@@ -1,5 +1,5 @@
 {
-  "name": "@wellsure/infra",
+  "name": "infra",
   "version": "0.1.0",
   "private": true,
   "description": "AWS CDK app provisioning the staging and production environments (spec §15).",
@@ -10,6 +10,7 @@
   },
   "dependencies": {},
   "devDependencies": {
+    "@types/node": "^20.14.0",
     "aws-cdk": "^2.150.0",
     "aws-cdk-lib": "^2.150.0",
     "constructs": "^10.3.0",

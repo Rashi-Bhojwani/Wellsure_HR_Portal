@@ -1,6 +1,6 @@
 dist
 build
 coverage
-pnpm-lock.yaml
+package-lock.json
 node_modules
 infra/cdk.out

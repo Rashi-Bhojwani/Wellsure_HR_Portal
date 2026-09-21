@@ -30,19 +30,25 @@ that spec.
 
 ## Repository layout
 
+Plain folders, **not** a pnpm/npm workspace — each of `backend/`,
+`frontend/`, `biometric-agent/` and `infra/` is a standalone npm project
+with its own `package.json` and `package-lock.json`. `shared/` is imported
+directly as TypeScript source, with no `package.json` of its own.
+
 ```
-apps/api               Backend: REST API, Socket.IO, BullMQ workers/scheduler
-apps/web                Frontend: Employee portal (ESS) + HR/Admin portal
-apps/biometric-agent     LAN sync agent for on-prem biometric devices
-packages/shared          Shared types, Zod schemas, constants, utilities
-infra/                   AWS CDK app (staging + production)
-docs/                    PROJECT_SPEC.md, PROGRESS.md, DEPLOYMENT.md
+backend/               Backend: REST API, Socket.IO, BullMQ workers/scheduler
+frontend/                Frontend: Employee portal (ESS) + HR/Admin portal
+biometric-agent/          LAN sync agent for on-prem biometric devices
+shared/                    Shared TypeScript (types, Zod schemas, constants, utils),
+                            imported via the @shared/* path alias — no package.json
+infra/                     AWS CDK app (staging + production)
+docs/                      PROJECT_SPEC.md, PROGRESS.md, DEPLOYMENT.md
 ```
 
 See the `README.md` in each of those folders, and the `README.md` in each
-subfolder, for what specifically goes there. `apps/api/src/README.md` and
-`apps/web/src/README.md` are the best starting points for the internal
-layout of those two apps.
+subfolder, for what specifically goes there. `backend/src/README.md` and
+`frontend/src/README.md` are the best starting points for the internal
+layout of those two projects.
 
 ## Core domain rules to keep in mind
 
@@ -77,13 +83,23 @@ assuming:
 
 ## Conventions (once code exists, starting Phase 0)
 
-- pnpm workspaces monorepo; Node ≥20; TypeScript strict mode
-  (`tsconfig.base.json`).
-- `apps/api` is one Docker image with four entrypoint modes: `api`,
+- npm, one standalone project per top-level folder (`backend/`,
+  `frontend/`, `biometric-agent/`, `infra/`); Node ≥20; TypeScript strict
+  mode (`tsconfig.base.json`, extended by each project's own
+  `tsconfig.json`).
+- `shared/` is plain TypeScript, no package of its own. `backend/` and
+  `frontend/` import it through the `@shared/*` path alias — wired in
+  `tsconfig.json` (`paths`) for both, plus `vite.config.ts`
+  (`resolve.alias`) for `frontend/` and resolved at runtime by `tsx` for
+  `backend/`. Keep it that way; don't turn `shared/` back into an npm
+  package (no `package.json`, no build step, no version to bump).
+- `backend/` is one Docker image with four entrypoint modes: `api`,
   `worker`, `scheduler`, `migrate` (spec §15.2.3) — don't split it into
-  separate images.
+  separate images. Build the image from the **repo root**
+  (`docker build -f backend/Dockerfile .`), not from inside `backend/`, so
+  `shared/` is included in the build context.
 - Validate all external input with Zod; request/response schemas shared
-  with the frontend via `packages/shared` where practical.
+  with the frontend via `shared/` where practical.
 - Storage and email are behind interfaces (`StorageService`, `MailService`)
   with local (MinIO/Mailpit) and AWS (S3/SES) implementations selected by
   env — write against the interface, not the AWS SDK directly.
@@ -92,7 +108,18 @@ assuming:
 
 ## Commands
 
-Not runnable yet — `apps/api` and `apps/web` have no source code or real
-dependencies until Phase 0. Once Phase 0 lands: `pnpm dev` (both apps),
-`pnpm build`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, and
-`docker compose up` for Postgres/Redis/MinIO/Mailpit.
+```
+npm run install:all   # npm install in the root, backend/, frontend/, biometric-agent/ and infra/
+npm run dev            # backend + frontend together, via concurrently
+npm run lint
+npm run typecheck
+npm run test
+docker compose up       # Postgres, Redis, MinIO, Mailpit
+docker build -f backend/Dockerfile -t wellsure-hr-backend .   # from the repo root
+```
+
+There's no real application behavior yet — `backend/src/index.ts`,
+`frontend/src/main.ts` and `infra/bin/app.ts` are placeholder entrypoints
+(the first two exist mainly to prove the `@shared/*` alias resolves). The
+real Express app, React shell, and device-sync logic land starting
+Phase 0/1/2.

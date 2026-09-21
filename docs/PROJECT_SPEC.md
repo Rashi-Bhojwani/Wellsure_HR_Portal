@@ -64,7 +64,7 @@ Employees can edit limited personal fields (address, emergency contact, photo); 
 
 **Path A — Device push (ADMS / "cloud server" mode).** Many ZKTeco/eSSL devices can be configured with a server address and will push attendance logs over HTTP. Implement the device protocol endpoints under `/iclock/*` (`cdata` GET for handshake/options, `cdata` POST for ATTLOG/OPERLOG uploads, `getrequest`, `devicecmd`). Parse ATTLOG lines (user id, timestamp, status, verify type). Authenticate devices by serial number against the `devices` table. Respond in the plain-text format the device expects.
 
-**Path B — LAN sync agent (`apps/biometric-agent`).** Runs on an office PC. Connects to each device IP on port 4370 using a ZKTeco library (e.g. `node-zklib` or `zkteco-js`), polls every 30 s (configurable), and POSTs new logs to `POST /api/biometric/agent/punches` using an agent API key over HTTPS. Keeps a local cursor (last synced timestamp) and retries with backoff when offline. Also sends a heartbeat. Can run as a Windows service (document using `node-windows` or NSSM).
+**Path B — LAN sync agent (`biometric-agent/`).** Runs on an office PC. Connects to each device IP on port 4370 using a ZKTeco library (e.g. `node-zklib` or `zkteco-js`), polls every 30 s (configurable), and POSTs new logs to `POST /api/biometric/agent/punches` using an agent API key over HTTPS. Keeps a local cursor (last synced timestamp) and retries with backoff when offline. Also sends a heartbeat. Can run as a Windows service (document using `node-windows` or NSSM).
 
 Both paths feed the same ingestion service.
 
@@ -288,8 +288,8 @@ Every import: upload → parse into staging table → validate (duplicates, miss
 Build strictly in this order. At the end of each phase: tests green, migrations applied, seed updated, `docs/PROGRESS.md` updated, committed.
 
 **Phase 0 — Foundation**
-Monorepo, pnpm workspaces, TS configs, ESLint/Prettier, docker-compose (postgres, redis, minio, mailpit), `.env.example`, Express app skeleton (helmet, cors, pino, error handler, Zod validation middleware, `/health` + `/ready`, graceful SIGTERM shutdown), config module that loads and validates all env vars with Zod, Prisma setup, React + Vite + AntD shell with routing and theming, shared package, Vitest in both apps, **production multi-stage Dockerfile for `apps/api`** (non-root user, includes Chromium for Puppeteer) with one entrypoint that can start as `api`, `worker`, `scheduler` or `migrate` via an env var/argument, empty `infra/` CDK app, GitHub Actions CI (lint, typecheck, test, docker build), README.
-✅ Done when `pnpm dev` runs both apps, the Docker image builds and starts in all four modes locally, and CI passes.
+Plain folder structure (`backend/`, `frontend/`, `biometric-agent/`, `shared/`, `infra/`), each an independent npm project with its own `package.json`/`package-lock.json`, TS configs, ESLint/Prettier, docker-compose (postgres, redis, minio, mailpit), `.env.example`, Express app skeleton (helmet, cors, pino, error handler, Zod validation middleware, `/health` + `/ready`, graceful SIGTERM shutdown), config module that loads and validates all env vars with Zod, Prisma setup, React + Vite + AntD shell with routing and theming, `shared/` wired up via the `@shared/*` path alias, Vitest in both `backend/` and `frontend/`, **production multi-stage Dockerfile for `backend/`** (non-root user, includes Chromium for Puppeteer, built from the repo root so `shared/` is included) with one entrypoint that can start as `api`, `worker`, `scheduler` or `migrate` via an env var/argument, empty `infra/` CDK app, GitHub Actions CI (lint, typecheck, test, docker build), README.
+✅ Done when `npm run dev` runs both `backend/` and `frontend/`, the Docker image builds and starts in all four modes locally, and CI passes.
 
 **Phase 1 — Auth, RBAC, org, employees**
 Users, roles, permissions, login (employee code + password), refresh rotation, logout, invite/set-password, forgot/reset password, lockout, TOTP 2FA for admin roles, audit log, encryption helper. Org masters. Employee CRUD, Add Employee wizard, profile tabs, All Employees grid with filters/export, Excel import with staging & validation. Employee "View My Info". Seed: company, locations, departments, roles, a super admin, 20 demo employees.
@@ -301,7 +301,7 @@ Implement the CDK stacks in §15 for `staging`: VPC, RDS, ElastiCache, S3 bucket
 From here on, every phase is verified on staging, not only locally.
 
 **Phase 2 — Biometric ingestion + attendance engine + real-time**
-Devices, `/iclock` push endpoints, agent API, `apps/biometric-agent`, raw punches, dedupe, mapping, unmapped queue, shifts, week-offs, rosters, rules engine (§4.4) with thorough unit tests (night shift, missing punch, half-day min, grace, holiday work), BullMQ recompute jobs, nightly cron, Socket.IO with Redis adapter, Who Is In? live board, employee Attendance Info calendar + day detail. A **punch simulator script** to generate fake device pushes for testing.
+Devices, `/iclock` push endpoints, agent API, `biometric-agent/`, raw punches, dedupe, mapping, unmapped queue, shifts, week-offs, rosters, rules engine (§4.4) with thorough unit tests (night shift, missing punch, half-day min, grace, holiday work), BullMQ recompute jobs, nightly cron, Socket.IO with Redis adapter, Who Is In? live board, employee Attendance Info calendar + day detail. A **punch simulator script** to generate fake device pushes for testing.
 ✅ Done when a simulated punch shows on the employee's calendar and HR's Who Is In? within 5 seconds.
 
 **Phase 3 — Attendance administration**

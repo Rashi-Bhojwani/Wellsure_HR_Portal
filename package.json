@@ -2,28 +2,20 @@
   "name": "wellsure-hr-portal",
   "version": "0.1.0",
   "private": true,
-  "description": "Wellsure HR Portal — in-house replacement for greytHR (real-time biometric attendance, leave, payroll, engage).",
+  "description": "Wellsure HR Portal — root convenience scripts only. backend/, frontend/, biometric-agent/ and infra/ are each standalone npm projects with their own package.json and package-lock.json.",
   "license": "UNLICENSED",
   "engines": {
     "node": ">=20",
-    "pnpm": ">=9"
+    "npm": ">=10"
   },
-  "packageManager": "pnpm@9.9.0",
   "scripts": {
-    "dev": "pnpm -r --parallel run dev",
-    "build": "pnpm -r run build",
-    "lint": "eslint .",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "typecheck": "pnpm -r run typecheck",
-    "test": "pnpm -r run test"
+    "install:all": "npm install && npm install --prefix backend && npm install --prefix frontend && npm install --prefix biometric-agent && npm install --prefix infra",
+    "dev": "concurrently -n backend,frontend -c blue,green \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
+    "lint": "npm run lint --prefix backend && npm run lint --prefix frontend && npm run lint --prefix biometric-agent",
+    "typecheck": "npm run typecheck --prefix backend && npm run typecheck --prefix frontend && npm run typecheck --prefix biometric-agent && npm run typecheck --prefix infra",
+    "test": "npm run test --prefix backend && npm run test --prefix frontend && npm run test --prefix biometric-agent"
   },
   "devDependencies": {
-    "@eslint/js": "^9.9.0",
-    "eslint": "^9.9.0",
-    "eslint-config-prettier": "^9.1.0",
-    "prettier": "^3.3.3",
-    "typescript": "^5.6.2",
-    "typescript-eslint": "^8.4.0"
+    "concurrently": "^8.2.2"
   }
 }

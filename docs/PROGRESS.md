@@ -41,6 +41,44 @@ committed).
 - No business logic, database schema, or UI screens yet — structure and
   configuration only, per instruction.
 
+### Switched from a pnpm monorepo to a plain folder structure
+
+- Moved (via `git mv`, history preserved) `apps/api` → `backend`,
+  `apps/web` → `frontend`, `apps/biometric-agent` → `biometric-agent`, and
+  `packages/shared/src/*` → `shared/*`. Removed the now-empty `apps/` and
+  `packages/` folders.
+- Removed all pnpm workspace tooling: `pnpm-workspace.yaml`, the
+  monorepo-wide root `eslint.config.mjs`, and the `workspace:*`
+  dependency on `@wellsure/shared` from every project. Switched to npm —
+  `backend`, `frontend`, `biometric-agent` and `infra` each now have their
+  own `package.json`, `package-lock.json` and `eslint.config.mjs`.
+- `shared/` is now plain TypeScript (no `package.json`/build step of its
+  own), imported through the `@shared/*` path alias: `backend/tsconfig.json`
+  and `frontend/tsconfig.json` map it via `paths`, `frontend/vite.config.ts`
+  mirrors it via `resolve.alias`, and `backend` resolves it at runtime via
+  `tsx`. Each of `backend/src/index.ts`, `frontend/src/main.ts` and
+  `infra/bin/app.ts` is a placeholder entrypoint (import from `shared/` in
+  the first two) that exists so `tsc`/`eslint`/`vite` have real, passing
+  input rather than empty folders.
+- Rewrote the root `package.json` down to convenience scripts only:
+  `install:all`, `dev` (backend + frontend via `concurrently`), `lint`,
+  `typecheck`, `test` — each delegating to the relevant project(s) via
+  `npm run <script> --prefix <dir>`.
+- Added `backend/Dockerfile` — a minimal, intentionally non-production
+  image (see its header comment) that builds from the **repo root** so
+  `shared/` is included in the build context; proves the container installs
+  and starts with the `@shared/*` alias resolving. The full Phase 0
+  production image (Chromium, non-root user, four entrypoint modes) is
+  still Phase 0 work.
+- Updated `README.md`, this file, `docs/PROJECT_SPEC.md` and `CLAUDE.md` to
+  describe the new layout and drop every `apps/`/`packages/`/pnpm
+  reference.
+- Verified `npm run install:all`, `dev`, `lint`, `typecheck`, `test`, and
+  `docker build -f backend/Dockerfile .` all succeed against the new
+  layout (see the commit for exact output).
+- No new features or business logic — structure/tooling only, per
+  instruction.
+
 ## Open questions
 
 Carried from spec §14 — configurable, not guessed, until answered:
