@@ -1,0 +1,16 @@
+{
+  "name": "@wellsure/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared types, Zod schemas, constants and utilities used across apps/api, apps/web and apps/biometric-agent.",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "echo \"packages/shared tests — added in Phase 0\" && exit 0"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.6.2"
+  }
+}
