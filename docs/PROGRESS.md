@@ -79,6 +79,18 @@ committed).
 - No new features or business logic — structure/tooling only, per
   instruction.
 
+### Added UI reference
+
+- Added `docs/UI_REFERENCE.md`: a written description of greytHR's
+  current employee-portal and HR/admin-portal screens (layout, navigation,
+  what's on each page), captured so our portal feels familiar to
+  employees and HR who already know greytHR. Reference only — our own
+  branding, colours and Ant Design components, never greytHR's logos,
+  illustrations, quotes or text.
+- Linked it from `README.md` and `CLAUDE.md` alongside `PROJECT_SPEC.md`.
+- No UI built yet — this informs the Phase 0 shell and the full screens
+  built in Phase 5 (see spec §12); still waiting on those phases in order.
+
 ## Open questions
 
 Carried from spec §14 — configurable, not guessed, until answered:

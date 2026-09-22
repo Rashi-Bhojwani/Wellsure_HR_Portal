@@ -7,6 +7,7 @@ approval, a kudos shows on screen within seconds) as the core improvement
 over greytHR's month-end sync.
 
 - **Full product & technical spec:** [`docs/PROJECT_SPEC.md`](docs/PROJECT_SPEC.md)
+- **UI reference (screen layout & navigation):** [`docs/UI_REFERENCE.md`](docs/UI_REFERENCE.md)
 - **Working conventions for contributors (incl. AI agents):** [`CLAUDE.md`](CLAUDE.md)
 - **Delivery status & open questions:** [`docs/PROGRESS.md`](docs/PROGRESS.md)
 - **Deployment runbook (from Phase 1.5):** [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
@@ -94,8 +95,10 @@ AWS CDK app provisioning staging and production: `NetworkStack`,
 
 ### `docs`
 
-`PROJECT_SPEC.md` (the spec), `PROGRESS.md` (phase status + open
-questions), `DEPLOYMENT.md` (deployment runbook, written in Phase 1.5).
+`PROJECT_SPEC.md` (the spec), `UI_REFERENCE.md` (greytHR screen layout
+reference — our own branding, never greytHR's), `PROGRESS.md` (phase
+status + open questions), `DEPLOYMENT.md` (deployment runbook, written in
+Phase 1.5).
 
 ## Getting started
 

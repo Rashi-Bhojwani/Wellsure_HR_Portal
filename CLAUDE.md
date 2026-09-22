@@ -9,8 +9,12 @@ module. Employee portal (ESS) + HR/Admin portal, with **real-time**
 biometric attendance (a punch shows on screen within seconds, not at month
 end), leave, engage (kudos/social feed), and eventually payroll. Full
 product and technical spec: **`docs/PROJECT_SPEC.md`** — read it before
-building anything. This file is the short, working-conventions companion to
-that spec.
+building anything. For screen layout, navigation and what's on each page,
+also read **`docs/UI_REFERENCE.md`** before building any UI — it describes
+greytHR's current screens (which ours should feel familiar to) with a hard
+constraint: our own branding, colours and Ant Design components, never
+greytHR's logos, illustrations, quotes or text. This file is the short,
+working-conventions companion to both.
 
 ## Ground rules
 
@@ -42,7 +46,7 @@ biometric-agent/          LAN sync agent for on-prem biometric devices
 shared/                    Shared TypeScript (types, Zod schemas, constants, utils),
                             imported via the @shared/* path alias — no package.json
 infra/                     AWS CDK app (staging + production)
-docs/                      PROJECT_SPEC.md, PROGRESS.md, DEPLOYMENT.md
+docs/                      PROJECT_SPEC.md, UI_REFERENCE.md, PROGRESS.md, DEPLOYMENT.md
 ```
 
 See the `README.md` in each of those folders, and the `README.md` in each
