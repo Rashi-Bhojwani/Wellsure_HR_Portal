@@ -9,7 +9,7 @@ committed).
 | Phase | Description | Status |
 |---|---|---|
 | — | Initial project structure (this commit) | ✅ Done |
-| 0 | Foundation | Not started |
+| 0 | Foundation | ✅ Done |
 | 1 | Auth, RBAC, org, employees | Not started |
 | 1.5 | AWS staging environment | Not started |
 | 2 | Biometric ingestion + attendance engine + real-time | Not started |
@@ -90,6 +90,127 @@ committed).
 - Linked it from `README.md` and `CLAUDE.md` alongside `PROJECT_SPEC.md`.
 - No UI built yet — this informs the Phase 0 shell and the full screens
   built in Phase 5 (see spec §12); still waiting on those phases in order.
+
+### Phase 0 — Foundation + application shell
+
+**Backend foundation** (`backend/`) — all built and verified live against
+real Postgres/Redis (docker-compose):
+
+- Express app (`src/app.ts`): helmet, cors (env-driven origin), pino-http
+  request logging, `/health` (liveness) and `/ready` (checks Prisma +
+  Redis, returns 503 if either is down), central error handler
+  (`src/middleware/errorHandler.ts`, handles `ZodError` → 400, `HttpError`
+  → its status, else 500) and a Zod `validate()` middleware factory
+  (`src/middleware/validate.ts`) ready for Phase 1 routes.
+- `src/config/env.ts`: every env var validated with Zod at boot, fails
+  fast (`process.exit(1)`) on invalid config.
+- Prisma (`backend/prisma/schema.prisma`, Prisma 6.19.3 — deliberately
+  not the 7.x line, which mandates driver adapters and a new generator;
+  see the note below): connected, no business models yet — `/ready`
+  proves connectivity with `SELECT 1`.
+- Redis (`src/lib/redis.ts`) — plain client + a `createBullConnection()`
+  helper (BullMQ needs `maxRetriesPerRequest: null`).
+- Socket.IO (`src/realtime/socket.ts`) with the `@socket.io/redis-adapter`
+  — handshake auth is a placeholder until Phase 1 sessions exist.
+- BullMQ skeleton (`src/jobs/`): a `system-ping` queue/worker proves the
+  queue → worker → Redis path end to end (enqueued and processed live
+  during verification).
+- One entrypoint, four modes (`src/index.ts` → `src/modes/{api,worker,
+  scheduler,migrate}.ts`), each with graceful SIGTERM/SIGINT shutdown —
+  all four verified live (api serves `/health`+`/ready`+Socket.IO and
+  shuts down cleanly; worker processes a real job and shuts down cleanly;
+  scheduler starts/logs/shuts down cleanly; migrate runs
+  `prisma migrate deploy` and exits 0).
+  **Bug found and fixed:** the Docker `CMD` originally ran `npm run
+  start`, but `npm run` does not reliably forward `SIGTERM` to the child
+  process it spawns — confirmed live (the child kept running after the
+  `npm` parent was killed). `Dockerfile`'s `CMD` now invokes
+  `node_modules/.bin/tsx` directly so the Node process is PID 1.
+
+**Frontend foundation + shell** (`frontend/`):
+
+- React Router (config-driven — see below), TanStack Query
+  (`QueryClientProvider` in `App.tsx`), an Ant Design theme with
+  light/dark tokens and a toggle (`src/theme/`), an API client with
+  access/refresh-token interceptor plumbing ready
+  (`src/api/client.ts` — no real endpoints to call yet), a Socket.IO
+  client wrapper (`src/sockets/SocketProvider.tsx`, opt-in via `enabled`,
+  off by default), and a React error boundary
+  (`src/components/common/ErrorBoundary.tsx`).
+- Login page (`src/pages/auth/login/`): Employee Code + password, Forgot
+  password link, logo placeholder — UI only, no real auth.
+- Employee portal layout (`src/layouts/EmployeeLayout.tsx`) matching
+  `docs/UI_REFERENCE.md` §1.0: sidebar (logo, profile block, full menu in
+  the listed order, grouped/nested), header (page title, Quick Links,
+  notification bell, logout), footer; becomes a `Drawer` under the `md`
+  breakpoint.
+- HR/Admin portal layout (`src/layouts/AdminLayout.tsx`) matching §2.0:
+  app switcher panel, per-app top-bar dropdown menus, breadcrumb, Payroll
+  Month selector + employee filter in `AdminFiltersContext`
+  (`src/context/`), dismissible help strip component
+  (`src/components/common/HelpStrip.tsx`), search/settings/avatar/logout.
+  Payroll and Admin Tools apps added per spec §7, with menus built from
+  §7.5/§7.8.
+- Menu/route config (`src/routes/employeeMenu.config.tsx`,
+  `adminMenu.config.tsx`): single source of truth per portal — the route
+  tree (`src/routes/router.tsx`) is generated from these, rendering a
+  registered `element` or `PlaceholderPage` (with its `phase`) otherwise.
+  Every employee menu item and every admin app/menu item exists as a
+  route today.
+- Real static mock-ups (fake data, no backend calls): Employee Home
+  (§1.1), Engage (§1.2), Payslips (§1.3), Leave Balances (§1.4),
+  Attendance Info incl. month calendar + status colours + stats cards +
+  day detail panel (§1.5); Admin Welcome + Dashboard (4 Recharts charts)
+  (§2.1–2.2), Workforce Management Overview (§2.3).
+- Reusable components (`src/components/`): `StatCard`,
+  `StatusCalendarCell`, `MaskedAmount`, `EmptyState`, `ChartCard`,
+  `HelpStrip`, `PlaceholderPage`, `ErrorBoundary`.
+- Dev-only role switcher (`src/components/common/DevRoleSwitcher.tsx`,
+  gated on `import.meta.env.DEV`): jumps between the employee portal, the
+  admin portal, and toggles light/dark — no real login required to
+  preview either portal.
+- Responsive: sidebar → Drawer, admin top bar wraps, all mock-up pages
+  use responsive `Row`/`Col` grids — checked at 1440×900 and 390×844.
+- Chart colours use the dataviz skill's validated palette
+  (`src/theme/chartPalette.ts`, light/dark categorical + sequential +
+  diverging steps, run through `validate_palette.js` before use), not
+  arbitrary colours.
+
+**CI** (`.github/workflows/ci.yml`): install → lint → typecheck → test in
+one job, `docker build -f backend/Dockerfile .` in a second.
+
+**Vite / audit advisory:** upgraded `vite` 5→8 and `@vitejs/plugin-react`
+→6 (the latest `@vitejs/plugin-react` already requires Vite 8 as a peer,
+so this is just "use current versions," not a forced jump) — `npm audit`
+on `frontend` is now clean, resolving the advisory flagged in the
+previous session.
+
+**Known follow-ups, not fixed this phase:**
+- `npm audit` on `backend` flags a high-severity `deepmerge-ts` issue via
+  `prisma`'s `@prisma/config` (dev-only CLI dependency, not
+  `@prisma/client`; not yet patched upstream even in `prisma@latest` at
+  time of writing). Left as-is rather than downgrading prisma to dodge it
+  — dev-tooling-only, no untrusted-input path.
+- Ant Design's `List` component is deprecated in favour of a new
+  virtualised `Listy` component with a materially different API (not a
+  prop-rename). `List` still works and isn't removed until AntD's next
+  major, so it's kept for now (used on both Home pages); migrating to
+  `Listy` is a small, isolated follow-up whenever convenient.
+- The production-hardening items from spec Phase 0 (non-root Docker user,
+  Chromium for Puppeteer, multi-stage build) are intentionally deferred —
+  `Dockerfile` runs all four entrypoint modes correctly today but isn't
+  hardened yet.
+
+**Verification note:** `docker build` was confirmed working end-to-end in
+this session (image builds, `@shared/*` resolves inside the container,
+the `tsx`-direct `CMD` receives and handles `SIGTERM` correctly) but
+repeated attempts in the sandbox this was built in were flaky — this
+sandbox's outbound network goes through a local TLS-intercepting proxy
+that containers can't reach without workarounds, and `npm install` inside
+the container intermittently failed against it (a well-known, documented
+limitation of that sandbox, unrelated to this repo). Re-run
+`docker build -f backend/Dockerfile .` in a normal environment to
+confirm; nothing sandbox-specific is in the committed Dockerfile.
 
 ## Open questions
 

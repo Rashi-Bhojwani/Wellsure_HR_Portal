@@ -13,10 +13,13 @@ Standalone npm project (`npm install` inside this folder, or
 [`tsx`](https://github.com/privatenumber/tsx) and at type-check time via
 `tsconfig.json`'s `paths`.
 
-See `src/README.md` for the module layout. No real application code exists
-yet beyond a placeholder entrypoint — this is Phase 0 scaffolding; the
-Express app, Prisma setup and the full production Dockerfile are built in
-Phase 0. `Dockerfile` here is a minimal build-verification image only (see
-its header comment).
+See `src/README.md` for the module layout. Phase 0 foundation is in place:
+Express (helmet, cors, pino, central error handler, Zod validation
+middleware), `/health` + `/ready`, graceful SIGTERM shutdown, env config
+validated with Zod at boot, Prisma (connected, no business models yet),
+Redis, a Socket.IO server with the Redis adapter, a BullMQ skeleton, and
+the `api`/`worker`/`scheduler`/`migrate` entrypoint modes (`src/index.ts`).
+No business logic yet — routes/modules under `src/modules/*` start in
+Phase 1.
 
 Full picture: `../docs/PROJECT_SPEC.md`.

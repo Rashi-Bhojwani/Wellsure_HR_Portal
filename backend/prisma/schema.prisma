@@ -1,0 +1,12 @@
+// Prisma schema — Phase 0 only proves the database connection works.
+// No business models yet; those start in Phase 1 (see docs/PROJECT_SPEC.md
+// §11 for the target data model and §12 for phase order).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}

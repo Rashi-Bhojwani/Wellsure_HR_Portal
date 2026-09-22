@@ -6,18 +6,35 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "echo \"frontend tests — added in Phase 0\" && exit 0"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@ant-design/icons": "^6.3.4",
+    "@tanstack/react-query": "^5.103.2",
+    "antd": "^6.6.5",
+    "axios": "^1.20.0",
+    "dayjs": "^1.11.23",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router-dom": "^7.18.4",
+    "recharts": "^3.10.1",
+    "socket.io-client": "^4.8.3"
+  },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
     "eslint": "^9.9.0",
     "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.7",
+    "globals": "^17.12.0",
     "typescript": "^5.6.2",
     "typescript-eslint": "^8.4.0",
-    "vite": "^5.4.6"
+    "vite": "^8.3.0"
   }
 }
