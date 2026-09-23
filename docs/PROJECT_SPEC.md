@@ -40,7 +40,8 @@ Permissions are granular strings (e.g. `employee.view`, `employee.salary.view`, 
 ## 3. Employee onboarding and login flow (exact business process)
 
 1. The new employee is first **registered on the biometric machine**, which assigns a **device user ID** (e.g. `1042`).
-2. HR opens **Add Employee** in the admin portal and enters that ID as the **Employee Code**. This code is the employee's permanent username.
+2. HR opens **Add Employee** in the admin portal and enters that ID as the **Device User ID**. The **Employee Code** field defaults to the same value, pre-filled but editable — in the normal case the two stay identical, matching how HR already thinks of it ("the ID from the machine is the username"). Employee Code is the employee's permanent login username; Device User ID is the live pointer (`device_user_mappings`, one active mapping per device ID at a time) used to resolve biometric punches to an employee. They're the same value unless a collision forces them apart:
+   - **Device ID reuse:** biometric machines eventually reassign a freed device user ID to a new joiner, but Employee Codes are **never reused**, even after separation. If the ID entered is already permanently held by a separated employee, HR sees a clear message — *"Employee Code 1042 was already used by \<name\>, separated on \<date\>. Employee Codes are never reused."* — and the wizard suggests the next available code by appending `-2`, `-3`, … (e.g. `1042-2` for the first reuse of `1042`). HR can accept the suggestion or type a different code. The Device User ID is still set to the raw `1042` either way, so punches from the machine keep resolving to the right (new) employee. Excel import runs the same check as a **row-level warning, not a hard failure**, so one collision doesn't stop a batch import.
 3. HR completes the onboarding wizard:
    - **Official:** employee code, date of joining, department, designation, location, reporting manager, shift, employment type, official email (optional)
    - **Personal:** full name, DOB, gender, personal email (Gmail, **required**), mobile, current/permanent address, emergency contact, blood group, photo
@@ -53,6 +54,7 @@ Permissions are granular strings (e.g. `employee.view`, `employee.salary.view`, 
 6. Thereafter login = **Employee Code + password**. "Forgot password" sends a reset link to the personal email on file.
 7. Accounts lock for 15 min after 5 failed attempts. HR/Admin/Payroll roles must enable TOTP 2FA.
 8. On separation, login is disabled automatically after the last working day.
+9. A rejoining employee is onboarded as a **brand-new employee record with a new Employee Code** — their previous record, job/name history and separation are never reopened or reused.
 
 Employees can edit limited personal fields (address, emergency contact, photo); changes to bank or statutory data by an employee create a **change request** that HR approves.
 
@@ -248,9 +250,9 @@ Every notification is also persisted in `notifications` (bell icon, read/unread)
 
 - HTTPS only; helmet; strict CORS; rate limiting (login, forgot-password, public endpoints); CSRF protection for cookie-based refresh.
 - argon2id password hashing; token hashes for invites and resets; refresh-token rotation with reuse detection.
-- AES-256-GCM encryption for bank account, PAN, Aadhaar, UAN; key via env/KMS; masked by default.
+- AES-256-GCM encryption for bank account, PAN, Aadhaar, UAN; key via env/KMS; masked by default. Each encrypted field also stores a plaintext last-4 column (masked display without decrypting) and an HMAC-SHA256 blind-index column keyed by a pepper separate from the encryption key (exact-match duplicate detection and search) — grids and imports use these, never live decryption. A dedicated, permission-gated reveal endpoint is the only path that decrypts, and every call is audit-logged.
 - Authorization on every route + data-scope filter; automated IDOR tests.
-- Audit log (actor, action, entity, entity_id, before, after, ip, user agent, timestamp) — append-only.
+- Audit log (actor, action, entity, entity_id, before, after, ip, user agent, timestamp) — append-only, written only through one shared service function that redacts sensitive values (PAN/Aadhaar/account numbers → last 4) out of `before`/`after` before the write, so no call site can forget to. `profile_change_requests.changes_json` goes through the same redaction helper.
 - File uploads: type and size validation, private storage, signed URLs with short expiry.
 - Daily automated Postgres backups (documented restore procedure).
 - India **DPDP Act 2023**: privacy notice acknowledgement on first login, purpose limitation, data retention policy for ex-employees (configurable), export of an employee's own data, breach logging.
@@ -274,9 +276,9 @@ Every import: upload → parse into staging table → validate (duplicates, miss
 
 ## 11. Core data model (starting point — refine in Prisma)
 
-**Identity & org:** `users`, `roles`, `permissions`, `role_permissions`, `user_roles`, `refresh_tokens`, `invitation_tokens`, `password_reset_tokens`, `audit_logs`, `company`, `locations`, `departments`, `designations`, `grades`, `cost_centres`
-**Employees:** `employees`, `employee_personal`, `employee_statutory` (encrypted), `employee_bank_accounts` (encrypted, effective-dated), `employee_job_history` (effective-dated dept/designation/location/manager), `employee_documents`, `profile_change_requests`, `separations`
-**Attendance:** `devices`, `device_user_mappings`, `raw_punches`, `unmapped_punches`, `shifts`, `week_off_patterns`, `shift_assignments`, `shift_overrides`, `daily_attendance`, `attendance_overrides`, `regularization_requests`, `attendance_periods` (lock state)
+**Identity & org:** `users`, `roles`, `permissions`, `role_permissions`, `user_roles`, `refresh_tokens`, `invitation_tokens`, `password_reset_tokens` (looked up by Employee Code, not personal email — personal email is not unique, see Employees below and §3), `audit_logs` (redacted before write, see §9), `system_settings`, `company`, `locations`, `departments`, `designations`, `grades`, `cost_centres`
+**Employees:** `employees` (Employee Code, permanent and never reused; Device User ID lives in `device_user_mappings`, not here — see §3), `employee_personal` (personal email intentionally **not** unique — a shared family email or a rejoin would otherwise collide), `employee_name_history` (effective-dated full name, so a past payslip or letter still shows the name as of its own date after a later name change), `employee_statutory` (encrypted + last-4 + blind-index hash), `employee_bank_accounts` (encrypted + last-4 + blind-index hash, effective-dated), `employee_job_history` (effective-dated dept/designation/location/manager/grade/cost centre), `employee_documents`, `profile_change_requests` (`changes_json` redacted, see §9), `separations` (a rejoin is a new `employees` row, never a reopened one)
+**Attendance:** `device_user_mappings` (**built in Phase 1**, as groundwork for the Employee Code / Device User ID split — see §3; the rest of this bucket is still Phase 2), `devices`, `raw_punches`, `unmapped_punches`, `shifts`, `week_off_patterns`, `shift_assignments`, `shift_overrides`, `daily_attendance`, `attendance_overrides`, `regularization_requests`, `attendance_periods` (lock state)
 **Leave:** `leave_types`, `leave_policies`, `leave_ledger`, `leave_requests`, `holidays`, `restricted_holidays`, `comp_off_credits`, `year_end_runs`
 **Engage & workflow:** `posts`, `kudos`, `polls`, `poll_options`, `poll_votes`, `reactions`, `comments`, `groups`, `notifications`, `approval_workflows`, `approval_steps`, `approval_instances`, `workflow_delegates`, `helpdesk_tickets`, `helpdesk_messages`, `announcements`, `user_favourites`, `dashboard_layouts`
 **Payroll (Phase 6):** `salary_components`, `salary_structures`, `employee_salaries`, `payroll_runs`, `payroll_run_items`, `payslips`, `payslip_lines`, `bank_transfer_batches`, `bank_file_templates`, `tax_declarations`, `tax_proofs`, `loans`, `loan_emis`, `reimbursement_claims`, `statutory_settings`
@@ -292,7 +294,7 @@ Plain folder structure (`backend/`, `frontend/`, `biometric-agent/`, `shared/`, 
 ✅ Done when `npm run dev` runs both `backend/` and `frontend/`, the Docker image builds and starts in all four modes locally, and CI passes.
 
 **Phase 1 — Auth, RBAC, org, employees**
-Users, roles, permissions, login (employee code + password), refresh rotation, logout, invite/set-password, forgot/reset password, lockout, TOTP 2FA for admin roles, audit log, encryption helper. Org masters. Employee CRUD, Add Employee wizard, profile tabs, All Employees grid with filters/export, Excel import with staging & validation. Employee "View My Info". Seed: company, locations, departments, roles, a super admin, 20 demo employees.
+Users, roles, permissions, login (employee code + password), refresh rotation, logout, invite/set-password, forgot/reset password, lockout, TOTP 2FA for admin roles, audit log, encryption helper (with last-4 + blind-index columns for masked grids and duplicate detection without decrypting). Org masters. Employee CRUD, Add Employee wizard (Employee Code vs Device User ID and the reuse convention — see §3), profile tabs, effective-dated job history/bank accounts/name history, `device_user_mappings` groundwork for Phase 2, All Employees grid with filters/export, Excel import with staging & validation. Employee "View My Info". Seed: company, locations, departments, roles, a super admin, 20 demo employees.
 ✅ Done when HR can create an employee, the employee receives the email as a `.eml` file in `.mail/` (local dev) or a real inbox (staging, via SES), sets a password, and logs in; and IDOR tests pass.
 
 **Phase 1.5 — AWS staging environment**
