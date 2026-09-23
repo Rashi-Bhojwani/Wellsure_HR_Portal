@@ -145,30 +145,36 @@ export function AttendanceInfoPage() {
           >
             {view === "Grid" ? (
               <>
-                <Row gutter={4} style={{ marginBottom: 4 }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(7, 1fr)",
+                    gap: 4,
+                    marginBottom: 4,
+                  }}
+                >
                   {WEEKDAYS.map((w) => (
-                    <Col span={24 / 7} key={w} style={{ textAlign: "center" }}>
+                    <div key={w} style={{ textAlign: "center" }}>
                       <Text type="secondary" style={{ fontSize: 11 }}>
                         {w}
                       </Text>
-                    </Col>
+                    </div>
                   ))}
-                </Row>
-                <Row gutter={[4, 4]}>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
                   {cells.map((cell, idx) =>
                     cell ? (
-                      <Col span={24 / 7} key={cell.date}>
-                        <StatusCalendarCell
-                          day={cell}
-                          selected={cell.date === selectedDate}
-                          onSelect={() => setSelectedDate(cell.date)}
-                        />
-                      </Col>
+                      <StatusCalendarCell
+                        key={cell.date}
+                        day={cell}
+                        selected={cell.date === selectedDate}
+                        onSelect={() => setSelectedDate(cell.date)}
+                      />
                     ) : (
-                      <Col span={24 / 7} key={`blank-${idx}`} />
+                      <div key={`blank-${idx}`} />
                     ),
                   )}
-                </Row>
+                </div>
               </>
             ) : (
               <Table
@@ -217,14 +223,15 @@ export function AttendanceInfoPage() {
                 </Descriptions.Item>
               </Descriptions>
 
-              <Table
-                size="small"
-                pagination={false}
-                columns={sessionColumns}
-                dataSource={sessionRow}
-                scroll={{ x: true }}
-                style={{ marginBottom: 16 }}
-              />
+              <div style={{ overflowX: "auto", marginBottom: 16 }}>
+                <Table
+                  size="small"
+                  pagination={false}
+                  columns={sessionColumns}
+                  dataSource={sessionRow}
+                  scroll={{ x: "max-content" }}
+                />
+              </div>
 
               <Title level={5}>Status Details</Title>
               <Descriptions column={1} size="small" style={{ marginBottom: 16 }}>

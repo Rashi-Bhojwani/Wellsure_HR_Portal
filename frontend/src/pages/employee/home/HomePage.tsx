@@ -1,6 +1,9 @@
+import { useState } from "react";
 import { Card, Col, Row, Typography, List, Space, Button, Alert } from "antd";
 import {
   ArrowRightOutlined,
+  EyeInvisibleOutlined,
+  EyeOutlined,
   FileTextOutlined,
   IdcardOutlined,
   SafetyCertificateOutlined,
@@ -39,9 +42,10 @@ const quickAccess = [
 
 export function HomePage() {
   const quote = QUOTES[new Date().getDate() % QUOTES.length]!;
+  const [salaryRevealed, setSalaryRevealed] = useState(false);
 
   return (
-    <Space orientation="vertical" size={16} style={{ width: "100%" }}>
+    <Space orientation="vertical" size={12} style={{ width: "100%" }}>
       <Card>
         <Row align="middle" gutter={16}>
           <Col flex="auto">
@@ -84,14 +88,14 @@ export function HomePage() {
         }
       />
 
-      <Row gutter={[16, 16]}>
+      <Row gutter={[16, 12]}>
         <Col xs={24} md={12} xl={8}>
           <Card
             title="Review"
             extra={<Link to="/app/todo/review"><ArrowRightOutlined /></Link>}
             style={{ height: "100%" }}
           >
-            <EmptyState message="Nothing to review" />
+            <EmptyState message="Nothing to review" compact />
           </Card>
         </Col>
 
@@ -119,7 +123,7 @@ export function HomePage() {
 
         <Col xs={24} md={12} xl={8}>
           <Card title="Track" style={{ height: "100%" }}>
-            <EmptyState message="Nothing new to track" />
+            <EmptyState message="Nothing new to track" compact />
           </Card>
         </Col>
 
@@ -139,7 +143,7 @@ export function HomePage() {
                     Gross Pay
                   </Text>
                   <div>
-                    <MaskedAmount value={8580} />
+                    <MaskedAmount value={8580} revealed={salaryRevealed} />
                   </div>
                 </Col>
                 <Col span={12}>
@@ -147,7 +151,7 @@ export function HomePage() {
                     Deduction
                   </Text>
                   <div>
-                    <MaskedAmount value={0} />
+                    <MaskedAmount value={0} revealed={salaryRevealed} />
                   </div>
                 </Col>
               </Row>
@@ -156,13 +160,23 @@ export function HomePage() {
                   Net Pay
                 </Text>
                 <div>
-                  <MaskedAmount value={8580} color="#1a9c5e" />
+                  <MaskedAmount value={8580} revealed={salaryRevealed} color="#1a9c5e" />
                 </div>
               </div>
             </div>
-            <Button type="link" size="small" icon={<FileTextOutlined />} style={{ paddingLeft: 0, marginTop: 8 }}>
-              Download
-            </Button>
+            <Space style={{ marginTop: 8 }}>
+              <Button type="link" size="small" icon={<FileTextOutlined />} style={{ paddingLeft: 0 }}>
+                Download
+              </Button>
+              <Button
+                type="link"
+                size="small"
+                icon={salaryRevealed ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+                onClick={() => setSalaryRevealed((r) => !r)}
+              >
+                {salaryRevealed ? "Hide" : "Show Salary"}
+              </Button>
+            </Space>
           </Card>
         </Col>
 

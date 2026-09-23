@@ -270,6 +270,47 @@ ECS Fargate and what CI verifies.
   from a pnpm monorepo" log entries above still say docker-compose/MinIO/
   Mailpit because that's what was true when they were written).
 
+### App shell UI corrections (pre-Phase 1)
+
+Five visual bugs in the Phase 0 shell, found against `docs/UI_REFERENCE.md`
+and fixed before starting Phase 1. Verified live (Playwright) at both
+1440×900 and 390×844 on both portals.
+
+- **Attendance Info calendar** (`AttendanceInfoPage.tsx`) — the day grid
+  used AntD `Row`/`Col` with `span={24 / 7}` (3.43, not a valid integer
+  `Col` span), so days wrapped compactly instead of aligning under
+  Sun–Sat. Replaced with CSS Grid (`repeat(7, 1fr)`) for both the weekday
+  header and the day cells; `StatusCalendarCell` itself is unchanged.
+- **Payslip card double/triple masking** (`HomePage.tsx`,
+  `MaskedAmount.tsx`) — each of Gross Pay/Deduction/Net Pay rendered its
+  own "Show Salary" toggle. Made `MaskedAmount` a controlled/presentational
+  component (`revealed` prop, no internal state or button — confirmed it
+  had no other call sites) and lifted one `salaryRevealed` toggle to the
+  Payslip card, next to "Download", matching UI_REFERENCE.md §1.1's "Links:
+  Download and Show Salary".
+- **"Type of leaves taken" donut ring** (`OverviewPage.tsx`, admin
+  Workforce Management) — the ring wasn't a broken layout, it was Recharts
+  3.x's default Pie entrance animation: `.recharts-shape` groups existed
+  but were empty until ~1–3s after mount (confirmed by inspecting the live
+  DOM — sectors had no `d` path at 500ms, full correct paths at 3s). Set
+  `isAnimationActive={false}` on the `Pie` so the ring renders immediately.
+- **Attendance day-detail metrics table overflow** — the 10-column session
+  table used `scroll={{ x: true }}`, which didn't constrain the table to
+  its Card's width, so it overflowed past the card (and near the viewport
+  edge) instead of scrolling. Wrapped it in a `div` with `overflowX: auto`
+  and changed `scroll` to `{ x: "max-content" }`; confirmed via computed
+  geometry that the table now scrolls within a container bounded to the
+  card (429px client width, 970px content width) rather than escaping it.
+- **Employee Home cards clipped at default window height** — Row 1's
+  Review/Track cards were stretched to match each other's height (AntD
+  equal-height row behaviour) with more padding than their content needed
+  (`Empty` at `24px 0`), pushing the Payslip/Quick Access row just past a
+  900px-tall viewport (measured: 902px bottom vs. 900px viewport). Added
+  an opt-in `compact` prop to `EmptyState` (`8px 0` padding) used only for
+  Review/Track, and tightened the page's outer `Space`/`Row` gutters
+  (16→12). Re-measured: Payslip/Quick Access now end at 890px, comfortably
+  inside a 900px viewport.
+
 ## Open questions
 
 Carried from spec §14 — configurable, not guessed, until answered:

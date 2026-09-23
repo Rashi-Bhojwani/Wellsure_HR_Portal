@@ -1,23 +1,21 @@
-import { useState } from "react";
-import { Button, Typography } from "antd";
-import { EyeInvisibleOutlined, EyeOutlined } from "@ant-design/icons";
+import { Typography } from "antd";
 
 const { Text } = Typography;
 
 interface MaskedAmountProps {
   value: number;
+  revealed: boolean;
   currency?: string;
   color?: string;
-  defaultRevealed?: boolean;
 }
 
 const formatter = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2, minimumFractionDigits: 2 });
 
-// Home → Payslip widget masks Gross/Deduction/Net as ***** until "Show
-// Salary" is clicked (docs/UI_REFERENCE.md §1.1).
-export function MaskedAmount({ value, currency = "₹", color, defaultRevealed = false }: MaskedAmountProps) {
-  const [revealed, setRevealed] = useState(defaultRevealed);
-
+// Home → Payslip widget masks Gross/Deduction/Net as ***** until the card's
+// single "Show Salary" toggle is clicked (docs/UI_REFERENCE.md §1.1).
+// Purely presentational: the parent card owns the reveal state so several
+// amounts can share one toggle.
+export function MaskedAmount({ value, revealed, currency = "₹", color }: MaskedAmountProps) {
   return (
     <Text strong style={color ? { color } : undefined}>
       {revealed ? (
@@ -27,15 +25,7 @@ export function MaskedAmount({ value, currency = "₹", color, defaultRevealed =
         </>
       ) : (
         "*****"
-      )}{" "}
-      <Button
-        type="link"
-        size="small"
-        onClick={() => setRevealed((r) => !r)}
-        icon={revealed ? <EyeInvisibleOutlined /> : <EyeOutlined />}
-      >
-        {revealed ? "Hide" : "Show Salary"}
-      </Button>
+      )}
     </Text>
   );
 }

@@ -84,6 +84,7 @@ export function WorkforceOverviewPage() {
                     outerRadius="80%"
                     paddingAngle={2}
                     cx="35%"
+                    isAnimationActive={false}
                   >
                     {leaveTypeBreakdown.map((entry, i) => (
                       <Cell key={entry.type} fill={colors.categorical[i % colors.categorical.length]} />
