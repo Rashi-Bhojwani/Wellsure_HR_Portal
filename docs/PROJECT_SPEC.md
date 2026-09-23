@@ -11,7 +11,7 @@ Our company has used **greytHR** for years for HR, attendance, leave and payroll
 Today, attendance from our biometric punching machine only reaches greytHR when HR clicks a "view/sync" button, usually at month end. Employees cannot see their attendance daily. In the new portal, every punch must appear on the employee's screen within seconds, and so must leave approvals, kudos, joinings, birthdays, anniversaries and announcements.
 
 **Company facts**
-- ~150–500 employees (confirm), across locations: C-10 Panchsheel, Ajmer, SPN-Panchsheel, B-22 Panchsheel (seed these; configurable).
+- ~150–500 employees (confirm), across multiple **branches in multiple cities** — this is not a small fixed list. HR creates and manages branches themselves (e.g. 3 separate branches in Ajmer alone, historically all just called "Ajmer"), and more are added over time. See §7.8/§11 for the City → Location (branch) model this implies. Seed data (docs/PROGRESS.md) uses placeholder branch names — C-10 Panchsheel, SPN-Panchsheel and B-22 Panchsheel from greytHR, plus 3 Ajmer branches — pending HR's confirmed list and city assignment.
 - One or more biometric punching machines (ZKTeco / eSSL family expected — confirm model).
 - Default shift: **General (GEN) 10:00–19:00**.
 - Leave year: **January–December**.
@@ -222,7 +222,9 @@ Headcount, joiners, leavers/attrition, birthdays & anniversaries, attendance mus
 Post announcements (org / location / department), moderate posts, manage groups, configure auto-posts (joining, birthday, anniversary templates and time).
 
 ### 7.8 Admin Tools
-Organisation setup (company, locations, departments, designations, grades, cost centres), holiday calendars, shift master, week-off patterns, leave types & policies, approval workflows (multi-level chains), workflow delegates, users/roles/permissions, email & letter templates, devices, data import/export, **audit log viewer**, system settings.
+Organisation setup (company, **cities** and **locations/branches** — two levels only, city → branch, with create/edit/merge-near-duplicates on both and deactivate (not delete) on a closed branch so its history stays intact — departments, designations, grades, cost centres), holiday calendars, shift master, week-off patterns, leave types & policies, approval workflows (multi-level chains), workflow delegates, users/roles/permissions, email & letter templates, devices, data import/export, **audit log viewer**, system settings.
+
+Holiday calendars, shift master and week-off patterns are all per-branch (`location_id`), and inherit the City/Location model from §11 — adding a branch is a data change in Organisation Setup, never a code change, in any of these later phases.
 
 ---
 
@@ -276,7 +278,7 @@ Every import: upload → parse into staging table → validate (duplicates, miss
 
 ## 11. Core data model (starting point — refine in Prisma)
 
-**Identity & org:** `users`, `roles`, `permissions`, `role_permissions`, `user_roles`, `refresh_tokens`, `invitation_tokens`, `password_reset_tokens` (looked up by Employee Code, not personal email — personal email is not unique, see Employees below and §3), `audit_logs` (redacted before write, see §9), `system_settings`, `company`, `locations`, `departments`, `designations`, `grades`, `cost_centres`
+**Identity & org:** `users`, `roles`, `permissions`, `role_permissions`, `user_roles`, `refresh_tokens`, `invitation_tokens`, `password_reset_tokens` (looked up by Employee Code, not personal email — personal email is not unique, see Employees below and §3), `audit_logs` (redacted before write, see §9), `system_settings`, `company`, `cities`, `locations` (branches — a growing, HR-managed list, not a small fixed set; two levels only, city → branch: an optional `city_id` on `locations` for reporting/grouping, independent of `locations`' own free-text address fields which are unchanged; `is_active` instead of delete, since a closed branch keeps historical employees/attendance attached; merge for near-duplicates on both `cities` and `locations`), `departments`, `designations`, `grades`, `cost_centres`. Every later-phase table that varies by branch (`holidays`, `shifts`, `week_off_patterns`, and anything else location-scoped) references `locations` by foreign key — never a hardcoded name or count — so adding a branch is a pure data change.
 **Employees:** `employees` (Employee Code, permanent and never reused; Device User ID lives in `device_user_mappings`, not here — see §3), `employee_personal` (personal email intentionally **not** unique — a shared family email or a rejoin would otherwise collide), `employee_name_history` (effective-dated full name, so a past payslip or letter still shows the name as of its own date after a later name change), `employee_statutory` (encrypted + last-4 + blind-index hash), `employee_bank_accounts` (encrypted + last-4 + blind-index hash, effective-dated), `employee_job_history` (effective-dated dept/designation/location/manager/grade/cost centre), `employee_documents`, `profile_change_requests` (`changes_json` redacted, see §9), `separations` (a rejoin is a new `employees` row, never a reopened one)
 **Attendance:** `device_user_mappings` (**built in Phase 1**, as groundwork for the Employee Code / Device User ID split — see §3; the rest of this bucket is still Phase 2), `devices`, `raw_punches`, `unmapped_punches`, `shifts`, `week_off_patterns`, `shift_assignments`, `shift_overrides`, `daily_attendance`, `attendance_overrides`, `regularization_requests`, `attendance_periods` (lock state)
 **Leave:** `leave_types`, `leave_policies`, `leave_ledger`, `leave_requests`, `holidays`, `restricted_holidays`, `comp_off_credits`, `year_end_runs`

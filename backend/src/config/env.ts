@@ -16,6 +16,16 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   REDIS_URL: z.string().min(1, "REDIS_URL is required"),
 
+  // Field-level encryption (src/lib/encryption.ts) and blind-index hashing
+  // (src/lib/fieldHash.ts) for bank account/PAN/Aadhaar/UAN — spec §9.
+  // Local dev derives a static key/pepper from these strings; staging/
+  // production swap in real KMS envelope encryption (spec §15.3) behind the
+  // same encrypt/decrypt call shape. The two must never be equal — the
+  // pepper is deliberately a separate secret from the encryption key so a
+  // leaked blind-index pepper alone can't help decrypt anything.
+  KMS_FIELD_KEY_ID: z.string().min(1).default("dev-local-key"),
+  FIELD_HASH_PEPPER: z.string().min(1).default("dev-local-pepper"),
+
   // Storage — local filesystem for dev, S3 in staging/production
   // (see src/integrations/storage).
   STORAGE_DRIVER: z.enum(["local", "s3"]).default("local"),
@@ -31,6 +41,9 @@ const envSchema = z.object({
 
   // AWS (staging/production only — used by the S3 and SES clients).
   AWS_REGION: z.string().default("ap-south-1"),
+}).refine((v) => v.KMS_FIELD_KEY_ID !== v.FIELD_HASH_PEPPER, {
+  message: "KMS_FIELD_KEY_ID and FIELD_HASH_PEPPER must be different secrets",
+  path: ["FIELD_HASH_PEPPER"],
 });
 
 export type Env = z.infer<typeof envSchema>;

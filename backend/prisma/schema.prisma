@@ -1,6 +1,19 @@
-// Prisma schema — Phase 0 only proves the database connection works.
-// No business models yet; those start in Phase 1 (see docs/PROJECT_SPEC.md
-// §11 for the target data model and §12 for phase order).
+// Prisma schema — Phase 1: auth, RBAC, org masters, employees.
+// See docs/PROJECT_SPEC.md §2/§3/§9/§11 for the business rules this
+// encodes, and docs/PROGRESS.md for what's still open (branch list, PL
+// eligibility boundary, etc.) that this schema deliberately keeps
+// configurable rather than hardcoding.
+//
+// Conventions used throughout:
+// - id: String @id @default(cuid())
+// - createdAt: DateTime @default(now()), updatedAt: DateTime @updatedAt
+// - snake_case table/column names via @@map/@map, camelCase in the client
+// - @db.Date for business/calendar dates (joining date, DOB, effective-from/
+//   to, ...) vs plain DateTime (timestamptz) for true instants (createdAt,
+//   expiresAt, lastLoginAt, ...) — mixing these up silently shifts a date by
+//   a day depending on server timezone (CLAUDE.md "Timezone/currency" rule).
+// - Four partial unique indexes Prisma can't express are added by hand to
+//   the generated migration SQL — see the comment on each affected model.
 
 generator client {
   provider = "prisma-client-js"
@@ -10,3 +23,606 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+// ── Enums ────────────────────────────────────────────────────────────────
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+// No separate LOCKED value: the 15-minute lockout after 5 failed attempts
+// (spec §3.7) is a temporary, self-expiring condition on an otherwise-
+// ACTIVE account, represented purely by User.lockedUntil/
+// failedLoginAttempts — login checks `lockedUntil > now()` regardless of
+// `status`, so there's no separate state to remember to clear.
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+  SEPARATED
+}
+
+enum EmploymentType {
+  PERMANENT
+  CONTRACT
+  INTERN
+  CONSULTANT
+  PROBATION
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum ChangeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum SeparationStatus {
+  INITIATED
+  COMPLETED
+  CANCELLED
+}
+
+// ── Identity & auth ─────────────────────────────────────────────────────
+
+model User {
+  id                      String     @id @default(cuid())
+  employeeId              String     @unique @map("employee_id")
+  employee                Employee   @relation(fields: [employeeId], references: [id])
+  passwordHash            String?    @map("password_hash")
+  status                  UserStatus @default(INVITED)
+  failedLoginAttempts     Int        @default(0) @map("failed_login_attempts")
+  lockedUntil             DateTime?  @map("locked_until")
+  totpSecretEncrypted     Bytes?     @map("totp_secret_encrypted")
+  totpEnabled             Boolean    @default(false) @map("totp_enabled")
+  totpVerifiedAt          DateTime?  @map("totp_verified_at")
+  privacyNoticeAcceptedAt DateTime?  @map("privacy_notice_accepted_at")
+  lastLoginAt             DateTime?  @map("last_login_at")
+  createdAt               DateTime   @default(now()) @map("created_at")
+  updatedAt               DateTime   @updatedAt @map("updated_at")
+
+  roles            UserRole[]
+  refreshTokens    RefreshToken[]
+  invitationTokens InvitationToken[]
+  passwordResets   PasswordResetToken[]
+  totpBackupCodes  TotpBackupCode[]
+  auditLogs        AuditLog[]           @relation("AuditActor")
+  settingsUpdated  SystemSetting[]
+
+  @@map("users")
+}
+
+// One login account per employee (spec §3: Employee Code + password IS the
+// login). Created atomically with its Employee row by the Add Employee
+// service — the `User?` optionality on Employee's side is a Prisma artifact
+// of the 1:1-via-unique-FK shape, not a real "employee without a user" state.
+
+model Role {
+  id          String   @id @default(cuid())
+  code        String   @unique // SUPER_ADMIN | HR_ADMIN | HR_EXECUTIVE | PAYROLL_ADMIN | MANAGER | APPROVER | EMPLOYEE
+  name        String
+  description String?
+  isSystem    Boolean  @default(true) @map("is_system") // seeded roles; not user-deletable
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  permissions RolePermission[]
+  users       UserRole[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  key         String   @unique // e.g. "employee.view", "employee.bank.view"
+  description String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String     @map("role_id")
+  role         Role       @relation(fields: [roleId], references: [id])
+  permissionId String     @map("permission_id")
+  permission   Permission @relation(fields: [permissionId], references: [id])
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  userId           String   @map("user_id")
+  user             User     @relation(fields: [userId], references: [id])
+  roleId           String   @map("role_id")
+  role             Role     @relation(fields: [roleId], references: [id])
+  assignedByUserId String?  @map("assigned_by_user_id")
+  assignedAt       DateTime @default(now()) @map("assigned_at")
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+// A user can hold multiple roles (spec §2); effective permissions = union
+// of all held roles' permissions.
+
+model RefreshToken {
+  id                String        @id @default(cuid())
+  userId            String        @map("user_id")
+  user              User          @relation(fields: [userId], references: [id])
+  tokenHash         String        @unique @map("token_hash") // raw token never stored
+  userAgent         String?       @map("user_agent")
+  ipAddress         String?       @map("ip_address")
+  expiresAt         DateTime      @map("expires_at")
+  revokedAt         DateTime?     @map("revoked_at")
+  replacedByTokenId String?       @unique @map("replaced_by_token_id")
+  replacedBy        RefreshToken? @relation("TokenRotation", fields: [replacedByTokenId], references: [id])
+  rotatedFrom       RefreshToken? @relation("TokenRotation")
+  lastUsedAt        DateTime?     @map("last_used_at")
+  createdAt         DateTime      @default(now()) @map("created_at")
+
+  @@index([userId, revokedAt])
+  @@map("refresh_tokens")
+}
+
+// One row = one active session; "active session listing" is
+// `WHERE userId = ? AND revokedAt IS NULL AND expiresAt > now()`. Reuse of
+// an already-rotated (replacedByTokenId set) token revokes the whole chain.
+
+model InvitationToken {
+  id              String    @id @default(cuid())
+  userId          String    @map("user_id")
+  user            User      @relation(fields: [userId], references: [id])
+  tokenHash       String    @unique @map("token_hash")
+  expiresAt       DateTime  @map("expires_at") // now + 48h
+  usedAt          DateTime? @map("used_at")
+  createdByUserId String?   @map("created_by_user_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("invitation_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  user      User      @relation(fields: [userId], references: [id])
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+// Requested by Employee Code, not personal email — personalEmail is not
+// unique (see EmployeePersonal), so the request form resolves an Employee
+// Code to that one employee's personalEmail and sends there. No ambiguity,
+// no email-enumeration surface.
+
+model TotpBackupCode {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  user      User      @relation(fields: [userId], references: [id])
+  codeHash  String    @map("code_hash")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("totp_backup_codes")
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorUserId String?  @map("actor_user_id") // null = system/scheduler action
+  actor       User?    @relation("AuditActor", fields: [actorUserId], references: [id])
+  action      String
+  entityType  String   @map("entity_type")
+  entityId    String   @map("entity_id")
+  before      Json? // always passed through the shared redact() helper before insert — see writeAuditLog()
+  after       Json? // ditto
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([entityType, entityId])
+  @@index([actorUserId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// Append-only. Only writeAuditLog() may insert a row — no other code path
+// calls prisma.auditLog.create directly, so redaction can never be skipped.
+
+model SystemSetting {
+  key             String   @id
+  value           Json
+  updatedByUserId String?  @map("updated_by_user_id")
+  updatedBy       User?    @relation(fields: [updatedByUserId], references: [id])
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("system_settings")
+}
+
+// Phase 1 keys: auth.lockoutAttempts, auth.lockoutMinutes,
+// auth.passwordMinLength, auth.invitationTtlHours, auth.require2faRoles.
+
+// ── Org masters ─────────────────────────────────────────────────────────
+
+model Company {
+  id                String   @id @default(cuid())
+  name              String
+  legalName         String?  @map("legal_name")
+  pan               String?
+  tan               String?
+  cin               String?
+  registeredAddress String?  @map("registered_address")
+  logoStorageKey    String?  @map("logo_storage_key")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@map("company")
+}
+
+// Single row for now — not enforced at DB level, just by the admin UI only
+// ever showing one record.
+
+model City {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  state     String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  locations Location[]
+
+  @@map("cities")
+}
+
+// Two levels only — city -> branch, not a general tree. Grouping/reporting
+// concept (Employee Count by City), independent of any branch's own postal
+// address city text. create/edit/merge-near-duplicates in Organisation
+// Setup; no isActive here — deactivation is a branch (Location) concept.
+
+model Location {
+  id           String   @id @default(cuid())
+  code         String   @unique
+  name         String   @unique
+  cityId       String?  @map("city_id")
+  cityMaster   City?    @relation(fields: [cityId], references: [id]) // structured grouping — distinct from `city` below
+  addressLine1 String   @map("address_line1")
+  addressLine2 String?  @map("address_line2")
+  city         String // free-text postal address city (unchanged shape from the original draft)
+  state        String
+  pincode      String
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  jobHistory EmployeeJobHistory[]
+
+  @@index([cityId])
+  @@map("locations")
+}
+
+// A branch. Growing, HR-managed list (spec §1) — not a small fixed set.
+// `isActive` instead of delete: a closed branch keeps its historical
+// EmployeeJobHistory rows intact and just disappears from active dropdowns
+// (delete stays blocked outright when referenced). `cityId` is optional and
+// independently editable from the branch's own address fields, since the
+// postal address city and the reporting-city grouping can legitimately
+// differ (e.g. a branch physically in a suburb HR wants grouped under the
+// metro city). create/edit/merge-near-duplicates/deactivate all live in
+// Organisation Setup (spec §7.8).
+
+model Department {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  jobHistory EmployeeJobHistory[]
+
+  @@map("departments")
+}
+
+model Designation {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  jobHistory EmployeeJobHistory[]
+
+  @@map("designations")
+}
+
+model Grade {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String   @unique
+  rank      Int? // display/seniority ordering
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  jobHistory EmployeeJobHistory[]
+
+  @@map("grades")
+}
+
+model CostCentre {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  jobHistory EmployeeJobHistory[]
+
+  @@map("cost_centres")
+}
+
+// ── Employees ────────────────────────────────────────────────────────────
+
+model Employee {
+  id              String         @id @default(cuid())
+  employeeCode    String         @unique @map("employee_code") // permanent login username — never reassigned, even after separation
+  officialEmail   String?        @unique @map("official_email")
+  dateOfJoining   DateTime       @map("date_of_joining") @db.Date
+  lastWorkingDate DateTime?      @map("last_working_date") @db.Date
+  employmentType  EmploymentType @map("employment_type")
+  status          EmployeeStatus @default(ACTIVE)
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  user           User?
+  personal       EmployeePersonal?
+  nameHistory    EmployeeNameHistory[]
+  statutory      EmployeeStatutory?
+  bankAccounts   EmployeeBankAccount[]
+  jobHistory     EmployeeJobHistory[]   @relation("EmployeeJobHistoryOwner")
+  managedBy      EmployeeJobHistory[]   @relation("EmployeeManager") // reverse: rows where I'm the manager
+  deviceMappings DeviceUserMapping[]
+  documents      EmployeeDocument[]
+  changeRequests ProfileChangeRequest[]
+  separations    Separation[]
+
+  @@index([status])
+  @@index([dateOfJoining])
+  @@map("employees")
+}
+
+// The static identity row. Org placement (dept/designation/location/
+// manager/grade/cost-centre) is NEVER stored here — only in
+// EmployeeJobHistory — so "who reported to whom, in what role, at what
+// branch, as of any date" is always reconstructable, not just the current
+// snapshot. A rejoining employee always gets a brand-new row here (new id,
+// new employeeCode) — old rows are never reopened or reused.
+
+model EmployeePersonal {
+  id                       String   @id @default(cuid())
+  employeeId               String   @unique @map("employee_id")
+  employee                 Employee @relation(fields: [employeeId], references: [id])
+  dateOfBirth              DateTime @map("date_of_birth") @db.Date
+  gender                   Gender
+  personalEmail            String   @map("personal_email") // NOT unique — see PasswordResetToken
+  mobile                   String
+  currentAddress           String   @map("current_address")
+  permanentAddress         String   @map("permanent_address")
+  emergencyContactName     String   @map("emergency_contact_name")
+  emergencyContactPhone    String   @map("emergency_contact_phone")
+  emergencyContactRelation String   @map("emergency_contact_relation")
+  bloodGroup               String?  @map("blood_group")
+  photoStorageKey          String?  @map("photo_storage_key")
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
+
+  @@index([personalEmail])
+  @@map("employee_personal")
+}
+
+// Current-state only (not effective-dated) — every change is still captured
+// in audit_logs regardless. Full name lives in EmployeeNameHistory instead
+// of here (see below). Address/emergency-contact/photo are employee-
+// editable directly; every other field requires HR (ProfileChangeRequest
+// for employee-initiated changes to anything else).
+
+model EmployeeNameHistory {
+  id              String    @id @default(cuid())
+  employeeId      String    @map("employee_id")
+  employee        Employee  @relation(fields: [employeeId], references: [id])
+  fullName        String    @map("full_name")
+  effectiveFrom   DateTime  @map("effective_from") @db.Date
+  effectiveTo     DateTime? @map("effective_to") @db.Date // null = current
+  changeReason    String?   @map("change_reason")
+  createdByUserId String    @map("created_by_user_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@index([employeeId, effectiveTo])
+  @@map("employee_name_history")
+}
+
+// Effective-dated so a payslip/letter generated in the past still shows the
+// name as of its own date after a later name change (e.g. marriage). Read
+// through one shared helper, resolveCurrentFullName(employeeId, asOfDate?),
+// used everywhere a name is displayed — never read ad hoc. Migration SQL
+// adds a partial unique index: one open row per employee —
+// (employee_id) WHERE effective_to IS NULL.
+
+model EmployeeStatutory {
+  id               String   @id @default(cuid())
+  employeeId       String   @unique @map("employee_id")
+  employee         Employee @relation(fields: [employeeId], references: [id])
+  panEncrypted     Bytes?   @map("pan_encrypted")
+  panLast4         String?  @map("pan_last4")
+  panHash          String?  @unique @map("pan_hash") // HMAC-SHA256(normalised PAN, FIELD_HASH_PEPPER) — dedup + exact-match only
+  aadhaarEncrypted Bytes?   @map("aadhaar_encrypted")
+  aadhaarLast4     String?  @map("aadhaar_last4")
+  aadhaarHash      String?  @unique @map("aadhaar_hash")
+  uanEncrypted     Bytes?   @map("uan_encrypted")
+  uanLast4         String?  @map("uan_last4")
+  esiNumber        String?  @map("esi_number") // deliberately unencrypted — spec §9 lists only bank account/PAN/Aadhaar/UAN as requiring encryption; ESI is not in that list
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("employee_statutory")
+}
+
+// Grids/lists read panLast4/aadhaarLast4/uanLast4 only — never decrypt to
+// render a list. panHash/aadhaarHash are global-unique (one EmployeeStatutory
+// row per employee, no history here) so no two employees can share a PAN or
+// Aadhaar. The reveal endpoint is the only path that decrypts, and is
+// audit-logged every time.
+
+model EmployeeBankAccount {
+  id                     String    @id @default(cuid())
+  employeeId             String    @map("employee_id")
+  employee               Employee  @relation(fields: [employeeId], references: [id])
+  accountHolderName      String    @map("account_holder_name")
+  accountNumberEncrypted Bytes     @map("account_number_encrypted")
+  accountNumberLast4     String    @map("account_number_last4")
+  accountNumberHash      String    @map("account_number_hash") // HMAC-SHA256(normalised account number, FIELD_HASH_PEPPER)
+  ifsc                   String
+  bankName               String    @map("bank_name")
+  branchName             String    @map("branch_name")
+  effectiveFrom          DateTime  @default(now()) @map("effective_from") @db.Date
+  effectiveTo            DateTime? @map("effective_to") @db.Date
+  createdByUserId        String    @map("created_by_user_id")
+  createdAt              DateTime  @default(now()) @map("created_at")
+
+  @@index([employeeId, effectiveTo])
+  @@index([accountNumberHash])
+  @@map("employee_bank_accounts")
+}
+
+// Effective-dated: changing bank details closes the current row and inserts
+// a new one — never an in-place update. Migration SQL adds two partial
+// unique indexes:
+//   1. one open row per employee — (employee_id) WHERE effective_to IS NULL
+//   2. no two employees share the same *active* account —
+//      (account_number_hash) WHERE effective_to IS NULL
+// (2) is scoped to open rows only, so an employee can legitimately re-adopt
+// an account they used years ago without colliding with their own closed
+// history.
+
+model EmployeeJobHistory {
+  id                 String      @id @default(cuid())
+  employeeId         String      @map("employee_id")
+  employee           Employee    @relation("EmployeeJobHistoryOwner", fields: [employeeId], references: [id])
+  departmentId       String      @map("department_id")
+  department         Department  @relation(fields: [departmentId], references: [id])
+  designationId      String      @map("designation_id")
+  designation        Designation @relation(fields: [designationId], references: [id])
+  locationId         String      @map("location_id")
+  location           Location    @relation(fields: [locationId], references: [id])
+  gradeId            String?     @map("grade_id")
+  grade              Grade?      @relation(fields: [gradeId], references: [id])
+  costCentreId       String?     @map("cost_centre_id")
+  costCentre         CostCentre? @relation(fields: [costCentreId], references: [id])
+  reportingManagerId String?     @map("reporting_manager_id")
+  reportingManager   Employee?   @relation("EmployeeManager", fields: [reportingManagerId], references: [id])
+  effectiveFrom      DateTime    @map("effective_from") @db.Date
+  effectiveTo        DateTime?   @map("effective_to") @db.Date
+  changeReason       String?     @map("change_reason")
+  createdByUserId    String      @map("created_by_user_id")
+  createdAt          DateTime    @default(now()) @map("created_at")
+
+  @@index([employeeId, effectiveTo])
+  @@index([reportingManagerId])
+  @@index([departmentId, effectiveTo])
+  @@index([locationId, effectiveTo])
+  @@map("employee_job_history")
+}
+
+// Effective-dated dept/designation/location/manager per spec §11, extended
+// to also carry grade + cost centre since both are org-placement attributes
+// that change on promotion/transfer the same way. Migration SQL adds a
+// partial unique index: one open row per employee —
+// (employee_id) WHERE effective_to IS NULL.
+
+model DeviceUserMapping {
+  id              String    @id @default(cuid())
+  employeeId      String    @map("employee_id")
+  employee        Employee  @relation(fields: [employeeId], references: [id])
+  deviceUserId    String    @map("device_user_id") // raw biometric machine user ID, e.g. "1042"
+  validFrom       DateTime  @map("valid_from") @db.Date
+  validTo         DateTime? @map("valid_to") @db.Date // null = currently active
+  createdByUserId String    @map("created_by_user_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@index([deviceUserId])
+  @@index([employeeId])
+  @@map("device_user_mappings")
+}
+
+// Phase 1 schema groundwork for Phase 2's ingestion (spec §4.3), added now
+// because Employee Code's permanence otherwise breaks under device ID
+// reuse — see spec §3. Migration SQL adds a partial unique index: one
+// active mapping per device ID — (device_user_id) WHERE valid_to IS NULL.
+// raw_punches/devices tables themselves are still Phase 2, not built here.
+
+model EmployeeDocument {
+  id               String   @id @default(cuid())
+  employeeId       String   @map("employee_id")
+  employee         Employee @relation(fields: [employeeId], references: [id])
+  documentType     String   @map("document_type") // free-text/controlled-vocab, not an enum — expands a lot from Phase 5's letter generation
+  fileKey          String   @map("file_key") // StorageService key
+  fileName         String   @map("file_name")
+  mimeType         String   @map("mime_type")
+  sizeBytes        Int      @map("size_bytes")
+  uploadedByUserId String   @map("uploaded_by_user_id")
+  uploadedAt       DateTime @default(now()) @map("uploaded_at")
+
+  @@index([employeeId])
+  @@map("employee_documents")
+}
+
+model ProfileChangeRequest {
+  id                String              @id @default(cuid())
+  employeeId        String              @map("employee_id")
+  employee          Employee            @relation(fields: [employeeId], references: [id])
+  requestedByUserId String              @map("requested_by_user_id")
+  fieldGroup        String              @map("field_group") // "bank" | "statutory" | "personal"
+  changesJson       Json                @map("changes_json") // always passed through redact() — see createProfileChangeRequest()
+  status            ChangeRequestStatus @default(PENDING)
+  remarks           String?
+  decidedByUserId   String?             @map("decided_by_user_id")
+  decidedAt         DateTime?           @map("decided_at")
+  createdAt         DateTime            @default(now()) @map("created_at")
+
+  @@index([employeeId, status])
+  @@map("profile_change_requests")
+}
+
+model Separation {
+  id                String           @id @default(cuid())
+  employeeId        String           @map("employee_id")
+  employee          Employee         @relation(fields: [employeeId], references: [id])
+  lastWorkingDate   DateTime         @map("last_working_date") @db.Date
+  reason            String
+  notes             String?
+  status            SeparationStatus @default(INITIATED)
+  initiatedByUserId String           @map("initiated_by_user_id")
+  initiatedAt       DateTime         @default(now()) @map("initiated_at")
+  cancelledAt       DateTime?        @map("cancelled_at")
+  completedAt       DateTime?        @map("completed_at")
+
+  @@index([employeeId])
+  @@map("separations")
+}
+
+// Multiple rows per employee are correct (rejoin). A rejoin always gets a
+// brand-new Employee row rather than reopening this one — see Employee.

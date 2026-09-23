@@ -10,7 +10,7 @@ committed).
 |---|---|---|
 | — | Initial project structure (this commit) | ✅ Done |
 | 0 | Foundation | ✅ Done |
-| 1 | Auth, RBAC, org, employees | Not started |
+| 1 | Auth, RBAC, org, employees | In progress — data layer done |
 | 1.5 | AWS staging environment | Not started |
 | 2 | Biometric ingestion + attendance engine + real-time | Not started |
 | 3 | Attendance administration | Not started |
@@ -311,6 +311,68 @@ and fixed before starting Phase 1. Verified live (Playwright) at both
   (16→12). Re-measured: Payslip/Quick Access now end at 890px, comfortably
   inside a 900px viewport.
 
+### Phase 1, commit A — data layer (schema, migrations, encryption, seed)
+
+First of several Phase 1 commits, scoped to the database foundation only —
+no routes/screens yet. Built after two rounds of schema review (Prisma
+model list, then a City/Location correction) captured in this session.
+
+- **`backend/prisma/schema.prisma`** — all 26 Phase 1 models (identity/
+  auth, org masters including the new `City`/`Location` two-level branch
+  model, employees). Business dates use `@db.Date`, true instants use
+  `DateTime`. `EmployeeJobHistory`/`EmployeeBankAccount`/
+  `EmployeeNameHistory` are effective-dated; `DeviceUserMapping` decouples
+  the permanent Employee Code from the reusable biometric device user ID
+  (Phase 2 groundwork — see spec §3/§11). Encrypted fields
+  (`EmployeeStatutory`, `EmployeeBankAccount`) carry a last-4 plaintext
+  column and an HMAC blind-index hash alongside the ciphertext, so grids
+  never decrypt to render a mask and duplicates can be detected without it.
+- **Migrations** — two: the initial schema, and a small additive follow-up
+  that removed an unused `UserStatus.LOCKED` enum value found redundant
+  with `lockedUntil`/`failedLoginAttempts` while verifying the seed (kept
+  as two migrations rather than folded together, since the fix was found
+  after the first had already been applied and seeded locally). Four
+  partial unique indexes Prisma can't express in `schema.prisma` were
+  hand-added to the generated SQL: one open `EmployeeJobHistory` row per
+  employee, one open `EmployeeBankAccount` row per employee, no two
+  employees sharing an *active* bank account, and one active
+  `DeviceUserMapping` per device user ID — plus the same "one open row"
+  pattern for `EmployeeNameHistory`.
+- **`backend/src/lib/`** — `encryption.ts` (AES-256-GCM, key derived from
+  `KMS_FIELD_KEY_ID`; swaps for real KMS envelope encryption in Phase 1.5
+  behind the same function signatures), `fieldHash.ts` (HMAC-SHA256 blind
+  index keyed by a separate `FIELD_HASH_PEPPER`, plus PAN/Aadhaar/account-
+  number normalisers), `redact.ts` (masks known-sensitive keys to their
+  last 4 in any JSON value), `audit.ts` (`writeAuditLog()` — the only
+  function permitted to insert an `audit_logs` row, redacts automatically).
+  `env.ts` now validates both new env vars and refuses to boot if they're
+  equal to each other.
+- **`backend/prisma/seed.ts`** — Company; 2 cities (Ajmer, and a
+  placeholder "Delhi" for the Panchsheel branches — see the open question
+  below) with 7 branches (3 Ajmer, 3 Panchsheel, 1 deliberately misspelled
+  "C-10 Panchsheeel" as the Organisation Setup merge-flow fixture);
+  generic departments/designations/grades/cost-centres; 7 roles and 19
+  Phase 1 permissions (`role.manage`/`settings.manage` are SUPER_ADMIN-
+  only per spec §2's explicit callout; `HR_EXECUTIVE` gets no
+  `employee.bank.*`); 30 employees (Super Admin "Aditi Sharma" — code
+  1000 — continuing the placeholder name already used throughout the
+  Phase 0 UI; HR Admin; 4 managers; the rest individual contributors) with
+  realistic Indian names, real encrypted/hashed statutory and bank data,
+  and a deliberate mix of account states (INVITED, ACTIVE, one locked, two
+  separated) including a **device-ID reuse fixture**: separated employee
+  1090 freeing that device user ID for the collision/suggestion flow to be
+  tested against once Add Employee exists. `npm run db:seed` wraps
+  `prisma migrate reset --force` (wipe + reapply migrations + reseed);
+  verified by running migrations from empty and the seed script directly
+  against a freshly-migrated empty database (30/30 employees, all
+  relations, encrypted-field byte lengths and hash lengths all correct) —
+  the full destructive `db:seed` path itself needs the user's explicit
+  consent to run (Prisma's own AI-agent safety gate on `migrate reset`),
+  still pending as of this entry.
+- **Incidental fixes**: `README.md`'s local-setup `CREATE ROLE` command
+  was missing `CREATEDB`, which every contributor would need anyway for
+  Prisma's `migrate dev` shadow database — not just this sandbox.
+
 ## Open questions
 
 Carried from spec §14 — configurable, not guessed, until answered:
@@ -321,7 +383,7 @@ Carried from spec §14 — configurable, not guessed, until answered:
 - [ ] Leave encashment formula and its tax treatment (to be confirmed by CA).
 - [ ] Bank bulk-transfer file format (from bank).
 - [ ] PT/LWF applicability per location's state.
-- [ ] Actual headcount and full location list.
+- [ ] Actual headcount and the authoritative branch (`locations`) list — branches are HR-managed and growing (e.g. 3 separate Ajmer branches, not the single "Ajmer" row earlier drafts assumed), so this isn't a one-time seed value. Also open: which city each of the 3 Panchsheel branches (C-10, SPN, B-22) belongs to, and the correct names/addresses for the 3 Ajmer branches — seeded as placeholders for now (see the Phase 1 log entry below).
 - [ ] Company domain name for the portal and whether DNS is on Route 53.
 - [ ] Whether the office has a static public IP (needed for device push).
 - [ ] AWS account structure (single account, two environments, or separate

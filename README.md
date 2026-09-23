@@ -149,9 +149,13 @@ Matches the defaults in `.env.example` — adjust both if you use different
 credentials.
 
 ```
-psql -U postgres -c "CREATE ROLE wellsure LOGIN PASSWORD 'wellsure';"
+psql -U postgres -c "CREATE ROLE wellsure LOGIN CREATEDB PASSWORD 'wellsure';"
 psql -U postgres -c "CREATE DATABASE wellsure_hr OWNER wellsure;"
 ```
+
+`CREATEDB` is required, not just `LOGIN` — Prisma's `migrate dev` creates a
+throwaway shadow database to compute each migration's diff, so the role
+needs permission to create databases, not just connect to one.
 
 (On Linux, PostgreSQL usually needs `sudo -u postgres psql -c "..."`
 instead, unless you've set up peer/password auth for your own user.)
