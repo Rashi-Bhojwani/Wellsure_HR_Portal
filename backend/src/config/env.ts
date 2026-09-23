@@ -15,6 +15,22 @@ const envSchema = z.object({
 
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   REDIS_URL: z.string().min(1, "REDIS_URL is required"),
+
+  // Storage — local filesystem for dev, S3 in staging/production
+  // (see src/integrations/storage).
+  STORAGE_DRIVER: z.enum(["local", "s3"]).default("local"),
+  STORAGE_LOCAL_DIR: z.string().default(".storage"),
+  STORAGE_SIGNED_URL_SECRET: z.string().default("dev-local-signing-secret"),
+  S3_BUCKET: z.string().optional(),
+
+  // Mail — console/.eml for dev, SES in staging/production
+  // (see src/integrations/mail).
+  MAIL_DRIVER: z.enum(["console", "ses"]).default("console"),
+  MAIL_DEV_DIR: z.string().default(".mail"),
+  SES_FROM: z.string().optional(),
+
+  // AWS (staging/production only — used by the S3 and SES clients).
+  AWS_REGION: z.string().default("ap-south-1"),
 });
 
 export type Env = z.infer<typeof envSchema>;

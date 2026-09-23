@@ -12,6 +12,36 @@ concurrency:
 jobs:
   install-lint-typecheck-test:
     runs-on: ubuntu-latest
+    # Postgres/Redis as service containers — nothing needed on the runner
+    # beyond Docker (which GitHub-hosted runners already have). Same
+    # DATABASE_URL/REDIS_URL shape as local dev (see README.md), just
+    # pointed at these containers instead of a locally installed service.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: wellsure
+          POSTGRES_PASSWORD: wellsure
+          POSTGRES_DB: wellsure_hr
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://wellsure:wellsure@localhost:5432/wellsure_hr
+      REDIS_URL: redis://localhost:6379
     steps:
       - uses: actions/checkout@v4
 
@@ -34,6 +64,9 @@ jobs:
 
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Check services
+        run: npm run check:services
 
       - name: Test
         run: npm run test

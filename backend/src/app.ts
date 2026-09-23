@@ -7,6 +7,7 @@ import { logger } from "./lib/logger";
 import { prisma } from "./lib/prisma";
 import { redis } from "./lib/redis";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
+import { devStorageRouter } from "./integrations/storage";
 
 export function createApp(): Express {
   const app = express();
@@ -41,6 +42,10 @@ export function createApp(): Express {
       res.status(503).json({ status: "unavailable", db: dbOk, redis: redisOk });
     }
   });
+
+  // Serves LocalStorageService's simulated signed URLs — see
+  // src/integrations/storage/devRoute.ts. Inert under STORAGE_DRIVER=s3.
+  app.use(devStorageRouter);
 
   // Module routes (auth, employees, attendance, ...) are mounted here
   // starting Phase 1 — see src/modules/*/README.md.

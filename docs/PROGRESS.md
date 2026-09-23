@@ -212,6 +212,64 @@ limitation of that sandbox, unrelated to this repo). Re-run
 `docker build -f backend/Dockerfile .` in a normal environment to
 confirm; nothing sandbox-specific is in the committed Dockerfile.
 
+### Replaced docker-compose with local services
+
+Local development no longer uses Docker at all — `docker-compose.yml`
+(Postgres, Redis, MinIO, Mailpit) is deleted. `backend/Dockerfile` and
+CI's Docker build step are unchanged: that image is still what runs on
+ECS Fargate and what CI verifies.
+
+- **Postgres 16 + Redis 7** — installed and run directly on the machine.
+  `.env.example`'s `DATABASE_URL`/`REDIS_URL` already pointed at
+  `localhost`, so only their comments changed (docker-compose → local
+  install). Verified live: created the `wellsure`/`wellsure_hr` role and
+  database matching `.env.example`, ran the backend against them, hit
+  `/ready` (`{"db":true,"redis":true}`).
+- **Storage**: built the `StorageService` interface for real (it was a
+  README placeholder before) — `LocalStorageService`
+  (`STORAGE_DRIVER=local`, the new default) writes objects under
+  `STORAGE_LOCAL_DIR` (default `.storage/`, gitignored) with a sidecar
+  `<key>.meta.json` for content type, and simulates signed URLs with an
+  HMAC over `key:expiry` verified by a new `/dev/storage` route
+  (`backend/src/integrations/storage/devRoute.ts`, mounted in `app.ts`).
+  `S3StorageService` (`STORAGE_DRIVER=s3`) is the real AWS implementation
+  via `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner`, unchanged
+  in shape from what MinIO stood in for. Verified live end to end: put an
+  object, fetched its signed URL over HTTP (right bytes, right
+  `Content-Type`), confirmed a tampered signature and an expired URL both
+  get `403`, and a valid signature for a deleted object gets `404`.
+- **Mail**: built the `MailService` interface for real too —
+  `ConsoleMailService` (`MAIL_DRIVER=console`, the new default) logs the
+  message and writes a real `.eml` file to `MAIL_DEV_DIR` (default
+  `.mail/`, gitignored) instead of sending anything. `SesMailService`
+  (`MAIL_DRIVER=ses`) is the real AWS implementation via
+  `@aws-sdk/client-ses`. Verified live: sent a message, confirmed the
+  console log and a valid, readable `.eml` file.
+- **`npm run check:services`** (`backend/scripts/check-services.ts`,
+  delegated from the root): checks Postgres via `prisma.$queryRaw`
+  and Redis via `ioredis` ping, prints reachable/unreachable for each
+  with the connection string's password masked, and — on failure —
+  OS-specific (`darwin`/`linux`/`win32`) install/start instructions.
+  Exits non-zero if either is unreachable. Verified both branches live
+  (services down → clear instructions + exit 1; services up → exit 0).
+- **CI** (`.github/workflows/ci.yml`): added `postgres:16-alpine` and
+  `redis:7-alpine` as GitHub Actions service containers on the existing
+  job (health-checked, same `wellsure`/`wellsure_hr` credentials as
+  local dev), wired `DATABASE_URL`/`REDIS_URL` to them, and added a
+  "Check services" step running `npm run check:services` — proves the
+  script (and the services) work generically, not just "absent locally".
+  Needs nothing from a contributor's machine.
+- **Docs**: rewrote `README.md`'s "Getting started" into a "Local setup"
+  section with step-by-step Postgres/Redis install + DB/user creation
+  for macOS, Linux and Windows (WSL2 or Memurai for Redis, since Redis
+  has no official Windows build), plus a separate "Docker (AWS
+  deployment image only)" section so it's clear the Dockerfile didn't
+  go away, it just isn't part of the dev loop. Updated `CLAUDE.md`'s
+  Commands section and `docs/PROJECT_SPEC.md` §12/§15.3 to match (kept
+  as historical record: the "Initial project structure" and "Switched
+  from a pnpm monorepo" log entries above still say docker-compose/MinIO/
+  Mailpit because that's what was true when they were written).
+
 ## Open questions
 
 Carried from spec §14 — configurable, not guessed, until answered:

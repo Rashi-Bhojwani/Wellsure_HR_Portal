@@ -29,5 +29,9 @@ coverage/
 infra/cdk.out/
 infra/.cdk.staging/
 
+# Local dev storage/mail (see backend/src/integrations/{storage,mail})
+.storage/
+.mail/
+
 # Misc
 *.local

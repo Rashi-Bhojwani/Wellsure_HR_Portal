@@ -105,25 +105,37 @@ assuming:
 - Validate all external input with Zod; request/response schemas shared
   with the frontend via `shared/` where practical.
 - Storage and email are behind interfaces (`StorageService`, `MailService`)
-  with local (MinIO/Mailpit) and AWS (S3/SES) implementations selected by
-  env — write against the interface, not the AWS SDK directly.
+  with local (filesystem/console+`.eml`) and AWS (S3/SES) implementations
+  selected by env — write against the interface, not the AWS SDK directly.
 - Every state-changing admin action that spec §9 calls out gets an
   append-only audit log entry.
 
 ## Commands
 
+Local dev needs PostgreSQL 16 and Redis 7 **installed and running on the
+machine** — not Docker (see README.md "Local setup" for OS-specific
+install steps). `backend/Dockerfile` still exists and still matters: it's
+the image CI builds and the one that runs on ECS Fargate (spec §15.2.3) —
+just don't reach for `docker compose` in local dev.
+
 ```
-npm run install:all   # npm install in the root, backend/, frontend/, biometric-agent/ and infra/
-npm run dev            # backend + frontend together, via concurrently
+npm run install:all    # npm install in the root, backend/, frontend/, biometric-agent/ and infra/
+npm run check:services  # confirms Postgres + Redis are reachable; prints setup help if not
+npm run dev              # backend + frontend together, via concurrently
 npm run lint
 npm run typecheck
 npm run test
-docker compose up       # Postgres, Redis, MinIO, Mailpit
-docker build -f backend/Dockerfile -t wellsure-hr-backend .   # from the repo root
+docker build -f backend/Dockerfile -t wellsure-hr-backend .   # from the repo root — CI/ECS image only
 ```
 
-There's no real application behavior yet — `backend/src/index.ts`,
-`frontend/src/main.ts` and `infra/bin/app.ts` are placeholder entrypoints
-(the first two exist mainly to prove the `@shared/*` alias resolves). The
-real Express app, React shell, and device-sync logic land starting
-Phase 0/1/2.
+Local storage and mail need no service to install either — both are
+file-based dev implementations behind the `StorageService`/`MailService`
+interfaces (`backend/src/integrations/{storage,mail}`): uploads land in
+`.storage/`, outgoing mail is logged to the console and written as
+`.eml` files to `.mail/` (both gitignored). S3/SES are the AWS
+implementations, selected by `STORAGE_DRIVER`/`MAIL_DRIVER` in
+staging/production.
+
+Business logic starts in Phase 1 — see `docs/PROGRESS.md` for what
+Phase 0 already built (Express app, real-time layer, BullMQ skeleton, the
+full app shell).

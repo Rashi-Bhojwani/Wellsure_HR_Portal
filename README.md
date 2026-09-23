@@ -12,9 +12,9 @@ over greytHR's month-end sync.
 - **Delivery status & open questions:** [`docs/PROGRESS.md`](docs/PROGRESS.md)
 - **Deployment runbook (from Phase 1.5):** [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
 
-This is currently a **structure-only scaffold** — folders, configuration and
-placeholder READMEs, no business logic, database schema or real UI yet. See
-`docs/PROJECT_SPEC.md` §12 for the phased build order that follows.
+Phase 0 (foundation + app shell) is done — see `docs/PROGRESS.md` for what
+exists today vs. what's still ahead. No business logic yet: that starts in
+Phase 1. See `docs/PROJECT_SPEC.md` §12 for the phased build order.
 
 ## Repository structure
 
@@ -31,9 +31,8 @@ wellsure_hr_portal/
 ├── shared/                   Shared TypeScript (types, Zod schemas, constants, utils)
 │                              — imported via the @shared/* path alias, no package.json
 ├── infra/                    AWS CDK app (staging + production)
-├── docs/                      PROJECT_SPEC.md, PROGRESS.md, DEPLOYMENT.md
-├── docker-compose.yml          Local Postgres, Redis, MinIO, Mailpit
-└── package.json                 Root convenience scripts (install:all, dev, lint, typecheck, test)
+├── docs/                      PROJECT_SPEC.md, UI_REFERENCE.md, PROGRESS.md, DEPLOYMENT.md
+└── package.json                Root convenience scripts (install:all, dev, lint, typecheck, test, check:services)
 ```
 
 ### `backend`
@@ -100,21 +99,94 @@ reference — our own branding, never greytHR's), `PROGRESS.md` (phase
 status + open questions), `DEPLOYMENT.md` (deployment runbook, written in
 Phase 1.5).
 
-## Getting started
+## Local setup
+
+Local development runs directly on your machine — **no Docker required**.
+You'll need **Node.js ≥20**, **npm ≥10**, **PostgreSQL 16** and **Redis 7**
+installed and running.
+
+### 1. Install PostgreSQL 16 and Redis 7
+
+**macOS** (Homebrew):
 
 ```
-npm run install:all   # npm install in the root, backend/, frontend/, biometric-agent/ and infra/
-npm run dev            # runs backend + frontend together (concurrently)
+brew install postgresql@16 redis
+brew services start postgresql@16
+brew services start redis
+```
+
+**Linux** (Debian/Ubuntu):
+
+```
+sudo apt update
+sudo apt install postgresql-16 redis-server
+sudo systemctl start postgresql
+sudo systemctl start redis-server
+sudo systemctl enable postgresql redis-server   # optional: start on boot
+```
+
+Other distros: use your package manager's PostgreSQL 16 and Redis
+packages, or see the [PostgreSQL](https://www.postgresql.org/download/linux/)
+and [Redis](https://redis.io/docs/latest/operate/oss_and_stack/install/install-redis/)
+install docs.
+
+**Windows:**
+
+- **PostgreSQL** — install the official installer from
+  [postgresql.org/download/windows](https://www.postgresql.org/download/windows/)
+  (pick version 16). It installs and starts a Windows service
+  automatically, and includes `psql`.
+- **Redis** — Redis has no official Windows build. Either:
+  - **WSL2** (recommended) — install a Linux distro under WSL2, then
+    follow the Linux instructions above *inside it*; `localhost` in
+    `.env` resolves correctly from Windows either way.
+  - **[Memurai](https://www.memurai.com/)** — a Redis-compatible Windows
+    service (free tier available), if you'd rather not use WSL2.
+
+### 2. Create the database and user
+
+Matches the defaults in `.env.example` — adjust both if you use different
+credentials.
+
+```
+psql -U postgres -c "CREATE ROLE wellsure LOGIN PASSWORD 'wellsure';"
+psql -U postgres -c "CREATE DATABASE wellsure_hr OWNER wellsure;"
+```
+
+(On Linux, PostgreSQL usually needs `sudo -u postgres psql -c "..."`
+instead, unless you've set up peer/password auth for your own user.)
+
+### 3. Configure and verify
+
+```
+cp .env.example backend/.env    # edit it if you used different DB credentials
+npm run install:all
+npm run check:services          # confirms Postgres and Redis are reachable
+```
+
+`check:services` prints clear, OS-specific setup instructions if either
+service isn't reachable yet.
+
+### 4. Run
+
+```
+npm run dev         # backend + frontend together
 npm run lint
 npm run typecheck
 npm run test
 ```
 
-`docker compose up` starts local Postgres, Redis, MinIO and Mailpit.
-`docker build -f backend/Dockerfile -t wellsure-hr-backend .` (from the repo
-root, so `shared/` is included in the build context) builds the backend
-image — see `backend/Dockerfile` for why it's still minimal at this stage.
+Local file storage and outgoing mail need no service either — uploaded
+files land in `.storage/` and outgoing mail is logged to the console and
+written as real `.eml` files to `.mail/` (both gitignored); see
+`backend/src/integrations/{storage,mail}`.
 
-There's no real application behavior yet beyond placeholder entrypoints
-that prove the `@shared/*` alias resolves — the actual Express app, React
-shell, and device-sync logic are built starting Phase 0/1/2.
+## Docker (AWS deployment image only)
+
+Local development doesn't use Docker. `backend/Dockerfile` builds the
+image that actually runs on ECS Fargate (spec §15.2.3), and is what CI's
+Docker build step exercises:
+
+```
+docker build -f backend/Dockerfile -t wellsure-hr-backend .   # from the repo root, so shared/ is included
+```
