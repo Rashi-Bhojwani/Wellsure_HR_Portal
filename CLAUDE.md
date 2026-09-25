@@ -30,7 +30,9 @@ working-conventions companion to both.
   payroll runs in parallel with greytHR for 2–3 months before cutover.
   Don't build anything that assumes greytHR is already switched off.
 - At the end of every phase: tests green, migrations applied, seed data
-  updated, `docs/PROGRESS.md` updated, and the work committed.
+  updated, `docs/PROGRESS.md` updated, `docs/GETTING_STARTED.md` updated
+  if anything about setup, env vars, seeded accounts or everyday commands
+  changed, and the work committed.
 
 ## Repository layout
 
