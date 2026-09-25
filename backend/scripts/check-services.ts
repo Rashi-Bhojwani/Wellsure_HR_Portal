@@ -27,7 +27,10 @@ const SETUP_INSTRUCTIONS: Record<string, string> = {
 };
 
 function maskUrl(url: string): string {
-  return url.replace(/:\/\/([^:/@]+):[^@]+@/, "://$1:****@");
+  // Greedy `.+` backtracks to the LAST @ before the host, so a password
+  // containing a literal @ (unusual, but not invalid) is fully masked
+  // instead of leaking everything after its first @.
+  return url.replace(/:\/\/([^:/@]+):.+@/, "://$1:****@");
 }
 
 async function checkPostgres(): Promise<boolean> {

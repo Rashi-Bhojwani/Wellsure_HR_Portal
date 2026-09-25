@@ -1,4 +1,19 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { z } from "zod";
+
+// Explicit, import-order-independent .env loading — must happen before the
+// safeParse below. This used to work by accident (Prisma Client's own
+// internal .env loading, triggered only when something imported
+// @prisma/client before this module evaluated), which silently broke any
+// entrypoint that imports env.ts first, including scripts/reset-db.ts and
+// this file's own primary consumer, src/index.ts. staging/production have
+// no .env file (env vars are injected via ECS task env / Secrets Manager
+// instead, per docs/PROJECT_SPEC.md §15.3), so this is a no-op there.
+const envFilePath = path.resolve(import.meta.dirname, "../../.env");
+if (existsSync(envFilePath)) {
+  process.loadEnvFile(envFilePath);
+}
 
 // Loads and validates every env var the backend currently reads, failing
 // fast at boot if anything is missing or malformed. Extend this schema
