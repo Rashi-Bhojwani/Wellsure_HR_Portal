@@ -10,5 +10,10 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],
+    // Integration tests share one real Postgres/Redis instance and some
+    // genuinely global rows (SystemSetting keys, rate-limit buckets keyed
+    // by IP) — running test files in parallel races those. Small suite,
+    // so sequential is cheap.
+    fileParallelism: false,
   },
 });

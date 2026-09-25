@@ -22,6 +22,7 @@ import {
   UserOutlined,
 } from "@ant-design/icons";
 import { employeeMenu, isEmployeeMenuGroup } from "../routes/employeeMenu.config";
+import { useAuth } from "../hooks/useAuth";
 
 const { Sider, Header, Content, Footer } = Layout;
 const { Text, Title } = Typography;
@@ -64,6 +65,7 @@ function findLabel(path: string): string {
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
   const currentKey = location.pathname.replace(/^\/app\//, "");
   const items = useMemo(() => buildMenuItems(), []);
 
@@ -90,7 +92,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       <div style={{ padding: "0 16px 16px", display: "flex", alignItems: "center", gap: 10 }}>
         <Avatar size={40} icon={<UserOutlined />} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <Text strong>Hi Aditi</Text>
+          <Text strong>Hi {user?.fullName?.split(" ")[0] ?? ""}</Text>
           <br />
           <a
             onClick={() => {
@@ -102,7 +104,13 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             View My Info
           </a>
         </div>
-        <SettingOutlined style={{ color: "#8c8c8c" }} />
+        <SettingOutlined
+          style={{ color: "#8c8c8c", cursor: "pointer" }}
+          onClick={() => {
+            navigate("/app/security");
+            onNavigate?.();
+          }}
+        />
       </div>
       <div style={{ flex: 1, overflowY: "auto" }}>
         <Menu
@@ -127,6 +135,12 @@ export function EmployeeLayout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const { logout } = useAuth();
+
+  async function handleLogout(): Promise<void> {
+    await logout();
+    navigate("/login");
+  }
 
   const pageTitle = findLabel(location.pathname.replace(/^\/app\//, ""));
 
@@ -184,7 +198,7 @@ export function EmployeeLayout() {
             <Badge dot>
               <BellOutlined style={{ fontSize: 18 }} />
             </Badge>
-            <LogoutOutlined style={{ fontSize: 18, cursor: "pointer" }} onClick={() => navigate("/login")} />
+            <LogoutOutlined style={{ fontSize: 18, cursor: "pointer" }} onClick={() => void handleLogout()} />
           </Space>
         </Header>
 

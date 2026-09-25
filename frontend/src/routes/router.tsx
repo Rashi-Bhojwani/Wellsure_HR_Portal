@@ -2,7 +2,14 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { EmployeeLayout } from "../layouts/EmployeeLayout";
 import { AdminLayout } from "../layouts/AdminLayout";
 import { LoginPage } from "../pages/auth/login/LoginPage";
+import { SetPasswordPage } from "../pages/auth/set-password/SetPasswordPage";
+import { ForgotPasswordPage } from "../pages/auth/forgot-password/ForgotPasswordPage";
+import { ResetPasswordPage } from "../pages/auth/reset-password/ResetPasswordPage";
+import { TotpChallengePage } from "../pages/auth/totp/TotpChallengePage";
+import { TotpSetupPage } from "../pages/auth/totp/TotpSetupPage";
+import { AccountSecurityPage } from "../pages/account-security/AccountSecurityPage";
 import { PlaceholderPage } from "../components/common/PlaceholderPage";
+import { RequireAuth } from "./RequireAuth";
 import { employeeMenu, isEmployeeMenuGroup } from "./employeeMenu.config";
 import { adminApps } from "./adminMenu.config";
 
@@ -38,15 +45,24 @@ export function AppRouter() {
     <Routes>
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/set-password/:token" element={<SetPasswordPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
+      <Route path="/totp-challenge" element={<TotpChallengePage />} />
+      <Route path="/totp-setup" element={<TotpSetupPage />} />
 
-      <Route path="/app" element={<EmployeeLayout />}>
-        <Route index element={<Navigate to="home" replace />} />
-        <Route path="profile" element={<PlaceholderPage title="Profile (View My Info)" phase="Phase 1" />} />
-        {employeeRoutes()}
-      </Route>
+      <Route element={<RequireAuth />}>
+        <Route path="/app" element={<EmployeeLayout />}>
+          <Route index element={<Navigate to="home" replace />} />
+          <Route path="profile" element={<PlaceholderPage title="Profile (View My Info)" phase="Phase 1" />} />
+          <Route path="security" element={<AccountSecurityPage />} />
+          {employeeRoutes()}
+        </Route>
 
-      <Route path="/admin" element={<AdminLayout />}>
-        {adminRoutes()}
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route path="security" element={<AccountSecurityPage />} />
+          {adminRoutes()}
+        </Route>
       </Route>
 
       <Route path="*" element={<Navigate to="/login" replace />} />

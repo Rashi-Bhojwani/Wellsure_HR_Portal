@@ -28,6 +28,7 @@ import {
 } from "@ant-design/icons";
 import { adminApps, type AdminApp } from "../routes/adminMenu.config";
 import { AdminFiltersProvider, useAdminFilters } from "../context/AdminFiltersContext";
+import { useAuth } from "../hooks/useAuth";
 
 const { Header, Content, Footer } = Layout;
 const { Text } = Typography;
@@ -96,6 +97,7 @@ function AppSwitcherPanel({ onSelect }: { onSelect: (app: AdminApp) => void }) {
 function TopBar() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { logout } = useAuth();
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const screens = useBreakpoint();
   const isMobile = !screens.md;
@@ -106,9 +108,13 @@ function TopBar() {
     setSwitcherOpen(false);
   };
 
+  async function handleLogout(): Promise<void> {
+    await logout();
+    navigate("/login");
+  }
+
   const settingsMenu: MenuProps["items"] = [
-    { key: "profile", label: "My Profile" },
-    { key: "settings", label: "Settings" },
+    { key: "security", label: "Account & Security", onClick: () => navigate("/admin/security") },
   ];
 
   return (
@@ -190,7 +196,7 @@ function TopBar() {
           <SettingOutlined style={{ fontSize: 16, cursor: "pointer" }} />
         </Dropdown>
         <Avatar size={28} icon={<UserOutlined />} />
-        <LogoutOutlined style={{ fontSize: 16, cursor: "pointer" }} onClick={() => navigate("/login")} />
+        <LogoutOutlined style={{ fontSize: 16, cursor: "pointer" }} onClick={() => void handleLogout()} />
       </Space>
     </Header>
   );

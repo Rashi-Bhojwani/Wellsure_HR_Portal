@@ -1,6 +1,7 @@
 import express, { type Express } from "express";
 import helmet from "helmet";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
 import { env } from "./config/env";
 import { logger } from "./lib/logger";
@@ -8,6 +9,7 @@ import { prisma } from "./lib/prisma";
 import { redis } from "./lib/redis";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 import { devStorageRouter } from "./integrations/storage";
+import { authRouter } from "./modules/auth/routes";
 
 export function createApp(): Express {
   const app = express();
@@ -16,6 +18,7 @@ export function createApp(): Express {
   app.use(helmet());
   app.use(cors({ origin: env.CORS_ORIGIN.split(","), credentials: true }));
   app.use(express.json());
+  app.use(cookieParser());
   app.use(pinoHttp({ logger }));
 
   // Liveness — the process is up. Never checks dependencies.
@@ -49,6 +52,7 @@ export function createApp(): Express {
 
   // Module routes (auth, employees, attendance, ...) are mounted here
   // starting Phase 1 — see src/modules/*/README.md.
+  app.use("/api/auth", authRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

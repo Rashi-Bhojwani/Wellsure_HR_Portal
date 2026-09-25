@@ -16,6 +16,14 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   REDIS_URL: z.string().min(1, "REDIS_URL is required"),
 
+  // Auth (src/modules/auth): JWT access tokens are short-lived and
+  // stateless; refresh tokens are opaque random strings tracked in
+  // refresh_tokens (rotation + reuse detection), never JWTs themselves.
+  JWT_ACCESS_SECRET: z.string().min(1).default("change-me-access-secret"),
+  JWT_REFRESH_SECRET: z.string().min(1).default("change-me-refresh-secret"),
+  JWT_ACCESS_TTL: z.string().default("15m"),
+  JWT_REFRESH_TTL: z.string().default("30d"),
+
   // Field-level encryption (src/lib/encryption.ts) and blind-index hashing
   // (src/lib/fieldHash.ts) for bank account/PAN/Aadhaar/UAN — spec §9.
   // Local dev derives a static key/pepper from these strings; staging/
@@ -41,10 +49,15 @@ const envSchema = z.object({
 
   // AWS (staging/production only — used by the S3 and SES clients).
   AWS_REGION: z.string().default("ap-south-1"),
-}).refine((v) => v.KMS_FIELD_KEY_ID !== v.FIELD_HASH_PEPPER, {
-  message: "KMS_FIELD_KEY_ID and FIELD_HASH_PEPPER must be different secrets",
-  path: ["FIELD_HASH_PEPPER"],
-});
+})
+  .refine((v) => v.KMS_FIELD_KEY_ID !== v.FIELD_HASH_PEPPER, {
+    message: "KMS_FIELD_KEY_ID and FIELD_HASH_PEPPER must be different secrets",
+    path: ["FIELD_HASH_PEPPER"],
+  })
+  .refine((v) => v.JWT_ACCESS_SECRET !== v.JWT_REFRESH_SECRET, {
+    message: "JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must be different secrets",
+    path: ["JWT_REFRESH_SECRET"],
+  });
 
 export type Env = z.infer<typeof envSchema>;
 

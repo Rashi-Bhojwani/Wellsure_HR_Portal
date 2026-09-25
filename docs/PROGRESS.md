@@ -10,7 +10,7 @@ committed).
 |---|---|---|
 | — | Initial project structure (this commit) | ✅ Done |
 | 0 | Foundation | ✅ Done |
-| 1 | Auth, RBAC, org, employees | In progress — data layer done |
+| 1 | Auth, RBAC, org, employees | In progress — data layer + authentication done; org masters/employees module next |
 | 1.5 | AWS staging environment | Not started |
 | 2 | Biometric ingestion + attendance engine + real-time | Not started |
 | 3 | Attendance administration | Not started |
@@ -422,6 +422,128 @@ it, per explicit instruction to prove it first.
   real table. Added a "Migrate" step (`npm run db:migrate`, i.e.
   `prisma migrate deploy` — non-interactive, additive-only, not the
   destructive reset path) between "Check services" and "Test".
+
+### Phase 1, commit B — authentication and session management
+
+The complete auth flow: backend (JWT + refresh rotation, TOTP 2FA,
+password/invitation flows, rate limiting, audit logging, email) and
+frontend (real login through Account & Security, replacing the dev role
+switcher). Every action is audit-logged; see the click-through steps and
+seeded test accounts below for manual verification.
+
+**Backend** (`backend/src/modules/auth/`, `backend/src/middleware/`):
+
+- **Login** (`POST /api/auth/login`) — Employee Code + password (spec §3).
+  Every failure path (unknown code, wrong password) returns the same
+  generic message; only "account locked" and "not yet activated" get
+  distinct messages, since neither leaks anything an Employee Code
+  (an openly-known internal identifier) doesn't already. 5 failed attempts
+  locks the account for 15 minutes (`User.failedLoginAttempts`/
+  `lockedUntil`, both configurable via `SystemSetting`).
+- **Sessions** — access tokens are short-lived stateless JWTs
+  (`src/lib/jwt.ts`); refresh tokens are opaque random strings, tracked in
+  `refresh_tokens`, delivered as an httpOnly/sameSite=strict cookie scoped
+  to `/api/auth` (never touched by JS). `POST /refresh` rotates the token
+  and detects reuse: presenting an already-*rotated* token revokes every
+  session for that user (spec §9) — found and fixed a real bug here during
+  testing, where a plain `/logout` (revoked, never rotated) was
+  indistinguishable from a rotated-away token and would have triggered the
+  same false "compromise" cascade; only `revokedAt` **and**
+  `replacedByTokenId` together now count as reuse. `GET /sessions`,
+  `DELETE /sessions/:id` (IDOR-checked — 404s on another user's session id
+  rather than revealing it exists), `POST /logout`, `POST /logout-all` are
+  all in place.
+- **Deactivation takes effect immediately, not at token expiry** — the
+  `authenticate` middleware re-checks `User.status === ACTIVE` against the
+  database on every single request, not just the JWT's own signature/
+  expiry, so a deactivated/suspended account loses access within one
+  request, not up to 15 minutes later. Directly tested (deactivate mid-
+  session, same still-valid token immediately rejected).
+- **Invitation accept** (`GET`/`POST /invitations/:token`) — validates,
+  sets the password, activates the account, sends a welcome email, and (per
+  spec §3.5) logs the employee straight in — through the same 2FA-required
+  check as a normal login.
+- **Forgot/reset password** — `POST /forgot-password` takes an Employee
+  Code (not email, since `personalEmail` isn't unique) and returns an
+  **identical response, padded to a ~200ms floor**, whether or not the
+  code exists or the account can receive a reset — verified with an
+  automated timing test alongside the response-body-equality test.
+  `POST /reset-password/:token` is single-use and revokes every existing
+  session for the account.
+- **TOTP 2FA** (`src/modules/auth/totp.ts`, via `otplib`) — setup
+  (QR code + manual-entry secret, secret stored AES-256-GCM encrypted),
+  verify (issues 10 single-use backup codes, hashed with SHA-256 — high-
+  entropy random codes, not passwords, so argon2's deliberate slowness
+  isn't needed), disable (requires password + a current code), backup-code
+  regeneration. Enforced at login for roles in `SystemSetting`
+  `auth.require2faRoles` (default: `SUPER_ADMIN`, `HR_ADMIN`,
+  `HR_EXECUTIVE`, `PAYROLL_ADMIN`) via a two-step challenge: login returns
+  a short-lived `challengeToken` (`requires_totp_setup` if not yet
+  enrolled, `requires_totp` if it is) instead of real tokens, and
+  `/2fa/setup`+`/2fa/verify` accept that token in place of a session for
+  the mid-login case, completing the login once verified. Self-disable is
+  blocked with `TOTP_REQUIRED_BY_ROLE` if the account's role still
+  requires it — only a Super Admin can force a reset (`employees/:id/2fa/
+  reset`, employees module, not yet built).
+- **Privacy notice** (`POST /privacy-notice/accept`, spec §9's DPDP
+  requirement) — tracked on `User.privacyNoticeAcceptedAt`, surfaced on
+  `/me`.
+- **Rate limiting** (`src/middleware/rateLimit.ts`) — Redis-backed,
+  IP-scoped, limits read from `SystemSetting` (falling back to a
+  hardcoded default if unseeded) on login, forgot-password, invite-accept,
+  reset-password and 2FA-verify. Deliberately separate from the per-
+  account lockout above — this stops the *endpoint* being hammered (code
+  enumeration, email spam), lockout stops one *account* being brute-forced.
+- **Audit logging** — every action above writes through `writeAuditLog()`
+  (commit A2); verified live that the full login → 2FA setup → verify →
+  refresh → reuse-detected → lockout sequence produces a matching,
+  correctly-ordered audit trail.
+- **Email** (`src/modules/auth/emails.ts`, via the existing `MailService`)
+  — invitation, password reset, welcome; verified `.eml` files land in
+  `.mail/` with working links.
+- Added `cookie-parser`, `jsonwebtoken`, `otplib`, `qrcode`; added
+  `JWT_ACCESS_SECRET`/`JWT_REFRESH_SECRET`/`JWT_ACCESS_TTL`/
+  `JWT_REFRESH_TTL` to `env.ts` (already in `.env.example`, never
+  previously wired up) with the same "must differ" refine as the
+  encryption key/pepper pair.
+- **46 tests** (`src/modules/auth/__tests__/`) — login (success, generic-
+  failure parity, lockout, 2FA setup/challenge branching), refresh
+  rotation + reuse detection, logout/logout-all/session IDOR, forgot/
+  reset-password including the timing-safety test, the deactivation-
+  window test, TOTP disable/backup-codes/role-required blocking, privacy
+  notice, invitation accept. `vitest.config.ts` now runs test files
+  sequentially (`fileParallelism: false`) — found this was necessary
+  when two files racing on the same `SystemSetting` row produced flaky
+  failures; self-contained per-test fixtures, still independent of
+  `prisma/seed.ts`.
+
+**Frontend** (`frontend/src/pages/auth/`, `pages/account-security/`,
+`hooks/useAuth.tsx`, `api/`):
+
+- `hooks/useAuth.tsx` — `AuthProvider`/`useAuth`, silent-refresh bootstrap
+  on load (access tokens are memory-only per spec §9, never
+  `localStorage`, so a page reload needs the httpOnly refresh cookie to
+  recover a session), `login`/`logout`/`hasPermission`/`hasRole`.
+  `api/client.ts`'s 401-retry interceptor (a Phase 0 placeholder) now
+  calls the real refresh endpoint.
+- Real screens: `LoginPage` (rewritten — real errors, 2FA branching),
+  `SetPasswordPage`, `ForgotPasswordPage`, `ResetPasswordPage`,
+  `TotpChallengePage`, `TotpSetupPage` (QR + manual secret + backup-code
+  reveal), `AccountSecurityPage` (2FA status/setup/disable/backup-code
+  regeneration, active sessions with revoke, log out everywhere) — wired
+  to the existing gear icon in both `EmployeeLayout` and `AdminLayout`,
+  which (along with the sidebar's greeting and the logout icon) now show
+  the real signed-in user instead of the hardcoded "Hi Aditi".
+- `DevRoleSwitcher` → `DevQuickLogin`: still dev-only
+  (`import.meta.env.DEV`), but now goes through real login with the
+  seeded demo accounts' known password rather than just navigating past
+  auth — Phase 1's explicit "keep a dev-only quick login" ask.
+- `RequireAuth` route guard on every `/app` and `/admin` route.
+- Verified live in a real browser (Playwright): full login for a non-2FA
+  employee, the complete 2FA enrolment flow (QR → code → backup codes →
+  landed on the right portal), the already-enrolled 2FA challenge, Account
+  & Security showing real session data, and forgot-password's identical
+  response screen.
 
 ## Open questions
 

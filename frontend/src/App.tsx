@@ -3,7 +3,8 @@ import { BrowserRouter } from "react-router-dom";
 import { AppThemeProvider } from "./theme/ThemeProvider";
 import { SocketProvider } from "./sockets/SocketProvider";
 import { ErrorBoundary } from "./components/common/ErrorBoundary";
-import { DevRoleSwitcher } from "./components/common/DevRoleSwitcher";
+import { DevQuickLogin } from "./components/common/DevQuickLogin";
+import { AuthProvider } from "./hooks/useAuth";
 import { AppRouter } from "./routes/router";
 
 const queryClient = new QueryClient({
@@ -15,12 +16,14 @@ export function App() {
     <ErrorBoundary>
       <AppThemeProvider>
         <QueryClientProvider client={queryClient}>
-          <SocketProvider enabled={false}>
-            <BrowserRouter>
-              <AppRouter />
-              {import.meta.env.DEV && <DevRoleSwitcher />}
-            </BrowserRouter>
-          </SocketProvider>
+          <AuthProvider>
+            <SocketProvider enabled={false}>
+              <BrowserRouter>
+                <AppRouter />
+                {import.meta.env.DEV && <DevQuickLogin />}
+              </BrowserRouter>
+            </SocketProvider>
+          </AuthProvider>
         </QueryClientProvider>
       </AppThemeProvider>
     </ErrorBoundary>
