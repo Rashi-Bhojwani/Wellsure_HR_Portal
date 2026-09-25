@@ -1,7 +1,11 @@
 import { PrismaClient, EmploymentType, Gender } from "@prisma/client";
 import argon2 from "argon2";
+import { PERMISSION_KEYS } from "@shared/constants/permissions";
 import { encryptField } from "../src/lib/encryption";
 import { blindIndex, normalizePan, normalizeAadhaar, normalizeAccountNumber } from "../src/lib/fieldHash";
+import { assertDevelopmentEnvironment } from "../src/lib/devGuard";
+
+assertDevelopmentEnvironment("the Phase 1 seed script (inserts fake employee/bank/statutory data)");
 
 // Seed data for Phase 1 — see docs/PROGRESS.md for what's still an open
 // question (branch list, Panchsheel city assignment, actual headcount).
@@ -212,28 +216,6 @@ async function main() {
   const cc = Object.fromEntries(costCentres.map((c) => [c.code, c]));
 
   // ── Permissions + Roles ─────────────────────────────────────────────
-  const PERMISSION_KEYS = [
-    "employee.view",
-    "employee.create",
-    "employee.edit",
-    "employee.export",
-    "employee.manage",
-    "employee.statutory.view",
-    "employee.statutory.edit",
-    "employee.bank.view",
-    "employee.bank.edit",
-    "employee.separate",
-    "employee.separate.view",
-    "profile.changerequest.approve",
-    "org.manage",
-    "role.view",
-    "role.manage",
-    "user.security.manage",
-    "import.manage",
-    "audit.view",
-    "settings.manage",
-  ] as const;
-
   const permissions = await Promise.all(
     PERMISSION_KEYS.map((key) =>
       prisma.permission.create({ data: { key, description: key.replace(/\./g, " ").replace(/_/g, " ") } }),

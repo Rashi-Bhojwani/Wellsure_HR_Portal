@@ -68,6 +68,9 @@ jobs:
       - name: Check services
         run: npm run check:services
 
+      - name: Migrate
+        run: npm run db:migrate
+
       - name: Test
         run: npm run test
 

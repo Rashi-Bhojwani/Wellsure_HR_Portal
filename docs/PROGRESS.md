@@ -365,13 +365,63 @@ model list, then a City/Location correction) captured in this session.
   `prisma migrate reset --force` (wipe + reapply migrations + reseed);
   verified by running migrations from empty and the seed script directly
   against a freshly-migrated empty database (30/30 employees, all
-  relations, encrypted-field byte lengths and hash lengths all correct) —
-  the full destructive `db:seed` path itself needs the user's explicit
-  consent to run (Prisma's own AI-agent safety gate on `migrate reset`),
-  still pending as of this entry.
+  relations, encrypted-field byte lengths and hash lengths all correct).
+  The full destructive `db:seed` path itself (`prisma migrate reset
+  --force`) needed the user's explicit consent to run — Prisma's own
+  AI-agent safety gate blocks that command outright otherwise — and was
+  verified end to end with that consent in commit A2 below.
 - **Incidental fixes**: `README.md`'s local-setup `CREATE ROLE` command
   was missing `CREATEDB`, which every contributor would need anyway for
   Prisma's `migrate dev` shadow database — not just this sandbox.
+
+### Phase 1, commit A2 — RBAC middleware, permission resolution, data-scope builder
+
+Closes a gap: commit A's own scope included the authorization layer, not
+just the schema — built now, with unit tests, before any route depends on
+it, per explicit instruction to prove it first.
+
+- **Dev-only destructive-action guard**: `src/lib/devGuard.ts`
+  (`assertDevelopmentEnvironment()`) refuses to proceed unless
+  `APP_ENV === "development"`, independent of Prisma's own interactive
+  confirmation. Wired into both `prisma/seed.ts` and a new
+  `scripts/reset-db.ts` (`npm run db:seed` now runs through this wrapper
+  instead of calling `prisma migrate reset --force` directly) — verified
+  it actually refuses under `APP_ENV=production`, then verified the full
+  `npm run db:seed` path end to end under `APP_ENV=development` with the
+  user's explicit consent (database wiped, both migrations reapplied from
+  scratch, 30 employees reseeded correctly).
+- **`shared/constants/permissions.ts` / `roles.ts`** — the Phase 1
+  permission-key list and role-code list, now a single source of truth
+  instead of living only inside `prisma/seed.ts` (which now imports
+  `PERMISSION_KEYS` from here instead of redeclaring it) — the frontend
+  will import the same constants when menu configs get permission-gated.
+- **`src/lib/permissions.ts`** — `resolveUserPermissions(userId)` (union
+  of every held role's permissions, spec §2) and `resolveUserRoleCodes()`.
+- **`src/lib/dataScope.ts`** — `getTeamEmployeeIds(managerId)` (a
+  `WITH RECURSIVE` CTE over the *current* `employee_job_history` rows,
+  since Prisma has no recursive-query API, walking direct and indirect
+  reports) and `buildEmployeeScopeWhere(employeeId, scope)` producing the
+  Prisma `where` fragment for SELF/TEAM/ALL.
+- **`src/middleware/rbac.ts`** + **`types.ts`** — `requireAuth`/
+  `requirePermission(key)` Express middleware reading `req.user` (the
+  `AuthenticatedUser` shape the JWT auth middleware in commit B will
+  populate); follows Phase 0's existing `HttpError`/centralized
+  `errorHandler` convention rather than writing responses directly.
+- **Vitest** set up for `backend/` for the first time (Phase 0 named it as
+  a Phase 0 target but never installed it) — pinned to `vitest@^4.1.11`
+  rather than the latest 5.x, which requires `@types/node@^22`; backend
+  is pinned to `@types/node@^20` for Node 20 per CLAUDE.md, so newer
+  vitest wouldn't resolve cleanly. 13 tests across 3 files (permission
+  union/empty-set, team-hierarchy walking at multiple levels, SELF/TEAM/
+  ALL where-clause shape, RBAC middleware auth/permission checks),
+  self-contained fixtures (not dependent on `prisma/seed.ts`'s demo data,
+  since CI never runs the seed) with verified cleanup — confirmed zero
+  leftover rows after a full run.
+- **CI gap closed**: `.github/workflows/ci.yml` never applied migrations
+  before running tests — would have failed the moment any test needed a
+  real table. Added a "Migrate" step (`npm run db:migrate`, i.e.
+  `prisma migrate deploy` — non-interactive, additive-only, not the
+  destructive reset path) between "Check services" and "Test".
 
 ## Open questions
 
