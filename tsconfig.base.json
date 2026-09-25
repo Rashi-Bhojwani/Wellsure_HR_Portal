@@ -14,7 +14,6 @@
     "isolatedModules": true,
     "declaration": false,
     "sourceMap": true,
-    "baseUrl": ".",
     "noEmit": true
   }
 }
