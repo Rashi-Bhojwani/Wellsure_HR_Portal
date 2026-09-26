@@ -8,6 +8,7 @@ import { logger } from "./lib/logger";
 import { prisma } from "./lib/prisma";
 import { redis } from "./lib/redis";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
+import { noStore } from "./middleware/noStore";
 import { devStorageRouter } from "./integrations/storage";
 import { authRouter } from "./modules/auth/routes";
 import { orgRouter } from "./modules/org/routes";
@@ -17,6 +18,13 @@ export function createApp(): Express {
   const app = express();
 
   app.disable("x-powered-by");
+  // Auth/session and authenticated-data responses must never be cached —
+  // see middleware/noStore.ts. Disabling etag app-wide is the actual fix
+  // for the 304 (Express's conditional-GET short-circuit runs regardless
+  // of Cache-Control); nothing in this API is a static asset a client
+  // should conditionally re-fetch, so there's no downside to losing it
+  // globally rather than trying to scope it away from just these routes.
+  app.set("etag", false);
   app.use(helmet());
   app.use(cors({ origin: env.CORS_ORIGIN.split(","), credentials: true }));
   app.use(express.json());
@@ -54,9 +62,9 @@ export function createApp(): Express {
 
   // Module routes (auth, employees, attendance, ...) are mounted here
   // starting Phase 1 — see src/modules/*/README.md.
-  app.use("/api/auth", authRouter);
-  app.use("/api/org", orgRouter);
-  app.use("/api/employees", employeeRouter);
+  app.use("/api/auth", noStore, authRouter);
+  app.use("/api/org", noStore, orgRouter);
+  app.use("/api/employees", noStore, employeeRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
