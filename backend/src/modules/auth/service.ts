@@ -42,7 +42,11 @@ function hashOpaqueToken(token: string): string {
 }
 
 async function getRequire2faRoles(): Promise<string[]> {
-  return getSetting<string[]>("auth.require2faRoles", ["SUPER_ADMIN", "HR_ADMIN", "HR_EXECUTIVE", "PAYROLL_ADMIN"]);
+  // Disabled by default for now (temporary — re-enable by setting this
+  // SystemSetting, e.g. back to ["SUPER_ADMIN", "HR_ADMIN", "HR_EXECUTIVE",
+  // "PAYROLL_ADMIN"], once 2FA is ready to be required again). The setup/
+  // verify/disable/backup-code flows and their tests are untouched.
+  return getSetting<string[]>("auth.require2faRoles", []);
 }
 
 async function getLockoutConfig(): Promise<{ maxAttempts: number; lockoutMinutes: number }> {
