@@ -23,6 +23,23 @@ export async function getTeamEmployeeIds(managerId: string): Promise<string[]> {
   return rows.map((row) => row.id);
 }
 
+// Maps held role codes to a data scope (spec §2's table) — the widest
+// scope among all held roles wins, matching how effective *permissions*
+// are already a union across roles. Used by the employee module's list/
+// profile/history endpoints to decide SELF vs TEAM vs ALL before calling
+// buildEmployeeScopeWhere below.
+const ALL_SCOPE_ROLES = ["SUPER_ADMIN", "HR_ADMIN", "HR_EXECUTIVE", "PAYROLL_ADMIN", "APPROVER"];
+
+export function resolveDataScope(roleCodes: string[]): DataScope {
+  if (roleCodes.some((code) => ALL_SCOPE_ROLES.includes(code))) {
+    return "ALL";
+  }
+  if (roleCodes.includes("MANAGER")) {
+    return "TEAM";
+  }
+  return "SELF";
+}
+
 // Scopes an Employee query to what the requesting user (identified by
 // their own employeeId) is allowed to see under SELF/TEAM/ALL (spec §2).
 // ALL is not permission-checked here — callers gate that separately via

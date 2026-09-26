@@ -95,6 +95,7 @@ model User {
   totpBackupCodes  TotpBackupCode[]
   auditLogs        AuditLog[]           @relation("AuditActor")
   settingsUpdated  SystemSetting[]
+  savedViews       SavedView[]
 
   @@map("users")
 }
@@ -626,3 +627,22 @@ model Separation {
 
 // Multiple rows per employee are correct (rejoin). A rejoin always gets a
 // brand-new Employee row rather than reopening this one — see Employee.
+
+model SavedView {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id])
+  gridKey   String   @map("grid_key") // e.g. "employees" — one grid today, room for more later
+  name      String
+  config    Json // { filters, columns, sortBy, sortDir }
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, gridKey, name])
+  @@index([userId, gridKey])
+  @@map("saved_views")
+}
+
+// Personal, per-user grid preferences (All Employees grid's "saved views" —
+// spec §7.2). Not effective-dated, not audited — this is UI convenience
+// state, not business data.

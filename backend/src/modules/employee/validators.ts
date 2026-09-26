@@ -1,0 +1,227 @@
+import { z } from "zod";
+
+export const idParamsSchema = z.object({ id: z.string().min(1) });
+
+export const deviceCodeCheckQuerySchema = z.object({
+  deviceUserId: z.string().trim().min(1).max(30),
+});
+
+const gmailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .email("Enter a valid email address.")
+  .refine((v) => v.endsWith("@gmail.com"), "Personal email must be a Gmail address.");
+
+const ifscSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, "Enter a valid IFSC code (e.g. SBIN0001234).");
+
+const dateSchema = z.iso.date(); // YYYY-MM-DD, matches @db.Date columns
+
+const officialSchema = z.object({
+  deviceUserId: z.string().trim().min(1).max(30),
+  employeeCode: z.string().trim().min(1).max(30),
+  dateOfJoining: dateSchema,
+  departmentId: z.string().min(1),
+  designationId: z.string().min(1),
+  locationId: z.string().min(1),
+  gradeId: z.string().min(1).nullable().optional(),
+  costCentreId: z.string().min(1).nullable().optional(),
+  reportingManagerId: z.string().min(1).nullable().optional(),
+  employmentType: z.enum(["PERMANENT", "CONTRACT", "INTERN", "CONSULTANT", "PROBATION"]),
+  officialEmail: z.string().trim().toLowerCase().email().nullable().optional(),
+});
+
+const personalSchema = z.object({
+  fullName: z.string().trim().min(1).max(150),
+  dateOfBirth: dateSchema,
+  gender: z.enum(["MALE", "FEMALE", "OTHER"]),
+  personalEmail: gmailSchema,
+  mobile: z.string().trim().regex(/^[0-9+\-\s]{7,15}$/, "Enter a valid mobile number."),
+  currentAddress: z.string().trim().min(1).max(300),
+  permanentAddress: z.string().trim().min(1).max(300),
+  emergencyContactName: z.string().trim().min(1).max(150),
+  emergencyContactPhone: z.string().trim().regex(/^[0-9+\-\s]{7,15}$/, "Enter a valid phone number."),
+  emergencyContactRelation: z.string().trim().min(1).max(50),
+  bloodGroup: z.string().trim().max(5).nullable().optional(),
+  photoStorageKey: z.string().trim().nullable().optional(),
+});
+
+const statutorySchema = z
+  .object({
+    pan: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[A-Z]{5}[0-9]{4}[A-Z]$/, "Enter a valid PAN.")
+      .optional(),
+    aadhaar: z
+      .string()
+      .trim()
+      .regex(/^\d{12}$/, "Aadhaar must be 12 digits.")
+      .optional(),
+    uan: z.string().trim().max(20).optional(),
+    esiNumber: z.string().trim().max(20).optional(),
+  })
+  .optional();
+
+const bankSchema = z
+  .object({
+    accountHolderName: z.string().trim().min(1).max(150),
+    accountNumber: z.string().trim().regex(/^\d{6,20}$/, "Enter a valid account number."),
+    accountNumberConfirm: z.string().trim(),
+    ifsc: ifscSchema,
+    bankName: z.string().trim().min(1).max(150),
+    branchName: z.string().trim().min(1).max(150),
+  })
+  .refine((v) => v.accountNumber === v.accountNumberConfirm, {
+    message: "Account numbers don't match.",
+    path: ["accountNumberConfirm"],
+  })
+  .optional();
+
+export const createEmployeeSchema = z.object({
+  official: officialSchema,
+  personal: personalSchema,
+  statutory: statutorySchema,
+  bank: bankSchema,
+});
+
+export const jobUpdateSchema = z.object({
+  departmentId: z.string().min(1).optional(),
+  designationId: z.string().min(1).optional(),
+  locationId: z.string().min(1).optional(),
+  gradeId: z.string().min(1).nullable().optional(),
+  costCentreId: z.string().min(1).nullable().optional(),
+  reportingManagerId: z.string().min(1).nullable().optional(),
+  effectiveFrom: dateSchema,
+  changeReason: z.string().trim().max(300).optional(),
+});
+
+export const bankUpdateSchema = z.object({
+  accountHolderName: z.string().trim().min(1).max(150),
+  accountNumber: z.string().trim().regex(/^\d{6,20}$/, "Enter a valid account number."),
+  accountNumberConfirm: z.string().trim(),
+  ifsc: ifscSchema,
+  bankName: z.string().trim().min(1).max(150),
+  branchName: z.string().trim().min(1).max(150),
+  effectiveFrom: dateSchema.optional(),
+}).refine((v) => v.accountNumber === v.accountNumberConfirm, {
+  message: "Account numbers don't match.",
+  path: ["accountNumberConfirm"],
+});
+
+export const nameUpdateSchema = z.object({
+  fullName: z.string().trim().min(1).max(150),
+  effectiveFrom: dateSchema,
+  changeReason: z.string().trim().max(300).optional(),
+});
+
+export const statutoryUpdateSchema = z.object({
+  pan: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{5}[0-9]{4}[A-Z]$/)
+    .optional(),
+  aadhaar: z
+    .string()
+    .trim()
+    .regex(/^\d{12}$/)
+    .optional(),
+  uan: z.string().trim().max(20).optional(),
+  esiNumber: z.string().trim().max(20).nullable().optional(),
+});
+
+export const personalUpdateSchema = z.object({
+  mobile: z.string().trim().regex(/^[0-9+\-\s]{7,15}$/).optional(),
+  personalEmail: gmailSchema.optional(),
+  bloodGroup: z.string().trim().max(5).nullable().optional(),
+  currentAddress: z.string().trim().min(1).max(300).optional(),
+  permanentAddress: z.string().trim().min(1).max(300).optional(),
+  emergencyContactName: z.string().trim().min(1).max(150).optional(),
+  emergencyContactPhone: z.string().trim().regex(/^[0-9+\-\s]{7,15}$/).optional(),
+  emergencyContactRelation: z.string().trim().min(1).max(50).optional(),
+  photoStorageKey: z.string().trim().nullable().optional(),
+});
+
+// The employee's own direct-edit path — address, emergency contact, photo
+// only (schema.prisma's EmployeePersonal comment). Everything else must go
+// through a ProfileChangeRequest instead.
+export const selfServiceUpdateSchema = z.object({
+  currentAddress: z.string().trim().min(1).max(300).optional(),
+  permanentAddress: z.string().trim().min(1).max(300).optional(),
+  emergencyContactName: z.string().trim().min(1).max(150).optional(),
+  emergencyContactPhone: z.string().trim().regex(/^[0-9+\-\s]{7,15}$/).optional(),
+  emergencyContactRelation: z.string().trim().min(1).max(50).optional(),
+  photoStorageKey: z.string().trim().nullable().optional(),
+});
+
+export const changeRequestFieldGroupSchema = z.enum(["bank", "statutory", "personal"]);
+
+const changeRequestBankChanges = z
+  .object({
+    accountHolderName: z.string().trim().min(1).max(150),
+    accountNumber: z.string().trim().regex(/^\d{6,20}$/),
+    accountNumberConfirm: z.string().trim(),
+    ifsc: ifscSchema,
+    bankName: z.string().trim().min(1).max(150),
+    branchName: z.string().trim().min(1).max(150),
+  })
+  .refine((v) => v.accountNumber === v.accountNumberConfirm, { message: "Account numbers don't match.", path: ["accountNumberConfirm"] });
+
+const changeRequestStatutoryChanges = z.object({
+  pan: z.string().trim().toUpperCase().regex(/^[A-Z]{5}[0-9]{4}[A-Z]$/).optional(),
+  aadhaar: z.string().trim().regex(/^\d{12}$/).optional(),
+  uan: z.string().trim().max(20).optional(),
+  esiNumber: z.string().trim().max(20).optional(),
+});
+
+const changeRequestPersonalChanges = z.object({
+  mobile: z.string().trim().regex(/^[0-9+\-\s]{7,15}$/).optional(),
+  personalEmail: gmailSchema.optional(),
+  bloodGroup: z.string().trim().max(5).optional(),
+});
+
+export const createChangeRequestSchema = z.discriminatedUnion("fieldGroup", [
+  z.object({ fieldGroup: z.literal("bank"), changes: changeRequestBankChanges }),
+  z.object({ fieldGroup: z.literal("statutory"), changes: changeRequestStatutoryChanges }),
+  z.object({ fieldGroup: z.literal("personal"), changes: changeRequestPersonalChanges }),
+]);
+
+export const decideChangeRequestSchema = z.object({
+  remarks: z.string().trim().max(300).optional(),
+});
+
+export const initiateSeparationSchema = z.object({
+  lastWorkingDate: dateSchema,
+  reason: z.string().trim().min(1).max(200),
+  notes: z.string().trim().max(500).optional(),
+});
+
+export const employeeListQuerySchema = z.object({
+  search: z.string().trim().max(100).optional(),
+  departmentId: z.string().optional(),
+  designationId: z.string().optional(),
+  locationId: z.string().optional(),
+  cityId: z.string().optional(),
+  status: z.enum(["ACTIVE", "INACTIVE", "SEPARATED"]).optional(),
+  employmentType: z.enum(["PERMANENT", "CONTRACT", "INTERN", "CONSULTANT", "PROBATION"]).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(200).default(25),
+  sortBy: z.enum(["employeeCode", "fullName", "dateOfJoining", "status"]).default("employeeCode"),
+  sortDir: z.enum(["asc", "desc"]).default("asc"),
+});
+
+export const exportQuerySchema = employeeListQuerySchema.omit({ page: true, pageSize: true }).extend({
+  includeSensitive: z.coerce.boolean().default(false),
+});
+
+export const savedViewCreateSchema = z.object({
+  gridKey: z.string().trim().min(1).max(50).default("employees"),
+  name: z.string().trim().min(1).max(100),
+  config: z.record(z.string(), z.unknown()),
+});

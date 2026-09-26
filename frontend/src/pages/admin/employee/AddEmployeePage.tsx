@@ -1,0 +1,291 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import {
+  Alert,
+  Button,
+  DatePicker,
+  Form,
+  Input,
+  Select,
+  Space,
+  Steps,
+  Typography,
+  message,
+} from "antd";
+import type { AxiosError } from "axios";
+import * as employeeApi from "../../../api/employee";
+import * as orgApi from "../../../api/org";
+
+const { Title, Text } = Typography;
+
+function errorMessage(err: unknown, fallback: string): string {
+  const axiosErr = err as AxiosError<{ error?: { message?: string } }>;
+  return axiosErr.response?.data?.error?.message ?? fallback;
+}
+
+const STEPS = ["Official", "Personal", "Statutory", "Bank", "Review"];
+
+export function AddEmployeePage() {
+  const navigate = useNavigate();
+  const [form] = Form.useForm();
+  const [current, setCurrent] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [deviceCheck, setDeviceCheck] = useState<employeeApi.DeviceCodeCheckResult | null>(null);
+  const [checkingDevice, setCheckingDevice] = useState(false);
+
+  const { data: departments = [] } = useQuery({ queryKey: ["org", "departments"], queryFn: orgApi.departments.list });
+  const { data: designations = [] } = useQuery({ queryKey: ["org", "designations"], queryFn: orgApi.designations.list });
+  const { data: locations = [] } = useQuery({ queryKey: ["org", "locations"], queryFn: () => orgApi.listLocations(false) });
+  const { data: grades = [] } = useQuery({ queryKey: ["org", "grades"], queryFn: orgApi.grades.list });
+  const { data: costCentres = [] } = useQuery({ queryKey: ["org", "cost-centres"], queryFn: orgApi.costCentres.list });
+  const { data: managerOptions } = useQuery({
+    queryKey: ["employees", "managers"],
+    queryFn: () => employeeApi.listEmployees({ pageSize: 200, sortBy: "fullName", sortDir: "asc" }),
+  });
+
+  async function onDeviceUserIdChange(value: string) {
+    form.setFieldValue("official", { ...form.getFieldValue("official"), employeeCode: value });
+    setDeviceCheck(null);
+    if (!value.trim()) return;
+    setCheckingDevice(true);
+    try {
+      const result = await employeeApi.checkDeviceCode(value.trim());
+      setDeviceCheck(result);
+      if (result.collision) {
+        form.setFieldValue(["official", "employeeCode"], result.suggestedEmployeeCode);
+      }
+    } catch {
+      // non-fatal — HR can still proceed, the create call re-validates
+    } finally {
+      setCheckingDevice(false);
+    }
+  }
+
+  const OFFICIAL_FIELDS = ["deviceUserId", "employeeCode", "dateOfJoining", "departmentId", "designationId", "locationId", "employmentType"];
+  const PERSONAL_FIELDS = [
+    "fullName",
+    "dateOfBirth",
+    "gender",
+    "personalEmail",
+    "mobile",
+    "currentAddress",
+    "permanentAddress",
+    "emergencyContactName",
+    "emergencyContactPhone",
+    "emergencyContactRelation",
+  ];
+  const stepFields: Record<number, string[][]> = {
+    0: OFFICIAL_FIELDS.map((f) => ["official", f]),
+    1: PERSONAL_FIELDS.map((f) => ["personal", f]),
+    2: [],
+    3: [["bank", "accountNumberConfirm"]],
+  };
+
+  async function next() {
+    const fields = stepFields[current];
+    if (fields && fields.length > 0) {
+      try {
+        await form.validateFields(fields as never);
+      } catch {
+        return;
+      }
+    }
+    setCurrent((c) => c + 1);
+  }
+
+  async function submit() {
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const values = form.getFieldsValue(true);
+      const official = { ...values.official, dateOfJoining: values.official.dateOfJoining.format("YYYY-MM-DD") };
+      const personal = { ...values.personal, dateOfBirth: values.personal.dateOfBirth.format("YYYY-MM-DD") };
+      const statutory = values.statutory && Object.values(values.statutory).some(Boolean) ? values.statutory : undefined;
+      const bank = values.bank?.accountNumber ? values.bank : undefined;
+
+      const result = await employeeApi.createEmployee({ official, personal, statutory, bank });
+      void message.success(`Employee ${result.employeeCode} created and invited.`);
+      navigate(`/admin/employee/profile/${result.id}`);
+    } catch (err) {
+      setSubmitError(errorMessage(err, "Could not create employee."));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const values = form.getFieldsValue(true) as {
+    official?: Record<string, unknown>;
+    personal?: Record<string, unknown>;
+    statutory?: Record<string, unknown>;
+    bank?: Record<string, unknown>;
+  };
+
+  return (
+    <Space orientation="vertical" size={16} style={{ width: "100%" }}>
+      <Title level={3} style={{ margin: 0 }}>
+        Add Employee
+      </Title>
+      <Steps current={current} items={STEPS.map((s) => ({ title: s }))} />
+
+      <Form form={form} layout="vertical" requiredMark={false} initialValues={{ official: { employmentType: "PERMANENT" } }}>
+        <div style={{ display: current === 0 ? "block" : "none" }}>
+          <Form.Item name={["official", "deviceUserId"]} label="Device User ID" rules={[{ required: true, message: "Enter the ID from the biometric machine" }]} extra="The raw ID assigned on the biometric machine.">
+            <Input onChange={(e) => void onDeviceUserIdChange(e.target.value)} placeholder="e.g. 1042" />
+          </Form.Item>
+          {checkingDevice && <Text type="secondary">Checking…</Text>}
+          {deviceCheck?.collision && (
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message={`Employee Code ${deviceCheck.collision.employeeCode} was already used by ${deviceCheck.collision.fullName}${deviceCheck.collision.separatedOn ? `, separated on ${deviceCheck.collision.separatedOn}` : ""}. Employee Codes are never reused.`}
+              description={`Suggested code: ${deviceCheck.suggestedEmployeeCode} (pre-filled below — you can still type a different one).`}
+            />
+          )}
+          <Form.Item name={["official", "employeeCode"]} label="Employee Code" rules={[{ required: true }]} extra="Permanent login username — pre-filled from Device User ID, editable.">
+            <Input />
+          </Form.Item>
+          <Form.Item name={["official", "dateOfJoining"]} label="Date of Joining" rules={[{ required: true }]}>
+            <DatePicker style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item name={["official", "departmentId"]} label="Department" rules={[{ required: true }]}>
+            <Select options={departments.map((d) => ({ value: d.id, label: d.name }))} showSearch optionFilterProp="label" />
+          </Form.Item>
+          <Form.Item name={["official", "designationId"]} label="Designation" rules={[{ required: true }]}>
+            <Select options={designations.map((d) => ({ value: d.id, label: d.name }))} showSearch optionFilterProp="label" />
+          </Form.Item>
+          <Form.Item name={["official", "locationId"]} label="Location" rules={[{ required: true }]}>
+            <Select options={locations.map((l) => ({ value: l.id, label: l.name }))} showSearch optionFilterProp="label" />
+          </Form.Item>
+          <Form.Item name={["official", "gradeId"]} label="Grade">
+            <Select allowClear options={grades.map((g) => ({ value: g.id, label: g.name }))} showSearch optionFilterProp="label" />
+          </Form.Item>
+          <Form.Item name={["official", "costCentreId"]} label="Cost Centre">
+            <Select allowClear options={costCentres.map((c) => ({ value: c.id, label: c.name }))} showSearch optionFilterProp="label" />
+          </Form.Item>
+          <Form.Item name={["official", "reportingManagerId"]} label="Reporting Manager">
+            <Select allowClear options={(managerOptions?.rows ?? []).map((m) => ({ value: m.id, label: `${m.fullName} (${m.employeeCode})` }))} showSearch optionFilterProp="label" />
+          </Form.Item>
+          <Form.Item name={["official", "employmentType"]} label="Employment Type" rules={[{ required: true }]}>
+            <Select options={["PERMANENT", "CONTRACT", "INTERN", "CONSULTANT", "PROBATION"].map((t) => ({ value: t, label: t }))} />
+          </Form.Item>
+          <Form.Item name={["official", "officialEmail"]} label="Official Email">
+            <Input />
+          </Form.Item>
+        </div>
+
+        <div style={{ display: current === 1 ? "block" : "none" }}>
+          <Form.Item name={["personal", "fullName"]} label="Full Name" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name={["personal", "dateOfBirth"]} label="Date of Birth" rules={[{ required: true }]}>
+            <DatePicker style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item name={["personal", "gender"]} label="Gender" rules={[{ required: true }]}>
+            <Select options={[{ value: "MALE", label: "Male" }, { value: "FEMALE", label: "Female" }, { value: "OTHER", label: "Other" }]} />
+          </Form.Item>
+          <Form.Item name={["personal", "personalEmail"]} label="Personal Email (Gmail)" rules={[{ required: true, type: "email" }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name={["personal", "mobile"]} label="Mobile" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name={["personal", "currentAddress"]} label="Current Address" rules={[{ required: true }]}>
+            <Input.TextArea rows={2} />
+          </Form.Item>
+          <Form.Item name={["personal", "permanentAddress"]} label="Permanent Address" rules={[{ required: true }]}>
+            <Input.TextArea rows={2} />
+          </Form.Item>
+          <Form.Item name={["personal", "emergencyContactName"]} label="Emergency Contact Name" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name={["personal", "emergencyContactPhone"]} label="Emergency Contact Phone" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name={["personal", "emergencyContactRelation"]} label="Relation" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name={["personal", "bloodGroup"]} label="Blood Group">
+            <Input />
+          </Form.Item>
+        </div>
+
+        <div style={{ display: current === 2 ? "block" : "none" }}>
+          <Text type="secondary">Optional at this stage — can be added later.</Text>
+          <Form.Item name={["statutory", "pan"]} label="PAN">
+            <Input />
+          </Form.Item>
+          <Form.Item name={["statutory", "aadhaar"]} label="Aadhaar">
+            <Input />
+          </Form.Item>
+          <Form.Item name={["statutory", "uan"]} label="UAN / PF Number">
+            <Input />
+          </Form.Item>
+          <Form.Item name={["statutory", "esiNumber"]} label="ESI Number">
+            <Input />
+          </Form.Item>
+        </div>
+
+        <div style={{ display: current === 3 ? "block" : "none" }}>
+          <Text type="secondary">Optional at this stage — can be added later.</Text>
+          <Form.Item name={["bank", "accountHolderName"]} label="Account Holder Name">
+            <Input />
+          </Form.Item>
+          <Form.Item name={["bank", "accountNumber"]} label="Account Number">
+            <Input />
+          </Form.Item>
+          <Form.Item
+            name={["bank", "accountNumberConfirm"]}
+            label="Confirm Account Number"
+            dependencies={[["bank", "accountNumber"]]}
+            rules={[
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!value || value === getFieldValue(["bank", "accountNumber"])) return Promise.resolve();
+                  return Promise.reject(new Error("Account numbers don't match."));
+                },
+              }),
+            ]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item name={["bank", "ifsc"]} label="IFSC">
+            <Input />
+          </Form.Item>
+          <Form.Item name={["bank", "bankName"]} label="Bank Name">
+            <Input />
+          </Form.Item>
+          <Form.Item name={["bank", "branchName"]} label="Branch Name">
+            <Input />
+          </Form.Item>
+        </div>
+
+        {current === 4 && (
+          <Space orientation="vertical" style={{ width: "100%" }}>
+            {submitError && <Alert type="error" showIcon message={submitError} />}
+            <Typography.Paragraph>
+              <strong>{String(values.personal?.fullName ?? "")}</strong> ({String(values.official?.employeeCode ?? "")}) — review the
+              details in previous steps, then save and send the set-password invitation.
+            </Typography.Paragraph>
+          </Space>
+        )}
+      </Form>
+
+      <Space>
+        {current > 0 && <Button onClick={() => setCurrent((c) => c - 1)}>Back</Button>}
+        {current < STEPS.length - 1 && (
+          <Button type="primary" onClick={() => void next()}>
+            Next
+          </Button>
+        )}
+        {current === STEPS.length - 1 && (
+          <Button type="primary" loading={submitting} onClick={() => void submit()}>
+            Save &amp; Send Invite
+          </Button>
+        )}
+      </Space>
+    </Space>
+  );
+}

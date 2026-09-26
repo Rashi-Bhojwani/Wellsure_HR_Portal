@@ -26,7 +26,7 @@ import {
   hashBackupCode,
   verifyTotpCode,
 } from "./totp";
-import { sendPasswordResetEmail, sendWelcomeEmail } from "./emails";
+import { sendInvitationEmail, sendPasswordResetEmail, sendWelcomeEmail } from "./emails";
 import type { LoginResult, LoginTokens, RequestMetaInput } from "./types";
 
 interface MinimalEmployee {
@@ -276,6 +276,38 @@ export async function revokeSession(userId: string, sessionId: string): Promise<
   }
   await revokeRefreshTokenById(sessionId);
   await writeAuditLog({ actorUserId: userId, action: "auth.session.revoked", entityType: "RefreshToken", entityId: sessionId });
+}
+
+// Called by the employee module right after creating a new hire's User row
+// (status INVITED) — issues the 48h single-use set-password token and
+// sends the invitation email. Not itself audit-logged: the caller's own
+// "employee.created" entry covers this as part of the same action.
+export async function createInvitation(params: {
+  userId: string;
+  email: string;
+  fullName: string;
+  employeeCode: string;
+}): Promise<void> {
+  const raw = generateOpaqueToken();
+  await prisma.invitationToken.create({
+    data: {
+      userId: params.userId,
+      tokenHash: hashOpaqueToken(raw),
+      expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+    },
+  });
+  await sendInvitationEmail(params.email, params.fullName, params.employeeCode, raw).catch((err: unknown) =>
+    logger.error({ err }, "failed to send invitation email"),
+  );
+}
+
+// Resend: invalidates any still-outstanding invitation tokens for this user
+// (a stale link should stop working once a fresher one is issued) and
+// issues a new one. HR-triggered — see employee module's resend-invite
+// endpoint, which is what actually audit-logs this action.
+export async function resendInvitation(userId: string, email: string, fullName: string, employeeCode: string): Promise<void> {
+  await prisma.invitationToken.updateMany({ where: { userId, usedAt: null }, data: { usedAt: new Date() } });
+  await createInvitation({ userId, email, fullName, employeeCode });
 }
 
 export async function getInvitationDetails(token: string): Promise<{ employeeCode: string; fullName: string }> {

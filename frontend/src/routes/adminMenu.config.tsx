@@ -37,6 +37,11 @@ import {
 } from "@ant-design/icons";
 import { AdminHomePage } from "../pages/admin/home/HomePage";
 import { WorkforceOverviewPage } from "../pages/admin/workforce/OverviewPage";
+import { OrganisationSetupPage } from "../pages/admin/organisation/OrganisationSetupPage";
+import { AllEmployeesPage } from "../pages/admin/employee/AllEmployeesPage";
+import { AddEmployeePage } from "../pages/admin/employee/AddEmployeePage";
+import { SeparationsPage } from "../pages/admin/employee/SeparationsPage";
+import { ChangeRequestsPage } from "../pages/admin/employee/ChangeRequestsPage";
 
 // Single source of truth for the HR/Admin portal's App Switcher and each
 // app's top-bar dropdown menus (docs/UI_REFERENCE.md §2.0). "Homepage",
@@ -89,10 +94,11 @@ export const adminApps: AdminApp[] = [
         key: "employee",
         label: "Employee",
         items: [
-          { key: "all-employees", label: "All Employees", path: "employee/all", icon: TeamOutlined, phase: "Phase 1" },
-          { key: "add-employee", label: "Add Employee", path: "employee/add", icon: UserAddOutlined, phase: "Phase 1" },
+          { key: "all-employees", label: "All Employees", path: "employee/all", icon: TeamOutlined, element: AllEmployeesPage },
+          { key: "add-employee", label: "Add Employee", path: "employee/add", icon: UserAddOutlined, element: AddEmployeePage },
           { key: "bulk-import", label: "Bulk Import", path: "employee/import", icon: CloudUploadOutlined, phase: "Phase 1" },
-          { key: "separations", label: "Separations", path: "employee/separations", icon: ExportOutlined, phase: "Phase 1" },
+          { key: "change-requests", label: "Change Requests", path: "employee/change-requests", icon: SolutionOutlined, element: ChangeRequestsPage },
+          { key: "separations", label: "Separations", path: "employee/separations", icon: ExportOutlined, element: SeparationsPage },
         ],
       },
     ],
@@ -215,7 +221,7 @@ export const adminApps: AdminApp[] = [
         key: "admin-tools",
         label: "Admin Tools",
         items: [
-          { key: "organisation-setup", label: "Organisation Setup", path: "admin-tools/organisation", icon: PartitionOutlined, phase: "Phase 1" },
+          { key: "organisation-setup", label: "Organisation Setup", path: "admin-tools/organisation", icon: PartitionOutlined, element: OrganisationSetupPage },
           { key: "holiday-calendars", label: "Holiday Calendars", path: "admin-tools/holidays", icon: GiftOutlined, phase: "Phase 4" },
           { key: "shift-master", label: "Shift Master", path: "admin-tools/shifts", icon: ScheduleOutlined, phase: "Phase 2" },
           { key: "week-off-patterns", label: "Week-off Patterns", path: "admin-tools/week-offs", icon: CalendarOutlined, phase: "Phase 2" },
