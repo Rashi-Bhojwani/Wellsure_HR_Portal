@@ -2,16 +2,11 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Input, Modal, Select, Space, Table, Tag, Typography, message } from "antd";
-import type { AxiosError } from "axios";
+import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as employeeApi from "../../../api/employee";
 import { EmptyState } from "../../../components/common/EmptyState";
 
 const { Title } = Typography;
-
-function errorMessage(err: unknown, fallback: string): string {
-  const axiosErr = err as AxiosError<{ error?: { message?: string } }>;
-  return axiosErr.response?.data?.error?.message ?? fallback;
-}
 
 const STATUS_COLORS: Record<string, string> = { PENDING: "gold", APPROVED: "green", REJECTED: "red" };
 

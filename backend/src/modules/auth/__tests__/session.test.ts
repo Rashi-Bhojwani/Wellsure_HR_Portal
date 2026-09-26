@@ -39,6 +39,39 @@ describe("refresh, logout and sessions", () => {
     expect(newCookie).not.toBe(cookie);
   });
 
+  it("two genuinely concurrent /refresh calls on the same token: exactly one wins, and the winner's new session stays fully valid", async () => {
+    // Regression test — a real bug found via a user's dev-server log:
+    // React StrictMode double-invokes AuthProvider's mount effect, firing
+    // two independent /refresh calls with the same refresh-token cookie
+    // before either has rotated it. The old code let both succeed (each
+    // issuing its own new child token, one left orphaned/unlinked); the
+    // fix makes the rotation an atomic claim so only one can win, and the
+    // loser gets a plain retryable 401 rather than triggering reuse-
+    // detection (a genuine race between two legitimate requests is not an
+    // attack signal, and must not revoke the user's whole session chain).
+    const user = await createTestUser(org);
+    employeeIds.push(user.employeeId);
+    const cookie = await loginAndGetCookie(user.employeeCode);
+
+    const [a, b] = await Promise.all([
+      request(app).post("/api/auth/refresh").set("Cookie", cookie),
+      request(app).post("/api/auth/refresh").set("Cookie", cookie),
+    ]);
+
+    const results = [a, b];
+    const winners = results.filter((r) => r.status === 200);
+    const losers = results.filter((r) => r.status !== 200);
+    expect(winners).toHaveLength(1);
+    expect(losers).toHaveLength(1);
+    expect(losers[0]!.body.error.code).toBe("REFRESH_RACE_LOST");
+
+    // The winning call's own new session must still work normally
+    // afterward — losing the race must never cascade into revoking it.
+    const winnerCookie = refreshCookie(winners[0]!);
+    const followUp = await request(app).post("/api/auth/refresh").set("Cookie", winnerCookie);
+    expect(followUp.status).toBe(200);
+  });
+
   it("rejects reuse of an already-rotated refresh token, and revokes the whole chain", async () => {
     const user = await createTestUser(org);
     employeeIds.push(user.employeeId);

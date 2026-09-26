@@ -1,16 +1,11 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card, Descriptions, Form, Input, Modal, Space, Tabs, Tag, Typography, message } from "antd";
-import type { AxiosError } from "axios";
+import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as employeeApi from "../../../api/employee";
 import { EmptyState } from "../../../components/common/EmptyState";
 
 const { Title } = Typography;
-
-function errorMessage(err: unknown, fallback: string): string {
-  const axiosErr = err as AxiosError<{ error?: { message?: string } }>;
-  return axiosErr.response?.data?.error?.message ?? fallback;
-}
 
 type ChangeRequestFieldGroup = "bank" | "statutory" | "personal";
 

@@ -19,7 +19,7 @@ import {
   message,
 } from "antd";
 import { EyeOutlined, ExportOutlined as SeparateIcon } from "@ant-design/icons";
-import type { AxiosError } from "axios";
+import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import dayjs from "dayjs";
 import * as employeeApi from "../../../api/employee";
 import * as orgApi from "../../../api/org";
@@ -27,11 +27,6 @@ import { useAuth } from "../../../hooks/useAuth";
 import { EmptyState } from "../../../components/common/EmptyState";
 
 const { Title, Text } = Typography;
-
-function errorMessage(err: unknown, fallback: string): string {
-  const axiosErr = err as AxiosError<{ error?: { message?: string } }>;
-  return axiosErr.response?.data?.error?.message ?? fallback;
-}
 
 function OfficialTab({ profile }: { profile: employeeApi.EmployeeProfile }) {
   return (

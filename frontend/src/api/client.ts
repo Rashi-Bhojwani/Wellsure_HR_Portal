@@ -55,6 +55,29 @@ async function refreshAccessToken(): Promise<void> {
   }
 }
 
+// Exported so AuthProvider's mount-time bootstrap can share the exact same
+// in-flight promise as the interceptor above, instead of calling
+// POST /api/auth/refresh directly. That direct call used to let React
+// StrictMode's dev-mode double-invoke of the mount effect fire two
+// independent, un-deduplicated refresh requests with the same refresh-
+// token cookie — a real race the backend now resolves without corrupting
+// session state (see tokens.ts's rotateRefreshToken), but the loser's
+// failure handler would still call setAccessToken(null), capable of
+// wiping out a token the *winning* call had just set, if its promise
+// settled second. Routing both callers through this one shared promise
+// means only one HTTP request ever goes out, so the race can't happen.
+export async function bootstrapSession(): Promise<boolean> {
+  refreshing ??= refreshAccessToken().finally(() => {
+    refreshing = null;
+  });
+  try {
+    await refreshing;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {

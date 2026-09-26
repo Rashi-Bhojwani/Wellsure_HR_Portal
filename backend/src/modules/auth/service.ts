@@ -235,7 +235,18 @@ export async function refresh(
     throw new HttpError(401, "Account is not active.", "UNAUTHENTICATED");
   }
 
-  const { token: newRefreshToken } = await rotateRefreshToken(outcome.row, meta);
+  const rotated = await rotateRefreshToken(outcome.row, meta);
+  if (!rotated) {
+    // Lost a genuine concurrent-rotation race (see tokens.ts) — a
+    // different in-flight request already rotated this exact token
+    // first, so it's not reuse (no attack signal, don't revoke the
+    // chain), just stale from this call's point of view. The client
+    // already has, or is about to receive, a valid session from the
+    // request that won; asking it to retry (rather than treating this as
+    // a hard logout) matches that.
+    throw new HttpError(401, "Session refresh in progress elsewhere. Please retry.", "REFRESH_RACE_LOST");
+  }
+  const { token: newRefreshToken } = rotated;
   const accessToken = signAccessToken(user.id);
   await writeAuditLog({
     actorUserId: user.id,

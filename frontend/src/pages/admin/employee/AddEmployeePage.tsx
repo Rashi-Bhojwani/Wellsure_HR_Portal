@@ -13,16 +13,11 @@ import {
   Typography,
   message,
 } from "antd";
-import type { AxiosError } from "axios";
+import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as employeeApi from "../../../api/employee";
 import * as orgApi from "../../../api/org";
 
 const { Title, Text } = Typography;
-
-function errorMessage(err: unknown, fallback: string): string {
-  const axiosErr = err as AxiosError<{ error?: { message?: string } }>;
-  return axiosErr.response?.data?.error?.message ?? fallback;
-}
 
 const STEPS = ["Official", "Personal", "Statutory", "Bank", "Review"];
 

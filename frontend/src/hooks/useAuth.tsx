@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components -- context + hook are colocated by design */
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { setAccessToken, setOnRefreshFailed } from "../api/client";
+import { bootstrapSession, setAccessToken, setOnRefreshFailed } from "../api/client";
 import * as authApi from "../api/auth";
 import type { LoginResponse, LoginTokensResponse, MeResponse } from "../api/auth";
 
@@ -32,15 +32,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // On first load there's no access token in memory (page refresh loses
     // it by design — spec §9 says never localStorage) — a silent refresh
     // against the httpOnly cookie is how a session survives a reload.
-    authApi
-      .refresh()
-      .then(async ({ accessToken }) => {
-        setAccessToken(accessToken);
+    // Goes through client.ts's shared bootstrapSession() (not
+    // authApi.refresh() directly) so React StrictMode's dev-mode double-
+    // invoke of this effect shares one in-flight request instead of firing
+    // two independent ones racing on the same refresh-token cookie — see
+    // bootstrapSession's own comment for what that race used to do.
+    bootstrapSession()
+      .then(async (ok) => {
+        if (!ok) return;
         const profile = await authApi.me();
         if (!cancelled) setUser(profile);
-      })
-      .catch(() => {
-        setAccessToken(null);
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);

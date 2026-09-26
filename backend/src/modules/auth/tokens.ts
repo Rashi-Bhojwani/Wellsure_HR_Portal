@@ -68,12 +68,29 @@ export async function checkRefreshToken(token: string): Promise<RefreshOutcome> 
   return { kind: "valid", row };
 }
 
-export async function rotateRefreshToken(oldRow: RefreshToken, meta: RequestMeta): Promise<IssuedRefreshToken> {
+// Two concurrent /refresh calls presenting the same still-valid token (a
+// real, observed case: React StrictMode double-invokes AuthProvider's
+// mount effect in dev, firing two independent, undeduplicated
+// authApi.refresh() calls) both used to pass checkRefreshToken's read,
+// then both issue a new child and both update the same old row — the
+// second update silently overwrites the first's replacedByTokenId, so a
+// second valid child ends up orphaned (unlinked, but real and usable),
+// which is a duplicated session, not the security-relevant "reuse" case.
+// The update below is the atomic claim: `revokedAt: null` in the WHERE
+// clause means only the first of any concurrent pair actually revokes the
+// row, so callers can tell who won.
+export async function rotateRefreshToken(oldRow: RefreshToken, meta: RequestMeta): Promise<IssuedRefreshToken | null> {
   const issued = await issueRefreshToken(oldRow.userId, meta);
-  await prisma.refreshToken.update({
-    where: { id: oldRow.id },
+  const claim = await prisma.refreshToken.updateMany({
+    where: { id: oldRow.id, revokedAt: null },
     data: { revokedAt: new Date(), replacedByTokenId: issued.row.id, lastUsedAt: new Date() },
   });
+  if (claim.count === 0) {
+    // Lost the race — a concurrent call already rotated this token first.
+    // Don't leave our own now-pointless child token behind.
+    await prisma.refreshToken.delete({ where: { id: issued.row.id } });
+    return null;
+  }
   return issued;
 }
 

@@ -18,18 +18,13 @@ import {
   Popconfirm,
 } from "antd";
 import { DeleteOutlined, EditOutlined, PlusOutlined, SwapOutlined } from "@ant-design/icons";
-import type { AxiosError } from "axios";
+import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as orgApi from "../../../api/org";
 import type { City, Location, SimpleMaster } from "../../../api/org";
 import { HelpStrip } from "../../../components/common/HelpStrip";
 import { useAuth } from "../../../hooks/useAuth";
 
 const { Title } = Typography;
-
-function errorMessage(err: unknown, fallback: string): string {
-  const axiosErr = err as AxiosError<{ error?: { message?: string } }>;
-  return axiosErr.response?.data?.error?.message ?? fallback;
-}
 
 // ── Cities ───────────────────────────────────────────────────────────────
 
