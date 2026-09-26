@@ -10,6 +10,8 @@ import { redis } from "./lib/redis";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 import { devStorageRouter } from "./integrations/storage";
 import { authRouter } from "./modules/auth/routes";
+import { orgRouter } from "./modules/org/routes";
+import { employeeRouter } from "./modules/employee/routes";
 
 export function createApp(): Express {
   const app = express();
@@ -53,6 +55,8 @@ export function createApp(): Express {
   // Module routes (auth, employees, attendance, ...) are mounted here
   // starting Phase 1 — see src/modules/*/README.md.
   app.use("/api/auth", authRouter);
+  app.use("/api/org", orgRouter);
+  app.use("/api/employees", employeeRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

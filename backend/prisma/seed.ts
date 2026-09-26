@@ -223,14 +223,17 @@ async function main() {
   );
   const perm = Object.fromEntries(permissions.map((p) => [p.key, p]));
 
+  // HR_EXECUTIVE deliberately excludes employee.statutory.* and
+  // employee.bank.* — spec §2 says "no salary or bank data"; PAN/Aadhaar/
+  // UAN are held to the same bar as bank data here, so HR_EXECUTIVE is
+  // blocked from both reveal endpoints, not just bank (commit C IDOR test
+  // covers this explicitly).
   const HR_EXECUTIVE_PERMS = [
     "employee.view",
     "employee.create",
     "employee.edit",
     "employee.export",
     "employee.manage",
-    "employee.statutory.view",
-    "employee.statutory.edit",
     "employee.separate",
     "employee.separate.view",
     "profile.changerequest.approve",
@@ -240,6 +243,8 @@ async function main() {
   ];
   const HR_ADMIN_PERMS = [
     ...HR_EXECUTIVE_PERMS,
+    "employee.statutory.view",
+    "employee.statutory.edit",
     "employee.bank.view",
     "employee.bank.edit",
     "user.security.manage",

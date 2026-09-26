@@ -8,6 +8,8 @@ import { ResetPasswordPage } from "../pages/auth/reset-password/ResetPasswordPag
 import { TotpChallengePage } from "../pages/auth/totp/TotpChallengePage";
 import { TotpSetupPage } from "../pages/auth/totp/TotpSetupPage";
 import { AccountSecurityPage } from "../pages/account-security/AccountSecurityPage";
+import { EmployeeProfilePage } from "../pages/admin/employee/EmployeeProfilePage";
+import { ViewMyInfoPage } from "../pages/employee/profile/ViewMyInfoPage";
 import { PlaceholderPage } from "../components/common/PlaceholderPage";
 import { RequireAuth } from "./RequireAuth";
 import { employeeMenu, isEmployeeMenuGroup } from "./employeeMenu.config";
@@ -54,13 +56,14 @@ export function AppRouter() {
       <Route element={<RequireAuth />}>
         <Route path="/app" element={<EmployeeLayout />}>
           <Route index element={<Navigate to="home" replace />} />
-          <Route path="profile" element={<PlaceholderPage title="Profile (View My Info)" phase="Phase 1" />} />
+          <Route path="profile" element={<ViewMyInfoPage />} />
           <Route path="security" element={<AccountSecurityPage />} />
           {employeeRoutes()}
         </Route>
 
         <Route path="/admin" element={<AdminLayout />}>
           <Route path="security" element={<AccountSecurityPage />} />
+          <Route path="employee/profile/:id" element={<EmployeeProfilePage />} />
           {adminRoutes()}
         </Route>
       </Route>

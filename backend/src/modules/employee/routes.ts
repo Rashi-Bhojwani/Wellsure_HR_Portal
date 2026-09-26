@@ -1,0 +1,101 @@
+import { Router } from "express";
+import { authenticate } from "../../middleware/authenticate";
+import { requirePermission } from "../../middleware/rbac";
+import { validate } from "../../middleware/validate";
+import * as controller from "./controller";
+import {
+  bankUpdateSchema,
+  createChangeRequestSchema,
+  createEmployeeSchema,
+  decideChangeRequestSchema,
+  deviceCodeCheckQuerySchema,
+  employeeListQuerySchema,
+  exportQuerySchema,
+  idParamsSchema,
+  initiateSeparationSchema,
+  jobUpdateSchema,
+  nameUpdateSchema,
+  personalUpdateSchema,
+  savedViewCreateSchema,
+  selfServiceUpdateSchema,
+  statutoryUpdateSchema,
+} from "./validators";
+
+export const employeeRouter = Router();
+employeeRouter.use(authenticate);
+
+const canCreate = requirePermission("employee.create");
+const canView = requirePermission("employee.view");
+const canEdit = requirePermission("employee.edit");
+const canExport = requirePermission("employee.export");
+const canViewBank = requirePermission("employee.bank.view");
+const canEditBank = requirePermission("employee.bank.edit");
+const canViewStatutory = requirePermission("employee.statutory.view");
+const canEditStatutory = requirePermission("employee.statutory.edit");
+const canSeparate = requirePermission("employee.separate");
+const canViewSeparations = requirePermission("employee.separate.view");
+const canApproveChangeRequest = requirePermission("profile.changerequest.approve");
+
+// ── Literal routes first — must precede /:id so Express doesn't try to
+// match "change-requests"/"separations"/etc. as an :id value. ────────────
+
+employeeRouter.get("/device-code-check", canCreate, validate({ query: deviceCodeCheckQuerySchema }), controller.checkDeviceCode);
+employeeRouter.post("/", canCreate, validate({ body: createEmployeeSchema }), controller.createEmployee);
+
+employeeRouter.get("/", canView, validate({ query: employeeListQuerySchema }), controller.listEmployees);
+employeeRouter.get("/export", canExport, validate({ query: exportQuerySchema }), controller.exportEmployees);
+
+employeeRouter.get("/saved-views", controller.listSavedViews);
+employeeRouter.post("/saved-views", validate({ body: savedViewCreateSchema }), controller.createSavedView);
+employeeRouter.delete("/saved-views/:id", validate({ params: idParamsSchema }), controller.deleteSavedView);
+
+employeeRouter.get("/me", controller.getMyProfile);
+employeeRouter.patch("/me", validate({ body: selfServiceUpdateSchema }), controller.updateSelfService);
+
+employeeRouter.post("/change-requests", validate({ body: createChangeRequestSchema }), controller.createChangeRequest);
+employeeRouter.get("/change-requests", controller.listChangeRequests);
+employeeRouter.post(
+  "/change-requests/:id/approve",
+  canApproveChangeRequest,
+  validate({ params: idParamsSchema, body: decideChangeRequestSchema }),
+  controller.approveChangeRequest,
+);
+employeeRouter.post(
+  "/change-requests/:id/reject",
+  canApproveChangeRequest,
+  validate({ params: idParamsSchema, body: decideChangeRequestSchema }),
+  controller.rejectChangeRequest,
+);
+
+employeeRouter.get("/separations", canViewSeparations, controller.listSeparations);
+employeeRouter.post("/separations/:id/cancel", canSeparate, validate({ params: idParamsSchema }), controller.cancelSeparation);
+
+// ── :id routes ───────────────────────────────────────────────────────────
+
+employeeRouter.get("/:id", canView, validate({ params: idParamsSchema }), controller.getProfile);
+employeeRouter.post("/:id/resend-invite", canCreate, validate({ params: idParamsSchema }), controller.resendInvite);
+
+employeeRouter.get("/:id/statutory/reveal", canViewStatutory, validate({ params: idParamsSchema }), controller.revealStatutory);
+employeeRouter.get("/:id/bank/reveal", canViewBank, validate({ params: idParamsSchema }), controller.revealBank);
+
+employeeRouter.get("/:id/history/job", canView, validate({ params: idParamsSchema }), controller.getJobHistory);
+employeeRouter.get("/:id/history/name", canView, validate({ params: idParamsSchema }), controller.getNameHistory);
+employeeRouter.get("/:id/history/bank", canViewBank, validate({ params: idParamsSchema }), controller.getBankHistory);
+
+employeeRouter.patch("/:id/job", canEdit, validate({ params: idParamsSchema, body: jobUpdateSchema }), controller.updateJob);
+employeeRouter.patch("/:id/bank", canEditBank, validate({ params: idParamsSchema, body: bankUpdateSchema }), controller.updateBank);
+employeeRouter.patch("/:id/name", canEdit, validate({ params: idParamsSchema, body: nameUpdateSchema }), controller.updateName);
+employeeRouter.patch(
+  "/:id/statutory",
+  canEditStatutory,
+  validate({ params: idParamsSchema, body: statutoryUpdateSchema }),
+  controller.updateStatutory,
+);
+employeeRouter.patch("/:id/personal", canEdit, validate({ params: idParamsSchema, body: personalUpdateSchema }), controller.updatePersonal);
+
+employeeRouter.post(
+  "/:id/separations",
+  canSeparate,
+  validate({ params: idParamsSchema, body: initiateSeparationSchema }),
+  controller.initiateSeparation,
+);

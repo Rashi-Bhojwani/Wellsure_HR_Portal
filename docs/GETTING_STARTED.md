@@ -207,9 +207,9 @@ subset for manual testing.
 |---|---|---|---|
 | `1000` | Aditi Sharma | Super Admin | Full admin access; **2FA required** — first login walks you through enrolment |
 | `1001` | Rohan Mehta | HR Admin | Employee management, bank/statutory data; **2FA required** |
-| `1002`–`1005` | Karan Kapoor, Priya Nair, Vikram Rao, Neha Verma | Manager | Team-scoped (`TEAM` data-scope) views once the employees module lands |
-| `1006`+ | various | Employee | Plain employee-portal access, no 2FA |
-| `1090` | Gaurav Singh | Employee (separated) | Device-ID reuse fixture — this employee's biometric device ID is freed for the Add Employee collision-detection flow to be tested against once it exists |
+| `1002`–`1005` | Karan Kapoor, Priya Nair, Vikram Rao, Neha Verma | Manager | Team-scoped (`TEAM` data-scope) views on the All Employees grid and employee profiles — see only your own direct/indirect reports |
+| `1006`+ | various | Employee | Plain employee-portal access, no 2FA; View My Info at `/app/profile` |
+| `1090` | Gaurav Singh | Employee (separated) | Device-ID reuse fixture — enter `1090` as the Device User ID in Add Employee to see the collision message and `1090-2` suggestion |
 
 A few accounts are deliberately seeded in non-active states to exercise
 those code paths: some are `INVITED` (never activated — try

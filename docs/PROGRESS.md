@@ -10,7 +10,7 @@ committed).
 |---|---|---|
 | — | Initial project structure (this commit) | ✅ Done |
 | 0 | Foundation | ✅ Done |
-| 1 | Auth, RBAC, org, employees | In progress — data layer + authentication done; org masters/employees module next |
+| 1 | Auth, RBAC, org, employees | In progress — data layer, authentication, org masters and employee management all done; bulk import, users/roles admin UI and audit log viewer still ahead |
 | 1.5 | AWS staging environment | Not started |
 | 2 | Biometric ingestion + attendance engine + real-time | Not started |
 | 3 | Attendance administration | Not started |
@@ -544,6 +544,215 @@ seeded test accounts below for manual verification.
   landed on the right portal), the already-enrolled 2FA challenge, Account
   & Security showing real session data, and forgot-password's identical
   response screen.
+
+### Interim fixes (between commit B and commit C)
+
+- **`.env` was never actually loaded on a clean shell.** `env.ts`'s
+  `safeParse(process.env)` silently depended on `@prisma/client`'s own
+  internal `.env` loading, which only ran when something imported
+  `@prisma/client` *before* `env.ts` evaluated — true for
+  `scripts/check-services.ts` (imports `lib/prisma.ts` first) but not for
+  `scripts/reset-db.ts`, or even the main server entrypoint `src/index.ts`
+  itself. A completely clean checkout (`.env` present, no exported shell
+  vars — exactly what `docs/GETTING_STARTED.md` documents) would fail
+  `npm run dev` outright with "Invalid environment configuration". Fixed
+  by loading `.env` explicitly and unconditionally at the top of `env.ts`
+  via `process.loadEnvFile()`, guarded by `existsSync` so staging/
+  production (env injected via ECS task env, no `.env` file) are
+  unaffected. Also fixed `check-services.ts`'s password-masking regex,
+  which partially leaked a password containing a literal `@`.
+- Dropped the now-deprecated `baseUrl` compiler option from all three
+  `tsconfig.json` files (TS 6+ deprecates it ahead of removal in TS 7.0;
+  `paths` has resolved relative to each tsconfig's own directory without
+  it since TS 4.1, so this is a no-op behaviourally).
+- **2FA enforcement temporarily disabled by default** —
+  `auth.require2faRoles`' fallback default flipped to `[]` (was
+  `["SUPER_ADMIN","HR_ADMIN","HR_EXECUTIVE","PAYROLL_ADMIN"]`) so manual
+  testing of the admin/HR flows isn't gated behind a TOTP challenge on
+  every login. Reversible via the `SystemSetting` row (or restoring the
+  code default) once the surrounding auth flow work settles; the setup/
+  verify/disable/backup-code endpoints, UI and their tests are untouched.
+
+### Phase 1, commit C — org masters and employee management
+
+Builds entirely on commit A's schema — City/Location/Department/
+Designation/Grade/CostCentre, Employee + its satellite tables,
+`ProfileChangeRequest`, `Separation` and `DeviceUserMapping` already
+existed, so this commit is the service/route/UI layer plus one small
+additive migration (`SavedView`, for the All Employees grid's saved
+views — personal, per-user grid preferences, not effective-dated or
+audited since it's UI convenience state, not business data).
+
+**Policy correction found while scoping the IDOR tests**: commit A's
+seed gave `HR_EXECUTIVE` `employee.statutory.view`/`.edit` alongside
+`employee.view`. Spec §2 says HR_EXECUTIVE gets "no salary or bank
+data" — re-reviewing against that bar, PAN/Aadhaar/UAN are held to the
+same standard here, so `HR_EXECUTIVE` now excludes statutory access too,
+same as bank. Both are proven by an explicit test (see below).
+
+**Backend — org masters** (`backend/src/modules/org/`, mounted at
+`/api/org`): City/Location(+merge/isActive/delete-blocked-when-
+referenced)/Department/Designation/Grade/CostCentre CRUD. Reads need only
+an authenticated session (every role needs these lists for dropdowns/
+filters); mutations require `org.manage`. Location merge repoints every
+`EmployeeJobHistory` row from the source branch to the target inside a
+transaction, then deletes the (now unreferenced) source — one call, one
+audit entry, matching spec §7.8's "merge-near-duplicates" ask. Delete on
+any of the six resources is blocked (409, not a raw FK error) when
+still referenced, checked proactively for a clear message.
+
+**Backend — employee module** (`backend/src/modules/employee/`, mounted
+at `/api/employees`):
+
+- **Add Employee** (spec §3) — `deviceCode.ts` implements the exact
+  collision flow: raw Device User ID collides with an existing Employee
+  Code (any status, since codes are never reused) → the wizard is told
+  who held it and when they separated, plus the next free `<id>-2`,
+  `-3`, … suggestion. `POST /` creates Employee + User(INVITED) +
+  Personal + NameHistory + JobHistory + DeviceUserMapping (+ optional
+  Statutory/BankAccount) in one transaction, then issues the invitation
+  (a new `createInvitation`/`resendInvitation` pair added to the auth
+  module, which had the accept/validate side from commit B but nothing
+  that actually created one — Add Employee is the first caller).
+- **Profile + reveal + history** — `getEmployeeProfile` omits the bank/
+  statutory sections entirely (not just masked) when the caller lacks
+  `employee.bank.view`/`.statutory.view`; `getMyProfile` (View My Info)
+  always includes the caller's *own* masked bank/statutory regardless of
+  those permissions (spec §6 vs. spec §7.2 are different access paths —
+  "can I see my own masked info" vs. "can I see someone else's"), but
+  full reveal stays permission-gated even for your own record, so plain
+  `EMPLOYEE` accounts never get an unmasked view through this UI.
+  Job/name/bank history timelines; bank history additionally gated
+  behind `employee.bank.view`.
+- **Effective-dated updates** — job/bank/name changes close the current
+  row (`effectiveTo` set) and open a new one in the same transaction;
+  statutory is a direct in-place update (not effective-dated — matches
+  the schema, `EmployeeStatutory` has no effective-dating columns).
+- **Profile change requests** — employee submits (bank/statutory changes
+  are encrypted into their `xxxEncrypted`/`xxxLast4`/`xxxHash` shape,
+  base64-packed for JSON storage, *before* being written to
+  `changesJson` — never the raw PAN/account number — then still run
+  through the shared `redact()` as defense in depth); HR approves
+  (applies the already-encrypted change) or rejects.
+- **Separations** — initiate/cancel; `processScheduledSeparations()` (a
+  new daily BullMQ repeatable job, `jobs/scheduler.ts` +
+  `jobs/worker.ts`, `upsertJobScheduler` — this BullMQ version deprecated
+  `Queue.add(..., {repeat})`) completes every `INITIATED` separation
+  whose last working date has passed (computed against Asia/Kolkata
+  "today", not the server's own clock — see the timezone comment in
+  `separations.ts`): separates the employee, deactivates login, revokes
+  every session, closes the open job-history row and frees the device
+  user ID (`DeviceUserMapping.validTo`) for reuse. Matches spec §3.8.
+- **All Employees grid** (`grid.ts`) — search/filter/paginate, sorted/
+  paginated in memory (acceptable at current headcount; revisit if the
+  still-open actual-headcount question lands much higher), Excel export
+  via `exceljs` (last-4/masked columns only, never live decryption — the
+  sensitive columns require `employee.bank.view`/`.statutory.view` and
+  are separately audit-logged as `employee.export.sensitive`), and
+  personal saved views (`SavedView`).
+
+**A real IDOR bug found by this commit's own tests, then fixed**:
+`findScopedEmployee`'s original `{ id: employeeId, ...scopeWhere }` — a
+manager viewing an out-of-team employee got **200**, not the expected
+404, because `scopeWhere` (TEAM/SELF) also produces an `id` key, and a
+later spread key silently overwrites an earlier one in a plain object
+literal. The check degenerated into "does *any* employee in my scope
+exist" instead of "is *this* employee in my scope" — always true once
+the scope is non-empty. Fixed with an explicit `AND: [{ id: employeeId
+}, scopeWhere]` (the same pattern already used correctly in `grid.ts`),
+robust regardless of `scopeWhere`'s own shape.
+
+**Also found**: Express 5 makes `req.query` a getter-only accessor
+(computed fresh from `req.url`); `validate.ts`'s `req.query = ...` threw
+"Cannot set property query which has only a getter" the moment any
+route actually used `validate({ query })` — nothing had, until this
+commit's grid/export/device-code-check endpoints. Fixed with
+`Object.defineProperty` instead of direct assignment.
+
+**Tests** (`backend/src/modules/{org,employee}/__tests__/`, 40 new —
+86 total across the backend): org CRUD + delete-blocked + merge;
+Add Employee create + duplicate-code 409 + the full device-ID collision/
+suggestion sequence (`-2`, then `-3`); data-scope SELF/TEAM/ALL via
+`/:id` (this is what caught the IDOR bug above); **`HR_EXECUTIVE`
+blocked from both the bank and statutory reveal endpoints, and from the
+bank history endpoint, and from seeing either section on the profile
+response**, while `HR_ADMIN` sees masked sections and can reveal
+(audit-logged) — the explicitly-requested test; effective-dated job/
+bank/name update round-trips (old row closed, new row open, response
+never carries a raw account number); **direct-Prisma-insert rejection
+of a second open row** for `EmployeeJobHistory`, `EmployeeNameHistory`
+and `EmployeeBankAccount`, a second employee holding the same *active*
+bank account, and a second active `DeviceUserMapping` for one device
+user ID — all five hand-added partial unique indexes from commit A's
+migration, proven directly; change-request submit/approve (verified the
+applied bank row, not just the 204)/reject/self-approval-blocked;
+separation initiate → not-immediately-deactivated → cancel, and
+`processScheduledSeparations()` end to end (login blocked afterward).
+Two real test-fixture bugs surfaced and fixed along the way: a fixed
+fake PAN/Aadhaar/account number collided across fixtures the moment a
+test created more than one full employee (now a monotonic per-process
+counter); and several files' shared literal role codes (`MANAGER`,
+`HR_ADMIN`, `HR_EXECUTIVE` — needed because `resolveDataScope` matches
+literal strings, so a randomized `TEST_*` code silently fell through to
+SELF scope regardless of intent) needed a `revokePermissions` helper so
+a negative test doesn't inherit a stale grant from an earlier local
+seed run.
+
+**Frontend** (`frontend/src/pages/admin/{organisation,employee}/`,
+`frontend/src/pages/employee/profile/`): Organisation Setup (tabbed:
+Cities/Branches/Departments/Designations/Grades/Cost Centres, branch
+merge with a confirming modal, active/inactive toggle); Add Employee
+(5-step wizard — Official/Personal/Statutory/Bank/Review, live device-
+ID collision check with the suggested-code banner, Statutory/Bank
+steps skippable); All Employees (search/filter/column chooser/saved
+views/Excel export gated behind a sensitive-data confirmation modal
+when the viewer can see bank or statutory columns); Employee Profile
+(Official/Personal/Statutory/Bank/History tabs, reveal buttons,
+effective-dated job/bank change modals, Initiate Separation); Change
+Requests (HR approve/reject queue); Separations (list + cancel); View
+My Info (masked statutory/bank always visible on your own record,
+direct edit for address/emergency contact, "Request a change" for
+everything else, which opens the change-request flow above). New menu
+entries: Employee app gains "Change Requests"; the employee-profile
+detail route (`/admin/employee/profile/:id`) is reached by clicking a
+grid/list row rather than through the menu, same pattern as the
+existing account-security route.
+
+Verified live in a real browser (Playwright, 1440×900): Organisation
+Setup across all six tabs (including the merge-flow fixture's near-
+duplicate C-10 Panchsheel branches), the full Add Employee wizard
+submitted end to end (device ID → pre-filled code → org-master
+dropdowns → personal details → skipped optional steps → review → save,
+landing on the new employee's real profile with the confirmation
+toast), All Employees grid, Employee Profile's Official/Statutory/Bank/
+History tabs, Separations (empty state), Change Requests (empty
+state), and View My Info's Official tab as a plain employee account.
+
+**`npm audit`**: `exceljs` (new, for the Excel export) pulls a
+moderate-severity `uuid <11.1.1` advisory (missing bounds check when a
+caller-supplied buffer is passed — `exceljs` never does that, so this
+specific code path isn't reachable through it) via a transitive
+dependency. Left as-is alongside the pre-existing `deepmerge-ts`/
+`@prisma/config` flag from Phase 0 (dev-tooling-only) rather than
+downgrading `exceljs` to a materially older, less-maintained major
+version to dodge an unreachable advisory.
+
+**Not done this commit** (deliberately out of the agreed scope): bulk
+import (Excel/CSV), letter generation, resend-invite has a backend
+endpoint but no UI button yet, Users & Roles admin screen, and the
+audit log viewer — all still placeholder routes for later.
+
+**Destructive reset still pending user consent**: extensive local
+testing (this commit's own manual verification plus everything since
+the last full reseed) has left the dev database with test-fixture
+garbage (stray `TEST-*`/`MERGE-TGT-*` locations, a few employees created
+by wizard verification, HR_EXECUTIVE still carrying its now-removed
+statutory grant on the *existing* role row — `grantPermissions` only
+ever adds). A single `npm run db:seed` clears all of it and gets every
+account back onto `HR_EXECUTIVE`'s corrected permission set. Per the
+standing agreement, this needs the user's fresh, explicit consent each
+time (Prisma's own AI-agent safety gate blocks it outright otherwise) —
+asked for, not yet run as of this commit.
 
 ## Open questions
 
