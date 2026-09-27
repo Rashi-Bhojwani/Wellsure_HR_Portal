@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button, Card, Col, List, Row, Segmented, Space, Statistic, Typography } from "antd";
 import {
   BarChart,
@@ -77,6 +78,8 @@ const latestUpdates = [
 ];
 
 function WelcomeTab() {
+  const navigate = useNavigate();
+
   return (
     <Space orientation="vertical" size={16} style={{ width: "100%" }}>
       <Card>
@@ -92,7 +95,12 @@ function WelcomeTab() {
             <Card title="My Favourites">
               <Row gutter={[12, 12]}>
                 <Col>
-                  <Card size="small" hoverable style={{ width: 120, textAlign: "center" }}>
+                  <Card
+                    size="small"
+                    hoverable
+                    style={{ width: 120, textAlign: "center" }}
+                    onClick={() => navigate("/admin/employee/add")}
+                  >
                     <UserAddOutlined style={{ fontSize: 20, color: "#2a78d6" }} />
                     <div style={{ fontSize: 12, marginTop: 6 }}>Add Employee</div>
                   </Card>
