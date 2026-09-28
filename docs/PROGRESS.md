@@ -976,14 +976,220 @@ of this bug: they already had real `element`s with no `phase` marker by
 design, since Phase 0 deliberately built their static/fake-data UI ahead
 of the phase that gives them a real backend.
 
+### Phase 4, commit A — leave schema, ledger, accrual, comp-off, jobs (foundation)
+
+Built ahead of Phase 2 (biometric/attendance) per the user's explicit
+instruction — the device model still isn't known (spec §14), which blocks
+Phase 2, not Leave. Zero UI/routes in this commit; a full written plan
+(schema, endpoints, screens, the Phase 2 seam, test plan) was reviewed and
+revised before any code — see the two "MUST FIX"/"SHOULD FIX" review
+rounds below for what changed between the first draft and what actually
+got built.
+
+**Schema** (`backend/prisma/schema.prisma`, migration
+`20260928132056_add_leave_phase4`): 9 new models — `LeaveType`,
+`LeavePolicy` (one row per type, typed columns rather than 5 polymorphic
+tables — exactly 5 fixed types, most columns null for a type that doesn't
+use them), `LeaveLedger` (spec §5.3's source of truth — balance for
+(employee, leaveType) as of any date is `SUM(days) WHERE entry_date <=
+asOfDate`, full history; `leave_year` is a reporting tag only, never a
+balance-computation boundary), `LeaveRequest`, `Holiday` /
+`RestrictedHoliday` (both per-branch, spec §7.8), `CompOffCredit` (FIFO
+lot tracking — see below), `YearEndRun` / `YearEndRunItem`. 7 new enums.
+2 hand-added partial unique indexes: one ACCRUAL row per
+(employee, leave type, `accrual_month`) — the credited month, not the
+date the job happened to run, is the real idempotency key, since a
+retried or manually re-triggered run must still resolve to the same
+key; and one COMMITTED `YearEndRun` per `leave_year`.
+
+**A real naming-convention bug found and fixed before this ever reached a
+review**: `LeaveType.isPaid`/`.allowHalfDay`/`.isActive` were missing
+`@map` to snake_case, unlike every other field in this schema — caught by
+inspecting the seeded columns directly (`\d leave_types` showed
+`"isPaid"` instead of `is_paid`), fixed by regenerating the migration
+before it was ever applied anywhere that mattered.
+
+**Two review rounds on the plan itself, before any code** — the user
+reviewed the schema/endpoint/screen/seam/test plan and sent back 4 "MUST
+FIX" correctness/concurrency issues and 4 "SHOULD FIX" hardenings, all
+incorporated into what was actually built:
+
+1. **Accrual idempotency key was wrong.** A unique index on
+   `(employee_id, leave_type_id, entry_date)` only prevented a duplicate
+   on the exact same calendar date — a job retried a day later, or a
+   manual re-trigger, would have produced a second accrual for the same
+   month. Fixed by adding `accrual_month` (the credited month's 1st) as
+   the real key.
+2. **Year-end cutoff semantics needed to be explicit**, specifically what
+   happens to a January accrual posted while a December run is still in
+   `PREVIEW`. Resolved: a year-end run for year Y computes each
+   employee's closing balance as `SUM(days) WHERE entryDate <=
+   'Y-12-31'` — an explicit cutoff, never the `leave_year` tag — so a
+   `(Y+1)-01-01` accrual is excluded from Y's encashment purely by
+   falling outside that window, with no special-case code needed. Proven
+   directly by a test (`yearEnd.test.ts`, commit D), not just asserted in
+   the design.
+3. **Comp-off's original design let ordinary leave silently erode a
+   lot's coverage** with no record of which lot was spent, so expiry had
+   to defensively re-check the aggregate ledger balance and could leave a
+   genuinely-spent lot "AVAILABLE forever." Redesigned around FIFO lot
+   tracking: `CompOffCredit.remainingDays`, decremented oldest-first at
+   approval, one `LeaveLedger` `CONSUMED` row written per lot touched
+   (via the new `compOffCreditId` FK) so cancellation-reversal restores
+   exactly the right lots and the daily expiry job needs no defensive
+   balance check at all — it simplified the expiry job versus the
+   original proposal, not just fixed a bug.
+4. **Overlap/balance checks needed to be concurrency-safe.** Two
+   approvals arriving at once could both pass a check-then-write race and
+   both succeed. Fixed with `withEmployeeLeaveLock()` — every leave-
+   mutating operation for an employee acquires that employee's row lock
+   (`SELECT ... FOR UPDATE`) first, inside the same transaction as the
+   write. Proven with a real concurrency test: two simultaneous comp-off
+   consumption attempts against a balance that can satisfy only one —
+   exactly one succeeds, the ledger never goes negative.
+5. **(Should-fix) Locked-period hook** — `AttendanceLeaveSink` gained
+   `isPeriodLocked(employeeId, date)` now, so Phase 2's finalised-month
+   lock (spec §4.5) has somewhere to plug into without a later interface
+   change; the stub always returns `false`.
+6. **(Should-fix) LOP's no-balance rule made explicit** — a
+   `skipBalanceCheck` policy flag (true only for LOP) rather than
+   modelling "unlimited" through the same machinery as a real balance;
+   LOP applications always succeed, and the payroll-read contract Phase 6
+   needs is documented (a plain read of `CONSUMED` LOP ledger rows in the
+   payroll period, no new leave-module code).
+7. **(Should-fix) Year End preview lifecycle** — added a `SUPERSEDED`
+   status and a discard action so re-previewing (or explicitly abandoning
+   a stale preview) never leaves two ambiguous "current" previews lying
+   around; commit only ever re-verifies against the balance at commit
+   time, never trusts a possibly-stale stored preview number.
+8. **(Should-fix) Encashment rate fails loudly.** The
+   `EncashmentRateProvider` stub throws
+   `EncashmentRateNotConfiguredError` rather than returning 0 when the
+   `leave.encashment.defaultDailyRate` setting is unset — a year-end run
+   that quietly encashed everyone at ₹0 would be worse than an error.
+
+**Backend — business logic** (`backend/src/modules/leave/`, all pure
+service functions, no HTTP routes yet):
+
+- `ledger.ts` — `getLeaveBalance`/`getLeaveBalancesForEmployee` (the
+  `SUM(days) WHERE entryDate <= asOfDate` query), `assertSufficientBalance`
+  (the generic balance gate every type except comp-off uses — comp-off's
+  authoritative check is its own FIFO lot sum), `writeLedgerEntry` (the
+  one function every write path goes through).
+- `accrual.ts` — `computeEligibilityDate`/`firstAccrualMonth`/
+  `isEligibleForAccrualMonth` implement HR's exact rule, including the
+  inclusive-boundary case the third worked example pins down: an
+  eligibility date landing exactly on a month's 1st counts as already
+  passed for that same month's credit, not pushed to the following month
+  (joined 3 Oct → eligible 1 Jan → first credit 1 Jan, not 1 Feb).
+  `creditMonthlyAccrualForEmployee` (idempotent, proactive existence
+  check backed by the partial unique index) and `runMonthlyPlAccrual`
+  (the bulk driver the scheduled job calls).
+- `compOff.ts` — `creditCompOff` (shared by Leave Granter's manual path
+  today and Phase 2's attendance path later — see below),
+  `consumeCompOffFifo`, `reverseCompOffConsumption`, `expireCompOffCredits`.
+- `concurrency.ts` — `withEmployeeLeaveLock`.
+- `dayCount.ts` — `computeTotalLeaveDays`, the pure half-day/holiday/
+  week-off-exclusion calculation Leave Apply will call in commit B.
+- `attendanceIntegration.ts` — the Phase 2 seam: `AttendanceLeaveSink`
+  interface (`onLeaveApproved`/`onLeaveReversed`/`isPeriodLocked`) with a
+  no-op stub registered today via `setAttendanceLeaveSink()`; Phase 2
+  registers a real implementation with zero leave-module changes.
+- `weekOff.ts` — `getDefaultWeekOffDays()`, a single global
+  `system_settings`-backed default (Sun+Sat) standing in for per-employee
+  week-off patterns until Phase 2.
+- `encashmentRate.ts` — `EncashmentRateProvider` interface,
+  `SettingsBasedEncashmentRateProvider` (Phase 4's only implementation,
+  throws rather than defaulting to ₹0 — see point 8 above).
+
+**New scheduled jobs** (`backend/src/jobs/`, following
+`employee-separations`' exact registration pattern): monthly PL accrual
+(`leave-pl-accrual`, 00:30 IST on the 1st) and daily comp-off expiry
+(`comp-off-expiry`, 01:30 IST) — both idempotent, safe to re-run.
+
+**A small precedent-following refactor**: extracted `businessToday()`
+(Asia/Kolkata "today" truncated to UTC midnight) plus `addCalendarDays`/
+`addCalendarMonths`/`startOfMonthUTC` into a new
+`backend/src/lib/businessDate.ts`, since `separations.ts` already had its
+own private copy of exactly this "today" function and the new accrual/
+expiry jobs needed the identical logic — one shared implementation now,
+not a third copy-paste.
+
+**Permissions + seed**: 7 new keys (`leave.apply.onBehalf`, `leave.view`,
+`leave.approve`, `leave.grant`, `leave.policy.manage`, `leave.recalculate`,
+`leave.yearend.manage`) added to `shared/constants/permissions.ts`.
+Role grants: HR_ADMIN gets all 7; HR_EXECUTIVE gets view/approve/grant/
+onBehalf (config-and-financial actions stay HR_ADMIN+, same narrowing as
+`settings.manage`/`import.manage`); MANAGER gets onBehalf (scope-limited
+to their own team via the existing `resolveDataScope`); APPROVER gets
+approve+view; PAYROLL_ADMIN gets view only. Seed: PL/LOP/COF/WFH/RH leave
+types + policies (HR-confirmed fields marked as such, everything else a
+documented default — see Open Questions below), and 2026 holiday +
+restricted-holiday calendars for every seeded branch.
+
+**Tests** (38 new, all in `backend/src/modules/leave/__tests__/` — 151
+total across the backend): `accrual.test.ts` (all 3 HR worked examples
+verbatim, the inclusive-boundary case, never-pro-rated, month-key
+idempotency including a same-day double-run and the DB constraint
+directly), `ledgerBalance.test.ts` (balance = sum of entries after an
+arbitrary sequence, `leave_year` non-scoping proven directly),
+`negativeBalance.test.ts` (the balance gate plus LOP's `skipBalanceCheck`),
+`halfDay.test.ts` (day-part arithmetic plus holiday/week-off exclusion),
+`compOff.test.ts` (FIFO across 2+ lots, exact reversal, expiry touching
+only genuinely-unconsumed `remainingDays`, a fully-consumed lot never
+resurfacing), `concurrency.test.ts` (two simultaneous approvals racing a
+one-day balance — exactly one wins, ledger never negative).
+
+**Verification**: migrations regenerated and reapplied cleanly from
+scratch on a disposable database (the standing pattern this project uses
+to verify seed/migrations without touching the shared dev database
+without fresh consent for a destructive reset); full backend suite green
+(151/151); lint/typecheck clean.
+
+**Not done this commit** (commits B–D, per the reviewed plan): every
+HTTP route, every screen, Year End Process, Leave Recalculator, the
+Workforce Overview dashboard's real data wiring, and finishing
+`realtime/socket.ts`'s handshake auth/room-joining (stubbed since Phase 0,
+needed for `leave.applied`/`leave.decided`).
+
 ## Open questions
 
 Carried from spec §14 — configurable, not guessed, until answered:
 
 - [ ] Exact biometric device brand/model and whether ADMS push is supported.
-- [ ] Exact PL eligibility boundary (credit on completing 3 months vs from
-      next month) and pro-rating.
-- [ ] Leave encashment formula and its tax treatment (to be confirmed by CA).
+- [x] Exact PL eligibility boundary: **HR-confirmed 2026-09-28** — 90 calendar
+      days from DOJ (`leave_policies.eligibility_mode = DAYS`,
+      `eligibility_value = 90`), no pro-rating, always a full 1.0-day credit.
+      See the Phase 4 commit A log entry below for the exact worked examples
+      and the inclusive-boundary rule (an eligibility date landing exactly on
+      the 1st of a month counts as already passed for that month's credit).
+- [ ] Leave encashment formula and its tax treatment: HR has confirmed the
+      *intent* ("one working day's salary per leave day") but not the exact
+      formula or its tax treatment — both still await CA confirmation.
+      `EncashmentRateProvider` (see Phase 4 commit A below) is the
+      swappable interface this resolves into once confirmed; until then it's
+      one flat, HR-entered rupee amount, and Year End Process refuses to run
+      at all if that amount isn't set (never silently encashes at ₹0).
+- [ ] Comp-off minimum hours worked to earn a credit, and its expiry window
+      — defaulted to 4h / 60 days pending HR confirmation
+      (`leave_policies.comp_off_min_hours_worked` /
+      `.comp_off_expiry_days`).
+- [ ] WFH monthly/yearly limits — defaulted to unlimited (`null`) pending HR
+      confirmation (`leave_policies.wfh_monthly_limit` / `.wfh_yearly_limit`).
+- [ ] Restricted Holiday yearly quota — defaulted to 2 pending HR
+      confirmation (`leave_policies.rh_yearly_quota`).
+- [ ] Leave advance-notice requirement (days' notice before an apply is
+      valid) — not yet modelled at all; no default enforced until HR
+      specifies whether this applies, and to which leave types.
+- [ ] Treatment of an unapproved absence (LOP by default? something else?)
+      — deferred to Phase 2/3's attendance rules engine, since "absence" as
+      a concept doesn't exist until punches/attendance do; not a Phase 4
+      `leave_policies` concern.
+- [ ] Whether unused Restricted Holiday balance lapses at year-end or
+      carries forward like PL/COF — defaulted to carry-forward (the safer,
+      less surprising default) until HR confirms; the ledger's reserved
+      `LAPSE` entry type is what Year End Process would emit if HR confirms
+      it should lapse instead.
 - [ ] Bank bulk-transfer file format (from bank).
 - [ ] PT/LWF applicability per location's state.
 - [ ] Actual headcount and the authoritative branch (`locations`) list — branches are HR-managed and growing (e.g. 3 separate Ajmer branches, not the single "Ajmer" row earlier drafts assumed), so this isn't a one-time seed value. Also open: which city each of the 3 Panchsheel branches (C-10, SPN, B-22) belongs to, and the correct names/addresses for the 3 Ajmer branches — seeded as placeholders for now (see the Phase 1 log entry below). The commit D reconciliation report (Import Center → Reconciliation Report tab) is the tool to compare against greytHR once the real numbers are in hand.

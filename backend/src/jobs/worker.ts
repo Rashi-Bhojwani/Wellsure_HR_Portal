@@ -1,10 +1,13 @@
 import { Worker } from "bullmq";
 import { createBullConnection } from "../lib/redis";
 import { logger } from "../lib/logger";
+import { businessToday, startOfMonthUTC } from "../lib/businessDate";
 import { processScheduledSeparations } from "../modules/employee/separations";
+import { runMonthlyPlAccrual } from "../modules/leave/accrual";
+import { expireCompOffCredits } from "../modules/leave/compOff";
 
 // Starts every BullMQ worker this service runs. Real workers (attendance
-// recompute, leave accrual, etc.) are added here starting Phase 2.
+// recompute, etc.) are added here starting Phase 2.
 export function startWorkers(): Worker[] {
   const pingWorker = new Worker(
     "system-ping",
@@ -31,5 +34,36 @@ export function startWorkers(): Worker[] {
     logger.error({ jobId: job?.id, err }, "employee-separations job failed");
   });
 
-  return [pingWorker, separationsWorker];
+  const leavePlAccrualWorker = new Worker(
+    "leave-pl-accrual",
+    async (job) => {
+      // Runs exactly on the 1st per the scheduler's cron pattern — the
+      // credited month is always "today's" month at run time. A retried
+      // or manually re-triggered run recomputes the same month and is a
+      // no-op per employee already credited (accrualMonth idempotency).
+      const accrualMonth = startOfMonthUTC(businessToday());
+      const result = await runMonthlyPlAccrual(accrualMonth);
+      logger.info({ jobId: job.id, ...result }, "leave-pl-accrual processed");
+      return result;
+    },
+    { connection: createBullConnection() },
+  );
+  leavePlAccrualWorker.on("failed", (job, err) => {
+    logger.error({ jobId: job?.id, err }, "leave-pl-accrual job failed");
+  });
+
+  const compOffExpiryWorker = new Worker(
+    "comp-off-expiry",
+    async (job) => {
+      const result = await expireCompOffCredits(businessToday());
+      logger.info({ jobId: job.id, ...result }, "comp-off-expiry processed");
+      return result;
+    },
+    { connection: createBullConnection() },
+  );
+  compOffExpiryWorker.on("failed", (job, err) => {
+    logger.error({ jobId: job?.id, err }, "comp-off-expiry job failed");
+  });
+
+  return [pingWorker, separationsWorker, leavePlAccrualWorker, compOffExpiryWorker];
 }

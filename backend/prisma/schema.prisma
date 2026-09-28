@@ -32,6 +32,7 @@ enum UserStatus {
   SUSPENDED
   DEACTIVATED
 }
+
 // No separate LOCKED value: the 15-minute lockout after 5 failed attempts
 // (spec §3.7) is a temporary, self-expiring condition on an otherwise-
 // ACTIVE account, represented purely by User.lockedUntil/
@@ -323,7 +324,9 @@ model Location {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  jobHistory EmployeeJobHistory[]
+  jobHistory         EmployeeJobHistory[]
+  holidays           Holiday[]
+  restrictedHolidays RestrictedHoliday[]
 
   @@index([cityId])
   @@map("locations")
@@ -412,6 +415,9 @@ model Employee {
   documents      EmployeeDocument[]
   changeRequests ProfileChangeRequest[]
   separations    Separation[]
+  leaveRequests  LeaveRequest[]         @relation("LeaveRequestOwner")
+  leaveLedger    LeaveLedger[]
+  compOffCredits CompOffCredit[]
 
   @@index([status])
   @@index([dateOfJoining])
@@ -701,4 +707,326 @@ model ImportStagingRow {
 
   @@index([batchId])
   @@map("import_staging_rows")
+}
+
+// ── Leave (Phase 4) ─────────────────────────────────────────────────────
+// spec §5. Built ahead of Phase 2 (biometric/attendance) since the device
+// model isn't known yet — CLAUDE.md's "keep it configurable, don't guess"
+// rule blocks Phase 2, not this. Two real dependencies on Phase 2 (approved
+// leave marking attendance days; comp-off crediting from worked holidays/
+// week-offs) are bridged by an interface in modules/leave/
+// attendanceIntegration.ts + compOff.ts — a no-op stub today, a drop-in
+// real implementation later, no migration required either way.
+
+model LeaveType {
+  id           String   @id @default(cuid())
+  code         String   @unique // "PL", "LOP", "COF", "WFH", "RH" — seeded, not hardcoded elsewhere
+  name         String
+  isPaid       Boolean  @default(true) @map("is_paid") // false for LOP
+  allowHalfDay Boolean  @default(true) @map("allow_half_day")
+  isActive     Boolean  @default(true) @map("is_active") // soft-disable — ledger/request history must survive a retired type
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  policy        LeavePolicy?
+  ledgerEntries LeaveLedger[]
+  leaveRequests LeaveRequest[]
+
+  @@map("leave_types")
+}
+
+enum LeaveEligibilityMode {
+  DAYS // eligibilityValue = calendar days from DOJ (HR's confirmed PL rule: 90)
+  CALENDAR_MONTHS // eligibilityValue = whole months from DOJ
+}
+
+// One row per leave type — a single typed table rather than 5 polymorphic
+// ones, since the catalog is exactly 5 fixed types and most columns are
+// null for a type that doesn't use them (see the comment block per field
+// group below). Not effective-dated: leave_ledger (append-only) is the
+// historical record; Leave Recalculator replays it after a policy change
+// rather than the policy itself being versioned.
+model LeavePolicy {
+  id          String    @id @default(cuid())
+  leaveTypeId String    @unique @map("leave_type_id")
+  leaveType   LeaveType @relation(fields: [leaveTypeId], references: [id])
+
+  // PL accrual — only meaningful when accrualEnabled = true (PL)
+  accrualEnabled         Boolean               @default(false) @map("accrual_enabled")
+  accrualDaysPerMonth    Decimal?              @map("accrual_days_per_month") @db.Decimal(5, 2) // 1.00
+  eligibilityMode        LeaveEligibilityMode? @map("eligibility_mode") // DAYS
+  eligibilityValue       Int?                  @map("eligibility_value") // 90
+  carryForwardCapDays    Decimal?              @map("carry_forward_cap_days") @db.Decimal(5, 2) // null = uncapped
+  negativeBalanceAllowed Boolean               @default(false) @map("negative_balance_allowed")
+  skipBalanceCheck       Boolean               @default(false) @map("skip_balance_check") // true for LOP only —
+  // LOP has no balance concept at all rather than an "unlimited" number; apply/approve never call the
+  // balance-check function for a type with this set
+  yearEndEncashment      Boolean               @default(false) @map("year_end_encashment") // true for PL only
+
+  // Comp-off (COF only) — hours/expiry pending HR confirmation, see docs/PROGRESS.md open questions
+  compOffMinHoursWorked Decimal? @map("comp_off_min_hours_worked") @db.Decimal(4, 2) // default 4.00
+  compOffExpiryDays     Int?     @map("comp_off_expiry_days") // default 60
+
+  // WFH (WFH only) — limits pending HR confirmation
+  wfhMonthlyLimit Int? @map("wfh_monthly_limit") // default null = unlimited
+  wfhYearlyLimit  Int? @map("wfh_yearly_limit") // default null = unlimited
+
+  // Restricted Holiday (RH only) — quota pending HR confirmation
+  rhYearlyQuota Int? @map("rh_yearly_quota") // default 2
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("leave_policies")
+}
+
+enum LeaveLedgerEntryType {
+  OPENING
+  ACCRUAL
+  CONSUMED
+  REVERSAL
+  GRANT
+  DEBIT
+  CARRY_FORWARD // reserved — unused by Phase 4's own logic; see leave_ledger's comment below
+  ENCASHMENT
+  LAPSE // reserved — unused by Phase 4's own logic; see leave_ledger's comment below
+  EXPIRY
+}
+
+// The source of truth (spec §5.3). Balance for (employee, leaveType) as of
+// any date = SUM(days) WHERE entry_date <= asOfDate — full history, no
+// year-scoped partition. leaveYear is a reporting/filter tag only, never
+// the balance-computation boundary — see the Year End section for exactly
+// where that distinction matters (a January accrual must never leak into
+// the prior December's encashment cutoff). This also makes "carry forward
+// with no cap" free: there is no carry-forward operation, just the absence
+// of any entry that would reduce the running balance.
+//
+// CARRY_FORWARD/LAPSE are reserved for scenarios Phase 4 doesn't need yet:
+// a capped-carry-forward type forfeiting the excess at year-end, or a
+// greytHR data-migration opening balance (§10) — not emitted by anything
+// built in this phase. RH defaults to carry-forward (no lapse) until HR
+// confirms whether unused RH should lapse at year-end.
+model LeaveLedger {
+  id              String               @id @default(cuid())
+  employeeId      String               @map("employee_id")
+  employee        Employee             @relation(fields: [employeeId], references: [id])
+  leaveTypeId     String               @map("leave_type_id")
+  leaveType       LeaveType            @relation(fields: [leaveTypeId], references: [id])
+  leaveYear       Int                  @map("leave_year")
+  entryDate       DateTime             @map("entry_date") @db.Date
+  accrualMonth    DateTime?            @map("accrual_month") @db.Date // ACCRUAL rows only — the 1st of the
+  // credited month; the real idempotency key (not entryDate, which can shift if a job runs late/retries)
+  entryType       LeaveLedgerEntryType @map("entry_type")
+  days            Decimal              @db.Decimal(5, 2) // signed: +credit, -debit
+  referenceType   String?              @map("reference_type") // "LEAVE_REQUEST" | "YEAR_END_RUN" |
+  // "MANUAL_GRANT" | "ACCRUAL_JOB" | "RECALCULATION" — polymorphic string pair, same convention as
+  // AuditLog.entityType/entityId (no real FK: points at different tables depending on the row)
+  referenceId     String?              @map("reference_id")
+  compOffCreditId String?              @map("comp_off_credit_id") // real FK (unlike referenceType/Id above,
+  // this always points at the same table when set) — COF CONSUMED/EXPIRY rows only, set per-lot so a
+  // cancellation's reversal knows exactly which lot to credit back
+  compOffCredit   CompOffCredit?       @relation(fields: [compOffCreditId], references: [id])
+  remarks         String?
+  createdByUserId String?              @map("created_by_user_id") // null = system/scheduler (accrual job,
+  // expiry job) — same nullable-actor convention as AuditLog.actorUserId
+  createdAt       DateTime             @default(now()) @map("created_at")
+
+  @@index([employeeId, leaveTypeId])
+  @@index([employeeId, entryDate])
+  @@index([referenceType, referenceId])
+  @@index([compOffCreditId])
+  @@map("leave_ledger")
+}
+
+// Migration SQL adds a partial unique index — the monthly accrual job's
+// idempotency backstop (spec §5.5): one ACCRUAL row per
+// (employee, leaveType, accrualMonth) —
+// (employee_id, leave_type_id, accrual_month) WHERE entry_type = 'ACCRUAL'.
+
+enum LeaveRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum LeaveDayPart {
+  FULL
+  FIRST_HALF
+  SECOND_HALF
+}
+
+model LeaveRequest {
+  id                   String             @id @default(cuid())
+  employeeId           String             @map("employee_id") // who the leave is FOR
+  employee             Employee           @relation("LeaveRequestOwner", fields: [employeeId], references: [id])
+  leaveTypeId          String             @map("leave_type_id")
+  leaveType            LeaveType          @relation(fields: [leaveTypeId], references: [id])
+  fromDate             DateTime           @map("from_date") @db.Date
+  toDate               DateTime           @map("to_date") @db.Date
+  fromDayPart          LeaveDayPart       @default(FULL) @map("from_day_part")
+  toDayPart            LeaveDayPart       @default(FULL) @map("to_day_part") // only meaningful when fromDate !=
+  // toDate; single-day requests use fromDayPart and validate toDayPart == fromDayPart at the Zod layer
+  totalDays            Decimal            @map("total_days") @db.Decimal(5, 2) // computed at apply time —
+  // excludes leave_types' holidays and a configurable default week-off pattern until Phase 2's real
+  // per-employee week_off_patterns exists, see modules/leave/attendanceIntegration.ts
+  reason               String?
+  attachmentStorageKey String?            @map("attachment_storage_key")
+  status               LeaveRequestStatus @default(PENDING)
+  appliedByUserId      String             @map("applied_by_user_id") // usually the employee; HR/manager when
+  // applying on behalf of (leave.apply.onBehalf)
+  decidedByUserId      String?            @map("decided_by_user_id")
+  decidedAt            DateTime?          @map("decided_at")
+  decisionComments     String?            @map("decision_comments")
+  cancelledByUserId    String?            @map("cancelled_by_user_id")
+  cancelledAt          DateTime?          @map("cancelled_at")
+  cancellationReason   String?            @map("cancellation_reason")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  @@index([employeeId, status])
+  @@index([fromDate, toDate])
+  @@index([status])
+  @@map("leave_requests")
+}
+
+// Overlap prevention (no two PENDING/APPROVED requests for one employee on
+// overlapping dates) is an application-level check inside the same locked
+// transaction as apply/approve (see modules/leave/concurrency.ts) — not a
+// DB constraint. Postgres range-exclusion needs the btree_gist extension,
+// which nothing else in this schema uses; a tested service-layer check
+// under a row lock is consistent with how the rest of this schema handles
+// cross-row invariants that aren't a single-row uniqueness fact.
+
+model Holiday {
+  id         String   @id @default(cuid())
+  locationId String   @map("location_id")
+  location   Location @relation(fields: [locationId], references: [id])
+  date       DateTime @db.Date
+  name       String
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@unique([locationId, date])
+  @@index([date])
+  @@map("holidays")
+}
+
+model RestrictedHoliday {
+  id         String   @id @default(cuid())
+  locationId String   @map("location_id")
+  location   Location @relation(fields: [locationId], references: [id])
+  date       DateTime @db.Date
+  name       String
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@unique([locationId, date])
+  @@index([date])
+  @@map("restricted_holidays")
+}
+
+// Both per-branch (spec §7.8 — "adding a branch is a data change, never a
+// code change"). An employee "applies" for an RH via a normal
+// LeaveRequest (leaveType = RH, fromDate = toDate = one of these dates),
+// validated against their location's list and leave_policies.rh_yearly_
+// quota — no separate selection table needed.
+
+enum CompOffCreditStatus {
+  AVAILABLE // remainingDays > 0, not expired
+  CONSUMED // remainingDays reached 0 via FIFO leave-approval consumption
+  EXPIRED // remainingDays force-debited by the daily expiry job past expiresOn
+}
+
+enum CompOffCreditSource {
+  MANUAL_GRANT
+  ATTENDANCE // unused until Phase 2 — see modules/leave/compOff.ts
+}
+
+// One row per earned comp-off "lot", tracking its own expiry and its own
+// remaining balance independently of the fungible ledger sum — spec lists
+// this as its own table. Consumption is FIFO (oldest earnedDate first) at
+// the moment a COF leave request is approved: remainingDays is decremented
+// per lot, one LeaveLedger CONSUMED row is written per lot touched (via
+// compOffCreditId), so cancellation-reversal and expiry both know exactly
+// which lot's remainingDays to adjust — never a guess, never a defensive
+// re-check against the aggregate ledger balance.
+model CompOffCredit {
+  id              String              @id @default(cuid())
+  employeeId      String              @map("employee_id")
+  employee        Employee            @relation(fields: [employeeId], references: [id])
+  earnedDate      DateTime            @map("earned_date") @db.Date // the holiday/week-off actually worked
+  earnedDays      Decimal             @map("earned_days") @db.Decimal(3, 2) // original amount, immutable
+  remainingDays   Decimal             @map("remaining_days") @db.Decimal(3, 2) // FIFO-decremented; drives status
+  expiresOn       DateTime            @map("expires_on") @db.Date // earnedDate + policy.compOffExpiryDays,
+  // resolved at credit time
+  status          CompOffCreditStatus @default(AVAILABLE)
+  source          CompOffCreditSource @map("source")
+  grantedByUserId String?             @map("granted_by_user_id") // set when source = MANUAL_GRANT
+  ledgerEntryId   String              @unique @map("ledger_entry_id") // the GRANT row this credit created
+  createdAt       DateTime            @default(now()) @map("created_at")
+
+  consumptions LeaveLedger[]
+
+  @@index([employeeId, status])
+  @@index([expiresOn])
+  @@map("comp_off_credits")
+}
+
+enum YearEndRunStatus {
+  PREVIEW
+  SUPERSEDED // a newer preview was generated for the same year, or HR explicitly discarded this one
+  COMMITTED
+}
+
+// Preview -> (optionally superseded/discarded, re-previewable) -> commit.
+// Mirrors ImportBatch/ImportStagingRow's parent/child + status-lifecycle
+// pattern. PREVIEW never writes to leave_ledger — it only computes and
+// stores into YearEndRunItem; leave_ledger is written exactly once, at
+// commit, which re-verifies the closing balance hasn't drifted since
+// preview before writing anything (see modules/leave/yearEnd.ts).
+model YearEndRun {
+  id                  String           @id @default(cuid())
+  leaveYear           Int              @map("leave_year")
+  status              YearEndRunStatus @default(PREVIEW)
+  previewedByUserId   String           @map("previewed_by_user_id")
+  previewedAt         DateTime         @default(now()) @map("previewed_at")
+  supersededAt        DateTime?        @map("superseded_at")
+  committedByUserId   String?          @map("committed_by_user_id")
+  committedAt         DateTime?        @map("committed_at")
+  totalEmployees      Int              @map("total_employees")
+  totalEncashedDays   Decimal          @map("total_encashed_days") @db.Decimal(10, 2)
+  totalEncashedAmount Decimal          @map("total_encashed_amount") @db.Decimal(12, 2)
+  reportStorageKey    String?          @map("report_storage_key") // via StorageService, same interface Phase 1
+  // already uses for documents
+  createdAt           DateTime         @default(now()) @map("created_at")
+
+  items YearEndRunItem[]
+
+  @@map("year_end_runs")
+}
+
+// Migration SQL adds a partial unique index — only one COMMITTED run per
+// year: (leave_year) WHERE status = 'COMMITTED'. Multiple PREVIEW/
+// SUPERSEDED rows per year are fine (harmless historical snapshots).
+
+model YearEndRunItem {
+  id                      String     @id @default(cuid())
+  yearEndRunId            String     @map("year_end_run_id")
+  yearEndRun              YearEndRun @relation(fields: [yearEndRunId], references: [id], onDelete: Cascade)
+  employeeId              String     @map("employee_id")
+  closingPlBalance        Decimal    @map("closing_pl_balance") @db.Decimal(5, 2)
+  encashedDays            Decimal    @map("encashed_days") @db.Decimal(5, 2) // == closingPlBalance (no cap today)
+  dailyRate               Decimal    @map("daily_rate") @db.Decimal(10, 2) // resolved via EncashmentRateProvider
+  // at preview time
+  rateSource              String     @map("rate_source") // "MANUAL_SETTING" today; "SALARY_STRUCTURE" once
+  // Phase 6 supplies a real provider — snapshot so switching providers never retroactively changes history
+  encashedAmount          Decimal    @map("encashed_amount") @db.Decimal(12, 2)
+  ledgerEncashmentEntryId String?    @unique @map("ledger_encashment_entry_id") // set only once committed;
+  // null on a mere preview — one ENCASHMENT ledger entry per employee, debiting the full balance to 0, IS
+  // the "reset for the new year" — no separate reset entry needed
+
+  @@index([yearEndRunId])
+  @@map("year_end_run_items")
 }

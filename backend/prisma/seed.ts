@@ -215,6 +215,91 @@ async function main() {
   );
   const cc = Object.fromEntries(costCentres.map((c) => [c.code, c]));
 
+  // ── Leave (Phase 4, spec §5) — types + policies, configurable, not
+  // hardcoded: HR edits these live via Admin Tools -> Leave Types &
+  // Policies once that screen exists (commit C). Fields marked
+  // "HR-confirmed" match the exact business rules HR gave; everything
+  // else is a sensible default, listed as an open question in
+  // docs/PROGRESS.md until HR confirms it. ─────────────────────────────
+  const plType = await prisma.leaveType.create({
+    data: { code: "PL", name: "Privilege / Earned Leave", isPaid: true, allowHalfDay: true },
+  });
+  await prisma.leavePolicy.create({
+    data: {
+      leaveTypeId: plType.id,
+      accrualEnabled: true,
+      accrualDaysPerMonth: 1.0,
+      eligibilityMode: "DAYS", // HR-confirmed
+      eligibilityValue: 90, // HR-confirmed: 90-day waiting period from DOJ
+      carryForwardCapDays: null, // HR-confirmed: no cap
+      negativeBalanceAllowed: false, // HR-confirmed
+      yearEndEncashment: true, // HR-confirmed
+    },
+  });
+
+  const lopType = await prisma.leaveType.create({
+    data: { code: "LOP", name: "Loss of Pay", isPaid: false, allowHalfDay: true },
+  });
+  await prisma.leavePolicy.create({
+    data: { leaveTypeId: lopType.id, skipBalanceCheck: true }, // HR-confirmed: LOP has no balance concept at all
+  });
+
+  const cofType = await prisma.leaveType.create({
+    data: { code: "COF", name: "Comp-Off", isPaid: true, allowHalfDay: true },
+  });
+  await prisma.leavePolicy.create({
+    data: {
+      leaveTypeId: cofType.id,
+      compOffMinHoursWorked: 4.0, // pending HR confirmation — see docs/PROGRESS.md open questions
+      compOffExpiryDays: 60, // pending HR confirmation — see docs/PROGRESS.md open questions
+    },
+  });
+
+  const wfhType = await prisma.leaveType.create({
+    data: { code: "WFH", name: "Work From Home", isPaid: true, allowHalfDay: true },
+  });
+  await prisma.leavePolicy.create({
+    data: {
+      leaveTypeId: wfhType.id,
+      wfhMonthlyLimit: null, // pending HR confirmation — default unlimited, see docs/PROGRESS.md
+      wfhYearlyLimit: null,
+    },
+  });
+
+  const rhType = await prisma.leaveType.create({
+    data: { code: "RH", name: "Restricted Holiday", isPaid: true, allowHalfDay: false },
+  });
+  await prisma.leavePolicy.create({
+    data: { leaveTypeId: rhType.id, rhYearlyQuota: 2 }, // pending HR confirmation — see docs/PROGRESS.md
+  });
+
+  // ── Holidays / Restricted Holidays — per branch (spec §7.8), example
+  // 2026 dates for every seeded location. HR edits these via Admin Tools
+  // -> Holiday Calendars once that screen exists (commit C). ───────────
+  const HOLIDAYS_2026: Array<[string, string]> = [
+    ["2026-01-26", "Republic Day"],
+    ["2026-03-04", "Holi"],
+    ["2026-08-15", "Independence Day"],
+    ["2026-10-02", "Gandhi Jayanti"],
+    ["2026-10-21", "Dussehra"],
+    ["2026-11-08", "Diwali"],
+    ["2026-12-25", "Christmas"],
+  ];
+  const RESTRICTED_HOLIDAYS_2026: Array<[string, string]> = [
+    ["2026-01-14", "Makar Sankranti"],
+    ["2026-04-14", "Ambedkar Jayanti"],
+    ["2026-08-28", "Ganesh Chaturthi"],
+    ["2026-12-24", "Christmas Eve"],
+  ];
+  for (const location of locations) {
+    await prisma.holiday.createMany({
+      data: HOLIDAYS_2026.map(([date, name]) => ({ locationId: location.id, date: new Date(date), name })),
+    });
+    await prisma.restrictedHoliday.createMany({
+      data: RESTRICTED_HOLIDAYS_2026.map(([date, name]) => ({ locationId: location.id, date: new Date(date), name })),
+    });
+  }
+
   // ── Permissions + Roles ─────────────────────────────────────────────
   const permissions = await Promise.all(
     PERMISSION_KEYS.map((key) =>
@@ -240,6 +325,13 @@ async function main() {
     "org.manage",
     "import.manage",
     "role.view",
+    // Phase 4 — leave administration stays with HR_EXECUTIVE; config/
+    // financial actions (policy.manage/recalculate/yearend.manage) are
+    // HR_ADMIN+ only, same narrowing as settings.manage/import.manage.
+    "leave.view",
+    "leave.approve",
+    "leave.grant",
+    "leave.apply.onBehalf",
   ];
   const HR_ADMIN_PERMS = [
     ...HR_EXECUTIVE_PERMS,
@@ -250,9 +342,13 @@ async function main() {
     "user.security.manage",
     "audit.view",
     "settings.manage",
+    "leave.policy.manage",
+    "leave.recalculate",
+    "leave.yearend.manage",
   ];
-  const PAYROLL_ADMIN_PERMS = ["employee.view", "employee.bank.view", "employee.statutory.view"];
-  const MANAGER_PERMS = ["employee.view"]; // TEAM-scoped via role, not a separate permission string
+  const PAYROLL_ADMIN_PERMS = ["employee.view", "employee.bank.view", "employee.statutory.view", "leave.view"];
+  const MANAGER_PERMS = ["employee.view", "leave.apply.onBehalf"]; // TEAM-scoped via role, not a separate
+  // permission string — a manager can only apply-on-behalf within their own team, enforced by resolveDataScope
   const SUPER_ADMIN_PERMS = PERMISSION_KEYS;
 
   const ROLES = [
@@ -261,7 +357,8 @@ async function main() {
     { code: "HR_EXECUTIVE", name: "HR Executive", permissions: HR_EXECUTIVE_PERMS },
     { code: "PAYROLL_ADMIN", name: "Payroll Admin", permissions: PAYROLL_ADMIN_PERMS },
     { code: "MANAGER", name: "Manager", permissions: MANAGER_PERMS },
-    { code: "APPROVER", name: "Approver", permissions: [] as string[] }, // real permissions arrive with Phase 6
+    { code: "APPROVER", name: "Approver", permissions: ["leave.approve", "leave.view"] }, // Phase 4 — more
+    // permissions arrive with Phase 6 (payroll maker-checker)
     { code: "EMPLOYEE", name: "Employee", permissions: [] as string[] },
   ];
 

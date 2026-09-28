@@ -1,20 +1,9 @@
 import { prisma } from "../../lib/prisma";
 import { writeAuditLog } from "../../lib/audit";
+import { businessToday } from "../../lib/businessDate";
 import { HttpError } from "../../middleware/errorHandler";
 import { revokeAllUserRefreshTokens } from "../auth/tokens";
 import type { RequestMetaInput } from "./types";
-
-// "Today" in the business timezone (Asia/Kolkata, fixed UTC+5:30, no DST —
-// spec §1/CLAUDE.md), truncated to a UTC-midnight Date matching how
-// @db.Date columns are stored/compared. Computing this from the server's
-// own (likely UTC) clock without the offset would let the scheduled
-// deactivation below fire up to 5.5h early or late — see CLAUDE.md's
-// timezone rule.
-function businessToday(): Date {
-  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
-  const nowIst = new Date(Date.now() + IST_OFFSET_MS);
-  return new Date(Date.UTC(nowIst.getUTCFullYear(), nowIst.getUTCMonth(), nowIst.getUTCDate()));
-}
 
 interface InitiateSeparationInput {
   lastWorkingDate: string;
