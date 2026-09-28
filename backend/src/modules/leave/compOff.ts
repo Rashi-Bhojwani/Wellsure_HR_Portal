@@ -1,15 +1,18 @@
 import { Prisma, type CompOffCredit } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { addCalendarDays } from "../../lib/businessDate";
+import { HttpError } from "../../middleware/errorHandler";
 import { withEmployeeLeaveLock } from "./concurrency";
 import { writeLedgerEntry, InsufficientLeaveBalanceError } from "./ledger";
 
-export class InsufficientHoursForCompOffError extends Error {
+// Extends HttpError, same reasoning as InsufficientLeaveBalanceError
+// (ledger.ts) — a 400 the global error handler maps automatically.
+export class InsufficientHoursForCompOffError extends HttpError {
   constructor(
     public readonly hoursWorked: number,
     public readonly minHoursRequired: number,
   ) {
-    super(`${hoursWorked}h worked is below the ${minHoursRequired}h minimum required to earn a comp-off`);
+    super(400, `${hoursWorked}h worked is below the ${minHoursRequired}h minimum required to earn a comp-off`, "INSUFFICIENT_HOURS");
     this.name = "InsufficientHoursForCompOffError";
   }
 }

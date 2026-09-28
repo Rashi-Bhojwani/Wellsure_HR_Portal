@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
+import { HttpError } from "../../middleware/errorHandler";
 
 // Any Prisma client/transaction handle — every function here accepts
 // either the top-level `prisma` or a `tx` from withEmployeeLeaveLock, so
@@ -22,6 +23,30 @@ export async function getLeaveBalance(db: Queryable, employeeId: string, leaveTy
   return result._sum.days ?? new Prisma.Decimal(0);
 }
 
+export interface LeaveBalanceDetail {
+  granted: Prisma.Decimal; // sum of positive entries only (ACCRUAL/GRANT/CARRY_FORWARD/OPENING) — the "Granted"
+  // figure the Leave Balances cards show, distinct from the net running balance
+  balance: Prisma.Decimal;
+}
+
+// Same balance as getLeaveBalance, plus the cumulative "granted" total —
+// small enough a dataset per (employee, leaveType) over a career that
+// summing in JS after one fetch is simpler and just as correct as a
+// conditional-aggregate raw query.
+export async function getLeaveBalanceDetail(db: Queryable, employeeId: string, leaveTypeId: string, asOfDate: Date = new Date()): Promise<LeaveBalanceDetail> {
+  const rows = await db.leaveLedger.findMany({
+    where: { employeeId, leaveTypeId, entryDate: { lte: asOfDate } },
+    select: { days: true },
+  });
+  let granted = new Prisma.Decimal(0);
+  let balance = new Prisma.Decimal(0);
+  for (const row of rows) {
+    balance = balance.plus(row.days);
+    if (row.days.greaterThan(0)) granted = granted.plus(row.days);
+  }
+  return { granted, balance };
+}
+
 // Every type's balance for one employee in a single query — used by the
 // Leave Balances screen.
 export async function getLeaveBalancesForEmployee(db: Queryable, employeeId: string, asOfDate: Date = new Date()): Promise<Map<string, Prisma.Decimal>> {
@@ -33,12 +58,16 @@ export async function getLeaveBalancesForEmployee(db: Queryable, employeeId: str
   return new Map(rows.map((r) => [r.leaveTypeId, r._sum.days ?? new Prisma.Decimal(0)]));
 }
 
-export class InsufficientLeaveBalanceError extends Error {
+// Extends HttpError (same convention separations.ts uses) so the global
+// error handler maps this to a proper 400 automatically, rather than
+// falling through to a generic 500 — every throw site (apply, approve,
+// comp-off FIFO consumption) gets this for free without its own try/catch.
+export class InsufficientLeaveBalanceError extends HttpError {
   constructor(
     public readonly available: Prisma.Decimal,
     public readonly requested: Prisma.Decimal,
   ) {
-    super(`Insufficient balance: available ${available.toFixed(2)}, requested ${requested.toFixed(2)}`);
+    super(400, `Insufficient balance: available ${available.toFixed(2)}, requested ${requested.toFixed(2)}`, "INSUFFICIENT_BALANCE");
     this.name = "InsufficientLeaveBalanceError";
   }
 }

@@ -347,8 +347,14 @@ async function main() {
     "leave.yearend.manage",
   ];
   const PAYROLL_ADMIN_PERMS = ["employee.view", "employee.bank.view", "employee.statutory.view", "leave.view"];
-  const MANAGER_PERMS = ["employee.view", "leave.apply.onBehalf"]; // TEAM-scoped via role, not a separate
-  // permission string — a manager can only apply-on-behalf within their own team, enforced by resolveDataScope
+  // leave.approve/leave.view here is a real fix over commit A's original
+  // seed, caught while designing commit B's approve endpoint: MANAGER is
+  // TEAM-scoped via resolveDataScope, but scope alone doesn't grant a
+  // permission — without these, no manager could ever approve their own
+  // team's leave, contradicting "Manager and HR: approve/reject..." (the
+  // explicit ask). All three stay TEAM-limited by resolveDataScope, not by
+  // being narrower permission strings.
+  const MANAGER_PERMS = ["employee.view", "leave.view", "leave.approve", "leave.apply.onBehalf"];
   const SUPER_ADMIN_PERMS = PERMISSION_KEYS;
 
   const ROLES = [

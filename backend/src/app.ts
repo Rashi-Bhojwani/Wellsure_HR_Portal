@@ -16,6 +16,7 @@ import { employeeRouter } from "./modules/employee/routes";
 import { importRouter } from "./modules/import/routes";
 import { auditLogRouter } from "./modules/auditLog/routes";
 import { settingsRouter } from "./modules/settings/routes";
+import { holidaysRouter, leaveRouter } from "./modules/leave/routes";
 
 export function createApp(): Express {
   const app = express();
@@ -71,6 +72,8 @@ export function createApp(): Express {
   app.use("/api/import", noStore, importRouter);
   app.use("/api/audit-logs", noStore, auditLogRouter);
   app.use("/api/settings", noStore, settingsRouter);
+  app.use("/api/leave", noStore, leaveRouter);
+  app.use("/api", noStore, holidaysRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

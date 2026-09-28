@@ -14,7 +14,7 @@ committed).
 | 1.5 | AWS staging environment | Not started |
 | 2 | Biometric ingestion + attendance engine + real-time | Not started |
 | 3 | Attendance administration | Not started |
-| 4 | Leave | Not started |
+| 4 | Leave | In progress — schema/ledger/accrual/comp-off/jobs (commit A) and employee self-service apply/approve/reject/cancel/balances/calendars (commit B) built and tested. Admin management (commit C) and Year End/Recalculator/dashboard/realtime (commit D) still to come. |
 | 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | Not started |
 | 5.5 | AWS production environment and go-live hardening | Not started |
 | 6 | Payroll | Not started |
@@ -1151,6 +1151,134 @@ HTTP route, every screen, Year End Process, Leave Recalculator, the
 Workforce Overview dashboard's real data wiring, and finishing
 `realtime/socket.ts`'s handshake auth/room-joining (stubbed since Phase 0,
 needed for `leave.applied`/`leave.decided`).
+
+### Phase 4, commit B — employee self-service (apply/approve/reject/cancel, balances, calendars)
+
+HTTP routes and the four employee-facing screens on top of commit A's
+service layer. No admin screens yet (Employee Leave, Leave Granter, Leave
+Types & Policies, Holiday/RH admin — commit C).
+
+**A real seed gap found while designing the approve endpoint's permission
+check, before any test was written**: `MANAGER_PERMS` in
+`backend/prisma/seed.ts` only granted `employee.view` and
+`leave.apply.onBehalf` — no manager could ever have approved their own
+team's leave, since data scope alone (from `resolveDataScope`) narrows
+*which* rows a query returns but grants no permission by itself. Fixed by
+adding `leave.view`/`leave.approve` to `MANAGER_PERMS`, flagged to the
+user inline rather than silently patched.
+
+**Backend** (`backend/src/modules/leave/`):
+
+- `scope.ts` — `buildLeaveEmployeeIdFilter`/`isEmployeeInScope`, the same
+  SELF/TEAM/ALL shape `resolveDataScope` already produces for Phase 1,
+  adapted for leave's `employeeId`-keyed tables. IDOR rule throughout:
+  out-of-scope always reads as 404 (never confirms another employee's
+  request exists to a caller who can't see them); "no `leave.view`/
+  `leave.approve` at all" is a separate 403 gate layered on top of scope.
+  A person can never approve/reject their own request, even holding
+  `leave.approve`.
+- `dayCountContext.ts` — resolves the holiday-dates set and week-off days
+  an apply/day-count calculation needs for one employee/date-range,
+  wrapping commit A's `holidays.ts`/`weekOff.ts` reads.
+  `types.ts` — `LeaveViewer`/`ActorMeta`, the same `viewer(req)`/
+  `actorMeta(req)` controller-helper shape used across the employee/org
+  modules since Phase 1.
+- `requests.ts` — `applyForLeave`, `listLeaveRequests`,
+  `getLeaveRequestById`, `approveLeaveRequest`, `rejectLeaveRequest`
+  (comments required), `bulkApproveLeaveRequests` (per-id success/failure,
+  never all-or-nothing), `cancelLeaveRequest` (REVERSAL + exact FIFO
+  comp-off credit-back via commit A's `reverseCompOffConsumption`). Every
+  write acquires `withEmployeeLeaveLock` before checking overlap/balance,
+  same as commit A's approve/comp-off paths. Self-approval blocked;
+  already-decided requests reject with 409; overlapping requests reject
+  with 409; LOP always succeeds (`skipBalanceCheck`).
+- `balances.ts` — `getLeaveBalancesForDisplay` (granted vs. current
+  balance per type, for the Balances cards and the Apply screen's live
+  check). `calendar.ts` — `getLeaveCalendar` ("who's on leave" — defaults
+  to the caller's own department unless they hold `leave.view`, in which
+  case org-wide with filters). `holidays.ts` gained the read side
+  (`listHolidays`/`listRestrictedHolidays`); mutations are commit C.
+  `leaveTypes.ts` — `listActiveLeaveTypes` for the Apply screen's dropdown
+  (missed in the initial commit A/B split, added when the Apply screen
+  needed it).
+- `validators.ts`/`controller.ts`/`routes.ts` — Zod schemas for every new
+  endpoint; `leaveRouter` mounted at `/api/leave`
+  (`/types`, `/requests` + `:id`/`:id/approve`/`:id/reject`/
+  `bulk-approve`/`:id/cancel`, `/balances`, `/calendar`) and
+  `holidaysRouter` at `/api` (`/holidays`, `/restricted-holidays`), both
+  wired into `app.ts`.
+
+**Two response-shape/error-class bugs caught by the new HTTP tests, not
+by manual testing**: `InsufficientLeaveBalanceError` and
+`InsufficientHoursForCompOffError` (commit A) were plain `Error`
+subclasses, so the central error handler's `instanceof HttpError` check
+missed them and returned a generic 500 instead of a 400 — fixed by
+extending `HttpError`, the established convention `separations.ts`
+already follows. Separately, `applyForLeave`/`approveLeaveRequest`/
+`rejectLeaveRequest`/`cancelLeaveRequest` originally returned the raw
+Prisma row, whose `Decimal totalDays` serializes as a JSON *string*
+(`"2"`, not `2`) — inconsistent with the list/detail endpoints. Fixed by
+re-fetching and formatting every write's response the same way the list
+endpoint does (`reloadFormatted`), and by writing a `toAuditJson` helper
+so `writeAuditLog`'s `before`/`after` payloads never carry a raw
+`Prisma.Decimal` (which breaks JSON serialization outright).
+
+**Frontend** (`frontend/src/`):
+
+- `api/leave.ts` — typed client functions for every new endpoint.
+- `pages/employee/leave/LeaveApplyPage.tsx` — leave type + date range
+  (half-day toggle on the first/last day), a live balance check as soon
+  as a type is picked, an estimated day count that excludes holidays/
+  week-offs before submit, and a "who else on the team is off" panel for
+  the selected range.
+- `pages/employee/leave/LeaveBalancesPage.tsx` — rewritten from the
+  Phase 0 mock array onto `getLeaveBalances()`; the per-type download
+  button from the old mock was dropped (not asked for in this commit).
+- `pages/employee/leave/LeaveCalendarPage.tsx` — a month grid in the same
+  custom-CSS-grid style as `AttendanceInfoPage.tsx` (deliberately not
+  AntD's `Calendar` component, to avoid its `cellRender` API version
+  uncertainty), marking days the caller's team is on leave.
+- `pages/employee/leave/HolidayCalendarPage.tsx` — Holidays/Restricted
+  Holidays tabs, per-year.
+- `routes/employeeMenu.config.tsx` — all 4 leave menu entries now have a
+  real `element` (Leave Balances already did from Phase 0); the
+  `phase: "Phase 4"` markers on Apply/Calendar/Holiday Calendar removed.
+
+**Tests** (33 new — `requests.integration.test.ts`, `idor.test.ts`,
+`permissions.test.ts` — 71 total in the leave module, 184 across the
+backend): full apply→approve→ledger-consumption→cancel→reversal HTTP
+flow; self-approval blocked; already-decided 409; reject requires
+comments; bulk-approve's per-id mixed results; overlap 409; LOP always
+succeeds; half-day totalDays; SELF/TEAM/ALL scope across requests/
+balances/apply-on-behalf with the 403-vs-404 distinction; all 7
+permission keys checked directly against every seeded role.
+
+A `pan_hash`-collision bug surfaced while writing these tests: the
+existing `employeeTestHelpers.ts` fixture counter is unique only within
+one Vitest file's module instance, and leave's two new HTTP test files
+both create several "full" employees — running them together collided on
+the shared unique index. Rather than touching the shared Phase 1 helper
+(risk to other modules' tests for no leave-specific benefit), added a
+lighter `createLoginableTestEmployee()`/`cleanupLoginableTestEmployee()`
+to `leaveTestHelpers.ts` that skips statutory/bank/device-mapping
+entirely, which leave's own tests never touch.
+
+**Verification**: full backend suite green from a clean migrate+seed on
+a disposable database (184/184, 29 files, zero regressions elsewhere);
+`lint`/`typecheck` clean on both `backend/` and `frontend/`; frontend
+suite green including the routing guard (confirms no Phase 4 route
+resolves to `PlaceholderPage`); live browser walkthrough as an employee
+covering all 4 screens plus a real end-to-end apply — leave type dropdown
+populated from seeded types, live "Current balance: 1 day(s)" check,
+date-range + half-day pickers, the estimated-day-count note, the "who
+else is off" panel, submit producing "Applied for 1 day(s) — pending
+approval", and the balance correctly staying unconsumed (still 1) until
+approval, matching the design that consumption happens at approve time,
+not apply time.
+
+**Not done this commit** (commit C): Employee Leave, Leave Granter (+
+`LEAVE_GRANTS` Import Center dataset), Leave Types & Policies admin
+screen, Holiday/RH admin mutations.
 
 ## Open questions
 

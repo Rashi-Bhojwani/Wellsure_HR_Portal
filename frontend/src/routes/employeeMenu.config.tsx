@@ -31,7 +31,10 @@ import {
 import { HomePage } from "../pages/employee/home/HomePage";
 import { EngagePage } from "../pages/employee/engage/EngagePage";
 import { PayslipsPage } from "../pages/employee/salary/PayslipsPage";
+import { LeaveApplyPage } from "../pages/employee/leave/LeaveApplyPage";
 import { LeaveBalancesPage } from "../pages/employee/leave/LeaveBalancesPage";
+import { LeaveCalendarPage } from "../pages/employee/leave/LeaveCalendarPage";
+import { HolidayCalendarPage } from "../pages/employee/leave/HolidayCalendarPage";
 import { AttendanceInfoPage } from "../pages/employee/attendance/AttendanceInfoPage";
 
 // Single source of truth for the Employee portal left sidebar
@@ -169,7 +172,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
         label: "Leave Apply",
         path: "leave/apply",
         icon: PlusCircleOutlined,
-        phase: "Phase 4",
+        element: LeaveApplyPage,
       },
       {
         key: "leave-balances",
@@ -183,14 +186,14 @@ export const employeeMenu: EmployeeMenuEntry[] = [
         label: "Leave Calendar",
         path: "leave/calendar",
         icon: CalendarOutlined,
-        phase: "Phase 4",
+        element: LeaveCalendarPage,
       },
       {
         key: "holiday-calendar",
         label: "Holiday Calendar",
         path: "leave/holiday-calendar",
         icon: GiftOutlined,
-        phase: "Phase 4",
+        element: HolidayCalendarPage,
       },
     ],
   },
