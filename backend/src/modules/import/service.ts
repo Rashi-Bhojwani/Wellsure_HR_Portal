@@ -7,14 +7,15 @@ import { unpackBytes } from "../../lib/bytesJson";
 import { createEmployeeInTx } from "../employee/service";
 import { parseUpload } from "./parse";
 import { buildTemplate } from "./templates";
-import { loadReferenceData, newBatchTracker, validateBankRow, validateEmployeeRow, validateOrgMasterRow, validateStatutoryRow } from "./rowValidators";
+import { loadReferenceData, newBatchTracker, validateBankRow, validateEmployeeRow, validateLeaveGrantRow, validateOrgMasterRow, validateStatutoryRow } from "./rowValidators";
 import { DATASET_COLUMNS, DATASET_TO_ENUM, ENUM_TO_DATASET, type ActorMeta, type ImportDatasetKey, type RowResult } from "./types";
 import type { ParsedRow } from "./parse";
+import { writeLedgerEntry } from "../leave/ledger";
 
 export { buildTemplate };
 
 function validatorFor(dataset: ImportDatasetKey) {
-  return { "org-masters": validateOrgMasterRow, employees: validateEmployeeRow, statutory: validateStatutoryRow, bank: validateBankRow }[dataset];
+  return { "org-masters": validateOrgMasterRow, employees: validateEmployeeRow, statutory: validateStatutoryRow, bank: validateBankRow, "leave-grants": validateLeaveGrantRow }[dataset];
 }
 
 // What HR actually sees in the preview / error report for one row — the
@@ -361,6 +362,56 @@ async function commitBank(tx: Prisma.TransactionClient, rows: { data: Record<str
   }
 }
 
+// LEAVE_GRANTS writes ledger entries directly against the transaction
+// handle commitBatch already holds, rather than going through grants.ts's
+// manualGrantOrDebit — that function opens its own withEmployeeLeaveLock
+// transaction, which can't nest inside this one. The per-employee
+// `FOR UPDATE` lock below is the same primitive withEmployeeLeaveLock
+// uses, just taken directly against the passed-in `tx` so it still
+// serializes with any other leave write touching the same employee.
+async function commitLeaveGrants(tx: Prisma.TransactionClient, rows: { data: Record<string, unknown> }[], meta: ActorMeta): Promise<void> {
+  const employees = await tx.employee.findMany({ select: { id: true, employeeCode: true } });
+  const empByCode = new Map(employees.map((e) => [e.employeeCode.toLowerCase(), e.id]));
+  const leaveTypes = await tx.leaveType.findMany({ where: { isActive: true, code: { not: "COF" } }, include: { policy: true } });
+  const typeByCode = new Map(leaveTypes.map((t) => [t.code.toLowerCase(), t]));
+
+  for (const { data } of rows) {
+    const d = data as Record<string, string>;
+    const employeeId = empByCode.get(d.employeeCode!.toLowerCase());
+    const leaveType = typeByCode.get(d.leaveTypeCode!.toLowerCase());
+    if (!employeeId || !leaveType) continue; // re-validated at commit time below; belt-and-braces like statutory/bank
+
+    const days = new Prisma.Decimal(d.days!);
+    const entryDate = new Date(d.entryDate!);
+    const entryType = days.greaterThan(0) ? "GRANT" : "DEBIT";
+
+    await tx.$queryRaw`SELECT id FROM employees WHERE id = ${employeeId} FOR UPDATE`;
+    if (days.lessThan(0) && !leaveType.policy?.skipBalanceCheck && !leaveType.policy?.negativeBalanceAllowed) {
+      const balance = await tx.leaveLedger.aggregate({ _sum: { days: true }, where: { employeeId, leaveTypeId: leaveType.id, entryDate: { lte: entryDate } } });
+      const available = balance._sum.days ?? new Prisma.Decimal(0);
+      // Thrown, not silently skipped: this rolls the whole transaction back
+      // (Prisma's $transaction behaviour on a thrown error), so a batch
+      // either fully commits or not at all — never a partial commit that
+      // silently drops just the rows that would have gone negative.
+      if (available.lessThan(days.negated())) {
+        throw new HttpError(400, `Row for employeeCode "${d.employeeCode}": insufficient ${leaveType.code} balance (available ${available.toFixed(2)}, debiting ${days.negated().toFixed(2)}). No rows in this batch were committed.`, "INSUFFICIENT_BALANCE");
+      }
+    }
+
+    await writeLedgerEntry(tx, {
+      employeeId,
+      leaveTypeId: leaveType.id,
+      leaveYear: entryDate.getUTCFullYear(),
+      entryDate,
+      entryType,
+      days,
+      referenceType: "MANUAL_GRANT",
+      remarks: d.remarks || null,
+      createdByUserId: meta.actorUserId,
+    });
+  }
+}
+
 export async function commitBatch(
   id: string,
   meta: ActorMeta,
@@ -395,7 +446,8 @@ export async function commitBatch(
       if (dataset === "org-masters") await commitOrgMasters(tx, rowInputs);
       else if (dataset === "employees") await commitEmployees(tx, rowInputs, meta);
       else if (dataset === "statutory") await commitStatutory(tx, rowInputs);
-      else await commitBank(tx, rowInputs, meta);
+      else if (dataset === "bank") await commitBank(tx, rowInputs, meta);
+      else await commitLeaveGrants(tx, rowInputs, meta);
 
       await tx.importBatch.update({ where: { id }, data: { status: "COMMITTED", committedByUserId: meta.actorUserId, committedAt: new Date() } });
     },

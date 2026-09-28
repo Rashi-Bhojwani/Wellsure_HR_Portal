@@ -1,6 +1,8 @@
 import type { Request, Response } from "express";
+import { businessToday } from "../../lib/businessDate";
 import * as balancesService from "./balances";
 import * as calendarService from "./calendar";
+import * as grantsService from "./grants";
 import * as holidaysService from "./holidays";
 import * as leaveTypesService from "./leaveTypes";
 import * as requestsService from "./requests";
@@ -58,7 +60,7 @@ export async function cancelLeaveRequest(req: Request, res: Response): Promise<v
 
 export async function getLeaveBalances(req: Request, res: Response): Promise<void> {
   const { employeeId, asOfDate } = req.query as { employeeId?: string; asOfDate?: string };
-  const balances = await balancesService.getLeaveBalancesForDisplay(employeeId, viewer(req), asOfDate ? new Date(asOfDate) : new Date());
+  const balances = await balancesService.getLeaveBalancesForDisplay(employeeId, viewer(req), asOfDate ? new Date(asOfDate) : businessToday());
   res.status(200).json({ balances });
 }
 
@@ -83,4 +85,67 @@ export async function listRestrictedHolidays(req: Request, res: Response): Promi
   const resolvedLocationId = locationId ?? (await holidaysService.getEmployeeCurrentLocationId(viewer(req).employeeId));
   const holidays = resolvedLocationId ? await holidaysService.listRestrictedHolidays(resolvedLocationId, year) : [];
   res.status(200).json({ holidays, locationId: resolvedLocationId });
+}
+
+// ── Admin: leave types & policies (leave.policy.manage) ─────────────────
+
+export async function listAllLeaveTypes(_req: Request, res: Response): Promise<void> {
+  res.status(200).json({ leaveTypes: await leaveTypesService.listAllLeaveTypesWithPolicy() });
+}
+
+export async function createLeaveType(req: Request, res: Response): Promise<void> {
+  res.status(201).json(await leaveTypesService.createLeaveType(req.body, actorMeta(req)));
+}
+
+export async function updateLeaveType(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await leaveTypesService.updateLeaveType(req.params.id as string, req.body, actorMeta(req)));
+}
+
+export async function upsertLeavePolicy(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await leaveTypesService.upsertLeavePolicy(req.params.id as string, req.body, actorMeta(req)));
+}
+
+// ── Admin: holidays / restricted holidays mutations (leave.policy.manage) ─
+
+export async function createHoliday(req: Request, res: Response): Promise<void> {
+  res.status(201).json(await holidaysService.createHoliday(req.body, actorMeta(req)));
+}
+export async function updateHoliday(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await holidaysService.updateHoliday(req.params.id as string, req.body, actorMeta(req)));
+}
+export async function deleteHoliday(req: Request, res: Response): Promise<void> {
+  await holidaysService.deleteHoliday(req.params.id as string, actorMeta(req));
+  res.status(204).send();
+}
+export async function bulkCreateHolidays(req: Request, res: Response): Promise<void> {
+  res.status(200).json({ results: await holidaysService.bulkCreateHolidays(req.body, actorMeta(req)) });
+}
+
+export async function createRestrictedHoliday(req: Request, res: Response): Promise<void> {
+  res.status(201).json(await holidaysService.createRestrictedHoliday(req.body, actorMeta(req)));
+}
+export async function updateRestrictedHoliday(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await holidaysService.updateRestrictedHoliday(req.params.id as string, req.body, actorMeta(req)));
+}
+export async function deleteRestrictedHoliday(req: Request, res: Response): Promise<void> {
+  await holidaysService.deleteRestrictedHoliday(req.params.id as string, actorMeta(req));
+  res.status(204).send();
+}
+export async function bulkCreateRestrictedHolidays(req: Request, res: Response): Promise<void> {
+  res.status(200).json({ results: await holidaysService.bulkCreateRestrictedHolidays(req.body, actorMeta(req)) });
+}
+
+// ── Admin: manual grant/debit + comp-off grant (leave.grant) ────────────
+
+export async function manualGrant(req: Request, res: Response): Promise<void> {
+  res.status(201).json(await grantsService.manualGrantOrDebit(req.body, actorMeta(req)));
+}
+
+export async function manualCompOffGrant(req: Request, res: Response): Promise<void> {
+  res.status(201).json(await grantsService.manualCompOffGrant(req.body, actorMeta(req)));
+}
+
+export async function listCompOffCredits(req: Request, res: Response): Promise<void> {
+  const { employeeId } = req.query as { employeeId: string };
+  res.status(200).json({ credits: await grantsService.listCompOffCredits(employeeId, viewer(req)) });
 }

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Card, Col, Row, Typography, List, Space, Button, Alert } from "antd";
+import { useQuery } from "@tanstack/react-query";
+import { Card, Col, Row, Typography, List, Space, Button, Alert, Badge } from "antd";
 import {
   ArrowRightOutlined,
   EyeInvisibleOutlined,
@@ -9,8 +10,10 @@ import {
   SafetyCertificateOutlined,
 } from "@ant-design/icons";
 import { Link } from "react-router-dom";
+import * as leaveApi from "../../../api/leave";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { MaskedAmount } from "../../../components/common/MaskedAmount";
+import { useAuth } from "../../../hooks/useAuth";
 
 const { Title, Text } = Typography;
 
@@ -43,6 +46,14 @@ const quickAccess = [
 export function HomePage() {
   const quote = QUOTES[new Date().getDate() % QUOTES.length]!;
   const [salaryRevealed, setSalaryRevealed] = useState(false);
+  const { hasPermission } = useAuth();
+  const canApprove = hasPermission("leave.approve");
+  const { data: pendingReview } = useQuery({
+    queryKey: ["leave", "requests", "review-queue"],
+    queryFn: () => leaveApi.listLeaveRequests({ status: "PENDING", pageSize: 1 }),
+    enabled: canApprove,
+  });
+  const pendingCount = pendingReview?.total ?? 0;
 
   return (
     <Space orientation="vertical" size={12} style={{ width: "100%" }}>
@@ -91,11 +102,25 @@ export function HomePage() {
       <Row gutter={[16, 12]}>
         <Col xs={24} md={12} xl={8}>
           <Card
-            title="Review"
+            title={
+              <Space>
+                Review
+                {pendingCount > 0 && <Badge count={pendingCount} />}
+              </Space>
+            }
             extra={<Link to="/app/todo/review"><ArrowRightOutlined /></Link>}
             style={{ height: "100%" }}
           >
-            <EmptyState message="Nothing to review" compact />
+            {canApprove && pendingCount > 0 ? (
+              <Space orientation="vertical" size={4}>
+                <Text>
+                  {pendingCount} leave request{pendingCount === 1 ? "" : "s"} from your team awaiting your decision.
+                </Text>
+                <Link to="/app/todo/review">Go to Review →</Link>
+              </Space>
+            ) : (
+              <EmptyState message="Nothing to review" compact />
+            )}
           </Card>
         </Col>
 

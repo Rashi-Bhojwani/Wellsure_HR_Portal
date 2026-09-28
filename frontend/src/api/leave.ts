@@ -135,3 +135,136 @@ export async function listLeaveTypes(): Promise<LeaveTypeOption[]> {
   const { data } = await apiClient.get<{ leaveTypes: LeaveTypeOption[] }>("/api/leave/types");
   return data.leaveTypes;
 }
+
+// ── Admin: leave types & policies (leave.policy.manage) ─────────────────
+
+export interface LeavePolicy {
+  id: string;
+  leaveTypeId: string;
+  accrualEnabled: boolean;
+  accrualDaysPerMonth: number | null;
+  eligibilityMode: "DAYS" | "CALENDAR_MONTHS" | null;
+  eligibilityValue: number | null;
+  carryForwardCapDays: number | null;
+  negativeBalanceAllowed: boolean;
+  skipBalanceCheck: boolean;
+  yearEndEncashment: boolean;
+  compOffMinHoursWorked: number | null;
+  compOffExpiryDays: number | null;
+  wfhMonthlyLimit: number | null;
+  wfhYearlyLimit: number | null;
+  rhYearlyQuota: number | null;
+}
+
+export interface LeaveTypeAdminRow {
+  id: string;
+  code: string;
+  name: string;
+  isPaid: boolean;
+  allowHalfDay: boolean;
+  isActive: boolean;
+  policy: LeavePolicy | null;
+}
+
+export async function listAllLeaveTypes(): Promise<LeaveTypeAdminRow[]> {
+  const { data } = await apiClient.get<{ leaveTypes: LeaveTypeAdminRow[] }>("/api/leave/types/all");
+  return data.leaveTypes;
+}
+
+export async function createLeaveType(input: { code: string; name: string; isPaid: boolean; allowHalfDay: boolean }) {
+  const { data } = await apiClient.post("/api/leave/types", input);
+  return data as { id: string; code: string; name: string; isPaid: boolean; allowHalfDay: boolean; isActive: boolean };
+}
+
+export async function updateLeaveType(id: string, input: Partial<{ name: string; isPaid: boolean; allowHalfDay: boolean; isActive: boolean }>) {
+  const { data } = await apiClient.patch(`/api/leave/types/${id}`, input);
+  return data as { id: string; code: string; name: string; isPaid: boolean; allowHalfDay: boolean; isActive: boolean };
+}
+
+export async function upsertLeavePolicy(leaveTypeId: string, input: Partial<Omit<LeavePolicy, "id" | "leaveTypeId">>): Promise<LeavePolicy> {
+  const { data } = await apiClient.put<LeavePolicy>(`/api/leave/types/${leaveTypeId}/policy`, input);
+  return data;
+}
+
+// ── Admin: holidays / restricted holidays mutations (leave.policy.manage) ─
+
+export interface HolidayInput {
+  locationId: string;
+  date: string;
+  name: string;
+}
+
+export async function createHoliday(input: HolidayInput): Promise<HolidayRow> {
+  const { data } = await apiClient.post<HolidayRow>("/api/holidays", input);
+  return data;
+}
+export async function updateHoliday(id: string, input: Partial<Omit<HolidayInput, "locationId">>): Promise<HolidayRow> {
+  const { data } = await apiClient.patch<HolidayRow>(`/api/holidays/${id}`, input);
+  return data;
+}
+export async function deleteHoliday(id: string): Promise<void> {
+  await apiClient.delete(`/api/holidays/${id}`);
+}
+export interface BulkHolidayResult {
+  locationId: string;
+  status: "created" | "skipped";
+  error?: string;
+}
+export async function bulkCreateHolidays(input: { locationIds: string[]; date: string; name: string }): Promise<BulkHolidayResult[]> {
+  const { data } = await apiClient.post<{ results: BulkHolidayResult[] }>("/api/holidays/bulk", input);
+  return data.results;
+}
+
+export async function createRestrictedHoliday(input: HolidayInput): Promise<HolidayRow> {
+  const { data } = await apiClient.post<HolidayRow>("/api/restricted-holidays", input);
+  return data;
+}
+export async function updateRestrictedHoliday(id: string, input: Partial<Omit<HolidayInput, "locationId">>): Promise<HolidayRow> {
+  const { data } = await apiClient.patch<HolidayRow>(`/api/restricted-holidays/${id}`, input);
+  return data;
+}
+export async function deleteRestrictedHoliday(id: string): Promise<void> {
+  await apiClient.delete(`/api/restricted-holidays/${id}`);
+}
+export async function bulkCreateRestrictedHolidays(input: { locationIds: string[]; date: string; name: string }): Promise<BulkHolidayResult[]> {
+  const { data } = await apiClient.post<{ results: BulkHolidayResult[] }>("/api/restricted-holidays/bulk", input);
+  return data.results;
+}
+
+// ── Admin: manual grant/debit + comp-off grant (leave.grant) ────────────
+
+export interface ManualGrantResult {
+  id: string;
+  employeeId: string;
+  leaveTypeId: string;
+  leaveTypeCode: string;
+  entryType: "GRANT" | "DEBIT";
+  days: number;
+  entryDate: string;
+  remarks: string | null;
+}
+
+export async function manualGrant(input: { employeeId: string; leaveTypeId: string; days: number; entryDate: string; remarks?: string }): Promise<ManualGrantResult> {
+  const { data } = await apiClient.post<ManualGrantResult>("/api/leave/grants", input);
+  return data;
+}
+
+export interface CompOffCreditRow {
+  id: string;
+  earnedDate: string;
+  earnedDays: number;
+  remainingDays: number;
+  expiresOn: string;
+  status: "AVAILABLE" | "CONSUMED" | "EXPIRED";
+  source: "MANUAL_GRANT" | "ATTENDANCE";
+}
+
+export async function manualCompOffGrant(input: { employeeId: string; earnedDate: string; hoursWorked: number; remarks?: string }): Promise<CompOffCreditRow> {
+  const { data } = await apiClient.post<CompOffCreditRow>("/api/leave/comp-off/grant", input);
+  return data;
+}
+
+export async function listCompOffCredits(employeeId: string): Promise<CompOffCreditRow[]> {
+  const { data } = await apiClient.get<{ credits: CompOffCreditRow[] }>("/api/leave/comp-off", { params: { employeeId } });
+  return data.credits;
+}

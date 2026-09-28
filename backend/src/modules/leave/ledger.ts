@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
+import { businessToday } from "../../lib/businessDate";
 import { HttpError } from "../../middleware/errorHandler";
 
 // Any Prisma client/transaction handle — every function here accepts
@@ -15,7 +16,7 @@ type Queryable = typeof prisma | Prisma.TransactionClient;
 // also what makes "carry forward with no cap" free: there is no separate
 // carry-forward operation, just the absence of any entry that would
 // reduce the running balance.
-export async function getLeaveBalance(db: Queryable, employeeId: string, leaveTypeId: string, asOfDate: Date = new Date()): Promise<Prisma.Decimal> {
+export async function getLeaveBalance(db: Queryable, employeeId: string, leaveTypeId: string, asOfDate: Date = businessToday()): Promise<Prisma.Decimal> {
   const result = await db.leaveLedger.aggregate({
     _sum: { days: true },
     where: { employeeId, leaveTypeId, entryDate: { lte: asOfDate } },
@@ -33,7 +34,7 @@ export interface LeaveBalanceDetail {
 // small enough a dataset per (employee, leaveType) over a career that
 // summing in JS after one fetch is simpler and just as correct as a
 // conditional-aggregate raw query.
-export async function getLeaveBalanceDetail(db: Queryable, employeeId: string, leaveTypeId: string, asOfDate: Date = new Date()): Promise<LeaveBalanceDetail> {
+export async function getLeaveBalanceDetail(db: Queryable, employeeId: string, leaveTypeId: string, asOfDate: Date = businessToday()): Promise<LeaveBalanceDetail> {
   const rows = await db.leaveLedger.findMany({
     where: { employeeId, leaveTypeId, entryDate: { lte: asOfDate } },
     select: { days: true },
@@ -49,7 +50,7 @@ export async function getLeaveBalanceDetail(db: Queryable, employeeId: string, l
 
 // Every type's balance for one employee in a single query — used by the
 // Leave Balances screen.
-export async function getLeaveBalancesForEmployee(db: Queryable, employeeId: string, asOfDate: Date = new Date()): Promise<Map<string, Prisma.Decimal>> {
+export async function getLeaveBalancesForEmployee(db: Queryable, employeeId: string, asOfDate: Date = businessToday()): Promise<Map<string, Prisma.Decimal>> {
   const rows = await db.leaveLedger.groupBy({
     by: ["leaveTypeId"],
     where: { employeeId, entryDate: { lte: asOfDate } },
@@ -88,7 +89,7 @@ export async function assertSufficientBalance(
   leaveTypeId: string,
   policy: BalancePolicyFields,
   requestedDays: Prisma.Decimal.Value,
-  asOfDate: Date = new Date(),
+  asOfDate: Date = businessToday(),
 ): Promise<void> {
   if (policy.skipBalanceCheck) return;
   if (policy.negativeBalanceAllowed) return;

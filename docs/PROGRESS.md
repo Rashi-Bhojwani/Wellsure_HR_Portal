@@ -14,7 +14,7 @@ committed).
 | 1.5 | AWS staging environment | Not started |
 | 2 | Biometric ingestion + attendance engine + real-time | Not started |
 | 3 | Attendance administration | Not started |
-| 4 | Leave | In progress — schema/ledger/accrual/comp-off/jobs (commit A) and employee self-service apply/approve/reject/cancel/balances/calendars (commit B) built and tested. Admin management (commit C) and Year End/Recalculator/dashboard/realtime (commit D) still to come. |
+| 4 | Leave | In progress — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), and admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C) built and tested. Year End Process/Recalculator/dashboard/realtime (commit D) still to come. |
 | 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | Not started |
 | 5.5 | AWS production environment and go-live hardening | Not started |
 | 6 | Payroll | Not started |
@@ -1279,6 +1279,157 @@ not apply time.
 **Not done this commit** (commit C): Employee Leave, Leave Granter (+
 `LEAVE_GRANTS` Import Center dataset), Leave Types & Policies admin
 screen, Holiday/RH admin mutations.
+
+### Phase 4, commit C — admin management (grants, catalog, manager Review, employee leave, holidays)
+
+Every remaining Phase 4 admin surface, plus — per the user's explicit
+addition to this commit's scope — manager approvals moved into the
+employee portal's To do → Review menu and Home page Review card
+(previously Phase 0 placeholders), since that is where greytHR puts
+manager-facing approvals, not the admin portal.
+
+**Backend** (`backend/src/modules/leave/`):
+
+- `grants.ts` (new) — `manualGrantOrDebit` (any type except COF; positive
+  `days` writes a `GRANT` row, negative writes `DEBIT`, still running
+  through the same `withEmployeeLeaveLock` + `assertSufficientBalance`
+  gate every other debit path uses), `manualCompOffGrant` (thin wrapper
+  over commit A's `creditCompOff`, `source: "MANUAL_GRANT"`),
+  `listCompOffCredits` (SELF/TEAM/ALL + `leave.view`, same shape as
+  balances). `POST /api/leave/grants`, `POST /api/leave/comp-off/grant`,
+  `GET /api/leave/comp-off` — all `leave.grant` except the read, which
+  follows the same permission-vs-scope split as balances.
+- `leaveTypes.ts` gained `listAllLeaveTypesWithPolicy`, `createLeaveType`,
+  `updateLeaveType`, `upsertLeavePolicy` — every `leave_policies` column
+  editable, not just the ones the 5 seeded types currently use (the
+  standing rule: every configurable value gets an admin screen, and nulls
+  out one at a time via a partial update, never a destructive full-row
+  replace). `POST/PATCH /api/leave/types`, `PUT /api/leave/types/:id/
+  policy`, `GET /api/leave/types/all` — `leave.policy.manage`.
+- `holidays.ts` gained the mutating side: `createHoliday`/`updateHoliday`/
+  `deleteHoliday`/`bulkCreateHolidays` and the restricted-holiday
+  equivalents. Bulk reports a per-location `created`/`skipped` result,
+  never all-or-nothing — a branch that already has a holiday on that date
+  doesn't block the others. `POST/PATCH/DELETE /api/holidays` (+`/bulk`)
+  and the restricted-holiday routes — `leave.policy.manage`.
+- `backend/src/modules/import/` — `LEAVE_GRANTS` joins the `ImportDataset`
+  enum (migration `20260928184732_add_leave_grants_import_dataset`) as
+  Leave Granter's bulk path: `employeeCode, leaveTypeCode, days,
+  entryDate, remarks`. COF is rejected at row-validation time (points to
+  the Comp-Off Grant action, same rule as the manual-grant endpoint).
+  Commits write ledger entries directly against `commitBatch`'s own
+  transaction handle rather than through `grants.ts` (which opens its own
+  `withEmployeeLeaveLock` transaction — Prisma can't nest one inside the
+  other), taking the same per-employee `FOR UPDATE` lock manually. A
+  debit that would violate `negativeBalanceAllowed=false` **throws**,
+  rolling back the whole transaction, rather than silently skipping just
+  that row — a batch either fully commits or visibly fails with a clear
+  error, never a partial commit nobody asked for.
+
+**A real timezone bug found by the full regression suite, not by design
+review**: `requests.integration.test.ts`'s cancel-and-reverse test started
+failing — deterministically, on a freshly seeded database, ruled out as
+test pollution — but only depending on the time of day this ran. Root
+cause: `getLeaveBalance`/`getLeaveBalanceDetail`/`getLeaveBalancesForEmployee`/
+`assertSufficientBalance`/`getLeaveBalancesForDisplay`/
+`expireCompOffCredits` all defaulted their `asOfDate` parameter to
+`new Date()` (the current instant), while every *write* to a `leave_ledger`
+row dates it with `businessToday()` (today's calendar date in Asia/Kolkata,
+represented as UTC midnight). Asia/Kolkata is UTC+5:30, so whenever the
+server's wall-clock UTC time is between 18:30 and 23:59, IST has already
+crossed into tomorrow — `businessToday()` then returns a Date that is
+*later* than `new Date()`, so a same-day reversal's `entryDate` fails the
+`entryDate <= asOfDate` filter and silently drops out of the balance sum
+for up to ~5.5 hours a day. Fixed by defaulting every one of those
+functions to `businessToday()` instead — `entry_date` is a `@db.Date`
+column, so every comparison against it should use the same business-date
+concept the writes use, never a raw instant. (The real scheduled jobs
+were never affected — `jobs/worker.ts` already passed `businessToday()`
+explicitly; only callers relying on the default, like this test, hit it.)
+
+**A response-shape inconsistency found during browser verification, not
+by a test**: `holidays.ts`'s read-only `listHolidays`/
+`listRestrictedHolidays` (commit B) returned the raw Prisma row, whose
+`date` is a full `DateTime`, not a plain `YYYY-MM-DD` string — inconsistent
+with the same file's own `createHoliday`/`updateHoliday`, which already
+used a `dateOnlyJson` formatter. The employee-facing Holiday Calendar
+screen happened to paper over this with its own client-side `new Date(v)`
+formatting, so it was never visibly wrong until the new admin table (no
+such formatting) rendered a raw ISO timestamp. Fixed both ends: the reads
+now go through `dateOnlyJson` too, and the admin table also formats the
+date client-side for a human-readable display, matching the employee
+screen.
+
+**Frontend**:
+
+- `pages/employee/todo/ReviewPage.tsx` (new, `/app/todo/review`) — a
+  manager's pending-approval queue (reuses commit B's
+  `GET /api/leave/requests?status=PENDING`, which already scopes to
+  TEAM for a caller with `leave.view`+`leave.approve` and no explicit
+  `employeeId` filter — no new backend needed for the listing itself).
+  Per-row Approve, a Reject modal requiring comments, row-selection bulk
+  approve, and a live per-employee balance column (one
+  `getLeaveBalances(employeeId)` call per distinct employee in the queue,
+  deduped by react-query's cache). Gated on `leave.approve`; a caller
+  without it sees the empty state rather than their own pending requests
+  misrendered as a decision queue.
+- `pages/employee/home/HomePage.tsx` — the Review card's `EmptyState` mock
+  replaced with a real pending count (same query key as the Review page,
+  so the two stay cache-consistent) and a link through.
+- `pages/admin/workforce/EmployeeLeavePage.tsx` (new) — HR's org-wide view
+  of every leave request (status filter, approve/reject/cancel inline)
+  plus an Apply on Behalf modal (employee picker + the same apply-form
+  shape as the employee screen).
+- `pages/admin/workforce/LeaveGranterPage.tsx` (new) — three tabs: Manual
+  Grant/Debit, Comp-Off Grant (with that employee's comp-off lot table
+  refreshing after each credit), and Bulk Upload, which reuses
+  `ImportCenterPage.tsx`'s upload/validate/commit component (exported as
+  `ImportDatasetTab`) parametrised with `dataset="leave-grants"` rather
+  than duplicating it.
+- `pages/admin/adminTools/LeaveTypesPoliciesPage.tsx` (new) — every leave
+  type with an Edit (type-level fields) and Policy (every
+  `leave_policies` column, grouped by concern — accrual, balance rules,
+  comp-off, WFH, RH) action; a banner reminding that several defaults
+  await HR/CA confirmation (docs/PROGRESS.md's Open Questions).
+- `pages/admin/adminTools/HolidayCalendarsAdminPage.tsx` (new) — Holidays/
+  Restricted Holidays tabs, branch + year pickers, per-branch CRUD, and
+  the requested multi-branch bulk action (a branch multi-select + one
+  date/name, applied to all of them with a per-branch created/skipped
+  result).
+- `routes/employeeMenu.config.tsx` / `adminMenu.config.tsx` — `todo/review`,
+  `workforce/leave/employee-leave`, `workforce/leave/granter`,
+  `admin-tools/holidays`, `admin-tools/leave-policies` all got real
+  `element`s; `todo/tasks` stays a Phase 5 placeholder (not asked for,
+  and Tasks is a distinct, larger Phase 5 concern per spec §6).
+
+**Tests** (21 new — `adminGrants.test.ts`, `adminCatalog.test.ts`,
+`import/__tests__/leaveGrants.test.ts` — 205 across the backend):
+grant/debit balance effects and the negative-balance gate, COF blocked on
+the generic grant endpoint, comp-off grant + its insufficient-hours 400,
+comp-off list scope; leave type create/duplicate-code-409/update, policy
+upsert leaving untouched fields alone and accepting an explicit `null`
+back to "unlimited"; holiday/RH create/update/duplicate-409/delete and
+the bulk endpoint's per-location created/skipped split; the `LEAVE_GRANTS`
+dataset's COF rejection, unknown-employee/type/malformed-days validation,
+a successful grant+debit commit, and the whole-batch-abort-on-insufficient-
+balance case with a direct assertion that nothing partial was written.
+
+**Verification**: full backend suite green from a clean migrate+seed on a
+disposable database (205/205, 32 files, zero regressions — including the
+timezone bug found and fixed along the way); `lint`/`typecheck` clean on
+both `backend/` and `frontend/`; frontend suite green; live browser
+walkthrough covering the full loop — an employee applies, their manager
+sees the real-time Review badge on Home and approves from the Review
+queue, HR sees the same request (now APPROVED) in Employee Leave, and all
+three Admin Tools/Workforce Management screens (Leave Granter's three
+tabs, Leave Types & Policies' catalog and policy modal, Holiday Calendars'
+branch view and multi-branch bulk-add modal) render and operate against
+real data.
+
+**Not done this commit** (commit D, per the reviewed plan): Year End
+Process (preview/discard/commit), Leave Recalculator, Workforce Overview
+dashboard's real data wiring, and finishing `realtime/socket.ts`'s
+handshake auth/room-joining for `leave.applied`/`leave.decided`.
 
 ## Open questions
 

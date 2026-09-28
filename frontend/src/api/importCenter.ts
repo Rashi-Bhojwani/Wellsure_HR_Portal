@@ -1,6 +1,6 @@
 import { apiClient } from "./client";
 
-export type ImportDataset = "org-masters" | "employees" | "statutory" | "bank";
+export type ImportDataset = "org-masters" | "employees" | "statutory" | "bank" | "leave-grants";
 
 export interface StagingRow {
   rowNumber: number;

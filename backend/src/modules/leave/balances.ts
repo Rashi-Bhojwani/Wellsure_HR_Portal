@@ -1,4 +1,5 @@
 import { prisma } from "../../lib/prisma";
+import { businessToday } from "../../lib/businessDate";
 import { resolveDataScope } from "../../lib/dataScope";
 import { HttpError } from "../../middleware/errorHandler";
 import { getLeaveBalanceDetail } from "./ledger";
@@ -15,7 +16,7 @@ export interface LeaveBalanceCard {
   balance: number;
 }
 
-export async function getLeaveBalancesForDisplay(targetEmployeeId: string | undefined, viewer: LeaveViewer, asOfDate: Date = new Date()): Promise<LeaveBalanceCard[]> {
+export async function getLeaveBalancesForDisplay(targetEmployeeId: string | undefined, viewer: LeaveViewer, asOfDate: Date = businessToday()): Promise<LeaveBalanceCard[]> {
   const employeeId = targetEmployeeId ?? viewer.employeeId;
   if (employeeId !== viewer.employeeId) {
     if (!viewer.permissions.has("leave.view")) {

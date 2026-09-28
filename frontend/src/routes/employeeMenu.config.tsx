@@ -30,6 +30,7 @@ import {
 } from "@ant-design/icons";
 import { HomePage } from "../pages/employee/home/HomePage";
 import { EngagePage } from "../pages/employee/engage/EngagePage";
+import { ReviewPage } from "../pages/employee/todo/ReviewPage";
 import { PayslipsPage } from "../pages/employee/salary/PayslipsPage";
 import { LeaveApplyPage } from "../pages/employee/leave/LeaveApplyPage";
 import { LeaveBalancesPage } from "../pages/employee/leave/LeaveBalancesPage";
@@ -102,7 +103,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
     icon: CheckSquareOutlined,
     children: [
       { key: "tasks", label: "Tasks", path: "todo/tasks", icon: UnorderedListOutlined, phase: "Phase 5" },
-      { key: "review", label: "Review", path: "todo/review", icon: AuditOutlined, phase: "Phase 5" },
+      { key: "review", label: "Review", path: "todo/review", icon: AuditOutlined, element: ReviewPage },
     ],
   },
   {

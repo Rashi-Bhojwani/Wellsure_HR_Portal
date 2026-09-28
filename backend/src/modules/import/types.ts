@@ -1,7 +1,7 @@
 // Import Center (spec §10) — one row shape per dataset, shared by the
 // parser, row validators, the error-report writer and the commit step.
 
-export type ImportDatasetKey = "org-masters" | "employees" | "statutory" | "bank";
+export type ImportDatasetKey = "org-masters" | "employees" | "statutory" | "bank" | "leave-grants";
 
 // URL-friendly kebab-case (routes/frontend) <-> Prisma's ImportDataset enum.
 export const DATASET_TO_ENUM = {
@@ -9,6 +9,7 @@ export const DATASET_TO_ENUM = {
   employees: "EMPLOYEES",
   statutory: "STATUTORY",
   bank: "BANK",
+  "leave-grants": "LEAVE_GRANTS",
 } as const;
 
 export const ENUM_TO_DATASET = {
@@ -16,6 +17,7 @@ export const ENUM_TO_DATASET = {
   EMPLOYEES: "employees",
   STATUTORY: "statutory",
   BANK: "bank",
+  LEAVE_GRANTS: "leave-grants",
 } as const;
 
 export interface RowResult {
@@ -73,4 +75,11 @@ export const DATASET_COLUMNS: Record<ImportDatasetKey, string[]> = {
   ],
   statutory: ["employeeCode", "pan", "aadhaar", "uan", "esiNumber"],
   bank: ["employeeCode", "accountHolderName", "accountNumber", "ifsc", "bankName", "branchName"],
+  "leave-grants": [
+    "employeeCode",
+    "leaveTypeCode", // must be an active, non-COF type — see Leave Granter's own Comp-Off Grant action for COF
+    "days", // signed: positive credits, negative debits; never zero
+    "entryDate", // YYYY-MM-DD
+    "remarks", // optional
+  ],
 };

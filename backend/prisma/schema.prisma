@@ -76,6 +76,7 @@ enum ImportDataset {
   EMPLOYEES
   STATUTORY
   BANK
+  LEAVE_GRANTS
 }
 
 enum ImportBatchStatus {

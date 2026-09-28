@@ -1,6 +1,6 @@
 import { Prisma, type CompOffCredit } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
-import { addCalendarDays } from "../../lib/businessDate";
+import { addCalendarDays, businessToday } from "../../lib/businessDate";
 import { HttpError } from "../../middleware/errorHandler";
 import { withEmployeeLeaveLock } from "./concurrency";
 import { writeLedgerEntry, InsufficientLeaveBalanceError } from "./ledger";
@@ -165,7 +165,7 @@ export async function reverseCompOffConsumption(tx: Prisma.TransactionClient, le
 // expiresOn. Structurally idempotent (no separate DB constraint needed,
 // unlike accrual): once a credit's status flips to EXPIRED, the
 // `status: "AVAILABLE"` filter excludes it from every future run.
-export async function expireCompOffCredits(asOfDate: Date = new Date()): Promise<{ expired: number }> {
+export async function expireCompOffCredits(asOfDate: Date = businessToday()): Promise<{ expired: number }> {
   const cofType = await prisma.leaveType.findUniqueOrThrow({ where: { code: "COF" } });
   const candidates = await prisma.compOffCredit.findMany({
     where: { status: "AVAILABLE", expiresOn: { lt: asOfDate } },
