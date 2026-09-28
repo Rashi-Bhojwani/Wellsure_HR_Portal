@@ -927,6 +927,55 @@ generation. Both are still placeholder routes.
 
 **Phase 1 is now complete.**
 
+### Phase 1 follow-up — router fix: two apps' base paths fell through to a stub
+
+**Bug reported by the user**: opening the Employee app in the admin portal
+(`/admin/employee`) showed `PlaceholderPage` ("Employee — Coming in Phase
+1") instead of the All Employees grid, even though every item under it
+was real. Same for `/admin/admin-tools`.
+
+**Root cause**: `adminMenu.config.tsx`'s `router.tsx` builds each app's
+own base route (e.g. `/admin/employee`) from that app's own top-level
+`element` field — but the "Employee" and "Admin Tools" app entries never
+had one (only their individual menu items did), and both still carried a
+stale `phase: "Phase 1"` marker left over from before commit C/D wired up
+their children. So the app's own base path always rendered
+`PlaceholderPage`, regardless of how many real screens existed one level
+down. Confirmed live (Playwright, seeded Super Admin): both
+`/admin/employee` and `/admin/admin-tools` showed the stub before the fix.
+
+**Fix**: `frontend/src/routes/resolveMenuRoutes.tsx` (new) is now the
+single source of truth for turning both menu configs into route elements,
+used by both `router.tsx` (the real route tree) and a new test (below) —
+so they can't drift apart. An app whose own `element` is unset now falls
+back to a `<Navigate>` redirect to its first sub-item that has a real
+`element`, in menu-declaration order, instead of a stub — so
+`/admin/employee` redirects to `/admin/employee/all` and
+`/admin/admin-tools` redirects to `/admin/admin-tools/organisation`. The
+stale `phase: "Phase 1"` markers on both app entries were removed. No
+other Phase 1 route was affected — every other built screen already had
+its own `element` wired up correctly.
+
+**Guard added**: `frontend/src/routes/__tests__/routes.test.tsx` — asserts
+every route without a `phase` marker (the codebase's own "this is
+delivered" convention, see `adminMenu.config.tsx`'s file comment) resolves
+to something other than `PlaceholderPage`, computed structurally via a
+`kind: "real" | "redirect" | "placeholder"` field rather than by rendering
+a page component (which would call React hooks outside a render tree).
+Verified with a deliberate mutation test: temporarily reintroducing the
+bug made the test fail with a specific, readable message naming both
+broken routes; reverting made it pass again. This is the first frontend
+test in the repo — added `vitest` (matching the backend's version) plus
+`frontend/vitest.config.ts`; `frontend/package.json`'s `test` script now
+actually runs it instead of a no-op placeholder.
+
+Two screens are static Phase 0 UI-shell mock-ups (Employee Home, Engage,
+Payslips, Leave Balances, Attendance Info, Admin Welcome/Dashboard,
+Workforce Overview — see Phase 0's log entry above) and were never part
+of this bug: they already had real `element`s with no `phase` marker by
+design, since Phase 0 deliberately built their static/fake-data UI ahead
+of the phase that gives them a real backend.
+
 ## Open questions
 
 Carried from spec §14 — configurable, not guessed, until answered:

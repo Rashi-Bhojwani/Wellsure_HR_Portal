@@ -91,7 +91,14 @@ export const adminApps: AdminApp[] = [
     label: "Employee",
     icon: IdcardOutlined,
     path: "employee",
-    phase: "Phase 1",
+    // No `phase` here even though the app itself has no dedicated
+    // `element`: every item below except Users & Roles is a real, built
+    // page, and router.tsx redirects this app's own base path to the
+    // first one (All Employees) rather than showing a stub — see
+    // resolveMenuRoutes.tsx's firstRealSubPath. A `phase` marker on an app
+    // whose content is actually reachable would make routes.test.ts's
+    // "every unphased route must resolve to something real" check
+    // useless for exactly this app.
     menus: [
       {
         key: "employee",
@@ -218,7 +225,9 @@ export const adminApps: AdminApp[] = [
     label: "Admin Tools",
     icon: ToolOutlined,
     path: "admin-tools",
-    phase: "Phase 1",
+    // See the identical comment on the "employee" app above — several
+    // items here are real (Organisation Setup, Data Import/Export, Audit
+    // Log, System Settings); the rest still carry their own `phase`.
     menus: [
       {
         key: "admin-tools",

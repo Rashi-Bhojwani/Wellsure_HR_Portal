@@ -245,7 +245,7 @@ Run from the repo root unless noted.
 | `npm run db:migrate --prefix backend` | Apply pending migrations without touching data |
 | `npm run lint` | ESLint across backend, frontend, biometric-agent |
 | `npm run typecheck` | `tsc --noEmit` across every project |
-| `npm run test` | Vitest (backend) — an integration suite against your real local Postgres/Redis, not mocks |
+| `npm run test` | Vitest, backend + frontend — backend is an integration suite against your real local Postgres/Redis, not mocks; frontend covers route-config wiring (`frontend/src/routes/__tests__/`) |
 | `npm run check:services` | Confirms Postgres/Redis are reachable |
 
 **Prisma Studio** (a GUI for browsing/editing the database):

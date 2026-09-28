@@ -10,36 +10,26 @@ import { TotpSetupPage } from "../pages/auth/totp/TotpSetupPage";
 import { AccountSecurityPage } from "../pages/account-security/AccountSecurityPage";
 import { EmployeeProfilePage } from "../pages/admin/employee/EmployeeProfilePage";
 import { ViewMyInfoPage } from "../pages/employee/profile/ViewMyInfoPage";
-import { PlaceholderPage } from "../components/common/PlaceholderPage";
 import { RequireAuth } from "./RequireAuth";
-import { employeeMenu, isEmployeeMenuGroup } from "./employeeMenu.config";
-import { adminApps } from "./adminMenu.config";
+import { resolveAdminRoutes, resolveEmployeeRoutes } from "./resolveMenuRoutes";
 
+// Route elements are generated from resolveMenuRoutes.tsx, not built here
+// directly — that module is the single source of truth also used by
+// routes.test.tsx, so a route that resolves to PlaceholderPage here is
+// guaranteed to fail that test too, not just something discovered by
+// clicking around.
 function employeeRoutes() {
-  const leaves = employeeMenu.flatMap((entry) => (isEmployeeMenuGroup(entry) ? entry.children : [entry]));
-
-  return leaves.map((leaf) => {
-    const Element = leaf.element ?? (() => <PlaceholderPage title={leaf.label} phase={leaf.phase} />);
-    return <Route key={leaf.path} path={leaf.path} element={<Element />} />;
-  });
+  return resolveEmployeeRoutes().map((route) => <Route key={route.relativePath} path={route.relativePath} element={route.element} />);
 }
 
 function adminRoutes() {
-  return adminApps.flatMap((app) => {
-    const AppElement = app.element ?? (() => <PlaceholderPage title={app.label} phase={app.phase} />);
-    const routes =
-      app.path === ""
-        ? [<Route key="index" index element={<AppElement />} />]
-        : [<Route key={app.path} path={app.path} element={<AppElement />} />];
-
-    for (const group of app.menus ?? []) {
-      for (const item of group.items) {
-        const ItemElement = item.element ?? (() => <PlaceholderPage title={item.label} phase={item.phase} />);
-        routes.push(<Route key={item.path} path={item.path} element={<ItemElement />} />);
-      }
-    }
-    return routes;
-  });
+  return resolveAdminRoutes().map((route) =>
+    route.isIndex ? (
+      <Route key="index" index element={route.element} />
+    ) : (
+      <Route key={route.relativePath} path={route.relativePath} element={route.element} />
+    ),
+  );
 }
 
 export function AppRouter() {
