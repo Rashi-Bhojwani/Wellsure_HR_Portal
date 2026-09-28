@@ -192,7 +192,7 @@ export async function exportEmployeesExcel(
     action: includeSensitive ? "employee.export.sensitive" : "employee.export",
     entityType: "Employee",
     entityId: "grid",
-    after: { rowCount: rows.length, includeSensitive },
+    after: { rowCount: rows.length, includeSensitive, columns: columns.map((col) => col.header) },
   });
 
   return Buffer.from(await workbook.xlsx.writeBuffer());

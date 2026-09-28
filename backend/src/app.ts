@@ -13,6 +13,9 @@ import { devStorageRouter } from "./integrations/storage";
 import { authRouter } from "./modules/auth/routes";
 import { orgRouter } from "./modules/org/routes";
 import { employeeRouter } from "./modules/employee/routes";
+import { importRouter } from "./modules/import/routes";
+import { auditLogRouter } from "./modules/auditLog/routes";
+import { settingsRouter } from "./modules/settings/routes";
 
 export function createApp(): Express {
   const app = express();
@@ -65,6 +68,9 @@ export function createApp(): Express {
   app.use("/api/auth", noStore, authRouter);
   app.use("/api/org", noStore, orgRouter);
   app.use("/api/employees", noStore, employeeRouter);
+  app.use("/api/import", noStore, importRouter);
+  app.use("/api/audit-logs", noStore, auditLogRouter);
+  app.use("/api/settings", noStore, settingsRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { ZodError } from "zod";
+import { MulterError } from "multer";
 import { env } from "../config/env";
 import { logger } from "../lib/logger";
 
@@ -30,6 +31,13 @@ export function errorHandler(err: unknown, req: Request, res: Response, next: Ne
 
   if (err instanceof HttpError) {
     res.status(err.status).json({ error: { message: err.message, code: err.code } });
+    return;
+  }
+
+  // Multer errors (Import Center uploads) are user input mistakes — wrong
+  // file type, file too large — not server faults.
+  if (err instanceof MulterError || (err instanceof Error && err.message === "Only .xlsx files are accepted.")) {
+    res.status(400).json({ error: { message: err.message, code: "INVALID_UPLOAD" } });
     return;
   }
 

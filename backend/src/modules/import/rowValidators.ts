@@ -1,0 +1,365 @@
+import { prisma } from "../../lib/prisma";
+import { encryptBankFields, encryptStatutoryFields } from "../employee/service";
+import { packBytes } from "../../lib/bytesJson";
+import { blindIndex, normalizeAadhaar, normalizeAccountNumber, normalizePan } from "../../lib/fieldHash";
+import { PAN_REGEX, AADHAAR_REGEX, MOBILE_REGEX, IFSC_REGEX, ACCOUNT_NUMBER_REGEX } from "../employee/validators";
+import { isNearDuplicate } from "../../lib/levenshtein";
+import type { ParsedRow } from "./parse";
+import type { RowResult } from "./types";
+
+const ORG_MASTER_TYPES = ["LOCATION", "DEPARTMENT", "DESIGNATION", "GRADE", "COST_CENTRE"] as const;
+const GENDERS = ["MALE", "FEMALE", "OTHER"];
+const EMPLOYMENT_TYPES = ["PERMANENT", "CONTRACT", "INTERN", "CONSULTANT", "PROBATION"];
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function isValidDate(s: string): boolean {
+  if (!DATE_RE.test(s)) return false;
+  const d = new Date(s);
+  return !Number.isNaN(d.getTime());
+}
+
+// ── Reference data, loaded once per upload (not per row) ───────────────────
+
+export interface ReferenceData {
+  cityNames: Set<string>; // lowercased
+  existing: Record<"LOCATION" | "DEPARTMENT" | "DESIGNATION" | "GRADE" | "COST_CENTRE", { codes: Set<string>; names: Map<string, string> }>; // names: lowercased -> original casing, for near-dup messages
+  departmentCodeToId: Map<string, string>;
+  designationCodeToId: Map<string, string>;
+  locationCodeToId: Map<string, string>;
+  gradeCodeToId: Map<string, string>;
+  costCentreCodeToId: Map<string, string>;
+  employeeCodeToId: Map<string, string>;
+  officialEmails: Set<string>; // lowercased
+  activeDeviceUserIds: Set<string>;
+  panHashes: Set<string>;
+  aadhaarHashes: Set<string>;
+  activeAccountNumberHashes: Set<string>;
+}
+
+export async function loadReferenceData(): Promise<ReferenceData> {
+  const [cities, locations, departments, designations, grades, costCentres, employees, deviceMappings, statutories, bankAccounts] =
+    await Promise.all([
+      prisma.city.findMany({ select: { name: true } }),
+      prisma.location.findMany({ select: { id: true, code: true, name: true } }),
+      prisma.department.findMany({ select: { id: true, code: true, name: true } }),
+      prisma.designation.findMany({ select: { id: true, code: true, name: true } }),
+      prisma.grade.findMany({ select: { id: true, code: true, name: true } }),
+      prisma.costCentre.findMany({ select: { id: true, code: true, name: true } }),
+      prisma.employee.findMany({ select: { id: true, employeeCode: true, officialEmail: true } }),
+      prisma.deviceUserMapping.findMany({ where: { validTo: null }, select: { deviceUserId: true } }),
+      prisma.employeeStatutory.findMany({ select: { panHash: true, aadhaarHash: true } }),
+      prisma.employeeBankAccount.findMany({ where: { effectiveTo: null }, select: { accountNumberHash: true } }),
+    ]);
+
+  return {
+    cityNames: new Set(cities.map((c) => c.name.toLowerCase())),
+    existing: {
+      LOCATION: { codes: new Set(locations.map((l) => l.code.toLowerCase())), names: new Map(locations.map((l) => [l.name.toLowerCase(), l.name])) },
+      DEPARTMENT: { codes: new Set(departments.map((d) => d.code.toLowerCase())), names: new Map(departments.map((d) => [d.name.toLowerCase(), d.name])) },
+      DESIGNATION: { codes: new Set(designations.map((d) => d.code.toLowerCase())), names: new Map(designations.map((d) => [d.name.toLowerCase(), d.name])) },
+      GRADE: { codes: new Set(grades.map((g) => g.code.toLowerCase())), names: new Map(grades.map((g) => [g.name.toLowerCase(), g.name])) },
+      COST_CENTRE: { codes: new Set(costCentres.map((c) => c.code.toLowerCase())), names: new Map(costCentres.map((c) => [c.name.toLowerCase(), c.name])) },
+    },
+    departmentCodeToId: new Map(departments.map((d) => [d.code.toLowerCase(), d.id])),
+    designationCodeToId: new Map(designations.map((d) => [d.code.toLowerCase(), d.id])),
+    locationCodeToId: new Map(locations.map((l) => [l.code.toLowerCase(), l.id])),
+    gradeCodeToId: new Map(grades.map((g) => [g.code.toLowerCase(), g.id])),
+    costCentreCodeToId: new Map(costCentres.map((c) => [c.code.toLowerCase(), c.id])),
+    employeeCodeToId: new Map(employees.map((e) => [e.employeeCode.toLowerCase(), e.id])),
+    officialEmails: new Set(employees.filter((e) => e.officialEmail).map((e) => e.officialEmail!.toLowerCase())),
+    activeDeviceUserIds: new Set(deviceMappings.map((m) => m.deviceUserId)),
+    panHashes: new Set(statutories.filter((s) => s.panHash).map((s) => s.panHash!)),
+    aadhaarHashes: new Set(statutories.filter((s) => s.aadhaarHash).map((s) => s.aadhaarHash!)),
+    activeAccountNumberHashes: new Set(bankAccounts.map((b) => b.accountNumberHash)),
+  };
+}
+
+// Per-batch accumulators, separate from ReferenceData (which is DB state as
+// of upload time) — catches duplicates *within* the same file, which the DB
+// alone can't see until commit.
+export interface BatchTracker {
+  orgCodes: Record<(typeof ORG_MASTER_TYPES)[number], Set<string>>;
+  orgNames: Record<(typeof ORG_MASTER_TYPES)[number], Set<string>>;
+  employeeCodes: Set<string>;
+  deviceUserIds: Set<string>;
+  officialEmails: Set<string>;
+  statutoryEmployeeCodes: Set<string>;
+  bankEmployeeCodes: Set<string>;
+  panHashes: Set<string>;
+  aadhaarHashes: Set<string>;
+  accountNumberHashes: Set<string>;
+}
+
+export function newBatchTracker(): BatchTracker {
+  const emptySets = () => ({
+    LOCATION: new Set<string>(),
+    DEPARTMENT: new Set<string>(),
+    DESIGNATION: new Set<string>(),
+    GRADE: new Set<string>(),
+    COST_CENTRE: new Set<string>(),
+  });
+  return {
+    orgCodes: emptySets(),
+    orgNames: emptySets(),
+    employeeCodes: new Set(),
+    deviceUserIds: new Set(),
+    officialEmails: new Set(),
+    statutoryEmployeeCodes: new Set(),
+    bankEmployeeCodes: new Set(),
+    panHashes: new Set(),
+    aadhaarHashes: new Set(),
+    accountNumberHashes: new Set(),
+  };
+}
+
+// ── org-masters ──────────────────────────────────────────────────────────
+
+export function validateOrgMasterRow(row: ParsedRow, refs: ReferenceData, tracker: BatchTracker): RowResult {
+  const v = row.values;
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const type = v.type!.toUpperCase();
+
+  if (!ORG_MASTER_TYPES.includes(type as (typeof ORG_MASTER_TYPES)[number])) {
+    errors.push(`type must be one of ${ORG_MASTER_TYPES.join(", ")} (got "${v.type}").`);
+    return { data: { ...v, type }, errors, warnings };
+  }
+  const t = type as (typeof ORG_MASTER_TYPES)[number];
+  const code = v.code!.trim();
+  const name = v.name!.trim();
+
+  if (!code) errors.push("code is required.");
+  if (!name) errors.push("name is required.");
+
+  if (code) {
+    const codeLc = code.toLowerCase();
+    if (refs.existing[t].codes.has(codeLc)) errors.push(`A ${t.toLowerCase()} with code "${code}" already exists.`);
+    else if (tracker.orgCodes[t].has(codeLc)) errors.push(`Duplicate code "${code}" elsewhere in this file.`);
+    else tracker.orgCodes[t].add(codeLc);
+  }
+  if (name) {
+    const nameLc = name.toLowerCase();
+    if (refs.existing[t].names.has(nameLc)) {
+      errors.push(`A ${t.toLowerCase()} named "${name}" already exists.`);
+    } else if (tracker.orgNames[t].has(nameLc)) {
+      errors.push(`Duplicate name "${name}" elsewhere in this file.`);
+    } else {
+      tracker.orgNames[t].add(nameLc);
+      if (t === "LOCATION" || t === "DEPARTMENT") {
+        for (const existingName of refs.existing[t].names.values()) {
+          if (isNearDuplicate(name, existingName)) {
+            warnings.push(`"${name}" is very close to the existing ${t.toLowerCase()} "${existingName}" — check this isn't a typo before committing (Organisation Setup has a merge tool if it turns out to be one).`);
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  if (t === "LOCATION") {
+    if (!v.addressLine1) errors.push("addressLine1 is required for a LOCATION row.");
+    if (!v.city) errors.push("city is required for a LOCATION row.");
+    if (!v.state) errors.push("state is required for a LOCATION row.");
+    if (!v.pincode) errors.push("pincode is required for a LOCATION row.");
+    if (v.cityName && !refs.cityNames.has(v.cityName.toLowerCase())) {
+      errors.push(`Unknown city "${v.cityName}" — create it in Organisation Setup first, or leave cityName blank.`);
+    }
+  }
+  if (t === "GRADE" && v.rank && !/^\d+$/.test(v.rank)) {
+    errors.push("rank must be a whole number.");
+  }
+
+  return { data: { ...v, type: t, code, name }, errors, warnings };
+}
+
+// ── employees ────────────────────────────────────────────────────────────
+
+export function validateEmployeeRow(row: ParsedRow, refs: ReferenceData, tracker: BatchTracker): RowResult {
+  const v = row.values;
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  const deviceUserId = v.deviceUserId!.trim();
+  const employeeCode = (v.employeeCode!.trim() || deviceUserId).trim();
+
+  if (!deviceUserId) errors.push("deviceUserId is required.");
+  const REQUIRED_FIELDS = [
+    "fullName",
+    "dateOfBirth",
+    "gender",
+    "personalEmail",
+    "mobile",
+    "currentAddress",
+    "permanentAddress",
+    "emergencyContactName",
+    "emergencyContactPhone",
+    "emergencyContactRelation",
+    "dateOfJoining",
+    "employmentType",
+    "departmentCode",
+    "designationCode",
+    "locationCode",
+  ] as const;
+  for (const field of REQUIRED_FIELDS) {
+    if (!v[field]) errors.push(`${field} is required.`);
+  }
+
+  if (deviceUserId) {
+    if (refs.activeDeviceUserIds.has(deviceUserId)) errors.push(`Device User ID "${deviceUserId}" is already actively assigned to another employee.`);
+    else if (tracker.deviceUserIds.has(deviceUserId)) errors.push(`Duplicate Device User ID "${deviceUserId}" elsewhere in this file.`);
+    else tracker.deviceUserIds.add(deviceUserId);
+  }
+  if (employeeCode) {
+    const codeLc = employeeCode.toLowerCase();
+    if (refs.employeeCodeToId.has(codeLc)) errors.push(`Employee Code "${employeeCode}" is already in use.`);
+    else if (tracker.employeeCodes.has(codeLc)) errors.push(`Duplicate Employee Code "${employeeCode}" elsewhere in this file.`);
+    else tracker.employeeCodes.add(codeLc);
+  }
+
+  if (v.dateOfBirth && !isValidDate(v.dateOfBirth)) errors.push("dateOfBirth must be a valid YYYY-MM-DD date.");
+  if (v.dateOfJoining && !isValidDate(v.dateOfJoining)) errors.push("dateOfJoining must be a valid YYYY-MM-DD date.");
+  if (v.gender && !GENDERS.includes(v.gender.toUpperCase())) errors.push(`gender must be one of ${GENDERS.join(", ")}.`);
+  if (v.employmentType && !EMPLOYMENT_TYPES.includes(v.employmentType.toUpperCase())) {
+    errors.push(`employmentType must be one of ${EMPLOYMENT_TYPES.join(", ")}.`);
+  }
+  if (v.personalEmail && !/^[^\s@]+@gmail\.com$/i.test(v.personalEmail)) errors.push("personalEmail must be a Gmail address.");
+  if (v.mobile && !MOBILE_REGEX.test(v.mobile)) errors.push("mobile is not a valid phone number.");
+  if (v.emergencyContactPhone && !MOBILE_REGEX.test(v.emergencyContactPhone)) errors.push("emergencyContactPhone is not a valid phone number.");
+  if (v.officialEmail) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.officialEmail)) {
+      errors.push("officialEmail is not a valid email address.");
+    } else {
+      const emailLc = v.officialEmail.toLowerCase();
+      if (refs.officialEmails.has(emailLc)) errors.push(`officialEmail "${v.officialEmail}" is already in use.`);
+      else if (tracker.officialEmails.has(emailLc)) errors.push(`Duplicate officialEmail "${v.officialEmail}" elsewhere in this file.`);
+      else tracker.officialEmails.add(emailLc);
+    }
+  }
+
+  if (v.departmentCode && !refs.departmentCodeToId.has(v.departmentCode.toLowerCase())) errors.push(`Unknown department code "${v.departmentCode}".`);
+  if (v.designationCode && !refs.designationCodeToId.has(v.designationCode.toLowerCase())) errors.push(`Unknown designation code "${v.designationCode}".`);
+  if (v.locationCode && !refs.locationCodeToId.has(v.locationCode.toLowerCase())) errors.push(`Unknown location code "${v.locationCode}".`);
+  if (v.gradeCode && !refs.gradeCodeToId.has(v.gradeCode.toLowerCase())) errors.push(`Unknown grade code "${v.gradeCode}".`);
+  if (v.costCentreCode && !refs.costCentreCodeToId.has(v.costCentreCode.toLowerCase())) errors.push(`Unknown cost centre code "${v.costCentreCode}".`);
+  if (v.reportingManagerCode && !refs.employeeCodeToId.has(v.reportingManagerCode.toLowerCase())) {
+    errors.push(`Unknown reporting manager code "${v.reportingManagerCode}" — the manager must already exist on record (import managers in an earlier batch).`);
+  }
+
+  return { data: { ...v, deviceUserId, employeeCode }, errors, warnings };
+}
+
+// ── statutory ────────────────────────────────────────────────────────────
+
+export function validateStatutoryRow(row: ParsedRow, refs: ReferenceData, tracker: BatchTracker): RowResult {
+  const v = row.values;
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const employeeCode = v.employeeCode!.trim();
+  const data: Record<string, unknown> = { employeeCode };
+
+  if (!employeeCode) {
+    errors.push("employeeCode is required.");
+    return { data, errors, warnings };
+  }
+  const codeLc = employeeCode.toLowerCase();
+  if (!refs.employeeCodeToId.has(codeLc)) {
+    errors.push(`Unknown employee code "${employeeCode}" — import the Employees dataset first.`);
+  } else if (tracker.statutoryEmployeeCodes.has(codeLc)) {
+    errors.push(`Duplicate employeeCode "${employeeCode}" elsewhere in this file.`);
+  } else {
+    tracker.statutoryEmployeeCodes.add(codeLc);
+  }
+
+  if (v.pan) {
+    const norm = normalizePan(v.pan);
+    if (!PAN_REGEX.test(norm)) {
+      errors.push("pan is not a valid PAN.");
+    } else {
+      const hash = blindIndex(norm);
+      if (refs.panHashes.has(hash)) errors.push("This PAN is already on record for another employee.");
+      else if (tracker.panHashes.has(hash)) errors.push("Duplicate PAN elsewhere in this file.");
+      else tracker.panHashes.add(hash);
+    }
+    const enc = encryptStatutoryFields({ pan: v.pan });
+    data.panEncrypted = packBytes(enc.panEncrypted as Uint8Array);
+    data.panLast4 = enc.panLast4;
+    data.panHash = enc.panHash;
+  }
+  if (v.aadhaar) {
+    const norm = normalizeAadhaar(v.aadhaar);
+    if (!AADHAAR_REGEX.test(norm)) {
+      errors.push("aadhaar must be 12 digits.");
+    } else {
+      const hash = blindIndex(norm);
+      if (refs.aadhaarHashes.has(hash)) errors.push("This Aadhaar is already on record for another employee.");
+      else if (tracker.aadhaarHashes.has(hash)) errors.push("Duplicate Aadhaar elsewhere in this file.");
+      else tracker.aadhaarHashes.add(hash);
+    }
+    const enc = encryptStatutoryFields({ aadhaar: v.aadhaar });
+    data.aadhaarEncrypted = packBytes(enc.aadhaarEncrypted as Uint8Array);
+    data.aadhaarLast4 = enc.aadhaarLast4;
+    data.aadhaarHash = enc.aadhaarHash;
+  }
+  if (v.uan) {
+    const enc = encryptStatutoryFields({ uan: v.uan });
+    data.uanEncrypted = packBytes(enc.uanEncrypted as Uint8Array);
+    data.uanLast4 = enc.uanLast4;
+  }
+  if (v.esiNumber) data.esiNumber = v.esiNumber;
+
+  return { data, errors, warnings };
+}
+
+// ── bank ─────────────────────────────────────────────────────────────────
+
+export function validateBankRow(row: ParsedRow, refs: ReferenceData, tracker: BatchTracker): RowResult {
+  const v = row.values;
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const employeeCode = v.employeeCode!.trim();
+  const data: Record<string, unknown> = { employeeCode, accountHolderName: v.accountHolderName, bankName: v.bankName, branchName: v.branchName };
+
+  if (!employeeCode) errors.push("employeeCode is required.");
+  else {
+    const codeLc = employeeCode.toLowerCase();
+    if (!refs.employeeCodeToId.has(codeLc)) errors.push(`Unknown employee code "${employeeCode}" — import the Employees dataset first.`);
+    else if (tracker.bankEmployeeCodes.has(codeLc)) errors.push(`Duplicate employeeCode "${employeeCode}" elsewhere in this file.`);
+    else tracker.bankEmployeeCodes.add(codeLc);
+  }
+  if (!v.accountHolderName) errors.push("accountHolderName is required.");
+  if (!v.bankName) errors.push("bankName is required.");
+  if (!v.branchName) errors.push("branchName is required.");
+
+  const ifsc = (v.ifsc ?? "").toUpperCase();
+  if (!v.ifsc) errors.push("ifsc is required.");
+  else if (!IFSC_REGEX.test(ifsc)) errors.push("ifsc is not a valid IFSC code.");
+  data.ifsc = ifsc;
+
+  if (!v.accountNumber) {
+    errors.push("accountNumber is required.");
+  } else {
+    const norm = normalizeAccountNumber(v.accountNumber);
+    if (!ACCOUNT_NUMBER_REGEX.test(norm)) {
+      errors.push("accountNumber is not valid.");
+    } else {
+      const hash = blindIndex(norm);
+      if (refs.activeAccountNumberHashes.has(hash)) errors.push("This bank account is already active on another employee's record.");
+      else if (tracker.accountNumberHashes.has(hash)) errors.push("Duplicate account number elsewhere in this file.");
+      else tracker.accountNumberHashes.add(hash);
+    }
+    // Encrypted regardless of format validity, same as statutory above —
+    // the plaintext never gets a chance to linger in `data` either way.
+    const enc = encryptBankFields({
+      accountHolderName: v.accountHolderName ?? "",
+      accountNumber: v.accountNumber,
+      ifsc,
+      bankName: v.bankName ?? "",
+      branchName: v.branchName ?? "",
+    });
+    data.accountNumberEncrypted = packBytes(enc.accountNumberEncrypted);
+    data.accountNumberLast4 = enc.accountNumberLast4;
+    data.accountNumberHash = enc.accountNumberHash;
+  }
+
+  return { data, errors, warnings };
+}

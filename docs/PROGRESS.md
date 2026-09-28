@@ -10,7 +10,7 @@ committed).
 |---|---|---|
 | — | Initial project structure (this commit) | ✅ Done |
 | 0 | Foundation | ✅ Done |
-| 1 | Auth, RBAC, org, employees | In progress — data layer, authentication, org masters and employee management all done; bulk import, users/roles admin UI and audit log viewer still ahead |
+| 1 | Auth, RBAC, org, employees | Done — data layer, authentication, org masters, employee management, import center, exports, audit log viewer and system settings all built and tested. Users & Roles admin screen (permission/role management UI — not role *assignment*, which already exists in Add Employee) deliberately deferred; not asked for in any commit so far. |
 | 1.5 | AWS staging environment | Not started |
 | 2 | Biometric ingestion + attendance engine + real-time | Not started |
 | 3 | Attendance administration | Not started |
@@ -754,6 +754,179 @@ standing agreement, this needs the user's fresh, explicit consent each
 time (Prisma's own AI-agent safety gate blocks it outright otherwise) —
 asked for, not yet run as of this commit.
 
+### Phase 1, commit D — import center, exports, audit log and settings
+
+The last commit of Phase 1: one additive migration (`ImportBatch`/
+`ImportStagingRow`, no changes to any existing table) plus the service/
+route/UI layer for the four remaining Admin Tools screens spec §7.8/§10
+call for.
+
+**Backend — Import Center** (`backend/src/modules/import/`, mounted at
+`/api/import`, gated by `import.manage`): upload → parse → validate →
+stage → (fix and re-upload as needed) → commit-in-one-transaction, per
+spec §10, for four datasets — `org-masters` (Location/Department/
+Designation/Grade/CostCentre, one flat sheet with a `type` column),
+`employees` (reuses the wizard's own `createEmployee` logic, refactored
+into a `createEmployeeInTx(tx, …)` core so every row in a batch commits
+inside one shared transaction rather than each getting its own — Prisma
+doesn't support nesting `$transaction` calls), `statutory` and `bank`
+(both key off an already-existing `employeeCode`, so org-masters and
+employees must be imported first, matching the migration's natural
+order).
+
+- **Validation**: duplicate employee codes and device IDs (both within
+  the file and against the DB), PAN/IFSC/email/mobile/Aadhaar format
+  (reusing the exact same regexes the Add Employee wizard's Zod schemas
+  use — extracted to named exports so the two can never drift apart),
+  unknown department/location/designation/grade/cost-centre/manager
+  references, and a Levenshtein-distance near-duplicate check (new
+  `lib/levenshtein.ts`) on location and department names — a warning,
+  never blocking, with a pointer to Organisation Setup's merge tool.
+  Errors block that row from committing (and block the *whole batch*
+  from committing at all until fixed and re-uploaded); warnings don't.
+- **Sensitive data never touches the staging table as plaintext**: PAN/
+  Aadhaar/account-number are transformed into the same encrypted/last4/
+  hash shape the live tables use *at validation time*, before the row is
+  ever written to `ImportStagingRow.data` — the identical base64-pack
+  pattern `employee/changeRequests.ts` already used for
+  `ProfileChangeRequest.changesJson`, now factored out to
+  `lib/bytesJson.ts` and shared by both. The downloadable error report
+  and every API response echo only the last-4-masked value, so "never
+  echo full account numbers" holds even for a row that *failed*
+  validation.
+- **Bank dataset** additionally requires `employee.bank.edit` (checked at
+  both upload and commit — commit checks it in the service, not route
+  middleware, since `/batches/:id/commit` has no `:dataset` URL segment
+  to key a static check off of) and a typed confirmation (`"IMPORT BANK
+  DATA"`, checked server-side, not just disabled in the UI until typed).
+- **Never auto-invites** (spec §10: "invitations are sent in batches,
+  HR-triggered, never automatically on import") — `createEmployee` gained
+  an `options.sendInvitation` flag (default `true`, unchanged for the
+  wizard); the import commit path passes `false`, so a bulk import
+  creates `INVITED`-status accounts with no email sent; HR sends each
+  one's invite from the existing per-employee "Resend Invite" action.
+- **Reconciliation report** (`GET /api/import/reconciliation`) — active
+  headcount by branch and by department, computed live off
+  `employee_job_history`'s current rows; a tab on the same Import Center
+  page rather than a separate Reports screen, matching where spec §10
+  places it.
+
+**Backend — Audit Log viewer** (`backend/src/modules/auditLog/`, mounted
+at `/api/audit-logs`, gated by `audit.view`): one `GET /`, filterable by
+actor (name/code search, joined through `User → Employee →
+NameHistory`), entity type, action (substring) and a date range,
+paginated. Deliberately GET-only — no PATCH or DELETE route exists
+anywhere for `audit_logs`, matching its append-only design.
+
+**Backend — System Settings** (`backend/src/modules/settings/`, mounted
+at `/api/settings`, gated by the (new) `settings.manage` permission,
+added to `HR_ADMIN_PERMS`): a fixed catalog, not a generic key-value
+editor — lockout attempts/duration, password minimum length, invitation
+link validity (hours), which roles require 2FA, and the five auth
+rate-limit buckets (login/2FA-verify/invite-accept/forgot-password/
+reset-password). Every field was already read via `getSetting()` **except
+two that turned out to be silently unused**: `auth.invitationTtlHours`
+(the invitation TTL was hardcoded to 48h) and `auth.passwordMinLength`
+(only the Zod schema's own fixed `.min(8)` applied, nothing read a
+setting). Both are now wired to their real enforcement points —
+`createInvitation` reads the configured TTL, and a new
+`assertPasswordMeetsPolicy()` check runs in both `acceptInvitation` and
+`resetPassword` on top of (not instead of) the Zod floor, so the setting
+can raise the bar but never lower it below 8. Proven with a test that
+sets a 9-character password (passes the Zod floor) and confirms it's
+still rejected once the configured minimum is 12.
+
+**A real, pre-existing bug found and fixed while adding the export audit
+log's column set** (see below): `exportQuerySchema`'s `includeSensitive:
+z.coerce.boolean()` parsed the *string* `"false"` as `true` — `Boolean()`
+treats any non-empty string as truthy, and axios serialises a JS `false`
+query param as the literal string `"false"`. That meant the All
+Employees grid's plain "Export" button — which explicitly sends
+`includeSensitive: false` — could silently produce a sensitive export
+(bank/PAN/Aadhaar last-4 columns) for anyone holding bank or statutory
+view permission, entirely bypassing the typed sensitive-data confirmation
+modal that flag exists to gate. Fixed with `z.stringbool()` (zod 4's
+purpose-built string-to-boolean parser). New regression test file
+(`employee/__tests__/export.test.ts`, previously untested despite
+existing since commit C) proves both directions and the permission
+boundary. Also added: the export's audit log entry now records the
+actual exported `columns` (header list), not just `rowCount`/
+`includeSensitive`, as asked.
+
+**Seed**: explicit `SystemSetting` rows for every Phase 1 key (so a fresh
+install shows real, seeded values rather than only code fallbacks), one
+already-`COMMITTED` `ImportBatch` fixture, and a handful of realistic
+`AuditLog` entries spanning several action types and roles — the seed
+script itself writes via raw Prisma calls (not through the service
+layer's `writeAuditLog()`), so without this the audit log would
+otherwise start completely empty on a fresh install.
+
+**Tests** (24 new — 113 total across the backend): Import Center
+end-to-end per dataset (org-masters unknown-city block + near-duplicate
+warning + exact-duplicate rejection; employees duplicate-code-within-file
++ never-auto-invites; statutory unknown-employee + invalid-PAN + the
+full response never contains the raw bad PAN string; bank's
+permission-then-confirmation gating in that order, the exact confirm
+phrase required, and the partial-unique-index guarantee — exactly one
+open `EmployeeBankAccount` row survives a commit); Audit Log's
+permission gate, action filter, an empty-date-range filter, and asserting
+the PATCH/DELETE routes 404; Settings' permission gate, a partial update
+leaving other fields untouched, the audit-log entry it writes, and the
+two enforcement-wiring tests described above; the export bug's
+regression tests. **The full onboarding end-to-end test** (spec-named
+explicitly): HR calls the real `POST /api/employees`, the invitation
+email is read back out of a real `.eml` file `ConsoleMailService` wrote
+to `.mail/` (not a shortcut token), the new hire calls the real accept-
+invitation and login endpoints, then — since a freshly-onboarded
+`EMPLOYEE` role holds *no* admin permissions at all (`employee.view`
+included) — proves they see their own data only via `GET /api/employees/
+me` (self-service, no permission required) while the admin grid and
+admin per-employee-profile route both 403 regardless of whose id is
+requested, including their own.
+
+**Also found and fixed along the way**: `login.test.ts`'s "2FA-required
+roles" describe block assumed no `auth.require2faRoles` `SystemSetting`
+row existed yet (`if (!settings) create(...)`) — true on an empty DB,
+false from now on since this commit's own seed changes populate that key
+by default. Rewrote it to snapshot whatever's already there (a real
+seeded value or nothing) and restore exactly that afterward, rather than
+assuming and unconditionally deleting. `settings.test.ts` needed the same
+discipline for `auth.lockout`, discovered when its own test run's leftover
+value broke `login.test.ts`'s unrelated lockout test on the next full
+suite run — every `SystemSetting` key is a global singleton shared by the
+whole test run, not something one file can mutate without restoring.
+
+**Frontend** (`frontend/src/pages/admin/{import,auditLog,settings}/`):
+Import Center (tabs per dataset, drag-and-drop upload via antd's
+`Upload.Dragger`, per-row error/warning table, error-report download,
+commit button disabled until the batch is error-free — and, for bank,
+until the exact confirmation phrase is typed — plus a reconciliation-
+report tab and an upload-history table per dataset); Audit Log (actor/
+entity/action/date-range filters, paginated table, a detail modal showing
+the redacted before/after JSON); System Settings (one form, sectioned by
+concern, saves via a single `PUT`). Both the existing "Bulk Import" menu
+item under Employee and "Data Import/Export" under Admin Tools now point
+at the same Import Center page — same feature, no reason for one of the
+two entry points to stay a dead placeholder.
+
+Verified live in a real browser (Playwright, 1500×1200) against the
+already-seeded dev database: Import Center's Org Masters and Employees
+tabs end to end (template download → upload → validate → commit →
+"Recent uploads" history showing the new row), the Reconciliation Report
+tab, Audit Log's row list and action filter plus opening a detail modal,
+and System Settings loading real seeded values, saving a change, and the
+change surviving a page reload.
+
+**`npm audit`**: unchanged from commit C's note — `multer` (new, for
+Import Center's file upload) introduced no new advisories.
+
+**Not done this commit** (still deliberately out of scope, unchanged from
+commit C's note): Users & Roles admin screen (permission/role management
+UI — role *assignment* during Add Employee already exists), letter
+generation. Both are still placeholder routes.
+
+**Phase 1 is now complete.**
+
 ## Open questions
 
 Carried from spec §14 — configurable, not guessed, until answered:
@@ -764,7 +937,7 @@ Carried from spec §14 — configurable, not guessed, until answered:
 - [ ] Leave encashment formula and its tax treatment (to be confirmed by CA).
 - [ ] Bank bulk-transfer file format (from bank).
 - [ ] PT/LWF applicability per location's state.
-- [ ] Actual headcount and the authoritative branch (`locations`) list — branches are HR-managed and growing (e.g. 3 separate Ajmer branches, not the single "Ajmer" row earlier drafts assumed), so this isn't a one-time seed value. Also open: which city each of the 3 Panchsheel branches (C-10, SPN, B-22) belongs to, and the correct names/addresses for the 3 Ajmer branches — seeded as placeholders for now (see the Phase 1 log entry below).
+- [ ] Actual headcount and the authoritative branch (`locations`) list — branches are HR-managed and growing (e.g. 3 separate Ajmer branches, not the single "Ajmer" row earlier drafts assumed), so this isn't a one-time seed value. Also open: which city each of the 3 Panchsheel branches (C-10, SPN, B-22) belongs to, and the correct names/addresses for the 3 Ajmer branches — seeded as placeholders for now (see the Phase 1 log entry below). The commit D reconciliation report (Import Center → Reconciliation Report tab) is the tool to compare against greytHR once the real numbers are in hand.
 - [ ] Company domain name for the portal and whether DNS is on Route 53.
 - [ ] Whether the office has a static public IP (needed for device push).
 - [ ] AWS account structure (single account, two environments, or separate

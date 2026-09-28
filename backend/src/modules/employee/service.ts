@@ -102,104 +102,124 @@ export function encryptBankFields(input: BankFieldsInput) {
 
 // ── Create (Add Employee wizard, spec §3) ───────────────────────────────
 
-export async function createEmployee(input: CreateEmployeeInput, meta: RequestMetaInput) {
+// The row-creation core, factored out so the Import Center's employee-
+// dataset commit (spec §10: "commit in one transaction") can run it inside
+// *its own* outer `prisma.$transaction` across every row in a batch,
+// instead of each employee getting its own separate transaction — Prisma
+// doesn't support nesting `$transaction` calls, so the only way to compose
+// this is to accept the transaction client as a parameter. createEmployee
+// below (the wizard's single-employee path) is just this plus its own
+// wrapping transaction, invitation email and audit log.
+export async function createEmployeeInTx(
+  tx: Prisma.TransactionClient,
+  input: CreateEmployeeInput,
+  meta: RequestMetaInput,
+): Promise<{ employee: { id: string }; userId: string }> {
+  const { official, personal, statutory, bank } = input;
+
+  const employeeRow = await tx.employee.create({
+    data: {
+      employeeCode: official.employeeCode,
+      officialEmail: official.officialEmail ?? null,
+      dateOfJoining: new Date(official.dateOfJoining),
+      employmentType: official.employmentType,
+      status: "ACTIVE",
+    },
+  });
+
+  const userRow = await tx.user.create({ data: { employeeId: employeeRow.id, status: "INVITED" } });
+  const employeeRole = await tx.role.findUnique({ where: { code: "EMPLOYEE" } });
+  if (employeeRole) {
+    await tx.userRole.create({ data: { userId: userRow.id, roleId: employeeRole.id, assignedByUserId: meta.actorUserId } });
+  }
+
+  await tx.employeePersonal.create({
+    data: {
+      employeeId: employeeRow.id,
+      dateOfBirth: new Date(personal.dateOfBirth),
+      gender: personal.gender,
+      personalEmail: personal.personalEmail,
+      mobile: personal.mobile,
+      currentAddress: personal.currentAddress,
+      permanentAddress: personal.permanentAddress,
+      emergencyContactName: personal.emergencyContactName,
+      emergencyContactPhone: personal.emergencyContactPhone,
+      emergencyContactRelation: personal.emergencyContactRelation,
+      bloodGroup: personal.bloodGroup ?? null,
+      photoStorageKey: personal.photoStorageKey ?? null,
+    },
+  });
+
+  await tx.employeeNameHistory.create({
+    data: {
+      employeeId: employeeRow.id,
+      fullName: personal.fullName,
+      effectiveFrom: new Date(official.dateOfJoining),
+      createdByUserId: meta.actorUserId,
+    },
+  });
+
+  await tx.employeeJobHistory.create({
+    data: {
+      employeeId: employeeRow.id,
+      departmentId: official.departmentId,
+      designationId: official.designationId,
+      locationId: official.locationId,
+      gradeId: official.gradeId ?? null,
+      costCentreId: official.costCentreId ?? null,
+      reportingManagerId: official.reportingManagerId ?? null,
+      effectiveFrom: new Date(official.dateOfJoining),
+      createdByUserId: meta.actorUserId,
+    },
+  });
+
+  await tx.deviceUserMapping.create({
+    data: {
+      employeeId: employeeRow.id,
+      deviceUserId: official.deviceUserId,
+      validFrom: new Date(official.dateOfJoining),
+      createdByUserId: meta.actorUserId,
+    },
+  });
+
+  if (statutory && (statutory.pan ?? statutory.aadhaar ?? statutory.uan ?? statutory.esiNumber)) {
+    await tx.employeeStatutory.create({
+      data: { employeeId: employeeRow.id, ...encryptStatutoryFields(statutory) },
+    });
+  }
+
+  if (bank) {
+    await tx.employeeBankAccount.create({
+      data: {
+        employeeId: employeeRow.id,
+        ...encryptBankFields(bank),
+        effectiveFrom: new Date(official.dateOfJoining),
+        createdByUserId: meta.actorUserId,
+      },
+    });
+  }
+
+  return { employee: employeeRow, userId: userRow.id };
+}
+
+// `sendInvitation: false` is used only by the Import Center's employee-
+// dataset commit (spec §10: "invitations are sent in batches, HR-triggered,
+// never automatically on import") — the wizard's own call site never passes
+// it, so a bulk import can't silently email hundreds of new hires.
+export async function createEmployee(input: CreateEmployeeInput, meta: RequestMetaInput, options?: { sendInvitation?: boolean }) {
   const { official, personal, statutory, bank } = input;
   await assertEmployeeCodeAvailable(official.employeeCode);
 
-  const { employee, userId } = await runConflictSafe(() =>
-    prisma.$transaction(async (tx) => {
-      const employeeRow = await tx.employee.create({
-        data: {
-          employeeCode: official.employeeCode,
-          officialEmail: official.officialEmail ?? null,
-          dateOfJoining: new Date(official.dateOfJoining),
-          employmentType: official.employmentType,
-          status: "ACTIVE",
-        },
-      });
+  const { employee, userId } = await runConflictSafe(() => prisma.$transaction((tx) => createEmployeeInTx(tx, input, meta)));
 
-      const userRow = await tx.user.create({ data: { employeeId: employeeRow.id, status: "INVITED" } });
-      const employeeRole = await tx.role.findUnique({ where: { code: "EMPLOYEE" } });
-      if (employeeRole) {
-        await tx.userRole.create({ data: { userId: userRow.id, roleId: employeeRole.id, assignedByUserId: meta.actorUserId } });
-      }
-
-      await tx.employeePersonal.create({
-        data: {
-          employeeId: employeeRow.id,
-          dateOfBirth: new Date(personal.dateOfBirth),
-          gender: personal.gender,
-          personalEmail: personal.personalEmail,
-          mobile: personal.mobile,
-          currentAddress: personal.currentAddress,
-          permanentAddress: personal.permanentAddress,
-          emergencyContactName: personal.emergencyContactName,
-          emergencyContactPhone: personal.emergencyContactPhone,
-          emergencyContactRelation: personal.emergencyContactRelation,
-          bloodGroup: personal.bloodGroup ?? null,
-          photoStorageKey: personal.photoStorageKey ?? null,
-        },
-      });
-
-      await tx.employeeNameHistory.create({
-        data: {
-          employeeId: employeeRow.id,
-          fullName: personal.fullName,
-          effectiveFrom: new Date(official.dateOfJoining),
-          createdByUserId: meta.actorUserId,
-        },
-      });
-
-      await tx.employeeJobHistory.create({
-        data: {
-          employeeId: employeeRow.id,
-          departmentId: official.departmentId,
-          designationId: official.designationId,
-          locationId: official.locationId,
-          gradeId: official.gradeId ?? null,
-          costCentreId: official.costCentreId ?? null,
-          reportingManagerId: official.reportingManagerId ?? null,
-          effectiveFrom: new Date(official.dateOfJoining),
-          createdByUserId: meta.actorUserId,
-        },
-      });
-
-      await tx.deviceUserMapping.create({
-        data: {
-          employeeId: employeeRow.id,
-          deviceUserId: official.deviceUserId,
-          validFrom: new Date(official.dateOfJoining),
-          createdByUserId: meta.actorUserId,
-        },
-      });
-
-      if (statutory && (statutory.pan ?? statutory.aadhaar ?? statutory.uan ?? statutory.esiNumber)) {
-        await tx.employeeStatutory.create({
-          data: { employeeId: employeeRow.id, ...encryptStatutoryFields(statutory) },
-        });
-      }
-
-      if (bank) {
-        await tx.employeeBankAccount.create({
-          data: {
-            employeeId: employeeRow.id,
-            ...encryptBankFields(bank),
-            effectiveFrom: new Date(official.dateOfJoining),
-            createdByUserId: meta.actorUserId,
-          },
-        });
-      }
-
-      return { employee: employeeRow, userId: userRow.id };
-    }),
-  );
-
-  await createInvitation({
-    userId,
-    email: personal.personalEmail,
-    fullName: personal.fullName,
-    employeeCode: official.employeeCode,
-  });
+  if (options?.sendInvitation ?? true) {
+    await createInvitation({
+      userId,
+      email: personal.personalEmail,
+      fullName: personal.fullName,
+      employeeCode: official.employeeCode,
+    });
+  }
 
   await writeAuditLog({
     actorUserId: meta.actorUserId,

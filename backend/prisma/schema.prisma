@@ -70,6 +70,18 @@ enum SeparationStatus {
   CANCELLED
 }
 
+enum ImportDataset {
+  ORG_MASTERS
+  EMPLOYEES
+  STATUTORY
+  BANK
+}
+
+enum ImportBatchStatus {
+  VALIDATED
+  COMMITTED
+}
+
 // ── Identity & auth ─────────────────────────────────────────────────────
 
 model User {
@@ -646,3 +658,47 @@ model SavedView {
 // Personal, per-user grid preferences (All Employees grid's "saved views" —
 // spec §7.2). Not effective-dated, not audited — this is UI convenience
 // state, not business data.
+
+// ── Import Center ────────────────────────────────────────────────────────
+
+model ImportBatch {
+  id                String            @id @default(cuid())
+  dataset           ImportDataset
+  fileName          String            @map("file_name")
+  status            ImportBatchStatus @default(VALIDATED)
+  totalRows         Int               @map("total_rows")
+  validRows         Int               @map("valid_rows")
+  errorRows         Int               @map("error_rows")
+  uploadedByUserId  String            @map("uploaded_by_user_id")
+  uploadedAt        DateTime          @default(now()) @map("uploaded_at")
+  committedByUserId String?           @map("committed_by_user_id")
+  committedAt       DateTime?         @map("committed_at")
+
+  rows ImportStagingRow[]
+
+  @@index([dataset, status])
+  @@map("import_batches")
+}
+
+// One row per parsed spreadsheet row (spec §10), kept only long enough to
+// validate, download as an error report, and commit. Sensitive fields
+// (bank account number, PAN, Aadhaar) are never stored here as plaintext:
+// row validation immediately transforms them into the same encrypted/
+// last4/hash shape the live tables use — the identical pack/unpack pattern
+// already used by employee/changeRequests.ts's changesJson — so a staging
+// row can leak no more than the committed table would, and the downloadable
+// error report (which echoes `data` back to HR) never has a plaintext
+// account number to echo in the first place.
+model ImportStagingRow {
+  id        String      @id @default(cuid())
+  batchId   String      @map("batch_id")
+  batch     ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  rowNumber Int         @map("row_number")
+  data      Json // parsed row fields, dataset-specific shape — see import/parse.ts
+  errors    Json // string[] — blocks commit for this row when non-empty
+  warnings  Json // string[] — informational only (e.g. near-duplicate name), never blocks
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  @@index([batchId])
+  @@map("import_staging_rows")
+}

@@ -1,4 +1,4 @@
-import { PrismaClient, EmploymentType, Gender } from "@prisma/client";
+import { PrismaClient, EmploymentType, Gender, Prisma } from "@prisma/client";
 import argon2 from "argon2";
 import { PERMISSION_KEYS } from "@shared/constants/permissions";
 import { encryptField } from "../src/lib/encryption";
@@ -249,6 +249,7 @@ async function main() {
     "employee.bank.edit",
     "user.security.manage",
     "audit.view",
+    "settings.manage",
   ];
   const PAYROLL_ADMIN_PERMS = ["employee.view", "employee.bank.view", "employee.statutory.view"];
   const MANAGER_PERMS = ["employee.view"]; // TEAM-scoped via role, not a separate permission string
@@ -555,6 +556,73 @@ async function main() {
         branchName: `${loc[spec.locationCode]!.city} Branch`,
         effectiveFrom: new Date(spec.doj),
         createdByUserId,
+      },
+    });
+  }
+
+  // ── System Settings (spec §7.8) — explicit rows so the Settings screen
+  // shows real, seeded values on first load rather than only the code's
+  // hardcoded fallbacks (which getSetting() would silently use for an
+  // unseeded key, but a fresh install should have something to look at
+  // and edit). ─────────────────────────────────────────────────────────
+  const SETTINGS: Array<[string, unknown]> = [
+    ["auth.lockout", { maxAttempts: 5, lockoutMinutes: 15 }],
+    ["auth.passwordMinLength", 8],
+    ["auth.invitationTtlHours", 48],
+    ["auth.require2faRoles", []], // temporarily disabled fleet-wide — see chore commit 7f99cfd
+    ["auth.rateLimit.login", { maxAttempts: 10, windowSeconds: 900 }],
+    ["auth.rateLimit.totpVerify", { maxAttempts: 10, windowSeconds: 900 }],
+    ["auth.rateLimit.inviteAccept", { maxAttempts: 10, windowSeconds: 900 }],
+    ["auth.rateLimit.forgotPassword", { maxAttempts: 5, windowSeconds: 3600 }],
+    ["auth.rateLimit.resetPassword", { maxAttempts: 10, windowSeconds: 900 }],
+  ];
+  for (const [key, value] of SETTINGS) {
+    await prisma.systemSetting.create({ data: { key, value: value as Prisma.InputJsonValue, updatedByUserId: superAdminUserId } });
+  }
+
+  // ── Import Center history fixture (spec §10) — one already-committed
+  // batch so the "Recent uploads" list isn't empty on a fresh install. ──
+  const importBatch = await prisma.importBatch.create({
+    data: {
+      dataset: "ORG_MASTERS",
+      fileName: "org-masters-initial-load.xlsx",
+      status: "COMMITTED",
+      totalRows: locations.length + departments.length,
+      validRows: locations.length + departments.length,
+      errorRows: 0,
+      uploadedByUserId: superAdminUserId!,
+      uploadedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+      committedByUserId: superAdminUserId,
+      committedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000 + 5 * 60 * 1000),
+    },
+  });
+
+  // ── Audit log fixture — a handful of realistic entries so the Audit Log
+  // viewer has something to filter/browse on a fresh install. The seed
+  // script itself writes employees directly via Prisma (not through the
+  // service layer's writeAuditLog() calls, which are for live traffic), so
+  // without this the table would otherwise be completely empty until HR
+  // clicks around for the first time. ─────────────────────────────────
+  const now = Date.now();
+  const hrAdminUser = await prisma.user.findUnique({ where: { employeeId: employeeIdByCode["1001"]! } });
+  const AUDIT_ENTRIES: Array<{ actorUserId: string | null; action: string; entityType: string; entityId: string; after?: unknown; minutesAgo: number }> = [
+    { actorUserId: superAdminUserId!, action: "import.committed", entityType: "ImportBatch", entityId: importBatch.id, after: { dataset: "ORG_MASTERS", rowCount: importBatch.totalRows }, minutesAgo: 30 * 24 * 60 },
+    { actorUserId: superAdminUserId!, action: "employee.created", entityType: "Employee", entityId: employeeIdByCode["1024"]!, after: { employeeCode: "1024", fullName: "Rajesh Kumar" }, minutesAgo: 20 * 24 * 60 },
+    { actorUserId: superAdminUserId!, action: "org.location.merged", entityType: "Location", entityId: loc["PAN-C10"]!.id, after: { mergedFrom: "C-10 Panchsheeel" }, minutesAgo: 18 * 24 * 60 },
+    { actorUserId: superAdminUserId!, action: "employee.separation.initiated", entityType: "Employee", entityId: employeeIdByCode[reuseFixtureCode]!, after: { reason: "Resignation" }, minutesAgo: 10 * 24 * 60 },
+    { actorUserId: superAdminUserId!, action: "settings.updated", entityType: "SystemSetting", entityId: "security", after: { lockoutMaxAttempts: 5 }, minutesAgo: 5 * 24 * 60 },
+    { actorUserId: hrAdminUser?.id ?? null, action: "employee.export", entityType: "Employee", entityId: "grid", after: { rowCount: n, includeSensitive: false }, minutesAgo: 2 * 24 * 60 },
+    { actorUserId: superAdminUserId!, action: "auth.login.success", entityType: "User", entityId: superAdminUserId!, minutesAgo: 60 },
+  ];
+  for (const entry of AUDIT_ENTRIES) {
+    await prisma.auditLog.create({
+      data: {
+        actorUserId: entry.actorUserId,
+        action: entry.action,
+        entityType: entry.entityType,
+        entityId: entry.entityId,
+        after: entry.after as Prisma.InputJsonValue | undefined,
+        createdAt: new Date(now - entry.minutesAgo * 60 * 1000),
       },
     });
   }

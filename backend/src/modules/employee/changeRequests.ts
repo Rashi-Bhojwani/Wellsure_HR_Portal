@@ -2,24 +2,19 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { writeAuditLog } from "../../lib/audit";
 import { redact } from "../../lib/redact";
+import { packBytes, unpackBytes } from "../../lib/bytesJson";
 import { HttpError } from "../../middleware/errorHandler";
 import { encryptBankFields, encryptStatutoryFields, type BankFieldsInput, type StatutoryFieldsInput } from "./service";
 import type { RequestMetaInput } from "./types";
 
 // changesJson never stores a raw "accountNumber"/"pan"/"aadhaar" key —
 // sensitive fields are transformed into their encrypted/last4/hash shape
-// (the encrypted bytes base64-encoded, since Json columns can't hold a
-// Uint8Array) up front, the same shape the live tables themselves use.
-// redact() is still run over the result as defense in depth: it only ever
-// masks a literal "accountNumber"/"pan"/"aadhaar" key, so it's a no-op on
-// this already-renamed shape but still catches a caller mistake.
-
-function packBytes(bytes: Uint8Array): string {
-  return Buffer.from(bytes).toString("base64");
-}
-function unpackBytes(b64: string): Uint8Array<ArrayBuffer> {
-  return Uint8Array.from(Buffer.from(b64, "base64")) as Uint8Array<ArrayBuffer>;
-}
+// (the encrypted bytes base64-encoded via lib/bytesJson, since Json columns
+// can't hold a Uint8Array) up front, the same shape the live tables
+// themselves use. redact() is still run over the result as defense in
+// depth: it only ever masks a literal "accountNumber"/"pan"/"aadhaar" key,
+// so it's a no-op on this already-renamed shape but still catches a caller
+// mistake.
 
 type BankChangeInput = BankFieldsInput & { accountNumberConfirm: string };
 type StatutoryChangeInput = StatutoryFieldsInput;

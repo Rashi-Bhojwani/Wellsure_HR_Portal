@@ -42,6 +42,9 @@ import { AllEmployeesPage } from "../pages/admin/employee/AllEmployeesPage";
 import { AddEmployeePage } from "../pages/admin/employee/AddEmployeePage";
 import { SeparationsPage } from "../pages/admin/employee/SeparationsPage";
 import { ChangeRequestsPage } from "../pages/admin/employee/ChangeRequestsPage";
+import { ImportCenterPage } from "../pages/admin/import/ImportCenterPage";
+import { AuditLogPage } from "../pages/admin/auditLog/AuditLogPage";
+import { SystemSettingsPage } from "../pages/admin/settings/SystemSettingsPage";
 
 // Single source of truth for the HR/Admin portal's App Switcher and each
 // app's top-bar dropdown menus (docs/UI_REFERENCE.md §2.0). "Homepage",
@@ -96,7 +99,7 @@ export const adminApps: AdminApp[] = [
         items: [
           { key: "all-employees", label: "All Employees", path: "employee/all", icon: TeamOutlined, element: AllEmployeesPage },
           { key: "add-employee", label: "Add Employee", path: "employee/add", icon: UserAddOutlined, element: AddEmployeePage },
-          { key: "bulk-import", label: "Bulk Import", path: "employee/import", icon: CloudUploadOutlined, phase: "Phase 1" },
+          { key: "bulk-import", label: "Bulk Import", path: "employee/import", icon: CloudUploadOutlined, element: ImportCenterPage },
           { key: "change-requests", label: "Change Requests", path: "employee/change-requests", icon: SolutionOutlined, element: ChangeRequestsPage },
           { key: "separations", label: "Separations", path: "employee/separations", icon: ExportOutlined, element: SeparationsPage },
         ],
@@ -231,9 +234,9 @@ export const adminApps: AdminApp[] = [
           { key: "users-roles", label: "Users & Roles", path: "admin-tools/users-roles", icon: TeamOutlined, phase: "Phase 1" },
           { key: "templates", label: "Email & Letter Templates", path: "admin-tools/templates", icon: FileTextOutlined, phase: "Phase 5" },
           { key: "devices", label: "Devices", path: "admin-tools/devices", icon: UsbOutlined, phase: "Phase 2" },
-          { key: "import-export", label: "Data Import/Export", path: "admin-tools/import-export", icon: CloudUploadOutlined, phase: "Phase 1" },
-          { key: "audit-log", label: "Audit Log", path: "admin-tools/audit-log", icon: AuditOutlined, phase: "Phase 1" },
-          { key: "system-settings", label: "System Settings", path: "admin-tools/settings", icon: SettingOutlined, phase: "Phase 1" },
+          { key: "import-export", label: "Data Import/Export", path: "admin-tools/import-export", icon: CloudUploadOutlined, element: ImportCenterPage },
+          { key: "audit-log", label: "Audit Log", path: "admin-tools/audit-log", icon: AuditOutlined, element: AuditLogPage },
+          { key: "system-settings", label: "System Settings", path: "admin-tools/settings", icon: SettingOutlined, element: SystemSettingsPage },
         ],
       },
     ],

@@ -6,18 +6,24 @@ export const deviceCodeCheckQuerySchema = z.object({
   deviceUserId: z.string().trim().min(1).max(30),
 });
 
-const gmailSchema = z
+// Exported so the Import Center's row validators (spec §10) enforce the
+// exact same format rules as this wizard — one source of truth for what
+// counts as a valid PAN/IFSC/mobile/Aadhaar, never a second copy that can
+// drift out of sync.
+export const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
+export const AADHAAR_REGEX = /^\d{12}$/;
+export const MOBILE_REGEX = /^[0-9+\-\s]{7,15}$/;
+export const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+export const ACCOUNT_NUMBER_REGEX = /^\d{6,20}$/;
+
+export const gmailSchema = z
   .string()
   .trim()
   .toLowerCase()
   .email("Enter a valid email address.")
   .refine((v) => v.endsWith("@gmail.com"), "Personal email must be a Gmail address.");
 
-const ifscSchema = z
-  .string()
-  .trim()
-  .toUpperCase()
-  .regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, "Enter a valid IFSC code (e.g. SBIN0001234).");
+export const ifscSchema = z.string().trim().toUpperCase().regex(IFSC_REGEX, "Enter a valid IFSC code (e.g. SBIN0001234).");
 
 const dateSchema = z.iso.date(); // YYYY-MM-DD, matches @db.Date columns
 
@@ -40,11 +46,11 @@ const personalSchema = z.object({
   dateOfBirth: dateSchema,
   gender: z.enum(["MALE", "FEMALE", "OTHER"]),
   personalEmail: gmailSchema,
-  mobile: z.string().trim().regex(/^[0-9+\-\s]{7,15}$/, "Enter a valid mobile number."),
+  mobile: z.string().trim().regex(MOBILE_REGEX, "Enter a valid mobile number."),
   currentAddress: z.string().trim().min(1).max(300),
   permanentAddress: z.string().trim().min(1).max(300),
   emergencyContactName: z.string().trim().min(1).max(150),
-  emergencyContactPhone: z.string().trim().regex(/^[0-9+\-\s]{7,15}$/, "Enter a valid phone number."),
+  emergencyContactPhone: z.string().trim().regex(MOBILE_REGEX, "Enter a valid phone number."),
   emergencyContactRelation: z.string().trim().min(1).max(50),
   bloodGroup: z.string().trim().max(5).nullable().optional(),
   photoStorageKey: z.string().trim().nullable().optional(),
@@ -56,12 +62,12 @@ const statutorySchema = z
       .string()
       .trim()
       .toUpperCase()
-      .regex(/^[A-Z]{5}[0-9]{4}[A-Z]$/, "Enter a valid PAN.")
+      .regex(PAN_REGEX, "Enter a valid PAN.")
       .optional(),
     aadhaar: z
       .string()
       .trim()
-      .regex(/^\d{12}$/, "Aadhaar must be 12 digits.")
+      .regex(AADHAAR_REGEX, "Aadhaar must be 12 digits.")
       .optional(),
     uan: z.string().trim().max(20).optional(),
     esiNumber: z.string().trim().max(20).optional(),
@@ -71,7 +77,7 @@ const statutorySchema = z
 const bankSchema = z
   .object({
     accountHolderName: z.string().trim().min(1).max(150),
-    accountNumber: z.string().trim().regex(/^\d{6,20}$/, "Enter a valid account number."),
+    accountNumber: z.string().trim().regex(ACCOUNT_NUMBER_REGEX, "Enter a valid account number."),
     accountNumberConfirm: z.string().trim(),
     ifsc: ifscSchema,
     bankName: z.string().trim().min(1).max(150),
@@ -103,7 +109,7 @@ export const jobUpdateSchema = z.object({
 
 export const bankUpdateSchema = z.object({
   accountHolderName: z.string().trim().min(1).max(150),
-  accountNumber: z.string().trim().regex(/^\d{6,20}$/, "Enter a valid account number."),
+  accountNumber: z.string().trim().regex(ACCOUNT_NUMBER_REGEX, "Enter a valid account number."),
   accountNumberConfirm: z.string().trim(),
   ifsc: ifscSchema,
   bankName: z.string().trim().min(1).max(150),
@@ -125,25 +131,25 @@ export const statutoryUpdateSchema = z.object({
     .string()
     .trim()
     .toUpperCase()
-    .regex(/^[A-Z]{5}[0-9]{4}[A-Z]$/)
+    .regex(PAN_REGEX)
     .optional(),
   aadhaar: z
     .string()
     .trim()
-    .regex(/^\d{12}$/)
+    .regex(AADHAAR_REGEX)
     .optional(),
   uan: z.string().trim().max(20).optional(),
   esiNumber: z.string().trim().max(20).nullable().optional(),
 });
 
 export const personalUpdateSchema = z.object({
-  mobile: z.string().trim().regex(/^[0-9+\-\s]{7,15}$/).optional(),
+  mobile: z.string().trim().regex(MOBILE_REGEX).optional(),
   personalEmail: gmailSchema.optional(),
   bloodGroup: z.string().trim().max(5).nullable().optional(),
   currentAddress: z.string().trim().min(1).max(300).optional(),
   permanentAddress: z.string().trim().min(1).max(300).optional(),
   emergencyContactName: z.string().trim().min(1).max(150).optional(),
-  emergencyContactPhone: z.string().trim().regex(/^[0-9+\-\s]{7,15}$/).optional(),
+  emergencyContactPhone: z.string().trim().regex(MOBILE_REGEX).optional(),
   emergencyContactRelation: z.string().trim().min(1).max(50).optional(),
   photoStorageKey: z.string().trim().nullable().optional(),
 });
@@ -155,7 +161,7 @@ export const selfServiceUpdateSchema = z.object({
   currentAddress: z.string().trim().min(1).max(300).optional(),
   permanentAddress: z.string().trim().min(1).max(300).optional(),
   emergencyContactName: z.string().trim().min(1).max(150).optional(),
-  emergencyContactPhone: z.string().trim().regex(/^[0-9+\-\s]{7,15}$/).optional(),
+  emergencyContactPhone: z.string().trim().regex(MOBILE_REGEX).optional(),
   emergencyContactRelation: z.string().trim().min(1).max(50).optional(),
   photoStorageKey: z.string().trim().nullable().optional(),
 });
@@ -165,7 +171,7 @@ export const changeRequestFieldGroupSchema = z.enum(["bank", "statutory", "perso
 const changeRequestBankChanges = z
   .object({
     accountHolderName: z.string().trim().min(1).max(150),
-    accountNumber: z.string().trim().regex(/^\d{6,20}$/),
+    accountNumber: z.string().trim().regex(ACCOUNT_NUMBER_REGEX),
     accountNumberConfirm: z.string().trim(),
     ifsc: ifscSchema,
     bankName: z.string().trim().min(1).max(150),
@@ -174,14 +180,14 @@ const changeRequestBankChanges = z
   .refine((v) => v.accountNumber === v.accountNumberConfirm, { message: "Account numbers don't match.", path: ["accountNumberConfirm"] });
 
 const changeRequestStatutoryChanges = z.object({
-  pan: z.string().trim().toUpperCase().regex(/^[A-Z]{5}[0-9]{4}[A-Z]$/).optional(),
-  aadhaar: z.string().trim().regex(/^\d{12}$/).optional(),
+  pan: z.string().trim().toUpperCase().regex(PAN_REGEX).optional(),
+  aadhaar: z.string().trim().regex(AADHAAR_REGEX).optional(),
   uan: z.string().trim().max(20).optional(),
   esiNumber: z.string().trim().max(20).optional(),
 });
 
 const changeRequestPersonalChanges = z.object({
-  mobile: z.string().trim().regex(/^[0-9+\-\s]{7,15}$/).optional(),
+  mobile: z.string().trim().regex(MOBILE_REGEX).optional(),
   personalEmail: gmailSchema.optional(),
   bloodGroup: z.string().trim().max(5).optional(),
 });
@@ -217,7 +223,16 @@ export const employeeListQuerySchema = z.object({
 });
 
 export const exportQuerySchema = employeeListQuerySchema.omit({ page: true, pageSize: true }).extend({
-  includeSensitive: z.coerce.boolean().default(false),
+  // z.coerce.boolean() would parse the string "false" as `true` (any
+  // non-empty string is truthy) — since axios serialises a JS `false`
+  // param as the literal query string "?includeSensitive=false", that bug
+  // meant clicking the *plain* Export button (which explicitly passes
+  // includeSensitive: false) could silently produce a sensitive export for
+  // anyone holding bank/statutory view permission, bypassing the typed
+  // confirmation modal this exact flag gates. z.stringbool() parses
+  // "true"/"false" (and "1"/"0", "yes"/"no") the way a query string
+  // actually needs.
+  includeSensitive: z.stringbool().default(false),
 });
 
 export const savedViewCreateSchema = z.object({

@@ -53,6 +53,21 @@ async function getLockoutConfig(): Promise<{ maxAttempts: number; lockoutMinutes
   return getSetting("auth.lockout", { maxAttempts: 5, lockoutMinutes: 15 });
 }
 
+async function getInvitationTtlHours(): Promise<number> {
+  return getSetting("auth.invitationTtlHours", 48);
+}
+
+// The Zod schema's own .min(8) (validators.ts) is an absolute floor that
+// can't be misconfigured away — this is the System Settings screen's own
+// knob for HR to require something stricter (e.g. 10+ characters), checked
+// wherever a password is actually set.
+async function assertPasswordMeetsPolicy(password: string): Promise<void> {
+  const minLength = await getSetting("auth.passwordMinLength", 8);
+  if (password.length < minLength) {
+    throw new HttpError(400, `Password must be at least ${minLength} characters.`, "VALIDATION_ERROR");
+  }
+}
+
 async function verifyTotpOrBackupCode(user: User, code: string): Promise<boolean> {
   if (user.totpSecretEncrypted) {
     const secret = decryptTotpSecret(user.totpSecretEncrypted);
@@ -290,8 +305,9 @@ export async function revokeSession(userId: string, sessionId: string): Promise<
 }
 
 // Called by the employee module right after creating a new hire's User row
-// (status INVITED) — issues the 48h single-use set-password token and
-// sends the invitation email. Not itself audit-logged: the caller's own
+// (status INVITED) — issues the single-use set-password token (TTL from the
+// auth.invitationTtlHours System Setting, spec §7.8) and sends the
+// invitation email. Not itself audit-logged: the caller's own
 // "employee.created" entry covers this as part of the same action.
 export async function createInvitation(params: {
   userId: string;
@@ -300,11 +316,12 @@ export async function createInvitation(params: {
   employeeCode: string;
 }): Promise<void> {
   const raw = generateOpaqueToken();
+  const ttlHours = await getInvitationTtlHours();
   await prisma.invitationToken.create({
     data: {
       userId: params.userId,
       tokenHash: hashOpaqueToken(raw),
-      expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      expiresAt: new Date(Date.now() + ttlHours * 60 * 60 * 1000),
     },
   });
   await sendInvitationEmail(params.email, params.fullName, params.employeeCode, raw).catch((err: unknown) =>
@@ -345,6 +362,7 @@ export async function acceptInvitation(
   if (!row || row.usedAt || row.expiresAt < new Date()) {
     throw new HttpError(400, "This invitation link is invalid or has expired.", "INVALID_INVITATION");
   }
+  await assertPasswordMeetsPolicy(password);
 
   const passwordHash = await argon2.hash(password);
   const [user] = await prisma.$transaction([
@@ -432,6 +450,7 @@ export async function resetPassword(token: string, password: string, meta: Reque
   if (!row || row.usedAt || row.expiresAt < new Date()) {
     throw new HttpError(400, "This reset link is invalid or has expired.", "INVALID_RESET_TOKEN");
   }
+  await assertPasswordMeetsPolicy(password);
 
   const passwordHash = await argon2.hash(password);
   await prisma.$transaction([

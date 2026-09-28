@@ -1,0 +1,14 @@
+import type { Request, Response } from "express";
+import * as settingsService from "./service";
+
+function actorMeta(req: Request) {
+  return { actorUserId: req.user!.userId, ipAddress: req.ip ?? null, userAgent: req.headers["user-agent"] ?? null };
+}
+
+export async function getSettings(_req: Request, res: Response): Promise<void> {
+  res.status(200).json(await settingsService.getSettings());
+}
+
+export async function updateSettings(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await settingsService.updateSettings(req.body, actorMeta(req)));
+}

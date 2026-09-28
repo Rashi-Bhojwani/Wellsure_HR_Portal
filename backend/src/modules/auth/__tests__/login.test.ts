@@ -77,14 +77,29 @@ describe("POST /api/auth/login", () => {
   });
 
   describe("2FA-required roles", () => {
+    // auth.require2faRoles is a global singleton (spec §7.8's System
+    // Settings), not something this suite owns — snapshot whatever's
+    // already there (a real seeded value, or nothing) and restore it
+    // exactly afterward, rather than assuming the row doesn't exist yet
+    // and never touching it back.
+    let originalValue: unknown;
+    let hadRow = false;
     beforeAll(async () => {
-      const settings = await prisma.systemSetting.findUnique({ where: { key: "auth.require2faRoles" } });
-      if (!settings) {
-        await prisma.systemSetting.create({ data: { key: "auth.require2faRoles", value: [roleCode] } });
-      }
+      const existing = await prisma.systemSetting.findUnique({ where: { key: "auth.require2faRoles" } });
+      hadRow = !!existing;
+      originalValue = existing?.value;
+      await prisma.systemSetting.upsert({
+        where: { key: "auth.require2faRoles" },
+        create: { key: "auth.require2faRoles", value: [roleCode] },
+        update: { value: [roleCode] },
+      });
     });
     afterAll(async () => {
-      await prisma.systemSetting.deleteMany({ where: { key: "auth.require2faRoles" } });
+      if (hadRow) {
+        await prisma.systemSetting.update({ where: { key: "auth.require2faRoles" }, data: { value: originalValue as never } });
+      } else {
+        await prisma.systemSetting.deleteMany({ where: { key: "auth.require2faRoles" } });
+      }
     });
 
     it("returns requires_totp_setup on first login for a role that requires 2FA and hasn't enrolled", async () => {
