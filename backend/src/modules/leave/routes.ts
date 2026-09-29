@@ -7,22 +7,27 @@ import {
   applyLeaveSchema,
   balancesQuerySchema,
   bulkApproveSchema,
-  bulkCreateHolidaySchema,
   calendarQuerySchema,
   cancelRequestSchema,
+  commitYearEndSchema,
   compOffQuerySchema,
   createHolidaySchema,
   createLeaveTypeSchema,
+  dashboardQuerySchema,
   holidaysQuerySchema,
   idParamsSchema,
   listLeaveRequestsQuerySchema,
   manualCompOffGrantSchema,
   manualGrantSchema,
+  previewYearEndSchema,
+  recalculateCommitSchema,
+  recalculatePreviewSchema,
   approveRequestSchema,
   rejectRequestSchema,
   updateHolidaySchema,
   updateLeaveTypeSchema,
   upsertLeavePolicySchema,
+  yearEndListQuerySchema,
 } from "./validators";
 
 // Leave (Phase 4, spec §5). Permission/scope narrowing happens inside the
@@ -61,6 +66,25 @@ leaveRouter.post("/grants", grant, validate({ body: manualGrantSchema }), contro
 leaveRouter.post("/comp-off/grant", grant, validate({ body: manualCompOffGrantSchema }), controller.manualCompOffGrant);
 leaveRouter.get("/comp-off", validate({ query: compOffQuerySchema }), controller.listCompOffCredits);
 
+// Admin: Year End Process (leave.yearend.manage) — preview -> discard/
+// re-preview -> commit; see modules/leave/yearEnd.ts for the full lifecycle.
+const yearEndManage = requirePermission("leave.yearend.manage");
+leaveRouter.get("/year-end", yearEndManage, validate({ query: yearEndListQuerySchema }), controller.listYearEndRuns);
+leaveRouter.post("/year-end/preview", yearEndManage, validate({ body: previewYearEndSchema }), controller.previewYearEnd);
+leaveRouter.get("/year-end/:id", yearEndManage, validate({ params: idParamsSchema }), controller.getYearEndRun);
+leaveRouter.get("/year-end/:id/report", yearEndManage, validate({ params: idParamsSchema }), controller.downloadYearEndReport);
+leaveRouter.post("/year-end/:id/discard", yearEndManage, validate({ params: idParamsSchema }), controller.discardYearEndRun);
+leaveRouter.post("/year-end/:id/commit", yearEndManage, validate({ params: idParamsSchema, body: commitYearEndSchema }), controller.commitYearEndRun);
+
+// Admin: Leave Recalculator (leave.recalculate)
+const recalculate = requirePermission("leave.recalculate");
+leaveRouter.post("/recalculate/preview", recalculate, validate({ body: recalculatePreviewSchema }), controller.previewRecalculation);
+leaveRouter.post("/recalculate/commit", recalculate, validate({ body: recalculateCommitSchema }), controller.commitRecalculation);
+
+// Admin: Workforce Overview dashboard (leave.view) — org-wide aggregates only, no SELF/TEAM scoping
+const dashboardView = requirePermission("leave.view");
+leaveRouter.get("/dashboard", dashboardView, validate({ query: dashboardQuerySchema }), controller.getWorkforceDashboard);
+
 // Holidays/restricted holidays — read-only routes above; the mutating
 // admin routes below (leave.policy.manage) share the same two resources.
 export const holidaysRouter = Router();
@@ -70,10 +94,8 @@ holidaysRouter.get("/restricted-holidays", validate({ query: holidaysQuerySchema
 
 const holidayManage = requirePermission("leave.policy.manage");
 holidaysRouter.post("/holidays", holidayManage, validate({ body: createHolidaySchema }), controller.createHoliday);
-holidaysRouter.post("/holidays/bulk", holidayManage, validate({ body: bulkCreateHolidaySchema }), controller.bulkCreateHolidays);
 holidaysRouter.patch("/holidays/:id", holidayManage, validate({ params: idParamsSchema, body: updateHolidaySchema }), controller.updateHoliday);
 holidaysRouter.delete("/holidays/:id", holidayManage, validate({ params: idParamsSchema }), controller.deleteHoliday);
 holidaysRouter.post("/restricted-holidays", holidayManage, validate({ body: createHolidaySchema }), controller.createRestrictedHoliday);
-holidaysRouter.post("/restricted-holidays/bulk", holidayManage, validate({ body: bulkCreateHolidaySchema }), controller.bulkCreateRestrictedHolidays);
 holidaysRouter.patch("/restricted-holidays/:id", holidayManage, validate({ params: idParamsSchema, body: updateHolidaySchema }), controller.updateRestrictedHoliday);
 holidaysRouter.delete("/restricted-holidays/:id", holidayManage, validate({ params: idParamsSchema }), controller.deleteRestrictedHoliday);

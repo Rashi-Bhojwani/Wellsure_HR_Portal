@@ -28,3 +28,14 @@ export interface SecuritySettings {
   require2faRoles: string[];
   rateLimits: Record<RateLimitKey, RateLimitSetting>;
 }
+
+// A second small, closed catalog — leave-domain settings, distinct from
+// the security ones above only in topic, not in pattern (same
+// getSetting/setSetting primitives, same closed-set-of-typed-keys
+// philosophy). Today this is exactly the one value Year End Process
+// needs (see modules/leave/encashmentRate.ts) — the flat per-day
+// encashment rate standing in for spec §5.2's real salary-based formula
+// until Phase 6.
+export interface LeaveSettings {
+  encashmentDefaultDailyRate: number | null;
+}

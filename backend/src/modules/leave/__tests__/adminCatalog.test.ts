@@ -9,10 +9,10 @@ describe("Leave — admin catalog (types/policies/holidays, leave.policy.manage)
   let org: TestOrgMasters;
   let adminToken: string;
   let plainToken: string;
-  let secondLocationId: string;
   const employeeIds: string[] = [];
   const leaveTypeIdsToCleanup: string[] = [];
   const holidayIdsToCleanup: string[] = [];
+  const restrictedHolidayIdsToCleanup: string[] = [];
 
   beforeAll(async () => {
     org = await createEmployeeTestOrgMasters();
@@ -25,22 +25,15 @@ describe("Leave — admin catalog (types/policies/holidays, leave.policy.manage)
     const plain = await createLoginableTestEmployee(org, { roleCode: "EMPLOYEE" });
     employeeIds.push(plain.employeeId);
     plainToken = await loginAs(plain.employeeCode);
-
-    const suffix = randomUUID().slice(0, 8);
-    const secondLocation = await prisma.location.create({
-      data: { code: `TEST-LOC2-${suffix}`, name: `Test Branch 2 ${suffix}`, addressLine1: "2 Test Rd", city: "Testville", state: "TS", pincode: "123456" },
-    });
-    secondLocationId = secondLocation.id;
   });
 
   afterAll(async () => {
     for (const id of holidayIdsToCleanup) await prisma.holiday.deleteMany({ where: { id } });
-    await prisma.restrictedHoliday.deleteMany({ where: { locationId: { in: [org.locationId, secondLocationId] } } });
+    for (const id of restrictedHolidayIdsToCleanup) await prisma.restrictedHoliday.deleteMany({ where: { id } });
     for (const id of leaveTypeIdsToCleanup) {
       await prisma.leavePolicy.deleteMany({ where: { leaveTypeId: id } });
       await prisma.leaveType.deleteMany({ where: { id } });
     }
-    await prisma.location.delete({ where: { id: secondLocationId } }).catch(() => undefined);
     for (const id of [...employeeIds].reverse()) await cleanupLoginableTestEmployee(id);
     await cleanupTestRole(adminRole);
     await cleanupEmployeeTestOrgMasters(org);
@@ -119,12 +112,12 @@ describe("Leave — admin catalog (types/policies/holidays, leave.policy.manage)
     });
   });
 
-  describe("holidays", () => {
+  describe("holidays (company-wide, HR-confirmed 2026-09-28 — no branch concept)", () => {
     it("blocks mutations without leave.policy.manage", async () => {
       const res = await request(app)
         .post("/api/holidays")
         .set(...authHeader(plainToken))
-        .send({ locationId: org.locationId, date: "2026-12-25", name: "Test Holiday" });
+        .send({ date: "2026-12-25", name: "Test Holiday" });
       expect(res.status).toBe(403);
     });
 
@@ -133,14 +126,15 @@ describe("Leave — admin catalog (types/policies/holidays, leave.policy.manage)
       const createRes = await request(app)
         .post("/api/holidays")
         .set(...authHeader(adminToken))
-        .send({ locationId: org.locationId, date: "2026-11-11", name: `Test Holiday ${suffix}` });
+        .send({ date: "2026-11-11", name: `Test Holiday ${suffix}` });
       expect(createRes.status).toBe(201);
+      expect(createRes.body).not.toHaveProperty("locationId");
       const holidayId = createRes.body.id as string;
 
       const dupRes = await request(app)
         .post("/api/holidays")
         .set(...authHeader(adminToken))
-        .send({ locationId: org.locationId, date: "2026-11-11", name: "Another Name" });
+        .send({ date: "2026-11-11", name: "Another Name" });
       expect(dupRes.status).toBe(409);
 
       const updateRes = await request(app)
@@ -159,42 +153,30 @@ describe("Leave — admin catalog (types/policies/holidays, leave.policy.manage)
       expect(gone).toBeNull();
     });
 
-    it("bulk-creates across multiple branches, per-location results distinguishing created from skipped", async () => {
+    it("GET /api/holidays returns the one company-wide list, with no per-branch filtering", async () => {
       const suffix = randomUUID().slice(0, 6);
-      // Pre-seed a conflicting holiday on the second location for the same date.
-      const existing = await prisma.holiday.create({ data: { locationId: secondLocationId, date: new Date("2026-10-10"), name: "Pre-existing" } });
-      holidayIdsToCleanup.push(existing.id);
-
-      const bulkRes = await request(app)
-        .post("/api/holidays/bulk")
+      const created = await request(app)
+        .post("/api/holidays")
         .set(...authHeader(adminToken))
-        .send({ locationIds: [org.locationId, secondLocationId], date: "2026-10-10", name: `Bulk Holiday ${suffix}` });
-      expect(bulkRes.status).toBe(200);
-      const results = bulkRes.body.results as { locationId: string; status: string }[];
-      expect(results.find((r) => r.locationId === org.locationId)?.status).toBe("created");
-      expect(results.find((r) => r.locationId === secondLocationId)?.status).toBe("skipped");
+        .send({ date: "2026-07-07", name: `Company Holiday ${suffix}` });
+      holidayIdsToCleanup.push(created.body.id);
 
-      const created = await prisma.holiday.findFirst({ where: { locationId: org.locationId, date: new Date("2026-10-10") } });
-      expect(created).not.toBeNull();
-      holidayIdsToCleanup.push(created!.id);
+      const listRes = await request(app).get("/api/holidays").query({ year: 2026 }).set(...authHeader(plainToken));
+      expect(listRes.status).toBe(200);
+      expect(listRes.body.holidays.some((h: { id: string }) => h.id === created.body.id)).toBe(true);
     });
   });
 
-  describe("restricted holidays", () => {
-    it("creates and bulk-creates the same way as holidays", async () => {
+  describe("restricted holidays (company-wide)", () => {
+    it("creates the same way as holidays, with no locationId", async () => {
       const suffix = randomUUID().slice(0, 6);
       const createRes = await request(app)
         .post("/api/restricted-holidays")
         .set(...authHeader(adminToken))
-        .send({ locationId: org.locationId, date: "2026-09-05", name: `Test RH ${suffix}` });
+        .send({ date: "2026-09-05", name: `Test RH ${suffix}` });
       expect(createRes.status).toBe(201);
-
-      const bulkRes = await request(app)
-        .post("/api/restricted-holidays/bulk")
-        .set(...authHeader(adminToken))
-        .send({ locationIds: [secondLocationId], date: "2026-09-06", name: `Bulk RH ${suffix}` });
-      expect(bulkRes.status).toBe(200);
-      expect(bulkRes.body.results[0].status).toBe("created");
+      expect(createRes.body).not.toHaveProperty("locationId");
+      restrictedHolidayIdsToCleanup.push(createRes.body.id);
     });
   });
 });

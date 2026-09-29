@@ -113,14 +113,14 @@ export interface HolidayRow {
   name: string;
 }
 
-export async function listHolidays(locationId?: string, year?: number): Promise<{ holidays: HolidayRow[]; locationId: string | null }> {
-  const { data } = await apiClient.get("/api/holidays", { params: { locationId, year } });
-  return data as { holidays: HolidayRow[]; locationId: string | null };
+export async function listHolidays(year?: number): Promise<HolidayRow[]> {
+  const { data } = await apiClient.get<{ holidays: HolidayRow[] }>("/api/holidays", { params: { year } });
+  return data.holidays;
 }
 
-export async function listRestrictedHolidays(locationId?: string, year?: number): Promise<{ holidays: HolidayRow[]; locationId: string | null }> {
-  const { data } = await apiClient.get("/api/restricted-holidays", { params: { locationId, year } });
-  return data as { holidays: HolidayRow[]; locationId: string | null };
+export async function listRestrictedHolidays(year?: number): Promise<HolidayRow[]> {
+  const { data } = await apiClient.get<{ holidays: HolidayRow[] }>("/api/restricted-holidays", { params: { year } });
+  return data.holidays;
 }
 
 export interface LeaveTypeOption {
@@ -189,7 +189,6 @@ export async function upsertLeavePolicy(leaveTypeId: string, input: Partial<Omit
 // ── Admin: holidays / restricted holidays mutations (leave.policy.manage) ─
 
 export interface HolidayInput {
-  locationId: string;
   date: string;
   name: string;
 }
@@ -198,37 +197,24 @@ export async function createHoliday(input: HolidayInput): Promise<HolidayRow> {
   const { data } = await apiClient.post<HolidayRow>("/api/holidays", input);
   return data;
 }
-export async function updateHoliday(id: string, input: Partial<Omit<HolidayInput, "locationId">>): Promise<HolidayRow> {
+export async function updateHoliday(id: string, input: Partial<HolidayInput>): Promise<HolidayRow> {
   const { data } = await apiClient.patch<HolidayRow>(`/api/holidays/${id}`, input);
   return data;
 }
 export async function deleteHoliday(id: string): Promise<void> {
   await apiClient.delete(`/api/holidays/${id}`);
 }
-export interface BulkHolidayResult {
-  locationId: string;
-  status: "created" | "skipped";
-  error?: string;
-}
-export async function bulkCreateHolidays(input: { locationIds: string[]; date: string; name: string }): Promise<BulkHolidayResult[]> {
-  const { data } = await apiClient.post<{ results: BulkHolidayResult[] }>("/api/holidays/bulk", input);
-  return data.results;
-}
 
 export async function createRestrictedHoliday(input: HolidayInput): Promise<HolidayRow> {
   const { data } = await apiClient.post<HolidayRow>("/api/restricted-holidays", input);
   return data;
 }
-export async function updateRestrictedHoliday(id: string, input: Partial<Omit<HolidayInput, "locationId">>): Promise<HolidayRow> {
+export async function updateRestrictedHoliday(id: string, input: Partial<HolidayInput>): Promise<HolidayRow> {
   const { data } = await apiClient.patch<HolidayRow>(`/api/restricted-holidays/${id}`, input);
   return data;
 }
 export async function deleteRestrictedHoliday(id: string): Promise<void> {
   await apiClient.delete(`/api/restricted-holidays/${id}`);
-}
-export async function bulkCreateRestrictedHolidays(input: { locationIds: string[]; date: string; name: string }): Promise<BulkHolidayResult[]> {
-  const { data } = await apiClient.post<{ results: BulkHolidayResult[] }>("/api/restricted-holidays/bulk", input);
-  return data.results;
 }
 
 // ── Admin: manual grant/debit + comp-off grant (leave.grant) ────────────
@@ -267,4 +253,110 @@ export async function manualCompOffGrant(input: { employeeId: string; earnedDate
 export async function listCompOffCredits(employeeId: string): Promise<CompOffCreditRow[]> {
   const { data } = await apiClient.get<{ credits: CompOffCreditRow[] }>("/api/leave/comp-off", { params: { employeeId } });
   return data.credits;
+}
+
+// ── Admin: Year End Process (leave.yearend.manage) ──────────────────────
+
+export type YearEndRunStatus = "PREVIEW" | "SUPERSEDED" | "COMMITTED";
+
+export interface YearEndRunRow {
+  id: string;
+  leaveYear: number;
+  status: YearEndRunStatus;
+  previewedByUserId: string;
+  previewedAt: string;
+  supersededAt: string | null;
+  committedByUserId: string | null;
+  committedAt: string | null;
+  totalEmployees: number;
+  totalEncashedDays: number;
+  totalEncashedAmount: number;
+}
+
+export interface YearEndRunItemRow {
+  id: string;
+  employeeId: string;
+  employeeCode: string;
+  employeeName: string;
+  closingPlBalance: number;
+  encashedDays: number;
+  dailyRate: number;
+  rateSource: string;
+  encashedAmount: number;
+  ledgerEncashmentEntryId: string | null;
+}
+
+export interface YearEndRunDetail extends YearEndRunRow {
+  items: YearEndRunItemRow[];
+}
+
+export async function listYearEndRuns(year?: number): Promise<YearEndRunRow[]> {
+  const { data } = await apiClient.get<{ runs: YearEndRunRow[] }>("/api/leave/year-end", { params: { year } });
+  return data.runs;
+}
+
+export async function getYearEndRun(id: string): Promise<YearEndRunDetail> {
+  const { data } = await apiClient.get<YearEndRunDetail>(`/api/leave/year-end/${id}`);
+  return data;
+}
+
+export async function previewYearEnd(leaveYear: number): Promise<YearEndRunDetail> {
+  const { data } = await apiClient.post<YearEndRunDetail>("/api/leave/year-end/preview", { leaveYear });
+  return data;
+}
+
+export async function discardYearEndRun(id: string): Promise<void> {
+  await apiClient.post(`/api/leave/year-end/${id}/discard`);
+}
+
+export async function commitYearEndRun(id: string, confirmText: string): Promise<YearEndRunRow> {
+  const { data } = await apiClient.post<YearEndRunRow>(`/api/leave/year-end/${id}/commit`, { confirmText });
+  return data;
+}
+
+export async function downloadYearEndReport(id: string): Promise<Blob> {
+  const { data } = await apiClient.get(`/api/leave/year-end/${id}/report`, { responseType: "blob" });
+  return data as Blob;
+}
+
+// ── Admin: Leave Recalculator (leave.recalculate) ────────────────────────
+
+export interface RecalcAction {
+  type: "CREDIT" | "REVERSE";
+  accrualMonth: string;
+  leaveTypeId: string;
+  leaveTypeCode: string;
+  days: number;
+  existingLedgerId?: string;
+}
+
+export interface RecalcEmployeeResult {
+  employeeId: string;
+  employeeCode: string;
+  employeeName: string;
+  actions: RecalcAction[];
+}
+
+export async function previewRecalculation(employeeIds: string[], fromDate: string): Promise<RecalcEmployeeResult[]> {
+  const { data } = await apiClient.post<RecalcEmployeeResult[]>("/api/leave/recalculate/preview", { employeeIds, fromDate });
+  return data;
+}
+
+export async function commitRecalculation(employeeIds: string[], fromDate: string, confirmText: string): Promise<RecalcEmployeeResult[]> {
+  const { data } = await apiClient.post<RecalcEmployeeResult[]>("/api/leave/recalculate/commit", { employeeIds, fromDate, confirmText });
+  return data;
+}
+
+// ── Admin: Workforce Overview dashboard (leave.view) ─────────────────────
+
+export interface WorkforceDashboardResult {
+  year: number;
+  leaveTypes: string[];
+  byMonthAndType: { month: number; leaveTypeCode: string; days: number }[];
+  rhBreakdown: { date: string; name: string; employeeCount: number }[];
+}
+
+export async function getWorkforceDashboard(year: number): Promise<WorkforceDashboardResult> {
+  const { data } = await apiClient.get<WorkforceDashboardResult>("/api/leave/dashboard", { params: { year } });
+  return data;
 }

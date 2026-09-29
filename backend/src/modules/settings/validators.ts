@@ -21,3 +21,7 @@ export const updateSettingsSchema = z.object({
     })
     .optional(),
 });
+
+export const updateLeaveSettingsSchema = z.object({
+  encashmentDefaultDailyRate: z.number().positive().nullable().optional(),
+});

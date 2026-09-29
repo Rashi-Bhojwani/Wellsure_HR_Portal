@@ -29,3 +29,17 @@ export async function updateSecuritySettings(input: Partial<SecuritySettings>): 
   const { data } = await apiClient.put<SecuritySettings>("/api/settings/security", input);
   return data;
 }
+
+export interface LeaveSettings {
+  encashmentDefaultDailyRate: number | null;
+}
+
+export async function getLeaveSettings(): Promise<LeaveSettings> {
+  const { data } = await apiClient.get<LeaveSettings>("/api/settings/leave");
+  return data;
+}
+
+export async function updateLeaveSettings(input: Partial<LeaveSettings>): Promise<LeaveSettings> {
+  const { data } = await apiClient.put<LeaveSettings>("/api/settings/leave", input);
+  return data;
+}

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card, Col, Divider, Form, InputNumber, Row, Select, Space, Typography, message } from "antd";
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as settingsApi from "../../../api/settings";
-import type { SecuritySettings } from "../../../api/settings";
+import type { LeaveSettings, SecuritySettings } from "../../../api/settings";
 import { EmptyState } from "../../../components/common/EmptyState";
 
 const { Title, Text } = Typography;
@@ -17,6 +17,55 @@ const RATE_LIMIT_LABELS: Record<keyof SecuritySettings["rateLimits"], string> = 
   forgotPassword: "Forgot password",
   resetPassword: "Reset password",
 };
+
+// Separate card + independent save, matching the two separate backend
+// endpoints (GET/PUT /api/settings/security vs /leave) rather than one
+// combined form — the Leave section is deliberately small: a closed
+// catalog of typed settings (see settings/service.ts's comment), not a
+// generic key-value editor, so this is exactly as small as it should be.
+function LeaveSettingsCard() {
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useQuery({ queryKey: ["settings", "leave"], queryFn: settingsApi.getLeaveSettings });
+  const [form] = Form.useForm<LeaveSettings>();
+
+  useEffect(() => {
+    if (data) form.setFieldsValue(data);
+  }, [data, form]);
+
+  const saveMutation = useMutation({
+    mutationFn: (values: LeaveSettings) => settingsApi.updateLeaveSettings(values),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["settings", "leave"], updated);
+      void message.success("Leave settings saved.");
+    },
+    onError: (err) => void message.error(errorMessage(err, "Could not save settings.")),
+  });
+
+  if (isLoading || !data) return <EmptyState message="Loading…" />;
+
+  return (
+    <Card>
+      <Form form={form} layout="vertical" initialValues={data} onFinish={(values) => saveMutation.mutate(values)} requiredMark={false}>
+        <Title level={5}>Year-end PL encashment</Title>
+        <Text type="secondary">
+          One flat rupee amount per encashed leave day, used by Year End Process — pending CA confirmation of both the rate and its tax treatment (spec §5.2).
+        </Text>
+        <Row gutter={16} style={{ marginTop: 12 }}>
+          <Col xs={24} sm={12} md={6}>
+            <Form.Item name="encashmentDefaultDailyRate" label="Default daily rate (₹)">
+              <InputNumber min={0} step={1} style={{ width: "100%" }} placeholder="Not configured" />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Form.Item style={{ marginTop: 8, marginBottom: 0 }}>
+          <Button type="primary" htmlType="submit" loading={saveMutation.isPending}>
+            Save changes
+          </Button>
+        </Form.Item>
+      </Form>
+    </Card>
+  );
+}
 
 export function SystemSettingsPage() {
   const queryClient = useQueryClient();
@@ -110,6 +159,11 @@ export function SystemSettingsPage() {
           </Form.Item>
         </Form>
       </Card>
+
+      <Title level={4} style={{ margin: 0 }}>
+        Leave
+      </Title>
+      <LeaveSettingsCard />
     </Space>
   );
 }

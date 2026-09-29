@@ -56,7 +56,6 @@ export const calendarQuerySchema = z.object({
 });
 
 export const holidaysQuerySchema = z.object({
-  locationId: z.string().min(1).optional(), // defaults to the caller's own current branch
   year: z.coerce.number().int().min(2000).max(2100).optional(),
 });
 
@@ -121,7 +120,6 @@ export const upsertLeavePolicySchema = z.object({
 // ── Admin: holidays / restricted holidays mutations (leave.policy.manage) ─
 
 export const createHolidaySchema = z.object({
-  locationId: z.string().min(1),
   date: isoDateSchema,
   name: z.string().trim().min(1).max(200),
 });
@@ -131,8 +129,35 @@ export const updateHolidaySchema = z.object({
   name: z.string().trim().min(1).max(200).optional(),
 });
 
-export const bulkCreateHolidaySchema = z.object({
-  locationIds: z.array(z.string().min(1)).min(1).max(200),
-  date: isoDateSchema,
-  name: z.string().trim().min(1).max(200),
+// ── Admin: Year End Process (leave.yearend.manage) ──────────────────────
+
+export const yearEndListQuerySchema = z.object({
+  year: z.coerce.number().int().min(2000).max(2100).optional(),
+});
+
+export const previewYearEndSchema = z.object({
+  leaveYear: z.number().int().min(2000).max(2100),
+});
+
+export const commitYearEndSchema = z.object({
+  confirmText: z.string().trim().max(50).optional(),
+});
+
+// ── Admin: Leave Recalculator (leave.recalculate) ────────────────────────
+
+export const recalculatePreviewSchema = z.object({
+  employeeIds: z.array(z.string().min(1)).min(1).max(500),
+  fromDate: isoDateSchema,
+});
+
+export const recalculateCommitSchema = z.object({
+  employeeIds: z.array(z.string().min(1)).min(1).max(500),
+  fromDate: isoDateSchema,
+  confirmText: z.string().trim().max(50).optional(),
+});
+
+// ── Admin: Workforce Overview dashboard (leave.view) ─────────────────────
+
+export const dashboardQuerySchema = z.object({
+  year: z.coerce.number().int().min(2000).max(2100),
 });

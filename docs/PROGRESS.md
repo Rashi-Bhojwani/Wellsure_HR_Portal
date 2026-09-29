@@ -14,7 +14,7 @@ committed).
 | 1.5 | AWS staging environment | Not started |
 | 2 | Biometric ingestion + attendance engine + real-time | Not started |
 | 3 | Attendance administration | Not started |
-| 4 | Leave | In progress — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), and admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C) built and tested. Year End Process/Recalculator/dashboard/realtime (commit D) still to come. |
+| 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
 | 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | Not started |
 | 5.5 | AWS production environment and go-live hardening | Not started |
 | 6 | Payroll | Not started |
@@ -1431,6 +1431,235 @@ Process (preview/discard/commit), Leave Recalculator, Workforce Overview
 dashboard's real data wiring, and finishing `realtime/socket.ts`'s
 handshake auth/room-joining for `leave.applied`/`leave.decided`.
 
+### Interim — holidays and every other leave/attendance rule made company-wide (HR-confirmed 2026-09-28)
+
+Before commit D, HR clarified a modelling assumption every prior commit
+had gotten wrong: holidays, leave types/policies, shifts, week-off
+patterns and attendance rules are identical for every branch — branches
+differ in exactly one way, which biometric machine their punches arrive
+from. That's a device-to-branch mapping (Phase 2's `devices.location_id`),
+not a policy difference, so none of Phase 4's rule tables should reference
+`locations` at all.
+
+**Schema**: `Holiday`/`RestrictedHoliday` lost `locationId`; both are now
+one company-wide list (`@@unique([date])` in place of
+`@@unique([locationId, date])`). Migration
+`20260928192111_make_holidays_company_wide` de-duplicates existing
+per-branch rows on `date` before dropping the column — verified safe
+against a scratch database seeded with real per-branch duplicate data
+first (every branch's row for a given date shared the identical `name`,
+confirmed via psql before trusting the migration). `Location` itself is
+unchanged: employees still belong to a branch, grids/dashboards still
+filter and group by branch and city, job history is unchanged — branch
+stays a first-class organisational/reporting attribute, just never a
+rule-scoping one.
+
+**Backend**: `holidays.ts` rewritten with no `locationId` anywhere
+(`listHolidays(year?)`/`listRestrictedHolidays(year?)` now return a plain
+array); `dayCountContext.ts` queries holidays directly with no job-history/
+location lookup; the two `bulkCreate*` functions and their routes are
+gone (no longer meaningful with one company-wide list); `seed.ts` seeds
+one flat holiday/RH list instead of per-location loops.
+
+**Frontend**: `HolidayCalendarPage.tsx` (employee) and
+`HolidayCalendarsAdminPage.tsx` (admin) both lost their branch
+`Select`/location params; the admin page's "Add to Multiple Branches"
+bulk modal is gone entirely, since there's only one branch to add to now.
+
+**Docs**: `docs/PROJECT_SPEC.md` §4.4/§5.4/§7.3/§7.4/§7.8/§11 updated to
+state explicitly that holidays/leave policies/shifts/week-off
+patterns/attendance rules are company-wide, that `devices` (Phase 2) is
+the one and only table that references `locations` for a branch-varying
+reason, and that the attendance rules engine itself does not vary by
+branch.
+
+**Breaking change for local data**: yes, for anyone with holiday/RH data
+in a local database already — the schema and the `GET/POST/PATCH
+/api/holidays`(+`/restricted-holidays`) response/request shapes both
+changed (no more `locationId`, no more `/bulk`). Re-run
+`npx prisma migrate deploy` (or `migrate dev` in local-only setups) to
+apply the de-duplicating migration, then `npm run db:seed` if you want
+the seeded holiday/RH data back in its new company-wide shape — a plain
+migrate without reseeding also works and keeps your existing (now
+de-duplicated) rows.
+
+**Design note — reopening branch-specific holidays later**: if a future
+need ever requires one branch to observe a local holiday the rest of the
+company doesn't, the door is left ajar, not closed — re-add a nullable
+`locationId` to `Holiday`/`RestrictedHoliday` (null = company-wide, a
+value = that branch only), which is an additive, backwards-compatible
+migration, and widen `dayCountContext.ts`'s query to also match
+`locationId: null OR locationId: employee's branch`. No data model
+rework, no lost history.
+
+### Phase 4, commit D — Year End Process, Leave Recalculator, Workforce Overview dashboard, real Socket.IO (Phase 4 complete)
+
+The final Phase 4 commit: the two admin financial/corrective tools that
+were deliberately saved for last (both write ledger entries at scale and
+both needed the rest of the leave module working first to be testable),
+the dashboard's real data wiring, and finishing the real-time layer that
+had been a Phase 0 skeleton since the very first commit.
+
+**Backend** (`backend/src/modules/leave/`):
+
+- `yearEnd.ts` (new) — preview → (discard or re-preview, which
+  auto-supersedes the old one) → commit. Preview never writes to
+  `leave_ledger`, only to `YearEndRunItem`; each employee's closing PL
+  balance is computed as an explicit `entryDate <= 'Y-12-31'` cutoff
+  (never the `leaveYear` tag), so a Jan-1 accrual for the next year
+  posted while this year's run is still `PREVIEW` is automatically
+  excluded and correctly starts the next year's balance instead — proved
+  directly by `yearEnd.test.ts`, not just asserted in a comment. The
+  encashment rate (via `EncashmentRateProvider`, commit A's throwing
+  stub) is resolved for every employee *before* any row is written — an
+  unconfigured rate aborts the whole preview with zero rows written, and
+  the live browser check confirmed the exact error text surfaces as a
+  toast. Commit re-verifies every item's balance fresh against the
+  ledger and rejects the *whole* commit — never a partial one — if
+  anything drifted since preview; both paths require a typed
+  confirmation (`"COMMIT YEAR END"`). `buildYearEndReport` regenerates an
+  Excel report on demand from the immutable `YearEndRunItem` rows rather
+  than persisting to `StorageService` at commit time — equally correct,
+  zero new integration surface, `YearEndRun.reportStorageKey` stays
+  unused by design. One schema fix along the way: `YearEndRunItem.
+  employeeId` (commit A) had no real Prisma relation/FK to `Employee`,
+  needed once the report/detail view started joining in employee names —
+  added (migration `20260928193500_add_year_end_run_item_employee_
+  relation`).
+- `recalculator.ts` (new) — diffs what *should* be in the ledger
+  (recomputed fresh from an employee's *current* DOJ and *current*
+  policy) against what's actually there, month by month, for every
+  accrual-enabled type, producing `CREDIT`/`REVERSE` actions for an
+  explicit employee list (unlike Year End's org-wide sweep). Deliberately
+  does *not* need Year End's "drifted since preview, reject" check —
+  commit simply re-diffs fresh, which is idempotently always correct —
+  documented in the module comment as a different design choice and why.
+  **A real idempotency bug caught while writing `recalculator.test.ts`,
+  not by design review**: the REVERSE check only looked for an existing
+  `ACCRUAL` row in that month to decide whether to propose a reversal,
+  never checking whether that row had *already* been reversed by a prior
+  recalculation run (a `REVERSAL` row is a different `entryType`, so the
+  original never-deleted `ACCRUAL` row always looked "still wrong"). A
+  second run on the same drifted month would propose — and, on commit,
+  write — another `REVERSAL`, double-reversing the balance every time it
+  ran. Fixed by also checking for a `REVERSAL` row already referencing
+  that `ACCRUAL` row's id (`referenceType: "RECALCULATION"`,
+  `referenceId: <accrual id>`) and skipping it once one exists;
+  `recalculator.test.ts`'s idempotency test (preview → commit → preview
+  again → commit again, asserting the second round is a no-op and the
+  row count is unchanged) is what caught it and what now guards it.
+- `dashboard.ts` (new) — `getWorkforceDashboard(year)`, one query per
+  year returning every (month, leaveTypeCode) total plus which
+  Restricted Holidays were actually taken and by how many employees;
+  bucketed by each request's `fromDate`, the same convention
+  `writeLedgerEntry` already uses for a `CONSUMED` row's `entryDate`, so
+  a multi-month request is attributed the same way the ledger itself
+  would show it. `GET /api/leave/dashboard?year` — `leave.view`, org-wide
+  only (no SELF/TEAM scoping — this is an aggregate management view, not
+  a per-employee one).
+- `backend/src/modules/settings/` gained a `LeaveSettings` section
+  (`getLeaveSettings`/`updateLeaveSettings`, `GET/PUT /api/settings/
+  leave`, `settings.manage`) holding `leave.encashment.
+  defaultDailyRate` — the System Settings location commit A's error
+  message already promised ("Set System Settings -> Leave -> Default
+  Daily Rate") but never actually built. Caught while live-verifying
+  Year End Process in a browser: generating a preview correctly surfaced
+  the "not configured" error, but there was nowhere in the UI to
+  actually configure it — `encashmentRate.ts`'s
+  `EncashmentRateNotConfiguredError` also proactively fixed to extend
+  `HttpError` (not plain `Error`), the same convention two earlier
+  commits' domain errors had already needed fixing to.
+- `backend/src/realtime/socket.ts` — real handshake auth (same access-
+  token verification and live active-account re-check as
+  `middleware/authenticate.ts`, since a socket connection is just as
+  authenticated a session as an HTTP request) and room-joining: every
+  socket joins `user:{employeeId}`, `manager:{employeeId}` (so server
+  code emitting to `manager:{id}` reaches the one connected socket
+  belonging to the employee who *is* manager `id`), `org`, `role:{role}`
+  for each held role, and `dept:{id}`/`location:{id}` from current job
+  history. `realtime/emit.ts` (new) holds the one process-wide `io`
+  singleton `requests.ts` calls into for `leave.applied` (→ the
+  applicant's reporting manager's room) and `leave.decided` (→ the
+  applicant's own room) — no-ops cleanly when no socket server is
+  running (every test, `worker`/`scheduler` modes), so a leave write
+  never depends on anyone being connected to notify.
+
+**Frontend**:
+
+- `pages/admin/workforce/YearEndProcessPage.tsx` (new) — leave-year
+  picker + Generate Preview, a run-history table, and a detail panel for
+  the selected run (per-employee balances/days/rate/amount, Discard,
+  typed-confirmation Commit, Download Report). Verified live: preview
+  correctly blocked with the exact "not configured" toast before the
+  rate existed, and — after configuring it via the new System Settings →
+  Leave card — a real preview against the seeded 32-employee roster
+  (₹16,000 total) with the Commit button staying disabled until
+  `"COMMIT YEAR END"` is typed exactly.
+- `pages/admin/workforce/LeaveRecalculatorPage.tsx` (new) — multi-employee
+  picker + a "recompute from" month, a preview results table
+  (colour-coded CREDIT/REVERSE tags per action), typed-confirmation
+  Apply. Verified live against a real seeded employee: preview correctly
+  listed 7 months of missing `CREDIT` actions.
+- `pages/admin/workforce/OverviewPage.tsx` — the three charts (donut,
+  monthly bar, RH bar) rewired from static mock data to
+  `getWorkforceDashboard(year)`; both "Category: All ▾" filters are now
+  real (client-side slicing of the one fetched year, no extra round
+  trips per filter change) rather than the inert dropdowns the mock had.
+- `pages/admin/settings/SystemSettingsPage.tsx` gained the Leave section
+  described above.
+- `pages/admin/workforce/AdminLeaveCalendarPage.tsx` (new) — a gap caught
+  while wiring commit D's menu entries: the original plan's screen list
+  had `/admin/workforce/leave/calendar` down for commit C, but it was
+  never built (still carrying a `phase: "Phase 4"` marker with no
+  route). Same org-wide "who's on leave" month grid as the employee
+  screen, plus the branch/department filters `leave.view` callers get
+  per `modules/leave/calendar.ts`.
+- `sockets/SocketProvider.tsx` now sends the real access token in the
+  handshake (`api/client.ts` gained `getAccessToken()`), and connects
+  only once `useAuth()` reports a signed-in user (`App.tsx`'s new
+  `AuthenticatedSocketProvider` wrapper) — it had been permanently
+  `enabled={false}` since Phase 0. `sockets/useLeaveNotifications.ts`
+  (new, wired into `RequireAuth.tsx` so it runs for every signed-in
+  route) listens for `leave.applied`/`leave.decided` and shows an antd
+  toast plus invalidates the `leave.requests`/`leave.balances` query
+  keys — verified live: both portals' WebSocket connections completed a
+  clean Socket.IO handshake with no auth errors.
+- `routes/adminMenu.config.tsx` — `workforce/leave/calendar`,
+  `workforce/leave/year-end`, `workforce/leave/recalculator` all got real
+  `element`s; every Phase 4 route now resolves to a real page.
+
+**Tests** (25 new — `yearEnd.test.ts`, `recalculator.test.ts`,
+`dashboard.test.ts`, `realtime/__tests__/socket.test.ts` — 230 across the
+backend): Year End's cutoff/Y+1-exclusion scenario end to end through
+commit, the loud preview failure with zero rows written when the rate
+isn't configured, commit rejecting a whole run on balance drift with no
+partial write, re-preview superseding, discard, and the DB-level
+one-committed-run-per-year unique index; the Recalculator's CREDIT+REVERSE
+scenario in one preview, preview being a true dry run, and the
+double-reversal idempotency bug above caught and now guarded; the
+dashboard's (month, type) aggregation and RH breakdown, correctly
+excluding non-approved requests; socket handshake auth resolving
+`employeeId`/`roleCodes`/department/location for a valid active-account
+token and rejecting a malformed token, a suspended account, and an
+unknown user id. Every new test file also has a couple of route-level
+403/200 checks for its permission gate.
+
+**Verification**: full backend suite green from a clean migrate+seed on a
+disposable database (230/230, 36 files, zero regressions);
+`lint`/`typecheck` clean on both `backend/` and `frontend/`; frontend
+suite green; live browser walkthrough as Super Admin covering every new
+screen plus the gap-fills (Workforce Overview's real charts, Year End's
+full not-configured → configure-the-rate → preview → ready-to-commit
+loop against the real 32-employee seed, the Recalculator's real
+CREDIT-action preview, the Admin Leave Calendar, the new Leave settings
+card) and, as a second employee, confirming the Socket.IO handshake
+completes cleanly with no console errors from either portal. Commit was
+not clicked in the browser (already covered end-to-end by
+`yearEnd.test.ts`) to avoid mutating the verification database
+unnecessarily.
+
+Phase 4 is now complete.
+
 ## Open questions
 
 Carried from spec §14 — configurable, not guessed, until answered:
@@ -1447,8 +1676,10 @@ Carried from spec §14 — configurable, not guessed, until answered:
       formula or its tax treatment — both still await CA confirmation.
       `EncashmentRateProvider` (see Phase 4 commit A below) is the
       swappable interface this resolves into once confirmed; until then it's
-      one flat, HR-entered rupee amount, and Year End Process refuses to run
-      at all if that amount isn't set (never silently encashes at ₹0).
+      one flat, HR-entered rupee amount (configurable at System Settings →
+      Leave → Default Daily Rate, Phase 4 commit D), and Year End Process
+      refuses to run at all if that amount isn't set (never silently
+      encashes at ₹0).
 - [ ] Comp-off minimum hours worked to earn a credit, and its expiry window
       — defaulted to 4h / 60 days pending HR confirmation
       (`leave_policies.comp_off_min_hours_worked` /

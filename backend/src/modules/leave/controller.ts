@@ -2,11 +2,14 @@ import type { Request, Response } from "express";
 import { businessToday } from "../../lib/businessDate";
 import * as balancesService from "./balances";
 import * as calendarService from "./calendar";
+import * as dashboardService from "./dashboard";
 import * as grantsService from "./grants";
 import * as holidaysService from "./holidays";
 import * as leaveTypesService from "./leaveTypes";
+import * as recalculatorService from "./recalculator";
 import * as requestsService from "./requests";
 import type { ActorMeta, LeaveViewer } from "./types";
+import * as yearEndService from "./yearEnd";
 
 function actorMeta(req: Request): ActorMeta {
   return { actorUserId: req.user!.userId, ipAddress: req.ip ?? null, userAgent: req.headers["user-agent"] ?? null };
@@ -71,20 +74,16 @@ export async function getLeaveCalendar(req: Request, res: Response): Promise<voi
   res.status(200).json({ entries });
 }
 
-// ── Holidays (read-only in commit B) ────────────────────────────────────
+// ── Holidays (company-wide; read-only in commit B) ──────────────────────
 
 export async function listHolidays(req: Request, res: Response): Promise<void> {
-  const { locationId, year } = req.query as { locationId?: string; year?: number };
-  const resolvedLocationId = locationId ?? (await holidaysService.getEmployeeCurrentLocationId(viewer(req).employeeId));
-  const holidays = resolvedLocationId ? await holidaysService.listHolidays(resolvedLocationId, year) : [];
-  res.status(200).json({ holidays, locationId: resolvedLocationId });
+  const { year } = req.query as { year?: number };
+  res.status(200).json({ holidays: await holidaysService.listHolidays(year) });
 }
 
 export async function listRestrictedHolidays(req: Request, res: Response): Promise<void> {
-  const { locationId, year } = req.query as { locationId?: string; year?: number };
-  const resolvedLocationId = locationId ?? (await holidaysService.getEmployeeCurrentLocationId(viewer(req).employeeId));
-  const holidays = resolvedLocationId ? await holidaysService.listRestrictedHolidays(resolvedLocationId, year) : [];
-  res.status(200).json({ holidays, locationId: resolvedLocationId });
+  const { year } = req.query as { year?: number };
+  res.status(200).json({ holidays: await holidaysService.listRestrictedHolidays(year) });
 }
 
 // ── Admin: leave types & policies (leave.policy.manage) ─────────────────
@@ -117,9 +116,6 @@ export async function deleteHoliday(req: Request, res: Response): Promise<void> 
   await holidaysService.deleteHoliday(req.params.id as string, actorMeta(req));
   res.status(204).send();
 }
-export async function bulkCreateHolidays(req: Request, res: Response): Promise<void> {
-  res.status(200).json({ results: await holidaysService.bulkCreateHolidays(req.body, actorMeta(req)) });
-}
 
 export async function createRestrictedHoliday(req: Request, res: Response): Promise<void> {
   res.status(201).json(await holidaysService.createRestrictedHoliday(req.body, actorMeta(req)));
@@ -130,9 +126,6 @@ export async function updateRestrictedHoliday(req: Request, res: Response): Prom
 export async function deleteRestrictedHoliday(req: Request, res: Response): Promise<void> {
   await holidaysService.deleteRestrictedHoliday(req.params.id as string, actorMeta(req));
   res.status(204).send();
-}
-export async function bulkCreateRestrictedHolidays(req: Request, res: Response): Promise<void> {
-  res.status(200).json({ results: await holidaysService.bulkCreateRestrictedHolidays(req.body, actorMeta(req)) });
 }
 
 // ── Admin: manual grant/debit + comp-off grant (leave.grant) ────────────
@@ -148,4 +141,56 @@ export async function manualCompOffGrant(req: Request, res: Response): Promise<v
 export async function listCompOffCredits(req: Request, res: Response): Promise<void> {
   const { employeeId } = req.query as { employeeId: string };
   res.status(200).json({ credits: await grantsService.listCompOffCredits(employeeId, viewer(req)) });
+}
+
+// ── Admin: Year End Process (leave.yearend.manage) ──────────────────────
+
+export async function listYearEndRuns(req: Request, res: Response): Promise<void> {
+  const { year } = req.query as { year?: number };
+  res.status(200).json({ runs: await yearEndService.listYearEndRuns(year) });
+}
+
+export async function getYearEndRun(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await yearEndService.getYearEndRun(req.params.id as string));
+}
+
+export async function previewYearEnd(req: Request, res: Response): Promise<void> {
+  const { leaveYear } = req.body as { leaveYear: number };
+  res.status(201).json(await yearEndService.previewYearEnd(leaveYear, actorMeta(req)));
+}
+
+export async function discardYearEndRun(req: Request, res: Response): Promise<void> {
+  await yearEndService.discardYearEndRun(req.params.id as string, actorMeta(req));
+  res.status(204).send();
+}
+
+export async function commitYearEndRun(req: Request, res: Response): Promise<void> {
+  const { confirmText } = req.body as { confirmText?: string };
+  res.status(200).json(await yearEndService.commitYearEndRun(req.params.id as string, actorMeta(req), { confirmText }));
+}
+
+export async function downloadYearEndReport(req: Request, res: Response): Promise<void> {
+  const { buffer, fileName } = await yearEndService.buildYearEndReport(req.params.id as string);
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+  res.status(200).send(buffer);
+}
+
+// ── Admin: Leave Recalculator (leave.recalculate) ────────────────────────
+
+export async function previewRecalculation(req: Request, res: Response): Promise<void> {
+  const { employeeIds, fromDate } = req.body as { employeeIds: string[]; fromDate: string };
+  res.status(200).json(await recalculatorService.previewRecalculation(employeeIds, fromDate, actorMeta(req)));
+}
+
+export async function commitRecalculation(req: Request, res: Response): Promise<void> {
+  const { employeeIds, fromDate, confirmText } = req.body as { employeeIds: string[]; fromDate: string; confirmText?: string };
+  res.status(200).json(await recalculatorService.commitRecalculation(employeeIds, fromDate, actorMeta(req), { confirmText }));
+}
+
+// ── Admin: Workforce Overview dashboard (leave.view) ──────────────────────
+
+export async function getWorkforceDashboard(req: Request, res: Response): Promise<void> {
+  const { year } = req.query as never as { year: number };
+  res.status(200).json(await dashboardService.getWorkforceDashboard(year));
 }

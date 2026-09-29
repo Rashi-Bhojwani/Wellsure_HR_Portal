@@ -4,6 +4,7 @@ import { writeAuditLog } from "../../lib/audit";
 import { addCalendarDays, businessToday } from "../../lib/businessDate";
 import { resolveDataScope } from "../../lib/dataScope";
 import { HttpError } from "../../middleware/errorHandler";
+import { emitLeaveApplied, emitLeaveDecided } from "../../realtime/emit";
 import { getAttendanceLeaveSink, type ApprovedLeaveDay } from "./attendanceIntegration";
 import { consumeCompOffFifo, reverseCompOffConsumption } from "./compOff";
 import { withEmployeeLeaveLock } from "./concurrency";
@@ -124,7 +125,15 @@ export async function applyForLeave(input: ApplyLeaveInput, viewer: LeaveViewer,
   });
 
   await writeAuditLog({ ...meta, action: "leave.request.apply", entityType: "LeaveRequest", entityId: request.id, after: toAuditJson(request) });
-  return reloadFormatted(request.id);
+  const formatted = await reloadFormatted(request.id);
+
+  const jobHistory = await prisma.employeeJobHistory.findFirst({ where: { employeeId: targetEmployeeId, effectiveTo: null }, select: { reportingManagerId: true } });
+  emitLeaveApplied(
+    { leaveRequestId: formatted.id, employeeId: formatted.employeeId, employeeName: formatted.employeeName, leaveTypeCode: formatted.leaveTypeCode, fromDate: formatted.fromDate, toDate: formatted.toDate, totalDays: formatted.totalDays },
+    jobHistory?.reportingManagerId ?? null,
+  );
+
+  return formatted;
 }
 
 export interface ListLeaveRequestsQuery {
@@ -332,7 +341,18 @@ export async function approveLeaveRequest(requestId: string, viewer: LeaveViewer
 
   await getAttendanceLeaveSink().onLeaveApproved(buildApprovedLeaveDays(updated, existing.leaveType.code));
   await writeAuditLog({ ...meta, action: "leave.request.approve", entityType: "LeaveRequest", entityId: requestId, before: toAuditJson(existing), after: toAuditJson(updated) });
-  return reloadFormatted(requestId);
+  const formatted = await reloadFormatted(requestId);
+  emitLeaveDecided({
+    leaveRequestId: formatted.id,
+    employeeId: formatted.employeeId,
+    employeeName: formatted.employeeName,
+    leaveTypeCode: formatted.leaveTypeCode,
+    fromDate: formatted.fromDate,
+    toDate: formatted.toDate,
+    totalDays: formatted.totalDays,
+    status: "APPROVED",
+  });
+  return formatted;
 }
 
 export async function rejectLeaveRequest(requestId: string, viewer: LeaveViewer, comments: string, meta: ActorMeta) {
@@ -355,7 +375,18 @@ export async function rejectLeaveRequest(requestId: string, viewer: LeaveViewer,
   });
 
   await writeAuditLog({ ...meta, action: "leave.request.reject", entityType: "LeaveRequest", entityId: requestId, before: toAuditJson(existing), after: toAuditJson(updated) });
-  return reloadFormatted(requestId);
+  const formatted = await reloadFormatted(requestId);
+  emitLeaveDecided({
+    leaveRequestId: formatted.id,
+    employeeId: formatted.employeeId,
+    employeeName: formatted.employeeName,
+    leaveTypeCode: formatted.leaveTypeCode,
+    fromDate: formatted.fromDate,
+    toDate: formatted.toDate,
+    totalDays: formatted.totalDays,
+    status: "REJECTED",
+  });
+  return formatted;
 }
 
 interface BulkApproveResult {

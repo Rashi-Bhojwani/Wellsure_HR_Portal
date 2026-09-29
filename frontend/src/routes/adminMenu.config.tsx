@@ -37,8 +37,11 @@ import {
 } from "@ant-design/icons";
 import { AdminHomePage } from "../pages/admin/home/HomePage";
 import { WorkforceOverviewPage } from "../pages/admin/workforce/OverviewPage";
+import { AdminLeaveCalendarPage } from "../pages/admin/workforce/AdminLeaveCalendarPage";
 import { EmployeeLeavePage } from "../pages/admin/workforce/EmployeeLeavePage";
 import { LeaveGranterPage } from "../pages/admin/workforce/LeaveGranterPage";
+import { YearEndProcessPage } from "../pages/admin/workforce/YearEndProcessPage";
+import { LeaveRecalculatorPage } from "../pages/admin/workforce/LeaveRecalculatorPage";
 import { OrganisationSetupPage } from "../pages/admin/organisation/OrganisationSetupPage";
 import { AllEmployeesPage } from "../pages/admin/employee/AllEmployeesPage";
 import { AddEmployeePage } from "../pages/admin/employee/AddEmployeePage";
@@ -129,11 +132,11 @@ export const adminApps: AdminApp[] = [
         key: "leave",
         label: "Leave",
         items: [
-          { key: "leave-calendar", label: "Leave Calendar", path: "workforce/leave/calendar", icon: CalendarOutlined, phase: "Phase 4" },
+          { key: "leave-calendar", label: "Leave Calendar", path: "workforce/leave/calendar", icon: CalendarOutlined, element: AdminLeaveCalendarPage },
           { key: "employee-leave", label: "Employee Leave", path: "workforce/leave/employee-leave", icon: SolutionOutlined, element: EmployeeLeavePage },
           { key: "leave-granter", label: "Leave Granter", path: "workforce/leave/granter", icon: GiftOutlined, element: LeaveGranterPage },
-          { key: "year-end-process", label: "Year End Process", path: "workforce/leave/year-end", icon: HistoryOutlined, phase: "Phase 4" },
-          { key: "leave-recalculator", label: "Leave Recalculator", path: "workforce/leave/recalculator", icon: CalculatorOutlined, phase: "Phase 4" },
+          { key: "year-end-process", label: "Year End Process", path: "workforce/leave/year-end", icon: HistoryOutlined, element: YearEndProcessPage },
+          { key: "leave-recalculator", label: "Leave Recalculator", path: "workforce/leave/recalculator", icon: CalculatorOutlined, element: LeaveRecalculatorPage },
         ],
       },
       {
