@@ -46,3 +46,37 @@ export function emitLeaveDecided(payload: LeaveEventPayload & { status: "APPROVE
   if (!io) return;
   io.to(`user:${payload.employeeId}`).emit("leave.decided", payload);
 }
+
+// Delivery for an already-persisted Notification row (spec §8) — never
+// the write itself, see modules/notifications/service.ts's
+// createNotification, which every caller invokes first, as its own step,
+// before it ever reaches this function. `targetEmployeeId` is the
+// notification's *employee* id, not its `Notification.userId` DB column
+// — rooms are keyed by employeeId (see realtime/socket.ts), so callers
+// must resolve that themselves rather than passing the raw user id.
+export interface NotificationEventPayload {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  link: string | null;
+  createdAt: string;
+}
+
+export function emitNotificationNew(targetEmployeeId: string, payload: NotificationEventPayload): void {
+  if (!io) return;
+  io.to(`user:${targetEmployeeId}`).emit("notification.new", payload);
+}
+
+// Signal-only, no payload — the frontend just invalidates its task-counts
+// query on receipt rather than trying to keep a server-computed number in
+// sync purely from event fields. Rooms: the applicant's reporting manager
+// (their own "review" count may have changed) plus every HR_ADMIN/
+// HR_EXECUTIVE-held role room (an org-wide "monitor" count may have
+// changed too, for any ALL-scope viewer, not just this one manager).
+export function emitTasksCounts(reportingManagerId: string | null): void {
+  if (!io) return;
+  if (reportingManagerId) io.to(`manager:${reportingManagerId}`).emit("tasks.counts", {});
+  io.to("role:HR_ADMIN").emit("tasks.counts", {});
+  io.to("role:HR_EXECUTIVE").emit("tasks.counts", {});
+}

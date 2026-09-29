@@ -30,6 +30,8 @@ export const PERMISSION_KEYS = [
   "leave.policy.manage", // leave types, policies, holidays, restricted holidays
   "leave.recalculate", // Leave Recalculator
   "leave.yearend.manage", // Year End Process
+  // Phase 5 — Homepage, Dashboards, Notifications
+  "announcements.manage", // create/edit/deactivate the Home page HR banner
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];

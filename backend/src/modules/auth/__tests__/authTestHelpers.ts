@@ -86,6 +86,10 @@ export async function cleanupTestUser(employeeId: string): Promise<void> {
   await prisma.refreshToken.deleteMany({ where: { user: { employeeId } } });
   await prisma.invitationToken.deleteMany({ where: { user: { employeeId } } });
   await prisma.passwordResetToken.deleteMany({ where: { user: { employeeId } } });
+  // Phase 5 tables FK-referencing User.id.
+  await prisma.notification.deleteMany({ where: { user: { employeeId } } });
+  await prisma.userFavourite.deleteMany({ where: { user: { employeeId } } });
+  await prisma.dashboardLayout.deleteMany({ where: { user: { employeeId } } });
   await prisma.auditLog.deleteMany({ where: { entityId: employeeId } });
   const user = await prisma.user.findUnique({ where: { employeeId } });
   if (user) {

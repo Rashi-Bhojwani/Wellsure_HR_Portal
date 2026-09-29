@@ -1,18 +1,14 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Card, Col, Row, Typography, List, Space, Button, Alert, Badge } from "antd";
+import { Card, Col, Row, Typography, List, Space, Badge, Tag } from "antd";
 import {
   ArrowRightOutlined,
-  EyeInvisibleOutlined,
-  EyeOutlined,
-  FileTextOutlined,
   IdcardOutlined,
   SafetyCertificateOutlined,
 } from "@ant-design/icons";
 import { Link } from "react-router-dom";
 import * as leaveApi from "../../../api/leave";
+import * as announcementsApi from "../../../api/announcements";
 import { EmptyState } from "../../../components/common/EmptyState";
-import { MaskedAmount } from "../../../components/common/MaskedAmount";
 import { useAuth } from "../../../hooks/useAuth";
 
 const { Title, Text } = Typography;
@@ -30,24 +26,14 @@ function greeting(): string {
   return "Good Evening";
 }
 
-const holidays = [
-  { date: "08 Nov", weekday: "Saturday", name: "Diwali" },
-  { date: "25 Dec", weekday: "Friday", name: "Christmas" },
-  { date: "01 Jan", weekday: "Thursday", name: "New Year's Day" },
-];
-
-const quickAccess = [
-  "Reimbursement Payslip",
-  "IT Statement",
-  "YTD Reports",
-  "Loan Statement",
-];
+const WEEKDAY_FORMAT = new Intl.DateTimeFormat("en-IN", { weekday: "long", timeZone: "Asia/Kolkata" });
+const DAY_MONTH_FORMAT = new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", timeZone: "Asia/Kolkata" });
 
 export function HomePage() {
   const quote = QUOTES[new Date().getDate() % QUOTES.length]!;
-  const [salaryRevealed, setSalaryRevealed] = useState(false);
-  const { hasPermission } = useAuth();
+  const { user, hasPermission } = useAuth();
   const canApprove = hasPermission("leave.approve");
+
   const { data: pendingReview } = useQuery({
     queryKey: ["leave", "requests", "review-queue"],
     queryFn: () => leaveApi.listLeaveRequests({ status: "PENDING", pageSize: 1 }),
@@ -55,13 +41,32 @@ export function HomePage() {
   });
   const pendingCount = pendingReview?.total ?? 0;
 
+  const { data: myPending } = useQuery({
+    queryKey: ["leave", "requests", "my-pending"],
+    queryFn: () => leaveApi.listLeaveRequests({ status: "PENDING", pageSize: 5 }),
+  });
+
+  const { data: holidays } = useQuery({
+    queryKey: ["leave", "holidays", "upcoming"],
+    queryFn: () => leaveApi.listHolidays(),
+  });
+  const upcomingHolidays = (holidays ?? [])
+    .filter((h) => new Date(h.date).getTime() >= new Date().setHours(0, 0, 0, 0))
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, 3);
+
+  const { data: announcement } = useQuery({
+    queryKey: ["announcements", "active"],
+    queryFn: announcementsApi.getActiveAnnouncement,
+  });
+
   return (
     <Space orientation="vertical" size={12} style={{ width: "100%" }}>
       <Card>
         <Row align="middle" gutter={16}>
           <Col flex="auto">
             <Title level={3} style={{ marginBottom: 4 }}>
-              {greeting()}, Aditi
+              {greeting()}, {user?.fullName?.split(" ")[0] ?? ""}
             </Title>
             <Text italic type="secondary">
               "{quote.text}" — {quote.author}
@@ -87,17 +92,24 @@ export function HomePage() {
         </Row>
       </Card>
 
-      <Alert
-        type="info"
-        showIcon
-        title="Welcome to the new Wellsure HR Portal"
-        description="Attendance and leave now update in real time — no more waiting for a month-end sync."
-        action={
-          <Button size="small" type="text">
-            Learn more
-          </Button>
-        }
-      />
+      {announcement && (
+        <Card>
+          <Row align="middle" justify="space-between" gutter={16}>
+            <Col flex="auto">
+              <Text strong>{announcement.title}</Text>
+              <br />
+              <Text type="secondary">{announcement.body}</Text>
+            </Col>
+            {announcement.linkUrl && announcement.linkLabel && (
+              <Col>
+                <a href={announcement.linkUrl} target="_blank" rel="noreferrer">
+                  {announcement.linkLabel}
+                </a>
+              </Col>
+            )}
+          </Row>
+        </Card>
+      )}
 
       <Row gutter={[16, 12]}>
         <Col xs={24} md={12} xl={8}>
@@ -130,95 +142,64 @@ export function HomePage() {
             extra={<Link to="/app/leave/holiday-calendar"><ArrowRightOutlined /></Link>}
             style={{ height: "100%" }}
           >
-            <List
-              size="small"
-              dataSource={holidays}
-              renderItem={(h) => (
-                <List.Item>
-                  <Space>
-                    <Text strong>{h.date}</Text>
-                    <Text type="secondary">{h.weekday}</Text>
-                  </Space>
-                  <Text>{h.name}</Text>
-                </List.Item>
-              )}
-            />
+            {upcomingHolidays.length > 0 ? (
+              <List
+                size="small"
+                dataSource={upcomingHolidays}
+                renderItem={(h) => {
+                  const date = new Date(h.date);
+                  return (
+                    <List.Item>
+                      <Space>
+                        <Text strong>{DAY_MONTH_FORMAT.format(date)}</Text>
+                        <Text type="secondary">{WEEKDAY_FORMAT.format(date)}</Text>
+                      </Space>
+                      <Text>{h.name}</Text>
+                    </List.Item>
+                  );
+                }}
+              />
+            ) : (
+              <EmptyState message="No upcoming holidays" compact />
+            )}
           </Card>
         </Col>
 
         <Col xs={24} md={12} xl={8}>
           <Card title="Track" style={{ height: "100%" }}>
-            <EmptyState message="Nothing new to track" compact />
+            {myPending && myPending.rows.length > 0 ? (
+              <List
+                size="small"
+                dataSource={myPending.rows}
+                renderItem={(r) => (
+                  <List.Item>
+                    <Space orientation="vertical" size={0} style={{ width: "100%" }}>
+                      <Space>
+                        <Text strong>{r.leaveTypeCode}</Text>
+                        <Tag color="gold">Pending</Tag>
+                      </Space>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {r.fromDate} to {r.toDate} &middot; {r.totalDays} day(s)
+                      </Text>
+                    </Space>
+                  </List.Item>
+                )}
+              />
+            ) : (
+              <EmptyState message="Nothing new to track" compact />
+            )}
           </Card>
         </Col>
 
         <Col xs={24} md={12} xl={8}>
-          <Card
-            title="Payslip"
-            extra={<Link to="/app/salary/payslips"><ArrowRightOutlined /></Link>}
-            style={{ height: "100%" }}
-          >
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              Aug 2026 &middot; Paid Days: 19
-            </Text>
-            <div style={{ marginTop: 12 }}>
-              <Row>
-                <Col span={12}>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    Gross Pay
-                  </Text>
-                  <div>
-                    <MaskedAmount value={8580} revealed={salaryRevealed} />
-                  </div>
-                </Col>
-                <Col span={12}>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    Deduction
-                  </Text>
-                  <div>
-                    <MaskedAmount value={0} revealed={salaryRevealed} />
-                  </div>
-                </Col>
-              </Row>
-              <div style={{ marginTop: 8 }}>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  Net Pay
-                </Text>
-                <div>
-                  <MaskedAmount value={8580} revealed={salaryRevealed} color="#1a9c5e" />
-                </div>
-              </div>
-            </div>
-            <Space style={{ marginTop: 8 }}>
-              <Button type="link" size="small" icon={<FileTextOutlined />} style={{ paddingLeft: 0 }}>
-                Download
-              </Button>
-              <Button
-                type="link"
-                size="small"
-                icon={salaryRevealed ? <EyeInvisibleOutlined /> : <EyeOutlined />}
-                onClick={() => setSalaryRevealed((r) => !r)}
-              >
-                {salaryRevealed ? "Hide" : "Show Salary"}
-              </Button>
-            </Space>
+          <Card title="Payslip" style={{ height: "100%" }}>
+            <EmptyState message="Payslips are coming in Phase 6" compact />
           </Card>
         </Col>
 
         <Col xs={24} md={12} xl={8}>
           <Card title="Quick Access" style={{ height: "100%" }}>
-            <List
-              size="small"
-              dataSource={quickAccess}
-              renderItem={(item) => (
-                <List.Item>
-                  <a>{item}</a>
-                </List.Item>
-              )}
-            />
-            <Text type="secondary" style={{ fontSize: 11 }}>
-              Frequently used salary documents, one click away.
-            </Text>
+            <EmptyState message="Salary documents are coming in Phase 6" compact />
           </Card>
         </Col>
 
@@ -232,7 +213,7 @@ export function HomePage() {
                     IT Declaration
                   </Text>
                   <Text type="secondary" style={{ fontSize: 12 }}>
-                    You can submit your Income Tax declaration once released.
+                    Coming in Phase 6 — you'll be able to submit your Income Tax declaration here.
                   </Text>
                 </div>
               </Space>
@@ -245,7 +226,7 @@ export function HomePage() {
                     POI (Proof of Investment)
                   </Text>
                   <Text type="secondary" style={{ fontSize: 12 }}>
-                    You can submit your Proof of Investments once released.
+                    Coming in Phase 6 — you'll be able to submit your Proof of Investments here.
                   </Text>
                 </div>
               </Space>

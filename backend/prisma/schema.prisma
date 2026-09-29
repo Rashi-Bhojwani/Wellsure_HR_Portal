@@ -110,6 +110,9 @@ model User {
   auditLogs        AuditLog[]           @relation("AuditActor")
   settingsUpdated  SystemSetting[]
   savedViews       SavedView[]
+  notifications    Notification[]
+  favourites       UserFavourite[]
+  dashboardLayout  DashboardLayout?
 
   @@map("users")
 }
@@ -325,7 +328,8 @@ model Location {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  jobHistory EmployeeJobHistory[]
+  jobHistory    EmployeeJobHistory[]
+  announcements Announcement[]
 
   @@index([cityId])
   @@map("locations")
@@ -348,7 +352,8 @@ model Department {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  jobHistory EmployeeJobHistory[]
+  jobHistory    EmployeeJobHistory[]
+  announcements Announcement[]
 
   @@map("departments")
 }
@@ -1028,4 +1033,90 @@ model YearEndRunItem {
 
   @@index([yearEndRunId])
   @@map("year_end_run_items")
+}
+
+// ── Phase 5 — Notifications, Announcements, Admin Homepage ──────────────
+
+// Persisted per spec §8 ("every notification is also persisted in
+// notifications... and optionally emailed"). This row is the durable
+// record; Socket.IO's `notification.new` event (realtime/emit.ts) is
+// delivery on top of it, never the write itself — every write path calls
+// modules/notifications' createNotification() directly, as its own step,
+// before it emits, so a notification exists whether or not anyone is
+// connected to hear about it.
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  user      User      @relation(fields: [userId], references: [id])
+  type      String // namespaced event-shaped string, e.g. "leave.decided" — not a fixed enum, so a new
+  // notification type never needs a migration
+  title     String
+  body      String
+  link      String? // client-side route to navigate to on click
+  payload   Json? // event-specific structured data, so the frontend never has to re-fetch to render it
+  readAt    DateTime? @map("read_at") // null = unread
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+// The Home page's HR-managed banner (spec §6), replacing greytHR's
+// product-ad slot. Multiple rows can have overlapping active windows and
+// scopes — modules/announcements/service.ts resolves exactly one for a
+// given viewer: most specific scope wins (ranked by how many of
+// scopeLocationId/scopeDepartmentId are set and match), ties break on
+// the most recent activeFrom. A row with both scope columns null is
+// org-wide and always the least specific match.
+model Announcement {
+  id                String      @id @default(cuid())
+  title             String
+  body              String
+  linkLabel         String?     @map("link_label")
+  linkUrl           String?     @map("link_url")
+  scopeLocationId   String?     @map("scope_location_id")
+  scopeLocation     Location?   @relation(fields: [scopeLocationId], references: [id])
+  scopeDepartmentId String?     @map("scope_department_id")
+  scopeDepartment   Department? @relation(fields: [scopeDepartmentId], references: [id])
+  activeFrom        DateTime    @map("active_from") @db.Date
+  activeTo          DateTime    @map("active_to") @db.Date
+  isActive          Boolean     @default(true) @map("is_active") // HR can pause without losing the configured date range
+  createdByUserId   String      @map("created_by_user_id")
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+
+  @@index([scopeLocationId])
+  @@index([scopeDepartmentId])
+  @@index([activeFrom, activeTo])
+  @@map("announcements")
+}
+
+// Personal widget visibility/order for the Admin Dashboard tab's "Edit"
+// button (spec §7.1) — one row per user (a personal customization, not a
+// global admin setting), created lazily on first save.
+model DashboardLayout {
+  id        String   @id @default(cuid())
+  userId    String   @unique @map("user_id")
+  user      User     @relation(fields: [userId], references: [id])
+  layout    Json // ordered array of { key: string, visible: boolean }, one entry per known widget
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("dashboard_layouts")
+}
+
+// Admin Homepage "My Favourites" shortcut tiles (spec §7.1) — user-
+// configurable, not a fixed admin-defined list.
+model UserFavourite {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id])
+  label     String
+  icon      String // key into a fixed frontend icon set — never a free-form URL/SVG upload
+  path      String // client-side route
+  rank      Int      @default(0) // display order, lower first
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, rank])
+  @@map("user_favourites")
 }

@@ -29,6 +29,7 @@ import {
 import { adminApps, type AdminApp } from "../routes/adminMenu.config";
 import { AdminFiltersProvider, useAdminFilters } from "../context/AdminFiltersContext";
 import { useAuth } from "../hooks/useAuth";
+import { NotificationBell } from "../components/common/NotificationBell";
 
 const { Header, Content, Footer } = Layout;
 const { Text } = Typography;
@@ -192,6 +193,7 @@ function TopBar() {
 
       <Space size="large">
         <SearchOutlined style={{ fontSize: 16 }} />
+        <NotificationBell homePath="/admin" />
         <Dropdown menu={{ items: settingsMenu }}>
           <SettingOutlined style={{ fontSize: 16, cursor: "pointer" }} />
         </Dropdown>

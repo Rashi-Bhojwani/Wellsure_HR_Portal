@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Avatar,
-  Badge,
   Button,
   Drawer,
   Dropdown,
@@ -14,7 +13,6 @@ import {
   type MenuProps,
 } from "antd";
 import {
-  BellOutlined,
   DownOutlined,
   LogoutOutlined,
   MenuOutlined,
@@ -23,6 +21,7 @@ import {
 } from "@ant-design/icons";
 import { employeeMenu, isEmployeeMenuGroup } from "../routes/employeeMenu.config";
 import { useAuth } from "../hooks/useAuth";
+import { NotificationBell } from "../components/common/NotificationBell";
 
 const { Sider, Header, Content, Footer } = Layout;
 const { Text, Title } = Typography;
@@ -195,9 +194,7 @@ export function EmployeeLayout() {
                 </Space>
               </a>
             </Dropdown>
-            <Badge dot>
-              <BellOutlined style={{ fontSize: 18 }} />
-            </Badge>
+            <NotificationBell homePath="/app/home" />
             <LogoutOutlined style={{ fontSize: 18, cursor: "pointer" }} onClick={() => void handleLogout()} />
           </Space>
         </Header>

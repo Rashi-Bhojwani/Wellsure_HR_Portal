@@ -135,6 +135,11 @@ export async function createFullTestEmployee(org: TestOrgMasters, opts: { roleCo
 export async function cleanupFullTestEmployee(employeeId: string): Promise<void> {
   await prisma.refreshToken.deleteMany({ where: { user: { employeeId } } });
   await prisma.invitationToken.deleteMany({ where: { user: { employeeId } } });
+  // Phase 5 tables FK-referencing User.id — must go before the User delete
+  // below, same as every other per-user row in this function.
+  await prisma.notification.deleteMany({ where: { user: { employeeId } } });
+  await prisma.userFavourite.deleteMany({ where: { user: { employeeId } } });
+  await prisma.dashboardLayout.deleteMany({ where: { user: { employeeId } } });
   await prisma.auditLog.deleteMany({ where: { entityId: employeeId } });
   const user = await prisma.user.findUnique({ where: { employeeId } });
   if (user) {

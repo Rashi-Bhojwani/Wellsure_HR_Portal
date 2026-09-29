@@ -8,8 +8,10 @@ import { writeLedgerEntry } from "../ledger";
 describe("Leave requests — apply/approve/reject/cancel/bulk-approve (integration)", () => {
   let org: TestOrgMasters;
   let managerId: string;
+  let managerUserId: string;
   let managerToken: string;
   let employeeId: string;
+  let employeeUserId: string;
   let employeeToken: string;
   let plTypeId: string;
   const employeeIds: string[] = [];
@@ -18,11 +20,13 @@ describe("Leave requests — apply/approve/reject/cancel/bulk-approve (integrati
     org = await createEmployeeTestOrgMasters();
     const manager = await createLoginableTestEmployee(org, { roleCode: "MANAGER" });
     managerId = manager.employeeId;
+    managerUserId = manager.userId;
     employeeIds.push(managerId);
     managerToken = await loginAs(manager.employeeCode);
 
     const employee = await createLoginableTestEmployee(org, { roleCode: "EMPLOYEE", managerId });
     employeeId = employee.employeeId;
+    employeeUserId = employee.userId;
     employeeIds.push(employeeId);
     employeeToken = await loginAs(employee.employeeCode);
 
@@ -58,6 +62,16 @@ describe("Leave requests — apply/approve/reject/cancel/bulk-approve (integrati
     requestId = res.body.id as string;
   });
 
+  it("applying for leave persists a Notification for the manager (spec §8)", async () => {
+    const notification = await prisma.notification.findFirstOrThrow({
+      where: { userId: managerUserId, type: "leave.applied" },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(notification.title).toBe("New leave request");
+    expect(notification.readAt).toBeNull();
+    expect(notification.link).toBe("/admin/workforce/leave/employee-leave");
+  });
+
   it("employee cannot approve their own request", async () => {
     const res = await request(app)
       .post(`/api/leave/requests/${requestId}/approve`)
@@ -77,6 +91,15 @@ describe("Leave requests — apply/approve/reject/cancel/bulk-approve (integrati
     const balanceRes = await request(app).get("/api/leave/balances").set(...authHeader(employeeToken));
     const plBalance = balanceRes.body.balances.find((b: { leaveTypeId: string }) => b.leaveTypeId === plTypeId);
     expect(plBalance.balance).toBe(8); // 10 - 2
+  });
+
+  it("approving persists a Notification for the applicant, distinct from the applied one (spec §8)", async () => {
+    const notification = await prisma.notification.findFirstOrThrow({
+      where: { userId: employeeUserId, type: "leave.decided" },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(notification.title).toBe("Leave approved");
+    expect((notification.payload as { status: string }).status).toBe("APPROVED");
   });
 
   it("cannot approve an already-decided request again", async () => {
@@ -119,6 +142,13 @@ describe("Leave requests — apply/approve/reject/cancel/bulk-approve (integrati
       .send({ comments: "Not enough coverage" });
     expect(rejectRes.status).toBe(200);
     expect(rejectRes.body.status).toBe("REJECTED");
+
+    const notification = await prisma.notification.findFirstOrThrow({
+      where: { userId: employeeUserId, type: "leave.decided", title: "Leave rejected" },
+      orderBy: { createdAt: "desc" },
+    });
+    expect((notification.payload as { leaveRequestId: string; status: string }).status).toBe("REJECTED");
+    expect((notification.payload as { leaveRequestId: string }).leaveRequestId).toBe(id);
   });
 
   it("bulk-approve reports per-id success/failure for a mix of valid and invalid ids", async () => {

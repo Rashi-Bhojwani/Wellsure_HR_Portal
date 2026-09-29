@@ -4,7 +4,8 @@ import { writeAuditLog } from "../../lib/audit";
 import { addCalendarDays, businessToday } from "../../lib/businessDate";
 import { resolveDataScope } from "../../lib/dataScope";
 import { HttpError } from "../../middleware/errorHandler";
-import { emitLeaveApplied, emitLeaveDecided } from "../../realtime/emit";
+import { createNotification } from "../notifications/service";
+import { emitLeaveApplied, emitLeaveDecided, emitNotificationNew, emitTasksCounts } from "../../realtime/emit";
 import { getAttendanceLeaveSink, type ApprovedLeaveDay } from "./attendanceIntegration";
 import { consumeCompOffFifo, reverseCompOffConsumption } from "./compOff";
 import { withEmployeeLeaveLock } from "./concurrency";
@@ -23,6 +24,27 @@ interface ApplyLeaveInput {
   toDayPart: LeaveDayPart;
   reason?: string;
   attachmentStorageKey?: string;
+}
+
+// Notification.userId is a User id, not an Employee id — every emit room
+// (realtime/socket.ts) is keyed by employeeId, so callers pass the target
+// employeeId here and this resolves+persists+delivers in one step.
+// Persistence (createNotification) always happens before the socket
+// emit, and happens even if no one is connected — see
+// modules/notifications/service.ts's module comment for why the two are
+// deliberately separate steps, never coupled.
+async function notifyEmployee(targetEmployeeId: string, input: { type: string; title: string; body: string; link?: string | null; payload?: Record<string, unknown> }): Promise<void> {
+  const user = await prisma.user.findUnique({ where: { employeeId: targetEmployeeId } });
+  if (!user) return;
+  const notification = await createNotification({ userId: user.id, ...input });
+  emitNotificationNew(targetEmployeeId, {
+    id: notification.id,
+    type: notification.type,
+    title: notification.title,
+    body: notification.body,
+    link: notification.link,
+    createdAt: notification.createdAt.toISOString(),
+  });
 }
 
 async function assertNoLockedPeriod(employeeId: string, fromDate: Date, toDate: Date): Promise<void> {
@@ -128,10 +150,22 @@ export async function applyForLeave(input: ApplyLeaveInput, viewer: LeaveViewer,
   const formatted = await reloadFormatted(request.id);
 
   const jobHistory = await prisma.employeeJobHistory.findFirst({ where: { employeeId: targetEmployeeId, effectiveTo: null }, select: { reportingManagerId: true } });
+  const reportingManagerId = jobHistory?.reportingManagerId ?? null;
+
+  if (reportingManagerId) {
+    await notifyEmployee(reportingManagerId, {
+      type: "leave.applied",
+      title: "New leave request",
+      body: `${formatted.employeeName} applied for ${formatted.totalDays} day(s) of ${formatted.leaveTypeCode} (${formatted.fromDate} to ${formatted.toDate}).`,
+      link: "/admin/workforce/leave/employee-leave",
+      payload: { leaveRequestId: formatted.id },
+    });
+  }
   emitLeaveApplied(
     { leaveRequestId: formatted.id, employeeId: formatted.employeeId, employeeName: formatted.employeeName, leaveTypeCode: formatted.leaveTypeCode, fromDate: formatted.fromDate, toDate: formatted.toDate, totalDays: formatted.totalDays },
-    jobHistory?.reportingManagerId ?? null,
+    reportingManagerId,
   );
+  emitTasksCounts(reportingManagerId);
 
   return formatted;
 }
@@ -342,6 +376,13 @@ export async function approveLeaveRequest(requestId: string, viewer: LeaveViewer
   await getAttendanceLeaveSink().onLeaveApproved(buildApprovedLeaveDays(updated, existing.leaveType.code));
   await writeAuditLog({ ...meta, action: "leave.request.approve", entityType: "LeaveRequest", entityId: requestId, before: toAuditJson(existing), after: toAuditJson(updated) });
   const formatted = await reloadFormatted(requestId);
+  await notifyEmployee(formatted.employeeId, {
+    type: "leave.decided",
+    title: "Leave approved",
+    body: `Your ${formatted.leaveTypeCode} request (${formatted.fromDate} to ${formatted.toDate}) was approved.`,
+    link: "/app/leave/balances",
+    payload: { leaveRequestId: formatted.id, status: "APPROVED" },
+  });
   emitLeaveDecided({
     leaveRequestId: formatted.id,
     employeeId: formatted.employeeId,
@@ -352,6 +393,7 @@ export async function approveLeaveRequest(requestId: string, viewer: LeaveViewer
     totalDays: formatted.totalDays,
     status: "APPROVED",
   });
+  emitTasksCounts(viewer.employeeId);
   return formatted;
 }
 
@@ -376,6 +418,13 @@ export async function rejectLeaveRequest(requestId: string, viewer: LeaveViewer,
 
   await writeAuditLog({ ...meta, action: "leave.request.reject", entityType: "LeaveRequest", entityId: requestId, before: toAuditJson(existing), after: toAuditJson(updated) });
   const formatted = await reloadFormatted(requestId);
+  await notifyEmployee(formatted.employeeId, {
+    type: "leave.decided",
+    title: "Leave rejected",
+    body: `Your ${formatted.leaveTypeCode} request (${formatted.fromDate} to ${formatted.toDate}) was rejected.`,
+    link: "/app/leave/balances",
+    payload: { leaveRequestId: formatted.id, status: "REJECTED" },
+  });
   emitLeaveDecided({
     leaveRequestId: formatted.id,
     employeeId: formatted.employeeId,
@@ -386,6 +435,7 @@ export async function rejectLeaveRequest(requestId: string, viewer: LeaveViewer,
     totalDays: formatted.totalDays,
     status: "REJECTED",
   });
+  emitTasksCounts(viewer.employeeId);
   return formatted;
 }
 

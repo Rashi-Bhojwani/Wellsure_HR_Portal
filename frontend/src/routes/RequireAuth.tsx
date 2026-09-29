@@ -2,6 +2,7 @@ import { Navigate, Outlet } from "react-router-dom";
 import { Spin } from "antd";
 import { useAuth } from "../hooks/useAuth";
 import { useLeaveNotifications } from "../sockets/useLeaveNotifications";
+import { useNotifications } from "../sockets/useNotifications";
 
 // Gate for every /app and /admin route — redirects to /login once the
 // initial silent-refresh bootstrap (see AuthProvider) has resolved and
@@ -11,6 +12,7 @@ import { useLeaveNotifications } from "../sockets/useLeaveNotifications";
 export function RequireAuth() {
   const { isAuthenticated, isLoading } = useAuth();
   useLeaveNotifications();
+  useNotifications();
 
   if (isLoading) {
     return (

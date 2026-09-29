@@ -15,7 +15,7 @@ committed).
 | 2 | Biometric ingestion + attendance engine + real-time | Not started |
 | 3 | Attendance administration | Not started |
 | 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
-| 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | Not started |
+| 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | In progress — commit A done (notifications substrate, Employee Home, Admin Homepage Welcome + Dashboard tabs). Commits B–G (Engage, People/Documents, Helpdesk/Request Hub, Workflow Delegates, Reports, Mobile/PWA) not started. |
 | 5.5 | AWS production environment and go-live hardening | Not started |
 | 6 | Payroll | Not started |
 | 7 | Tax & benefits | Not started |
@@ -1659,6 +1659,162 @@ not clicked in the browser (already covered end-to-end by
 unnecessarily.
 
 Phase 4 is now complete.
+
+### Phase 5, commit A — notifications substrate, Employee Home, Admin Homepage (Welcome + Dashboard)
+
+Built ahead of Phase 2/3 (attendance) for the same reason Phase 4 was — spec
+§12 still lists Phase 5 next regardless, and nothing in this commit needs
+attendance data. A full written plan was reviewed and sent back with 4
+"MUST FIX" and 5 "SHOULD FIX" corrections before any code; all incorporated
+below. The mobile bottom-tab-bar commit (G) is blocked on the user adding
+four greytHR screenshots to `docs/screenshots/` and stays last in the
+7-commit plan for that reason — not started this commit.
+
+**Schema** (`backend/prisma/schema.prisma`, migration
+`20260929095306_add_phase5_notifications_announcements_dashboard`): 4 new
+models — `Notification` (userId → `User`, type/title/body/link/payload,
+`readAt` nullable = unread, indexed `[userId, readAt]`), `Announcement`
+(the Home page HR banner replacing greytHR's product ads — optional
+`scopeLocationId`/`scopeDepartmentId`, `activeFrom`/`activeTo` date
+window), `DashboardLayout` (one row per user — ordered widget-key array +
+visibility), `UserFavourite` (Admin Homepage shortcut tiles, `rank`-ordered).
+New permission: `announcements.manage` (HR_ADMIN+, same config-action
+narrowing as `settings.manage`).
+
+**Notification persistence is deliberately decoupled from the realtime
+emit** — the MUST-FIX the user caught in review: `createNotification()` is
+called directly by each write-path service function (`leave/requests.ts`'s
+`applyForLeave`/`approveLeaveRequest`/`rejectLeaveRequest`, via a new
+`notifyEmployee()` helper) as its own step, before the emit — never from
+inside `realtime/emit.ts`. The row exists whether or not anyone is
+connected; the emit (`emitNotificationNew`, → `user:{employeeId}`) is
+delivery on top of an already-durable record, never the write path itself.
+A second new emit, `emitTasksCounts` (signal-only, no payload — the
+frontend just invalidates its query on receipt), fires to the applicant's
+manager room plus every `role:HR_ADMIN`/`role:HR_EXECUTIVE` room on every
+leave apply/approve/reject.
+
+**Announcement precedence is explicit, not inferred** — the other MUST-FIX:
+`getActiveAnnouncementForEmployee()` resolves every currently-active,
+date-in-range, scope-matching row for the caller, then ranks by
+specificity (count of non-null `scopeLocationId`/`scopeDepartmentId` —
+both-scoped beats one-scoped beats org-wide) with ties broken by most
+recent `activeFrom`. Covered by dedicated tests for both rules
+(`announcements.test.ts`): a both-scoped row beating org-wide, a
+one-scoped row beating org-wide but losing to both-scoped, and two
+equally-specific rows resolving on `activeFrom` recency.
+
+**Admin Dashboard's 7 widgets** (`modules/admin/dashboard.ts`) — years in
+service, additions & attrition (last 12 calendar months), headcount by
+branch and by city, age distribution, gender split, department
+headcount — cached in Redis as one JSON blob, **TTL-only (5 minutes), no
+write-triggered invalidation** (the third MUST-FIX): the set of writes
+that could change these numbers (create, separate, a cancelled
+separation, a job-history transfer, a name/DOB/gender edit) is large and
+easy to under-cover, so a flat staleness bound was chosen deliberately
+over partial invalidation that would be wrong in ways nobody notices —
+documented as the explicit tradeoff in the module's own comment, not an
+oversight.
+
+**"My Tasks" review/monitor split** (`modules/admin/tasks.ts`) — review =
+pending items within the caller's own approval scope (gated on
+`leave.approve`, reusing the exact `listLeaveRequests` query the Review
+page already uses); monitor = org-wide pending count minus review,
+computed only for `leave.view` + ALL-scope holders. A real, slightly
+subtle consequence surfaced by the tests: an ALL-scope role that also
+holds `leave.approve` (HR_ADMIN) has its own "review" query already
+covering every org-wide pending request (ALL scope + no employeeId filter
+= sees everyone), so its monitor total nets to 0 — correct, not a gap.
+Proving "monitor" actually shows a nonzero number needed a role with
+`leave.view` + ALL scope but no `leave.approve` (PAYROLL_ADMIN, per seed).
+`RegularizationRequestSink` (the fourth MUST-FIX's counterpart —
+`modules/admin/regularizationIntegration.ts`) is the same seam shape as
+Phase 4's `AttendanceLeaveSink`: a `NoopRegularizationRequestSink`
+returning genuine zero counts today, with `setRegularizationRequestSink`
+exported for Phase 2/3 to plug a real one in later with zero call-site
+changes.
+
+**Frontend**: `pages/employee/home/HomePage.tsx` rewritten off real data —
+greeting from `useAuth().user`, Upcoming Holidays from
+`leaveApi.listHolidays()`, the announcement banner from
+`GET /api/announcements/active` (rendered only when one resolves — no
+placeholder banner when none is active), Track from the caller's own
+pending leave requests. Payslip/Quick Access/IT Declaration/POI stay
+explicit "Coming in Phase 6" states, per spec §6's own "show 'coming soon'
+earlier" for Salary. `pages/admin/home/HomePage.tsx` rewritten with a
+working Welcome tab (My Favourites CRUD with a fixed icon catalog and an
+Add Shortcut modal, My Tasks wired to the counts above, Latest Updates —
+the full admin announcement list for an `announcements.manage` holder,
+falling back to just the single active one for anyone else) and a
+Dashboard tab rendering all 7 widgets through the existing `ChartCard`/
+`useChartColors` pattern (years-in-service and age distribution as line
+charts, headcount-by-branch/city and department headcount as horizontal
+bars, gender split as a donut `PieChart`), plus an Edit modal
+(visibility toggle + reorder arrows per widget) persisting to
+`DashboardLayout`. A new shared `components/common/NotificationBell.tsx`
+(Badge + Popover list, mark-read/mark-all-read) replaced the static
+non-functional bell in `EmployeeLayout` and was added to `AdminLayout`,
+which had no bell at all before this commit. New
+`sockets/useNotifications.ts` listens for `notification.new`/
+`tasks.counts` and is wired into `RequireAuth.tsx` alongside the existing
+leave-specific hook.
+
+**A real duplicate-toast bug found and fixed via live browser testing**
+(not caught by any automated test): applying for/deciding a leave request
+now fires *two* realtime events for the same action —
+`leave.applied`/`leave.decided` (Phase 4's own channel) and the new
+generic `notification.new` (this commit's channel, since every leave
+event now also persists a `Notification` row). Both hooks were showing a
+toast, so both sides of a live two-browser apply→approve→reject walkthrough
+(screenshotted) showed the same message twice, stacked. Fixed by stripping
+the toast out of `sockets/useLeaveNotifications.ts` entirely — it's now
+cache-invalidation only (`leave.requests`/`leave.balances` query keys);
+`useNotifications` is the single place a toast gets shown, driven by the
+persisted Notification row (the actual source of truth for "what did we
+tell the user"), for every event type including leave's. Re-verified live
+after the fix: exactly one toast per action on both sides.
+
+**A real test-infrastructure gap found while running the full suite**: the
+three new Phase 5 tables FK-reference `User.id`, but the shared
+`cleanupFullTestEmployee`/`cleanupTestUser` helpers (`employeeTestHelpers.ts`,
+`authTestHelpers.ts`) didn't know to delete `Notification`/`UserFavourite`/
+`DashboardLayout` rows before deleting the `User` row — any test whose
+fixture user picked up a notification (which, after this commit, includes
+every leave apply/approve/reject integration test) hit a live FK violation
+in cleanup. Fixed in both helpers, not worked around per-test-file, since
+it's shared infrastructure every future module's tests will also rely on.
+
+**Tests** (7 new files, 271 across the backend): notification create/
+list/mark-read/mark-all-read, always self-scoped (another user's
+notification 404s, never 403, matching the codebase's existing
+don't-confirm-existence convention); announcement precedence (both rules,
+scope mismatch, expired/future windows) plus CRUD permission gating;
+dashboard widget aggregate correctness against real fixtures plus a
+cache-hit check; favourites CRUD, ownership-scoped delete, and reorder
+(including the exact-id-set validation); dashboard layout default-then-
+round-trip and an unknown-widget-key rejection; task counts' review/
+monitor split across a manager, a no-permission employee, and both flavors
+of ALL-scope viewer, plus the `RegularizationRequestSink` seam proven with
+an installed fake sink; three new assertions added to the existing
+`requests.integration.test.ts` proving each of apply/approve/reject
+persists the right `Notification` row for the right target.
+
+**Verification**: full backend suite green from a clean `migrate reset` +
+reseed on the shared dev database (271/271, 42 files, zero regressions —
+required an explicit fresh reset-consent from the user, since the database
+had accumulated stray test-fixture rows across many earlier sessions
+without ever having `prisma/seed.ts` run against it, which is why 36
+pre-existing Phase 1–4 tests were failing before the reset for reasons
+unrelated to this commit); `lint`/`typecheck` clean on both `backend/` and
+`frontend/`; frontend suite green (route-placeholder guard). Live
+Playwright walkthrough as Super Admin (Aditi) and as a plain Employee
+(Arjun) against a fresh migrate+seed on the disposable
+`wellsure_hr_devcheck` scratch database: both Home pages, the Admin
+Dashboard's real charts, the Edit Dashboard and Add Shortcut modals, and
+both portals' notification bells — plus the full apply → realtime toast →
+approve → realtime toast, and a second apply → reject round, driven
+through the real API with both browser tabs open throughout to prove the
+Socket.IO delivery live, not just via a follow-up fetch.
 
 ## Open questions
 
