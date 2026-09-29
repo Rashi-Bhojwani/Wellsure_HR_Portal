@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { getSetting } from "../../lib/settings";
+import { HttpError } from "../../middleware/errorHandler";
 
 export interface EncashmentRateResult {
   amount: Prisma.Decimal;
@@ -11,9 +12,12 @@ export interface EncashmentRateProvider {
   getDailyRate(employeeId: string, asOfDate: Date): Promise<EncashmentRateResult>;
 }
 
-export class EncashmentRateNotConfiguredError extends Error {
+// Extends HttpError (same convention InsufficientLeaveBalanceError/
+// InsufficientHoursForCompOffError already follow) so the central error
+// handler maps this to a 400 instead of falling through to a 500.
+export class EncashmentRateNotConfiguredError extends HttpError {
   constructor() {
-    super("Leave encashment daily rate is not configured. Set System Settings -> Leave -> Default Daily Rate before running Year End Process.");
+    super(400, "Leave encashment daily rate is not configured. Set System Settings -> Leave -> Default Daily Rate before running Year End Process.", "ENCASHMENT_RATE_NOT_CONFIGURED");
     this.name = "EncashmentRateNotConfiguredError";
   }
 }

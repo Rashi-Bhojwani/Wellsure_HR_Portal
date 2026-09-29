@@ -23,6 +23,13 @@ const NOTES: Record<ImportDatasetKey, string[]> = {
     "employeeCode must match an employee already on record (import the Employees dataset first).",
     "All columns are required. Committing this dataset requires the bank-details permission and a typed confirmation.",
   ],
+  "leave-grants": [
+    "employeeCode must match an employee already on record.",
+    "leaveTypeCode must be an active leave type's code (PL, LOP, WFH, RH) — COF is not supported here, use Leave Granter's Comp-Off Grant action instead (it needs hours worked, not just a day count).",
+    "days is signed: a positive number credits the balance, a negative number debits it. Never zero. Half-days are allowed, e.g. 0.5 or -0.5.",
+    "entryDate is YYYY-MM-DD — the ledger date this grant/debit is recorded against.",
+    "remarks is optional free text, shown on the ledger entry.",
+  ],
 };
 
 // Blank downloadable template (spec §10) — header row only, plus a second

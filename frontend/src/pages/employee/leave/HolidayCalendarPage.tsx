@@ -13,18 +13,18 @@ const COLUMNS = [
   { title: "Occasion", dataIndex: "name" },
 ];
 
-// Own current branch by default (leaveApi.listHolidays without a
-// locationId resolves server-side to the caller's own) — spec §5.4.
+// Company-wide — holidays don't vary by branch (spec §5.4, HR-confirmed
+// 2026-09-28).
 export function HolidayCalendarPage() {
   const [year, setYear] = useState(CURRENT_YEAR);
 
-  const { data: holidays, isLoading: loadingHolidays } = useQuery({
+  const { data: holidays = [], isLoading: loadingHolidays } = useQuery({
     queryKey: ["leave", "holidays", year],
-    queryFn: () => leaveApi.listHolidays(undefined, year),
+    queryFn: () => leaveApi.listHolidays(year),
   });
-  const { data: restrictedHolidays, isLoading: loadingRh } = useQuery({
+  const { data: restrictedHolidays = [], isLoading: loadingRh } = useQuery({
     queryKey: ["leave", "restricted-holidays", year],
-    queryFn: () => leaveApi.listRestrictedHolidays(undefined, year),
+    queryFn: () => leaveApi.listRestrictedHolidays(year),
   });
 
   return (
@@ -45,10 +45,10 @@ export function HolidayCalendarPage() {
               <Table
                 rowKey="id"
                 loading={loadingHolidays}
-                dataSource={holidays?.holidays ?? []}
+                dataSource={holidays}
                 columns={COLUMNS}
                 pagination={false}
-                locale={{ emptyText: <EmptyState message="No holidays found for your branch." /> }}
+                locale={{ emptyText: <EmptyState message="No holidays found for this year." /> }}
               />
             ),
           },
@@ -59,10 +59,10 @@ export function HolidayCalendarPage() {
               <Table
                 rowKey="id"
                 loading={loadingRh}
-                dataSource={restrictedHolidays?.holidays ?? []}
+                dataSource={restrictedHolidays}
                 columns={COLUMNS}
                 pagination={false}
-                locale={{ emptyText: <EmptyState message="No restricted holidays found for your branch." /> }}
+                locale={{ emptyText: <EmptyState message="No restricted holidays found for this year." /> }}
               />
             ),
           },

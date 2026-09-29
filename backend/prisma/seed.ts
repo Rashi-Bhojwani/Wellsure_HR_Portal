@@ -273,9 +273,10 @@ async function main() {
     data: { leaveTypeId: rhType.id, rhYearlyQuota: 2 }, // pending HR confirmation — see docs/PROGRESS.md
   });
 
-  // ── Holidays / Restricted Holidays — per branch (spec §7.8), example
-  // 2026 dates for every seeded location. HR edits these via Admin Tools
-  // -> Holiday Calendars once that screen exists (commit C). ───────────
+  // ── Holidays / Restricted Holidays — company-wide (HR-confirmed
+  // 2026-09-28: identical for every branch, see schema.prisma's comment
+  // on the Holiday model), example 2026 dates. HR edits these via Admin
+  // Tools -> Holiday Calendars. ─────────────────────────────────────────
   const HOLIDAYS_2026: Array<[string, string]> = [
     ["2026-01-26", "Republic Day"],
     ["2026-03-04", "Holi"],
@@ -291,14 +292,12 @@ async function main() {
     ["2026-08-28", "Ganesh Chaturthi"],
     ["2026-12-24", "Christmas Eve"],
   ];
-  for (const location of locations) {
-    await prisma.holiday.createMany({
-      data: HOLIDAYS_2026.map(([date, name]) => ({ locationId: location.id, date: new Date(date), name })),
-    });
-    await prisma.restrictedHoliday.createMany({
-      data: RESTRICTED_HOLIDAYS_2026.map(([date, name]) => ({ locationId: location.id, date: new Date(date), name })),
-    });
-  }
+  await prisma.holiday.createMany({
+    data: HOLIDAYS_2026.map(([date, name]) => ({ date: new Date(date), name })),
+  });
+  await prisma.restrictedHoliday.createMany({
+    data: RESTRICTED_HOLIDAYS_2026.map(([date, name]) => ({ date: new Date(date), name })),
+  });
 
   // ── Permissions + Roles ─────────────────────────────────────────────
   const permissions = await Promise.all(

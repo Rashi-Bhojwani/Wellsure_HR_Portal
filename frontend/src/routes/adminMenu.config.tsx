@@ -37,6 +37,11 @@ import {
 } from "@ant-design/icons";
 import { AdminHomePage } from "../pages/admin/home/HomePage";
 import { WorkforceOverviewPage } from "../pages/admin/workforce/OverviewPage";
+import { AdminLeaveCalendarPage } from "../pages/admin/workforce/AdminLeaveCalendarPage";
+import { EmployeeLeavePage } from "../pages/admin/workforce/EmployeeLeavePage";
+import { LeaveGranterPage } from "../pages/admin/workforce/LeaveGranterPage";
+import { YearEndProcessPage } from "../pages/admin/workforce/YearEndProcessPage";
+import { LeaveRecalculatorPage } from "../pages/admin/workforce/LeaveRecalculatorPage";
 import { OrganisationSetupPage } from "../pages/admin/organisation/OrganisationSetupPage";
 import { AllEmployeesPage } from "../pages/admin/employee/AllEmployeesPage";
 import { AddEmployeePage } from "../pages/admin/employee/AddEmployeePage";
@@ -45,6 +50,8 @@ import { ChangeRequestsPage } from "../pages/admin/employee/ChangeRequestsPage";
 import { ImportCenterPage } from "../pages/admin/import/ImportCenterPage";
 import { AuditLogPage } from "../pages/admin/auditLog/AuditLogPage";
 import { SystemSettingsPage } from "../pages/admin/settings/SystemSettingsPage";
+import { LeaveTypesPoliciesPage } from "../pages/admin/adminTools/LeaveTypesPoliciesPage";
+import { HolidayCalendarsAdminPage } from "../pages/admin/adminTools/HolidayCalendarsAdminPage";
 
 // Single source of truth for the HR/Admin portal's App Switcher and each
 // app's top-bar dropdown menus (docs/UI_REFERENCE.md §2.0). "Homepage",
@@ -125,11 +132,11 @@ export const adminApps: AdminApp[] = [
         key: "leave",
         label: "Leave",
         items: [
-          { key: "leave-calendar", label: "Leave Calendar", path: "workforce/leave/calendar", icon: CalendarOutlined, phase: "Phase 4" },
-          { key: "employee-leave", label: "Employee Leave", path: "workforce/leave/employee-leave", icon: SolutionOutlined, phase: "Phase 4" },
-          { key: "leave-granter", label: "Leave Granter", path: "workforce/leave/granter", icon: GiftOutlined, phase: "Phase 4" },
-          { key: "year-end-process", label: "Year End Process", path: "workforce/leave/year-end", icon: HistoryOutlined, phase: "Phase 4" },
-          { key: "leave-recalculator", label: "Leave Recalculator", path: "workforce/leave/recalculator", icon: CalculatorOutlined, phase: "Phase 4" },
+          { key: "leave-calendar", label: "Leave Calendar", path: "workforce/leave/calendar", icon: CalendarOutlined, element: AdminLeaveCalendarPage },
+          { key: "employee-leave", label: "Employee Leave", path: "workforce/leave/employee-leave", icon: SolutionOutlined, element: EmployeeLeavePage },
+          { key: "leave-granter", label: "Leave Granter", path: "workforce/leave/granter", icon: GiftOutlined, element: LeaveGranterPage },
+          { key: "year-end-process", label: "Year End Process", path: "workforce/leave/year-end", icon: HistoryOutlined, element: YearEndProcessPage },
+          { key: "leave-recalculator", label: "Leave Recalculator", path: "workforce/leave/recalculator", icon: CalculatorOutlined, element: LeaveRecalculatorPage },
         ],
       },
       {
@@ -234,10 +241,10 @@ export const adminApps: AdminApp[] = [
         label: "Admin Tools",
         items: [
           { key: "organisation-setup", label: "Organisation Setup", path: "admin-tools/organisation", icon: PartitionOutlined, element: OrganisationSetupPage },
-          { key: "holiday-calendars", label: "Holiday Calendars", path: "admin-tools/holidays", icon: GiftOutlined, phase: "Phase 4" },
+          { key: "holiday-calendars", label: "Holiday Calendars", path: "admin-tools/holidays", icon: GiftOutlined, element: HolidayCalendarsAdminPage },
           { key: "shift-master", label: "Shift Master", path: "admin-tools/shifts", icon: ScheduleOutlined, phase: "Phase 2" },
           { key: "week-off-patterns", label: "Week-off Patterns", path: "admin-tools/week-offs", icon: CalendarOutlined, phase: "Phase 2" },
-          { key: "leave-types-policies", label: "Leave Types & Policies", path: "admin-tools/leave-policies", icon: SolutionOutlined, phase: "Phase 4" },
+          { key: "leave-types-policies", label: "Leave Types & Policies", path: "admin-tools/leave-policies", icon: SolutionOutlined, element: LeaveTypesPoliciesPage },
           { key: "approval-workflows", label: "Approval Workflows", path: "admin-tools/workflows", icon: BranchesOutlined, phase: "Phase 5" },
           { key: "workflow-delegates-admin", label: "Workflow Delegates", path: "admin-tools/delegates", icon: UserSwitchOutlined, phase: "Phase 5" },
           { key: "users-roles", label: "Users & Roles", path: "admin-tools/users-roles", icon: TeamOutlined, phase: "Phase 1" },

@@ -3,10 +3,12 @@ import { authenticate } from "../../middleware/authenticate";
 import { requirePermission } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
 import * as controller from "./controller";
-import { updateSettingsSchema } from "./validators";
+import { updateLeaveSettingsSchema, updateSettingsSchema } from "./validators";
 
-// System Settings (spec §7.8) — security policy only in Phase 1: lockout,
-// password rules, invitation TTL, 2FA-required roles, auth rate limits.
+// System Settings (spec §7.8) — security policy (Phase 1: lockout,
+// password rules, invitation TTL, 2FA-required roles, auth rate limits)
+// plus, from Phase 4, the one leave-domain setting Year End Process needs
+// (the encashment daily rate — see modules/leave/encashmentRate.ts).
 export const settingsRouter = Router();
 settingsRouter.use(authenticate);
 
@@ -14,3 +16,6 @@ const manage = requirePermission("settings.manage");
 
 settingsRouter.get("/security", manage, controller.getSettings);
 settingsRouter.put("/security", manage, validate({ body: updateSettingsSchema }), controller.updateSettings);
+
+settingsRouter.get("/leave", manage, controller.getLeaveSettings);
+settingsRouter.put("/leave", manage, validate({ body: updateLeaveSettingsSchema }), controller.updateLeaveSettings);

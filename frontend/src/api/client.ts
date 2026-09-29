@@ -19,6 +19,13 @@ export function setAccessToken(token: string | null): void {
   accessToken = token;
 }
 
+// Read by SocketProvider for the Socket.IO handshake — the socket auth
+// payload needs the same in-memory token this module already holds for
+// the Authorization header, never a second copy.
+export function getAccessToken(): string | null {
+  return accessToken;
+}
+
 export function setOnRefreshFailed(handler: (() => void) | null): void {
   onRefreshFailed = handler;
 }

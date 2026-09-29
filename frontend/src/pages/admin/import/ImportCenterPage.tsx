@@ -15,6 +15,7 @@ const DATASET_LABELS: Record<ImportDataset, string> = {
   employees: "Employees",
   statutory: "Statutory",
   bank: "Bank",
+  "leave-grants": "Leave Grants",
 };
 
 function saveBlob(blob: Blob, fileName: string): void {
@@ -79,7 +80,11 @@ function BatchHistory({ dataset, onSelect }: { dataset: ImportDataset; onSelect:
   );
 }
 
-function DatasetTab({ dataset }: { dataset: ImportDataset }) {
+// Exported for reuse by LeaveGranterPage's bulk-upload section — the same
+// upload/validate/commit/history component, just parametrised by
+// dataset="leave-grants" instead of embedded only in this Import Center
+// (Employee/Admin Tools) screen.
+export function ImportDatasetTab({ dataset }: { dataset: ImportDataset }) {
   const { hasPermission } = useAuth();
   const queryClient = useQueryClient();
   // batchId is tracked separately from `result` — UploadResult keys its id
@@ -243,10 +248,10 @@ export function ImportCenterPage() {
       </Title>
       <Tabs
         items={[
-          { key: "org-masters", label: "Org Masters", children: <DatasetTab dataset="org-masters" /> },
-          { key: "employees", label: "Employees", children: <DatasetTab dataset="employees" /> },
-          { key: "statutory", label: "Statutory", children: <DatasetTab dataset="statutory" /> },
-          { key: "bank", label: "Bank", children: <DatasetTab dataset="bank" /> },
+          { key: "org-masters", label: "Org Masters", children: <ImportDatasetTab dataset="org-masters" /> },
+          { key: "employees", label: "Employees", children: <ImportDatasetTab dataset="employees" /> },
+          { key: "statutory", label: "Statutory", children: <ImportDatasetTab dataset="statutory" /> },
+          { key: "bank", label: "Bank", children: <ImportDatasetTab dataset="bank" /> },
           { key: "reconciliation", label: "Reconciliation Report", children: <ReconciliationTab /> },
         ]}
       />

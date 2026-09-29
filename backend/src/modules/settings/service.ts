@@ -1,8 +1,8 @@
 import { getSetting, setSetting } from "../../lib/settings";
 import { writeAuditLog } from "../../lib/audit";
-import { RATE_LIMIT_DEFAULTS, RATE_LIMIT_KEYS, type RateLimitSetting, type SecuritySettings } from "./types";
+import { RATE_LIMIT_DEFAULTS, RATE_LIMIT_KEYS, type LeaveSettings, type RateLimitSetting, type SecuritySettings } from "./types";
 import type { z } from "zod";
-import type { updateSettingsSchema } from "./validators";
+import type { updateLeaveSettingsSchema, updateSettingsSchema } from "./validators";
 
 const RATE_LIMIT_SETTING_KEY: Record<(typeof RATE_LIMIT_KEYS)[number], string> = {
   login: "auth.rateLimit.login",
@@ -67,5 +67,22 @@ export async function updateSettings(input: UpdateInput, meta: { actorUserId: st
 
   const after = await getSettings();
   await writeAuditLog({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "security", before, after });
+  return after;
+}
+
+export async function getLeaveSettings(): Promise<LeaveSettings> {
+  const encashmentDefaultDailyRate = await getSetting<number | null>("leave.encashment.defaultDailyRate", null);
+  return { encashmentDefaultDailyRate };
+}
+
+type UpdateLeaveInput = z.infer<typeof updateLeaveSettingsSchema>;
+
+export async function updateLeaveSettings(input: UpdateLeaveInput, meta: { actorUserId: string; ipAddress?: string | null; userAgent?: string | null }): Promise<LeaveSettings> {
+  const before = await getLeaveSettings();
+  if (input.encashmentDefaultDailyRate !== undefined) {
+    await setSetting("leave.encashment.defaultDailyRate", input.encashmentDefaultDailyRate, meta.actorUserId);
+  }
+  const after = await getLeaveSettings();
+  await writeAuditLog({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "leave", before, after });
   return after;
 }

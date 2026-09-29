@@ -34,10 +34,11 @@ export interface ReferenceData {
   panHashes: Set<string>;
   aadhaarHashes: Set<string>;
   activeAccountNumberHashes: Set<string>;
+  activeLeaveTypeCodeToId: Map<string, string>; // lowercased code -> id, isActive types only, COF excluded
 }
 
 export async function loadReferenceData(): Promise<ReferenceData> {
-  const [cities, locations, departments, designations, grades, costCentres, employees, deviceMappings, statutories, bankAccounts] =
+  const [cities, locations, departments, designations, grades, costCentres, employees, deviceMappings, statutories, bankAccounts, leaveTypes] =
     await Promise.all([
       prisma.city.findMany({ select: { name: true } }),
       prisma.location.findMany({ select: { id: true, code: true, name: true } }),
@@ -49,6 +50,7 @@ export async function loadReferenceData(): Promise<ReferenceData> {
       prisma.deviceUserMapping.findMany({ where: { validTo: null }, select: { deviceUserId: true } }),
       prisma.employeeStatutory.findMany({ select: { panHash: true, aadhaarHash: true } }),
       prisma.employeeBankAccount.findMany({ where: { effectiveTo: null }, select: { accountNumberHash: true } }),
+      prisma.leaveType.findMany({ where: { isActive: true, code: { not: "COF" } }, select: { id: true, code: true } }),
     ]);
 
   return {
@@ -71,6 +73,7 @@ export async function loadReferenceData(): Promise<ReferenceData> {
     panHashes: new Set(statutories.filter((s) => s.panHash).map((s) => s.panHash!)),
     aadhaarHashes: new Set(statutories.filter((s) => s.aadhaarHash).map((s) => s.aadhaarHash!)),
     activeAccountNumberHashes: new Set(bankAccounts.map((b) => b.accountNumberHash)),
+    activeLeaveTypeCodeToId: new Map(leaveTypes.map((t) => [t.code.toLowerCase(), t.id])),
   };
 }
 
@@ -360,6 +363,57 @@ export function validateBankRow(row: ParsedRow, refs: ReferenceData, tracker: Ba
     data.accountNumberLast4 = enc.accountNumberLast4;
     data.accountNumberHash = enc.accountNumberHash;
   }
+
+  return { data, errors, warnings };
+}
+
+// ── leave-grants ─────────────────────────────────────────────────────────
+// Bulk PL/LOP/WFH/RH grants and debits (Leave Granter's Excel path). COF is
+// deliberately out of scope here — it needs hoursWorked to compute
+// eligibility/expiry (see compOff.ts's creditCompOff), not just a day
+// count, so a COF row is rejected with a pointer to Leave Granter's own
+// Comp-Off Grant action instead of silently mis-handling it.
+
+const DAYS_RE = /^-?\d+(\.\d{1,2})?$/;
+
+export function validateLeaveGrantRow(row: ParsedRow, refs: ReferenceData, _tracker: BatchTracker): RowResult {
+  const v = row.values;
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const employeeCode = v.employeeCode!.trim();
+  const leaveTypeCode = v.leaveTypeCode!.trim().toUpperCase();
+  const data: Record<string, unknown> = { employeeCode, leaveTypeCode, days: v.days, entryDate: v.entryDate, remarks: v.remarks || undefined };
+
+  if (!employeeCode) {
+    errors.push("employeeCode is required.");
+  } else if (!refs.employeeCodeToId.has(employeeCode.toLowerCase())) {
+    errors.push(`Unknown employee code "${employeeCode}" — import the Employees dataset first.`);
+  }
+
+  if (!v.leaveTypeCode) {
+    errors.push("leaveTypeCode is required.");
+  } else if (leaveTypeCode === "COF") {
+    errors.push("COF is not supported here — use Leave Granter's Comp-Off Grant action (it needs hours worked, not just a day count).");
+  } else if (!refs.activeLeaveTypeCodeToId.has(leaveTypeCode.toLowerCase())) {
+    errors.push(`Unknown or inactive leave type code "${leaveTypeCode}".`);
+  }
+
+  if (!v.days) {
+    errors.push("days is required.");
+  } else if (!DAYS_RE.test(v.days)) {
+    errors.push("days must be a whole or half number, e.g. 1, -0.5, 2.5 (positive credits, negative debits).");
+  } else if (Number(v.days) === 0) {
+    errors.push("days must not be zero.");
+  }
+
+  if (!v.entryDate) errors.push("entryDate is required.");
+  else if (!isValidDate(v.entryDate)) errors.push("entryDate must be a valid YYYY-MM-DD date.");
+
+  // Duplicate-in-file tracking (the tracker param other validators use)
+  // deliberately omitted: two grants for the same employee+date are a
+  // legitimate correction pattern (e.g. a same-day credit then a same-day
+  // debit), not an error signal the way a repeated PAN or account number
+  // would be.
 
   return { data, errors, warnings };
 }

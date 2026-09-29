@@ -1,11 +1,14 @@
 /* eslint-disable react-refresh/only-export-components -- context + hook are colocated by design */
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { io, type Socket } from "socket.io-client";
+import { getAccessToken } from "../api/client";
 
 // Socket.IO client wrapper (spec §8). Connection is opt-in via `enabled`
-// — nothing should auto-connect until real sessions exist in Phase 1, and
-// none of the real-time events (attendance.updated, leave.applied, ...)
-// are wired up until the modules that emit them land in Phase 2+.
+// — App.tsx flips this on/off with useAuth()'s isAuthenticated, so a
+// socket only ever connects for a signed-in user. Handshake auth sends
+// the same in-memory access token every REST call already uses (see
+// realtime/socket.ts's server-side verification); useLeaveNotifications
+// is what actually listens for events once connected.
 
 interface SocketContextValue {
   socket: Socket | null;
@@ -26,7 +29,7 @@ export function SocketProvider({
   // `enabled` only flips on login/logout, so recreating the instance on
   // change (rather than mutating one in a ref) is cheap and keeps the
   // instance safe to read during render.
-  const socket = useMemo(() => (enabled ? io(API_BASE_URL, { withCredentials: true }) : null), [enabled]);
+  const socket = useMemo(() => (enabled ? io(API_BASE_URL, { withCredentials: true, auth: { token: getAccessToken() } }) : null), [enabled]);
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {

@@ -76,6 +76,7 @@ enum ImportDataset {
   EMPLOYEES
   STATUTORY
   BANK
+  LEAVE_GRANTS
 }
 
 enum ImportBatchStatus {
@@ -324,9 +325,7 @@ model Location {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  jobHistory         EmployeeJobHistory[]
-  holidays           Holiday[]
-  restrictedHolidays RestrictedHoliday[]
+  jobHistory EmployeeJobHistory[]
 
   @@index([cityId])
   @@map("locations")
@@ -415,9 +414,10 @@ model Employee {
   documents      EmployeeDocument[]
   changeRequests ProfileChangeRequest[]
   separations    Separation[]
-  leaveRequests  LeaveRequest[]         @relation("LeaveRequestOwner")
-  leaveLedger    LeaveLedger[]
-  compOffCredits CompOffCredit[]
+  leaveRequests   LeaveRequest[]    @relation("LeaveRequestOwner")
+  leaveLedger     LeaveLedger[]
+  compOffCredits  CompOffCredit[]
+  yearEndRunItems YearEndRunItem[]
 
   @@index([status])
   @@index([dateOfJoining])
@@ -900,38 +900,36 @@ model LeaveRequest {
 // cross-row invariants that aren't a single-row uniqueness fact.
 
 model Holiday {
-  id         String   @id @default(cuid())
-  locationId String   @map("location_id")
-  location   Location @relation(fields: [locationId], references: [id])
-  date       DateTime @db.Date
-  name       String
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  id        String   @id @default(cuid())
+  date      DateTime @db.Date
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@unique([locationId, date])
-  @@index([date])
+  @@unique([date])
   @@map("holidays")
 }
 
 model RestrictedHoliday {
-  id         String   @id @default(cuid())
-  locationId String   @map("location_id")
-  location   Location @relation(fields: [locationId], references: [id])
-  date       DateTime @db.Date
-  name       String
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  id        String   @id @default(cuid())
+  date      DateTime @db.Date
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@unique([locationId, date])
-  @@index([date])
+  @@unique([date])
   @@map("restricted_holidays")
 }
 
-// Both per-branch (spec §7.8 — "adding a branch is a data change, never a
-// code change"). An employee "applies" for an RH via a normal
-// LeaveRequest (leaveType = RH, fromDate = toDate = one of these dates),
-// validated against their location's list and leave_policies.rh_yearly_
-// quota — no separate selection table needed.
+// Company-wide, not per-branch (HR-confirmed 2026-09-28 — see docs/
+// PROJECT_SPEC.md §1/§7.8 and docs/PROGRESS.md's Phase 4 commit D log:
+// holidays, leave policies, shifts, week-off patterns and attendance
+// rules are identical for every branch; a branch's only real difference
+// is which biometric device its punches come from, a device-to-branch
+// mapping Phase 2 owns, not a policy difference). An employee "applies"
+// for an RH via a normal LeaveRequest (leaveType = RH, fromDate = toDate
+// = one of these dates), validated against this one list and
+// leave_policies.rh_yearly_quota — no separate selection table needed.
 
 enum CompOffCreditStatus {
   AVAILABLE // remainingDays > 0, not expired
@@ -1016,6 +1014,7 @@ model YearEndRunItem {
   yearEndRunId            String     @map("year_end_run_id")
   yearEndRun              YearEndRun @relation(fields: [yearEndRunId], references: [id], onDelete: Cascade)
   employeeId              String     @map("employee_id")
+  employee                Employee   @relation(fields: [employeeId], references: [id])
   closingPlBalance        Decimal    @map("closing_pl_balance") @db.Decimal(5, 2)
   encashedDays            Decimal    @map("encashed_days") @db.Decimal(5, 2) // == closingPlBalance (no cap today)
   dailyRate               Decimal    @map("daily_rate") @db.Decimal(10, 2) // resolved via EncashmentRateProvider
