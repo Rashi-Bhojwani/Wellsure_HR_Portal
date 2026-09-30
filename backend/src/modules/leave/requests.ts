@@ -1,11 +1,11 @@
+import { notifyEmployee } from "../notifications/notifyEmployee";
 import type { LeaveDayPart, LeaveRequestStatus, Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { writeAuditLog } from "../../lib/audit";
 import { addCalendarDays, businessToday } from "../../lib/businessDate";
 import { resolveDataScope } from "../../lib/dataScope";
 import { HttpError } from "../../middleware/errorHandler";
-import { createNotification } from "../notifications/service";
-import { emitLeaveApplied, emitLeaveDecided, emitNotificationNew, emitTasksCounts } from "../../realtime/emit";
+import { emitLeaveApplied, emitLeaveDecided, emitTasksCounts } from "../../realtime/emit";
 import { getAttendanceLeaveSink, type ApprovedLeaveDay } from "./attendanceIntegration";
 import { consumeCompOffFifo, reverseCompOffConsumption } from "./compOff";
 import { withEmployeeLeaveLock } from "./concurrency";
@@ -33,20 +33,6 @@ interface ApplyLeaveInput {
 // emit, and happens even if no one is connected — see
 // modules/notifications/service.ts's module comment for why the two are
 // deliberately separate steps, never coupled.
-async function notifyEmployee(targetEmployeeId: string, input: { type: string; title: string; body: string; link?: string | null; payload?: Record<string, unknown> }): Promise<void> {
-  const user = await prisma.user.findUnique({ where: { employeeId: targetEmployeeId } });
-  if (!user) return;
-  const notification = await createNotification({ userId: user.id, ...input });
-  emitNotificationNew(targetEmployeeId, {
-    id: notification.id,
-    type: notification.type,
-    title: notification.title,
-    body: notification.body,
-    link: notification.link,
-    createdAt: notification.createdAt.toISOString(),
-  });
-}
-
 async function assertNoLockedPeriod(employeeId: string, fromDate: Date, toDate: Date): Promise<void> {
   const sink = getAttendanceLeaveSink();
   for (let d = fromDate; d.getTime() <= toDate.getTime(); d = addCalendarDays(d, 1)) {

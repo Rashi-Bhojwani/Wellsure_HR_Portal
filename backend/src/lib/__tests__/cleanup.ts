@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { storageService } from "../../integrations/storage";
 import { prisma } from "../prisma";
 
 // Schema-driven test cleanup.
@@ -45,6 +46,9 @@ export const OPTIONAL_FK_POLICY: Record<string, Policy> = {
   // Nulling the scope would turn a scoped announcement into an org-wide one.
   "Announcement.scopeLocationId": "delete",
   "Announcement.scopeDepartmentId": "delete",
+  // Same reasoning: a scoped company document must never become org-wide.
+  "CompanyDocument.scopeLocationId": "delete",
+  "CompanyDocument.scopeDepartmentId": "delete",
   // Posts written by, or auto-posted about, an employee belong to them.
   "Post.authorEmployeeId": "delete",
   "Post.subjectEmployeeId": "delete",
@@ -77,8 +81,23 @@ export const STANDALONE_ROOT_MODELS: Record<string, string> = {
   YearEndRun: "year-end run; tests delete by id (items cascade)",
   Announcement: "HR announcement; tests delete by id",
   Group: "Engage group; cleanupEngageGroups",
+  DocumentCategory: "document category master; deleteWithDependents(\"DocumentCategory\", ids) takes its documents with it",
   EngageAutoPostSetting: "id-less closed catalog keyed by `kind`; cleanupAutoPostSetting",
 };
+
+// Columns holding a StorageService key. When the engine deletes a row it
+// also deletes the stored object, so tests that upload files don't leave
+// them behind in .storage/. The guard fails on any column that looks like a
+// storage key (…StorageKey / fileKey) but isn't listed here.
+export const STORAGE_KEY_COLUMNS: Record<string, string[]> = {
+  EmployeePersonal: ["photoStorageKey", "photoThumbStorageKey"],
+  EmployeeDocument: ["fileKey"],
+  CompanyDocument: ["fileKey"],
+  YearEndRun: ["reportStorageKey"],
+  LeaveRequest: ["attachmentStorageKey"],
+  Company: ["logoStorageKey"],
+};
+const STORAGE_KEY_COLUMN_PATTERN = /(StorageKey|^fileKey|^storageKey)$/;
 
 interface Edge {
   parent: string;
@@ -163,6 +182,25 @@ export function findCleanupSchemaProblems(): string[] {
         `${edge.child}.${edge.fk} points at ${edge.parent}, which has no single "id" primary key, so the engine ` +
           `can't collect its dependents. Give ${edge.parent} an "id" column.`,
       );
+    }
+  }
+
+  for (const model of models) {
+    for (const field of model.fields) {
+      if (field.kind !== "scalar" || !STORAGE_KEY_COLUMN_PATTERN.test(field.name)) continue;
+      if (!STORAGE_KEY_COLUMNS[model.name]?.includes(field.name)) {
+        problems.push(
+          `${model.name}.${field.name} looks like a StorageService key but isn't in STORAGE_KEY_COLUMNS in ` +
+            `backend/src/lib/__tests__/cleanup.ts — add it, so deleting a ${model.name} row in tests also deletes its stored file.`,
+        );
+      }
+    }
+  }
+  for (const [modelName, columns] of Object.entries(STORAGE_KEY_COLUMNS)) {
+    for (const column of columns) {
+      if (!modelByName.get(modelName)?.fields.some((f) => f.name === column)) {
+        problems.push(`STORAGE_KEY_COLUMNS lists ${modelName}.${column}, which no longer exists — remove it from backend/src/lib/__tests__/cleanup.ts.`);
+      }
     }
   }
 
@@ -281,6 +319,22 @@ export async function deleteWithDependents(model: string, ids: string[]): Promis
   for (const { child, fk, parentIds } of nullify) {
     await delegate(child).updateMany({ where: { [fk]: { in: parentIds } }, data: { [fk]: null } });
   }
+  // Stored files first, while the rows that name them still exist.
+  for (const [name, idSet] of collected) {
+    const columns = STORAGE_KEY_COLUMNS[name];
+    if (!columns || idSet.size === 0) continue;
+    const rows = await delegate(name).findMany({
+      where: { id: { in: [...idSet] } },
+      select: Object.fromEntries(columns.map((c) => [c, true])) as never,
+    });
+    for (const row of rows as unknown as Record<string, string | null>[]) {
+      for (const column of columns) {
+        const key = row[column];
+        if (key) await storageService.deleteObject(key);
+      }
+    }
+  }
+
   for (const name of deletionOrder()) {
     const idSet = collected.get(name);
     if (idSet && idSet.size > 0) await delegate(name).deleteMany({ where: { id: { in: [...idSet] } } });

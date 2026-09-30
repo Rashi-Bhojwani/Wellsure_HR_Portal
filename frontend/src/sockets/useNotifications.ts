@@ -27,11 +27,14 @@ export function useNotifications(): void {
 
     function onNotificationNew(payload: NotificationEventPayload): void {
       antdNotification.info({
-        message: payload.title,
+        title: payload.title,
         description: payload.body,
         placement: "topRight",
       });
       void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      // HR shared a document with this employee (Phase 5 commit C) — refresh
+      // My Documents live rather than waiting for a reload.
+      if (payload.type.startsWith("document.")) void queryClient.invalidateQueries({ queryKey: ["documents", "mine"] });
     }
 
     function onTasksCounts(): void {

@@ -330,6 +330,7 @@ model Location {
 
   jobHistory    EmployeeJobHistory[]
   announcements Announcement[]
+  companyDocuments CompanyDocument[]
 
   @@index([cityId])
   @@map("locations")
@@ -354,6 +355,7 @@ model Department {
 
   jobHistory    EmployeeJobHistory[]
   announcements Announcement[]
+  companyDocuments CompanyDocument[]
 
   @@map("departments")
 }
@@ -433,6 +435,8 @@ model Employee {
   reactions      Reaction[]
   groupMembers   GroupMember[]
 
+  companyDocumentDownloads CompanyDocumentDownload[]
+
   @@index([status])
   @@index([dateOfJoining])
   @@map("employees")
@@ -459,7 +463,13 @@ model EmployeePersonal {
   emergencyContactPhone    String   @map("emergency_contact_phone")
   emergencyContactRelation String   @map("emergency_contact_relation")
   bloodGroup               String?  @map("blood_group")
-  photoStorageKey          String?  @map("photo_storage_key")
+  // Photo objects are only ever written by the photo upload endpoint
+  // (modules/people/photos.ts), which re-encodes the image with sharp and
+  // strips all metadata — never settable as a raw key through any other
+  // API, or a caller could point it at someone else's stored file.
+  photoStorageKey          String?  @map("photo_storage_key") // re-encoded 512px WebP
+  photoThumbStorageKey     String?  @map("photo_thumb_storage_key") // 96x96 WebP for the directory/org chart
+  photoVersion             String?  @map("photo_version") // changes on every photo change; cache-busts image URLs
   createdAt                DateTime @default(now()) @map("created_at")
   updatedAt                DateTime @updatedAt @map("updated_at")
 
@@ -607,17 +617,25 @@ model DeviceUserMapping {
 // active mapping per device ID — (device_user_id) WHERE valid_to IS NULL.
 // raw_punches/devices tables themselves are still Phase 2, not built here.
 
+// Per-employee files HR keeps (letters, ID proofs, …) — Phase 5 commit C.
+// HR-only uploads; the employee sees a document only when HR marks it
+// visibleToEmployee. Archived, never deleted.
 model EmployeeDocument {
-  id               String   @id @default(cuid())
-  employeeId       String   @map("employee_id")
-  employee         Employee @relation(fields: [employeeId], references: [id])
-  documentType     String   @map("document_type") // free-text/controlled-vocab, not an enum — expands a lot from Phase 5's letter generation
-  fileKey          String   @map("file_key") // StorageService key
-  fileName         String   @map("file_name")
-  mimeType         String   @map("mime_type")
-  sizeBytes        Int      @map("size_bytes")
-  uploadedByUserId String   @map("uploaded_by_user_id")
-  uploadedAt       DateTime @default(now()) @map("uploaded_at")
+  id                String           @id @default(cuid())
+  employeeId        String           @map("employee_id")
+  employee          Employee         @relation(fields: [employeeId], references: [id])
+  categoryId        String           @map("category_id")
+  category          DocumentCategory @relation(fields: [categoryId], references: [id])
+  title             String
+  fileKey           String           @map("file_key") // StorageService key
+  fileName          String           @map("file_name")
+  mimeType          String           @map("mime_type")
+  sizeBytes         Int              @map("size_bytes")
+  visibleToEmployee Boolean          @default(false) @map("visible_to_employee")
+  uploadedByUserId  String           @map("uploaded_by_user_id")
+  uploadedAt        DateTime         @default(now()) @map("uploaded_at")
+  archivedAt        DateTime?        @map("archived_at")
+  archivedByUserId  String?          @map("archived_by_user_id")
 
   @@index([employeeId])
   @@map("employee_documents")
@@ -1085,9 +1103,9 @@ model Announcement {
   linkLabel         String?     @map("link_label")
   linkUrl           String?     @map("link_url")
   scopeLocationId   String?     @map("scope_location_id")
-  scopeLocation     Location?   @relation(fields: [scopeLocationId], references: [id])
+  scopeLocation     Location?   @relation(fields: [scopeLocationId], references: [id], onDelete: Restrict)
   scopeDepartmentId String?     @map("scope_department_id")
-  scopeDepartment   Department? @relation(fields: [scopeDepartmentId], references: [id])
+  scopeDepartment   Department? @relation(fields: [scopeDepartmentId], references: [id], onDelete: Restrict)
   activeFrom        DateTime    @map("active_from") @db.Date
   activeTo          DateTime    @map("active_to") @db.Date
   isActive          Boolean     @default(true) @map("is_active") // HR can pause without losing the configured date range
@@ -1327,4 +1345,76 @@ model EngageAutoPostSetting {
   updatedAt DateTime     @updatedAt @map("updated_at")
 
   @@map("engage_auto_post_settings")
+}
+
+// ── Documents (Phase 5 commit C) ─────────────────────────────────────────
+
+enum DocumentCategoryScope {
+  COMPANY // company policies, forms — CompanyDocument
+  EMPLOYEE // letters, ID proofs — EmployeeDocument
+}
+
+// Admin-editable master (standing rule: nothing hardcoded). Deactivated,
+// never deleted, once any document references it.
+model DocumentCategory {
+  id        String                @id @default(cuid())
+  code      String                @unique
+  name      String
+  appliesTo DocumentCategoryScope @map("applies_to")
+  isActive  Boolean               @default(true) @map("is_active")
+  sortOrder Int                   @default(0) @map("sort_order")
+  createdAt DateTime              @default(now()) @map("created_at")
+  updatedAt DateTime              @updatedAt @map("updated_at")
+
+  companyDocuments  CompanyDocument[]
+  employeeDocuments EmployeeDocument[]
+
+  @@map("document_categories")
+}
+
+// Document Center's company-wide files. Audience uses the same rule as
+// Announcement: a null scope column matches everyone, a set one must match
+// the employee's current job row, both set = the intersection.
+model CompanyDocument {
+  id                String           @id @default(cuid())
+  title             String
+  description       String?
+  categoryId        String           @map("category_id")
+  category          DocumentCategory @relation(fields: [categoryId], references: [id])
+  fileKey           String           @map("file_key")
+  fileName          String           @map("file_name")
+  mimeType          String           @map("mime_type")
+  sizeBytes         Int              @map("size_bytes")
+  scopeLocationId   String?          @map("scope_location_id")
+  scopeLocation     Location?        @relation(fields: [scopeLocationId], references: [id], onDelete: Restrict)
+  scopeDepartmentId String?          @map("scope_department_id")
+  scopeDepartment   Department?      @relation(fields: [scopeDepartmentId], references: [id], onDelete: Restrict)
+  uploadedByUserId  String           @map("uploaded_by_user_id")
+  uploadedAt        DateTime         @default(now()) @map("uploaded_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+  archivedAt        DateTime?        @map("archived_at")
+  archivedByUserId  String?          @map("archived_by_user_id")
+
+  downloads CompanyDocumentDownload[]
+
+  @@index([categoryId])
+  @@map("company_documents")
+}
+
+// Who has downloaded which company document — one row per (document,
+// employee), upserted on every download. Deliberately not an audit_logs
+// row per click: this answers "who has read the new policy" directly,
+// without acknowledgement (out of scope) and without flooding the audit log.
+model CompanyDocumentDownload {
+  id                String          @id @default(cuid())
+  documentId        String          @map("document_id")
+  document          CompanyDocument @relation(fields: [documentId], references: [id])
+  employeeId        String          @map("employee_id")
+  employee          Employee        @relation(fields: [employeeId], references: [id])
+  firstDownloadedAt DateTime        @default(now()) @map("first_downloaded_at")
+  lastDownloadedAt  DateTime        @default(now()) @map("last_downloaded_at")
+  downloadCount     Int             @default(1) @map("download_count")
+
+  @@unique([documentId, employeeId])
+  @@map("company_document_downloads")
 }

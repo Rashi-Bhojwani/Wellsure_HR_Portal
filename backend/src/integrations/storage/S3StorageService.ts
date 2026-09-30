@@ -1,7 +1,7 @@
 import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { env } from "../../config/env";
-import type { StorageService } from "./StorageService";
+import { attachmentContentDisposition, type SignedUrlOptions, type StorageService } from "./StorageService";
 
 // The AWS implementation — selected by STORAGE_DRIVER=s3 (staging/production
 // only; local dev uses LocalStorageService). Credentials and region come
@@ -24,10 +24,19 @@ export class S3StorageService implements StorageService {
     );
   }
 
-  async getObjectSignedUrl(key: string, expiresInSeconds = 900): Promise<string> {
-    return getSignedUrl(this.client, new GetObjectCommand({ Bucket: this.bucket, Key: key }), {
-      expiresIn: expiresInSeconds,
+  async getObject(key: string): Promise<{ body: Buffer; contentType: string }> {
+    const result = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+    if (!result.Body) throw new Error(`S3 object has no body: ${key}`);
+    return { body: Buffer.from(await result.Body.transformToByteArray()), contentType: result.ContentType ?? "application/octet-stream" };
+  }
+
+  async getObjectSignedUrl(key: string, expiresInSeconds = 900, options: SignedUrlOptions = {}): Promise<string> {
+    const command = new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+      ...(options.downloadFileName && { ResponseContentDisposition: attachmentContentDisposition(options.downloadFileName) }),
     });
+    return getSignedUrl(this.client, command, { expiresIn: expiresInSeconds });
   }
 
   async deleteObject(key: string): Promise<void> {

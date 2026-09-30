@@ -3,7 +3,8 @@ import { LocalStorageService } from "./LocalStorageService";
 import { S3StorageService } from "./S3StorageService";
 import type { StorageService } from "./StorageService";
 
-export type { StorageService } from "./StorageService";
+export type { SignedUrlOptions, StorageService } from "./StorageService";
+export { attachmentContentDisposition } from "./StorageService";
 export { devStorageRouter } from "./devRoute";
 
 function createStorageService(): StorageService {

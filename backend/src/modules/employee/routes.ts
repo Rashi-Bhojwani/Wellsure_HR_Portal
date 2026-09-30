@@ -3,6 +3,8 @@ import { authenticate } from "../../middleware/authenticate";
 import { requirePermission } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
 import * as controller from "./controller";
+import { memoryUpload } from "../../lib/uploads";
+import { MAX_PHOTO_UPLOAD_MB_CEILING } from "@shared/constants/peopleDocuments";
 import {
   bankUpdateSchema,
   createChangeRequestSchema,
@@ -35,6 +37,7 @@ const canEditStatutory = requirePermission("employee.statutory.edit");
 const canSeparate = requirePermission("employee.separate");
 const canViewSeparations = requirePermission("employee.separate.view");
 const canApproveChangeRequest = requirePermission("profile.changerequest.approve");
+const photoUpload = memoryUpload(MAX_PHOTO_UPLOAD_MB_CEILING);
 
 // ── Literal routes first — must precede /:id so Express doesn't try to
 // match "change-requests"/"separations"/etc. as an :id value. ────────────
@@ -51,6 +54,10 @@ employeeRouter.delete("/saved-views/:id", validate({ params: idParamsSchema }), 
 
 employeeRouter.get("/me", controller.getMyProfile);
 employeeRouter.patch("/me", validate({ body: selfServiceUpdateSchema }), controller.updateSelfService);
+// Photos — multipart "file"; re-encoded server-side (modules/people/photos.ts).
+// Multer's cap is the hard ceiling; the admin-set limit is checked per request.
+employeeRouter.put("/me/photo", photoUpload, controller.uploadMyPhoto);
+employeeRouter.delete("/me/photo", controller.removeMyPhoto);
 
 employeeRouter.post("/change-requests", validate({ body: createChangeRequestSchema }), controller.createChangeRequest);
 employeeRouter.get("/change-requests", controller.listChangeRequests);
@@ -91,6 +98,8 @@ employeeRouter.patch(
   validate({ params: idParamsSchema, body: statutoryUpdateSchema }),
   controller.updateStatutory,
 );
+employeeRouter.put("/:id/photo", canEdit, validate({ params: idParamsSchema }), photoUpload, controller.uploadPhoto);
+employeeRouter.delete("/:id/photo", canEdit, validate({ params: idParamsSchema }), controller.removePhoto);
 employeeRouter.patch("/:id/personal", canEdit, validate({ params: idParamsSchema, body: personalUpdateSchema }), controller.updatePersonal);
 
 employeeRouter.post(

@@ -22,7 +22,7 @@ interface GridRow {
   id: string;
   employeeCode: string;
   fullName: string;
-  photoStorageKey: string | null;
+  photoVersion: string | null;
   department: string;
   designation: string;
   location: string;
@@ -95,7 +95,7 @@ async function loadRows(where: Prisma.EmployeeWhereInput, includeSensitive: { ba
       id: employee.id,
       employeeCode: employee.employeeCode,
       fullName: employee.nameHistory[0]?.fullName ?? employee.employeeCode,
-      photoStorageKey: employee.personal?.photoStorageKey ?? null,
+      photoVersion: employee.personal?.photoVersion ?? null,
       department: job?.department.name ?? "—",
       designation: job?.designation.name ?? "—",
       location: job?.location.name ?? "—",

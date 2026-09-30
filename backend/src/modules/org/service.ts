@@ -117,8 +117,25 @@ export async function deleteLocation(id: string, meta: ActorMeta): Promise<void>
       `This branch has ${referencedCount} employee job-history record(s) attached. Deactivate it instead of deleting — history must stay intact.`,
     );
   }
+  await assertNoScopedContent({ scopeLocationId: id }, "branch");
   await prisma.location.delete({ where: { id } });
   await writeAuditLog({ ...meta, action: "org.location.deleted", entityType: "Location", entityId: id, before });
+}
+
+// Announcements and company documents can be scoped to a branch or
+// department. Deleting one of those must never silently widen that content
+// to the whole company, so delete is refused while anything is scoped to it.
+async function assertNoScopedContent(
+  where: { scopeLocationId: string } | { scopeDepartmentId: string },
+  label: "branch" | "department",
+): Promise<void> {
+  const [announcements, documents] = await Promise.all([prisma.announcement.count({ where }), prisma.companyDocument.count({ where })]);
+  if (announcements + documents > 0) {
+    throw conflict(
+      `This ${label} has ${announcements} announcement(s) and ${documents} company document(s) scoped to it. ` +
+        `Re-scope or remove them first${label === "branch" ? ", or merge this branch into another (scoped content moves with it)" : ""}.`,
+    );
+  }
 }
 
 // Merges a near-duplicate branch into another: every EmployeeJobHistory row
@@ -139,6 +156,12 @@ export async function mergeLocations(sourceId: string, targetId: string, meta: A
 
   const movedCount = await prisma.$transaction(async (tx) => {
     const result = await tx.employeeJobHistory.updateMany({ where: { locationId: sourceId }, data: { locationId: targetId } });
+    // Content scoped to the duplicate branch follows it to the real one —
+    // otherwise deleting the source would leave it pointing nowhere (the
+    // FK is RESTRICT; it used to be SET NULL, which silently made scoped
+    // content org-wide).
+    await tx.announcement.updateMany({ where: { scopeLocationId: sourceId }, data: { scopeLocationId: targetId } });
+    await tx.companyDocument.updateMany({ where: { scopeLocationId: sourceId }, data: { scopeLocationId: targetId } });
     await tx.location.delete({ where: { id: sourceId } });
     return result.count;
   });
@@ -254,6 +277,7 @@ export async function deleteSimpleMaster(resource: SimpleMasterDelegate, id: str
   if (referencedCount > 0) {
     throw conflict(`This ${label.toLowerCase()} has ${referencedCount} employee job-history record(s) attached and can't be deleted.`);
   }
+  if (resource === "department") await assertNoScopedContent({ scopeDepartmentId: id }, "department");
   await delegateFor(resource).delete({ where: { id } });
   await writeAuditLog({ ...meta, action: `org.${resource}.deleted`, entityType: AUDIT_ENTITY[resource], entityId: id, before });
 }

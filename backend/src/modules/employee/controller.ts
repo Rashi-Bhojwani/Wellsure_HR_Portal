@@ -1,3 +1,5 @@
+import * as photos from "../people/photos";
+import { requireFile } from "../../lib/uploads";
 import type { Request, Response } from "express";
 import { resolveDataScope } from "../../lib/dataScope";
 import { checkDeviceUserId } from "./deviceCode";
@@ -143,4 +145,25 @@ export async function cancelSeparation(req: Request, res: Response): Promise<voi
 }
 export async function listSeparations(_req: Request, res: Response): Promise<void> {
   res.status(200).json({ separations: await separationService.listSeparations() });
+}
+
+// ── Photos (Phase 5 commit C) — pipeline lives in modules/people/photos.ts ──
+export async function uploadMyPhoto(req: Request, res: Response): Promise<void> {
+  const result = await photos.setPhoto(req.user!.employeeId, requireFile(req.file), actorMeta(req), "employee.photo.self_updated");
+  res.status(200).json(result);
+}
+export async function removeMyPhoto(req: Request, res: Response): Promise<void> {
+  await photos.removePhoto(req.user!.employeeId, actorMeta(req), "employee.photo.self_removed");
+  res.status(204).send();
+}
+export async function uploadPhoto(req: Request, res: Response): Promise<void> {
+  const employeeId = req.params.id as string;
+  await employeeService.findScopedEmployee(employeeId, req.user!.employeeId, scope(req));
+  res.status(200).json(await photos.setPhoto(employeeId, requireFile(req.file), actorMeta(req), "employee.photo.updated"));
+}
+export async function removePhoto(req: Request, res: Response): Promise<void> {
+  const employeeId = req.params.id as string;
+  await employeeService.findScopedEmployee(employeeId, req.user!.employeeId, scope(req));
+  await photos.removePhoto(employeeId, actorMeta(req), "employee.photo.removed");
+  res.status(204).send();
 }

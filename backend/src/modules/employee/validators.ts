@@ -53,7 +53,6 @@ const personalSchema = z.object({
   emergencyContactPhone: z.string().trim().regex(MOBILE_REGEX, "Enter a valid phone number."),
   emergencyContactRelation: z.string().trim().min(1).max(50),
   bloodGroup: z.string().trim().max(5).nullable().optional(),
-  photoStorageKey: z.string().trim().nullable().optional(),
 });
 
 const statutorySchema = z
@@ -151,7 +150,6 @@ export const personalUpdateSchema = z.object({
   emergencyContactName: z.string().trim().min(1).max(150).optional(),
   emergencyContactPhone: z.string().trim().regex(MOBILE_REGEX).optional(),
   emergencyContactRelation: z.string().trim().min(1).max(50).optional(),
-  photoStorageKey: z.string().trim().nullable().optional(),
 });
 
 // The employee's own direct-edit path — address, emergency contact, photo
@@ -163,7 +161,6 @@ export const selfServiceUpdateSchema = z.object({
   emergencyContactName: z.string().trim().min(1).max(150).optional(),
   emergencyContactPhone: z.string().trim().regex(MOBILE_REGEX).optional(),
   emergencyContactRelation: z.string().trim().min(1).max(50).optional(),
-  photoStorageKey: z.string().trim().nullable().optional(),
 });
 
 export const changeRequestFieldGroupSchema = z.enum(["bank", "statutory", "personal"]);

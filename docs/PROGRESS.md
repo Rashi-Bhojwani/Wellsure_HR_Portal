@@ -15,7 +15,7 @@ committed).
 | 2 | Biometric ingestion + attendance engine + real-time | Not started |
 | 3 | Attendance administration | Not started |
 | 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
-| 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | In progress — commit A done (notifications substrate, Employee Home, Admin Homepage Welcome + Dashboard tabs), commit B done (Engage: posts/kudos/polls/reactions/comments/groups/moderation/auto-posts, all real-time). Commits C–G (People/Org chart/Documents, Helpdesk/Request Hub, Three-level hierarchy + Workflow Delegates, Reports, Mobile/PWA) not started — full plan in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
+| 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | In progress — commit A done (notifications substrate, Employee Home, Admin Homepage Welcome + Dashboard tabs), commit B done (Engage), commit C done (People directory + org chart, employee photos, Document Center, HR-held employee documents). Commits D–G (Helpdesk/Request Hub, Three-level hierarchy + Workflow Delegates, Reports, Mobile/PWA) not started — full plan in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
 | 5.5 | AWS production environment and go-live hardening | Not started |
 | 6 | Payroll | Not started |
 | 7 | Tax & benefits | Not started |
@@ -2168,6 +2168,228 @@ it. Relying on a remote host being unreachable isn't a safeguard.
   with the refusal message before opening any connection. With
   `DATABASE_URL` unset, `.env`'s local scratch database is used,
   `db:migrate` runs, and the full backend suite passes.
+
+### Phase 5, commit C — People directory, org chart, photos, Document Center
+
+The approved plan, with the user's five corrections and four answers, is in
+[`docs/plans/PHASE_5.md`](plans/PHASE_5.md) (commit C section, plus an
+"As built" subsection for everything that differs or was added). This
+entry summarises what shipped and what was found along the way.
+
+**Schema** (migration `20260930102931_add_documents_people_phase5_commit_c`):
+- New `DocumentCategory` (admin-editable, `COMPANY`/`EMPLOYEE`), `CompanyDocument`
+  (optional branch/department audience, same rule as `Announcement`) and
+  `CompanyDocumentDownload` (one row per document and employee: first/last
+  download plus count, which answers "who has read the policy").
+- `EmployeeDocument` (unused since Phase 1) moves from free-text
+  `documentType` to a category FK, and gains title,
+  `visibleToEmployee`, and archive fields. The migration refuses to run if
+  the table has rows rather than guess a mapping.
+- `EmployeePersonal` gains `photoThumbStorageKey` and `photoVersion`.
+- **Scope FKs on `Announcement` and `CompanyDocument` go from SET NULL to
+  RESTRICT** (see bugs below).
+- New permissions: `documents.manage`, `employee.documents.view` and
+  `employee.documents.manage`, held by SUPER_ADMIN, HR_ADMIN and
+  HR_EXECUTIVE. Never by MANAGER: a manager can't open their team's
+  documents.
+
+**Backend:**
+- **`modules/people`:**
+  - Directory and person endpoints return only what the field-policy
+    allowlist (`fieldPolicy.ts`) and the company-wide toggles permit.
+    ACTIVE employees only; anyone else 404s.
+  - The org chart is one gzipped payload.
+  - Photos run through a sharp pipeline: decoded (format judged from the
+    bytes), auto-oriented, then re-encoded to a 512 px WebP plus a 96×96
+    thumbnail. All metadata, GPS included, is gone, and the original is
+    never stored. There's a 64-megapixel decode cap against decompression
+    bombs.
+  - Photos are served with a 1-hour, photo-only HMAC token, because `<img>`
+    can't send the Authorization header. Responses are cacheable per
+    version, carry `CORP: same-site`, and the token is redacted from logs.
+    Photo tokens stop working when an account is deactivated.
+- **`modules/documents`:**
+  - Categories.
+  - Company documents: an audience-filtered employee list, a management
+    list with download counts, upload, edit, archive and unarchive,
+    downloads (a 60-second signed URL with the original filename, plus the
+    download record), and "who downloaded" stats.
+  - Per-employee documents: every route checks permission **and** data
+    scope. HR downloads are audit-logged. A visible upload, or flipping a
+    document to visible, notifies the employee (persisted, then
+    `notification.new`).
+  - Uploads check the admin-set size limit, the type allowlist, the
+    extension and the file's magic bytes.
+- **Settings:** a new People & Documents section (directory toggles,
+  photo and document size limits, allowed types), audit-logged.
+- **`lib/`:**
+  - `audience.ts` (shared scope rule);
+  - `uploads.ts` (multer at a hard ceiling, validation, filename
+    sanitising);
+  - `reportingHierarchy.ts` (the three-level rule, used by the seed
+    assertion now and E's enforcement later);
+  - `devFixtures.ts` (a tiny valid-PDF generator for the seed and tests);
+  - `StorageService.getObject()` and download filenames on signed URLs.
+
+**Seed:**
+- The reporting lines now follow Admin → Managers → Employees:
+  - 1024 gains `MANAGER` and takes the HR staff (1021–1023);
+  - 1005 moves under Admin;
+  - 1090 moves under 1002.
+- An end-of-seed assertion (`findReportingLineViolations`) fails the seed
+  if any reporting manager lacks `MANAGER`, apart from Admin managing
+  managers. **Mutation-tested**: putting 1021 back under 1001 made the seed
+  fail with that exact line named.
+- The seed also refuses a manager referenced before it exists, which is
+  the bug below.
+- Adds document categories, three company documents (one Sales-only) and
+  two documents for Arjun (1006): a visible letter and an HR-only ID proof.
+- Adds the four new settings rows.
+
+**Frontend:**
+- **People:** a directory with lazy-loaded thumbnails and a person drawer,
+  and an Org Chart tab. Teams are collapsed by default; a team's cards are
+  only mounted when expanded. Search reveals and highlights a person.
+- **Document Center:** Policies & Forms (grouped by category), My
+  Documents, and Payslips / Form 16 as "coming" states.
+- **Photos:** a `PhotoUploader` on View My Info and in the admin profile
+  header.
+- **Admin:**
+  - The employee profile gains a Documents tab (upload, visibility
+    toggle, archive, download).
+  - New page: Employee app → Company Documents (Documents and Categories
+    tabs, with a "who downloaded" modal).
+  - System Settings gains a People & Documents card.
+- **Live update:** `document.*` notifications invalidate My Documents.
+- `people` and `document-center` are no longer placeholders; the route
+  guard enforces it.
+
+**Real bugs found and fixed:**
+1. **Scoped content silently went org-wide.** Deleting or merging away a
+   branch or department set `Announcement.scopeLocationId` to NULL. That
+   bug has existed since commit A. Merge now repoints scoped content,
+   delete is refused with a clear 409, and the FK is RESTRICT as the
+   database backstop. The existing announcements test was doing exactly
+   this, deleting a branch its announcement was scoped to; the new
+   RESTRICT caught it.
+2. **A raw storage key was writable.** `photoStorageKey` was accepted as a
+   free string on create, HR edit and **employee self-edit**. With photos
+   served by storage key, anyone could have pointed their photo at a
+   colleague's stored ID proof. Removed from all three schemas; a test
+   proves a sent value is ignored.
+3. **Credentials were in the logs.** pino-http's default serializer logged
+   every request header, including `Authorization: Bearer <access token>`
+   and the refresh-token cookie. The request log is now an allowlist.
+   Verified live: a request carrying three secret markers left zero in the
+   log.
+4. **Photos 401'd before reaching their route.** `holidaysRouter` is
+   mounted at bare `/api` and runs `authenticate` for every `/api/*`
+   request that reaches it, so the photo route (token-authenticated) got
+   401s. It's now mounted ahead of all `/api` routers, with a comment
+   explaining why.
+5. **Silent "no manager" in the seed.** Specs are created in array order,
+   so a manager defined after its reports silently gave them no manager.
+   The seed's own assertion couldn't see it, because it only checks lines
+   that exist. Caught when the org chart showed three unexpected
+   "unassigned" people. Fixed by failing loudly and reordering.
+6. **Test residue** (the cleanup engine now also deletes stored files, and
+   guards `*StorageKey`/`fileKey` columns). Its first run found two columns
+   it had missed. Also: `totpAndPrivacy.test.ts` deleted the seeded
+   `auth.require2faRoles` row instead of restoring it.
+
+**Tests** (9 new files, 45 new tests; 400 across the backend):
+- **Directory allowlist guard:** every `Employee`/`EmployeePersonal` column
+  must be classified. Mutation-tested: an unclassified `pronouns` column
+  was named with the fix.
+- **Sentinel test:** a unique marker in every personal text column, with
+  all toggles off and then on; only allowed columns may appear, and never
+  the birth year. Mutation-tested: emitting `mobile` regardless of its
+  toggle was reported as leaked.
+- Directory filters, search and pagination; separated employees 404; org
+  chart shape and the unassigned group.
+- Photos: EXIF/GPS present in the input and absent from both stored
+  outputs, sizes, format, rejection of a non-image, a GIF and an oversize
+  file, old objects deleted on replace, token required/tampered/expired,
+  an access token rejected as a photo token, deactivation, a separated
+  employee's photo hidden from colleagues but not HR, `employee.edit`
+  gating.
+- Company documents: audience 404 on list and download, the signed-URL
+  filename and anti-replay, the download record and stats, magic-byte /
+  extension / type / size rejections, category rules, archive plus audit.
+- Employee documents IDOR: another employee, a manager without the
+  permission, and a TEAM-scoped holder of the permission outside their team
+  are all refused. Plus HR download audit and the visible-upload and
+  flip-to-visible notifications.
+- Org: merge carries scoped content; delete is blocked.
+- Settings: permission gate, validation, audit, immediate effect.
+- The permission matrix against seeded roles.
+- The reporting-line checker.
+
+**Verification:**
+- Fresh migrate and seed on `wellsure_hr_devcheck`. Full backend suite
+  **400/400**, and after the suite the database **and `.storage/`** are
+  identical to a fresh seed.
+- Lint and typecheck clean everywhere; frontend 4/4.
+- **Live Playwright walkthrough:**
+  - As a plain employee (Arjun, 1006): directory, drawer, org chart
+    (expand, search and highlight), photo upload from a GPS-tagged JPEG
+    (renders as a 512 px WebP), and Document Center. He sees the org-wide
+    policy but not the Sales-only one, and his letter but not the HR-only
+    ID proof. The download arrives with its real filename.
+  - As Super Admin: Arjun's photo in the profile header, an HR-only
+    document downloaded (audit-logged), a Company Documents publish with
+    an Engineering audience (Arjun sees it), the "who downloaded" modal
+    (1 of 28), and the settings toggle (mobile numbers then appear in the
+    drawer).
+  - **Two browsers side by side:** HR uploads a visible letter on Arjun's
+    profile, and Arjun's already-open My Documents list and bell update in
+    **~360 ms with no reload**.
+  - At 390 px width, no horizontal overflow on People, the Org Chart
+    (collapsed and expanded), Document Center or admin Company Documents,
+    after fixing an org-chart overflow found this way.
+- **Org chart at scale (correction 3):** about 490 generated employees on
+  the scratch DB (removed afterwards), measured on a production build.
+  - The payload is 130 KB of JSON, 13.8 KB gzipped, compressed per route.
+    Not app-wide, because responses that mix secrets with user input
+    shouldn't be compressed (BREACH).
+  - Initial render mounts 27 cards.
+  - The first version janked: one team expand blocked 126 ms, and "Expand
+    all" blocked for 1.46 s. After switching to memoised plain cards,
+    CSS ellipsis, a shared photo token and `startTransition`: one team is
+    a single 75 ms block, and **"Expand all" has zero long tasks**, with
+    all 488 cards mounted in 184 ms.
+- **Console:** only pre-existing messages remain: the expected 401 from
+  the login page's silent-refresh probe, AntD's static-`message` context
+  warning, and `List` deprecation from the pre-existing notification bell.
+  Commit C adds no `List` usages, and fixed one deprecated
+  `notification({ message })` call it touched.
+- **Docker:** `sharp` 0.35.5 is **verified on Alpine**. In a clean
+  `node:20-alpine` container it installs its musl binary and re-encodes a
+  GPS-tagged JPEG to a 512×384 WebP with EXIF gone, and the backend
+  lockfile carries the `linuxmusl` packages the production image needs.
+  The full `docker build -f backend/Dockerfile .`, however, **fails
+  before and after this commit alike**:
+  - Plain, `npm install` inside the build hits this sandbox's proxy, and
+    npm crashes with "Exit handler never called!" yet the RUN step still
+    exits 0. That leaves a half-installed image, a silent-failure mode
+    worth knowing about.
+  - With the sandbox proxy and CA wired in (a scratch Dockerfile, not
+    committed), `npm install` gets further and fails compiling **argon2**
+    from source: node-gyp can't find Python in `node:20-alpine`. That's
+    despite argon2 0.45.1 shipping a `linux-x64/argon2.musl.node`
+    prebuild.
+  - Building the previous commit (`6df230e`) the same way fails at the
+    identical point, so this is **pre-existing, not introduced by commit
+    C** (argon2 has been a dependency since Phase 1). Not fixed here;
+    raised with the user.
+
+**Follow-ups, not done:**
+- The employee sidebar greeting shows a generic icon, because
+  `/api/auth/me` doesn't return the employee id or photo version.
+- Whether to compress responses app-wide is a Phase 5.5 decision.
+- This container also exports `PORT=3000`, which overrides `.env` the same
+  way `DATABASE_URL` did. Harmless, so no guard; documented in
+  GETTING_STARTED troubleshooting.
 
 ## Open questions
 

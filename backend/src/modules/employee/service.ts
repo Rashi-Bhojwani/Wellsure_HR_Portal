@@ -146,7 +146,6 @@ export async function createEmployeeInTx(
       emergencyContactPhone: personal.emergencyContactPhone,
       emergencyContactRelation: personal.emergencyContactRelation,
       bloodGroup: personal.bloodGroup ?? null,
-      photoStorageKey: personal.photoStorageKey ?? null,
     },
   });
 
@@ -250,7 +249,7 @@ export async function resendInvite(employeeId: string, meta: RequestMetaInput): 
 
 // ── Scope helpers ────────────────────────────────────────────────────────
 
-async function findScopedEmployee(employeeId: string, requestingEmployeeId: string, scope: DataScope) {
+export async function findScopedEmployee(employeeId: string, requestingEmployeeId: string, scope: DataScope) {
   const scopeWhere = await buildEmployeeScopeWhere(requestingEmployeeId, scope);
   // AND, not a spread merge: scopeWhere's own "id" key (SELF/TEAM scope
   // both produce one) would otherwise silently overwrite this "id:
@@ -307,7 +306,9 @@ async function loadProfileCore(employeeId: string) {
           emergencyContactPhone: employee.personal.emergencyContactPhone,
           emergencyContactRelation: employee.personal.emergencyContactRelation,
           bloodGroup: employee.personal.bloodGroup,
-          photoStorageKey: employee.personal.photoStorageKey,
+          // The storage key itself stays server-side; clients build photo
+          // URLs from the version (see modules/people/photos.ts).
+          photoVersion: employee.personal.photoVersion,
         }
       : null,
     job: job
@@ -577,7 +578,6 @@ interface PersonalUpdateInput {
   emergencyContactName?: string;
   emergencyContactPhone?: string;
   emergencyContactRelation?: string;
-  photoStorageKey?: string | null;
 }
 
 async function updatePersonalFields(employeeId: string, input: PersonalUpdateInput, meta: RequestMetaInput, action: string): Promise<void> {

@@ -3,7 +3,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { requirePermission } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
 import * as controller from "./controller";
-import { updateLeaveSettingsSchema, updateSettingsSchema } from "./validators";
+import { updateLeaveSettingsSchema, updatePeopleDocumentsSettingsSchema, updateSettingsSchema } from "./validators";
 
 // System Settings (spec §7.8) — security policy (Phase 1: lockout,
 // password rules, invitation TTL, 2FA-required roles, auth rate limits)
@@ -19,3 +19,11 @@ settingsRouter.put("/security", manage, validate({ body: updateSettingsSchema })
 
 settingsRouter.get("/leave", manage, controller.getLeaveSettings);
 settingsRouter.put("/leave", manage, validate({ body: updateLeaveSettingsSchema }), controller.updateLeaveSettings);
+
+settingsRouter.get("/people-documents", manage, controller.getPeopleDocumentsSettings);
+settingsRouter.put(
+  "/people-documents",
+  manage,
+  validate({ body: updatePeopleDocumentsSettingsSchema }),
+  controller.updatePeopleDocumentsSettings,
+);

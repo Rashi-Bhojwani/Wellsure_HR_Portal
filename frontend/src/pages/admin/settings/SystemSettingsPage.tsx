@@ -1,9 +1,17 @@
 import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Card, Col, Divider, Form, InputNumber, Row, Select, Space, Typography, message } from "antd";
+import { Button, Card, Checkbox, Col, Divider, Form, InputNumber, Row, Select, Space, Typography, message } from "antd";
+import {
+  DIRECTORY_FIELD_LABELS,
+  DIRECTORY_TOGGLEABLE_FIELDS,
+  DOCUMENT_MIME_TYPES,
+  MAX_DOCUMENT_UPLOAD_MB_CEILING,
+  MAX_PHOTO_UPLOAD_MB_CEILING,
+  SUPPORTED_DOCUMENT_MIME_TYPES,
+} from "@shared/constants/peopleDocuments";
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as settingsApi from "../../../api/settings";
-import type { LeaveSettings, SecuritySettings } from "../../../api/settings";
+import type { LeaveSettings, PeopleDocumentsSettings, SecuritySettings } from "../../../api/settings";
 import { EmptyState } from "../../../components/common/EmptyState";
 
 const { Title, Text } = Typography;
@@ -58,6 +66,71 @@ function LeaveSettingsCard() {
           </Col>
         </Row>
         <Form.Item style={{ marginTop: 8, marginBottom: 0 }}>
+          <Button type="primary" htmlType="submit" loading={saveMutation.isPending}>
+            Save changes
+          </Button>
+        </Form.Item>
+      </Form>
+    </Card>
+  );
+}
+
+// Phase 5 commit C — who sees what in the People directory, and upload
+// limits for photos and documents. One company-wide setting (no per-employee
+// opt-out); the always-shown core (name, photo, code, designation,
+// department, branch) isn't listed because it can't be turned off.
+function PeopleDocumentsSettingsCard() {
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useQuery({ queryKey: ["settings", "people-documents"], queryFn: settingsApi.getPeopleDocumentsSettings });
+  const [form] = Form.useForm<PeopleDocumentsSettings>();
+
+  useEffect(() => {
+    if (data) form.setFieldsValue(data);
+  }, [data, form]);
+
+  const saveMutation = useMutation({
+    mutationFn: (values: PeopleDocumentsSettings) => settingsApi.updatePeopleDocumentsSettings(values),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["settings", "people-documents"], updated);
+      void queryClient.invalidateQueries({ queryKey: ["people"] });
+      void message.success("People & Documents settings saved.");
+    },
+    onError: (err) => void message.error(errorMessage(err, "Could not save settings.")),
+  });
+
+  if (isLoading || !data) return <EmptyState message="Loading…" />;
+
+  return (
+    <Card>
+      <Form form={form} layout="vertical" initialValues={data} onFinish={(values) => saveMutation.mutate(values)} requiredMark={false}>
+        <Title level={5}>People directory</Title>
+        <Text type="secondary">
+          Everyone always sees a colleague's name, photo, employee code, designation, department and branch. Choose what else is shown — this applies company-wide.
+          The org chart always shows reporting lines.
+        </Text>
+        <Form.Item name="directoryVisibleFields" style={{ marginTop: 12 }}>
+          <Checkbox.Group options={DIRECTORY_TOGGLEABLE_FIELDS.map((f) => ({ value: f, label: DIRECTORY_FIELD_LABELS[f] }))} />
+        </Form.Item>
+        <Divider />
+        <Title level={5}>Uploads</Title>
+        <Row gutter={16}>
+          <Col xs={24} sm={12} md={6}>
+            <Form.Item name="photoMaxUploadMb" label="Photo size limit (MB)" rules={[{ required: true }]} extra="Photos are resized and re-encoded, so stored files stay small.">
+              <InputNumber min={0.1} max={MAX_PHOTO_UPLOAD_MB_CEILING} step={0.5} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <Form.Item name="documentMaxUploadMb" label="Document size limit (MB)" rules={[{ required: true }]}>
+              <InputNumber min={0.1} max={MAX_DOCUMENT_UPLOAD_MB_CEILING} step={1} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="documentAllowedMimeTypes" label="Allowed document types" rules={[{ required: true, type: "array", min: 1, message: "Allow at least one type." }]}>
+              <Select mode="multiple" options={SUPPORTED_DOCUMENT_MIME_TYPES.map((m) => ({ value: m, label: DOCUMENT_MIME_TYPES[m].label }))} />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Form.Item style={{ marginBottom: 0 }}>
           <Button type="primary" htmlType="submit" loading={saveMutation.isPending}>
             Save changes
           </Button>
@@ -164,6 +237,7 @@ export function SystemSettingsPage() {
         Leave
       </Title>
       <LeaveSettingsCard />
+      <PeopleDocumentsSettingsCard />
     </Space>
   );
 }

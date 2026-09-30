@@ -25,6 +25,9 @@ import * as employeeApi from "../../../api/employee";
 import * as orgApi from "../../../api/org";
 import { useAuth } from "../../../hooks/useAuth";
 import { EmptyState } from "../../../components/common/EmptyState";
+import { PhotoUploader } from "../../../components/common/PhotoUploader";
+import * as peopleApi from "../../../api/people";
+import { EmployeeDocumentsTab } from "./EmployeeDocumentsTab";
 
 const { Title, Text } = Typography;
 
@@ -311,6 +314,7 @@ function SeparationModal({ employeeId, open, onClose }: { employeeId: string; op
 }
 
 export function EmployeeProfilePage() {
+  const queryClient = useQueryClient();
   const { id } = useParams<{ id: string }>();
   const { hasPermission } = useAuth();
   const [jobEditOpen, setJobEditOpen] = useState(false);
@@ -331,9 +335,20 @@ export function EmployeeProfilePage() {
   return (
     <Space orientation="vertical" size={16} style={{ width: "100%" }}>
       <Space style={{ width: "100%", justifyContent: "space-between" }} wrap>
-        <Title level={3} style={{ margin: 0 }}>
-          {profile.fullName} <Text type="secondary" style={{ fontSize: 16 }}>({profile.employeeCode})</Text>
-        </Title>
+        <Space size={16} align="center" wrap>
+          <PhotoUploader
+            employeeId={id!}
+            name={profile.fullName}
+            photoVersion={profile.personal?.photoVersion ?? null}
+            upload={(file) => peopleApi.uploadEmployeePhoto(id!, file)}
+            remove={() => peopleApi.removeEmployeePhoto(id!)}
+            onChanged={() => void queryClient.invalidateQueries({ queryKey: ["employees", "profile", id] })}
+            disabled={!canEdit || !profile.personal}
+          />
+          <Title level={3} style={{ margin: 0 }}>
+            {profile.fullName} <Text type="secondary" style={{ fontSize: 16 }}>({profile.employeeCode})</Text>
+          </Title>
+        </Space>
         <Space>
           {canEdit && <Button onClick={() => setJobEditOpen(true)}>Change job details</Button>}
           {canSeparate && profile.status === "ACTIVE" && (
@@ -351,6 +366,9 @@ export function EmployeeProfilePage() {
             { key: "personal", label: "Personal", children: <PersonalTab profile={profile} /> },
             { key: "statutory", label: "Statutory", children: <StatutoryTab employeeId={id!} profile={profile} canEdit={hasPermission("employee.statutory.edit")} /> },
             { key: "bank", label: "Bank", children: <BankTab employeeId={id!} profile={profile} canEdit={hasPermission("employee.bank.edit")} /> },
+            ...(hasPermission("employee.documents.view")
+              ? [{ key: "documents", label: "Documents", children: <EmployeeDocumentsTab employeeId={id!} canManage={hasPermission("employee.documents.manage")} /> }]
+              : []),
             { key: "history", label: "History", children: <HistoryTab employeeId={id!} canViewBank={canViewBank} /> },
           ]}
         />

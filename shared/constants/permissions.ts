@@ -36,6 +36,10 @@ export const PERMISSION_KEYS = [
   "engage.moderate", // soft-hide a post (and its backing kudos/poll) from the feed
   "engage.groups.manage", // create/rename/deactivate groups + manage membership
   "engage.autopost.manage", // per-kind template/enabled toggle + the shared daily run hour
+  // Phase 5 — People / Document Center (commit C)
+  "documents.manage", // company documents (upload/edit/archive, download stats) + document categories
+  "employee.documents.view", // see another employee's HR-held documents (letters, ID proofs); download is audit-logged
+  "employee.documents.manage", // upload/edit/archive another employee's documents
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];

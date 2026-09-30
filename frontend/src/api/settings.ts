@@ -1,3 +1,4 @@
+import type { DirectoryToggleableField, DocumentMimeType } from "@shared/constants/peopleDocuments";
 import { apiClient } from "./client";
 
 export interface RateLimitSetting {
@@ -41,5 +42,23 @@ export async function getLeaveSettings(): Promise<LeaveSettings> {
 
 export async function updateLeaveSettings(input: Partial<LeaveSettings>): Promise<LeaveSettings> {
   const { data } = await apiClient.put<LeaveSettings>("/api/settings/leave", input);
+  return data;
+}
+
+// Phase 5 commit C — People & Documents.
+export interface PeopleDocumentsSettings {
+  directoryVisibleFields: DirectoryToggleableField[];
+  photoMaxUploadMb: number;
+  documentMaxUploadMb: number;
+  documentAllowedMimeTypes: DocumentMimeType[];
+}
+
+export async function getPeopleDocumentsSettings(): Promise<PeopleDocumentsSettings> {
+  const { data } = await apiClient.get<PeopleDocumentsSettings>("/api/settings/people-documents");
+  return data;
+}
+
+export async function updatePeopleDocumentsSettings(input: Partial<PeopleDocumentsSettings>): Promise<PeopleDocumentsSettings> {
+  const { data } = await apiClient.put<PeopleDocumentsSettings>("/api/settings/people-documents", input);
   return data;
 }

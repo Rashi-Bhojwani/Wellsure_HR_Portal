@@ -12,6 +12,7 @@ import {
   ExportOutlined,
   FileProtectOutlined,
   FileTextOutlined,
+  FolderOpenOutlined,
   FundOutlined,
   GiftOutlined,
   GroupOutlined,
@@ -50,6 +51,7 @@ import { ChangeRequestsPage } from "../pages/admin/employee/ChangeRequestsPage";
 import { ImportCenterPage } from "../pages/admin/import/ImportCenterPage";
 import { AuditLogPage } from "../pages/admin/auditLog/AuditLogPage";
 import { SystemSettingsPage } from "../pages/admin/settings/SystemSettingsPage";
+import { CompanyDocumentsPage } from "../pages/admin/documents/CompanyDocumentsPage";
 import { LeaveTypesPoliciesPage } from "../pages/admin/adminTools/LeaveTypesPoliciesPage";
 import { HolidayCalendarsAdminPage } from "../pages/admin/adminTools/HolidayCalendarsAdminPage";
 import { AnnouncementsAdminPage } from "../pages/admin/engage/AnnouncementsAdminPage";
@@ -120,6 +122,7 @@ export const adminApps: AdminApp[] = [
           { key: "bulk-import", label: "Bulk Import", path: "employee/import", icon: CloudUploadOutlined, element: ImportCenterPage },
           { key: "change-requests", label: "Change Requests", path: "employee/change-requests", icon: SolutionOutlined, element: ChangeRequestsPage },
           { key: "separations", label: "Separations", path: "employee/separations", icon: ExportOutlined, element: SeparationsPage },
+          { key: "company-documents", label: "Company Documents", path: "employee/company-documents", icon: FolderOpenOutlined, element: CompanyDocumentsPage },
         ],
       },
     ],

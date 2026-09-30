@@ -56,7 +56,7 @@ export interface EmployeeGridRow {
   id: string;
   employeeCode: string;
   fullName: string;
-  photoStorageKey: string | null;
+  photoVersion: string | null;
   department: string;
   designation: string;
   location: string;
@@ -136,7 +136,7 @@ export interface EmployeeProfile {
     emergencyContactPhone: string;
     emergencyContactRelation: string;
     bloodGroup: string | null;
-    photoStorageKey: string | null;
+    photoVersion: string | null;
   } | null;
   job: {
     department: { id: string; name: string };

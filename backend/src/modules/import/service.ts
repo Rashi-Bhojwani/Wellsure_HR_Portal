@@ -292,7 +292,6 @@ async function commitEmployees(tx: Prisma.TransactionClient, rows: { data: Recor
         emergencyContactPhone: d.emergencyContactPhone!,
         emergencyContactRelation: d.emergencyContactRelation!,
         bloodGroup: d.bloodGroup || null,
-        photoStorageKey: null,
       },
     };
     const { employee } = await createEmployeeInTx(tx, input, { actorUserId: meta.actorUserId });

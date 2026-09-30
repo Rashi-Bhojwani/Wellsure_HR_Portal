@@ -4,6 +4,15 @@ import { PERMISSION_KEYS } from "@shared/constants/permissions";
 import { encryptField } from "../src/lib/encryption";
 import { blindIndex, normalizePan, normalizeAadhaar, normalizeAccountNumber } from "../src/lib/fieldHash";
 import { assertDevelopmentEnvironment } from "../src/lib/devGuard";
+import { findReportingLineViolations } from "../src/lib/reportingHierarchy";
+import { storageService } from "../src/integrations/storage";
+import {
+  DEFAULT_DIRECTORY_VISIBLE_FIELDS,
+  DEFAULT_DOCUMENT_ALLOWED_MIME_TYPES,
+  DEFAULT_DOCUMENT_MAX_UPLOAD_MB,
+  DEFAULT_PHOTO_MAX_UPLOAD_MB,
+} from "@shared/constants/peopleDocuments";
+import { minimalPdf } from "../src/lib/devFixtures";
 
 assertDevelopmentEnvironment("the Phase 1 seed script (inserts fake employee/bank/statutory data)");
 
@@ -331,6 +340,11 @@ async function main() {
     "leave.approve",
     "leave.grant",
     "leave.apply.onBehalf",
+    // Phase 5 commit C — Document Center admin and HR-held employee documents.
+    // Not salary/bank data, so HR_EXECUTIVE holds them too; MANAGER does not.
+    "documents.manage",
+    "employee.documents.view",
+    "employee.documents.manage",
   ];
   const HR_ADMIN_PERMS = [
     ...HR_EXECUTIVE_PERMS,
@@ -482,7 +496,7 @@ async function main() {
       gradeCode: "G3",
       costCentreCode: "CC-FIN",
       locationCode: "PAN-B22",
-      managerCode: "1001",
+      managerCode: "1000",
       account: "active",
     },
     // Individual contributors — mostly ACTIVE (known password) so grids
@@ -503,10 +517,10 @@ async function main() {
     { employeeCode: "1018", deviceUserId: "1018", fullName: "Deepak Reddy", gender: "MALE", dob: "1990-03-21", doj: "2021-11-11", employmentType: "PERMANENT", deptCode: "FIN", designationCode: "SR_EXEC", gradeCode: "G2", costCentreCode: "CC-FIN", locationCode: "PAN-B22", managerCode: "1005", account: "active" },
     { employeeCode: "1019", deviceUserId: "1019", fullName: "Meera Gupta", gender: "FEMALE", dob: "1991-07-14", doj: "2022-05-23", employmentType: "PERMANENT", deptCode: "FIN", designationCode: "EXEC", gradeCode: "G1", costCentreCode: "CC-FIN", locationCode: "PAN-B22", managerCode: "1005", account: "active" },
     { employeeCode: "1020", deviceUserId: "1020", fullName: "Suresh Iyer", gender: "MALE", dob: "1986-12-02", doj: "2020-02-14", employmentType: "PERMANENT", deptCode: "FIN", designationCode: "ASST_MGR", gradeCode: "G2", costCentreCode: "CC-FIN", locationCode: "PAN-C10", managerCode: "1005", account: "active" },
-    { employeeCode: "1021", deviceUserId: "1021", fullName: "Swati Rao", gender: "FEMALE", dob: "1995-09-09", doj: "2024-01-22", employmentType: "PERMANENT", deptCode: "HR", designationCode: "SR_EXEC", gradeCode: "G2", costCentreCode: "CC-HR", locationCode: "PAN-C10", managerCode: "1001", account: "active" },
-    { employeeCode: "1022", deviceUserId: "1022", fullName: "Manoj Nair", gender: "MALE", dob: "1992-04-16", doj: "2023-06-05", employmentType: "PERMANENT", deptCode: "HR", designationCode: "EXEC", gradeCode: "G1", costCentreCode: "CC-HR", locationCode: "PAN-C10", managerCode: "1001", account: "active" },
-    { employeeCode: "1023", deviceUserId: "1023", fullName: "Kirti Malhotra", gender: "FEMALE", dob: "1997-08-30", doj: "2024-08-01", employmentType: "INTERN", deptCode: "HR", designationCode: "EXEC", gradeCode: "G1", costCentreCode: "CC-HR", locationCode: "PAN-C10", managerCode: "1001", account: "invited" },
     { employeeCode: "1024", deviceUserId: "1024", fullName: "Rajesh Kumar", gender: "MALE", dob: "1983-06-25", doj: "2019-04-08", employmentType: "PERMANENT", deptCode: "ADMIN", designationCode: "MGR", gradeCode: "G3", costCentreCode: "CC-ADMIN", locationCode: "PAN-C10", managerCode: "1000", account: "active" },
+    { employeeCode: "1021", deviceUserId: "1021", fullName: "Swati Rao", gender: "FEMALE", dob: "1995-09-09", doj: "2024-01-22", employmentType: "PERMANENT", deptCode: "HR", designationCode: "SR_EXEC", gradeCode: "G2", costCentreCode: "CC-HR", locationCode: "PAN-C10", managerCode: "1024", account: "active" },
+    { employeeCode: "1022", deviceUserId: "1022", fullName: "Manoj Nair", gender: "MALE", dob: "1992-04-16", doj: "2023-06-05", employmentType: "PERMANENT", deptCode: "HR", designationCode: "EXEC", gradeCode: "G1", costCentreCode: "CC-HR", locationCode: "PAN-C10", managerCode: "1024", account: "active" },
+    { employeeCode: "1023", deviceUserId: "1023", fullName: "Kirti Malhotra", gender: "FEMALE", dob: "1997-08-30", doj: "2024-08-01", employmentType: "INTERN", deptCode: "HR", designationCode: "EXEC", gradeCode: "G1", costCentreCode: "CC-HR", locationCode: "PAN-C10", managerCode: "1024", account: "invited" },
     { employeeCode: "1025", deviceUserId: "1025", fullName: "Anjali Desai", gender: "FEMALE", dob: "1996-02-11", doj: "2024-07-15", employmentType: "CONSULTANT", deptCode: "ADMIN", designationCode: "EXEC", gradeCode: "G1", costCentreCode: "CC-ADMIN", locationCode: "PAN-B22", managerCode: "1024", account: "active" },
     { employeeCode: "1026", deviceUserId: "1026", fullName: "Anil Chauhan", gender: "MALE", dob: "1989-10-04", doj: "2021-01-20", employmentType: "PERMANENT", deptCode: "ENG", designationCode: "SR_EXEC", gradeCode: "G2", costCentreCode: "CC-ENG", locationCode: "AJM-2", managerCode: "1002", account: "active" },
     { employeeCode: "1027", deviceUserId: "1027", fullName: "Shreya Bhatt", gender: "FEMALE", dob: "1993-03-08", doj: "2022-10-30", employmentType: "PERMANENT", deptCode: "SALES", designationCode: "SR_EXEC", gradeCode: "G2", costCentreCode: "CC-SALES", locationCode: "AJM-3", managerCode: "1003", account: "active" },
@@ -527,7 +541,7 @@ async function main() {
       gradeCode: "G3",
       costCentreCode: "CC-ENG",
       locationCode: "PAN-C10",
-      managerCode: "1000",
+      managerCode: "1002",
       account: "separated",
       lastWorkingDate: "2026-02-28",
     },
@@ -562,7 +576,10 @@ async function main() {
         ? "SUPER_ADMIN"
         : spec.employeeCode === "1001"
           ? "HR_ADMIN"
-          : ["1002", "1003", "1004", "1005"].includes(spec.employeeCode)
+          : // 1024 heads the Admin department (designation "Manager") and
+            // manages the HR staff and 1025 — three-level rule, see
+            // lib/reportingHierarchy.ts and the assertion at the end of main().
+            ["1002", "1003", "1004", "1005", "1024"].includes(spec.employeeCode)
             ? "MANAGER"
             : "EMPLOYEE";
 
@@ -608,6 +625,12 @@ async function main() {
     });
 
     const managerId = spec.managerCode ? employeeIdByCode[spec.managerCode] : undefined;
+    // A manager referenced before its own spec has been created would
+    // silently become "no manager" — fail loudly instead (specs are created
+    // in array order, so a manager must appear above their reports).
+    if (spec.managerCode && !managerId) {
+      throw new Error(`Seed spec ${spec.employeeCode} names manager ${spec.managerCode}, which isn't created yet — move ${spec.managerCode} above it in specs.`);
+    }
     await prisma.employeeJobHistory.create({
       data: {
         employeeId: employee.id,
@@ -682,6 +705,11 @@ async function main() {
     ["auth.rateLimit.inviteAccept", { maxAttempts: 10, windowSeconds: 900 }],
     ["auth.rateLimit.forgotPassword", { maxAttempts: 5, windowSeconds: 3600 }],
     ["auth.rateLimit.resetPassword", { maxAttempts: 10, windowSeconds: 900 }],
+    // Phase 5 commit C — People & Documents
+    ["people.directory.visibleFields", DEFAULT_DIRECTORY_VISIBLE_FIELDS],
+    ["people.photo.maxUploadMb", DEFAULT_PHOTO_MAX_UPLOAD_MB],
+    ["documents.maxUploadMb", DEFAULT_DOCUMENT_MAX_UPLOAD_MB],
+    ["documents.allowedMimeTypes", DEFAULT_DOCUMENT_ALLOWED_MIME_TYPES],
   ];
   for (const [key, value] of SETTINGS) {
     await prisma.systemSetting.create({ data: { key, value: value as Prisma.InputJsonValue, updatedByUserId: superAdminUserId } });
@@ -732,6 +760,107 @@ async function main() {
         createdAt: new Date(now - entry.minutesAgo * 60 * 1000),
       },
     });
+  }
+
+  // ── Document Center (Phase 5 commit C) — categories plus a few real
+  // (tiny, generated) PDFs so every Document Center tab has content on a
+  // fresh install: one org-wide policy, one department-scoped document
+  // (the audience rule is visible), and two HR-held documents for Arjun
+  // (1006) — a letter he can see and an ID proof he can't. ──────────────
+  const CATEGORIES: Array<{ code: string; name: string; appliesTo: "COMPANY" | "EMPLOYEE"; sortOrder: number }> = [
+    { code: "POLICIES", name: "Policies", appliesTo: "COMPANY", sortOrder: 1 },
+    { code: "FORMS", name: "Forms", appliesTo: "COMPANY", sortOrder: 2 },
+    { code: "LETTERS", name: "Letters", appliesTo: "EMPLOYEE", sortOrder: 1 },
+    { code: "ID_PROOFS", name: "ID Proofs", appliesTo: "EMPLOYEE", sortOrder: 2 },
+    { code: "OTHER", name: "Other", appliesTo: "EMPLOYEE", sortOrder: 3 },
+  ];
+  const category: Record<string, { id: string }> = {};
+  for (const c of CATEGORIES) category[c.code] = await prisma.documentCategory.create({ data: c });
+
+  async function seedPdf(key: string, title: string, lines: string[]) {
+    const body = minimalPdf(title, lines);
+    await storageService.putObject(key, body, "application/pdf");
+    return { fileKey: key, mimeType: "application/pdf", sizeBytes: body.length };
+  }
+  await prisma.companyDocument.create({
+    data: {
+      title: "Leave Policy 2026",
+      description: "How leave accrues, carries forward and is encashed at year end.",
+      categoryId: category.POLICIES!.id,
+      fileName: "leave-policy-2026.pdf",
+      ...(await seedPdf("seed/company/leave-policy-2026.pdf", "Leave Policy 2026", [
+        "Demo document generated by the seed script.",
+        "PL accrues at 1.0 day per month after the eligibility period.",
+      ])),
+      uploadedByUserId: superAdminUserId!,
+    },
+  });
+  await prisma.companyDocument.create({
+    data: {
+      title: "Reimbursement Claim Form",
+      categoryId: category.FORMS!.id,
+      fileName: "reimbursement-claim-form.pdf",
+      ...(await seedPdf("seed/company/reimbursement-claim-form.pdf", "Reimbursement Claim Form", ["Demo form generated by the seed script."])),
+      uploadedByUserId: superAdminUserId!,
+    },
+  });
+  const salesDept = await prisma.department.findUniqueOrThrow({ where: { code: "SALES" } });
+  await prisma.companyDocument.create({
+    data: {
+      title: "Sales Incentive Plan 2026",
+      description: "Visible to the Sales department only.",
+      categoryId: category.POLICIES!.id,
+      scopeDepartmentId: salesDept.id,
+      fileName: "sales-incentive-plan-2026.pdf",
+      ...(await seedPdf("seed/company/sales-incentive-plan-2026.pdf", "Sales Incentive Plan 2026", ["Demo document generated by the seed script."])),
+      uploadedByUserId: superAdminUserId!,
+    },
+  });
+  const arjunId = employeeIdByCode["1006"]!;
+  await prisma.employeeDocument.create({
+    data: {
+      employeeId: arjunId,
+      categoryId: category.LETTERS!.id,
+      title: "Appointment Letter",
+      fileName: "appointment-letter.pdf",
+      visibleToEmployee: true,
+      ...(await seedPdf(`seed/employees/${arjunId}/appointment-letter.pdf`, "Appointment Letter", ["Demo letter generated by the seed script."])),
+      uploadedByUserId: superAdminUserId!,
+    },
+  });
+  await prisma.employeeDocument.create({
+    data: {
+      employeeId: arjunId,
+      categoryId: category.ID_PROOFS!.id,
+      title: "Address Proof (HR only)",
+      fileName: "address-proof.pdf",
+      visibleToEmployee: false,
+      ...(await seedPdf(`seed/employees/${arjunId}/address-proof.pdf`, "Address Proof", ["Demo ID proof generated by the seed script."])),
+      uploadedByUserId: superAdminUserId!,
+    },
+  });
+
+  // ── Reporting-line assertion (Phase 5 commit C) — the seed must model the
+  // three-level structure (Admin → Managers → Employees) that commit E
+  // enforces in code. Fails the seed outright rather than seeding an org
+  // chart that contradicts the rules. ──────────────────────────────────
+  const openJobRows = await prisma.employeeJobHistory.findMany({
+    where: { effectiveTo: null, reportingManagerId: { not: null } },
+    select: {
+      employee: { select: { employeeCode: true, user: { select: { roles: { select: { role: { select: { code: true } } } } } } } },
+      reportingManager: { select: { employeeCode: true, user: { select: { roles: { select: { role: { select: { code: true } } } } } } } },
+    },
+  });
+  const violations = findReportingLineViolations(
+    openJobRows.map((row) => ({
+      employeeCode: row.employee.employeeCode,
+      roleCodes: row.employee.user?.roles.map((r) => r.role.code) ?? [],
+      managerCode: row.reportingManager!.employeeCode,
+      managerRoleCodes: row.reportingManager!.user?.roles.map((r) => r.role.code) ?? [],
+    })),
+  );
+  if (violations.length > 0) {
+    throw new Error(`Seed reporting lines break the three-level rule:\n  - ${violations.join("\n  - ")}`);
   }
 
   console.log(`Seeded ${n} employees across ${locations.length} branches in 2 cities.`);

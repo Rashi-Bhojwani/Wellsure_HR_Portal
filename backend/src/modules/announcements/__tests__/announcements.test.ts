@@ -1,6 +1,7 @@
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import { prisma } from "../../../lib/prisma";
+import { deleteWithDependents } from "../../../lib/__tests__/cleanup";
 import { getActiveAnnouncementForEmployee } from "../service";
 import {
   app,
@@ -124,7 +125,11 @@ describe("Announcements", () => {
     const result = await getActiveAnnouncementForEmployee(employeeId);
     expect(result?.title).not.toBe("Wrong location");
 
-    await prisma.location.delete({ where: { id: otherLocation.id } });
+    // Deleting the branch directly is refused while an announcement is scoped
+    // to it (RESTRICT, Phase 5 commit C — it used to SET NULL, silently
+    // making the announcement org-wide). The cleanup engine removes the
+    // scoped announcement with it.
+    await deleteWithDependents("Location", [otherLocation.id]);
   });
 
   it("an expired or not-yet-active row never matches", async () => {

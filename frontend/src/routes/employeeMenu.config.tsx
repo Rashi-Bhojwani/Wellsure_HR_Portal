@@ -38,6 +38,8 @@ import { LeaveBalancesPage } from "../pages/employee/leave/LeaveBalancesPage";
 import { LeaveCalendarPage } from "../pages/employee/leave/LeaveCalendarPage";
 import { HolidayCalendarPage } from "../pages/employee/leave/HolidayCalendarPage";
 import { AttendanceInfoPage } from "../pages/employee/attendance/AttendanceInfoPage";
+import { DocumentCenterPage } from "../pages/employee/document-center/DocumentCenterPage";
+import { PeoplePage } from "../pages/employee/people/PeoplePage";
 
 // Single source of truth for the Employee portal left sidebar
 // (docs/UI_REFERENCE.md §1.0). The sidebar, the route tree and the
@@ -218,14 +220,14 @@ export const employeeMenu: EmployeeMenuEntry[] = [
     label: "Document Center",
     path: "document-center",
     icon: FolderOutlined,
-    phase: "Phase 5",
+    element: DocumentCenterPage,
   },
   {
     key: "people",
     label: "People",
     path: "people",
     icon: TeamOutlined,
-    phase: "Phase 5",
+    element: PeoplePage,
   },
   {
     key: "helpdesk",

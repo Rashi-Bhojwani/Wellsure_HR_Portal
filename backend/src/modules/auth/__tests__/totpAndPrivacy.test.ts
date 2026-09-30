@@ -70,6 +70,8 @@ describe("2FA self-service (disable, backup codes) and privacy notice", () => {
   it("blocks self-disable when the user's role requires 2FA", async () => {
     const user = await createTestUser(org, { roleCode: requiredRoleCode });
     employeeIds.push(user.employeeId);
+    // A global singleton this suite doesn't own — restore exactly what was there.
+    const original = await prisma.systemSetting.findUnique({ where: { key: "auth.require2faRoles" } });
     await prisma.systemSetting.upsert({
       where: { key: "auth.require2faRoles" },
       create: { key: "auth.require2faRoles", value: [requiredRoleCode] },
@@ -86,7 +88,11 @@ describe("2FA self-service (disable, backup codes) and privacy notice", () => {
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe("TOTP_REQUIRED_BY_ROLE");
 
-    await prisma.systemSetting.deleteMany({ where: { key: "auth.require2faRoles" } });
+    if (original) {
+      await prisma.systemSetting.update({ where: { key: "auth.require2faRoles" }, data: { value: original.value as never } });
+    } else {
+      await prisma.systemSetting.deleteMany({ where: { key: "auth.require2faRoles" } });
+    }
   });
 
   it("regenerates backup codes, invalidating the old ones", async () => {

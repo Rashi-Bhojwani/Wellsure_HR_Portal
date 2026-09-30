@@ -4,6 +4,8 @@ import { Button, Card, Descriptions, Form, Input, Modal, Space, Tabs, Tag, Typog
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as employeeApi from "../../../api/employee";
 import { EmptyState } from "../../../components/common/EmptyState";
+import { PhotoUploader } from "../../../components/common/PhotoUploader";
+import * as peopleApi from "../../../api/people";
 
 const { Title } = Typography;
 
@@ -93,6 +95,7 @@ function EditSelfServiceModal({ open, profile, onClose }: { open: boolean; profi
 }
 
 export function ViewMyInfoPage() {
+  const queryClient = useQueryClient();
   const { data: profile, isLoading } = useQuery({ queryKey: ["employees", "me"], queryFn: employeeApi.getMyProfile });
   const [editOpen, setEditOpen] = useState(false);
   const [requestGroup, setRequestGroup] = useState<ChangeRequestFieldGroup | null>(null);
@@ -102,6 +105,21 @@ export function ViewMyInfoPage() {
   return (
     <Space orientation="vertical" size={16} style={{ width: "100%" }}>
       <Title level={3} style={{ margin: 0 }}>My Info</Title>
+      {profile.personal && (
+        <Card size="small">
+          <PhotoUploader
+            employeeId={profile.id}
+            name={profile.fullName}
+            photoVersion={profile.personal.photoVersion}
+            upload={peopleApi.uploadMyPhoto}
+            remove={peopleApi.removeMyPhoto}
+            onChanged={() => {
+              void queryClient.invalidateQueries({ queryKey: ["employees", "me"] });
+              void queryClient.invalidateQueries({ queryKey: ["people"] });
+            }}
+          />
+        </Card>
+      )}
       <Card>
         <Tabs
           items={[

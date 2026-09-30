@@ -2,6 +2,7 @@ import { Router } from "express";
 import { readFile } from "node:fs/promises";
 import { localStorageFilePath, readLocalObjectMeta, verifyLocalSignedUrl } from "./LocalStorageService";
 import { HttpError } from "../../middleware/errorHandler";
+import { attachmentContentDisposition } from "./StorageService";
 
 // Serves LocalStorageService's simulated signed URLs
 // (GET /dev/storage?key=...&exp=...&sig=...). Only meaningful when
@@ -14,14 +15,16 @@ devStorageRouter.get("/dev/storage", async (req, res, next) => {
     const key = typeof req.query.key === "string" ? req.query.key : "";
     const exp = Number(req.query.exp);
     const sig = typeof req.query.sig === "string" ? req.query.sig : "";
+    const downloadFileName = typeof req.query.dn === "string" ? req.query.dn : "";
 
-    if (!key || !sig || !verifyLocalSignedUrl(key, exp, sig)) {
+    if (!key || !sig || !verifyLocalSignedUrl(key, exp, sig, downloadFileName)) {
       throw new HttpError(403, "Invalid or expired signed URL");
     }
 
     const { contentType } = await readLocalObjectMeta(key);
     const data = await readFile(localStorageFilePath(key));
     res.setHeader("Content-Type", contentType);
+    if (downloadFileName) res.setHeader("Content-Disposition", attachmentContentDisposition(downloadFileName));
     res.send(data);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {

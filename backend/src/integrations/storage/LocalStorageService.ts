@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { env } from "../../config/env";
-import type { StorageService } from "./StorageService";
+import type { SignedUrlOptions, StorageService } from "./StorageService";
 
 // Local filesystem StorageService — dev-only stand-in for S3. Objects live
 // under STORAGE_LOCAL_DIR (default .storage/, gitignored); a small sidecar
@@ -20,13 +20,15 @@ function resolveKeyPath(key: string): string {
   return resolved;
 }
 
-function sign(key: string, exp: number): string {
-  return createHmac("sha256", env.STORAGE_SIGNED_URL_SECRET).update(`${key}:${exp}`).digest("hex");
+// The download filename (if any) is part of what's signed, so a URL can't
+// be replayed with a different name attached.
+function sign(key: string, exp: number, downloadFileName = ""): string {
+  return createHmac("sha256", env.STORAGE_SIGNED_URL_SECRET).update(`${key}:${exp}:${downloadFileName}`).digest("hex");
 }
 
-export function verifyLocalSignedUrl(key: string, exp: number, sig: string): boolean {
+export function verifyLocalSignedUrl(key: string, exp: number, sig: string, downloadFileName = ""): boolean {
   if (!Number.isFinite(exp) || Date.now() / 1000 > exp) return false;
-  const expected = Buffer.from(sign(key, exp));
+  const expected = Buffer.from(sign(key, exp, downloadFileName));
   const actual = Buffer.from(sig);
   return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
@@ -43,7 +45,13 @@ export class LocalStorageService implements StorageService {
     await writeFile(`${filePath}.meta.json`, JSON.stringify({ contentType }), "utf8");
   }
 
-  async getObjectSignedUrl(key: string, expiresInSeconds = 900): Promise<string> {
+  async getObject(key: string): Promise<{ body: Buffer; contentType: string }> {
+    const body = await readFile(resolveKeyPath(key));
+    const { contentType } = await readLocalObjectMeta(key);
+    return { body, contentType };
+  }
+
+  async getObjectSignedUrl(key: string, expiresInSeconds = 900, options: SignedUrlOptions = {}): Promise<string> {
     // Throws (via resolveKeyPath) if the key would escape the storage root,
     // so a bad key is caught here rather than at request time.
     resolveKeyPath(key);
@@ -51,7 +59,8 @@ export class LocalStorageService implements StorageService {
     const url = new URL("/dev/storage", env.API_BASE_URL);
     url.searchParams.set("key", key);
     url.searchParams.set("exp", String(exp));
-    url.searchParams.set("sig", sign(key, exp));
+    if (options.downloadFileName) url.searchParams.set("dn", options.downloadFileName);
+    url.searchParams.set("sig", sign(key, exp, options.downloadFileName));
     return url.toString();
   }
 

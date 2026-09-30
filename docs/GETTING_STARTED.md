@@ -207,8 +207,10 @@ subset for manual testing.
 |---|---|---|---|
 | `1000` | Aditi Sharma | Super Admin | Full admin access; **2FA required** — first login walks you through enrolment |
 | `1001` | Rohan Mehta | HR Admin | Employee management, bank/statutory data, Admin Tools → Import Center/Audit Log/System Settings; **2FA required** |
-| `1002`–`1005` | Karan Kapoor, Priya Nair, Vikram Rao, Neha Verma | Manager | Team-scoped (`TEAM` data-scope) views on the All Employees grid and employee profiles — see only your own direct/indirect reports |
-| `1006`+ | various | Employee | Plain employee-portal access, no 2FA; View My Info at `/app/profile` |
+| `1002`–`1005`, `1024` | Karan Kapoor, Priya Nair, Vikram Rao, Neha Verma, Rajesh Kumar | Manager | Team-scoped (`TEAM` data-scope) views on the All Employees grid and employee profiles — see only your own reports. Every manager reports to Admin (`1000`); the seed enforces the three-level structure (Admin → Managers → Employees) and refuses to run if it's broken |
+| `1006`+ | various | Employee | Plain employee-portal access, no 2FA; View My Info at `/app/profile` (upload a photo there) |
+| `1006` | Arjun Singh | Employee (Engineering) | Document Center fixture: has a visible Appointment Letter and an HR-only Address Proof he can't see |
+| `1010` | Rahul Malhotra | Employee (Sales) | Sees the Sales-only "Sales Incentive Plan 2026" in Document Center, which Arjun doesn't |
 | `1090` | Gaurav Singh | Employee (separated) | Device-ID reuse fixture — enter `1090` as the Device User ID in Add Employee to see the collision message and `1090-2` suggestion |
 
 A few accounts are deliberately seeded in non-active states to exercise
@@ -230,7 +232,11 @@ real login flow, it just fills in the known demo password for you.
   console and written as a real `.eml` file (openable in any mail client)
   to `backend/.mail/` (gitignored).
 - **Uploaded files** — written to `backend/.storage/` (gitignored), served
-  back through a signed-URL-simulating dev route.
+  back through a signed-URL-simulating dev route. The seed writes its demo
+  Document Center PDFs under `.storage/seed/`; employee photos land under
+  `.storage/employees/<id>/photo/` (only the re-encoded WebP copies — the
+  uploaded original is never stored) and documents under
+  `.storage/employees/<id>/documents/` and `.storage/company-documents/`.
 
 ---
 
@@ -299,6 +305,11 @@ cloud dev container's defaults silently wins over `.env`. The message says
 which one it was. Fix: `unset DATABASE_URL` so `.env` is used, or export
 a local URL. There is deliberately no override flag: a remote database
 isn't a development environment, so set `APP_ENV` to match instead.
+
+**The backend starts on the wrong port (e.g. `api listening on :3000`)**
+Same cause as above: a `PORT` exported in your shell wins over
+`backend/.env`. The frontend expects the API on `:4000`
+(`VITE_API_BASE_URL`), so `unset PORT` or start with `PORT=4000`.
 
 **Stale Prisma Client after a schema change**
 If TypeScript complains about fields/models that clearly exist in

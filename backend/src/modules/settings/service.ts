@@ -2,7 +2,8 @@ import { getSetting, setSetting } from "../../lib/settings";
 import { writeAuditLog } from "../../lib/audit";
 import { RATE_LIMIT_DEFAULTS, RATE_LIMIT_KEYS, type LeaveSettings, type RateLimitSetting, type SecuritySettings } from "./types";
 import type { z } from "zod";
-import type { updateLeaveSettingsSchema, updateSettingsSchema } from "./validators";
+import type { updateLeaveSettingsSchema, updatePeopleDocumentsSettingsSchema, updateSettingsSchema } from "./validators";
+import { getPeopleDocumentsSettings, PEOPLE_DOCUMENTS_SETTING_KEYS, type PeopleDocumentsSettings } from "../../lib/peopleDocumentsSettings";
 
 const RATE_LIMIT_SETTING_KEY: Record<(typeof RATE_LIMIT_KEYS)[number], string> = {
   login: "auth.rateLimit.login",
@@ -84,5 +85,25 @@ export async function updateLeaveSettings(input: UpdateLeaveInput, meta: { actor
   }
   const after = await getLeaveSettings();
   await writeAuditLog({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "leave", before, after });
+  return after;
+}
+
+// Phase 5 commit C — People & Documents (directory field visibility, upload limits).
+export async function getPeopleDocumentsSettingsForAdmin(): Promise<PeopleDocumentsSettings> {
+  return getPeopleDocumentsSettings();
+}
+
+type UpdatePeopleDocumentsInput = z.infer<typeof updatePeopleDocumentsSettingsSchema>;
+
+export async function updatePeopleDocumentsSettings(
+  input: UpdatePeopleDocumentsInput,
+  meta: { actorUserId: string; ipAddress?: string | null; userAgent?: string | null },
+): Promise<PeopleDocumentsSettings> {
+  const before = await getPeopleDocumentsSettings();
+  for (const [field, key] of Object.entries(PEOPLE_DOCUMENTS_SETTING_KEYS) as Array<[keyof UpdatePeopleDocumentsInput, string]>) {
+    if (input[field] !== undefined) await setSetting(key, input[field], meta.actorUserId);
+  }
+  const after = await getPeopleDocumentsSettings();
+  await writeAuditLog({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "peopleDocuments", before, after });
   return after;
 }

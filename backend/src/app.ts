@@ -21,6 +21,8 @@ import { notificationsRouter } from "./modules/notifications/routes";
 import { announcementsRouter } from "./modules/announcements/routes";
 import { adminRouter } from "./modules/admin/routes";
 import { engageRouter } from "./modules/engage/routes";
+import { peoplePhotosRouter, peopleRouter } from "./modules/people/routes";
+import { documentsRouter } from "./modules/documents/routes";
 
 export function createApp(): Express {
   const app = express();
@@ -37,7 +39,24 @@ export function createApp(): Express {
   app.use(cors({ origin: env.CORS_ORIGIN.split(","), credentials: true }));
   app.use(express.json());
   app.use(cookieParser());
-  app.use(pinoHttp({ logger }));
+  // Request logs are an allowlist. pino-http's default serializer logs every
+  // request header — including `Authorization: Bearer <access token>` and
+  // the refresh-token cookie — so credentials must never go through it.
+  // The photo-only token (modules/people/photos.ts) travels in the query
+  // string because <img> can't send headers, so it's redacted from the URL.
+  app.use(
+    pinoHttp({
+      logger,
+      serializers: {
+        req: (req: { id?: unknown; method: string; url: string; remoteAddress?: string }) => ({
+          id: req.id,
+          method: req.method,
+          url: req.url.replace(/([?&]t=)[^&]*/g, "$1[redacted]"),
+          remoteAddress: req.remoteAddress,
+        }),
+      },
+    }),
+  );
 
   // Liveness — the process is up. Never checks dependencies.
   app.get("/health", (_req, res) => {
@@ -67,6 +86,11 @@ export function createApp(): Express {
   // Serves LocalStorageService's simulated signed URLs — see
   // src/integrations/storage/devRoute.ts. Inert under STORAGE_DRIVER=s3.
   app.use(devStorageRouter);
+  // Employee photos: cacheable image bytes, authenticated by the photo-only
+  // token (modules/people/photos.ts), not the Authorization header. Mounted
+  // before every /api router because holidaysRouter is mounted at bare /api
+  // and runs `authenticate` for any /api/* request that reaches it.
+  app.use("/api/people/photos", peoplePhotosRouter);
 
   // Module routes (auth, employees, attendance, ...) are mounted here
   // starting Phase 1 — see src/modules/*/README.md.
@@ -82,6 +106,8 @@ export function createApp(): Express {
   app.use("/api/announcements", noStore, announcementsRouter);
   app.use("/api/admin", noStore, adminRouter);
   app.use("/api/engage", noStore, engageRouter);
+  app.use("/api/people", noStore, peopleRouter);
+  app.use("/api/documents", noStore, documentsRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
