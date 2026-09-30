@@ -10,7 +10,7 @@ committed).
 |---|---|---|
 | — | Initial project structure (this commit) | ✅ Done |
 | 0 | Foundation | ✅ Done |
-| 1 | Auth, RBAC, org, employees | Done — data layer, authentication, org masters, employee management, import center, exports, audit log viewer and system settings all built and tested. Users & Roles admin screen (permission/role management UI — not role *assignment*, which already exists in Add Employee) deliberately deferred; not asked for in any commit so far. |
+| 1 | Auth, RBAC, org, employees | Done — data layer, authentication, org masters, employee management, import center, exports, audit log viewer and system settings all built and tested. Users & Roles admin screen deliberately deferred. **Correction (2026-09-30): role assignment does not exist anywhere in the product** — Add Employee always assigns plain `EMPLOYEE` and nothing else assigns roles; an earlier version of this row claimed otherwise. Both are Phase 5 commit E1 ([`docs/plans/PHASE_5.md`](plans/PHASE_5.md)). |
 | 1.5 | AWS staging environment | Not started |
 | 2 | Biometric ingestion + attendance engine + real-time | Not started |
 | 3 | Attendance administration | Not started |
@@ -922,7 +922,7 @@ Import Center's file upload) introduced no new advisories.
 
 **Not done this commit** (still deliberately out of scope, unchanged from
 commit C's note): Users & Roles admin screen (permission/role management
-UI — role *assignment* during Add Employee already exists), letter
+UI — **correction 2026-09-30: this originally said role assignment "already exists" in Add Employee; it does not, Add Employee only ever assigns `EMPLOYEE`, see Phase 5 commit E1**), letter
 generation. Both are still placeholder routes.
 
 **Phase 1 is now complete.**

@@ -38,7 +38,7 @@ repo before it's built.
 | B | Engage: posts, kudos, polls, reactions, comments, groups, moderation, auto-posts **[recorded]** | ✅ Done |
 | C | People directory, org chart, Document Center **[recorded]** | ✅ Built 2026-09-30, awaiting review (see "As built" below). |
 | D | Helpdesk, Request Hub **[recorded]** | Not started |
-| E | Three-level hierarchy (Manager Management, per-manager permissions) + Workflow Delegates **[recorded: user, 2026-09-30]** | Not started |
+| E | E1 role & permission system · E2 three-level hierarchy (Manager Management) · E3 Workflow Delegates **[recorded: user, 2026-09-30, revised]** | Plan approved 2026-09-30. Not started (after the Docker fix and D). |
 | F | Reports **[recorded]** | Not started |
 | G | Mobile / PWA **[recorded]** | Not started. No longer blocked, see below. |
 
@@ -315,45 +315,186 @@ Detail **[reconstructed]** (spec §6, §11 `helpdesk_tickets`/`helpdesk_messages
   3 and 6 exist.
 - Admin side: a ticket queue with categories as an admin-editable master.
 
-## E — Three-level hierarchy + Workflow Delegates
+## E — Role & permission system, three-level hierarchy, Workflow Delegates
 
-Hierarchy scope **[recorded: user, 2026-09-30]**, verbatim in substance:
+**Status: plan APPROVED 2026-09-30.** It supersedes the earlier E scope, which
+had only manager permissions. The user corrected the admin model (two admin
+levels, see below), so E now covers role and permission management
+generally, and the manager work is built on top of it. Split into
+**E1 → E2 → E3**, each its own reviewed commit. Build order across the
+phase: Docker fix → D → E1 → E2 → E3.
 
-- Strictly three flat levels: Admin → Managers (directly under Admin) →
-  Employees (directly under a Manager). Managers never report to other
-  managers. Only Admin appoints or removes a manager, places employees
-  under a manager, and decides what a manager may do.
-- **Manager Management** (Admin Tools): list every manager with team
-  size, department and branch. Promote an employee to manager. Demote a
-  manager, which requires reassigning their team first. Open a manager to
-  add or remove team members. Every change writes an effective-dated
-  `EmployeeJobHistory` row (never an in-place overwrite), and every change
-  is audit-logged.
-- **Per-manager permissions**: Admin edits one default manager permission
-  set centrally, plus per-manager overrides. The UI shows which
-  permissions are inherited and which are overridden. A manager can never
-  grant permissions to anyone.
-- **Enforcement**: every manager endpoint checks both the permission and
-  the team scope, so a manager acting outside their own team is rejected
-  even when they hold the permission. IDOR tests prove it.
-- **Validation**: anyone set as a reporting manager must hold the
-  `MANAGER` role, and a manager's own reporting manager can only be Admin.
-  Enforced in the service layer and in the Excel import.
-- The recursive team-scope query (`lib/dataScope.ts`) can stay, with a
-  note in code and in the spec that exactly three levels are supported.
-- Update `docs/PROJECT_SPEC.md` §2 to describe this explicitly.
-- Also for E's plan **[recorded: commit C]**: which roles count as "Admin"
-  for reporting purposes. Commit C's seed assertion provisionally treats
-  only `SUPER_ADMIN` as Admin (with `HR_ADMIN` allowed to report to Admin
-  but never to manage a team) — see `backend/src/lib/reportingHierarchy.ts`.
-- Questions the commit E plan must answer **[recorded: user]**: is an
-  employee with no manager blocked at creation, or allowed and surfaced in
-  an "unassigned employees" list? And who approves a manager's own leave,
-  given self-approval is blocked (presumably Admin)?
+### Findings that shaped this plan (2026-09-30)
 
-Workflow Delegates detail **[reconstructed]** (spec §6): a manager
-delegates their approvals to someone else for a date range while away.
-Covers `/app/workflow-delegates` and `/admin/admin-tools/delegates`.
+- **Role assignment does not exist anywhere in the product.** Add Employee
+  always assigns plain `EMPLOYEE` (`employee/service.ts`), and no screen or
+  endpoint assigns any other role. PROGRESS.md used to claim otherwise;
+  corrected.
+- Data scope is hardcoded by role code (`resolveDataScope`'s
+  `ALL_SCOPE_ROLES` list in `lib/dataScope.ts`).
+- Effective permissions are computed in two places
+  (`middleware/authenticate.ts` and `lib/permissions.ts`), from role rows
+  only. They're re-read from the DB on every request, so a change takes
+  effect on the user's next request.
+
+### The admin model (user, 2026-09-30)
+
+- **SUPER_ADMIN** is the owner level. It is never restricted, and it alone
+  decides what every other role may do, HR_ADMIN included. There will be
+  **exactly two real SUPER_ADMIN accounts** (the owners; their names are
+  deliberately not recorded in the repo). Only an existing SUPER_ADMIN can
+  make another.
+- **HR_ADMIN** does day-to-day HR. Its permissions are *configured* by
+  SUPER_ADMIN, not fixed. SUPER_ADMIN can grant or revoke any permission for
+  the HR_ADMIN role, or for individual HR_ADMIN users.
+
+### E1 — Role & permission system
+
+**Schema:**
+- `UserPermissionOverride`: userId, permissionId, effect `GRANT | REVOKE`,
+  required reason, createdByUserId, createdAt. Unique per
+  (user, permission).
+- `Role.dataScope` (`SELF | TEAM | ALL`) replaces the hardcoded list. The
+  migration backfills today's mapping, so behaviour is unchanged on day
+  one. SUPER_ADMIN's scope is fixed at ALL.
+- `Role.isSystem`: the seven built-in roles can't be deleted. Creating new
+  roles is out of scope.
+- `role.manage` is retired. Role-definition changes are gated on holding
+  the SUPER_ADMIN role itself (rule 2).
+
+**Effective permissions:**
+- One resolver (`lib/permissions.ts`) used by `authenticate`, the socket
+  handshake and the photo route: union of role permissions, plus the
+  user's GRANTs, minus the user's REVOKEs.
+- **A SUPER_ADMIN holder always gets every key in `PERMISSION_KEYS`,
+  computed in code and never read from rows.** No stored row, even one
+  deleted directly in the database, can take anything away, and keys added
+  by later commits are held automatically.
+
+**Rules, enforced in the service layer, one test each (minimum):**
+1. SUPER_ADMIN's permissions can't be edited or revoked by anyone,
+   including SUPER_ADMIN: the role's definition is locked, and overrides
+   targeting a SUPER_ADMIN holder are refused.
+2. Only SUPER_ADMIN can change role definitions (permission set, data
+   scope). `role.view` holders get a read-only view.
+3. Nobody can grant a permission they don't hold. This applies to every
+   grant path: role assignment, overrides and manager permissions.
+4. **Meta-permissions** (those that confer power over other people's
+   access, flagged in the catalog) can be granted only by SUPER_ADMIN, and
+   never to the MANAGER role or to a MANAGER holder. So a manager can never
+   grant permissions to anyone.
+5. Per-user overrides:
+   - SUPER_ADMIN may set them on anyone except a SUPER_ADMIN holder.
+   - Anyone else only on MANAGER holders, and only with
+     `manager.permissions.manage` (E2).
+   - Never on yourself.
+6. Role assignment (**new**):
+   - SUPER_ADMIN assigns and removes any role, **including SUPER_ADMIN**;
+     only an existing SUPER_ADMIN can create another.
+   - Admin roles (HR_ADMIN, HR_EXECUTIVE, PAYROLL_ADMIN, APPROVER):
+     SUPER_ADMIN only.
+   - MANAGER: via Manager Management (E2).
+7. **Lockout, with two SUPER_ADMINs in mind:** the **last remaining active**
+   SUPER_ADMIN can't be deactivated, suspended, separated (including a
+   scheduled separation completing), have the role removed, or lose the
+   role any other way. While two or more are active, either may be removed,
+   as long as one remains. **Both cases tested**, including the
+   separation job refusing (and alerting) instead of locking the company
+   out.
+8. Every change (role permission sets, data scope, overrides, role
+   assignments) is audit-logged with before and after.
+
+**Also in E1:**
+- **Permission catalog** in `shared/`: label, group and description per
+  key, plus the meta flag. The screens group by area and never show raw
+  keys.
+- **Live effect:** `permissions.changed` to each affected user. The
+  frontend refetches `/me`, so menus and buttons update without a reload.
+- **Screens** (these retire the Phase-1-deferred `admin-tools/users-roles`
+  placeholder):
+  - **Admin Tools → Roles & Permissions:** a grid per role, grouped by
+    area, with a data-scope selector. The SUPER_ADMIN column is locked
+    ("All permissions — can't be changed"). Editable only by SUPER_ADMIN,
+    read-only for `role.view`.
+  - **Employee profile → Access tab:** roles (assign/remove per rule 6),
+    then every effective permission marked **Inherited from <role>** /
+    **Granted to this person** / **Revoked for this person**, with
+    override toggles that require a reason.
+- **Real SUPER_ADMIN bootstrap** (user requirement): the seed stays fake
+  (seeded accounts unchanged; no real names or details ever in the repo).
+  A one-time CLI, `npm run admin:bootstrap --prefix backend`, creates the
+  first real SUPER_ADMIN on staging or production:
+  - All details are supplied at runtime (interactive prompts or env vars
+    for the invocation), never hardcoded.
+  - It refuses to run if an active SUPER_ADMIN already exists (further ones
+    are created in-app by an existing SUPER_ADMIN, per rule 6).
+  - Audit-logged, and it issues the normal set-password invitation so no
+    password ever passes through the CLI.
+  - Documented in GETTING_STARTED.md. The two real accounts are created
+    during Phase 1.5 staging setup.
+- **Recovery procedure** in GETTING_STARTED.md (user requirement, needed
+  before go-live), covering a SUPER_ADMIN who has lost their password or
+  2FA device:
+  1. The other SUPER_ADMIN resets it in-app. The 2FA reset endpoint exists
+     since Phase 1; the Access tab gets the button.
+  2. Forgot-password covers a lost password with 2FA intact.
+  3. If no SUPER_ADMIN can sign in, a documented break-glass CLI run with
+     database access (`admin:recover`) resets 2FA and/or issues a fresh
+     set-password link for a named SUPER_ADMIN, audit-logged.
+  4. The equivalent direct SQL is written down as a last resort, with
+     SSM port-forwarding per spec §15.7.
+
+**Tests:** every rule above, including SUPER_ADMIN keeping every permission
+after its role rows are deleted directly; last-SUPER_ADMIN protection
+across deactivate, role removal, separation and the scheduled separation
+job; override resolution order; override IDOR; audit rows;
+`permissions.changed`; the bootstrap CLI (refuses when a SUPER_ADMIN
+exists, never takes a password); the recovery CLI.
+
+### E2 — Three-level hierarchy on top of E1
+
+- **Structure:** strictly three flat levels: Admin (SUPER_ADMIN) → Managers
+  (report directly to Admin) → Employees (report to a Manager). Managers
+  never report to managers. HR_ADMIN reports to Admin and never manages a
+  team (as the commit C seed assertion already models).
+- **New permissions:** `manager.appoint`, `manager.team.assign` and
+  `manager.permissions.manage` (meta). **HR_ADMIN holds all three by
+  default** (user decision); SUPER_ADMIN can revoke them.
+- **Manager Management** (Admin Tools):
+  - Every manager with team size, department and branch.
+  - Promote an employee to manager (assigns `MANAGER`).
+  - Demote, which requires reassigning the whole team first.
+  - Open a manager to add or remove team members. Every move writes an
+    effective-dated `EmployeeJobHistory` row, never an in-place overwrite.
+    All audit-logged.
+  - A **Permissions** tab reusing E1's Access view: the default is the
+    MANAGER role (edited only by SUPER_ADMIN), and per-manager differences
+    are E1 overrides.
+  - An **Unassigned employees** list.
+- **Validation** in the service layer and the Excel import, reusing
+  `lib/reportingHierarchy.ts`: a reporting manager must hold MANAGER, and a
+  manager's own reporting manager can only be Admin.
+- **Enforcement:** an audit of every manager-reachable endpoint for both
+  checks (permission and team scope), with IDOR tests for acting outside
+  your own team while holding the permission.
+- The recursive team-scope query stays, with a note in code and spec that
+  exactly three levels are supported. Spec §2 is rewritten for the
+  two-level admin model, the three-level structure, overrides and the
+  lockout rules.
+- **Answered questions:**
+  - An employee with no manager is **allowed at creation** and surfaced in
+    the Unassigned list, plus a count on the admin dashboard.
+  - A manager's own leave is **approved by Admin**: managers report to
+    SUPER_ADMIN, so it lands in their Review queue, and HR_ADMIN can
+    approve via Employee Leave if it holds `leave.approve`.
+  - HR_ADMIN's own leave goes to SUPER_ADMIN.
+  - Self-approval stays blocked.
+
+### E3 — Workflow Delegates
+
+**[reconstructed]** (spec §6): a manager delegates their approvals to
+someone for a date range while away. Covers `/app/workflow-delegates` and
+`/admin/admin-tools/delegates`. Plan written up for review before building.
 
 ## F — Reports
 
@@ -397,6 +538,6 @@ planned. Every route must be wired by the end of Phase 5.
 |---|---|
 | `/app/my-worklife/feedback` (Feedback) | D (a request/response flow like Helpdesk), or defer and re-mark |
 | `/app/todo/tasks` and admin app `tasks` (Tasks) | D, alongside Request Hub (both are "my open items") |
-| Admin app `workflow` (Workflow) and `admin-tools/workflows` (Approval Workflows, multi-level chains, spec §7.8) | E, alongside the hierarchy and delegates |
+| Admin app `workflow` (Workflow) and `admin-tools/workflows` (Approval Workflows, multi-level chains, spec §7.8) | E3, alongside delegates (confirm when E3 is planned) |
 | `admin-tools/templates` (Email & Letter Templates) | C (letters in Document Center) or a later commit. Letter generation was deferred from Phase 1. |
-| `admin-tools/users-roles` (Users & Roles) | Marked `Phase 1`, deliberately deferred since Phase 1. Overlaps E's per-manager permissions, so decide in E's plan. |
+| `admin-tools/users-roles` (Users & Roles) | **Settled: E1** (Roles & Permissions). |
