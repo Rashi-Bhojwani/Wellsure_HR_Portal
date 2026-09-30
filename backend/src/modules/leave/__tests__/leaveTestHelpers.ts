@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "../../../lib/prisma";
-import { TEST_PASSWORD, cleanupFullTestEmployee, type TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
+import { deleteEmployeesAndDependents } from "../../../lib/__tests__/cleanup";
+import { TEST_PASSWORD, type TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
 
 export { createEmployeeTestOrgMasters, cleanupEmployeeTestOrgMasters, cleanupFullTestEmployee, grantPermissions, revokePermissions, cleanupTestRole, loginAs, authHeader, app, TEST_PASSWORD } from "../../employee/__tests__/employeeTestHelpers";
 export type { TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
@@ -87,22 +88,11 @@ export async function createMinimalTestEmployee(dateOfJoining: Date, opts: { sta
 }
 
 export async function cleanupMinimalTestEmployee(employeeId: string): Promise<void> {
-  await prisma.leaveLedger.deleteMany({ where: { employeeId } });
-  await prisma.leaveRequest.deleteMany({ where: { employeeId } });
-  await prisma.compOffCredit.deleteMany({ where: { employeeId } });
-  await prisma.employee.deleteMany({ where: { id: employeeId } });
+  await deleteEmployeesAndDependents([employeeId]);
 }
 
-// employeeTestHelpers.ts's cleanupFullTestEmployee predates leave existing
-// and doesn't know to delete leave_ledger/leave_requests/comp_off_credits
-// first — deleting the Employee row while any of those still reference it
-// violates their FK. Leave-data cleanup here, then defer the rest (user,
-// job/name history, etc.) to the existing helper.
 export async function cleanupLoginableTestEmployee(employeeId: string): Promise<void> {
-  await prisma.leaveLedger.deleteMany({ where: { employeeId } });
-  await prisma.leaveRequest.deleteMany({ where: { employeeId } });
-  await prisma.compOffCredit.deleteMany({ where: { employeeId } });
-  await cleanupFullTestEmployee(employeeId);
+  await deleteEmployeesAndDependents([employeeId]);
 }
 
 export function utcDate(iso: string): Date {

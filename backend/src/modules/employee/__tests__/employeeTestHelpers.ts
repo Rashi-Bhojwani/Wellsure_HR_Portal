@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { createApp } from "../../../app";
 import { prisma } from "../../../lib/prisma";
+import { deleteEmployeesAndDependents, deleteWithDependents } from "../../../lib/__tests__/cleanup";
 import {
-  cleanupEmployeeEngageRows,
   createTestOrgMasters as createBaseOrgMasters,
   type TestOrgMasters as BaseTestOrgMasters,
 } from "../../../lib/__tests__/testHelpers";
@@ -45,13 +45,12 @@ export async function createEmployeeTestOrgMasters(): Promise<TestOrgMasters> {
 }
 
 export async function cleanupEmployeeTestOrgMasters(org: TestOrgMasters): Promise<void> {
-  await prisma.grade.delete({ where: { id: org.gradeId } }).catch(() => undefined);
-  await prisma.costCentre.delete({ where: { id: org.costCentreId } }).catch(() => undefined);
-  await prisma.location.update({ where: { id: org.locationId }, data: { cityId: null } }).catch(() => undefined);
-  await prisma.city.delete({ where: { id: org.cityId } }).catch(() => undefined);
-  await prisma.department.delete({ where: { id: org.departmentId } }).catch(() => undefined);
-  await prisma.designation.delete({ where: { id: org.designationId } }).catch(() => undefined);
-  await prisma.location.delete({ where: { id: org.locationId } }).catch(() => undefined);
+  await deleteWithDependents("Grade", [org.gradeId]);
+  await deleteWithDependents("CostCentre", [org.costCentreId]);
+  await deleteWithDependents("City", [org.cityId]);
+  await deleteWithDependents("Department", [org.departmentId]);
+  await deleteWithDependents("Designation", [org.designationId]);
+  await deleteWithDependents("Location", [org.locationId]);
 }
 
 // Full employee (personal + name + job + statutory + bank), with a real
@@ -137,38 +136,19 @@ export async function createFullTestEmployee(org: TestOrgMasters, opts: { roleCo
 }
 
 export async function cleanupFullTestEmployee(employeeId: string): Promise<void> {
-  await cleanupEmployeeEngageRows(employeeId);
-  await prisma.refreshToken.deleteMany({ where: { user: { employeeId } } });
-  await prisma.invitationToken.deleteMany({ where: { user: { employeeId } } });
-  // Phase 5 tables FK-referencing User.id — must go before the User delete
-  // below, same as every other per-user row in this function.
-  await prisma.notification.deleteMany({ where: { user: { employeeId } } });
-  await prisma.userFavourite.deleteMany({ where: { user: { employeeId } } });
-  await prisma.dashboardLayout.deleteMany({ where: { user: { employeeId } } });
-  await prisma.auditLog.deleteMany({ where: { entityId: employeeId } });
-  const user = await prisma.user.findUnique({ where: { employeeId } });
-  if (user) {
-    await prisma.userRole.deleteMany({ where: { userId: user.id } });
-    await prisma.auditLog.deleteMany({ where: { entityId: user.id } });
-  }
-  await prisma.profileChangeRequest.deleteMany({ where: { employeeId } });
-  await prisma.separation.deleteMany({ where: { employeeId } });
-  await prisma.employeeBankAccount.deleteMany({ where: { employeeId } });
-  await prisma.employeeStatutory.deleteMany({ where: { employeeId } });
-  await prisma.deviceUserMapping.deleteMany({ where: { employeeId } });
-  await prisma.employeeJobHistory.deleteMany({ where: { employeeId } });
-  await prisma.employeeNameHistory.deleteMany({ where: { employeeId } });
-  await prisma.employeePersonal.deleteMany({ where: { employeeId } });
-  await prisma.user.deleteMany({ where: { employeeId } });
-  await prisma.employee.deleteMany({ where: { id: employeeId } });
+  await deleteEmployeesAndDependents([employeeId]);
+}
+
+// Removes employees created through the real API (e.g. the Add Employee
+// wizard), where the test only knows the Employee Code it submitted.
+export async function cleanupEmployeesByCode(employeeCodes: string[]): Promise<void> {
+  const rows = await prisma.employee.findMany({ where: { employeeCode: { in: employeeCodes } }, select: { id: true } });
+  await deleteEmployeesAndDependents(rows.map((r) => r.id));
 }
 
 export async function cleanupTestRole(roleCode: string): Promise<void> {
   const role = await prisma.role.findUnique({ where: { code: roleCode } });
-  if (!role) return;
-  await prisma.rolePermission.deleteMany({ where: { roleId: role.id } });
-  await prisma.userRole.deleteMany({ where: { roleId: role.id } });
-  await prisma.role.delete({ where: { id: role.id } });
+  if (role) await deleteWithDependents("Role", [role.id]);
 }
 
 // Grants the given permission keys to a (possibly newly created) role,

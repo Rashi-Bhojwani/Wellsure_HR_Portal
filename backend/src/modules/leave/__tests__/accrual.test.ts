@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "../../../lib/prisma";
 import { computeEligibilityDate, creditMonthlyAccrualForEmployee, firstAccrualMonth, isEligibleForAccrualMonth, runMonthlyPlAccrual } from "../accrual";
 import { cleanupMinimalTestEmployee, createMinimalTestEmployee, utcDate } from "./leaveTestHelpers";
@@ -146,8 +146,19 @@ describe("monthly accrual idempotency (spec §5.5)", () => {
 
 describe("runMonthlyPlAccrual (bulk driver)", () => {
   const employeeIds: string[] = [];
+  // The bulk driver credits EVERY active employee — seeded ones included —
+  // so it writes rows no fixture cleanup owns. Remember which accrual rows
+  // existed beforehand and remove only the ones this test's run added.
+  let preExistingAccrualIds = new Set<string>();
+  beforeEach(async () => {
+    const rows = await prisma.leaveLedger.findMany({ where: { entryType: "ACCRUAL" }, select: { id: true } });
+    preExistingAccrualIds = new Set(rows.map((r) => r.id));
+  });
   afterEach(async () => {
     while (employeeIds.length) await cleanupMinimalTestEmployee(employeeIds.pop()!);
+    const rows = await prisma.leaveLedger.findMany({ where: { entryType: "ACCRUAL" }, select: { id: true } });
+    const added = rows.map((r) => r.id).filter((id) => !preExistingAccrualIds.has(id));
+    await prisma.leaveLedger.deleteMany({ where: { id: { in: added } } });
   });
 
   it("credits a specific eligible fixture employee when run for their eligible month", async () => {

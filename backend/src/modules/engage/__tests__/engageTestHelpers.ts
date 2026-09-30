@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "../../../lib/prisma";
+import { deleteEmployeesAndDependents, deleteWithDependents } from "../../../lib/__tests__/cleanup";
 
 export {
   app,
@@ -12,37 +13,15 @@ export {
   type TestOrgMasters,
 } from "../../leave/__tests__/leaveTestHelpers";
 
-// Deletes every child row (from ANY employee — a post's reactions/comments/
-// votes/kudos aren't only ever the author's own) of the given posts, then
-// the posts themselves, in FK dependency order. Every engage test tracks
-// the post ids it creates and calls this in afterAll/afterEach BEFORE
-// cleaning up the employees that authored/reacted-to/voted-on them —
-// cleanupLoginableTestEmployee's underlying cleanupFullTestEmployee
-// doesn't know about the engage tables and will hit a live FK violation
-// on Employee delete otherwise (the same class of bug already found and
-// fixed for Notification/UserFavourite/DashboardLayout in commit A).
+// Deletes the given posts and every kudos/poll/vote/comment/reaction on
+// them (from any employee), children first — see lib/__tests__/cleanup.ts.
 export async function cleanupEngagePosts(postIds: string[]): Promise<void> {
-  if (postIds.length === 0) return;
-  const polls = await prisma.poll.findMany({ where: { postId: { in: postIds } }, select: { id: true } });
-  const pollIds = polls.map((p) => p.id);
-
-  await prisma.reaction.deleteMany({ where: { postId: { in: postIds } } });
-  await prisma.comment.deleteMany({ where: { postId: { in: postIds } } });
-  if (pollIds.length > 0) {
-    await prisma.pollVote.deleteMany({ where: { pollId: { in: pollIds } } });
-    await prisma.pollOption.deleteMany({ where: { pollId: { in: pollIds } } });
-    await prisma.poll.deleteMany({ where: { id: { in: pollIds } } });
-  }
-  await prisma.kudos.deleteMany({ where: { postId: { in: postIds } } });
-  await prisma.post.deleteMany({ where: { id: { in: postIds } } });
+  await deleteWithDependents("Post", postIds);
 }
 
-// Call after cleanupEngagePosts (posts reference groupId, so a group can't
-// be deleted while a post still points at it).
+// Posts in these groups survive, ungrouped (Post.groupId is "setNull").
 export async function cleanupEngageGroups(groupIds: string[]): Promise<void> {
-  if (groupIds.length === 0) return;
-  await prisma.groupMember.deleteMany({ where: { groupId: { in: groupIds } } });
-  await prisma.group.deleteMany({ where: { id: { in: groupIds } } });
+  await deleteWithDependents("Group", groupIds);
 }
 
 export async function cleanupAutoPostSetting(kind: "BIRTHDAY" | "JOINING" | "ANNIVERSARY"): Promise<void> {
@@ -92,9 +71,5 @@ export async function createAutoPostTestEmployee(opts: { dateOfJoining: Date; da
 }
 
 export async function cleanupAutoPostTestEmployee(employeeId: string): Promise<void> {
-  const posts = await prisma.post.findMany({ where: { subjectEmployeeId: employeeId }, select: { id: true } });
-  await cleanupEngagePosts(posts.map((p) => p.id));
-  await prisma.employeePersonal.deleteMany({ where: { employeeId } });
-  await prisma.employeeNameHistory.deleteMany({ where: { employeeId } });
-  await prisma.employee.deleteMany({ where: { id: employeeId } });
+  await deleteEmployeesAndDependents([employeeId]);
 }

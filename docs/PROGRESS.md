@@ -15,7 +15,7 @@ committed).
 | 2 | Biometric ingestion + attendance engine + real-time | Not started |
 | 3 | Attendance administration | Not started |
 | 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
-| 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | In progress — commit A done (notifications substrate, Employee Home, Admin Homepage Welcome + Dashboard tabs), commit B done (Engage: posts/kudos/polls/reactions/comments/groups/moderation/auto-posts, all real-time). Commits C–G (People/Documents, Helpdesk/Request Hub, Workflow Delegates, Reports, Mobile/PWA) not started. |
+| 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | In progress — commit A done (notifications substrate, Employee Home, Admin Homepage Welcome + Dashboard tabs), commit B done (Engage: posts/kudos/polls/reactions/comments/groups/moderation/auto-posts, all real-time). Commits C–G (People/Org chart/Documents, Helpdesk/Request Hub, Three-level hierarchy + Workflow Delegates, Reports, Mobile/PWA) not started — full plan in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
 | 5.5 | AWS production environment and go-live hardening | Not started |
 | 6 | Payroll | Not started |
 | 7 | Tax & benefits | Not started |
@@ -2029,6 +2029,109 @@ Settings saved and persisted. All Playwright-generated test data (22 posts,
 database afterward. Two real bugs were found this way and are detailed
 above — the moderation-queue pagination 500 and the orphaned-post "null
 just joined us!" test-infrastructure gap — both fixed and re-verified.
+
+### Interim — schema-driven test cleanup, and plans written into the repo
+
+A standalone commit between Phase 5 commits B and C, fixing two process
+problems rather than adding features.
+
+**1. The recurring "new table not in the test cleanup" bug, fixed
+structurally.** Three commits in a row (Phase 4's leave helpers, Phase 5
+A and B) found a new table that FK-referenced `Employee` or `User` but
+wasn't in a hand-maintained cleanup helper. It surfaced later as a live FK
+violation or, worse, a silent orphan (an optional FK defaults to
+`SetNull`, which is how "null just joined us!" reached the Engage feed).
+The hand-maintained lists are gone:
+
+- `backend/src/lib/__tests__/cleanup.ts` (new) reads every relation from
+  `Prisma.dmmf` and implements `deleteWithDependents(model, ids)`. It
+  collects the root rows plus every row depending on them, transitively,
+  and deletes children before parents in an order computed from the
+  schema. Required FKs always cascade. **Optional FKs need an explicit
+  policy** in `OPTIONAL_FK_POLICY`, because the schema can't say whether
+  an optional pointer means "belongs to" (an auto-post about an employee,
+  so delete) or "merely references" (a seeded `SystemSetting` last edited
+  by a test user, or another employee whose reporting manager was a
+  fixture, so null the pointer and keep the row). A plain cascade would
+  have silently deleted seeded settings.
+  `deleteEmployeesAndDependents(ids)` wraps it for per-employee fixtures
+  and also removes `AuditLog` rows *about* the employee (`entityId` is a
+  polymorphic string, not an FK, so the engine can't see it).
+- Every shared cleanup helper (`cleanupTestUser`,
+  `cleanupFullTestEmployee`, `cleanupLoginableTestEmployee`,
+  `cleanupMinimalTestEmployee`, `cleanupAutoPostTestEmployee`,
+  `cleanupTestData`, `cleanupEmployeeTestOrgMasters`, `cleanupTestRole`,
+  `cleanupEngagePosts`, `cleanupEngageGroups`) now delegates to the
+  engine, with names and signatures unchanged, so no test file needed
+  touching for this. `cleanupEmployeeEngageRows` was deleted as redundant.
+  About 160 lines of hand-ordered `deleteMany` calls became about 40.
+- **Guard test** `backend/src/lib/__tests__/cleanup.test.ts`:
+  `findCleanupSchemaProblems()` fails the suite, naming the exact
+  model/field and the fix, when an optional FK has no policy, when a model
+  isn't reachable from any cleanup root (`Employee`/`User`, or an entry in
+  `STANDALONE_ROOT_MODELS` saying how tests remove it), when a policy
+  entry has gone stale, or when the graph has a shape the engine can't
+  order (a cross-table cycle, a "delete" self-FK, a non-`id` or composite
+  FK target). **Mutation-tested**: temporarily adding a model with an
+  unclassified optional FK to `Employee` and a model with no FK at all
+  made it fail with exactly those two messages; reverting made it pass. A
+  functional test builds one employee with rows in every kind of
+  dependent table (sessions, a refresh-token rotation chain, notifications,
+  favourites, saved views, audit rows by and about them, separation,
+  change request, leave request, comp-off lot and ledger, group
+  membership, a poll post voted, commented and reacted on by a colleague,
+  a kudos, an auto-post, their reaction on a colleague's post). It
+  deletes the employee, then sweeps every relation in the schema for
+  anything still pointing at them, and asserts that the report's job row,
+  the colleague's post and the edited setting all survive with their
+  pointers nulled.
+
+**Real leaks this surfaced on a green suite.** A full run on the
+pre-change code left 5 employees, a TEST department and branch, and a
+role behind every time, all silently:
+
+- `employee/create.test.ts` deleted wizard-created employees with a bare
+  `prisma.employee.deleteMany(...).catch(() => undefined)`, which
+  FK-failed on their user/personal/job rows. The swallowed error then
+  made the org-master cleanup fail silently too. Now uses a new
+  `cleanupEmployeesByCode()`.
+- `import/leaveGrants.test.ts` never removed its test role. Fixed.
+- `leave/accrual.test.ts`'s bulk-driver tests run the org-wide monthly PL
+  job, which credits **every** active employee, seeded ones included, and
+  never reversed it. That silently changed seeded leave balances in any
+  database the suite ran against. It now snapshots existing ACCRUAL rows
+  and removes only the ones its run added. Not an FK gap (a job test
+  mutating rows it doesn't own), but the same "tests leave residue" class.
+
+**2. Plans live in the repo.** The detailed Phase 5 C–G plan existed only
+in an earlier chat session. `docs/plans/PHASE_5.md` (new) reconstructs
+it from this file's one-line statuses, the spec, `UI_REFERENCE.md` and the
+remaining placeholder routes, marking every item **[recorded]** or
+**[reconstructed]**. It records the user's expanded commit E (three-level
+hierarchy: Manager Management, per-manager permissions, team-scope
+enforcement, validation, plus the two open questions), and notes that
+commit G is no longer blocked: the four mobile screenshots are in
+`docs/screenshots/` (as `*.png.jpeg`). It also lists the placeholder
+routes none of the recorded one-liners own, with a proposed home for
+each. CLAUDE.md gains the standing rule: an approved plan is written
+into the repo before it's built.
+
+**Verification**: fresh `DROP`/`CREATE` + migrate + seed of
+`wellsure_hr_devcheck`. Baseline on the untouched code was 340/340. After
+the change the full backend suite is **343/343** (53 files, the 3 new
+guard tests included), and a row-count snapshot of the database taken
+after the seed is **identical** after the full suite (employees, users,
+TEST org masters, roles, posts, ledger, audit log, notifications); the
+baseline run had left 5 employees, 2 org masters, 1 role and 28–56
+ledger rows. `lint`/`typecheck` clean across all projects; frontend
+suite green. No schema, runtime code or UI changed, so no browser
+walkthrough applies to this commit.
+
+**Environment gotcha found and documented**: this container exports a
+`DATABASE_URL` pointing at an unrelated remote database, and `env.ts`'s
+`process.loadEnvFile()` never overrides a variable already set in the
+shell. The seed and tests would have targeted it (the connection failed,
+so nothing was touched). Added to GETTING_STARTED.md troubleshooting.
 
 ## Open questions
 

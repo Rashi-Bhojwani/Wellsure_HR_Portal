@@ -287,6 +287,15 @@ edited tables by hand), the reliable fix in local dev is
 `npm run db:seed --prefix backend` — it wipes and rebuilds from the
 migrations themselves, so there's no ambiguity.
 
+**The backend connects to the wrong database (or a remote host you don't recognise)**
+`backend/.env` is loaded with `process.loadEnvFile()`, which never
+overrides a variable already exported in your shell. If `DATABASE_URL`
+(or `REDIS_URL`) is set in your environment, from another project or
+a cloud dev container's defaults, it silently wins over `.env`, and
+`npm run db:seed` and `npm run test` would run against *that* database.
+Check with `echo $DATABASE_URL`; `unset DATABASE_URL`, or export the
+local value explicitly, before running anything destructive.
+
 **Stale Prisma Client after a schema change**
 If TypeScript complains about fields/models that clearly exist in
 `schema.prisma`, regenerate the client:

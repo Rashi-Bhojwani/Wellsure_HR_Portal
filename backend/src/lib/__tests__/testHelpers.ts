@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "../prisma";
+import { deleteEmployeesAndDependents, deleteWithDependents } from "./cleanup";
 
 // Minimal, self-contained fixtures for tests that need a real Employee
 // (and its required Department/Designation/Location) — deliberately not
@@ -62,68 +63,20 @@ export async function createTestEmployee({ org, managerId }: CreateTestEmployeeO
   return { employeeId: employee.id, userId: user.id };
 }
 
-// A test that drives the real accept-invitation HTTP flow (auth/service.ts's
-// acceptInvitation) creates an AUTO_JOINING Post as a real side effect of
-// that code path (Phase 5 commit B), not something the test itself asked
-// for. Post.authorEmployeeId/subjectEmployeeId are optional FKs, so Prisma's
-// default onDelete is SetNull, not a blocking error — deleting the Employee
-// row without this cleanup first doesn't fail the test, it silently leaves
-// an orphaned Post (subjectEmployeeId/subject now null) permanently in the
-// dev DB, which then renders as "null just joined us!" in the real feed.
-// Every cleanup helper that deletes a real Employee row must call this
-// first — mirrors the child-tables-before-parent pattern already used for
-// Notification/UserFavourite/DashboardLayout.
-export async function cleanupEmployeeEngageRows(employeeId: string): Promise<void> {
-  await prisma.reaction.deleteMany({ where: { employeeId } });
-  await prisma.comment.deleteMany({ where: { authorEmployeeId: employeeId } });
-  await prisma.pollVote.deleteMany({ where: { employeeId } });
-  await prisma.groupMember.deleteMany({ where: { employeeId } });
-  await prisma.kudos.deleteMany({ where: { OR: [{ fromEmployeeId: employeeId }, { toEmployeeId: employeeId }] } });
-
-  const posts = await prisma.post.findMany({
-    where: { OR: [{ authorEmployeeId: employeeId }, { subjectEmployeeId: employeeId }] },
-    select: { id: true },
-  });
-  if (posts.length === 0) return;
-  const postIds = posts.map((p) => p.id);
-  const polls = await prisma.poll.findMany({ where: { postId: { in: postIds } }, select: { id: true } });
-  const pollIds = polls.map((p) => p.id);
-
-  await prisma.reaction.deleteMany({ where: { postId: { in: postIds } } });
-  await prisma.comment.deleteMany({ where: { postId: { in: postIds } } });
-  if (pollIds.length > 0) {
-    await prisma.pollVote.deleteMany({ where: { pollId: { in: pollIds } } });
-    await prisma.pollOption.deleteMany({ where: { pollId: { in: pollIds } } });
-    await prisma.poll.deleteMany({ where: { id: { in: pollIds } } });
-  }
-  await prisma.kudos.deleteMany({ where: { postId: { in: postIds } } });
-  await prisma.post.deleteMany({ where: { id: { in: postIds } } });
-}
-
-// Deletes everything created via the helpers above, in FK-safe order.
+// Deletes everything created via the helpers above, in FK-safe order —
+// derived from the Prisma schema (see cleanup.ts), not a hand-kept list.
 export async function cleanupTestData(opts: {
   employeeIds?: string[];
   org?: TestOrgMasters;
   roleIds?: string[];
   permissionIds?: string[];
 }): Promise<void> {
-  const employeeIds = opts.employeeIds ?? [];
-  if (employeeIds.length > 0) {
-    await prisma.userRole.deleteMany({ where: { user: { employeeId: { in: employeeIds } } } });
-    await prisma.employeeJobHistory.deleteMany({ where: { employeeId: { in: employeeIds } } });
-    await prisma.user.deleteMany({ where: { employeeId: { in: employeeIds } } });
-    await prisma.employee.deleteMany({ where: { id: { in: employeeIds } } });
-  }
-  if (opts.roleIds && opts.roleIds.length > 0) {
-    await prisma.rolePermission.deleteMany({ where: { roleId: { in: opts.roleIds } } });
-    await prisma.role.deleteMany({ where: { id: { in: opts.roleIds } } });
-  }
-  if (opts.permissionIds && opts.permissionIds.length > 0) {
-    await prisma.permission.deleteMany({ where: { id: { in: opts.permissionIds } } });
-  }
+  await deleteEmployeesAndDependents(opts.employeeIds ?? []);
+  await deleteWithDependents("Role", opts.roleIds ?? []);
+  await deleteWithDependents("Permission", opts.permissionIds ?? []);
   if (opts.org) {
-    await prisma.department.delete({ where: { id: opts.org.departmentId } }).catch(() => undefined);
-    await prisma.designation.delete({ where: { id: opts.org.designationId } }).catch(() => undefined);
-    await prisma.location.delete({ where: { id: opts.org.locationId } }).catch(() => undefined);
+    await deleteWithDependents("Department", [opts.org.departmentId]);
+    await deleteWithDependents("Designation", [opts.org.designationId]);
+    await deleteWithDependents("Location", [opts.org.locationId]);
   }
 }

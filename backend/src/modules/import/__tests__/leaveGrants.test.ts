@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { prisma } from "../../../lib/prisma";
-import { app, authHeader, cleanupEmployeeTestOrgMasters, createEmployeeTestOrgMasters, grantPermissions, loginAs, type TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
+import { app, authHeader, cleanupEmployeeTestOrgMasters, cleanupTestRole, createEmployeeTestOrgMasters, grantPermissions, loginAs, type TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
 import { cleanupLoginableTestEmployee, createLoginableTestEmployee } from "../../leave/__tests__/leaveTestHelpers";
 import { writeLedgerEntry } from "../../leave/ledger";
 import { DATASET_COLUMNS } from "../types";
@@ -29,6 +29,7 @@ describe("Import Center — leave-grants dataset (/api/import/leave-grants)", ()
 
   afterAll(async () => {
     for (const id of [...employeeIds].reverse()) await cleanupLoginableTestEmployee(id);
+    await cleanupTestRole(managerRole);
     await cleanupEmployeeTestOrgMasters(org);
   });
 

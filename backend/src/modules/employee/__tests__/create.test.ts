@@ -6,6 +6,7 @@ import {
   app,
   authHeader,
   cleanupEmployeeTestOrgMasters,
+  cleanupEmployeesByCode,
   cleanupFullTestEmployee,
   cleanupTestRole,
   createEmployeeTestOrgMasters,
@@ -31,7 +32,7 @@ describe("POST /api/employees (Add Employee wizard)", () => {
   });
 
   afterAll(async () => {
-    await prisma.employee.deleteMany({ where: { employeeCode: { in: createdEmployeeCodes } } }).catch(() => undefined);
+    await cleanupEmployeesByCode(createdEmployeeCodes);
     for (const id of employeeIds) await cleanupFullTestEmployee(id);
     await cleanupTestRole(roleCode);
     await cleanupEmployeeTestOrgMasters(org);

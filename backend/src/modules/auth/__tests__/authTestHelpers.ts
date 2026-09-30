@@ -3,7 +3,8 @@ import argon2 from "argon2";
 import { createApp } from "../../../app";
 import { prisma } from "../../../lib/prisma";
 import { redis } from "../../../lib/redis";
-import { cleanupEmployeeEngageRows, createTestOrgMasters, type TestOrgMasters } from "../../../lib/__tests__/testHelpers";
+import { deleteEmployeesAndDependents, deleteWithDependents } from "../../../lib/__tests__/cleanup";
+import { createTestOrgMasters, type TestOrgMasters } from "../../../lib/__tests__/testHelpers";
 
 export const TEST_PASSWORD = "TestPass1234";
 
@@ -81,35 +82,16 @@ export async function createTestUser(
   return { employeeId: employee.id, userId: user.id, employeeCode };
 }
 
+// Every row that depends on this employee (user, sessions, tokens, job/name
+// history, leave, engage, notifications…) is found from the schema — see
+// lib/__tests__/cleanup.ts — so a new table needs no change here.
 export async function cleanupTestUser(employeeId: string): Promise<void> {
-  await cleanupEmployeeEngageRows(employeeId);
-  await prisma.totpBackupCode.deleteMany({ where: { user: { employeeId } } });
-  await prisma.refreshToken.deleteMany({ where: { user: { employeeId } } });
-  await prisma.invitationToken.deleteMany({ where: { user: { employeeId } } });
-  await prisma.passwordResetToken.deleteMany({ where: { user: { employeeId } } });
-  // Phase 5 tables FK-referencing User.id.
-  await prisma.notification.deleteMany({ where: { user: { employeeId } } });
-  await prisma.userFavourite.deleteMany({ where: { user: { employeeId } } });
-  await prisma.dashboardLayout.deleteMany({ where: { user: { employeeId } } });
-  await prisma.auditLog.deleteMany({ where: { entityId: employeeId } });
-  const user = await prisma.user.findUnique({ where: { employeeId } });
-  if (user) {
-    await prisma.auditLog.deleteMany({ where: { entityId: user.id } });
-    await prisma.userRole.deleteMany({ where: { userId: user.id } });
-  }
-  await prisma.employeeJobHistory.deleteMany({ where: { employeeId } });
-  await prisma.employeeNameHistory.deleteMany({ where: { employeeId } });
-  await prisma.employeePersonal.deleteMany({ where: { employeeId } });
-  await prisma.user.deleteMany({ where: { employeeId } });
-  await prisma.employee.deleteMany({ where: { id: employeeId } });
+  await deleteEmployeesAndDependents([employeeId]);
 }
 
 export async function cleanupTestRole(roleCode: string): Promise<void> {
   const role = await prisma.role.findUnique({ where: { code: roleCode } });
-  if (!role) return;
-  await prisma.rolePermission.deleteMany({ where: { roleId: role.id } });
-  await prisma.userRole.deleteMany({ where: { roleId: role.id } });
-  await prisma.role.delete({ where: { id: role.id } });
+  if (role) await deleteWithDependents("Role", [role.id]);
 }
 
 export { createTestOrgMasters, type TestOrgMasters };

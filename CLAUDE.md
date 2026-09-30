@@ -29,6 +29,12 @@ working-conventions companion to both.
 - **greytHR runs in parallel** throughout. Attendance + leave go live first;
   payroll runs in parallel with greytHR for 2–3 months before cutover.
   Don't build anything that assumes greytHR is already switched off.
+- **Plans live in the repo, not the chat.** Any plan the user approves
+  (schema, endpoints, screens, test plan, scope changes) is written into
+  the repo *before* it's built: under `docs/plans/` (e.g.
+  `docs/plans/PHASE_5.md`) or as a detailed section in
+  `docs/PROGRESS.md`. A new session must be able to pick up from the
+  repo alone.
 - At the end of every phase: tests green, migrations applied, seed data
   updated, `docs/PROGRESS.md` updated, `docs/GETTING_STARTED.md` updated
   if anything about setup, env vars, seeded accounts or everyday commands
@@ -111,6 +117,13 @@ assuming:
   selected by env — write against the interface, not the AWS SDK directly.
 - Every state-changing admin action that spec §9 calls out gets an
   append-only audit log entry.
+- **Test cleanup is schema-driven** (`backend/src/lib/__tests__/cleanup.ts`):
+  delete fixtures with `deleteEmployeesAndDependents` /
+  `deleteWithDependents` (or the helpers built on them), never a
+  hand-ordered list of `deleteMany` calls, and never swallow a cleanup
+  error with `.catch(() => undefined)`. When a migration adds an optional
+  FK or a new standalone table, `cleanup.test.ts` fails and tells you
+  exactly what to classify.
 
 ## Commands
 
