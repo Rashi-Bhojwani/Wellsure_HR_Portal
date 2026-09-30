@@ -2133,6 +2133,42 @@ walkthrough applies to this commit.
 shell. The seed and tests would have targeted it (the connection failed,
 so nothing was touched). Added to GETTING_STARTED.md troubleshooting.
 
+### Interim — development-database guard
+
+Follow-up to the environment gotcha recorded in the previous entry: a
+`DATABASE_URL` exported in the shell (here, an unrelated remote RDS
+database in the cloud dev container) silently overrides `backend/.env`,
+and only a failed connection stopped `db:seed` and the suite from using
+it. Relying on a remote host being unreachable isn't a safeguard.
+
+- `backend/src/config/databaseGuard.ts` (new): with
+  `APP_ENV=development`, `DATABASE_URL` must be local (`localhost`,
+  `127.0.0.1`, `::1`, or a Unix socket via `?host=/path`). A `host=` query
+  parameter pointing elsewhere, a lookalike such as
+  `localhost.evil.example`, or an unparseable URL all count as not local
+  (fail safe). Enforced in `config/env.ts`, the one module every entry
+  point loads, so it runs before any Prisma or Redis client exists. The
+  refusal message masks the password and says whether the value came
+  from the shell, overriding `.env` (captured before `.env` is loaded), or
+  from `.env` itself, with the fix. No override flag: a remote database
+  isn't a development environment.
+- Tests: `vitest.globalSetup.ts` loads `config/env` once before any test
+  file, so the suite refuses once, loudly, instead of each file failing
+  separately. `config/__tests__/databaseGuard.test.ts` covers local and
+  non-local URLs, the message, and password masking (12 tests).
+- `npm run db:migrate --prefix backend`, which GETTING_STARTED.md already
+  documented, didn't exist: only the root script did, and it called
+  `prisma migrate deploy` directly. Added `backend/scripts/migrate.ts`
+  (loads `config/env`, so it's guarded too, then runs
+  `prisma migrate deploy`); the root `db:migrate` delegates to it. The
+  Docker image's `migrate` mode (staging/production) is unchanged.
+- **Verified live against the real remote URL still exported in this
+  container's shell**: `tsx src/index.ts` (the API), `npm run db:seed`,
+  `npm run db:migrate`, `tsx prisma/seed.ts` and `vitest run` all exit 1
+  with the refusal message before opening any connection. With
+  `DATABASE_URL` unset, `.env`'s local scratch database is used,
+  `db:migrate` runs, and the full backend suite passes.
+
 ## Open questions
 
 Carried from spec §14 — configurable, not guessed, until answered:

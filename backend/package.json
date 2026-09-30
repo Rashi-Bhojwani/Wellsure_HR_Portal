@@ -13,6 +13,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
+    "db:migrate": "tsx scripts/migrate.ts",
     "check:services": "tsx scripts/check-services.ts",
     "db:seed": "tsx scripts/reset-db.ts"
   },

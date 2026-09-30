@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
+import { databaseGuardError } from "./databaseGuard";
 
 // Explicit, import-order-independent .env loading — must happen before the
 // safeParse below. This used to work by accident (Prisma Client's own
@@ -11,6 +12,9 @@ import { z } from "zod";
 // no .env file (env vars are injected via ECS task env / Secrets Manager
 // instead, per docs/PROJECT_SPEC.md §15.3), so this is a no-op there.
 const envFilePath = path.resolve(import.meta.dirname, "../../.env");
+// Captured before .env loads, so the database guard below can say whether
+// a bad DATABASE_URL came from the shell (overriding .env) or from .env.
+const databaseUrlFromShell = process.env.DATABASE_URL !== undefined;
 if (existsSync(envFilePath)) {
   process.loadEnvFile(envFilePath);
 }
@@ -80,6 +84,15 @@ function loadEnv(): Env {
   const parsed = envSchema.safeParse(process.env);
   if (!parsed.success) {
     console.error("Invalid environment configuration:", z.treeifyError(parsed.error));
+    process.exit(1);
+  }
+  const guardError = databaseGuardError({
+    appEnv: parsed.data.APP_ENV,
+    databaseUrl: parsed.data.DATABASE_URL,
+    cameFromShell: databaseUrlFromShell,
+  });
+  if (guardError) {
+    console.error(guardError);
     process.exit(1);
   }
   return parsed.data;

@@ -287,14 +287,18 @@ edited tables by hand), the reliable fix in local dev is
 `npm run db:seed --prefix backend` — it wipes and rebuilds from the
 migrations themselves, so there's no ambiguity.
 
-**The backend connects to the wrong database (or a remote host you don't recognise)**
-`backend/.env` is loaded with `process.loadEnvFile()`, which never
-overrides a variable already exported in your shell. If `DATABASE_URL`
-(or `REDIS_URL`) is set in your environment, from another project or
-a cloud dev container's defaults, it silently wins over `.env`, and
-`npm run db:seed` and `npm run test` would run against *that* database.
-Check with `echo $DATABASE_URL`; `unset DATABASE_URL`, or export the
-local value explicitly, before running anything destructive.
+**`REFUSING TO START: APP_ENV is "development" but DATABASE_URL points at a non-local database`**
+With `APP_ENV=development`, the backend (every mode), `npm run db:seed`,
+`npm run db:migrate` and `npm run test` all refuse to run unless
+`DATABASE_URL` is on this machine (`localhost`, `127.0.0.1`, `::1` or a
+Unix socket), because seeding drops the database and tests write and
+delete rows. The usual cause: `backend/.env` is loaded with
+`process.loadEnvFile()`, which never overrides a variable already
+exported in your shell, so a `DATABASE_URL` from another project or a
+cloud dev container's defaults silently wins over `.env`. The message says
+which one it was. Fix: `unset DATABASE_URL` so `.env` is used, or export
+a local URL. There is deliberately no override flag: a remote database
+isn't a development environment, so set `APP_ENV` to match instead.
 
 **Stale Prisma Client after a schema change**
 If TypeScript complains about fields/models that clearly exist in
