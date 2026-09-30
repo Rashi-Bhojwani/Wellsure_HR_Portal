@@ -30,6 +30,7 @@ import {
 } from "@ant-design/icons";
 import { HomePage } from "../pages/employee/home/HomePage";
 import { EngagePage } from "../pages/employee/engage/EngagePage";
+import { KudosPage } from "../pages/employee/engage/KudosPage";
 import { ReviewPage } from "../pages/employee/todo/ReviewPage";
 import { PayslipsPage } from "../pages/employee/salary/PayslipsPage";
 import { LeaveApplyPage } from "../pages/employee/leave/LeaveApplyPage";
@@ -87,7 +88,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
     label: "My Worklife",
     icon: HeartOutlined,
     children: [
-      { key: "kudos", label: "Kudos", path: "my-worklife/kudos", icon: TrophyOutlined, phase: "Phase 5" },
+      { key: "kudos", label: "Kudos", path: "my-worklife/kudos", icon: TrophyOutlined, element: KudosPage },
       {
         key: "feedback",
         label: "Feedback",

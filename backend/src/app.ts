@@ -20,6 +20,7 @@ import { holidaysRouter, leaveRouter } from "./modules/leave/routes";
 import { notificationsRouter } from "./modules/notifications/routes";
 import { announcementsRouter } from "./modules/announcements/routes";
 import { adminRouter } from "./modules/admin/routes";
+import { engageRouter } from "./modules/engage/routes";
 
 export function createApp(): Express {
   const app = express();
@@ -80,6 +81,7 @@ export function createApp(): Express {
   app.use("/api/notifications", noStore, notificationsRouter);
   app.use("/api/announcements", noStore, announcementsRouter);
   app.use("/api/admin", noStore, adminRouter);
+  app.use("/api/engage", noStore, engageRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

@@ -408,21 +408,30 @@ model Employee {
   createdAt       DateTime       @default(now()) @map("created_at")
   updatedAt       DateTime       @updatedAt @map("updated_at")
 
-  user           User?
-  personal       EmployeePersonal?
-  nameHistory    EmployeeNameHistory[]
-  statutory      EmployeeStatutory?
-  bankAccounts   EmployeeBankAccount[]
-  jobHistory     EmployeeJobHistory[]   @relation("EmployeeJobHistoryOwner")
-  managedBy      EmployeeJobHistory[]   @relation("EmployeeManager") // reverse: rows where I'm the manager
-  deviceMappings DeviceUserMapping[]
-  documents      EmployeeDocument[]
-  changeRequests ProfileChangeRequest[]
-  separations    Separation[]
-  leaveRequests   LeaveRequest[]    @relation("LeaveRequestOwner")
+  user            User?
+  personal        EmployeePersonal?
+  nameHistory     EmployeeNameHistory[]
+  statutory       EmployeeStatutory?
+  bankAccounts    EmployeeBankAccount[]
+  jobHistory      EmployeeJobHistory[]   @relation("EmployeeJobHistoryOwner")
+  managedBy       EmployeeJobHistory[]   @relation("EmployeeManager") // reverse: rows where I'm the manager
+  deviceMappings  DeviceUserMapping[]
+  documents       EmployeeDocument[]
+  changeRequests  ProfileChangeRequest[]
+  separations     Separation[]
+  leaveRequests   LeaveRequest[]         @relation("LeaveRequestOwner")
   leaveLedger     LeaveLedger[]
   compOffCredits  CompOffCredit[]
   yearEndRunItems YearEndRunItem[]
+
+  authoredPosts  Post[]        @relation("PostAuthor")
+  subjectOfPosts Post[]        @relation("PostSubject")
+  kudosGiven     Kudos[]       @relation("KudosFrom")
+  kudosReceived  Kudos[]       @relation("KudosTo")
+  pollVotes      PollVote[]
+  comments       Comment[]
+  reactions      Reaction[]
+  groupMembers   GroupMember[]
 
   @@index([status])
   @@index([dateOfJoining])
@@ -1119,4 +1128,203 @@ model UserFavourite {
 
   @@index([userId, rank])
   @@map("user_favourites")
+}
+
+// ── Phase 5 commit B — Engage (spec §4, §7.7) ──────────────────────────
+
+enum PostKind {
+  USER
+  KUDOS
+  POLL
+  AUTO_BIRTHDAY
+  AUTO_JOINING
+  AUTO_ANNIVERSARY
+}
+
+// A lightweight named category posts can be tagged with (e.g. "Events",
+// "Milestones") — membership is informational (who's "in" a group, for a
+// future "my groups" view) and does NOT gate who can post into or see a
+// group's posts; the feed itself stays org-wide with client-side/query
+// filters. Deliberately not access-controlled: nothing in this phase asks
+// for closed-membership groups, and building that now would be an
+// unrequested feature.
+model Group {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  members GroupMember[]
+  posts   Post[]
+
+  @@map("groups")
+}
+
+model GroupMember {
+  id         String   @id @default(cuid())
+  groupId    String   @map("group_id")
+  group      Group    @relation(fields: [groupId], references: [id])
+  employeeId String   @map("employee_id")
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  joinedAt   DateTime @default(now()) @map("joined_at")
+
+  @@unique([groupId, employeeId])
+  @@map("group_members")
+}
+
+// The feed's one uniform row — a plain USER post, a KUDOS/POLL post
+// (structured data lives in the 1:1 Kudos/Poll row via postId), or a
+// system-generated AUTO_* celebration. authorEmployeeId is null for
+// AUTO_* kinds (nobody "wrote" it); subjectEmployeeId + occurredOn are
+// set only for AUTO_* kinds — occurredOn is the calendar date being
+// celebrated (not createdAt), and is the idempotency key alongside kind +
+// subjectEmployeeId (hand-added partial unique index in the migration —
+// see autoPosts.ts for the 29-Feb-birthday and mid-loop-failure rules
+// this protects against).
+//
+// Moderation is a soft hide, never a delete (this codebase's standing
+// append-only convention — YearEndRun SUPERSEDED, Location.isActive):
+// moderatedAt/moderatedByUserId get set, the row and its backing Kudos/
+// Poll/Comment/Reaction rows stay in the database. Every feed query and
+// every count derived from a Post (kudos-given/received included) filters
+// on moderatedAt IS NULL — never a stored counter, so a moderated post's
+// kudos stop counting immediately with no separate decrement to get
+// wrong.
+model Post {
+  id                String    @id @default(cuid())
+  authorEmployeeId  String?   @map("author_employee_id")
+  author            Employee? @relation("PostAuthor", fields: [authorEmployeeId], references: [id])
+  subjectEmployeeId String?   @map("subject_employee_id")
+  subject           Employee? @relation("PostSubject", fields: [subjectEmployeeId], references: [id])
+  groupId           String?   @map("group_id")
+  group             Group?    @relation(fields: [groupId], references: [id])
+  kind              PostKind
+  body              String
+  occurredOn        DateTime? @map("occurred_on") @db.Date
+  moderatedAt       DateTime? @map("moderated_at")
+  moderatedByUserId String?   @map("moderated_by_user_id")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  kudos     Kudos?
+  poll      Poll?
+  comments  Comment[]
+  reactions Reaction[]
+
+  @@index([createdAt])
+  @@index([groupId])
+  @@index([kind])
+  @@map("posts")
+}
+
+model Kudos {
+  id             String   @id @default(cuid())
+  postId         String   @unique @map("post_id")
+  post           Post     @relation(fields: [postId], references: [id])
+  fromEmployeeId String   @map("from_employee_id")
+  fromEmployee   Employee @relation("KudosFrom", fields: [fromEmployeeId], references: [id])
+  toEmployeeId   String   @map("to_employee_id")
+  toEmployee     Employee @relation("KudosTo", fields: [toEmployeeId], references: [id])
+  message        String
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([toEmployeeId])
+  @@map("kudos")
+}
+
+model Poll {
+  id        String    @id @default(cuid())
+  postId    String    @unique @map("post_id")
+  post      Post      @relation(fields: [postId], references: [id])
+  question  String
+  closesAt  DateTime? @map("closes_at")
+  closedAt  DateTime? @map("closed_at") // set when explicitly closed — independent of closesAt lapsing
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  options PollOption[]
+  votes   PollVote[]
+
+  @@map("polls")
+}
+
+model PollOption {
+  id     String @id @default(cuid())
+  pollId String @map("poll_id")
+  poll   Poll   @relation(fields: [pollId], references: [id])
+  label  String
+  rank   Int    @default(0)
+
+  votes PollVote[]
+
+  @@index([pollId])
+  @@map("poll_options")
+}
+
+model PollVote {
+  id           String     @id @default(cuid())
+  pollId       String     @map("poll_id") // denormalized off PollOption.pollId so one employee->poll vote is a plain unique index, not a cross-table check
+  poll         Poll       @relation(fields: [pollId], references: [id])
+  pollOptionId String     @map("poll_option_id")
+  pollOption   PollOption @relation(fields: [pollOptionId], references: [id])
+  employeeId   String     @map("employee_id")
+  employee     Employee   @relation(fields: [employeeId], references: [id])
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  @@unique([pollId, employeeId])
+  @@map("poll_votes")
+}
+
+model Comment {
+  id               String   @id @default(cuid())
+  postId           String   @map("post_id")
+  post             Post     @relation(fields: [postId], references: [id])
+  authorEmployeeId String   @map("author_employee_id")
+  author           Employee @relation(fields: [authorEmployeeId], references: [id])
+  body             String
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@index([postId])
+  @@map("comments")
+}
+
+// One row per (post, employee) — picking a different emoji replaces the
+// existing reaction; clicking the same emoji again removes it (toggle),
+// both handled in reactions.ts's upsert-or-delete, never a second row.
+model Reaction {
+  id         String   @id @default(cuid())
+  postId     String   @map("post_id")
+  post       Post     @relation(fields: [postId], references: [id])
+  employeeId String   @map("employee_id")
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  emoji      String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([postId, employeeId])
+  @@map("reactions")
+}
+
+enum AutoPostKind {
+  BIRTHDAY
+  JOINING
+  ANNIVERSARY
+}
+
+// Admin-configurable per-kind template + enabled flag (spec §7.7's
+// "configure auto-posts (joining, birthday, anniversary templates and
+// time)") — a closed catalog of exactly 3 rows, same shape as
+// LeavePolicy's one-row-per-fixed-type pattern. `template` supports
+// {name} (and {years} for ANNIVERSARY) placeholders substituted by
+// autoPosts.ts at generation time. The shared daily-batch run hour (for
+// BIRTHDAY/ANNIVERSARY; JOINING fires on-event, not on this cron) lives
+// in SystemSetting `engage.autopost.dailyRunHour`, not here — see
+// jobs/scheduler.ts.
+model EngageAutoPostSetting {
+  kind      AutoPostKind @id
+  enabled   Boolean      @default(true)
+  template  String
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  @@map("engage_auto_post_settings")
 }

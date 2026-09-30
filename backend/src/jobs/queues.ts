@@ -17,3 +17,10 @@ export const leavePlAccrualQueue = new Queue("leave-pl-accrual", { connection: c
 // Daily: expires comp-off credits past their configured expiry window
 // (spec §5.5) — see modules/leave/compOff.ts.
 export const compOffExpiryQueue = new Queue("comp-off-expiry", { connection: createBullConnection() });
+
+// Daily (spec §8's "engage.birthday/.joining/.anniversary | org (daily
+// 08:00 cron + on joining)"): scans for today's birthdays and work
+// anniversaries — see modules/engage/autoPosts.ts. Joining posts fire on
+// the actual joining event (auth/service.ts's acceptInvitation), never on
+// this cron.
+export const engageAutoPostsQueue = new Queue("engage-auto-posts", { connection: createBullConnection() });

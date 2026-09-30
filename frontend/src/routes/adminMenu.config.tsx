@@ -52,6 +52,10 @@ import { AuditLogPage } from "../pages/admin/auditLog/AuditLogPage";
 import { SystemSettingsPage } from "../pages/admin/settings/SystemSettingsPage";
 import { LeaveTypesPoliciesPage } from "../pages/admin/adminTools/LeaveTypesPoliciesPage";
 import { HolidayCalendarsAdminPage } from "../pages/admin/adminTools/HolidayCalendarsAdminPage";
+import { AnnouncementsAdminPage } from "../pages/admin/engage/AnnouncementsAdminPage";
+import { ModerationPage } from "../pages/admin/engage/ModerationPage";
+import { GroupsAdminPage } from "../pages/admin/engage/GroupsAdminPage";
+import { AutoPostSettingsPage } from "../pages/admin/engage/AutoPostSettingsPage";
 
 // Single source of truth for the HR/Admin portal's App Switcher and each
 // app's top-bar dropdown menus (docs/UI_REFERENCE.md §2.0). "Homepage",
@@ -190,16 +194,15 @@ export const adminApps: AdminApp[] = [
     label: "Engage",
     icon: RocketOutlined,
     path: "engage",
-    phase: "Phase 5",
     menus: [
       {
         key: "engage",
         label: "Engage",
         items: [
-          { key: "announcements", label: "Announcements", path: "engage/announcements", icon: NotificationOutlined, phase: "Phase 5" },
-          { key: "moderation", label: "Moderation", path: "engage/moderation", icon: SafetyOutlined, phase: "Phase 5" },
-          { key: "groups", label: "Groups", path: "engage/groups", icon: GroupOutlined, phase: "Phase 5" },
-          { key: "auto-post-settings", label: "Auto-Post Settings", path: "engage/auto-posts", icon: TrophyOutlined, phase: "Phase 5" },
+          { key: "announcements", label: "Announcements", path: "engage/announcements", icon: NotificationOutlined, element: AnnouncementsAdminPage },
+          { key: "moderation", label: "Moderation", path: "engage/moderation", icon: SafetyOutlined, element: ModerationPage },
+          { key: "groups", label: "Groups", path: "engage/groups", icon: GroupOutlined, element: GroupsAdminPage },
+          { key: "auto-post-settings", label: "Auto-Post Settings", path: "engage/auto-posts", icon: TrophyOutlined, element: AutoPostSettingsPage },
         ],
       },
     ],

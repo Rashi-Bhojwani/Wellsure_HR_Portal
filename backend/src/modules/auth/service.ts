@@ -8,6 +8,7 @@ import { getSetting } from "../../lib/settings";
 import { resolveUserPermissions, resolveUserRoleCodes } from "../../lib/permissions";
 import { signAccessToken, signTotpChallengeToken, verifyTotpChallengeToken } from "../../lib/jwt";
 import { HttpError } from "../../middleware/errorHandler";
+import { createJoiningPost } from "../engage/autoPosts";
 import {
   checkRefreshToken,
   findRefreshTokenByRawToken,
@@ -387,6 +388,13 @@ export async function acceptInvitation(
     ipAddress: meta.ipAddress,
     userAgent: meta.userAgent,
   });
+
+  // The real joining event (spec §8) — fires here, not on the daily
+  // Engage cron, which only ever scans for birthdays/anniversaries. Never
+  // throws (createAutoPost's own try/catch swallows and logs), so a
+  // transient failure here can't block the account activation this
+  // function exists to complete.
+  await createJoiningPost(employee.id);
 
   if (employee.personal?.personalEmail) {
     sendWelcomeEmail(employee.personal.personalEmail, fullName).catch((err: unknown) =>

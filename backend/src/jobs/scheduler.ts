@@ -1,5 +1,6 @@
 import { logger } from "../lib/logger";
-import { compOffExpiryQueue, employeeSeparationsQueue, leavePlAccrualQueue } from "./queues";
+import { getDailyRunHour } from "../modules/engage/autoPostSettings";
+import { compOffExpiryQueue, employeeSeparationsQueue, engageAutoPostsQueue, leavePlAccrualQueue } from "./queues";
 
 // Registers BullMQ repeatable jobs. Idempotent registration matters here —
 // see docs/PROJECT_SPEC.md §15.2.3 (the scheduler service always runs
@@ -28,4 +29,19 @@ export async function registerScheduledJobs(): Promise<void> {
     { name: "expire-comp-off-credits" },
   );
   logger.info("Registered repeatable job: comp-off-expiry (01:30 IST daily)");
+
+  // The hour is admin-configurable (Engage Admin > Auto-Post Settings,
+  // engage.autopost.manage) via SystemSetting "engage.autopost.dailyRunHour"
+  // (default 8, spec §8's "daily 08:00 cron") — read once here at
+  // registration time. BullMQ's repeatable-job schedule isn't live-
+  // reloaded within a running process, so a changed hour takes effect on
+  // the scheduler's next restart, not immediately; documented in the
+  // admin screen itself.
+  const dailyRunHour = await getDailyRunHour();
+  await engageAutoPostsQueue.upsertJobScheduler(
+    "engage-auto-posts-daily",
+    { pattern: `0 ${dailyRunHour} * * *`, tz: "Asia/Kolkata" },
+    { name: "run-daily-engage-auto-posts" },
+  );
+  logger.info(`Registered repeatable job: engage-auto-posts (${String(dailyRunHour).padStart(2, "0")}:00 IST daily)`);
 }

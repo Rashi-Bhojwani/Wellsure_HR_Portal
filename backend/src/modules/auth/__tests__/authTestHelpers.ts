@@ -3,7 +3,7 @@ import argon2 from "argon2";
 import { createApp } from "../../../app";
 import { prisma } from "../../../lib/prisma";
 import { redis } from "../../../lib/redis";
-import { createTestOrgMasters, type TestOrgMasters } from "../../../lib/__tests__/testHelpers";
+import { cleanupEmployeeEngageRows, createTestOrgMasters, type TestOrgMasters } from "../../../lib/__tests__/testHelpers";
 
 export const TEST_PASSWORD = "TestPass1234";
 
@@ -82,6 +82,7 @@ export async function createTestUser(
 }
 
 export async function cleanupTestUser(employeeId: string): Promise<void> {
+  await cleanupEmployeeEngageRows(employeeId);
   await prisma.totpBackupCode.deleteMany({ where: { user: { employeeId } } });
   await prisma.refreshToken.deleteMany({ where: { user: { employeeId } } });
   await prisma.invitationToken.deleteMany({ where: { user: { employeeId } } });

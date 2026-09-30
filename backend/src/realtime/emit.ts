@@ -80,3 +80,62 @@ export function emitTasksCounts(reportingManagerId: string | null): void {
   io.to("role:HR_ADMIN").emit("tasks.counts", {});
   io.to("role:HR_EXECUTIVE").emit("tasks.counts", {});
 }
+
+// Engage (spec §4, §7.7, §8's "engage.post/.kudos/.reaction | org (or
+// scoped)" and "engage.birthday/.joining/.anniversary | org (daily 08:00
+// cron + on joining)"). Every event fires to the org-wide `org` room —
+// the feed itself isn't location/department-scoped on the post (see
+// schema.prisma's Group comment), so there's no narrower room to target;
+// the frontend's own filters decide what to show after invalidating.
+// Payload is `unknown` here rather than the full formatted-post type to
+// avoid a circular import with modules/engage/posts.ts (whose
+// formatPost() return shape is the actual payload) — this module is a
+// pure transport layer, it never inspects the payload it forwards.
+export function emitEngagePost(payload: unknown): void {
+  if (!io) return;
+  io.to("org").emit("engage.post", payload);
+}
+
+export function emitEngageKudos(payload: unknown): void {
+  if (!io) return;
+  io.to("org").emit("engage.kudos", payload);
+}
+
+export interface EngageReactionPayload {
+  postId: string;
+  reactions: { emoji: string; count: number }[];
+}
+
+export function emitEngageReaction(payload: EngageReactionPayload): void {
+  if (!io) return;
+  io.to("org").emit("engage.reaction", payload);
+}
+
+export interface EngageCommentCountPayload {
+  postId: string;
+  commentCount: number;
+}
+
+// Not a named event in spec §8's table — comments don't get their own
+// realtime event there, but a live comment count is worth the same
+// query-invalidation treatment reactions get, so it rides the same `org`
+// room under its own event name rather than overloading `engage.post`.
+export function emitEnginePostCommentCount(payload: EngageCommentCountPayload): void {
+  if (!io) return;
+  io.to("org").emit("engage.comment", payload);
+}
+
+export function emitEngageBirthday(payload: unknown): void {
+  if (!io) return;
+  io.to("org").emit("engage.birthday", payload);
+}
+
+export function emitEngageJoining(payload: unknown): void {
+  if (!io) return;
+  io.to("org").emit("engage.joining", payload);
+}
+
+export function emitEngageAnniversary(payload: unknown): void {
+  if (!io) return;
+  io.to("org").emit("engage.anniversary", payload);
+}

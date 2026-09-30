@@ -32,6 +32,10 @@ export const PERMISSION_KEYS = [
   "leave.yearend.manage", // Year End Process
   // Phase 5 — Homepage, Dashboards, Notifications
   "announcements.manage", // create/edit/deactivate the Home page HR banner
+  // Phase 5 — Engage
+  "engage.moderate", // soft-hide a post (and its backing kudos/poll) from the feed
+  "engage.groups.manage", // create/rename/deactivate groups + manage membership
+  "engage.autopost.manage", // per-kind template/enabled toggle + the shared daily run hour
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];

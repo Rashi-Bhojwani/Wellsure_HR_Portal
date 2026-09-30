@@ -5,6 +5,7 @@ import { businessToday, startOfMonthUTC } from "../lib/businessDate";
 import { processScheduledSeparations } from "../modules/employee/separations";
 import { runMonthlyPlAccrual } from "../modules/leave/accrual";
 import { expireCompOffCredits } from "../modules/leave/compOff";
+import { runDailyAutoPosts } from "../modules/engage/autoPosts";
 
 // Starts every BullMQ worker this service runs. Real workers (attendance
 // recompute, etc.) are added here starting Phase 2.
@@ -65,5 +66,18 @@ export function startWorkers(): Worker[] {
     logger.error({ jobId: job?.id, err }, "comp-off-expiry job failed");
   });
 
-  return [pingWorker, separationsWorker, leavePlAccrualWorker, compOffExpiryWorker];
+  const engageAutoPostsWorker = new Worker(
+    "engage-auto-posts",
+    async (job) => {
+      const result = await runDailyAutoPosts(businessToday());
+      logger.info({ jobId: job.id, ...result }, "engage-auto-posts processed");
+      return result;
+    },
+    { connection: createBullConnection() },
+  );
+  engageAutoPostsWorker.on("failed", (job, err) => {
+    logger.error({ jobId: job?.id, err }, "engage-auto-posts job failed");
+  });
+
+  return [pingWorker, separationsWorker, leavePlAccrualWorker, compOffExpiryWorker, engageAutoPostsWorker];
 }

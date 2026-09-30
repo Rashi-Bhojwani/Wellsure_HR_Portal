@@ -1,7 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { createApp } from "../../../app";
 import { prisma } from "../../../lib/prisma";
-import { createTestOrgMasters as createBaseOrgMasters, type TestOrgMasters as BaseTestOrgMasters } from "../../../lib/__tests__/testHelpers";
+import {
+  cleanupEmployeeEngageRows,
+  createTestOrgMasters as createBaseOrgMasters,
+  type TestOrgMasters as BaseTestOrgMasters,
+} from "../../../lib/__tests__/testHelpers";
 import { TEST_PASSWORD, clearRateLimits } from "../../auth/__tests__/authTestHelpers";
 import request from "supertest";
 
@@ -133,6 +137,7 @@ export async function createFullTestEmployee(org: TestOrgMasters, opts: { roleCo
 }
 
 export async function cleanupFullTestEmployee(employeeId: string): Promise<void> {
+  await cleanupEmployeeEngageRows(employeeId);
   await prisma.refreshToken.deleteMany({ where: { user: { employeeId } } });
   await prisma.invitationToken.deleteMany({ where: { user: { employeeId } } });
   // Phase 5 tables FK-referencing User.id — must go before the User delete

@@ -346,6 +346,9 @@ async function main() {
     "leave.yearend.manage",
     // Phase 5 — config/financial actions stay HR_ADMIN+, same narrowing as settings.manage/leave.policy.manage
     "announcements.manage",
+    "engage.moderate",
+    "engage.groups.manage",
+    "engage.autopost.manage",
   ];
   const PAYROLL_ADMIN_PERMS = ["employee.view", "employee.bank.view", "employee.statutory.view", "leave.view"];
   // leave.approve/leave.view here is a real fix over commit A's original

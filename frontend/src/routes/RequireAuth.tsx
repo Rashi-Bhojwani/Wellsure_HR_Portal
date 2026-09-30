@@ -3,6 +3,7 @@ import { Spin } from "antd";
 import { useAuth } from "../hooks/useAuth";
 import { useLeaveNotifications } from "../sockets/useLeaveNotifications";
 import { useNotifications } from "../sockets/useNotifications";
+import { useEngageRealtime } from "../sockets/useEngageRealtime";
 
 // Gate for every /app and /admin route — redirects to /login once the
 // initial silent-refresh bootstrap (see AuthProvider) has resolved and
@@ -13,6 +14,7 @@ export function RequireAuth() {
   const { isAuthenticated, isLoading } = useAuth();
   useLeaveNotifications();
   useNotifications();
+  useEngageRealtime();
 
   if (isLoading) {
     return (

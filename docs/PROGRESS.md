@@ -15,7 +15,7 @@ committed).
 | 2 | Biometric ingestion + attendance engine + real-time | Not started |
 | 3 | Attendance administration | Not started |
 | 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
-| 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | In progress — commit A done (notifications substrate, Employee Home, Admin Homepage Welcome + Dashboard tabs). Commits B–G (Engage, People/Documents, Helpdesk/Request Hub, Workflow Delegates, Reports, Mobile/PWA) not started. |
+| 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | In progress — commit A done (notifications substrate, Employee Home, Admin Homepage Welcome + Dashboard tabs), commit B done (Engage: posts/kudos/polls/reactions/comments/groups/moderation/auto-posts, all real-time). Commits C–G (People/Documents, Helpdesk/Request Hub, Workflow Delegates, Reports, Mobile/PWA) not started. |
 | 5.5 | AWS production environment and go-live hardening | Not started |
 | 6 | Payroll | Not started |
 | 7 | Tax & benefits | Not started |
@@ -1815,6 +1815,220 @@ both portals' notification bells — plus the full apply → realtime toast →
 approve → realtime toast, and a second apply → reject round, driven
 through the real API with both browser tabs open throughout to prove the
 Socket.IO delivery live, not just via a follow-up fetch.
+
+### Phase 5, commit B — Engage (posts, kudos, polls, reactions, comments, groups, moderation, auto-posts)
+
+Per the plan, with three corrections the user called out explicitly before
+any code: kudos deletion behaviour on moderation had to be decided and
+tested (not left implicit), auto-post idempotency had to handle 29 February
+birthdays and survive a duplicate-key error mid-loop without aborting the
+rest of the batch, and joining posts had to fire on the real joining event,
+not the daily cron. All three are addressed below with their own dedicated
+tests, not just handled in passing.
+
+**Schema** (`backend/prisma/schema.prisma`, migration
+`20260929110137_add_engage_phase5_commit_b`): `Post` — the feed's one
+uniform row for every kind (`USER`/`KUDOS`/`POLL`/`AUTO_BIRTHDAY`/
+`AUTO_JOINING`/`AUTO_ANNIVERSARY`), with `authorEmployeeId` nullable (null
+for AUTO_* posts — nobody "wrote" them) and `subjectEmployeeId`/
+`occurredOn` set only for AUTO_* kinds. `Kudos`/`Poll` are 1:1 child tables
+via `postId` so the feed always queries `Post` uniformly regardless of
+kind. `PollOption`/`PollVote` (`@@unique([pollId, employeeId])` — one vote
+per employee per poll, moved rather than duplicated on a re-vote).
+`Comment`, `Reaction` (`@@unique([postId, employeeId])` — a second reaction
+from the same employee replaces, not adds). `Group`/`GroupMember` — plain
+categorisation only; **membership is deliberately not access control**,
+documented directly in the schema comment: posting into or viewing a
+group's posts is never membership-gated, a deliberate scope
+simplification. `EngageAutoPostSetting` — a closed 3-row catalog (one per
+AUTO_* kind) holding `enabled` + `template`, same one-row-per-fixed-kind
+shape as `LeavePolicy`; the shared daily batch run hour lives in
+`SystemSetting` (`engage.autopost.dailyRunHour`, default 8 for spec §8's
+"daily 08:00 cron"), not in this table, since it's one shared schedule
+covering two of the three kinds. A hand-added partial unique index (the
+established Prisma-can't-express-this pattern, applied after
+`prisma migrate dev --create-only`) enforces the auto-post idempotency key:
+`posts_auto_kind_subject_occurred_key` on `(kind, subject_employee_id,
+occurred_on)` where both columns are non-null. New permissions:
+`engage.moderate`, `engage.groups.manage`, `engage.autopost.manage`, all
+granted to `HR_ADMIN`/`SUPER_ADMIN` only in seed — a plain `EMPLOYEE`
+holds none of them, matching every other admin-gated Phase 4/5 permission.
+
+**Moderation is a soft hide, never a delete** — this codebase's standing
+append-only convention (`YearEndRun` SUPERSEDED, `Location.isActive`),
+applied to `Post` for the first time: `moderatePost()`/`unmoderatePost()`
+set/clear `moderatedAt`/`moderatedByUserId`; the row (and its backing
+Kudos/Poll/Comment/Reaction rows) stay in the database. Every feed and
+detail-view query filters `moderatedAt IS NULL`; the admin moderation
+queue is the one place that deliberately doesn't, so HR can review and
+restore. The explicit review requirement — kudos deletion behaviour must be
+decided and tested — is answered directly: `getKudosReceivedCount()`/
+`getKudosGivenCount()` are always a live `prisma.kudos.count()` filtered
+through `post: { moderatedAt: null }`, never a stored counter, so a
+moderated kudos post stops counting toward its recipient's total
+immediately with no separate decrement step to get wrong.
+`moderation.test.ts` proves the full cycle end to end: give kudos → count
+includes it → moderate the post → count excludes it while the row still
+exists (found via the admin queue) → unhide → count includes it again.
+
+**Auto-post idempotency** (`modules/engage/autoPosts.ts`) —
+`isEventDateCelebratedToday()` (now exported for direct unit testing)
+handles the 29 February rule explicitly: a leap-day birthday is celebrated
+on 28 February in a non-leap year, matched on today's real calendar date
+(never rolling forward to 1 March), and the emitted `occurredOn` is always
+that real match date — so the partial unique index never double-fires
+later the same year, and the following year's own 28-or-29 February still
+creates a fresh post since `occurredOn` differs. Each employee's insert
+inside `runDailyAutoPosts()` is individually try/caught: a `P2002`
+(duplicate-key — a retried run, or a genuine race) is treated as an
+idempotent skip; any other error is logged and counted as failed; **the
+loop always continues to the next employee regardless of one row's
+outcome** — proven directly in `autoPosts.test.ts` by pre-seeding one
+employee with today's post already present (simulating a partial prior
+run) alongside a second, fresh employee with a matching birthday in the
+same call: the first employee's pre-existing post is left untouched (not
+duplicated, not overwritten) and the second employee's post is still
+created in the same run. Joining posts fire on the actual joining event —
+`createJoiningPost()` is called from `auth/service.ts`'s `acceptInvitation`
+(the only real path that flips `User.status` `INVITED`→`ACTIVE`; Add
+Employee always creates `INVITED`, confirmed by code search), keyed on the
+employee's real `dateOfJoining`, not the moment they happened to click the
+link. `runDailyAutoPosts()` never scans for `AUTO_JOINING` at all — proven
+in `autoPosts.test.ts` by running the cron on the exact day matching an
+employee's join-date and asserting zero posts appear until
+`createJoiningPost()` is called explicitly — and `joiningEvent.test.ts`
+drives the real HTTP path end to end (Add Employee → invitation email →
+accept → post appears, exactly the E2E onboarding flow's own shape) to
+prove the wiring holds outside the unit-level guarantee too.
+
+**Backend** `modules/engage/`: `posts.ts` (`FEED_INCLUDE` batches
+author/subject/group/kudos/poll/reactions/comment-count in one query, no
+N+1; `listFeed()` filters by kind/group/location-or-department-via-current-
+job-history/search), `kudos.ts`, `polls.ts` (`votePoll()` upserts on the
+`[pollId, employeeId]` unique key so a re-vote moves rather than adds;
+`closePoll()` gated to the poll's author or an `engage.moderate` holder),
+`reactions.ts` (toggle: same emoji again removes, a different emoji
+replaces), `comments.ts`, `groups.ts`, `moderation.ts`,
+`autoPostSettings.ts`, `autoPosts.ts`, `employeeSearch.ts` — a new, minimal
+self-serve `GET /api/engage/employees/search` (name + code only), built
+because the existing `modules/employee` search needs `employee.view`,
+which a plain `EMPLOYEE` doesn't hold but must still be able to search
+colleagues to give kudos. Realtime: `emitEngagePost`/`emitEngageKudos`/
+`emitEngageReaction`/`emitEnginePostCommentCount`/`emitEngageBirthday`/
+`emitEngageJoining`/`emitEngageAnniversary`, all to the `org` room (the
+feed is org-wide by design — see the Group schema comment). Jobs:
+`engageAutoPostsQueue`, a `getDailyRunHour()`-driven `upsertJobScheduler`
+entry (read once at scheduler-registration time — a changed hour takes
+effect on the scheduler's next restart, since BullMQ repeatable jobs
+aren't live-reloaded; the admin screen's own `Alert` says so explicitly),
+a thin worker calling `runDailyAutoPosts(businessToday())`.
+
+**A real bug found via the live Playwright walkthrough, not any automated
+test**: the moderation queue route (`GET /api/engage/moderation/posts`)
+had no query-schema validation, so a request without explicit `page`/
+`pageSize` — which is exactly how the real `ModerationPage.tsx` calls it
+(`{ moderated, pageSize: 50 }`, no `page`) — computed `skip: NaN` and 500'd
+in production, not just in a contrived test. Fixed by adding
+`listModerationQuerySchema` (the same coerced-with-defaults shape
+`listFeedQuerySchema` already uses) and wiring it through `validate()` at
+the route.
+
+**A second real bug found the same way**: wiring `createJoiningPost` into
+`acceptInvitation` means any test that drives the real accept-invitation
+HTTP flow now also creates a real `Post` row as a side effect — which
+three *pre-existing*, untouched test files do
+(`auth/__tests__/invitation.test.ts`, `employee/__tests__/
+e2eOnboarding.test.ts`, `settings/__tests__/settings.test.ts`).
+`Post.authorEmployeeId`/`subjectEmployeeId` are optional FKs, so Prisma's
+default `onDelete` is `SetNull`, not a blocking error — those tests'
+existing `cleanupFullTestEmployee`/`cleanupTestUser` calls didn't fail,
+they silently left an orphaned `Post` (subject nulled out) permanently in
+the dev database, which then rendered as **"null just joined us!"** in the
+real Engage feed — caught only by looking at the live UI, not by the green
+test suite. Fixed at the shared-infrastructure level (not per test file):
+a new `cleanupEmployeeEngageRows()` in `lib/__tests__/testHelpers.ts`
+(the base test-helper layer both `authTestHelpers.ts` and
+`employeeTestHelpers.ts` already depend on) deletes every engage row
+referencing the employee — as author or reactor, and every child row of
+any post they authored or are the subject of — before the `Employee` row
+itself is deleted; wired into both `cleanupFullTestEmployee` and
+`cleanupTestUser`. The 4 orphaned rows already in the dev database from
+earlier runs were purged directly. This is the same class of gap commit A
+found and fixed for `Notification`/`UserFavourite`/`DashboardLayout`
+against `User.id` — this time against `Employee.id`, and now guarded
+against for every future module that adds an Employee-referencing table.
+
+**Frontend**: `pages/employee/engage/EngagePage.tsx` fully rewritten off
+real data (previously 100% static mock) — top card with Give Kudos/Create
+Poll/inline post composer, a Filters panel (activity type, search,
+groups/location/department), the feed itself (`PostCard` handling all 6
+kinds including poll voting bars, per-post reactions and comments, and a
+moderator-only Hide action), `GiveKudosModal` (debounced employee-search
+`Select`), `CreatePollModal`. Takes an optional `initialActivity` prop,
+reused by a new, thin `pages/employee/engage/KudosPage.tsx`
+(`/app/my-worklife/kudos`) rather than a second parallel kudos
+implementation — the frontend's `MeResponse` has no `employeeId` field to
+filter a "my kudos" view by otherwise. New
+`sockets/useEngageRealtime.ts` listens for all 7 engage events,
+invalidating the feed query on post/kudos/reaction/comment and showing a
+celebratory toast for birthday/joining/anniversary; wired into
+`RequireAuth.tsx` alongside the existing hooks. Admin: `ModerationPage.tsx`
+(Visible/Hidden segmented filter, Hide/Restore), `GroupsAdminPage.tsx`
+(Table+Modal CRUD plus a Members modal), `AutoPostSettingsPage.tsx`
+(per-kind template/enabled cards plus the shared daily-run-hour field with
+its restart-to-apply `Alert`) — and `AnnouncementsAdminPage.tsx`, the
+admin CRUD screen for commit A's `Announcement` schema that commit A's own
+plan explicitly deferred to "whenever Engage admin's screens get built,
+since it's one app in the menu" and was never actually built until now.
+Menu: `my-worklife/kudos` and all 4 `engage-admin` sub-items lost their
+`phase` markers; the `engage-admin` app itself deliberately keeps no
+`element` of its own (an app with `menus` auto-redirects `/admin/engage`
+to the first sub-item with a real element per `resolveMenuRoutes.tsx`'s
+established convention — briefly got this backwards mid-commit, caught by
+re-reading that file before it shipped).
+
+**Tests** (10 new files, 69 new tests, 340 across the backend): feed
+CRUD/every filter/group-scoping (`posts.test.ts`); kudos give/self-kudos
+rejection/live-count correctness/the employee-search picker
+(`kudos.test.ts`); poll create/vote/re-vote-moves-not-adds/close
+permission-gating/closed-poll-rejects-vote (`polls.test.ts`); reaction
+toggle-on/toggle-off/replace (`reactions.test.ts`); comment CRUD
+(`comments.test.ts`); group CRUD/membership (idempotent add,
+member-not-found on remove)/`engage.groups.manage` gating
+(`groups.test.ts`); moderation soft-hide/already-moderated and
+not-moderated rejections/the full kudos-count exclusion cycle/
+`engage.moderate` gating (`moderation.test.ts`); the 29-February rule
+directly, same-day double-run idempotency, the mid-loop-duplicate-key
+resilience proof, work-anniversary year-count and less-than-a-year
+exclusion, and joining-fires-on-event-not-cron at both the unit and real
+HTTP-flow level (`autoPosts.test.ts`, `joiningEvent.test.ts`); auto-post
+settings CRUD, the closed-catalog defensive defaults, the daily-run-hour
+0–23 validation, and `engage.autopost.manage` gating
+(`autoPostSettings.test.ts`).
+
+**Verification**: fresh `migrate reset` + reseed on the shared dev
+database (Postgres/Redis needed starting in this fresh container — the
+prior session's data had persisted but this session's own migration/seed
+state hadn't, caught by `prisma migrate status` before assuming anything
+was current; the reset needed a fresh explicit consent from the user per
+this codebase's dangerous-AI-action guard); full backend suite green
+(340/340, 52 files, zero regressions); `lint`/`typecheck` clean on both
+`backend/` and `frontend/`; frontend suite green including the
+route-placeholder guard. Live Playwright walkthrough (two simultaneous
+employee sessions plus an HR Admin session, chromium headless) proved
+real-time delivery end to end without any page reload: Employee A posts →
+Employee B's feed updates live; Employee B gives Employee A kudos →
+Employee A's feed updates live; Employee A creates a poll → Employee B
+votes on it after it syncs live; both persisted correctly across a reload.
+HR Admin hid Employee A's post via Moderation → it disappeared from
+Employee A's live feed. All 4 Engage admin screens (Announcements,
+Moderation, Groups, Auto-Post Settings) exercised directly: a new group
+was created and appeared in the table, a template edit on Auto-Post
+Settings saved and persisted. All Playwright-generated test data (22 posts,
+2 groups, one mutated auto-post-setting row) was purged from the dev
+database afterward. Two real bugs were found this way and are detailed
+above — the moderation-queue pagination 500 and the orphaned-post "null
+just joined us!" test-infrastructure gap — both fixed and re-verified.
 
 ## Open questions
 
