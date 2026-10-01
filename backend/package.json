@@ -5,6 +5,7 @@
   "description": "Wellsure HR Portal backend — REST API, Socket.IO, BullMQ workers and scheduler. One image, four entrypoint modes (api | worker | scheduler | migrate).",
   "type": "module",
   "scripts": {
+    "postinstall": "prisma generate",
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "lint": "eslint .",

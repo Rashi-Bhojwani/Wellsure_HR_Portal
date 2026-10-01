@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import { prisma } from "../../../lib/prisma";
 import { writeLedgerEntry } from "../ledger";
@@ -20,7 +20,19 @@ import {
 // Leave Recalculator (spec §5.4) — previewRecalculation/commitRecalculation
 // take an explicit employeeIds array (unlike Year End's org-wide sweep),
 // so these tests are naturally isolated to their own fixture employees.
+//
+// The recalculator diffs every month through the CURRENT month, so the
+// expectations below ("only Sep is due") hold only as of September 2026.
+// Pin the clock there (Date only, real timers) — unpinned, this test broke
+// on 1 Oct 2026 when October's accrual became due too.
 describe("Leave Recalculator", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-09-15T06:30:00.000Z") });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   let plTypeId: string;
   let actorOrg: TestOrgMasters;
   let actorEmployeeId: string;

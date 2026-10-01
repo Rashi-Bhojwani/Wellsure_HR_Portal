@@ -2442,6 +2442,51 @@ zero workflow runs; `ci.yml` triggers only on pull requests and pushes to
   - `api`, `worker` and `scheduler` all shut down cleanly on SIGTERM, exit
     code 0.
 
+### Interim — first real CI run, and why it failed
+
+CI now runs on every push to every branch (`push: branches: ["**"]`, plus
+pull requests and manual dispatch). Its first complete run (e9703d7,
+2026-10-01) **failed**: the Docker build job passed, but install → lint →
+typecheck stopped at **typecheck**, with 266 errors across the backend. Migrate and
+Test never ran.
+
+Three problems were found. Each was reproduced on a clean worktree with
+only CI's two env vars (`DATABASE_URL`, `REDIS_URL`) and no `.env`:
+
+1. **The Prisma client was never generated on a fresh install.** Nothing in
+   `backend/` ran `prisma generate`; it only worked because
+   `@prisma/client`'s own postinstall sometimes does it. That hook silently
+   leaves an empty stub if it runs before the `prisma` CLI is linked, which
+   is what happened on GitHub. Local checkouts had a client generated long
+   ago, so nobody noticed. **Fix:** `backend/package.json` now has
+   `"postinstall": "prisma generate"`, which runs after every dependency is
+   installed. This also covers a fresh clone following GETTING_STARTED.
+2. **CI tested an unseeded database.** The backend suite assumes the seeded
+   dataset (roles, permissions, leave types, settings, seeded employees),
+   just like local runs. Without it, 60 tests failed. **Fix:** a `Seed`
+   step (`npm run db:seed`, the same reset + migrate + seed as local dev)
+   after `Migrate`. The earlier note (Phase 1) that tests are independent
+   of the seed is no longer true and hasn't been for several phases.
+3. **A date time-bomb in `recalculator.test.ts`.** The test was written in
+   September and assumed only September's PL accrual was due. The
+   recalculator diffs through the *current* month, so on 1 Oct 2026 it
+   correctly also credited October and the test failed (3 accruals, not
+   2). This was a test bug, not a product bug. **Fix:** the file pins
+   `Date` to 15 Sep 2026 (`vi.useFakeTimers({ toFake: ["Date"] })`; real
+   timers stay real).
+
+Also changed: the Postgres service health check now runs as `wellsure`, which
+silences the `role "root" does not exist` log noise.
+
+**Verified locally, end to end:** clean worktree, fresh empty database,
+CI's env only. `install:all` → lint → typecheck → check:services →
+db:migrate → db:seed → test all exit 0: backend 400/400, frontend 4/4.
+The GitHub result for the pushed commit is recorded in the next entry.
+
+Not covered by CI yet: the frontend has a single route-config test file.
+The screen-level checks are the manual Playwright walkthroughs run each
+commit, and CI doesn't run them.
+
 ## Open questions
 
 Carried from spec §14 — configurable, not guessed, until answered:

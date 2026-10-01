@@ -312,7 +312,8 @@ Same cause as above: a `PORT` exported in your shell wins over
 (`VITE_API_BASE_URL`), so `unset PORT` or start with `PORT=4000`.
 
 **Stale Prisma Client after a schema change**
-If TypeScript complains about fields/models that clearly exist in
+`npm install` in `backend/` generates the client (its `postinstall`). If
+TypeScript still complains about fields/models that clearly exist in
 `schema.prisma`, regenerate the client:
 ```bash
 cd backend && npx prisma generate

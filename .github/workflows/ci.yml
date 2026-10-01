@@ -31,7 +31,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U wellsure -d wellsure_hr"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -61,6 +61,9 @@ jobs:
             biometric-agent/package-lock.json
             infra/package-lock.json
 
+      # backend's postinstall runs `prisma generate`. Without it the typecheck
+      # ran against @prisma/client's empty default stub: its own postinstall
+      # silently does nothing if it runs before the prisma CLI is linked.
       - name: Install
         run: npm run install:all
 
@@ -75,6 +78,12 @@ jobs:
 
       - name: Migrate
         run: npm run db:migrate
+
+      # The backend suite runs against the seeded dataset (roles, permissions,
+      # leave types, settings, seeded employees), exactly as it does locally
+      # — so seed it the same way local dev does (reset + migrate + seed).
+      - name: Seed
+        run: npm run db:seed
 
       - name: Test
         run: npm run test
