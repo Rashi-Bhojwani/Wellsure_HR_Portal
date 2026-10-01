@@ -37,7 +37,8 @@ repo before it's built.
 | A | Notifications substrate, Employee Home, Admin Homepage (Welcome + Dashboard) **[recorded]** | ✅ Done |
 | B | Engage: posts, kudos, polls, reactions, comments, groups, moderation, auto-posts **[recorded]** | ✅ Done |
 | C | People directory, org chart, Document Center **[recorded]** | ✅ Built 2026-09-30, awaiting review (see "As built" below). |
-| D | Helpdesk, Request Hub **[recorded]** | Not started |
+| D | Helpdesk, Request Hub, Tasks inbox **[recorded]** | Plan approved 2026-10-01. In progress. |
+| D2 | Letter templates + PDF generation (headless Chromium), letters saved to Document Center **[recorded: user, 2026-10-01]** | Not started. Plan to be approved before code. |
 | E | E1 role & permission system · E2 three-level hierarchy (Manager Management) · E3 Workflow Delegates **[recorded: user, 2026-09-30, revised]** | Plan approved 2026-09-30. Not started (after the Docker fix and D). |
 | F | Reports **[recorded]** | Not started |
 | G | Mobile / PWA **[recorded]** | Not started. No longer blocked, see below. |
@@ -300,20 +301,146 @@ live My Documents update.
   - Existing AntD `List` usages (notification bell, Home) remain the
     documented Phase 0 follow-up; commit C adds no new ones.
 
-## D — Helpdesk, Request Hub
+## D — Helpdesk, Request Hub (+ To do → Tasks inbox)
 
-Scope **[recorded]**: Helpdesk, Request Hub.
+**Status: plan APPROVED 2026-10-01**, with the user's answers and two
+additions folded in below. Built as one commit, paused for review.
 
-Detail **[reconstructed]** (spec §6, §11 `helpdesk_tickets`/`helpdesk_messages`):
+### Decisions (user, 2026-10-01)
 
-- **Helpdesk** (`/app/helpdesk`): raise a ticket to HR by category, track
-  its status, chat-style replies. Real-time replies are likely, following
-  the `notification.new` pattern.
-- **Request Hub** (`/app/request-hub`): all of *my* requests in one place.
-  Today that means leave and profile change requests, plus helpdesk
-  tickets once D lands. Regularization and reimbursement join when Phases
-  3 and 6 exist.
-- Admin side: a ticket queue with categories as an admin-editable master.
+1. **To do → Tasks** (employee menu and the admin Tasks app) is an **inbox
+   of things waiting on me**, with no new schema: approvals I can act on,
+   helpdesk tickets assigned to me, and change requests I can approve. It
+   sits alongside Review. A real task system (assign, due date, done) comes
+   later with onboarding and exit checklists.
+2. **Feedback** (My Worklife) is deferred to **Phase 8** with performance
+   reviews, and stays a placeholder (re-marked `phase: "Phase 8"`).
+3. **Letter templates and PDF generation** get their own commit right after
+   D, using **headless Chromium** (payslips need it in Phase 6). Generated
+   letters are saved as employee documents, so they appear in the
+   employee's Document Center. The image-size increase gets documented in
+   `docs/DEPLOYMENT.md` so it's no surprise at Phase 1.5.
+4. **Sensitive helpdesk categories:** HR_EXECUTIVE doesn't see them by
+   default (consistent with the salary rule). The seed marks "Payroll &
+   Salary" and "Grievance" sensitive. **The flag is configurable per
+   category** in the admin screen, so HR can mark a new category sensitive
+   without code.
+5. **The employee always sees when a ticket will auto-close**, e.g. "Resolved
+   — will close automatically on 8 Oct unless you reply", on the list and
+   in the thread. The reopen window is shown the same way, so a ticket
+   never vanishes unexplained.
+6. **Helpdesk attachments go through the same pipeline as Document Center
+   uploads:**
+   - size, type, extension and magic-byte checks;
+   - **images are re-encoded with sharp and stripped of all metadata**
+     (EXIF/GPS);
+   - photographed payslips and IDs are exactly the leak case.
+
+### Schema
+- `HelpdeskCategory`: code, name, `isSensitive`, optional default
+  assignee, `isActive`, `sortOrder`. Admin-editable; deactivated, never
+  deleted, once used.
+- `HelpdeskTicket`:
+  - `number` from a Postgres sequence, shown as `HD-000123`;
+  - `raisedByEmployeeId`, categoryId, subject, priority
+    (`LOW | NORMAL | HIGH`), optional `assigneeEmployeeId`;
+  - status `OPEN → IN_PROGRESS → WAITING_ON_EMPLOYEE → RESOLVED → CLOSED`;
+  - `resolvedAt`, `closedAt`, `lastActivityAt`.
+- `HelpdeskMessage`: ticketId, authorEmployeeId, body, `isInternalNote`
+  (HR-only, never sent to the employee).
+- `HelpdeskAttachment`: messageId, file metadata, and a storage key
+  registered with the cleanup engine.
+- New permissions:
+  - `helpdesk.manage` (HR_ADMIN, HR_EXECUTIVE): the queue, assignment,
+    status, replies, internal notes and categories;
+  - `helpdesk.sensitive.view` (HR_ADMIN).
+
+  Both become SUPER_ADMIN-editable in E1.
+- Settings (System Settings → Helpdesk): reopen window (days, default 7)
+  and auto-close period (days quiet after Resolved, default 7).
+
+### Behaviour
+- **Employee:**
+  - Raise a ticket (category, subject, first message, attachments), reply,
+    and list or view **own** tickets only.
+  - Reopen a Resolved ticket within the window.
+  - Replying to a Resolved ticket reopens it; replying while it's
+    Waiting-on-employee moves it back to Open.
+  - Internal notes are excluded server-side from every employee-facing
+    response. Another employee's ticket or attachment reads as 404.
+- **HR** (`helpdesk.manage`):
+  - A queue with status, category and assignee filters, including
+    "assigned to me".
+  - Assign, change status and priority, reply, and add internal notes.
+  - Sensitive-category tickets need `helpdesk.sensitive.view` too; without
+    it they're absent from the queue and 404 on direct access.
+  - Opening a sensitive ticket is audit-logged.
+- **Daily job:** closes Resolved tickets quiet for the auto-close period.
+  It's idempotent, like the other jobs.
+- **Real-time:** a reply or status change notifies the other side
+  (persisted notification plus `notification.new`), and a signal-only
+  `helpdesk.queue` refreshes HR queues.
+- **Audit-logged:** assignment, status and priority changes, category
+  create/edit (including the sensitive flag), and sensitive-ticket views.
+- **Request Hub** (`GET /api/request-hub`): my leave requests, profile
+  change requests and helpdesk tickets as one normalised list (type,
+  title, status, submitted, last update, link), with type and status
+  filters. Sources plug in through a registry seam so regularizations
+  (Phase 3) and reimbursements (Phase 6) slot in later. Actions stay on
+  each module's own screen.
+- **Tasks inbox** (`GET /api/tasks/mine`): pending leave approvals in my
+  scope, tickets assigned to me, and change requests I can approve, each
+  with a link. It powers `/app/todo/tasks` and the admin Tasks app.
+
+### Frontend
+- **Employee:**
+  - `/app/helpdesk`: my tickets, Raise ticket, and the ticket thread with
+    attachments and the auto-close/reopen notices.
+  - `/app/request-hub`.
+  - `/app/todo/tasks`.
+  - The Home page's Track card reads from the Request Hub.
+- **Admin:**
+  - Helpdesk queue plus thread view (assign, status, priority, internal
+    notes).
+  - The admin Tasks app (the same inbox).
+  - Admin Tools → Helpdesk Categories (with the sensitive toggle), and a
+    Helpdesk card in System Settings.
+- Feedback is re-marked Phase 8.
+
+### Tests
+- Internal notes never reach the employee in any response.
+- Ticket and attachment IDOR (another employee; HR without the
+  permission).
+- Sensitive categories hidden from HR_EXECUTIVE (queue and direct access),
+  and the flag's effect when toggled.
+- Every status transition, the reopen window, and the auto-close job
+  (idempotent, and the notice date matches what the job does).
+- **Attachment images stored with no EXIF/GPS**, plus type, size and magic
+  checks.
+- Notifications, audit entries.
+- Request Hub union, scoping and filters; Tasks inbox contents per role.
+- The permission matrix.
+
+### Verification
+Fresh migrate and seed on the scratch DB; both suites; lint and typecheck;
+CI green on GitHub. Browser walkthrough with **two browsers**: an employee
+raises a ticket and HR's queue updates live; HR replies and the employee's
+thread updates live; an internal note never appears for the employee; the
+auto-close notice is visible.
+
+## D2 — Letter templates and PDF generation
+
+**[recorded: user, 2026-10-01]** A separate commit right after D:
+- Email & letter templates (the `admin-tools/templates` placeholder) for
+  offer, appointment, experience, relieving and address-proof letters
+  (spec §7.2).
+- PDF rendering with **headless Chromium**, which payslips also need in
+  Phase 6.
+- Generated letters are saved as `EmployeeDocument`s (category Letters),
+  so they appear in the employee's Document Center.
+- Chromium enlarges the backend image noticeably. Document the measured
+  size in `docs/DEPLOYMENT.md` so it's expected at Phase 1.5.
+- Detailed plan written up for approval before building.
 
 ## E — Role & permission system, three-level hierarchy, Workflow Delegates
 
@@ -536,8 +663,8 @@ planned. Every route must be wired by the end of Phase 5.
 
 | Route | Proposed home |
 |---|---|
-| `/app/my-worklife/feedback` (Feedback) | D (a request/response flow like Helpdesk), or defer and re-mark |
-| `/app/todo/tasks` and admin app `tasks` (Tasks) | D, alongside Request Hub (both are "my open items") |
+| `/app/my-worklife/feedback` (Feedback) | **Settled: Phase 8** (performance reviews); placeholder kept |
+| `/app/todo/tasks` and admin app `tasks` (Tasks) | **Settled: D** (inbox of things waiting on me) |
 | Admin app `workflow` (Workflow) and `admin-tools/workflows` (Approval Workflows, multi-level chains, spec §7.8) | E3, alongside delegates (confirm when E3 is planned) |
-| `admin-tools/templates` (Email & Letter Templates) | C (letters in Document Center) or a later commit. Letter generation was deferred from Phase 1. |
+| `admin-tools/templates` (Email & Letter Templates) | **Settled: its own commit right after D** (headless Chromium; letters saved to Document Center) |
 | `admin-tools/users-roles` (Users & Roles) | **Settled: E1** (Roles & Permissions). |
