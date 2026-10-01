@@ -1,9 +1,14 @@
 name: CI
 
+# Every push to every branch (main and any working branch), every pull
+# request, and on demand. Until 2026-10-01 this ran only on pull requests and
+# pushes to main; all work so far happened on claude/* branches with no PRs,
+# so CI had never actually run once.
 on:
-  pull_request:
   push:
-    branches: [main]
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
