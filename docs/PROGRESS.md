@@ -2702,11 +2702,50 @@ the table now says so.
 **Next:** D2 (letter templates + PDF generation with headless Chromium,
 plus the image-size note in DEPLOYMENT.md), then E1.
 
+### Interim — attendance approach recorded (Phases 2–3 built before the device)
+
+Recorded for the record (user, 2026-10-01). Nothing was built; the
+current work order (D2, then E1–E3, F, G) is unchanged.
+- **Phases 2 and 3 are built completely without the physical device.**
+  That's ingestion, the rules engine, shifts, week-offs, exceptions,
+  regularization, muster, manual entry, period finalisation, and every
+  screen and report, all production-ready. **The device connection is the
+  final step, not the first.**
+- A **punch simulator** is a first-class tool (spec §4.6). It covers
+  realistic ATTLOG streams and the hard cases, replays a month for 500
+  employees, and drips single punches live. It goes through the real
+  ingestion routes, never the database.
+- **Three ingestion routes, one ingestion service and one dedupe** (spec
+  §4.1):
+  - the sync agent, as the primary route (Windows service, 30 s polling,
+    cursor, backoff, catch-up, heartbeat);
+  - ADMS push;
+  - a manual file upload through the Import Center, emergency only. The
+    greytHR-style month-end export is no longer the daily process.
+- **Device and agent health monitoring** is built in Phase 2 (spec §4.7):
+  silence alerts during working hours, a morning check, and the Devices
+  screen.
+
+Updated:
+- `docs/PROJECT_SPEC.md`: §4.1 rewritten, §4.2, §4.3, new §4.6 and §4.7,
+  §7.3, the §12 Phase 2/3 scope and done-criteria, §14, §15.4.
+- `docs/plans/PHASE_2.md` (new).
+- `biometric-agent/README.md`.
+
+**Correction recorded:** §4 had *not* recorded an exact eSSL ATTLOG
+format, only "user id, timestamp, status, verify type". The standard
+ZKTeco/eSSL layout is now written down as a **working assumption** with a
+tolerant, configurable parser, to be confirmed from a real sample at
+device connection (new open question below).
+
 ## Open questions
 
 Carried from spec §14 — configurable, not guessed, until answered:
 
-- [ ] Exact biometric device brand/model and whether ADMS push is supported.
+- [ ] Exact biometric device brand/model and whether ADMS push is supported. Not blocking (2026-10-01): Phases 2–3 are built against the punch simulator, and the device is connected last.
+- [ ] The exact ATTLOG line layout and the emergency file's format on our firmware: confirm from a real sample (spec §4.1 records the standard layout as a working assumption).
+- [ ] The office PC that will run the sync agent (Windows version, always on), and the number of devices.
+- [ ] Working hours and working days for the device-silence alert (spec §4.7): configurable defaults until HR confirms.
 - [x] Exact PL eligibility boundary: **HR-confirmed 2026-09-28** — 90 calendar
       days from DOJ (`leave_policies.eligibility_mode = DAYS`,
       `eligibility_value = 90`), no pro-rating, always a full 1.0-day credit.

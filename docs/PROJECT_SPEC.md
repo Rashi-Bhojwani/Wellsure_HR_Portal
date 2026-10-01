@@ -62,23 +62,111 @@ Employees can edit limited personal fields (address, emergency contact, photo); 
 
 ## 4. Biometric integration and real-time attendance
 
-### 4.1 Ingestion (build both paths)
+### 4.1 Ingestion: three routes, one ingestion service
 
-**Path A — Device push (ADMS / "cloud server" mode).** Many ZKTeco/eSSL devices can be configured with a server address and will push attendance logs over HTTP. Implement the device protocol endpoints under `/iclock/*` (`cdata` GET for handshake/options, `cdata` POST for ATTLOG/OPERLOG uploads, `getrequest`, `devicecmd`). Parse ATTLOG lines (user id, timestamp, status, verify type). Authenticate devices by serial number against the `devices` table. Respond in the plain-text format the device expects.
+**Approach (user decision, 2026-10-01).** Phases 2 and 3 are built
+**completely, before the physical device is connected**: ingestion, the
+rules engine, shifts, week-offs, exceptions, regularization, muster, manual
+entry, period finalisation, and every screen and report. All of it is
+production-ready and tested against the punch simulator (§4.6).
+**Connecting the real device is the final step, not the first.** It means
+installing the agent on the office PC, registering the device, and
+confirming the ATTLOG layout against a real sample. Nothing downstream of
+the ingestion service changes when it happens.
 
-**Path B — LAN sync agent (`biometric-agent/`).** Runs on an office PC. Connects to each device IP on port 4370 using a ZKTeco library (e.g. `node-zklib` or `zkteco-js`), polls every 30 s (configurable), and POSTs new logs to `POST /api/biometric/agent/punches` using an agent API key over HTTPS. Keeps a local cursor (last synced timestamp) and retries with backoff when offline. Also sends a heartbeat. Can run as a Windows service (document using `node-windows` or NSSM).
+**No month-end file exports as the daily process.** greytHR's current
+practice (export a file from the device at month end and upload it) is
+kept *only* as an emergency fallback. The daily path is automatic and
+near-real-time.
 
-Both paths feed the same ingestion service.
+Three ingestion routes, all built:
+
+1. **Sync agent (primary route), `biometric-agent/`.** Runs on an office PC
+   on the device's LAN:
+   - connects to each device on **port 4370** using a ZKTeco/eSSL protocol
+     library (e.g. `node-zklib` / `zkteco-js`, chosen when built);
+   - **polls every 30 s** (configurable) and POSTs new punches to
+     `POST /api/biometric/agent/punches` over **HTTPS with an agent API
+     key**;
+   - keeps a **local cursor** per device (last synced punch), so a restart
+     neither re-sends everything nor loses anything;
+   - **retries with exponential backoff** when the API or device is
+     unreachable, and **catches up automatically after downtime**: the
+     backlog is sent in order, in batches;
+   - sends a **heartbeat** (`POST /api/biometric/agent/heartbeat`) every
+     cycle, carrying agent version, host, per-device reachability and
+     cursor position;
+   - **installs as a Windows service** (install/uninstall scripts, auto-start
+     on boot, restart on failure), so it survives reboots without anyone
+     remembering to start it.
+
+   The device driver sits behind an interface. The real 4370 driver and the
+   simulator's driver (§4.6) are interchangeable, so the agent code that
+   ships is the code that was tested.
+2. **Device push (ADMS / "cloud server" mode)**, for models that support
+   it:
+   - the device protocol endpoints under `/iclock/*`: `cdata` GET for
+     handshake/options, `cdata` POST for ATTLOG/OPERLOG uploads,
+     `getrequest`, `devicecmd`;
+   - devices are authenticated by serial number against the `devices`
+     table; unknown serials are rejected and logged;
+   - responses are in the plain-text format the device expects;
+   - exposure on AWS per §15.4.
+3. **Manual file upload: emergency only.** Through the Import Center with
+   staging and validation like every other import: upload → parse → preview
+   (new / duplicate / unmapped / invalid rows) → commit. Audit-logged. It is
+   never the routine path.
+
+**All three converge on one ingestion service.** It validates, resolves the
+device and timezone, deduplicates, inserts into `raw_punches`, resolves
+the employee, and enqueues recompute. The `source` column records the
+route, for audit only; the rules engine never reads it, so it cannot tell
+the routes apart.
+
+**Deduplication, two layers:**
+- **Exact duplicates** (same device, device user ID and timestamp) are
+  dropped at ingestion by the unique key. This makes agent catch-up,
+  retries, ADMS re-sends and a file that overlaps already-synced data all
+  idempotent.
+- **Near-duplicates** (the same person punching twice seconds apart) are
+  stored raw, as they happened, and collapsed by the rules engine (§4.4,
+  within 2 minutes, configurable).
+
+**ATTLOG line format: working assumption, to confirm on the real
+device.** The standard ZKTeco/eSSL push-protocol ATTLOG record is one
+punch per line, tab-separated:
+`PIN  YYYY-MM-DD HH:MM:SS  status  verify  workcode  reserved…`
+- `PIN` is the device user ID.
+- The timestamp is device-local time with no zone; it's interpreted in the
+  device's configured timezone, default Asia/Kolkata.
+- `status` is the punch state (e.g. 0 check-in, 1 check-out; other values
+  mean breaks or overtime on some firmware).
+- `verify` is the verification method (fingerprint, card, face…).
+
+Trailing fields vary by firmware. The parser reads the leading fields it
+needs, tolerates extra or missing trailing ones, and records unparseable
+lines as rejected rather than failing a batch. **The exact layout,
+including the emergency file's format (a device USB dump versus an
+eSSL-software export), is confirmed against a real sample when the device
+is connected** (§14). The parser is configurable rather than guessed.
+
+**Clock and ordering safeguards:**
+- Punches may arrive out of order or late (catch-up), and are processed
+  by `punched_at`, not arrival.
+- Punches implausibly far in the future or past (device clock wrong;
+  thresholds configurable) are flagged for HR rather than silently
+  trusted.
 
 ### 4.2 Data layers
 
 - **`raw_punches`** — immutable: `device_id, device_user_id, punched_at (timestamptz), direction (IN/OUT/UNKNOWN), verify_type, source (PUSH|AGENT|IMPORT|MANUAL), raw_payload, received_at`. Unique `(device_id, device_user_id, punched_at)`.
 - **`daily_attendance`** — one row per employee per business date: `shift_id, first_in, last_out, total_work_mins, break_mins, actual_work_mins, work_mins_in_shift, late_in_mins, early_out_mins, shortfall_mins, excess_mins, status, first_half_status, second_half_status, lop_days, exception_flags[], is_overridden, is_locked, processed_at`.
 - **`attendance_overrides`**, **`shift_overrides`**, **`regularization_requests`** — corrections that never touch raw data.
+- **`devices`**, **`biometric_agents`** (API key stored hashed, last heartbeat, version, host), **`device_health_incidents`** (§4.7), and an ingestion batch record per agent post / ADMS upload / file import (counts of new, duplicate, unmapped and rejected), so volume and failures are visible per route.
 
 ### 4.3 Real-time pipeline
 
-1. Punch arrives → insert into `raw_punches` (skip duplicates).
+1. Punch arrives by any route (§4.1) → the ingestion service inserts into `raw_punches` (exact duplicates skipped).
 2. Resolve `device_user_id` → employee via `employees.employee_code` (and optional `device_user_mappings` for multiple devices). If unresolved → record in unmapped list for HR.
 3. Enqueue BullMQ job `attendance.recompute { employeeId, date }` (debounced/deduplicated per employee-date).
 4. Worker recomputes that day, saves, and emits Socket.IO events:
@@ -113,6 +201,62 @@ Status codes: `P` present, `A` absent, `HD` half day, `H` holiday, `O` week-off,
 ### 4.5 Period finalisation
 
 HR finalises a payroll month's attendance. Finalised days are locked (`is_locked = true`); recompute, overrides and regularizations are blocked. Unlock requires `SUPER_ADMIN`, a reason, and is audit-logged. Payroll only reads finalised attendance.
+
+### 4.6 Punch simulator (first-class development tool)
+
+A maintained tool, not a throwaway script, because it's how Phases 2–3
+are built and verified before the device exists. It must:
+- **Generate realistic punch streams in the ATTLOG format of §4.1**, for
+  real (seeded or staging) employees, using their actual shifts,
+  week-offs, holidays and leave, so the engine's output can be checked
+  against what was intended.
+- **Cover the hard cases**, each as a named scenario:
+  - normal days, late arrivals, early exits, and break OUT/IN pairs;
+  - missing punches (single punch, no OUT), and duplicates seconds apart;
+  - people who never punch at all (the absent / manual-entry branches);
+  - work on holidays and week-offs (comp-off eligibility), and night
+    shifts crossing midnight;
+  - unmapped device user IDs, and out-of-order or late (catch-up)
+    delivery;
+  - a device with a wrong clock;
+  - a device or agent going silent, to exercise the health alerts in
+    §4.7.
+- **Two modes:**
+  - **Replay:** a whole month for 500 employees (load test of ingestion and
+    the engine, with throughput and recompute time reported).
+  - **Live drip:** single punches in real time, so a screen can be watched
+    updating (§8).
+- **Feed through exactly the ingestion routes the real device will use.**
+  It does this as an ADMS device posting to `/iclock/*`, as the real
+  `biometric-agent` running with a simulated device driver, or as an
+  emergency upload file. It never writes to the database directly, so
+  when the machine arrives nothing downstream changes.
+- **Be deterministic** (seedable), so a scenario reproduces exactly in
+  tests and CI.
+- **Never touch production.** It refuses to run when the target is
+  production, and simulated devices can't be registered there.
+
+### 4.7 Device and agent health monitoring
+
+If a machine stops sending, **HR must find out that morning, not at month
+end.** Built in Phase 2, in the application itself. Phase 5.5's
+CloudWatch alarm is an additional infrastructure-level safety net, not
+the only one.
+- **Last seen, per device and per agent:** devices record last heartbeat
+  and last punch received; agents record last heartbeat, version, host and
+  per-device reachability.
+- **Alerts** (in-app notification plus email to HR/admin roles, once per
+  incident, with a recovery notice):
+  - no punches from a device for N minutes during working hours (default
+    30, configurable; working hours, working days and company holidays
+    respected, so there are no alerts on Sundays or holidays);
+  - an agent heartbeat missed for N minutes (configurable);
+  - a **morning check** at a configurable time: any device that normally
+    receives punches but has none today.
+- **Admin Devices screen** (§7.3): device and agent status at a glance;
+  **unmapped punches** with "map to employee"; recent ingestion volume per
+  device and per route (hourly/daily); and incident history.
+
 
 ---
 
@@ -205,7 +349,7 @@ Top bar with **app switcher**, **Payroll Month selector** (global context sent w
 - **Manual Override** — set a day's status with reason (audited).
 - **Shift Override** — change shift for specific dates.
 - **Regularization queue** — approve/reject, bulk, comments.
-- **Devices** — registered biometric devices, last heartbeat, last punch received, unmapped punches with "map to employee". Each device maps to exactly one branch (`location_id` on `devices` — see §11's note); that mapping is the *only* thing that varies by branch in the attendance pipeline — which device a punch arrived from tells the rules engine which employees' punches it's looking at, nothing about the rules themselves changes per branch.
+- **Devices** — registered biometric devices and sync agents, status at a glance (online / silent / offline), last heartbeat, last punch received, unmapped punches with "map to employee", recent ingestion volume per device and route, health incident history (§4.7). Each device maps to exactly one branch (`location_id` on `devices` — see §11's note); that mapping is the *only* thing that varies by branch in the attendance pipeline — which device a punch arrived from tells the rules engine which employees' punches it's looking at, nothing about the rules themselves changes per branch.
 
 ### 7.4 Workforce Management — Leave
 Leave Overview dashboard, Leave Calendar, Employee Leave, Leave Granter, Year End Process, Leave Recalculator, leave type and policy configuration, one company-wide holiday and RH list (see §11's note on branch scoping — HR confirmed 2026-09-28 that holidays, leave policies, shifts, week-off patterns and attendance rules are identical for every branch).
@@ -307,11 +451,55 @@ Implement the CDK stacks in §15 for `staging`: VPC, RDS, ElastiCache, S3 bucket
 From here on, every phase is verified on staging, not only locally.
 
 **Phase 2 — Biometric ingestion + attendance engine + real-time**
-Devices, `/iclock` push endpoints, agent API, `biometric-agent/`, raw punches, dedupe, mapping, unmapped queue, shifts, week-offs, rosters, rules engine (§4.4) with thorough unit tests (night shift, missing punch, half-day min, grace, holiday work), BullMQ recompute jobs, nightly cron, Socket.IO with Redis adapter, Who Is In? live board, employee Attendance Info calendar + day detail. A **punch simulator script** to generate fake device pushes for testing.
-✅ Done when a simulated punch shows on the employee's calendar and HR's Who Is In? within 5 seconds.
+**Built completely without the physical device (user decision, 2026-10-01; plan in `docs/plans/PHASE_2.md`).**
+- Ingestion:
+  - devices and agents, and one ingestion service fed by all three routes
+    (§4.1): the `biometric-agent/` sync agent (primary, Windows service),
+    `/iclock` ADMS push, and the emergency file upload via the Import
+    Center;
+  - raw punches, two-layer dedupe, mapping, the unmapped queue.
+- Attendance:
+  - shifts, week-offs, rosters;
+  - the rules engine (§4.4) with thorough unit tests (night shift, missing
+    punch, half-day min, grace, holiday work);
+  - BullMQ recompute jobs and the nightly cron.
+- Real-time and screens:
+  - Socket.IO with the Redis adapter;
+  - the Who Is In? live board;
+  - the employee Attendance Info calendar and day detail.
+- **The punch simulator (§4.6)** as a first-class tool.
+- **Device and agent health monitoring (§4.7)** with alerts and the
+  Devices screen.
+
+✅ Done when:
+- a simulated punch, through each of the three routes, shows on the
+  employee's calendar and HR's Who Is In? within 5 seconds;
+- a full simulated month for 500 employees ingests and recomputes
+  correctly;
+- a silenced simulated device raises an HR alert during working hours.
+
+**The real device connection is the last step of Phase 3**, not the first
+of Phase 2. It means:
+- installing the agent as a Windows service on the office PC;
+- registering the device;
+- confirming the ATTLOG layout against a real sample;
+- a short parallel check against greytHR.
 
 **Phase 3 — Attendance administration**
-Employee Swipes, Attendance Muster, Process Attendance (with progress), Exceptions, Manual Override, Shift Override, Regularization (employee request + approval queue + bulk), Period Finalisation/lock/unlock, attendance stats cards and insights, exports.
+Built completely and production-ready before the device is connected (all verified with the simulator):
+- Employee Swipes;
+- Attendance Muster;
+- Process Attendance (with progress);
+- Exceptions;
+- Manual Override, including manual entry for people who never punch;
+- Shift Override;
+- Regularization (employee request, approval queue, bulk);
+- Period Finalisation (lock/unlock);
+- attendance stats cards and insights;
+- every report and export.
+
+**Final step: connect the real device** (see Phase 2), after which
+attendance is ready for go-live alongside leave.
 
 **Phase 4 — Leave**
 Leave types/policies, ledger, monthly accrual job with our PL rules (§5.2), apply/approve/cancel, balances, leave calendar, holiday & RH calendars, comp-off credit/expiry, Leave Granter, Leave Recalculator, Year End Process (preview → commit), Leave Overview dashboard, attendance integration. Unit tests for accrual eligibility, carry-forward and encashment.
@@ -347,7 +535,10 @@ Assets management, performance/review cycles, custom report builder, scheduled r
 
 ## 14. Open questions (Claude Code: do not guess these — keep configurable and list in PROGRESS.md)
 
-- Exact biometric device brand/model and whether ADMS push is supported.
+- Exact biometric device brand/model and whether ADMS push is supported. Not blocking: Phases 2–3 are built against the simulator, and this is answered when the device is connected.
+- The exact ATTLOG line layout and the emergency file's format on our firmware (§4.1 records the standard layout as a working assumption): confirm from a real sample.
+- The office PC that will run the sync agent (Windows version, always-on?) and how many devices there are.
+- Working hours and working days for the "no punches" alert (§4.7): defaults are configurable until HR confirms.
 - Exact PL eligibility boundary (credit on completing 3 months vs from next month) and pro-rating.
 - Leave encashment formula and its tax treatment (to be confirmed by CA).
 - Bank bulk-transfer file format (from bank).
@@ -417,7 +608,8 @@ Organise as separate stacks, parameterised by `-c env=staging|production`:
   - Restrict that listener with a WAF IP set / security group rule to the **office static public IP(s)** only.
   - Authenticate every request by device serial number registered in the `devices` table; unknown serials are rejected and logged.
   - If the office has no static IP, do not expose the push path; use the agent only.
-- Heartbeats from devices/agents update `devices.last_seen_at`; the observability stack alarms if a device is silent during working hours.
+- Heartbeats from devices/agents update last-seen timestamps. The application raises HR alerts itself (§4.7), and the observability stack (Phase 5.5) alarms independently if a device is silent during working hours.
+- The **emergency file upload** (§4.1 route 3) goes through the normal authenticated Import Center over HTTPS; it needs no extra exposure.
 
 ### 15.5 CI/CD (GitHub Actions)
 
