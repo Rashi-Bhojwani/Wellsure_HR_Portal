@@ -5,7 +5,7 @@
   "description": "Wellsure HR Portal — root convenience scripts only. backend/, frontend/, biometric-agent/ and infra/ are each standalone npm projects with their own package.json and package-lock.json.",
   "license": "UNLICENSED",
   "engines": {
-    "node": ">=20",
+    "node": ">=22",
     "npm": ">=10"
   },
   "scripts": {

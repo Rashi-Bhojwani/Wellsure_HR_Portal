@@ -96,7 +96,7 @@ assuming:
 ## Conventions (once code exists, starting Phase 0)
 
 - npm, one standalone project per top-level folder (`backend/`,
-  `frontend/`, `biometric-agent/`, `infra/`); Node ≥20; TypeScript strict
+  `frontend/`, `biometric-agent/`, `infra/`); Node ≥22 (Node 20 is end-of-life, and argon2's prebuilt binaries segfault on it); TypeScript strict
   mode (`tsconfig.base.json`, extended by each project's own
   `tsconfig.json`).
 - `shared/` is plain TypeScript, no package of its own. `backend/` and

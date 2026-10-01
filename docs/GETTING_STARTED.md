@@ -15,8 +15,8 @@ seed data. For *what* the product does, see
 
 | Tool | Version | Check it's installed |
 |---|---|---|
-| Node.js | ≥ 20 | `node -v` |
-| npm | ≥ 10 (ships with Node 20) | `npm -v` |
+| Node.js | ≥ 22 (Node 20 is end-of-life and crashes the argon2 password library) | `node -v` |
+| npm | ≥ 10 (ships with Node 22) | `npm -v` |
 | PostgreSQL | 16 | `psql --version` |
 | Redis | 7 | `redis-cli --version` |
 | git | any recent version | `git --version` |

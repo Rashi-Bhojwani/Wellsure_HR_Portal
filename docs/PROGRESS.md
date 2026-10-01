@@ -2380,8 +2380,8 @@ entry summarises what shipped and what was found along the way.
     prebuild.
   - Building the previous commit (`6df230e`) the same way fails at the
     identical point, so this is **pre-existing, not introduced by commit
-    C** (argon2 has been a dependency since Phase 1). Not fixed here;
-    raised with the user.
+    C** (argon2 has been a dependency since Phase 1). Fixed in the
+    next commit, "Interim — Docker image fixed".
 
 **Follow-ups, not done:**
 - The employee sidebar greeting shows a generic icon, because
@@ -2390,6 +2390,57 @@ entry summarises what shipped and what was found along the way.
 - This container also exports `PORT=3000`, which overrides `.env` the same
   way `DATABASE_URL` did. Harmless, so no guard; documented in
   GETTING_STARTED troubleshooting.
+
+### Interim — Docker image fixed (Node 22), and a silent-failure hole closed
+
+`docker build -f backend/Dockerfile .` had been failing since Phase 1, and
+nobody had seen it because CI has never run on GitHub. The repository has
+zero workflow runs; `ci.yml` triggers only on pull requests and pushes to
+`main`, and neither has happened yet.
+
+**Root cause**, isolated in clean containers outside the repo:
+- argon2 0.45.1's prebuilt binaries **segfault on Node 20**, on glibc
+  (`node:20-bookworm-slim`) and musl (`node:20-alpine`) alike, despite the
+  package declaring support for Node ≥16.
+- At install time `node-gyp-build` test-loads the binary, sees the crash,
+  falls back to compiling from source, and fails because the image has
+  no Python or C++ toolchain.
+- On Node 22, the same package installs from its prebuilt binary and works,
+  on both Alpine and Debian. Node 20 also reached end-of-life in April
+  2026.
+
+**Fix:**
+- `backend/Dockerfile` moves to `node:22-alpine`; the OS was never the
+  problem, so the base stays Alpine. It adds `openssl` (Prisma's query
+  engine needs it).
+- `npm install` becomes **`npm ci`** (exact lockfile, fails loudly), plus
+  an explicit `npx prisma generate` instead of relying on a postinstall
+  side effect.
+- A **build-time check** loads argon2, sharp and the generated Prisma
+  client, so a half-installed image fails the build rather than the first
+  production request. Before this, npm crashed mid-install behind this
+  sandbox's proxy ("Exit handler never called!") and still exited 0,
+  leaving a broken image that passed `docker build`.
+  **Mutation-tested**: a variant that deletes `sharp` after install fails
+  the build with "Cannot find module 'sharp'".
+- CI's `node-version` and the root `engines` move from 20 to 22, along with
+  the Node minimum in CLAUDE.md and GETTING_STARTED.md. Local dev in this
+  container already runs Node 22; all 400 backend tests have been passing
+  on it.
+
+**Verified:**
+- The image builds. This sandbox needs its proxy CA and settings injected
+  into the build, done via a scratch Dockerfile generated from the
+  committed one with only those lines added after `FROM`; nothing
+  sandbox-specific is committed.
+- Run against the local scratch database, all four modes work:
+  - `migrate` applies migrations;
+  - `api` passes `/health` and `/ready`, a real login succeeds (argon2
+    verify), and a photo upload re-encodes to a 96×96 and a 512×384 WebP
+    with EXIF stripped (sharp);
+  - `worker` and `scheduler` start;
+  - `api`, `worker` and `scheduler` all shut down cleanly on SIGTERM, exit
+    code 0.
 
 ## Open questions
 
