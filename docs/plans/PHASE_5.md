@@ -38,7 +38,7 @@ repo before it's built.
 | B | Engage: posts, kudos, polls, reactions, comments, groups, moderation, auto-posts **[recorded]** | ✅ Done |
 | C | People directory, org chart, Document Center **[recorded]** | ✅ Built 2026-09-30, awaiting review (see "As built" below). |
 | D | Helpdesk, Request Hub, Tasks inbox **[recorded]** | ✅ Built 2026-10-01; see "As built" under §D and the PROGRESS entry. |
-| D2 | Letter templates + PDF generation (headless Chromium), letters saved to Document Center **[recorded: user, 2026-10-01]** | Not started. Plan to be approved before code. |
+| D2 | Letter templates + PDF generation (headless Chromium), letters saved to Document Center **[recorded: user, 2026-10-01]** | Plan approved 2026-10-01. In progress. |
 | E | E1 role & permission system · E2 three-level hierarchy (Manager Management) · E3 Workflow Delegates **[recorded: user, 2026-09-30, revised]** | Plan approved 2026-09-30. Not started (after the Docker fix and D). |
 | F | Reports **[recorded]** | Not started |
 | G | Mobile / PWA **[recorded]** | Not started. No longer blocked, see below. |
@@ -458,6 +458,162 @@ auto-close notice is visible.
 - Chromium enlarges the backend image noticeably. Document the measured
   size in `docs/DEPLOYMENT.md` so it's expected at Phase 1.5.
 - Detailed plan written up for approval before building.
+
+**Status: plan APPROVED 2026-10-01**, with these answers:
+1. **Letters only.** Making system emails (invite, reset…) editable is its
+   own later commit. The menu item keeps the name "Email & Letter
+   Templates", with an "emails: later" note on the screen.
+2. **Offer letters** are generated against the employee record created at
+   joining, with HR typing figures such as CTC at generation time. Phase 6
+   revisits this to pull them from salary structures (spec §12, Phase 6).
+3. **All five letters are visible to the employee by default**; HR can
+   untick it per letter.
+4. **Editor: TipTap** (MIT), because HR writes these.
+5. **Addition: letters are legal documents.** They must be reproducible and
+   must never be overwritten (below).
+
+### Schema
+- `LetterTemplate`: `code` (unique: `OFFER`, `APPOINTMENT`, `EXPERIENCE`,
+  `RELIEVING`, `ADDRESS_PROOF`, plus HR-created ones), name, description,
+  `isActive`, `visibleToEmployeeDefault` (true), and a pointer to its
+  current version.
+- `LetterTemplateVersion` (**append-only**): `templateId`, `version`
+  (1, 2, 3…), sanitized `bodyHtml`, `extraFields` (the typed-in fields
+  this version asks for at generation, e.g. `ctcAnnual`: label, type
+  text|number|currency|date, required), `createdByUserId`, `createdAt`.
+  Editing a template always creates a new version; old versions are never
+  changed.
+- `GeneratedLetter`, one row per issued letter, never replaced:
+  - reference `LTR-000123` (a sequence);
+  - employee and `templateVersionId`;
+  - **`mergeValues`**: every value merged in, including typed extras and a
+    letterhead snapshot;
+  - **`generatedAt`** (the letter's date);
+  - `generatedByUserId`;
+  - status `QUEUED → GENERATED | FAILED`, with a failure reason;
+  - `employeeDocumentId` (unique), `pdfSha256`, `rendererVersion`
+    (Chromium version);
+  - optional `reissueOfId` (the letter it reissues).
+- **Database-level immutability** (Postgres triggers, so no code path,
+  admin screen or later bug can quietly break it):
+  - `letter_template_versions` rows can't be updated;
+  - a `generated_letters` row's version, merge values, `generatedAt`,
+    employee, reference and (once set) PDF hash and document link can't
+    change. Only `QUEUED → GENERATED/FAILED` is allowed.
+  - **`employee_documents.file_key`, file name, MIME type and size can't
+    change after insert**, for every employee document. No code does this
+    today; the trigger makes it impossible.
+- Settings / letterhead:
+  - the company's legal name, registered address and logo (the existing
+    `Company` columns; no screen edits them today);
+  - the signatory's name and designation (SystemSettings);
+  - a new logo upload gets a new storage key and old logos are kept, so
+    old letters stay reproducible.
+- Permissions:
+  - `letters.template.manage`: HR_ADMIN (and SUPER_ADMIN);
+  - `letters.generate`: HR_ADMIN, HR_EXECUTIVE.
+
+  Both are SUPER_ADMIN-editable in E1.
+
+### Behaviour
+- **Placeholders** come from a fixed catalog in `shared/` (like the
+  directory field allowlist):
+  - `employee.fullName` (as of the letter date), `employee.code`,
+    `employee.designation`, `employee.department`, `employee.branch`,
+    `employee.dateOfJoining`, `employee.lastWorkingDate` (from the
+    separation; generation is refused with a clear message if there is
+    none), `employee.currentAddress`;
+  - `company.legalName`, `company.address`;
+  - `letter.date`, `letter.reference`;
+  - `signatory.name`, `signatory.designation`;
+  - `extra.<key>` for the version's typed fields.
+
+  Inserted from a toolbar menu. Saving a template refuses unknown or
+  malformed placeholders (e.g. half of one bolded).
+- **Safety:**
+  - template HTML is sanitized on save (an allowlist of formatting tags
+    and text alignment);
+  - merge values are HTML-escaped, so typed text can't change the layout;
+  - Chromium renders with **JavaScript disabled and every network request
+    blocked**;
+  - the letterhead logo and the font are embedded in the page, so the
+    renderer needs nothing external.
+- **One bundled font** (Noto Sans, OFL; it has the ₹ glyph), embedded
+  rather than taken from the OS, so the output doesn't depend on which
+  machine renders it.
+- **Generating** (from the employee's Documents tab):
+  1. choose the template, fill its typed fields, tick or untick
+     "visible to employee";
+  2. the API checks permission and data scope, resolves every merge value
+     *now*, stores them, and queues a job;
+  3. the worker renders the PDF, stores it, and creates the
+     `EmployeeDocument` (category Letters);
+  4. if visible, the employee is notified; HR's screen updates live
+     (`letter.generated`).
+- **Reissuing** creates a *new* letter and document (`reissueOfId` links
+  them), so the earlier one stays exactly as issued. There is no "replace
+  file" path anywhere.
+- **Reproduce:** HR can re-render any issued letter from its stored version
+  and merge values and `generatedAt`. The download reports whether it
+  matches the stored PDF's hash. Byte-identical output is the goal: the
+  bundled font, fixed PDF metadata (dates set to `generatedAt`) and a
+  recorded renderer version. If a different Chromium version changes the
+  bytes, the stored PDF remains the record of what was sent and the
+  reproduction is reported as a re-render, not a match.
+- **Preview** while editing: render the draft against a chosen employee,
+  without storing anything.
+- Letter documents' title and category can't be edited. Visibility and
+  archive (both reversible and audited) still work.
+- Audited: template create/version/activate, generation, reissue,
+  reproduce, and letterhead/signatory changes.
+
+### Frontend
+- **Admin Tools → Email & Letter Templates** (replaces the placeholder):
+  - the template list;
+  - the editor: TipTap toolbar, a placeholder menu, the typed-fields
+    editor, the default-visibility toggle and preview with an employee;
+  - read-only version history.
+- **Employee profile → Documents tab:** a "Generate letter" modal. Letter
+  rows show the reference, template version and generated time, plus
+  Reissue and Reproduce for HR.
+- **System Settings → Letters card:** legal name, registered address, logo
+  and signatory.
+- Employee Document Center: letters appear under Letters (existing).
+
+### Deployment
+- The Docker image adds Alpine `chromium`, with the path given to
+  `puppeteer-core` by env (`CHROMIUM_PATH`), plus a build-time check that
+  Chromium starts. The measured size increase goes in `docs/DEPLOYMENT.md`.
+- **Local dev:** Chromium is auto-detected from common install paths, or
+  set with `CHROMIUM_PATH`; documented in GETTING_STARTED. Tests that
+  render need it and fail with a clear message if it's missing (never
+  silently skipped).
+- **CI:** GitHub's runner image ships Google Chrome, so `CHROMIUM_PATH`
+  points at it and PDF tests run for real.
+
+### Tests
+- The permission matrix and data scope (generate for an out-of-scope
+  employee → 404).
+- Placeholder validation (unknown, malformed); sanitization (scripts,
+  event handlers and external images removed); escaping of typed values.
+- A version bump on every edit, and old versions unchanged.
+- **The triggers:** updating a template version, a generated letter's
+  merge values, or an employee document's file key fails at the database.
+- Generation stores the version, values and timestamp. The PDF contains
+  the merged text (extracted). The name is as of the letter date, after a
+  later name change.
+- **Reissue keeps the original intact. Reproduce matches the hash.**
+- Network requests from a template are blocked (an external image is
+  never fetched).
+- Visibility default and notification; failure path (missing last working
+  day; renderer error → FAILED with a reason).
+- Cleanup classification for the new tables.
+
+### Verification
+Fresh seed; suites, lint, typecheck; CI green (with Chrome); the Docker
+image built and its size measured. Browser walkthrough: HR edits a
+template (new version), previews, generates for an employee, and the
+employee sees it live in Document Center; reissue and reproduce work.
 
 ## E — Role & permission system, three-level hierarchy, Workflow Delegates
 
