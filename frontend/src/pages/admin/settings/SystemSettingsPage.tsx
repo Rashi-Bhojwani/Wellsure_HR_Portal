@@ -11,7 +11,7 @@ import {
 } from "@shared/constants/peopleDocuments";
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as settingsApi from "../../../api/settings";
-import type { LeaveSettings, PeopleDocumentsSettings, SecuritySettings } from "../../../api/settings";
+import type { HelpdeskSettings, LeaveSettings, PeopleDocumentsSettings, SecuritySettings } from "../../../api/settings";
 import { EmptyState } from "../../../components/common/EmptyState";
 
 const { Title, Text } = Typography;
@@ -62,6 +62,59 @@ function LeaveSettingsCard() {
           <Col xs={24} sm={12} md={6}>
             <Form.Item name="encashmentDefaultDailyRate" label="Default daily rate (₹)">
               <InputNumber min={0} step={1} style={{ width: "100%" }} placeholder="Not configured" />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Form.Item style={{ marginTop: 8, marginBottom: 0 }}>
+          <Button type="primary" htmlType="submit" loading={saveMutation.isPending}>
+            Save changes
+          </Button>
+        </Form.Item>
+      </Form>
+    </Card>
+  );
+}
+
+// Phase 5 commit D — Helpdesk. Employees see the exact dates these produce
+// on every resolved ticket ("closes automatically on …", "reopen until …").
+function HelpdeskSettingsCard() {
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useQuery({ queryKey: ["settings", "helpdesk"], queryFn: settingsApi.getHelpdeskSettings });
+  const [form] = Form.useForm<HelpdeskSettings>();
+
+  useEffect(() => {
+    if (data) form.setFieldsValue(data);
+  }, [data, form]);
+
+  const saveMutation = useMutation({
+    mutationFn: (values: HelpdeskSettings) => settingsApi.updateHelpdeskSettings(values),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["settings", "helpdesk"], updated);
+      void queryClient.invalidateQueries({ queryKey: ["helpdesk"] });
+      void message.success("Helpdesk settings saved.");
+    },
+    onError: (err) => void message.error(errorMessage(err, "Could not save settings.")),
+  });
+
+  if (isLoading || !data) return <EmptyState message="Loading…" />;
+
+  return (
+    <Card>
+      <Form form={form} layout="vertical" initialValues={data} onFinish={(values) => saveMutation.mutate(values)} requiredMark={false}>
+        <Title level={5}>Helpdesk</Title>
+        <Text type="secondary">
+          A resolved ticket closes by itself after this many quiet days unless the employee replies, and can be reopened within the reopen window. Employees always
+          see both dates on the ticket. Changes apply to existing resolved tickets too.
+        </Text>
+        <Row gutter={16} style={{ marginTop: 12 }}>
+          <Col xs={24} sm={12} md={6}>
+            <Form.Item name="autoCloseDays" label="Auto-close after (days)" rules={[{ required: true }]}>
+              <InputNumber min={1} max={90} step={1} precision={0} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <Form.Item name="reopenWindowDays" label="Reopen window (days)" rules={[{ required: true }]}>
+              <InputNumber min={1} max={90} step={1} precision={0} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
         </Row>
@@ -238,6 +291,7 @@ export function SystemSettingsPage() {
       </Title>
       <LeaveSettingsCard />
       <PeopleDocumentsSettingsCard />
+      <HelpdeskSettingsCard />
     </Space>
   );
 }

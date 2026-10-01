@@ -139,3 +139,19 @@ export function emitEngageAnniversary(payload: unknown): void {
   if (!io) return;
   io.to("org").emit("engage.anniversary", payload);
 }
+
+// Helpdesk (Phase 5 commit D). Both are signal-only — clients refetch, so
+// no ticket content (and never an internal note) rides on a broadcast.
+// helpdesk.queue → the HR rooms that may hold helpdesk.manage; the queue
+// endpoint itself decides what each of them may see (sensitive categories).
+export function emitHelpdeskQueue(): void {
+  if (!io) return;
+  io.to(["role:HR_ADMIN", "role:HR_EXECUTIVE", "role:SUPER_ADMIN"]).emit("helpdesk.queue");
+}
+
+// helpdesk.ticket → the people on one ticket, so an open thread refreshes live.
+export function emitHelpdeskTicket(ticketId: string, employeeIds: Array<string | null | undefined>): void {
+  if (!io) return;
+  const rooms = [...new Set(employeeIds.filter((id): id is string => Boolean(id)))].map((id) => `user:${id}`);
+  if (rooms.length > 0) io.to(rooms).emit("helpdesk.ticket", { ticketId });
+}

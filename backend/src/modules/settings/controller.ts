@@ -28,3 +28,11 @@ export async function getPeopleDocumentsSettings(_req: Request, res: Response): 
 export async function updatePeopleDocumentsSettings(req: Request, res: Response): Promise<void> {
   res.status(200).json(await settingsService.updatePeopleDocumentsSettings(req.body, actorMeta(req)));
 }
+
+export async function getHelpdeskSettings(_req: Request, res: Response): Promise<void> {
+  res.status(200).json(await settingsService.getHelpdeskSettingsForAdmin());
+}
+
+export async function updateHelpdeskSettings(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await settingsService.updateHelpdeskSettings(req.body, actorMeta(req)));
+}

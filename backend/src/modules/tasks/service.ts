@@ -1,0 +1,120 @@
+import type { Prisma } from "@prisma/client";
+import { formatTicketNumber, HELPDESK_STATUS_LABELS, helpdeskAdminPath, helpdeskEmployeePath } from "@shared/constants/helpdesk";
+import type { TaskItem, TaskType } from "@shared/types/inbox";
+import { prisma } from "../../lib/prisma";
+import { resolveDataScope } from "../../lib/dataScope";
+import { buildLeaveEmployeeIdFilter } from "../leave/scope";
+
+// Tasks inbox (spec §7.1 "My Tasks", To do → Tasks — Phase 5 commit D, user
+// decision 1): things waiting on ME, with no task schema of its own. Each
+// source applies exactly the permission and data-scope rules the screen
+// that acts on the item enforces, so the inbox never lists something the
+// caller would then be refused. A real task system (assign, due date, done)
+// arrives later with onboarding/exit checklists; regularization approvals
+// (Phase 3) add a source here.
+
+export interface TaskViewer {
+  employeeId: string;
+  roleCodes: string[];
+  permissions: Set<string>;
+}
+
+export interface TaskSource {
+  type: TaskType;
+  list(viewer: TaskViewer, limit: number): Promise<TaskItem[]>;
+}
+
+const nameOf = (e: { employeeCode: string; nameHistory: { fullName: string }[] }) => e.nameHistory[0]?.fullName ?? e.employeeCode;
+const currentName = { include: { nameHistory: { where: { effectiveTo: null } } } } as const;
+const dateOnly = (d: Date) => d.toISOString().slice(0, 10);
+
+// Pending leave I can decide: leave.approve, inside my data scope, never my
+// own (approveLeaveRequest refuses self-approval).
+const leaveApprovals: TaskSource = {
+  type: "LEAVE_APPROVAL",
+  async list(viewer, limit) {
+    if (!viewer.permissions.has("leave.approve")) return [];
+    const scopeFilter = await buildLeaveEmployeeIdFilter(viewer.employeeId, resolveDataScope(viewer.roleCodes));
+    const where: Prisma.LeaveRequestWhereInput = {
+      status: "PENDING",
+      AND: [{ employeeId: { not: viewer.employeeId } }, ...(scopeFilter ? [{ employeeId: scopeFilter }] : [])],
+    };
+    const rows = await prisma.leaveRequest.findMany({ where, include: { leaveType: true, employee: currentName }, orderBy: { createdAt: "asc" }, take: limit });
+    return rows.map((r) => ({
+      type: "LEAVE_APPROVAL" as const,
+      id: r.id,
+      title: `${r.leaveType.name} request`,
+      detail: `${dateOnly(r.fromDate)} to ${dateOnly(r.toDate)} · ${r.totalDays.toNumber()} day(s)`,
+      employeeName: nameOf(r.employee),
+      waitingSince: r.createdAt.toISOString(),
+      link: "/app/todo/review",
+      adminLink: "/admin/workforce/leave/employee-leave",
+    }));
+  },
+};
+
+// Pending profile change requests: profile.changerequest.approve (org-wide,
+// exactly as the Change Requests screen lists them), never my own.
+const FIELD_GROUP_LABELS: Record<string, string> = { bank: "Bank details", statutory: "Statutory details", personal: "Personal details" };
+const profileChangeApprovals: TaskSource = {
+  type: "PROFILE_CHANGE_APPROVAL",
+  async list(viewer, limit) {
+    if (!viewer.permissions.has("profile.changerequest.approve")) return [];
+    const rows = await prisma.profileChangeRequest.findMany({
+      where: { status: "PENDING", employeeId: { not: viewer.employeeId } },
+      include: { employee: currentName },
+      orderBy: { createdAt: "asc" },
+      take: limit,
+    });
+    return rows.map((r) => ({
+      type: "PROFILE_CHANGE_APPROVAL" as const,
+      id: r.id,
+      title: `${FIELD_GROUP_LABELS[r.fieldGroup] ?? r.fieldGroup} change`,
+      detail: null,
+      employeeName: nameOf(r.employee),
+      waitingSince: r.createdAt.toISOString(),
+      link: "/admin/employee/change-requests",
+      adminLink: "/admin/employee/change-requests",
+    }));
+  },
+};
+
+// Helpdesk tickets assigned to me that still need HR: not resolved, not
+// closed, not waiting on the employee. Sensitive ones only with
+// helpdesk.sensitive.view (an assignment made before the permission was
+// removed mustn't leak the ticket here).
+const assignedTickets: TaskSource = {
+  type: "HELPDESK_ASSIGNED",
+  async list(viewer, limit) {
+    if (!viewer.permissions.has("helpdesk.manage")) return [];
+    const rows = await prisma.helpdeskTicket.findMany({
+      where: {
+        assigneeEmployeeId: viewer.employeeId,
+        status: { in: ["OPEN", "IN_PROGRESS"] },
+        raisedByEmployeeId: { not: viewer.employeeId },
+        ...(!viewer.permissions.has("helpdesk.sensitive.view") && { category: { isSensitive: false } }),
+      },
+      include: { category: true, raisedBy: currentName },
+      orderBy: { lastActivityAt: "asc" },
+      take: limit,
+    });
+    return rows.map((t) => ({
+      type: "HELPDESK_ASSIGNED" as const,
+      id: t.id,
+      title: `${formatTicketNumber(t.number)} · ${t.subject}`,
+      detail: `${t.category.name} · ${HELPDESK_STATUS_LABELS[t.status]}`,
+      employeeName: nameOf(t.raisedBy),
+      waitingSince: t.lastActivityAt.toISOString(),
+      link: helpdeskEmployeePath(t.id),
+      adminLink: helpdeskAdminPath(t.id),
+    }));
+  },
+};
+
+export const TASK_SOURCES: TaskSource[] = [leaveApprovals, profileChangeApprovals, assignedTickets];
+
+// Oldest-waiting first: the inbox is a queue, not a feed.
+export async function listMyTasks(viewer: TaskViewer, limit = 100): Promise<TaskItem[]> {
+  const lists = await Promise.all(TASK_SOURCES.map((s) => s.list(viewer, limit)));
+  return lists.flat().sort((a, b) => a.waitingSince.localeCompare(b.waitingSince)).slice(0, limit);
+}

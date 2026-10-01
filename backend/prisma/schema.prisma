@@ -437,6 +437,11 @@ model Employee {
 
   companyDocumentDownloads CompanyDocumentDownload[]
 
+  helpdeskTicketsRaised      HelpdeskTicket[]   @relation("HelpdeskTicketRaisedBy")
+  helpdeskTicketsAssigned    HelpdeskTicket[]   @relation("HelpdeskTicketAssignee")
+  helpdeskMessages           HelpdeskMessage[]
+  helpdeskCategoriesAssigned HelpdeskCategory[] @relation("HelpdeskCategoryDefaultAssignee")
+
   @@index([status])
   @@index([dateOfJoining])
   @@map("employees")
@@ -1417,4 +1422,101 @@ model CompanyDocumentDownload {
 
   @@unique([documentId, employeeId])
   @@map("company_document_downloads")
+}
+
+// ── Helpdesk (Phase 5 commit D) ──────────────────────────────────────────
+
+enum HelpdeskTicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_ON_EMPLOYEE
+  RESOLVED
+  CLOSED
+}
+
+enum HelpdeskPriority {
+  LOW
+  NORMAL
+  HIGH
+}
+
+// Admin-editable. isSensitive (e.g. Payroll & Salary, Grievance) limits the
+// category's tickets to holders of helpdesk.sensitive.view — configurable
+// per category, never hardcoded. Deactivated, not deleted, once used.
+model HelpdeskCategory {
+  id                        String    @id @default(cuid())
+  code                      String    @unique
+  name                      String
+  isSensitive               Boolean   @default(false) @map("is_sensitive")
+  defaultAssigneeEmployeeId String?   @map("default_assignee_employee_id")
+  defaultAssignee           Employee? @relation("HelpdeskCategoryDefaultAssignee", fields: [defaultAssigneeEmployeeId], references: [id])
+  isActive                  Boolean   @default(true) @map("is_active")
+  sortOrder                 Int       @default(0) @map("sort_order")
+  createdAt                 DateTime  @default(now()) @map("created_at")
+  updatedAt                 DateTime  @updatedAt @map("updated_at")
+
+  tickets HelpdeskTicket[]
+
+  @@map("helpdesk_categories")
+}
+
+model HelpdeskTicket {
+  id                 String               @id @default(cuid())
+  number             Int                  @unique @default(autoincrement()) // shown as HD-000123
+  raisedByEmployeeId String               @map("raised_by_employee_id")
+  raisedBy           Employee             @relation("HelpdeskTicketRaisedBy", fields: [raisedByEmployeeId], references: [id])
+  categoryId         String               @map("category_id")
+  category           HelpdeskCategory     @relation(fields: [categoryId], references: [id])
+  subject            String
+  priority           HelpdeskPriority     @default(NORMAL)
+  status             HelpdeskTicketStatus @default(OPEN)
+  assigneeEmployeeId String?              @map("assignee_employee_id")
+  assignee           Employee?            @relation("HelpdeskTicketAssignee", fields: [assigneeEmployeeId], references: [id])
+  resolvedAt         DateTime?            @map("resolved_at")
+  closedAt           DateTime?            @map("closed_at")
+  lastActivityAt     DateTime             @default(now()) @map("last_activity_at")
+  createdAt          DateTime             @default(now()) @map("created_at")
+  updatedAt          DateTime             @updatedAt @map("updated_at")
+
+  messages HelpdeskMessage[]
+
+  @@index([raisedByEmployeeId])
+  @@index([assigneeEmployeeId])
+  @@index([status, resolvedAt])
+  @@map("helpdesk_tickets")
+}
+
+// The chat-style thread. isInternalNote messages are HR-only: excluded
+// server-side from every employee-facing response, never just hidden.
+model HelpdeskMessage {
+  id               String         @id @default(cuid())
+  ticketId         String         @map("ticket_id")
+  ticket           HelpdeskTicket @relation(fields: [ticketId], references: [id])
+  authorEmployeeId String         @map("author_employee_id")
+  author           Employee       @relation(fields: [authorEmployeeId], references: [id])
+  body             String
+  isInternalNote   Boolean        @default(false) @map("is_internal_note")
+  createdAt        DateTime       @default(now()) @map("created_at")
+
+  attachments HelpdeskAttachment[]
+
+  @@index([ticketId, createdAt])
+  @@map("helpdesk_messages")
+}
+
+// Same pipeline as Document Center uploads (lib/uploads.ts): size/type/
+// extension/magic-byte checks, and images re-encoded with sharp so no
+// EXIF/GPS survives — a photographed payslip or ID is the exact leak case.
+model HelpdeskAttachment {
+  id        String          @id @default(cuid())
+  messageId String          @map("message_id")
+  message   HelpdeskMessage @relation(fields: [messageId], references: [id])
+  fileKey   String          @map("file_key")
+  fileName  String          @map("file_name")
+  mimeType  String          @map("mime_type")
+  sizeBytes Int             @map("size_bytes")
+  createdAt DateTime        @default(now()) @map("created_at")
+
+  @@index([messageId])
+  @@map("helpdesk_attachments")
 }

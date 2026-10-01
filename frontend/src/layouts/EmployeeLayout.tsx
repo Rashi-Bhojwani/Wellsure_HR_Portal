@@ -49,7 +49,16 @@ function buildMenuItems(): MenuProps["items"] {
   });
 }
 
-function findLabel(path: string): string {
+// A detail page (e.g. helpdesk/<ticket id>) belongs to its menu entry: the
+// longest menu path the current path sits under.
+function menuPathFor(path: string): string {
+  const paths = employeeMenu.flatMap((entry) => (isEmployeeMenuGroup(entry) ? entry.children.map((c) => c.path) : [entry.path]));
+  if (paths.includes(path)) return path;
+  return paths.filter((p) => path.startsWith(`${p}/`)).sort((a, b) => b.length - a.length)[0] ?? path;
+}
+
+function findLabel(rawPath: string): string {
+  const path = menuPathFor(rawPath);
   for (const entry of employeeMenu) {
     if (isEmployeeMenuGroup(entry)) {
       const child = entry.children.find((c) => c.path === path);
@@ -65,7 +74,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  const currentKey = location.pathname.replace(/^\/app\//, "");
+  const currentKey = menuPathFor(location.pathname.replace(/^\/app\//, ""));
   const items = useMemo(() => buildMenuItems(), []);
 
   return (

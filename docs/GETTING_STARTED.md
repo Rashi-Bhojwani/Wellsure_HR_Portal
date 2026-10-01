@@ -205,13 +205,27 @@ subset for manual testing.
 
 | Employee Code | Name | Role | Useful for testing |
 |---|---|---|---|
-| `1000` | Aditi Sharma | Super Admin | Full admin access; **2FA required** — first login walks you through enrolment |
-| `1001` | Rohan Mehta | HR Admin | Employee management, bank/statutory data, Admin Tools → Import Center/Audit Log/System Settings; **2FA required** |
+| `1000` | Aditi Sharma | Super Admin | Full admin access. 2FA enforcement is currently **off** in the seed (`auth.require2faRoles` = `[]`, chore 7f99cfd); re-enable it in System Settings and first login walks you through enrolment. Sees every helpdesk ticket, sensitive ones included |
+| `1001` | Rohan Mehta | HR Admin | Employee management, bank/statutory data, Admin Tools → Import Center/Audit Log/System Settings; the helpdesk queue including sensitive categories. 2FA currently off (see above) |
 | `1002`–`1005`, `1024` | Karan Kapoor, Priya Nair, Vikram Rao, Neha Verma, Rajesh Kumar | Manager | Team-scoped (`TEAM` data-scope) views on the All Employees grid and employee profiles — see only your own reports. Every manager reports to Admin (`1000`); the seed enforces the three-level structure (Admin → Managers → Employees) and refuses to run if it's broken |
 | `1006`+ | various | Employee | Plain employee-portal access, no 2FA; View My Info at `/app/profile` (upload a photo there) |
-| `1006` | Arjun Singh | Employee (Engineering) | Document Center fixture: has a visible Appointment Letter and an HR-only Address Proof he can't see |
-| `1010` | Rahul Malhotra | Employee (Sales) | Sees the Sales-only "Sales Incentive Plan 2026" in Document Center, which Arjun doesn't |
+| `1006` | Arjun Singh | Employee (Engineering) | Document Center fixture: has a visible Appointment Letter and an HR-only Address Proof he can't see. Helpdesk fixture: a resolved comp-off ticket (carrying an HR internal note he never sees) and an open address-proof request |
+| `1010` | Rahul Malhotra | Employee (Sales) | Sees the Sales-only "Sales Incentive Plan 2026" in Document Center, which Arjun doesn't. Has an in-progress **Payroll & Salary** helpdesk ticket, a sensitive category that HR Executives can't see |
 | `1090` | Gaurav Singh | Employee (separated) | Device-ID reuse fixture — enter `1090` as the Device User ID in Add Employee to see the collision message and `1090-2` suggestion |
+
+**Helpdesk.** Six categories are seeded. **Payroll & Salary** and
+**Grievance** are *sensitive*: only roles holding `helpdesk.sensitive.view`
+(HR Admin, Super Admin) see their tickets, and HR Executives don't. Toggle
+the flag per category under Admin Tools → Helpdesk Categories. The admin
+queue is Employee → Helpdesk. Resolved tickets close automatically after
+the days set in System Settings → Helpdesk (default 7). That check is an
+hourly background job. `npm run dev` runs only the API, so to see
+auto-close happen locally, also run the `scheduler` (registers the job;
+run it once) and the `worker` (runs it) from `backend/`:
+`node_modules/.bin/tsx src/index.ts scheduler` and
+`node_modules/.bin/tsx src/index.ts worker`. The same applies to every
+other background job (accrual, comp-off expiry, separations, Engage
+auto-posts).
 
 A few accounts are deliberately seeded in non-active states to exercise
 those code paths: some are `INVITED` (never activated — try

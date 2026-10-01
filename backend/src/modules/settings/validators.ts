@@ -42,3 +42,10 @@ export const updatePeopleDocumentsSettingsSchema = z.object({
     .min(1, "Allow at least one document type")
     .optional(),
 });
+
+// Phase 5 commit D — Helpdesk. Whole days; the employee is shown the exact
+// auto-close and reopen-until dates these produce on each resolved ticket.
+export const updateHelpdeskSettingsSchema = z.object({
+  autoCloseDays: z.number().int().min(1).max(90).optional(),
+  reopenWindowDays: z.number().int().min(1).max(90).optional(),
+});

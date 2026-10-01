@@ -6,6 +6,7 @@ import { processScheduledSeparations } from "../modules/employee/separations";
 import { runMonthlyPlAccrual } from "../modules/leave/accrual";
 import { expireCompOffCredits } from "../modules/leave/compOff";
 import { runDailyAutoPosts } from "../modules/engage/autoPosts";
+import { autoCloseResolvedTickets } from "../modules/helpdesk/service";
 
 // Starts every BullMQ worker this service runs. Real workers (attendance
 // recompute, etc.) are added here starting Phase 2.
@@ -79,5 +80,18 @@ export function startWorkers(): Worker[] {
     logger.error({ jobId: job?.id, err }, "engage-auto-posts job failed");
   });
 
-  return [pingWorker, separationsWorker, leavePlAccrualWorker, compOffExpiryWorker, engageAutoPostsWorker];
+  const helpdeskAutoCloseWorker = new Worker(
+    "helpdesk-auto-close",
+    async (job) => {
+      const result = await autoCloseResolvedTickets(new Date());
+      logger.info({ jobId: job.id, ...result }, "helpdesk-auto-close processed");
+      return result;
+    },
+    { connection: createBullConnection() },
+  );
+  helpdeskAutoCloseWorker.on("failed", (job, err) => {
+    logger.error({ jobId: job?.id, err }, "helpdesk-auto-close job failed");
+  });
+
+  return [pingWorker, separationsWorker, leavePlAccrualWorker, compOffExpiryWorker, engageAutoPostsWorker, helpdeskAutoCloseWorker];
 }

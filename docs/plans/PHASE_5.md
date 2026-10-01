@@ -37,7 +37,7 @@ repo before it's built.
 | A | Notifications substrate, Employee Home, Admin Homepage (Welcome + Dashboard) **[recorded]** | ✅ Done |
 | B | Engage: posts, kudos, polls, reactions, comments, groups, moderation, auto-posts **[recorded]** | ✅ Done |
 | C | People directory, org chart, Document Center **[recorded]** | ✅ Built 2026-09-30, awaiting review (see "As built" below). |
-| D | Helpdesk, Request Hub, Tasks inbox **[recorded]** | Plan approved 2026-10-01. In progress. |
+| D | Helpdesk, Request Hub, Tasks inbox **[recorded]** | ✅ Built 2026-10-01; see "As built" under §D and the PROGRESS entry. |
 | D2 | Letter templates + PDF generation (headless Chromium), letters saved to Document Center **[recorded: user, 2026-10-01]** | Not started. Plan to be approved before code. |
 | E | E1 role & permission system · E2 three-level hierarchy (Manager Management) · E3 Workflow Delegates **[recorded: user, 2026-09-30, revised]** | Plan approved 2026-09-30. Not started (after the Docker fix and D). |
 | F | Reports **[recorded]** | Not started |
@@ -303,8 +303,9 @@ live My Documents update.
 
 ## D — Helpdesk, Request Hub (+ To do → Tasks inbox)
 
-**Status: plan APPROVED 2026-10-01**, with the user's answers and two
-additions folded in below. Built as one commit, paused for review.
+**Status: BUILT 2026-10-01** (plan approved the same day, with the user's
+answers and two additions folded in below). See "As built" at the end of
+this section for the three deviations.
 
 ### Decisions (user, 2026-10-01)
 
@@ -376,7 +377,7 @@ additions folded in below. Built as one commit, paused for review.
     it they're absent from the queue and 404 on direct access.
   - Opening a sensitive ticket is audit-logged.
 - **Daily job:** closes Resolved tickets quiet for the auto-close period.
-  It's idempotent, like the other jobs.
+  It's idempotent, like the other jobs. *(As built: hourly — see below.)*
 - **Real-time:** a reply or status change notifies the other side
   (persisted notification plus `notification.new`), and a signal-only
   `helpdesk.queue` refreshes HR queues.
@@ -427,6 +428,22 @@ CI green on GitHub. Browser walkthrough with **two browsers**: an employee
 raises a ticket and HR's queue updates live; HR replies and the employee's
 thread updates live; an internal note never appears for the employee; the
 auto-close notice is visible.
+
+### As built (2026-10-01)
+- **The auto-close job runs hourly at :05, not daily.** A daily run could
+  close a ticket up to a day after the time the employee was shown, which
+  undercuts decision 5. Hourly keeps it within the hour.
+- **The admin helpdesk lives under Employee → Helpdesk**
+  (`/admin/employee/helpdesk`, thread at `…/helpdesk/:id`). The plan didn't
+  place it and UI_REFERENCE has no admin Helpdesk tile. The paths come
+  from one shared helper in `shared/constants/helpdesk.ts`.
+- **The Home Track card was leaking:** it listed pending leave with no
+  employee filter, so managers and HR saw other people's. It now reads
+  the self-scoped Request Hub.
+- **Carried into E1:** `helpdesk.queue` goes to fixed role rooms. Once
+  roles and permissions are editable, a custom role holding
+  `helpdesk.manage` needs a permission-keyed room (or a per-holder emit)
+  to get the live refresh.
 
 ## D2 — Letter templates and PDF generation
 
@@ -537,6 +554,13 @@ phase: Docker fix → D → E1 → E2 → E3.
   keys.
 - **Live effect:** `permissions.changed` to each affected user. The
   frontend refetches `/me`, so menus and buttons update without a reload.
+- **Permission-keyed real-time rooms** (carried from D): signals that
+  today go to fixed role rooms, like `helpdesk.queue` to
+  `role:HR_ADMIN/HR_EXECUTIVE/SUPER_ADMIN`, must reach anyone whose
+  *effective* permissions include the key (e.g. a `perm:helpdesk.manage`
+  room joined from the resolved set, re-joined on `permissions.changed`).
+  Otherwise a custom role holding `helpdesk.manage` gets correct data but
+  no live refresh.
 - **Screens** (these retire the Phase-1-deferred `admin-tools/users-roles`
   placeholder):
   - **Admin Tools → Roles & Permissions:** a grid per role, grouped by

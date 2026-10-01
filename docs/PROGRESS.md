@@ -15,7 +15,7 @@ committed).
 | 2 | Biometric ingestion + attendance engine + real-time | Not started |
 | 3 | Attendance administration | Not started |
 | 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
-| 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | In progress — commit A done (notifications substrate, Employee Home, Admin Homepage Welcome + Dashboard tabs), commit B done (Engage), commit C done (People directory + org chart, employee photos, Document Center, HR-held employee documents). Commits D–G (Helpdesk/Request Hub, Three-level hierarchy + Workflow Delegates, Reports, Mobile/PWA) not started — full plan in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
+| 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | In progress — commit A done (notifications substrate, Employee Home, Admin Homepage Welcome + Dashboard tabs), commit B done (Engage), commit C done (People directory + org chart, employee photos, Document Center, HR-held employee documents), commit D done (Helpdesk, Request Hub, Tasks inbox). D2 (letters + PDFs) and E–G (roles & permissions, three-level hierarchy, Workflow Delegates, Reports, Mobile/PWA) not started — full plan in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
 | 5.5 | AWS production environment and go-live hardening | Not started |
 | 6 | Payroll | Not started |
 | 7 | Tax & benefits | Not started |
@@ -2481,11 +2481,226 @@ silences the `role "root" does not exist` log noise.
 **Verified locally, end to end:** clean worktree, fresh empty database,
 CI's env only. `install:all` → lint → typecheck → check:services →
 db:migrate → db:seed → test all exit 0: backend 400/400, frontend 4/4.
-The GitHub result for the pushed commit is recorded in the next entry.
+The GitHub result for the pushed commit (run #3, green) is recorded in the next entry.
 
 Not covered by CI yet: the frontend has a single route-config test file.
 The screen-level checks are the manual Playwright walkthroughs run each
 commit, and CI doesn't run them.
+
+### Phase 5, commit D — Helpdesk, Request Hub, Tasks inbox
+
+Plan (approved 2026-10-01, with the user's six answers):
+[`docs/plans/PHASE_5.md`](plans/PHASE_5.md) §D. Built as planned except
+where noted under **Deviations**.
+
+**CI result first.** The CI fix (fe40e1f, previous entry) ran green on
+GitHub as run #3. Install, lint, typecheck, check:services, migrate, seed
+and test all ran (backend 400/400, frontend 4/4), and the Docker image
+built. One non-blocking warning: GitHub says `actions/checkout@v4` and
+`actions/setup-node@v4` target the deprecated Node 20 runtime (forced onto
+Node 24 for now). Bumping them is a small follow-up.
+
+**Schema** (migration `20261001063642_add_helpdesk_phase5_commit_d`):
+- `HelpdeskCategory`: code, name, `isSensitive`, optional default
+  assignee, `isActive`, `sortOrder`.
+- `HelpdeskTicket`: `number` is an autoincrement sequence shown as
+  `HD-000123`. It also holds raiser, category, subject, `LOW | NORMAL |
+  HIGH` priority, optional assignee, `OPEN → IN_PROGRESS →
+  WAITING_ON_EMPLOYEE → RESOLVED → CLOSED`, `resolvedAt`, `closedAt` and
+  `lastActivityAt`.
+- `HelpdeskMessage` (with `isInternalNote`) and `HelpdeskAttachment`.
+
+Cleanup classification: assignee and default assignee are `setNull`, the
+attachment `fileKey` is a storage column, and `HelpdeskCategory` is a
+standalone root.
+
+**Permissions and seed:**
+- `helpdesk.manage`: HR_EXECUTIVE, HR_ADMIN, SUPER_ADMIN.
+- `helpdesk.sensitive.view`: HR_ADMIN, SUPER_ADMIN.
+- Settings `helpdesk.autoCloseDays` and `helpdesk.reopenWindowDays`, both
+  7.
+- Six categories. **Payroll & Salary** and **Grievance** are sensitive.
+- Three tickets: Arjun (1006) has a resolved comp-off question with an
+  internal note and an open address-proof request; Rahul (1010) has an
+  in-progress payroll (sensitive) ticket.
+
+**Backend:**
+- `modules/helpdesk`:
+  - One access decision per ticket (`resolveAccess`). The raiser gets the
+    raiser view. HR needs `helpdesk.manage`, plus `helpdesk.sensitive.view`
+    for sensitive categories, and never handles a ticket they raised.
+    Anything else is a 404.
+  - Internal notes and their attachments are filtered out server-side for
+    the raiser.
+  - Status follows the conversation: the raiser replying to Resolved or
+    Waiting-on-you hands the ticket back to HR, HR's first public reply
+    moves Open to In progress, and internal notes never change status.
+  - The reopen window is enforced on both replies and Reopen.
+  - Every response carries `autoClosesAt` and `reopenUntil`, computed in
+    one place (`lib/helpdeskSettings.ts`) that the job also uses.
+  - Audited: raise, status/priority/assignee changes (before/after),
+    reopen, auto-close, category create/update (sensitive flag included),
+    and every HR view of a sensitive ticket.
+  - Notifications go to the other side on every reply, status change and
+    assignment, persisted and pushed live.
+- **Attachments** go through the new `prepareDocumentUpload`
+  (`lib/uploads.ts`): size, type, extension and magic-byte checks, then a
+  sharp re-encode of JPEG/PNG that drops all metadata, EXIF and GPS
+  included. At most 3 files per message; multer's limit errors are
+  translated into readable messages. Downloads use 60-second signed URLs.
+- **Fixed gap from commit C:** Document Center and HR-held employee
+  document images were stored with their metadata intact. Both now use
+  the same `prepareDocumentUpload`, and there's a test for each.
+- **Auto-close job** `helpdesk-auto-close` (worker + scheduler). It's
+  idempotent: a raced reply wins, and a retried run touches nothing.
+- **Request Hub** `GET /api/request-hub` (`modules/requestHub`). My leave
+  requests, profile change requests and tickets, normalised into one list
+  (shared types in `shared/types/inbox.ts`) with type and open/closed
+  filters pushed into each source's query. Always self-scoped. Sources
+  sit in `REQUEST_HUB_SOURCES`, so regularizations (Phase 3) and
+  reimbursements (Phase 6) add one entry each.
+- **Tasks inbox** `GET /api/tasks/mine` (`modules/tasks`), with no new
+  schema (user decision 1). It lists, oldest first:
+  - pending leave I can decide (`leave.approve`, my data scope, never my
+    own);
+  - pending profile change requests (`profile.changerequest.approve`,
+    never my own);
+  - Open or In-progress tickets assigned to me (sensitive ones only with
+    the permission).
+
+  Each source uses the same rules as the screen that acts on the item.
+- System Settings → Helpdesk: `GET/PUT /api/settings/helpdesk`
+  (`settings.manage`, 1–90 days each, audited).
+- Real-time: `helpdesk.queue` goes to the HR role rooms and
+  `helpdesk.ticket` to the raiser and assignee. Both are signal-only, so
+  no ticket content rides on a socket. An internal note signals only the
+  assignee.
+
+**Frontend:**
+- Employee `/app/helpdesk`: Active/Closed/All list, Raise ticket
+  (category, subject, description, priority, up to 3 attachments).
+  Resolved rows say "Closes automatically on …".
+- Employee `/app/helpdesk/:id`: the thread. A resolved ticket shows the
+  banner "Resolved — this ticket will close automatically on 8 Oct,
+  12:47 pm unless you reply". A closed one shows "reopen until …" with a
+  Reopen button, or tells the employee to raise a new ticket.
+- `/app/request-hub` (In progress / Completed / All, type filter).
+- `/app/todo/tasks` and the admin **Tasks** app share one `TasksInbox`;
+  each row opens the screen where the item is handled.
+- The Home **Track** card now reads the Request Hub (open items, any
+  module).
+- Admin **Employee → Helpdesk**: the queue (status, category and
+  assignee filters, live) and the thread at
+  `/admin/employee/helpdesk/:id`, with status, priority and assignee,
+  internal notes styled unmistakably, and the sensitive tag.
+- **Admin Tools → Helpdesk Categories**: sensitive and active toggles,
+  default assignee, add category.
+- A Helpdesk card in System Settings.
+- Feedback re-marked `phase: "Phase 8"`.
+- The employee layout maps detail paths (`helpdesk/<id>`) to their menu
+  entry for the page title and highlighted item.
+- Dates are formatted in Asia/Kolkata (`lib/dates.ts`) whatever the
+  browser's timezone.
+
+**Deviations from the plan, and why:**
+1. **The auto-close job runs hourly (at :05), not daily.** With a daily
+   run, a ticket could close up to 24 hours after the time the employee
+   was shown, which works against decision 5. Hourly keeps the actual
+   close within the hour; the job is idempotent and cheap. A test pins
+   that the job closes exactly at the shown time and not a millisecond
+   before.
+2. **The admin helpdesk lives under the Employee app** (next to Change
+   Requests), at `employee/helpdesk`. UI_REFERENCE doesn't place it and
+   greytHR's admin tiles have no Helpdesk app. Links come from one shared
+   helper (`helpdeskAdminPath`/`helpdeskEmployeePath`), so moving it later
+   is a one-line change.
+3. **Home Track card bug fixed on the way.** It listed pending leave with
+   no employee filter, so anyone holding `leave.view` (managers, HR) saw
+   *other people's* pending leave labelled as their own tracking. It now
+   reads the always-self-scoped Request Hub.
+
+**Known limitation, for E1:** `helpdesk.queue` is sent to fixed role rooms
+(`role:HR_ADMIN`, `role:HR_EXECUTIVE`, `role:SUPER_ADMIN`). Once E1 makes
+permissions assignable to any role, a custom role holding
+`helpdesk.manage` won't get the live queue refresh; it still sees the
+right data on load. Nothing leaks, since the signal carries no content.
+E1 should add permission-keyed rooms, or emit per holder.
+
+**Tests:** 31 new, in 4 files.
+- `helpdesk/__tests__/helpdesk.test.ts` (19):
+  - the seeded permission matrix and sensitive categories;
+  - raise, validation, internal notes (thread, notification, and socket
+    rooms via a recording fake server);
+  - IDOR for another employee, a manager, a missing ticket, and the raiser
+    managing their own ticket;
+  - HR never handling their own ticket;
+  - sensitive hidden from HR_EXECUTIVE in the queue and on direct access,
+    with an audited HR_ADMIN view;
+  - toggling the flag (immediate effect, audited before/after);
+  - assignment rules, notification and audit, and default assignee;
+  - all status transitions, the auto-close and reopen dates (and that
+    they follow the setting), and the reopen window for replies and
+    Reopen;
+  - category admin, and the settings endpoint.
+- `attachments.test.ts` (4): JPEG and PNG stored with no EXIF/GPS (and
+  the recorded size is the re-encoded one) while PDFs are stored as-is;
+  disguised, mismatched-extension, disallowed, oversize and too-many
+  uploads are refused with nothing stored; download IDOR, including an
+  internal note's attachment; Document Center and employee-document
+  images stripped.
+- `autoClose.test.ts` (2): closes at exactly the shown time, idempotent,
+  audited and notified; follows the setting; leaves non-resolved tickets
+  alone. It runs the global job against 2020 dates, so no seeded or real
+  ticket can be touched.
+- `tasks/__tests__/inbox.test.ts` (6): Request Hub union, self-scoping,
+  type/state filters and the auto-close field; Tasks inbox per role
+  (manager team-only, never own; HR_EXECUTIVE change requests and
+  assigned tickets, never resolved or sensitive; HR_ADMIN org-wide; a
+  plain employee gets nothing).
+- **Mutation-checked:** removing the internal-note filter, removing the
+  sensitive-category check, or skipping the image re-encode each fails
+  the relevant tests.
+
+**Verified:**
+- Fresh `wellsure_hr_devcheck`: dropped and recreated, then
+  `db:migrate` + `prisma db seed`. Prisma's own AI-agent gate refuses
+  `migrate reset`, and it was not bypassed; this database is covered by
+  the standing consent.
+- Backend **431/431** (67 files), frontend 4/4, lint and typecheck clean.
+- No residue: ticket, category, employee, notification and leave counts
+  are identical before and after the run, and no stored files are left.
+
+**Two-browser walkthrough** (Super Admin 1000 and Arjun 1006, side by
+side; Playwright):
+- Arjun raises a Payroll & Salary ticket with a GPS-tagged photo, and the
+  HR queue shows it **without a reload**.
+- HR assigns it to themselves and adds an internal note. Arjun's thread
+  never shows it, but does show the attachment. The stored photo has no
+  EXIF and no marker bytes.
+- HR's public reply appears in Arjun's open thread live (~0.2 s), and the
+  status moves to In progress.
+- The admin Tasks app lists the assigned ticket.
+- HR resolves it, and Arjun's open thread shows "Resolved — this ticket
+  will close automatically on 8 Oct, 12:47 pm unless you reply" live,
+  with a matching toast.
+- The Request Hub's Completed tab shows "Closes automatically on 8 Oct
+  2026 unless you reply".
+- Home Track lists Arjun's open address-proof ticket, and his Tasks
+  inbox is empty.
+- Helpdesk Categories, the System Settings Helpdesk card and the
+  Feedback "Phase 8" placeholder all checked.
+- At 390 px the ticket page has 0 px horizontal overflow.
+- Console: only pre-existing noise. The 401s are `/api/auth/refresh` on
+  the login page (silent refresh before any session exists), and AntD's
+  static `message`/`List` deprecation warnings predate this commit.
+
+**Docs corrected:** GETTING_STARTED's account table said Super Admin and
+HR Admin have "2FA required". The seed currently sets
+`auth.require2faRoles` to `[]` (disabled fleet-wide, chore 7f99cfd), so
+the table now says so.
+
+**Next:** D2 (letter templates + PDF generation with headless Chromium,
+plus the image-size note in DEPLOYMENT.md), then E1.
 
 ## Open questions
 

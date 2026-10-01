@@ -7,7 +7,7 @@ import { audienceWhere, getCurrentPlacement, isInAudience } from "../../lib/audi
 import { resolveDataScope } from "../../lib/dataScope";
 import { getPeopleDocumentsSettings } from "../../lib/peopleDocumentsSettings";
 import { prisma } from "../../lib/prisma";
-import { validateDocumentUpload } from "../../lib/uploads";
+import { prepareDocumentUpload } from "../../lib/uploads";
 import { HttpError } from "../../middleware/errorHandler";
 import { findScopedEmployee } from "../employee/service";
 import { notifyEmployee } from "../notifications/notifyEmployee";
@@ -156,11 +156,11 @@ export async function uploadCompanyDocument(
   meta: ActorMeta,
 ) {
   const settings = await getPeopleDocumentsSettings();
-  const { mimeType, fileName } = validateDocumentUpload(file, settings);
+  const { buffer, mimeType, fileName, sizeBytes } = await prepareDocumentUpload(file, settings);
   await requireActiveCategory(input.categoryId, "COMPANY");
   await assertScopeTargetsExist(input);
   const fileKey = storageKey("company-documents", fileName);
-  await storageService.putObject(fileKey, file.buffer, mimeType);
+  await storageService.putObject(fileKey, buffer, mimeType);
   try {
     const row = await prisma.companyDocument.create({
       data: {
@@ -172,7 +172,7 @@ export async function uploadCompanyDocument(
         fileKey,
         fileName,
         mimeType,
-        sizeBytes: file.size,
+        sizeBytes,
         uploadedByUserId: meta.actorUserId,
       },
       include: companyInclude,
@@ -357,10 +357,10 @@ export async function uploadEmployeeDocument(
 ) {
   await assertEmployeeInScope(employeeId, viewer);
   const settings = await getPeopleDocumentsSettings();
-  const { mimeType, fileName } = validateDocumentUpload(file, settings);
+  const { buffer, mimeType, fileName, sizeBytes } = await prepareDocumentUpload(file, settings);
   await requireActiveCategory(input.categoryId, "EMPLOYEE");
   const fileKey = storageKey(`employees/${employeeId}/documents`, fileName);
-  await storageService.putObject(fileKey, file.buffer, mimeType);
+  await storageService.putObject(fileKey, buffer, mimeType);
   let row: EmployeeDocRow;
   try {
     row = await prisma.employeeDocument.create({
@@ -372,7 +372,7 @@ export async function uploadEmployeeDocument(
         fileKey,
         fileName,
         mimeType,
-        sizeBytes: file.size,
+        sizeBytes,
         uploadedByUserId: meta.actorUserId,
       },
       include: employeeDocInclude,

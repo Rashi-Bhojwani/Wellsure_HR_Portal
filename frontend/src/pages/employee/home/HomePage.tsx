@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Card, Col, Row, Typography, List, Space, Badge, Tag } from "antd";
+import { Card, Col, Flex, Row, Typography, List, Space, Badge, Tag } from "antd";
 import {
   ArrowRightOutlined,
   IdcardOutlined,
@@ -7,6 +7,8 @@ import {
 } from "@ant-design/icons";
 import { Link } from "react-router-dom";
 import * as leaveApi from "../../../api/leave";
+import * as inboxApi from "../../../api/inbox";
+import { REQUEST_HUB_TYPE_LABELS } from "@shared/types/inbox";
 import * as announcementsApi from "../../../api/announcements";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { useAuth } from "../../../hooks/useAuth";
@@ -41,9 +43,12 @@ export function HomePage() {
   });
   const pendingCount = pendingReview?.total ?? 0;
 
-  const { data: myPending } = useQuery({
-    queryKey: ["leave", "requests", "my-pending"],
-    queryFn: () => leaveApi.listLeaveRequests({ status: "PENDING", pageSize: 5 }),
+  // Track = my own requests still in progress, from every module (Request
+  // Hub, Phase 5 commit D). It used to list pending leave without an
+  // employee filter, which for anyone with leave.view meant other people's.
+  const { data: tracking } = useQuery({
+    queryKey: ["request-hub", { state: "OPEN", limit: 5 }],
+    queryFn: () => inboxApi.listMyRequests({ state: "OPEN", limit: 5 }),
   });
 
   const { data: holidays } = useQuery({
@@ -166,25 +171,24 @@ export function HomePage() {
         </Col>
 
         <Col xs={24} md={12} xl={8}>
-          <Card title="Track" style={{ height: "100%" }}>
-            {myPending && myPending.rows.length > 0 ? (
-              <List
-                size="small"
-                dataSource={myPending.rows}
-                renderItem={(r) => (
-                  <List.Item>
+          <Card title="Track" style={{ height: "100%" }} extra={<Link to="/app/request-hub"><ArrowRightOutlined /></Link>}>
+            {tracking && tracking.length > 0 ? (
+              <Flex vertical>
+                {tracking.map((r) => (
+                  <Link key={`${r.type}:${r.id}`} to={r.link} style={{ color: "inherit", padding: "8px 0", borderBottom: "1px solid rgba(128,128,128,0.15)" }}>
                     <Space orientation="vertical" size={0} style={{ width: "100%" }}>
-                      <Space>
-                        <Text strong>{r.leaveTypeCode}</Text>
-                        <Tag color="gold">Pending</Tag>
+                      <Space wrap>
+                        <Text strong>{r.title}</Text>
+                        <Tag color="gold">{r.statusLabel}</Tag>
                       </Space>
                       <Text type="secondary" style={{ fontSize: 12 }}>
-                        {r.fromDate} to {r.toDate} &middot; {r.totalDays} day(s)
+                        {REQUEST_HUB_TYPE_LABELS[r.type]}
+                        {r.detail ? ` · ${r.detail}` : ""}
                       </Text>
                     </Space>
-                  </List.Item>
-                )}
-              />
+                  </Link>
+                ))}
+              </Flex>
             ) : (
               <EmptyState message="Nothing new to track" compact />
             )}

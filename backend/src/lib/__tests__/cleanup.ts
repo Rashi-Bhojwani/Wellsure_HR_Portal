@@ -49,6 +49,9 @@ export const OPTIONAL_FK_POLICY: Record<string, Policy> = {
   // Same reasoning: a scoped company document must never become org-wide.
   "CompanyDocument.scopeLocationId": "delete",
   "CompanyDocument.scopeDepartmentId": "delete",
+  // A ticket belongs to whoever raised it; the assignee is just a pointer.
+  "HelpdeskTicket.assigneeEmployeeId": "setNull",
+  "HelpdeskCategory.defaultAssigneeEmployeeId": "setNull",
   // Posts written by, or auto-posted about, an employee belong to them.
   "Post.authorEmployeeId": "delete",
   "Post.subjectEmployeeId": "delete",
@@ -81,6 +84,7 @@ export const STANDALONE_ROOT_MODELS: Record<string, string> = {
   YearEndRun: "year-end run; tests delete by id (items cascade)",
   Announcement: "HR announcement; tests delete by id",
   Group: "Engage group; cleanupEngageGroups",
+  HelpdeskCategory: "helpdesk category master; deleteWithDependents(\"HelpdeskCategory\", ids) takes its tickets with it",
   DocumentCategory: "document category master; deleteWithDependents(\"DocumentCategory\", ids) takes its documents with it",
   EngageAutoPostSetting: "id-less closed catalog keyed by `kind`; cleanupAutoPostSetting",
 };
@@ -93,6 +97,7 @@ export const STORAGE_KEY_COLUMNS: Record<string, string[]> = {
   EmployeePersonal: ["photoStorageKey", "photoThumbStorageKey"],
   EmployeeDocument: ["fileKey"],
   CompanyDocument: ["fileKey"],
+  HelpdeskAttachment: ["fileKey"],
   YearEndRun: ["reportStorageKey"],
   LeaveRequest: ["attachmentStorageKey"],
   Company: ["logoStorageKey"],

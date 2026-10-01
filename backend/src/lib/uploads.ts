@@ -1,5 +1,7 @@
 import path from "node:path";
+import type { RequestHandler } from "express";
 import multer from "multer";
+import sharp from "sharp";
 import { DOCUMENT_MIME_TYPES, type DocumentMimeType } from "@shared/constants/peopleDocuments";
 import { HttpError } from "../middleware/errorHandler";
 
@@ -12,6 +14,24 @@ import { HttpError } from "../middleware/errorHandler";
 // the photo pipeline — so lowering the setting takes effect immediately.
 export function memoryUpload(ceilingMb: number) {
   return multer({ storage: multer.memoryStorage(), limits: { fileSize: ceilingMb * 1024 * 1024, files: 1 } }).single("file");
+}
+
+// Several files in one multipart field ("files") — helpdesk messages.
+// Multer's own limit errors ("Unexpected field" for one file too many) mean
+// nothing to an employee, so they're translated here.
+export function memoryUploadMany(ceilingMb: number, maxFiles: number): RequestHandler {
+  const handler = multer({ storage: multer.memoryStorage(), limits: { fileSize: ceilingMb * 1024 * 1024, files: maxFiles } }).array("files", maxFiles);
+  return (req, res, next) => {
+    handler(req, res, (err?: unknown) => {
+      if (err instanceof multer.MulterError) {
+        if (err.code === "LIMIT_UNEXPECTED_FILE" || err.code === "LIMIT_FILE_COUNT") {
+          return next(new HttpError(400, `Attach at most ${maxFiles} files.`, "INVALID_UPLOAD"));
+        }
+        if (err.code === "LIMIT_FILE_SIZE") return next(new HttpError(400, `A file is larger than the ${ceilingMb} MB limit.`, "INVALID_UPLOAD"));
+      }
+      next(err as Error | undefined);
+    });
+  };
 }
 
 export function requireFile(file: Express.Multer.File | undefined): Express.Multer.File {
@@ -74,4 +94,38 @@ export function validateDocumentUpload(
     throw new HttpError(400, `The file's contents don't match its type (${DOCUMENT_MIME_TYPES[declared].label}).`, "INVALID_UPLOAD");
   }
   return { mimeType: declared, fileName };
+}
+
+// Decompression-bomb guard for anything sharp decodes (same cap as photos).
+const MAX_INPUT_PIXELS = 64_000_000;
+
+export interface PreparedUpload {
+  buffer: Buffer;
+  mimeType: DocumentMimeType;
+  fileName: string;
+  sizeBytes: number;
+}
+
+// The one path every user-uploaded document goes through (Document Center,
+// employee documents, helpdesk attachments): validateDocumentUpload's checks,
+// then — for images — a sharp re-encode in the same format, auto-oriented,
+// which drops every byte of metadata (EXIF incl. GPS, XMP, comments). A
+// photographed payslip or ID is exactly the leak case. Only the re-encoded
+// bytes are ever stored. (PDF/Office files are stored as validated; their
+// internal document properties aren't rewritten.)
+export async function prepareDocumentUpload(
+  file: Express.Multer.File,
+  settings: { documentMaxUploadMb: number; documentAllowedMimeTypes: DocumentMimeType[] },
+): Promise<PreparedUpload> {
+  const { mimeType, fileName } = validateDocumentUpload(file, settings);
+  if (mimeType !== "image/jpeg" && mimeType !== "image/png") {
+    return { buffer: file.buffer, mimeType, fileName, sizeBytes: file.size };
+  }
+  try {
+    const image = sharp(file.buffer, { limitInputPixels: MAX_INPUT_PIXELS, failOn: "error" }).rotate();
+    const buffer = mimeType === "image/jpeg" ? await image.jpeg({ quality: 90 }).toBuffer() : await image.png().toBuffer();
+    return { buffer, mimeType, fileName, sizeBytes: buffer.length };
+  } catch {
+    throw new HttpError(400, "That image couldn't be read. Try exporting it again or attach a PDF.", "INVALID_UPLOAD");
+  }
 }

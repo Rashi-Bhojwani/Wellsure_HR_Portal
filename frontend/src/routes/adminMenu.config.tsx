@@ -7,6 +7,7 @@ import {
   CalendarOutlined,
   CheckSquareOutlined,
   CloudUploadOutlined,
+  CustomerServiceOutlined,
   DesktopOutlined,
   DollarOutlined,
   ExportOutlined,
@@ -58,6 +59,9 @@ import { AnnouncementsAdminPage } from "../pages/admin/engage/AnnouncementsAdmin
 import { ModerationPage } from "../pages/admin/engage/ModerationPage";
 import { GroupsAdminPage } from "../pages/admin/engage/GroupsAdminPage";
 import { AutoPostSettingsPage } from "../pages/admin/engage/AutoPostSettingsPage";
+import { HelpdeskQueuePage } from "../pages/admin/helpdesk/HelpdeskQueuePage";
+import { HelpdeskCategoriesPage } from "../pages/admin/helpdesk/HelpdeskCategoriesPage";
+import { AdminTasksPage } from "../pages/admin/tasks/AdminTasksPage";
 
 // Single source of truth for the HR/Admin portal's App Switcher and each
 // app's top-bar dropdown menus (docs/UI_REFERENCE.md §2.0). "Homepage",
@@ -123,6 +127,7 @@ export const adminApps: AdminApp[] = [
           { key: "change-requests", label: "Change Requests", path: "employee/change-requests", icon: SolutionOutlined, element: ChangeRequestsPage },
           { key: "separations", label: "Separations", path: "employee/separations", icon: ExportOutlined, element: SeparationsPage },
           { key: "company-documents", label: "Company Documents", path: "employee/company-documents", icon: FolderOpenOutlined, element: CompanyDocumentsPage },
+          { key: "helpdesk", label: "Helpdesk", path: "employee/helpdesk", icon: CustomerServiceOutlined, element: HelpdeskQueuePage },
         ],
       },
     ],
@@ -176,7 +181,7 @@ export const adminApps: AdminApp[] = [
     label: "Tasks",
     icon: CheckSquareOutlined,
     path: "tasks",
-    phase: "Phase 5",
+    element: AdminTasksPage,
   },
   {
     key: "workflow",
@@ -254,6 +259,7 @@ export const adminApps: AdminApp[] = [
           { key: "approval-workflows", label: "Approval Workflows", path: "admin-tools/workflows", icon: BranchesOutlined, phase: "Phase 5" },
           { key: "workflow-delegates-admin", label: "Workflow Delegates", path: "admin-tools/delegates", icon: UserSwitchOutlined, phase: "Phase 5" },
           { key: "users-roles", label: "Users & Roles", path: "admin-tools/users-roles", icon: TeamOutlined, phase: "Phase 1" },
+          { key: "helpdesk-categories", label: "Helpdesk Categories", path: "admin-tools/helpdesk-categories", icon: CustomerServiceOutlined, element: HelpdeskCategoriesPage },
           { key: "templates", label: "Email & Letter Templates", path: "admin-tools/templates", icon: FileTextOutlined, phase: "Phase 5" },
           { key: "devices", label: "Devices", path: "admin-tools/devices", icon: UsbOutlined, phase: "Phase 2" },
           { key: "import-export", label: "Data Import/Export", path: "admin-tools/import-export", icon: CloudUploadOutlined, element: ImportCenterPage },

@@ -2,8 +2,9 @@ import { getSetting, setSetting } from "../../lib/settings";
 import { writeAuditLog } from "../../lib/audit";
 import { RATE_LIMIT_DEFAULTS, RATE_LIMIT_KEYS, type LeaveSettings, type RateLimitSetting, type SecuritySettings } from "./types";
 import type { z } from "zod";
-import type { updateLeaveSettingsSchema, updatePeopleDocumentsSettingsSchema, updateSettingsSchema } from "./validators";
+import type { updateHelpdeskSettingsSchema, updateLeaveSettingsSchema, updatePeopleDocumentsSettingsSchema, updateSettingsSchema } from "./validators";
 import { getPeopleDocumentsSettings, PEOPLE_DOCUMENTS_SETTING_KEYS, type PeopleDocumentsSettings } from "../../lib/peopleDocumentsSettings";
+import { getHelpdeskSettings, HELPDESK_SETTING_KEYS, type HelpdeskSettings } from "../../lib/helpdeskSettings";
 
 const RATE_LIMIT_SETTING_KEY: Record<(typeof RATE_LIMIT_KEYS)[number], string> = {
   login: "auth.rateLimit.login",
@@ -105,5 +106,25 @@ export async function updatePeopleDocumentsSettings(
   }
   const after = await getPeopleDocumentsSettings();
   await writeAuditLog({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "peopleDocuments", before, after });
+  return after;
+}
+
+// Phase 5 commit D — Helpdesk (auto-close and reopen windows).
+export async function getHelpdeskSettingsForAdmin(): Promise<HelpdeskSettings> {
+  return getHelpdeskSettings();
+}
+
+type UpdateHelpdeskInput = z.infer<typeof updateHelpdeskSettingsSchema>;
+
+export async function updateHelpdeskSettings(
+  input: UpdateHelpdeskInput,
+  meta: { actorUserId: string; ipAddress?: string | null; userAgent?: string | null },
+): Promise<HelpdeskSettings> {
+  const before = await getHelpdeskSettings();
+  for (const [field, key] of Object.entries(HELPDESK_SETTING_KEYS) as Array<[keyof UpdateHelpdeskInput, string]>) {
+    if (input[field] !== undefined) await setSetting(key, input[field], meta.actorUserId);
+  }
+  const after = await getHelpdeskSettings();
+  await writeAuditLog({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "helpdesk", before, after });
   return after;
 }

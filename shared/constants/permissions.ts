@@ -40,6 +40,9 @@ export const PERMISSION_KEYS = [
   "documents.manage", // company documents (upload/edit/archive, download stats) + document categories
   "employee.documents.view", // see another employee's HR-held documents (letters, ID proofs); download is audit-logged
   "employee.documents.manage", // upload/edit/archive another employee's documents
+  // Phase 5 — Helpdesk (commit D)
+  "helpdesk.manage", // the HR ticket queue: assign, status, priority, replies, internal notes, categories
+  "helpdesk.sensitive.view", // tickets in categories flagged sensitive (e.g. Payroll & Salary, Grievance)
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];

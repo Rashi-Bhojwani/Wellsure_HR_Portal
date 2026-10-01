@@ -23,6 +23,9 @@ import { adminRouter } from "./modules/admin/routes";
 import { engageRouter } from "./modules/engage/routes";
 import { peoplePhotosRouter, peopleRouter } from "./modules/people/routes";
 import { documentsRouter } from "./modules/documents/routes";
+import { helpdeskRouter } from "./modules/helpdesk/routes";
+import { requestHubRouter } from "./modules/requestHub/routes";
+import { tasksRouter } from "./modules/tasks/routes";
 
 export function createApp(): Express {
   const app = express();
@@ -108,6 +111,9 @@ export function createApp(): Express {
   app.use("/api/engage", noStore, engageRouter);
   app.use("/api/people", noStore, peopleRouter);
   app.use("/api/documents", noStore, documentsRouter);
+  app.use("/api/helpdesk", noStore, helpdeskRouter);
+  app.use("/api/request-hub", noStore, requestHubRouter);
+  app.use("/api/tasks", noStore, tasksRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

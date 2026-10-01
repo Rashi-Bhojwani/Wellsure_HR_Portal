@@ -10,6 +10,8 @@ import { TotpSetupPage } from "../pages/auth/totp/TotpSetupPage";
 import { AccountSecurityPage } from "../pages/account-security/AccountSecurityPage";
 import { EmployeeProfilePage } from "../pages/admin/employee/EmployeeProfilePage";
 import { ViewMyInfoPage } from "../pages/employee/profile/ViewMyInfoPage";
+import { HelpdeskTicketPage } from "../pages/employee/helpdesk/HelpdeskTicketPage";
+import { AdminHelpdeskTicketPage } from "../pages/admin/helpdesk/AdminHelpdeskTicketPage";
 import { RequireAuth } from "./RequireAuth";
 import { resolveAdminRoutes, resolveEmployeeRoutes } from "./resolveMenuRoutes";
 
@@ -48,12 +50,14 @@ export function AppRouter() {
           <Route index element={<Navigate to="home" replace />} />
           <Route path="profile" element={<ViewMyInfoPage />} />
           <Route path="security" element={<AccountSecurityPage />} />
+          <Route path="helpdesk/:id" element={<HelpdeskTicketPage />} />
           {employeeRoutes()}
         </Route>
 
         <Route path="/admin" element={<AdminLayout />}>
           <Route path="security" element={<AccountSecurityPage />} />
           <Route path="employee/profile/:id" element={<EmployeeProfilePage />} />
+          <Route path="employee/helpdesk/:id" element={<AdminHelpdeskTicketPage />} />
           {adminRoutes()}
         </Route>
       </Route>

@@ -35,10 +35,15 @@ export function useNotifications(): void {
       // HR shared a document with this employee (Phase 5 commit C) — refresh
       // My Documents live rather than waiting for a reload.
       if (payload.type.startsWith("document.")) void queryClient.invalidateQueries({ queryKey: ["documents", "mine"] });
+      // Anything that lands as a notification may also have changed what's
+      // waiting on this person or the state of one of their requests.
+      void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      void queryClient.invalidateQueries({ queryKey: ["request-hub"] });
     }
 
     function onTasksCounts(): void {
       void queryClient.invalidateQueries({ queryKey: ["admin", "tasks", "counts"] });
+      void queryClient.invalidateQueries({ queryKey: ["tasks"] });
     }
 
     socket.on("notification.new", onNotificationNew);

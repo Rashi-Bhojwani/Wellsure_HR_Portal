@@ -40,6 +40,9 @@ import { HolidayCalendarPage } from "../pages/employee/leave/HolidayCalendarPage
 import { AttendanceInfoPage } from "../pages/employee/attendance/AttendanceInfoPage";
 import { DocumentCenterPage } from "../pages/employee/document-center/DocumentCenterPage";
 import { PeoplePage } from "../pages/employee/people/PeoplePage";
+import { HelpdeskPage } from "../pages/employee/helpdesk/HelpdeskPage";
+import { RequestHubPage } from "../pages/employee/request-hub/RequestHubPage";
+import { TasksPage } from "../pages/employee/todo/TasksPage";
 
 // Single source of truth for the Employee portal left sidebar
 // (docs/UI_REFERENCE.md §1.0). The sidebar, the route tree and the
@@ -96,7 +99,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
         label: "Feedback",
         path: "my-worklife/feedback",
         icon: CommentOutlined,
-        phase: "Phase 5",
+        phase: "Phase 8", // with performance reviews (user decision, Phase 5 commit D)
       },
     ],
   },
@@ -105,7 +108,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
     label: "To do",
     icon: CheckSquareOutlined,
     children: [
-      { key: "tasks", label: "Tasks", path: "todo/tasks", icon: UnorderedListOutlined, phase: "Phase 5" },
+      { key: "tasks", label: "Tasks", path: "todo/tasks", icon: UnorderedListOutlined, element: TasksPage },
       { key: "review", label: "Review", path: "todo/review", icon: AuditOutlined, element: ReviewPage },
     ],
   },
@@ -234,14 +237,14 @@ export const employeeMenu: EmployeeMenuEntry[] = [
     label: "Helpdesk",
     path: "helpdesk",
     icon: CustomerServiceOutlined,
-    phase: "Phase 5",
+    element: HelpdeskPage,
   },
   {
     key: "request-hub",
     label: "Request Hub",
     path: "request-hub",
     icon: InboxOutlined,
-    phase: "Phase 5",
+    element: RequestHubPage,
   },
   {
     key: "workflow-delegates",

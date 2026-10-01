@@ -24,3 +24,9 @@ export const compOffExpiryQueue = new Queue("comp-off-expiry", { connection: cre
 // the actual joining event (auth/service.ts's acceptInvitation), never on
 // this cron.
 export const engageAutoPostsQueue = new Queue("engage-auto-posts", { connection: createBullConnection() });
+
+// Hourly: closes Resolved helpdesk tickets whose auto-close time (shown to
+// the employee on the ticket) has passed — see modules/helpdesk/service.ts.
+// Hourly rather than daily so a ticket closes within the hour of the time
+// the employee was shown, not up to a day later.
+export const helpdeskAutoCloseQueue = new Queue("helpdesk-auto-close", { connection: createBullConnection() });

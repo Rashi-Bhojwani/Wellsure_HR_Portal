@@ -62,3 +62,19 @@ export async function updatePeopleDocumentsSettings(input: Partial<PeopleDocumen
   const { data } = await apiClient.put<PeopleDocumentsSettings>("/api/settings/people-documents", input);
   return data;
 }
+
+// Phase 5 commit D — Helpdesk.
+export interface HelpdeskSettings {
+  autoCloseDays: number;
+  reopenWindowDays: number;
+}
+
+export async function getHelpdeskSettings(): Promise<HelpdeskSettings> {
+  const { data } = await apiClient.get<HelpdeskSettings>("/api/settings/helpdesk");
+  return data;
+}
+
+export async function updateHelpdeskSettings(input: Partial<HelpdeskSettings>): Promise<HelpdeskSettings> {
+  const { data } = await apiClient.put<HelpdeskSettings>("/api/settings/helpdesk", input);
+  return data;
+}
