@@ -328,8 +328,8 @@ model Location {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  jobHistory    EmployeeJobHistory[]
-  announcements Announcement[]
+  jobHistory       EmployeeJobHistory[]
+  announcements    Announcement[]
   companyDocuments CompanyDocument[]
 
   @@index([cityId])
@@ -353,8 +353,8 @@ model Department {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  jobHistory    EmployeeJobHistory[]
-  announcements Announcement[]
+  jobHistory       EmployeeJobHistory[]
+  announcements    Announcement[]
   companyDocuments CompanyDocument[]
 
   @@map("departments")
@@ -441,6 +441,7 @@ model Employee {
   helpdeskTicketsAssigned    HelpdeskTicket[]   @relation("HelpdeskTicketAssignee")
   helpdeskMessages           HelpdeskMessage[]
   helpdeskCategoriesAssigned HelpdeskCategory[] @relation("HelpdeskCategoryDefaultAssignee")
+  generatedLetters           GeneratedLetter[]
 
   @@index([status])
   @@index([dateOfJoining])
@@ -641,6 +642,7 @@ model EmployeeDocument {
   uploadedAt        DateTime         @default(now()) @map("uploaded_at")
   archivedAt        DateTime?        @map("archived_at")
   archivedByUserId  String?          @map("archived_by_user_id")
+  generatedLetter   GeneratedLetter?
 
   @@index([employeeId])
   @@map("employee_documents")
@@ -1519,4 +1521,75 @@ model HelpdeskAttachment {
 
   @@index([messageId])
   @@map("helpdesk_attachments")
+}
+
+// ── Letters (Phase 5 commit D2) ──────────────────────────────────────────
+// Letters are legal documents (user, 2026-10-01): every issued letter can be
+// reproduced from what's stored here, and nothing issued is ever replaced.
+// Database triggers (migration add_letters_phase5_commit_d2) make template
+// versions and issued letters immutable, and freeze an employee document's
+// file once written.
+
+model LetterTemplate {
+  id                       String                  @id @default(cuid())
+  code                     String                  @unique
+  name                     String
+  description              String?
+  isActive                 Boolean                 @default(true) @map("is_active")
+  visibleToEmployeeDefault Boolean                 @default(true) @map("visible_to_employee_default")
+  createdAt                DateTime                @default(now()) @map("created_at")
+  updatedAt                DateTime                @updatedAt @map("updated_at")
+  versions                 LetterTemplateVersion[]
+
+  @@map("letter_templates")
+}
+
+// Append-only: editing a template always adds a version. The current
+// version is the highest `version` number.
+model LetterTemplateVersion {
+  id              String            @id @default(cuid())
+  templateId      String            @map("template_id")
+  template        LetterTemplate    @relation(fields: [templateId], references: [id])
+  version         Int
+  bodyHtml        String            @map("body_html") // sanitized on save
+  extraFields     Json              @map("extra_fields") // [{ key, label, type, required }]
+  createdByUserId String?           @map("created_by_user_id") // null for seeded versions
+  createdAt       DateTime          @default(now()) @map("created_at")
+  letters         GeneratedLetter[]
+
+  @@unique([templateId, version])
+  @@map("letter_template_versions")
+}
+
+enum GeneratedLetterStatus {
+  QUEUED
+  GENERATED
+  FAILED
+}
+
+model GeneratedLetter {
+  id                 String                @id @default(cuid())
+  number             Int                   @unique @default(autoincrement()) // shown as LTR-000123
+  employeeId         String                @map("employee_id")
+  employee           Employee              @relation(fields: [employeeId], references: [id])
+  templateVersionId  String                @map("template_version_id")
+  templateVersion    LetterTemplateVersion @relation(fields: [templateVersionId], references: [id])
+  mergeValues        Json                  @map("merge_values") // every value merged in, incl. typed extras + letterhead snapshot
+  generatedAt        DateTime              @map("generated_at") // the letter's date; fixed at request time
+  generatedByUserId  String                @map("generated_by_user_id")
+  visibleToEmployee  Boolean               @map("visible_to_employee")
+  status             GeneratedLetterStatus @default(QUEUED)
+  failureReason      String?               @map("failure_reason")
+  employeeDocumentId String?               @unique @map("employee_document_id")
+  // Restrict: an issued letter's document can never be deleted out from under it.
+  employeeDocument   EmployeeDocument?     @relation(fields: [employeeDocumentId], references: [id], onDelete: Restrict)
+  pdfSha256          String?               @map("pdf_sha256")
+  rendererVersion    String?               @map("renderer_version")
+  reissueOfId        String?               @map("reissue_of_id")
+  reissueOf          GeneratedLetter?      @relation("LetterReissue", fields: [reissueOfId], references: [id], onDelete: SetNull)
+  reissues           GeneratedLetter[]     @relation("LetterReissue")
+  createdAt          DateTime              @default(now()) @map("created_at")
+
+  @@index([employeeId])
+  @@map("generated_letters")
 }

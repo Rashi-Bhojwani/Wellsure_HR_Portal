@@ -47,6 +47,9 @@ jobs:
     env:
       DATABASE_URL: postgresql://wellsure:wellsure@localhost:5432/wellsure_hr
       REDIS_URL: redis://localhost:6379
+      # Letters render real PDFs in the test suite (Phase 5 commit D2). The
+      # GitHub-hosted Ubuntu image ships Google Chrome here.
+      CHROMIUM_PATH: /usr/bin/google-chrome
     steps:
       - uses: actions/checkout@v4
 

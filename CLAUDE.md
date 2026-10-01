@@ -136,7 +136,7 @@ just don't reach for `docker compose` in local dev.
 ```
 npm run install:all    # npm install in the root, backend/, frontend/, biometric-agent/ and infra/
 npm run check:services  # confirms Postgres + Redis are reachable; prints setup help if not
-npm run dev              # backend + frontend together, via concurrently
+npm run dev              # api + worker + frontend together, via concurrently
 npm run lint
 npm run typecheck
 npm run test

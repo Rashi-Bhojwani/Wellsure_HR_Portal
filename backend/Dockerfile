@@ -13,15 +13,22 @@
 # Node 22 — and Node 20 reached end-of-life in April 2026 anyway. Found
 # 2026-09-30; see docs/PROGRESS.md.
 #
-# Not yet hardened for production: still root, no Chromium (needed once
-# Puppeteer-based PDF generation lands), single stage (no separate
-# build/runtime layers).
+# Chromium (Phase 5 commit D2) renders letters — and later payslips — to
+# PDF via puppeteer-core; CHROMIUM_PATH tells the renderer where it is. The
+# letter font is bundled in the app (Noto Sans), so no system fonts are
+# needed. Size impact is recorded in docs/DEPLOYMENT.md.
+#
+# Not yet hardened for production: still root (so Chromium runs with
+# --no-sandbox; pages are locked down regardless — no JS, no network),
+# single stage, and dev dependencies installed (the migrate mode needs the
+# Prisma CLI).
 # See docs/PROJECT_SPEC.md §12 and §15.2.3.
 
 FROM node:22-alpine
 
 # Prisma's query engine needs OpenSSL, which the Alpine base doesn't ship.
-RUN apk add --no-cache openssl
+RUN apk add --no-cache openssl chromium
+ENV CHROMIUM_PATH=/usr/bin/chromium
 
 WORKDIR /app
 COPY tsconfig.base.json ./tsconfig.base.json
@@ -37,7 +44,9 @@ RUN npm ci && npx prisma generate
 # module or the generated Prisma client is missing or can't load. (A
 # half-installed image once passed `docker build` because npm crashed yet
 # exited 0.)
-RUN node -e "require('argon2'); require('sharp'); new (require('@prisma/client').PrismaClient)(); console.log('native modules and Prisma client OK')"
+RUN node -e "require('argon2'); require('sharp'); new (require('@prisma/client').PrismaClient)(); console.log('native modules and Prisma client OK')" \
+ && "$CHROMIUM_PATH" --headless --no-sandbox --disable-gpu --dump-dom "data:text/html,<p>chromium-ok</p>" | grep -q chromium-ok \
+ && echo "Chromium OK: $("$CHROMIUM_PATH" --version)"
 
 # Invoke tsx directly (not via `npm run start`) so the Node process is
 # PID 1 and receives SIGTERM directly — `npm run` does not reliably

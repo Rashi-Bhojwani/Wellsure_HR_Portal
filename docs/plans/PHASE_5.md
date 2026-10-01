@@ -38,7 +38,7 @@ repo before it's built.
 | B | Engage: posts, kudos, polls, reactions, comments, groups, moderation, auto-posts **[recorded]** | ✅ Done |
 | C | People directory, org chart, Document Center **[recorded]** | ✅ Built 2026-09-30, awaiting review (see "As built" below). |
 | D | Helpdesk, Request Hub, Tasks inbox **[recorded]** | ✅ Built 2026-10-01; see "As built" under §D and the PROGRESS entry. |
-| D2 | Letter templates + PDF generation (headless Chromium), letters saved to Document Center **[recorded: user, 2026-10-01]** | Plan approved 2026-10-01. In progress. |
+| D2 | Letter templates + PDF generation (headless Chromium), letters saved to Document Center **[recorded: user, 2026-10-01]** | ✅ Built 2026-10-01; see "As built" under §D2. |
 | E | E1 role & permission system · E2 three-level hierarchy (Manager Management) · E3 Workflow Delegates **[recorded: user, 2026-09-30, revised]** | Plan approved 2026-09-30. Not started (after the Docker fix and D). |
 | F | Reports **[recorded]** | Not started |
 | G | Mobile / PWA **[recorded]** | Not started. No longer blocked, see below. |
@@ -608,6 +608,17 @@ auto-close notice is visible.
 - Visibility default and notification; failure path (missing last working
   day; renderer error → FAILED with a reason).
 - Cleanup classification for the new tables.
+
+### As built (2026-10-01)
+- As planned. The measured image size is in `docs/DEPLOYMENT.md`
+  (379 → 804 MB).
+- **Added: the worker's live events.** Background jobs couldn't push
+  Socket.IO events at all (only the api process had a server). The worker
+  now publishes through a Redis emitter, which fixes "letter ready", D's
+  auto-close and B's auto-posts too.
+- **Reproduce is byte-identical per Chromium version** (verified). Across
+  an upgrade it's an honest re-render, and the stored PDF stays the record.
+- `npm run dev` starts the worker (letters render there).
 
 ### Verification
 Fresh seed; suites, lint, typecheck; CI green (with Chrome); the Docker

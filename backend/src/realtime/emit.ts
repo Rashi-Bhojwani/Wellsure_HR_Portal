@@ -1,19 +1,27 @@
 import type { Server as SocketIOServer } from "socket.io";
 
 // A module-level singleton rather than passing `io` through every service
-// call: `runApi()` (modes/api.ts) is the one process that ever has a real
-// Socket.IO server, and every leave write path already runs inside that
-// same process for the `api` mode. `worker`/`scheduler`/`migrate` modes,
-// and every test that never calls createSocketServer, simply never set
-// this — every emit* helper below no-ops in that case rather than throwing,
-// since a leave write must still succeed with no one connected to notify.
-let io: SocketIOServer | null = null;
+// call. Two processes emit:
+//   - `api` sets the real Socket.IO server (realtime/socket.ts);
+//   - `worker` sets a Socket.IO *Redis emitter*
+//     (realtime/emitter.ts), which publishes through the same Redis adapter
+//     the api's server listens on — so a background job (a letter finishing,
+//     a ticket auto-closing, a birthday post) reaches open screens live too.
+//     Until Phase 5 commit D2 these modes set nothing and every emit from a
+//     job was silently dropped.
+// `scheduler` (only registers schedules), `migrate`, and tests that never
+// set one get no-ops — a write must still
+// succeed with no one connected to notify.
+export interface RoomEmitter {
+  to(room: string | string[]): { emit(event: string, ...args: unknown[]): unknown };
+}
+let io: RoomEmitter | null = null;
 
-export function setSocketServer(server: SocketIOServer): void {
-  io = server;
+export function setSocketServer(server: RoomEmitter | SocketIOServer | null): void {
+  io = server as RoomEmitter | null;
 }
 
-export function getSocketServer(): SocketIOServer | null {
+export function getSocketServer(): RoomEmitter | null {
   return io;
 }
 
@@ -154,4 +162,11 @@ export function emitHelpdeskTicket(ticketId: string, employeeIds: Array<string |
   if (!io) return;
   const rooms = [...new Set(employeeIds.filter((id): id is string => Boolean(id)))].map((id) => `user:${id}`);
   if (rooms.length > 0) io.to(rooms).emit("helpdesk.ticket", { ticketId });
+}
+
+// Letters (Phase 5 commit D2) — signal-only: the issuer's screen refetches
+// when a queued letter finishes (generated or failed).
+export function emitLetterUpdated(issuerEmployeeId: string | null, payload: { letterId: string; employeeId: string }): void {
+  if (!io || !issuerEmployeeId) return;
+  io.to(`user:${issuerEmployeeId}`).emit("letter.updated", payload);
 }

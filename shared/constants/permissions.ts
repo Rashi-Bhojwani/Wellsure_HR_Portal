@@ -43,6 +43,8 @@ export const PERMISSION_KEYS = [
   // Phase 5 — Helpdesk (commit D)
   "helpdesk.manage", // the HR ticket queue: assign, status, priority, replies, internal notes, categories
   "helpdesk.sensitive.view", // tickets in categories flagged sensitive (e.g. Payroll & Salary, Grievance)
+  "letters.template.manage", // letter templates: edit (new version), activate, typed fields, letterhead & signatory
+  "letters.generate", // issue / reissue / reproduce letters for employees in scope
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];

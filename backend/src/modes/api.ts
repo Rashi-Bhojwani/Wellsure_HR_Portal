@@ -2,6 +2,8 @@ import { createServer } from "node:http";
 import { env } from "../config/env";
 import { logger } from "../lib/logger";
 import { prisma } from "../lib/prisma";
+import { closePdfRenderer } from "../lib/pdf/renderer";
+import { closeLettersQueue } from "../jobs/lettersQueue";
 import { redis } from "../lib/redis";
 import { createApp } from "../app";
 import { createSocketServer } from "../realtime/socket";
@@ -25,6 +27,8 @@ export async function runApi(): Promise<void> {
 
     await new Promise<void>((resolve) => io.close(() => resolve()));
     await new Promise<void>((resolve) => httpServer.close(() => resolve()));
+    await closePdfRenderer(); // letters/preview may have Chromium open
+    await closeLettersQueue();
     await prisma.$disconnect();
     redis.disconnect();
 

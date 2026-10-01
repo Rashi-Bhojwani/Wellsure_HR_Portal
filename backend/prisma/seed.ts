@@ -14,6 +14,7 @@ import {
 } from "@shared/constants/peopleDocuments";
 import { minimalPdf } from "../src/lib/devFixtures";
 import { DEFAULT_HELPDESK_AUTO_CLOSE_DAYS, DEFAULT_HELPDESK_REOPEN_WINDOW_DAYS } from "@shared/constants/helpdesk";
+import { LETTER_TEMPLATE_SEEDS } from "./seedLetterTemplates";
 
 assertDevelopmentEnvironment("the Phase 1 seed script (inserts fake employee/bank/statutory data)");
 
@@ -72,7 +73,13 @@ async function main() {
 
   // ── Company ──────────────────────────────────────────────────────────
   await prisma.company.create({
-    data: { name: "Wellsure" /* placeholder legal entity name, pending confirmation */ },
+    data: {
+      name: "Wellsure" /* placeholder legal entity name, pending confirmation */,
+      // Letterhead placeholders (Phase 5 commit D2) — obviously fake so a
+      // letter generated from seed data can never be mistaken for real.
+      legalName: "Wellsure (placeholder legal name — set in System Settings > Letters)",
+      registeredAddress: "Placeholder registered address — set in System Settings > Letters",
+    },
   });
 
   // ── Cities (open question: which city each Panchsheel branch belongs
@@ -349,10 +356,13 @@ async function main() {
     // Phase 5 commit D — the helpdesk queue, but NOT sensitive categories
     // (Payroll & Salary, Grievance): same bar as "no salary or bank data".
     "helpdesk.manage",
+    // Phase 5 commit D2 — issuing letters (templates themselves are HR_ADMIN+).
+    "letters.generate",
   ];
   const HR_ADMIN_PERMS = [
     ...HR_EXECUTIVE_PERMS,
     "helpdesk.sensitive.view",
+    "letters.template.manage",
     "employee.statutory.view",
     "employee.statutory.edit",
     "employee.bank.view",
@@ -718,6 +728,9 @@ async function main() {
     // Phase 5 commit D — Helpdesk
     ["helpdesk.autoCloseDays", DEFAULT_HELPDESK_AUTO_CLOSE_DAYS],
     ["helpdesk.reopenWindowDays", DEFAULT_HELPDESK_REOPEN_WINDOW_DAYS],
+    // Phase 5 commit D2 — the letter signatory (the fake seeded HR Admin).
+    ["letters.signatoryName", "Rohan Mehta"],
+    ["letters.signatoryDesignation", "HR Admin"],
   ];
   for (const [key, value] of SETTINGS) {
     await prisma.systemSetting.create({ data: { key, value: value as Prisma.InputJsonValue, updatedByUserId: superAdminUserId } });
@@ -861,6 +874,19 @@ async function main() {
   ];
   const helpdeskCategory: Record<string, { id: string }> = {};
   for (const c of HELPDESK_CATEGORIES) helpdeskCategory[c.code] = await prisma.helpdeskCategory.create({ data: c });
+
+  // ── Letter templates (Phase 5 commit D2) — five starters, version 1,
+  // draft wording for HR to review. ───────────────────────────────────────
+  for (const t of LETTER_TEMPLATE_SEEDS) {
+    await prisma.letterTemplate.create({
+      data: {
+        code: t.code,
+        name: t.name,
+        description: t.description,
+        versions: { create: { version: 1, bodyHtml: t.bodyHtml, extraFields: t.extraFields as unknown as Prisma.InputJsonValue } },
+      },
+    });
+  }
 
   const hrExecId = employeeIdByCode["1001"]!; // HR Admin handles the seeded queue
   const daysAgo = (d: number) => new Date(Date.now() - d * 24 * 60 * 60 * 1000);

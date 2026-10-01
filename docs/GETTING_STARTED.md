@@ -124,6 +124,7 @@ except the two marked **required**.
 | `TZ_BUSINESS` | Business timezone for date logic | No | `Asia/Kolkata` |
 | `DATABASE_URL` | Postgres connection string | **Yes** | `postgresql://wellsure:wellsure@localhost:5432/wellsure_hr` |
 | `REDIS_URL` | Redis connection string | **Yes** | `redis://localhost:6379` |
+| `CHROMIUM_PATH` | Chrome/Chromium binary used to render letter PDFs | No (auto-detected; set it if detection fails) | unset locally; `/usr/bin/chromium` in the Docker image |
 | `JWT_ACCESS_SECRET` | Signs short-lived access tokens | No (has a placeholder default) | change it before staging/production |
 | `JWT_REFRESH_SECRET` | Not itself used to sign anything (refresh tokens are opaque, DB-tracked), reserved for future use — must differ from `JWT_ACCESS_SECRET` | No | change it before staging/production |
 | `JWT_ACCESS_TTL` | Access token lifetime | No | `15m` |
@@ -177,7 +178,7 @@ data.
 
 ```bash
 npm run check:services   # confirms Postgres + Redis are reachable, with setup help if not
-npm run dev               # backend + frontend together
+npm run dev               # api + worker + frontend together
 ```
 
 A healthy startup looks like:
@@ -219,13 +220,27 @@ subset for manual testing.
 the flag per category under Admin Tools → Helpdesk Categories. The admin
 queue is Employee → Helpdesk. Resolved tickets close automatically after
 the days set in System Settings → Helpdesk (default 7). That check is an
-hourly background job. `npm run dev` runs only the API, so to see
-auto-close happen locally, also run the `scheduler` (registers the job;
-run it once) and the `worker` (runs it) from `backend/`:
-`node_modules/.bin/tsx src/index.ts scheduler` and
-`node_modules/.bin/tsx src/index.ts worker`. The same applies to every
-other background job (accrual, comp-off expiry, separations, Engage
-auto-posts).
+hourly background job. `npm run dev` runs the API and the **worker** (which
+runs jobs), but not the **scheduler** (which registers timed jobs). So to
+see auto-close happen locally, also run the scheduler once from
+`backend/`: `node_modules/.bin/tsx src/index.ts scheduler`. The same applies
+to every other timed job (accrual, comp-off expiry, separations, Engage
+auto-posts). On-demand jobs, such as generating a letter, need only the
+worker.
+
+**Letters (PDF).** Admin Tools → Email & Letter Templates has five seeded
+starter letters (offer, appointment, experience, relieving, address
+proof), all marked "draft wording — HR to review". Issue one from an
+employee's profile → Documents → "Issue a letter". It renders in the worker
+and lands in their Document Center under Letters.
+- The seeded letterhead is an obvious placeholder. Set the real one in
+  System Settings → Letters.
+- **PDF rendering needs Chrome or Chromium on your machine.** The backend
+  finds Google Chrome or Chromium in the usual places (Linux, macOS,
+  Windows); otherwise set `CHROMIUM_PATH` in `backend/.env` to the browser
+  binary.
+- The backend tests that render PDFs need it too, and fail with a clear
+  message if it's missing. They're never skipped.
 
 A few accounts are deliberately seeded in non-active states to exercise
 those code paths: some are `INVITED` (never activated — try
@@ -260,7 +275,7 @@ Run from the repo root unless noted.
 
 | Command | What it does |
 |---|---|
-| `npm run dev` | Backend + frontend together, with live reload |
+| `npm run dev` | API, background worker and frontend together, with live reload |
 | `npm run db:seed --prefix backend` | Wipe and reseed the database (dev only) |
 | `npm run db:migrate --prefix backend` | Apply pending migrations without touching data |
 | `npm run lint` | ESLint across backend, frontend, biometric-agent |

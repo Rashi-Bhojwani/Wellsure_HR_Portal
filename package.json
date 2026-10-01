@@ -13,7 +13,7 @@
     "check:services": "npm run check:services --prefix backend",
     "db:seed": "npm run db:seed --prefix backend",
     "db:migrate": "npm run db:migrate --prefix backend",
-    "dev": "concurrently -n backend,frontend -c blue,green \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
+    "dev": "concurrently -n api,worker,frontend -c blue,magenta,green \"npm run dev --prefix backend\" \"npm run dev:worker --prefix backend\" \"npm run dev --prefix frontend\"",
     "lint": "npm run lint --prefix backend && npm run lint --prefix frontend && npm run lint --prefix biometric-agent",
     "typecheck": "npm run typecheck --prefix backend && npm run typecheck --prefix frontend && npm run typecheck --prefix biometric-agent && npm run typecheck --prefix infra",
     "test": "npm run test --prefix backend && npm run test --prefix frontend && npm run test --prefix biometric-agent"

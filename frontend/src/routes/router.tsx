@@ -12,6 +12,7 @@ import { EmployeeProfilePage } from "../pages/admin/employee/EmployeeProfilePage
 import { ViewMyInfoPage } from "../pages/employee/profile/ViewMyInfoPage";
 import { HelpdeskTicketPage } from "../pages/employee/helpdesk/HelpdeskTicketPage";
 import { AdminHelpdeskTicketPage } from "../pages/admin/helpdesk/AdminHelpdeskTicketPage";
+import { LetterTemplateEditorPage } from "../pages/admin/letters/LetterTemplateEditorPage";
 import { RequireAuth } from "./RequireAuth";
 import { resolveAdminRoutes, resolveEmployeeRoutes } from "./resolveMenuRoutes";
 
@@ -58,6 +59,7 @@ export function AppRouter() {
           <Route path="security" element={<AccountSecurityPage />} />
           <Route path="employee/profile/:id" element={<EmployeeProfilePage />} />
           <Route path="employee/helpdesk/:id" element={<AdminHelpdeskTicketPage />} />
+          <Route path="admin-tools/templates/:id" element={<LetterTemplateEditorPage />} />
           {adminRoutes()}
         </Route>
       </Route>

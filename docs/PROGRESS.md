@@ -15,7 +15,7 @@ committed).
 | 2 | Biometric ingestion + attendance engine + real-time | Not started |
 | 3 | Attendance administration | Not started |
 | 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
-| 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | In progress — commit A done (notifications substrate, Employee Home, Admin Homepage Welcome + Dashboard tabs), commit B done (Engage), commit C done (People directory + org chart, employee photos, Document Center, HR-held employee documents), commit D done (Helpdesk, Request Hub, Tasks inbox). D2 (letters + PDFs) and E–G (roles & permissions, three-level hierarchy, Workflow Delegates, Reports, Mobile/PWA) not started — full plan in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
+| 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | In progress — commit A done (notifications substrate, Employee Home, Admin Homepage Welcome + Dashboard tabs), commit B done (Engage), commit C done (People directory + org chart, employee photos, Document Center, HR-held employee documents), commit D done (Helpdesk, Request Hub, Tasks inbox), commit D2 done (letter templates + PDF generation). E–G (roles & permissions, three-level hierarchy, Workflow Delegates, Reports, Mobile/PWA) not started — full plan in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
 | 5.5 | AWS production environment and go-live hardening | Not started |
 | 6 | Payroll | Not started |
 | 7 | Tax & benefits | Not started |
@@ -2749,6 +2749,162 @@ format and the sample itself:
 The ATTLOG open question is removed. One new question: §3's
 pre-filling of Employee Code from Device User ID conflicts with those
 low device IDs.
+
+### Phase 5, commit D2 — Letter templates and PDF generation
+
+Plan (approved 2026-10-01): [`docs/plans/PHASE_5.md`](plans/PHASE_5.md)
+§D2. The user's answers:
+- letters only (system emails become editable in a later commit);
+- offer letters are generated against the employee record, with CTC and
+  similar figures typed in (spec §12 Phase 6 now says to revisit this);
+- all five letters are visible to the employee by default;
+- the editor is TipTap;
+- **letters are legal documents: always reproducible, never overwritten.**
+
+**Schema** (migration `add_letters_phase5_commit_d2`):
+- `LetterTemplate`.
+- `LetterTemplateVersion` (append-only; the current version is the
+  highest number).
+- `GeneratedLetter`:
+  - reference `LTR-000123`, the template version, **frozen merge values**
+    (already formatted, plus a letterhead snapshot with the logo's storage
+    key and hash), and **`generatedAt`**;
+  - status, the document link, the PDF SHA-256, the renderer version, and
+    `reissueOfId`.
+
+**Immutability, enforced in Postgres**, so no code path can break it:
+- template versions can't be updated;
+- an issued letter's content can't change (only the worker's
+  `QUEUED → GENERATED/FAILED` step is allowed);
+- **an employee document's file (key, name, type, size) can't change after
+  insert, for every employee document;**
+- `generated_letters → employee_documents` is `ON DELETE RESTRICT`.
+
+The service additionally refuses title/category edits on a letter's
+document (`LETTER_IMMUTABLE`). Reissue always creates a new letter and
+document.
+
+**Permissions:** `letters.template.manage` (HR_ADMIN), `letters.generate`
+(HR_ADMIN, HR_EXECUTIVE), plus data scope on every issue/read (404 out of
+scope).
+
+**Rendering** (`lib/pdf/renderer.ts`): headless Chromium via
+`puppeteer-core`:
+- **JavaScript off, every network request blocked** (tested with a local
+  probe server that receives nothing);
+- **one bundled font** (Noto Sans, OFL, including ₹), embedded, so the
+  machine's fonts don't matter;
+- PDF metadata dates are fixed to `generatedAt`.
+- **Verified byte-identical** across renders, browser restarts and separate
+  container runs, on the same Chromium version.
+
+Templates are sanitized to a formatting allowlist. Placeholders come from
+a closed catalog (`shared/constants/letters.ts`) plus each version's typed
+fields; unknown or half-formatted ones are refused at save. Merge values
+are HTML-escaped. Letters use the employee's details **as in force on the
+letter's date** (name and job, from the effective-dated histories).
+
+**Flow:**
+1. HR issues from the employee's Documents tab.
+2. The API checks permission and scope, resolves and freezes every value,
+   allocates the reference (only after the values resolve, so refusals
+   don't burn numbers), and queues `letters-generate`.
+3. The worker renders, stores the file and files it under Letters, in one
+   transaction that can only complete a `QUEUED` letter (a duplicate job
+   is a no-op).
+4. The employee is notified, and HR's table updates live.
+
+Also:
+- **Reproduce** re-renders from the stored version, values and timestamp,
+  and says whether it matches the stored hash.
+- **Preview** renders a draft against any employee and stores nothing.
+- The letterhead (legal name, address, logo with a new storage key per
+  upload) and the signatory live in System Settings → Letters. Issuing is
+  refused until they're set.
+
+**Found and fixed on the way — live updates from background jobs never
+arrived.**
+- Only the `api` process had a Socket.IO server, so every `emit*()` made
+  inside a BullMQ job was silently dropped. That affected:
+  - this commit's "letter ready";
+  - commit D's helpdesk auto-close;
+  - Phase 5 commit B's daily Engage auto-posts and their notifications.
+
+  The persisted notifications still showed on the next page load, which is
+  why it went unnoticed.
+- **Fix:** the `worker` now installs a Socket.IO **Redis emitter**
+  (`realtime/emitter.ts`), publishing through the same Redis adapter the
+  api uses.
+- `realtime/__tests__/workerEmitter.test.ts` proves an emit from an
+  emitter-only process reaches a browser connected to an api server.
+- In the walkthrough, "letter issued" reached HR's and the employee's
+  screens in about 0.27 s.
+
+**Also:**
+- `npm run dev` now starts the worker too (api + worker + frontend).
+  Otherwise an issued letter waits for a worker forever locally.
+- `requireAnyPermission()` added: the template list serves both editors
+  and issuers.
+- The letters queue is created lazily in `jobs/lettersQueue.ts`, so the api
+  and tests don't open Redis connections they never use.
+- The seed has five starter templates in our own wording (marked "draft —
+  HR to review"), an obviously-placeholder letterhead (ASCII-only, so no
+  font fallback), and the fake HR Admin as signatory.
+- CI sets `CHROMIUM_PATH=/usr/bin/google-chrome` (the GitHub runner's
+  Chrome), so PDF tests run for real there.
+
+**Docker image** (measured; details in `docs/DEPLOYMENT.md`): 379 MB →
+**804 MB**. Chromium accounts for +322 MB and the npm dependencies for
++103 MB (mostly test-only packages present because the image installs dev
+dependencies; that's Phase 5.5 hardening). A build-time check starts
+Chromium.
+- Letters render inside the container, and the metadata-IP request is
+  blocked there too.
+- The container's Chromium 152 and this machine's Chrome 141 produce
+  different bytes for the same letter. So "reproduce" is exact per
+  renderer version, and each letter records its version. The stored PDF
+  is always the record of what was sent.
+
+**Tests:** 30 new.
+- `letters/__tests__/template.test.ts` (7): sanitizer; placeholder
+  validation (unknown, split by formatting, stray braces, undefined
+  extras); key rules; escaping; and that every seeded template passes the
+  editor's own validation *unchanged*. That last check caught the seed
+  being stored in a non-normalised form.
+- `letters/__tests__/letters.test.ts` (14), against real Chromium and the
+  database:
+  - the permission matrix, route gates, and versioning (v1 unchanged after
+    v2; an unchanged save adds nothing; this caught a real bug, because
+    `jsonb` reorders keys, so the no-op check now compares canonically);
+  - issuing end to end, with the PDF text extracted (reference, ₹
+    amount, name), the notification, audit, queue job, **byte-identical
+    reproduce**, and an idempotent second job run;
+  - the name as of the letter date despite a scheduled rename; manager
+    data scope (404 outside the team);
+  - up-front refusals that don't consume a reference (missing field, no
+    separation, incomplete letterhead);
+  - all five seeded templates rendering for a leaver with no literal
+    `{{`;
+  - reissue leaving the original byte-for-byte intact; **database triggers
+    refusing every rewrite**; the letter document title lock;
+  - render failure → `FAILED` with a reason and nothing filed; the
+    network-blocking probe; preview storing nothing.
+- `realtime/__tests__/workerEmitter.test.ts` (2).
+- **Mutation-checked:** disabling the triggers fails the database test,
+  and letting the renderer allow network requests fails the SSRF test.
+
+**Verified:** fresh `wellsure_hr_devcheck` (drop, recreate, migrate,
+seed); backend **454/454** (70 files); frontend 4/4; lint and typecheck
+clean across all projects; no row or file residue. Two-browser walkthrough (Super Admin and Arjun):
+- set the letterhead and logo;
+- edit the Offer Letter in TipTap (placeholder from the menu) and save a
+  new version (history shows each);
+- preview with Arjun (the PDF opens);
+- issue with CTC: HR's table goes Generating → Issued **live** and
+  Arjun's Document Center shows the letter **live**;
+- Reproduce reports "identical"; Reissue creates `LTR-…` "reissue of"
+  with the original kept;
+- 0 px overflow on mobile.
 
 ## Open questions
 

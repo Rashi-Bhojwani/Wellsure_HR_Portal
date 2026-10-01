@@ -388,6 +388,13 @@ export async function uploadEmployeeDocument(
 
 export async function updateEmployeeDocument(id: string, input: z.infer<typeof updateEmployeeDocumentSchema>, viewer: DocumentViewer, meta: ActorMeta) {
   const before = await loadEmployeeDocInScope(id, viewer);
+  // An issued letter (D2) is a legal document: its title and category are
+  // what was issued. Visibility and archive stay editable (reversible,
+  // audited); a correction is a reissue, never an edit.
+  if ((input.title !== undefined && input.title !== before.title) || (input.categoryId !== undefined && input.categoryId !== before.categoryId)) {
+    const letter = await prisma.generatedLetter.findUnique({ where: { employeeDocumentId: id }, select: { id: true } });
+    if (letter) throw new HttpError(409, "This is an issued letter, so its title and category can't change. Reissue the letter instead.", "LETTER_IMMUTABLE");
+  }
   if (input.categoryId && input.categoryId !== before.categoryId) await requireActiveCategory(input.categoryId, "EMPLOYEE");
   const after = await prisma.employeeDocument.update({ where: { id }, data: input, include: employeeDocInclude });
   await writeAuditLog({

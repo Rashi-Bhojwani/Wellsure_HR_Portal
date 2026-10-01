@@ -52,6 +52,12 @@ export const OPTIONAL_FK_POLICY: Record<string, Policy> = {
   // A ticket belongs to whoever raised it; the assignee is just a pointer.
   "HelpdeskTicket.assigneeEmployeeId": "setNull",
   "HelpdeskCategory.defaultAssigneeEmployeeId": "setNull",
+  // An issued letter is its document (D2): deleting the document takes the
+  // letter record with it, in tests only — the database itself refuses to
+  // delete a letter's document while the letter exists (ON DELETE RESTRICT).
+  "GeneratedLetter.employeeDocumentId": "delete",
+  // A reissue stands on its own; losing the link to the original is fine.
+  "GeneratedLetter.reissueOfId": "setNull",
   // Posts written by, or auto-posted about, an employee belong to them.
   "Post.authorEmployeeId": "delete",
   "Post.subjectEmployeeId": "delete",
@@ -84,6 +90,7 @@ export const STANDALONE_ROOT_MODELS: Record<string, string> = {
   YearEndRun: "year-end run; tests delete by id (items cascade)",
   Announcement: "HR announcement; tests delete by id",
   Group: "Engage group; cleanupEngageGroups",
+  LetterTemplate: "letter template master; deleteWithDependents(\"LetterTemplate\", ids) takes its versions and issued letters with it",
   HelpdeskCategory: "helpdesk category master; deleteWithDependents(\"HelpdeskCategory\", ids) takes its tickets with it",
   DocumentCategory: "document category master; deleteWithDependents(\"DocumentCategory\", ids) takes its documents with it",
   EngageAutoPostSetting: "id-less closed catalog keyed by `kind`; cleanupAutoPostSetting",

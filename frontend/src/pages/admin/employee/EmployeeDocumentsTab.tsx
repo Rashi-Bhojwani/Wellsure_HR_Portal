@@ -5,6 +5,8 @@ import { DownloadOutlined, EyeInvisibleOutlined, EyeOutlined, UploadOutlined } f
 import { DOCUMENT_MIME_TYPES } from "@shared/constants/peopleDocuments";
 import * as docsApi from "../../../api/documents";
 import { apiErrorMessage } from "../../../lib/apiError";
+import { IssuedLetters } from "../../../components/letters/IssuedLetters";
+import { useAuth } from "../../../hooks/useAuth";
 
 const ACCEPT = Object.values(DOCUMENT_MIME_TYPES).flatMap((t) => t.extensions).join(",");
 
@@ -14,6 +16,7 @@ const ACCEPT = Object.values(DOCUMENT_MIME_TYPES).flatMap((t) => t.extensions).j
 // audit-logged server-side.
 export function EmployeeDocumentsTab({ employeeId, canManage }: { employeeId: string; canManage: boolean }) {
   const queryClient = useQueryClient();
+  const { hasPermission } = useAuth();
   const [uploadOpen, setUploadOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [form] = Form.useForm();
@@ -50,6 +53,7 @@ export function EmployeeDocumentsTab({ employeeId, canManage }: { employeeId: st
 
   return (
     <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+      {hasPermission("letters.generate") && <IssuedLetters employeeId={employeeId} />}
       {canManage && (
         <Space style={{ width: "100%", justifyContent: "flex-end" }}>
           <Button type="primary" icon={<UploadOutlined />} onClick={() => setUploadOpen(true)}>

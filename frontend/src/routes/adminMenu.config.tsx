@@ -62,6 +62,7 @@ import { AutoPostSettingsPage } from "../pages/admin/engage/AutoPostSettingsPage
 import { HelpdeskQueuePage } from "../pages/admin/helpdesk/HelpdeskQueuePage";
 import { HelpdeskCategoriesPage } from "../pages/admin/helpdesk/HelpdeskCategoriesPage";
 import { AdminTasksPage } from "../pages/admin/tasks/AdminTasksPage";
+import { LetterTemplatesPage } from "../pages/admin/letters/LetterTemplatesPage";
 
 // Single source of truth for the HR/Admin portal's App Switcher and each
 // app's top-bar dropdown menus (docs/UI_REFERENCE.md §2.0). "Homepage",
@@ -260,7 +261,7 @@ export const adminApps: AdminApp[] = [
           { key: "workflow-delegates-admin", label: "Workflow Delegates", path: "admin-tools/delegates", icon: UserSwitchOutlined, phase: "Phase 5" },
           { key: "users-roles", label: "Users & Roles", path: "admin-tools/users-roles", icon: TeamOutlined, phase: "Phase 1" },
           { key: "helpdesk-categories", label: "Helpdesk Categories", path: "admin-tools/helpdesk-categories", icon: CustomerServiceOutlined, element: HelpdeskCategoriesPage },
-          { key: "templates", label: "Email & Letter Templates", path: "admin-tools/templates", icon: FileTextOutlined, phase: "Phase 5" },
+          { key: "templates", label: "Email & Letter Templates", path: "admin-tools/templates", icon: FileTextOutlined, element: LetterTemplatesPage },
           { key: "devices", label: "Devices", path: "admin-tools/devices", icon: UsbOutlined, phase: "Phase 2" },
           { key: "import-export", label: "Data Import/Export", path: "admin-tools/import-export", icon: CloudUploadOutlined, element: ImportCenterPage },
           { key: "audit-log", label: "Audit Log", path: "admin-tools/audit-log", icon: AuditOutlined, element: AuditLogPage },

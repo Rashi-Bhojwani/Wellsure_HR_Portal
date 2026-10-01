@@ -1,10 +1,13 @@
 import { logger } from "../lib/logger";
 import { prisma } from "../lib/prisma";
+import { closePdfRenderer } from "../lib/pdf/renderer";
 import { redis } from "../lib/redis";
+import { startSocketEmitter, stopSocketEmitter } from "../realtime/emitter";
 import { startWorkers } from "../jobs/worker";
 
 export async function runWorker(): Promise<void> {
   await redis.connect();
+  await startSocketEmitter(); // live events from jobs reach the api's clients
   const workers = startWorkers();
   logger.info({ count: workers.length }, "worker started");
 
@@ -15,6 +18,8 @@ export async function runWorker(): Promise<void> {
     logger.info({ signal }, "shutting down");
 
     await Promise.all(workers.map((w) => w.close()));
+    await closePdfRenderer(); // letters/preview may have Chromium open
+    await stopSocketEmitter();
     await prisma.$disconnect();
     redis.disconnect();
 

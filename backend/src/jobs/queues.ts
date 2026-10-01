@@ -30,3 +30,6 @@ export const engageAutoPostsQueue = new Queue("engage-auto-posts", { connection:
 // Hourly rather than daily so a ticket closes within the hour of the time
 // the employee was shown, not up to a day later.
 export const helpdeskAutoCloseQueue = new Queue("helpdesk-auto-close", { connection: createBullConnection() });
+
+// letters-generate lives in ./lettersQueue.ts (created lazily) — the API
+// enqueues to it, and importing this module would build every queue above.

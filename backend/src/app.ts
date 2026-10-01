@@ -26,6 +26,7 @@ import { documentsRouter } from "./modules/documents/routes";
 import { helpdeskRouter } from "./modules/helpdesk/routes";
 import { requestHubRouter } from "./modules/requestHub/routes";
 import { tasksRouter } from "./modules/tasks/routes";
+import { lettersRouter } from "./modules/letters/routes";
 
 export function createApp(): Express {
   const app = express();
@@ -114,6 +115,7 @@ export function createApp(): Express {
   app.use("/api/helpdesk", noStore, helpdeskRouter);
   app.use("/api/request-hub", noStore, requestHubRouter);
   app.use("/api/tasks", noStore, tasksRouter);
+  app.use("/api/letters", noStore, lettersRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

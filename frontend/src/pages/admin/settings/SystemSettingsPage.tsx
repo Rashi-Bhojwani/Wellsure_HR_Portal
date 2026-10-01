@@ -12,6 +12,8 @@ import {
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as settingsApi from "../../../api/settings";
 import type { HelpdeskSettings, LeaveSettings, PeopleDocumentsSettings, SecuritySettings } from "../../../api/settings";
+import { LettersSettingsCard } from "../../../components/letters/LettersSettingsCard";
+import { useAuth } from "../../../hooks/useAuth";
 import { EmptyState } from "../../../components/common/EmptyState";
 
 const { Title, Text } = Typography;
@@ -194,6 +196,7 @@ function PeopleDocumentsSettingsCard() {
 }
 
 export function SystemSettingsPage() {
+  const { hasPermission } = useAuth();
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ["settings", "security"], queryFn: settingsApi.getSecuritySettings });
   const [form] = Form.useForm<SecuritySettings>();
@@ -292,6 +295,7 @@ export function SystemSettingsPage() {
       <LeaveSettingsCard />
       <PeopleDocumentsSettingsCard />
       <HelpdeskSettingsCard />
+      {hasPermission("letters.template.manage") && <LettersSettingsCard />}
     </Space>
   );
 }

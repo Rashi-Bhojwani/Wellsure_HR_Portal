@@ -27,11 +27,20 @@ export function useHelpdeskRealtime(): void {
       void queryClient.invalidateQueries({ queryKey: ["tasks"] });
     }
 
+    // letter.updated (Phase 5 commit D2): a letter this user issued finished
+    // generating (or failed) — refresh that employee's letters and documents.
+    function onLetter(payload: { letterId: string; employeeId: string }): void {
+      void queryClient.invalidateQueries({ queryKey: ["letters", "employee", payload.employeeId] });
+      void queryClient.invalidateQueries({ queryKey: ["documents", "employee", payload.employeeId] });
+    }
+
     socket.on("helpdesk.queue", onQueue);
     socket.on("helpdesk.ticket", onTicket);
+    socket.on("letter.updated", onLetter);
     return () => {
       socket.off("helpdesk.queue", onQueue);
       socket.off("helpdesk.ticket", onTicket);
+      socket.off("letter.updated", onLetter);
     };
   }, [socket, queryClient]);
 }

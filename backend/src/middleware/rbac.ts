@@ -30,3 +30,20 @@ export function requirePermission(key: string) {
     next();
   };
 }
+
+// Requires at least one of the given permission keys — for a read that
+// serves two different jobs (e.g. the letter template list is needed both
+// by template editors and by people who only issue letters).
+export function requireAnyPermission(...keys: string[]) {
+  return (req: Request, _res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      next(new HttpError(401, "Authentication required", "UNAUTHENTICATED"));
+      return;
+    }
+    if (!keys.some((k) => req.user!.permissions.has(k))) {
+      next(new HttpError(403, `Missing permission: one of ${keys.join(", ")}`, "FORBIDDEN"));
+      return;
+    }
+    next();
+  };
+}

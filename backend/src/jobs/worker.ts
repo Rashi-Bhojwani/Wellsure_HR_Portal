@@ -7,6 +7,8 @@ import { runMonthlyPlAccrual } from "../modules/leave/accrual";
 import { expireCompOffCredits } from "../modules/leave/compOff";
 import { runDailyAutoPosts } from "../modules/engage/autoPosts";
 import { autoCloseResolvedTickets } from "../modules/helpdesk/service";
+import { processLetterJob } from "../modules/letters/service";
+import { LETTERS_QUEUE_NAME } from "./lettersQueue";
 
 // Starts every BullMQ worker this service runs. Real workers (attendance
 // recompute, etc.) are added here starting Phase 2.
@@ -93,5 +95,19 @@ export function startWorkers(): Worker[] {
     logger.error({ jobId: job?.id, err }, "helpdesk-auto-close job failed");
   });
 
-  return [pingWorker, separationsWorker, leavePlAccrualWorker, compOffExpiryWorker, engageAutoPostsWorker, helpdeskAutoCloseWorker];
+  const lettersWorker = new Worker(
+    LETTERS_QUEUE_NAME,
+    async (job) => {
+      const result = await processLetterJob(job.data.letterId as string);
+      logger.info({ jobId: job.id, ...result }, "letters-generate processed");
+      return result;
+    },
+    // One Chromium render at a time per worker keeps memory predictable.
+    { connection: createBullConnection(), concurrency: 1 },
+  );
+  lettersWorker.on("failed", (job, err) => {
+    logger.error({ jobId: job?.id, err }, "letters-generate job failed");
+  });
+
+  return [pingWorker, separationsWorker, leavePlAccrualWorker, compOffExpiryWorker, engageAutoPostsWorker, helpdeskAutoCloseWorker, lettersWorker];
 }
