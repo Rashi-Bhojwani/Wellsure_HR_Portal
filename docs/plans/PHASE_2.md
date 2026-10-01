@@ -69,10 +69,17 @@ Spec: [`PROJECT_SPEC.md`](../PROJECT_SPEC.md) §4 (rewritten for this), §7.3,
     timezone (default Asia/Kolkata);
   - out-of-order and late punches are processed by `punched_at`;
   - implausible timestamps (device clock wrong) are flagged for HR.
-- **ATTLOG layout is a working assumption** (spec §4.1): tab-separated
-  `PIN, timestamp, status, verify, workcode…`, with a tolerant,
-  configurable parser. It's confirmed against a real sample at device
-  connection.
+- **ATTLOG layout: CONFIRMED** from a real export from our device (spec
+  §4.1). It has six tab-separated columns: device user ID, timestamp,
+  status, verify mode, workcode, reserved.
+  - Status is always `1`, with **no direction**: the first punch is IN and
+    the last is OUT, inferred by the engine.
+  - Device user IDs are low integers (2–126), so mapping goes **only**
+    through `device_user_mappings`.
+  - The real sample, including user 113's duplicate punch three seconds
+    apart, is a mandatory test fixture.
+  - The parser stays tolerant: extra columns and whitespace are fine, and
+    bad lines are rejected individually.
 
 ## The punch simulator (spec §4.6)
 
@@ -80,7 +87,9 @@ To be designed in detail at Phase 2. Recorded requirements and the
 proposed shape:
 
 **Requirements:**
-- Generates realistic punch streams **in the ATTLOG format**, for real
+- Generates realistic punch streams **in exactly the confirmed ATTLOG
+  format** (status 1, verify 255, workcode 1, reserved 0, low-integer device
+  user IDs, no direction), for real
   employees, from their actual shifts, week-offs, holidays and leave, so
   every run has an *expected* outcome the engine's output is checked
   against.
@@ -185,9 +194,9 @@ The last commit of Phase 3. It's done only when the machine is available:
    PC, device count.
 2. Register the device and agent, and install the agent as a Windows
    service on the office PC.
-3. Capture a real ATTLOG sample (and an emergency-export sample). Confirm
-   or adjust the parser configuration, and add the sample as a test
-   fixture.
+3. Check the first live punches against the confirmed ATTLOG layout
+   (spec §4.1); any firmware differences go into parser configuration and a
+   new fixture.
 4. Turn on ADMS only if the model supports it *and* the office has a
    static IP (spec §15.4); otherwise use the agent only.
 5. Run a short parallel check: the same days in greytHR and here, compared
@@ -200,7 +209,11 @@ and it gets fixed in the simulator too.
 ## Open questions carried (spec §14; do not guess)
 
 - The device brand/model and whether ADMS push is supported.
-- The exact ATTLOG layout and emergency-file format on our firmware.
+- The device's LAN IP address and admin password (the password is
+  supplied at install, never stored in the repo).
+- Whether an always-on office PC exists for the agent.
+- Employee Code vs Device User ID default in Add Employee (spec §14): our
+  device IDs (2–126) differ from the 1000-series codes.
 - Whether the office has a static public IP (decides whether ADMS is
   exposed).
 - The office PC for the agent (Windows version, always on), and the

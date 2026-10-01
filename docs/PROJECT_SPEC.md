@@ -71,7 +71,7 @@ entry, period finalisation, and every screen and report. All of it is
 production-ready and tested against the punch simulator (§4.6).
 **Connecting the real device is the final step, not the first.** It means
 installing the agent on the office PC, registering the device, and
-confirming the ATTLOG layout against a real sample. Nothing downstream of
+checking live data against the confirmed ATTLOG layout (§4.1). Nothing downstream of
 the ingestion service changes when it happens.
 
 **No month-end file exports as the daily process.** greytHR's current
@@ -132,23 +132,48 @@ the routes apart.
   stored raw, as they happened, and collapsed by the rules engine (§4.4,
   within 2 minutes, configurable).
 
-**ATTLOG line format: working assumption, to confirm on the real
-device.** The standard ZKTeco/eSSL push-protocol ATTLOG record is one
-punch per line, tab-separated:
-`PIN  YYYY-MM-DD HH:MM:SS  status  verify  workcode  reserved…`
-- `PIN` is the device user ID.
-- The timestamp is device-local time with no zone; it's interpreted in the
-  device's configured timezone, default Asia/Kolkata.
-- `status` is the punch state (e.g. 0 check-in, 1 check-out; other values
-  mean breaks or overtime on some firmware).
-- `verify` is the verification method (fingerprint, card, face…).
+**ATTLOG line format: CONFIRMED from a real export from our device**
+(user-supplied sample, recorded 2026-10-01). One punch per line, six
+tab-separated columns:
 
-Trailing fields vary by firmware. The parser reads the leading fields it
-needs, tolerates extra or missing trailing ones, and records unparseable
-lines as rejected rather than failing a batch. **The exact layout,
-including the emergency file's format (a device USB dump versus an
-eSSL-software export), is confirmed against a real sample when the device
-is connected** (§14). The parser is configurable rather than guessed.
+```
+18	2021-09-01 18:30:19	1	255	1	0
+44	2021-09-01 18:30:38	1	255	1	0
+113	2021-09-01 19:02:25	1	255	1	0
+113	2021-09-01 19:02:28	1	255	1	0
+```
+
+| # | Column | Notes |
+|---|---|---|
+| 1 | Device user ID | Low integers on our machine (observed **2–126**), **not** our 1000-series Employee Codes. Punches are therefore resolved **only** through `device_user_mappings` (§3, §4.3), never by matching Employee Code. |
+| 2 | Timestamp | `YYYY-MM-DD HH:MM:SS`, device-local time with no zone. Interpreted in the device's configured timezone (default Asia/Kolkata). |
+| 3 | Status | **Always `1` on our device. It carries no in/out direction.** |
+| 4 | Verify mode | `255` in the sample. Stored as-is. |
+| 5 | Workcode | `1` in the sample. Stored as-is. |
+| 6 | Reserved | `0` in the sample. Stored as-is. |
+
+Consequences:
+- **Direction is inferred, never read from the device.** Raw punches are
+  stored with `direction = UNKNOWN`. The rules engine (§4.4) treats the
+  first punch of the employee's shift window as IN and the last as OUT.
+  Intermediate punches are kept and shown (Employee Swipes, day detail)
+  but don't create break time by default. Inferring break pairs from them
+  is a configurable option, off by default, since nothing on the device
+  says which punch was which.
+- **Real duplicate punches happen:** user 113 punched twice, three seconds
+  apart. Both rows are distinct raw punches (different timestamps). The
+  engine's near-duplicate window (§4.4, 2 minutes) collapses them. This
+  sample is a mandatory test fixture.
+- **The parser stays tolerant.** It reads the six columns, tolerates extra
+  trailing columns and surrounding whitespace, and records an unparseable
+  line as rejected (with the line kept for HR) instead of failing the
+  batch. Other firmware may send different status values, so status and
+  verify mode are stored but not relied on.
+- **This sample is an export from the device, so the emergency file upload
+  (route 3) accepts exactly this format.** ADMS push (route 2) carries
+  ATTLOG records in the same layout. The punch simulator (§4.6) produces
+  exactly this format: `status` 1, verify 255, workcode 1, reserved 0, and
+  low-integer device user IDs.
 
 **Clock and ordering safeguards:**
 - Punches may arrive out of order or late (catch-up), and are processed
@@ -167,7 +192,7 @@ is connected** (§14). The parser is configurable rather than guessed.
 ### 4.3 Real-time pipeline
 
 1. Punch arrives by any route (§4.1) → the ingestion service inserts into `raw_punches` (exact duplicates skipped).
-2. Resolve `device_user_id` → employee via `employees.employee_code` (and optional `device_user_mappings` for multiple devices). If unresolved → record in unmapped list for HR.
+2. Resolve `device_user_id` → employee **via `device_user_mappings` only**, as active on the punch date. Our device's IDs (2–126) are not Employee Codes (§4.1), so matching on `employees.employee_code` would mis-map punches. If unresolved, the punch is recorded in the unmapped list for HR.
 3. Enqueue BullMQ job `attendance.recompute { employeeId, date }` (debounced/deduplicated per employee-date).
 4. Worker recomputes that day, saves, and emits Socket.IO events:
    - `attendance.updated` → room `user:{id}` and `manager:{managerId}`
@@ -188,7 +213,7 @@ Evaluate in this order for each employee and date:
    - Shift = shift override for that date, else roster assignment, else employee default shift.
    - Pair punches within the shift window (shift start − 4 h to shift end + 6 h, configurable). **Night shifts crossing midnight** belong to the shift's start date.
    - Ignore duplicate punches within 2 minutes.
-   - First punch = first in, last punch = last out. If directions are available, compute break time from OUT→IN gaps.
+   - First punch = first in, last punch = last out (our device sends no direction, §4.1). Break time from OUT→IN gaps only when a punch carries a real direction, or the optional inferred-pairing setting is on (off by default).
    - Late-in = first_in − (shift start + grace). Early-out = (shift end − grace) − last_out.
    - Full day if actual hours ≥ `full_day_min_hours`; half day if ≥ `half_day_min_hours`; else absent.
    - **Half-day minimum not met → 1 day LOP** (current greytHR rule; configurable).
@@ -206,7 +231,9 @@ HR finalises a payroll month's attendance. Finalised days are locked (`is_locked
 
 A maintained tool, not a throwaway script, because it's how Phases 2–3
 are built and verified before the device exists. It must:
-- **Generate realistic punch streams in the ATTLOG format of §4.1**, for
+- **Generate realistic punch streams in exactly the confirmed ATTLOG format
+  of §4.1** (six tab-separated columns, status always `1`, verify `255`,
+  workcode `1`, reserved `0`, low-integer device user IDs, no direction), for
   real (seeded or staging) employees, using their actual shifts,
   week-offs, holidays and leave, so the engine's output can be checked
   against what was intended.
@@ -482,7 +509,7 @@ From here on, every phase is verified on staging, not only locally.
 of Phase 2. It means:
 - installing the agent as a Windows service on the office PC;
 - registering the device;
-- confirming the ATTLOG layout against a real sample;
+- checking live punches against the confirmed ATTLOG layout (§4.1);
 - a short parallel check against greytHR.
 
 **Phase 3 — Attendance administration**
@@ -514,6 +541,7 @@ Production CDK stack (Multi-AZ RDS, deletion protection, longer backup retention
 
 **Phase 6 — Payroll (parallel run with greytHR)**
 Components, structures, employee salaries, payroll run, LOP from finalised attendance, leave encashment, arrears, payslips (PDF), variance report, maker-checker, bank transfer file, PF/ESI/PT/LWF outputs, salary register.
+**Revisit offer letters here:** until Phase 6, the offer letter (Phase 5 commit D2) is generated against the employee record created at joining, with HR typing figures such as CTC at generation time. Once salary structures exist, those figures should be pulled from the employee's salary assignment rather than typed (user decision, 2026-10-01).
 
 **Phase 7 — Tax & benefits**
 IT declarations (old/new regime), proof of investment, TDS projection, IT statement, YTD, Form 16 data, loans & advances, reimbursements, full & final settlement, salary revision letters.
@@ -535,10 +563,11 @@ Assets management, performance/review cycles, custom report builder, scheduled r
 
 ## 14. Open questions (Claude Code: do not guess these — keep configurable and list in PROGRESS.md)
 
-- Exact biometric device brand/model and whether ADMS push is supported. Not blocking: Phases 2–3 are built against the simulator, and this is answered when the device is connected.
-- The exact ATTLOG line layout and the emergency file's format on our firmware (§4.1 records the standard layout as a working assumption): confirm from a real sample.
-- The office PC that will run the sync agent (Windows version, always-on?) and how many devices there are.
-- Working hours and working days for the "no punches" alert (§4.7): defaults are configurable until HR confirms.
+- The eSSL device **model number**, and whether it supports ADMS push. Not blocking: Phases 2–3 are built against the simulator, and the device is connected last.
+- The device's **LAN IP address**, and its **admin password** (needed by the sync agent). The password is supplied at install time and stored only in the agent's local configuration or a secrets store, **never in the repo or docs**.
+- Whether an **always-on office PC** exists to run the sync agent as a Windows service (and its Windows version), and how many devices there are.
+- Working hours and working days for the "no punches" alert (§4.7): configurable defaults until HR confirms.
+- **Employee Code vs Device User ID default (§3):** §3 pre-fills Employee Code from the Device User ID, but our device's IDs (2–126) differ from our 1000-series Employee Codes. Should Add Employee stop pre-filling, or is the 1000-series only for existing staff? Punch mapping is unaffected: it always goes through `device_user_mappings`.
 - Exact PL eligibility boundary (credit on completing 3 months vs from next month) and pro-rating.
 - Leave encashment formula and its tax treatment (to be confirmed by CA).
 - Bank bulk-transfer file format (from bank).

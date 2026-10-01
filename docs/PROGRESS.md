@@ -2732,19 +2732,32 @@ Updated:
 - `docs/plans/PHASE_2.md` (new).
 - `biometric-agent/README.md`.
 
-**Correction recorded:** §4 had *not* recorded an exact eSSL ATTLOG
-format, only "user id, timestamp, status, verify type". The standard
-ZKTeco/eSSL layout is now written down as a **working assumption** with a
-tolerant, configurable parser, to be confirmed from a real sample at
-device connection (new open question below).
+**ATTLOG format: confirmed (follow-up, same day).** The user re-supplied a
+real export from our device. It had been given in an earlier session but
+was never written into the repo, so this entry's first version wrongly
+recorded the layout as an assumption. Spec §4.1 now has the confirmed
+format and the sample itself:
+- six tab-separated columns: device user ID, timestamp, status, verify,
+  workcode, reserved;
+- **status is always 1, so the direction is inferred** (first punch IN,
+  last OUT);
+- **device user IDs are 2–126, not Employee Codes**, so §4.3 now maps
+  punches only through `device_user_mappings`;
+- the sample's three-seconds-apart duplicate (user 113) is a mandatory
+  test fixture.
+
+The ATTLOG open question is removed. One new question: §3's
+pre-filling of Employee Code from Device User ID conflicts with those
+low device IDs.
 
 ## Open questions
 
 Carried from spec §14 — configurable, not guessed, until answered:
 
-- [ ] Exact biometric device brand/model and whether ADMS push is supported. Not blocking (2026-10-01): Phases 2–3 are built against the punch simulator, and the device is connected last.
-- [ ] The exact ATTLOG line layout and the emergency file's format on our firmware: confirm from a real sample (spec §4.1 records the standard layout as a working assumption).
-- [ ] The office PC that will run the sync agent (Windows version, always on), and the number of devices.
+- [ ] The eSSL device model number, and whether it supports ADMS push. Not blocking (2026-10-01): Phases 2–3 are built against the punch simulator, and the device is connected last.
+- [ ] The device's LAN IP address and admin password (needed by the sync agent). The password is supplied at install and kept in the agent's local configuration or a secrets store, never in the repo.
+- [ ] Whether an always-on office PC exists to run the sync agent as a Windows service (Windows version), and how many devices there are.
+- [ ] Employee Code vs Device User ID default (spec §3): Add Employee pre-fills Employee Code from the Device User ID, but our device's IDs (2–126) differ from the 1000-series Employee Codes. Keep pre-filling or not? (Punch mapping is unaffected; it always uses `device_user_mappings`.)
 - [ ] Working hours and working days for the device-silence alert (spec §4.7): configurable defaults until HR confirms.
 - [x] Exact PL eligibility boundary: **HR-confirmed 2026-09-28** — 90 calendar
       days from DOJ (`leave_policies.eligibility_mode = DAYS`,
