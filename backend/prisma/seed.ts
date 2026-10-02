@@ -1,6 +1,5 @@
 import { PrismaClient, EmploymentType, Gender, Prisma } from "@prisma/client";
 import argon2 from "argon2";
-import { PERMISSION_KEYS } from "@shared/constants/permissions";
 import { encryptField } from "../src/lib/encryption";
 import { blindIndex, normalizePan, normalizeAadhaar, normalizeAccountNumber } from "../src/lib/fieldHash";
 import { assertDevelopmentEnvironment } from "../src/lib/devGuard";
@@ -15,6 +14,9 @@ import {
 import { minimalPdf } from "../src/lib/devFixtures";
 import { DEFAULT_HELPDESK_AUTO_CLOSE_DAYS, DEFAULT_HELPDESK_REOPEN_WINDOW_DAYS } from "@shared/constants/helpdesk";
 import { LETTER_TEMPLATE_SEEDS } from "./seedLetterTemplates";
+import { SYSTEM_ROLES } from "../src/lib/systemRoles";
+import { ensureAccessCatalog } from "../src/lib/accessCatalog";
+import { prisma as appPrisma } from "../src/lib/prisma";
 
 assertDevelopmentEnvironment("the Phase 1 seed script (inserts fake employee/bank/statutory data)");
 
@@ -317,98 +319,14 @@ async function main() {
   });
 
   // ── Permissions + Roles ─────────────────────────────────────────────
-  const permissions = await Promise.all(
-    PERMISSION_KEYS.map((key) =>
-      prisma.permission.create({ data: { key, description: key.replace(/\./g, " ").replace(/_/g, " ") } }),
-    ),
+  // The same additive step every environment runs on migrate (E1): a
+  // Permission row per catalog key and each system role with its default
+  // definition from src/lib/systemRoles.ts. `npm run db:migrate` has usually
+  // created them already; anything missing is created here.
+  await ensureAccessCatalog();
+  const roles: Record<string, { id: string }> = Object.fromEntries(
+    (await prisma.role.findMany({ where: { code: { in: SYSTEM_ROLES.map((r) => r.code) } } })).map((r) => [r.code, r]),
   );
-  const perm = Object.fromEntries(permissions.map((p) => [p.key, p]));
-
-  // HR_EXECUTIVE deliberately excludes employee.statutory.* and
-  // employee.bank.* — spec §2 says "no salary or bank data"; PAN/Aadhaar/
-  // UAN are held to the same bar as bank data here, so HR_EXECUTIVE is
-  // blocked from both reveal endpoints, not just bank (commit C IDOR test
-  // covers this explicitly).
-  const HR_EXECUTIVE_PERMS = [
-    "employee.view",
-    "employee.create",
-    "employee.edit",
-    "employee.export",
-    "employee.manage",
-    "employee.separate",
-    "employee.separate.view",
-    "profile.changerequest.approve",
-    "org.manage",
-    "import.manage",
-    "role.view",
-    // Phase 4 — leave administration stays with HR_EXECUTIVE; config/
-    // financial actions (policy.manage/recalculate/yearend.manage) are
-    // HR_ADMIN+ only, same narrowing as settings.manage/import.manage.
-    "leave.view",
-    "leave.approve",
-    "leave.grant",
-    "leave.apply.onBehalf",
-    // Phase 5 commit C — Document Center admin and HR-held employee documents.
-    // Not salary/bank data, so HR_EXECUTIVE holds them too; MANAGER does not.
-    "documents.manage",
-    "employee.documents.view",
-    "employee.documents.manage",
-    // Phase 5 commit D — the helpdesk queue, but NOT sensitive categories
-    // (Payroll & Salary, Grievance): same bar as "no salary or bank data".
-    "helpdesk.manage",
-    // Phase 5 commit D2 — issuing letters (templates themselves are HR_ADMIN+).
-    "letters.generate",
-  ];
-  const HR_ADMIN_PERMS = [
-    ...HR_EXECUTIVE_PERMS,
-    "helpdesk.sensitive.view",
-    "letters.template.manage",
-    "employee.statutory.view",
-    "employee.statutory.edit",
-    "employee.bank.view",
-    "employee.bank.edit",
-    "user.security.manage",
-    "audit.view",
-    "settings.manage",
-    "leave.policy.manage",
-    "leave.recalculate",
-    "leave.yearend.manage",
-    // Phase 5 — config/financial actions stay HR_ADMIN+, same narrowing as settings.manage/leave.policy.manage
-    "announcements.manage",
-    "engage.moderate",
-    "engage.groups.manage",
-    "engage.autopost.manage",
-  ];
-  const PAYROLL_ADMIN_PERMS = ["employee.view", "employee.bank.view", "employee.statutory.view", "leave.view"];
-  // leave.approve/leave.view here is a real fix over commit A's original
-  // seed, caught while designing commit B's approve endpoint: MANAGER is
-  // TEAM-scoped via resolveDataScope, but scope alone doesn't grant a
-  // permission — without these, no manager could ever approve their own
-  // team's leave, contradicting "Manager and HR: approve/reject..." (the
-  // explicit ask). All three stay TEAM-limited by resolveDataScope, not by
-  // being narrower permission strings.
-  const MANAGER_PERMS = ["employee.view", "leave.view", "leave.approve", "leave.apply.onBehalf"];
-  const SUPER_ADMIN_PERMS = PERMISSION_KEYS;
-
-  const ROLES = [
-    { code: "SUPER_ADMIN", name: "Super Admin", permissions: SUPER_ADMIN_PERMS },
-    { code: "HR_ADMIN", name: "HR Admin", permissions: HR_ADMIN_PERMS },
-    { code: "HR_EXECUTIVE", name: "HR Executive", permissions: HR_EXECUTIVE_PERMS },
-    { code: "PAYROLL_ADMIN", name: "Payroll Admin", permissions: PAYROLL_ADMIN_PERMS },
-    { code: "MANAGER", name: "Manager", permissions: MANAGER_PERMS },
-    { code: "APPROVER", name: "Approver", permissions: ["leave.approve", "leave.view"] }, // Phase 4 — more
-    // permissions arrive with Phase 6 (payroll maker-checker)
-    { code: "EMPLOYEE", name: "Employee", permissions: [] as string[] },
-  ];
-
-  const roles: Record<string, { id: string }> = {};
-  for (const r of ROLES) {
-    const role = await prisma.role.create({ data: { code: r.code, name: r.name } });
-    roles[r.code] = role;
-    await prisma.rolePermission.createMany({
-      data: r.permissions.map((key) => ({ roleId: role.id, permissionId: perm[key]!.id })),
-    });
-  }
 
   // ── Employees ────────────────────────────────────────────────────────
   // Device-ID reuse fixture first: a separated employee who used to hold
@@ -980,4 +898,5 @@ main()
   })
   .finally(async () => {
     await prisma.$disconnect();
+    await appPrisma.$disconnect(); // the client ensureAccessCatalog() used
   });

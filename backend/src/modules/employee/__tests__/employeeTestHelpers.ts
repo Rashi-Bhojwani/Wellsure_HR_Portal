@@ -170,7 +170,7 @@ export async function grantPermissions(roleCode: string, permissionKeys: string[
 
 // Strips the given permission keys from a role, if present — for tests
 // that assert a role must NOT have some permission. Needed because a
-// shared literal role code (e.g. "HR_EXECUTIVE", used so resolveDataScope
+// shared literal role code (e.g. "HR_EXECUTIVE", used so the seeded role's data scope (Role.dataScope, E1)
 // resolves correctly — see profileAndReveal.test.ts) may already carry
 // permissions granted by an earlier test run or a stale local seed;
 // grantPermissions only ever adds, so a negative test needs this to get a

@@ -18,7 +18,7 @@ export async function cleanupTestCategories(ids: string[]): Promise<void> {
   await deleteWithDependents("DocumentCategory", ids);
 }
 
-// Adds a literal role code to an existing fixture user. resolveDataScope
+// Adds a literal role code to an existing fixture user. the role's data scope (Role.dataScope, E1)
 // matches literal codes, so ALL scope needs e.g. "HR_ADMIN" itself.
 export async function addLiteralRole(userId: string, code: string): Promise<void> {
   const role = await prisma.role.upsert({ where: { code }, create: { code, name: code }, update: {} });

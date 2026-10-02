@@ -282,6 +282,8 @@ Run from the repo root unless noted.
 | `npm run typecheck` | `tsc --noEmit` across every project |
 | `npm run test` | Vitest, backend + frontend — backend is an integration suite against your real local Postgres/Redis, not mocks; frontend covers route-config wiring (`frontend/src/routes/__tests__/`) |
 | `npm run check:services` | Confirms Postgres/Redis are reachable |
+| `npm run admin:bootstrap --prefix backend` | Create the **first** real Super Admin on a fresh staging/production database — see §12. Refuses once any active Super Admin exists, so it does nothing locally (seeded `1000` is one) |
+| `npm run admin:recover --prefix backend` | Break-glass recovery for a Super Admin who lost their password or 2FA device — see §12 |
 
 **Prisma Studio** (a GUI for browsing/editing the database):
 
@@ -400,3 +402,141 @@ For the *business rules* behind any of this (attendance engine, leave
 policy, RBAC model, security requirements), see
 [`docs/PROJECT_SPEC.md`](PROJECT_SPEC.md) — this file is only about
 running the code, not what it should do.
+
+---
+
+## 12. Super Admin accounts: first-time setup and recovery
+
+Super Admin is guaranteed in code (Phase 5 commit E1, spec §2):
+
+- it always holds **every** permission with data scope **ALL**. This is
+  computed in `backend/src/lib/permissions.ts`, not read from the role's
+  rows, so nobody (a Super Admin included) can revoke anything from it;
+- the **last active Super Admin can never be lost**. Deactivating,
+  removing the role from, or separating the only active Super Admin is
+  refused, both by the API with a clear message and by database triggers
+  for any other path.
+
+Production is meant to have **two** real Super Admins, so either can be
+removed or recover the other while one remains. The seeded accounts
+(`1000` etc.) are fake and exist only in development. Real people's
+details never go in the seed or anywhere else in the repo.
+
+### Creating the first Super Admin (staging and production)
+
+Staging and production are never seeded, so the first Super Admin is
+created once with `scripts/admin-bootstrap.ts`. It:
+
+- refuses if any **active** Super Admin already exists. After that, Super
+  Admins are appointed in the app.
+- takes the person's details **at runtime**: from prompts when run in a
+  terminal, or from flags / `BOOTSTRAP_*` environment variables. The full
+  list is at the top of the script.
+- attaches the role to an existing employee by employee code, or creates
+  a minimal employee record. The minimal record has identity and contact
+  details only. Addresses and emergency contact are set to "To be updated
+  in the portal"; job placement is added later from the profile once
+  departments exist.
+- **never handles a password.** The person gets the normal invitation
+  email and sets their own password (and 2FA, where the
+  `auth.require2faRoles` setting requires it) in the browser.
+- writes an audit-log entry (`access.super_admin.bootstrapped`) with no
+  actor.
+
+Steps:
+
+1. Deploy as usual. The `migrate` task applies migrations **and** creates
+   the permission catalog and system roles (`ensureAccessCatalog`). The
+   bootstrap also runs it, in case it hasn't.
+2. Make sure outgoing email works in that environment (SES), because the
+   invitation goes to the person's personal Gmail. If email can't be
+   relied on yet, add `--print-link`. The script then also prints the
+   set-password link; hand it over in person and treat it like a password.
+3. Run the script **inside the backend image**, in the target environment,
+   from a shell on a running backend container (ECS Exec), so the details
+   are typed at prompts and never stored anywhere:
+
+   ```bash
+   aws ecs execute-command --cluster <cluster> --task <api-task-id> \
+     --container <backend-container> --interactive \
+     --command "node_modules/.bin/tsx scripts/admin-bootstrap.ts"
+   ```
+
+   The exact cluster and container names come from the CDK app stack once
+   it's deployed. It prints the environment and the masked database URL
+   first. Check them, answer the prompts, then type `yes`.
+
+   *Avoid* passing the details as environment-variable overrides on a
+   one-off `aws ecs run-task`. That works (add `--yes`), but the values
+   are then kept in the ECS task definition/overrides, where anyone who
+   can describe tasks can read a real person's details.
+4. The person opens the invitation, sets a password, signs in with their
+   employee code, and completes their profile (address, emergency
+   contact, and job placement under Employee → profile → Job).
+5. They appoint the **second** Super Admin in the app: create that person
+   with Add Employee as usual (or open their existing profile), then go to
+   profile → **Access** → Roles → add *Super Admin*. Only a Super Admin can
+   assign that role.
+
+If the invitation link expires before it's used, run the script again with
+the **same** employee code. It sends a fresh link. It refuses any other
+code while that invitation is outstanding.
+
+### If a Super Admin loses their password or 2FA device
+
+Work down this list and stop at the first step that applies. In every
+case, **verify the person's identity out of band first** (in person or by
+a call to a known number), never just on the strength of an email or
+chat message.
+
+1. **The other Super Admin does it in the app (normal path).**
+   They open the person's profile → **Access** → Security:
+   - *Reset 2FA*: clears the authenticator and backup codes and signs the
+     person out everywhere. They enrol again at next sign-in.
+   - *Send password reset*: emails a 1-hour reset link to their personal
+     Gmail.
+   - *Unlock*: clears a failed-login lockout.
+
+   All three ask for a reason and are audit-logged. Only a Super Admin can
+   do these to a Super Admin. Nobody can do them to themselves, and HR
+   staff with `user.security.manage` can do them only for non-Super-Admins.
+2. **Lost password but still has 2FA and their Gmail:** they use *Forgot
+   password* on the sign-in page. No admin needed.
+3. **No other Super Admin can help** (the other one is unavailable or also
+   locked out): use the **break-glass CLI**, run the same way as the
+   bootstrap (ECS Exec into a backend container):
+
+   ```bash
+   node_modules/.bin/tsx scripts/admin-recover.ts --employee-code <code> \
+     --reset-2fa --password-reset --unlock --reason "<why, ticket ref>"
+   ```
+
+   Pick only the actions needed. It works on Super Admin accounts only (it
+   refuses everyone else), it can only reset, unlock or re-issue (never set
+   a password or grant a role), and each action is audit-logged with no
+   actor and your reason prefixed `[break-glass CLI]`. If they've also lost
+   access to their Gmail, add `--print-link` and hand the reset link over
+   in person. It is valid for 1 hour and works once.
+4. **Last resort: the app can't run at all.** Connect to the database
+   directly, through an SSM port-forward to RDS via the bastion/instance
+   the infra stack provides, using the admin credentials from Secrets
+   Manager. Then clear 2FA and the lockout for that one user:
+
+   ```sql
+   BEGIN;
+   UPDATE users SET totp_enabled = false, totp_secret_encrypted = NULL, totp_verified_at = NULL,
+                    failed_login_attempts = 0, locked_until = NULL
+    WHERE employee_id = (SELECT id FROM employees WHERE employee_code = '<code>');
+   DELETE FROM totp_backup_codes WHERE user_id = (SELECT u.id FROM users u JOIN employees e ON e.id = u.employee_id WHERE e.employee_code = '<code>');
+   INSERT INTO audit_logs (id, actor_user_id, action, entity_type, entity_id, after, created_at)
+   SELECT gen_random_uuid()::text, NULL, 'auth.2fa.reset_by_sql', 'User', u.id, '{"reason":"<why>"}'::jsonb, now()
+     FROM users u JOIN employees e ON e.id = u.employee_id WHERE e.employee_code = '<code>';
+   COMMIT;
+   ```
+
+   The person then uses *Forgot password* (step 2) once the app is back.
+   Never write a password hash by hand. Record what was done and why
+   outside the system too, since this bypasses the app's own checks.
+
+The database triggers still apply on this path: no SQL can leave the
+system with zero active Super Admins.

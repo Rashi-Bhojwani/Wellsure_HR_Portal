@@ -1,10 +1,10 @@
+import type { DataScope } from "@shared/constants/roles";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { Prisma, type DocumentCategoryScope } from "@prisma/client";
 import { storageService } from "../../integrations/storage";
 import { writeAuditLog } from "../../lib/audit";
 import { audienceWhere, getCurrentPlacement, isInAudience } from "../../lib/audience";
-import { resolveDataScope } from "../../lib/dataScope";
 import { getPeopleDocumentsSettings } from "../../lib/peopleDocumentsSettings";
 import { prisma } from "../../lib/prisma";
 import { prepareDocumentUpload } from "../../lib/uploads";
@@ -37,6 +37,7 @@ export interface DocumentViewer {
   userId: string;
   employeeId: string;
   roleCodes: string[];
+  dataScope: DataScope; // resolved per request (lib/permissions.ts)
   permissions: Set<string>;
 }
 
@@ -301,7 +302,7 @@ function formatEmployeeDoc(row: EmployeeDocRow) {
 // Permission alone isn't enough: the target employee must also be inside
 // the viewer's data scope (spec §2/§9 IDOR rule). Out of scope reads as 404.
 async function assertEmployeeInScope(employeeId: string, viewer: DocumentViewer) {
-  await findScopedEmployee(employeeId, viewer.employeeId, resolveDataScope(viewer.roleCodes));
+  await findScopedEmployee(employeeId, viewer.employeeId, viewer.dataScope);
 }
 
 async function loadEmployeeDocInScope(id: string, viewer: DocumentViewer) {

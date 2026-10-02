@@ -15,7 +15,7 @@ import {
 } from "./employeeTestHelpers";
 
 describe("Employee profile, reveal + history — scope and permission IDOR", () => {
-  // resolveDataScope (lib/dataScope.ts) matches these exact literal role
+  // each seeded role's Role.dataScope (E1) matches these exact literal role
   // codes to decide SELF/TEAM/ALL — a randomized TEST_* role code would
   // never match any of them and would silently fall through to SELF
   // regardless of intent (found the hard way: every one of these scope

@@ -3,7 +3,7 @@ import { requireFile } from "../../lib/uploads";
 import * as service from "./service";
 
 function viewer(req: Request): service.DocumentViewer {
-  return { userId: req.user!.userId, employeeId: req.user!.employeeId, roleCodes: req.user!.roleCodes, permissions: req.user!.permissions };
+  return { userId: req.user!.userId, employeeId: req.user!.employeeId, roleCodes: req.user!.roleCodes, dataScope: req.user!.dataScope, permissions: req.user!.permissions };
 }
 function actorMeta(req: Request): service.ActorMeta {
   return { actorUserId: req.user!.userId, ipAddress: req.ip ?? null, userAgent: req.headers["user-agent"] ?? null };

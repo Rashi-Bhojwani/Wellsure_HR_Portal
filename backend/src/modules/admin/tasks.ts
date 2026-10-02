@@ -1,5 +1,4 @@
 import { prisma } from "../../lib/prisma";
-import { resolveDataScope } from "../../lib/dataScope";
 import * as leaveRequestsService from "../leave/requests";
 import type { LeaveViewer } from "../leave/types";
 import { getRegularizationRequestSink } from "./regularizationIntegration";
@@ -26,7 +25,7 @@ export async function getTaskCounts(viewer: LeaveViewer): Promise<TaskCounts> {
   const leaveReview = canApprove ? (await leaveRequestsService.listLeaveRequests({ status: "PENDING", page: 1, pageSize: 1 }, viewer)).total : 0;
 
   const hasBroadView = viewer.permissions.has("leave.view");
-  const scope = resolveDataScope(viewer.roleCodes);
+  const scope = viewer.dataScope;
   let leaveMonitor = 0;
   if (hasBroadView && scope === "ALL") {
     const orgWidePending = await prisma.leaveRequest.count({ where: { status: "PENDING" } });

@@ -48,6 +48,6 @@ export async function saveLayout(req: Request, res: Response): Promise<void> {
 // user legitimately calls this for their own review/monitor counts) ────
 
 export async function getTaskCounts(req: Request, res: Response): Promise<void> {
-  const viewer = { employeeId: req.user!.employeeId, roleCodes: req.user!.roleCodes, permissions: req.user!.permissions };
+  const viewer = { employeeId: req.user!.employeeId, roleCodes: req.user!.roleCodes, dataScope: req.user!.dataScope, permissions: req.user!.permissions };
   res.status(200).json(await tasksService.getTaskCounts(viewer));
 }

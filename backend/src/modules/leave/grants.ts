@@ -1,7 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { writeAuditLog } from "../../lib/audit";
-import { resolveDataScope } from "../../lib/dataScope";
 import { HttpError } from "../../middleware/errorHandler";
 import { creditCompOff } from "./compOff";
 import { withEmployeeLeaveLock } from "./concurrency";
@@ -136,7 +135,7 @@ export async function listCompOffCredits(targetEmployeeId: string, viewer: Leave
     if (!viewer.permissions.has("leave.view")) {
       throw new HttpError(403, "Missing permission: leave.view", "FORBIDDEN");
     }
-    const scope = resolveDataScope(viewer.roleCodes);
+    const scope = viewer.dataScope;
     if (!(await isEmployeeInScope(targetEmployeeId, viewer.employeeId, scope))) {
       throw new HttpError(404, "Employee not found.", "NOT_FOUND");
     }

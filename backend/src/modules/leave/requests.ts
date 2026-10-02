@@ -3,7 +3,6 @@ import type { LeaveDayPart, LeaveRequestStatus, Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { writeAuditLog } from "../../lib/audit";
 import { addCalendarDays, businessToday } from "../../lib/businessDate";
-import { resolveDataScope } from "../../lib/dataScope";
 import { HttpError } from "../../middleware/errorHandler";
 import { emitLeaveApplied, emitLeaveDecided, emitTasksCounts } from "../../realtime/emit";
 import { getAttendanceLeaveSink, type ApprovedLeaveDay } from "./attendanceIntegration";
@@ -67,7 +66,7 @@ export async function applyForLeave(input: ApplyLeaveInput, viewer: LeaveViewer,
     if (!viewer.permissions.has("leave.apply.onBehalf")) {
       throw new HttpError(403, "Missing permission: leave.apply.onBehalf", "FORBIDDEN");
     }
-    const scope = resolveDataScope(viewer.roleCodes);
+    const scope = viewer.dataScope;
     if (!(await isEmployeeInScope(targetEmployeeId, viewer.employeeId, scope))) {
       throw new HttpError(404, "Employee not found.", "NOT_FOUND");
     }
@@ -249,7 +248,7 @@ async function reloadFormatted(requestId: string) {
 }
 
 export async function listLeaveRequests(query: ListLeaveRequestsQuery, viewer: LeaveViewer) {
-  const scope = resolveDataScope(viewer.roleCodes);
+  const scope = viewer.dataScope;
   const hasBroadView = viewer.permissions.has("leave.view");
   const where: Prisma.LeaveRequestWhereInput = {};
 
@@ -293,7 +292,7 @@ export async function getLeaveRequestById(requestId: string, viewer: LeaveViewer
   const row = await prisma.leaveRequest.findUnique({ where: { id: requestId }, include: REQUEST_LIST_INCLUDE });
   if (!row) throw new HttpError(404, "Leave request not found.", "NOT_FOUND");
 
-  const scope = resolveDataScope(viewer.roleCodes);
+  const scope = viewer.dataScope;
   const isSelf = row.employeeId === viewer.employeeId;
   if (!isSelf && !viewer.permissions.has("leave.view")) {
     throw new HttpError(404, "Leave request not found.", "NOT_FOUND");
@@ -311,7 +310,7 @@ async function assertCanDecide(existing: { employeeId: string }, viewer: LeaveVi
   if (existing.employeeId === viewer.employeeId) {
     throw new HttpError(403, "You cannot decide your own leave request.", "SELF_APPROVAL_BLOCKED");
   }
-  const scope = resolveDataScope(viewer.roleCodes);
+  const scope = viewer.dataScope;
   if (!(await isEmployeeInScope(existing.employeeId, viewer.employeeId, scope))) {
     throw new HttpError(404, "Leave request not found.", "NOT_FOUND");
   }
@@ -453,7 +452,7 @@ export async function cancelLeaveRequest(requestId: string, viewer: LeaveViewer,
     if (!viewer.permissions.has("leave.approve")) {
       throw new HttpError(403, "Missing permission: leave.approve", "FORBIDDEN");
     }
-    const scope = resolveDataScope(viewer.roleCodes);
+    const scope = viewer.dataScope;
     if (!(await isEmployeeInScope(existing.employeeId, viewer.employeeId, scope))) {
       throw new HttpError(404, "Leave request not found.", "NOT_FOUND");
     }

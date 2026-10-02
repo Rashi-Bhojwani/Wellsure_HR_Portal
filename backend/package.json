@@ -17,7 +17,9 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "db:migrate": "tsx scripts/migrate.ts",
     "check:services": "tsx scripts/check-services.ts",
-    "db:seed": "tsx scripts/reset-db.ts"
+    "db:seed": "tsx scripts/reset-db.ts",
+    "admin:bootstrap": "tsx scripts/admin-bootstrap.ts",
+    "admin:recover": "tsx scripts/admin-recover.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

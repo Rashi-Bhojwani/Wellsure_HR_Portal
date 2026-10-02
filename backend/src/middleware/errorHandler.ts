@@ -29,6 +29,13 @@ export function errorHandler(err: unknown, req: Request, res: Response, next: Ne
     return;
   }
 
+  // The database's last-SUPER_ADMIN trigger (E1): a backstop for any path
+  // the service-layer check didn't cover — surfaced as a clean 409.
+  if (err instanceof Error && err.message.includes("LAST_SUPER_ADMIN:")) {
+    res.status(409).json({ error: { message: "This is the last active Super Admin. Appoint another Super Admin first.", code: "LAST_SUPER_ADMIN" } });
+    return;
+  }
+
   if (err instanceof HttpError) {
     res.status(err.status).json({ error: { message: err.message, code: err.code } });
     return;

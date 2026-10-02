@@ -769,6 +769,69 @@ job; override resolution order; override IDOR; audit rows;
 `permissions.changed`; the bootstrap CLI (refuses when a SUPER_ADMIN
 exists, never takes a password); the recovery CLI.
 
+### E1 as built (2026-10-02)
+
+Built to the plan above. Additions and corrections:
+
+- **Correction to recovery step 1:** the plan said a 2FA reset endpoint
+  "exists since Phase 1". It didn't. E1 adds three admin security actions
+  (`modules/auth/service.ts`): `adminResetTotp` (also signs the person out
+  everywhere), `adminUnlock` and `adminIssuePasswordReset` (1-hour link).
+  The Access tab and the break-glass CLI both use them.
+  - On the Access tab, a Super Admin's sign-in can be reset only by
+    *another* Super Admin.
+  - HR holding `user.security.manage` can reset only non-Super-Admins.
+  - Nobody can reset themselves.
+- **Finding: production would have had no roles at all.** Staging and
+  production are never seeded, so not even SUPER_ADMIN would exist for the
+  bootstrap to assign. The fix is `lib/accessCatalog.ts`
+  (`ensureAccessCatalog`), which creates any missing Permission rows and
+  any missing system roles from their default definitions. It is additive
+  only and never edits an existing role. It runs in:
+  - the `migrate` mode, on every deploy;
+  - `npm run db:migrate`;
+  - the seed;
+  - the bootstrap.
+
+  The default definitions moved from the seed to `lib/systemRoles.ts`.
+- **Two layers protect the last active Super Admin:**
+  - service checks (`lib/superAdminGuard.ts`) give a clear 409
+    `LAST_SUPER_ADMIN`;
+  - Postgres triggers on `users` and `user_roles` refuse any path at all,
+    including direct SQL. `errorHandler` maps their error to the same 409.
+  - Separation initiation doesn't count a Super Admin who is already
+    leaving, so two Super Admins can't separate each other.
+  - The daily separation job skips the last one instead of completing. It
+    writes `employee.separation.blocked_last_super_admin` and sends them an
+    `access.alert` notification every day until another Super Admin is
+    appointed.
+- **Data scope** now comes from `Role.dataScope`, widest across a person's
+  roles. `lib/dataScope.ts` no longer hardcodes a role list.
+  `req.user.dataScope` is resolved once in `authenticate`.
+- **Permission rooms:** each socket joins `perm:<key>` for every key it
+  effectively holds. `permissions.changed` moves a connected user's
+  sockets between rooms server-side (`socketsJoin`/`socketsLeave`), then
+  their browser refetches `/me`. Room changes:
+  - `helpdesk.queue` now goes to `perm:helpdesk.manage`;
+  - `tasks.counts` goes to `perm:leave.approve` + `perm:leave.view` +
+    `manager:<id>`.
+- **Bootstrap details:**
+  - It attaches to an existing employee, or creates a minimal one (identity
+    and contact; addresses and emergency contact read "To be updated in the
+    portal"; no job placement, since a fresh database has no departments).
+    "Change job details" on the profile now creates the *first* placement
+    when there is none.
+  - Running it again with the same employee code re-sends an expired
+    invitation.
+  - While an invitation is pending, it refuses anyone else.
+  - `--print-link` covers environments where email can't be relied on yet.
+- **Recovery CLI scope:** Super Admin targets only. It can only reset,
+  unlock or re-issue, never set a password or grant a role. Audit entries
+  have no actor and carry the reason prefixed `[break-glass CLI]`.
+- The `admin-tools/users-roles` placeholder is now **Roles & Permissions**
+  (the path is kept). The Access tab shows to Super Admins and to holders
+  of `role.view` or `user.security.manage`.
+
 ### E2 — Three-level hierarchy on top of E1
 
 - **Structure:** strictly three flat levels: Admin (SUPER_ADMIN) → Managers

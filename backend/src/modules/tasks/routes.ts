@@ -9,5 +9,5 @@ tasksRouter.use(authenticate);
 
 tasksRouter.get("/mine", async (req: Request, res: Response) => {
   const user = req.user!;
-  res.status(200).json(await service.listMyTasks({ employeeId: user.employeeId, roleCodes: user.roleCodes, permissions: user.permissions }));
+  res.status(200).json(await service.listMyTasks({ employeeId: user.employeeId, roleCodes: user.roleCodes, dataScope: user.dataScope, permissions: user.permissions }));
 });

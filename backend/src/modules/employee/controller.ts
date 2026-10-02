@@ -1,7 +1,6 @@
 import * as photos from "../people/photos";
 import { requireFile } from "../../lib/uploads";
 import type { Request, Response } from "express";
-import { resolveDataScope } from "../../lib/dataScope";
 import { checkDeviceUserId } from "./deviceCode";
 import * as employeeService from "./service";
 import * as gridService from "./grid";
@@ -12,10 +11,10 @@ function actorMeta(req: Request) {
   return { actorUserId: req.user!.userId, ipAddress: req.ip ?? null, userAgent: req.headers["user-agent"] ?? null };
 }
 function viewer(req: Request) {
-  return { employeeId: req.user!.employeeId, roleCodes: req.user!.roleCodes, permissions: req.user!.permissions };
+  return { employeeId: req.user!.employeeId, roleCodes: req.user!.roleCodes, dataScope: req.user!.dataScope, permissions: req.user!.permissions };
 }
 function scope(req: Request) {
-  return resolveDataScope(req.user!.roleCodes);
+  return req.user!.dataScope;
 }
 
 // ── Device code check + create ──────────────────────────────────────────

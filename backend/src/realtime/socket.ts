@@ -6,7 +6,8 @@ import { verifyAccessToken } from "../lib/jwt";
 import { logger } from "../lib/logger";
 import { prisma } from "../lib/prisma";
 import { redis } from "../lib/redis";
-import { setSocketServer } from "./emit";
+import { permissionRoom, setSocketServer } from "./emit";
+import { resolveAccess } from "../lib/permissions";
 
 // Socket.IO server with the Redis adapter (spec §8), so multiple api
 // instances can broadcast to each other's connected clients. Handshake
@@ -22,6 +23,7 @@ export interface SocketAuthData {
   userId: string;
   employeeId: string;
   roleCodes: string[];
+  permissions: string[]; // effective (lib/permissions.ts) — each joins a perm:{key} room
   departmentId: string | null;
   locationId: string | null;
 }
@@ -32,13 +34,11 @@ export interface SocketAuthData {
 // account? which rooms?) is made.
 export async function authenticateSocketToken(token: string): Promise<SocketAuthData> {
   const userId = verifyAccessToken(token);
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: { roles: { include: { role: true } } },
-  });
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, employeeId: true, status: true } });
   if (!user || user.status !== "ACTIVE") {
     throw new Error("Account is not active");
   }
+  const access = await resolveAccess(user.id);
   const jobHistory = await prisma.employeeJobHistory.findFirst({
     where: { employeeId: user.employeeId, effectiveTo: null },
     select: { departmentId: true, locationId: true },
@@ -46,7 +46,8 @@ export async function authenticateSocketToken(token: string): Promise<SocketAuth
   return {
     userId: user.id,
     employeeId: user.employeeId,
-    roleCodes: user.roles.map((r) => r.role.code),
+    roleCodes: access.roleCodes,
+    permissions: [...access.permissions],
     departmentId: jobHistory?.departmentId ?? null,
     locationId: jobHistory?.locationId ?? null,
   };
@@ -77,12 +78,19 @@ export async function createSocketServer(httpServer: HttpServer): Promise<Socket
   });
 
   io.on("connection", (socket) => {
-    const { userId, employeeId, roleCodes, departmentId, locationId } = socket.data as SocketAuthData;
+    const { userId, employeeId, roleCodes, permissions, departmentId, locationId } = socket.data as SocketAuthData;
     void socket.join(`user:${employeeId}`);
     void socket.join(`manager:${employeeId}`);
     void socket.join("org");
     for (const role of roleCodes) {
       void socket.join(`role:${role}`);
+    }
+    // Permission-keyed rooms (E1): a signal meant for "whoever can work the
+    // helpdesk queue" goes to perm:helpdesk.manage, so a custom role or a
+    // per-user GRANT gets it too. Re-joined live when access changes
+    // (refreshPermissionRooms in realtime/emit.ts).
+    for (const key of permissions) {
+      void socket.join(permissionRoom(key));
     }
     if (departmentId) void socket.join(`dept:${departmentId}`);
     if (locationId) void socket.join(`location:${locationId}`);

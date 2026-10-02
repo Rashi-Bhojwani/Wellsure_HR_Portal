@@ -3,6 +3,9 @@ import { writeAuditLog } from "../../lib/audit";
 import { businessToday } from "../../lib/businessDate";
 import { HttpError } from "../../middleware/errorHandler";
 import { revokeAllUserRefreshTokens } from "../auth/tokens";
+import { logger } from "../../lib/logger";
+import { assertSuperAdminRemains, isActiveSuperAdmin, otherActiveSuperAdmins } from "../../lib/superAdminGuard";
+import { notifyEmployee } from "../notifications/notifyEmployee";
 import type { RequestMetaInput } from "./types";
 
 interface InitiateSeparationInput {
@@ -21,6 +24,10 @@ export async function initiateSeparation(employeeId: string, input: InitiateSepa
   if (active) {
     throw new HttpError(409, "This employee already has a separation in progress.", "CONFLICT");
   }
+  // E1 rule 7: never separate the last Super Admin — counting only Super
+  // Admins who aren't themselves on their way out.
+  const user = await prisma.user.findUnique({ where: { employeeId }, select: { id: true } });
+  if (user) await assertSuperAdminRemains(user.id, { excludeLeaving: true });
 
   const lastWorkingDate = new Date(input.lastWorkingDate);
   const [row] = await prisma.$transaction([
@@ -84,6 +91,22 @@ export async function processScheduledSeparations(): Promise<{ processed: number
   // needs its own transaction.
   let processed = 0;
   for (const sep of due) {
+    // E1 rule 7: completing this would deactivate the last active Super
+    // Admin — refuse, keep the separation pending, and raise the alarm
+    // (every day until someone appoints another Super Admin or cancels it).
+    const leaving = await prisma.user.findUnique({ where: { employeeId: sep.employeeId }, select: { id: true } });
+    if (leaving && (await isActiveSuperAdmin(leaving.id)) && (await otherActiveSuperAdmins(leaving.id)) === 0) {
+      logger.error({ separationId: sep.id, employeeId: sep.employeeId }, "separation NOT completed: employee is the last active Super Admin");
+      await writeAuditLog({ actorUserId: null, action: "employee.separation.blocked_last_super_admin", entityType: "Employee", entityId: sep.employeeId, after: { separationId: sep.id } });
+      await notifyEmployee(sep.employeeId, {
+        type: "access.alert",
+        title: "Your separation couldn't complete",
+        body: "You're the last active Super Admin, so your access was kept. Appoint another Super Admin (Employee profile → Access), then the separation completes on the next daily run.",
+        link: "/admin",
+        payload: { separationId: sep.id },
+      });
+      continue;
+    }
     await prisma.$transaction(async (tx) => {
       await tx.employee.update({ where: { id: sep.employeeId }, data: { status: "SEPARATED" } });
       await tx.user.update({ where: { employeeId: sep.employeeId }, data: { status: "DEACTIVATED" } });

@@ -39,7 +39,7 @@ describe("Leave — seeded role -> permission grants", () => {
     expect(perms.has("leave.yearend.manage")).toBe(false);
   });
 
-  it("MANAGER has view/approve/onBehalf (scope-limited to their own team by resolveDataScope, not by these permission strings) but not grant/policy/recalculate/yearend", async () => {
+  it("MANAGER has view/approve/onBehalf (scope-limited to their own team by the MANAGER role's TEAM data scope, not by these permission strings) but not grant/policy/recalculate/yearend", async () => {
     const perms = await leavePermissionsFor("MANAGER");
     expect(perms.has("leave.view")).toBe(true);
     expect(perms.has("leave.approve")).toBe(true);

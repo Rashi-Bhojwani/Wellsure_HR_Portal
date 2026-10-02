@@ -5,6 +5,7 @@ import { useLeaveNotifications } from "../sockets/useLeaveNotifications";
 import { useNotifications } from "../sockets/useNotifications";
 import { useEngageRealtime } from "../sockets/useEngageRealtime";
 import { useHelpdeskRealtime } from "../sockets/useHelpdeskRealtime";
+import { usePermissionsRealtime } from "../sockets/usePermissionsRealtime";
 
 // Gate for every /app and /admin route — redirects to /login once the
 // initial silent-refresh bootstrap (see AuthProvider) has resolved and
@@ -17,6 +18,7 @@ export function RequireAuth() {
   useNotifications();
   useEngageRealtime();
   useHelpdeskRealtime();
+  usePermissionsRealtime();
 
   if (isLoading) {
     return (

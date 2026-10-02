@@ -1,6 +1,5 @@
 import { prisma } from "../../lib/prisma";
 import { businessToday } from "../../lib/businessDate";
-import { resolveDataScope } from "../../lib/dataScope";
 import { HttpError } from "../../middleware/errorHandler";
 import { getLeaveBalanceDetail } from "./ledger";
 import { isEmployeeInScope } from "./scope";
@@ -22,7 +21,7 @@ export async function getLeaveBalancesForDisplay(targetEmployeeId: string | unde
     if (!viewer.permissions.has("leave.view")) {
       throw new HttpError(403, "Missing permission: leave.view", "FORBIDDEN");
     }
-    const scope = resolveDataScope(viewer.roleCodes);
+    const scope = viewer.dataScope;
     if (!(await isEmployeeInScope(employeeId, viewer.employeeId, scope))) {
       throw new HttpError(404, "Employee not found.", "NOT_FOUND");
     }

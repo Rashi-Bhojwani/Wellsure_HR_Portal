@@ -4,7 +4,7 @@ import { prisma } from "../../../lib/prisma";
 import { app, authHeader, cleanupEmployeeTestOrgMasters, cleanupLoginableTestEmployee, createEmployeeTestOrgMasters, createLoginableTestEmployee, loginAs, type TestOrgMasters } from "./leaveTestHelpers";
 
 describe("Leave — admin grants (POST /api/leave/grants, /comp-off/grant, GET /comp-off)", () => {
-  // HR_ADMIN, not a synthetic role code: resolveDataScope keys off known
+  // HR_ADMIN, not a synthetic role code: the seeded role's data scope (Role.dataScope, E1) keys off known
   // role codes (SUPER_ADMIN/HR_ADMIN/HR_EXECUTIVE/PAYROLL_ADMIN/APPROVER/
   // MANAGER), so an unrecognised synthetic code silently resolves to SELF
   // scope — fine for the permission-gate checks below, but wrong for the

@@ -76,10 +76,12 @@ export async function resetPassword(token: string, password: string): Promise<vo
 }
 
 export interface MeResponse {
+  employeeId: string;
   employeeCode: string;
   fullName: string;
   roleCodes: string[];
   permissions: string[];
+  dataScope: "SELF" | "TEAM" | "ALL";
   totpEnabled: boolean;
   privacyNoticeAccepted: boolean;
 }

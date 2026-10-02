@@ -15,7 +15,7 @@ function actorMeta(req: Request): ActorMeta {
   return { actorUserId: req.user!.userId, ipAddress: req.ip ?? null, userAgent: req.headers["user-agent"] ?? null };
 }
 function viewer(req: Request): LeaveViewer {
-  return { employeeId: req.user!.employeeId, roleCodes: req.user!.roleCodes, permissions: req.user!.permissions };
+  return { employeeId: req.user!.employeeId, roleCodes: req.user!.roleCodes, dataScope: req.user!.dataScope, permissions: req.user!.permissions };
 }
 
 // ── Leave types (read-only here) ────────────────────────────────────────

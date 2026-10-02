@@ -10,7 +10,7 @@ function makeRequest(user?: Request["user"]): Request {
 describe("requireAuth", () => {
   it("calls next() when req.user is set", () => {
     const next = vi.fn();
-    requireAuth(makeRequest({ userId: "u1", employeeId: "e1", roleCodes: [], permissions: new Set() }), {} as Response, next);
+    requireAuth(makeRequest({ userId: "u1", employeeId: "e1", roleCodes: [], dataScope: "SELF" as const, permissions: new Set() }), {} as Response, next);
     expect(next).toHaveBeenCalledWith();
   });
 
@@ -29,7 +29,7 @@ describe("requirePermission", () => {
     const next = vi.fn();
     const middleware = requirePermission("employee.view");
     middleware(
-      makeRequest({ userId: "u1", employeeId: "e1", roleCodes: ["HR_ADMIN"], permissions: new Set(["employee.view"]) }),
+      makeRequest({ userId: "u1", employeeId: "e1", roleCodes: ["HR_ADMIN"], dataScope: "SELF" as const, permissions: new Set(["employee.view"]) }),
       {} as Response,
       next,
     );
@@ -40,7 +40,7 @@ describe("requirePermission", () => {
     const next = vi.fn();
     const middleware = requirePermission("employee.bank.view");
     middleware(
-      makeRequest({ userId: "u1", employeeId: "e1", roleCodes: ["HR_EXECUTIVE"], permissions: new Set(["employee.view"]) }),
+      makeRequest({ userId: "u1", employeeId: "e1", roleCodes: ["HR_EXECUTIVE"], dataScope: "SELF" as const, permissions: new Set(["employee.view"]) }),
       {} as Response,
       next,
     );

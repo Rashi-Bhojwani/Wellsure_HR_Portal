@@ -1,8 +1,8 @@
+import type { DataScope } from "@shared/constants/roles";
 import type { Prisma } from "@prisma/client";
 import { formatTicketNumber, HELPDESK_STATUS_LABELS, helpdeskAdminPath, helpdeskEmployeePath } from "@shared/constants/helpdesk";
 import type { TaskItem, TaskType } from "@shared/types/inbox";
 import { prisma } from "../../lib/prisma";
-import { resolveDataScope } from "../../lib/dataScope";
 import { buildLeaveEmployeeIdFilter } from "../leave/scope";
 
 // Tasks inbox (spec §7.1 "My Tasks", To do → Tasks — Phase 5 commit D, user
@@ -16,6 +16,7 @@ import { buildLeaveEmployeeIdFilter } from "../leave/scope";
 export interface TaskViewer {
   employeeId: string;
   roleCodes: string[];
+  dataScope: DataScope; // resolved per request (lib/permissions.ts)
   permissions: Set<string>;
 }
 
@@ -34,7 +35,7 @@ const leaveApprovals: TaskSource = {
   type: "LEAVE_APPROVAL",
   async list(viewer, limit) {
     if (!viewer.permissions.has("leave.approve")) return [];
-    const scopeFilter = await buildLeaveEmployeeIdFilter(viewer.employeeId, resolveDataScope(viewer.roleCodes));
+    const scopeFilter = await buildLeaveEmployeeIdFilter(viewer.employeeId, viewer.dataScope);
     const where: Prisma.LeaveRequestWhereInput = {
       status: "PENDING",
       AND: [{ employeeId: { not: viewer.employeeId } }, ...(scopeFilter ? [{ employeeId: scopeFilter }] : [])],

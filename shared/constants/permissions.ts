@@ -16,8 +16,7 @@ export const PERMISSION_KEYS = [
   "employee.separate.view",
   "profile.changerequest.approve",
   "org.manage",
-  "role.view",
-  "role.manage",
+  "role.view", // read-only view of roles, their permissions and data scope (role DEFINITIONS are changed only by SUPER_ADMIN — E1)
   "user.security.manage",
   "import.manage",
   "audit.view",
@@ -48,3 +47,68 @@ export const PERMISSION_KEYS = [
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
+
+// ── Permission catalog (Phase 5 commit E1) ─────────────────────────────
+// What the Roles & Permissions screens show instead of raw keys. `meta`
+// marks permissions that confer power over OTHER people's access (sign-in,
+// 2FA, security policy): only SUPER_ADMIN may grant them, and never to the
+// MANAGER role or a MANAGER holder (E1 rule 4). Typed as a complete record,
+// so adding a key above without describing it here fails to compile.
+export interface PermissionInfo {
+  group: string;
+  label: string;
+  description: string;
+  meta?: true;
+}
+
+export const PERMISSION_GROUPS = [
+  "Employees",
+  "Sensitive data",
+  "Organisation & system",
+  "Access & security",
+  "Leave",
+  "Home & Engage",
+  "Documents & letters",
+  "Helpdesk",
+] as const;
+
+export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
+  "employee.view": { group: "Employees", label: "View employees", description: "See employees in their data scope: grid, profiles, history." },
+  "employee.create": { group: "Employees", label: "Add employees", description: "Run the Add Employee wizard and send invitations." },
+  "employee.edit": { group: "Employees", label: "Edit employees", description: "Edit official and personal details, job and name history." },
+  "employee.export": { group: "Employees", label: "Export employees", description: "Export the employee grid to Excel/CSV." },
+  "employee.manage": { group: "Employees", label: "Manage employee records", description: "Saved views and other employee-grid administration." },
+  "employee.separate": { group: "Employees", label: "Separate employees", description: "Initiate and cancel separations (exit with last working day)." },
+  "employee.separate.view": { group: "Employees", label: "View separations", description: "See the separations list." },
+  "profile.changerequest.approve": { group: "Employees", label: "Approve profile changes", description: "Approve or reject employees' bank, statutory and personal change requests." },
+  "employee.statutory.view": { group: "Sensitive data", label: "View statutory details", description: "Reveal PAN, Aadhaar, UAN and ESI numbers (audited)." },
+  "employee.statutory.edit": { group: "Sensitive data", label: "Edit statutory details", description: "Change PAN, Aadhaar, UAN and ESI numbers." },
+  "employee.bank.view": { group: "Sensitive data", label: "View bank details", description: "Reveal bank account numbers (audited)." },
+  "employee.bank.edit": { group: "Sensitive data", label: "Edit bank details", description: "Change an employee's bank account." },
+  "org.manage": { group: "Organisation & system", label: "Organisation setup", description: "Cities, branches, departments, designations, grades and cost centres." },
+  "import.manage": { group: "Organisation & system", label: "Data import", description: "Run Import Center uploads and the reconciliation report." },
+  "audit.view": { group: "Organisation & system", label: "View audit log", description: "Read the audit log." },
+  "settings.manage": { group: "Access & security", label: "System settings", description: "Security policy (password rules, lockout, which roles need 2FA) and other system settings.", meta: true },
+  "role.view": { group: "Access & security", label: "View roles & permissions", description: "See what each role may do, read-only. Only a Super Admin can change roles." },
+  "user.security.manage": { group: "Access & security", label: "Manage others' sign-in security", description: "Reset another person's 2FA, unlock accounts and resend invitations.", meta: true },
+  "leave.apply.onBehalf": { group: "Leave", label: "Apply on behalf", description: "Apply for leave for someone else in their data scope." },
+  "leave.view": { group: "Leave", label: "View others' leave", description: "See other employees' requests, ledgers and balances in their data scope." },
+  "leave.approve": { group: "Leave", label: "Approve leave", description: "Approve, reject or cancel leave requests in their data scope." },
+  "leave.grant": { group: "Leave", label: "Leave Granter", description: "Manual leave grants/debits and comp-off credits." },
+  "leave.policy.manage": { group: "Leave", label: "Leave policies & holidays", description: "Leave types, policies, holidays and restricted holidays." },
+  "leave.recalculate": { group: "Leave", label: "Leave Recalculator", description: "Preview and commit ledger recalculations." },
+  "leave.yearend.manage": { group: "Leave", label: "Year End Process", description: "Run year-end encashment and carry-forward." },
+  "announcements.manage": { group: "Home & Engage", label: "Announcements", description: "Create and manage the Home page HR announcements." },
+  "engage.moderate": { group: "Home & Engage", label: "Moderate Engage", description: "Hide posts, kudos and polls from the feed." },
+  "engage.groups.manage": { group: "Home & Engage", label: "Engage groups", description: "Create and manage Engage groups and membership." },
+  "engage.autopost.manage": { group: "Home & Engage", label: "Engage auto-posts", description: "Birthday, joining and anniversary post templates and timing." },
+  "documents.manage": { group: "Documents & letters", label: "Company documents", description: "Publish company documents and manage document categories." },
+  "employee.documents.view": { group: "Documents & letters", label: "View employee documents", description: "See and download employees' HR-held documents (audited)." },
+  "employee.documents.manage": { group: "Documents & letters", label: "Manage employee documents", description: "Upload, edit and archive employees' documents." },
+  "letters.template.manage": { group: "Documents & letters", label: "Letter templates", description: "Edit letter templates, the letterhead and the signatory." },
+  "letters.generate": { group: "Documents & letters", label: "Issue letters", description: "Issue, reissue and reproduce letters for employees in their data scope." },
+  "helpdesk.manage": { group: "Helpdesk", label: "Helpdesk queue", description: "Work the ticket queue: assign, status, replies, internal notes, categories." },
+  "helpdesk.sensitive.view": { group: "Helpdesk", label: "Sensitive tickets", description: "See tickets in categories marked sensitive (e.g. Payroll & Salary, Grievance)." },
+};
+
+export const META_PERMISSION_KEYS = PERMISSION_KEYS.filter((k) => PERMISSION_CATALOG[k].meta);

@@ -16,7 +16,7 @@ import {
 } from "./employeeTestHelpers";
 
 describe("Effective-dated updates + partial unique indexes", () => {
-  // Literal "HR_ADMIN" — resolveDataScope only grants ALL scope to exact
+  // Literal "HR_ADMIN" — the seeded role's data scope (Role.dataScope, E1) only grants ALL scope to exact
   // role-code matches; a randomized code defaults to SELF, which would
   // 404 this file's own read-back-after-update assertions (found via the
   // same failure profileAndReveal.test.ts's scope tests hit).

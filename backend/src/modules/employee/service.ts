@@ -478,7 +478,7 @@ interface JobUpdateInput {
 
 export async function updateJob(employeeId: string, input: JobUpdateInput, meta: RequestMetaInput) {
   const current = await prisma.employeeJobHistory.findFirst({ where: { employeeId, effectiveTo: null } });
-  if (!current) throw new HttpError(404, "This employee has no current job placement on record.", "NOT_FOUND");
+  if (!current) return createFirstJobPlacement(employeeId, input, meta);
 
   const effectiveFrom = new Date(input.effectiveFrom);
   const after = await runConflictSafe(() =>
@@ -502,6 +502,35 @@ export async function updateJob(employeeId: string, input: JobUpdateInput, meta:
   );
 
   await writeAuditLog({ ...meta, action: "employee.job.changed", entityType: "Employee", entityId: employeeId, before: current, after });
+  return after;
+}
+
+// An employee created by the Super Admin bootstrap CLI (modules/access/
+// bootstrap.ts) starts with no job placement — a fresh production database
+// has no departments yet. Their first placement is set here, so department,
+// designation and location are all required.
+async function createFirstJobPlacement(employeeId: string, input: JobUpdateInput, meta: RequestMetaInput) {
+  if (!(await prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true } }))) throw new HttpError(404, "Employee not found.", "NOT_FOUND");
+  if (!input.departmentId || !input.designationId || !input.locationId) {
+    throw new HttpError(400, "This employee has no job placement yet — choose a department, designation and location.", "VALIDATION_ERROR");
+  }
+  const after = await runConflictSafe(() =>
+    prisma.employeeJobHistory.create({
+      data: {
+        employeeId,
+        departmentId: input.departmentId!,
+        designationId: input.designationId!,
+        locationId: input.locationId!,
+        gradeId: input.gradeId ?? null,
+        costCentreId: input.costCentreId ?? null,
+        reportingManagerId: input.reportingManagerId ?? null,
+        effectiveFrom: new Date(input.effectiveFrom),
+        changeReason: input.changeReason ?? null,
+        createdByUserId: meta.actorUserId,
+      },
+    }),
+  );
+  await writeAuditLog({ ...meta, action: "employee.job.changed", entityType: "Employee", entityId: employeeId, before: null, after });
   return after;
 }
 

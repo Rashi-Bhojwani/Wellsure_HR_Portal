@@ -138,7 +138,8 @@ describe("Helpdesk tickets", () => {
       const raiserRoom = `user:${people.raiser.employeeId}`;
       expect(sent.some((s) => s.rooms.includes(raiserRoom))).toBe(false);
       expect(sent.find((s) => s.event === "helpdesk.ticket")?.rooms).toEqual([`user:${people.hrExec.employeeId}`]);
-      expect(sent.find((s) => s.event === "helpdesk.queue")?.rooms).toEqual(["role:HR_ADMIN", "role:HR_EXECUTIVE", "role:SUPER_ADMIN"]);
+      // By effective permission since E1 — not a fixed list of role rooms.
+      expect(sent.find((s) => s.event === "helpdesk.queue")?.rooms).toEqual(["perm:helpdesk.manage"]);
       expect(JSON.stringify(sent)).not.toContain("INTERNAL-ONLY"); // signals carry no content
 
       sent.length = 0;

@@ -102,17 +102,18 @@ model User {
   createdAt               DateTime   @default(now()) @map("created_at")
   updatedAt               DateTime   @updatedAt @map("updated_at")
 
-  roles            UserRole[]
-  refreshTokens    RefreshToken[]
-  invitationTokens InvitationToken[]
-  passwordResets   PasswordResetToken[]
-  totpBackupCodes  TotpBackupCode[]
-  auditLogs        AuditLog[]           @relation("AuditActor")
-  settingsUpdated  SystemSetting[]
-  savedViews       SavedView[]
-  notifications    Notification[]
-  favourites       UserFavourite[]
-  dashboardLayout  DashboardLayout?
+  roles               UserRole[]
+  permissionOverrides UserPermissionOverride[] @relation("UserPermissionOverrides")
+  refreshTokens       RefreshToken[]
+  invitationTokens    InvitationToken[]
+  passwordResets      PasswordResetToken[]
+  totpBackupCodes     TotpBackupCode[]
+  auditLogs           AuditLog[]               @relation("AuditActor")
+  settingsUpdated     SystemSetting[]
+  savedViews          SavedView[]
+  notifications       Notification[]
+  favourites          UserFavourite[]
+  dashboardLayout     DashboardLayout?
 
   @@map("users")
 }
@@ -123,13 +124,17 @@ model User {
 // of the 1:1-via-unique-FK shape, not a real "employee without a user" state.
 
 model Role {
-  id          String   @id @default(cuid())
-  code        String   @unique // SUPER_ADMIN | HR_ADMIN | HR_EXECUTIVE | PAYROLL_ADMIN | MANAGER | APPROVER | EMPLOYEE
+  id          String        @id @default(cuid())
+  code        String        @unique // SUPER_ADMIN | HR_ADMIN | HR_EXECUTIVE | PAYROLL_ADMIN | MANAGER | APPROVER | EMPLOYEE
   name        String
   description String?
-  isSystem    Boolean  @default(true) @map("is_system") // seeded roles; not user-deletable
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  isSystem    Boolean       @default(true) @map("is_system") // seeded roles; not user-deletable
+  // Phase 5 commit E1: which employees this role's holders see (spec §2).
+  // Editable by SUPER_ADMIN only; SUPER_ADMIN itself is always ALL, computed
+  // in code (lib/permissions.ts) whatever this column says.
+  dataScope   RoleDataScope @default(SELF) @map("data_scope")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
 
   permissions RolePermission[]
   users       UserRole[]
@@ -143,9 +148,40 @@ model Permission {
   description String
   createdAt   DateTime @default(now()) @map("created_at")
 
-  roles RolePermission[]
+  roles     RolePermission[]
+  overrides UserPermissionOverride[]
 
   @@map("permissions")
+}
+
+enum RoleDataScope {
+  SELF
+  TEAM
+  ALL
+}
+
+enum PermissionOverrideEffect {
+  GRANT
+  REVOKE
+}
+
+// Phase 5 commit E1: a per-user exception to what their roles give them —
+// GRANT adds a permission, REVOKE removes one. Effective permissions =
+// union(role permissions) + GRANTs − REVOKEs (lib/permissions.ts). Never on
+// a SUPER_ADMIN holder (who always has everything) and never on yourself.
+model UserPermissionOverride {
+  id              String                   @id @default(cuid())
+  userId          String                   @map("user_id")
+  user            User                     @relation("UserPermissionOverrides", fields: [userId], references: [id])
+  permissionId    String                   @map("permission_id")
+  permission      Permission               @relation(fields: [permissionId], references: [id])
+  effect          PermissionOverrideEffect
+  reason          String
+  createdByUserId String                   @map("created_by_user_id")
+  createdAt       DateTime                 @default(now()) @map("created_at")
+
+  @@unique([userId, permissionId])
+  @@map("user_permission_overrides")
 }
 
 model RolePermission {

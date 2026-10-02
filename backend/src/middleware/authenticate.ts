@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { verifyAccessToken } from "../lib/jwt";
+import { resolveAccess } from "../lib/permissions";
 import { prisma } from "../lib/prisma";
 import { HttpError } from "./errorHandler";
 import type { AuthenticatedUser } from "./types";
@@ -23,23 +24,16 @@ async function tryAuthenticate(req: Request): Promise<AuthenticatedUser | null> 
     throw new HttpError(401, "Invalid or expired access token", "UNAUTHENTICATED");
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: { roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } } },
-  });
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, employeeId: true, status: true } });
   if (!user || user.status !== "ACTIVE") {
     throw new HttpError(401, "Account is not active", "UNAUTHENTICATED");
   }
 
-  const permissions = new Set<string>();
-  const roleCodes: string[] = [];
-  for (const userRole of user.roles) {
-    roleCodes.push(userRole.role.code);
-    for (const rolePermission of userRole.role.permissions) {
-      permissions.add(rolePermission.permission.key);
-    }
-  }
-  return { userId: user.id, employeeId: user.employeeId, roleCodes, permissions };
+  // The one resolver (lib/permissions.ts): roles + overrides, SUPER_ADMIN
+  // gets everything in code. Re-read on every request, so an access change
+  // takes effect on the user's very next call.
+  const { roleCodes, permissions, dataScope } = await resolveAccess(user.id);
+  return { userId: user.id, employeeId: user.employeeId, roleCodes, permissions, dataScope };
 }
 
 export async function authenticate(req: Request, _res: Response, next: NextFunction): Promise<void> {

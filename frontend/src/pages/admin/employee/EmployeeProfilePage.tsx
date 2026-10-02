@@ -28,6 +28,7 @@ import { EmptyState } from "../../../components/common/EmptyState";
 import { PhotoUploader } from "../../../components/common/PhotoUploader";
 import * as peopleApi from "../../../api/people";
 import { EmployeeDocumentsTab } from "./EmployeeDocumentsTab";
+import { EmployeeAccessTab } from "../../../components/access/EmployeeAccessTab";
 
 const { Title, Text } = Typography;
 
@@ -316,7 +317,7 @@ function SeparationModal({ employeeId, open, onClose }: { employeeId: string; op
 export function EmployeeProfilePage() {
   const queryClient = useQueryClient();
   const { id } = useParams<{ id: string }>();
-  const { hasPermission } = useAuth();
+  const { hasPermission, hasRole } = useAuth();
   const [jobEditOpen, setJobEditOpen] = useState(false);
   const [separationOpen, setSeparationOpen] = useState(false);
 
@@ -370,6 +371,9 @@ export function EmployeeProfilePage() {
               ? [{ key: "documents", label: "Documents", children: <EmployeeDocumentsTab employeeId={id!} canManage={hasPermission("employee.documents.manage")} /> }]
               : []),
             { key: "history", label: "History", children: <HistoryTab employeeId={id!} canViewBank={canViewBank} /> },
+            ...(hasRole("SUPER_ADMIN") || hasPermission("role.view") || hasPermission("user.security.manage")
+              ? [{ key: "access", label: "Access", children: <EmployeeAccessTab employeeId={id!} /> }]
+              : []),
           ]}
         />
       </Card>

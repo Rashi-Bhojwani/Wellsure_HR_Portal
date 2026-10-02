@@ -10,12 +10,12 @@ committed).
 |---|---|---|
 | — | Initial project structure (this commit) | ✅ Done |
 | 0 | Foundation | ✅ Done |
-| 1 | Auth, RBAC, org, employees | Done — data layer, authentication, org masters, employee management, import center, exports, audit log viewer and system settings all built and tested. Users & Roles admin screen deliberately deferred. **Correction (2026-09-30): role assignment does not exist anywhere in the product** — Add Employee always assigns plain `EMPLOYEE` and nothing else assigns roles; an earlier version of this row claimed otherwise. Both are Phase 5 commit E1 ([`docs/plans/PHASE_5.md`](plans/PHASE_5.md)). |
+| 1 | Auth, RBAC, org, employees | Done — data layer, authentication, org masters, employee management, import center, exports, audit log viewer and system settings all built and tested. Users & Roles admin screen deliberately deferred (built in Phase 5 commit E1 as Roles & Permissions). **Correction (2026-09-30): role assignment does not exist anywhere in the product** — Add Employee always assigns plain `EMPLOYEE` and nothing else assigns roles; an earlier version of this row claimed otherwise. Both are Phase 5 commit E1 ([`docs/plans/PHASE_5.md`](plans/PHASE_5.md)). |
 | 1.5 | AWS staging environment | Not started |
 | 2 | Biometric ingestion + attendance engine + real-time | Not started |
 | 3 | Attendance administration | Not started |
 | 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
-| 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | In progress — commit A done (notifications substrate, Employee Home, Admin Homepage Welcome + Dashboard tabs), commit B done (Engage), commit C done (People directory + org chart, employee photos, Document Center, HR-held employee documents), commit D done (Helpdesk, Request Hub, Tasks inbox), commit D2 done (letter templates + PDF generation). E–G (roles & permissions, three-level hierarchy, Workflow Delegates, Reports, Mobile/PWA) not started — full plan in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
+| 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | In progress — commit A done (notifications substrate, Employee Home, Admin Homepage Welcome + Dashboard tabs), commit B done (Engage), commit C done (People directory + org chart, employee photos, Document Center, HR-held employee documents), commit D done (Helpdesk, Request Hub, Tasks inbox), commit D2 done (letter templates + PDF generation), commit E1 done (roles & permissions, Super Admin guarantees, bootstrap/recovery CLIs). E2–G (three-level hierarchy, Workflow Delegates, Reports, Mobile/PWA) not started — full plan in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
 | 5.5 | AWS production environment and go-live hardening | Not started |
 | 6 | Payroll | Not started |
 | 7 | Tax & benefits | Not started |
@@ -2957,3 +2957,83 @@ Carried from spec §14 — configurable, not guessed, until answered:
 - [ ] Whether the office has a static public IP (needed for device push).
 - [ ] AWS account structure (single account, two environments, or separate
       staging/production accounts).
+
+### Phase 5, commit E1 — Role & permission system
+
+Plan: [`docs/plans/PHASE_5.md`](plans/PHASE_5.md) §E1 (approved
+2026-09-30); as-built notes directly below it. The user's requirements:
+- every permission always for SUPER_ADMIN, computed in code;
+- never revocable, by anyone including itself;
+- scope always ALL;
+- the last active SUPER_ADMIN protected from deactivation, demotion and
+  separation, with two real Super Admins planned for production;
+- seeded accounts stay fake;
+- a runtime-only bootstrap for the first real Super Admin;
+- a documented recovery procedure.
+
+**Schema** (migration `e1_roles_permissions_lockout`):
+- `Role.dataScope` (`SELF | TEAM | ALL`), backfilled to today's mapping.
+- `UserPermissionOverride`: GRANT or REVOKE, with a required reason;
+  unique per user and permission.
+- `role.manage` is retired.
+- Triggers on `users` and `user_roles` refuse any change that would leave
+  zero active SUPER_ADMINs.
+
+**Backend:**
+- One access resolver, `resolveAccess` in `lib/permissions.ts`, used by
+  HTTP auth, sockets and `/me`.
+- `modules/access`: role list and edit, per-person access, overrides, role
+  assignment, and the security actions (reset 2FA, unlock, password reset).
+  Rules 1–8 are enforced and audited.
+- `lib/accessCatalog.ts` gives never-seeded databases their roles.
+- Permission-keyed socket rooms, plus `permissions.changed`.
+
+**CLIs** (`backend/scripts/`):
+- `npm run admin:bootstrap`: the first real Super Admin. It refuses once an
+  active one exists, takes details from prompts, flags or `BOOTSTRAP_*`
+  env vars, and never handles a password (the person gets the invitation).
+- `npm run admin:recover`: break-glass reset of 2FA, unlock or
+  password-reset link for a Super Admin.
+
+Both are documented in GETTING_STARTED.md §12, together with the four-step
+recovery procedure (the last resort is direct SQL, which was tested).
+
+**Frontend:**
+- Admin Tools → Roles & Permissions: one column per role, permissions
+  grouped by area, a scope selector, and a locked Super Admin column.
+  Super Admins can edit; `role.view` holders see it read-only.
+- Employee profile → Access tab: roles, effective permissions and where
+  each comes from, exceptions with reasons, and the sign-in security
+  buttons.
+- `usePermissionsRealtime` refetches `/me` live.
+
+**Seed:** unchanged accounts. Roles and permission rows now come from
+`ensureAccessCatalog` (the same code as production).
+
+**Verification:**
+- devcheck dropped, recreated, migrated and seeded.
+- Backend **483/483**, including a new 29-test `access.test.ts`. It covers:
+  - every rule;
+  - the Super Admin keeping everything after its role rows are deleted;
+  - lockout through the API, the triggers, separation and the job;
+  - override order;
+  - out-of-scope 404s;
+  - audit rows;
+  - permission rooms and `permissions.changed`;
+  - the bootstrap, run end to end on a simulated fresh database;
+  - recovery;
+  - the catalog.
+- Frontend 4/4. Lint and typecheck are clean.
+- Two-browser walkthrough:
+  - Super Admin grid locked;
+  - HR read-only;
+  - employee gets a 403;
+  - a grant on the Access tab reaches the employee's open browser live
+    (their `/me` now includes the key), and removing it reverses that;
+  - removing the last Super Admin's role shows the refusal message.
+- Both CLIs smoke-tested against devcheck. The bootstrap refused because
+  seeded `1000` exists, and the recovery CLI refused a non-Super-Admin.
+
+**Still open:** none new. The real Super Admins are created with the
+bootstrap during Phase 1.5 staging setup, and their details never enter
+the repo.

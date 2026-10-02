@@ -2,10 +2,11 @@ import { createHash, randomBytes } from "node:crypto";
 import argon2 from "argon2";
 import type { User } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
+import { env } from "../../config/env";
 import { logger } from "../../lib/logger";
 import { writeAuditLog } from "../../lib/audit";
 import { getSetting } from "../../lib/settings";
-import { resolveUserPermissions, resolveUserRoleCodes } from "../../lib/permissions";
+import { resolveAccess, resolveUserRoleCodes } from "../../lib/permissions";
 import { signAccessToken, signTotpChallengeToken, verifyTotpChallengeToken } from "../../lib/jwt";
 import { HttpError } from "../../middleware/errorHandler";
 import { createJoiningPost } from "../engage/autoPosts";
@@ -315,7 +316,7 @@ export async function createInvitation(params: {
   email: string;
   fullName: string;
   employeeCode: string;
-}): Promise<void> {
+}): Promise<{ link: string }> {
   const raw = generateOpaqueToken();
   const ttlHours = await getInvitationTtlHours();
   await prisma.invitationToken.create({
@@ -328,15 +329,18 @@ export async function createInvitation(params: {
   await sendInvitationEmail(params.email, params.fullName, params.employeeCode, raw).catch((err: unknown) =>
     logger.error({ err }, "failed to send invitation email"),
   );
+  // Returned only for the SUPER_ADMIN bootstrap CLI's --print-link
+  // (modules/access/bootstrap.ts); every other caller ignores it.
+  return { link: `${env.WEB_BASE_URL}/set-password/${raw}` };
 }
 
 // Resend: invalidates any still-outstanding invitation tokens for this user
 // (a stale link should stop working once a fresher one is issued) and
 // issues a new one. HR-triggered — see employee module's resend-invite
 // endpoint, which is what actually audit-logs this action.
-export async function resendInvitation(userId: string, email: string, fullName: string, employeeCode: string): Promise<void> {
+export async function resendInvitation(userId: string, email: string, fullName: string, employeeCode: string): Promise<{ link: string }> {
   await prisma.invitationToken.updateMany({ where: { userId, usedAt: null }, data: { usedAt: new Date() } });
-  await createInvitation({ userId, email, fullName, employeeCode });
+  return createInvitation({ userId, email, fullName, employeeCode });
 }
 
 export async function getInvitationDetails(token: string): Promise<{ employeeCode: string; fullName: string }> {
@@ -489,12 +493,16 @@ export async function getMe(userId: string) {
   if (!employee?.user) {
     throw new HttpError(404, "Not found", "NOT_FOUND");
   }
-  const [roleCodes, permissions] = await Promise.all([resolveUserRoleCodes(userId), resolveUserPermissions(userId)]);
+  // The same resolver every request uses (lib/permissions.ts), so what the
+  // UI shows is exactly what the server enforces.
+  const { roleCodes, permissions, dataScope } = await resolveAccess(userId);
   return {
     employeeCode: employee.employeeCode,
+    employeeId: employee.id,
     fullName: employee.nameHistory[0]?.fullName ?? employee.employeeCode,
     roleCodes,
     permissions: Array.from(permissions),
+    dataScope,
     totpEnabled: employee.user.totpEnabled,
     privacyNoticeAccepted: employee.user.privacyNoticeAcceptedAt !== null,
   };
@@ -577,4 +585,47 @@ export async function regenerateBackupCodes(userId: string): Promise<string[]> {
   ]);
   await writeAuditLog({ actorUserId: userId, action: "auth.2fa.backup_codes_regenerated", entityType: "User", entityId: userId });
   return backupCodes;
+}
+
+// ── Admin security actions (Phase 5 commit E1) ──────────────────────────
+// Used by the employee profile's Access tab (access module) and by the
+// break-glass recovery CLI (scripts/admin-recover.ts). Callers decide who
+// may act on whom; these only perform and audit the action.
+
+// Wipes 2FA (secret + backup codes) and ends every session. If the user's
+// role requires 2FA, their next login walks them through enrolment again.
+export async function adminResetTotp(userId: string, meta: { actorUserId: string | null; ipAddress?: string | null; userAgent?: string | null; reason?: string }): Promise<void> {
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: userId }, data: { totpEnabled: false, totpSecretEncrypted: null, totpVerifiedAt: null } }),
+    prisma.totpBackupCode.deleteMany({ where: { userId } }),
+  ]);
+  await revokeAllUserRefreshTokens(userId);
+  await writeAuditLog({ ...meta, action: "auth.2fa.reset_by_admin", entityType: "User", entityId: userId, after: { reason: meta.reason ?? null } });
+}
+
+// Clears a failed-login lockout.
+export async function adminUnlock(userId: string, meta: { actorUserId: string | null; ipAddress?: string | null; userAgent?: string | null }): Promise<void> {
+  await prisma.user.update({ where: { id: userId }, data: { failedLoginAttempts: 0, lockedUntil: null } });
+  await writeAuditLog({ ...meta, action: "auth.unlocked_by_admin", entityType: "User", entityId: userId });
+}
+
+// Issues a password-reset link (1 hour, single use) and emails it to the
+// personal email on file. Returns the link only for the break-glass CLI,
+// whose operator may need to hand it over when email itself is the problem.
+export async function adminIssuePasswordReset(
+  userId: string,
+  meta: { actorUserId: string | null; ipAddress?: string | null; userAgent?: string | null; reason?: string },
+): Promise<{ link: string; emailedTo: string | null }> {
+  const employee = await prisma.employee.findFirst({ where: { user: { id: userId } }, include: { personal: true, nameHistory: { where: { effectiveTo: null } } } });
+  if (!employee) throw new HttpError(404, "User not found.", "NOT_FOUND");
+  const raw = generateOpaqueToken();
+  await prisma.passwordResetToken.create({ data: { userId, tokenHash: hashOpaqueToken(raw), expiresAt: new Date(Date.now() + 60 * 60 * 1000) } });
+  const email = employee.personal?.personalEmail ?? null;
+  if (email) {
+    await sendPasswordResetEmail(email, employee.nameHistory[0]?.fullName ?? employee.employeeCode, raw).catch((err: unknown) =>
+      logger.error({ err }, "failed to send password reset email"),
+    );
+  }
+  await writeAuditLog({ ...meta, action: "auth.password_reset_issued_by_admin", entityType: "User", entityId: userId, after: { emailed: Boolean(email), reason: meta.reason ?? null } });
+  return { link: `${env.WEB_BASE_URL}/reset-password/${raw}`, emailedTo: email };
 }

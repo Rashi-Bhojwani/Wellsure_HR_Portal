@@ -14,8 +14,15 @@ import type { Server as SocketIOServer } from "socket.io";
 // succeed with no one connected to notify.
 export interface RoomEmitter {
   to(room: string | string[]): { emit(event: string, ...args: unknown[]): unknown };
+  // Both the real server and the Redis emitter can move a user's sockets
+  // between rooms across every api instance.
+  in?(room: string | string[]): { socketsJoin(rooms: string | string[]): unknown; socketsLeave(rooms: string | string[]): unknown };
 }
 let io: RoomEmitter | null = null;
+
+// Permission-keyed room (E1): every socket joins perm:{key} for each
+// permission its user effectively holds (realtime/socket.ts).
+export const permissionRoom = (key: string) => `perm:${key}`;
 
 export function setSocketServer(server: RoomEmitter | SocketIOServer | null): void {
   io = server as RoomEmitter | null;
@@ -79,14 +86,15 @@ export function emitNotificationNew(targetEmployeeId: string, payload: Notificat
 // Signal-only, no payload — the frontend just invalidates its task-counts
 // query on receipt rather than trying to keep a server-computed number in
 // sync purely from event fields. Rooms: the applicant's reporting manager
-// (their own "review" count may have changed) plus every HR_ADMIN/
-// HR_EXECUTIVE-held role room (an org-wide "monitor" count may have
-// changed too, for any ALL-scope viewer, not just this one manager).
+// (their own "review" count may have changed) plus everyone who can approve
+// or monitor leave — by effective permission (E1), so a custom role or a
+// per-user grant is included; one emit to the union of rooms, so nobody
+// gets it twice.
 export function emitTasksCounts(reportingManagerId: string | null): void {
   if (!io) return;
-  if (reportingManagerId) io.to(`manager:${reportingManagerId}`).emit("tasks.counts", {});
-  io.to("role:HR_ADMIN").emit("tasks.counts", {});
-  io.to("role:HR_EXECUTIVE").emit("tasks.counts", {});
+  const rooms = [permissionRoom("leave.approve"), permissionRoom("leave.view")];
+  if (reportingManagerId) rooms.push(`manager:${reportingManagerId}`);
+  io.to(rooms).emit("tasks.counts", {});
 }
 
 // Engage (spec §4, §7.7, §8's "engage.post/.kudos/.reaction | org (or
@@ -150,11 +158,12 @@ export function emitEngageAnniversary(payload: unknown): void {
 
 // Helpdesk (Phase 5 commit D). Both are signal-only — clients refetch, so
 // no ticket content (and never an internal note) rides on a broadcast.
-// helpdesk.queue → the HR rooms that may hold helpdesk.manage; the queue
+// helpdesk.queue → everyone holding helpdesk.manage (perm room); the queue
 // endpoint itself decides what each of them may see (sensitive categories).
 export function emitHelpdeskQueue(): void {
   if (!io) return;
-  io.to(["role:HR_ADMIN", "role:HR_EXECUTIVE", "role:SUPER_ADMIN"]).emit("helpdesk.queue");
+  // Whoever can work the queue — by effective permission, not role (E1).
+  io.to(permissionRoom("helpdesk.manage")).emit("helpdesk.queue");
 }
 
 // helpdesk.ticket → the people on one ticket, so an open thread refreshes live.
@@ -169,4 +178,22 @@ export function emitHelpdeskTicket(ticketId: string, employeeIds: Array<string |
 export function emitLetterUpdated(issuerEmployeeId: string | null, payload: { letterId: string; employeeId: string }): void {
   if (!io || !issuerEmployeeId) return;
   io.to(`user:${issuerEmployeeId}`).emit("letter.updated", payload);
+}
+
+// ── Access changes (Phase 5 commit E1) ──────────────────────────────────
+
+
+// After someone's roles or overrides change: move their connected sockets
+// to the permission rooms they now hold (and out of the ones they lost),
+// then tell their browser to refetch /me so menus and buttons update without
+// a reload. Signal-only payload.
+export function emitPermissionsChanged(employeeId: string, effectivePermissions: Iterable<string>, allKeys: readonly string[]): void {
+  if (!io) return;
+  const keep = new Set(effectivePermissions);
+  if (io.in) {
+    const userRoom = `user:${employeeId}`;
+    io.in(userRoom).socketsLeave(allKeys.filter((k) => !keep.has(k)).map(permissionRoom));
+    io.in(userRoom).socketsJoin([...keep].map(permissionRoom));
+  }
+  io.to(`user:${employeeId}`).emit("permissions.changed", {});
 }

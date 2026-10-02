@@ -1,10 +1,10 @@
+import type { DataScope } from "@shared/constants/roles";
 import { createHash, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import sharp from "sharp";
 import { formatLetterNumber, LETTER_PLACEHOLDERS, type LetterExtraField } from "@shared/constants/letters";
 import { storageService } from "../../integrations/storage";
 import { writeAuditLog } from "../../lib/audit";
-import { resolveDataScope } from "../../lib/dataScope";
 import { renderPdf } from "../../lib/pdf/renderer";
 import { prisma } from "../../lib/prisma";
 import { getSetting, setSetting } from "../../lib/settings";
@@ -28,6 +28,7 @@ export interface LetterViewer {
   userId: string;
   employeeId: string;
   roleCodes: string[];
+  dataScope: DataScope; // resolved per request (lib/permissions.ts)
   permissions: Set<string>;
 }
 export interface ActorMeta {
@@ -373,7 +374,7 @@ export async function previewTemplate(
   input: { bodyHtml: string; extraFields: LetterExtraField[]; employeeId: string; extraValues: Record<string, string>; templateName: string },
   viewer: LetterViewer,
 ): Promise<Buffer> {
-  await findScopedEmployee(input.employeeId, viewer.employeeId, resolveDataScope(viewer.roleCodes));
+  await findScopedEmployee(input.employeeId, viewer.employeeId, viewer.dataScope);
   const bodyHtml = prepareBody(input.bodyHtml, input.extraFields);
   const now = new Date();
   const merge = await resolveMergeValues({ bodyHtml, extraFields: input.extraFields as unknown as Prisma.JsonValue }, { name: input.templateName, code: "PREVIEW" }, input.employeeId, input.extraValues, now, "PREVIEW");
@@ -421,7 +422,7 @@ export async function issueLetter(
   meta: ActorMeta,
   enqueue: EnqueueLetter,
 ) {
-  await findScopedEmployee(input.employeeId, viewer.employeeId, resolveDataScope(viewer.roleCodes));
+  await findScopedEmployee(input.employeeId, viewer.employeeId, viewer.dataScope);
   const template = await prisma.letterTemplate.findUnique({ where: { id: input.templateId } });
   if (!template || !template.isActive) throw new HttpError(400, "Choose an active letter template.", "VALIDATION_ERROR");
   const version = await currentVersion(template.id);
@@ -471,7 +472,7 @@ export async function reissueLetter(
 ) {
   const original = await prisma.generatedLetter.findUnique({ where: { id: letterId }, include: letterInclude });
   if (!original) throw new HttpError(404, "Letter not found.", "NOT_FOUND");
-  await findScopedEmployee(original.employeeId, viewer.employeeId, resolveDataScope(viewer.roleCodes)).catch(() => {
+  await findScopedEmployee(original.employeeId, viewer.employeeId, viewer.dataScope).catch(() => {
     throw new HttpError(404, "Letter not found.", "NOT_FOUND");
   });
   const previous = formatLetter(original);
@@ -492,7 +493,7 @@ export async function reissueLetter(
 }
 
 export async function listEmployeeLetters(employeeId: string, viewer: LetterViewer) {
-  await findScopedEmployee(employeeId, viewer.employeeId, resolveDataScope(viewer.roleCodes));
+  await findScopedEmployee(employeeId, viewer.employeeId, viewer.dataScope);
   const rows = await prisma.generatedLetter.findMany({ where: { employeeId }, include: letterInclude, orderBy: { number: "desc" } });
   return rows.map(formatLetter);
 }
@@ -501,7 +502,7 @@ async function loadScopedLetter(letterId: string, viewer: LetterViewer) {
   const letter = await prisma.generatedLetter.findUnique({ where: { id: letterId }, include: letterInclude });
   if (!letter) throw new HttpError(404, "Letter not found.", "NOT_FOUND");
   try {
-    await findScopedEmployee(letter.employeeId, viewer.employeeId, resolveDataScope(viewer.roleCodes));
+    await findScopedEmployee(letter.employeeId, viewer.employeeId, viewer.dataScope);
   } catch {
     throw new HttpError(404, "Letter not found.", "NOT_FOUND");
   }
