@@ -39,6 +39,9 @@ const envSchema = z.object({
   // channel prefix (pub/sub isn't per-database in Redis, so the database
   // number alone wouldn't separate them).
   REDIS_TEST_DB: z.coerce.number().int().min(1).max(15).default(15),
+  // The Postgres database the test suite uses instead of DATABASE_URL's own
+  // (see isolateTestDatabase below). Defaults to "<dev database>_test".
+  TEST_DATABASE_NAME: z.string().regex(/^[a-z_][a-z0-9_]*$/, "lowercase letters, digits and _ only").optional(),
   SOCKET_IO_REDIS_KEY: z.string().min(1).default("socket.io"),
 
   // Auth (src/modules/auth): JWT access tokens are short-lived and
@@ -105,7 +108,7 @@ function loadEnv(): Env {
     console.error(guardError);
     process.exit(1);
   }
-  return isTestRun() ? isolateTestRedis(parsed.data) : parsed.data;
+  return isTestRun() ? isolateTestServices(parsed.data) : parsed.data;
 }
 
 // True inside the test suite (vitest sets VITEST in every process it runs).
@@ -137,6 +140,39 @@ export function isolateTestRedis(e: Env): Env {
   }
   url.pathname = `/${e.REDIS_TEST_DB}`;
   return { ...e, REDIS_URL: url.toString(), SOCKET_IO_REDIS_KEY: `${e.SOCKET_IO_REDIS_KEY}-test` };
+}
+
+// The same rule for Postgres: under vitest the suite uses its own database
+// (TEST_DATABASE_NAME, default "<dev database>_test") on the same server,
+// which vitest.globalSetup.ts drops, recreates, migrates and seeds at the
+// start of every run — so a dev server left running, or someone clicking
+// around the dev UI mid-run, can never touch the suite's rows (or vice
+// versa). Refuses to start if DATABASE_URL already points at the test
+// database, since dev would then be sharing it.
+export function isolateTestDatabase(e: Env): Env {
+  let url: URL;
+  try {
+    url = new URL(e.DATABASE_URL);
+  } catch {
+    console.error("DATABASE_URL isn't a valid URL, so the test suite can't isolate its Postgres database.");
+    process.exit(1);
+  }
+  const devName = decodeURIComponent(url.pathname.replace(/^\//, ""));
+  const testName = e.TEST_DATABASE_NAME ?? `${devName}_test`;
+  if (!devName || devName === testName) {
+    console.error(`DATABASE_URL uses the database "${devName}", which is the test suite's (TEST_DATABASE_NAME). Point dev at another database or set TEST_DATABASE_NAME.`);
+    process.exit(1);
+  }
+  url.pathname = `/${testName}`;
+  return { ...e, DATABASE_URL: url.toString() };
+}
+
+// Every service a test run could share with dev on the same machine:
+// Redis, Postgres, and the local storage and mail folders (uploads, letter
+// PDFs and .eml files land in .storage-test/ and .mail-test/ instead).
+export function isolateTestServices(e: Env): Env {
+  const isolated = isolateTestDatabase(isolateTestRedis(e));
+  return { ...isolated, STORAGE_LOCAL_DIR: `${e.STORAGE_LOCAL_DIR.replace(/\/+$/, "")}-test`, MAIL_DEV_DIR: `${e.MAIL_DEV_DIR.replace(/\/+$/, "")}-test` };
 }
 
 export const env = loadEnv();

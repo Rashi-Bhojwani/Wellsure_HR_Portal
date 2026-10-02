@@ -82,9 +82,9 @@ jobs:
       - name: Migrate
         run: npm run db:migrate
 
-      # The backend suite runs against the seeded dataset (roles, permissions,
-      # leave types, settings, seeded employees), exactly as it does locally
-      # — so seed it the same way local dev does (reset + migrate + seed).
+      # Migrate + seed the dev database exactly as a new developer would, to
+      # prove that path works from scratch. The test suite itself then builds
+      # its own database (wellsure_hr_test) in vitest.globalSetup.ts.
       - name: Seed
         run: npm run db:seed
 

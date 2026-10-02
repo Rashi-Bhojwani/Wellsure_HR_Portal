@@ -3119,9 +3119,9 @@ each recognisable):
   compare renders within one run, so an update can't cause a mismatch. A
   real rendering regression in new Chrome would still show as a
   (legitimate) failure.
-- **Locally only:** tests share the Postgres database with the dev app, so
-  changing settings in the dev UI during a run can interfere. CI has no dev
-  app.
+- ~~**Locally only:** tests share the Postgres database with the dev app, so
+  changing settings in the dev UI during a run can interfere.~~ **Fixed**
+  in the interim commit after E2 (below): the suite has its own database.
 
 ### Phase 5, commit E2 — Three-level hierarchy, Manager Management, manager-grantable list, endpoint audit
 
@@ -3205,6 +3205,51 @@ No new leak was found beyond the four E1.1 fixed.
   - a manager gets "You can't manage managers";
   - a manager's Permissions show bank data as "Not for managers";
   - no console errors.
+
+### Interim — the test suite gets its own Postgres database (2026-10-02)
+
+The user asked for the Redis pattern to be applied to Postgres too, so dev
+can stay running during a test run with no interaction at all.
+
+**What changed:**
+- **Postgres.** Under vitest, `config/env.ts` (`isolateTestDatabase`)
+  points the suite at its own database on the same server:
+  `TEST_DATABASE_NAME`, default `<dev database>_test`, so
+  `wellsure_hr_test` locally and in CI. It refuses to start if dev's
+  `DATABASE_URL` already points there. `lib/prisma.ts` now takes its URL
+  from `config/env` instead of Prisma's own read of `process.env`, so the
+  isolation applies to every query.
+- **Files.** Uploads, letter PDFs and `.eml` files from tests go to
+  `.storage-test/` and `.mail-test/` (gitignored), never dev's `.storage/`
+  and `.mail/`.
+- **Every run starts from the same state.** `vitest.globalSetup.ts`:
+  1. drops and recreates the test database;
+  2. migrates it (`scripts/migrate.ts`);
+  3. seeds it (`prisma db seed`);
+  4. flushes the test Redis database;
+  5. empties the test folders.
+
+  This takes about 7–14 s. A leftover from an earlier, interrupted run can
+  never leak into the next one.
+- `testDatabaseIsolation.test.ts` checks:
+  - the suite's connection is to its own database and dev's is untouched;
+  - the database was migrated and seeded by the setup;
+  - the folders are separate;
+  - the refusal.
+- Needs the `CREATEDB` privilege, which §3 of GETTING_STARTED already
+  requires.
+
+**Verified:**
+- The full backend suite (539/539) ran while the dev api, worker and Vite
+  were up and the E2 browser walkthrough was logging in and reassigning a
+  team on the dev UI at the same time. Both passed.
+- Afterwards the dev database held only the walkthrough's audit rows
+  (logins, one team assignment) and the seed's 32 employees. Nothing from
+  the test run.
+
+CI still migrates and seeds `wellsure_hr` before testing. That checks the
+dev setup path works from scratch; the suite itself then builds
+`wellsure_hr_test`.
 
 ## Open questions
 

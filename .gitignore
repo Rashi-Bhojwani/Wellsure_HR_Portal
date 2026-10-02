@@ -32,6 +32,8 @@ infra/.cdk.staging/
 # Local dev storage/mail (see backend/src/integrations/{storage,mail})
 .storage/
 .mail/
+.storage-test/
+.mail-test/
 
 # Misc
 *.local

@@ -125,6 +125,7 @@ except the two marked **required**.
 | `DATABASE_URL` | Postgres connection string | **Yes** | `postgresql://wellsure:wellsure@localhost:5432/wellsure_hr` |
 | `REDIS_URL` | Redis connection string | **Yes** | `redis://localhost:6379` |
 | `REDIS_TEST_DB` | The Redis logical database the **test suite** uses instead of `REDIS_URL`'s, so a running dev server and a test run never share queues, caches or rate limits | No | `15` |
+| `TEST_DATABASE_NAME` | The Postgres database the **test suite** uses instead of `DATABASE_URL`'s, on the same server. Dropped and rebuilt at the start of every test run, so never point dev at it | No | `<dev database>_test`, e.g. `wellsure_hr_test` |
 | `SOCKET_IO_REDIS_KEY` | Socket.IO's Redis pub/sub channel prefix. The test suite appends `-test`, because Redis pub/sub isn't separated by database number | No | `socket.io` |
 | `CHROMIUM_PATH` | Chrome/Chromium binary used to render letter PDFs | No (auto-detected; set it if detection fails) | unset locally; `/usr/bin/chromium` in the Docker image |
 | `JWT_ACCESS_SECRET` | Signs short-lived access tokens | No (has a placeholder default) | change it before staging/production |
@@ -290,7 +291,7 @@ Run from the repo root unless noted.
 | `npm run db:migrate --prefix backend` | Apply pending migrations without touching data |
 | `npm run lint` | ESLint across backend, frontend, biometric-agent |
 | `npm run typecheck` | `tsc --noEmit` across every project |
-| `npm run test` | Vitest, backend + frontend — backend is an integration suite against your real local Postgres/Redis, not mocks; frontend covers route-config wiring (`frontend/src/routes/__tests__/`). Safe to run while `npm run dev` is up: the suite uses its own Redis database and Socket.IO channel (`REDIS_TEST_DB`), so the dev worker can't take its jobs. It does share the Postgres database with dev, so don't change settings in the dev app mid-run |
+| `npm run test` | Vitest, backend + frontend — backend is an integration suite against your real local Postgres/Redis, not mocks; frontend covers route-config wiring (`frontend/src/routes/__tests__/`). Safe to run while `npm run dev` is up, with no interaction either way: the suite uses its own Postgres database (`<dev database>_test`), Redis database and Socket.IO channel (`REDIS_TEST_DB`), and `.storage-test/`/`.mail-test/` folders. Each run drops, recreates, migrates and seeds that database first (about 10 s), so every run starts from the same state |
 | `npm run check:services` | Confirms Postgres/Redis are reachable |
 | `npm run admin:bootstrap --prefix backend` | Create the **first** real Super Admin on a fresh staging/production database — see §12. Refuses once any active Super Admin exists, so it does nothing locally (seeded `1000` is one) |
 | `npm run admin:recover --prefix backend` | Break-glass recovery for a Super Admin who lost their password or 2FA device — see §12 |
