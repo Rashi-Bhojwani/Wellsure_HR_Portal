@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { redis } from "../../lib/redis";
 import { emitHelpdeskTicket, emitLetterUpdated, getSocketServer, setSocketServer } from "../emit";
 import { createSocketEmitter } from "../emitter";
+import { env } from "../../config/env";
 
 // A background job runs in the WORKER process, which has no Socket.IO server.
 // Its emits must still reach browsers connected to the API process: the
@@ -29,7 +30,7 @@ describe("emits from the worker reach clients connected to the api (Redis emitte
     clients.push(pub, sub, emitterClient);
     await Promise.all(clients.map((c) => c.connect()));
     httpServer = createServer();
-    apiServer = new Server(httpServer, { adapter: createAdapter(pub, sub) });
+    apiServer = new Server(httpServer, { adapter: createAdapter(pub, sub, { key: env.SOCKET_IO_REDIS_KEY }) });
     apiServer.on("connection", (s) => void s.join(`user:${room}`));
     await new Promise<void>((resolve) => httpServer.listen(0, "127.0.0.1", resolve));
     const { port } = httpServer.address() as AddressInfo;

@@ -60,7 +60,8 @@ export async function createSocketServer(httpServer: HttpServer): Promise<Socket
 
   const io = new SocketIOServer(httpServer, {
     cors: { origin: env.CORS_ORIGIN.split(","), credentials: true },
-    adapter: createAdapter(pubClient, subClient),
+    // Channel prefix from env: the test suite uses its own (config/env.ts).
+    adapter: createAdapter(pubClient, subClient, { key: env.SOCKET_IO_REDIS_KEY }),
   });
 
   io.use((socket, next) => {

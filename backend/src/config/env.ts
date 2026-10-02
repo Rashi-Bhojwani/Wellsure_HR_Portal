@@ -34,6 +34,12 @@ const envSchema = z.object({
 
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   REDIS_URL: z.string().min(1, "REDIS_URL is required"),
+  // Test isolation (see isolateTestRedis below): the logical Redis database
+  // the test suite uses instead of REDIS_URL's own, and the Socket.IO pub/sub
+  // channel prefix (pub/sub isn't per-database in Redis, so the database
+  // number alone wouldn't separate them).
+  REDIS_TEST_DB: z.coerce.number().int().min(1).max(15).default(15),
+  SOCKET_IO_REDIS_KEY: z.string().min(1).default("socket.io"),
 
   // Auth (src/modules/auth): JWT access tokens are short-lived and
   // stateless; refresh tokens are opaque random strings tracked in
@@ -99,7 +105,38 @@ function loadEnv(): Env {
     console.error(guardError);
     process.exit(1);
   }
-  return parsed.data;
+  return isTestRun() ? isolateTestRedis(parsed.data) : parsed.data;
+}
+
+// True inside the test suite (vitest sets VITEST in every process it runs).
+export function isTestRun(): boolean {
+  return process.env.VITEST === "true" || process.env.VITEST === "1";
+}
+
+// A test run must never share Redis with a dev server on the same machine
+// (or CI's): a running dev worker once consumed the test suite's queued
+// letter jobs, and a dev API and the realtime tests could hear each other's
+// Socket.IO broadcasts. So under vitest, whatever REDIS_URL says, the suite
+// uses its own logical database (REDIS_TEST_DB, default 15) — separating
+// every key: BullMQ queues, caches, rate limits — and its own Socket.IO
+// channel prefix, separating pub/sub (which Redis doesn't scope by
+// database). Refuses to start if REDIS_URL already points at the test
+// database, since dev would then be sharing it.
+export function isolateTestRedis(e: Env): Env {
+  let url: URL;
+  try {
+    url = new URL(e.REDIS_URL);
+  } catch {
+    console.error(`REDIS_URL isn't a valid URL ("${e.REDIS_URL}"), so the test suite can't isolate its Redis database.`);
+    process.exit(1);
+  }
+  const devDb = Number(url.pathname.replace("/", "") || "0");
+  if (devDb === e.REDIS_TEST_DB) {
+    console.error(`REDIS_URL uses Redis database ${devDb}, which is the test suite's (REDIS_TEST_DB). Point dev at another database or set REDIS_TEST_DB.`);
+    process.exit(1);
+  }
+  url.pathname = `/${e.REDIS_TEST_DB}`;
+  return { ...e, REDIS_URL: url.toString(), SOCKET_IO_REDIS_KEY: `${e.SOCKET_IO_REDIS_KEY}-test` };
 }
 
 export const env = loadEnv();

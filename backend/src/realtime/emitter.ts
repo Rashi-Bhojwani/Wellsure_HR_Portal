@@ -1,5 +1,6 @@
 import { Emitter } from "@socket.io/redis-emitter";
 import type { Redis } from "ioredis";
+import { env } from "../config/env";
 import { redis } from "../lib/redis";
 import { setSocketServer } from "./emit";
 
@@ -10,7 +11,8 @@ import { setSocketServer } from "./emit";
 let client: Redis | null = null;
 
 export function createSocketEmitter(redisClient: Redis): Emitter {
-  return new Emitter(redisClient);
+  // Same channel prefix as the api's adapter (config/env.ts).
+  return new Emitter(redisClient, { key: env.SOCKET_IO_REDIS_KEY });
 }
 
 export async function startSocketEmitter(): Promise<void> {

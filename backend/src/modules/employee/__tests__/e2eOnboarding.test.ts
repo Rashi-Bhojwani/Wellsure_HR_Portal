@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { readFile, readdir, stat } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
@@ -20,18 +20,20 @@ import {
 
 const MAIL_DIR = path.resolve(process.cwd(), env.MAIL_DEV_DIR);
 
-// Reads every .eml the ConsoleMailService has written since `sinceMs`,
+// Reads the .eml files the ConsoleMailService has written,
 // finds the one addressed to `toEmail`, and pulls the /set-password/:token
 // link out of its body — the same link a real new hire would click from
 // their inbox (spec §3's onboarding flow).
-async function findInvitationTokenInMail(toEmail: string, sinceMs: number): Promise<string> {
-  const deadline = Date.now() + 5000;
+// Matches on the recipient alone — every test fixture's address is unique.
+// (It used to also require a file mtime after the test started: that
+// compared filesystem timestamps to the process clock, which breaks on
+// filesystems with coarse mtime granularity.)
+async function findInvitationTokenInMail(toEmail: string): Promise<string> {
+  const deadline = Date.now() + 20_000; // well inside the 30 s test budget (vitest.config.ts)
   while (Date.now() < deadline) {
     const files = await readdir(MAIL_DIR).catch(() => [] as string[]);
     for (const file of files) {
       const filePath = path.join(MAIL_DIR, file);
-      const stats = await stat(filePath);
-      if (stats.mtimeMs < sinceMs) continue;
       const body = await readFile(filePath, "utf8");
       if (!body.includes(`To: ${toEmail}`)) continue;
       const match = /\/set-password\/([A-Za-z0-9_-]+)/.exec(body);
@@ -66,7 +68,6 @@ describe("Full onboarding, end to end: HR creates an employee -> invite email ->
     const suffix = randomUUID().slice(0, 8);
     const employeeCode = `E2E-${suffix}`;
     const personalEmail = `e2e.onboarding.${suffix}@gmail.com`;
-    const beforeCreate = Date.now();
 
     // 1. HR creates the employee through the real Add Employee endpoint —
     // the same one the wizard's UI submits to.
@@ -102,7 +103,7 @@ describe("Full onboarding, end to end: HR creates an employee -> invite email ->
 
     // 2. The invitation email actually landed in .mail/ (spec's local dev
     // MailService — no real email provider involved).
-    const token = await findInvitationTokenInMail(personalEmail, beforeCreate);
+    const token = await findInvitationTokenInMail(personalEmail);
     expect(token).toBeTruthy();
 
     // 3. The new hire follows the link and sets their password.
