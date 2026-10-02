@@ -1,9 +1,10 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
+import type { DataScope } from "../../lib/dataScope";
+import { buildLeaveEmployeeIdFilter } from "./scope";
 
-// Workforce Overview dashboard (docs/UI_REFERENCE.md §2.3) — org-wide
-// aggregates only (no SELF/TEAM scoping, gated by leave.view same as the
-// rest of the admin leave surface). One fetch per selected year returns
+// Workforce Overview dashboard (docs/UI_REFERENCE.md §2.3) — aggregates
+// over the viewer's data scope (see getWorkforceDashboard). One fetch per selected year returns
 // every (month, leaveTypeCode) total for the whole year so the frontend
 // can slice both the month-strip donut and the "Category: All" filters
 // on each card without extra round trips.
@@ -14,20 +15,27 @@ import { prisma } from "../../lib/prisma";
 // the month it started in, consistent with what the ledger itself shows.
 
 export interface WorkforceDashboardResult {
+  scope: "company" | "team";
   year: number;
   leaveTypes: string[]; // active leave type codes, so the frontend can render a full legend/filter list even for zero-value types
   byMonthAndType: { month: number; leaveTypeCode: string; days: number }[]; // non-zero combos only
   rhBreakdown: { date: string; name: string; employeeCount: number }[]; // restricted holidays actually taken this year, non-zero only
 }
 
-export async function getWorkforceDashboard(year: number): Promise<WorkforceDashboardResult> {
+// Data scope (E1.1 — was a live leak): gated by leave.view, which managers
+// hold, so until E1.1 every manager saw company-wide leave totals. Now
+// ALL-scope viewers get the company; everyone else their own scope (TEAM:
+// themselves + their reports).
+export async function getWorkforceDashboard(year: number, viewer: { employeeId: string; dataScope: DataScope }): Promise<WorkforceDashboardResult> {
+  const employeeFilter = await buildLeaveEmployeeIdFilter(viewer.employeeId, viewer.dataScope);
+  const scoped = employeeFilter ? { employeeId: employeeFilter } : {};
   const yearStart = new Date(Date.UTC(year, 0, 1));
   const yearEnd = new Date(Date.UTC(year, 11, 31));
 
   const types = await prisma.leaveType.findMany({ where: { isActive: true }, orderBy: { code: "asc" }, select: { code: true } });
 
   const requests = await prisma.leaveRequest.findMany({
-    where: { status: "APPROVED", fromDate: { gte: yearStart, lte: yearEnd } },
+    where: { status: "APPROVED", fromDate: { gte: yearStart, lte: yearEnd }, ...scoped },
     select: { fromDate: true, totalDays: true, leaveType: { select: { code: true } } },
   });
 
@@ -43,7 +51,7 @@ export async function getWorkforceDashboard(year: number): Promise<WorkforceDash
   });
 
   const rhRequests = await prisma.leaveRequest.findMany({
-    where: { status: "APPROVED", leaveType: { code: "RH" }, fromDate: { gte: yearStart, lte: yearEnd } },
+    where: { status: "APPROVED", leaveType: { code: "RH" }, fromDate: { gte: yearStart, lte: yearEnd }, ...scoped },
     select: { fromDate: true },
   });
   const rhCounts = new Map<string, number>();
@@ -57,5 +65,5 @@ export async function getWorkforceDashboard(year: number): Promise<WorkforceDash
     .filter((rh) => rh.employeeCount > 0)
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  return { year, leaveTypes: types.map((t) => t.code), byMonthAndType, rhBreakdown };
+  return { scope: employeeFilter ? "team" : "company", year, leaveTypes: types.map((t) => t.code), byMonthAndType, rhBreakdown };
 }

@@ -2906,58 +2906,6 @@ clean across all projects; no row or file residue. Two-browser walkthrough (Supe
   with the original kept;
 - 0 px overflow on mobile.
 
-## Open questions
-
-Carried from spec §14 — configurable, not guessed, until answered:
-
-- [ ] The eSSL device model number, and whether it supports ADMS push. Not blocking (2026-10-01): Phases 2–3 are built against the punch simulator, and the device is connected last.
-- [ ] The device's LAN IP address and admin password (needed by the sync agent). The password is supplied at install and kept in the agent's local configuration or a secrets store, never in the repo.
-- [ ] Whether an always-on office PC exists to run the sync agent as a Windows service (Windows version), and how many devices there are.
-- [ ] Employee Code vs Device User ID default (spec §3): Add Employee pre-fills Employee Code from the Device User ID, but our device's IDs (2–126) differ from the 1000-series Employee Codes. Keep pre-filling or not? (Punch mapping is unaffected; it always uses `device_user_mappings`.)
-- [ ] Working hours and working days for the device-silence alert (spec §4.7): configurable defaults until HR confirms.
-- [x] Exact PL eligibility boundary: **HR-confirmed 2026-09-28** — 90 calendar
-      days from DOJ (`leave_policies.eligibility_mode = DAYS`,
-      `eligibility_value = 90`), no pro-rating, always a full 1.0-day credit.
-      See the Phase 4 commit A log entry below for the exact worked examples
-      and the inclusive-boundary rule (an eligibility date landing exactly on
-      the 1st of a month counts as already passed for that month's credit).
-- [ ] Leave encashment formula and its tax treatment: HR has confirmed the
-      *intent* ("one working day's salary per leave day") but not the exact
-      formula or its tax treatment — both still await CA confirmation.
-      `EncashmentRateProvider` (see Phase 4 commit A below) is the
-      swappable interface this resolves into once confirmed; until then it's
-      one flat, HR-entered rupee amount (configurable at System Settings →
-      Leave → Default Daily Rate, Phase 4 commit D), and Year End Process
-      refuses to run at all if that amount isn't set (never silently
-      encashes at ₹0).
-- [ ] Comp-off minimum hours worked to earn a credit, and its expiry window
-      — defaulted to 4h / 60 days pending HR confirmation
-      (`leave_policies.comp_off_min_hours_worked` /
-      `.comp_off_expiry_days`).
-- [ ] WFH monthly/yearly limits — defaulted to unlimited (`null`) pending HR
-      confirmation (`leave_policies.wfh_monthly_limit` / `.wfh_yearly_limit`).
-- [ ] Restricted Holiday yearly quota — defaulted to 2 pending HR
-      confirmation (`leave_policies.rh_yearly_quota`).
-- [ ] Leave advance-notice requirement (days' notice before an apply is
-      valid) — not yet modelled at all; no default enforced until HR
-      specifies whether this applies, and to which leave types.
-- [ ] Treatment of an unapproved absence (LOP by default? something else?)
-      — deferred to Phase 2/3's attendance rules engine, since "absence" as
-      a concept doesn't exist until punches/attendance do; not a Phase 4
-      `leave_policies` concern.
-- [ ] Whether unused Restricted Holiday balance lapses at year-end or
-      carries forward like PL/COF — defaulted to carry-forward (the safer,
-      less surprising default) until HR confirms; the ledger's reserved
-      `LAPSE` entry type is what Year End Process would emit if HR confirms
-      it should lapse instead.
-- [ ] Bank bulk-transfer file format (from bank).
-- [ ] PT/LWF applicability per location's state.
-- [ ] Actual headcount and the authoritative branch (`locations`) list — branches are HR-managed and growing (e.g. 3 separate Ajmer branches, not the single "Ajmer" row earlier drafts assumed), so this isn't a one-time seed value. Also open: which city each of the 3 Panchsheel branches (C-10, SPN, B-22) belongs to, and the correct names/addresses for the 3 Ajmer branches — seeded as placeholders for now (see the Phase 1 log entry below). The commit D reconciliation report (Import Center → Reconciliation Report tab) is the tool to compare against greytHR once the real numbers are in hand.
-- [ ] Company domain name for the portal and whether DNS is on Route 53.
-- [ ] Whether the office has a static public IP (needed for device push).
-- [ ] AWS account structure (single account, two environments, or separate
-      staging/production accounts).
-
 ### Phase 5, commit E1 — Role & permission system
 
 Plan: [`docs/plans/PHASE_5.md`](plans/PHASE_5.md) §E1 (approved
@@ -3037,3 +2985,143 @@ recovery procedure (the last resort is direct SQL, which was tested).
 **Still open:** none new. The real Super Admins are created with the
 bootstrap during Phase 1.5 staging setup, and their details never enter
 the repo.
+
+### Phase 5, commit E1.1 — Append-only audit log, loud break-glass recovery, manager data leaks
+
+Plan: [`docs/plans/PHASE_5.md`](plans/PHASE_5.md) §E1.1 (approved
+2026-10-02); as-built notes and the manager-leak survey directly below it.
+
+**Audit log made append-only at the database level.** Spec §9 has said
+"append-only" since Phase 1, but nothing enforced it until now.
+- Migration `e1_1_audit_append_only_security_events` adds triggers that
+  refuse UPDATE, DELETE and TRUNCATE on `audit_logs`.
+- The test-only exception needs a session flag **and** a row in
+  `dev_database_marker`. Only the dev seed writes that row, so a
+  never-seeded production database has no exception.
+- The actor column is no longer a foreign key.
+- Test cleanup goes through `purgeAppendOnly`.
+
+**Break-glass is loud** (`lib/securityAlerts.ts`). `admin:recover` and
+`admin:bootstrap`:
+- write a `security.breakglass` log line first, outside the database;
+- email every active Super Admin (the target included) and the new
+  optional `SECURITY_ALERT_EMAIL` **before acting**. They stop if email
+  fails, unless `--mail-is-down` is given, in which case the alert is
+  queued (`security-alert-email`, retried for 24 hours, sent by the
+  worker);
+- create an append-only `security_events` row. It shows a red banner to
+  every Super Admin on every admin page until a Super Admin other than
+  the target acknowledges it (audited), and notifies each Super Admin.
+
+**Recovery CLI inputs.**
+- `--reason` (≥10 characters), `--operator` and `--confirm-no-other-admin`
+  are required.
+- It lists the other active Super Admins and when each last signed in.
+- All of these are recorded on every action's audit entry. Unlock now
+  records its reason; E1 had dropped it.
+
+**In-app resets tell the person.** Reset 2FA, unlock and password reset
+from the Access tab email the target with who did it and why. Unlock now
+takes a reason.
+
+**Manager data leaks fixed.** Four endpoints served company-wide data to
+managers; they now apply data scope:
+- the Admin dashboard;
+- the leave dashboard;
+- the leave calendar, including a no-department hole;
+- former employees' photos.
+
+The full survey is in the plan.
+
+**Spec.**
+- §9 states the honest limit plainly: a shell operator can bypass the
+  tools, and the real control is the records outside the database.
+- §12 Phase 1.5 and DEPLOYMENT.md list the wiring that has to exist:
+  - a CloudWatch alarm on `security.breakglass`;
+  - ECS Exec session logging and CloudTrail;
+  - an app database role without UPDATE/DELETE on the audit tables;
+  - RDS log export or pgaudit;
+  - `SECURITY_ALERT_EMAIL`.
+
+**Verification:**
+- devcheck dropped, recreated, migrated and seeded.
+- Backend **492/492**, including the new `securityAlerts.test.ts`. It
+  covers:
+  - the triggers, including that the exception fails without the marker;
+  - email to every Super Admin before acting, and the log line before the
+    email;
+  - mail failure changing nothing, and `--mail-is-down` queueing the alert;
+  - the banner, and that the target can't acknowledge their own event;
+  - the operator, reason and justification on every audit row;
+  - the target being emailed on an in-app reset;
+  - all four leak fixes.
+- Frontend lint, typecheck and tests clean.
+
+## Open questions
+
+Carried from spec §14 — configurable, not guessed, until answered:
+
+- [ ] The eSSL device model number, and whether it supports ADMS push. Not blocking (2026-10-01): Phases 2–3 are built against the punch simulator, and the device is connected last.
+- [ ] The device's LAN IP address and admin password (needed by the sync agent). The password is supplied at install and kept in the agent's local configuration or a secrets store, never in the repo.
+- [ ] Whether an always-on office PC exists to run the sync agent as a Windows service (Windows version), and how many devices there are.
+- [ ] Employee Code vs Device User ID default (spec §3): Add Employee pre-fills Employee Code from the Device User ID, but our device's IDs (2–126) differ from the 1000-series Employee Codes. Keep pre-filling or not? (Punch mapping is unaffected; it always uses `device_user_mappings`.)
+- [ ] Working hours and working days for the device-silence alert (spec §4.7): configurable defaults until HR confirms.
+- [x] Exact PL eligibility boundary: **HR-confirmed 2026-09-28** — 90 calendar
+      days from DOJ (`leave_policies.eligibility_mode = DAYS`,
+      `eligibility_value = 90`), no pro-rating, always a full 1.0-day credit.
+      See the Phase 4 commit A log entry below for the exact worked examples
+      and the inclusive-boundary rule (an eligibility date landing exactly on
+      the 1st of a month counts as already passed for that month's credit).
+- [ ] Leave encashment formula and its tax treatment: HR has confirmed the
+      *intent* ("one working day's salary per leave day") but not the exact
+      formula or its tax treatment — both still await CA confirmation.
+      `EncashmentRateProvider` (see Phase 4 commit A below) is the
+      swappable interface this resolves into once confirmed; until then it's
+      one flat, HR-entered rupee amount (configurable at System Settings →
+      Leave → Default Daily Rate, Phase 4 commit D), and Year End Process
+      refuses to run at all if that amount isn't set (never silently
+      encashes at ₹0).
+- [ ] Comp-off minimum hours worked to earn a credit, and its expiry window
+      — defaulted to 4h / 60 days pending HR confirmation
+      (`leave_policies.comp_off_min_hours_worked` /
+      `.comp_off_expiry_days`).
+- [ ] WFH monthly/yearly limits — defaulted to unlimited (`null`) pending HR
+      confirmation (`leave_policies.wfh_monthly_limit` / `.wfh_yearly_limit`).
+- [ ] Restricted Holiday yearly quota — defaulted to 2 pending HR
+      confirmation (`leave_policies.rh_yearly_quota`).
+- [ ] Leave advance-notice requirement (days' notice before an apply is
+      valid) — not yet modelled at all; no default enforced until HR
+      specifies whether this applies, and to which leave types.
+- [ ] Treatment of an unapproved absence (LOP by default? something else?)
+      — deferred to Phase 2/3's attendance rules engine, since "absence" as
+      a concept doesn't exist until punches/attendance do; not a Phase 4
+      `leave_policies` concern.
+- [ ] Whether unused Restricted Holiday balance lapses at year-end or
+      carries forward like PL/COF — defaulted to carry-forward (the safer,
+      less surprising default) until HR confirms; the ledger's reserved
+      `LAPSE` entry type is what Year End Process would emit if HR confirms
+      it should lapse instead.
+- [ ] Bank bulk-transfer file format (from bank).
+- [ ] PT/LWF applicability per location's state.
+- [ ] Actual headcount and the authoritative branch (`locations`) list — branches are HR-managed and growing (e.g. 3 separate Ajmer branches, not the single "Ajmer" row earlier drafts assumed), so this isn't a one-time seed value. Also open: which city each of the 3 Panchsheel branches (C-10, SPN, B-22) belongs to, and the correct names/addresses for the 3 Ajmer branches — seeded as placeholders for now (see the Phase 1 log entry below). The commit D reconciliation report (Import Center → Reconciliation Report tab) is the tool to compare against greytHR once the real numbers are in hand.
+- [ ] Company domain name for the portal and whether DNS is on Route 53.
+- [ ] Whether the office has a static public IP (needed for device push).
+- [ ] AWS account structure (single account, two environments, or separate
+      staging/production accounts).
+
+## Open issues (known bugs, not yet fixed)
+
+- [ ] **Future-dated job changes take effect immediately for access
+      checks** (found 2026-10-02 while planning E2). `updateJob` accepts
+      any `effectiveFrom`. It closes the current row and inserts the new
+      one with `effective_to = NULL`. Every scope and team query treats
+      `effective_to IS NULL` as "current", so a change dated next month
+      applies today:
+      - reporting line, so team scope and approvals;
+      - department and branch.
+
+      E2 refuses future dates on team moves as a stopgap. **The general
+      fix (current = `effective_from <= today AND (effective_to IS NULL OR
+      effective_to > today)`, everywhere job history is read) is required
+      before Phase 6**, because payroll depends on effective dates being
+      honoured exactly.

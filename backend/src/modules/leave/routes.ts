@@ -81,7 +81,7 @@ const recalculate = requirePermission("leave.recalculate");
 leaveRouter.post("/recalculate/preview", recalculate, validate({ body: recalculatePreviewSchema }), controller.previewRecalculation);
 leaveRouter.post("/recalculate/commit", recalculate, validate({ body: recalculateCommitSchema }), controller.commitRecalculation);
 
-// Admin: Workforce Overview dashboard (leave.view) — org-wide aggregates only, no SELF/TEAM scoping
+// Admin: Workforce Overview dashboard (leave.view) — aggregates over the viewer's data scope (E1.1)
 const dashboardView = requirePermission("leave.view");
 leaveRouter.get("/dashboard", dashboardView, validate({ query: dashboardQuerySchema }), controller.getWorkforceDashboard);
 

@@ -56,3 +56,30 @@ What this means for Phase 1.5 / 5.5:
     are honest re-renders, not byte matches. The local Chrome 141 and the
     image's Chromium 152 produced different bytes for the same letter.
   - The stored PDF is always the authoritative record of what was sent.
+
+## Security wiring required before staging/production go live (Phase 5 commit E1.1)
+
+Spec §9 ("Break-glass access and its honest limit") and §12 Phase 1.5
+list these. They are recorded here so the CDK work can't miss them:
+
+- **Alarm on the break-glass log line.** `admin:recover` and
+  `admin:bootstrap` write a JSON log line with
+  `"event": "security.breakglass"` (also `security.breakglass.aborted`,
+  `.alert_failed`, `.alert_undelivered`). Add a CloudWatch Logs metric
+  filter on the backend log group, with an alarm that emails the owners
+  through SNS on any occurrence. **This is the control that matters most**:
+  the record is outside the database, so whoever ran the tool can't undo
+  it.
+- **ECS Exec**: allowed only for the owners' IAM identities, with session
+  logging (CloudWatch Logs or S3) and CloudTrail capturing
+  `ecs:ExecuteCommand`. That records which AWS identity opened a shell; the
+  tool's `--operator` is only self-declared.
+- **Database roles**: the app connects as a role with no UPDATE, DELETE or
+  TRUNCATE on `audit_logs` and `security_events`, and the migrate task uses
+  the owning role. This is a second layer under the append-only triggers.
+- **RDS log export / pgaudit** for writes to `users` and `audit_logs`. It
+  is the only trail for the direct-SQL last resort (GETTING_STARTED §12,
+  step 4).
+- **`SECURITY_ALERT_EMAIL`**: set to an inbox outside this system.
+- **Worker** must be running for queued break-glass alert emails
+  (`security-alert-email` queue, retried every 5 minutes for 24 hours).

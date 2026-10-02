@@ -9,6 +9,8 @@ import { runDailyAutoPosts } from "../modules/engage/autoPosts";
 import { autoCloseResolvedTickets } from "../modules/helpdesk/service";
 import { processLetterJob } from "../modules/letters/service";
 import { LETTERS_QUEUE_NAME } from "./lettersQueue";
+import { SECURITY_ALERT_QUEUE_NAME } from "./securityAlertQueue";
+import { mailService, type MailMessage } from "../integrations/mail";
 
 // Starts every BullMQ worker this service runs. Real workers (attendance
 // recompute, etc.) are added here starting Phase 2.
@@ -109,5 +111,19 @@ export function startWorkers(): Worker[] {
     logger.error({ jobId: job?.id, err }, "letters-generate job failed");
   });
 
-  return [pingWorker, separationsWorker, leavePlAccrualWorker, compOffExpiryWorker, engageAutoPostsWorker, helpdeskAutoCloseWorker, lettersWorker];
+  // E1.1: a break-glass alert email that failed when the CLI ran. Throwing
+  // makes BullMQ retry it (SECURITY_ALERT_RETRY).
+  const securityAlertWorker = new Worker(
+    SECURITY_ALERT_QUEUE_NAME,
+    async (job) => {
+      await mailService.send(job.data as MailMessage);
+      logger.warn({ event: "security.breakglass.alert_delivered_late", to: (job.data as MailMessage).to, attempt: job.attemptsMade + 1 }, "queued break-glass alert email delivered");
+    },
+    { connection: createBullConnection() },
+  );
+  securityAlertWorker.on("failed", (job, err) => {
+    logger.error({ event: "security.breakglass.alert_undelivered", jobId: job?.id, attempt: job?.attemptsMade, err }, "break-glass alert email still not delivered");
+  });
+
+  return [pingWorker, separationsWorker, leavePlAccrualWorker, compOffExpiryWorker, engageAutoPostsWorker, helpdeskAutoCloseWorker, lettersWorker, securityAlertWorker];
 }

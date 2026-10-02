@@ -12,6 +12,9 @@ import {
   roleCodeParamsSchema,
   setOverrideSchema,
   updateRoleSchema,
+  securityEventsQuerySchema,
+  idParamsSchema,
+  acknowledgeSchema,
 } from "./validators";
 
 // Roles & permissions (Phase 5 commit E1). The gates here only decide who
@@ -34,5 +37,9 @@ accessRouter.delete("/employees/:employeeId/roles/:code", validate({ params: emp
 accessRouter.put("/employees/:employeeId/overrides/:key", validate({ params: employeeKeyParamsSchema, body: setOverrideSchema }), controller.setOverride);
 accessRouter.delete("/employees/:employeeId/overrides/:key", validate({ params: employeeKeyParamsSchema, body: reasonSchema }), controller.clearOverride);
 accessRouter.post("/employees/:employeeId/reset-2fa", validate({ params: employeeParamsSchema, body: reasonSchema }), controller.resetTwoFactor);
-accessRouter.post("/employees/:employeeId/unlock", validate({ params: employeeParamsSchema }), controller.unlockAccount);
+accessRouter.post("/employees/:employeeId/unlock", validate({ params: employeeParamsSchema, body: reasonSchema }), controller.unlockAccount);
 accessRouter.post("/employees/:employeeId/password-reset", validate({ params: employeeParamsSchema, body: reasonSchema }), controller.sendPasswordReset);
+
+// Security events (E1.1) — Super Admin only (checked in the service).
+accessRouter.get("/security-events", validate({ query: securityEventsQuerySchema }), controller.listSecurityEvents);
+accessRouter.post("/security-events/:id/acknowledge", validate({ params: idParamsSchema, body: acknowledgeSchema }), controller.acknowledgeSecurityEvent);

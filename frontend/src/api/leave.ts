@@ -350,6 +350,7 @@ export async function commitRecalculation(employeeIds: string[], fromDate: strin
 // ── Admin: Workforce Overview dashboard (leave.view) ─────────────────────
 
 export interface WorkforceDashboardResult {
+  scope: "company" | "team"; // E1.1: "team" = the viewer and their team only
   year: number;
   leaveTypes: string[];
   byMonthAndType: { month: number; leaveTypeCode: string; days: number }[];

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Row, Col, Space, Typography, Button } from "antd";
+import { Alert, Row, Col, Space, Typography, Button } from "antd";
 import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis } from "recharts";
 import * as leaveApi from "../../../api/leave";
 import { HelpStrip } from "../../../components/common/HelpStrip";
@@ -14,7 +14,8 @@ const { Text } = Typography;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 // Workforce Overview (docs/UI_REFERENCE.md §2.3) — real data from
-// GET /api/leave/dashboard (leave.view, org-wide). One fetch per selected
+// GET /api/leave/dashboard (leave.view; company-wide for ALL scope, the
+// viewer's team otherwise — E1.1). One fetch per selected
 // year drives both the month-strip donut and the two "Category: All"
 // filters client-side, since the whole year's (month, leaveTypeCode)
 // matrix is small enough to slice locally without extra round trips.
@@ -55,6 +56,7 @@ export function WorkforceOverviewPage() {
       <HelpStrip storageKey="workforce-overview">
         This page summarises leave usage patterns across the organisation for the selected month.
       </HelpStrip>
+      {data?.scope === "team" && <Alert type="info" showIcon title="Showing your team only — you and the people who report to you." />}
 
       <Row justify="end">
         <Text type="secondary">Jan {year} - Dec {year}</Text>

@@ -428,6 +428,13 @@ Every notification is also persisted in `notifications` (bell icon, read/unread)
 - AES-256-GCM encryption for bank account, PAN, Aadhaar, UAN; key via env/KMS; masked by default. Each encrypted field also stores a plaintext last-4 column (masked display without decrypting) and an HMAC-SHA256 blind-index column keyed by a pepper separate from the encryption key (exact-match duplicate detection and search) — grids and imports use these, never live decryption. A dedicated, permission-gated reveal endpoint is the only path that decrypts, and every call is audit-logged.
 - Authorization on every route + data-scope filter; automated IDOR tests.
 - Audit log (actor, action, entity, entity_id, before, after, ip, user agent, timestamp) — append-only, written only through one shared service function that redacts sensitive values (PAN/Aadhaar/account numbers → last 4) out of `before`/`after` before the write, so no call site can forget to. `profile_change_requests.changes_json` goes through the same redaction helper.
+  - **Append-only is enforced by the database** (since Phase 5 commit E1.1; before that it was only a convention). Triggers refuse every UPDATE, DELETE and TRUNCATE on `audit_logs`. The one exception lets the test suite remove its own fixture rows, and only in a database the development seed has marked; staging and production are never seeded, so they have no exception. The actor column is deliberately not a foreign key, so nothing that happens to a user can alter an audit row. Phase 1.5 adds a second layer: the application's database role gets no UPDATE/DELETE grant on `audit_logs` at all.
+- **Break-glass access and its honest limit.** The break-glass tools (`admin:recover`, `admin:bootstrap`, run from a server shell; see GETTING_STARTED.md §12) are deliberately loud:
+  - before anything changes, every active Super Admin and an optional outside address are emailed;
+  - a log line is written outside the database;
+  - a security banner stays in the app until a Super Admin *other than the person concerned* acknowledges it.
+
+  **They are not a guarantee against a malicious operator.** Anyone who can run them has a shell on a backend container and the database credentials. They can skip the tools entirely, use SQL directly, or drop a trigger, and nothing inside the application can prevent that. The controls that can't be undone from inside are the records kept **outside the database**: the CloudWatch log line (alarmed on), the ECS Exec session log, CloudTrail's record of which AWS identity opened the shell, and the alert email already delivered to the owners. That is why Phase 1.5 must wire up and alarm on the `security.breakglass` log event, and why server shell access must stay limited to the owners.
 - File uploads: type and size validation, private storage, signed URLs with short expiry.
 - Daily automated Postgres backups (documented restore procedure).
 - India **DPDP Act 2023**: privacy notice acknowledgement on first login, purpose limitation, data retention policy for ex-employees (configurable), export of an employee's own data, breach logging.
@@ -474,6 +481,13 @@ Users, roles, permissions, login (employee code + password), refresh rotation, l
 
 **Phase 1.5 — AWS staging environment**
 Implement the CDK stacks in §15 for `staging`: VPC, RDS, ElastiCache, S3 buckets, CloudFront, ECR, ECS cluster with api/worker/scheduler services, ALB, ACM, Route 53 records, Secrets Manager, KMS, SES domain identity, CloudWatch log groups and alarms, WAF, GitHub OIDC deploy role. Add the GitHub Actions deploy workflow (build → push to ECR → run migrate task → roll ECS services → upload web build to S3 → CloudFront invalidation). Write `docs/DEPLOYMENT.md` (first-time bootstrap, DNS, SES verification, how to deploy, how to roll back, how to restore a DB backup).
+
+Security wiring required in Phase 1.5 (Phase 5 commit E1.1, §9 "Break-glass access"):
+- a CloudWatch metric filter on the `security.breakglass` log event (and `security.breakglass.aborted` / `.alert_undelivered`), with an alarm that emails the owners via SNS;
+- ECS Exec enabled only for the owners' IAM identities, with session logging to CloudWatch Logs or S3 and CloudTrail covering `ExecuteCommand`;
+- separate database roles: the app role has no UPDATE/DELETE/TRUNCATE on `audit_logs` or `security_events`, and only the migrate role owns tables;
+- RDS log export (or pgaudit) covering writes to `users` and `audit_logs`, the only trail for the direct-SQL last resort;
+- `SECURITY_ALERT_EMAIL` set to an inbox outside this system.
 ✅ Done when a merge to `main` automatically deploys to `staging.<domain>`, an invite email is delivered via SES, and file uploads land in S3.
 From here on, every phase is verified on staging, not only locally.
 

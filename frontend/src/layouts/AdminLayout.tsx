@@ -30,6 +30,7 @@ import { adminApps, type AdminApp } from "../routes/adminMenu.config";
 import { AdminFiltersProvider, useAdminFilters } from "../context/AdminFiltersContext";
 import { useAuth } from "../hooks/useAuth";
 import { NotificationBell } from "../components/common/NotificationBell";
+import { SecurityEventsBanner } from "../components/access/SecurityEventsBanner";
 
 const { Header, Content, Footer } = Layout;
 const { Text } = Typography;
@@ -325,6 +326,7 @@ function AdminLayoutInner() {
       )}
 
       <Content style={{ padding: isMobile ? 12 : 24 }}>
+        <SecurityEventsBanner />
         <Outlet />
       </Content>
 

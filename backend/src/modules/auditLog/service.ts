@@ -27,14 +27,20 @@ export async function listAuditLogs(query: ListAuditLogQuery) {
     };
   }
   if (query.actorSearch) {
-    where.actor = {
-      employee: {
-        OR: [
-          { employeeCode: { contains: query.actorSearch, mode: "insensitive" } },
-          { nameHistory: { some: { effectiveTo: null, fullName: { contains: query.actorSearch, mode: "insensitive" } } } },
-        ],
+    // actorUserId is a plain column, not a relation (append-only, E1.1),
+    // so matching actors are resolved first.
+    const actors = await prisma.user.findMany({
+      where: {
+        employee: {
+          OR: [
+            { employeeCode: { contains: query.actorSearch, mode: "insensitive" } },
+            { nameHistory: { some: { effectiveTo: null, fullName: { contains: query.actorSearch, mode: "insensitive" } } } },
+          ],
+        },
       },
-    };
+      select: { id: true },
+    });
+    where.actorUserId = { in: actors.map((a) => a.id) };
   }
 
   const [total, rows] = await Promise.all([
@@ -44,9 +50,14 @@ export async function listAuditLogs(query: ListAuditLogQuery) {
       orderBy: { createdAt: "desc" },
       skip: (query.page - 1) * query.pageSize,
       take: query.pageSize,
-      include: { actor: { include: { employee: { include: { nameHistory: { where: { effectiveTo: null } } } } } } },
     }),
   ]);
+  const actorIds = [...new Set(rows.map((r) => r.actorUserId).filter((id): id is string => Boolean(id)))];
+  const actorRows = await prisma.user.findMany({
+    where: { id: { in: actorIds } },
+    select: { id: true, employee: { select: { employeeCode: true, nameHistory: { where: { effectiveTo: null }, select: { fullName: true } } } } },
+  });
+  const actorById = new Map(actorRows.map((a) => [a.id, a.employee]));
 
   return {
     total,
@@ -54,8 +65,8 @@ export async function listAuditLogs(query: ListAuditLogQuery) {
     pageSize: query.pageSize,
     rows: rows.map((r) => ({
       id: r.id,
-      actorEmployeeCode: r.actor?.employee.employeeCode ?? null,
-      actorName: r.actor?.employee.nameHistory[0]?.fullName ?? null,
+      actorEmployeeCode: (r.actorUserId && actorById.get(r.actorUserId)?.employeeCode) ?? null,
+      actorName: (r.actorUserId && actorById.get(r.actorUserId)?.nameHistory[0]?.fullName) ?? null,
       action: r.action,
       entityType: r.entityType,
       entityId: r.entityId,

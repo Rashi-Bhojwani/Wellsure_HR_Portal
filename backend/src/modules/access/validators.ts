@@ -18,3 +18,7 @@ const reason = z.string().trim().min(3, "Give a reason (at least a few words).")
 export const setOverrideSchema = z.object({ effect: z.enum(["GRANT", "REVOKE"]), reason });
 export const reasonSchema = z.object({ reason });
 export const assignRoleSchema = z.object({ code: z.string().min(1).max(40) });
+
+export const idParamsSchema = z.object({ id: z.string().min(1) });
+export const securityEventsQuerySchema = z.object({ status: z.enum(["open", "all"]).optional() });
+export const acknowledgeSchema = z.object({ note: z.string().trim().min(3, "Say what you checked (at least a few words).").max(500) });

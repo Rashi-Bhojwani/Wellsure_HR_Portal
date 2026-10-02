@@ -16,6 +16,9 @@ import {
   type TestOrgMasters,
 } from "./leaveTestHelpers";
 
+// An ALL-scope viewer: company-wide figures (E1.1 scoped this endpoint).
+const COMPANY_VIEWER = { employeeId: "test-viewer", dataScope: "ALL" as const };
+
 // Workforce Overview dashboard — byMonthAndType/rhBreakdown both filter on
 // a CLOSED fromDate range for the given year (unlike Year End's open-ended
 // cutoff), so a fictional far-future year genuinely isolates this test's
@@ -71,7 +74,7 @@ describe("GET /api/leave/dashboard", () => {
     });
     requestIds.push(rhRequest.id);
 
-    const result = await dashboardService.getWorkforceDashboard(YEAR);
+    const result = await dashboardService.getWorkforceDashboard(YEAR, COMPANY_VIEWER);
 
     expect(result.leaveTypes).toEqual(expect.arrayContaining(["PL", "WFH", "RH"]));
 
@@ -89,7 +92,7 @@ describe("GET /api/leave/dashboard", () => {
     const rh = await prisma.restrictedHoliday.create({ data: { date: utcDate(`${YEAR}-02-14`), name: "Untaken RH" } });
     rhIds.push(rh.id);
 
-    const result = await dashboardService.getWorkforceDashboard(YEAR);
+    const result = await dashboardService.getWorkforceDashboard(YEAR, COMPANY_VIEWER);
     expect(result.rhBreakdown.find((r) => r.date === `${YEAR}-02-14`)).toBeUndefined();
   });
 

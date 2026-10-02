@@ -1,6 +1,8 @@
 import { createInterface } from "node:readline/promises";
 import { env } from "../../src/config/env";
 import { maskDatabaseUrl } from "../../src/config/databaseGuard";
+import { logger } from "../../src/lib/logger";
+import { startSocketEmitter, stopSocketEmitter } from "../../src/realtime/emitter";
 
 // Small helpers shared by the admin CLIs (admin-bootstrap, admin-recover).
 
@@ -50,3 +52,16 @@ export async function confirmOrExit(yesFlag: boolean): Promise<void> {
     process.exit(1);
   }
 }
+
+// The CLIs run as their own process with no Socket.IO server, so — like the
+// worker — they publish live signals (the Super Admins' security banner)
+// through Redis to the api servers. If Redis is down the CLI still works:
+// the banner then appears on the next refresh (it also polls every minute).
+export async function startLiveSignals(): Promise<void> {
+  try {
+    await startSocketEmitter();
+  } catch (err) {
+    logger.warn({ err }, "live signals unavailable (Redis down?) — the security banner will appear on the next refresh");
+  }
+}
+export const stopLiveSignals = stopSocketEmitter;

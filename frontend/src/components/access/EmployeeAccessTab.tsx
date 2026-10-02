@@ -45,14 +45,6 @@ export function EmployeeAccessTab({ employeeId }: { employeeId: string }) {
     },
     onError: (err) => void message.error(apiErrorMessage(err, "Couldn't change the role.")),
   });
-  const unlock = useMutation({
-    mutationFn: () => accessApi.unlockAccount(employeeId),
-    onSuccess: (a) => {
-      applied(a);
-      void message.success("Account unlocked.");
-    },
-    onError: (err) => void message.error(apiErrorMessage(err, "Couldn't unlock the account.")),
-  });
   const runPrompt = useMutation({
     mutationFn: (reason: string) => prompt!.run(reason),
     onSuccess: (a) => {
@@ -154,19 +146,23 @@ export function EmployeeAccessTab({ employeeId }: { employeeId: string }) {
               icon={<KeyOutlined />}
               disabled={!access.totpEnabled}
               onClick={() =>
-                setPrompt({ title: "Reset two-factor authentication", okText: "Reset 2FA", danger: true, description: "Clears their authenticator and backup codes and signs them out everywhere. Verify who you're talking to first.", run: (reason) => accessApi.resetTwoFactor(employeeId, reason), success: "2FA reset — they've been signed out." })
+                setPrompt({ title: "Reset two-factor authentication", okText: "Reset 2FA", danger: true, description: "Clears their authenticator and backup codes and signs them out everywhere. Verify who you're talking to first. They'll be emailed that you did this.", run: (reason) => accessApi.resetTwoFactor(employeeId, reason), success: "2FA reset — they've been signed out." })
               }
             >
               Reset 2FA
             </Button>
-            <Button icon={<UnlockOutlined />} disabled={!access.locked} loading={unlock.isPending} onClick={() => unlock.mutate()}>
+            <Button
+              icon={<UnlockOutlined />}
+              disabled={!access.locked}
+              onClick={() => setPrompt({ title: "Unlock this account", okText: "Unlock", description: "Clears the lockout after failed sign-in attempts. They'll be emailed that you did this.", run: (reason) => accessApi.unlockAccount(employeeId, reason), success: "Account unlocked." })}
+            >
               Unlock
             </Button>
             <Button
               icon={<MailOutlined />}
               disabled={access.status !== "ACTIVE"}
               onClick={() =>
-                setPrompt({ title: "Send a password reset link", okText: "Send link", description: "Emails a single-use link (valid 1 hour) to their personal email on file.", run: (reason) => accessApi.sendPasswordReset(employeeId, reason), success: "Password reset link sent." })
+                setPrompt({ title: "Send a password reset link", okText: "Send link", description: "Emails a single-use link (valid 1 hour) to their personal email on file, with a note that you sent it.", run: (reason) => accessApi.sendPasswordReset(employeeId, reason), success: "Password reset link sent." })
               }
             >
               Send password reset

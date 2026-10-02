@@ -6,7 +6,8 @@ import { storageService } from "../../integrations/storage";
 import { writeAuditLog } from "../../lib/audit";
 import { logger } from "../../lib/logger";
 import { getPeopleDocumentsSettings } from "../../lib/peopleDocumentsSettings";
-import { resolveUserPermissions } from "../../lib/permissions";
+import { buildEmployeeScopeWhere } from "../../lib/dataScope";
+import { resolveAccess } from "../../lib/permissions";
 import { prisma } from "../../lib/prisma";
 import { assertWithinSize } from "../../lib/uploads";
 import { HttpError } from "../../middleware/errorHandler";
@@ -181,8 +182,15 @@ export async function readPhotoForViewer(token: string | undefined, employeeId: 
   // Same visibility as the directory: ACTIVE employees for everyone; anyone
   // else only for viewers who may view employee records (HR profile pages).
   if (!employee) throw new HttpError(404, "Photo not found.", "NOT_FOUND");
-  if (employee.status !== "ACTIVE" && !(await resolveUserPermissions(viewerUserId)).has("employee.view")) {
-    throw new HttpError(404, "Photo not found.", "NOT_FOUND");
+  if (employee.status !== "ACTIVE") {
+    // E1.1 (was a leak): a former employee's photo needs employee.view AND
+    // the person within the viewer's data scope — a manager sees their own
+    // team's, not the whole company's.
+    const viewer = await resolveAccess(viewerUserId);
+    const viewerUser = await prisma.user.findUnique({ where: { id: viewerUserId }, select: { employeeId: true } });
+    if (!viewer.permissions.has("employee.view") || !viewerUser || !(await prisma.employee.findFirst({ where: { AND: [{ id: employeeId }, await buildEmployeeScopeWhere(viewerUser.employeeId, viewer.dataScope)] }, select: { id: true } }))) {
+      throw new HttpError(404, "Photo not found.", "NOT_FOUND");
+    }
   }
   const key = size === "thumb" ? employee.personal?.photoThumbStorageKey : employee.personal?.photoStorageKey;
   if (!key) throw new HttpError(404, "Photo not found.", "NOT_FOUND");

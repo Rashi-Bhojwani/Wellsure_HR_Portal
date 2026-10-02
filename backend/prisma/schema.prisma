@@ -108,7 +108,6 @@ model User {
   invitationTokens    InvitationToken[]
   passwordResets      PasswordResetToken[]
   totpBackupCodes     TotpBackupCode[]
-  auditLogs           AuditLog[]               @relation("AuditActor")
   settingsUpdated     SystemSetting[]
   savedViews          SavedView[]
   notifications       Notification[]
@@ -279,8 +278,10 @@ model TotpBackupCode {
 
 model AuditLog {
   id          String   @id @default(cuid())
-  actorUserId String?  @map("actor_user_id") // null = system/scheduler action
-  actor       User?    @relation("AuditActor", fields: [actorUserId], references: [id])
+  // null = system/scheduler/CLI action. Deliberately NOT a foreign key
+  // (E1.1): the table is append-only, so a row must never depend on — or
+  // be changed by — anything happening to the user it names.
+  actorUserId String?  @map("actor_user_id")
   action      String
   entityType  String   @map("entity_type")
   entityId    String   @map("entity_id")
@@ -1628,4 +1629,37 @@ model GeneratedLetter {
 
   @@index([employeeId])
   @@map("generated_letters")
+}
+
+// Phase 5 commit E1.1: a security-relevant event that must not go unnoticed
+// — today the break-glass CLIs (admin:recover, admin:bootstrap). Each row
+// shows a red banner to every Super Admin until a Super Admin OTHER than the
+// target acknowledges it. Append-only (database trigger): only the three
+// acknowledgement columns may be filled in, once. No foreign keys, so a row
+// outlives anything it mentions.
+model SecurityEvent {
+  id                   String    @id @default(cuid())
+  kind                 String // "break_glass.recover" | "break_glass.bootstrap"
+  targetUserId         String?   @map("target_user_id")
+  summary              String
+  details              Json
+  createdAt            DateTime  @default(now()) @map("created_at")
+  acknowledgedAt       DateTime? @map("acknowledged_at")
+  acknowledgedByUserId String?   @map("acknowledged_by_user_id")
+  acknowledgementNote  String?   @map("acknowledgement_note")
+
+  @@index([acknowledgedAt])
+  @@map("security_events")
+}
+
+// Phase 5 commit E1.1: one row, written only by prisma/seed.ts (which
+// refuses to run outside development), marks a development/CI database.
+// The append-only triggers on audit_logs and security_events let the test
+// suite delete its own fixture rows only when this row exists — so a
+// never-seeded staging/production database has no exception at all.
+model DevDatabaseMarker {
+  id        Int      @id @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("dev_database_marker")
 }

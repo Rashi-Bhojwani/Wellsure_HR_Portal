@@ -19,8 +19,8 @@ import {
   loginAs,
   type TestOrgMasters,
 } from "../../employee/__tests__/employeeTestHelpers";
+import { purgeAppendOnly } from "../../../lib/__tests__/cleanup";
 import { AdminCliRefusal, assertBootstrapAllowed, bootstrapSuperAdmin, provisionSuperAdmin } from "../bootstrap";
-import { recoverSuperAdmin } from "../recovery";
 
 // Roles & permissions (Phase 5 commit E1) — rules 1–8 of docs/plans/PHASE_5.md §E1.
 // Uses the SEEDED system roles, so the matrix under test is the real one.
@@ -264,7 +264,7 @@ describe("Roles & permissions (E1)", () => {
 
     it("security actions: HR (user.security.manage) on an employee yes, on a Super Admin no, on yourself no", async () => {
       await prisma.user.update({ where: { id: people.employee.userId }, data: { failedLoginAttempts: 5, lockedUntil: new Date(Date.now() + 60_000) } });
-      const unlock = await api(tokens.hrAdmin).post(`/api/access/employees/${people.employee.employeeId}/unlock`);
+      const unlock = await api(tokens.hrAdmin).post(`/api/access/employees/${people.employee.employeeId}/unlock`, { reason: "locked out after typos" });
       expect(unlock.status).toBe(200);
       expect(unlock.body.locked).toBe(false);
       expect(await auditCount("auth.unlocked_by_admin", people.employee.userId)).toBe(1);
@@ -282,9 +282,9 @@ describe("Roles & permissions (E1)", () => {
       expect((await api(tokens.hrAdmin).post(`/api/access/employees/${people.sa.employeeId}/reset-2fa`, { reason: "try on SA" })).status).toBe(403);
       expect((await api(tokens.sa).post(`/api/access/employees/${people.sa.employeeId}/reset-2fa`, { reason: "on myself" })).body.error.code).toBe("SELF");
       // Recovery step 1: another Super Admin can.
-      expect((await api(tokens.sa).post(`/api/access/employees/${people.sa2.employeeId}/unlock`)).status).toBe(200);
+      expect((await api(tokens.sa).post(`/api/access/employees/${people.sa2.employeeId}/unlock`, { reason: "locked out after typos" })).status).toBe(200);
       // Outside the manager's TEAM scope: 404, never confirming the person exists.
-      expect((await api(tokens.manager).post(`/api/access/employees/${people.employee.employeeId}/unlock`)).status).toBe(404);
+      expect((await api(tokens.manager).post(`/api/access/employees/${people.employee.employeeId}/unlock`, { reason: "should not work" })).status).toBe(404);
     });
   });
 
@@ -372,7 +372,7 @@ describe("Roles & permissions (E1)", () => {
   describe("Super Admin bootstrap", () => {
     it("refuses while any active Super Admin exists (always true here: the seed has one)", async () => {
       await expect(assertBootstrapAllowed("ANY")).rejects.toBeInstanceOf(AdminCliRefusal);
-      await expect(bootstrapSuperAdmin({ employeeCode: "ANY" })).rejects.toThrow(/active Super Admin already exists/);
+      await expect(bootstrapSuperAdmin({ employeeCode: "ANY" }, { operator: "Test Operator" })).rejects.toThrow(/active Super Admin already exists/);
     });
 
     it("provisions a minimal employee, INVITED, with no password — the invitation is how they set one", async () => {
@@ -414,13 +414,14 @@ describe("Roles & permissions (E1)", () => {
       await prisma.$executeRawUnsafe("ALTER TABLE users DISABLE TRIGGER users_protect_last_super_admin");
       try {
         await prisma.user.updateMany({ where: { id: { in: active.map((u) => u.id) } }, data: { status: "SUSPENDED" } });
-        const r = await bootstrapSuperAdmin({ employeeCode: code, fullName: "Fresh Db Person", personalEmail: `fresh.${code.toLowerCase()}@gmail.com`, mobile: "9000000003", dateOfBirth: "1980-01-01", gender: "OTHER", dateOfJoining: "2019-04-01" });
+        const r = await bootstrapSuperAdmin({ employeeCode: code, fullName: "Fresh Db Person", personalEmail: `fresh.${code.toLowerCase()}@gmail.com`, mobile: "9000000003", dateOfBirth: "1980-01-01", gender: "OTHER", dateOfJoining: "2019-04-01" }, { operator: "Test Operator" });
         expect(r.outcome).toBe("created");
         await expect(assertBootstrapAllowed("SOMEONE-ELSE")).rejects.toThrow(new RegExp(`invitation is already outstanding for employee ${code}`));
         await expect(assertBootstrapAllowed(code)).resolves.toBeUndefined();
       } finally {
         await prisma.user.updateMany({ where: { id: { in: active.map((u) => u.id) } }, data: { status: "ACTIVE" } });
         await prisma.$executeRawUnsafe("ALTER TABLE users ENABLE TRIGGER users_protect_last_super_admin");
+        await purgeAppendOnly("SecurityEvent", { kind: "break_glass.bootstrap", summary: { contains: code } });
       }
     });
 
@@ -430,26 +431,7 @@ describe("Roles & permissions (E1)", () => {
     });
   });
 
-  describe("break-glass recovery", () => {
-    it("refuses anyone who isn't a Super Admin, and needs an action and a reason", async () => {
-      await expect(recoverSuperAdmin({ employeeCode: people.hrAdmin.employeeCode, unlock: true, reason: "test" })).rejects.toThrow(/not a Super Admin/);
-      await expect(recoverSuperAdmin({ employeeCode: people.sa2.employeeCode, reason: "test" })).rejects.toThrow(/at least one/);
-      await expect(recoverSuperAdmin({ employeeCode: people.sa2.employeeCode, unlock: true, reason: "" })).rejects.toThrow(/reason/);
-    });
-
-    it("resets 2FA, unlocks and issues a reset link for a Super Admin; audited with no actor and the reason", async () => {
-      await prisma.user.update({ where: { id: people.sa2.userId }, data: { totpEnabled: true, failedLoginAttempts: 5, lockedUntil: new Date(Date.now() + 60_000) } });
-      const r = await recoverSuperAdmin({ employeeCode: people.sa2.employeeCode, resetTwoFactor: true, unlock: true, passwordReset: true, reason: "lost phone; verified by call" });
-      expect(r.done).toHaveLength(3);
-      expect(r.passwordResetLink).toMatch(/\/reset-password\/[0-9a-f]{64}$/);
-      expect(r.emailedTo).toMatch(/@gmail\.com$/);
-      const u = await prisma.user.findUniqueOrThrow({ where: { id: people.sa2.userId } });
-      expect(u).toMatchObject({ totpEnabled: false, failedLoginAttempts: 0, lockedUntil: null });
-      const log = await prisma.auditLog.findFirstOrThrow({ where: { action: "auth.2fa.reset_by_admin", entityId: people.sa2.userId }, orderBy: { createdAt: "desc" } });
-      expect(log.actorUserId).toBeNull();
-      expect((log.after as { reason: string }).reason).toBe("[break-glass CLI] lost phone; verified by call");
-    });
-  });
+  // Break-glass recovery is tested in securityAlerts.test.ts (E1.1).
 
   describe("access catalog (production has no seed)", () => {
     it("creates a missing permission row and is otherwise a no-op; never touches existing roles", async () => {

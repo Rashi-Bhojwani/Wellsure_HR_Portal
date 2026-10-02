@@ -2,6 +2,7 @@ import { useMemo, useState, type ComponentType } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Alert,
   Button,
   Card,
   Col,
@@ -467,6 +468,7 @@ function DashboardTab() {
       <Row justify="end">
         <Button onClick={() => setEditOpen(true)}>Edit</Button>
       </Row>
+      {widgets.scope === "team" && <Alert type="info" showIcon title="Showing your team only — you and the people who report to you." />}
       {orderedVisible.length === 0 ? (
         <EmptyState message="No widgets are visible — use Edit to show some." />
       ) : (

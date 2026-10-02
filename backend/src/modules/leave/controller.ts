@@ -192,5 +192,5 @@ export async function commitRecalculation(req: Request, res: Response): Promise<
 
 export async function getWorkforceDashboard(req: Request, res: Response): Promise<void> {
   const { year } = req.query as never as { year: number };
-  res.status(200).json(await dashboardService.getWorkforceDashboard(year));
+  res.status(200).json(await dashboardService.getWorkforceDashboard(year, { employeeId: req.user!.employeeId, dataScope: req.user!.dataScope }));
 }

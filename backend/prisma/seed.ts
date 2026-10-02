@@ -318,6 +318,13 @@ async function main() {
     data: RESTRICTED_HOLIDAYS_2026.map(([date, name]) => ({ date: new Date(date), name })),
   });
 
+  // ── Development-database marker (E1.1) ──────────────────────────────
+  // Lets the test suite's fixture cleanup use the append-only triggers' one
+  // exception (see migration e1_1_audit_append_only_security_events). Only
+  // ever written here, and this seed refuses to run outside development, so
+  // staging/production never carry it.
+  await prisma.devDatabaseMarker.create({ data: { id: 1 } });
+
   // ── Permissions + Roles ─────────────────────────────────────────────
   // The same additive step every environment runs on migrate (E1): a
   // Permission row per catalog key and each system role with its default

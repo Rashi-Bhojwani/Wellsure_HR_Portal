@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
+import { getTeamEmployeeIds } from "../../lib/dataScope";
 import type { LeaveViewer } from "./types";
 
 export interface LeaveCalendarQuery {
@@ -27,8 +28,14 @@ export interface LeaveCalendarEntry {
 // locationId/departmentId query params — a plain employee always sees
 // "my team", never an arbitrary department. leave.view holders can widen
 // to any location/department, or the whole org if neither is given.
+//
+// E1.1 (was a live leak): widening is for ALL-scope leave.view holders only.
+// A TEAM-scoped holder (a manager) gets their own department, as everyone
+// does, plus their own team wherever its members sit — never an arbitrary
+// department or the whole company.
 export async function getLeaveCalendar(query: LeaveCalendarQuery, viewer: LeaveViewer): Promise<LeaveCalendarEntry[]> {
-  const hasBroadView = viewer.permissions.has("leave.view");
+  const hasBroadView = viewer.permissions.has("leave.view") && viewer.dataScope === "ALL";
+  const teamIds = viewer.permissions.has("leave.view") && viewer.dataScope === "TEAM" ? await getTeamEmployeeIds(viewer.employeeId) : [];
   const fromDate = new Date(query.fromDate);
   const toDate = new Date(query.toDate);
 
@@ -49,7 +56,7 @@ export async function getLeaveCalendar(query: LeaveCalendarQuery, viewer: LeaveV
     toDate: { gte: fromDate },
   };
   if (departmentId || locationId) {
-    where.employee = {
+    const placement = {
       jobHistory: {
         some: {
           effectiveTo: null,
@@ -58,6 +65,12 @@ export async function getLeaveCalendar(query: LeaveCalendarQuery, viewer: LeaveV
         },
       },
     };
+    where.employee = teamIds.length > 0 ? { OR: [placement, { id: { in: teamIds } }] } : placement;
+  }
+  if (!hasBroadView && !departmentId) {
+    // No department on record (e.g. no job placement yet): without this,
+    // the filter above would be skipped and the whole company returned.
+    where.employee = { id: { in: [viewer.employeeId, ...teamIds] } };
   }
 
   const rows = await prisma.leaveRequest.findMany({

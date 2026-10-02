@@ -6,7 +6,9 @@ import { resolveAccess, SUPER_ADMIN_ROLE_CODE } from "../../lib/permissions";
 import { prisma } from "../../lib/prisma";
 import { assertSuperAdminRemains } from "../../lib/superAdminGuard";
 import { HttpError } from "../../middleware/errorHandler";
-import { emitPermissionsChanged } from "../../realtime/emit";
+import { emitPermissionsChanged, getSocketServer } from "../../realtime/emit";
+import { logger } from "../../lib/logger";
+import { sendSecurityChangeNoticeEmail } from "../auth/emails";
 import { adminIssuePasswordReset, adminResetTotp, adminUnlock } from "../auth/service";
 
 // Roles & permissions (spec §2, Phase 5 commit E1). The rules, numbered as in
@@ -285,15 +287,31 @@ async function assertMaySecure(employeeId: string, actor: AccessActor) {
   return user;
 }
 
+// E1.1: the person is always told, by email, who changed their sign-in and why.
+async function tellTarget(userId: string, change: string, reason: string, actor: AccessActor) {
+  const [target, by] = await Promise.all([
+    prisma.employee.findFirst({ where: { user: { id: userId } }, include: { personal: true, nameHistory: { where: { effectiveTo: null } } } }),
+    prisma.employee.findUnique({ where: { id: actor.employeeId }, include: { nameHistory: { where: { effectiveTo: null } } } }),
+  ]);
+  const email = target?.personal?.personalEmail;
+  if (!target || !email) return;
+  const byLabel = by ? `${by.nameHistory[0]?.fullName ?? by.employeeCode} (${by.employeeCode})` : "an administrator";
+  await sendSecurityChangeNoticeEmail(email, target.nameHistory[0]?.fullName ?? target.employeeCode, change, byLabel, reason).catch((err: unknown) =>
+    logger.error({ err, userId }, "failed to send security change notice"),
+  );
+}
+
 export async function resetTwoFactor(employeeId: string, reason: string, actor: AccessActor, meta: ActorMeta) {
   const user = await assertMaySecure(employeeId, actor);
   await adminResetTotp(user.id, { ...meta, reason });
+  await tellTarget(user.id, "Your two-factor authentication was reset and you were signed out everywhere", reason, actor);
   return getEmployeeAccess(employeeId, actor);
 }
 
-export async function unlockAccount(employeeId: string, actor: AccessActor, meta: ActorMeta) {
+export async function unlockAccount(employeeId: string, reason: string, actor: AccessActor, meta: ActorMeta) {
   const user = await assertMaySecure(employeeId, actor);
-  await adminUnlock(user.id, meta);
+  await adminUnlock(user.id, { ...meta, reason });
+  await tellTarget(user.id, "Your account was unlocked after failed sign-in attempts", reason, actor);
   return getEmployeeAccess(employeeId, actor);
 }
 
@@ -302,6 +320,39 @@ export async function sendPasswordReset(employeeId: string, reason: string, acto
   if (user.status !== "ACTIVE") throw new HttpError(409, "Only an active account can be sent a password reset (resend the invitation instead).", "NOT_ACTIVE");
   const { emailedTo } = await adminIssuePasswordReset(user.id, { ...meta, reason });
   if (!emailedTo) throw new HttpError(409, "This person has no personal email on file, so the link couldn't be sent.", "NO_EMAIL");
+  await tellTarget(user.id, "A password-reset link was sent to you", reason, actor);
   return { emailed: true };
+}
+
+// ── Security events (E1.1) ─────────────────────────────────────────────
+// Raised by the break-glass CLIs (lib/securityAlerts.ts). Super Admins only.
+// A banner stays until a Super Admin OTHER than the event's target
+// acknowledges it — the person recovered can't clear their own alarm.
+
+export async function listSecurityEvents(actor: AccessActor, status: "open" | "all") {
+  requireSuperAdmin(actor, "see security events");
+  const rows = await prisma.securityEvent.findMany({ where: status === "open" ? { acknowledgedAt: null } : {}, orderBy: { createdAt: "desc" }, take: 100 });
+  return rows.map((e) => ({
+    id: e.id,
+    kind: e.kind,
+    summary: e.summary,
+    details: e.details,
+    createdAt: e.createdAt.toISOString(),
+    acknowledgedAt: e.acknowledgedAt?.toISOString() ?? null,
+    acknowledgedByUserId: e.acknowledgedByUserId,
+    acknowledgementNote: e.acknowledgementNote,
+    youAreTarget: e.targetUserId === actor.userId,
+  }));
+}
+
+export async function acknowledgeSecurityEvent(id: string, note: string, actor: AccessActor, meta: ActorMeta) {
+  requireSuperAdmin(actor, "acknowledge security events");
+  const event = await prisma.securityEvent.findUnique({ where: { id } });
+  if (!event) throw new HttpError(404, "Security event not found.", "NOT_FOUND");
+  if (event.acknowledgedAt) throw new HttpError(409, "Already acknowledged.", "ALREADY_ACKNOWLEDGED");
+  if (event.targetUserId === actor.userId) throw forbid("This event is about your own account — another Super Admin has to acknowledge it.", "SELF");
+  await prisma.securityEvent.update({ where: { id }, data: { acknowledgedAt: new Date(), acknowledgedByUserId: actor.userId, acknowledgementNote: note } });
+  await writeAuditLog({ ...meta, action: "security_event.acknowledged", entityType: "SecurityEvent", entityId: id, after: { note } });
+  getSocketServer()?.to(`role:${SUPER_ADMIN_ROLE_CODE}`).emit("security.event", { id });
 }
 

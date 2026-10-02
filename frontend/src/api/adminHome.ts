@@ -19,6 +19,9 @@ export interface MonthAdditionAttrition {
 }
 
 export interface DashboardWidgets {
+  // "team" when the viewer's data scope isn't ALL (E1.1): every figure is
+  // over themselves + their team, not the company.
+  scope: "company" | "team";
   yearsInService: BucketCount[];
   additionsAttrition: MonthAdditionAttrition[];
   headcountByLocation: NamedCount[];

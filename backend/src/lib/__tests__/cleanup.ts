@@ -31,8 +31,6 @@ type Policy = "delete" | "setNull";
 export const OPTIONAL_FK_POLICY: Record<string, Policy> = {
   // A token that replaced this one during refresh rotation — just a pointer.
   "RefreshToken.replacedByTokenId": "setNull",
-  // Audit rows written by a test actor are test noise.
-  "AuditLog.actorUserId": "delete",
   // Seeded settings can be edited by a test user; the setting must survive.
   "SystemSetting.updatedByUserId": "setNull",
   // A branch's optional city grouping — deleting a city never deletes branches.
@@ -94,6 +92,9 @@ export const STANDALONE_ROOT_MODELS: Record<string, string> = {
   HelpdeskCategory: "helpdesk category master; deleteWithDependents(\"HelpdeskCategory\", ids) takes its tickets with it",
   DocumentCategory: "document category master; deleteWithDependents(\"DocumentCategory\", ids) takes its documents with it",
   EngageAutoPostSetting: "id-less closed catalog keyed by `kind`; cleanupAutoPostSetting",
+  AuditLog: "append-only (E1.1); no FKs — rows about a fixture go via deleteEmployeesAndDependents, through purgeAppendOnly",
+  SecurityEvent: "append-only (E1.1); no FKs — tests remove their own rows by id through purgeAppendOnly",
+  DevDatabaseMarker: "one row written by the dev seed (E1.1); never created or removed by tests",
 };
 
 // Columns holding a StorageService key. When the engine deletes a row it
@@ -355,6 +356,18 @@ export async function deleteWithDependents(model: string, ids: string[]): Promis
   }
 }
 
+// audit_logs and security_events are append-only at the database level
+// (E1.1). The only way a test may remove its fixture rows is the trigger's
+// test exception: app.audit_purge = 'test' for this transaction, honoured
+// only in a database the dev seed marked (a row in dev_database_marker).
+export async function purgeAppendOnly(model: "AuditLog" | "SecurityEvent", where: object): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe("SELECT set_config('app.audit_purge', 'test', true)");
+    if (model === "AuditLog") await tx.auditLog.deleteMany({ where });
+    else await tx.securityEvent.deleteMany({ where });
+  });
+}
+
 // The one entry point every per-employee cleanup helper uses. AuditLog's
 // entityId is a plain string (it can name any entity type), not an FK, so
 // the engine can't see it — rows *about* the fixture are removed here
@@ -362,6 +375,7 @@ export async function deleteWithDependents(model: string, ids: string[]): Promis
 export async function deleteEmployeesAndDependents(employeeIds: string[]): Promise<void> {
   if (employeeIds.length === 0) return;
   const users = await prisma.user.findMany({ where: { employeeId: { in: employeeIds } }, select: { id: true } });
-  await prisma.auditLog.deleteMany({ where: { entityId: { in: [...employeeIds, ...users.map((u) => u.id)] } } });
+  const ids = [...employeeIds, ...users.map((u) => u.id)];
+  await purgeAppendOnly("AuditLog", { OR: [{ entityId: { in: ids } }, { actorUserId: { in: users.map((u) => u.id) } }] });
   await deleteWithDependents("Employee", employeeIds);
 }

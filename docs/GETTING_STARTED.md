@@ -138,6 +138,7 @@ except the two marked **required**.
 | `MAIL_DRIVER` | `console` \| `ses` | No | `console` |
 | `MAIL_DEV_DIR` | Where outgoing mail is written as `.eml` files | No | `.mail` |
 | `SES_FROM` | Required only when `MAIL_DRIVER=ses` | Conditional | — |
+| `SECURITY_ALERT_EMAIL` | An inbox **outside** this system (e.g. the owners' shared mailbox). It also receives every break-glass alert (§12). Set it in staging and production | No | unset |
 | `AGENT_API_KEYS` | Biometric agent authentication (Phase 2 — not yet wired up) | No | placeholder |
 | `AWS_REGION` | Used by the S3/SES clients when those drivers are active | No | `ap-south-1` |
 
@@ -442,6 +443,14 @@ created once with `scripts/admin-bootstrap.ts`. It:
   `auth.require2faRoles` setting requires it) in the browser.
 - writes an audit-log entry (`access.super_admin.bootstrapped`) with no
   actor.
+- **is loud** (E1.1). It needs `--operator "<your name>"`. Before anything
+  is created, it:
+  - writes a `security.breakglass` log line;
+  - emails `SECURITY_ALERT_EMAIL`, when set;
+  - raises a security event that the new Super Admin sees as a banner.
+
+  If that email fails it stops, unless you add `--mail-is-down`; the alert
+  is then queued and retried for 24 hours.
 
 Steps:
 
@@ -459,7 +468,7 @@ Steps:
    ```bash
    aws ecs execute-command --cluster <cluster> --task <api-task-id> \
      --container <backend-container> --interactive \
-     --command "node_modules/.bin/tsx scripts/admin-bootstrap.ts"
+     --command "node_modules/.bin/tsx scripts/admin-bootstrap.ts --operator '<your name>'"
    ```
 
    The exact cluster and container names come from the CDK app stack once
@@ -497,9 +506,11 @@ chat message.
      Gmail.
    - *Unlock*: clears a failed-login lockout.
 
-   All three ask for a reason and are audit-logged. Only a Super Admin can
-   do these to a Super Admin. Nobody can do them to themselves, and HR
-   staff with `user.security.manage` can do them only for non-Super-Admins.
+   All three ask for a reason and are audit-logged. The person is emailed
+   that it was done, by whom and why, so one admin account can't quietly
+   take over another. Only a Super Admin can do these to a Super Admin.
+   Nobody can do them to themselves, and HR staff with
+   `user.security.manage` can do them only for non-Super-Admins.
 2. **Lost password but still has 2FA and their Gmail:** they use *Forgot
    password* on the sign-in page. No admin needed.
 3. **No other Super Admin can help** (the other one is unavailable or also
@@ -508,15 +519,43 @@ chat message.
 
    ```bash
    node_modules/.bin/tsx scripts/admin-recover.ts --employee-code <code> \
-     --reset-2fa --password-reset --unlock --reason "<why, ticket ref>"
+     --reset-2fa --password-reset --unlock \
+     --reason "<what happened, ticket ref>" \
+     --operator "<your name>" \
+     --confirm-no-other-admin "<why the other Super Admin can't do this in the app>"
    ```
 
-   Pick only the actions needed. It works on Super Admin accounts only (it
-   refuses everyone else), it can only reset, unlock or re-issue (never set
-   a password or grant a role), and each action is audit-logged with no
-   actor and your reason prefixed `[break-glass CLI]`. If they've also lost
-   access to their Gmail, add `--print-link` and hand the reset link over
-   in person. It is valid for 1 hour and works once.
+   Pick only the actions needed. **It is loud by design, and that's the
+   point:**
+   - **Before** it changes anything it emails **every active Super Admin
+     (the person being recovered included)** and `SECURITY_ALERT_EMAIL`:
+     what, to whom, the reason, the justification, the operator and the
+     machine.
+   - It writes a `security.breakglass` log line, which goes to CloudWatch
+     in AWS and is alarmed on.
+   - It raises a red banner in the app for every Super Admin. The banner
+     stays until a Super Admin **other than the person recovered**
+     acknowledges it and says what they checked.
+   - If the alert email can't be sent, it changes nothing. Only with
+     `--mail-is-down` does it proceed; the alert is then queued and retried
+     for 24 hours.
+
+   It first lists the other active Super Admins and when each last signed
+   in, so you can see whether step 1 was really unavailable. The reason
+   (≥10 characters), operator and justification are required, and they are
+   recorded on every action's audit entry, unlock included.
+   - It works on Super Admin accounts only, and refuses everyone else.
+   - It can only reset, unlock or re-issue. It never sets a password or
+     grants a role.
+   - If they've also lost access to their Gmail, add `--print-link` and
+     hand the reset link over in person. It is valid for 1 hour and works
+     once.
+
+   **What it doesn't do:** stop someone with server access who chooses not
+   to use it. See spec §9 "Break-glass access and its honest limit". The
+   safeguard against that is the record kept outside the database
+   (CloudWatch, ECS Exec session logs, CloudTrail), so keep server access
+   limited to the owners.
 4. **Last resort: the app can't run at all.** Connect to the database
    directly, through an SSM port-forward to RDS via the bastion/instance
    the infra stack provides, using the admin credentials from Secrets
@@ -535,8 +574,13 @@ chat message.
    ```
 
    The person then uses *Forgot password* (step 2) once the app is back.
-   Never write a password hash by hand. Record what was done and why
-   outside the system too, since this bypasses the app's own checks.
+   Never write a password hash by hand.
+
+   This path is **not** loud: no email and no banner. Tell the other
+   Super Admin yourself, and record what was done and why outside the
+   system. The only automatic trail is the RDS log export / pgaudit that
+   Phase 1.5 sets up. The `INSERT` above is the one audit-log write that
+   is allowed: rows can be added but never changed or deleted.
 
 The database triggers still apply on this path: no SQL can leave the
 system with zero active Super Admins.

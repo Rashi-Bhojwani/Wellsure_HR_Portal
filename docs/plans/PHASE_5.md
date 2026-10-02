@@ -832,7 +832,20 @@ Built to the plan above. Additions and corrections:
   (the path is kept). The Access tab shows to Super Admins and to holders
   of `role.view` or `user.security.manage`.
 
-### E1.1 — Making break-glass recovery loud (PROPOSED 2026-10-02, awaiting approval)
+### E1.1 — Making break-glass recovery loud (APPROVED 2026-10-02)
+
+**User decisions (2026-10-02):**
+- Approved as proposed; built before E2.
+- **The audit log being editable is the most important part.** The spec has
+  claimed append-only since Phase 1 and it never was. Enforce it at the
+  database level, with the test-only exception.
+- **Write the shell-operator limit into the spec plainly**, so nobody
+  mistakes this for a guarantee. The real control is records outside the
+  database, so the CloudWatch line matters more than the audit row.
+  **Phase 1.5 must wire it up and alarm on it.**
+- **The manager dashboards leak is a live bug, fixed in E1.1** (moved here
+  from E2). Survey and report anything else that leaks company-wide data
+  to a manager today.
 
 The user's requirement (2026-10-02): `admin:recover` must keep working when
 everything else is broken, but **nobody may use it without the other Super
@@ -929,7 +942,78 @@ works on both layers.
 
 Built as a small commit of its own, **before E2**, if approved.
 
-### E2 — Three-level hierarchy and Manager Management (PLAN v2, 2026-10-02, awaiting approval)
+### E1.1 as built (2026-10-02)
+
+Built as approved. Differences and additions:
+
+- **The test exception's marker is a table, not a database setting.** The
+  plan said "the database name ends in `_test`/`_devcheck`". But CI and
+  local dev both use `wellsure_hr`, which production could also be called,
+  so the name can't tell them apart. A database-level setting
+  (`ALTER DATABASE … SET`) needs superuser on Postgres 16. So the marker is
+  a one-row `dev_database_marker` table that only the dev seed fills.
+  - The triggers allow a DELETE only with `app.audit_purge = 'test'` **and**
+    that row present.
+  - UPDATE and TRUNCATE are never allowed.
+  - Someone who can insert the marker can also drop a trigger, so this
+    adds no new hole (spec §9's honest limit).
+- **`audit_logs.actor_user_id` is no longer a foreign key.** It was
+  `ON DELETE SET NULL`, an UPDATE the trigger now refuses. The audit
+  viewer resolves actor names itself.
+- **The in-app unlock now also asks for a reason** (it had none), for
+  consistency with "a reason on every action".
+- **Security banner** sits on every admin page for Super Admins, not only
+  the Admin home. It refreshes live on the `security.event` signal
+  (`role:SUPER_ADMIN` room).
+
+**The manager-leak survey, as asked.** These reached a manager
+(`employee.view`, `leave.view`, `leave.approve`, `leave.apply.onBehalf`,
+TEAM scope) company-wide. All four are fixed and tested:
+
+1. `GET /api/admin/dashboard`: headcount by branch, city and department,
+   age, gender, joiners and leavers. It is now computed over the viewer's
+   scope; leavers count if their last placement reported into the team.
+   Each scope is cached under its own key.
+2. `GET /api/leave/dashboard`: leave days by month and type, and
+   Restricted Holiday takers, now scoped the same way. Both dashboards
+   show "Showing your team only".
+3. `GET /api/leave/calendar`: any `leave.view` holder could widen "who's
+   on leave" to any department, branch or the whole company. Widening is
+   now for ALL scope only. A manager gets their own department plus their
+   team.
+   - **Also fixed:** a non-HR viewer with no job placement had no
+     department filter at all, so they saw the whole company.
+4. `GET /api/people/photos/:id/:size` for a **former** employee:
+   `employee.view` alone was enough. Now the person must also be within
+   the viewer's scope.
+
+**Checked and not leaking:**
+- the employee grid, export, profile, reveal and history (all
+  scope-filtered);
+- leave requests, balances and comp-off (scope-checked);
+- the tasks inbox (company-wide "monitor" counts for ALL scope only);
+- helpdesk, letters, documents and separations (managers don't hold the
+  keys, or the endpoints are scoped).
+
+**Company-wide for every employee by design, not a manager leak:**
+- the People directory and org chart (field visibility is configurable);
+- Engage employee search;
+- holidays;
+- announcements and company documents (audience-targeted).
+
+### E2 — Three-level hierarchy and Manager Management (PLAN v2, APPROVED 2026-10-02)
+
+**User decisions (2026-10-02):**
+- **Hierarchy model A** (synthetic Admin root; managers and HR Admins have
+  no reporting manager).
+- **The manager-grantable list is enforced even against a Super Admin.**
+  "This is the one place I want the system to overrule me." It is widened
+  only by a deliberate code change. The proposed list is right, and bank
+  and statutory data staying off it is non-negotiable.
+- The dashboards fix moved to E1.1.
+- The future-dated job change is a **real correctness bug**, recorded in
+  PROGRESS.md's open issues. The general fix is needed before Phase 6.
+  Refusing future dates on team moves is the E2 stopgap.
 
 Carried over from the approved outline (2026-09-30):
 - three flat levels;

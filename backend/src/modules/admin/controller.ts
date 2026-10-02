@@ -4,11 +4,11 @@ import * as favouritesService from "./favourites";
 import * as layoutService from "./layout";
 import * as tasksService from "./tasks";
 
-// ── Dashboard widgets (leave.view; org-wide, no SELF/TEAM narrowing — an
-// aggregate management view) ──────────────────────────────────────────
+// ── Dashboard widgets (employee.view; narrowed to the viewer's data scope
+// since E1.1 — company figures for ALL scope only) ──────────────────────
 
-export async function getDashboardWidgets(_req: Request, res: Response): Promise<void> {
-  res.status(200).json(await dashboardService.getDashboardWidgets());
+export async function getDashboardWidgets(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await dashboardService.getDashboardWidgets({ employeeId: req.user!.employeeId, dataScope: req.user!.dataScope }));
 }
 
 // ── My Favourites (self-serve) ───────────────────────────────────────

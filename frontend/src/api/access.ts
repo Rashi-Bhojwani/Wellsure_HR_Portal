@@ -75,11 +75,33 @@ export async function resetTwoFactor(employeeId: string, reason: string): Promis
   return data;
 }
 
-export async function unlockAccount(employeeId: string): Promise<EmployeeAccess> {
-  const { data } = await apiClient.post<EmployeeAccess>(`/api/access/employees/${employeeId}/unlock`);
+export async function unlockAccount(employeeId: string, reason: string): Promise<EmployeeAccess> {
+  const { data } = await apiClient.post<EmployeeAccess>(`/api/access/employees/${employeeId}/unlock`, { reason });
   return data;
 }
 
 export async function sendPasswordReset(employeeId: string, reason: string): Promise<void> {
   await apiClient.post(`/api/access/employees/${employeeId}/password-reset`, { reason });
+}
+
+// Security events (E1.1) — Super Admins only.
+export interface SecurityEvent {
+  id: string;
+  kind: "break_glass.recover" | "break_glass.bootstrap";
+  summary: string;
+  details: { reason?: string; justification?: string | null; operator?: string; origin?: { hostname?: string; appEnv?: string }; emailed?: string[]; queued?: string[] };
+  createdAt: string;
+  acknowledgedAt: string | null;
+  acknowledgedByUserId: string | null;
+  acknowledgementNote: string | null;
+  youAreTarget: boolean;
+}
+
+export async function listSecurityEvents(status: "open" | "all" = "open"): Promise<SecurityEvent[]> {
+  const { data } = await apiClient.get<{ events: SecurityEvent[] }>("/api/access/security-events", { params: { status } });
+  return data.events;
+}
+
+export async function acknowledgeSecurityEvent(id: string, note: string): Promise<void> {
+  await apiClient.post(`/api/access/security-events/${id}/acknowledge`, { note });
 }

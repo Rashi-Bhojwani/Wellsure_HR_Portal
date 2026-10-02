@@ -592,30 +592,54 @@ export async function regenerateBackupCodes(userId: string): Promise<string[]> {
 // break-glass recovery CLI (scripts/admin-recover.ts). Callers decide who
 // may act on whom; these only perform and audit the action.
 
-// Wipes 2FA (secret + backup codes) and ends every session. If the user's
-// role requires 2FA, their next login walks them through enrolment again.
-export async function adminResetTotp(userId: string, meta: { actorUserId: string | null; ipAddress?: string | null; userAgent?: string | null; reason?: string }): Promise<void> {
+// What every admin security action records (E1.1): who, why, and — for the
+// break-glass CLI — the operator, their written justification and the
+// security event that announced it.
+export interface AdminSecurityMeta {
+  actorUserId: string | null;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  reason?: string;
+  operator?: string;
+  justification?: string;
+  securityEventId?: string;
+}
+
+function securityAuditFields(meta: AdminSecurityMeta) {
+  return {
+    actorUserId: meta.actorUserId,
+    ipAddress: meta.ipAddress,
+    userAgent: meta.userAgent,
+    after: {
+      reason: meta.reason ?? null,
+      ...(meta.operator && { operator: meta.operator }),
+      ...(meta.justification && { justification: meta.justification }),
+      ...(meta.securityEventId && { securityEventId: meta.securityEventId }),
+    },
+  };
+}
+
+// Wipes 2FA (secret + backup codes) and ends every session.
+export async function adminResetTotp(userId: string, meta: AdminSecurityMeta): Promise<void> {
   await prisma.$transaction([
     prisma.user.update({ where: { id: userId }, data: { totpEnabled: false, totpSecretEncrypted: null, totpVerifiedAt: null } }),
     prisma.totpBackupCode.deleteMany({ where: { userId } }),
   ]);
   await revokeAllUserRefreshTokens(userId);
-  await writeAuditLog({ ...meta, action: "auth.2fa.reset_by_admin", entityType: "User", entityId: userId, after: { reason: meta.reason ?? null } });
+  await writeAuditLog({ ...securityAuditFields(meta), action: "auth.2fa.reset_by_admin", entityType: "User", entityId: userId });
 }
 
-// Clears a failed-login lockout.
-export async function adminUnlock(userId: string, meta: { actorUserId: string | null; ipAddress?: string | null; userAgent?: string | null }): Promise<void> {
+// Clears a failed-login lockout. The reason is recorded too (E1.1 — E1
+// dropped it on this one path).
+export async function adminUnlock(userId: string, meta: AdminSecurityMeta): Promise<void> {
   await prisma.user.update({ where: { id: userId }, data: { failedLoginAttempts: 0, lockedUntil: null } });
-  await writeAuditLog({ ...meta, action: "auth.unlocked_by_admin", entityType: "User", entityId: userId });
+  await writeAuditLog({ ...securityAuditFields(meta), action: "auth.unlocked_by_admin", entityType: "User", entityId: userId });
 }
 
 // Issues a password-reset link (1 hour, single use) and emails it to the
 // personal email on file. Returns the link only for the break-glass CLI,
 // whose operator may need to hand it over when email itself is the problem.
-export async function adminIssuePasswordReset(
-  userId: string,
-  meta: { actorUserId: string | null; ipAddress?: string | null; userAgent?: string | null; reason?: string },
-): Promise<{ link: string; emailedTo: string | null }> {
+export async function adminIssuePasswordReset(userId: string, meta: AdminSecurityMeta): Promise<{ link: string; emailedTo: string | null }> {
   const employee = await prisma.employee.findFirst({ where: { user: { id: userId } }, include: { personal: true, nameHistory: { where: { effectiveTo: null } } } });
   if (!employee) throw new HttpError(404, "User not found.", "NOT_FOUND");
   const raw = generateOpaqueToken();
@@ -626,6 +650,7 @@ export async function adminIssuePasswordReset(
       logger.error({ err }, "failed to send password reset email"),
     );
   }
-  await writeAuditLog({ ...meta, action: "auth.password_reset_issued_by_admin", entityType: "User", entityId: userId, after: { emailed: Boolean(email), reason: meta.reason ?? null } });
+  const audit = securityAuditFields(meta);
+  await writeAuditLog({ ...audit, action: "auth.password_reset_issued_by_admin", entityType: "User", entityId: userId, after: { ...audit.after, emailed: Boolean(email) } });
   return { link: `${env.WEB_BASE_URL}/reset-password/${raw}`, emailedTo: email };
 }

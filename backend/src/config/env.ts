@@ -65,6 +65,10 @@ const envSchema = z.object({
   MAIL_DRIVER: z.enum(["console", "ses"]).default("console"),
   MAIL_DEV_DIR: z.string().default(".mail"),
   SES_FROM: z.string().optional(),
+  // Optional (E1.1): an inbox OUTSIDE this system (e.g. the owners' shared
+  // mailbox) that also receives every break-glass alert — the one copy a
+  // compromised Super Admin account can't make disappear.
+  SECURITY_ALERT_EMAIL: z.email().optional(),
 
   // AWS (staging/production only — used by the S3 and SES clients).
   AWS_REGION: z.string().default("ap-south-1"),

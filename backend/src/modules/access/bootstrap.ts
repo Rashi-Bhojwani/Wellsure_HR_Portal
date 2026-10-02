@@ -3,6 +3,7 @@ import { writeAuditLog } from "../../lib/audit";
 import { ensureAccessCatalog } from "../../lib/accessCatalog";
 import { SUPER_ADMIN_ROLE_CODE } from "../../lib/permissions";
 import { prisma } from "../../lib/prisma";
+import { AlertNotDelivered, raiseBreakGlassAlert } from "../../lib/securityAlerts";
 import { createInvitation, resendInvitation } from "../auth/service";
 import { gmailSchema, MOBILE_REGEX } from "../employee/validators";
 
@@ -75,10 +76,33 @@ export async function assertBootstrapAllowed(employeeCode: string): Promise<void
   }
 }
 
-export async function bootstrapSuperAdmin(rawInput: BootstrapInput): Promise<BootstrapResult> {
+// E1.1: loud like admin:recover — a log line outside the database, an email
+// to SECURITY_ALERT_EMAIL (and any active Super Admin, though by definition
+// there's none yet) before anything is created, and a security event the
+// first Super Admin sees when they sign in.
+export async function bootstrapSuperAdmin(rawInput: BootstrapInput, opts: { operator: string; mailIsDown?: boolean }): Promise<BootstrapResult> {
   const input = bootstrapInputSchema.parse(rawInput);
+  const operator = opts.operator.trim();
+  if (operator.length < 2) throw new AdminCliRefusal('Say who is running this (--operator "<your name>") — it goes into the alert and the audit entry.');
   await ensureAccessCatalog();
   await assertBootstrapAllowed(input.employeeCode);
+  try {
+    await raiseBreakGlassAlert(
+      {
+        kind: "break_glass.bootstrap",
+        targetUserId: null,
+        target: `${input.employeeCode}${input.fullName ? ` · ${input.fullName}` : ""}`,
+        actions: ["make this employee a Super Admin (creating the employee if needed) and send them an invitation"],
+        reason: "first Super Admin for this environment",
+        justification: null,
+        operator,
+      },
+      { mailIsDown: opts.mailIsDown },
+    );
+  } catch (err) {
+    if (err instanceof AlertNotDelivered) throw new AdminCliRefusal(err.message);
+    throw err;
+  }
   return provisionSuperAdmin(input);
 }
 
