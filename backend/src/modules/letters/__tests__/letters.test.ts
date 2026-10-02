@@ -43,7 +43,12 @@ async function pdfText(pdf: Buffer): Promise<string> {
 }
 const sha256 = (b: Buffer) => createHash("sha256").update(b).digest("hex");
 
-describe("Letters", () => {
+// Most tests here render real PDFs in headless Chromium. A cold browser
+// start on a shared CI runner can take longer than vitest's 5 s default on
+// its own (CI run #11 failed exactly that way: two render tests timed out,
+// green before and after on the same code), so rendering gets an explicit,
+// generous budget rather than relying on a fast machine.
+describe("Letters", { timeout: 30_000 }, () => {
   let org: TestOrgMasters;
   type Person = { employeeId: string; employeeCode: string; userId: string };
   const people = {} as Record<"hrAdmin" | "hrExec" | "manager" | "report" | "outsider" | "leaver", Person>;
