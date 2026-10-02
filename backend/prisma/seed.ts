@@ -371,7 +371,6 @@ async function main() {
       gradeCode: "G5",
       costCentreCode: "CC-HR",
       locationCode: "PAN-C10",
-      managerCode: "1000",
       account: "active",
     },
     // Managers
@@ -388,7 +387,6 @@ async function main() {
       gradeCode: "G4",
       costCentreCode: "CC-ENG",
       locationCode: "PAN-C10",
-      managerCode: "1000",
       account: "active",
     },
     {
@@ -404,7 +402,6 @@ async function main() {
       gradeCode: "G4",
       costCentreCode: "CC-SALES",
       locationCode: "PAN-SPN",
-      managerCode: "1000",
       account: "active",
     },
     {
@@ -420,7 +417,6 @@ async function main() {
       gradeCode: "G3",
       costCentreCode: "CC-OPS",
       locationCode: "AJM-1",
-      managerCode: "1000",
       account: "active",
     },
     {
@@ -436,7 +432,6 @@ async function main() {
       gradeCode: "G3",
       costCentreCode: "CC-FIN",
       locationCode: "PAN-B22",
-      managerCode: "1000",
       account: "active",
     },
     // Individual contributors — mostly ACTIVE (known password) so grids
@@ -457,13 +452,19 @@ async function main() {
     { employeeCode: "1018", deviceUserId: "1018", fullName: "Deepak Reddy", gender: "MALE", dob: "1990-03-21", doj: "2021-11-11", employmentType: "PERMANENT", deptCode: "FIN", designationCode: "SR_EXEC", gradeCode: "G2", costCentreCode: "CC-FIN", locationCode: "PAN-B22", managerCode: "1005", account: "active" },
     { employeeCode: "1019", deviceUserId: "1019", fullName: "Meera Gupta", gender: "FEMALE", dob: "1991-07-14", doj: "2022-05-23", employmentType: "PERMANENT", deptCode: "FIN", designationCode: "EXEC", gradeCode: "G1", costCentreCode: "CC-FIN", locationCode: "PAN-B22", managerCode: "1005", account: "active" },
     { employeeCode: "1020", deviceUserId: "1020", fullName: "Suresh Iyer", gender: "MALE", dob: "1986-12-02", doj: "2020-02-14", employmentType: "PERMANENT", deptCode: "FIN", designationCode: "ASST_MGR", gradeCode: "G2", costCentreCode: "CC-FIN", locationCode: "PAN-C10", managerCode: "1005", account: "active" },
-    { employeeCode: "1024", deviceUserId: "1024", fullName: "Rajesh Kumar", gender: "MALE", dob: "1983-06-25", doj: "2019-04-08", employmentType: "PERMANENT", deptCode: "ADMIN", designationCode: "MGR", gradeCode: "G3", costCentreCode: "CC-ADMIN", locationCode: "PAN-C10", managerCode: "1000", account: "active" },
+    { employeeCode: "1024", deviceUserId: "1024", fullName: "Rajesh Kumar", gender: "MALE", dob: "1983-06-25", doj: "2019-04-08", employmentType: "PERMANENT", deptCode: "ADMIN", designationCode: "MGR", gradeCode: "G3", costCentreCode: "CC-ADMIN", locationCode: "PAN-C10", account: "active" },
     { employeeCode: "1021", deviceUserId: "1021", fullName: "Swati Rao", gender: "FEMALE", dob: "1995-09-09", doj: "2024-01-22", employmentType: "PERMANENT", deptCode: "HR", designationCode: "SR_EXEC", gradeCode: "G2", costCentreCode: "CC-HR", locationCode: "PAN-C10", managerCode: "1024", account: "active" },
     { employeeCode: "1022", deviceUserId: "1022", fullName: "Manoj Nair", gender: "MALE", dob: "1992-04-16", doj: "2023-06-05", employmentType: "PERMANENT", deptCode: "HR", designationCode: "EXEC", gradeCode: "G1", costCentreCode: "CC-HR", locationCode: "PAN-C10", managerCode: "1024", account: "active" },
     { employeeCode: "1023", deviceUserId: "1023", fullName: "Kirti Malhotra", gender: "FEMALE", dob: "1997-08-30", doj: "2024-08-01", employmentType: "INTERN", deptCode: "HR", designationCode: "EXEC", gradeCode: "G1", costCentreCode: "CC-HR", locationCode: "PAN-C10", managerCode: "1024", account: "invited" },
     { employeeCode: "1025", deviceUserId: "1025", fullName: "Anjali Desai", gender: "FEMALE", dob: "1996-02-11", doj: "2024-07-15", employmentType: "CONSULTANT", deptCode: "ADMIN", designationCode: "EXEC", gradeCode: "G1", costCentreCode: "CC-ADMIN", locationCode: "PAN-B22", managerCode: "1024", account: "active" },
     { employeeCode: "1026", deviceUserId: "1026", fullName: "Anil Chauhan", gender: "MALE", dob: "1989-10-04", doj: "2021-01-20", employmentType: "PERMANENT", deptCode: "ENG", designationCode: "SR_EXEC", gradeCode: "G2", costCentreCode: "CC-ENG", locationCode: "AJM-2", managerCode: "1002", account: "active" },
     { employeeCode: "1027", deviceUserId: "1027", fullName: "Shreya Bhatt", gender: "FEMALE", dob: "1993-03-08", doj: "2022-10-30", employmentType: "PERMANENT", deptCode: "SALES", designationCode: "SR_EXEC", gradeCode: "G2", costCentreCode: "CC-SALES", locationCode: "AJM-3", managerCode: "1003", account: "active" },
+    // E2 fixtures. 1029 is a manager with NO reports yet (the org chart
+    // shows "No team yet", distinct from a plain employee); 1030 has no
+    // reporting manager, so they appear on Manager Management's Unassigned
+    // list. Both fake, like every seeded person.
+    { employeeCode: "1029", deviceUserId: "1029", fullName: "Farhan Qureshi", gender: "MALE", dob: "1987-11-23", doj: "2020-11-02", employmentType: "PERMANENT", deptCode: "OPS", designationCode: "MGR", gradeCode: "G3", costCentreCode: "CC-OPS", locationCode: "AJM-2", account: "active" },
+    { employeeCode: "1030", deviceUserId: "1030", fullName: "Leela Menon", gender: "FEMALE", dob: "1998-02-17", doj: "2026-09-01", employmentType: "PROBATION", deptCode: "SALES", designationCode: "EXEC", gradeCode: "G1", costCentreCode: "CC-SALES", locationCode: "PAN-SPN", account: "active" },
     // Rejoin-friendly separated employee still on record (not the device
     // reuse fixture below).
     { employeeCode: "1028", deviceUserId: "1028", fullName: "Vikas Pillai", gender: "MALE", dob: "1990-01-01", doj: "2019-09-01", employmentType: "PERMANENT", deptCode: "OPS", designationCode: "SR_EXEC", gradeCode: "G2", costCentreCode: "CC-OPS", locationCode: "AJM-1", managerCode: "1004", account: "separated", lastWorkingDate: "2025-05-31" },
@@ -517,9 +518,10 @@ async function main() {
         : spec.employeeCode === "1001"
           ? "HR_ADMIN"
           : // 1024 heads the Admin department (designation "Manager") and
-            // manages the HR staff and 1025 — three-level rule, see
-            // lib/reportingHierarchy.ts and the assertion at the end of main().
-            ["1002", "1003", "1004", "1005", "1024"].includes(spec.employeeCode)
+            // manages the HR staff and 1025; 1029 is a manager with no team
+            // yet — three-level rule (model A), see lib/reportingHierarchy.ts
+            // and the assertion at the end of main().
+            ["1002", "1003", "1004", "1005", "1024", "1029"].includes(spec.employeeCode)
             ? "MANAGER"
             : "EMPLOYEE";
 
@@ -870,23 +872,26 @@ async function main() {
     ],
   });
 
-  // ── Reporting-line assertion (Phase 5 commit C) — the seed must model the
-  // three-level structure (Admin → Managers → Employees) that commit E
-  // enforces in code. Fails the seed outright rather than seeding an org
-  // chart that contradicts the rules. ──────────────────────────────────
+  // ── Reporting-line assertion (commit C, model A since E2) — the seed
+  // must model the three-level structure enforced in code: Super Admins,
+  // Managers and HR Admins have no reporting manager; everyone else reports
+  // to an active Manager (or no one: Unassigned). Fails the seed outright
+  // rather than seeding an org chart that contradicts the rules. ──────────
+  const rolesOf = (u: { roles: { role: { code: string } }[] } | null) => u?.roles.map((r) => r.role.code) ?? [];
   const openJobRows = await prisma.employeeJobHistory.findMany({
-    where: { effectiveTo: null, reportingManagerId: { not: null } },
+    where: { effectiveTo: null, employee: { status: "ACTIVE" } },
     select: {
       employee: { select: { employeeCode: true, user: { select: { roles: { select: { role: { select: { code: true } } } } } } } },
-      reportingManager: { select: { employeeCode: true, user: { select: { roles: { select: { role: { select: { code: true } } } } } } } },
+      reportingManager: { select: { employeeCode: true, status: true, user: { select: { roles: { select: { role: { select: { code: true } } } } } } } },
     },
   });
   const violations = findReportingLineViolations(
     openJobRows.map((row) => ({
       employeeCode: row.employee.employeeCode,
-      roleCodes: row.employee.user?.roles.map((r) => r.role.code) ?? [],
-      managerCode: row.reportingManager!.employeeCode,
-      managerRoleCodes: row.reportingManager!.user?.roles.map((r) => r.role.code) ?? [],
+      roleCodes: rolesOf(row.employee.user),
+      managerCode: row.reportingManager?.employeeCode ?? null,
+      managerRoleCodes: rolesOf(row.reportingManager?.user ?? null),
+      managerActive: row.reportingManager?.status === "ACTIVE",
     })),
   );
   if (violations.length > 0) {

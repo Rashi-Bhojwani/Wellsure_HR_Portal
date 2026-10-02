@@ -5,9 +5,10 @@ import { MinusSquareOutlined, PlusSquareOutlined } from "@ant-design/icons";
 import { getOrgChart, photoUrl, type OrgChart as OrgChartData, type OrgChartNode } from "../../../api/people";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { usePhotoToken } from "../../../hooks/usePhotoToken";
+import { useAuth } from "../../../hooks/useAuth";
 
-// The company org chart: Admin → Managers → teams (the three-level structure,
-// though it draws whatever reporting lines exist). The whole company arrives
+// The company org chart: Admin (the Super Admins) → Managers and HR Admins →
+// teams (the three-level structure, hierarchy model A — E2). The whole company arrives
 // in one compact, gzipped payload, but a team's cards are only mounted once
 // its manager is expanded — managers start collapsed.
 //
@@ -100,18 +101,37 @@ const OrgCard = memo(function OrgCard({
         <span style={{ display: "block", fontWeight: 600, ...ellipsis }}>{node.name}</span>
         <span style={{ display: "block", fontSize: 12, color: palette.textSecondary, ...ellipsis }}>{subtitle}</span>
       </span>
-      {reportCount > 0 && (
-        <span
-          title={`${reportCount} direct reports`}
-          aria-label={`${reportCount} direct reports`}
-          style={{ flexShrink: 0, fontSize: 12, padding: "0 7px", borderRadius: 4, border: `1px solid ${palette.border}`, background: palette.tagBg }}
-        >
-          {reportCount}
-        </span>
-      )}
+      <KindBadge kind={node.kind} reportCount={reportCount} palette={palette} />
     </button>
   );
 });
+
+// E2: a manager is always labelled as one — "Manager · No team yet" is
+// visibly different from a plain employee (who has no badge) and from an HR
+// Admin (top level, never a team). That was the old chart's ambiguity.
+function KindBadge({ kind, reportCount, palette }: { kind: OrgChartNode["kind"]; reportCount: number; palette: Palette }) {
+  if (kind === "employee") return null;
+  const text = kind === "manager" ? `Manager · ${reportCount === 0 ? "No team yet" : reportCount}` : kind === "adminStaff" ? "HR Admin" : "Super Admin";
+  const label = kind === "manager" ? (reportCount === 0 ? "Manager with no team yet" : `Manager with ${reportCount} direct reports`) : text;
+  return (
+    <span
+      title={label}
+      aria-label={label}
+      style={{
+        flexShrink: 0,
+        fontSize: 12,
+        padding: "0 7px",
+        borderRadius: 4,
+        whiteSpace: "nowrap",
+        border: `1px solid ${kind === "manager" ? palette.primary : palette.border}`,
+        color: kind === "manager" ? palette.primary : palette.textSecondary,
+        background: palette.tagBg,
+      }}
+    >
+      {text}
+    </span>
+  );
+}
 
 interface BranchProps {
   node: OrgChartNode;
@@ -194,6 +214,8 @@ function Branch({ node, chart, childrenOf, expanded, toggle, onOpen, highlightId
 
 export function OrgChart({ onOpenPerson }: { onOpenPerson: (id: string) => void }) {
   const { data: chart, isLoading } = useQuery({ queryKey: ["people", "org-chart"], queryFn: getOrgChart });
+  // Unassigned people are shown to whoever can fix it (Manager Management).
+  const canAssign = useAuth().hasPermission("manager.team.assign");
   const photoToken = usePhotoToken();
   const { token } = theme.useToken();
   const [expandedOverride, setExpanded] = useState<Set<string> | null>(null);
@@ -223,8 +245,8 @@ export function OrgChart({ onOpenPerson }: { onOpenPerson: (id: string) => void 
     return { byId, childrenOf, managerIds: [...childrenOf.keys()] };
   }, [chart]);
 
-  // Default: the top level (Admin) open, every manager's team collapsed.
-  const expanded = expandedOverride ?? new Set(chart?.rootIds ?? []);
+  // Default: everyone directly under Admin visible, every manager's team collapsed.
+  const expanded = expandedOverride ?? new Set<string>();
   const setExpandedSoon = (next: Set<string>) => startTransition(() => setExpanded(next));
 
   function toggle(id: string) {
@@ -265,12 +287,29 @@ export function OrgChart({ onOpenPerson }: { onOpenPerson: (id: string) => void 
             if (match) reveal(match.id);
           }}
         />
-        <Button onClick={() => setExpandedSoon(new Set([...chart.rootIds, ...managerIds]))}>Expand all</Button>
-        <Button onClick={() => setExpandedSoon(new Set(chart.rootIds))}>Collapse all</Button>
+        <Button onClick={() => setExpandedSoon(new Set(managerIds))}>Expand all</Button>
+        <Button onClick={() => setExpandedSoon(new Set())}>Collapse all</Button>
         <Typography.Text type="secondary">{chart.nodes.length} people</Typography.Text>
         {isPending && <Spin size="small" />}
       </Space>
-      <div>
+      {/* The synthetic Admin root (model A): the Super Admins, not one person. */}
+      <Card size="small" styles={{ body: { padding: 12 } }}>
+        <Space wrap size={[8, 8]} align="center">
+          <Typography.Text strong>Admin</Typography.Text>
+          {chart.adminIds.map((id) => {
+            const a = byId.get(id);
+            return a ? (
+              <Button key={id} size="small" onClick={() => onOpenPerson(id)}>
+                {a.name}
+              </Button>
+            ) : null;
+          })}
+          <Typography.Text type="secondary">
+            · {chart.rootIds.filter((id) => byId.get(id)?.kind === "manager").length} managers
+          </Typography.Text>
+        </Space>
+      </Card>
+      <div style={{ marginLeft: 12, borderLeft: `2px solid ${palette.line}`, paddingLeft: 8 }}>
         {chart.rootIds.map((id) => {
           const node = byId.get(id);
           return node ? (
@@ -290,8 +329,8 @@ export function OrgChart({ onOpenPerson }: { onOpenPerson: (id: string) => void 
           ) : null;
         })}
       </div>
-      {chart.unassignedIds.length > 0 && (
-        <Card size="small" title={`No reporting manager (${chart.unassignedIds.length})`}>
+      {canAssign && chart.unassignedIds.length > 0 && (
+        <Card size="small" title={`Unassigned — no reporting manager (${chart.unassignedIds.length})`}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(240px, 100%), 1fr))", gap: 8 }}>
             {chart.unassignedIds.map((id) => {
               const node = byId.get(id);

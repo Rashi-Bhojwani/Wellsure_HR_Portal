@@ -23,6 +23,7 @@ import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import dayjs from "dayjs";
 import * as employeeApi from "../../../api/employee";
 import * as orgApi from "../../../api/org";
+import * as managersApi from "../../../api/managers";
 import { useAuth } from "../../../hooks/useAuth";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { PhotoUploader } from "../../../components/common/PhotoUploader";
@@ -214,13 +215,15 @@ function JobEditModal({ employeeId, open, onClose }: { employeeId: string; open:
   const { data: departments = [] } = useQuery({ queryKey: ["org", "departments"], queryFn: orgApi.departments.list });
   const { data: designations = [] } = useQuery({ queryKey: ["org", "designations"], queryFn: orgApi.designations.list });
   const { data: locations = [] } = useQuery({ queryKey: ["org", "locations"], queryFn: () => orgApi.listLocations(false) });
+  const { data: managers = [] } = useQuery({ queryKey: ["managers", "options"], queryFn: managersApi.managerOptions });
 
   const mutation = useMutation({
-    mutationFn: (values: { departmentId?: string; designationId?: string; locationId?: string; effectiveFrom: dayjs.Dayjs; changeReason?: string }) =>
+    mutationFn: (values: { departmentId?: string; designationId?: string; locationId?: string; reportingManagerId?: string; effectiveFrom: dayjs.Dayjs; changeReason?: string }) =>
       employeeApi.updateJob(employeeId, { ...values, effectiveFrom: values.effectiveFrom.format("YYYY-MM-DD") }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["employees", "profile", employeeId] });
       void queryClient.invalidateQueries({ queryKey: ["employees", "history", employeeId, "job"] });
+      void queryClient.invalidateQueries({ queryKey: ["managers"] });
       onClose();
       void message.success("Job details updated.");
     },
@@ -233,6 +236,9 @@ function JobEditModal({ employeeId, open, onClose }: { employeeId: string; open:
         <Form.Item name="departmentId" label="Department"><Select allowClear options={departments.map((d) => ({ value: d.id, label: d.name }))} /></Form.Item>
         <Form.Item name="designationId" label="Designation"><Select allowClear options={designations.map((d) => ({ value: d.id, label: d.name }))} /></Form.Item>
         <Form.Item name="locationId" label="Location"><Select allowClear options={locations.map((l) => ({ value: l.id, label: l.name }))} /></Form.Item>
+        <Form.Item name="reportingManagerId" label="Reporting manager" extra="Only managers. To move someone between teams, Manager Management is quicker. A manager change can't be dated in the future yet.">
+          <Select allowClear placeholder="Leave unchanged" options={managers.filter((m) => m.employeeId !== employeeId).map((m) => ({ value: m.employeeId, label: `${m.name} (${m.employeeCode})` }))} showSearch optionFilterProp="label" />
+        </Form.Item>
         <Form.Item name="effectiveFrom" label="Effective From" rules={[{ required: true }]}><DatePicker style={{ width: "100%" }} /></Form.Item>
         <Form.Item name="changeReason" label="Reason"><Input placeholder="e.g. Promotion, Transfer" /></Form.Item>
         <Form.Item style={{ marginBottom: 0, textAlign: "right" }}>

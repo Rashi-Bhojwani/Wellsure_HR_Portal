@@ -68,6 +68,11 @@ const HR_ADMIN_PERMS: string[] = [
   "engage.moderate",
   "engage.groups.manage",
   "engage.autopost.manage",
+  // Phase 5 commit E2 — Manager Management (user decision: HR_ADMIN holds
+  // all three by default; a Super Admin can revoke them).
+  "manager.appoint",
+  "manager.team.assign",
+  "manager.permissions.manage",
 ];
 const PAYROLL_ADMIN_PERMS = ["employee.view", "employee.bank.view", "employee.statutory.view", "leave.view"];
 // leave.approve/leave.view here is a real fix over commit A's original

@@ -44,8 +44,14 @@ export async function getPerson(id: string): Promise<DirectoryEntry> {
   return data;
 }
 
+// E2: what someone is in the three-level structure. A manager always shows
+// as one (even with no team yet); an HR Admin sits at the top level but
+// never has a team; Super Admins form the Admin root.
+export type OrgChartKind = "admin" | "manager" | "adminStaff" | "employee";
+
 export interface OrgChartNode {
   id: string;
+  kind: OrgChartKind;
   code: string;
   name: string;
   photoVersion: string | null;
@@ -57,7 +63,8 @@ export interface OrgChartNode {
 
 export interface OrgChart {
   nodes: OrgChartNode[];
-  rootIds: string[];
+  adminIds: string[]; // the Super Admins — the synthetic Admin root
+  rootIds: string[]; // directly under Admin: managers and HR Admins
   unassignedIds: string[];
   designations: Record<string, string>;
   departments: Record<string, string>;

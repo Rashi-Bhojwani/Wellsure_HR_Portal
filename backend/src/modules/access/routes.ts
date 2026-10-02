@@ -1,6 +1,7 @@
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { authenticate } from "../../middleware/authenticate";
 import { HttpError } from "../../middleware/errorHandler";
+import { tagGate } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
 import * as controller from "./controller";
 import {
@@ -24,13 +25,17 @@ export const accessRouter = Router();
 accessRouter.use(authenticate);
 
 const isSuperAdmin = (req: Request) => req.user!.roleCodes.includes("SUPER_ADMIN");
-const canView = (...keys: string[]) => (req: Request, _res: Response, next: NextFunction) =>
-  isSuperAdmin(req) || keys.some((k) => req.user!.permissions.has(k)) ? next() : next(new HttpError(403, "You can't view roles and permissions.", "FORBIDDEN"));
+const canView = (...keys: string[]) =>
+  tagGate(
+    (req: Request, _res: Response, next: NextFunction) =>
+      isSuperAdmin(req) || keys.some((k) => req.user!.permissions.has(k)) ? next() : next(new HttpError(403, "You can't view roles and permissions.", "FORBIDDEN")),
+    keys,
+  );
 
 accessRouter.get("/roles", canView("role.view"), controller.listRoles);
 accessRouter.put("/roles/:code", validate({ params: roleCodeParamsSchema, body: updateRoleSchema }), controller.updateRole);
 
-const viewPerson = canView("role.view", "user.security.manage");
+const viewPerson = canView("role.view", "user.security.manage", "manager.permissions.manage");
 accessRouter.get("/employees/:employeeId", viewPerson, validate({ params: employeeParamsSchema }), controller.getEmployeeAccess);
 accessRouter.post("/employees/:employeeId/roles", validate({ params: employeeParamsSchema, body: assignRoleSchema }), controller.assignRole);
 accessRouter.delete("/employees/:employeeId/roles/:code", validate({ params: employeeRoleParamsSchema }), controller.removeRole);

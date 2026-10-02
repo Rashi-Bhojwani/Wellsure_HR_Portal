@@ -29,6 +29,7 @@ export interface EmployeeAccess {
   totpEnabled: boolean;
   locked: boolean;
   isSuperAdmin: boolean;
+  isManager: boolean; // E2: only manager-grantable keys can be granted
   dataScope: DataScope;
   roles: Array<{ code: string; name: string; assignedAt: string }>;
   permissions: EmployeePermission[];

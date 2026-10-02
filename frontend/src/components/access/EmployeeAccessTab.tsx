@@ -222,6 +222,10 @@ export function EmployeeAccessTab({ employeeId }: { employeeId: string }) {
                                 <Button size="small" danger onClick={() => overridePrompt(p, "REVOKE")}>
                                   Revoke for them
                                 </Button>
+                              ) : access.isManager && !PERMISSION_CATALOG[p.key as PermissionKey]?.managerGrantable ? (
+                                <Tooltip title="A manager can only ever hold permissions limited to their own team. This list is fixed in code.">
+                                  <Tag>Not for managers</Tag>
+                                </Tooltip>
                               ) : (
                                 <Button size="small" onClick={() => overridePrompt(p, "GRANT")}>
                                   Grant to them

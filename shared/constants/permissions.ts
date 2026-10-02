@@ -44,6 +44,10 @@ export const PERMISSION_KEYS = [
   "helpdesk.sensitive.view", // tickets in categories flagged sensitive (e.g. Payroll & Salary, Grievance)
   "letters.template.manage", // letter templates: edit (new version), activate, typed fields, letterhead & signatory
   "letters.generate", // issue / reissue / reproduce letters for employees in scope
+  // Phase 5 — Manager Management (commit E2)
+  "manager.appoint", // promote an employee to manager / remove a manager (team must be empty)
+  "manager.team.assign", // move employees into and out of a manager's team (effective-dated)
+  "manager.permissions.manage", // per-manager permission exceptions (meta; manager-grantable keys only)
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
@@ -59,6 +63,9 @@ export interface PermissionInfo {
   label: string;
   description: string;
   meta?: true;
+  // E2: one of the few keys a MANAGER holder may ever have (see
+  // MANAGER_GRANTABLE_KEYS below).
+  managerGrantable?: true;
 }
 
 export const PERMISSION_GROUPS = [
@@ -66,6 +73,7 @@ export const PERMISSION_GROUPS = [
   "Sensitive data",
   "Organisation & system",
   "Access & security",
+  "Managers",
   "Leave",
   "Home & Engage",
   "Documents & letters",
@@ -73,7 +81,7 @@ export const PERMISSION_GROUPS = [
 ] as const;
 
 export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
-  "employee.view": { group: "Employees", label: "View employees", description: "See employees in their data scope: grid, profiles, history." },
+  "employee.view": { group: "Employees", label: "View employees", description: "See employees in their data scope: grid, profiles, history.", managerGrantable: true },
   "employee.create": { group: "Employees", label: "Add employees", description: "Run the Add Employee wizard and send invitations." },
   "employee.edit": { group: "Employees", label: "Edit employees", description: "Edit official and personal details, job and name history." },
   "employee.export": { group: "Employees", label: "Export employees", description: "Export the employee grid to Excel/CSV." },
@@ -91,9 +99,9 @@ export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
   "settings.manage": { group: "Access & security", label: "System settings", description: "Security policy (password rules, lockout, which roles need 2FA) and other system settings.", meta: true },
   "role.view": { group: "Access & security", label: "View roles & permissions", description: "See what each role may do, read-only. Only a Super Admin can change roles." },
   "user.security.manage": { group: "Access & security", label: "Manage others' sign-in security", description: "Reset another person's 2FA, unlock accounts and resend invitations.", meta: true },
-  "leave.apply.onBehalf": { group: "Leave", label: "Apply on behalf", description: "Apply for leave for someone else in their data scope." },
-  "leave.view": { group: "Leave", label: "View others' leave", description: "See other employees' requests, ledgers and balances in their data scope." },
-  "leave.approve": { group: "Leave", label: "Approve leave", description: "Approve, reject or cancel leave requests in their data scope." },
+  "leave.apply.onBehalf": { group: "Leave", label: "Apply on behalf", description: "Apply for leave for someone else in their data scope.", managerGrantable: true },
+  "leave.view": { group: "Leave", label: "View others' leave", description: "See other employees' requests, ledgers and balances in their data scope.", managerGrantable: true },
+  "leave.approve": { group: "Leave", label: "Approve leave", description: "Approve, reject or cancel leave requests in their data scope.", managerGrantable: true },
   "leave.grant": { group: "Leave", label: "Leave Granter", description: "Manual leave grants/debits and comp-off credits." },
   "leave.policy.manage": { group: "Leave", label: "Leave policies & holidays", description: "Leave types, policies, holidays and restricted holidays." },
   "leave.recalculate": { group: "Leave", label: "Leave Recalculator", description: "Preview and commit ledger recalculations." },
@@ -103,12 +111,26 @@ export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
   "engage.groups.manage": { group: "Home & Engage", label: "Engage groups", description: "Create and manage Engage groups and membership." },
   "engage.autopost.manage": { group: "Home & Engage", label: "Engage auto-posts", description: "Birthday, joining and anniversary post templates and timing." },
   "documents.manage": { group: "Documents & letters", label: "Company documents", description: "Publish company documents and manage document categories." },
-  "employee.documents.view": { group: "Documents & letters", label: "View employee documents", description: "See and download employees' HR-held documents (audited)." },
+  "employee.documents.view": { group: "Documents & letters", label: "View employee documents", description: "See and download employees' HR-held documents (audited).", managerGrantable: true },
   "employee.documents.manage": { group: "Documents & letters", label: "Manage employee documents", description: "Upload, edit and archive employees' documents." },
   "letters.template.manage": { group: "Documents & letters", label: "Letter templates", description: "Edit letter templates, the letterhead and the signatory." },
-  "letters.generate": { group: "Documents & letters", label: "Issue letters", description: "Issue, reissue and reproduce letters for employees in their data scope." },
+  "letters.generate": { group: "Documents & letters", label: "Issue letters", description: "Issue, reissue and reproduce letters for employees in their data scope.", managerGrantable: true },
+  "manager.appoint": { group: "Managers", label: "Appoint and remove managers", description: "Promote an employee to manager, or remove a manager once their team has been reassigned." },
+  "manager.team.assign": { group: "Managers", label: "Assign teams", description: "Move employees into and out of a manager's team (effective-dated), and work the Unassigned list." },
+  "manager.permissions.manage": { group: "Managers", label: "Manager permission exceptions", description: "Grant or revoke individual permissions for a manager — only from the manager-grantable list, never sensitive data.", meta: true },
   "helpdesk.manage": { group: "Helpdesk", label: "Helpdesk queue", description: "Work the ticket queue: assign, status, replies, internal notes, categories." },
   "helpdesk.sensitive.view": { group: "Helpdesk", label: "Sensitive tickets", description: "See tickets in categories marked sensitive (e.g. Payroll & Salary, Grievance)." },
 };
 
 export const META_PERMISSION_KEYS = PERMISSION_KEYS.filter((k) => PERMISSION_CATALOG[k].meta);
+
+// ── Manager-grantable keys (Phase 5 commit E2, user decision 2026-10-02) ─
+// The ONLY permissions a MANAGER holder may ever have — through the MANAGER
+// role, a per-user GRANT or any other role. Enforced in code even against a
+// Super Admin ("the one place I want the system to overrule me"), and again
+// when access is resolved (backend lib/permissions.ts). Every key here is
+// TEAM-scoped at every endpoint that checks it, with an IDOR test
+// (modules/managers/__tests__/managerReach.test.ts). Bank, statutory and
+// salary data are deliberately and permanently absent; widening this list
+// is a reviewed code change with its own scope tests, never a click.
+export const MANAGER_GRANTABLE_KEYS = PERMISSION_KEYS.filter((k) => PERMISSION_CATALOG[k].managerGrantable);

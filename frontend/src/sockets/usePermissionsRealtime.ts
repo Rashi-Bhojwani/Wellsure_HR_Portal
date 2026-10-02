@@ -20,9 +20,16 @@ export function usePermissionsRealtime(): void {
       void queryClient.invalidateQueries({ queryKey: ["access"] });
       void queryClient.invalidateQueries({ queryKey: ["tasks"] });
     }
+    // team.changed (E2): someone moved into or out of a team, or a manager
+    // was appointed/removed — refresh team screens, scoped lists and the chart.
+    function onTeam(): void {
+      for (const key of [["managers"], ["employees"], ["people", "org-chart"], ["tasks"], ["leave"], ["admin", "dashboard"]]) void queryClient.invalidateQueries({ queryKey: key });
+    }
     socket.on("permissions.changed", onChanged);
+    socket.on("team.changed", onTeam);
     return () => {
       socket.off("permissions.changed", onChanged);
+      socket.off("team.changed", onTeam);
     };
   }, [socket, queryClient, refreshUser]);
 }

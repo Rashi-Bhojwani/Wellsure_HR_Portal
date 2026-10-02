@@ -211,11 +211,18 @@ subset for manual testing.
 |---|---|---|---|
 | `1000` | Aditi Sharma | Super Admin | Full admin access. 2FA enforcement is currently **off** in the seed (`auth.require2faRoles` = `[]`, chore 7f99cfd); re-enable it in System Settings and first login walks you through enrolment. Sees every helpdesk ticket, sensitive ones included |
 | `1001` | Rohan Mehta | HR Admin | Employee management, bank/statutory data, Admin Tools → Import Center/Audit Log/System Settings; the helpdesk queue including sensitive categories. 2FA currently off (see above) |
-| `1002`–`1005`, `1024` | Karan Kapoor, Priya Nair, Vikram Rao, Neha Verma, Rajesh Kumar | Manager | Team-scoped (`TEAM` data-scope) views on the All Employees grid and employee profiles — see only your own reports. Every manager reports to Admin (`1000`); the seed enforces the three-level structure (Admin → Managers → Employees) and refuses to run if it's broken |
+| `1002`–`1005`, `1024` | Karan Kapoor, Priya Nair, Vikram Rao, Neha Verma, Rajesh Kumar | Manager | Team-scoped (`TEAM` data-scope) views on the All Employees grid, employee profiles, leave and dashboards — see only your own reports. Managers (and HR Admin `1001`) have **no** reporting manager: they sit under the synthetic Admin root (model A, spec §2.1). The seed enforces the hierarchy and refuses to run if it's broken. A manager can only ever hold the manager-grantable keys (spec §2.2) |
+| `1029` | Farhan Qureshi | Manager (Operations) | A manager with **no team yet** — the org chart shows "Manager · No team yet". Assign someone to him from Admin Tools → Manager Management |
+| `1030` | Leela Menon | Employee (Sales, probation) | **Unassigned** — no reporting manager. Shows in Manager Management → Unassigned and as a count on the Admin home |
 | `1006`+ | various | Employee | Plain employee-portal access, no 2FA; View My Info at `/app/profile` (upload a photo there) |
 | `1006` | Arjun Singh | Employee (Engineering) | Document Center fixture: has a visible Appointment Letter and an HR-only Address Proof he can't see. Helpdesk fixture: a resolved comp-off ticket (carrying an HR internal note he never sees) and an open address-proof request |
 | `1010` | Rahul Malhotra | Employee (Sales) | Sees the Sales-only "Sales Incentive Plan 2026" in Document Center, which Arjun doesn't. Has an in-progress **Payroll & Salary** helpdesk ticket, a sensitive category that HR Executives can't see |
 | `1090` | Gaurav Singh | Employee (separated) | Device-ID reuse fixture — enter `1090` as the Device User ID in Add Employee to see the collision message and `1090-2` suggestion |
+
+**Manager Management.** Admin Tools → Manager Management (HR Admin,
+Super Admin) appoints and removes managers, moves people between teams
+(effective-dated, never in the future) and edits a manager's permissions.
+A move shows up live on the managers' screens.
 
 **Helpdesk.** Six categories are seeded. **Payroll & Salary** and
 **Grievance** are *sensitive*: only roles holding `helpdesk.sensitive.view`

@@ -1240,6 +1240,73 @@ As usual:
   everywhere;
 - docs updated, CI green, `main` fast-forwarded.
 
+### E2 as built (2026-10-02)
+
+Built as approved. Differences and additions:
+
+- **No new `admins` socket room.** A leave request from someone with no
+  reporting manager (a manager, an HR Admin) notifies every active Super
+  Admin (never the applicant) through the existing `role:SUPER_ADMIN`
+  room. HR_ADMIN still sees it in Employee Leave.
+- **The grantable list is enforced in three places,** not only on writes:
+  - **the MANAGER role:** in Roles & Permissions, non-grantable boxes are
+    disabled with a tooltip and ALL scope isn't offered. The API refuses
+    both (403 `NOT_MANAGER_GRANTABLE`) even for a Super Admin.
+  - **overrides:** a GRANT of a non-grantable key to a MANAGER holder is
+    refused. The Access tab marks those keys "Not for managers".
+  - **resolution:** `resolveAccess` intersects a MANAGER holder's keys
+    with the grantable list and caps ALL scope at TEAM. So a stale row, a
+    raw SQL grant or an old role combination still can't widen a manager.
+- **Role combinations:** MANAGER can be combined only with EMPLOYEE. That
+  covers "may not also be HR_ADMIN", and also excludes HR_EXECUTIVE,
+  PAYROLL_ADMIN and APPROVER, whose keys the cap would silently strip.
+  Assigning SUPER_ADMIN or HR_ADMIN clears the person's reporting line
+  (an effective-dated row), because those are top-level roles.
+- **The Access tab and Manager Management.**
+  - Assigning MANAGER in the Access tab runs the same appointment as
+    Manager Management.
+  - Removing MANAGER there is refused (409 `USE_MANAGER_MANAGEMENT`),
+    because removal needs an empty team and a new manager for the person.
+  - Holders of `manager.permissions.manage` can edit a manager's
+    overrides from the Permissions drawer, which reuses E1's Access view.
+- **Every reporting-manager picker lists managers only:** Add Employee,
+  Change job details (which gained a Reporting manager field) and the
+  Unassigned bulk assign. They are fed by
+  `GET /api/managers/options`, gated on
+  `employee.create`/`employee.edit`/`manager.appoint`/`manager.team.assign`.
+  `updateJob` applies the same hierarchy rules and the same
+  no-future-date stopgap when the reporting manager changes.
+- **Unassigned shows a reason:** "No reporting manager", "Manager is
+  inactive", "Manager no longer holds Manager" or "No job placement".
+  The count shows as a warning on the Admin home (Welcome tab) for
+  holders of `manager.team.assign`.
+- **The route-inventory guard needed two small refactors:**
+  - `app.ts` mounts routers from an exported `API_MOUNTS` list, so the
+    test sees exactly what the app serves;
+  - `requirePermission`/`requireAnyPermission` tag their middleware with
+    the keys they check (`tagGate`), so the test compares each
+    classification with the route's real gate.
+
+  The classes are `public`, `self`, `everyone` (the plan's "org-wide",
+  with a reason), `scoped` and `admin`. A route gated only in the service
+  (Super-Admin-only) must say so. Every route reachable with a grantable
+  key is either `scoped` with an IDOR case in `managerReach.test.ts`, or
+  `everyone` with a reason. 26 routes are manager-reachable and scoped,
+  and each has a case.
+- **Realtime `team.changed`** goes to the old and new managers
+  (`user:<id>`) and to `perm:manager.team.assign`. Screens invalidate
+  employees, the org chart, tasks, leave, managers and the admin
+  dashboard. In the walkthrough, a manager's All Employees grid showed the
+  new member without a reload.
+- **The dashboards fix** shipped in E1.1, as recorded there.
+- **Seed:**
+  - managers 1002–1005 and 1024, and HR Admin 1001, have no reporting
+    manager;
+  - **1029 Farhan Qureshi** is a manager with no team;
+  - **1030 Leela Menon** is an unassigned employee.
+
+  The assertion checks every active placement under the new rules.
+
 ### E3 — Workflow Delegates
 
 **[reconstructed]** (spec §6): a manager delegates their approvals to

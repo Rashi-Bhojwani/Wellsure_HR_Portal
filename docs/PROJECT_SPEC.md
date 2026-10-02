@@ -35,6 +35,85 @@ Today, attendance from our biometric punching machine only reaches greytHR when 
 
 Permissions are granular strings (e.g. `employee.view`, `employee.salary.view`, `employee.bank.view`, `attendance.override`, `attendance.finalise`, `leave.grant`, `payroll.run`, `payroll.approve`). Roles map to permission sets. A user can hold multiple roles. Every query applies a data scope: `SELF`, `TEAM`, `ALL`.
 
+### 2.1 The three-level hierarchy (model A, Phase 5 commit E2)
+
+- **Admin** is the top level: the Super Admins. It is a synthetic root.
+  Nobody points to it, and there is no single "boss of all managers".
+- **Managers and HR Admins** sit directly under Admin. They have **no**
+  reporting manager. HR Admins never have a team.
+- **Everyone else** reports to exactly one **active `MANAGER` holder**.
+  That includes HR Executives, Payroll Admins and Approvers. An employee
+  with no valid manager (none, an inactive one, or one who lost the role)
+  is **Unassigned**. HR sees Unassigned people in Manager Management and
+  as a count on the Admin home.
+- A reporting manager always holds `MANAGER`: never an Admin, never a
+  plain employee. `MANAGER` can be combined only with `EMPLOYEE`.
+- **Where the rules are enforced:**
+  - the service layer (Add Employee, Change job details, Manager
+    Management, role assignment);
+  - the Excel import;
+  - the seed assertion.
+- **Leave routing:**
+  - a manager's or HR Admin's own leave goes to every Super Admin;
+  - HR (ALL scope + `leave.approve`) can always decide it;
+  - nobody approves their own.
+- **Manager Management** (Admin Tools; `manager.appoint`,
+  `manager.team.assign`, `manager.permissions.manage`, held by HR_ADMIN by
+  default):
+  - appoints and removes managers. Removal needs an empty team and a new
+    manager for the person.
+  - moves people between teams as **effective-dated job history rows,
+    never in-place edits**. Future dates are refused until job history
+    can represent a pending change (PROGRESS.md open issue, needed before
+    Phase 6).
+  - edits a manager's per-person overrides.
+
+### 2.2 What a manager can ever hold (the manager-grantable list)
+
+A `MANAGER` holder can only ever hold these keys, all at most `TEAM` scope:
+- `employee.view`
+- `leave.view`
+- `leave.approve`
+- `leave.apply.onBehalf`
+- `employee.documents.view`
+- `letters.generate`
+
+**This overrules everyone, Super Admin included.**
+- It applies to the `MANAGER` role definition, to per-manager overrides,
+  and again when access is resolved, so no stale row can widen a manager.
+- Bank, statutory and (later) salary data are never on the list.
+- Widening the list is a code change with its own team-scope tests, never
+  a checkbox.
+- Every endpoint reachable with a grantable key applies TEAM scope.
+  A route-inventory test classifies every API route and fails on an
+  unclassified one. Each manager-reachable route has an IDOR test: an
+  outsider's record is a 404.
+
+### 2.3 Access administration rules (Phase 5 commit E1)
+
+- **Super Admin:** permissions are computed in code (every key, ALL
+  scope). They can't be edited, revoked or overridden by anyone.
+- **Role definitions:** only a Super Admin changes a role's keys or scope.
+- **Granting:**
+  - nobody can grant a key they don't hold;
+  - **meta-permissions** (power over others' access) only by a Super
+    Admin, and never to a manager.
+- **Per-person overrides** (GRANT/REVOKE on top of roles):
+  - a Super Admin may set them on anyone but a Super Admin;
+  - holders of `manager.permissions.manage` only on managers, within §2.2;
+  - nobody on themselves.
+- **Role assignment:**
+  - admin roles are assigned by a Super Admin only;
+  - `MANAGER` goes through Manager Management;
+  - only an existing Super Admin can create another.
+- **Lockout:** the last active Super Admin can't lose the role, be
+  deactivated, suspended or separated (a scheduled separation refuses and
+  alerts instead). With two or more, either may go as long as one
+  remains. Recovery when every in-app route is gone is the loud
+  break-glass CLI (§9).
+- **Audit:** every access change is in the append-only audit log, with
+  before and after.
+
 ---
 
 ## 3. Employee onboarding and login flow (exact business process)

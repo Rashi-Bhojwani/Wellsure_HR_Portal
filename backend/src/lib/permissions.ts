@@ -1,4 +1,4 @@
-import { PERMISSION_KEYS } from "@shared/constants/permissions";
+import { PERMISSION_KEYS, MANAGER_GRANTABLE_KEYS } from "@shared/constants/permissions";
 import type { DataScope } from "@shared/constants/roles";
 import { prisma } from "./prisma";
 
@@ -28,6 +28,9 @@ export function widestScope(scopes: DataScope[]): DataScope {
   return scopes.reduce<DataScope>((acc, s) => (SCOPE_RANK[s] > SCOPE_RANK[acc] ? s : acc), "SELF");
 }
 
+const MANAGER_ROLE = "MANAGER";
+const MANAGER_GRANTABLE = new Set<string>(MANAGER_GRANTABLE_KEYS);
+
 export async function resolveAccess(userId: string): Promise<ResolvedAccess> {
   const [userRoles, overrides] = await Promise.all([
     prisma.userRole.findMany({ where: { userId }, include: { role: { include: { permissions: { include: { permission: true } } } } } }),
@@ -41,7 +44,16 @@ export async function resolveAccess(userId: string): Promise<ResolvedAccess> {
   for (const ur of userRoles) for (const rp of ur.role.permissions) permissions.add(rp.permission.key);
   for (const o of overrides) if (o.effect === "GRANT") permissions.add(o.permission.key);
   for (const o of overrides) if (o.effect === "REVOKE") permissions.delete(o.permission.key);
-  return { roleCodes, permissions, dataScope: widestScope(userRoles.map((ur) => ur.role.dataScope)), isSuperAdmin: false };
+  const dataScope = widestScope(userRoles.map((ur) => ur.role.dataScope));
+  if (roleCodes.includes(MANAGER_ROLE)) {
+    // E2 manager-grantable guard, enforced at resolution as well as on every
+    // write: whatever rows say (a stale role definition, a raw SQL grant, a
+    // role combination that predates the guard), a MANAGER holder gets only
+    // manager-grantable keys, and never more than TEAM scope.
+    for (const key of [...permissions]) if (!MANAGER_GRANTABLE.has(key)) permissions.delete(key);
+    return { roleCodes, permissions, dataScope: dataScope === "ALL" ? "TEAM" : dataScope, isSuperAdmin: false };
+  }
+  return { roleCodes, permissions, dataScope, isSuperAdmin: false };
 }
 
 export async function resolveUserPermissions(userId: string): Promise<Set<string>> {
@@ -51,4 +63,24 @@ export async function resolveUserPermissions(userId: string): Promise<Set<string
 export async function resolveUserRoleCodes(userId: string): Promise<string[]> {
   const userRoles = await prisma.userRole.findMany({ where: { userId }, include: { role: true } });
   return userRoles.map((userRole) => userRole.role.code);
+}
+
+// Every ACTIVE user who effectively holds `key` right now — for notifying
+// "whoever can deal with this" (e.g. E2: a separated manager's team needs
+// reassigning). Candidates are found cheaply, then each is resolved exactly.
+export async function activeUsersHoldingPermission(key: string): Promise<Array<{ userId: string; employeeId: string }>> {
+  const candidates = await prisma.user.findMany({
+    where: {
+      status: "ACTIVE",
+      OR: [
+        { roles: { some: { role: { code: SUPER_ADMIN_ROLE_CODE } } } },
+        { roles: { some: { role: { permissions: { some: { permission: { key } } } } } } },
+        { permissionOverrides: { some: { effect: "GRANT", permission: { key } } } },
+      ],
+    },
+    select: { id: true, employeeId: true },
+  });
+  const out: Array<{ userId: string; employeeId: string }> = [];
+  for (const c of candidates) if ((await resolveAccess(c.id)).permissions.has(key)) out.push({ userId: c.id, employeeId: c.employeeId });
+  return out;
 }

@@ -4,7 +4,9 @@ import { prisma } from "../../lib/prisma";
 import { writeAuditLog } from "../../lib/audit";
 import { addCalendarDays, businessToday } from "../../lib/businessDate";
 import { HttpError } from "../../middleware/errorHandler";
-import { emitLeaveApplied, emitLeaveDecided, emitTasksCounts } from "../../realtime/emit";
+import { emitLeaveApplied, emitLeaveAppliedToAdmins, emitLeaveDecided, emitTasksCounts } from "../../realtime/emit";
+import { isTopLevel } from "../../lib/reportingHierarchy";
+import { roleCodesOf } from "../managers/hierarchy";
 import { getAttendanceLeaveSink, type ApprovedLeaveDay } from "./attendanceIntegration";
 import { consumeCompOffFifo, reverseCompOffConsumption } from "./compOff";
 import { withEmployeeLeaveLock } from "./concurrency";
@@ -146,10 +148,25 @@ export async function applyForLeave(input: ApplyLeaveInput, viewer: LeaveViewer,
       payload: { leaveRequestId: formatted.id },
     });
   }
-  emitLeaveApplied(
-    { leaveRequestId: formatted.id, employeeId: formatted.employeeId, employeeName: formatted.employeeName, leaveTypeCode: formatted.leaveTypeCode, fromDate: formatted.fromDate, toDate: formatted.toDate, totalDays: formatted.totalDays },
-    reportingManagerId,
-  );
+  const appliedPayload = { leaveRequestId: formatted.id, employeeId: formatted.employeeId, employeeName: formatted.employeeName, leaveTypeCode: formatted.leaveTypeCode, fromDate: formatted.fromDate, toDate: formatted.toDate, totalDays: formatted.totalDays };
+  emitLeaveApplied(appliedPayload, reportingManagerId);
+  if (!reportingManagerId && isTopLevel(await roleCodesOf(targetEmployeeId))) {
+    // E2 (model A): managers and HR Admins have no reporting manager — their
+    // leave is decided by Admin, so every Super Admin is told (never just
+    // one). Super Admins see it in Review through ALL scope + leave.approve;
+    // self-approval stays blocked.
+    const admins = await prisma.user.findMany({ where: { status: "ACTIVE", employeeId: { not: targetEmployeeId }, roles: { some: { role: { code: "SUPER_ADMIN" } } } }, select: { employeeId: true } });
+    for (const a of admins) {
+      await notifyEmployee(a.employeeId, {
+        type: "leave.applied",
+        title: "New leave request (manager / HR Admin)",
+        body: `${formatted.employeeName} applied for ${formatted.totalDays} day(s) of ${formatted.leaveTypeCode} (${formatted.fromDate} to ${formatted.toDate}).`,
+        link: "/admin/workforce/leave/employee-leave",
+        payload: { leaveRequestId: formatted.id },
+      });
+    }
+    emitLeaveAppliedToAdmins(appliedPayload);
+  }
   emitTasksCounts(reportingManagerId);
 
   return formatted;

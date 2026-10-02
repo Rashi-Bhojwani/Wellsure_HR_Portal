@@ -6,6 +6,8 @@ import { revokeAllUserRefreshTokens } from "../auth/tokens";
 import { logger } from "../../lib/logger";
 import { assertSuperAdminRemains, isActiveSuperAdmin, otherActiveSuperAdmins } from "../../lib/superAdminGuard";
 import { notifyEmployee } from "../notifications/notifyEmployee";
+import { activeUsersHoldingPermission } from "../../lib/permissions";
+import { emitTeamChanged } from "../../realtime/emit";
 import type { RequestMetaInput } from "./types";
 
 interface InitiateSeparationInput {
@@ -126,6 +128,22 @@ export async function processScheduledSeparations(): Promise<{ processed: number
       await revokeAllUserRefreshTokens(user.id);
     }
     await writeAuditLog({ actorUserId: null, action: "employee.separation.completed", entityType: "Employee", entityId: sep.employeeId });
+    // E2: a manager who left with a team leaves that team unassigned (their
+    // reports now show on Manager Management's Unassigned list) — tell
+    // whoever can reassign them.
+    const orphaned = await prisma.employeeJobHistory.count({ where: { reportingManagerId: sep.employeeId, effectiveTo: null, employee: { status: "ACTIVE" } } });
+    if (orphaned > 0) {
+      for (const holder of await activeUsersHoldingPermission("manager.team.assign")) {
+        await notifyEmployee(holder.employeeId, {
+          type: "team.unassigned",
+          title: "A manager has left — their team needs reassigning",
+          body: `${orphaned} team member${orphaned === 1 ? "" : "s"} now ${orphaned === 1 ? "has" : "have"} no manager. Reassign them in Manager Management.`,
+          link: "/admin/admin-tools/managers",
+          payload: { separatedEmployeeId: sep.employeeId },
+        });
+      }
+      emitTeamChanged([sep.employeeId]);
+    }
     processed += 1;
   }
 

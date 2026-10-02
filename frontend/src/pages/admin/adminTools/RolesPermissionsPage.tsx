@@ -125,7 +125,7 @@ export function RolesPermissionsPage() {
                     value={draftOf(role).dataScope}
                     aria-label={`${role.name} data scope`}
                     onChange={(dataScope) => setDrafts({ ...drafts, [role.code]: { ...draftOf(role), dataScope } })}
-                    options={(["SELF", "TEAM", "ALL"] as const).map((s) => ({ value: s, label: SCOPE_LABELS[s] }))}
+                    options={(role.code === "MANAGER" ? (["SELF", "TEAM"] as const) : (["SELF", "TEAM", "ALL"] as const)).map((s) => ({ value: s, label: SCOPE_LABELS[s] }))}
                   />
                   {editable(role) && (
                     <Button size="small" type="primary" icon={<SaveOutlined />} disabled={!isDirty(role)} loading={save.isPending && save.variables?.code === role.code} onClick={() => save.mutate(role)}>
@@ -138,9 +138,11 @@ export function RolesPermissionsPage() {
               render: (_: unknown, r: Row) => {
                 if (r.kind === "group") return null;
                 const checked = draftOf(role).permissions.includes(r.key);
-                const metaToManager = role.code === "MANAGER" && PERMISSION_CATALOG[r.key].meta;
+                // E2: the Manager role only ever holds manager-grantable keys
+                // (fixed in code; the server refuses anything else).
+                const metaToManager = role.code === "MANAGER" && !PERMISSION_CATALOG[r.key].managerGrantable;
                 return (
-                  <Tooltip title={role.locked ? "A Super Admin always has every permission" : metaToManager ? "The Manager role can never hold access-management permissions" : undefined}>
+                  <Tooltip title={role.locked ? "A Super Admin always has every permission" : metaToManager ? "Managers can never hold this — they only get permissions limited to their own team. Fixed in code." : undefined}>
                     <Checkbox
                       aria-label={`${role.name}: ${PERMISSION_CATALOG[r.key].label}`}
                       checked={checked}

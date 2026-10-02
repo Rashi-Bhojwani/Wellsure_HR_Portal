@@ -15,7 +15,7 @@ committed).
 | 2 | Biometric ingestion + attendance engine + real-time | Not started |
 | 3 | Attendance administration | Not started |
 | 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
-| 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | In progress — commit A done (notifications substrate, Employee Home, Admin Homepage Welcome + Dashboard tabs), commit B done (Engage), commit C done (People directory + org chart, employee photos, Document Center, HR-held employee documents), commit D done (Helpdesk, Request Hub, Tasks inbox), commit D2 done (letter templates + PDF generation), commit E1 done (roles & permissions, Super Admin guarantees, bootstrap/recovery CLIs). E2–G (three-level hierarchy, Workflow Delegates, Reports, Mobile/PWA) not started — full plan in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
+| 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | In progress — commit A done (notifications substrate, Employee Home, Admin Homepage Welcome + Dashboard tabs), commit B done (Engage), commit C done (People directory + org chart, employee photos, Document Center, HR-held employee documents), commit D done (Helpdesk, Request Hub, Tasks inbox), commit D2 done (letter templates + PDF generation), commit E1 done (roles & permissions, Super Admin guarantees, bootstrap/recovery CLIs), E1.1 done (append-only audit log, loud break-glass, manager data leaks), commit E2 done (three-level hierarchy model A, Manager Management, manager-grantable list, endpoint audit). E3–G (Workflow Delegates, Reports, Mobile/PWA) not started — full plan in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
 | 5.5 | AWS production environment and go-live hardening | Not started |
 | 6 | Payroll | Not started |
 | 7 | Tax & benefits | Not started |
@@ -3123,6 +3123,89 @@ each recognisable):
   changing settings in the dev UI during a run can interfere. CI has no dev
   app.
 
+### Phase 5, commit E2 — Three-level hierarchy, Manager Management, manager-grantable list, endpoint audit
+
+Plan: [`docs/plans/PHASE_5.md`](plans/PHASE_5.md) §E2 (approved
+2026-10-02); as-built notes directly below it. Spec §2 rewritten (§2.1
+hierarchy, §2.2 manager-grantable list, §2.3 access rules).
+
+**Hierarchy model A.**
+- Super Admins are a synthetic Admin root.
+- Managers and HR Admins have no reporting manager.
+- Everyone else reports to one active `MANAGER` holder, or is
+  Unassigned.
+
+`lib/reportingHierarchy.ts` holds the rules. They are enforced in:
+- Add Employee and Change job details;
+- Manager Management;
+- role assignment (`MANAGER` only with `EMPLOYEE`; top-level roles clear
+  the reporting line);
+- the Excel import;
+- the seed assertion.
+
+A manager's or HR Admin's own leave notifies every Super Admin.
+
+**Manager Management** (Admin Tools; three new keys `manager.appoint`,
+`manager.team.assign` and `manager.permissions.manage`, held by HR_ADMIN
+via migration `e2_manager_management_permissions`):
+- the managers list with team size ("No team yet");
+- appoint, and remove (refused while the team isn't empty; needs the
+  person's new manager);
+- team moves as effective-dated job rows (future dates refused);
+- the Unassigned list with a reason and a bulk assign, plus its count on
+  the Admin home;
+- a per-manager Permissions drawer.
+
+Every action is audited. `team.changed` reaches the old and new managers
+live.
+
+When a manager with a team separates, the team becomes Unassigned and
+team-assigners are notified.
+
+**The manager-grantable list** is enforced on the role, on overrides and at
+access resolution, even against a Super Admin:
+- `employee.view`, `leave.view`, `leave.approve`, `leave.apply.onBehalf`,
+  `employee.documents.view` and `letters.generate`;
+- TEAM scope at most;
+- bank and statutory data never.
+
+The screens disable non-grantable choices for managers ("Not for
+managers").
+
+**Endpoint audit.**
+- `routeInventory.test.ts` walks the real Express mounts (`API_MOUNTS`)
+  and the permission gates tagged on each route. It fails if a route is
+  unclassified, stale, or classified inconsistently with its gate.
+- `managerReach.test.ts` has an IDOR case for each of the 26 scoped
+  routes a manager can reach: an outsider's record is a 404, a team
+  member's works.
+
+No new leak was found beyond the four E1.1 fixed.
+
+**Org chart.**
+- An Admin root card names the Super Admins.
+- Managers carry "Manager · N" or "Manager · No team yet"; HR Admins
+  carry "HR Admin"; plain employees carry neither. This resolves the
+  Rohan Mehta ambiguity.
+- An Unassigned group shows to `manager.team.assign` holders only.
+
+**Seed.**
+- Managers and 1001 have no reporting manager.
+- New fake accounts: **1029 Farhan Qureshi** (a manager, no team) and
+  **1030 Leela Menon** (Unassigned).
+- 32 employees.
+
+**Verified:**
+- a fresh devcheck seed;
+- the full backend and frontend suites, lint and typecheck;
+- a two-browser walkthrough:
+  - HR assigns Leela to Farhan, and Farhan's All Employees grid shows her
+    without a reload;
+  - the org chart badge goes from "No team yet" to "1";
+  - a manager gets "You can't manage managers";
+  - a manager's Permissions show bank data as "Not for managers";
+  - no console errors.
+
 ## Open questions
 
 Carried from spec §14 — configurable, not guessed, until answered:
@@ -3186,7 +3269,10 @@ Carried from spec §14 — configurable, not guessed, until answered:
       - reporting line, so team scope and approvals;
       - department and branch.
 
-      E2 refuses future dates on team moves as a stopgap. **The general
+      E2 refuses future dates on team moves as a stopgap, both in Manager
+      Management and in Change job details whenever the reporting manager
+      changes. Other job fields (department, branch, designation) still
+      accept a future date and still take effect early. **The general
       fix (current = `effective_from <= today AND (effective_to IS NULL OR
       effective_to > today)`, everywhere job history is read) is required
       before Phase 6**, because payroll depends on effective dates being

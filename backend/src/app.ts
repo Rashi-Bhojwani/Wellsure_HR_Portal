@@ -1,3 +1,4 @@
+import type { Router } from "express";
 import express, { type Express } from "express";
 import helmet from "helmet";
 import cors from "cors";
@@ -28,6 +29,40 @@ import { requestHubRouter } from "./modules/requestHub/routes";
 import { tasksRouter } from "./modules/tasks/routes";
 import { lettersRouter } from "./modules/letters/routes";
 import { accessRouter } from "./modules/access/routes";
+import { managersRouter } from "./modules/managers/routes";
+
+// Every API router and where it's mounted — one list, so the route
+// inventory test (modules/managers/__tests__/routeInventory.test.ts) can see
+// every endpoint the app serves. Order matters: Express tries mounts in
+// this order.
+//   - /api/people/photos comes first: cacheable image bytes, authenticated
+//     by the photo-only token (modules/people/photos.ts), not the
+//     Authorization header — and holidaysRouter, mounted at bare /api,
+//     would otherwise run `authenticate` for it.
+//   - everything else is `no-store`.
+export const API_MOUNTS: ReadonlyArray<{ path: string; router: Router; cacheable?: true }> = [
+  { path: "/api/people/photos", router: peoplePhotosRouter, cacheable: true },
+  { path: "/api/auth", router: authRouter },
+  { path: "/api/org", router: orgRouter },
+  { path: "/api/employees", router: employeeRouter },
+  { path: "/api/import", router: importRouter },
+  { path: "/api/audit-logs", router: auditLogRouter },
+  { path: "/api/settings", router: settingsRouter },
+  { path: "/api/leave", router: leaveRouter },
+  { path: "/api", router: holidaysRouter },
+  { path: "/api/notifications", router: notificationsRouter },
+  { path: "/api/announcements", router: announcementsRouter },
+  { path: "/api/admin", router: adminRouter },
+  { path: "/api/engage", router: engageRouter },
+  { path: "/api/people", router: peopleRouter },
+  { path: "/api/documents", router: documentsRouter },
+  { path: "/api/helpdesk", router: helpdeskRouter },
+  { path: "/api/request-hub", router: requestHubRouter },
+  { path: "/api/tasks", router: tasksRouter },
+  { path: "/api/letters", router: lettersRouter },
+  { path: "/api/access", router: accessRouter },
+  { path: "/api/managers", router: managersRouter },
+];
 
 export function createApp(): Express {
   const app = express();
@@ -95,29 +130,10 @@ export function createApp(): Express {
   // token (modules/people/photos.ts), not the Authorization header. Mounted
   // before every /api router because holidaysRouter is mounted at bare /api
   // and runs `authenticate` for any /api/* request that reaches it.
-  app.use("/api/people/photos", peoplePhotosRouter);
-
-  // Module routes (auth, employees, attendance, ...) are mounted here
-  // starting Phase 1 — see src/modules/*/README.md.
-  app.use("/api/auth", noStore, authRouter);
-  app.use("/api/org", noStore, orgRouter);
-  app.use("/api/employees", noStore, employeeRouter);
-  app.use("/api/import", noStore, importRouter);
-  app.use("/api/audit-logs", noStore, auditLogRouter);
-  app.use("/api/settings", noStore, settingsRouter);
-  app.use("/api/leave", noStore, leaveRouter);
-  app.use("/api", noStore, holidaysRouter);
-  app.use("/api/notifications", noStore, notificationsRouter);
-  app.use("/api/announcements", noStore, announcementsRouter);
-  app.use("/api/admin", noStore, adminRouter);
-  app.use("/api/engage", noStore, engageRouter);
-  app.use("/api/people", noStore, peopleRouter);
-  app.use("/api/documents", noStore, documentsRouter);
-  app.use("/api/helpdesk", noStore, helpdeskRouter);
-  app.use("/api/request-hub", noStore, requestHubRouter);
-  app.use("/api/tasks", noStore, tasksRouter);
-  app.use("/api/letters", noStore, lettersRouter);
-  app.use("/api/access", noStore, accessRouter);
+  for (const m of API_MOUNTS) {
+    if (m.cacheable) app.use(m.path, m.router);
+    else app.use(m.path, noStore, m.router);
+  }
 
   app.use(notFoundHandler);
   app.use(errorHandler);

@@ -109,7 +109,10 @@ describe("Employee documents (/api/documents/employees, /me)", () => {
     expect((await request(app).get(`/api/documents/employees/${people.owner.employeeId}`).set(...authHeader(inTeam))).status).toBe(200);
     expect((await request(app).get(`/api/documents/employees/${people.owner.employeeId}`).set(...authHeader(outOfTeam))).status).toBe(404);
     expect((await request(app).post(`/api/documents/employee-documents/${hiddenDocId}/download`).set(...authHeader(outOfTeam))).status).toBe(404);
-    expect((await uploadFor(people.owner.employeeId, outOfTeam, { title: "x", categoryId })).status).toBe(404);
+    // employee.documents.manage isn't manager-grantable (E2): even with the
+    // row on the MANAGER role, a manager can't upload — refused outright.
+    expect((await uploadFor(people.owner.employeeId, outOfTeam, { title: "x", categoryId })).status).toBe(403);
+    expect((await uploadFor(people.owner.employeeId, inTeam, { title: "x", categoryId })).status).toBe(403);
     await revokePermissions("MANAGER", DOC_PERMS.filter((k) => !managerRoleHadDocPerms.includes(k)));
   });
 

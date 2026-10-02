@@ -58,6 +58,7 @@ import { useChartColors } from "../../../theme/chartPalette";
 import { ChartCard } from "../../../components/charts/ChartCard";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { useAuth } from "../../../hooks/useAuth";
+import * as managersApi from "../../../api/managers";
 import * as adminHomeApi from "../../../api/adminHome";
 import * as announcementsApi from "../../../api/announcements";
 import type { DashboardWidgetKey, WidgetLayoutEntry } from "../../../api/adminHome";
@@ -156,6 +157,10 @@ function WelcomeTab() {
     queryFn: adminHomeApi.getTaskCounts,
   });
 
+  // E2: people with no (valid) manager, for whoever can assign teams.
+  const canAssignTeams = hasPermission("manager.team.assign");
+  const { data: unassigned = [] } = useQuery({ queryKey: ["managers", "unassigned"], queryFn: managersApi.listUnassigned, enabled: canAssignTeams });
+
   const { data: allAnnouncements } = useQuery({
     queryKey: ["announcements", "all"],
     queryFn: announcementsApi.listAnnouncements,
@@ -180,6 +185,19 @@ function WelcomeTab() {
         </Title>
         <Text type="secondary">Here&apos;s what needs your attention today.</Text>
       </Card>
+      {canAssignTeams && unassigned.length > 0 && (
+        <Alert
+          type="warning"
+          showIcon
+          title={`${unassigned.length} ${unassigned.length === 1 ? "person has" : "people have"} no reporting manager`}
+          description="Their leave has no manager to approve it, and they don't appear in any team."
+          action={
+            <Button size="small" onClick={() => navigate("/admin/admin-tools/managers")}>
+              Assign
+            </Button>
+          }
+        />
+      )}
 
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={16}>

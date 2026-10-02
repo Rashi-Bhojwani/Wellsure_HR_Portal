@@ -26,7 +26,7 @@ describe("People directory + org chart (/api/people)", () => {
     await setSetting(PEOPLE_DOCUMENTS_SETTING_KEYS.directoryVisibleFields, ["reportingManager"]);
     org = await createEmployeeTestOrgMasters();
     otherOrg = await createEmployeeTestOrgMasters();
-    ids.manager = await createFullTestEmployee(org);
+    ids.manager = await createFullTestEmployee(org, { roleCode: "MANAGER" });
     ids.report = await createFullTestEmployee(org, { managerId: ids.manager.employeeId });
     ids.orphan = await createFullTestEmployee(otherOrg); // no manager, not an Admin
     ids.separated = await createFullTestEmployee(org, { managerId: ids.manager.employeeId });
@@ -71,7 +71,7 @@ describe("People directory + org chart (/api/people)", () => {
     expect((await request(app).get("/api/people/does-not-exist").set(...authHeader(token))).status).toBe(404);
   });
 
-  it("org chart: links reports to managers, and surfaces a non-Admin with no manager as unassigned", async () => {
+  it("org chart: links reports to managers, and surfaces an employee with no manager as unassigned (model A)", async () => {
     const res = await request(app).get("/api/people/org-chart").set(...authHeader(token));
     expect(res.status).toBe(200);
     const node = (id: string) => res.body.nodes.find((n: { id: string }) => n.id === id);
@@ -79,6 +79,10 @@ describe("People directory + org chart (/api/people)", () => {
     expect(node(ids.separated.employeeId)).toBeUndefined();
     expect(res.body.unassignedIds).toContain(ids.orphan.employeeId);
     expect(res.body.rootIds).not.toContain(ids.orphan.employeeId);
+    // E2: kinds, and the manager sits directly under the Admin root.
+    expect(node(ids.manager.employeeId).kind).toBe("manager");
+    expect(node(ids.report.employeeId).kind).toBe("employee");
+    expect(res.body.rootIds).toContain(ids.manager.employeeId);
     // Names are sent once as lookup maps, not repeated per node.
     expect(res.body.departments[org.departmentId]).toBeDefined();
     expect(node(ids.report.employeeId).department).toBeUndefined();

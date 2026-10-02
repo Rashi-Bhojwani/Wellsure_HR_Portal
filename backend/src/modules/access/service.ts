@@ -1,4 +1,4 @@
-import { META_PERMISSION_KEYS, PERMISSION_CATALOG, PERMISSION_KEYS, type PermissionKey } from "@shared/constants/permissions";
+import { MANAGER_GRANTABLE_KEYS, META_PERMISSION_KEYS, PERMISSION_CATALOG, PERMISSION_KEYS, type PermissionKey } from "@shared/constants/permissions";
 import type { DataScope } from "@shared/constants/roles";
 import { writeAuditLog } from "../../lib/audit";
 import { buildEmployeeScopeWhere } from "../../lib/dataScope";
@@ -6,7 +6,12 @@ import { resolveAccess, SUPER_ADMIN_ROLE_CODE } from "../../lib/permissions";
 import { prisma } from "../../lib/prisma";
 import { assertSuperAdminRemains } from "../../lib/superAdminGuard";
 import { HttpError } from "../../middleware/errorHandler";
-import { emitPermissionsChanged, getSocketServer } from "../../realtime/emit";
+import { getSocketServer } from "../../realtime/emit";
+import { notifyAccessChanged } from "../../lib/accessChanged";
+import { appointManager } from "../managers/service";
+import { moveReportingLine } from "../managers/hierarchy";
+import { businessToday } from "../../lib/businessDate";
+import { checkRoleCombination, isTopLevel } from "../../lib/reportingHierarchy";
 import { logger } from "../../lib/logger";
 import { sendSecurityChangeNoticeEmail } from "../auth/emails";
 import { adminIssuePasswordReset, adminResetTotp, adminUnlock } from "../auth/service";
@@ -46,14 +51,27 @@ export interface ActorMeta {
 }
 
 const MANAGER_ROLE_CODE = "MANAGER";
-// E2 introduces this key (Manager Management); referenced now so rule 5's
-// non-SUPER_ADMIN path is written once and simply opens when the key exists.
+// Manager Management (E2): lets HR set per-manager exceptions (rule 5's
+// non-SUPER_ADMIN path).
 const MANAGER_PERMISSIONS_MANAGE = "manager.permissions.manage";
 
 const isSuperAdmin = (actor: AccessActor) => actor.roleCodes.includes(SUPER_ADMIN_ROLE_CODE);
 const isKnownKey = (key: string): key is PermissionKey => (PERMISSION_KEYS as readonly string[]).includes(key);
 const isMeta = (key: string) => (META_PERMISSION_KEYS as readonly string[]).includes(key);
 const forbid = (message: string, code = "FORBIDDEN") => new HttpError(403, message, code);
+
+// E2 (user decision 2026-10-02): a MANAGER holder may only ever hold keys
+// from the manager-grantable list — "the one place the system overrules a
+// Super Admin". Widening it is a code change (shared/constants/permissions.ts).
+function assertManagerGrantable(keys: readonly string[]) {
+  const outside = keys.filter((k) => !(MANAGER_GRANTABLE_KEYS as readonly string[]).includes(k));
+  if (outside.length) {
+    throw forbid(
+      `A manager can't be given ${outside.map((k) => PERMISSION_CATALOG[k as PermissionKey]?.label ?? k).join(", ")} — managers only ever get permissions limited to their own team. This list is fixed in code.`,
+      "NOT_MANAGER_GRANTABLE",
+    );
+  }
+}
 
 function requireSuperAdmin(actor: AccessActor, what: string) {
   if (!isSuperAdmin(actor)) throw forbid(`Only a Super Admin can ${what}.`, "SUPER_ADMIN_ONLY");
@@ -89,12 +107,6 @@ async function holdersOf(roleId: string) {
   return prisma.userRole.findMany({ where: { roleId }, select: { user: { select: { id: true, employeeId: true } } } });
 }
 
-async function notifyAccessChanged(users: Array<{ id: string; employeeId: string }>) {
-  for (const u of users) {
-    const access = await resolveAccess(u.id);
-    emitPermissionsChanged(u.employeeId, access.permissions, PERMISSION_KEYS);
-  }
-}
 
 export async function updateRole(roleCode: string, input: { permissions?: string[]; dataScope?: DataScope }, actor: AccessActor, meta: ActorMeta) {
   requireSuperAdmin(actor, "change what a role may do"); // rule 2
@@ -114,7 +126,11 @@ export async function updateRole(roleCode: string, input: { permissions?: string
     if (role.code === MANAGER_ROLE_CODE) {
       const meta4 = next.filter(isMeta); // rule 4
       if (meta4.length) throw forbid(`The Manager role can never hold access-management permissions (${meta4.map((k) => PERMISSION_CATALOG[k as PermissionKey].label).join(", ")}).`, "META_TO_MANAGER");
+      assertManagerGrantable(next); // E2 — even for a Super Admin
     }
+  }
+  if (role.code === MANAGER_ROLE_CODE && input.dataScope === "ALL") {
+    throw forbid("A manager's data scope can't be everyone — managers see their own team.", "NOT_MANAGER_GRANTABLE");
   }
 
   await prisma.$transaction(async (tx) => {
@@ -160,6 +176,7 @@ export async function getEmployeeAccess(employeeId: string, actor: AccessActor) 
     totpEnabled: user.totpEnabled,
     locked: Boolean(user.lockedUntil && user.lockedUntil > new Date()),
     isSuperAdmin: isTargetSuperAdmin,
+    isManager: access.roleCodes.includes(MANAGER_ROLE_CODE),
     dataScope: access.dataScope,
     roles: userRoles.map((ur) => ({ code: ur.role.code, name: ur.role.name, assignedAt: ur.assignedAt.toISOString() })),
     permissions: PERMISSION_KEYS.map((key) => {
@@ -176,7 +193,9 @@ export async function getEmployeeAccess(employeeId: string, actor: AccessActor) 
     // re-checks every one.
     can: {
       editRoles: actorIsSuperAdmin,
-      editOverrides: actorIsSuperAdmin && !isTargetSuperAdmin && !isSelf,
+      // E2: holders of manager.permissions.manage may set exceptions on a
+      // manager (manager-grantable keys only — checked again on write).
+      editOverrides: !isTargetSuperAdmin && !isSelf && (actorIsSuperAdmin || (actor.permissions.has(MANAGER_PERMISSIONS_MANAGE) && access.roleCodes.includes(MANAGER_ROLE_CODE))),
       securityActions: !isSelf && (actorIsSuperAdmin || (actor.permissions.has("user.security.manage") && !isTargetSuperAdmin)),
     },
   };
@@ -196,6 +215,7 @@ async function assertMayOverride(targetUserId: string, key: string, effect: "GRA
     if (isMeta(key)) throw forbid("Only a Super Admin can grant access-management permissions.", "META_SUPER_ADMIN_ONLY"); // rule 4
   }
   if (effect === "GRANT") {
+    if (target.roleCodes.includes(MANAGER_ROLE_CODE)) assertManagerGrantable([key]); // E2
     if (!actor.permissions.has(key)) throw forbid("You can't grant a permission you don't hold.", "NOT_HELD"); // rule 3
     if (isMeta(key) && target.roleCodes.includes(MANAGER_ROLE_CODE)) {
       throw forbid("A manager can never hold access-management permissions.", "META_TO_MANAGER"); // rule 4
@@ -246,14 +266,25 @@ export async function assignRole(employeeId: string, roleCode: string, actor: Ac
   if (user.status === "DEACTIVATED") throw new HttpError(409, "This person's account is deactivated.", "DEACTIVATED");
   const role = await prisma.role.findUnique({ where: { code: roleCode } });
   if (!role) throw new HttpError(404, "Role not found.", "NOT_FOUND");
-  if (role.code === MANAGER_ROLE_CODE) {
-    // Rule 4: a MANAGER holder may never hold a meta-permission by override.
-    const metaGrants = await prisma.userPermissionOverride.findMany({ where: { userId: user.id, effect: "GRANT", permission: { key: { in: [...META_PERMISSION_KEYS] } } }, include: { permission: true } });
-    if (metaGrants.length) throw forbid(`Remove this person's access-management grants first (${metaGrants.map((g) => g.permission.key).join(", ")}): a manager can never hold them.`, "META_TO_MANAGER");
-  }
   const before = (await prisma.userRole.findMany({ where: { userId: user.id }, include: { role: true } })).map((ur) => ur.role.code).sort();
   if (before.includes(role.code)) return getEmployeeAccess(employeeId, actor);
-  await prisma.userRole.create({ data: { userId: user.id, roleId: role.id, assignedByUserId: actor.userId } });
+  // E2: appointing a manager is one operation wherever it starts — the
+  // role, the cleared reporting line and the grantable check together.
+  if (role.code === MANAGER_ROLE_CODE) {
+    await appointManager(employeeId, {}, meta);
+    return getEmployeeAccess(employeeId, actor);
+  }
+  // E2: a manager holds no role but EMPLOYEE alongside MANAGER.
+  const combo = checkRoleCombination([...before, role.code]);
+  if (combo) throw new HttpError(400, combo, "HIERARCHY");
+  await prisma.$transaction(async (tx) => {
+    await tx.userRole.create({ data: { userId: user.id, roleId: role.id, assignedByUserId: actor.userId } });
+    // Model A: Super Admins and HR Admins sit directly under Admin.
+    if (isTopLevel([role.code])) {
+      const current = await tx.employeeJobHistory.findFirst({ where: { employeeId, effectiveTo: null } });
+      if (current?.reportingManagerId) await moveReportingLine(tx, employeeId, null, businessToday(), actor.userId, `Became ${role.name}`);
+    }
+  });
   await writeAuditLog({ ...meta, action: "access.role.assigned", entityType: "User", entityId: user.id, before: { roles: before }, after: { roles: [...before, role.code].sort() } });
   await notifyAccessChanged([user]);
   return getEmployeeAccess(employeeId, actor);
@@ -265,6 +296,11 @@ export async function removeRole(employeeId: string, roleCode: string, actor: Ac
   const userRole = await prisma.userRole.findFirst({ where: { userId: user.id, role: { code: roleCode } }, include: { role: true } });
   if (!userRole) throw new HttpError(404, "This person doesn't hold that role.", "NOT_FOUND");
   if (roleCode === SUPER_ADMIN_ROLE_CODE) await assertSuperAdminRemains(user.id); // rule 7
+  if (roleCode === MANAGER_ROLE_CODE) {
+    // E2: their team has to go somewhere and they need a manager of their
+    // own — both chosen in Manager Management.
+    throw new HttpError(409, "Remove a manager from Admin Tools → Manager Management, which reassigns their team and gives them a manager of their own.", "USE_MANAGER_MANAGEMENT");
+  }
   const before = (await prisma.userRole.findMany({ where: { userId: user.id }, include: { role: true } })).map((ur) => ur.role.code).sort();
   await prisma.userRole.delete({ where: { userId_roleId: { userId: user.id, roleId: userRole.roleId } } });
   await writeAuditLog({ ...meta, action: "access.role.removed", entityType: "User", entityId: user.id, before: { roles: before }, after: { roles: before.filter((c) => c !== roleCode) } });

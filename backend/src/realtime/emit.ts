@@ -197,3 +197,22 @@ export function emitPermissionsChanged(employeeId: string, effectivePermissions:
   }
   io.to(`user:${employeeId}`).emit("permissions.changed", {});
 }
+
+// ── Teams (Phase 5 commit E2) ───────────────────────────────────────────
+// Signal-only: a team changed (member moved in or out, manager appointed or
+// removed). Goes to each affected manager, so their team screens, Review
+// queue and scoped dashboards refresh, and to everyone who manages teams.
+export function emitTeamChanged(managerEmployeeIds: Array<string | null | undefined>): void {
+  if (!io) return;
+  const rooms = [...new Set(managerEmployeeIds.filter((id): id is string => Boolean(id)))].map((id) => `user:${id}`);
+  rooms.push(permissionRoom("manager.team.assign"));
+  io.to(rooms).emit("team.changed", {});
+}
+
+// A request from someone at the top level (a manager or HR Admin — no
+// reporting manager under hierarchy model A) is decided by Admin: tell
+// every Super Admin, not one person.
+export function emitLeaveAppliedToAdmins(payload: LeaveEventPayload): void {
+  if (!io) return;
+  io.to("role:SUPER_ADMIN").emit("leave.applied", payload);
+}

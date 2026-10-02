@@ -6,6 +6,7 @@ import { encryptField, decryptField } from "../../lib/encryption";
 import { blindIndex, last4, normalizeAadhaar, normalizeAccountNumber, normalizePan } from "../../lib/fieldHash";
 import { buildEmployeeScopeWhere, type DataScope } from "../../lib/dataScope";
 import { createInvitation, resendInvitation as resendInvitationEmail } from "../auth/service";
+import { assertReportingLine, assertReportingLineFor, parseMoveDate } from "../managers/hierarchy";
 import type { RequestMetaInput } from "./types";
 import type { createEmployeeSchema } from "./validators";
 import type { z } from "zod";
@@ -208,6 +209,9 @@ export async function createEmployeeInTx(
 export async function createEmployee(input: CreateEmployeeInput, meta: RequestMetaInput, options?: { sendInvitation?: boolean }) {
   const { official, personal, statutory, bank } = input;
   await assertEmployeeCodeAvailable(official.employeeCode);
+  // E2 (model A): a new hire is a plain employee, so their reporting manager
+  // must be an active Manager (or none — they then show as Unassigned).
+  await assertReportingLine({ code: official.employeeCode, roleCodes: ["EMPLOYEE"] }, official.reportingManagerId ?? null);
 
   const { employee, userId } = await runConflictSafe(() => prisma.$transaction((tx) => createEmployeeInTx(tx, input, meta)));
 
@@ -478,6 +482,12 @@ interface JobUpdateInput {
 
 export async function updateJob(employeeId: string, input: JobUpdateInput, meta: RequestMetaInput) {
   const current = await prisma.employeeJobHistory.findFirst({ where: { employeeId, effectiveTo: null } });
+  if (input.reportingManagerId !== undefined && input.reportingManagerId !== (current?.reportingManagerId ?? null)) {
+    // E2: the three-level rules, and no future-dated team move (job history
+    // can't represent a pending change yet — PROGRESS.md open issue).
+    await assertReportingLineFor(employeeId, input.reportingManagerId);
+    parseMoveDate(input.effectiveFrom, null);
+  }
   if (!current) return createFirstJobPlacement(employeeId, input, meta);
 
   const effectiveFrom = new Date(input.effectiveFrom);

@@ -15,6 +15,7 @@ import {
 } from "antd";
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as employeeApi from "../../../api/employee";
+import * as managersApi from "../../../api/managers";
 import * as orgApi from "../../../api/org";
 
 const { Title, Text } = Typography;
@@ -35,10 +36,8 @@ export function AddEmployeePage() {
   const { data: locations = [] } = useQuery({ queryKey: ["org", "locations"], queryFn: () => orgApi.listLocations(false) });
   const { data: grades = [] } = useQuery({ queryKey: ["org", "grades"], queryFn: orgApi.grades.list });
   const { data: costCentres = [] } = useQuery({ queryKey: ["org", "cost-centres"], queryFn: orgApi.costCentres.list });
-  const { data: managerOptions } = useQuery({
-    queryKey: ["employees", "managers"],
-    queryFn: () => employeeApi.listEmployees({ pageSize: 200, sortBy: "fullName", sortDir: "asc" }),
-  });
+  // E2 (model A): only active managers can be someone's reporting manager.
+  const { data: managerOptions = [] } = useQuery({ queryKey: ["managers", "options"], queryFn: managersApi.managerOptions });
 
   async function onDeviceUserIdChange(value: string) {
     form.setFieldValue("official", { ...form.getFieldValue("official"), employeeCode: value });
@@ -161,7 +160,7 @@ export function AddEmployeePage() {
             <Select allowClear options={costCentres.map((c) => ({ value: c.id, label: c.name }))} showSearch optionFilterProp="label" />
           </Form.Item>
           <Form.Item name={["official", "reportingManagerId"]} label="Reporting Manager">
-            <Select allowClear options={(managerOptions?.rows ?? []).map((m) => ({ value: m.id, label: `${m.fullName} (${m.employeeCode})` }))} showSearch optionFilterProp="label" />
+            <Select allowClear placeholder="None — they'll show as Unassigned" options={managerOptions.map((m) => ({ value: m.employeeId, label: `${m.name} (${m.employeeCode})` }))} showSearch optionFilterProp="label" />
           </Form.Item>
           <Form.Item name={["official", "employmentType"]} label="Employment Type" rules={[{ required: true }]}>
             <Select options={["PERMANENT", "CONTRACT", "INTERN", "CONSULTANT", "PROBATION"].map((t) => ({ value: t, label: t }))} />

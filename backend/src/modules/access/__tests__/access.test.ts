@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { PERMISSION_KEYS } from "@shared/constants/permissions";
+import { MANAGER_GRANTABLE_KEYS, PERMISSION_KEYS } from "@shared/constants/permissions";
 import { ensureAccessCatalog } from "../../../lib/accessCatalog";
 import { resolveAccess } from "../../../lib/permissions";
 import { prisma } from "../../../lib/prisma";
@@ -82,27 +82,45 @@ describe("Roles & permissions (E1)", () => {
     it("everyone else: union of roles, plus GRANTs, minus REVOKEs (a revoke beats a role), widest scope across roles", async () => {
       const u = people.employee.userId;
       const perm = (key: string) => prisma.permission.findUniqueOrThrow({ where: { key } });
-      const leaveView = await perm("leave.view");
-      const empView = await perm("employee.view");
-      const mgr = await prisma.role.findUniqueOrThrow({ where: { code: "MANAGER" } });
-      await prisma.userRole.create({ data: { userId: u, roleId: mgr.id } });
+      const approver = await prisma.role.findUniqueOrThrow({ where: { code: "APPROVER" } }); // leave.approve + leave.view, scope ALL
+      await prisma.userRole.create({ data: { userId: u, roleId: approver.id } });
       try {
         let a = await resolveAccess(u);
-        expect(a.dataScope).toBe("TEAM");
-        expect(a.permissions.has("employee.view")).toBe(true);
+        expect(a.dataScope).toBe("ALL"); // EMPLOYEE (SELF) + APPROVER (ALL) → widest
+        expect(a.permissions.has("leave.view")).toBe(true);
         await prisma.userPermissionOverride.createMany({
           data: [
-            { userId: u, permissionId: empView.id, effect: "REVOKE", reason: "test", createdByUserId: people.sa.userId },
+            { userId: u, permissionId: (await perm("leave.view")).id, effect: "REVOKE", reason: "test", createdByUserId: people.sa.userId },
             { userId: u, permissionId: (await perm("helpdesk.manage")).id, effect: "GRANT", reason: "test", createdByUserId: people.sa.userId },
           ],
         });
         a = await resolveAccess(u);
-        expect(a.permissions.has("employee.view")).toBe(false);
+        expect(a.permissions.has("leave.view")).toBe(false);
         expect(a.permissions.has("helpdesk.manage")).toBe(true);
-        expect(a.permissions.has(leaveView.key)).toBe(true);
+        expect(a.permissions.has("leave.approve")).toBe(true);
       } finally {
         await prisma.userPermissionOverride.deleteMany({ where: { userId: u } });
-        await prisma.userRole.delete({ where: { userId_roleId: { userId: u, roleId: mgr.id } } });
+        await prisma.userRole.delete({ where: { userId_roleId: { userId: u, roleId: approver.id } } });
+      }
+    });
+
+    it("E2: a manager's access is clipped to the manager-grantable list and TEAM scope, whatever the rows say", async () => {
+      const u = people.manager.userId;
+      const perm = (key: string) => prisma.permission.findUniqueOrThrow({ where: { key } });
+      const payroll = await prisma.role.findUniqueOrThrow({ where: { code: "PAYROLL_ADMIN" } }); // bank view, scope ALL
+      // Raw rows the API would refuse: another role, and a non-grantable GRANT.
+      await prisma.userRole.create({ data: { userId: u, roleId: payroll.id } });
+      await prisma.userPermissionOverride.create({ data: { userId: u, permissionId: (await perm("helpdesk.manage")).id, effect: "GRANT", reason: "raw", createdByUserId: people.sa.userId } });
+      try {
+        const a = await resolveAccess(u);
+        expect(a.dataScope).toBe("TEAM");
+        expect(a.permissions.has("employee.bank.view")).toBe(false);
+        expect(a.permissions.has("helpdesk.manage")).toBe(false);
+        expect([...a.permissions].every((k) => (MANAGER_GRANTABLE_KEYS as readonly string[]).includes(k))).toBe(true);
+        expect(a.permissions.has("leave.approve")).toBe(true);
+      } finally {
+        await prisma.userPermissionOverride.deleteMany({ where: { userId: u } });
+        await prisma.userRole.delete({ where: { userId_roleId: { userId: u, roleId: payroll.id } } });
       }
     });
 
@@ -191,7 +209,7 @@ describe("Roles & permissions (E1)", () => {
       expect(leaveApprove).toMatchObject({ effective: true, inheritedFrom: ["MANAGER"], override: null });
       expect(res.body.can).toEqual({ editRoles: true, editOverrides: true, securityActions: true });
       const asHr = await api(tokens.hrAdmin).get(`/api/access/employees/${people.manager.employeeId}`);
-      expect(asHr.body.can).toEqual({ editRoles: false, editOverrides: false, securityActions: true });
+      expect(asHr.body.can).toEqual({ editRoles: false, editOverrides: true, securityActions: true }); // E2: HR holds manager.permissions.manage
       const ofSa = await api(tokens.hrAdmin).get(`/api/access/employees/${people.sa.employeeId}`);
       expect(ofSa.body.can.securityActions).toBe(false);
       expect((await api(tokens.employee).get(`/api/access/employees/${people.manager.employeeId}`)).status).toBe(403);
@@ -207,10 +225,12 @@ describe("Roles & permissions (E1)", () => {
       expect((await api(tokens.sa).put(path(people.employee.employeeId), { effect: "GRANT", reason: "x" })).status).toBe(400);
     });
 
-    it("rule 4 per person: an access-management permission is never granted to a manager", async () => {
-      const res = await api(tokens.sa).put(`/api/access/employees/${people.manager.employeeId}/overrides/user.security.manage`, { effect: "GRANT", reason: "should be refused" });
-      expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe("META_TO_MANAGER");
+    it("rule 4 / E2 per person: nothing outside the manager-grantable list reaches a manager — not even from a Super Admin", async () => {
+      for (const key of ["user.security.manage", "employee.bank.view", "helpdesk.manage"]) {
+        const res = await api(tokens.sa).put(`/api/access/employees/${people.manager.employeeId}/overrides/${key}`, { effect: "GRANT", reason: "should be refused" });
+        expect(res.status).toBe(403);
+        expect(res.body.error.code).toBe("NOT_MANAGER_GRANTABLE");
+      }
     });
 
     it("set and clear an override: takes effect, audited with the reason, and the person is told live", async () => {
@@ -250,13 +270,13 @@ describe("Roles & permissions (E1)", () => {
       expect(await auditCount("access.role.removed", people.employee.userId)).toBeGreaterThan(0);
     });
 
-    it("rule 4 via roles: someone holding an access-management grant can't be made a manager", async () => {
+    it("rule 4 / E2 via roles: someone holding a non-grantable grant can't be made a manager", async () => {
       const p = await prisma.permission.findUniqueOrThrow({ where: { key: "user.security.manage" } });
       await prisma.userPermissionOverride.create({ data: { userId: people.employee.userId, permissionId: p.id, effect: "GRANT", reason: "t", createdByUserId: people.sa.userId } });
       try {
         const res = await api(tokens.sa).post(`/api/access/employees/${people.employee.employeeId}/roles`, { code: "MANAGER" });
         expect(res.status).toBe(403);
-        expect(res.body.error.code).toBe("META_TO_MANAGER");
+        expect(res.body.error.code).toBe("NOT_MANAGER_GRANTABLE"); // E2 supersedes rule 4: any non-grantable grant blocks it
       } finally {
         await prisma.userPermissionOverride.deleteMany({ where: { userId: people.employee.userId } });
       }

@@ -29,6 +29,7 @@ export interface ReferenceData {
   gradeCodeToId: Map<string, string>;
   costCentreCodeToId: Map<string, string>;
   employeeCodeToId: Map<string, string>;
+  activeManagerCodes: Set<string>; // lowercased; active MANAGER holders (E2: the only valid reporting managers)
   officialEmails: Set<string>; // lowercased
   activeDeviceUserIds: Set<string>;
   panHashes: Set<string>;
@@ -46,7 +47,9 @@ export async function loadReferenceData(): Promise<ReferenceData> {
       prisma.designation.findMany({ select: { id: true, code: true, name: true } }),
       prisma.grade.findMany({ select: { id: true, code: true, name: true } }),
       prisma.costCentre.findMany({ select: { id: true, code: true, name: true } }),
-      prisma.employee.findMany({ select: { id: true, employeeCode: true, officialEmail: true } }),
+      prisma.employee.findMany({
+        select: { id: true, employeeCode: true, officialEmail: true, status: true, user: { select: { roles: { select: { role: { select: { code: true } } } } } } },
+      }),
       prisma.deviceUserMapping.findMany({ where: { validTo: null }, select: { deviceUserId: true } }),
       prisma.employeeStatutory.findMany({ select: { panHash: true, aadhaarHash: true } }),
       prisma.employeeBankAccount.findMany({ where: { effectiveTo: null }, select: { accountNumberHash: true } }),
@@ -68,6 +71,7 @@ export async function loadReferenceData(): Promise<ReferenceData> {
     gradeCodeToId: new Map(grades.map((g) => [g.code.toLowerCase(), g.id])),
     costCentreCodeToId: new Map(costCentres.map((c) => [c.code.toLowerCase(), c.id])),
     employeeCodeToId: new Map(employees.map((e) => [e.employeeCode.toLowerCase(), e.id])),
+    activeManagerCodes: new Set(employees.filter((e) => e.status === "ACTIVE" && e.user?.roles.some((r) => r.role.code === "MANAGER")).map((e) => e.employeeCode.toLowerCase())),
     officialEmails: new Set(employees.filter((e) => e.officialEmail).map((e) => e.officialEmail!.toLowerCase())),
     activeDeviceUserIds: new Set(deviceMappings.map((m) => m.deviceUserId)),
     panHashes: new Set(statutories.filter((s) => s.panHash).map((s) => s.panHash!)),
@@ -246,6 +250,10 @@ export function validateEmployeeRow(row: ParsedRow, refs: ReferenceData, tracker
   if (v.costCentreCode && !refs.costCentreCodeToId.has(v.costCentreCode.toLowerCase())) errors.push(`Unknown cost centre code "${v.costCentreCode}".`);
   if (v.reportingManagerCode && !refs.employeeCodeToId.has(v.reportingManagerCode.toLowerCase())) {
     errors.push(`Unknown reporting manager code "${v.reportingManagerCode}" — the manager must already exist on record (import managers in an earlier batch).`);
+  } else if (v.reportingManagerCode && !refs.activeManagerCodes.has(v.reportingManagerCode.toLowerCase())) {
+    // E2 (model A): imported people are plain employees, so they report to
+    // an active Manager — or leave it blank (they then show as Unassigned).
+    errors.push(`Reporting manager "${v.reportingManagerCode}" isn't an active Manager — appoint them in Manager Management first, or leave the column blank.`);
   }
 
   return { data: { ...v, deviceUserId, employeeCode }, errors, warnings };

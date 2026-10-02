@@ -1,7 +1,7 @@
 import type { DirectoryToggleableField } from "@shared/constants/peopleDocuments";
 import { prisma } from "../../lib/prisma";
 import { getPeopleDocumentsSettings } from "../../lib/peopleDocumentsSettings";
-import { ADMIN_ROLE_CODES } from "../../lib/reportingHierarchy";
+import { isTopLevel, MANAGER_ROLE_CODE } from "../../lib/reportingHierarchy";
 import { HttpError } from "../../middleware/errorHandler";
 import { DIRECTORY_FIELD_POLICY } from "./fieldPolicy";
 
@@ -151,8 +151,14 @@ export async function getDirectoryEntry(employeeId: string): Promise<DirectoryEn
 // three-level rule is asserted for the seed and enforced in commit E);
 // the frontend renders collapsed branches lazily.
 
+// E2: what a person is in the three-level structure — so the chart can tell
+// a manager with no team ("No team yet") from a plain employee, and an HR
+// Admin (top level, never a team) from both.
+export type OrgChartKind = "admin" | "manager" | "adminStaff" | "employee";
+
 export interface OrgChartNode {
   id: string;
+  kind: OrgChartKind;
   code: string;
   name: string;
   photoVersion: string | null;
@@ -178,28 +184,34 @@ export async function getOrgChart() {
     },
   });
   const activeIds = new Set(rows.map((r) => r.id));
+  const rolesById = new Map(rows.map((r) => [r.id, r.user?.roles.map((ur) => ur.role.code) ?? []]));
+  const kindOf = (roles: string[]): OrgChartKind =>
+    roles.includes("SUPER_ADMIN") ? "admin" : roles.includes(MANAGER_ROLE_CODE) ? "manager" : isTopLevel(roles) ? "adminStaff" : "employee";
   const nodes: OrgChartNode[] = rows.map((r) => {
     const job = r.jobHistory[0]!;
+    const managerId = job.reportingManagerId;
     return {
       id: r.id,
+      kind: kindOf(rolesById.get(r.id)!),
       code: r.employeeCode,
       name: r.nameHistory[0]?.fullName ?? r.employeeCode,
       photoVersion: r.personal?.photoVersion ?? null,
       designationId: job.designationId,
       departmentId: job.departmentId,
       locationId: job.locationId,
-      // A manager who is no longer active doesn't anchor anyone.
-      managerId: job.reportingManagerId && activeIds.has(job.reportingManagerId) ? job.reportingManagerId : null,
+      // Only an active Manager anchors anyone (model A); anything else is
+      // shown as unassigned rather than drawn as a line the rules forbid.
+      managerId: managerId && activeIds.has(managerId) && rolesById.get(managerId)!.includes(MANAGER_ROLE_CODE) ? managerId : null,
     };
   });
   nodes.sort((a, b) => a.name.localeCompare(b.name));
 
-  const isAdmin = new Map(
-    rows.map((r) => [r.id, r.user?.roles.some((ur) => (ADMIN_ROLE_CODES as readonly string[]).includes(ur.role.code)) ?? false]),
-  );
-  const managerless = nodes.filter((n) => n.managerId === null);
-  const rootIds = managerless.filter((n) => isAdmin.get(n.id)).map((n) => n.id);
-  const unassignedIds = managerless.filter((n) => !isAdmin.get(n.id)).map((n) => n.id);
+  // Model A: the synthetic Admin root names the Super Admins; directly under
+  // it sit the managers and HR Admins. Anyone else without a manager is
+  // unassigned.
+  const adminIds = nodes.filter((n) => n.kind === "admin").map((n) => n.id);
+  const rootIds = nodes.filter((n) => n.kind === "manager" || n.kind === "adminStaff").map((n) => n.id);
+  const unassignedIds = nodes.filter((n) => n.kind === "employee" && n.managerId === null).map((n) => n.id);
 
   const [designations, departments, locations] = await Promise.all([
     prisma.designation.findMany({ where: { id: { in: [...new Set(nodes.map((n) => n.designationId))] } }, select: { id: true, name: true } }),
@@ -209,6 +221,7 @@ export async function getOrgChart() {
   const toMap = (list: { id: string; name: string }[]) => Object.fromEntries(list.map((x) => [x.id, x.name]));
   return {
     nodes,
+    adminIds,
     rootIds,
     unassignedIds,
     designations: toMap(designations),
