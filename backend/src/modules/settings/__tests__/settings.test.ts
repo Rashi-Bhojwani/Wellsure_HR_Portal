@@ -29,6 +29,7 @@ describe("System Settings (/api/settings/security)", () => {
   const noPermRole = `TEST_SETTINGS_NONE_${Date.now()}`;
   let org: TestOrgMasters;
   let managerToken: string;
+  let managerUserId: string;
   let noPermToken: string;
   const employeeIds: string[] = [];
   let settingsSnapshot: { key: string; value: unknown }[];
@@ -43,6 +44,7 @@ describe("System Settings (/api/settings/security)", () => {
     const manager = await createFullTestEmployee(org, { roleCode: managerRole });
     employeeIds.push(manager.employeeId);
     managerToken = await loginAs(manager.employeeCode);
+    managerUserId = manager.userId;
 
     const plain = await createFullTestEmployee(org, { roleCode: noPermRole });
     employeeIds.push(plain.employeeId);
@@ -92,7 +94,8 @@ describe("System Settings (/api/settings/security)", () => {
     expect(res.body.lockoutMaxAttempts).toBe(7);
     expect(res.body.lockoutMinutes).toBe(before.body.lockoutMinutes); // untouched
 
-    const audit = await prisma.auditLog.findFirst({ where: { action: "settings.updated" }, orderBy: { createdAt: "desc" } });
+    // This request's own entry, not just any settings change ever logged.
+    const audit = await prisma.auditLog.findFirst({ where: { action: "settings.updated", actorUserId: managerUserId }, orderBy: { createdAt: "desc" } });
     expect(audit).not.toBeNull();
   });
 

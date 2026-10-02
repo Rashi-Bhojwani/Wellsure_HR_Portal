@@ -29,6 +29,7 @@ describe("GET /api/employees/export", () => {
   const noSensitiveRole = `TEST_EXPORT_PLAIN_${Date.now()}`; // employee.export only
   let org: TestOrgMasters;
   let exporterToken: string;
+  let exporterUserId: string;
   let plainExporterToken: string;
   const employeeIds: string[] = [];
 
@@ -38,6 +39,7 @@ describe("GET /api/employees/export", () => {
     await grantPermissions(noSensitiveRole, ["employee.view", "employee.export"]);
 
     const exporter = await createFullTestEmployee(org, { roleCode: exporterRole });
+    exporterUserId = exporter.userId;
     employeeIds.push(exporter.employeeId);
     exporterToken = await loginAs(exporter.employeeCode);
 
@@ -82,7 +84,10 @@ describe("GET /api/employees/export", () => {
     expect(headers).not.toContain("Bank Account (last 4)");
     expect(headers).not.toContain("PAN (last 4)");
 
-    const audit = await prisma.auditLog.findFirst({ where: { action: { startsWith: "employee.export" } }, orderBy: { createdAt: "desc" } });
+    // This test's own row (by its own exporter), never "the newest export
+    // in the database": the seed writes a sample export row, and anything
+    // else exporting during a run would otherwise be picked up instead.
+    const audit = await prisma.auditLog.findFirst({ where: { action: { startsWith: "employee.export" }, actorUserId: exporterUserId }, orderBy: { createdAt: "desc" } });
     expect(audit?.action).toBe("employee.export");
     const after = audit?.after as { includeSensitive: boolean; columns: string[]; rowCount: number };
     expect(after.includeSensitive).toBe(false);
@@ -103,7 +108,7 @@ describe("GET /api/employees/export", () => {
     expect(headers).toContain("Bank Account (last 4)");
     expect(headers).toContain("PAN (last 4)");
 
-    const audit = await prisma.auditLog.findFirst({ where: { action: "employee.export.sensitive" }, orderBy: { createdAt: "desc" } });
+    const audit = await prisma.auditLog.findFirst({ where: { action: "employee.export.sensitive", actorUserId: exporterUserId }, orderBy: { createdAt: "desc" } });
     const after = audit?.after as { includeSensitive: boolean; columns: string[] };
     expect(after.includeSensitive).toBe(true);
     expect(after.columns).toEqual(headers);
