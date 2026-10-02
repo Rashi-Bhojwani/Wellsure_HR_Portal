@@ -114,6 +114,30 @@ A `MANAGER` holder can only ever hold these keys, all at most `TEAM` scope:
 - **Audit:** every access change is in the append-only audit log, with
   before and after.
 
+
+### 2.4 Workflow delegation (Phase 5 commit E3)
+
+A manager away for a date range can delegate their leave approvals.
+- **The delegate must already hold `leave.approve`.** Delegation never
+  grants a permission. It only adds the delegator's current team to the
+  delegate's reach in the approval flows: the review queue, the request,
+  approve/reject, the requester's balances, and Tasks. It never adds
+  profiles, documents or dashboards.
+- **Not transitive.** The delegator keeps their own access.
+- **Self-approval stays blocked.**
+- **No overlaps:** one delegator can't have overlapping non-revoked
+  delegations.
+- **Dates:** inclusive, starting today or later.
+- **Revoke, never delete:** revoking records who and why.
+- **Audit:** every decision reached through a delegation records the real
+  actor **and** `on_behalf_of` (the delegator), in the audit log and on
+  the request.
+- **Only `MANAGER` holders delegate.** Super Admins don't need to: the two
+  cover each other, and HR Admins (ALL scope) can approve any manager's
+  leave. Letting a Super Admin delegate to a manager would create peer
+  approval.
+- **HR** (`delegation.manage`) sees everyone's delegations, sets one up for
+  a manager, and revokes any.
 ---
 
 ## 3. Employee onboarding and login flow (exact business process)

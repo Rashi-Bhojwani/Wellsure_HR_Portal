@@ -92,7 +92,7 @@ export function AuditLogPage() {
         }}
         columns={[
           { title: "When", dataIndex: "createdAt", render: (v: string) => dayjs(v).format("DD-MMM-YYYY HH:mm") },
-          { title: "Actor", key: "actor", render: (_: unknown, r) => (r.actorName ? `${r.actorName} (${r.actorEmployeeCode})` : "System") },
+          { title: "Actor", key: "actor", render: (_: unknown, r) => (r.actorName ? `${r.actorName} (${r.actorEmployeeCode})${r.onBehalfOfName ? ` on behalf of ${r.onBehalfOfName}` : ""}` : "System") },
           { title: "Action", dataIndex: "action" },
           { title: "Entity", key: "entity", render: (_: unknown, r) => `${r.entityType} · ${r.entityId}` },
           { title: "IP", dataIndex: "ipAddress" },
@@ -107,7 +107,7 @@ export function AuditLogPage() {
               <b>{detail.action}</b> on {detail.entityType} ({detail.entityId})
             </Text>
             <Text type="secondary">
-              {detail.actorName ? `${detail.actorName} (${detail.actorEmployeeCode})` : "System"} · {dayjs(detail.createdAt).format("DD-MMM-YYYY HH:mm:ss")}
+              {detail.actorName ? `${detail.actorName} (${detail.actorEmployeeCode})${detail.onBehalfOfName ? ` on behalf of ${detail.onBehalfOfName}` : ""}` : "System"} · {dayjs(detail.createdAt).format("DD-MMM-YYYY HH:mm:ss")}
               {detail.ipAddress ? ` · ${detail.ipAddress}` : ""}
             </Text>
             {detail.before !== null && (

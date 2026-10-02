@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { formatTicketNumber, HELPDESK_STATUS_LABELS, helpdeskAdminPath, helpdeskEmployeePath } from "@shared/constants/helpdesk";
 import type { TaskItem, TaskType } from "@shared/types/inbox";
 import { prisma } from "../../lib/prisma";
-import { buildLeaveEmployeeIdFilter } from "../leave/scope";
+import { approvalEmployeeIdFilter, resolveApprovalReach } from "../leave/scope";
 
 // Tasks inbox (spec §7.1 "My Tasks", To do → Tasks — Phase 5 commit D, user
 // decision 1): things waiting on ME, with no task schema of its own. Each
@@ -30,12 +30,13 @@ const currentName = { include: { nameHistory: { where: { effectiveTo: null } } }
 const dateOnly = (d: Date) => d.toISOString().slice(0, 10);
 
 // Pending leave I can decide: leave.approve, inside my data scope, never my
-// own (approveLeaveRequest refuses self-approval).
+// own (approveLeaveRequest refuses self-approval) — plus, while a workflow
+// delegation to me is active, the delegator's team's (E3).
 const leaveApprovals: TaskSource = {
   type: "LEAVE_APPROVAL",
   async list(viewer, limit) {
     if (!viewer.permissions.has("leave.approve")) return [];
-    const scopeFilter = await buildLeaveEmployeeIdFilter(viewer.employeeId, viewer.dataScope);
+    const scopeFilter = approvalEmployeeIdFilter(await resolveApprovalReach(viewer));
     const where: Prisma.LeaveRequestWhereInput = {
       status: "PENDING",
       AND: [{ employeeId: { not: viewer.employeeId } }, ...(scopeFilter ? [{ employeeId: scopeFilter }] : [])],

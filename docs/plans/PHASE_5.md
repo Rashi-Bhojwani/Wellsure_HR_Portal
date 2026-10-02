@@ -1307,11 +1307,169 @@ Built as approved. Differences and additions:
 
   The assertion checks every active placement under the new rules.
 
-### E3 — Workflow Delegates
+### E3 — Workflow Delegates (requirements 2026-10-02; built, pending review)
 
-**[reconstructed]** (spec §6): a manager delegates their approvals to
-someone for a date range while away. Covers `/app/workflow-delegates` and
-`/admin/admin-tools/delegates`. Plan written up for review before building.
+**User requirements (2026-10-02):**
+- A manager delegates their approvals to someone for a date range while
+  away.
+- **The delegate must already hold the approval permission.** Delegation
+  redirects *whose team* their scope resolves against. It never grants a
+  permission.
+- **The audit log records the real actor and who they acted on behalf
+  of.**
+- Overlapping active delegations from the same delegator are rejected.
+- The self-approval block still holds.
+- **Screens:** a manager sets up and revokes their own delegations; HR
+  sees and manages anyone's.
+- Settle whether a Super Admin can delegate, and to whom. The
+  recommendation is below.
+
+#### Can a Super Admin delegate? Recommendation: no — and nothing needs to
+
+Under model A, a Super Admin's approval work is the Admin queue: leave
+from managers and HR Admins, who report to no one. That queue already has
+three layers of cover with no delegation at all:
+1. **Both Super Admins** are notified of every such request, and either
+   can decide it. One being away is the normal case the two-owner design
+   handles.
+2. **HR_ADMIN** holds `leave.approve` with ALL scope, so they can decide
+   any manager's leave.
+3. That leaves one gap: **HR_ADMIN's own leave** (self-approval blocked)
+   while **both** Super Admins are away. It simply waits. Leave can be
+   approved after the fact, so nothing is lost.
+
+What delegation *would* mean for a Super Admin, and why each version is
+worse:
+- **To a manager:** that manager would approve their peers' leave. That
+  is a peer-approval hole, and it reaches past the manager-grantable cap
+  (spec §2.2) through the back door.
+- **To an HR Admin:** pointless, because they already have ALL scope.
+  Except for their own leave, which self-approval forbids anyway.
+- **To the other Super Admin:** pointless, because they already see
+  everything.
+- Mechanically, a Super Admin's scope is ALL. "Resolve their team against
+  someone else's" has no meaning for ALL scope.
+
+So **only `MANAGER` holders can be delegators.** A Super Admin or HR Admin
+trying to set one up gets an explanation instead: "Super Admins already
+cover each other; HR Admins can approve any manager's leave." If the gap
+in point 3 ever matters in practice, the fix is a second HR Admin or a
+third Super Admin. It isn't delegation.
+
+#### Rules
+
+| Rule | Detail |
+|---|---|
+| Who can delegate | Active `MANAGER` holders. Not Super Admins or HR Admins, as above. HR (`delegation.manage`) can also set one up *for* a manager, e.g. one who fell ill before doing it themselves. |
+| Who can be the delegate | Any other active user who **currently** holds `leave.approve` (role or override): another manager, an HR Admin, a Super Admin. Checked at creation, and again on every use, because the approval endpoints are gated on `leave.approve` itself. A delegate who later loses it simply can't act; the screens flag it. Never the delegator. |
+| What it covers | **Leave approvals:** the review queue (list), a request's detail, approve, reject, bulk approve, the requester's balances (shown in Review), and the Tasks inbox. *Not* employee profiles, documents, dashboards, the calendar, applying on behalf, or cancelling approved leave. Delegation is about deciding pending approvals, not taking over the team. Regularization approvals (Phase 3) join the same mechanism when they exist. |
+| How it works | For a delegate, TEAM scope in those flows resolves against **their own team plus the current team of each manager with an active delegation to them**. Their permissions are unchanged. Not transitive: if B covers A and C covers B, C gets B's team, never A's. |
+| The delegator keeps access | Delegation adds a second approver; it doesn't take the delegator's away. Whoever decides first wins, as with two Super Admins. |
+| Dates | Inclusive calendar dates (Asia/Kolkata). The start may not be in the past; the end may not be before the start. "Active" means today is in range and it isn't revoked. Future ones show as *Scheduled*. |
+| Overlap | A delegator may not have two non-revoked delegations whose ranges overlap, to anyone. Checked under a per-delegator advisory lock, so two simultaneous requests can't both pass. |
+| Revoke | Active or scheduled ones can be revoked early, by the delegator, or by HR on anyone's. An ended one can't. Nothing is ever deleted; revocation records who, when, and an optional reason. No editing: revoke and create a new one. |
+| Self-approval | Unchanged. Nobody decides their own request, including a delegate who is a member of the delegator's team. The delegator's own leave isn't in their own team, so a delegate never reaches it either. |
+| Audit | Creating and revoking are audited. Every decision reached *through* a delegation records `onBehalfOfUserId` (the delegator) next to the real actor: a new `audit_logs.on_behalf_of_user_id` column, plus `leave_requests.decided_on_behalf_of_user_id`. The Audit Log viewer shows "B on behalf of A". |
+| Notifications | While a delegation is active: a new request from the team notifies the delegate too ("covering for A"). A decision made on someone's behalf sends the delegator an FYI. Creating or revoking one notifies the delegate. |
+| Realtime | `delegation.changed` goes to the delegator, the delegate and holders of `delegation.manage`. Screens refresh delegations, the leave review queue and Tasks. `leave.applied` also reaches active delegates. |
+
+**New permission:** `delegation.manage`, held by HR_ADMIN by default.
+- It isn't meta: it moves no permission, and the delegate must already
+  hold the approval key.
+- It isn't manager-grantable.
+- A manager managing **their own** delegations needs no key, only the
+  MANAGER role.
+
+#### Data
+
+`workflow_delegates` (spec §11's table name):
+- `id`;
+- `delegator_user_id` and `delegate_user_id` (both FK → users);
+- `start_date` and `end_date` (date);
+- `reason`;
+- `created_by_user_id` and `created_at`;
+- `revoked_at`, `revoked_by_user_id` and `revoke_reason`.
+
+There are indexes on the delegator and the delegate.
+
+#### API
+
+| Route | Gate | Class (route inventory) |
+|---|---|---|
+| `GET /api/delegations/mine` | signed in | self: delegations I gave, and ones I'm covering |
+| `GET /api/delegations/delegate-options` | signed in; only managers get rows | self |
+| `POST /api/delegations/mine` | signed in; refused unless MANAGER | self |
+| `POST /api/delegations/mine/:id/revoke` | signed in; must be the delegator | self |
+| `GET /api/delegations` | `delegation.manage` | admin |
+| `GET /api/delegations/managers` | `delegation.manage` | admin |
+| `GET /api/delegations/delegate-options/:delegatorUserId` | `delegation.manage` | admin |
+| `POST /api/delegations` | `delegation.manage` | admin |
+| `POST /api/delegations/:id/revoke` | `delegation.manage` | admin |
+
+The delegated reach is added inside the existing leave endpoints. Their
+IDOR cases in `managerReach.test.ts` stay, plus new ones:
+- an outsider's request stays 404 for a delegate;
+- a delegator's team becomes reachable only while the delegation is
+  active.
+
+#### Screens
+
+- **Employee portal → Workflow Delegates** (`/app/workflow-delegates`,
+  replacing the placeholder):
+  - "My delegations": managers only. Lists them with status, plus Delegate
+    (delegate picker, date range, reason) and Revoke.
+  - "Covering for": anyone who is a delegate. Shows whose approvals they
+    have and until when.
+  - Everyone else sees an explanation.
+- **Admin Tools → Workflow Delegates** (`/admin/admin-tools/delegates`,
+  replacing the placeholder): everyone's delegations with a status filter.
+  "Set up a delegation" picks the manager, then a delegate. Revoke with a
+  reason.
+- **Review:** a request reached through a delegation carries an "On behalf
+  of A" tag.
+
+**Not in E3:** Approval Workflows (multi-level chains, spec §7.8). They
+stay a placeholder and need their own plan. Nothing in leave today is
+multi-level.
+
+#### Tests
+
+- every rule above (who can delegate and be delegated to, dates, overlap
+  including the concurrent case, revoke);
+- reach exists only while active (scheduled, active, ended, revoked);
+- non-transitive;
+- the delegator keeps access;
+- self-approval still blocked;
+- the audit row and the leave row carry on-behalf-of;
+- notifications and realtime;
+- a delegate who loses `leave.approve` can't act;
+- the route-inventory classification for the new routes.
+
+### E3 as built (2026-10-02)
+
+Built as planned above. Differences and additions:
+
+- **`GET /api/delegations/delegate-options` is classified `everyone`,**
+  not `self`. It lists other people: name, designation, department and
+  role names of active users who can approve leave. Only a MANAGER caller
+  gets rows. The route inventory records the reason.
+- **"Covering for"** shows only active and scheduled delegations. Ended and
+  revoked ones stay in the delegator's list and in HR's.
+- **"Decided on their behalf"** is a per-delegation count, read from the
+  audit log: rows whose actor is the delegate and whose `on_behalf_of` is
+  the delegator, within the delegation's lifetime. It answers "what
+  happened while I was away".
+- **Refresh after a change** marks leave balances stale instead of
+  refetching them. A revoke removes rows from the delegate's Review queue,
+  and refetching those rows' balance cells first would 404 on people now
+  out of reach. Found in the walkthrough.
+- **Two CHECK constraints** back the service rules in the database:
+  `end_date >= start_date` and delegator ≠ delegate.
+- **The walkthrough ran with the browsers on Asia/Kolkata time.** It ran
+  after 00:00 IST, when the container's UTC "today" was still the day
+  before. Real users' browsers are on IST, and the server always uses the
+  IST business date, so a browser on another timezone could offer a
+  "today" the server calls past and get a clear 400 `PAST_START`.
 
 ## F — Reports
 
@@ -1355,6 +1513,6 @@ planned. Every route must be wired by the end of Phase 5.
 |---|---|
 | `/app/my-worklife/feedback` (Feedback) | **Settled: Phase 8** (performance reviews); placeholder kept |
 | `/app/todo/tasks` and admin app `tasks` (Tasks) | **Settled: D** (inbox of things waiting on me) |
-| Admin app `workflow` (Workflow) and `admin-tools/workflows` (Approval Workflows, multi-level chains, spec §7.8) | E3, alongside delegates (confirm when E3 is planned) |
+| Admin app `workflow` (Workflow) and `admin-tools/workflows` (Approval Workflows, multi-level chains, spec §7.8) | **Not in E3** (decided when E3 was planned, 2026-10-02): nothing in leave is multi-level today. Needs its own plan before the end of Phase 5; placeholder kept |
 | `admin-tools/templates` (Email & Letter Templates) | **Settled: its own commit right after D** (headless Chromium; letters saved to Document Center) |
 | `admin-tools/users-roles` (Users & Roles) | **Settled: E1** (Roles & Permissions). |

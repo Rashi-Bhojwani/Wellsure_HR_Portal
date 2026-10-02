@@ -216,3 +216,18 @@ export function emitLeaveAppliedToAdmins(payload: LeaveEventPayload): void {
   if (!io) return;
   io.to("role:SUPER_ADMIN").emit("leave.applied", payload);
 }
+
+// E3: a new request from a team whose manager is delegating — the delegate
+// (covering their approvals) gets the same event in their own room.
+export function emitLeaveAppliedToDelegate(payload: LeaveEventPayload, delegateEmployeeId: string): void {
+  if (!io) return;
+  io.to(`user:${delegateEmployeeId}`).emit("leave.applied", payload);
+}
+
+// E3: a delegation was created or revoked — the delegator, the delegate and
+// everyone who manages delegations refresh their delegation lists, review
+// queue and tasks.
+export function emitDelegationChanged(employeeIds: string[]): void {
+  if (!io) return;
+  io.to([...new Set(employeeIds.map((id) => `user:${id}`)), permissionRoom("delegation.manage")]).emit("delegation.changed", {});
+}

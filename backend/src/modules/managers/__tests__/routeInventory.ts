@@ -287,6 +287,18 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "DELETE /api/managers/:employeeId": admin,
   "POST /api/managers/:employeeId/team": admin,
   "DELETE /api/managers/:employeeId/team/:memberId": admin,
+
+  // Workflow Delegates (E3). /mine: the caller's own delegations and the
+  // ones they're covering; creating one is refused unless they're a MANAGER.
+  "GET /api/delegations/mine": self,
+  "POST /api/delegations/mine": self,
+  "POST /api/delegations/mine/:id/revoke": self,
+  "GET /api/delegations/delegate-options": everyone("only a MANAGER gets rows: name, designation, department and role names of people who can approve leave — to pick a delegate"),
+  "GET /api/delegations": admin,
+  "GET /api/delegations/managers": admin,
+  "GET /api/delegations/delegate-options/:delegatorUserId": admin,
+  "POST /api/delegations": admin,
+  "POST /api/delegations/:id/revoke": admin,
 };
 
 // Scoped routes a manager can reach with a manager-grantable key — each has

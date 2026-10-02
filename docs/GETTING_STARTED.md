@@ -225,6 +225,13 @@ Super Admin) appoints and removes managers, moves people between teams
 (effective-dated, never in the future) and edits a manager's permissions.
 A move shows up live on the managers' screens.
 
+**Workflow Delegates.** A manager (e.g. `1002`) delegates their leave
+approvals from the employee portal's **Workflow Delegates** page to someone
+who can already approve leave (e.g. `1003`). For those dates the delegate's
+**Review** queue also shows the manager's team's requests, tagged "On behalf
+of …". HR (`1001`) sees and manages everyone's under Admin Tools → Workflow
+Delegates. Super Admins and HR Admins don't delegate (spec §2.4).
+
 **Helpdesk.** Six categories are seeded. **Payroll & Salary** and
 **Grievance** are *sensitive*: only roles holding `helpdesk.sensitive.view`
 (HR Admin, Super Admin) see their tickets, and HR Executives don't. Toggle

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { refreshAfterDelegationChange } from "../lib/delegationRefresh";
 import { useAuth } from "../hooks/useAuth";
 import { useSocket } from "./SocketProvider";
 
@@ -25,11 +26,19 @@ export function usePermissionsRealtime(): void {
     function onTeam(): void {
       for (const key of [["managers"], ["employees"], ["people", "org-chart"], ["tasks"], ["leave"], ["admin", "dashboard"]]) void queryClient.invalidateQueries({ queryKey: key });
     }
+    // delegation.changed (E3): a delegation involving me was created or
+    // revoked (or I manage delegations) — refresh the lists and whatever
+    // approval queue it widens or narrows.
+    function onDelegation(): void {
+      refreshAfterDelegationChange(queryClient);
+    }
     socket.on("permissions.changed", onChanged);
     socket.on("team.changed", onTeam);
+    socket.on("delegation.changed", onDelegation);
     return () => {
       socket.off("permissions.changed", onChanged);
       socket.off("team.changed", onTeam);
+      socket.off("delegation.changed", onDelegation);
     };
   }, [socket, queryClient, refreshUser]);
 }

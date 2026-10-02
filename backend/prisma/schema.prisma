@@ -113,6 +113,8 @@ model User {
   notifications       Notification[]
   favourites          UserFavourite[]
   dashboardLayout     DashboardLayout?
+  delegationsGiven    WorkflowDelegate[]       @relation("DelegationDelegator")
+  delegationsReceived WorkflowDelegate[]       @relation("DelegationDelegate")
 
   @@map("users")
 }
@@ -277,19 +279,23 @@ model TotpBackupCode {
 }
 
 model AuditLog {
-  id          String   @id @default(cuid())
+  id               String   @id @default(cuid())
   // null = system/scheduler/CLI action. Deliberately NOT a foreign key
   // (E1.1): the table is append-only, so a row must never depend on — or
   // be changed by — anything happening to the user it names.
-  actorUserId String?  @map("actor_user_id")
-  action      String
-  entityType  String   @map("entity_type")
-  entityId    String   @map("entity_id")
-  before      Json? // always passed through the shared redact() helper before insert — see writeAuditLog()
-  after       Json? // ditto
-  ipAddress   String?  @map("ip_address")
-  userAgent   String?  @map("user_agent")
-  createdAt   DateTime @default(now()) @map("created_at")
+  actorUserId      String?  @map("actor_user_id")
+  // Set when the actor acted through a workflow delegation (E3): the
+  // manager whose approvals they were covering. Not a foreign key, for the
+  // same reason as actorUserId.
+  onBehalfOfUserId String?  @map("on_behalf_of_user_id")
+  action           String
+  entityType       String   @map("entity_type")
+  entityId         String   @map("entity_id")
+  before           Json? // always passed through the shared redact() helper before insert — see writeAuditLog()
+  after            Json? // ditto
+  ipAddress        String?  @map("ip_address")
+  userAgent        String?  @map("user_agent")
+  createdAt        DateTime @default(now()) @map("created_at")
 
   @@index([entityType, entityId])
   @@index([actorUserId])
@@ -934,32 +940,35 @@ enum LeaveDayPart {
 }
 
 model LeaveRequest {
-  id                   String             @id @default(cuid())
-  employeeId           String             @map("employee_id") // who the leave is FOR
-  employee             Employee           @relation("LeaveRequestOwner", fields: [employeeId], references: [id])
-  leaveTypeId          String             @map("leave_type_id")
-  leaveType            LeaveType          @relation(fields: [leaveTypeId], references: [id])
-  fromDate             DateTime           @map("from_date") @db.Date
-  toDate               DateTime           @map("to_date") @db.Date
-  fromDayPart          LeaveDayPart       @default(FULL) @map("from_day_part")
-  toDayPart            LeaveDayPart       @default(FULL) @map("to_day_part") // only meaningful when fromDate !=
+  id                      String             @id @default(cuid())
+  employeeId              String             @map("employee_id") // who the leave is FOR
+  employee                Employee           @relation("LeaveRequestOwner", fields: [employeeId], references: [id])
+  leaveTypeId             String             @map("leave_type_id")
+  leaveType               LeaveType          @relation(fields: [leaveTypeId], references: [id])
+  fromDate                DateTime           @map("from_date") @db.Date
+  toDate                  DateTime           @map("to_date") @db.Date
+  fromDayPart             LeaveDayPart       @default(FULL) @map("from_day_part")
+  toDayPart               LeaveDayPart       @default(FULL) @map("to_day_part") // only meaningful when fromDate !=
   // toDate; single-day requests use fromDayPart and validate toDayPart == fromDayPart at the Zod layer
-  totalDays            Decimal            @map("total_days") @db.Decimal(5, 2) // computed at apply time —
+  totalDays               Decimal            @map("total_days") @db.Decimal(5, 2) // computed at apply time —
   // excludes leave_types' holidays and a configurable default week-off pattern until Phase 2's real
   // per-employee week_off_patterns exists, see modules/leave/attendanceIntegration.ts
-  reason               String?
-  attachmentStorageKey String?            @map("attachment_storage_key")
-  status               LeaveRequestStatus @default(PENDING)
-  appliedByUserId      String             @map("applied_by_user_id") // usually the employee; HR/manager when
+  reason                  String?
+  attachmentStorageKey    String?            @map("attachment_storage_key")
+  status                  LeaveRequestStatus @default(PENDING)
+  appliedByUserId         String             @map("applied_by_user_id") // usually the employee; HR/manager when
   // applying on behalf of (leave.apply.onBehalf)
-  decidedByUserId      String?            @map("decided_by_user_id")
-  decidedAt            DateTime?          @map("decided_at")
-  decisionComments     String?            @map("decision_comments")
-  cancelledByUserId    String?            @map("cancelled_by_user_id")
-  cancelledAt          DateTime?          @map("cancelled_at")
-  cancellationReason   String?            @map("cancellation_reason")
-  createdAt            DateTime           @default(now()) @map("created_at")
-  updatedAt            DateTime           @updatedAt @map("updated_at")
+  decidedByUserId         String?            @map("decided_by_user_id")
+  // E3: the manager whose approvals decidedBy was covering, when the
+  // decision was reached through a workflow delegation.
+  decidedOnBehalfOfUserId String?            @map("decided_on_behalf_of_user_id")
+  decidedAt               DateTime?          @map("decided_at")
+  decisionComments        String?            @map("decision_comments")
+  cancelledByUserId       String?            @map("cancelled_by_user_id")
+  cancelledAt             DateTime?          @map("cancelled_at")
+  cancellationReason      String?            @map("cancellation_reason")
+  createdAt               DateTime           @default(now()) @map("created_at")
+  updatedAt               DateTime           @updatedAt @map("updated_at")
 
   @@index([employeeId, status])
   @@index([fromDate, toDate])
@@ -1662,4 +1671,29 @@ model DevDatabaseMarker {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("dev_database_marker")
+}
+
+// Workflow delegation (Phase 5 commit E3): a manager's approvals covered
+// by someone else for an inclusive date range. Never grants a permission —
+// the delegate must already hold leave.approve; it only widens whose team
+// their TEAM scope resolves against in the approval flows
+// (modules/delegations/reach.ts). Never deleted: revoking records who/when.
+model WorkflowDelegate {
+  id              String    @id @default(cuid())
+  delegatorUserId String    @map("delegator_user_id")
+  delegator       User      @relation("DelegationDelegator", fields: [delegatorUserId], references: [id])
+  delegateUserId  String    @map("delegate_user_id")
+  delegate        User      @relation("DelegationDelegate", fields: [delegateUserId], references: [id])
+  startDate       DateTime  @map("start_date") @db.Date
+  endDate         DateTime  @map("end_date") @db.Date
+  reason          String?
+  createdByUserId String    @map("created_by_user_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  revokedAt       DateTime? @map("revoked_at")
+  revokedByUserId String?   @map("revoked_by_user_id")
+  revokeReason    String?   @map("revoke_reason")
+
+  @@index([delegatorUserId])
+  @@index([delegateUserId])
+  @@map("workflow_delegates")
 }

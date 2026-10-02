@@ -4,6 +4,8 @@ import { redact } from "./redact";
 
 interface WriteAuditLogInput {
   actorUserId?: string | null;
+  // E3: when the actor acted through a workflow delegation — the delegator.
+  onBehalfOfUserId?: string | null;
   action: string;
   entityType: string;
   entityId: string;
@@ -20,6 +22,7 @@ export async function writeAuditLog(input: WriteAuditLogInput): Promise<void> {
   await prisma.auditLog.create({
     data: {
       actorUserId: input.actorUserId ?? null,
+      onBehalfOfUserId: input.onBehalfOfUserId ?? null,
       action: input.action,
       entityType: input.entityType,
       entityId: input.entityId,

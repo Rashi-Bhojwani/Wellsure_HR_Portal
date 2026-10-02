@@ -34,11 +34,15 @@ export interface LeaveRequestRow {
   reason: string | null;
   status: LeaveRequestStatus;
   decidedByUserId: string | null;
+  decidedOnBehalfOfUserId: string | null; // E3: decided while covering this manager's approvals
   decidedAt: string | null;
   decisionComments: string | null;
   cancelledAt: string | null;
   cancellationReason: string | null;
   createdAt: string;
+  // E3 (list/detail only): set when the viewer reaches this request only by
+  // covering another manager's approvals.
+  onBehalfOf?: { userId: string; name: string } | null;
 }
 
 export interface ApplyLeaveInput {

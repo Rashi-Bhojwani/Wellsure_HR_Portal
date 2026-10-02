@@ -30,6 +30,7 @@ import { tasksRouter } from "./modules/tasks/routes";
 import { lettersRouter } from "./modules/letters/routes";
 import { accessRouter } from "./modules/access/routes";
 import { managersRouter } from "./modules/managers/routes";
+import { delegationsRouter } from "./modules/delegations/routes";
 
 // Every API router and where it's mounted — one list, so the route
 // inventory test (modules/managers/__tests__/routeInventory.test.ts) can see
@@ -62,6 +63,7 @@ export const API_MOUNTS: ReadonlyArray<{ path: string; router: Router; cacheable
   { path: "/api/letters", router: lettersRouter },
   { path: "/api/access", router: accessRouter },
   { path: "/api/managers", router: managersRouter },
+  { path: "/api/delegations", router: delegationsRouter },
 ];
 
 export function createApp(): Express {

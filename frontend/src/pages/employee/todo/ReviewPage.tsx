@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Button, Input, Modal, Space, Table, Typography, message } from "antd";
+import { Alert, Button, Input, Modal, Space, Table, Tag, Typography, message } from "antd";
 import { CheckOutlined, CloseOutlined } from "@ant-design/icons";
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as leaveApi from "../../../api/leave";
@@ -88,7 +88,7 @@ export function ReviewPage() {
       <Title level={3} style={{ margin: 0 }}>
         Review
       </Title>
-      <Text type="secondary">Pending leave requests from your team.</Text>
+      <Text type="secondary">Pending leave requests from your team — and from the team of any manager whose approvals you're covering (Workflow Delegates).</Text>
 
       {selectedIds.length > 0 && (
         <Alert
@@ -111,7 +111,16 @@ export function ReviewPage() {
         locale={{ emptyText: <EmptyState message="No pending requests from your team" compact /> }}
         rowSelection={{ selectedRowKeys: selectedIds, onChange: (keys) => setSelectedIds(keys as string[]) }}
         columns={[
-          { title: "Employee", key: "employee", render: (_, r) => `${r.employeeName} (${r.employeeCode})` },
+          {
+            title: "Employee",
+            key: "employee",
+            render: (_, r) => (
+              <Space size={6} wrap>
+                <span>{`${r.employeeName} (${r.employeeCode})`}</span>
+                {r.onBehalfOf && <Tag color="purple">On behalf of {r.onBehalfOf.name}</Tag>}
+              </Space>
+            ),
+          },
           { title: "Type", dataIndex: "leaveTypeName" },
           {
             title: "Dates",

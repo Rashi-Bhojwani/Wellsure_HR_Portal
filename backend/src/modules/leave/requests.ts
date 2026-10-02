@@ -4,7 +4,7 @@ import { prisma } from "../../lib/prisma";
 import { writeAuditLog } from "../../lib/audit";
 import { addCalendarDays, businessToday } from "../../lib/businessDate";
 import { HttpError } from "../../middleware/errorHandler";
-import { emitLeaveApplied, emitLeaveAppliedToAdmins, emitLeaveDecided, emitTasksCounts } from "../../realtime/emit";
+import { emitLeaveApplied, emitLeaveAppliedToAdmins, emitLeaveAppliedToDelegate, emitLeaveDecided, emitTasksCounts } from "../../realtime/emit";
 import { isTopLevel } from "../../lib/reportingHierarchy";
 import { roleCodesOf } from "../managers/hierarchy";
 import { getAttendanceLeaveSink, type ApprovedLeaveDay } from "./attendanceIntegration";
@@ -13,7 +13,8 @@ import { withEmployeeLeaveLock } from "./concurrency";
 import { computeTotalLeaveDays } from "./dayCount";
 import { resolveDayCountContext } from "./dayCountContext";
 import { assertSufficientBalance, writeLedgerEntry } from "./ledger";
-import { buildLeaveEmployeeIdFilter, isEmployeeInScope } from "./scope";
+import { approvalEmployeeIdFilter, isEmployeeInScope, reachFor, resolveApprovalReach, type ApprovalReach } from "./scope";
+import { activeDelegatesOf, type Delegator } from "../delegations/reach";
 import type { ActorMeta, LeaveViewer } from "./types";
 
 interface ApplyLeaveInput {
@@ -148,8 +149,24 @@ export async function applyForLeave(input: ApplyLeaveInput, viewer: LeaveViewer,
       payload: { leaveRequestId: formatted.id },
     });
   }
+  // E3: anyone actively covering this manager's approvals is told too.
+  const delegates = reportingManagerId ? await activeDelegatesOf(reportingManagerId) : [];
+  if (delegates.length > 0) {
+    const managerName = await employeeNameOf(reportingManagerId!);
+    for (const d of delegates) {
+      if (d.employeeId === targetEmployeeId) continue; // never asked to decide their own
+      await notifyEmployee(d.employeeId, {
+        type: "leave.applied",
+        title: `New leave request (covering for ${managerName})`,
+        body: `${formatted.employeeName} applied for ${formatted.totalDays} day(s) of ${formatted.leaveTypeCode} (${formatted.fromDate} to ${formatted.toDate}).`,
+        link: "/app/todo/review",
+        payload: { leaveRequestId: formatted.id, onBehalfOfEmployeeId: reportingManagerId },
+      });
+    }
+  }
   const appliedPayload = { leaveRequestId: formatted.id, employeeId: formatted.employeeId, employeeName: formatted.employeeName, leaveTypeCode: formatted.leaveTypeCode, fromDate: formatted.fromDate, toDate: formatted.toDate, totalDays: formatted.totalDays };
   emitLeaveApplied(appliedPayload, reportingManagerId);
+  for (const d of delegates) emitLeaveAppliedToDelegate(appliedPayload, d.employeeId);
   if (!reportingManagerId && isTopLevel(await roleCodesOf(targetEmployeeId))) {
     // E2 (model A): managers and HR Admins have no reporting manager — their
     // leave is decided by Admin, so every Super Admin is told (never just
@@ -201,6 +218,7 @@ function toAuditJson(row: {
   status: string;
   appliedByUserId: string;
   decidedByUserId: string | null;
+  decidedOnBehalfOfUserId: string | null;
   decidedAt: Date | null;
   decisionComments: string | null;
   cancelledByUserId: string | null;
@@ -220,6 +238,7 @@ function toAuditJson(row: {
     status: row.status,
     appliedByUserId: row.appliedByUserId,
     decidedByUserId: row.decidedByUserId,
+    decidedOnBehalfOfUserId: row.decidedOnBehalfOfUserId,
     decidedAt: row.decidedAt?.toISOString() ?? null,
     decisionComments: row.decisionComments,
     cancelledByUserId: row.cancelledByUserId,
@@ -246,6 +265,7 @@ function formatLeaveRequestRow(row: Prisma.LeaveRequestGetPayload<{ include: { l
     status: row.status,
     appliedByUserId: row.appliedByUserId,
     decidedByUserId: row.decidedByUserId,
+    decidedOnBehalfOfUserId: row.decidedOnBehalfOfUserId,
     decidedAt: row.decidedAt?.toISOString() ?? null,
     decisionComments: row.decisionComments,
     cancelledAt: row.cancelledAt?.toISOString() ?? null,
@@ -268,19 +288,26 @@ export async function listLeaveRequests(query: ListLeaveRequestsQuery, viewer: L
   const scope = viewer.dataScope;
   const hasBroadView = viewer.permissions.has("leave.view");
   const where: Prisma.LeaveRequestWhereInput = {};
+  // E3: the review queue also reaches the teams of managers actively
+  // delegating to the viewer (empty unless they hold leave.approve).
+  const reach = await resolveApprovalReach(viewer);
+  const hasDelegated = reach.delegated.size > 0;
 
   if (query.employeeId && query.employeeId !== viewer.employeeId) {
-    if (!hasBroadView) throw new HttpError(403, "Missing permission: leave.view", "FORBIDDEN");
-    if (!(await isEmployeeInScope(query.employeeId, viewer.employeeId, scope))) {
+    if (!hasBroadView && !hasDelegated) throw new HttpError(403, "Missing permission: leave.view", "FORBIDDEN");
+    const inOwnScope = hasBroadView && (await isEmployeeInScope(query.employeeId, viewer.employeeId, scope));
+    if (!inOwnScope && !reach.delegated.has(query.employeeId)) {
       throw new HttpError(404, "Employee not found.", "NOT_FOUND");
     }
     where.employeeId = query.employeeId;
   } else if (query.employeeId === viewer.employeeId) {
     where.employeeId = viewer.employeeId;
   } else if (!hasBroadView) {
-    where.employeeId = viewer.employeeId; // no filter given, no broad view — silently narrow to self
+    // no filter given, no broad view — silently narrow to self (plus any
+    // delegated team)
+    where.employeeId = hasDelegated ? { in: [viewer.employeeId, ...reach.delegated.keys()] } : viewer.employeeId;
   } else {
-    const filter = await buildLeaveEmployeeIdFilter(viewer.employeeId, scope);
+    const filter = approvalEmployeeIdFilter(reach);
     if (filter) where.employeeId = filter;
   }
 
@@ -302,7 +329,16 @@ export async function listLeaveRequests(query: ListLeaveRequestsQuery, viewer: L
     }),
   ]);
 
-  return { total, page: query.page, pageSize: query.pageSize, rows: rows.map(formatLeaveRequestRow) };
+  const names = await delegatorNames(reach);
+  return {
+    total,
+    page: query.page,
+    pageSize: query.pageSize,
+    rows: rows.map((r) => {
+      const via = r.employeeId === viewer.employeeId ? null : reachFor(reach, r.employeeId).onBehalfOf;
+      return { ...formatLeaveRequestRow(r), onBehalfOf: via ? { userId: via.userId, name: names.get(via.userId) ?? "" } : null };
+    }),
+  };
 }
 
 export async function getLeaveRequestById(requestId: string, viewer: LeaveViewer) {
@@ -311,32 +347,61 @@ export async function getLeaveRequestById(requestId: string, viewer: LeaveViewer
 
   const scope = viewer.dataScope;
   const isSelf = row.employeeId === viewer.employeeId;
-  if (!isSelf && !viewer.permissions.has("leave.view")) {
-    throw new HttpError(404, "Leave request not found.", "NOT_FOUND");
-  }
-  if (!isSelf && !(await isEmployeeInScope(row.employeeId, viewer.employeeId, scope))) {
-    throw new HttpError(404, "Leave request not found.", "NOT_FOUND");
-  }
-  return formatLeaveRequestRow(row);
+  if (isSelf) return { ...formatLeaveRequestRow(row), onBehalfOf: null };
+  const inOwnScope = viewer.permissions.has("leave.view") && (await isEmployeeInScope(row.employeeId, viewer.employeeId, scope));
+  if (inOwnScope) return { ...formatLeaveRequestRow(row), onBehalfOf: null };
+  const reach = await resolveApprovalReach(viewer);
+  const via = reach.delegated.get(row.employeeId);
+  if (!via) throw new HttpError(404, "Leave request not found.", "NOT_FOUND");
+  return { ...formatLeaveRequestRow(row), onBehalfOf: { userId: via.userId, name: (await delegatorNames(reach)).get(via.userId) ?? "" } };
 }
 
-async function assertCanDecide(existing: { employeeId: string }, viewer: LeaveViewer): Promise<void> {
+// Returns the delegator when the viewer can decide only through a workflow
+// delegation (E3) — recorded as "on behalf of" on the request and in the
+// audit log — or null when it's within their own scope.
+async function assertCanDecide(existing: { employeeId: string }, viewer: LeaveViewer): Promise<Delegator | null> {
   if (!viewer.permissions.has("leave.approve")) {
     throw new HttpError(403, "Missing permission: leave.approve", "FORBIDDEN");
   }
   if (existing.employeeId === viewer.employeeId) {
     throw new HttpError(403, "You cannot decide your own leave request.", "SELF_APPROVAL_BLOCKED");
   }
-  const scope = viewer.dataScope;
-  if (!(await isEmployeeInScope(existing.employeeId, viewer.employeeId, scope))) {
+  const { reachable, onBehalfOf } = reachFor(await resolveApprovalReach(viewer), existing.employeeId);
+  if (!reachable) {
     throw new HttpError(404, "Leave request not found.", "NOT_FOUND");
   }
+  return onBehalfOf;
+}
+
+// Display names for the delegators in a reach, keyed by user id.
+async function delegatorNames(reach: ApprovalReach): Promise<Map<string, string>> {
+  const byUser = new Map<string, string>();
+  for (const d of reach.delegated.values()) if (!byUser.has(d.userId)) byUser.set(d.userId, await employeeNameOf(d.employeeId));
+  return byUser;
+}
+
+async function employeeNameOf(employeeId: string): Promise<string> {
+  const e = await prisma.employee.findUnique({ where: { id: employeeId }, select: { employeeCode: true, nameHistory: { where: { effectiveTo: null }, select: { fullName: true } } } });
+  return e?.nameHistory[0]?.fullName ?? e?.employeeCode ?? "";
+}
+
+// E3: a decision made on a manager's behalf tells them — they'll want to
+// know what happened while they were away.
+async function notifyDelegatorOfDecision(onBehalfOf: Delegator | null, actorEmployeeId: string, formatted: { id: string; employeeName: string; leaveTypeCode: string; fromDate: string; toDate: string }, outcome: "approved" | "rejected"): Promise<void> {
+  if (!onBehalfOf) return;
+  await notifyEmployee(onBehalfOf.employeeId, {
+    type: "leave.decided.onBehalf",
+    title: `Leave ${outcome} on your behalf`,
+    body: `${await employeeNameOf(actorEmployeeId)} ${outcome} ${formatted.employeeName}'s ${formatted.leaveTypeCode} request (${formatted.fromDate} to ${formatted.toDate}) while covering your approvals.`,
+    link: "/app/workflow-delegates",
+    payload: { leaveRequestId: formatted.id },
+  });
 }
 
 export async function approveLeaveRequest(requestId: string, viewer: LeaveViewer, comments: string | undefined, meta: ActorMeta) {
   const existing = await prisma.leaveRequest.findUnique({ where: { id: requestId }, include: { leaveType: { include: { policy: true } } } });
   if (!existing) throw new HttpError(404, "Leave request not found.", "NOT_FOUND");
-  await assertCanDecide(existing, viewer);
+  const onBehalfOf = await assertCanDecide(existing, viewer);
   if (existing.status !== "PENDING") {
     throw new HttpError(409, `Request is ${existing.status.toLowerCase()}, not pending.`, "NOT_PENDING");
   }
@@ -371,12 +436,12 @@ export async function approveLeaveRequest(requestId: string, viewer: LeaveViewer
 
     return tx.leaveRequest.update({
       where: { id: requestId },
-      data: { status: "APPROVED", decidedByUserId: meta.actorUserId, decidedAt: new Date(), decisionComments: comments ?? null },
+      data: { status: "APPROVED", decidedByUserId: meta.actorUserId, decidedOnBehalfOfUserId: onBehalfOf?.userId ?? null, decidedAt: new Date(), decisionComments: comments ?? null },
     });
   });
 
   await getAttendanceLeaveSink().onLeaveApproved(buildApprovedLeaveDays(updated, existing.leaveType.code));
-  await writeAuditLog({ ...meta, action: "leave.request.approve", entityType: "LeaveRequest", entityId: requestId, before: toAuditJson(existing), after: toAuditJson(updated) });
+  await writeAuditLog({ ...meta, onBehalfOfUserId: onBehalfOf?.userId ?? null, action: "leave.request.approve", entityType: "LeaveRequest", entityId: requestId, before: toAuditJson(existing), after: toAuditJson(updated) });
   const formatted = await reloadFormatted(requestId);
   await notifyEmployee(formatted.employeeId, {
     type: "leave.decided",
@@ -385,6 +450,7 @@ export async function approveLeaveRequest(requestId: string, viewer: LeaveViewer
     link: "/app/leave/balances",
     payload: { leaveRequestId: formatted.id, status: "APPROVED" },
   });
+  await notifyDelegatorOfDecision(onBehalfOf, viewer.employeeId, formatted, "approved");
   emitLeaveDecided({
     leaveRequestId: formatted.id,
     employeeId: formatted.employeeId,
@@ -402,7 +468,7 @@ export async function approveLeaveRequest(requestId: string, viewer: LeaveViewer
 export async function rejectLeaveRequest(requestId: string, viewer: LeaveViewer, comments: string, meta: ActorMeta) {
   const existing = await prisma.leaveRequest.findUnique({ where: { id: requestId } });
   if (!existing) throw new HttpError(404, "Leave request not found.", "NOT_FOUND");
-  await assertCanDecide(existing, viewer);
+  const onBehalfOf = await assertCanDecide(existing, viewer);
   if (existing.status !== "PENDING") {
     throw new HttpError(409, `Request is ${existing.status.toLowerCase()}, not pending.`, "NOT_PENDING");
   }
@@ -414,11 +480,11 @@ export async function rejectLeaveRequest(requestId: string, viewer: LeaveViewer,
     }
     return tx.leaveRequest.update({
       where: { id: requestId },
-      data: { status: "REJECTED", decidedByUserId: meta.actorUserId, decidedAt: new Date(), decisionComments: comments },
+      data: { status: "REJECTED", decidedByUserId: meta.actorUserId, decidedOnBehalfOfUserId: onBehalfOf?.userId ?? null, decidedAt: new Date(), decisionComments: comments },
     });
   });
 
-  await writeAuditLog({ ...meta, action: "leave.request.reject", entityType: "LeaveRequest", entityId: requestId, before: toAuditJson(existing), after: toAuditJson(updated) });
+  await writeAuditLog({ ...meta, onBehalfOfUserId: onBehalfOf?.userId ?? null, action: "leave.request.reject", entityType: "LeaveRequest", entityId: requestId, before: toAuditJson(existing), after: toAuditJson(updated) });
   const formatted = await reloadFormatted(requestId);
   await notifyEmployee(formatted.employeeId, {
     type: "leave.decided",
@@ -427,6 +493,7 @@ export async function rejectLeaveRequest(requestId: string, viewer: LeaveViewer,
     link: "/app/leave/balances",
     payload: { leaveRequestId: formatted.id, status: "REJECTED" },
   });
+  await notifyDelegatorOfDecision(onBehalfOf, viewer.employeeId, formatted, "rejected");
   emitLeaveDecided({
     leaveRequestId: formatted.id,
     employeeId: formatted.employeeId,

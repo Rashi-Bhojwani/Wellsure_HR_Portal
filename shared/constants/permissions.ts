@@ -48,6 +48,8 @@ export const PERMISSION_KEYS = [
   "manager.appoint", // promote an employee to manager / remove a manager (team must be empty)
   "manager.team.assign", // move employees into and out of a manager's team (effective-dated)
   "manager.permissions.manage", // per-manager permission exceptions (meta; manager-grantable keys only)
+  // Phase 5 — Workflow Delegates (commit E3)
+  "delegation.manage", // see and manage anyone's approval delegations (a manager manages their own with no key)
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
@@ -118,6 +120,7 @@ export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
   "manager.appoint": { group: "Managers", label: "Appoint and remove managers", description: "Promote an employee to manager, or remove a manager once their team has been reassigned." },
   "manager.team.assign": { group: "Managers", label: "Assign teams", description: "Move employees into and out of a manager's team (effective-dated), and work the Unassigned list." },
   "manager.permissions.manage": { group: "Managers", label: "Manager permission exceptions", description: "Grant or revoke individual permissions for a manager — only from the manager-grantable list, never sensitive data.", meta: true },
+  "delegation.manage": { group: "Managers", label: "Workflow delegations", description: "See every manager's approval delegations, set one up for a manager, and revoke one. Moves no permission: a delegate must already hold Approve leave." },
   "helpdesk.manage": { group: "Helpdesk", label: "Helpdesk queue", description: "Work the ticket queue: assign, status, replies, internal notes, categories." },
   "helpdesk.sensitive.view": { group: "Helpdesk", label: "Sensitive tickets", description: "See tickets in categories marked sensitive (e.g. Payroll & Salary, Grievance)." },
 };

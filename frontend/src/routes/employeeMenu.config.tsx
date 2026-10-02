@@ -43,6 +43,7 @@ import { PeoplePage } from "../pages/employee/people/PeoplePage";
 import { HelpdeskPage } from "../pages/employee/helpdesk/HelpdeskPage";
 import { RequestHubPage } from "../pages/employee/request-hub/RequestHubPage";
 import { TasksPage } from "../pages/employee/todo/TasksPage";
+import { WorkflowDelegatesPage } from "../pages/employee/workflow-delegates/WorkflowDelegatesPage";
 
 // Single source of truth for the Employee portal left sidebar
 // (docs/UI_REFERENCE.md §1.0). The sidebar, the route tree and the
@@ -251,6 +252,6 @@ export const employeeMenu: EmployeeMenuEntry[] = [
     label: "Workflow Delegates",
     path: "workflow-delegates",
     icon: SwapOutlined,
-    phase: "Phase 5",
+    element: WorkflowDelegatesPage,
   },
 ];

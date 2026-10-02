@@ -4,6 +4,7 @@ export interface AuditLogRow {
   id: string;
   actorEmployeeCode: string | null;
   actorName: string | null;
+  onBehalfOfName: string | null; // E3: acted while covering this manager's approvals
   action: string;
   entityType: string;
   entityId: string;

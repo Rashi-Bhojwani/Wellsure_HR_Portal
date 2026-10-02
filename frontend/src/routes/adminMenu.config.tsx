@@ -65,6 +65,7 @@ import { HelpdeskCategoriesPage } from "../pages/admin/helpdesk/HelpdeskCategori
 import { AdminTasksPage } from "../pages/admin/tasks/AdminTasksPage";
 import { LetterTemplatesPage } from "../pages/admin/letters/LetterTemplatesPage";
 import { RolesPermissionsPage } from "../pages/admin/adminTools/RolesPermissionsPage";
+import { WorkflowDelegatesAdminPage } from "../pages/admin/adminTools/WorkflowDelegatesAdminPage";
 import { ManagerManagementPage } from "../pages/admin/adminTools/ManagerManagementPage";
 
 // Single source of truth for the HR/Admin portal's App Switcher and each
@@ -261,7 +262,7 @@ export const adminApps: AdminApp[] = [
           { key: "week-off-patterns", label: "Week-off Patterns", path: "admin-tools/week-offs", icon: CalendarOutlined, phase: "Phase 2" },
           { key: "leave-types-policies", label: "Leave Types & Policies", path: "admin-tools/leave-policies", icon: SolutionOutlined, element: LeaveTypesPoliciesPage },
           { key: "approval-workflows", label: "Approval Workflows", path: "admin-tools/workflows", icon: BranchesOutlined, phase: "Phase 5" },
-          { key: "workflow-delegates-admin", label: "Workflow Delegates", path: "admin-tools/delegates", icon: UserSwitchOutlined, phase: "Phase 5" },
+          { key: "workflow-delegates-admin", label: "Workflow Delegates", path: "admin-tools/delegates", icon: UserSwitchOutlined, element: WorkflowDelegatesAdminPage },
           { key: "users-roles", label: "Roles & Permissions", path: "admin-tools/users-roles", icon: TeamOutlined, element: RolesPermissionsPage },
           { key: "managers", label: "Manager Management", path: "admin-tools/managers", icon: ApartmentOutlined, element: ManagerManagementPage },
           { key: "helpdesk-categories", label: "Helpdesk Categories", path: "admin-tools/helpdesk-categories", icon: CustomerServiceOutlined, element: HelpdeskCategoriesPage },

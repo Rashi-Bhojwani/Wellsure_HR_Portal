@@ -15,7 +15,7 @@ committed).
 | 2 | Biometric ingestion + attendance engine + real-time | Not started |
 | 3 | Attendance administration | Not started |
 | 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
-| 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | In progress — commit A done (notifications substrate, Employee Home, Admin Homepage Welcome + Dashboard tabs), commit B done (Engage), commit C done (People directory + org chart, employee photos, Document Center, HR-held employee documents), commit D done (Helpdesk, Request Hub, Tasks inbox), commit D2 done (letter templates + PDF generation), commit E1 done (roles & permissions, Super Admin guarantees, bootstrap/recovery CLIs), E1.1 done (append-only audit log, loud break-glass, manager data leaks), commit E2 done (three-level hierarchy model A, Manager Management, manager-grantable list, endpoint audit). E3–G (Workflow Delegates, Reports, Mobile/PWA) not started — full plan in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
+| 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | In progress — commit A done (notifications substrate, Employee Home, Admin Homepage Welcome + Dashboard tabs), commit B done (Engage), commit C done (People directory + org chart, employee photos, Document Center, HR-held employee documents), commit D done (Helpdesk, Request Hub, Tasks inbox), commit D2 done (letter templates + PDF generation), commit E1 done (roles & permissions, Super Admin guarantees, bootstrap/recovery CLIs), E1.1 done (append-only audit log, loud break-glass, manager data leaks), commit E2 done (three-level hierarchy model A, Manager Management, manager-grantable list, endpoint audit), commit E3 done (Workflow Delegates). F–G (Reports, Mobile/PWA) not started — full plan in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
 | 5.5 | AWS production environment and go-live hardening | Not started |
 | 6 | Payroll | Not started |
 | 7 | Tax & benefits | Not started |
@@ -3250,6 +3250,80 @@ can stay running during a test run with no interaction at all.
 CI still migrates and seeds `wellsure_hr` before testing. That checks the
 dev setup path works from scratch; the suite itself then builds
 `wellsure_hr_test`.
+
+### Phase 5, commit E3 — Workflow Delegates
+
+Plan and as-built notes: [`docs/plans/PHASE_5.md`](plans/PHASE_5.md) §E3,
+written from the user's requirements of 2026-10-02 before building. Spec
+§2.4 added.
+
+**What a delegation is.** A manager hands their leave approvals to
+someone who **already holds `leave.approve`**, for an inclusive date range.
+- Nothing is granted. `modules/delegations/reach.ts` is the one place that
+  adds the delegator's current team to the delegate's reach, and only in
+  the approval flows: the review queue, request detail, approve, reject
+  and bulk approve, the requester's balances, and Tasks.
+- **Not transitive.** The delegator keeps their own access.
+- **Self-approval stays blocked**, including for a delegate who is in the
+  delegator's team.
+- **No overlaps:** overlapping non-revoked delegations from one delegator
+  are refused under a row lock, so two simultaneous requests can't both
+  pass.
+- **Revoke, never delete.**
+
+**On behalf of.**
+- `audit_logs.on_behalf_of_user_id` and
+  `leave_requests.decided_on_behalf_of_user_id` record the delegator next
+  to the real actor.
+- The Audit Log viewer shows "Priya Nair on behalf of Karan Kapoor".
+- Review tags such requests "On behalf of …".
+- The delegator gets an FYI notification for each decision made for them.
+
+**Super Admins don't delegate** (recommendation recorded in the plan):
+- the two Super Admins already cover each other;
+- HR Admins (ALL scope) can approve any manager's leave;
+- delegating to a manager would create peer approval.
+
+Only MANAGER holders can be delegators. Everyone else is told why.
+
+**Screens.**
+- **Workflow Delegates** in the employee portal: a manager's own
+  delegations (create, revoke), plus "You're covering" for anyone who is a
+  delegate.
+- **Admin Tools → Workflow Delegates** for HR (`delegation.manage`, new,
+  HR_ADMIN by default): everyone's, with a status filter. HR can set one
+  up for a manager and revoke any.
+- A delegate who has lost `leave.approve` is flagged "Can't approve".
+
+**Realtime.**
+- New requests reach active delegates (`leave.applied` + notification).
+- `delegation.changed` refreshes both people's screens and HR's.
+
+**Migration** `e3_workflow_delegates`:
+- the `workflow_delegates` table, with CHECKs (range; not self);
+- the two on-behalf columns;
+- `delegation.manage` granted to HR_ADMIN.
+
+**Verified:**
+- a fresh devcheck seed;
+- the full backend and frontend suites, lint and typecheck;
+- `delegations.test.ts`, 17 cases: every rule, including the concurrent
+  overlap, non-transitivity, scheduled/ended/revoked reach, and a delegate
+  losing the permission;
+- the route inventory (9 new routes classified);
+- a multi-browser walkthrough:
+  - a Super Admin is told why they don't delegate;
+  - Karan (1002) delegates to Priya (1003) in the UI;
+  - Arjun's new request appears in Priya's Review within ~0.1 s, tagged
+    "On behalf of Karan Kapoor";
+  - Priya approves it, and the request records decided by 1003 on behalf
+    of 1002;
+  - Karan is notified;
+  - HR sees the delegation with "1 decided on their behalf", and the audit
+    log names both;
+  - HR revokes it, and Kavya's pending request leaves Priya's queue with
+    no reload;
+  - no console errors.
 
 ## Open questions
 

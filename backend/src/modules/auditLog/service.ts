@@ -52,7 +52,7 @@ export async function listAuditLogs(query: ListAuditLogQuery) {
       take: query.pageSize,
     }),
   ]);
-  const actorIds = [...new Set(rows.map((r) => r.actorUserId).filter((id): id is string => Boolean(id)))];
+  const actorIds = [...new Set(rows.flatMap((r) => [r.actorUserId, r.onBehalfOfUserId]).filter((id): id is string => Boolean(id)))];
   const actorRows = await prisma.user.findMany({
     where: { id: { in: actorIds } },
     select: { id: true, employee: { select: { employeeCode: true, nameHistory: { where: { effectiveTo: null }, select: { fullName: true } } } } },
@@ -67,6 +67,8 @@ export async function listAuditLogs(query: ListAuditLogQuery) {
       id: r.id,
       actorEmployeeCode: (r.actorUserId && actorById.get(r.actorUserId)?.employeeCode) ?? null,
       actorName: (r.actorUserId && actorById.get(r.actorUserId)?.nameHistory[0]?.fullName) ?? null,
+      // E3: the manager whose approvals the actor was covering.
+      onBehalfOfName: (r.onBehalfOfUserId && (actorById.get(r.onBehalfOfUserId)?.nameHistory[0]?.fullName ?? actorById.get(r.onBehalfOfUserId)?.employeeCode)) ?? null,
       action: r.action,
       entityType: r.entityType,
       entityId: r.entityId,
