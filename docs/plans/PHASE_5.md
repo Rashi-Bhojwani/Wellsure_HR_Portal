@@ -832,44 +832,329 @@ Built to the plan above. Additions and corrections:
   (the path is kept). The Access tab shows to Super Admins and to holders
   of `role.view` or `user.security.manage`.
 
-### E2 — Three-level hierarchy on top of E1
+### E1.1 — Making break-glass recovery loud (PROPOSED 2026-10-02, awaiting approval)
 
-- **Structure:** strictly three flat levels: Admin (SUPER_ADMIN) → Managers
-  (report directly to Admin) → Employees (report to a Manager). Managers
-  never report to managers. HR_ADMIN reports to Admin and never manages a
-  team (as the commit C seed assertion already models).
-- **New permissions:** `manager.appoint`, `manager.team.assign` and
-  `manager.permissions.manage` (meta). **HR_ADMIN holds all three by
-  default** (user decision); SUPER_ADMIN can revoke them.
-- **Manager Management** (Admin Tools):
-  - Every manager with team size, department and branch.
-  - Promote an employee to manager (assigns `MANAGER`).
-  - Demote, which requires reassigning the whole team first.
-  - Open a manager to add or remove team members. Every move writes an
-    effective-dated `EmployeeJobHistory` row, never an in-place overwrite.
-    All audit-logged.
-  - A **Permissions** tab reusing E1's Access view: the default is the
-    MANAGER role (edited only by SUPER_ADMIN), and per-manager differences
-    are E1 overrides.
-  - An **Unassigned employees** list.
-- **Validation** in the service layer and the Excel import, reusing
-  `lib/reportingHierarchy.ts`: a reporting manager must hold MANAGER, and a
-  manager's own reporting manager can only be Admin.
-- **Enforcement:** an audit of every manager-reachable endpoint for both
-  checks (permission and team scope), with IDOR tests for acting outside
-  your own team while holding the permission.
-- The recursive team-scope query stays, with a note in code and spec that
-  exactly three levels are supported. Spec §2 is rewritten for the
-  two-level admin model, the three-level structure, overrides and the
-  lockout rules.
-- **Answered questions:**
-  - An employee with no manager is **allowed at creation** and surfaced in
-    the Unassigned list, plus a count on the admin dashboard.
-  - A manager's own leave is **approved by Admin**: managers report to
-    SUPER_ADMIN, so it lands in their Review queue, and HR_ADMIN can
-    approve via Employee Leave if it holds `leave.approve`.
-  - HR_ADMIN's own leave goes to SUPER_ADMIN.
-  - Self-approval stays blocked.
+The user's requirement (2026-10-02): `admin:recover` must keep working when
+everything else is broken, but **nobody may use it without the other Super
+Admin finding out.**
+
+**How E1 actually stands** (checked in the code, not assumed):
+
+| Question | E1 today |
+|---|---|
+| Logged somewhere that survives? | **Partly.** One `audit_logs` row per action, with no actor. But `audit_logs` is append-only only by convention: spec §9 says append-only, and nothing in the database enforces it. Anyone with the database access the CLI needs can delete the row afterwards. Nothing is written outside the database. |
+| Alerts the other Super Admin by email? | **No.** Only the password-reset link email goes, and that goes to the *target*. |
+| Refuses unless the in-app routes are unavailable? | **No, that's convention only.** The CLI never checks. |
+| Reason mandatory and recorded? | **Mandatory, yes** (≥3 characters). **Recorded: only for reset-2FA and password-reset.** `--unlock` drops the reason (`adminUnlock` never stores it), a gap. |
+
+**A hard limit to be honest about:** whoever can run this CLI has a shell in
+a backend container and the database credentials. They can bypass the CLI
+completely, with SQL or modified code. So the CLI being loud protects the
+honest path and catches the casual one. The real backstop has to be records
+that *the app's own database access can't erase*. The proposal therefore
+works on both layers.
+
+**Proposed changes:**
+
+1. **Alert before acting, to everyone who must know.** Before changing
+   anything, the CLI:
+   - emails **every active Super Admin, the target included**, at their
+     personal email: what was done, to whom, the reason, when, and from
+     where (container hostname, ECS task id when present, operator name);
+   - emails a `SECURITY_ALERT_EMAIL` address when one is configured (new,
+     optional env var, e.g. an owners' shared inbox outside this system).
+
+   If the mail send fails, the CLI **stops** unless `--mail-is-down` is
+   passed. With that flag it proceeds, queues the alert to retry until mail
+   works, and still does steps 2–4.
+2. **A persistent in-app alarm.** A new append-only `security_events`
+   table. Each row raises:
+   - a red banner on the Admin home for every Super Admin, which stays
+     until a Super Admin **other than the target** acknowledges it
+     (acknowledgement recorded);
+   - an `access.alert` notification.
+3. **A copy outside the database.** A structured `security.breakglass`
+   log line (no secrets) goes to stdout, which is CloudWatch Logs in AWS.
+   For Phase 1.5 infra:
+   - a CloudWatch metric filter and alarm emailing the owners through SNS;
+   - ECS Exec session logging to CloudWatch/S3, plus CloudTrail. These
+     record *which AWS identity* opened the shell, which the CLI itself
+     can't know.
+4. **`audit_logs` made actually append-only.** A trigger refuses UPDATE and
+   DELETE. Test cleanup needs to delete fixture rows, so the trigger lets
+   through only a session that sets `app.audit_purge = 'test'`, and only
+   when the database name ends in `_test` or `_devcheck`. (The trigger
+   reads `current_database()`, so production can't use the escape hatch.)
+   Phase 1.5 adds the stronger layer: the app's database role has no
+   UPDATE/DELETE grant on `audit_logs` at all, and only the migrate role
+   owns the table.
+5. **"Only when the in-app routes fail" stays a judgement, not a check,
+   but it becomes explicit and recorded.** The CLI can't verify that the
+   other Super Admin is unreachable, and a hard block would break the
+   both-locked-out case. Instead, it:
+   - lists the other active Super Admins and when each last signed in;
+   - requires `--confirm-no-other-admin "<why the in-app route can't be
+     used>"`.
+
+   That text goes into the audit row, the security event and the alert
+   email.
+6. **Reason on every action.** Required for unlock too (fixing the gap),
+   minimum 10 characters, stored in the audit row of each action.
+   `--operator "<name>"` is required. It's self-declared, so the CloudTrail
+   identity from step 3 is what's authoritative.
+7. **The in-app path is loud too.** When one Super Admin resets another's
+   2FA, unlocks them or sends them a reset link from the Access tab, the
+   target gets an email naming who did it.
+   - Recovery step 1 legitimately happens in the app, but a compromised
+     Super Admin account must not be able to silently take over the other.
+   - The same email goes to any user whose sign-in security is changed by
+     an admin.
+8. **`admin:bootstrap`** writes the same security event and log line, and
+   emails `SECURITY_ALERT_EMAIL` when set. No other Super Admin exists to
+   tell yet.
+9. **The direct-SQL last resort** (GETTING_STARTED §12, step 4) can't be
+   made loud from inside the app. The doc will say so, and point to the
+   Phase 1.5 RDS log export / pgaudit on the `users` and `audit_logs`
+   tables as its trail.
+
+**Tests:**
+- the alert reaches every active Super Admin and the security address;
+- the CLI stops when mail fails, and `--mail-is-down` queues the alert;
+- the security event and banner appear, and acknowledgement by the target
+  is refused;
+- the audit trigger refuses update and delete, and the purge escape hatch
+  is refused on a database without the dev/test suffix;
+- reason and operator are recorded for every action, unlock included;
+- the in-app reset emails the target.
+
+Built as a small commit of its own, **before E2**, if approved.
+
+### E2 — Three-level hierarchy and Manager Management (PLAN v2, 2026-10-02, awaiting approval)
+
+Carried over from the approved outline (2026-09-30):
+- three flat levels;
+- `manager.appoint`, `manager.team.assign` and `manager.permissions.manage`
+  (meta), held by HR_ADMIN by default and revocable by SUPER_ADMIN;
+- unassigned employees allowed and listed;
+- a manager's own leave is approved by Admin, HR_ADMIN's by SUPER_ADMIN;
+- no self-approval.
+
+Below is what's new or decided now.
+
+#### The hierarchy model (open since commit C) — recommendation
+
+Two options for where managers hang:
+
+**A. Managers have no `reportingManagerId`. A synthetic "Admin" root sits
+above them.**
+- Pro: the two owners are symmetric. Neither is arbitrarily "the" boss of
+  every manager.
+- Pro: when a Super Admin changes or leaves, no manager has to be moved.
+  With B, every manager's job history needs a new row, and that interacts
+  with the last-Super-Admin lock.
+- Pro: a manager's leave reaches **both** Super Admins (and HR_ADMIN via
+  Employee Leave), not one person's queue. Under B it stalls if that one
+  Super Admin is away, until E3 delegates exist.
+- Pro: "who is at manager level" is answered by the role, the single
+  source of truth, rather than by a pointer that can drift.
+- Con: a special case in three places:
+  - **Leave routing:** a request from someone with no reporting manager
+    goes to Admin rather than to `manager:<id>`. This needs a new
+    `admins` socket room for SUPER_ADMIN holders. Approval itself needs no
+    change: Super Admins already see every pending request through ALL
+    scope + `leave.approve`.
+  - **The org chart root.**
+  - **The Unassigned rule:** a null manager is normal for MANAGER and
+    HR_ADMIN, and a problem for anyone else.
+- Con: job history no longer records "reports to Admin". That carries no
+  information anyway, since every manager does.
+- Con: the seed and any existing data need one effective-dated row per
+  manager (and HR_ADMIN) clearing the pointer. Only devcheck data exists
+  today; production has none.
+
+**B. Managers keep a `reportingManagerId` that must point to a SUPER_ADMIN
+holder.**
+- Pro: no special cases. Leave routing, the recursive team query and the
+  chart all work as they do today. It's the smaller change: the seed is
+  already shaped this way.
+- Con: the arbitrary choice between two owners, and the mass reassignment
+  on any Super Admin change.
+- Con: a manager's leave lands with one person.
+- Con: a second rule to keep in sync: "points to a SUPER_ADMIN" must be
+  re-validated whenever someone loses that role. The last-Super-Admin
+  triggers protect *having* one, not *which* one managers point to.
+
+**Recommendation: A.** The deciding factors are the two owners and owner
+turnover. B is cheaper by about a day, but it bakes a single point of
+approval and a maintenance chore into the structure.
+
+The rules under A, enforced in the service layer, the Excel import and the
+seed assertion (`lib/reportingHierarchy.ts`, rewritten):
+
+| Holder | Reporting manager |
+|---|---|
+| SUPER_ADMIN | none (they *are* the Admin root) |
+| MANAGER | none; sits under the Admin root; may not also be HR_ADMIN |
+| HR_ADMIN | none; sits under the Admin root; never has a team |
+| everyone else (incl. HR_EXECUTIVE, PAYROLL_ADMIN, APPROVER) | must be an active MANAGER holder, or none, which puts them in **Unassigned** |
+
+A reporting manager must always hold MANAGER: never an Admin, never a plain
+employee.
+
+#### Manager Management (Admin Tools, replaces the placeholder)
+
+- **List:** every manager with team size, department, branch, and a "0
+  reports" state.
+- **Appoint** (`manager.appoint`):
+  - assigns MANAGER;
+  - clears their own reporting line with an effective-dated job row;
+  - refused for SUPER_ADMIN and HR_ADMIN holders.
+- **Remove a manager** (`manager.appoint`):
+  - refused while the team isn't empty ("reassign the N team members
+    first", with a link);
+  - the dialog requires choosing **their** new manager (effective-dated),
+    since they become a plain employee;
+  - removes MANAGER.
+- **Team** (`manager.team.assign`):
+  - add or remove members, singly or in bulk from the Unassigned list;
+  - every move is a new `EmployeeJobHistory` row (copying department,
+    designation, branch and so on), never an in-place edit;
+  - the effective date defaults to today and **may not be in the future**
+    (see the finding below);
+  - all audited with before and after;
+  - realtime `team.changed` goes to the old and new managers;
+  - pending leave follows the employee automatically. Approval is resolved
+    from the *current* team at decision time; tested.
+- **Permissions tab:** E1's Access view for that manager. The default comes
+  from the MANAGER role (edited only by SUPER_ADMIN). Per-manager
+  differences are E1 overrides. Non-Super-Admins need
+  `manager.permissions.manage`, and rules 3 and 4 still apply.
+- **Unassigned employees:** active people who need a manager but have none,
+  whose manager is inactive or no longer holds MANAGER, or who have no job
+  placement at all. It shows a count on the Admin dashboard.
+- **Separating a manager who still has a team** is allowed. When it
+  completes, the team shows up in Unassigned, and holders of
+  `manager.team.assign` get a notification.
+
+#### Which permissions a manager may ever hold — a new guard (recommendation)
+
+A finding from planning: overrides let a SUPER_ADMIN or HR_ADMIN grant a
+manager **any** key they hold, but most endpoints were written for ALL-scope
+roles and **don't apply data scope**. For example, `employee.edit`'s job
+update takes any employee id. A manager granted `employee.edit` today could
+edit people outside their team.
+
+Recommendation:
+- a `managerGrantable` flag in the permission catalog, initially:
+  - `employee.view`
+  - `leave.view`
+  - `leave.approve`
+  - `leave.apply.onBehalf`
+  - `employee.documents.view`
+  - `letters.generate`
+
+  These are the keys whose endpoints already apply data scope.
+  `helpdesk.manage` is deliberately excluded: the helpdesk queue isn't
+  team-scoped, so a manager holding it would see every ticket.
+- **No one, Super Admin included, can give a MANAGER holder a key outside
+  that list**, whether through the MANAGER role or an override. Every key
+  on the list gets a TEAM-scope check and an IDOR test at every endpoint
+  (the audit below).
+- Sensitive-data keys (`employee.bank.*`, `employee.statutory.*`, later
+  salary) are **not** on the list, which keeps spec §2's "only
+  HR_ADMIN/PAYROLL_ADMIN/SUPER_ADMIN see salary or bank data". Widening
+  the list later is a code change with its own scope tests, never a
+  checkbox.
+
+#### Endpoint audit (manager reach)
+
+- A **route-inventory guard test**, like the cleanup guard. It walks the
+  Express router and fails on any route not classified as one of:
+  - `public`;
+  - `self` (the caller's own data);
+  - `scoped` (permission + data scope);
+  - `org-wide`, with a stated reason;
+  - `admin-only` (a key that can't be manager-grantable).
+
+  New routes can't slip through unclassified.
+- For every `scoped` route reachable with a manager-grantable key, an IDOR
+  test: a manager holding the key, acting on someone **outside** their
+  team, gets 404 (the existing convention), and on their own team member
+  succeeds.
+- **Finding to fix in E2:** two dashboards are `org-wide` today and
+  reachable by every manager:
+  - `GET /api/admin/dashboard` (gated on `employee.view`);
+  - `GET /api/leave/dashboard` (gated on `leave.view`).
+
+  Managers currently see company-wide aggregates there: headcount,
+  leave-day totals by month and type. Proposal: TEAM-scoped viewers get
+  the same widgets computed over their team only.
+- **Finding, noted, not fixed in E2:** a *future-dated* job change
+  (`updateJob` accepts any date) becomes the "current" row
+  (`effective_to IS NULL`) immediately, so scope queries act on it early.
+  E2 avoids this for team moves by refusing future dates. A general fix
+  (scope queries reading `effective_from <= today`) is listed for a later
+  commit.
+
+#### Org chart
+
+- The root is a synthetic **Admin** card naming the Super Admins. Under it
+  sit the managers and HR Admins.
+- Each node gets a `kind`: `admin`, `manager`, `adminStaff` or `employee`.
+  - **A manager always carries a "Manager" badge with a team count, "0" (or
+    "No team yet") included.**
+  - An HR Admin carries an "HR Admin" badge and no count.
+  - A plain employee has neither.
+
+  So Rohan Mehta (HR Admin, no team) can no longer be mistaken for a
+  manager with an empty team, or for an employee.
+- An "Unassigned" group at the bottom is visible only to holders of
+  `manager.team.assign`. (Today the chart computes `unassignedIds` but
+  never shows them.)
+
+#### Seed
+
+- Managers and 1001 get their reporting line cleared, via effective-dated
+  rows.
+- Seed one manager with zero reports (a new fake account) and one
+  unassigned employee, so both states are visible.
+- The seed assertion uses the new rules.
+
+#### Spec
+
+§2 is rewritten for:
+- the admin model;
+- the three levels under model A;
+- manager-grantable keys;
+- overrides;
+- the lockout rules.
+
+#### Tests
+
+- every hierarchy rule, through the service, the import and the seed
+  assertion;
+- appoint and remove, including removal refused while the team isn't
+  empty;
+- a team move writes an effective-dated row and refuses a future date;
+- pending leave follows a moved employee;
+- a manager's leave reaches both Super Admins;
+- the Unassigned list;
+- the manager-grantable guard (the role and override paths, the Super
+  Admin included);
+- the route-inventory guard;
+- IDOR per scoped route;
+- the dashboards narrowed to the team;
+- the org-chart `kind`;
+- realtime `team.changed`.
+
+#### Verification
+
+As usual:
+- a fresh devcheck seed, the full suites, lint and typecheck;
+- a two-browser walkthrough: HR moves an employee and the old and new
+  managers' screens update live, and a manager sees only their team
+  everywhere;
+- docs updated, CI green, `main` fast-forwarded.
 
 ### E3 — Workflow Delegates
 
