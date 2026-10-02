@@ -3057,6 +3057,72 @@ The full survey is in the plan.
   - all four leak fixes.
 - Frontend lint, typecheck and tests clean.
 
+### Interim — test isolation and CI determinism (2026-10-02)
+
+Prompted by a docs-only commit failing CI (run #11). The user's bar: a red
+CI run must always mean a real problem.
+
+**What happened.** Two separate things:
+- **CI run #11:** two letters tests that render a real PDF in headless
+  Chromium hit vitest's 5 s default timeout on a slow runner. The same code
+  was green before and after.
+- **Locally only:** a dev worker left running consumed the test suite's
+  queued letter jobs. Both used Redis database 0.
+
+**Fixed (commits 8699238, d77a4ff, a9a4606):**
+- **Redis isolation.** Under vitest, `config/env.ts` moves the suite to its
+  own Redis logical database (`REDIS_TEST_DB`, default 15): queues,
+  caches and rate limits. It also gives the suite its own Socket.IO pub/sub
+  channel (`SOCKET_IO_REDIS_KEY` + `-test`), because Redis pub/sub isn't
+  scoped by database number. It refuses to start if dev's `REDIS_URL`
+  already uses the test database. `testRedisIsolation.test.ts` proves a
+  job queued on either side is invisible to the other. A running
+  `npm run dev` can no longer take or see the suite's jobs and broadcasts.
+- **Timeouts.** A global `testTimeout` of 30 s and `hookTimeout` of 60 s.
+  They only change how long a genuinely stuck test takes to fail. The
+  e-mail polling helpers got a 20 s deadline.
+- **Wall-clock coupling.** The e-mail polling helpers compared file mtimes
+  with the process clock, which is fragile on coarse-mtime filesystems.
+  They now match on the unique recipient.
+- **Tests that read "the newest audit row in the database"** instead of
+  their own:
+  - the export test could be beaten by the seed's sample export row;
+  - the settings test would have passed even if its own write logged
+    nothing.
+
+  Both are now scoped to their own actor. No other unscoped audit lookups
+  remain.
+
+**How determinism was checked.** Not by inspection alone. Seed and the
+full suite were run with the process clock shifted (a `node --import`
+preload) to:
+- 31 Dec 19:00 UTC, already 1 Jan in IST: a leave-year rollover;
+- 28 Feb 19:00 UTC, already 1 Mar in IST: a month end;
+
+as well as at the real time. The only failure at the shifted instants was
+the export-test lookup above (fixed, then re-verified at the shifted
+time). The full suite on a fresh seed is 495/495. Expected-error noise in
+the Postgres log (duplicate keys, trigger refusals) comes from negative
+tests and is not a failure signal.
+
+**What can still make CI red without a code defect** (known and accepted,
+each recognisable):
+- **External services:** npm registry, Docker Hub / Alpine package mirrors,
+  GitHub's runner or service containers. These fail in the Install,
+  Docker-build or "Initialize containers" steps, not in Test. If Test
+  itself is red, treat it as real.
+- **A run that straddles IST midnight** (18:30 UTC) could see "today"
+  change between a fixture being created and asserted on. The window is
+  the few seconds of any one test. It hasn't been observed, but the
+  shifted-clock runs can't rule it out.
+- **The runner's Chrome is updated with GitHub's runner image.** PDF tests
+  compare renders within one run, so an update can't cause a mismatch. A
+  real rendering regression in new Chrome would still show as a
+  (legitimate) failure.
+- **Locally only:** tests share the Postgres database with the dev app, so
+  changing settings in the dev UI during a run can interfere. CI has no dev
+  app.
+
 ## Open questions
 
 Carried from spec §14 — configurable, not guessed, until answered:
