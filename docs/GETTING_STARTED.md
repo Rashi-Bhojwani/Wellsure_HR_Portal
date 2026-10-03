@@ -232,6 +232,15 @@ who can already approve leave (e.g. `1003`). For those dates the delegate's
 of …". HR (`1001`) sees and manages everyone's under Admin Tools → Workflow
 Delegates. Super Admins and HR Admins don't delegate (spec §2.4).
 
+**Reports.** The Reports app (`/admin/reports`) has headcount, joiners,
+leavers & attrition, birthdays & anniversaries, leave balance, leave
+liability and LOP, each with an Excel export. A manager (e.g. `1002`) sees
+their own team. Leave liability is HR Admin / Payroll Admin only.
+- **The seed writes no leave ledger entries,** so every balance is 0 until
+  you grant leave (Workforce → Leave Granter) or run the accrual job.
+- **Liability needs a daily rate** (System Settings → Leave), which is
+  provisional until the CA confirms it.
+
 **Helpdesk.** Six categories are seeded. **Payroll & Salary** and
 **Grievance** are *sensitive*: only roles holding `helpdesk.sensitive.view`
 (HR Admin, Super Admin) see their tickets, and HR Executives don't. Toggle

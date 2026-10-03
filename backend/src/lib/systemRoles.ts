@@ -48,6 +48,8 @@ const HR_EXECUTIVE_PERMS: string[] = [
   "helpdesk.manage",
   // Phase 5 commit D2 — issuing letters (templates themselves are HR_ADMIN+).
   "letters.generate",
+  // Phase 5 commit F — the Reports app (leave liability is HR_ADMIN+ only).
+  "reports.view",
 ];
 const HR_ADMIN_PERMS: string[] = [
   ...HR_EXECUTIVE_PERMS,
@@ -75,8 +77,10 @@ const HR_ADMIN_PERMS: string[] = [
   "manager.permissions.manage",
   // Phase 5 commit E3 — Workflow Delegates.
   "delegation.manage",
+  // Phase 5 commit F — leave liability (salary-derived from Phase 6).
+  "reports.liability.view",
 ];
-const PAYROLL_ADMIN_PERMS = ["employee.view", "employee.bank.view", "employee.statutory.view", "leave.view"];
+const PAYROLL_ADMIN_PERMS = ["employee.view", "employee.bank.view", "employee.statutory.view", "leave.view", "reports.view", "reports.liability.view"];
 // leave.approve/leave.view here is a real fix over commit A's original
 // seed, caught while designing commit B's approve endpoint: MANAGER is
 // TEAM-scoped (its Role.dataScope), but scope alone doesn't grant a
@@ -84,7 +88,7 @@ const PAYROLL_ADMIN_PERMS = ["employee.view", "employee.bank.view", "employee.st
 // team's leave, contradicting "Manager and HR: approve/reject..." (the
 // explicit ask). All three stay TEAM-limited by the role's scope, not by
 // being narrower permission strings.
-const MANAGER_PERMS = ["employee.view", "leave.view", "leave.approve", "leave.apply.onBehalf"];
+const MANAGER_PERMS = ["employee.view", "leave.view", "leave.approve", "leave.apply.onBehalf", "reports.view"];
 const SUPER_ADMIN_PERMS = PERMISSION_KEYS;
 
 export const SYSTEM_ROLES: SystemRoleDefinition[] = [

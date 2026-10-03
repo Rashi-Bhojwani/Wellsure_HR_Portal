@@ -1471,18 +1471,134 @@ Built as planned above. Differences and additions:
   IST business date, so a browser on another timezone could offer a
   "today" the server calls past and get a clear 400 `PAST_START`.
 
-## F — Reports
+## F — Core reports (requirements 2026-10-03; built, pending review)
 
-Scope **[recorded]**: Reports.
+**User requirements (2026-10-03):**
+- The buildable reports: headcount, joiners, leavers and attrition,
+  birthdays and anniversaries, leave balance, leave liability, and LOP.
+- Each gets a filtered list view plus an Excel export through the shared
+  helper.
+- Each is gated by `reports.view` and scope-filtered, so a manager sees
+  only their team.
+- Leave liability is flagged in the UI as dependent on the encashment
+  rate, which is still awaiting the CA, the same way Year End does.
+- Nothing that needs attendance or payroll data. Those arrive with
+  Phases 3 and 6.
 
-Detail **[reconstructed]** (spec §7.6, and §12's "core reports +
-exports"): the reports that exist without attendance or payroll data.
-Likely headcount, joiners, leavers/attrition, birthdays and
-anniversaries, leave balance and leave liability, and LOP (from the leave
-ledger), each with an Excel export. Attendance, salary and statutory
-reports wait for their phases. The custom report builder is Phase 8.
-Covers the admin `reports` app (`/admin/reports`, currently a
-placeholder).
+#### Permissions — two consequences of the requirements
+
+1. **`reports.view` joins the manager-grantable list.** Managers must hold
+   it, and a MANAGER holder can only ever hold grantable keys (spec §2.2).
+   This is the deliberate code change §2.2 describes, with its own scope
+   tests:
+   - every report route is classified `scoped` in the route inventory and
+     listed in `MANAGER_REACHABLE_SCOPED`;
+   - `managerReach.test.ts` proves a manager's rows are their team only,
+     for every report.
+
+   Held by HR_ADMIN, HR_EXECUTIVE, PAYROLL_ADMIN (LOP and leave figures
+   feed payroll) and MANAGER, plus Super Admins.
+2. **Leave liability also needs `reports.liability.view`.** This key is
+   new and **not** manager-grantable. It is held by HR_ADMIN and
+   PAYROLL_ADMIN only.
+   - Liability is days × the encashment daily rate. Today the rate is one
+     flat HR-entered amount, but from Phase 6 it is "one day's salary", so
+     the report reveals salary.
+   - Spec §2 keeps salary from HR_EXECUTIVE, and §2.2 keeps it from
+     managers, non-negotiably. Gating it now means Phase 6 can't silently
+     leak it.
+
+#### The reports
+
+Every report is computed in `modules/reports/` from one definition. The
+definition holds its filters, its columns, a function that builds the
+rows and summary from the viewer's scoped population, and any notes. The
+same rows feed the screen and the export, so the two can't disagree.
+
+Common filters on every report: department, branch and employment type.
+
+| Report | Filters | Rows | Summary |
+|---|---|---|---|
+| **Headcount** | as of a date (default today) | everyone employed on that date (joined on or before it, and not separated before it), with the department/branch/designation **as of that date** | total, by department, by branch |
+| **Joiners** | date range (default: this month) | joined in range | count, by month |
+| **Leavers & attrition** | date range (default: year to date) | completed separations with their last working day in range, with tenure and reason | leavers, opening headcount, closing headcount, **attrition = leavers ÷ average of opening and closing headcount** (the formula is shown on screen), by month, by reason |
+| **Birthdays & anniversaries** | date range (default: the next 30 days, at most a year), and which kind | active employees whose birthday or work anniversary (1 year or more) falls in range. Birthdays show **day and month only, never the year or age**. A 29 Feb birthday falls on 28 Feb in other years. | count of each |
+| **Leave balance** | as of a date, leave type (optional) | one row per active employee, one column per leave type: the ledger sum up to that date, exactly as the Balances screen computes it | totals per type |
+| **Leave liability** | as of a date | balance of each year-end-encashable type (PL) × the daily rate from the same provider Year End uses; a negative balance counts as 0 | total days, rate, total liability. A **warning banner says the rate is provisional pending the CA**. If no rate is configured, it shows days only, with "rate not configured". |
+| **LOP** | date range (default: this month) | approved LOP leave overlapping the range, counted day by day within it (holidays and week-offs excluded, half-days honoured, as `computeTotalLeaveDays` does) | total days, employees affected. Note: **leave LOP only.** Attendance LOP (half-day minimum not met, spec §4.4) arrives with Phase 3. |
+
+#### Scope
+
+- A manager's population is their current team (`buildEmployeeScopeWhere`).
+- Leavers aren't in anyone's current team, so a leaver is in a manager's
+  scope if their last placement reported to the manager or someone in the
+  team. This is the same rule as the E1.1 dashboard.
+- Historical headcount for a manager uses today's team. That's documented
+  on screen, the same as the dashboard.
+
+#### Excel
+
+**The shared helper:** `lib/xlsx.ts` builds a workbook from
+`{ sheet, columns, rows }` plus optional extra sheets for breakdowns. It
+applies a bold header, widths and date/number formats. There wasn't one
+before: the employee grid and Year End each built their own, and both now
+use it.
+- Each report exports its rows on sheet 1, its summary and breakdowns on
+  sheet 2, and a footer noting the filters and "team only" when scoped.
+- Every export is audit-logged as `report.exported`, with the report key,
+  filters, row count and scope.
+
+#### API
+
+| Route | Notes |
+|---|---|
+| `GET /api/reports` | the catalog the viewer can open (liability only with its key) |
+| `GET /api/reports/:key` | the rows, summary, breakdowns and notes |
+| `GET /api/reports/:key/export` | the `.xlsx` |
+
+All three are gated on `reports.view`; liability additionally needs
+`reports.liability.view` in the service.
+
+#### Screens
+
+- **The Reports app** (`/admin/reports`, replacing the placeholder): a
+  landing page of report cards, and one page per report with its filters,
+  summary tiles, breakdown tables, the list (sortable, paginated) and
+  Export.
+- A "Showing your team only" tag appears when scoped.
+- **Leave liability** carries the provisional-rate warning. **Year End**
+  gets the same warning, as one shared component. Until now its only sign
+  was a "Rate Source" column.
+
+#### Tests
+
+- every report's numbers on a fixture: headcount as of a past date,
+  joiners, leavers and the attrition formula, the 29 Feb birthday, balances
+  as of a date, liability with and without a rate, LOP straddling the
+  range and a holiday;
+- manager scope for every report, with the IDOR guard;
+- liability's second key;
+- export through the helper, plus the audit row;
+- the route inventory.
+
+### F as built (2026-10-03)
+
+Built as planned above. Differences found while building:
+
+- **Leavers come from the employee record, not only Separation rows.**
+  The seeded leavers (1028, 1090), like everyone greytHR will import,
+  have `status = SEPARATED` and a last working day but no Separation
+  row in this system. So a leaver is any separated employee whose last
+  working day falls in the range. The reason comes from their completed
+  separation where there is one, else "—".
+- **Headcount never counts a separated employee with no last working
+  day.** Nothing places them in time. Tested.
+- **Leave liability lists only non-zero balances.** It said this on
+  screen; listing everyone at ₹0 drowned the people who matter.
+- **The walkthrough needed real ledger data.** The seed has no leave
+  ledger entries at all (accrual is a scheduled job), so every balance
+  is genuinely 0. In the walkthrough, HR granted PL through Leave
+  Granter and approved an LOP day before checking liability and LOP.
 
 ## G — Mobile / PWA
 

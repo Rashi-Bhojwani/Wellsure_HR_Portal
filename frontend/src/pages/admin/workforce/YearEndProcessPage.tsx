@@ -7,6 +7,7 @@ import * as leaveApi from "../../../api/leave";
 import type { YearEndRunItemRow, YearEndRunRow, YearEndRunStatus } from "../../../api/leave";
 import { HelpStrip } from "../../../components/common/HelpStrip";
 import { EmptyState } from "../../../components/common/EmptyState";
+import { ProvisionalRateAlert } from "../../../components/leave/ProvisionalRateAlert";
 
 const { Title, Text } = Typography;
 
@@ -133,6 +134,7 @@ export function YearEndProcessPage() {
       {detail && (
         <Card size="small" title={`${detail.leaveYear} run detail`} extra={<Tag color={STATUS_COLORS[detail.status]}>{detail.status}</Tag>}>
           <Space orientation="vertical" size={16} style={{ width: "100%" }}>
+            {detail.items.some((i) => i.rateSource === "MANUAL_SETTING") && <ProvisionalRateAlert />}
             <Table<YearEndRunItemRow>
               rowKey="id"
               size="small"

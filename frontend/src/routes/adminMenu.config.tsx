@@ -66,6 +66,8 @@ import { AdminTasksPage } from "../pages/admin/tasks/AdminTasksPage";
 import { LetterTemplatesPage } from "../pages/admin/letters/LetterTemplatesPage";
 import { RolesPermissionsPage } from "../pages/admin/adminTools/RolesPermissionsPage";
 import { WorkflowDelegatesAdminPage } from "../pages/admin/adminTools/WorkflowDelegatesAdminPage";
+import { ReportsHomePage } from "../pages/admin/reports/ReportsHomePage";
+import { CelebrationsReportPage, HeadcountReportPage, JoinersReportPage, LeaveBalanceReportPage, LeaveLiabilityReportPage, LeaversReportPage, LopReportPage } from "../pages/admin/reports/reportPages";
 import { ManagerManagementPage } from "../pages/admin/adminTools/ManagerManagementPage";
 
 // Single source of truth for the HR/Admin portal's App Switcher and each
@@ -200,7 +202,28 @@ export const adminApps: AdminApp[] = [
     label: "Reports",
     icon: PieChartOutlined,
     path: "reports",
-    phase: "Phase 5",
+    element: ReportsHomePage,
+    menus: [
+      {
+        key: "people-reports",
+        label: "People",
+        items: [
+          { key: "report-headcount", label: "Headcount", path: "reports/headcount", element: HeadcountReportPage },
+          { key: "report-joiners", label: "Joiners", path: "reports/joiners", element: JoinersReportPage },
+          { key: "report-leavers", label: "Leavers & attrition", path: "reports/leavers", element: LeaversReportPage },
+          { key: "report-celebrations", label: "Birthdays & anniversaries", path: "reports/celebrations", element: CelebrationsReportPage },
+        ],
+      },
+      {
+        key: "leave-reports",
+        label: "Leave",
+        items: [
+          { key: "report-leave-balance", label: "Leave balance", path: "reports/leave-balance", element: LeaveBalanceReportPage },
+          { key: "report-leave-liability", label: "Leave liability", path: "reports/leave-liability", element: LeaveLiabilityReportPage },
+          { key: "report-lop", label: "Loss of pay (LOP)", path: "reports/lop", element: LopReportPage },
+        ],
+      },
+    ],
   },
   {
     key: "engage-admin",

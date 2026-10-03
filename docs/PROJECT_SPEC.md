@@ -77,6 +77,9 @@ A `MANAGER` holder can only ever hold these keys, all at most `TEAM` scope:
 - `leave.apply.onBehalf`
 - `employee.documents.view`
 - `letters.generate`
+- `reports.view` (added in Phase 5 commit F; every report is computed over
+  the viewer's scope. Leave liability needs `reports.liability.view` too,
+  which is not on this list.)
 
 **This overrules everyone, Super Admin included.**
 - It applies to the `MANAGER` role definition, to per-manager overrides,
@@ -491,6 +494,29 @@ Salary components (earning/deduction, taxable, PF/ESI applicability), salary str
 
 ### 7.6 Reports
 Headcount, joiners, leavers/attrition, birthdays & anniversaries, attendance muster, late-coming, overtime, exceptions, leave balance & leave liability, LOP, salary register, PF/ESI/PT, bank statement, exit report. Plus a **custom report builder** (choose fields, filters, grouping; save; export; schedule by email).
+
+**Built in Phase 5 commit F:**
+- headcount (as of a date);
+- joiners;
+- leavers and attrition (leavers ÷ average of opening and closing
+  headcount);
+- birthdays and anniversaries (day and month only);
+- leave balance (as of a date);
+- leave liability;
+- LOP (leave LOP only).
+
+Each report:
+- is gated by `reports.view` and scope-filtered (a manager sees their
+  team);
+- has a list view and an Excel export through `lib/xlsx.ts`, with each
+  export audited.
+
+Leave liability also needs `reports.liability.view` (HR_ADMIN and
+PAYROLL_ADMIN) because it becomes salary-derived in Phase 6. The UI
+flags its rate as provisional until the CA confirms it.
+
+The attendance reports come with Phase 3, the salary and statutory
+reports with Phase 6, and the custom builder with Phase 8.
 
 ### 7.7 Engage admin
 Post announcements (org / location / department), moderate posts, manage groups, configure auto-posts (joining, birthday, anniversary templates and time).

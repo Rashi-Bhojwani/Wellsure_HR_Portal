@@ -299,11 +299,21 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/delegations/delegate-options/:delegatorUserId": admin,
   "POST /api/delegations": admin,
   "POST /api/delegations/:id/revoke": admin,
+
+  // Core reports (F). reports.view is manager-grantable: every report is
+  // computed over the viewer's data scope; liability also needs a
+  // non-grantable key (service).
+  "GET /api/reports": scoped("the report catalog — leave liability listed only with reports.liability.view"),
+  "GET /api/reports/:key": scoped("every report is computed over the viewer's population (modules/reports/context.ts)"),
+  "GET /api/reports/:key/export": scoped("the same rows as the report, as .xlsx — audited"),
 };
 
 // Scoped routes a manager can reach with a manager-grantable key — each has
 // an IDOR case in managerReach.test.ts. The test fails if one is missing.
 export const MANAGER_REACHABLE_SCOPED = [
+  "GET /api/reports",
+  "GET /api/reports/:key",
+  "GET /api/reports/:key/export",
   "GET /api/employees",
   "GET /api/employees/:id",
   "GET /api/employees/:id/history/job",

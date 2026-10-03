@@ -50,6 +50,9 @@ export const PERMISSION_KEYS = [
   "manager.permissions.manage", // per-manager permission exceptions (meta; manager-grantable keys only)
   // Phase 5 — Workflow Delegates (commit E3)
   "delegation.manage", // see and manage anyone's approval delegations (a manager manages their own with no key)
+  // Phase 5 — Core reports (commit F)
+  "reports.view", // the Reports app: headcount, joiners, leavers & attrition, birthdays & anniversaries, leave balance, LOP — in data scope
+  "reports.liability.view", // leave liability (days × encashment rate — salary-derived from Phase 6, so never a manager's)
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
@@ -80,6 +83,7 @@ export const PERMISSION_GROUPS = [
   "Home & Engage",
   "Documents & letters",
   "Helpdesk",
+  "Reports",
 ] as const;
 
 export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
@@ -121,6 +125,8 @@ export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
   "manager.team.assign": { group: "Managers", label: "Assign teams", description: "Move employees into and out of a manager's team (effective-dated), and work the Unassigned list." },
   "manager.permissions.manage": { group: "Managers", label: "Manager permission exceptions", description: "Grant or revoke individual permissions for a manager — only from the manager-grantable list, never sensitive data.", meta: true },
   "delegation.manage": { group: "Managers", label: "Workflow delegations", description: "See every manager's approval delegations, set one up for a manager, and revoke one. Moves no permission: a delegate must already hold Approve leave." },
+  "reports.view": { group: "Reports", label: "Reports", description: "Headcount, joiners, leavers & attrition, birthdays & anniversaries, leave balance and LOP reports, with Excel export — only for people in their data scope.", managerGrantable: true },
+  "reports.liability.view": { group: "Reports", label: "Leave liability report", description: "Leave liability in rupees (encashable balance × the encashment daily rate). Salary-derived once payroll exists, so it sits with salary data, never with managers." },
   "helpdesk.manage": { group: "Helpdesk", label: "Helpdesk queue", description: "Work the ticket queue: assign, status, replies, internal notes, categories." },
   "helpdesk.sensitive.view": { group: "Helpdesk", label: "Sensitive tickets", description: "See tickets in categories marked sensitive (e.g. Payroll & Salary, Grievance)." },
 };

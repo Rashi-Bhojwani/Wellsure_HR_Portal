@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import ExcelJS from "exceljs";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MANAGER_GRANTABLE_KEYS } from "@shared/constants/permissions";
@@ -41,6 +42,8 @@ describe("manager reach — TEAM scope at every endpoint a manager can call (E2)
   let categoryId = "";
   let leaveTypeId = "";
   const photoKey = `test/reach/${randomUUID()}.webp`;
+  const sep: string[] = [];
+  const lopReq: string[] = [];
 
   const api = (t: string) => ({
     get: (path: string) => request(app).get(path).set(...authHeader(t)),
@@ -91,6 +94,18 @@ describe("manager reach — TEAM scope at every endpoint a manager can call (E2)
       letter[who] = res.body.id;
     }
 
+    // Reports (F): the two leavers' completed separations, and an approved
+    // LOP day each for the member and the outsider.
+    for (const x of [p.leaverIn, p.leaverOut]) {
+      sep.push((await prisma.separation.create({ data: { employeeId: x.employeeId, lastWorkingDate: new Date(Date.UTC(2031, 2, 31)), reason: "Reach test", status: "COMPLETED", completedAt: new Date(), initiatedByUserId: p.hrAdmin.userId } })).id);
+      await prisma.employee.update({ where: { id: x.employeeId }, data: { lastWorkingDate: new Date(Date.UTC(2031, 2, 31)) } });
+    }
+    const lop = await prisma.leaveType.findFirstOrThrow({ where: { code: "LOP" } });
+    const lopDay = new Date(Date.UTC(2031, 3, 16)); // a Wednesday
+    for (const who of ["member", "outsider"] as const) {
+      lopReq.push((await prisma.leaveRequest.create({ data: { employeeId: p[who].employeeId, leaveTypeId: lop.id, fromDate: lopDay, toDate: lopDay, totalDays: 1, status: "APPROVED", appliedByUserId: p[who].userId } })).id);
+    }
+
     // Two former employees with a photo: one from the manager's team, one not.
     await storageService.putObject(photoKey, Buffer.from("x"), "image/webp");
     for (const x of [p.leaverIn, p.leaverOut]) {
@@ -103,7 +118,8 @@ describe("manager reach — TEAM scope at every endpoint a manager can call (E2)
     for (const id of Object.values(letter)) await lettersGenerateQueue().remove(id).catch(() => undefined);
     await deleteWithDependents("LetterTemplate", [templateId]);
     await cleanupTestCategories([categoryId]);
-    await prisma.leaveRequest.deleteMany({ where: { id: { in: Object.values(req) } } });
+    await prisma.leaveRequest.deleteMany({ where: { id: { in: [...Object.values(req), ...lopReq] } } });
+    await prisma.separation.deleteMany({ where: { id: { in: sep } } });
     await prisma.employeePersonal.updateMany({ where: { employeeId: { in: [p.leaverIn.employeeId, p.leaverOut.employeeId] } }, data: { photoThumbStorageKey: null, photoStorageKey: null } });
     await storageService.deleteObject(photoKey);
     for (const x of Object.values(p)) await cleanupFullTestEmployee(x.employeeId);
@@ -252,6 +268,56 @@ describe("manager reach — TEAM scope at every endpoint a manager can call (E2)
       const t = encodeURIComponent(issuePhotoToken(p.manager.userId).token);
       expect((await request(app).get(`/api/people/photos/${p.leaverIn.employeeId}/thumb?t=${t}`)).status).toBe(200);
       expect((await request(app).get(`/api/people/photos/${p.leaverOut.employeeId}/thumb?t=${t}`)).status).toBe(404);
+    });
+  });
+
+  describe("reports (F)", () => {
+    const codes = (body: { rows: Array<{ employeeCode: string }> }) => body.rows.map((r) => r.employeeCode);
+    const cases: Array<[string, string, Array<"member" | "leaverIn">, Array<"outsider" | "leaverOut">]> = [
+      ["headcount", "", ["member"], ["outsider"]],
+      ["joiners", "?from=2024-01-01&to=2024-01-01", ["member"], ["outsider"]],
+      ["leavers", "?from=2031-03-01&to=2031-03-31", ["leaverIn"], ["leaverOut"]],
+      ["celebrations", "?from=2026-12-25&to=2027-01-05&kind=anniversary", ["member"], ["outsider"]],
+      ["leave-balance", "", ["member"], ["outsider"]],
+      ["lop", "?from=2031-04-01&to=2031-04-30", ["member"], ["outsider"]],
+    ];
+    for (const [key, qs, inside, outside] of cases) {
+      it(`GET /api/reports/${key} — the team only, never an outsider`, async () => {
+        const res = await m().get(`/api/reports/${key}${qs}`);
+        expect(res.status).toBe(200);
+        expect(res.body.scope).toBe("team");
+        for (const who of inside) expect(codes(res.body)).toContain(p[who].employeeCode);
+        for (const who of outside) expect(codes(res.body)).not.toContain(p[who].employeeCode);
+        // HR sees both — the case isn't vacuous.
+        const all = codes((await api(hrToken).get(`/api/reports/${key}${qs}`)).body);
+        for (const who of [...inside, ...outside]) expect(all).toContain(p[who].employeeCode);
+        cover("GET /api/reports/:key");
+      });
+    }
+
+    it("leave liability isn't a manager's (salary-derived) — not listed, 403", async () => {
+      const catalog = await m().get("/api/reports");
+      expect(catalog.status).toBe(200);
+      expect(catalog.body.reports.map((r: { key: string }) => r.key)).not.toContain("leave-liability");
+      expect((await m().get("/api/reports/leave-liability")).status).toBe(403);
+      expect((await m().get("/api/reports/leave-liability/export")).status).toBe(403);
+      cover("GET /api/reports");
+    });
+
+    it("GET /api/reports/:key/export — the file holds the team only", async () => {
+      const res = await m().get("/api/reports/headcount/export").buffer(true).parse((r, cb) => {
+        const chunks: Buffer[] = [];
+        r.on("data", (c: Buffer) => chunks.push(c));
+        r.on("end", () => cb(null, Buffer.concat(chunks)));
+      });
+      expect(res.status).toBe(200);
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(res.body as unknown as ExcelJS.Buffer);
+      const cells = wb.worksheets[0]!.getColumn(1).values.map(String);
+      expect(cells).toContain(p.member.employeeCode);
+      expect(cells).not.toContain(p.outsider.employeeCode);
+      expect(cells.some((c) => c.startsWith("Team only"))).toBe(true);
+      cover("GET /api/reports/:key/export");
     });
   });
 

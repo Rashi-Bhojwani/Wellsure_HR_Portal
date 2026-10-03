@@ -1,4 +1,4 @@
-import ExcelJS from "exceljs";
+import { buildXlsx } from "../../lib/xlsx";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { writeAuditLog } from "../../lib/audit";
@@ -223,32 +223,31 @@ export async function buildYearEndReport(runId: string): Promise<{ buffer: Buffe
   const run = await prisma.yearEndRun.findUnique({ where: { id: runId }, include: { items: { include: { employee: { include: { nameHistory: { where: { effectiveTo: null } } } } } } } });
   if (!run) throw new HttpError(404, "Year End run not found.", "NOT_FOUND");
 
-  const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet("Year End " + run.leaveYear);
-  sheet.columns = [
-    { header: "Employee Code", key: "code", width: 16 },
-    { header: "Employee Name", key: "name", width: 28 },
-    { header: "Closing PL Balance", key: "balance", width: 18 },
-    { header: "Encashed Days", key: "days", width: 16 },
-    { header: "Daily Rate", key: "rate", width: 14 },
-    { header: "Rate Source", key: "rateSource", width: 16 },
-    { header: "Encashed Amount", key: "amount", width: 18 },
-  ];
-  sheet.getRow(1).font = { bold: true };
-  for (const item of run.items) {
-    sheet.addRow({
-      code: item.employee.employeeCode,
-      name: item.employee.nameHistory[0]?.fullName ?? item.employee.employeeCode,
-      balance: item.closingPlBalance.toNumber(),
-      days: item.encashedDays.toNumber(),
-      rate: item.dailyRate.toNumber(),
-      rateSource: item.rateSource,
-      amount: item.encashedAmount.toNumber(),
-    });
-  }
-  sheet.addRow({});
-  const totalRow = sheet.addRow({ name: "Total", days: run.totalEncashedDays.toNumber(), amount: run.totalEncashedAmount.toNumber() });
-  totalRow.font = { bold: true };
+  const buffer = await buildXlsx([
+    {
+      name: `Year End ${run.leaveYear}`,
+      columns: [
+        { header: "Employee Code", key: "code", width: 16 },
+        { header: "Employee Name", key: "name", width: 28 },
+        { header: "Closing PL Balance", key: "balance", type: "number", width: 18 },
+        { header: "Encashed Days", key: "days", type: "number", width: 16 },
+        { header: "Daily Rate", key: "rate", type: "money", width: 14 },
+        { header: "Rate Source", key: "rateSource", width: 16 },
+        { header: "Encashed Amount", key: "amount", type: "money", width: 18 },
+      ],
+      rows: run.items.map((item) => ({
+        code: item.employee.employeeCode,
+        name: item.employee.nameHistory[0]?.fullName ?? item.employee.employeeCode,
+        balance: item.closingPlBalance.toNumber(),
+        days: item.encashedDays.toNumber(),
+        rate: item.dailyRate.toNumber(),
+        rateSource: item.rateSource,
+        amount: item.encashedAmount.toNumber(),
+      })),
+      totals: { name: "Total", days: run.totalEncashedDays.toNumber(), amount: run.totalEncashedAmount.toNumber() },
+      footer: run.items.some((i) => i.rateSource === "MANUAL_SETTING") ? ["Daily rate: provisional flat HR-entered amount, pending CA confirmation of the encashment formula and its tax treatment (spec §5.2)."] : [],
+    },
+  ]);
 
-  return { buffer: Buffer.from(await workbook.xlsx.writeBuffer()), fileName: `year-end-${run.leaveYear}-${run.status.toLowerCase()}.xlsx` };
+  return { buffer, fileName: `year-end-${run.leaveYear}-${run.status.toLowerCase()}.xlsx` };
 }

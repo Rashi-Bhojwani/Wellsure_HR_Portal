@@ -15,7 +15,7 @@ committed).
 | 2 | Biometric ingestion + attendance engine + real-time | Not started |
 | 3 | Attendance administration | Not started |
 | 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
-| 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | In progress — commit A done (notifications substrate, Employee Home, Admin Homepage Welcome + Dashboard tabs), commit B done (Engage), commit C done (People directory + org chart, employee photos, Document Center, HR-held employee documents), commit D done (Helpdesk, Request Hub, Tasks inbox), commit D2 done (letter templates + PDF generation), commit E1 done (roles & permissions, Super Admin guarantees, bootstrap/recovery CLIs), E1.1 done (append-only audit log, loud break-glass, manager data leaks), commit E2 done (three-level hierarchy model A, Manager Management, manager-grantable list, endpoint audit), commit E3 done (Workflow Delegates). F–G (Reports, Mobile/PWA) not started — full plan in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
+| 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | In progress — commit A done (notifications substrate, Employee Home, Admin Homepage Welcome + Dashboard tabs), commit B done (Engage), commit C done (People directory + org chart, employee photos, Document Center, HR-held employee documents), commit D done (Helpdesk, Request Hub, Tasks inbox), commit D2 done (letter templates + PDF generation), commit E1 done (roles & permissions, Super Admin guarantees, bootstrap/recovery CLIs), E1.1 done (append-only audit log, loud break-glass, manager data leaks), commit E2 done (three-level hierarchy model A, Manager Management, manager-grantable list, endpoint audit), commit E3 done (Workflow Delegates), commit F done (core reports). G (Mobile/PWA) not started — full plan in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
 | 5.5 | AWS production environment and go-live hardening | Not started |
 | 6 | Payroll | Not started |
 | 7 | Tax & benefits | Not started |
@@ -3325,7 +3325,91 @@ Only MANAGER holders can be delegators. Everyone else is told why.
     no reload;
   - no console errors.
 
+### Phase 5, commit F — Core reports
+
+Plan and as-built notes: [`docs/plans/PHASE_5.md`](plans/PHASE_5.md) §F,
+written from the user's requirements of 2026-10-03 before building. Spec
+§2.2 and §7.6 updated.
+
+**Seven reports in the new Reports app** (`/admin/reports`):
+- headcount (as of a date, with the placement held that day);
+- joiners;
+- leavers and attrition;
+- birthdays and anniversaries;
+- leave balance (as of a date);
+- leave liability;
+- LOP (leave LOP only).
+
+Each has filters (date or range, department, branch, employment type, plus
+report-specific ones), summary tiles, breakdown tables, a sortable list,
+and an **Excel export** of exactly those rows plus a Summary sheet and one
+sheet per breakdown. Every export is audited (`report.exported`).
+
+Nothing reads attendance or payroll data. The LOP report says
+attendance-based LOP arrives with Phase 3.
+
+**Permissions.**
+- **`reports.view`** is held by HR_EXECUTIVE, HR_ADMIN, PAYROLL_ADMIN and
+  MANAGER. It **joins the manager-grantable list**, the deliberate code
+  change spec §2.2 requires:
+  - all three report routes are classified `scoped`;
+  - `managerReach.test.ts` proves each report gives a manager their team
+    only, export included.
+- **`reports.liability.view`** is new, not grantable, and held by HR_ADMIN
+  and PAYROLL_ADMIN only. Leave liability is days × the encashment rate,
+  which becomes "one day's salary" in Phase 6, and salary stays off
+  HR_EXECUTIVE and managers.
+
+Migration `f_reports_permissions`.
+
+**Provisional rate.**
+- Leave liability shows "Encashment rate is provisional", or "No
+  encashment rate is set — showing days only".
+- **Year End now shows the same warning** (`ProvisionalRateAlert`) when
+  its run uses the flat settings rate. Until now its only sign was a
+  "Rate Source" column.
+- The Year End export footer says the same.
+
+**The shared Excel helper.** `lib/xlsx.ts` handles typed columns (real
+dates, ₹ amounts, percentages), totals and footers. There wasn't one
+before; the employee grid and Year End exports now use it too.
+
+**Verified:**
+- a fresh devcheck seed;
+- the full backend and frontend suites, lint and typecheck;
+- `reports.test.ts`: every report's numbers on a fixture, including
+  - historical headcount with an effective-dated move;
+  - an imported leaver;
+  - the attrition formula;
+  - the 29 Feb birthday;
+  - balances as of a date;
+  - liability with and without a rate;
+  - LOP straddling the range and a holiday;
+  - the export's sheets and audit row;
+- manager reach for all seven reports;
+- a browser walkthrough:
+  - HR sees all seven reports and a 30-person headcount;
+  - leavers year to date: 1090, attrition 3.3%;
+  - liability: no rate, then ₹1,500/day × 10.5 granted days = ₹15,750,
+    flagged provisional;
+  - an LOP request for 1–2 Oct counts 1 day (Gandhi Jayanti excluded);
+  - the headcount export has 5 sheets;
+  - Karan sees his 6-person team tagged "Showing your team only", no
+    liability card, and a 403 on liability;
+  - no console errors.
+
 ## Open questions
+
+- [ ] **Approval Workflows (spec §7.8 "approval workflows (multi-level
+      chains)", §11 `approval_workflows`/`approval_steps`/`approval_instances`)
+      — keep, or drop from the spec?** Raised by the user 2026-10-03 after E3.
+      Every approval in the spec is either single-step (leave and
+      regularization by the manager; profile changes and Year End by HR) or
+      payroll maker-checker (run, bank batch). Recommendation given in chat
+      2026-10-03: drop general chains; build maker-checker in Phase 6 as its
+      own small primitive. **Awaiting the user's decision.** Until then the
+      admin "Workflow" app and Admin Tools → Approval Workflows stay
+      placeholders.
 
 Carried from spec §14 — configurable, not guessed, until answered:
 

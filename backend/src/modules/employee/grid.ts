@@ -1,4 +1,4 @@
-import ExcelJS from "exceljs";
+import { buildXlsx } from "../../lib/xlsx";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { writeAuditLog } from "../../lib/audit";
@@ -179,13 +179,7 @@ export async function exportEmployeesExcel(
   const rows = sortRows(await loadRows(where, sensitiveFlags), query.sortBy, query.sortDir);
   const columns = EXPORT_COLUMNS.filter((col) => !col.sensitive || sensitiveFlags.bank || sensitiveFlags.statutory);
 
-  const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet("All Employees");
-  sheet.columns = columns.map((col) => ({ header: col.header, key: col.key, width: 20 }));
-  sheet.getRow(1).font = { bold: true };
-  for (const row of rows) {
-    sheet.addRow(Object.fromEntries(columns.map((col) => [col.key, row[col.key] ?? ""])));
-  }
+  const buffer = await buildXlsx([{ name: "All Employees", columns: columns.map((col) => ({ key: col.key, header: col.header, width: 20 })), rows: rows as unknown as Array<Record<string, unknown>> }]);
 
   await writeAuditLog({
     ...meta,
@@ -195,7 +189,7 @@ export async function exportEmployeesExcel(
     after: { rowCount: rows.length, includeSensitive, columns: columns.map((col) => col.header) },
   });
 
-  return Buffer.from(await workbook.xlsx.writeBuffer());
+  return buffer;
 }
 
 // ── Saved views ──────────────────────────────────────────────────────────
