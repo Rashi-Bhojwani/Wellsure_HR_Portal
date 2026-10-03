@@ -522,7 +522,32 @@ reports with Phase 6, and the custom builder with Phase 8.
 Post announcements (org / location / department), moderate posts, manage groups, configure auto-posts (joining, birthday, anniversary templates and time).
 
 ### 7.8 Admin Tools
-Organisation setup (company, **cities** and **locations/branches** — two levels only, city → branch, with create/edit/merge-near-duplicates on both and deactivate (not delete) on a closed branch so its history stays intact — departments, designations, grades, cost centres), holiday calendars, shift master, week-off patterns, leave types & policies, approval workflows (multi-level chains), workflow delegates, users/roles/permissions, email & letter templates, devices, data import/export, **audit log viewer**, system settings.
+Organisation setup (company, **cities** and **locations/branches** — two levels only, city → branch, with create/edit/merge-near-duplicates on both and deactivate (not delete) on a closed branch so its history stays intact — departments, designations, grades, cost centres), holiday calendars, shift master, week-off patterns, leave types & policies, workflow delegates, users/roles/permissions, email & letter templates, devices, data import/export, **audit log viewer**, system settings.
+
+**No general approval-chain engine (decided 2026-10-03, after Phase 5 commit E3; do not reintroduce without revisiting this).**
+- Earlier drafts listed "approval workflows (multi-level chains)" here,
+  with `approval_workflows` / `approval_steps` / `approval_instances`
+  tables in §11. Both were removed deliberately.
+- **No approval in this product needs a configurable chain.** Every
+  approval is one of two shapes:
+  - **single-step:** leave and regularization by the reporting manager
+    (with workflow delegates covering absences); profile change requests
+    and Year End by HR;
+  - **payroll maker-checker:** the payroll run and the bank transfer
+    batch.
+- **Maker-checker's safety doesn't come from routing.** It comes from
+  four guarantees:
+  - the checker is a different person from the maker;
+  - the approval is bound to the exact figures approved;
+  - any change after approval voids it;
+  - the approved artefact is locked.
+- A general chain engine provides none of those, and adds configuration
+  surface for mistakes: a mis-set chain that skips the checker, a
+  self-routed step.
+- So maker-checker is one small purpose-built piece in Phase 6 (§12). A
+  future need for a fixed two-step flow (e.g. a Phase 7 reimbursement:
+  manager, then payroll) is built for that feature, not as configurable
+  chains.
 
 **Holiday calendars, shift master, week-off patterns, leave types & policies, and attendance rules are all company-wide** (HR-confirmed 2026-09-28), not per-branch — one holiday list, one set of leave policies, one set of shifts and week-off patterns for the whole company, regardless of how many branches exist or where an employee is posted. A branch (`Location`) stays a real, first-class concept — employees still belong to one, grids/dashboards/reports still filter and group by branch and city, `EmployeeJobHistory` is unchanged — but it is purely an *organisational and reporting* attribute plus, from Phase 2, a *biometric-device* attribute: each device (`devices.location_id`) maps to the one branch its punches come from, so the rules engine knows whose punches it's looking at. That device-to-branch mapping is the only place "branch" enters the attendance/leave rule pipeline; none of the rules themselves vary by which branch an employee is at. Adding a branch is a data change in Organisation Setup, never a code change, same as before — it's just that holidays/shifts/week-offs/policies are no longer part of what a new branch needs configured.
 
@@ -591,7 +616,8 @@ Every import: upload → parse into staging table → validate (duplicates, miss
 **Employees:** `employees` (Employee Code, permanent and never reused; Device User ID lives in `device_user_mappings`, not here — see §3), `employee_personal` (personal email intentionally **not** unique — a shared family email or a rejoin would otherwise collide), `employee_name_history` (effective-dated full name, so a past payslip or letter still shows the name as of its own date after a later name change), `employee_statutory` (encrypted + last-4 + blind-index hash), `employee_bank_accounts` (encrypted + last-4 + blind-index hash, effective-dated), `employee_job_history` (effective-dated dept/designation/location/manager/grade/cost centre), `employee_documents`, `profile_change_requests` (`changes_json` redacted, see §9), `separations` (a rejoin is a new `employees` row, never a reopened one)
 **Attendance:** `device_user_mappings` (**built in Phase 1**, as groundwork for the Employee Code / Device User ID split — see §3; the rest of this bucket is still Phase 2), `devices` (**maps to exactly one branch** via `location_id` — this is the one and only place "branch" affects the attendance pipeline; the rules engine itself, `shifts`, and `week_off_patterns` are company-wide, see §11's note above), `raw_punches`, `unmapped_punches`, `shifts`, `week_off_patterns`, `shift_assignments`, `shift_overrides`, `daily_attendance`, `attendance_overrides`, `regularization_requests`, `attendance_periods` (lock state)
 **Leave:** `leave_types`, `leave_policies` (both company-wide, no location scoping), `leave_ledger`, `leave_requests`, `holidays`, `restricted_holidays` (both company-wide, one list for the whole company — no `location_id`, see §11's note above), `comp_off_credits`, `year_end_runs`
-**Engage & workflow:** `posts`, `kudos`, `polls`, `poll_options`, `poll_votes`, `reactions`, `comments`, `groups`, `notifications`, `approval_workflows`, `approval_steps`, `approval_instances`, `workflow_delegates`, `helpdesk_tickets`, `helpdesk_messages`, `announcements`, `user_favourites`, `dashboard_layouts`
+**Engage & workflow:** `posts`, `kudos`, `polls`, `poll_options`, `poll_votes`, `reactions`, `comments`, `groups`, `notifications`, `workflow_delegates`, `helpdesk_tickets`, `helpdesk_messages`, `announcements`, `user_favourites`, `dashboard_layouts`
+*(No `approval_*` tables: general approval chains were dropped — see §7.8. Maker-checker state lives on `payroll_runs` and `bank_transfer_batches` themselves, §12 Phase 6.)*
 **Payroll (Phase 6):** `salary_components`, `salary_structures`, `employee_salaries`, `payroll_runs`, `payroll_run_items`, `payslips`, `payslip_lines`, `bank_transfer_batches`, `bank_file_templates`, `tax_declarations`, `tax_proofs`, `loans`, `loan_emis`, `reimbursement_claims`, `statutory_settings`
 
 ---
@@ -617,6 +643,31 @@ Security wiring required in Phase 1.5 (Phase 5 commit E1.1, §9 "Break-glass acc
 - separate database roles: the app role has no UPDATE/DELETE/TRUNCATE on `audit_logs` or `security_events`, and only the migrate role owns tables;
 - RDS log export (or pgaudit) covering writes to `users` and `audit_logs`, the only trail for the direct-SQL last resort;
 - `SECURITY_ALERT_EMAIL` set to an inbox outside this system.
+
+Data migration notes for the greytHR import (recorded 2026-10-03):
+- **Ex-employees arrive without a Separation record.**
+  - Every former employee imported from greytHR has a last working day
+    and maybe a reason, but no separation workflow in this system.
+  - The Employees import handles them deliberately (Phase 5 G prep): an
+    optional `lastWorkingDate` (on or after joining, never in the future)
+    and `exitReason`.
+  - Such a row is created already separated, through the same data
+    change a completed separation makes (`markSeparatedInTx`): status
+    SEPARATED, account DEACTIVATED (never invitable), job placement and
+    device mapping ended on the last working day.
+  - No Separation row is required.
+  - Their old device ID may already belong to someone current (the reuse
+    convention, §3), so no collision is raised.
+  - Their reporting manager only needs to exist, not be an active manager.
+  - `exitReason` lives on the employee record. Completed separations copy
+    their reason there too, so Leavers & attrition reads one field for
+    both.
+  - A leaver who hasn't left yet (future date) is separated in the app,
+    never imported as one.
+- **Before inviting anyone, reconcile.** Compare the Import Center's
+  headcount by location against greytHR. Also compare a Leavers report
+  for the last 12 months, so missing ex-employees are caught before
+  attrition figures are trusted.
 ✅ Done when a merge to `main` automatically deploys to `staging.<domain>`, an invite email is delivered via SES, and file uploads land in S3.
 From here on, every phase is verified on staging, not only locally.
 
@@ -684,6 +735,29 @@ Production CDK stack (Multi-AZ RDS, deletion protection, longer backup retention
 
 **Phase 6 — Payroll (parallel run with greytHR)**
 Components, structures, employee salaries, payroll run, LOP from finalised attendance, leave encashment, arrears, payslips (PDF), variance report, maker-checker, bank transfer file, PF/ESI/PT/LWF outputs, salary register.
+
+**Maker-checker** is one small purpose-built piece (not a general approval
+engine; see §7.8), used by exactly two things: the **payroll run** and the
+**bank transfer batch**. For each:
+- **Two different people.** A **maker** (`payroll.run`) prepares and
+  submits it. A **checker** (`payroll.approve`, the APPROVER role)
+  approves or rejects it with a reason. The checker can never be the
+  maker, nor anyone who changed the run's figures since it was submitted
+  (enforced in the service and tested).
+- **Bound to the figures.** Submitting records a content hash of the
+  exact figures: every line, every total, and the bank file's rows. The
+  approval stores the hash it approved.
+- **Voided by change.** Any change after approval (a recalculation, an
+  edited line, a late attendance correction) changes the hash. That
+  voids the approval automatically, and the run goes back to Draft for
+  a new submission and check.
+- **Gated downstream.** Publishing payslips and generating the bank file
+  both re-verify the stored hash against the live figures, and refuse on
+  a mismatch.
+- **Locked once approved.** An approved run is locked; reopening it is
+  an explicit, audited action that voids the approval.
+- **Recorded.** Every submit, approve, reject, void and reopen is in the
+  append-only audit log with the hash.
 **Revisit offer letters here:** until Phase 6, the offer letter (Phase 5 commit D2) is generated against the employee record created at joining, with HR typing figures such as CTC at generation time. Once salary structures exist, those figures should be pulled from the employee's salary assignment rather than typed (user decision, 2026-10-01).
 
 **Phase 7 — Tax & benefits**

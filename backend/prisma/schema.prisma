@@ -448,6 +448,10 @@ model Employee {
   officialEmail   String?        @unique @map("official_email")
   dateOfJoining   DateTime       @map("date_of_joining") @db.Date
   lastWorkingDate DateTime?      @map("last_working_date") @db.Date
+  // Why they left — set when a separation completes, or directly by the
+  // Excel import for ex-employees migrated from greytHR, who have a last
+  // working day and a reason but no Separation row here (Phase 5 G prep).
+  exitReason      String?        @map("exit_reason")
   employmentType  EmploymentType @map("employment_type")
   status          EmployeeStatus @default(ACTIVE)
   createdAt       DateTime       @default(now()) @map("created_at")

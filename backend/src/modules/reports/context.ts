@@ -96,7 +96,11 @@ export async function placementsOn(employeeIds: string[], day: Date): Promise<Ma
   const result = new Map<string, Placement>();
   for (const [id, history] of byEmployee) {
     const inForce = history.find((r) => r.effectiveFrom.getTime() <= t && (!r.effectiveTo || r.effectiveTo.getTime() > t));
-    result.set(id, toPlacement(inForce ?? history[0]!)); // rows are oldest first
+    // No row in force: a leaver on/after their last working day (completing
+    // a separation closes the last row ON that day) → their latest row that
+    // had started; a day before anyone's first placement → their first row.
+    const started = history.filter((r) => r.effectiveFrom.getTime() <= t);
+    result.set(id, toPlacement(inForce ?? started[started.length - 1] ?? history[0]!)); // rows are oldest first
   }
   return result;
 }

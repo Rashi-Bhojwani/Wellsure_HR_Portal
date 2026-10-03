@@ -48,7 +48,7 @@ describe("Core reports (F)", () => {
     await prisma.employee.update({ where: { id: p.c.employeeId }, data: { status: "SEPARATED", lastWorkingDate: D("2025-03-31") } });
     created.separations.push((await prisma.separation.create({ data: { employeeId: p.c.employeeId, lastWorkingDate: D("2025-03-31"), reason: "Better opportunity", status: "COMPLETED", completedAt: D("2025-03-31"), initiatedByUserId: p.hrAdmin.userId } })).id);
     // e: imported leaver — separated with a last working day, no Separation row.
-    await prisma.employee.update({ where: { id: p.e.employeeId }, data: { status: "SEPARATED", lastWorkingDate: D("2025-06-30") } });
+    await prisma.employee.update({ where: { id: p.e.employeeId }, data: { status: "SEPARATED", lastWorkingDate: D("2025-06-30"), exitReason: "Moved city" } });
     // f: separated with no last working day recorded — can't be placed in time, never counted.
     await prisma.employee.update({ where: { id: p.f.employeeId }, data: { status: "SEPARATED" } });
     // d: moved to the other department on 2025-01-01 (effective-dated).
@@ -110,7 +110,7 @@ describe("Core reports (F)", () => {
     const r = await run("leavers", "&from=2025-01-01&to=2025-12-31");
     expect(codes(r)).toEqual(sorted(p.c, p.e)); // e was imported: no Separation row, still a leaver
     expect(r.rows.find((x) => x.employeeCode === p.c.employeeCode)).toMatchObject({ lastWorkingDate: "2025-03-31", tenureYears: 1.2, reason: "Better opportunity" });
-    expect(r.rows.find((x) => x.employeeCode === p.e.employeeCode)).toMatchObject({ lastWorkingDate: "2025-06-30", reason: null });
+    expect(r.rows.find((x) => x.employeeCode === p.e.employeeCode)).toMatchObject({ lastWorkingDate: "2025-06-30", reason: "Moved city" }); // the imported reason
     expect(summary(r, "Headcount on 2025-01-01")).toBe(3); // a, c, e (d moved that day; f never counts)
     expect(summary(r, "Headcount on 2025-12-31")).toBe(2); // a, b
     expect(summary(r, "Attrition")).toBe(0.8); // 2 ÷ 2.5

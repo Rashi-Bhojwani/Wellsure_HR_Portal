@@ -2,7 +2,6 @@ import type { ComponentType } from "react";
 import {
   AuditOutlined,
   BankOutlined,
-  BranchesOutlined,
   CalculatorOutlined,
   CalendarOutlined,
   CheckSquareOutlined,
@@ -73,7 +72,7 @@ import { ManagerManagementPage } from "../pages/admin/adminTools/ManagerManageme
 // Single source of truth for the HR/Admin portal's App Switcher and each
 // app's top-bar dropdown menus (docs/UI_REFERENCE.md §2.0). "Homepage",
 // "Employee", "Workforce Management", "Assets Management", "Tasks",
-// "Workflow", "Reports" and "Engage" are greytHR's own app tiles; Payroll
+// "Reports" and "Engage" are greytHR's own app tiles (greytHR's "Workflow" tile is deliberately absent — no general approval chains, spec §7.8); Payroll
 // and Admin Tools are ours, added per docs/PROJECT_SPEC.md §7.
 
 export interface AdminMenuLeaf {
@@ -191,13 +190,6 @@ export const adminApps: AdminApp[] = [
     element: AdminTasksPage,
   },
   {
-    key: "workflow",
-    label: "Workflow",
-    icon: BranchesOutlined,
-    path: "workflow",
-    phase: "Phase 5",
-  },
-  {
     key: "reports",
     label: "Reports",
     icon: PieChartOutlined,
@@ -284,7 +276,6 @@ export const adminApps: AdminApp[] = [
           { key: "shift-master", label: "Shift Master", path: "admin-tools/shifts", icon: ScheduleOutlined, phase: "Phase 2" },
           { key: "week-off-patterns", label: "Week-off Patterns", path: "admin-tools/week-offs", icon: CalendarOutlined, phase: "Phase 2" },
           { key: "leave-types-policies", label: "Leave Types & Policies", path: "admin-tools/leave-policies", icon: SolutionOutlined, element: LeaveTypesPoliciesPage },
-          { key: "approval-workflows", label: "Approval Workflows", path: "admin-tools/workflows", icon: BranchesOutlined, phase: "Phase 5" },
           { key: "workflow-delegates-admin", label: "Workflow Delegates", path: "admin-tools/delegates", icon: UserSwitchOutlined, element: WorkflowDelegatesAdminPage },
           { key: "users-roles", label: "Roles & Permissions", path: "admin-tools/users-roles", icon: TeamOutlined, element: RolesPermissionsPage },
           { key: "managers", label: "Manager Management", path: "admin-tools/managers", icon: ApartmentOutlined, element: ManagerManagementPage },

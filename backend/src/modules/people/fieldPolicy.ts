@@ -23,6 +23,7 @@ export const DIRECTORY_FIELD_POLICY: Record<string, DirectoryFieldPolicy> = {
   "Employee.officialEmail": { shown: "setting", setting: "officialEmail" },
   "Employee.dateOfJoining": { shown: "setting", setting: "dateOfJoining" },
   "Employee.lastWorkingDate": { shown: "never", why: "separation detail — HR only" },
+  "Employee.exitReason": { shown: "never", why: "why someone left — HR only (Leavers report, reports.view in scope)" },
   "Employee.employmentType": { shown: "never", why: "contract/probation status is HR data" },
   "Employee.status": { shown: "never", why: "used only to filter to ACTIVE employees" },
   "Employee.createdAt": { shown: "never", why: "internal bookkeeping" },

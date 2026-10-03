@@ -3398,18 +3398,54 @@ before; the employee grid and Year End exports now use it too.
     liability card, and a 403 on liability;
   - no console errors.
 
+### Interim — Approval Workflows dropped; ex-employees importable (2026-10-03)
+
+User decisions after F.
+
+**Approval Workflows dropped.**
+- Spec §7.8 now says why no general approval-chain engine exists, so a
+  future session doesn't bring one back. The `approval_*` tables are gone
+  from §11.
+- The Workflow app and Admin Tools → Approval Workflows placeholders are
+  removed.
+- Payroll maker-checker is specified in §12 Phase 6 as one small
+  purpose-built piece for the payroll run and the bank batch:
+  - a different checker;
+  - approval bound to a content hash of the exact figures;
+  - voided by any change;
+  - downstream steps re-verify the hash;
+  - locked once approved.
+
+**Ex-employees in the Excel import** (found in F: imported leavers have no
+Separation row).
+- The Employees dataset gains optional `lastWorkingDate` and `exitReason`
+  columns. Such a row is created already separated through
+  `markSeparatedInTx`, now shared with separation completion: status
+  SEPARATED, account DEACTIVATED (never invitable), placement and device
+  mapping ended that day.
+- The device mapping is created already ended, so a reused device ID
+  doesn't collide.
+- The reporting manager only needs to exist.
+- Refused: a future date, a date before joining, or a reason without a
+  date. A missing reason is a warning.
+- New `employees.exit_reason` column (migration backfills it from
+  completed separations). Leavers & attrition reads it first.
+- Also fixed: a report's "placement on a date" for a leaver on or after
+  their last working day, whose last row is closed that day, now uses
+  their latest row, not their first.
+- Recorded in spec §12 Phase 1.5 as data-migration notes, with a leavers
+  reconciliation step before invites.
+- Tested: `import.test.ts` (an ex-employee row end to end, plus each
+  refusal) and `reports.test.ts` (the imported reason in Leavers).
+
 ## Open questions
 
-- [ ] **Approval Workflows (spec §7.8 "approval workflows (multi-level
-      chains)", §11 `approval_workflows`/`approval_steps`/`approval_instances`)
-      — keep, or drop from the spec?** Raised by the user 2026-10-03 after E3.
-      Every approval in the spec is either single-step (leave and
-      regularization by the manager; profile changes and Year End by HR) or
-      payroll maker-checker (run, bank batch). Recommendation given in chat
-      2026-10-03: drop general chains; build maker-checker in Phase 6 as its
-      own small primitive. **Awaiting the user's decision.** Until then the
-      admin "Workflow" app and Admin Tools → Approval Workflows stay
-      placeholders.
+- [x] **Approval Workflows — dropped (user decision 2026-10-03).** No
+      approval needs a configurable chain. Payroll maker-checker is one
+      small purpose-built piece in Phase 6 (spec §12), and the rationale is
+      written into spec §7.8 so it isn't reintroduced. The Workflow app and
+      Admin Tools → Approval Workflows placeholders were removed (Phase 5
+      G prep).
 
 Carried from spec §14 — configurable, not guessed, until answered:
 

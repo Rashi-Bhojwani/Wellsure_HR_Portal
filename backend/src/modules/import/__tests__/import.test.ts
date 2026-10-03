@@ -208,6 +208,74 @@ describe("Import Center (/api/import)", () => {
       const invitations = await prisma.invitationToken.count({ where: { userId: created!.user!.id } });
       expect(invitations).toBe(0);
     });
+
+    it("imports an ex-employee as separated — last working day and reason, no Separation row, no login, device ID free for reuse", async () => {
+      const suffix = randomUUID().slice(0, 8);
+      const [deptCode, desigCode, locCode] = await Promise.all([
+        prisma.department.findUniqueOrThrow({ where: { id: org.departmentId } }).then((x) => x.code),
+        prisma.designation.findUniqueOrThrow({ where: { id: org.designationId } }).then((x) => x.code),
+        prisma.location.findUniqueOrThrow({ where: { id: org.locationId } }).then((x) => x.code),
+      ]);
+      // Someone current already holds this device ID — a leaver's old ID being reused (spec §3).
+      const takenDeviceId = (await prisma.deviceUserMapping.findFirstOrThrow({ where: { employeeId: employeeIds[0], validTo: null } })).deviceUserId;
+      const base = (n: string) => ({
+        deviceUserId: `EX-${suffix}-${n}`,
+        employeeCode: `EX-${suffix}-${n}`,
+        fullName: `Former Employee ${n}`,
+        dateOfBirth: "1985-05-05",
+        gender: "FEMALE",
+        personalEmail: `former.${suffix}.${n}@gmail.com`,
+        mobile: "9123456790",
+        currentAddress: "2 Old Rd",
+        permanentAddress: "2 Old Rd",
+        emergencyContactName: "Contact",
+        emergencyContactPhone: "9123456791",
+        emergencyContactRelation: "Sibling",
+        bloodGroup: "",
+        dateOfJoining: "2019-04-01",
+        employmentType: "PERMANENT",
+        departmentCode: deptCode,
+        designationCode: desigCode,
+        locationCode: locCode,
+        gradeCode: "",
+        costCentreCode: "",
+        reportingManagerCode: "",
+        officialEmail: "",
+        lastWorkingDate: "",
+        exitReason: "",
+      });
+      const good = { ...base("a"), deviceUserId: takenDeviceId, lastWorkingDate: "2025-06-30", exitReason: "Relocated" };
+      const rows = [
+        good,
+        { ...base("b"), lastWorkingDate: "2099-01-01" }, // not left yet
+        { ...base("c"), exitReason: "Resigned" }, // reason without a last working day
+        { ...base("d"), lastWorkingDate: "2018-01-01" }, // before joining
+        { ...base("e"), lastWorkingDate: "2025-03-31" }, // fine, but no reason → a warning
+      ];
+      const upload = await request(app).post("/api/import/employees/upload").set(...authHeader(managerToken)).attach("file", await buildXlsx(DATASET_COLUMNS.employees, rows), "employees.xlsx");
+      expect(upload.status).toBe(201);
+      const msgs = (i: number) => [...upload.body.rows[i].errors, ...upload.body.rows[i].warnings].join(" ");
+      expect(upload.body.rows[0].errors).toEqual([]);
+      expect(msgs(1)).toMatch(/lastWorkingDate is in the future/);
+      expect(msgs(2)).toMatch(/exitReason is only for ex-employees/);
+      expect(msgs(3)).toMatch(/lastWorkingDate is before dateOfJoining/);
+      expect(upload.body.rows[4].errors).toEqual([]);
+      expect(msgs(4)).toMatch(/No exitReason/);
+
+      const clean = await request(app).post("/api/import/employees/upload").set(...authHeader(managerToken)).attach("file", await buildXlsx(DATASET_COLUMNS.employees, [good]), "employees.xlsx");
+      expect(clean.body.errorRows).toBe(0);
+      expect((await request(app).post(`/api/import/batches/${clean.body.batchId}/commit`).set(...authHeader(managerToken)).send({})).status).toBe(200);
+
+      const e = await prisma.employee.findUniqueOrThrow({ where: { employeeCode: good.employeeCode }, include: { user: true, jobHistory: true, separations: true } });
+      employeeIds.push(e.id);
+      expect(e).toMatchObject({ status: "SEPARATED", exitReason: "Relocated" });
+      expect(e.lastWorkingDate?.toISOString().slice(0, 10)).toBe("2025-06-30");
+      expect(e.separations).toEqual([]); // no Separation row needed
+      expect(e.user!.status).toBe("DEACTIVATED"); // never invited, can't log in
+      expect(e.jobHistory.map((j) => j.effectiveTo?.toISOString().slice(0, 10))).toEqual(["2025-06-30"]);
+      const mapping = await prisma.deviceUserMapping.findFirstOrThrow({ where: { employeeId: e.id } });
+      expect(mapping.validTo?.toISOString().slice(0, 10)).toBe("2025-06-30");
+    });
   });
 
   describe("statutory dataset", () => {

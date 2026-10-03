@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { writeAuditLog } from "../../lib/audit";
 import { businessToday } from "../../lib/businessDate";
@@ -110,16 +111,7 @@ export async function processScheduledSeparations(): Promise<{ processed: number
       continue;
     }
     await prisma.$transaction(async (tx) => {
-      await tx.employee.update({ where: { id: sep.employeeId }, data: { status: "SEPARATED" } });
-      await tx.user.update({ where: { employeeId: sep.employeeId }, data: { status: "DEACTIVATED" } });
-      await tx.employeeJobHistory.updateMany({
-        where: { employeeId: sep.employeeId, effectiveTo: null },
-        data: { effectiveTo: sep.lastWorkingDate },
-      });
-      await tx.deviceUserMapping.updateMany({
-        where: { employeeId: sep.employeeId, validTo: null },
-        data: { validTo: sep.lastWorkingDate },
-      });
+      await markSeparatedInTx(tx, sep.employeeId, sep.lastWorkingDate, sep.reason);
       await tx.separation.update({ where: { id: sep.id }, data: { status: "COMPLETED", completedAt: new Date() } });
     });
 
@@ -148,4 +140,16 @@ export async function processScheduledSeparations(): Promise<{ processed: number
   }
 
   return { processed };
+}
+
+// What "this person has left" means in the data, in one place — used when a
+// separation completes and by the Excel import for ex-employees migrated
+// from greytHR (who have a last working day and a reason, but no Separation
+// row in this system). Status SEPARATED, account deactivated, the current
+// placement and device mapping closed on the last working day.
+export async function markSeparatedInTx(tx: Prisma.TransactionClient, employeeId: string, lastWorkingDate: Date, exitReason: string | null): Promise<void> {
+  await tx.employee.update({ where: { id: employeeId }, data: { status: "SEPARATED", lastWorkingDate, exitReason } });
+  await tx.user.update({ where: { employeeId }, data: { status: "DEACTIVATED" } });
+  await tx.employeeJobHistory.updateMany({ where: { employeeId, effectiveTo: null }, data: { effectiveTo: lastWorkingDate } });
+  await tx.deviceUserMapping.updateMany({ where: { employeeId, validTo: null }, data: { validTo: lastWorkingDate } });
 }

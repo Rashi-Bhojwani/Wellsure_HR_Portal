@@ -170,6 +170,7 @@ const leavers: Definition = async (q, pop) => {
       employeeCode: true,
       dateOfJoining: true,
       lastWorkingDate: true,
+      exitReason: true,
       ...currentName,
       jobHistory: { orderBy: { effectiveFrom: "desc" }, take: 1, select: { reportingManagerId: true } },
       separations: { where: { status: "COMPLETED" }, orderBy: { completedAt: "desc" }, take: 1, select: { reason: true } },
@@ -184,7 +185,7 @@ const leavers: Definition = async (q, pop) => {
     const p = (await placementsOn([e.id], lwd)).get(e.id);
     if (!matchesOrg(p, q)) continue;
     const tenureYears = (lwd.getTime() - e.dateOfJoining.getTime()) / (365.25 * 86_400_000);
-    rows.push({ ...personCells(e, p), dateOfJoining: ymd(e.dateOfJoining), lastWorkingDate: ymd(lwd), tenureYears: Math.round(tenureYears * 10) / 10, reason: e.separations[0]?.reason ?? null });
+    rows.push({ ...personCells(e, p), dateOfJoining: ymd(e.dateOfJoining), lastWorkingDate: ymd(lwd), tenureYears: Math.round(tenureYears * 10) / 10, reason: e.exitReason ?? e.separations[0]?.reason ?? null });
   }
   const opening = (await headcountOn(from, q, pop)).length;
   const closing = (await headcountOn(to, q, pop)).length;

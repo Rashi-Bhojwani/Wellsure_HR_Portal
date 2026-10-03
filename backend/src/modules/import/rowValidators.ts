@@ -12,6 +12,11 @@ const GENDERS = ["MALE", "FEMALE", "OTHER"];
 const EMPLOYMENT_TYPES = ["PERMANENT", "CONTRACT", "INTERN", "CONSULTANT", "PROBATION"];
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+// Today's business date (Asia/Kolkata) as YYYY-MM-DD.
+function todayIso(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+}
+
 function isValidDate(s: string): boolean {
   if (!DATE_RE.test(s)) return false;
   const d = new Date(s);
@@ -188,6 +193,11 @@ export function validateEmployeeRow(row: ParsedRow, refs: ReferenceData, tracker
 
   const deviceUserId = v.deviceUserId!.trim();
   const employeeCode = (v.employeeCode!.trim() || deviceUserId).trim();
+  // An ex-employee being migrated from greytHR (lastWorkingDate set): they
+  // arrive already separated, with no Separation row (docs/PROGRESS.md
+  // Phase 1.5 migration notes).
+  const lastWorkingDate = (v.lastWorkingDate ?? "").trim();
+  const isFormer = lastWorkingDate !== "";
 
   if (!deviceUserId) errors.push("deviceUserId is required.");
   const REQUIRED_FIELDS = [
@@ -211,7 +221,11 @@ export function validateEmployeeRow(row: ParsedRow, refs: ReferenceData, tracker
     if (!v[field]) errors.push(`${field} is required.`);
   }
 
-  if (deviceUserId) {
+  if (deviceUserId && isFormer) {
+    // A leaver's device ID was released on their last working day — it may
+    // already belong to someone current (the reuse convention, spec §3), so
+    // no collision check; within this file it's still tracked per row.
+  } else if (deviceUserId) {
     if (refs.activeDeviceUserIds.has(deviceUserId)) errors.push(`Device User ID "${deviceUserId}" is already actively assigned to another employee.`);
     else if (tracker.deviceUserIds.has(deviceUserId)) errors.push(`Duplicate Device User ID "${deviceUserId}" elsewhere in this file.`);
     else tracker.deviceUserIds.add(deviceUserId);
@@ -225,6 +239,14 @@ export function validateEmployeeRow(row: ParsedRow, refs: ReferenceData, tracker
 
   if (v.dateOfBirth && !isValidDate(v.dateOfBirth)) errors.push("dateOfBirth must be a valid YYYY-MM-DD date.");
   if (v.dateOfJoining && !isValidDate(v.dateOfJoining)) errors.push("dateOfJoining must be a valid YYYY-MM-DD date.");
+  if (isFormer) {
+    if (!isValidDate(lastWorkingDate)) errors.push("lastWorkingDate must be a valid YYYY-MM-DD date.");
+    else if (v.dateOfJoining && isValidDate(v.dateOfJoining) && lastWorkingDate < v.dateOfJoining) errors.push("lastWorkingDate is before dateOfJoining.");
+    else if (lastWorkingDate > todayIso()) errors.push("lastWorkingDate is in the future — a leaver who hasn't left yet is separated in the app (Employee → Separations), not imported as one.");
+    if (!(v.exitReason ?? "").trim()) warnings.push("No exitReason — this ex-employee will show without a reason in the Leavers report.");
+  } else if ((v.exitReason ?? "").trim()) {
+    errors.push("exitReason is only for ex-employees — set lastWorkingDate too, or leave exitReason blank.");
+  }
   if (v.gender && !GENDERS.includes(v.gender.toUpperCase())) errors.push(`gender must be one of ${GENDERS.join(", ")}.`);
   if (v.employmentType && !EMPLOYMENT_TYPES.includes(v.employmentType.toUpperCase())) {
     errors.push(`employmentType must be one of ${EMPLOYMENT_TYPES.join(", ")}.`);
@@ -250,13 +272,13 @@ export function validateEmployeeRow(row: ParsedRow, refs: ReferenceData, tracker
   if (v.costCentreCode && !refs.costCentreCodeToId.has(v.costCentreCode.toLowerCase())) errors.push(`Unknown cost centre code "${v.costCentreCode}".`);
   if (v.reportingManagerCode && !refs.employeeCodeToId.has(v.reportingManagerCode.toLowerCase())) {
     errors.push(`Unknown reporting manager code "${v.reportingManagerCode}" — the manager must already exist on record (import managers in an earlier batch).`);
-  } else if (v.reportingManagerCode && !refs.activeManagerCodes.has(v.reportingManagerCode.toLowerCase())) {
+  } else if (v.reportingManagerCode && !isFormer && !refs.activeManagerCodes.has(v.reportingManagerCode.toLowerCase())) {
     // E2 (model A): imported people are plain employees, so they report to
     // an active Manager — or leave it blank (they then show as Unassigned).
     errors.push(`Reporting manager "${v.reportingManagerCode}" isn't an active Manager — appoint them in Manager Management first, or leave the column blank.`);
   }
 
-  return { data: { ...v, deviceUserId, employeeCode }, errors, warnings };
+  return { data: { ...v, deviceUserId, employeeCode, lastWorkingDate: isFormer ? lastWorkingDate : "", exitReason: isFormer ? (v.exitReason ?? "").trim() : "" }, errors, warnings };
 }
 
 // ── statutory ────────────────────────────────────────────────────────────

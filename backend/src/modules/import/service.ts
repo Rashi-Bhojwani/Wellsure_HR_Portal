@@ -1,3 +1,4 @@
+import { markSeparatedInTx } from "../employee/separations";
 import ExcelJS from "exceljs";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
@@ -294,7 +295,11 @@ async function commitEmployees(tx: Prisma.TransactionClient, rows: { data: Recor
         bloodGroup: d.bloodGroup || null,
       },
     };
-    const { employee } = await createEmployeeInTx(tx, input, { actorUserId: meta.actorUserId });
+    const lastWorkingDate = d.lastWorkingDate ? new Date(`${d.lastWorkingDate}T00:00:00Z`) : null;
+    const { employee } = await createEmployeeInTx(tx, input, { actorUserId: meta.actorUserId }, { deviceMappingValidTo: lastWorkingDate ?? undefined });
+    // An ex-employee migrated from greytHR: separated on arrival — the same
+    // data change a completed separation makes, with no Separation row.
+    if (lastWorkingDate) await markSeparatedInTx(tx, employee.id, lastWorkingDate, d.exitReason || null);
     empByCode.set(input.official.employeeCode.toLowerCase(), employee.id);
     createdIds.push(employee.id);
   }

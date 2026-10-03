@@ -72,6 +72,8 @@ export const DATASET_COLUMNS: Record<ImportDatasetKey, string[]> = {
     "costCentreCode", // optional
     "reportingManagerCode", // optional — an existing employeeCode
     "officialEmail", // optional
+    "lastWorkingDate", // optional — set ONLY for an ex-employee being migrated (YYYY-MM-DD, not in the future): imported as separated
+    "exitReason", // optional — why they left (ex-employees only)
   ],
   statutory: ["employeeCode", "pan", "aadhaar", "uan", "esiNumber"],
   bank: ["employeeCode", "accountHolderName", "accountNumber", "ifsc", "bankName", "branchName"],

@@ -1629,6 +1629,6 @@ planned. Every route must be wired by the end of Phase 5.
 |---|---|
 | `/app/my-worklife/feedback` (Feedback) | **Settled: Phase 8** (performance reviews); placeholder kept |
 | `/app/todo/tasks` and admin app `tasks` (Tasks) | **Settled: D** (inbox of things waiting on me) |
-| Admin app `workflow` (Workflow) and `admin-tools/workflows` (Approval Workflows, multi-level chains, spec §7.8) | **Not in E3** (decided when E3 was planned, 2026-10-02): nothing in leave is multi-level today. Needs its own plan before the end of Phase 5; placeholder kept |
+| Admin app `workflow` (Workflow) and `admin-tools/workflows` (Approval Workflows, multi-level chains, spec §7.8) | **Dropped** (user decision 2026-10-03): no approval needs configurable chains; payroll maker-checker is purpose-built in Phase 6. Both placeholders removed; rationale in spec §7.8 |
 | `admin-tools/templates` (Email & Letter Templates) | **Settled: its own commit right after D** (headless Chromium; letters saved to Document Center) |
 | `admin-tools/users-roles` (Users & Roles) | **Settled: E1** (Roles & Permissions). |

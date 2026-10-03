@@ -115,6 +115,10 @@ export async function createEmployeeInTx(
   tx: Prisma.TransactionClient,
   input: CreateEmployeeInput,
   meta: RequestMetaInput,
+  // Import only: an ex-employee's device mapping is created already ended on
+  // their last working day, so it never collides with the current holder of
+  // a reused device ID (the active-mapping unique index).
+  opts: { deviceMappingValidTo?: Date } = {},
 ): Promise<{ employee: { id: string }; userId: string }> {
   const { official, personal, statutory, bank } = input;
 
@@ -178,6 +182,7 @@ export async function createEmployeeInTx(
       employeeId: employeeRow.id,
       deviceUserId: official.deviceUserId,
       validFrom: new Date(official.dateOfJoining),
+      validTo: opts.deviceMappingValidTo ?? null,
       createdByUserId: meta.actorUserId,
     },
   });

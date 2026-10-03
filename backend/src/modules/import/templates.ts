@@ -14,6 +14,7 @@ const NOTES: Record<ImportDatasetKey, string[]> = {
     "reportingManagerCode, if set, must match an existing employeeCode.",
     "personalEmail must be a gmail.com address (same rule as the Add Employee wizard).",
     "Dates are YYYY-MM-DD.",
+    "Ex-employees (migrating from greytHR): fill lastWorkingDate (on or after dateOfJoining, not in the future) and, if known, exitReason. They are imported as separated — no login, never invited, their device ID free for reuse from the day after — with no separation workflow needed. reportingManagerCode, if set, may be anyone on record (their old manager may have left too). Leave both blank for current employees.",
   ],
   statutory: [
     "employeeCode must match an employee already on record (import the Employees dataset first).",
