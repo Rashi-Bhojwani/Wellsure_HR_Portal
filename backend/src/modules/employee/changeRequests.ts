@@ -1,5 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
+import { businessToday } from "../../lib/businessDate";
+import { writeBankChange } from "../../lib/effectiveDating";
 import { writeAuditLog } from "../../lib/audit";
 import { redact } from "../../lib/redact";
 import { packBytes, unpackBytes } from "../../lib/bytesJson";
@@ -91,15 +93,13 @@ export async function listChangeRequests(viewer: { employeeId: string; canApprov
 }
 
 async function applyBankChange(employeeId: string, changesJson: Record<string, unknown>, meta: RequestMetaInput): Promise<void> {
-  const current = await prisma.employeeBankAccount.findFirst({ where: { employeeId, effectiveTo: null } });
-  const effectiveFrom = new Date();
-  await prisma.$transaction(async (tx) => {
-    if (current) {
-      await tx.employeeBankAccount.update({ where: { id: current.id }, data: { effectiveTo: effectiveFrom } });
-    }
-    await tx.employeeBankAccount.create({
-      data: {
-        employeeId,
+  // Approved today, in force from today (IST) — through the one timeline writer.
+  await prisma.$transaction((tx) =>
+    writeBankChange(
+      tx,
+      employeeId,
+      businessToday(),
+      {
         accountHolderName: changesJson.accountHolderName as string,
         accountNumberEncrypted: unpackBytes(changesJson.accountNumberEncrypted as string),
         accountNumberLast4: changesJson.accountNumberLast4 as string,
@@ -107,11 +107,10 @@ async function applyBankChange(employeeId: string, changesJson: Record<string, u
         ifsc: changesJson.ifsc as string,
         bankName: changesJson.bankName as string,
         branchName: changesJson.branchName as string,
-        effectiveFrom,
-        createdByUserId: meta.actorUserId,
       },
-    });
-  });
+      { createdByUserId: meta.actorUserId },
+    ),
+  );
 }
 
 async function applyStatutoryChange(employeeId: string, changesJson: Record<string, unknown>): Promise<void> {

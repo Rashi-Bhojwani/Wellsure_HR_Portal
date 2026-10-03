@@ -3,6 +3,8 @@ import ExcelJS from "exceljs";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { writeAuditLog } from "../../lib/audit";
+import { businessToday } from "../../lib/businessDate";
+import { dayAfter, writeBankChange } from "../../lib/effectiveDating";
 import { HttpError } from "../../middleware/errorHandler";
 import { unpackBytes } from "../../lib/bytesJson";
 import { createEmployeeInTx } from "../employee/service";
@@ -296,7 +298,7 @@ async function commitEmployees(tx: Prisma.TransactionClient, rows: { data: Recor
       },
     };
     const lastWorkingDate = d.lastWorkingDate ? new Date(`${d.lastWorkingDate}T00:00:00Z`) : null;
-    const { employee } = await createEmployeeInTx(tx, input, { actorUserId: meta.actorUserId }, { deviceMappingValidTo: lastWorkingDate ?? undefined });
+    const { employee } = await createEmployeeInTx(tx, input, { actorUserId: meta.actorUserId }, { deviceMappingValidTo: lastWorkingDate ? dayAfter(lastWorkingDate) : undefined });
     // An ex-employee migrated from greytHR: separated on arrival — the same
     // data change a completed separation makes, with no Separation row.
     if (lastWorkingDate) await markSeparatedInTx(tx, employee.id, lastWorkingDate, d.exitReason || null);
@@ -344,14 +346,12 @@ async function commitBank(tx: Prisma.TransactionClient, rows: { data: Record<str
     const employeeId = empByCode.get(d.employeeCode!.toLowerCase());
     if (!employeeId || !d.accountNumberEncrypted) continue;
 
-    const current = await tx.employeeBankAccount.findFirst({ where: { employeeId, effectiveTo: null } });
-    const effectiveFrom = new Date();
-    if (current) {
-      await tx.employeeBankAccount.update({ where: { id: current.id }, data: { effectiveTo: effectiveFrom } });
-    }
-    await tx.employeeBankAccount.create({
-      data: {
-        employeeId,
+    // In force from today (IST), through the one timeline writer.
+    await writeBankChange(
+      tx,
+      employeeId,
+      businessToday(),
+      {
         accountHolderName: d.accountHolderName!,
         accountNumberEncrypted: unpackBytes(d.accountNumberEncrypted),
         accountNumberLast4: d.accountNumberLast4!,
@@ -359,10 +359,9 @@ async function commitBank(tx: Prisma.TransactionClient, rows: { data: Record<str
         ifsc: d.ifsc!,
         bankName: d.bankName!,
         branchName: d.branchName!,
-        effectiveFrom,
-        createdByUserId: meta.actorUserId,
       },
-    });
+      { createdByUserId: meta.actorUserId },
+    );
   }
 }
 

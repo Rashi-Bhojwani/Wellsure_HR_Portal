@@ -168,8 +168,13 @@ describe("Separations — initiate, cancel, scheduled deactivation", () => {
     const initiate = await request(app)
       .post(`/api/employees/${target.employeeId}/separations`)
       .set(...authHeader(hrToken))
-      .send({ lastWorkingDate: "2020-01-01", reason: "Resignation" }); // safely in the past
-    expect(initiate.status).toBe(201);
+      .send({ lastWorkingDate: "2020-01-01", reason: "Resignation" }); // before they joined (2024-01-01)
+    expect(initiate.status).toBe(400); // EF1: history can't end before it starts
+    const ok = await request(app)
+      .post(`/api/employees/${target.employeeId}/separations`)
+      .set(...authHeader(hrToken))
+      .send({ lastWorkingDate: "2025-01-15", reason: "Resignation" }); // safely in the past
+    expect(ok.status).toBe(201);
 
     const { processed } = await processScheduledSeparations();
     expect(processed).toBeGreaterThanOrEqual(1);
@@ -182,7 +187,12 @@ describe("Separations — initiate, cancel, scheduled deactivation", () => {
     expect(openJob).toBeNull();
     const openMapping = await prisma.deviceUserMapping.findFirst({ where: { employeeId: target.employeeId, validTo: null } });
     expect(openMapping).toBeNull();
-    const separation = await prisma.separation.findUnique({ where: { id: initiate.body.id } });
+    // EF1: both end the day AFTER the last working day, so they're in force on it.
+    const job = await prisma.employeeJobHistory.findFirstOrThrow({ where: { employeeId: target.employeeId }, orderBy: { effectiveFrom: "desc" } });
+    expect(job.effectiveTo?.toISOString().slice(0, 10)).toBe("2025-01-16");
+    const mapping = await prisma.deviceUserMapping.findFirstOrThrow({ where: { employeeId: target.employeeId } });
+    expect(mapping.validTo?.toISOString().slice(0, 10)).toBe("2025-01-16");
+    const separation = await prisma.separation.findUnique({ where: { id: ok.body.id } });
     expect(separation?.status).toBe("COMPLETED");
   });
 
@@ -192,7 +202,7 @@ describe("Separations — initiate, cancel, scheduled deactivation", () => {
     await request(app)
       .post(`/api/employees/${target.employeeId}/separations`)
       .set(...authHeader(hrToken))
-      .send({ lastWorkingDate: "2020-01-01", reason: "Resignation" });
+      .send({ lastWorkingDate: "2025-01-15", reason: "Resignation" });
     await processScheduledSeparations();
 
     const loginRes = await request(app).post("/api/auth/login").send({ employeeCode: target.employeeCode, password: "TestPass1234" });

@@ -323,6 +323,7 @@ Run from the repo root unless noted.
 | `npm run check:services` | Confirms Postgres/Redis are reachable |
 | `npm run admin:bootstrap --prefix backend` | Create the **first** real Super Admin on a fresh staging/production database — see §12. Refuses once any active Super Admin exists, so it does nothing locally (seeded `1000` is one) |
 | `npm run admin:recover --prefix backend` | Break-glass recovery for a Super Admin who lost their password or 2FA device — see §12 |
+| `npm run history:repair --prefix backend` | **Preview** history rows that don't fit the effective-dating model (e.g. a leaver whose placement was never closed) — every fix, current → new value, and why, plus rows a person must decide. Changes nothing. To apply, get the preview approved, then run the exact command it prints (`--apply --fingerprint … --approved-by … --operator …`); a changed list is refused. `db:migrate` warns when this is needed. See `docs/plans/EFFECTIVE_DATES.md` |
 
 **Prisma Studio** (a GUI for browsing/editing the database):
 

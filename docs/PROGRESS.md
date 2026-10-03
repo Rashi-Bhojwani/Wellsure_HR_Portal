@@ -3666,6 +3666,99 @@ reissue/reproduce. HR Admin does all of that.
   reproduce are 403.
 - The grantable-keys guard now also forbids `documents.pay.*`.
 
+### Effective dating EF1 — foundation (2026-10-04)
+
+Plan: [`docs/plans/EFFECTIVE_DATES.md`](plans/EFFECTIVE_DATES.md), approved
+2026-10-03 with all six decisions as recommended. This is commit 1 of 4.
+Users see no behaviour change, except that history that would have been
+corrupted is now refused.
+
+**Built:**
+- **`lib/effectiveDating.ts`, the one model:**
+  - a row covers its start up to but not including its end;
+  - `inForceOn(day)` / `mappingInForceOn(day)`;
+  - `planTimelineChange`, a pure function:
+    - append after the latest row;
+    - amend on its own start date;
+    - refuse anything earlier (`HISTORY_BEFORE_LATEST`), or earlier than
+      a scheduled change (`HISTORY_SCHEDULED_EXISTS` — cancel it first);
+    - refuse more than 366 days ahead (setting
+      `history.maxScheduleAheadDays`) and changes after leaving;
+  - the only writers, `writeJobChange`, `writeNameChange` and
+    `writeBankChange`, which lock the employee row first;
+  - `cancelScheduledJobChange` (its endpoint and UI come in EF3);
+  - `closeHistoryOnLeaving`.
+- **Every history writer moved onto it:**
+  - Change job details;
+  - Manager Management team moves;
+  - role changes;
+  - name changes;
+  - bank changes (direct, approved change requests, import);
+  - separations.
+
+  Bank changes now default to the IST business date, not `new Date()`.
+- **Separations close history the day AFTER the last working day**, so a
+  leaver is in force on it. The last working day can't be before joining,
+  or before a job change already in force. Scheduled changes after it
+  are dropped (audited). A blocked completion stays pending, with a daily
+  audit entry.
+- **Database rules** (migration `20261004090000_effective_dating`; changes
+  no data):
+  - CHECK that each row ends after it starts, on all four history tables;
+  - `btree_gist` EXCLUDE constraints: no overlap per employee on all four
+    tables, and none per device ID.
+
+  If existing rows break these rules, the migration stops before changing
+  anything.
+- **History repair, preview → approve → apply** (user addition):
+  - `npm run history:repair` lists every row it would fix (current → new
+    value, and why) and every row a person must decide, with a
+    fingerprint.
+  - `--apply` needs that fingerprint plus `--approved-by` and
+    `--operator`. It refuses if the list changed, applies in one
+    transaction, and writes one `history.repaired` audit entry per row.
+  - `db:migrate` and the `migrate` mode warn when a repair is pending;
+    they never repair.
+  - Procedure: `docs/DEPLOYMENT.md`.
+- **Import:** a device ID whose dates would overlap another holder's is a
+  per-row error. The Add Employee wizard maps the same constraint to a
+  clear 409.
+- **Seed:** leavers 1028 and 1090 are now closed the day after their last
+  working day, so the seed needs no repair.
+- **Test clock:** `setBusinessTodayForTests(day)`, vitest only, so tests
+  can move "today".
+
+**Repair preview on a copy of devcheck with the OLD seed data**
+(`wellsure_hr_repairdemo`): 4 rows to fix, 0 needing a person.
+- 1028 and 1090: job placements still open after leaving → close them
+  the day after the last working day.
+- Their device mappings end ON the last working day → move the end to the
+  day after.
+- Fingerprint `8068df96b59be0d2`. **Not applied — awaiting user
+  approval.**
+
+A wrong fingerprint and a missing approver were both refused, with
+nothing changed. `wellsure_hr` (the user's own dev database) was not
+touched.
+
+**Tests:**
+- `lib/__tests__/effectiveDating.test.ts`:
+  - planner cases;
+  - a property test: 300 random histories × 12 changes against a
+    reference model, checking contiguous, non-overlapping and correct in
+    force on sampled days.
+- `lib/__tests__/timeline.integration.test.ts`:
+  - append, amend and refuse;
+  - the database rejects overlaps and backwards rows;
+  - a scheduled change is not in force before its day and can be
+    cancelled;
+  - leaving: in force on the last working day, scheduled change dropped,
+    in-force conflict refused;
+  - repair preview, refusal, apply and audit;
+  - the seed needs no repair.
+- Separation and import tests updated: their fixtures had a last working
+  day before joining, or a device ID shared by two people at once.
+
 ## Open questions
 
 - [x] **Approval Workflows — dropped (user decision 2026-10-03).** No

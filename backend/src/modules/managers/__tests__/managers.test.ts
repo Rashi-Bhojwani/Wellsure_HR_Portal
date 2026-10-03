@@ -247,7 +247,7 @@ describe("Manager Management and the three-level hierarchy (E2)", () => {
     const m = await createFullTestEmployee(org, { roleCode: "MANAGER" });
     const r = await createFullTestEmployee(org, { roleCode: "EMPLOYEE", managerId: m.employeeId });
     extra.push(r.employeeId, m.employeeId);
-    await prisma.separation.create({ data: { employeeId: m.employeeId, lastWorkingDate: new Date("2020-01-31"), reason: "Resigned", initiatedByUserId: p.hrAdmin.userId } });
+    await prisma.separation.create({ data: { employeeId: m.employeeId, lastWorkingDate: new Date("2025-01-31"), reason: "Resigned", initiatedByUserId: p.hrAdmin.userId } });
     await processScheduledSeparations();
     expect((await prisma.employee.findUniqueOrThrow({ where: { id: m.employeeId } })).status).toBe("SEPARATED");
     const ids = (await hr().get("/api/managers/unassigned")).body.employees.map((e: { employeeId: string }) => e.employeeId);

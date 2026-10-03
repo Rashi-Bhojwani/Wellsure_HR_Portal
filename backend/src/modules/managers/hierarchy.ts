@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { businessToday } from "../../lib/businessDate";
+import { writeJobChange } from "../../lib/effectiveDating";
 import { prisma } from "../../lib/prisma";
 import { checkReportingLine, isTopLevel, MANAGER_ROLE_CODE, type ManagerRef } from "../../lib/reportingHierarchy";
 import { HttpError } from "../../middleware/errorHandler";
@@ -36,44 +37,26 @@ export async function assertReportingLineFor(employeeId: string, managerId: stri
   await assertReportingLine({ code: e.employeeCode, roleCodes: await roleCodesOf(employeeId, db) }, managerId, db);
 }
 
-// Effective dates for team moves: today or earlier, never before the
-// current placement started. Future dates are refused because job history
-// can't yet represent a pending change (a future-dated row becomes
-// "current" immediately — docs/PROGRESS.md open issue, to be fixed before
-// Phase 6).
-export function parseMoveDate(effectiveFrom: string | undefined, currentFrom: Date | null): Date {
+// Effective dates for team moves: today or earlier. Future dates stay
+// refused until EF3 (docs/plans/EFFECTIVE_DATES.md) makes scheduled changes
+// visible and rolls them over; how far back a change may go is the timeline
+// writer's rule (never before the latest period started).
+export function parseMoveDate(effectiveFrom: string | undefined): Date {
   const today = businessToday();
   const date = effectiveFrom ? new Date(effectiveFrom) : today;
   if (date > today) throw new HttpError(400, "A team change can't be dated in the future yet — use today or an earlier date.", "FUTURE_DATE");
-  if (currentFrom && date < currentFrom) {
-    throw new HttpError(400, `The change can't be dated before their current placement started (${currentFrom.toISOString().slice(0, 10)}).`, "VALIDATION_ERROR");
-  }
   return date;
 }
 
-// Effective-dated reporting-line change: closes the current placement and
-// opens a new one copying everything but the manager. Never edits a row's
-// contents in place. Returns before/after for the audit log.
+// Effective-dated reporting-line change through the one timeline writer
+// (lib/effectiveDating.ts): copies everything but the manager. Returns
+// before/after for the audit log.
 export async function moveReportingLine(tx: Prisma.TransactionClient, employeeId: string, newManagerId: string | null, effectiveFrom: Date, createdByUserId: string | null, changeReason: string) {
-  const current = await tx.employeeJobHistory.findFirst({ where: { employeeId, effectiveTo: null } });
+  const current = await tx.employeeJobHistory.findFirst({ where: { employeeId }, orderBy: { effectiveFrom: "desc" } });
   if (!current) throw new HttpError(409, "This person has no job placement yet — set their department, designation and branch first (Change job details).", "NO_PLACEMENT");
   if (current.reportingManagerId === newManagerId) return { before: current, after: current, changed: false as const };
-  await tx.employeeJobHistory.update({ where: { id: current.id }, data: { effectiveTo: effectiveFrom } });
-  const after = await tx.employeeJobHistory.create({
-    data: {
-      employeeId,
-      departmentId: current.departmentId,
-      designationId: current.designationId,
-      locationId: current.locationId,
-      gradeId: current.gradeId,
-      costCentreId: current.costCentreId,
-      reportingManagerId: newManagerId,
-      effectiveFrom,
-      changeReason,
-      createdByUserId: createdByUserId ?? current.createdByUserId,
-    },
-  });
-  return { before: current, after, changed: true as const };
+  const write = await writeJobChange(tx, employeeId, effectiveFrom, { reportingManagerId: newManagerId }, { createdByUserId: createdByUserId ?? current.createdByUserId, changeReason });
+  return { before: current, after: write.after, changed: true as const };
 }
 
 // Active direct reports of a manager (current placements only).

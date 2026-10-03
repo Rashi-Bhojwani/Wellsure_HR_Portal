@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
+import { closeHistoryOnLeaving } from "../../lib/effectiveDating";
 import { writeAuditLog } from "../../lib/audit";
 import { businessToday } from "../../lib/businessDate";
 import { HttpError } from "../../middleware/errorHandler";
@@ -33,6 +34,17 @@ export async function initiateSeparation(employeeId: string, input: InitiateSepa
   if (user) await assertSuperAdminRemains(user.id, { excludeLeaving: true });
 
   const lastWorkingDate = new Date(input.lastWorkingDate);
+  // Effective dating (EF1): their history ends the day after this date, so
+  // it can't be before they joined, nor before a job change that's already
+  // in force (that would rewrite history). A change merely scheduled after
+  // it is dropped when the separation completes.
+  if (lastWorkingDate < employee.dateOfJoining) {
+    throw new HttpError(400, `The last working day can't be before they joined (${employee.dateOfJoining.toISOString().slice(0, 10)}).`, "VALIDATION_ERROR");
+  }
+  const laterInForce = await prisma.employeeJobHistory.findFirst({ where: { employeeId, effectiveFrom: { gt: lastWorkingDate, lte: businessToday() } }, orderBy: { effectiveFrom: "asc" } });
+  if (laterInForce) {
+    throw new HttpError(409, `They have a job change in force from ${laterInForce.effectiveFrom.toISOString().slice(0, 10)}, after this last working day — earlier history is never rewritten. Choose a last working day on or after it.`, "HISTORY_AFTER_LEAVING");
+  }
   const [row] = await prisma.$transaction([
     prisma.separation.create({
       data: { employeeId, lastWorkingDate, reason: input.reason, notes: input.notes ?? null, initiatedByUserId: meta.actorUserId },
@@ -110,10 +122,25 @@ export async function processScheduledSeparations(): Promise<{ processed: number
       });
       continue;
     }
-    await prisma.$transaction(async (tx) => {
-      await markSeparatedInTx(tx, sep.employeeId, sep.lastWorkingDate, sep.reason);
-      await tx.separation.update({ where: { id: sep.id }, data: { status: "COMPLETED", completedAt: new Date() } });
-    });
+    let removedScheduled: Awaited<ReturnType<typeof markSeparatedInTx>>["removedScheduled"];
+    try {
+      ({ removedScheduled } = await prisma.$transaction(async (tx) => {
+        const closed = await markSeparatedInTx(tx, sep.employeeId, sep.lastWorkingDate, sep.reason);
+        await tx.separation.update({ where: { id: sep.id }, data: { status: "COMPLETED", completedAt: new Date() } });
+        return closed;
+      }));
+    } catch (err) {
+      // History that can't be closed without rewriting it (a job change in
+      // force after the last working day): keep the separation pending and
+      // say why, every day, rather than guess.
+      if (!(err instanceof HttpError)) throw err;
+      logger.error({ separationId: sep.id, employeeId: sep.employeeId, code: err.code }, "separation NOT completed: history conflict");
+      await writeAuditLog({ actorUserId: null, action: "employee.separation.blocked_history", entityType: "Employee", entityId: sep.employeeId, after: { separationId: sep.id, reason: err.message } });
+      continue;
+    }
+    for (const row of removedScheduled) {
+      await writeAuditLog({ actorUserId: null, action: "employee.job.scheduled_change_removed", entityType: "Employee", entityId: sep.employeeId, before: row, after: { reason: "Dated after their last working day — it would never take effect." } });
+    }
 
     const user = await prisma.user.findUnique({ where: { employeeId: sep.employeeId } });
     if (user) {
@@ -147,9 +174,13 @@ export async function processScheduledSeparations(): Promise<{ processed: number
 // from greytHR (who have a last working day and a reason, but no Separation
 // row in this system). Status SEPARATED, account deactivated, the current
 // placement and device mapping closed on the last working day.
-export async function markSeparatedInTx(tx: Prisma.TransactionClient, employeeId: string, lastWorkingDate: Date, exitReason: string | null): Promise<void> {
+// History closes the day AFTER the last working day (lib/effectiveDating.ts:
+// a row covers its start up to but not including its end), so the leaver is
+// in force on their last day — payroll's last month and attendance for that
+// day both depend on it. Returns any scheduled job change dated after the
+// last day, removed because it can never take effect, for the audit log.
+export async function markSeparatedInTx(tx: Prisma.TransactionClient, employeeId: string, lastWorkingDate: Date, exitReason: string | null) {
   await tx.employee.update({ where: { id: employeeId }, data: { status: "SEPARATED", lastWorkingDate, exitReason } });
   await tx.user.update({ where: { employeeId }, data: { status: "DEACTIVATED" } });
-  await tx.employeeJobHistory.updateMany({ where: { employeeId, effectiveTo: null }, data: { effectiveTo: lastWorkingDate } });
-  await tx.deviceUserMapping.updateMany({ where: { employeeId, validTo: null }, data: { validTo: lastWorkingDate } });
+  return closeHistoryOnLeaving(tx, employeeId, lastWorkingDate);
 }

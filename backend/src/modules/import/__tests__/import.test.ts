@@ -244,13 +244,16 @@ describe("Import Center (/api/import)", () => {
         lastWorkingDate: "",
         exitReason: "",
       });
-      const good = { ...base("a"), deviceUserId: takenDeviceId, lastWorkingDate: "2025-06-30", exitReason: "Relocated" };
+      // The device ID's current holder started 2024-01-01: a leaver can have
+      // held it only up to the day before (EF1: one ID is never two people).
+      const good = { ...base("a"), deviceUserId: takenDeviceId, lastWorkingDate: "2023-12-31", exitReason: "Relocated" };
       const rows = [
         good,
         { ...base("b"), lastWorkingDate: "2099-01-01" }, // not left yet
         { ...base("c"), exitReason: "Resigned" }, // reason without a last working day
         { ...base("d"), lastWorkingDate: "2018-01-01" }, // before joining
         { ...base("e"), lastWorkingDate: "2025-03-31" }, // fine, but no reason → a warning
+        { ...base("f"), deviceUserId: takenDeviceId, lastWorkingDate: "2025-06-30", exitReason: "Relocated" }, // overlaps the current holder
       ];
       const upload = await request(app).post("/api/import/employees/upload").set(...authHeader(managerToken)).attach("file", await buildXlsx(DATASET_COLUMNS.employees, rows), "employees.xlsx");
       expect(upload.status).toBe(201);
@@ -261,6 +264,7 @@ describe("Import Center (/api/import)", () => {
       expect(msgs(3)).toMatch(/lastWorkingDate is before dateOfJoining/);
       expect(upload.body.rows[4].errors).toEqual([]);
       expect(msgs(4)).toMatch(/No exitReason/);
+      expect(msgs(5)).toMatch(/One device ID can't be two people on the same day/);
 
       const clean = await request(app).post("/api/import/employees/upload").set(...authHeader(managerToken)).attach("file", await buildXlsx(DATASET_COLUMNS.employees, [good]), "employees.xlsx");
       expect(clean.body.errorRows).toBe(0);
@@ -269,12 +273,13 @@ describe("Import Center (/api/import)", () => {
       const e = await prisma.employee.findUniqueOrThrow({ where: { employeeCode: good.employeeCode }, include: { user: true, jobHistory: true, separations: true } });
       employeeIds.push(e.id);
       expect(e).toMatchObject({ status: "SEPARATED", exitReason: "Relocated" });
-      expect(e.lastWorkingDate?.toISOString().slice(0, 10)).toBe("2025-06-30");
+      expect(e.lastWorkingDate?.toISOString().slice(0, 10)).toBe("2023-12-31");
       expect(e.separations).toEqual([]); // no Separation row needed
       expect(e.user!.status).toBe("DEACTIVATED"); // never invited, can't log in
-      expect(e.jobHistory.map((j) => j.effectiveTo?.toISOString().slice(0, 10))).toEqual(["2025-06-30"]);
+      // EF1: history ends the day AFTER the last working day (in force on it).
+      expect(e.jobHistory.map((j) => j.effectiveTo?.toISOString().slice(0, 10))).toEqual(["2024-01-01"]);
       const mapping = await prisma.deviceUserMapping.findFirstOrThrow({ where: { employeeId: e.id } });
-      expect(mapping.validTo?.toISOString().slice(0, 10)).toBe("2025-06-30");
+      expect(mapping.validTo?.toISOString().slice(0, 10)).toBe("2024-01-01");
     });
   });
 

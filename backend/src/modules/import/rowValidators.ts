@@ -1,4 +1,5 @@
 import { prisma } from "../../lib/prisma";
+import { addCalendarDays } from "../../lib/businessDate";
 import { encryptBankFields, encryptStatutoryFields } from "../employee/service";
 import { packBytes } from "../../lib/bytesJson";
 import { blindIndex, normalizeAadhaar, normalizeAccountNumber, normalizePan } from "../../lib/fieldHash";
@@ -37,6 +38,7 @@ export interface ReferenceData {
   activeManagerCodes: Set<string>; // lowercased; active MANAGER holders (E2: the only valid reporting managers)
   officialEmails: Set<string>; // lowercased
   activeDeviceUserIds: Set<string>;
+  deviceMappingRanges: Map<string, Array<{ from: Date; to: Date | null; employeeCode: string }>>;
   panHashes: Set<string>;
   aadhaarHashes: Set<string>;
   activeAccountNumberHashes: Set<string>;
@@ -55,7 +57,7 @@ export async function loadReferenceData(): Promise<ReferenceData> {
       prisma.employee.findMany({
         select: { id: true, employeeCode: true, officialEmail: true, status: true, user: { select: { roles: { select: { role: { select: { code: true } } } } } } },
       }),
-      prisma.deviceUserMapping.findMany({ where: { validTo: null }, select: { deviceUserId: true } }),
+      prisma.deviceUserMapping.findMany({ select: { deviceUserId: true, validFrom: true, validTo: true, employee: { select: { employeeCode: true } } } }),
       prisma.employeeStatutory.findMany({ select: { panHash: true, aadhaarHash: true } }),
       prisma.employeeBankAccount.findMany({ where: { effectiveTo: null }, select: { accountNumberHash: true } }),
       prisma.leaveType.findMany({ where: { isActive: true, code: { not: "COF" } }, select: { id: true, code: true } }),
@@ -78,7 +80,13 @@ export async function loadReferenceData(): Promise<ReferenceData> {
     employeeCodeToId: new Map(employees.map((e) => [e.employeeCode.toLowerCase(), e.id])),
     activeManagerCodes: new Set(employees.filter((e) => e.status === "ACTIVE" && e.user?.roles.some((r) => r.role.code === "MANAGER")).map((e) => e.employeeCode.toLowerCase())),
     officialEmails: new Set(employees.filter((e) => e.officialEmail).map((e) => e.officialEmail!.toLowerCase())),
-    activeDeviceUserIds: new Set(deviceMappings.map((m) => m.deviceUserId)),
+    activeDeviceUserIds: new Set(deviceMappings.filter((m) => m.validTo === null).map((m) => m.deviceUserId)),
+    // Every mapping's date range per device ID: one ID is never two people
+    // on the same day (the device_user_mappings_device_no_overlap constraint).
+    deviceMappingRanges: deviceMappings.reduce((acc, m) => {
+      acc.set(m.deviceUserId, [...(acc.get(m.deviceUserId) ?? []), { from: m.validFrom, to: m.validTo, employeeCode: m.employee.employeeCode }]);
+      return acc;
+    }, new Map<string, Array<{ from: Date; to: Date | null; employeeCode: string }>>()),
     panHashes: new Set(statutories.filter((s) => s.panHash).map((s) => s.panHash!)),
     aadhaarHashes: new Set(statutories.filter((s) => s.aadhaarHash).map((s) => s.aadhaarHash!)),
     activeAccountNumberHashes: new Set(bankAccounts.map((b) => b.accountNumberHash)),
@@ -221,10 +229,25 @@ export function validateEmployeeRow(row: ParsedRow, refs: ReferenceData, tracker
     if (!v[field]) errors.push(`${field} is required.`);
   }
 
+  // One device ID is never two people on the same day. A leaver's ID may
+  // already belong to someone current (the reuse convention, spec §3) — fine
+  // as long as that person started after the leaver's last working day.
+  if (deviceUserId && v.dateOfJoining && isValidDate(v.dateOfJoining) && (!isFormer || isValidDate(lastWorkingDate))) {
+    const from = new Date(v.dateOfJoining);
+    const to = isFormer ? addCalendarDays(new Date(lastWorkingDate), 1) : null;
+    const FAR = new Date(8640000000000000);
+    // For a current hire, an open mapping is reported by the "actively
+    // assigned" check below; here, a leaver whose time runs past their start.
+    const ranges = (refs.deviceMappingRanges.get(deviceUserId) ?? []).filter((r) => isFormer || r.to !== null);
+    const clash = ranges.find((r) => r.from < (to ?? FAR) && from < (r.to ?? FAR));
+    if (clash) {
+      errors.push(
+        `Device User ID "${deviceUserId}" belongs to ${clash.employeeCode} from ${clash.from.toISOString().slice(0, 10)}${clash.to ? ` to ${addCalendarDays(clash.to, -1).toISOString().slice(0, 10)}` : ""}, which overlaps this person's time (${v.dateOfJoining} to ${isFormer ? lastWorkingDate : "now"}). One device ID can't be two people on the same day.`,
+      );
+    }
+  }
   if (deviceUserId && isFormer) {
-    // A leaver's device ID was released on their last working day — it may
-    // already belong to someone current (the reuse convention, spec §3), so
-    // no collision check; within this file it's still tracked per row.
+    // Within this file a leaver's ID isn't tracked: their reuse is checked by date above.
   } else if (deviceUserId) {
     if (refs.activeDeviceUserIds.has(deviceUserId)) errors.push(`Device User ID "${deviceUserId}" is already actively assigned to another employee.`);
     else if (tracker.deviceUserIds.has(deviceUserId)) errors.push(`Duplicate Device User ID "${deviceUserId}" elsewhere in this file.`);

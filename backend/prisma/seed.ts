@@ -16,6 +16,7 @@ import { DEFAULT_HELPDESK_AUTO_CLOSE_DAYS, DEFAULT_HELPDESK_REOPEN_WINDOW_DAYS }
 import { LETTER_TEMPLATE_SEEDS } from "./seedLetterTemplates";
 import { SYSTEM_ROLES } from "../src/lib/systemRoles";
 import { ensureAccessCatalog } from "../src/lib/accessCatalog";
+import { dayAfter } from "../src/lib/effectiveDating";
 import { prisma as appPrisma } from "../src/lib/prisma";
 
 assertDevelopmentEnvironment("the Phase 1 seed script (inserts fake employee/bank/statutory data)");
@@ -596,6 +597,10 @@ async function main() {
         costCentreId: cc[spec.costCentreCode]!.id,
         reportingManagerId: managerId ?? null,
         effectiveFrom: new Date(spec.doj),
+        // A leaver's history ends the day AFTER their last working day (a row
+        // covers its start up to but not including its end —
+        // lib/effectiveDating.ts), exactly as a real separation closes it.
+        effectiveTo: spec.lastWorkingDate ? dayAfter(new Date(spec.lastWorkingDate)) : null,
         createdByUserId,
       },
     });
@@ -605,7 +610,7 @@ async function main() {
         employeeId: employee.id,
         deviceUserId: spec.deviceUserId,
         validFrom: new Date(spec.doj),
-        validTo: spec.lastWorkingDate ? new Date(spec.lastWorkingDate) : null,
+        validTo: spec.lastWorkingDate ? dayAfter(new Date(spec.lastWorkingDate)) : null,
         createdByUserId,
       },
     });

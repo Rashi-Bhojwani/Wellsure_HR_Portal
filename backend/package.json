@@ -19,7 +19,8 @@
     "check:services": "tsx scripts/check-services.ts",
     "db:seed": "tsx scripts/reset-db.ts",
     "admin:bootstrap": "tsx scripts/admin-bootstrap.ts",
-    "admin:recover": "tsx scripts/admin-recover.ts"
+    "admin:recover": "tsx scripts/admin-recover.ts",
+    "history:repair": "tsx scripts/history-repair.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

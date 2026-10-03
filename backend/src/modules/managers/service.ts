@@ -167,7 +167,7 @@ export async function appointManager(employeeId: string, input: { effectiveFrom?
   }
   const current = await prisma.employeeJobHistory.findFirst({ where: { employeeId, effectiveTo: null } });
   if (!current) throw new HttpError(409, "They have no job placement yet — set their department, designation and branch first.", "NO_PLACEMENT");
-  const effectiveFrom = parseMoveDate(input.effectiveFrom, current.effectiveFrom);
+  const effectiveFrom = parseMoveDate(input.effectiveFrom);
   const role = await prisma.role.findUniqueOrThrow({ where: { code: MANAGER_ROLE_CODE } });
   const oldManagerId = current.reportingManagerId;
 
@@ -192,7 +192,7 @@ export async function removeManager(employeeId: string, input: { newManagerId: s
   // Their own new line, as the plain employee they become.
   await assertReportingLine({ code: person.employeeCode, roleCodes: remainingRoles }, input.newManagerId);
   const current = await prisma.employeeJobHistory.findFirst({ where: { employeeId, effectiveTo: null } });
-  const effectiveFrom = parseMoveDate(input.effectiveFrom, current?.effectiveFrom ?? null);
+  const effectiveFrom = parseMoveDate(input.effectiveFrom);
   const role = await prisma.role.findUniqueOrThrow({ where: { code: MANAGER_ROLE_CODE } });
 
   // Their manager powers were granted to them as a manager — they go with
@@ -228,7 +228,7 @@ export async function assignTeamMembers(managerId: string, input: { employeeIds:
   for (const p of people) {
     if (!byEmployee.get(p.id)) throw new HttpError(409, `${p.employeeCode} has no job placement yet — set their department, designation and branch first.`, "NO_PLACEMENT");
   }
-  const dates = new Map(people.map((p) => [p.id, parseMoveDate(input.effectiveFrom, byEmployee.get(p.id)!.effectiveFrom)]));
+  const dates = new Map(people.map((p) => [p.id, parseMoveDate(input.effectiveFrom)]));
 
   const moves = await prisma.$transaction(async (tx) => {
     const out = [];
@@ -248,7 +248,7 @@ export async function assignTeamMembers(managerId: string, input: { employeeIds:
 export async function removeTeamMember(managerId: string, memberId: string, input: { effectiveFrom?: string }, meta: Meta) {
   const current = await prisma.employeeJobHistory.findFirst({ where: { employeeId: memberId, effectiveTo: null } });
   if (!current || current.reportingManagerId !== managerId) throw new HttpError(404, "They aren't in this manager's team.", "NOT_FOUND");
-  const effectiveFrom = parseMoveDate(input.effectiveFrom, current.effectiveFrom);
+  const effectiveFrom = parseMoveDate(input.effectiveFrom);
   const move = await prisma.$transaction((tx) => moveReportingLine(tx, memberId, null, effectiveFrom, meta.actorUserId, MOVE_REASON.remove));
   await writeAuditLog({ ...meta, action: "manager.team.member_removed", entityType: "Employee", entityId: memberId, before: { reportingManagerId: managerId }, after: { reportingManagerId: null, effectiveFrom: effectiveFrom.toISOString().slice(0, 10), jobHistoryId: move.after.id } });
   emitTeamChanged([managerId]);

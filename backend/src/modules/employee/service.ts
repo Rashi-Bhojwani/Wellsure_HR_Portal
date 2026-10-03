@@ -1,6 +1,8 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { writeAuditLog } from "../../lib/audit";
+import { businessToday } from "../../lib/businessDate";
+import { writeBankChange, writeJobChange, writeNameChange } from "../../lib/effectiveDating";
 import { HttpError } from "../../middleware/errorHandler";
 import { encryptField, decryptField } from "../../lib/encryption";
 import { blindIndex, last4, normalizeAadhaar, normalizeAccountNumber, normalizePan } from "../../lib/fieldHash";
@@ -37,6 +39,13 @@ async function runConflictSafe<T>(fn: () => Promise<T>): Promise<T> {
       if (target.includes("aadhaar_hash")) throw new HttpError(409, "This Aadhaar is already on record for another employee.", "CONFLICT");
       if (target.includes("employee_id")) throw new HttpError(409, "A conflicting record already exists for this employee.", "CONFLICT");
       throw new HttpError(409, "A record with these details already exists.", "CONFLICT");
+    }
+    // The effective-dating overlap constraints (lib/effectiveDating.ts).
+    if (err instanceof Prisma.PrismaClientUnknownRequestError && err.message.includes("device_user_mappings_device_no_overlap")) {
+      throw new HttpError(409, "This Device User ID belongs to someone else for part of this period — one device ID can't be two people on the same day.", "CONFLICT");
+    }
+    if (err instanceof Prisma.PrismaClientUnknownRequestError && err.message.includes("_no_overlap")) {
+      throw new HttpError(409, "That would give this person two overlapping records for the same days.", "CONFLICT");
     }
     throw err;
   }
@@ -486,67 +495,40 @@ interface JobUpdateInput {
 }
 
 export async function updateJob(employeeId: string, input: JobUpdateInput, meta: RequestMetaInput) {
-  const current = await prisma.employeeJobHistory.findFirst({ where: { employeeId, effectiveTo: null } });
-  if (input.reportingManagerId !== undefined && input.reportingManagerId !== (current?.reportingManagerId ?? null)) {
-    // E2: the three-level rules, and no future-dated team move (job history
-    // can't represent a pending change yet — PROGRESS.md open issue).
+  const latest = await prisma.employeeJobHistory.findFirst({ where: { employeeId }, orderBy: { effectiveFrom: "desc" } });
+  if (input.reportingManagerId !== undefined && input.reportingManagerId !== (latest?.reportingManagerId ?? null)) {
+    // E2: the three-level rules, and no future-dated team move until EF3
+    // (docs/plans/EFFECTIVE_DATES.md) makes scheduled changes visible.
     await assertReportingLineFor(employeeId, input.reportingManagerId);
-    parseMoveDate(input.effectiveFrom, null);
+    parseMoveDate(input.effectiveFrom);
   }
-  if (!current) return createFirstJobPlacement(employeeId, input, meta);
+  if (!latest && !(await prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true } }))) throw new HttpError(404, "Employee not found.", "NOT_FOUND");
 
-  const effectiveFrom = new Date(input.effectiveFrom);
-  const after = await runConflictSafe(() =>
-    prisma.$transaction(async (tx) => {
-      await tx.employeeJobHistory.update({ where: { id: current.id }, data: { effectiveTo: effectiveFrom } });
-      return tx.employeeJobHistory.create({
-        data: {
-          employeeId,
-          departmentId: input.departmentId ?? current.departmentId,
-          designationId: input.designationId ?? current.designationId,
-          locationId: input.locationId ?? current.locationId,
-          gradeId: input.gradeId !== undefined ? input.gradeId : current.gradeId,
-          costCentreId: input.costCentreId !== undefined ? input.costCentreId : current.costCentreId,
-          reportingManagerId: input.reportingManagerId !== undefined ? input.reportingManagerId : current.reportingManagerId,
-          effectiveFrom,
-          changeReason: input.changeReason ?? null,
-          createdByUserId: meta.actorUserId,
-        },
-      });
-    }),
-  );
-
-  await writeAuditLog({ ...meta, action: "employee.job.changed", entityType: "Employee", entityId: employeeId, before: current, after });
-  return after;
-}
-
-// An employee created by the Super Admin bootstrap CLI (modules/access/
-// bootstrap.ts) starts with no job placement — a fresh production database
-// has no departments yet. Their first placement is set here, so department,
-// designation and location are all required.
-async function createFirstJobPlacement(employeeId: string, input: JobUpdateInput, meta: RequestMetaInput) {
-  if (!(await prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true } }))) throw new HttpError(404, "Employee not found.", "NOT_FOUND");
-  if (!input.departmentId || !input.designationId || !input.locationId) {
-    throw new HttpError(400, "This employee has no job placement yet — choose a department, designation and location.", "VALIDATION_ERROR");
-  }
-  const after = await runConflictSafe(() =>
-    prisma.employeeJobHistory.create({
-      data: {
+  // One writer for all job history (lib/effectiveDating.ts): appended at
+  // the end, never rewriting older history. An employee created by the
+  // Super Admin bootstrap CLI has no placement yet; their first one is set
+  // here, so department, designation and location are then all required.
+  const write = await runConflictSafe(() =>
+    prisma.$transaction((tx) =>
+      writeJobChange(
+        tx,
         employeeId,
-        departmentId: input.departmentId!,
-        designationId: input.designationId!,
-        locationId: input.locationId!,
-        gradeId: input.gradeId ?? null,
-        costCentreId: input.costCentreId ?? null,
-        reportingManagerId: input.reportingManagerId ?? null,
-        effectiveFrom: new Date(input.effectiveFrom),
-        changeReason: input.changeReason ?? null,
-        createdByUserId: meta.actorUserId,
-      },
-    }),
+        new Date(input.effectiveFrom),
+        {
+          departmentId: input.departmentId,
+          designationId: input.designationId,
+          locationId: input.locationId,
+          gradeId: input.gradeId,
+          costCentreId: input.costCentreId,
+          reportingManagerId: input.reportingManagerId,
+        },
+        { createdByUserId: meta.actorUserId, changeReason: input.changeReason ?? null },
+      ),
+    ),
   );
-  await writeAuditLog({ ...meta, action: "employee.job.changed", entityType: "Employee", entityId: employeeId, before: null, after });
-  return after;
+
+  await writeAuditLog({ ...meta, action: "employee.job.changed", entityType: "Employee", entityId: employeeId, before: write.before, after: { ...write.after, timeline: write.plan } });
+  return write.after;
 }
 
 interface BankUpdateInput extends BankFieldsInput {
@@ -554,19 +536,14 @@ interface BankUpdateInput extends BankFieldsInput {
 }
 
 export async function updateBank(employeeId: string, input: BankUpdateInput, meta: RequestMetaInput) {
-  const current = await prisma.employeeBankAccount.findFirst({ where: { employeeId, effectiveTo: null } });
-  const effectiveFrom = input.effectiveFrom ? new Date(input.effectiveFrom) : new Date();
-
-  const after = await runConflictSafe(() =>
-    prisma.$transaction(async (tx) => {
-      if (current) {
-        await tx.employeeBankAccount.update({ where: { id: current.id }, data: { effectiveTo: effectiveFrom } });
-      }
-      return tx.employeeBankAccount.create({
-        data: { employeeId, ...encryptBankFields(input), effectiveFrom, createdByUserId: meta.actorUserId },
-      });
-    }),
+  // businessToday(), never new Date(): between 00:00 and 05:30 IST a UTC
+  // timestamp lands on yesterday's date.
+  const effectiveFrom = input.effectiveFrom ? new Date(input.effectiveFrom) : businessToday();
+  const write = await runConflictSafe(() =>
+    prisma.$transaction((tx) => writeBankChange(tx, employeeId, effectiveFrom, encryptBankFields(input), { createdByUserId: meta.actorUserId })),
   );
+  const current = write.before;
+  const after = write.after;
 
   await writeAuditLog({
     ...meta,
@@ -586,21 +563,13 @@ interface NameUpdateInput {
 }
 
 export async function updateName(employeeId: string, input: NameUpdateInput, meta: RequestMetaInput) {
-  const current = await prisma.employeeNameHistory.findFirst({ where: { employeeId, effectiveTo: null } });
-  if (!current) throw new HttpError(404, "This employee has no current name on record.", "NOT_FOUND");
-
-  const effectiveFrom = new Date(input.effectiveFrom);
-  const after = await runConflictSafe(() =>
-    prisma.$transaction(async (tx) => {
-      await tx.employeeNameHistory.update({ where: { id: current.id }, data: { effectiveTo: effectiveFrom } });
-      return tx.employeeNameHistory.create({
-        data: { employeeId, fullName: input.fullName, effectiveFrom, changeReason: input.changeReason ?? null, createdByUserId: meta.actorUserId },
-      });
-    }),
+  if (!(await prisma.employeeNameHistory.findFirst({ where: { employeeId }, select: { id: true } }))) throw new HttpError(404, "This employee has no current name on record.", "NOT_FOUND");
+  const write = await runConflictSafe(() =>
+    prisma.$transaction((tx) => writeNameChange(tx, employeeId, new Date(input.effectiveFrom), input.fullName, { createdByUserId: meta.actorUserId, changeReason: input.changeReason ?? null })),
   );
 
-  await writeAuditLog({ ...meta, action: "employee.name.changed", entityType: "Employee", entityId: employeeId, before: current, after });
-  return after;
+  await writeAuditLog({ ...meta, action: "employee.name.changed", entityType: "Employee", entityId: employeeId, before: write.before, after: { ...write.after, timeline: write.plan } });
+  return write.after;
 }
 
 export async function updateStatutory(employeeId: string, input: StatutoryFieldsInput, meta: RequestMetaInput) {

@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { ensureAccessCatalog } from "../lib/accessCatalog";
+import { warnIfHistoryNeedsRepair } from "../lib/historyRepairNotice";
 import { logger } from "../lib/logger";
 import { prisma } from "../lib/prisma";
 
@@ -22,6 +23,9 @@ export async function runMigrate(): Promise<void> {
   // A database that's never seeded (staging/production) still needs the
   // system roles and permission rows — additive only, never edits a role.
   await ensureAccessCatalog();
+  // Effective dating (EF1): report, never repair — a person previews and
+  // approves the repair (npm run history:repair).
+  await warnIfHistoryNeedsRepair((line) => logger.warn(line));
   await prisma.$disconnect();
 
   logger.info("migrate complete");

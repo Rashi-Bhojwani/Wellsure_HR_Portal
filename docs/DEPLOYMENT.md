@@ -57,6 +57,29 @@ What this means for Phase 1.5 / 5.5:
     image's Chromium 152 produced different bytes for the same letter.
   - The stored PDF is always the authoritative record of what was sent.
 
+## History repair after the effective-dating migration (EF1, 2026-10-04)
+
+Migration `20261004090000_effective_dating` adds database rules: no history
+row may end before it starts, and none may overlap another for the same
+employee or device ID. It **changes no data**.
+- If existing rows break those rules, it stops before changing anything,
+  and `npm run history:repair` lists each row. Those rows need a person to
+  decide.
+- Rows with one clear fix (a leaver whose placement was never closed, or
+  closed on the last working day itself) are **never fixed automatically**.
+  The `migrate` mode logs `HISTORY NEEDS REPAIR` with counts.
+
+The procedure, user decision 2026-10-03 ("show me a preview of every row it
+would fix and why, let me approve, then apply"):
+1. Run `npm run history:repair` (preview) in a one-off task, the same way
+   as `admin:recover`. Save the output.
+2. The owner reviews the list and approves that exact output.
+3. Run the `--apply --fingerprint <hex> --approved-by "<owner>" --operator
+   "<you>" --yes` command the preview printed.
+   - It refuses if anything changed since the preview.
+   - Each fixed row gets a `history.repaired` audit entry naming the
+     approver.
+
 ## Security wiring required before staging/production go live (Phase 5 commit E1.1)
 
 Spec §9 ("Break-glass access and its honest limit") and §12 Phase 1.5

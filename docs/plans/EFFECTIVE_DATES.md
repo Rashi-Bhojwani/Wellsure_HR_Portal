@@ -1,8 +1,30 @@
 # Effective dates: one "as of" model, before any payroll code
 
-Status: **PLAN — awaiting user review. Nothing here is built yet.**
-Written 2026-10-03. Required before Phase 6 (Phase 5 review §5.1;
+Status: **Approved 2026-10-03 (all six decisions as recommended). EF1
+built 2026-10-04 and awaiting review; EF2–EF4 to follow, one commit each,
+pausing after each.** Required before Phase 6 (Phase 5 review §5.1;
 PROGRESS open issue "Future-dated job changes take effect immediately").
+
+**Added by the user on approval:** the data repair must show exactly what
+it would change before changing it, with a preview of every row and why,
+a person's approval, and only then the apply. Built as `npm run
+history:repair` (§4, EF1).
+
+**Settled while building EF1** (consistent with decisions 1–2; flagged for
+review):
+- **A change dated the same day as the latest row amends that row.** The
+  alternative is a zero-length row, which the new CHECK forbids. This is
+  a correction within the latest period, audited with before and after.
+- **Separations:**
+  - the last working day can't be before the date of joining, or before
+    a job change already in force (that would rewrite history);
+  - scheduled job changes dated after the last day are dropped when the
+    separation completes, with an audit entry;
+  - if history can't be closed cleanly, the separation stays pending and
+    an audit entry is written each day, rather than guessing.
+- **Import:** one device ID can't be two people on the same day. An
+  ex-employee whose dates overlap the ID's later holder is a per-row
+  error, not a crash.
 
 ## 1. The problem, in one paragraph
 
