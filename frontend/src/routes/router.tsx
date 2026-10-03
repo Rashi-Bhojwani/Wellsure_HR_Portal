@@ -13,6 +13,8 @@ import { ViewMyInfoPage } from "../pages/employee/profile/ViewMyInfoPage";
 import { HelpdeskTicketPage } from "../pages/employee/helpdesk/HelpdeskTicketPage";
 import { AdminHelpdeskTicketPage } from "../pages/admin/helpdesk/AdminHelpdeskTicketPage";
 import { LetterTemplateEditorPage } from "../pages/admin/letters/LetterTemplateEditorPage";
+import { MobileActionPage } from "../pages/employee/mobile/MobileActionPage";
+import { MobileExplorePage } from "../pages/employee/mobile/MobileExplorePage";
 import { RequireAuth } from "./RequireAuth";
 import { resolveAdminRoutes, resolveEmployeeRoutes } from "./resolveMenuRoutes";
 
@@ -52,6 +54,10 @@ export function AppRouter() {
           <Route path="profile" element={<ViewMyInfoPage />} />
           <Route path="security" element={<AccountSecurityPage />} />
           <Route path="helpdesk/:id" element={<HelpdeskTicketPage />} />
+          {/* The phone bottom bar's generated tabs (Phase 5 commit G); Home
+              and Engage are ordinary menu routes. */}
+          <Route path="action" element={<MobileActionPage />} />
+          <Route path="explore" element={<MobileExplorePage />} />
           {employeeRoutes()}
         </Route>
 

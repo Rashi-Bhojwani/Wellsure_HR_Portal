@@ -1,9 +1,10 @@
 import { useNavigate } from "react-router-dom";
-import { Button, Dropdown, Space, message, type MenuProps } from "antd";
+import { Button, Dropdown, Grid, Space, message, type MenuProps } from "antd";
 import { BulbOutlined, LoginOutlined, LogoutOutlined } from "@ant-design/icons";
 import { useThemeMode } from "../../theme/ThemeProvider";
 import { useAuth } from "../../hooks/useAuth";
 import { isLoginChallenge } from "../../api/auth";
+import { MOBILE_TAB_BAR_HEIGHT } from "../../lib/mobileNav";
 
 // Mirrors prisma/seed.ts's DEV_PASSWORD — dev/demo-only, printed to the
 // console by the seed script itself, never a real secret.
@@ -23,6 +24,8 @@ const QUICK_ACCOUNTS = [
 // login flow, it just fills in known demo credentials rather than
 // bypassing auth. Rendered only when import.meta.env.DEV.
 export function DevQuickLogin() {
+  // On phones it sits above the bottom tab bar (Phase 5 commit G), never over it.
+  const isPhone = !Grid.useBreakpoint().md;
   const navigate = useNavigate();
   const { mode, toggleMode } = useThemeMode();
   const { login, logout, isAuthenticated } = useAuth();
@@ -52,8 +55,8 @@ export function DevQuickLogin() {
     <div
       style={{
         position: "fixed",
-        bottom: 16,
-        right: 16,
+        bottom: isPhone ? MOBILE_TAB_BAR_HEIGHT + 12 : 16,
+        right: isPhone ? 8 : 16,
         zIndex: 1000,
         background: "#fff",
         border: "1px solid #d9d9d9",

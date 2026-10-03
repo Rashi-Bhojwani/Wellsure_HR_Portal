@@ -308,3 +308,118 @@ in `PROJECT_SPEC.md` §7.8.
 - **Our own branding**, announcement banner instead of product ads, our
   own help links.
 - **Mobile-friendly layouts** for every employee page.
+
+---
+
+## PART 4 — EMPLOYEE MOBILE APP
+
+Written from the four greytHR mobile screenshots in `docs/screenshots/`
+(`mobile-action.jpeg`, `mobile-explore-1.jpeg`, `mobile-explore-2.jpeg`,
+`mobile-engage.jpeg`). There is no Home-tab screenshot. The same hard
+constraint applies: layout and information only. Their illustrations,
+colours and wording are not copied; we use our own icons, palette and
+copy. The Engage screenshot shows real employees' posts; none of that
+content belongs in this repo or the seed.
+
+### 4.0 Frame: a four-tab bottom bar
+
+- **Phones only.** At phone widths the employee portal has **no sidebar
+  and no hamburger drawer**. A **bottom tab bar** with four equal tabs,
+  each an outline icon over a small label, replaces them:
+  1. **Home**
+  2. **Action**: a lightning-bolt icon in greytHR
+  3. **Explore**: a 2×2-squares grid icon
+  4. **Engage**: a broadcast/signal icon
+- **Look.** The active tab's icon and label are in the accent blue;
+  inactive ones are light grey. The bar is white, fixed to the bottom,
+  above the phone's home indicator (safe area).
+- **Header.** Each tab's screen has a plain white header with a large
+  left-aligned title ("Actions", "Explore", "Engage") on a light-grey page
+  background.
+- **Inner pages.** Opening something from Action or Explore shows that
+  feature's normal page. The bottom bar stays visible, with the tab you
+  came from still active.
+
+### 4.1 Action tab: quick actions
+
+- A vertical list of **full-width white rounded cards**. Each has a
+  square tinted icon tile on the left and a label on the right. Tapping
+  the card opens the feature; there are no chevrons or subtitles.
+- **Icon tiles are tinted by area:** lavender for attendance items, pale
+  teal for leave, pale peach for salary.
+- **greytHR's order:**
+  - Apply Regularization
+  - Attendance Info
+  - Apply Leave
+  - Leave Balance
+  - Holiday Calendar
+  - Payslips
+  - YTD Reports
+  - IT Statement
+  - more below the fold (the list scrolls)
+- **Purpose.** These are the handful of things people do most, flattened
+  out of their sections.
+
+### 4.2 Explore tab: every section, as cards
+
+- A vertical stack of **large coloured cards**, one per section. Each has
+  the section name in large bold type, a one-line description below, and
+  an illustration on the right (ours: an icon, never an illustration).
+- **Sections with sub-pages** have a **chevron** after the name and
+  **expand in place** to list their pages. Single-page sections have no
+  chevron and open directly.
+- **greytHR's order and descriptions** (paraphrased):
+
+  | Section | Description |
+  |---|---|
+  | Attendance | manage your attendance |
+  | Leave | check and apply for leave |
+  | Salary | your salary breakdown |
+  | My Worklife | collaborate, learn and grow together |
+  | People | personal info and workmates |
+  | To Do | review pending items |
+  | Helpdesk | request assistance (no chevron) |
+  | Documents | check or request documents (no chevron) |
+
+- **Each card has its own pastel background:** lavender, light cyan,
+  peach, mint, pink and so on.
+- **Purpose.** Explore is the mobile equivalent of the desktop sidebar:
+  everything is reachable from here.
+
+### 4.3 Engage tab
+
+- **The same feed as desktop Engage**, single column:
+  - filter pills: "Activity: All Activities ›" and "Group: All Groups ›";
+  - a "Sort: Newest post ⌄" control;
+  - then post cards (author/company avatar, relative time "1 day ago",
+    the post text, a media or celebration block, a "React" action).
+- **Celebration posts** show a large initials avatar on a tinted band,
+  the occasion ("Happy Birthday!") and the person's name.
+- **Creating a post** is a floating **"+ Create"** pill button at the
+  bottom right, above the tab bar.
+
+### 4.4 Home tab
+
+- No screenshot. Ours shows the existing Employee Home (spec §6),
+  single column on a phone.
+
+### 4.5 How we build it (Phase 5 commit G)
+
+- **One source of truth.** The tabs and both tab contents are generated
+  from `frontend/src/routes/employeeMenu.config.tsx`: the same file that
+  builds the desktop sidebar and the route tree. A menu change shows up
+  on mobile automatically.
+  - **Explore:** every menu entry except the ones that are themselves
+    tabs (Home, Engage). Groups become expandable cards; single pages
+    become direct cards. The description comes from the entry's
+    `description`.
+  - **Action:** the leaves marked `quickAction`, in menu order.
+- **Not built yet.** Anything not yet built (`phase`) or depending on
+  data that doesn't exist yet (`needs: "attendance" | "payroll"`) is
+  **skipped in Action** and shown greyed with **"Coming soon"** in
+  Explore. That covers Regularization, Attendance Info, Payslips and the
+  Salary pages until Phases 3 and 6.
+- **Install.** The portal is installable as a PWA: a manifest, our own
+  icons, and a service worker for the app shell. On a phone, a
+  dismissible "Install the Wellsure app" prompt appears. iOS Safari has
+  no install event, so there it explains *Share → Add to Home Screen*.

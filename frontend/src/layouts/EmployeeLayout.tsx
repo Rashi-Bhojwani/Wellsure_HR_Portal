@@ -1,9 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Avatar,
-  Button,
-  Drawer,
   Dropdown,
   Grid,
   Layout,
@@ -15,13 +13,15 @@ import {
 import {
   DownOutlined,
   LogoutOutlined,
-  MenuOutlined,
   SettingOutlined,
   UserOutlined,
 } from "@ant-design/icons";
 import { employeeMenu, isEmployeeMenuGroup } from "../routes/employeeMenu.config";
 import { useAuth } from "../hooks/useAuth";
 import { NotificationBell } from "../components/common/NotificationBell";
+import { MobileTabBar } from "../components/mobile/MobileTabBar";
+import { InstallAppBanner } from "../components/mobile/InstallAppBanner";
+import { MOBILE_TAB_BAR_HEIGHT } from "../lib/mobileNav";
 
 const { Sider, Header, Content, Footer } = Layout;
 const { Text, Title } = Typography;
@@ -140,7 +140,6 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 export function EmployeeLayout() {
   const screens = useBreakpoint();
   const isMobile = !screens.md;
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { logout } = useAuth();
@@ -150,7 +149,9 @@ export function EmployeeLayout() {
     navigate("/login");
   }
 
-  const pageTitle = findLabel(location.pathname.replace(/^\/app\//, ""));
+  const relPath = location.pathname.replace(/^\/app\//, "");
+  // The phone tab pages aren't menu entries; their header title is the tab's.
+  const pageTitle = relPath === "action" ? "Actions" : relPath === "explore" ? "Explore" : findLabel(relPath);
 
   const quickLinksMenu: MenuProps["items"] = [
     { key: "policies", label: "Company Policies" },
@@ -165,17 +166,10 @@ export function EmployeeLayout() {
           <SidebarContent />
         </Sider>
       )}
-      {isMobile && (
-        <Drawer
-          placement="left"
-          open={drawerOpen}
-          onClose={() => setDrawerOpen(false)}
-          size={260}
-          styles={{ body: { padding: 0 } }}
-        >
-          <SidebarContent onNavigate={() => setDrawerOpen(false)} />
-        </Drawer>
-      )}
+      {/* Phones: no sidebar and no drawer — the bottom tab bar (Home, Action,
+          Explore, Engage) generated from employeeMenu.config.tsx replaces
+          them (Phase 5 commit G, docs/UI_REFERENCE.md Part 4). */}
+      {isMobile && <MobileTabBar />}
 
       <Layout>
         <Header
@@ -185,17 +179,20 @@ export function EmployeeLayout() {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "0 20px",
+            padding: isMobile ? "0 12px" : "0 20px",
+            position: isMobile ? "sticky" : undefined,
+            top: 0,
+            zIndex: 99,
           }}
         >
           <Space>
-            {isMobile && <Button type="text" icon={<MenuOutlined />} onClick={() => setDrawerOpen(true)} />}
             <span style={{ width: 8, height: 20, background: "#2f6fed", borderRadius: 4, display: "inline-block" }} />
             <Title level={4} style={{ margin: 0 }}>
               {pageTitle}
             </Title>
           </Space>
           <Space size="large">
+            {!isMobile && (
             <Dropdown menu={{ items: quickLinksMenu }}>
               <a onClick={(e) => e.preventDefault()}>
                 <Space size={4}>
@@ -203,19 +200,23 @@ export function EmployeeLayout() {
                 </Space>
               </a>
             </Dropdown>
+            )}
             <NotificationBell homePath="/app/home" />
             <LogoutOutlined style={{ fontSize: 18, cursor: "pointer" }} onClick={() => void handleLogout()} />
           </Space>
         </Header>
 
-        <Content style={{ padding: isMobile ? 12 : 24 }}>
+        <Content style={{ padding: isMobile ? 12 : 24, paddingBottom: isMobile ? `calc(${MOBILE_TAB_BAR_HEIGHT + 16}px + env(safe-area-inset-bottom))` : 24 }}>
+          {isMobile && <InstallAppBanner />}
           <Outlet />
         </Content>
 
-        <Footer style={{ textAlign: "center", color: "#8c8c8c", fontSize: 12 }}>
-          Wellsure HR Portal v0.1.0 &nbsp;|&nbsp; <a href="#privacy">Privacy Policy</a> &nbsp;|&nbsp;{" "}
-          <a href="#terms">Terms Of Service</a>
-        </Footer>
+        {!isMobile && (
+          <Footer style={{ textAlign: "center", color: "#8c8c8c", fontSize: 12 }}>
+            Wellsure HR Portal v0.1.0 &nbsp;|&nbsp; <a href="#privacy">Privacy Policy</a> &nbsp;|&nbsp;{" "}
+            <a href="#terms">Terms Of Service</a>
+          </Footer>
+        )}
       </Layout>
     </Layout>
   );

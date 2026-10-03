@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Wellsure's own mark (placeholder until the real logo — see index.html): a blue tile with a white W. -->
+  <rect width="512" height="512" rx="112" fill="#2f6fed"/>
+  <path d="M120 168 L184 352 L256 220 L328 352 L392 168" fill="none" stroke="#ffffff" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

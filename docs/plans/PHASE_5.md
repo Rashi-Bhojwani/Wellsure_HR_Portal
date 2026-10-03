@@ -1600,23 +1600,94 @@ Built as planned above. Differences found while building:
   is genuinely 0. In the walkthrough, HR granted PL through Leave
   Granter and approved an LOP day before checking liability and LOP.
 
-## G — Mobile / PWA
+## G — Mobile / PWA (requirements 2026-10-03; built, pending review)
 
-Scope **[recorded]**: Mobile/PWA, a mobile bottom tab bar, plus spec §12's
-"PWA install".
-
-- **[recorded: user, 2026-09-30]** No longer blocked: the four greytHR
-  mobile screenshots are in `docs/screenshots/`: `mobile-action.jpeg`,
-  `mobile-explore-1.jpeg`, `mobile-explore-2.jpeg`, `mobile-engage.jpeg`
-  (renamed from a double `.png.jpeg` extension in commit C; they are
-  JPEGs).
-- **[recorded: user]** Before building, read them and write
-  **PART 4 — EMPLOYEE MOBILE APP** into `docs/UI_REFERENCE.md`.
-- **[recorded: user]** The tab contents must be driven from
-  `frontend/src/routes/employeeMenu.config.tsx`, not from a second
+**User requirements (2026-10-03):**
+- Read the four greytHR mobile screenshots and write **PART 4 — EMPLOYEE
+  MOBILE APP** into `docs/UI_REFERENCE.md` first. Done; it is the
+  layout spec for this commit.
+- A four-tab bottom bar (Home, Action, Explore, Engage) at phone widths,
+  **in place of** the sidebar drawer.
+- Tab contents come from `employeeMenu.config.tsx`, never a second
   hardcoded list.
-- **[reconstructed]** PWA: a web manifest, a service worker for install
-  and offline shell, and our own icons.
+- Anything depending on attendance or payroll is skipped or marked
+  "Coming soon".
+- **PWA installability:** a manifest, icons, a service worker and an
+  install prompt.
+- Then a full Phase 5 review before the user tests.
+
+**Plan:**
+- **The menu config gains three optional fields:**
+  - `description` on groups as well as leaves (the Explore subtitle);
+  - `quickAction` on leaves (the Action list, in menu order);
+  - `needs: "attendance" | "payroll"` on leaves whose page exists but
+    whose data doesn't yet. Payslips and Attendance Info are Phase 0
+    mock-ups with hardcoded demo figures.
+
+  `mobileTabs` is declared in the same file: Home and Engage point at
+  their menu entries; Action and Explore are generated pages.
+- **`/app/action` and `/app/explore`** are real routes, added by the
+  router from `mobileTabs`. They render on desktop too, harmlessly.
+- **`EmployeeLayout` on phones (below `md`):**
+  - no Sider and no Drawer;
+  - a compact header (title, bell, logout);
+  - content padded above a fixed bottom bar with the safe-area inset;
+  - no footer.
+
+  The active tab is worked out from the current path: Home, Engage, the
+  Action page or an Action item, and everything else is Explore.
+- **PWA:**
+  - `public/manifest.webmanifest` (standalone, start `/app/home`, our
+    blue);
+  - icons generated from our own "W" mark (192, 512, maskable 512, Apple
+    180);
+  - `public/sw.js`:
+    - network-first for page navigations, falling back to the cached
+      app shell when offline;
+    - cache-first for hashed `/assets/*`;
+    - **never** caches API, socket or cross-origin requests, and drops
+      old caches on activate.
+
+    It is registered in production builds only (it would fight Vite's
+    hot reload in dev).
+  - The install prompt uses `beforeinstallprompt` where supported and
+    iOS instructions otherwise. It is dismissible, the dismissal is
+    remembered per device, and it is hidden when already installed.
+- **Tests:** the mobile tabs and Explore/Action are derived from the
+  config (a config change shows up); coming-soon rules; the manifest
+  and service-worker files exist and are well formed.
+- **Verification:** a phone-viewport browser walkthrough plus a
+  production-build check that the service worker registers and the app
+  shell loads offline.
+
+### G as built (2026-10-03)
+
+Built as planned above. Differences and additions:
+
+- **The install banner lives in the layout**, at the top of every phone
+  page until it's installed or dismissed. The plan had it on Action and
+  Explore only, so it never showed on Home.
+- **The header shows the tab's name** ("Actions", "Explore") rather than
+  "Wellsure HR". The pages dropped their own duplicate title, as greytHR
+  does.
+- **Engage on a phone:** the Filters card folds away (Show/Hide) so the
+  feed comes first. Without that it pushed the posts a full screen down.
+- **The dev-only Quick login toolbar** sits above the tab bar on phones.
+  It covered the Engage tab and blocked taps.
+- **Found and fixed: production builds depended on the shell's
+  `NODE_ENV`.** This container exports `NODE_ENV=development`, which made
+  `vite build` emit React's dev bundle with `import.meta.env.PROD` false,
+  so no service worker. `vite.config.ts` now forces production for
+  `vite build`; it also protects the Phase 1.5 deploy.
+- **Offline behaviour, honestly:** the service worker serves the app
+  shell, so the portal opens instead of the browser's error page. But the
+  session can't be refreshed without the network, so an offline reload
+  lands on the login screen. There is no offline data, by design: the
+  worker never caches API responses.
+- **The Phase 0 mock-ups (Payslips, Attendance Info)** carry
+  `needs: payroll` / `needs: attendance`, so mobile shows them as Coming
+  soon. On desktop they still render their hardcoded demo figures.
+  Flagged in the Phase 5 review (`docs/plans/PHASE_5_REVIEW.md`).
 
 ## Placeholder routes no commit above clearly owns
 

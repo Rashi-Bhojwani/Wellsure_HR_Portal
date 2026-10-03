@@ -15,7 +15,7 @@ committed).
 | 2 | Biometric ingestion + attendance engine + real-time | Not started |
 | 3 | Attendance administration | Not started |
 | 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
-| 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | In progress — commit A done (notifications substrate, Employee Home, Admin Homepage Welcome + Dashboard tabs), commit B done (Engage), commit C done (People directory + org chart, employee photos, Document Center, HR-held employee documents), commit D done (Helpdesk, Request Hub, Tasks inbox), commit D2 done (letter templates + PDF generation), commit E1 done (roles & permissions, Super Admin guarantees, bootstrap/recovery CLIs), E1.1 done (append-only audit log, loud break-glass, manager data leaks), commit E2 done (three-level hierarchy model A, Manager Management, manager-grantable list, endpoint audit), commit E3 done (Workflow Delegates), commit F done (core reports). G (Mobile/PWA) not started — full plan in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
+| 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | ✅ Done (2026-10-03) — commits A, B, C, D, D2, E1, E1.1, E2, E3, F and G (mobile bottom bar + PWA), plus interim commits. Full review — every screen and URL, every permission, what's stubbed, open questions, risks for Phase 6 — in [`docs/plans/PHASE_5_REVIEW.md`](plans/PHASE_5_REVIEW.md). Plan and as-built notes per commit in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
 | 5.5 | AWS production environment and go-live hardening | Not started |
 | 6 | Payroll | Not started |
 | 7 | Tax & benefits | Not started |
@@ -3437,6 +3437,67 @@ Separation row).
   reconciliation step before invites.
 - Tested: `import.test.ts` (an ex-employee row end to end, plus each
   refusal) and `reports.test.ts` (the imported reason in Leavers).
+
+### Phase 5, commit G — Mobile bottom bar and PWA (Phase 5 complete)
+
+Plan and as-built notes: [`docs/plans/PHASE_5.md`](plans/PHASE_5.md) §G.
+Layout spec: **PART 4 — EMPLOYEE MOBILE APP** in `docs/UI_REFERENCE.md`,
+written from the four greytHR mobile screenshots before building.
+
+**The bottom bar.** At phone widths (below `md`), the employee portal
+replaces its sidebar drawer with a four-tab bottom bar: **Home, Action,
+Explore, Engage**. Everything comes from `employeeMenu.config.tsx`:
+- **the tabs** (`mobileTabs`);
+- **Action:** leaves marked `quickAction`, in menu order;
+- **Explore:** every menu entry except the tab ones. Groups expand in
+  place; single pages open directly. The subtitles come from
+  `description`.
+
+A menu change reaches mobile with no mobile code touched; a test adds an
+entry and checks.
+
+Pages that aren't built (`phase`), or are built over data that doesn't
+exist yet (`needs: attendance | payroll`: Payslips and Attendance Info,
+both Phase 0 mock-ups), are left out of Action and greyed "Coming soon"
+in Explore. They can't be tapped.
+
+**PWA.**
+- `public/manifest.webmanifest`: standalone, starting at `/app/home`.
+- Our own icons generated from the "W" mark: 192, 512, maskable 512, and
+  the Apple touch icon.
+- `public/sw.js`:
+  - network-first navigations with an offline app-shell fallback;
+  - cache-first for hashed `/assets/*`;
+  - **never** the API or anything cross-origin.
+
+  Registered in production builds only.
+- An install banner (Chrome/Android: the real prompt; iOS: Share → Add
+  to Home Screen). Dismissible, and the dismissal is remembered on the
+  device.
+
+**Also fixed:**
+- `vite build` now always builds production. A shell exporting
+  `NODE_ENV=development` had been silently producing a dev bundle with no
+  service worker.
+- The dev toolbar sits above the tab bar on phones.
+- Engage's filters fold away on phones.
+
+**Verified:**
+- the full suites, lint and typecheck;
+- `mobile.test.tsx`: the tabs, Action and Explore derived from the
+  config, coming-soon rules, active-tab mapping, the manifest, icons and
+  service worker;
+- a phone walkthrough (390×844, iPhone user agent): tabs, no sidebar,
+  drawer or footer; Action list; Leave Apply from Action (Action stays
+  active); Salary and Attendance coming soon and untappable; People from
+  Explore; Engage; iOS install instructions, dismissal remembered;
+  desktop unchanged; no console errors;
+- a production build served by `vite preview`:
+  - the service worker registers, activates and controls the page;
+  - Chrome parses the manifest with no errors, and its only
+    installability objection is "in-incognito" (Playwright's contexts
+    are incognito);
+  - offline, the app shell still opens.
 
 ## Open questions
 

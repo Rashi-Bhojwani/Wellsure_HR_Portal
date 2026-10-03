@@ -58,13 +58,20 @@ export interface EmployeeMenuLeaf {
   icon?: ComponentType;
   element?: ComponentType;
   phase?: string;
-  description?: string;
+  description?: string; // also the mobile Explore card's subtitle
+  // Mobile (Phase 5 commit G, docs/UI_REFERENCE.md Part 4): listed on the
+  // Action tab, in menu order.
+  quickAction?: boolean;
+  // The page exists but the data it shows doesn't yet (Payslips and
+  // Attendance Info are Phase 0 mock-ups) — mobile shows "Coming soon".
+  needs?: "attendance" | "payroll";
 }
 
 export interface EmployeeMenuGroup {
   key: string;
   label: string;
   icon?: ComponentType;
+  description?: string; // the mobile Explore card's subtitle
   children: EmployeeMenuLeaf[];
 }
 
@@ -93,8 +100,9 @@ export const employeeMenu: EmployeeMenuEntry[] = [
     key: "my-worklife",
     label: "My Worklife",
     icon: HeartOutlined,
+    description: "Kudos and recognition from your colleagues.",
     children: [
-      { key: "kudos", label: "Kudos", path: "my-worklife/kudos", icon: TrophyOutlined, element: KudosPage },
+      { key: "kudos", label: "Kudos", path: "my-worklife/kudos", icon: TrophyOutlined, element: KudosPage, quickAction: true },
       {
         key: "feedback",
         label: "Feedback",
@@ -108,17 +116,19 @@ export const employeeMenu: EmployeeMenuEntry[] = [
     key: "todo",
     label: "To do",
     icon: CheckSquareOutlined,
+    description: "Things waiting on you, and approvals to review.",
     children: [
-      { key: "tasks", label: "Tasks", path: "todo/tasks", icon: UnorderedListOutlined, element: TasksPage },
-      { key: "review", label: "Review", path: "todo/review", icon: AuditOutlined, element: ReviewPage },
+      { key: "tasks", label: "Tasks", path: "todo/tasks", icon: UnorderedListOutlined, element: TasksPage, quickAction: true },
+      { key: "review", label: "Review", path: "todo/review", icon: AuditOutlined, element: ReviewPage, quickAction: true },
     ],
   },
   {
     key: "salary",
     label: "Salary",
     icon: DollarOutlined,
+    description: "Payslips, tax and salary details.",
     children: [
-      { key: "payslips", label: "Payslips", path: "salary/payslips", icon: FileTextOutlined, element: PayslipsPage },
+      { key: "payslips", label: "Payslips", path: "salary/payslips", icon: FileTextOutlined, element: PayslipsPage, needs: "payroll" },
       {
         key: "ytd-reports",
         label: "YTD Reports",
@@ -174,6 +184,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
     key: "leave",
     label: "Leave",
     icon: CalendarOutlined,
+    description: "Check balances and apply for leave.",
     children: [
       {
         key: "leave-apply",
@@ -181,6 +192,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
         path: "leave/apply",
         icon: PlusCircleOutlined,
         element: LeaveApplyPage,
+        quickAction: true,
       },
       {
         key: "leave-balances",
@@ -188,6 +200,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
         path: "leave/balances",
         icon: PieChartOutlined,
         element: LeaveBalancesPage,
+        quickAction: true,
       },
       {
         key: "leave-calendar",
@@ -202,6 +215,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
         path: "leave/holiday-calendar",
         icon: GiftOutlined,
         element: HolidayCalendarPage,
+        quickAction: true,
       },
     ],
   },
@@ -209,6 +223,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
     key: "attendance",
     label: "Attendance",
     icon: ClockCircleOutlined,
+    description: "Your punches and attendance calendar.",
     children: [
       {
         key: "attendance-info",
@@ -216,6 +231,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
         path: "attendance/info",
         icon: FieldTimeOutlined,
         element: AttendanceInfoPage,
+        needs: "attendance",
       },
     ],
   },
@@ -225,6 +241,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
     path: "document-center",
     icon: FolderOutlined,
     element: DocumentCenterPage,
+    description: "Company policies, your letters and documents.",
   },
   {
     key: "people",
@@ -232,6 +249,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
     path: "people",
     icon: TeamOutlined,
     element: PeoplePage,
+    description: "Find colleagues and see the org chart.",
   },
   {
     key: "helpdesk",
@@ -239,6 +257,8 @@ export const employeeMenu: EmployeeMenuEntry[] = [
     path: "helpdesk",
     icon: CustomerServiceOutlined,
     element: HelpdeskPage,
+    description: "Ask HR for help.",
+    quickAction: true,
   },
   {
     key: "request-hub",
@@ -246,6 +266,8 @@ export const employeeMenu: EmployeeMenuEntry[] = [
     path: "request-hub",
     icon: InboxOutlined,
     element: RequestHubPage,
+    description: "Everything you've requested, in one place.",
+    quickAction: true,
   },
   {
     key: "workflow-delegates",
@@ -253,5 +275,39 @@ export const employeeMenu: EmployeeMenuEntry[] = [
     path: "workflow-delegates",
     icon: SwapOutlined,
     element: WorkflowDelegatesPage,
+    description: "Hand your approvals to someone while you're away.",
   },
 ];
+
+// ── Mobile (Phase 5 commit G, docs/UI_REFERENCE.md Part 4) ──────────────
+// The four-tab bottom bar shown at phone widths instead of the sidebar.
+// Home and Engage are menu entries; Action and Explore are pages generated
+// from the menu above (quickAction leaves; every other entry) — so a menu
+// change shows up on mobile without touching any mobile code.
+export interface MobileTab {
+  key: "home" | "action" | "explore" | "engage";
+  label: string;
+  path: string; // relative to /app
+  menuKey?: string; // a menu entry whose icon this tab reuses
+}
+
+export const mobileTabs: MobileTab[] = [
+  { key: "home", label: "Home", path: "home", menuKey: "home" },
+  { key: "action", label: "Action", path: "action" },
+  { key: "explore", label: "Explore", path: "explore" },
+  { key: "engage", label: "Engage", path: "engage", menuKey: "engage" },
+];
+
+// Not built yet (phase) or built over data that doesn't exist yet (needs).
+export function isComingSoon(leaf: EmployeeMenuLeaf): boolean {
+  return Boolean(leaf.phase || leaf.needs || !leaf.element);
+}
+
+export function quickActions(): EmployeeMenuLeaf[] {
+  return employeeMenu.flatMap((e) => (isEmployeeMenuGroup(e) ? e.children : [e])).filter((l) => l.quickAction && !isComingSoon(l));
+}
+
+export function exploreEntries(): EmployeeMenuEntry[] {
+  const tabMenuKeys = new Set(mobileTabs.map((t) => t.menuKey).filter(Boolean));
+  return employeeMenu.filter((e) => !tabMenuKeys.has(e.key));
+}

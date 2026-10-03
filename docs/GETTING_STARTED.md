@@ -241,6 +241,18 @@ their own team. Leave liability is HR Admin / Payroll Admin only.
 - **Liability needs a daily rate** (System Settings → Leave), which is
   provisional until the CA confirms it.
 
+**Phone layout and installing the app.**
+- Narrow the browser below 768px (or use the device toolbar in Chrome
+  DevTools) and the employee portal switches to the bottom tab bar (Home,
+  Action, Explore, Engage), generated from
+  `frontend/src/routes/employeeMenu.config.tsx`.
+- The service worker that makes it installable only runs in a
+  **production build**. Check it with
+  `npm run build --prefix frontend && npx --prefix frontend vite preview --port 5173`
+  (stop `npm run dev`'s Vite first: the API only allows the
+  `localhost:5173` origin). Chrome DevTools → Application then shows the
+  manifest and service worker.
+
 **Helpdesk.** Six categories are seeded. **Payroll & Salary** and
 **Grievance** are *sensitive*: only roles holding `helpdesk.sensitive.view`
 (HR Admin, Super Admin) see their tickets, and HR Executives don't. Toggle

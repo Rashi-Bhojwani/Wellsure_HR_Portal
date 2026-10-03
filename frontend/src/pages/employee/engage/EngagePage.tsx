@@ -7,6 +7,7 @@ import {
   Col,
   Collapse,
   Empty,
+  Grid,
   Input,
   List,
   Modal,
@@ -363,6 +364,9 @@ export function EngagePage({ initialActivity = "all" }: { initialActivity?: "all
   const [locationId, setLocationId] = useState<string | undefined>();
   const [departmentId, setDepartmentId] = useState<string | undefined>();
   const [search, setSearch] = useState("");
+  // Phones (Phase 5 commit G): the filters fold away so the feed comes first.
+  const isPhone = !Grid.useBreakpoint().md;
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [kudosOpen, setKudosOpen] = useState(false);
   const [pollOpen, setPollOpen] = useState(false);
   const [draft, setDraft] = useState("");
@@ -429,7 +433,19 @@ export function EngagePage({ initialActivity = "all" }: { initialActivity?: "all
 
       <Row gutter={16}>
         <Col xs={24} md={7} lg={6}>
-          <Card title="Filters" size="small">
+          <Card
+            title="Filters"
+            size="small"
+            style={isPhone ? { marginBottom: 12 } : undefined}
+            styles={{ body: isPhone && !filtersOpen ? { display: "none" } : undefined }}
+            extra={
+              isPhone && (
+                <Button type="link" size="small" onClick={() => setFiltersOpen((o) => !o)}>
+                  {filtersOpen ? "Hide" : "Show"}
+                </Button>
+              )
+            }
+          >
             <Text strong style={{ fontSize: 12 }}>
               ACTIVITIES
             </Text>
