@@ -3751,4 +3751,9 @@ Carried from spec §14 — configurable, not guessed, until answered:
       fix (current = `effective_from <= today AND (effective_to IS NULL OR
       effective_to > today)`, everywhere job history is read) is required
       before Phase 6**, because payroll depends on effective dates being
-      honoured exactly.
+      honoured exactly. **Plan written 2026-10-03, awaiting review:**
+      [`docs/plans/EFFECTIVE_DATES.md`](plans/EFFECTIVE_DATES.md). It also
+      covers two related defects found while planning:
+      - back-dated changes can invert or overlap history;
+      - separations close history on the last working day itself, so a
+        leaver has no placement on that day.
