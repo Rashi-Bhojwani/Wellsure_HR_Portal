@@ -113,7 +113,7 @@ salary keys can never join the list (a test guards it).
 
 ## 3. Incomplete, stubbed, or placeholder
 
-**Must fix before go-live (shown to employees as if real):**
+**Must fix before go-live (shown to employees as if real) — all three fixed 2026-10-03, see the PROGRESS entry "go-live fixes":**
 - **Payslips** (`/app/salary/payslips`) and **Attendance Info**
   (`/app/attendance/info`) are **Phase 0 mock-ups with hardcoded demo
   data**: fake BASIC/HRA figures and an invented attendance month. They
@@ -221,7 +221,8 @@ Resolved in Phase 5:
      until rendering.
 4. **The Phase 0 mock-ups** (§3) are exactly the screens payroll
    replaces. If Phase 6 work starts by editing them, the fake data could
-   survive into a half-built state. Retire them first.
+   survive into a half-built state. Retire them first. **Done
+   2026-10-03:** both pages deleted; the menu entries are phase-marked.
 5. **Running in parallel with greytHR has no reconciliation tooling
    yet.** Spec §10 wants reconciliation before invites, and Phase 6 runs
    payroll in parallel for 2–3 months. Nothing yet imports greytHR's

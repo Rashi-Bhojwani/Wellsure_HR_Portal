@@ -153,11 +153,21 @@ export function EmployeeLayout() {
   // The phone tab pages aren't menu entries; their header title is the tab's.
   const pageTitle = relPath === "action" ? "Actions" : relPath === "explore" ? "Explore" : findLabel(relPath);
 
-  const quickLinksMenu: MenuProps["items"] = [
-    { key: "policies", label: "Company Policies" },
-    { key: "org-chart", label: "Org Chart" },
-    { key: "helpdesk", label: "Raise a Helpdesk Ticket" },
-  ];
+  const quickLinks: Partial<Record<string, string>> = {
+    policies: "/app/document-center",
+    "org-chart": "/app/people?tab=org-chart",
+    helpdesk: "/app/helpdesk?raise=1",
+  };
+  const quickLinksMenu: MenuProps = {
+    items: [
+      { key: "policies", label: "Company Policies" },
+      { key: "org-chart", label: "Org Chart" },
+      { key: "helpdesk", label: "Raise a Helpdesk Ticket" },
+    ],
+    onClick: ({ key }) => {
+      if (quickLinks[key]) navigate(quickLinks[key]);
+    },
+  };
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
@@ -193,7 +203,7 @@ export function EmployeeLayout() {
           </Space>
           <Space size="large">
             {!isMobile && (
-            <Dropdown menu={{ items: quickLinksMenu }}>
+            <Dropdown menu={quickLinksMenu}>
               <a onClick={(e) => e.preventDefault()}>
                 <Space size={4}>
                   Quick Links <DownOutlined style={{ fontSize: 10 }} />
@@ -213,8 +223,9 @@ export function EmployeeLayout() {
 
         {!isMobile && (
           <Footer style={{ textAlign: "center", color: "#8c8c8c", fontSize: 12 }}>
-            Wellsure HR Portal v0.1.0 &nbsp;|&nbsp; <a href="#privacy">Privacy Policy</a> &nbsp;|&nbsp;{" "}
-            <a href="#terms">Terms Of Service</a>
+            {/* No Privacy Policy / Terms links until those pages exist (the §9
+                privacy notice is its own item) — dead links read as broken. */}
+            Wellsure HR Portal v0.1.0
           </Footer>
         )}
       </Layout>

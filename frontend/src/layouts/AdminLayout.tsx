@@ -331,8 +331,9 @@ function AdminLayoutInner() {
       </Content>
 
       <Footer style={{ textAlign: "center", color: "#8c8c8c", fontSize: 12 }}>
-        Wellsure HR Portal v0.1.0 &nbsp;|&nbsp; <a href="#privacy">Privacy Policy</a> &nbsp;|&nbsp;{" "}
-        <a href="#terms">Terms Of Service</a>
+        {/* No Privacy Policy / Terms links until those pages exist (the §9
+            privacy notice is its own item) — dead links read as broken. */}
+        Wellsure HR Portal v0.1.0
       </Footer>
     </Layout>
   );

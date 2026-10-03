@@ -3548,6 +3548,33 @@ grantable.
 approve their own team's regularizations, if granted; finalising,
 overrides and anything feeding payroll stay Admin-only.
 
+### Interim — go-live fixes from the Phase 5 review (2026-10-03)
+
+The three "must fix before go-live" items in
+`docs/plans/PHASE_5_REVIEW.md` §3:
+- **Payslips and Attendance Info mock-ups retired.** The Phase 0 pages
+  (hardcoded BASIC/HRA figures, an invented attendance month) are
+  deleted. Their menu entries now carry `phase: "Phase 6"` /
+  `phase: "Phase 3"`, so desktop shows the "Coming in Phase N"
+  placeholder and mobile shows "Coming soon". The `needs` menu field
+  existed only for them and is gone. Phase 6 / Phase 3 build these pages
+  from scratch.
+- **Quick Links wired** (employee header): Company Policies →
+  `/app/document-center` (Policies & Forms tab), Org Chart →
+  `/app/people?tab=org-chart`, Raise a Helpdesk Ticket →
+  `/app/helpdesk?raise=1`, which opens the raise dialog (the param is
+  cleared on close).
+- **Footer links removed** from both portals. They pointed at `#privacy`
+  and `#terms`, and no such pages exist. They come back with the §9
+  privacy notice, whose text the user has to supply.
+
+**Verified:**
+- frontend typecheck, lint and tests (`mobile.test.tsx` pins the phase
+  markers);
+- a browser walkthrough as Arjun (1006): both pages show the
+  placeholder with no demo figures; each Quick Link lands correctly and
+  the helpdesk one opens the dialog; both footers have no links.
+
 ## Open questions
 
 - [x] **Approval Workflows — dropped (user decision 2026-10-03).** No

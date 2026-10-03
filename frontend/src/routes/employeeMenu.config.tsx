@@ -32,12 +32,10 @@ import { HomePage } from "../pages/employee/home/HomePage";
 import { EngagePage } from "../pages/employee/engage/EngagePage";
 import { KudosPage } from "../pages/employee/engage/KudosPage";
 import { ReviewPage } from "../pages/employee/todo/ReviewPage";
-import { PayslipsPage } from "../pages/employee/salary/PayslipsPage";
 import { LeaveApplyPage } from "../pages/employee/leave/LeaveApplyPage";
 import { LeaveBalancesPage } from "../pages/employee/leave/LeaveBalancesPage";
 import { LeaveCalendarPage } from "../pages/employee/leave/LeaveCalendarPage";
 import { HolidayCalendarPage } from "../pages/employee/leave/HolidayCalendarPage";
-import { AttendanceInfoPage } from "../pages/employee/attendance/AttendanceInfoPage";
 import { DocumentCenterPage } from "../pages/employee/document-center/DocumentCenterPage";
 import { PeoplePage } from "../pages/employee/people/PeoplePage";
 import { HelpdeskPage } from "../pages/employee/helpdesk/HelpdeskPage";
@@ -62,9 +60,6 @@ export interface EmployeeMenuLeaf {
   // Mobile (Phase 5 commit G, docs/UI_REFERENCE.md Part 4): listed on the
   // Action tab, in menu order.
   quickAction?: boolean;
-  // The page exists but the data it shows doesn't yet (Payslips and
-  // Attendance Info are Phase 0 mock-ups) — mobile shows "Coming soon".
-  needs?: "attendance" | "payroll";
 }
 
 export interface EmployeeMenuGroup {
@@ -128,7 +123,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
     icon: DollarOutlined,
     description: "Payslips, tax and salary details.",
     children: [
-      { key: "payslips", label: "Payslips", path: "salary/payslips", icon: FileTextOutlined, element: PayslipsPage, needs: "payroll" },
+      { key: "payslips", label: "Payslips", path: "salary/payslips", icon: FileTextOutlined, phase: "Phase 6" },
       {
         key: "ytd-reports",
         label: "YTD Reports",
@@ -230,8 +225,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
         label: "Attendance Info",
         path: "attendance/info",
         icon: FieldTimeOutlined,
-        element: AttendanceInfoPage,
-        needs: "attendance",
+        phase: "Phase 3",
       },
     ],
   },
@@ -298,9 +292,11 @@ export const mobileTabs: MobileTab[] = [
   { key: "engage", label: "Engage", path: "engage", menuKey: "engage" },
 ];
 
-// Not built yet (phase) or built over data that doesn't exist yet (needs).
+// Not built yet: phase-marked, or no page. (Payslips and Attendance Info
+// were Phase 0 mock-ups with demo data; retired 2026-10-03 until the real
+// data exists — Phase 6 and Phase 3.)
 export function isComingSoon(leaf: EmployeeMenuLeaf): boolean {
-  return Boolean(leaf.phase || leaf.needs || !leaf.element);
+  return Boolean(leaf.phase || !leaf.element);
 }
 
 export function quickActions(): EmployeeMenuLeaf[] {

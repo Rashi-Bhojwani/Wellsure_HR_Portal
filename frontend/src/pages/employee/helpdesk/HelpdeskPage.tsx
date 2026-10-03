@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card, Flex, Form, Input, Modal, Segmented, Select, Table, Typography, message } from "antd";
 import type { UploadFile } from "antd";
@@ -62,10 +62,17 @@ function RaiseTicketModal({ open, onClose }: { open: boolean; onClose: () => voi
 }
 
 // Helpdesk (spec §6): my tickets, newest activity first, and Raise ticket.
+// `?raise=1` (the header's "Raise a Helpdesk Ticket" quick link) opens the
+// raise dialog straight away.
 export function HelpdeskPage() {
   const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
   const [view, setView] = useState<View>("open");
-  const [raising, setRaising] = useState(false);
+  const [raising, setRaising] = useState(params.get("raise") === "1");
+  const closeRaise = () => {
+    setRaising(false);
+    if (params.has("raise")) setParams({}, { replace: true });
+  };
   const { data = [], isLoading } = useQuery({ queryKey: ["helpdesk", "mine"], queryFn: () => helpdeskApi.listMyTickets() });
 
   const rows = data.filter((t) => (view === "all" ? true : view === "open" ? t.status !== "CLOSED" : t.status === "CLOSED"));
@@ -117,7 +124,7 @@ export function HelpdeskPage() {
           { title: "Last update", dataIndex: "lastActivityAt", render: (v: string) => formatDateTime(v) },
         ]}
       />
-      <RaiseTicketModal open={raising} onClose={() => setRaising(false)} />
+      <RaiseTicketModal open={raising} onClose={closeRaise} />
     </Card>
   );
 }
