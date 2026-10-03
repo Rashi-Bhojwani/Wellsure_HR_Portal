@@ -3575,6 +3575,97 @@ The three "must fix before go-live" items in
   placeholder with no demo figures; each Quick Link lands correctly and
   the helpdesk one opens the dialog; both footers have no links.
 
+### Interim — pay and ID documents HR-only; no stranded leave (2026-10-03)
+
+**Rule (user decision): any document category that can contain money
+figures is HR-only, structurally.** A manager never sees it, whatever
+they're granted, the same permanent way as bank and statutory data. It
+is never a per-letter box.
+
+**Built:**
+- `document_categories.sensitivity`: `GENERAL | PAY | STATUTORY`
+  (migration `20261003130000_document_sensitivity`). The rules live in
+  `shared/constants/peopleDocuments.ts`:
+  - PAY needs the new key `documents.pay.view` (HR_ADMIN, PAYROLL_ADMIN;
+    never grantable);
+  - STATUTORY needs `employee.statutory.view`;
+  - unknown contents default to PAY.
+  Seeded: Letters PAY, ID Proofs STATUTORY, Other PAY, company categories
+  GENERAL.
+- Enforced in the service on every read path:
+  - the employee-documents list (filtered);
+  - download, update and archive (404, indistinguishable from absent);
+  - upload (403 when you couldn't read the category back);
+  - moving a document (409 if less sensitive).
+- Category sensitivity is required for new employee categories,
+  raise-only (409 `SENSITIVITY_LOWERING`), and always GENERAL for company
+  categories.
+- Letters: every letter is filed under Letters (the job refuses to file a
+  letter anywhere that isn't PAY). Without `documents.pay.view`, the
+  letters API returns the letter's existence only (`contentsWithheld`:
+  no typed values, no PDF, no hash), and reissue/reproduce are 403.
+- UI:
+  - Document categories: "May contain" column, raise-only select with a
+    confirm, and a required choice when creating an employee category.
+  - The upload picker lists only categories you can read.
+  - Issued letters show "Contents restricted" instead of the actions.
+
+**Audit of everything a manager can be granted, for pay or other
+sensitive data:**
+- **Fixed:**
+  - Letters (CTC in typed values and the PDF).
+  - ID proofs (PAN/Aadhaar copies, reachable through
+    `employee.documents.view`).
+  - "Other" documents (unknown contents).
+- **Fixed (latent):** year-end encashment ledger remarks wrote the daily
+  rate ("… at 1234.00/day"). No screen serves ledger remarks today, but
+  any future ledger view would have leaked a salary-derived figure to
+  `leave.view` holders. Remarks now carry days only.
+- **Clean:**
+  - Leave encashment amounts live only on the Year End Process run
+    (`leave.yearend.manage`, not grantable). Leave liability needs
+    `reports.liability.view` (not grantable).
+  - The leave balance, LOP, headcount, joiners/leavers and celebrations
+    reports carry days and counts, no money.
+  - Profiles show bank and statutory data only to holders of those keys.
+  - Helpdesk Payroll & Salary tickets need non-grantable keys.
+- **Flagged, not changed:** a team member's **grade** is visible to a
+  manager with `employee.view` (job history). If grades map to pay bands,
+  that implies salary. This is the user's call.
+
+**HR Executive changes (spec §2 says HR_EXECUTIVE never sees salary,
+bank or statutory data):** the same bar applies to them. They no longer
+see Letters, ID Proofs or Other documents, a letter's typed values, or
+reissue/reproduce. HR Admin does all of that.
+
+**Leave requests with no team-side approver are never stranded**
+(`leave/noTeamApprover.ts`):
+- When the manager can't approve and no delegate covers, or there's no
+  reporting manager, everyone with company-wide leave approval gets a
+  `leave.applied.noTeamApprover` notification. It links to HR's queue
+  filtered to these requests.
+- HR's Employee Leave queue tags them "No manager can approve", with an
+  alert and a "Show only these" toggle (`?noTeamApprover=1`).
+- Admin Home shows a warning with a count (`leaveNoTeamApprover` on task
+  counts).
+- All of this is computed live: a grant or a delegation clears it at
+  once.
+
+**Tests:**
+- `documents/__tests__/sensitivity.test.ts`:
+  - a manager holding every grantable key sees GENERAL only;
+  - HR Executive vs HR Admin;
+  - upload, move, category rules;
+  - seeded sensitivities.
+- `leave/__tests__/noTeamApprover.test.ts`:
+  - HR is notified and the manager isn't;
+  - flags and counts;
+  - a grant clears the flag;
+  - the filter is restricted to company-wide viewers.
+- `managerReach`: a manager's own team's letter is withheld; reissue and
+  reproduce are 403.
+- The grantable-keys guard now also forbids `documents.pay.*`.
+
 ## Open questions
 
 - [x] **Approval Workflows — dropped (user decision 2026-10-03).** No
@@ -3583,6 +3674,14 @@ The three "must fix before go-live" items in
       written into spec §7.8 so it isn't reintroduced. The Workflow app and
       Admin Tools → Approval Workflows placeholders were removed (Phase 5
       G prep).
+
+- [ ] **Privacy notice (DPDP Act 2023) and Terms of Service wording —
+      the user supplies it. Needed BEFORE real employee data goes onto
+      AWS, not after** (user, 2026-10-03). Spec §9 requires the privacy
+      notice to be acknowledged on first login. The footer's dead Privacy
+      Policy / Terms links were removed (2026-10-03) and come back with
+      these pages. Blocks: loading real employee data into staging or
+      production.
 
 Carried from spec §14 — configurable, not guessed, until answered:
 

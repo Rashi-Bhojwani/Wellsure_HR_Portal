@@ -261,6 +261,11 @@ describe("manager reach — TEAM scope at every endpoint a manager can call (E2)
       expect((await m().get(`/api/letters/${letter.member}`)).status).toBe(200);
       for (const path of [`/api/letters/${letter.outsider}`]) expect((await m().get(path)).status).toBe(404);
       for (const action of ["reissue", "reproduce"]) expect((await m().post(`/api/letters/${letter.outsider}/${action}`, {})).status).toBe(404);
+      // Own team's letter: that it exists, never what's in it (a letter is a
+      // PAY document — 2026-10-03), and no reissue/reproduce.
+      const own = await m().get(`/api/letters/${letter.member}`);
+      expect(own.body).toMatchObject({ contentsWithheld: true, extraValues: null, document: null });
+      for (const action of ["reissue", "reproduce"]) expect((await m().post(`/api/letters/${letter.member}/${action}`, {})).status).toBe(403);
     });
 
     it("a former employee's photo — own team's yes, anyone else's 404", async () => {

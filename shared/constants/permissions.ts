@@ -39,6 +39,7 @@ export const PERMISSION_KEYS = [
   "documents.manage", // company documents (upload/edit/archive, download stats) + document categories
   "employee.documents.view", // see another employee's HR-held documents (letters, ID proofs); download is audit-logged
   "employee.documents.manage", // upload/edit/archive another employee's documents
+  "documents.pay.view", // documents in PAY-sensitivity categories (letters, payslips) — never a manager's (2026-10-03)
   // Phase 5 — Helpdesk (commit D)
   "helpdesk.manage", // the HR ticket queue: assign, status, priority, replies, internal notes, categories
   "helpdesk.sensitive.view", // tickets in categories flagged sensitive (e.g. Payroll & Salary, Grievance)
@@ -118,6 +119,7 @@ export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
   "engage.autopost.manage": { group: "Home & Engage", label: "Engage auto-posts", description: "Birthday, joining and anniversary post templates and timing." },
   "documents.manage": { group: "Documents & letters", label: "Company documents", description: "Publish company documents and manage document categories." },
   "employee.documents.view": { group: "Documents & letters", label: "View employee documents", description: "See and download employees' HR-held documents (audited).", managerGrantable: true },
+  "documents.pay.view": { group: "Sensitive data", label: "View pay documents", description: "See and download documents in pay categories — issued letters, payslips — and a letter's typed values (e.g. CTC). Never manager-grantable." },
   "employee.documents.manage": { group: "Documents & letters", label: "Manage employee documents", description: "Upload, edit and archive employees' documents." },
   "letters.template.manage": { group: "Documents & letters", label: "Letter templates", description: "Edit letter templates, the letterhead and the signatory." },
   "letters.generate": { group: "Documents & letters", label: "Issue letters", description: "Issue, reissue and reproduce letters for employees in their data scope.", managerGrantable: true },

@@ -337,7 +337,7 @@ describe("Manager Management and the three-level hierarchy (E2)", () => {
   });
 
   it("crucial operations can never reach a manager: no payroll, bank-file, salary, bank or statutory key is (or can become) manager-grantable", () => {
-    const forbidden = /^(payroll|bank|salary)\.|^employee\.(bank|statutory|salary)\./;
+    const forbidden = /^(payroll|bank|salary)\.|^employee\.(bank|statutory|salary)\.|^documents\.pay\./;
     expect(MANAGER_GRANTABLE_KEYS.filter((k) => forbidden.test(k))).toEqual([]);
     // Every such key that exists today is outside the ceiling.
     expect(PERMISSION_KEYS.filter((k) => forbidden.test(k)).every((k) => !(MANAGER_GRANTABLE_KEYS as readonly string[]).includes(k))).toBe(true);

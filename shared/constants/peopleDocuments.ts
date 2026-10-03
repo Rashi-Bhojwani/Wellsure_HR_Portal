@@ -51,3 +51,29 @@ export const MAX_PHOTO_UPLOAD_MB_CEILING = 20;
 export const PHOTO_INPUT_FORMATS = ["jpeg", "png", "webp"] as const;
 export const PHOTO_FULL_SIZE_PX = 512;
 export const PHOTO_THUMB_SIZE_PX = 96;
+
+// Document category sensitivity (2026-10-03, user decision): who may ever
+// read an EMPLOYEE category's documents, on top of employee.documents.view
+// and data scope. Neither extra key is manager-grantable, so a manager can
+// never read PAY or STATUTORY documents, whatever they're granted.
+export const DOCUMENT_SENSITIVITIES = ["GENERAL", "PAY", "STATUTORY"] as const;
+export type DocumentSensitivity = (typeof DOCUMENT_SENSITIVITIES)[number];
+export const SENSITIVITY_READ_KEY: Record<DocumentSensitivity, "documents.pay.view" | "employee.statutory.view" | null> = {
+  GENERAL: null,
+  PAY: "documents.pay.view",
+  STATUTORY: "employee.statutory.view",
+};
+export const SENSITIVITY_LABELS: Record<DocumentSensitivity, string> = {
+  GENERAL: "General — no pay, bank or ID numbers",
+  PAY: "Pay — may contain salary or other money figures",
+  STATUTORY: "Statutory — ID proofs (PAN, Aadhaar)",
+};
+export function canReadSensitivity(sensitivity: DocumentSensitivity, permissions: ReadonlySet<string>): boolean {
+  const key = SENSITIVITY_READ_KEY[sensitivity];
+  return key === null || permissions.has(key);
+}
+// Sensitivity may be raised (GENERAL → PAY/STATUTORY), never lowered or
+// switched: that would retroactively expose documents already filed.
+export function sensitivityChangeAllowed(from: DocumentSensitivity, to: DocumentSensitivity): boolean {
+  return from === to || from === "GENERAL";
+}

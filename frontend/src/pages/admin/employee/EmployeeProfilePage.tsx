@@ -215,7 +215,8 @@ function JobEditModal({ employeeId, open, onClose }: { employeeId: string; open:
   const { data: departments = [] } = useQuery({ queryKey: ["org", "departments"], queryFn: orgApi.departments.list });
   const { data: designations = [] } = useQuery({ queryKey: ["org", "designations"], queryFn: orgApi.designations.list });
   const { data: locations = [] } = useQuery({ queryKey: ["org", "locations"], queryFn: () => orgApi.listLocations(false) });
-  const { data: managers = [] } = useQuery({ queryKey: ["managers", "options"], queryFn: managersApi.managerOptions });
+  // Only once the dialog opens: a viewer who can see the profile but not edit it (a manager) would get a 403.
+  const { data: managers = [] } = useQuery({ queryKey: ["managers", "options"], queryFn: managersApi.managerOptions, enabled: open });
 
   const mutation = useMutation({
     mutationFn: (values: { departmentId?: string; designationId?: string; locationId?: string; reportingManagerId?: string; effectiveFrom: dayjs.Dayjs; changeReason?: string }) =>

@@ -1,3 +1,4 @@
+import type { DocumentSensitivity } from "@shared/constants/peopleDocuments";
 import { apiClient } from "./client";
 
 export type CategoryScope = "COMPANY" | "EMPLOYEE";
@@ -7,6 +8,10 @@ export interface DocumentCategory {
   code: string;
   name: string;
   appliesTo: CategoryScope;
+  // Who may ever read its documents (2026-10-03): PAY and STATUTORY need
+  // keys no manager can hold. Raise-only.
+  sensitivity: DocumentSensitivity;
+  readable: boolean; // can the current viewer read (and so file into) it
   isActive: boolean;
   sortOrder: number;
 }
@@ -67,11 +72,11 @@ export async function listCategories(params: { appliesTo?: CategoryScope; includ
   const { data } = await apiClient.get<DocumentCategory[]>("/api/documents/categories", { params });
   return data;
 }
-export async function createCategory(input: { code: string; name: string; appliesTo: CategoryScope; sortOrder?: number }): Promise<DocumentCategory> {
+export async function createCategory(input: { code: string; name: string; appliesTo: CategoryScope; sensitivity?: DocumentSensitivity; sortOrder?: number }): Promise<DocumentCategory> {
   const { data } = await apiClient.post<DocumentCategory>("/api/documents/categories", input);
   return data;
 }
-export async function updateCategory(id: string, input: { name?: string; isActive?: boolean; sortOrder?: number }): Promise<DocumentCategory> {
+export async function updateCategory(id: string, input: { name?: string; isActive?: boolean; sensitivity?: DocumentSensitivity; sortOrder?: number }): Promise<DocumentCategory> {
   const { data } = await apiClient.patch<DocumentCategory>(`/api/documents/categories/${id}`, input);
   return data;
 }

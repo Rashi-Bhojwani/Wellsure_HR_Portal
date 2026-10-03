@@ -44,6 +44,9 @@ export function useNotifications(): void {
     function onTasksCounts(): void {
       void queryClient.invalidateQueries({ queryKey: ["admin", "tasks", "counts"] });
       void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      // HR's Employee Leave queue (its "no manager can approve" flags move
+      // with leave grants and new requests, not only with leave.* events).
+      void queryClient.invalidateQueries({ queryKey: ["leave", "requests", "admin"] });
     }
 
     socket.on("notification.new", onNotificationNew);

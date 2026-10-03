@@ -164,7 +164,8 @@ export function EmployeeDocumentsTab({ employeeId, canManage }: { employeeId: st
             <Input maxLength={200} />
           </Form.Item>
           <Form.Item name="categoryId" label="Category" rules={[{ required: true }]}>
-            <Select options={categories.map((c) => ({ value: c.id, label: c.name }))} />
+            {/* Only categories the uploader can read back (PAY needs pay-document access, STATUTORY statutory). */}
+            <Select options={categories.filter((c) => c.readable).map((c) => ({ value: c.id, label: c.name }))} />
           </Form.Item>
           <Form.Item name="visibleToEmployee" label="Employee can see it" valuePropName="checked" extra="On: it appears in their Document Center and they're notified. Off: HR only.">
             <Switch />

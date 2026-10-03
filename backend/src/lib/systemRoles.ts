@@ -59,6 +59,8 @@ const HR_ADMIN_PERMS: string[] = [
   "employee.statutory.edit",
   "employee.bank.view",
   "employee.bank.edit",
+  // 2026-10-03 — documents in PAY categories (issued letters carry CTC).
+  "documents.pay.view",
   "user.security.manage",
   "audit.view",
   "settings.manage",
@@ -80,7 +82,7 @@ const HR_ADMIN_PERMS: string[] = [
   // Phase 5 commit F — leave liability (salary-derived from Phase 6).
   "reports.liability.view",
 ];
-const PAYROLL_ADMIN_PERMS = ["employee.view", "employee.bank.view", "employee.statutory.view", "leave.view", "reports.view", "reports.liability.view"];
+const PAYROLL_ADMIN_PERMS = ["employee.view", "employee.bank.view", "employee.statutory.view", "leave.view", "reports.view", "reports.liability.view", "documents.pay.view"];
 // leave.approve/leave.view here is a real fix over commit A's original
 // seed, caught while designing commit B's approve endpoint: MANAGER is
 // TEAM-scoped (its Role.dataScope), but scope alone doesn't grant a

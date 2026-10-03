@@ -1,3 +1,4 @@
+import { DOCUMENT_SENSITIVITIES, canReadSensitivity, sensitivityChangeAllowed, type DocumentSensitivity } from "@shared/constants/peopleDocuments";
 import type { DataScope } from "@shared/constants/roles";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
@@ -58,16 +59,33 @@ async function signedDownload(fileKey: string, fileName: string) {
 
 // ── Categories ────────────────────────────────────────────────────────
 
-export async function listCategories(query: { appliesTo?: DocumentCategoryScope; includeInactive?: boolean }) {
-  return prisma.documentCategory.findMany({
+// Sensitivity (2026-10-03): an EMPLOYEE category's documents are readable
+// only by holders of its sensitivity's key (shared/constants/peopleDocuments).
+// Structural — the category decides, never a per-document box — and the
+// PAY/STATUTORY keys are never manager-grantable.
+const readableSensitivities = (permissions: ReadonlySet<string>): DocumentSensitivity[] =>
+  DOCUMENT_SENSITIVITIES.filter((s) => canReadSensitivity(s, permissions));
+
+export async function listCategories(query: { appliesTo?: DocumentCategoryScope; includeInactive?: boolean }, permissions: ReadonlySet<string>) {
+  const rows = await prisma.documentCategory.findMany({
     where: { ...(query.appliesTo && { appliesTo: query.appliesTo }), ...(!query.includeInactive && { isActive: true }) },
     orderBy: [{ appliesTo: "asc" }, { sortOrder: "asc" }, { name: "asc" }],
   });
+  return rows.map((c) => ({ ...c, readable: canReadSensitivity(c.sensitivity, permissions) }));
 }
 
 export async function createCategory(input: z.infer<typeof createCategorySchema>, meta: ActorMeta) {
+  // Company documents go to everyone, so their categories are GENERAL; an
+  // employee category must say what it may contain (no silent default).
+  if (input.appliesTo === "COMPANY" && input.sensitivity && input.sensitivity !== "GENERAL") {
+    throw new HttpError(400, "Company document categories are always General — company documents are published to employees.", "VALIDATION_ERROR");
+  }
+  if (input.appliesTo === "EMPLOYEE" && !input.sensitivity) {
+    throw new HttpError(400, "Say what this category's documents may contain: General, Pay or Statutory.", "VALIDATION_ERROR");
+  }
+  const data = { ...input, sensitivity: input.appliesTo === "COMPANY" ? ("GENERAL" as const) : input.sensitivity! };
   try {
-    const after = await prisma.documentCategory.create({ data: input });
+    const after = await prisma.documentCategory.create({ data });
     await writeAuditLog({ ...meta, action: "documents.category.created", entityType: "DocumentCategory", entityId: after.id, after });
     return after;
   } catch (err) {
@@ -83,15 +101,25 @@ export async function createCategory(input: z.infer<typeof createCategorySchema>
 export async function updateCategory(id: string, input: z.infer<typeof updateCategorySchema>, meta: ActorMeta) {
   const before = await prisma.documentCategory.findUnique({ where: { id } });
   if (!before) throw notFound("Category");
+  if (input.sensitivity && input.sensitivity !== before.sensitivity) {
+    if (before.appliesTo === "COMPANY") throw new HttpError(400, "Company document categories are always General.", "VALIDATION_ERROR");
+    if (!sensitivityChangeAllowed(before.sensitivity, input.sensitivity)) {
+      throw new HttpError(409, "A category's sensitivity can be raised, never lowered or switched — that would expose documents already filed under it.", "SENSITIVITY_LOWERING");
+    }
+  }
   const after = await prisma.documentCategory.update({ where: { id }, data: input });
   await writeAuditLog({ ...meta, action: "documents.category.updated", entityType: "DocumentCategory", entityId: id, before, after });
   return after;
 }
 
-async function requireActiveCategory(categoryId: string, appliesTo: DocumentCategoryScope) {
+async function requireActiveCategory(categoryId: string, appliesTo: DocumentCategoryScope, permissions?: ReadonlySet<string>) {
   const category = await prisma.documentCategory.findUnique({ where: { id: categoryId } });
   if (!category || category.appliesTo !== appliesTo || !category.isActive) {
     throw new HttpError(400, "Choose an active category for this kind of document.", "VALIDATION_ERROR");
+  }
+  // Never file a document where the person filing it couldn't read it back.
+  if (permissions && !canReadSensitivity(category.sensitivity, permissions)) {
+    throw new HttpError(403, `You can't file documents under "${category.name}" — its documents need a permission you don't have.`, "CATEGORY_RESTRICTED");
   }
   return category;
 }
@@ -281,7 +309,7 @@ export async function getCompanyDocumentDownloads(id: string) {
 
 // ── Employee documents ────────────────────────────────────────────────
 
-const employeeDocInclude = { category: { select: { id: true, name: true, code: true } } } as const;
+const employeeDocInclude = { category: { select: { id: true, name: true, code: true, sensitivity: true } } } as const;
 type EmployeeDocRow = Prisma.EmployeeDocumentGetPayload<{ include: typeof employeeDocInclude }>;
 
 function formatEmployeeDoc(row: EmployeeDocRow) {
@@ -307,7 +335,8 @@ async function assertEmployeeInScope(employeeId: string, viewer: DocumentViewer)
 
 async function loadEmployeeDocInScope(id: string, viewer: DocumentViewer) {
   const doc = await prisma.employeeDocument.findUnique({ where: { id }, include: employeeDocInclude });
-  if (!doc) throw notFound();
+  // A document in a category the viewer can't read is indistinguishable from absent.
+  if (!doc || !canReadSensitivity(doc.category.sensitivity, viewer.permissions)) throw notFound();
   try {
     await assertEmployeeInScope(doc.employeeId, viewer);
   } catch {
@@ -334,7 +363,11 @@ export async function downloadMyDocument(id: string, employeeId: string) {
 
 export async function listEmployeeDocuments(employeeId: string, viewer: DocumentViewer) {
   await assertEmployeeInScope(employeeId, viewer);
-  const rows = await prisma.employeeDocument.findMany({ where: { employeeId }, include: employeeDocInclude, orderBy: { uploadedAt: "desc" } });
+  const rows = await prisma.employeeDocument.findMany({
+    where: { employeeId, category: { sensitivity: { in: readableSensitivities(viewer.permissions) } } },
+    include: employeeDocInclude,
+    orderBy: { uploadedAt: "desc" },
+  });
   return rows.map(formatEmployeeDoc);
 }
 
@@ -359,7 +392,7 @@ export async function uploadEmployeeDocument(
   await assertEmployeeInScope(employeeId, viewer);
   const settings = await getPeopleDocumentsSettings();
   const { buffer, mimeType, fileName, sizeBytes } = await prepareDocumentUpload(file, settings);
-  await requireActiveCategory(input.categoryId, "EMPLOYEE");
+  await requireActiveCategory(input.categoryId, "EMPLOYEE", viewer.permissions);
   const fileKey = storageKey(`employees/${employeeId}/documents`, fileName);
   await storageService.putObject(fileKey, buffer, mimeType);
   let row: EmployeeDocRow;
@@ -396,7 +429,13 @@ export async function updateEmployeeDocument(id: string, input: z.infer<typeof u
     const letter = await prisma.generatedLetter.findUnique({ where: { employeeDocumentId: id }, select: { id: true } });
     if (letter) throw new HttpError(409, "This is an issued letter, so its title and category can't change. Reissue the letter instead.", "LETTER_IMMUTABLE");
   }
-  if (input.categoryId && input.categoryId !== before.categoryId) await requireActiveCategory(input.categoryId, "EMPLOYEE");
+  if (input.categoryId && input.categoryId !== before.categoryId) {
+    const target = await requireActiveCategory(input.categoryId, "EMPLOYEE", viewer.permissions);
+    // Moving a document must never lower who can read it.
+    if (!sensitivityChangeAllowed(before.category.sensitivity, target.sensitivity)) {
+      throw new HttpError(409, `This document is in a ${before.category.sensitivity.toLowerCase()} category; it can only move to another ${before.category.sensitivity.toLowerCase()} category.`, "SENSITIVITY_LOWERING");
+    }
+  }
   const after = await prisma.employeeDocument.update({ where: { id }, data: input, include: employeeDocInclude });
   await writeAuditLog({
     ...meta,

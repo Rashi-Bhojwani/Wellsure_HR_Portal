@@ -1,4 +1,5 @@
 import { prisma } from "../../lib/prisma";
+import { pendingWithNoTeamApprover } from "../leave/noTeamApprover";
 import * as leaveRequestsService from "../leave/requests";
 import type { LeaveViewer } from "../leave/types";
 import { getRegularizationRequestSink } from "./regularizationIntegration";
@@ -18,6 +19,9 @@ export interface TaskCountsByType {
 export interface TaskCounts {
   review: { total: number; byType: TaskCountsByType[] };
   monitor: { total: number; byType: TaskCountsByType[] };
+  // Pending leave no manager or delegate can decide (company-wide approvers
+  // only; null for everyone else) — shown as an alert on Admin Home.
+  leaveNoTeamApprover: number | null;
 }
 
 export async function getTaskCounts(viewer: LeaveViewer): Promise<TaskCounts> {
@@ -40,8 +44,11 @@ export async function getTaskCounts(viewer: LeaveViewer): Promise<TaskCounts> {
   const monitorByType: TaskCountsByType[] = [{ type: "LEAVE", label: "Leave", count: leaveMonitor }];
   if (regularization.monitor > 0) monitorByType.push({ type: "REGULARIZATION", label: "Attendance Regularization", count: regularization.monitor });
 
+  const leaveNoTeamApprover = canApprove && scope === "ALL" ? (await pendingWithNoTeamApprover()).size : null;
+
   return {
     review: { total: leaveReview + regularization.review, byType: reviewByType },
     monitor: { total: leaveMonitor + regularization.monitor, byType: monitorByType },
+    leaveNoTeamApprover,
   };
 }

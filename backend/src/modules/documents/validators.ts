@@ -1,3 +1,4 @@
+import { DOCUMENT_SENSITIVITIES } from "@shared/constants/peopleDocuments";
 import { z } from "zod";
 
 // Multipart forms send every field as a string: "" means "not set", and
@@ -22,12 +23,14 @@ export const createCategorySchema = z.object({
   code: z.string().trim().min(1).max(40).regex(/^[A-Z0-9_]+$/, "Use capital letters, digits and underscores."),
   name: z.string().trim().min(1).max(80),
   appliesTo: z.enum(["COMPANY", "EMPLOYEE"]),
+  sensitivity: z.enum(DOCUMENT_SENSITIVITIES).optional(), // required for EMPLOYEE (checked in the service)
   sortOrder: z.number().int().min(0).max(999).optional(),
 });
 
 export const updateCategorySchema = z.object({
   name: z.string().trim().min(1).max(80).optional(),
   isActive: z.boolean().optional(),
+  sensitivity: z.enum(DOCUMENT_SENSITIVITIES).optional(), // raise only
   sortOrder: z.number().int().min(0).max(999).optional(),
 });
 

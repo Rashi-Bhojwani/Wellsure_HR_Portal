@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, DatePicker, Form, Input, Modal, Select, Space, Table, Tag, Typography, message } from "antd";
+import { useSearchParams } from "react-router-dom";
+import { Alert, Button, DatePicker, Form, Input, Modal, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
 import type { Dayjs } from "dayjs";
 import { PlusOutlined } from "@ant-design/icons";
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
+import * as adminHomeApi from "../../../api/adminHome";
 import * as leaveApi from "../../../api/leave";
 import type { LeaveRequestRow, LeaveRequestStatus } from "../../../api/leave";
 import * as employeeApi from "../../../api/employee";
@@ -105,9 +107,18 @@ export function EmployeeLeavePage() {
   const [rejecting, setRejecting] = useState<LeaveRequestRow | null>(null);
   const [rejectComments, setRejectComments] = useState("");
 
+  // Requests nobody on the team side can decide (no manager with leave
+  // approval, no delegate, or no manager at all) — HR's to decide. Linked
+  // from the notification and Admin Home as ?noTeamApprover=1.
+  const [params, setParams] = useSearchParams();
+  const onlyNoTeamApprover = params.get("noTeamApprover") === "1";
+  const setOnlyNoTeamApprover = (on: boolean) => setParams(on ? { noTeamApprover: "1" } : {}, { replace: true });
+  const { data: taskCounts } = useQuery({ queryKey: ["admin", "tasks", "counts"], queryFn: adminHomeApi.getTaskCounts });
+  const noTeamApproverCount = taskCounts?.leaveNoTeamApprover ?? 0;
+
   const { data, isLoading } = useQuery({
-    queryKey: ["leave", "requests", "admin", status],
-    queryFn: () => leaveApi.listLeaveRequests({ status, pageSize: 100 }),
+    queryKey: ["leave", "requests", "admin", status, onlyNoTeamApprover],
+    queryFn: () => leaveApi.listLeaveRequests({ status, noTeamApprover: onlyNoTeamApprover || undefined, pageSize: 100 }),
   });
   const rows = data?.rows ?? [];
 
@@ -156,6 +167,24 @@ export function EmployeeLeavePage() {
         )}
       </Space>
 
+      {(noTeamApproverCount > 0 || onlyNoTeamApprover) && (
+        <Alert
+          type={noTeamApproverCount > 0 ? "warning" : "success"}
+          showIcon
+          title={
+            noTeamApproverCount > 0
+              ? `${noTeamApproverCount} pending ${noTeamApproverCount === 1 ? "request has" : "requests have"} no manager who can approve ${noTeamApproverCount === 1 ? "it" : "them"}`
+              : "Every pending request has a manager or delegate who can approve it"
+          }
+          description={noTeamApproverCount > 0 ? "Their manager hasn't been given leave approval (and nobody is covering), or they have no reporting manager — so these wait on HR." : undefined}
+          action={
+            <Button size="small" onClick={() => setOnlyNoTeamApprover(!onlyNoTeamApprover)}>
+              {onlyNoTeamApprover ? "Show all requests" : "Show only these"}
+            </Button>
+          }
+        />
+      )}
+
       <Select
         allowClear
         placeholder="Filter by status"
@@ -173,7 +202,20 @@ export function EmployeeLeavePage() {
         scroll={{ x: "max-content" }}
         locale={{ emptyText: <EmptyState message="No leave requests found" compact /> }}
         columns={[
-          { title: "Employee", key: "employee", render: (_, r) => `${r.employeeName} (${r.employeeCode})` },
+          {
+            title: "Employee",
+            key: "employee",
+            render: (_, r) => (
+              <Space size={6} wrap>
+                {`${r.employeeName} (${r.employeeCode})`}
+                {r.noTeamApprover && (
+                  <Tooltip title={r.noTeamApprover === "NO_MANAGER" ? "No reporting manager — HR decides." : "Their manager hasn't been given leave approval and nobody is covering — HR decides."}>
+                    <Tag color="orange">No manager can approve</Tag>
+                  </Tooltip>
+                )}
+              </Space>
+            ),
+          },
           { title: "Type", dataIndex: "leaveTypeName" },
           { title: "Dates", key: "dates", render: (_, r) => (r.fromDate === r.toDate ? r.fromDate : `${r.fromDate} → ${r.toDate}`) },
           { title: "Days", dataIndex: "totalDays" },

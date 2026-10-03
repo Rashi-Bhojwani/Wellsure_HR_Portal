@@ -179,7 +179,8 @@ describe("Letters", { timeout: 30_000 }, () => {
     expect(await prisma.auditLog.count({ where: { entityId: res.body.id, action: "letters.issued" } })).toBe(1);
 
     // Reproduce: from the stored version + values + timestamp, same bytes.
-    const repro = await as("hrExec").post(`/api/letters/${res.body.id}/reproduce`).buffer(true).parse((r, cb) => {
+    // (HR Admin: a letter is a PAY document, which an HR Executive can't open.)
+    const repro = await as("hrAdmin").post(`/api/letters/${res.body.id}/reproduce`).buffer(true).parse((r, cb) => {
       const chunks: Buffer[] = [];
       r.on("data", (c: Buffer) => chunks.push(c));
       r.on("end", () => cb(null, Buffer.concat(chunks)));

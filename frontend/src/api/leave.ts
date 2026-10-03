@@ -43,6 +43,10 @@ export interface LeaveRequestRow {
   // E3 (list/detail only): set when the viewer reaches this request only by
   // covering another manager's approvals.
   onBehalfOf?: { userId: string; name: string } | null;
+  // Company-wide viewers only: nobody on the team side can decide this
+  // pending request (the manager hasn't been granted leave approval and no
+  // delegate covers, or there's no reporting manager) — it's HR's.
+  noTeamApprover?: "NO_MANAGER" | "MANAGER_CANNOT_APPROVE" | null;
 }
 
 export interface ApplyLeaveInput {
@@ -66,6 +70,7 @@ export interface ListLeaveRequestsParams {
   leaveTypeId?: string;
   fromDate?: string;
   toDate?: string;
+  noTeamApprover?: boolean;
   page?: number;
   pageSize?: number;
 }

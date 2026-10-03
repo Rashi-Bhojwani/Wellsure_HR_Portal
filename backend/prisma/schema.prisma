@@ -1411,13 +1411,29 @@ enum DocumentCategoryScope {
   EMPLOYEE // letters, ID proofs — EmployeeDocument
 }
 
+// What an EMPLOYEE category's documents may contain, and so who may ever
+// read them (2026-10-03, user decision — structural, never per document):
+// GENERAL anyone with employee.documents.view in scope; PAY (anything with
+// money in it: offer and increment letters, payslips) also needs
+// documents.pay.view; STATUTORY (ID proofs: PAN, Aadhaar) also needs
+// employee.statutory.view. Neither key is manager-grantable, so a manager
+// never sees PAY or STATUTORY documents whatever they're granted. New
+// categories default to PAY; sensitivity can be raised, never lowered.
+// COMPANY categories are always GENERAL (company documents are for everyone).
+enum DocumentSensitivity {
+  GENERAL
+  PAY
+  STATUTORY
+}
+
 // Admin-editable master (standing rule: nothing hardcoded). Deactivated,
 // never deleted, once any document references it.
 model DocumentCategory {
-  id        String                @id @default(cuid())
-  code      String                @unique
-  name      String
-  appliesTo DocumentCategoryScope @map("applies_to")
+  id          String                @id @default(cuid())
+  code        String                @unique
+  name        String
+  appliesTo   DocumentCategoryScope @map("applies_to")
+  sensitivity DocumentSensitivity   @default(PAY)
   isActive  Boolean               @default(true) @map("is_active")
   sortOrder Int                   @default(0) @map("sort_order")
   createdAt DateTime              @default(now()) @map("created_at")

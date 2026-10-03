@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import sharp from "sharp";
 import { formatLetterNumber, LETTER_PLACEHOLDERS, type LetterExtraField } from "@shared/constants/letters";
+import { canReadSensitivity } from "@shared/constants/peopleDocuments";
 import { storageService } from "../../integrations/storage";
 import { writeAuditLog } from "../../lib/audit";
 import { renderPdf } from "../../lib/pdf/renderer";
@@ -391,8 +392,34 @@ const letterInclude = {
 } as const;
 type LetterRow = Prisma.GeneratedLetterGetPayload<{ include: typeof letterInclude }>;
 
+// Every issued letter is filed under LETTERS, a PAY category (an offer
+// letter carries the CTC HR typed in). Whoever can't read PAY documents —
+// every manager, whatever they're granted, and HR Executives — sees that a
+// letter exists (reference, template, date, status) but never its typed
+// values or its PDF, and can't reissue or reproduce it (2026-10-03).
+async function canReadLetterContents(viewer: { permissions: ReadonlySet<string> }): Promise<boolean> {
+  const category = await prisma.documentCategory.findUnique({ where: { code: LETTERS_CATEGORY_CODE }, select: { sensitivity: true } });
+  return canReadSensitivity(category?.sensitivity ?? "PAY", viewer.permissions);
+}
+
+async function requireLetterContents(viewer: { permissions: ReadonlySet<string> }) {
+  if (!(await canReadLetterContents(viewer))) {
+    throw new HttpError(403, "Issued letters can contain pay figures, so only people who can see pay documents can reissue or reproduce them.", "CONTENTS_WITHHELD");
+  }
+}
+
+function withheld(l: ReturnType<typeof formatLetter>) {
+  return { ...l, document: null, extraValues: null, pdfSha256: null, contentsWithheld: true as const };
+}
+
+async function present(rows: LetterRow[], viewer: { permissions: ReadonlySet<string> }) {
+  const full = rows.map(formatLetter);
+  return (await canReadLetterContents(viewer)) ? full : full.map(withheld);
+}
+
 function formatLetter(l: LetterRow) {
   return {
+    contentsWithheld: false as boolean,
     id: l.id,
     reference: formatLetterNumber(l.number),
     employeeId: l.employeeId,
@@ -460,7 +487,7 @@ export async function issueLetter(
     after: { reference: formatLetterNumber(letter.number), employeeId: letter.employeeId, template: template.code, version: version.version, reissueOfId: input.reissueOfId ?? null },
   });
   await enqueue(letter.id);
-  return formatLetter(letter);
+  return (await present([letter], viewer))[0]!;
 }
 
 export async function reissueLetter(
@@ -475,6 +502,8 @@ export async function reissueLetter(
   await findScopedEmployee(original.employeeId, viewer.employeeId, viewer.dataScope).catch(() => {
     throw new HttpError(404, "Letter not found.", "NOT_FOUND");
   });
+  // A reissue copies the original's typed values, so it needs to read them.
+  await requireLetterContents(viewer);
   const previous = formatLetter(original);
   // A reissue is a brand-new letter from the template's CURRENT version,
   // today's values and a new reference; the original stays untouched.
@@ -495,7 +524,7 @@ export async function reissueLetter(
 export async function listEmployeeLetters(employeeId: string, viewer: LetterViewer) {
   await findScopedEmployee(employeeId, viewer.employeeId, viewer.dataScope);
   const rows = await prisma.generatedLetter.findMany({ where: { employeeId }, include: letterInclude, orderBy: { number: "desc" } });
-  return rows.map(formatLetter);
+  return present(rows, viewer);
 }
 
 async function loadScopedLetter(letterId: string, viewer: LetterViewer) {
@@ -510,7 +539,7 @@ async function loadScopedLetter(letterId: string, viewer: LetterViewer) {
 }
 
 export async function getLetter(letterId: string, viewer: LetterViewer) {
-  return formatLetter(await loadScopedLetter(letterId, viewer));
+  return (await present([await loadScopedLetter(letterId, viewer)], viewer))[0]!;
 }
 
 // Re-renders an issued letter from exactly what was stored — template
@@ -518,6 +547,7 @@ export async function getLetter(letterId: string, viewer: LetterViewer) {
 // PDF that was issued.
 export async function reproduceLetter(letterId: string, viewer: LetterViewer, meta: ActorMeta) {
   const letter = await loadScopedLetter(letterId, viewer);
+  await requireLetterContents(viewer);
   if (letter.status !== "GENERATED") throw new HttpError(409, "Only a generated letter can be reproduced.", "CONFLICT");
   const rendered = await renderStored(letter.templateVersion.bodyHtml, letter.mergeValues as unknown as StoredMergeValues, letter.generatedAt);
   const hash = sha256(rendered.pdf);
@@ -543,6 +573,8 @@ export async function processLetterJob(letterId: string): Promise<{ status: "GEN
   try {
     const category = await prisma.documentCategory.findUnique({ where: { code: LETTERS_CATEGORY_CODE } });
     if (!category) throw new Error(`Document category ${LETTERS_CATEGORY_CODE} is missing.`);
+    // Structural: a letter is never filed where a manager could read it.
+    if (category.sensitivity !== "PAY") throw new Error(`Document category ${LETTERS_CATEGORY_CODE} must be PAY sensitivity, not ${category.sensitivity}.`);
     const rendered = await renderStored(letter.templateVersion.bodyHtml, merge, letter.generatedAt);
     fileKey = `letters/${letter.employeeId}/${letter.id}.pdf`;
     await storageService.putObject(fileKey, rendered.pdf, "application/pdf");

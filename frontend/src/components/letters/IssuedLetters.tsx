@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, Button, Checkbox, Flex, Form, Modal, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
-import { CheckCircleOutlined, FileAddOutlined, RedoOutlined, SafetyCertificateOutlined } from "@ant-design/icons";
+import { CheckCircleOutlined, FileAddOutlined, LockOutlined, RedoOutlined, SafetyCertificateOutlined } from "@ant-design/icons";
 import * as lettersApi from "../../api/letters";
 import type { IssuedLetter, LetterTemplateSummary } from "../../api/letters";
 import { apiErrorMessage } from "../../lib/apiError";
@@ -102,7 +102,12 @@ export function IssuedLetters({ employeeId }: { employeeId: string }) {
           {
             title: "",
             key: "actions",
-            render: (_: unknown, l) => (
+            render: (_: unknown, l) =>
+              l.contentsWithheld ? (
+                <Tooltip title="Letters can contain pay figures, so only people who can see pay documents can open, reissue or reproduce them.">
+                  <Tag icon={<LockOutlined />}>Contents restricted</Tag>
+                </Tooltip>
+              ) : (
               <Space size={4}>
                 {l.status === "GENERATED" && (
                   <Tooltip title="Re-render from what was stored and check it matches the issued PDF">

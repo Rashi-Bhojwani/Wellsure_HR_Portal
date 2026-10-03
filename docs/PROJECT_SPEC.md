@@ -98,7 +98,12 @@ A `MANAGER` holder can only ever hold these keys, all at most `TEAM` scope:
   listed under them. Manager Management marks them **"No permissions"**
   and counts them.
 - Their team's leave is then decided by HR, and they aren't sent
-  "New leave request" notifications they can't act on.
+  "New leave request" notifications they can't act on. Such a request is
+  never stranded: everyone with company-wide leave approval is notified,
+  HR's Employee Leave queue tags it **"No manager can approve"** (with a
+  "show only these" filter), and Admin Home counts it. The flag is
+  computed live, so granting the manager leave approval clears it. The
+  same applies to someone with no reporting manager.
 - Removing someone as a manager also removes their manager grants.
 
 **The ceiling overrules everyone, Super Admin included.**
@@ -108,8 +113,28 @@ A `MANAGER` holder can only ever hold these keys, all at most `TEAM` scope:
   neither is anything that runs, approves or publishes payroll, or that
   generates or approves a bank transfer file. Those are Admin-only, with
   maker-checker (§12 Phase 6). A test fails if any `payroll.*`, `bank.*`,
-  `salary.*`, `employee.bank.*`, `employee.statutory.*` or
-  `employee.salary.*` key ever becomes grantable.
+  `salary.*`, `employee.bank.*`, `employee.statutory.*`,
+  `employee.salary.*` or `documents.pay.*` key ever becomes grantable.
+- **Documents carrying pay or ID numbers are HR-only, structurally**
+  (user decision 2026-10-03). Each employee-document category declares a
+  sensitivity: **General**, **Pay** (anything that can contain money
+  figures: offer and increment letters, later payslips) or **Statutory**
+  (ID proofs: PAN, Aadhaar).
+  - Pay documents need `documents.pay.view` (HR Admin, Payroll Admin);
+    Statutory ones need `employee.statutory.view`. Neither is grantable,
+    so no manager ever sees them, whatever else they hold.
+  - The category decides, never a per-document checkbox. New categories
+    must declare a sensitivity; it can be raised, never lowered, and a
+    document can't move to a less sensitive category.
+  - Every issued letter is filed under **Letters**, a Pay category. A
+    viewer without `documents.pay.view` sees that a letter exists
+    (reference, template, date, status), but never its typed values or
+    its PDF. They also can't reissue or reproduce it.
+  - The same bar applies to HR Executives (spec §2: no salary, bank or
+    statutory data).
+  - Ledger remarks never carry money: a year-end encashment entry
+    records days only. The rate and amount stay on the Year End Process
+    run, which needs `leave.yearend.manage`.
 - **Attendance (Phases 2–3), decided 2026-10-03:**
   - At most, a manager may **view and approve regularizations for their
     own team**, and only if Admin grants it (two grantable keys, TEAM

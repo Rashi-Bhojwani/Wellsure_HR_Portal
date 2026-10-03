@@ -16,6 +16,7 @@ import { resolveDayCountContext } from "./dayCountContext";
 import { assertSufficientBalance, writeLedgerEntry } from "./ledger";
 import { approvalEmployeeIdFilter, isEmployeeInScope, reachFor, resolveApprovalReach, type ApprovalReach } from "./scope";
 import { activeDelegatesOf, type Delegator } from "../delegations/reach";
+import { companyWideApprovers, noTeamApproverReason, pendingWithNoTeamApprover } from "./noTeamApprover";
 import type { ActorMeta, LeaveViewer } from "./types";
 
 interface ApplyLeaveInput {
@@ -190,12 +191,33 @@ export async function applyForLeave(input: ApplyLeaveInput, viewer: LeaveViewer,
     }
     emitLeaveAppliedToAdmins(appliedPayload);
   }
+  // Stranded otherwise (2026-10-03): nobody on the team side can decide this
+  // one — the manager hasn't been granted leave approval and nobody covers,
+  // or there's no reporting manager. Everyone with company-wide approval is
+  // told directly, and the request is flagged in their queue and on Home.
+  const noTeamApprover = await noTeamApproverReason(targetEmployeeId, reportingManagerId);
+  if (noTeamApprover) {
+    const why =
+      noTeamApprover === "NO_MANAGER"
+        ? `${formatted.employeeName} has no reporting manager`
+        : `${await employeeNameOf(reportingManagerId!)} hasn't been given leave approval`;
+    for (const employeeId of await companyWideApprovers(targetEmployeeId)) {
+      await notifyEmployee(employeeId, {
+        type: "leave.applied.noTeamApprover",
+        title: "Leave request with no manager to approve it",
+        body: `${formatted.employeeName} applied for ${formatted.totalDays} day(s) of ${formatted.leaveTypeCode} (${formatted.fromDate} to ${formatted.toDate}). ${why}, so it's waiting on HR.`,
+        link: "/admin/workforce/leave/employee-leave?noTeamApprover=1",
+        payload: { leaveRequestId: formatted.id, reason: noTeamApprover },
+      });
+    }
+  }
   emitTasksCounts(reportingManagerId);
 
   return formatted;
 }
 
 export interface ListLeaveRequestsQuery {
+  noTeamApprover?: boolean;
   employeeId?: string;
   status?: LeaveRequestStatus;
   leaveTypeId?: string;
@@ -324,6 +346,15 @@ export async function listLeaveRequests(query: ListLeaveRequestsQuery, viewer: L
   if (query.fromDate) where.toDate = { gte: new Date(query.fromDate) };
   if (query.toDate) where.fromDate = { lte: new Date(query.toDate) };
 
+  // HR's view of requests no team-side approver can decide: company-wide
+  // viewers only (a manager's queue is their own team by definition).
+  const companyWide = hasBroadView && scope === "ALL";
+  const stranded = companyWide ? await pendingWithNoTeamApprover() : new Map();
+  if (query.noTeamApprover) {
+    if (!companyWide) throw new HttpError(403, "Only company-wide leave viewers can filter by this.", "FORBIDDEN");
+    where.id = { in: [...stranded.keys()] };
+  }
+
   const [total, rows] = await Promise.all([
     prisma.leaveRequest.count({ where }),
     prisma.leaveRequest.findMany({
@@ -342,7 +373,7 @@ export async function listLeaveRequests(query: ListLeaveRequestsQuery, viewer: L
     pageSize: query.pageSize,
     rows: rows.map((r) => {
       const via = r.employeeId === viewer.employeeId ? null : reachFor(reach, r.employeeId).onBehalfOf;
-      return { ...formatLeaveRequestRow(r), onBehalfOf: via ? { userId: via.userId, name: names.get(via.userId) ?? "" } : null };
+      return { ...formatLeaveRequestRow(r), onBehalfOf: via ? { userId: via.userId, name: names.get(via.userId) ?? "" } : null, noTeamApprover: stranded.get(r.id) ?? null };
     }),
   };
 }

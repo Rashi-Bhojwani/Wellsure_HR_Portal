@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tabs, Tag, Typography, Upload, message } from "antd";
 import { DownloadOutlined, InboxOutlined, PlusOutlined, TeamOutlined, UploadOutlined } from "@ant-design/icons";
-import { DOCUMENT_MIME_TYPES } from "@shared/constants/peopleDocuments";
+import { DOCUMENT_MIME_TYPES, SENSITIVITY_LABELS, sensitivityChangeAllowed, type DocumentSensitivity } from "@shared/constants/peopleDocuments";
 import * as docsApi from "../../../api/documents";
 import type { CategoryScope, CompanyDocument, DocumentCategory } from "../../../api/documents";
 import * as orgApi from "../../../api/org";
@@ -209,6 +209,8 @@ function DocumentsTab() {
   );
 }
 
+const SENSITIVITY_SHORT: Record<DocumentSensitivity, string> = { GENERAL: "General", PAY: "Pay", STATUTORY: "Statutory" };
+
 function CategoriesTab() {
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
@@ -216,7 +218,8 @@ function CategoriesTab() {
   const { data = [], isLoading } = useQuery({ queryKey: ["documents", "categories", "all"], queryFn: () => docsApi.listCategories({ includeInactive: true }) });
   const invalidate = () => void queryClient.invalidateQueries({ queryKey: ["documents", "categories"] });
   const create = useMutation({
-    mutationFn: (values: { code: string; name: string; appliesTo: CategoryScope; sortOrder?: number }) => docsApi.createCategory(values),
+    mutationFn: (values: { code: string; name: string; appliesTo: CategoryScope; sensitivity?: DocumentSensitivity; sortOrder?: number }) =>
+      docsApi.createCategory({ ...values, sensitivity: values.appliesTo === "COMPANY" ? undefined : values.sensitivity }),
     onSuccess: () => {
       void message.success("Category added.");
       invalidate();
@@ -226,7 +229,7 @@ function CategoriesTab() {
     onError: (err) => void message.error(apiErrorMessage(err, "Couldn't add that category.")),
   });
   const update = useMutation({
-    mutationFn: ({ id, ...input }: { id: string; name?: string; isActive?: boolean; sortOrder?: number }) => docsApi.updateCategory(id, input),
+    mutationFn: ({ id, ...input }: { id: string; name?: string; isActive?: boolean; sensitivity?: DocumentSensitivity; sortOrder?: number }) => docsApi.updateCategory(id, input),
     onSuccess: invalidate,
     onError: (err) => void message.error(apiErrorMessage(err, "Couldn't update that category.")),
   });
@@ -253,6 +256,32 @@ function CategoriesTab() {
           { title: "Code", dataIndex: "code" },
           { title: "Used for", render: (_, c) => (c.appliesTo === "COMPANY" ? "Company documents" : "Employee documents") },
           {
+            title: "May contain",
+            render: (_, c) =>
+              c.appliesTo === "COMPANY" ? (
+                <Typography.Text type="secondary">—</Typography.Text>
+              ) : c.sensitivity === "GENERAL" ? (
+                // Raise-only: a General category can become Pay or Statutory, never back.
+                <Select<DocumentSensitivity>
+                  size="small"
+                  value={c.sensitivity}
+                  style={{ width: 150 }}
+                  aria-label={`What ${c.name} may contain`}
+                  options={(["GENERAL", "PAY", "STATUTORY"] as const).filter((s) => sensitivityChangeAllowed(c.sensitivity, s)).map((s) => ({ value: s, label: SENSITIVITY_SHORT[s] }))}
+                  onChange={(sensitivity) =>
+                    Modal.confirm({
+                      title: `Make "${c.name}" ${SENSITIVITY_SHORT[sensitivity]}?`,
+                      content: "This can't be undone. Managers (and anyone without the matching permission) will stop seeing documents in this category.",
+                      okText: "Raise it",
+                      onOk: () => update.mutate({ id: c.id, sensitivity }),
+                    })
+                  }
+                />
+              ) : (
+                <Tag color={c.sensitivity === "PAY" ? "gold" : "purple"}>{SENSITIVITY_SHORT[c.sensitivity]} · HR only</Tag>
+              ),
+          },
+          {
             title: "Order",
             render: (_, c) => <InputNumber size="small" min={0} max={999} defaultValue={c.sortOrder} onBlur={(e) => { const v = Number(e.target.value); if (v !== c.sortOrder) update.mutate({ id: c.id, sortOrder: v }); }} aria-label={`Order for ${c.name}`} />,
           },
@@ -277,6 +306,20 @@ function CategoriesTab() {
                 { value: "EMPLOYEE", label: "Employee documents (letters, ID proofs)" },
               ]}
             />
+          </Form.Item>
+          <Form.Item noStyle shouldUpdate={(a, b) => a.appliesTo !== b.appliesTo}>
+            {({ getFieldValue }) =>
+              getFieldValue("appliesTo") === "EMPLOYEE" && (
+                <Form.Item
+                  name="sensitivity"
+                  label="What may its documents contain?"
+                  rules={[{ required: true, message: "Choose one — this decides who can ever see them." }]}
+                  extra="Pay and Statutory documents are never shown to managers, whatever they've been granted. This can be raised later, never lowered."
+                >
+                  <Select options={(["GENERAL", "PAY", "STATUTORY"] as const).map((s) => ({ value: s, label: SENSITIVITY_LABELS[s] }))} />
+                </Form.Item>
+              )
+            }
           </Form.Item>
           <Form.Item name="sortOrder" label="Order">
             <InputNumber min={0} max={999} />

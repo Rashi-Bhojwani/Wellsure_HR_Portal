@@ -22,6 +22,9 @@ export const listLeaveRequestsQuerySchema = z.object({
   leaveTypeId: z.string().min(1).optional(),
   fromDate: isoDateSchema.optional(),
   toDate: isoDateSchema.optional(),
+  // Only PENDING requests whose team has nobody who can approve them
+  // (noTeamApprover.ts) — HR's "needs you" view; company-wide viewers only.
+  noTeamApprover: z.stringbool().optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(25),
 });

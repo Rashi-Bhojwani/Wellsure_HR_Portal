@@ -185,6 +185,19 @@ function WelcomeTab() {
         </Title>
         <Text type="secondary">Here&apos;s what needs your attention today.</Text>
       </Card>
+      {(taskCounts?.leaveNoTeamApprover ?? 0) > 0 && (
+        <Alert
+          type="warning"
+          showIcon
+          title={`${taskCounts!.leaveNoTeamApprover} leave ${taskCounts!.leaveNoTeamApprover === 1 ? "request has" : "requests have"} no manager who can approve ${taskCounts!.leaveNoTeamApprover === 1 ? "it" : "them"}`}
+          description="Their manager hasn't been given leave approval and nobody is covering, or they have no reporting manager. They wait on HR."
+          action={
+            <Button size="small" onClick={() => navigate("/admin/workforce/leave/employee-leave?noTeamApprover=1")}>
+              Review
+            </Button>
+          }
+        />
+      )}
       {canAssignTeams && unassigned.length > 0 && (
         <Alert
           type="warning"

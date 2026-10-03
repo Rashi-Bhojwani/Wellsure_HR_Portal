@@ -12,7 +12,7 @@ const id = (req: Request) => req.params.id as string;
 
 // Categories
 export async function listCategories(req: Request, res: Response): Promise<void> {
-  res.status(200).json(await service.listCategories(req.query as never));
+  res.status(200).json(await service.listCategories(req.query as never, req.user!.permissions));
 }
 export async function createCategory(req: Request, res: Response): Promise<void> {
   res.status(201).json(await service.createCategory(req.body, actorMeta(req)));

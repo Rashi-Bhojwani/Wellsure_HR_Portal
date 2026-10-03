@@ -728,12 +728,16 @@ async function main() {
   // fresh install: one org-wide policy, one department-scoped document
   // (the audience rule is visible), and two HR-held documents for Arjun
   // (1006) — a letter he can see and an ID proof he can't. ──────────────
-  const CATEGORIES: Array<{ code: string; name: string; appliesTo: "COMPANY" | "EMPLOYEE"; sortOrder: number }> = [
-    { code: "POLICIES", name: "Policies", appliesTo: "COMPANY", sortOrder: 1 },
-    { code: "FORMS", name: "Forms", appliesTo: "COMPANY", sortOrder: 2 },
-    { code: "LETTERS", name: "Letters", appliesTo: "EMPLOYEE", sortOrder: 1 },
-    { code: "ID_PROOFS", name: "ID Proofs", appliesTo: "EMPLOYEE", sortOrder: 2 },
-    { code: "OTHER", name: "Other", appliesTo: "EMPLOYEE", sortOrder: 3 },
+  // Sensitivity (2026-10-03): LETTERS is PAY (every issued letter is filed
+  // there; offer letters carry CTC), ID_PROOFS is STATUTORY, and OTHER is
+  // PAY because its contents are unknown. No GENERAL employee category is
+  // seeded — HR creates one deliberately if they want managers to see it.
+  const CATEGORIES: Array<{ code: string; name: string; appliesTo: "COMPANY" | "EMPLOYEE"; sensitivity: "GENERAL" | "PAY" | "STATUTORY"; sortOrder: number }> = [
+    { code: "POLICIES", name: "Policies", appliesTo: "COMPANY", sensitivity: "GENERAL", sortOrder: 1 },
+    { code: "FORMS", name: "Forms", appliesTo: "COMPANY", sensitivity: "GENERAL", sortOrder: 2 },
+    { code: "LETTERS", name: "Letters", appliesTo: "EMPLOYEE", sensitivity: "PAY", sortOrder: 1 },
+    { code: "ID_PROOFS", name: "ID Proofs", appliesTo: "EMPLOYEE", sensitivity: "STATUTORY", sortOrder: 2 },
+    { code: "OTHER", name: "Other", appliesTo: "EMPLOYEE", sensitivity: "PAY", sortOrder: 3 },
   ];
   const category: Record<string, { id: string }> = {};
   for (const c of CATEGORIES) category[c.code] = await prisma.documentCategory.create({ data: c });

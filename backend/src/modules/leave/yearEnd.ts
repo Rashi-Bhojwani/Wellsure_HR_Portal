@@ -203,7 +203,11 @@ export async function commitYearEndRun(runId: string, meta: ActorMeta, options: 
         referenceType: "YEAR_END_RUN",
         referenceId: run.id,
         createdByUserId: meta.actorUserId,
-        remarks: `Year-end ${run.leaveYear} encashment: ${item.encashedDays.toFixed(2)} day(s) at ${item.dailyRate.toFixed(2)}/day`,
+        // Days only, never the rate: the ledger is readable by anyone with
+        // leave.view in scope (managers included), and the daily rate is
+        // salary-derived. The rate and amount live on the YearEndRunItem,
+        // behind leave.yearend.manage (2026-10-03).
+        remarks: `Year-end ${run.leaveYear} encashment: ${item.encashedDays.toFixed(2)} day(s)`,
       });
       await tx.yearEndRunItem.update({ where: { id: item.id }, data: { ledgerEncashmentEntryId: entry.id } });
     });

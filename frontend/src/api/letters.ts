@@ -47,7 +47,11 @@ export interface IssuedLetter {
   rendererVersion: string | null;
   reissueOf: { id: string; reference: string } | null;
   reissuedAs: Array<{ id: string; reference: string }>;
-  extraValues: Record<string, string>;
+  // Every letter is a PAY document (offer letters carry CTC). Without
+  // documents.pay.view the viewer sees that it exists, never its typed
+  // values or PDF, and can't reissue or reproduce it.
+  contentsWithheld: boolean;
+  extraValues: Record<string, string> | null;
 }
 
 export interface Letterhead {

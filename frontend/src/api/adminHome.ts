@@ -104,6 +104,7 @@ export interface TaskCountsByType {
 export interface TaskCounts {
   review: { total: number; byType: TaskCountsByType[] };
   monitor: { total: number; byType: TaskCountsByType[] };
+  leaveNoTeamApprover: number | null; // company-wide approvers only
 }
 
 export async function getTaskCounts(): Promise<TaskCounts> {
