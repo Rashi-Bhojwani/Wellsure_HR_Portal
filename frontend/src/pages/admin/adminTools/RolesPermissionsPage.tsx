@@ -55,7 +55,7 @@ export function RolesPermissionsPage() {
     return <Result status={status === 403 ? "403" : "error"} title={status === 403 ? "You can't view roles and permissions" : "Couldn't load roles"} />;
   }
 
-  const editable = (r: RoleDefinition) => isSuperAdmin && !r.locked;
+  const editable = (r: RoleDefinition) => isSuperAdmin && !r.locked && !r.managerLocked;
   const toggle = (r: RoleDefinition, key: string, on: boolean) => {
     const d = draftOf(r);
     setDrafts({ ...drafts, [r.code]: { ...d, permissions: on ? [...d.permissions, key] : d.permissions.filter((k) => k !== key) } });
@@ -113,7 +113,7 @@ export function RolesPermissionsPage() {
               title: (
                 <Space orientation="vertical" size={4} style={{ width: "100%" }}>
                   <Text strong>
-                    {role.locked && <LockOutlined />} {role.name}
+                    {(role.locked || role.managerLocked) && <LockOutlined />} {role.name}
                   </Text>
                   <Text type="secondary" style={{ fontSize: 11 }}>
                     {role.holderCount} {role.holderCount === 1 ? "person" : "people"}
@@ -142,7 +142,7 @@ export function RolesPermissionsPage() {
                 // (fixed in code; the server refuses anything else).
                 const metaToManager = role.code === "MANAGER" && !PERMISSION_CATALOG[r.key].managerGrantable;
                 return (
-                  <Tooltip title={role.locked ? "A Super Admin always has every permission" : metaToManager ? "Managers can never hold this — they only get permissions limited to their own team. Fixed in code." : undefined}>
+                  <Tooltip title={role.locked ? "A Super Admin always has every permission" : role.managerLocked ? "Managers start with nothing. Grant each manager what they need in Manager Management." : metaToManager ? "Managers can never hold this — they only get permissions limited to their own team. Fixed in code." : undefined}>
                     <Checkbox
                       aria-label={`${role.name}: ${PERMISSION_CATALOG[r.key].label}`}
                       checked={checked}

@@ -82,7 +82,7 @@ general approval chains, spec §7.8).
 | `manager.team.assign` | HR_ADMIN | no |
 | `manager.permissions.manage` (meta) | HR_ADMIN | no |
 | `delegation.manage` | HR_ADMIN | no |
-| `reports.view` | HR_ADMIN, HR_EXECUTIVE, PAYROLL_ADMIN, **MANAGER** | **yes** (F) |
+| `reports.view` | HR_ADMIN, HR_EXECUTIVE, PAYROLL_ADMIN | **yes** (F) |
 | `reports.liability.view` | HR_ADMIN, PAYROLL_ADMIN | no (salary-derived) |
 
 **The manager-grantable list is now:**
@@ -99,7 +99,17 @@ resolution. Every route reachable with one of these keys is
 team-scoped, with an IDOR test (`managerReach.test.ts`, guarded by
 `routeInventory.test.ts`).
 
-No new roles. MANAGER's default set grew by `reports.view`.
+No new roles.
+
+**Correction (2026-10-03, user decision): the MANAGER role grants
+nothing.** Its default permission set is now empty and locked (the Roles
+& Permissions screen won't edit it; the API answers
+`MANAGER_ROLE_LOCKED`). Being appointed a manager gives the same access
+as a plain employee. Everything a manager can do is granted per manager,
+within the list above, in Manager Management ("Grant leave approval" is
+one deliberate click, never automatic) or on their Access tab. Managers
+with nothing granted show **No permissions**. Payroll, bank-file and
+salary keys can never join the list (a test guards it).
 
 ## 3. Incomplete, stubbed, or placeholder
 

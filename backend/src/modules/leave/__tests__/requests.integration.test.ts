@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { grantManager, LEGACY_MANAGER_GRANTS } from "../../../lib/__tests__/testHelpers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { prisma } from "../../../lib/prisma";
@@ -19,6 +20,7 @@ describe("Leave requests — apply/approve/reject/cancel/bulk-approve (integrati
   beforeAll(async () => {
     org = await createEmployeeTestOrgMasters();
     const manager = await createLoginableTestEmployee(org, { roleCode: "MANAGER" });
+    await grantManager(manager.userId, LEGACY_MANAGER_GRANTS); // a manager has no powers until Admin grants them (2026-10-03)
     managerId = manager.employeeId;
     managerUserId = manager.userId;
     employeeIds.push(managerId);

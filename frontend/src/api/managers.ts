@@ -15,6 +15,8 @@ export interface PersonPlacement {
 }
 export interface ManagerRow extends PersonPlacement {
   teamSize: number;
+  permissions: string[]; // what they can actually do — empty unless Admin granted it (2026-10-03)
+  leaveApproval: boolean;
 }
 export interface UnassignedRow extends PersonPlacement {
   why: string;
@@ -42,8 +44,12 @@ export async function getTeam(managerId: string): Promise<{ manager: PersonPlace
   const { data } = await apiClient.get(`/api/managers/${managerId}/team`);
   return data;
 }
-export async function appointManager(employeeId: string, effectiveFrom?: string): Promise<void> {
-  await apiClient.post("/api/managers", { employeeId, effectiveFrom });
+export async function appointManager(employeeId: string, effectiveFrom?: string, grantLeaveApproval = false): Promise<void> {
+  await apiClient.post("/api/managers", { employeeId, effectiveFrom, grantLeaveApproval });
+}
+export async function setLeaveApproval(employeeId: string, grant: boolean): Promise<ManagerRow> {
+  const { data } = await apiClient.post<ManagerRow>(`/api/managers/${employeeId}/leave-approval`, { grant });
+  return data;
 }
 export async function removeManager(employeeId: string, body: { newManagerId: string | null; effectiveFrom?: string }): Promise<void> {
   await apiClient.delete(`/api/managers/${employeeId}`, { data: body });

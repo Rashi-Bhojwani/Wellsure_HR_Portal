@@ -187,6 +187,44 @@ Every item is production-ready before the device is connected:
 - stats cards and insights;
 - every report and export.
 
+## Managers and attendance: designed in, not retrofitted (user decision 2026-10-03)
+
+The manager model from Phase 5 applies unchanged (spec §2.2):
+- a manager starts with **no** permissions;
+- Admin grants each manager what they need, within the manager-grantable
+  ceiling;
+- the ceiling is enforced even against a Super Admin.
+
+For attendance, that means:
+
+| Capability | Key (to create in Phase 2/3) | Manager-grantable? | Scope |
+|---|---|---|---|
+| View their team's regularization requests (and the team's attendance needed to judge them) | `attendance.regularization.view` | **yes**, if Admin grants it | TEAM only |
+| Approve or reject their team's regularization requests | `attendance.regularization.approve` | **yes**, if Admin grants it | TEAM only |
+| Finalise / lock an attendance period, unlock it | `attendance.finalise` | **never** | Admin only |
+| Manual override of a day's status, anywhere | `attendance.override` | **never** | Admin only |
+| Shift overrides and roster changes | `attendance.shift.manage` | **never** | Admin only |
+| Process / recompute attendance | `attendance.process` | **never** | Admin only |
+| Devices, mappings, the unmapped-punch queue, simulator controls | `attendance.devices.manage` | **never** | Admin only |
+| Anything that feeds payroll (paid days, LOP from attendance) | n/a: derived only from finalised periods | **never** | Admin only |
+
+**Rules carried from Phase 5:**
+- The two regularization keys join `MANAGER_GRANTABLE_KEYS` in the same
+  commit as their endpoints. Each endpoint is classified `scoped` in the
+  route inventory, with an IDOR case in `managerReach.test.ts`: a team
+  member's request works, an outsider's is a 404.
+- A manager's own regularization is never theirs to approve: self-approval
+  is blocked, and it goes to Admin, like their leave (model A).
+- Workflow delegation (E3) extends to regularization approval through the
+  same reach (`modules/delegations/reach.ts`). The delegate must hold the
+  approval key themselves.
+- Manager Management gets a second one-click grant, "Grant
+  regularization approval", beside "Grant leave approval". It is always
+  deliberate and never automatic.
+- A regularization approved by a manager changes a **non-finalised** day
+  only. Once a period is finalised, only Admin can reopen it, which feeds
+  payroll's maker-checker hash (Phase 6).
+
 ## Final step: connecting the real device
 
 The last commit of Phase 3. It's done only when the machine is available:

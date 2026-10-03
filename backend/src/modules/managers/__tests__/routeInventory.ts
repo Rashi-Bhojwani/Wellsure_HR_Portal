@@ -287,6 +287,7 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "DELETE /api/managers/:employeeId": admin,
   "POST /api/managers/:employeeId/team": admin,
   "DELETE /api/managers/:employeeId/team/:memberId": admin,
+  "POST /api/managers/:employeeId/leave-approval": admin,
 
   // Workflow Delegates (E3). /mine: the caller's own delegations and the
   // ones they're covering; creating one is refused unless they're a MANAGER.

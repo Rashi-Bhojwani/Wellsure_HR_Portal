@@ -1,4 +1,6 @@
-import { MANAGER_GRANTABLE_KEYS, PERMISSION_CATALOG, type PermissionKey } from "@shared/constants/permissions";
+import { LEAVE_APPROVAL_GRANT, MANAGER_GRANTABLE_KEYS, PERMISSION_CATALOG, type PermissionKey } from "@shared/constants/permissions";
+import { resolveAccess } from "../../lib/permissions";
+import { clearOverride, setOverride, type AccessActor } from "../access/service";
 import { writeAuditLog } from "../../lib/audit";
 import { prisma } from "../../lib/prisma";
 import { checkRoleCombination, EMPLOYEE_ROLE, isTopLevel, MANAGER_ROLE_CODE } from "../../lib/reportingHierarchy";
@@ -66,14 +68,21 @@ async function placementLabels(employeeIds: string[]) {
 export async function listManagers() {
   const holders = await prisma.userRole.findMany({
     where: { role: { code: MANAGER_ROLE_CODE }, user: { employee: { status: "ACTIVE" } } },
-    select: { user: { select: { employeeId: true } } },
+    select: { user: { select: { id: true, employeeId: true } } },
   });
   const ids = holders.map((h) => h.user.employeeId);
   const labels = await placementLabels(ids);
   const counts = await prisma.employeeJobHistory.groupBy({ by: ["reportingManagerId"], where: { reportingManagerId: { in: ids }, effectiveTo: null, employee: { status: "ACTIVE" } }, _count: { _all: true } });
   const countBy = new Map(counts.map((c) => [c.reportingManagerId, c._count._all]));
+  // What each manager can actually do (2026-10-03: nothing unless Admin
+  // granted it) — the resolved set, so the screen shows the truth.
+  const permissionsBy = new Map<string, string[]>();
+  for (const h of holders) permissionsBy.set(h.user.employeeId, [...(await resolveAccess(h.user.id)).permissions].sort());
   return ids
-    .map((id) => ({ ...labels.get(id)!, teamSize: countBy.get(id) ?? 0 }))
+    .map((id) => {
+      const permissions = permissionsBy.get(id) ?? [];
+      return { ...labels.get(id)!, teamSize: countBy.get(id) ?? 0, permissions, leaveApproval: LEAVE_APPROVAL_GRANT.every((k) => permissions.includes(k)) };
+    })
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -138,8 +147,14 @@ async function loadPerson(employeeId: string) {
 
 // ── Appoint / remove ─────────────────────────────────────────────────────
 
-export async function appointManager(employeeId: string, input: { effectiveFrom?: string }, meta: Meta) {
+export async function appointManager(employeeId: string, input: { effectiveFrom?: string; grantLeaveApproval?: boolean }, meta: Meta, actor?: AccessActor) {
   const person = await loadPerson(employeeId);
+  // Appointing grants nothing (2026-10-03). Granting leave approval at the
+  // same time is a deliberate, separate choice — checked before anything
+  // changes, so a refused grant never leaves a half-done appointment.
+  if (input.grantLeaveApproval && !(actor && (actor.roleCodes.includes("SUPER_ADMIN") || actor.permissions.has("manager.permissions.manage")))) {
+    throw new HttpError(403, "You can appoint managers but not grant them permissions (Manager permission exceptions).", "FORBIDDEN");
+  }
   if (person.roleCodes.includes(MANAGER_ROLE_CODE)) throw new HttpError(409, "They're already a manager.", "ALREADY_MANAGER");
   const combo = checkRoleCombination([...person.roleCodes, MANAGER_ROLE_CODE]);
   if (combo) throw new HttpError(400, combo, "HIERARCHY");
@@ -164,7 +179,8 @@ export async function appointManager(employeeId: string, input: { effectiveFrom?
   await writeAuditLog({ ...meta, action: "manager.appointed", entityType: "Employee", entityId: employeeId, before: { roles: person.roleCodes, reportingManagerId: oldManagerId }, after: { roles: [...person.roleCodes, MANAGER_ROLE_CODE], reportingManagerId: null, effectiveFrom: effectiveFrom.toISOString().slice(0, 10), jobHistoryId: move.after.id } });
   await notifyAccessChanged([{ id: person.user.id, employeeId }]);
   emitTeamChanged([oldManagerId, employeeId]);
-  return { employeeId, effectiveFrom: effectiveFrom.toISOString().slice(0, 10) };
+  if (input.grantLeaveApproval && actor) await setLeaveApproval(employeeId, true, actor, meta);
+  return { employeeId, effectiveFrom: effectiveFrom.toISOString().slice(0, 10), leaveApproval: Boolean(input.grantLeaveApproval) };
 }
 
 export async function removeManager(employeeId: string, input: { newManagerId: string | null; effectiveFrom?: string }, meta: Meta) {
@@ -179,8 +195,12 @@ export async function removeManager(employeeId: string, input: { newManagerId: s
   const effectiveFrom = parseMoveDate(input.effectiveFrom, current?.effectiveFrom ?? null);
   const role = await prisma.role.findUniqueOrThrow({ where: { code: MANAGER_ROLE_CODE } });
 
+  // Their manager powers were granted to them as a manager — they go with
+  // the role, so a former manager is exactly a plain employee again.
+  const managerGrants = await prisma.userPermissionOverride.findMany({ where: { userId: person.user.id, effect: "GRANT", permission: { key: { in: [...MANAGER_GRANTABLE_KEYS] } } }, include: { permission: true } });
   await prisma.$transaction(async (tx) => {
     await tx.userRole.delete({ where: { userId_roleId: { userId: person.user.id, roleId: role.id } } });
+    if (managerGrants.length) await tx.userPermissionOverride.deleteMany({ where: { id: { in: managerGrants.map((g) => g.id) } } });
     if (current) await moveReportingLine(tx, employeeId, input.newManagerId, effectiveFrom, meta.actorUserId, MOVE_REASON.demote);
   });
   // A plain employee always keeps EMPLOYEE.
@@ -188,7 +208,7 @@ export async function removeManager(employeeId: string, input: { newManagerId: s
   if (employeeRole && !remainingRoles.includes(EMPLOYEE_ROLE)) {
     await prisma.userRole.create({ data: { userId: person.user.id, roleId: employeeRole.id, assignedByUserId: meta.actorUserId } });
   }
-  await writeAuditLog({ ...meta, action: "manager.removed", entityType: "Employee", entityId: employeeId, before: { roles: person.roleCodes }, after: { roles: remainingRoles, reportingManagerId: input.newManagerId, effectiveFrom: effectiveFrom.toISOString().slice(0, 10) } });
+  await writeAuditLog({ ...meta, action: "manager.removed", entityType: "Employee", entityId: employeeId, before: { roles: person.roleCodes }, after: { roles: remainingRoles, reportingManagerId: input.newManagerId, effectiveFrom: effectiveFrom.toISOString().slice(0, 10), grantsCleared: managerGrants.map((g) => g.permission.key) } });
   await notifyAccessChanged([{ id: person.user.id, employeeId }]);
   emitTeamChanged([employeeId, input.newManagerId]);
 }
@@ -233,4 +253,26 @@ export async function removeTeamMember(managerId: string, memberId: string, inpu
   await writeAuditLog({ ...meta, action: "manager.team.member_removed", entityType: "Employee", entityId: memberId, before: { reportingManagerId: managerId }, after: { reportingManagerId: null, effectiveFrom: effectiveFrom.toISOString().slice(0, 10), jobHistoryId: move.after.id } });
   emitTeamChanged([managerId]);
   emitTasksCounts(managerId);
+}
+
+// ── Permissions (2026-10-03: a manager starts with nothing) ──────────────
+
+// "Grant leave approval" — the one-click, deliberate grant of the common
+// case (view + approve their team's leave), as per-manager overrides through
+// the same rules as the Access tab (the manager-grantable ceiling, no
+// self-grants, can't grant what you don't hold), each audited.
+export async function setLeaveApproval(employeeId: string, grant: boolean, actor: AccessActor, meta: Meta) {
+  const person = await loadPerson(employeeId);
+  if (!person.roleCodes.includes(MANAGER_ROLE_CODE)) throw new HttpError(404, "Manager not found.", "NOT_FOUND");
+  for (const key of LEAVE_APPROVAL_GRANT) {
+    if (grant) {
+      await setOverride(employeeId, key, { effect: "GRANT", reason: "Leave approval granted in Manager Management" }, actor, meta);
+    } else {
+      const existing = await prisma.userPermissionOverride.findFirst({ where: { userId: person.user.id, effect: "GRANT", permission: { key } } });
+      if (existing) await clearOverride(employeeId, key, { reason: "Leave approval removed in Manager Management" }, actor, meta);
+    }
+  }
+  await writeAuditLog({ ...meta, action: grant ? "manager.leave_approval.granted" : "manager.leave_approval.removed", entityType: "Employee", entityId: employeeId, after: { keys: [...LEAVE_APPROVAL_GRANT] } });
+  emitTasksCounts(null);
+  return (await listManagers()).find((m) => m.employeeId === employeeId)!;
 }

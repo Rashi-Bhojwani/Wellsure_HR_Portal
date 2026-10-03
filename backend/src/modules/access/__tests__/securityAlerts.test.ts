@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { grantManager, LEGACY_MANAGER_GRANTS } from "../../../lib/__tests__/testHelpers";
 import request from "supertest";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { env } from "../../../config/env";
@@ -46,6 +47,7 @@ describe("E1.1 — loud break-glass, append-only audit, manager data scope", () 
     p.sa2 = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
     p.hrAdmin = await createFullTestEmployee(org, { roleCode: "HR_ADMIN" });
     p.manager = await createFullTestEmployee(org, { roleCode: "MANAGER" });
+    await grantManager(p.manager.userId, LEGACY_MANAGER_GRANTS); // a manager has no powers until Admin grants them (2026-10-03)
     p.report = await createFullTestEmployee(org, { managerId: p.manager.employeeId });
     p.outsider = await createFullTestEmployee(otherOrg);
     for (const k of ["sa", "sa2", "hrAdmin", "manager"] as const) tokens[k] = await loginAs(p[k].employeeCode);

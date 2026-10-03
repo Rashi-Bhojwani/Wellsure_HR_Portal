@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Badge, Button, DatePicker, Drawer, Flex, Form, Modal, Popconfirm, Result, Select, Space, Table, Tabs, Tag, Tooltip, Typography, message } from "antd";
-import { SafetyOutlined, TeamOutlined, UserAddOutlined, UserDeleteOutlined } from "@ant-design/icons";
+import { Alert, Badge, Button, Checkbox, DatePicker, Drawer, Flex, Form, Modal, Popconfirm, Result, Select, Space, Table, Tabs, Tag, Tooltip, Typography, message } from "antd";
+import { CheckCircleOutlined, SafetyOutlined, TeamOutlined, UserAddOutlined, UserDeleteOutlined } from "@ant-design/icons";
+import { LEAVE_APPROVAL_GRANT, PERMISSION_CATALOG, type PermissionKey } from "@shared/constants/permissions";
 import dayjs, { type Dayjs } from "dayjs";
 import * as managersApi from "../../../api/managers";
 import type { ManagerRow, UnassignedRow } from "../../../api/managers";
@@ -41,21 +42,31 @@ export function ManagerManagementPage() {
   const [removing, setRemoving] = useState<ManagerRow | null>(null);
   const [appointOpen, setAppointOpen] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
-  const [appointForm] = Form.useForm<{ employeeId: string; effectiveFrom: Dayjs }>();
+  const [appointForm] = Form.useForm<{ employeeId: string; effectiveFrom: Dayjs; grantLeaveApproval?: boolean }>();
   const [removeForm] = Form.useForm<{ newManagerId: string | null; effectiveFrom: Dayjs }>();
   const [bulkForm] = Form.useForm<{ managerId: string; effectiveFrom: Dayjs }>();
 
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["managers"] });
   const onError = (fallback: string) => (err: unknown) => void message.error(apiErrorMessage(err, fallback));
   const appoint = useMutation({
-    mutationFn: (v: { employeeId: string; effectiveFrom: Dayjs }) => managersApi.appointManager(v.employeeId, ymd(v.effectiveFrom)),
+    mutationFn: (v: { employeeId: string; effectiveFrom: Dayjs; grantLeaveApproval?: boolean }) => managersApi.appointManager(v.employeeId, ymd(v.effectiveFrom), Boolean(v.grantLeaveApproval)),
     onSuccess: () => {
       refresh();
       setAppointOpen(false);
       appointForm.resetFields();
-      void message.success("Appointed. They now sit directly under Admin, with no team yet.");
+      void message.success("Appointed. They sit directly under Admin, with no team yet — and only the permissions you granted.");
     },
     onError: onError("Couldn't appoint them."),
+  });
+  // One click, always deliberate (2026-10-03): a manager can do nothing
+  // until Admin grants it; leave approval is the common grant.
+  const leaveApproval = useMutation({
+    mutationFn: (v: { employeeId: string; grant: boolean }) => managersApi.setLeaveApproval(v.employeeId, v.grant),
+    onSuccess: (m) => {
+      void message.success(m.leaveApproval ? `${m.name} can now approve their team's leave.` : `${m.name} can no longer approve leave.`);
+      void queryClient.invalidateQueries({ queryKey: ["managers"] });
+    },
+    onError: onError("Couldn't change their leave approval."),
   });
   const remove = useMutation({
     mutationFn: (v: { newManagerId: string | null; effectiveFrom: Dayjs }) => managersApi.removeManager(removing!.employeeId, { newManagerId: v.newManagerId ?? null, effectiveFrom: ymd(v.effectiveFrom) }),
@@ -107,6 +118,16 @@ export function ManagerManagementPage() {
             key: "managers",
             label: `Managers (${managers.length})`,
             children: (
+              <>
+              {managers.some((m) => m.permissions.length === 0) && (
+                <Alert
+                  type="warning"
+                  showIcon
+                  style={{ marginBottom: 12 }}
+                  title={`${managers.filter((m) => m.permissions.length === 0).length} of ${managers.length} managers have no permissions`}
+                  description="Being a manager grants nothing on its own — they can't approve leave or see their team until you grant it. If that's intended, nothing to do."
+                />
+              )}
               <Table<ManagerRow>
                 rowKey="employeeId"
                 size="small"
@@ -125,10 +146,46 @@ export function ManagerManagementPage() {
                     render: (n: number) => (n === 0 ? <Tag>No team yet</Tag> : <Tag color="blue">{n} {n === 1 ? "person" : "people"}</Tag>),
                   },
                   {
+                    title: "Can do",
+                    key: "permissions",
+                    filters: [
+                      { text: "No permissions", value: "none" },
+                      { text: "Leave approval", value: "leave" },
+                    ],
+                    onFilter: (v, m) => (v === "none" ? m.permissions.length === 0 : m.leaveApproval),
+                    render: (_: unknown, m) =>
+                      m.permissions.length === 0 ? (
+                        <Tooltip title="A manager starts with nothing. Grant what they need — leave approval with one click, anything else under Permissions.">
+                          <Tag color="warning">No permissions</Tag>
+                        </Tooltip>
+                      ) : (
+                        <Space size={[4, 4]} wrap>
+                          {m.leaveApproval && <Tag color="green">Leave approval</Tag>}
+                          {m.permissions
+                            .filter((k) => !(m.leaveApproval && (LEAVE_APPROVAL_GRANT as readonly string[]).includes(k)))
+                            .map((k) => (
+                              <Tag key={k}>{PERMISSION_CATALOG[k as PermissionKey]?.label ?? k}</Tag>
+                            ))}
+                        </Space>
+                      ),
+                  },
+                  {
                     title: "",
                     key: "actions",
                     render: (_: unknown, m) => (
                       <Space size={4} wrap>
+                        {canPermissions &&
+                          (m.leaveApproval ? (
+                            <Popconfirm title={`Stop ${m.name} approving leave?`} okText="Remove" onConfirm={() => leaveApproval.mutate({ employeeId: m.employeeId, grant: false })}>
+                              <Button size="small">Remove leave approval</Button>
+                            </Popconfirm>
+                          ) : (
+                            <Popconfirm title={`Let ${m.name} view and approve their team's leave?`} okText="Grant" onConfirm={() => leaveApproval.mutate({ employeeId: m.employeeId, grant: true })}>
+                              <Button size="small" type="primary" ghost icon={<CheckCircleOutlined />}>
+                                Grant leave approval
+                              </Button>
+                            </Popconfirm>
+                          ))}
                         <Button size="small" icon={<TeamOutlined />} onClick={() => setTeamOf(m)}>
                           Team
                         </Button>
@@ -149,6 +206,7 @@ export function ManagerManagementPage() {
                   },
                 ]}
               />
+              </>
             ),
           },
           {
@@ -215,6 +273,11 @@ export function ManagerManagementPage() {
             <EmployeePicker />
           </Form.Item>
           <DateField />
+          {canPermissions && (
+            <Form.Item name="grantLeaveApproval" valuePropName="checked" extra="A new manager can do nothing until you grant it. Leave this unticked to decide later.">
+              <Checkbox>Also let them approve their team's leave</Checkbox>
+            </Form.Item>
+          )}
         </Form>
       </Modal>
 

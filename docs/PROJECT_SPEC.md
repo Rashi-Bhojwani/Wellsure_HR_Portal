@@ -81,10 +81,43 @@ A `MANAGER` holder can only ever hold these keys, all at most `TEAM` scope:
   the viewer's scope. Leave liability needs `reports.liability.view` too,
   which is not on this list.)
 
-**This overrules everyone, Super Admin included.**
+**Within that ceiling, a manager starts with nothing** (user decision
+2026-10-03).
+- Being appointed a manager grants no power at all. The `MANAGER` role's
+  permission set is **empty and locked**: no one, Super Admin included,
+  can add a key to it. So nothing is ever granted to all managers at once.
+- Every power is granted **per manager** by Admin, as a per-person grant:
+  - **"Grant leave approval"** on Manager Management is the one-click
+    common case (`leave.view` + `leave.approve`). It is always a
+    deliberate choice; appointing never does it unless the "also let them
+    approve their team's leave" box is ticked.
+  - Anything else on the list is granted from the manager's Permissions
+    (Access tab).
+- **No permissions means an ordinary employee.** A manager with no
+  permissions behaves exactly like an ordinary employee who has people
+  listed under them. Manager Management marks them **"No permissions"**
+  and counts them.
+- Their team's leave is then decided by HR, and they aren't sent
+  "New leave request" notifications they can't act on.
+- Removing someone as a manager also removes their manager grants.
+
+**The ceiling overrules everyone, Super Admin included.**
 - It applies to the `MANAGER` role definition, to per-manager overrides,
   and again when access is resolved, so no stale row can widen a manager.
-- Bank, statutory and (later) salary data are never on the list.
+- Bank, statutory and (later) salary data are never on the list, and
+  neither is anything that runs, approves or publishes payroll, or that
+  generates or approves a bank transfer file. Those are Admin-only, with
+  maker-checker (§12 Phase 6). A test fails if any `payroll.*`, `bank.*`,
+  `salary.*`, `employee.bank.*`, `employee.statutory.*` or
+  `employee.salary.*` key ever becomes grantable.
+- **Attendance (Phases 2–3), decided 2026-10-03:**
+  - At most, a manager may **view and approve regularizations for their
+    own team**, and only if Admin grants it (two grantable keys, TEAM
+    scope, IDOR-tested).
+  - Finalising an attendance period, manual overrides, shift overrides,
+    processing attendance, device management and anything that feeds
+    payroll stay **Admin-only and are never grantable** (see
+    `docs/plans/PHASE_2.md`).
 - Widening the list is a code change with its own team-scope tests, never
   a checkbox.
 - Every endpoint reachable with a grantable key applies TEAM scope.

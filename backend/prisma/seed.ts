@@ -540,6 +540,19 @@ async function main() {
       superAdminUserId = user.id;
     }
     const createdByUserId = superAdminUserId ?? user.id;
+    // A manager starts with nothing (user decision 2026-10-03); Admin grants
+    // each one what they need. The demo shows both states: Karan (1002) has
+    // leave approval plus the employee grid and reports; Priya (1003) has
+    // leave approval only; 1004, 1005, 1024 and 1029 have nothing — Manager
+    // Management shows them as "No permissions".
+    const SEEDED_MANAGER_GRANTS: Record<string, string[]> = {
+      "1002": ["leave.view", "leave.approve", "employee.view", "reports.view"],
+      "1003": ["leave.view", "leave.approve"],
+    };
+    for (const key of SEEDED_MANAGER_GRANTS[spec.employeeCode] ?? []) {
+      const permission = await prisma.permission.findUniqueOrThrow({ where: { key } });
+      await prisma.userPermissionOverride.create({ data: { userId: user.id, permissionId: permission.id, effect: "GRANT", reason: "Seeded demo grant (Manager Management)", createdByUserId } });
+    }
 
     await prisma.employeePersonal.create({
       data: {

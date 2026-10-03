@@ -97,7 +97,6 @@ describe("Roles & permissions (E1)", () => {
         a = await resolveAccess(u);
         expect(a.permissions.has("leave.view")).toBe(false);
         expect(a.permissions.has("helpdesk.manage")).toBe(true);
-        expect(a.permissions.has("leave.approve")).toBe(true);
       } finally {
         await prisma.userPermissionOverride.deleteMany({ where: { userId: u } });
         await prisma.userRole.delete({ where: { userId_roleId: { userId: u, roleId: approver.id } } });
@@ -117,7 +116,8 @@ describe("Roles & permissions (E1)", () => {
         expect(a.permissions.has("employee.bank.view")).toBe(false);
         expect(a.permissions.has("helpdesk.manage")).toBe(false);
         expect([...a.permissions].every((k) => (MANAGER_GRANTABLE_KEYS as readonly string[]).includes(k))).toBe(true);
-        expect(a.permissions.has("leave.approve")).toBe(true);
+        expect(a.permissions.has("leave.view")).toBe(true); // grantable (from the raw role row), so it survives the cap
+        expect(a.permissions.has("leave.approve")).toBe(false); // nothing grants it: the MANAGER role itself is empty (2026-10-03)
       } finally {
         await prisma.userPermissionOverride.deleteMany({ where: { userId: u } });
         await prisma.userRole.delete({ where: { userId_roleId: { userId: u, roleId: payroll.id } } });
@@ -163,11 +163,14 @@ describe("Roles & permissions (E1)", () => {
       expect(res.body.error.code).toBe("SUPER_ADMIN_ONLY");
     });
 
-    it("rule 4: the Manager role can never hold an access-management permission", async () => {
-      const current = (await api(tokens.sa).get("/api/access/roles")).body.roles.find((r: { code: string }) => r.code === "MANAGER").permissions;
-      const res = await api(tokens.sa).put("/api/access/roles/MANAGER", { permissions: [...current, "user.security.manage"] });
-      expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe("META_TO_MANAGER");
+    it("the Manager role is locked empty — nothing is ever granted to all managers at once, not even by a Super Admin (2026-10-03)", async () => {
+      const manager = (await api(tokens.sa).get("/api/access/roles")).body.roles.find((r: { code: string }) => r.code === "MANAGER");
+      expect(manager).toMatchObject({ permissions: [], managerLocked: true });
+      for (const body of [{ permissions: ["user.security.manage"] }, { permissions: ["leave.approve"] }, { dataScope: "SELF" }]) {
+        const res = await api(tokens.sa).put("/api/access/roles/MANAGER", body);
+        expect(res.status).toBe(403);
+        expect(res.body.error.code).toBe("MANAGER_ROLE_LOCKED");
+      }
     });
 
     it("unknown keys are rejected", async () => {
@@ -206,7 +209,8 @@ describe("Roles & permissions (E1)", () => {
       const res = await api(tokens.sa).get(`/api/access/employees/${people.manager.employeeId}`);
       expect(res.status).toBe(200);
       const leaveApprove = res.body.permissions.find((p: { key: string }) => p.key === "leave.approve");
-      expect(leaveApprove).toMatchObject({ effective: true, inheritedFrom: ["MANAGER"], override: null });
+      // A manager has nothing by default (2026-10-03): not from the role, not from anywhere.
+      expect(leaveApprove).toMatchObject({ effective: false, inheritedFrom: [], override: null });
       expect(res.body.can).toEqual({ editRoles: true, editOverrides: true, securityActions: true });
       const asHr = await api(tokens.hrAdmin).get(`/api/access/employees/${people.manager.employeeId}`);
       expect(asHr.body.can).toEqual({ editRoles: false, editOverrides: true, securityActions: true }); // E2: HR holds manager.permissions.manage

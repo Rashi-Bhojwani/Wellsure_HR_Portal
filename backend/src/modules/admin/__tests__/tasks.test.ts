@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, it } from "vitest";
+import { grantManager, LEGACY_MANAGER_GRANTS } from "../../../lib/__tests__/testHelpers";
 import request from "supertest";
 import {
   app,
@@ -45,6 +46,7 @@ describe("GET /api/admin/tasks/counts", () => {
   it("counts a pending request in the manager's own review total, not their monitor total", async () => {
     org = await createEmployeeTestOrgMasters();
     const manager = await createLoginableTestEmployee(org, { roleCode: "MANAGER" });
+    await grantManager(manager.userId, LEGACY_MANAGER_GRANTS); // a manager has no powers until Admin grants them (2026-10-03)
     managerId = manager.employeeId;
     employeeIds.push(managerId);
     managerToken = await loginAs(manager.employeeCode);

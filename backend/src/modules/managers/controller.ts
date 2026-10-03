@@ -17,7 +17,7 @@ export async function getTeam(req: Request, res: Response): Promise<void> {
   res.status(200).json(await service.getTeam(id(req)));
 }
 export async function appointManager(req: Request, res: Response): Promise<void> {
-  res.status(201).json(await service.appointManager(req.body.employeeId, req.body, meta(req)));
+  res.status(201).json(await service.appointManager(req.body.employeeId, req.body, meta(req), req.user!));
 }
 export async function removeManager(req: Request, res: Response): Promise<void> {
   await service.removeManager(id(req), req.body, meta(req));
@@ -29,4 +29,7 @@ export async function assignTeamMembers(req: Request, res: Response): Promise<vo
 export async function removeTeamMember(req: Request, res: Response): Promise<void> {
   await service.removeTeamMember(id(req), req.params.memberId as string, req.body ?? {}, meta(req));
   res.status(204).send();
+}
+export async function setLeaveApproval(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await service.setLeaveApproval(id(req), req.body.grant, req.user!, meta(req)));
 }

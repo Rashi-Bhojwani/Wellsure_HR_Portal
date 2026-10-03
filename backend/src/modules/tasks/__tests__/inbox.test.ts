@@ -1,4 +1,5 @@
 import request from "supertest";
+import { grantManager, LEGACY_MANAGER_GRANTS } from "../../../lib/__tests__/testHelpers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { RequestHubItem, TaskItem } from "@shared/types/inbox";
 import { prisma } from "../../../lib/prisma";
@@ -39,6 +40,7 @@ describe("Request Hub and Tasks inbox", () => {
     people.hrAdmin = await createFullTestEmployee(org, { roleCode: "HR_ADMIN" });
     people.hrExec = await createFullTestEmployee(org, { roleCode: "HR_EXECUTIVE" });
     people.manager = await createFullTestEmployee(org, { roleCode: "MANAGER" });
+    await grantManager(people.manager.userId, LEGACY_MANAGER_GRANTS); // a manager has no powers until Admin grants them (2026-10-03)
     people.report = await createFullTestEmployee(org, { managerId: people.manager.employeeId });
     people.outsider = await createFullTestEmployee(org);
     for (const key of Object.keys(people) as Array<keyof typeof people>) tokens[key] = await loginAs(people[key].employeeCode);

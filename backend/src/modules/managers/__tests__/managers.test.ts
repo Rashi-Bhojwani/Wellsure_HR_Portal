@@ -1,4 +1,5 @@
 import request from "supertest";
+import { grantManager } from "../../../lib/__tests__/testHelpers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { addCalendarDays, businessToday } from "../../../lib/businessDate";
 import { prisma } from "../../../lib/prisma";
@@ -10,11 +11,14 @@ import {
   authHeader,
   cleanupEmployeeTestOrgMasters,
   cleanupFullTestEmployee,
+  cleanupTestRole,
   createEmployeeTestOrgMasters,
   createFullTestEmployee,
+  grantPermissions,
   loginAs,
   type TestOrgMasters,
 } from "../../employee/__tests__/employeeTestHelpers";
+import { MANAGER_GRANTABLE_KEYS, PERMISSION_KEYS } from "@shared/constants/permissions";
 
 // Manager Management and the three-level rules (Phase 5 commit E2,
 // hierarchy model A — docs/plans/PHASE_5.md §E2).
@@ -33,6 +37,7 @@ describe("Manager Management and the three-level hierarchy (E2)", () => {
     p.hrAdmin = await createFullTestEmployee(org, { roleCode: "HR_ADMIN" });
     p.mgrA = await createFullTestEmployee(org, { roleCode: "MANAGER" });
     p.mgrB = await createFullTestEmployee(org, { roleCode: "MANAGER" });
+    for (const k of ["mgrA", "mgrB"] as const) await grantManager(p[k].userId, ["leave.view", "leave.approve"]); // granted, not default (2026-10-03)
     p.alice = await createFullTestEmployee(org, { roleCode: "EMPLOYEE", managerId: p.mgrA.employeeId });
     p.bob = await createFullTestEmployee(org, { roleCode: "EMPLOYEE" }); // unassigned
     p.carol = await createFullTestEmployee(org, { roleCode: "EMPLOYEE", managerId: p.mgrA.employeeId });
@@ -163,14 +168,15 @@ describe("Manager Management and the three-level hierarchy (E2)", () => {
       expect(remove.body.error.code).toBe("USE_MANAGER_MANAGEMENT");
     });
 
-    it("the MANAGER role itself can't be widened: non-grantable keys or company-wide scope are refused, even for a Super Admin", async () => {
-      const roles = (await api(tok.sa).get("/api/access/roles")).body.roles as Array<{ code: string; permissions: string[] }>;
-      const current = roles.find((r) => r.code === "MANAGER")!.permissions;
-      const wider = await api(tok.sa).put("/api/access/roles/MANAGER", { permissions: [...current, "employee.bank.view"] });
+    it("the MANAGER role itself can't be changed at all — not widened, not given company-wide scope — even by a Super Admin", async () => {
+      const wider = await api(tok.sa).put("/api/access/roles/MANAGER", { permissions: ["employee.bank.view"] });
       expect(wider.status).toBe(403);
-      expect(wider.body.error.code).toBe("NOT_MANAGER_GRANTABLE");
+      expect(wider.body.error.code).toBe("MANAGER_ROLE_LOCKED");
       const all = await api(tok.sa).put("/api/access/roles/MANAGER", { dataScope: "ALL" });
-      expect(all.body.error.code).toBe("NOT_MANAGER_GRANTABLE");
+      expect(all.body.error.code).toBe("MANAGER_ROLE_LOCKED");
+      // …and per-manager grants still stop at the ceiling, Super Admin included.
+      const bank = await api(tok.sa).put(`/api/access/employees/${p.mgrA.employeeId}/overrides/employee.bank.view`, { effect: "GRANT", reason: "should be refused" });
+      expect(bank.body.error.code).toBe("NOT_MANAGER_GRANTABLE");
     });
 
     it("Excel import: a row's reporting manager must be an active manager (blank is allowed — Unassigned)", async () => {
@@ -247,5 +253,93 @@ describe("Manager Management and the three-level hierarchy (E2)", () => {
     const ids = (await hr().get("/api/managers/unassigned")).body.employees.map((e: { employeeId: string }) => e.employeeId);
     expect(ids).toContain(r.employeeId);
     expect(await prisma.notification.count({ where: { userId: p.hrAdmin.userId, type: "team.unassigned" } })).toBeGreaterThan(0);
+  });
+
+  // User decision 2026-10-03: being appointed a manager grants nothing.
+  describe("a manager starts with nothing — every power is granted per manager", () => {
+    const fresh = {} as Record<"mgr" | "member", { employeeId: string; employeeCode: string; userId: string }>;
+    const appointerOnly = `TEST_APPOINT_ONLY_${Date.now()}`;
+    let requestId = "";
+
+    beforeAll(async () => {
+      fresh.mgr = await createFullTestEmployee(org);
+      fresh.member = await createFullTestEmployee(org);
+      expect((await hr().post("/api/managers", { employeeId: fresh.mgr.employeeId })).status).toBe(201);
+      expect((await hr().post(`/api/managers/${fresh.mgr.employeeId}/team`, { employeeIds: [fresh.member.employeeId] })).status).toBe(200);
+      const lop = await prisma.leaveType.findFirstOrThrow({ where: { code: "LOP" } });
+      const day = new Date(Date.UTC(2031, 9, 15));
+      requestId = (await prisma.leaveRequest.create({ data: { employeeId: fresh.member.employeeId, leaveTypeId: lop.id, fromDate: day, toDate: day, totalDays: 1, status: "PENDING", appliedByUserId: fresh.member.userId } })).id;
+    });
+
+    afterAll(async () => {
+      await prisma.leaveRequest.deleteMany({ where: { employeeId: { in: [fresh.member.employeeId] } } });
+      for (const x of Object.values(fresh)) extra.push(x.employeeId);
+      await cleanupTestRole(appointerOnly);
+    });
+
+    it("a newly appointed manager holds no permission at all, and Manager Management says so", async () => {
+      const row = (await hr().get("/api/managers")).body.managers.find((m: { employeeId: string }) => m.employeeId === fresh.mgr.employeeId);
+      expect(row).toMatchObject({ permissions: [], leaveApproval: false, teamSize: 1 });
+      const t = await loginAs(fresh.mgr.employeeCode);
+      expect((await api(t).get(`/api/leave/requests/${requestId}`)).status).toBe(404);
+      expect((await api(t).post(`/api/leave/requests/${requestId}/approve`, {})).status).toBe(403);
+      expect((await api(t).get(`/api/employees/${fresh.member.employeeId}`)).status).toBe(403);
+      expect((await api(t).get("/api/reports/headcount")).status).toBe(403);
+    });
+
+    it("a manager who can't approve isn't asked to: no 'New leave request' for them", async () => {
+      const lop = await prisma.leaveType.findFirstOrThrow({ where: { code: "LOP" } });
+      const res = await api(await loginAs(fresh.member.employeeCode)).post("/api/leave/requests", { leaveTypeId: lop.id, fromDate: "2031-10-20", toDate: "2031-10-20" });
+      expect(res.status).toBe(201);
+      expect(await prisma.notification.count({ where: { userId: fresh.mgr.userId, type: "leave.applied" } })).toBe(0);
+    });
+
+    it("'Grant leave approval' is one deliberate click — audited, live — and can be taken back", async () => {
+      const granted = await hr().post(`/api/managers/${fresh.mgr.employeeId}/leave-approval`, { grant: true });
+      expect(granted.status).toBe(200);
+      expect(granted.body).toMatchObject({ leaveApproval: true, permissions: ["leave.approve", "leave.view"] });
+      const overrides = await prisma.userPermissionOverride.findMany({ where: { userId: fresh.mgr.userId }, include: { permission: true } });
+      expect(overrides.map((o) => [o.permission.key, o.effect]).sort()).toEqual([["leave.approve", "GRANT"], ["leave.view", "GRANT"]]);
+      expect(await prisma.auditLog.count({ where: { action: "manager.leave_approval.granted", entityId: fresh.mgr.employeeId } })).toBe(1);
+      const t = await loginAs(fresh.mgr.employeeCode);
+      expect((await api(t).get(`/api/leave/requests/${requestId}`)).status).toBe(200);
+      // A manager can't grant themselves anything, and nobody without the key can click it.
+      expect((await api(t).post(`/api/managers/${fresh.mgr.employeeId}/leave-approval`, { grant: true })).status).toBe(403);
+
+      const removed = await hr().post(`/api/managers/${fresh.mgr.employeeId}/leave-approval`, { grant: false });
+      expect(removed.body).toMatchObject({ leaveApproval: false, permissions: [] });
+      expect((await api(await loginAs(fresh.mgr.employeeCode)).get(`/api/leave/requests/${requestId}`)).status).toBe(404);
+    });
+
+    it("appointing never grants by default; granting at appointment is an explicit choice that needs the permission-granting key", async () => {
+      await grantPermissions(appointerOnly, ["manager.appoint"]);
+      const appointer = await createFullTestEmployee(org, { roleCode: appointerOnly });
+      const target = await createFullTestEmployee(org);
+      const other = await createFullTestEmployee(org);
+      extra.push(appointer.employeeId, target.employeeId, other.employeeId);
+      const t = await loginAs(appointer.employeeCode);
+      const refused = await api(t).post("/api/managers", { employeeId: target.employeeId, grantLeaveApproval: true });
+      expect(refused.status).toBe(403);
+      expect(await roles(target.userId)).not.toContain("MANAGER"); // nothing half-done
+      expect((await hr().post("/api/managers", { employeeId: target.employeeId, grantLeaveApproval: true })).body.leaveApproval).toBe(true);
+      const row = (await hr().get("/api/managers")).body.managers.find((m: { employeeId: string }) => m.employeeId === target.employeeId);
+      expect(row.leaveApproval).toBe(true);
+      expect((await api(t).post("/api/managers", { employeeId: other.employeeId })).status).toBe(201); // plain appointment: allowed, grants nothing
+      expect((await hr().get("/api/managers")).body.managers.find((m: { employeeId: string }) => m.employeeId === other.employeeId).permissions).toEqual([]);
+    });
+
+    it("removing a manager takes their manager grants with the role — they're exactly a plain employee again", async () => {
+      await hr().post(`/api/managers/${fresh.mgr.employeeId}/leave-approval`, { grant: true });
+      await hr().del(`/api/managers/${fresh.mgr.employeeId}/team/${fresh.member.employeeId}`);
+      expect((await hr().del(`/api/managers/${fresh.mgr.employeeId}`, { newManagerId: null })).status).toBe(204);
+      expect(await prisma.userPermissionOverride.count({ where: { userId: fresh.mgr.userId } })).toBe(0);
+    });
+  });
+
+  it("crucial operations can never reach a manager: no payroll, bank-file, salary, bank or statutory key is (or can become) manager-grantable", () => {
+    const forbidden = /^(payroll|bank|salary)\.|^employee\.(bank|statutory|salary)\./;
+    expect(MANAGER_GRANTABLE_KEYS.filter((k) => forbidden.test(k))).toEqual([]);
+    // Every such key that exists today is outside the ceiling.
+    expect(PERMISSION_KEYS.filter((k) => forbidden.test(k)).every((k) => !(MANAGER_GRANTABLE_KEYS as readonly string[]).includes(k))).toBe(true);
   });
 });

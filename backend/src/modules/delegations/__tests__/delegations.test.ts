@@ -1,4 +1,5 @@
 import request from "supertest";
+import { grantManager } from "../../../lib/__tests__/testHelpers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { addCalendarDays, businessToday } from "../../../lib/businessDate";
 import { prisma } from "../../../lib/prisma";
@@ -34,6 +35,8 @@ describe("Workflow Delegates (E3)", () => {
     p.mgrA = await createFullTestEmployee(org, { roleCode: "MANAGER" });
     p.mgrB = await createFullTestEmployee(org, { roleCode: "MANAGER" });
     p.mgrC = await createFullTestEmployee(org, { roleCode: "MANAGER" });
+    // Managers have no powers until Admin grants them (2026-10-03); these three can approve leave.
+    for (const k of ["mgrA", "mgrB", "mgrC"] as const) await grantManager(p[k].userId, ["leave.view", "leave.approve"]);
     p.alice = await createFullTestEmployee(org, { roleCode: "EMPLOYEE", managerId: p.mgrA.employeeId });
     p.carol = await createFullTestEmployee(org, { roleCode: "EMPLOYEE", managerId: p.mgrA.employeeId });
     p.frank = await createFullTestEmployee(org, { roleCode: "EMPLOYEE", managerId: p.mgrA.employeeId }); // a senior in A's team who can approve leave
@@ -143,8 +146,8 @@ describe("Workflow Delegates (E3)", () => {
       expect((await api(tok.mgrB).post(`/api/leave/requests/${outsider}/reject`, { comments: "no" })).status).toBe(404);
       expect((await api(tok.mgrB).get(`/api/leave/balances?employeeId=${p.gina.employeeId}`)).status).toBe(404);
 
-      // Delegation covers approvals only — not the team's profiles.
-      expect((await api(tok.mgrB).get(`/api/employees/${p.alice.employeeId}`)).status).toBe(404);
+      // Delegation covers approvals only — not the team's profiles (B wasn't granted employee.view at all).
+      expect((await api(tok.mgrB).get(`/api/employees/${p.alice.employeeId}`)).status).toBe(403);
     });
 
     it("the delegator keeps their own access; a decision in their own scope isn't 'on behalf'", async () => {

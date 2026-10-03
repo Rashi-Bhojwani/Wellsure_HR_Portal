@@ -131,6 +131,12 @@ export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
   "helpdesk.sensitive.view": { group: "Helpdesk", label: "Sensitive tickets", description: "See tickets in categories marked sensitive (e.g. Payroll & Salary, Grievance)." },
 };
 
+// "Grant leave approval" — the one-click grant on Manager Management (user
+// decision 2026-10-03: a manager starts with nothing; approving the team's
+// leave is the common grant). Both keys are manager-grantable; view is
+// needed to see the review queue, approve to decide.
+export const LEAVE_APPROVAL_GRANT = ["leave.view", "leave.approve"] as const satisfies readonly PermissionKey[];
+
 export const META_PERMISSION_KEYS = PERMISSION_KEYS.filter((k) => PERMISSION_CATALOG[k].meta);
 
 // ── Manager-grantable keys (Phase 5 commit E2, user decision 2026-10-02) ─

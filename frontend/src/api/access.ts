@@ -10,6 +10,7 @@ export interface RoleDefinition {
   description: string | null;
   isSystem: boolean;
   locked: boolean; // SUPER_ADMIN: every permission, can't be changed
+  managerLocked?: boolean; // MANAGER: always empty — granted per manager (2026-10-03)
   dataScope: DataScope;
   permissions: string[];
   holderCount: number;

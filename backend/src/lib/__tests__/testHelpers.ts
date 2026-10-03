@@ -80,3 +80,19 @@ export async function cleanupTestData(opts: {
     await deleteWithDependents("Location", [opts.org.locationId]);
   }
 }
+
+// A manager starts with no permissions at all (user decision 2026-10-03);
+// Admin grants each one per manager. Tests stand in for that grant with
+// per-user GRANT overrides — exactly what Manager Management writes.
+export const LEGACY_MANAGER_GRANTS = ["employee.view", "leave.view", "leave.approve", "leave.apply.onBehalf"] as const;
+
+export async function grantManager(userId: string, keys: readonly string[]): Promise<void> {
+  const permissions = await prisma.permission.findMany({ where: { key: { in: [...keys] } } });
+  for (const p of permissions) {
+    await prisma.userPermissionOverride.upsert({
+      where: { userId_permissionId: { userId, permissionId: p.id } },
+      create: { userId, permissionId: p.id, effect: "GRANT", reason: "test fixture: granted by Admin", createdByUserId: userId },
+      update: { effect: "GRANT" },
+    });
+  }
+}

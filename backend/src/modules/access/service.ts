@@ -87,6 +87,8 @@ export async function listRoles() {
   return roles.map((r) => {
     const locked = r.code === SUPER_ADMIN_ROLE_CODE;
     return {
+      // MANAGER: locked empty — permissions are granted per manager (2026-10-03).
+      managerLocked: r.code === MANAGER_ROLE_CODE,
       id: r.id,
       code: r.code,
       name: r.name,
@@ -113,6 +115,13 @@ export async function updateRole(roleCode: string, input: { permissions?: string
   const role = await prisma.role.findUnique({ where: { code: roleCode }, include: { permissions: { include: { permission: true } } } });
   if (!role) throw new HttpError(404, "Role not found.", "NOT_FOUND");
   if (role.code === SUPER_ADMIN_ROLE_CODE) throw forbid("The Super Admin role always has every permission and can't be changed.", "SUPER_ADMIN_LOCKED"); // rule 1
+  // User decision 2026-10-03: being a manager grants nothing on its own, and
+  // every manager power is granted to that one manager — never to all
+  // managers at once through the role. So the role's definition is locked
+  // empty with TEAM scope, even for a Super Admin.
+  if (role.code === MANAGER_ROLE_CODE) {
+    throw forbid("The Manager role grants nothing by itself and can't be changed — give each manager what they need in Manager Management (or their Access tab).", "MANAGER_ROLE_LOCKED");
+  }
 
   const before = { permissions: role.permissions.map((p) => p.permission.key).sort(), dataScope: role.dataScope };
   let next = before.permissions;

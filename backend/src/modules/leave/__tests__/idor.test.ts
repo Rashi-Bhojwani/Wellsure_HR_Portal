@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { grantManager, LEGACY_MANAGER_GRANTS } from "../../../lib/__tests__/testHelpers";
 import request from "supertest";
 import { prisma } from "../../../lib/prisma";
 import { app, authHeader, cleanupEmployeeTestOrgMasters, cleanupLoginableTestEmployee, createEmployeeTestOrgMasters, createLoginableTestEmployee, loginAs, type TestOrgMasters } from "./leaveTestHelpers";
@@ -26,11 +27,13 @@ describe("Leave — SELF/TEAM/ALL scope and IDOR", () => {
     org = await createEmployeeTestOrgMasters();
 
     const manager1 = await createLoginableTestEmployee(org, { roleCode: "MANAGER" });
+    await grantManager(manager1.userId, LEGACY_MANAGER_GRANTS); // a manager has no powers until Admin grants them (2026-10-03)
     manager1Id = manager1.employeeId;
     employeeIds.push(manager1Id);
     manager1Token = await loginAs(manager1.employeeCode);
 
     const manager2 = await createLoginableTestEmployee(org, { roleCode: "MANAGER" });
+    await grantManager(manager2.userId, LEGACY_MANAGER_GRANTS);
     employeeIds.push(manager2.employeeId);
     manager2Token = await loginAs(manager2.employeeCode);
 

@@ -2,6 +2,7 @@ import { notifyEmployee } from "../notifications/notifyEmployee";
 import type { LeaveDayPart, LeaveRequestStatus, Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { writeAuditLog } from "../../lib/audit";
+import { resolveAccess } from "../../lib/permissions";
 import { addCalendarDays, businessToday } from "../../lib/businessDate";
 import { HttpError } from "../../middleware/errorHandler";
 import { emitLeaveApplied, emitLeaveAppliedToAdmins, emitLeaveAppliedToDelegate, emitLeaveDecided, emitTasksCounts } from "../../realtime/emit";
@@ -140,7 +141,12 @@ export async function applyForLeave(input: ApplyLeaveInput, viewer: LeaveViewer,
   const jobHistory = await prisma.employeeJobHistory.findFirst({ where: { employeeId: targetEmployeeId, effectiveTo: null }, select: { reportingManagerId: true } });
   const reportingManagerId = jobHistory?.reportingManagerId ?? null;
 
-  if (reportingManagerId) {
+  // Only a manager who can actually approve is asked to (2026-10-03: a
+  // manager has no powers until Admin grants them). Otherwise the request
+  // waits in HR's Employee Leave queue and Tasks, which list every pending
+  // request for anyone with company-wide leave approval.
+  const managerCanApprove = reportingManagerId ? await employeeCanApproveLeave(reportingManagerId) : false;
+  if (reportingManagerId && managerCanApprove) {
     await notifyEmployee(reportingManagerId, {
       type: "leave.applied",
       title: "New leave request",
@@ -378,6 +384,11 @@ async function delegatorNames(reach: ApprovalReach): Promise<Map<string, string>
   const byUser = new Map<string, string>();
   for (const d of reach.delegated.values()) if (!byUser.has(d.userId)) byUser.set(d.userId, await employeeNameOf(d.employeeId));
   return byUser;
+}
+
+async function employeeCanApproveLeave(employeeId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({ where: { employeeId }, select: { id: true, status: true } });
+  return Boolean(user && user.status === "ACTIVE" && (await resolveAccess(user.id)).permissions.has("leave.approve"));
 }
 
 async function employeeNameOf(employeeId: string): Promise<string> {

@@ -3499,6 +3499,55 @@ in Explore. They can't be tapped.
     are incognito);
   - offline, the app shell still opens.
 
+### Interim — managers start with nothing (2026-10-03, user decision)
+
+**Rule.** The MANAGER role's default permission set is **empty**. Being
+appointed a manager grants no powers; every one is granted by Admin, per
+manager. The manager-grantable list (spec §2.2) stays the ceiling,
+enforced even against a Super Admin; bank and statutory keys are
+permanently off it.
+
+**Built.**
+- `systemRoles.ts`: `MANAGER_PERMS = []`. Migration
+  `20261003120000_manager_role_empty` deletes the role's existing rows.
+- The MANAGER role is locked: `PUT /api/access/roles/MANAGER` answers
+  403 `MANAGER_ROLE_LOCKED`; Roles & Permissions shows its column
+  read-only with a lock and a pointer to Manager Management.
+- Manager Management:
+  - a **Can do** column; managers with nothing granted show a **No
+    permissions** warning tag, and an alert above the table counts them;
+  - **Grant leave approval / Remove leave approval**: one click with a
+    confirm (`POST /api/managers/:employeeId/leave-approval`, gated on
+    `manager.permissions.manage`). It sets GRANT overrides for
+    `leave.view` + `leave.approve` and writes
+    `manager.leave_approval.granted|removed` to the audit log;
+  - the appoint dialog has an **unticked** "Also let them approve their
+    team's leave" box. Ticking it needs `manager.permissions.manage`; an
+    appointer without it gets a 403 and nobody is appointed.
+- Removing a manager clears their manager-grantable GRANT overrides in
+  the same transaction (`grantsCleared` on the audit row).
+- A reporting manager without `leave.approve` no longer gets the "New
+  leave request" notification. The request still lands in HR's Employee
+  Leave queue and Tasks.
+- Seed: Karan `1002` has leave approval + `employee.view` +
+  `reports.view`; Priya `1003` has leave approval; `1004`, `1005`,
+  `1024`, `1029` have nothing.
+
+**What the empty default broke** (all fixed in this commit): 35 tests in
+9 files assumed managers held leave approval or `employee.view` by
+default. They now grant explicitly (`grantManager`,
+`LEGACY_MANAGER_GRANTS` in `testHelpers.ts`). New tests: a newly
+appointed manager can do nothing (404/403 across leave, employees,
+reports); no notification to a manager who can't approve; one-click
+grant and removal with audit; no self-grant; appointing grants nothing
+by default; removal clears grants; no payroll/bank/salary key is ever
+grantable.
+
+**Planned, not built:** Phase 2/3 attendance rules for managers are in
+`docs/plans/PHASE_2.md` ("Managers and attendance"): at most view and
+approve their own team's regularizations, if granted; finalising,
+overrides and anything feeding payroll stay Admin-only.
+
 ## Open questions
 
 - [x] **Approval Workflows — dropped (user decision 2026-10-03).** No
