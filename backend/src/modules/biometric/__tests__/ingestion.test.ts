@@ -27,6 +27,9 @@ describe("biometric ingestion (P2-B)", () => {
   let pushDevice: { id: string; serialNumber: string };
   const recomputed: DayRef[] = [];
   const UNMAPPED = `U${suffix}`; // a device user ID nobody has yet
+  // One fixed timestamp reused by later tests as "already stored" — never
+  // recomputed from the clock, which moves on between tests (CI is slower).
+  const storedEarlier = ist(5 * HOUR);
 
   beforeAll(async () => {
     org = await createEmployeeTestOrgMasters();
@@ -91,7 +94,7 @@ describe("biometric ingestion (P2-B)", () => {
     });
 
     it("is idempotent: re-sending the same lines (a retry after a lost response) stores nothing new", async () => {
-      const t = ist(5 * HOUR);
+      const t = storedEarlier;
       const first = await agentPost([line(p.alice.employeeCode, t)]);
       const again = await agentPost([line(p.alice.employeeCode, t), line(p.alice.employeeCode, t)]);
       expect(first.body.newCount).toBe(1);
@@ -239,7 +242,7 @@ describe("biometric ingestion (P2-B)", () => {
   describe("the emergency file upload", () => {
     it("previews without writing, needs a reason to commit, then stores through the same service — once", async () => {
       const t = ist(9 * HOUR);
-      const existing = ist(5 * HOUR); // already stored by the agent test above
+      const existing = storedEarlier; // stored by the idempotence test above
       const file = [line(p.alice.employeeCode, t), line(p.alice.employeeCode, existing), line(`Z${suffix}`, t), "bad line"].join("\n");
       const preview = await hr().post("/api/biometric/import/preview").field("deviceId", agentDevice.id).attach("file", Buffer.from(file), "attlog.txt");
       expect(preview.status).toBe(200);
