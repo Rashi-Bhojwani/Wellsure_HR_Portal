@@ -26,6 +26,8 @@ export interface RouteClass {
 }
 
 const pub: RouteClass = { kind: "public" };
+// No user sign-in; a machine credential instead (Phase 2 ingestion).
+const machine = (why: string): RouteClass => ({ kind: "public", why });
 const self: RouteClass = { kind: "self" };
 const everyone = (why: string): RouteClass => ({ kind: "everyone", why });
 const scoped = (why: string): RouteClass => ({ kind: "scoped", why });
@@ -328,6 +330,30 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "POST /api/attendance/config/assignments/:employeeId/:rowId/cancel": admin,
   "GET /api/attendance/config/manual-branches": admin,
   "PUT /api/attendance/config/manual-branches/:userId": admin,
+
+  // Biometric ingestion (Phase 2 P2-B). The sync agent authenticates with its
+  // agent key and may post only for its own devices; ADMS devices by their
+  // registered push serial. The admin side is attendance.devices.manage.
+  "POST /api/biometric/agent/punches": machine("sync agent key; only devices assigned to that agent"),
+  "POST /api/biometric/agent/heartbeat": machine("sync agent key"),
+  "GET /iclock/cdata": machine("ADMS handshake; registered, active push-device serial"),
+  "POST /iclock/cdata": machine("ADMS upload; registered, active push-device serial"),
+  "GET /iclock/getrequest": machine("ADMS poll; registered, active push-device serial"),
+  "POST /iclock/devicecmd": machine("ADMS command result; registered, active push-device serial"),
+  "GET /api/biometric/devices": admin,
+  "POST /api/biometric/devices": admin,
+  "PATCH /api/biometric/devices/:id": admin,
+  "GET /api/biometric/agents": admin,
+  "POST /api/biometric/agents": admin,
+  "PATCH /api/biometric/agents/:id": admin,
+  "POST /api/biometric/agents/:id/rotate-key": admin,
+  "GET /api/biometric/batches": admin,
+  "GET /api/biometric/unmapped": admin,
+  "POST /api/biometric/unmapped/map": admin,
+  "GET /api/biometric/flagged": admin,
+  "POST /api/biometric/flagged/:id/resolve": admin,
+  "POST /api/biometric/import/preview": admin,
+  "POST /api/biometric/import/:id/commit": admin,
 
   // Core reports (F). reports.view is manager-grantable: every report is
   // computed over the viewer's data scope; liability also needs a

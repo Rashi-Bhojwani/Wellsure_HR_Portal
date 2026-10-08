@@ -56,6 +56,12 @@ export const OPTIONAL_FK_POLICY: Record<string, Policy> = {
   "GeneratedLetter.employeeDocumentId": "delete",
   // A reissue stands on its own; losing the link to the original is fine.
   "GeneratedLetter.reissueOfId": "setNull",
+  // Phase 2 ingestion. A test punch belongs to its test employee (deleted
+  // through the raw_punches purge exception — see PURGE_GUARDED_MODELS).
+  "RawPunch.employeeId": "delete",
+  // A device or batch outlives the agent that once fed it — just a pointer.
+  "Device.agentId": "setNull",
+  "IngestionBatch.agentId": "setNull",
   // Posts written by, or auto-posted about, an employee belong to them.
   "Post.authorEmployeeId": "delete",
   "Post.subjectEmployeeId": "delete",
@@ -95,6 +101,8 @@ export const STANDALONE_ROOT_MODELS: Record<string, string> = {
   AuditLog: "append-only (E1.1); no FKs — rows about a fixture go via deleteEmployeesAndDependents, through purgeAppendOnly",
   SecurityEvent: "append-only (E1.1); no FKs — tests remove their own rows by id through purgeAppendOnly",
   DevDatabaseMarker: "one row written by the dev seed (E1.1); never created or removed by tests",
+  BiometricAgent: "sync agent (Phase 2); deleteWithDependents(\"BiometricAgent\", ids)",
+  Device: "biometric device (Phase 2); deleteWithDependents(\"Device\", ids) takes its batches and punches with it",
   Shift: "attendance config master (Phase 2); deleteWithDependents(\"Shift\", ids) takes its sessions and assignments with it",
   WeekOffPattern: "attendance config master (Phase 2); deleteWithDependents(\"WeekOffPattern\", ids)",
   AttendancePolicy: "attendance config master (Phase 2); deleteWithDependents(\"AttendancePolicy\", ids)",
@@ -299,6 +307,10 @@ function delegate(modelName: string): Delegate {
   return found;
 }
 
+// Tables a database trigger keeps immutable, deletable only through the
+// test-purge exception (app.audit_purge = 'test' in a dev-marked database).
+const PURGE_GUARDED_MODELS = new Set(["RawPunch"]);
+
 // Deletes the given rows of `model` and every row that depends on them,
 // transitively, in FK-safe order. Optional FKs follow OPTIONAL_FK_POLICY.
 export async function deleteWithDependents(model: string, ids: string[]): Promise<void> {
@@ -354,7 +366,12 @@ export async function deleteWithDependents(model: string, ids: string[]): Promis
 
   for (const name of deletionOrder()) {
     const idSet = collected.get(name);
-    if (idSet && idSet.size > 0) await delegate(name).deleteMany({ where: { id: { in: [...idSet] } } });
+    if (idSet && idSet.size > 0 && PURGE_GUARDED_MODELS.has(name)) {
+      await prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe("SELECT set_config('app.audit_purge', 'test', true)");
+        await (tx as unknown as Record<string, Delegate>)[name.charAt(0).toLowerCase() + name.slice(1)]!.deleteMany({ where: { id: { in: [...idSet] } } });
+      });
+    } else if (idSet && idSet.size > 0) await delegate(name).deleteMany({ where: { id: { in: [...idSet] } } });
     const wheres = idlessWheres.get(name);
     if (wheres) await delegate(name).deleteMany({ where: { OR: wheres } });
   }

@@ -3,7 +3,7 @@
 **Status: APPROVED 2026-10-08 with the user's answers to D1–D7 (§13),
 HR's answers on rules and branches, the attendance cycle, and three
 additions (§3.1, §7.1, §4.7). Building P2-A → P2-I in order, pausing
-after each.** Progress: **P2-A done** (see "As built" at the end).
+after each.** Progress: **P2-A and P2-B done** (see "As built" at the end).
 - Written 2026-10-08, after effective dating (EF1–EF4) was finished, as
   the user asked: "attendance is entirely date-based, so I don't want it
   built on half-fixed foundations".
@@ -1060,3 +1060,29 @@ As planned, with these specifics:
   ("status only, no times") wherever it appears (§2.3, §4.2, §5.1).
 - The muster screenshot still didn't come through. P2-D builds §5.1 from
   the user's written description.
+
+### P2-B (2026-10-09)
+
+As planned, with these specifics:
+- **The one permitted change to a raw punch** is re-resolving `employee_id`
+  (the "map to employee" flow), enforced by the trigger; every received
+  column is frozen. Flag decisions live in `punch_flag_resolutions`, so the
+  punch itself never changes.
+- **Plausibility thresholds** come from the company default policy (a punch
+  isn't known to be anyone's until it's resolved).
+- **Agent payload**: the agent sends ATTLOG lines, exactly the device's
+  format, so all three routes share the one parser. The response's highest
+  punch time is for the cursor; P2-F decides whether the agent's cursor is
+  that time or the device's record position.
+- **`requestRecompute`** is a seam (`modules/attendance/recompute.ts`): a no-op
+  until P2-C registers the engine's debounced job.
+- **Map to employee** defaults to the first unmapped punch's date (never
+  before joining). A first mapping may be extended back to cover earlier
+  punches — there was no row there to rewrite; an existing history is never
+  rewritten.
+- **The ATTLOG upload** lives under the biometric module (preview batch →
+  commit) and appears as an Import Center tab for `attendance.devices.manage`
+  holders, rather than as an xlsx dataset (the file is plain text and needs
+  a device).
+- **Deferred:** the `CLOCK_SKEW` incident (consistently skewed device) and
+  every other health check are P2-H; the Devices screen's health columns too.

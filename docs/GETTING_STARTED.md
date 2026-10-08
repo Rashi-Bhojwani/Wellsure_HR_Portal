@@ -325,6 +325,21 @@ Run from the repo root unless noted.
 | `npm run admin:recover --prefix backend` | Break-glass recovery for a Super Admin who lost their password or 2FA device — see §12 |
 | `npm run history:repair --prefix backend` | **Preview** history rows that don't fit the effective-dating model (e.g. a leaver whose placement was never closed) — every fix, current → new value, and why, plus rows a person must decide. Changes nothing. To apply, get the preview approved, then run the exact command it prints (`--apply --fingerprint … --approved-by … --operator …`); a changed list is refused. `db:migrate` warns when this is needed. See `docs/plans/EFFECTIVE_DATES.md` |
 
+**Trying punch ingestion locally (Phase 2).** No device is needed. Sign in as
+`1001`, open Admin Tools → Devices → Sync agents, add an agent and copy its key
+(shown once). Then register a device (route *Sync agent*, that agent, *Simulated*
+on) and post ATTLOG lines as the agent would:
+
+```bash
+curl -s -X POST localhost:4000/api/biometric/agent/punches \
+  -H "Authorization: Bearer <agent key>" -H "Content-Type: application/json" \
+  -d '{"device":"<serial>","lines":["1006\t2026-10-08 10:02:11\t1\t255\t1\t0"]}'
+```
+
+The response gives the counts (new / duplicate / unmapped / rejected / flagged).
+Recent batches, Unmapped and Flagged show the result. The punch simulator
+(P2-G) will do this at scale. Attendance days are computed from P2-C on.
+
 **Prisma Studio** (a GUI for browsing/editing the database):
 
 ```bash

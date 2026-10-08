@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { HttpError } from "../middleware/errorHandler";
+import { prisma } from "./prisma";
 import { getSetting } from "./settings";
 
 // System Settings → Attendance (Phase 2, docs/plans/PHASE_2.md §2.1). Read
@@ -37,4 +38,16 @@ export async function resolveAttendanceDefaults(tx: Prisma.TransactionClient): P
     );
   }
   return { shiftId: shift.id, weekOffPatternId: weekOffPattern.id, policyId: policy.id };
+}
+
+/**
+ * Punch plausibility (docs/plans/PHASE_2.md §3 "Clock safeguards"): a punch
+ * more than `futureToleranceMinutes` ahead of the server clock, or older than
+ * `maxPunchAgeDays`, is stored but flagged. Read from the company default
+ * policy — ingestion runs before a punch is known to be anyone's.
+ */
+export async function punchPlausibility(): Promise<{ futureToleranceMinutes: number; maxPunchAgeDays: number }> {
+  const d = await getAttendanceDefaults();
+  const policy = await prisma.attendancePolicy.findUnique({ where: { code: d.policyCode }, select: { futureToleranceMinutes: true, maxPunchAgeDays: true } });
+  return policy ?? { futureToleranceMinutes: 10, maxPunchAgeDays: 45 };
 }

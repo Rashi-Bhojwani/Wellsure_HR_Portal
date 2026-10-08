@@ -12,7 +12,7 @@ committed).
 | 0 | Foundation | ✅ Done |
 | 1 | Auth, RBAC, org, employees | Done — data layer, authentication, org masters, employee management, import center, exports, audit log viewer and system settings all built and tested. Users & Roles admin screen deliberately deferred (built in Phase 5 commit E1 as Roles & Permissions). **Correction (2026-09-30): role assignment does not exist anywhere in the product** — Add Employee always assigns plain `EMPLOYEE` and nothing else assigns roles; an earlier version of this row claimed otherwise. Both are Phase 5 commit E1 ([`docs/plans/PHASE_5.md`](plans/PHASE_5.md)). |
 | 1.5 | AWS staging environment | Not started |
-| 2 | Biometric ingestion + attendance engine + real-time | In progress — plan approved ([`docs/plans/PHASE_2.md`](plans/PHASE_2.md)); P2-A (attendance configuration, capture choice) done; P2-B → P2-I to follow |
+| 2 | Biometric ingestion + attendance engine + real-time | In progress — plan approved ([`docs/plans/PHASE_2.md`](plans/PHASE_2.md)); P2-A (attendance configuration, capture choice) and P2-B (ingestion) done; P2-C → P2-I to follow |
 | 3 | Attendance administration | Not started |
 | 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
 | 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | ✅ Done (2026-10-03) — commits A, B, C, D, D2, E1, E1.1, E2, E3, F and G (mobile bottom bar + PWA), plus interim commits. Full review — every screen and URL, every permission, what's stubbed, open questions, risks for Phase 6 — in [`docs/plans/PHASE_5_REVIEW.md`](plans/PHASE_5_REVIEW.md). Plan and as-built notes per commit in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
@@ -3985,6 +3985,62 @@ Plan: [`docs/plans/PHASE_2.md`](plans/PHASE_2.md) §2.1, §2.4, §4.3, §4.6.
   placeholders, sessions, deactivation guards, cycle boundaries, scheduled and
   bulk assignments, leaving, manual branches); Add Employee and import capture
   cases; cleanup and route-inventory guards updated.
+
+### Phase 2, commit P2-B — biometric ingestion (2026-10-09)
+
+Plan: [`docs/plans/PHASE_2.md`](plans/PHASE_2.md) §2.2, §3.
+
+- **Shared ATTLOG parser** `shared/attendance/attlog.ts` (the backend now,
+  the simulator in P2-G): the six confirmed columns, tolerant of whitespace,
+  CRLF and extra columns; a bad line is rejected on its own and kept
+  verbatim. Device-local time → instant in the device's timezone. The user's
+  sample (18, 44, 113 ×2 three seconds apart) is a mandatory fixture.
+- **Schema** `20261009090000_biometric_ingestion`: `biometric_agents` (key
+  stored as a SHA-256 hash, shown once), `devices` (one branch, timezone,
+  AGENT or PUSH route, simulated flag refused in production),
+  `ingestion_batches` (counts, rejected lines verbatim, upload reason),
+  `raw_punches`, `punch_flag_resolutions`.
+  - **`raw_punches` is immutable as received**: a trigger refuses DELETE and
+    any UPDATE except re-resolving `employee_id` (a device ID mapped after its
+    punches arrived). Tests delete only through the dev-marked purge
+    exception, like the audit log.
+  - Unique (device, device user ID, instant): exact duplicates dropped, so
+    retries and overlapping files are idempotent.
+- **One ingestion service** (`modules/biometric/ingestion.ts`) for all three
+  routes. It parses, applies the device timezone, flags implausible times
+  (more than 10 min in the future, or older than 45 days — from the default
+  policy; flagged punches are stored but excluded until HR accepts or
+  discards them), resolves the employee through the mapping in force on the
+  punch's date (EF4, bulk reader), records the batch, and calls
+  `requestRecompute` — a no-op seam until the engine registers in P2-C (the
+  nightly catch-up then covers anything ingested before).
+  - **Agent**: `POST /api/biometric/agent/punches` (≤1,000 lines, only devices
+    assigned to that agent; returns counts and the highest punch time for the
+    cursor) and `/heartbeat` (stores the report; returns server time and the
+    agent's devices). Bearer agent key, rate-limited.
+  - **ADMS**: `/iclock/cdata` (handshake, ATTLOG upload → `OK: n`, other
+    tables acknowledged and ignored), `/iclock/getrequest`, `/iclock/devicecmd`;
+    only registered, active PUSH serials; plain-text replies.
+  - **Emergency upload**: Import Center → Punches (ATTLOG): choose the device,
+    upload, preview (nothing stored), commit with a reason, audited.
+- **Map to employee**: `writeDeviceMapping` in `lib/effectiveDating.ts` (first
+  mapping, extend back over earlier punches, append on a new ID, never before
+  joining or after leaving, never one ID for two people on a day); then the
+  ID's unmapped punches are re-resolved and their days recomputed. Audited.
+- **Devices screen** (Admin Tools → Devices): devices, sync agents (key shown
+  once, rotate, deactivate), Unmapped, Flagged (accept/discard with a reason),
+  Recent batches with rejected lines. Health, incidents and charts are P2-H.
+- **Realtime**: `punch.received` to the employee, a batch summary to
+  `perm:attendance.view`.
+- **Bug caught by the tests:** Zod keeps a field's `.default()` through
+  `.partial()`, so a device PATCH naming only the timezone silently reset its
+  route to AGENT. The update schema now has no defaults. Other update schemas
+  checked: none carry defaults.
+- Tests: parser and timezone units; ingestion integration (agent, ADMS,
+  upload, dedupe idempotence, rejected lines, flags, immutability, key
+  rotation, heartbeat, unmapped → map → re-resolve, one-ID-one-person,
+  permissions); mapping-writer units. Cleanup and route-inventory guards
+  updated (agent and ADMS routes classified as machine-credential routes).
 
 ## Open questions
 

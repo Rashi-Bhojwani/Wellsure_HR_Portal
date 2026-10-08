@@ -257,3 +257,19 @@ export function emitDelegationChanged(employeeIds: string[]): void {
   if (!io) return;
   io.to([...new Set(employeeIds.map((id) => `user:${id}`)), permissionRoom("delegation.manage")]).emit("delegation.changed", {});
 }
+
+// Phase 2 (P2-B): punches just stored. Each employee's own screens hear about
+// their punch (user:{id}); anyone watching attendance live (Who Is In?, P2-E)
+// gets the batch on perm:attendance.view. Device health (P2-H) adds
+// device.status for perm:attendance.devices.manage.
+export interface PunchReceivedPayload {
+  employeeId: string;
+  punchedAt: string;
+  deviceId: string;
+  locationId: string;
+}
+export function emitPunchesReceived(punches: PunchReceivedPayload[]): void {
+  if (!io || punches.length === 0) return;
+  for (const p of punches) io.to(`user:${p.employeeId}`).emit("punch.received", p);
+  io.to(permissionRoom("attendance.view")).emit("punch.received.batch", { count: punches.length, punches: punches.slice(0, 200) });
+}

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { PunchImportTab } from "./PunchImportTab";
 import { Alert, Button, Input, Space, Table, Tabs, Tag, Typography, Upload, message } from "antd";
 import { DownloadOutlined, InboxOutlined } from "@ant-design/icons";
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
@@ -241,6 +242,7 @@ function ReconciliationTab() {
 }
 
 export function ImportCenterPage() {
+  const { hasPermission } = useAuth();
   return (
     <Space orientation="vertical" size={16} style={{ width: "100%" }}>
       <Title level={3} style={{ margin: 0 }}>
@@ -253,6 +255,8 @@ export function ImportCenterPage() {
           { key: "statutory", label: "Statutory", children: <ImportDatasetTab dataset="statutory" /> },
           { key: "bank", label: "Bank", children: <ImportDatasetTab dataset="bank" /> },
           { key: "reconciliation", label: "Reconciliation Report", children: <ReconciliationTab /> },
+          // Phase 2 P2-B: the emergency punch upload (attendance.devices.manage).
+          ...(hasPermission("attendance.devices.manage") ? [{ key: "punches", label: "Punches (ATTLOG)", children: <PunchImportTab /> }] : []),
         ]}
       />
     </Space>

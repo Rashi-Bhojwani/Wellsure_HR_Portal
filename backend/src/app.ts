@@ -32,6 +32,8 @@ import { accessRouter } from "./modules/access/routes";
 import { managersRouter } from "./modules/managers/routes";
 import { delegationsRouter } from "./modules/delegations/routes";
 import { attendanceRouter } from "./modules/attendance/routes";
+import { biometricAgentRouter, biometricRouter } from "./modules/biometric/routes";
+import { admsRouter } from "./modules/biometric/admsRoutes";
 import { reportsRouter } from "./modules/reports/routes";
 
 // Every API router and where it's mounted — one list, so the route
@@ -45,6 +47,10 @@ import { reportsRouter } from "./modules/reports/routes";
 //   - everything else is `no-store`.
 export const API_MOUNTS: ReadonlyArray<{ path: string; router: Router; cacheable?: true }> = [
   { path: "/api/people/photos", router: peoplePhotosRouter, cacheable: true },
+  // Machine credentials, not user sign-in (Phase 2 P2-B) — before the bare
+  // /api router, whose `authenticate` would otherwise run first.
+  { path: "/api/biometric/agent", router: biometricAgentRouter },
+  { path: "/iclock", router: admsRouter },
   { path: "/api/auth", router: authRouter },
   { path: "/api/org", router: orgRouter },
   { path: "/api/employees", router: employeeRouter },
@@ -68,6 +74,7 @@ export const API_MOUNTS: ReadonlyArray<{ path: string; router: Router; cacheable
   { path: "/api/delegations", router: delegationsRouter },
   { path: "/api/reports", router: reportsRouter },
   { path: "/api/attendance", router: attendanceRouter },
+  { path: "/api/biometric", router: biometricRouter },
 ];
 
 export function createApp(): Express {

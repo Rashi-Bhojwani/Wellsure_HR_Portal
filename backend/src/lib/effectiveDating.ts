@@ -1,4 +1,4 @@
-import { Prisma, type AttendanceAssignment, type EmployeeBankAccount, type EmployeeJobHistory, type EmployeeNameHistory } from "@prisma/client";
+import { Prisma, type AttendanceAssignment, type DeviceUserMapping, type EmployeeBankAccount, type EmployeeJobHistory, type EmployeeNameHistory } from "@prisma/client";
 import { HttpError } from "../middleware/errorHandler";
 import { addCalendarDays, businessToday } from "./businessDate";
 import { prisma } from "./prisma";
@@ -231,6 +231,23 @@ export async function bankAccountOn(employeeId: string, day: Date): Promise<Empl
 export async function employeeForDeviceUserOn(deviceUserId: string, day: Date): Promise<string | null> {
   const m = await prisma.deviceUserMapping.findFirst({ where: { deviceUserId, ...mappingInForceOn(day) }, select: { employeeId: true } });
   return m?.employeeId ?? null;
+}
+
+/**
+ * Bulk form of employeeForDeviceUserOn, for an ingestion batch: whose punch
+ * is each (device user ID, day)? Keyed `${deviceUserId}|${YYYY-MM-DD}`;
+ * absent = unmapped that day.
+ */
+export async function employeesForDeviceUsersOn(keys: Array<{ deviceUserId: string; day: Date }>): Promise<Map<string, string>> {
+  const ids = [...new Set(keys.map((k) => k.deviceUserId))];
+  const out = new Map<string, string>();
+  if (ids.length === 0) return out;
+  const rows = await prisma.deviceUserMapping.findMany({ where: { deviceUserId: { in: ids } }, select: { deviceUserId: true, employeeId: true, validFrom: true, validTo: true } });
+  for (const k of keys) {
+    const m = rows.find((r) => r.deviceUserId === k.deviceUserId && r.validFrom <= k.day && (!r.validTo || r.validTo > k.day));
+    if (m) out.set(`${k.deviceUserId}|${iso(k.day)}`, m.employeeId);
+  }
+  return out;
 }
 
 /**
@@ -479,6 +496,69 @@ export async function cancelScheduledChange(tx: Prisma.TransactionClient, kind: 
 }
 
 /** Job-only shorthand (EF1 tests). */
+/**
+ * Phase 2 (P2-B "map to employee"): give `employeeId` the device user ID
+ * `deviceUserId` from `day`. The same rules as every history writer, on the
+ * mapping timeline:
+ *   - no mapping yet (manual capture until now) → a first row from `day`;
+ *   - the same ID already in force → nothing to do, or, if it is their only
+ *     row and `day` is earlier, its start moves back to `day` (covering punches
+ *     that arrived before anyone mapped them — there was no row there to
+ *     rewrite);
+ *   - a different ID → the current row closes at `day` and the new one starts
+ *     (or replaces it, dated its own start day).
+ * Never before joining, never after leaving. One device ID is never two
+ * people on the same day (the device_no_overlap constraint).
+ */
+export async function writeDeviceMapping(
+  tx: Prisma.TransactionClient,
+  employeeId: string,
+  deviceUserId: string,
+  day: Date,
+  meta: { createdByUserId: string },
+): Promise<{ before: DeviceUserMapping | null; after: DeviceUserMapping; plan: "first" | "extend" | "append" | "amend" | "unchanged" }> {
+  await lockEmployee(tx, employeeId);
+  await assertNotInLockedPayroll(day);
+  const employee = await tx.employee.findUniqueOrThrow({ where: { id: employeeId }, select: { dateOfJoining: true, lastWorkingDate: true } });
+  if (day < employee.dateOfJoining) throw new HttpError(400, `They joined on ${iso(employee.dateOfJoining)} — a device ID can't be theirs before that.`, "MAPPING_BEFORE_JOINING");
+  if (employee.lastWorkingDate && day > employee.lastWorkingDate) throw new HttpError(409, `They left on ${iso(employee.lastWorkingDate)}, so this can't change.`, "HISTORY_CLOSED");
+  const end = employee.lastWorkingDate ? addCalendarDays(employee.lastWorkingDate, 1) : null;
+  const rows = await tx.deviceUserMapping.findMany({ where: { employeeId }, orderBy: { validFrom: "asc" } });
+  const latest = rows.at(-1) ?? null;
+  if (!latest) {
+    const after = await tx.deviceUserMapping.create({ data: { employeeId, deviceUserId, validFrom: day, validTo: end, createdByUserId: meta.createdByUserId } });
+    return { before: null, after, plan: "first" };
+  }
+  if (latest.deviceUserId === deviceUserId && (!latest.validTo || latest.validTo > day)) {
+    if (day >= latest.validFrom) return { before: latest, after: latest, plan: "unchanged" };
+    if (rows.length > 1) throw new HttpError(400, `Their mapping history starts before ${iso(latest.validFrom)} — earlier history is never rewritten.`, "HISTORY_BEFORE_LATEST");
+    const after = await tx.deviceUserMapping.update({ where: { id: latest.id }, data: { validFrom: day } });
+    return { before: latest, after, plan: "extend" };
+  }
+  if (latest.validTo && latest.validTo.getTime() === end?.getTime() && day >= latest.validTo) {
+    throw new HttpError(409, `They left on ${iso(employee.lastWorkingDate!)}, so this can't change.`, "HISTORY_CLOSED");
+  }
+  if (day < latest.validFrom) throw new HttpError(400, `Their current device ID started on ${iso(latest.validFrom)} — earlier history is never rewritten.`, "HISTORY_BEFORE_LATEST");
+  if (day.getTime() === latest.validFrom.getTime()) {
+    const after = await tx.deviceUserMapping.update({ where: { id: latest.id }, data: { deviceUserId, createdByUserId: meta.createdByUserId } });
+    return { before: latest, after, plan: "amend" };
+  }
+  if (!latest.validTo || latest.validTo > day) await tx.deviceUserMapping.update({ where: { id: latest.id }, data: { validTo: day } });
+  const after = await tx.deviceUserMapping.create({ data: { employeeId, deviceUserId, validFrom: day, validTo: end, createdByUserId: meta.createdByUserId } });
+  return { before: latest, after, plan: "append" };
+}
+
+/** Turns the device-mapping constraints' errors into a friendly 409 (rethrows anything else). */
+export function translateMappingConflict(err: unknown, deviceUserId: string): never {
+  if (err instanceof Prisma.PrismaClientUnknownRequestError && err.message.includes("device_user_mappings_device_no_overlap")) {
+    throw new HttpError(409, `Device user ID "${deviceUserId}" belongs to someone else for part of that period — one device ID can't be two people on the same day.`, "CONFLICT");
+  }
+  if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+    throw new HttpError(409, `Device user ID "${deviceUserId}" is already actively assigned to someone else.`, "CONFLICT");
+  }
+  throw err;
+}
+
 /** Cancel a scheduled attendance-assignment change (the same rules as cancelScheduledChange). */
 export async function cancelScheduledAssignment(tx: Prisma.TransactionClient, employeeId: string, rowId: string): Promise<{ removed: AttendanceAssignment; reopened: AttendanceAssignment }> {
   await lockEmployee(tx, employeeId);

@@ -68,6 +68,7 @@ import { WorkflowDelegatesAdminPage } from "../pages/admin/adminTools/WorkflowDe
 import { ReportsHomePage } from "../pages/admin/reports/ReportsHomePage";
 import { CelebrationsReportPage, HeadcountReportPage, JoinersReportPage, LeaveBalanceReportPage, LeaveLiabilityReportPage, LeaversReportPage, LopReportPage } from "../pages/admin/reports/reportPages";
 import { ManagerManagementPage } from "../pages/admin/adminTools/ManagerManagementPage";
+import { DevicesPage } from "../pages/admin/devices/DevicesPage";
 import { AttendanceSettingsPage, ShiftMasterPage, WeekOffPatternsPage } from "../pages/admin/attendance/AttendanceSettingsPage";
 
 // Single source of truth for the HR/Admin portal's App Switcher and each
@@ -283,7 +284,7 @@ export const adminApps: AdminApp[] = [
           { key: "managers", label: "Manager Management", path: "admin-tools/managers", icon: ApartmentOutlined, element: ManagerManagementPage },
           { key: "helpdesk-categories", label: "Helpdesk Categories", path: "admin-tools/helpdesk-categories", icon: CustomerServiceOutlined, element: HelpdeskCategoriesPage },
           { key: "templates", label: "Email & Letter Templates", path: "admin-tools/templates", icon: FileTextOutlined, element: LetterTemplatesPage },
-          { key: "devices", label: "Devices", path: "admin-tools/devices", icon: UsbOutlined, phase: "Phase 2" },
+          { key: "devices", label: "Devices", path: "admin-tools/devices", icon: UsbOutlined, element: DevicesPage },
           { key: "import-export", label: "Data Import/Export", path: "admin-tools/import-export", icon: CloudUploadOutlined, element: ImportCenterPage },
           { key: "audit-log", label: "Audit Log", path: "admin-tools/audit-log", icon: AuditOutlined, element: AuditLogPage },
           { key: "system-settings", label: "System Settings", path: "admin-tools/settings", icon: SettingOutlined, element: SystemSettingsPage },

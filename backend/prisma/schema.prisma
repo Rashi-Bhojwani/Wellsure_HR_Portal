@@ -379,6 +379,7 @@ model Location {
 
   jobHistory        EmployeeJobHistory[]
   manualBranchUsers AttendanceManualBranch[]
+  devices           Device[]
   announcements     Announcement[]
   companyDocuments  CompanyDocument[]
 
@@ -497,6 +498,7 @@ model Employee {
   helpdeskCategoriesAssigned HelpdeskCategory[]     @relation("HelpdeskCategoryDefaultAssignee")
   generatedLetters           GeneratedLetter[]
   attendanceAssignments      AttendanceAssignment[]
+  rawPunches                 RawPunch[]
 
   @@index([status])
   @@index([dateOfJoining])
@@ -1866,4 +1868,161 @@ model AttendanceManualBranch {
 
   @@id([userId, locationId])
   @@map("attendance_manual_branches")
+}
+
+// ── Biometric ingestion (Phase 2 commit P2-B; docs/plans/PHASE_2.md §2.2, §3) ──
+// Three routes (the LAN sync agent, ADMS push, an emergency file upload)
+// converge on one ingestion service. Raw punches are immutable as received.
+
+enum DeviceRoute {
+  AGENT // polled on the LAN by a sync agent (the primary route)
+  PUSH // the device pushes to /iclock/* (ADMS)
+}
+
+enum PunchRoute {
+  AGENT
+  PUSH
+  IMPORT
+}
+
+enum PunchFlag {
+  FUTURE // more than the tolerance ahead of the server clock when received
+  TOO_OLD // older than the plausible age when received
+}
+
+enum PunchFlagDecision {
+  ACCEPTED
+  DISCARDED
+}
+
+enum IngestionBatchStatus {
+  PREVIEW // a file upload parsed and counted, nothing stored yet
+  COMMITTED
+}
+
+// A sync agent on an office PC. Its API key is shown once and stored only as
+// a hash, like any credential.
+model BiometricAgent {
+  id              String    @id @default(cuid())
+  name            String
+  keyHash         String    @unique @map("key_hash")
+  keyPrefix       String    @map("key_prefix") // first characters, to tell keys apart on screen
+  host            String?
+  version         String?
+  lastHeartbeatAt DateTime? @map("last_heartbeat_at")
+  lastHeartbeat   Json?     @map("last_heartbeat") // the agent's last report: reachability, cursor lag, clock offset, retention
+  isActive        Boolean   @default(true) @map("is_active")
+  createdByUserId String    @map("created_by_user_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  devices Device[]
+  batches IngestionBatch[]
+
+  @@map("biometric_agents")
+}
+
+// A biometric machine, at exactly one branch (spec §7.3).
+model Device {
+  id              String          @id @default(cuid())
+  serialNumber    String          @unique @map("serial_number") // ADMS authenticates on it
+  name            String
+  locationId      String          @map("location_id")
+  location        Location        @relation(fields: [locationId], references: [id])
+  timezone        String          @default("Asia/Kolkata")
+  model           String? // free text until the model is known (spec §14)
+  firmware        String?
+  route           DeviceRoute     @default(AGENT)
+  agentId         String?         @map("agent_id")
+  agent           BiometricAgent? @relation(fields: [agentId], references: [id])
+  lanIp           String?         @map("lan_ip")
+  isSimulated     Boolean         @default(false) @map("is_simulated") // refused on production; the engine never reads it
+  isActive        Boolean         @default(true) @map("is_active")
+  lastHeartbeatAt DateTime?       @map("last_heartbeat_at")
+  lastPunchAt     DateTime?       @map("last_punch_at") // the latest punch time received
+  lastReceivedAt  DateTime?       @map("last_received_at") // when anything last arrived from it
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  punches RawPunch[]
+  batches IngestionBatch[]
+
+  @@index([agentId])
+  @@map("devices")
+}
+
+// One per agent post, ADMS upload or file import.
+model IngestionBatch {
+  id               String               @id @default(cuid())
+  route            PunchRoute
+  status           IngestionBatchStatus @default(COMMITTED)
+  deviceId         String               @map("device_id")
+  device           Device               @relation(fields: [deviceId], references: [id])
+  agentId          String?              @map("agent_id")
+  agent            BiometricAgent?      @relation(fields: [agentId], references: [id])
+  uploadedByUserId String?              @map("uploaded_by_user_id") // IMPORT only
+  fileName         String?              @map("file_name")
+  reason           String? // IMPORT: why the emergency upload was needed
+  receivedAt       DateTime             @default(now()) @map("received_at")
+  committedAt      DateTime?            @map("committed_at")
+  totalLines       Int                  @default(0) @map("total_lines")
+  newCount         Int                  @default(0) @map("new_count")
+  duplicateCount   Int                  @default(0) @map("duplicate_count")
+  unmappedCount    Int                  @default(0) @map("unmapped_count")
+  rejectedCount    Int                  @default(0) @map("rejected_count")
+  flaggedCount     Int                  @default(0) @map("flagged_count")
+  rejectedLines    Json                 @default("[]") @map("rejected_lines") // kept verbatim for HR
+  pendingText      String?              @map("pending_text") // PREVIEW only: the file, until committed
+
+  punches RawPunch[]
+
+  @@index([deviceId, receivedAt])
+  @@map("ingestion_batches")
+}
+
+// spec §4.2. Immutable as received: a database trigger refuses DELETE, and
+// any UPDATE except re-resolving employee_id (a device ID mapped later,
+// docs/plans/PHASE_2.md §2.2). Unique (device, device user, instant) is the
+// exact-duplicate layer that makes retries and overlapping files idempotent.
+model RawPunch {
+  id           String         @id @default(cuid())
+  deviceId     String         @map("device_id")
+  device       Device         @relation(fields: [deviceId], references: [id])
+  deviceUserId String         @map("device_user_id")
+  punchedAt    DateTime       @map("punched_at") @db.Timestamptz(3)
+  localTime    String         @map("local_time") // exactly as the device recorded it
+  businessDate DateTime       @map("business_date") @db.Date // the date in the device's zone, used for mapping
+  direction    String         @default("UNKNOWN") // our device sends none (spec §4.1)
+  status       String
+  verifyMode   String         @map("verify_mode")
+  workcode     String
+  reserved     String
+  rawLine      String         @map("raw_line")
+  route        PunchRoute // audit only; never read downstream
+  batchId      String         @map("batch_id")
+  batch        IngestionBatch @relation(fields: [batchId], references: [id])
+  receivedAt   DateTime       @default(now()) @map("received_at")
+  employeeId   String?        @map("employee_id") // via employeeForDeviceUserOn(deviceUserId, businessDate); null = unmapped
+  employee     Employee?      @relation(fields: [employeeId], references: [id])
+  flag         PunchFlag?
+
+  flagResolution PunchFlagResolution?
+
+  @@unique([deviceId, deviceUserId, punchedAt])
+  @@index([employeeId, punchedAt])
+  @@index([deviceUserId, businessDate])
+  @@map("raw_punches")
+}
+
+// HR's decision on a flagged (implausible-time) punch: accepted into
+// computation, or discarded. Kept apart so the punch itself never changes.
+model PunchFlagResolution {
+  punchId         String            @id @map("punch_id")
+  punch           RawPunch          @relation(fields: [punchId], references: [id])
+  decision        PunchFlagDecision
+  reason          String?
+  decidedByUserId String            @map("decided_by_user_id")
+  decidedAt       DateTime          @default(now()) @map("decided_at")
+
+  @@map("punch_flag_resolutions")
 }
