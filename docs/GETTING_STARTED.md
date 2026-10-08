@@ -337,8 +337,11 @@ curl -s -X POST localhost:4000/api/biometric/agent/punches \
 ```
 
 The response gives the counts (new / duplicate / unmapped / rejected / flagged).
-Recent batches, Unmapped and Flagged show the result. The punch simulator
-(P2-G) will do this at scale. Attendance days are computed from P2-C on.
+Recent batches, Unmapped and Flagged show the result. With `npm run dev`
+running (the worker is part of it), each punch's day is recomputed about a
+second later into `daily_attendance`. To compute a range from scratch — say
+the month so far — use Workforce → Attendance → Process Attendance. The punch
+simulator (P2-G) will do all of this at scale.
 
 **Prisma Studio** (a GUI for browsing/editing the database):
 

@@ -3,7 +3,7 @@
 **Status: APPROVED 2026-10-08 with the user's answers to D1–D7 (§13),
 HR's answers on rules and branches, the attendance cycle, and three
 additions (§3.1, §7.1, §4.7). Building P2-A → P2-I in order, pausing
-after each.** Progress: **P2-A and P2-B done** (see "As built" at the end).
+after each.** Progress: **P2-A, P2-B and P2-C done** (see "As built" at the end).
 - Written 2026-10-08, after effective dating (EF1–EF4) was finished, as
   the user asked: "attendance is entirely date-based, so I don't want it
   built on half-fixed foundations".
@@ -1086,3 +1086,84 @@ As planned, with these specifics:
   a device).
 - **Deferred:** the `CLOCK_SKEW` incident (consistently skewed device) and
   every other health check are P2-H; the Devices screen's health columns too.
+
+### P2-C (2026-10-09)
+
+Built as planned: a pure engine (`modules/attendance/engine/`), a loader and
+writer (`compute.ts`, through the EF readers only), `daily_attendance`
+(source and capture on every day, `engine_version`, locked rows never
+rewritten), debounced live recompute, the 02:00 nightly with catch-up,
+Process Attendance (API, background job with progress, screen), the real
+`AttendanceLeaveSink`, and recompute triggers for punches, mappings, leave,
+holidays and assignment changes. Also: `writeDeviceMapping` now has the
+366-day limit and the already-scheduled check, like every other writer.
+
+**Placeholders are a recompute, never a disaster.** Every day is derived only
+from stored inputs and the rule values; re-running with nothing changed writes
+nothing, and a test pins that correcting a threshold and recomputing gives
+exactly what computing from scratch with the new value gives — and that
+changing it back restores every day.
+
+**Rules decided here because neither HR nor the spec covers them** (each is
+pinned by a named test in `engine.test.ts`, and each is a small, local change
+if HR wants it otherwise):
+
+1. **Which half a half day is.** When hours make a half day, the half whose
+   scheduled work the person covered more of (as a fraction) is present
+   (`P:A` or `A:P`). Equal coverage gives `HD` with no half named.
+2. **Where the halves split.** At the scheduled break nearest the middle of
+   the shift (GEN: lunch). A shift with a single work session splits at its
+   midpoint.
+3. **Near-duplicates chain.** Each punch is compared with the last punch
+   *kept*, and the first of a cluster is kept (0 s, 90 s, 180 s with a 120 s
+   window keeps 0 s and 180 s).
+4. **Overlapping punch windows.** The nearer shift start wins; an exact tie
+   goes to the earlier date. A punch in no window counts toward no day and is
+   recorded on its calendar date's record (`outsideWindowPunches`).
+5. **Lateness to the second.** Any second past start + grace is late; late and
+   early minutes round up, worked durations round down.
+6. **A lone punch is never "late".** On a closed day it might be the out, so it
+   gives `A` + `MISSING_PUNCH` (1 day LOP until regularized) with no `LATE_IN`.
+7. **Today is provisional.** Until a day's shift window closes (GEN: 01:00
+   next day) someone who has punched is `P` so far and someone who hasn't is
+   `A` so far with no LOP; `MISSING_PUNCH`, `EARLY_OUT`, `SHORTFALL` and
+   `HALF_DAY_MIN_NOT_MET` wait for the window to close. The nightly makes it
+   final.
+8. **LOP per day.** `A` = 1; a half day = 0.5; an unpaid-leave half = 0.5;
+   `NM`, `NS`, `H`, `O` and paid leave = 0; half-day minimum not met = the
+   policy value (default 1, spec). With one half on leave, the worked half
+   failing the half-day minimum is 0.5, not the policy's full day.
+9. **`SHORTFALL` is an exception only when hours made it a half day.**
+   Shortfall minutes are always recorded, but flagging every day someone left
+   a few minutes early would bury real exceptions.
+10. **Half-day leave days.** Lateness is measured from the working half's
+    start (14:45 after a morning off), early-out to its end (14:00 before an
+    afternoon off); the worked half needs the half-day minimum.
+11. **Work on a holiday or week-off.** Any punch (or a manual P/WORKED) marks
+    it worked; hours are recorded for the comp-off decision; it never raises
+    an exception.
+12. **No shift assigned.** Status `NS` with `NO_SHIFT`, no LOP — a
+    configuration gap never turns into an absence. (Every employee gets the
+    company default, so this shouldn't occur.)
+13. **Source on a half-leave day** is the worked half's (`DEVICE` or
+    `MANUAL`); the leave shows in the half status and leave code. A full leave
+    day is `LEAVE`.
+14. **Shortfall and excess** are against the scheduled work of the working
+    halves (GEN 8 h 15 m), not the span.
+15. **A manual time on a night shift** earlier than the punch window's start is
+    read as the next morning.
+16. **A day that should no longer exist** (a joining or leaving date
+    corrected) is deleted on recompute, unless locked.
+17. **Edits to a shift, policy or week-off pattern don't recompute by
+    themselves**; the save message points to Process Attendance (the plan's
+    "nothing recomputes silently"). An assignment change dated today or
+    earlier does recompute that person from its date.
+18. **The nightly** starts the day before the last run's end (a night shift's
+    window closes the next morning) and catches up at most 31 missed days.
+
+**One consequence HR should see before confirming the thresholds.** With the
+placeholder full-day minimum of 8 h against GEN's 8 h 15 m of scheduled work,
+anyone more than 15 minutes late or early (net) is a half day. That is a
+de-facto lateness penalty, though HR said there is none. When HR gives the
+real minimums, this is the number to check. A night shift (7 h 30 m of work)
+would need its own policy.

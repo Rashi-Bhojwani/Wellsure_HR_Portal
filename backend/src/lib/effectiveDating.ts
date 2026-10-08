@@ -178,6 +178,35 @@ export async function nextAssignmentChanges(employeeIds: string[], day: Date): P
   return out;
 }
 
+/** Every assignment row overlapping [from, to] (inclusive days) for these employees — the engine's loader picks the one in force per day. */
+export async function assignmentsBetween(employeeIds: string[], from: Date, to: Date): Promise<AssignmentWithRules[]> {
+  return prisma.attendanceAssignment.findMany({
+    where: { employeeId: { in: employeeIds }, effectiveFrom: { lte: to }, OR: [{ effectiveTo: null }, { effectiveTo: { gt: from } }] },
+    orderBy: { effectiveFrom: "asc" },
+    include: assignmentInclude,
+  });
+}
+
+/** In-force test for a half-open row on `day` (shared by the engine's loader). */
+export function rowInForce(row: { effectiveFrom: Date; effectiveTo: Date | null }, day: Date): boolean {
+  return row.effectiveFrom <= day && (!row.effectiveTo || row.effectiveTo > day);
+}
+
+/**
+ * Device-mapping periods overlapping [from, to] for these employees, as
+ * half-open [from, to) — the engine's "capture" per day: a day inside one is
+ * device capture, any other day is manual (docs/plans/PHASE_2.md §4.3).
+ */
+export async function deviceMappingPeriods(employeeIds: string[], from: Date, to: Date): Promise<Map<string, Array<{ from: Date; to: Date | null }>>> {
+  const rows = await prisma.deviceUserMapping.findMany({
+    where: { employeeId: { in: employeeIds }, validFrom: { lte: to }, OR: [{ validTo: null }, { validTo: { gt: from } }] },
+    select: { employeeId: true, validFrom: true, validTo: true },
+  });
+  const out = new Map<string, Array<{ from: Date; to: Date | null }>>();
+  for (const r of rows) out.set(r.employeeId, [...(out.get(r.employeeId) ?? []), { from: r.validFrom, to: r.validTo }]);
+  return out;
+}
+
 /** One employee's whole assignment history, newest first (the Assignments tab). */
 export async function assignmentHistory(employeeId: string): Promise<AssignmentWithRules[]> {
   return prisma.attendanceAssignment.findMany({ where: { employeeId }, orderBy: { effectiveFrom: "desc" }, include: assignmentInclude });
@@ -519,6 +548,12 @@ export async function writeDeviceMapping(
 ): Promise<{ before: DeviceUserMapping | null; after: DeviceUserMapping; plan: "first" | "extend" | "append" | "amend" | "unchanged" }> {
   await lockEmployee(tx, employeeId);
   await assertNotInLockedPayroll(day);
+  // The same limit as every other writer (planTimelineChange).
+  const today = businessToday();
+  const maxAheadDays = await maxScheduleAheadDays();
+  if (day > addCalendarDays(today, maxAheadDays)) {
+    throw new HttpError(400, `A change can be scheduled at most ${maxAheadDays} days ahead (until ${iso(addCalendarDays(today, maxAheadDays))}).`, "HISTORY_TOO_FAR_AHEAD");
+  }
   const employee = await tx.employee.findUniqueOrThrow({ where: { id: employeeId }, select: { dateOfJoining: true, lastWorkingDate: true } });
   if (day < employee.dateOfJoining) throw new HttpError(400, `They joined on ${iso(employee.dateOfJoining)} — a device ID can't be theirs before that.`, "MAPPING_BEFORE_JOINING");
   if (employee.lastWorkingDate && day > employee.lastWorkingDate) throw new HttpError(409, `They left on ${iso(employee.lastWorkingDate)}, so this can't change.`, "HISTORY_CLOSED");
@@ -528,6 +563,11 @@ export async function writeDeviceMapping(
   if (!latest) {
     const after = await tx.deviceUserMapping.create({ data: { employeeId, deviceUserId, validFrom: day, validTo: end, createdByUserId: meta.createdByUserId } });
     return { before: null, after, plan: "first" };
+  }
+  // As every writer: a change dated before an already-scheduled one is refused
+  // with that reason, not merely as "before the latest period".
+  if (day < latest.validFrom && latest.validFrom > today && !(latest.deviceUserId === deviceUserId && rows.length === 1)) {
+    throw new HttpError(409, `A change is already scheduled for ${iso(latest.validFrom)}. Cancel it first, or date this change on or after it.`, "HISTORY_SCHEDULED_EXISTS");
   }
   if (latest.deviceUserId === deviceUserId && (!latest.validTo || latest.validTo > day)) {
     if (day >= latest.validFrom) return { before: latest, after: latest, plan: "unchanged" };

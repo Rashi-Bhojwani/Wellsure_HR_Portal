@@ -23,6 +23,7 @@ import {
 } from "../../lib/effectiveDating";
 import { HttpError } from "../../middleware/errorHandler";
 import { POLICY_PLACEHOLDER_FIELDS, SHIFT_PLACEHOLDER_FIELDS } from "./configValidators";
+import { requestRecomputeRange } from "./recompute";
 
 // Attendance Settings (Phase 2 commit P2-A, docs/plans/PHASE_2.md §2.1,
 // §4.6). Company-wide configuration: shifts with their sessions, week-off
@@ -378,6 +379,12 @@ function assignmentView(a: AssignmentWithRules) {
   };
 }
 
+/** An assignment change dated today or earlier recomputes those days (capped at today; locked days are left alone). */
+async function recomputeFromAssignment(employeeIds: string[], from: Date): Promise<void> {
+  const today = businessToday();
+  if (from <= today) await requestRecomputeRange(employeeIds, from, today);
+}
+
 /** Everyone currently employed or joining soon, with the assignment in force today and any scheduled change. */
 export async function listAssignments(filter: { search?: string; locationId?: string; departmentId?: string; shiftId?: string; capture?: "DEVICE" | "MANUAL" }) {
   const today = businessToday();
@@ -469,6 +476,7 @@ export async function changeAssignment(employeeId: string, input: AssignmentChan
     "assignment",
   );
   await writeAuditLog({ ...meta, action: "attendance.assignment.changed", entityType: "Employee", entityId: employeeId, before: write.before, after: { ...write.after, timeline: write.plan } });
+  await recomputeFromAssignment([employeeId], write.after.effectiveFrom);
   return getAssignmentHistory(employeeId);
 }
 
@@ -499,6 +507,7 @@ export async function bulkChangeAssignment(input: AssignmentChangeInput & { empl
     },
     { timeout: 60_000 },
   );
+  await recomputeFromAssignment(ids, day);
   for (const w of writes) {
     await writeAuditLog({ ...meta, action: "attendance.assignment.changed", entityType: "Employee", entityId: w.employeeId, before: w.write.before, after: { ...w.write.after, timeline: w.write.plan, bulk: true } });
   }
@@ -508,6 +517,7 @@ export async function bulkChangeAssignment(input: AssignmentChangeInput & { empl
 export async function cancelAssignmentChange(employeeId: string, rowId: string, meta: Meta) {
   await assertEmployee(employeeId);
   const { removed, reopened } = await prisma.$transaction((tx) => cancelScheduledAssignment(tx, employeeId, rowId));
+  // A cancelled change was in the future, so no computed day used it.
   await writeAuditLog({ ...meta, action: "attendance.assignment.scheduled_change_cancelled", entityType: "Employee", entityId: employeeId, before: removed, after: { reopenedRowId: reopened.id } });
   return getAssignmentHistory(employeeId);
 }

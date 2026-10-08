@@ -1,3 +1,4 @@
+import { closeAttendanceQueues } from "../jobs/attendanceQueues";
 import { logger } from "../lib/logger";
 import { prisma } from "../lib/prisma";
 import { redis } from "../lib/redis";
@@ -22,6 +23,7 @@ export async function runScheduler(): Promise<void> {
     logger.info({ signal }, "shutting down");
 
     clearInterval(heartbeat);
+    await closeAttendanceQueues();
     await prisma.$disconnect();
     redis.disconnect();
 

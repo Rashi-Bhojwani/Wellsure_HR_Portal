@@ -1,3 +1,4 @@
+import { requestRecomputeForEveryone } from "../attendance/recompute";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { writeAuditLog } from "../../lib/audit";
@@ -53,6 +54,7 @@ export async function createHoliday(input: HolidayInput, meta: ActorMeta) {
   const date = new Date(input.date);
   const holiday = await runUnique(() => prisma.holiday.create({ data: { date, name: input.name } }), "A holiday already exists on this date.");
   await writeAuditLog({ ...meta, action: "leave.holiday.create", entityType: "Holiday", entityId: holiday.id, after: dateOnlyJson(holiday) });
+  await requestRecomputeForEveryone([holiday.date]); // Phase 2: the day becomes H for everyone
   return dateOnlyJson(holiday);
 }
 
@@ -64,6 +66,7 @@ export async function updateHoliday(id: string, input: Partial<HolidayInput>, me
     "A holiday already exists on this date.",
   );
   await writeAuditLog({ ...meta, action: "leave.holiday.update", entityType: "Holiday", entityId: id, before: dateOnlyJson(before), after: dateOnlyJson(after) });
+  await requestRecomputeForEveryone([before.date, after.date]);
   return dateOnlyJson(after);
 }
 
@@ -72,6 +75,7 @@ export async function deleteHoliday(id: string, meta: ActorMeta) {
   if (!before) throw new HttpError(404, "Holiday not found.", "NOT_FOUND");
   await prisma.holiday.delete({ where: { id } });
   await writeAuditLog({ ...meta, action: "leave.holiday.delete", entityType: "Holiday", entityId: id, before: dateOnlyJson(before) });
+  await requestRecomputeForEveryone([before.date]);
 }
 
 // ── Restricted holidays — admin mutations (leave.policy.manage) ─────────

@@ -3,6 +3,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { requireAnyPermission, requirePermission } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
 import * as config from "./configController";
+import * as processRuns from "./processController";
 import {
   assignmentChangeSchema,
   assignmentListQuerySchema,
@@ -16,6 +17,8 @@ import {
   employeeRowParamsSchema,
   idParamsSchema,
   manualBranchesSchema,
+  processRunSchema,
+  processScopeQuerySchema,
   updatePolicySchema,
   updateShiftSchema,
   updateWeekOffPatternSchema,
@@ -58,3 +61,11 @@ attendanceRouter.post("/config/assignments/:employeeId/:rowId/cancel", canManage
 
 attendanceRouter.get("/config/manual-branches", canManage, config.listManualBranchHolders);
 attendanceRouter.put("/config/manual-branches/:userId", canManage, validate({ params: userParamsSchema, body: manualBranchesSchema }), config.setManualBranches);
+
+// Process Attendance (P2-C, docs/plans/PHASE_2.md §3.1): re-run the engine for
+// a range before the period is locked. attendance.process — not manager-grantable.
+const canProcess = requirePermission("attendance.process");
+attendanceRouter.get("/process/scope", canProcess, validate({ query: processScopeQuerySchema }), processRuns.scope);
+attendanceRouter.get("/process", canProcess, processRuns.listRuns);
+attendanceRouter.post("/process", canProcess, validate({ body: processRunSchema }), processRuns.startRun);
+attendanceRouter.get("/process/:id", canProcess, validate({ params: idParamsSchema }), processRuns.getRun);

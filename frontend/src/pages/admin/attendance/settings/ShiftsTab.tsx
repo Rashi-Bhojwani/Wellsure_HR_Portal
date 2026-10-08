@@ -41,7 +41,7 @@ function ShiftModal({ editing, open, onClose }: { editing: ShiftRow | null; open
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["attendance", "config"] });
-      void message.success(editing ? "Shift saved." : "Shift created.");
+      void message.success(editing ? "Shift saved. Days already computed keep the old rule until you run Process Attendance for them." : "Shift created.");
       onClose();
     },
     onError: (err) => void message.error(apiErrorMessage(err, "Could not save this shift.")),

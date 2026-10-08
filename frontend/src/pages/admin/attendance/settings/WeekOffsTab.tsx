@@ -62,7 +62,7 @@ function PatternModal({ editing, open, onClose }: { editing: WeekOffPatternRow |
       editing ? attendanceApi.updateWeekOffPattern(editing.id, { name: v.name, rules: fromForm(v.days) }) : attendanceApi.createWeekOffPattern({ code: v.code, name: v.name, rules: fromForm(v.days) }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["attendance", "config"] });
-      void message.success("Week-off pattern saved.");
+      void message.success("Week-off pattern saved. Days already computed keep the old rule until you run Process Attendance for them.");
       onClose();
     },
     onError: (err) => void message.error(apiErrorMessage(err, "Could not save this pattern.")),

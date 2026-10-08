@@ -69,6 +69,7 @@ import { ReportsHomePage } from "../pages/admin/reports/ReportsHomePage";
 import { CelebrationsReportPage, HeadcountReportPage, JoinersReportPage, LeaveBalanceReportPage, LeaveLiabilityReportPage, LeaversReportPage, LopReportPage } from "../pages/admin/reports/reportPages";
 import { ManagerManagementPage } from "../pages/admin/adminTools/ManagerManagementPage";
 import { DevicesPage } from "../pages/admin/devices/DevicesPage";
+import { ProcessAttendancePage } from "../pages/admin/attendance/ProcessAttendancePage";
 import { AttendanceSettingsPage, ShiftMasterPage, WeekOffPatternsPage } from "../pages/admin/attendance/AttendanceSettingsPage";
 
 // Single source of truth for the HR/Admin portal's App Switcher and each
@@ -168,7 +169,7 @@ export const adminApps: AdminApp[] = [
           { key: "employee-swipes", label: "Employee Swipes", path: "workforce/attendance/swipes", icon: DesktopOutlined, phase: "Phase 3" },
           { key: "attendance-muster", label: "Attendance Muster", path: "workforce/attendance/muster", icon: FileTextOutlined, phase: "Phase 3" },
           { key: "attendance-info", label: "Attendance Info", path: "workforce/attendance/info", icon: CalendarOutlined, phase: "Phase 3" },
-          { key: "process-attendance", label: "Process Attendance", path: "workforce/attendance/process", icon: ToolOutlined, phase: "Phase 3" },
+          { key: "process-attendance", label: "Process Attendance", path: "workforce/attendance/process", icon: ToolOutlined, element: ProcessAttendancePage },
           { key: "period-finalisation", label: "Attendance Period Finalisation", path: "workforce/attendance/finalisation", icon: SafetyOutlined, phase: "Phase 3" },
           { key: "attendance-exception", label: "Attendance Exception", path: "workforce/attendance/exceptions", icon: AuditOutlined, phase: "Phase 3" },
           { key: "manual-override", label: "Manual Override", path: "workforce/attendance/manual-override", icon: ToolOutlined, phase: "Phase 3" },

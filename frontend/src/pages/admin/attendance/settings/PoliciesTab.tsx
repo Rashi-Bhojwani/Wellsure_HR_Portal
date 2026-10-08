@@ -46,7 +46,7 @@ function PolicyModal({ editing, open, onClose }: { editing: PolicyRow | null; op
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["attendance", "config"] });
-      void message.success("Policy saved.");
+      void message.success("Policy saved. Days already computed keep the old rule until you run Process Attendance for them.");
       onClose();
     },
     onError: (err) => void message.error(apiErrorMessage(err, "Could not save this policy.")),

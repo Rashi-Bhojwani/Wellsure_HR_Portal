@@ -25,3 +25,23 @@ export async function requestRecompute(days: DayRef[]): Promise<void> {
   for (const d of days) seen.set(`${d.employeeId}|${d.date.toISOString().slice(0, 10)}`, d);
   if (seen.size) await handler([...seen.values()]);
 }
+
+/** Every day from `from` to `to` (inclusive, UTC-midnight dates) for each employee — capped at today by the engine. */
+export async function requestRecomputeRange(employeeIds: string[], from: Date, to: Date): Promise<void> {
+  const days: DayRef[] = [];
+  for (const employeeId of employeeIds) {
+    for (let d = new Date(from); d <= to; d = new Date(d.getTime() + 86_400_000)) days.push({ employeeId, date: d });
+  }
+  await requestRecompute(days);
+}
+
+// Company-wide changes (a holiday added, moved or removed) touch everyone
+// employed on those dates: one job per date range, not one per person.
+type DatesHandler = (dates: Date[]) => Promise<void>;
+let datesHandler: DatesHandler = async () => undefined;
+export function setRecomputeDatesHandler(h: DatesHandler | null): void {
+  datesHandler = h ?? (async () => undefined);
+}
+export async function requestRecomputeForEveryone(dates: Date[]): Promise<void> {
+  if (dates.length) await datesHandler(dates);
+}

@@ -7,9 +7,12 @@ import { closeLettersQueue } from "../jobs/lettersQueue";
 import { redis } from "../lib/redis";
 import { createApp } from "../app";
 import { createSocketServer } from "../realtime/socket";
+import { registerAttendanceEngine } from "../modules/attendance/wiring";
+import { closeAttendanceQueues } from "../jobs/attendanceQueues";
 
 export async function runApi(): Promise<void> {
   await redis.connect();
+  registerAttendanceEngine();
 
   const app = createApp();
   const httpServer = createServer(app);
@@ -29,6 +32,7 @@ export async function runApi(): Promise<void> {
     await new Promise<void>((resolve) => httpServer.close(() => resolve()));
     await closePdfRenderer(); // letters/preview may have Chromium open
     await closeLettersQueue();
+    await closeAttendanceQueues();
     await prisma.$disconnect();
     redis.disconnect();
 

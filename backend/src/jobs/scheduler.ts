@@ -1,5 +1,6 @@
 import { logger } from "../lib/logger";
 import { getDailyRunHour } from "../modules/engage/autoPostSettings";
+import { attendanceNightlyQueue } from "./attendanceQueues";
 import { compOffExpiryQueue, employeeSeparationsQueue, historyRolloverQueue, engageAutoPostsQueue, helpdeskAutoCloseQueue, leavePlAccrualQueue } from "./queues";
 
 // Registers BullMQ repeatable jobs. Idempotent registration matters here —
@@ -9,6 +10,11 @@ import { compOffExpiryQueue, employeeSeparationsQueue, historyRolloverQueue, eng
 // The nightly attendance cron and daily Engage auto-posts are registered
 // here starting Phase 2/5.
 export async function registerScheduledJobs(): Promise<void> {
+  // Attendance nightly (Phase 2 P2-C): finalises yesterday (and catches up any
+  // missed nights) once every GEN shift window has closed (01:00).
+  await attendanceNightlyQueue().upsertJobScheduler("attendance-nightly", { pattern: "0 2 * * *", tz: "Asia/Kolkata" }, { name: "attendance-nightly" });
+  logger.info("Registered repeatable job: attendance-nightly (02:00 IST daily)");
+
   await historyRolloverQueue.upsertJobScheduler(
     "history-rollover-daily",
     { pattern: "5 0 * * *", tz: "Asia/Kolkata" }, // 00:05 IST daily (EF3)

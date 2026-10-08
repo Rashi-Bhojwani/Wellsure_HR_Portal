@@ -12,6 +12,9 @@ import { processLetterJob } from "../modules/letters/service";
 import { LETTERS_QUEUE_NAME } from "./lettersQueue";
 import { SECURITY_ALERT_QUEUE_NAME } from "./securityAlertQueue";
 import { mailService, type MailMessage } from "../integrations/mail";
+import { ATTENDANCE_NIGHTLY_QUEUE, ATTENDANCE_PROCESS_QUEUE, ATTENDANCE_RECOMPUTE_QUEUE } from "./attendanceQueues";
+import { processRecomputeJob, runNightly } from "../modules/attendance/jobs";
+import { executeProcessRun } from "../modules/attendance/processService";
 
 // Starts every BullMQ worker this service runs. Real workers (attendance
 // recompute, etc.) are added here starting Phase 2.
@@ -27,6 +30,19 @@ export function startWorkers(): Worker[] {
   pingWorker.on("failed", (job, err) => {
     logger.error({ jobId: job?.id, err }, "system-ping job failed");
   });
+
+  // Attendance (Phase 2 P2-C). Recompute jobs run a few at a time; a
+  // Process Attendance run or the nightly is one long job.
+  const recomputeWorker = new Worker(
+    ATTENDANCE_RECOMPUTE_QUEUE,
+    async (job) => processRecomputeJob(job.data as { employeeId?: string; from: string; to: string }),
+    { connection: createBullConnection(), concurrency: 4 },
+  );
+  recomputeWorker.on("failed", (job, err) => logger.error({ jobId: job?.id, err }, "attendance-recompute job failed"));
+  const nightlyWorker = new Worker(ATTENDANCE_NIGHTLY_QUEUE, async () => runNightly(), { connection: createBullConnection() });
+  nightlyWorker.on("failed", (job, err) => logger.error({ jobId: job?.id, err }, "attendance-nightly job failed"));
+  const processWorker = new Worker(ATTENDANCE_PROCESS_QUEUE, async (job) => executeProcessRun((job.data as { runId: string }).runId), { connection: createBullConnection() });
+  processWorker.on("failed", (job, err) => logger.error({ jobId: job?.id, err }, "attendance-process job failed"));
 
   const rolloverWorker = new Worker(
     "history-rollover",
@@ -139,5 +155,5 @@ export function startWorkers(): Worker[] {
     logger.error({ event: "security.breakglass.alert_undelivered", jobId: job?.id, attempt: job?.attemptsMade, err }, "break-glass alert email still not delivered");
   });
 
-  return [pingWorker, rolloverWorker, separationsWorker, leavePlAccrualWorker, compOffExpiryWorker, engageAutoPostsWorker, helpdeskAutoCloseWorker, lettersWorker, securityAlertWorker];
+  return [pingWorker, rolloverWorker, separationsWorker, leavePlAccrualWorker, compOffExpiryWorker, engageAutoPostsWorker, helpdeskAutoCloseWorker, lettersWorker, securityAlertWorker, recomputeWorker, nightlyWorker, processWorker];
 }

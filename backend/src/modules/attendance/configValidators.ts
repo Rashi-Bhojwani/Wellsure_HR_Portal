@@ -87,3 +87,14 @@ export const assignmentListQuerySchema = z.object({
 });
 
 export const manualBranchesSchema = z.object({ locationIds: z.array(z.string().min(1)).max(200) });
+
+// ── Process Attendance (P2-C) ──
+export const processRunSchema = z
+  .object({
+    fromDate: z.iso.date(),
+    toDate: z.iso.date(),
+    employeeIds: z.array(z.string().min(1)).max(2000).optional(),
+    locationId: z.string().min(1).nullable().optional(),
+    reason: z.string().trim().min(5, "Say why (e.g. HR confirmed the half-day hours)").max(500),
+  });
+export const processScopeQuerySchema = z.object({ from: z.iso.date() });

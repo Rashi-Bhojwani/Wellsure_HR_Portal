@@ -52,4 +52,13 @@ describe("writeDeviceMapping", () => {
     await expect(write(emp.employeeId, `Q${tag}`, "2025-01-01")).rejects.toMatchObject({ code: "HISTORY_BEFORE_LATEST" });
     await expect(write(emp.employeeId, `P${tag}`, "2025-05-01")).rejects.toMatchObject({ code: "HISTORY_BEFORE_LATEST" });
   });
+
+  it("the same limits as every writer: at most 366 days ahead; never before an already-scheduled change", async () => {
+    const far = new Date(Date.now() + 400 * 86_400_000).toISOString().slice(0, 10);
+    await expect(write(emp.employeeId, `F${tag}`, far)).rejects.toMatchObject({ code: "HISTORY_TOO_FAR_AHEAD" });
+    const soon = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+    const sooner = new Date(Date.now() + 10 * 86_400_000).toISOString().slice(0, 10);
+    expect((await write(emp.employeeId, `S${tag}`, soon)).plan).toBe("append"); // scheduled
+    await expect(write(emp.employeeId, `T${tag}`, sooner)).rejects.toMatchObject({ code: "HISTORY_SCHEDULED_EXISTS" });
+  });
 });

@@ -191,3 +191,40 @@ export async function listManualBranchHolders(): Promise<ManualBranchHolder[]> {
 export async function setManualBranches(userId: string, locationIds: string[]): Promise<ManualBranchHolder | null> {
   return (await apiClient.put<ManualBranchHolder | null>(`${base}/manual-branches/${userId}`, { locationIds })).data;
 }
+
+// ── Process Attendance (P2-C) ──
+export type ProcessStatus = "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED";
+export interface ProcessRun {
+  id: string;
+  fromDate: string;
+  toDate: string;
+  employeeIds: string[];
+  locationId: string | null;
+  reason: string;
+  status: ProcessStatus;
+  requestedByUserId: string;
+  requestedAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  totalDays: number;
+  processedDays: number;
+  changedDays: number;
+  lockedDays: number;
+  error: string | null;
+}
+export interface ProcessRunDetail extends ProcessRun {
+  changes: Array<{ employeeId: string; employeeCode: string | null; date: string; before: string | null; after: string | null }>;
+}
+
+export async function listProcessRuns(): Promise<ProcessRun[]> {
+  return (await apiClient.get<{ runs: ProcessRun[] }>("/api/attendance/process")).data.runs;
+}
+export async function getProcessRun(id: string): Promise<ProcessRunDetail> {
+  return (await apiClient.get<ProcessRunDetail>(`/api/attendance/process/${id}`)).data;
+}
+export async function startProcessRun(body: { fromDate: string; toDate: string; employeeIds?: string[]; locationId?: string | null; reason: string }): Promise<ProcessRun> {
+  return (await apiClient.post<ProcessRun>("/api/attendance/process", body)).data;
+}
+export async function processScope(from: string): Promise<{ from: string; to: string; employees: number; days: number }> {
+  return (await apiClient.get("/api/attendance/process/scope", { params: { from } })).data;
+}

@@ -499,6 +499,7 @@ model Employee {
   generatedLetters           GeneratedLetter[]
   attendanceAssignments      AttendanceAssignment[]
   rawPunches                 RawPunch[]
+  dailyAttendance            DailyAttendance[]
 
   @@index([status])
   @@index([dateOfJoining])
@@ -2025,4 +2026,99 @@ model PunchFlagResolution {
   decidedAt       DateTime          @default(now()) @map("decided_at")
 
   @@map("punch_flag_resolutions")
+}
+
+// ── The day record (Phase 2 commit P2-C; docs/plans/PHASE_2.md §2.3, §4) ──
+
+enum AttendanceSource {
+  DEVICE
+  MANUAL
+  LEAVE
+  HOLIDAY
+  WEEK_OFF
+}
+
+enum AttendanceCapture {
+  DEVICE
+  MANUAL
+}
+
+// One row per employee per business date, written only by the rules engine
+// (modules/attendance/engine). Fully derivable from raw punches, manual
+// entries, approved leave, holidays, assignments and rule values — nothing is
+// ever typed into it. A locked row (Phase 3 finalisation) is never rewritten.
+model DailyAttendance {
+  id               String            @id @default(cuid())
+  employeeId       String            @map("employee_id")
+  employee         Employee          @relation(fields: [employeeId], references: [id])
+  date             DateTime          @db.Date
+  // The shift as used that day (a snapshot: later edits to the shift don't change history until recomputed).
+  shiftId          String?           @map("shift_id")
+  shiftCode        String?           @map("shift_code")
+  shiftStart       String?           @map("shift_start")
+  shiftEnd         String?           @map("shift_end")
+  policyId         String?           @map("policy_id")
+  firstIn          DateTime?         @map("first_in") @db.Timestamptz(3)
+  lastOut          DateTime?         @map("last_out") @db.Timestamptz(3)
+  totalMinutes     Int?              @map("total_minutes")
+  breakMinutes     Int?              @map("break_minutes")
+  actualMinutes    Int?              @map("actual_minutes")
+  inShiftMinutes   Int?              @map("in_shift_minutes")
+  lateInMinutes    Int?              @map("late_in_minutes")
+  earlyOutMinutes  Int?              @map("early_out_minutes")
+  shortfallMinutes Int?              @map("shortfall_minutes")
+  excessMinutes    Int?              @map("excess_minutes")
+  status           String // P, A, HD, H, O, NM, NS, a leave code, or a split such as A:P / PL:P
+  firstHalfStatus  String?           @map("first_half_status")
+  secondHalfStatus String?           @map("second_half_status")
+  lopDays          Decimal           @default(0) @map("lop_days") @db.Decimal(3, 2)
+  exceptionFlags   String[]          @default([]) @map("exception_flags")
+  source           AttendanceSource
+  capture          AttendanceCapture
+  leaveTypeCode    String?           @map("leave_type_code")
+  holidayName      String?           @map("holiday_name")
+  workedOnOffDay   Boolean           @default(false) @map("worked_on_off_day")
+  provisional      Boolean           @default(false) // computed while the shift window was still open
+  punchCount       Int               @default(0) @map("punch_count")
+  computedFrom     Json              @default("{}") @map("computed_from") // punch ids, manual entry id, collapsed/outside counts — for "Info"
+  isLocked         Boolean           @default(false) @map("is_locked") // Phase 3 finalisation
+  processedAt      DateTime          @default(now()) @map("processed_at")
+  engineVersion    Int               @map("engine_version")
+
+  @@unique([employeeId, date])
+  @@index([date])
+  @@map("daily_attendance")
+}
+
+enum AttendanceProcessStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+// Process Attendance (docs/plans/PHASE_2.md §3.1): re-run the engine for a
+// date range at any time before the period is locked. Audited: who, range,
+// why, and what changed.
+model AttendanceProcessRun {
+  id                String                  @id @default(cuid())
+  fromDate          DateTime                @map("from_date") @db.Date
+  toDate            DateTime                @map("to_date") @db.Date
+  employeeIds       String[]                @default([]) @map("employee_ids") // empty = everyone employed in the range
+  locationId        String?                 @map("location_id")
+  reason            String
+  status            AttendanceProcessStatus @default(QUEUED)
+  requestedByUserId String                  @map("requested_by_user_id")
+  requestedAt       DateTime                @default(now()) @map("requested_at")
+  startedAt         DateTime?               @map("started_at")
+  finishedAt        DateTime?               @map("finished_at")
+  totalDays         Int                     @default(0) @map("total_days") // employee-days in scope
+  processedDays     Int                     @default(0) @map("processed_days")
+  changedDays       Int                     @default(0) @map("changed_days")
+  lockedDays        Int                     @default(0) @map("locked_days") // in scope but locked, left alone
+  changes           Json                    @default("[]") // the first changed days: employee, date, before → after status
+  error             String?
+
+  @@index([requestedAt])
+  @@map("attendance_process_runs")
 }

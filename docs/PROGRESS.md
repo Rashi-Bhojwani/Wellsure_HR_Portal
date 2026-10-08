@@ -12,7 +12,7 @@ committed).
 | 0 | Foundation | ✅ Done |
 | 1 | Auth, RBAC, org, employees | Done — data layer, authentication, org masters, employee management, import center, exports, audit log viewer and system settings all built and tested. Users & Roles admin screen deliberately deferred (built in Phase 5 commit E1 as Roles & Permissions). **Correction (2026-09-30): role assignment does not exist anywhere in the product** — Add Employee always assigns plain `EMPLOYEE` and nothing else assigns roles; an earlier version of this row claimed otherwise. Both are Phase 5 commit E1 ([`docs/plans/PHASE_5.md`](plans/PHASE_5.md)). |
 | 1.5 | AWS staging environment | Not started |
-| 2 | Biometric ingestion + attendance engine + real-time | In progress — plan approved ([`docs/plans/PHASE_2.md`](plans/PHASE_2.md)); P2-A (attendance configuration, capture choice) and P2-B (ingestion) done; P2-C → P2-I to follow |
+| 2 | Biometric ingestion + attendance engine + real-time | In progress — plan approved ([`docs/plans/PHASE_2.md`](plans/PHASE_2.md)); P2-A (configuration), P2-B (ingestion) and P2-C (rules engine) done; P2-D → P2-I to follow |
 | 3 | Attendance administration | Not started |
 | 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
 | 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | ✅ Done (2026-10-03) — commits A, B, C, D, D2, E1, E1.1, E2, E3, F and G (mobile bottom bar + PWA), plus interim commits. Full review — every screen and URL, every permission, what's stubbed, open questions, risks for Phase 6 — in [`docs/plans/PHASE_5_REVIEW.md`](plans/PHASE_5_REVIEW.md). Plan and as-built notes per commit in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
@@ -4042,6 +4042,33 @@ Plan: [`docs/plans/PHASE_2.md`](plans/PHASE_2.md) §2.2, §3.
   permissions); mapping-writer units. Cleanup and route-inventory guards
   updated (agent and ADMS routes classified as machine-credential routes).
 
+### Phase 2, commit P2-C — the rules engine (2026-10-09)
+
+Plan and as-built notes: [`docs/plans/PHASE_2.md`](plans/PHASE_2.md) §4, §3.1,
+"As built: P2-C" — including the **18 rules decided here** that neither HR nor
+the spec covers, listed for review.
+
+- **Pure engine** (`modules/attendance/engine/`): one employee-day, no I/O, the
+  spec's order (not employed → holiday → week-off → leave → manual capture →
+  punches). Two-session shifts with the scheduled lunch deducted (also when
+  someone leaves and returns in it); halves and split codes (`A:P`, `P:A`,
+  `PL:P`, `P:PL`, `HD`); near-duplicates collapsed (the sample's user 113 is a
+  test); first punch in, last out; night shifts on their start date; grace at
+  the second; thresholds; `NM` for manual capture with nothing entered, never
+  absent or an exception; source and capture on every day; provisional until
+  the shift window closes.
+- **`daily_attendance`** (migration `20261009120000_daily_attendance`), written
+  only by the engine; locked rows never rewritten; `engine_version` stored.
+- **Recompute**: debounced live jobs (punches, mapping, leave via the real
+  `AttendanceLeaveSink`, holidays, assignment changes); nightly 02:00 IST with
+  catch-up; **Process Attendance** (Workforce → Attendance) for any range up to
+  a year, before lock, audited, with what changed.
+- `writeDeviceMapping` gained the 366-day limit and the already-scheduled check.
+- Tests: 43 engine rule tests, a database week per capture type, idempotent
+  re-runs, the placeholder-correction proof, locked days, joiners/leavers,
+  mid-week mapping and assignment changes, flagged punches, night shift, leave
+  sink, Process Attendance, nightly, recompute grouping.
+
 ## Open questions
 
 - [x] **Approval Workflows — dropped (user decision 2026-10-03).** No
@@ -4075,6 +4102,11 @@ Carried from spec §14 — configurable, not guessed, until answered:
       older open question further down — the authoritative branch list and exact
       branch names have been unconfirmed since Phase 1 (the user is chasing
       it with HR).
+- [ ] **Before HR confirms the full-day minimum hours:** with the placeholder
+      8 h against GEN's 8 h 15 m of scheduled work, anyone more than 15
+      minutes late or early (net) becomes a half day — a de-facto lateness
+      penalty, though HR said there is none. Worth showing HR this number when
+      asking for the thresholds (Phase 2 plan, "As built: P2-C").
 - [ ] **Attendance rule values still to come from HR** (Phase 2 plan D3):
       grace minutes before someone counts as late, half-day and full-day
       minimum hours, and whether any shift other than GEN exists.
