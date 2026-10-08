@@ -200,15 +200,25 @@ export function validateEmployeeRow(row: ParsedRow, refs: ReferenceData, tracker
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  const deviceUserId = v.deviceUserId!.trim();
-  const employeeCode = (v.employeeCode!.trim() || deviceUserId).trim();
+  const deviceUserId = (v.deviceUserId ?? "").trim();
+  const employeeCode = ((v.employeeCode ?? "").trim() || deviceUserId).trim();
+  // Phase 2 (D2): DEVICE (the default when blank) needs a Device User ID;
+  // MANUAL means attendance is marked manually and there's no device ID.
+  const attendanceCapture = ((v.attendanceCapture ?? "").trim().toUpperCase() || "DEVICE") as "DEVICE" | "MANUAL";
   // An ex-employee being migrated from greytHR (lastWorkingDate set): they
   // arrive already separated, with no Separation row (docs/PROGRESS.md
   // Phase 1.5 migration notes).
   const lastWorkingDate = (v.lastWorkingDate ?? "").trim();
   const isFormer = lastWorkingDate !== "";
 
-  if (!deviceUserId) errors.push("deviceUserId is required.");
+  if (attendanceCapture !== "DEVICE" && attendanceCapture !== "MANUAL") {
+    errors.push(`attendanceCapture must be DEVICE or MANUAL (got "${v.attendanceCapture}").`);
+  } else if (attendanceCapture === "DEVICE" && !deviceUserId) {
+    errors.push("deviceUserId is required for attendanceCapture DEVICE — or set attendanceCapture to MANUAL if this person has no biometric machine.");
+  } else if (attendanceCapture === "MANUAL" && deviceUserId) {
+    errors.push("attendanceCapture MANUAL has no deviceUserId — clear it, or set attendanceCapture to DEVICE.");
+  }
+  if (attendanceCapture === "MANUAL" && !employeeCode) errors.push("employeeCode is required for MANUAL (there is no deviceUserId to reuse).");
   const REQUIRED_FIELDS = [
     "fullName",
     "dateOfBirth",
@@ -302,7 +312,7 @@ export function validateEmployeeRow(row: ParsedRow, refs: ReferenceData, tracker
     errors.push(`Reporting manager "${v.reportingManagerCode}" isn't an active Manager — appoint them in Manager Management first, or leave the column blank.`);
   }
 
-  return { data: { ...v, deviceUserId, employeeCode, lastWorkingDate: isFormer ? lastWorkingDate : "", exitReason: isFormer ? (v.exitReason ?? "").trim() : "" }, errors, warnings };
+  return { data: { ...v, attendanceCapture, deviceUserId, employeeCode, lastWorkingDate: isFormer ? lastWorkingDate : "", exitReason: isFormer ? (v.exitReason ?? "").trim() : "" }, errors, warnings };
 }
 
 // ── statutory ────────────────────────────────────────────────────────────

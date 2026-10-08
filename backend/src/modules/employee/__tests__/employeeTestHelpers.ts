@@ -105,6 +105,10 @@ export async function createFullTestEmployee(org: TestOrgMasters, opts: { roleCo
   await prisma.deviceUserMapping.create({
     data: { employeeId: employee.id, deviceUserId: employeeCode, validFrom: new Date("2024-01-01"), createdByUserId: user.id },
   });
+  // Phase 2: the company default attendance assignment, as Add Employee gives.
+  await prisma.attendanceAssignment.create({
+    data: { employeeId: employee.id, shiftId: "shift_gen", weekOffPatternId: "wop_sun", policyId: "policy_default", effectiveFrom: new Date("2024-01-01"), createdByUserId: user.id },
+  });
 
   // Unique per call (monotonic counter, not the UUID suffix — see comment
   // on nextFixtureDigits) — a colliding fake PAN/Aadhaar/account number

@@ -20,6 +20,8 @@ export const createLocationSchema = z.object({
   city: z.string().trim().min(1).max(100),
   state: z.string().trim().min(1).max(100),
   pincode: z.string().trim().min(4).max(10),
+  // Phase 2: whether the branch has a biometric machine (Add Employee's default capture).
+  hasBiometricDevice: z.boolean().optional(),
 });
 export const updateLocationSchema = createLocationSchema.partial().extend({
   isActive: z.boolean().optional(),

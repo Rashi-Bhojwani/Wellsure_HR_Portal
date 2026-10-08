@@ -85,6 +85,60 @@ describe("POST /api/employees (Add Employee wizard)", () => {
     expect(auditRow).not.toBeNull();
   });
 
+  describe("attendance capture is a deliberate choice (Phase 2, D2)", () => {
+    const withCapture = (capture: "DEVICE" | "MANUAL" | undefined, deviceUserId: string | undefined) => {
+      const payload = wizardPayload();
+      const official: Record<string, unknown> = { ...payload.official, deviceUserId };
+      if (capture) official.attendanceCapture = capture;
+      createdEmployeeCodes.push(payload.official.employeeCode);
+      return { ...payload, official };
+    };
+
+    it("MANUAL: no Device User ID, no device mapping, the company default assignment, and the profile says manual", async () => {
+      const payload = withCapture("MANUAL", undefined);
+      const res = await request(app).post("/api/employees").set(...authHeader(hrToken)).send(payload);
+      expect(res.status).toBe(201);
+      const e = await prisma.employee.findUniqueOrThrow({ where: { id: res.body.id } });
+      expect(await prisma.deviceUserMapping.count({ where: { employeeId: e.id } })).toBe(0);
+      const a = await prisma.attendanceAssignment.findMany({ where: { employeeId: e.id }, include: { shift: true, weekOffPattern: true, policy: true } });
+      expect(a.map((x) => [x.shift.code, x.weekOffPattern.code, x.policy.code, x.effectiveFrom.toISOString().slice(0, 10), x.effectiveTo])).toEqual([["GEN", "SUN", "DEFAULT", "2026-01-15", null]]);
+      const hrAdmin = await createFullTestEmployee(org, { roleCode: "HR_ADMIN" }); // company-wide scope sees the new hire
+      employeeIds.push(hrAdmin.employeeId);
+      const token = await loginAs(hrAdmin.employeeCode);
+      const profile = await request(app).get(`/api/employees/${e.id}`).set(...authHeader(token));
+      expect(profile.status).toBe(200);
+      expect(profile.body.attendanceCapture).toBe("MANUAL");
+    });
+
+    it("DEVICE (the default for older clients): the mapping is created and the profile says device", async () => {
+      const payload = withCapture(undefined, `DEV-${randomUUID().slice(0, 6)}`);
+      const res = await request(app).post("/api/employees").set(...authHeader(hrToken)).send(payload);
+      expect(res.status).toBe(201);
+      expect(await prisma.deviceUserMapping.count({ where: { employeeId: res.body.id } })).toBe(1);
+      expect(await prisma.attendanceAssignment.count({ where: { employeeId: res.body.id } })).toBe(1);
+    });
+
+    it("DEVICE without a Device User ID, or MANUAL with one, is refused with a message naming the choice", async () => {
+      const noId = await request(app).post("/api/employees").set(...authHeader(hrToken)).send(withCapture("DEVICE", ""));
+      expect(noId.status).toBe(400);
+      expect(JSON.stringify(noId.body)).toContain("No device: attendance is marked manually");
+      const both = await request(app).post("/api/employees").set(...authHeader(hrToken)).send(withCapture("MANUAL", "12345"));
+      expect(both.status).toBe(400);
+      expect(JSON.stringify(both.body)).toContain("Manual attendance has no Device User ID");
+    });
+
+    it("refuses to add anyone while the company default shift is inactive — never a person with no shift", async () => {
+      await prisma.shift.update({ where: { id: "shift_gen" }, data: { isActive: false } });
+      try {
+        const res = await request(app).post("/api/employees").set(...authHeader(hrToken)).send(withCapture("MANUAL", undefined));
+        expect(res.status).toBe(409);
+        expect(res.body.error.code).toBe("ATTENDANCE_DEFAULTS_MISSING");
+      } finally {
+        await prisma.shift.update({ where: { id: "shift_gen" }, data: { isActive: true } });
+      }
+    });
+  });
+
   it("rejects a duplicate Employee Code with a 409", async () => {
     const payload = wizardPayload();
     createdEmployeeCodes.push(payload.official.employeeCode);

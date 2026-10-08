@@ -31,6 +31,7 @@ import { lettersRouter } from "./modules/letters/routes";
 import { accessRouter } from "./modules/access/routes";
 import { managersRouter } from "./modules/managers/routes";
 import { delegationsRouter } from "./modules/delegations/routes";
+import { attendanceRouter } from "./modules/attendance/routes";
 import { reportsRouter } from "./modules/reports/routes";
 
 // Every API router and where it's mounted — one list, so the route
@@ -66,6 +67,7 @@ export const API_MOUNTS: ReadonlyArray<{ path: string; router: Router; cacheable
   { path: "/api/managers", router: managersRouter },
   { path: "/api/delegations", router: delegationsRouter },
   { path: "/api/reports", router: reportsRouter },
+  { path: "/api/attendance", router: attendanceRouter },
 ];
 
 export function createApp(): Express {

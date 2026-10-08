@@ -68,6 +68,7 @@ import { WorkflowDelegatesAdminPage } from "../pages/admin/adminTools/WorkflowDe
 import { ReportsHomePage } from "../pages/admin/reports/ReportsHomePage";
 import { CelebrationsReportPage, HeadcountReportPage, JoinersReportPage, LeaveBalanceReportPage, LeaveLiabilityReportPage, LeaversReportPage, LopReportPage } from "../pages/admin/reports/reportPages";
 import { ManagerManagementPage } from "../pages/admin/adminTools/ManagerManagementPage";
+import { AttendanceSettingsPage, ShiftMasterPage, WeekOffPatternsPage } from "../pages/admin/attendance/AttendanceSettingsPage";
 
 // Single source of truth for the HR/Admin portal's App Switcher and each
 // app's top-bar dropdown menus (docs/UI_REFERENCE.md §2.0). "Homepage",
@@ -171,6 +172,7 @@ export const adminApps: AdminApp[] = [
           { key: "attendance-exception", label: "Attendance Exception", path: "workforce/attendance/exceptions", icon: AuditOutlined, phase: "Phase 3" },
           { key: "manual-override", label: "Manual Override", path: "workforce/attendance/manual-override", icon: ToolOutlined, phase: "Phase 3" },
           { key: "shift-override", label: "Shift Override", path: "workforce/attendance/shift-override", icon: SwapOutlined, phase: "Phase 3" },
+          { key: "attendance-settings", label: "Attendance Settings", path: "workforce/attendance/settings", icon: SettingOutlined, element: AttendanceSettingsPage },
         ],
       },
     ],
@@ -273,8 +275,8 @@ export const adminApps: AdminApp[] = [
         items: [
           { key: "organisation-setup", label: "Organisation Setup", path: "admin-tools/organisation", icon: PartitionOutlined, element: OrganisationSetupPage },
           { key: "holiday-calendars", label: "Holiday Calendars", path: "admin-tools/holidays", icon: GiftOutlined, element: HolidayCalendarsAdminPage },
-          { key: "shift-master", label: "Shift Master", path: "admin-tools/shifts", icon: ScheduleOutlined, phase: "Phase 2" },
-          { key: "week-off-patterns", label: "Week-off Patterns", path: "admin-tools/week-offs", icon: CalendarOutlined, phase: "Phase 2" },
+          { key: "shift-master", label: "Shift Master", path: "admin-tools/shifts", icon: ScheduleOutlined, element: ShiftMasterPage },
+          { key: "week-off-patterns", label: "Week-off Patterns", path: "admin-tools/week-offs", icon: CalendarOutlined, element: WeekOffPatternsPage },
           { key: "leave-types-policies", label: "Leave Types & Policies", path: "admin-tools/leave-policies", icon: SolutionOutlined, element: LeaveTypesPoliciesPage },
           { key: "workflow-delegates-admin", label: "Workflow Delegates", path: "admin-tools/delegates", icon: UserSwitchOutlined, element: WorkflowDelegatesAdminPage },
           { key: "users-roles", label: "Roles & Permissions", path: "admin-tools/users-roles", icon: TeamOutlined, element: RolesPermissionsPage },

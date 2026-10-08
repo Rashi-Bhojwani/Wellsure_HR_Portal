@@ -54,6 +54,12 @@ export const PERMISSION_KEYS = [
   // Phase 5 — Core reports (commit F)
   "reports.view", // the Reports app: headcount, joiners, leavers & attrition, birthdays & anniversaries, leave balance, LOP — in data scope
   "reports.liability.view", // leave liability (days × encashment rate — salary-derived from Phase 6, so never a manager's)
+  // Phase 2 — Attendance (docs/plans/PHASE_2.md §2.4)
+  "attendance.view", // others' attendance (calendar, day detail, muster, Who Is In?) in data scope
+  "attendance.config.manage", // shifts, sessions, week-off patterns, policies, assignments, the cycle, manual-entry branches
+  "attendance.manual.enter", // mark attendance (IN/OUT times or status) for manual-capture employees in ASSIGNED BRANCHES only
+  "attendance.process", // re-process a date range from raw punches and manual entries, before the period is locked
+  "attendance.devices.manage", // biometric devices, agents and keys, unmapped punches, clock flags, simulator controls
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
@@ -81,6 +87,7 @@ export const PERMISSION_GROUPS = [
   "Access & security",
   "Managers",
   "Leave",
+  "Attendance",
   "Home & Engage",
   "Documents & letters",
   "Helpdesk",
@@ -129,6 +136,16 @@ export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
   "delegation.manage": { group: "Managers", label: "Workflow delegations", description: "See every manager's approval delegations, set one up for a manager, and revoke one. Moves no permission: a delegate must already hold Approve leave." },
   "reports.view": { group: "Reports", label: "Reports", description: "Headcount, joiners, leavers & attrition, birthdays & anniversaries, leave balance and LOP reports, with Excel export — only for people in their data scope.", managerGrantable: true },
   "reports.liability.view": { group: "Reports", label: "Leave liability report", description: "Leave liability in rupees (encashable balance × the encashment daily rate). Salary-derived once payroll exists, so it sits with salary data, never with managers." },
+  "attendance.view": { group: "Attendance", label: "View attendance", description: "See other employees' attendance — calendar, day detail, muster, Who Is In? — in their data scope." },
+  "attendance.config.manage": { group: "Attendance", label: "Attendance settings", description: "Shifts and their sessions, week-off patterns, policies, assignments, the attendance cycle, and who marks which branch." },
+  "attendance.manual.enter": {
+    group: "Attendance",
+    label: "Mark attendance manually",
+    description: "Enter IN/OUT times (or a status) for employees with no biometric device — only in the branches assigned to them. Changes open days only; Admin finalises.",
+    managerGrantable: true,
+  },
+  "attendance.process": { group: "Attendance", label: "Process attendance", description: "Re-process a date range from raw punches and manual entries, before the period is locked." },
+  "attendance.devices.manage": { group: "Attendance", label: "Biometric devices", description: "Devices, sync agents and their keys, unmapped punches, clock warnings." },
   "helpdesk.manage": { group: "Helpdesk", label: "Helpdesk queue", description: "Work the ticket queue: assign, status, replies, internal notes, categories." },
   "helpdesk.sensitive.view": { group: "Helpdesk", label: "Sensitive tickets", description: "See tickets in categories marked sensitive (e.g. Payroll & Salary, Grievance)." },
 };

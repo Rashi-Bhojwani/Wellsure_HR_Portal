@@ -14,7 +14,9 @@ export async function checkDeviceCode(deviceUserId: string): Promise<DeviceCodeC
 
 export interface CreateEmployeeInput {
   official: {
-    deviceUserId: string;
+    // Phase 2 (D2): a deliberate choice. MANUAL = no biometric machine, no Device User ID.
+    attendanceCapture: "DEVICE" | "MANUAL";
+    deviceUserId?: string;
     employeeCode: string;
     dateOfJoining: string;
     departmentId: string;
@@ -123,6 +125,8 @@ export interface EmployeeProfile {
   lastWorkingDate: string | null;
   employmentType: string;
   status: string;
+  // Phase 2: MANUAL = no device mapping in force — attendance is marked by hand.
+  attendanceCapture: "DEVICE" | "MANUAL";
   accountStatus: string | null;
   totpEnabled: boolean;
   personal: {

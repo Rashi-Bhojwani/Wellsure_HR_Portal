@@ -149,6 +149,9 @@ async function main() {
         city: "Delhi",
         state: "Delhi",
         pincode: "110017",
+        // HR 2026-10-08: SPN has no biometric machine — its people are
+        // manual capture (no device mapping), marked by one manager.
+        hasBiometricDevice: false,
       },
     }),
     prisma.location.create({
@@ -544,11 +547,12 @@ async function main() {
     // A manager starts with nothing (user decision 2026-10-03); Admin grants
     // each one what they need. The demo shows both states: Karan (1002) has
     // leave approval plus the employee grid and reports; Priya (1003) has
-    // leave approval only; 1004, 1005, 1024 and 1029 have nothing — Manager
+    // leave approval and marks SPN's attendance (Phase 2: manual entry,
+    // branch-scoped to SPN — assigned below); 1004, 1005, 1024 and 1029 have nothing — Manager
     // Management shows them as "No permissions".
     const SEEDED_MANAGER_GRANTS: Record<string, string[]> = {
       "1002": ["leave.view", "leave.approve", "employee.view", "reports.view"],
-      "1003": ["leave.view", "leave.approve"],
+      "1003": ["leave.view", "leave.approve", "attendance.manual.enter"],
     };
     for (const key of SEEDED_MANAGER_GRANTS[spec.employeeCode] ?? []) {
       const permission = await prisma.permission.findUniqueOrThrow({ where: { key } });
@@ -605,12 +609,31 @@ async function main() {
       },
     });
 
-    await prisma.deviceUserMapping.create({
+    // Phase 2: a branch with no machine (SPN) means manual capture — no
+    // device mapping (docs/plans/PHASE_2.md §4.3).
+    if (loc[spec.locationCode]!.hasBiometricDevice) {
+      await prisma.deviceUserMapping.create({
+        data: {
+          employeeId: employee.id,
+          deviceUserId: spec.deviceUserId,
+          validFrom: new Date(spec.doj),
+          validTo: spec.lastWorkingDate ? dayAfter(new Date(spec.lastWorkingDate)) : null,
+          createdByUserId,
+        },
+      });
+    }
+
+    // The company default (GEN 10:00–19:00 with lunch, Sunday off, the
+    // default policy — created by the attendance migration), from joining.
+    await prisma.attendanceAssignment.create({
       data: {
         employeeId: employee.id,
-        deviceUserId: spec.deviceUserId,
-        validFrom: new Date(spec.doj),
-        validTo: spec.lastWorkingDate ? dayAfter(new Date(spec.lastWorkingDate)) : null,
+        shiftId: "shift_gen",
+        weekOffPatternId: "wop_sun",
+        policyId: "policy_default",
+        effectiveFrom: new Date(spec.doj),
+        effectiveTo: spec.lastWorkingDate ? dayAfter(new Date(spec.lastWorkingDate)) : null,
+        changeReason: "Company default",
         createdByUserId,
       },
     });
@@ -648,6 +671,12 @@ async function main() {
         createdByUserId,
       },
     });
+  }
+
+  // Phase 2 (D4): Priya (1003) marks SPN's attendance — and only SPN's.
+  {
+    const priyaUser = await prisma.user.findUniqueOrThrow({ where: { employeeId: employeeIdByCode["1003"]! } });
+    await prisma.attendanceManualBranch.create({ data: { userId: priyaUser.id, locationId: loc["PAN-SPN"]!.id, assignedByUserId: superAdminUserId! } });
   }
 
   // ── System Settings (spec §7.8) — explicit rows so the Settings screen

@@ -50,6 +50,10 @@ const HR_EXECUTIVE_PERMS: string[] = [
   "letters.generate",
   // Phase 5 commit F — the Reports app (leave liability is HR_ADMIN+ only).
   "reports.view",
+  // Phase 2 — attendance operations (settings and devices are HR_ADMIN+).
+  "attendance.view",
+  "attendance.manual.enter",
+  "attendance.process",
 ];
 const HR_ADMIN_PERMS: string[] = [
   ...HR_EXECUTIVE_PERMS,
@@ -81,8 +85,11 @@ const HR_ADMIN_PERMS: string[] = [
   "delegation.manage",
   // Phase 5 commit F — leave liability (salary-derived from Phase 6).
   "reports.liability.view",
+  // Phase 2 — attendance settings and biometric devices.
+  "attendance.config.manage",
+  "attendance.devices.manage",
 ];
-const PAYROLL_ADMIN_PERMS = ["employee.view", "employee.bank.view", "employee.statutory.view", "leave.view", "reports.view", "reports.liability.view", "documents.pay.view"];
+const PAYROLL_ADMIN_PERMS = ["employee.view", "employee.bank.view", "employee.statutory.view", "leave.view", "reports.view", "reports.liability.view", "documents.pay.view", "attendance.view"];
 // leave.approve/leave.view here is a real fix over commit A's original
 // seed, caught while designing commit B's approve endpoint: MANAGER is
 // TEAM-scoped (its Role.dataScope), but scope alone doesn't grant a

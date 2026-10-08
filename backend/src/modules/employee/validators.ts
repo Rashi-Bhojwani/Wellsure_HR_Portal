@@ -28,7 +28,12 @@ export const ifscSchema = z.string().trim().toUpperCase().regex(IFSC_REGEX, "Ent
 const dateSchema = z.iso.date(); // YYYY-MM-DD, matches @db.Date columns
 
 const officialSchema = z.object({
-  deviceUserId: z.string().trim().min(1).max(30),
+  // Phase 2 (D2, user 2026-10-08): attendance capture is a deliberate choice.
+  // DEVICE needs the biometric machine's Device User ID; MANUAL means this
+  // person's attendance is marked manually (no machine at their branch) and
+  // they get no device mapping. Defaults to DEVICE for older clients.
+  attendanceCapture: z.enum(["DEVICE", "MANUAL"]).default("DEVICE"),
+  deviceUserId: z.string().trim().max(30).optional().transform((v) => (v ? v : undefined)),
   employeeCode: z.string().trim().min(1).max(30),
   dateOfJoining: dateSchema,
   departmentId: z.string().min(1),
@@ -39,6 +44,13 @@ const officialSchema = z.object({
   reportingManagerId: z.string().min(1).nullable().optional(),
   employmentType: z.enum(["PERMANENT", "CONTRACT", "INTERN", "CONSULTANT", "PROBATION"]),
   officialEmail: z.string().trim().toLowerCase().email().nullable().optional(),
+}).superRefine((v, ctx) => {
+  if (v.attendanceCapture === "DEVICE" && !v.deviceUserId) {
+    ctx.addIssue({ code: "custom", path: ["deviceUserId"], message: "Enter the Device User ID from the biometric machine — or choose \"No device: attendance is marked manually\"." });
+  }
+  if (v.attendanceCapture === "MANUAL" && v.deviceUserId) {
+    ctx.addIssue({ code: "custom", path: ["deviceUserId"], message: "Manual attendance has no Device User ID — clear it, or choose \"Biometric device\"." });
+  }
 });
 
 const personalSchema = z.object({

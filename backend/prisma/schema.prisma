@@ -102,19 +102,20 @@ model User {
   createdAt               DateTime   @default(now()) @map("created_at")
   updatedAt               DateTime   @updatedAt @map("updated_at")
 
-  roles               UserRole[]
-  permissionOverrides UserPermissionOverride[] @relation("UserPermissionOverrides")
-  refreshTokens       RefreshToken[]
-  invitationTokens    InvitationToken[]
-  passwordResets      PasswordResetToken[]
-  totpBackupCodes     TotpBackupCode[]
-  settingsUpdated     SystemSetting[]
-  savedViews          SavedView[]
-  notifications       Notification[]
-  favourites          UserFavourite[]
-  dashboardLayout     DashboardLayout?
-  delegationsGiven    WorkflowDelegate[]       @relation("DelegationDelegator")
-  delegationsReceived WorkflowDelegate[]       @relation("DelegationDelegate")
+  roles                    UserRole[]
+  permissionOverrides      UserPermissionOverride[] @relation("UserPermissionOverrides")
+  refreshTokens            RefreshToken[]
+  invitationTokens         InvitationToken[]
+  passwordResets           PasswordResetToken[]
+  totpBackupCodes          TotpBackupCode[]
+  settingsUpdated          SystemSetting[]
+  savedViews               SavedView[]
+  notifications            Notification[]
+  favourites               UserFavourite[]
+  dashboardLayout          DashboardLayout?
+  delegationsGiven         WorkflowDelegate[]       @relation("DelegationDelegator")
+  delegationsReceived      WorkflowDelegate[]       @relation("DelegationDelegate")
+  attendanceManualBranches AttendanceManualBranch[] @relation("AttendanceManualBranchUser")
 
   @@map("users")
 }
@@ -357,23 +358,29 @@ model City {
 // Setup; no isActive here — deactivation is a branch (Location) concept.
 
 model Location {
-  id           String   @id @default(cuid())
-  code         String   @unique
-  name         String   @unique
-  cityId       String?  @map("city_id")
-  cityMaster   City?    @relation(fields: [cityId], references: [id]) // structured grouping — distinct from `city` below
-  addressLine1 String   @map("address_line1")
-  addressLine2 String?  @map("address_line2")
-  city         String // free-text postal address city (unchanged shape from the original draft)
-  state        String
-  pincode      String
-  isActive     Boolean  @default(true) @map("is_active")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id                 String   @id @default(cuid())
+  code               String   @unique
+  name               String   @unique
+  cityId             String?  @map("city_id")
+  cityMaster         City?    @relation(fields: [cityId], references: [id]) // structured grouping — distinct from `city` below
+  addressLine1       String   @map("address_line1")
+  addressLine2       String?  @map("address_line2")
+  city               String // free-text postal address city (unchanged shape from the original draft)
+  state              String
+  pincode            String
+  isActive           Boolean  @default(true) @map("is_active")
+  // Phase 2 (HR 2026-10-08): whether this branch has a biometric machine.
+  // Guides the UI only (Add Employee's default "attendance capture", the
+  // Devices screen's consistency check). The rules engine never reads it:
+  // manual capture = no device mapping in force on the day.
+  hasBiometricDevice Boolean  @default(true) @map("has_biometric_device")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
 
-  jobHistory       EmployeeJobHistory[]
-  announcements    Announcement[]
-  companyDocuments CompanyDocument[]
+  jobHistory        EmployeeJobHistory[]
+  manualBranchUsers AttendanceManualBranch[]
+  announcements     Announcement[]
+  companyDocuments  CompanyDocument[]
 
   @@index([cityId])
   @@map("locations")
@@ -484,11 +491,12 @@ model Employee {
 
   companyDocumentDownloads CompanyDocumentDownload[]
 
-  helpdeskTicketsRaised      HelpdeskTicket[]   @relation("HelpdeskTicketRaisedBy")
-  helpdeskTicketsAssigned    HelpdeskTicket[]   @relation("HelpdeskTicketAssignee")
+  helpdeskTicketsRaised      HelpdeskTicket[]       @relation("HelpdeskTicketRaisedBy")
+  helpdeskTicketsAssigned    HelpdeskTicket[]       @relation("HelpdeskTicketAssignee")
   helpdeskMessages           HelpdeskMessage[]
-  helpdeskCategoriesAssigned HelpdeskCategory[] @relation("HelpdeskCategoryDefaultAssignee")
+  helpdeskCategoriesAssigned HelpdeskCategory[]     @relation("HelpdeskCategoryDefaultAssignee")
   generatedLetters           GeneratedLetter[]
+  attendanceAssignments      AttendanceAssignment[]
 
   @@index([status])
   @@index([dateOfJoining])
@@ -1434,10 +1442,10 @@ model DocumentCategory {
   name        String
   appliesTo   DocumentCategoryScope @map("applies_to")
   sensitivity DocumentSensitivity   @default(PAY)
-  isActive  Boolean               @default(true) @map("is_active")
-  sortOrder Int                   @default(0) @map("sort_order")
-  createdAt DateTime              @default(now()) @map("created_at")
-  updatedAt DateTime              @updatedAt @map("updated_at")
+  isActive    Boolean               @default(true) @map("is_active")
+  sortOrder   Int                   @default(0) @map("sort_order")
+  createdAt   DateTime              @default(now()) @map("created_at")
+  updatedAt   DateTime              @updatedAt @map("updated_at")
 
   companyDocuments  CompanyDocument[]
   employeeDocuments EmployeeDocument[]
@@ -1716,4 +1724,146 @@ model WorkflowDelegate {
   @@index([delegatorUserId])
   @@index([delegateUserId])
   @@map("workflow_delegates")
+}
+
+// ── Attendance configuration (Phase 2 commit P2-A; docs/plans/PHASE_2.md §2.1) ──
+// Company-wide (HR 2026-09-28): shifts, week-off patterns and rules are the
+// same for every branch. Admin-configurable, audited, deactivated never
+// deleted. Fields still awaiting HR are listed in `placeholderFields` and
+// shown as "placeholder — awaiting HR" until someone sets them.
+
+enum ShiftSessionKind {
+  WORK
+  BREAK
+}
+
+model Shift {
+  id                  String                 @id @default(cuid())
+  code                String                 @unique
+  name                String
+  startTime           String                 @map("start_time") // "HH:MM", local business time
+  endTime             String                 @map("end_time") // "HH:MM"; <= start → crosses midnight
+  graceInMinutes      Int                    @default(0) @map("grace_in_minutes")
+  graceOutMinutes     Int                    @default(0) @map("grace_out_minutes")
+  windowBeforeMinutes Int                    @default(240) @map("window_before_minutes") // punch window opens start − this
+  windowAfterMinutes  Int                    @default(360) @map("window_after_minutes") // and closes end + this
+  placeholderFields   Json                   @default("[]") @map("placeholder_fields") // e.g. ["graceInMinutes"] until HR confirms
+  isActive            Boolean                @default(true) @map("is_active")
+  createdAt           DateTime               @default(now()) @map("created_at")
+  updatedAt           DateTime               @updatedAt @map("updated_at")
+  sessions            ShiftSession[]
+  assignments         AttendanceAssignment[]
+
+  @@map("shifts")
+}
+
+// The shift's parts, in order: work sessions and the scheduled breaks between
+// them (GEN: 10:00–14:00 work, 14:00–14:45 lunch, 14:45–19:00 work). The
+// first work session is the first half, the last the second half; scheduled
+// breaks covered by someone's IN–OUT span are deducted from actual work,
+// since our device sends no direction (spec §4.1).
+model ShiftSession {
+  id        String           @id @default(cuid())
+  shiftId   String           @map("shift_id")
+  shift     Shift            @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  sortOrder Int              @map("sort_order")
+  kind      ShiftSessionKind
+  label     String
+  startTime String           @map("start_time")
+  endTime   String           @map("end_time")
+
+  @@unique([shiftId, sortOrder])
+  @@map("shift_sessions")
+}
+
+// Week-off pattern rules: [{ weekday: 0..6 (0 = Sunday), weeks?: [1..5] }]
+// — no `weeks` = every week; weeks = which occurrences in the month (e.g. 2nd
+// and 4th Saturday). HR 2026-10-08: Sunday off, Monday–Saturday working.
+model WeekOffPattern {
+  id          String                 @id @default(cuid())
+  code        String                 @unique
+  name        String
+  rules       Json
+  isActive    Boolean                @default(true) @map("is_active")
+  createdAt   DateTime               @default(now()) @map("created_at")
+  updatedAt   DateTime               @updatedAt @map("updated_at")
+  assignments AttendanceAssignment[]
+
+  @@map("week_off_patterns")
+}
+
+// The rule set (greytHR's "attendance scheme"). HR 2026-10-08: no late
+// penalty — `penaltyRules` stays empty; lateness is recorded and visible.
+model AttendancePolicy {
+  id                      String                 @id @default(cuid())
+  code                    String                 @unique
+  name                    String
+  fullDayMinMinutes       Int                    @map("full_day_min_minutes")
+  halfDayMinMinutes       Int                    @map("half_day_min_minutes")
+  halfDayMinNotMetLopDays Decimal                @default(1) @map("half_day_min_not_met_lop_days") @db.Decimal(3, 2)
+  nearDuplicateSeconds    Int                    @default(120) @map("near_duplicate_seconds")
+  inferBreakPairing       Boolean                @default(false) @map("infer_break_pairing")
+  penaltyRules            Json                   @default("[]") @map("penalty_rules")
+  futureToleranceMinutes  Int                    @default(10) @map("future_tolerance_minutes")
+  maxPunchAgeDays         Int                    @default(45) @map("max_punch_age_days")
+  placeholderFields       Json                   @default("[]") @map("placeholder_fields")
+  isActive                Boolean                @default(true) @map("is_active")
+  createdAt               DateTime               @default(now()) @map("created_at")
+  updatedAt               DateTime               @updatedAt @map("updated_at")
+  assignments             AttendanceAssignment[]
+
+  @@map("attendance_policies")
+}
+
+// Effective-dated per employee: which shift, week-off pattern and policy
+// apply from when. A history table under the effective-dating model
+// (lib/effectiveDating.ts): half-open rows, one writer, no overlaps
+// (migration constraint), read only through assignmentOn/assignmentSegments.
+model AttendanceAssignment {
+  id               String           @id @default(cuid())
+  employeeId       String           @map("employee_id")
+  employee         Employee         @relation(fields: [employeeId], references: [id])
+  shiftId          String           @map("shift_id")
+  shift            Shift            @relation(fields: [shiftId], references: [id])
+  weekOffPatternId String           @map("week_off_pattern_id")
+  weekOffPattern   WeekOffPattern   @relation(fields: [weekOffPatternId], references: [id])
+  policyId         String           @map("policy_id")
+  policy           AttendancePolicy @relation(fields: [policyId], references: [id])
+  effectiveFrom    DateTime         @map("effective_from") @db.Date
+  effectiveTo      DateTime?        @map("effective_to") @db.Date
+  changeReason     String?          @map("change_reason")
+  createdByUserId  String           @map("created_by_user_id")
+  createdAt        DateTime         @default(now()) @map("created_at")
+
+  @@index([employeeId, effectiveTo])
+  @@map("attendance_assignments")
+}
+
+// The attendance cycle (the period finalised and paid). Effective-dated
+// rules so a change applies from a future cycle boundary and past cycles
+// keep their boundaries. startDay 1 = calendar month (user-confirmed
+// 2026-10-08); 26 = 26th to 25th.
+model AttendanceCycleRule {
+  id              String   @id @default(cuid())
+  effectiveFrom   DateTime @unique @map("effective_from") @db.Date
+  startDay        Int      @map("start_day")
+  createdByUserId String?  @map("created_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("attendance_cycle_rules")
+}
+
+// Which branches someone holding attendance.manual.enter may mark (HR
+// 2026-10-08: one manager marks SPN and Wellsure 2 only). Company-wide
+// holders (ALL data scope) may mark every branch.
+model AttendanceManualBranch {
+  userId           String   @map("user_id")
+  user             User     @relation("AttendanceManualBranchUser", fields: [userId], references: [id], onDelete: Cascade)
+  locationId       String   @map("location_id")
+  location         Location @relation(fields: [locationId], references: [id])
+  assignedByUserId String   @map("assigned_by_user_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@id([userId, locationId])
+  @@map("attendance_manual_branches")
 }

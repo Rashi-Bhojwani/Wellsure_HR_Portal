@@ -195,6 +195,7 @@ function LocationsTab({ canManage }: { canManage: boolean }) {
           { title: "Name", dataIndex: "name" },
           { title: "City", dataIndex: ["cityMaster", "name"], render: (v: string | undefined) => v ?? "—" },
           { title: "State", dataIndex: "state" },
+          { title: "Biometric machine", dataIndex: "hasBiometricDevice", render: (v: boolean) => (v ? "Yes" : <Tag color="purple">No — marked manually</Tag>) },
           { title: "Status", dataIndex: "isActive", render: (v: boolean) => <Tag color={v ? "green" : "default"}>{v ? "Active" : "Inactive"}</Tag> },
           { title: "Employees", dataIndex: ["_count", "jobHistory"], render: (v: number) => v ?? 0 },
           ...(canManage
@@ -225,7 +226,7 @@ function LocationsTab({ canManage }: { canManage: boolean }) {
       />
 
       <Modal title={editing ? "Edit Branch" : "Add Branch"} open={modalOpen} onCancel={() => setModalOpen(false)} footer={null} destroyOnHidden width={560}>
-        <Form form={form} layout="vertical" onFinish={(values) => saveMutation.mutate(values)} requiredMark={false}>
+        <Form form={form} layout="vertical" onFinish={(values) => saveMutation.mutate(values)} requiredMark={false} initialValues={{ hasBiometricDevice: true }}>
           <Form.Item name="code" label="Branch code" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
@@ -252,6 +253,14 @@ function LocationsTab({ canManage }: { canManage: boolean }) {
               <Input />
             </Form.Item>
           </Space.Compact>
+          <Form.Item
+            name="hasBiometricDevice"
+            label="Has a biometric machine"
+            valuePropName="checked"
+            extra="Off for a branch whose attendance is marked by hand. It sets Add Employee's default attendance capture for this branch; what decides each person's capture is whether they have a Device User ID."
+          >
+            <Switch />
+          </Form.Item>
           <Form.Item style={{ marginBottom: 0, textAlign: "right" }}>
             <Button type="primary" htmlType="submit" loading={saveMutation.isPending}>
               Save

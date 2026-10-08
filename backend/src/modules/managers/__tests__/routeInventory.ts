@@ -304,6 +304,31 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "POST /api/delegations": admin,
   "POST /api/delegations/:id/revoke": admin,
 
+  // Attendance Settings (Phase 2 P2-A): company configuration. Reads on
+  // attendance.view / attendance.config.manage, writes on config.manage —
+  // neither manager-grantable.
+  "GET /api/attendance/config/shifts": admin,
+  "POST /api/attendance/config/shifts": admin,
+  "PATCH /api/attendance/config/shifts/:id": admin,
+  "GET /api/attendance/config/week-off-patterns": admin,
+  "POST /api/attendance/config/week-off-patterns": admin,
+  "PATCH /api/attendance/config/week-off-patterns/:id": admin,
+  "GET /api/attendance/config/policies": admin,
+  "POST /api/attendance/config/policies": admin,
+  "PATCH /api/attendance/config/policies/:id": admin,
+  "GET /api/attendance/config/defaults": admin,
+  "PUT /api/attendance/config/defaults": admin,
+  "GET /api/attendance/config/cycle": admin,
+  "POST /api/attendance/config/cycle": admin,
+  "POST /api/attendance/config/cycle/:id/cancel": admin,
+  "GET /api/attendance/config/assignments": admin,
+  "POST /api/attendance/config/assignments/bulk": admin,
+  "GET /api/attendance/config/assignments/:employeeId": admin,
+  "POST /api/attendance/config/assignments/:employeeId": admin,
+  "POST /api/attendance/config/assignments/:employeeId/:rowId/cancel": admin,
+  "GET /api/attendance/config/manual-branches": admin,
+  "PUT /api/attendance/config/manual-branches/:userId": admin,
+
   // Core reports (F). reports.view is manager-grantable: every report is
   // computed over the viewer's data scope; liability also needs a
   // non-grantable key (service).

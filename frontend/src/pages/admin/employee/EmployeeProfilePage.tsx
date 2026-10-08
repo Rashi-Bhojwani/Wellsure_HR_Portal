@@ -52,6 +52,9 @@ function OfficialTab({ profile }: { profile: employeeApi.EmployeeProfile }) {
       <Descriptions.Item label="Reporting Manager">{profile.job?.reportingManager?.fullName ?? "—"}</Descriptions.Item>
       <Descriptions.Item label="Account Status">{profile.accountStatus ?? "—"}</Descriptions.Item>
       <Descriptions.Item label="2FA">{profile.totpEnabled ? "Enabled" : "Not enabled"}</Descriptions.Item>
+      <Descriptions.Item label="Attendance capture">
+        {profile.attendanceCapture === "MANUAL" ? <Tag color="purple">Manual attendance — marked by whoever marks their branch</Tag> : "Biometric device"}
+      </Descriptions.Item>
     </Descriptions>
   );
 }
@@ -387,6 +390,11 @@ export function EmployeeProfilePage() {
           />
           <Title level={3} style={{ margin: 0 }}>
             {profile.fullName} <Text type="secondary" style={{ fontSize: 16 }}>({profile.employeeCode})</Text>
+            {profile.attendanceCapture === "MANUAL" && (
+              <Tag color="purple" style={{ marginInlineStart: 8, verticalAlign: "middle" }} title="No biometric device: their attendance is marked manually by whoever marks their branch.">
+                Manual attendance
+              </Tag>
+            )}
           </Title>
         </Space>
         <Space>

@@ -271,7 +271,8 @@ async function commitEmployees(tx: Prisma.TransactionClient, rows: { data: Recor
     const d = data as Record<string, string>;
     const input = {
       official: {
-        deviceUserId: d.deviceUserId!,
+        attendanceCapture: (d.attendanceCapture || "DEVICE") as "DEVICE" | "MANUAL",
+        deviceUserId: d.deviceUserId || undefined,
         employeeCode: d.employeeCode!,
         dateOfJoining: d.dateOfJoining!,
         departmentId: deptMap.get(d.departmentCode!.toLowerCase())!,

@@ -1,4 +1,4 @@
-import { Prisma, type EmployeeBankAccount, type EmployeeJobHistory, type EmployeeNameHistory } from "@prisma/client";
+import { Prisma, type AttendanceAssignment, type EmployeeBankAccount, type EmployeeJobHistory, type EmployeeNameHistory } from "@prisma/client";
 import { HttpError } from "../middleware/errorHandler";
 import { addCalendarDays, businessToday } from "./businessDate";
 import { prisma } from "./prisma";
@@ -143,10 +143,83 @@ export async function placementSegments(employeeId: string, from: Date, to: Date
   });
 }
 
+const assignmentInclude = { shift: { include: { sessions: { orderBy: { sortOrder: "asc" as const } } } }, weekOffPattern: true, policy: true } as const;
+export type AssignmentWithRules = Prisma.AttendanceAssignmentGetPayload<{ include: typeof assignmentInclude }>;
+
+/** The attendance assignment (shift with sessions, week-off pattern, policy) in force on `day`. */
+export async function assignmentOn(employeeId: string, day: Date): Promise<AssignmentWithRules | null> {
+  return prisma.attendanceAssignment.findFirst({ where: { employeeId, ...inForceOn(day) }, include: assignmentInclude });
+}
+
+/** Every assignment covering part of [from, to] (inclusive days), clipped, oldest first. */
+export async function assignmentSegments(employeeId: string, from: Date, to: Date): Promise<Array<{ row: AssignmentWithRules; from: Date; to: Date }>> {
+  const rows = await prisma.attendanceAssignment.findMany({
+    where: { employeeId, effectiveFrom: { lte: to }, OR: [{ effectiveTo: null }, { effectiveTo: { gt: from } }] },
+    orderBy: { effectiveFrom: "asc" },
+    include: assignmentInclude,
+  });
+  return rows.map((row) => {
+    const lastDay = row.effectiveTo ? addCalendarDays(row.effectiveTo, -1) : to;
+    return { row, from: row.effectiveFrom > from ? row.effectiveFrom : from, to: lastDay < to ? lastDay : to };
+  });
+}
+
+/** Everyone's assignment in force on `day` (bulk screens), keyed by employee id. */
+export async function assignmentsOn(employeeIds: string[], day: Date): Promise<Map<string, AssignmentWithRules>> {
+  const rows = await prisma.attendanceAssignment.findMany({ where: { employeeId: { in: employeeIds }, ...inForceOn(day) }, include: assignmentInclude });
+  return new Map(rows.map((r) => [r.employeeId, r]));
+}
+
+/** For each employee, their next scheduled assignment change after `day` (if any). */
+export async function nextAssignmentChanges(employeeIds: string[], day: Date): Promise<Map<string, AssignmentWithRules>> {
+  const rows = await prisma.attendanceAssignment.findMany({ where: { employeeId: { in: employeeIds }, effectiveFrom: { gt: day } }, orderBy: { effectiveFrom: "asc" }, include: assignmentInclude });
+  const out = new Map<string, AssignmentWithRules>();
+  for (const r of rows) if (!out.has(r.employeeId)) out.set(r.employeeId, r);
+  return out;
+}
+
+/** One employee's whole assignment history, newest first (the Assignments tab). */
+export async function assignmentHistory(employeeId: string): Promise<AssignmentWithRules[]> {
+  return prisma.attendanceAssignment.findMany({ where: { employeeId }, orderBy: { effectiveFrom: "desc" }, include: assignmentInclude });
+}
+
 /** The name in force on `day` (a payslip or letter keeps the name of its own date). */
 export async function nameOn(employeeId: string, day: Date): Promise<string | null> {
   const row = await prisma.employeeNameHistory.findFirst({ where: { employeeId, ...inForceOn(day) }, select: { fullName: true } });
   return row?.fullName ?? null;
+}
+
+/** Everyone's name in force on `day` (bulk screens), keyed by employee id. */
+export async function namesOn(employeeIds: string[], day: Date): Promise<Map<string, string>> {
+  const rows = await prisma.employeeNameHistory.findMany({ where: { employeeId: { in: employeeIds }, ...inForceOn(day) }, select: { employeeId: true, fullName: true } });
+  return new Map(rows.map((r) => [r.employeeId, r.fullName]));
+}
+
+/**
+ * Of `employeeIds`, those with a device mapping in force on `day` — the
+ * rest are manual capture that day (Phase 2, docs/plans/PHASE_2.md §4.3:
+ * manual capture = no mapping in force, never a flag or a branch setting).
+ */
+export async function deviceCapturedOn(employeeIds: string[], day: Date): Promise<Set<string>> {
+  const rows = await prisma.deviceUserMapping.findMany({ where: { employeeId: { in: employeeIds }, ...mappingInForceOn(day) }, select: { employeeId: true } });
+  return new Set(rows.map((r) => r.employeeId));
+}
+
+/**
+ * How many employees each shift / week-off pattern / policy applies to,
+ * today or in a scheduled change — what deactivating one would strand.
+ */
+export async function assignmentUsage(today: Date = businessToday()): Promise<{ shift: Map<string, number>; weekOffPattern: Map<string, number>; policy: Map<string, number> }> {
+  const rows = await prisma.attendanceAssignment.findMany({
+    where: { OR: [{ effectiveTo: { gt: today } }, { effectiveTo: null }] },
+    select: { employeeId: true, shiftId: true, weekOffPatternId: true, policyId: true },
+  });
+  const count = (key: "shiftId" | "weekOffPatternId" | "policyId") => {
+    const people = new Map<string, Set<string>>();
+    for (const r of rows) people.set(r[key], (people.get(r[key]) ?? new Set()).add(r.employeeId));
+    return new Map([...people].map(([id, set]) => [id, set.size]));
+  };
+  return { shift: count("shiftId"), weekOffPattern: count("weekOffPatternId"), policy: count("policyId") };
 }
 
 /** The bank account in force on `day` — for a payment, the payment date. */
@@ -339,6 +412,39 @@ export function rowStatus(from: Date, to: Date | null, today: Date = businessTod
 
 type AnyHistoryRow = EmployeeJobHistory | EmployeeNameHistory | EmployeeBankAccount;
 
+type AssignmentFields = Pick<AttendanceAssignment, "shiftId" | "weekOffPatternId" | "policyId">;
+
+/**
+ * Phase 2: change an employee's attendance assignment (shift, week-off
+ * pattern, policy) from `day` — the same rules as every history writer.
+ * `fields` apply on top of the latest row (or must be complete for the first).
+ */
+export async function writeAssignmentChange(
+  tx: Prisma.TransactionClient,
+  employeeId: string,
+  day: Date,
+  fields: Partial<AssignmentFields>,
+  meta: { createdByUserId: string; changeReason: string | null },
+): Promise<TimelineWrite<AttendanceAssignment>> {
+  await lockEmployee(tx, employeeId);
+  await assertNotInLockedPayroll(day);
+  const rows = await tx.attendanceAssignment.findMany({ where: { employeeId }, orderBy: { effectiveFrom: "asc" } });
+  const plan = planTimelineChange(rows.map(toRow), day, businessToday(), await maxScheduleAheadDays());
+  const latest = rows.at(-1) ?? null;
+  const shiftId = fields.shiftId ?? latest?.shiftId;
+  const weekOffPatternId = fields.weekOffPatternId ?? latest?.weekOffPatternId;
+  const policyId = fields.policyId ?? latest?.policyId;
+  if (!shiftId || !weekOffPatternId || !policyId) throw new HttpError(400, "Choose a shift, week-off pattern and policy.", "VALIDATION_ERROR");
+  const data = { shiftId, weekOffPatternId, policyId, changeReason: meta.changeReason };
+  if (plan.kind === "amend") {
+    const after = await tx.attendanceAssignment.update({ where: { id: plan.id }, data: { ...data, createdByUserId: meta.createdByUserId } });
+    return { before: latest, after, plan: plan.kind };
+  }
+  if (plan.kind === "append") await tx.attendanceAssignment.update({ where: { id: plan.closeId }, data: { effectiveTo: day } });
+  const after = await tx.attendanceAssignment.create({ data: { employeeId, ...data, effectiveFrom: day, createdByUserId: meta.createdByUserId } });
+  return { before: latest, after, plan: plan.kind };
+}
+
 /**
  * Cancel a scheduled (not yet in force) change: the row is removed and the
  * previous one reopened. Returns the removed row for the caller's audit
@@ -373,6 +479,21 @@ export async function cancelScheduledChange(tx: Prisma.TransactionClient, kind: 
 }
 
 /** Job-only shorthand (EF1 tests). */
+/** Cancel a scheduled attendance-assignment change (the same rules as cancelScheduledChange). */
+export async function cancelScheduledAssignment(tx: Prisma.TransactionClient, employeeId: string, rowId: string): Promise<{ removed: AttendanceAssignment; reopened: AttendanceAssignment }> {
+  await lockEmployee(tx, employeeId);
+  const rows = await tx.attendanceAssignment.findMany({ where: { employeeId }, orderBy: { effectiveFrom: "asc" } });
+  const target = rows.find((r) => r.id === rowId);
+  if (!target) throw new HttpError(404, "That change wasn't found.", "NOT_FOUND");
+  if (target !== rows.at(-1)) throw new HttpError(409, "Only the latest scheduled change can be cancelled — cancel the later one first.", "HISTORY_NOT_LATEST");
+  if (target.effectiveFrom <= businessToday()) throw new HttpError(409, "This change is already in force, so it can't be cancelled — make a new change instead.", "HISTORY_IN_FORCE");
+  const previous = rows.at(-2);
+  if (!previous) throw new HttpError(409, "This is the only record, so it can't be cancelled.", "HISTORY_ONLY_ROW");
+  await tx.attendanceAssignment.delete({ where: { id: target.id } });
+  const reopened = await tx.attendanceAssignment.update({ where: { id: previous.id }, data: { effectiveTo: target.effectiveTo } });
+  return { removed: target, reopened };
+}
+
 export async function cancelScheduledJobChange(tx: Prisma.TransactionClient, employeeId: string, rowId: string): Promise<{ removed: EmployeeJobHistory; reopened: EmployeeJobHistory }> {
   return (await cancelScheduledChange(tx, "job", employeeId, rowId)) as { removed: EmployeeJobHistory; reopened: EmployeeJobHistory };
 }
@@ -396,6 +517,9 @@ export async function closeHistoryOnLeaving(tx: Prisma.TransactionClient, employ
   if (removedScheduled.length) await tx.employeeJobHistory.deleteMany({ where: { id: { in: removedScheduled.map((r) => r.id) } } });
   await tx.employeeJobHistory.updateMany({ where: { employeeId, effectiveFrom: { lt: end }, OR: [{ effectiveTo: null }, { effectiveTo: { gt: end } }] }, data: { effectiveTo: end } });
   await tx.deviceUserMapping.updateMany({ where: { employeeId, validFrom: { lt: end }, OR: [{ validTo: null }, { validTo: { gt: end } }] }, data: { validTo: end } });
+  // Phase 2: their attendance assignment ends with them; scheduled ones after the last day are dropped.
+  await tx.attendanceAssignment.deleteMany({ where: { employeeId, effectiveFrom: { gte: end } } });
+  await tx.attendanceAssignment.updateMany({ where: { employeeId, effectiveFrom: { lt: end }, OR: [{ effectiveTo: null }, { effectiveTo: { gt: end } }] }, data: { effectiveTo: end } });
   return { removedScheduled };
 }
 

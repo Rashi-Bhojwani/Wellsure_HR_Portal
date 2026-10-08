@@ -7,6 +7,7 @@ import {
   DatePicker,
   Form,
   Input,
+  Radio,
   Select,
   Space,
   Steps,
@@ -57,7 +58,25 @@ export function AddEmployeePage() {
     }
   }
 
-  const OFFICIAL_FIELDS = ["deviceUserId", "employeeCode", "dateOfJoining", "departmentId", "designationId", "locationId", "employmentType"];
+  // Phase 2 (D2, user 2026-10-08): attendance capture is a deliberate choice,
+  // defaulted from the branch (has it a biometric machine?) until HR picks.
+  const locationId = Form.useWatch(["official", "locationId"], form) as string | undefined;
+  const capture = (Form.useWatch(["official", "attendanceCapture"], form) as "DEVICE" | "MANUAL" | undefined) ?? "DEVICE";
+  const branch = locations.find((l) => l.id === locationId);
+  const [captureTouched, setCaptureTouched] = useState(false);
+  function onLocationChange(id: string) {
+    const l = locations.find((x) => x.id === id);
+    if (l && !captureTouched) setCapture(l.hasBiometricDevice ? "DEVICE" : "MANUAL");
+  }
+  function setCapture(c: "DEVICE" | "MANUAL") {
+    form.setFieldValue(["official", "attendanceCapture"], c);
+    if (c === "MANUAL") {
+      form.setFieldValue(["official", "deviceUserId"], undefined);
+      setDeviceCheck(null);
+    }
+  }
+
+  const OFFICIAL_FIELDS = ["locationId", "attendanceCapture", "deviceUserId", "employeeCode", "dateOfJoining", "departmentId", "designationId", "locationId", "employmentType"];
   const PERSONAL_FIELDS = [
     "fullName",
     "dateOfBirth",
@@ -123,22 +142,65 @@ export function AddEmployeePage() {
       </Title>
       <Steps current={current} items={STEPS.map((s) => ({ title: s }))} />
 
-      <Form form={form} layout="vertical" requiredMark={false} initialValues={{ official: { employmentType: "PERMANENT" } }}>
+      <Form form={form} layout="vertical" requiredMark={false} initialValues={{ official: { employmentType: "PERMANENT", attendanceCapture: "DEVICE" } }}>
         <div style={{ display: current === 0 ? "block" : "none" }}>
-          <Form.Item name={["official", "deviceUserId"]} label="Device User ID" rules={[{ required: true, message: "Enter the ID from the biometric machine" }]} extra="The raw ID assigned on the biometric machine.">
-            <Input onChange={(e) => void onDeviceUserIdChange(e.target.value)} placeholder="e.g. 1042" />
+          <Form.Item name={["official", "locationId"]} label="Branch" rules={[{ required: true }]}>
+            <Select
+              options={locations.map((l) => ({ value: l.id, label: l.hasBiometricDevice ? l.name : `${l.name} (no biometric machine)` }))}
+              showSearch
+              optionFilterProp="label"
+              onChange={onLocationChange}
+            />
           </Form.Item>
+          <Form.Item name={["official", "attendanceCapture"]} label="Attendance capture" rules={[{ required: true }]}>
+            <Radio.Group
+              onChange={(e) => {
+                setCaptureTouched(true);
+                setCapture(e.target.value as "DEVICE" | "MANUAL");
+              }}
+            >
+              <Space orientation="vertical">
+                <Radio value="DEVICE">Biometric device — enter their Device User ID</Radio>
+                <Radio value="MANUAL">No device: attendance is marked manually</Radio>
+              </Space>
+            </Radio.Group>
+          </Form.Item>
+          {capture === "MANUAL" && (
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+              title="This person's attendance will be marked manually by whoever marks their branch."
+              description="They won't punch a biometric machine, so no Device User ID is needed. Their days show as Not marked until someone enters them — never as absent. If they move to a branch with a machine later, add a Device User ID then."
+            />
+          )}
+          {capture === "MANUAL" && branch?.hasBiometricDevice && (
+            <Alert type="warning" showIcon style={{ marginBottom: 16 }} title={`${branch.name} has a biometric machine. Choose manual only if this person really won't punch it.`} />
+          )}
+          {capture === "DEVICE" && branch && !branch.hasBiometricDevice && (
+            <Alert type="warning" showIcon style={{ marginBottom: 16 }} title={`${branch.name} has no biometric machine. Their punches will only arrive if they use a machine at another branch.`} />
+          )}
+          {capture === "DEVICE" && (
+            <Form.Item name={["official", "deviceUserId"]} label="Device User ID" rules={[{ required: true, message: "Enter the ID from the biometric machine — or choose \"No device: attendance is marked manually\"" }]} extra="The raw ID assigned on the biometric machine.">
+              <Input onChange={(e) => void onDeviceUserIdChange(e.target.value)} placeholder="e.g. 1042" />
+            </Form.Item>
+          )}
           {checkingDevice && <Text type="secondary">Checking…</Text>}
           {deviceCheck?.collision && (
             <Alert
               type="warning"
               showIcon
               style={{ marginBottom: 16 }}
-              message={`Employee Code ${deviceCheck.collision.employeeCode} was already used by ${deviceCheck.collision.fullName}${deviceCheck.collision.separatedOn ? `, separated on ${deviceCheck.collision.separatedOn}` : ""}. Employee Codes are never reused.`}
+              title={`Employee Code ${deviceCheck.collision.employeeCode} was already used by ${deviceCheck.collision.fullName}${deviceCheck.collision.separatedOn ? `, separated on ${deviceCheck.collision.separatedOn}` : ""}. Employee Codes are never reused.`}
               description={`Suggested code: ${deviceCheck.suggestedEmployeeCode} (pre-filled below — you can still type a different one).`}
             />
           )}
-          <Form.Item name={["official", "employeeCode"]} label="Employee Code" rules={[{ required: true }]} extra="Permanent login username — pre-filled from Device User ID, editable.">
+          <Form.Item
+            name={["official", "employeeCode"]}
+            label="Employee Code"
+            rules={[{ required: true }]}
+            extra={capture === "DEVICE" ? "Permanent login username — pre-filled from Device User ID, editable." : "Permanent login username."}
+          >
             <Input />
           </Form.Item>
           <Form.Item name={["official", "dateOfJoining"]} label="Date of Joining" rules={[{ required: true }]}>
@@ -149,9 +211,6 @@ export function AddEmployeePage() {
           </Form.Item>
           <Form.Item name={["official", "designationId"]} label="Designation" rules={[{ required: true }]}>
             <Select options={designations.map((d) => ({ value: d.id, label: d.name }))} showSearch optionFilterProp="label" />
-          </Form.Item>
-          <Form.Item name={["official", "locationId"]} label="Location" rules={[{ required: true }]}>
-            <Select options={locations.map((l) => ({ value: l.id, label: l.name }))} showSearch optionFilterProp="label" />
           </Form.Item>
           <Form.Item name={["official", "gradeId"]} label="Grade">
             <Select allowClear options={grades.map((g) => ({ value: g.id, label: g.name }))} showSearch optionFilterProp="label" />
@@ -258,10 +317,19 @@ export function AddEmployeePage() {
 
         {current === 4 && (
           <Space orientation="vertical" style={{ width: "100%" }}>
-            {submitError && <Alert type="error" showIcon message={submitError} />}
+            {submitError && <Alert type="error" showIcon title={submitError} />}
             <Typography.Paragraph>
               <strong>{String(values.personal?.fullName ?? "")}</strong> ({String(values.official?.employeeCode ?? "")}) — review the
               details in previous steps, then save and send the set-password invitation.
+            </Typography.Paragraph>
+            <Typography.Paragraph>
+              Attendance:{" "}
+              {values.official?.attendanceCapture === "MANUAL" ? (
+                <strong>marked manually (no biometric device)</strong>
+              ) : (
+                <strong>biometric device, Device User ID {String(values.official?.deviceUserId ?? "")}</strong>
+              )}
+              . They get the company's default shift and week-off from their first day; change it in Attendance Settings → Assignments.
             </Typography.Paragraph>
           </Space>
         )}

@@ -44,7 +44,7 @@ describe("no 'current = no end date' reads outside lib/effectiveDating.ts", () =
   // bankAccountOn, employeeForDeviceUserOn, employedOn) — never by querying a
   // history table themselves.
   it("payroll and attendance never query history tables directly", () => {
-    const HISTORY = /\.(employeeJobHistory|employeeNameHistory|employeeBankAccount|deviceUserMapping)\.|employee_job_history|employee_name_history|employee_bank_accounts|device_user_mappings/;
+    const HISTORY = /\.(employeeJobHistory|employeeNameHistory|employeeBankAccount|deviceUserMapping|attendanceAssignment)\.|employee_job_history|employee_name_history|employee_bank_accounts|device_user_mappings|attendance_assignments/;
     const offenders: string[] = [];
     for (const area of ["modules/payroll", "modules/attendance", "modules/biometric"]) {
       for (const file of walk(path.join(SRC, area))) {

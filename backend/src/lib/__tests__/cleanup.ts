@@ -95,6 +95,10 @@ export const STANDALONE_ROOT_MODELS: Record<string, string> = {
   AuditLog: "append-only (E1.1); no FKs — rows about a fixture go via deleteEmployeesAndDependents, through purgeAppendOnly",
   SecurityEvent: "append-only (E1.1); no FKs — tests remove their own rows by id through purgeAppendOnly",
   DevDatabaseMarker: "one row written by the dev seed (E1.1); never created or removed by tests",
+  Shift: "attendance config master (Phase 2); deleteWithDependents(\"Shift\", ids) takes its sessions and assignments with it",
+  WeekOffPattern: "attendance config master (Phase 2); deleteWithDependents(\"WeekOffPattern\", ids)",
+  AttendancePolicy: "attendance config master (Phase 2); deleteWithDependents(\"AttendancePolicy\", ids)",
+  AttendanceCycleRule: "attendance cycle rules (Phase 2); deleteWithDependents(\"AttendanceCycleRule\", ids)",
 };
 
 // Columns holding a StorageService key. When the engine deletes a row it

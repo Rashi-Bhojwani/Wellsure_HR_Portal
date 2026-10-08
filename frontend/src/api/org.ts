@@ -18,6 +18,8 @@ export interface Location {
   state: string;
   pincode: string;
   isActive: boolean;
+  // Phase 2: whether the branch has a biometric machine (Add Employee's default capture).
+  hasBiometricDevice: boolean;
   _count?: { jobHistory: number };
 }
 export interface SimpleMaster {
@@ -56,6 +58,7 @@ export type LocationInput = {
   city: string;
   state: string;
   pincode: string;
+  hasBiometricDevice?: boolean;
 };
 export async function createLocation(input: LocationInput): Promise<Location> {
   const { data } = await apiClient.post<Location>("/api/org/locations", input);

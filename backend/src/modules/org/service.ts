@@ -79,6 +79,7 @@ interface LocationInput {
   city: string;
   state: string;
   pincode: string;
+  hasBiometricDevice?: boolean;
 }
 
 export async function createLocation(data: LocationInput, meta: ActorMeta) {

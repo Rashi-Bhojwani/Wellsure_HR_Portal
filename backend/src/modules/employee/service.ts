@@ -1,8 +1,9 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { writeAuditLog } from "../../lib/audit";
+import { resolveAttendanceDefaults } from "../../lib/attendanceSettings";
 import { businessToday } from "../../lib/businessDate";
-import { firstHistoryDay, inForceOn, rowStatus, writeBankChange, writeJobChange, writeNameChange } from "../../lib/effectiveDating";
+import { deviceCapturedOn, firstHistoryDay, inForceOn, rowStatus, writeBankChange, writeJobChange, writeNameChange } from "../../lib/effectiveDating";
 import { HttpError } from "../../middleware/errorHandler";
 import { encryptField, decryptField } from "../../lib/encryption";
 import { blindIndex, last4, normalizeAadhaar, normalizeAccountNumber, normalizePan } from "../../lib/fieldHash";
@@ -194,15 +195,36 @@ export async function createEmployeeInTx(
     },
   });
 
-  await tx.deviceUserMapping.create({
-    data: {
-      employeeId: employeeRow.id,
-      deviceUserId: official.deviceUserId,
-      validFrom: new Date(official.dateOfJoining),
-      validTo: opts.deviceMappingValidTo ?? null,
-      createdByUserId: meta.actorUserId,
-    },
-  });
+  // Phase 2 (D2): a device mapping only for "Biometric device" capture. No
+  // mapping = manual capture: their attendance is marked by whoever marks
+  // their branch (docs/plans/PHASE_2.md §4.3).
+  if (official.attendanceCapture === "DEVICE" && official.deviceUserId) {
+    await tx.deviceUserMapping.create({
+      data: {
+        employeeId: employeeRow.id,
+        deviceUserId: official.deviceUserId,
+        validFrom: new Date(official.dateOfJoining),
+        validTo: opts.deviceMappingValidTo ?? null,
+        createdByUserId: meta.actorUserId,
+      },
+    });
+  }
+
+  // The company default shift, week-off pattern and policy, from the same
+  // first day as their placement — ended like it for an imported leaver.
+  const end = opts.deviceMappingValidTo ?? null;
+  if (!end || end > firstRowsFrom) {
+    await tx.attendanceAssignment.create({
+      data: {
+        employeeId: employeeRow.id,
+        ...(await resolveAttendanceDefaults(tx)),
+        effectiveFrom: firstRowsFrom,
+        effectiveTo: end,
+        changeReason: "Company default",
+        createdByUserId: meta.actorUserId,
+      },
+    });
+  }
 
   if (statutory && (statutory.pan ?? statutory.aadhaar ?? statutory.uan ?? statutory.esiNumber)) {
     await tx.employeeStatutory.create({
@@ -309,6 +331,11 @@ async function loadProfileCore(employeeId: string) {
   if (!employee) throw new HttpError(404, "Employee not found.", "NOT_FOUND");
 
   const job = employee.jobHistory[0];
+  // Phase 2: manual capture = no device mapping in force (PHASE_2.md §4.3) —
+  // judged on today, or on their first/last day for a joiner/leaver.
+  const today = businessToday();
+  const captureDay = employee.dateOfJoining > today ? employee.dateOfJoining : employee.lastWorkingDate && employee.lastWorkingDate < today ? employee.lastWorkingDate : today;
+  const attendanceCapture = (await deviceCapturedOn([employee.id], captureDay)).has(employee.id) ? "DEVICE" : "MANUAL";
   return {
     id: employee.id,
     employeeCode: employee.employeeCode,
@@ -318,6 +345,7 @@ async function loadProfileCore(employeeId: string) {
     lastWorkingDate: employee.lastWorkingDate?.toISOString().slice(0, 10) ?? null,
     employmentType: employee.employmentType,
     status: employee.status,
+    attendanceCapture,
     accountStatus: employee.user?.status ?? null,
     totpEnabled: employee.user?.totpEnabled ?? false,
     personal: employee.personal

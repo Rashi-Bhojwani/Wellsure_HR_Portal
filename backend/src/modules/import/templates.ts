@@ -9,7 +9,8 @@ const NOTES: Record<ImportDatasetKey, string[]> = {
     "GRADE rows may optionally set rank (a number used for display order).",
   ],
   employees: [
-    "deviceUserId is the raw biometric machine ID. Leave employeeCode blank to reuse it as the Employee Code, unless it collides with one already on record.",
+    "attendanceCapture: DEVICE (the default if blank) or MANUAL. MANUAL is a deliberate choice for someone at a branch with no biometric machine: their attendance is marked manually by whoever marks that branch, and deviceUserId must be blank.",
+    "deviceUserId is the raw biometric machine ID (required for DEVICE). Leave employeeCode blank to reuse it as the Employee Code, unless it collides with one already on record. MANUAL rows must fill employeeCode.",
     "departmentCode / designationCode / locationCode / gradeCode / costCentreCode must match an existing code in Organisation Setup.",
     "reportingManagerCode, if set, must match an existing employeeCode.",
     "personalEmail must be a gmail.com address (same rule as the Add Employee wizard).",

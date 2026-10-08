@@ -12,7 +12,7 @@ committed).
 | 0 | Foundation | ✅ Done |
 | 1 | Auth, RBAC, org, employees | Done — data layer, authentication, org masters, employee management, import center, exports, audit log viewer and system settings all built and tested. Users & Roles admin screen deliberately deferred (built in Phase 5 commit E1 as Roles & Permissions). **Correction (2026-09-30): role assignment does not exist anywhere in the product** — Add Employee always assigns plain `EMPLOYEE` and nothing else assigns roles; an earlier version of this row claimed otherwise. Both are Phase 5 commit E1 ([`docs/plans/PHASE_5.md`](plans/PHASE_5.md)). |
 | 1.5 | AWS staging environment | Not started |
-| 2 | Biometric ingestion + attendance engine + real-time | Not started |
+| 2 | Biometric ingestion + attendance engine + real-time | In progress — plan approved ([`docs/plans/PHASE_2.md`](plans/PHASE_2.md)); P2-A (attendance configuration, capture choice) done; P2-B → P2-I to follow |
 | 3 | Attendance administration | Not started |
 | 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
 | 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | ✅ Done (2026-10-03) — commits A, B, C, D, D2, E1, E1.1, E2, E3, F and G (mobile bottom bar + PWA), plus interim commits. Full review — every screen and URL, every permission, what's stubbed, open questions, risks for Phase 6 — in [`docs/plans/PHASE_5_REVIEW.md`](plans/PHASE_5_REVIEW.md). Plan and as-built notes per commit in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
@@ -3925,6 +3925,65 @@ routes into one ingestion service; the rules engine with sources and
 the commit split; what stays unproven until the device is connected;
 acceptance gates; and decisions D1–D7.
 
+### Phase 2, commit P2-A — attendance configuration and the capture choice (2026-10-08)
+
+Plan: [`docs/plans/PHASE_2.md`](plans/PHASE_2.md) §2.1, §2.4, §4.3, §4.6.
+
+- **Schema and migration** `20261008100000_attendance_config`:
+  - `shifts` + `shift_sessions` (ordered WORK/BREAK parts), `week_off_patterns`
+    (weekday, optional weeks of the month), `attendance_policies` (thresholds,
+    half-day-not-met LOP, near-duplicate window, punch plausibility; penalty
+    rules stored but empty — HR: no penalty);
+  - `attendance_assignments`: effective-dated employee → shift, week-off,
+    policy, under the EF rules (CHECK, EXCLUDE overlap, one open row);
+  - `attendance_cycle_rules` (start day 1–28, effective-dated);
+  - `attendance_manual_branches` (who may mark which branch);
+  - `locations.has_biometric_device`.
+  - **What HR confirmed is created by the migration on every database**, not
+    only the dev seed: GEN 10:00–19:00 in two sessions with lunch
+    14:00–14:45, Sunday off, the default policy, the calendar-month cycle,
+    the company default setting, and an assignment for everyone already on
+    record. Grace and the full/half-day minimums are **placeholders**
+    (`placeholder_fields`), flagged on screen until HR's values are entered
+    or confirmed.
+- **Readers/writers** in `lib/effectiveDating.ts`: `writeAssignmentChange`,
+  `cancelScheduledAssignment`, `assignmentOn`, `assignmentSegments`,
+  `assignmentsOn`, `nextAssignmentChanges`, `assignmentHistory`,
+  `assignmentUsage`, `namesOn`, `deviceCapturedOn`. Leaving closes the
+  assignment the day after the last working day. The guard now also forbids
+  `attendanceAssignment` queries in the attendance/biometric/payroll modules.
+- **`lib/attendanceCycle.ts`**: `cycleFor(day)`, `recentCycles`; a start-day
+  change applies only after the current cycle ends, so past cycles never move.
+- **Permissions:** `attendance.view`, `attendance.config.manage`,
+  `attendance.manual.enter`, `attendance.process`, `attendance.devices.manage`.
+  HR Admin all; HR Executive view + manual entry + process; Payroll Admin view.
+  `attendance.manual.enter` is the one **manager-grantable** key (the
+  SPN/Wellsure 2 marker is a manager), limited to the branches assigned in
+  Attendance Settings → Manual-entry branches; company-wide holders mark every
+  branch. Enforcement on entries arrives with P2-D.
+- **Add Employee (D2):** Branch first, then "Attendance capture" — *Biometric
+  device* (Device User ID required) or *No device: attendance is marked
+  manually* (no ID, no device mapping), defaulted from the branch, with the
+  explanation shown and a warning on a mismatch. Every new hire gets the
+  company default assignment from their first history day. The Excel import
+  has the same `attendanceCapture` column. Profiles show a "Manual
+  attendance" badge (manual = no mapping in force, never a flag).
+- **Attendance Settings** (Workforce → Attendance → Attendance Settings; Admin
+  Tools → Shift Master / Week-off Patterns open the same page): Shifts with a
+  session editor validated live, Week-off patterns with a six-week preview,
+  Policies, Assignments (company default, filters, per-person history,
+  scheduled changes and cancel, all-or-nothing bulk change), Attendance cycle,
+  Manual-entry branches. Organisation Setup shows and edits "Has a biometric
+  machine". All changes audited; nothing in use can be deactivated.
+- **Seed:** SPN-Panchsheel has no machine; its four people are manual capture
+  (no mappings); Priya `1003` holds `attendance.manual.enter` for SPN only.
+- **Deferred within Phase 2:** the roster generator and the penalty-rule
+  builder (HR: no penalties, only GEN so far) — noted in PHASE_2.md.
+- Tests: cycle and session/week-off unit tests; config API (permissions,
+  placeholders, sessions, deactivation guards, cycle boundaries, scheduled and
+  bulk assignments, leaving, manual branches); Add Employee and import capture
+  cases; cleanup and route-inventory guards updated.
+
 ## Open questions
 
 - [x] **Approval Workflows — dropped (user decision 2026-10-03).** No
@@ -3952,6 +4011,10 @@ Carried from spec §14 — configurable, not guessed, until answered:
 - [x] **Branches without a biometric machine: SPN and Wellsure 2**, both
       marked by one manager entering IN/OUT times (HR, 2026-10-08;
       Phase 2 plan D4).
+- [ ] **"Wellsure 2" isn't in the seeded branch list** (the seed's branches
+      are placeholders). Which branch is it, or should it be added? Its
+      "Has a biometric machine" switch must be turned off in Organisation
+      Setup, as SPN's is in the seed.
 - [ ] **Attendance rule values still to come from HR** (Phase 2 plan D3):
       grace minutes before someone counts as late, half-day and full-day
       minimum hours, and whether any shift other than GEN exists.

@@ -50,7 +50,8 @@ export const DATASET_COLUMNS: Record<ImportDatasetKey, string[]> = {
     "rank", // GRADE only, optional
   ],
   employees: [
-    "deviceUserId",
+    "attendanceCapture", // optional — DEVICE (default) or MANUAL (no biometric machine: attendance marked manually)
+    "deviceUserId", // required for DEVICE, blank for MANUAL
     "employeeCode", // optional — blank pre-fills from deviceUserId, same as the wizard
     "fullName",
     "dateOfBirth", // YYYY-MM-DD

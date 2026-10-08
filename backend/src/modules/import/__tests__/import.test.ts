@@ -209,6 +209,59 @@ describe("Import Center (/api/import)", () => {
       expect(invitations).toBe(0);
     });
 
+    it("attendanceCapture MANUAL (Phase 2, D2): no device ID, no mapping, the default assignment; the mismatches are row errors", async () => {
+      const suffix = randomUUID().slice(0, 8);
+      const [deptCode, desigCode, locCode] = await Promise.all([
+        prisma.department.findUniqueOrThrow({ where: { id: org.departmentId } }).then((x) => x.code),
+        prisma.designation.findUniqueOrThrow({ where: { id: org.designationId } }).then((x) => x.code),
+        prisma.location.findUniqueOrThrow({ where: { id: org.locationId } }).then((x) => x.code),
+      ]);
+      const base = (n: string) => ({
+        attendanceCapture: "MANUAL",
+        deviceUserId: "",
+        employeeCode: `T-MAN-${suffix}-${n}`,
+        fullName: "Manual Capture",
+        dateOfBirth: "1992-01-01",
+        gender: "FEMALE",
+        personalEmail: `manual.${suffix}.${n}@gmail.com`,
+        mobile: "9123456780",
+        currentAddress: "1 Test Rd",
+        permanentAddress: "1 Test Rd",
+        emergencyContactName: "Contact",
+        emergencyContactPhone: "9123456781",
+        emergencyContactRelation: "Friend",
+        dateOfJoining: "2024-01-01",
+        employmentType: "PERMANENT",
+        departmentCode: deptCode,
+        designationCode: desigCode,
+        locationCode: locCode,
+      });
+      const file = await buildXlsx(DATASET_COLUMNS.employees, [
+        base("ok"),
+        { ...base("both"), deviceUserId: `D-${suffix}` },
+        { ...base("none"), attendanceCapture: "DEVICE" },
+        { ...base("blank"), attendanceCapture: "", deviceUserId: "" },
+        { ...base("nocode"), employeeCode: "" },
+        { ...base("bad"), attendanceCapture: "BIOMETRIC" },
+      ]);
+      const upload = await request(app).post("/api/import/employees/upload").set(...authHeader(managerToken)).attach("file", file, "employees.xlsx");
+      const errs = upload.body.rows.map((r: { errors: string[] }) => r.errors.join(" "));
+      expect(errs[0]).toBe("");
+      expect(errs[1]).toMatch(/MANUAL has no deviceUserId/);
+      expect(errs[2]).toMatch(/deviceUserId is required for attendanceCapture DEVICE/);
+      expect(errs[3]).toMatch(/deviceUserId is required for attendanceCapture DEVICE/); // blank means DEVICE
+      expect(errs[4]).toMatch(/employeeCode is required for MANUAL/);
+      expect(errs[5]).toMatch(/must be DEVICE or MANUAL/);
+
+      const clean = await request(app).post("/api/import/employees/upload").set(...authHeader(managerToken)).attach("file", await buildXlsx(DATASET_COLUMNS.employees, [base("ok")]), "employees.xlsx");
+      expect(clean.body.errorRows).toBe(0);
+      expect((await request(app).post(`/api/import/batches/${clean.body.batchId}/commit`).set(...authHeader(managerToken)).send({})).status).toBe(200);
+      const e = await prisma.employee.findUniqueOrThrow({ where: { employeeCode: `T-MAN-${suffix}-ok` } });
+      employeeIds.push(e.id);
+      expect(await prisma.deviceUserMapping.count({ where: { employeeId: e.id } })).toBe(0);
+      expect(await prisma.attendanceAssignment.count({ where: { employeeId: e.id, shiftId: "shift_gen" } })).toBe(1);
+    });
+
     it("imports an ex-employee as separated — last working day and reason, no Separation row, no login, device ID free for reuse", async () => {
       const suffix = randomUUID().slice(0, 8);
       const [deptCode, desigCode, locCode] = await Promise.all([
@@ -280,6 +333,8 @@ describe("Import Center (/api/import)", () => {
       expect(e.jobHistory.map((j) => j.effectiveTo?.toISOString().slice(0, 10))).toEqual(["2024-01-01"]);
       const mapping = await prisma.deviceUserMapping.findFirstOrThrow({ where: { employeeId: e.id } });
       expect(mapping.validTo?.toISOString().slice(0, 10)).toBe("2024-01-01");
+      const assignments = await prisma.attendanceAssignment.findMany({ where: { employeeId: e.id } });
+      expect(assignments.map((a) => a.effectiveTo?.toISOString().slice(0, 10))).toEqual(["2024-01-01"]); // ends with them (Phase 2)
     });
   });
 

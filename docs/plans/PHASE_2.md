@@ -3,7 +3,7 @@
 **Status: APPROVED 2026-10-08 with the user's answers to D1–D7 (§13),
 HR's answers on rules and branches, the attendance cycle, and three
 additions (§3.1, §7.1, §4.7). Building P2-A → P2-I in order, pausing
-after each.**
+after each.** Progress: **P2-A done** (see "As built" at the end).
 - Written 2026-10-08, after effective dating (EF1–EF4) was finished, as
   the user asked: "attendance is entirely date-based, so I don't want it
   built on half-fixed foundations".
@@ -242,7 +242,7 @@ which device sits where, and whether a branch has one at all.
   - **Append-only:** a correction supersedes and the latest wins. History
     is kept and audited.
 
-### 2.4 Permissions (new keys, all Admin-only, never manager-grantable)
+### 2.4 Permissions (new keys; all Admin-only except `attendance.manual.enter`, which is manager-grantable but branch-limited)
 
 - `attendance.view`: others' attendance, in data scope.
 - `attendance.config.manage`: shifts, patterns, policies, assignments,
@@ -1022,3 +1022,28 @@ backoff logic, and the Windows service mechanics (CI runner).
     manager;*
   - *week-off, shift and sessions, and no penalty;*
   - *the calendar month.)*
+
+
+---
+
+## As built
+
+### P2-A (2026-10-08)
+
+As planned, with these specifics:
+- `attendance.manual.enter` is **manager-grantable** (the SPN/Wellsure 2
+  marker is a manager, and a MANAGER holder can only ever hold grantable
+  keys). It stays safe because it is branch-limited by
+  `attendance_manual_branches` and only touches non-finalised days.
+- Grace and the day thresholds are placeholders listed per row in
+  `placeholder_fields`; a value counts as confirmed when HR changes it or
+  presses "Confirm values".
+- A cycle start-day change must be dated on the new start day and after the
+  current cycle ends; the cycle before it is clipped. One scheduled change at
+  a time.
+- Shift and policy edits apply in place (no versioning). Recompute-from-date
+  arrives with the engine in P2-C.
+- **Deferred to later Phase 2 commits:** the roster generator (with Shift
+  Roster, P2-E) and the penalty-rule builder (HR confirmed no penalties; the
+  column exists and stays empty). Branch enforcement of manual entries is
+  P2-D.
