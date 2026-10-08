@@ -1047,3 +1047,16 @@ As planned, with these specifics:
   Roster, P2-E) and the penalty-rule builder (HR confirmed no penalties; the
   column exists and stays empty). Branch enforcement of manual entries is
   P2-D.
+
+**Follow-up after P2-A approval (user, 2026-10-08):**
+- "Wellsure 2" added as a branch (`WS-2`, no biometric machine, placeholder
+  address; exact name and address open in PROGRESS). Priya `1003` is
+  seeded to mark both SPN-Panchsheel and Wellsure 2.
+- Reaffirmed for P2-D: HR's manager records actual IN and OUT times. A
+  `TIMED` entry goes through the same rules engine as device punches, so
+  lateness, work hours, the scheduled-break deduction and the half-day and
+  full-day thresholds come out identical. `STATUS_ONLY` is only for days
+  whose times genuinely aren't known, and is always visibly distinguished
+  ("status only, no times") wherever it appears (§2.3, §4.2, §5.1).
+- The muster screenshot still didn't come through. P2-D builds §5.1 from
+  the user's written description.

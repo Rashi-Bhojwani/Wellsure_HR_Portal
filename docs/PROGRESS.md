@@ -3975,8 +3975,10 @@ Plan: [`docs/plans/PHASE_2.md`](plans/PHASE_2.md) §2.1, §2.4, §4.3, §4.6.
   scheduled changes and cancel, all-or-nothing bulk change), Attendance cycle,
   Manual-entry branches. Organisation Setup shows and edits "Has a biometric
   machine". All changes audited; nothing in use can be deactivated.
-- **Seed:** SPN-Panchsheel has no machine; its four people are manual capture
-  (no mappings); Priya `1003` holds `attendance.manual.enter` for SPN only.
+- **Seed:** SPN-Panchsheel has no machine; its people are manual capture
+  (no mappings); Priya `1003` holds `attendance.manual.enter`. Follow-up
+  (user, 2026-10-08): "Wellsure 2" added as a branch with no machine
+  (`WS-2`, Rahul `1010` moved there), and Priya marks both SPN and Wellsure 2.
 - **Deferred within Phase 2:** the roster generator and the penalty-rule
   builder (HR: no penalties, only GEN so far) — noted in PHASE_2.md.
 - Tests: cycle and session/week-off unit tests; config API (permissions,
@@ -4011,10 +4013,12 @@ Carried from spec §14 — configurable, not guessed, until answered:
 - [x] **Branches without a biometric machine: SPN and Wellsure 2**, both
       marked by one manager entering IN/OUT times (HR, 2026-10-08;
       Phase 2 plan D4).
-- [ ] **"Wellsure 2" isn't in the seeded branch list** (the seed's branches
-      are placeholders). Which branch is it, or should it be added? Its
-      "Has a biometric machine" switch must be turned off in Organisation
-      Setup, as SPN's is in the seed.
+- [ ] **"Wellsure 2": exact name and address still to confirm with HR.**
+      Added to the seed 2026-10-08 (code `WS-2`, no biometric machine,
+      placeholder address) under the name HR uses for it. It belongs to the
+      older open question further down — the authoritative branch list and exact
+      branch names have been unconfirmed since Phase 1 (the user is chasing
+      it with HR).
 - [ ] **Attendance rule values still to come from HR** (Phase 2 plan D3):
       grace minutes before someone counts as late, half-day and full-day
       minimum hours, and whether any shift other than GEN exists.
@@ -4065,7 +4069,7 @@ Carried from spec §14 — configurable, not guessed, until answered:
       it should lapse instead.
 - [ ] Bank bulk-transfer file format (from bank).
 - [ ] PT/LWF applicability per location's state.
-- [ ] Actual headcount and the authoritative branch (`locations`) list — branches are HR-managed and growing (e.g. 3 separate Ajmer branches, not the single "Ajmer" row earlier drafts assumed), so this isn't a one-time seed value. Also open: which city each of the 3 Panchsheel branches (C-10, SPN, B-22) belongs to, and the correct names/addresses for the 3 Ajmer branches — seeded as placeholders for now (see the Phase 1 log entry below). The commit D reconciliation report (Import Center → Reconciliation Report tab) is the tool to compare against greytHR once the real numbers are in hand.
+- [ ] Actual headcount and the authoritative branch (`locations`) list — branches are HR-managed and growing (e.g. 3 separate Ajmer branches, not the single "Ajmer" row earlier drafts assumed), so this isn't a one-time seed value. Also open: which city each of the 3 Panchsheel branches (C-10, SPN, B-22) belongs to, the correct names/addresses for the 3 Ajmer branches, and Wellsure 2's exact name and address (user chasing with HR, 2026-10-08) — seeded as placeholders for now (see the Phase 1 log entry below). The commit D reconciliation report (Import Center → Reconciliation Report tab) is the tool to compare against greytHR once the real numbers are in hand.
 - [ ] Company domain name for the portal and whether DNS is on Route 53.
 - [ ] Whether the office has a static public IP (needed for device push).
 - [ ] AWS account structure (single account, two environments, or separate

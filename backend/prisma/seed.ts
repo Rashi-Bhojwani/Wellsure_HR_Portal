@@ -165,6 +165,20 @@ async function main() {
         pincode: "110017",
       },
     }),
+    // HR 2026-10-08: "Wellsure 2" (named as HR refers to it; the exact name
+    // and address are unconfirmed — docs/PROGRESS.md open questions) has no
+    // biometric machine. Its attendance is marked by the same manager as SPN.
+    prisma.location.create({
+      data: {
+        code: "WS-2",
+        name: "Wellsure 2",
+        addressLine1: "Placeholder address — to be confirmed by HR",
+        city: "To be confirmed",
+        state: "To be confirmed",
+        pincode: "000000",
+        hasBiometricDevice: false,
+      },
+    }),
     // Merge-flow fixture: a near-duplicate of PAN-C10 with a typo, not an
     // exact duplicate (the `name` unique constraint would reject an exact
     // one) — Organisation Setup's near-duplicate detection should flag
@@ -445,7 +459,7 @@ async function main() {
     { employeeCode: "1007", deviceUserId: "1007", fullName: "Kavya Iyer", gender: "FEMALE", dob: "1994-08-22", doj: "2023-02-20", employmentType: "PERMANENT", deptCode: "ENG", designationCode: "EXEC", gradeCode: "G1", costCentreCode: "CC-ENG", locationCode: "PAN-C10", managerCode: "1002", account: "active" },
     { employeeCode: "1008", deviceUserId: "1008", fullName: "Aditya Joshi", gender: "MALE", dob: "1991-12-05", doj: "2022-09-12", employmentType: "PERMANENT", deptCode: "ENG", designationCode: "ASST_MGR", gradeCode: "G2", costCentreCode: "CC-ENG", locationCode: "PAN-SPN", managerCode: "1002", account: "active" },
     { employeeCode: "1009", deviceUserId: "1009", fullName: "Ananya Agarwal", gender: "FEMALE", dob: "1995-01-30", doj: "2024-03-04", employmentType: "PERMANENT", deptCode: "ENG", designationCode: "EXEC", gradeCode: "G1", costCentreCode: "CC-ENG", locationCode: "AJM-1", managerCode: "1002", account: "invited" },
-    { employeeCode: "1010", deviceUserId: "1010", fullName: "Rahul Malhotra", gender: "MALE", dob: "1990-06-17", doj: "2021-10-25", employmentType: "PERMANENT", deptCode: "SALES", designationCode: "SR_EXEC", gradeCode: "G2", costCentreCode: "CC-SALES", locationCode: "PAN-SPN", managerCode: "1003", account: "active" },
+    { employeeCode: "1010", deviceUserId: "1010", fullName: "Rahul Malhotra", gender: "MALE", dob: "1990-06-17", doj: "2021-10-25", employmentType: "PERMANENT", deptCode: "SALES", designationCode: "SR_EXEC", gradeCode: "G2", costCentreCode: "CC-SALES", locationCode: "WS-2", managerCode: "1003", account: "active" },
     { employeeCode: "1011", deviceUserId: "1011", fullName: "Divya Chauhan", gender: "FEMALE", dob: "1992-10-11", doj: "2022-12-01", employmentType: "PERMANENT", deptCode: "SALES", designationCode: "EXEC", gradeCode: "G1", costCentreCode: "CC-SALES", locationCode: "AJM-2", managerCode: "1003", account: "active" },
     { employeeCode: "1012", deviceUserId: "1012", fullName: "Sanjay Bhatt", gender: "MALE", dob: "1988-02-08", doj: "2020-05-19", employmentType: "CONTRACT", deptCode: "SALES", designationCode: "ASST_MGR", gradeCode: "G2", costCentreCode: "CC-SALES", locationCode: "PAN-B22", managerCode: "1003", account: "locked" },
     { employeeCode: "1013", deviceUserId: "1013", fullName: "Pooja Desai", gender: "FEMALE", dob: "1996-04-03", doj: "2024-06-10", employmentType: "PROBATION", deptCode: "SALES", designationCode: "EXEC", gradeCode: "G1", costCentreCode: "CC-SALES", locationCode: "AJM-3", managerCode: "1003", account: "invited" },
@@ -547,8 +561,8 @@ async function main() {
     // A manager starts with nothing (user decision 2026-10-03); Admin grants
     // each one what they need. The demo shows both states: Karan (1002) has
     // leave approval plus the employee grid and reports; Priya (1003) has
-    // leave approval and marks SPN's attendance (Phase 2: manual entry,
-    // branch-scoped to SPN — assigned below); 1004, 1005, 1024 and 1029 have nothing — Manager
+    // leave approval and marks SPN's and Wellsure 2's attendance (Phase 2:
+    // manual entry, limited to those two branches — assigned below); 1004, 1005, 1024 and 1029 have nothing — Manager
     // Management shows them as "No permissions".
     const SEEDED_MANAGER_GRANTS: Record<string, string[]> = {
       "1002": ["leave.view", "leave.approve", "employee.view", "reports.view"],
@@ -673,10 +687,13 @@ async function main() {
     });
   }
 
-  // Phase 2 (D4): Priya (1003) marks SPN's attendance — and only SPN's.
+  // Phase 2 (D4): Priya (1003) marks SPN's and Wellsure 2's attendance —
+  // the two branches with no machine — and no other branch.
   {
     const priyaUser = await prisma.user.findUniqueOrThrow({ where: { employeeId: employeeIdByCode["1003"]! } });
-    await prisma.attendanceManualBranch.create({ data: { userId: priyaUser.id, locationId: loc["PAN-SPN"]!.id, assignedByUserId: superAdminUserId! } });
+    for (const code of ["PAN-SPN", "WS-2"]) {
+      await prisma.attendanceManualBranch.create({ data: { userId: priyaUser.id, locationId: loc[code]!.id, assignedByUserId: superAdminUserId! } });
+    }
   }
 
   // ── System Settings (spec §7.8) — explicit rows so the Settings screen
