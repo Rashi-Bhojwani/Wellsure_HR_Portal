@@ -92,8 +92,15 @@ describe("step 7: computed from punches", () => {
     it("lateness is recorded with no penalty (HR 2026-10-08): no LOP for being late", () => {
       expect(ev({ punches: punches("10:10", "19:00") })).toMatchObject({ status: "P", lopDays: 0, lateInMinutes: 10, flags: ["LATE_IN"] });
     });
-    it("…but hours still count: with the placeholder 8 h full-day minimum against 8 h 15 m of work, arriving 11:30 is a half day", () => {
+    it("…but hours still count: with an 8 h full-day minimum against 8 h 15 m of work, arriving 11:30 is a half day", () => {
       expect(ev({ punches: punches("11:30", "19:00") })).toMatchObject({ actualMinutes: 405, status: "A:P", lopDays: 0.5, lateInMinutes: 90, flags: ["LATE_IN", "SHORTFALL"] });
+    });
+    it("the fail-safe placeholder thresholds (6 h / 3 h) never turn lateness into a half day", () => {
+      const policy = { ...POLICY, fullDayMinMinutes: 360, halfDayMinMinutes: 180 };
+      expect(ev({ policy, punches: punches("11:30", "19:00") })).toMatchObject({ status: "P", lopDays: 0, lateInMinutes: 90, flags: ["LATE_IN"] });
+      expect(ev({ policy, punches: punches("12:00", "19:00") })).toMatchObject({ actualMinutes: 375, status: "P", lopDays: 0 });
+      // a genuine short day is still a half day: 10:00–14:00 is the whole first half
+      expect(ev({ policy, punches: punches("10:00", "14:00") })).toMatchObject({ actualMinutes: 240, status: "P:A", lopDays: 0.5 });
     });
   });
 
@@ -225,7 +232,7 @@ describe("step 6: manual capture (no device mapping on D)", () => {
   it("a TIMED entry goes through the punch rules exactly like device punches (10:45 is late)", () => {
     const manual = ev({ capture: "MANUAL", manual: { kind: "TIMED", id: "m1", inTime: "10:45", outTime: "19:00" } });
     const device = ev({ punches: punches("10:45", "19:00") });
-    // late, exactly as a punched 10:45 — and, with the placeholder thresholds, a half day like it
+    // late, exactly as a punched 10:45 — and, with an 8 h full-day minimum, a half day like it
     expect(manual).toMatchObject({ source: "MANUAL", status: "A:P", lateInMinutes: 45, flags: ["LATE_IN", "SHORTFALL"], manualEntryId: "m1" });
     const strip = ({ source: _s, capture: _c, usedPunchIds: _u, manualEntryId: _m, ...rest }: ReturnType<typeof ev>) => rest;
     expect(strip(manual)).toEqual(strip(device));

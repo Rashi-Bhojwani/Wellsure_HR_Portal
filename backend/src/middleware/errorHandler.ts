@@ -9,6 +9,8 @@ export class HttpError extends Error {
     public status: number,
     message: string,
     public code?: string,
+    /** Extra structured context for the client (e.g. what blocks an action). */
+    public details?: Record<string, unknown>,
   ) {
     super(message);
     this.name = "HttpError";
@@ -37,7 +39,7 @@ export function errorHandler(err: unknown, req: Request, res: Response, next: Ne
   }
 
   if (err instanceof HttpError) {
-    res.status(err.status).json({ error: { message: err.message, code: err.code } });
+    res.status(err.status).json({ error: { message: err.message, code: err.code, ...(err.details ? { details: err.details } : {}) } });
     return;
   }
 

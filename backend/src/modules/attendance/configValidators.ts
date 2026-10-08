@@ -98,3 +98,4 @@ export const processRunSchema = z
     reason: z.string().trim().min(5, "Say why (e.g. HR confirmed the half-day hours)").max(500),
   });
 export const processScopeQuerySchema = z.object({ from: z.iso.date() });
+export const finalisationReadinessQuerySchema = z.object({ from: z.iso.date(), to: z.iso.date() });

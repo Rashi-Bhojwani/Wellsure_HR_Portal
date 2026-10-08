@@ -132,7 +132,8 @@ describe("rules engine against the database (P2-C)", () => {
       setManualEntryLoader(async () => new Map([[`${p.manual.employeeId}|2026-09-14`, { kind: "TIMED", id: "m-1", inTime: "10:45", outTime: "19:00" }]]));
       await computeAttendance([p.manual.employeeId], "2026-09-14", "2026-09-14");
       setManualEntryLoader(null);
-      expect((await days(p.manual))["2026-09-14"]).toMatchObject({ source: "MANUAL", lateInMinutes: 45, exceptionFlags: ["LATE_IN", "SHORTFALL"], computedFrom: expect.objectContaining({ manualEntryId: "m-1" }) });
+      // late, as a punched 10:45 would be — and, under the fail-safe 6 h placeholder, still a full day
+      expect((await days(p.manual))["2026-09-14"]).toMatchObject({ source: "MANUAL", status: "P", lateInMinutes: 45, exceptionFlags: ["LATE_IN"], computedFrom: expect.objectContaining({ manualEntryId: "m-1" }) });
     });
 
     it("a mapping starting mid-week switches those days to device capture", async () => {

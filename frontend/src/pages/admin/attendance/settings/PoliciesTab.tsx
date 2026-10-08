@@ -13,8 +13,8 @@ const { Text } = Typography;
 const NEW_POLICY: PolicyInput = {
   code: "",
   name: "",
-  fullDayMinMinutes: 480,
-  halfDayMinMinutes: 240,
+  fullDayMinMinutes: 360,
+  halfDayMinMinutes: 180,
   halfDayMinNotMetLopDays: 1,
   nearDuplicateSeconds: 120,
   inferBreakPairing: false,

@@ -334,6 +334,7 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/attendance/process": admin,
   "POST /api/attendance/process": admin,
   "GET /api/attendance/process/:id": admin,
+  "GET /api/attendance/finalisation/readiness": admin,
 
   // Biometric ingestion (Phase 2 P2-B). The sync agent authenticates with its
   // agent key and may post only for its own devices; ADMS devices by their

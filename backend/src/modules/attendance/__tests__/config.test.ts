@@ -73,6 +73,8 @@ describe("Attendance Settings (P2-A)", () => {
       const policy = (await api(tok.hrAdmin).get("/policies")).body.policies.find((x: { code: string }) => x.code === "DEFAULT");
       expect(policy).toMatchObject({ penaltyRules: [], halfDayMinNotMetLopDays: 1, nearDuplicateSeconds: 120, inferBreakPairing: false, futureToleranceMinutes: 10, maxPunchAgeDays: 45 });
       expect(policy.placeholderFields).toEqual(["fullDayMinMinutes", "halfDayMinMinutes"]);
+      // fail-safe placeholders: well below the General Shift's 8 h 15 m of work
+      expect([policy.fullDayMinMinutes, policy.halfDayMinMinutes]).toEqual([360, 180]);
       const cycle = (await api(tok.hrAdmin).get("/cycle")).body;
       expect(cycle.current.startDay).toBe(1);
       expect(cycle.current.start.slice(8)).toBe("01");

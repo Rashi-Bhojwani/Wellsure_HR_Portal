@@ -8,6 +8,7 @@ import * as orgApi from "../../../api/org";
 import { EmployeePicker } from "../../../components/letters/LetterFields";
 import { HelpStrip } from "../../../components/common/HelpStrip";
 import { apiErrorMessage } from "../../../lib/apiError";
+import { FinalisationReadinessCard } from "./FinalisationReadinessCard";
 
 const { Title, Text } = Typography;
 const long = (d: string) => dayjs(d).format("D MMM YYYY");
@@ -144,6 +145,7 @@ export function ProcessAttendancePage() {
           { title: "", key: "view", render: (_, r) => <Button size="small" onClick={() => setDetail(r.id)}>What changed</Button> },
         ]}
       />
+      <FinalisationReadinessCard />
       {runs.some((r) => r.status === "FAILED") && <Alert type="error" showIcon title="A run failed. The error is shown on the run; the days it hadn't reached are unchanged." />}
       <RunDetail runId={detail} onClose={() => setDetail(null)} />
     </Space>

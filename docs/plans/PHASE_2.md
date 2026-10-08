@@ -1162,8 +1162,138 @@ if HR wants it otherwise):
     window closes the next morning) and catches up at most 31 missed days.
 
 **One consequence HR should see before confirming the thresholds.** With the
-placeholder full-day minimum of 8 h against GEN's 8 h 15 m of scheduled work,
-anyone more than 15 minutes late or early (net) is a half day. That is a
-de-facto lateness penalty, though HR said there is none. When HR gives the
-real minimums, this is the number to check. A night shift (7 h 30 m of work)
-would need its own policy.
+P2-A placeholder full-day minimum of 8 h against GEN's 8 h 15 m of scheduled
+work, anyone more than 15 minutes late or early (net) was a half day: a
+de-facto lateness penalty, though HR said there is none. **Fixed 2026-10-09
+(user: "a placeholder should fail safe, not fail harsh"):** the placeholders
+are now 6 h / 3 h (see "Fail-safe thresholds and the finalisation gate"
+below). When HR gives the real minimums, this is the number to check. A night
+shift (7 h 30 m of work) would need its own policy.
+
+### Fail-safe thresholds and the finalisation gate (2026-10-09)
+
+- **Thresholds.** Default policy placeholders 6 h full day, 3 h half day:
+  - 2 h 15 m below GEN's 8 h 15 m of work, so lateness alone (11:30 → 19:00
+    is 6 h 45 m) never makes a half day;
+  - 3 h is below either half's length (4 h, 4 h 15 m), so a genuine half
+    day still counts as one;
+  - applied by migration `20261010090000_failsafe_thresholds` only where the
+    values were untouched; still marked as placeholders.
+- **The gate** (`modules/attendance/finalisation.ts`), a hard block the
+  server enforces; Phase 3's Period Finalisation is built on it:
+  - blocks while a shift or policy in use in the period (by assignment or as
+    recorded on a computed day) still has a placeholder field, while any
+    `NM` or `NS` day remains, before the period has ended, or while any day
+    isn't up to date: a dry run of the engine over the period
+    (`computeAttendance(…, { dryRun: true })`, no writes) would change it.
+    That catches a confirmed value that differs from the placeholder when
+    the period wasn't re-processed, unprocessed punches, leave or holidays,
+    days never computed and provisional days;
+  - 409 `FINALISATION_BLOCKED` with every blocker in the message and in
+    `error.details.blockers` (names the rule and fields, lists the days);
+  - `finalisePeriod` is the only writer of `is_locked` (guard test);
+  - readiness: `GET /api/attendance/finalisation/readiness?from&to`
+    (`attendance.process`) and the "Ready to finalise?" card on Process
+    Attendance.
+- **Left for Phase 3**: the Period Finalisation screen, unlock (Super Admin,
+  with a reason) and the payroll lock check, all on top of `finalisePeriod`.
+
+### P2-D build design (2026-10-09, written before building)
+
+§2.3 and §5 stand; these are the specifics decided for the build.
+
+- **`manual_attendance_entries`**: append-only (a trigger refuses UPDATE and
+  DELETE, with the same test-only purge as `raw_punches`). Kinds:
+  - `TIMED` (`in_time`, optional `out_time`, "HH:MM");
+  - `STATUS_ONLY` (`P`, `A`, `HD_FIRST`, `HD_SECOND`, `WORKED`);
+  - `CLEARED`: withdraws the entry, so the day returns to `NM`.
+
+  The latest entry per employee-day wins; every earlier one stays as
+  history. `via` is `SCREEN`, `MUSTER_UPLOAD` (with the upload id) or
+  `BULK` ("mark all present"). Each entry also stores remark, entered by
+  and entered at.
+- **The engine's manual loader** (P2-C's `setManualEntryLoader` hook) is the
+  real query, registered with the engine. A `CLEARED` latest entry means no
+  entry.
+- **Who may mark a day:**
+  - `attendance.manual.enter`, for an employee whose placement on that day
+    is in one of the holder's `attendance_manual_branches`;
+  - holders with ALL data scope (HR) may mark every branch, so HR can
+    cover for the marker. (Decided here; it's the same reach HR has
+    through `attendance.view`.)
+  - Outside that: 404, never confirming the employee exists (IDOR-tested,
+    `managerReach.test.ts`).
+- **Which cells are editable**, all of these:
+  - a manual-capture day (no device mapping in force);
+  - employed that day, not after today, not locked;
+  - not a full-day leave.
+
+  On a holiday or week-off, only `W` or times are allowed (work on an off
+  day). A half-day leave day takes the worked half. Everything else is
+  read-only, with the reason in the tooltip.
+- **What a cell accepts** (shared parser in `shared/attendance/muster.ts`;
+  the legend under the grid lists them):
+  - times: `10:05-19:10`, also `1005-1910`, `10.05-19.10` or `10:05 19:10`.
+    An IN alone (`10:05-`) is a single punch: absent with `MISSING_PUNCH`,
+    as the engine rule says;
+  - `P`, `A`;
+  - `P:A` (half day, present in the first half), `A:P` (present in the
+    second half);
+  - `W` (worked a holiday or week-off);
+  - `-` (clear).
+
+  Anything else is refused in place with the reason. `HD` alone is refused
+  with "which half? P:A or A:P".
+- **Seeing the muster:**
+  - `attendance.view`: everyone in the holder's data scope, read-only
+    except where they may also mark;
+  - `attendance.manual.enter` alone: only the manual-capture employees in
+    their branches.
+
+  Device days are always read-only in P2-D (Manual Override is Phase 3).
+- **Cells:**
+  - the status code, with week-off as `OFF`, holiday `H`, leave by its
+    code, `NM` grey;
+  - a status-only entry is marked as such (dashed outline, "status only,
+    no times");
+  - a timed day shows the times and any "late Nm" in its tooltip;
+  - a missing-punch day is marked red ("one time only: forgot to punch
+    out?") and counted in its own totals column, so it is easy to find
+    and fix.
+- **Totals per row:**
+  - **Paid days** = sum over the cycle's computed days of (1 − LOP),
+    counting `NM` and `NS` days as 0 until they are resolved (the column
+    says so), and never counting future days;
+  - then Present (½ per present half), Absent, Half days, LOP, Leave, H,
+    OFF, NM and Missing punch.
+- **Save:** one batch per Save, up to 2,000 cells. Every cell is validated
+  first, and nothing is written unless every cell is valid. The batch is
+  then written, the touched employee-days are recomputed synchronously
+  and the updated rows returned. The usual `attendance.updated` events
+  reach every open screen. The batch is audited.
+- **Mark all present** (a day, a branch) writes `TIMED` entries at each
+  person's shift start and end, `via BULK`, for `NM` cells only. It never
+  overwrites an entry.
+- **Muster upload** (Import Center → "Manual attendance muster"):
+  - the template is per branch and cycle, one row per manual-capture
+    employee, with IN and OUT columns per day, pre-filled with the current
+    entries so it round-trips. Off days, leave and locked days are shaded
+    and ignored;
+  - preview lists every cell as timed, status-only, clear, unchanged or
+    invalid; rejected rows and cells are listed with reasons;
+  - commit writes only the cells that differ from the current entry, so a
+    corrected re-upload supersedes and never duplicates;
+  - a blank cell leaves the day as it is; `-` clears it.
+- **Reminder:**
+  - daily at `attendance.manualReminderHour` (default 18 IST, a System
+    Setting read when the scheduler starts);
+  - each marker with `NM` rows today in their branches gets a
+    notification with the count and a link to the muster;
+  - nothing is sent on a day with none (a Sunday is `OFF`, not `NM`).
+- **Where it lives:**
+  - Workforce → Attendance → Attendance Muster (admin portal);
+  - for a marker who is a manager, the employee portal gains Attendance →
+    Mark Attendance, the same grid, shown only to holders of
+    `attendance.manual.enter`.
+- **Export:** the grid as `.xlsx`, totals, legend, and markers for status-only
+  (`*`) and missing-punch (`!`) cells.

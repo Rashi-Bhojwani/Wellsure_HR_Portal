@@ -19,6 +19,7 @@ import {
   manualBranchesSchema,
   processRunSchema,
   processScopeQuerySchema,
+  finalisationReadinessQuerySchema,
   updatePolicySchema,
   updateShiftSchema,
   updateWeekOffPatternSchema,
@@ -69,3 +70,6 @@ attendanceRouter.get("/process/scope", canProcess, validate({ query: processScop
 attendanceRouter.get("/process", canProcess, processRuns.listRuns);
 attendanceRouter.post("/process", canProcess, validate({ body: processRunSchema }), processRuns.startRun);
 attendanceRouter.get("/process/:id", canProcess, validate({ params: idParamsSchema }), processRuns.getRun);
+// What still blocks finalising a period (placeholder rule values, NM/NS/provisional days).
+// Finalisation itself is Phase 3; the gate it must pass is built now.
+attendanceRouter.get("/finalisation/readiness", canProcess, validate({ query: finalisationReadinessQuerySchema }), processRuns.finalisationReadiness);

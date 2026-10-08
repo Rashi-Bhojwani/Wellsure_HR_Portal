@@ -228,3 +228,18 @@ export async function startProcessRun(body: { fromDate: string; toDate: string; 
 export async function processScope(from: string): Promise<{ from: string; to: string; employees: number; days: number }> {
   return (await apiClient.get("/api/attendance/process/scope", { params: { from } })).data;
 }
+
+// ── Finalisation gate (the hard block; finalisation itself is Phase 3) ──
+export type FinalisationBlocker =
+  | { code: "PERIOD_NOT_OVER"; message: string }
+  | { code: "PLACEHOLDER_RULES"; message: string; rules: Array<{ kind: "SHIFT" | "POLICY"; id: string; code: string; name: string; fields: string[] }> }
+  | { code: "NOT_MARKED" | "NO_SHIFT" | "NOT_UP_TO_DATE"; message: string; count: number; days: Array<{ employeeId: string; employeeName: string; date: string }> };
+export interface FinalisationReadiness {
+  from: string;
+  to: string;
+  ready: boolean;
+  blockers: FinalisationBlocker[];
+}
+export async function finalisationReadiness(from: string, to: string): Promise<FinalisationReadiness> {
+  return (await apiClient.get<FinalisationReadiness>("/api/attendance/finalisation/readiness", { params: { from, to } })).data;
+}

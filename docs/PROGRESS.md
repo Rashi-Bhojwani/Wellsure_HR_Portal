@@ -4069,6 +4069,24 @@ the spec covers, listed for review.
   mid-week mapping and assignment changes, flagged punches, night shift, leave
   sink, Process Attendance, nightly, recompute grouping.
 
+### Interim — fail-safe thresholds and the finalisation gate (2026-10-09, after P2-C review)
+
+- **Placeholder thresholds now fail safe**: migration
+  `20261010090000_failsafe_thresholds` moves the default policy from 8 h / 4 h
+  to **6 h full day / 3 h half day** (2 h 15 m below GEN's scheduled work),
+  only where nobody had confirmed or changed them; still flagged as
+  placeholders. New policies default to the same.
+- **Finalisation gate** (`modules/attendance/finalisation.ts`):
+  `finalisationBlockers` / `assertCanFinalise` refuse a period while any shift
+  or policy used in it has placeholder values (any placeholder field, grace
+  included), any `NM` or `NS` day remains, any day isn't up to date (a dry
+  run of the engine would change it: e.g. HR's real threshold entered but the
+  period not re-processed), or the period hasn't ended. `finalisePeriod` is the only code allowed to set `is_locked`
+  (guard test); Phase 3 builds the screen, unlock and the payroll check on
+  it. `GET /api/attendance/finalisation/readiness` + a "Ready to finalise?"
+  card on Process Attendance show the blockers for any recent cycle.
+- `HttpError` gained optional `details`, returned as `error.details`.
+
 ## Open questions
 
 - [x] **Approval Workflows — dropped (user decision 2026-10-03).** No
@@ -4102,11 +4120,24 @@ Carried from spec §14 — configurable, not guessed, until answered:
       older open question further down — the authoritative branch list and exact
       branch names have been unconfirmed since Phase 1 (the user is chasing
       it with HR).
-- [ ] **Before HR confirms the full-day minimum hours:** with the placeholder
-      8 h against GEN's 8 h 15 m of scheduled work, anyone more than 15
-      minutes late or early (net) becomes a half day — a de-facto lateness
-      penalty, though HR said there is none. Worth showing HR this number when
-      asking for the thresholds (Phase 2 plan, "As built: P2-C").
+- [x] **The placeholder full-day minimum was a hidden lateness penalty**
+      (8 h against GEN's 8 h 15 m: anyone 15+ minutes short became a half
+      day). **Changed 2026-10-09 (user: "a placeholder should fail safe, not
+      fail harsh")** to 6 h full day / 3 h half day, still marked as
+      placeholders. Finalisation is hard-blocked while any rule value in use
+      is a placeholder. When HR gives the real minimums, compare them with
+      the 8 h 15 m of scheduled work: a minimum close to it penalises
+      lateness again.
+- [ ] **Two engine rules the user is confirming with HR** (2026-10-09; built
+      as stated, unchanged until HR answers):
+      - half-day minimum not met = 1 day LOP (spec §4.4 default; the policy
+        setting also offers ½ day or none);
+      - a single punch on a day (e.g. forgot to punch out) = absent with a
+        `MISSING_PUNCH` flag. Its remedy is regularization, which the
+        approved plan puts in Phase 3 (not P2-D); until then HR fixes such a
+        day with a manual entry only for manual-capture staff, or by
+        re-processing once a punch is corrected. The muster marks these
+        days so they are easy to find.
 - [ ] **Attendance rule values still to come from HR** (Phase 2 plan D3):
       grace minutes before someone counts as late, half-day and full-day
       minimum hours, and whether any shift other than GEN exists.

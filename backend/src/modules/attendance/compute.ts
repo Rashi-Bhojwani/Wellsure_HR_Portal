@@ -115,7 +115,7 @@ export function sameDay(existing: DailyAttendance, next: RowData): boolean {
  * Recompute [from, to] (business dates, inclusive) for these employees. Days
  * after today are never computed. Callers chunk large employee sets.
  */
-export async function computeAttendance(employeeIds: string[], from: string, to: string, opts: { now?: Date; maxChanges?: number } = {}): Promise<ComputeResult> {
+export async function computeAttendance(employeeIds: string[], from: string, to: string, opts: { now?: Date; maxChanges?: number; dryRun?: boolean } = {}): Promise<ComputeResult> {
   const result: ComputeResult = { processed: 0, changed: 0, locked: 0, deleted: 0, changes: [] };
   const today = iso(businessToday());
   const last = to > today ? today : to;
@@ -212,7 +212,7 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
       };
       if (!r) {
         if (before) {
-          await prisma.dailyAttendance.delete({ where: { id: before.id } });
+          if (!opts.dryRun) await prisma.dailyAttendance.delete({ where: { id: before.id } });
           result.deleted += 1;
           note(null);
         }
@@ -220,12 +220,12 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
       }
       const data = rowData(emp.id, date, r, a, outsideOn.get(date) ?? 0);
       if (before && sameDay(before, data)) continue;
-      await prisma.dailyAttendance.upsert({ where: { employeeId_date: { employeeId: emp.id, date: data.date } }, create: data, update: { ...data, processedAt: new Date() } });
+      if (!opts.dryRun) await prisma.dailyAttendance.upsert({ where: { employeeId_date: { employeeId: emp.id, date: data.date } }, create: data, update: { ...data, processedAt: new Date() } });
       note(r.status);
     }
   }
 
-  if (changedByEmployee.size) {
+  if (changedByEmployee.size && !opts.dryRun) {
     const placements = await placementsOn([...changedByEmployee.keys()], utcDate(today));
     for (const [employeeId, dates] of changedByEmployee) emitAttendanceUpdated(employeeId, dates, placements.get(employeeId)?.reportingManagerId ?? null);
   }
