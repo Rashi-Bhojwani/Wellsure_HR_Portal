@@ -3949,13 +3949,22 @@ Carried from spec §14 — configurable, not guessed, until answered:
 - [ ] Whether an always-on office PC exists to run the sync agent as a Windows service (Windows version), and how many devices there are.
 - [ ] Employee Code vs Device User ID default (spec §3): Add Employee pre-fills Employee Code from the Device User ID, but our device's IDs (2–126) differ from the 1000-series Employee Codes. Keep pre-filling or not? (Punch mapping is unaffected; it always uses `device_user_mappings`.)
 - [ ] Working hours and working days for the device-silence alert (spec §4.7): configurable defaults until HR confirms.
-- [ ] **Which two branches have no biometric machine, and who marks
-      their attendance daily** (Phase 2 plan D4, 2026-10-08).
-- [ ] **The real attendance rule values** (Phase 2 plan D3): grace
-      minutes, half-day and full-day minimum hours, the week-off pattern
-      (Sunday only? which Saturdays?), any late penalty, and shifts other
-      than GEN 10:00–19:00. Seeded as placeholders and configurable; not
-      guessed.
+- [x] **Branches without a biometric machine: SPN and Wellsure 2**, both
+      marked by one manager entering IN/OUT times (HR, 2026-10-08;
+      Phase 2 plan D4).
+- [ ] **Attendance rule values still to come from HR** (Phase 2 plan D3):
+      grace minutes before someone counts as late, half-day and full-day
+      minimum hours, and whether any shift other than GEN exists.
+      Seeded as placeholders and configurable; not guessed.
+      Confirmed already:
+      - working days Monday–Saturday, Sunday off;
+      - GEN 10:00–19:00 in two sessions (10:00–14:00, lunch 14:00–14:45,
+        14:45–19:00);
+      - no late penalty;
+      - the attendance cycle is the calendar month.
+- [ ] **The biometric device's log capacity (retention)**, once the model
+      is known. The agent's retention guard defaults pessimistically to
+      3 days / 20,000 records until then (Phase 2 plan §7.1).
 - [x] Exact PL eligibility boundary: **HR-confirmed 2026-09-28** — 90 calendar
       days from DOJ (`leave_policies.eligibility_mode = DAYS`,
       `eligibility_value = 90`), no pro-rating, always a full 1.0-day credit.

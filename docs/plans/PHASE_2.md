@@ -1,6 +1,9 @@
 # Phase 2: attendance, built completely before the device
 
-**Status: PLAN, awaiting the user's review. Nothing here is built yet.**
+**Status: APPROVED 2026-10-08 with the user's answers to D1–D7 (§13),
+HR's answers on rules and branches, the attendance cycle, and three
+additions (§3.1, §7.1, §4.7). Building P2-A → P2-I in order, pausing
+after each.**
 - Written 2026-10-08, after effective dating (EF1–EF4) was finished, as
   the user asked: "attendance is entirely date-based, so I don't want it
   built on half-fixed foundations".
@@ -9,6 +12,10 @@
 - Spec: [`PROJECT_SPEC.md`](../PROJECT_SPEC.md) §4, §7.3, §8, §12.
 - Contract with payroll: [`PHASE_6.md`](PHASE_6.md) "Effective-dating
   contract".
+
+Note: the user's screenshot of greytHR's Attendance Muster didn't come
+through in the session. §5.1 follows the user's written description of
+it.
 
 **The goal (user, 2026-10-08):** attendance built so completely that
 connecting the real machine at the end is a configuration step and nothing
@@ -29,10 +36,10 @@ until then.
      device once staging exists.
   2. **"Verified on staging"** (spec §12: from Phase 1.5 on, every phase is
      verified on staging) can't apply to Phase 2 yet.
-- **Recommendation:** build Phase 2 now, then do Phase 1.5 **before the
-  device-connection step**. The agent route, which is the primary one,
-  also posts to the deployed API, so the machine can't be connected to
-  anything real until staging exists. → **Decision D1** (§12).
+- **Decided (D1, user 2026-10-08):** build Phase 2 now, then do Phase 1.5
+  **before the device-connection step**. The agent route, which is the
+  primary one, also posts to the deployed API, so the machine can't be
+  connected to anything real until staging exists.
 
 **Phase 2 / Phase 3 split.** This plan covers Phase 2 in full. It also
 pulls into Phase 2 the parts of Phase 3 the user listed as must-haves:
@@ -77,35 +84,65 @@ and rules are the same for every branch. The only branch-varying fact is
 which device sits where, and whether a branch has one at all.
 
 - **`shifts`**: code, name, start time, end time, `crosses_midnight`
-  (derived: end ≤ start), and a break allowance (informational).
+  (derived: end ≤ start).
   - Grace in / grace out (minutes).
   - Punch window: before start (default 4 h), after end (default 6 h).
   - Active flag. Deactivated, never deleted.
-  - Seed: **GEN 10:00–19:00**, the timing on the greytHR screens
-    (UI_REFERENCE §1.5). Every other value is a placeholder until HR
-    confirms (§12, D3).
+  - **`shift_sessions`** (HR, 2026-10-08: "make the session structure
+    configurable rather than hardcoded, since it affects how break time is
+    computed"). These are ordered parts of the shift: work sessions and the
+    scheduled breaks between them.
+    - **Seed GEN (confirmed by HR):** in 10:00, out 19:00, in two parts:
+      - Session 1, 10:00–14:00 (the first half);
+      - Lunch, 14:00–14:45 (a scheduled break);
+      - Session 2, 14:45–19:00 (the second half).
+    - **Halves come from the sessions.** The first work session is the
+      first half and the last is the second half. Split statuses (`A:P`,
+      `P:A`, `PL:P`) are decided per session.
+    - **Break time comes from the sessions.** Our device sends no
+      direction (spec §4.1), so a lunch break can't be read off the
+      punches. When a person's IN–OUT span covers a scheduled break, the
+      scheduled break is deducted: actual work = span − scheduled breaks
+      covered. Inferred pairing from extra punches stays an option, off
+      by default.
+    - Shift length, in-shift time, shortfall and excess are measured
+      against the work sessions, not the raw span.
+  - **Still to come from HR (open, placeholders):**
+    - grace minutes (placeholder 0);
+    - whether any shift other than GEN exists.
 - **`week_off_patterns`**: code, name, and rules per weekday, optionally
-  per week of the month. Examples:
-  - Sunday off;
-  - Sunday plus the 2nd and 4th Saturday;
-  - alternate Saturdays anchored to a start date.
-
-  Seed: "Sunday off" as a placeholder (D3).
+  per week of the month (for future patterns such as alternate
+  Saturdays).
+  - **Seed (confirmed by HR):** "Sunday off". Monday to Saturday are
+    working days, the same for everyone.
 - **`attendance_policies`** (greytHR calls this an "attendance scheme";
   the spec calls it the rule set):
-  - **Thresholds:** full-day minimum hours; half-day minimum hours.
+  - **Thresholds:** full-day minimum hours; half-day minimum hours. Both
+    are **still to come from HR** (open, placeholders).
   - **Half-day minimum not met:** 1 day LOP by default, configurable
     (spec §4.4).
   - **Single punch:** status A and `MISSING_PUNCH` until regularized
     (spec).
   - **Near-duplicate window:** 2 minutes.
-  - **Inferred break pairing:** off (spec §4.1: the device sends no
-    direction).
-  - **Late and early penalty rules:** a list, **off by default**. For
-    example, "N late-ins in a month = ½ day LOP", or "late beyond X
-    minutes = half day".
+  - **Inferred break pairing:** off.
+  - **Late and early penalty rules:** the builder exists, but **HR
+    confirmed none apply.** Lateness and early exits are recorded and
+    visible (flags, minutes, counts), with no money and no half-day
+    penalty. The seeded policy has no penalty rules.
   - **Implausible-punch thresholds:** more than 10 min in the future, or
     older than 45 days.
+- **`attendance_cycles` configuration** (user, 2026-10-08):
+  - The attendance period isn't assumed to be the calendar month. It is
+    admin-configurable as a cycle start day: day 1 = the calendar month;
+    day 26 = the 26th to the 25th.
+  - **Confirmed by the user: calendar month** (start day 1). That's the
+    seeded value.
+  - `cycleFor(date)` gives the cycle containing any date. The muster's
+    "Select Attendance Cycle", period finalisation (Phase 3) and payroll
+    (Phase 6) all use it.
+  - Changing the start day is allowed only from a future cycle boundary.
+    Past cycles keep the boundaries they had, so a finalised period never
+    shifts.
 - **`attendance_assignments`**: effective-dated, per employee: shift,
   week-off pattern and policy. It's a history table under EF rules: the
   writer, the constraints, scheduled changes and the readers
@@ -117,9 +154,12 @@ which device sits where, and whether a branch has one at all.
   - The Shift Roster screen's generator is in this phase; editing a
     single date is Phase 3's Shift Override.
 - **`locations.has_biometric_device`**: whether a branch has a machine.
-  It only guides the UI (Add Employee hides the device ID field for a
-  no-device branch, and the Devices screen checks consistency). **It is
-  never what the engine reads** (§4.3).
+  - **HR (2026-10-08): SPN and Wellsure 2 have none.** They're set on
+    those branches by configuration; the seed's branch list is
+    placeholder data.
+  - It only guides the UI (Add Employee's default, and the Devices
+    screen's consistency check). **It is never what the engine reads**
+    (§4.3).
 - **System Settings → Attendance:**
   - company default shift, week-off pattern and policy;
   - the nightly recompute time (02:00 IST);
@@ -184,19 +224,36 @@ which device sits where, and whether a branch has one at all.
   - `is_locked` (written by Phase 3 finalisation; the engine already
     obeys it), `processed_at`, `engine_version`.
   - Unique (employee_id, date).
-- **`manual_attendance_entries`** (§5): employee, date.
-  - **Status:** `P`, `A`, `HD` (with which half), `WFH`-style codes are
-    leave and not entered here, and `WORKED` for a holiday or week-off.
-  - Optional in and out times; a remark.
-  - Entered by and at. Superseded entries are kept (append-only; the
-    latest wins). Audited.
+- **`manual_attendance_entries`** (§5): employee, date, and **one of two
+  kinds**, always shown differently:
+  - **`TIMED`** (the normal case, HR 2026-10-08): the employee's actual
+    **IN and OUT times** as the muster records them. They go **through the
+    same rules engine as device punches**, so 10:45 is late exactly as a
+    punched 10:45 would be, and work hours, the scheduled-break deduction,
+    shortfall and half-day/full-day thresholds are computed identically.
+    An IN with no OUT behaves like a single punch (`MISSING_PUNCH`).
+  - **`STATUS_ONLY`**: for a day whose times genuinely aren't known, `P`,
+    `A`, `HD` (which half) or `WORKED` (a holiday or week-off). It's
+    labelled "status only, no times" everywhere, and has no late,
+    shortfall or work-hours figures. Leave is never entered here; it comes
+    from approved leave.
+  - **Common to both:** a remark, entered by and at, and how it arrived
+    (`SCREEN` or `MUSTER_UPLOAD` with the batch).
+  - **Append-only:** a correction supersedes and the latest wins. History
+    is kept and audited.
 
 ### 2.4 Permissions (new keys, all Admin-only, never manager-grantable)
 
 - `attendance.view`: others' attendance, in data scope.
 - `attendance.config.manage`: shifts, patterns, policies, assignments,
   settings.
-- `attendance.manual.enter`: the daily manual-entry workflow (§5, D4).
+- `attendance.manual.enter`: the manual-entry workflow (§5), **scoped to
+  chosen branches** (D4, user 2026-10-08). A holder can mark only the
+  branches they're assigned to in **`attendance_manual_branches`** (user ↔
+  location, set by Admin, audited). The manager who marks SPN and
+  Wellsure 2 gets exactly those two, and is refused anywhere else (404,
+  IDOR-tested). It adds this one branch limit beside the
+  SELF/TEAM/ALL scope.
 - `attendance.process`: recompute a date range.
 - `attendance.devices.manage`: devices, agents, keys, mapping unmapped
   punches, simulator controls on non-production.
@@ -271,6 +328,28 @@ plus a small suite per adapter.
     Who Is In? room;
   - `device.status` → `perm:attendance.devices.manage`.
 
+### 3.1 Re-processing from raw punches *(user addition, 2026-10-08)*
+
+"A wrong rule value discovered later is a recompute rather than a
+data-entry exercise." So:
+- **Raw punches and manual entries are the only inputs.** Every
+  `daily_attendance` row is fully derivable from raw punches, manual
+  entries, approved leave, holidays, assignments and the rule values.
+  Nothing is typed into a day record directly.
+- **Process Attendance for a date range** is built in Phase 2 (P2-C):
+  - backend, job and a simple admin screen (`attendance.process`);
+  - re-runs the engine for any range and any employees, **at any time
+    before the period is locked**;
+  - a background job with progress, audited (who, range, why);
+  - the result shows how many days changed and which, e.g. after
+    correcting the half-day hours.
+- **Changing a rule value** (shift, sessions, grace, thresholds,
+  week-off, assignment) offers that recompute from its effective date,
+  with the count of affected days. A locked (finalised) period is never
+  recomputed, and the screen says so.
+- **Late re-mapping** works the same way: mapping an unmapped device ID
+  re-resolves its stored raw punches and recomputes those days.
+
 ---
 
 ## 4. The rules engine
@@ -326,9 +405,14 @@ For each employee and business date D:
    (e.g. `PL:P`).
 5. **Manual override** (Phase 3) → as overridden. The source is that of
    the data entered, with `is_overridden` set.
-6. **Manual capture: no device mapping in force on D** → the manual entry
-   if there is one (source `MANUAL`), **otherwise `NM` "Not marked"**: no
-   status, never `A`, never an exception, and LOP 0 (§4.3).
+6. **Manual capture: no device mapping in force on D:**
+   - a **`TIMED`** entry → its IN and OUT times are treated as the day's
+     punches and **go through step 7 exactly like device punches** (late,
+     hours, sessions, thresholds, flags), with source `MANUAL`;
+   - a **`STATUS_ONLY`** entry → its status, source `MANUAL`, no time
+     figures;
+   - **nothing entered → `NM` "Not marked"**: no status, never `A`, never
+     an exception, and LOP 0 (§4.3).
 7. **Compute from punches** (source `DEVICE`):
    - The shift is the shift override for D, else the roster, else the
      assignment.
@@ -339,8 +423,14 @@ For each employee and business date D:
      tie and edge rules are pinned by tests.
    - Near-duplicates within 2 minutes collapse to the first.
    - First punch = first in; last punch = last out; no direction is
-     assumed. Break time is computed only from real directions or the
-     inferred-pairing option (off).
+     assumed.
+   - **Break time = the scheduled breaks of the shift's sessions (GEN:
+     14:00–14:45) that the IN–OUT span covers**, deducted from actual
+     work. Real directions or the inferred-pairing option (off) can
+     refine it.
+   - **Halves:** session 1 is the first half and session 2 the second.
+     Each half is present, absent or on leave on its own, which gives
+     `A:P`, `P:A`, `PL:P` and so on.
    - **Late-in** = first in − (start + grace in). **Early-out** = (end −
      grace out) − last out. **Shortfall and excess** are against shift
      length.
@@ -351,13 +441,16 @@ For each employee and business date D:
    - **One punch only** → `A` and `MISSING_PUNCH`, until regularized
      (Phase 3).
    - **No punches** on a working day → `A`.
-   - **Penalty rules** (off by default) run after the month's days, and
-     only on DEVICE days.
+   - **Penalty rules:** none apply (HR 2026-10-08). Lateness is recorded
+     and counted, with no LOP. The builder stays for the future, empty.
 8. **Exception flags:** `MISSING_PUNCH`, `SHORTFALL`, `LATE_IN`,
    `EARLY_OUT`, `HALF_DAY_MIN_NOT_MET`, `NO_SHIFT`, `UNMAPPED` (punches
    exist on D for a device ID with no mapping, raised on the Devices
-   screen, not the day), and `CLOCK_FLAGGED`. **Never on a manual-capture
-   day.**
+   screen, not the day), and `CLOCK_FLAGGED`.
+   - A `TIMED` manual day gets the same time-based flags as a device day
+     (a 10:45 manual arrival is `LATE_IN`).
+   - **A day with nothing entered (`NM`) and a `STATUS_ONLY` day never
+     get exceptions.**
 
 ### 4.3 Employees with no device mapping *(user, 2026-10-08)*
 
@@ -373,9 +466,16 @@ For each employee and business date D:
     neutral grey everywhere.
   - Phase 3 finalisation **refuses to lock a period while any `NM` day
     remains**, listing them. Paid days are then never guessed.
-- **Add Employee:** the Device User ID becomes **optional** (it's
-  required today). That's needed for the two no-device branches. →
-  **Decision D2.**
+- **Add Employee** (D2, user 2026-10-08): the Device User ID becomes
+  optional, **as a deliberate choice, not a blank field.**
+  - The wizard asks "**Attendance capture**" with two options: *Biometric
+    device* (enter Device User ID) or *No device: attendance is marked
+    manually*. It defaults from the branch's `has_biometric_device`.
+  - Choosing manual shows "This person's attendance will be marked
+    manually by whoever marks their branch." The profile shows "Manual
+    attendance" as a badge.
+  - The Excel import gets the same column, `attendanceCapture`
+    (`DEVICE`/`MANUAL`). A blank device ID with `DEVICE` is an error.
 - **The safety net for a mistake** (someone at a device branch without a
   mapping, so their days would silently become manual):
   - the Devices screen lists "**Employees at device branches with no
@@ -388,7 +488,7 @@ For each employee and business date D:
 | Source | When | Shown as |
 |---|---|---|
 | `DEVICE` | Computed from punches | the normal cell |
-| `MANUAL` | From a manual entry (manual-capture employee) | **a hand icon and a dotted border on the cell, "Manual" in the day detail with who entered it and when, and an "M" marker in grids and exports** |
+| `MANUAL` | From a manual entry (manual-capture employee) | **a hand icon and a dotted border on the cell, "Manual" in the day detail with who entered it and when, and an "M" marker in grids and exports.** A `STATUS_ONLY` entry also says "**status only, no times**" |
 | `LEAVE` | Approved leave | the leave colour |
 | `HOLIDAY` | A company holiday | light blue |
 | `WEEK_OFF` | The assigned pattern | grey |
@@ -400,6 +500,8 @@ For each employee and business date D:
 - Split days for the first and second half, in every combination greytHR
   shows: `A:P`, `P:A`, `PL:P`, `P:PL`, `HD` with the half named.
 - **`NM` "Not marked"**: new, manual-capture only.
+- **`OFF`**: how the muster shows a week-off (greytHR shows Sunday as
+  OFF). It's the same status as `O`, given the muster's label.
 
 **Colours** follow UI_REFERENCE §1.5:
 - present: light green;
@@ -451,35 +553,73 @@ days. Nothing recomputes silently.
 
 ---
 
-## 5. Manual entry: a fast daily workflow (P2-D)
+## 5. Manual entry and the editable muster (P2-D)
 
-The two branches without a machine. → **Decision D4: who enters it.**
+**How HR works today (2026-10-08).** SPN and Wellsure 2 have no machine.
+**One manager marks attendance for both**, entering each employee's
+actual IN and OUT times into a muster, which is then uploaded. So manual
+entry is **time-based** first, with status-only as the clearly-labelled
+exception.
 
-- **The screen:** Workforce → Attendance → **Mark Attendance**. One branch
-  and one date (today by default) opens **one row per manual-capture
-  employee there**.
-  - **Pre-filled**: holiday, week-off and approved leave are already
-    shown and locked (source-labelled). Only working days need input.
-  - **Speed:**
-    - "**Mark all present**" (one click), then change the exceptions;
-    - keyboard: ↑/↓ moves, P/A/H sets the status, T types times;
-    - optional in and out times;
-    - a remark.
-  - **One save writes the batch.** Each entry is audited, and the days
-    recompute and appear live on everyone's screens.
-  - **The week strip** above the grid shows, per day, how many are still
-    `NM`, so a missed day is obvious. A **reminder notification**
-    (configurable time, default 18:00 on working days) goes to whoever
-    enters for that branch if today still has `NM` rows.
-  - **Edit:** any non-finalised day can be changed. The entry is
-    superseded, never overwritten, so the history shows who changed what.
-- **Visibly manual everywhere** (§4.4 table): the calendar, day detail,
-  Who Is In?, grids and exports.
-- **Not an override.** Overrides (Phase 3) correct *device* days and are
-  exceptional. Manual entry is the *routine* source for manual-capture
+### 5.1 The editable muster (built like greytHR's)
+
+As the user described greytHR's Attendance Muster:
+- **A grid of employees × days for a cycle.**
+  - "**Select Attendance Cycle**" sits beside the month (§2.1; calendar
+    month by confirmation).
+  - Filters by branch and department, or **a single employee**.
+  - Columns per day; Sunday shows **OFF**.
+  - Right-hand totals: **P = paid days for the cycle**, then A, HD, LOP,
+    leaves, H, OFF and NM.
+  - **A legend at the bottom.**
+  - **Export to Excel**: the same grid, with source markers.
+- **Directly editable: click a day cell and type.**
+  - A status letter (`P`, `A`, `HD`; the legend lists what's allowed)
+    makes a `STATUS_ONLY` entry.
+  - **Or times**: `10:05-19:10`, or the cell's IN/OUT popover, makes a
+    `TIMED` entry. A timed cell shows the computed status, with the times
+    in a tooltip and a "late 35m" mark where it applies.
+  - Tab/Enter moves to the next cell, and one save writes the batch.
+- **What's editable depends on who and which day:**
+  - **Manual-capture employees, in branches the user is assigned to**
+    (`attendance.manual.enter`, branch-scoped): editable. Each edit is a
+    manual entry, recomputed through the engine, audited, and live on
+    every screen.
+  - **Holidays, approved leave and week-offs are pre-filled and locked**
+    (source-labelled). Working on an off day is entered as `WORKED` or
+    with times.
+  - **Device days are read-only in Phase 2.** Correcting a device day is
+    a Manual Override, a Phase 3 action that uses this same grid.
+  - **Finalised (locked) cycles are read-only** (Phase 3).
+- **The whole muster (all employees, read-only)** is visible to
+  `attendance.view` holders. The SPN/Wellsure 2 manager sees and edits
+  only their two branches.
+
+### 5.2 Muster upload (how the times arrive today)
+
+- **Import Center → "Manual attendance muster"**: download a template for
+  a branch and cycle (employees × days, IN/OUT columns per day, legend
+  letters allowed instead), fill it in, and upload.
+- The flow is parse → **preview** (per cell: timed / status-only / blank
+  / invalid; clashes with leave or holidays shown) → commit.
+- Each cell becomes a manual entry (`via MUSTER_UPLOAD`, with the batch)
+  through the same engine. Only the uploader's assigned branches are
+  accepted; other rows are rejected and listed.
+- Re-uploading a corrected file supersedes entries; it never duplicates
+  them.
+
+### 5.3 Daily speed and safety nets
+
+- **"Mark all present 10:00–19:00"** for a day, then change the
+  exceptions. It writes `TIMED` entries at the shift times, labelled as
+  bulk-filled.
+- **The week strip** above the grid shows, per day, how many are still
+  `NM`.
+- **A reminder** (configurable, default 18:00 on working days) goes to
+  the person assigned to a branch while today still has `NM` rows.
+- **Not an override.** Overrides (Phase 3) correct device days and are
+  exceptional. Manual entry is the routine source for manual-capture
   employees.
-
----
 
 ## 6. The punch simulator (P2-G) *(requirements recorded; design now)*
 
@@ -528,7 +668,7 @@ The two branches without a machine. → **Decision D4: who enters it.**
 - **Replay:** a whole month for **500 employees**. It reports punches
   sent, ingestion throughput, time until every day is recomputed, and
   **a diff of engine output against the intended outcomes, which must
-  be empty**. → **Decision D5: the pass threshold.**
+  be empty**. The timings are checked against the committed baseline (D5, §12 G2).
 - **Live drip:** single punches in real time, at a rate or for one named
   employee, so Who Is In?, the calendar and the Devices screen can be
   watched updating.
@@ -558,6 +698,38 @@ The two branches without a machine. → **Decision D4: who enters it.**
   A device that's down is reported, and the others carry on. With the API
   down it backs off exponentially (capped) and keeps an **on-disk outbox**,
   so a long outage loses nothing and catches up in order.
+- **Device log retention guard** *(user addition, 2026-10-08)*. This is
+  the one real data-loss risk: a device keeps only so many punches. If
+  nothing syncs for longer than it holds, the oldest are overwritten.
+  - **`retentionDays`** and **`retentionRecords`** are configured per
+    device in the app (Devices screen) and sent to the agent. **The
+    default is pessimistic: 3 days / 20,000 records** until the model is
+    known.
+  - Each cycle the agent compares the **time since the last successful
+    sync** (and, where the device reports it, its log count against
+    capacity) with retention:
+    - **50%: warning.** Heartbeat state `RETENTION_WARNING`, shown on
+      the Devices screen.
+    - **75%: alarm.** A `RETENTION_RISK` incident, with in-app plus email
+      to everyone on the device alert list, and an urgent banner for
+      admins: "*Device X hasn't synced for N days; punches older than ~M
+      days may be overwritten soon.*"
+  - **The agent alarms locally too.** It writes to the Windows event log
+    and its own log, because the reason it can't sync may be that the
+    API is unreachable. The server side **raises the same alarm from
+    silence alone**: last successful batch against retention, so an agent
+    that has died entirely still triggers it.
+- **Clock drift** *(user addition)*:
+  - each cycle the agent reads the device's clock (`deviceTime`) and
+    reports the offset from server time in the heartbeat;
+  - ADMS devices are checked from their handshake time and punch arrival;
+  - beyond a threshold (**default 2 minutes**, configurable) the Devices
+    screen shows a **warning banner** for that device, and a
+    `CLOCK_DRIFT` incident notifies the alert list ("a drifting clock
+    silently corrupts attendance for everyone");
+  - drift is charted over time;
+  - it is never auto-corrected. Setting the device clock is a deliberate
+    admin action, documented in `INSTALL.md`.
 - **`DeviceDriver` interface**, the seam:
   - `connect`, `readSince(cursor)`, `deviceTime`, `info`, `disconnect`;
   - implementations:
@@ -570,12 +742,15 @@ The two branches without a machine. → **Decision D4: who enters it.**
     rotation;
   - **packaged as a single executable**, so the office PC needs no Node
     install;
-  - mechanism: **NSSM (recommended)** or `node-windows` (D6);
+  - mechanism: **NSSM** (D6, decided), with the agent key in **Windows
+    Credential Manager** and never in the config file;
   - **CI tests install → start → reboot-survival (restart) → uninstall on
     a GitHub Windows runner**, so the service mechanics are proven before
     any office PC is touched;
-  - a step-by-step install guide for whoever sets up the PC
-    (`biometric-agent/INSTALL.md`).
+  - `biometric-agent/INSTALL.md`: **install, upgrade and uninstall**,
+    step by step, for someone who isn't the user (D6). It includes
+    storing the key in Credential Manager, checking the service and logs,
+    rotating the key, and what the retention and drift alarms mean.
 
 ### 7.2 Health monitoring *(spec §4.7)*
 
@@ -590,7 +765,10 @@ The two branches without a machine. → **Decision D4: who enters it.**
   - **Morning check** (10:30, configurable): a device that normally has
     punches has none today. It also counts employees at device branches
     with no mapping, and unmapped punches yesterday.
-  - **Clock skew** on a device.
+  - **Clock drift** beyond the threshold (§7.1).
+  - **Retention risk**: the gap since the last successful sync is
+    approaching the device's retention (§7.1), raised by the agent *and*
+    by the server.
 - **The checks run on the scheduler** (every minute: a cheap query on
   last-seen timestamps), and work against simulated devices identically.
 - **Devices screen** (Workforce → Attendance → Devices):
@@ -630,11 +808,15 @@ The two branches without a machine. → **Decision D4: who enters it.**
     - arrived (with time, late flag);
     - not yet arrived;
     - on leave, holiday or week-off;
-    - **manual-capture employees, shown as manual** ("marked present by
-      <who>", or "not marked yet"), never as absent.
+    - **manual-capture employees, shown as manual** (their entered IN
+      time with the manual marker, "marked present (status only)", or
+      "not marked yet"), never as absent.
   - It does **not** claim who has left the building.
-- **Mark Attendance** (§5), **Devices** (§7.2), **Attendance Settings**
-  (§4.6).
+- **The Attendance Muster** (§5.1): the editable grid with the cycle
+  selector, totals, legend, single-employee filter and Excel export.
+  **Devices** (§7.2), with the retention and clock-drift warnings.
+  **Process Attendance** (§3.1). **Attendance Settings** (§4.6),
+  including the cycle and the manual-entry branch assignments.
 - **The menus** stop showing the Phase 3 placeholders for what Phase 2
   builds. Attendance Info stops being phase-marked: the mock-up was
   retired 2026-10-03.
@@ -645,15 +827,15 @@ The two branches without a machine. → **Decision D4: who enters it.**
 
 | Commit | Content |
 |---|---|
-| **P2-A** | Configuration model: shifts, week-off patterns, policies, `attendance_assignments` (EF history, writer and readers), `has_biometric_device`, the optional Device User ID (D2), permissions, settings, seed placeholders, config screens |
+| **P2-A** | Configuration model: shifts **with sessions**, week-off patterns, policies (no penalty rules), **attendance cycle**, `attendance_assignments` (EF history, writer and readers), `has_biometric_device`, the **deliberate "Attendance capture" choice** with the optional Device User ID (D2), permissions including the **branch-scoped** `attendance.manual.enter`, settings, seed (GEN 10:00–19:00 with lunch, Sunday off, calendar month; placeholders for grace and thresholds), config screens |
 | **P2-B** | Ingestion: the shared ATTLOG parser and fixture, devices and agents (keys), `raw_punches` (immutable), batches, the service, the agent endpoints, `/iclock/*`, the Import Center "Punches (ATTLOG)" dataset, the unmapped queue and map-to-employee, clock flags |
-| **P2-C** | Rules engine (pure function, loader, writer), `daily_attendance`, recompute jobs (debounced, bulk), nightly 02:00 and catch-up, the real `AttendanceLeaveSink`, holiday/assignment triggers, sources, `NM`, the exhaustive table tests |
-| **P2-D** | Manual entry: Mark Attendance, entries (append-only), reminders |
+| **P2-C** | Rules engine (pure function, loader, writer): sessions and the scheduled-break deduction, halves, `daily_attendance`, recompute jobs (debounced, bulk), nightly 02:00 and catch-up, **Process Attendance (re-process a range from raw data before lock)**, the real `AttendanceLeaveSink`, holiday/assignment triggers, sources, `NM`, the exhaustive table tests |
+| **P2-D** | Manual entry: `TIMED` and `STATUS_ONLY` entries (append-only) through the engine; **the editable muster** (cycle selector, totals, legend, single-employee filter, Excel export); **muster upload** via the Import Center; bulk "mark all present"; reminders; branch scope enforced and IDOR-tested |
 | **P2-E** | Screens: employee and admin Attendance Info with day detail, Who Is In?, live events, source markers everywhere |
-| **P2-F** | `biometric-agent`: the driver interface, SimulatedDriver, the Zk4370Driver (protocol-tested), the outbox and cursor, backoff, heartbeat, the single-executable build, Windows service scripts and the CI Windows-runner test, `INSTALL.md` |
-| **P2-G** | Punch simulator: scenarios with intended outcomes, the three routes, replay (500 × month) with a golden diff, drip, production refusal, the dev roster endpoint |
-| **P2-H** | Device health: checks, incidents, alerts and recovery, the morning check, the Devices screen and charts |
-| **P2-I** | Acceptance and review: the three §12 gates measured and recorded, the docs (GETTING_STARTED, DEPLOYMENT, PROGRESS) and a Phase 2 review like Phase 5's |
+| **P2-F** | `biometric-agent`: the driver interface, SimulatedDriver, the Zk4370Driver (protocol-tested), the outbox and cursor, backoff, heartbeat with **clock offset and retention state**, the **retention guard**, the single-executable build, NSSM service scripts with **Credential Manager** for the key, the CI Windows-runner test, `INSTALL.md` (install, upgrade, uninstall) |
+| **P2-G** | Punch simulator: scenarios with intended outcomes (including manual-capture branches and `TIMED` entries), the three routes, replay (500 × month) with a golden diff, drip, production refusal, the dev roster endpoint |
+| **P2-H** | Device health: checks, incidents (silence, agent silence, morning check, **clock drift, retention risk**), alerts and recovery, the Devices screen and charts |
+| **P2-I** | Acceptance and review: the four §12 gates measured and recorded, **the performance baseline committed as a regression guard** (D5), the docs (GETTING_STARTED, DEPLOYMENT, PROGRESS) and a Phase 2 review |
 
 ---
 
@@ -661,9 +843,9 @@ The two branches without a machine. → **Decision D4: who enters it.**
 
 What's left after Phase 2:
 - Employee Swipes;
-- Attendance Muster (with source markers and totals: P, A, HD, LOP,
-  leaves, holidays, week-offs, paid days, NM);
-- Process Attendance with progress (the engine supports it from P2-C);
+- the muster's device-day editing (Manual Override in the same grid). The
+  muster itself is built in Phase 2 (§5.1);
+- Process Attendance is already built in Phase 2 (§3.1);
 - the Exceptions screen with bulk resolve;
 - Manual Override for device days;
 - Shift Override (single dates);
@@ -701,8 +883,11 @@ backoff logic, and the Windows service mechanics (CI runner).
      filters) or only new ones;
    - its log capacity and whether it overwrites when full. **If the agent
      is offline longer than the device holds, punches are lost. That's
-     the one real data-loss risk, and its size is unknown until we know
-     the capacity.**
+     the one real data-loss risk.** It is now *guarded* (§7.1: a warning
+     at 50% and a loud alarm at 75% of a pessimistic 3-day default, from
+     the agent and independently from the server), but **the true
+     capacity is unknown until we know the model**, and the setting has to
+     be made then.
    - whether reading logs affects the device.
 
    *Contained by:* the driver interface. A firmware difference changes
@@ -735,12 +920,15 @@ backoff logic, and the Windows service mechanics (CI runner).
    adds the office uplink (agent → AWS) and the 30 s poll interval. **A
    punch through the agent route therefore reaches the screen within
    about 30–35 s, not 5.** The 5 s target holds for ADMS push, and for
-   the agent only after the poll. → **Decision D7.**
+   the agent only after the poll. **Accepted (D7, user):** the difference
+   that matters is "same day vs month end".
 7. **Data entry, not code:**
    - the device-user-ID ↔ employee mappings for the ~125 enrolled IDs
      (2–126);
-   - the list of which branches have no machine;
-   - the real shift and policy values.
+   - setting `has_biometric_device` off for SPN and Wellsure 2;
+   - the open rule values (grace, half-day and full-day hours, other
+     shifts);
+   - the device's retention, once the model is known.
 
    These are configuration. A wrong mapping is caught by the unmapped
    queue and the "device branch, no mapping" list, not by the engine.
@@ -757,49 +945,61 @@ backoff logic, and the Windows service mechanics (CI runner).
   is the poll interval (§11.6).
 - **G2 — a month at scale:** a 500-employee month replayed through the
   agent route is ingested and recomputed with **zero differences** from
-  the intended outcomes, within the D5 threshold, and recorded in
-  PROGRESS.
+  the intended outcomes. It must come in within ingest ≤ 2 min and
+  recompute ≤ 5 min on a dev machine.
+  - **D5, user: a regression guard, not a target.** The measured times
+    are committed as a baseline (`perf/baseline.json`). The replay job
+    reports each run against it and **fails if any figure is more than
+    2× the baseline**, even if it's still under the absolute limit.
 - **G3 — health:** a silenced simulated device raises an HR alert during
   working hours (and doesn't on a Sunday or holiday). A silenced agent
   does too. Recovery notices follow.
 - **G4 — manual capture:** a manual-capture employee with nothing entered
-  is `NM`, never `A`, never an exception. Marking the branch present
-  updates every screen live, with the manual marker.
+  is `NM`, never `A`, never an exception.
+  - A `TIMED` manual 10:45 arrival is `LATE_IN` with the same minutes a
+    punched 10:45 would give.
+  - A status-only `P` shows as status-only.
+  - The SPN/Wellsure 2 manager is refused on any other branch.
+  - Every change shows live, with the manual marker.
 
-## 13. Decisions needed before building (recommendation first)
+## 13. Decisions (answered by the user, 2026-10-08)
 
-- **D1 — Phase 1.5 timing.** Build Phase 2 now (local + CI), and do
-  Phase 1.5 (AWS staging) before the device-connection step.
-  *Recommended.* The alternative is to do 1.5 first.
-- **D2 — Device User ID optional in Add Employee**, for people at
-  no-device branches (it's required today). *Recommended: yes.* "Manual
-  capture" then follows from having no mapping, with no separate flag.
-- **D3 — the real rule values.** I won't guess them. They're seeded as
-  placeholders and listed in open questions until HR confirms:
-  - grace minutes;
-  - half-day and full-day minimum hours;
-  - the week-off pattern (Sunday only? which Saturdays?);
-  - whether any late penalty applies;
-  - other shifts besides GEN 10:00–19:00.
-- **D4 — who does manual entry for the two no-device branches**, and
-  which branches they are.
-  - *Recommended:* a permission `attendance.manual.enter` limited to
-    chosen branches, so someone at each branch (or HR centrally) can mark
-    only their branch. This adds a "branches" limit to that one
-    permission; data scope today is only SELF/TEAM/ALL.
-  - The alternative is HR only, centrally, with no new scoping.
-- **D5 — the replay pass threshold** for 500 employees × one month
-  (~24k punches, ~15k employee-days). *Proposed:* ingest ≤ 2 minutes,
-  recompute complete ≤ 5 minutes on a dev machine, and re-measured on
-  staging (Phase 5.5's load test sizes production).
-- **D6 — the agent's Windows packaging and secrets.**
-  *Recommended:* a single executable run under NSSM, with the agent key
-  in Windows Credential Manager. The alternative is `node-windows` with
-  the key in the config file (restricted ACL).
-- **D7 — the live-latency expectation for the agent route.** With a 30 s
-  poll, a punch reaches screens in about 30–35 s. *Recommended:* accept
-  that (it's still live, and far from month-end). Alternatively, poll
-  every 10 s; the cost is more device load, which is unproven (§11.1).
+- **D1:** build Phase 2 now; do Phase 1.5 before connecting the device.
+- **D2:** Device User ID optional in Add Employee, as an **explicit
+  "attendance marked manually" choice**, never a forgotten field (§4.3).
+- **D3 (HR):**
+  - working days are Monday to Saturday, and Sunday is the weekly off,
+    the same for everyone;
+  - the shift is 10:00–19:00 in two sessions, 10:00–14:00 and
+    14:45–19:00, with lunch 14:00–14:45. The sessions are configurable;
+  - **no late penalty**: lateness is recorded and visible only.
+  - **Still open:**
+    - grace minutes;
+    - half-day and full-day minimum hours;
+    - whether other shifts exist.
+
+    These stay placeholders and are kept in PROGRESS.
+- **D4 (HR):**
+  - SPN and Wellsure 2 have no machine;
+  - one manager marks both, entering **IN/OUT times** into a muster that
+    is uploaded;
+  - manual entry is time-based through the same engine, with a clearly
+    distinguished status-only option;
+  - `attendance.manual.enter` is branch-scoped, and this manager gets SPN
+    and Wellsure 2 only.
+- **D5:** ingest ≤ 2 min and recompute ≤ 5 min as a starting point.
+  **The committed baseline guards against regression (more than 2× fails).**
+- **D6:** a single executable under NSSM, with the key in Windows
+  Credential Manager. Install, upgrade and uninstall are documented for
+  someone else to do.
+- **D7:** about 30 s on the agent route is fine. The device isn't pushed
+  harder.
+- **Attendance cycle:** admin-configurable. **The calendar month is
+  confirmed by the user.**
+- **Additions:**
+  - the retention guard (§7.1);
+  - the clock-drift warning (§7.1, §7.2);
+  - re-processing from raw punches before lock (§3.1).
 
 ## 14. Open questions carried (spec §14; do not guess)
 
@@ -813,7 +1013,12 @@ backoff logic, and the Windows service mechanics (CI runner).
 - Whether the office has a static public IP (decides ADMS exposure).
 - Working hours and days for the silence alert (defaults until HR
   confirms).
-- **New:**
-  - which two branches have no machine, and who marks their attendance
-    (D4);
-  - the real shift, grace, threshold, week-off and penalty values (D3).
+- **Still open from HR (D3):** grace minutes, half-day and full-day
+  minimum hours, and whether any shift other than GEN exists.
+- The device's real log capacity (retention), once the model is known
+  (§7.1).
+- *(Answered 2026-10-08:*
+  - *the no-device branches are SPN and Wellsure 2, marked by one
+    manager;*
+  - *week-off, shift and sessions, and no penalty;*
+  - *the calendar month.)*
