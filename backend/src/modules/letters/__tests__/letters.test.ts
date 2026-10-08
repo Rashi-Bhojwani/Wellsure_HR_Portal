@@ -72,6 +72,10 @@ describe("Letters", { timeout: 30_000 }, () => {
   }
 
   beforeAll(async () => {
+    // Launch Chromium here, under the 60 s hook budget: a cold launch on a
+    // slow CI runner is not something the 30 s issuing test should pay for
+    // (CI run 37835475091 timed out at letters.test.ts "issues a letter").
+    await renderPdf("<!doctype html><p>warm-up</p>", new Date("2026-01-01T00:00:00Z"));
     org = await createEmployeeTestOrgMasters();
     people.hrAdmin = await createFullTestEmployee(org, { roleCode: "HR_ADMIN" });
     people.hrExec = await createFullTestEmployee(org, { roleCode: "HR_EXECUTIVE" });
