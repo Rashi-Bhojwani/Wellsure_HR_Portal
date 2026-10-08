@@ -6,6 +6,11 @@ import { createBullConnection } from "../lib/redis";
 // (attendance.recompute, leave accrual, etc.) start in Phase 2+.
 export const systemPingQueue = new Queue("system-ping", { connection: createBullConnection() });
 
+// Daily 00:05 IST (EF3): scheduled job changes that start today refresh the
+// live state (rooms, team screens) and tell the people involved — see
+// modules/employee/scheduledChanges.ts. Runs before separations (01:00).
+export const historyRolloverQueue = new Queue("history-rollover", { connection: createBullConnection() });
+
 // Daily: completes any INITIATED separation whose last working date has
 // passed (spec §3.8) — see modules/employee/separations.ts.
 export const employeeSeparationsQueue = new Queue("employee-separations", { connection: createBullConnection() });

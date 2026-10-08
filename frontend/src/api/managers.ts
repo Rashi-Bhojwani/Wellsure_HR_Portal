@@ -40,7 +40,8 @@ export async function listUnassigned(): Promise<UnassignedRow[]> {
   const { data } = await apiClient.get<{ employees: UnassignedRow[] }>("/api/managers/unassigned");
   return data.employees;
 }
-export async function getTeam(managerId: string): Promise<{ manager: PersonPlacement; members: PersonPlacement[] }> {
+export type ScheduledMove = PersonPlacement & { from: string; jobHistoryId: string; toManager?: string | null };
+export async function getTeam(managerId: string): Promise<{ manager: PersonPlacement; members: PersonPlacement[]; joining: ScheduledMove[]; leaving: ScheduledMove[] }> {
   const { data } = await apiClient.get(`/api/managers/${managerId}/team`);
   return data;
 }

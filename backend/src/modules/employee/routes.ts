@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { authenticate } from "../../middleware/authenticate";
-import { requirePermission } from "../../middleware/rbac";
+import { requireAnyPermission, requirePermission } from "../../middleware/rbac";
+import { z } from "zod";
 import { validate } from "../../middleware/validate";
 import * as controller from "./controller";
 import { memoryUpload } from "../../lib/uploads";
@@ -22,6 +23,8 @@ import {
   selfServiceUpdateSchema,
   statutoryUpdateSchema,
 } from "./validators";
+
+const historyRowParamsSchema = z.object({ id: z.string().min(1), rowId: z.string().min(1) });
 
 export const employeeRouter = Router();
 employeeRouter.use(authenticate);
@@ -88,6 +91,11 @@ employeeRouter.get("/:id/bank/reveal", canViewBank, validate({ params: idParamsS
 employeeRouter.get("/:id/history/job", canView, validate({ params: idParamsSchema }), controller.getJobHistory);
 employeeRouter.get("/:id/history/name", canView, validate({ params: idParamsSchema }), controller.getNameHistory);
 employeeRouter.get("/:id/history/bank", canViewBank, validate({ params: idParamsSchema }), controller.getBankHistory);
+// EF3: cancel a scheduled change — same permission as making it (a team
+// move can also be made in Manager Management, hence manager.team.assign).
+employeeRouter.post("/:id/history/job/:rowId/cancel", requireAnyPermission("employee.edit", "manager.team.assign"), validate({ params: historyRowParamsSchema }), controller.cancelScheduledJobChange);
+employeeRouter.post("/:id/history/name/:rowId/cancel", canEdit, validate({ params: historyRowParamsSchema }), controller.cancelScheduledNameChange);
+employeeRouter.post("/:id/history/bank/:rowId/cancel", canEditBank, validate({ params: historyRowParamsSchema }), controller.cancelScheduledBankChange);
 
 employeeRouter.patch("/:id/job", canEdit, validate({ params: idParamsSchema, body: jobUpdateSchema }), controller.updateJob);
 employeeRouter.patch("/:id/bank", canEditBank, validate({ params: idParamsSchema, body: bankUpdateSchema }), controller.updateBank);

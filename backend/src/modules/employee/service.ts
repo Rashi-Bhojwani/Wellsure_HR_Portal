@@ -2,13 +2,15 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { writeAuditLog } from "../../lib/audit";
 import { businessToday } from "../../lib/businessDate";
-import { firstHistoryDay, inForceOn, writeBankChange, writeJobChange, writeNameChange } from "../../lib/effectiveDating";
+import { firstHistoryDay, inForceOn, rowStatus, writeBankChange, writeJobChange, writeNameChange } from "../../lib/effectiveDating";
 import { HttpError } from "../../middleware/errorHandler";
 import { encryptField, decryptField } from "../../lib/encryption";
 import { blindIndex, last4, normalizeAadhaar, normalizeAccountNumber, normalizePan } from "../../lib/fieldHash";
 import { buildEmployeeScopeWhere, type DataScope } from "../../lib/dataScope";
 import { createInvitation, resendInvitation as resendInvitationEmail } from "../auth/service";
-import { assertReportingLine, assertReportingLineFor, parseMoveDate } from "../managers/hierarchy";
+import { assertReportingLine, assertReportingLineFor } from "../managers/hierarchy";
+import { emitPlacementRooms, emitTeamChanged } from "../../realtime/emit";
+import { notifyScheduledMove } from "./scheduledChanges";
 import type { RequestMetaInput } from "./types";
 import type { createEmployeeSchema } from "./validators";
 import type { z } from "zod";
@@ -452,6 +454,7 @@ export async function getJobHistory(employeeId: string, viewerEmployeeId: string
     reportingManager: row.reportingManager ? row.reportingManager.nameHistory[0]?.fullName ?? row.reportingManager.employeeCode : null,
     effectiveFrom: row.effectiveFrom.toISOString().slice(0, 10),
     effectiveTo: row.effectiveTo?.toISOString().slice(0, 10) ?? null,
+    status: rowStatus(row.effectiveFrom, row.effectiveTo), // past | current | scheduled (EF3)
     changeReason: row.changeReason,
   }));
 }
@@ -464,6 +467,7 @@ export async function getNameHistory(employeeId: string, viewerEmployeeId: strin
     fullName: row.fullName,
     effectiveFrom: row.effectiveFrom.toISOString().slice(0, 10),
     effectiveTo: row.effectiveTo?.toISOString().slice(0, 10) ?? null,
+    status: rowStatus(row.effectiveFrom, row.effectiveTo), // past | current | scheduled (EF3)
     changeReason: row.changeReason,
   }));
 }
@@ -484,6 +488,7 @@ export async function getBankHistory(employeeId: string, viewerEmployeeId: strin
     branchName: row.branchName,
     effectiveFrom: row.effectiveFrom.toISOString().slice(0, 10),
     effectiveTo: row.effectiveTo?.toISOString().slice(0, 10) ?? null,
+    status: rowStatus(row.effectiveFrom, row.effectiveTo), // past | current | scheduled (EF3)
   }));
 }
 
@@ -503,10 +508,8 @@ interface JobUpdateInput {
 export async function updateJob(employeeId: string, input: JobUpdateInput, meta: RequestMetaInput) {
   const latest = await prisma.employeeJobHistory.findFirst({ where: { employeeId }, orderBy: { effectiveFrom: "desc" } });
   if (input.reportingManagerId !== undefined && input.reportingManagerId !== (latest?.reportingManagerId ?? null)) {
-    // E2: the three-level rules, and no future-dated team move until EF3
-    // (docs/plans/EFFECTIVE_DATES.md) makes scheduled changes visible.
+    // E2: the three-level rules. A move may be scheduled ahead (EF3).
     await assertReportingLineFor(employeeId, input.reportingManagerId);
-    parseMoveDate(input.effectiveFrom);
   }
   if (!latest && !(await prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true } }))) throw new HttpError(404, "Employee not found.", "NOT_FOUND");
 
@@ -534,6 +537,15 @@ export async function updateJob(employeeId: string, input: JobUpdateInput, meta:
   );
 
   await writeAuditLog({ ...meta, action: "employee.job.changed", entityType: "Employee", entityId: employeeId, before: write.before, after: { ...write.after, timeline: write.plan } });
+  const before = write.before;
+  if (write.after.effectiveFrom <= businessToday()) {
+    // In force now: live rooms and team screens follow at once.
+    emitPlacementRooms(employeeId, { departmentId: before?.departmentId ?? null, locationId: before?.locationId ?? null }, write.after);
+    if (before?.reportingManagerId !== write.after.reportingManagerId) emitTeamChanged([before?.reportingManagerId, write.after.reportingManagerId]);
+  } else {
+    // Scheduled: the daily rollover refreshes live state on the day; people are told now.
+    await notifyScheduledMove(employeeId, before?.reportingManagerId ?? null, write.after.reportingManagerId, write.after.effectiveFrom);
+  }
   return write.after;
 }
 

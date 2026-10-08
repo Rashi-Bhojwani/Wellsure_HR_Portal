@@ -1,7 +1,7 @@
 # Effective dates: one "as of" model, before any payroll code
 
 Status: **Approved 2026-10-03 (all six decisions as recommended). EF1
-built 2026-10-04. EF2 built 2026-10-08. EF3 and EF4 follow straight on
+built 2026-10-04. EF2 and EF3 built 2026-10-08. EF4 follows straight on
 (user, 2026-10-08: finish EF2–EF4, then plan Phase 2).** Required before Phase 6 (Phase 5 review §5.1;
 PROGRESS open issue "Future-dated job changes take effect immediately").
 

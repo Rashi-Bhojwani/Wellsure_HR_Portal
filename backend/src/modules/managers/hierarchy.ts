@@ -37,14 +37,17 @@ export async function assertReportingLineFor(employeeId: string, managerId: stri
   await assertReportingLine({ code: e.employeeCode, roleCodes: await roleCodesOf(employeeId, db) }, managerId, db);
 }
 
-// Effective dates for team moves: today or earlier. Future dates stay
-// refused until EF3 (docs/plans/EFFECTIVE_DATES.md) makes scheduled changes
-// visible and rolls them over; how far back a change may go is the timeline
-// writer's rule (never before the latest period started).
-export function parseMoveDate(effectiveFrom: string | undefined): Date {
+// Effective dates for reporting-line changes. Team moves may be scheduled
+// ahead (EF3) — the timeline writer enforces how far ahead and that older
+// history is never rewritten. Appointing or removing a manager stays
+// today-or-earlier: the role itself changes immediately, so its reporting
+// line must too (model A: a manager has no manager).
+export function parseMoveDate(effectiveFrom: string | undefined, opts: { allowFuture?: boolean } = {}): Date {
   const today = businessToday();
   const date = effectiveFrom ? new Date(effectiveFrom) : today;
-  if (date > today) throw new HttpError(400, "A team change can't be dated in the future yet — use today or an earlier date.", "FUTURE_DATE");
+  if (!opts.allowFuture && date > today) {
+    throw new HttpError(400, "Appointing or removing a manager takes effect now — use today or an earlier date.", "FUTURE_DATE");
+  }
   return date;
 }
 
@@ -57,6 +60,12 @@ export async function moveReportingLine(tx: Prisma.TransactionClient, employeeId
   if (current.reportingManagerId === newManagerId) return { before: current, after: current, changed: false as const };
   const write = await writeJobChange(tx, employeeId, effectiveFrom, { reportingManagerId: newManagerId }, { createdByUserId: createdByUserId ?? current.createdByUserId, changeReason });
   return { before: current, after: write.after, changed: true as const };
+}
+
+// People scheduled to join a manager's team (a move dated after today).
+export async function scheduledJoinerIds(managerId: string, db: Db = prisma): Promise<string[]> {
+  const rows = await db.employeeJobHistory.findMany({ where: { reportingManagerId: managerId, effectiveFrom: { gt: businessToday() }, employee: { status: "ACTIVE" } }, select: { employeeId: true } });
+  return [...new Set(rows.map((r) => r.employeeId))];
 }
 
 // Active direct reports of a manager (current placements only).

@@ -1,3 +1,4 @@
+import { cancelScheduled } from "./scheduledChanges";
 import * as photos from "../people/photos";
 import { requireFile } from "../../lib/uploads";
 import type { Request, Response } from "express";
@@ -87,6 +88,14 @@ export async function getBankHistory(req: Request, res: Response): Promise<void>
     .status(200)
     .json({ history: await employeeService.getBankHistory(req.params.id as string, req.user!.employeeId, scope(req), req.user!.permissions) });
 }
+
+// EF3: cancel a scheduled (not yet in force) change.
+const cancelOf = (kind: "job" | "name" | "bank") => async (req: Request, res: Response): Promise<void> => {
+  res.status(200).json(await cancelScheduled(kind, req.params.id as string, req.params.rowId as string, { employeeId: req.user!.employeeId, dataScope: scope(req) }, actorMeta(req)));
+};
+export const cancelScheduledJobChange = cancelOf("job");
+export const cancelScheduledNameChange = cancelOf("name");
+export const cancelScheduledBankChange = cancelOf("bank");
 
 // ── Effective-dated + direct updates ────────────────────────────────────
 

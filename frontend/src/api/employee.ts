@@ -178,6 +178,7 @@ export interface JobHistoryEntry {
   reportingManager: string | null;
   effectiveFrom: string;
   effectiveTo: string | null;
+  status: "past" | "current" | "scheduled";
   changeReason: string | null;
 }
 export interface NameHistoryEntry {
@@ -185,6 +186,7 @@ export interface NameHistoryEntry {
   fullName: string;
   effectiveFrom: string;
   effectiveTo: string | null;
+  status: "past" | "current" | "scheduled";
   changeReason: string | null;
 }
 export interface BankHistoryEntry {
@@ -196,6 +198,7 @@ export interface BankHistoryEntry {
   branchName: string;
   effectiveFrom: string;
   effectiveTo: string | null;
+  status: "past" | "current" | "scheduled";
 }
 export async function getJobHistory(id: string): Promise<JobHistoryEntry[]> {
   const { data } = await apiClient.get<{ history: JobHistoryEntry[] }>(`/api/employees/${id}/history/job`);
@@ -208,6 +211,11 @@ export async function getNameHistory(id: string): Promise<NameHistoryEntry[]> {
 export async function getBankHistory(id: string): Promise<BankHistoryEntry[]> {
   const { data } = await apiClient.get<{ history: BankHistoryEntry[] }>(`/api/employees/${id}/history/bank`);
   return data.history;
+}
+
+// EF3: cancel a scheduled (not yet in force) change; the previous row reopens.
+export async function cancelScheduledChange(id: string, kind: "job" | "name" | "bank", rowId: string): Promise<void> {
+  await apiClient.post(`/api/employees/${id}/history/${kind}/${rowId}/cancel`, {});
 }
 
 // ── Effective-dated + direct updates ────────────────────────────────────

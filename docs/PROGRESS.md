@@ -3806,6 +3806,71 @@ D affects every screen and every access check on D, and not before.
   dashboard, Employee Leave, headcount, org chart and directory as HR,
   and Karan's team grid.
 
+### Effective dating EF3 — scheduled changes go live (2026-10-08)
+
+Commit 3 of 4 (`docs/plans/EFFECTIVE_DATES.md`). A change dated after
+today is stored now, shown as scheduled, can be cancelled until its day,
+and takes effect on it.
+
+**Built:**
+- **E2's stopgap is lifted for team moves.** Manager Management "Add to
+  team", bulk assign from Unassigned, removing a member, and Change job
+  details can all be dated ahead, up to 366 days (the timeline writer's
+  cap).
+  - Appointing or removing a manager stays today-or-earlier: the role
+    changes at once, so its reporting line must too (`FUTURE_DATE`).
+  - A manager can't be removed while anyone is scheduled to join their
+    team (`TEAM_NOT_EMPTY`).
+- **Visibility:**
+  - Job, name and bank history rows carry `status: past | current |
+    scheduled`.
+  - Profile → History shows "Scheduled from 20 Oct 2026" with Cancel,
+    and "until <last day>" for past rows.
+  - The Change job dialog says "Takes effect now" or "Scheduled — takes
+    effect on …".
+  - The Manager Management team drawer lists scheduled joiners and
+    leavers, each with Cancel.
+- **Cancel:** `POST /api/employees/:id/history/{job|name|bank}/:rowId/cancel`.
+  - Uses the same permission as making the change (job:
+    `employee.edit` or `manager.team.assign`; name: `employee.edit`;
+    bank: `employee.bank.edit`), scope-checked.
+  - Only the latest, not-yet-in-force row can be cancelled; the previous
+    row reopens.
+  - The audit entry holds the removed row in full (bank: last 4, IFSC,
+    bank — never the number).
+  - The employee and the manager they were going to are told.
+  - All three routes are classified Admin-only in the route inventory.
+- **Told when it's scheduled:** the employee, the old manager and the new
+  manager each get a `team.move.scheduled` notification.
+- **The daily rollover** (BullMQ `history-rollover`, 00:05 IST, before
+  separations):
+  - for each job change written before its day that has now started, it
+    moves the person's live sockets to the new `dept:`/`location:`
+    rooms, refreshes both managers' team screens and task counts, and
+    notifies all three (`team.move.effective`);
+  - it catches up any missed days (`history.rolloverLastRun`) and never
+    repeats a day.
+- **Immediate job changes** now move the person's live rooms at once too.
+
+**Tests:**
+- `employee/__tests__/scheduledChanges.test.ts`:
+  - scheduled via Change job details: status, three notifications,
+    `HISTORY_SCHEDULED_EXISTS` for an earlier second change;
+  - the rollover catches up a missed day, moves rooms, emits team
+    changes, notifies, and runs once only;
+  - name cancel: a scheduled one cancels, an in-force one is refused.
+- `managers.test.ts`: the old "future move refused" test now checks that
+  a move is scheduled, appears in the team view's joining list, and
+  cancels from the profile history; appointing with a future date is
+  still `FUTURE_DATE`.
+
+**Verified:**
+- 609 backend and 12 frontend tests, lint and typecheck;
+- a browser walkthrough: Karan's team → add Leela for 20 Oct shows
+  "Scheduled — takes effect on 20 Oct 2026", she isn't a member yet,
+  "Leela Menon joins on 20 Oct 2026" appears with Cancel, and cancelling
+  it leaves her history with one row.
+
 ## Open questions
 
 - [x] **Approval Workflows — dropped (user decision 2026-10-03).** No
@@ -3875,8 +3940,13 @@ Carried from spec §14 — configurable, not guessed, until answered:
 
 ## Open issues (known bugs, not yet fixed)
 
-- [ ] **Future-dated job changes take effect immediately for access
-      checks** (found 2026-10-02 while planning E2). `updateJob` accepts
+- [x] **Future-dated job changes take effect immediately for access
+      checks** — FIXED by effective dating EF1–EF3 (2026-10-08):
+      - every read is "in force today";
+      - a change dated later is scheduled, shown and cancellable;
+      - the 00:05 IST rollover applies it on its day.
+
+      The original note follows. (found 2026-10-02 while planning E2). `updateJob` accepts
       any `effectiveFrom`. It closes the current row and inserts the new
       one with `effective_to = NULL`. Every scope and team query treats
       `effective_to IS NULL` as "current", so a change dated next month

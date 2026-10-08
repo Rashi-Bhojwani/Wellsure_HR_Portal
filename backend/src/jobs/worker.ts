@@ -1,3 +1,4 @@
+import { processHistoryRollover } from "../modules/employee/scheduledChanges";
 import { Worker } from "bullmq";
 import { createBullConnection } from "../lib/redis";
 import { logger } from "../lib/logger";
@@ -25,6 +26,19 @@ export function startWorkers(): Worker[] {
   );
   pingWorker.on("failed", (job, err) => {
     logger.error({ jobId: job?.id, err }, "system-ping job failed");
+  });
+
+  const rolloverWorker = new Worker(
+    "history-rollover",
+    async (job) => {
+      const result = await processHistoryRollover();
+      logger.info({ jobId: job.id, ...result }, "history-rollover processed");
+      return result;
+    },
+    { connection: createBullConnection() },
+  );
+  rolloverWorker.on("failed", (job, err) => {
+    logger.error({ jobId: job?.id, err }, "history-rollover job failed");
   });
 
   const separationsWorker = new Worker(
@@ -125,5 +139,5 @@ export function startWorkers(): Worker[] {
     logger.error({ event: "security.breakglass.alert_undelivered", jobId: job?.id, attempt: job?.attemptsMade, err }, "break-glass alert email still not delivered");
   });
 
-  return [pingWorker, separationsWorker, leavePlAccrualWorker, compOffExpiryWorker, engageAutoPostsWorker, helpdeskAutoCloseWorker, lettersWorker, securityAlertWorker];
+  return [pingWorker, rolloverWorker, separationsWorker, leavePlAccrualWorker, compOffExpiryWorker, engageAutoPostsWorker, helpdeskAutoCloseWorker, lettersWorker, securityAlertWorker];
 }

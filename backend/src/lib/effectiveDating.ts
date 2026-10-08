@@ -258,23 +258,53 @@ export async function writeBankChange(
   return { before: latest, after, plan: plan.kind };
 }
 
+export type HistoryKind = "job" | "name" | "bank";
+
+/** Where a history row stands today: already ended, in force, or scheduled. */
+export function rowStatus(from: Date, to: Date | null, today: Date = businessToday()): "past" | "current" | "scheduled" {
+  if (from > today) return "scheduled";
+  if (to !== null && to <= today) return "past";
+  return "current";
+}
+
+type AnyHistoryRow = EmployeeJobHistory | EmployeeNameHistory | EmployeeBankAccount;
+
 /**
- * Cancel a scheduled (not yet in force) job change: the row is removed and
- * the previous one reopened. Returns the removed row for the caller's audit
+ * Cancel a scheduled (not yet in force) change: the row is removed and the
+ * previous one reopened. Returns the removed row for the caller's audit
  * entry. A change already in force can't be cancelled — supersede it.
  */
-export async function cancelScheduledJobChange(tx: Prisma.TransactionClient, employeeId: string, rowId: string): Promise<{ removed: EmployeeJobHistory; reopened: EmployeeJobHistory }> {
+export async function cancelScheduledChange(tx: Prisma.TransactionClient, kind: HistoryKind, employeeId: string, rowId: string): Promise<{ removed: AnyHistoryRow; reopened: AnyHistoryRow }> {
   await lockEmployee(tx, employeeId);
-  const rows = await tx.employeeJobHistory.findMany({ where: { employeeId }, orderBy: { effectiveFrom: "asc" } });
+  const rows: AnyHistoryRow[] =
+    kind === "job"
+      ? await tx.employeeJobHistory.findMany({ where: { employeeId }, orderBy: { effectiveFrom: "asc" } })
+      : kind === "name"
+        ? await tx.employeeNameHistory.findMany({ where: { employeeId }, orderBy: { effectiveFrom: "asc" } })
+        : await tx.employeeBankAccount.findMany({ where: { employeeId }, orderBy: { effectiveFrom: "asc" } });
   const target = rows.find((r) => r.id === rowId);
   if (!target) throw new HttpError(404, "That change wasn't found.", "NOT_FOUND");
   if (target !== rows.at(-1)) throw new HttpError(409, "Only the latest scheduled change can be cancelled — cancel the later one first.", "HISTORY_NOT_LATEST");
   if (target.effectiveFrom <= businessToday()) throw new HttpError(409, "This change is already in force, so it can't be cancelled — make a new change instead.", "HISTORY_IN_FORCE");
   const previous = rows.at(-2);
-  if (!previous) throw new HttpError(409, "This is their only placement, so it can't be cancelled.", "HISTORY_ONLY_ROW");
-  await tx.employeeJobHistory.delete({ where: { id: target.id } });
-  const reopened = await tx.employeeJobHistory.update({ where: { id: previous.id }, data: { effectiveTo: null } });
+  if (!previous) throw new HttpError(409, "This is the only record, so it can't be cancelled.", "HISTORY_ONLY_ROW");
+  let reopened: AnyHistoryRow;
+  if (kind === "job") {
+    await tx.employeeJobHistory.delete({ where: { id: target.id } });
+    reopened = await tx.employeeJobHistory.update({ where: { id: previous.id }, data: { effectiveTo: null } });
+  } else if (kind === "name") {
+    await tx.employeeNameHistory.delete({ where: { id: target.id } });
+    reopened = await tx.employeeNameHistory.update({ where: { id: previous.id }, data: { effectiveTo: null } });
+  } else {
+    await tx.employeeBankAccount.delete({ where: { id: target.id } });
+    reopened = await tx.employeeBankAccount.update({ where: { id: previous.id }, data: { effectiveTo: null } });
+  }
   return { removed: target, reopened };
+}
+
+/** Job-only shorthand (EF1 tests). */
+export async function cancelScheduledJobChange(tx: Prisma.TransactionClient, employeeId: string, rowId: string): Promise<{ removed: EmployeeJobHistory; reopened: EmployeeJobHistory }> {
+  return (await cancelScheduledChange(tx, "job", employeeId, rowId)) as { removed: EmployeeJobHistory; reopened: EmployeeJobHistory };
 }
 
 /**

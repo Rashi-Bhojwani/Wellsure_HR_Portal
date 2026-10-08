@@ -198,6 +198,32 @@ export function emitPermissionsChanged(employeeId: string, effectivePermissions:
   io.to(`user:${employeeId}`).emit("permissions.changed", {});
 }
 
+// ── Placement rooms (EF3) ───────────────────────────────────────────────
+// A job change that takes effect — now, or on its scheduled day via the
+// rollover — moves the person's live sockets from their old dept:/location:
+// rooms to the new ones (joined at connection, realtime/socket.ts), so a
+// department- or branch-scoped event reaches them from that day.
+export function emitPlacementRooms(
+  employeeId: string,
+  before: { departmentId: string | null; locationId: string | null },
+  after: { departmentId: string | null; locationId: string | null },
+): void {
+  if (!io?.in) return;
+  const leave: string[] = [];
+  const join: string[] = [];
+  if (before.departmentId !== after.departmentId) {
+    if (before.departmentId) leave.push(`dept:${before.departmentId}`);
+    if (after.departmentId) join.push(`dept:${after.departmentId}`);
+  }
+  if (before.locationId !== after.locationId) {
+    if (before.locationId) leave.push(`location:${before.locationId}`);
+    if (after.locationId) join.push(`location:${after.locationId}`);
+  }
+  const userRoom = `user:${employeeId}`;
+  if (leave.length) io.in(userRoom).socketsLeave(leave);
+  if (join.length) io.in(userRoom).socketsJoin(join);
+}
+
 // ── Teams (Phase 5 commit E2) ───────────────────────────────────────────
 // Signal-only: a team changed (member moved in or out, manager appointed or
 // removed). Goes to each affected manager, so their team screens, Review

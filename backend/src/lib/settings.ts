@@ -12,7 +12,7 @@ export async function getSetting<T>(key: string, defaultValue: T): Promise<T> {
 
 // Only the System Settings module (spec §7.8) calls this — every other
 // module only ever reads settings via getSetting above.
-export async function setSetting(key: string, value: unknown, updatedByUserId: string): Promise<void> {
+export async function setSetting(key: string, value: unknown, updatedByUserId: string | null): Promise<void> {
   await prisma.systemSetting.upsert({
     where: { key },
     create: { key, value: value as Prisma.InputJsonValue, updatedByUserId },

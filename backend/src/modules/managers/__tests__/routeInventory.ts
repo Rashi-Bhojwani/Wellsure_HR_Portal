@@ -103,6 +103,9 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/employees/:id/history/job": scoped("findScopedEmployee"),
   "GET /api/employees/:id/history/name": scoped("findScopedEmployee"),
   "GET /api/employees/:id/history/bank": admin,
+  "POST /api/employees/:id/history/job/:rowId/cancel": admin, // EF3 — employee.edit / manager.team.assign, neither grantable
+  "POST /api/employees/:id/history/name/:rowId/cancel": admin,
+  "POST /api/employees/:id/history/bank/:rowId/cancel": admin,
   "PATCH /api/employees/:id/job": admin,
   "PATCH /api/employees/:id/bank": admin,
   "PATCH /api/employees/:id/name": admin,

@@ -1,3 +1,4 @@
+import { EffectiveDateHint, HistoryStatusCell, type HistoryStatus } from "../../../lib/effectiveDate";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -10,6 +11,7 @@ import {
   Form,
   Input,
   Modal,
+  Popconfirm,
   Select,
   Space,
   Table,
@@ -212,6 +214,7 @@ function BankTab({ employeeId, profile, canEdit }: { employeeId: string; profile
 function JobEditModal({ employeeId, open, onClose }: { employeeId: string; open: boolean; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
+  const effectiveFrom = Form.useWatch("effectiveFrom", form) as dayjs.Dayjs | undefined;
   const { data: departments = [] } = useQuery({ queryKey: ["org", "departments"], queryFn: orgApi.departments.list });
   const { data: designations = [] } = useQuery({ queryKey: ["org", "designations"], queryFn: orgApi.designations.list });
   const { data: locations = [] } = useQuery({ queryKey: ["org", "locations"], queryFn: () => orgApi.listLocations(false) });
@@ -237,10 +240,10 @@ function JobEditModal({ employeeId, open, onClose }: { employeeId: string; open:
         <Form.Item name="departmentId" label="Department"><Select allowClear options={departments.map((d) => ({ value: d.id, label: d.name }))} /></Form.Item>
         <Form.Item name="designationId" label="Designation"><Select allowClear options={designations.map((d) => ({ value: d.id, label: d.name }))} /></Form.Item>
         <Form.Item name="locationId" label="Location"><Select allowClear options={locations.map((l) => ({ value: l.id, label: l.name }))} /></Form.Item>
-        <Form.Item name="reportingManagerId" label="Reporting manager" extra="Only managers. To move someone between teams, Manager Management is quicker. A manager change can't be dated in the future yet.">
+        <Form.Item name="reportingManagerId" label="Reporting manager" extra="Only managers. To move someone between teams, Manager Management is quicker.">
           <Select allowClear placeholder="Leave unchanged" options={managers.filter((m) => m.employeeId !== employeeId).map((m) => ({ value: m.employeeId, label: `${m.name} (${m.employeeCode})` }))} showSearch optionFilterProp="label" />
         </Form.Item>
-        <Form.Item name="effectiveFrom" label="Effective From" rules={[{ required: true }]}><DatePicker style={{ width: "100%" }} /></Form.Item>
+        <Form.Item name="effectiveFrom" label="Effective From" rules={[{ required: true }]} extra={<EffectiveDateHint value={effectiveFrom} />}><DatePicker style={{ width: "100%" }} /></Form.Item>
         <Form.Item name="changeReason" label="Reason"><Input placeholder="e.g. Promotion, Transfer" /></Form.Item>
         <Form.Item style={{ marginBottom: 0, textAlign: "right" }}>
           <Button type="primary" htmlType="submit" loading={mutation.isPending}>Save</Button>
@@ -251,9 +254,38 @@ function JobEditModal({ employeeId, open, onClose }: { employeeId: string; open:
 }
 
 function HistoryTab({ employeeId, canViewBank }: { employeeId: string; canViewBank: boolean }) {
+  const queryClient = useQueryClient();
+  const { hasPermission } = useAuth();
   const { data: jobHistory = [] } = useQuery({ queryKey: ["employees", "history", employeeId, "job"], queryFn: () => employeeApi.getJobHistory(employeeId) });
   const { data: nameHistory = [] } = useQuery({ queryKey: ["employees", "history", employeeId, "name"], queryFn: () => employeeApi.getNameHistory(employeeId) });
   const { data: bankHistory = [] } = useQuery({ queryKey: ["employees", "history", employeeId, "bank"], queryFn: () => employeeApi.getBankHistory(employeeId), enabled: canViewBank });
+  // EF3: a scheduled change can be cancelled until its day (the previous row reopens).
+  const cancel = useMutation({
+    mutationFn: ({ kind, rowId }: { kind: "job" | "name" | "bank"; rowId: string }) => employeeApi.cancelScheduledChange(employeeId, kind, rowId),
+    onSuccess: () => {
+      void message.success("Scheduled change cancelled.");
+      void queryClient.invalidateQueries({ queryKey: ["employees", "history", employeeId] });
+      void queryClient.invalidateQueries({ queryKey: ["employees", "profile", employeeId] });
+    },
+    onError: (err) => void message.error(errorMessage(err, "Couldn't cancel it.")),
+  });
+  const canCancel = { job: hasPermission("employee.edit") || hasPermission("manager.team.assign"), name: hasPermission("employee.edit"), bank: hasPermission("employee.bank.edit") };
+  const statusColumn = (kind: "job" | "name" | "bank") => ({
+    title: "Until",
+    key: "status",
+    render: (_: unknown, r: { id: string; status: HistoryStatus; effectiveFrom: string; effectiveTo: string | null }) => (
+      <Space size={6}>
+        <HistoryStatusCell status={r.status} effectiveFrom={r.effectiveFrom} effectiveTo={r.effectiveTo} />
+        {r.status === "scheduled" && canCancel[kind] && (
+          <Popconfirm title="Cancel this scheduled change? The current record stays as it is." okText="Cancel change" cancelText="Keep it" onConfirm={() => cancel.mutate({ kind, rowId: r.id })}>
+            <Button size="small" danger type="link">
+              Cancel
+            </Button>
+          </Popconfirm>
+        )}
+      </Space>
+    ),
+  });
 
   return (
     <Space orientation="vertical" size={24} style={{ width: "100%" }}>
@@ -265,7 +297,7 @@ function HistoryTab({ employeeId, canViewBank }: { employeeId: string; canViewBa
           { title: "Location", dataIndex: "location" },
           { title: "Manager", dataIndex: "reportingManager", render: (v: string | null) => v ?? "—" },
           { title: "From", dataIndex: "effectiveFrom" },
-          { title: "To", dataIndex: "effectiveTo", render: (v: string | null) => v ?? "Current" },
+          statusColumn("job"),
           { title: "Reason", dataIndex: "changeReason", render: (v: string | null) => v ?? "—" },
         ]} />
       </div>
@@ -274,7 +306,7 @@ function HistoryTab({ employeeId, canViewBank }: { employeeId: string; canViewBa
         <Table rowKey="id" size="small" pagination={false} dataSource={nameHistory} columns={[
           { title: "Full Name", dataIndex: "fullName" },
           { title: "From", dataIndex: "effectiveFrom" },
-          { title: "To", dataIndex: "effectiveTo", render: (v: string | null) => v ?? "Current" },
+          statusColumn("name"),
           { title: "Reason", dataIndex: "changeReason", render: (v: string | null) => v ?? "—" },
         ]} />
       </div>
@@ -286,7 +318,7 @@ function HistoryTab({ employeeId, canViewBank }: { employeeId: string; canViewBa
             { title: "Account (last 4)", dataIndex: "accountNumberLast4" },
             { title: "IFSC", dataIndex: "ifsc" },
             { title: "From", dataIndex: "effectiveFrom" },
-            { title: "To", dataIndex: "effectiveTo", render: (v: string | null) => v ?? "Current" },
+            statusColumn("bank"),
           ]} />
         </div>
       )}

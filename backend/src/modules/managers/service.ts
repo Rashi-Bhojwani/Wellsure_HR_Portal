@@ -3,11 +3,13 @@ import { resolveAccess } from "../../lib/permissions";
 import { clearOverride, setOverride, type AccessActor } from "../access/service";
 import { writeAuditLog } from "../../lib/audit";
 import { prisma } from "../../lib/prisma";
+import { businessToday } from "../../lib/businessDate";
 import { checkRoleCombination, EMPLOYEE_ROLE, isTopLevel, MANAGER_ROLE_CODE } from "../../lib/reportingHierarchy";
 import { HttpError } from "../../middleware/errorHandler";
 import { emitTasksCounts, emitTeamChanged } from "../../realtime/emit";
 import { notifyAccessChanged } from "../../lib/accessChanged";
-import { assertReportingLine, directReportIds, moveReportingLine, parseMoveDate, roleCodesOf } from "./hierarchy";
+import { notifyScheduledMove } from "../employee/scheduledChanges";
+import { assertReportingLine, directReportIds, moveReportingLine, parseMoveDate, roleCodesOf, scheduledJoinerIds } from "./hierarchy";
 import { inForceOn } from "../../lib/effectiveDating";
 
 // Manager Management (Phase 5 commit E2, docs/plans/PHASE_5.md §E2):
@@ -97,8 +99,23 @@ export async function managerOptions() {
 export async function getTeam(managerId: string) {
   await requireActiveManager(managerId);
   const ids = await directReportIds(managerId);
-  const labels = await placementLabels([managerId, ...ids]);
-  return { manager: labels.get(managerId)!, members: ids.map((id) => labels.get(id)!).sort((a, b) => a.name.localeCompare(b.name)) };
+  // EF3: moves scheduled after today — who joins and who leaves, and when.
+  const scheduledRows = await prisma.employeeJobHistory.findMany({
+    where: { effectiveFrom: { gt: businessToday() }, employee: { status: "ACTIVE" }, OR: [{ reportingManagerId: managerId }, { employeeId: { in: ids } }] },
+    orderBy: { effectiveFrom: "asc" },
+    select: { id: true, employeeId: true, reportingManagerId: true, effectiveFrom: true },
+  });
+  const moving = scheduledRows.filter((r) => (r.reportingManagerId === managerId) !== ids.includes(r.employeeId));
+  const labels = await placementLabels([managerId, ...ids, ...moving.map((r) => r.employeeId), ...moving.flatMap((r) => (r.reportingManagerId ? [r.reportingManagerId] : []))]);
+  const day = (d: Date) => d.toISOString().slice(0, 10);
+  return {
+    manager: labels.get(managerId)!,
+    members: ids.map((id) => labels.get(id)!).sort((a, b) => a.name.localeCompare(b.name)),
+    joining: moving.filter((r) => r.reportingManagerId === managerId).map((r) => ({ ...labels.get(r.employeeId)!, from: day(r.effectiveFrom), jobHistoryId: r.id })),
+    leaving: moving
+      .filter((r) => r.reportingManagerId !== managerId)
+      .map((r) => ({ ...labels.get(r.employeeId)!, from: day(r.effectiveFrom), jobHistoryId: r.id, toManager: r.reportingManagerId ? (labels.get(r.reportingManagerId)?.name ?? null) : null })),
+  };
 }
 
 // Active people who need a manager and don't have a valid one: no
@@ -189,6 +206,9 @@ export async function removeManager(employeeId: string, input: { newManagerId: s
   if (!person.roleCodes.includes(MANAGER_ROLE_CODE)) throw new HttpError(404, "Manager not found.", "NOT_FOUND");
   const team = await directReportIds(employeeId);
   if (team.length > 0) throw new HttpError(409, `Reassign their ${team.length} team member${team.length === 1 ? "" : "s"} first.`, "TEAM_NOT_EMPTY");
+  // EF3: nor anyone scheduled to join their team later.
+  const joining = await scheduledJoinerIds(employeeId);
+  if (joining.length > 0) throw new HttpError(409, `${joining.length} ${joining.length === 1 ? "person is" : "people are"} scheduled to join their team — cancel or redirect those moves first.`, "TEAM_NOT_EMPTY");
   const remainingRoles = person.roleCodes.filter((r) => r !== MANAGER_ROLE_CODE);
   // Their own new line, as the plain employee they become.
   await assertReportingLine({ code: person.employeeCode, roleCodes: remainingRoles }, input.newManagerId);
@@ -229,7 +249,7 @@ export async function assignTeamMembers(managerId: string, input: { employeeIds:
   for (const p of people) {
     if (!byEmployee.get(p.id)) throw new HttpError(409, `${p.employeeCode} has no job placement yet — set their department, designation and branch first.`, "NO_PLACEMENT");
   }
-  const dates = new Map(people.map((p) => [p.id, parseMoveDate(input.effectiveFrom)]));
+  const dates = new Map(people.map((p) => [p.id, parseMoveDate(input.effectiveFrom, { allowFuture: true })]));
 
   const moves = await prisma.$transaction(async (tx) => {
     const out = [];
@@ -237,6 +257,8 @@ export async function assignTeamMembers(managerId: string, input: { employeeIds:
     return out;
   });
   const changed = moves.filter((m) => m.changed);
+  // EF3: a move dated after today is scheduled — everyone affected is told now.
+  for (const m of changed) await notifyScheduledMove(m.person.id, m.before.reportingManagerId, managerId, dates.get(m.person.id)!);
   for (const m of changed) {
     await writeAuditLog({ ...meta, action: "manager.team.member_assigned", entityType: "Employee", entityId: m.person.id, before: { reportingManagerId: m.before.reportingManagerId }, after: { reportingManagerId: managerId, effectiveFrom: m.after.effectiveFrom.toISOString().slice(0, 10), jobHistoryId: m.after.id } });
   }
@@ -249,8 +271,9 @@ export async function assignTeamMembers(managerId: string, input: { employeeIds:
 export async function removeTeamMember(managerId: string, memberId: string, input: { effectiveFrom?: string }, meta: Meta) {
   const current = await prisma.employeeJobHistory.findFirst({ where: { employeeId: memberId, ...inForceOn() } });
   if (!current || current.reportingManagerId !== managerId) throw new HttpError(404, "They aren't in this manager's team.", "NOT_FOUND");
-  const effectiveFrom = parseMoveDate(input.effectiveFrom);
+  const effectiveFrom = parseMoveDate(input.effectiveFrom, { allowFuture: true });
   const move = await prisma.$transaction((tx) => moveReportingLine(tx, memberId, null, effectiveFrom, meta.actorUserId, MOVE_REASON.remove));
+  await notifyScheduledMove(memberId, managerId, null, effectiveFrom);
   await writeAuditLog({ ...meta, action: "manager.team.member_removed", entityType: "Employee", entityId: memberId, before: { reportingManagerId: managerId }, after: { reportingManagerId: null, effectiveFrom: effectiveFrom.toISOString().slice(0, 10), jobHistoryId: move.after.id } });
   emitTeamChanged([managerId]);
   emitTasksCounts(managerId);

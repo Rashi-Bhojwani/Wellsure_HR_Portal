@@ -107,13 +107,24 @@ describe("Manager Management and the three-level hierarchy (E2)", () => {
       }
     });
 
-    it("a future-dated team move is refused (job history can't represent a pending change yet — PROGRESS open issue)", async () => {
-      const res = await hr().post(`/api/managers/${p.mgrA.employeeId}/team`, { employeeIds: [p.bob.employeeId], effectiveFrom: iso(addCalendarDays(businessToday(), 3)) });
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe("FUTURE_DATE");
-      // Same rule through Change job details.
-      const viaJob = await hr().patch(`/api/employees/${p.bob.employeeId}/job`, { reportingManagerId: p.mgrA.employeeId, effectiveFrom: iso(addCalendarDays(businessToday(), 3)) });
-      expect(viaJob.status).toBe(400);
+    it("a future-dated team move is scheduled, not applied (EF3); appointing a manager stays today-or-earlier", async () => {
+      const when = iso(addCalendarDays(businessToday(), 3));
+      const res = await hr().post(`/api/managers/${p.mgrA.employeeId}/team`, { employeeIds: [p.bob.employeeId], effectiveFrom: when });
+      expect(res.status).toBe(200);
+      // Not in A's team yet; A's team view lists them as joining on that date.
+      const team = (await hr().get(`/api/managers/${p.mgrA.employeeId}/team`)).body;
+      expect(team.members.map((m: { employeeId: string }) => m.employeeId)).not.toContain(p.bob.employeeId);
+      expect(team.joining).toEqual([expect.objectContaining({ employeeId: p.bob.employeeId, from: when })]);
+      // Cancel it from the profile's job history: the previous placement reopens.
+      const scheduled = (await hr().get(`/api/employees/${p.bob.employeeId}/history/job`)).body.history.find((h: { status: string }) => h.status === "scheduled");
+      expect(scheduled).toBeTruthy();
+      expect((await hr().post(`/api/employees/${p.bob.employeeId}/history/job/${scheduled.id}/cancel`, {})).status).toBe(200);
+      expect((await hr().get(`/api/managers/${p.mgrA.employeeId}/team`)).body.joining).toEqual([]);
+      expect(await prisma.auditLog.count({ where: { action: "employee.job.scheduled_change_cancelled", entityId: p.bob.employeeId } })).toBe(1);
+      // A role change is immediate, so its reporting line can't be scheduled.
+      const appoint = await hr().post(`/api/managers`, { employeeId: p.bob.employeeId, effectiveFrom: when });
+      expect(appoint.status).toBe(400);
+      expect(appoint.body.error.code).toBe("FUTURE_DATE");
     });
 
     it("pending leave follows the employee: the new manager can decide it, the old one can't", async () => {

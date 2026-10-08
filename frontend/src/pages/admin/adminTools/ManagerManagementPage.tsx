@@ -1,3 +1,5 @@
+import { EffectiveDateHint } from "../../../lib/effectiveDate";
+import * as employeeApi from "../../../api/employee";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -14,15 +16,20 @@ import { apiErrorMessage } from "../../../lib/apiError";
 
 const { Title, Text } = Typography;
 
-// Team changes can be dated today or earlier, never later: job history can't
-// yet hold a pending change (docs/PROGRESS.md open issue — fixed before Phase 6).
+// Team moves can be scheduled ahead (EF3): dated after today they're stored
+// now and take effect on their day. Appointing or removing a manager changes
+// a role, which is immediate — so those stay today or earlier.
 const noFuture = (d: Dayjs) => d.isAfter(dayjs(), "day");
 const ymd = (d?: Dayjs | null) => (d ? d.format("YYYY-MM-DD") : undefined);
-const DateField = ({ name = "effectiveFrom" }: { name?: string }) => (
-  <Form.Item name={name} label="Effective from" initialValue={dayjs()} extra="Today or earlier." rules={[{ required: true }]}>
-    <DatePicker style={{ width: "100%" }} disabledDate={noFuture} />
-  </Form.Item>
-);
+const DateField = ({ name = "effectiveFrom", allowFuture = false }: { name?: string; allowFuture?: boolean }) => {
+  const form = Form.useFormInstance();
+  const value = Form.useWatch(name, form) as Dayjs | undefined;
+  return (
+    <Form.Item name={name} label="Effective from" initialValue={dayjs()} extra={allowFuture ? <EffectiveDateHint value={value} /> : "Today or earlier — a role change takes effect now."} rules={[{ required: true }]}>
+      <DatePicker style={{ width: "100%" }} disabledDate={allowFuture ? undefined : noFuture} />
+    </Form.Item>
+  );
+};
 
 // Admin Tools → Manager Management (Phase 5 commit E2). Three flat levels
 // under a synthetic Admin root: managers (and HR Admins) report to no one;
@@ -225,7 +232,7 @@ export function ManagerManagementPage() {
                       <Select style={{ width: 240 }} placeholder="Assign selected to…" options={managerSelect()} showSearch optionFilterProp="label" />
                     </Form.Item>
                     <Form.Item name="effectiveFrom" rules={[{ required: true }]}>
-                      <DatePicker disabledDate={noFuture} />
+                      <DatePicker />
                     </Form.Item>
                     <Button type="primary" htmlType="submit" disabled={selected.length === 0} loading={bulkAssign.isPending}>
                       Assign {selected.length || ""}
@@ -315,6 +322,14 @@ function TeamDrawer({ manager, canAssign, onClose }: { manager: ManagerRow | nul
     },
     onError: (err) => void message.error(apiErrorMessage(err, "Couldn't remove them.")),
   });
+  const cancelMove = useMutation({
+    mutationFn: ({ employeeId, rowId }: { employeeId: string; rowId: string }) => employeeApi.cancelScheduledChange(employeeId, "job", rowId),
+    onSuccess: () => {
+      refresh();
+      void message.success("Scheduled move cancelled.");
+    },
+    onError: (err) => void message.error(apiErrorMessage(err, "Couldn't cancel it.")),
+  });
   return (
     <Drawer title={manager ? `${manager.name}'s team` : ""} open={manager !== null} onClose={onClose} size="large" destroyOnHidden>
       <Flex vertical gap={16}>
@@ -323,11 +338,34 @@ function TeamDrawer({ manager, canAssign, onClose }: { manager: ManagerRow | nul
             <Form.Item name="employeeId" label="Add someone" rules={[{ required: true, message: "Choose someone" }]} extra="Moves them from their current manager (if any). A new job-history entry is written; the old one is kept.">
               <EmployeePicker />
             </Form.Item>
-            <DateField />
+            <DateField allowFuture />
             <Button type="primary" htmlType="submit" loading={add.isPending}>
               Add to team
             </Button>
           </Form>
+        )}
+        {((data?.joining.length ?? 0) > 0 || (data?.leaving.length ?? 0) > 0) && (
+          <Alert
+            type="info"
+            showIcon
+            title="Scheduled team changes"
+            description={
+              <Flex vertical gap={6}>
+                {[...(data?.joining ?? []).map((m) => ({ ...m, text: `${m.name} joins on ${dayjs(m.from).format("D MMM YYYY")}` })), ...(data?.leaving ?? []).map((m) => ({ ...m, text: `${m.name} moves ${m.toManager ? `to ${m.toManager}` : "out"} on ${dayjs(m.from).format("D MMM YYYY")}` }))].map((m) => (
+                  <Flex key={m.jobHistoryId} justify="space-between" align="center" gap={8}>
+                    <span>{m.text}</span>
+                    {canAssign && (
+                      <Popconfirm title="Cancel this scheduled move?" okText="Cancel move" cancelText="Keep it" onConfirm={() => cancelMove.mutate({ employeeId: m.employeeId, rowId: m.jobHistoryId })}>
+                        <Button size="small" type="link" danger>
+                          Cancel
+                        </Button>
+                      </Popconfirm>
+                    )}
+                  </Flex>
+                ))}
+              </Flex>
+            }
+          />
         )}
         <Table
           rowKey="employeeId"
