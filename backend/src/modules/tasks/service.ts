@@ -4,6 +4,7 @@ import { formatTicketNumber, HELPDESK_STATUS_LABELS, helpdeskAdminPath, helpdesk
 import type { TaskItem, TaskType } from "@shared/types/inbox";
 import { prisma } from "../../lib/prisma";
 import { approvalEmployeeIdFilter, resolveApprovalReach } from "../leave/scope";
+import { inForceOn } from "../../lib/effectiveDating";
 
 // Tasks inbox (spec §7.1 "My Tasks", To do → Tasks — Phase 5 commit D, user
 // decision 1): things waiting on ME, with no task schema of its own. Each
@@ -26,7 +27,7 @@ export interface TaskSource {
 }
 
 const nameOf = (e: { employeeCode: string; nameHistory: { fullName: string }[] }) => e.nameHistory[0]?.fullName ?? e.employeeCode;
-const currentName = { include: { nameHistory: { where: { effectiveTo: null } } } } as const;
+const currentName = () => ({ include: { nameHistory: { where: inForceOn() } } }) as const;
 const dateOnly = (d: Date) => d.toISOString().slice(0, 10);
 
 // Pending leave I can decide: leave.approve, inside my data scope, never my
@@ -41,7 +42,7 @@ const leaveApprovals: TaskSource = {
       status: "PENDING",
       AND: [{ employeeId: { not: viewer.employeeId } }, ...(scopeFilter ? [{ employeeId: scopeFilter }] : [])],
     };
-    const rows = await prisma.leaveRequest.findMany({ where, include: { leaveType: true, employee: currentName }, orderBy: { createdAt: "asc" }, take: limit });
+    const rows = await prisma.leaveRequest.findMany({ where, include: { leaveType: true, employee: currentName() }, orderBy: { createdAt: "asc" }, take: limit });
     return rows.map((r) => ({
       type: "LEAVE_APPROVAL" as const,
       id: r.id,
@@ -64,7 +65,7 @@ const profileChangeApprovals: TaskSource = {
     if (!viewer.permissions.has("profile.changerequest.approve")) return [];
     const rows = await prisma.profileChangeRequest.findMany({
       where: { status: "PENDING", employeeId: { not: viewer.employeeId } },
-      include: { employee: currentName },
+      include: { employee: currentName() },
       orderBy: { createdAt: "asc" },
       take: limit,
     });
@@ -96,7 +97,7 @@ const assignedTickets: TaskSource = {
         raisedByEmployeeId: { not: viewer.employeeId },
         ...(!viewer.permissions.has("helpdesk.sensitive.view") && { category: { isSensitive: false } }),
       },
-      include: { category: true, raisedBy: currentName },
+      include: { category: true, raisedBy: currentName() },
       orderBy: { lastActivityAt: "asc" },
       take: limit,
     });

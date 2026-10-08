@@ -24,7 +24,7 @@ export async function giveKudos(viewer: EngageViewer, input: { toEmployeeId: str
     await tx.kudos.create({
       data: { postId: created.id, fromEmployeeId: viewer.employeeId, toEmployeeId: input.toEmployeeId, message: input.message },
     });
-    return tx.post.findUniqueOrThrow({ where: { id: created.id }, include: FEED_INCLUDE });
+    return tx.post.findUniqueOrThrow({ where: { id: created.id }, include: FEED_INCLUDE() });
   });
 
   await writeAuditLog({ ...meta, action: "engage.kudos.give", entityType: "Post", entityId: post.id, after: { toEmployeeId: input.toEmployeeId } });

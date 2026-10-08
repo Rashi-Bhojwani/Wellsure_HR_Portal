@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { writeAuditLog } from "../../lib/audit";
 import { businessToday } from "../../lib/businessDate";
-import { dayAfter, writeBankChange } from "../../lib/effectiveDating";
+import { dayAfter, inForceOn, writeBankChange } from "../../lib/effectiveDating";
 import { HttpError } from "../../middleware/errorHandler";
 import { unpackBytes } from "../../lib/bytesJson";
 import { createEmployeeInTx } from "../employee/service";
@@ -127,7 +127,7 @@ export async function listBatches(dataset?: ImportDatasetKey) {
 
 // ── Reconciliation report (spec §10: "compare with greytHR before sending
 // invites") — active headcount by branch and by department, computed live
-// off employee_job_history's current (effective_to IS NULL) rows, not
+// off employee_job_history's rows in force today (lib/effectiveDating), not
 // anything import-specific. Lives here because spec ties it directly to
 // the Import Center workflow, not a separate Reports screen (Phase 5).
 
@@ -141,11 +141,11 @@ export interface HeadcountRow {
 export async function reconciliationReport(): Promise<{ totalActive: number; byLocation: HeadcountRow[]; byDepartment: HeadcountRow[] }> {
   const [locations, departments, totalActive] = await Promise.all([
     prisma.location.findMany({
-      select: { id: true, code: true, name: true, _count: { select: { jobHistory: { where: { effectiveTo: null, employee: { status: "ACTIVE" } } } } } },
+      select: { id: true, code: true, name: true, _count: { select: { jobHistory: { where: { ...inForceOn(), employee: { status: "ACTIVE" } } } } } },
       orderBy: { name: "asc" },
     }),
     prisma.department.findMany({
-      select: { id: true, code: true, name: true, _count: { select: { jobHistory: { where: { effectiveTo: null, employee: { status: "ACTIVE" } } } } } },
+      select: { id: true, code: true, name: true, _count: { select: { jobHistory: { where: { ...inForceOn(), employee: { status: "ACTIVE" } } } } } },
       orderBy: { name: "asc" },
     }),
     prisma.employee.count({ where: { status: "ACTIVE" } }),

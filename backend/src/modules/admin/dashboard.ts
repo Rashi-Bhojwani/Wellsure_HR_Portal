@@ -2,6 +2,7 @@ import { prisma } from "../../lib/prisma";
 import { redis } from "../../lib/redis";
 import { businessToday } from "../../lib/businessDate";
 import { getTeamEmployeeIds, type DataScope } from "../../lib/dataScope";
+import { inForceOn } from "../../lib/effectiveDating";
 
 // Admin Dashboard widgets (spec §7.1) — six aggregates over Employee/
 // EmployeePersonal/EmployeeJobHistory/Separation/Location/City/Department,
@@ -143,7 +144,7 @@ async function getGenderSplit(pop: Population) {
 async function getHeadcountByLocation(pop: Population) {
   const rows = await prisma.employeeJobHistory.groupBy({
     by: ["locationId"],
-    where: { effectiveTo: null, ...jobInPop(pop), employee: { status: "ACTIVE" } },
+    where: { ...inForceOn(), ...jobInPop(pop), employee: { status: "ACTIVE" } },
     _count: { _all: true },
   });
   const locations = await prisma.location.findMany({ where: { id: { in: rows.map((r) => r.locationId) } }, select: { id: true, name: true } });
@@ -153,7 +154,7 @@ async function getHeadcountByLocation(pop: Population) {
 
 async function getHeadcountByCity(pop: Population) {
   const rows = await prisma.employeeJobHistory.findMany({
-    where: { effectiveTo: null, ...jobInPop(pop), employee: { status: "ACTIVE" } },
+    where: { ...inForceOn(), ...jobInPop(pop), employee: { status: "ACTIVE" } },
     select: { location: { select: { cityMaster: { select: { id: true, name: true } } } } },
   });
   const counts = new Map<string, { name: string; count: number }>();
@@ -171,7 +172,7 @@ async function getHeadcountByCity(pop: Population) {
 async function getDepartmentHeadcount(pop: Population) {
   const rows = await prisma.employeeJobHistory.groupBy({
     by: ["departmentId"],
-    where: { effectiveTo: null, ...jobInPop(pop), employee: { status: "ACTIVE" } },
+    where: { ...inForceOn(), ...jobInPop(pop), employee: { status: "ACTIVE" } },
     _count: { _all: true },
   });
   const departments = await prisma.department.findMany({ where: { id: { in: rows.map((r) => r.departmentId) } }, select: { id: true, name: true } });

@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
+import { inForceOn } from "../../lib/effectiveDating";
 
 export interface ListAuditLogQuery {
   actorSearch?: string;
@@ -34,7 +35,7 @@ export async function listAuditLogs(query: ListAuditLogQuery) {
         employee: {
           OR: [
             { employeeCode: { contains: query.actorSearch, mode: "insensitive" } },
-            { nameHistory: { some: { effectiveTo: null, fullName: { contains: query.actorSearch, mode: "insensitive" } } } },
+            { nameHistory: { some: { ...inForceOn(), fullName: { contains: query.actorSearch, mode: "insensitive" } } } },
           ],
         },
       },
@@ -55,7 +56,7 @@ export async function listAuditLogs(query: ListAuditLogQuery) {
   const actorIds = [...new Set(rows.flatMap((r) => [r.actorUserId, r.onBehalfOfUserId]).filter((id): id is string => Boolean(id)))];
   const actorRows = await prisma.user.findMany({
     where: { id: { in: actorIds } },
-    select: { id: true, employee: { select: { employeeCode: true, nameHistory: { where: { effectiveTo: null }, select: { fullName: true } } } } },
+    select: { id: true, employee: { select: { employeeCode: true, nameHistory: { where: inForceOn(), select: { fullName: true } } } } },
   });
   const actorById = new Map(actorRows.map((a) => [a.id, a.employee]));
 

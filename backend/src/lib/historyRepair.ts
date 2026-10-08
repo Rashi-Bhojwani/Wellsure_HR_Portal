@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { writeAuditLog } from "./audit";
+import { businessToday } from "./businessDate";
 import { prisma } from "./prisma";
 
 // History repair (EF1, docs/plans/EFFECTIVE_DATES.md). Finds history rows
@@ -19,15 +20,15 @@ import { prisma } from "./prisma";
 // Raw SQL on purpose: it must work on a database before and after the
 // effective-dating migration.
 
-export type RepairTable = "employee_job_history" | "device_user_mappings";
+export type RepairTable = "employee_job_history" | "employee_name_history" | "employee_bank_accounts" | "device_user_mappings";
 
 export interface RepairFix {
   table: RepairTable;
   rowId: string;
   employeeCode: string;
-  column: "effective_to" | "valid_to";
+  column: "effective_to" | "valid_to" | "effective_from";
   rowFrom: string; // the row's start date, for the reader
-  current: string | null; // current end date (null = still open)
+  current: string | null; // the column's current value (null = still open)
   proposed: string;
   reason: string;
 }
@@ -92,7 +93,25 @@ export async function planHistoryRepair(): Promise<RepairPlan> {
     }
   }
 
-  // 2. Inverted or empty rows, and overlapping rows, in every history table.
+  // 2. Pre-joiners added before EF2: their first name/placement/bank row
+  //    starts on a future date of joining, so nothing is in force today
+  //    (unnamed, in no team). New pre-joiners start on the day they're added
+  //    (firstHistoryDay) — move the first row's start to that day.
+  for (const t of ["employee_name_history", "employee_job_history", "employee_bank_accounts"] as const) {
+    const firsts = await prisma.$queryRawUnsafe<{ id: string; employee_code: string; f: Date; added: Date }[]>(
+      `SELECT DISTINCT ON (h.employee_id) h.id, e.employee_code, h.effective_from AS f, (e.created_at AT TIME ZONE 'Asia/Kolkata')::date AS added
+         FROM ${t} h JOIN employees e ON e.id = h.employee_id
+        ORDER BY h.employee_id, h.effective_from ASC`,
+    );
+    const today = businessToday();
+    for (const r of firsts) {
+      if (r.f <= today || r.added >= r.f) continue;
+      const what = t === "employee_name_history" ? "name" : t === "employee_job_history" ? "job placement" : "bank account";
+      fixes.push({ table: t, rowId: r.id, employeeCode: r.employee_code, column: "effective_from", rowFrom: d(r.f)!, current: d(r.f), proposed: d(r.added)!, reason: `A pre-joiner: their first ${what} starts on their joining date (${d(r.f)}), so they have none today — start it on the day they were added (${d(r.added)}).` });
+    }
+  }
+
+  // 3. Inverted or empty rows, and overlapping rows, in every history table.
   for (const t of ["employee_job_history", "employee_name_history", "employee_bank_accounts"] as const) {
     const inverted = await prisma.$queryRawUnsafe<{ id: string; employee_code: string; f: Date; t: Date }[]>(
       `SELECT h.id, e.employee_code, h.effective_from AS f, h.effective_to AS t FROM ${t} h JOIN employees e ON e.id = h.employee_id WHERE h.effective_to IS NOT NULL AND h.effective_to <= h.effective_from`,
@@ -159,10 +178,13 @@ export async function applyHistoryRepair(input: { fingerprint: string; approvedB
   await prisma.$transaction(async (tx) => {
     for (const f of plan.fixes) {
       // Guarded on the previewed value: if the row moved underneath us, abort the lot.
-      const n =
-        f.table === "employee_job_history"
-          ? await tx.$executeRaw`UPDATE employee_job_history SET effective_to = ${f.proposed}::date WHERE id = ${f.rowId} AND effective_to IS NOT DISTINCT FROM ${f.current}::date`
-          : await tx.$executeRaw`UPDATE device_user_mappings SET valid_to = ${f.proposed}::date WHERE id = ${f.rowId} AND valid_to IS NOT DISTINCT FROM ${f.current}::date`;
+      // Table and column come from the fixed unions above, never from input.
+      const n = await tx.$executeRawUnsafe(
+        `UPDATE ${f.table} SET ${f.column} = $1::date WHERE id = $2 AND ${f.column} IS NOT DISTINCT FROM $3::date`,
+        f.proposed,
+        f.rowId,
+        f.current,
+      );
       if (n !== 1) throw new RepairRefused(`Row ${f.table}/${f.rowId} changed while repairing — nothing was applied. Run the preview again.`);
     }
   });

@@ -20,6 +20,12 @@ type Person = { employeeId: string; employeeCode: string; userId: string };
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 const today = () => businessToday();
 const inDays = (n: number) => iso(addCalendarDays(today(), n));
+// A working day about n days out (leave can't be applied for a Sunday).
+const weekdayInDays = (n: number) => {
+  let d = addCalendarDays(today(), n);
+  while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d = addCalendarDays(d, 1);
+  return iso(d);
+};
 
 describe("Workflow Delegates (E3)", () => {
   let org: TestOrgMasters;
@@ -276,8 +282,8 @@ describe("Workflow Delegates (E3)", () => {
     it("a new request from the team reaches the delegate while the delegation is active", async () => {
       await revokeAll();
       expect((await delegate("mgrA", p.mgrB)).status).toBe(201);
-      const res = await api(tok.alice).post("/api/leave/requests", { leaveTypeId: lop.id, fromDate: inDays(500), toDate: inDays(500) });
-      expect(res.status).toBe(201);
+      const res = await api(tok.alice).post("/api/leave/requests", { leaveTypeId: lop.id, fromDate: weekdayInDays(500), toDate: weekdayInDays(500) });
+      expect(res.status, JSON.stringify(res.body)).toBe(201);
       requestIds.push(res.body.id);
       const note = await prisma.notification.findFirst({ where: { userId: p.mgrB.userId, type: "leave.applied", payload: { path: ["leaveRequestId"], equals: res.body.id } } });
       expect(note?.title).toMatch(/covering for/);

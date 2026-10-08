@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { businessToday } from "../../lib/businessDate";
-import { writeBankChange } from "../../lib/effectiveDating";
+import { inForceOn, writeBankChange } from "../../lib/effectiveDating";
 import { writeAuditLog } from "../../lib/audit";
 import { redact } from "../../lib/redact";
 import { packBytes, unpackBytes } from "../../lib/bytesJson";
@@ -77,7 +77,7 @@ export async function listChangeRequests(viewer: { employeeId: string; canApprov
   const rows = await prisma.profileChangeRequest.findMany({
     where: { ...where, ...(status ? { status } : {}) },
     orderBy: { createdAt: "desc" },
-    include: { employee: { include: { nameHistory: { where: { effectiveTo: null } } } } },
+    include: { employee: { include: { nameHistory: { where: inForceOn() } } } },
   });
   return rows.map((row) => ({
     id: row.id,

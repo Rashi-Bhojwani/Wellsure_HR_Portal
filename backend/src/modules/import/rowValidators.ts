@@ -7,6 +7,7 @@ import { PAN_REGEX, AADHAAR_REGEX, MOBILE_REGEX, IFSC_REGEX, ACCOUNT_NUMBER_REGE
 import { isNearDuplicate } from "../../lib/levenshtein";
 import type { ParsedRow } from "./parse";
 import type { RowResult } from "./types";
+import { inForceOn } from "../../lib/effectiveDating";
 
 const ORG_MASTER_TYPES = ["LOCATION", "DEPARTMENT", "DESIGNATION", "GRADE", "COST_CENTRE"] as const;
 const GENDERS = ["MALE", "FEMALE", "OTHER"];
@@ -59,7 +60,7 @@ export async function loadReferenceData(): Promise<ReferenceData> {
       }),
       prisma.deviceUserMapping.findMany({ select: { deviceUserId: true, validFrom: true, validTo: true, employee: { select: { employeeCode: true } } } }),
       prisma.employeeStatutory.findMany({ select: { panHash: true, aadhaarHash: true } }),
-      prisma.employeeBankAccount.findMany({ where: { effectiveTo: null }, select: { accountNumberHash: true } }),
+      prisma.employeeBankAccount.findMany({ where: inForceOn(), select: { accountNumberHash: true } }),
       prisma.leaveType.findMany({ where: { isActive: true, code: { not: "COF" } }, select: { id: true, code: true } }),
     ]);
 

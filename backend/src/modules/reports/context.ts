@@ -1,7 +1,7 @@
 import type { EmploymentType, Prisma } from "@prisma/client";
 import type { DataScope } from "@shared/constants/roles";
-import { prisma } from "../../lib/prisma";
 import { getTeamEmployeeIds } from "../../lib/dataScope";
+import { inForceOn, type Placement } from "../../lib/effectiveDating";
 
 // What every report shares (Phase 5 commit F): who's in the viewer's scope,
 // where each person was placed on a given date, and the org filters.
@@ -49,62 +49,6 @@ export function employeeWhere(pop: Population, q: ReportQuery): Prisma.EmployeeW
   };
 }
 
-export interface Placement {
-  departmentId: string;
-  department: string;
-  designation: string;
-  locationId: string;
-  location: string;
-  city: string | null;
-  reportingManagerId: string | null;
-  reportingManager: string | null;
-}
-
-// The job-history row in force on `day` for each employee: effective_from
-// <= day < effective_to (effective_to is the next row's start). Falls back
-// to the earliest row for a day before someone's first placement.
-export async function placementsOn(employeeIds: string[], day: Date): Promise<Map<string, Placement>> {
-  const rows = await prisma.employeeJobHistory.findMany({
-    where: { employeeId: { in: employeeIds } },
-    orderBy: { effectiveFrom: "asc" },
-    select: {
-      employeeId: true,
-      effectiveFrom: true,
-      effectiveTo: true,
-      departmentId: true,
-      locationId: true,
-      reportingManagerId: true,
-      department: { select: { name: true } },
-      designation: { select: { name: true } },
-      location: { select: { name: true, cityMaster: { select: { name: true } } } },
-      reportingManager: { select: { employeeCode: true, nameHistory: { where: { effectiveTo: null }, select: { fullName: true } } } },
-    },
-  });
-  const toPlacement = (r: (typeof rows)[number]): Placement => ({
-    departmentId: r.departmentId,
-    department: r.department.name,
-    designation: r.designation.name,
-    locationId: r.locationId,
-    location: r.location.name,
-    city: r.location.cityMaster?.name ?? null,
-    reportingManagerId: r.reportingManagerId,
-    reportingManager: r.reportingManager ? (r.reportingManager.nameHistory[0]?.fullName ?? r.reportingManager.employeeCode) : null,
-  });
-  const t = day.getTime();
-  const byEmployee = new Map<string, typeof rows>();
-  for (const r of rows) byEmployee.set(r.employeeId, [...(byEmployee.get(r.employeeId) ?? []), r]);
-  const result = new Map<string, Placement>();
-  for (const [id, history] of byEmployee) {
-    const inForce = history.find((r) => r.effectiveFrom.getTime() <= t && (!r.effectiveTo || r.effectiveTo.getTime() > t));
-    // No row in force: a leaver on/after their last working day (completing
-    // a separation closes the last row ON that day) → their latest row that
-    // had started; a day before anyone's first placement → their first row.
-    const started = history.filter((r) => r.effectiveFrom.getTime() <= t);
-    result.set(id, toPlacement(inForce ?? started[started.length - 1] ?? history[0]!)); // rows are oldest first
-  }
-  return result;
-}
-
 export function matchesOrg(p: Placement | undefined, q: ReportQuery): boolean {
   if (q.departmentId && p?.departmentId !== q.departmentId) return false;
   if (q.locationId && p?.locationId !== q.locationId) return false;
@@ -112,5 +56,7 @@ export function matchesOrg(p: Placement | undefined, q: ReportQuery): boolean {
 }
 
 export const nameOf = (e: { employeeCode: string; nameHistory: { fullName: string }[] }) => e.nameHistory[0]?.fullName ?? e.employeeCode;
-export const currentName = { nameHistory: { where: { effectiveTo: null }, select: { fullName: true } } } as const;
+// A function, not a constant: "today" moves at midnight.
+export const currentName = () => ({ nameHistory: { where: inForceOn(), select: { fullName: true } } }) as const;
+export { placementsOn, type Placement } from "../../lib/effectiveDating";
 export const ymd = (d: Date) => d.toISOString().slice(0, 10);

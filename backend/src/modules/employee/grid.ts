@@ -5,6 +5,7 @@ import { writeAuditLog } from "../../lib/audit";
 import { HttpError } from "../../middleware/errorHandler";
 import { buildEmployeeScopeWhere, type DataScope } from "../../lib/dataScope";
 import type { RequestMetaInput } from "./types";
+import { inForceOn } from "../../lib/effectiveDating";
 
 export interface EmployeeListQuery {
   search?: string;
@@ -47,7 +48,7 @@ async function buildWhere(query: EmployeeListQuery, viewerEmployeeId: string, sc
     filters.push({
       OR: [
         { employeeCode: { contains: query.search, mode: "insensitive" } },
-        { nameHistory: { some: { effectiveTo: null, fullName: { contains: query.search, mode: "insensitive" } } } },
+        { nameHistory: { some: { ...inForceOn(), fullName: { contains: query.search, mode: "insensitive" } } } },
         { personal: { personalEmail: { contains: query.search, mode: "insensitive" } } },
         { personal: { mobile: { contains: query.search } } },
       ],
@@ -59,7 +60,7 @@ async function buildWhere(query: EmployeeListQuery, viewerEmployeeId: string, sc
     filters.push({
       jobHistory: {
         some: {
-          effectiveTo: null,
+          ...inForceOn(),
           ...(query.departmentId ? { departmentId: query.departmentId } : {}),
           ...(query.designationId ? { designationId: query.designationId } : {}),
           ...(query.locationId ? { locationId: query.locationId } : {}),
@@ -76,13 +77,13 @@ async function loadRows(where: Prisma.EmployeeWhereInput, includeSensitive: { ba
   const employees = await prisma.employee.findMany({
     where,
     include: {
-      nameHistory: { where: { effectiveTo: null } },
+      nameHistory: { where: inForceOn() },
       personal: true,
       jobHistory: {
-        where: { effectiveTo: null },
-        include: { department: true, designation: true, location: { include: { cityMaster: true } }, reportingManager: { include: { nameHistory: { where: { effectiveTo: null } } } } },
+        where: inForceOn(),
+        include: { department: true, designation: true, location: { include: { cityMaster: true } }, reportingManager: { include: { nameHistory: { where: inForceOn() } } } },
       },
-      ...(includeSensitive.bank ? { bankAccounts: { where: { effectiveTo: null } } } : {}),
+      ...(includeSensitive.bank ? { bankAccounts: { where: inForceOn() } } : {}),
       ...(includeSensitive.statutory ? { statutory: true } : {}),
     },
   });

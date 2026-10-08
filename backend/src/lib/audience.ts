@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { inForceOn } from "./effectiveDating";
 
 // Audience rule shared by scoped content (company documents; the same rule
 // Announcement has used since Phase 5 commit A): each scope column is either
@@ -12,7 +13,7 @@ export interface Placement {
 
 export async function getCurrentPlacement(employeeId: string): Promise<Placement | null> {
   const job = await prisma.employeeJobHistory.findFirst({
-    where: { employeeId, effectiveTo: null },
+    where: { employeeId, ...inForceOn() },
     select: { locationId: true, departmentId: true },
   });
   return job;

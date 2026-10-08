@@ -8,6 +8,7 @@ import { HttpError } from "../../middleware/errorHandler";
 import { emitTasksCounts, emitTeamChanged } from "../../realtime/emit";
 import { notifyAccessChanged } from "../../lib/accessChanged";
 import { assertReportingLine, directReportIds, moveReportingLine, parseMoveDate, roleCodesOf } from "./hierarchy";
+import { inForceOn } from "../../lib/effectiveDating";
 
 // Manager Management (Phase 5 commit E2, docs/plans/PHASE_5.md §E2):
 // appoint/remove managers (manager.appoint), move people into and out of
@@ -37,9 +38,9 @@ async function placementLabels(employeeIds: string[]) {
       id: true,
       employeeCode: true,
       status: true,
-      nameHistory: { where: { effectiveTo: null }, select: { fullName: true } },
+      nameHistory: { where: inForceOn(), select: { fullName: true } },
       jobHistory: {
-        where: { effectiveTo: null },
+        where: inForceOn(),
         select: { effectiveFrom: true, reportingManagerId: true, department: { select: { name: true } }, designation: { select: { name: true } }, location: { select: { name: true } } },
       },
     },
@@ -72,7 +73,7 @@ export async function listManagers() {
   });
   const ids = holders.map((h) => h.user.employeeId);
   const labels = await placementLabels(ids);
-  const counts = await prisma.employeeJobHistory.groupBy({ by: ["reportingManagerId"], where: { reportingManagerId: { in: ids }, effectiveTo: null, employee: { status: "ACTIVE" } }, _count: { _all: true } });
+  const counts = await prisma.employeeJobHistory.groupBy({ by: ["reportingManagerId"], where: { reportingManagerId: { in: ids }, ...inForceOn(), employee: { status: "ACTIVE" } }, _count: { _all: true } });
   const countBy = new Map(counts.map((c) => [c.reportingManagerId, c._count._all]));
   // What each manager can actually do (2026-10-03: nothing unless Admin
   // granted it) — the resolved set, so the screen shows the truth.
@@ -110,7 +111,7 @@ export async function listUnassigned() {
     select: {
       id: true,
       user: { select: { roles: { select: { role: { select: { code: true } } } } } },
-      jobHistory: { where: { effectiveTo: null }, select: { reportingManagerId: true } },
+      jobHistory: { where: inForceOn(), select: { reportingManagerId: true } },
     },
   });
   const managerIds = new Set(
@@ -165,7 +166,7 @@ export async function appointManager(employeeId: string, input: { effectiveFrom?
   if (disallowed.length) {
     throw new HttpError(403, `Remove their exceptions first — a manager can't hold: ${disallowed.map((g) => PERMISSION_CATALOG[g.permission.key as PermissionKey]?.label ?? g.permission.key).join(", ")}.`, "NOT_MANAGER_GRANTABLE");
   }
-  const current = await prisma.employeeJobHistory.findFirst({ where: { employeeId, effectiveTo: null } });
+  const current = await prisma.employeeJobHistory.findFirst({ where: { employeeId, ...inForceOn() } });
   if (!current) throw new HttpError(409, "They have no job placement yet — set their department, designation and branch first.", "NO_PLACEMENT");
   const effectiveFrom = parseMoveDate(input.effectiveFrom);
   const role = await prisma.role.findUniqueOrThrow({ where: { code: MANAGER_ROLE_CODE } });
@@ -191,7 +192,7 @@ export async function removeManager(employeeId: string, input: { newManagerId: s
   const remainingRoles = person.roleCodes.filter((r) => r !== MANAGER_ROLE_CODE);
   // Their own new line, as the plain employee they become.
   await assertReportingLine({ code: person.employeeCode, roleCodes: remainingRoles }, input.newManagerId);
-  const current = await prisma.employeeJobHistory.findFirst({ where: { employeeId, effectiveTo: null } });
+  const current = await prisma.employeeJobHistory.findFirst({ where: { employeeId, ...inForceOn() } });
   const effectiveFrom = parseMoveDate(input.effectiveFrom);
   const role = await prisma.role.findUniqueOrThrow({ where: { code: MANAGER_ROLE_CODE } });
 
@@ -223,7 +224,7 @@ export async function assignTeamMembers(managerId: string, input: { employeeIds:
     if (p.id === managerId) throw new HttpError(400, "A manager can't be in their own team.", "HIERARCHY");
     await assertReportingLine({ code: p.employeeCode, roleCodes: p.roleCodes }, managerId);
   }
-  const currents = await prisma.employeeJobHistory.findMany({ where: { employeeId: { in: ids }, effectiveTo: null } });
+  const currents = await prisma.employeeJobHistory.findMany({ where: { employeeId: { in: ids }, ...inForceOn() } });
   const byEmployee = new Map(currents.map((c) => [c.employeeId, c]));
   for (const p of people) {
     if (!byEmployee.get(p.id)) throw new HttpError(409, `${p.employeeCode} has no job placement yet — set their department, designation and branch first.`, "NO_PLACEMENT");
@@ -246,7 +247,7 @@ export async function assignTeamMembers(managerId: string, input: { employeeIds:
 }
 
 export async function removeTeamMember(managerId: string, memberId: string, input: { effectiveFrom?: string }, meta: Meta) {
-  const current = await prisma.employeeJobHistory.findFirst({ where: { employeeId: memberId, effectiveTo: null } });
+  const current = await prisma.employeeJobHistory.findFirst({ where: { employeeId: memberId, ...inForceOn() } });
   if (!current || current.reportingManagerId !== managerId) throw new HttpError(404, "They aren't in this manager's team.", "NOT_FOUND");
   const effectiveFrom = parseMoveDate(input.effectiveFrom);
   const move = await prisma.$transaction((tx) => moveReportingLine(tx, memberId, null, effectiveFrom, meta.actorUserId, MOVE_REASON.remove));

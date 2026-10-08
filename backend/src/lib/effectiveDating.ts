@@ -1,6 +1,7 @@
-import type { EmployeeBankAccount, EmployeeJobHistory, EmployeeNameHistory, Prisma } from "@prisma/client";
+import { Prisma, type EmployeeBankAccount, type EmployeeJobHistory, type EmployeeNameHistory } from "@prisma/client";
 import { HttpError } from "../middleware/errorHandler";
 import { addCalendarDays, businessToday } from "./businessDate";
+import { prisma } from "./prisma";
 import { getSetting } from "./settings";
 
 // Effective dating — ONE model for every history table (user decisions
@@ -24,6 +25,8 @@ import { getSetting } from "./settings";
 //     constraint so no two rows for one employee overlap (migration
 //     20261004090000_effective_dating).
 
+const iso = (d: Date) => d.toISOString().slice(0, 10);
+
 // ── Reading ──────────────────────────────────────────────────────────────
 
 /** Prisma `where` for effectiveFrom/effectiveTo tables: rows in force on `day`. */
@@ -36,10 +39,85 @@ export function mappingInForceOn(day: Date = businessToday()) {
   return { validFrom: { lte: day }, OR: [{ validTo: null }, { validTo: { gt: day } }] };
 }
 
+/**
+ * The same condition for raw SQL on an effective_from/effective_to table
+ * aliased `alias` (e.g. the team-scope recursive query).
+ */
+export function inForceSql(alias: "jh", day: Date = businessToday()): Prisma.Sql {
+  const d = iso(day);
+  return Prisma.sql`${Prisma.raw(alias)}.effective_from <= ${d}::date AND (${Prisma.raw(alias)}.effective_to IS NULL OR ${Prisma.raw(alias)}.effective_to > ${d}::date)`;
+}
+
+/**
+ * Where a new person's first name/placement/bank row starts: their date of
+ * joining, or today if they join later — so a pre-joiner is in force (named,
+ * in their team) from the day they're added. Employment itself is always
+ * read from dateOfJoining / lastWorkingDate, never from these rows.
+ */
+export function firstHistoryDay(dateOfJoining: Date, today: Date = businessToday()): Date {
+  return dateOfJoining < today ? dateOfJoining : today;
+}
+
 /** The exclusive end date for something whose last covered day is `lastDay`. */
 export const dayAfter = (lastDay: Date) => addCalendarDays(lastDay, 1);
 
-const iso = (d: Date) => d.toISOString().slice(0, 10);
+
+export interface Placement {
+  departmentId: string;
+  department: string;
+  designation: string;
+  locationId: string;
+  location: string;
+  city: string | null;
+  reportingManagerId: string | null;
+  reportingManager: string | null;
+}
+
+/**
+ * The job placement in force on `day` for each employee. A day before
+ * someone's first placement falls back to their first row (a joiner shown
+ * as of their date of joining); a gap — which the constraints and the
+ * writer now prevent — falls back to the latest row that had started.
+ * The reporting manager's name is the one in force on `day` too.
+ */
+export async function placementsOn(employeeIds: string[], day: Date): Promise<Map<string, Placement>> {
+  const rows = await prisma.employeeJobHistory.findMany({
+    where: { employeeId: { in: employeeIds } },
+    orderBy: { effectiveFrom: "asc" },
+    select: {
+      employeeId: true,
+      effectiveFrom: true,
+      effectiveTo: true,
+      departmentId: true,
+      locationId: true,
+      reportingManagerId: true,
+      department: { select: { name: true } },
+      designation: { select: { name: true } },
+      location: { select: { name: true, cityMaster: { select: { name: true } } } },
+      reportingManager: { select: { employeeCode: true, nameHistory: { where: inForceOn(day), select: { fullName: true } } } },
+    },
+  });
+  const toPlacement = (r: (typeof rows)[number]): Placement => ({
+    departmentId: r.departmentId,
+    department: r.department.name,
+    designation: r.designation.name,
+    locationId: r.locationId,
+    location: r.location.name,
+    city: r.location.cityMaster?.name ?? null,
+    reportingManagerId: r.reportingManagerId,
+    reportingManager: r.reportingManager ? (r.reportingManager.nameHistory[0]?.fullName ?? r.reportingManager.employeeCode) : null,
+  });
+  const t = day.getTime();
+  const byEmployee = new Map<string, typeof rows>();
+  for (const r of rows) byEmployee.set(r.employeeId, [...(byEmployee.get(r.employeeId) ?? []), r]);
+  const result = new Map<string, Placement>();
+  for (const [id, history] of byEmployee) {
+    const inForce = history.find((r) => r.effectiveFrom.getTime() <= t && (!r.effectiveTo || r.effectiveTo.getTime() > t));
+    const started = history.filter((r) => r.effectiveFrom.getTime() <= t);
+    result.set(id, toPlacement(inForce ?? started.at(-1) ?? history[0]!)); // rows are oldest first
+  }
+  return result;
+}
 
 // ── Planning a change (pure — property-tested) ───────────────────────────
 

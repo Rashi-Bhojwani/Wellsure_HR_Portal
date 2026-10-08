@@ -3,6 +3,7 @@ import { resolveAccess } from "../../lib/permissions";
 import { prisma } from "../../lib/prisma";
 import { activeDelegatesOf } from "../delegations/reach";
 import { roleCodesOf } from "../managers/hierarchy";
+import { inForceOn } from "../../lib/effectiveDating";
 
 // A leave request nobody on the team side can decide (2026-10-03): a
 // manager starts with no permissions, so a team whose manager hasn't been
@@ -40,7 +41,7 @@ export async function pendingWithNoTeamApprover(): Promise<Map<string, NoTeamApp
     select: {
       id: true,
       employeeId: true,
-      employee: { select: { jobHistory: { where: { effectiveTo: null }, select: { reportingManagerId: true }, take: 1 } } },
+      employee: { select: { jobHistory: { where: inForceOn(), select: { reportingManagerId: true }, take: 1 } } },
     },
   });
   const byEmployee = new Map<string, NoTeamApproverReason | null>();

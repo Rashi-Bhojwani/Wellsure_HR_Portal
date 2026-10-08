@@ -1,8 +1,8 @@
 # Effective dates: one "as of" model, before any payroll code
 
 Status: **Approved 2026-10-03 (all six decisions as recommended). EF1
-built 2026-10-04 and awaiting review; EF2–EF4 to follow, one commit each,
-pausing after each.** Required before Phase 6 (Phase 5 review §5.1;
+built 2026-10-04. EF2 built 2026-10-08. EF3 and EF4 follow straight on
+(user, 2026-10-08: finish EF2–EF4, then plan Phase 2).** Required before Phase 6 (Phase 5 review §5.1;
 PROGRESS open issue "Future-dated job changes take effect immediately").
 
 **Added by the user on approval:** the data repair must show exactly what
@@ -25,6 +25,20 @@ review):
 - **Import:** one device ID can't be two people on the same day. An
   ex-employee whose dates overlap the ID's later holder is a per-row
   error, not a crash.
+
+**Settled while building EF2:**
+- **Pre-joiners.** A new person's first name, placement and bank rows start
+  on the earlier of their date of joining and the day they're added
+  (`firstHistoryDay`), so "in force today" includes them: named, and in
+  their manager's team, exactly as before. Joiner, headcount and every
+  "employed on D" figure reads `dateOfJoining` / `lastWorkingDate`, never
+  these rows. The device mapping still starts on the date of joining.
+  - Pre-joiners added before EF2 are a new `history:repair` category:
+    preview → approve → apply, never automatic.
+- **Status vs employed-on-date (decision 6).** The reports already answer
+  "employed on D" from `dateOfJoining`/`lastWorkingDate`. The remaining
+  `status: "ACTIVE"` filters are all "people you can act on today", so they
+  stay as they are.
 
 ## 1. The problem, in one paragraph
 

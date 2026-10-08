@@ -9,6 +9,7 @@ import { getSocketServer } from "../realtime/emit";
 import { logger } from "./logger";
 import { SUPER_ADMIN_ROLE_CODE } from "./permissions";
 import { prisma } from "./prisma";
+import { inForceOn } from "./effectiveDating";
 
 // Making the break-glass CLIs loud (Phase 5 commit E1.1, docs/plans/PHASE_5.md).
 //
@@ -69,7 +70,7 @@ const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;")
 async function activeSuperAdmins() {
   return prisma.user.findMany({
     where: { status: "ACTIVE", roles: { some: { role: { code: SUPER_ADMIN_ROLE_CODE } } } },
-    select: { id: true, employeeId: true, lastLoginAt: true, employee: { select: { employeeCode: true, personal: { select: { personalEmail: true } }, nameHistory: { where: { effectiveTo: null }, select: { fullName: true } } } } },
+    select: { id: true, employeeId: true, lastLoginAt: true, employee: { select: { employeeCode: true, personal: { select: { personalEmail: true } }, nameHistory: { where: inForceOn(), select: { fullName: true } } } } },
   });
 }
 

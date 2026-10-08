@@ -3759,6 +3759,53 @@ touched.
 - Separation and import tests updated: their fixtures had a last working
   day before joining, or a device ID shared by two people at once.
 
+### Effective dating EF2 — every read is "in force today" (2026-10-08)
+
+Commit 2 of 4 (`docs/plans/EFFECTIVE_DATES.md`). From here, a change dated
+D affects every screen and every access check on D, and not before.
+
+**Built:**
+- **All 99 reads in 37 backend files** now go through
+  `inForceOn(day)` (Prisma) or `inForceSql(alias, day)` (raw SQL). That
+  covers names, placements, bank, team counts, the directory and org
+  chart, grid and filters, dashboard, leave calendar and routing, the
+  no-team-approver check, engage filters, audiences, socket rooms, import
+  checks and reports.
+- **Team scope** (`getTeamEmployeeIds`, the recursive query behind every
+  manager's reach) walks rows in force on a given day, default today.
+- **Module-level `include`/`select` constants that read history are now
+  functions** ("today" moves at midnight; a constant froze it at server
+  start): engage feed and names, helpdesk tickets, delegations, leave
+  request lists, tasks, the directory.
+- **`placementsOn` moved into `lib/effectiveDating.ts`** for reports and,
+  later, payroll. The leaver workaround is gone, because leavers are in
+  force on their last day since EF1.
+- **Pre-joiners:** first rows start on the earlier of joining and today
+  (`firstHistoryDay`). Old pre-joiners are a new `history:repair`
+  category (preview → approve → apply).
+- **Guard:** `lib/__tests__/currentRowGuard.test.ts` fails on any
+  `effectiveTo: null`-style read outside `lib/effectiveDating.ts` and
+  `lib/historyRepair.ts`.
+
+**Tests:**
+- `lib/__tests__/timeTravel.test.ts`: on D, schedule a move to manager B
+  in a new department, and a name change, for D+7.
+  - Through D+6, manager A sees and reaches the employee and B gets 404;
+    from D+7 it's the reverse.
+  - The department filter and the displayed name switch on D+7.
+  - A pre-joiner added on D (joining a month later) is named and in
+    their manager's team from D.
+- The full backend suite passes.
+- Fixed a date-dependent test: the delegation test's "leave 500 days
+  from today" fell on a Sunday from 8 Oct; it now picks the next
+  weekday.
+
+**Verified:**
+- the full suites, lint and typecheck;
+- a smoke walkthrough with no console errors: grid, Manager Management,
+  dashboard, Employee Leave, headcount, org chart and directory as HR,
+  and Karan's team grid.
+
 ## Open questions
 
 - [x] **Approval Workflows — dropped (user decision 2026-10-03).** No

@@ -2,8 +2,9 @@ import { prisma } from "../../lib/prisma";
 import { HttpError } from "../../middleware/errorHandler";
 import { emitEnginePostCommentCount } from "../../realtime/emit";
 import type { EngageViewer } from "./types";
+import { inForceOn } from "../../lib/effectiveDating";
 
-const NAME_INCLUDE = { nameHistory: { where: { effectiveTo: null as null } } } as const;
+const NAME_INCLUDE = () => ({ nameHistory: { where: inForceOn() } }) as const;
 
 function currentName(employee: { nameHistory: { fullName: string }[]; employeeCode: string }): string {
   return employee.nameHistory[0]?.fullName ?? employee.employeeCode;
@@ -15,7 +16,7 @@ export async function listComments(postId: string) {
 
   const rows = await prisma.comment.findMany({
     where: { postId },
-    include: { author: { include: NAME_INCLUDE } },
+    include: { author: { include: NAME_INCLUDE() } },
     orderBy: { createdAt: "asc" },
   });
   return rows.map((c) => ({
@@ -34,7 +35,7 @@ export async function addComment(postId: string, body: string, viewer: EngageVie
 
   const comment = await prisma.comment.create({
     data: { postId, authorEmployeeId: viewer.employeeId, body },
-    include: { author: { include: NAME_INCLUDE } },
+    include: { author: { include: NAME_INCLUDE() } },
   });
 
   const commentCount = await prisma.comment.count({ where: { postId } });

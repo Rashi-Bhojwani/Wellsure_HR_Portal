@@ -18,6 +18,7 @@ import { approvalEmployeeIdFilter, isEmployeeInScope, reachFor, resolveApprovalR
 import { activeDelegatesOf, type Delegator } from "../delegations/reach";
 import { companyWideApprovers, noTeamApproverReason, pendingWithNoTeamApprover } from "./noTeamApprover";
 import type { ActorMeta, LeaveViewer } from "./types";
+import { inForceOn } from "../../lib/effectiveDating";
 
 interface ApplyLeaveInput {
   employeeId?: string; // target; defaults to the caller's own
@@ -139,7 +140,7 @@ export async function applyForLeave(input: ApplyLeaveInput, viewer: LeaveViewer,
   await writeAuditLog({ ...meta, action: "leave.request.apply", entityType: "LeaveRequest", entityId: request.id, after: toAuditJson(request) });
   const formatted = await reloadFormatted(request.id);
 
-  const jobHistory = await prisma.employeeJobHistory.findFirst({ where: { employeeId: targetEmployeeId, effectiveTo: null }, select: { reportingManagerId: true } });
+  const jobHistory = await prisma.employeeJobHistory.findFirst({ where: { employeeId: targetEmployeeId, ...inForceOn() }, select: { reportingManagerId: true } });
   const reportingManagerId = jobHistory?.reportingManagerId ?? null;
 
   // Only a manager who can actually approve is asked to (2026-10-03: a
@@ -302,14 +303,14 @@ function formatLeaveRequestRow(row: Prisma.LeaveRequestGetPayload<{ include: { l
   };
 }
 
-const REQUEST_LIST_INCLUDE = { leaveType: true, employee: { include: { nameHistory: { where: { effectiveTo: null } } } } } as const;
+const REQUEST_LIST_INCLUDE = () => ({ leaveType: true, employee: { include: { nameHistory: { where: inForceOn() } } } }) as const;
 
 // Every write endpoint (apply/approve/reject/cancel) returns this same
 // formatted shape as list/get — a plain `return updated` would hand back
 // the raw Prisma row instead, where totalDays (a Decimal) serialises to a
 // JSON *string*, not a number, a real inconsistency a client can't rely on.
 async function reloadFormatted(requestId: string) {
-  return formatLeaveRequestRow(await prisma.leaveRequest.findUniqueOrThrow({ where: { id: requestId }, include: REQUEST_LIST_INCLUDE }));
+  return formatLeaveRequestRow(await prisma.leaveRequest.findUniqueOrThrow({ where: { id: requestId }, include: REQUEST_LIST_INCLUDE() }));
 }
 
 export async function listLeaveRequests(query: ListLeaveRequestsQuery, viewer: LeaveViewer) {
@@ -359,7 +360,7 @@ export async function listLeaveRequests(query: ListLeaveRequestsQuery, viewer: L
     prisma.leaveRequest.count({ where }),
     prisma.leaveRequest.findMany({
       where,
-      include: REQUEST_LIST_INCLUDE,
+      include: REQUEST_LIST_INCLUDE(),
       orderBy: { createdAt: "desc" },
       skip: (query.page - 1) * query.pageSize,
       take: query.pageSize,
@@ -379,7 +380,7 @@ export async function listLeaveRequests(query: ListLeaveRequestsQuery, viewer: L
 }
 
 export async function getLeaveRequestById(requestId: string, viewer: LeaveViewer) {
-  const row = await prisma.leaveRequest.findUnique({ where: { id: requestId }, include: REQUEST_LIST_INCLUDE });
+  const row = await prisma.leaveRequest.findUnique({ where: { id: requestId }, include: REQUEST_LIST_INCLUDE() });
   if (!row) throw new HttpError(404, "Leave request not found.", "NOT_FOUND");
 
   const scope = viewer.dataScope;
@@ -423,7 +424,7 @@ async function employeeCanApproveLeave(employeeId: string): Promise<boolean> {
 }
 
 async function employeeNameOf(employeeId: string): Promise<string> {
-  const e = await prisma.employee.findUnique({ where: { id: employeeId }, select: { employeeCode: true, nameHistory: { where: { effectiveTo: null }, select: { fullName: true } } } });
+  const e = await prisma.employee.findUnique({ where: { id: employeeId }, select: { employeeCode: true, nameHistory: { where: inForceOn(), select: { fullName: true } } } });
   return e?.nameHistory[0]?.fullName ?? e?.employeeCode ?? "";
 }
 

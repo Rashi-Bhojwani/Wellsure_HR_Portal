@@ -6,6 +6,7 @@ import { activeUsersHoldingPermission, resolveAccess } from "../../lib/permissio
 import { HttpError } from "../../middleware/errorHandler";
 import { emitDelegationChanged, emitTasksCounts } from "../../realtime/emit";
 import { notifyEmployee } from "../notifications/notifyEmployee";
+import { inForceOn } from "../../lib/effectiveDating";
 
 // Workflow Delegates (Phase 5 commit E3; docs/plans/PHASE_5.md §E3).
 // A manager's leave approvals covered by someone else for a date range.
@@ -28,20 +29,20 @@ export function statusOf(row: { startDate: Date; endDate: Date; revokedAt: Date 
   return "ACTIVE";
 }
 
-const personSelect = {
+const personSelect = () => ({
   id: true,
   employeeId: true,
   status: true,
   employee: {
     select: {
       employeeCode: true,
-      nameHistory: { where: { effectiveTo: null }, select: { fullName: true } },
-      jobHistory: { where: { effectiveTo: null }, select: { designation: { select: { name: true } }, department: { select: { name: true } } } },
+      nameHistory: { where: inForceOn(), select: { fullName: true } },
+      jobHistory: { where: inForceOn(), select: { designation: { select: { name: true } }, department: { select: { name: true } } } },
     },
   },
-} satisfies Prisma.UserSelect;
+} satisfies Prisma.UserSelect);
 
-type PersonRow = Prisma.UserGetPayload<{ select: typeof personSelect }>;
+type PersonRow = Prisma.UserGetPayload<{ select: ReturnType<typeof personSelect> }>;
 
 function person(u: PersonRow) {
   const job = u.employee.jobHistory[0];
@@ -55,14 +56,14 @@ function person(u: PersonRow) {
   };
 }
 
-const rowInclude = { delegator: { select: personSelect }, delegate: { select: personSelect } } satisfies Prisma.WorkflowDelegateInclude;
-type DelegationRecord = Prisma.WorkflowDelegateGetPayload<{ include: typeof rowInclude }>;
+const rowInclude = () => ({ delegator: { select: personSelect() }, delegate: { select: personSelect() } } satisfies Prisma.WorkflowDelegateInclude);
+type DelegationRecord = Prisma.WorkflowDelegateGetPayload<{ include: ReturnType<typeof rowInclude> }>;
 
 async function format(rows: DelegationRecord[]) {
   const today = businessToday();
   const approvers = new Set((await activeUsersHoldingPermission("leave.approve")).map((u) => u.userId));
   const actorIds = [...new Set(rows.flatMap((r) => [r.createdByUserId, r.revokedByUserId]).filter((x): x is string => !!x))];
-  const actors = new Map((await prisma.user.findMany({ where: { id: { in: actorIds } }, select: personSelect })).map((u) => [u.id, person(u).name]));
+  const actors = new Map((await prisma.user.findMany({ where: { id: { in: actorIds } }, select: personSelect() })).map((u) => [u.id, person(u).name]));
   const out = [];
   for (const r of rows) {
     // What the delegate did on the delegator's behalf inside this
@@ -103,8 +104,8 @@ async function roleCodesOfUser(userId: string): Promise<string[]> {
 
 export async function listMine(userId: string) {
   const [given, covering, roles] = await Promise.all([
-    prisma.workflowDelegate.findMany({ where: { delegatorUserId: userId }, include: rowInclude }),
-    prisma.workflowDelegate.findMany({ where: { delegateUserId: userId }, include: rowInclude }),
+    prisma.workflowDelegate.findMany({ where: { delegatorUserId: userId }, include: rowInclude() }),
+    prisma.workflowDelegate.findMany({ where: { delegateUserId: userId }, include: rowInclude() }),
     roleCodesOfUser(userId),
   ]);
   const covered = (await format(covering)).filter((r) => r.status === "ACTIVE" || r.status === "SCHEDULED");
@@ -112,7 +113,7 @@ export async function listMine(userId: string) {
 }
 
 export async function listAll(status?: DelegationStatus) {
-  const rows = await format(await prisma.workflowDelegate.findMany({ include: rowInclude }));
+  const rows = await format(await prisma.workflowDelegate.findMany({ include: rowInclude() }));
   return status ? rows.filter((r) => r.status === status) : rows;
 }
 
@@ -121,7 +122,7 @@ export async function listAll(status?: DelegationStatus) {
 export async function delegateOptions(delegatorUserId: string) {
   if (!(await roleCodesOfUser(delegatorUserId)).includes("MANAGER")) return [];
   const approvers = (await activeUsersHoldingPermission("leave.approve")).filter((u) => u.userId !== delegatorUserId);
-  const users = await prisma.user.findMany({ where: { id: { in: approvers.map((a) => a.userId) } }, select: { ...personSelect, roles: { select: { role: { select: { name: true } } } } } });
+  const users = await prisma.user.findMany({ where: { id: { in: approvers.map((a) => a.userId) } }, select: { ...personSelect(), roles: { select: { role: { select: { name: true } } } } } });
   return users
     .map((u) => ({ ...person(u), roles: u.roles.map((r) => r.role.name) }))
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -129,7 +130,7 @@ export async function delegateOptions(delegatorUserId: string) {
 
 // Managers HR can set a delegation up for.
 export async function delegatorOptions() {
-  const users = await prisma.user.findMany({ where: { status: "ACTIVE", roles: { some: { role: { code: "MANAGER" } } } }, select: personSelect });
+  const users = await prisma.user.findMany({ where: { status: "ACTIVE", roles: { some: { role: { code: "MANAGER" } } } }, select: personSelect() });
   return users.map(person).sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -154,8 +155,8 @@ export interface CreateInput {
 
 export async function createDelegation(input: CreateInput, meta: Meta) {
   const [delegator, delegate] = await Promise.all([
-    prisma.user.findUnique({ where: { id: input.delegatorUserId }, select: personSelect }),
-    prisma.user.findUnique({ where: { id: input.delegateUserId }, select: personSelect }),
+    prisma.user.findUnique({ where: { id: input.delegatorUserId }, select: personSelect() }),
+    prisma.user.findUnique({ where: { id: input.delegateUserId }, select: personSelect() }),
   ]);
   if (!delegator || delegator.status !== "ACTIVE") throw new HttpError(404, "That person isn't an active user.", "NOT_FOUND");
   const reason = notAllowedReason(await roleCodesOfUser(delegator.id));
@@ -180,14 +181,14 @@ export async function createDelegation(input: CreateInput, meta: Meta) {
     await tx.$queryRaw`SELECT id FROM users WHERE id = ${delegator.id} FOR UPDATE`;
     const overlap = await tx.workflowDelegate.findFirst({
       where: { delegatorUserId: delegator.id, revokedAt: null, startDate: { lte: endDate }, endDate: { gte: startDate } },
-      include: { delegate: { select: personSelect } },
+      include: { delegate: { select: personSelect() } },
     });
     if (overlap) {
       throw new HttpError(409, `This overlaps an existing delegation to ${person(overlap.delegate).name} (${dateOnly(overlap.startDate)} to ${dateOnly(overlap.endDate)}). Revoke that one first, or pick other dates.`, "OVERLAPPING_DELEGATION");
     }
     return tx.workflowDelegate.create({
       data: { delegatorUserId: delegator.id, delegateUserId: delegate.id, startDate, endDate, reason: input.reason?.trim() || null, createdByUserId: meta.actorUserId },
-      include: rowInclude,
+      include: rowInclude(),
     });
   });
 
@@ -221,7 +222,7 @@ export async function createDelegation(input: CreateInput, meta: Meta) {
 }
 
 export async function revokeDelegation(id: string, input: { reason?: string | null }, meta: Meta, opts: { mustBeDelegator: boolean }) {
-  const existing = await prisma.workflowDelegate.findUnique({ where: { id }, include: rowInclude });
+  const existing = await prisma.workflowDelegate.findUnique({ where: { id }, include: rowInclude() });
   // A manager revoking "their own" can't learn about anyone else's.
   if (!existing || (opts.mustBeDelegator && existing.delegatorUserId !== meta.actorUserId)) throw new HttpError(404, "Delegation not found.", "NOT_FOUND");
   const status = statusOf(existing);
@@ -231,7 +232,7 @@ export async function revokeDelegation(id: string, input: { reason?: string | nu
   const updated = await prisma.workflowDelegate.update({
     where: { id },
     data: { revokedAt: new Date(), revokedByUserId: meta.actorUserId, revokeReason: input.reason?.trim() || null },
-    include: rowInclude,
+    include: rowInclude(),
   });
   await writeAuditLog({
     ...meta,

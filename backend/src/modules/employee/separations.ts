@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
-import { closeHistoryOnLeaving } from "../../lib/effectiveDating";
+import { closeHistoryOnLeaving, inForceOn } from "../../lib/effectiveDating";
 import { writeAuditLog } from "../../lib/audit";
 import { businessToday } from "../../lib/businessDate";
 import { HttpError } from "../../middleware/errorHandler";
@@ -73,7 +73,7 @@ export async function cancelSeparation(id: string, meta: RequestMetaInput): Prom
 export async function listSeparations() {
   const rows = await prisma.separation.findMany({
     orderBy: { initiatedAt: "desc" },
-    include: { employee: { include: { nameHistory: { where: { effectiveTo: null } } } } },
+    include: { employee: { include: { nameHistory: { where: inForceOn() } } } },
   });
   return rows.map((row) => ({
     id: row.id,
@@ -150,7 +150,7 @@ export async function processScheduledSeparations(): Promise<{ processed: number
     // E2: a manager who left with a team leaves that team unassigned (their
     // reports now show on Manager Management's Unassigned list) — tell
     // whoever can reassign them.
-    const orphaned = await prisma.employeeJobHistory.count({ where: { reportingManagerId: sep.employeeId, effectiveTo: null, employee: { status: "ACTIVE" } } });
+    const orphaned = await prisma.employeeJobHistory.count({ where: { reportingManagerId: sep.employeeId, ...inForceOn(), employee: { status: "ACTIVE" } } });
     if (orphaned > 0) {
       for (const holder of await activeUsersHoldingPermission("manager.team.assign")) {
         await notifyEmployee(holder.employeeId, {

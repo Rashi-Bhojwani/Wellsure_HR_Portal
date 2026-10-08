@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { businessToday } from "../../lib/businessDate";
-import { writeJobChange } from "../../lib/effectiveDating";
+import { inForceOn, writeJobChange } from "../../lib/effectiveDating";
 import { prisma } from "../../lib/prisma";
 import { checkReportingLine, isTopLevel, MANAGER_ROLE_CODE, type ManagerRef } from "../../lib/reportingHierarchy";
 import { HttpError } from "../../middleware/errorHandler";
@@ -61,7 +61,7 @@ export async function moveReportingLine(tx: Prisma.TransactionClient, employeeId
 
 // Active direct reports of a manager (current placements only).
 export async function directReportIds(managerId: string, db: Db = prisma): Promise<string[]> {
-  const rows = await db.employeeJobHistory.findMany({ where: { reportingManagerId: managerId, effectiveTo: null, employee: { status: "ACTIVE" } }, select: { employeeId: true } });
+  const rows = await db.employeeJobHistory.findMany({ where: { reportingManagerId: managerId, ...inForceOn(), employee: { status: "ACTIVE" } }, select: { employeeId: true } });
   return rows.map((r) => r.employeeId);
 }
 

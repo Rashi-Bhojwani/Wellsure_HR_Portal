@@ -14,6 +14,7 @@ import { emitLetterUpdated } from "../../realtime/emit";
 import { findScopedEmployee } from "../employee/service";
 import { notifyEmployee } from "../notifications/notifyEmployee";
 import { letterDocument, mergeIntoBody, sanitizeTemplateHtml, validateExtraFields, validatePlaceholders, type Letterhead } from "./template";
+import { inForceOn } from "../../lib/effectiveDating";
 
 // Letters (spec §7.2, Phase 5 commit D2). Letters are legal documents
 // (user, 2026-10-01):
@@ -292,7 +293,7 @@ async function snapshotLetterhead(): Promise<{ letterhead: Letterhead; signatory
 // the name as of its own date after a later change).
 async function employeeValues(employeeId: string, asOf: Date, needed: Set<string>): Promise<Record<string, string>> {
   const day = istDateOnly(asOf);
-  const inForce = { effectiveFrom: { lte: day }, OR: [{ effectiveTo: null }, { effectiveTo: { gt: day } }] };
+  const inForce = inForceOn(day);
   const employee = await prisma.employee.findUniqueOrThrow({
     where: { id: employeeId },
     include: {

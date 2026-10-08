@@ -8,6 +8,7 @@ import { prisma } from "../lib/prisma";
 import { redis } from "../lib/redis";
 import { permissionRoom, setSocketServer } from "./emit";
 import { resolveAccess } from "../lib/permissions";
+import { inForceOn } from "../lib/effectiveDating";
 
 // Socket.IO server with the Redis adapter (spec §8), so multiple api
 // instances can broadcast to each other's connected clients. Handshake
@@ -40,7 +41,7 @@ export async function authenticateSocketToken(token: string): Promise<SocketAuth
   }
   const access = await resolveAccess(user.id);
   const jobHistory = await prisma.employeeJobHistory.findFirst({
-    where: { employeeId: user.employeeId, effectiveTo: null },
+    where: { employeeId: user.employeeId, ...inForceOn() },
     select: { departmentId: true, locationId: true },
   });
   return {

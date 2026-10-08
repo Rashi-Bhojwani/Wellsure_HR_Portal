@@ -7,6 +7,7 @@ import { withEmployeeLeaveLock } from "./concurrency";
 import { getEncashmentRateProvider } from "./encashmentRate";
 import { writeLedgerEntry } from "./ledger";
 import type { ActorMeta } from "./types";
+import { inForceOn } from "../../lib/effectiveDating";
 
 // Year End Process (spec §5.4/§5.5) — preview -> (optionally superseded/
 // discarded, re-previewable) -> commit. Mirrors Import Center's batch/
@@ -87,7 +88,7 @@ export async function listYearEndRuns(year?: number) {
 }
 
 export async function getYearEndRun(runId: string) {
-  const run = await prisma.yearEndRun.findUnique({ where: { id: runId }, include: { items: { include: { employee: { include: { nameHistory: { where: { effectiveTo: null } } } } } } } });
+  const run = await prisma.yearEndRun.findUnique({ where: { id: runId }, include: { items: { include: { employee: { include: { nameHistory: { where: inForceOn() } } } } } } });
   if (!run) throw new HttpError(404, "Year End run not found.", "NOT_FOUND");
   return {
     ...runJson(run),
@@ -224,7 +225,7 @@ export async function commitYearEndRun(runId: string, meta: ActorMeta, options: 
 // items never change at all), so regenerating is exactly as correct as a
 // stored copy, with no extra integration surface.
 export async function buildYearEndReport(runId: string): Promise<{ buffer: Buffer; fileName: string }> {
-  const run = await prisma.yearEndRun.findUnique({ where: { id: runId }, include: { items: { include: { employee: { include: { nameHistory: { where: { effectiveTo: null } } } } } } } });
+  const run = await prisma.yearEndRun.findUnique({ where: { id: runId }, include: { items: { include: { employee: { include: { nameHistory: { where: inForceOn() } } } } } } });
   if (!run) throw new HttpError(404, "Year End run not found.", "NOT_FOUND");
 
   const buffer = await buildXlsx([

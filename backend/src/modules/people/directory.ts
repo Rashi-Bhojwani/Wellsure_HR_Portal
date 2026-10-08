@@ -4,6 +4,7 @@ import { getPeopleDocumentsSettings } from "../../lib/peopleDocumentsSettings";
 import { isTopLevel, MANAGER_ROLE_CODE } from "../../lib/reportingHierarchy";
 import { HttpError } from "../../middleware/errorHandler";
 import { DIRECTORY_FIELD_POLICY } from "./fieldPolicy";
+import { inForceOn } from "../../lib/effectiveDating";
 
 // People directory + org chart (spec §6 "People", Phase 5 commit C).
 // Every signed-in employee can use both; only ACTIVE employees appear, and
@@ -27,32 +28,32 @@ export interface DirectoryEntry {
 }
 
 // Selects exactly the columns the policy can ever show (never the whole row).
-const DIRECTORY_SELECT = {
+const DIRECTORY_SELECT = () => ({
   id: true,
   employeeCode: true,
   officialEmail: true,
   dateOfJoining: true,
   personal: { select: { dateOfBirth: true, personalEmail: true, mobile: true, photoVersion: true } },
-  nameHistory: { where: { effectiveTo: null }, select: { fullName: true } },
+  nameHistory: { where: inForceOn(), select: { fullName: true } },
   jobHistory: {
-    where: { effectiveTo: null },
+    where: inForceOn(),
     select: {
       designation: { select: { id: true, name: true } },
       department: { select: { id: true, name: true } },
       location: { select: { id: true, name: true } },
       reportingManager: {
-        select: { id: true, status: true, employeeCode: true, nameHistory: { where: { effectiveTo: null }, select: { fullName: true } } },
+        select: { id: true, status: true, employeeCode: true, nameHistory: { where: inForceOn(), select: { fullName: true } } },
       },
     },
   },
-} as const;
+}) as const;
 
 type DirectoryRow = Awaited<ReturnType<typeof loadDirectoryRows>>[number];
 
 async function loadDirectoryRows(where: object) {
   return prisma.employee.findMany({
-    where: { status: "ACTIVE", jobHistory: { some: { effectiveTo: null } }, ...where },
-    select: DIRECTORY_SELECT,
+    where: { status: "ACTIVE", jobHistory: { some: inForceOn() }, ...where },
+    select: DIRECTORY_SELECT(),
   });
 }
 
@@ -109,13 +110,13 @@ export async function listDirectory(query: ListDirectoryQuery) {
     ...(search && {
       OR: [
         { employeeCode: { contains: search, mode: "insensitive" as const } },
-        { nameHistory: { some: { effectiveTo: null, fullName: { contains: search, mode: "insensitive" as const } } } },
+        { nameHistory: { some: { ...inForceOn(), fullName: { contains: search, mode: "insensitive" as const } } } },
       ],
     }),
     ...((query.departmentId || query.locationId) && {
       jobHistory: {
         some: {
-          effectiveTo: null,
+          ...inForceOn(),
           ...(query.departmentId && { departmentId: query.departmentId }),
           ...(query.locationId && { locationId: query.locationId }),
         },
@@ -170,14 +171,14 @@ export interface OrgChartNode {
 
 export async function getOrgChart() {
   const rows = await prisma.employee.findMany({
-    where: { status: "ACTIVE", jobHistory: { some: { effectiveTo: null } } },
+    where: { status: "ACTIVE", jobHistory: { some: inForceOn() } },
     select: {
       id: true,
       employeeCode: true,
       personal: { select: { photoVersion: true } },
-      nameHistory: { where: { effectiveTo: null }, select: { fullName: true } },
+      nameHistory: { where: inForceOn(), select: { fullName: true } },
       jobHistory: {
-        where: { effectiveTo: null },
+        where: inForceOn(),
         select: { designationId: true, departmentId: true, locationId: true, reportingManagerId: true },
       },
       user: { select: { roles: { select: { role: { select: { code: true } } } } } },

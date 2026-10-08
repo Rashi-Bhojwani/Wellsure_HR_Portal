@@ -11,6 +11,7 @@ import { prepareDocumentUpload } from "../../lib/uploads";
 import { HttpError } from "../../middleware/errorHandler";
 import { emitHelpdeskQueue, emitHelpdeskTicket } from "../../realtime/emit";
 import { notifyEmployee } from "../notifications/notifyEmployee";
+import { inForceOn } from "../../lib/effectiveDating";
 
 // Helpdesk (spec §6 "raise ticket to HR by category, track status,
 // chat-style replies"), Phase 5 commit D.
@@ -52,16 +53,16 @@ function hrVisibleWhere(viewer: HelpdeskViewer): Prisma.HelpdeskTicketWhereInput
   };
 }
 
-const nameSelect = { id: true, employeeCode: true, nameHistory: { where: { effectiveTo: null }, select: { fullName: true } } } as const;
+const nameSelect = () => ({ id: true, employeeCode: true, nameHistory: { where: inForceOn(), select: { fullName: true } } }) as const;
 const personRef = (p: { id: string; employeeCode: string; nameHistory: { fullName: string }[] } | null) =>
   p ? { id: p.id, employeeCode: p.employeeCode, name: p.nameHistory[0]?.fullName ?? p.employeeCode } : null;
 
-const ticketInclude = {
+const ticketInclude = () => ({
   category: { select: { id: true, code: true, name: true, isSensitive: true } },
-  raisedBy: { select: nameSelect },
-  assignee: { select: nameSelect },
-} as const;
-type TicketRow = Prisma.HelpdeskTicketGetPayload<{ include: typeof ticketInclude }>;
+  raisedBy: { select: nameSelect() },
+  assignee: { select: nameSelect() },
+}) as const;
+type TicketRow = Prisma.HelpdeskTicketGetPayload<{ include: ReturnType<typeof ticketInclude> }>;
 
 // The employee is always told when a Resolved ticket will close and until
 // when they can reopen it — the same dates the auto-close job uses.
@@ -103,7 +104,7 @@ export async function listActiveCategories() {
 
 export async function listAllCategories() {
   const rows = await prisma.helpdeskCategory.findMany({
-    include: { defaultAssignee: { select: nameSelect }, _count: { select: { tickets: true } } },
+    include: { defaultAssignee: { select: nameSelect() }, _count: { select: { tickets: true } } },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
   });
   return rows.map((c) => ({
@@ -166,7 +167,7 @@ export async function listAssignees() {
       status: "ACTIVE",
       user: { status: "ACTIVE", roles: { some: { role: { permissions: { some: { permission: { key: "helpdesk.manage" } } } } } } },
     },
-    select: nameSelect,
+    select: nameSelect(),
   });
   return rows.map((r) => personRef(r)!).sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -247,7 +248,7 @@ export async function listMyTickets(viewer: HelpdeskViewer, query: { status?: He
   const [rows, settings] = await Promise.all([
     prisma.helpdeskTicket.findMany({
       where: { raisedByEmployeeId: viewer.employeeId, ...(query.status && { status: query.status }) },
-      include: ticketInclude,
+      include: ticketInclude(),
       orderBy: { lastActivityAt: "desc" },
     }),
     getHelpdeskSettings(),
@@ -276,7 +277,7 @@ export async function listQueue(viewer: HelpdeskViewer, query: HelpdeskQueueQuer
     prisma.helpdeskTicket.count({ where }),
     prisma.helpdeskTicket.findMany({
       where,
-      include: ticketInclude,
+      include: ticketInclude(),
       orderBy: [{ lastActivityAt: "desc" }],
       skip: (query.page - 1) * query.pageSize,
       take: query.pageSize,
@@ -290,7 +291,7 @@ type Access = { mode: "raiser" } | { mode: "hr" };
 
 // The single access decision for one ticket (see the module comment).
 async function resolveAccess(ticketId: string, viewer: HelpdeskViewer): Promise<{ ticket: TicketRow; access: Access }> {
-  const ticket = await prisma.helpdeskTicket.findUnique({ where: { id: ticketId }, include: ticketInclude });
+  const ticket = await prisma.helpdeskTicket.findUnique({ where: { id: ticketId }, include: ticketInclude() });
   if (!ticket) throw notFound();
   if (ticket.raisedByEmployeeId === viewer.employeeId) return { ticket, access: { mode: "raiser" } };
   if (canManage(viewer) && (!ticket.category.isSensitive || canSeeSensitive(viewer))) return { ticket, access: { mode: "hr" } };
@@ -302,7 +303,7 @@ export async function getTicket(ticketId: string, viewer: HelpdeskViewer, meta?:
   const [messages, settings] = await Promise.all([
     prisma.helpdeskMessage.findMany({
       where: { ticketId, ...(access.mode === "raiser" && { isInternalNote: false }) },
-      include: { author: { select: nameSelect }, attachments: { select: { id: true, fileName: true, mimeType: true, sizeBytes: true } } },
+      include: { author: { select: nameSelect() }, attachments: { select: { id: true, fileName: true, mimeType: true, sizeBytes: true } } },
       orderBy: { createdAt: "asc" },
     }),
     getHelpdeskSettings(),
@@ -412,7 +413,7 @@ export async function updateTicket(
     if (input.status !== "CLOSED") data.closedAt = null;
     if (input.status === "CLOSED" && !ticket.resolvedAt) data.resolvedAt = new Date(); // starts the reopen window
   }
-  const after = await prisma.helpdeskTicket.update({ where: { id: ticketId }, data, include: ticketInclude });
+  const after = await prisma.helpdeskTicket.update({ where: { id: ticketId }, data, include: ticketInclude() });
   await writeAuditLog({
     ...meta,
     action: "helpdesk.ticket.updated",

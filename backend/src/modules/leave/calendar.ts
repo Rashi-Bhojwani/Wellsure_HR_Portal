@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { getTeamEmployeeIds } from "../../lib/dataScope";
 import type { LeaveViewer } from "./types";
+import { inForceOn } from "../../lib/effectiveDating";
 
 export interface LeaveCalendarQuery {
   fromDate: string;
@@ -43,7 +44,7 @@ export async function getLeaveCalendar(query: LeaveCalendarQuery, viewer: LeaveV
   let departmentId = query.departmentId;
   if (!hasBroadView) {
     const ownJobHistory = await prisma.employeeJobHistory.findFirst({
-      where: { employeeId: viewer.employeeId, effectiveTo: null },
+      where: { employeeId: viewer.employeeId, ...inForceOn() },
       select: { departmentId: true },
     });
     departmentId = ownJobHistory?.departmentId;
@@ -59,7 +60,7 @@ export async function getLeaveCalendar(query: LeaveCalendarQuery, viewer: LeaveV
     const placement = {
       jobHistory: {
         some: {
-          effectiveTo: null,
+          ...inForceOn(),
           ...(departmentId ? { departmentId } : {}),
           ...(locationId ? { locationId } : {}),
         },
@@ -75,7 +76,7 @@ export async function getLeaveCalendar(query: LeaveCalendarQuery, viewer: LeaveV
 
   const rows = await prisma.leaveRequest.findMany({
     where,
-    include: { leaveType: true, employee: { include: { nameHistory: { where: { effectiveTo: null } } } } },
+    include: { leaveType: true, employee: { include: { nameHistory: { where: inForceOn() } } } },
     orderBy: { fromDate: "asc" },
   });
 

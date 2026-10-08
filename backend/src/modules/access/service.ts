@@ -15,6 +15,7 @@ import { checkRoleCombination, isTopLevel } from "../../lib/reportingHierarchy";
 import { logger } from "../../lib/logger";
 import { sendSecurityChangeNoticeEmail } from "../auth/emails";
 import { adminIssuePasswordReset, adminResetTotp, adminUnlock } from "../auth/service";
+import { inForceOn } from "../../lib/effectiveDating";
 
 // Roles & permissions (spec §2, Phase 5 commit E1). The rules, numbered as in
 // docs/plans/PHASE_5.md §E1, are enforced HERE (the routes only check that
@@ -290,7 +291,7 @@ export async function assignRole(employeeId: string, roleCode: string, actor: Ac
     await tx.userRole.create({ data: { userId: user.id, roleId: role.id, assignedByUserId: actor.userId } });
     // Model A: Super Admins and HR Admins sit directly under Admin.
     if (isTopLevel([role.code])) {
-      const current = await tx.employeeJobHistory.findFirst({ where: { employeeId, effectiveTo: null } });
+      const current = await tx.employeeJobHistory.findFirst({ where: { employeeId, ...inForceOn() } });
       if (current?.reportingManagerId) await moveReportingLine(tx, employeeId, null, businessToday(), actor.userId, `Became ${role.name}`);
     }
   });
@@ -335,8 +336,8 @@ async function assertMaySecure(employeeId: string, actor: AccessActor) {
 // E1.1: the person is always told, by email, who changed their sign-in and why.
 async function tellTarget(userId: string, change: string, reason: string, actor: AccessActor) {
   const [target, by] = await Promise.all([
-    prisma.employee.findFirst({ where: { user: { id: userId } }, include: { personal: true, nameHistory: { where: { effectiveTo: null } } } }),
-    prisma.employee.findUnique({ where: { id: actor.employeeId }, include: { nameHistory: { where: { effectiveTo: null } } } }),
+    prisma.employee.findFirst({ where: { user: { id: userId } }, include: { personal: true, nameHistory: { where: inForceOn() } } }),
+    prisma.employee.findUnique({ where: { id: actor.employeeId }, include: { nameHistory: { where: inForceOn() } } }),
   ]);
   const email = target?.personal?.personalEmail;
   if (!target || !email) return;

@@ -30,6 +30,7 @@ import {
 } from "./totp";
 import { sendInvitationEmail, sendPasswordResetEmail, sendWelcomeEmail } from "./emails";
 import type { LoginResult, LoginTokens, RequestMetaInput } from "./types";
+import { inForceOn } from "../../lib/effectiveDating";
 
 interface MinimalEmployee {
   employeeCode: string;
@@ -350,7 +351,7 @@ export async function getInvitationDetails(token: string): Promise<{ employeeCod
   }
   const employee = await prisma.employee.findFirst({
     where: { user: { id: row.userId } },
-    include: { nameHistory: { where: { effectiveTo: null } } },
+    include: { nameHistory: { where: inForceOn() } },
   });
   if (!employee) {
     throw new HttpError(400, "This invitation link is invalid or has expired.", "INVALID_INVITATION");
@@ -377,7 +378,7 @@ export async function acceptInvitation(
 
   const employee = await prisma.employee.findFirst({
     where: { user: { id: user.id } },
-    include: { personal: true, nameHistory: { where: { effectiveTo: null } } },
+    include: { personal: true, nameHistory: { where: inForceOn() } },
   });
   if (!employee) {
     throw new HttpError(500, "Employee record not found for this account.", "INTERNAL_ERROR");
@@ -425,7 +426,7 @@ export async function forgotPassword(employeeCode: string, meta: RequestMetaInpu
 
   const employee = await prisma.employee.findUnique({
     where: { employeeCode },
-    include: { user: true, personal: true, nameHistory: { where: { effectiveTo: null } } },
+    include: { user: true, personal: true, nameHistory: { where: inForceOn() } },
   });
 
   if (employee?.user && employee.user.status === "ACTIVE" && employee.personal?.personalEmail) {
@@ -488,7 +489,7 @@ export async function acceptPrivacyNotice(userId: string): Promise<void> {
 export async function getMe(userId: string) {
   const employee = await prisma.employee.findFirst({
     where: { user: { id: userId } },
-    include: { user: true, nameHistory: { where: { effectiveTo: null } } },
+    include: { user: true, nameHistory: { where: inForceOn() } },
   });
   if (!employee?.user) {
     throw new HttpError(404, "Not found", "NOT_FOUND");
@@ -640,7 +641,7 @@ export async function adminUnlock(userId: string, meta: AdminSecurityMeta): Prom
 // personal email on file. Returns the link only for the break-glass CLI,
 // whose operator may need to hand it over when email itself is the problem.
 export async function adminIssuePasswordReset(userId: string, meta: AdminSecurityMeta): Promise<{ link: string; emailedTo: string | null }> {
-  const employee = await prisma.employee.findFirst({ where: { user: { id: userId } }, include: { personal: true, nameHistory: { where: { effectiveTo: null } } } });
+  const employee = await prisma.employee.findFirst({ where: { user: { id: userId } }, include: { personal: true, nameHistory: { where: inForceOn() } } });
   if (!employee) throw new HttpError(404, "User not found.", "NOT_FOUND");
   const raw = generateOpaqueToken();
   await prisma.passwordResetToken.create({ data: { userId, tokenHash: hashOpaqueToken(raw), expiresAt: new Date(Date.now() + 60 * 60 * 1000) } });

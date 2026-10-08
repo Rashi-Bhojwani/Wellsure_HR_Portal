@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { writeAuditLog } from "../../lib/audit";
 import { businessToday } from "../../lib/businessDate";
-import { writeBankChange, writeJobChange, writeNameChange } from "../../lib/effectiveDating";
+import { firstHistoryDay, inForceOn, writeBankChange, writeJobChange, writeNameChange } from "../../lib/effectiveDating";
 import { HttpError } from "../../middleware/errorHandler";
 import { encryptField, decryptField } from "../../lib/encryption";
 import { blindIndex, last4, normalizeAadhaar, normalizeAccountNumber, normalizePan } from "../../lib/fieldHash";
@@ -163,11 +163,17 @@ export async function createEmployeeInTx(
     },
   });
 
+  // Name, placement and bank start on the date of joining — or today, for
+  // someone joining later (a pre-joiner), so they're in force from the day
+  // they're added: in their manager's team, named on every screen. Joiner
+  // and headcount figures come from dateOfJoining, never from these rows.
+  // The device mapping stays from the date of joining: only punches use it.
+  const firstRowsFrom = firstHistoryDay(new Date(official.dateOfJoining));
   await tx.employeeNameHistory.create({
     data: {
       employeeId: employeeRow.id,
       fullName: personal.fullName,
-      effectiveFrom: new Date(official.dateOfJoining),
+      effectiveFrom: firstRowsFrom,
       createdByUserId: meta.actorUserId,
     },
   });
@@ -181,7 +187,7 @@ export async function createEmployeeInTx(
       gradeId: official.gradeId ?? null,
       costCentreId: official.costCentreId ?? null,
       reportingManagerId: official.reportingManagerId ?? null,
-      effectiveFrom: new Date(official.dateOfJoining),
+      effectiveFrom: firstRowsFrom,
       createdByUserId: meta.actorUserId,
     },
   });
@@ -207,7 +213,7 @@ export async function createEmployeeInTx(
       data: {
         employeeId: employeeRow.id,
         ...encryptBankFields(bank),
-        effectiveFrom: new Date(official.dateOfJoining),
+        effectiveFrom: firstRowsFrom,
         createdByUserId: meta.actorUserId,
       },
     });
@@ -254,7 +260,7 @@ export async function createEmployee(input: CreateEmployeeInput, meta: RequestMe
 export async function resendInvite(employeeId: string, meta: RequestMetaInput): Promise<void> {
   const employee = await prisma.employee.findUnique({
     where: { id: employeeId },
-    include: { user: true, personal: true, nameHistory: { where: { effectiveTo: null } } },
+    include: { user: true, personal: true, nameHistory: { where: inForceOn() } },
   });
   if (!employee?.user) throw new HttpError(404, "Employee not found.", "NOT_FOUND");
   if (employee.user.status !== "INVITED") {
@@ -290,11 +296,11 @@ async function loadProfileCore(employeeId: string) {
     where: { id: employeeId },
     include: {
       personal: true,
-      nameHistory: { where: { effectiveTo: null } },
+      nameHistory: { where: inForceOn() },
       user: { select: { status: true, totpEnabled: true, lastLoginAt: true } },
       jobHistory: {
-        where: { effectiveTo: null },
-        include: { department: true, designation: true, location: true, grade: true, costCentre: true, reportingManager: { include: { nameHistory: { where: { effectiveTo: null } } } } },
+        where: inForceOn(),
+        include: { department: true, designation: true, location: true, grade: true, costCentre: true, reportingManager: { include: { nameHistory: { where: inForceOn() } } } },
       },
     },
   });
@@ -360,7 +366,7 @@ async function loadMaskedStatutory(employeeId: string) {
 }
 
 async function loadMaskedBank(employeeId: string) {
-  const row = await prisma.employeeBankAccount.findFirst({ where: { employeeId, effectiveTo: null } });
+  const row = await prisma.employeeBankAccount.findFirst({ where: { employeeId, ...inForceOn() } });
   if (!row) return null;
   return {
     accountHolderName: row.accountHolderName,
@@ -420,7 +426,7 @@ export async function revealStatutory(employeeId: string, viewerEmployeeId: stri
 
 export async function revealBank(employeeId: string, viewerEmployeeId: string, scope: DataScope, meta: RequestMetaInput) {
   await findScopedEmployee(employeeId, viewerEmployeeId, scope);
-  const row = await prisma.employeeBankAccount.findFirst({ where: { employeeId, effectiveTo: null } });
+  const row = await prisma.employeeBankAccount.findFirst({ where: { employeeId, ...inForceOn() } });
   if (!row) throw new HttpError(404, "No active bank account on file.", "NOT_FOUND");
   const result = { accountHolderName: row.accountHolderName, accountNumber: decryptField(row.accountNumberEncrypted), ifsc: row.ifsc, bankName: row.bankName, branchName: row.branchName };
   await writeAuditLog({ ...meta, action: "employee.bank.revealed", entityType: "Employee", entityId: employeeId });
@@ -434,7 +440,7 @@ export async function getJobHistory(employeeId: string, viewerEmployeeId: string
   const rows = await prisma.employeeJobHistory.findMany({
     where: { employeeId },
     orderBy: { effectiveFrom: "desc" },
-    include: { department: true, designation: true, location: true, grade: true, costCentre: true, reportingManager: { include: { nameHistory: { where: { effectiveTo: null } } } } },
+    include: { department: true, designation: true, location: true, grade: true, costCentre: true, reportingManager: { include: { nameHistory: { where: inForceOn() } } } },
   });
   return rows.map((row) => ({
     id: row.id,

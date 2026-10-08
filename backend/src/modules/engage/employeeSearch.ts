@@ -1,4 +1,5 @@
 import { prisma } from "../../lib/prisma";
+import { inForceOn } from "../../lib/effectiveDating";
 
 // A minimal, self-serve "who can I give kudos to / @-mention" lookup —
 // name + code only, no sensitive data — deliberately separate from
@@ -14,10 +15,10 @@ export async function searchEmployeesForPicker(search: string, excludeEmployeeId
       id: { not: excludeEmployeeId },
       OR: [
         { employeeCode: { contains: search, mode: "insensitive" } },
-        { nameHistory: { some: { effectiveTo: null, fullName: { contains: search, mode: "insensitive" } } } },
+        { nameHistory: { some: { ...inForceOn(), fullName: { contains: search, mode: "insensitive" } } } },
       ],
     },
-    select: { id: true, employeeCode: true, nameHistory: { where: { effectiveTo: null }, select: { fullName: true } } },
+    select: { id: true, employeeCode: true, nameHistory: { where: inForceOn(), select: { fullName: true } } },
     take: 10,
   });
   return rows.map((r) => ({ id: r.id, employeeCode: r.employeeCode, name: r.nameHistory[0]?.fullName ?? r.employeeCode }));

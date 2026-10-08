@@ -3,6 +3,7 @@ import { prisma } from "../../lib/prisma";
 import { AlertNotDelivered, raiseBreakGlassAlert } from "../../lib/securityAlerts";
 import { adminIssuePasswordReset, adminResetTotp, adminUnlock } from "../auth/service";
 import { AdminCliRefusal } from "./bootstrap";
+import { inForceOn } from "../../lib/effectiveDating";
 
 // Break-glass recovery for a SUPER_ADMIN who has lost their password or 2FA
 // device and has no other Super Admin to help them in the app (Phase 5
@@ -56,7 +57,7 @@ export async function recoverSuperAdmin(input: RecoverInput): Promise<RecoverRes
 
   const employee = await prisma.employee.findUnique({
     where: { employeeCode: input.employeeCode.trim() },
-    include: { user: { include: { roles: { include: { role: true } } } }, nameHistory: { where: { effectiveTo: null } } },
+    include: { user: { include: { roles: { include: { role: true } } } }, nameHistory: { where: inForceOn() } },
   });
   const user = employee?.user;
   if (!employee || !user || !user.roles.some((r) => r.role.code === SUPER_ADMIN_ROLE_CODE)) {

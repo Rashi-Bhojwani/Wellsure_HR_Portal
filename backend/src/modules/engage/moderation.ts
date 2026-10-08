@@ -19,7 +19,7 @@ export async function moderatePost(postId: string, viewer: EngageViewer, meta: A
   await prisma.post.update({ where: { id: postId }, data: { moderatedAt: new Date(), moderatedByUserId: viewer.userId } });
   await writeAuditLog({ ...meta, action: "engage.post.moderate", entityType: "Post", entityId: postId, before: { moderatedAt: null } });
 
-  const reloaded = await prisma.post.findUniqueOrThrow({ where: { id: postId }, include: FEED_INCLUDE });
+  const reloaded = await prisma.post.findUniqueOrThrow({ where: { id: postId }, include: FEED_INCLUDE() });
   return formatPost(reloaded, viewer.employeeId);
 }
 
@@ -31,7 +31,7 @@ export async function unmoderatePost(postId: string, viewer: EngageViewer, meta:
   await prisma.post.update({ where: { id: postId }, data: { moderatedAt: null, moderatedByUserId: null } });
   await writeAuditLog({ ...meta, action: "engage.post.unmoderate", entityType: "Post", entityId: postId, before: { moderatedAt: existing.moderatedAt } });
 
-  const reloaded = await prisma.post.findUniqueOrThrow({ where: { id: postId }, include: FEED_INCLUDE });
+  const reloaded = await prisma.post.findUniqueOrThrow({ where: { id: postId }, include: FEED_INCLUDE() });
   return formatPost(reloaded, viewer.employeeId);
 }
 
@@ -43,7 +43,7 @@ export async function listPostsForModeration(query: { moderated?: boolean; page:
     prisma.post.count({ where }),
     prisma.post.findMany({
       where,
-      include: FEED_INCLUDE,
+      include: FEED_INCLUDE(),
       orderBy: { createdAt: "desc" },
       skip: (query.page - 1) * query.pageSize,
       take: query.pageSize,

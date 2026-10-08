@@ -1,5 +1,6 @@
 import { prisma } from "../../lib/prisma";
 import type { DeviceCodeCheckResult } from "./types";
+import { inForceOn } from "../../lib/effectiveDating";
 
 // Employee Codes are permanent and never reused (spec §3), even though the
 // biometric machine's own device user IDs are eventually reassigned once
@@ -9,7 +10,7 @@ import type { DeviceCodeCheckResult } from "./types";
 export async function checkDeviceUserId(deviceUserId: string): Promise<DeviceCodeCheckResult> {
   const existing = await prisma.employee.findUnique({
     where: { employeeCode: deviceUserId },
-    include: { nameHistory: { where: { effectiveTo: null } } },
+    include: { nameHistory: { where: inForceOn() } },
   });
   if (!existing) {
     return { deviceUserId, suggestedEmployeeCode: deviceUserId, collision: null };

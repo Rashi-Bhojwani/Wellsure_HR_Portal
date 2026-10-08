@@ -7,6 +7,7 @@ import { isEligibleForAccrualMonth } from "./accrual";
 import { withEmployeeLeaveLock } from "./concurrency";
 import { writeLedgerEntry } from "./ledger";
 import type { ActorMeta } from "./types";
+import { inForceOn } from "../../lib/effectiveDating";
 
 // Leave Recalculator (spec §5.4) — replays PL-style accrual after a
 // policy change, a corrected DOJ, or a backdated approval that shifted
@@ -90,7 +91,7 @@ async function diffForEmployee(
 async function resolveEmployees(employeeIds: string[]) {
   const employees = await prisma.employee.findMany({
     where: { id: { in: employeeIds } },
-    select: { id: true, employeeCode: true, dateOfJoining: true, nameHistory: { where: { effectiveTo: null }, select: { fullName: true } } },
+    select: { id: true, employeeCode: true, dateOfJoining: true, nameHistory: { where: inForceOn(), select: { fullName: true } } },
   });
   if (employees.length !== employeeIds.length) {
     throw new HttpError(404, "One or more employees were not found.", "NOT_FOUND");

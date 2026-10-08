@@ -4,6 +4,7 @@ import { writeAuditLog } from "../../lib/audit";
 import { businessToday } from "../../lib/businessDate";
 import { HttpError } from "../../middleware/errorHandler";
 import type { ActorMeta } from "./types";
+import { inForceOn } from "../../lib/effectiveDating";
 
 // The Home page HR banner (spec §6), replacing greytHR's product-ad slot.
 // Overlapping active windows/scopes are expected — see getActiveForEmployee
@@ -117,7 +118,7 @@ export async function deleteAnnouncement(id: string, meta: ActorMeta): Promise<v
 export async function getActiveAnnouncementForEmployee(employeeId: string) {
   const today = businessToday();
   const jobHistory = await prisma.employeeJobHistory.findFirst({
-    where: { employeeId, effectiveTo: null },
+    where: { employeeId, ...inForceOn() },
     select: { locationId: true, departmentId: true },
   });
 

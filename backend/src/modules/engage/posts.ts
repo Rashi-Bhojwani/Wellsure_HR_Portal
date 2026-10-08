@@ -4,24 +4,25 @@ import { writeAuditLog } from "../../lib/audit";
 import { HttpError } from "../../middleware/errorHandler";
 import { emitEngagePost } from "../../realtime/emit";
 import type { ActorMeta, EngageViewer } from "./types";
+import { inForceOn } from "../../lib/effectiveDating";
 
-const NAME_INCLUDE = { nameHistory: { where: { effectiveTo: null as null } } } as const;
+const NAME_INCLUDE = () => ({ nameHistory: { where: inForceOn() } }) as const;
 
 // Every field a feed card / detail view needs, fetched in one query per
 // page (Prisma batches the nested includes — no N+1 per post). Comments
 // are counted here but fetched in full via their own endpoint, since a
 // popular post's comment list can grow independently of the feed page.
-export const FEED_INCLUDE = {
-  author: { include: NAME_INCLUDE },
-  subject: { include: NAME_INCLUDE },
+export const FEED_INCLUDE = () => ({
+  author: { include: NAME_INCLUDE() },
+  subject: { include: NAME_INCLUDE() },
   group: true,
-  kudos: { include: { fromEmployee: { include: NAME_INCLUDE }, toEmployee: { include: NAME_INCLUDE } } },
+  kudos: { include: { fromEmployee: { include: NAME_INCLUDE() }, toEmployee: { include: NAME_INCLUDE() } } },
   poll: { include: { options: { include: { votes: true }, orderBy: { rank: "asc" as const } } } },
   reactions: true,
   _count: { select: { comments: true } },
-} satisfies Prisma.PostInclude;
+} satisfies Prisma.PostInclude);
 
-export type PostWithIncludes = Prisma.PostGetPayload<{ include: typeof FEED_INCLUDE }>;
+export type PostWithIncludes = Prisma.PostGetPayload<{ include: ReturnType<typeof FEED_INCLUDE> }>;
 
 function currentName(employee: { nameHistory: { fullName: string }[]; employeeCode: string } | null): string | null {
   if (!employee) return null;
@@ -94,16 +95,16 @@ export async function listFeed(query: ListFeedQuery, viewerEmployeeId: string) {
   if (query.locationId) {
     and.push({
       OR: [
-        { author: { jobHistory: { some: { effectiveTo: null, locationId: query.locationId } } } },
-        { subject: { jobHistory: { some: { effectiveTo: null, locationId: query.locationId } } } },
+        { author: { jobHistory: { some: { ...inForceOn(), locationId: query.locationId } } } },
+        { subject: { jobHistory: { some: { ...inForceOn(), locationId: query.locationId } } } },
       ],
     });
   }
   if (query.departmentId) {
     and.push({
       OR: [
-        { author: { jobHistory: { some: { effectiveTo: null, departmentId: query.departmentId } } } },
-        { subject: { jobHistory: { some: { effectiveTo: null, departmentId: query.departmentId } } } },
+        { author: { jobHistory: { some: { ...inForceOn(), departmentId: query.departmentId } } } },
+        { subject: { jobHistory: { some: { ...inForceOn(), departmentId: query.departmentId } } } },
       ],
     });
   }
@@ -120,7 +121,7 @@ export async function listFeed(query: ListFeedQuery, viewerEmployeeId: string) {
     prisma.post.count({ where }),
     prisma.post.findMany({
       where,
-      include: FEED_INCLUDE,
+      include: FEED_INCLUDE(),
       orderBy: { createdAt: "desc" },
       skip: (query.page - 1) * query.pageSize,
       take: query.pageSize,
@@ -131,7 +132,7 @@ export async function listFeed(query: ListFeedQuery, viewerEmployeeId: string) {
 }
 
 export async function getPost(id: string, viewerEmployeeId: string) {
-  const post = await prisma.post.findUnique({ where: { id }, include: FEED_INCLUDE });
+  const post = await prisma.post.findUnique({ where: { id }, include: FEED_INCLUDE() });
   if (!post || post.moderatedAt) throw new HttpError(404, "Post not found.", "NOT_FOUND");
   return formatPost(post, viewerEmployeeId);
 }
@@ -144,7 +145,7 @@ export async function createPost(viewer: EngageViewer, input: { body: string; gr
 
   const post = await prisma.post.create({
     data: { authorEmployeeId: viewer.employeeId, groupId: input.groupId ?? null, kind: "USER", body: input.body },
-    include: FEED_INCLUDE,
+    include: FEED_INCLUDE(),
   });
   await writeAuditLog({ ...meta, action: "engage.post.create", entityType: "Post", entityId: post.id, after: { kind: post.kind, groupId: post.groupId } });
 

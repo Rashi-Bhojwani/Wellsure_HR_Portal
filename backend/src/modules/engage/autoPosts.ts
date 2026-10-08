@@ -4,6 +4,7 @@ import { logger } from "../../lib/logger";
 import { emitEngageBirthday, emitEngageJoining, emitEngageAnniversary } from "../../realtime/emit";
 import { getAutoPostSetting } from "./autoPostSettings";
 import { FEED_INCLUDE, formatPost } from "./posts";
+import { inForceOn } from "../../lib/effectiveDating";
 
 function renderTemplate(template: string, vars: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (match, key: string) => vars[key] ?? match);
@@ -45,7 +46,7 @@ async function createAutoPost(attempt: AutoPostAttempt, occurredOn: Date): Promi
   try {
     const post = await prisma.post.create({
       data: { subjectEmployeeId: attempt.subjectEmployeeId, kind: attempt.kind, body: attempt.body, occurredOn },
-      include: FEED_INCLUDE,
+      include: FEED_INCLUDE(),
     });
     // No single "viewer" for a broadcast system post — a fresh post has no
     // reactions/votes yet anyway, so viewerReaction/viewerVotedOptionId are
@@ -82,7 +83,7 @@ export async function runDailyAutoPosts(today: Date): Promise<{ created: number;
       id: true,
       dateOfJoining: true,
       personal: { select: { dateOfBirth: true } },
-      nameHistory: { where: { effectiveTo: null }, select: { fullName: true } },
+      nameHistory: { where: inForceOn(), select: { fullName: true } },
     },
   });
 
@@ -131,7 +132,7 @@ export async function createJoiningPost(employeeId: string): Promise<void> {
 
   const employee = await prisma.employee.findUnique({
     where: { id: employeeId },
-    select: { dateOfJoining: true, nameHistory: { where: { effectiveTo: null }, select: { fullName: true } } },
+    select: { dateOfJoining: true, nameHistory: { where: inForceOn(), select: { fullName: true } } },
   });
   if (!employee) return;
   const name = employee.nameHistory[0]?.fullName ?? "our newest team member";

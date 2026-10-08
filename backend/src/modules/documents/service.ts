@@ -21,6 +21,7 @@ import type {
   uploadCompanyDocumentSchema,
   uploadEmployeeDocumentSchema,
 } from "./validators";
+import { inForceOn } from "../../lib/effectiveDating";
 
 // Document Center (spec §6) + HR-held employee documents (spec §7.2),
 // Phase 5 commit C. Files live behind StorageService and are only ever
@@ -277,7 +278,7 @@ export async function getCompanyDocumentDownloads(id: string) {
       where: { documentId: id },
       orderBy: { lastDownloadedAt: "desc" },
       include: {
-        employee: { select: { id: true, employeeCode: true, nameHistory: { where: { effectiveTo: null }, select: { fullName: true } } } },
+        employee: { select: { id: true, employeeCode: true, nameHistory: { where: inForceOn(), select: { fullName: true } } } },
       },
     }),
     prisma.employee.count({
@@ -285,7 +286,7 @@ export async function getCompanyDocumentDownloads(id: string) {
         status: "ACTIVE",
         jobHistory: {
           some: {
-            effectiveTo: null,
+            ...inForceOn(),
             ...(doc.scopeLocationId && { locationId: doc.scopeLocationId }),
             ...(doc.scopeDepartmentId && { departmentId: doc.scopeDepartmentId }),
           },

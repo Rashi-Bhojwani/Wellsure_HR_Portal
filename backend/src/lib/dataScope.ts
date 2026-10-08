@@ -1,21 +1,24 @@
 import type { Prisma } from "@prisma/client";
 import type { DataScope } from "@shared/constants/roles";
+import { businessToday } from "./businessDate";
+import { inForceSql } from "./effectiveDating";
 import { prisma } from "./prisma";
 
 export type { DataScope };
 
 // Every employee who reports, directly or indirectly, to managerId — walked
-// over the *current* org-placement rows only (employee_job_history rows
-// with effective_to IS NULL). Prisma has no recursive-query API, so this is
-// a raw WITH RECURSIVE CTE.
-export async function getTeamEmployeeIds(managerId: string): Promise<string[]> {
+// over the org-placement rows IN FORCE on `day` (default today, IST;
+// lib/effectiveDating.ts). A move scheduled for next month changes the team
+// next month, not now. Prisma has no recursive-query API, so this is a raw
+// WITH RECURSIVE CTE.
+export async function getTeamEmployeeIds(managerId: string, day: Date = businessToday()): Promise<string[]> {
   const rows = await prisma.$queryRaw<{ id: string }[]>`
     WITH RECURSIVE reports AS (
       SELECT id FROM employees WHERE id = ${managerId}
       UNION ALL
       SELECT e.id
       FROM employees e
-      JOIN employee_job_history jh ON jh.employee_id = e.id AND jh.effective_to IS NULL
+      JOIN employee_job_history jh ON jh.employee_id = e.id AND ${inForceSql("jh", day)}
       JOIN reports r ON jh.reporting_manager_id = r.id
     )
     SELECT id FROM reports WHERE id != ${managerId}

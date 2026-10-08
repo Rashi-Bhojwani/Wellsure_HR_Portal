@@ -6,6 +6,7 @@ import { prisma } from "../../lib/prisma";
 import { AlertNotDelivered, raiseBreakGlassAlert } from "../../lib/securityAlerts";
 import { createInvitation, resendInvitation } from "../auth/service";
 import { gmailSchema, MOBILE_REGEX } from "../employee/validators";
+import { firstHistoryDay, inForceOn } from "../../lib/effectiveDating";
 
 // One-time creation of the first real SUPER_ADMIN on a fresh staging or
 // production database (Phase 5 commit E1). Run by scripts/admin-bootstrap.ts
@@ -117,7 +118,7 @@ export async function provisionSuperAdmin(rawInput: BootstrapInput): Promise<Boo
 
   const existing = await prisma.employee.findUnique({
     where: { employeeCode: input.employeeCode },
-    include: { user: true, personal: true, nameHistory: { where: { effectiveTo: null } } },
+    include: { user: true, personal: true, nameHistory: { where: inForceOn() } },
   });
 
   if (existing) {
@@ -191,7 +192,7 @@ export async function provisionSuperAdmin(rawInput: BootstrapInput): Promise<Boo
     });
     // No one is signed in to attribute this to; the new user is its own author.
     await tx.employeeNameHistory.create({
-      data: { employeeId: employee.id, fullName: d.fullName, effectiveFrom: new Date(d.dateOfJoining), createdByUserId: user.id },
+      data: { employeeId: employee.id, fullName: d.fullName, effectiveFrom: firstHistoryDay(new Date(d.dateOfJoining)), createdByUserId: user.id },
     });
     return { employeeId: employee.id, userId: user.id };
   });

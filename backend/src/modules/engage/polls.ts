@@ -23,7 +23,7 @@ export async function createPoll(viewer: EngageViewer, input: { question: string
         options: { create: input.options.map((label, rank) => ({ label, rank })) },
       },
     });
-    return tx.post.findUniqueOrThrow({ where: { id: created.id }, include: FEED_INCLUDE });
+    return tx.post.findUniqueOrThrow({ where: { id: created.id }, include: FEED_INCLUDE() });
   });
 
   await writeAuditLog({ ...meta, action: "engage.poll.create", entityType: "Post", entityId: post.id, after: { optionCount: input.options.length } });
@@ -49,7 +49,7 @@ export async function votePoll(pollOptionId: string, viewer: EngageViewer) {
     update: { pollOptionId },
   });
 
-  const post = await prisma.post.findUniqueOrThrow({ where: { id: option.poll.postId }, include: FEED_INCLUDE });
+  const post = await prisma.post.findUniqueOrThrow({ where: { id: option.poll.postId }, include: FEED_INCLUDE() });
   const formatted = formatPost(post, viewer.employeeId);
   emitEngagePost(formatted);
   return formatted;
@@ -68,7 +68,7 @@ export async function closePoll(postId: string, viewer: EngageViewer, meta: Acto
   await prisma.poll.update({ where: { id: post.poll.id }, data: { closedAt: new Date() } });
   await writeAuditLog({ ...meta, action: "engage.poll.close", entityType: "Post", entityId: postId });
 
-  const reloaded = await prisma.post.findUniqueOrThrow({ where: { id: postId }, include: FEED_INCLUDE });
+  const reloaded = await prisma.post.findUniqueOrThrow({ where: { id: postId }, include: FEED_INCLUDE() });
   const formatted = formatPost(reloaded, viewer.employeeId);
   emitEngagePost(formatted);
   return formatted;

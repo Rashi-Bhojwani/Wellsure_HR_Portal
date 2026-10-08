@@ -2,8 +2,9 @@ import { prisma } from "../../lib/prisma";
 import { writeAuditLog } from "../../lib/audit";
 import { HttpError } from "../../middleware/errorHandler";
 import type { ActorMeta } from "./types";
+import { inForceOn } from "../../lib/effectiveDating";
 
-const NAME_INCLUDE = { nameHistory: { where: { effectiveTo: null as null } } } as const;
+const NAME_INCLUDE = () => ({ nameHistory: { where: inForceOn() } }) as const;
 
 function formatGroup(row: { id: string; name: string; description: string | null; isActive: boolean; createdAt: Date }) {
   return { id: row.id, name: row.name, description: row.description, isActive: row.isActive, createdAt: row.createdAt.toISOString() };
@@ -49,7 +50,7 @@ export async function listMembers(groupId: string) {
 
   const rows = await prisma.groupMember.findMany({
     where: { groupId },
-    include: { employee: { include: NAME_INCLUDE } },
+    include: { employee: { include: NAME_INCLUDE() } },
     orderBy: { joinedAt: "asc" },
   });
   return rows.map((m) => ({

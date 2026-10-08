@@ -98,7 +98,7 @@ export async function headcountOn(asOf: Date, q: ReportQuery, pop: Population) {
         { status: "SEPARATED", lastWorkingDate: { gte: asOf } },
       ],
     },
-    select: { id: true, employeeCode: true, dateOfJoining: true, employmentType: true, ...currentName },
+    select: { id: true, employeeCode: true, dateOfJoining: true, employmentType: true, ...currentName() },
     orderBy: { employeeCode: "asc" },
   });
   const placements = await placementsOn(
@@ -135,7 +135,7 @@ const joiners: Definition = async (q, pop) => {
   const { from, to } = rangeOf(q, new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1)), today);
   const employees = await prisma.employee.findMany({
     where: { ...employeeWhere(pop, q), dateOfJoining: { gte: from, lte: to } },
-    select: { id: true, employeeCode: true, dateOfJoining: true, employmentType: true, status: true, ...currentName },
+    select: { id: true, employeeCode: true, dateOfJoining: true, employmentType: true, status: true, ...currentName() },
     orderBy: [{ dateOfJoining: "asc" }, { employeeCode: "asc" }],
   });
   const rows: Row[] = [];
@@ -171,7 +171,7 @@ const leavers: Definition = async (q, pop) => {
       dateOfJoining: true,
       lastWorkingDate: true,
       exitReason: true,
-      ...currentName,
+      ...currentName(),
       jobHistory: { orderBy: { effectiveFrom: "desc" }, take: 1, select: { reportingManagerId: true } },
       separations: { where: { status: "COMPLETED" }, orderBy: { completedAt: "desc" }, take: 1, select: { reason: true } },
     },
@@ -229,7 +229,7 @@ const celebrations: Definition = async (q, pop) => {
   const kind = q.kind ?? "all";
   const employees = await prisma.employee.findMany({
     where: { ...employeeWhere(pop, q), status: "ACTIVE" },
-    select: { id: true, employeeCode: true, dateOfJoining: true, ...currentName, personal: { select: { dateOfBirth: true } } },
+    select: { id: true, employeeCode: true, dateOfJoining: true, ...currentName(), personal: { select: { dateOfBirth: true } } },
   });
   const placements = await placementsOn(
     employees.map((e) => e.id),
@@ -272,7 +272,7 @@ const celebrations: Definition = async (q, pop) => {
 async function activeEmployeesOn(asOf: Date, q: ReportQuery, pop: Population) {
   const employees = await prisma.employee.findMany({
     where: { ...employeeWhere(pop, q), status: "ACTIVE", dateOfJoining: { lte: asOf } },
-    select: { id: true, employeeCode: true, ...currentName },
+    select: { id: true, employeeCode: true, ...currentName() },
     orderBy: { employeeCode: "asc" },
   });
   const placements = await placementsOn(
@@ -379,7 +379,7 @@ const lop: Definition = async (q, pop) => {
       toDate: { gte: from },
       employee: employeeWhere(pop, q),
     },
-    select: { employeeId: true, fromDate: true, toDate: true, fromDayPart: true, toDayPart: true, employee: { select: { employeeCode: true, ...currentName } } },
+    select: { employeeId: true, fromDate: true, toDate: true, fromDayPart: true, toDayPart: true, employee: { select: { employeeCode: true, ...currentName() } } },
     orderBy: { fromDate: "asc" },
   });
   const placements = await placementsOn([...new Set(requests.map((r) => r.employeeId))], to);
