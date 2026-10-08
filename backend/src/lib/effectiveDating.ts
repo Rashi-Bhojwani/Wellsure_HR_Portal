@@ -119,6 +119,73 @@ export async function placementsOn(employeeIds: string[], day: Date): Promise<Ma
   return result;
 }
 
+// ── The payroll contract (EF4) ───────────────────────────────────────────
+// Payroll, attendance and anything else that asks "what was true on day D"
+// uses these readers — never a raw history query (docs/plans/PHASE_6.md,
+// "Effective-dating contract"). Each takes the day explicitly; none of them
+// defaults to today.
+
+/** The placement in force on `day` (null if none — before the first, or after leaving). */
+export async function placementOn(employeeId: string, day: Date): Promise<EmployeeJobHistory | null> {
+  return prisma.employeeJobHistory.findFirst({ where: { employeeId, ...inForceOn(day) } });
+}
+
+/** Every placement covering any part of [from, to] (inclusive days), each clipped to that range, oldest first. */
+export async function placementSegments(employeeId: string, from: Date, to: Date): Promise<Array<{ row: EmployeeJobHistory; from: Date; to: Date }>> {
+  const rows = await prisma.employeeJobHistory.findMany({
+    where: { employeeId, effectiveFrom: { lte: to }, OR: [{ effectiveTo: null }, { effectiveTo: { gt: from } }] },
+    orderBy: { effectiveFrom: "asc" },
+  });
+  return rows.map((row) => {
+    const segFrom = row.effectiveFrom > from ? row.effectiveFrom : from;
+    const lastDay = row.effectiveTo ? addCalendarDays(row.effectiveTo, -1) : to;
+    return { row, from: segFrom, to: lastDay < to ? lastDay : to };
+  });
+}
+
+/** The name in force on `day` (a payslip or letter keeps the name of its own date). */
+export async function nameOn(employeeId: string, day: Date): Promise<string | null> {
+  const row = await prisma.employeeNameHistory.findFirst({ where: { employeeId, ...inForceOn(day) }, select: { fullName: true } });
+  return row?.fullName ?? null;
+}
+
+/** The bank account in force on `day` — for a payment, the payment date. */
+export async function bankAccountOn(employeeId: string, day: Date): Promise<EmployeeBankAccount | null> {
+  return prisma.employeeBankAccount.findFirst({ where: { employeeId, ...inForceOn(day) } });
+}
+
+/** Whose punch is this: the employee a device user ID belonged to on `day`. */
+export async function employeeForDeviceUserOn(deviceUserId: string, day: Date): Promise<string | null> {
+  const m = await prisma.deviceUserMapping.findFirst({ where: { deviceUserId, ...mappingInForceOn(day) }, select: { employeeId: true } });
+  return m?.employeeId ?? null;
+}
+
+/**
+ * Prisma `where` on Employee: employed on `day` — joined on or before it,
+ * and not yet past their last working day. Read from dateOfJoining /
+ * lastWorkingDate, never from `status` (the login switch) or history rows.
+ */
+export function employedOn(day: Date) {
+  return { dateOfJoining: { lte: day }, OR: [{ lastWorkingDate: null }, { lastWorkingDate: { gte: day } }] };
+}
+
+// ── Payroll lock (EF4 hook; enforced from Phase 6) ───────────────────────
+// A change dated inside a locked (finalised) payroll period would silently
+// change what was paid. Phase 6 registers the real check; until then there
+// are no locked periods and this lets everything through. Every history
+// writer, cancel and separation close calls it with the date it changes.
+type PayrollLockCheck = (day: Date) => Promise<{ locked: boolean; period?: string }>;
+let payrollLockCheck: PayrollLockCheck = async () => ({ locked: false });
+export function setPayrollLockCheck(check: PayrollLockCheck | null): void {
+  payrollLockCheck = check ?? (async () => ({ locked: false }));
+}
+export async function assertNotInLockedPayroll(day: Date): Promise<void> {
+  const r = await payrollLockCheck(day);
+  if (r.locked) {
+    throw new HttpError(409, `Payroll for ${r.period ?? iso(day)} is finalised, so a change dated ${iso(day)} would rewrite what was paid. Date it after that period.`, "PAYROLL_LOCKED");
+  }
+}
+
 // ── Planning a change (pure — property-tested) ───────────────────────────
 
 export interface TimelineRow {
@@ -192,6 +259,7 @@ export async function writeJobChange(
   meta: { createdByUserId: string; changeReason: string | null },
 ): Promise<TimelineWrite<EmployeeJobHistory>> {
   await lockEmployee(tx, employeeId);
+  await assertNotInLockedPayroll(day);
   const rows = await tx.employeeJobHistory.findMany({ where: { employeeId }, orderBy: { effectiveFrom: "asc" } });
   const plan = planTimelineChange(rows.map(toRow), day, businessToday(), await maxScheduleAheadDays());
   const latest = rows.at(-1) ?? null;
@@ -224,6 +292,7 @@ export async function writeNameChange(
   meta: { createdByUserId: string; changeReason: string | null },
 ): Promise<TimelineWrite<EmployeeNameHistory>> {
   await lockEmployee(tx, employeeId);
+  await assertNotInLockedPayroll(day);
   const rows = await tx.employeeNameHistory.findMany({ where: { employeeId }, orderBy: { effectiveFrom: "asc" } });
   const plan = planTimelineChange(rows.map(toRow), day, businessToday(), await maxScheduleAheadDays());
   const latest = rows.at(-1) ?? null;
@@ -246,6 +315,7 @@ export async function writeBankChange(
   meta: { createdByUserId: string },
 ): Promise<TimelineWrite<EmployeeBankAccount>> {
   await lockEmployee(tx, employeeId);
+  await assertNotInLockedPayroll(day);
   const rows = await tx.employeeBankAccount.findMany({ where: { employeeId }, orderBy: { effectiveFrom: "asc" } });
   const plan = planTimelineChange(rows.map(toRow), day, businessToday(), await maxScheduleAheadDays());
   const latest = rows.at(-1) ?? null;
@@ -316,6 +386,7 @@ export async function cancelScheduledJobChange(tx: Prisma.TransactionClient, emp
  */
 export async function closeHistoryOnLeaving(tx: Prisma.TransactionClient, employeeId: string, lastWorkingDate: Date): Promise<{ removedScheduled: EmployeeJobHistory[] }> {
   await lockEmployee(tx, employeeId);
+  await assertNotInLockedPayroll(lastWorkingDate);
   const end = dayAfter(lastWorkingDate);
   const removedScheduled = await tx.employeeJobHistory.findMany({ where: { employeeId, effectiveFrom: { gte: end } } });
   const inForce = removedScheduled.find((r) => r.effectiveFrom <= businessToday());

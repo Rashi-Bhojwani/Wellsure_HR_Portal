@@ -37,4 +37,24 @@ describe("no 'current = no end date' reads outside lib/effectiveDating.ts", () =
     }
     expect(offenders, "Use inForceOn(day) / inForceSql(alias, day) from lib/effectiveDating.ts").toEqual([]);
   });
+
+  // EF4 (docs/plans/PHASE_6.md "Effective-dating contract"): payroll and
+  // attendance answer "what was true on day D" only through the readers in
+  // lib/effectiveDating.ts (placementOn, placementSegments, nameOn,
+  // bankAccountOn, employeeForDeviceUserOn, employedOn) — never by querying a
+  // history table themselves.
+  it("payroll and attendance never query history tables directly", () => {
+    const HISTORY = /\.(employeeJobHistory|employeeNameHistory|employeeBankAccount|deviceUserMapping)\.|employee_job_history|employee_name_history|employee_bank_accounts|device_user_mappings/;
+    const offenders: string[] = [];
+    for (const area of ["modules/payroll", "modules/attendance", "modules/biometric"]) {
+      for (const file of walk(path.join(SRC, area))) {
+        readFileSync(file, "utf8")
+          .split("\n")
+          .forEach((line, i) => {
+            if (HISTORY.test(line) && !line.trim().startsWith("//")) offenders.push(`${path.relative(SRC, file)}:${i + 1}: ${line.trim()}`);
+          });
+      }
+    }
+    expect(offenders, "Use the readers in lib/effectiveDating.ts").toEqual([]);
+  });
 });

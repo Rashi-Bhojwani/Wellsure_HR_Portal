@@ -3871,6 +3871,54 @@ and takes effect on it.
   "Leela Menon joins on 20 Oct 2026" appears with Cancel, and cancelling
   it leaves her history with one row.
 
+### Effective dating EF4 — the payroll contract (2026-10-08). Effective dating complete.
+
+Commit 4 of 4. The contract is written in
+[`docs/plans/PHASE_6.md`](plans/PHASE_6.md) "Effective-dating contract".
+
+**Built:**
+- **Readers, each taking an explicit day:**
+  - `placementOn`;
+  - `placementSegments(employeeId, from, to)`, which splits a pay period
+    on change days;
+  - `placementsOn`;
+  - `nameOn`;
+  - `bankAccountOn` (for a payment, the payment date);
+  - `employeeForDeviceUserOn` (whose punch);
+  - `employedOn(day)`, from `dateOfJoining`/`lastWorkingDate`, never
+    `status`.
+- **The payroll-lock hook:**
+  - `assertNotInLockedPayroll(day)` is called by every history writer,
+    cancellation and separation close;
+  - Phase 6 registers the real check with `setPayrollLockCheck`. Until
+    then nothing is locked.
+- **Guard:** payroll, attendance and biometric code must never query a
+  history table directly (`currentRowGuard.test.ts`, second case). Those
+  modules are empty today, so the guard is in place before Phase 2's
+  first line.
+
+**Tests** (`lib/__tests__/payrollContract.test.ts`):
+- a transfer on the 16th gives two segments;
+- a leaver is placed and employed on their last working day, not the day
+  after;
+- a bank change on the 10th sends a payment on the 25th to the new
+  account, and the 9th to the old one;
+- a name change takes effect on its own date;
+- a reused device ID gives the last day's punch to the leaver and the
+  next day's to the new holder;
+- the lock refuses a change, or a leaving, dated inside a finalised
+  period.
+
+**Effective dating, EF1–EF4, is done:**
+- one model;
+- one writer;
+- constraints in the database;
+- every read "in force today";
+- scheduled changes visible, cancellable and rolled over;
+- a written, guarded contract for payroll and attendance.
+
+Next (user, 2026-10-08): plan Phase 2 in full and show it before building.
+
 ## Open questions
 
 - [x] **Approval Workflows — dropped (user decision 2026-10-03).** No
