@@ -3918,6 +3918,12 @@ Commit 4 of 4. The contract is written in
 - a written, guarded contract for payroll and attendance.
 
 Next (user, 2026-10-08): plan Phase 2 in full and show it before building.
+**Done:** [`docs/plans/PHASE_2.md`](plans/PHASE_2.md) rewritten as the
+full Phase 2 plan, awaiting review. It covers the data model; three
+routes into one ingestion service; the rules engine with sources and
+`NM`; manual entry; the simulator; the agent; device health; screens;
+the commit split; what stays unproven until the device is connected;
+acceptance gates; and decisions D1–D7.
 
 ## Open questions
 
@@ -3943,6 +3949,13 @@ Carried from spec §14 — configurable, not guessed, until answered:
 - [ ] Whether an always-on office PC exists to run the sync agent as a Windows service (Windows version), and how many devices there are.
 - [ ] Employee Code vs Device User ID default (spec §3): Add Employee pre-fills Employee Code from the Device User ID, but our device's IDs (2–126) differ from the 1000-series Employee Codes. Keep pre-filling or not? (Punch mapping is unaffected; it always uses `device_user_mappings`.)
 - [ ] Working hours and working days for the device-silence alert (spec §4.7): configurable defaults until HR confirms.
+- [ ] **Which two branches have no biometric machine, and who marks
+      their attendance daily** (Phase 2 plan D4, 2026-10-08).
+- [ ] **The real attendance rule values** (Phase 2 plan D3): grace
+      minutes, half-day and full-day minimum hours, the week-off pattern
+      (Sunday only? which Saturdays?), any late penalty, and shifts other
+      than GEN 10:00–19:00. Seeded as placeholders and configurable; not
+      guessed.
 - [x] Exact PL eligibility boundary: **HR-confirmed 2026-09-28** — 90 calendar
       days from DOJ (`leave_policies.eligibility_mode = DAYS`,
       `eligibility_value = 90`), no pro-rating, always a full 1.0-day credit.
