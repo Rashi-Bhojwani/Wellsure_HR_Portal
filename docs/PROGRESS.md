@@ -12,7 +12,7 @@ committed).
 | 0 | Foundation | ✅ Done |
 | 1 | Auth, RBAC, org, employees | Done — data layer, authentication, org masters, employee management, import center, exports, audit log viewer and system settings all built and tested. Users & Roles admin screen deliberately deferred (built in Phase 5 commit E1 as Roles & Permissions). **Correction (2026-09-30): role assignment does not exist anywhere in the product** — Add Employee always assigns plain `EMPLOYEE` and nothing else assigns roles; an earlier version of this row claimed otherwise. Both are Phase 5 commit E1 ([`docs/plans/PHASE_5.md`](plans/PHASE_5.md)). |
 | 1.5 | AWS staging environment | Not started |
-| 2 | Biometric ingestion + attendance engine + real-time | In progress — plan approved ([`docs/plans/PHASE_2.md`](plans/PHASE_2.md)); P2-A (configuration), P2-B (ingestion) and P2-C (rules engine) done; P2-D → P2-I to follow |
+| 2 | Biometric ingestion + attendance engine + real-time | In progress — plan approved ([`docs/plans/PHASE_2.md`](plans/PHASE_2.md)); P2-A (configuration), P2-B (ingestion), P2-C (rules engine) and P2-D (manual entry and the muster) done, plus the fail-safe thresholds and the finalisation gate; P2-E → P2-I to follow |
 | 3 | Attendance administration | Not started |
 | 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
 | 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | ✅ Done (2026-10-03) — commits A, B, C, D, D2, E1, E1.1, E2, E3, F and G (mobile bottom bar + PWA), plus interim commits. Full review — every screen and URL, every permission, what's stubbed, open questions, risks for Phase 6 — in [`docs/plans/PHASE_5_REVIEW.md`](plans/PHASE_5_REVIEW.md). Plan and as-built notes per commit in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
@@ -4086,6 +4086,36 @@ the spec covers, listed for review.
   it. `GET /api/attendance/finalisation/readiness` + a "Ready to finalise?"
   card on Process Attendance show the blockers for any recent cycle.
 - `HttpError` gained optional `details`, returned as `error.details`.
+
+### Phase 2, commit P2-D — manual entry and the editable muster (2026-10-09)
+
+Plan and as-built notes: [`docs/plans/PHASE_2.md`](plans/PHASE_2.md) §5, "P2-D
+build design" and "As built: P2-D", including the **12 rules decided here**.
+
+- **`manual_attendance_entries`** (migration `20261010100000_manual_attendance`):
+  - entries are `TIMED`, `STATUS_ONLY` or `CLEARED`, arriving
+    `via SCREEN / MUSTER_UPLOAD / BULK`;
+  - append-only by trigger; the latest wins;
+  - the engine's manual loader is now the real query, so a TIMED entry is
+    computed exactly like punches at the same times (a tested identity).
+- **Attendance Muster** (Workforce → Attendance):
+  - employees × the cycle's days, with the cycle selector beside the month;
+  - filters for branch, department and a single employee;
+  - click a cell and type times or a status letter; Tab/Enter moves on and
+    one Save writes the batch. A bad cell turns red and nothing is saved;
+  - `OFF` on week-offs; status-only cells marked; missing-punch days marked
+    red and counted;
+  - totals start with paid days; a per-day NM count above the grid; the
+    legend at the bottom;
+  - Excel export with markers; "Mark all present"; muster upload (template,
+    preview, commit, supersedes without duplicating);
+  - 18:00 "still not marked" reminder.
+- **Branch scope** (`manual/scope.ts`): markers reach only their branches,
+  per day (404 outside, IDOR-tested). Nobody marks their own attendance.
+- **Priya** gets the same grid in the employee portal (Attendance → Mark
+  Attendance), shown only to holders of `attendance.manual.enter`.
+- Fixed along the way: the letters suite launches Chromium in `beforeAll`,
+  after CI run 37835475091 timed out in its issuing test.
 
 ## Open questions
 

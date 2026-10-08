@@ -8,6 +8,7 @@ import { evaluateDay } from "./engine/engine";
 import { addDays, businessDateOf, dayStartMs } from "./engine/time";
 import { ENGINE_VERSION, type DayInput, type DayResult, type HalfLeave, type ManualEntry, type PunchRef, type ShiftDef } from "./engine/types";
 import { attributePunches } from "./engine/windows";
+import { loadManualEntries } from "./manual/entries";
 
 // The engine's loader and writer (docs/plans/PHASE_2.md §4.1). The loader
 // gathers each employee-day's inputs — through the effective-dating readers
@@ -35,11 +36,11 @@ export interface ComputeResult {
   changes: DayChange[];
 }
 
-/** Manual entries come with P2-D; until then there are none. */
+/** Manual entries (P2-D): the real query by default; tests may substitute a loader. */
 type ManualLoader = (employeeIds: string[], from: string, to: string) => Promise<Map<string, ManualEntry>>;
-let loadManualEntries: ManualLoader = async () => new Map();
+let loadManual: ManualLoader = loadManualEntries;
 export function setManualEntryLoader(loader: ManualLoader | null): void {
-  loadManualEntries = loader ?? (async () => new Map());
+  loadManual = loader ?? loadManualEntries;
 }
 
 function shiftDef(a: AssignmentWithRules): ShiftDef {
@@ -135,7 +136,7 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
       select: { employeeId: true, fromDate: true, toDate: true, fromDayPart: true, toDayPart: true, leaveType: { select: { code: true, isPaid: true } } },
     }),
     prisma.dailyAttendance.findMany({ where: { employeeId: { in: employeeIds }, date: { gte: fromD, lte: lastD } } }),
-    loadManualEntries(employeeIds, from, last),
+    loadManual(employeeIds, from, last),
   ]);
   const punches = await prisma.rawPunch.findMany({
     where: { employeeId: { in: employeeIds }, punchedAt: { gte: new Date(dayStartMs(addDays(from, -1))), lt: new Date(dayStartMs(addDays(last, 2))) } },
@@ -227,7 +228,16 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
 
   if (changedByEmployee.size && !opts.dryRun) {
     const placements = await placementsOn([...changedByEmployee.keys()], utcDate(today));
-    for (const [employeeId, dates] of changedByEmployee) emitAttendanceUpdated(employeeId, dates, placements.get(employeeId)?.reportingManagerId ?? null);
+    // Whoever marks a branch's manual attendance sees its changes live too (P2-D).
+    const markers = await prisma.attendanceManualBranch.findMany({
+      where: { locationId: { in: [...new Set([...placements.values()].map((p) => p.locationId))] } },
+      select: { locationId: true, user: { select: { employeeId: true } } },
+    });
+    const markersAt = (locationId: string | undefined) => markers.filter((m) => m.locationId === locationId).map((m) => m.user.employeeId);
+    for (const [employeeId, dates] of changedByEmployee) {
+      const placement = placements.get(employeeId);
+      emitAttendanceUpdated(employeeId, dates, placement?.reportingManagerId ?? null, markersAt(placement?.locationId));
+    }
   }
   return result;
 }

@@ -1297,3 +1297,64 @@ shift (7 h 30 m of work) would need its own policy.
     `attendance.manual.enter`.
 - **Export:** the grid as `.xlsx`, totals, legend, and markers for status-only
   (`*`) and missing-punch (`!`) cells.
+
+### P2-D (2026-10-09)
+
+Built as the design above. Specifics, and the **rules decided here** (neither
+HR nor the spec covers them; listed for review):
+
+1. **Nobody marks their own attendance**, HR included. Priya's own row is
+   read-only to her; HR marks it. (Found in the walkthrough: Priya sits at
+   SPN, so she could otherwise have marked herself.)
+2. **HR (ALL data scope) may mark every branch**, so they can cover for the
+   marker.
+3. **A blank cell in an upload leaves the day as it is; `-` clears it.**
+   **`HD` alone is refused** ("which half? P:A or A:P").
+4. **An IN with no OUT is accepted.** It counts like a single punch: absent
+   with `MISSING_PUNCH`, per the engine rule HR is confirming. The muster
+   marks it with a red corner, counts it in a "1×" column, and a correction
+   (`10:05-19:00`) fixes it.
+5. **Opening the muster computes any day that has happened but has no
+   record yet** (e.g. today, before the nightly). Every cell is a real
+   engine result.
+6. **Paid days** = Σ (1 − LOP) over the days so far. NM halves and NS days
+   count 0 until resolved, and future days aren't counted.
+7. **Mark all present** fills only `NM` working days, at each person's
+   shift start and end. It never overwrites an entry.
+8. **Committing an upload re-validates every cell.** If anything changed
+   since the preview (e.g. leave approved), nothing is written and the
+   upload goes back to preview. Only the uploader can commit their upload.
+9. **One remark per Save** (applied to every cell in it), not per cell.
+10. **The reminder goes only to the people assigned in Attendance Settings →
+    who marks which branch**, not to every ALL-scope HR user.
+11. **Limits:** 2,000 cells per save, and up to 400 days back.
+12. **Live:** `attendance.updated` also reaches each branch's markers, so
+    their muster refreshes on someone else's change. Unsaved typing is kept.
+
+Also as built:
+- **Where it is.** The muster is at Workforce → Attendance → Attendance
+  Muster. The upload is on the muster page ("Upload muster") and also in
+  Import Center → "Manual attendance muster" (the plan named only the
+  Import Center; Priya, a manager, has no Import Center).
+- **The marker's route.** The employee portal has Attendance → Mark
+  Attendance, shown only with `attendance.manual.enter`. The menu gained an
+  optional `permission` per item.
+- **Self-check pass:**
+  - the upload preview applies the same day rules as Save (a `P` on a Sunday
+    is listed as a problem, not as a change);
+  - only the uploader can commit an upload.
+- **Not done here:**
+  - the reminder hour is a seeded System Setting row, not yet on the System
+    Settings screen;
+  - regularization (an employee asking for a missing-punch day to be
+    corrected) stays in Phase 3, as planned.
+
+**Tests:**
+- `manual.test.ts` (18): the parser; a TIMED entry equals device punches
+  at the same times; status-only; IN-only; supersede, clear, append-only;
+  no duplicates; off days, leave, device days, the future, finalised days,
+  self-marking; branch IDOR; totals and paid days; mark all present; export;
+  upload round-trip, preview, commit, re-upload without duplicates, foreign
+  files; reminder (quiet on a Sunday).
+- `managerReach.test.ts`: 7 muster routes, the manager's branch only.
+- `finalisation.test.ts` (9).

@@ -1,9 +1,11 @@
 import { Router } from "express";
+import multer from "multer";
 import { authenticate } from "../../middleware/authenticate";
 import { requireAnyPermission, requirePermission } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
 import * as config from "./configController";
 import * as processRuns from "./processController";
+import * as manual from "./manual/controller";
 import {
   assignmentChangeSchema,
   assignmentListQuerySchema,
@@ -20,6 +22,10 @@ import {
   processRunSchema,
   processScopeQuerySchema,
   finalisationReadinessQuerySchema,
+  markPresentSchema,
+  musterEntriesSchema,
+  musterQuerySchema,
+  musterTemplateQuerySchema,
   updatePolicySchema,
   updateShiftSchema,
   updateWeekOffPatternSchema,
@@ -73,3 +79,23 @@ attendanceRouter.get("/process/:id", canProcess, validate({ params: idParamsSche
 // What still blocks finalising a period (placeholder rule values, NM/NS/provisional days).
 // Finalisation itself is Phase 3; the gate it must pass is built now.
 attendanceRouter.get("/finalisation/readiness", canProcess, validate({ query: finalisationReadinessQuerySchema }), processRuns.finalisationReadiness);
+
+// The Attendance Muster and manual entry (P2-D, docs/plans/PHASE_2.md §5).
+// Seen with attendance.view (data scope) or attendance.manual.enter (only
+// the branches assigned to the holder — manual/scope.ts, 404 outside);
+// changed only with attendance.manual.enter, branch-limited per day.
+const canSeeMuster = requireAnyPermission("attendance.view", "attendance.manual.enter");
+const canMark = requirePermission("attendance.manual.enter");
+const musterUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => (file.originalname.toLowerCase().endsWith(".xlsx") ? cb(null, true) : cb(new Error("Only .xlsx files are accepted."))),
+});
+attendanceRouter.get("/muster/cycles", canSeeMuster, manual.cycles);
+attendanceRouter.get("/muster", canSeeMuster, validate({ query: musterQuerySchema }), manual.getMuster);
+attendanceRouter.get("/muster/export", canSeeMuster, validate({ query: musterQuerySchema }), manual.exportMuster);
+attendanceRouter.post("/muster/entries", canMark, validate({ body: musterEntriesSchema }), manual.saveEntries);
+attendanceRouter.post("/muster/mark-present", canMark, validate({ body: markPresentSchema }), manual.markPresent);
+attendanceRouter.get("/muster/template", canMark, validate({ query: musterTemplateQuerySchema }), manual.template);
+attendanceRouter.post("/muster/upload", canMark, musterUpload.single("file"), manual.previewUpload);
+attendanceRouter.post("/muster/upload/:id/commit", canMark, validate({ params: idParamsSchema }), manual.commitUpload);

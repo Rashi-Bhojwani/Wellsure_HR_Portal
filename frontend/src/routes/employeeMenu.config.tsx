@@ -42,6 +42,7 @@ import { HelpdeskPage } from "../pages/employee/helpdesk/HelpdeskPage";
 import { RequestHubPage } from "../pages/employee/request-hub/RequestHubPage";
 import { TasksPage } from "../pages/employee/todo/TasksPage";
 import { WorkflowDelegatesPage } from "../pages/employee/workflow-delegates/WorkflowDelegatesPage";
+import { MarkAttendancePage } from "../pages/employee/attendance/MarkAttendancePage";
 
 // Single source of truth for the Employee portal left sidebar
 // (docs/UI_REFERENCE.md §1.0). The sidebar, the route tree and the
@@ -60,6 +61,9 @@ export interface EmployeeMenuLeaf {
   // Mobile (Phase 5 commit G, docs/UI_REFERENCE.md Part 4): listed on the
   // Action tab, in menu order.
   quickAction?: boolean;
+  // Shown only to holders of this permission (e.g. Mark Attendance, P2-D:
+  // the manager who marks a branch by hand). The API enforces it regardless.
+  permission?: string;
 }
 
 export interface EmployeeMenuGroup {
@@ -227,6 +231,15 @@ export const employeeMenu: EmployeeMenuEntry[] = [
         icon: FieldTimeOutlined,
         phase: "Phase 3",
       },
+      {
+        key: "mark-attendance",
+        label: "Mark Attendance",
+        path: "attendance/mark",
+        icon: FormOutlined,
+        element: MarkAttendancePage,
+        permission: "attendance.manual.enter",
+        description: "Mark the attendance of the branches you're assigned to.",
+      },
     ],
   },
   {
@@ -295,6 +308,11 @@ export const mobileTabs: MobileTab[] = [
 // Not built yet: phase-marked, or no page. (Payslips and Attendance Info
 // were Phase 0 mock-ups with demo data; retired 2026-10-03 until the real
 // data exists — Phase 6 and Phase 3.)
+/** Whether this person sees the leaf (a permission-gated one only for its holders). */
+export function canSeeLeaf(leaf: EmployeeMenuLeaf, hasPermission: (key: string) => boolean): boolean {
+  return !leaf.permission || hasPermission(leaf.permission);
+}
+
 export function isComingSoon(leaf: EmployeeMenuLeaf): boolean {
   return Boolean(leaf.phase || !leaf.element);
 }

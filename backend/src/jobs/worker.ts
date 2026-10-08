@@ -12,7 +12,8 @@ import { processLetterJob } from "../modules/letters/service";
 import { LETTERS_QUEUE_NAME } from "./lettersQueue";
 import { SECURITY_ALERT_QUEUE_NAME } from "./securityAlertQueue";
 import { mailService, type MailMessage } from "../integrations/mail";
-import { ATTENDANCE_NIGHTLY_QUEUE, ATTENDANCE_PROCESS_QUEUE, ATTENDANCE_RECOMPUTE_QUEUE } from "./attendanceQueues";
+import { ATTENDANCE_MANUAL_REMINDER_QUEUE, ATTENDANCE_NIGHTLY_QUEUE, ATTENDANCE_PROCESS_QUEUE, ATTENDANCE_RECOMPUTE_QUEUE } from "./attendanceQueues";
+import { runManualReminder } from "../modules/attendance/manual/reminder";
 import { processRecomputeJob, runNightly } from "../modules/attendance/jobs";
 import { executeProcessRun } from "../modules/attendance/processService";
 
@@ -43,6 +44,8 @@ export function startWorkers(): Worker[] {
   nightlyWorker.on("failed", (job, err) => logger.error({ jobId: job?.id, err }, "attendance-nightly job failed"));
   const processWorker = new Worker(ATTENDANCE_PROCESS_QUEUE, async (job) => executeProcessRun((job.data as { runId: string }).runId), { connection: createBullConnection() });
   processWorker.on("failed", (job, err) => logger.error({ jobId: job?.id, err }, "attendance-process job failed"));
+  const reminderWorker = new Worker(ATTENDANCE_MANUAL_REMINDER_QUEUE, async () => runManualReminder(), { connection: createBullConnection() });
+  reminderWorker.on("failed", (job, err) => logger.error({ jobId: job?.id, err }, "attendance-manual-reminder job failed"));
 
   const rolloverWorker = new Worker(
     "history-rollover",
@@ -155,5 +158,5 @@ export function startWorkers(): Worker[] {
     logger.error({ event: "security.breakglass.alert_undelivered", jobId: job?.id, attempt: job?.attemptsMade, err }, "break-glass alert email still not delivered");
   });
 
-  return [pingWorker, rolloverWorker, separationsWorker, leavePlAccrualWorker, compOffExpiryWorker, engageAutoPostsWorker, helpdeskAutoCloseWorker, lettersWorker, securityAlertWorker, recomputeWorker, nightlyWorker, processWorker];
+  return [pingWorker, rolloverWorker, separationsWorker, leavePlAccrualWorker, compOffExpiryWorker, engageAutoPostsWorker, helpdeskAutoCloseWorker, lettersWorker, securityAlertWorker, recomputeWorker, nightlyWorker, processWorker, reminderWorker];
 }

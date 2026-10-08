@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, Flex, Space, Tag, Typography, theme } from "antd";
 import { DownOutlined, RightOutlined, UpOutlined } from "@ant-design/icons";
-import { exploreEntries, isComingSoon, isEmployeeMenuGroup, type EmployeeMenuLeaf } from "../../../routes/employeeMenu.config";
+import { canSeeLeaf, exploreEntries, isComingSoon, isEmployeeMenuGroup, type EmployeeMenuLeaf } from "../../../routes/employeeMenu.config";
+import { useAuth } from "../../../hooks/useAuth";
 import { tintFor } from "./tints";
 
 const { Text } = Typography;
@@ -18,6 +19,7 @@ export function MobileExplorePage() {
   const navigate = useNavigate();
   const { token } = theme.useToken();
   const [open, setOpen] = useState<string | null>(null);
+  const { hasPermission } = useAuth();
 
   const leafRow = (leaf: EmployeeMenuLeaf) => {
     const soon = isComingSoon(leaf);
@@ -63,7 +65,7 @@ export function MobileExplorePage() {
               </div>
               <span style={{ fontSize: 30, color: tint.fg }}>{Icon && <Icon />}</span>
             </Flex>
-            {group && isOpen && <div style={{ marginTop: 10 }}>{group.children.map(leafRow)}</div>}
+            {group && isOpen && <div style={{ marginTop: 10 }}>{group.children.filter((l) => canSeeLeaf(l, hasPermission)).map(leafRow)}</div>}
           </Card>
         );
       })}

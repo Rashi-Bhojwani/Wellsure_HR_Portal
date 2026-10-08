@@ -343,6 +343,29 @@ second later into `daily_attendance`. To compute a range from scratch — say
 the month so far — use Workforce → Attendance → Process Attendance. The punch
 simulator (P2-G) will do all of this at scale.
 
+**Trying the Attendance Muster and manual entry (Phase 2).** Sign in as `1001`
+and open Workforce → Attendance → Attendance Muster. Days that have happened
+are computed on first view. The SPN-Panchsheel and Wellsure 2 people (`1003`,
+`1008`, `1030`, `1010`) have no device, so their days are `NM` and editable:
+- click a day and type `10:45-19:00` (worked out like a punch: late 45m), `P`,
+  `A`, `P:A`/`A:P`, `W` on an off day, or `-` to clear;
+- Tab or Enter moves on; Save writes the batch (one bad cell saves nothing,
+  and the bad cell turns red).
+
+Device people's days are read-only. Nobody can mark their own attendance,
+HR included.
+
+Priya (`1003`) marks those two branches. Signed in as her, the employee portal
+shows Attendance → Mark Attendance with only those people, plus "Mark all
+present" and "Upload muster". The upload takes the template downloaded there,
+or from Import Center → Manual attendance muster. Karan (`1002`) doesn't see
+the item.
+
+The "still not marked" reminder goes to whoever marks a branch at 18:00 IST.
+That hour is the System Setting row `attendance.manualReminderHour` (not yet
+on the System Settings screen), and a change applies when the scheduler
+restarts.
+
 **Prisma Studio** (a GUI for browsing/editing the database):
 
 ```bash

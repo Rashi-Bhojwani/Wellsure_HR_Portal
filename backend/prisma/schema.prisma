@@ -377,11 +377,12 @@ model Location {
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
 
-  jobHistory        EmployeeJobHistory[]
-  manualBranchUsers AttendanceManualBranch[]
-  devices           Device[]
-  announcements     Announcement[]
-  companyDocuments  CompanyDocument[]
+  jobHistory          EmployeeJobHistory[]
+  manualBranchUsers   AttendanceManualBranch[]
+  manualMusterUploads ManualMusterUpload[]
+  devices             Device[]
+  announcements       Announcement[]
+  companyDocuments    CompanyDocument[]
 
   @@index([cityId])
   @@map("locations")
@@ -492,14 +493,15 @@ model Employee {
 
   companyDocumentDownloads CompanyDocumentDownload[]
 
-  helpdeskTicketsRaised      HelpdeskTicket[]       @relation("HelpdeskTicketRaisedBy")
-  helpdeskTicketsAssigned    HelpdeskTicket[]       @relation("HelpdeskTicketAssignee")
+  helpdeskTicketsRaised      HelpdeskTicket[]        @relation("HelpdeskTicketRaisedBy")
+  helpdeskTicketsAssigned    HelpdeskTicket[]        @relation("HelpdeskTicketAssignee")
   helpdeskMessages           HelpdeskMessage[]
-  helpdeskCategoriesAssigned HelpdeskCategory[]     @relation("HelpdeskCategoryDefaultAssignee")
+  helpdeskCategoriesAssigned HelpdeskCategory[]      @relation("HelpdeskCategoryDefaultAssignee")
   generatedLetters           GeneratedLetter[]
   attendanceAssignments      AttendanceAssignment[]
   rawPunches                 RawPunch[]
   dailyAttendance            DailyAttendance[]
+  manualAttendanceEntries    ManualAttendanceEntry[]
 
   @@index([status])
   @@index([dateOfJoining])
@@ -2121,4 +2123,67 @@ model AttendanceProcessRun {
 
   @@index([requestedAt])
   @@map("attendance_process_runs")
+}
+
+// ── Manual attendance (Phase 2 commit P2-D; docs/plans/PHASE_2.md §2.3, §5) ──
+// For manual-capture employees (no device mapping in force on the day): the
+// muster's entries. Append-only (a trigger refuses UPDATE and DELETE); the
+// latest entry per employee-day wins, every earlier one stays as history.
+
+enum ManualEntryKind {
+  TIMED // actual IN (and OUT) times — through the same rules as device punches
+  STATUS_ONLY // P, A, HD_FIRST, HD_SECOND or WORKED — "status only, no times"
+  CLEARED // withdraws the entry: the day returns to NM
+}
+
+enum ManualEntryVia {
+  SCREEN // typed into the Attendance Muster
+  MUSTER_UPLOAD // the Import Center's muster template
+  BULK // "Mark all present"
+}
+
+model ManualAttendanceEntry {
+  id              String              @id @default(cuid())
+  seq             Int                 @unique @default(autoincrement()) // the "latest wins" order
+  employeeId      String              @map("employee_id")
+  employee        Employee            @relation(fields: [employeeId], references: [id])
+  date            DateTime            @db.Date
+  kind            ManualEntryKind
+  inTime          String?             @map("in_time") // "HH:MM" business time
+  outTime         String?             @map("out_time") // at or before inTime = next day
+  status          String? // STATUS_ONLY: P, A, HD_FIRST, HD_SECOND, WORKED
+  via             ManualEntryVia
+  uploadId        String?             @map("upload_id")
+  upload          ManualMusterUpload? @relation(fields: [uploadId], references: [id])
+  remark          String?
+  enteredByUserId String              @map("entered_by_user_id")
+  enteredAt       DateTime            @default(now()) @map("entered_at") @db.Timestamptz(3)
+
+  @@index([employeeId, date, seq])
+  @@map("manual_attendance_entries")
+}
+
+enum ManualMusterUploadStatus {
+  PREVIEW
+  COMMITTED
+}
+
+// One upload of the muster template (a branch and a cycle): parsed and
+// previewed, then committed once. Cells are kept until commit.
+model ManualMusterUpload {
+  id               String                   @id @default(cuid())
+  locationId       String                   @map("location_id")
+  location         Location                 @relation(fields: [locationId], references: [id])
+  cycleStart       DateTime                 @map("cycle_start") @db.Date
+  cycleEnd         DateTime                 @map("cycle_end") @db.Date
+  fileName         String                   @map("file_name")
+  status           ManualMusterUploadStatus @default(PREVIEW)
+  pendingCells     Json?                    @map("pending_cells") // the changes to write on commit
+  summary          Json                     @default("{}")
+  uploadedByUserId String                   @map("uploaded_by_user_id")
+  uploadedAt       DateTime                 @default(now()) @map("uploaded_at")
+  committedAt      DateTime?                @map("committed_at")
+  entries          ManualAttendanceEntry[]
+
+  @@map("manual_muster_uploads")
 }

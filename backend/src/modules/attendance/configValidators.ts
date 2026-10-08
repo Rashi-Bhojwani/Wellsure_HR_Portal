@@ -99,3 +99,19 @@ export const processRunSchema = z
   });
 export const processScopeQuerySchema = z.object({ from: z.iso.date() });
 export const finalisationReadinessQuerySchema = z.object({ from: z.iso.date(), to: z.iso.date() });
+
+// ── Manual entry and the muster (P2-D) ──
+export const musterQuerySchema = z.object({
+  cycleStart: z.iso.date().optional(),
+  locationId: z.string().min(1).optional(),
+  departmentId: z.string().min(1).optional(),
+  employeeId: z.string().min(1).optional(),
+});
+export const musterEntriesSchema = z.object({
+  entries: z
+    .array(z.object({ employeeId: z.string().min(1), date: z.iso.date(), text: z.string().max(40), remark: z.string().trim().max(200).optional().nullable() }))
+    .min(1)
+    .max(2000),
+});
+export const markPresentSchema = z.object({ date: z.iso.date(), locationId: z.string().min(1) });
+export const musterTemplateQuerySchema = z.object({ locationId: z.string().min(1), cycleStart: z.iso.date().optional() });

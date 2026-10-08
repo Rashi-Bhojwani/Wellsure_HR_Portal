@@ -7,9 +7,11 @@ import { createBullConnection } from "../lib/redis";
 //   attendance-recompute: one employee's date range, debounced 1 s per range
 //   attendance-nightly:   02:00 IST — yesterday (and any missed nights) for everyone
 //   attendance-process:   a Process Attendance run, in the background with progress
+//   attendance-manual-reminder: daily, "still not marked" to branch markers (P2-D)
 export const ATTENDANCE_RECOMPUTE_QUEUE = "attendance-recompute";
 export const ATTENDANCE_NIGHTLY_QUEUE = "attendance-nightly";
 export const ATTENDANCE_PROCESS_QUEUE = "attendance-process";
+export const ATTENDANCE_MANUAL_REMINDER_QUEUE = "attendance-manual-reminder";
 
 const queues = new Map<string, Queue>();
 function lazy(name: string): Queue {
@@ -24,6 +26,7 @@ function lazy(name: string): Queue {
 export const attendanceRecomputeQueue = () => lazy(ATTENDANCE_RECOMPUTE_QUEUE);
 export const attendanceNightlyQueue = () => lazy(ATTENDANCE_NIGHTLY_QUEUE);
 export const attendanceProcessQueue = () => lazy(ATTENDANCE_PROCESS_QUEUE);
+export const attendanceManualReminderQueue = () => lazy(ATTENDANCE_MANUAL_REMINDER_QUEUE);
 
 export async function closeAttendanceQueues(): Promise<void> {
   const all = [...queues.values()];

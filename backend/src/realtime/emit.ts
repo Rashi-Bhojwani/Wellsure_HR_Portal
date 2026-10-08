@@ -277,10 +277,12 @@ export function emitPunchesReceived(punches: PunchReceivedPayload[]): void {
 // Phase 2 (P2-C): days recomputed with a different result. The employee's own
 // Attendance Info, their manager's team views, and anyone watching attendance
 // refresh those dates (spec §8: attendance.updated).
-export function emitAttendanceUpdated(employeeId: string, dates: string[], reportingManagerId: string | null): void {
+export function emitAttendanceUpdated(employeeId: string, dates: string[], reportingManagerId: string | null, markerEmployeeIds: string[] = []): void {
   if (!io || dates.length === 0) return;
   const payload = { employeeId, dates };
   io.to(`user:${employeeId}`).emit("attendance.updated", payload);
   if (reportingManagerId) io.to(`manager:${reportingManagerId}`).emit("attendance.updated", payload);
+  // The people who mark this employee's branch by hand (P2-D's muster).
+  for (const marker of markerEmployeeIds) io.to(`user:${marker}`).emit("attendance.updated", payload);
   io.to(permissionRoom("attendance.view")).emit("attendance.updated", payload);
 }

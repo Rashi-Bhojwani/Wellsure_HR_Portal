@@ -62,6 +62,9 @@ export const OPTIONAL_FK_POLICY: Record<string, Policy> = {
   // A device or batch outlives the agent that once fed it — just a pointer.
   "Device.agentId": "setNull",
   "IngestionBatch.agentId": "setNull",
+  // A manual entry from a muster upload goes with the upload (tests only:
+  // both are append-only history in real use).
+  "ManualAttendanceEntry.uploadId": "delete",
   // Posts written by, or auto-posted about, an employee belong to them.
   "Post.authorEmployeeId": "delete",
   "Post.subjectEmployeeId": "delete",
@@ -310,7 +313,7 @@ function delegate(modelName: string): Delegate {
 
 // Tables a database trigger keeps immutable, deletable only through the
 // test-purge exception (app.audit_purge = 'test' in a dev-marked database).
-const PURGE_GUARDED_MODELS = new Set(["RawPunch"]);
+const PURGE_GUARDED_MODELS = new Set(["RawPunch", "ManualAttendanceEntry"]);
 
 // Deletes the given rows of `model` and every row that depends on them,
 // transitively, in FK-safe order. Optional FKs follow OPTIONAL_FK_POLICY.

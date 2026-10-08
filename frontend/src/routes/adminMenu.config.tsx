@@ -70,6 +70,7 @@ import { CelebrationsReportPage, HeadcountReportPage, JoinersReportPage, LeaveBa
 import { ManagerManagementPage } from "../pages/admin/adminTools/ManagerManagementPage";
 import { DevicesPage } from "../pages/admin/devices/DevicesPage";
 import { ProcessAttendancePage } from "../pages/admin/attendance/ProcessAttendancePage";
+import { MusterPage } from "../pages/admin/attendance/muster/MusterPage";
 import { AttendanceSettingsPage, ShiftMasterPage, WeekOffPatternsPage } from "../pages/admin/attendance/AttendanceSettingsPage";
 
 // Single source of truth for the HR/Admin portal's App Switcher and each
@@ -167,7 +168,7 @@ export const adminApps: AdminApp[] = [
           { key: "who-is-in", label: "Who Is In?", path: "workforce/attendance/who-is-in", icon: TeamOutlined, phase: "Phase 2" },
           { key: "shift-roster", label: "Shift Roster", path: "workforce/attendance/shift-roster", icon: ScheduleOutlined, phase: "Phase 2" },
           { key: "employee-swipes", label: "Employee Swipes", path: "workforce/attendance/swipes", icon: DesktopOutlined, phase: "Phase 3" },
-          { key: "attendance-muster", label: "Attendance Muster", path: "workforce/attendance/muster", icon: FileTextOutlined, phase: "Phase 3" },
+          { key: "attendance-muster", label: "Attendance Muster", path: "workforce/attendance/muster", icon: FileTextOutlined, element: MusterPage },
           { key: "attendance-info", label: "Attendance Info", path: "workforce/attendance/info", icon: CalendarOutlined, phase: "Phase 3" },
           { key: "process-attendance", label: "Process Attendance", path: "workforce/attendance/process", icon: ToolOutlined, element: ProcessAttendancePage },
           { key: "period-finalisation", label: "Attendance Period Finalisation", path: "workforce/attendance/finalisation", icon: SafetyOutlined, phase: "Phase 3" },

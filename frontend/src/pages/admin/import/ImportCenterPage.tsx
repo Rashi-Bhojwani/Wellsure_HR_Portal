@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { MusterUploadTab } from "../attendance/muster/MusterUploadPanel";
 import { PunchImportTab } from "./PunchImportTab";
 import { Alert, Button, Input, Space, Table, Tabs, Tag, Typography, Upload, message } from "antd";
 import { DownloadOutlined, InboxOutlined } from "@ant-design/icons";
@@ -257,6 +258,8 @@ export function ImportCenterPage() {
           { key: "reconciliation", label: "Reconciliation Report", children: <ReconciliationTab /> },
           // Phase 2 P2-B: the emergency punch upload (attendance.devices.manage).
           ...(hasPermission("attendance.devices.manage") ? [{ key: "punches", label: "Punches (ATTLOG)", children: <PunchImportTab /> }] : []),
+          // Phase 2 P2-D: the manual-capture branches' muster (attendance.manual.enter, branch-limited).
+          ...(hasPermission("attendance.manual.enter") ? [{ key: "manual-muster", label: "Manual attendance muster", children: <MusterUploadTab /> }] : []),
         ]}
       />
     </Space>

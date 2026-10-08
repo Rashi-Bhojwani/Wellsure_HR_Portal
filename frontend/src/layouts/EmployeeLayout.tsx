@@ -16,7 +16,7 @@ import {
   SettingOutlined,
   UserOutlined,
 } from "@ant-design/icons";
-import { employeeMenu, isEmployeeMenuGroup } from "../routes/employeeMenu.config";
+import { canSeeLeaf, employeeMenu, isEmployeeMenuGroup } from "../routes/employeeMenu.config";
 import { useAuth } from "../hooks/useAuth";
 import { NotificationBell } from "../components/common/NotificationBell";
 import { MobileTabBar } from "../components/mobile/MobileTabBar";
@@ -27,7 +27,7 @@ const { Sider, Header, Content, Footer } = Layout;
 const { Text, Title } = Typography;
 const { useBreakpoint } = Grid;
 
-function buildMenuItems(): MenuProps["items"] {
+function buildMenuItems(hasPermission: (key: string) => boolean): MenuProps["items"] {
   return employeeMenu.map((entry) => {
     const Icon = entry.icon;
     if (isEmployeeMenuGroup(entry)) {
@@ -35,7 +35,7 @@ function buildMenuItems(): MenuProps["items"] {
         key: entry.key,
         icon: Icon ? <Icon /> : undefined,
         label: entry.label,
-        children: entry.children.map((child) => {
+        children: entry.children.filter((child) => canSeeLeaf(child, hasPermission)).map((child) => {
           const ChildIcon = child.icon;
           return {
             key: child.path,
@@ -73,9 +73,9 @@ function findLabel(rawPath: string): string {
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const currentKey = menuPathFor(location.pathname.replace(/^\/app\//, ""));
-  const items = useMemo(() => buildMenuItems(), []);
+  const items = useMemo(() => buildMenuItems(hasPermission), [hasPermission]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>

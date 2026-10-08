@@ -1,6 +1,8 @@
 import { logger } from "../lib/logger";
 import { getDailyRunHour } from "../modules/engage/autoPostSettings";
-import { attendanceNightlyQueue } from "./attendanceQueues";
+import { getSetting } from "../lib/settings";
+import { MANUAL_REMINDER_HOUR_KEY } from "../modules/attendance/manual/reminder";
+import { attendanceManualReminderQueue, attendanceNightlyQueue } from "./attendanceQueues";
 import { compOffExpiryQueue, employeeSeparationsQueue, historyRolloverQueue, engageAutoPostsQueue, helpdeskAutoCloseQueue, leavePlAccrualQueue } from "./queues";
 
 // Registers BullMQ repeatable jobs. Idempotent registration matters here —
@@ -14,6 +16,13 @@ export async function registerScheduledJobs(): Promise<void> {
   // missed nights) once every GEN shift window has closed (01:00).
   await attendanceNightlyQueue().upsertJobScheduler("attendance-nightly", { pattern: "0 2 * * *", tz: "Asia/Kolkata" }, { name: "attendance-nightly" });
   logger.info("Registered repeatable job: attendance-nightly (02:00 IST daily)");
+  // "Still not marked" to whoever marks a manual branch (P2-D). The hour is
+  // the System Setting attendance.manualReminderHour (default 18), read at
+  // registration like the Engage hour below: a change applies on restart.
+  const stored = Number(await getSetting<number | string>(MANUAL_REMINDER_HOUR_KEY, 18));
+  const reminderHour = Number.isInteger(stored) && stored >= 0 && stored <= 23 ? stored : 18;
+  await attendanceManualReminderQueue().upsertJobScheduler("attendance-manual-reminder", { pattern: `0 ${reminderHour} * * *`, tz: "Asia/Kolkata" }, { name: "attendance-manual-reminder" });
+  logger.info(`Registered repeatable job: attendance-manual-reminder (${String(reminderHour).padStart(2, "0")}:00 IST daily)`);
 
   await historyRolloverQueue.upsertJobScheduler(
     "history-rollover-daily",

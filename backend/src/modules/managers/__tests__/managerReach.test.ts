@@ -326,6 +326,99 @@ describe("manager reach — TEAM scope at every endpoint a manager can call (E2)
     });
   });
 
+  // The Attendance Muster (P2-D): attendance.manual.enter is limited by
+  // BRANCH, not team — the manager marks the member's branch only. Both the
+  // member and the outsider are manual capture (no device mapping).
+  describe("attendance muster and manual entry (P2-D): the manager's branch only", () => {
+    const CYCLE = "2026-09-01";
+    const DAY = "2026-09-15"; // a Tuesday
+    const binary = (r: request.Response, cb: (err: Error | null, body: Buffer) => void) => {
+      const chunks: Buffer[] = [];
+      r.on("data", (c: Buffer) => chunks.push(c));
+      r.on("end", () => cb(null, Buffer.concat(chunks)));
+    };
+    let uploadId = "";
+    let workbook: Buffer;
+
+    beforeAll(async () => {
+      await prisma.deviceUserMapping.deleteMany({ where: { employeeId: { in: [p.member.employeeId, p.outsider.employeeId] } } });
+      await prisma.attendanceManualBranch.create({ data: { userId: p.manager.userId, locationId: org.locationId, assignedByUserId: p.hrAdmin.userId } });
+    });
+
+    it("GET /api/attendance/muster — the member's row, never the outsider's", async () => {
+      const res = await m().get(`/api/attendance/muster?cycleStart=${CYCLE}`);
+      expect(res.status).toBe(200);
+      const ids = res.body.rows.map((r: { employeeId: string }) => r.employeeId);
+      expect(ids).toContain(p.member.employeeId);
+      expect(ids).not.toContain(p.outsider.employeeId);
+      expect((await m().get(`/api/attendance/muster?cycleStart=${CYCLE}&employeeId=${p.outsider.employeeId}`)).body.rows).toEqual([]);
+      // HR sees both — the case isn't vacuous.
+      const all = (await api(hrToken).get(`/api/attendance/muster?cycleStart=${CYCLE}`)).body.rows.map((r: { employeeId: string }) => r.employeeId);
+      expect(all).toEqual(expect.arrayContaining([p.member.employeeId, p.outsider.employeeId]));
+      cover("GET /api/attendance/muster");
+    });
+
+    it("GET /api/attendance/muster/export — the file holds the member only", async () => {
+      const res = await m().get(`/api/attendance/muster/export?cycleStart=${CYCLE}`).buffer(true).parse(binary);
+      expect(res.status).toBe(200);
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(res.body as unknown as ExcelJS.Buffer);
+      const codes = wb.worksheets[0]!.getColumn(1).values.map(String);
+      expect(codes).toContain(p.member.employeeCode);
+      expect(codes).not.toContain(p.outsider.employeeCode);
+      cover("GET /api/attendance/muster/export");
+    });
+
+    it("POST /api/attendance/muster/entries — the member's day: saved; the outsider's: 404", async () => {
+      const ok = await m().post("/api/attendance/muster/entries", { entries: [{ employeeId: p.member.employeeId, date: DAY, text: "10:00-19:00" }] });
+      expect(ok.status).toBe(200);
+      const no = await m().post("/api/attendance/muster/entries", { entries: [{ employeeId: p.outsider.employeeId, date: DAY, text: "P" }] });
+      expect(no.status).toBe(404);
+      expect(await prisma.manualAttendanceEntry.count({ where: { employeeId: p.outsider.employeeId } })).toBe(0);
+      cover("POST /api/attendance/muster/entries");
+    });
+
+    it("POST /api/attendance/muster/mark-present — own branch only", async () => {
+      expect((await m().post("/api/attendance/muster/mark-present", { date: "2026-09-16", locationId: org.locationId })).status).toBe(200);
+      expect((await m().post("/api/attendance/muster/mark-present", { date: "2026-09-16", locationId: otherOrg.locationId })).status).toBe(404);
+      expect(await prisma.manualAttendanceEntry.count({ where: { employeeId: p.outsider.employeeId } })).toBe(0);
+      cover("POST /api/attendance/muster/mark-present");
+    });
+
+    it("GET /api/attendance/muster/template — own branch only", async () => {
+      const res = await m().get(`/api/attendance/muster/template?locationId=${org.locationId}&cycleStart=${CYCLE}`).buffer(true).parse(binary);
+      expect(res.status).toBe(200);
+      workbook = res.body as Buffer;
+      expect((await m().get(`/api/attendance/muster/template?locationId=${otherOrg.locationId}&cycleStart=${CYCLE}`)).status).toBe(404);
+      cover("GET /api/attendance/muster/template");
+    });
+
+    it("POST /api/attendance/muster/upload — an outsider's row smuggled into the file is rejected", async () => {
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(workbook as unknown as ExcelJS.Buffer);
+      const ws = wb.getWorksheet("Muster")!;
+      const inCol = (ws.getRow(3).values as unknown[]).findIndex((v) => typeof v === "string" && v.startsWith("2026-09-17") && v.endsWith("IN"));
+      ws.addRow([p.outsider.employeeCode, "x"]).getCell(inCol).value = "P";
+      ws.getRows(4, ws.rowCount)!.find((r) => r.getCell(1).value === p.member.employeeCode)!.getCell(inCol).value = "P";
+      const res = await request(app).post("/api/attendance/muster/upload").set(...authHeader(token)).attach("file", Buffer.from(await wb.xlsx.writeBuffer()), "m.xlsx");
+      expect(res.status).toBe(200);
+      expect(res.body.counts.statusOnly).toBe(1);
+      expect(res.body.issues.map((i: { employeeCode: string }) => i.employeeCode)).toContain(p.outsider.employeeCode);
+      uploadId = res.body.uploadId;
+      cover("POST /api/attendance/muster/upload");
+    });
+
+    it("POST /api/attendance/muster/upload/:id/commit — own upload; the outsider is untouched; another person's upload is 404", async () => {
+      expect((await m().post(`/api/attendance/muster/upload/${uploadId}/commit`)).status).toBe(200);
+      expect(await prisma.manualAttendanceEntry.count({ where: { employeeId: p.outsider.employeeId } })).toBe(0);
+      const hrTemplate = await api(hrToken).get(`/api/attendance/muster/template?locationId=${otherOrg.locationId}&cycleStart=${CYCLE}`).buffer(true).parse(binary);
+      const hrUpload = await request(app).post("/api/attendance/muster/upload").set(...authHeader(hrToken)).attach("file", hrTemplate.body as Buffer, "hr.xlsx");
+      expect(hrUpload.status).toBe(200);
+      expect((await m().post(`/api/attendance/muster/upload/${hrUpload.body.uploadId}/commit`)).status).toBe(404);
+      cover("POST /api/attendance/muster/upload/:id/commit");
+    });
+  });
+
   it("every manager-reachable scoped route has a case above", () => {
     expect(MANAGER_REACHABLE_SCOPED.filter((r) => !covered.has(r))).toEqual([]);
   });

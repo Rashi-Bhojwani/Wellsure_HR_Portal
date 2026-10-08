@@ -143,6 +143,26 @@ export async function placementSegments(employeeId: string, from: Date, to: Date
   });
 }
 
+/**
+ * Branch and department per employee over [from, to] (inclusive days), as
+ * clipped segments oldest first — the muster's "which branch was this
+ * person in on day D" (P2-D: manual entry is branch-limited per day).
+ */
+export async function placementPeriods(employeeIds: string[], from: Date, to: Date): Promise<Map<string, Array<{ locationId: string; departmentId: string; from: Date; to: Date }>>> {
+  const rows = await prisma.employeeJobHistory.findMany({
+    where: { employeeId: { in: employeeIds }, effectiveFrom: { lte: to }, OR: [{ effectiveTo: null }, { effectiveTo: { gt: from } }] },
+    orderBy: { effectiveFrom: "asc" },
+    select: { employeeId: true, locationId: true, departmentId: true, effectiveFrom: true, effectiveTo: true },
+  });
+  const out = new Map<string, Array<{ locationId: string; departmentId: string; from: Date; to: Date }>>();
+  for (const r of rows) {
+    const segFrom = r.effectiveFrom > from ? r.effectiveFrom : from;
+    const lastDay = r.effectiveTo ? addCalendarDays(r.effectiveTo, -1) : to;
+    out.set(r.employeeId, [...(out.get(r.employeeId) ?? []), { locationId: r.locationId, departmentId: r.departmentId, from: segFrom, to: lastDay < to ? lastDay : to }]);
+  }
+  return out;
+}
+
 const assignmentInclude = { shift: { include: { sessions: { orderBy: { sortOrder: "asc" as const } } } }, weekOffPattern: true, policy: true } as const;
 export type AssignmentWithRules = Prisma.AttendanceAssignmentGetPayload<{ include: typeof assignmentInclude }>;
 

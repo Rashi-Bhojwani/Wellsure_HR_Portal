@@ -335,6 +335,16 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "POST /api/attendance/process": admin,
   "GET /api/attendance/process/:id": admin,
   "GET /api/attendance/finalisation/readiness": admin,
+  // The Attendance Muster and manual entry (P2-D): attendance.manual.enter is
+  // manager-grantable but branch-limited (attendance_manual_branches), per day.
+  "GET /api/attendance/muster/cycles": everyone("the company's attendance cycle boundaries; no one's record"),
+  "GET /api/attendance/muster": scoped("attendance.view in data scope, or attendance.manual.enter for the holder's branches only (manual/scope.ts)"),
+  "GET /api/attendance/muster/export": scoped("the same rows as GET /muster"),
+  "POST /api/attendance/muster/entries": scoped("attendance.manual.enter, each day's branch in the holder's branches; 404 for the batch otherwise"),
+  "POST /api/attendance/muster/mark-present": scoped("attendance.manual.enter for that branch; 404 otherwise"),
+  "GET /api/attendance/muster/template": scoped("attendance.manual.enter for that branch; 404 otherwise"),
+  "POST /api/attendance/muster/upload": scoped("attendance.manual.enter for the file's branch; rows outside it are rejected"),
+  "POST /api/attendance/muster/upload/:id/commit": scoped("the uploader's own upload; branch and every day re-checked"),
 
   // Biometric ingestion (Phase 2 P2-B). The sync agent authenticates with its
   // agent key and may post only for its own devices; ADMS devices by their
@@ -400,4 +410,11 @@ export const MANAGER_REACHABLE_SCOPED = [
   "POST /api/letters/:id/reissue",
   "POST /api/letters/:id/reproduce",
   "GET /api/people/photos/:employeeId/:size",
+  "GET /api/attendance/muster",
+  "GET /api/attendance/muster/export",
+  "POST /api/attendance/muster/entries",
+  "POST /api/attendance/muster/mark-present",
+  "GET /api/attendance/muster/template",
+  "POST /api/attendance/muster/upload",
+  "POST /api/attendance/muster/upload/:id/commit",
 ] as const;
