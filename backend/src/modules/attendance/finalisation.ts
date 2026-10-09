@@ -79,9 +79,14 @@ async function dayList(where: { status?: string }, from: Date, to: Date) {
 }
 
 /** Everything standing in the way of finalising `from`..`to` (ISO dates, inclusive). Empty = ready. */
+/** A period is at most a year: the check dry-runs the engine over every day of it. */
+export const MAX_FINALISATION_DAYS = 366;
+
 export async function finalisationBlockers(fromDate: string, toDate: string): Promise<FinalisationBlocker[]> {
   const from = day(fromDate);
   const to = day(toDate);
+  if (fromDate > toDate) throw new HttpError(400, "The start date must be on or before the end date.", "VALIDATION_ERROR");
+  if ((to.getTime() - from.getTime()) / 86_400_000 + 1 > MAX_FINALISATION_DAYS) throw new HttpError(400, `Check at most ${MAX_FINALISATION_DAYS} days at a time.`, "VALIDATION_ERROR");
   const blockers: FinalisationBlocker[] = [];
 
   if (toDate >= iso(businessToday())) {
@@ -145,7 +150,6 @@ export async function assertCanFinalise(fromDate: string, toDate: string): Promi
 }
 
 export async function finalisationReadiness(fromDate: string, toDate: string) {
-  if (fromDate > toDate) throw new HttpError(400, "The start date must be on or before the end date.", "VALIDATION_ERROR");
   const blockers = await finalisationBlockers(fromDate, toDate);
   return { from: fromDate, to: toDate, ready: blockers.length === 0, blockers };
 }

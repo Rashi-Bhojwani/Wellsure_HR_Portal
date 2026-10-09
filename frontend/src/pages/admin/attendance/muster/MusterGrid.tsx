@@ -150,7 +150,7 @@ export function MusterGrid({ muster, pending, errors, onChange, focused, onFocus
                   position: "relative",
                   fontWeight: 500,
                 };
-                const title = error ? `${describe(row, cell)}\n⚠ ${error}` : describe(row, cell);
+                const title = error ? `${describe(row, cell)}\n⚠ ${error}` : edited === "" ? `${describe(row, cell)}\nWill be cleared (back to not marked) when you save.` : describe(row, cell);
                 const corner = cell.missingPunch ? <span aria-hidden style={{ position: "absolute", top: 0, right: 0, borderTop: `7px solid ${token.colorError}`, borderLeft: "7px solid transparent" }} /> : null;
                 const worked = cell.workedOnOffDay ? <span aria-hidden style={{ position: "absolute", bottom: 2, right: 3, width: 5, height: 5, borderRadius: 5, background: token.colorSuccess }} /> : null;
                 if (!cell.editable) {
@@ -172,6 +172,7 @@ export function MusterGrid({ muster, pending, errors, onChange, focused, onFocus
                       aria-label={describe(row, cell)}
                       aria-invalid={error ? true : undefined}
                       value={shown}
+                      placeholder={edited === "" ? "clear" : undefined}
                       onFocus={(e) => {
                         onFocus(key);
                         requestAnimationFrame(() => e.target.select());

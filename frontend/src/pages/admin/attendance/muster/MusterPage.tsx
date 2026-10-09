@@ -72,7 +72,8 @@ export function MusterPage({ title = "Attendance Muster" }: { title?: string }) 
       musterApi.saveEntries(
         Object.entries(pending).map(([key, text]) => {
           const [employeeId, date] = key.split("|") as [string, string];
-          return { employeeId, date, text, remark: remark.trim() || null };
+          // An emptied cell that had an entry clears the day (the grid only keeps it pending if it had one).
+          return { employeeId, date, text: text.trim() === "" ? "-" : text, remark: remark.trim() || null };
         }),
       ),
     onSuccess: (r) => {

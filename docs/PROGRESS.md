@@ -4087,6 +4087,28 @@ the spec covers, listed for review.
   card on Process Attendance show the blockers for any recent cycle.
 - `HttpError` gained optional `details`, returned as `error.details`.
 
+### Interim — after the P2-D review (2026-10-09)
+
+- **Device details recorded** (user, from the device's menu): spec §4.1a.
+  ZKTeco/eSSL, serial `AEXY225060969`, static `192.168.29.213`, port 4370,
+  +330 (IST), fingerprint + face + finger-vein, enrolment 3,000 FP / 2,000
+  faces. Open questions narrowed: model name (ADMS), attendance-log
+  capacity, always-on PC, admin password and comm key.
+- **Clearing a day is explicit**: `-` in an upload (the template, the panel
+  and the preview all say so); emptying a marked cell in the grid clears
+  on Save. See PHASE_2.md, P2-D rule 3.
+- **Test-budget audit** (after the second slow-runner PDF timeout): every
+  backend test was timed, and three had expensive setup inside their own
+  30 s budget:
+  - the letters issuing test now issues and reproduces in two tests;
+  - the reach test computes September for the company in its `beforeAll`,
+    not in the first muster test;
+  - the finalisation test checked a 36-year range. The check is now
+    capped at 366 days (a product limit as well).
+
+  All backend tests now run in under 1 s each locally, except the
+  deliberate password-timing measurement (about 2.4 s).
+
 ### Phase 2, commit P2-D — manual entry and the editable muster (2026-10-09)
 
 Plan and as-built notes: [`docs/plans/PHASE_2.md`](plans/PHASE_2.md) §5, "P2-D
@@ -4136,8 +4158,9 @@ build design" and "As built: P2-D", including the **12 rules decided here**.
 
 Carried from spec §14 — configurable, not guessed, until answered:
 
-- [ ] The eSSL device model number, and whether it supports ADMS push. Not blocking (2026-10-01): Phases 2–3 are built against the punch simulator, and the device is connected last.
-- [ ] The device's LAN IP address and admin password (needed by the sync agent). The password is supplied at install and kept in the agent's local configuration or a secrets store, never in the repo.
+- [ ] The eSSL device **model name**, and whether it supports ADMS push. Not blocking (2026-10-01): Phases 2–3 are built against the punch simulator, and the device is connected last. Everything else about the device is now confirmed (2026-10-09, spec §4.1a): ZKTeco/eSSL platform, serial `AEXY225060969`, fingerprint + face + finger-vein.
+- [x] **The device's LAN address and port: answered 2026-10-09.** `192.168.29.213`, subnet `255.255.255.0`, DHCP off (fixed), port 4370, timezone +330 (IST). The agent route is the primary path and the agent must run on a PC inside 192.168.29.x (spec §4.1a).
+- [ ] The device's **admin password and comm key** (port 4370 connection password). Supplied at install and kept in the agent's local configuration or a secrets store, never in the repo or docs.
 - [ ] Whether an always-on office PC exists to run the sync agent as a Windows service (Windows version), and how many devices there are.
 - [ ] Employee Code vs Device User ID default (spec §3): Add Employee pre-fills Employee Code from the Device User ID, but our device's IDs (2–126) differ from the 1000-series Employee Codes. Keep pre-filling or not? (Punch mapping is unaffected; it always uses `device_user_mappings`.)
 - [ ] Working hours and working days for the device-silence alert (spec §4.7): configurable defaults until HR confirms.
@@ -4178,8 +4201,10 @@ Carried from spec §14 — configurable, not guessed, until answered:
         14:45–19:00);
       - no late penalty;
       - the attendance cycle is the calendar month.
-- [ ] **The biometric device's log capacity (retention)**, once the model
-      is known. The agent's retention guard defaults pessimistically to
+- [ ] **The biometric device's attendance-log capacity (retention)**, and
+      whether it overwrites the oldest records when full. Not the same as
+      its enrolment capacity (3,000 fingerprints / 2,000 faces, confirmed
+      2026-10-09). The agent's retention guard defaults pessimistically to
       3 days / 20,000 records until then (Phase 2 plan §7.1).
 - [x] Exact PL eligibility boundary: **HR-confirmed 2026-09-28** — 90 calendar
       days from DOJ (`leave_policies.eligibility_mode = DAYS`,
@@ -4220,7 +4245,7 @@ Carried from spec §14 — configurable, not guessed, until answered:
 - [ ] PT/LWF applicability per location's state.
 - [ ] Actual headcount and the authoritative branch (`locations`) list — branches are HR-managed and growing (e.g. 3 separate Ajmer branches, not the single "Ajmer" row earlier drafts assumed), so this isn't a one-time seed value. Also open: which city each of the 3 Panchsheel branches (C-10, SPN, B-22) belongs to, the correct names/addresses for the 3 Ajmer branches, and Wellsure 2's exact name and address (user chasing with HR, 2026-10-08) — seeded as placeholders for now (see the Phase 1 log entry below). The commit D reconciliation report (Import Center → Reconciliation Report tab) is the tool to compare against greytHR once the real numbers are in hand.
 - [ ] Company domain name for the portal and whether DNS is on Route 53.
-- [ ] Whether the office has a static public IP (needed for device push).
+- [ ] Whether the office has a static public IP. Only matters if ADMS push is used, and only to restrict `/iclock/*` to the office address: push is outbound from the device, and the agent route needs no inbound access (spec §14).
 - [ ] AWS account structure (single account, two environments, or separate
       staging/production accounts).
 

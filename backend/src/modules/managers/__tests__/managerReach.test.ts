@@ -19,6 +19,8 @@ import {
   loginAs,
   type TestOrgMasters,
 } from "../../employee/__tests__/employeeTestHelpers";
+import { computeAttendance } from "../../attendance/compute";
+import { employeesInRange } from "../../attendance/jobs";
 import { MANAGER_REACHABLE_SCOPED } from "./routeInventory";
 
 // The IDOR half of the E2 endpoint audit: a manager holding EVERY
@@ -343,6 +345,10 @@ describe("manager reach — TEAM scope at every endpoint a manager can call (E2)
     beforeAll(async () => {
       await prisma.deviceUserMapping.deleteMany({ where: { employeeId: { in: [p.member.employeeId, p.outsider.employeeId] } } });
       await prisma.attendanceManualBranch.create({ data: { userId: p.manager.userId, locationId: org.locationId, assignedByUserId: p.hrAdmin.userId } });
+      // The first muster view computes the month for everyone it shows (HR: the whole company).
+      // Do that here, under the hook's budget, not inside the first test's 30 s.
+      const everyone = await employeesInRange("2026-09-01", "2026-09-30");
+      await computeAttendance(everyone, "2026-09-01", "2026-09-30");
     });
 
     it("GET /api/attendance/muster — the member's row, never the outsider's", async () => {
@@ -397,9 +403,9 @@ describe("manager reach — TEAM scope at every endpoint a manager can call (E2)
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(workbook as unknown as ExcelJS.Buffer);
       const ws = wb.getWorksheet("Muster")!;
-      const inCol = (ws.getRow(3).values as unknown[]).findIndex((v) => typeof v === "string" && v.startsWith("2026-09-17") && v.endsWith("IN"));
+      const inCol = (ws.getRow(4).values as unknown[]).findIndex((v) => typeof v === "string" && v.startsWith("2026-09-17") && v.endsWith("IN"));
       ws.addRow([p.outsider.employeeCode, "x"]).getCell(inCol).value = "P";
-      ws.getRows(4, ws.rowCount)!.find((r) => r.getCell(1).value === p.member.employeeCode)!.getCell(inCol).value = "P";
+      ws.getRows(5, ws.rowCount)!.find((r) => r.getCell(1).value === p.member.employeeCode)!.getCell(inCol).value = "P";
       const res = await request(app).post("/api/attendance/muster/upload").set(...authHeader(token)).attach("file", Buffer.from(await wb.xlsx.writeBuffer()), "m.xlsx");
       expect(res.status).toBe(200);
       expect(res.body.counts.statusOnly).toBe(1);

@@ -153,7 +153,10 @@ describe("Letters", { timeout: 30_000 }, () => {
     expect(bad.body.error.message).toMatch(/Unknown placeholder/);
   });
 
-  it("issues a letter: values, version and timestamp frozen; rendered and filed in Letters; employee notified; reproduces byte-for-byte", async () => {
+  // Issuing and reproducing each render a PDF, so they are two tests, each
+  // with its own budget (CI runs are several times slower than local ones).
+  let issued = { id: "", reference: "", sha: "" };
+  it("issues a letter: values, version and timestamp frozen; rendered and filed in Letters; employee notified", async () => {
     const res = await issue("hrExec", people.report.employeeId, { templateId, extraValues: { ctc: "1200000" } });
     expect(res.status).toBe(202);
     expect(res.body).toMatchObject({ status: "QUEUED", templateVersion: 2, visibleToEmployee: true });
@@ -181,10 +184,14 @@ describe("Letters", { timeout: 30_000 }, () => {
     const notes = await prisma.notification.findMany({ where: { userId: people.report.userId, type: "document.added" } });
     expect(notes.some((n) => (n.payload as { letterId?: string }).letterId === res.body.id)).toBe(true);
     expect(await prisma.auditLog.count({ where: { entityId: res.body.id, action: "letters.issued" } })).toBe(1);
+    issued = { id: res.body.id, reference: res.body.reference, sha: letter.pdfSha256! };
+  });
 
+  it("reproduces the issued letter byte-for-byte; a repeated job does nothing", async () => {
+    expect(issued.id).not.toBe("");
     // Reproduce: from the stored version + values + timestamp, same bytes.
     // (HR Admin: a letter is a PAY document, which an HR Executive can't open.)
-    const repro = await as("hrAdmin").post(`/api/letters/${res.body.id}/reproduce`).buffer(true).parse((r, cb) => {
+    const repro = await as("hrAdmin").post(`/api/letters/${issued.id}/reproduce`).buffer(true).parse((r, cb) => {
       const chunks: Buffer[] = [];
       r.on("data", (c: Buffer) => chunks.push(c));
       r.on("end", () => cb(null, Buffer.concat(chunks)));
@@ -192,11 +199,11 @@ describe("Letters", { timeout: 30_000 }, () => {
     expect(repro.status).toBe(200);
     expect(repro.headers["content-type"]).toBe("application/pdf");
     expect(repro.headers["x-letter-reproduction"]).toBe("match");
-    expect(sha256(repro.body as Buffer)).toBe(letter.pdfSha256);
+    expect(sha256(repro.body as Buffer)).toBe(issued.sha);
 
     // A second run of the same job (retry/duplicate) does nothing.
-    expect(await processLetterJob(res.body.id)).toEqual({ status: "SKIPPED" });
-    expect(await prisma.employeeDocument.count({ where: { generatedLetter: { id: res.body.id } } })).toBe(1);
+    expect(await processLetterJob(issued.id)).toEqual({ status: "SKIPPED" });
+    expect(await prisma.employeeDocument.count({ where: { generatedLetter: { id: issued.id } } })).toBe(1);
   });
 
   it("uses the name in force on the letter's date, and an issued letter keeps it after a later rename", async () => {

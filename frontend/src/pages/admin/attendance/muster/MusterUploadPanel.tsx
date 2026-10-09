@@ -7,7 +7,7 @@ import type { MusterCycle, UploadPreview } from "../../../../api/muster";
 import { apiErrorMessage } from "../../../../lib/apiError";
 
 const { Text, Paragraph } = Typography;
-const KIND: Record<string, string> = { TIMED: "times", STATUS_ONLY: "status only", CLEARED: "clear" };
+const KIND: Record<string, { label: string; color?: string }> = { TIMED: { label: "times" }, STATUS_ONLY: { label: "status only" }, CLEARED: { label: "clears the day (back to NM)", color: "red" } };
 
 /**
  * Muster upload (docs/plans/PHASE_2.md §5.2): the template for a branch and
@@ -47,8 +47,15 @@ export function MusterUploadPanel({ branches, cycles, defaultBranch, defaultCycl
         <Text strong>1. Download the template</Text>
         <Paragraph type="secondary" style={{ marginBottom: 8 }}>
           One row per person marked by hand at the branch, with IN and OUT columns for each day, already filled with what's marked so far. Type the times
-          (10:05 and 19:10) or a letter in IN (P, A, P:A, A:P, W). A blank cell leaves the day as it is; - clears it.
+          (10:05 and 19:10) or a letter in IN (P, A, P:A, A:P, W). A blank cell leaves the day as it is.
         </Paragraph>
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 8 }}
+          title={<>To clear a day marked by mistake, type <Text code>-</Text> (a dash) in its IN cell.</>}
+          description="The day goes back to Not marked. Deleting what's in the cell does not clear it: a blank cell always means 'leave as it is', so a partly filled sheet can't wipe anything."
+        />
         <Space wrap>
           <Select aria-label="Branch" placeholder="Branch" style={{ width: 220 }} value={branch} onChange={setBranch} options={branches.map((b) => ({ value: b.id, label: b.name }))} />
           <Select aria-label="Attendance cycle" style={{ width: 200 }} value={cycle} onChange={setCycle} options={cycles.map((c) => ({ value: c.start, label: c.label }))} />
@@ -99,8 +106,9 @@ export function MusterUploadPanel({ branches, cycles, defaultBranch, defaultCycl
               columns={[
                 { title: "Employee", dataIndex: "employee" },
                 { title: "Date", dataIndex: "date" },
-                { title: "Entry", dataIndex: "entry", render: (v: string) => <Text code>{v}</Text> },
-                { title: "Kind", dataIndex: "kind", render: (k: string) => <Tag>{KIND[k] ?? k}</Tag> },
+                { title: "Now", dataIndex: "before", render: (v: string | null) => (v ? <Text code>{v}</Text> : <Text type="secondary">not marked</Text>) },
+                { title: "Becomes", dataIndex: "entry", render: (v: string, c) => (c.kind === "CLEARED" ? <Text type="danger">not marked</Text> : <Text code>{v}</Text>) },
+                { title: "Kind", dataIndex: "kind", render: (k: string) => <Tag color={KIND[k]?.color}>{KIND[k]?.label ?? k}</Tag> },
               ]}
             />
           ) : (

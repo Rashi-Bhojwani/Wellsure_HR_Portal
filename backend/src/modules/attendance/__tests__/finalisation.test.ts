@@ -109,8 +109,11 @@ describe("period finalisation gate", () => {
     expect(await codes()).toEqual([]);
   });
 
-  it("a period that hasn't ended can't be finalised", async () => {
-    expect((await finalisationBlockers("1990-03-01", "2999-12-31")).map((b) => b.code)).toContain("PERIOD_NOT_OVER");
+  it("a period that hasn't ended can't be finalised; a check is at most a year", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const in10 = new Date(Date.now() + 10 * 86_400_000).toISOString().slice(0, 10);
+    expect((await finalisationBlockers(today, in10)).map((b) => b.code)).toContain("PERIOD_NOT_OVER");
+    await expect(finalisationBlockers("1990-03-01", "1991-03-02")).rejects.toMatchObject({ status: 400, message: "Check at most 366 days at a time." });
   });
 
   it("once nothing blocks, finalisePeriod locks the period's days and audits it", async () => {

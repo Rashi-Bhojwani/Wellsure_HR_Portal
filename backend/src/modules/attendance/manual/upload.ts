@@ -15,7 +15,7 @@ import { inBranches, markableBranches, type Viewer } from "./scope";
 // duplicates. Blank = leave the day as it is; "-" clears it.
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const HEADER_ROW = 3;
+const HEADER_ROW = 4;
 const SHADE = { type: "pattern" as const, pattern: "solid" as const, fgColor: { argb: "FFEDEDED" } };
 
 async function assertBranch(viewer: Viewer, locationId: string) {
@@ -46,8 +46,10 @@ export async function musterTemplate(viewer: Viewer, q: { locationId: string; cy
   ws.getCell("A1").value = `Manual attendance muster: ${location.name}, ${m.cycle.label}`;
   ws.getCell("A1").font = { bold: true, size: 13 };
   ws.getCell("A2").value =
-    "Type the IN and OUT times (e.g. 10:05 and 19:10), or a letter in the IN column: P, A, P:A, A:P (half day), W (worked an off day). - clears a day. A blank cell leaves the day as it is. Shaded days can't be marked here.";
+    "Type the IN and OUT times (e.g. 10:05 and 19:10), or a letter in the IN column: P, A, P:A, A:P (half day), W (worked an off day). A blank cell leaves the day as it is. Shaded days can't be marked here.";
   ws.getCell("A2").font = { italic: true };
+  ws.getCell("A3").value = "To clear a day marked by mistake, type - (a dash) in its IN cell: the day goes back to Not marked. Deleting what's in the cell does NOT clear it.";
+  ws.getCell("A3").font = { bold: true, color: { argb: "FFC00000" } };
   const header = ["Employee Code", "Name", ...m.days.flatMap((d) => [`${d.date} ${WEEKDAYS[d.weekday]} IN`, `${d.date} ${WEEKDAYS[d.weekday]} OUT`])];
   ws.getRow(HEADER_ROW).values = header;
   ws.getRow(HEADER_ROW).font = { bold: true };
@@ -153,7 +155,11 @@ export async function previewUpload(viewer: Viewer, file: { buffer: Buffer; orig
 
   // Header: "<date> <Wkd> IN|OUT" columns.
   const columns = new Map<string, { inCol?: number; outCol?: number }>();
-  ws.getRow(HEADER_ROW).eachCell((cell, col) => {
+  // The header row is the one labelled "Employee Code" (an older template had it one row higher).
+  let headerRow = 0;
+  for (let r = 1; r <= 10 && !headerRow; r++) if (cellText(ws.getRow(r).getCell(1).value) === "Employee Code") headerRow = r;
+  if (!headerRow) throw new HttpError(400, "Use the template downloaded from the Attendance Muster: its header row (Employee Code, Name, then the days) is missing.", "INVALID_UPLOAD");
+  ws.getRow(headerRow).eachCell((cell, col) => {
     const match = /^(\d{4}-\d{2}-\d{2})\b.*\b(IN|OUT)$/i.exec(cellText(cell.value));
     if (!match) return;
     const slot = columns.get(match[1]!) ?? {};
@@ -165,12 +171,12 @@ export async function previewUpload(viewer: Viewer, file: { buffer: Buffer; orig
   if (columns.size === 0 || [...columns.keys()].some((d) => !known.has(d))) throw new HttpError(400, `The day columns don't match ${m.cycle.label}. Download a fresh template.`, "INVALID_UPLOAD");
 
   const issues: UploadIssue[] = [];
-  const edits: Array<CellEdit & { kind: string }> = [];
+  const edits: Array<CellEdit & { kind: string; before: string | null }> = [];
   let unchanged = 0;
   let blank = 0;
   const seen = new Set<string>();
   ws.eachRow((row, rowNumber) => {
-    if (rowNumber <= HEADER_ROW) return;
+    if (rowNumber <= headerRow) return;
     const code = cellText(row.getCell(1).value);
     if (!code) return;
     const target = byCode.get(code);
@@ -216,7 +222,7 @@ export async function previewUpload(viewer: Viewer, file: { buffer: Buffer; orig
         unchanged += 1;
         continue;
       }
-      edits.push({ employeeId: target.employeeId, date: c.date, text: combined.text, kind: parsed.value.kind });
+      edits.push({ employeeId: target.employeeId, date: c.date, text: combined.text, kind: parsed.value.kind, before: beforeText || null });
     }
   });
 
@@ -246,7 +252,8 @@ export async function previewUpload(viewer: Viewer, file: { buffer: Buffer; orig
     cycle: m.cycle,
     fileName: file.originalname,
     counts,
-    changes: edits.slice(0, 500).map((e) => ({ employee: names.get(e.employeeId) ?? e.employeeId, date: e.date, entry: e.text, kind: e.kind })),
+    // before → after, so a clear ("-") shows exactly what it removes
+    changes: edits.slice(0, 500).map((e) => ({ employee: names.get(e.employeeId) ?? e.employeeId, date: e.date, before: e.before, entry: e.kind === "CLEARED" ? "-" : e.text, kind: e.kind })),
     issues: issues.slice(0, 500),
   };
 }

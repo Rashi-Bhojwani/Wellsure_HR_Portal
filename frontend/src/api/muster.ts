@@ -97,7 +97,7 @@ export interface UploadPreview {
   cycle: MusterCycle;
   fileName: string;
   counts: { timed: number; statusOnly: number; cleared: number; unchanged: number; blank: number; issues: number };
-  changes: Array<{ employee: string; date: string; entry: string; kind: string }>;
+  changes: Array<{ employee: string; date: string; before: string | null; entry: string; kind: string }>;
   issues: Array<{ row: number; employeeCode: string | null; date: string | null; issue: string }>;
 }
 export async function previewUpload(file: File): Promise<UploadPreview> {

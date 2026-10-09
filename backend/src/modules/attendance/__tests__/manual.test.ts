@@ -301,8 +301,8 @@ describe("manual entry and the attendance muster (P2-D)", () => {
       if (res.body.uploadId) uploadIds.push(res.body.uploadId);
       return res;
     };
-    const colOf = (ws: ExcelJS.Worksheet, date: string, which: "IN" | "OUT") => (ws.getRow(3).values as unknown[]).findIndex((v) => typeof v === "string" && v.startsWith(date) && v.endsWith(which));
-    const rowOf = (ws: ExcelJS.Worksheet, code: string) => ws.getRows(4, ws.rowCount)!.find((r) => r.getCell(1).value === code)!;
+    const colOf = (ws: ExcelJS.Worksheet, date: string, which: "IN" | "OUT") => (ws.getRow(4).values as unknown[]).findIndex((v) => typeof v === "string" && v.startsWith(date) && v.endsWith(which));
+    const rowOf = (ws: ExcelJS.Worksheet, code: string) => ws.getRows(5, ws.rowCount)!.find((r) => r.getCell(1).value === code)!;
 
     it("the template round-trips the current entries; preview sorts every cell; commit writes only the changes", async () => {
       const wb = await download();
@@ -345,18 +345,26 @@ describe("manual entry and the attendance muster (P2-D)", () => {
       expect((await as(tok.hr).post(`/muster/upload/${res.body.uploadId}/commit`)).status).toBe(404); // someone else's upload
     });
 
-    it("re-uploading the corrected file supersedes, never duplicates", async () => {
+    it("re-uploading the corrected file supersedes, never duplicates; a dash clears a day, an emptied cell doesn't", async () => {
       const wb = await download();
       const ws = wb.getWorksheet("Muster")!;
       const before = await prisma.manualAttendanceEntry.count({ where: { employeeId: { in: [p.mA.employeeId, p.mB.employeeId] } } });
       const same = await upload(wb);
       expect(same.body.counts).toMatchObject({ timed: 0, statusOnly: 0, cleared: 0 });
-      rowOf(ws, p.mB.employeeCode).getCell(colOf(ws, "2026-09-23", "IN")).value = "P"; // was A
+      const mB = rowOf(ws, p.mB.employeeCode);
+      mB.getCell(colOf(ws, "2026-09-23", "IN")).value = "P"; // was A
+      mB.getCell(colOf(ws, "2026-09-22", "IN")).value = "-"; // marked by mistake: a dash clears it
+      mB.getCell(colOf(ws, "2026-09-22", "OUT")).value = null;
+      mB.getCell(colOf(ws, "2026-09-24", "IN")).value = null; // deleting the cell's contents does NOT clear
+      mB.getCell(colOf(ws, "2026-09-24", "OUT")).value = null;
       const corrected = await upload(wb);
-      expect(corrected.body.counts).toMatchObject({ timed: 0, statusOnly: 1, cleared: 0 });
+      expect(corrected.body.counts).toMatchObject({ timed: 0, statusOnly: 1, cleared: 1 });
+      expect(corrected.body.changes).toContainEqual(expect.objectContaining({ date: "2026-09-22", before: "10:10-19:00", entry: "-", kind: "CLEARED" }));
       await as(tok.marker).post(`/muster/upload/${corrected.body.uploadId}/commit`);
-      expect(await prisma.manualAttendanceEntry.count({ where: { employeeId: { in: [p.mA.employeeId, p.mB.employeeId] } } })).toBe(before + 1);
+      expect(await prisma.manualAttendanceEntry.count({ where: { employeeId: { in: [p.mA.employeeId, p.mB.employeeId] } } })).toBe(before + 2);
       expect(await dayRow(p.mB, "2026-09-23")).toMatchObject({ status: "P" });
+      expect(await dayRow(p.mB, "2026-09-22")).toMatchObject({ status: "NM" });
+      expect(await dayRow(p.mB, "2026-09-24")).toMatchObject({ status: "P", firstIn: ist("2026-09-24", "10:30") });
     });
 
     it("a file that isn't the template is refused with a clear message", async () => {

@@ -346,6 +346,53 @@ Consequences:
   thresholds configurable) are flagged for HR rather than silently
   trusted.
 
+### 4.1a Our device (confirmed from its admin menu, 2026-10-09)
+
+The one biometric terminal in use today, read from its system information by
+the user. **The agent route (§4.1, route 1) is the primary path, and the
+real driver is built against this device.**
+
+| Property | Value |
+|---|---|
+| Platform | ZKTeco / eSSL India |
+| Serial number | `AEXY225060969` (ZK lot `AEXY225060001`) |
+| LAN address | `192.168.29.213`, subnet `255.255.255.0`. **DHCP off, so the address is fixed** |
+| Communication port | **4370** (the ZKTeco TCP/UDP protocol the sync agent speaks) |
+| Timezone | **+330 minutes (IST)**: the device records local Indian time directly |
+| Recognition | ZKFP v10.0 fingerprint, ZKFace v7 face, ZKFingerVein VX v3 finger-vein |
+| Enrolment capacity | 3,000 fingerprints, 2,000 faces (templates, not punches) |
+| Configured | 15 Dec 2022 |
+| Backup format | ZK 1.0.0.0, database `ZKDB.db` |
+
+What this settles:
+- **Agent route: viable.** Port 4370 is open and the address is static, so
+  the agent's device configuration is a fixed host and port. The agent
+  must run on a PC **inside the 192.168.29.x network**: it is a private
+  address, unreachable from AWS or from outside the office.
+- **Timezone.** The device's +330 offset is the engine's Asia/Kolkata
+  assumption, so ATTLOG timestamps are read as IST with no conversion. The
+  clock-drift warning (§4.7; Phase 2 plan §7.1) is still built: a correct
+  zone doesn't make a correct clock.
+- **Verify mode.** This device does fingerprint, face and finger-vein, so
+  ATTLOG's verify-mode column may carry values other than the sample's
+  `255`. It is stored as received and never relied on (§4.1, ATTLOG table).
+- **Enrolment capacity is not log capacity.** 3,000 fingerprints / 2,000
+  faces is how many people can be enrolled. **How many attendance records
+  the device holds before it stops or overwrites is still unknown**, and is
+  the data-loss risk. The agent keeps its pessimistic default and the
+  retention alarm (Phase 2 plan §7.1) until it is known.
+
+Still unknown, and not guessed (§14):
+- the **model name** printed on the unit or in Device Info. It decides
+  whether ADMS push (route 2) is supported;
+- the **attendance-log capacity**, and whether the device overwrites the
+  oldest records when full;
+- whether an **always-on PC** exists on the 192.168.29.x network for the
+  agent;
+- the **comm key** (the device's connection password for port 4370, often
+  0). Like the admin password, it is supplied at install and kept only in
+  the agent's local configuration, **never in the repo or docs**.
+
 ### 4.2 Data layers
 
 - **`raw_punches`** — immutable: `device_id, device_user_id, punched_at (timestamptz), direction (IN/OUT/UNKNOWN), verify_type, source (PUSH|AGENT|IMPORT|MANUAL), raw_payload, received_at`. Unique `(device_id, device_user_id, punched_at)`.
@@ -838,8 +885,9 @@ Assets management, performance/review cycles, custom report builder, scheduled r
 
 ## 14. Open questions (Claude Code: do not guess these — keep configurable and list in PROGRESS.md)
 
-- The eSSL device **model number**, and whether it supports ADMS push. Not blocking: Phases 2–3 are built against the simulator, and the device is connected last.
-- The device's **LAN IP address**, and its **admin password** (needed by the sync agent). The password is supplied at install time and stored only in the agent's local configuration or a secrets store, **never in the repo or docs**.
+- The eSSL device **model name**, and whether it supports ADMS push. Not blocking: Phases 2–3 are built against the simulator, and the device is connected last. (Platform, serial, address, port and timezone are confirmed: §4.1a.)
+- The device's **attendance-log capacity**, and whether it overwrites the oldest records when full (§4.1a; the agent's retention alarm assumes the worst until then).
+- ~~The device's LAN IP address~~ **Answered 2026-10-09: `192.168.29.213`, static, port 4370 (§4.1a).** Its **admin password and comm key** are supplied at install time and stored only in the agent's local configuration or a secrets store, **never in the repo or docs**.
 - Whether an **always-on office PC** exists to run the sync agent as a Windows service (and its Windows version), and how many devices there are.
 - Working hours and working days for the "no punches" alert (§4.7): configurable defaults until HR confirms.
 - **Employee Code vs Device User ID default (§3):** §3 pre-fills Employee Code from the Device User ID, but our device's IDs (2–126) differ from our 1000-series Employee Codes. Should Add Employee stop pre-filling, or is the 1000-series only for existing staff? Punch mapping is unaffected: it always goes through `device_user_mappings`.
@@ -849,7 +897,7 @@ Assets management, performance/review cycles, custom report builder, scheduled r
 - PT/LWF applicability per location's state.
 - Actual headcount and full location list.
 - Company domain name for the portal (e.g. `hr.company.com`) and whether DNS is on Route 53.
-- Whether the office has a static public IP (needed to restrict device push traffic).
+- Whether the office has a static public IP. Only relevant if ADMS push is used: push is outbound from the device to our server, so it works without one; a static IP would only let the server accept `/iclock/*` from the office address alone. The agent route (primary) needs no inbound access at all.
 - AWS account structure (single account with two environments, or separate staging/production accounts).
 
 ---

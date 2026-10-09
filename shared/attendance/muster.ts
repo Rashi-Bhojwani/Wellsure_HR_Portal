@@ -83,5 +83,5 @@ export const MUSTER_INPUT_HELP: Array<{ code: string; label: string }> = [
   { code: "P / A", label: "Present / absent, status only (no times)" },
   { code: "P:A / A:P", label: "Half day, status only" },
   { code: "W", label: "Worked a holiday or week-off, status only" },
-  { code: "-", label: "Clear the entry (back to NM)" },
+  { code: "-", label: "Clear the entry (back to NM); in the grid, emptying a marked cell and saving does the same" },
 ];

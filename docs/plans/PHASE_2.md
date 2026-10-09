@@ -1003,8 +1003,11 @@ backoff logic, and the Windows service mechanics (CI runner).
 
 ## 14. Open questions carried (spec §14; do not guess)
 
-- The device brand and model, and whether it supports ADMS push.
-- The device's LAN IP and admin password (supplied at install, never
+- The device's model name, and whether it supports ADMS push. *(Brand,
+  platform, serial, address, port and timezone answered 2026-10-09: spec
+  §4.1a. The agent route is primary and is built against
+  `192.168.29.213:4370`.)*
+- The device's admin password and comm key (supplied at install, never
   stored in the repo).
 - Whether an always-on office PC exists for the agent (Windows version)
   and how many devices there are.
@@ -1015,8 +1018,9 @@ backoff logic, and the Windows service mechanics (CI runner).
   confirms).
 - **Still open from HR (D3):** grace minutes, half-day and full-day
   minimum hours, and whether any shift other than GEN exists.
-- The device's real log capacity (retention), once the model is known
-  (§7.1).
+- The device's real attendance-log capacity (retention) and whether it
+  overwrites when full (§7.1). Its enrolment capacity (3,000 fingerprints,
+  2,000 faces) is known and is a different number.
 - *(Answered 2026-10-08:*
   - *the no-device branches are SPN and Wellsure 2, marked by one
     manager;*
@@ -1310,6 +1314,18 @@ HR nor the spec covers them; listed for review):
    marker.
 3. **A blank cell in an upload leaves the day as it is; `-` clears it.**
    **`HD` alone is refused** ("which half? P:A or A:P").
+   *Follow-up (user, 2026-10-09: "confirm there's a way to actively clear a
+   day, and that it's obvious"):*
+   - the template says so in a bold red line above the header: "To clear a
+     day marked by mistake, type - (a dash) in its IN cell. Deleting what's
+     in the cell does NOT clear it.";
+   - the upload panel shows the same as a warning;
+   - the preview lists each change as *Now → Becomes*, with a clear shown in
+     red as "clears the day (back to NM)" next to what it removes;
+   - in the grid, emptying a marked cell and saving clears it too (the
+     cell shows "clear" until saved). Only the upload keeps blank = leave
+     as is, so a partly filled sheet can't wipe anything;
+   - tested: a dash clears; an emptied upload cell changes nothing.
 4. **An IN with no OUT is accepted.** It counts like a single punch: absent
    with `MISSING_PUNCH`, per the engine rule HR is confirming. The muster
    marks it with a red corner, counts it in a "1×" column, and a correction
@@ -1358,3 +1374,122 @@ Also as built:
   files; reminder (quiet on a Sunday).
 - `managerReach.test.ts`: 7 muster routes, the manager's branch only.
 - `finalisation.test.ts` (9).
+
+### P2-E build design (2026-10-09, written before building)
+
+§8 stands. P2-E also takes the **forgot-to-punch-out request**, brought
+forward from Phase 3 (user, 2026-10-09). The user's words: "the employee
+raises it from their own attendance view, their manager or HR approves,
+and the day recomputes with the corrected time and an override marker.
+The fuller regularization workflow can still come in Phase 3."
+
+**The forgot-to-punch-out request (the first kind of regularization):**
+- **`regularization_requests`** (the spec's table), with `kind =
+  MISSING_PUNCH` only. Phase 3 adds kinds to the same table, keys and
+  screens. Columns:
+  - employee, date;
+  - `missing` (`OUT`, the usual case, or `IN`), `time` ("HH:MM");
+  - `reason` (required);
+  - status `PENDING` → `APPROVED` / `REJECTED` / `CANCELLED`;
+  - raised by, decided by and at, decision note.
+
+  One pending request per employee-day (partial unique index). Every
+  change is audited.
+- **Who can raise one:** the employee, for **their own day**, when that day
+  qualifies on every count:
+  - device capture, with exactly one usable punch (`MISSING_PUNCH`);
+  - not finalised;
+  - in the current or previous attendance cycle.
+
+  Manual-capture days are fixed by their marker in the muster. A day with
+  no punches at all is Phase 3's full regularization.
+- **The time must make sense:**
+  - an OUT comes after the recorded punch, an IN before it;
+  - it falls inside the shift's punch window;
+  - it is more than the near-duplicate window away from the punch.
+- **Who decides:**
+  - the key `attendance.regularization.approve`, for an employee in their
+    data scope (TEAM: their reports; ALL: everyone), never their own
+    request;
+  - `attendance.regularization.view` shows the queue without deciding.
+    These are spec §2.2's "two grantable keys, TEAM scope, IDOR-tested",
+    created now;
+  - both are held by HR_ADMIN and HR_EXECUTIVE; managers only by grant.
+    The seed grants them to Karan (`1002`) for the demo.
+- **Approval recomputes the day.**
+  - The engine gets the approved time as one more point on the day. It is
+    a *corrected time*, never a raw punch: raw punches stay immutable.
+    The engine then works the day out exactly as if a second punch
+    existed.
+  - The day records `override_kind = MISSING_PUNCH_CORRECTION` and the
+    request id. That is the override marker, shown on the calendar, the
+    day detail, the muster and its export ("✎ corrected, approved by …").
+  - A real punch that arrives later (agent catch-up) simply joins the
+    points.
+- **Finalisation gate:** a pending request in the period is a new blocker
+  (`PENDING_REGULARIZATIONS`).
+- **Notifications and live events:**
+  - raising notifies the employee's reporting manager if they hold the
+    approve key; HR sees every pending request in its queue;
+  - a decision notifies the employee;
+  - `regularization.submitted` / `.decided` (spec §8) refresh the queues
+    and the employee's view.
+- **Where it shows:**
+  - the Tasks inbox (new source `REGULARIZATION_APPROVAL`) and the
+    Request Hub (new type `REGULARIZATION`), the seams those modules left
+    for it;
+  - managers decide in To do → Review (a new "Attendance" tab);
+  - HR decides in Workforce → Attendance → Regularizations.
+
+**Attendance Info** (employee: Attendance → Attendance Info; admin: Workforce
+→ Attendance → Attendance Info, any employee in `attendance.view` scope,
+read-only):
+- **Month calendar** (previous/next):
+  - each day has a colour by status, the status code (`OFF` for a week-off,
+    as in the muster) and the shift code;
+  - markers: device or manual entry, status only, corrected, missing punch.
+- **Stats cards:**
+  - average work hours and average actual hours (days with times);
+  - late days;
+  - LOP days. *Decided here:* LOP replaces greytHR's "penalty days", which
+    would always be 0, since HR confirmed there are no penalties.
+- **Exception banner:** "N exception days" (any exception flag), listing
+  the kinds; clicking selects the first.
+- **Day panel:**
+  - the exception explained in words;
+  - shift name, code, timings, policy, "Processed on";
+  - First In / Last Out / Late / Early / Total / Break / Actual / In shift /
+    Shortfall / Excess;
+  - status details:
+    - status and source;
+    - for manual days, who entered it and when, and whether it is status
+      only;
+    - the correction, if any;
+  - half statuses;
+  - **the day's raw punches** (first and last marked, near-duplicates shown
+    collapsed, outside-window and flagged ones labelled);
+  - the forgot-to-punch-out block.
+- **Live:** `punch.received` and `attendance.updated` refresh the calendar
+  and the open day within seconds.
+
+**Who Is In?** (Workforce → Attendance, `attendance.view`):
+- today, by branch and department;
+- it computes today for everyone shown on first load, then updates live
+  (`punch.received.batch`, `attendance.updated`);
+- the honest groups from §8:
+  - **arrived** (first punch time, late flag);
+  - **not yet arrived**;
+  - **away** (leave, holiday, week-off);
+  - **manual capture** (entered IN, "status only", or "not marked yet");
+- a note says it shows who has punched, not who has left.
+
+**Routes:**
+- self: `GET /api/attendance/me/month`, `GET /api/attendance/me/day/:date`;
+- self: `POST /api/attendance/me/regularizations` and its `/:id/cancel`;
+- admin, data scope: `GET /api/attendance/employees/:employeeId/month` and
+  `/day/:date`;
+- admin: `GET /api/attendance/who-is-in`;
+- scoped, manager-reachable, IDOR-tested:
+  - `GET /api/attendance/regularizations`;
+  - `POST /api/attendance/regularizations/:id/approve`;
+  - `POST /api/attendance/regularizations/:id/reject`.
