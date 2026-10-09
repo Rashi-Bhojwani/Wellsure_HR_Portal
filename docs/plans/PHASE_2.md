@@ -735,8 +735,10 @@ As the user described greytHR's Attendance Muster:
   - `connect`, `readSince(cursor)`, `deviceTime`, `info`, `disconnect`;
   - implementations:
     - `SimulatedDriver` (the simulator);
-    - `Zk4370Driver` over `node-zklib` or `zkteco-js`, chosen at build
-      after evaluating both against a protocol-level fake (§11);
+    - `Zk4370Driver`. **Decided 2026-10-09 (D-F1): our own read-only
+      implementation of the protocol, not `node-zklib` or `zkteco-js`.**
+      Neither library supports the comm key, and `zkteco-js` derives punch
+      times from the PC's timezone (see "P2-F build design" at the end);
   - everything else in the agent is tested through `SimulatedDriver`.
 - **Windows service:**
   - install/uninstall scripts, start on boot, restart on failure, log
@@ -833,7 +835,7 @@ As the user described greytHR's Attendance Muster:
 | **P2-C** | Rules engine (pure function, loader, writer): sessions and the scheduled-break deduction, halves, `daily_attendance`, recompute jobs (debounced, bulk), nightly 02:00 and catch-up, **Process Attendance (re-process a range from raw data before lock)**, the real `AttendanceLeaveSink`, holiday/assignment triggers, sources, `NM`, the exhaustive table tests |
 | **P2-D** | Manual entry: `TIMED` and `STATUS_ONLY` entries (append-only) through the engine; **the editable muster** (cycle selector, totals, legend, single-employee filter, Excel export); **muster upload** via the Import Center; bulk "mark all present"; reminders; branch scope enforced and IDOR-tested |
 | **P2-E** | Screens: employee and admin Attendance Info with day detail, Who Is In?, live events, source markers everywhere |
-| **P2-F** | `biometric-agent`: the driver interface, SimulatedDriver, the Zk4370Driver (protocol-tested), the outbox and cursor, backoff, heartbeat with **clock offset and retention state**, the **retention guard**, the single-executable build, NSSM service scripts with **Credential Manager** for the key, the CI Windows-runner test, `INSTALL.md` (install, upgrade, uninstall) |
+| **P2-F** | `biometric-agent`: the driver interface, SimulatedDriver, the Zk4370Driver (protocol-tested), the outbox and cursor, backoff, heartbeat with **clock offset and retention state**, the **retention guard**, the single-executable build, NSSM service scripts with **Credential Manager** for the key, the CI Windows-runner test, `INSTALL.md` (install, upgrade, uninstall). **Split (D-F5) into F1** (the agent, our read-only driver, the server side, verified end to end locally) **and F2** (Windows packaging, the service, Credential Manager, the Windows CI job, `INSTALL.md`); see "P2-F build design" |
 | **P2-G** | Punch simulator: scenarios with intended outcomes (including manual-capture branches and `TIMED` entries), the three routes, replay (500 × month) with a golden diff, drip, production refusal, the dev roster endpoint |
 | **P2-H** | Device health: checks, incidents (silence, agent silence, morning check, **clock drift, retention risk**), alerts and recovery, the Devices screen and charts |
 | **P2-I** | Acceptance and review: the four §12 gates measured and recorded, **the performance baseline committed as a regression guard** (D5), the docs (GETTING_STARTED, DEPLOYMENT, PROGRESS) and a Phase 2 review |
@@ -884,10 +886,20 @@ backoff logic, and the Windows service mechanics (CI runner).
 **What we're taking on faith, exactly:**
 
 1. **The 4370 protocol against our actual model and firmware.** The
-   driver is built on an open-source ZK library and tested against a
-   protocol-level fake, but not against our machine. Unknowns:
-   - whether the library speaks our firmware's variant;
+   driver is our own read-only implementation (D-F1), checked against
+   pyzk's reference behaviour and a protocol-level fake that `zkteco-js`
+   reads correctly, but not against our machine. Unknowns:
+   - whether our firmware speaks the protocol exactly as documented
+     (TCP and UDP framing, the buffered read, the 40-byte record);
    - the comm-password handshake;
+   - **whether reading the log without pausing the device is consistent
+     on our firmware, and never stops anyone punching** (user,
+     2026-10-09: "the one failure employees would notice immediately").
+     The agent never pauses the device (P2-F rule 1), so a punch made
+     mid-read is simply picked up on the next cycle. What to watch on
+     connection day is in "P2-F build design: connection day";
+   - how the device's record columns map onto ATTLOG's (status, verify
+     mode, workcode). They are stored, never relied on;
    - how the device returns logs: all of them each time (so the cursor
      filters) or only new ones;
    - its log capacity and whether it overwrites when full. **If the agent
@@ -1564,3 +1576,253 @@ Also as built:
   re-raise; cancel; Who Is In groups;
 - 4 engine tests for corrections;
 - 3 reach cases in `managerReach.test.ts`.
+
+### P2-F build design (2026-10-09, approved, written before building)
+
+§7.1 stands except where this section changes it. The user approved
+D-F1 to D-F5 and the rules below on 2026-10-09.
+
+**What the library evaluation found (D-F1).** Both candidates were read
+in full (`node-zklib` 1.3.0, `zkteco-js` 1.7.2):
+- **Neither supports the comm key** (the `CMD_AUTH` handshake). If our
+  device has a non-zero comm key, neither can connect.
+- `zkteco-js` builds each punch time as a JavaScript `Date` in **the PC's
+  own timezone**, then stringifies it, so punch times would depend on how
+  the office PC's clock is set ("wrong attendance that nobody could
+  trace", user).
+- `zkteco-js` treats 1 s of silence as "the read has finished", so a slow
+  read could come back cut short without an error. It also logs to the
+  console throughout.
+- `node-zklib`: last released 2022, an older copy of the same code.
+
+So `Zk4370Driver` is **our own read-only implementation** of the ZKTeco
+protocol (TCP, with UDP as a fallback), about 500 lines. Two independent
+checks keep it honest, since a fake built from the same reading of the
+protocol could share its mistakes:
+- the comm key, checksum, time encoding and record decoding are checked
+  against **test vectors produced by pyzk** (the widely used Python
+  implementation), recorded with their provenance;
+- the protocol-level fake device must be readable by **`zkteco-js`**
+  (installed as a test-only dependency). That proves the fake behaves
+  like the devices that library is used with.
+
+**Rule 1, the most important (user: "a structural guarantee with a
+test"): the agent never changes anything on the device.** The device is
+live, greytHR still reads it at month end, and people punch on it all
+day. So:
+- the driver can send only the commands on a fixed allowlist: connect,
+  authenticate, exit, read options (serial, platform), firmware version,
+  record counts, device time, and the buffered read of the attendance log
+  with its free. **No command that writes exists in the driver at all**:
+  no clearing the log, setting the clock, disabling the device, or
+  touching users;
+- the send path refuses anything outside the allowlist, and a test
+  asserts it;
+- the fake device fails any test in which it receives a command outside
+  the allowlist;
+- the agent **never pauses the device** while reading (libraries and
+  examples often do), so nobody is ever blocked from punching. A punch
+  made mid-read is picked up on the next cycle;
+- `INSTALL.md` (F2) says plainly that the agent cannot change or disrupt
+  the machine.
+
+**The cursor (D-F2): a position plus a fingerprint, never a timestamp.**
+- The device returns its whole log, in storage order, on every read. The
+  agent remembers how many records it has taken, and a fingerprint (user
+  ID, time, status, verify mode) of the last one. Someone correcting the
+  device clock backwards would make a timestamp cursor skip a week of new
+  punches silently.
+- **Normal case:** the count grew and the record at the remembered
+  position still matches, so the new records are those after it.
+- **Log cleared, or wrapped when full:** the remembered record isn't where
+  it was. The agent looks for it from the end. Found: everything after it
+  is new. Not found: every record in the log is sent again; the server's
+  exact-duplicate key drops the ones it has.
+- **Cheap polling:** the agent asks for the record count first (one small
+  command). The full log is read only when the count changed, or when the
+  log is full (a wrapping log can change without its count changing).
+- **The outbox:** new records are written to an on-disk outbox (one file
+  per batch of at most 1,000 lines, written and flushed, then renamed into
+  place) **before** the cursor moves. An outbox file is deleted only when
+  the API acknowledges it. So a long API outage can't leave punches only
+  on the device, where they could be overwritten; a crash at any step
+  re-sends rather than loses.
+
+**"Sync punches from" (D-F3).** Each device gets a date on the Devices
+screen, defaulting to the day it was registered. The agent never sends a
+punch dated before it, and moves its cursor past such records. The
+device has been recording since Dec 2022; without this, the first sync
+would send years of history and flood the Flagged queue (anything older
+than 45 days is flagged). **Moving the date earlier** makes the agent
+read the whole log again and send from that date; the server drops exact
+duplicates. The screen says so before saving.
+
+**Accounts and secrets (D-F4, built in F2).** Credential Manager stores
+secrets per Windows user, so the service runs as its own low-privilege
+local account (not LocalSystem). The agent key **and each device's comm
+key** go in that account's Credential Manager; `config.json` holds no
+secrets. On Linux (development, CI) secrets come from environment
+variables.
+
+**The commit split (D-F5).**
+
+*F1: the agent, the driver, the server side.*
+- **Shared contract** `shared/attendance/agentProtocol.ts`: the punches
+  post, the heartbeat request and reply, and their limits, used by both
+  the backend's validators and the agent.
+- **Schema** (one migration):
+  - `devices.sync_from` (date; existing devices get the day they were
+    created), `devices.retention_days` (3) and `devices.retention_records`
+    (20,000), labelled "pessimistic until the device model is known";
+  - `devices.agent_report` (the agent's latest report for that device)
+    and `devices.agent_report_at`;
+  - the setting `attendance.deviceHealth`: warning at 50% and alarm at 75%
+    of the retention window, log nearly full at 90%, clock drift beyond
+    120 s. Created by the migration on every database.
+- **Heartbeat:**
+  - the reply carries, per device assigned to the agent: serial, name,
+    timezone, sync-from date, retention values and the simulated flag,
+    plus the thresholds. A change in the app reaches the agent within one
+    cycle, with no restart;
+  - the agent reports, per device: its state (`OK`, `UNREACHABLE`,
+    `SERIAL_MISMATCH`, `AUTH_FAILED`, `NOT_ASSIGNED`,
+    `UNSUPPORTED_FORMAT`), last successful read, last error, the log count
+    and capacity the device reports, firmware and platform, the device
+    clock's offset from the server (positive = device ahead), the outbox
+    backlog and the retention state; and for itself: version, host, start
+    time, total backlog, last successful post and last error;
+  - stored on each assigned device (`agent_report`) and on the agent (as
+    before);
+  - a heartbeat emits `device.status` (signal only) to
+    `perm:attendance.devices.manage`, so the Devices screen updates live.
+- **Clock drift is visible to HR, not just in the agent's logs** (user,
+  2026-10-09: "nobody would think to look"):
+  - the Devices screen shows each device's offset, and a **warning banner**
+    for any device beyond the threshold, saying the clock must be set from
+    the device's own menu (never automatically);
+  - **Admin Home** shows the same warning to holders of
+    `attendance.devices.manage`, next to the existing alerts, together
+    with any device whose retention state is at warning or alarm (that is
+    punches at risk of being overwritten);
+  - P2-H adds the `CLOCK_DRIFT` incident, the in-app and email
+    notification to the alert list, and the drift chart.
+- **Devices screen:** columns for the agent's report (state, last read,
+  clock offset, retention, log count and capacity, backlog); "Not
+  configured on the agent PC" for a device assigned to an agent whose
+  heartbeat doesn't include it; the device form gains sync-from and the
+  two retention fields. Changes are audited.
+- **System Settings → Attendance → Device health** (`settings.manage`,
+  audited): the four thresholds. P2-H adds the silence and morning-check
+  settings to the same card.
+- **The agent** (`biometric-agent/src`):
+  - `config`: `config.json` validated with Zod (API URL, poll interval
+    30 s, data folder, secrets source, devices: serial, host, port 4370,
+    transport `auto`/`tcp`/`udp`, driver `zk4370`/`simulated`). HTTPS is
+    required except for localhost;
+  - `device`: the `DeviceDriver` interface; `zk/` (packet framing,
+    checksum, comm key, time and record decoding, TCP and UDP transports,
+    the driver); `SimulatedDriver` (in memory; P2-G drives it);
+  - `sync`: the per-device reader, the cursor, the outbox, the sender, the
+    heartbeat, the retention guard and the clock-offset estimate;
+  - `api`: the HTTPS client;
+  - commands: `run`, `diagnose` (connects, prints serial, firmware,
+    platform, log count and capacity, the clock and its offset; sends
+    nothing), `check-config`, `version`;
+  - a development fake device (`npm run fake-device --prefix
+    biometric-agent`) that speaks the real protocol, so the whole route
+    can be run locally;
+  - logs are JSON lines on stdout.
+- **How each cycle runs** (one loop per device, every 30 s, so a device
+  that is down never holds up the others):
+  1. connect (with the comm key if one is stored);
+  2. **confirm the device's own serial matches the configuration**; on a
+     mismatch, read and send nothing (a wrong IP would otherwise put one
+     branch's punches on another);
+  3. ask for the record count; read the full log only if needed;
+  4. turn new records into ATTLOG lines with the same shared code the
+     server parses with (`shared/attendance/attlog.ts`), skipping any
+     before the sync-from date;
+  5. write them to the outbox, then move the cursor;
+  6. read the device clock; disconnect.
+
+  Separately, the sender drains the outbox in order (backoff 5 s doubling
+  to a 5-minute cap, with jitter), and a heartbeat goes every cycle. If
+  the server rejects the agent key (401) or a device (403), the agent
+  keeps reading into the outbox and stops sending until it is fixed.
+- **The retention guard**, per device: the time since its last successful
+  read against `retention_days` gives `WARNING` at 50% and `RISK` at 75%;
+  the log count against capacity (as the device reports it, else
+  `retention_records`) gives `LOG_NEARLY_FULL` at 90%. The last values
+  the server sent are kept on disk, so the guard works while the API is
+  unreachable, which is when it matters. (F2 adds the Windows event-log
+  entry on each change of state.)
+- **Tests:**
+  - agent: pyzk vectors; the fake device over TCP and UDP (comm key,
+    direct and chunked reads, a log cleared or wrapped, a dropped
+    connection mid-read, a skewed clock); `zkteco-js` reading the fake;
+    the allowlist; the cursor in every case above; a crash at each step
+    losing nothing; an API outage and catch-up in order; backoff; 401 and
+    403; serial mismatch; sync-from (and moving it earlier); retention
+    and log-full states; HTTPS required; the heartbeat contract;
+  - backend: the heartbeat reply and stored reports, `device.status`,
+    the device fields, the thresholds setting, the Admin Home warnings,
+    audit, the route inventory.
+- **Verification:** a fresh devcheck migrate and seed; backend, frontend
+  and agent suites; lint and typecheck; live, the real agent reads the
+  fake device and Arjun's calendar and Who Is In update in two browsers;
+  the Devices screen and Admin Home show a skewed clock and a retention
+  warning live; an API outage drains afterwards; an agent killed mid-run
+  resumes with nothing lost.
+
+*F2: Windows packaging and the service.*
+- A single executable (Node's single-executable application, built on
+  the CI Windows runner).
+- A release zip: the executable, NSSM (downloaded in CI and checked
+  against a pinned SHA-256, never committed), `install.ps1`,
+  `upgrade.ps1`, `uninstall.ps1`, an example `config.json`.
+- `install.ps1`: creates the service account, stores the secrets in its
+  Credential Manager, registers the event-log source, configures NSSM
+  (start on boot, restart on failure, log rotation), and warns if the PC
+  is set to sleep.
+- The agent writes to the Windows event log on every change of retention
+  state, and when the clock drifts beyond the threshold.
+- **CI on a Windows runner:** install the real executable; check it runs
+  as the dedicated account and that punches from the fake device reach a
+  fake API; kill the process and see it restart; restart the service; cut
+  the API and watch the outbox drain; uninstall cleanly. (A runner can't
+  reboot, so restart-on-failure plus automatic start stand in for
+  "survives a reboot".)
+- `biometric-agent/INSTALL.md`: install, upgrade and uninstall for
+  someone who isn't the user; a plain statement that the agent cannot
+  change or disrupt the device; rotating the key; `diagnose`; what the
+  retention, log-full and drift warnings mean; setting the device clock
+  by hand.
+
+**Rules decided while designing** (approved 2026-10-09):
+1. The agent never changes anything on the device (above).
+2. Log-nearly-full has its own threshold (90%). 50%/75% applied to how
+   full the log is would alarm permanently on a device recording since
+   2022.
+3. A simulated driver is allowed only for a device the server marks as
+   simulated, so a production PC can never send made-up punches.
+4. HTTPS is required except for localhost.
+5. Clock drift is shown and never corrected.
+
+**Connection day: what to watch** (§11.1; told to the user on the day).
+The one failure employees would notice at once is the device refusing
+or delaying punches while the agent reads it. On the day:
+1. run `diagnose` first and note the log count, capacity, firmware and
+   the clock offset;
+2. while the agent runs its first full read (the slowest one, since it
+   reads the whole log), have someone punch repeatedly at the device and
+   confirm each is accepted at once, with no "working…" or busy screen;
+3. confirm those punches arrive in the next cycle or the one after;
+4. watch the agent's log for read timeouts or retried chunks over the
+   first hour; repeated ones mean the device is slow to serve the log,
+   and the poll interval or chunk size is the setting to change;
+5. compare a morning's punches with greytHR's view of the same device
+   before relying on them.
+
+If reading ever blocks punching, stop the agent (stopping the service is
+instant and changes nothing on the device), and the fix is in the driver
+alone.

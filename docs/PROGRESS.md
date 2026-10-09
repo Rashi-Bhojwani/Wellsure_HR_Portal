@@ -4180,7 +4180,14 @@ build design" and "As built: P2-D", including the **12 rules decided here**.
   entirely and when **the device was down**. An outage hits every
   device-captured person at a branch at once, so Phase 3's plan must handle
   it in bulk.
-- P2-F's plan is with the user for review; not built.
+- **P2-F design approved** (user, 2026-10-09: D-F1 to D-F5 and five rules),
+  written into `PHASE_2.md` ("P2-F build design") before building. Our own
+  read-only ZK driver (neither library supports the comm key); a
+  position-plus-fingerprint cursor with an on-disk outbox; a "Sync punches
+  from" date per device; a dedicated Windows service account with secrets in
+  Credential Manager; split into F1 (agent, driver, server) and F2 (Windows
+  packaging). Reading without pausing the device is added to the "unproven
+  until connection" list, with what to watch on the day.
 
 ## Open questions
 
