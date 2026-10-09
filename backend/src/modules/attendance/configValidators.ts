@@ -115,3 +115,17 @@ export const musterEntriesSchema = z.object({
 });
 export const markPresentSchema = z.object({ date: z.iso.date(), locationId: z.string().min(1) });
 export const musterTemplateQuerySchema = z.object({ locationId: z.string().min(1), cycleStart: z.iso.date().optional() });
+
+// ── Attendance Info, Who Is In, regularization (P2-E) ──
+export const monthQuerySchema = z.object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Use YYYY-MM") });
+export const dateParamsSchema = z.object({ date: z.iso.date() });
+export const employeeDateParamsSchema = z.object({ employeeId: z.string().min(1), date: z.iso.date() });
+export const whoIsInQuerySchema = z.object({ locationId: z.string().min(1).optional(), departmentId: z.string().min(1).optional() });
+export const raiseRegularizationSchema = z.object({
+  date: z.iso.date(),
+  missing: z.enum(["IN", "OUT"]),
+  time: time,
+  reason: z.string().trim().min(3, "Say what happened (e.g. forgot to punch out, left at 7 pm)").max(500),
+});
+export const regularizationQueueQuerySchema = z.object({ status: z.enum(["PENDING", "APPROVED", "REJECTED", "CANCELLED"]).optional() });
+export const regularizationDecisionSchema = z.object({ note: z.string().trim().max(500).optional().nullable() });

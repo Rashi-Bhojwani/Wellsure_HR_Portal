@@ -57,6 +57,7 @@ export interface MusterCell {
   flags: string[];
   statusOnly: boolean;
   missingPunch: boolean;
+  corrected: boolean; // an approved forgot-to-punch request added a time (P2-E)
   workedOnOffDay: boolean;
   provisional: boolean;
   locked: boolean;
@@ -218,6 +219,7 @@ function cellFor(s: Scoped, employeeId: string, date: string, row: DailyAttendan
     flags: shown ? row.exceptionFlags : [],
     statusOnly: !!shown && statusOnly,
     missingPunch: !!shown && row.exceptionFlags.includes("MISSING_PUNCH"),
+    corrected: !!shown && row.overrideKind === "MISSING_PUNCH_CORRECTION",
     workedOnOffDay: !!shown && row.workedOnOffDay,
     provisional: !!shown && row.provisional,
     locked: !!row?.isLocked,
@@ -474,7 +476,7 @@ export async function exportMuster(viewer: Viewer, q: MusterQuery) {
     code: r.employeeCode,
     name: r.name,
     branch: r.branch ?? "",
-    ...Object.fromEntries(r.cells.map((c) => [c.date, c.code ? `${c.code}${c.statusOnly ? "*" : ""}${c.missingPunch ? "!" : ""}` : ""])),
+    ...Object.fromEntries(r.cells.map((c) => [c.date, c.code ? `${c.code}${c.statusOnly ? "*" : ""}${c.missingPunch ? "!" : ""}${c.corrected ? "~" : ""}` : ""])),
     ...r.totals,
   }));
   const buffer = await buildXlsx([
@@ -485,7 +487,7 @@ export async function exportMuster(viewer: Viewer, q: MusterQuery) {
       footer: [
         `Attendance muster, ${m.cycle.label} (${m.cycle.start} to ${m.cycle.end}). Exported ${m.today}.`,
         ...m.legend.map((l) => `${l.code}: ${l.label}`),
-        "* status only, no times   ! one time only (missing punch)",
+        "* status only, no times   ! one time only (missing punch)   ~ corrected: a forgot-to-punch request was approved",
         "Paid days = days in the cycle so far less LOP; NM and NS days count 0 until resolved.",
       ],
     },

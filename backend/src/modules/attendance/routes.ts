@@ -6,6 +6,7 @@ import { validate } from "../../middleware/validate";
 import * as config from "./configController";
 import * as processRuns from "./processController";
 import * as manual from "./manual/controller";
+import * as info from "./info/controller";
 import {
   assignmentChangeSchema,
   assignmentListQuerySchema,
@@ -23,6 +24,13 @@ import {
   processScopeQuerySchema,
   finalisationReadinessQuerySchema,
   markPresentSchema,
+  monthQuerySchema,
+  dateParamsSchema,
+  employeeDateParamsSchema,
+  whoIsInQuerySchema,
+  raiseRegularizationSchema,
+  regularizationQueueQuerySchema,
+  regularizationDecisionSchema,
   musterEntriesSchema,
   musterQuerySchema,
   musterTemplateQuerySchema,
@@ -99,3 +107,22 @@ attendanceRouter.post("/muster/mark-present", canMark, validate({ body: markPres
 attendanceRouter.get("/muster/template", canMark, validate({ query: musterTemplateQuerySchema }), manual.template);
 attendanceRouter.post("/muster/upload", canMark, musterUpload.single("file"), manual.previewUpload);
 attendanceRouter.post("/muster/upload/:id/commit", canMark, validate({ params: idParamsSchema }), manual.commitUpload);
+
+// Attendance Info, Who Is In? and the forgot-to-punch request (P2-E).
+// Own attendance needs no key (always SELF). Anyone else's needs
+// attendance.view, narrowed to data scope in the service (404 outside).
+// Regularization: the two manager-grantable keys, TEAM scope, never one's own.
+attendanceRouter.get("/me/month", validate({ query: monthQuerySchema }), info.myMonth);
+attendanceRouter.get("/me/day/:date", validate({ params: dateParamsSchema }), info.myDay);
+attendanceRouter.get("/me/regularizations", info.mine);
+attendanceRouter.post("/me/regularizations", validate({ body: raiseRegularizationSchema }), info.raise);
+attendanceRouter.post("/me/regularizations/:id/cancel", validate({ params: idParamsSchema }), info.cancel);
+const canViewAttendance = requirePermission("attendance.view");
+attendanceRouter.get("/employees/:employeeId/month", canViewAttendance, validate({ params: employeeParamsSchema, query: monthQuerySchema }), info.employeeMonth);
+attendanceRouter.get("/employees/:employeeId/day/:date", canViewAttendance, validate({ params: employeeDateParamsSchema }), info.employeeDay);
+attendanceRouter.get("/who-is-in", canViewAttendance, validate({ query: whoIsInQuerySchema }), info.whoIsIn);
+const canSeeRegularizations = requireAnyPermission("attendance.regularization.view", "attendance.regularization.approve");
+const canDecideRegularizations = requirePermission("attendance.regularization.approve");
+attendanceRouter.get("/regularizations", canSeeRegularizations, validate({ query: regularizationQueueQuerySchema }), info.queue);
+attendanceRouter.post("/regularizations/:id/approve", canDecideRegularizations, validate({ params: idParamsSchema, body: regularizationDecisionSchema }), info.approve);
+attendanceRouter.post("/regularizations/:id/reject", canDecideRegularizations, validate({ params: idParamsSchema, body: regularizationDecisionSchema }), info.reject);

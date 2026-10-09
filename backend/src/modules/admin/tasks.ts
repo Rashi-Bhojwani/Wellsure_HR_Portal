@@ -36,7 +36,7 @@ export async function getTaskCounts(viewer: LeaveViewer): Promise<TaskCounts> {
     leaveMonitor = Math.max(0, orgWidePending - leaveReview);
   }
 
-  const regularization = await getRegularizationRequestSink().getPendingCounts(viewer.employeeId, viewer.roleCodes);
+  const regularization = await getRegularizationRequestSink().getPendingCounts(viewer);
 
   const reviewByType: TaskCountsByType[] = [{ type: "LEAVE", label: "Leave", count: leaveReview }];
   if (regularization.review > 0) reviewByType.push({ type: "REGULARIZATION", label: "Attendance Regularization", count: regularization.review });

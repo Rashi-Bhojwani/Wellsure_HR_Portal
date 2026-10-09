@@ -849,7 +849,8 @@ What's left after Phase 2:
 - the Exceptions screen with bulk resolve;
 - Manual Override for device days;
 - Shift Override (single dates);
-- **Regularization** (request, approval queue, bulk; managers by grant,
+- **Regularization** beyond the forgot-to-punch request P2-E brought
+  forward (request, approval queue, bulk; managers by grant,
   as recorded);
 - **Period Finalisation**:
   - locks `daily_attendance` for a payroll month;
@@ -1493,3 +1494,62 @@ read-only):
   - `GET /api/attendance/regularizations`;
   - `POST /api/attendance/regularizations/:id/approve`;
   - `POST /api/attendance/regularizations/:id/reject`.
+
+### P2-E (2026-10-09)
+
+Built as the design above, including the forgot-to-punch request brought
+forward from Phase 3. **Rules decided here** (listed for review):
+
+1. **Which days can be corrected:** only days with exactly one punch, in the
+   current or previous attendance cycle, not finalised. A day with no
+   punches at all, or an older one, waits for Phase 3's full
+   regularization.
+2. **The corrected time is a point, not a raw punch.** The engine takes
+   first and last over all points. A corrected IN is therefore subject to
+   lateness exactly like a punched one.
+3. **One approved correction per day.** Once a day is corrected, no further
+   request can be raised for it (a partial unique index enforces it).
+4. **Notifications:** only the reporting manager is notified, and only if
+   they hold the approve key. HR finds requests in its queue and in Admin
+   Home's task counts, without a notification each (to avoid noise).
+5. **Rejecting needs a reason in the UI** (the employee is told why). The
+   API accepts an empty note.
+6. **Workflow Delegates don't extend regularization reach** (they cover
+   leave only, as built in E3). A manager's queue is their reporting tree.
+7. **A manager deciding a request sees the recorded punch and the shift in
+   the queue row.** They don't get the team's calendars: `attendance.view`
+   stays non-grantable.
+8. **Attendance Info is by calendar month**, like greytHR's. The muster is
+   by attendance cycle, and the two are the same while the cycle is the
+   calendar month.
+9. **Stats cards:** "LOP days" replaces greytHR's "penalty days" (no
+   penalties exist). The exception banner counts missing punch, below the
+   half-day minimum, shortfall, no shift and a flagged clock. Lateness is
+   recorded but is not an exception.
+10. **Who Is In works lateness out from the first punch** (shift start plus
+    grace), so it is shown even when the day has only that punch.
+11. **Admin Attendance Info is read-only:** nobody raises a request on
+    someone else's behalf in this minimal version.
+
+Also as built:
+- the override marker is `daily_attendance.override_kind =
+  MISSING_PUNCH_CORRECTION` plus `override_ref` (the request). It shows as ✎
+  on the calendar, "Corrected" in the day panel, `~` in the muster export
+  and in the muster tooltip;
+- `RegularizationRequestSink` (Admin Home task counts), the Tasks inbox and
+  the Request Hub got their regularization sources, through the seams
+  Phase 5 left for them;
+- a pending request is a finalisation blocker;
+- the keys are in the HR role defaults (`systemRoles.ts`) and in the
+  migration (for existing databases). Karan (`1002`) is seeded with both;
+- live: `useAttendanceRealtime` refreshes any attendance screen on
+  `punch.received`, `attendance.updated` and `regularization.*`.
+
+**Tests:**
+- `attendanceInfo.test.ts` (13): month, day, punch roles; admin view and
+  refusals; eligibility; time sanity; raise with notification, tasks, hub and
+  counts; finalisation blocker; queue scope; IDOR and own-request refusals;
+  approval recompute and marker with the raw punch untouched; reject and
+  re-raise; cancel; Who Is In groups;
+- 4 engine tests for corrections;
+- 3 reach cases in `managerReach.test.ts`.

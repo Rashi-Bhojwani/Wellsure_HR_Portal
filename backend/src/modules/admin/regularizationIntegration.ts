@@ -9,8 +9,17 @@ export interface RegularizationTaskCounts {
   monitor: number; // pending regularization requests org-wide the viewer can see but isn't the approver for
 }
 
+export interface RegularizationViewer {
+  employeeId: string;
+  roleCodes: string[];
+  dataScope: "SELF" | "TEAM" | "ALL";
+  permissions: Set<string>;
+}
+
+// P2-E: the real sink (modules/attendance/regularization/sink.ts) is installed
+// at process start by registerAttendanceEngine.
 export interface RegularizationRequestSink {
-  getPendingCounts(viewerEmployeeId: string, roleCodes: string[]): Promise<RegularizationTaskCounts>;
+  getPendingCounts(viewer: RegularizationViewer): Promise<RegularizationTaskCounts>;
 }
 
 export class NoopRegularizationRequestSink implements RegularizationRequestSink {

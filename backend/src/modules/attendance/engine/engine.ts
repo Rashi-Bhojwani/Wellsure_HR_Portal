@@ -108,6 +108,13 @@ export function evaluateDay(input: DayInput): DayResult | null {
   let points: number[] = [];
   let usedPunchIds: string[] = [];
   let collapsed = 0;
+  // A business-time "HH:MM" on D's timeline: on a night shift, a time before the
+  // punch window opens is the next morning.
+  const crosses = tl ? tl.end > 86_400 : false;
+  const read = (hhmm: string) => {
+    const t = hhmmToSeconds(hhmm);
+    return crosses && tl && t < tl.windowStart ? t + 86_400 : t;
+  };
   if (input.capture === "DEVICE") {
     const { kept, keptIdx } = collapseNearDuplicates(
       input.punches.map((p) => p.at),
@@ -117,11 +124,6 @@ export function evaluateDay(input: DayInput): DayResult | null {
     usedPunchIds = keptIdx.map((i) => input.punches[i]!.id);
     collapsed = input.punches.length - kept.length;
   } else if (input.manual?.kind === "TIMED") {
-    const crosses = tl ? tl.end > 86_400 : false;
-    const read = (hhmm: string) => {
-      const t = hhmmToSeconds(hhmm);
-      return crosses && tl && t < tl.windowStart ? t + 86_400 : t; // after midnight on a night shift
-    };
     const inS = read(input.manual.inTime);
     points = [inS];
     if (input.manual.outTime) {
@@ -130,6 +132,10 @@ export function evaluateDay(input: DayInput): DayResult | null {
       points.push(outS);
     }
   }
+  const realPoints = points.length;
+  // An approved forgot-to-punch time joins the day's points (device days only).
+  const correctionId = input.capture === "DEVICE" && input.correction ? input.correction.id : null;
+  if (correctionId) points = [...points, read(input.correction!.time)].sort((a, b) => a - b);
 
   const result: DayResult = {
     status: "",
@@ -154,10 +160,11 @@ export function evaluateDay(input: DayInput): DayResult | null {
     earlyOutMinutes: null,
     shortfallMinutes: null,
     excessMinutes: null,
-    punchCount: points.length,
+    punchCount: realPoints,
     usedPunchIds,
     collapsedPunches: collapsed,
     manualEntryId: input.manual?.id ?? null,
+    correctionId,
   };
 
   const recordFigures = (f: Figures, opts: { timeFlags: boolean }) => {

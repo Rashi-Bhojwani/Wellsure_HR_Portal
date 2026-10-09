@@ -54,6 +54,9 @@ const HR_EXECUTIVE_PERMS: string[] = [
   "attendance.view",
   "attendance.manual.enter",
   "attendance.process",
+  // Phase 2 P2-E — regularization (the forgot-to-punch request): HR decides any.
+  "attendance.regularization.view",
+  "attendance.regularization.approve",
 ];
 const HR_ADMIN_PERMS: string[] = [
   ...HR_EXECUTIVE_PERMS,

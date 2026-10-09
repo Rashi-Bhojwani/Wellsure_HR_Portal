@@ -345,6 +345,18 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/attendance/muster/template": scoped("attendance.manual.enter for that branch; 404 otherwise"),
   "POST /api/attendance/muster/upload": scoped("attendance.manual.enter for the file's branch; rows outside it are rejected"),
   "POST /api/attendance/muster/upload/:id/commit": scoped("the uploader's own upload; branch and every day re-checked"),
+  // Attendance Info, Who Is In? and the forgot-to-punch request (P2-E).
+  "GET /api/attendance/me/month": self,
+  "GET /api/attendance/me/day/:date": self,
+  "GET /api/attendance/me/regularizations": self,
+  "POST /api/attendance/me/regularizations": self,
+  "POST /api/attendance/me/regularizations/:id/cancel": self,
+  "GET /api/attendance/employees/:employeeId/month": adminInService("attendance.view (not grantable), narrowed to data scope; 404 outside"),
+  "GET /api/attendance/employees/:employeeId/day/:date": adminInService("attendance.view (not grantable), narrowed to data scope; 404 outside"),
+  "GET /api/attendance/who-is-in": adminInService("attendance.view (not grantable), narrowed to data scope"),
+  "GET /api/attendance/regularizations": scoped("regularization view/approve keys, data scope (TEAM: reports), never one's own"),
+  "POST /api/attendance/regularizations/:id/approve": scoped("approve key, data scope, never one's own; 404 outside"),
+  "POST /api/attendance/regularizations/:id/reject": scoped("approve key, data scope, never one's own; 404 outside"),
 
   // Biometric ingestion (Phase 2 P2-B). The sync agent authenticates with its
   // agent key and may post only for its own devices; ADMS devices by their
@@ -417,4 +429,7 @@ export const MANAGER_REACHABLE_SCOPED = [
   "GET /api/attendance/muster/template",
   "POST /api/attendance/muster/upload",
   "POST /api/attendance/muster/upload/:id/commit",
+  "GET /api/attendance/regularizations",
+  "POST /api/attendance/regularizations/:id/approve",
+  "POST /api/attendance/regularizations/:id/reject",
 ] as const;

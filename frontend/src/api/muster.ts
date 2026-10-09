@@ -20,6 +20,7 @@ export interface MusterCell {
   flags: string[];
   statusOnly: boolean;
   missingPunch: boolean;
+  corrected: boolean;
   workedOnOffDay: boolean;
   provisional: boolean;
   locked: boolean;

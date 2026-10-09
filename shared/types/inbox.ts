@@ -2,13 +2,14 @@
 // both the backend sources and the frontend lists use. Each module keeps its
 // own screens and actions; these lists only point at them.
 
-export const REQUEST_HUB_TYPES = ["LEAVE", "PROFILE_CHANGE", "HELPDESK"] as const;
+export const REQUEST_HUB_TYPES = ["LEAVE", "PROFILE_CHANGE", "HELPDESK", "REGULARIZATION"] as const;
 export type RequestHubType = (typeof REQUEST_HUB_TYPES)[number];
 
 export const REQUEST_HUB_TYPE_LABELS: Record<RequestHubType, string> = {
   LEAVE: "Leave",
   PROFILE_CHANGE: "Profile change",
   HELPDESK: "Helpdesk",
+  REGULARIZATION: "Attendance regularization",
 };
 
 // Every source's own statuses map onto two buckets so one filter works
@@ -31,13 +32,14 @@ export interface RequestHubItem {
   link: string; // employee-portal path
 }
 
-export const TASK_TYPES = ["LEAVE_APPROVAL", "PROFILE_CHANGE_APPROVAL", "HELPDESK_ASSIGNED"] as const;
+export const TASK_TYPES = ["LEAVE_APPROVAL", "PROFILE_CHANGE_APPROVAL", "HELPDESK_ASSIGNED", "REGULARIZATION_APPROVAL"] as const;
 export type TaskType = (typeof TASK_TYPES)[number];
 
 export const TASK_TYPE_LABELS: Record<TaskType, string> = {
   LEAVE_APPROVAL: "Leave approval",
   PROFILE_CHANGE_APPROVAL: "Profile change approval",
   HELPDESK_ASSIGNED: "Helpdesk ticket",
+  REGULARIZATION_APPROVAL: "Attendance regularization",
 };
 
 export interface TaskItem {

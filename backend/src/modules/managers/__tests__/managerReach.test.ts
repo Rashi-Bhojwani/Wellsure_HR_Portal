@@ -425,6 +425,43 @@ describe("manager reach — TEAM scope at every endpoint a manager can call (E2)
     });
   });
 
+  // The forgot-to-punch request (P2-E): the regularization keys, TEAM scope.
+  describe("regularization requests (P2-E): the team's only", () => {
+    const req = {} as Record<"member" | "member2" | "outsider", string>;
+    beforeAll(async () => {
+      const mk = (who: Person, date: string) =>
+        prisma.regularizationRequest.create({ data: { employeeId: who.employeeId, date: new Date(`${date}T00:00:00Z`), missing: "OUT", time: "19:00", reason: "Reach test", raisedByUserId: who.userId } });
+      req.member = (await mk(p.member, "2026-09-10")).id;
+      req.member2 = (await mk(p.member, "2026-09-11")).id;
+      req.outsider = (await mk(p.outsider, "2026-09-10")).id;
+    });
+
+    it("GET /api/attendance/regularizations — the member's, never the outsider's", async () => {
+      const res = await m().get("/api/attendance/regularizations?status=PENDING");
+      expect(res.status).toBe(200);
+      const ids = res.body.requests.map((r: { id: string }) => r.id);
+      expect(ids).toContain(req.member);
+      expect(ids).not.toContain(req.outsider);
+      const all = (await api(hrToken).get("/api/attendance/regularizations?status=PENDING")).body.requests.map((r: { id: string }) => r.id);
+      expect(all).toEqual(expect.arrayContaining([req.member, req.outsider]));
+      cover("GET /api/attendance/regularizations");
+    });
+
+    it("POST /api/attendance/regularizations/:id/approve — member: approved; outsider: 404, untouched", async () => {
+      expect((await m().post(`/api/attendance/regularizations/${req.outsider}/approve`)).status).toBe(404);
+      expect((await m().post(`/api/attendance/regularizations/${req.member}/approve`)).status).toBe(200);
+      expect((await prisma.regularizationRequest.findUniqueOrThrow({ where: { id: req.outsider } })).status).toBe("PENDING");
+      cover("POST /api/attendance/regularizations/:id/approve");
+    });
+
+    it("POST /api/attendance/regularizations/:id/reject — member: rejected; outsider: 404, untouched", async () => {
+      expect((await m().post(`/api/attendance/regularizations/${req.outsider}/reject`, { note: "x" })).status).toBe(404);
+      expect((await m().post(`/api/attendance/regularizations/${req.member2}/reject`, { note: "Not what the register says" })).status).toBe(200);
+      expect((await prisma.regularizationRequest.findUniqueOrThrow({ where: { id: req.outsider } })).status).toBe("PENDING");
+      cover("POST /api/attendance/regularizations/:id/reject");
+    });
+  });
+
   it("every manager-reachable scoped route has a case above", () => {
     expect(MANAGER_REACHABLE_SCOPED.filter((r) => !covered.has(r))).toEqual([]);
   });

@@ -286,3 +286,19 @@ export function emitAttendanceUpdated(employeeId: string, dates: string[], repor
   for (const marker of markerEmployeeIds) io.to(`user:${marker}`).emit("attendance.updated", payload);
   io.to(permissionRoom("attendance.view")).emit("attendance.updated", payload);
 }
+
+// Phase 2 P2-E: a forgot-to-punch request raised (to the employee's manager
+// and whoever can see regularizations) or decided (to the employee). Signal
+// only — the screens refetch.
+export function emitRegularizationSubmitted(payload: { id: string; employeeId: string }, reportingManagerId: string | null): void {
+  if (!io) return;
+  if (reportingManagerId) io.to(`manager:${reportingManagerId}`).emit("regularization.submitted", payload);
+  io.to(permissionRoom("attendance.regularization.view")).emit("regularization.submitted", payload);
+  io.to(`user:${payload.employeeId}`).emit("regularization.submitted", payload);
+}
+export function emitRegularizationDecided(payload: { id: string; employeeId: string; status: string }, reportingManagerId: string | null): void {
+  if (!io) return;
+  io.to(`user:${payload.employeeId}`).emit("regularization.decided", payload);
+  if (reportingManagerId) io.to(`manager:${reportingManagerId}`).emit("regularization.decided", payload);
+  io.to(permissionRoom("attendance.regularization.view")).emit("regularization.decided", payload);
+}

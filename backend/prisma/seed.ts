@@ -560,12 +560,13 @@ async function main() {
     const createdByUserId = superAdminUserId ?? user.id;
     // A manager starts with nothing (user decision 2026-10-03); Admin grants
     // each one what they need. The demo shows both states: Karan (1002) has
-    // leave approval plus the employee grid and reports; Priya (1003) has
+    // leave approval, the employee grid, reports and his team's forgot-to-punch
+    // requests (P2-E); Priya (1003) has
     // leave approval and marks SPN's and Wellsure 2's attendance (Phase 2:
     // manual entry, limited to those two branches — assigned below); 1004, 1005, 1024 and 1029 have nothing — Manager
     // Management shows them as "No permissions".
     const SEEDED_MANAGER_GRANTS: Record<string, string[]> = {
-      "1002": ["leave.view", "leave.approve", "employee.view", "reports.view"],
+      "1002": ["leave.view", "leave.approve", "employee.view", "reports.view", "attendance.regularization.view", "attendance.regularization.approve"],
       "1003": ["leave.view", "leave.approve", "attendance.manual.enter"],
     };
     for (const key of SEEDED_MANAGER_GRANTS[spec.employeeCode] ?? []) {

@@ -4,6 +4,7 @@ import { formatTicketNumber, HELPDESK_STATUS_LABELS, helpdeskAdminPath, helpdesk
 import type { TaskItem, TaskType } from "@shared/types/inbox";
 import { prisma } from "../../lib/prisma";
 import { approvalEmployeeIdFilter, resolveApprovalReach } from "../leave/scope";
+import { getTeamEmployeeIds } from "../../lib/dataScope";
 import { inForceOn } from "../../lib/effectiveDating";
 
 // Tasks inbox (spec §7.1 "My Tasks", To do → Tasks — Phase 5 commit D, user
@@ -11,8 +12,8 @@ import { inForceOn } from "../../lib/effectiveDating";
 // source applies exactly the permission and data-scope rules the screen
 // that acts on the item enforces, so the inbox never lists something the
 // caller would then be refused. A real task system (assign, due date, done)
-// arrives later with onboarding/exit checklists; regularization approvals
-// (Phase 3) add a source here.
+// arrives later with onboarding/exit checklists. Regularization approvals
+// (P2-E, the forgot-to-punch request) are a source here.
 
 export interface TaskViewer {
   employeeId: string;
@@ -114,7 +115,28 @@ const assignedTickets: TaskSource = {
   },
 };
 
-export const TASK_SOURCES: TaskSource[] = [leaveApprovals, profileChangeApprovals, assignedTickets];
+// Pending forgot-to-punch requests I can decide (P2-E): the approve key, my
+// data scope (TEAM: my reports), never my own — as the queue enforces.
+const regularizationApprovals: TaskSource = {
+  type: "REGULARIZATION_APPROVAL",
+  async list(viewer, limit) {
+    if (!viewer.permissions.has("attendance.regularization.approve") || viewer.dataScope === "SELF") return [];
+    const employeeId = viewer.dataScope === "ALL" ? { not: viewer.employeeId } : { in: await getTeamEmployeeIds(viewer.employeeId) };
+    const rows = await prisma.regularizationRequest.findMany({ where: { status: "PENDING", employeeId }, include: { employee: currentName() }, orderBy: { createdAt: "asc" }, take: limit });
+    return rows.map((r) => ({
+      type: "REGULARIZATION_APPROVAL" as const,
+      id: r.id,
+      title: `Forgot to punch ${r.missing === "OUT" ? "out" : "in"}`,
+      detail: `${dateOnly(r.date)} · asks for ${r.missing} ${r.time}`,
+      employeeName: nameOf(r.employee),
+      waitingSince: r.createdAt.toISOString(),
+      link: "/app/todo/review?tab=attendance",
+      adminLink: "/admin/workforce/attendance/regularizations",
+    }));
+  },
+};
+
+export const TASK_SOURCES: TaskSource[] = [leaveApprovals, profileChangeApprovals, assignedTickets, regularizationApprovals];
 
 // Oldest-waiting first: the inbox is a queue, not a feed.
 export async function listMyTasks(viewer: TaskViewer, limit = 100): Promise<TaskItem[]> {

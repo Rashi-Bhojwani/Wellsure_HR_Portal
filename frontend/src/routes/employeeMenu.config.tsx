@@ -43,6 +43,7 @@ import { RequestHubPage } from "../pages/employee/request-hub/RequestHubPage";
 import { TasksPage } from "../pages/employee/todo/TasksPage";
 import { WorkflowDelegatesPage } from "../pages/employee/workflow-delegates/WorkflowDelegatesPage";
 import { MarkAttendancePage } from "../pages/employee/attendance/MarkAttendancePage";
+import { AttendanceInfoPage } from "../pages/employee/attendance/AttendanceInfoPage";
 
 // Single source of truth for the Employee portal left sidebar
 // (docs/UI_REFERENCE.md §1.0). The sidebar, the route tree and the
@@ -229,7 +230,8 @@ export const employeeMenu: EmployeeMenuEntry[] = [
         label: "Attendance Info",
         path: "attendance/info",
         icon: FieldTimeOutlined,
-        phase: "Phase 3",
+        element: AttendanceInfoPage,
+        description: "Your month, live: punches, hours, and forgot-to-punch requests.",
       },
       {
         key: "mark-attendance",

@@ -38,12 +38,13 @@ describe("mobile tabs and their contents come from the employee menu", () => {
     }
   });
 
-  it("anything over attendance or payroll data, or not built yet, is 'coming soon'", () => {
-    // The Phase 0 mock-ups are retired: phase-marked, no page, so desktop shows the placeholder too.
+  it("anything over payroll data, or not built yet, is 'coming soon'; Attendance Info is real now", () => {
+    // The Phase 0 payslip mock-up is retired: phase-marked, no page, so desktop shows the placeholder too.
     expect([leaf("payslips").phase, leaf("payslips").element]).toEqual(["Phase 6", undefined]);
-    expect([leaf("attendance-info").phase, leaf("attendance-info").element]).toEqual(["Phase 3", undefined]);
     expect(isComingSoon(leaf("payslips"))).toBe(true);
-    expect(isComingSoon(leaf("attendance-info"))).toBe(true);
+    // Attendance Info is built on real data (Phase 2 P2-E).
+    expect(leaf("attendance-info").phase).toBeUndefined();
+    expect(isComingSoon(leaf("attendance-info"))).toBe(false);
     expect(isComingSoon(leaf("ytd-reports"))).toBe(true); // phase-marked
     expect(isComingSoon(leaf("leave-apply"))).toBe(false);
     expect(quickActions().map((a) => a.key)).not.toContain("payslips");

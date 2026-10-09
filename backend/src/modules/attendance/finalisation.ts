@@ -27,6 +27,7 @@ import type { Meta } from "./processService";
 //    (e.g. HR's confirmed threshold replacing the placeholder), a punch,
 //    leave or holiday not yet processed, a day never computed, or one still
 //    provisional;
+//  - a forgot-to-punch request still waiting for a decision (P2-E);
 //  - the period hasn't ended yet.
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -42,6 +43,7 @@ const FIELD_LABELS: Record<string, string> = {
 
 export type FinalisationBlocker =
   | { code: "PERIOD_NOT_OVER"; message: string }
+  | { code: "PENDING_REGULARIZATIONS"; message: string; count: number; days: Array<{ employeeId: string; employeeName: string; date: string }> }
   | { code: "PLACEHOLDER_RULES"; message: string; rules: Array<{ kind: "SHIFT" | "POLICY"; id: string; code: string; name: string; fields: string[] }> }
   | { code: "NOT_MARKED" | "NO_SHIFT" | "NOT_UP_TO_DATE"; message: string; count: number; days: Array<{ employeeId: string; employeeName: string; date: string }> };
 
@@ -130,6 +132,18 @@ export async function finalisationBlockers(fromDate: string, toDate: string): Pr
   if (nm.count) blockers.push({ code: "NOT_MARKED", message: `${plural(nm.count, "day")} at manual-capture branches ${nm.count === 1 ? "is" : "are"} not marked. Mark them in the Attendance Muster.`, ...nm });
   const ns = await dayList({ status: "NS" }, from, to);
   if (ns.count) blockers.push({ code: "NO_SHIFT", message: `${plural(ns.count, "day")} had no shift assigned. Assign a shift, then run Process Attendance.`, ...ns });
+  // A forgot-to-punch request still waiting would change its day once decided (P2-E).
+  const pendingRequests = await prisma.regularizationRequest.findMany({ where: { status: "PENDING", date: { gte: from, lte: to } }, select: { employeeId: true, date: true }, orderBy: { date: "asc" }, take: 500 });
+  if (pendingRequests.length) {
+    const names = await namesOn([...new Set(pendingRequests.map((r) => r.employeeId))], to);
+    blockers.push({
+      code: "PENDING_REGULARIZATIONS",
+      message: `${plural(pendingRequests.length, "regularization request")} in this period ${pendingRequests.length === 1 ? "is" : "are"} still waiting for a decision. Approve or reject ${pendingRequests.length === 1 ? "it" : "them"} first.`,
+      count: pendingRequests.length,
+      days: pendingRequests.slice(0, LIST_LIMIT).map((r) => ({ employeeId: r.employeeId, employeeName: names.get(r.employeeId) ?? r.employeeId, date: iso(r.date) })),
+    });
+  }
+
   const stale = await staleDays(ids, fromDate, toDate);
   if (stale.count) {
     blockers.push({

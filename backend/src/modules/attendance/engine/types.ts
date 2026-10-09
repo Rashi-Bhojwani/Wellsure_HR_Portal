@@ -61,6 +61,9 @@ export interface DayInput {
   leave: { first: HalfLeave | null; second: HalfLeave | null }; // full-day leave fills both
   capture: Capture; // DEVICE = a device mapping was in force on D
   manual: ManualEntry | null;
+  // An approved forgot-to-punch request (P2-E): one more time on a device day,
+  // "HH:MM" business time like a manual entry's. Never a raw punch.
+  correction: { id: string; time: string } | null;
   punches: PunchRef[]; // usable punches attributed to D (flagged ones only if HR accepted them)
   flaggedExcluded: number; // punches attributed to D still awaiting HR's decision on their time
   policy: PolicyDef | null;
@@ -96,4 +99,5 @@ export interface DayResult {
   usedPunchIds: string[];
   collapsedPunches: number;
   manualEntryId: string | null;
+  correctionId: string | null; // the regularization request whose time was added
 }

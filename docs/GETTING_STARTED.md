@@ -212,7 +212,7 @@ subset for manual testing.
 |---|---|---|---|
 | `1000` | Aditi Sharma | Super Admin | Full admin access. 2FA enforcement is currently **off** in the seed (`auth.require2faRoles` = `[]`, chore 7f99cfd); re-enable it in System Settings and first login walks you through enrolment. Sees every helpdesk ticket, sensitive ones included |
 | `1001` | Rohan Mehta | HR Admin | Employee management, bank/statutory data, pay documents (issued letters' contents, Letters/ID Proofs/Other categories — never visible to managers or HR Executives), Admin Tools → Import Center/Audit Log/System Settings; the helpdesk queue including sensitive categories. Admin Home and Employee Leave flag leave requests **no manager can approve** (e.g. teams of managers with no permissions). 2FA currently off (see above) |
-| `1002`–`1005`, `1024` | Karan Kapoor, Priya Nair, Vikram Rao, Neha Verma, Rajesh Kumar | Manager | Team-scoped (`TEAM` data-scope) views on the All Employees grid, employee profiles, leave and dashboards — see only your own reports. Managers (and HR Admin `1001`) have **no** reporting manager: they sit under the synthetic Admin root (model A, spec §2.1). The seed enforces the hierarchy and refuses to run if it's broken. A manager can only ever hold the manager-grantable keys (spec §2.2), and **starts with none of them** — the Manager role grants nothing; each power is granted per manager in Admin Tools → Manager Management. Seeded grants: Karan `1002` has leave approval + View employees + Reports; Priya `1003` has leave approval and marks attendance by hand for SPN-Panchsheel and Wellsure 2 only (Phase 2: neither branch has a biometric machine, so their people — `1003`, `1008`, `1030` at SPN and `1010` at Wellsure 2 — are manual capture with no Device User ID); Vikram `1004`, Neha `1005` and Rajesh `1024` have **no permissions** (shown as such in Manager Management) |
+| `1002`–`1005`, `1024` | Karan Kapoor, Priya Nair, Vikram Rao, Neha Verma, Rajesh Kumar | Manager | Team-scoped (`TEAM` data-scope) views on the All Employees grid, employee profiles, leave and dashboards — see only your own reports. Managers (and HR Admin `1001`) have **no** reporting manager: they sit under the synthetic Admin root (model A, spec §2.1). The seed enforces the hierarchy and refuses to run if it's broken. A manager can only ever hold the manager-grantable keys (spec §2.2), and **starts with none of them** — the Manager role grants nothing; each power is granted per manager in Admin Tools → Manager Management. Seeded grants: Karan `1002` has leave approval + View employees + Reports + his team's forgot-to-punch requests (view and approve); Priya `1003` has leave approval and marks attendance by hand for SPN-Panchsheel and Wellsure 2 only (Phase 2: neither branch has a biometric machine, so their people — `1003`, `1008`, `1030` at SPN and `1010` at Wellsure 2 — are manual capture with no Device User ID); Vikram `1004`, Neha `1005` and Rajesh `1024` have **no permissions** (shown as such in Manager Management) |
 | `1029` | Farhan Qureshi | Manager (Operations) | A manager with **no team yet** — the org chart shows "Manager · No team yet". Assign someone to him from Admin Tools → Manager Management. Has **no permissions** until granted there |
 | `1030` | Leela Menon | Employee (Sales, probation) | **Unassigned** — no reporting manager. Shows in Manager Management → Unassigned and as a count on the Admin home |
 | `1006`+ | various | Employee | Plain employee-portal access, no 2FA; View My Info at `/app/profile` (upload a photo there) |
@@ -365,6 +365,21 @@ The "still not marked" reminder goes to whoever marks a branch at 18:00 IST.
 That hour is the System Setting row `attendance.manualReminderHour` (not yet
 on the System Settings screen), and a change applies when the scheduler
 restarts.
+
+**Trying Attendance Info and the forgot-to-punch request (Phase 2).**
+1. Post a single punch for Arjun (`1006`) on a past weekday, as in "Trying
+   punch ingestion" above.
+2. Sign in as `1006` and open Attendance → Attendance Info. That day shows
+   `A` with a red dot.
+3. Click the day, then "Tell us the missing time", and give, say, 19:00 and
+   a reason.
+4. Karan (`1002`, Arjun's manager, seeded with the regularization keys) gets
+   a notification, and the request appears in To do → Review → Attendance.
+   HR sees every request in Workforce → Attendance → Regularizations.
+5. Approve it. Arjun's open calendar turns the day into `P` with ✎
+   (corrected) within a second or two.
+
+Workforce → Attendance → Who Is In? shows today live.
 
 **Prisma Studio** (a GUI for browsing/editing the database):
 

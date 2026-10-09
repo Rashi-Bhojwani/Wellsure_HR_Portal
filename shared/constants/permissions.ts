@@ -60,6 +60,9 @@ export const PERMISSION_KEYS = [
   "attendance.manual.enter", // mark attendance (IN/OUT times or status) for manual-capture employees in ASSIGNED BRANCHES only
   "attendance.process", // re-process a date range from raw punches and manual entries, before the period is locked
   "attendance.devices.manage", // biometric devices, agents and keys, unmapped punches, clock flags, simulator controls
+  // Phase 2 P2-E — regularization's first kind (forgot to punch), brought forward from Phase 3
+  "attendance.regularization.view", // see regularization requests in data scope (a manager: their team)
+  "attendance.regularization.approve", // approve or reject them, in data scope, never one's own
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
@@ -146,6 +149,8 @@ export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
   },
   "attendance.process": { group: "Attendance", label: "Process attendance", description: "Re-process a date range from raw punches and manual entries, before the period is locked." },
   "attendance.devices.manage": { group: "Attendance", label: "Biometric devices", description: "Devices, sync agents and their keys, unmapped punches, clock warnings." },
+  "attendance.regularization.view": { group: "Attendance", label: "View regularizations", description: "See attendance regularization requests (e.g. forgot to punch out) from people in their data scope — a manager: their team.", managerGrantable: true },
+  "attendance.regularization.approve": { group: "Attendance", label: "Approve regularizations", description: "Approve or reject attendance regularization requests from people in their data scope, never their own. The day is recomputed with the corrected time.", managerGrantable: true },
   "helpdesk.manage": { group: "Helpdesk", label: "Helpdesk queue", description: "Work the ticket queue: assign, status, replies, internal notes, categories." },
   "helpdesk.sensitive.view": { group: "Helpdesk", label: "Sensitive tickets", description: "See tickets in categories marked sensitive (e.g. Payroll & Salary, Grievance)." },
 };

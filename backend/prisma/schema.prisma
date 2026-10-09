@@ -502,6 +502,7 @@ model Employee {
   rawPunches                 RawPunch[]
   dailyAttendance            DailyAttendance[]
   manualAttendanceEntries    ManualAttendanceEntry[]
+  regularizationRequests     RegularizationRequest[]
 
   @@index([status])
   @@index([dateOfJoining])
@@ -2083,6 +2084,10 @@ model DailyAttendance {
   provisional      Boolean           @default(false) // computed while the shift window was still open
   punchCount       Int               @default(0) @map("punch_count")
   computedFrom     Json              @default("{}") @map("computed_from") // punch ids, manual entry id, collapsed/outside counts — for "Info"
+  // An override applied to the day (P2-E: MISSING_PUNCH_CORRECTION, an approved
+  // forgot-to-punch request; Phase 3 adds manual overrides) and what it was.
+  overrideKind     String?           @map("override_kind")
+  overrideRef      String?           @map("override_ref")
   isLocked         Boolean           @default(false) @map("is_locked") // Phase 3 finalisation
   processedAt      DateTime          @default(now()) @map("processed_at")
   engineVersion    Int               @map("engine_version")
@@ -2186,4 +2191,47 @@ model ManualMusterUpload {
   entries          ManualAttendanceEntry[]
 
   @@map("manual_muster_uploads")
+}
+
+// ── Regularization (spec §4.4, "regularization_requests") ──
+// P2-E brings forward the first kind, the forgot-to-punch request: an
+// employee's own device day with one punch gets the missing IN or OUT time,
+// decided by their manager (by grant) or HR. Phase 3 adds kinds here.
+
+enum RegularizationKind {
+  MISSING_PUNCH
+}
+
+enum RegularizationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum MissingPunchSide {
+  IN
+  OUT
+}
+
+model RegularizationRequest {
+  id              String               @id @default(cuid())
+  employeeId      String               @map("employee_id")
+  employee        Employee             @relation(fields: [employeeId], references: [id])
+  date            DateTime             @db.Date
+  kind            RegularizationKind   @default(MISSING_PUNCH)
+  missing         MissingPunchSide
+  time            String // "HH:MM" business time
+  reason          String
+  status          RegularizationStatus @default(PENDING)
+  raisedByUserId  String               @map("raised_by_user_id")
+  decidedByUserId String?              @map("decided_by_user_id")
+  decidedAt       DateTime?            @map("decided_at")
+  decisionNote    String?              @map("decision_note")
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+
+  @@index([employeeId, date])
+  @@index([status])
+  @@map("regularization_requests")
 }

@@ -107,7 +107,32 @@ const helpdeskSource: RequestHubSource = {
   },
 };
 
-export const REQUEST_HUB_SOURCES: RequestHubSource[] = [leaveSource, profileChangeSource, helpdeskSource];
+// My forgot-to-punch requests (P2-E).
+const regularizationSource: RequestHubSource = {
+  type: "REGULARIZATION",
+  async list(employeeId, state, limit) {
+    const rows = await prisma.regularizationRequest.findMany({
+      where: { employeeId, ...(state === "OPEN" && { status: "PENDING" }), ...(state === "CLOSED" && { status: { not: "PENDING" } }) },
+      orderBy: { updatedAt: "desc" },
+      take: limit,
+    });
+    return rows.map((r) => ({
+      type: "REGULARIZATION" as const,
+      id: r.id,
+      title: `Forgot to punch ${r.missing === "OUT" ? "out" : "in"}`,
+      detail: `${dateOnly(r.date)} · ${r.missing} ${r.time}`,
+      status: r.status,
+      statusLabel: r.status === "PENDING" ? "Waiting for approval" : titleCase(r.status),
+      state: (r.status === "PENDING" ? "OPEN" : "CLOSED") as RequestHubState,
+      submittedAt: iso(r.createdAt),
+      updatedAt: iso(r.updatedAt),
+      autoClosesAt: null,
+      link: `/app/attendance/info?date=${dateOnly(r.date)}`,
+    }));
+  },
+};
+
+export const REQUEST_HUB_SOURCES: RequestHubSource[] = [leaveSource, profileChangeSource, helpdeskSource, regularizationSource];
 
 export interface RequestHubQuery {
   type?: RequestHubType;

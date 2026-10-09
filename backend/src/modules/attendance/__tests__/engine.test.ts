@@ -50,7 +50,7 @@ let n = 0;
 const punches = (...times: string[]) => times.map((t) => ({ id: `p${++n}`, at: at(t) }));
 
 function day(over: Partial<DayInput> = {}): DayInput {
-  return { date: D, employed: true, holiday: null, shift: GEN, weekOff: false, leave: { first: null, second: null }, capture: "DEVICE", manual: null, punches: [], flaggedExcluded: 0, policy: POLICY, now: LATER, ...over };
+  return { date: D, employed: true, holiday: null, shift: GEN, weekOff: false, leave: { first: null, second: null }, capture: "DEVICE", manual: null, correction: null, punches: [], flaggedExcluded: 0, policy: POLICY, now: LATER, ...over };
 }
 const ev = (over: Partial<DayInput> = {}) => evaluateDay(day(over))!;
 
@@ -292,5 +292,25 @@ describe("determinism", () => {
   it("the same inputs give the same day, every time", () => {
     const input = day({ punches: punches("10:07", "14:10", "14:41", "18:20") });
     expect(evaluateDay(input)).toEqual(evaluateDay(structuredClone(input)));
+  });
+});
+
+describe("an approved forgot-to-punch correction (P2-E)", () => {
+  const strip = ({ usedPunchIds: _u, correctionId: _c, punchCount: _n, ...rest }: ReturnType<typeof ev>) => rest;
+  it("a lone 10:02 punch plus a corrected OUT of 19:00 is worked out exactly like two punches, and marked", () => {
+    const corrected = ev({ punches: punches("10:02"), correction: { id: "r1", time: "19:00" } });
+    const twoPunches = ev({ punches: punches("10:02", "19:00") });
+    expect(corrected).toMatchObject({ status: "P", flags: ["LATE_IN"], correctionId: "r1", punchCount: 1 });
+    expect(strip(corrected)).toEqual(strip(twoPunches));
+  });
+  it("a forgotten IN works the same way (a lone evening punch, corrected IN 10:00)", () => {
+    expect(ev({ punches: punches("19:00"), correction: { id: "r2", time: "10:00" } })).toMatchObject({ status: "P", flags: [], firstIn: at("10:00"), lastOut: at("19:00") });
+  });
+  it("on a night shift, a corrected 06:00 OUT is the next morning", () => {
+    const r = ev({ shift: NIGHT, policy: { ...POLICY, fullDayMinMinutes: 420, halfDayMinMinutes: 210 }, punches: punches("22:00"), correction: { id: "r3", time: "06:00" } });
+    expect(r).toMatchObject({ status: "P", lastOut: at("06:00", "2026-10-06"), correctionId: "r3" });
+  });
+  it("is ignored on a manual-capture day (the marker fixes those)", () => {
+    expect(ev({ capture: "MANUAL", correction: { id: "r4", time: "19:00" } })).toMatchObject({ status: "NM", correctionId: null });
   });
 });

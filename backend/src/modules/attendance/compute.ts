@@ -43,7 +43,7 @@ export function setManualEntryLoader(loader: ManualLoader | null): void {
   loadManual = loader ?? loadManualEntries;
 }
 
-function shiftDef(a: AssignmentWithRules): ShiftDef {
+export function shiftDef(a: AssignmentWithRules): ShiftDef {
   const s = a.shift;
   return {
     id: s.id,
@@ -91,7 +91,9 @@ function rowData(employeeId: string, date: string, r: DayResult, a: AssignmentWi
     workedOnOffDay: r.workedOnOffDay,
     provisional: r.provisional,
     punchCount: r.punchCount,
-    computedFrom: { punchIds: r.usedPunchIds, manualEntryId: r.manualEntryId, collapsedPunches: r.collapsedPunches, outsideWindowPunches: outside } as Prisma.InputJsonValue,
+    computedFrom: { punchIds: r.usedPunchIds, manualEntryId: r.manualEntryId, correctionId: r.correctionId, collapsedPunches: r.collapsedPunches, outsideWindowPunches: outside } as Prisma.InputJsonValue,
+    overrideKind: r.correctionId ? "MISSING_PUNCH_CORRECTION" : null,
+    overrideRef: r.correctionId,
     engineVersion: ENGINE_VERSION,
   };
 }
@@ -100,13 +102,21 @@ type RowData = ReturnType<typeof rowData>;
 const COMPARED: Array<keyof RowData> = [
   "shiftId", "shiftCode", "shiftStart", "shiftEnd", "policyId", "firstIn", "lastOut", "totalMinutes", "breakMinutes", "actualMinutes", "inShiftMinutes",
   "lateInMinutes", "earlyOutMinutes", "shortfallMinutes", "excessMinutes", "status", "firstHalfStatus", "secondHalfStatus", "lopDays", "exceptionFlags",
-  "source", "capture", "leaveTypeCode", "holidayName", "workedOnOffDay", "provisional", "punchCount", "computedFrom", "engineVersion",
+  "source", "capture", "leaveTypeCode", "holidayName", "workedOnOffDay", "provisional", "punchCount", "computedFrom", "overrideKind", "overrideRef", "engineVersion",
 ];
+// Key order never matters: Postgres jsonb stores object keys in its own order
+// (by length, then bytes), so computedFrom read back can differ from the
+// literal we wrote. Objects compare with their keys sorted.
+function sortedJson(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(sortedJson);
+  if (v !== null && typeof v === "object") return Object.fromEntries(Object.keys(v as object).sort().map((k) => [k, sortedJson((v as Record<string, unknown>)[k])]));
+  return v;
+}
 function canonical(v: unknown): string {
   if (v instanceof Date) return v.toISOString();
   if (v instanceof Prisma.Decimal) return v.toFixed(2);
   if (v !== null && typeof v === "object" && "toFixed" in (v as object)) return (v as Prisma.Decimal).toFixed(2);
-  return JSON.stringify(v ?? null);
+  return JSON.stringify(sortedJson(v ?? null));
 }
 export function sameDay(existing: DailyAttendance, next: RowData): boolean {
   return COMPARED.every((k) => canonical((existing as unknown as Record<string, unknown>)[k]) === canonical(next[k]));
@@ -126,7 +136,7 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
 
   const fromD = utcDate(from);
   const lastD = utcDate(last);
-  const [employees, assignments, mappings, holidays, leaves, existing, manual] = await Promise.all([
+  const [employees, assignments, mappings, holidays, leaves, existing, manual, corrections] = await Promise.all([
     prisma.employee.findMany({ where: { id: { in: employeeIds } }, select: { id: true, dateOfJoining: true, lastWorkingDate: true } }),
     assignmentsBetween(employeeIds, utcDate(addDays(from, -1)), utcDate(addDays(last, 1))),
     deviceMappingPeriods(employeeIds, fromD, lastD),
@@ -137,7 +147,13 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
     }),
     prisma.dailyAttendance.findMany({ where: { employeeId: { in: employeeIds }, date: { gte: fromD, lte: lastD } } }),
     loadManual(employeeIds, from, last),
+    // Approved forgot-to-punch requests (P2-E): one more time on that day.
+    prisma.regularizationRequest.findMany({
+      where: { employeeId: { in: employeeIds }, status: "APPROVED", kind: "MISSING_PUNCH", date: { gte: fromD, lte: lastD } },
+      select: { id: true, employeeId: true, date: true, time: true },
+    }),
   ]);
+  const correctionBy = new Map(corrections.map((c) => [`${c.employeeId}|${iso(c.date)}`, { id: c.id, time: c.time }]));
   const punches = await prisma.rawPunch.findMany({
     where: { employeeId: { in: employeeIds }, punchedAt: { gte: new Date(dayStartMs(addDays(from, -1))), lt: new Date(dayStartMs(addDays(last, 2))) } },
     select: { id: true, employeeId: true, punchedAt: true, flag: true, flagResolution: { select: { decision: true } } },
@@ -200,6 +216,7 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
         leave: leaveOn.get(date) ?? { first: null, second: null },
         capture: captured(date) ? "DEVICE" : "MANUAL",
         manual: manual.get(key) ?? null,
+        correction: correctionBy.get(key) ?? null,
         punches: attributed.byDate.get(date) ?? [],
         flaggedExcluded: (pendingAttributed.byDate.get(date) ?? []).length,
         policy: a ? { id: a.policy.id, fullDayMinMinutes: a.policy.fullDayMinMinutes, halfDayMinMinutes: a.policy.halfDayMinMinutes, halfDayMinNotMetLopDays: Number(a.policy.halfDayMinNotMetLopDays), nearDuplicateSeconds: a.policy.nearDuplicateSeconds, inferBreakPairing: a.policy.inferBreakPairing } : null,

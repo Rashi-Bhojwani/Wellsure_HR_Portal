@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Button, Input, Modal, Space, Table, Tag, Typography, message } from "antd";
+import { Alert, Button, Input, Modal, Space, Table, Tabs, Tag, Typography, message } from "antd";
+import { useSearchParams } from "react-router-dom";
 import { CheckOutlined, CloseOutlined } from "@ant-design/icons";
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as leaveApi from "../../../api/leave";
 import type { LeaveRequestRow } from "../../../api/leave";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { useAuth } from "../../../hooks/useAuth";
+import { RegularizationQueue } from "../../../components/attendance/RegularizationQueue";
 
 const { Title, Text } = Typography;
 
@@ -19,7 +21,7 @@ function BalanceCell({ employeeId, leaveTypeId }: { employeeId: string; leaveTyp
   return <>{balance ?? "—"}</>;
 }
 
-export function ReviewPage() {
+function LeaveReview() {
   const { hasPermission } = useAuth();
   const canApprove = hasPermission("leave.approve");
   const queryClient = useQueryClient();
@@ -72,22 +74,10 @@ export function ReviewPage() {
     onError: (err) => void message.error(errorMessage(err, "Could not bulk-approve.")),
   });
 
-  if (!canApprove) {
-    return (
-      <Space orientation="vertical" size={16} style={{ width: "100%" }}>
-        <Title level={3} style={{ margin: 0 }}>
-          Review
-        </Title>
-        <EmptyState message="Nothing to review" />
-      </Space>
-    );
-  }
+  if (!canApprove) return null;
 
   return (
     <Space orientation="vertical" size={16} style={{ width: "100%" }}>
-      <Title level={3} style={{ margin: 0 }}>
-        Review
-      </Title>
       <Text type="secondary">Pending leave requests from your team — and from the team of any manager whose approvals you're covering (Workflow Delegates).</Text>
 
       {selectedIds.length > 0 && (
@@ -166,6 +156,28 @@ export function ReviewPage() {
           placeholder="Why is this being rejected?"
         />
       </Modal>
+    </Space>
+  );
+}
+
+// To do → Review: leave (leave.approve) and, from P2-E, forgot-to-punch
+// requests (attendance.regularization.view/approve — a manager's team, by grant).
+export function ReviewPage() {
+  const { hasPermission } = useAuth();
+  const [params, setParams] = useSearchParams();
+  const leave = hasPermission("leave.approve");
+  const attendance = hasPermission("attendance.regularization.view") || hasPermission("attendance.regularization.approve");
+  const tabs = [
+    ...(leave ? [{ key: "leave", label: "Leave", children: <LeaveReview /> }] : []),
+    ...(attendance ? [{ key: "attendance", label: "Attendance (forgot to punch)", children: <RegularizationQueue emptyText="No forgot-to-punch requests from your team" /> }] : []),
+  ];
+  const active = tabs.some((t) => t.key === params.get("tab")) ? params.get("tab")! : tabs[0]?.key;
+  return (
+    <Space orientation="vertical" size={16} style={{ width: "100%" }}>
+      <Title level={3} style={{ margin: 0 }}>
+        Review
+      </Title>
+      {tabs.length === 0 ? <EmptyState message="Nothing to review" /> : <Tabs activeKey={active} onChange={(k) => setParams({ tab: k })} items={tabs} />}
     </Space>
   );
 }

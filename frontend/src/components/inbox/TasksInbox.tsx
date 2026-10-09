@@ -7,7 +7,7 @@ import { EmptyState } from "../common/EmptyState";
 import { formatDateTime } from "../../lib/dates";
 
 const { Text } = Typography;
-const TYPE_COLORS: Record<TaskType, string> = { LEAVE_APPROVAL: "blue", PROFILE_CHANGE_APPROVAL: "purple", HELPDESK_ASSIGNED: "cyan" };
+const TYPE_COLORS: Record<TaskType, string> = { LEAVE_APPROVAL: "blue", PROFILE_CHANGE_APPROVAL: "purple", HELPDESK_ASSIGNED: "cyan", REGULARIZATION_APPROVAL: "orange" };
 
 // To do → Tasks and the admin Tasks app (user decision 1): an inbox of
 // things waiting on me, oldest first. Each row opens the screen where the
