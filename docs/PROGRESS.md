@@ -4170,6 +4170,18 @@ build design" and "As built: P2-D", including the **12 rules decided here**.
 - Fixed along the way: the letters suite launches Chromium in `beforeAll`,
   after CI run 37835475091 timed out in its issuing test.
 
+### Interim — P2-E approved; no-punch days recorded for Phase 3 (2026-10-09)
+
+- **P2-E is approved** (user, 2026-10-09), including its eleven
+  self-decided rules (`docs/plans/PHASE_2.md`, "As built: P2-E").
+- **Recorded for Phase 3** (`PHASE_2.md` §10): the forgot-to-punch request
+  covers only days with exactly one punch. Phase 3's fuller regularization
+  must also cover days with **no punches at all**, both when someone forgot
+  entirely and when **the device was down**. An outage hits every
+  device-captured person at a branch at once, so Phase 3's plan must handle
+  it in bulk.
+- P2-F's plan is with the user for review; not built.
+
 ## Open questions
 
 - [x] **Approval Workflows — dropped (user decision 2026-10-03).** No

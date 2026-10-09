@@ -3,7 +3,8 @@
 **Status: APPROVED 2026-10-08 with the user's answers to D1–D7 (§13),
 HR's answers on rules and branches, the attendance cycle, and three
 additions (§3.1, §7.1, §4.7). Building P2-A → P2-I in order, pausing
-after each.** Progress: **P2-A, P2-B and P2-C done** (see "As built" at the end).
+after each.** Progress: **P2-A through P2-E done** (P2-E approved 2026-10-09
+with its eleven rules; see "As built" at the end). P2-F next.
 - Written 2026-10-08, after effective dating (EF1–EF4) was finished, as
   the user asked: "attendance is entirely date-based, so I don't want it
   built on half-fixed foundations".
@@ -851,7 +852,14 @@ What's left after Phase 2:
 - Shift Override (single dates);
 - **Regularization** beyond the forgot-to-punch request P2-E brought
   forward (request, approval queue, bulk; managers by grant,
-  as recorded);
+  as recorded). **It must cover days with no punches at all** (user,
+  2026-10-09). P2-E's request only covers days with exactly one punch,
+  and the other common case is a day with none:
+  - someone forgot to punch entirely: they give both IN and OUT;
+  - **the device was down**: every device-captured person at that branch
+    has no punches for the outage, at once. Phase 3's plan must say how
+    that is handled in bulk (e.g. HR records the outage and the affected
+    days are corrected together), not as dozens of single requests;
 - **Period Finalisation**:
   - locks `daily_attendance` for a payroll month;
   - refuses while `NM` days remain;
@@ -1498,7 +1506,10 @@ read-only):
 ### P2-E (2026-10-09)
 
 Built as the design above, including the forgot-to-punch request brought
-forward from Phase 3. **Rules decided here** (listed for review):
+forward from Phase 3. **Approved by the user 2026-10-09, including the
+eleven rules below.** Follow-up: days with no punches at all are recorded
+for Phase 3's regularization (§10). **Rules decided here** (listed for
+review):
 
 1. **Which days can be corrected:** only days with exactly one punch, in the
    current or previous attendance cycle, not finalised. A day with no
