@@ -79,6 +79,17 @@ try {
     }
     Check 'the release folder matches its SHA256SUMS.txt' ($bad.Count -eq 0 -and $sums.Count -ge 8) ("{0} files; mismatches: {1}" -f $sums.Count, ($bad -join ','))
 
+    # A damaged or swapped file is refused before anything is installed.
+    $tampered = Join-Path $work 'tampered'
+    Remove-Item -LiteralPath $tampered -Recurse -Force -ErrorAction SilentlyContinue
+    Copy-Item -LiteralPath $release -Destination $tampered -Recurse
+    [IO.File]::AppendAllText((Join-Path $tampered 'nssm.exe'), 'x')
+    $out = Join-Path $work 'tampered-install.log'
+    $p = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $tampered 'install.ps1'), '-Unattended', '-ApiUrl', 'http://localhost:4400', '-Device', "$serial,127.0.0.1") -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput $out -RedirectStandardError "$out.err"
+    $said = (Get-Content $out -Raw -ErrorAction SilentlyContinue)
+    Check 'a release folder with a changed nssm.exe is refused before anything is installed' ($p.ExitCode -ne 0 -and $said -match 'not what the release was built with' -and $said -match 'nssm.exe' -and -not (Get-Service -Name WellsureAgent -ErrorAction SilentlyContinue) -and -not (Test-Path $program))
+    Remove-Item -LiteralPath $tampered -Recurse -Force -ErrorAction SilentlyContinue
+
     # ── The fake world ─────────────────────────────────────────────────────
     $tsx = 'node_modules\tsx\dist\cli.mjs'
     [void](Start-Background 'fake-api' @($tsx, 'src\dev\fakeApiCli.ts', '--key', $apiKey, '--serial', $serial, '--port', '4400', '--control-port', '4401'))

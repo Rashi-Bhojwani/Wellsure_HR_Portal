@@ -44,12 +44,16 @@ try {
         if (-not (Test-Path -LiteralPath (Join-Path $PSScriptRoot $f))) { throw "$f is missing from this folder. Unzip the whole release and run install.ps1 from inside it." }
     }
 
+    $checked = Test-ReleaseIntegrity $PSScriptRoot
+
     Write-Host ''
     Write-Host 'Wellsure Agent: install' -ForegroundColor White
     Write-Host 'This installs the program that copies new punches from the attendance device to the HR system.'
     Write-Host 'It only reads the device. It cannot change, clear or pause it.'
 
     $existing = Read-AgentConfig
+
+    Write-Host "All $checked files in this folder are exactly as they were built."
 
     # ── 1. What we need to know ────────────────────────────────────────────
     Write-Step 1 $steps 'Checking what you have told me'

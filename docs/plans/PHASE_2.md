@@ -2224,6 +2224,22 @@ visible from Linux or from the parser):
 Also: NSSM 2.24's zip, downloaded from nssm.cc, matched the SHA-256 I pinned
 from memory of the published value, so two independent sources agree on it.
 
+**NSSM on connection day (user, 2026-10-10): we do not improvise.** NSSM comes from
+one place, nssm.cc, checked against a pinned SHA-256; it is never fetched from
+anywhere else and never swapped by hand. So:
+- the release zip is built **ahead of the day**, not on it, and kept by the user
+  outside CI: the CI artifact is kept 90 days (the most GitHub allows) and the CI
+  cache of the NSSM zip is evicted after 7 idle days, so a build much later
+  depends on nssm.cc being up;
+- if a rebuild is ever needed and nssm.cc is unreachable: use the cached copy
+  from an earlier build, or **stop and switch to WinSW deliberately** (a design
+  decision, asked first), never download a wrapper from another site;
+- `install.ps1` and `upgrade.ps1` refuse a folder whose files don't match
+  `SHA256SUMS.txt` (a damaged copy, or a swapped `nssm.exe`) before changing
+  anything, and say not to fetch files by hand; the Windows CI job tests that a
+  changed `nssm.exe` is refused;
+- `INSTALL.md` says all of this in the installer's words ("About nssm.exe").
+
 **Rules decided while building** (beyond the design's nine):
 10. **Secrets go through an inbox folder**, not an impersonated temporary file
     (see "The account and its secrets"). Rotating the key is: drop a file,
@@ -2249,7 +2265,7 @@ from memory of the published value, so two independent sources agree on it.
 
 **Also as built.**
 - The release is `wellsure-agent-<version>-windows-x64.zip`, an artifact of the
-  `agent-windows` CI job (30 days): `wellsure-agent.exe` (118 MB, the Node
+  `agent-windows` CI job (kept 90 days): `wellsure-agent.exe` (118 MB, the Node
   runtime embedded), `nssm.exe`, the five scripts, `config.example.json`,
   `INSTALL.md`, `VERSION.txt`, `SHA256SUMS.txt`. It is **not code-signed**.
 - Event IDs: 1 start, 2 stop, 3 installed, 10/11/12 retention, 20/21 log fill,

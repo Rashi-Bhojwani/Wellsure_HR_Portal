@@ -214,6 +214,7 @@ Run `status` (above) first: its last lines name the problem. Find it here.
 | `N batch(es) of punches the server refused are set aside` | The server would not accept some punches, as they stood. They are **kept safely on this PC**, not in attendance yet | See "Punches the server refused" below |
 | A warning that the device **has not been read for a while**, or **punches are at risk** | The PC was off, asleep, or off the network for a long time. The machine only remembers punches for a few days | Switch the PC on / fix the network. Run `status`. The agent catches up by itself. If this happens often, check the PC's sleep setting (below) |
 | Step 7 said the **PC is set to sleep** | A sleeping PC reads nothing | *Settings → System → Power → Screen and sleep*: set "When plugged in, put my device to sleep after" to **Never** |
+| *"These files are not what the release was built with"* (the install stops before changing anything) | The zip was damaged on the way (a bad download or copy), or a file in it was changed | **Do not install from that folder, and do not download or swap in any file yourself, `nssm.exe` above all.** Ask your supporter for a fresh copy of the zip and unzip that |
 | Installed, but still not working after two minutes, and nothing above fits | — | Run `status` and `Get-Content "C:\ProgramData\Wellsure Agent\logs\agent.log" -Tail 100`, and read both to your supporter (or send them as text). Nothing is wrong that cannot be fixed from there |
 
 ---
@@ -294,6 +295,14 @@ On *Admin Home* and *Admin Tools → Devices*:
 | The account it runs as | `WellsureAgentSvc` (no other use; open only to administrators) |
 | Where the key and comm key are kept | Windows Credential Manager, under that account. Never in a file |
 
+**About `nssm.exe`.** It is the small program that runs the agent as a Windows
+service. It is **inside the zip**, and `install.ps1` checks every file in the
+folder against `SHA256SUMS.txt` before it installs anything. **Never download
+NSSM, or any other "service wrapper", yourself, and never replace the copy in
+the zip, whatever a website or a search result says.** If `install.ps1` reports a
+file that doesn't match, or says `nssm.exe` is missing, stop and ask for a fresh
+copy of the zip.
+
 **What it connects to:** the machine on port **4370** (on your network), and the
 HR system over **HTTPS** (port 443). It listens for nothing, so no inbound
 firewall rule is needed.
@@ -327,6 +336,13 @@ Ask, in this order:
    does it show?" Then: `Test-NetConnection <ip> -Port 4370`.
 5. Still stuck: "Read me the last 20 lines of the log."
    `Get-Content "C:\ProgramData\Wellsure Agent\logs\agent.log" -Tail 20`
+
+**Have the release zip ready before the day, not on it.** The zip is built by CI and kept
+as a CI artifact for 90 days; keep your own copy of it (and its `SHA256SUMS.txt`) somewhere
+you control. **Do not rebuild it on the day.** If it ever has to be rebuilt and `nssm.cc`
+(where NSSM is downloaded from, and checked against a pinned hash) is unreachable, **do not
+improvise**: use the copy cached from an earlier build, or stop and decide deliberately to
+switch to WinSW. Never fetch a service wrapper from anywhere else.
 
 **Connection day only:** run `diagnose` first. If the machine has a comm key,
 first type `$env:WELLSURE_COMMKEY_AEXY225060969 = "123456"` (its serial and its comm

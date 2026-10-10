@@ -69,6 +69,27 @@ function Invoke-Native([string]$File, [string[]]$Arguments) {
     return [pscustomobject]@{ ExitCode = $code; Output = (@($lines) -join "`n") }
 }
 
+# Every file in the release folder must match SHA256SUMS.txt, which CI wrote when
+# it built the zip: this catches a damaged copy (a bad download, a USB stick) and
+# a swapped nssm.exe before anything is installed. The service wrapper is NEVER
+# to come from anywhere but this zip (INSTALL.md, "About nssm.exe").
+function Test-ReleaseIntegrity([string]$Folder) {
+    $sums = Join-Path $Folder 'SHA256SUMS.txt'
+    if (-not (Test-Path -LiteralPath $sums)) { throw 'SHA256SUMS.txt is missing from this folder, so I cannot check the files are intact. Get a fresh copy of the zip from whoever supports you.' }
+    $bad = @()
+    $checked = 0
+    foreach ($line in (Get-Content -LiteralPath $sums | Where-Object { $_.Trim() })) {
+        $parts = $line -split ' \*', 2
+        if ($parts.Count -ne 2) { throw "SHA256SUMS.txt has a line I do not understand: $line" }
+        $file = Join-Path $Folder $parts[1].Trim()
+        if (-not (Test-Path -LiteralPath $file)) { $bad += "$($parts[1]) (missing)"; continue }
+        if ((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant() -ne $parts[0].Trim().ToLowerInvariant()) { $bad += $parts[1] }
+        $checked++
+    }
+    if ($bad.Count) { throw ("These files are not what the release was built with: {0}. Do not install from this folder. Get a fresh copy of the zip from whoever supports you (do not download nssm.exe or anything else yourself)." -f ($bad -join ', ')) }
+    return $checked
+}
+
 function Get-AgentExe { return (Join-Path $script:ProgramDir $script:ExeName) }
 function Get-Nssm     { return (Join-Path $script:ProgramDir 'nssm.exe') }
 

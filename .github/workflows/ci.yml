@@ -172,7 +172,9 @@ jobs:
         with:
           name: wellsure-agent-windows
           path: dist-zip/*.zip
-          retention-days: 30
+          # The longest GitHub keeps one. Connection day may be weeks away and
+          # must not depend on nssm.cc being reachable to rebuild (plan, "NSSM").
+          retention-days: 90
 
       - name: Install the release and exercise the service
         shell: powershell

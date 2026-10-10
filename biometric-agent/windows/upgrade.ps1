@@ -19,6 +19,7 @@ try {
     $newExe = Join-Path $PSScriptRoot $script:ExeName
     if (-not (Test-Path -LiteralPath $newExe)) { throw "$($script:ExeName) is missing from this folder. Unzip the whole release and run upgrade.ps1 from inside it." }
 
+    [void](Test-ReleaseIntegrity $PSScriptRoot)
     $installed = Get-AgentExe
     $oldVersion = (Invoke-Native $installed @('version')).Output
     $newVersion = (Invoke-Native $newExe @('version')).Output
