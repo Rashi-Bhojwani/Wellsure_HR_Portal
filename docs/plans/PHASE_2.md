@@ -2489,7 +2489,11 @@ is a three-line change if the user prefers to decide it.*
 The speed figures are the secondary measure: the guard is the limits (ingest 120 s,
 recompute 300 s) and, once `backend/perf/baseline.json` exists, 2x the baseline. The
 baseline is recorded from the **CI runner** (`attendance-replay` job prints
-`last-run.json` and uploads it), not from a development machine.
+`last-run.json` and uploads it), not from a development machine. **Recorded**
+(run 38045839418, ubuntu-latest): 21,559 punches, 0 differences, ingest 8.7 s, recompute
+23.0 s (the development container was slower: 10.9 s and 48.1 s). It is one sample; if
+runner variance ever trips the 2x guard without a real regression, re-record it with the
+artifact of a clean run rather than loosening the factor.
 
 **Rules decided while building (for the user to veto)**
 1. The simulated organisation has its own round-number masters (SIM-DAY 10:00–19:00,
