@@ -836,7 +836,8 @@ As the user described greytHR's Attendance Muster:
 | **P2-D** | Manual entry: `TIMED` and `STATUS_ONLY` entries (append-only) through the engine; **the editable muster** (cycle selector, totals, legend, single-employee filter, Excel export); **muster upload** via the Import Center; bulk "mark all present"; reminders; branch scope enforced and IDOR-tested |
 | **P2-E** | Screens: employee and admin Attendance Info with day detail, Who Is In?, live events, source markers everywhere |
 | **P2-F** | `biometric-agent`: the driver interface, SimulatedDriver, the Zk4370Driver (protocol-tested), the outbox and cursor, backoff, heartbeat with **clock offset and retention state**, the **retention guard**, the single-executable build, NSSM service scripts with **Credential Manager** for the key, the CI Windows-runner test, `INSTALL.md` (install, upgrade, uninstall). **Split (D-F5) into F1** (the agent, our read-only driver, the server side, verified end to end locally) **and F2** (Windows packaging, the service, Credential Manager, the Windows CI job, `INSTALL.md`); see "P2-F build design" |
-| **P2-G** | Punch simulator: scenarios with intended outcomes (including manual-capture branches and `TIMED` entries), the three routes, replay (500 × month) with a golden diff, drip, production refusal, the dev roster endpoint |
+| **P2-G, commit G1** | **Correctness first** (user, 2026-10-10: "it must prove the engine produces the right answers, not just that it ingests fast"): the scenario library with intended outcomes (including manual-capture branches and `TIMED` entries), a seeded 500-employee roster, the month replay through the real ingestion path with a golden diff that must be empty, the perf baseline |
+| **P2-G, commit G2** | The routes and the rest: the three routes (real agent with the simulated driver, ADMS push, file), the CLI, live drip, the dev roster endpoint, production refusal, the G1 latency test |
 | **P2-H** | Device health: checks, incidents (silence, agent silence, morning check, **clock drift, retention risk**), alerts and recovery, the Devices screen and charts |
 | **P2-I** | Acceptance and review: the four §12 gates measured and recorded, **the performance baseline committed as a regression guard** (D5), the docs (GETTING_STARTED, DEPLOYMENT, PROGRESS) and a Phase 2 review |
 
@@ -2281,4 +2282,164 @@ anywhere else and never swapped by hand. So:
 
 **Tests:** agent 97 (also on Windows); the Windows job's 35 checks; backend 811;
 frontend 12.
+
+### P2-G build design (2026-10-10, written before building)
+
+The user approved §6 and gates G1/G2 and said, on 2026-10-10: *"the thing I care
+most about there: it must prove the engine produces the right answers, not just
+that it ingests fast. Named scenarios carrying their expected outcomes, and a
+month-long replay for 500 employees that fails if any day computes differently
+from what the scenario says it should. Speed is the secondary measure."* So P2-G
+is two commits, correctness first:
+- **G1** (this section's "G1"): scenarios with intended outcomes, the seeded
+  roster, the month replay through the real ingestion path, the golden diff, the
+  baseline.
+- **G2**: the three routes, the CLI, drip, the dev roster endpoint, production
+  refusal, latency. (§6's text stands for G2.)
+
+**What "right" means, and how it avoids marking the engine's own homework.** A
+golden test is only as good as where its expectations come from. If they were
+produced by running the engine, the diff would always be empty and prove
+nothing. Three independent legs instead:
+1. **Declared intent.** Every named scenario states, in plain words and numbers,
+   what should happen ("arrives 25 minutes after the grace period, works a full
+   day: present, late by exactly 25 minutes, no loss of pay, flag LATE_IN"),
+   as a closed form of the scenario's parameters. A person can read each one
+   (`npm run simulate -- --catalogue` prints them) and say "yes, that's the
+   rule" or "no".
+2. **A reference model** (`shared/attendance/simulator/reference.ts`): a small,
+   separate implementation of the written rules in whole seconds on plain
+   strings, importing nothing from the engine. It fills in *every* field of the
+   expected day (hours, break, shortfall, half statuses…). A unit test checks it
+   against leg 1 over thousands of seeded draws, so a mistake in either shows up
+   before the engine is involved.
+3. **The engine**, run for real: punches go in through the real ingestion
+   service, days are recomputed by the real recompute path, and every stored day
+   is compared, field by field, with leg 2 (which leg 1 has vouched for).
+
+A disagreement between the engine and the reference is reported with the
+scenario, its parameters, the field, expected and actual, and the scenario's
+stated reason; whoever reads it decides which side is wrong. **What this cannot
+catch:** if a *rule itself* is wrong or misread (for example what a "half day"
+should be), the reference and the engine share my reading of it. That is what
+reading the catalogue is for, and why the scenario table is generated from the
+code rather than written separately.
+
+**Where it lives.**
+- `shared/attendance/simulator/`: plain TypeScript, no I/O, no database, seeded
+  (the same seed always gives the same month): the scenarios, the reference
+  model, the roster and the month plan. In `shared/` because the backend
+  replay and (in G2) the agent's simulator CLI both need it, and the
+  simulator itself never touches the database (§6).
+- `backend/src/modules/attendance/__tests__/simulator/`: the harness that
+  creates the roster in the *test* database, feeds the punches through
+  `ingest()`, recomputes, and diffs. Only the backend may touch the database.
+- The scenario library's own tests (fast, no database) run with the agent's
+  vitest suite: determinism, leg 1 against leg 2, the catalogue, "no engine
+  imports".
+
+**The roster** (seeded; 500 employees for the full replay, 40 for the always-on
+CI test). It carries its own masters, with explicit round numbers so the test
+doesn't depend on the seeded defaults (whose grace and thresholds are HR's to
+confirm):
+- shifts: `SIM-DAY` 10:00–19:00 (work 10:00–14:00, lunch 14:00–14:45, work
+  14:45–19:00; grace 10 in / 10 out; window −4 h / +6 h) and `SIM-NIGHT`
+  22:00–06:00 (work 22:00–02:00, break 02:00–02:30, work 02:30–06:00);
+- policies: `SIM-STD` (full day 420 min, half day 240, not-met loss 1.0, near
+  duplicates 120 s) and `SIM-STRICT` (480, 300, 0.5), so a policy really changes
+  outcomes;
+- week-off: `SIM-SUN` (Sunday) and `SIM-SUN-SAT24` (Sunday, and the 2nd and 4th
+  Saturday);
+- company holidays on two dates; approved leave (full day and each half, paid and
+  unpaid); joiners and leavers inside the month; device mappings that start
+  mid-month (manual → device); manual-capture employees (no mapping) with
+  nothing entered, a `TIMED` entry and a status-only entry; unmapped device IDs.
+
+**The named scenarios** (each reusable, seeded, with parameters; every one
+carries its intent):
+
+| Scenario | What it produces | Intended outcome |
+|---|---|---|
+| `normal-day` | in up to the grace limit, out at or after the end less grace | `P`, not late, not early, hours = span − lunch, no flags |
+| `late-arrival` | in `k` min (+ `s` s) after the grace limit, still a full day | `P`, late = ⌈k + s/60⌉, flag `LATE_IN` |
+| `early-exit` | out `k` min before end − grace, still a full day | `P`, early = ⌈k + s/60⌉, flag `EARLY_OUT` |
+| `late-and-early` | both | `P`, both figures and both flags |
+| `half-day-first` / `half-day-second` | hours between half and full day, covering more of one half | the covered half `P`, the other `A`, 0.5 loss, `SHORTFALL` |
+| `below-half-day` | hours under the half-day minimum | `A`, the policy's not-met loss, `HALF_DAY_MIN_NOT_MET` |
+| `threshold-edges` | hours exactly at, and one minute either side of, the full and half minimums | each side of each edge as the rule says |
+| `missing-punch` | one punch only | `A`, 0.5 loss, `MISSING_PUNCH` |
+| `duplicate-seconds` | pairs of punches 1–10 s apart (the 113 pattern) | counted once each; `collapsed` figure as expected |
+| `never-punches` | mapped, nothing | `A`, full loss |
+| `holiday-work`, `weekoff-work` | punches on an off day | `H` / `O`, worked on an off day, no flags |
+| `night-shift` | in before midnight, out after, and the edges of the window | `P` on the START date; nothing on the next |
+| `leave-half-worked` | half-day leave, the other half worked | `PL:P` style split |
+| `leave-full` | full-day leave | the leave code, loss only if unpaid |
+| `stray-flagged` | a normal day plus one punch delivered too late (flagged) | `P` computed without it, flag `CLOCK_FLAGGED` |
+| `unmapped` | an unknown device ID | no employee's day changes; counted as unmapped |
+| `manual-nothing` / `manual-timed` / `manual-status` | manual-capture employees | `NM` (never `A`); `TIMED` through the punch rules; status as entered |
+| `not-employed` | before joining, after the last day | no record |
+| `catch-up`, `out-of-order` | a backlog delivered late and in a shuffled order | the same day as if delivered live |
+| `month-realistic` | a seeded weighted mix of the above | each day as its scenario says |
+
+(`wrong-clock`, `device-silent` and `agent-silent` belong to G2 and P2-H: they
+need the agent route and the health alerts.)
+
+**The replay** (backend harness, `npm run test:replay --prefix backend`):
+1. create the masters and the roster in the test database in bulk
+   (`createMany`, so 500 people take seconds, and cleaned up with the
+   schema-driven helpers, never hand-ordered deletes);
+2. feed the month's ATTLOG lines through **`ingest()`** in batches of 1,000, as
+   the agent sends them (route `AGENT`), so mapping resolution, exact-duplicate
+   dropping and the plausibility flags are the real ones; the ingest clock is
+   the month's own, except for `stray-flagged`/`catch-up`, which are delivered
+   late (beyond the plausibility window, which the harness *reads* rather than
+   assumes);
+3. recompute the month for everyone with **`computeInChunks`**, the work
+   `attendance.recompute`, the nightly job and Process Attendance all do;
+4. diff **every employee-day** against the plan: each field, and also that days
+   expected to have *no record* really have none, and that no unexpected rows
+   exist. The test fails on any difference and prints the first mismatches
+   grouped by scenario;
+5. report punches sent, ingest time, recompute time, and employee-days per
+   scenario and per outcome.
+
+**The diff has to be able to fail.** Four checks make it prove something:
+- a **teeth test**: the same replay with one policy value changed (half-day
+  minimum +30 min) must report differences, in the half-day scenarios, and
+  nowhere else; and one expected value corrupted must report exactly one;
+- a **coverage test**: the month must actually contain every status, every flag,
+  night-shift days, a mid-month mapping switch, a joiner and a leaver, and a
+  collapsed duplicate; a missing category fails the test (so the corpus can't
+  quietly stop testing something);
+- **determinism**: the same seed gives byte-identical lines and expectations;
+- **no engine imports** in the simulator package (a test greps it), so the
+  reference can't quietly call the code it is checking.
+
+**Speed, secondary** (gate G2, D5): ingest ≤ 2 min and recompute ≤ 5 min for 500
+× a month, and a committed baseline (`backend/perf/baseline.json`) that each run
+is compared with, failing if any figure is more than 2× the baseline. The baseline
+is **recorded by the CI runner**, not this container (different machines, and a
+number that only holds on one of them guards nothing): the first green CI run's
+figures are committed. Locally the replay still reports its numbers.
+
+**CI:** the 40-employee replay with the golden diff and the teeth, coverage and
+determinism tests run in the normal backend suite. The 500-employee replay is a
+separate job (`attendance-replay`, also on demand) and its figures go to PROGRESS.
+
+**Rules decided while designing** (neither HR nor the spec covers them; each is
+small to change):
+1. **G1 is correctness, G2 the routes**, because that is the order of
+   importance you gave; G1 pauses for your review before G2.
+2. **The scenario library is in `shared/`**, not `biometric-agent/` as §6 first
+   said, so the backend replay and the agent CLI share one copy; the simulator
+   still never writes to the database.
+3. **The replay ingests in-process through `ingest()`**, not over HTTP: it is
+   the same service every route calls, with no network noise in the figures. The
+   three real routes, and the real agent, are G2.
+4. **The test roster has its own round-number masters** (grace 10 min, full day
+   7 h…), explicitly *not* HR's policy: they are test data, so a change to the
+   seeded defaults can't make the replay pass or fail.
+5. **The baseline is the CI runner's**, committed after the first green run.
+6. **`not-employed`, `unmapped` and `stray-flagged` are in the month**, since
+   "no record" and "excluded" are outcomes too.
 
