@@ -2043,13 +2043,17 @@ registers the service to run as it, and stores:
 - each device's comm key at `WellsureAgent/commkey/<serial>`.
 
 Credential Manager belongs to a user, so the secrets have to be written *as*
-that user. The script starts the agent's own `secrets set` as the service
-account (`Start-Process -Credential -LoadUserProfile`), handing the value over
-in a temporary file that only that account and the administrators can read and
-that is deleted straight after, never on a command line. The agent reads
-Credential Manager through Windows PowerShell and the system's `CredRead`
-(no native module to ship), once at start and again after a 401, so a rotated
-key works without a restart. Prompts hide what's typed.
+that user. Rather than have the installer impersonate the account (which needs
+its password, and resetting a local account's password destroys the credentials
+saved under it, so rotating the key would have been a trap), the installer,
+running as administrator, drops each value in `secrets-inbox\` inside the data
+folder, which only administrators, SYSTEM and the service account can open. At
+start the agent, which already runs as that account, stores each value in
+Credential Manager and deletes the file. Rotating the key is the same: drop a
+file, restart the service. The agent reads Credential Manager through Windows
+PowerShell and the system's `CredRead`/`CredWrite` (no native module to ship),
+the key again after a 401 (so a rotated key works without a restart) and comm
+keys cached for ten minutes. Prompts hide what's typed.
 
 **The service (NSSM).** Automatic (delayed) start, so the network is up;
 restart on exit after 5 s (throttled if it keeps failing), and the Windows
@@ -2071,9 +2075,10 @@ stops. Event IDs are fixed and listed in INSTALL.md so someone can find them.
 - `status`: what is true right now, in sentences, read from the data folder
   and the lock: is an agent running, each device's last read, state and
   punches waiting, anything set aside. For the person at the PC over the phone.
-- `secrets set agent-key|comm-key --serial <s> --from-file <f>` and
-  `secrets check`: write/verify Credential Manager (on Linux it says the
-  secrets come from environment variables). Values are never printed.
+- `diagnose` and `check-config` on Windows: run in an administrator's window
+  they can't see the service account's vault, so `diagnose` takes a comm key
+  from `WELLSURE_COMMKEY_<SERIAL>` and `check-config` says so rather than
+  reporting a missing key.
 
 **The scripts** (Windows PowerShell 5.1, which every Windows 10/11 and Server
 has; no PowerShell 7 features):
@@ -2088,9 +2093,11 @@ has; no PowerShell 7 features):
 - `upgrade.ps1`: stops the service, keeps the old executable as `.previous`,
   puts the new one in, starts it, confirms the new version reported; puts the
   old one back if the new one doesn't start.
-- `uninstall.ps1`: stops and removes the service and the event source. Keeps
-  `C:\ProgramData\Wellsure Agent` (it may hold punches the server hasn't
-  received) unless `-RemoveData`, and says how many are waiting before it does.
+- `uninstall.ps1`: stops and removes the service, the event source, the program
+  and the service account with its stored passwords (so a reinstall starts with
+  a fresh account and nothing stale). Keeps `C:\ProgramData\Wellsure Agent` (it
+  may hold punches the server hasn't received) unless `-RemoveData`, and says
+  how many are waiting before it does.
 - `set-key.ps1`: rotating the agent key: asks for the new one (hidden), stores
   it, restarts the service.
 
@@ -2123,13 +2130,16 @@ small to change):
 2. **Credential Manager is reached through Windows PowerShell**, not a native
    module: there is nothing to build or ship for Windows, at the cost of about
    a second at start and on a 401.
-3. **Secrets reach the service account through a temporary file** with a
-   restricted ACL (never the command line or an environment variable of a
-   long-lived process).
+3. **Secrets reach the service account through an inbox folder**, written by
+   the administrator and emptied by the service (never the command line or the
+   environment of a long-lived process, and no impersonation or password
+   kept). Changed during the build from "a temporary file handed to a process
+   started as the account".
 4. **The data folder is administrators + SYSTEM + the service account only**,
    since the outbox is punch data.
 5. **Uninstall keeps the data folder by default**, because it may hold punches
-   not yet sent.
+   not yet sent, but always removes the account (its saved passwords go with
+   it; reinstalling asks for the key again).
 6. **`install.ps1` is idempotent** and never reports success until the agent has
    reported in.
 7. **No code signing** (no certificate), so INSTALL.md covers SmartScreen and

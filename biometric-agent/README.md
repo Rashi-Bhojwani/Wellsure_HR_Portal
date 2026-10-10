@@ -28,10 +28,14 @@ each device's settings ("Sync punches from", retention) and the thresholds.
 
 ```bash
 npm run agent -- run            --config <config.json>   # the agent
+npm run agent -- status         --config <config.json>   # what is true right now, in sentences; exit 0 only if working
 npm run agent -- diagnose       --config <config.json>   # read each device and print what it says; sends nothing
 npm run agent -- check-config   --config <config.json>   # validate; say which secrets are present (never their values)
+npm run agent -- quarantine     --config <config.json>   # punch batches the server refused (--export <folder>, --done)
 npm run agent -- version
 npm run fake-device -- --serial SIM-001 --port 4370      # development: a fake device speaking the real protocol
+npm run fake-api -- --key wsa_test --serial SIM-001      # development and CI: a stand-in for the two agent endpoints
+npm run build:exe                                        # the single executable (Node SEA), for this OS
 npm test                                                 # the agent's tests
 ```
 
@@ -46,9 +50,23 @@ npm test                                                 # the agent's tests
 ```
 
 Secrets: the agent key and each device's comm key. On Windows they live in
-Credential Manager under the service's own account (built in P2-F commit F2,
-with the Windows service, NSSM and `INSTALL.md`). On Linux, for development
-and CI: `WELLSURE_AGENT_KEY` and `WELLSURE_COMMKEY_<SERIAL>`.
+Credential Manager under the service's own account, handed over through a
+locked-down inbox folder (`src/secrets/`). On Linux, for development and CI:
+`WELLSURE_AGENT_KEY` and `WELLSURE_COMMKEY_<SERIAL>`.
+
+## On the office PC (Windows)
+
+[`INSTALL.md`](INSTALL.md) is the guide for whoever installs it (not a
+developer): written to be followed on the phone. The release zip is built by
+the CI job `agent-windows` (executable + NSSM + `windows/*.ps1` + `INSTALL.md`)
+and attached to the run as an artifact.
+
+| Folder | What |
+|---|---|
+| `src/` | The agent (`device/` the read-only driver, `sync/` cursor/outbox/agent, `service/` event log + `status`, `secrets/`) |
+| `windows/` | `install.ps1`, `upgrade.ps1`, `uninstall.ps1`, `set-key.ps1`, `lib.ps1` (Windows PowerShell 5.1) |
+| `packaging/` | Builds the executable, fetches NSSM against a pinned hash, assembles the release folder |
+| `ci/` | The script the Windows CI job uses to install the zip and exercise the real service |
 
 Running it locally against the dev API: `docs/GETTING_STARTED.md`, "Running
 the sync agent locally".

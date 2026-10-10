@@ -321,8 +321,10 @@ Run from the repo root unless noted.
 | `npm run typecheck` | `tsc --noEmit` across every project |
 | `npm run test` | Vitest, backend + frontend + biometric-agent — backend is an integration suite against your real local Postgres/Redis, not mocks; frontend covers route-config wiring (`frontend/src/routes/__tests__/`). Safe to run while `npm run dev` is up, with no interaction either way: the suite uses its own Postgres database (`<dev database>_test`), Redis database and Socket.IO channel (`REDIS_TEST_DB`), and `.storage-test/`/`.mail-test/` folders. Each run drops, recreates, migrates and seeds that database first (about 10 s), so every run starts from the same state |
 | `npm run check:services` | Confirms Postgres/Redis are reachable |
-| `npm run agent --prefix biometric-agent -- <run\|diagnose\|check-config\|version> --config <file>` | The biometric sync agent (Phase 2 P2-F); see "Running the sync agent locally" below |
+| `npm run agent --prefix biometric-agent -- <run\|status\|diagnose\|check-config\|quarantine\|version> --config <file>` | The biometric sync agent (Phase 2 P2-F); see "Running the sync agent locally" below |
 | `npm run fake-device --prefix biometric-agent -- --serial <s> --port <p>` | A fake biometric device speaking the real protocol, for local development |
+| `npm run fake-api --prefix biometric-agent -- --key <k> --serial <s>` | A stand-in for the agent's two API endpoints, to run the agent with no backend (also what the Windows CI job uses) |
+| `npm run build:exe --prefix biometric-agent` | Builds the agent as a single executable for this OS (the Windows release is built by CI) |
 | `npm run admin:bootstrap --prefix backend` | Create the **first** real Super Admin on a fresh staging/production database — see §12. Refuses once any active Super Admin exists, so it does nothing locally (seeded `1000` is one) |
 | `npm run admin:recover --prefix backend` | Break-glass recovery for a Super Admin who lost their password or 2FA device — see §12 |
 | `npm run history:repair --prefix backend` | **Preview** history rows that don't fit the effective-dating model (e.g. a leaver whose placement was never closed) — every fix, current → new value, and why, plus rows a person must decide. Changes nothing. To apply, get the preview approved, then run the exact command it prints (`--apply --fingerprint … --approved-by … --operator …`); a changed list is refused. `db:migrate` warns when this is needed. See `docs/plans/EFFECTIVE_DATES.md` |
@@ -378,6 +380,13 @@ device's protocol. Nothing here touches a real device.
    `curl -X POST localhost:4380/clock -d '{"offsetSeconds":300}'` makes the
    device clock drift: the Devices screen and Admin Home warn within a heartbeat.
    `/clear` clears its log; `/power` with `{"on":false}` stops it answering.
+
+To try the **packaged** executable instead of `tsx` (same behaviour, one file):
+`npm run build:exe --prefix biometric-agent`, then run
+`biometric-agent/dist/wellsure-agent run --config <file>` with the same
+environment variables. The Windows service, installer and release zip are built
+and tested by the CI job `agent-windows`; installing on a real PC is
+`biometric-agent/INSTALL.md`.
 
 The Devices screen shows what the agent last reported per device (read OK or
 why not, last read, clock offset, retention, log fill, punches waiting on the
