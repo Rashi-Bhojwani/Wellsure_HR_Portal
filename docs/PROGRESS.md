@@ -12,7 +12,7 @@ committed).
 | 0 | Foundation | ✅ Done |
 | 1 | Auth, RBAC, org, employees | Done — data layer, authentication, org masters, employee management, import center, exports, audit log viewer and system settings all built and tested. Users & Roles admin screen deliberately deferred (built in Phase 5 commit E1 as Roles & Permissions). **Correction (2026-09-30): role assignment does not exist anywhere in the product** — Add Employee always assigns plain `EMPLOYEE` and nothing else assigns roles; an earlier version of this row claimed otherwise. Both are Phase 5 commit E1 ([`docs/plans/PHASE_5.md`](plans/PHASE_5.md)). |
 | 1.5 | AWS staging environment | Not started |
-| 2 | Biometric ingestion + attendance engine + real-time | In progress — plan approved ([`docs/plans/PHASE_2.md`](plans/PHASE_2.md)); P2-A (configuration), P2-B (ingestion), P2-C (rules engine), P2-D (manual entry and the muster) and P2-E (Attendance Info, Who Is In, the forgot-to-punch request) done, plus the fail-safe thresholds and the finalisation gate; P2-F done: F1 (the sync agent with our read-only device driver, and its server side), a follow-up (HR is told when punches are set aside) and F2 (the Windows service, release zip and INSTALL.md, proven on a Windows CI runner); P2-G: G1 done (the simulator's correctness: scenarios with expected outcomes, the month replay and its diff); G2, then P2-H and P2-I to follow |
+| 2 | Biometric ingestion + attendance engine + real-time | In progress — plan approved ([`docs/plans/PHASE_2.md`](plans/PHASE_2.md)); P2-A (configuration), P2-B (ingestion), P2-C (rules engine), P2-D (manual entry and the muster) and P2-E (Attendance Info, Who Is In, the forgot-to-punch request) done, plus the fail-safe thresholds and the finalisation gate; P2-F done: F1 (the sync agent with our read-only device driver, and its server side), a follow-up (HR is told when punches are set aside) and F2 (the Windows service, release zip and INSTALL.md, proven on a Windows CI runner); P2-G done: G1 (the simulator's correctness: scenarios with expected outcomes, the month replay and its diff), G2a (the three routes, the `simulate` command, route replays) and G2b (the automated punch-to-screen latency test); P2-H and P2-I to follow |
 | 3 | Attendance administration | Not started |
 | 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
 | 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | ✅ Done (2026-10-03) — commits A, B, C, D, D2, E1, E1.1, E2, E3, F and G (mobile bottom bar + PWA), plus interim commits. Full review — every screen and URL, every permission, what's stubbed, open questions, risks for Phase 6 — in [`docs/plans/PHASE_5_REVIEW.md`](plans/PHASE_5_REVIEW.md). Plan and as-built notes per commit in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
@@ -4348,6 +4348,25 @@ and "P2-G, commit G2a … as built".
   ingestion service plus these 40-employee route replays — an HTTP replay of 500 would only add
   transport time.
 - **Next: G2b**, the automated punch-to-screen latency test.
+
+### Phase 2, commit P2-G G2b — the punch-to-screen latency test, automated (2026-10-10)
+
+Plan and as-built notes: [`docs/plans/PHASE_2.md`](plans/PHASE_2.md), "P2-G, commit G2b … as built".
+This is spec gate G1, the claim the whole project rests on, measured by a job rather than observed once.
+
+- **What is measured:** from the punch reaching the server to it showing on screen, in a real browser with no
+  reload, for each route (agent, ADMS push, file upload), on the employee's own Attendance Info and on HR's
+  Who Is In?. Fails if any sample on any screen exceeds 5 s, if a screen never shows it, or if a route or
+  screen wasn't measured. CI job `latency` boots the API, worker and frontend on a freshly seeded database.
+- **First measurements (local, fresh database):** own screen ~0.1 s; Who Is In? ~1.2–1.4 s on every route
+  (it waits for the recompute); agent device→server 1.8–3.8 s with a 5 s poll (30 s on a production PC, so the
+  worst case from finger to board is about the poll interval plus ~1.5 s). The CI runner's figures become the
+  baseline.
+- **It can fail:** with the server's attendance socket events disabled the test fails; the pass/fail rules
+  are unit-tested.
+- **Run it:** `npm run test:latency --prefix biometric-agent` with the API, worker and frontend up (see
+  GETTING_STARTED); it needs a freshly seeded database each time.
+- **Next:** P2-H (device health), which adds new schema, so its design goes to you first.
 
 ## Open questions
 

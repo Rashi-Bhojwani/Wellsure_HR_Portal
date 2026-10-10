@@ -15,7 +15,8 @@
     "fake-api": "tsx src/dev/fakeApiCli.ts",
     "build:exe": "node packaging/build-exe.mjs",
     "catalogue": "tsx src/simulator/catalogueCli.ts",
-    "simulate": "tsx src/simulator/cli.ts"
+    "simulate": "tsx src/simulator/cli.ts",
+    "test:latency": "tsx src/simulator/latency/run.ts"
   },
   "dependencies": {
     "zod": "^4.6.5"
@@ -27,6 +28,7 @@
     "eslint": "^9.9.0",
     "eslint-config-prettier": "^9.1.0",
     "globals": "^17.12.0",
+    "playwright-core": "1.56.1",
     "postject": "1.0.0-alpha.6",
     "tsx": "^4.19.0",
     "typescript": "^5.6.2",

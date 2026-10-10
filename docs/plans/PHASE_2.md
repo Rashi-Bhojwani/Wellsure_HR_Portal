@@ -2644,3 +2644,34 @@ Built as designed above. What is worth knowing beyond the design:
   2020-01-01 so any past day is replayable; (5) the dev-only login is rate-limited
   like any other, and the CLI says so rather than working around it.
 
+### P2-G, commit G2b (2026-10-10): the punch-to-screen latency test, as built
+
+`npm run test:latency --prefix biometric-agent`, and the CI job `latency` (boots the API, the worker and the
+frontend on a freshly seeded database, then runs it; uploads the figures and the server logs).
+- **What it does:** Playwright (`playwright-core` 1.56.1, dev dependency; Chrome from the CI image or
+  `$PLAYWRIGHT_CHROMIUM_EXECUTABLE`) signs HR into Who Is In? and three employees into their own Attendance
+  Info with today's day panel open. For each route (push, file, agent) it sends three punches: an employee
+  who is watching their own screen (both screens measured), a stranger's (HR's board only), and the watcher's
+  second (own screen only). The screens are watched from inside the page with a `MutationObserver`, so the
+  timestamp is when the DOM changed, not when a socket frame arrived.
+- **The clock starts** when the punch reaches the server: the server's own receipt time of the batch
+  (agent), just before the POST (push), just before the commit (file). The agent route also reports
+  device-to-server separately (it waits for the agent's next poll: 5 s here, 30 s on a production PC), so
+  the poll interval is never hidden inside the figure.
+- **Pass/fail** (`latency/stats.ts`, itself unit-tested): every sample on both screens within 5000 ms; a
+  screen that never shows the punch is recorded as 20 s, so it fails; a route or screen never measured fails;
+  and against a committed baseline (`perf/latency-baseline.json`, recorded by the CI runner) a figure may
+  not be both over 2x the baseline and over 2 s.
+- **Local result (fresh devcheck, 2026-10-10):** own screen about 0.1 s on every route; HR's Who Is In? about
+  1.2–1.4 s on every route (the board is built from the recomputed day, so it waits for the worker's debounced
+  recompute); agent device-to-server 1.8–3.8 s with a 5 s poll.
+- **Mutation-checked:** with the server's two attendance socket emitters disabled the test fails (no screen
+  updates within 20 s). With only `punch.received` disabled it still passes, because the employee's screen
+  then updates from `attendance.updated` after the recompute (about 1.2 s): the redundancy is real and the
+  test measures the outcome a person sees, not which event delivered it.
+- **Decisions I made** (for the user to veto): (1) the gate is measured from the punch reaching the server, not
+  from the finger on the device, for the reason above; (2) the employee's own-screen figure is the raw punch
+  appearing in their day panel, and HR's is the person appearing under Arrived (or under Away as "worked
+  anyway" on a day off); (3) it needs a freshly seeded database each time (it refuses to run when fewer than 8
+  people have no punches today), and signing in is rate-limited by IP at 10 per 15 minutes (a run uses 5).
+

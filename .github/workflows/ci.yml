@@ -264,3 +264,99 @@ jobs:
           path: backend/perf/last-run.json
           if-no-files-found: ignore
 
+
+  # Gate G1 of Phase 2 (docs/plans/PHASE_2.md §12, "P2-G, commit G2 build design"):
+  # a punch must show on the employee's own screen and on HR's Who Is In? within
+  # 5 seconds, by every route, in a real browser. This job boots the whole
+  # stack (API, worker, frontend) on a freshly seeded database and measures it.
+  latency:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: wellsure
+          POSTGRES_PASSWORD: wellsure
+          POSTGRES_DB: wellsure_hr
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wellsure -d wellsure_hr"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://wellsure:wellsure@localhost:5432/wellsure_hr
+      REDIS_URL: redis://localhost:6379
+      # The seeded development accounts' documented password (a throwaway database).
+      SIM_USER: "1000"
+      SIM_PASSWORD: Wellsure@123
+      # The GitHub-hosted Ubuntu image ships Google Chrome here.
+      PLAYWRIGHT_CHROMIUM_EXECUTABLE: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+            frontend/package-lock.json
+            biometric-agent/package-lock.json
+
+      - name: Install
+        run: |
+          npm install
+          npm install --prefix backend
+          npm install --prefix frontend
+          npm install --prefix biometric-agent
+
+      - name: Migrate and seed
+        run: |
+          npm run db:migrate
+          npm run db:seed
+
+      - name: Start the API, the worker and the frontend
+        run: |
+          mkdir -p "$RUNNER_TEMP/stack"
+          nohup npm run start --prefix backend > "$RUNNER_TEMP/stack/api.log" 2>&1 &
+          nohup npm run start --prefix backend -- worker > "$RUNNER_TEMP/stack/worker.log" 2>&1 &
+          nohup npm run dev --prefix frontend > "$RUNNER_TEMP/stack/frontend.log" 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fs http://localhost:4000/ready > /dev/null && curl -fs http://localhost:5173/login > /dev/null; then echo "stack is up after ${i} checks"; exit 0; fi
+            sleep 2
+          done
+          echo "the stack did not come up"; tail -n 40 "$RUNNER_TEMP"/stack/*.log; exit 1
+
+      - name: Measure punch-to-screen latency, by every route
+        run: npm run test:latency --prefix biometric-agent
+
+      - name: The figures
+        if: always()
+        run: |
+          cat biometric-agent/perf/latency-last-run.json || true
+          echo "### Punch-to-screen latency" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat biometric-agent/perf/latency-last-run.json >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: latency-figures-and-logs
+          path: |
+            biometric-agent/perf/latency-last-run.json
+            ${{ runner.temp }}/stack/*.log
+          if-no-files-found: ignore

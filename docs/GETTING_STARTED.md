@@ -322,6 +322,7 @@ Run from the repo root unless noted.
 | `npm run test` | Vitest, backend + frontend + biometric-agent — backend is an integration suite against your real local Postgres/Redis, not mocks; frontend covers route-config wiring (`frontend/src/routes/__tests__/`). Safe to run while `npm run dev` is up, with no interaction either way: the suite uses its own Postgres database (`<dev database>_test`), Redis database and Socket.IO channel (`REDIS_TEST_DB`), and `.storage-test/`/`.mail-test/` folders. Each run drops, recreates, migrates and seeds that database first (about 10 s), so every run starts from the same state |
 | `npm run test:replay --prefix backend` | The month replay: 500 simulated employees for a month through the real ingestion and recompute, diffed field by field against what each named scenario says should happen (about 75 s, needs the same local Postgres/Redis; not part of `npm run test`; CI runs it as `attendance-replay`). Writes `backend/perf/last-run.json`; see `backend/perf/README.md`. Override size with `REPLAY_EMPLOYEES` / `REPLAY_SEED` |
 | `npm run simulate --prefix biometric-agent -- <command>` | The punch simulator CLI (see "The punch simulator" above): `setup`, `scenarios`, `scenario <name>`, `replay`, `drip` |
+| `npm run test:latency --prefix biometric-agent` | Punch-to-screen latency in a real browser, by every route (see "Measuring punch-to-screen latency" above) |
 | `npm run catalogue --prefix biometric-agent` | Regenerates `docs/plans/PHASE_2_SCENARIOS.md`, the plain-words list of every simulator scenario and its expected outcome. A test fails if you change a scenario and forget to run this |
 | `npm run check:services` | Confirms Postgres/Redis are reachable |
 | `npm run agent --prefix biometric-agent -- <run\|status\|diagnose\|check-config\|quarantine\|version> --config <file>` | The biometric sync agent (Phase 2 P2-F); see "Running the sync agent locally" below |
@@ -373,6 +374,21 @@ is rate-limited by IP, so many quick runs in a row can be refused for a few
 minutes. Days whose punches arrive late (`stale-day`, `stray-flagged`,
 `catch-up`'s lateness) can't be sent through a real route and are left out; the
 replay tests cover them.
+
+**Measuring punch-to-screen latency (Phase 2 gate G1).** With the API, the worker and
+the frontend running (`npm run dev`) on a **freshly seeded** database:
+```bash
+export SIM_USER=1000 SIM_PASSWORD='<that account\'s password>'
+npm run test:latency --prefix biometric-agent
+```
+It signs HR and three employees into the real screens in a headless browser,
+sends punches by each route and prints how long each took to show on each
+screen; it fails past 5 seconds. Chromium comes from `PLAYWRIGHT_BROWSERS_PATH`
+(or `PLAYWRIGHT_CHROMIUM_EXECUTABLE`); `npx playwright-core install chromium`
+fetches one. It refuses to run if fewer than 8 people lack punches today (reseed),
+and signing in is limited to 10 per 15 minutes per IP (a run uses 5; local Redis
+key `ratelimit:auth.rateLimit.login:127.0.0.1` can be deleted to reset it). CI job
+`latency` does the same on every push.
 
 **Running the sync agent locally (Phase 2 P2-F).** The real agent and its
 read-only device driver, against a fake device on this machine that speaks the

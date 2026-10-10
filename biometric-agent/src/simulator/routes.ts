@@ -172,19 +172,29 @@ export class FileRoute implements Route {
     private readonly o: { api?: ServerApi; deviceId?: string; reason?: string; writeTo?: string },
   ) {}
 
-  async send(lines: PunchLine[]): Promise<void> {
+  /** The file written and, with a device, uploaded for preview (HR's first step). Returns the upload to commit, if any. */
+  async stage(lines: PunchLine[]): Promise<string | null> {
     const text = lines.map((l) => l.line).join("\n") + "\n";
     if (this.o.writeTo) {
       mkdirSync(path.dirname(this.o.writeTo), { recursive: true });
       writeFileSync(this.o.writeTo, text);
     }
-    if (!this.o.api || !this.o.deviceId) return;
-    // The same two calls the Import Center screen makes: preview, then commit.
+    if (!this.o.api || !this.o.deviceId) return null;
     const form = new FormData();
     form.set("deviceId", this.o.deviceId);
     form.set("file", new Blob([text], { type: "text/plain" }), "attlog.txt");
-    const preview = await this.o.api.request<{ batchId: string }>("POST", "/api/biometric/import/preview", { form });
-    await this.o.api.request("POST", `/api/biometric/import/${preview.batchId}/commit`, { json: { reason: this.o.reason ?? "Punch simulator (development)" } });
+    return (await this.o.api.request<{ batchId: string }>("POST", "/api/biometric/import/preview", { form })).batchId;
+  }
+
+  /** HR's second step: commit the previewed upload. This is the moment the punches reach the server. */
+  async commit(batchId: string): Promise<void> {
+    await this.o.api!.request("POST", `/api/biometric/import/${batchId}/commit`, { json: { reason: this.o.reason ?? "Punch simulator (development)" } });
+  }
+
+  async send(lines: PunchLine[]): Promise<void> {
+    // The same two calls the Import Center screen makes: preview, then commit.
+    const batchId = await this.stage(lines);
+    if (batchId) await this.commit(batchId);
   }
 
   async settled(): Promise<void> {
