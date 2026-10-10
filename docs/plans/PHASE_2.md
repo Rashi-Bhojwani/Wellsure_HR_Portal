@@ -2519,3 +2519,90 @@ a person can read the rules the engine is held to and say "no, that is not the r
 
 **Regenerating the catalogue**: `npm run catalogue --prefix biometric-agent`. A test
 fails if the committed page differs from what the scenarios now produce.
+
+### P2-G, commit G2 build design (2026-10-10, written before building)
+
+User, 2026-10-10: *"For G2, the punch-to-screen latency test matters most — it's the
+claim this whole project rests on, and I want it measured automatically rather than
+observed once in a walkthrough."* Two commits, the second being the one that matters
+most, each pushed once and CI read once:
+- **G2a**: the three delivery routes, the `simulate` CLI, the dev endpoints, production
+  refusal, and route-level replays (the golden diff, through real HTTP, per route).
+- **G2b**: the automated latency test and its CI job.
+
+**G2a**
+1. **Dev endpoints, `/api/dev/simulator/*`** (backend, `modules/dev/`). Mounted only when
+   `APP_ENV !== "production"`: in production the router does not exist, so the path is a
+   plain 404. Needs `attendance.devices.manage`. `GET /roster?from&to` returns the
+   employees who punch on a device (code, device user ID, branch, device capture/manual
+   from the effective-dated mapping), each day's shift/policy/week-off in force, approved
+   leave and holidays, shaped as the simulator's `Roster`. `GET /days?from&to` returns the
+   stored `daily_attendance` for the same people, in the replay's vocabulary, so the CLI
+   can diff against the plan. Both are read-only; the simulator never writes to the
+   database, only sends punches through the three real routes.
+2. **Production refusal, three layers.** (a) The router isn't mounted. (b) Registering an
+   `is_simulated` device is already refused when `APP_ENV=production` (P2-F), and the
+   agent refuses the simulated driver for a device the server doesn't mark simulated.
+   (c) The CLI asks the server first and refuses to send a single punch unless
+   `/api/dev/simulator/roster` answers and says the environment is not production; a 404
+   (a production build) is "this is not a development server".
+3. **The three routes, always the real path** (`biometric-agent/src/simulator/routes.ts`):
+   - `agent`: the CLI writes the simulated device's state file (the `SimulatedDriver`'s
+     JSON source) and runs the **real agent** (`main.ts run`, same code as the Windows
+     service) against it, with the agent key from the environment. The punches reach the
+     server only because the agent read them and posted them.
+   - `push`: plays the ADMS device: `GET /iclock/cdata?SN=` handshake, then `POST
+     /iclock/cdata?SN=…&table=ATTLOG`, chunked like a device.
+   - `file`: writes the ATTLOG file and, with `--commit`, uploads it through
+     `POST /api/biometric/import/preview` and `/commit` (the same screen HR would use).
+4. **The CLI**: `npm run simulate --prefix biometric-agent -- <command>`:
+   - `scenario <name> --route … [--employee CODE] [--date D] [--seed N]`: one named
+     scenario for one or more employees on a date, with its expected outcome printed and
+     (with `--verify`) compared with what the server stored.
+   - `replay --from D --to D --route … [--seed N] [--verify]`: the planned days for the
+     server's roster, sent through the chosen route; reports punches sent, time to
+     ingest, time until every day is recomputed, and the diff (must be empty).
+   - `drip --route … [--rate N/min | --employee CODE]`: single punches in real time, so
+     Who Is In?, the calendar and the Devices screen can be watched updating.
+   - `--seed` is always honoured; the same seed gives the same punches.
+5. **Route replays in CI** (backend, in the replay job, not the fast suite): the 40-employee
+   golden world (G1) sent through each route over **real HTTP** (agent: the real agent as
+   a child process; push: ADMS posts; file: preview and commit), then recomputed and
+   diffed exactly as in G1. Two limits, stated: (i) the server stamps arrival with its own
+   clock, so only `live` deliveries are replayable over HTTP (a `late` or `stale`
+   delivery needs the clock moved, which production code must not allow), so those
+   employee-days are left out of the route replays and stay covered by G1; (ii) the
+   punch-age plausibility window is raised for the test (an ordinary admin setting) so a
+   fixed past month is not "too old".
+   **Gate G2 as measured:** G2's "a 500-employee month through the agent route" is met
+   by G1's replay through the real ingestion service (which the agent route calls),
+   plus these route replays at 40 employees; an HTTP replay of 500 would only add
+   transport time and would need a 500-employee world in a dev database, which the
+   simulator is not allowed to create. Recorded as a decision, not hidden.
+
+**G2b: the latency test (gate G1)**
+- **What is measured**, per route, per sample: the time from the punch **reaching the
+  server by that route** to the punch **showing on screen** in a real browser with no
+  reload, on both screens: the employee's own Attendance Info (their day panel lists the
+  punch) and HR's Who Is In? (the person appears on the board). Agent: from the server's
+  own receipt time of the batch (so the poll interval is reported separately, not hidden
+  in the figure); push: from just before the POST; file: from just before commit. The
+  screen update is read from the DOM (what a person sees), the strictest reading of "the
+  socket event".
+- **How**: `biometric-agent/src/simulator/latency/` (Playwright with `playwright-core`
+  as a dev dependency, Chromium from the CI image or `PLAYWRIGHT_BROWSERS_PATH`), run
+  by `npm run test:latency --prefix biometric-agent` against a running API, worker and
+  frontend. Employees are signed in on both screens before the punch, nine distinct
+  employees (three samples per route; Who Is In shows someone once a day).
+- **Pass/fail**: every sample on every screen ≤ 5 s (the gate), and the run records
+  min/median/max per route and screen to `perf/latency-last-run.json`, printed in the CI
+  summary. The figures are also checked against a committed baseline like the replay's
+  (fail beyond 2× baseline, with a floor so a 0.3 s baseline can't make 0.7 s a failure).
+- **In CI**: a new job `latency`: services, migrate, seed, API + worker + the frontend
+  dev server, then the test. Its artifacts are uploaded. A route that is slow fails the
+  commit that made it slow.
+- **Agent route caveat, stated in the output**: a punch reaches the server only on the
+  agent's next poll. The test polls every 5 s (the minimum); production uses 30 s, so
+  the worst case from a person pressing the finger to the screen is the poll interval
+  plus the measured post-to-screen time.
+
