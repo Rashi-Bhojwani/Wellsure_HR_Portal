@@ -2367,7 +2367,7 @@ carries its intent):
 | `half-day-first` / `half-day-second` | hours between half and full day, covering more of one half | the covered half `P`, the other `A`, 0.5 loss, `SHORTFALL` |
 | `below-half-day` | hours under the half-day minimum | `A`, the policy's not-met loss, `HALF_DAY_MIN_NOT_MET` |
 | `threshold-edges` | hours exactly at, and one minute either side of, the full and half minimums | each side of each edge as the rule says |
-| `missing-punch` | one punch only | `A`, 0.5 loss, `MISSING_PUNCH` |
+| `missing-punch` | one punch only | `A`, a day's loss (rule 6 of P2-C), `MISSING_PUNCH` |
 | `duplicate-seconds` | pairs of punches 1–10 s apart (the 113 pattern) | counted once each; `collapsed` figure as expected |
 | `never-punches` | mapped, nothing | `A`, full loss |
 | `holiday-work`, `weekoff-work` | punches on an off day | `H` / `O`, worked on an off day, no flags |
@@ -2443,3 +2443,75 @@ small to change):
 6. **`not-employed`, `unmapped` and `stray-flagged` are in the month**, since
    "no record" and "excluded" are outcomes too.
 
+### P2-G, commit G1 (2026-10-10): simulator correctness, as built
+
+What is in: the scenario library, the independent reference model, the seeded
+roster and month plan, the real-path month replay with a field-by-field diff, the
+generated scenario catalogue ([`PHASE_2_SCENARIOS.md`](PHASE_2_SCENARIOS.md)), and a CI job that
+runs the 500-employee month. What is **not** in (G2): the three delivery routes
+into a running server, the `simulate` CLI, the live drip, the dev roster
+endpoint, production refusal and the punch-to-screen latency test.
+
+**Where things are**
+- `shared/attendance/simulator/`: `rng` (seeded; one stream per employee-day, so
+  results do not depend on order), `time`, `model`, `scenarios` (each carries its
+  intent as a closed form), `reference` (an independent re-statement of the rules;
+  a test greps that it imports nothing from the engine), `roster`, `month`,
+  `catalogue`.
+- `backend/src/modules/attendance/__tests__/simulator/`: `world` (builds the
+  organisation in the test DB and removes it with the schema-driven cleanup),
+  `replay` (real `ingest()` then the real `computeInChunks`, then the diff),
+  `golden.test.ts` (40 employees, in every CI run), `month500.replay.test.ts`
+  (500 employees; `npm run test:replay --prefix backend`; its own vitest config so
+  the ordinary suite stays fast).
+
+**Three legs, so the engine does not mark its own homework.** Each employee-day is
+(1) *declared* by its scenario in closed form ("in 38 min after grace, so late 38"),
+(2) *derived* by the reference model from the raw punches, and (3) *computed* by the
+real engine. The tests require 1 = 2 over thousands of draws and 2 = 3 over the whole
+replay. Mutation checks: changing the engine's full-day comparison (`>=` to `>`) makes
+the 500 replay fail with 56 employee-days, all in `threshold-edges` and `manual-timed`;
+changing the policy's half-day minimum by 30 minutes is caught only in the
+half-day scenarios.
+
+**What the replay found: a real engine bug.** A night-shift employee's *last working
+day* was stored as `A` with `MISSING_PUNCH`. The shift's out-punches fall after
+midnight, on the next date, when the person is no longer employed; the loader still
+gave the non-employed date a punch window, so the out-punch was attributed to the
+wrong date and the last night was left with one punch. **Fix** (`compute.ts`): a date
+on which the person is not employed gets no punch window. `ENGINE_VERSION` is now 2,
+so existing computed days are recomputed on the next run. A named regression test
+covers it. *This is a rule-affecting change decided by me, not HR or the spec; revert
+is a three-line change if the user prefers to decide it.*
+
+**Results (local, 2026-08, seed 20260801, 500 employees)**: 15,500 employee-days,
+21,559 punches in 86 ingest calls, **0 differences**; ingest 10.9 s, recompute 48.1 s.
+The speed figures are the secondary measure: the guard is the limits (ingest 120 s,
+recompute 300 s) and, once `backend/perf/baseline.json` exists, 2x the baseline. The
+baseline is recorded from the **CI runner** (`attendance-replay` job prints
+`last-run.json` and uploads it), not from a development machine.
+
+**Rules decided while building (for the user to veto)**
+1. The simulated organisation has its own round-number masters (SIM-DAY 10:00–19:00,
+   SIM-NIGHT, SIM-STD/SIM-STRICT policies, leave codes SIMPL/SIMLOP). They are
+   deliberately not HR's real policy, whose grace and thresholds are HR's to confirm.
+2. Ties are not left to chance: a day covering exactly equal fractions of both halves
+   is a plain half day (`HD`, neither half named); that is the engine's rule, and the
+   catalogue states it.
+3. Joiners' first days and leavers' last days are always working days and always
+   `normal-day`; the day before joining and the day after leaving carry stray punches
+   (a card still in use), which must produce no record.
+4. A stale delivery (older than the plausibility window) is expected to be flagged and
+   excluded, giving `A` with `CLOCK_FLAGGED`; that is the existing fail-safe, now
+   pinned.
+5. Archetype shares (day 58%, strict 8%, Saturday-off 8%, night 6%, manual 8%, joiner,
+   leaver, mapped-late 2.5% each, night-leaver 1%) are test data, not policy.
+
+**The honest limit.** The reference model and the engine were both written from the
+same written rules, by the same author. Where my reading of a rule is wrong, both are
+wrong together and the replay stays green. That is what the generated catalogue is
+for: every scenario, in plain words, with the expected outcome of worked examples, so
+a person can read the rules the engine is held to and say "no, that is not the rule".
+
+**Regenerating the catalogue**: `npm run catalogue --prefix biometric-agent`. A test
+fails if the committed page differs from what the scenarios now produce.

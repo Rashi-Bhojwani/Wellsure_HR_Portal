@@ -2,7 +2,7 @@
   "name": "backend",
   "version": "0.1.0",
   "private": true,
-  "description": "Wellsure HR Portal backend — REST API, Socket.IO, BullMQ workers and scheduler. One image, four entrypoint modes (api | worker | scheduler | migrate).",
+  "description": "Wellsure HR Portal backend \u2014 REST API, Socket.IO, BullMQ workers and scheduler. One image, four entrypoint modes (api | worker | scheduler | migrate).",
   "type": "module",
   "scripts": {
     "postinstall": "prisma generate",
@@ -20,7 +20,8 @@
     "db:seed": "tsx scripts/reset-db.ts",
     "admin:bootstrap": "tsx scripts/admin-bootstrap.ts",
     "admin:recover": "tsx scripts/admin-recover.ts",
-    "history:repair": "tsx scripts/history-repair.ts"
+    "history:repair": "tsx scripts/history-repair.ts",
+    "test:replay": "vitest run --config vitest.replay.config.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

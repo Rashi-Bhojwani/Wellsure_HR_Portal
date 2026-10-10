@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 import path from "node:path";
 
 export default defineConfig({
@@ -10,6 +10,8 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],
+    // The 500-employee month replay is its own job (`npm run test:replay`), not part of every run.
+    exclude: [...configDefaults.exclude, "**/*.replay.test.ts"],
     globalSetup: ["./vitest.globalSetup.ts"],
     // Integration tests share one real Postgres/Redis instance and some
     // genuinely global rows (SystemSetting keys, rate-limit buckets keyed

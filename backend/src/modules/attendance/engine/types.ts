@@ -2,7 +2,8 @@
 // only: the engine is a pure function, so every rule is table-testable.
 
 /** Bump whenever a rule's behaviour changes; stored on every day so a recompute can show what changed. */
-export const ENGINE_VERSION = 1;
+// 1 → 2 (P2-G): punches are no longer attributed to dates on which the person isn't employed (a night-shift leaver's last night).
+export const ENGINE_VERSION = 2;
 
 export type AttendanceSource = "DEVICE" | "MANUAL" | "LEAVE" | "HOLIDAY" | "WEEK_OFF";
 export type Capture = "DEVICE" | "MANUAL";

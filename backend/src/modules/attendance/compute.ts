@@ -185,10 +185,17 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
     // Punches → business dates through the shift windows (night shifts stay on their start date).
     const around: string[] = [];
     for (let d = addDays(from, -1); d <= addDays(last, 1); d = addDays(d, 1)) around.push(d);
-    const dayShifts = around.map((date) => {
-      const a = assignmentOnDate(date);
-      return { date, shift: a ? shiftDef(a) : null };
-    });
+    // A date on which the person is not employed (before joining, after the last working day) has no punch window at all.
+    // Without this, the day after a night-shift leaver's last night got a shift-less 00:00–24:00 window that was NEARER to
+    // the final morning's out punch than the night shift's own window, and stole it (found by the P2-G month replay):
+    // their last night read as absent with a missing punch. Night shifts belong to their START date (spec §4.4).
+    const employedOn = (date: string) => emp.dateOfJoining <= utcDate(date) && (!emp.lastWorkingDate || emp.lastWorkingDate >= utcDate(date));
+    const dayShifts = around
+      .filter(employedOn)
+      .map((date) => {
+        const a = assignmentOnDate(date);
+        return { date, shift: a ? shiftDef(a) : null };
+      });
     const mine = punches.filter((p) => p.employeeId === emp.id);
     const usable: PunchRef[] = mine.filter((p) => !p.flag || p.flagResolution?.decision === "ACCEPTED").map((p) => ({ id: p.id, at: p.punchedAt.getTime() }));
     const pending: PunchRef[] = mine.filter((p) => p.flag && !p.flagResolution).map((p) => ({ id: p.id, at: p.punchedAt.getTime() }));
@@ -206,7 +213,7 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
         continue;
       }
       const a = assignmentOnDate(date);
-      const employed = emp.dateOfJoining <= utcDate(date) && (!emp.lastWorkingDate || emp.lastWorkingDate >= utcDate(date));
+      const employed = employedOn(date);
       const input: DayInput = {
         date,
         employed,

@@ -40,3 +40,4 @@ infra/.cdk.staging/
 
 # Biometric sync agent: its local state and outbox when run in development
 agent-data/
+backend/perf/last-run.json

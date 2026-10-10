@@ -192,3 +192,70 @@ jobs:
           Get-ChildItem (Join-Path $env:RUNNER_TEMP 'agent-ci') -Filter *.log -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "--- $($_.Name)"; Get-Content $_.FullName -Tail 40 }
           try { Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'WellsureAgent' } -MaxEvents 20 -ErrorAction Stop | Format-List TimeCreated, Id, LevelDisplayName, Message } catch { Write-Host 'no WellsureAgent events' }
 
+  # The month replay for 500 employees (Phase 2 P2-G; docs/plans/PHASE_2.md "P2-G
+  # build design"): a whole month, every named scenario, through the real
+  # ingestion service and the real recompute path, failing if ANY employee-day is
+  # stored differently from what its scenario says it should be. Its own job so
+  # it doesn't slow every run; the 40-employee version of the same replay is in
+  # the normal backend suite. Its timings are checked against
+  # backend/perf/baseline.json (fail if more than 2x), which this runner records.
+  attendance-replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: wellsure
+          POSTGRES_PASSWORD: wellsure
+          POSTGRES_DB: wellsure_hr
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wellsure -d wellsure_hr"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://wellsure:wellsure@localhost:5432/wellsure_hr
+      REDIS_URL: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install
+        run: npm install --prefix backend
+
+      - name: Replay a month for 500 employees
+        run: npm run test:replay --prefix backend
+
+      - name: The figures (these are what the baseline is recorded from)
+        if: always()
+        run: |
+          cat backend/perf/last-run.json || true
+          echo "### Month replay, 500 employees" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat backend/perf/last-run.json >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: month-replay-figures
+          path: backend/perf/last-run.json
+          if-no-files-found: ignore
+

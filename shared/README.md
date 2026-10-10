@@ -18,3 +18,9 @@ alias:
 
 See `index.ts` (the barrel — currently a placeholder) and `types/`,
 `schemas/`, `constants/`, `utils/` below for the folder layout.
+
+`attendance/simulator/` — the punch simulator's library (P2-G): seeded
+scenarios that each declare their expected outcome, an independent reference
+model of the attendance rules, the simulated roster and month plan, and the
+generator for `docs/plans/PHASE_2_SCENARIOS.md`. Imported by the backend
+replay tests and the agent's tests; nothing in it imports the engine.

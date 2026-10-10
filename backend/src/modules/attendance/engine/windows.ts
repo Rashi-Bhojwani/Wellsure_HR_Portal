@@ -7,7 +7,8 @@ import type { PunchRef, ShiftDef } from "./types";
 // timeline, so a night shift crossing midnight keeps its after-midnight
 // punches on its START date. A punch inside two dates' windows goes to the
 // date whose shift start is nearer; an exact tie goes to the earlier date.
-// A date without a shift uses its calendar day (00:00–24:00 IST). A punch in
+// A date without a shift uses its calendar day (00:00–24:00 IST); a date on which the person is
+// not employed has no window at all (the loader leaves it out). A punch in
 // no window at all is left out of every day (counted, never silently lost).
 
 export interface DayShift {

@@ -12,7 +12,7 @@ committed).
 | 0 | Foundation | ✅ Done |
 | 1 | Auth, RBAC, org, employees | Done — data layer, authentication, org masters, employee management, import center, exports, audit log viewer and system settings all built and tested. Users & Roles admin screen deliberately deferred (built in Phase 5 commit E1 as Roles & Permissions). **Correction (2026-09-30): role assignment does not exist anywhere in the product** — Add Employee always assigns plain `EMPLOYEE` and nothing else assigns roles; an earlier version of this row claimed otherwise. Both are Phase 5 commit E1 ([`docs/plans/PHASE_5.md`](plans/PHASE_5.md)). |
 | 1.5 | AWS staging environment | Not started |
-| 2 | Biometric ingestion + attendance engine + real-time | In progress — plan approved ([`docs/plans/PHASE_2.md`](plans/PHASE_2.md)); P2-A (configuration), P2-B (ingestion), P2-C (rules engine), P2-D (manual entry and the muster) and P2-E (Attendance Info, Who Is In, the forgot-to-punch request) done, plus the fail-safe thresholds and the finalisation gate; P2-F done: F1 (the sync agent with our read-only device driver, and its server side), a follow-up (HR is told when punches are set aside) and F2 (the Windows service, release zip and INSTALL.md, proven on a Windows CI runner); P2-G → P2-I to follow |
+| 2 | Biometric ingestion + attendance engine + real-time | In progress — plan approved ([`docs/plans/PHASE_2.md`](plans/PHASE_2.md)); P2-A (configuration), P2-B (ingestion), P2-C (rules engine), P2-D (manual entry and the muster) and P2-E (Attendance Info, Who Is In, the forgot-to-punch request) done, plus the fail-safe thresholds and the finalisation gate; P2-F done: F1 (the sync agent with our read-only device driver, and its server side), a follow-up (HR is told when punches are set aside) and F2 (the Windows service, release zip and INSTALL.md, proven on a Windows CI runner); P2-G: G1 done (the simulator's correctness: scenarios with expected outcomes, the month replay and its diff); G2, then P2-H and P2-I to follow |
 | 3 | Attendance administration | Not started |
 | 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
 | 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | ✅ Done (2026-10-03) — commits A, B, C, D, D2, E1, E1.1, E2, E3, F and G (mobile bottom bar + PWA), plus interim commits. Full review — every screen and URL, every permission, what's stubbed, open questions, risks for Phase 6 — in [`docs/plans/PHASE_5_REVIEW.md`](plans/PHASE_5_REVIEW.md). Plan and as-built notes per commit in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
@@ -4291,6 +4291,37 @@ design" and "P2-F, commit F2 (2026-10-10): the Windows service, as built", inclu
 
 **Tests:** agent 97 (also run on Windows in CI), backend 811, frontend 12; lint and typecheck
 clean.
+
+### Phase 2, commit P2-G G1 — the punch simulator proves the engine is right (2026-10-10)
+
+Plan and as-built notes: [`docs/plans/PHASE_2.md`](plans/PHASE_2.md), "P2-G build design" and
+"P2-G, commit G1 (2026-10-10): simulator correctness, as built". The generated list of every
+scenario and its expected outcome is [`docs/plans/PHASE_2_SCENARIOS.md`](plans/PHASE_2_SCENARIOS.md)
+(read this to check the rules themselves).
+
+- **What it proves.** A seeded month for a made-up organisation (500 employees in the big run,
+  40 in every CI run) goes through the real ingestion service and the real recompute path.
+  Every employee-day is then compared, field by field, with what its named scenario says it
+  should be; any difference fails the run and is reported grouped by scenario with a worked
+  example. Three independent statements of each outcome (the scenario's own, a separate
+  reference model, the real engine) must agree.
+- **It found a real bug.** A night-shift employee's last working night was stored as absent
+  with a missing punch (the out-punch falls after midnight, when they are no longer
+  employed). Fixed in `compute.ts`; `ENGINE_VERSION` is 2 so stored days are recomputed; a
+  named regression test covers it. Rule-affecting, decided by me: say if you want it reverted.
+- **Results (500 employees, one month, local).** 15,500 employee-days, 21,559 punches, 86
+  ingest calls, 0 differences; ingest 10.9 s, recompute 48.1 s. The perf baseline is recorded
+  from the CI runner, not this machine.
+- **Teeth.** Changing the engine's full-day comparison makes the 500 replay fail on 56
+  employee-days; changing a policy minimum is caught only in the scenarios it should affect;
+  corrupting one expected value gives exactly one reported difference.
+- **Limit, stated plainly.** The reference model and the engine share my reading of the written
+  rules. If a rule is wrongly understood, both are wrong together. The catalogue exists so a
+  person can read the rules and veto them.
+- **New commands.** `npm run test:replay --prefix backend` (500 employees; CI job
+  `attendance-replay`), `npm run catalogue --prefix biometric-agent`.
+- **Next: G2** (the three routes into a running server, the `simulate` CLI, drip, the dev roster
+  endpoint, production refusal, the punch-to-screen latency test).
 
 ## Open questions
 
