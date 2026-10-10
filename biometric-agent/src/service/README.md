@@ -12,4 +12,4 @@ The Windows side of the agent (P2-F commit F2). See `docs/plans/PHASE_2.md`,
   at the PC.
 
 The service itself is NSSM plus `windows/*.ps1`; the single executable is built by
-`build/`.
+`packaging/`.

@@ -151,7 +151,7 @@ jobs:
 
       - name: Fetch NSSM (checked against the pinned hash)
         shell: powershell
-        run: ./biometric-agent/build/fetch-nssm.ps1 -Version $env:NSSM_VERSION -Sha256 $env:NSSM_SHA256 -OutDir nssm-dl
+        run: ./biometric-agent/packaging/fetch-nssm.ps1 -Version $env:NSSM_VERSION -Sha256 $env:NSSM_SHA256 -OutDir nssm-dl
 
       - name: Build the executable
         working-directory: biometric-agent
@@ -161,7 +161,7 @@ jobs:
         shell: powershell
         run: |
           Push-Location biometric-agent
-          node build/package-release.mjs --nssm "..\nssm-dl\nssm-$env:NSSM_VERSION\win64\nssm.exe" --out ..\release
+          node packaging/package-release.mjs --nssm "..\nssm-dl\nssm-$env:NSSM_VERSION\win64\nssm.exe" --out ..\release
           Pop-Location
           $version = (Get-Content biometric-agent\package.json -Raw | ConvertFrom-Json).version
           New-Item -ItemType Directory -Force -Path dist-zip | Out-Null
