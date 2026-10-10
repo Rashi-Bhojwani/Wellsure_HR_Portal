@@ -935,7 +935,15 @@ backoff logic, and the Windows service mechanics (CI runner).
 5. **The office environment.** That an always-on PC exists, its Windows
    version, its antivirus, and the LAN path from the PC to the device on
    port 4370. The single-executable service is proven on a clean
-   Windows CI runner, not on that PC.
+   Windows CI runner, not on that PC. Specifically (added with F2):
+   antivirus or application-control policy blocking or quarantining an
+   unsigned executable (an exclusion for `C:\Program Files\Wellsure Agent`
+   is the fix); a domain policy that blocks local account creation,
+   restricts "log on as a service" or restricts PowerShell
+   (`install.ps1` says which step failed); survival across a real reboot
+   and a real sleep/hibernate (a runner can't reboot: restart on failure
+   and automatic start stand in); the PC reaching the app over HTTPS from
+   the office network (proxy, firewall).
 6. **End-to-end latency in production.** The 5-second gate (§12) is
    measured locally, through all three routes. On the real network it
    adds the office uplink (agent → AWS) and the 30 s poll interval. **A
@@ -2150,7 +2158,7 @@ small to change):
 9. **`status` and `secrets` are agent commands**, so the phone call can be
    "run status and read me the second line".
 
-**Unproven until the real PC** (to join §11.1):
+**Unproven until the real PC** (now in §11.1 item 5):
 - Antivirus or application-control policy on the office PC blocking or
   quarantining an unsigned executable. If it does, an exclusion for
   `C:\Program Files\Wellsure Agent` is the fix.
@@ -2159,4 +2167,102 @@ small to change):
   policy). `install.ps1` checks each and says which one failed.
 - Survival across a real reboot and a real sleep/hibernate.
 - The PC reaching the app over HTTPS from the office network (proxy, firewall).
+
+### P2-F, commit F2 (2026-10-10): the Windows service, as built
+
+Built as the F2 design above (revised where noted), in a series of commits
+because the Windows CI job is the only place the service can be proven, and
+it found real bugs one run at a time. **The final run: 35 of 35 service
+checks pass, and all 97 agent tests pass on Windows.**
+
+**What the Windows runner proved** (`ci/windows-service-test.ps1`, against a
+fake API and the fake device, installing the shipped zip):
+- the release folder matches its `SHA256SUMS.txt`; `install.ps1` finishes and
+  says WORKING; the service exists, is running, starts automatically;
+- the agent runs as `WellsureAgentSvc`, which is in no group but Users; the
+  data folder is closed to ordinary users;
+- the agent key is stored in Credential Manager and appears nowhere on disk or
+  on the command line, yet the agent authenticates with it (so it was read
+  from Credential Manager); the inbox is empty; the log never shows it;
+- a punch on the device reaches the API; killing the process, the service
+  starts a new one that takes over the dead one's lock; restart works;
+- with the API down the punches wait on the PC (`status` says so), and arrive
+  when it is back; the event log has the start (1), a drifting device clock
+  (30) and recovery (31), and a rejected key (50), written by the service
+  account;
+- a rotated key shows as not working at once; `set-key.ps1` fixes it; stopping
+  the service is clean (the agent says it stopped and releases its lock, so
+  NSSM's Ctrl+C reaches Node);
+- re-running `install.ps1` keeps the key and device; `upgrade.ps1` replaces the
+  program and keeps the old one; the fake device received only read commands;
+- `uninstall.ps1 -RemoveData` leaves no service, account, folders or event
+  source.
+
+**What building it on a real Windows machine found** (none of these were
+visible from Linux or from the parser):
+1. `build/` is in the repo's `.gitignore`, so the build scripts were never
+   committed (CI's first run): now `biometric-agent/packaging/`.
+2. `New-LocalUser -Description` allows 48 characters; mine was 95. The
+   installer would have stopped at step 2 on any PC.
+3. A `# comment` after a line-continuation backtick silently broke
+   `New-LocalUser`'s parameters. The parser accepts it. Parameters are now
+   splatted.
+4. In Windows PowerShell 5.1, `2>&1` on a native command under
+   `$ErrorActionPreference = 'Stop'` turns any stderr line into a terminating
+   error. Every native call (nssm, icacls, sc, eventcreate, `status`) now goes
+   through one helper.
+5. `icacls /T` on a re-run re-applied the `(OI)(CI)` grants to existing
+   *files*, where they grant nothing, locking administrators and the service
+   out of `config.json`, the log and the outbox. A re-install on a working PC
+   would have broken it. Now the folder only; children inherit.
+6. After a key rotation, `status` stayed WORKING for up to five minutes (it
+   only noticed the server had gone quiet). The agent now records when the key
+   is rejected and `status` says so at once.
+7. A device-clock test compared two readings a moment apart (flaky on any
+   platform), and a test that sent a whole log in 7-byte writes timed out on a
+   slow runner: both made cheaper without losing what they check.
+Also: NSSM 2.24's zip, downloaded from nssm.cc, matched the SHA-256 I pinned
+from memory of the published value, so two independent sources agree on it.
+
+**Rules decided while building** (beyond the design's nine):
+10. **Secrets go through an inbox folder**, not an impersonated temporary file
+    (see "The account and its secrets"). Rotating the key is: drop a file,
+    restart.
+11. **Uninstall always removes the service account** (its saved passwords go
+    with it); only the data folder is kept without `-RemoveData`.
+12. **An existing account is never given a new password**, because resetting a
+    local account's password makes Windows lose its saved credentials; an
+    account left with no service (a failed first install) is removed and
+    recreated, since it holds nothing yet.
+13. **`status` is the one command for "is it working"**: exit 0 only if an agent
+    is running, the server has answered it lately and every device is read;
+    `install.ps1`, `upgrade.ps1` and `set-key.ps1` wait for exactly that.
+14. **Unattended installs take the key from an environment variable**
+    (`WELLSURE_INSTALL_AGENT_KEY`), never a command-line argument.
+15. **`diagnose` takes a comm key from `WELLSURE_COMMKEY_<SERIAL>`** and
+    `check-config` says it can't see the service's vault, since both run in an
+    administrator's window, not the service account's.
+16. **The agent keeps the newest ten rotated logs** (NSSM rotates but never
+    deletes).
+17. **`config.json` may be saved with a byte-order mark** (Notepad and
+    PowerShell 5 do); the agent strips it.
+
+**Also as built.**
+- The release is `wellsure-agent-<version>-windows-x64.zip`, an artifact of the
+  `agent-windows` CI job (30 days): `wellsure-agent.exe` (118 MB, the Node
+  runtime embedded), `nssm.exe`, the five scripts, `config.example.json`,
+  `INSTALL.md`, `VERSION.txt`, `SHA256SUMS.txt`. It is **not code-signed**.
+- Event IDs: 1 start, 2 stop, 3 installed, 10/11/12 retention, 20/21 log fill,
+  30/31 clock, 40 batch set aside, 50/51 key, 60 secrets not stored.
+- `INSTALL.md` is written for a non-developer: before you start, eight plain
+  steps with what each is for, what "working" looks like (on the PC, in the
+  app, with a real punch), a symptom table, everyday commands, punches the
+  server refused, setting the device clock by hand, the warnings' meanings, a
+  reference, and a phone checklist for the supporter.
+- The scripts are Windows PowerShell 5.1; they are parsed with PowerShell 7's
+  parser and with 5.1's own (in CI), and analysed for 5.1 syntax compatibility
+  (PSScriptAnalyzer `PSUseCompatibleSyntax`, verified to flag 7-only syntax).
+
+**Tests:** agent 97 (also on Windows); the Windows job's 35 checks; backend 811;
+frontend 12.
 
