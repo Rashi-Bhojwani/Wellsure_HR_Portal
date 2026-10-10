@@ -2606,3 +2606,41 @@ most, each pushed once and CI read once:
   the worst case from a person pressing the finger to the screen is the poll interval
   plus the measured post-to-screen time.
 
+### P2-G, commit G2a (2026-10-10): the routes, the CLI and the route replays, as built
+
+Built as designed above. What is worth knowing beyond the design:
+- **Server:** `modules/dev/` (`GET /api/dev/simulator/roster` and `/days`), mounted by
+  `apiMountsFor(appEnv)`: absent in production (a test pins it), classified in the route
+  inventory as admin-only. The roster refuses to plan, and says why, anyone whose
+  policy uses break pairing or penalty rules, whose shift/week-off/policy or device
+  mapping changes inside the range, or whose device mapping starts inside it (before
+  it they are marked by hand, and the simulator cannot type manual entries). A leaver's
+  assignment ending the day after the last working day is not a change.
+- **CLI** (`npm run simulate`): `setup`, `scenarios`, `scenario <name>`, `replay`, `drip`.
+  Credentials: the user is `--user`/`$SIM_USER` and the password only `$SIM_PASSWORD`
+  (never a command-line argument). It refuses, before sending anything: a server that
+  is not this machine (unless `--allow-remote`, before even signing in); a server
+  without the simulator endpoints (a production build); a server that says it is
+  production; `stale-day` and `stray-flagged` (they need the server's clock moved);
+  and employee-days that already have punches (the simulator cannot remove them, so a
+  second run would be compared against a mix). Its agent key lives in
+  `biometric-agent/.simulator/` (gitignored, mode 600) or `$WELLSURE_AGENT_KEY`.
+- **Verification flow** (`--verify`): send, ask the server to recompute the range through
+  the real Process Attendance run (the worker must be running), then compare every day
+  with its scenario. Days from today on are not compared (provisional).
+- **Route replays in CI** (`routes.replay.test.ts`, in the replay job): the 40-employee
+  world through each route by running the real CLI as a child process against this
+  process's real HTTP server, the real agent included. All three routes: zero
+  differences. Mutation check: dropping one line per chunk from the push route fails it
+  ("expected 1561 to be 1568").
+- **Found while building:** `shared/` has no `package.json`, so `tsx` loads it as
+  CommonJS and Node sees a barrel's `export *` names only as `default`; the agent's
+  simulator code imports from the specific files, not the barrel.
+- **Decisions I made** (for the user to veto): (1) the simulator's roster omits manual-capture people
+  (nothing to send for them; their manual entries are typed by the screen, which the
+  simulator may not do); (2) `--verify` refuses a range containing already-punched
+  days rather than trying to subtract; (3) the file route only uploads with `--commit`
+  (otherwise it just writes the file); (4) `setup` registers devices with sync-from
+  2020-01-01 so any past day is replayable; (5) the dev-only login is rate-limited
+  like any other, and the CLI says so rather than working around it.
+

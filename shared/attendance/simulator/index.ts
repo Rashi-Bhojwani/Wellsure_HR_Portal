@@ -1,4 +1,5 @@
 export * from "./catalogue";
+export * from "./diff";
 export * from "./model";
 export * from "./month";
 export * from "./reference";

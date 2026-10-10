@@ -42,12 +42,12 @@ export function indexOf(roster: Roster): Index {
 
 const named = (s: S.Scenario, g: S.Generated | null) => (g ? { name: s.name, g } : null);
 
-function workingDay(c: S.GenCtx): { name: string; g: S.Generated } {
-  const chosen = c.rng.weighted(S.WORKING_DAY_SCENARIOS);
+function workingDay(c: S.GenCtx, force?: string): { name: string; g: S.Generated } {
+  const chosen = force ? (S.WORKING_DAY_SCENARIOS.find(([s]) => s.name === force)?.[0] ?? c.rng.weighted(S.WORKING_DAY_SCENARIOS)) : c.rng.weighted(S.WORKING_DAY_SCENARIOS);
   return named(chosen, chosen.generate(c)) ?? named(S.FALLBACK, S.FALLBACK.generate(c)) ?? { name: "never-punches", g: S.WORKING_DAY_SCENARIOS.find(([s]) => s.name === "never-punches")![0].generate(c)! };
 }
 
-function planDay(ix: Index, roster: Roster, emp: SimEmployee, date: string): { plan: DayPlan; problems: string[] } {
+function planDay(ix: Index, roster: Roster, emp: SimEmployee, date: string, force?: string): { plan: DayPlan; problems: string[] } {
   const shift = ix.shifts.get(emp.shift)!;
   const policy = ix.policies.get(emp.policy)!;
   const layout = ix.layouts.get(emp.shift)!;
@@ -87,6 +87,8 @@ function planDay(ix: Index, roster: Roster, emp: SimEmployee, date: string): { p
     const leaveHalf = first ? ("first" as const) : ("second" as const);
     const worked = rng.chance(0.6) ? S.leaveHalfWorked(c, leaveHalf, l.type, unpaid(l.type)) : null;
     picked = worked ? { name: "leave-half-worked", g: worked } : { name: "leave-half-no-show", g: S.leaveHalfNoShow(leaveHalf, l.type, unpaid(l.type)) };
+  } else if (capture === "DEVICE" && force) {
+    picked = workingDay(c, force);
   } else if (capture === "DEVICE" && (date === emp.lastWorking || date === emp.joined)) {
     // The first and last day of someone's employment are always an ordinary working day: the edges are where windows and assignments meet.
     const g = S.WORKING_DAY_SCENARIOS[0]![0].generate(c);
@@ -140,6 +142,31 @@ export function planMonth(roster: Roster): MonthPlan {
   for (const emp of roster.employees) {
     for (const date of datesBetween(roster.from, roster.to)) {
       const r = planDay(ix, roster, emp, date);
+      days.push(r.plan);
+      problems.push(...r.problems);
+    }
+  }
+  return { roster, days, problems };
+}
+
+/** Names of the working-day scenarios that can be asked for by name. */
+export const NAMED_SCENARIOS: string[] = S.WORKING_DAY_SCENARIOS.map(([s]) => s.name);
+
+/**
+ * Some days of a roster, optionally every working day forced to one named scenario
+ * (the CLI's `scenario` command). Holidays, week-offs, leave and non-employment
+ * still decide first, exactly as in a month: a scenario is a way of working, not a
+ * way of ignoring the calendar.
+ */
+export function planDays(roster: Roster, opts: { scenario?: string; employees?: string[]; dates?: string[] } = {}): MonthPlan {
+  const ix = indexOf(roster);
+  const days: DayPlan[] = [];
+  const problems: string[] = [];
+  const dates = opts.dates ?? datesBetween(roster.from, roster.to);
+  for (const emp of roster.employees) {
+    if (opts.employees && !opts.employees.includes(emp.code)) continue;
+    for (const date of dates) {
+      const r = planDay(ix, roster, emp, date, opts.scenario);
       days.push(r.plan);
       problems.push(...r.problems);
     }

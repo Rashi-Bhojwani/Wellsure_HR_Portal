@@ -369,6 +369,8 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "POST /iclock/cdata": machine("ADMS upload; registered, active push-device serial"),
   "GET /iclock/getrequest": machine("ADMS poll; registered, active push-device serial"),
   "POST /iclock/devicecmd": machine("ADMS command result; registered, active push-device serial"),
+  "GET /api/dev/simulator/roster": admin,
+  "GET /api/dev/simulator/days": admin,
   "GET /api/biometric/devices": admin,
   "GET /api/biometric/device-warnings": admin,
   "POST /api/biometric/devices": admin,

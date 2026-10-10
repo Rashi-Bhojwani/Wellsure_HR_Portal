@@ -1,9 +1,10 @@
 import type { DailyAttendance } from "@prisma/client";
-import { instantToLocalTime, localTimeToInstant } from "@shared/attendance/attlog";
+import { localTimeToInstant } from "@shared/attendance/attlog";
 import { linesOf, makeRng, type DayPlan, type ExpectedDay, type MonthPlan, type PlannedLine } from "@shared/attendance/simulator";
 import { punchPlausibility } from "../../../../lib/attendanceSettings";
 import { prisma } from "../../../../lib/prisma";
 import { ingest } from "../../../biometric/ingestion";
+import { observedDay } from "../../../dev/simulatorService";
 import { computeInChunks } from "../../jobs";
 import { setRecomputeHandler } from "../../recompute";
 import type { SimWorld } from "./world";
@@ -112,39 +113,9 @@ export async function recomputeWorld(world: SimWorld): Promise<{ ms: number; pro
   return { ms: Date.now() - started, processed: r.processed, changed: r.changed };
 }
 
-const sorted = (a: string[]) => [...a].sort();
-
-/** The stored day, in the plan's vocabulary. */
+/** The stored day, in the plan's vocabulary (the same reader the dev endpoint serves the CLI). */
 export function observed(row: DailyAttendance, tag: string): Record<keyof ExpectedDay, unknown> {
-  const from = (row.computedFrom ?? {}) as { collapsedPunches?: number; outsideWindowPunches?: number };
-  const local = (d: Date | null) => (d ? instantToLocalTime(d, IST) : null);
-  return {
-    status: row.status,
-    firstHalf: row.firstHalfStatus,
-    secondHalf: row.secondHalfStatus,
-    source: row.source,
-    capture: row.capture,
-    lopDays: Number(row.lopDays),
-    flags: sorted(row.exceptionFlags),
-    workedOnOffDay: row.workedOnOffDay,
-    provisional: row.provisional,
-    shiftCode: row.shiftCode ? row.shiftCode.replace(`-${tag}`, "") : null,
-    holidayName: row.holidayName,
-    leaveTypeCode: row.leaveTypeCode,
-    punchCount: row.punchCount,
-    collapsedPunches: from.collapsedPunches ?? 0,
-    outsideWindowPunches: from.outsideWindowPunches ?? 0,
-    firstIn: local(row.firstIn),
-    lastOut: local(row.lastOut),
-    totalMinutes: row.totalMinutes,
-    breakMinutes: row.breakMinutes,
-    actualMinutes: row.actualMinutes,
-    inShiftMinutes: row.inShiftMinutes,
-    lateInMinutes: row.lateInMinutes,
-    earlyOutMinutes: row.earlyOutMinutes,
-    shortfallMinutes: row.shortfallMinutes,
-    excessMinutes: row.excessMinutes,
-  };
+  return observedDay(row, (code) => code.replace(`-${tag}`, ""));
 }
 
 export async function diffWorld(world: SimWorld, plan: MonthPlan, expectedOverride?: (d: DayPlan) => ExpectedDay | null): Promise<Mismatch[]> {

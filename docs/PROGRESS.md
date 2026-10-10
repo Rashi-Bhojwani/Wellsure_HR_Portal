@@ -4323,6 +4323,32 @@ scenario and its expected outcome is [`docs/plans/PHASE_2_SCENARIOS.md`](plans/P
 - **Next: G2** (the three routes into a running server, the `simulate` CLI, drip, the dev roster
   endpoint, production refusal, the punch-to-screen latency test).
 
+### Phase 2, commit P2-G G2a — the three routes, the `simulate` command and the route replays (2026-10-10)
+
+Plan and as-built notes: [`docs/plans/PHASE_2.md`](plans/PHASE_2.md), "P2-G, commit G2 build design"
+and "P2-G, commit G2a … as built".
+
+- **`npm run simulate --prefix biometric-agent`**: `setup`, `scenarios`, `scenario <name>`,
+  `replay`, `drip`. Punches go through the real routes only: the **real agent** reading a
+  simulated device, **ADMS push**, or **HR's file upload**. With `--verify` the server
+  recomputes the range (as Process Attendance does) and every day is compared with its scenario.
+  Checked live on a fresh dev database: 174 employee-days through each of push and file, 172
+  through the agent, zero differences, matching about a second after the last punch.
+- **Cannot touch production, three ways**: the dev endpoints (`/api/dev/simulator/*`) are not
+  mounted when `APP_ENV=production` (a test pins it); simulated devices can't be registered
+  there; and the CLI refuses a server that isn't this machine, has no simulator endpoints, or
+  says it is production, before sending a byte. It never writes to the database.
+- **Route replays in CI** (replay job): the 40-employee month through each route over real HTTP,
+  by the real CLI and agent as child processes, then recomputed and diffed against the scenarios:
+  zero differences on all three. Mutation-checked (dropping a line per push chunk fails it).
+- **Rules I decided** (veto welcome): the simulator omits manual-capture people and anyone its
+  model can't describe (listed with the reason); a second run over days that already have punches
+  is refused (it can't remove punches); stale/late-arriving days can't be sent over a real route
+  and stay covered by the G1 replay; "gate G2" (500 employees) is met by the G1 replay through the
+  ingestion service plus these 40-employee route replays — an HTTP replay of 500 would only add
+  transport time.
+- **Next: G2b**, the automated punch-to-screen latency test.
+
 ## Open questions
 
 - [x] **Approval Workflows — dropped (user decision 2026-10-03).** No

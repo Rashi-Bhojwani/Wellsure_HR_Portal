@@ -14,7 +14,8 @@
     "test": "vitest run",
     "fake-api": "tsx src/dev/fakeApiCli.ts",
     "build:exe": "node packaging/build-exe.mjs",
-    "catalogue": "tsx src/simulator/catalogueCli.ts"
+    "catalogue": "tsx src/simulator/catalogueCli.ts",
+    "simulate": "tsx src/simulator/cli.ts"
   },
   "dependencies": {
     "zod": "^4.6.5"

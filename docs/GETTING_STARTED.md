@@ -321,6 +321,7 @@ Run from the repo root unless noted.
 | `npm run typecheck` | `tsc --noEmit` across every project |
 | `npm run test` | Vitest, backend + frontend + biometric-agent — backend is an integration suite against your real local Postgres/Redis, not mocks; frontend covers route-config wiring (`frontend/src/routes/__tests__/`). Safe to run while `npm run dev` is up, with no interaction either way: the suite uses its own Postgres database (`<dev database>_test`), Redis database and Socket.IO channel (`REDIS_TEST_DB`), and `.storage-test/`/`.mail-test/` folders. Each run drops, recreates, migrates and seeds that database first (about 10 s), so every run starts from the same state |
 | `npm run test:replay --prefix backend` | The month replay: 500 simulated employees for a month through the real ingestion and recompute, diffed field by field against what each named scenario says should happen (about 75 s, needs the same local Postgres/Redis; not part of `npm run test`; CI runs it as `attendance-replay`). Writes `backend/perf/last-run.json`; see `backend/perf/README.md`. Override size with `REPLAY_EMPLOYEES` / `REPLAY_SEED` |
+| `npm run simulate --prefix biometric-agent -- <command>` | The punch simulator CLI (see "The punch simulator" above): `setup`, `scenarios`, `scenario <name>`, `replay`, `drip` |
 | `npm run catalogue --prefix biometric-agent` | Regenerates `docs/plans/PHASE_2_SCENARIOS.md`, the plain-words list of every simulator scenario and its expected outcome. A test fails if you change a scenario and forget to run this |
 | `npm run check:services` | Confirms Postgres/Redis are reachable |
 | `npm run agent --prefix biometric-agent -- <run\|status\|diagnose\|check-config\|quarantine\|version> --config <file>` | The biometric sync agent (Phase 2 P2-F); see "Running the sync agent locally" below |
@@ -347,7 +348,31 @@ Recent batches, Unmapped and Flagged show the result. With `npm run dev`
 running (the worker is part of it), each punch's day is recomputed about a
 second later into `daily_attendance`. To compute a range from scratch — say
 the month so far — use Workforce → Attendance → Process Attendance. The punch
-simulator (P2-G) will do all of this at scale.
+simulator (below) does all of this at scale.
+
+**The punch simulator (Phase 2 P2-G).** Sends a day, a week or a month of
+made-up punches through the three real routes (the real agent reading a
+simulated device, ADMS push, or HR's file upload) and checks that the server
+stored every day exactly as its scenario says. Development servers only; it
+never writes to the database, only sends punches.
+```bash
+export SIM_USER=1000 SIM_PASSWORD='<that account\'s password>'   # who signs in; never a command-line argument
+npm run simulate --prefix biometric-agent -- setup                # once: registers its agent and one simulated device per route
+npm run simulate --prefix biometric-agent -- scenarios            # the scenario names (what each should do: docs/plans/PHASE_2_SCENARIOS.md)
+npm run simulate --prefix biometric-agent -- scenario late-arrival --route push --employee 1006,1007 --date 2026-10-05 --verify
+npm run simulate --prefix biometric-agent -- replay --route agent --from 2026-09-01 --to 2026-09-07 --verify
+npm run simulate --prefix biometric-agent -- drip --route push --rate 6    # a punch every 10 s, to watch Who Is In? and the calendar update; Ctrl-C stops
+```
+`--verify` asks the server to recompute the range (as Process Attendance does;
+the worker must be running) and compares every day with its scenario. The
+server must be this machine unless you pass `--allow-remote` (staging); a
+production server has no simulator endpoints and is refused. The simulator
+cannot remove punches, so it refuses to send to employee-days that already have
+some: use other days, other employees, or a freshly seeded database. Signing in
+is rate-limited by IP, so many quick runs in a row can be refused for a few
+minutes. Days whose punches arrive late (`stale-day`, `stray-flagged`,
+`catch-up`'s lateness) can't be sent through a real route and are left out; the
+replay tests cover them.
 
 **Running the sync agent locally (Phase 2 P2-F).** The real agent and its
 read-only device driver, against a fake device on this machine that speaks the

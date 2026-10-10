@@ -235,12 +235,17 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: backend/package-lock.json
+          cache-dependency-path: |
+            backend/package-lock.json
+            biometric-agent/package-lock.json
 
+      # The route replays run the real `simulate` CLI and the real agent, which live in biometric-agent/.
       - name: Install
-        run: npm install --prefix backend
+        run: |
+          npm install --prefix backend
+          npm install --prefix biometric-agent
 
-      - name: Replay a month for 500 employees
+      - name: Replay a month for 500 employees, then 40 through each real route
         run: npm run test:replay --prefix backend
 
       - name: The figures (these are what the baseline is recorded from)

@@ -12,3 +12,11 @@
 - `dev/` — the fake device (tests and `npm run fake-device`); not part of the
   agent that runs on the office PC.
 - `service/` — the Windows service wrapper (F2).
+- `simulator/` — the punch simulator's command line (`npm run simulate`) and its
+  parts: `routes.ts` (the three ways a punch reaches the server: the real agent
+  reading a simulated device, ADMS push, the file upload), `serverApi.ts` (an
+  HTTP client, and the refusal to run against anything that looks like
+  production), `run.ts` (send a plan, then compare the server's days with it),
+  `setup.ts`, `cli.ts`. The scenarios, the reference model and the planner it
+  uses are in `shared/attendance/simulator/`. Development only; not part of the
+  release.

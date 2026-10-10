@@ -34,6 +34,7 @@ import { delegationsRouter } from "./modules/delegations/routes";
 import { attendanceRouter } from "./modules/attendance/routes";
 import { biometricAgentRouter, biometricRouter } from "./modules/biometric/routes";
 import { admsRouter } from "./modules/biometric/admsRoutes";
+import { devSimulatorRouter } from "./modules/dev/routes";
 import { reportsRouter } from "./modules/reports/routes";
 
 // Every API router and where it's mounted — one list, so the route
@@ -45,7 +46,9 @@ import { reportsRouter } from "./modules/reports/routes";
 //     Authorization header — and holidaysRouter, mounted at bare /api,
 //     would otherwise run `authenticate` for it.
 //   - everything else is `no-store`.
-export const API_MOUNTS: ReadonlyArray<{ path: string; router: Router; cacheable?: true }> = [
+type ApiMount = { path: string; router: Router; cacheable?: true };
+
+const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   { path: "/api/people/photos", router: peoplePhotosRouter, cacheable: true },
   // Machine credentials, not user sign-in (Phase 2 P2-B) — before the bare
   // /api router, whose `authenticate` would otherwise run first.
@@ -76,6 +79,13 @@ export const API_MOUNTS: ReadonlyArray<{ path: string; router: Router; cacheable
   { path: "/api/attendance", router: attendanceRouter },
   { path: "/api/biometric", router: biometricRouter },
 ];
+
+/** The mount list for an environment. The punch simulator's read-only helpers (P2-G) exist everywhere except production, where the path is a plain 404. */
+export function apiMountsFor(appEnv: string): ReadonlyArray<ApiMount> {
+  return appEnv === "production" ? BASE_MOUNTS : [...BASE_MOUNTS, { path: "/api/dev/simulator", router: devSimulatorRouter }];
+}
+
+export const API_MOUNTS = apiMountsFor(env.APP_ENV);
 
 export function createApp(): Express {
   const app = express();

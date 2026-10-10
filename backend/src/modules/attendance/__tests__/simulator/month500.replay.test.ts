@@ -41,7 +41,6 @@ describe(`a month for ${EMPLOYEES} employees against the scenarios' intended out
       lastRunFile,
       JSON.stringify({ employees: result.employees, employeeDays: result.employeeDays, month: MONTH, seed: SEED, punchesSent: result.ingest.lines, ingestCalls: result.ingest.calls, ingestMs: result.ingestMs, recomputeMs: result.recomputeMs, daysDiffering: daysDiffering(result.mismatches), recordedAt: new Date().toISOString() }, null, 2),
     );
-    // eslint-disable-next-line no-console
     console.log(
       [
         `\n  ${result.employees} employees × ${MONTH} = ${result.employeeDays} employee-days`,
@@ -78,7 +77,6 @@ describe(`a month for ${EMPLOYEES} employees against the scenarios' intended out
       return;
     }
     if (!existsSync(baselineFile)) {
-      // eslint-disable-next-line no-console
       console.log("  no baseline committed yet: the CI runner records it (backend/perf/README.md)");
       return;
     }
