@@ -104,7 +104,7 @@ function Initialize-ServiceAccount([bool]$ServiceExists) {
     $plain = New-RandomPassword
     New-LocalUser -Name $script:AccountName `
         -Password (ConvertTo-SecureString $plain -AsPlainText -Force) `
-        -Description 'Runs the Wellsure Agent service, which reads the biometric attendance device. Has no other use.' `
+        -Description 'Runs the Wellsure Agent service.'   # Windows allows at most 48 characters here `
         -PasswordNeverExpires -UserMayNotChangePassword -AccountNeverExpires | Out-Null
     Add-LocalGroupMember -Group (Get-LocalGroup -SID $script:SidUsers) -Member $script:AccountName
     return $plain
