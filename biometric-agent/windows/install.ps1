@@ -119,7 +119,7 @@ try {
     New-Item -ItemType Directory -Force -Path $script:ProgramDir | Out-Null
     Copy-WithRetry (Join-Path $PSScriptRoot $script:ExeName) (Get-AgentExe)
     Copy-WithRetry (Join-Path $PSScriptRoot 'nssm.exe') (Get-Nssm)
-    $version = (& (Get-AgentExe) version 2>&1) -join ' '
+    $version = (Invoke-Native (Get-AgentExe) @('version')).Output
     Write-Done "Installed Wellsure Agent $version in $($script:ProgramDir)"
 
     # ── 4. Settings and secrets ────────────────────────────────────────────
@@ -151,7 +151,8 @@ try {
     Invoke-Nssm set $script:ServiceName AppRestartDelay 5000
     Invoke-Nssm set $script:ServiceName AppThrottle 5000
     Invoke-Nssm set $script:ServiceName AppStopMethodConsole 15000
-    & sc.exe failure $script:ServiceName reset= 86400 actions= restart/5000/restart/5000/restart/60000 | Out-Null
+    $sc = Invoke-Native (Join-Path $env:SystemRoot 'System32\sc.exe') @('failure', $script:ServiceName, 'reset=', '86400', 'actions=', 'restart/5000/restart/5000/restart/60000')
+    if ($sc.ExitCode -ne 0) { throw "Could not set the service's recovery actions: $($sc.Output)" }
     Write-Done 'The service starts when the PC starts, and restarts itself if it stops.'
 
     # ── 6. Windows event log ───────────────────────────────────────────────

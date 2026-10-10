@@ -20,8 +20,8 @@ try {
     if (-not (Test-Path -LiteralPath $newExe)) { throw "$($script:ExeName) is missing from this folder. Unzip the whole release and run upgrade.ps1 from inside it." }
 
     $installed = Get-AgentExe
-    $oldVersion = (& $installed version 2>&1) -join ' '
-    $newVersion = (& $newExe version 2>&1) -join ' '
+    $oldVersion = (Invoke-Native $installed @('version')).Output
+    $newVersion = (Invoke-Native $newExe @('version')).Output
     Write-Host "Installed: $oldVersion"
     Write-Host "This folder: $newVersion"
     if ($oldVersion -eq $newVersion -and -not $Force) {

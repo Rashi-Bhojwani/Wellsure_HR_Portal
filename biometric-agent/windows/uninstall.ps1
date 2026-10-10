@@ -28,7 +28,7 @@ try {
     if (Get-AgentService) {
         Stop-AgentService
         if (Test-Path -LiteralPath (Get-Nssm)) { Invoke-Nssm remove $script:ServiceName confirm }
-        else { & sc.exe delete $script:ServiceName | Out-Null }
+        else { [void](Invoke-Native (Join-Path $env:SystemRoot 'System32\sc.exe') @('delete', $script:ServiceName)) }
         Write-Done 'Service stopped and removed.'
     } else { Write-Note 'The service was not installed.' }
 

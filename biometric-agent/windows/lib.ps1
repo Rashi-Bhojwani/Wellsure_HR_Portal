@@ -55,6 +55,20 @@ function New-RandomPassword {
     return 'Aa1#' + (-join $chars)
 }
 
+# Runs a native program and returns its exit code and combined output. In
+# Windows PowerShell 5.1, `2>&1` on a native command while $ErrorActionPreference
+# is 'Stop' turns ANY line the program writes to stderr into a terminating
+# error, even when it succeeded; so the preference is relaxed for the call.
+function Invoke-Native([string]$File, [string[]]$Arguments) {
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $lines = & $File @Arguments 2>&1 | ForEach-Object { "$_" }
+        $code = $LASTEXITCODE
+    } finally { $ErrorActionPreference = $previous }
+    return [pscustomobject]@{ ExitCode = $code; Output = (@($lines) -join "`n") }
+}
+
 function Get-AgentExe { return (Join-Path $script:ProgramDir $script:ExeName) }
 function Get-Nssm     { return (Join-Path $script:ProgramDir 'nssm.exe') }
 
@@ -62,8 +76,10 @@ function Get-AgentService { return (Get-Service -Name $script:ServiceName -Error
 
 function Invoke-Nssm {
     param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
-    $output = & (Get-Nssm) @Arguments 2>&1
-    if ($LASTEXITCODE -ne 0) { throw ("nssm {0} failed (exit {1}): {2}" -f ($Arguments[0..1] -join ' '), $LASTEXITCODE, ($output -join ' ')) }
+    $r = Invoke-Native (Get-Nssm) $Arguments
+    # NSSM writes UTF-16, which shows as spaced-out letters: squeeze the NULs out.
+    $text = ($r.Output -replace "`0", '')
+    if ($r.ExitCode -ne 0) { throw ("nssm {0} failed (exit {1}): {2}" -f ($Arguments[0..1] -join ' '), $r.ExitCode, $text) }
 }
 
 function Stop-AgentService {
@@ -102,10 +118,15 @@ function Initialize-ServiceAccount([bool]$ServiceExists) {
     }
     if ($user) { Remove-ServiceAccount }
     $plain = New-RandomPassword
-    New-LocalUser -Name $script:AccountName `
-        -Password (ConvertTo-SecureString $plain -AsPlainText -Force) `
-        -Description 'Runs the Wellsure Agent service.'   # Windows allows at most 48 characters here `
-        -PasswordNeverExpires -UserMayNotChangePassword -AccountNeverExpires | Out-Null
+    $newUser = @{
+        Name                 = $script:AccountName
+        Password             = (ConvertTo-SecureString $plain -AsPlainText -Force)
+        Description          = 'Runs the Wellsure Agent service.'   # Windows allows at most 48 characters here
+        PasswordNeverExpires = $true
+        UserMayNotChangePassword = $true
+        AccountNeverExpires  = $true
+    }
+    New-LocalUser @newUser | Out-Null
     Add-LocalGroupMember -Group (Get-LocalGroup -SID $script:SidUsers) -Member $script:AccountName
     return $plain
 }
@@ -128,9 +149,9 @@ function Initialize-DataFolder {
         New-Item -ItemType Directory -Force -Path $d | Out-Null
     }
     $account = "$env:COMPUTERNAME\$($script:AccountName)"
-    $out = & icacls.exe $script:DataDir /inheritance:r `
-        /grant:r "*$($script:SidAdministrators):(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" "${account}:(OI)(CI)M" /T /C 2>&1
-    if ($LASTEXITCODE -ne 0) { throw "Could not restrict the data folder: $($out -join ' ')" }
+    $grants = @("*$($script:SidAdministrators):(OI)(CI)F", '*S-1-5-18:(OI)(CI)F', "${account}:(OI)(CI)M")
+    $r = Invoke-Native (Join-Path $env:SystemRoot 'System32\icacls.exe') (@($script:DataDir, '/inheritance:r', '/grant:r') + $grants + @('/T', '/C'))
+    if ($r.ExitCode -ne 0) { throw "Could not restrict the data folder: $($r.Output)" }
 }
 
 # ── config.json (no secrets in it) ──────────────────────────────────────────
@@ -181,7 +202,8 @@ function Test-PcSleeps {
 # Registers the "WellsureAgent" event source the way Windows' own eventcreate
 # does (so Event Viewer shows our text cleanly), and writes the first entry.
 function Register-EventSource([string]$Text) {
-    & (Join-Path $env:SystemRoot 'System32\eventcreate.exe') /ID 3 /L APPLICATION /T INFORMATION /SO $script:EventSource /D $Text 2>&1 | Out-Null
+    $r = Invoke-Native (Join-Path $env:SystemRoot 'System32\eventcreate.exe') @('/ID', '3', '/L', 'APPLICATION', '/T', 'INFORMATION', '/SO', $script:EventSource, '/D', $Text)
+    if ($r.ExitCode -ne 0) { throw "Could not register with the Windows event log: $($r.Output)" }
 }
 
 function Unregister-EventSource {
@@ -196,8 +218,9 @@ function Wait-AgentWorking([int]$Seconds = 120) {
     $deadline = (Get-Date).AddSeconds($Seconds)
     $text = ''
     do {
-        $text = (& (Get-AgentExe) status 2>&1) -join "`n"
-        if ($LASTEXITCODE -eq 0) { return [pscustomobject]@{ Working = $true; Output = $text } }
+        $r = Invoke-Native (Get-AgentExe) @('status')
+        $text = $r.Output
+        if ($r.ExitCode -eq 0) { return [pscustomobject]@{ Working = $true; Output = $text } }
         Start-Sleep -Seconds 3
     } while ((Get-Date) -lt $deadline)
     return [pscustomobject]@{ Working = $false; Output = $text }
