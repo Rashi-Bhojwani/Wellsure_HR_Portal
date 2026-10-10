@@ -2662,9 +2662,11 @@ frontend on a freshly seeded database, then runs it; uploads the figures and the
   screen that never shows the punch is recorded as 20 s, so it fails; a route or screen never measured fails;
   and against a committed baseline (`perf/latency-baseline.json`, recorded by the CI runner) a figure may
   not be both over 2x the baseline and over 2 s.
+- **CI runner result (run 38053097275, recorded as `perf/latency-baseline.json`, slowest sample):** own screen 109 ms (agent), 203 ms (push), 149 ms (file); Who Is In? 1219 / 1457 / 1552 ms. Windows and every other job green on the same commit.
 - **Local result (fresh devcheck, 2026-10-10):** own screen about 0.1 s on every route; HR's Who Is In? about
   1.2–1.4 s on every route (the board is built from the recomputed day, so it waits for the worker's debounced
   recompute); agent device-to-server 1.8–3.8 s with a 5 s poll.
+- **Found by the Windows job on this commit:** a pre-existing test timed out at 30 s. Root cause was in the fake ZK device (it bound UDP to the TCP port's number and hung on a bind error when another test file held that UDP port): fixed to retry on a fresh port and to fail loudly, with a test; not a retry of a "flaky" run.
 - **Mutation-checked:** with the server's two attendance socket emitters disabled the test fails (no screen
   updates within 20 s). With only `punch.received` disabled it still passes, because the employee's screen
   then updates from `attendance.updated` after the recompute (about 1.2 s): the redundancy is real and the
