@@ -1,6 +1,9 @@
+import type { DeviceHealthThresholds, DeviceReportState, RetentionAssessment } from "@shared/attendance/agentProtocol";
 import { apiClient } from "./client";
 
 // Biometric ingestion admin (Phase 2 P2-B) — backend/src/modules/biometric.
+// P2-F adds what the sync agent reports about each device, and the warnings
+// HR sees (clock drift, retention, a nearly full log).
 
 export type DeviceRoute = "AGENT" | "PUSH";
 
@@ -20,7 +23,46 @@ export interface DeviceRow {
   lastHeartbeatAt: string | null;
   lastPunchAt: string | null;
   lastReceivedAt: string | null;
+  /** "YYYY-MM-DD": the agent never sends a punch dated before it. */
+  syncFrom: string;
+  retentionDays: number;
+  retentionRecords: number;
+  health: DeviceHealth;
+  warnings: DeviceWarning[];
 }
+
+/** The sync agent's latest report on a device, as the server keeps it. */
+export interface AgentReport {
+  state?: DeviceReportState;
+  reachable?: boolean;
+  lastError?: string | null;
+  reportedSerial?: string | null;
+  firmware?: string | null;
+  platform?: string | null;
+  logCount?: number | null;
+  logCapacity?: number | null;
+  clockOffsetSeconds?: number | null;
+  outboxRecords?: number;
+  oldestUnsentLocalTime?: string | null;
+}
+export interface DeviceHealth {
+  report: AgentReport | null;
+  reportAt: string | null;
+  /** The last successful read, on the server's clock. */
+  lastReadAt: string | null;
+  retention: RetentionAssessment | null;
+  clockDrift: { offsetSeconds: number; text: string; exceeded: boolean } | null;
+  notConfiguredOnAgent: boolean;
+}
+export interface DeviceWarning {
+  deviceId: string;
+  deviceName: string;
+  serialNumber: string;
+  kind: "CLOCK_DRIFT" | "RETENTION_WARNING" | "RETENTION_RISK" | "LOG_NEARLY_FULL";
+  message: string;
+  reportAt: string | null;
+}
+
 export interface DeviceInput {
   serialNumber?: string;
   name?: string;
@@ -33,6 +75,9 @@ export interface DeviceInput {
   lanIp?: string | null;
   isSimulated?: boolean;
   isActive?: boolean;
+  syncFrom?: string;
+  retentionDays?: number;
+  retentionRecords?: number;
 }
 
 export interface AgentRow {
@@ -108,8 +153,15 @@ export interface ImportPreview extends ImportCounts {
 
 const base = "/api/biometric";
 
+export async function listDevicesWithThresholds(): Promise<{ devices: DeviceRow[]; thresholds: DeviceHealthThresholds }> {
+  return (await apiClient.get<{ devices: DeviceRow[]; thresholds: DeviceHealthThresholds }>(`${base}/devices`)).data;
+}
 export async function listDevices(): Promise<DeviceRow[]> {
-  return (await apiClient.get<{ devices: DeviceRow[] }>(`${base}/devices`)).data.devices;
+  return (await listDevicesWithThresholds()).devices;
+}
+/** Clock drift, retention and nearly-full logs across active devices (P2-F): the Devices screen banner and Admin Home. */
+export async function listDeviceWarnings(): Promise<DeviceWarning[]> {
+  return (await apiClient.get<{ warnings: DeviceWarning[] }>(`${base}/device-warnings`)).data.warnings;
 }
 export async function createDevice(body: DeviceInput): Promise<DeviceRow> {
   return (await apiClient.post<DeviceRow>(`${base}/devices`, body)).data;

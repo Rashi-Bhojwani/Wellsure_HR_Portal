@@ -37,3 +37,6 @@ infra/.cdk.staging/
 
 # Misc
 *.local
+
+# Biometric sync agent: its local state and outbox when run in development
+agent-data/

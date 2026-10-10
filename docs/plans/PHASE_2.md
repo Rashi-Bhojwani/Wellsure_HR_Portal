@@ -1826,3 +1826,129 @@ or delaying punches while the agent reads it. On the day:
 If reading ever blocks punching, stop the agent (stopping the service is
 instant and changes nothing on the device), and the fix is in the driver
 alone.
+
+### P2-F, commit F1 (2026-10-10)
+
+Built as the design above: the shared contract
+(`shared/attendance/agentProtocol.ts`), the server side, our read-only
+`Zk4370Driver` with its fake device, the agent, and the screens. F2 (Windows
+packaging) follows.
+
+**What the independent checks caught.**
+- **The fake device wasn't behaving like a real one.** `zkteco-js` read a
+  small log from it but stalled on a chunked one: the fake sent a chunk's three
+  packets (prepare, data, acknowledgement) in one TCP write, and `zkteco-js`
+  handles one packet per network read, which works with real devices only
+  because they send those packets separately. The fake now sends them
+  separately by default, like a device. Our driver is tested against all three
+  ways a TCP stream can carry them: separate, joined in one write, and split
+  into 7-byte pieces.
+- pyzk's vectors matched our comm key, checksum, packet headers, time encoding
+  and both record layouts on the first run.
+
+**Rules decided while building** (neither HR nor the spec covers them; each is
+small to change):
+1. **Any timeout or protocol surprise ends the session.** The next cycle starts
+   clean, so a late reply can never be read as the answer to a later command.
+   Packets that arrive unasked are dropped before each command.
+2. **The agent reports in before it reads.** It needs each device's sync-from
+   date. A device the server hasn't described yet is `NOT_YET_READ`; once
+   heard, the server's settings are kept on disk, so the agent keeps reading
+   (and the retention guard keeps working) while the API is down.
+3. **What the server can't accept stays on the PC.** A rejected agent key
+   (401): reading carries on into the outbox, sending stops, and the agent
+   reads the stored key again on each retry, so a corrected key works without
+   a restart. A refused device (403): that device's batches wait (backoff at its
+   cap); others still go. A batch refused as it stands (400/413/422) is moved
+   to `outbox-rejected/` for a person, never deleted, and counted in the
+   heartbeat.
+4. **The retention state on screen is worked out by the server when the page is
+   read**, from the agent's "seconds since the last read" placed on the
+   server's clock. If the agent dies, its devices climb to WARNING and RISK on
+   their own (§7.1's "the server raises the same alarm from silence alone",
+   shown on screen now; P2-H adds the incident, notification and email).
+5. **A new device state, `CONFIG_REFUSED`**: the PC's configuration for a device
+   is refused (a simulated driver for a real device, P2-F rule 3).
+6. **Record columns.** ATTLOG's status ← the record's punch state; verify mode
+   ← its verify type; workcode ← the 16-byte record's workcode, else `0`. All
+   stored, never relied on. **8-byte records** (very old firmware, user IDs only
+   through the user table) are `UNSUPPORTED_FORMAT`, not read. Our device's
+   face and finger-vein firmware is expected to use 40-byte records (§11).
+7. **The comm-key scramble wraps at 32 bits**, as the vendor's C original does;
+   pyzk raises instead. Only a key whose bit-reversal plus the session id
+   overflows is affected.
+8. **"Sync punches from" can't be in the future**, and has a database default of
+   today (IST) for any insert path. Retention: 1–365 days, 100–10,000,000
+   records. Thresholds: warning below alarm (both checked on save).
+9. **Device warnings on Admin Home** go to holders of
+   `attendance.devices.manage`, the same people as the Devices screen.
+10. **"Not configured on the agent PC"**: a device assigned to an agent that has
+    reported since, without mentioning it.
+11. **One agent per data folder.** Two agents on one outbox and cursor would
+    send punches twice and fight over the cursor, so `run` takes a lock file in
+    the data folder and a second agent exits with "already running". The lock
+    is refreshed every 20 s and is taken over once it is a minute old, or at
+    once if its process is gone. A process ID alone isn't enough: Windows
+    reuses IDs after a reboot, so an old lock could name an unrelated live
+    process and keep the agent down for good. A crashed agent therefore
+    restarts within a minute at most; the service manager's restart (F2)
+    retries until then.
+
+**Also as built.**
+- The heartbeat accepts an agent a version older or newer than the server:
+  only each device's serial and reachability are required.
+- `diagnose` reads firmware, platform, log count and capacity, and the clock
+  straight from the device and sends nothing: the device-checklist questions
+  (log capacity above all) can be answered from it once a PC on the
+  192.168.29.x network can reach the device.
+- The clock offset is device − PC plus PC − server (from each heartbeat's round
+  trip), so a wrong PC clock doesn't make a right device look wrong (tested).
+- **npm 10.9.4 can't resolve vitest from scratch** (a peer-dependency bug in
+  npm: even an empty project fails). The agent's lockfile was resolved once
+  with npm 11; npm 10's `npm ci` and `npm install` both install from it
+  (checked).
+
+**Tests:**
+- agent (70): pyzk vectors; framing; the attendance buffer; the allowlist; the
+  driver against the fake over TCP and UDP (direct and chunked reads, joined
+  and fragmented TCP, 16-byte records, the comm key right and wrong, a punch
+  mid-read, a silent device, a connection dropped mid-chunk, nothing
+  listening, every write command refused before a byte leaves); `zkteco-js`
+  reading the fake (3,000 records, chunked) exactly as our driver does; the
+  cursor in every case (including a clock set back an hour); the outbox,
+  backoff, clock offsets, config and secrets; the agent end to end (sync-from,
+  cheap polling, a wrapped and a cleared log, sync-from moved earlier, 2,500
+  punches in batches of 1,000, an API outage while the device overwrites, a
+  crash between outbox and cursor, a lost answer, a rotated key (with and
+  without a restart), a 403 and a
+  400, a serial mismatch, not yet read / not assigned, one device down, a
+  simulated driver refused and allowed, the retention guard at 50% / 75% with
+  the API down and back, a nearly full log, clock drift against the server not
+  the PC, start and stop; one agent per data folder: a second refused, a dead
+  agent's lock taken over at once, a stale lock taken over even when its
+  process ID belongs to something else);
+- backend `agentDevices.test.ts` (15): the device fields, the heartbeat reply
+  and stored reports (the last read on the server's clock), `device.status`,
+  "not configured on the agent PC", clock drift, retention climbing when read
+  later, a nearly full log, the thresholds setting (audited, warning below
+  alarm, reaching the agent), permissions, another agent's key.
+- **Live walkthrough** (fresh `wellsure_hr_devcheck`; the real agent and our
+  driver reading the fake device over TCP; HR and Arjun in two browsers):
+  - a new device syncs from today, and the 8 older records on the device were
+    never sent;
+  - Arjun punched: his open day panel listed it 1.9 s later, his calendar day
+    turned A → P at 3.0 s, and HR's open Who Is In listed him under Arrived
+    (0 → 1, late 62 min) at 3.1 s, with no reload (the agent polls every 5 s
+    here, 30 s in production);
+  - the device clock set 5 minutes ahead: the Devices screen's warning
+    appeared in 7.9 s with no reload, Admin Home showed it to HR, and it
+    cleared by itself once the clock was put right; the 9-of-10 log showed as
+    nearly full;
+  - API stopped: the agent kept reading into the outbox, and all 3 punches
+    made during the outage arrived once the API was back;
+  - a second agent on the same data folder was refused; the first was killed
+    outright (SIGKILL), restarted as a service manager would, took over its
+    lock, and sent exactly the one punch made while it was down (4 stored, no
+    duplicates);
+  - the fake device received only read commands (100 of them);
+  - the Devices screen at 390 px has no horizontal overflow.

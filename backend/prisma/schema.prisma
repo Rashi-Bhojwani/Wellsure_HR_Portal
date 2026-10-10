@@ -1928,25 +1928,35 @@ model BiometricAgent {
 
 // A biometric machine, at exactly one branch (spec §7.3).
 model Device {
-  id              String          @id @default(cuid())
-  serialNumber    String          @unique @map("serial_number") // ADMS authenticates on it
-  name            String
-  locationId      String          @map("location_id")
-  location        Location        @relation(fields: [locationId], references: [id])
-  timezone        String          @default("Asia/Kolkata")
-  model           String? // free text until the model is known (spec §14)
-  firmware        String?
-  route           DeviceRoute     @default(AGENT)
-  agentId         String?         @map("agent_id")
-  agent           BiometricAgent? @relation(fields: [agentId], references: [id])
-  lanIp           String?         @map("lan_ip")
-  isSimulated     Boolean         @default(false) @map("is_simulated") // refused on production; the engine never reads it
-  isActive        Boolean         @default(true) @map("is_active")
-  lastHeartbeatAt DateTime?       @map("last_heartbeat_at")
-  lastPunchAt     DateTime?       @map("last_punch_at") // the latest punch time received
-  lastReceivedAt  DateTime?       @map("last_received_at") // when anything last arrived from it
-  createdAt       DateTime        @default(now()) @map("created_at")
-  updatedAt       DateTime        @updatedAt @map("updated_at")
+  id               String          @id @default(cuid())
+  serialNumber     String          @unique @map("serial_number") // ADMS authenticates on it
+  name             String
+  locationId       String          @map("location_id")
+  location         Location        @relation(fields: [locationId], references: [id])
+  timezone         String          @default("Asia/Kolkata")
+  model            String? // free text until the model is known (spec §14)
+  firmware         String?
+  route            DeviceRoute     @default(AGENT)
+  agentId          String?         @map("agent_id")
+  agent            BiometricAgent? @relation(fields: [agentId], references: [id])
+  lanIp            String?         @map("lan_ip")
+  isSimulated      Boolean         @default(false) @map("is_simulated") // refused on production; the engine never reads it
+  isActive         Boolean         @default(true) @map("is_active")
+  lastHeartbeatAt  DateTime?       @map("last_heartbeat_at")
+  lastPunchAt      DateTime?       @map("last_punch_at") // the latest punch time received
+  lastReceivedAt   DateTime?       @map("last_received_at") // when anything last arrived from it
+  // P2-F (docs/plans/PHASE_2.md "P2-F build design"). The agent never sends a
+  // punch dated before syncFrom (D-F3); moving it earlier makes it re-send.
+  syncFrom         DateTime        @default(dbgenerated("((now() AT TIME ZONE 'Asia/Kolkata'::text))::date")) @map("sync_from") @db.Date
+  // The device's log retention, pessimistic until the model is known (§7.1).
+  retentionDays    Int             @default(3) @map("retention_days")
+  retentionRecords Int             @default(20000) @map("retention_records")
+  // The sync agent's latest report on this device (state, last read, clock
+  // offset, log count/capacity, backlog, retention), with when it arrived.
+  agentReport      Json?           @map("agent_report")
+  agentReportAt    DateTime?       @map("agent_report_at")
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
 
   punches RawPunch[]
   batches IngestionBatch[]

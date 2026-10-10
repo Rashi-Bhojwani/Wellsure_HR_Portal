@@ -1,26 +1,31 @@
 {
   "name": "biometric-agent",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "LAN sync agent — polls on-prem ZKTeco/eSSL biometric devices and forwards new punches to the central API over HTTPS.",
+  "description": "LAN sync agent: reads the on-prem ZKTeco/eSSL biometric device(s), read-only, and forwards new punches to the central API over HTTPS (docs/plans/PHASE_2.md, P2-F).",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "start": "tsx src/index.ts",
-    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/main.ts run",
+    "start": "tsx src/main.ts run",
+    "agent": "tsx src/main.ts",
+    "fake-device": "tsx src/dev/fakeDeviceCli.ts",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "echo \"biometric-agent tests — added in Phase 2\" && exit 0"
+    "test": "vitest run"
   },
-  "dependencies": {},
+  "dependencies": {
+    "zod": "^4.6.5"
+  },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
-    "@types/node": "^20.14.0",
+    "@types/node": "^22.20.5",
     "eslint": "^9.9.0",
-    "globals": "^17.12.0",
     "eslint-config-prettier": "^9.1.0",
+    "globals": "^17.12.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.2",
-    "typescript-eslint": "^8.4.0"
+    "typescript-eslint": "^8.4.0",
+    "vitest": "^4.1.11",
+    "zkteco-js": "1.7.2"
   }
 }

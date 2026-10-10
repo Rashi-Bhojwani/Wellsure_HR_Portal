@@ -41,6 +41,9 @@ const canManage = requirePermission("attendance.devices.manage");
 const attlogUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 biometricRouter.get("/devices", canManage, controller.listDevices);
+// Clock drift, retention and a nearly full log, worded for HR (P2-F): the
+// Devices screen banner and Admin Home.
+biometricRouter.get("/device-warnings", canManage, controller.deviceWarnings);
 biometricRouter.post("/devices", canManage, validate({ body: createDeviceSchema }), controller.createDevice);
 biometricRouter.patch("/devices/:id", canManage, validate({ params: idParamsSchema, body: updateDeviceSchema }), controller.updateDevice);
 

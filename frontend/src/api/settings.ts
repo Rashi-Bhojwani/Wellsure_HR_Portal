@@ -1,4 +1,5 @@
 import type { DirectoryToggleableField, DocumentMimeType } from "@shared/constants/peopleDocuments";
+import type { DeviceHealthThresholds as Thresholds } from "@shared/attendance/agentProtocol";
 import { apiClient } from "./client";
 
 export interface RateLimitSetting {
@@ -76,5 +77,19 @@ export async function getHelpdeskSettings(): Promise<HelpdeskSettings> {
 
 export async function updateHelpdeskSettings(input: Partial<HelpdeskSettings>): Promise<HelpdeskSettings> {
   const { data } = await apiClient.put<HelpdeskSettings>("/api/settings/helpdesk", input);
+  return data;
+}
+
+// Phase 2 P2-F — Attendance → Device health: sent to every sync agent, and
+// used for the warnings on the Devices screen and Admin Home.
+export type { DeviceHealthThresholds } from "@shared/attendance/agentProtocol";
+
+export async function getDeviceHealthSettings(): Promise<Thresholds> {
+  const { data } = await apiClient.get<Thresholds>("/api/settings/device-health");
+  return data;
+}
+
+export async function updateDeviceHealthSettings(input: Partial<Thresholds>): Promise<Thresholds> {
+  const { data } = await apiClient.put<Thresholds>("/api/settings/device-health", input);
   return data;
 }

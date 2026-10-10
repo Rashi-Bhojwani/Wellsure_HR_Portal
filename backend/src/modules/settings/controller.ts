@@ -36,3 +36,11 @@ export async function getHelpdeskSettings(_req: Request, res: Response): Promise
 export async function updateHelpdeskSettings(req: Request, res: Response): Promise<void> {
   res.status(200).json(await settingsService.updateHelpdeskSettings(req.body, actorMeta(req)));
 }
+
+export async function getDeviceHealthSettings(_req: Request, res: Response): Promise<void> {
+  res.status(200).json(await settingsService.getDeviceHealthSettings());
+}
+
+export async function updateDeviceHealthSettings(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await settingsService.updateDeviceHealthSettings(req.body, actorMeta(req)));
+}

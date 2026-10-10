@@ -133,6 +133,8 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "PUT /api/settings/people-documents": admin,
   "GET /api/settings/helpdesk": admin,
   "PUT /api/settings/helpdesk": admin,
+  "GET /api/settings/device-health": admin,
+  "PUT /api/settings/device-health": admin,
 
   "GET /api/leave/types": everyone("active leave types (apply form)"),
   "GET /api/leave/types/all": admin,
@@ -368,6 +370,7 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /iclock/getrequest": machine("ADMS poll; registered, active push-device serial"),
   "POST /iclock/devicecmd": machine("ADMS command result; registered, active push-device serial"),
   "GET /api/biometric/devices": admin,
+  "GET /api/biometric/device-warnings": admin,
   "POST /api/biometric/devices": admin,
   "PATCH /api/biometric/devices/:id": admin,
   "GET /api/biometric/agents": admin,

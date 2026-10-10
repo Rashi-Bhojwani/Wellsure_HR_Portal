@@ -12,7 +12,7 @@ committed).
 | 0 | Foundation | ✅ Done |
 | 1 | Auth, RBAC, org, employees | Done — data layer, authentication, org masters, employee management, import center, exports, audit log viewer and system settings all built and tested. Users & Roles admin screen deliberately deferred (built in Phase 5 commit E1 as Roles & Permissions). **Correction (2026-09-30): role assignment does not exist anywhere in the product** — Add Employee always assigns plain `EMPLOYEE` and nothing else assigns roles; an earlier version of this row claimed otherwise. Both are Phase 5 commit E1 ([`docs/plans/PHASE_5.md`](plans/PHASE_5.md)). |
 | 1.5 | AWS staging environment | Not started |
-| 2 | Biometric ingestion + attendance engine + real-time | In progress — plan approved ([`docs/plans/PHASE_2.md`](plans/PHASE_2.md)); P2-A (configuration), P2-B (ingestion), P2-C (rules engine), P2-D (manual entry and the muster) and P2-E (Attendance Info, Who Is In, the forgot-to-punch request) done, plus the fail-safe thresholds and the finalisation gate; P2-F → P2-I to follow |
+| 2 | Biometric ingestion + attendance engine + real-time | In progress — plan approved ([`docs/plans/PHASE_2.md`](plans/PHASE_2.md)); P2-A (configuration), P2-B (ingestion), P2-C (rules engine), P2-D (manual entry and the muster) and P2-E (Attendance Info, Who Is In, the forgot-to-punch request) done, plus the fail-safe thresholds and the finalisation gate; P2-F commit F1 (the sync agent with our read-only device driver, and its server side) done; F2 (Windows packaging) and P2-G → P2-I to follow |
 | 3 | Attendance administration | Not started |
 | 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
 | 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | ✅ Done (2026-10-03) — commits A, B, C, D, D2, E1, E1.1, E2, E3, F and G (mobile bottom bar + PWA), plus interim commits. Full review — every screen and URL, every permission, what's stubbed, open questions, risks for Phase 6 — in [`docs/plans/PHASE_5_REVIEW.md`](plans/PHASE_5_REVIEW.md). Plan and as-built notes per commit in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
@@ -4189,6 +4189,60 @@ build design" and "As built: P2-D", including the **12 rules decided here**.
   packaging). Reading without pausing the device is added to the "unproven
   until connection" list, with what to watch on the day.
 
+### Phase 2, commit P2-F F1 — the sync agent and its read-only device driver (2026-10-10)
+
+Plan and as-built notes: [`docs/plans/PHASE_2.md`](plans/PHASE_2.md), "P2-F build
+design" and "P2-F, commit F1", including the **11 rules decided while building**.
+
+- **Our own read-only driver for the device** (D-F1), `biometric-agent/src/device/zk/`:
+  the ZKTeco/eSSL protocol on port 4370 over TCP, UDP as a fallback; the comm key;
+  40- and 16-byte records; times decoded straight to wall-clock text (never through
+  the PC's timezone). **It can only send read commands**: a fixed allowlist, refused
+  at the send path before a byte leaves, and a fake device that fails any test in
+  which it receives anything else. It never pauses the device.
+  - Checked two independent ways: test vectors produced by running pyzk itself, and
+    `zkteco-js` (a client used with real devices, test-only) reading our fake device
+    exactly as our driver does. That second check caught the fake device sending a
+    chunk's packets in one TCP write, unlike a real device; fixed.
+- **The agent** (`biometric-agent/src/sync/`): one loop per device every 30 s; the
+  device's own serial checked before reading; the record count first, the whole log
+  only when needed; new punches into a durable on-disk outbox **before** the cursor
+  (a position plus a fingerprint, never a timestamp) moves; a sender that drains in
+  order with backoff and deletes a batch only on acknowledgement; a heartbeat every
+  cycle. Commands `run`, `diagnose` (reads the device and sends nothing),
+  `check-config`, `version`; `npm run fake-device` for local runs. One agent per data
+  folder: a second one exits with "already running"; a crashed agent's lock is taken
+  over within a minute (refresh-based, since Windows reuses process IDs).
+- **Server side** (migration `20261012090000_agent_device_config`):
+  - devices gain **"Sync punches from"** (default the registration date, D-F3),
+    retention days/records (3 / 20,000, pessimistic), and the agent's latest report;
+  - the heartbeat replies with each device's settings and the thresholds, stores
+    the report (the last read placed on the server's clock), and emits
+    `device.status`;
+  - `GET /api/biometric/device-warnings` and System Settings → Attendance →
+    **Device health** (`GET/PUT /api/settings/device-health`).
+- **Clock drift is visible to HR**, not just in the agent's log: a warning banner on
+  the Devices screen and on Admin Home (holders of `attendance.devices.manage`), live,
+  together with retention at warning or risk and a nearly full log. P2-H adds the
+  incidents, notifications, email and charts.
+- **Devices screen**: what the agent says per device (read OK or why not, last read),
+  clock offset, retention and log fill, punches waiting on the PC, "Not configured on
+  the agent PC"; the form gains sync-from (moving it earlier asks first) and retention.
+
+**Tests:** agent 70 (new suite, run in CI by the root `npm run test`); backend 810
+(+15, `agentDevices.test.ts`; route inventory +3 routes); frontend 12. Lint and
+typecheck clean in every project.
+
+**Live walkthrough** (fresh devcheck; the real agent and our driver reading the fake
+device over TCP; HR and Arjun in two browsers; details in the plan): Arjun's punch
+reached his open day panel in 1.9 s, turned his calendar day A → P at 3.0 s and put him
+under Arrived on HR's open Who Is In at 3.1 s, with no reload (5 s polling here, 30 s in
+production); a device clock 5 minutes ahead raised the Devices-screen warning in 7.9 s
+and on Admin Home, and cleared by itself when put right; punches made while the API was
+down arrived once it was back; a second agent was refused; an agent killed outright
+restarted and sent exactly the one punch it had missed; the device received only read
+commands; the Devices screen fits 390 px.
+
 ## Open questions
 
 - [x] **Approval Workflows — dropped (user decision 2026-10-03).** No
@@ -4210,7 +4264,7 @@ Carried from spec §14 — configurable, not guessed, until answered:
 
 - [ ] The eSSL device **model name**, and whether it supports ADMS push. Not blocking (2026-10-01): Phases 2–3 are built against the punch simulator, and the device is connected last. Everything else about the device is now confirmed (2026-10-09, spec §4.1a): ZKTeco/eSSL platform, serial `AEXY225060969`, fingerprint + face + finger-vein.
 - [x] **The device's LAN address and port: answered 2026-10-09.** `192.168.29.213`, subnet `255.255.255.0`, DHCP off (fixed), port 4370, timezone +330 (IST). The agent route is the primary path and the agent must run on a PC inside 192.168.29.x (spec §4.1a).
-- [ ] The device's **admin password and comm key** (port 4370 connection password). Supplied at install and kept in the agent's local configuration or a secrets store, never in the repo or docs.
+- [ ] The device's **admin password and comm key** (port 4370 connection password). Supplied at install, never in the repo or docs. **Where it lives is decided (D-F4, 2026-10-09):** the comm key goes in Windows Credential Manager under the agent service's own account, beside the agent key; `config.json` holds no secrets. The agent never needs the admin password.
 - [ ] Whether an always-on office PC exists to run the sync agent as a Windows service (Windows version), and how many devices there are.
 - [ ] Employee Code vs Device User ID default (spec §3): Add Employee pre-fills Employee Code from the Device User ID, but our device's IDs (2–126) differ from the 1000-series Employee Codes. Keep pre-filling or not? (Punch mapping is unaffected; it always uses `device_user_mappings`.)
 - [ ] Working hours and working days for the device-silence alert (spec §4.7): configurable defaults until HR confirms.
@@ -4255,7 +4309,10 @@ Carried from spec §14 — configurable, not guessed, until answered:
       whether it overwrites the oldest records when full. Not the same as
       its enrolment capacity (3,000 fingerprints / 2,000 faces, confirmed
       2026-10-09). The agent's retention guard defaults pessimistically to
-      3 days / 20,000 records until then (Phase 2 plan §7.1).
+      3 days / 20,000 records until then (Phase 2 plan §7.1). **Once a PC on
+      the 192.168.29.x network can reach the device, `diagnose` (P2-F) reads
+      its log count and capacity directly**; whether it overwrites or stops
+      when full still has to come from the model or its settings.
 - [x] Exact PL eligibility boundary: **HR-confirmed 2026-09-28** — 90 calendar
       days from DOJ (`leave_policies.eligibility_mode = DAYS`,
       `eligibility_value = 90`), no pro-rating, always a full 1.0-day credit.

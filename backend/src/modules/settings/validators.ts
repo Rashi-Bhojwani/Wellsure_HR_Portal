@@ -49,3 +49,14 @@ export const updateHelpdeskSettingsSchema = z.object({
   autoCloseDays: z.number().int().min(1).max(90).optional(),
   reopenWindowDays: z.number().int().min(1).max(90).optional(),
 });
+
+// Phase 2 P2-F — Attendance → Device health (docs/plans/PHASE_2.md "P2-F
+// build design"). Sent to every sync agent in its heartbeat reply. The
+// warning must come before the alarm; the service checks it against the
+// stored value when only one of the two is sent.
+export const updateDeviceHealthSettingsSchema = z.object({
+  retentionWarningPercent: z.number().int().min(1).max(99).optional(),
+  retentionAlarmPercent: z.number().int().min(2).max(100).optional(),
+  logNearlyFullPercent: z.number().int().min(50).max(100).optional(),
+  clockDriftWarningSeconds: z.number().int().min(10).max(3600).optional(),
+});

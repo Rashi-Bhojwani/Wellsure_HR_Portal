@@ -145,7 +145,7 @@ describe("biometric ingestion (P2-B)", () => {
         .set("Authorization", `Bearer ${agentKey}`)
         .send({ version: "0.1.0", host: "OFFICE-PC", devices: [{ device: agentDevice.serialNumber, reachable: true, clockOffsetSeconds: 4 }] });
       expect(res.status).toBe(200);
-      expect(res.body.devices).toEqual([agentDevice.serialNumber]);
+      expect(res.body.devices.map((d: { serial: string }) => d.serial)).toEqual([agentDevice.serialNumber]); // P2-F: per-device config, see agentDevices.test.ts
       const agent = await prisma.biometricAgent.findUniqueOrThrow({ where: { id: agentIds[0] } });
       expect(agent).toMatchObject({ host: "OFFICE-PC", version: "0.1.0" });
       expect((await prisma.device.findUniqueOrThrow({ where: { id: agentDevice.id } })).lastHeartbeatAt).not.toBeNull();

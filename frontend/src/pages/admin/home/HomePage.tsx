@@ -62,6 +62,7 @@ import * as managersApi from "../../../api/managers";
 import * as adminHomeApi from "../../../api/adminHome";
 import * as announcementsApi from "../../../api/announcements";
 import type { DashboardWidgetKey, WidgetLayoutEntry } from "../../../api/adminHome";
+import { DeviceWarnings } from "../../../components/devices/DeviceWarnings";
 
 const { Title, Text } = Typography;
 
@@ -198,6 +199,8 @@ function WelcomeTab() {
           }
         />
       )}
+      {/* P2-F: a wrong device clock or punches at risk — "nobody would think to look". */}
+      <DeviceWarnings enabled={hasPermission("attendance.devices.manage")} linkToDevices />
       {canAssignTeams && unassigned.length > 0 && (
         <Alert
           type="warning"

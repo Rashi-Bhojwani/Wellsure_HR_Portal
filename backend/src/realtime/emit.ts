@@ -260,8 +260,7 @@ export function emitDelegationChanged(employeeIds: string[]): void {
 
 // Phase 2 (P2-B): punches just stored. Each employee's own screens hear about
 // their punch (user:{id}); anyone watching attendance live (Who Is In?, P2-E)
-// gets the batch on perm:attendance.view. Device health (P2-H) adds
-// device.status for perm:attendance.devices.manage.
+// gets the batch on perm:attendance.view.
 export interface PunchReceivedPayload {
   employeeId: string;
   punchedAt: string;
@@ -272,6 +271,14 @@ export function emitPunchesReceived(punches: PunchReceivedPayload[]): void {
   if (!io || punches.length === 0) return;
   for (const p of punches) io.to(`user:${p.employeeId}`).emit("punch.received", p);
   io.to(permissionRoom("attendance.view")).emit("punch.received.batch", { count: punches.length, punches: punches.slice(0, 200) });
+}
+
+// Phase 2 P2-F: a sync agent reported in (its heartbeat, every cycle). Signal
+// only: the Devices screen and Admin Home's device warnings refetch. P2-H's
+// health incidents reuse the same event.
+export function emitDeviceStatus(payload: { agentId?: string; deviceId?: string }): void {
+  if (!io) return;
+  io.to(permissionRoom("attendance.devices.manage")).emit("device.status", payload);
 }
 
 // Phase 2 (P2-C): days recomputed with a different result. The employee's own

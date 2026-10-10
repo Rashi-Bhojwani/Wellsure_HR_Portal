@@ -1,8 +1,10 @@
 import { z } from "zod";
+import { DEVICE_REPORT_STATES, MAX_AGENT_BATCH_LINES, MAX_AGENT_REPORTED_DEVICES, RETENTION_STATES } from "@shared/attendance/agentProtocol";
 
 // Biometric ingestion (Phase 2 commit P2-B, docs/plans/PHASE_2.md §2.2, §3).
+// The agent's wire contract lives in shared/attendance/agentProtocol.ts (P2-F).
 
-export const MAX_AGENT_BATCH_LINES = 1000;
+export { MAX_AGENT_BATCH_LINES };
 
 export const idParamsSchema = z.object({ id: z.string().min(1) });
 
@@ -11,20 +13,53 @@ export const agentPunchesSchema = z.object({
   device: z.string().trim().min(1).max(64), // the device's serial number
   lines: z.array(z.string().max(500)).min(1).max(MAX_AGENT_BATCH_LINES), // ATTLOG lines, exactly as the device records them
 });
-export const agentHeartbeatSchema = z.object({
-  version: z.string().trim().max(50),
-  host: z.string().trim().max(200),
-  devices: z
-    .array(
-      z
-        .object({
-          device: z.string().trim().min(1).max(64),
-          reachable: z.boolean(),
-        })
-        .passthrough(), // cursor, lag, clock offset, retention state — kept as reported (P2-F/P2-H)
-    )
-    .max(100),
-}).passthrough();
+// The heartbeat (P2-F). Only the device and its reachability are required:
+// an agent a version older or newer than the server still gets through, and
+// whatever it reports is kept as reported.
+const retentionReportSchema = z
+  .object({
+    state: z.enum(RETENTION_STATES),
+    gapHours: z.number().min(0).nullable(),
+    windowHours: z.number().min(0),
+    logFullPercent: z.number().min(0).nullable(),
+    logNearlyFull: z.boolean(),
+    capacityUsed: z.number().min(0).nullable(),
+  })
+  .partial()
+  .passthrough();
+const deviceReportSchema = z
+  .object({
+    device: z.string().trim().min(1).max(64),
+    reachable: z.boolean(),
+    state: z.enum(DEVICE_REPORT_STATES).optional(),
+    lastReadAt: z.iso.datetime({ offset: true }).nullable().optional(),
+    secondsSinceLastRead: z.number().min(0).nullable().optional(),
+    lastError: z.string().max(1000).nullable().optional(),
+    reportedSerial: z.string().max(64).nullable().optional(),
+    firmware: z.string().max(100).nullable().optional(),
+    platform: z.string().max(100).nullable().optional(),
+    logCount: z.number().int().min(0).nullable().optional(),
+    logCapacity: z.number().int().min(0).nullable().optional(),
+    clockOffsetSeconds: z.number().nullable().optional(),
+    outboxRecords: z.number().int().min(0).optional(),
+    oldestUnsentLocalTime: z.string().max(25).nullable().optional(),
+    retention: retentionReportSchema.optional(),
+  })
+  .passthrough();
+export const agentHeartbeatSchema = z
+  .object({
+    version: z.string().trim().max(50),
+    host: z.string().trim().max(200),
+    startedAt: z.iso.datetime({ offset: true }).optional(),
+    outboxRecords: z.number().int().min(0).optional(),
+    lastPostAt: z.iso.datetime({ offset: true }).nullable().optional(),
+    lastPostError: z.string().max(1000).nullable().optional(),
+    pcClockOffsetSeconds: z.number().nullable().optional(),
+    devices: z.array(deviceReportSchema).max(MAX_AGENT_REPORTED_DEVICES),
+  })
+  .passthrough();
+export type AgentHeartbeatBody = z.infer<typeof agentHeartbeatSchema>;
+export type AgentDeviceReportBody = z.infer<typeof deviceReportSchema>;
 
 // ── Admin: devices and agents ──
 const timezone = z.string().trim().refine((tz) => {
@@ -49,11 +84,20 @@ const deviceFields = z.object({
   agentId: z.string().min(1).nullable().optional(),
   lanIp: z.string().trim().max(64).nullable().optional(),
   isSimulated: z.boolean(),
+  // P2-F: the agent never sends a punch dated before syncFrom (default: the
+  // day the device is registered); retention is pessimistic until the model
+  // is known.
+  syncFrom: z.iso.date(),
+  retentionDays: z.number().int().min(1).max(365),
+  retentionRecords: z.number().int().min(100).max(10_000_000),
 });
 export const createDeviceSchema = deviceFields.extend({
   timezone: timezone.default("Asia/Kolkata"),
   route: z.enum(["AGENT", "PUSH"]).default("AGENT"),
   isSimulated: z.boolean().default(false),
+  syncFrom: z.iso.date().optional(), // the service defaults it to today (IST)
+  retentionDays: z.number().int().min(1).max(365).optional(),
+  retentionRecords: z.number().int().min(100).max(10_000_000).optional(),
 });
 export const updateDeviceSchema = deviceFields.omit({ serialNumber: true }).partial().extend({ isActive: z.boolean().optional() });
 

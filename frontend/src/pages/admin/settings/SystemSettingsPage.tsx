@@ -11,7 +11,7 @@ import {
 } from "@shared/constants/peopleDocuments";
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as settingsApi from "../../../api/settings";
-import type { HelpdeskSettings, LeaveSettings, PeopleDocumentsSettings, SecuritySettings } from "../../../api/settings";
+import type { DeviceHealthThresholds, HelpdeskSettings, LeaveSettings, PeopleDocumentsSettings, SecuritySettings } from "../../../api/settings";
 import { LettersSettingsCard } from "../../../components/letters/LettersSettingsCard";
 import { useAuth } from "../../../hooks/useAuth";
 import { EmptyState } from "../../../components/common/EmptyState";
@@ -64,6 +64,81 @@ function LeaveSettingsCard() {
           <Col xs={24} sm={12} md={6}>
             <Form.Item name="encashmentDefaultDailyRate" label="Default daily rate (₹)">
               <InputNumber min={0} step={1} style={{ width: "100%" }} placeholder="Not configured" />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Form.Item style={{ marginTop: 8, marginBottom: 0 }}>
+          <Button type="primary" htmlType="submit" loading={saveMutation.isPending}>
+            Save changes
+          </Button>
+        </Form.Item>
+      </Form>
+    </Card>
+  );
+}
+
+// Phase 2 P2-F — Attendance → Device health. Sent to every sync agent in its
+// heartbeat, and used for the warnings on the Devices screen and Admin Home.
+// P2-H adds the silence and morning-check settings to this card.
+function DeviceHealthSettingsCard() {
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useQuery({ queryKey: ["settings", "device-health"], queryFn: settingsApi.getDeviceHealthSettings });
+  const [form] = Form.useForm<DeviceHealthThresholds>();
+
+  useEffect(() => {
+    if (data) form.setFieldsValue(data);
+  }, [data, form]);
+
+  const saveMutation = useMutation({
+    mutationFn: (values: DeviceHealthThresholds) => settingsApi.updateDeviceHealthSettings(values),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["settings", "device-health"], updated);
+      void queryClient.invalidateQueries({ queryKey: ["biometric"] });
+      void message.success("Device health settings saved. Each sync agent picks them up at its next heartbeat.");
+    },
+    onError: (err) => void message.error(errorMessage(err, "Could not save settings.")),
+  });
+
+  if (isLoading || !data) return <EmptyState message="Loading…" />;
+
+  return (
+    <Card>
+      <Form form={form} layout="vertical" initialValues={data} onFinish={(values) => saveMutation.mutate(values)} requiredMark={false}>
+        <Title level={5}>Device health</Title>
+        <Text type="secondary">
+          A device&apos;s log holds only so many punches (set per device on the Devices screen). If it isn&apos;t read for a share of that window, HR is warned, then
+          alarmed, before punches can be overwritten. A device clock further than the drift limit from the server&apos;s is a warning: every punch on it carries the
+          wrong time until someone sets it from the device&apos;s own menu (the system never changes it).
+        </Text>
+        <Row gutter={16} style={{ marginTop: 12 }}>
+          <Col xs={24} sm={12} md={6}>
+            <Form.Item name="retentionWarningPercent" label="Warning at (% of window)" rules={[{ required: true }]}>
+              <InputNumber min={1} max={99} precision={0} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <Form.Item
+              name="retentionAlarmPercent"
+              label="Alarm at (% of window)"
+              dependencies={["retentionWarningPercent"]}
+              rules={[
+                { required: true },
+                ({ getFieldValue }) => ({
+                  validator: (_, v: number) => (v > getFieldValue("retentionWarningPercent") ? Promise.resolve() : Promise.reject(new Error("Must be above the warning."))),
+                }),
+              ]}
+            >
+              <InputNumber min={2} max={100} precision={0} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <Form.Item name="logNearlyFullPercent" label="Log nearly full at (%)" rules={[{ required: true }]}>
+              <InputNumber min={50} max={100} precision={0} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <Form.Item name="clockDriftWarningSeconds" label="Clock drift warning (seconds)" rules={[{ required: true }]}>
+              <InputNumber min={10} max={3600} precision={0} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
         </Row>
@@ -296,6 +371,11 @@ export function SystemSettingsPage() {
       <PeopleDocumentsSettingsCard />
       <HelpdeskSettingsCard />
       {hasPermission("letters.template.manage") && <LettersSettingsCard />}
+
+      <Title level={4} style={{ margin: 0 }}>
+        Attendance
+      </Title>
+      <DeviceHealthSettingsCard />
     </Space>
   );
 }

@@ -1,11 +1,12 @@
 import { useState } from "react";
 import dayjs from "dayjs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Badge, Button, DatePicker, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Tabs, Tag, Typography, message } from "antd";
+import { Alert, Badge, Button, Col, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space, Switch, Table, Tabs, Tag, Tooltip, Typography, message } from "antd";
 import { CopyOutlined, EditOutlined, KeyOutlined, PlusOutlined } from "@ant-design/icons";
 import * as biometricApi from "../../../api/biometric";
 import type { AgentRow, BatchRow, DeviceInput, DeviceRow, FlaggedRow, UnmappedRow } from "../../../api/biometric";
 import * as orgApi from "../../../api/org";
+import { DeviceWarnings } from "../../../components/devices/DeviceWarnings";
 import { EmployeePicker } from "../../../components/letters/LetterFields";
 import { HelpStrip } from "../../../components/common/HelpStrip";
 import { apiErrorMessage } from "../../../lib/apiError";
@@ -16,9 +17,11 @@ const invalidate = (qc: ReturnType<typeof useQueryClient>) => void qc.invalidate
 
 // ── Devices ──────────────────────────────────────────────────────────────
 
+type DeviceForm = Omit<DeviceInput, "syncFrom"> & { syncFrom?: dayjs.Dayjs };
+
 function DeviceModal({ editing, open, onClose }: { editing: DeviceRow | null; open: boolean; onClose: () => void }) {
   const qc = useQueryClient();
-  const [form] = Form.useForm<DeviceInput>();
+  const [form] = Form.useForm<DeviceForm>();
   const route = Form.useWatch("route", form);
   const { data: locations = [] } = useQuery({ queryKey: ["org", "locations"], queryFn: () => orgApi.listLocations() });
   const { data: agents = [] } = useQuery({ queryKey: ["biometric", "agents"], queryFn: biometricApi.listAgents });
@@ -31,6 +34,20 @@ function DeviceModal({ editing, open, onClose }: { editing: DeviceRow | null; op
     },
     onError: (err) => void message.error(apiErrorMessage(err, "Could not save this device.")),
   });
+  const submit = (v: DeviceForm) => {
+    const body: DeviceInput = { ...v, syncFrom: v.syncFrom ? v.syncFrom.format("YYYY-MM-DD") : undefined };
+    // Moving the date earlier makes the agent read the whole log again and send from it (D-F3).
+    if (editing && body.syncFrom && body.syncFrom < editing.syncFrom) {
+      Modal.confirm({
+        title: "Send punches again from an earlier date?",
+        content: `The agent will read the device's whole log again and send every punch from ${dayjs(body.syncFrom).format("D MMM YYYY")}. Punches already received are recognised and dropped, so nothing is counted twice. Punches older than the attendance policy's limit arrive flagged for you to accept or discard.`,
+        okText: "Send again from this date",
+        onOk: () => save.mutate(body),
+      });
+      return;
+    }
+    save.mutate(body);
+  };
   return (
     <Modal
       title={editing ? `Edit ${editing.name}` : "Register a device"}
@@ -39,11 +56,16 @@ function DeviceModal({ editing, open, onClose }: { editing: DeviceRow | null; op
       footer={null}
       destroyOnHidden
       afterOpenChange={(o) =>
-        o && form.setFieldsValue(editing ? { ...editing, locationId: editing.location.id, agentId: editing.agent?.id ?? null } : { route: "AGENT", timezone: "Asia/Kolkata", isSimulated: false })
+        o &&
+        form.setFieldsValue(
+          editing
+            ? { ...editing, locationId: editing.location.id, agentId: editing.agent?.id ?? null, syncFrom: dayjs(editing.syncFrom) }
+            : { route: "AGENT", timezone: "Asia/Kolkata", isSimulated: false, syncFrom: dayjs(), retentionDays: 3, retentionRecords: 20000 },
+        )
       }
     >
-      <Form form={form} layout="vertical" requiredMark={false} onFinish={(v) => save.mutate(v)}>
-        <Form.Item name="serialNumber" label="Serial number" rules={[{ required: true }]} extra="From the device's system info. Push (ADMS) devices authenticate with it.">
+      <Form form={form} layout="vertical" requiredMark={false} onFinish={submit}>
+        <Form.Item name="serialNumber" label="Serial number" rules={[{ required: true }]} extra="From the device's system info. The agent checks the device reports this serial before reading it; push (ADMS) devices authenticate with it.">
           <Input disabled={!!editing} />
         </Form.Item>
         <Form.Item name="name" label="Name" rules={[{ required: true }]}>
@@ -60,11 +82,35 @@ function DeviceModal({ editing, open, onClose }: { editing: DeviceRow | null; op
             <Form.Item name="agentId" label="Sync agent">
               <Select allowClear placeholder="Choose the agent that polls it" options={agents.filter((a) => a.isActive).map((a) => ({ value: a.id, label: a.name }))} />
             </Form.Item>
-            <Form.Item name="lanIp" label="LAN IP address" extra="Used only by the agent on the office network.">
-              <Input placeholder="e.g. 192.168.1.201" />
+            <Form.Item name="lanIp" label="LAN IP address" extra="For reference: the agent's own config.json on the office PC is what it connects to.">
+              <Input placeholder="e.g. 192.168.29.213" />
             </Form.Item>
           </>
         )}
+        <Form.Item
+          name="syncFrom"
+          label="Sync punches from"
+          rules={[{ required: true }]}
+          extra="The agent never sends a punch dated before this, so the first sync doesn't send the device's whole history. Moving it earlier sends again from that date."
+        >
+          <DatePicker format="D MMM YYYY" disabledDate={(d) => d.isAfter(dayjs(), "day")} />
+        </Form.Item>
+        <Row gutter={12}>
+          <Col span={12}>
+            <Form.Item name="retentionDays" label="Log holds about (days)" rules={[{ required: true }]}>
+              <InputNumber min={1} max={365} precision={0} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item name="retentionRecords" label="Log holds (records)" rules={[{ required: true }]}>
+              <InputNumber min={100} max={10_000_000} precision={0} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Text type="secondary" style={{ display: "block", marginTop: -12, marginBottom: 16 }}>
+          How much the device keeps before old punches may be overwritten. Pessimistic (3 days, 20,000) until the model is known: if the device isn&apos;t read for half of
+          this, a warning shows; at three quarters, an alarm. When the device reports its own capacity, that figure is used instead of the records.
+        </Text>
         <Form.Item name="timezone" label="Device clock timezone" rules={[{ required: true }]} extra="The device records local time with no zone; it is read in this one.">
           <Input />
         </Form.Item>
@@ -86,6 +132,76 @@ function DeviceModal({ editing, open, onClose }: { editing: DeviceRow | null; op
         </Form.Item>
       </Form>
     </Modal>
+  );
+}
+
+const STATE_TAG: Record<string, { color: string; label: string }> = {
+  OK: { color: "green", label: "Read OK" },
+  NOT_YET_READ: { color: "default", label: "Not read yet" },
+  UNREACHABLE: { color: "red", label: "Unreachable" },
+  SERIAL_MISMATCH: { color: "red", label: "Wrong device at that address" },
+  AUTH_FAILED: { color: "red", label: "Comm key refused" },
+  NOT_ASSIGNED: { color: "orange", label: "Not assigned to the agent" },
+  UNSUPPORTED_FORMAT: { color: "red", label: "Record layout not supported" },
+  CONFIG_REFUSED: { color: "red", label: "Configuration refused" },
+};
+
+/** What the sync agent last said about the device (P2-F). */
+function AgentReportCell({ d }: { d: DeviceRow }) {
+  if (d.route !== "AGENT") return <Text type="secondary">—</Text>;
+  const h = d.health;
+  if (h.notConfiguredOnAgent) {
+    return (
+      <Tooltip title="The agent reported in but didn't mention this device: it isn't in that PC's config.json.">
+        <Tag color="orange">Not configured on the agent PC</Tag>
+      </Tooltip>
+    );
+  }
+  if (!h.report) return <Text type="secondary">No report yet</Text>;
+  const tag = STATE_TAG[h.report.state ?? ""] ?? { color: "default", label: h.report.state ?? "?" };
+  return (
+    <Space orientation="vertical" size={0}>
+      <Tooltip title={h.report.lastError ?? undefined}>
+        <Tag color={tag.color}>{tag.label}</Tag>
+      </Tooltip>
+      <Text type="secondary" style={{ fontSize: 12 }}>
+        last read {when(h.lastReadAt)}
+      </Text>
+    </Space>
+  );
+}
+
+function ClockCell({ d }: { d: DeviceRow }) {
+  const c = d.health.clockDrift;
+  if (!c) return <Text type="secondary">—</Text>;
+  return c.exceeded ? (
+    <Tooltip title="Beyond the threshold (System Settings → Attendance → Device health). Set the clock from the device's own menu; the system never changes it.">
+      <Tag color="red">{c.text}</Tag>
+    </Tooltip>
+  ) : (
+    <Text>{c.text}</Text>
+  );
+}
+
+function RetentionCell({ d }: { d: DeviceRow }) {
+  const r = d.health.retention;
+  if (!r) return <Text type="secondary">—</Text>;
+  const color = r.state === "RISK" ? "red" : r.state === "WARNING" ? "orange" : "green";
+  const gap = r.gapHours === null ? "not read yet" : r.gapHours < 1 ? "read within the hour" : `${Math.round(r.gapHours)} h since a read`;
+  return (
+    <Space orientation="vertical" size={0}>
+      <Tooltip title={`Log assumed to hold ${Math.round(r.windowHours / 24)} days. Warning at half, alarm at three quarters.`}>
+        <Tag color={color}>{r.state === "OK" ? "OK" : r.state === "RISK" ? "At risk" : "Warning"}</Tag>
+      </Tooltip>
+      <Text type="secondary" style={{ fontSize: 12 }}>
+        {gap}
+      </Text>
+      {r.logFullPercent !== null && (
+        <Text type={r.logNearlyFull ? "danger" : "secondary"} style={{ fontSize: 12 }}>
+          log {d.health.report?.logCount ?? "?"} / {r.capacityUsed ?? "?"} ({r.logFullPercent}%)
+        </Text>
+      )}
+    </Space>
   );
 }
 
@@ -115,9 +231,12 @@ function DevicesTab() {
           { title: "Device", key: "name", render: (_, d) => <><Text strong>{d.name}</Text> <Text type="secondary">{d.serialNumber}</Text> {d.isSimulated && <Tag color="purple">Simulated</Tag>}</> },
           { title: "Branch", key: "loc", render: (_, d) => d.location.name },
           { title: "Route", key: "route", render: (_, d) => (d.route === "AGENT" ? <>Agent{d.agent ? `: ${d.agent.name}` : <Text type="warning"> (none assigned)</Text>}</> : "ADMS push") },
-          { title: "Timezone", dataIndex: "timezone" },
+          { title: "Sync from", dataIndex: "syncFrom", render: (v: string) => dayjs(v).format("D MMM YYYY") },
+          { title: "Agent says", key: "report", render: (_, d) => <AgentReportCell d={d} /> },
+          { title: "Clock", key: "clock", render: (_, d) => <ClockCell d={d} /> },
+          { title: "Retention", key: "retention", render: (_, d) => <RetentionCell d={d} /> },
+          { title: "Waiting on the PC", key: "outbox", render: (_, d) => (d.health.report?.outboxRecords ? <Tag color="gold">{d.health.report.outboxRecords} punches</Tag> : "—") },
           { title: "Last punch", dataIndex: "lastPunchAt", render: when },
-          { title: "Last heard from", key: "heard", render: (_, d) => when(d.lastHeartbeatAt ?? d.lastReceivedAt) },
           { title: "Status", dataIndex: "isActive", render: (v: boolean) => <Tag color={v ? "green" : "default"}>{v ? "Active" : "Inactive"}</Tag> },
           {
             title: "",
@@ -370,8 +489,8 @@ function BatchesTab() {
   );
 }
 
-// Admin Tools → Devices (Phase 2 P2-B). Health checks, incidents and charts
-// arrive with P2-H.
+// Admin Tools → Devices (Phase 2 P2-B; P2-F adds what the sync agent reports
+// and the warnings). Health incidents, alerts and charts arrive with P2-H.
 export function DevicesPage() {
   const { data: unmapped = [] } = useQuery({ queryKey: ["biometric", "unmapped"], queryFn: biometricApi.listUnmapped });
   const { data: flagged = [] } = useQuery({ queryKey: ["biometric", "flagged"], queryFn: biometricApi.listFlagged });
@@ -383,7 +502,9 @@ export function DevicesPage() {
       <HelpStrip storageKey="biometric-devices-help">
         Biometric machines and the sync agents that read them. Punches arrive through the agent (primary), ADMS push, or an emergency file upload (Import Center),
         and all go through the same checks: exact duplicates are dropped, implausible times are flagged, and punches nobody's device ID covers wait in Unmapped.
+        The agent only ever reads a device: it never changes, clears or pauses it, and never sets its clock.
       </HelpStrip>
+      <DeviceWarnings />
       <Tabs
         items={[
           { key: "devices", label: "Devices", children: <DevicesTab /> },

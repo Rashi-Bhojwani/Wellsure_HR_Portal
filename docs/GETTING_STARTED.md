@@ -142,7 +142,7 @@ except the two marked **required**.
 | `MAIL_DEV_DIR` | Where outgoing mail is written as `.eml` files | No | `.mail` |
 | `SES_FROM` | Required only when `MAIL_DRIVER=ses` | Conditional | — |
 | `SECURITY_ALERT_EMAIL` | An inbox **outside** this system (e.g. the owners' shared mailbox). It also receives every break-glass alert (§12). Set it in staging and production | No | unset |
-| `AGENT_API_KEYS` | Biometric agent authentication (Phase 2 — not yet wired up) | No | placeholder |
+| `AGENT_API_KEYS` | Unused. Sync agent keys are created on Admin Tools → Devices → Sync agents (shown once, stored hashed) since Phase 2 P2-B | No | placeholder |
 | `AWS_REGION` | Used by the S3/SES clients when those drivers are active | No | `ap-south-1` |
 
 > [!WARNING]
@@ -319,8 +319,10 @@ Run from the repo root unless noted.
 | `npm run db:migrate --prefix backend` | Apply pending migrations without touching data |
 | `npm run lint` | ESLint across backend, frontend, biometric-agent |
 | `npm run typecheck` | `tsc --noEmit` across every project |
-| `npm run test` | Vitest, backend + frontend — backend is an integration suite against your real local Postgres/Redis, not mocks; frontend covers route-config wiring (`frontend/src/routes/__tests__/`). Safe to run while `npm run dev` is up, with no interaction either way: the suite uses its own Postgres database (`<dev database>_test`), Redis database and Socket.IO channel (`REDIS_TEST_DB`), and `.storage-test/`/`.mail-test/` folders. Each run drops, recreates, migrates and seeds that database first (about 10 s), so every run starts from the same state |
+| `npm run test` | Vitest, backend + frontend + biometric-agent — backend is an integration suite against your real local Postgres/Redis, not mocks; frontend covers route-config wiring (`frontend/src/routes/__tests__/`). Safe to run while `npm run dev` is up, with no interaction either way: the suite uses its own Postgres database (`<dev database>_test`), Redis database and Socket.IO channel (`REDIS_TEST_DB`), and `.storage-test/`/`.mail-test/` folders. Each run drops, recreates, migrates and seeds that database first (about 10 s), so every run starts from the same state |
 | `npm run check:services` | Confirms Postgres/Redis are reachable |
+| `npm run agent --prefix biometric-agent -- <run\|diagnose\|check-config\|version> --config <file>` | The biometric sync agent (Phase 2 P2-F); see "Running the sync agent locally" below |
+| `npm run fake-device --prefix biometric-agent -- --serial <s> --port <p>` | A fake biometric device speaking the real protocol, for local development |
 | `npm run admin:bootstrap --prefix backend` | Create the **first** real Super Admin on a fresh staging/production database — see §12. Refuses once any active Super Admin exists, so it does nothing locally (seeded `1000` is one) |
 | `npm run admin:recover --prefix backend` | Break-glass recovery for a Super Admin who lost their password or 2FA device — see §12 |
 | `npm run history:repair --prefix backend` | **Preview** history rows that don't fit the effective-dating model (e.g. a leaver whose placement was never closed) — every fix, current → new value, and why, plus rows a person must decide. Changes nothing. To apply, get the preview approved, then run the exact command it prints (`--apply --fingerprint … --approved-by … --operator …`); a changed list is refused. `db:migrate` warns when this is needed. See `docs/plans/EFFECTIVE_DATES.md` |
@@ -342,6 +344,42 @@ running (the worker is part of it), each punch's day is recomputed about a
 second later into `daily_attendance`. To compute a range from scratch — say
 the month so far — use Workforce → Attendance → Process Attendance. The punch
 simulator (P2-G) will do all of this at scale.
+
+**Running the sync agent locally (Phase 2 P2-F).** The real agent and its
+read-only device driver, against a fake device on this machine that speaks the
+device's protocol. Nothing here touches a real device.
+1. Sign in as `1000` or `1001`. In Admin Tools → Devices → Sync agents, add an
+   agent and copy its key (shown once). Register a device: route *Sync agent*,
+   that agent, *Simulated* on, serial e.g. `SIM-001`. "Sync punches from"
+   defaults to today; the agent never sends a punch dated before it.
+2. Start the fake device (TCP and UDP 4370, control on 4380):
+   ```bash
+   npm run fake-device --prefix biometric-agent -- --serial SIM-001 --port 4370
+   ```
+3. Give the agent a `config.json` (anywhere; no secrets in it):
+   ```json
+   { "apiUrl": "http://localhost:4000", "pollSeconds": 5, "dataDir": "./agent-data",
+     "devices": [{ "serial": "SIM-001", "host": "127.0.0.1", "port": 4370 }] }
+   ```
+   and run it with the key in the environment (Windows uses Credential Manager
+   instead, from P2-F commit F2):
+   ```bash
+   WELLSURE_AGENT_KEY=<key> npm run agent --prefix biometric-agent -- run --config /path/to/config.json
+   ```
+   `diagnose` instead of `run` prints what the device says (serial, firmware,
+   log count and capacity, clock) and sends nothing; `check-config` validates
+   the file and says whether the key is present. Only one agent runs per data
+   folder: a second `run` exits with "already running". After a crash the
+   lock is taken over within a minute.
+4. Punch: `curl -X POST localhost:4380/punch -d '{"deviceUserId":"1006"}'`
+   (Arjun's device ID). Within a poll his Attendance Info and Who Is In update.
+   `curl -X POST localhost:4380/clock -d '{"offsetSeconds":300}'` makes the
+   device clock drift: the Devices screen and Admin Home warn within a heartbeat.
+   `/clear` clears its log; `/power` with `{"on":false}` stops it answering.
+
+The Devices screen shows what the agent last reported per device (read OK or
+why not, last read, clock offset, retention, log fill, punches waiting on the
+PC). The thresholds are System Settings → Attendance → Device health.
 
 **Trying the Attendance Muster and manual entry (Phase 2).** Sign in as `1001`
 and open Workforce → Attendance → Attendance Muster. Days that have happened

@@ -2,7 +2,10 @@ import { getSetting, setSetting } from "../../lib/settings";
 import { writeAuditLog } from "../../lib/audit";
 import { RATE_LIMIT_DEFAULTS, RATE_LIMIT_KEYS, type LeaveSettings, type RateLimitSetting, type SecuritySettings } from "./types";
 import type { z } from "zod";
-import type { updateHelpdeskSettingsSchema, updateLeaveSettingsSchema, updatePeopleDocumentsSettingsSchema, updateSettingsSchema } from "./validators";
+import type { updateDeviceHealthSettingsSchema, updateHelpdeskSettingsSchema, updateLeaveSettingsSchema, updatePeopleDocumentsSettingsSchema, updateSettingsSchema } from "./validators";
+import type { DeviceHealthThresholds } from "@shared/attendance/agentProtocol";
+import { DEVICE_HEALTH_SETTING_KEY, getDeviceHealthThresholds } from "../../lib/deviceHealthSettings";
+import { HttpError } from "../../middleware/errorHandler";
 import { getPeopleDocumentsSettings, PEOPLE_DOCUMENTS_SETTING_KEYS, type PeopleDocumentsSettings } from "../../lib/peopleDocumentsSettings";
 import { getHelpdeskSettings, HELPDESK_SETTING_KEYS, type HelpdeskSettings } from "../../lib/helpdeskSettings";
 
@@ -126,5 +129,28 @@ export async function updateHelpdeskSettings(
   }
   const after = await getHelpdeskSettings();
   await writeAuditLog({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "helpdesk", before, after });
+  return after;
+}
+
+// Phase 2 P2-F — Attendance → Device health: the retention warning/alarm,
+// the nearly-full log and the clock-drift thresholds every sync agent and the
+// Devices screen use. One stored object (attendance.deviceHealth).
+export async function getDeviceHealthSettings(): Promise<DeviceHealthThresholds> {
+  return getDeviceHealthThresholds();
+}
+
+type UpdateDeviceHealthInput = z.infer<typeof updateDeviceHealthSettingsSchema>;
+
+export async function updateDeviceHealthSettings(
+  input: UpdateDeviceHealthInput,
+  meta: { actorUserId: string; ipAddress?: string | null; userAgent?: string | null },
+): Promise<DeviceHealthThresholds> {
+  const before = await getDeviceHealthThresholds();
+  const after: DeviceHealthThresholds = { ...before, ...Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)) };
+  if (after.retentionWarningPercent >= after.retentionAlarmPercent) {
+    throw new HttpError(400, "The retention warning must come before the alarm (a lower percentage).", "VALIDATION_ERROR");
+  }
+  await setSetting(DEVICE_HEALTH_SETTING_KEY, after, meta.actorUserId);
+  await writeAuditLog({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "deviceHealth", before, after });
   return after;
 }

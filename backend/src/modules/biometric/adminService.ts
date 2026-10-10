@@ -1,11 +1,14 @@
 import { Prisma, type Device } from "@prisma/client";
 import { env } from "../../config/env";
 import { writeAuditLog } from "../../lib/audit";
+import { businessToday } from "../../lib/businessDate";
+import { getDeviceHealthThresholds } from "../../lib/deviceHealthSettings";
 import { employeesForDeviceUsersOn, namesOn, translateMappingConflict, writeDeviceMapping } from "../../lib/effectiveDating";
 import { prisma } from "../../lib/prisma";
 import { HttpError } from "../../middleware/errorHandler";
 import { requestRecompute } from "../attendance/recompute";
 import { newAgentKey } from "./agentAuth";
+import { deviceHealth, warningsFor } from "./deviceHealth";
 import { ingest, previewCounts } from "./ingestion";
 
 // Admin side of biometric ingestion (P2-B): devices, sync agents (keys shown
@@ -32,28 +35,40 @@ async function uniqueSafe<T>(fn: () => Promise<T>, message: string): Promise<T> 
 
 // ── Devices ──────────────────────────────────────────────────────────────
 
-export async function listDevices() {
-  const rows = await prisma.device.findMany({
-    orderBy: [{ isActive: "desc" }, { name: "asc" }],
-    include: { location: { select: { id: true, name: true, hasBiometricDevice: true } }, agent: { select: { id: true, name: true } } },
+export async function listDevices(now: Date = new Date()) {
+  const [rows, thresholds] = await Promise.all([
+    prisma.device.findMany({
+      orderBy: [{ isActive: "desc" }, { name: "asc" }],
+      include: { location: { select: { id: true, name: true, hasBiometricDevice: true } }, agent: { select: { id: true, name: true, lastHeartbeatAt: true } } },
+    }),
+    getDeviceHealthThresholds(),
+  ]);
+  const devices = rows.map((d) => {
+    const health = deviceHealth(d, d.agent, thresholds, now);
+    return {
+      id: d.id,
+      serialNumber: d.serialNumber,
+      name: d.name,
+      location: d.location,
+      timezone: d.timezone,
+      model: d.model,
+      firmware: d.firmware,
+      route: d.route,
+      agent: d.agent ? { id: d.agent.id, name: d.agent.name } : null,
+      lanIp: d.lanIp,
+      isSimulated: d.isSimulated,
+      isActive: d.isActive,
+      lastHeartbeatAt: d.lastHeartbeatAt,
+      lastPunchAt: d.lastPunchAt,
+      lastReceivedAt: d.lastReceivedAt,
+      syncFrom: iso(d.syncFrom),
+      retentionDays: d.retentionDays,
+      retentionRecords: d.retentionRecords,
+      health,
+      warnings: d.isActive ? warningsFor(d, health) : [],
+    };
   });
-  return rows.map((d) => ({
-    id: d.id,
-    serialNumber: d.serialNumber,
-    name: d.name,
-    location: d.location,
-    timezone: d.timezone,
-    model: d.model,
-    firmware: d.firmware,
-    route: d.route,
-    agent: d.agent,
-    lanIp: d.lanIp,
-    isSimulated: d.isSimulated,
-    isActive: d.isActive,
-    lastHeartbeatAt: d.lastHeartbeatAt,
-    lastPunchAt: d.lastPunchAt,
-    lastReceivedAt: d.lastReceivedAt,
-  }));
+  return { devices, thresholds };
 }
 
 interface DeviceInput {
@@ -68,6 +83,18 @@ interface DeviceInput {
   lanIp?: string | null;
   isSimulated?: boolean;
   isActive?: boolean;
+  syncFrom?: string;
+  retentionDays?: number;
+  retentionRecords?: number;
+}
+
+// The agent's report is operational state, not configuration: it changes
+// every 30 s and would bury what an admin actually changed.
+const auditView = ({ agentReport: _r, agentReportAt: _a, ...d }: Device) => ({ ...d, syncFrom: iso(d.syncFrom) });
+
+function toDeviceData(input: DeviceInput) {
+  const { syncFrom, ...rest } = input;
+  return { ...rest, ...(syncFrom !== undefined ? { syncFrom: new Date(`${syncFrom}T00:00:00Z`) } : {}) };
 }
 
 async function assertDeviceInput(input: DeviceInput, current?: Device): Promise<void> {
@@ -84,26 +111,31 @@ async function assertDeviceInput(input: DeviceInput, current?: Device): Promise<
     const loc = await prisma.location.findUnique({ where: { id: input.locationId } });
     if (!loc?.isActive) throw new HttpError(400, "Choose an active branch.", "VALIDATION_ERROR");
   }
+  // A later date would only hold punches back; the agent sends from this day on (D-F3).
+  if (input.syncFrom && input.syncFrom > iso(businessToday())) {
+    throw new HttpError(400, "\"Sync punches from\" can't be in the future.", "VALIDATION_ERROR");
+  }
 }
 
 export async function createDevice(input: Required<Pick<DeviceInput, "serialNumber" | "name" | "locationId">> & DeviceInput, meta: Meta) {
   await assertDeviceInput(input);
+  const { serialNumber, name, locationId, ...rest } = toDeviceData({ ...input, syncFrom: input.syncFrom ?? iso(businessToday()) });
   const device = await uniqueSafe(
-    () => prisma.device.create({ data: { ...input, agentId: input.route === "PUSH" ? null : (input.agentId ?? null) } }),
+    () => prisma.device.create({ data: { ...rest, serialNumber: serialNumber!, name: name!, locationId: locationId!, agentId: input.route === "PUSH" ? null : (input.agentId ?? null) } }),
     `A device with serial number "${input.serialNumber}" is already registered.`,
   );
-  await writeAuditLog({ ...meta, action: "biometric.device.created", entityType: "Device", entityId: device.id, after: device });
-  return device;
+  await writeAuditLog({ ...meta, action: "biometric.device.created", entityType: "Device", entityId: device.id, after: auditView(device) });
+  return auditView(device);
 }
 
 export async function updateDevice(id: string, input: DeviceInput, meta: Meta) {
   const before = await prisma.device.findUnique({ where: { id } });
   if (!before) throw new HttpError(404, "Device not found.", "NOT_FOUND");
   await assertDeviceInput(input, before);
-  const data = { ...input, ...(input.route === "PUSH" ? { agentId: null } : {}) };
+  const data = { ...toDeviceData(input), ...(input.route === "PUSH" ? { agentId: null } : {}) };
   const after = await prisma.device.update({ where: { id }, data });
-  await writeAuditLog({ ...meta, action: "biometric.device.updated", entityType: "Device", entityId: id, before, after });
-  return after;
+  await writeAuditLog({ ...meta, action: "biometric.device.updated", entityType: "Device", entityId: id, before: auditView(before), after: auditView(after) });
+  return auditView(after);
 }
 
 // ── Sync agents ──────────────────────────────────────────────────────────

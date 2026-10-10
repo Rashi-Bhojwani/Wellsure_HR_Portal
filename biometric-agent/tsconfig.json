@@ -3,10 +3,10 @@
   "compilerOptions": {
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "outDir": "dist",
-    "rootDir": "src",
-    "noEmit": false,
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "@shared/*": ["../shared/*"]
+    }
   },
-  "include": ["src"]
+  "include": ["src", "vitest.config.ts"]
 }

@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { HttpError } from "../../middleware/errorHandler";
 import * as admin from "./adminService";
 import * as agentService from "./agentService";
+import { listDeviceWarnings } from "./deviceHealth";
 
 const meta = (req: Request): admin.Meta => ({ actorUserId: req.user!.userId, ipAddress: req.ip ?? null, userAgent: req.get("user-agent") ?? null });
 const id = (req: Request) => req.params.id as string;
@@ -16,7 +17,10 @@ export async function agentHeartbeat(req: Request, res: Response): Promise<void>
 
 // ── Admin ──
 export async function listDevices(_req: Request, res: Response): Promise<void> {
-  res.status(200).json({ devices: await admin.listDevices() });
+  res.status(200).json(await admin.listDevices());
+}
+export async function deviceWarnings(_req: Request, res: Response): Promise<void> {
+  res.status(200).json(await listDeviceWarnings());
 }
 export async function createDevice(req: Request, res: Response): Promise<void> {
   res.status(201).json(await admin.createDevice(req.body, meta(req)));
