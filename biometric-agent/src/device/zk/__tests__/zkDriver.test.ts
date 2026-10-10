@@ -36,7 +36,11 @@ describe("Zk4370Driver over TCP", () => {
     await d.connect();
     expect(d.transportKind).toBe("tcp");
     expect(await d.info()).toEqual({ serial: "AEXY225060969", platform: "ZMM220_TFT", firmware: "Ver 6.60 Apr 28 2015", logCount: 5, logCapacity: 80_000, userCount: 125 });
-    expect(await d.deviceTime()).toBe(device.now()); // the device's own (skewed) clock, as wall-clock text
+    // The device's own (skewed) clock, as wall-clock text. Bracketed, because the second can tick between the calls.
+    const before = device.now();
+    const read = await d.deviceTime();
+    const after = device.now();
+    expect(read >= before && read <= after).toBe(true);
   });
 
   it("reads a small log answered at once, and a large one in chunks, identically", async () => {

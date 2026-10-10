@@ -46,7 +46,7 @@ function Get-StoredCount { $s = Get-FakeApiState; return @($s.stored.$serial).Co
 function Get-AgentProcess { return (Get-CimInstance Win32_Process -Filter "Name='wellsure-agent.exe'" | Select-Object -First 1) }
 function Get-AgentStatus { return ((& $exe status 2>&1) -join "`n") }
 function Test-Working { [void](& $exe status 2>&1); return ($LASTEXITCODE -eq 0) }
-function Get-AppEvents([int]$Id) { return @(Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'WellsureAgent'; Id = $Id } -ErrorAction SilentlyContinue) }
+function Get-AppEvents([int]$Id) { try { return @(Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'WellsureAgent'; Id = $Id } -ErrorAction Stop) } catch { return @() } }
 function Start-Background([string]$Name, [string[]]$NodeArgs) {
     $p = Start-Process -FilePath 'node' -ArgumentList $NodeArgs -WorkingDirectory $agentDir -PassThru -WindowStyle Hidden `
         -RedirectStandardOutput (Join-Path $work "$Name.out.log") -RedirectStandardError (Join-Path $work "$Name.err.log")

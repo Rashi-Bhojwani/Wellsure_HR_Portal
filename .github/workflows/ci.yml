@@ -188,5 +188,5 @@ jobs:
           $log = Join-Path $env:ProgramData 'Wellsure Agent\logs\agent.log'
           if (Test-Path $log) { Write-Host '--- agent.log (last 80 lines)'; Get-Content $log -Tail 80 }
           Get-ChildItem (Join-Path $env:RUNNER_TEMP 'agent-ci') -Filter *.log -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "--- $($_.Name)"; Get-Content $_.FullName -Tail 40 }
-          Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'WellsureAgent' } -MaxEvents 20 -ErrorAction SilentlyContinue | Format-List TimeCreated, Id, LevelDisplayName, Message
+          try { Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'WellsureAgent' } -MaxEvents 20 -ErrorAction Stop | Format-List TimeCreated, Id, LevelDisplayName, Message } catch { Write-Host 'no WellsureAgent events' }
 
