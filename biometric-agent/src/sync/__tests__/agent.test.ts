@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -237,19 +237,22 @@ describe("outages and crashes lose nothing", () => {
 
   it("a rejected key raises one alarm (for the Windows event log), not one per retry, and one when it is accepted again", async () => {
     const alarms: string[] = [];
-    const { serial, make } = await setup({
+    const { serial, make, dataDir } = await setup({
       devices: [{ serial: "AEXY225060969", records: [rec("18", "2026-10-04 09:00:00")] }],
       hooks: { onAlarm: (s, kind, level) => alarms.push(`${s}:${kind}:${level}`) },
     });
+    const rejectedAt = () => (JSON.parse(readFileSync(path.join(dataDir, "state.json"), "utf8")) as { keyRejectedAt?: string | null }).keyRejectedAt;
     const env: NodeJS.ProcessEnv = { WELLSURE_AGENT_KEY: "wsa_old" };
     const agent = make(KEY, { secrets: new EnvSecretStore(env) });
     await agent.heartbeat();
     await agent.heartbeat();
     await agent.heartbeat();
     expect(alarms).toEqual(["null:KEY_REJECTED:error"]);
+    expect(rejectedAt()).toEqual(expect.any(String)); // what `status` reads, so it says so at once
     env.WELLSURE_AGENT_KEY = KEY;
     await turn(agent, [serial]);
     await agent.heartbeat();
+    expect(rejectedAt()).toBeNull();
     expect(alarms).toEqual(["null:KEY_REJECTED:error", "null:KEY_REJECTED:recovered"]);
   });
 

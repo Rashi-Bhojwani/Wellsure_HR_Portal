@@ -9,7 +9,7 @@ import { ago, describeStatus } from "../status";
 
 const NOW = new Date("2026-10-10T06:00:00Z");
 
-function dataDir(over: { lock?: "alive" | "dead" | "stale" | "none"; serverAgoMs?: number | null; device?: Partial<ReturnType<typeof emptyDeviceState>> | null; waiting?: number; setAside?: boolean } = {}) {
+function dataDir(over: { keyRejectedAgoMs?: number; lock?: "alive" | "dead" | "stale" | "none"; serverAgoMs?: number | null; device?: Partial<ReturnType<typeof emptyDeviceState>> | null; waiting?: number; setAside?: boolean } = {}) {
   const dir = mkdtempSync(path.join(os.tmpdir(), "wsa-status-"));
   const lock = over.lock ?? "alive";
   if (lock !== "none") {
@@ -22,6 +22,7 @@ function dataDir(over: { lock?: "alive" | "dead" | "stale" | "none"; serverAgoMs
     devices: over.device === null ? {} : { "AEXY225060969": { ...emptyDeviceState(), state: "OK", lastReadAt: new Date(NOW.getTime() - 12_000).toISOString(), clockOffsetSeconds: 3, ...over.device } },
     server: over.serverAgoMs === null ? null : { devices: [{ serial: "AEXY225060969", name: "C-10 entrance", timezone: "Asia/Kolkata", syncFrom: "2026-10-10", retentionDays: 3, retentionRecords: 20000, isSimulated: false }], thresholds: {}, receivedAt: new Date(NOW.getTime() - (over.serverAgoMs ?? 10_000)).toISOString() },
     pcClockOffsetSeconds: 0,
+    keyRejectedAt: over.keyRejectedAgoMs === undefined ? null : new Date(NOW.getTime() - over.keyRejectedAgoMs).toISOString(),
   };
   writeFileSync(path.join(dir, "state.json"), JSON.stringify(state));
   if (over.waiting) {
@@ -75,6 +76,16 @@ describe("wellsure-agent status", () => {
     const never = describeStatus(dataDir({ serverAgoMs: null }).config, NOW);
     expect(never.working).toBe(false);
     expect(never.lines.join("\n")).toMatch(/never answered it/);
+  });
+
+  it("a rejected key shows at once, not after the server has been quiet for minutes", () => {
+    const r = describeStatus(dataDir({ keyRejectedAgoMs: 4_000, serverAgoMs: 40_000 }).config, NOW);
+    expect(r.working).toBe(false);
+    const text = r.lines.join("\n");
+    expect(text).toMatch(/REJECTED the agent key 4 s ago.*set-key\.ps1/);
+    expect(text).not.toMatch(/last answered it/);
+    // Once the server has answered since, it is no longer a problem.
+    expect(describeStatus(dataDir({ keyRejectedAgoMs: 60_000, serverAgoMs: 5_000 }).config, NOW).working).toBe(true);
   });
 
   it("counts punches waiting and batches the server refused, without touching either", () => {

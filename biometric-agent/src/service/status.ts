@@ -58,7 +58,11 @@ export function describeStatus(config: LoadedConfig, now: Date = new Date()): { 
   }
   const state = new StateStore(config.dataDir).state;
 
-  if (state.server && now.getTime() - Date.parse(state.server.receivedAt) < SERVER_FRESH_MS) lines.push(`The server last answered it ${ago(now.getTime() - Date.parse(state.server.receivedAt))}.`);
+  const keyRejected = state.keyRejectedAt && (!state.server || Date.parse(state.keyRejectedAt) > Date.parse(state.server.receivedAt));
+  if (keyRejected) {
+    lines.push(`The server REJECTED the agent key ${ago(now.getTime() - Date.parse(state.keyRejectedAt!))}: it was probably replaced in the app. Run set-key.ps1 with the newest key. Punches are collecting on this PC meanwhile and are not lost.`);
+    problems.push("agent key rejected");
+  } else if (state.server && now.getTime() - Date.parse(state.server.receivedAt) < SERVER_FRESH_MS) lines.push(`The server last answered it ${ago(now.getTime() - Date.parse(state.server.receivedAt))}.`);
   else {
     lines.push(state.server ? `The server has not answered it for ${ago(now.getTime() - Date.parse(state.server.receivedAt)).replace(" ago", "")}. Check the internet connection, and that the agent key is right.` : "The server has never answered it. Check the address in config.json, the internet connection, and that the agent key is right.");
     problems.push("server not answering");

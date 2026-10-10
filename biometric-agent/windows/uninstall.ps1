@@ -47,6 +47,12 @@ try {
 
     if ($RemoveData) {
         Remove-Item -LiteralPath $script:DataDir -Recurse -Force -ErrorAction SilentlyContinue
+        if (Test-Path -LiteralPath $script:DataDir) {
+            # Something inside has odd permissions: take them back, then try once more.
+            [void](Invoke-Native (Join-Path $env:SystemRoot 'System32\icacls.exe') @($script:DataDir, '/reset', '/T', '/C'))
+            Remove-Item -LiteralPath $script:DataDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        if (Test-Path -LiteralPath $script:DataDir) { throw "Could not remove $($script:DataDir). Delete it by hand (File Explorer, as an administrator)." }
         Write-Done 'Data folder removed.'
     } elseif (Test-Path -LiteralPath $script:DataDir) {
         Write-Note "Kept $($script:DataDir) (settings, the log, any waiting punches). Install again and it carries on from there; delete it yourself, or run this with -RemoveData, to get rid of it."

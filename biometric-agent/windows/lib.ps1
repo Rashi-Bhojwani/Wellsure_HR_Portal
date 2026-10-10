@@ -144,13 +144,17 @@ function Remove-ServiceAccount {
 
 # The data folder holds punch data, so only administrators, the system and the
 # service account may open it (and what it holds, including the secrets inbox).
+# The folder only, never /T: files and folders inside inherit these entries
+# automatically (Windows propagates an inheritable change to them), whereas
+# icacls /T re-applies the (OI)(CI) entries to each FILE too, where they grant
+# nothing, and locked everyone out of the existing files on a re-run.
 function Initialize-DataFolder {
     foreach ($d in @($script:DataDir, (Join-Path $script:DataDir 'logs'), (Join-Path $script:DataDir 'secrets-inbox'))) {
         New-Item -ItemType Directory -Force -Path $d | Out-Null
     }
     $account = "$env:COMPUTERNAME\$($script:AccountName)"
     $grants = @("*$($script:SidAdministrators):(OI)(CI)F", '*S-1-5-18:(OI)(CI)F', "${account}:(OI)(CI)M")
-    $r = Invoke-Native (Join-Path $env:SystemRoot 'System32\icacls.exe') (@($script:DataDir, '/inheritance:r', '/grant:r') + $grants + @('/T', '/C'))
+    $r = Invoke-Native (Join-Path $env:SystemRoot 'System32\icacls.exe') (@($script:DataDir, '/inheritance:r', '/grant:r') + $grants)
     if ($r.ExitCode -ne 0) { throw "Could not restrict the data folder: $($r.Output)" }
 }
 

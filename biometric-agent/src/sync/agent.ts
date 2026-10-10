@@ -357,6 +357,7 @@ export class Agent {
       this.store.state.server = { devices: body.devices, thresholds: body.thresholds, receivedAt: new Date().toISOString() };
       this.store.state.pcClockOffsetSeconds = pcMinusServerSeconds(res.sentAt, res.receivedAt, body.serverTime);
       this.setKeyRejected(false);
+      this.store.state.keyRejectedAt = null;
       await this.store.save();
       if (JSON.stringify(body.devices) !== before) this.log.info("settings from the server", { devices: body.devices.map((d) => ({ serial: d.serial, syncFrom: d.syncFrom, retentionDays: d.retentionDays })) });
       for (const cfg of this.opts.config.devices) {
@@ -367,6 +368,8 @@ export class Agent {
     if (res.status === 401) {
       this.setKeyRejected(true);
       this.api = null;
+      this.store.state.keyRejectedAt = new Date().toISOString();
+      await this.store.save();
     }
     this.log.warn("heartbeat failed", { error: res.error });
     return false;

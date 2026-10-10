@@ -35,6 +35,8 @@ export interface AgentState {
   server: { devices: AgentDeviceConfig[]; thresholds: DeviceHealthThresholds; receivedAt: string } | null;
   /** PC clock minus server clock, from the last heartbeat. */
   pcClockOffsetSeconds: number | null;
+  /** Set when the server rejects the agent key (cleared by the next accepted heartbeat), so `status` can say so at once. */
+  keyRejectedAt?: string | null;
 }
 
 export const emptyDeviceState = (): DeviceState => ({
