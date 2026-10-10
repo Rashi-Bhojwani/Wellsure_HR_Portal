@@ -249,20 +249,36 @@ export class FakeZkDevice {
 
   async start(listen: { host?: string; tcpPort?: number; udpPort?: number | null } = {}): Promise<{ tcpPort: number; udpPort: number | null }> {
     const host = listen.host ?? "127.0.0.1";
-    this.tcp = net.createServer((socket) => this.serveTcp(socket));
-    await new Promise<void>((resolve, reject) => {
-      this.tcp!.once("error", reject);
-      this.tcp!.listen(listen.tcpPort ?? 0, host, () => resolve());
-    });
-    const tcpPort = (this.tcp.address() as net.AddressInfo).port;
-    let udpPort: number | null = null;
-    if (listen.udpPort !== null) {
-      this.udp = dgram.createSocket("udp4");
-      this.udp.on("message", (msg, rinfo) => this.serveUdp(msg, rinfo));
-      await new Promise<void>((resolve) => this.udp!.bind(listen.udpPort ?? tcpPort, host, () => resolve()));
-      udpPort = this.udp.address().port;
+    // TCP and UDP port numbers are separate spaces, and a real device answers both on 4370. When the TCP port is
+    // chosen by the OS, the UDP socket wants the same number; if something else already holds that UDP number
+    // (another test file's fake, on a busy machine) take a fresh TCP port and try again, instead of hanging.
+    const explicit = listen.tcpPort !== undefined;
+    for (let attempt = 1; ; attempt++) {
+      this.tcp = net.createServer((socket) => this.serveTcp(socket));
+      await new Promise<void>((resolve, reject) => {
+        this.tcp!.once("error", reject);
+        this.tcp!.listen(listen.tcpPort ?? 0, host, () => resolve());
+      });
+      const tcpPort = (this.tcp.address() as net.AddressInfo).port;
+      if (listen.udpPort === null) return { tcpPort, udpPort: null };
+      const udp = dgram.createSocket("udp4");
+      udp.on("message", (msg, rinfo) => this.serveUdp(msg, rinfo));
+      try {
+        await new Promise<void>((resolve, reject) => {
+          udp.once("error", reject);
+          udp.bind(listen.udpPort ?? tcpPort, host, () => resolve());
+        });
+      } catch (err) {
+        udp.close();
+        await new Promise<void>((resolve) => this.tcp!.close(() => resolve()));
+        this.tcp = null;
+        if ((err as NodeJS.ErrnoException).code === "EADDRINUSE" && !explicit && listen.udpPort === undefined && attempt < 20) continue;
+        throw err;
+      }
+      udp.removeAllListeners("error");
+      this.udp = udp;
+      return { tcpPort, udpPort: udp.address().port };
     }
-    return { tcpPort, udpPort };
   }
 
   async stop(): Promise<void> {

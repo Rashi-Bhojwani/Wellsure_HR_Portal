@@ -170,6 +170,23 @@ describe("failures end the session cleanly", () => {
   });
 });
 
+describe("the fake device itself", () => {
+  // Found on a loaded Windows CI runner: a UDP port already taken made start() wait forever and the test timed out at 30 s.
+  it("fails at once, saying why, when the UDP port it was asked for is taken (it never hangs)", async () => {
+    const dgram = await import("node:dgram");
+    const holder = dgram.createSocket("udp4");
+    await new Promise<void>((r) => holder.bind(0, "127.0.0.1", () => r()));
+    const taken = holder.address().port;
+    const device = new FakeZkDevice({ serial: "X" });
+    try {
+      await expect(device.start({ udpPort: taken })).rejects.toMatchObject({ code: "EADDRINUSE" });
+    } finally {
+      await device.stop();
+      holder.close();
+    }
+  }, 5_000);
+});
+
 describe("P2-F rule 1, at the send path", () => {
   it("refuses every write command before a byte leaves, and a buffered read of anything but the attendance log", async () => {
     const { device, tcpPort } = await fake({ records: punches(1) });
