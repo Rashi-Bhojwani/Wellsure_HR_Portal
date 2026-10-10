@@ -50,7 +50,29 @@ describe("the outbox", () => {
     expect(o.waiting("DEV-1").lines).toBe(0);
     expect(o.quarantinedCount()).toBe(1);
     const kept = readdirSync(path.join(dir, "outbox-rejected"));
-    expect(JSON.parse(readFileSync(path.join(dir, "outbox-rejected", kept[0]!), "utf8")).lines).toHaveLength(2);
+    expect(JSON.parse(readFileSync(path.join(dir, "outbox-rejected", kept.find((f) => !f.endsWith(".reason.json"))!), "utf8")).lines).toHaveLength(2);
+  });
+
+  it("a person can list what was set aside with why, export it for Import Center, and mark it handled (still never deleted)", () => {
+    const dir = tmp();
+    const o = new Outbox(dir);
+    o.init();
+    o.append("DEV-1", entries(3));
+    o.quarantineSegment(o.oldest("DEV-1")!, "HTTP 422: line 2 is not a punch", new Date("2026-10-10T05:00:00Z"));
+    expect(o.quarantinedCount()).toBe(1); // the reason file isn't a second batch
+    const [b] = o.quarantined();
+    expect(b).toMatchObject({ serial: "DEV-1", refusedAt: "2026-10-10T05:00:00.000Z", reason: "HTTP 422: line 2 is not a punch" });
+    expect(b!.lines).toHaveLength(3);
+
+    const exported = o.exportQuarantined(path.join(dir, "export"));
+    expect(exported).toHaveLength(1);
+    expect(readFileSync(exported[0]!, "utf8").trim().split("\n")).toEqual(b!.lines);
+
+    expect(o.markQuarantinedHandled()).toBe(1);
+    expect(o.quarantinedCount()).toBe(0); // the warning clears
+    const handled = readdirSync(path.join(dir, "outbox-rejected", "handled"));
+    expect(handled).toHaveLength(2); // the batch and its reason: moved, not deleted
+    expect(o.markQuarantinedHandled()).toBe(0);
   });
 });
 

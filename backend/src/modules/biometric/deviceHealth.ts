@@ -65,12 +65,15 @@ export function deviceHealth(device: Device, agent: Pick<BiometricAgent, "lastHe
   };
 }
 
-export type DeviceWarningKind = "CLOCK_DRIFT" | "RETENTION_WARNING" | "RETENTION_RISK" | "LOG_NEARLY_FULL";
+export type DeviceWarningKind = "CLOCK_DRIFT" | "RETENTION_WARNING" | "RETENTION_RISK" | "LOG_NEARLY_FULL" | "BATCHES_SET_ASIDE";
 
 export interface DeviceWarning {
-  deviceId: string;
-  deviceName: string;
-  serialNumber: string;
+  /** Device warnings carry the device; BATCHES_SET_ASIDE is the agent PC's, so carries the agent instead. */
+  deviceId: string | null;
+  deviceName: string | null;
+  serialNumber: string | null;
+  agentId: string | null;
+  agentName: string | null;
   kind: DeviceWarningKind;
   message: string;
   reportAt: string | null;
@@ -80,7 +83,7 @@ const hoursText = (h: number) => (h >= 48 ? `${Math.round(h / 24)} days` : `${Ma
 
 /** The warnings a device's report raises, worded for HR. */
 export function warningsFor(device: Device, health: DeviceHealth): DeviceWarning[] {
-  const base = { deviceId: device.id, deviceName: device.name, serialNumber: device.serialNumber, reportAt: health.reportAt?.toISOString() ?? null };
+  const base = { deviceId: device.id, deviceName: device.name, serialNumber: device.serialNumber, agentId: null, agentName: null, reportAt: health.reportAt?.toISOString() ?? null };
   const out: DeviceWarning[] = [];
   if (health.clockDrift?.exceeded) {
     out.push({
@@ -107,11 +110,35 @@ export function warningsFor(device: Device, health: DeviceHealth): DeviceWarning
   return out;
 }
 
-/** Every warning across active agent-route devices (Admin Home, the Devices screen banner). */
+/**
+ * Punches the server refused as they stand are kept on the agent's PC (never
+ * deleted) but are NOT in attendance. A quarantine nobody checks is data loss,
+ * only slower (user, 2026-10-10), so the count the agent reports is a warning
+ * until a person deals with them (`quarantine`, INSTALL.md).
+ */
+export function agentWarnings(agent: Pick<BiometricAgent, "id" | "name" | "lastHeartbeatAt" | "lastHeartbeat">): DeviceWarning[] {
+  const n = Number((agent.lastHeartbeat as { quarantinedBatches?: unknown } | null)?.quarantinedBatches ?? 0);
+  if (!Number.isFinite(n) || n <= 0) return [];
+  return [
+    {
+      deviceId: null,
+      deviceName: null,
+      serialNumber: null,
+      agentId: agent.id,
+      agentName: agent.name,
+      kind: "BATCHES_SET_ASIDE",
+      message: `${agent.name} is holding ${n} batch${n === 1 ? "" : "es"} of punches that the server refused. They are kept on that PC and are not lost, but they are not in attendance yet. Whoever looks after the agent PC should list and handle them (INSTALL.md, "Punches the server refused").`,
+      reportAt: agent.lastHeartbeatAt?.toISOString() ?? null,
+    },
+  ];
+}
+
+/** Every warning across active agents and their devices (Admin Home, the Devices screen banner). */
 export async function listDeviceWarnings(now: Date = new Date()): Promise<{ warnings: DeviceWarning[]; thresholds: DeviceHealthThresholds }> {
-  const [devices, thresholds] = await Promise.all([
+  const [devices, agents, thresholds] = await Promise.all([
     prisma.device.findMany({ where: { isActive: true, route: "AGENT" }, include: { agent: { select: { lastHeartbeatAt: true } } }, orderBy: { name: "asc" } }),
+    prisma.biometricAgent.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
     getDeviceHealthThresholds(),
   ]);
-  return { warnings: devices.flatMap((d) => warningsFor(d, deviceHealth(d, d.agent, thresholds, now))), thresholds };
+  return { warnings: [...devices.flatMap((d) => warningsFor(d, deviceHealth(d, d.agent, thresholds, now))), ...agents.flatMap(agentWarnings)], thresholds };
 }

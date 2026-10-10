@@ -87,6 +87,8 @@ export interface AgentHeartbeatRequest {
   lastPostError: string | null;
   /** The PC's clock minus the server's, estimated from the last round trip. */
   pcClockOffsetSeconds: number | null;
+  /** Batches the server refused as they stand, set aside on the PC for a person (never deleted). HR sees a warning while this is above 0. */
+  quarantinedBatches?: number;
   devices: AgentDeviceReport[];
 }
 

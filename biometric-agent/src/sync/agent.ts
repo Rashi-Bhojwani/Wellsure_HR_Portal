@@ -259,7 +259,7 @@ export class Agent {
           continue;
         }
         if (res.status === 400 || res.status === 413 || res.status === 422) {
-          this.outbox.quarantineSegment(seg);
+          this.outbox.quarantineSegment(seg, res.error ?? `HTTP ${res.status}`);
           this.log.error("the API refused a batch as it stands; it was set aside in outbox-rejected for a person to look at (never deleted)", { serial, file: seg.file, error: res.error });
           continue;
         }
@@ -316,7 +316,7 @@ export class Agent {
       lastPostError: this.lastPostError ? this.lastPostError.slice(0, 1000) : null,
       pcClockOffsetSeconds: this.store.state.pcClockOffsetSeconds,
       devices,
-      ...({ quarantinedBatches: this.outbox.quarantinedCount(), keyRejected: this.keyRejected } as object),
+      quarantinedBatches: this.outbox.quarantinedCount(),
     };
   }
 

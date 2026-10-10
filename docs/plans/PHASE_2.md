@@ -1952,3 +1952,42 @@ small to change):
     duplicates);
   - the fake device received only read commands (100 of them);
   - the Devices screen at 390 px has no horizontal overflow.
+
+### P2-F, follow-up to F1: HR is told when punches are set aside (2026-10-10)
+
+Added on the user's review of F1 ("a quarantine nobody checks is the same as
+data loss, just slower"). Small, so it has no design section of its own.
+- **Why:** a batch the server refuses as it stands (400/413/422) is moved to
+  `outbox-rejected/` on the agent PC. The count was in the heartbeat but the
+  server ignored it, so those punches were neither in attendance nor on any
+  screen.
+- **Surfaced:** the heartbeat's `quarantinedBatches` (now part of the shared
+  contract, optional so an older agent is fine) raises a `BATCHES_SET_ASIDE`
+  warning, red, on the Devices screen and Admin Home (the same people and the
+  same live `device.status` refresh as the other device warnings). It clears
+  by itself when the PC reports 0. The Sync agents tab shows the count per
+  agent.
+- **Rules decided while building:**
+  1. **The reason the server refused it is kept beside the batch**
+     (`<batch>.reason.json`), since a person looking at it a week later
+     couldn't otherwise tell why.
+  2. **A way to deal with them, since a banner nobody can clear gets ignored:**
+     `quarantine` (list, with the reason), `quarantine --export <folder>`
+     (each batch as a plain ATTLOG file that Import Center → Punches (ATTLOG)
+     accepts, which gives line-by-line reasons and takes the valid ones), and
+     `quarantine --done` (moves them to `outbox-rejected/handled/`: still
+     never deleted, and the warning clears). Safe beside a running agent.
+  3. **`keyRejected` is no longer in the heartbeat.** A rejected key means the
+     heartbeat is rejected too, so the server could never have received it;
+     the case is covered by the key-rejected warning in the agent's log, and
+     (P2-H) by the agent going silent.
+- **Also:** the npm 10 / vitest lockfile problem is now in GETTING_STARTED's
+  troubleshooting (user note).
+- **Tests:** agent 71 (+1: reason, list, export, handled; the heartbeat carries
+  the count); backend +1 (the warning appears, shows on the agents list, clears
+  on the next report, and an older agent raises nothing). Live, on a fresh
+  devcheck: a 1,001-line batch (over the server's 1,000 limit) in the outbox
+  was refused with HTTP 400 and set aside; the Devices screen warned 5.9 s
+  after the agent started, Admin Home and the Sync agents tab showed it,
+  `quarantine` listed it with the reason, `--export` wrote all 1,001 punches,
+  `--done` moved (not deleted) the files, and the banner cleared by itself.

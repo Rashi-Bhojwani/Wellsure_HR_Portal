@@ -55,10 +55,13 @@ export interface DeviceHealth {
   notConfiguredOnAgent: boolean;
 }
 export interface DeviceWarning {
-  deviceId: string;
-  deviceName: string;
-  serialNumber: string;
-  kind: "CLOCK_DRIFT" | "RETENTION_WARNING" | "RETENTION_RISK" | "LOG_NEARLY_FULL";
+  /** Device warnings carry the device; BATCHES_SET_ASIDE is the agent PC's, so carries the agent. */
+  deviceId: string | null;
+  deviceName: string | null;
+  serialNumber: string | null;
+  agentId: string | null;
+  agentName: string | null;
+  kind: "CLOCK_DRIFT" | "RETENTION_WARNING" | "RETENTION_RISK" | "LOG_NEARLY_FULL" | "BATCHES_SET_ASIDE";
   message: string;
   reportAt: string | null;
 }

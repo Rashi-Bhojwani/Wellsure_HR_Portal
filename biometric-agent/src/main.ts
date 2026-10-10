@@ -1,3 +1,4 @@
+import path from "node:path";
 import { instantToLocalTime } from "@shared/attendance/attlog";
 import { describeClockOffset } from "@shared/attendance/agentProtocol";
 import { ConfigError, defaultConfigPath, loadConfig, type LoadedConfig } from "./config/load";
@@ -8,6 +9,7 @@ import { createLogger } from "./log";
 import { createSecretStore, type SecretStore } from "./secrets";
 import { Agent } from "./sync/agent";
 import { acquireAgentLock, AgentAlreadyRunningError } from "./sync/lock";
+import { Outbox } from "./sync/outbox";
 import { deviceMinusPcSeconds } from "./sync/clock";
 import { AGENT_VERSION } from "./version";
 
@@ -15,6 +17,9 @@ import { AGENT_VERSION } from "./version";
 //   run           the sync agent (what the Windows service runs)
 //   diagnose      connect to each device and print what it says; sends nothing
 //   check-config  validate config.json and say which secrets are present (never their values)
+//   quarantine    list the punch batches the server refused and the agent set aside;
+//                 --export <folder> writes them as files Import Center accepts;
+//                 --done moves them aside once a person has dealt with them
 //   version
 // docs/plans/PHASE_2.md "P2-F build design".
 
@@ -84,6 +89,34 @@ async function checkConfig(config: LoadedConfig, file: string, secrets: SecretSt
   return ok ? 0 : 1;
 }
 
+function quarantine(config: LoadedConfig): number {
+  // Works on the data folder directly; safe beside a running agent, which only counts the files.
+  const outbox = new Outbox(config.dataDir);
+  const batches = outbox.quarantined();
+  if (flag("done")) {
+    const n = outbox.markQuarantinedHandled();
+    out(n ? `${n} set-aside batch(es) moved to ${path.join(config.dataDir, "outbox-rejected", "handled")} (not deleted). The warning in the app clears within a minute.` : "Nothing was set aside.");
+    return 0;
+  }
+  if (!batches.length) {
+    out("Nothing is set aside: no punch batch has been refused by the server.");
+    return 0;
+  }
+  out(`${batches.length} batch(es) of punches the server refused, kept on this PC (never deleted). They are NOT in attendance yet.`);
+  for (const b of batches) {
+    out(`  ${b.name}: ${b.lines.length} punch(es) from device ${b.serial}${b.oldestLocalTime ? `, earliest ${b.oldestLocalTime}` : ""}`);
+    out(`    refused ${b.refusedAt ?? "(time not recorded)"}: ${b.reason}`);
+  }
+  const to = arg("export");
+  if (to) {
+    const files = outbox.exportQuarantined(to);
+    out(`Wrote ${files.length} file(s) to ${to}. Upload each in the app: Import Center → Punches (ATTLOG), choosing the device ${batches[0]!.serial}. Then run: quarantine --done`);
+  } else {
+    out("To get them into attendance: quarantine --export <folder>, upload the files in Import Center → Punches (ATTLOG), then quarantine --done. If unsure, ask for help before doing anything.");
+  }
+  return 0;
+}
+
 async function main(): Promise<number> {
   const command = process.argv.slice(2).find((a) => !a.startsWith("--") && process.argv[process.argv.indexOf(a) - 1]?.startsWith("--") !== true) ?? "run";
   if (command === "version") {
@@ -95,8 +128,9 @@ async function main(): Promise<number> {
   const secrets = createSecretStore(config.secrets);
   if (command === "check-config") return checkConfig(config, file, secrets);
   if (command === "diagnose") return diagnose(config, secrets);
+  if (command === "quarantine") return quarantine(config);
   if (command !== "run") {
-    out(`Unknown command "${command}". Use run, diagnose, check-config or version.`);
+    out(`Unknown command "${command}". Use run, diagnose, check-config, quarantine or version.`);
     return 2;
   }
   const release = acquireAgentLock(config.dataDir);

@@ -224,6 +224,24 @@ describe("sync agent: the server side (P2-F)", () => {
       expect(a.warnings.map((w) => w.kind)).toEqual(["LOG_NEARLY_FULL"]);
     });
 
+    it("punches the agent PC has set aside (the server refused them) are a warning HR sees until someone deals with them", async () => {
+      await beat({ ...body([]), quarantinedBatches: 2 });
+      const res = await hr().get("/api/biometric/device-warnings");
+      const w = res.body.warnings.find((x: { agentId: string | null }) => x.agentId === agentIds[0]);
+      expect(w).toMatchObject({ kind: "BATCHES_SET_ASIDE", deviceId: null, agentName: expect.any(String) });
+      expect(w.message).toMatch(/holding 2 batches of punches that the server refused.*not in attendance yet/);
+      // The Sync agents tab has the figure too.
+      const agents = await hr().get("/api/biometric/agents");
+      expect(agents.body.agents.find((a: { id: string }) => a.id === agentIds[0]).lastHeartbeat.quarantinedBatches).toBe(2);
+      // Dealt with (`quarantine --done` on the PC): the next heartbeat reports 0 and the warning clears.
+      await beat({ ...body([]), quarantinedBatches: 0 });
+      const after = await hr().get("/api/biometric/device-warnings");
+      expect(after.body.warnings.some((x: { kind: string }) => x.kind === "BATCHES_SET_ASIDE")).toBe(false);
+      // An older agent that doesn't send the count raises nothing.
+      await beat(body([]));
+      expect((await listDeviceWarnings()).warnings.some((x) => x.kind === "BATCHES_SET_ASIDE")).toBe(false);
+    });
+
     it("the warnings need attendance.devices.manage", async () => {
       expect((await request(app).get("/api/biometric/device-warnings").set(...authHeader(empToken))).status).toBe(403);
     });

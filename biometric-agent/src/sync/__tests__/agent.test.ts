@@ -219,7 +219,7 @@ describe("outages and crashes lose nothing", () => {
     device.punch("44", "2026-10-04 09:30:00");
     await agent.cycleDevice(serial); // reading goes on with the settings it already has
     expect(await agent.sendPending()).toBe(false);
-    expect(agent.report()).toMatchObject({ keyRejected: true, outboxRecords: 1 });
+    expect(agent.report()).toMatchObject({ outboxRecords: 1 }); // the punches wait on the PC
     const fixed = make("wsa_rotated");
     expect(await turn(fixed, [serial])).toBe(true);
     expect(api.storedFor(serial)).toEqual(["18|2026-10-04 09:00:00", "44|2026-10-04 09:30:00"]);
@@ -253,6 +253,9 @@ describe("outages and crashes lose nothing", () => {
     api.mode = "400";
     expect(await agent.sendPending()).toBe(true);
     expect(agent.outbox.quarantinedCount()).toBe(1);
+    // HR is told: the heartbeat carries the count, and the reason it was refused is kept beside the batch.
+    expect(agent.report().quarantinedBatches).toBe(1);
+    expect(agent.outbox.quarantined()[0]).toMatchObject({ serial, reason: expect.stringMatching(/400/) });
     api.mode = "ok";
     device.punch("44", "2026-10-04 09:30:00");
     await turn(agent, [serial]);

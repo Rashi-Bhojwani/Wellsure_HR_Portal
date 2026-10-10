@@ -4243,6 +4243,18 @@ down arrived once it was back; a second agent was refused; an agent killed outri
 restarted and sent exactly the one punch it had missed; the device received only read
 commands; the Devices screen fits 390 px.
 
+### Phase 2, P2-F follow-up — HR is told when punches are set aside (2026-10-10)
+
+From the review of F1. Details: [`docs/plans/PHASE_2.md`](plans/PHASE_2.md), "P2-F, follow-up to F1".
+
+- Batches the server refuses as they stand stay on the agent PC (never deleted, with the
+  reason beside them) and are now a red warning on the Devices screen and Admin Home
+  until someone deals with them; the Sync agents tab shows the count.
+- New agent command `quarantine` (list; `--export <folder>` for Import Center → Punches
+  (ATTLOG); `--done` to move them to `handled/`, which clears the warning).
+- GETTING_STARTED gained the npm 10 / vitest lockfile note.
+- Tests: agent 71, backend +1; checked live on a fresh devcheck.
+
 ## Open questions
 
 - [x] **Approval Workflows — dropped (user decision 2026-10-03).** No

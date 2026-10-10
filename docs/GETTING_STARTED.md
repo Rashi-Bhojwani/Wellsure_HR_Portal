@@ -370,7 +370,9 @@ device's protocol. Nothing here touches a real device.
    log count and capacity, clock) and sends nothing; `check-config` validates
    the file and says whether the key is present. Only one agent runs per data
    folder: a second `run` exits with "already running". After a crash the
-   lock is taken over within a minute.
+   lock is taken over within a minute. `quarantine` lists any punch batches
+   the server refused (set aside on the PC, never deleted; HR sees a warning
+   until they are dealt with).
 4. Punch: `curl -X POST localhost:4380/punch -d '{"deviceUserId":"1006"}'`
    (Arjun's device ID). Within a poll his Attendance Info and Who Is In update.
    `curl -X POST localhost:4380/clock -d '{"offsetSeconds":300}'` makes the
@@ -438,6 +440,16 @@ is running. `npm run check:services` tells you exactly what's unreachable.
 The password in `DATABASE_URL` doesn't match what you created the role
 with in [§3](#3-create-the-database-and-role). Either fix `backend/.env`
 to match, or drop and recreate the role with the password you want.
+
+**`npm install` in `biometric-agent/` fails with `Cannot read properties of null (reading 'edgesOut')`**
+This is a bug in npm 10 (the version that ships with Node 22): it can't resolve
+the agent's test tool (vitest) *from scratch*, even in an empty project. It
+only bites when the lockfile is being changed. `npm ci` and a plain
+`npm install` work, because they install from `biometric-agent/package-lock.json`,
+which was resolved once with npm 11. So: don't delete that lockfile, and to add
+or upgrade a dependency there use npm 11 for that one command:
+`cd biometric-agent && npx -y npm@11 install --save-dev <package>`, then check
+that `npm ci` still works under npm 10 before committing.
 
 **Redis not reachable**
 Same idea as Postgres: `brew services start redis` / `sudo systemctl

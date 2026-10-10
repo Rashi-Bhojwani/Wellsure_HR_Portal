@@ -300,6 +300,14 @@ function AgentsTab() {
           { title: "Agent", key: "name", render: (_, a) => <><Text strong>{a.name}</Text> <Text type="secondary" code>{a.keyPrefix}…</Text></> },
           { title: "Host / version", key: "host", render: (_, a) => (a.host ? `${a.host} · v${a.version ?? "?"}` : <Text type="secondary">Not connected yet</Text>) },
           { title: "Last heartbeat", dataIndex: "lastHeartbeatAt", render: when },
+          {
+            title: "Set aside",
+            key: "setAside",
+            render: (_, a) => {
+              const n = Number((a.lastHeartbeat as { quarantinedBatches?: number } | null)?.quarantinedBatches ?? 0);
+              return n > 0 ? <Tooltip title="Batches of punches the server refused, kept on the agent PC and not in attendance. See INSTALL.md, 'Punches the server refused'."><Tag color="red">{n} refused</Tag></Tooltip> : "—";
+            },
+          },
           { title: "Devices", key: "devices", render: (_, a) => (a.devices.length ? a.devices.map((d) => <Tag key={d.id}>{d.name}</Tag>) : "—") },
           { title: "Status", dataIndex: "isActive", render: (v: boolean) => <Tag color={v ? "green" : "default"}>{v ? "Active" : "Inactive"}</Tag> },
           {

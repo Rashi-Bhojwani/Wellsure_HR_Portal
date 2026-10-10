@@ -55,6 +55,7 @@ export const agentHeartbeatSchema = z
     lastPostAt: z.iso.datetime({ offset: true }).nullable().optional(),
     lastPostError: z.string().max(1000).nullable().optional(),
     pcClockOffsetSeconds: z.number().nullable().optional(),
+    quarantinedBatches: z.number().int().min(0).optional(),
     devices: z.array(deviceReportSchema).max(MAX_AGENT_REPORTED_DEVICES),
   })
   .passthrough();

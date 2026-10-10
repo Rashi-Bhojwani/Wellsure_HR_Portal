@@ -9,7 +9,9 @@ import type { DeviceWarning } from "../../api/biometric";
 // build design"): a device clock beyond the threshold — "a drifting device
 // clock silently corrupts attendance for everyone and nobody would think to
 // look" (user, 2026-10-09) — a device not read for half or three quarters of
-// its retention window, and a nearly full log. Shown on Admin Home and the
+// its retention window, a nearly full log, and punches the server refused that
+// an agent PC is holding (a quarantine nobody checks is data loss, only slower:
+// user, 2026-10-10). Shown on Admin Home and the
 // Devices screen; live (device.status). P2-H adds notifications and email.
 
 const TITLES: Record<DeviceWarning["kind"], string> = {
@@ -17,6 +19,7 @@ const TITLES: Record<DeviceWarning["kind"], string> = {
   RETENTION_WARNING: "Device not read for a while",
   RETENTION_RISK: "Punches at risk of being overwritten",
   LOG_NEARLY_FULL: "Device log nearly full",
+  BATCHES_SET_ASIDE: "Punches the server refused are waiting",
 };
 
 export function DeviceWarnings({ enabled = true, linkToDevices = false }: { enabled?: boolean; linkToDevices?: boolean }) {
@@ -27,10 +30,10 @@ export function DeviceWarnings({ enabled = true, linkToDevices = false }: { enab
     <Space orientation="vertical" size={8} style={{ width: "100%" }}>
       {warnings.map((w) => (
         <Alert
-          key={`${w.deviceId}-${w.kind}`}
-          type={w.kind === "RETENTION_RISK" || w.kind === "CLOCK_DRIFT" ? "error" : "warning"}
+          key={`${w.deviceId ?? w.agentId}-${w.kind}`}
+          type={w.kind === "RETENTION_RISK" || w.kind === "CLOCK_DRIFT" || w.kind === "BATCHES_SET_ASIDE" ? "error" : "warning"}
           showIcon
-          title={`${TITLES[w.kind]}: ${w.deviceName}`}
+          title={`${TITLES[w.kind]}: ${w.deviceName ?? w.agentName}`}
           description={
             <>
               {w.message}

@@ -19,6 +19,18 @@ export interface Segment {
   oldestLocalTime: string | null;
 }
 
+/** A set-aside batch (not its `.reason.json` companion). */
+const isBatchFile = (f: string) => f.endsWith(".json") && !f.endsWith(".reason.json");
+
+export interface QuarantinedBatch {
+  name: string;
+  serial: string;
+  lines: string[];
+  oldestLocalTime: string | null;
+  refusedAt: string | null;
+  reason: string;
+}
+
 const folderFor = (serial: string) => serial.replace(/[^A-Za-z0-9_-]/g, "_");
 
 export class Outbox {
@@ -86,15 +98,63 @@ export class Outbox {
     this.recount(seg.serial);
   }
 
-  /** The API refused the batch itself (it will never be accepted as is): kept aside for a person, never deleted. */
-  quarantineSegment(seg: Segment): void {
+  /**
+   * The API refused the batch itself (it will never be accepted as is): kept
+   * aside for a person, never deleted, with the reason it was refused beside
+   * it. The heartbeat reports how many are waiting, so HR sees a banner until
+   * someone deals with them (`quarantine` command, INSTALL.md).
+   */
+  quarantineSegment(seg: Segment, reason = "(no reason recorded)", now: Date = new Date()): void {
     mkdirSync(this.quarantine, { recursive: true });
-    renameSync(seg.file, path.join(this.quarantine, `${folderFor(seg.serial)}-${path.basename(seg.file)}`));
+    const name = `${folderFor(seg.serial)}-${path.basename(seg.file)}`;
+    renameSync(seg.file, path.join(this.quarantine, name));
+    writeFileDurably(path.join(this.quarantine, name.replace(/\.json$/, ".reason.json")), JSON.stringify({ refusedAt: now.toISOString(), reason }));
     this.recount(seg.serial);
   }
 
   quarantinedCount(): number {
-    return existsSync(this.quarantine) ? readdirSync(this.quarantine).filter((f) => f.endsWith(".json")).length : 0;
+    return existsSync(this.quarantine) ? readdirSync(this.quarantine).filter(isBatchFile).length : 0;
+  }
+
+  /** What is set aside, oldest first: for the `quarantine` command. */
+  quarantined(): QuarantinedBatch[] {
+    if (!existsSync(this.quarantine)) return [];
+    return readdirSync(this.quarantine)
+      .filter(isBatchFile)
+      .sort()
+      .map((name) => {
+        const file = path.join(this.quarantine, name);
+        const body = JSON.parse(readFileSync(file, "utf8")) as { serial: string; lines: string[]; oldestLocalTime: string | null };
+        const reasonFile = path.join(this.quarantine, name.replace(/\.json$/, ".reason.json"));
+        const why = existsSync(reasonFile) ? (JSON.parse(readFileSync(reasonFile, "utf8")) as { refusedAt?: string; reason?: string }) : {};
+        return { name, serial: body.serial, lines: body.lines, oldestLocalTime: body.oldestLocalTime, refusedAt: why.refusedAt ?? null, reason: why.reason ?? "(no reason recorded)" };
+      });
+  }
+
+  /**
+   * Writes every set-aside batch as a plain ATTLOG text file that Import
+   * Center → Device punches accepts (the same lines, one punch per line).
+   */
+  exportQuarantined(toDir: string): string[] {
+    mkdirSync(toDir, { recursive: true });
+    return this.quarantined().map((b) => {
+      const file = path.join(toDir, b.name.replace(/\.json$/, ".attlog.txt"));
+      writeFileDurably(file, `${b.lines.join("\n")}\n`);
+      return file;
+    });
+  }
+
+  /** A person has dealt with them: moved to `outbox-rejected/handled/`, still not deleted, and the banner clears. */
+  markQuarantinedHandled(): number {
+    const handled = path.join(this.quarantine, "handled");
+    mkdirSync(handled, { recursive: true });
+    let n = 0;
+    for (const name of readdirSync(this.quarantine)) {
+      if (!name.endsWith(".json")) continue;
+      if (isBatchFile(name)) n++;
+      renameSync(path.join(this.quarantine, name), path.join(handled, name));
+    }
+    return n;
   }
 
   private recount(serial: string): void {
