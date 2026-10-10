@@ -65,7 +65,7 @@ export interface FakeDeviceOptions {
    * How replies go out over TCP. "separate" (default, like a real device):
    * each packet in its own write, a moment apart — zkteco-js, which handles one
    * packet per network read, depends on this. "joined": all of a request's
-   * replies in one write. "fragmented": tiny writes. Our driver must cope with
+   * replies in one write. "fragmented": each packet's first bytes in tiny writes. Our driver must cope with
    * all three.
    */
   tcpWrites?: "separate" | "joined" | "fragmented";
@@ -297,8 +297,15 @@ export class FakeZkDevice {
           if (this.opts.tcpWrites === "joined") {
             if (frames.length) socket.write(Buffer.concat(frames));
           } else if (this.opts.tcpWrites === "fragmented") {
-            const bytes = Buffer.concat(frames);
-            for (let o = 0; o < bytes.length; o += 7) socket.write(bytes.subarray(o, o + 7));
+            // Every packet's top and header, and the start of its payload, in 7-byte pieces
+            // (so a boundary falls inside every field), then the rest whole: splitting a whole
+            // log this way is thousands of tiny writes, which is slow on some platforms and
+            // adds no coverage.
+            for (const f of frames) {
+              const head = Math.min(f.length, 40);
+              for (let o = 0; o < head; o += 7) socket.write(f.subarray(o, Math.min(o + 7, head)));
+              if (f.length > head) socket.write(f.subarray(head));
+            }
           } else {
             for (const [i, f] of frames.entries()) {
               if (i > 0) await pause();
