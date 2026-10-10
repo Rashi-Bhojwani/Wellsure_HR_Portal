@@ -2675,3 +2675,84 @@ frontend on a freshly seeded database, then runs it; uploads the figures and the
   anyway" on a day off); (3) it needs a freshly seeded database each time (it refuses to run when fewer than 8
   people have no punches today), and signing in is rate-limited by IP at 10 per 15 minutes (a run uses 5).
 
+### P2-H build design (2026-10-10, written before building; **awaiting approval: it adds a table**)
+
+Spec §4.7 and §7.2 above are the requirements. This section turns them into a build, and records the three
+places where the literal text would not work.
+
+**What the plan already has to build on (P2-F):** per-device agent reports with the retention guard and clock
+drift, computed when read and shown as warnings on the Devices screen and Admin Home; `devices.lastHeartbeatAt /
+lastPunchAt / lastReceivedAt`, `biometric_agents.lastHeartbeatAt`; System Settings → Attendance → Device health
+(`attendance.deviceHealth`). H turns those into **incidents with a start, an end, a notification and a recovery
+notice**, adds the checks that don't exist yet, and adds the missing parts of the Devices screen.
+
+**Schema (the new table): `device_incidents`**
+- `id`, `kind` (`DEVICE_SILENT`, `AGENT_SILENT`, `NO_PUNCHES_TODAY`, `CLOCK_DRIFT`, `RETENTION_RISK`),
+  `deviceId?`, `agentId?` (exactly one of them, by kind), `openedAt`, `resolvedAt?`, `details` (json: the
+  numbers behind it, e.g. minutes silent, offset seconds), `openNotifiedAt`, `recoveryNotifiedAt`.
+- **One open incident per subject and kind**, enforced by a partial unique index on
+  `(kind, coalesce(device_id, agent_id)) WHERE resolved_at IS NULL`: a check that runs every minute cannot open
+  the same incident twice, and "once per incident" is a property of the table, not of careful code.
+- Append-only in spirit: rows are closed, never deleted; the Devices screen's incident history reads them.
+
+**The checks** (`attendance.deviceHealth.check`, a BullMQ repeatable job every minute; cheap queries on
+timestamps; pure decision functions that take `now`, so tests and the simulator can move the clock):
+1. **Agent silent**: the agent's `lastHeartbeatAt` older than N minutes (default 5, configurable) → opens;
+   a heartbeat → closes. Only for agents that have ever reported, and only while at least one of its devices
+   is active. Not limited to working hours (an agent that is down at 3 am is down at 9 am).
+2. **Device silent**: **no successful contact** from the device for N minutes (default 30) *during that device's
+   working hours on a working day*. Contact means: agent route, the agent reports the device `OK` and its last
+   successful read is recent; push route, the device's own poll (`lastHeartbeatAt`) or upload is recent. It does
+   **not** mean "a punch arrived" (see decision 1).
+3. **No punches today** (the morning check, default 10:30, configurable): a device that has received punches on
+   its usual working days has none today by that time → opens; the first punch closes it. Also reports, in the
+   incident's details, how many employees at that device's branch have no device mapping and how many unmapped
+   punches arrived yesterday (spec §7.2).
+4. **Clock drift** and 5. **retention risk / log nearly full**: the existing P2-F assessments, now opened as
+   incidents when they cross their thresholds and closed when they clear. (The warnings on the Devices screen
+   and Admin Home stay, and now read the open incidents.)
+
+**Working hours and working days.** A device's *expected people today* are the active employees whose placement
+is at the device's location, with a device mapping in force, employed today, and not on a holiday, week-off or
+full-day leave (read through the effective-dating readers, as the engine does). Its working window today is the
+earliest shift start (less the shift's punch-window-before) to the latest shift end among them. No expected
+people today (Sunday, a holiday) → no window → **no device-silent or morning alert**. Agent silence is separate
+(rule 1).
+
+**Alerts.** On open: an in-app notification to every holder of `attendance.devices.manage` (never manager-
+grantable) and an email to the same people plus a configured list (`attendance.deviceHealth.alertEmails`); on
+close: a recovery notice, same recipients. Once each. No reminders (an open incident stays on the Devices screen
+and Admin Home until it clears). Email goes through the `MailService` interface as everywhere else.
+
+**Settings** (the existing Device health card, all admin-editable): `deviceSilentMinutes` (30),
+`agentSilentMinutes` (5), `morningCheckTime` ("10:30"), `alertEmails` ([]). The scheduler reads the check
+interval's cron at registration; thresholds are read each run (live).
+
+**Devices screen** (Workforce → Attendance → Devices, what §7.2 lists and F1 didn't build): a status chip per
+device and agent (online / silent / offline, from the open incidents); an **Incidents** tab (open first, then
+history with how long each lasted); **ingestion volume** charts per device and per route, hourly for today and
+daily for the last 30 days (one aggregation endpoint over `ingestion_batches`); and **employees at device
+branches with no mapping**. The Admin Home banner lists open incidents.
+
+**Simulator additions** (§6's table, still to build): `device-silent` (the simulated device stops answering the
+agent), `agent-silent` (the agent process is stopped), `wrong-clock` (a clock offset on the simulated device).
+
+**Tests, and gate G3 made measurable:** a silenced simulated device raises an HR alert during working hours and
+**does not** on a Sunday or a company holiday; a silenced agent raises one; each recovers with exactly one
+notice; the same condition on consecutive checks never opens a second incident (the index, tested by trying);
+morning check; clock drift and retention incidents open and close; recipients are exactly the permission holders
+plus the list; IDOR/permission tests on the new endpoints; route inventory.
+
+**Decisions for you (nothing built until you answer):**
+1. **"Device silent" cannot literally mean "no punches for 30 minutes".** Staff punch at arrival and departure,
+   so ten silent minutes in the middle of the day are normal and half an hour is the *rule* between about
+   10:30 and 18:30: the alert would fire every day at lunch. I propose *no successful contact* (the device
+   unreachable to the agent, or not polling in) for N minutes during working hours, and let the morning check
+   (rule 3) catch "the device is up but nobody's punches are arriving". This departs from the spec's wording;
+   say if you meant the literal one.
+2. **Working hours from the shifts of the people expected at that branch** (above), not a single company-wide
+   window. A branch with only night-shift staff is then watched at night and left alone in the day.
+3. **No periodic reminders** while an incident stays open. (Add a daily reminder if you'd rather.)
+4. **Who is told**: holders of `attendance.devices.manage` plus a free list of email addresses. If you want a
+   named person, put them on the list.
+
