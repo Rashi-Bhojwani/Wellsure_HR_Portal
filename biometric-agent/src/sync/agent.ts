@@ -40,11 +40,17 @@ import { StateStore, type DeviceState } from "./state";
 //
 // The agent only ever reads the device (P2-F rule 1; see device/zk/zkDriver.ts).
 
+export type AlarmKind = "RETENTION" | "LOG_NEARLY_FULL" | "CLOCK_DRIFT" | "BATCH_SET_ASIDE" | "KEY_REJECTED";
+
 export interface AgentHooks {
   /** Tests: a crash point between "records are in the outbox" and "the cursor moved". */
   afterOutboxWrite?: (serial: string) => void | Promise<void>;
-  /** F2: the Windows event log, on each change of retention state / drift. */
-  onAlarm?: (serial: string, kind: "RETENTION" | "LOG_NEARLY_FULL" | "CLOCK_DRIFT", level: "warning" | "error" | "recovered", message: string) => void;
+  /**
+   * The Windows event log (F2), on each change of retention state, log fill,
+   * clock drift, a batch set aside, or the key being rejected. `serial` is
+   * null for what belongs to the agent, not a device.
+   */
+  onAlarm?: (serial: string | null, kind: AlarmKind, level: "warning" | "error" | "recovered", message: string) => void;
 }
 
 export interface AgentOptions {
@@ -240,7 +246,7 @@ export class Agent {
           this.outbox.remove(seg);
           this.lastPostAt = new Date().toISOString();
           this.lastPostError = null;
-          this.keyRejected = false;
+          this.setKeyRejected(false);
           this.sendBackoff.reset();
           const b = res.body!;
           this.log.info("sent", { serial, lines: seg.lines.length, new: b.newCount, duplicate: b.duplicateCount, unmapped: b.unmappedCount, rejected: b.rejectedCount, flagged: b.flaggedCount });
@@ -248,7 +254,7 @@ export class Agent {
         }
         this.lastPostError = res.error;
         if (res.status === 401) {
-          this.keyRejected = true;
+          this.setKeyRejected(true);
           this.api = null; // read the key again next time: a corrected key works without a restart
           this.log.error("the API rejected the agent key; punches keep collecting in the outbox until it is fixed (rotate the key: INSTALL.md)", { error: res.error });
           return false;
@@ -261,6 +267,7 @@ export class Agent {
         if (res.status === 400 || res.status === 413 || res.status === 422) {
           this.outbox.quarantineSegment(seg, res.error ?? `HTTP ${res.status}`);
           this.log.error("the API refused a batch as it stands; it was set aside in outbox-rejected for a person to look at (never deleted)", { serial, file: seg.file, error: res.error });
+          this.opts.hooks?.onAlarm?.(serial, "BATCH_SET_ASIDE", "error", `The server refused a batch of ${seg.lines.length} punches from ${serial} (${res.error ?? `HTTP ${res.status}`}). They are kept on this PC, not in attendance yet: run "wellsure-agent quarantine".`);
           continue;
         }
         this.log.warn("send failed; will retry", { serial, error: res.error });
@@ -279,6 +286,20 @@ export class Agent {
         if (!ok) this.later(() => this.wakeSender(), this.keyRejected ? this.opts.config.backoff.maxSeconds * 1000 : this.sendBackoff.next());
         else if (this.outbox.total() > 0) this.later(() => this.wakeSender(), this.opts.config.backoff.maxSeconds * 1000); // only parked devices left
       })(),
+    );
+  }
+
+  /** The key being rejected (or accepted again) is an alarm change: logged once for the event log, not on every retry. */
+  private setKeyRejected(rejected: boolean): void {
+    if (rejected === this.keyRejected) return;
+    this.keyRejected = rejected;
+    this.opts.hooks?.onAlarm?.(
+      null,
+      "KEY_REJECTED",
+      rejected ? "error" : "recovered",
+      rejected
+        ? "The API rejected the agent key. Punches are collecting on this PC but nothing is reaching the server until the key is corrected (run set-key.ps1)."
+        : "The API accepts the agent key again.",
     );
   }
 
@@ -335,7 +356,7 @@ export class Agent {
       const before = JSON.stringify(this.store.state.server?.devices ?? null);
       this.store.state.server = { devices: body.devices, thresholds: body.thresholds, receivedAt: new Date().toISOString() };
       this.store.state.pcClockOffsetSeconds = pcMinusServerSeconds(res.sentAt, res.receivedAt, body.serverTime);
-      this.keyRejected = false;
+      this.setKeyRejected(false);
       await this.store.save();
       if (JSON.stringify(body.devices) !== before) this.log.info("settings from the server", { devices: body.devices.map((d) => ({ serial: d.serial, syncFrom: d.syncFrom, retentionDays: d.retentionDays })) });
       for (const cfg of this.opts.config.devices) {
@@ -344,7 +365,7 @@ export class Agent {
       return true;
     }
     if (res.status === 401) {
-      this.keyRejected = true;
+      this.setKeyRejected(true);
       this.api = null;
     }
     this.log.warn("heartbeat failed", { error: res.error });

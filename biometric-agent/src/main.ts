@@ -6,10 +6,15 @@ import { DeviceError } from "./device/driver";
 import { createDriver } from "./device/factory";
 import { Zk4370Driver } from "./device/zk/zkDriver";
 import { createLogger } from "./log";
-import { createSecretStore, type SecretStore } from "./secrets";
+import { createSecretStore, EnvFirstSecretStore, type SecretStore } from "./secrets";
+import { importSecretInbox } from "./secrets/inbox";
+import { WindowsCredentialStore } from "./secrets/windowsCredentials";
 import { Agent } from "./sync/agent";
 import { acquireAgentLock, AgentAlreadyRunningError } from "./sync/lock";
 import { Outbox } from "./sync/outbox";
+import { alarmToEventLog, createEventLog, EVENT_IDS } from "./service/eventLog";
+import { pruneRotatedLogs } from "./service/logs";
+import { describeStatus } from "./service/status";
 import { deviceMinusPcSeconds } from "./sync/clock";
 import { AGENT_VERSION } from "./version";
 
@@ -17,6 +22,7 @@ import { AGENT_VERSION } from "./version";
 //   run           the sync agent (what the Windows service runs)
 //   diagnose      connect to each device and print what it says; sends nothing
 //   check-config  validate config.json and say which secrets are present (never their values)
+//   status        what is true right now, in sentences; exit 0 only if it is working
 //   quarantine    list the punch batches the server refused and the agent set aside;
 //                 --export <folder> writes them as files Import Center accepts;
 //                 --done moves them aside once a person has dealt with them
@@ -76,6 +82,12 @@ async function checkConfig(config: LoadedConfig, file: string, secrets: SecretSt
   out(`poll          every ${config.pollSeconds} s`);
   out(`data folder   ${config.dataDir}`);
   out(`secrets from  ${config.secrets}`);
+  if (secrets instanceof WindowsCredentialStore) {
+    // The key and comm keys belong to the service account's Credential Manager, which this window can't see.
+    out("agent key     held by the service account's Windows Credential Manager (not visible from here; `status` shows whether it works)");
+    for (const d of config.devices) out(`device        ${d.serial} at ${d.host}:${d.port} (${d.driver})`);
+    return 0;
+  }
   let ok = true;
   try {
     const key = await secrets.agentKey();
@@ -117,31 +129,50 @@ function quarantine(config: LoadedConfig): number {
   return 0;
 }
 
+function status(config: LoadedConfig): number {
+  const { lines, working } = describeStatus(config);
+  for (const l of lines) out(l);
+  return working ? 0 : 1;
+}
+
 async function main(): Promise<number> {
   const command = process.argv.slice(2).find((a) => !a.startsWith("--") && process.argv[process.argv.indexOf(a) - 1]?.startsWith("--") !== true) ?? "run";
   if (command === "version") {
-    out(AGENT_VERSION);
+    out(`${AGENT_VERSION} (node ${process.versions.node})`);
     return 0;
   }
   const file = arg("config") ?? defaultConfigPath();
   const config = loadConfig(file);
   const secrets = createSecretStore(config.secrets);
   if (command === "check-config") return checkConfig(config, file, secrets);
-  if (command === "diagnose") return diagnose(config, secrets);
+  if (command === "diagnose") return diagnose(config, secrets instanceof WindowsCredentialStore ? new EnvFirstSecretStore(secrets) : secrets);
   if (command === "quarantine") return quarantine(config);
+  if (command === "status") return status(config);
   if (command !== "run") {
-    out(`Unknown command "${command}". Use run, diagnose, check-config, quarantine or version.`);
+    out(`Unknown command "${command}". Use run, status, diagnose, check-config, quarantine or version.`);
     return 2;
   }
   const release = acquireAgentLock(config.dataDir);
-  const agent = new Agent({ config, secrets, logger: createLogger(config.logLevel) });
+  const logger = createLogger(config.logLevel);
+  const events = createEventLog(process.platform, logger);
+  pruneRotatedLogs(path.join(config.dataDir, "logs"));
+  // Windows: secrets the installer dropped in the inbox go into this account's Credential Manager first.
+  if (secrets instanceof WindowsCredentialStore) {
+    const inbox = await importSecretInbox(config.dataDir, secrets, logger);
+    if (inbox.failed.length) events.write(EVENT_IDS.SECRETS_FAILED, "ERROR", `Could not store ${inbox.failed.length} secret(s) in Windows Credential Manager: ${inbox.failed[0]!.error}`);
+  }
+  const agent = new Agent({ config, secrets, logger, hooks: { onAlarm: alarmToEventLog(events) } });
   agent.start();
+  events.write(EVENT_IDS.STARTED, "INFORMATION", `Wellsure Agent ${AGENT_VERSION} started, reading ${config.devices.map((d) => d.serial).join(", ")}.`);
   await new Promise<void>((resolve) => {
     const stop = () => void agent.stop().then(resolve);
     process.once("SIGINT", stop);
     process.once("SIGTERM", stop);
+    process.once("SIGBREAK", stop); // Windows: Ctrl+Break, which a console stop can send instead of Ctrl+C
   });
   release();
+  events.write(EVENT_IDS.STOPPED, "INFORMATION", `Wellsure Agent ${AGENT_VERSION} stopped.`);
+  await new Promise((r) => setTimeout(r, 500)); // let the last event-log write leave
   return 0;
 }
 

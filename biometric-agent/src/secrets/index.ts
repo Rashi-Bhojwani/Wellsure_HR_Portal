@@ -2,8 +2,10 @@
 // either:
 //   - the agent key (Admin Tools → Devices → Sync agents, shown once);
 //   - each device's comm key (its connection password; absent or 0 = none).
-// Windows: Credential Manager, under the service's own account (F2).
+// Windows: Credential Manager, under the service's own account (windowsCredentials.ts).
 // Linux (development, CI): environment variables.
+
+import { WindowsCredentialStore } from "./windowsCredentials";
 
 export interface SecretStore {
   agentKey(): Promise<string | null>;
@@ -30,9 +32,23 @@ export class EnvSecretStore implements SecretStore {
   }
 }
 
+/**
+ * `diagnose` runs in an administrator's window, but on Windows the real secrets
+ * belong to the service account's Credential Manager, which that window can't
+ * see. So a comm key typed into the environment for the diagnosis
+ * (WELLSURE_COMMKEY_<SERIAL>) wins, and anything else falls through.
+ */
+export class EnvFirstSecretStore implements SecretStore {
+  private readonly env = new EnvSecretStore();
+  constructor(private readonly fallback: SecretStore) {}
+  async agentKey(): Promise<string | null> {
+    return (await this.env.agentKey()) ?? this.fallback.agentKey();
+  }
+  async commKey(serial: string): Promise<number | null> {
+    return (await this.env.commKey(serial)) ?? this.fallback.commKey(serial);
+  }
+}
+
 export function createSecretStore(kind: "credential-manager" | "env"): SecretStore {
-  if (kind === "env") return new EnvSecretStore();
-  // Windows Credential Manager under the service's account is built with the
-  // Windows packaging (P2-F commit F2).
-  throw new Error('secrets: "credential-manager" arrives with the Windows service (P2-F F2). Use secrets: "env" until then.');
+  return kind === "env" ? new EnvSecretStore() : new WindowsCredentialStore();
 }

@@ -166,6 +166,28 @@ export class Outbox {
     return this.pending.get(serial) ?? { lines: 0, oldest: null };
   }
 
+  /**
+   * What is waiting on disk for a device, read without touching anything (the
+   * `status` command runs beside a live agent; `init()` would delete a file the
+   * agent is in the middle of writing).
+   */
+  static waitingOnDisk(dataDir: string, serial: string): { lines: number; batches: number } {
+    const dir = path.join(dataDir, "outbox", folderFor(serial));
+    if (!existsSync(dir)) return { lines: 0, batches: 0 };
+    let lines = 0;
+    let batches = 0;
+    for (const f of readdirSync(dir)) {
+      if (!f.endsWith(".json")) continue;
+      try {
+        lines += (JSON.parse(readFileSync(path.join(dir, f), "utf8")) as { lines: string[] }).lines.length;
+        batches++;
+      } catch {
+        // being replaced as we read it: the next look will see it
+      }
+    }
+    return { lines, batches };
+  }
+
   serialsWaiting(): string[] {
     return [...this.pending.entries()].filter(([, v]) => v.lines > 0).map(([k]) => k);
   }

@@ -2,8 +2,8 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, utimesSync, writeFi
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { parseConfig } from "../../config/load";
-import { EnvSecretStore, commKeyEnvName } from "../../secrets";
+import { loadConfig, parseConfig } from "../../config/load";
+import { EnvFirstSecretStore, EnvSecretStore, commKeyEnvName } from "../../secrets";
 import { AGENT_VERSION } from "../../version";
 import { Backoff } from "../backoff";
 import { deviceMinusPcSeconds, pcMinusServerSeconds } from "../clock";
@@ -119,6 +119,13 @@ describe("config.json", () => {
     expect(parseConfig({ ...base, apiUrl: "http://127.0.0.1:4000" }, "linux").apiUrl).toBe("http://127.0.0.1:4000");
   });
 
+  it("accepts a config.json saved with a byte-order mark (Notepad, PowerShell 5)", () => {
+    const dir = tmp();
+    const file = path.join(dir, "config.json");
+    writeFileSync(file, `\uFEFF${JSON.stringify(base)}`);
+    expect(loadConfig(file).apiUrl).toBe("https://api.example.com");
+  });
+
   it("refuses a device listed twice, and says which field is wrong", () => {
     expect(() => parseConfig({ ...base, devices: [base.devices[0], base.devices[0]] }, "linux")).toThrow(/once/);
     expect(() => parseConfig({ ...base, pollSeconds: 1 }, "linux")).toThrow(/pollSeconds/);
@@ -133,6 +140,21 @@ describe("secrets from the environment (Linux, development, CI)", () => {
     expect(await s.commKey("AEXY-22")).toBe(123456);
     expect(await s.commKey("OTHER")).toBeNull();
     await expect(new EnvSecretStore({ [commKeyEnvName("X")]: "abc" }).commKey("X")).rejects.toThrow(/whole number/);
+  });
+});
+
+describe("diagnose in an administrator's window (Windows)", () => {
+  it("a comm key typed into the environment wins; anything else falls through to the service account's store", async () => {
+    const fallback = { agentKey: async () => "from-vault", commKey: async (s: string) => (s === "VAULT-ONLY" ? 7 : null) };
+    process.env[commKeyEnvName("DIAG-1")] = "424242";
+    try {
+      const store = new EnvFirstSecretStore(fallback);
+      expect(await store.commKey("DIAG-1")).toBe(424242);
+      expect(await store.commKey("VAULT-ONLY")).toBe(7);
+      expect(await store.commKey("NEITHER")).toBeNull();
+    } finally {
+      delete process.env[commKeyEnvName("DIAG-1")];
+    }
   });
 });
 

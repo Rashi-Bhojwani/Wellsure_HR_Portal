@@ -1991,3 +1991,162 @@ data loss, just slower"). Small, so it has no design section of its own.
   after the agent started, Admin Home and the Sync agents tab showed it,
   `quarantine` listed it with the reason, `--export` wrote all 1,001 punches,
   `--done` moved (not deleted) the files, and the banner cleared by itself.
+
+### P2-F, commit F2 build design (2026-10-10, written before building)
+
+D-F4 (a dedicated low-privilege account; the agent key and comm keys in its
+Credential Manager) and the F2 bullet list in "P2-F build design" above were
+approved on 2026-10-09; the user's instruction on 2026-10-10 was "Build F2".
+This section is the detail underneath them, and the rules I decided where the
+approved text didn't reach are listed at the end for review.
+
+**Where each thing can be proven.** F2 is mostly Windows, and this container
+is Linux, so the proof is split:
+- *Here:* the executable is built and run for real (the same single-executable
+  recipe works on Linux) against the fake device and a fake API; the
+  Credential Manager and event-log code against a fake PowerShell, so the logic
+  is tested even though the Windows calls aren't; every `.ps1` is parsed with
+  PowerShell 7's own parser.
+- *The CI Windows runner:* the real thing: `install.ps1`, the service account,
+  Credential Manager, NSSM, restart on failure, event log, uninstall.
+- *Only the office PC:* see "Unproven" below.
+
+**The executable.** The agent is bundled with esbuild into one CommonJS file
+(zod is its only runtime dependency; `zkteco-js` stays test-only and never
+ships), then turned into a Node single-executable application: the SEA blob is
+injected (postject) into a copy of `node.exe`. The result, `wellsure-agent.exe`,
+needs nothing installed on the PC. The Node version it embeds is the one CI
+builds with (22.x), and `wellsure-agent.exe version` prints both versions. It is
+not code-signed (no certificate exists); INSTALL.md says what Windows may say
+about that and what to do.
+
+**The release.** A zip built by CI (and attached to the CI run as an artifact,
+named for the agent version): `wellsure-agent.exe`, `nssm.exe`, `install.ps1`,
+`upgrade.ps1`, `uninstall.ps1`, `set-key.ps1`, `config.example.json`,
+`INSTALL.md`, `VERSION.txt`, and `SHA256SUMS.txt` of the lot. NSSM 2.24 is
+downloaded in CI and its zip checked against a pinned SHA-256 before use; it is
+never committed, and the downloaded zip is cached by hash so a flaky
+nssm.cc can't break a rerun.
+
+**Layout on the PC.**
+- `C:\Program Files\Wellsure Agent\` : the executable and `nssm.exe`. Anyone
+  can read, only administrators can change.
+- `C:\ProgramData\Wellsure Agent\` : `config.json` (no secrets), `state.json`,
+  `outbox\`, `outbox-rejected\`, `agent.lock`, `logs\`. Inheritance removed:
+  administrators, SYSTEM and the service account only. It holds punch data.
+
+**The account and its secrets (D-F4).** `install.ps1` creates the local account
+`WellsureAgentSvc` (random 24-character password, never shown or stored by the
+script, member of Users only, may not change the password, never expires),
+registers the service to run as it, and stores:
+- the agent key at Credential Manager target `WellsureAgent/agent-key`;
+- each device's comm key at `WellsureAgent/commkey/<serial>`.
+
+Credential Manager belongs to a user, so the secrets have to be written *as*
+that user. The script starts the agent's own `secrets set` as the service
+account (`Start-Process -Credential -LoadUserProfile`), handing the value over
+in a temporary file that only that account and the administrators can read and
+that is deleted straight after, never on a command line. The agent reads
+Credential Manager through Windows PowerShell and the system's `CredRead`
+(no native module to ship), once at start and again after a 401, so a rotated
+key works without a restart. Prompts hide what's typed.
+
+**The service (NSSM).** Automatic (delayed) start, so the network is up;
+restart on exit after 5 s (throttled if it keeps failing), and the Windows
+service-recovery actions as a second net should NSSM itself die; stdout and
+stderr to `logs\agent.log`, rotated at 10 MB, 10 kept; a stop first sends
+Ctrl+C and waits up to 15 s (the agent finishes what it is sending, writes its
+state and releases its lock). A fresh lock after a kill makes the restarted
+agent exit with "already running" and NSSM try again, which is the
+behaviour proven in F1's walkthrough.
+
+**The Windows event log.** Source `WellsureAgent` in Application, registered
+by `install.ps1`; the agent writes with `eventcreate` (nothing to install). One
+entry on each change of a device's retention state (warning, error, recovered),
+on the log being nearly full, on the clock drifting beyond the threshold (and
+recovering), when batches are first set aside, and when the service starts and
+stops. Event IDs are fixed and listed in INSTALL.md so someone can find them.
+
+**Commands added** (all work on Linux too, so they are testable here):
+- `status`: what is true right now, in sentences, read from the data folder
+  and the lock: is an agent running, each device's last read, state and
+  punches waiting, anything set aside. For the person at the PC over the phone.
+- `secrets set agent-key|comm-key --serial <s> --from-file <f>` and
+  `secrets check`: write/verify Credential Manager (on Linux it says the
+  secrets come from environment variables). Values are never printed.
+
+**The scripts** (Windows PowerShell 5.1, which every Windows 10/11 and Server
+has; no PowerShell 7 features):
+- `install.ps1`: must be run as administrator (checks, and says how). Asks the
+  few things only the installer knows (the app's address, the agent key hidden,
+  and for each device its serial, IP address and comm key if any) or takes
+  them as parameters for unattended use. Safe to run again: it updates the
+  configuration and secrets and leaves punches waiting in the outbox alone. It
+  checks the device can be reached before starting (`diagnose --no-read`),
+  warns if the PC is set to sleep, starts the service, and doesn't say "working"
+  until the agent has actually reported in.
+- `upgrade.ps1`: stops the service, keeps the old executable as `.previous`,
+  puts the new one in, starts it, confirms the new version reported; puts the
+  old one back if the new one doesn't start.
+- `uninstall.ps1`: stops and removes the service and the event source. Keeps
+  `C:\ProgramData\Wellsure Agent` (it may hold punches the server hasn't
+  received) unless `-RemoveData`, and says how many are waiting before it does.
+- `set-key.ps1`: rotating the agent key: asks for the new one (hidden), stores
+  it, restarts the service.
+
+**CI on a Windows runner** (a new job, `agent-windows`): unit tests on Windows
+(catching path and lock differences); build the executable and the zip;
+then, against a fake API and the fake device on the runner: install with
+`install.ps1` unattended; the service is running as `WellsureAgentSvc` and a
+punch from the fake device reaches the fake API; Credential Manager holds the
+key (`secrets check` as that account); kill the process and see it restarted;
+restart the service; stop the API, make punches, restart the API and see the
+outbox drain; make the device clock drift and see the event-log entry;
+`upgrade.ps1` to a rebuilt copy; `uninstall.ps1 -RemoveData` leaves no service,
+account or event source. A runner can't reboot: restart on failure plus
+automatic start stand in for "survives a reboot".
+
+**INSTALL.md** is written for someone at the office who isn't a developer,
+possibly on the phone with the user: before you start (what to have in hand),
+the steps with what each is for, what "working" looks like (in the app and on
+the PC), what to do when it isn't (a symptom list), upgrade, uninstall,
+rotating the key, setting the device clock by hand, what the warnings mean,
+punches the server refused, and a plain statement that the agent only ever
+reads the device and cannot change, clear, pause or disrupt it.
+
+**Rules decided while designing** (neither HR nor the spec covers them; each is
+small to change):
+1. **NSSM stays, but its host is the weak point.** nssm.cc is the only
+   official source and is known to be unreliable, so the zip is hash-pinned and
+   cached. If CI shows it unreachable, the fallback is WinSW (hosted on
+   GitHub); I'd ask before switching.
+2. **Credential Manager is reached through Windows PowerShell**, not a native
+   module: there is nothing to build or ship for Windows, at the cost of about
+   a second at start and on a 401.
+3. **Secrets reach the service account through a temporary file** with a
+   restricted ACL (never the command line or an environment variable of a
+   long-lived process).
+4. **The data folder is administrators + SYSTEM + the service account only**,
+   since the outbox is punch data.
+5. **Uninstall keeps the data folder by default**, because it may hold punches
+   not yet sent.
+6. **`install.ps1` is idempotent** and never reports success until the agent has
+   reported in.
+7. **No code signing** (no certificate), so INSTALL.md covers SmartScreen and
+   antivirus.
+8. **The agent writes start/stop and the alarm changes to the event log**, not
+   only the alarms the plan named, so "what did it do last night" has an answer
+   without opening a log file.
+9. **`status` and `secrets` are agent commands**, so the phone call can be
+   "run status and read me the second line".
+
+**Unproven until the real PC** (to join §11.1):
+- Antivirus or application-control policy on the office PC blocking or
+  quarantining an unsigned executable. If it does, an exclusion for
+  `C:\Program Files\Wellsure Agent` is the fix.
+- The office PC's own configuration (a domain policy that blocks local account
+  creation, "log on as a service" being restricted, PowerShell restricted by
+  policy). `install.ps1` checks each and says which one failed.
+- Survival across a real reboot and a real sleep/hibernate.
+- The PC reaching the app over HTTPS from the office network (proxy, firewall).
+

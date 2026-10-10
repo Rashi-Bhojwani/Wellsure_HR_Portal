@@ -235,6 +235,39 @@ describe("outages and crashes lose nothing", () => {
     expect(api.storedFor(serial)).toEqual(["18|2026-10-04 09:00:00"]);
   });
 
+  it("a rejected key raises one alarm (for the Windows event log), not one per retry, and one when it is accepted again", async () => {
+    const alarms: string[] = [];
+    const { serial, make } = await setup({
+      devices: [{ serial: "AEXY225060969", records: [rec("18", "2026-10-04 09:00:00")] }],
+      hooks: { onAlarm: (s, kind, level) => alarms.push(`${s}:${kind}:${level}`) },
+    });
+    const env: NodeJS.ProcessEnv = { WELLSURE_AGENT_KEY: "wsa_old" };
+    const agent = make(KEY, { secrets: new EnvSecretStore(env) });
+    await agent.heartbeat();
+    await agent.heartbeat();
+    await agent.heartbeat();
+    expect(alarms).toEqual(["null:KEY_REJECTED:error"]);
+    env.WELLSURE_AGENT_KEY = KEY;
+    await turn(agent, [serial]);
+    await agent.heartbeat();
+    expect(alarms).toEqual(["null:KEY_REJECTED:error", "null:KEY_REJECTED:recovered"]);
+  });
+
+  it("a batch set aside raises an alarm naming the device", async () => {
+    const alarms: Array<[string | null, string, string, string]> = [];
+    const { api, serial, make } = await setup({
+      devices: [{ serial: "AEXY225060969", records: [rec("18", "2026-10-04 09:00:00")] }],
+      hooks: { onAlarm: (s, kind, level, message) => alarms.push([s, kind, level, message]) },
+    });
+    const agent = make();
+    await agent.heartbeat();
+    await agent.cycleDevice(serial);
+    api.mode = "400";
+    await agent.sendPending();
+    expect(alarms).toHaveLength(1);
+    expect(alarms[0]).toMatchObject([serial, "BATCH_SET_ASIDE", "error", expect.stringMatching(/refused a batch of 1 punches.*quarantine/)]);
+  });
+
   it("one device refused (403) is held back in the outbox; the other's punches still go", async () => {
     const { api, make } = await setup({ devices: [{ serial: "DEV-A", records: [rec("1", "2026-10-04 09:00:00")] }, { serial: "DEV-B", records: [rec("2", "2026-10-04 09:00:00")] }] });
     api.deviceMode.set("DEV-A", "403");

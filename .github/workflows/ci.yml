@@ -98,3 +98,95 @@ jobs:
 
       - name: Build backend image
         run: docker build -f backend/Dockerfile -t wellsure-hr-backend .
+
+  # The Windows service (Phase 2 P2-F, commit F2; docs/plans/PHASE_2.md "P2-F,
+  # commit F2 build design"). Builds the single executable and the release zip,
+  # then installs that zip for real and exercises the service: its account, the
+  # secrets, a punch reaching a fake API, restart on kill, an API outage,
+  # the event log, a rotated key, upgrade and uninstall. A runner can't
+  # reboot: restart on failure plus automatic start stand in for that.
+  agent-windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      NSSM_VERSION: "2.24"
+      # nssm.cc is the only official source and is sometimes unreliable: the
+      # zip is checked against this hash before use, and cached by it.
+      NSSM_SHA256: "727d1e42275c605e0f04aba98095c38a8e1e46def453cdffce42869428aa6743"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: biometric-agent/package-lock.json
+
+      - name: Install
+        working-directory: biometric-agent
+        run: npm ci
+
+      # The same unit tests as the Linux job, here, to catch path and lock
+      # differences between the two platforms.
+      - name: Unit tests on Windows
+        working-directory: biometric-agent
+        run: npm test
+
+      - name: Parse every PowerShell script with Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $bad = 0
+          Get-ChildItem biometric-agent -Recurse -Filter *.ps1 | Where-Object { $_.FullName -notmatch 'node_modules' } | ForEach-Object {
+            $errors = $null; $tokens = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors)
+            if ($errors) { $bad++; $errors | ForEach-Object { Write-Host "$($_.Extent.File):$($_.Extent.StartLineNumber): $($_.Message)" } }
+            else { Write-Host "ok  $($_.Name)" }
+          }
+          if ($bad) { exit 1 }
+
+      - uses: actions/cache@v4
+        with:
+          path: nssm-dl
+          key: nssm-${{ env.NSSM_VERSION }}-${{ env.NSSM_SHA256 }}
+
+      - name: Fetch NSSM (checked against the pinned hash)
+        shell: powershell
+        run: ./biometric-agent/build/fetch-nssm.ps1 -Version $env:NSSM_VERSION -Sha256 $env:NSSM_SHA256 -OutDir nssm-dl
+
+      - name: Build the executable
+        working-directory: biometric-agent
+        run: npm run build:exe
+
+      - name: Assemble and zip the release
+        shell: powershell
+        run: |
+          Push-Location biometric-agent
+          node build/package-release.mjs --nssm "..\nssm-dl\nssm-$env:NSSM_VERSION\win64\nssm.exe" --out ..\release
+          Pop-Location
+          $version = (Get-Content biometric-agent\package.json -Raw | ConvertFrom-Json).version
+          New-Item -ItemType Directory -Force -Path dist-zip | Out-Null
+          Compress-Archive -Path "release\wellsure-agent-$version" -DestinationPath "dist-zip\wellsure-agent-$version-windows-x64.zip" -Force
+          Get-ChildItem dist-zip | ForEach-Object { "{0}  {1:N1} MB" -f $_.Name, ($_.Length / 1MB) }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wellsure-agent-windows
+          path: dist-zip/*.zip
+          retention-days: 30
+
+      - name: Install the release and exercise the service
+        shell: powershell
+        run: |
+          $zip = (Get-ChildItem dist-zip -Filter *.zip | Select-Object -First 1).FullName
+          ./biometric-agent/ci/windows-service-test.ps1 -ZipPath $zip -RepoDir $PWD.Path
+
+      - name: Diagnostics (agent log, service state)
+        if: failure()
+        shell: powershell
+        run: |
+          Get-Service WellsureAgent -ErrorAction SilentlyContinue | Format-List *
+          $log = Join-Path $env:ProgramData 'Wellsure Agent\logs\agent.log'
+          if (Test-Path $log) { Write-Host '--- agent.log (last 80 lines)'; Get-Content $log -Tail 80 }
+          Get-ChildItem (Join-Path $env:RUNNER_TEMP 'agent-ci') -Filter *.log -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "--- $($_.Name)"; Get-Content $_.FullName -Tail 40 }
+          Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'WellsureAgent' } -MaxEvents 20 -ErrorAction SilentlyContinue | Format-List TimeCreated, Id, LevelDisplayName, Message
+

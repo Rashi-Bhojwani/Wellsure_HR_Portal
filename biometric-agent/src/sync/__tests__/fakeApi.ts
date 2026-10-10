@@ -34,13 +34,13 @@ export class FakeApi {
     return [...(this.stored.get(device) ?? [])].sort();
   }
 
-  async start(): Promise<string> {
+  async start(port = 0): Promise<string> {
     this.server = http.createServer((req, res) => {
       let body = "";
       req.on("data", (c) => (body += c));
       req.on("end", () => this.handle(req, res, body));
     });
-    await new Promise<void>((resolve) => this.server!.listen(0, "127.0.0.1", () => resolve()));
+    await new Promise<void>((resolve) => this.server!.listen(port, "127.0.0.1", () => resolve()));
     return `http://127.0.0.1:${(this.server.address() as { port: number }).port}`;
   }
 

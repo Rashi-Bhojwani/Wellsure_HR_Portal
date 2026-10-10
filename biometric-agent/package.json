@@ -11,7 +11,9 @@
     "fake-device": "tsx src/dev/fakeDeviceCli.ts",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "fake-api": "tsx src/dev/fakeApiCli.ts",
+    "build:exe": "node build/build-exe.mjs"
   },
   "dependencies": {
     "zod": "^4.6.5"
@@ -19,9 +21,11 @@
   "devDependencies": {
     "@eslint/js": "^9.9.0",
     "@types/node": "^22.20.5",
+    "esbuild": "0.28.2",
     "eslint": "^9.9.0",
     "eslint-config-prettier": "^9.1.0",
     "globals": "^17.12.0",
+    "postject": "1.0.0-alpha.6",
     "tsx": "^4.19.0",
     "typescript": "^5.6.2",
     "typescript-eslint": "^8.4.0",

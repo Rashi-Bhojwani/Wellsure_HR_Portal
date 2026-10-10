@@ -1,0 +1,6 @@
+{
+  "apiUrl": "https://hr.example.com",
+  "devices": [
+    { "serial": "AEXY225060969", "host": "192.168.29.213", "port": 4370 }
+  ]
+}

@@ -27,10 +27,23 @@ const alive = (pid: number) => {
   }
 };
 
+/** Who holds the lock, if anyone does right now (`status`): its process exists and it was refreshed within the last minute. */
+export function readAgentLock(dataDir: string, now: () => number = Date.now): { pid: number; startedAt: string | null } | null {
+  const file = path.join(dataDir, "agent.lock");
+  try {
+    const holder = JSON.parse(readFileSync(file, "utf8")) as { pid?: number; startedAt?: string };
+    if (!holder.pid || now() - statSync(file).mtimeMs >= LOCK_STALE_MS || !alive(holder.pid)) return null;
+    return { pid: holder.pid, startedAt: holder.startedAt ?? null };
+  } catch {
+    return null;
+  }
+}
+
 export function acquireAgentLock(dataDir: string, pid: number = process.pid, now: () => number = Date.now): () => void {
   mkdirSync(dataDir, { recursive: true });
   const file = path.join(dataDir, "agent.lock");
-  const write = () => writeFileSync(file, JSON.stringify({ pid, startedAt: new Date(now()).toISOString() }));
+  const startedAt = new Date(now()).toISOString();
+  const write = () => writeFileSync(file, JSON.stringify({ pid, startedAt })); // rewritten to show it is alive; startedAt stays the start
   let holder: { pid?: number; startedAt?: string } | null = null;
   try {
     holder = JSON.parse(readFileSync(file, "utf8")) as { pid?: number; startedAt?: string };

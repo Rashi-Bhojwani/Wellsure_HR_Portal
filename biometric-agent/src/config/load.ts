@@ -2,13 +2,15 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { agentConfigSchema, type AgentConfig } from "./schema";
 
-/** Where the agent looks for config.json unless told: next to its data on Windows, else the working directory. */
+/** Windows: under %ProgramData% (C:\ProgramData on a normal PC), so the service needs no path arguments; elsewhere the working directory. */
+const winDir = () => path.win32.join(process.env.ProgramData ?? "C:\\ProgramData", "Wellsure Agent");
+
 export function defaultConfigPath(platform: NodeJS.Platform = process.platform): string {
-  return process.env.WELLSURE_AGENT_CONFIG ?? (platform === "win32" ? "C:\\ProgramData\\Wellsure Agent\\config.json" : path.resolve("config.json"));
+  return process.env.WELLSURE_AGENT_CONFIG ?? (platform === "win32" ? path.win32.join(winDir(), "config.json") : path.resolve("config.json"));
 }
 
 export function defaultDataDir(platform: NodeJS.Platform = process.platform): string {
-  return platform === "win32" ? "C:\\ProgramData\\Wellsure Agent" : path.resolve("agent-data");
+  return platform === "win32" ? winDir() : path.resolve("agent-data");
 }
 
 export interface LoadedConfig extends AgentConfig {
@@ -42,7 +44,7 @@ export function loadConfig(file: string = defaultConfigPath()): LoadedConfig {
   }
   let raw: unknown;
   try {
-    raw = JSON.parse(text);
+    raw = JSON.parse(text.replace(/^\uFEFF/, "")); // Notepad and PowerShell 5 can save UTF-8 with a byte-order mark
   } catch (err) {
     throw new ConfigError(`${file} isn't valid JSON: ${(err as Error).message}`);
   }
