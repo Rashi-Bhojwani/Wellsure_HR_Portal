@@ -2816,3 +2816,61 @@ incident per subject and kind, and a CHECK requires exactly one subject. The sch
   a wrong subject; recipients; endpoints and permissions; the settings). Mutation-checked: dropping the week-off test,
   the agent suppression, or the escalation claim each fails a case.
 
+
+---
+
+## P2-J — review follow-ups (user-approved 2026-10-12)
+
+The user approved Phase 2 pending CI and, from the independent review's findings, decided: limit the agent-silent
+alert to working hours with a configurable margin; make "no ADMS push device in production until `/iclock` is
+restricted to the office address" a hard Phase 1.5 prerequisite; add the `raw_punches (device_id, business_date)`
+index; add a careful bulk accept for flagged punches; and check the codebase for any other place a person can act on
+their own attendance. Built in this order, as one follow-up.
+
+**A. Agent-silent alert follows the working window (replaces "24 hours a day").**
+- The window is the same one device silence uses (the shifts of the people expected at the branches the agent's active
+  devices serve; nothing on a holiday or week-off), widened by a margin each side: new setting
+  `agentWindowMarginMinutes` in Device alerts (default 30, 0–240).
+- An agent is silent when it is inside any such widened window and its last heartbeat is at least
+  `agentSilentMinutes` old, **measured from the later of its last heartbeat and the widened window's start** (so a PC
+  that was off overnight is not "silent for 14 hours" the moment the window opens; it is silent for as long as it has
+  been late *this morning*).
+- It closes when the heartbeat is fresh again, **not** when the window ends (the same rule as a silent device), so an
+  agent that died at 17:00 stays one open incident through the night and escalates once at the next working day's start.
+- A PC that is simply switched on after the margin opens (say 09:50 for a 10:00 shift with a 30-minute margin) does
+  raise a short incident: that is the setting working. Raise the margin to taste.
+- The Devices screen's "agent offline" chip is a status, not an alert, and still reads the heartbeat at any hour.
+
+**B. Index.** `raw_punches (device_id, business_date)` (migration `20261012150000_raw_punch_device_date_index`):
+the every-minute no-punches-today count and the per-day device views filter on exactly this pair; only the unique
+`(device_id, device_user_id, punched_at)` existed. No data changes.
+
+**C. ADMS push is a Phase 1.5 gate, not a note.** `docs/DEPLOYMENT.md` gets a "Phase 1.5 go-live checklist" whose first
+item, **restrict `/iclock` to the office address at the load balancer or listener**, must be ticked before any PUSH
+device is created in production, and the spec's Phase 1.5 section points at it. To make the tick real rather than
+remembered, the server refuses to create a PUSH device, and does not mount `/iclock`, when `APP_ENV=production` unless
+`ADMS_PUSH_ENABLED=true`; setting that variable is the act of ticking the item. (Decided by me: the user asked for a
+checklist item; the guard is the cheap way to make it unforgettable. Veto if unwanted.)
+
+**D. Bulk accept for flagged punches.** The device-outage case: when a device's clock or a long backlog goes wrong,
+flagged punches arrive for a whole branch at once; accepting them one at a time is not workable.
+- *Select* either by explicit ids (row checkboxes) or by a filter (device, flag reason, business-date range). The list
+  (`GET /flagged`) takes those filters, returns `total` as well as the first 500 rows, and says so.
+- *Preview* (`POST /flagged/bulk-accept/preview`): returns exactly what would be accepted: count, per device, per
+  reason, per business date, how many belong to no employee yet (they will not count until mapped), the affected
+  employee-days, every punch (paged on the screen) and a **fingerprint** of the exact set. A set over 2,000 is refused:
+  narrow the filter.
+- *Confirm* (`POST /flagged/bulk-accept`): needs the fingerprint from the preview, a reason (5–500 characters) and an
+  explicit confirmation. If the set has changed since the preview (someone decided one meanwhile, or more arrived) it is
+  refused with "the list changed, review again". Otherwise one transaction records an `ACCEPTED` decision for every punch
+  and the affected days are recomputed once.
+- *Audit:* **one audit row per punch** (`biometric.punch.flag_accepted`, the same action name a single decision writes,
+  with the reason and a shared `bulkId` so the batch can be reconstructed), never one row for the batch.
+- *Screen:* Devices → Flagged gets filters, row selection and "Accept…", which opens a confirmation dialog showing the
+  summary and every punch, a reason box and a "I have looked at these N punches" tick that enables the button.
+- *Also fixed here:* accepting a flagged punch that belongs to nobody yet, then mapping its ID later, never recomputed the
+  day (the re-resolve skipped flagged punches). It now recomputes when the punch was accepted. Discarding stays single.
+
+**E. Self-action audit.** One pass over every write path that touches attendance for the person doing it (manual entry,
+bulk mark, upload, flagged decisions, mapping, leave and correction paths, Who Is In, device screens); findings and fixes
+in PROGRESS.
