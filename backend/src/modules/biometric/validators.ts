@@ -117,3 +117,12 @@ export const resolveFlagSchema = z.object({ decision: z.enum(["ACCEPTED", "DISCA
 // ── Admin: emergency file upload (Import Center → Punches (ATTLOG)) ──
 export const importPreviewBodySchema = z.object({ deviceId: z.string().min(1) });
 export const importCommitSchema = z.object({ reason: z.string().trim().min(5, "Say why the emergency upload was needed").max(500) });
+
+// ── Admin: health (P2-H) ──
+export const incidentsQuerySchema = z.object({
+  state: z.enum(["open", "all"]).default("all"),
+  deviceId: z.string().min(1).optional(),
+  agentId: z.string().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+});
+export const volumeQuerySchema = z.object({ scope: z.enum(["today", "30d"]).default("today"), deviceId: z.string().min(1).optional() });

@@ -3,7 +3,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { requirePermission } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
 import * as controller from "./controller";
-import { updateDeviceHealthSettingsSchema, updateHelpdeskSettingsSchema, updateLeaveSettingsSchema, updatePeopleDocumentsSettingsSchema, updateSettingsSchema } from "./validators";
+import { updateDeviceAlertSettingsSchema, updateDeviceHealthSettingsSchema, updateHelpdeskSettingsSchema, updateLeaveSettingsSchema, updatePeopleDocumentsSettingsSchema, updateSettingsSchema } from "./validators";
 
 // System Settings (spec §7.8) — security policy (Phase 1: lockout,
 // password rules, invitation TTL, 2FA-required roles, auth rate limits)
@@ -34,3 +34,7 @@ settingsRouter.put("/helpdesk", manage, validate({ body: updateHelpdeskSettingsS
 // Phase 2 P2-F: Attendance → Device health (sent to every sync agent).
 settingsRouter.get("/device-health", manage, controller.getDeviceHealthSettings);
 settingsRouter.put("/device-health", manage, validate({ body: updateDeviceHealthSettingsSchema }), controller.updateDeviceHealthSettings);
+
+// Phase 2 P2-H: Attendance → Device alerts (who is told, and when silence becomes an incident).
+settingsRouter.get("/device-alerts", manage, controller.getDeviceAlertSettings);
+settingsRouter.put("/device-alerts", manage, validate({ body: updateDeviceAlertSettingsSchema }), controller.updateDeviceAlertSettings);

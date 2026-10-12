@@ -2,8 +2,9 @@ import { getSetting, setSetting } from "../../lib/settings";
 import { writeAuditLog } from "../../lib/audit";
 import { RATE_LIMIT_DEFAULTS, RATE_LIMIT_KEYS, type LeaveSettings, type RateLimitSetting, type SecuritySettings } from "./types";
 import type { z } from "zod";
-import type { updateDeviceHealthSettingsSchema, updateHelpdeskSettingsSchema, updateLeaveSettingsSchema, updatePeopleDocumentsSettingsSchema, updateSettingsSchema } from "./validators";
+import type { updateDeviceAlertSettingsSchema, updateDeviceHealthSettingsSchema, updateHelpdeskSettingsSchema, updateLeaveSettingsSchema, updatePeopleDocumentsSettingsSchema, updateSettingsSchema } from "./validators";
 import type { DeviceHealthThresholds } from "@shared/attendance/agentProtocol";
+import { DEVICE_ALERT_SETTING_KEY, getDeviceAlertSettings, type DeviceAlertSettings } from "../../lib/deviceAlertSettings";
 import { DEVICE_HEALTH_SETTING_KEY, getDeviceHealthThresholds } from "../../lib/deviceHealthSettings";
 import { HttpError } from "../../middleware/errorHandler";
 import { getPeopleDocumentsSettings, PEOPLE_DOCUMENTS_SETTING_KEYS, type PeopleDocumentsSettings } from "../../lib/peopleDocumentsSettings";
@@ -152,5 +153,25 @@ export async function updateDeviceHealthSettings(
   }
   await setSetting(DEVICE_HEALTH_SETTING_KEY, after, meta.actorUserId);
   await writeAuditLog({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "deviceHealth", before, after });
+  return after;
+}
+
+// Phase 2 P2-H — Attendance → Device alerts: how long before silence is an
+// incident, the morning check, and who is told. One stored object.
+export async function getDeviceAlertSettingsForAdmin(): Promise<DeviceAlertSettings> {
+  return getDeviceAlertSettings();
+}
+
+type UpdateDeviceAlertInput = z.infer<typeof updateDeviceAlertSettingsSchema>;
+
+export async function updateDeviceAlertSettings(
+  input: UpdateDeviceAlertInput,
+  meta: { actorUserId: string; ipAddress?: string | null; userAgent?: string | null },
+): Promise<DeviceAlertSettings> {
+  const before = await getDeviceAlertSettings();
+  const after: DeviceAlertSettings = { ...before, ...(Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)) as Partial<DeviceAlertSettings>) };
+  after.alertEmails = [...new Set(after.alertEmails)];
+  await setSetting(DEVICE_ALERT_SETTING_KEY, after, meta.actorUserId);
+  await writeAuditLog({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "deviceAlerts", before, after });
   return after;
 }

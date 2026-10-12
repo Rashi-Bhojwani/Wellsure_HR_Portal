@@ -375,6 +375,18 @@ minutes. Days whose punches arrive late (`stale-day`, `stray-flagged`,
 `catch-up`'s lateness) can't be sent through a real route and are left out; the
 replay tests cover them.
 
+**Device and agent health (Phase 2 P2-H).** The check runs every minute on the *scheduler*, which `npm run dev` does
+not start: for the alerts to fire locally also run `npm run start --prefix backend -- scheduler` (the worker, which is part
+of `npm run dev`, runs the job). Thresholds and recipients: System Settings → Attendance → Device alerts. To see an alert
+end to end, with the API, worker and scheduler up and `simulate setup` done:
+```bash
+npm run simulate --prefix biometric-agent -- fault agent-silent --for 240     # the agent stops; alerts after the set minutes
+npm run simulate --prefix biometric-agent -- fault device-silent --for 420    # the device is switched off (inside the branch's working hours)
+npm run simulate --prefix biometric-agent -- fault wrong-clock --for 240 --offset 600
+```
+Lower *Device quiet for* (minimum 5) and *Agent heartbeat late by* (minimum 2) in Device alerts to wait less. Incidents,
+health chips and the Volume chart are on Admin Tools → Devices.
+
 **Measuring punch-to-screen latency (Phase 2 gate G1).** With the API, the worker and
 the frontend running (`npm run dev`) on a **freshly seeded** database:
 ```bash

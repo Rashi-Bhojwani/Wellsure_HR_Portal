@@ -10,6 +10,7 @@ import { requestRecompute } from "../attendance/recompute";
 import { newAgentKey } from "./agentAuth";
 import { deviceHealth, warningsFor } from "./deviceHealth";
 import { ingest, previewCounts } from "./ingestion";
+import { openIncidentKindsBySubject, statusOf } from "./health/queries";
 
 // Admin side of biometric ingestion (P2-B): devices, sync agents (keys shown
 // once), recent batches, the unmapped queue with "map to employee", flagged
@@ -35,13 +36,17 @@ async function uniqueSafe<T>(fn: () => Promise<T>, message: string): Promise<T> 
 
 // ── Devices ──────────────────────────────────────────────────────────────
 
+/** Nothing has ever come from it: not read by its agent, not polling, nothing uploaded. */
+const neverHeardFrom = (d: Device, health: ReturnType<typeof deviceHealth>) => (d.route === "PUSH" ? !d.lastHeartbeatAt && !d.lastReceivedAt : !health.lastReadAt);
+
 export async function listDevices(now: Date = new Date()) {
-  const [rows, thresholds] = await Promise.all([
+  const [rows, thresholds, incidents] = await Promise.all([
     prisma.device.findMany({
       orderBy: [{ isActive: "desc" }, { name: "asc" }],
       include: { location: { select: { id: true, name: true, hasBiometricDevice: true } }, agent: { select: { id: true, name: true, lastHeartbeatAt: true } } },
     }),
     getDeviceHealthThresholds(),
+    openIncidentKindsBySubject(),
   ]);
   const devices = rows.map((d) => {
     const health = deviceHealth(d, d.agent, thresholds, now);
@@ -66,6 +71,9 @@ export async function listDevices(now: Date = new Date()) {
       retentionRecords: d.retentionRecords,
       health,
       warnings: d.isActive ? warningsFor(d, health) : [],
+      // At a glance (P2-H): from the open incidents; an agent that has stopped explains its devices.
+      openIncidents: incidents.byDevice.get(d.id) ?? [],
+      status: d.isActive ? statusOf(incidents.byDevice.get(d.id) ?? [], !!d.agent && (incidents.byAgent.get(d.agent.id) ?? []).includes("AGENT_SILENT"), neverHeardFrom(d, health)) : null,
     };
   });
   return { devices, thresholds };
@@ -140,7 +148,9 @@ export async function updateDevice(id: string, input: DeviceInput, meta: Meta) {
 
 // ── Sync agents ──────────────────────────────────────────────────────────
 
-const agentView = (a: Prisma.BiometricAgentGetPayload<{ include: { devices: { select: { id: true; name: true; serialNumber: true } } } }>) => ({
+const agentView = (a: Prisma.BiometricAgentGetPayload<{ include: { devices: { select: { id: true; name: true; serialNumber: true } } } }>, kinds: Parameters<typeof statusOf>[0] = []) => ({
+  openIncidents: kinds,
+  status: a.isActive ? statusOf(kinds, false) : null,
   id: a.id,
   name: a.name,
   keyPrefix: a.keyPrefix,
@@ -154,8 +164,8 @@ const agentView = (a: Prisma.BiometricAgentGetPayload<{ include: { devices: { se
 });
 
 export async function listAgents() {
-  const rows = await prisma.biometricAgent.findMany({ orderBy: { createdAt: "asc" }, include: { devices: { select: { id: true, name: true, serialNumber: true } } } });
-  return rows.map(agentView);
+  const [rows, incidents] = await Promise.all([prisma.biometricAgent.findMany({ orderBy: { createdAt: "asc" }, include: { devices: { select: { id: true, name: true, serialNumber: true } } } }), openIncidentKindsBySubject()]);
+  return rows.map((a) => agentView(a, incidents.byAgent.get(a.id) ?? []));
 }
 
 /** Creates an agent and returns its key — the only time the key is ever shown. */

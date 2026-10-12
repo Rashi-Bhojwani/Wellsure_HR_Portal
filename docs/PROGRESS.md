@@ -4376,6 +4376,29 @@ reported as "The server can't be reached … (This is not a problem with your de
 screen that shows an API error (`apiErrorMessage`), a 5xx says the server hit a problem, and only a refused
 sign-in (401/403) may ask about the seed. Checked in a real browser with the API stopped; unit-tested.
 
+### Phase 2, P2-H — device and agent health: incidents, alerts, recovery notices (2026-10-12)
+
+Plan and as-built notes: [`docs/plans/PHASE_2.md`](plans/PHASE_2.md), "P2-H build design", "P2-H, approved" and
+"P2-H (2026-10-12): device and agent health, as built".
+
+- **Every minute the system checks each device and sync agent** and turns trouble into an *incident* with a start, an end
+  and a notification: a device with no contact for 30 minutes during its working hours; an agent whose heartbeat is
+  5 minutes late; a reachable device with no punches at all by the morning check; a wrong clock; a log at risk. Working hours
+  come from the shifts of the people expected at that branch, so nothing fires on a Sunday, a holiday or outside the shift.
+- **HR is told once when it opens, once more if it is still open at the start of the next working day, and once when it
+  closes**, in the bell and by email (to everyone who can manage devices, every active Super Admin, and a free list).
+  The recovery notice says what was missed: how long, how many punches arrived afterwards, who is still expected with no
+  punch, "check whether anyone's attendance needs correcting".
+- **Devices screen:** a health chip per device and agent, an Incidents tab (history), a Volume chart per route, and the
+  people at branches with a machine but no device user ID.
+- **Settings** (all admin-editable): System Settings → Attendance → Device alerts.
+- **Checked live** with the real agent and a simulated device against a fresh database, two browsers (see the walkthrough
+  results below), and by 27 integration cases that put the clock where they want it.
+- **Found by looking at the screenshots, not by a test:** the Volume chart put punches received at 11:57 IST in the
+  00:00 bucket (a `timestamp` column read as if it were already IST). Fixed, with a test that places a batch at a known
+  IST time and fails without the fix.
+- **Next: P2-I**, acceptance and the Phase 2 review.
+
 ## Open questions
 
 - [x] **Approval Workflows — dropped (user decision 2026-10-03).** No
@@ -4400,7 +4423,7 @@ Carried from spec §14 — configurable, not guessed, until answered:
 - [ ] The device's **admin password and comm key** (port 4370 connection password). Supplied at install, never in the repo or docs. **Where it lives is decided (D-F4, 2026-10-09):** the comm key goes in Windows Credential Manager under the agent service's own account, beside the agent key; `config.json` holds no secrets. The agent never needs the admin password.
 - [ ] Whether an always-on office PC exists to run the sync agent as a Windows service (Windows version), and how many devices there are.
 - [ ] Employee Code vs Device User ID default (spec §3): Add Employee pre-fills Employee Code from the Device User ID, but our device's IDs (2–126) differ from the 1000-series Employee Codes. Keep pre-filling or not? (Punch mapping is unaffected; it always uses `device_user_mappings`.)
-- [ ] Working hours and working days for the device-silence alert (spec §4.7): configurable defaults until HR confirms.
+- [x] Working hours for the device-silence alert: **answered 2026-10-12** — derived from the shifts of the people expected at that branch (P2-H); quiet time, morning check, recipients and recovery wait are settings under System Settings → Attendance → Device alerts.
 - [x] **Branches without a biometric machine: SPN and Wellsure 2**, both
       marked by one manager entering IN/OUT times (HR, 2026-10-08;
       Phase 2 plan D4).

@@ -3,6 +3,9 @@ import { HttpError } from "../../middleware/errorHandler";
 import * as admin from "./adminService";
 import * as agentService from "./agentService";
 import { listDeviceWarnings } from "./deviceHealth";
+import { peopleWithoutMapping } from "./health/people";
+import { ingestionVolume, listIncidents } from "./health/queries";
+import { businessToday } from "../../lib/businessDate";
 
 const meta = (req: Request): admin.Meta => ({ actorUserId: req.user!.userId, ipAddress: req.ip ?? null, userAgent: req.get("user-agent") ?? null });
 const id = (req: Request) => req.params.id as string;
@@ -61,4 +64,14 @@ export async function previewImport(req: Request, res: Response): Promise<void> 
 }
 export async function commitImport(req: Request, res: Response): Promise<void> {
   res.status(200).json(await admin.commitImport(id(req), req.body, meta(req)));
+}
+
+export async function incidents(req: Request, res: Response): Promise<void> {
+  res.status(200).json({ incidents: await listIncidents(req.query as never) });
+}
+export async function volume(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await ingestionVolume(req.query as never));
+}
+export async function peopleWithoutMappingList(_req: Request, res: Response): Promise<void> {
+  res.status(200).json({ people: await peopleWithoutMapping(businessToday().toISOString().slice(0, 10)) });
 }

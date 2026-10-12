@@ -29,6 +29,10 @@ type Policy = "delete" | "setNull";
 // Key: "<ChildModel>.<foreignKeyField>". Required FKs are never listed —
 // a required FK can't be nulled, so its child is always deleted.
 export const OPTIONAL_FK_POLICY: Record<string, Policy> = {
+  // An incident belongs to the device or agent it records trouble with (exactly one is set, by a CHECK):
+  // it disappears with it, never loses its subject.
+  "DeviceIncident.deviceId": "delete",
+  "DeviceIncident.agentId": "delete",
   // A token that replaced this one during refresh rotation — just a pointer.
   "RefreshToken.replacedByTokenId": "setNull",
   // Seeded settings can be edited by a test user; the setting must survive.

@@ -13,12 +13,14 @@ import {
   createAgentSchema,
   createDeviceSchema,
   idParamsSchema,
+  incidentsQuerySchema,
   importCommitSchema,
   importPreviewBodySchema,
   mapUnmappedSchema,
   resolveFlagSchema,
   updateAgentSchema,
   updateDeviceSchema,
+  volumeQuerySchema,
 } from "./validators";
 
 // The sync agent's API (docs/plans/PHASE_2.md §3). A machine credential —
@@ -51,6 +53,12 @@ biometricRouter.get("/agents", canManage, controller.listAgents);
 biometricRouter.post("/agents", canManage, validate({ body: createAgentSchema }), controller.createAgent);
 biometricRouter.patch("/agents/:id", canManage, validate({ params: idParamsSchema, body: updateAgentSchema }), controller.updateAgent);
 biometricRouter.post("/agents/:id/rotate-key", canManage, validate({ params: idParamsSchema }), controller.rotateAgentKey);
+
+// Health (P2-H): incidents (open first, then history), ingestion volume per device and route,
+// and the people at device branches with no device user ID mapped.
+biometricRouter.get("/incidents", canManage, validate({ query: incidentsQuerySchema }), controller.incidents);
+biometricRouter.get("/volume", canManage, validate({ query: volumeQuerySchema }), controller.volume);
+biometricRouter.get("/people-without-mapping", canManage, controller.peopleWithoutMappingList);
 
 biometricRouter.get("/batches", canManage, validate({ query: batchesQuerySchema }), controller.listBatches);
 

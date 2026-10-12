@@ -1920,8 +1920,9 @@ model BiometricAgent {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  devices Device[]
-  batches IngestionBatch[]
+  devices   Device[]
+  batches   IngestionBatch[]
+  incidents DeviceIncident[]
 
   @@map("biometric_agents")
 }
@@ -1958,11 +1959,53 @@ model Device {
   createdAt        DateTime        @default(now()) @map("created_at")
   updatedAt        DateTime        @updatedAt @map("updated_at")
 
-  punches RawPunch[]
-  batches IngestionBatch[]
+  punches   RawPunch[]
+  batches   IngestionBatch[]
+  incidents DeviceIncident[]
 
   @@index([agentId])
   @@map("devices")
+}
+
+// What kind of trouble a DeviceIncident records (spec §4.7, docs/plans/PHASE_2.md "P2-H build design").
+enum DeviceIncidentKind {
+  DEVICE_SILENT // no successful contact with the device for N minutes during its working hours
+  AGENT_SILENT // the sync agent's heartbeat missed for N minutes
+  NO_PUNCHES_TODAY // the morning check: reachable, expected people, but no punch today
+  CLOCK_DRIFT // the device's clock is beyond the threshold
+  RETENTION_RISK // the device's log is at risk of overwriting punches nobody has read, or is nearly full
+}
+
+// One stretch of trouble with a device or an agent: opened by the health check,
+// closed when it clears, never deleted. At most one is open per subject and
+// kind (a partial unique index in the migration), so "once per incident" is a
+// property of the table. Exactly one of deviceId / agentId is set (AGENT_SILENT
+// has the agent, every other kind has the device).
+model DeviceIncident {
+  id                 String             @id @default(cuid())
+  kind               DeviceIncidentKind
+  deviceId           String?            @map("device_id")
+  device             Device?            @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  agentId            String?            @map("agent_id")
+  agent              BiometricAgent?    @relation(fields: [agentId], references: [id])
+  openedAt           DateTime           @map("opened_at")
+  // When the subject was last seen working, so the gap can be reported honestly (the incident opens N minutes after it).
+  lastContactAt      DateTime?          @map("last_contact_at")
+  resolvedAt         DateTime?          @map("resolved_at")
+  // The numbers behind it (minutes silent, offset seconds, ...), and what the recovery found.
+  details            Json               @default("{}")
+  openNotifiedAt     DateTime?          @map("open_notified_at")
+  // The start of the next working day after it opened: if it is still open then, one fresh notification (escalatedAt).
+  escalateAfter      DateTime?          @map("escalate_after")
+  escalatedAt        DateTime?          @map("escalated_at")
+  recoveryNotifiedAt DateTime?          @map("recovery_notified_at")
+  recoverySummary    Json?              @map("recovery_summary")
+  createdAt          DateTime           @default(now()) @map("created_at")
+
+  @@index([resolvedAt])
+  @@index([deviceId, openedAt])
+  @@index([agentId, openedAt])
+  @@map("device_incidents")
 }
 
 // One per agent post, ADMS upload or file import.

@@ -44,3 +44,11 @@ export async function getDeviceHealthSettings(_req: Request, res: Response): Pro
 export async function updateDeviceHealthSettings(req: Request, res: Response): Promise<void> {
   res.status(200).json(await settingsService.updateDeviceHealthSettings(req.body, actorMeta(req)));
 }
+
+export async function getDeviceAlertSettings(_req: Request, res: Response): Promise<void> {
+  res.status(200).json(await settingsService.getDeviceAlertSettingsForAdmin());
+}
+
+export async function updateDeviceAlertSettings(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await settingsService.updateDeviceAlertSettings(req.body, actorMeta(req)));
+}

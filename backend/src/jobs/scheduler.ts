@@ -2,7 +2,7 @@ import { logger } from "../lib/logger";
 import { getDailyRunHour } from "../modules/engage/autoPostSettings";
 import { getSetting } from "../lib/settings";
 import { MANUAL_REMINDER_HOUR_KEY } from "../modules/attendance/manual/reminder";
-import { attendanceManualReminderQueue, attendanceNightlyQueue } from "./attendanceQueues";
+import { attendanceDeviceHealthQueue, attendanceManualReminderQueue, attendanceNightlyQueue } from "./attendanceQueues";
 import { compOffExpiryQueue, employeeSeparationsQueue, historyRolloverQueue, engageAutoPostsQueue, helpdeskAutoCloseQueue, leavePlAccrualQueue } from "./queues";
 
 // Registers BullMQ repeatable jobs. Idempotent registration matters here —
@@ -23,6 +23,10 @@ export async function registerScheduledJobs(): Promise<void> {
   const reminderHour = Number.isInteger(stored) && stored >= 0 && stored <= 23 ? stored : 18;
   await attendanceManualReminderQueue().upsertJobScheduler("attendance-manual-reminder", { pattern: `0 ${reminderHour} * * *`, tz: "Asia/Kolkata" }, { name: "attendance-manual-reminder" });
   logger.info(`Registered repeatable job: attendance-manual-reminder (${String(reminderHour).padStart(2, "0")}:00 IST daily)`);
+
+  // Device and agent health (P2-H): cheap queries on timestamps, every minute. The thresholds are read each run, so a change in System Settings applies at once.
+  await attendanceDeviceHealthQueue().upsertJobScheduler("attendance-device-health", { pattern: "* * * * *", tz: "Asia/Kolkata" }, { name: "attendance-device-health" });
+  logger.info("Registered repeatable job: attendance-device-health (every minute)");
 
   await historyRolloverQueue.upsertJobScheduler(
     "history-rollover-daily",

@@ -93,3 +93,19 @@ export async function updateDeviceHealthSettings(input: Partial<Thresholds>): Pr
   const { data } = await apiClient.put<Thresholds>("/api/settings/device-health", input);
   return data;
 }
+
+// Phase 2 P2-H — Attendance → Device alerts.
+export interface DeviceAlertSettings {
+  deviceSilentMinutes: number;
+  agentSilentMinutes: number;
+  morningCheckTime: string;
+  alertEmails: string[];
+  alertSuperAdmins: boolean;
+  recoverySettleSeconds: number;
+}
+export async function getDeviceAlertSettings(): Promise<DeviceAlertSettings> {
+  return (await apiClient.get<DeviceAlertSettings>("/api/settings/device-alerts")).data;
+}
+export async function updateDeviceAlertSettings(input: Partial<DeviceAlertSettings>): Promise<DeviceAlertSettings> {
+  return (await apiClient.put<DeviceAlertSettings>("/api/settings/device-alerts", input)).data;
+}

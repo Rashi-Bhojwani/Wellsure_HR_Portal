@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Card, Checkbox, Col, Divider, Form, InputNumber, Row, Select, Space, Typography, message } from "antd";
+import { Button, Card, Checkbox, Col, Divider, Form, Input, InputNumber, Row, Select, Space, Switch, Typography, message } from "antd";
 import {
   DIRECTORY_FIELD_LABELS,
   DIRECTORY_TOGGLEABLE_FIELDS,
@@ -11,7 +11,7 @@ import {
 } from "@shared/constants/peopleDocuments";
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as settingsApi from "../../../api/settings";
-import type { DeviceHealthThresholds, HelpdeskSettings, LeaveSettings, PeopleDocumentsSettings, SecuritySettings } from "../../../api/settings";
+import type { DeviceAlertSettings, DeviceHealthThresholds, HelpdeskSettings, LeaveSettings, PeopleDocumentsSettings, SecuritySettings } from "../../../api/settings";
 import { LettersSettingsCard } from "../../../components/letters/LettersSettingsCard";
 import { useAuth } from "../../../hooks/useAuth";
 import { EmptyState } from "../../../components/common/EmptyState";
@@ -77,9 +77,79 @@ function LeaveSettingsCard() {
   );
 }
 
+// Phase 2 P2-H — Attendance → Device alerts: how long a device or agent may go
+// quiet before it is an incident, the morning check, and who is told.
+function DeviceAlertSettingsCard() {
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useQuery({ queryKey: ["settings", "device-alerts"], queryFn: settingsApi.getDeviceAlertSettings });
+  const [form] = Form.useForm<DeviceAlertSettings>();
+  useEffect(() => {
+    if (data) form.setFieldsValue(data);
+  }, [data, form]);
+  const save = useMutation({
+    mutationFn: (values: DeviceAlertSettings) => settingsApi.updateDeviceAlertSettings(values),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["settings", "device-alerts"], updated);
+      void message.success("Device alert settings saved. The next check (within a minute) uses them.");
+    },
+    onError: (err) => void message.error(errorMessage(err, "Could not save settings.")),
+  });
+  if (isLoading || !data) return <EmptyState message="Loading…" />;
+  return (
+    <Card>
+      <Form form={form} layout="vertical" initialValues={data} onFinish={(values) => save.mutate(values)} requiredMark={false}>
+        <Title level={5}>Device alerts</Title>
+        <Text type="secondary">
+          Every minute the system checks each device and sync agent. A device not heard from for the time below <em>during its working hours</em> (taken from the shifts of the people
+          expected at its branch; never on a holiday or week-off) becomes an incident, as does an agent whose heartbeat is late, a morning with no punches at all from a reachable
+          device, a wrong clock, or a log at risk. HR is told once when it opens, once more if it is still open at the start of the next working day, and once when it closes
+          (saying how long it lasted and how many punches arrived afterwards).
+        </Text>
+        <Row gutter={16} style={{ marginTop: 12 }}>
+          <Col xs={24} sm={12} md={6}>
+            <Form.Item name="deviceSilentMinutes" label="Device quiet for (minutes)" rules={[{ required: true }]}>
+              <InputNumber min={5} max={480} precision={0} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <Form.Item name="agentSilentMinutes" label="Agent heartbeat late by (minutes)" rules={[{ required: true }]}>
+              <InputNumber min={2} max={240} precision={0} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <Form.Item name="morningCheckTime" label="Morning check at (HH:MM)" rules={[{ required: true, pattern: /^([01]\d|2[0-3]):[0-5]\d$/, message: "24-hour HH:MM, e.g. 10:30" }]} extra="Never earlier than the window start plus the quiet time.">
+              <Input placeholder="10:30" style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <Form.Item name="recoverySettleSeconds" label="Recovery notice waits (seconds)" extra="So a catching-up agent's backlog arrives first." rules={[{ required: true }]}>
+              <InputNumber min={0} max={900} precision={0} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col xs={24} md={8}>
+            <Form.Item name="alertSuperAdmins" label="Email every Super Admin" valuePropName="checked" extra="Resolved when an alert is sent, so it stays right when Super Admins change.">
+              <Switch />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={16}>
+            <Form.Item name="alertEmails" label="Also email these addresses" extra="In addition to everyone who can manage devices (who also get an in-app notification).">
+              <Select mode="tags" tokenSeparators={[",", " "]} placeholder="Type an address and press Enter" open={false} />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Button type="primary" htmlType="submit" loading={save.isPending}>
+          Save
+        </Button>
+      </Form>
+    </Card>
+  );
+}
+
 // Phase 2 P2-F — Attendance → Device health. Sent to every sync agent in its
 // heartbeat, and used for the warnings on the Devices screen and Admin Home.
-// P2-H adds the silence and morning-check settings to this card.
+// The silence and morning-check settings are the Device alerts card below.
 function DeviceHealthSettingsCard() {
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ["settings", "device-health"], queryFn: settingsApi.getDeviceHealthSettings });
@@ -376,6 +446,7 @@ export function SystemSettingsPage() {
         Attendance
       </Title>
       <DeviceHealthSettingsCard />
+      <DeviceAlertSettingsCard />
     </Space>
   );
 }

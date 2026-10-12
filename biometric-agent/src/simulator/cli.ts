@@ -24,6 +24,10 @@ const USAGE = `Punch simulator (development only)
   simulate scenario <name> [options]   one named scenario for some employees on one day
   simulate replay [options]            the planned days for the server's roster over a range
   simulate drip [options]              single punches in real time, to watch the screens update
+  simulate fault <kind> [options]      put the simulated device or agent in trouble for a while, then fix it:
+                                         device-silent (the device is switched off), agent-silent (the agent stops),
+                                         wrong-clock (the device clock is --offset seconds out). --for <seconds>, default 360.
+                                         Raises the real alerts (inside the branch's working hours); needs the worker and scheduler.
   simulate scenarios                   list the scenario names
 
 Options
@@ -35,6 +39,8 @@ Options
   --employee <code[,code]>  limit to these employees
   --count <n>               scenario/replay: at most n employees
   --from/--to <YYYY-MM-DD>  replay: the range (default the last 7 days up to yesterday)
+  --for <seconds>           fault: how long the trouble lasts (default 360)
+  --offset <seconds>        fault wrong-clock: how far out the device clock is (default 600)
   --rate <n>                drip: punches per minute (default 6)
   --verify                  after sending, recompute the range on the server and compare every day with its scenario
   --commit                  file route: upload the file the way HR does (otherwise only write it)
@@ -129,6 +135,32 @@ async function main(): Promise<number> {
   if (!local) throw new RefusedError("Run `simulate setup` first: it registers the simulated devices.");
   const routeName = arg("route") ?? "agent";
 
+  if (command === "fault") {
+    const kind = process.argv[3];
+    if (kind !== "device-silent" && kind !== "agent-silent" && kind !== "wrong-clock") throw new RefusedError("Say which fault: device-silent, agent-silent or wrong-clock.");
+    const route = makeRoute("agent", api, local, workDir) as AgentRoute;
+    const seconds = Number(arg("for") ?? 360);
+    const wait = (s: number) => new Promise((r) => setTimeout(r, s * 1000));
+    await route.start();
+    try {
+      out("The simulated device and agent are running normally (letting them report in)…");
+      await wait(15);
+      out(`Fault: ${kind} for ${seconds} s. Watch the Devices screen (Incidents) and the notification bell.`);
+      if (kind === "device-silent") route.setReachable(false);
+      else if (kind === "wrong-clock") route.setClockOffset(Number(arg("offset") ?? 600));
+      else await route.pause();
+      await wait(seconds);
+      out("Fixing it…");
+      if (kind === "device-silent") route.setReachable(true);
+      else if (kind === "wrong-clock") route.setClockOffset(0);
+      else await route.resume();
+      await wait(30);
+      out("Done. The recovery notice follows within a couple of minutes of the check seeing it clear.");
+    } finally {
+      await route.stop();
+    }
+    return 0;
+  }
   if (command === "scenario") {
     const name = process.argv[3]!;
     const date = arg("date") ?? shift(istToday(), -1);

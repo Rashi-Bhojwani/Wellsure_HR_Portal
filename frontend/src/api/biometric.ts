@@ -29,6 +29,43 @@ export interface DeviceRow {
   retentionRecords: number;
   health: DeviceHealth;
   warnings: DeviceWarning[];
+  /** P2-H: at a glance, from the open incidents (null when the device is switched off). */
+  status: HealthStatus | null;
+  openIncidents: IncidentKind[];
+}
+
+export type IncidentKind = "DEVICE_SILENT" | "AGENT_SILENT" | "NO_PUNCHES_TODAY" | "CLOCK_DRIFT" | "RETENTION_RISK";
+export type HealthStatus = "ONLINE" | "SILENT" | "AGENT_OFFLINE" | "ATTENTION" | "NOT_CONNECTED";
+
+export interface IncidentRow {
+  id: string;
+  kind: IncidentKind;
+  deviceId: string | null;
+  agentId: string | null;
+  subject: string;
+  branch: string | null;
+  openedAt: string;
+  resolvedAt: string | null;
+  duration: string;
+  isOpen: boolean;
+  headline: string;
+  detail: string;
+  escalatedAt: string | null;
+  recovery: { arrivedPunches: number | null; expectedWithoutPunch: number | null } | null;
+}
+
+export interface VolumeBucket {
+  bucket: string;
+  route: "AGENT" | "PUSH" | "IMPORT";
+  punches: number;
+  batches: number;
+}
+
+export interface PersonWithoutMapping {
+  employeeId: string;
+  employeeCode: string;
+  locationId: string;
+  branch: string;
 }
 
 /** The sync agent's latest report on a device, as the server keeps it. */
@@ -61,7 +98,7 @@ export interface DeviceWarning {
   serialNumber: string | null;
   agentId: string | null;
   agentName: string | null;
-  kind: "CLOCK_DRIFT" | "RETENTION_WARNING" | "RETENTION_RISK" | "LOG_NEARLY_FULL" | "BATCHES_SET_ASIDE";
+  kind: "CLOCK_DRIFT" | "RETENTION_WARNING" | "RETENTION_RISK" | "LOG_NEARLY_FULL" | "BATCHES_SET_ASIDE" | "DEVICE_SILENT" | "AGENT_SILENT" | "NO_PUNCHES_TODAY";
   message: string;
   reportAt: string | null;
 }
@@ -94,6 +131,8 @@ export interface AgentRow {
   isActive: boolean;
   devices: Array<{ id: string; name: string; serialNumber: string }>;
   createdAt: string;
+  status: HealthStatus | null;
+  openIncidents: IncidentKind[];
 }
 
 export interface RejectedLine {
@@ -212,4 +251,15 @@ export async function previewImport(deviceId: string, file: File): Promise<Impor
 }
 export async function commitImport(batchId: string, reason: string): Promise<ImportCounts & { batchId: string }> {
   return (await apiClient.post(`${base}/import/${batchId}/commit`, { reason })).data;
+}
+
+// ── Health (P2-H) ──
+export async function listIncidents(params: { state?: "open" | "all"; deviceId?: string; limit?: number } = {}): Promise<IncidentRow[]> {
+  return (await apiClient.get<{ incidents: IncidentRow[] }>(`${base}/incidents`, { params })).data.incidents;
+}
+export async function ingestionVolume(scope: "today" | "30d", deviceId?: string): Promise<VolumeBucket[]> {
+  return (await apiClient.get<{ buckets: VolumeBucket[] }>(`${base}/volume`, { params: { scope, ...(deviceId ? { deviceId } : {}) } })).data.buckets;
+}
+export async function listPeopleWithoutMapping(): Promise<PersonWithoutMapping[]> {
+  return (await apiClient.get<{ people: PersonWithoutMapping[] }>(`${base}/people-without-mapping`)).data.people;
 }

@@ -2,6 +2,7 @@ import type { BiometricAgent, Device } from "@prisma/client";
 import { assessRetention, clockDriftExceeded, describeClockOffset, type DeviceHealthThresholds, type RetentionAssessment } from "@shared/attendance/agentProtocol";
 import { getDeviceHealthThresholds } from "../../lib/deviceHealthSettings";
 import { prisma } from "../../lib/prisma";
+import { listIncidents } from "./health/queries";
 
 // What the Devices screen and Admin Home show about each agent-route device,
 // from the sync agent's latest report (Phase 2 P2-F, docs/plans/PHASE_2.md
@@ -65,7 +66,7 @@ export function deviceHealth(device: Device, agent: Pick<BiometricAgent, "lastHe
   };
 }
 
-export type DeviceWarningKind = "CLOCK_DRIFT" | "RETENTION_WARNING" | "RETENTION_RISK" | "LOG_NEARLY_FULL" | "BATCHES_SET_ASIDE";
+export type DeviceWarningKind = "CLOCK_DRIFT" | "RETENTION_WARNING" | "RETENTION_RISK" | "LOG_NEARLY_FULL" | "BATCHES_SET_ASIDE" | "DEVICE_SILENT" | "AGENT_SILENT" | "NO_PUNCHES_TODAY";
 
 export interface DeviceWarning {
   /** Device warnings carry the device; BATCHES_SET_ASIDE is the agent PC's, so carries the agent instead. */
@@ -140,5 +141,17 @@ export async function listDeviceWarnings(now: Date = new Date()): Promise<{ warn
     prisma.biometricAgent.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
     getDeviceHealthThresholds(),
   ]);
-  return { warnings: [...devices.flatMap((d) => warningsFor(d, deviceHealth(d, d.agent, thresholds, now))), ...agents.flatMap(agentWarnings)], thresholds };
+  // P2-H: the incidents that are not already a warning above (clock, retention and a full log are), worded as the alert was.
+  const incidents = (await listIncidents({ state: "open", limit: 100 }, now)).filter((i) => i.kind === "DEVICE_SILENT" || i.kind === "AGENT_SILENT" || i.kind === "NO_PUNCHES_TODAY");
+  const fromIncidents: DeviceWarning[] = incidents.map((i) => ({
+    deviceId: i.deviceId,
+    deviceName: i.deviceId ? i.subject : null,
+    serialNumber: null,
+    agentId: i.agentId,
+    agentName: i.agentId ? i.subject : null,
+    kind: i.kind as DeviceWarningKind,
+    message: `${i.headline}. ${i.detail}`,
+    reportAt: i.openedAt,
+  }));
+  return { warnings: [...fromIncidents, ...devices.flatMap((d) => warningsFor(d, deviceHealth(d, d.agent, thresholds, now))), ...agents.flatMap(agentWarnings)], thresholds };
 }

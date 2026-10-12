@@ -4,9 +4,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, Badge, Button, Col, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space, Switch, Table, Tabs, Tag, Tooltip, Typography, message } from "antd";
 import { CopyOutlined, EditOutlined, KeyOutlined, PlusOutlined } from "@ant-design/icons";
 import * as biometricApi from "../../../api/biometric";
-import type { AgentRow, BatchRow, DeviceInput, DeviceRow, FlaggedRow, UnmappedRow } from "../../../api/biometric";
+import type { AgentRow, BatchRow, DeviceInput, DeviceRow, FlaggedRow, HealthStatus, IncidentKind, IncidentRow, PersonWithoutMapping, UnmappedRow } from "../../../api/biometric";
 import * as orgApi from "../../../api/org";
 import { DeviceWarnings } from "../../../components/devices/DeviceWarnings";
+import { IngestionVolumeChart } from "../../../components/devices/IngestionVolumeChart";
 import { EmployeePicker } from "../../../components/letters/LetterFields";
 import { HelpStrip } from "../../../components/common/HelpStrip";
 import { apiErrorMessage } from "../../../lib/apiError";
@@ -14,6 +15,33 @@ import { apiErrorMessage } from "../../../lib/apiError";
 const { Title, Text, Paragraph } = Typography;
 const when = (v: string | null) => (v ? dayjs(v).format("D MMM YYYY, HH:mm") : "—");
 const invalidate = (qc: ReturnType<typeof useQueryClient>) => void qc.invalidateQueries({ queryKey: ["biometric"] });
+
+// ── Health at a glance (P2-H) ────────────────────────────────────────────
+
+const STATUS_TAG: Record<HealthStatus, { color: string; label: string; tip: string }> = {
+  ONLINE: { color: "green", label: "Online", tip: "Heard from recently, with nothing open against it." },
+  SILENT: { color: "red", label: "Gone quiet", tip: "No successful contact for the set time during working hours. See Incidents." },
+  AGENT_OFFLINE: { color: "red", label: "Agent offline", tip: "The sync agent that reads it has stopped reporting, so nothing from it can arrive. See Incidents." },
+  NOT_CONNECTED: { color: "default", label: "Not connected yet", tip: "Nothing has ever come from it. No alert is raised for something that has never worked; connect it (INSTALL.md) and it is watched from then on." },
+  ATTENTION: { color: "orange", label: "Needs attention", tip: "Reachable, but something is open against it (no punches today, clock, or log). See Incidents." },
+};
+const KIND_LABEL: Record<IncidentKind, string> = {
+  DEVICE_SILENT: "Device gone quiet",
+  AGENT_SILENT: "Agent stopped reporting",
+  NO_PUNCHES_TODAY: "No punches today",
+  CLOCK_DRIFT: "Clock wrong",
+  RETENTION_RISK: "Punches at risk on the device",
+};
+
+function StatusChip({ status }: { status: HealthStatus | null }) {
+  if (!status) return <Text type="secondary">—</Text>;
+  const t = STATUS_TAG[status];
+  return (
+    <Tooltip title={t.tip}>
+      <Tag color={t.color}>{t.label}</Tag>
+    </Tooltip>
+  );
+}
 
 // ── Devices ──────────────────────────────────────────────────────────────
 
@@ -229,6 +257,7 @@ function DevicesTab() {
         locale={{ emptyText: "No devices yet. The real machine is connected in the final Phase 2/3 step; simulated devices can be registered for testing." }}
         columns={[
           { title: "Device", key: "name", render: (_, d) => <><Text strong>{d.name}</Text> <Text type="secondary">{d.serialNumber}</Text> {d.isSimulated && <Tag color="purple">Simulated</Tag>}</> },
+          { title: "Health", key: "health", render: (_, d) => <StatusChip status={d.status} /> },
           { title: "Branch", key: "loc", render: (_, d) => d.location.name },
           { title: "Route", key: "route", render: (_, d) => (d.route === "AGENT" ? <>Agent{d.agent ? `: ${d.agent.name}` : <Text type="warning"> (none assigned)</Text>}</> : "ADMS push") },
           { title: "Sync from", dataIndex: "syncFrom", render: (v: string) => dayjs(v).format("D MMM YYYY") },
@@ -299,6 +328,7 @@ function AgentsTab() {
         columns={[
           { title: "Agent", key: "name", render: (_, a) => <><Text strong>{a.name}</Text> <Text type="secondary" code>{a.keyPrefix}…</Text></> },
           { title: "Host / version", key: "host", render: (_, a) => (a.host ? `${a.host} · v${a.version ?? "?"}` : <Text type="secondary">Not connected yet</Text>) },
+          { title: "Health", key: "health", render: (_, a) => <StatusChip status={a.status} /> },
           { title: "Last heartbeat", dataIndex: "lastHeartbeatAt", render: when },
           {
             title: "Set aside",
@@ -386,8 +416,81 @@ function UnmappedTab() {
         ]}
       />
       <MapModal row={mapping} onClose={() => setMapping(null)} />
+      <PeopleWithoutMapping />
     </Space>
   );
+}
+
+/** People at a branch that has a machine but who have no device user ID: if they punch, it lands above; and on a day they are expected they look absent. */
+function PeopleWithoutMapping() {
+  const { data = [], isLoading } = useQuery({ queryKey: ["biometric", "people-without-mapping"], queryFn: biometricApi.listPeopleWithoutMapping });
+  return (
+    <Space orientation="vertical" size={8} style={{ width: "100%", marginTop: 16 }}>
+      <Title level={5} style={{ margin: 0 }}>
+        People at branches with a machine but no device user ID
+      </Title>
+      <Text type="secondary">Employed today, placed at a branch that has an active biometric device, and with no device user ID mapped. Map their ID from the employee&apos;s record (Attendance capture).</Text>
+      <Table<PersonWithoutMapping>
+        size="small"
+        rowKey="employeeId"
+        loading={isLoading}
+        dataSource={data}
+        pagination={{ pageSize: 10, hideOnSinglePage: true }}
+        locale={{ emptyText: "Everyone at a branch with a machine has a device user ID." }}
+        columns={[
+          { title: "Employee code", dataIndex: "employeeCode" },
+          { title: "Branch", dataIndex: "branch" },
+        ]}
+      />
+    </Space>
+  );
+}
+
+// ── Incidents (P2-H) ─────────────────────────────────────────────────────
+
+function IncidentsTab() {
+  const { data = [], isLoading } = useQuery({ queryKey: ["biometric", "incidents"], queryFn: () => biometricApi.listIncidents({ state: "all", limit: 100 }) });
+  return (
+    <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+      <Text type="secondary">
+        Each stretch of trouble with a device or a sync agent: when it started, how long it lasted, and what was missed. Open ones are first. HR is told once when one opens, once more if it is still open at the start of the next working day, and once when it closes.
+      </Text>
+      <Table<IncidentRow>
+        rowKey="id"
+        loading={isLoading}
+        dataSource={data}
+        pagination={{ pageSize: 20, hideOnSinglePage: true }}
+        locale={{ emptyText: "No incidents. Nothing has gone quiet." }}
+        expandable={{ expandedRowRender: (i) => <Paragraph style={{ margin: 0 }}>{i.detail}</Paragraph> }}
+        columns={[
+          { title: "State", key: "state", render: (_, i) => (i.isOpen ? <Tag color="red">Open</Tag> : <Tag color="green">Closed</Tag>) },
+          { title: "What", key: "kind", render: (_, i) => KIND_LABEL[i.kind] },
+          { title: "Device / agent", key: "subject", render: (_, i) => <>{i.subject}{i.branch ? <Text type="secondary"> · {i.branch}</Text> : null}</> },
+          { title: "Started", dataIndex: "openedAt", render: when },
+          { title: "Ended", dataIndex: "resolvedAt", render: (v: string | null) => v ? when(v) : <Text type="danger">still open</Text> },
+          { title: "Lasted", dataIndex: "duration" },
+          {
+            title: "What was missed",
+            key: "recovery",
+            render: (_, i) =>
+              i.recovery?.arrivedPunches != null
+                ? `${i.recovery.arrivedPunches} punch${i.recovery.arrivedPunches === 1 ? "" : "es"} arrived afterwards${i.recovery.expectedWithoutPunch ? `; ${i.recovery.expectedWithoutPunch} still without one` : ""}`
+                : i.isOpen
+                  ? ""
+                  : "—",
+          },
+          { title: "", key: "esc", render: (_, i) => (i.escalatedAt ? <Tooltip title={`Told again at the start of the next working day (${when(i.escalatedAt)})`}><Tag>repeated</Tag></Tooltip> : null) },
+        ]}
+      />
+    </Space>
+  );
+}
+
+// ── Volume (P2-H) ────────────────────────────────────────────────────────
+
+function VolumeTab() {
+  const { data: devices = [] } = useQuery({ queryKey: ["biometric", "devices"], queryFn: biometricApi.listDevices });
+  return <IngestionVolumeChart devices={devices.map((d) => ({ id: d.id, name: d.name }))} />;
 }
 
 // ── Flagged punches ──────────────────────────────────────────────────────
@@ -498,10 +601,12 @@ function BatchesTab() {
 }
 
 // Admin Tools → Devices (Phase 2 P2-B; P2-F adds what the sync agent reports
-// and the warnings). Health incidents, alerts and charts arrive with P2-H.
+// and the warnings; P2-H adds health at a glance, the incident history, and
+// ingestion volume).
 export function DevicesPage() {
   const { data: unmapped = [] } = useQuery({ queryKey: ["biometric", "unmapped"], queryFn: biometricApi.listUnmapped });
   const { data: flagged = [] } = useQuery({ queryKey: ["biometric", "flagged"], queryFn: biometricApi.listFlagged });
+  const { data: openIncidents = [] } = useQuery({ queryKey: ["biometric", "incidents", "open"], queryFn: () => biometricApi.listIncidents({ state: "open", limit: 100 }) });
   return (
     <Space orientation="vertical" size={16} style={{ width: "100%" }}>
       <Title level={3} style={{ margin: 0 }}>
@@ -517,6 +622,8 @@ export function DevicesPage() {
         items={[
           { key: "devices", label: "Devices", children: <DevicesTab /> },
           { key: "agents", label: "Sync agents", children: <AgentsTab /> },
+          { key: "incidents", label: <Badge count={openIncidents.length} size="small" offset={[8, 0]}>Incidents</Badge>, children: <IncidentsTab /> },
+          { key: "volume", label: "Volume", children: <VolumeTab /> },
           { key: "unmapped", label: <Badge count={unmapped.length} size="small" offset={[8, 0]}>Unmapped</Badge>, children: <UnmappedTab /> },
           { key: "flagged", label: <Badge count={flagged.length} size="small" offset={[8, 0]}>Flagged</Badge>, children: <FlaggedTab /> },
           { key: "batches", label: "Recent batches", children: <BatchesTab /> },

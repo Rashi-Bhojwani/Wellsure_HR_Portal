@@ -43,6 +43,7 @@ export interface AgentRouteOptions {
 export class AgentRoute implements Route {
   readonly name = "agent" as const;
   private proc: ChildProcess | null = null;
+  private started = false;
   private records: AttRecord[] = [];
   readonly stateFile: string;
   readonly dataDir: string;
@@ -56,16 +57,41 @@ export class AgentRoute implements Route {
     this.logFile = path.join(o.workDir, "agent.log");
   }
 
+  /** Faults the simulated device can be put in (the CLI's `fault` command): switched off, or its clock wrong. */
+  private fault: { reachable: boolean; clockOffsetSeconds: number } = { reachable: true, clockOffsetSeconds: 0 };
+
   private writeDevice(): void {
     mkdirSync(this.o.workDir, { recursive: true });
-    writeFileSync(this.stateFile, JSON.stringify({ serial: this.o.serial, records: this.records }));
+    writeFileSync(this.stateFile, JSON.stringify({ serial: this.o.serial, records: this.records, ...this.fault }));
+  }
+
+  /** The device is switched off (the agent finds it unreachable) or back on. */
+  setReachable(reachable: boolean): void {
+    this.fault.reachable = reachable;
+    this.writeDevice();
+  }
+
+  /** The device's clock is this many seconds ahead of the server's (negative: behind). */
+  setClockOffset(seconds: number): void {
+    this.fault.clockOffsetSeconds = seconds;
+    this.writeDevice();
+  }
+
+  /** The agent process stops (its PC is off, its service crashed). `resume()` starts a new one on the same data folder. */
+  async pause(): Promise<void> {
+    await this.stop();
+  }
+
+  async resume(): Promise<void> {
+    await this.start();
   }
 
   /** Starts the real agent (`main.ts run`, the code the Windows service runs) against the simulated device. */
   async start(): Promise<void> {
     if (this.proc) return;
     mkdirSync(this.o.workDir, { recursive: true });
-    rmSync(this.dataDir, { recursive: true, force: true });
+    if (!this.started) rmSync(this.dataDir, { recursive: true, force: true }); // a resumed agent keeps what it knew
+    this.started = true;
     this.writeDevice();
     writeFileSync(
       this.configFile,

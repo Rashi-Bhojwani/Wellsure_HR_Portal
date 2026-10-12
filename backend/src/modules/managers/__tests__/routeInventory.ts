@@ -135,6 +135,8 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "PUT /api/settings/helpdesk": admin,
   "GET /api/settings/device-health": admin,
   "PUT /api/settings/device-health": admin,
+  "GET /api/settings/device-alerts": admin,
+  "PUT /api/settings/device-alerts": admin,
 
   "GET /api/leave/types": everyone("active leave types (apply form)"),
   "GET /api/leave/types/all": admin,
@@ -375,6 +377,9 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/biometric/device-warnings": admin,
   "POST /api/biometric/devices": admin,
   "PATCH /api/biometric/devices/:id": admin,
+  "GET /api/biometric/incidents": admin,
+  "GET /api/biometric/volume": admin,
+  "GET /api/biometric/people-without-mapping": admin,
   "GET /api/biometric/agents": admin,
   "POST /api/biometric/agents": admin,
   "PATCH /api/biometric/agents/:id": admin,

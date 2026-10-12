@@ -2758,3 +2758,61 @@ plus the list; IDOR/permission tests on the new endpoints; route inventory.
 4. **Who is told**: holders of `attendance.devices.manage` plus a free list of email addresses. If you want a
    named person, put them on the list.
 
+### P2-H, approved (user, 2026-10-12) and the additions to the design above
+
+The four decisions were answered as proposed: (1) device silence is **no successful contact for 30 minutes during
+working hours**, with the morning check covering "reachable but no punches arriving"; (2) working hours come from the
+**shifts of the people expected at that branch**; (3) **no periodic reminders**, with one exception below; (4)
+recipients are holders of `attendance.devices.manage` plus the free email list. Additions:
+- **One escalation.** If an incident is still open at the **start of the next working day**, one fresh notification
+  goes to the same people (`escalateAfter` is worked out when the incident opens: the first working-window start after
+  it; stored, so the check is a timestamp comparison). One repeat, not a daily drip: a device that died on Friday
+  evening is not silent all Monday morning.
+- **Recovery notices say what was missed.** "Back online after 4 h 10 min (10:42–14:52). 37 punches made during that
+  time have arrived and those days were recomputed. 3 people expected at this branch still have no punch today:
+  check whether their attendance needs correcting." When none have arrived while people were expected, it says that
+  instead (they may still be on the device, or lost if its log wrapped). To let a catching-up agent's backlog land
+  first, the notice goes out `recoverySettleSeconds` (default 120) after the incident closes.
+- **Super Admins are on the default recipient list as a rule, not as two typed addresses**: a setting
+  (`alertSuperAdmins`, default on) that resolves every active Super Admin's email when an alert is sent, so it stays
+  right when Super Admins change. The free list (`alertEmails`) is for anyone else.
+- Suppression, so one fault is one alert: a device whose agent has an open *agent silent* incident gets no *device
+  silent* incident of its own, and a device with a contact incident open gets no *no punches today* incident.
+- The morning check runs at the later of `morningCheckTime` (10:30) and the window start plus the silence minutes, so a
+  night-only branch is checked in its own morning, not at 10:30 when nobody is due.
+
+### P2-H (2026-10-12): device and agent health, as built
+
+Built as approved above. Where things are: `backend/src/modules/biometric/health/` (`windows.ts` working hours from
+the shifts of the people expected at a branch; `runner.ts` the check; `incidents.ts` open/close; `notify.ts` and
+`messages.ts` who is told and the words; `recovery.ts` what was missed; `queries.ts` and `people.ts` what the Devices
+screen reads). One new table, `device_incidents` (migration `20261012130000`): a partial unique index allows one open
+incident per subject and kind, and a CHECK requires exactly one subject. The scheduler registers
+`attendance-device-health` every minute; a worker runs it one at a time. Settings: System Settings → Attendance →
+**Device alerts** (`attendance.deviceAlerts`).
+
+- **What was built beyond the design text:** the Devices screen has a *Health* chip per device and agent (online /
+  gone quiet / agent offline / needs attention, with an agent that is down explaining its devices), an **Incidents**
+  tab (open first, history with how long and what was missed), a **Volume** tab (punches stored per route, by hour for
+  today or by day for 30, one device or all, drawn with the reference palette's first three slots, validated; a table
+  view of the same figures is one switch away because the aqua is below 3:1 on the light surface), and the list of
+  people at branches with a machine but no device user ID under Unmapped. The device warnings banner and Admin Home also
+  show the open silent/no-punches incidents.
+- **Simulator:** `simulate fault device-silent|agent-silent|wrong-clock --for <seconds>` puts the simulated device or
+  agent in trouble through the real agent, then fixes it.
+- **Decisions I made** (for you to veto): (1) the default recipients "the two Super Admins" are a rule (every active
+  Super Admin, resolved at send time) with the free list for anyone else, not two typed addresses; (2) the recovery
+  notice goes out `recoverySettleSeconds` (120) after the incident closes so a catching-up agent's backlog is counted;
+  (3) the "punches missed" figure is the raw punches made during the gap that arrived after contact was lost (a fact
+  from immutable rows, not an estimate); when none arrived it says so and why that may be; (4) a device switched off in
+  the system closes its open incidents without a recovery notice; (5) an email that fails to send is logged and does not
+  stop the in-app notification (the durable one); (6) the alert check never changes a device or an agent;
+  (7) a device nobody has ever heard from is *not* alarmed as "gone quiet" (alerts are for things that stop; found in the live
+  walkthrough, where registered-but-unused simulator devices alarmed at once): its chip reads "Not connected yet" until the first contact.
+- **Tests (gate G3 made measurable):** 25 integration cases with the clock placed explicitly (silence in working hours,
+  none on a Sunday, a holiday or outside the shift; agent silence at any hour with no second incident for its devices;
+  the morning check and when it must stay quiet; escalation exactly once at Monday 10:00 after a Saturday-evening
+  open; recovery once with the figures; clock and retention incidents; the table refusing a duplicate open incident and
+  a wrong subject; recipients; endpoints and permissions; the settings). Mutation-checked: dropping the week-off test,
+  the agent suppression, or the escalation claim each fails a case.
+
