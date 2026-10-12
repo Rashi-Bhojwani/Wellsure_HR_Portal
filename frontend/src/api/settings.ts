@@ -98,6 +98,7 @@ export async function updateDeviceHealthSettings(input: Partial<Thresholds>): Pr
 export interface DeviceAlertSettings {
   deviceSilentMinutes: number;
   agentSilentMinutes: number;
+  agentWindowMarginMinutes: number;
   morningCheckTime: string;
   alertEmails: string[];
   alertSuperAdmins: boolean;

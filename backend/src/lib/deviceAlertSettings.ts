@@ -11,8 +11,10 @@ export const DEVICE_ALERT_SETTING_KEY = "attendance.deviceAlerts";
 export interface DeviceAlertSettings {
   /** No successful contact with a device for this long, during its working hours, opens an incident. */
   deviceSilentMinutes: number;
-  /** A sync agent's heartbeat missing for this long opens one. */
+  /** A sync agent's heartbeat missing for this long, during working hours, opens one. */
   agentSilentMinutes: number;
+  /** An agent's working hours are its devices' branch windows widened by this many minutes each side (a PC may be a little early or late). */
+  agentWindowMarginMinutes: number;
   /** The morning check ("reachable, people expected, but no punch today"), IST "HH:MM". It runs at the later of this and the window start plus the silence minutes. */
   morningCheckTime: string;
   /** Email addresses told in addition to the people who hold attendance.devices.manage. */
@@ -26,6 +28,7 @@ export interface DeviceAlertSettings {
 export const DEFAULT_DEVICE_ALERT_SETTINGS: DeviceAlertSettings = {
   deviceSilentMinutes: 30,
   agentSilentMinutes: 5,
+  agentWindowMarginMinutes: 30,
   morningCheckTime: "10:30",
   alertEmails: [],
   alertSuperAdmins: true,

@@ -65,6 +65,7 @@ export const updateDeviceHealthSettingsSchema = z.object({
 export const updateDeviceAlertSettingsSchema = z.object({
   deviceSilentMinutes: z.number().int().min(5).max(480).optional(),
   agentSilentMinutes: z.number().int().min(2).max(240).optional(),
+  agentWindowMarginMinutes: z.number().int().min(0).max(240).optional(),
   morningCheckTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use 24-hour HH:MM, e.g. 10:30").optional(),
   alertEmails: z.array(z.string().trim().toLowerCase().email().max(200)).max(20).optional(),
   alertSuperAdmins: z.boolean().optional(),

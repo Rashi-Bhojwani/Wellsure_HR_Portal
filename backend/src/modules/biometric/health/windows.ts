@@ -94,6 +94,22 @@ export function windowContaining(byDate: Map<string, Map<string, BranchWindow>>,
 }
 
 /**
+ * The start of the widened window (`marginMs` each side) of any of these branches that contains `at`: the latest such
+ * start, or null when none does. How an agent's "working hours" are told from its devices' branches.
+ */
+export function widenedWindowStart(byDate: Map<string, Map<string, BranchWindow>>, locationIds: string[], at: Date, marginMs: number): number | null {
+  let latest: number | null = null;
+  for (const windows of byDate.values()) {
+    for (const locationId of locationIds) {
+      const w = windows.get(locationId);
+      if (!w || w.start - marginMs > at.getTime() || at.getTime() > w.end + marginMs) continue;
+      latest = latest === null ? w.start - marginMs : Math.max(latest, w.start - marginMs);
+    }
+  }
+  return latest;
+}
+
+/**
  * The start of the next working day at any of these branches after `after`: the
  * first window that opens later. Looks up to two weeks ahead (null: none, so
  * an incident then has no escalation). The incident's "still open at the start

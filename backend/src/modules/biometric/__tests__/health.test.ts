@@ -16,7 +16,8 @@ import { runDeviceHealthChecks } from "../health/runner";
 // takes `now`, so every case puts the clock exactly where it wants it.
 const ist = (date: string, hhmm: string) => new Date(`${date}T${hhmm}:00+05:30`);
 const TUE = "2026-10-06";
-const WED = "2026-10-07"; // a working day (GEN 10:00–19:00, Sunday off)
+const WED = "2026-10-07";
+const THU = "2026-10-08"; // a working day (GEN 10:00–19:00, Sunday off)
 const SAT = "2026-10-10";
 const SUN = "2026-10-11";
 const MON = "2026-10-12";
@@ -253,15 +254,56 @@ describe("device and agent health (P2-H)", () => {
   });
 
   describe("an agent that goes quiet", () => {
-    it("opens when its heartbeat is 5 minutes late, at any hour, on its own: its devices do not each raise another", async () => {
-      await setState({ read: ist(SUN, "02:00"), heartbeat: ist(SUN, "02:00") });
-      const r = await check(ist(SUN, "02:06")); // a Sunday, 2 a.m.: an agent that is down at 2 a.m. is down at 9
+    it("opens in working hours (the shift plus a margin), on its own: its devices do not each raise another", async () => {
+      await setState({ read: ist(WED, "10:00"), heartbeat: ist(WED, "10:00") });
+      const r = await check(ist(WED, "10:06")); // GEN 10:00–19:00: 6 minutes late inside the window
       expect(mine(r.opened).map((o) => o.kind)).toEqual(["AGENT_SILENT"]);
-      // The next working morning the agent is still silent: its device does not get a second incident of its own.
-      await check(ist(MON, "11:00"));
+      // Still silent an hour on: its device does not get a second incident of its own.
+      await check(ist(WED, "11:00"));
       const open = await incidents({ resolvedAt: null });
       expect(open.map((i) => i.kind)).toEqual(["AGENT_SILENT"]);
       expect((await notificationsFor(p.hr.employeeId, "attendance.device.incident"))[0]!.title).toMatch(/has stopped reporting/);
+    });
+
+    it("is silent about a PC that is off outside working hours: at night, on a Sunday, on a holiday, and before the margin opens", async () => {
+      await setState({ read: ist(SUN, "02:00"), heartbeat: ist(SUN, "02:00") });
+      expect(mine((await check(ist(SUN, "02:06"))).opened)).toEqual([]); // 2 a.m. on a Sunday
+      await setState({ read: ist(WED, "02:50"), heartbeat: ist(WED, "02:50") });
+      expect(mine((await check(ist(WED, "03:30"))).opened)).toEqual([]); // 3:30 a.m. on a working day
+      await setState({ read: ist(SUN, "11:00"), heartbeat: ist(SUN, "11:00") });
+      expect(mine((await check(ist(SUN, "13:00"))).opened)).toEqual([]); // a week-off, at midday
+      await setState({ read: ist(HOLIDAY, "11:00"), heartbeat: ist(HOLIDAY, "11:00") });
+      expect(mine((await check(ist(HOLIDAY, "13:00"))).opened)).toEqual([]); // a company holiday
+      expect(await incidents()).toEqual([]);
+    });
+
+    it("counts lateness from the start of the widened window, not from last night's last heartbeat", async () => {
+      await setState({ read: ist(TUE, "19:05"), heartbeat: ist(TUE, "19:05") }); // the PC was switched off last evening
+      expect(mine((await check(ist(WED, "09:29"))).opened)).toEqual([]); // 09:30 is the window start less the 30-minute margin
+      expect(mine((await check(ist(WED, "09:33"))).opened)).toEqual([]); // 3 minutes late this morning, not 14 hours
+      expect(mine((await check(ist(WED, "09:36"))).opened).map((o) => o.kind)).toEqual(["AGENT_SILENT"]); // 6 minutes late: now it is
+      const [incident] = await incidents();
+      expect(incident!.details).toMatchObject({ silentMinutes: expect.any(Number) });
+    });
+
+    it("stops alerting once the window and its margin have closed, but one that opened stays open overnight and closes only on contact", async () => {
+      await setState({ read: ist(WED, "17:00"), heartbeat: ist(WED, "17:00") });
+      expect(mine((await check(ist(WED, "17:06"))).opened).map((o) => o.kind)).toEqual(["AGENT_SILENT"]);
+      for (const at of [ist(WED, "22:00"), ist(WED, "23:55")]) expect(mine((await check(at)).resolved)).toEqual([]); // the window ending does not close it
+      expect((await incidents({ resolvedAt: null })).map((i) => i.kind)).toEqual(["AGENT_SILENT"]);
+      await setState({ read: ist(THU, "08:00"), heartbeat: ist(THU, "08:00") });
+      expect(mine((await check(ist(THU, "08:00"))).resolved).map((o) => o.kind).sort()).toEqual(["AGENT_SILENT"]); // contact is back
+    });
+
+    it("takes its margin from the setting", async () => {
+      await setSetting(DEVICE_ALERT_SETTING_KEY, { ...DEFAULT_DEVICE_ALERT_SETTINGS, alertEmails: ["ops@example.com"], agentWindowMarginMinutes: 0 }, p.hr.userId);
+      try {
+        await setState({ read: ist(TUE, "19:05"), heartbeat: ist(TUE, "19:05") });
+        expect(mine((await check(ist(WED, "09:36"))).opened)).toEqual([]); // no margin: the window opens at 10:00
+        expect(mine((await check(ist(WED, "10:06"))).opened).map((o) => o.kind)).toEqual(["AGENT_SILENT"]);
+      } finally {
+        await setSetting(DEVICE_ALERT_SETTING_KEY, { ...DEFAULT_DEVICE_ALERT_SETTINGS, alertEmails: ["ops@example.com"] }, p.hr.userId);
+      }
     });
 
     it("recovers with a notice that counts the catch-up across its devices", async () => {
@@ -457,10 +499,11 @@ describe("device and agent health (P2-H)", () => {
       const put = (body: object, token = hrToken) => request(app).put("/api/settings/device-alerts").set(...authHeader(token)).send(body);
       expect((await request(app).get("/api/settings/device-alerts").set(...authHeader(empToken))).status).toBe(403);
       const before = (await request(app).get("/api/settings/device-alerts").set(...authHeader(hrToken))).body;
-      expect(before).toMatchObject({ deviceSilentMinutes: 30, agentSilentMinutes: 5, morningCheckTime: "10:30", alertSuperAdmins: true });
+      expect(before).toMatchObject({ deviceSilentMinutes: 30, agentSilentMinutes: 5, agentWindowMarginMinutes: 30, morningCheckTime: "10:30", alertSuperAdmins: true });
       expect((await put({ morningCheckTime: "25:00" })).status).toBe(400);
       expect((await put({ alertEmails: ["not an email"] })).status).toBe(400);
       expect((await put({ deviceSilentMinutes: 1 })).status).toBe(400);
+      expect((await put({ agentWindowMarginMinutes: 500 })).status).toBe(400);
       const ok = await put({ deviceSilentMinutes: 45, alertEmails: ["Ops@Example.com", "ops@example.com", "late@example.com"] });
       expect(ok.status).toBe(200);
       expect(ok.body.deviceSilentMinutes).toBe(45);

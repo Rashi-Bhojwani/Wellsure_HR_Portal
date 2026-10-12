@@ -4383,7 +4383,7 @@ Plan and as-built notes: [`docs/plans/PHASE_2.md`](plans/PHASE_2.md), "P2-H buil
 
 - **Every minute the system checks each device and sync agent** and turns trouble into an *incident* with a start, an end
   and a notification: a device with no contact for 30 minutes during its working hours; an agent whose heartbeat is
-  5 minutes late; a reachable device with no punches at all by the morning check; a wrong clock; a log at risk. Working hours
+  5 minutes late during those hours plus a configurable margin (30 minutes each side; changed in P2-J — it was 24 hours a day); a reachable device with no punches at all by the morning check; a wrong clock; a log at risk. Working hours
   come from the shifts of the people expected at that branch, so nothing fires on a Sunday, a holiday or outside the shift.
 - **HR is told once when it opens, once more if it is still open at the start of the next working day, and once when it
   closes**, in the bell and by email (to everyone who can manage devices, every active Super Admin, and a free list).

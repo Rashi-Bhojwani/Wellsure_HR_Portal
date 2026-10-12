@@ -101,8 +101,8 @@ function DeviceAlertSettingsCard() {
         <Title level={5}>Device alerts</Title>
         <Text type="secondary">
           Every minute the system checks each device and sync agent. A device not heard from for the time below <em>during its working hours</em> (taken from the shifts of the people
-          expected at its branch; never on a holiday or week-off) becomes an incident, as does an agent whose heartbeat is late, a morning with no punches at all from a reachable
-          device, a wrong clock, or a log at risk. HR is told once when it opens, once more if it is still open at the start of the next working day, and once when it closes
+          expected at its branch; never on a holiday or week-off) becomes an incident, as does an agent whose heartbeat is late during those hours (plus the margin below, so a
+          PC switched off overnight is not an alert every night), a morning with no punches at all from a reachable device, a wrong clock, or a log at risk. HR is told once when it opens, once more if it is still open at the start of the next working day, and once when it closes
           (saying how long it lasted and how many punches arrived afterwards).
         </Text>
         <Row gutter={16} style={{ marginTop: 12 }}>
@@ -114,6 +114,11 @@ function DeviceAlertSettingsCard() {
           <Col xs={24} sm={12} md={6}>
             <Form.Item name="agentSilentMinutes" label="Agent heartbeat late by (minutes)" rules={[{ required: true }]}>
               <InputNumber min={2} max={240} precision={0} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <Form.Item name="agentWindowMarginMinutes" label="Agent hours margin (minutes)" rules={[{ required: true }]} extra="The agent is expected up this long before the shift starts and after it ends.">
+              <InputNumber min={0} max={240} precision={0} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
           <Col xs={24} sm={12} md={6}>

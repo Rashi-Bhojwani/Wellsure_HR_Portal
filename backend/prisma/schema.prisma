@@ -1987,7 +1987,7 @@ model DeviceIncident {
   deviceId           String?            @map("device_id")
   device             Device?            @relation(fields: [deviceId], references: [id], onDelete: Cascade)
   agentId            String?            @map("agent_id")
-  agent              BiometricAgent?    @relation(fields: [agentId], references: [id])
+  agent              BiometricAgent?    @relation(fields: [agentId], references: [id], onDelete: Cascade)
   openedAt           DateTime           @map("opened_at")
   // When the subject was last seen working, so the gap can be reported honestly (the incident opens N minutes after it).
   lastContactAt      DateTime?          @map("last_contact_at")
@@ -2068,6 +2068,7 @@ model RawPunch {
   @@unique([deviceId, deviceUserId, punchedAt])
   @@index([employeeId, punchedAt])
   @@index([deviceUserId, businessDate])
+  @@index([deviceId, businessDate]) // the every-minute "any punches today?" count and the per-day device views (P2-J)
   @@map("raw_punches")
 }
 

@@ -2810,7 +2810,7 @@ incident per subject and kind, and a CHECK requires exactly one subject. The sch
   (7) a device nobody has ever heard from is *not* alarmed as "gone quiet" (alerts are for things that stop; found in the live
   walkthrough, where registered-but-unused simulator devices alarmed at once): its chip reads "Not connected yet" until the first contact.
 - **Tests (gate G3 made measurable):** 25 integration cases with the clock placed explicitly (silence in working hours,
-  none on a Sunday, a holiday or outside the shift; agent silence at any hour with no second incident for its devices;
+  none on a Sunday, a holiday or outside the shift; agent silence in working hours (from P2-J; it was any hour) with no second incident for its devices;
   the morning check and when it must stay quiet; escalation exactly once at Monday 10:00 after a Saturday-evening
   open; recovery once with the figures; clock and retention incidents; the table refusing a duplicate open incident and
   a wrong subject; recipients; endpoints and permissions; the settings). Mutation-checked: dropping the week-off test,

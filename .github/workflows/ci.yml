@@ -82,6 +82,12 @@ jobs:
       - name: Migrate
         run: npm run db:migrate
 
+      # The migrations and schema.prisma must describe the same database: a relation
+      # whose onDelete differs here would be "fixed" by the next `migrate dev` into a
+      # migration nobody wrote (P2-J found one). Exits non-zero on any difference.
+      - name: Schema matches migrations
+        run: npm run db:drift
+
       # Migrate + seed the dev database exactly as a new developer would, to
       # prove that path works from scratch. The test suite itself then builds
       # its own database (wellsure_hr_test) in vitest.globalSetup.ts.

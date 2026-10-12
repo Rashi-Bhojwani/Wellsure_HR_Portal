@@ -10,7 +10,7 @@ import { openIncident, openIncidents, resolveIncident, type Subject } from "./in
 import { sendEscalation, sendOpened, sendRecovered } from "./notify";
 import { peopleWithoutMapping } from "./people";
 import { summariseRecovery } from "./recovery";
-import { nextWindowStart, windowContaining, windowsAround } from "./windows";
+import { nextWindowStart, widenedWindowStart, windowContaining, windowsAround } from "./windows";
 
 // The device and agent health check (docs/plans/PHASE_2.md "P2-H build design",
 // spec §4.7). Runs every minute on the scheduler; every decision is a function
@@ -66,9 +66,14 @@ export async function runDeviceHealthChecks(now: Date = new Date()): Promise<Hea
       continue;
     }
     if (!agent.lastHeartbeatAt) continue; // never reported: nothing to have gone quiet
-    const silentMs = now.getTime() - agent.lastHeartbeatAt.getTime();
-    const want = silentMs >= settings.agentSilentMinutes * MIN;
-    await reconcile("AGENT_SILENT", subject, want, { lastContactAt: agent.lastHeartbeatAt, details: { silentMinutes: Math.floor(silentMs / MIN) }, locationIds });
+    // Working hours only (its devices' branch windows, widened by the margin): a PC switched off overnight is not an alert every night. Late is
+    // counted from the later of its last heartbeat and the widened window's start; it closes when the heartbeat is back, not when the window ends.
+    const windowStart = widenedWindowStart(byDate, locationIds, now, settings.agentWindowMarginMinutes * MIN);
+    const heardMs = agent.lastHeartbeatAt.getTime();
+    const lateMs = windowStart === null ? 0 : now.getTime() - Math.max(heardMs, windowStart);
+    const want = windowStart !== null && lateMs >= settings.agentSilentMinutes * MIN;
+    const silentMs = now.getTime() - heardMs;
+    await reconcile("AGENT_SILENT", subject, want, { lastContactAt: agent.lastHeartbeatAt, details: { silentMinutes: Math.floor(silentMs / MIN) }, locationIds, clear: silentMs < settings.agentSilentMinutes * MIN });
     if (want || find("AGENT_SILENT", subject)) agentSilentOpen.add(agent.id);
   }
   const agentOf = new Map(agents.map((a) => [a.id, a]));

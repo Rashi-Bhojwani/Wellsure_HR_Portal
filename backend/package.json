@@ -16,6 +16,7 @@
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "db:migrate": "tsx scripts/migrate.ts",
+    "db:drift": "prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --exit-code",
     "check:services": "tsx scripts/check-services.ts",
     "db:seed": "tsx scripts/reset-db.ts",
     "admin:bootstrap": "tsx scripts/admin-bootstrap.ts",
