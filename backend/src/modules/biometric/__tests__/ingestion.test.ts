@@ -5,6 +5,7 @@ import { deleteWithDependents, purgeAppendOnly } from "../../../lib/__tests__/cl
 import { employeeForDeviceUserOn, employeesForDeviceUsersOn } from "../../../lib/effectiveDating";
 import { prisma } from "../../../lib/prisma";
 import { setRecomputeHandler, type DayRef } from "../../attendance/recompute";
+import { punchedAtRange } from "../ingestion";
 import { app, authHeader, cleanupEmployeeTestOrgMasters, cleanupFullTestEmployee, createEmployeeTestOrgMasters, createFullTestEmployee, loginAs, type TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
 
 // Biometric ingestion (Phase 2 commit P2-B, docs/plans/PHASE_2.md §2.2, §3):
@@ -255,6 +256,23 @@ describe("biometric ingestion (P2-B)", () => {
       expect((await hr().post(`/api/biometric/import/${preview.body.batchId}/commit`).send({ reason: "again please" })).status).toBe(409);
       expect(await prisma.auditLog.findFirst({ where: { action: "biometric.punches.imported", entityId: preview.body.batchId } })).not.toBeNull();
       await purgeAppendOnly("AuditLog", { entityId: preview.body.batchId });
+    });
+  });
+
+  describe("emergency file upload, two review findings", () => {
+    it("an uploaded file is a person, not the device: it never reads as the device being heard from", async () => {
+      await prisma.device.update({ where: { id: pushDevice.id }, data: { lastReceivedAt: null, lastHeartbeatAt: null } });
+      const file = line(p.alice.employeeCode, ist(7 * HOUR));
+      const preview = await hr().post("/api/biometric/import/preview").field("deviceId", pushDevice.id).attach("file", Buffer.from(file), "attlog.txt");
+      const commit = await hr().post(`/api/biometric/import/${preview.body.batchId}/commit`).send({ reason: "Device is down; HR copied the log off it" });
+      expect(commit.body).toMatchObject({ newCount: 1 });
+      expect(await prisma.device.findUniqueOrThrow({ where: { id: pushDevice.id } })).toMatchObject({ lastReceivedAt: null, lastHeartbeatAt: null });
+      await purgeAppendOnly("AuditLog", { entityId: preview.body.batchId });
+    });
+
+    it("finds the range of a device's whole log (hundreds of thousands of lines) without spreading it into a call", () => {
+      const times = Array.from({ length: 300_000 }, (_, i) => new Date(1_700_000_000_000 + ((i * 7919) % 300_000) * 60_000));
+      expect(punchedAtRange(times)).toEqual({ first: new Date(1_700_000_000_000), last: new Date(1_700_000_000_000 + 299_999 * 60_000) });
     });
   });
 

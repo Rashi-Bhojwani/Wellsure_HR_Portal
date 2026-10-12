@@ -428,11 +428,13 @@ export async function recomputeTouched(items: Array<{ employeeId: string; date: 
 export async function markAllPresent(viewer: Viewer, input: { date: string; locationId: string }, meta: Meta) {
   const today = iso(businessToday());
   if (input.date > today) throw new HttpError(400, "This day hasn't happened yet.", "VALIDATION_ERROR");
+  if (input.date < addDays(today, -MAX_BACK_DAYS)) throw new HttpError(400, "That's too far back to mark here.", "VALIDATION_ERROR");
   const branches = await markableBranches(viewer);
   if (!inBranches(branches, input.locationId)) throw new HttpError(404, "Branch not found.", "NOT_FOUND");
   const all = await employeesInRange(input.date, input.date);
   const [placements, mappings] = await Promise.all([placementPeriods(all, day(input.date), day(input.date)), deviceMappingPeriods(all, day(input.date), day(input.date))]);
-  const ids = all.filter((id) => locationOn(placements.get(id), input.date) === input.locationId && !deviceOn(mappings.get(id), input.date));
+  // Nobody marks their own attendance (plan §5.1, the same rule as a single cell): the viewer is left out.
+  const ids = all.filter((id) => id !== viewer.employeeId && locationOn(placements.get(id), input.date) === input.locationId && !deviceOn(mappings.get(id), input.date));
   if (ids.length === 0) return { marked: 0, skipped: 0 };
   await computeAttendance(ids, input.date, input.date);
   const [rows, assignments] = await Promise.all([

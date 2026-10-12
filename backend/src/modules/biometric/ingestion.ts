@@ -138,10 +138,11 @@ export async function ingest(input: IngestInput): Promise<IngestResult> {
       flaggedCount: inserted.filter((p) => p.flag).length,
     };
     await tx.ingestionBatch.update({ where: { id: batch.id }, data: { ...counts, rejectedLines: rejected.slice(0, MAX_KEPT_REJECTED) as never } });
+    // An emergency file upload is a person, not the device: it must not read as the device being heard from (health/runner.ts).
     const latestNew = inserted.filter((p) => !p.flag).reduce<Date | null>((m, p) => (!m || p.punchedAt > m ? p.punchedAt : m), null);
     await tx.device.update({
       where: { id: input.device.id },
-      data: { lastReceivedAt: now, ...(latestNew && (!input.device.lastPunchAt || latestNew > input.device.lastPunchAt) ? { lastPunchAt: latestNew } : {}) },
+      data: { ...(input.route === "IMPORT" ? {} : { lastReceivedAt: now }), ...(latestNew && (!input.device.lastPunchAt || latestNew > input.device.lastPunchAt) ? { lastPunchAt: latestNew } : {}) },
     });
     return { batchId: batch.id, inserted, counts };
   });
@@ -161,16 +162,28 @@ export async function ingest(input: IngestInput): Promise<IngestResult> {
   };
 }
 
+/** The earliest and latest instant. A loop, not Math.min(...times): a device's whole log is hundreds of thousands of lines, past the argument limit. */
+export function punchedAtRange(times: Date[]): { first: Date; last: Date } {
+  let first = Infinity;
+  let last = -Infinity;
+  for (const t of times) {
+    const ms = t.getTime();
+    if (ms < first) first = ms;
+    if (ms > last) last = ms;
+  }
+  return { first: new Date(first), last: new Date(last) };
+}
+
 /**
  * What committing an uploaded file would do, counted against what's stored
  * now (docs/plans/PHASE_2.md §3 "File upload": upload → preview → commit).
  */
 export async function previewCounts(device: Device, text: string, now: Date = new Date()): Promise<IngestCounts & { rejected: AttlogRejected[]; sample: Array<{ lineNumber: number; deviceUserId: string; localTime: string; outcome: string }> }> {
   const { planned, rejected } = await analyse(device, text, now);
-  const times = planned.map((p) => p.punchedAt.getTime());
+  const range = punchedAtRange(planned.map((p) => p.punchedAt));
   const existing = planned.length
     ? await prisma.rawPunch.findMany({
-        where: { deviceId: device.id, punchedAt: { gte: new Date(Math.min(...times)), lte: new Date(Math.max(...times)) } },
+        where: { deviceId: device.id, punchedAt: { gte: range.first, lte: range.last } },
         select: { deviceUserId: true, punchedAt: true },
       })
     : [];

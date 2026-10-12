@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
+import { deleteWithDependents } from "../../../lib/__tests__/cleanup";
 import { prisma } from "../../../lib/prisma";
 import {
   app,
@@ -93,6 +94,28 @@ describe("POST /api/employees (Add Employee wizard)", () => {
       createdEmployeeCodes.push(payload.official.employeeCode);
       return { ...payload, official };
     };
+
+    it("DEVICE: punches this ID made before the record existed are given to the new hire, not left in the Unmapped queue", async () => {
+      const payload = withCapture("DEVICE", `EARLY-${randomUUID().slice(0, 6)}`);
+      const deviceUserId = String(payload.official.deviceUserId);
+      const device = await prisma.device.create({ data: { serialNumber: `CRE-${randomUUID().slice(0, 8)}`, name: "Create test device", locationId: org.locationId } });
+      const batch = await prisma.ingestionBatch.create({ data: { route: "IMPORT", deviceId: device.id } });
+      const punch = await prisma.rawPunch.create({
+        data: {
+          deviceId: device.id, deviceUserId, punchedAt: new Date("2026-01-15T04:35:00Z"), localTime: "2026-01-15 10:05:00", businessDate: new Date("2026-01-15T00:00:00Z"),
+          status: "1", verifyMode: "255", workcode: "1", reserved: "0", rawLine: "test", route: "IMPORT", batchId: batch.id, employeeId: null,
+        },
+      });
+      try {
+        const res = await request(app).post("/api/employees").set(...authHeader(hrToken)).send(payload);
+        expect(res.status).toBe(201);
+        expect((await prisma.rawPunch.findUniqueOrThrow({ where: { id: punch.id } })).employeeId).toBe(res.body.id);
+      } finally {
+        await deleteWithDependents("RawPunch", [punch.id]);
+        await deleteWithDependents("IngestionBatch", [batch.id]);
+        await deleteWithDependents("Device", [device.id]);
+      }
+    });
 
     it("MANUAL: no Device User ID, no device mapping, the company default assignment, and the profile says manual", async () => {
       const payload = withCapture("MANUAL", undefined);

@@ -6,6 +6,7 @@ import { parseMusterCell } from "@shared/attendance/muster";
 import { deleteWithDependents } from "../../../lib/__tests__/cleanup";
 import { setBusinessTodayForTests } from "../../../lib/businessDate";
 import { prisma } from "../../../lib/prisma";
+import { setSocketServer } from "../../../realtime/emit";
 import { app, authHeader, cleanupEmployeeTestOrgMasters, cleanupFullTestEmployee, createEmployeeTestOrgMasters, createFullTestEmployee, loginAs, type TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
 import { computeAttendance } from "../compute";
 import { runManualReminder } from "../manual/reminder";
@@ -260,6 +261,22 @@ describe("manual entry and the attendance muster (P2-D)", () => {
       expect((await as(tok.marker).post("/muster/mark-present", { date: "2026-09-21", locationId: org.locationId })).body.marked).toBe(0);
     });
 
+    it("mark all present never marks the person doing the marking, and won't reach back past the 400-day limit", async () => {
+      // HR is manual capture at branch X for this case, and presses the button (a day in August: outside the September cycle the other cases total up).
+      await prisma.deviceUserMapping.deleteMany({ where: { employeeId: p.hr.employeeId } });
+      try {
+        const res = await as(tok.hr).post("/muster/mark-present", { date: "2026-08-12", locationId: org.locationId });
+        expect(res.status).toBe(200);
+        expect(res.body.marked).toBeGreaterThanOrEqual(1);
+        expect(await prisma.manualAttendanceEntry.count({ where: { employeeId: p.hr.employeeId } })).toBe(0);
+        expect(await prisma.manualAttendanceEntry.count({ where: { employeeId: p.mB.employeeId, date: d("2026-08-12") } })).toBe(1);
+        const old = await as(tok.hr).post("/muster/mark-present", { date: "2020-01-06", locationId: org.locationId });
+        expect(old.status).toBe(400);
+      } finally {
+        await prisma.deviceUserMapping.create({ data: { employeeId: p.hr.employeeId, deviceUserId: p.hr.employeeCode, validFrom: d("2024-01-01"), createdByUserId: p.hr.userId } });
+      }
+    });
+
     it("the Excel export is the same grid with markers, totals and the legend", async () => {
       const res = await as(tok.marker).get(`/muster/export?cycleStart=${CYCLE}`).buffer(true).parse((r, cb) => {
         const chunks: Buffer[] = [];
@@ -374,6 +391,27 @@ describe("manual entry and the attendance muster (P2-D)", () => {
       expect(res.status).toBe(400);
       expect(res.body.error.message).toMatch(/Use the template downloaded from the Attendance Muster/);
     });
+  });
+
+  // Gate G4 of Phase 2 (docs/plans/PHASE_2.md §12): a manual entry is live —
+  // the day reads MANUAL and attendance.updated reaches the employee, their
+  // manager, the branch marker and anyone watching attendance, naming the date.
+  it("a manual entry reaches the right screens live, and the day reads MANUAL (G4)", async () => {
+    await prisma.employeeJobHistory.updateMany({ where: { employeeId: p.mA.employeeId }, data: { reportingManagerId: p.hr.employeeId } });
+    const emitted: Array<{ room: string; event: string; payload: unknown }> = [];
+    setSocketServer({ to: (room) => ({ emit: (event: string, payload: unknown) => void emitted.push({ room: String(room), event, payload }) }) });
+    try {
+      const res = await save(tok.marker, [{ who: p.mA, date: "2026-09-19", text: "10:00-19:00" }]);
+      expect(res.status).toBe(200);
+      const payload = { employeeId: p.mA.employeeId, dates: ["2026-09-19"] };
+      const updated = emitted.filter((e) => e.event === "attendance.updated");
+      expect(updated.map((e) => e.room).sort()).toEqual([`manager:${p.hr.employeeId}`, "perm:attendance.view", `user:${p.mA.employeeId}`, `user:${p.marker.employeeId}`].sort());
+      for (const e of updated) expect(e.payload).toEqual(payload);
+      expect(await dayRow(p.mA, "2026-09-19")).toMatchObject({ status: "P", source: "MANUAL" });
+    } finally {
+      setSocketServer(null);
+      await prisma.employeeJobHistory.updateMany({ where: { employeeId: p.mA.employeeId }, data: { reportingManagerId: null } });
+    }
   });
 
   it("the daily reminder tells the marker how many of today's days are still not marked — and stays quiet on a Sunday", async () => {

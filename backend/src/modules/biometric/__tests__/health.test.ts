@@ -15,6 +15,7 @@ import { runDeviceHealthChecks } from "../health/runner";
 // what was missed; and the same fault never opens a second incident. The check
 // takes `now`, so every case puts the clock exactly where it wants it.
 const ist = (date: string, hhmm: string) => new Date(`${date}T${hhmm}:00+05:30`);
+const TUE = "2026-10-06";
 const WED = "2026-10-07"; // a working day (GEN 10:00–19:00, Sunday off)
 const SAT = "2026-10-10";
 const SUN = "2026-10-11";
@@ -274,6 +275,19 @@ describe("device and agent health (P2-H)", () => {
       expect(n.title).toMatch(/is back after 1 h 20 min/);
       expect(n.body).toMatch(/The sync agent is back online after 1 h 20 min \(10:00–11:20\)/);
       expect(n.body).toMatch(/1 punch made during that time has now arrived/);
+    });
+  });
+
+  describe("a PC that is off overnight", () => {
+    it("recovering before the shift starts does not claim people are missing a punch", async () => {
+      await setState({ read: ist(TUE, "19:00"), heartbeat: ist(TUE, "19:00") });
+      await check(ist(TUE, "19:06")); // the agent PC was switched off at 19:00
+      await setState({ read: ist(WED, "08:00"), heartbeat: ist(WED, "08:00") });
+      await check(ist(WED, "08:00")); // switched on again at 08:00, two hours before the 10:00 shift
+      await check(ist(WED, "08:03"));
+      const n = (await notificationsFor(p.hr.employeeId, "attendance.device.incident.recovered"))[0]!;
+      expect(n.body).toMatch(/hasn't started yet/);
+      expect(n.body).not.toMatch(/with no punch yet today|Everyone expected today has a punch/);
     });
   });
 

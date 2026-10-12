@@ -4,7 +4,9 @@ import { writeAuditLog } from "../../lib/audit";
 import { resolveAttendanceDefaults } from "../../lib/attendanceSettings";
 import { businessToday } from "../../lib/businessDate";
 import { deviceCapturedOn, firstHistoryDay, inForceOn, rowStatus, writeBankChange, writeJobChange, writeNameChange } from "../../lib/effectiveDating";
+import { logger } from "../../lib/logger";
 import { HttpError } from "../../middleware/errorHandler";
+import { reResolveUnmapped } from "../biometric/adminService";
 import { encryptField, decryptField } from "../../lib/encryption";
 import { blindIndex, last4, normalizeAadhaar, normalizeAccountNumber, normalizePan } from "../../lib/fieldHash";
 import { buildEmployeeScopeWhere, type DataScope } from "../../lib/dataScope";
@@ -258,6 +260,12 @@ export async function createEmployee(input: CreateEmployeeInput, meta: RequestMe
   await assertReportingLine({ code: official.employeeCode, roleCodes: ["EMPLOYEE"] }, official.reportingManagerId ?? null);
 
   const { employee, userId } = await runConflictSafe(() => prisma.$transaction((tx) => createEmployeeInTx(tx, input, meta)));
+
+  // Punches this ID made before the record existed (day one, before HR added them) sit unmapped
+  // until someone gives them an owner; the new mapping is that owner (docs/plans/PHASE_2.md §4.3).
+  if (official.attendanceCapture === "DEVICE" && official.deviceUserId) {
+    await reResolveUnmapped(official.deviceUserId).catch((err: unknown) => logger.warn({ err, employeeId: employee.id }, "Could not attach earlier punches to the new employee; map them from the Unmapped queue"));
+  }
 
   if (options?.sendInvitation ?? true) {
     await createInvitation({

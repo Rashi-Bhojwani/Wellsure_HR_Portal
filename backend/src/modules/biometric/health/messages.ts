@@ -82,6 +82,8 @@ export interface RecoverySummary {
   expectedWithoutPunch: number | null;
   /** The first punch of the day, for a "no punches today" incident. */
   firstPunchAt: string | null;
+  /** True when no affected branch's working day has begun yet, so "no punch yet today" would mean nothing. */
+  workNotStarted?: boolean;
 }
 
 export function recoveredMessage(f: IncidentFacts, resolvedAt: Date, r: RecoverySummary): Message {
@@ -101,7 +103,9 @@ export function recoveredMessage(f: IncidentFacts, resolvedAt: Date, r: Recovery
             : `No punches made during that time have arrived. If people punched meanwhile they may still be on the device, or lost if its log wrapped; check the device.`,
         );
       }
-      if (r.expectedWithoutPunch !== null && r.expectedWithoutPunch > 0) {
+      if (r.workNotStarted) {
+        lines.push(`The working day at ${f.branch ?? "the branch"} hasn't started yet, so nobody can be missing a punch so far.`);
+      } else if (r.expectedWithoutPunch !== null && r.expectedWithoutPunch > 0) {
         lines.push(`${plural(r.expectedWithoutPunch, "person is", "people are")} expected at ${f.branch ?? "the branch"} with no punch yet today: check whether anyone's attendance needs correcting (Attendance → Muster, or a missing-punch request).`);
       } else if (r.arrivedPunches !== null) {
         lines.push("Everyone expected today has a punch.");

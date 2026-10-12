@@ -31,7 +31,11 @@ export async function summariseRecovery(incident: DeviceIncident, now: Date): Pr
   const arrivedPunches = await prisma.rawPunch.count({ where: { deviceId: { in: deviceIds }, punchedAt: { gte: gapFrom, lte: gapTo }, receivedAt: { gte: gapFrom } } });
 
   const windows = await branchWindows(today);
-  const expected = [...new Set(devices.map((d) => d.locationId))].flatMap((l) => windows.get(l)?.employeeIds ?? []);
+  // "No punch yet today" only means something once the branch's working day has begun (an agent PC switched on at 08:00 for a 10:00 shift).
+  const branches = [...new Set(devices.map((d) => d.locationId))].map((l) => windows.get(l)).filter((w): w is NonNullable<typeof w> => !!w);
+  const begun = branches.filter((w) => w.start <= now.getTime());
+  if (branches.length > 0 && begun.length === 0) return { ...none, arrivedPunches, workNotStarted: true };
+  const expected = begun.flatMap((w) => w.employeeIds);
   if (expected.length === 0) return { ...none, arrivedPunches };
   const punched = await prisma.rawPunch.findMany({ where: { employeeId: { in: expected }, businessDate: day }, select: { employeeId: true }, distinct: ["employeeId"] });
   return { ...none, arrivedPunches, expectedWithoutPunch: expected.length - punched.length };

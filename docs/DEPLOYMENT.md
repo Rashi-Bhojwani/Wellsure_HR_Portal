@@ -106,3 +106,44 @@ list these. They are recorded here so the CDK work can't miss them:
 - **`SECURITY_ALERT_EMAIL`**: set to an inbox outside this system.
 - **Worker** must be running for queued break-glass alert emails
   (`security-alert-email` queue, retried every 5 minutes for 24 hours).
+
+## Attendance (Phase 2): what staging and production need
+
+Added at the end of Phase 2 (P2-I) so Phase 1.5 doesn't have to rediscover it.
+
+- **The scheduler must be running, as its own task.** `scheduler` mode registers the repeatable jobs
+  (`attendance-nightly` 02:00 IST, `attendance-manual-reminder`, and `attendance-device-health`
+  **every minute**). Without it nothing recomputes overnight and **no device or agent alert ever
+  fires**: the minute check is how HR learns a device has gone quiet. It is not part of `npm run dev`
+  (start it with `npm run start -- scheduler`, GETTING_STARTED). Run exactly one scheduler task;
+  registration is idempotent, so a restart is safe.
+- **The worker must be running** too: it runs the jobs the scheduler enqueues and sends the alert emails.
+- **Email for alerts goes through SES** (`MAIL_DRIVER=ses`), so the SES domain verification above is a
+  prerequisite for HR being emailed about a silent device. The in-app bell works without it. Until SES
+  is verified, set the alert recipients knowing the email part is a console log, not a delivery.
+- **Settings to review at first deployment**, all in System Settings → Attendance: *Device health*
+  (retention warning and alarm shares, drift limit) and *Device alerts* (quiet time before an incident,
+  agent heartbeat limit, morning check time, recovery notice wait, whether Super Admins are emailed, and
+  the extra email list). Defaults: device quiet 30 min, agent late 5 min, morning check 10:30, Super
+  Admins on. The device's real log capacity is set per device on the Devices screen once the model is
+  known (the default is pessimistic: 3 days / 20,000 records).
+- **`/api/dev/simulator` exists everywhere except production.** `app.ts` mounts it only when `APP_ENV`
+  is not `production`; in production it is an ordinary 404 (a test asserts this). It is read-only and
+  needs `attendance.devices.manage`. Staging therefore has it; that is intended, since staging is where
+  the simulator is exercised.
+- **Simulated devices are refused in production.** Registering a device marked simulated returns
+  `SIMULATED_IN_PRODUCTION`. The `simulate` command also refuses to run against a server it cannot
+  show is local and non-production, and refuses days that already hold punches.
+- **The sync agent runs on an office PC, not in AWS.** Install, upgrade and uninstall are in
+  `biometric-agent/INSTALL.md`. The PC needs a route to the device on port 4370 and HTTPS out to the
+  app; the agent key and the device comm key live in Windows Credential Manager, never in the repo or
+  these docs. ADMS push additionally needs a stable public address for the device to reach
+  (Phase 1.5, and the office's static IP, both still open).
+- **ADMS push is authenticated by the device serial number alone** (there is no shared secret in the protocol we
+  implement), and `/iclock` is mounted on the main API. Do not register a PUSH device in production until the
+  `/iclock` path is restricted to the office's address at the load balancer or listener; until then use the agent
+  route, which has its own key. Raw punches cannot be deleted, so a forged one cannot be undone.
+- **Cutover to real punches:** register the real device with `isSimulated` off, map the device user IDs
+  (Employee record → Attendance capture; the Devices screen lists the people at device branches
+  with none), and watch the Incidents tab on the first day. PHASE_2.md "Connection day: what to watch"
+  lists what to look for.
