@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button, Form, Input, Alert } from "antd";
 import { LockOutlined, UserOutlined } from "@ant-design/icons";
-import type { AxiosError } from "axios";
+import { apiErrorMessage } from "../../../lib/apiError";
 import { AuthShell } from "../AuthShell";
 import { useAuth } from "../../../hooks/useAuth";
 import { isLoginChallenge } from "../../../api/auth";
@@ -37,8 +37,7 @@ export function LoginPage() {
       const isAdminTier = result.user.roleCodes.some((role) => ADMIN_TIER_ROLES.includes(role));
       navigate(isAdminTier ? "/admin" : "/app/home");
     } catch (err) {
-      const axiosErr = err as AxiosError<{ error?: { message?: string } }>;
-      setError(axiosErr.response?.data?.error?.message ?? "Something went wrong. Please try again.");
+      setError(apiErrorMessage(err, "Something went wrong. Please try again."));
     } finally {
       setSubmitting(false);
     }

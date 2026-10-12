@@ -4,6 +4,7 @@ import { BulbOutlined, LoginOutlined, LogoutOutlined } from "@ant-design/icons";
 import { useThemeMode } from "../../theme/ThemeProvider";
 import { useAuth } from "../../hooks/useAuth";
 import { isLoginChallenge } from "../../api/auth";
+import { quickLoginFailure } from "../../lib/loginErrors";
 import { MOBILE_TAB_BAR_HEIGHT } from "../../lib/mobileNav";
 
 // Mirrors prisma/seed.ts's DEV_PASSWORD — dev/demo-only, printed to the
@@ -40,8 +41,8 @@ export function DevQuickLogin() {
       }
       const isAdminTier = result.user.roleCodes.some((role) => ADMIN_TIER_ROLES.includes(role));
       navigate(isAdminTier ? "/admin" : "/app/home");
-    } catch {
-      void message.error(`Could not log in as ${employeeCode} — has the database been seeded?`);
+    } catch (err) {
+      void message.error(quickLoginFailure(employeeCode, err));
     }
   }
 

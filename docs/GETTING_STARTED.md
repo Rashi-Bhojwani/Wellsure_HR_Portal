@@ -503,6 +503,14 @@ or upgrade a dependency there use npm 11 for that one command:
 `cd biometric-agent && npx -y npm@11 install --save-dev <package>`, then check
 that `npm ci` still works under npm 10 before committing.
 
+**The login screen (or Quick login) says "The server can't be reached"**
+The browser got no answer at all from the API, so nothing is wrong with the
+sign-in details or the database. Start it (`npm run dev`, or `npm run dev
+--prefix backend`), and check `curl localhost:4000/ready` answers. After a
+machine or container restart Postgres, Redis and the API all need starting
+again. A *refused* sign-in is different: it shows the server's own message
+(and Quick login then also asks whether the seed has run).
+
 **Redis not reachable**
 Same idea as Postgres: `brew services start redis` / `sudo systemctl
 start redis-server`, or confirm the Windows/WSL2/Memurai service is up.

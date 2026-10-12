@@ -4368,6 +4368,14 @@ This is spec gate G1, the claim the whole project rests on, measured by a job ra
   GETTING_STARTED); it needs a freshly seeded database each time.
 - **Next:** P2-H (device health), which adds new schema, so its design goes to you first.
 
+### Login errors told the truth (2026-10-12)
+
+The login screen and the dev Quick login said "has the database been seeded?" when the API was simply not
+reachable, which cost half an hour of reseeding a healthy database. A request that gets no answer is now
+reported as "The server can't be reached … (This is not a problem with your details or the data.)" on every
+screen that shows an API error (`apiErrorMessage`), a 5xx says the server hit a problem, and only a refused
+sign-in (401/403) may ask about the seed. Checked in a real browser with the API stopped; unit-tested.
+
 ## Open questions
 
 - [x] **Approval Workflows — dropped (user decision 2026-10-03).** No
