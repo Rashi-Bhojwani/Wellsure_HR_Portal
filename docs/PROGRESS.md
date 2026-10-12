@@ -12,7 +12,7 @@ committed).
 | 0 | Foundation | ✅ Done |
 | 1 | Auth, RBAC, org, employees | Done — data layer, authentication, org masters, employee management, import center, exports, audit log viewer and system settings all built and tested. Users & Roles admin screen deliberately deferred (built in Phase 5 commit E1 as Roles & Permissions). **Correction (2026-09-30): role assignment does not exist anywhere in the product** — Add Employee always assigns plain `EMPLOYEE` and nothing else assigns roles; an earlier version of this row claimed otherwise. Both are Phase 5 commit E1 ([`docs/plans/PHASE_5.md`](plans/PHASE_5.md)). |
 | 1.5 | AWS staging environment | Not started — **go-live checklist in [`DEPLOYMENT.md`](DEPLOYMENT.md): item 1, restrict `/iclock` to the office address, must be ticked before any ADMS push device is created in production** |
-| 2 | Biometric ingestion + attendance engine + real-time | In progress — plan approved ([`docs/plans/PHASE_2.md`](plans/PHASE_2.md)); P2-A (configuration), P2-B (ingestion), P2-C (rules engine), P2-D (manual entry and the muster) and P2-E (Attendance Info, Who Is In, the forgot-to-punch request) done, plus the fail-safe thresholds and the finalisation gate; P2-F done: F1 (the sync agent with our read-only device driver, and its server side), a follow-up (HR is told when punches are set aside) and F2 (the Windows service, release zip and INSTALL.md, proven on a Windows CI runner); P2-G done: G1 (the simulator's correctness: scenarios with expected outcomes, the month replay and its diff), G2a (the three routes, the `simulate` command, route replays) and G2b (the automated punch-to-screen latency test); P2-H done (device and agent health: incidents, alerts, recovery notices); P2-I done (the four gates recorded in [`PHASE_2_ACCEPTANCE.md`](plans/PHASE_2_ACCEPTANCE.md), an independent review with five fixes and the rest listed for your decision) — awaiting your review |
+| 2 | Biometric ingestion + attendance engine + real-time | In progress — plan approved ([`docs/plans/PHASE_2.md`](plans/PHASE_2.md)); P2-A (configuration), P2-B (ingestion), P2-C (rules engine), P2-D (manual entry and the muster) and P2-E (Attendance Info, Who Is In, the forgot-to-punch request) done, plus the fail-safe thresholds and the finalisation gate; P2-F done: F1 (the sync agent with our read-only device driver, and its server side), a follow-up (HR is told when punches are set aside) and F2 (the Windows service, release zip and INSTALL.md, proven on a Windows CI runner); P2-G done: G1 (the simulator's correctness: scenarios with expected outcomes, the month replay and its diff), G2a (the three routes, the `simulate` command, route replays) and G2b (the automated punch-to-screen latency test); P2-H done (device and agent health: incidents, alerts, recovery notices); P2-I done (the four gates recorded in [`PHASE_2_ACCEPTANCE.md`](plans/PHASE_2_ACCEPTANCE.md), an independent review with five fixes) and P2-J (the review follow-ups you approved) — **Phase 2 built and approved pending CI (green on 50ef7e8); awaiting your hands-on testing; close-out below** |
 | 3 | Attendance administration | Not started |
 | 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
 | 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | ✅ Done (2026-10-03) — commits A, B, C, D, D2, E1, E1.1, E2, E3, F and G (mobile bottom bar + PWA), plus interim commits. Full review — every screen and URL, every permission, what's stubbed, open questions, risks for Phase 6 — in [`docs/plans/PHASE_5_REVIEW.md`](plans/PHASE_5_REVIEW.md). Plan and as-built notes per commit in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
@@ -4393,7 +4393,7 @@ Plan and as-built notes: [`docs/plans/PHASE_2.md`](plans/PHASE_2.md), "P2-H buil
   people at branches with a machine but no device user ID.
 - **Settings** (all admin-editable): System Settings → Attendance → Device alerts.
 - **Checked live** with the real agent and a simulated device against a fresh database, two browsers (see the walkthrough
-  results below), and by 28 integration cases that put the clock where they want it.
+  results below), and by 28 integration cases (32 after P2-J) that put the clock where they want it.
 - **Found by looking at the screenshots, not by a test:** the Volume chart put punches received at 11:57 IST in the
   00:00 bucket (a `timestamp` column read as if it were already IST). Fixed, with a test that places a batch at a known
   IST time and fails without the fix.
@@ -4503,6 +4503,54 @@ refusing the whole batch; the 2,000 cap; the production gate on ADMS push (item 
 live two-browser walkthrough as Super Admin and a plain employee: the dialog showed what would be accepted, left out the Super Admin's own
 two punches, kept the button disabled until a reason and the tick were given, accepted 10 punches in one batch (10 audit rows, 1 batch),
 and the employee's open Attendance Info page changed from "waiting for HR (implausible time)" to First In 10:00 / Last Out 19:05 without a reload.
+
+### Phase 2 close-out (2026-10-12; CI green on 50ef7e8)
+
+**Every screen and its URL** (admin portal under `/admin/…`, employee portal under `/app/…`):
+
+| Screen | URL | What it is |
+|---|---|---|
+| Admin Home | `/admin` | Open device/agent warnings and incidents banner |
+| Who Is In? | `/admin/workforce/attendance/who-is-in` | Live board: who has punched, source markers, updates by socket |
+| Attendance Muster | `/admin/workforce/attendance/muster` | The grid: edit manual-capture cells, mark all present, Excel export, template upload |
+| Attendance Info (team/employee) | `/admin/workforce/attendance/info` | Anyone's month with day detail |
+| Regularizations | `/admin/workforce/attendance/regularizations` | The forgot-to-punch approval queue (one-punch days) |
+| Process Attendance | `/admin/workforce/attendance/process` | Recompute a range; the "ready to finalise?" card |
+| Attendance Settings | `/admin/workforce/attendance/settings` | Shifts, week-off patterns, policies, defaults, cycle, assignments, manual-entry branches |
+| Devices | `/admin/admin-tools/devices` | Tabs: Devices, Sync agents, Incidents, Volume, Unmapped, Flagged (bulk accept), Recent batches |
+| Data Import/Export → Punches (ATTLOG) | `/admin/admin-tools/import-export` | The emergency file upload: preview, then commit with a reason |
+| System Settings → Attendance | `/admin/admin-tools/settings` | Device health and Device alerts (incl. the agent hours margin) |
+| Attendance Info (mine) | `/app/attendance/info` | My month, live; forgot-to-punch request on a one-punch day |
+| Mark Attendance | `/app/attendance/mark` | For whoever holds `attendance.manual.enter` (branch-scoped) |
+
+Still menu placeholders: **Shift Roster** (labelled Phase 2; its generator was deferred within Phase 2 because only the GEN shift
+exists, so it is not built; **I should have raised that when it was deferred**), and the five Phase 3 entries below.
+
+**What stays unproven until the device is connected** (the exact list is PHASE_2.md §11 and PHASE_2_ACCEPTANCE.md): the 4370 protocol
+against your model and firmware, above all that reading the log never disturbs a punch; whether the model does ADMS push at all (and
+that needs the office-address restriction first, Phase 1.5 checklist item 1); the device's real clock drift, log capacity and whether it
+overwrites when full (the retention default is pessimistic until then); the office PC (antivirus, a real reboot, the LAN path to
+port 4370, HTTPS out); real-network latency (about 30–35 s on the agent route, accepted). Plus data entry, not code: the device-user-ID
+mappings, `has_biometric_device` off for SPN and Wellsure 2, and HR's open values (grace minutes, half- and full-day minimums, other
+shifts, the device's retention).
+
+**What Phase 3 still has to cover** (PHASE_2.md §10, plus what Phase 2 carried forward):
+- Employee Swipes; Attendance Exceptions with bulk resolve; **Manual Override** for device days (and the muster's device-day editing);
+  **Shift Override** for single dates; the Shift Roster generator and the penalty-rule builder (both deferred; HR currently has no
+  penalties and only GEN).
+- **Full regularization:** it must cover days with **no punches at all** (someone forgot entirely: both IN and OUT) and **the device-down
+  case**, where every device-captured person at a branch has no punches for the outage. The plan must say how that is handled in bulk
+  (HR records the outage and the days are corrected together, not dozens of single requests); bulk accept of flagged punches (built here)
+  covers only the flagged-punch half of an outage.
+- **Period Finalisation:** the screen, the refusal while `NM` days remain, unlock (Super Admin, with a reason), and registering the
+  payroll-lock check and the leave module's `isPeriodLocked` (`finalisePeriod` and the readiness card exist already).
+- Stats and insights; every report and export; then the final step, **connecting the device**.
+- Carried from the review, for you to schedule or drop: guard changing your **own shift/week-off/policy** and editing your **own job
+  record** (P2-J item 5); bulk *discard* of flagged punches; recompute jobs have no row lock and a failed recompute enqueue after a
+  successful save is not retried; a muster upload over 2,000 cells is refused only at commit; the rate limit is keyed on the request IP
+  (needs `trust proxy` behind the load balancer); Deactivate on a device or agent has no confirmation; a device that died outside working
+  hours reads "Online" until the next working window; the import path (greytHR migration) does not re-attach earlier punches the way Add
+  Employee now does.
 
 ## Open questions
 
