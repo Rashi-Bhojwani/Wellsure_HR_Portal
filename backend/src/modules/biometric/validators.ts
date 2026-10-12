@@ -112,6 +112,24 @@ export const mapUnmappedSchema = z.object({
   employeeId: z.string().min(1),
   effectiveFrom: z.iso.date().optional(), // default: the first unmapped punch's date (not before joining)
 });
+// Flagged punches: filter the list, preview a bulk accept, and confirm it (P2-J, docs/plans/PHASE_2.md "P2-J", D).
+const flaggedFilterFields = {
+  deviceId: z.string().min(1).optional(),
+  flag: z.enum(["FUTURE", "TOO_OLD"]).optional(),
+  from: z.iso.date().optional(),
+  to: z.iso.date().optional(),
+};
+export const flaggedQuerySchema = z.object(flaggedFilterFields);
+const flaggedSelection = z
+  .object({ ids: z.array(z.string().min(1)).min(1).max(2000).optional(), filter: z.object(flaggedFilterFields).optional() })
+  .refine((s) => (s.ids ? 1 : 0) + (s.filter && Object.values(s.filter).some((v) => v !== undefined) ? 1 : 0) === 1, {
+    message: "Choose punches by ticking them, or by a filter (device, reason, dates) — one or the other.",
+  });
+export const bulkAcceptPreviewSchema = flaggedSelection;
+export const bulkAcceptSchema = z.intersection(
+  flaggedSelection,
+  z.object({ fingerprint: z.string().regex(/^[0-9a-f]{64}$/), reason: z.string().trim().min(5, "Say why these punches are right").max(500), confirm: z.literal(true) }),
+);
 export const resolveFlagSchema = z.object({ decision: z.enum(["ACCEPTED", "DISCARDED"]), reason: z.string().trim().min(1).max(500) });
 
 // ── Admin: emergency file upload (Import Center → Punches (ATTLOG)) ──

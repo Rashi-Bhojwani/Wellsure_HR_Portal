@@ -6,6 +6,7 @@ import { CopyOutlined, EditOutlined, KeyOutlined, PlusOutlined } from "@ant-desi
 import * as biometricApi from "../../../api/biometric";
 import type { AgentRow, BatchRow, DeviceInput, DeviceRow, FlaggedRow, HealthStatus, IncidentKind, IncidentRow, PersonWithoutMapping, UnmappedRow } from "../../../api/biometric";
 import * as orgApi from "../../../api/org";
+import { BulkAcceptFlaggedModal } from "../../../components/devices/BulkAcceptFlaggedModal";
 import { DeviceWarnings } from "../../../components/devices/DeviceWarnings";
 import { IngestionVolumeChart } from "../../../components/devices/IngestionVolumeChart";
 import { EmployeePicker } from "../../../components/letters/LetterFields";
@@ -497,7 +498,14 @@ function VolumeTab() {
 
 function FlaggedTab() {
   const qc = useQueryClient();
-  const { data = [], isLoading } = useQuery({ queryKey: ["biometric", "flagged"], queryFn: biometricApi.listFlagged });
+  const [filter, setFilter] = useState<biometricApi.FlaggedFilter>({});
+  const [ticked, setTicked] = useState<string[]>([]);
+  const [bulk, setBulk] = useState<biometricApi.FlaggedSelection | null>(null);
+  const { data, isLoading } = useQuery({ queryKey: ["biometric", "flagged", filter], queryFn: () => biometricApi.listFlagged(filter) });
+  const { data: devices = [] } = useQuery({ queryKey: ["biometric", "devices"], queryFn: biometricApi.listDevices });
+  const rows = data?.flagged ?? [];
+  const total = data?.total ?? 0;
+  const filtered = Object.values(filter).some((v) => v !== undefined);
   const [deciding, setDeciding] = useState<{ row: FlaggedRow; decision: "ACCEPTED" | "DISCARDED" } | null>(null);
   const [reason, setReason] = useState("");
   const resolve = useMutation({
@@ -509,18 +517,64 @@ function FlaggedTab() {
     },
     onError: (err) => void message.error(apiErrorMessage(err, "Could not record the decision.")),
   });
+  const setF = (patch: Partial<biometricApi.FlaggedFilter>) => {
+    setFilter((f) => ({ ...f, ...patch }));
+    setTicked([]);
+  };
   return (
     <Space orientation="vertical" size={12} style={{ width: "100%" }}>
       <Text type="secondary">
         Punches with an implausible time — in the future, or very old — usually mean the device clock is wrong. They are stored but left out of attendance until you accept or
-        discard each one.
+        discard them. When a device goes wrong, flagged punches arrive for a whole branch at once: filter to them, tick them, or accept everything that matches, after seeing exactly
+        what that is.
       </Text>
+      <Space wrap>
+        <Select
+          allowClear
+          placeholder="Any device"
+          style={{ width: 240 }}
+          value={filter.deviceId}
+          onChange={(v) => setF({ deviceId: v })}
+          options={devices.map((d) => ({ value: d.id, label: d.name }))}
+        />
+        <Select
+          allowClear
+          placeholder="Any reason"
+          style={{ width: 160 }}
+          value={filter.flag}
+          onChange={(v) => setF({ flag: v })}
+          options={[{ value: "TOO_OLD", label: "Too old" }, { value: "FUTURE", label: "In the future" }]}
+        />
+        <DatePicker.RangePicker
+          format="D MMM YYYY"
+          value={filter.from && filter.to ? [dayjs(filter.from), dayjs(filter.to)] : null}
+          onChange={(v) => setF({ from: v?.[0]?.format("YYYY-MM-DD"), to: v?.[1]?.format("YYYY-MM-DD") })}
+        />
+        <Button disabled={!filtered} onClick={() => setF({ deviceId: undefined, flag: undefined, from: undefined, to: undefined })}>Clear filters</Button>
+      </Space>
+      <Space wrap>
+        <Button type="primary" disabled={ticked.length === 0} onClick={() => setBulk({ ids: ticked })}>
+          {ticked.length ? `Accept the ${ticked.length} ticked…` : "Accept ticked…"}
+        </Button>
+        <Tooltip title={!filtered ? "Choose a device, a reason or dates first, so you know what you are accepting." : total > 2000 ? "More than 2,000 match: narrow it and accept in parts." : ""}>
+          <span>
+            <Button disabled={!filtered || total === 0 || total > 2000} onClick={() => setBulk({ filter })}>
+              {filtered ? `Accept all ${total} that match…` : "Accept all that match…"}
+            </Button>
+          </span>
+        </Tooltip>
+        <Text type="secondary">
+          {total > rows.length ? `Showing the latest ${rows.length} of ${total}. ` : ""}
+          You will see every punch and confirm before anything is accepted.
+        </Text>
+      </Space>
       <Table<FlaggedRow>
         rowKey="id"
         loading={isLoading}
-        dataSource={data}
+        dataSource={rows}
         pagination={{ pageSize: 50 }}
-        locale={{ emptyText: "No flagged punches." }}
+        rowSelection={{ selectedRowKeys: ticked, onChange: (keys) => setTicked(keys as string[]), preserveSelectedRowKeys: true }}
+        locale={{ emptyText: filtered ? "No flagged punches match." : "No flagged punches." }}
         columns={[
           { title: "Device", dataIndex: "device" },
           { title: "Device user ID", dataIndex: "deviceUserId" },
@@ -539,6 +593,14 @@ function FlaggedTab() {
             ),
           },
         ]}
+      />
+      <BulkAcceptFlaggedModal
+        key={JSON.stringify(bulk)}
+        selection={bulk}
+        onClose={() => {
+          setBulk(null);
+          setTicked([]);
+        }}
       />
       <Modal
         title={deciding?.decision === "ACCEPTED" ? "Accept this punch?" : "Discard this punch?"}
@@ -605,7 +667,7 @@ function BatchesTab() {
 // ingestion volume).
 export function DevicesPage() {
   const { data: unmapped = [] } = useQuery({ queryKey: ["biometric", "unmapped"], queryFn: biometricApi.listUnmapped });
-  const { data: flagged = [] } = useQuery({ queryKey: ["biometric", "flagged"], queryFn: biometricApi.listFlagged });
+  const { data: flagged } = useQuery({ queryKey: ["biometric", "flagged", "count"], queryFn: () => biometricApi.listFlagged() });
   const { data: openIncidents = [] } = useQuery({ queryKey: ["biometric", "incidents", "open"], queryFn: () => biometricApi.listIncidents({ state: "open", limit: 100 }) });
   return (
     <Space orientation="vertical" size={16} style={{ width: "100%" }}>
@@ -625,7 +687,7 @@ export function DevicesPage() {
           { key: "incidents", label: <Badge count={openIncidents.length} size="small" offset={[8, 0]}>Incidents</Badge>, children: <IncidentsTab /> },
           { key: "volume", label: "Volume", children: <VolumeTab /> },
           { key: "unmapped", label: <Badge count={unmapped.length} size="small" offset={[8, 0]}>Unmapped</Badge>, children: <UnmappedTab /> },
-          { key: "flagged", label: <Badge count={flagged.length} size="small" offset={[8, 0]}>Flagged</Badge>, children: <FlaggedTab /> },
+          { key: "flagged", label: <Badge count={flagged?.total ?? 0} size="small" offset={[8, 0]}>Flagged</Badge>, children: <FlaggedTab /> },
           { key: "batches", label: "Recent batches", children: <BatchesTab /> },
         ]}
       />

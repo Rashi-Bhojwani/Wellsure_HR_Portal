@@ -168,6 +168,8 @@ export interface UnmappedRow {
 
 export interface FlaggedRow {
   id: string;
+  deviceId: string;
+  businessDate: string;
   device: string;
   deviceUserId: string;
   localTime: string;
@@ -236,8 +238,36 @@ export async function mapUnmapped(body: { deviceUserId: string; employeeId: stri
   return (await apiClient.post(`${base}/unmapped/map`, body)).data;
 }
 
-export async function listFlagged(): Promise<FlaggedRow[]> {
-  return (await apiClient.get<{ flagged: FlaggedRow[] }>(`${base}/flagged`)).data.flagged;
+export interface FlaggedFilter {
+  deviceId?: string;
+  flag?: "FUTURE" | "TOO_OLD";
+  from?: string;
+  to?: string;
+}
+export async function listFlagged(filter: FlaggedFilter = {}): Promise<{ total: number; flagged: FlaggedRow[] }> {
+  return (await apiClient.get<{ total: number; flagged: FlaggedRow[] }>(`${base}/flagged`, { params: filter })).data;
+}
+
+// Bulk accept (P2-J): a selection is either ticked punches or a filter, previewed, then confirmed against the previewed set.
+export type FlaggedSelection = { ids: string[] } | { filter: FlaggedFilter };
+export interface BulkAcceptPreview {
+  count: number;
+  /** The viewer's own flagged punches in this selection: left out, because someone else decides them. */
+  ownLeftOut: number;
+  fingerprint: string;
+  unmappedCount: number;
+  affectedDays: number;
+  employees: number;
+  byDevice: Array<{ device: string; count: number }>;
+  byFlag: Array<{ flag: string; count: number }>;
+  byDate: Array<{ date: string; count: number }>;
+  punches: Array<{ id: string; device: string; deviceUserId: string; localTime: string; flag: "FUTURE" | "TOO_OLD"; employee: { id: string; name: string | null } | null }>;
+}
+export async function previewBulkAccept(selection: FlaggedSelection): Promise<BulkAcceptPreview> {
+  return (await apiClient.post<BulkAcceptPreview>(`${base}/flagged/bulk-accept/preview`, selection)).data;
+}
+export async function bulkAcceptFlagged(selection: FlaggedSelection, body: { fingerprint: string; reason: string }): Promise<{ accepted: number; recomputedDays: number; unmapped: number }> {
+  return (await apiClient.post(`${base}/flagged/bulk-accept`, { ...selection, ...body, confirm: true })).data;
 }
 export async function resolveFlag(id: string, body: { decision: "ACCEPTED" | "DISCARDED"; reason: string }): Promise<void> {
   await apiClient.post(`${base}/flagged/${id}/resolve`, body);

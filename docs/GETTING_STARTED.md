@@ -116,6 +116,7 @@ except the two marked **required**.
 | Variable | What it does | Required? | Local dev value |
 |---|---|---|---|
 | `APP_ENV` | `development` \| `staging` \| `production` — also gates destructive scripts (`npm run db:seed` refuses to run unless this is `development`) | No | `development` |
+| `ADMS_PUSH_ENABLED` | `true` \| `false`. Whether ADMS push (`/iclock`, and creating a PUSH device) is served. Unset = on, except in production, where it stays off until `/iclock` is restricted to the office address (`docs/DEPLOYMENT.md`, Phase 1.5 go-live checklist, item 1) | No | unset (on) |
 | `APP_MODE` | Which of the backend's four entrypoints to run: `api` \| `worker` \| `scheduler` \| `migrate` | No | `api` (`npm run dev` sets this itself) |
 | `PORT` | Backend HTTP port | No | `4000` |
 | `WEB_BASE_URL` | Frontend origin — used to build links in emails (set-password, reset-password) | No | `http://localhost:5173` |
@@ -317,6 +318,7 @@ Run from the repo root unless noted.
 | `npm run dev` | API, background worker and frontend together, with live reload |
 | `npm run db:seed --prefix backend` | Wipe and reseed the database (dev only) |
 | `npm run db:migrate --prefix backend` | Apply pending migrations without touching data |
+| `npm run db:drift` | Fail if `prisma/schema.prisma` and the migrations describe different databases (CI runs it; run it after changing the schema) |
 | `npm run lint` | ESLint across backend, frontend, biometric-agent |
 | `npm run typecheck` | `tsc --noEmit` across every project |
 | `npm run test` | Vitest, backend + frontend + biometric-agent — backend is an integration suite against your real local Postgres/Redis, not mocks; frontend covers route-config wiring (`frontend/src/routes/__tests__/`). Safe to run while `npm run dev` is up, with no interaction either way: the suite uses its own Postgres database (`<dev database>_test`), Redis database and Socket.IO channel (`REDIS_TEST_DB`), and `.storage-test/`/`.mail-test/` folders. Each run drops, recreates, migrates and seeds that database first (about 10 s), so every run starts from the same state |
@@ -374,6 +376,11 @@ is rate-limited by IP, so many quick runs in a row can be refused for a few
 minutes. Days whose punches arrive late (`stale-day`, `stray-flagged`,
 `catch-up`'s lateness) can't be sent through a real route and are left out; the
 replay tests cover them.
+
+**Flagged punches in bulk (P2-J).** Admin Tools → Devices → Flagged: filter by device, reason and dates, tick rows or choose *Accept all N that match…*,
+read exactly what will be accepted, give a reason and tick the confirmation. Each punch gets its own audit row. Your own punches are left out (someone else
+decides them). To try it locally, make some old punches: `simulate` days older than the policy's plausible age arrive flagged, or upload an old ATTLOG
+file in Import Center.
 
 **Device and agent health (Phase 2 P2-H).** The check runs every minute on the *scheduler*, which `npm run dev` does
 not start: for the alerts to fire locally also run `npm run start --prefix backend -- scheduler` (the worker, which is part

@@ -4459,6 +4459,51 @@ Plan and as-built notes: [`docs/plans/PHASE_2.md`](plans/PHASE_2.md), "P2-H buil
 punches for their ID immediately (a failure to do so is logged, never blocks the hire); "mark all present" skips the
 person marking.
 
+### Phase 2, P2-J — review follow-ups you approved (2026-10-12)
+
+Plan: [`docs/plans/PHASE_2.md`](plans/PHASE_2.md) "P2-J". Built in your order.
+
+1. **Agent-silent alert follows working hours.** Same window logic as device silence (the shifts of the people expected at the
+   agent's branches; nothing on a Sunday or holiday), widened by a margin each side: new setting **Agent hours margin**, default 30
+   minutes, 0–240, in System Settings → Attendance → Device alerts. Lateness is counted from the later of the last heartbeat and the
+   widened window's start, so a PC switched off overnight is not "silent for 14 hours" when the window opens. It closes when the
+   heartbeat is back, not when the window ends: an agent that died at 17:00 is one open incident through the night and escalates once at
+   the next working day. A PC switched on after the margin opens (09:50 for a 10:00 shift) does raise a short incident: that is the
+   setting working; raise the margin to taste.
+2. **Index on `raw_punches (device_id, business_date)`** (migration `20261012150000`). While adding it I found the schema and the health
+   migration disagreed on `device_incidents.agent_id` (`onDelete: Cascade` in the migration, missing in the schema), so the next
+   `prisma migrate dev` would have generated `SET NULL`, which the table's CHECK constraint forbids. Fixed in the schema, and **CI now
+   fails on any difference between the migrations and `schema.prisma`** (`npm run db:drift`).
+3. **ADMS push is a hard Phase 1.5 prerequisite.** `docs/DEPLOYMENT.md` has a "Phase 1.5 go-live checklist"; item 1, restrict `/iclock`
+   to the office's address, must be ticked before any PUSH device is created; the spec's Phase 1.5 section and the Phase 1.5 row above point
+   at it. **Beyond what you asked (veto if unwanted):** the server enforces it. In production it does not serve `/iclock` and refuses to
+   create a PUSH device (`ADMS_PUSH_DISABLED`) unless `ADMS_PUSH_ENABLED=true` is set, which is the act of ticking the item. Development and
+   staging default to on. The agent route and existing records are untouched.
+4. **Bulk accept for flagged punches**, as you specified: filter or tick, a **preview** of exactly what will be accepted (counts per
+   device, reason and day, the people and attendance days affected, how many belong to nobody yet, and every punch), a **reason** and an
+   explicit tick, and the confirmation applies only to the set that was previewed (a fingerprint of the exact ids; if anything was decided
+   or arrived meanwhile it is refused and the new list is shown). **One audit row per punch** (`biometric.punch.flag_accepted`, with the
+   reason and a shared `bulkId` so the batch can be reconstructed), written in the same transaction as the decisions. A set over 2,000 is
+   refused ("narrow it"). The affected days are recomputed once each. Also fixed: accepting a flagged punch that belonged to nobody yet,
+   then mapping its ID, never recomputed the day.
+5. **The self-action sweep** (you asked: anywhere else a person can act on their own attendance?). Checked every write path that touches
+   attendance. **Already guarded:** a single muster cell and the muster upload, regularization decisions (`OWN_REQUEST`), leave decisions
+   (`SELF_APPROVAL_BLOCKED`), access changes (`SELF`). **Found and closed, with tests:** (a) "mark all present" (last commit);
+   (b) **deciding your own flagged punches**, single or in bulk, which could let an HR admin make their own bad punch count: now refused
+   (`OWN_ATTENDANCE`) and left out of a bulk accept, with a note saying how many; (c) **mapping unmapped punches to yourself**, which could
+   attribute someone else's stray punches to your own day: refused. **Not closed, for you to decide:** (d) an HR admin can change their
+   **own shift, week-off pattern or policy** (Attendance → Config → Assignments, single or in a bulk selection) and (e) edit their **own
+   job record** (branch, reporting manager), either of which changes how their own attendance is computed or who marks it. Both are
+   ordinary HR duties and I did not want to block them without asking; the same one-line guard would close them if you want it.
+
+**Rules I decided myself:** the margin defaults to 30 minutes both sides; a bulk accept leaves out the actor's own punches rather than
+refusing the whole batch; the 2,000 cap; the production gate on ADMS push (item 3).
+
+**Verification:** fresh devcheck reset (30 migrations, seed), full backend, frontend and agent suites, lint, typecheck, `db:drift`, and a
+live two-browser walkthrough as Super Admin and a plain employee: the dialog showed what would be accepted, left out the Super Admin's own
+two punches, kept the button disabled until a reason and the tick were given, accepted 10 punches in one batch (10 audit rows, 1 batch),
+and the employee's open Attendance Info page changed from "waiting for HR (implausible time)" to First In 10:00 / Last Out 19:05 without a reload.
+
 ## Open questions
 
 - [x] **Approval Workflows — dropped (user decision 2026-10-03).** No

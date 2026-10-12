@@ -389,6 +389,8 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "POST /api/biometric/unmapped/map": admin,
   "GET /api/biometric/flagged": admin,
   "POST /api/biometric/flagged/:id/resolve": admin,
+  "POST /api/biometric/flagged/bulk-accept/preview": admin,
+  "POST /api/biometric/flagged/bulk-accept": admin,
   "POST /api/biometric/import/preview": admin,
   "POST /api/biometric/import/:id/commit": admin,
 

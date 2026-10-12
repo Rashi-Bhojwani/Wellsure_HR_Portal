@@ -10,6 +10,7 @@ import { HttpError } from "../../middleware/errorHandler";
 import { requestRecompute } from "../attendance/recompute";
 import { newAgentKey } from "./agentAuth";
 import { deviceHealth, warningsFor } from "./deviceHealth";
+import { flaggedWhere, type FlaggedFilter } from "./flaggedBulk";
 import { ingest, previewCounts } from "./ingestion";
 import { openIncidentKindsBySubject, statusOf } from "./health/queries";
 
@@ -20,6 +21,8 @@ import { openIncidentKindsBySubject, statusOf } from "./health/queries";
 
 export interface Meta {
   actorUserId: string;
+  /** The actor's own employee record: nobody decides the evidence of their own attendance. */
+  actorEmployeeId?: string | null;
   ipAddress: string | null;
   userAgent: string | null;
 }
@@ -231,6 +234,7 @@ export async function listUnmapped() {
 export async function mapUnmapped(input: { deviceUserId: string; employeeId: string; effectiveFrom?: string }, meta: Meta) {
   const employee = await prisma.employee.findUnique({ where: { id: input.employeeId }, select: { id: true, employeeCode: true, dateOfJoining: true } });
   if (!employee) throw new HttpError(404, "Employee not found.", "NOT_FOUND");
+  if (employee.id === meta.actorEmployeeId) throw new HttpError(403, "You can't map unmapped punches to yourself. Someone else does, so nobody rules on their own attendance.", "OWN_ATTENDANCE");
   const first = await prisma.rawPunch.findFirst({ where: { deviceUserId: input.deviceUserId, employeeId: null }, orderBy: { businessDate: "asc" }, select: { businessDate: true } });
   if (!first && !input.effectiveFrom) throw new HttpError(404, `No unmapped punches for device user ID "${input.deviceUserId}".`, "NOT_FOUND");
   const requested = input.effectiveFrom ? new Date(input.effectiveFrom) : first!.businessDate;
@@ -254,7 +258,7 @@ export async function mapUnmapped(input: { deviceUserId: string; employeeId: str
 
 /** Give each still-unmapped punch of `deviceUserId` to whoever its mapping now says, and recompute those days. */
 export async function reResolveUnmapped(deviceUserId: string): Promise<{ resolved: number; stillUnmapped: number }> {
-  const punches = await prisma.rawPunch.findMany({ where: { deviceUserId, employeeId: null }, select: { id: true, businessDate: true, flag: true } });
+  const punches = await prisma.rawPunch.findMany({ where: { deviceUserId, employeeId: null }, select: { id: true, businessDate: true, flag: true, flagResolution: { select: { decision: true } } } });
   const owners = await employeesForDeviceUsersOn(punches.map((p) => ({ deviceUserId, day: p.businessDate })));
   const byEmployee = new Map<string, typeof punches>();
   for (const p of punches) {
@@ -266,31 +270,36 @@ export async function reResolveUnmapped(deviceUserId: string): Promise<{ resolve
     // The one change raw_punches allow (the immutability trigger checks it).
     const r = await prisma.rawPunch.updateMany({ where: { id: { in: list.map((p) => p.id) }, employeeId: null }, data: { employeeId } });
     resolved += r.count;
-    await requestRecompute(list.filter((p) => !p.flag).map((p) => ({ employeeId, date: p.businessDate })));
+    // A flagged punch counts only if HR accepted it; one accepted while it still belonged to nobody is recomputed now that it does.
+    await requestRecompute(list.filter((p) => !p.flag || p.flagResolution?.decision === "ACCEPTED").map((p) => ({ employeeId, date: p.businessDate })));
   }
   return { resolved, stillUnmapped: punches.length - resolved };
 }
 
 // ── Flagged (implausible-time) punches ───────────────────────────────────
 
-export async function listFlagged() {
-  const rows = await prisma.rawPunch.findMany({
-    where: { flag: { not: null }, flagResolution: null },
-    orderBy: { punchedAt: "desc" },
-    take: 500,
-    include: { device: { select: { name: true, timezone: true } } },
-  });
+export async function listFlagged(filter: FlaggedFilter = {}) {
+  const where = flaggedWhere(filter);
+  const [rows, total] = await Promise.all([
+    prisma.rawPunch.findMany({ where, orderBy: { punchedAt: "desc" }, take: 500, include: { device: { select: { name: true, timezone: true } } } }),
+    prisma.rawPunch.count({ where }),
+  ]);
   const names = await namesOn([...new Set(rows.flatMap((r) => (r.employeeId ? [r.employeeId] : [])))], new Date());
-  return rows.map((r) => ({
-    id: r.id,
-    device: r.device.name,
-    deviceUserId: r.deviceUserId,
-    localTime: r.localTime,
-    punchedAt: r.punchedAt,
-    receivedAt: r.receivedAt,
-    flag: r.flag,
-    employee: r.employeeId ? { id: r.employeeId, name: names.get(r.employeeId) ?? null } : null,
-  }));
+  return {
+    total,
+    flagged: rows.map((r) => ({
+      id: r.id,
+      deviceId: r.deviceId,
+      device: r.device.name,
+      deviceUserId: r.deviceUserId,
+      localTime: r.localTime,
+      punchedAt: r.punchedAt,
+      businessDate: iso(r.businessDate),
+      receivedAt: r.receivedAt,
+      flag: r.flag,
+      employee: r.employeeId ? { id: r.employeeId, name: names.get(r.employeeId) ?? null } : null,
+    })),
+  };
 }
 
 /** HR's decision: accepted punches count from now on (their day is recomputed); discarded ones never do. */
@@ -298,6 +307,7 @@ export async function resolveFlag(punchId: string, input: { decision: "ACCEPTED"
   const punch = await prisma.rawPunch.findUnique({ where: { id: punchId }, include: { flagResolution: true } });
   if (!punch?.flag) throw new HttpError(404, "Flagged punch not found.", "NOT_FOUND");
   if (punch.flagResolution) throw new HttpError(409, "This punch has already been decided.", "ALREADY_RESOLVED");
+  if (punch.employeeId && punch.employeeId === meta.actorEmployeeId) throw new HttpError(403, "This is one of your own punches. Someone else decides it, so nobody rules on their own attendance.", "OWN_ATTENDANCE");
   const resolution = await prisma.punchFlagResolution.create({ data: { punchId, decision: input.decision, reason: input.reason, decidedByUserId: meta.actorUserId } });
   if (input.decision === "ACCEPTED" && punch.employeeId) await requestRecompute([{ employeeId: punch.employeeId, date: punch.businessDate }]);
   await writeAuditLog({ ...meta, action: `biometric.punch.flag_${input.decision.toLowerCase()}`, entityType: "RawPunch", entityId: punchId, after: { ...resolution, flag: punch.flag, localTime: punch.localTime } });

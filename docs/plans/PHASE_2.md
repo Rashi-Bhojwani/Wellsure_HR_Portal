@@ -2874,3 +2874,10 @@ flagged punches arrive for a whole branch at once; accepting them one at a time 
 **E. Self-action audit.** One pass over every write path that touches attendance for the person doing it (manual entry,
 bulk mark, upload, flagged decisions, mapping, leave and correction paths, Who Is In, device screens); findings and fixes
 in PROGRESS.
+
+**P2-J as built (2026-10-12).** Built as written, with these differences and additions: (A) the incident closes on contact, not when
+the window ends, so an overnight-dead agent is one incident; (B) the same migration pass found and fixed a schema/migration mismatch on
+`device_incidents.agent_id`, and CI gained `npm run db:drift`; (C) the guard is `ADMS_PUSH_ENABLED`, read through `lib/admsGate.ts`;
+(D) the bulk accept leaves the actor's own punches out and reports how many (`ownLeftOut`), the audit rows are written in the same
+transaction (`writeAuditLogs`), and the cap of 2,000 is `MAX_BULK_ACCEPT`; (E) the sweep found and closed deciding one's own flagged
+punches and mapping punches to oneself; changing one's own shift/week-off/policy and one's own job record remain open for the user.

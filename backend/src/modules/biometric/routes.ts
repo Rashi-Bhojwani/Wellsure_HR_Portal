@@ -10,8 +10,11 @@ import {
   agentHeartbeatSchema,
   agentPunchesSchema,
   batchesQuerySchema,
+  bulkAcceptPreviewSchema,
+  bulkAcceptSchema,
   createAgentSchema,
   createDeviceSchema,
+  flaggedQuerySchema,
   idParamsSchema,
   incidentsQuerySchema,
   importCommitSchema,
@@ -65,7 +68,10 @@ biometricRouter.get("/batches", canManage, validate({ query: batchesQuerySchema 
 biometricRouter.get("/unmapped", canManage, controller.listUnmapped);
 biometricRouter.post("/unmapped/map", canManage, validate({ body: mapUnmappedSchema }), controller.mapUnmapped);
 
-biometricRouter.get("/flagged", canManage, controller.listFlagged);
+biometricRouter.get("/flagged", canManage, validate({ query: flaggedQuerySchema }), controller.listFlagged);
+// Bulk accept (P2-J): preview what would be accepted, then confirm that exact set with a reason. One audit row per punch.
+biometricRouter.post("/flagged/bulk-accept/preview", canManage, validate({ body: bulkAcceptPreviewSchema }), controller.previewBulkAccept);
+biometricRouter.post("/flagged/bulk-accept", canManage, validate({ body: bulkAcceptSchema }), controller.bulkAccept);
 biometricRouter.post("/flagged/:id/resolve", canManage, validate({ params: idParamsSchema, body: resolveFlagSchema }), controller.resolveFlag);
 
 biometricRouter.post("/import/preview", canManage, attlogUpload.single("file"), validate({ body: importPreviewBodySchema }), controller.previewImport);
