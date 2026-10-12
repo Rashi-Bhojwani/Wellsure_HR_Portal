@@ -1,5 +1,6 @@
 import { Prisma, type Device } from "@prisma/client";
 import { env } from "../../config/env";
+import { ADMS_PUSH_DISABLED_MESSAGE, admsGate } from "../../lib/admsGate";
 import { writeAuditLog } from "../../lib/audit";
 import { businessToday } from "../../lib/businessDate";
 import { getDeviceHealthThresholds } from "../../lib/deviceHealthSettings";
@@ -110,6 +111,7 @@ async function assertDeviceInput(input: DeviceInput, current?: Device): Promise<
   // arrives (P2-G). They are refused outright on production.
   if (input.isSimulated && env.APP_ENV === "production") throw new HttpError(400, "Simulated devices can't be registered in production.", "SIMULATED_IN_PRODUCTION");
   const route = input.route ?? current?.route ?? "AGENT";
+  if (route === "PUSH" && current?.route !== "PUSH" && !admsGate.enabled()) throw new HttpError(400, ADMS_PUSH_DISABLED_MESSAGE, "ADMS_PUSH_DISABLED");
   const agentId = input.agentId === undefined ? current?.agentId : input.agentId;
   if (route === "AGENT" && agentId) {
     const agent = await prisma.biometricAgent.findUnique({ where: { id: agentId } });

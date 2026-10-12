@@ -742,6 +742,8 @@ Users, roles, permissions, login (employee code + password), refresh rotation, l
 **Phase 1.5 — AWS staging environment**
 Implement the CDK stacks in §15 for `staging`: VPC, RDS, ElastiCache, S3 buckets, CloudFront, ECR, ECS cluster with api/worker/scheduler services, ALB, ACM, Route 53 records, Secrets Manager, KMS, SES domain identity, CloudWatch log groups and alarms, WAF, GitHub OIDC deploy role. Add the GitHub Actions deploy workflow (build → push to ECR → run migrate task → roll ECS services → upload web build to S3 → CloudFront invalidation). Write `docs/DEPLOYMENT.md` (first-time bootstrap, DNS, SES verification, how to deploy, how to roll back, how to restore a DB backup).
 
+**Hard prerequisite before any ADMS push device is created in production:** restrict `/iclock` to the office's address at the load balancer/WAF. It is item 1 of the Phase 1.5 go-live checklist in `docs/DEPLOYMENT.md`; the server keeps ADMS push off in production (`ADMS_PUSH_ENABLED`) until it is ticked, because an ADMS device is authenticated by its serial number alone.
+
 Security wiring required in Phase 1.5 (Phase 5 commit E1.1, §9 "Break-glass access"):
 - a CloudWatch metric filter on the `security.breakglass` log event (and `security.breakglass.aborted` / `.alert_undelivered`), with an alarm that emails the owners via SNS;
 - ECS Exec enabled only for the owners' IAM identities, with session logging to CloudWatch Logs or S3 and CloudTrail covering `ExecuteCommand`;

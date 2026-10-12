@@ -30,6 +30,9 @@ const envSchema = z.object({
   WEB_BASE_URL: z.url().default("http://localhost:5173"),
   API_BASE_URL: z.url().default("http://localhost:4000"),
   CORS_ORIGIN: z.string().default("http://localhost:5173"),
+  // ADMS push is authenticated by the device serial number alone, so in production it stays off until /iclock is restricted to the office's address
+  // (docs/DEPLOYMENT.md, "Phase 1.5 go-live checklist"). Setting this to "true" is the act of ticking that item. Unset: on, except in production.
+  ADMS_PUSH_ENABLED: z.enum(["true", "false"]).optional(),
   TZ_BUSINESS: z.string().default("Asia/Kolkata"),
 
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),

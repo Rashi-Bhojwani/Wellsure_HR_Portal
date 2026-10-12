@@ -1,5 +1,6 @@
 import express, { Router, type Request, type Response } from "express";
 import { zoneOffsetMinutes } from "@shared/attendance/attlog";
+import { admsGate } from "../../lib/admsGate";
 import { logger } from "../../lib/logger";
 import { prisma } from "../../lib/prisma";
 import { rateLimit } from "../../middleware/rateLimit";
@@ -13,6 +14,8 @@ import { ingest } from "./ingestion";
 // details (option names, OPERLOG shape) are unproven until a real push
 // device is connected (§11).
 export const admsRouter = Router();
+// Off in production until the go-live checklist item is ticked: the path does not exist, as far as the internet can tell.
+admsRouter.use((_req, res, next) => (admsGate.enabled() ? next() : void res.status(404).end()));
 admsRouter.use(rateLimit("biometric.rateLimit.adms", { maxAttempts: 600, windowSeconds: 60 }));
 admsRouter.use(express.text({ type: () => true, limit: "2mb" }));
 

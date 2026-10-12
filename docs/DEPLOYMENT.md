@@ -6,6 +6,28 @@ _To be written in Phase 1.5 (AWS staging environment) — see
 Will cover: first-time bootstrap, DNS, SES domain verification, how to
 deploy, how to roll back, and how to restore a database backup.
 
+## Phase 1.5 go-live checklist
+
+Items that **must be ticked before the thing they guard is used**. Not notes: each one has a switch in the code or the
+infrastructure that stays off until it is ticked, so it cannot be forgotten. Tick an item by editing this file in the
+commit that does the work, with the date and who did it.
+
+- [ ] **1. ADMS push: restrict `/iclock` to the office's address — BEFORE any PUSH device is created in production.**
+  - *Why:* an ADMS device proves who it is by its serial number alone (there is no shared secret in the protocol), the serial is
+    printed on the device and shown on the Devices screen, and raw punches cannot be deleted. Anyone who learns a serial could post
+    punches as that device and nobody could undo them.
+  - *Do:* at the load balancer (or a separate listener), allow `/iclock/*` only from the office's static IP (open question: the
+    office's static IP, spec §14) and deny it from everywhere else; put the same allow-list in the WAF; confirm from outside the
+    office that `GET /iclock/cdata?SN=anything` is refused at the edge, not just by the app.
+  - *Switch:* in production the server does not serve `/iclock` and refuses to create a PUSH device (`ADMS_PUSH_DISABLED`) unless the
+    environment sets `ADMS_PUSH_ENABLED=true`. **Setting that variable is the act of ticking this item**, and only after the
+    allow-list above is verified. Leave it unset until then; use the sync-agent route, which has its own key.
+  - *Ticked:* ☐ date ______ by ______ (allow-list verified from outside the office: ☐)
+- [ ] 2. The security wiring in spec §12 "Phase 1.5" (break-glass alarm, ECS Exec limits, separate database roles, RDS audit export,
+  `SECURITY_ALERT_EMAIL`), listed under "Security wiring required before staging/production go live" below.
+- [ ] 3. SES domain verified, so HR is emailed when a device or agent goes silent (the in-app bell works without it).
+- [ ] 4. The scheduler and the worker each run as their own task (no scheduler means no device alerts and no overnight recompute).
+
 ---
 
 ## Backend image: size and Chromium (recorded early, Phase 5 commit D2)
@@ -139,10 +161,8 @@ Added at the end of Phase 2 (P2-I) so Phase 1.5 doesn't have to rediscover it.
   app; the agent key and the device comm key live in Windows Credential Manager, never in the repo or
   these docs. ADMS push additionally needs a stable public address for the device to reach
   (Phase 1.5, and the office's static IP, both still open).
-- **ADMS push is authenticated by the device serial number alone** (there is no shared secret in the protocol we
-  implement), and `/iclock` is mounted on the main API. Do not register a PUSH device in production until the
-  `/iclock` path is restricted to the office's address at the load balancer or listener; until then use the agent
-  route, which has its own key. Raw punches cannot be deleted, so a forged one cannot be undone.
+- **ADMS push is off in production until the go-live checklist item below is ticked** (the server refuses to create a PUSH device and
+  does not serve `/iclock`). Use the agent route, which has its own key.
 - **Cutover to real punches:** register the real device with `isSimulated` off, map the device user IDs
   (Employee record → Attendance capture; the Devices screen lists the people at device branches
   with none), and watch the Incidents tab on the first day. PHASE_2.md "Connection day: what to watch"

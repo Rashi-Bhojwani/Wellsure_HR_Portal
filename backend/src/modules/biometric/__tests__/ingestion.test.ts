@@ -1,10 +1,11 @@
 import request from "supertest";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { formatAttlogLine, instantToLocalTime } from "@shared/attendance/attlog";
 import { deleteWithDependents, purgeAppendOnly } from "../../../lib/__tests__/cleanup";
 import { employeeForDeviceUserOn, employeesForDeviceUsersOn } from "../../../lib/effectiveDating";
 import { prisma } from "../../../lib/prisma";
 import { setRecomputeHandler, type DayRef } from "../../attendance/recompute";
+import { admsGate, admsPushEnabledFor } from "../../../lib/admsGate";
 import { punchedAtRange } from "../ingestion";
 import { app, authHeader, cleanupEmployeeTestOrgMasters, cleanupFullTestEmployee, createEmployeeTestOrgMasters, createFullTestEmployee, loginAs, type TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
 
@@ -256,6 +257,39 @@ describe("biometric ingestion (P2-B)", () => {
       expect((await hr().post(`/api/biometric/import/${preview.body.batchId}/commit`).send({ reason: "again please" })).status).toBe(409);
       expect(await prisma.auditLog.findFirst({ where: { action: "biometric.punches.imported", entityId: preview.body.batchId } })).not.toBeNull();
       await purgeAppendOnly("AuditLog", { entityId: preview.body.batchId });
+    });
+  });
+
+  describe("the production gate on ADMS push (Phase 1.5 go-live checklist)", () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it("while off: /iclock does not exist and no push device can be created, but the agent route and existing devices' records are untouched", async () => {
+      vi.spyOn(admsGate, "enabled").mockReturnValue(false);
+      const handshake = await request(app).get(`/iclock/cdata?SN=${pushDevice.serialNumber}&options=all`);
+      expect(handshake.status).toBe(404);
+      expect((await request(app).post(`/iclock/cdata?SN=${pushDevice.serialNumber}&table=ATTLOG&Stamp=1`).set("Content-Type", "text/plain").send(`${line(p.alice.employeeCode, ist(3 * HOUR))}\n`)).status).toBe(404);
+      const created = await hr().post("/api/biometric/devices").send({ serialNumber: `GATE-${suffix}`, name: "Gated push device", locationId: org.locationId, route: "PUSH" });
+      expect(created.status).toBe(400);
+      expect(created.body.error.code).toBe("ADMS_PUSH_DISABLED");
+      expect(await prisma.device.count({ where: { serialNumber: `GATE-${suffix}` } })).toBe(0);
+      // Not a lock-out of everything: an agent-route device is created as usual, and an existing push device can still be edited.
+      const agentOne = await hr().post("/api/biometric/devices").send({ serialNumber: `GATE2-${suffix}`, name: "Gate agent device", locationId: org.locationId, route: "AGENT", agentId: agentIds[0] });
+      expect(agentOne.status).toBe(201);
+      deviceIds.push(agentOne.body.id);
+      expect((await hr().patch(`/api/biometric/devices/${pushDevice.id}`).send({ name: "Back door, renamed" })).status).toBe(200);
+    });
+
+    it("once enabled (the checklist item ticked): the handshake works and a push device can be created", async () => {
+      vi.spyOn(admsGate, "enabled").mockReturnValue(true);
+      expect((await request(app).get(`/iclock/cdata?SN=${pushDevice.serialNumber}&options=all`)).status).toBe(200);
+      const created = await hr().post("/api/biometric/devices").send({ serialNumber: `GATE3-${suffix}`, name: "Allowed push device", locationId: org.locationId, route: "PUSH" });
+      expect(created.status).toBe(201);
+      deviceIds.push(created.body.id);
+    });
+
+    it("defaults: off in production, on elsewhere, and an explicit setting wins", () => {
+      expect([admsPushEnabledFor("production", undefined), admsPushEnabledFor("staging", undefined), admsPushEnabledFor("development", undefined)]).toEqual([false, true, true]);
+      expect([admsPushEnabledFor("production", "true"), admsPushEnabledFor("staging", "false")]).toEqual([true, false]);
     });
   });
 
