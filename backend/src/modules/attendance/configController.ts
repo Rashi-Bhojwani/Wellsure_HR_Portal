@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import * as service from "./configService";
 
-const meta = (req: Request): service.Meta => ({ actorUserId: req.user!.userId, ipAddress: req.ip ?? null, userAgent: req.get("user-agent") ?? null });
+const meta = (req: Request): service.Meta => ({ actorUserId: req.user!.userId, actorEmployeeId: req.user!.employeeId, ipAddress: req.ip ?? null, userAgent: req.get("user-agent") ?? null });
 const id = (req: Request) => req.params.id as string;
 
 export async function listShifts(_req: Request, res: Response): Promise<void> {

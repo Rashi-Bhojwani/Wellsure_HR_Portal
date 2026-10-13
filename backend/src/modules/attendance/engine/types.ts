@@ -5,7 +5,7 @@
 // 1 → 2 (P2-G): punches are no longer attributed to dates on which the person isn't employed (a night-shift leaver's last night).
 export const ENGINE_VERSION = 2;
 
-export type AttendanceSource = "DEVICE" | "MANUAL" | "LEAVE" | "HOLIDAY" | "WEEK_OFF";
+export type AttendanceSource = "DEVICE" | "MANUAL" | "LEAVE" | "HOLIDAY" | "WEEK_OFF" | "OVERRIDE";
 export type Capture = "DEVICE" | "MANUAL";
 
 export interface ShiftSessionDef {
@@ -48,6 +48,18 @@ export type ManualEntry =
   | { kind: "TIMED"; id: string; inTime: string; outTime: string | null } // "HH:MM" business time; an out at or before the in is next day
   | { kind: "STATUS_ONLY"; id: string; status: "P" | "A" | "HD_FIRST" | "HD_SECOND" | "WORKED" };
 
+/**
+ * A day-level correction. ADD_TIME joins one time to the device punches (the Phase 2 forgot-to-punch case); TIMES
+ * replaces the device punches with an in and an out for the day; STATUS sets the day's status as a manual
+ * status-only entry does, on any capture. "HH:MM" business times; an out at or before the in is the next day.
+ */
+export type DayOverride =
+  | { kind: "ADD_TIME"; id: string; origin: OverrideOrigin; time: string }
+  | { kind: "TIMES"; id: string; origin: OverrideOrigin; inTime: string; outTime: string }
+  | { kind: "STATUS"; id: string; origin: OverrideOrigin; status: "P" | "A" | "HD_FIRST" | "HD_SECOND" | "WORKED" };
+
+export type OverrideOrigin = "REGULARIZATION" | "MANUAL_OVERRIDE";
+
 export interface PunchRef {
   id: string;
   at: number; // epoch ms
@@ -62,9 +74,9 @@ export interface DayInput {
   leave: { first: HalfLeave | null; second: HalfLeave | null }; // full-day leave fills both
   capture: Capture; // DEVICE = a device mapping was in force on D
   manual: ManualEntry | null;
-  // An approved forgot-to-punch request (P2-E): one more time on a device day,
-  // "HH:MM" business time like a manual entry's. Never a raw punch.
-  correction: { id: string; time: string } | null;
+  // The day's active correction (Phase 3: an approved regularization, or a manual
+  // override), applied after holiday, week-off and leave. Never a raw punch.
+  override: DayOverride | null;
   punches: PunchRef[]; // usable punches attributed to D (flagged ones only if HR accepted them)
   flaggedExcluded: number; // punches attributed to D still awaiting HR's decision on their time
   policy: PolicyDef | null;
@@ -100,5 +112,6 @@ export interface DayResult {
   usedPunchIds: string[];
   collapsedPunches: number;
   manualEntryId: string | null;
-  correctionId: string | null; // the regularization request whose time was added
+  overrideId: string | null; // the attendance_overrides row this day was computed with
+  overrideOrigin: OverrideOrigin | null;
 }

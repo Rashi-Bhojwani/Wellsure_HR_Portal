@@ -69,6 +69,10 @@ export const OPTIONAL_FK_POLICY: Record<string, Policy> = {
   // A manual entry from a muster upload goes with the upload (tests only:
   // both are append-only history in real use).
   "ManualAttendanceEntry.uploadId": "delete",
+  // Phase 3: a bulk correction's batch is a grouping; a request survives it. An override made from a request goes with
+  // it in tests (both are append-only history in real use, and an override must keep its request: a database CHECK).
+  "RegularizationRequest.batchId": "setNull",
+  "AttendanceOverride.requestId": "delete",
   // Posts written by, or auto-posted about, an employee belong to them.
   "Post.authorEmployeeId": "delete",
   "Post.subjectEmployeeId": "delete",
@@ -94,6 +98,7 @@ export const STANDALONE_ROOT_MODELS: Record<string, string> = {
   Grade: "org master; cleanupEmployeeTestOrgMasters",
   CostCentre: "org master; cleanupEmployeeTestOrgMasters",
   SystemSetting: "id-less singleton keyed by `key`; tests snapshot and restore it",
+  RegularizationBatch: "groups a bulk correction; tests delete it by id after its requests",
   ImportBatch: "import upload batch; tests delete it by id (staging rows cascade)",
   LeaveType: "leave catalog; tests delete by id",
   Holiday: "company-wide holiday list; tests delete by id",
@@ -317,7 +322,7 @@ function delegate(modelName: string): Delegate {
 
 // Tables a database trigger keeps immutable, deletable only through the
 // test-purge exception (app.audit_purge = 'test' in a dev-marked database).
-const PURGE_GUARDED_MODELS = new Set(["RawPunch", "ManualAttendanceEntry"]);
+const PURGE_GUARDED_MODELS = new Set(["RawPunch", "ManualAttendanceEntry", "AttendanceOverride"]);
 
 // Deletes the given rows of `model` and every row that depends on them,
 // transitively, in FK-safe order. Optional FKs follow OPTIONAL_FK_POLICY.

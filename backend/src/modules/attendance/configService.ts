@@ -34,6 +34,8 @@ import { requestRecomputeRange } from "./recompute";
 
 export interface Meta {
   actorUserId: string;
+  /** The actor's own employee record: nobody changes the inputs to their own attendance and pay. */
+  actorEmployeeId?: string | null;
   ipAddress: string | null;
   userAgent: string | null;
 }
@@ -465,7 +467,15 @@ function fieldsOf(input: AssignmentChangeInput) {
   return { shiftId: input.shiftId, weekOffPatternId: input.weekOffPatternId, policyId: input.policyId };
 }
 
+/** Nobody changes their own shift, week-off pattern or policy: those are inputs to their own pay (Phase 3, user's change 3). */
+function assertNotOwnAssignment(meta: Meta, employeeIds: string[]): void {
+  if (meta.actorEmployeeId && employeeIds.includes(meta.actorEmployeeId)) {
+    throw new HttpError(403, "You can't change your own shift, week-off pattern or policy: they are inputs to your own attendance and pay. Another administrator changes yours.", "OWN_ATTENDANCE");
+  }
+}
+
 export async function changeAssignment(employeeId: string, input: AssignmentChangeInput, meta: Meta) {
+  assertNotOwnAssignment(meta, [employeeId]);
   await assertEmployee(employeeId);
   await assertActiveChoices(input);
   const write = await conflictSafe(
@@ -488,6 +498,7 @@ export async function changeAssignment(employeeId: string, input: AssignmentChan
 export async function bulkChangeAssignment(input: AssignmentChangeInput & { employeeIds: string[] }, meta: Meta) {
   await assertActiveChoices(input);
   const ids = [...new Set(input.employeeIds)];
+  assertNotOwnAssignment(meta, ids); // all or none: take yourself out of the selection
   const found = await prisma.employee.findMany({ where: { id: { in: ids } }, select: { id: true, employeeCode: true } });
   if (found.length !== ids.length) throw new HttpError(404, "Some of those employees weren't found.", "NOT_FOUND");
   const code = new Map(found.map((e) => [e.id, e.employeeCode]));
@@ -515,6 +526,7 @@ export async function bulkChangeAssignment(input: AssignmentChangeInput & { empl
 }
 
 export async function cancelAssignmentChange(employeeId: string, rowId: string, meta: Meta) {
+  assertNotOwnAssignment(meta, [employeeId]);
   await assertEmployee(employeeId);
   const { removed, reopened } = await prisma.$transaction((tx) => cancelScheduledAssignment(tx, employeeId, rowId));
   // A cancelled change was in the future, so no computed day used it.

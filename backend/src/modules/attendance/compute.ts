@@ -6,9 +6,10 @@ import { prisma } from "../../lib/prisma";
 import { emitAttendanceUpdated } from "../../realtime/emit";
 import { evaluateDay } from "./engine/engine";
 import { addDays, businessDateOf, dayStartMs } from "./engine/time";
-import { ENGINE_VERSION, type DayInput, type DayResult, type HalfLeave, type ManualEntry, type PunchRef, type ShiftDef } from "./engine/types";
+import { ENGINE_VERSION, type DayInput, type DayOverride, type DayResult, type HalfLeave, type ManualEntry, type PunchRef, type ShiftDef } from "./engine/types";
 import { attributePunches } from "./engine/windows";
 import { loadManualEntries } from "./manual/entries";
+import { loadOverrides } from "./overrides";
 
 // The engine's loader and writer (docs/plans/PHASE_2.md §4.1). The loader
 // gathers each employee-day's inputs — through the effective-dating readers
@@ -34,6 +35,8 @@ export interface ComputeResult {
   locked: number; // left alone: finalised
   deleted: number; // a record that should no longer exist (e.g. not employed that day)
   changes: DayChange[];
+  /** Every employee-day evaluated, changed or not (only when `collect` is set): what a preview shows. */
+  evaluated?: Array<{ employeeId: string; date: string; before: string | null; after: string | null; locked: boolean }>;
 }
 
 /** Manual entries (P2-D): the real query by default; tests may substitute a loader. */
@@ -91,9 +94,9 @@ function rowData(employeeId: string, date: string, r: DayResult, a: AssignmentWi
     workedOnOffDay: r.workedOnOffDay,
     provisional: r.provisional,
     punchCount: r.punchCount,
-    computedFrom: { punchIds: r.usedPunchIds, manualEntryId: r.manualEntryId, correctionId: r.correctionId, collapsedPunches: r.collapsedPunches, outsideWindowPunches: outside } as Prisma.InputJsonValue,
-    overrideKind: r.correctionId ? "MISSING_PUNCH_CORRECTION" : null,
-    overrideRef: r.correctionId,
+    computedFrom: { punchIds: r.usedPunchIds, manualEntryId: r.manualEntryId, overrideId: r.overrideId, collapsedPunches: r.collapsedPunches, outsideWindowPunches: outside } as Prisma.InputJsonValue,
+    overrideKind: r.overrideOrigin,
+    overrideRef: r.overrideId,
     engineVersion: ENGINE_VERSION,
   };
 }
@@ -126,7 +129,7 @@ export function sameDay(existing: DailyAttendance, next: RowData): boolean {
  * Recompute [from, to] (business dates, inclusive) for these employees. Days
  * after today are never computed. Callers chunk large employee sets.
  */
-export async function computeAttendance(employeeIds: string[], from: string, to: string, opts: { now?: Date; maxChanges?: number; dryRun?: boolean } = {}): Promise<ComputeResult> {
+export async function computeAttendance(employeeIds: string[], from: string, to: string, opts: { now?: Date; maxChanges?: number; dryRun?: boolean; collect?: boolean; hypothetical?: Map<string, DayOverride> } = {}): Promise<ComputeResult> {
   const result: ComputeResult = { processed: 0, changed: 0, locked: 0, deleted: 0, changes: [] };
   const today = iso(businessToday());
   const last = to > today ? today : to;
@@ -136,7 +139,7 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
 
   const fromD = utcDate(from);
   const lastD = utcDate(last);
-  const [employees, assignments, mappings, holidays, leaves, existing, manual, corrections] = await Promise.all([
+  const [employees, assignments, mappings, holidays, leaves, existing, manual, overrides] = await Promise.all([
     prisma.employee.findMany({ where: { id: { in: employeeIds } }, select: { id: true, dateOfJoining: true, lastWorkingDate: true } }),
     assignmentsBetween(employeeIds, utcDate(addDays(from, -1)), utcDate(addDays(last, 1))),
     deviceMappingPeriods(employeeIds, fromD, lastD),
@@ -147,13 +150,10 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
     }),
     prisma.dailyAttendance.findMany({ where: { employeeId: { in: employeeIds }, date: { gte: fromD, lte: lastD } } }),
     loadManual(employeeIds, from, last),
-    // Approved forgot-to-punch requests (P2-E): one more time on that day.
-    prisma.regularizationRequest.findMany({
-      where: { employeeId: { in: employeeIds }, status: "APPROVED", kind: "MISSING_PUNCH", date: { gte: fromD, lte: lastD } },
-      select: { id: true, employeeId: true, date: true, time: true },
-    }),
+    // The active override per employee-day (an approved regularization, or a manual override): latest wins.
+    loadOverrides(employeeIds, from, last),
   ]);
-  const correctionBy = new Map(corrections.map((c) => [`${c.employeeId}|${iso(c.date)}`, { id: c.id, time: c.time }]));
+  const overrideBy = opts.hypothetical ? new Map([...overrides, ...opts.hypothetical]) : overrides;
   const punches = await prisma.rawPunch.findMany({
     where: { employeeId: { in: employeeIds }, punchedAt: { gte: new Date(dayStartMs(addDays(from, -1))), lt: new Date(dayStartMs(addDays(last, 2))) } },
     select: { id: true, employeeId: true, punchedAt: true, flag: true, flagResolution: { select: { decision: true } } },
@@ -210,6 +210,7 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
       const before = existingBy.get(key) ?? null;
       if (before?.isLocked) {
         result.locked += 1;
+        if (opts.collect) (result.evaluated ??= []).push({ employeeId: emp.id, date, before: before.status, after: before.status, locked: true });
         continue;
       }
       const a = assignmentOnDate(date);
@@ -223,13 +224,14 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
         leave: leaveOn.get(date) ?? { first: null, second: null },
         capture: captured(date) ? "DEVICE" : "MANUAL",
         manual: manual.get(key) ?? null,
-        correction: correctionBy.get(key) ?? null,
+        override: overrideBy.get(key) ?? null,
         punches: attributed.byDate.get(date) ?? [],
         flaggedExcluded: (pendingAttributed.byDate.get(date) ?? []).length,
         policy: a ? { id: a.policy.id, fullDayMinMinutes: a.policy.fullDayMinMinutes, halfDayMinMinutes: a.policy.halfDayMinMinutes, halfDayMinNotMetLopDays: Number(a.policy.halfDayMinNotMetLopDays), nearDuplicateSeconds: a.policy.nearDuplicateSeconds, inferBreakPairing: a.policy.inferBreakPairing } : null,
         now,
       };
       const r = evaluateDay(input);
+      if (opts.collect) (result.evaluated ??= []).push({ employeeId: emp.id, date, before: before?.status ?? null, after: r?.status ?? null, locked: false });
       const note = (after: string | null) => {
         result.changed += 1;
         changedByEmployee.set(emp.id, [...(changedByEmployee.get(emp.id) ?? []), date]);

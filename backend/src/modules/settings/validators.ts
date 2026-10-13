@@ -71,3 +71,10 @@ export const updateDeviceAlertSettingsSchema = z.object({
   alertSuperAdmins: z.boolean().optional(),
   recoverySettleSeconds: z.number().int().min(0).max(900).optional(),
 });
+
+// Phase 3 commit 1 — Attendance → Regularization (docs/plans/PHASE_3.md).
+export const updateRegularizationSettingsSchema = z.object({
+  backdateCycles: z.number().int().min(0).max(3).optional(),
+  bulkMaxRangeDays: z.number().int().min(1).max(92).optional(),
+  bulkMaxEmployeeDays: z.number().int().min(1).max(5000).optional(),
+});

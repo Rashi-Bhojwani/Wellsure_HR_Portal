@@ -121,11 +121,51 @@ export const monthQuerySchema = z.object({ month: z.string().regex(/^\d{4}-(0[1-
 export const dateParamsSchema = z.object({ date: z.iso.date() });
 export const employeeDateParamsSchema = z.object({ employeeId: z.string().min(1), date: z.iso.date() });
 export const whoIsInQuerySchema = z.object({ locationId: z.string().min(1).optional(), departmentId: z.string().min(1).optional() });
-export const raiseRegularizationSchema = z.object({
-  date: z.iso.date(),
-  missing: z.enum(["IN", "OUT"]),
-  time: time,
-  reason: z.string().trim().min(3, "Say what happened (e.g. forgot to punch out, left at 7 pm)").max(500),
+const reasonCode = z.enum(["FORGOT_TO_PUNCH", "DEVICE_DOWN", "ON_DUTY_ELSEWHERE", "OTHER"]);
+const targetStatus = z.enum(["P", "A", "HD_FIRST", "HD_SECOND"]);
+const noteText = z.string().trim().max(500);
+/** A correction is a status, or one or two times (never both, never neither). */
+const correctionFields = {
+  inTime: time.optional().nullable(),
+  outTime: time.optional().nullable(),
+  status: targetStatus.optional().nullable(),
+};
+const oneCorrection = (v: { inTime?: string | null; outTime?: string | null; status?: string | null }) => (v.status ? 1 : 0) + (v.inTime || v.outTime ? 1 : 0) === 1;
+const correctionMessage = "Give corrected times (in, out or both), or a status, not both and not neither.";
+export const raiseRegularizationSchema = z
+  .object({ date: z.iso.date(), reasonCode, note: noteText.optional().nullable(), ...correctionFields })
+  .refine(oneCorrection, { message: correctionMessage })
+  .refine((v) => v.reasonCode !== "OTHER" || (v.note ?? "").length >= 3, { message: "Say what happened.", path: ["note"] });
+export const eligibilityQuerySchema = z.object({ date: z.iso.date() });
+export const regularizationQueueQuerySchema = z.object({
+  status: z.enum(["PENDING", "APPROVED", "REJECTED", "CANCELLED"]).optional(),
+  reasonCode: reasonCode.optional(),
+  from: z.iso.date().optional(),
+  to: z.iso.date().optional(),
+  batchId: z.string().min(1).optional(),
 });
-export const regularizationQueueQuerySchema = z.object({ status: z.enum(["PENDING", "APPROVED", "REJECTED", "CANCELLED"]).optional() });
+
+// Bulk correction by HR (Phase 3 commit 1): a date range, a set of employees (a branch, a department, or a list),
+// one correction, previewed and then confirmed against the exact set that was previewed.
+const bulkSelection = z
+  .object({
+    employeeIds: z.array(z.string().min(1)).min(1).max(1000).optional(),
+    locationId: z.string().min(1).optional(),
+    departmentId: z.string().min(1).optional(),
+  })
+  .refine((s) => (s.employeeIds ? 1 : 0) + (s.locationId || s.departmentId ? 1 : 0) === 1, { message: "Choose employees by a list, or by branch and/or department." });
+const bulkBase = z.object({
+  selection: bulkSelection,
+  from: z.iso.date(),
+  to: z.iso.date(),
+  reasonCode,
+  note: noteText.min(5, "Say why (at least a few words)"),
+  action: z.enum(["RAISE", "RAISE_AND_APPROVE"]),
+  ...correctionFields,
+});
+export const bulkRegularizationPreviewSchema = bulkBase.refine(oneCorrection, { message: correctionMessage }).refine((v) => v.from <= v.to, { message: "The end date is before the start date." });
+export const bulkRegularizationSchema = bulkBase
+  .extend({ fingerprint: z.string().regex(/^[0-9a-f]{64}$/), confirm: z.literal(true) })
+  .refine(oneCorrection, { message: correctionMessage })
+  .refine((v) => v.from <= v.to, { message: "The end date is before the start date." });
 export const regularizationDecisionSchema = z.object({ note: z.string().trim().max(500).optional().nullable() });

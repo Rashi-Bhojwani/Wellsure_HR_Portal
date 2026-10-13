@@ -132,7 +132,7 @@ export function AttendanceInfoView({ employeeId, initialDate }: { employeeId?: s
                       <div style={{ position: "absolute", bottom: 2, right: 4, fontSize: 10, color: token.colorTextTertiary }}>{d?.shiftCode ?? ""}</div>
                       <div style={{ position: "absolute", top: 2, right: 4, fontSize: 10, display: "flex", gap: 2 }}>
                         {d?.missingPunch && <span title="One punch only" style={{ width: 7, height: 7, borderRadius: 7, background: token.colorError, display: "inline-block", marginTop: 3 }} />}
-                        {d?.corrected && <EditOutlined title="Corrected (forgot-to-punch request approved)" />}
+                        {d?.corrected && <EditOutlined title={d.overrideKind === "MANUAL_OVERRIDE" ? "Overridden by HR (not from the device)" : "Corrected: an approved request (not from the device)"} />}
                         {d?.request?.status === "PENDING" && <ClockCircleOutlined title="Request waiting for approval" />}
                         {d?.capture === "MANUAL" && d.source === "MANUAL" && <span title={d.statusOnly ? "Marked by hand, status only" : "Marked by hand"}>{d.statusOnly ? "S" : "M"}</span>}
                       </div>
@@ -147,7 +147,7 @@ export function AttendanceInfoView({ employeeId, initialDate }: { employeeId?: s
                 one punch only
               </Text>
               <Text type="secondary">
-                <EditOutlined /> corrected
+                <EditOutlined /> corrected by hand (a request or an HR override)
               </Text>
               <Text type="secondary">
                 <ClockCircleOutlined /> request waiting

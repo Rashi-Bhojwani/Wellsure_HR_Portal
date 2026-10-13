@@ -11,7 +11,7 @@ import {
 } from "@shared/constants/peopleDocuments";
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as settingsApi from "../../../api/settings";
-import type { DeviceAlertSettings, DeviceHealthThresholds, HelpdeskSettings, LeaveSettings, PeopleDocumentsSettings, SecuritySettings } from "../../../api/settings";
+import type { DeviceAlertSettings, DeviceHealthThresholds, HelpdeskSettings, LeaveSettings, PeopleDocumentsSettings, RegularizationSettings, SecuritySettings } from "../../../api/settings";
 import { LettersSettingsCard } from "../../../components/letters/LettersSettingsCard";
 import { useAuth } from "../../../hooks/useAuth";
 import { EmptyState } from "../../../components/common/EmptyState";
@@ -141,6 +141,57 @@ function DeviceAlertSettingsCard() {
           <Col xs={24} md={16}>
             <Form.Item name="alertEmails" label="Also email these addresses" extra="In addition to everyone who can manage devices (who also get an in-app notification).">
               <Select mode="tags" tokenSeparators={[",", " "]} placeholder="Type an address and press Enter" open={false} />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Button type="primary" htmlType="submit" loading={save.isPending}>
+          Save
+        </Button>
+      </Form>
+    </Card>
+  );
+}
+
+// Phase 3 commit 1 — Attendance → Regularization: how far back a correction may reach and the caps on a
+// bulk correction, so a mistake can't rewrite a quarter.
+function RegularizationSettingsCard() {
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useQuery({ queryKey: ["settings", "regularization"], queryFn: settingsApi.getRegularizationSettings });
+  const [form] = Form.useForm<RegularizationSettings>();
+  useEffect(() => {
+    if (data) form.setFieldsValue(data);
+  }, [data, form]);
+  const save = useMutation({
+    mutationFn: (values: RegularizationSettings) => settingsApi.updateRegularizationSettings(values),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["settings", "regularization"], updated);
+      void message.success("Regularization settings saved.");
+    },
+    onError: (err) => void message.error(errorMessage(err, "Could not save settings.")),
+  });
+  if (isLoading || !data) return <EmptyState message="Loading…" />;
+  return (
+    <Card>
+      <Form form={form} layout="vertical" initialValues={data} onFinish={(values) => save.mutate(values)} requiredMark={false}>
+        <Title level={5}>Regularization</Title>
+        <Text type="secondary">
+          An employee, or HR in bulk, can ask for a correction to a past day: missing punches, wrong times or a wrong status. A correction never reaches into a finalised period. The caps below stop a mistake from rewriting
+          a quarter: a bulk correction must fit inside both.
+        </Text>
+        <Row gutter={16} style={{ marginTop: 12 }}>
+          <Col xs={24} md={8}>
+            <Form.Item name="backdateCycles" label="Reach back (attendance cycles before the current one)" extra="1 = this cycle and the one before; 0 = this cycle only." rules={[{ required: true }]}>
+              <InputNumber min={0} max={3} precision={0} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={8}>
+            <Form.Item name="bulkMaxRangeDays" label="Bulk correction: longest date range (days)" rules={[{ required: true }]}>
+              <InputNumber min={1} max={92} precision={0} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={8}>
+            <Form.Item name="bulkMaxEmployeeDays" label="Bulk correction: most employee-days at once" rules={[{ required: true }]}>
+              <InputNumber min={1} max={5000} precision={0} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
         </Row>
@@ -452,6 +503,7 @@ export function SystemSettingsPage() {
       </Title>
       <DeviceHealthSettingsCard />
       <DeviceAlertSettingsCard />
+      <RegularizationSettingsCard />
     </Space>
   );
 }

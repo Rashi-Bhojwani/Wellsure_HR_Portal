@@ -21,6 +21,8 @@ export interface MusterCell {
   statusOnly: boolean;
   missingPunch: boolean;
   corrected: boolean;
+  /** REGULARIZATION | MANUAL_OVERRIDE when corrected by hand. */
+  overrideKind?: string | null;
   workedOnOffDay: boolean;
   provisional: boolean;
   locked: boolean;

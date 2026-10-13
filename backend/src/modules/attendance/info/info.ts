@@ -11,6 +11,7 @@ import { employeesInRange } from "../jobs";
 import { entryInput, entryKey, latestEntries } from "../manual/entries";
 import { viewableEmployeeIds, type Viewer } from "../manual/scope";
 import { requestEligibility } from "../regularization/service";
+import { describeCorrection, REASON_LABEL, type Correction } from "../regularization/correction";
 
 // Attendance Info and Who Is In? (Phase 2 P2-E, docs/plans/PHASE_2.md §8 and
 // "P2-E build design"). The employee's own view, the admin's view of anyone
@@ -73,7 +74,8 @@ export async function monthView(employeeId: string, month: string) {
       source: r.source,
       capture: r.capture,
       statusOnly: r.source === "MANUAL" && entry?.kind === "STATUS_ONLY",
-      corrected: r.overrideKind === "MISSING_PUNCH_CORRECTION",
+      corrected: r.overrideKind !== null,
+      overrideKind: r.overrideKind,
       missingPunch: r.exceptionFlags.includes("MISSING_PUNCH"),
       flags: r.exceptionFlags,
       lopDays: Number(r.lopDays),
@@ -85,7 +87,7 @@ export async function monthView(employeeId: string, month: string) {
       provisional: r.provisional,
       locked: r.isLocked,
       workedOnOffDay: r.workedOnOffDay,
-      request: req ? { id: req.id, status: req.status, missing: req.missing, time: req.time } : null,
+      request: req ? { id: req.id, status: req.status, reasonLabel: REASON_LABEL[req.reasonCode] ?? req.reasonCode, correctionText: describeCorrection({ inTime: req.inTime, outTime: req.outTime, status: req.targetStatus as Correction["status"] }) } : null,
     };
   });
   const worked = rows.filter((r) => r.totalMinutes !== null && !r.provisional);
@@ -127,7 +129,7 @@ export async function dayDetail(employeeId: string, date: string, opts: { self: 
   const base = dayStartMs(date);
   const windowFrom = new Date(base + (tl ? tl.windowStart : 0) * 1000);
   const windowTo = new Date(base + (tl ? tl.windowEnd : 86_400) * 1000);
-  const computed = (row.computedFrom ?? {}) as { punchIds?: string[]; manualEntryId?: string | null; correctionId?: string | null; collapsedPunches?: number };
+  const computed = (row.computedFrom ?? {}) as { punchIds?: string[]; manualEntryId?: string | null; overrideId?: string | null; collapsedPunches?: number };
   const used = computed.punchIds ?? [];
 
   const [punches, entries, requests, mapped] = await Promise.all([
@@ -141,7 +143,8 @@ export async function dayDetail(employeeId: string, date: string, opts: { self: 
     deviceMappingPeriods([employeeId], day(date), day(date)),
   ]);
   const entry = entries.get(entryKey(employeeId, date));
-  const names = await userNames([entry?.enteredByUserId, ...requests.map((r) => r.decidedByUserId)]);
+  const overrideRow = row.overrideKind && row.overrideRef ? await prisma.attendanceOverride.findUnique({ where: { id: row.overrideRef } }) : null;
+  const names = await userNames([entry?.enteredByUserId, overrideRow?.createdByUserId, ...requests.map((r) => r.decidedByUserId)]);
   return {
     date,
     employed: true as const,
@@ -202,18 +205,26 @@ export async function dayDetail(employeeId: string, date: string, opts: { self: 
                     ? "DUPLICATE"
                     : "NOT_USED",
     })),
-    correction:
-      row.overrideKind === "MISSING_PUNCH_CORRECTION"
-        ? (() => {
-            const r = requests.find((x) => x.id === row.overrideRef);
-            return r ? { id: r.id, missing: r.missing, time: r.time, decidedBy: names.get(r.decidedByUserId ?? "") ?? null, decidedAt: r.decidedAt?.toISOString() ?? null } : null;
-          })()
-        : null,
+    // The correction this day was computed with (a regularization, or a manual override), and who and why.
+    override: overrideRow
+      ? {
+          id: overrideRow.id,
+          origin: overrideRow.origin,
+          kind: overrideRow.kind,
+          text: describeCorrection({ inTime: overrideRow.inTime, outTime: overrideRow.outTime, status: overrideRow.status as Correction["status"] }),
+          reasonLabel: overrideRow.reasonCode ? (REASON_LABEL[overrideRow.reasonCode] ?? overrideRow.reasonCode) : null,
+          reason: overrideRow.reason,
+          by: names.get(overrideRow.createdByUserId) ?? null,
+          at: overrideRow.createdAt.toISOString(),
+          requestId: overrideRow.requestId,
+        }
+      : null,
     requests: requests.map((r) => ({
       id: r.id,
       status: r.status,
-      missing: r.missing,
-      time: r.time,
+      reasonCode: r.reasonCode,
+      reasonLabel: REASON_LABEL[r.reasonCode] ?? r.reasonCode,
+      correctionText: describeCorrection({ inTime: r.inTime, outTime: r.outTime, status: r.targetStatus as Correction["status"] }),
       reason: r.reason,
       decisionNote: r.decisionNote,
       decidedBy: names.get(r.decidedByUserId ?? "") ?? null,

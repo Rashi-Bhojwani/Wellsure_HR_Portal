@@ -7,7 +7,7 @@ import * as infoApi from "../../api/attendanceInfo";
 import type { DayDetail } from "../../api/attendanceInfo";
 import { apiErrorMessage } from "../../lib/apiError";
 import { hoursLabel } from "../../pages/admin/attendance/settings/format";
-import { MissingPunchModal } from "./MissingPunchModal";
+import { CorrectionModal } from "./CorrectionModal";
 
 const { Text } = Typography;
 
@@ -22,7 +22,7 @@ const FLAG_TEXT: Record<string, string> = {
   NO_SHIFT: "No shift was assigned for this day.",
   CLOCK_FLAGGED: "A punch with an implausible time is waiting for HR's decision.",
 };
-const SOURCE_TEXT: Record<string, string> = { DEVICE: "Biometric device", MANUAL: "Marked by hand", LEAVE: "Approved leave", HOLIDAY: "Holiday", WEEK_OFF: "Week-off" };
+const SOURCE_TEXT: Record<string, string> = { DEVICE: "Biometric device", MANUAL: "Marked by hand", LEAVE: "Approved leave", HOLIDAY: "Holiday", WEEK_OFF: "Week-off", OVERRIDE: "Corrected by hand (not from the device)" };
 const ROLE_TEXT: Record<string, string> = {
   FIRST_IN: "first in",
   LAST_OUT: "last out",
@@ -35,7 +35,7 @@ const ROLE_TEXT: Record<string, string> = {
 };
 const STATUS_COLOR: Record<string, string> = { PENDING: "gold", APPROVED: "green", REJECTED: "red", CANCELLED: "default" };
 
-/** One day of Attendance Info (Phase 2 P2-E): times, shift, status, raw punches, and the forgot-to-punch request. */
+/** One day of Attendance Info (Phase 2 P2-E): times, shift, status, raw punches, and the correction request (Phase 3). */
 export function DayPanel({ employeeId, date, self, onClose }: { employeeId?: string; date: string; self: boolean; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [asking, setAsking] = useState(false);
@@ -55,7 +55,7 @@ export function DayPanel({ employeeId, date, self, onClose }: { employeeId?: str
   return (
     <Card size="small" title={title} extra={<Button type="text" size="small" icon={<CloseOutlined />} onClick={onClose} aria-label="Hide day" />}>
       {isLoading || !data ? <Spin /> : !data.employed ? <Empty description="Not employed on this day." /> : <DayBody data={data} self={self} onAsk={() => setAsking(true)} onCancel={(id) => cancel.mutate(id)} />}
-      {data?.canRequest?.ok && <MissingPunchModal date={date} punchTime={data.canRequest.punchTime} open={asking} onClose={() => setAsking(false)} />}
+      {data?.canRequest?.ok && <CorrectionModal date={date} day={data.canRequest.day} open={asking} onClose={() => setAsking(false)} />}
     </Card>
   );
 }
@@ -69,13 +69,13 @@ function DayBody({ data, self, onAsk, onCancel }: { data: DayDetail; self: boole
       {exceptions.map((f) => (
         <Alert key={f} type="warning" showIcon title={FLAG_TEXT[f] ?? f} description={f === "MISSING_PUNCH" && data.lopDays ? `${data.lopDays} day(s) of LOP until it's corrected.` : undefined} />
       ))}
-      {data.correction && (
+      {data.override && (
         <Alert
           type="success"
           showIcon
           icon={<EditOutlined />}
-          title={`Corrected: ${data.correction.missing} ${data.correction.time} was added`}
-          description={`A forgot-to-punch request approved${data.correction.decidedBy ? ` by ${data.correction.decidedBy}` : ""}${data.correction.decidedAt ? ` on ${dayjs(data.correction.decidedAt).format("D MMM, HH:mm")}` : ""}. The device's own punches are unchanged.`}
+          title={`${data.override.origin === "MANUAL_OVERRIDE" ? "Overridden by HR" : "Corrected"}: ${data.override.text}`}
+          description={`${data.override.reasonLabel ? `${data.override.reasonLabel}. ` : ""}${data.override.reason ? `"${data.override.reason}" ` : ""}${data.override.origin === "MANUAL_OVERRIDE" ? "Set" : "Approved"}${data.override.by ? ` by ${data.override.by}` : ""} on ${dayjs(data.override.at).format("D MMM, HH:mm")}. The punches below are exactly what the device recorded; they were not changed.`}
         />
       )}
 
@@ -83,10 +83,11 @@ function DayBody({ data, self, onAsk, onCancel }: { data: DayDetail; self: boole
         <Alert
           type="info"
           showIcon
-          title={`Only one punch recorded (${data.canRequest.punchTime}). Forgot to punch out?`}
+          title={data.canRequest.day.punchCount === 0 ? "No punches were recorded for this day." : "Something wrong with this day?"}
+          description="Missing punches, wrong times, or the wrong status can be corrected: your manager or HR approves it."
           action={
             <Button size="small" type="primary" onClick={onAsk}>
-              Tell us the missing time
+              Ask for a correction
             </Button>
           }
         />
@@ -95,8 +96,8 @@ function DayBody({ data, self, onAsk, onCancel }: { data: DayDetail; self: boole
         <Alert
           type="info"
           showIcon
-          title={`You asked for ${pending.missing} ${pending.time}: waiting for approval`}
-          description={`"${pending.reason}"`}
+          title={`You asked for a correction (${pending.reasonLabel}): ${pending.correctionText}. Waiting for approval`}
+          description={pending.reason ? `"${pending.reason}"` : undefined}
           action={
             self ? (
               <Button size="small" onClick={() => onCancel(pending.id)}>
@@ -226,12 +227,12 @@ function DayBody({ data, self, onAsk, onCancel }: { data: DayDetail; self: boole
                 <Space size={6} wrap>
                   <Tag color={STATUS_COLOR[r.status]}>{r.status.toLowerCase()}</Tag>
                   <Text>
-                    {r.missing} {r.time}
+                    {r.reasonLabel}: {r.correctionText}
                   </Text>
                   <Text type="secondary">· {dayjs(r.createdAt).format("D MMM, HH:mm")}</Text>
                 </Space>
                 <div>
-                  <Text type="secondary">"{r.reason}"</Text>
+                  {r.reason && <Text type="secondary">"{r.reason}"</Text>}
                   {r.decidedBy && (
                     <Text type="secondary">
                       {" "}
@@ -245,7 +246,7 @@ function DayBody({ data, self, onAsk, onCancel }: { data: DayDetail; self: boole
           />
         </div>
       )}
-      {self && data.canRequest && !data.canRequest.ok && data.flags?.includes("MISSING_PUNCH") && !pending && <Text type="secondary">{data.canRequest.reason}</Text>}
+      {self && data.canRequest && !data.canRequest.ok && !pending && !data.provisional && <Text type="secondary">A correction can't be asked for on this day: {data.canRequest.reason}</Text>}
     </Space>
   );
 }

@@ -7,7 +7,7 @@ import type { DayInput, DayResult, ExceptionFlag, HalfLeave, PolicyDef } from ".
 //   2. holiday → H          (punches or a "worked" entry mark worked_on_off_day)
 //   3. week-off → O         (likewise)
 //   4. approved leave → the leave code; half-day leave combines with the other half
-//   5. manual override — Phase 3
+//   5. an override (an approved regularization or a manual override): STATUS as set; TIMES replace the punches; ADD_TIME joins one
 //   6. manual capture (no device mapping on D): TIMED times go through step 7
 //      exactly like punches; STATUS_ONLY is taken as entered; nothing → NM
 //   7. compute from punches
@@ -102,6 +102,8 @@ export function evaluateDay(input: DayInput): DayResult | null {
   const base = dayStartMs(input.date);
   const provisional = input.now < base + (tl ? tl.windowEnd * 1000 : DAY_MS);
   const policy = input.policy;
+  // Holiday, week-off and a full day of approved leave come first: an override recorded for such a day is not applied.
+  const override = input.holiday !== null || input.weekOff || (input.leave.first && input.leave.second) ? null : input.override;
   const toMs = (s: number) => base + s * 1000;
 
   // The day's points, as seconds on D's timeline: collapsed device punches, or a TIMED manual entry's times.
@@ -115,7 +117,16 @@ export function evaluateDay(input: DayInput): DayResult | null {
     const t = hhmmToSeconds(hhmm);
     return crosses && tl && t < tl.windowStart ? t + 86_400 : t;
   };
-  if (input.capture === "DEVICE") {
+  // A TIMES override replaces whatever the device or a manual entry would give with its in and out.
+  const timesOverride = override?.kind === "TIMES" ? override : null;
+  if (timesOverride) {
+    const inS = read(timesOverride.inTime);
+    let outS = read(timesOverride.outTime);
+    if (outS <= inS) outS += 86_400;
+    points = [inS, outS];
+    // The device punches stay on record; they are simply not what this day was computed from.
+    collapsed = 0;
+  } else if (input.capture === "DEVICE") {
     const { kept, keptIdx } = collapseNearDuplicates(
       input.punches.map((p) => p.at),
       policy?.nearDuplicateSeconds ?? DEFAULT_NEAR_DUPLICATE_SECONDS,
@@ -133,15 +144,17 @@ export function evaluateDay(input: DayInput): DayResult | null {
     }
   }
   const realPoints = points.length;
-  // An approved forgot-to-punch time joins the day's points (device days only).
-  const correctionId = input.capture === "DEVICE" && input.correction ? input.correction.id : null;
-  if (correctionId) points = [...points, read(input.correction!.time)].sort((a, b) => a - b);
+  // An added time (a one-time regularization) joins the device day's points.
+  const addTime = input.capture === "DEVICE" && override?.kind === "ADD_TIME" ? override : null;
+  if (addTime) points = [...points, read(addTime.time)].sort((a, b) => a - b);
+  // Whether any override shaped this day: a STATUS override is applied below, after the off-day and leave steps.
+  const appliedOverride = timesOverride ?? addTime ?? (override?.kind === "STATUS" ? override : null);
 
   const result: DayResult = {
     status: "",
     firstHalfStatus: null,
     secondHalfStatus: null,
-    source: input.capture,
+    source: appliedOverride ? "OVERRIDE" : input.capture,
     capture: input.capture,
     lopDays: 0,
     flags: [],
@@ -164,7 +177,8 @@ export function evaluateDay(input: DayInput): DayResult | null {
     usedPunchIds,
     collapsedPunches: collapsed,
     manualEntryId: input.manual?.id ?? null,
-    correctionId,
+    overrideId: appliedOverride?.id ?? null,
+    overrideOrigin: appliedOverride?.origin ?? null,
   };
 
   const recordFigures = (f: Figures, opts: { timeFlags: boolean }) => {
@@ -229,9 +243,11 @@ export function evaluateDay(input: DayInput): DayResult | null {
     return result;
   };
 
-  // 6. Manual capture: status-only, or nothing entered (NM — never absent, never an exception, no LOP).
-  if (input.capture === "MANUAL" && input.manual?.kind !== "TIMED") {
-    const m = input.manual;
+  // 5–6. A STATUS override, or manual capture with a status-only entry or nothing entered (NM — never absent, never an
+  // exception, no LOP). A TIMES override is a timed day whatever the capture, so it goes on to step 7.
+  const statusOverride = override?.kind === "STATUS" ? override : null;
+  if (statusOverride || (input.capture === "MANUAL" && input.manual?.kind !== "TIMED" && !timesOverride)) {
+    const m = statusOverride ? { status: statusOverride.status } : input.manual?.kind === "STATUS_ONLY" ? input.manual : null;
     if (!m) {
       finish("NM", 0);
       return done();

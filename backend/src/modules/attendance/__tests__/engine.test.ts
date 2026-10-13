@@ -50,7 +50,7 @@ let n = 0;
 const punches = (...times: string[]) => times.map((t) => ({ id: `p${++n}`, at: at(t) }));
 
 function day(over: Partial<DayInput> = {}): DayInput {
-  return { date: D, employed: true, holiday: null, shift: GEN, weekOff: false, leave: { first: null, second: null }, capture: "DEVICE", manual: null, correction: null, punches: [], flaggedExcluded: 0, policy: POLICY, now: LATER, ...over };
+  return { date: D, employed: true, holiday: null, shift: GEN, weekOff: false, leave: { first: null, second: null }, capture: "DEVICE", manual: null, override: null, punches: [], flaggedExcluded: 0, policy: POLICY, now: LATER, ...over };
 }
 const ev = (over: Partial<DayInput> = {}) => evaluateDay(day(over))!;
 
@@ -295,22 +295,71 @@ describe("determinism", () => {
   });
 });
 
-describe("an approved forgot-to-punch correction (P2-E)", () => {
-  const strip = ({ usedPunchIds: _u, correctionId: _c, punchCount: _n, ...rest }: ReturnType<typeof ev>) => rest;
+const addTime = (id: string, time: string): DayInput["override"] => ({ kind: "ADD_TIME", id, origin: "REGULARIZATION", time });
+const times = (id: string, inTime: string, outTime: string, origin: "REGULARIZATION" | "MANUAL_OVERRIDE" = "REGULARIZATION"): DayInput["override"] => ({ kind: "TIMES", id, origin, inTime, outTime });
+const setStatus = (id: string, status: "P" | "A" | "HD_FIRST" | "HD_SECOND" | "WORKED", origin: "REGULARIZATION" | "MANUAL_OVERRIDE" = "REGULARIZATION"): DayInput["override"] => ({ kind: "STATUS", id, origin, status });
+
+describe("an approved forgot-to-punch correction: one added time (P2-E, now an ADD_TIME override)", () => {
+  const strip = ({ usedPunchIds: _u, overrideId: _c, overrideOrigin: _o, source: _s, punchCount: _n, ...rest }: ReturnType<typeof ev>) => rest;
   it("a lone 10:02 punch plus a corrected OUT of 19:00 is worked out exactly like two punches, and marked", () => {
-    const corrected = ev({ punches: punches("10:02"), correction: { id: "r1", time: "19:00" } });
+    const corrected = ev({ punches: punches("10:02"), override: addTime("r1", "19:00") });
     const twoPunches = ev({ punches: punches("10:02", "19:00") });
-    expect(corrected).toMatchObject({ status: "P", flags: ["LATE_IN"], correctionId: "r1", punchCount: 1 });
+    expect(corrected).toMatchObject({ status: "P", flags: ["LATE_IN"], overrideId: "r1", overrideOrigin: "REGULARIZATION", source: "OVERRIDE", capture: "DEVICE", punchCount: 1 });
     expect(strip(corrected)).toEqual(strip(twoPunches));
   });
   it("a forgotten IN works the same way (a lone evening punch, corrected IN 10:00)", () => {
-    expect(ev({ punches: punches("19:00"), correction: { id: "r2", time: "10:00" } })).toMatchObject({ status: "P", flags: [], firstIn: at("10:00"), lastOut: at("19:00") });
+    expect(ev({ punches: punches("19:00"), override: addTime("r2", "10:00") })).toMatchObject({ status: "P", flags: [], firstIn: at("10:00"), lastOut: at("19:00") });
   });
   it("on a night shift, a corrected 06:00 OUT is the next morning", () => {
-    const r = ev({ shift: NIGHT, policy: { ...POLICY, fullDayMinMinutes: 420, halfDayMinMinutes: 210 }, punches: punches("22:00"), correction: { id: "r3", time: "06:00" } });
-    expect(r).toMatchObject({ status: "P", lastOut: at("06:00", "2026-10-06"), correctionId: "r3" });
+    const r = ev({ shift: NIGHT, policy: { ...POLICY, fullDayMinMinutes: 420, halfDayMinMinutes: 210 }, punches: punches("22:00"), override: addTime("r3", "06:00") });
+    expect(r).toMatchObject({ status: "P", lastOut: at("06:00", "2026-10-06"), overrideId: "r3" });
   });
   it("is ignored on a manual-capture day (the marker fixes those)", () => {
-    expect(ev({ capture: "MANUAL", correction: { id: "r4", time: "19:00" } })).toMatchObject({ status: "NM", correctionId: null });
+    expect(ev({ capture: "MANUAL", override: addTime("r4", "19:00") })).toMatchObject({ status: "NM", overrideId: null, source: "MANUAL" });
+  });
+});
+
+describe("regularization and override kinds (Phase 3)", () => {
+  it("TIMES on a day with no punches at all (the device was down) is worked out like a timed day, source OVERRIDE", () => {
+    const r = ev({ override: times("o1", "10:00", "19:00") });
+    expect(r).toMatchObject({ status: "P", flags: [], lopDays: 0, firstIn: at("10:00"), lastOut: at("19:00"), source: "OVERRIDE", capture: "DEVICE", overrideId: "o1", overrideOrigin: "REGULARIZATION", punchCount: 2 });
+    expect(r.actualMinutes).toBe(ev({ punches: punches("10:00", "19:00") }).actualMinutes);
+  });
+  it("TIMES replace wrong device times: a 10:02 punch the device stamped late becomes the real 10:00 and the day is no longer late", () => {
+    expect(ev({ punches: punches("10:02", "19:00") })).toMatchObject({ status: "P", flags: ["LATE_IN"] });
+    const r = ev({ punches: punches("10:02", "19:00"), override: times("o2", "10:00", "19:00") });
+    expect(r).toMatchObject({ status: "P", flags: [], firstIn: at("10:00"), usedPunchIds: [], source: "OVERRIDE" });
+  });
+  it("TIMES still go through the punch rules: too short a day is still half or absent, and an out before the in is the next morning", () => {
+    expect(ev({ override: times("o3", "10:00", "12:00") })).toMatchObject({ status: "A", flags: expect.arrayContaining(["HALF_DAY_MIN_NOT_MET"]), lopDays: 1 });
+    expect(ev({ shift: NIGHT, policy: { ...POLICY, fullDayMinMinutes: 420, halfDayMinMinutes: 210 }, override: times("o4", "22:00", "06:00") })).toMatchObject({ status: "P", lastOut: at("06:00", "2026-10-06") });
+  });
+  it("a TIMES override also works on a manual-capture day (a manual override, commit 2), ignoring the marker's entry", () => {
+    const r = ev({ capture: "MANUAL", manual: { kind: "TIMED", id: "m", inTime: "11:30", outTime: "19:00" }, override: times("o5", "10:00", "19:00", "MANUAL_OVERRIDE") });
+    expect(r).toMatchObject({ status: "P", flags: [], firstIn: at("10:00"), source: "OVERRIDE", overrideOrigin: "MANUAL_OVERRIDE" });
+  });
+  it("STATUS sets the day: present has no figures and no lateness; absent loses the day as a status-only entry does", () => {
+    const present = ev({ punches: punches("11:30"), override: setStatus("o6", "P") });
+    expect(present).toMatchObject({ status: "P", lopDays: 0, flags: [], lateInMinutes: null, firstIn: null, source: "OVERRIDE", overrideId: "o6" });
+    expect(ev({ override: setStatus("o7", "A") })).toMatchObject({ status: "A", lopDays: 1, source: "OVERRIDE" });
+    expect(ev({ override: setStatus("o8", "HD_FIRST") })).toMatchObject({ status: "P:A", lopDays: 0.5, firstHalfStatus: "P", secondHalfStatus: "A" });
+  });
+  it("STATUS beats a manual entry on a manual-capture day", () => {
+    expect(ev({ capture: "MANUAL", manual: { kind: "STATUS_ONLY", id: "m", status: "A" }, override: setStatus("o9", "P", "MANUAL_OVERRIDE") })).toMatchObject({ status: "P", source: "OVERRIDE" });
+  });
+  it("a holiday, a week-off and a full-day leave come first: the override is recorded but not applied", () => {
+    expect(ev({ holiday: "Dussehra", override: setStatus("o10", "P") })).toMatchObject({ status: "H", source: "HOLIDAY", overrideId: null });
+    expect(ev({ weekOff: true, override: times("o11", "10:00", "19:00") })).toMatchObject({ status: "O", source: "WEEK_OFF", overrideId: null, workedOnOffDay: false });
+    expect(ev({ leave: { first: PL, second: PL }, override: setStatus("o12", "P") })).toMatchObject({ status: "PL", source: "LEAVE", overrideId: null });
+  });
+  it("on a half-day leave the override applies to the working half only", () => {
+    expect(ev({ leave: { first: PL, second: null }, override: setStatus("o13", "P") })).toMatchObject({ status: "PL:P", source: "OVERRIDE" });
+  });
+  it("an override on a day nobody was employed produces no record", () => {
+    expect(evaluateDay(day({ employed: false, override: setStatus("o14", "P") }))).toBeNull();
+  });
+  it("is deterministic: the same inputs give the same day", () => {
+    const input = day({ punches: punches("10:45"), override: times("o15", "10:00", "19:00") });
+    expect(evaluateDay(input)).toEqual(evaluateDay(structuredClone(input)));
   });
 });

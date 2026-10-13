@@ -1,3 +1,4 @@
+import { describeCorrection, REASON_LABEL, type Correction } from "../attendance/regularization/correction";
 import { formatTicketNumber, HELPDESK_STATUS_LABELS, helpdeskEmployeePath } from "@shared/constants/helpdesk";
 import type { RequestHubItem, RequestHubState, RequestHubType } from "@shared/types/inbox";
 import type { HelpdeskTicketStatus } from "@prisma/client";
@@ -107,7 +108,7 @@ const helpdeskSource: RequestHubSource = {
   },
 };
 
-// My forgot-to-punch requests (P2-E).
+// My attendance corrections (P2-E's forgot-to-punch request, generalised in Phase 3).
 const regularizationSource: RequestHubSource = {
   type: "REGULARIZATION",
   async list(employeeId, state, limit) {
@@ -119,8 +120,8 @@ const regularizationSource: RequestHubSource = {
     return rows.map((r) => ({
       type: "REGULARIZATION" as const,
       id: r.id,
-      title: `Forgot to punch ${r.missing === "OUT" ? "out" : "in"}`,
-      detail: `${dateOnly(r.date)} · ${r.missing} ${r.time}`,
+      title: `Attendance correction: ${REASON_LABEL[r.reasonCode] ?? r.reasonCode}`,
+      detail: `${dateOnly(r.date)} · ${describeCorrection({ inTime: r.inTime, outTime: r.outTime, status: r.targetStatus as Correction["status"] })}`,
       status: r.status,
       statusLabel: r.status === "PENDING" ? "Waiting for approval" : titleCase(r.status),
       state: (r.status === "PENDING" ? "OPEN" : "CLOSED") as RequestHubState,

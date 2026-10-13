@@ -110,3 +110,16 @@ export async function getDeviceAlertSettings(): Promise<DeviceAlertSettings> {
 export async function updateDeviceAlertSettings(input: Partial<DeviceAlertSettings>): Promise<DeviceAlertSettings> {
   return (await apiClient.put<DeviceAlertSettings>("/api/settings/device-alerts", input)).data;
 }
+
+// Phase 3 commit 1 — Attendance → Regularization: how far back a correction reaches and the bulk caps.
+export interface RegularizationSettings {
+  backdateCycles: number;
+  bulkMaxRangeDays: number;
+  bulkMaxEmployeeDays: number;
+}
+export async function getRegularizationSettings(): Promise<RegularizationSettings> {
+  return (await apiClient.get<RegularizationSettings>("/api/settings/regularization")).data;
+}
+export async function updateRegularizationSettings(input: Partial<RegularizationSettings>): Promise<RegularizationSettings> {
+  return (await apiClient.put<RegularizationSettings>("/api/settings/regularization", input)).data;
+}

@@ -251,6 +251,24 @@ describe("Attendance Settings (P2-A)", () => {
       expect(await audit("attendance.assignment.scheduled_change_cancelled", p.emp.employeeId)).not.toBeNull();
     });
 
+    it("nobody changes their own shift, week-off pattern or policy: single, bulk and cancelling a scheduled change are all refused for one's own record", async () => {
+      const own = p.hrAdmin.employeeId;
+      const single = await api(tok.hrAdmin).post(`/assignments/${own}`, { policyId: created.policies[0], effectiveFrom: inDays(20), changeReason: "my own" });
+      expect(single.status).toBe(403);
+      expect(single.body.error.code).toBe("OWN_ATTENDANCE");
+      const bulk = await api(tok.hrAdmin).post("/assignments/bulk", { employeeIds: [p.emp.employeeId, own], policyId: created.policies[0], effectiveFrom: inDays(21) });
+      expect(bulk.status).toBe(403);
+      expect(bulk.body.error.code).toBe("OWN_ATTENDANCE");
+      expect((await api(tok.hrAdmin).post(`/assignments/${own}/some-row/cancel`)).status).toBe(403);
+      // all or none: the other person in the refused bulk change was not changed either
+      const empHistory = (await api(tok.hrAdmin).get(`/assignments/${p.emp.employeeId}`)).body.history;
+      expect(empHistory.some((h: { effectiveFrom: string }) => h.effectiveFrom === inDays(21))).toBe(false);
+      // someone else can change theirs: another administrator acts for them
+      expect((await api(tok.hrAdmin).post(`/assignments/${p.emp.employeeId}`, { policyId: created.policies[0], effectiveFrom: inDays(22) })).status).toBe(200);
+      const history = (await api(tok.hrAdmin).get(`/assignments/${p.emp.employeeId}`)).body.history;
+      await api(tok.hrAdmin).post(`/assignments/${p.emp.employeeId}/${history[0].id}/cancel`);
+    });
+
     it("history is never rewritten: a change before the latest period is refused", async () => {
       const res = await api(tok.hrAdmin).post(`/assignments/${p.emp.employeeId}`, { policyId: created.policies[0], effectiveFrom: "2023-06-01" });
       expect(res.status).toBe(400);

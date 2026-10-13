@@ -71,6 +71,8 @@ const HR_ADMIN_PERMS: string[] = [
   "user.security.manage",
   "audit.view",
   "settings.manage",
+  // Phase 3 commit 1 — bulk attendance corrections (HR Admin, not HR Executive).
+  "attendance.regularization.bulk",
   "leave.policy.manage",
   "leave.recalculate",
   "leave.yearend.manage",

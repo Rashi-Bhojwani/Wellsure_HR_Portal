@@ -13,7 +13,7 @@ committed).
 | 1 | Auth, RBAC, org, employees | Done — data layer, authentication, org masters, employee management, import center, exports, audit log viewer and system settings all built and tested. Users & Roles admin screen deliberately deferred (built in Phase 5 commit E1 as Roles & Permissions). **Correction (2026-09-30): role assignment does not exist anywhere in the product** — Add Employee always assigns plain `EMPLOYEE` and nothing else assigns roles; an earlier version of this row claimed otherwise. Both are Phase 5 commit E1 ([`docs/plans/PHASE_5.md`](plans/PHASE_5.md)). |
 | 1.5 | AWS staging environment | Not started — **go-live checklist in [`DEPLOYMENT.md`](DEPLOYMENT.md): item 1, restrict `/iclock` to the office address, must be ticked before any ADMS push device is created in production** |
 | 2 | Biometric ingestion + attendance engine + real-time | In progress — plan approved ([`docs/plans/PHASE_2.md`](plans/PHASE_2.md)); P2-A (configuration), P2-B (ingestion), P2-C (rules engine), P2-D (manual entry and the muster) and P2-E (Attendance Info, Who Is In, the forgot-to-punch request) done, plus the fail-safe thresholds and the finalisation gate; P2-F done: F1 (the sync agent with our read-only device driver, and its server side), a follow-up (HR is told when punches are set aside) and F2 (the Windows service, release zip and INSTALL.md, proven on a Windows CI runner); P2-G done: G1 (the simulator's correctness: scenarios with expected outcomes, the month replay and its diff), G2a (the three routes, the `simulate` command, route replays) and G2b (the automated punch-to-screen latency test); P2-H done (device and agent health: incidents, alerts, recovery notices); P2-I done (the four gates recorded in [`PHASE_2_ACCEPTANCE.md`](plans/PHASE_2_ACCEPTANCE.md), an independent review with five fixes) and P2-J (the review follow-ups you approved) — **Phase 2 built and approved pending CI (green on 50ef7e8); awaiting your hands-on testing; close-out below** |
-| 3 | Attendance administration | Not started |
+| 3 | Attendance administration | In progress — plan approved with three changes ([`docs/plans/PHASE_3.md`](plans/PHASE_3.md)); **commit 1 (regularization, complete, plus the assignment self-guard) built, awaiting your review**; commits 2 (override, roster, swipes), 3 (finalisation, exceptions) and 4 (reports, close-out) not started |
 | 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
 | 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | ✅ Done (2026-10-03) — commits A, B, C, D, D2, E1, E1.1, E2, E3, F and G (mobile bottom bar + PWA), plus interim commits. Full review — every screen and URL, every permission, what's stubbed, open questions, risks for Phase 6 — in [`docs/plans/PHASE_5_REVIEW.md`](plans/PHASE_5_REVIEW.md). Plan and as-built notes per commit in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
 | 5.5 | AWS production environment and go-live hardening | Not started |
@@ -4551,6 +4551,52 @@ shifts, the device's retention).
   (needs `trust proxy` behind the load balancer); Deactivate on a device or agent has no confirmation; a device that died outside working
   hours reads "Online" until the next working window; the import path (greytHR migration) does not re-attach earlier punches the way Add
   Employee now does.
+
+### Phase 3, commit 1 — regularization, complete (2026-10-13)
+
+Plan: [`docs/plans/PHASE_3.md`](plans/PHASE_3.md) (the section "Commit 1 — as built" lists every difference from the plan).
+
+**What exists now**
+- **Any correctable day can be corrected, not just one-punch days.** An employee (or HR on their behalf in bulk) picks a reason code
+  (forgot to punch / device down / on duty elsewhere / other), writes a note, and gives either corrected times (both for a day with no
+  punches; one time on a day with punches; both to replace the device's) or a status (present, absent, first/second half). The
+  employee's day panel in Attendance Info has the dialog; it asks the server whether the day is eligible and says why not in words.
+- **Approval:** the employee's manager if they hold `attendance.regularization.approve` (their team only), or HR. Nobody decides their own
+  request. A pending request still blocks finalising its period. Approving writes an `attendance_overrides` row and recomputes the
+  day; the raw punches are never changed, and the day reads "Corrected by hand (not from the device)" with who, why and which request.
+- **Bulk correction (HR Admin, Super Admin):** Regularizations → "Correct in bulk…". Pick dates and people (a branch, a department, or a
+  list), reason code, note and the correction; **Preview** shows each employee-day that would change (from → to) and each that can't
+  and why; **Confirm** (reason + tick) raises the requests, or raises and approves them in one action. One audit row per
+  employee-day in the same transaction; a `regularization_batches` row groups them; confirm is refused if the previewed set changed.
+  Caps, all editable in System Settings → Attendance → Regularization: 31 days, 1,000 employee-days, backdating to the previous cycle.
+- **Nobody changes their own shift, week-off or policy** (your change 3): the Attendance Settings assignment change, its bulk form and
+  cancelling a scheduled change all refuse your own record. The other Super Admin acts for you.
+- The engine gained three override kinds (add a time / replace both times / set a status) at step 5 of the order, with source
+  `OVERRIDE`. Holiday, week-off and full-leave days ignore an override (leave-day-worked is commit 2 plus its small ledger commit).
+
+**Rules I decided myself** (beyond the plan's list; veto any):
+1. A day that already has a correction can't take another request; changing it is Manual Override's job (commit 2).
+2. Manual-capture days are refused with a pointer to the muster; so are holiday, week-off and leave days.
+3. Bulk skips days outside a person's employment silently; days with no computed record are reported as `NO_RECORD`.
+4. "Raise and approve" in bulk needs both the bulk and the approve permission.
+5. The backdate limit counts attendance cycles, not days, and is configurable 0–3 (default 1: current and previous).
+6. `attendance_overrides.request_id` is RESTRICT, so a request that made a correction can't be deleted.
+7. Old approved forgot-to-punch requests were migrated into overrides so they keep their marker.
+
+**Verification:** fresh scratch database from migrations (`wellsure_hr_p3`: 34 migrations + seed; also a legacy-data migration check
+with pre-existing approved requests), `db:drift` clean on migrations alone, full backend suite 907 passing (107 files; new:
+`regularization.test.ts` 10, `regularizationBulk.test.ts` 8, engine override kinds, assignment self-guard, manager-reach cases
+for the new endpoints), frontend 16, agent 158, lint and typecheck clean, attendance golden test green and the 500-employee replay
+shows **0 differences**. Mutation checks: removing the own-request guard, the bulk own-days exclusion, the fingerprint check and the
+backdate limit each fails a named test. Live walkthrough in two browsers: an employee raised a no-punch correction; HR saw it in
+the queue with reason, note and "the day now / asks for", approved it, and the employee's open page changed to P with the corrected
+marker without a reload; HR's bulk dialog previewed and applied a correction and the employee's page updated live.
+Caveat: on this sandbox the 500-employee replay ran about 2–4× slower than the CI baseline (ingest 19.5 s, recompute 92.5 s against
+8.7 s and 23 s), tripping the "2× baseline" guard locally; the correctness result was 0 differences and CI's runner is the reference
+for timing, so I am reading CI for that figure rather than loosening the guard.
+
+**Still to do in Phase 3:** commit 2 (Manual Override incl. leave-day-worked attendance side, Shift Override, Shift Roster, Employee
+Swipes), then the leave-ledger reversal as its own small commit, commit 3 (Finalisation + Exceptions), commit 4 (reports, close-out).
 
 ## Open questions
 

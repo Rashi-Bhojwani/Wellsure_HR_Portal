@@ -39,7 +39,8 @@ describe("Attendance Info, Who Is In and the forgot-to-punch request (P2-E)", ()
       data: { deviceId, deviceUserId: who.employeeCode, punchedAt: ist(date, time), localTime: `${date} ${time.length === 5 ? `${time}:00` : time}`, businessDate: d(date), status: "1", verifyMode: "255", workcode: "1", reserved: "0", rawLine: "test", route: "IMPORT", batchId, employeeId: who.employeeId },
     });
   const dayRow = (who: Person, date: string) => prisma.dailyAttendance.findUniqueOrThrow({ where: { employeeId_date: { employeeId: who.employeeId, date: d(date) } } });
-  const raise = (t: string, date: string, missing: "IN" | "OUT", time: string, reason = "Forgot to punch out, left with the team") => as(t).post("/me/regularizations", { date, missing, time, reason });
+  const raise = (t: string, date: string, missing: "IN" | "OUT", time: string, note = "Forgot to punch out, left with the team") =>
+    as(t).post("/me/regularizations", { date, reasonCode: "FORGOT_TO_PUNCH", note, ...(missing === "IN" ? { inTime: time } : { outTime: time }) });
 
   beforeAll(async () => {
     setBusinessTodayForTests(d(TODAY));
@@ -105,10 +106,10 @@ describe("Attendance Info, Who Is In and the forgot-to-punch request (P2-E)", ()
       const full = (await as(tok.dev).get("/me/day/2026-09-14")).body;
       expect(full).toMatchObject({ code: "P", shift: { code: "GEN", startTime: "10:00", endTime: "19:00" }, policy: { code: "DEFAULT" }, times: { firstIn: "10:00", lastOut: "19:00", breakMinutes: 45 } });
       expect(full.punches.map((x: { time: string; role: string }) => `${x.time} ${x.role}`)).toEqual(["10:00:00 FIRST_IN", "10:00:40 DUPLICATE", "19:00:00 LAST_OUT"]);
-      expect(full.canRequest).toEqual({ ok: false, reason: "This request is for a day with exactly one punch." });
+      expect(full.canRequest).toMatchObject({ ok: true, day: { punchCount: 2 } }); // wrong times can be corrected too (Phase 3)
       const lone = (await as(tok.dev).get("/me/day/2026-09-15")).body;
       expect(lone.punches.map((x: { role: string }) => x.role)).toEqual(["ONLY"]);
-      expect(lone.canRequest).toEqual({ ok: true, punchTime: "10:02" });
+      expect(lone.canRequest).toMatchObject({ ok: true, day: { punchCount: 1, firstIn: "10:02" } });
     });
 
     it("HR sees anyone's month and day; a plain employee and a manager without attendance.view don't", async () => {
@@ -126,20 +127,20 @@ describe("Attendance Info, Who Is In and the forgot-to-punch request (P2-E)", ()
     let outsiderRequest = "";
     let mgrRequest = "";
 
-    it("eligibility: one punch, a device day, this cycle or the one before, not finalised", async () => {
-      expect(await requestEligibility(p.dev.employeeId, "2026-09-15")).toEqual({ ok: true, punchTime: "10:02" });
-      expect(await requestEligibility(p.dev.employeeId, "2026-07-31")).toMatchObject({ ok: false, reason: expect.stringMatching(/this attendance cycle and the one before/) });
+    it("eligibility: a device day, this cycle or the one before, not finalised", async () => {
+      expect(await requestEligibility(p.dev.employeeId, "2026-09-15")).toMatchObject({ ok: true, day: { punchCount: 1, firstIn: "10:02", lastOut: null }, earliest: "2026-08-01" });
+      expect(await requestEligibility(p.dev.employeeId, "2026-07-31")).toMatchObject({ ok: false, code: "TOO_OLD", reason: expect.stringMatching(/start of the previous attendance cycle/) });
       await computeAttendance([p.manual.employeeId], "2026-09-15", "2026-09-15");
-      expect(await requestEligibility(p.manual.employeeId, "2026-09-15")).toMatchObject({ ok: false, reason: expect.stringMatching(/marked by hand/) });
-      expect(await requestEligibility(p.dev.employeeId, "2026-10-05")).toMatchObject({ ok: false, reason: "This day hasn't happened yet." });
+      expect(await requestEligibility(p.manual.employeeId, "2026-09-15")).toMatchObject({ ok: false, code: "MANUAL_CAPTURE", reason: expect.stringMatching(/marked by hand/) });
+      expect(await requestEligibility(p.dev.employeeId, "2026-10-05")).toMatchObject({ ok: false, code: "NOT_OVER" });
     });
 
     it("the time must make sense: OUT after the punch, inside the window, not the same time", async () => {
-      expect((await raise(tok.dev, "2026-09-15", "OUT", "09:30")).body.error.message).toMatch(/must be after your punch at 10:02/);
-      expect((await raise(tok.dev, "2026-09-15", "IN", "11:00")).body.error.message).toMatch(/must be before your punch at 10:02/);
-      expect((await raise(tok.dev, "2026-09-15", "OUT", "10:03")).body.error.message).toMatch(/almost the same time/);
-      expect((await raise(tok.dev, "2026-09-15", "IN", "05:00")).body.error.message).toMatch(/outside your shift's punch window \(06:00–01:00\)/);
-      expect((await raise(tok.dev, "2026-09-14", "OUT", "19:30")).status).toBe(409); // two punches already
+      expect((await raise(tok.dev, "2026-09-15", "OUT", "09:30")).body.error.message).toMatch(/time out must be after the last punch at 10:02/);
+      expect((await raise(tok.dev, "2026-09-15", "IN", "11:00")).body.error.message).toMatch(/time in must be before the first punch at 10:02/);
+      expect((await raise(tok.dev, "2026-09-15", "OUT", "10:03")).body.error.message).toMatch(/time out must be after the last punch/); // within the near-duplicate window
+      expect((await raise(tok.dev, "2026-09-15", "IN", "05:00")).body.error.message).toMatch(/05:00 is outside the shift's punch window \(06:00–01:00\)/);
+      expect((await raise(tok.dev, "2026-09-14", "OUT", "18:30")).status).toBe(400); // that day already has a later punch (a time out must come after the last punch)
     });
 
     it("raising one: the manager (who holds the key) is notified; Tasks, Request Hub and the Admin Home counts show it", async () => {
@@ -148,7 +149,7 @@ describe("Attendance Info, Who Is In and the forgot-to-punch request (P2-E)", ()
       devRequest = res.body.id;
       expect((await raise(tok.dev, "2026-09-15", "OUT", "19:05")).status).toBe(409); // one open request per day
       const note = await prisma.notification.findFirst({ where: { userId: p.mgr.userId, type: "regularization.submitted" } });
-      expect(note?.title).toMatch(/forgot to punch out/);
+      expect(note?.title).toMatch(/Forgot to punch/);
       const tasks = await request(app).get("/api/tasks/mine").set(...authHeader(tok.mgr));
       expect(tasks.body.map((t: { id: string }) => t.id)).toContain(devRequest);
       const hub = await request(app).get("/api/request-hub").set(...authHeader(tok.dev));
@@ -171,7 +172,7 @@ describe("Attendance Info, Who Is In and the forgot-to-punch request (P2-E)", ()
       expect(mine).not.toContain(mgrRequest);
       const hrs = (await as(tok.hr).get("/regularizations?status=PENDING")).body.requests;
       expect(hrs.map((r: { id: string }) => r.id)).toEqual(expect.arrayContaining([devRequest, outsiderRequest, mgrRequest]));
-      expect(hrs.find((r: { id: string }) => r.id === devRequest)).toMatchObject({ punch: "10:02", missing: "OUT", time: "19:00", dayStatus: "A", canDecide: true });
+      expect(hrs.find((r: { id: string }) => r.id === devRequest)).toMatchObject({ punches: { count: 1, firstIn: "10:02", lastOut: null }, reasonCode: "FORGOT_TO_PUNCH", outTime: "19:00", correctionText: "Out 19:00", dayStatus: "A", canDecide: true });
       expect((await as(tok.emp).get("/regularizations")).status).toBe(403);
     });
 
@@ -185,13 +186,13 @@ describe("Attendance Info, Who Is In and the forgot-to-punch request (P2-E)", ()
     it("approval recomputes the day with the corrected time and an override marker; the raw punch is untouched", async () => {
       const res = await as(tok.mgr).post(`/regularizations/${devRequest}/approve`, { note: "Confirmed, he left with me" });
       expect(res.status).toBe(200);
-      expect(await dayRow(p.dev, "2026-09-15")).toMatchObject({ status: "P", lateInMinutes: 2, exceptionFlags: ["LATE_IN"], overrideKind: "MISSING_PUNCH_CORRECTION", overrideRef: devRequest, firstIn: ist("2026-09-15", "10:02"), lastOut: ist("2026-09-15", "19:00"), punchCount: 1 });
+      expect(await dayRow(p.dev, "2026-09-15")).toMatchObject({ status: "P", lateInMinutes: 2, exceptionFlags: ["LATE_IN"], source: "OVERRIDE", overrideKind: "REGULARIZATION", overrideRef: expect.any(String), firstIn: ist("2026-09-15", "10:02"), lastOut: ist("2026-09-15", "19:00"), punchCount: 1 });
       expect(await prisma.rawPunch.count({ where: { employeeId: p.dev.employeeId, businessDate: d("2026-09-15") } })).toBe(1);
       const month = (await as(tok.dev).get("/me/month?month=2026-09")).body;
       expect(month.days.find((x: { date: string }) => x.date === "2026-09-15")).toMatchObject({ code: "P", corrected: true, request: { status: "APPROVED" } });
       const day = (await as(tok.dev).get("/me/day/2026-09-15")).body;
-      expect(day.correction).toMatchObject({ missing: "OUT", time: "19:00", decidedBy: expect.any(String) });
-      expect(day.canRequest).toMatchObject({ ok: false, reason: "This day has already been corrected." });
+      expect(day.override).toMatchObject({ origin: "REGULARIZATION", kind: "ADD_TIME", text: "Out 19:00", by: expect.any(String), requestId: devRequest });
+      expect(day.canRequest).toMatchObject({ ok: false, code: "ALREADY_CORRECTED", reason: "This day has already been corrected." });
       expect(await prisma.notification.count({ where: { userId: p.dev.userId, type: "regularization.decided" } })).toBe(1);
       expect((await as(tok.mgr).post(`/regularizations/${devRequest}/approve`)).status).toBe(409);
       expect(await prisma.auditLog.count({ where: { entityId: devRequest, action: "attendance.regularization.approved" } })).toBe(1);

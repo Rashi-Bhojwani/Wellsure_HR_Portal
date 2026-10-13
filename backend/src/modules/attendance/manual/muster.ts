@@ -57,7 +57,8 @@ export interface MusterCell {
   flags: string[];
   statusOnly: boolean;
   missingPunch: boolean;
-  corrected: boolean; // an approved forgot-to-punch request added a time (P2-E)
+  corrected: boolean; // corrected by hand: a regularization or a manual override (Phase 3); overrideKind says which
+  overrideKind: string | null; // REGULARIZATION | MANUAL_OVERRIDE
   workedOnOffDay: boolean;
   provisional: boolean;
   locked: boolean;
@@ -219,7 +220,8 @@ function cellFor(s: Scoped, employeeId: string, date: string, row: DailyAttendan
     flags: shown ? row.exceptionFlags : [],
     statusOnly: !!shown && statusOnly,
     missingPunch: !!shown && row.exceptionFlags.includes("MISSING_PUNCH"),
-    corrected: !!shown && row.overrideKind === "MISSING_PUNCH_CORRECTION",
+    corrected: !!shown && row.overrideKind !== null,
+    overrideKind: shown ? row.overrideKind : null,
     workedOnOffDay: !!shown && row.workedOnOffDay,
     provisional: !!shown && row.provisional,
     locked: !!row?.isLocked,

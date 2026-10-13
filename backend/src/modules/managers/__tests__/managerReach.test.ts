@@ -429,11 +429,21 @@ describe("manager reach — TEAM scope at every endpoint a manager can call (E2)
   describe("regularization requests (P2-E): the team's only", () => {
     const req = {} as Record<"member" | "member2" | "outsider", string>;
     beforeAll(async () => {
+      // A request is about a day that has a record (the engine's, from the device); approving checks it is still correctable.
+      // (Earlier sections made these two manual-capture; a device-capture day is what a correction is about.)
+      for (const who of [p.member, p.outsider]) {
+        await prisma.deviceUserMapping.create({ data: { employeeId: who.employeeId, deviceUserId: who.employeeCode, validFrom: new Date("2024-01-01"), createdByUserId: p.hrAdmin.userId } });
+      }
+      await computeAttendance([p.member.employeeId, p.outsider.employeeId], "2026-09-10", "2026-09-11");
       const mk = (who: Person, date: string) =>
-        prisma.regularizationRequest.create({ data: { employeeId: who.employeeId, date: new Date(`${date}T00:00:00Z`), missing: "OUT", time: "19:00", reason: "Reach test", raisedByUserId: who.userId } });
+        prisma.regularizationRequest.create({ data: { employeeId: who.employeeId, date: new Date(`${date}T00:00:00Z`), reasonCode: "DEVICE_DOWN", inTime: "10:00", outTime: "19:00", reason: "Reach test", raisedByUserId: who.userId } });
       req.member = (await mk(p.member, "2026-09-10")).id;
       req.member2 = (await mk(p.member, "2026-09-11")).id;
       req.outsider = (await mk(p.outsider, "2026-09-10")).id;
+    });
+
+    afterAll(async () => {
+      await prisma.deviceUserMapping.deleteMany({ where: { employeeId: { in: [p.member.employeeId, p.outsider.employeeId] } } });
     });
 
     it("GET /api/attendance/regularizations — the member's, never the outsider's", async () => {
@@ -449,7 +459,9 @@ describe("manager reach — TEAM scope at every endpoint a manager can call (E2)
 
     it("POST /api/attendance/regularizations/:id/approve — member: approved; outsider: 404, untouched", async () => {
       expect((await m().post(`/api/attendance/regularizations/${req.outsider}/approve`)).status).toBe(404);
-      expect((await m().post(`/api/attendance/regularizations/${req.member}/approve`)).status).toBe(200);
+      const approved = await m().post(`/api/attendance/regularizations/${req.member}/approve`);
+      expect(approved.body.error?.message ?? "", "approving the member's request").toBe("");
+      expect(approved.status).toBe(200);
       expect((await prisma.regularizationRequest.findUniqueOrThrow({ where: { id: req.outsider } })).status).toBe("PENDING");
       cover("POST /api/attendance/regularizations/:id/approve");
     });

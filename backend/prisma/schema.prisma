@@ -503,6 +503,7 @@ model Employee {
   dailyAttendance            DailyAttendance[]
   manualAttendanceEntries    ManualAttendanceEntry[]
   regularizationRequests     RegularizationRequest[]
+  attendanceOverrides        AttendanceOverride[]
 
   @@index([status])
   @@index([dateOfJoining])
@@ -2093,6 +2094,7 @@ enum AttendanceSource {
   LEAVE
   HOLIDAY
   WEEK_OFF
+  OVERRIDE // corrected by hand: a regularization or a manual override (Phase 3)
 }
 
 enum AttendanceCapture {
@@ -2248,12 +2250,17 @@ model ManualMusterUpload {
 }
 
 // ── Regularization (spec §4.4, "regularization_requests") ──
-// P2-E brings forward the first kind, the forgot-to-punch request: an
-// employee's own device day with one punch gets the missing IN or OUT time,
-// decided by their manager (by grant) or HR. Phase 3 adds kinds here.
+// One request type for any correctable device-capture day (Phase 3 commit 1):
+// a reason code, a free-text note, and either corrected times (one or both) or
+// a target status. Decided by the employee's manager (by grant) or HR, never
+// one's own; approval appends an attendance_overrides row and recomputes the
+// day. Raw punches are never altered.
 
-enum RegularizationKind {
-  MISSING_PUNCH
+enum RegularizationReasonCode {
+  FORGOT_TO_PUNCH
+  DEVICE_DOWN
+  ON_DUTY_ELSEWHERE
+  OTHER
 }
 
 enum RegularizationStatus {
@@ -2263,29 +2270,85 @@ enum RegularizationStatus {
   CANCELLED
 }
 
-enum MissingPunchSide {
-  IN
-  OUT
-}
-
 model RegularizationRequest {
-  id              String               @id @default(cuid())
-  employeeId      String               @map("employee_id")
-  employee        Employee             @relation(fields: [employeeId], references: [id])
-  date            DateTime             @db.Date
-  kind            RegularizationKind   @default(MISSING_PUNCH)
-  missing         MissingPunchSide
-  time            String // "HH:MM" business time
-  reason          String
-  status          RegularizationStatus @default(PENDING)
-  raisedByUserId  String               @map("raised_by_user_id")
-  decidedByUserId String?              @map("decided_by_user_id")
-  decidedAt       DateTime?            @map("decided_at")
-  decisionNote    String?              @map("decision_note")
-  createdAt       DateTime             @default(now()) @map("created_at")
-  updatedAt       DateTime             @updatedAt @map("updated_at")
+  id              String                   @id @default(cuid())
+  employeeId      String                   @map("employee_id")
+  employee        Employee                 @relation(fields: [employeeId], references: [id])
+  date            DateTime                 @db.Date
+  reasonCode      RegularizationReasonCode @map("reason_code")
+  inTime          String?                  @map("in_time") // "HH:MM" business time
+  outTime         String?                  @map("out_time")
+  targetStatus    String?                  @map("target_status") // P, A, HD_FIRST, HD_SECOND (instead of times)
+  reason          String                   @default("") // the free-text note
+  status          RegularizationStatus     @default(PENDING)
+  raisedByUserId  String                   @map("raised_by_user_id")
+  decidedByUserId String?                  @map("decided_by_user_id")
+  decidedAt       DateTime?                @map("decided_at")
+  decisionNote    String?                  @map("decision_note")
+  batchId         String?                  @map("batch_id")
+  batch           RegularizationBatch?     @relation(fields: [batchId], references: [id])
+  createdAt       DateTime                 @default(now()) @map("created_at")
+  updatedAt       DateTime                 @updatedAt @map("updated_at")
+  override        AttendanceOverride?
 
   @@index([employeeId, date])
   @@index([status])
+  @@index([batchId])
   @@map("regularization_requests")
+}
+
+// One HR action over many employee-days (typically a whole branch after a device outage).
+model RegularizationBatch {
+  id              String                   @id @default(cuid())
+  createdByUserId String                   @map("created_by_user_id")
+  action          String // RAISED | RAISED_AND_APPROVED
+  reasonCode      RegularizationReasonCode @map("reason_code")
+  note            String
+  fromDate        DateTime                 @map("from_date") @db.Date
+  toDate          DateTime                 @map("to_date") @db.Date
+  employeeCount   Int                      @map("employee_count")
+  dayCount        Int                      @map("day_count")
+  createdAt       DateTime                 @default(now()) @map("created_at")
+  requests        RegularizationRequest[]
+
+  @@map("regularization_batches")
+}
+
+enum OverrideOrigin {
+  REGULARIZATION
+  MANUAL_OVERRIDE
+}
+
+enum OverrideKind {
+  ADD_TIME // one time joins the device punches
+  TIMES // in and out replace the device punches for the day
+  STATUS // the day's status as set
+  CLEARED // takes the override away (the day computes from its punches again)
+}
+
+// Every day-level correction (Phase 3): a regularization when approved, a manual
+// override from commit 2. Append-only like manual_attendance_entries: the latest
+// row (highest seq) for an employee-day wins and the history stays. Raw punches
+// are never touched; daily_attendance.override_kind / override_ref say which row
+// a day was computed with.
+model AttendanceOverride {
+  id              String                    @id @default(cuid())
+  seq             Int                       @unique @default(autoincrement())
+  employeeId      String                    @map("employee_id")
+  employee        Employee                  @relation(fields: [employeeId], references: [id])
+  date            DateTime                  @db.Date
+  origin          OverrideOrigin
+  kind            OverrideKind
+  inTime          String?                   @map("in_time")
+  outTime         String?                   @map("out_time")
+  status          String? // STATUS: P, A, HD_FIRST, HD_SECOND, WORKED
+  reasonCode      RegularizationReasonCode? @map("reason_code")
+  reason          String                    @default("")
+  requestId       String?                   @unique @map("request_id")
+  request         RegularizationRequest?    @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  createdByUserId String                    @map("created_by_user_id")
+  createdAt       DateTime                  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([employeeId, date, seq])
+  @@map("attendance_overrides")
 }

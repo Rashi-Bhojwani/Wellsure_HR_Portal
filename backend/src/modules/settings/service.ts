@@ -2,9 +2,10 @@ import { getSetting, setSetting } from "../../lib/settings";
 import { writeAuditLog } from "../../lib/audit";
 import { RATE_LIMIT_DEFAULTS, RATE_LIMIT_KEYS, type LeaveSettings, type RateLimitSetting, type SecuritySettings } from "./types";
 import type { z } from "zod";
-import type { updateDeviceAlertSettingsSchema, updateDeviceHealthSettingsSchema, updateHelpdeskSettingsSchema, updateLeaveSettingsSchema, updatePeopleDocumentsSettingsSchema, updateSettingsSchema } from "./validators";
+import type { updateDeviceAlertSettingsSchema, updateRegularizationSettingsSchema, updateDeviceHealthSettingsSchema, updateHelpdeskSettingsSchema, updateLeaveSettingsSchema, updatePeopleDocumentsSettingsSchema, updateSettingsSchema } from "./validators";
 import type { DeviceHealthThresholds } from "@shared/attendance/agentProtocol";
 import { DEVICE_ALERT_SETTING_KEY, getDeviceAlertSettings, type DeviceAlertSettings } from "../../lib/deviceAlertSettings";
+import { getRegularizationSettings, REGULARIZATION_SETTING_KEY, type RegularizationSettings } from "../../lib/regularizationSettings";
 import { DEVICE_HEALTH_SETTING_KEY, getDeviceHealthThresholds } from "../../lib/deviceHealthSettings";
 import { HttpError } from "../../middleware/errorHandler";
 import { getPeopleDocumentsSettings, PEOPLE_DOCUMENTS_SETTING_KEYS, type PeopleDocumentsSettings } from "../../lib/peopleDocumentsSettings";
@@ -173,5 +174,23 @@ export async function updateDeviceAlertSettings(
   after.alertEmails = [...new Set(after.alertEmails)];
   await setSetting(DEVICE_ALERT_SETTING_KEY, after, meta.actorUserId);
   await writeAuditLog({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "deviceAlerts", before, after });
+  return after;
+}
+
+// Phase 3 commit 1 — Attendance → Regularization: backdating and the bulk caps.
+export async function getRegularizationSettingsForAdmin(): Promise<RegularizationSettings> {
+  return getRegularizationSettings();
+}
+
+type UpdateRegularizationInput = z.infer<typeof updateRegularizationSettingsSchema>;
+
+export async function updateRegularizationSettings(
+  input: UpdateRegularizationInput,
+  meta: { actorUserId: string; ipAddress?: string | null; userAgent?: string | null },
+): Promise<RegularizationSettings> {
+  const before = await getRegularizationSettings();
+  const after: RegularizationSettings = { ...before, ...(Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)) as Partial<RegularizationSettings>) };
+  await setSetting(REGULARIZATION_SETTING_KEY, after, meta.actorUserId);
+  await writeAuditLog({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "regularization", before, after });
   return after;
 }

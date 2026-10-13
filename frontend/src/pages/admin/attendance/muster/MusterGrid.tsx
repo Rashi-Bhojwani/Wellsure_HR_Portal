@@ -33,7 +33,7 @@ function describe(row: MusterRow, cell: MusterCell): string {
   if (cell.earlyOutMinutes) parts.push(`left ${cell.earlyOutMinutes}m early`);
   if (cell.statusOnly) parts.push("status only, no times");
   if (cell.missingPunch) parts.push("one time only: forgot to punch out?");
-  if (cell.corrected) parts.push("corrected: a forgot-to-punch request was approved");
+  if (cell.corrected) parts.push(cell.overrideKind === "MANUAL_OVERRIDE" ? "overridden by HR (not from the device)" : "corrected: an approved request (not from the device)");
   if (cell.workedOnOffDay) parts.push("worked on an off day");
   if (cell.provisional) parts.push("provisional (the day isn't over)");
   if (cell.entry) parts.push(`entered as "${cell.entry.text}"${cell.entry.via === "MUSTER_UPLOAD" ? " (upload)" : cell.entry.via === "BULK" ? " (mark all present)" : ""}${cell.entry.remark ? `: ${cell.entry.remark}` : ""}`);

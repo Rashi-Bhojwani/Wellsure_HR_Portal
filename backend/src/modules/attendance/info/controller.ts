@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import type { Meta } from "../processService";
 import type { Viewer } from "../manual/scope";
+import * as bulk from "../regularization/bulk";
 import * as reg from "../regularization/service";
 import * as info from "./info";
 
@@ -37,8 +38,17 @@ export async function cancel(req: Request, res: Response): Promise<void> {
 export async function mine(req: Request, res: Response): Promise<void> {
   res.status(200).json({ requests: await reg.myRequests(req.user!.employeeId) });
 }
+export async function eligibility(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await reg.requestEligibility(req.user!.employeeId, (req.query as { date: string }).date));
+}
 export async function queue(req: Request, res: Response): Promise<void> {
-  res.status(200).json({ requests: await reg.listQueue(viewer(req), req.query as { status?: "PENDING" }) });
+  res.status(200).json({ requests: await reg.listQueue(viewer(req), req.query as Parameters<typeof reg.listQueue>[1]) });
+}
+export async function bulkPreview(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await bulk.previewBulk(viewer(req), req.body as bulk.BulkInput));
+}
+export async function bulkConfirm(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await bulk.confirmBulk(viewer(req), req.body as bulk.BulkInput & { fingerprint: string }, meta(req)));
 }
 export async function approve(req: Request, res: Response): Promise<void> {
   res.status(200).json(await reg.decideRequest(viewer(req), req.params.id as string, { approve: true, note: (req.body as { note?: string }).note }, meta(req)));

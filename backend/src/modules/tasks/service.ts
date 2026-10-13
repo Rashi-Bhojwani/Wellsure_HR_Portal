@@ -1,3 +1,4 @@
+import { describeCorrection, REASON_LABEL, type Correction } from "../attendance/regularization/correction";
 import type { DataScope } from "@shared/constants/roles";
 import type { Prisma } from "@prisma/client";
 import { formatTicketNumber, HELPDESK_STATUS_LABELS, helpdeskAdminPath, helpdeskEmployeePath } from "@shared/constants/helpdesk";
@@ -115,7 +116,7 @@ const assignedTickets: TaskSource = {
   },
 };
 
-// Pending forgot-to-punch requests I can decide (P2-E): the approve key, my
+// Pending attendance corrections I can decide (P2-E, generalised in Phase 3): the approve key, my
 // data scope (TEAM: my reports), never my own — as the queue enforces.
 const regularizationApprovals: TaskSource = {
   type: "REGULARIZATION_APPROVAL",
@@ -126,8 +127,8 @@ const regularizationApprovals: TaskSource = {
     return rows.map((r) => ({
       type: "REGULARIZATION_APPROVAL" as const,
       id: r.id,
-      title: `Forgot to punch ${r.missing === "OUT" ? "out" : "in"}`,
-      detail: `${dateOnly(r.date)} · asks for ${r.missing} ${r.time}`,
+      title: `Attendance correction: ${REASON_LABEL[r.reasonCode] ?? r.reasonCode}`,
+      detail: `${dateOnly(r.date)} · asks for ${describeCorrection({ inTime: r.inTime, outTime: r.outTime, status: r.targetStatus as Correction["status"] })}`,
       employeeName: nameOf(r.employee),
       waitingSince: r.createdAt.toISOString(),
       link: "/app/todo/review?tab=attendance",

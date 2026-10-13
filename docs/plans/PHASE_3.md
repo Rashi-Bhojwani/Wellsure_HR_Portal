@@ -1,7 +1,23 @@
 # Phase 3 — attendance administration: implementation plan
 
-Status: **awaiting the user's confirmation** (2026-10-13). The design decisions are the user's and are not re-planned here;
+Status: **approved 2026-10-13, with three changes (below)**. The design decisions are the user's and are not re-planned here;
 this document says how they are built on what Phase 2 left, and lists what I decided myself. Four commits, a pause after each.
+
+## Changes the user made on approval (2026-10-13)
+
+1. **A leave day the person actually worked can be corrected.** The common real case: an approved leave day where the person came in.
+   HR overrides the day to *worked* **and reverses the leave consumption in the ledger so the balance comes back**: an explicit action
+   with a reason, never a silent side effect, visible on both the attendance day and the leave ledger. This replaces rule 3 below for
+   leave days (holiday and week-off days still allow "worked" only). It is built in two steps: **the attendance side with Manual
+   Override (commit 2)**, and **the leave-ledger reversal as its own small commit straight after it**, so the day never reads
+   worked while the ledger still says consumed (the action is one transaction, shipped when both sides exist). Regularization requests
+   stay off leave days (an employee cannot give leave back; HR does, through Manual Override).
+2. **No "overtime" until HR defines it.** The report column and the report are called **Excess hours** (what the engine already
+   computes, minutes worked beyond the scheduled shift end), and the report says plainly that an overtime policy is undefined and
+   that excess hours are not payable overtime. (Replaces rule 10's wording; commit 4.)
+3. **Nobody changes their own shift, week-off pattern or policy.** The existing Attendance Settings assignment change (single, bulk
+   and cancelling a scheduled change) refuses the actor's own record, like the other self-action guards; the other Super Admin acts
+   for them. Built in commit 1.
 
 ## What Phase 2 left that this builds on
 
@@ -69,6 +85,39 @@ MANUAL_OVERRIDE. Existing results do not change, so `ENGINE_VERSION` stays 2.
   bulk preview/cap/fingerprint/own-days-left-out/one audit row per employee-day/atomicity; pending blocks finalisation;
   migration copies old requests; settings; route inventory; cleanup policies.
 
+### Commit 1 — as built (2026-10-13)
+
+Built as planned; what differs from, or was decided beyond, the plan above:
+
+- **Migrations (two):** `20261013090000_attendance_source_override` (the enum value, alone because Postgres cannot use a new enum
+  value in the transaction that adds it) and `20261013090100_regularization_generalised` (everything else). Old approved
+  MISSING_PUNCH requests are copied into `attendance_overrides` and their `daily_attendance` rows re-marked, so earlier corrections
+  keep reading "corrected by hand". `attendance_overrides.request_id` is `ON DELETE RESTRICT`: a request that produced a correction
+  cannot be deleted from under it.
+- **`attendance_overrides` has a `seq` serial** (not a `superseded_by` pointer): the active row is the one with the highest `seq`.
+  Un-doing is a `CLEARED` row. Append-only trigger as for manual entries (the test-purge exception is the same one).
+- **Where the override applies in the engine:** step 5, and only if the day is not a holiday, week-off or fully-on-leave day (the
+  override is dropped there, not applied). Half-day leave plus an override is evaluated like any other day.
+- **A day that already carries a correction cannot be given another request** (`ALREADY_CORRECTED`). Changing a corrected day is
+  Manual Override's job (commit 2), which appends a newer row. The employee screen says so.
+- **Why a day is refused is a code the screens show in words:** `TOO_OLD`, `NO_RECORD`, `NOT_OVER`, `LOCKED`, `MANUAL_CAPTURE`,
+  `OFF_DAY`, `ON_LEAVE`, `ALREADY_CORRECTED`, `PENDING_EXISTS`, `NO_SHIFT`, plus the times checks `OUT_OF_WINDOW`, `BAD_TIMES`,
+  `NEEDS_BOTH_TIMES`. The eligibility endpoint and the bulk preview use the same function, so the dialog and the server agree.
+- **Bulk:** the preview reports, per reason, what was left out: days before the person joined or after they left are skipped
+  silently (not employed), days with no computed record are counted as `NO_RECORD`, the actor's own days are counted as
+  `OWN_ATTENDANCE`. Confirm is refused with 409 `SELECTION_CHANGED` if the set differs from the previewed one. `RAISE_AND_APPROVE`
+  needs `attendance.regularization.approve` as well as the bulk permission.
+- **Settings:** System Settings → Attendance → Regularization (`backdateCycles` 1, `bulkMaxRangeDays` 31, `bulkMaxEmployeeDays` 1,000
+  defaults; the plan said 1,000 employee-days and 31 days as well). `GET/PUT /api/settings/regularization`, audited.
+- **Self-action guards:** a request can't be decided by the person it is for (`OWN_REQUEST`); bulk leaves out the actor's days
+  (`OWN_ATTENDANCE`); and, user's change 3, the Attendance Settings assignment change, bulk assignment change and cancelling a
+  scheduled assignment change refuse the actor's own record (`OWN_ATTENDANCE`).
+- **Visible marker:** `daily_attendance.override_kind` is `REGULARIZATION` or `MANUAL_OVERRIDE`; Attendance Info day panel reads
+  "Corrected by hand (not from the device)" with who, why and the request; the muster cell is marked; the Attendance Info month
+  `corrected` flag uses it. Exports for this are added with the reports in commit 4 (nothing exports a Phase 3 override yet).
+- **Not done here, by design:** HR correcting a day that is not a request (commit 2), the leave-day-worked reversal (commit 2 + its
+  own small commit), the corrected-day marker in Excel exports (commit 4).
+
 ## Commit 2 — Override, roster, swipes
 
 - **Manual Override** (`attendance.override.manage`, HR Admin and Super Admin, never manager-grantable): HR sets a day's
@@ -113,12 +162,13 @@ MANUAL_OVERRIDE. Existing results do not change, so `ENGINE_VERSION` stays 2.
 
 ## Commit 4 — Reports and close-out
 
-- Four reports in the existing reports framework (`late-coming`, `overtime`, `exception-summary`, `attendance-muster`), the same
+- Four reports in the existing reports framework (`late-coming`, `excess-hours`, `exception-summary`, `attendance-muster`), the same
   `lib/xlsx.ts` helper, `reports.view` and the same data-scope rules (a manager sees only their team), screen and export from one
   result. Overridden and manually set days carry a marker column in every one. Each report warns when placeholder rules were in
   use ("computed with rule values HR has not confirmed").
-- **Overtime** has no HR rule yet, so it reports the raw minutes worked beyond the scheduled shift end (`excess_minutes`) with a
-  configurable minimum to count (default 0), labelled provisional until HR defines overtime.
+- **Excess hours** (not "overtime": user's change 2) reports the raw minutes worked beyond the scheduled shift end
+  (`excess_minutes`) with a configurable minimum to count (default 0). The report states that overtime policy is undefined and
+  that these hours are not payable overtime.
 - Close-out: every Phase 3 screen with its URL; what stays unproven until the device is connected; and
   `docs/CONNECTION_DAY.md`, a step-by-step procedure to follow at the office (what to bring, what to run, what to check, what
   to do when each check fails).
@@ -132,12 +182,12 @@ MANUAL_OVERRIDE. Existing results do not change, so `ENGINE_VERSION` stays 2.
 
 1. One `attendance_overrides` table holds regularizations and manual overrides, latest wins, history kept.
 2. Regularization applies to **device-capture** days; manual-capture days are corrected in the muster.
-3. Holiday, week-off and leave days are not overridable (off days: "worked" only).
+3. Holiday and week-off days are not overridable except "worked". **Leave days: overridable to "worked" by HR with an explicit leave reversal (user's change 1).**
 4. The roster is **forward-only** because the effective-dating writers are; past shifts are corrected with Shift Override.
 5. Bulk caps default to 31 days and 1,000 employee-days, backdating to the previous cycle; all configurable.
 6. Flagged punches awaiting a decision **block** finalisation; unmapped punches only warn.
 7. The exceptions queue excludes late-in and early-out.
 8. Payroll's "consumed" check is a provider that says "no" until Phase 6.
 9. Self-action guards apply to every new path (own requests, own days in bulk, own overrides, own roster).
-   **Question:** also guard the existing Attendance Settings assignment change for your own record (open since Phase 2)?
-10. Overtime = raw minutes beyond the shift end, provisional, until HR defines it.
+   **Answered yes (user's change 3):** the existing Attendance Settings assignment change is guarded too.
+10. "Excess hours" = raw minutes beyond the shift end, until HR defines overtime (user's change 2).

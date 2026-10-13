@@ -28,6 +28,9 @@ import {
   dateParamsSchema,
   employeeDateParamsSchema,
   whoIsInQuerySchema,
+  bulkRegularizationPreviewSchema,
+  bulkRegularizationSchema,
+  eligibilityQuerySchema,
   raiseRegularizationSchema,
   regularizationQueueQuerySchema,
   regularizationDecisionSchema,
@@ -115,6 +118,7 @@ attendanceRouter.post("/muster/upload/:id/commit", canMark, validate({ params: i
 attendanceRouter.get("/me/month", validate({ query: monthQuerySchema }), info.myMonth);
 attendanceRouter.get("/me/day/:date", validate({ params: dateParamsSchema }), info.myDay);
 attendanceRouter.get("/me/regularizations", info.mine);
+attendanceRouter.get("/me/regularizations/eligibility", validate({ query: eligibilityQuerySchema }), info.eligibility);
 attendanceRouter.post("/me/regularizations", validate({ body: raiseRegularizationSchema }), info.raise);
 attendanceRouter.post("/me/regularizations/:id/cancel", validate({ params: idParamsSchema }), info.cancel);
 const canViewAttendance = requirePermission("attendance.view");
@@ -124,5 +128,9 @@ attendanceRouter.get("/who-is-in", canViewAttendance, validate({ query: whoIsInQ
 const canSeeRegularizations = requireAnyPermission("attendance.regularization.view", "attendance.regularization.approve");
 const canDecideRegularizations = requirePermission("attendance.regularization.approve");
 attendanceRouter.get("/regularizations", canSeeRegularizations, validate({ query: regularizationQueueQuerySchema }), info.queue);
+// Bulk correction by HR (attendance.regularization.bulk: never manager-grantable): preview, then confirm the exact set.
+const canBulkCorrect = requirePermission("attendance.regularization.bulk");
+attendanceRouter.post("/regularizations/bulk/preview", canBulkCorrect, validate({ body: bulkRegularizationPreviewSchema }), info.bulkPreview);
+attendanceRouter.post("/regularizations/bulk", canBulkCorrect, validate({ body: bulkRegularizationSchema }), info.bulkConfirm);
 attendanceRouter.post("/regularizations/:id/approve", canDecideRegularizations, validate({ params: idParamsSchema, body: regularizationDecisionSchema }), info.approve);
 attendanceRouter.post("/regularizations/:id/reject", canDecideRegularizations, validate({ params: idParamsSchema, body: regularizationDecisionSchema }), info.reject);

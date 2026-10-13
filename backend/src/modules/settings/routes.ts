@@ -3,7 +3,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { requirePermission } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
 import * as controller from "./controller";
-import { updateDeviceAlertSettingsSchema, updateDeviceHealthSettingsSchema, updateHelpdeskSettingsSchema, updateLeaveSettingsSchema, updatePeopleDocumentsSettingsSchema, updateSettingsSchema } from "./validators";
+import { updateRegularizationSettingsSchema, updateDeviceAlertSettingsSchema, updateDeviceHealthSettingsSchema, updateHelpdeskSettingsSchema, updateLeaveSettingsSchema, updatePeopleDocumentsSettingsSchema, updateSettingsSchema } from "./validators";
 
 // System Settings (spec §7.8) — security policy (Phase 1: lockout,
 // password rules, invitation TTL, 2FA-required roles, auth rate limits)
@@ -38,3 +38,7 @@ settingsRouter.put("/device-health", manage, validate({ body: updateDeviceHealth
 // Phase 2 P2-H: Attendance → Device alerts (who is told, and when silence becomes an incident).
 settingsRouter.get("/device-alerts", manage, controller.getDeviceAlertSettings);
 settingsRouter.put("/device-alerts", manage, validate({ body: updateDeviceAlertSettingsSchema }), controller.updateDeviceAlertSettings);
+
+// Phase 3 commit 1: Attendance → Regularization (how far back a correction reaches; the bulk caps).
+settingsRouter.get("/regularization", manage, controller.getRegularizationSettings);
+settingsRouter.put("/regularization", manage, validate({ body: updateRegularizationSettingsSchema }), controller.updateRegularizationSettings);

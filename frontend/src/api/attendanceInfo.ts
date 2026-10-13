@@ -1,6 +1,27 @@
 import { apiClient } from "./client";
 
-// Attendance Info, Who Is In? and the forgot-to-punch request (Phase 2 P2-E).
+// Attendance Info, Who Is In? and regularization (Phase 2 P2-E began it; Phase 3 commit 1 generalised it).
+
+export type ReasonCode = "FORGOT_TO_PUNCH" | "DEVICE_DOWN" | "ON_DUTY_ELSEWHERE" | "OTHER";
+export const REASON_OPTIONS: Array<{ value: ReasonCode; label: string }> = [
+  { value: "FORGOT_TO_PUNCH", label: "Forgot to punch" },
+  { value: "DEVICE_DOWN", label: "Device was down" },
+  { value: "ON_DUTY_ELSEWHERE", label: "On duty elsewhere" },
+  { value: "OTHER", label: "Other" },
+];
+export type TargetStatus = "P" | "A" | "HD_FIRST" | "HD_SECOND";
+export const STATUS_OPTIONS: Array<{ value: TargetStatus; label: string }> = [
+  { value: "P", label: "Present" },
+  { value: "A", label: "Absent" },
+  { value: "HD_FIRST", label: "Half day (first half present)" },
+  { value: "HD_SECOND", label: "Half day (second half present)" },
+];
+/** A correction: times (in, out or both) or a status. */
+export interface CorrectionBody {
+  inTime?: string | null;
+  outTime?: string | null;
+  status?: TargetStatus | null;
+}
 
 export interface MonthDay {
   date: string;
@@ -11,6 +32,8 @@ export interface MonthDay {
   capture: "DEVICE" | "MANUAL";
   statusOnly: boolean;
   corrected: boolean;
+  /** REGULARIZATION | MANUAL_OVERRIDE when the day was corrected by hand. */
+  overrideKind?: string | null;
   missingPunch: boolean;
   flags: string[];
   lopDays: number;
@@ -22,7 +45,7 @@ export interface MonthDay {
   provisional: boolean;
   locked: boolean;
   workedOnOffDay: boolean;
-  request: { id: string; status: RegularizationStatus; missing: "IN" | "OUT"; time: string } | null;
+  request: { id: string; status: RegularizationStatus; reasonLabel: string; correctionText: string } | null;
 }
 
 export interface MonthView {
@@ -57,10 +80,15 @@ export interface DayDetail {
   times?: Record<"firstIn" | "lastOut", string | null> & Record<"lateInMinutes" | "earlyOutMinutes" | "totalMinutes" | "breakMinutes" | "actualMinutes" | "inShiftMinutes" | "shortfallMinutes" | "excessMinutes", number | null>;
   manualEntry?: { kind: string; text: string; via: string; remark: string | null; enteredBy: string | null; enteredAt: string } | null;
   punches?: Array<{ id: string; time: string; date: string; device: string; route: string; role: "FIRST_IN" | "LAST_OUT" | "ONLY" | "BETWEEN" | "DUPLICATE" | "FLAGGED" | "DISCARDED" | "NOT_USED" }>;
-  correction?: { id: string; missing: "IN" | "OUT"; time: string; decidedBy: string | null; decidedAt: string | null } | null;
-  requests?: Array<{ id: string; status: RegularizationStatus; missing: "IN" | "OUT"; time: string; reason: string; decisionNote: string | null; decidedBy: string | null; decidedAt: string | null; createdAt: string }>;
-  canRequest?: { ok: true; punchTime: string } | { ok: false; reason: string } | null;
+  /** The correction this day was computed with (a regularization, or a manual override), and who and why. */
+  override?: { id: string; origin: "REGULARIZATION" | "MANUAL_OVERRIDE"; kind: string; text: string; reasonLabel: string | null; reason: string; by: string | null; at: string; requestId: string | null } | null;
+  requests?: Array<{ id: string; status: RegularizationStatus; reasonCode: ReasonCode; reasonLabel: string; correctionText: string; reason: string; decisionNote: string | null; decidedBy: string | null; decidedAt: string | null; createdAt: string }>;
+  canRequest?: Eligibility | null;
 }
+
+export type Eligibility =
+  | { ok: true; earliest: string; day: { status: string; punchCount: number; firstIn: string | null; lastOut: string | null; shift: string | null } }
+  | { ok: false; reason: string; code: string };
 
 export async function myMonth(month: string): Promise<MonthView> {
   return (await apiClient.get<MonthView>("/api/attendance/me/month", { params: { month } })).data;
@@ -75,8 +103,11 @@ export async function employeeDay(employeeId: string, date: string): Promise<Day
   return (await apiClient.get<DayDetail>(`/api/attendance/employees/${employeeId}/day/${date}`)).data;
 }
 
-export async function raiseRegularization(body: { date: string; missing: "IN" | "OUT"; time: string; reason: string }) {
+export async function raiseRegularization(body: CorrectionBody & { date: string; reasonCode: ReasonCode; note?: string }) {
   return (await apiClient.post("/api/attendance/me/regularizations", body)).data;
+}
+export async function regularizationEligibility(date: string): Promise<Eligibility> {
+  return (await apiClient.get<Eligibility>("/api/attendance/me/regularizations/eligibility", { params: { date } })).data;
 }
 export async function cancelRegularization(id: string) {
   return (await apiClient.post(`/api/attendance/me/regularizations/${id}/cancel`)).data;
@@ -88,11 +119,16 @@ export interface QueueRow {
   employeeCode: string;
   name: string;
   date: string;
-  missing: "IN" | "OUT";
-  time: string;
+  reasonCode: ReasonCode;
+  reasonLabel: string;
+  inTime: string | null;
+  outTime: string | null;
+  targetStatus: TargetStatus | null;
+  correctionText: string;
   reason: string;
   status: RegularizationStatus;
-  punch: string | null;
+  batchId: string | null;
+  punches: { count: number; firstIn: string | null; lastOut: string | null } | null;
   dayStatus: string | null;
   shift: string | null;
   createdAt: string;
@@ -101,8 +137,42 @@ export interface QueueRow {
   decisionNote: string | null;
   canDecide: boolean;
 }
-export async function regularizationQueue(status?: RegularizationStatus): Promise<QueueRow[]> {
-  return (await apiClient.get<{ requests: QueueRow[] }>("/api/attendance/regularizations", { params: { status } })).data.requests;
+export interface QueueFilter {
+  status?: RegularizationStatus;
+  reasonCode?: ReasonCode;
+  from?: string;
+  to?: string;
+  batchId?: string;
+}
+export async function regularizationQueue(filter: QueueFilter = {}): Promise<QueueRow[]> {
+  return (await apiClient.get<{ requests: QueueRow[] }>("/api/attendance/regularizations", { params: filter })).data.requests;
+}
+
+// Bulk correction by HR (Phase 3 commit 1): preview, then confirm the exact set that was previewed.
+export interface BulkBody extends CorrectionBody {
+  selection: { employeeIds?: string[]; locationId?: string; departmentId?: string };
+  from: string;
+  to: string;
+  reasonCode: ReasonCode;
+  note: string;
+  action: "RAISE" | "RAISE_AND_APPROVE";
+}
+export interface BulkPreview {
+  count: number;
+  employees: number;
+  correction: string;
+  action: "RAISE" | "RAISE_AND_APPROVE";
+  ownLeftOut: number;
+  fingerprint: string;
+  caps: { maxRangeDays: number; maxEmployeeDays: number };
+  rows: Array<{ employeeId: string; employeeCode: string; name: string; date: string; before: string | null; after: string | null }>;
+  cannotCorrect: Array<{ code: string; label: string; count: number; examples: Array<{ employeeCode: string; name: string; date: string }> }>;
+}
+export async function previewBulkCorrection(body: BulkBody): Promise<BulkPreview> {
+  return (await apiClient.post<BulkPreview>("/api/attendance/regularizations/bulk/preview", body)).data;
+}
+export async function confirmBulkCorrection(body: BulkBody, fingerprint: string): Promise<{ batchId: string; requests: number; employees: number; approved: boolean; ownLeftOut: number }> {
+  return (await apiClient.post("/api/attendance/regularizations/bulk", { ...body, fingerprint, confirm: true })).data;
 }
 export async function approveRegularization(id: string, note?: string) {
   return (await apiClient.post(`/api/attendance/regularizations/${id}/approve`, { note: note || null })).data;

@@ -52,3 +52,11 @@ export async function getDeviceAlertSettings(_req: Request, res: Response): Prom
 export async function updateDeviceAlertSettings(req: Request, res: Response): Promise<void> {
   res.status(200).json(await settingsService.updateDeviceAlertSettings(req.body, actorMeta(req)));
 }
+
+export async function getRegularizationSettings(_req: Request, res: Response): Promise<void> {
+  res.status(200).json(await settingsService.getRegularizationSettingsForAdmin());
+}
+
+export async function updateRegularizationSettings(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await settingsService.updateRegularizationSettings(req.body, actorMeta(req)));
+}
