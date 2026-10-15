@@ -6,6 +6,7 @@ import { MANAGER_GRANTABLE_KEYS } from "@shared/constants/permissions";
 import { storageService } from "../../../integrations/storage";
 import { lettersGenerateQueue } from "../../../jobs/lettersQueue";
 import { deleteWithDependents } from "../../../lib/__tests__/cleanup";
+import { setBusinessTodayForTests } from "../../../lib/businessDate";
 import { prisma } from "../../../lib/prisma";
 import { issuePhotoToken } from "../../people/photos";
 import { cleanupTestCategories, createTestCategory, pdf } from "../../documents/__tests__/documentsTestHelpers";
@@ -117,6 +118,7 @@ describe("manager reach — TEAM scope at every endpoint a manager can call (E2)
   });
 
   afterAll(async () => {
+    setBusinessTodayForTests(null);
     for (const id of Object.values(letter)) await lettersGenerateQueue().remove(id).catch(() => undefined);
     await deleteWithDependents("LetterTemplate", [templateId]);
     await cleanupTestCategories([categoryId]);
@@ -349,6 +351,9 @@ describe("manager reach — TEAM scope at every endpoint a manager can call (E2)
     let workbook: Buffer;
 
     beforeAll(async () => {
+      // The attendance sections below use September 2026 days: "today" is pinned just after them (through the Employee
+      // Swipes section), since marking and correcting reach back a limited number of days from the real date.
+      setBusinessTodayForTests(new Date("2026-09-30T00:00:00Z"));
       await prisma.deviceUserMapping.deleteMany({ where: { employeeId: { in: [p.member.employeeId, p.outsider.employeeId] } } });
       await prisma.attendanceManualBranch.create({ data: { userId: p.manager.userId, locationId: org.locationId, assignedByUserId: p.hrAdmin.userId } });
       // The first muster view computes the month for everyone it shows (HR: the whole company).
@@ -503,6 +508,7 @@ describe("manager reach — TEAM scope at every endpoint a manager can call (E2)
       await mk("9999", "10:02", null); // matches nobody
     });
     afterAll(async () => {
+      setBusinessTodayForTests(null);
       await deleteWithDependents("RawPunch", (await prisma.rawPunch.findMany({ where: { deviceId }, select: { id: true } })).map((r) => r.id));
       await deleteWithDependents("IngestionBatch", [batchId]);
       await deleteWithDependents("Device", [deviceId]);

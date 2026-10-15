@@ -229,17 +229,46 @@ export async function processScope(from: string): Promise<{ from: string; to: st
   return (await apiClient.get("/api/attendance/process/scope", { params: { from } })).data;
 }
 
-// ── Finalisation gate (the hard block; finalisation itself is Phase 3) ──
+// ── Finalisation: the gate, the periods and the lock (Phase 3 commit 3) ──
 export type FinalisationBlocker =
   | { code: "PERIOD_NOT_OVER"; message: string }
+  | { code: "FLAGGED_PUNCHES"; message: string; count: number; punches: Array<{ id: string; deviceUserId: string; employeeId: string | null; employeeName: string | null; date: string; flag: string }> }
+  | { code: "PENDING_REGULARIZATIONS"; message: string; count: number; days: Array<{ employeeId: string; employeeName: string; date: string }> }
   | { code: "PLACEHOLDER_RULES"; message: string; rules: Array<{ kind: "SHIFT" | "POLICY"; id: string; code: string; name: string; fields: string[] }> }
   | { code: "NOT_MARKED" | "NO_SHIFT" | "NOT_UP_TO_DATE"; message: string; count: number; days: Array<{ employeeId: string; employeeName: string; date: string }> };
+export type FinalisationBlockerCode = FinalisationBlocker["code"];
+export interface FinalisationWarning {
+  code: "UNMAPPED_PUNCHES";
+  message: string;
+  count: number;
+}
 export interface FinalisationReadiness {
   from: string;
   to: string;
   ready: boolean;
   blockers: FinalisationBlocker[];
+  warnings: FinalisationWarning[];
 }
 export async function finalisationReadiness(from: string, to: string): Promise<FinalisationReadiness> {
   return (await apiClient.get<FinalisationReadiness>("/api/attendance/finalisation/readiness", { params: { from, to } })).data;
+}
+
+export type PeriodStatus = "OPEN" | "FINALISED" | "UNLOCKED";
+export interface PeriodRow {
+  from: string;
+  to: string;
+  label: string;
+  isOver: boolean;
+  status: PeriodStatus;
+  lockedDays: number;
+  last: { action: "FINALISE" | "UNLOCK"; at: string; by: string | null; reason: string; payrollConsumed: boolean } | null;
+}
+export async function listPeriods(asOf?: string): Promise<PeriodRow[]> {
+  return (await apiClient.get<{ periods: PeriodRow[] }>("/api/attendance/finalisation/periods", { params: { asOf } })).data.periods;
+}
+export async function finalisePeriod(body: { from: string; to: string; note?: string }): Promise<{ locked: number }> {
+  return (await apiClient.post<{ locked: number }>("/api/attendance/finalisation", { ...body, confirm: true })).data;
+}
+export async function unlockPeriod(body: { from: string; to: string; reason: string; confirmPayrollConsumed?: boolean }): Promise<{ unlocked: number }> {
+  return (await apiClient.post<{ unlocked: number }>("/api/attendance/finalisation/unlock", { ...body, confirm: true })).data;
 }

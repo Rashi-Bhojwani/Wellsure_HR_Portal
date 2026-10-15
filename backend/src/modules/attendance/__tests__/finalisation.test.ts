@@ -49,6 +49,7 @@ describe("period finalisation gate", () => {
 
   afterAll(async () => {
     await purgeAppendOnly("AuditLog", { entityId: `${FROM}..${TO}` });
+    await deleteWithDependents("AttendancePeriodLock", (await prisma.attendancePeriodLock.findMany({ where: { periodStart: d(FROM) }, select: { id: true } })).map((r) => r.id));
     await deleteWithDependents("Holiday", holidayIds);
     for (const x of [who, hr, emp]) await cleanupFullTestEmployee(x.employeeId);
     await deleteWithDependents("Shift", [shiftId]);
@@ -131,7 +132,7 @@ describe("period finalisation gate", () => {
     expect(denied.status).toBe(403);
   });
 
-  it("guard: finalisation.ts is the only code that sets is_locked", () => {
+  it("guard: finalisation.ts is the only code that sets or clears is_locked", () => {
     const root = path.resolve(import.meta.dirname, "../../..");
     const offenders: string[] = [];
     const walk = (dir: string) => {
@@ -141,13 +142,13 @@ describe("period finalisation gate", () => {
           if (name !== "__tests__") walk(full);
         } else if (/\.ts$/.test(name) && !name.endsWith(".test.ts")) {
           const src = readFileSync(full, "utf8");
-          const writesFlag = /data:\s*\{[^}]*\bisLocked:\s*true/s.test(src) || /is_locked\s*=\s*true/i.test(src);
+          const writesFlag = /data:\s*\{[^}]*\bisLocked:\s*(true|false)/s.test(src) || /is_locked\s*=\s*(true|false)/i.test(src);
           if (writesFlag && path.relative(root, full) !== path.join("modules", "attendance", "finalisation.ts")) offenders.push(path.relative(root, full));
         }
       }
     };
     walk(root);
     expect(offenders).toEqual([]);
-    expect(readFileSync(path.join(root, "modules/attendance/finalisation.ts"), "utf8")).toMatch(/await assertCanFinalise\(fromDate, toDate\);\n\s*const \{ count \} = await prisma\.dailyAttendance\.updateMany/);
+    expect(readFileSync(path.join(root, "modules/attendance/finalisation.ts"), "utf8")).toMatch(/await assertCanFinalise\(fromDate, toDate\);\n\s*const locked = await prisma\.\$transaction\(async \(tx\) => \{\n\s*const \{ count \} = await tx\.dailyAttendance\.updateMany/);
   });
 });

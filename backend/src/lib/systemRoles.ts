@@ -77,6 +77,8 @@ const HR_ADMIN_PERMS: string[] = [
   "attendance.regularization.bulk",
   // Phase 3 commit 2 — Manual Override and Shift Override (HR Admin, not HR Executive).
   "attendance.override.manage",
+  // Phase 3 commit 3 — locking a finished attendance cycle (HR Admin, Payroll Admin; unlocking is Super Admin only).
+  "attendance.finalise",
   "leave.policy.manage",
   "leave.recalculate",
   "leave.yearend.manage",
@@ -98,7 +100,7 @@ const HR_ADMIN_PERMS: string[] = [
   "attendance.config.manage",
   "attendance.devices.manage",
 ];
-const PAYROLL_ADMIN_PERMS = ["employee.view", "employee.bank.view", "employee.statutory.view", "leave.view", "reports.view", "reports.liability.view", "documents.pay.view", "attendance.view"];
+const PAYROLL_ADMIN_PERMS = ["employee.view", "employee.bank.view", "employee.statutory.view", "leave.view", "reports.view", "reports.liability.view", "documents.pay.view", "attendance.view", "attendance.finalise"];
 // leave.approve/leave.view here is a real fix over commit A's original
 // seed, caught while designing commit B's approve endpoint: MANAGER is
 // TEAM-scoped (its Role.dataScope), but scope alone doesn't grant a

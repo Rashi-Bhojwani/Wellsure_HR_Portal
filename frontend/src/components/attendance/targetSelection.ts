@@ -15,3 +15,12 @@ export function selectionOf(v: TargetValues, fixedEmployeeId?: string): { select
   }
   return v.locationId || v.departmentId ? { selection: { locationId: v.locationId, departmentId: v.departmentId } } : { error: "Choose a branch, a department, or switch to specific employees." };
 }
+
+/** People and dates carried from the Exceptions queue into the screen that corrects them (Regularizations, Manual Override, Shift Override). */
+export interface CarriedSelection {
+  employeeIds: string[];
+  /** So the pickers can show names for the carried ids without searching. */
+  people: Array<{ value: string; label: string }>;
+  from: string;
+  to: string;
+}

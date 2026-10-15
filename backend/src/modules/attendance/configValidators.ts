@@ -248,3 +248,38 @@ export const swipesQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(50),
 });
+
+// ── Period Finalisation (Phase 3 commit 3): a whole attendance cycle at a time ──
+export const finalisePeriodSchema = z.object({ from: z.iso.date(), to: z.iso.date(), note: z.string().trim().max(500).optional(), confirm: z.literal(true) }).refine((v) => v.from <= v.to, { message: "The end date is before the start date." });
+export const unlockPeriodSchema = z
+  .object({ from: z.iso.date(), to: z.iso.date(), reason: z.string().trim().min(5, "Say why (a few words)").max(500), confirmPayrollConsumed: z.boolean().default(false), confirm: z.literal(true) })
+  .refine((v) => v.from <= v.to, { message: "The end date is before the start date." });
+
+// ── The Exceptions queue (Phase 3 commit 3): server-paged, filtered; bulk resolve by preview then confirm ──
+const exceptionFilter = {
+  from: z.iso.date().optional(),
+  to: z.iso.date().optional(),
+  locationId: z.string().min(1).optional(),
+  departmentId: z.string().min(1).optional(),
+};
+export const exceptionsQuerySchema = z.object({
+  ...exceptionFilter,
+  type: z.enum(["MISSING_PUNCH", "SHORTFALL", "HALF_DAY_MIN_NOT_MET", "NO_SHIFT", "CLOCK_FLAGGED", "UNMAPPED_ID"]).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(200).default(50),
+});
+const filterObject = z.object(exceptionFilter);
+const mapSelection = z
+  .object({ deviceUserIds: z.array(z.string().min(1)).min(1).max(200).optional(), filter: filterObject.optional() })
+  .refine((v) => !!v.deviceUserIds !== !!v.filter, { message: "Choose device IDs by ticking them, or by a filter (branch, dates) — one or the other." });
+export const mapDeviceIdsPreviewSchema = mapSelection;
+export const mapDeviceIdsSchema = z.intersection(mapSelection, z.object({ fingerprint: z.string().regex(/^[0-9a-f]{64}$/), confirm: z.literal(true) }));
+const assignBase = z.object({
+  keys: z.array(z.object({ employeeId: z.string().min(1), date: z.iso.date() })).min(1).max(2000).optional(),
+  filter: filterObject.optional(),
+  shiftId: z.string().min(1),
+});
+const assignSelection = (v: { keys?: unknown; filter?: unknown }) => !!v.keys !== !!v.filter;
+const assignMessage = { message: "Choose days by ticking them, or by a filter (branch, department, dates) — one or the other." };
+export const assignShiftPreviewSchema = assignBase.refine(assignSelection, assignMessage);
+export const assignShiftSchema = assignBase.extend({ note: z.string().trim().max(500).default(""), fingerprint: z.string().regex(/^[0-9a-f]{64}$/), confirm: z.literal(true) }).refine(assignSelection, assignMessage);

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import dayjs from "dayjs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, Badge, Button, Col, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space, Switch, Table, Tabs, Tag, Tooltip, Typography, message } from "antd";
@@ -666,6 +667,8 @@ function BatchesTab() {
 // and the warnings; P2-H adds health at a glance, the incident history, and
 // ingestion volume).
 export function DevicesPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = ["devices", "agents", "incidents", "volume", "unmapped", "flagged", "batches"].includes(searchParams.get("tab") ?? "") ? searchParams.get("tab")! : "devices"; // links from other screens (Finalisation, Exceptions) open a tab
   const { data: unmapped = [] } = useQuery({ queryKey: ["biometric", "unmapped"], queryFn: biometricApi.listUnmapped });
   const { data: flagged } = useQuery({ queryKey: ["biometric", "flagged", "count"], queryFn: () => biometricApi.listFlagged() });
   const { data: openIncidents = [] } = useQuery({ queryKey: ["biometric", "incidents", "open"], queryFn: () => biometricApi.listIncidents({ state: "open", limit: 100 }) });
@@ -681,6 +684,8 @@ export function DevicesPage() {
       </HelpStrip>
       <DeviceWarnings />
       <Tabs
+        activeKey={tab}
+        onChange={(key) => setSearchParams({ tab: key }, { replace: true })}
         items={[
           { key: "devices", label: "Devices", children: <DevicesTab /> },
           { key: "agents", label: "Sync agents", children: <AgentsTab /> },

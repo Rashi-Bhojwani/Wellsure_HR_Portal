@@ -13,7 +13,7 @@ committed).
 | 1 | Auth, RBAC, org, employees | Done — data layer, authentication, org masters, employee management, import center, exports, audit log viewer and system settings all built and tested. Users & Roles admin screen deliberately deferred (built in Phase 5 commit E1 as Roles & Permissions). **Correction (2026-09-30): role assignment does not exist anywhere in the product** — Add Employee always assigns plain `EMPLOYEE` and nothing else assigns roles; an earlier version of this row claimed otherwise. Both are Phase 5 commit E1 ([`docs/plans/PHASE_5.md`](plans/PHASE_5.md)). |
 | 1.5 | AWS staging environment | Not started — **go-live checklist in [`DEPLOYMENT.md`](DEPLOYMENT.md): item 1, restrict `/iclock` to the office address, must be ticked before any ADMS push device is created in production** |
 | 2 | Biometric ingestion + attendance engine + real-time | In progress — plan approved ([`docs/plans/PHASE_2.md`](plans/PHASE_2.md)); P2-A (configuration), P2-B (ingestion), P2-C (rules engine), P2-D (manual entry and the muster) and P2-E (Attendance Info, Who Is In, the forgot-to-punch request) done, plus the fail-safe thresholds and the finalisation gate; P2-F done: F1 (the sync agent with our read-only device driver, and its server side), a follow-up (HR is told when punches are set aside) and F2 (the Windows service, release zip and INSTALL.md, proven on a Windows CI runner); P2-G done: G1 (the simulator's correctness: scenarios with expected outcomes, the month replay and its diff), G2a (the three routes, the `simulate` command, route replays) and G2b (the automated punch-to-screen latency test); P2-H done (device and agent health: incidents, alerts, recovery notices); P2-I done (the four gates recorded in [`PHASE_2_ACCEPTANCE.md`](plans/PHASE_2_ACCEPTANCE.md), an independent review with five fixes) and P2-J (the review follow-ups you approved) — **Phase 2 built and approved pending CI (green on 50ef7e8); awaiting your hands-on testing; close-out below** |
-| 3 | Attendance administration | In progress — plan approved with three changes ([`docs/plans/PHASE_3.md`](plans/PHASE_3.md)); commit 1 (regularization, complete, plus the assignment self-guard) approved, CI green; **commit 2 (Manual Override incl. a leave day worked with the balance returned, Shift Override, Shift Roster, Employee Swipes) built, awaiting your review**; commits 3 (finalisation, exceptions) and 4 (reports, close-out) not started |
+| 3 | Attendance administration | In progress — plan approved with three changes ([`docs/plans/PHASE_3.md`](plans/PHASE_3.md)); commit 1 (regularization, complete, plus the assignment self-guard) approved, CI green; commit 2 (Manual Override, Shift Override, Shift Roster, Employee Swipes) approved, pushed; **commit 3 (Period Finalisation, Attendance Exceptions, the latency-test fix and the time-dependence audit) built, awaiting your review**; commit 4 (reports, close-out) not started |
 | 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
 | 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | ✅ Done (2026-10-03) — commits A, B, C, D, D2, E1, E1.1, E2, E3, F and G (mobile bottom bar + PWA), plus interim commits. Full review — every screen and URL, every permission, what's stubbed, open questions, risks for Phase 6 — in [`docs/plans/PHASE_5_REVIEW.md`](plans/PHASE_5_REVIEW.md). Plan and as-built notes per commit in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
 | 5.5 | AWS production environment and go-live hardening | Not started |
@@ -4657,6 +4657,74 @@ nine-person rotation preview and write, the swipes list and export, and a device
 
 **Still to do in Phase 3:** commit 3 (Period Finalisation, Attendance Exceptions), commit 4 (reports incl. Excess hours, close-out with
 `docs/CONNECTION_DAY.md`).
+
+### Phase 3, commit 3 — Period Finalisation, Attendance Exceptions, and the time-dependence fixes (2026-10-16)
+
+Design and as-built notes: [`docs/plans/PHASE_3.md`](plans/PHASE_3.md) ("Commit 3 — as built").
+
+**Your three instructions on approving commit 2**
+1. **The latency test no longer depends on the hour, and does not skip.** For the duration of a run, the people it measures get an all-day
+   shift (`LATENCY24`, 00:00–23:59) through Shift Override for yesterday and today, so a punch sent at "now" is inside a window whatever the
+   hour; it puts everything back when it ends. The one instant no all-day window covers is midnight, so a run starting within five minutes of it
+   waits until just after (it never skips). Verified at 00:52 IST, the hour the CI run failed in: PASS (own screen about 145–205 ms, Who Is In?
+   about 1.4–1.6 s), shift inactive and overrides cleared afterwards. The 06:15 re-run of the failed CI job is not evidence of anything: this
+   fix is.
+2. **Time-dependence audit of the whole suite** (`backend/vitest.fakeClock.ts`, `npm run test:clock --prefix backend`): the full backend suite
+   run as if the clock read 00:10 IST (UTC still the day before), 00:10 IST on 1 January, ordinary midday in June 2027, 00:30 IST on 1 November,
+   a leap day in 2028, and mid-2030. Found and fixed: **`manual.test.ts` and the attendance parts of `managerReach.test.ts` use fixed September
+   2026 days, and marking/correcting reaches back a limited number of days (400 for marking), so both would have started failing in about a year
+   (they first failed in the 2028 run), the same kind of failure as the leave test that assumed it was still September**: "today" is now pinned just
+   after their dates; and `regularizationBulk.test.ts` compared a stored `createdAt` with `Date.now()` (fails under any fake instant; the DB stamps
+   the time), now no clock comparison. After the fixes the full suite is green at the normal clock, and the reruns at 00:10 IST, the 2028 leap day and 2030 showed nothing time-related (one assertion about Payroll Admin's new permission, not the clock, which I fixed). The limits of the tool: only JavaScript's clock moves (the database's
+   `now()` and Prisma's `@default(now())` stay real), so a test that depends on a database-stamped time at a particular hour is not covered;
+   and it costs about seven minutes per instant, so it is a tool to run, not a per-push gate (a scheduled CI job would be cheap if you want one).
+   Grep also found nothing else that computes "today" in UTC where the app means IST except offsets of several days, which can't flip.
+3. **PR #1:** I did not create it. It was opened for this branch from the Claude Code UI (the session notice said so); I closed it, since you
+   work on the branch and fast-forward main.
+
+**What exists now** (every screen routed; none is a placeholder)
+- **Attendance Period Finalisation** (`/admin/workforce/attendance/finalisation`; `attendance.finalise`: HR Admin, Payroll Admin, Super Admin):
+  the last 13 cycles with status (Open / Finalised / Unlocked), locked days and who last did what; pick one to see every blocker grouped by
+  reason with its count and a link to where it is fixed; **Finalise** when clear (note optional), which locks every day of the cycle. New
+  blocker: flagged punches nobody has decided. Unmapped punches warn only; placeholder rule values still block. **Unlock** is Super Admin only
+  (`attendance.unlock`, not grantable to any role), needs a reason, is audited, and if payroll has used the period says so and needs "Unlock
+  anyway" (payroll doesn't exist until Phase 6; the check answers "not used" until it registers).
+- **Attendance Exception** (`.../exceptions`; `attendance.view`): the days that need a look, counts per type up front (missing punch, short of the
+  full day, half-day minimum not met, no shift, clock-flagged, unmapped device IDs), filters (dates, branch, department, type), paged on the
+  server; a day leaves by itself once corrected. Bulk: **map every suggested device ID** (an ID equal to exactly one employee code, who has no ID
+  mapped yet) and **assign a shift to no-shift days**, each previewed and confirmed against the exact set, one audit row per item, your own
+  items left out; anything else carries the ticked people and dates into Regularizations, Manual Override or Shift Override.
+
+**Rules I decided myself** (veto any)
+1. A period is a whole attendance cycle; part of one is refused.
+2. Unlocking leaves the days as computed; the cycle must be finalised again before payroll reads it. Finalising a cycle with nothing in it is allowed.
+3. Bulk map only offers an ID whose employee has no device ID yet (a second would replace the first: a decision), from the first punch day.
+4. Assigning a shift to no-shift days changes the person's assignment **from their earliest selected day onward** (that is what the
+   effective-dated writer does), keeping their week-off pattern and policy; days before an assignment starts are left to Shift Override.
+5. Exceptions: default range 14 days, at most 93, 50 a page; unmapped IDs are company-wide scope only; finalised days can't be ticked.
+6. `attendance.view` is not manager-grantable, so the Exceptions queue is HR's screen today; the data-scope code is in and tested for when
+   a scoped holder exists.
+7. Finalisation tests and the route inventory treat the three finalisation routes and four exceptions routes as admin routes.
+
+**Known gap, for your decision (not built):** days that do not exist when a period is finalised are not locked. If HR adds an employee with a joining
+date inside an already-finalised cycle (or moves one earlier), the engine creates that person's days there unlocked, so the period no longer
+reads as fully locked. Options: refuse such a joining date while the cycle is finalised (unlock first); or have the engine skip days in a
+finalised cycle. I would take the first; it is a small change in the employee writer.
+
+**Verification:** fresh scratch database from migrations (37, seed), `db:drift` clean; full backend suite 990 passing (114 files); frontend 16;
+agent 160; lint and typecheck clean in every project. Mutation checks (rule removed, a named test fails): 18 of 18 caught (eight on
+finalisation: no Super Admin check, no reason, no payroll warning, blockers skipped, finalising twice, part of a cycle, flagged punches not
+blocking; the rest on the queue: late-in queued, scope ignored, branch filter ignored, own ID/own days not left out, existing mapping replaced,
+no fingerprint check, no audit rows, days that are not no-shift taken, no recompute requested). Two survived the first time (the service's own
+Super Admin and reason checks were shadowed by the route's permission and schema); a direct service test now kills both. Live walkthrough as
+Super Admin on a scratch database with seeded exception days: the counts and filters, assigning a shift (it refused the day before the assignment
+start and said to use Shift Override), mapping a suggested ID (the punches became the person's and a one-punch day appeared as a missing
+punch), ticked days carried into Regularizations and Manual Override with the names and dates filled in, the Process Attendance card
+linking to the page, finalising a September with rows (20 days locked), the short-reason refusal, unlock, finalise again. Plain-employee refusal
+is in the automated tests (403 on every new route).
+
+**Still to do in Phase 3:** commit 4 (reports incl. Excess hours; close-out with every screen and URL, what stays unproven until the device is
+connected, and `docs/CONNECTION_DAY.md`).
 
 ## Open questions
 

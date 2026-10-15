@@ -231,7 +231,7 @@ export async function listUnmapped() {
  * The mapping starts at `effectiveFrom`, or the first unmapped punch's date —
  * never before they joined; punches from before then stay unmapped.
  */
-export async function mapUnmapped(input: { deviceUserId: string; employeeId: string; effectiveFrom?: string }, meta: Meta) {
+export async function mapUnmapped(input: { deviceUserId: string; employeeId: string; effectiveFrom?: string }, meta: Meta, extraAudit: Record<string, unknown> = {}) {
   const employee = await prisma.employee.findUnique({ where: { id: input.employeeId }, select: { id: true, employeeCode: true, dateOfJoining: true } });
   if (!employee) throw new HttpError(404, "Employee not found.", "NOT_FOUND");
   if (employee.id === meta.actorEmployeeId) throw new HttpError(403, "You can't map unmapped punches to yourself. Someone else does, so nobody rules on their own attendance.", "OWN_ATTENDANCE");
@@ -251,7 +251,7 @@ export async function mapUnmapped(input: { deviceUserId: string; employeeId: str
     entityType: "Employee",
     entityId: employee.id,
     before: write.before,
-    after: { ...write.after, plan: write.plan, punchesResolved: reResolved.resolved, stillUnmapped: reResolved.stillUnmapped },
+    after: { ...write.after, plan: write.plan, punchesResolved: reResolved.resolved, stillUnmapped: reResolved.stillUnmapped, ...extraAudit },
   });
   return { mapping: { deviceUserId: write.after.deviceUserId, validFrom: iso(write.after.validFrom), validTo: write.after.validTo ? iso(write.after.validTo) : null, plan: write.plan }, ...reResolved };
 }

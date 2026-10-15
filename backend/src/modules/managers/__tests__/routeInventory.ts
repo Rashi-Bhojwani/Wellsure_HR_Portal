@@ -341,6 +341,9 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "POST /api/attendance/process": admin,
   "GET /api/attendance/process/:id": admin,
   "GET /api/attendance/finalisation/readiness": admin,
+  "GET /api/attendance/finalisation/periods": admin,
+  "POST /api/attendance/finalisation": admin,
+  "POST /api/attendance/finalisation/unlock": admin,
   // The Attendance Muster and manual entry (P2-D): attendance.manual.enter is
   // manager-grantable but branch-limited (attendance_manual_branches), per day.
   "GET /api/attendance/muster/cycles": everyone("the company's attendance cycle boundaries; no one's record"),
@@ -376,6 +379,12 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/attendance/shift-overrides": admin,
   "POST /api/attendance/roster/preview": admin,
   "POST /api/attendance/roster": admin,
+  // The Exceptions queue (Phase 3 commit 3): attendance.view in data scope; the bulk actions are HR's (device and config permissions).
+  "GET /api/attendance/exceptions": admin, // attendance.view is not manager-grantable; the service still applies the holder's data scope (exceptions.test.ts)
+  "POST /api/attendance/exceptions/map-device-ids/preview": admin,
+  "POST /api/attendance/exceptions/map-device-ids": admin,
+  "POST /api/attendance/exceptions/assign-shift/preview": admin,
+  "POST /api/attendance/exceptions/assign-shift": admin,
   "GET /api/attendance/swipes": scoped("swipes key, data scope: a manager sees their team's punches only; punches matching nobody are company-wide only"),
   "GET /api/attendance/swipes/options": scoped("swipes key; device names only, the same for anyone allowed"),
   "GET /api/attendance/swipes/export": scoped("the same rows as GET /swipes, capped, audited"),

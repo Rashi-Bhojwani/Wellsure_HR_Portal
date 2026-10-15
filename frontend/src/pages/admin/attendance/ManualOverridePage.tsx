@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { useLocation } from "react-router-dom";
 import dayjs from "dayjs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card, Flex, Form, Input, Modal, Select, Table, Tag, Tooltip, Typography, message } from "antd";
 import * as adminApi from "../../../api/attendanceAdmin";
 import * as employeeApi from "../../../api/employee";
 import { ManualOverrideForm } from "../../../components/attendance/ManualOverrideForm";
+import type { CarriedSelection } from "../../../components/attendance/targetSelection";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { apiErrorMessage } from "../../../lib/apiError";
 
@@ -13,6 +15,7 @@ const { Title, Text } = Typography;
 // Workforce → Attendance → Manual Override (Phase 3 commit 2): HR sets days directly (including a leave day the person
 // worked, which returns the leave balance), and sees every override that was made, who made it and why.
 export function ManualOverridePage() {
+  const carried = (useLocation().state as { carried?: CarriedSelection } | null)?.carried; // people and dates chosen on the Exceptions queue
   const queryClient = useQueryClient();
   const [employeeId, setEmployeeId] = useState<string | undefined>();
   const [search, setSearch] = useState("");
@@ -37,7 +40,7 @@ export function ManualOverridePage() {
         Manual Override
       </Title>
       <Card title="Set days" size="small">
-        <ManualOverrideForm onDone={() => setPage(1)} />
+        <ManualOverrideForm onDone={() => setPage(1)} carried={carried} />
       </Card>
       <Card title="Overrides and corrections made" size="small" extra={<Text type="secondary">Newest first. Approved correction requests are here too.</Text>}>
         <Flex gap={8} style={{ marginBottom: 12 }}>

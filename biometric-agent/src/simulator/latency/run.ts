@@ -6,6 +6,7 @@ import { chromium, type Browser, type Page } from "playwright-core";
 import { formatAttlogLine, instantToLocalTime } from "@shared/attendance/attlog";
 import { AgentRoute, FileRoute, PushRoute, type PunchLine } from "../routes";
 import { assertDevelopmentServer, ServerApi } from "../serverApi";
+import { msUntilClearOfMidnight, openTheDay, type AllDay } from "./allDay";
 import { setupSimulator } from "../setup";
 import { baselineOf, GATE_MS, summarisePerRoute, verdict, type Baseline, type RouteName, type Sample } from "./stats";
 
@@ -34,6 +35,7 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const WAIT_MS = 20_000; // longer than the gate: a slow sample should be measured, not abandoned
 
 const istToday = () => instantToLocalTime(new Date(), "Asia/Kolkata").slice(0, 10);
+const istTimeOfDay = () => instantToLocalTime(new Date(), "Asia/Kolkata").slice(11, 19);
 
 // ── the two screens, watched from inside the page ─────────────────────────
 // The code below runs in the browser, so it is plain JavaScript in a string
@@ -92,6 +94,12 @@ async function main(): Promise<number> {
   const password = process.env.SIM_PASSWORD;
   if (!password) throw new Error("Set SIM_PASSWORD (the HR account's password) in the environment.");
   const employeePassword = process.env.LATENCY_EMPLOYEE_PASSWORD ?? password;
+  // A run of a few minutes must not straddle midnight (the one moment no all-day window covers).
+  const hold = msUntilClearOfMidnight(istTimeOfDay());
+  if (hold > 0) {
+    out(`It is ${istTimeOfDay()} IST: waiting ${Math.round(hold / 1000)} s so the run does not straddle midnight.`);
+    await sleep(hold);
+  }
   const today = istToday();
   const outFile = arg("out") ?? path.join(AGENT_ROOT, "perf", "latency-last-run.json");
   const baselineFile = path.join(AGENT_ROOT, "perf", "latency-baseline.json");
@@ -110,11 +118,15 @@ async function main(): Promise<number> {
   const fresh = working.filter((e) => Number(stored[`${e.code}|${today}`]?.punchCount ?? 0) === 0);
   if (fresh.length < 8) throw new Error(`Need at least 8 people with no punches today to measure with; found ${fresh.length}. Use a freshly seeded development database.`);
 
+  // The hour this runs at must not matter: the people measured get an all-day shift for the duration (see allDay.ts).
+  const measured = fresh.filter((e) => e.code !== user).slice(0, 12);
+  let opened: AllDay | null = null;
   const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined });
   const pages: Page[] = [];
   const samples: Sample[] = [];
   let agent: AgentRoute | null = null;
   try {
+    opened = await openTheDay(api, today, measured.map((e) => e.code));
     const hr = await signIn(browser, web, user, password);
     pages.push(hr);
     await hr.goto(`${web}/admin/workforce/attendance/who-is-in`);
@@ -123,7 +135,7 @@ async function main(): Promise<number> {
     // Only people HR's board actually lists today (it is scoped, and not everyone is expected) can be measured on it.
     await hr.waitForFunction('document.body.innerText.includes(" · ")', undefined, { timeout: 15_000 });
     const listed = new Set(((await hr.evaluate("document.body.innerText")) as string).match(/[0-9]+(?= ·)/g) ?? []);
-    const candidates = fresh.filter((e) => e.code !== user && listed.has(e.code));
+    const candidates = measured.filter((e) => listed.has(e.code));
     if (candidates.length < 6) throw new Error(`Need at least 6 people on HR's Who Is In? board with no punches today; found ${candidates.length}. Use a freshly seeded development database.`);
 
     // Three employees watching their own Attendance Info, today's day panel open. Anyone who cannot sign in is passed over.
@@ -224,6 +236,7 @@ async function main(): Promise<number> {
     out(`PASS every sample on every screen within ${GATE_MS} ms`);
     return 0;
   } finally {
+    await opened?.restore();
     await agent?.stop();
     await browser.close().catch(() => undefined);
     rmSync(home, { recursive: true, force: true });

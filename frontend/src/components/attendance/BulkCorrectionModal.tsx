@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, Button, Checkbox, DatePicker, Descriptions, Form, Input, Modal, Radio, Select, Space, Table, Tag, Typography, message } from "antd";
@@ -8,6 +8,7 @@ import * as employeeApi from "../../api/employee";
 import * as orgApi from "../../api/org";
 import { apiErrorMessage } from "../../lib/apiError";
 import { useAuth } from "../../hooks/useAuth";
+import type { CarriedSelection } from "./targetSelection";
 
 const { Text } = Typography;
 const TIME = /^([01]?\d|2[0-3]):[0-5]\d$/;
@@ -34,8 +35,11 @@ interface Values {
  * exactly which employee-days change and from what to what, and what can't be corrected and why; CONFIRM applies
  * only that set. Raise it for an approver, or raise and approve in one go. One audit row per employee-day.
  */
-export function BulkCorrectionModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function BulkCorrectionModal({ open, onClose, carried }: { open: boolean; onClose: () => void; carried?: CarriedSelection }) {
   const [form] = Form.useForm<Values>();
+  useEffect(() => {
+    if (open && carried) form.setFieldsValue({ who: "LIST", employeeIds: carried.employeeIds, range: [dayjs(carried.from), dayjs(carried.to)] });
+  }, [open, carried, form]);
   const queryClient = useQueryClient();
   const { hasPermission } = useAuth();
   const canApprove = hasPermission("attendance.regularization.approve");
@@ -130,7 +134,7 @@ export function BulkCorrectionModal({ open, onClose }: { open: boolean; onClose:
               mode="multiple"
               showSearch={{ filterOption: false, onSearch: setSearch }}
               placeholder="Search by name or code"
-              options={(people?.rows ?? []).map((e) => ({ value: e.id, label: `${e.fullName} (${e.employeeCode})` }))}
+              options={[...(carried?.people ?? []), ...(people?.rows ?? []).filter((e) => !(carried?.people ?? []).some((k) => k.value === e.id)).map((e) => ({ value: e.id, label: `${e.fullName} (${e.employeeCode})` }))]}
             />
           </Form.Item>
         )}

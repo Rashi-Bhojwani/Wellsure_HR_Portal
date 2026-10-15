@@ -100,6 +100,7 @@ export const STANDALONE_ROOT_MODELS: Record<string, string> = {
   CostCentre: "org master; cleanupEmployeeTestOrgMasters",
   SystemSetting: "id-less singleton keyed by `key`; tests snapshot and restore it",
   RegularizationBatch: "groups a bulk correction; tests delete it by id after its requests",
+  AttendancePeriodLock: "the append-only record of finalising and unlocking an attendance cycle; keyed by dates, no employee",
   ImportBatch: "import upload batch; tests delete it by id (staging rows cascade)",
   LeaveType: "leave catalog; tests delete by id",
   Holiday: "company-wide holiday list; tests delete by id",
@@ -323,7 +324,7 @@ function delegate(modelName: string): Delegate {
 
 // Tables a database trigger keeps immutable, deletable only through the
 // test-purge exception (app.audit_purge = 'test' in a dev-marked database).
-const PURGE_GUARDED_MODELS = new Set(["RawPunch", "ManualAttendanceEntry", "AttendanceOverride", "ShiftOverride", "LeaveDayRelease"]);
+const PURGE_GUARDED_MODELS = new Set(["RawPunch", "ManualAttendanceEntry", "AttendanceOverride", "ShiftOverride", "LeaveDayRelease", "AttendancePeriodLock"]);
 
 // Deletes the given rows of `model` and every row that depends on them,
 // transitively, in FK-safe order. Optional FKs follow OPTIONAL_FK_POLICY.

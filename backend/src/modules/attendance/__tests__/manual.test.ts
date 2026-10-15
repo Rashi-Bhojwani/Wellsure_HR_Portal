@@ -19,6 +19,9 @@ const CYCLE = "2026-09-01";
 const ist = (date: string, time: string) => localTimeToInstant(`${date} ${time}:00`, "Asia/Kolkata");
 const tag = Date.now().toString(36).slice(-5);
 const d = (s: string) => new Date(`${s}T00:00:00Z`);
+// The dates below are September 2026, so "today" is pinned just after them: marking reaches back a fixed number of
+// days, and against the real clock these tests would start failing once that window moved past September.
+const TODAY = "2026-09-30";
 
 describe("manual entry and the attendance muster (P2-D)", () => {
   let org: TestOrgMasters; // branch X: the marker's
@@ -40,6 +43,7 @@ describe("manual entry and the attendance muster (P2-D)", () => {
     m.rows.find((r) => r.employeeId === who.employeeId)!.cells.find((c) => c.date === date) as Record<string, unknown>;
 
   beforeAll(async () => {
+    setBusinessTodayForTests(d(TODAY));
     org = await createEmployeeTestOrgMasters();
     otherOrg = await createEmployeeTestOrgMasters();
     for (const k of ["mA", "mB", "mC", "dev"] as const) p[k] = await createFullTestEmployee(org);
@@ -68,6 +72,7 @@ describe("manual entry and the attendance muster (P2-D)", () => {
   });
 
   afterAll(async () => {
+    setBusinessTodayForTests(null);
     await deleteWithDependents("ManualMusterUpload", uploadIds);
     await prisma.leaveRequest.deleteMany({ where: { employeeId: { in: Object.values(p).map((x) => x.employeeId) } } });
     for (const x of Object.values(p)) await cleanupFullTestEmployee(x.employeeId);
@@ -423,7 +428,7 @@ describe("manual entry and the attendance muster (P2-D)", () => {
       setBusinessTodayForTests(d("2026-09-28")); // a Monday nobody has marked yet
       expect((await runManualReminder()).notified).toBeGreaterThanOrEqual(1);
     } finally {
-      setBusinessTodayForTests(null);
+      setBusinessTodayForTests(d(TODAY));
     }
     const note = await prisma.notification.findFirstOrThrow({ where: { userId: p.marker.userId, type: "attendance.manual.reminder" } });
     expect(note.title).toBe("2 people not marked today"); // mA and mB (mC has left)

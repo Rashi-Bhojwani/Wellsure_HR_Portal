@@ -68,6 +68,9 @@ export const PERMISSION_KEYS = [
   // Phase 3 commit 2 — Manual Override and Shift Override (HR only), and the raw punch log
   "attendance.override.manage", // set a day's status or times, or its shift, directly (preview first); release approved leave on a worked day
   "attendance.swipes.view", // Employee Swipes: the raw punch log in data scope (a manager: their team)
+  // Phase 3 commit 3 — Period Finalisation
+  "attendance.finalise", // lock a finished attendance cycle so it can reach payroll
+  "attendance.unlock", // open a finalised cycle again, with a reason (Super Admin only)
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
@@ -167,6 +170,8 @@ export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
     description: "Set a day's status or times, or its shift, directly (after a preview), including marking a day of approved leave as worked and returning the leave balance. Company-wide; never one's own days.",
   },
   "attendance.swipes.view": { group: "Attendance", label: "View Employee Swipes", description: "See the raw punch log — every punch exactly as the device sent it — for people in their data scope. Punches not matched to anyone are visible company-wide only.", managerGrantable: true },
+  "attendance.finalise": { group: "Attendance", label: "Finalise attendance periods", description: "Lock a finished attendance cycle once nothing blocks it, so its attendance can reach payroll. Locked days can't be changed." },
+  "attendance.unlock": { group: "Attendance", label: "Unlock attendance periods", description: "Open a finalised attendance cycle again, with a written reason (and a warning if payroll has used it). Super Admin only.", meta: true },
   "helpdesk.manage": { group: "Helpdesk", label: "Helpdesk queue", description: "Work the ticket queue: assign, status, replies, internal notes, categories." },
   "helpdesk.sensitive.view": { group: "Helpdesk", label: "Sensitive tickets", description: "See tickets in categories marked sensitive (e.g. Payroll & Salary, Grievance)." },
 };

@@ -69,6 +69,8 @@ import { ReportsHomePage } from "../pages/admin/reports/ReportsHomePage";
 import { CelebrationsReportPage, HeadcountReportPage, JoinersReportPage, LeaveBalanceReportPage, LeaveLiabilityReportPage, LeaversReportPage, LopReportPage } from "../pages/admin/reports/reportPages";
 import { ManagerManagementPage } from "../pages/admin/adminTools/ManagerManagementPage";
 import { DevicesPage } from "../pages/admin/devices/DevicesPage";
+import { FinalisationPage } from "../pages/admin/attendance/FinalisationPage";
+import { ExceptionsPage } from "../pages/admin/attendance/ExceptionsPage";
 import { ProcessAttendancePage } from "../pages/admin/attendance/ProcessAttendancePage";
 import { MusterPage } from "../pages/admin/attendance/muster/MusterPage";
 import { WhoIsInPage } from "../pages/admin/attendance/WhoIsInPage";
@@ -179,8 +181,8 @@ export const adminApps: AdminApp[] = [
           { key: "attendance-info", label: "Attendance Info", path: "workforce/attendance/info", icon: CalendarOutlined, element: AttendanceInfoAdminPage },
           { key: "regularizations", label: "Regularizations", path: "workforce/attendance/regularizations", icon: AuditOutlined, element: RegularizationsPage },
           { key: "process-attendance", label: "Process Attendance", path: "workforce/attendance/process", icon: ToolOutlined, element: ProcessAttendancePage },
-          { key: "period-finalisation", label: "Attendance Period Finalisation", path: "workforce/attendance/finalisation", icon: SafetyOutlined, phase: "Phase 3" },
-          { key: "attendance-exception", label: "Attendance Exception", path: "workforce/attendance/exceptions", icon: AuditOutlined, phase: "Phase 3" },
+          { key: "period-finalisation", label: "Attendance Period Finalisation", path: "workforce/attendance/finalisation", icon: SafetyOutlined, element: FinalisationPage },
+          { key: "attendance-exception", label: "Attendance Exception", path: "workforce/attendance/exceptions", icon: AuditOutlined, element: ExceptionsPage },
           { key: "manual-override", label: "Manual Override", path: "workforce/attendance/manual-override", icon: ToolOutlined, element: ManualOverridePage },
           { key: "shift-override", label: "Shift Override", path: "workforce/attendance/shift-override", icon: SwapOutlined, element: ShiftOverridePage },
           { key: "attendance-settings", label: "Attendance Settings", path: "workforce/attendance/settings", icon: SettingOutlined, element: AttendanceSettingsPage },

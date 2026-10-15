@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { msUntilClearOfMidnight } from "../latency/allDay";
 import { baselineOf, summarise, summarisePerRoute, verdict, type Sample } from "../latency/stats";
 
 const sample = (route: Sample["route"], e: number | null, w: number | null): Sample => ({ route, employee: "1", employeeScreenMs: e, whoIsInMs: w, punchToServerMs: null });
@@ -37,5 +38,17 @@ describe("the latency test's pass and fail rules", () => {
     const v = verdict(regressed, summarisePerRoute(regressed), base);
     expect(v.length).toBe(3);
     expect(v[0]).toMatch(/baseline of 300 ms/);
+  });
+});
+
+// The test must not depend on the hour it runs at (allDay.ts): the only moment it holds back is the last minutes of the day.
+describe("msUntilClearOfMidnight", () => {
+  it("does not wait at any ordinary hour, including the small hours the test used to fail in", () => {
+    for (const t of ["00:00:00", "00:10:00", "03:30:00", "06:00:00", "12:00:00", "18:00:00", "23:54:59"]) expect(msUntilClearOfMidnight(t)).toBe(0);
+  });
+  it("waits until just after midnight when it is 23:55 or later", () => {
+    expect(msUntilClearOfMidnight("23:55:00")).toBe((5 * 60 + 30) * 1000);
+    expect(msUntilClearOfMidnight("23:59:30")).toBe(60 * 1000);
+    expect(msUntilClearOfMidnight("23:59:59")).toBe(31 * 1000);
   });
 });

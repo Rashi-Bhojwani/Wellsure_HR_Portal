@@ -9,6 +9,7 @@ import * as manual from "./manual/controller";
 import * as info from "./info/controller";
 import * as overrides from "./override/controller";
 import * as swipes from "./swipes/controller";
+import * as exceptionsQueue from "./exceptions/controller";
 import {
   assignmentChangeSchema,
   assignmentListQuerySchema,
@@ -25,6 +26,8 @@ import {
   processRunSchema,
   processScopeQuerySchema,
   finalisationReadinessQuerySchema,
+  finalisePeriodSchema,
+  unlockPeriodSchema,
   markPresentSchema,
   monthQuerySchema,
   dateParamsSchema,
@@ -37,6 +40,11 @@ import {
   overridePreviewSchema,
   rosterConfirmSchema,
   swipesQuerySchema,
+  exceptionsQuerySchema,
+  mapDeviceIdsPreviewSchema,
+  mapDeviceIdsSchema,
+  assignShiftPreviewSchema,
+  assignShiftSchema,
   rosterPreviewSchema,
   shiftOverrideClearSchema,
   shiftOverrideConfirmSchema,
@@ -102,7 +110,11 @@ attendanceRouter.post("/process", canProcess, validate({ body: processRunSchema 
 attendanceRouter.get("/process/:id", canProcess, validate({ params: idParamsSchema }), processRuns.getRun);
 // What still blocks finalising a period (placeholder rule values, NM/NS/provisional days).
 // Finalisation itself is Phase 3; the gate it must pass is built now.
-attendanceRouter.get("/finalisation/readiness", canProcess, validate({ query: finalisationReadinessQuerySchema }), processRuns.finalisationReadiness);
+attendanceRouter.get("/finalisation/readiness", requireAnyPermission("attendance.process", "attendance.finalise"), validate({ query: finalisationReadinessQuerySchema }), processRuns.finalisationReadiness);
+// Period Finalisation (attendance.finalise: HR Admin, Payroll Admin; unlock is Super Admin only: a meta permission).
+attendanceRouter.get("/finalisation/periods", requirePermission("attendance.finalise"), processRuns.listPeriods);
+attendanceRouter.post("/finalisation", requirePermission("attendance.finalise"), validate({ body: finalisePeriodSchema }), processRuns.finalise);
+attendanceRouter.post("/finalisation/unlock", requirePermission("attendance.unlock"), validate({ body: unlockPeriodSchema }), processRuns.unlock);
 
 // The Attendance Muster and manual entry (P2-D, docs/plans/PHASE_2.md §5).
 // Seen with attendance.view (data scope) or attendance.manual.enter (only
@@ -158,6 +170,15 @@ attendanceRouter.post("/shift-overrides/preview", canOverride, validate({ body: 
 attendanceRouter.post("/shift-overrides/clear", canOverride, validate({ body: shiftOverrideClearSchema }), overrides.shiftClear);
 attendanceRouter.post("/shift-overrides", canOverride, validate({ body: shiftOverrideConfirmSchema }), overrides.shiftConfirm);
 attendanceRouter.get("/shift-overrides", canOverride, validate({ query: shiftOverrideListQuerySchema }), overrides.shiftList);
+// Exceptions queue: days that need a person to look (attendance.view, data-scoped; the unmapped device IDs are for company-wide
+// scope). Bulk resolve is preview then confirm: mapping device IDs needs attendance.devices.manage, assigning a shift
+// attendance.config.manage (both checked again in the service, with the actor's own items left out).
+attendanceRouter.get("/exceptions", requirePermission("attendance.view"), validate({ query: exceptionsQuerySchema }), exceptionsQueue.list);
+attendanceRouter.post("/exceptions/map-device-ids/preview", requirePermission("attendance.devices.manage"), validate({ body: mapDeviceIdsPreviewSchema }), exceptionsQueue.previewMap);
+attendanceRouter.post("/exceptions/map-device-ids", requirePermission("attendance.devices.manage"), validate({ body: mapDeviceIdsSchema }), exceptionsQueue.confirmMap);
+attendanceRouter.post("/exceptions/assign-shift/preview", requirePermission("attendance.config.manage"), validate({ body: assignShiftPreviewSchema }), exceptionsQueue.previewAssign);
+attendanceRouter.post("/exceptions/assign-shift", requirePermission("attendance.config.manage"), validate({ body: assignShiftSchema }), exceptionsQueue.confirmAssign);
+
 // Employee Swipes: the raw punch log (attendance.swipes.view: HR; a manager by grant, their team only).
 const canSeeSwipes = requirePermission("attendance.swipes.view");
 attendanceRouter.get("/swipes", canSeeSwipes, validate({ query: swipesQuerySchema }), swipes.list);

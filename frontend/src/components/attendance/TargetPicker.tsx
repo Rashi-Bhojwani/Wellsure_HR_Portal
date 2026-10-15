@@ -7,7 +7,7 @@ import type { TargetValues } from "./targetSelection";
 
 
 /** The "Who?" part of the attendance administration forms: everyone at a branch/department, or a list of people. */
-export function TargetPicker({ fixed }: { fixed?: { employeeId: string; name: string } }) {
+export function TargetPicker({ fixed, known = [] }: { fixed?: { employeeId: string; name: string }; known?: Array<{ value: string; label: string }> }) {
   const form = Form.useFormInstance();
   const who = (Form.useWatch("who", form) as TargetValues["who"]) ?? "GROUP";
   const [search, setSearch] = useState("");
@@ -35,7 +35,7 @@ export function TargetPicker({ fixed }: { fixed?: { employeeId: string; name: st
         </Space>
       ) : (
         <Form.Item name="employeeIds" label="Employees">
-          <Select mode="multiple" showSearch={{ filterOption: false, onSearch: setSearch }} placeholder="Search by name or code" options={(people?.rows ?? []).map((e) => ({ value: e.id, label: `${e.fullName} (${e.employeeCode})` }))} />
+          <Select mode="multiple" showSearch={{ filterOption: false, onSearch: setSearch }} placeholder="Search by name or code" options={[...known, ...(people?.rows ?? []).filter((e) => !known.some((k) => k.value === e.id)).map((e) => ({ value: e.id, label: `${e.fullName} (${e.employeeCode})` }))]} />
         </Form.Item>
       )}
     </>

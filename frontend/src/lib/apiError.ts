@@ -44,3 +44,8 @@ export function apiErrorMessage(err: unknown, fallback: string): string {
   if (status && status >= 500) return `The server hit a problem (error ${status}) and could not do that. Try again; if it keeps happening, tell whoever looks after this system.`;
   return fallback;
 }
+
+/** The machine-readable code of an API error (for example PAYROLL_CONSUMED), if the response carried one. */
+export function apiErrorCode(err: unknown): string | undefined {
+  return (err as AxiosError<ApiErrorBody>).response?.data?.error?.code;
+}

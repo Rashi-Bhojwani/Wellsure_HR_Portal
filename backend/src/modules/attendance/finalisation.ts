@@ -1,6 +1,7 @@
-import { writeAuditLog } from "../../lib/audit";
+import { writeAuditLogs } from "../../lib/audit";
 import { businessToday } from "../../lib/businessDate";
-import { assignmentsBetween, namesOn } from "../../lib/effectiveDating";
+import { loadCycleRules, recentCycles } from "../../lib/attendanceCycle";
+import { assignmentsBetween, namesOn, payrollLockedBetween } from "../../lib/effectiveDating";
 import { prisma } from "../../lib/prisma";
 import { HttpError } from "../../middleware/errorHandler";
 import { computeAttendance } from "./compute";
@@ -28,6 +29,7 @@ import type { Meta } from "./processService";
 //    leave or holiday not yet processed, a day never computed, or one still
 //    provisional;
 //  - a forgot-to-punch request still waiting for a decision (P2-E);
+//  - a punch with an implausible time (flagged) still waiting for HR's decision (Phase 3): it could change a day once decided;
 //  - the period hasn't ended yet.
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -43,6 +45,7 @@ const FIELD_LABELS: Record<string, string> = {
 
 export type FinalisationBlocker =
   | { code: "PERIOD_NOT_OVER"; message: string }
+  | { code: "FLAGGED_PUNCHES"; message: string; count: number; punches: Array<{ id: string; deviceUserId: string; employeeId: string | null; employeeName: string | null; date: string; flag: string }> }
   | { code: "PENDING_REGULARIZATIONS"; message: string; count: number; days: Array<{ employeeId: string; employeeName: string; date: string }> }
   | { code: "PLACEHOLDER_RULES"; message: string; rules: Array<{ kind: "SHIFT" | "POLICY"; id: string; code: string; name: string; fields: string[] }> }
   | { code: "NOT_MARKED" | "NO_SHIFT" | "NOT_UP_TO_DATE"; message: string; count: number; days: Array<{ employeeId: string; employeeName: string; date: string }> };
@@ -144,6 +147,20 @@ export async function finalisationBlockers(fromDate: string, toDate: string): Pr
     });
   }
 
+  // A flagged punch nobody has decided could change a day when it is: HR decides first (Phase 3).
+  const flaggedWhere = { businessDate: { gte: from, lte: to }, flag: { not: null }, flagResolution: null } as const;
+  const flaggedCount = await prisma.rawPunch.count({ where: flaggedWhere });
+  if (flaggedCount) {
+    const rows = await prisma.rawPunch.findMany({ where: flaggedWhere, select: { id: true, deviceUserId: true, employeeId: true, businessDate: true, flag: true }, orderBy: [{ businessDate: "asc" }, { punchedAt: "asc" }], take: LIST_LIMIT });
+    const names = await namesOn([...new Set(rows.map((r) => r.employeeId).filter((x): x is string => !!x))], to);
+    blockers.push({
+      code: "FLAGGED_PUNCHES",
+      message: `${plural(flaggedCount, "punch", "punches")} with an implausible time ${flaggedCount === 1 ? "is" : "are"} still waiting for a decision. Accept or discard ${flaggedCount === 1 ? "it" : "them"} in Devices → Flagged.`,
+      count: flaggedCount,
+      punches: rows.map((r) => ({ id: r.id, deviceUserId: r.deviceUserId, employeeId: r.employeeId, employeeName: r.employeeId ? (names.get(r.employeeId) ?? null) : null, date: iso(r.businessDate), flag: r.flag as string })),
+    });
+  }
+
   const stale = await staleDays(ids, fromDate, toDate);
   if (stale.count) {
     blockers.push({
@@ -163,19 +180,139 @@ export async function assertCanFinalise(fromDate: string, toDate: string): Promi
   throw new HttpError(409, `This period can't be finalised yet. ${blockers.map((b) => b.message).join(" ")}`, "FINALISATION_BLOCKED", { blockers });
 }
 
+/** Things worth knowing that do not stop a period being finalised. */
+export interface FinalisationWarning {
+  code: "UNMAPPED_PUNCHES";
+  message: string;
+  count: number;
+  deviceUserIds: string[];
+}
+
+async function finalisationWarnings(fromDate: string, toDate: string): Promise<FinalisationWarning[]> {
+  const where = { businessDate: { gte: day(fromDate), lte: day(toDate) }, employeeId: null } as const;
+  const count = await prisma.rawPunch.count({ where });
+  if (!count) return [];
+  const ids = await prisma.rawPunch.findMany({ where, distinct: ["deviceUserId"], select: { deviceUserId: true }, orderBy: { deviceUserId: "asc" }, take: 20 });
+  return [
+    {
+      code: "UNMAPPED_PUNCHES",
+      message: `${plural(count, "punch", "punches")} in this period belong${count === 1 ? "s" : ""} to device IDs that match no employee. They don't change anyone's attendance, but check nobody is missing a day (Attendance Exceptions, or Devices → Unmapped).`,
+      count,
+      deviceUserIds: ids.map((r) => r.deviceUserId),
+    },
+  ];
+}
+
 export async function finalisationReadiness(fromDate: string, toDate: string) {
   const blockers = await finalisationBlockers(fromDate, toDate);
-  return { from: fromDate, to: toDate, ready: blockers.length === 0, blockers };
+  return { from: fromDate, to: toDate, ready: blockers.length === 0, blockers, warnings: await finalisationWarnings(fromDate, toDate) };
 }
 
 /**
- * Lock every computed day in the period. The single writer of `is_locked`;
- * Phase 3 puts the Period Finalisation screen, unlock and the payroll lock
- * check on top of it. Refuses while `finalisationBlockers` reports anything.
+ * Lock every computed day in the period. The single writer of `is_locked = true`; refuses while `finalisationBlockers` reports
+ * anything. The lock and its record (who, when) are one transaction. Callers go through `finaliseCycle`, which also insists
+ * the period is a whole attendance cycle.
  */
-export async function finalisePeriod(fromDate: string, toDate: string, meta: Meta): Promise<{ locked: number }> {
+export async function finalisePeriod(fromDate: string, toDate: string, meta: Meta, note = ""): Promise<{ locked: number }> {
   await assertCanFinalise(fromDate, toDate);
-  const { count } = await prisma.dailyAttendance.updateMany({ where: { date: { gte: day(fromDate), lte: day(toDate) }, isLocked: false }, data: { isLocked: true } });
-  await writeAuditLog({ ...meta, action: "attendance.period.finalised", entityType: "DailyAttendance", entityId: `${fromDate}..${toDate}`, after: { from: fromDate, to: toDate, locked: count } });
-  return { locked: count };
+  const locked = await prisma.$transaction(async (tx) => {
+    const { count } = await tx.dailyAttendance.updateMany({ where: { date: { gte: day(fromDate), lte: day(toDate) }, isLocked: false }, data: { isLocked: true } });
+    await tx.attendancePeriodLock.create({ data: { periodStart: day(fromDate), periodEnd: day(toDate), action: "FINALISE", reason: note, lockedDays: count, actorUserId: meta.actorUserId } });
+    await writeAuditLogs([{ ...meta, action: "attendance.period.finalised", entityType: "DailyAttendance", entityId: `${fromDate}..${toDate}`, after: { from: fromDate, to: toDate, locked: count, note } }], tx);
+    return count;
+  });
+  return { locked };
+}
+
+// ── Periods: the attendance cycles and what has been done to them (Phase 3 commit 3) ──────────
+
+export type PeriodStatus = "OPEN" | "FINALISED" | "UNLOCKED";
+
+export interface PeriodRow {
+  from: string;
+  to: string;
+  label: string;
+  isOver: boolean;
+  /** OPEN: never finalised. FINALISED: locked. UNLOCKED: was finalised, then opened again by a Super Admin, not yet finalised again. */
+  status: PeriodStatus;
+  lockedDays: number;
+  last: { action: "FINALISE" | "UNLOCK"; at: string; by: string | null; reason: string; payrollConsumed: boolean } | null;
+}
+
+async function userNames(userIds: string[]) {
+  const users = await prisma.user.findMany({ where: { id: { in: [...new Set(userIds)] } }, select: { id: true, employeeId: true } });
+  const names = await namesOn(users.map((u) => u.employeeId), businessToday());
+  return new Map(users.map((u) => [u.id, names.get(u.employeeId) ?? null]));
+}
+
+/** The latest cycles (the current one and the twelve before), newest first, each with its status. */
+/** The 13 cycles ending at or before `asOf` (default today) — newest first. */
+export async function listPeriods(asOf?: string): Promise<PeriodRow[]> {
+  const cycles = recentCycles(await loadCycleRules(), asOf ? day(asOf) : businessToday(), 13);
+  const today = iso(businessToday());
+  const rows = await Promise.all(
+    cycles.map(async (c) => {
+      const [last, lockedDays] = await Promise.all([
+        prisma.attendancePeriodLock.findFirst({ where: { periodStart: c.start, periodEnd: c.end }, orderBy: { seq: "desc" } }),
+        prisma.dailyAttendance.count({ where: { date: { gte: c.start, lte: c.end }, isLocked: true } }),
+      ]);
+      return { c, last, lockedDays };
+    }),
+  );
+  const names = await userNames(rows.flatMap((r) => (r.last ? [r.last.actorUserId] : [])));
+  return rows.map(({ c, last, lockedDays }) => ({
+    from: iso(c.start),
+    to: iso(c.end),
+    label: c.label,
+    isOver: iso(c.end) < today,
+    status: !last ? "OPEN" : last.action === "FINALISE" ? "FINALISED" : "UNLOCKED",
+    lockedDays,
+    last: last ? { action: last.action, at: last.createdAt.toISOString(), by: names.get(last.actorUserId) ?? null, reason: last.reason, payrollConsumed: last.payrollConsumed } : null,
+  }));
+}
+
+/** The cycle that is exactly [from, to]; a part of one, or two, is refused (a half-locked cycle helps nobody). */
+async function cycleExactly(fromDate: string, toDate: string) {
+  const cycle = recentCycles(await loadCycleRules(), day(toDate), 1)[0]!;
+  if (iso(cycle.start) !== fromDate || iso(cycle.end) !== toDate) {
+    throw new HttpError(400, "That isn't a whole attendance cycle. A period is finalised and unlocked a whole cycle at a time.", "NOT_A_CYCLE");
+  }
+  return cycle;
+}
+
+async function latestAction(fromDate: string, toDate: string) {
+  return prisma.attendancePeriodLock.findFirst({ where: { periodStart: day(fromDate), periodEnd: day(toDate) }, orderBy: { seq: "desc" } });
+}
+
+/** Finalise a whole attendance cycle once nothing blocks it (the server enforces every blocker). */
+export async function finaliseCycle(fromDate: string, toDate: string, meta: Meta, note = "") {
+  await cycleExactly(fromDate, toDate);
+  if ((await latestAction(fromDate, toDate))?.action === "FINALISE") throw new HttpError(409, "This period is already finalised.", "ALREADY_FINALISED");
+  return finalisePeriod(fromDate, toDate, meta, note);
+}
+
+/**
+ * Open a finalised cycle again (Super Admin only, with a reason). If payroll has used the period the answer is a 409 that
+ * names it, and the unlock goes ahead only when the caller confirms they know. Payroll doesn't exist until Phase 6, so
+ * the check answers "not used" until then (lib/effectiveDating's payroll lock hook). The days stay as they were computed;
+ * they are open to changes and to Process Attendance again, and the cycle must be finalised again before payroll reads it.
+ */
+export async function unlockCycle(fromDate: string, toDate: string, input: { reason: string; confirmPayrollConsumed: boolean }, actor: { roleCodes: string[] }, meta: Meta) {
+  if (!actor.roleCodes.includes("SUPER_ADMIN")) throw new HttpError(403, "Only a Super Admin can unlock a finalised period.", "SUPER_ADMIN_ONLY");
+  await cycleExactly(fromDate, toDate);
+  const reason = input.reason.trim();
+  if (reason.length < 5) throw new HttpError(400, "Say why the period is being unlocked (a few words).", "VALIDATION_ERROR");
+  const last = await latestAction(fromDate, toDate);
+  if (last?.action !== "FINALISE") throw new HttpError(409, "This period isn't finalised, so there is nothing to unlock.", "NOT_FINALISED");
+  const payroll = await payrollLockedBetween(day(fromDate), day(toDate));
+  if (payroll.locked && !input.confirmPayrollConsumed) {
+    throw new HttpError(409, `Payroll for ${payroll.period} has already used this period's attendance. Unlocking it lets attendance change under a payroll that was run on the old figures. Confirm that you understand, or leave it locked.`, "PAYROLL_CONSUMED", { period: payroll.period });
+  }
+  const unlocked = await prisma.$transaction(async (tx) => {
+    const { count } = await tx.dailyAttendance.updateMany({ where: { date: { gte: day(fromDate), lte: day(toDate) }, isLocked: true }, data: { isLocked: false } });
+    await tx.attendancePeriodLock.create({ data: { periodStart: day(fromDate), periodEnd: day(toDate), action: "UNLOCK", reason, lockedDays: count, payrollConsumed: payroll.locked, actorUserId: meta.actorUserId } });
+    await writeAuditLogs([{ ...meta, action: "attendance.period.unlocked", entityType: "DailyAttendance", entityId: `${fromDate}..${toDate}`, after: { from: fromDate, to: toDate, unlocked: count, reason, payrollConsumed: payroll.locked, payrollPeriod: payroll.period ?? null } }], tx);
+    return count;
+  });
+  return { unlocked };
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import dayjs from "dayjs";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Alert, Button, Checkbox, DatePicker, Descriptions, Form, Input, Radio, Select, Space, Table, Tag, Typography, message } from "antd";
@@ -7,7 +7,7 @@ import type { OverrideBody, OverridePreview } from "../../api/attendanceAdmin";
 import { REASON_OPTIONS, type ReasonCode } from "../../api/attendanceInfo";
 import { apiErrorMessage } from "../../lib/apiError";
 import { TargetPicker } from "./TargetPicker";
-import { selectionOf, type TargetValues } from "./targetSelection";
+import { selectionOf, type CarriedSelection, type TargetValues } from "./targetSelection";
 
 const { Text } = Typography;
 const TIME = /^([01]?\d|2[0-3]):[0-5]\d$/;
@@ -30,8 +30,11 @@ interface Values extends TargetValues {
  * appears. "They worked on a day of approved leave" is the explicit action that releases that leave and returns the
  * days to the balance, in the same step.
  */
-export function ManualOverrideForm({ fixed, onDone }: { fixed?: { employeeId: string; name: string; date: string }; onDone?: () => void }) {
+export function ManualOverrideForm({ fixed, onDone, carried }: { fixed?: { employeeId: string; name: string; date: string }; onDone?: () => void; carried?: CarriedSelection }) {
   const [form] = Form.useForm<Values>();
+  useEffect(() => {
+    if (carried) form.setFieldsValue({ who: "LIST", employeeIds: carried.employeeIds, range: [dayjs(carried.from), dayjs(carried.to)] });
+  }, [carried, form]);
   const queryClient = useQueryClient();
   const [preview, setPreview] = useState<{ data: OverridePreview; body: OverrideBody } | null>(null);
   const [looked, setLooked] = useState(false);
@@ -107,7 +110,7 @@ export function ManualOverrideForm({ fixed, onDone }: { fixed?: { employeeId: st
           <Alert type="info" showIcon style={{ marginBottom: 12 }} title={`${fixed.name}, ${dayjs(fixed.date).format("ddd D MMM YYYY")}`} />
         ) : (
           <>
-            <TargetPicker />
+            <TargetPicker known={carried?.people} />
             <Form.Item name="range" label="Dates" rules={[{ required: true, message: "Choose the dates" }]}>
               <DatePicker.RangePicker format="D MMM YYYY" disabledDate={(d) => d.isAfter(dayjs().subtract(1, "day"), "day")} />
             </Form.Item>

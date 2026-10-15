@@ -49,6 +49,19 @@ export function inForceSql(alias: "jh", day: Date = businessToday()): Prisma.Sql
 }
 
 /**
+ * Raw-SQL condition: the employee `employeeIdExpr` was placed at this branch and/or department on the date `dateExpr`
+ * (a column such as d.date). For paged, filterable lists over per-day rows (the exceptions queue), where reading
+ * placements one person at a time is not an option. The placement history is only ever read here.
+ */
+export function placedAtSql(employeeIdExpr: Prisma.Sql, dateExpr: Prisma.Sql, where: { locationId?: string; departmentId?: string }): Prisma.Sql {
+  const extra = [
+    where.locationId ? Prisma.sql`AND jh.location_id = ${where.locationId}` : Prisma.empty,
+    where.departmentId ? Prisma.sql`AND jh.department_id = ${where.departmentId}` : Prisma.empty,
+  ];
+  return Prisma.sql`EXISTS (SELECT 1 FROM employee_job_history jh WHERE jh.employee_id = ${employeeIdExpr} AND jh.effective_from <= ${dateExpr} AND (jh.effective_to IS NULL OR jh.effective_to > ${dateExpr}) ${Prisma.join(extra, " ")})`;
+}
+
+/**
  * Where a new person's first name/placement/bank row starts: their date of
  * joining, or today if they join later — so a pre-joiner is in force (named,
  * in their team) from the day they're added. Employment itself is always
@@ -322,6 +335,14 @@ type PayrollLockCheck = (day: Date) => Promise<{ locked: boolean; period?: strin
 let payrollLockCheck: PayrollLockCheck = async () => ({ locked: false });
 export function setPayrollLockCheck(check: PayrollLockCheck | null): void {
   payrollLockCheck = check ?? (async () => ({ locked: false }));
+}
+/** Whether payroll has locked any day in [from, to] (inclusive), and the first period that did. Until Phase 6 nothing is locked. */
+export async function payrollLockedBetween(from: Date, to: Date): Promise<{ locked: boolean; period?: string }> {
+  for (let d = from; d.getTime() <= to.getTime(); d = addCalendarDays(d, 1)) {
+    const r = await payrollLockCheck(d);
+    if (r.locked) return { locked: true, period: r.period ?? iso(d) };
+  }
+  return { locked: false };
 }
 export async function assertNotInLockedPayroll(day: Date): Promise<void> {
   const r = await payrollLockCheck(day);

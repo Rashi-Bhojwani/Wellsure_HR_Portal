@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import dayjs from "dayjs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, Button, Card, Checkbox, DatePicker, Descriptions, Flex, Form, Input, Modal, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
@@ -7,7 +8,7 @@ import type { ShiftOverrideBody, ShiftOverridePreview } from "../../../api/atten
 import * as attendanceApi from "../../../api/attendance";
 import * as employeeApi from "../../../api/employee";
 import { TargetPicker } from "../../../components/attendance/TargetPicker";
-import { selectionOf, type TargetValues } from "../../../components/attendance/targetSelection";
+import { selectionOf, type CarriedSelection, type TargetValues } from "../../../components/attendance/targetSelection";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { apiErrorMessage } from "../../../lib/apiError";
 
@@ -24,6 +25,10 @@ interface Values extends TargetValues {
 // every change is on record. For a repeating pattern from tomorrow, use Shift Roster instead.
 export function ShiftOverridePage() {
   const [form] = Form.useForm<Values>();
+  const carried = (useLocation().state as { carried?: CarriedSelection } | null)?.carried; // people and dates chosen on the Exceptions queue
+  useEffect(() => {
+    if (carried) form.setFieldsValue({ who: "LIST", employeeIds: carried.employeeIds, range: [dayjs(carried.from), dayjs(carried.to)] });
+  }, [carried, form]);
   const [noteForm] = Form.useForm<{ note: string }>();
   const queryClient = useQueryClient();
   const [preview, setPreview] = useState<{ data: ShiftOverridePreview; body: ShiftOverrideBody } | null>(null);
@@ -95,7 +100,7 @@ export function ShiftOverridePage() {
             For a swap or cover on particular days: a past day in the current or previous cycle, or a day up to the usual scheduling limit ahead. Only the shift changes; the week-off pattern and policy stay the person's own. Your own
             days are left out.
           </Text>
-          <TargetPicker />
+          <TargetPicker known={carried?.people} />
           <Space wrap align="start">
             <Form.Item name="range" label="Dates" rules={[{ required: true, message: "Choose the dates" }]}>
               <DatePicker.RangePicker format="D MMM YYYY" />

@@ -290,6 +290,69 @@ Built as designed above; what differs, and what was added beyond it:
   payroll-consumed warning via the provider; exceptions counts vs a seeded month, filters, paging, scope IDOR, volume (500
   employees), bulk map/assign with audit, self-action guards.
 
+### Commit 3 — as built (2026-10-16)
+
+Built as specified above; what the build settled, and what was added:
+
+- **Migration (one):** `20261015090000_period_finalisation`: `attendance_period_locks` (append-only like the other history tables: id, `seq`,
+  period start and end, `action` FINALISE or UNLOCK, reason, locked day count, `payroll_consumed`, actor, time; checks that the period is
+  forward and an unlock has a reason of at least five characters; the test-purge exception is the same one) and the two permissions.
+  `attendance.finalise` is granted to HR Admin and Payroll Admin; `attendance.unlock` is `meta: true` (granted to no role, Super Admin holds it
+  in code), so it cannot be given to anyone else from the Roles screen.
+- **A period is a whole attendance cycle.** `GET /api/attendance/finalisation/periods` lists the 13 cycles ending at or before `asOf`
+  (default today) with their status: *Open* (never finalised), *Finalised*, or *Unlocked* (finalised, then opened again, not yet finalised
+  again), the locked day count and the last action with who and why. `POST /finalisation` and `/finalisation/unlock` take exactly a cycle (a
+  part of one, or two, is a 400 `NOT_A_CYCLE`: a half-locked cycle helps nobody). Finalising a finalised period is a 409.
+- **Finalise = the one transaction** that sets `is_locked` on every day of the cycle, writes the event row and writes the audit row
+  (`attendance.period.finalised`); only `finalisation.ts` may set or clear `is_locked` (the guard test now checks the transaction form).
+  Locked days refuse every writer (override, shift override, regularization, manual entry, leave release, Process Attendance: each already
+  checked the day's flag; a test now exercises all of them against a finalised period).
+- **New blocker, `FLAGGED_PUNCHES`:** a punch with an implausible time that nobody has accepted or discarded, in the period. It could change a
+  day once decided, so it blocks (your earlier rule that a placeholder rule value also stays a hard block is unchanged). **Unmapped punches
+  warn only** (`warnings: UNMAPPED_PUNCHES`): they belong to nobody, so they change nobody's day until mapped. The blockers are shown grouped by
+  reason with their counts and a link to the screen that fixes each (Attendance Settings, Muster, the Exceptions queue narrowed to the period,
+  Process Attendance, Devices → Flagged, Regularizations); the same list is on Process Attendance's "Ready to finalise?" card, which now links
+  to the page instead of saying finalisation arrives in Phase 3.
+- **Unlock** (`attendance.unlock`, checked again in the service by role): reason required (5 characters or more), audited
+  (`attendance.period.unlocked`), the days stay as computed and open to changes; the cycle must be finalised again. If payroll has used the
+  period the answer is 409 `PAYROLL_CONSUMED` naming it; the screen then shows the warning and an "Unlock anyway" that sends the explicit
+  confirmation. The check is `payrollLockedBetween` in `lib/effectiveDating.ts`, the same provider hook the history writers already use; until
+  Phase 6 registers payroll it answers "not consumed". The tests register a provider to prove the warning and the confirmation.
+- **Exceptions queue** (`GET /api/attendance/exceptions`, `attendance.view` in the viewer's data scope; a viewer without the key is refused;
+  note `attendance.view` is not manager-grantable, so today this is HR's screen): derived from `daily_attendance.exception_flags`, so a day
+  leaves it by itself the moment it is corrected and recomputed (a test proves a lone punch is listed and the second punch clears it). Types:
+  missing punch, short of the full day, half-day minimum not met, no shift, clock-flagged; a day with two reasons is one row with two tags and
+  counts under both. Counts per type come up front for the current filters; the list is paged on the server (50 a page, at most 200);
+  filters are the dates (at most 93 days, default the last 14), branch and department (as placed on each day, through
+  `lib/effectiveDating.placedAtSql`, since the placement history may only be read there), and the type. Late-in and early-out are not listed.
+  Rows show the person, day, reasons, status, in-out, worked, short by, shift, branch, department, and a *Finalised* tag (a finalised day
+  cannot be ticked: it can't change until unlocked).
+- **Unmapped device IDs** are the sixth type: punches with no employee, grouped by ID (punch count, days, first and last day, device, branch)
+  for company-wide scope only (a scoped viewer sees none, and a department filter shows none: they have no department). Each shows the
+  *suggested match*: the one employee whose code equals the ID.
+- **Bulk resolve, only where there is one obvious answer**, each preview then confirm of exactly the previewed set (a fingerprint), the
+  actor's own items left out and counted:
+  1. **Map every suggested match** (`attendance.devices.manage`): an ID equal to exactly one employee's code, **who has no device ID mapped
+     yet**, who had not left before the first punch, who is not the actor. Anyone with an existing mapping is skipped with the reason, because
+     mapping a second ID would replace the first (that is a decision, on Devices). Each is mapped through the Biometric Devices path
+     (`mapUnmapped`: the effective-dating writer, the punches re-resolved, the days recomputed) with its own audit row, tagged with the batch.
+  2. **Assign a shift to no-shift days** (`attendance.config.manage`): written through the effective-dated assignment writer **from each
+     person's earliest selected day onward** (their week-off pattern and policy stay as they are; a person with no assignment at all gets the
+     company defaults for those two), in one transaction (all or none), one audit row per person, then the days are recomputed. People whose
+     assignment starts *after* the selected days (assigning would rewrite history), people who have left, and people already on that shift
+     (the shift definition is the problem) are listed with the reason and left alone: those days are corrected with Shift Override.
+  3. **Everything else routes**, carrying the ticked people and the date span of the ticked days into the target screen's form
+     (Regularizations "Correct in bulk", Manual Override, Shift Override); clock-flagged days link to Devices → Flagged.
+- **Added beyond the spec:** `Devices` opens on a tab named in the address (`?tab=flagged`), so a link can land on the right one;
+  `listPeriods(asOf)` (the tests use it, and it lets the screen look further back later).
+- **Tests added:** `periodFinalisation.test.ts` (11: who can use it, the periods list, a flagged punch blocks and deciding it clears, the
+  unmapped warning, whole cycles only, finalising locks the cycle and records it, every writer refuses a locked day, unlock rules incl. Super
+  Admin only and the reason, reopen and finalise again, payroll consumed warns and needs confirmation, append-only), `exceptions.test.ts` (13:
+  counts, type filter, branch/department/date filters and the 93-day limit, paging, scope, a corrected day leaving the queue, unmapped
+  grouping, map suggested matches with every skip reason and the own-ID guard, a stale fingerprint, assign shift incl. the before-assignment
+  and own-day cases, 450-day volume), route inventory and cleanup classification for the new routes and table.
+- **Time-dependence audit and the latency test** are recorded in `docs/PROGRESS.md` (Phase 3, commit 3).
+
 ## Commit 4 — Reports and close-out
 
 - Four reports in the existing reports framework (`late-coming`, `excess-hours`, `exception-summary`, `attendance-muster`), the same
@@ -306,7 +369,7 @@ Built as designed above; what differs, and what was added beyond it:
 ## Permissions added (seeded to the system roles; route inventory and IDOR tests updated)
 
 `attendance.regularization.bulk`, `attendance.override.manage`, `attendance.swipes.view` (manager-grantable, TEAM),
-`attendance.finalise`, `attendance.unlock` (Super Admin only).
+`attendance.finalise` (HR Admin, Payroll Admin), `attendance.unlock` (Super Admin only, not grantable).
 
 ## Rules I am deciding myself (to be confirmed or vetoed)
 

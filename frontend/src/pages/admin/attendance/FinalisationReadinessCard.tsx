@@ -2,22 +2,15 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Alert, Card, Select, Space, Typography } from "antd";
 import * as attendanceApi from "../../../api/attendance";
-import type { FinalisationBlocker } from "../../../api/attendance";
+import { Link } from "react-router-dom";
+import { FinalisationBlockers } from "../../../components/attendance/FinalisationBlockers";
 
 const { Text } = Typography;
-
-const TITLES: Record<FinalisationBlocker["code"], string> = {
-  PLACEHOLDER_RULES: "Rule values are still placeholders",
-  NOT_MARKED: "Days not marked",
-  NO_SHIFT: "Days with no shift",
-  NOT_UP_TO_DATE: "Days not up to date with the rules and data",
-  PERIOD_NOT_OVER: "The period hasn't ended",
-};
 
 /**
  * What stands between a cycle and finalisation. The block is enforced on the
  * server (placeholder thresholds can't reach payroll unconfirmed); this card
- * shows it early. Finalisation itself is Phase 3.
+ * shows it early; the period is finalised on its own screen (Attendance Period Finalisation).
  */
 export function FinalisationReadinessCard() {
   const { data: cycle } = useQuery({ queryKey: ["attendance", "config", "cycle"], queryFn: attendanceApi.getCycle });
@@ -36,31 +29,18 @@ export function FinalisationReadinessCard() {
       title="Ready to finalise?"
       extra={<Select size="small" aria-label="Attendance cycle" style={{ width: 200 }} value={chosen.start} onChange={setPicked} options={cycles.map((c) => ({ value: c.start, label: c.label }))} />}
     >
-      {data?.ready && <Alert type="success" showIcon title={`${chosen.label} has nothing blocking finalisation.`} description="Period Finalisation arrives in Phase 3." />}
+      {data?.ready && (
+        <Space orientation="vertical" size={8} style={{ width: "100%" }}>
+          <Alert type="success" showIcon title={`${chosen.label} has nothing blocking finalisation.`} description={<Link to="/admin/workforce/attendance/finalisation">Finalise it on Attendance Period Finalisation</Link>} />
+          {data.warnings.length > 0 && <FinalisationBlockers readiness={{ ...data, blockers: [] }} />}
+        </Space>
+      )}
       {data && !data.ready && (
         <Space orientation="vertical" size={8} style={{ width: "100%" }}>
           <Text>
             {chosen.label} can't be finalised until {data.blockers.length === 1 ? "this is" : "these are"} resolved. The server refuses finalisation outright while any remain.
           </Text>
-          {data.blockers.map((b) => (
-            <Alert
-              key={b.code}
-              type={b.code === "PLACEHOLDER_RULES" ? "error" : "warning"}
-              showIcon
-              title={TITLES[b.code]}
-              description={
-                <>
-                  <div>{b.message}</div>
-                  {"days" in b && b.days.length > 0 && (
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      {b.days.slice(0, 8).map((d) => `${d.employeeName} (${d.date})`).join(", ")}
-                      {b.count > 8 ? `, and ${b.count - 8} more` : ""}
-                    </Text>
-                  )}
-                </>
-              }
-            />
-          ))}
+          <FinalisationBlockers readiness={data} />
         </Space>
       )}
     </Card>

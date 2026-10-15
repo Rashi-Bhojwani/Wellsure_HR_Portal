@@ -192,3 +192,118 @@ export async function swipeOptions(): Promise<{ devices: Array<{ id: string; nam
 export async function exportSwipes(q: SwipeQuery): Promise<Blob> {
   return (await apiClient.get("/api/attendance/swipes/export", { params: { ...q, page: undefined, pageSize: undefined }, responseType: "blob" })).data as Blob;
 }
+
+// ── Exceptions queue (Phase 3 commit 3) ──
+export type DayExceptionType = "MISSING_PUNCH" | "SHORTFALL" | "HALF_DAY_MIN_NOT_MET" | "NO_SHIFT" | "CLOCK_FLAGGED";
+export type ExceptionType = DayExceptionType | "UNMAPPED_ID";
+export const EXCEPTION_TYPE_LABEL: Record<ExceptionType, string> = {
+  MISSING_PUNCH: "Missing punch",
+  SHORTFALL: "Short of the full day",
+  HALF_DAY_MIN_NOT_MET: "Half-day minimum not met",
+  NO_SHIFT: "No shift assigned",
+  CLOCK_FLAGGED: "A punch was set aside (clock)",
+  UNMAPPED_ID: "Unmapped device ID",
+};
+export interface ExceptionFilter {
+  from?: string;
+  to?: string;
+  locationId?: string;
+  departmentId?: string;
+}
+export interface ExceptionQuery extends ExceptionFilter {
+  type?: ExceptionType;
+  page: number;
+  pageSize: number;
+}
+export interface ExceptionDay {
+  key: string;
+  employeeId: string;
+  employeeCode: string;
+  employeeName: string | null;
+  date: string;
+  status: string;
+  types: DayExceptionType[];
+  shiftCode: string | null;
+  firstIn: string | null;
+  lastOut: string | null;
+  shortfallMinutes: number | null;
+  actualMinutes: number | null;
+  branch: string | null;
+  department: string | null;
+  locked: boolean;
+  provisional: boolean;
+}
+export interface UnmappedGroup {
+  deviceUserId: string;
+  punches: number;
+  days: number;
+  firstDay: string;
+  lastDay: string;
+  devices: string[];
+  branches: string[];
+  suggestion: null | { employeeId: string; employeeCode: string; employeeName: string | null; canMap: boolean; problem: string | null; partial: boolean };
+}
+export interface ExceptionList {
+  kind: "DAYS" | "UNMAPPED";
+  from: string;
+  to: string;
+  counts: Record<ExceptionType | "ALL_DAYS", number>;
+  total: number;
+  page: number;
+  pageSize: number;
+  days: ExceptionDay[];
+  unmapped: UnmappedGroup[];
+}
+export async function listExceptions(q: ExceptionQuery): Promise<ExceptionList> {
+  return (await apiClient.get<ExceptionList>("/api/attendance/exceptions", { params: q })).data;
+}
+
+export interface MapSelection {
+  deviceUserIds?: string[];
+  filter?: ExceptionFilter;
+}
+export interface MapPreview {
+  count: number;
+  punches: number;
+  ownLeftOut: number;
+  fingerprint: string;
+  items: Array<{ deviceUserId: string; employeeId: string; employeeCode: string; employeeName: string | null; punches: number; firstDay: string; lastDay: string; partial: boolean }>;
+  skipped: Array<{ deviceUserId: string; punches: number; reason: string }>;
+}
+export async function previewMapDeviceIds(sel: MapSelection): Promise<MapPreview> {
+  return (await apiClient.post<MapPreview>("/api/attendance/exceptions/map-device-ids/preview", sel)).data;
+}
+export async function confirmMapDeviceIds(sel: MapSelection, fingerprint: string): Promise<{ bulkId: string; mapped: number; punchesResolved: number; failed: Array<{ deviceUserId: string; message: string }> }> {
+  return (await apiClient.post("/api/attendance/exceptions/map-device-ids", { ...sel, fingerprint, confirm: true })).data;
+}
+
+export interface AssignSelection {
+  keys?: Array<{ employeeId: string; date: string }>;
+  filter?: ExceptionFilter;
+}
+export interface AssignPreview {
+  shift: { id: string; code: string; name: string };
+  employees: number;
+  days: number;
+  blockedEmployees: number;
+  ownLeftOut: number;
+  fingerprint: string;
+  items: Array<{
+    employeeId: string;
+    employeeCode: string;
+    employeeName: string | null;
+    from: string;
+    noShiftDays: number;
+    lockedDays: number;
+    currentShift: string | null;
+    hasAssignment: boolean;
+    problem: string | null;
+    problemText: string | null;
+  }>;
+}
+export async function previewAssignShift(sel: AssignSelection, shiftId: string): Promise<AssignPreview> {
+  return (await apiClient.post<AssignPreview>("/api/attendance/exceptions/assign-shift/preview", { ...sel, shiftId })).data;
+}
+export async function confirmAssignShift(sel: AssignSelection, shiftId: string, fingerprint: string, note: string): Promise<{ bulkId: string; employees: number; days: number; shiftCode: string }> {
+  return (await apiClient.post("/api/attendance/exceptions/assign-shift", { ...sel, shiftId, fingerprint, note, confirm: true })).data;
+}

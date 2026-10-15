@@ -2380,6 +2380,29 @@ model ShiftOverride {
   @@map("shift_overrides")
 }
 
+// Period Finalisation's record (Phase 3 commit 3): every finalise and every unlock of an attendance cycle, append-only.
+// A cycle's status is its latest row: none = open, FINALISE = finalised, UNLOCK = open again (who, when, why).
+enum PeriodLockAction {
+  FINALISE
+  UNLOCK
+}
+
+model AttendancePeriodLock {
+  id              String           @id @default(cuid())
+  seq             Int              @unique @default(autoincrement())
+  periodStart     DateTime         @map("period_start") @db.Date
+  periodEnd       DateTime         @map("period_end") @db.Date
+  action          PeriodLockAction
+  reason          String           @default("")
+  lockedDays      Int              @default(0) @map("locked_days")
+  payrollConsumed Boolean          @default(false) @map("payroll_consumed") // an unlock that went ahead although payroll had used the period
+  actorUserId     String           @map("actor_user_id")
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([periodStart, periodEnd, seq])
+  @@map("attendance_period_locks")
+}
+
 // HR released approved leave because the person worked that day (Phase 3 commit 2). One row per leave request and
 // part of the day; the leave_ledger REVERSAL it caused points back here (reference_type LEAVE_DAY_RELEASE). The
 // engine reads these to stop treating the date as leave for that request; cancelling the request later returns only

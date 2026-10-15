@@ -323,6 +323,7 @@ Run from the repo root unless noted.
 | `npm run typecheck` | `tsc --noEmit` across every project |
 | `npm run test` | Vitest, backend + frontend + biometric-agent — backend is an integration suite against your real local Postgres/Redis, not mocks; frontend covers route-config wiring (`frontend/src/routes/__tests__/`). Safe to run while `npm run dev` is up, with no interaction either way: the suite uses its own Postgres database (`<dev database>_test`), Redis database and Socket.IO channel (`REDIS_TEST_DB`), and `.storage-test/`/`.mail-test/` folders. Each run drops, recreates, migrates and seeds that database first (about 10 s), so every run starts from the same state |
 | `npm run test:replay --prefix backend` | The month replay: 500 simulated employees for a month through the real ingestion and recompute, diffed field by field against what each named scenario says should happen (about 75 s, needs the same local Postgres/Redis; not part of `npm run test`; CI runs it as `attendance-replay`). Writes `backend/perf/last-run.json`; see `backend/perf/README.md`. Override size with `REPLAY_EMPLOYEES` / `REPLAY_SEED` |
+| `npm run test:clock --prefix backend` | The whole backend suite run as if the wall clock read each of several instants (00:10 IST, a new year, a leap day, years ahead; or `-- <ISO instant>` for one), to find tests that depend on the hour or date they run in. About 7 minutes per instant on CI-class hardware; uses its own database and Redis db, so it can run beside `npm test`. Only JavaScript's clock moves (the database's `now()` stays real). Not part of `npm run test`; run it after adding a test with fixed dates or one that sends "now" punches. See `backend/vitest.fakeClock.ts` |
 | `npm run simulate --prefix biometric-agent -- <command>` | The punch simulator CLI (see "The punch simulator" above): `setup`, `scenarios`, `scenario <name>`, `replay`, `drip` |
 | `npm run test:latency --prefix biometric-agent` | Punch-to-screen latency in a real browser, by every route (see "Measuring punch-to-screen latency" above) |
 | `npm run catalogue --prefix biometric-agent` | Regenerates `docs/plans/PHASE_2_SCENARIOS.md`, the plain-words list of every simulator scenario and its expected outcome. A test fails if you change a scenario and forget to run this |
@@ -410,6 +411,12 @@ fetches one. It refuses to run if fewer than 8 people lack punches today (reseed
 and signing in is limited to 10 per 15 minutes per IP (a run uses 5; local Redis
 key `ratelimit:auth.rateLimit.login:127.0.0.1` can be deleted to reset it). CI job
 `latency` does the same on every push.
+
+**The hour it runs at does not matter** (Phase 3 commit 3; the first CI run at 00:10 IST failed because "now" was outside the shift's punch window). For the
+duration of a run the people it measures are given an all-day shift (code `LATENCY24`, 00:00 to 23:59) through Shift Override for yesterday and today, so
+every punch sent at "now" is inside a window whatever the hour, and the run is never about whether an out-of-hours punch is filed correctly. It puts
+everything back when it ends (overrides cleared, the shift made inactive). The one moment no all-day window covers is midnight itself, so a run that
+starts within five minutes of it waits until just after. It does not skip, at any hour.
 
 **Running the sync agent locally (Phase 2 P2-F).** The real agent and its
 read-only device driver, against a fake device on this machine that speaks the

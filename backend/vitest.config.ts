@@ -13,6 +13,8 @@ export default defineConfig({
     // The 500-employee month replay is its own job (`npm run test:replay`), not part of every run.
     exclude: [...configDefaults.exclude, "**/*.replay.test.ts"],
     globalSetup: ["./vitest.globalSetup.ts"],
+    // Does nothing unless TEST_FAKE_NOW is set (npm run test:clock).
+    setupFiles: ["./vitest.fakeClock.ts"],
     // Integration tests share one real Postgres/Redis instance and some
     // genuinely global rows (SystemSetting keys, rate-limit buckets keyed
     // by IP) — running test files in parallel races those. Small suite,

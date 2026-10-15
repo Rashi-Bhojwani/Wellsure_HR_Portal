@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { useLocation } from "react-router-dom";
 import { Button, Flex, Typography } from "antd";
 import { BulkCorrectionModal } from "../../../components/attendance/BulkCorrectionModal";
+import type { CarriedSelection } from "../../../components/attendance/targetSelection";
 import { RegularizationQueue } from "../../../components/attendance/RegularizationQueue";
 import { useAuth } from "../../../hooks/useAuth";
 
@@ -8,7 +10,8 @@ import { useAuth } from "../../../hooks/useAuth";
 // requests from everyone in scope, and (for HR) bulk corrections, for example a whole branch after a device outage.
 export function RegularizationsPage() {
   const { hasPermission } = useAuth();
-  const [bulk, setBulk] = useState(false);
+  const carried = (useLocation().state as { carried?: CarriedSelection } | null)?.carried; // people and dates chosen on the Exceptions queue
+  const [bulk, setBulk] = useState(!!carried && hasPermission("attendance.regularization.bulk"));
   return (
     <Flex vertical gap={12}>
       <Flex justify="space-between" align="center" wrap gap={8}>
@@ -26,7 +29,7 @@ export function RegularizationsPage() {
         the corrected day is marked as not from the device everywhere it appears.
       </Typography.Text>
       <RegularizationQueue />
-      <BulkCorrectionModal open={bulk} onClose={() => setBulk(false)} />
+      <BulkCorrectionModal open={bulk} onClose={() => setBulk(false)} carried={carried} />
     </Flex>
   );
 }

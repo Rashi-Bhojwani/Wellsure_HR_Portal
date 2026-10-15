@@ -176,7 +176,7 @@ describe("bulk regularization (Phase 3 commit 1)", () => {
       expect(audits).toHaveLength(3);
       expect(new Set(audits.map((a) => (a.after as { batchId: string }).batchId))).toEqual(new Set([res.body.batchId]));
       expect(audits[0]!.after).toMatchObject({ batchSize: 3, reasonCode: "DEVICE_DOWN", correction: "In 10:00 · Out 19:00", dayBefore: "A", dayAfter: "P" });
-      expect(await prisma.notification.count({ where: { type: "regularization.decided", userId: { in: [p.a1.userId, p.a2.userId, p.a3.userId] }, createdAt: { gte: new Date(Date.now() - 60_000) } } })).toBeGreaterThanOrEqual(3);
+      expect(await prisma.notification.count({ where: { type: "regularization.decided", userId: { in: [p.a1.userId, p.a2.userId, p.a3.userId] } } })).toBeGreaterThanOrEqual(3); // fresh people, so these are their only notices; no clock comparison (the DB stamps createdAt)
       expect(await prisma.rawPunch.count({ where: { employeeId: { in: [p.a1.employeeId, p.a2.employeeId, p.a3.employeeId] } } })).toBe(0);
       // Repeating it is refused: nothing is left to correct.
       expect((await hr().post("/regularizations/bulk", { ...body(), fingerprint: preview.fingerprint, confirm: true })).status).toBe(409);
