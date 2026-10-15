@@ -23,6 +23,8 @@ export interface MusterCell {
   corrected: boolean;
   /** REGULARIZATION | MANUAL_OVERRIDE when corrected by hand. */
   overrideKind?: string | null;
+  /** The shift on this day came from a Shift Override (Phase 3 commit 2). */
+  shiftOverridden?: boolean;
   workedOnOffDay: boolean;
   provisional: boolean;
   locked: boolean;

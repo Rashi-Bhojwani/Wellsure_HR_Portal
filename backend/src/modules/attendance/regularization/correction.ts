@@ -7,10 +7,12 @@ import type { ShiftDef } from "../engine/types";
 // the single request, the approval re-check and the bulk preview all use these, so they cannot disagree.
 
 export type TargetStatus = "P" | "A" | "HD_FIRST" | "HD_SECOND";
+/** What HR may set directly (Manual Override): also "worked", for a holiday or week-off. A request can't ask for "worked". */
+export type OverrideStatus = TargetStatus | "WORKED";
 export interface Correction {
   inTime?: string | null;
   outTime?: string | null;
-  status?: TargetStatus | null;
+  status?: OverrideStatus | null;
 }
 
 export const REASON_LABEL: Record<string, string> = {
@@ -20,7 +22,7 @@ export const REASON_LABEL: Record<string, string> = {
   OTHER: "Other",
 };
 
-const STATUS_LABEL: Record<TargetStatus, string> = { P: "Present", A: "Absent", HD_FIRST: "Half day (first half present)", HD_SECOND: "Half day (second half present)" };
+const STATUS_LABEL: Record<OverrideStatus, string> = { P: "Present", A: "Absent", HD_FIRST: "Half day (first half present)", HD_SECOND: "Half day (second half present)", WORKED: "Worked (on a holiday or week-off)" };
 
 /** "Present", "In 10:00 · Out 19:00", "Out 19:00": the correction in words. */
 export function describeCorrection(c: Correction): string {
@@ -44,8 +46,8 @@ export const PROBLEM_LABEL: Record<string, string> = {
   TOO_OLD: "Older than corrections reach",
   LOCKED: "Finalised",
   MANUAL_CAPTURE: "Marked by hand (corrected in the muster)",
-  OFF_DAY: "A holiday or week-off",
-  ON_LEAVE: "On approved leave",
+  OFF_DAY: "A holiday or week-off (Manual Override can mark it worked)",
+  ON_LEAVE: "On approved leave (Manual Override can mark it worked and return the leave)",
   ALREADY_CORRECTED: "Already corrected",
   PENDING_EXISTS: "A request is already waiting",
   NO_SHIFT: "No shift assigned",
@@ -71,9 +73,9 @@ export function dayProblem(row: DailyAttendance | null | undefined, date: string
   if (row.provisional) return notOver;
   if (row.isLocked) return { code: "LOCKED", message: "This day's attendance is finalised." };
   if (row.capture !== "DEVICE") return { code: "MANUAL_CAPTURE", message: "Attendance for this person is marked by hand; the person who marks their branch corrects it in the muster." };
-  if (row.source === "HOLIDAY" || row.source === "WEEK_OFF") return { code: "OFF_DAY", message: "This was a holiday or week-off." };
-  if (row.source === "LEAVE") return { code: "ON_LEAVE", message: "This day is on approved leave." };
-  if (ctx.corrected || row.overrideKind) return { code: "ALREADY_CORRECTED", message: "This day has already been corrected." };
+  if (row.source === "HOLIDAY" || row.source === "WEEK_OFF") return { code: "OFF_DAY", message: "This was a holiday or week-off. If you worked, ask HR to mark the day as worked: a correction request can't do that." };
+  if (row.source === "LEAVE") return { code: "ON_LEAVE", message: "This day is on approved leave, and a correction request can't change that. If you actually worked, ask HR: they can mark the day as worked and return the leave to your balance." };
+  if (ctx.corrected || row.overrideKind) return { code: "ALREADY_CORRECTED", message: "This day has already been corrected. If it is still wrong, ask HR to change it." };
   if (ctx.pending) return { code: "PENDING_EXISTS", message: "There's already a request waiting for this day." };
   if (row.status === "NS") return { code: "NO_SHIFT", message: "No shift was assigned for this day, so there is nothing to correct it against." };
   return null;

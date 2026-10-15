@@ -5,6 +5,7 @@ import * as calendarService from "./calendar";
 import * as dashboardService from "./dashboard";
 import * as grantsService from "./grants";
 import * as holidaysService from "./holidays";
+import * as ledgerView from "./ledgerView";
 import * as leaveTypesService from "./leaveTypes";
 import * as recalculatorService from "./recalculator";
 import * as requestsService from "./requests";
@@ -65,6 +66,11 @@ export async function getLeaveBalances(req: Request, res: Response): Promise<voi
   const { employeeId, asOfDate } = req.query as { employeeId?: string; asOfDate?: string };
   const balances = await balancesService.getLeaveBalancesForDisplay(employeeId, viewer(req), asOfDate ? new Date(asOfDate) : businessToday());
   res.status(200).json({ balances });
+}
+
+export async function getLeaveLedger(req: Request, res: Response): Promise<void> {
+  const { employeeId, leaveTypeId } = req.query as { employeeId?: string; leaveTypeId?: string };
+  res.status(200).json({ entries: await ledgerView.getLeaveLedger(employeeId, viewer(req), { leaveTypeId }) });
 }
 
 // ── Calendar ─────────────────────────────────────────────────────────────

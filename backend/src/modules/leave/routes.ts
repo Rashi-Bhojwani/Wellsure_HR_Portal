@@ -6,6 +6,7 @@ import * as controller from "./controller";
 import {
   applyLeaveSchema,
   balancesQuerySchema,
+  ledgerQuerySchema,
   bulkApproveSchema,
   calendarQuerySchema,
   cancelRequestSchema,
@@ -58,6 +59,7 @@ leaveRouter.post("/requests/bulk-approve", validate({ body: bulkApproveSchema })
 leaveRouter.post("/requests/:id/cancel", validate({ params: idParamsSchema, body: cancelRequestSchema }), controller.cancelLeaveRequest);
 
 leaveRouter.get("/balances", validate({ query: balancesQuerySchema }), controller.getLeaveBalances);
+leaveRouter.get("/ledger", validate({ query: ledgerQuerySchema }), controller.getLeaveLedger);
 leaveRouter.get("/calendar", validate({ query: calendarQuerySchema }), controller.getLeaveCalendar);
 
 // Admin: manual grant/debit + comp-off grant (leave.grant) — Leave

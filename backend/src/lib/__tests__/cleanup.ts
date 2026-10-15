@@ -73,6 +73,7 @@ export const OPTIONAL_FK_POLICY: Record<string, Policy> = {
   // it in tests (both are append-only history in real use, and an override must keep its request: a database CHECK).
   "RegularizationRequest.batchId": "setNull",
   "AttendanceOverride.requestId": "delete",
+  "ShiftOverride.shiftId": "delete", // a shift override (a null shift is the "cleared" marker) belongs to the shift it names
   // Posts written by, or auto-posted about, an employee belong to them.
   "Post.authorEmployeeId": "delete",
   "Post.subjectEmployeeId": "delete",
@@ -322,7 +323,7 @@ function delegate(modelName: string): Delegate {
 
 // Tables a database trigger keeps immutable, deletable only through the
 // test-purge exception (app.audit_purge = 'test' in a dev-marked database).
-const PURGE_GUARDED_MODELS = new Set(["RawPunch", "ManualAttendanceEntry", "AttendanceOverride"]);
+const PURGE_GUARDED_MODELS = new Set(["RawPunch", "ManualAttendanceEntry", "AttendanceOverride", "ShiftOverride", "LeaveDayRelease"]);
 
 // Deletes the given rows of `model` and every row that depends on them,
 // transitively, in FK-safe order. Optional FKs follow OPTIONAL_FK_POLICY.

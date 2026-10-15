@@ -14,6 +14,7 @@ import { withEmployeeLeaveLock } from "./concurrency";
 import { computeTotalLeaveDays } from "./dayCount";
 import { resolveDayCountContext } from "./dayCountContext";
 import { assertSufficientBalance, writeLedgerEntry } from "./ledger";
+import { releasedDaysOf } from "./releases";
 import { approvalEmployeeIdFilter, isEmployeeInScope, reachFor, resolveApprovalReach, type ApprovalReach } from "./scope";
 import { activeDelegatesOf, type Delegator } from "../delegations/reach";
 import { companyWideApprovers, noTeamApproverReason, pendingWithNoTeamApprover } from "./noTeamApprover";
@@ -605,17 +606,21 @@ export async function cancelLeaveRequest(requestId: string, viewer: LeaveViewer,
       if (existing.leaveType.code === "COF") {
         await reverseCompOffConsumption(tx, requestId, leaveYear, cancelDate);
       } else {
-        await writeLedgerEntry(tx, {
-          employeeId: existing.employeeId,
-          leaveTypeId: existing.leaveType.id,
-          leaveYear,
-          entryDate: cancelDate,
-          entryType: "REVERSAL",
-          days: fresh.totalDays,
-          referenceType: "LEAVE_REQUEST",
-          referenceId: requestId,
-          createdByUserId: meta.actorUserId,
-        });
+        // Days HR already returned by releasing single days the person worked (Phase 3) are not returned twice.
+        const toReturn = fresh.totalDays.minus(await releasedDaysOf(tx, requestId));
+        if (toReturn.greaterThan(0)) {
+          await writeLedgerEntry(tx, {
+            employeeId: existing.employeeId,
+            leaveTypeId: existing.leaveType.id,
+            leaveYear,
+            entryDate: cancelDate,
+            entryType: "REVERSAL",
+            days: toReturn,
+            referenceType: "LEAVE_REQUEST",
+            referenceId: requestId,
+            createdByUserId: meta.actorUserId,
+          });
+        }
       }
     }
 

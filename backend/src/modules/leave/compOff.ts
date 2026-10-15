@@ -130,15 +130,13 @@ export async function consumeCompOffFifo(
 // regardless; the next daily expiry job run sweeps it up naturally (its
 // expiresOn is already in the past), so no special-casing is needed here.
 export async function reverseCompOffConsumption(tx: Prisma.TransactionClient, leaveRequestId: string, leaveYear: number, entryDate: Date): Promise<void> {
-  const consumedEntries = await tx.leaveLedger.findMany({
-    where: { referenceType: "LEAVE_REQUEST", referenceId: leaveRequestId, entryType: "CONSUMED", compOffCreditId: { not: null } },
-  });
-
-  for (const entry of consumedEntries) {
-    if (!entry.compOffCreditId) continue;
-    const restoreAmount = entry.days.negated(); // days was stored negative on the original CONSUMED row
-    const credit = await tx.compOffCredit.findUniqueOrThrow({ where: { id: entry.compOffCreditId } });
-    const newRemaining = credit.remainingDays.plus(restoreAmount);
+  // Per lot: what the approval consumed, less what HR already gave back by releasing single days (Phase 3), so a
+  // cancellation after a release never returns the same days twice.
+  const cofType = await tx.leaveType.findUniqueOrThrow({ where: { code: "COF" } });
+  for (const [creditId, net] of await consumedPerLot(tx, leaveRequestId)) {
+    if (!net.greaterThan(0)) continue;
+    const credit = await tx.compOffCredit.findUniqueOrThrow({ where: { id: creditId } });
+    const newRemaining = credit.remainingDays.plus(net);
 
     await tx.compOffCredit.update({
       where: { id: credit.id },
@@ -146,15 +144,67 @@ export async function reverseCompOffConsumption(tx: Prisma.TransactionClient, le
     });
     await writeLedgerEntry(tx, {
       employeeId: credit.employeeId,
-      leaveTypeId: entry.leaveTypeId,
+      leaveTypeId: cofType.id,
       leaveYear,
       entryDate,
       entryType: "REVERSAL",
-      days: restoreAmount,
+      days: net,
       referenceType: "LEAVE_REQUEST",
       referenceId: leaveRequestId,
       compOffCreditId: credit.id,
     });
+  }
+}
+
+/** Per comp-off lot, the days of this request still consumed: its CONSUMED rows less the reversals of releases. */
+async function consumedPerLot(tx: Prisma.TransactionClient, leaveRequestId: string): Promise<Map<string, Prisma.Decimal>> {
+  const releaseIds = (await tx.leaveDayRelease.findMany({ where: { leaveRequestId }, select: { id: true } })).map((r) => r.id);
+  const rows = await tx.leaveLedger.findMany({
+    where: {
+      compOffCreditId: { not: null },
+      OR: [
+        { referenceType: "LEAVE_REQUEST", referenceId: leaveRequestId, entryType: "CONSUMED" },
+        ...(releaseIds.length ? [{ referenceType: "LEAVE_DAY_RELEASE", referenceId: { in: releaseIds }, entryType: "REVERSAL" as const }] : []),
+      ],
+    },
+    select: { compOffCreditId: true, days: true },
+  });
+  const net = new Map<string, Prisma.Decimal>();
+  for (const r of rows) net.set(r.compOffCreditId!, (net.get(r.compOffCreditId!) ?? new Prisma.Decimal(0)).minus(r.days)); // CONSUMED is negative
+  return net;
+}
+
+// Phase 3 (leave day worked): give `amount` days of a COF request back to its lots, newest lot first, exactly the
+// lots the approval drew on and never more than each still has consumed. Same expiry note as above: a lot already
+// past its expiry is restored AVAILABLE and the next expiry run sweeps it.
+export async function restoreCompOffDays(
+  tx: Prisma.TransactionClient,
+  p: { leaveRequestId: string; releaseId: string; employeeId: string; amount: Prisma.Decimal; leaveYear: number; entryDate: Date; remarks: string; actorUserId: string },
+): Promise<void> {
+  const cofType = await tx.leaveType.findUniqueOrThrow({ where: { code: "COF" } });
+  const perLot = await consumedPerLot(tx, p.leaveRequestId);
+  const credits = await tx.compOffCredit.findMany({ where: { id: { in: [...perLot.keys()] } }, orderBy: { earnedDate: "desc" } });
+  let left = p.amount;
+  for (const credit of credits) {
+    if (left.lessThanOrEqualTo(0)) break;
+    const available = perLot.get(credit.id) ?? new Prisma.Decimal(0);
+    if (!available.greaterThan(0)) continue;
+    const give = left.lessThan(available) ? left : available;
+    await tx.compOffCredit.update({ where: { id: credit.id }, data: { remainingDays: credit.remainingDays.plus(give), status: "AVAILABLE" } });
+    await writeLedgerEntry(tx, {
+      employeeId: p.employeeId,
+      leaveTypeId: cofType.id,
+      leaveYear: p.leaveYear,
+      entryDate: p.entryDate,
+      entryType: "REVERSAL",
+      days: give,
+      referenceType: "LEAVE_DAY_RELEASE",
+      referenceId: p.releaseId,
+      compOffCreditId: credit.id,
+      remarks: p.remarks,
+      createdByUserId: p.actorUserId,
+    });
+    left = left.minus(give);
   }
 }
 

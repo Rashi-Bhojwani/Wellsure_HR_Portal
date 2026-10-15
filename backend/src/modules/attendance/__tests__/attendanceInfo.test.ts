@@ -192,7 +192,7 @@ describe("Attendance Info, Who Is In and the forgot-to-punch request (P2-E)", ()
       expect(month.days.find((x: { date: string }) => x.date === "2026-09-15")).toMatchObject({ code: "P", corrected: true, request: { status: "APPROVED" } });
       const day = (await as(tok.dev).get("/me/day/2026-09-15")).body;
       expect(day.override).toMatchObject({ origin: "REGULARIZATION", kind: "ADD_TIME", text: "Out 19:00", by: expect.any(String), requestId: devRequest });
-      expect(day.canRequest).toMatchObject({ ok: false, code: "ALREADY_CORRECTED", reason: "This day has already been corrected." });
+      expect(day.canRequest).toMatchObject({ ok: false, code: "ALREADY_CORRECTED", reason: expect.stringContaining("already been corrected") });
       expect(await prisma.notification.count({ where: { userId: p.dev.userId, type: "regularization.decided" } })).toBe(1);
       expect((await as(tok.mgr).post(`/regularizations/${devRequest}/approve`)).status).toBe(409);
       expect(await prisma.auditLog.count({ where: { entityId: devRequest, action: "attendance.regularization.approved" } })).toBe(1);

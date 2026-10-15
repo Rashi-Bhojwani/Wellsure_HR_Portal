@@ -8,6 +8,7 @@ import type { DayInput, DayResult, ExceptionFlag, HalfLeave, PolicyDef } from ".
 //   3. week-off → O         (likewise)
 //   4. approved leave → the leave code; half-day leave combines with the other half
 //   5. an override (an approved regularization or a manual override): STATUS as set; TIMES replace the punches; ADD_TIME joins one
+//      (on a holiday or week-off only "worked" is read, in step 2/3; approved leave released by HR is simply not leave here)
 //   6. manual capture (no device mapping on D): TIMED times go through step 7
 //      exactly like punches; STATUS_ONLY is taken as entered; nothing → NM
 //   7. compute from punches
@@ -102,8 +103,10 @@ export function evaluateDay(input: DayInput): DayResult | null {
   const base = dayStartMs(input.date);
   const provisional = input.now < base + (tl ? tl.windowEnd * 1000 : DAY_MS);
   const policy = input.policy;
-  // Holiday, week-off and a full day of approved leave come first: an override recorded for such a day is not applied.
+  // Holiday, week-off and a full day of approved leave come first: an override recorded for such a day is not applied,
+  // except "worked" on a holiday or week-off, which only marks that the person worked it (Manual Override, Phase 3).
   const override = input.holiday !== null || input.weekOff || (input.leave.first && input.leave.second) ? null : input.override;
+  const workedOverride = (input.holiday !== null || input.weekOff) && input.override?.kind === "STATUS" && (input.override.status === "WORKED" || input.override.status === "P") ? input.override : null;
   const toMs = (s: number) => base + s * 1000;
 
   // The day's points, as seconds on D's timeline: collapsed device punches, or a TIMED manual entry's times.
@@ -149,6 +152,8 @@ export function evaluateDay(input: DayInput): DayResult | null {
   if (addTime) points = [...points, read(addTime.time)].sort((a, b) => a - b);
   // Whether any override shaped this day: a STATUS override is applied below, after the off-day and leave steps.
   const appliedOverride = timesOverride ?? addTime ?? (override?.kind === "STATUS" ? override : null);
+  // A released leave day follows the device; it is only marked as not purely the device's (the marker, not the source).
+  const releaseOnly = override?.kind === "RELEASE_ONLY" ? override : null;
 
   const result: DayResult = {
     status: "",
@@ -177,8 +182,8 @@ export function evaluateDay(input: DayInput): DayResult | null {
     usedPunchIds,
     collapsedPunches: collapsed,
     manualEntryId: input.manual?.id ?? null,
-    overrideId: appliedOverride?.id ?? null,
-    overrideOrigin: appliedOverride?.origin ?? null,
+    overrideId: appliedOverride?.id ?? releaseOnly?.id ?? null,
+    overrideOrigin: appliedOverride?.origin ?? releaseOnly?.origin ?? null,
   };
 
   const recordFigures = (f: Figures, opts: { timeFlags: boolean }) => {
@@ -209,7 +214,11 @@ export function evaluateDay(input: DayInput): DayResult | null {
     result.source = offDay.source;
     result.holidayName = input.holiday;
     const manualWorked = input.manual?.kind === "STATUS_ONLY" && (input.manual.status === "WORKED" || input.manual.status === "P");
-    result.workedOnOffDay = points.length > 0 || manualWorked;
+    result.workedOnOffDay = points.length > 0 || manualWorked || !!workedOverride;
+    if (workedOverride) {
+      result.overrideId = workedOverride.id;
+      result.overrideOrigin = workedOverride.origin;
+    }
     if (tl && points.length > 0) recordFigures(computeFigures(points, tl, [true, true], policy ?? { inferBreakPairing: false }, input.shift!), { timeFlags: false });
     return result;
   }

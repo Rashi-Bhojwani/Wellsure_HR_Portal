@@ -169,3 +169,82 @@ export const bulkRegularizationSchema = bulkBase
   .refine(oneCorrection, { message: correctionMessage })
   .refine((v) => v.from <= v.to, { message: "The end date is before the start date." });
 export const regularizationDecisionSchema = z.object({ note: z.string().trim().max(500).optional().nullable() });
+
+// ── Manual Override and Shift Override (Phase 3 commit 2): HR sets a day or a shift directly, after a preview ──
+const overrideStatus = z.enum(["P", "A", "HD_FIRST", "HD_SECOND", "WORKED"]);
+const overrideNote = z.string().trim().min(5, "Say why (at least a few words)").max(500);
+const overrideBase = z.object({
+  selection: bulkSelection,
+  from: z.iso.date(),
+  to: z.iso.date(),
+  reasonCode,
+  note: overrideNote,
+  releaseLeave: z.boolean().default(false),
+  /** With the release: the day follows the device's punches; no status or times are set. */
+  followDevice: z.boolean().default(false),
+  inTime: time.optional().nullable(),
+  outTime: time.optional().nullable(),
+  status: overrideStatus.optional().nullable(),
+});
+type OverrideShape = { inTime?: string | null; outTime?: string | null; status?: string | null; followDevice?: boolean; releaseLeave?: boolean };
+/** Exactly one of: a status, times, or "follow the device" (which only makes sense with the leave release). */
+const oneOverride = (v: OverrideShape) => (v.status ? 1 : 0) + (v.inTime || v.outTime ? 1 : 0) + (v.followDevice ? 1 : 0) === 1 && (!v.followDevice || !!v.releaseLeave);
+const overrideMessage = "Set a status, or give times, or follow the device (the last only when releasing approved leave).";
+const orderedDates = (v: { from: string; to: string }) => v.from <= v.to;
+const datesMessage = { message: "The end date is before the start date." };
+export const overridePreviewSchema = overrideBase.refine(oneOverride, { message: overrideMessage }).refine(orderedDates, datesMessage);
+export const overrideConfirmSchema = overrideBase
+  .extend({ fingerprint: z.string().regex(/^[0-9a-f]{64}$/), confirm: z.literal(true) })
+  .refine(oneOverride, { message: overrideMessage })
+  .refine(orderedDates, datesMessage);
+export const overrideClearSchema = z.object({ employeeId: z.string().min(1), date: z.iso.date(), note: overrideNote });
+export const overrideListQuerySchema = z.object({
+  employeeId: z.string().min(1).optional(),
+  from: z.iso.date().optional(),
+  to: z.iso.date().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+});
+
+const shiftOverrideBase = z.object({
+  selection: bulkSelection,
+  from: z.iso.date(),
+  to: z.iso.date(),
+  shiftId: z.string().min(1),
+  note: overrideNote,
+});
+export const shiftOverridePreviewSchema = shiftOverrideBase.refine(orderedDates, datesMessage);
+export const shiftOverrideConfirmSchema = shiftOverrideBase.extend({ fingerprint: z.string().regex(/^[0-9a-f]{64}$/), confirm: z.literal(true) }).refine(orderedDates, datesMessage);
+export const shiftOverrideClearSchema = z.object({ employeeId: z.string().min(1), date: z.iso.date(), note: overrideNote });
+export const shiftOverrideListQuerySchema = overrideListQuerySchema;
+
+// ── Shift Roster (Phase 3 commit 2): a shift, or a rotation of shifts, for many people from a future date ──
+const rosterBase = z.object({
+  selection: bulkSelection,
+  start: z.iso.date(),
+  steps: z.array(z.object({ shiftId: z.string().min(1), days: z.number().int().min(1).max(366) })).min(1).max(14),
+  repeat: z.boolean().default(false),
+  until: z.iso.date().optional().nullable(),
+  then: z.enum(["RETURN", "STAY"]).default("RETURN"),
+  note: overrideNote,
+});
+const rosterRules = (v: { steps: unknown[]; repeat: boolean; until?: string | null }) => (v.repeat ? !!v.until : v.steps.length === 1);
+const rosterMessage = { message: "A repeating rotation needs an end date; without repeating, give one shift (it then stays from the start date)." };
+export const rosterPreviewSchema = rosterBase.refine(rosterRules, rosterMessage);
+export const rosterConfirmSchema = rosterBase.extend({ fingerprint: z.string().regex(/^[0-9a-f]{64}$/), confirm: z.literal(true) }).refine(rosterRules, rosterMessage);
+
+// ── Employee Swipes (Phase 3 commit 2): the raw punch log, filtered and paged server-side ──
+const flagParam = z.enum(["any", "pending", "accepted", "discarded", "none"]);
+export const swipesQuerySchema = z.object({
+  from: z.iso.date().optional(),
+  to: z.iso.date().optional(),
+  deviceId: z.string().min(1).optional(),
+  locationId: z.string().min(1).optional(),
+  employeeId: z.string().min(1).optional(),
+  route: z.enum(["AGENT", "PUSH", "IMPORT"]).optional(),
+  used: z.enum(["yes", "no"]).optional(),
+  flagged: flagParam.optional(),
+  unmapped: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+});

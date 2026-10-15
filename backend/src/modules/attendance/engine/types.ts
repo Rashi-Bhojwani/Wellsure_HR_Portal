@@ -56,7 +56,9 @@ export type ManualEntry =
 export type DayOverride =
   | { kind: "ADD_TIME"; id: string; origin: OverrideOrigin; time: string }
   | { kind: "TIMES"; id: string; origin: OverrideOrigin; inTime: string; outTime: string }
-  | { kind: "STATUS"; id: string; origin: OverrideOrigin; status: "P" | "A" | "HD_FIRST" | "HD_SECOND" | "WORKED" };
+  | { kind: "STATUS"; id: string; origin: OverrideOrigin; status: "P" | "A" | "HD_FIRST" | "HD_SECOND" | "WORKED" }
+  // Leave released because the person worked: the figures come from the device as for any day; the day is only marked.
+  | { kind: "RELEASE_ONLY"; id: string; origin: OverrideOrigin };
 
 export type OverrideOrigin = "REGULARIZATION" | "MANUAL_OVERRIDE";
 

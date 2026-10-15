@@ -62,6 +62,12 @@ export function emitLeaveDecided(payload: LeaveEventPayload & { status: "APPROVE
   io.to(`user:${payload.employeeId}`).emit("leave.decided", payload);
 }
 
+/** A leave balance changed without a decision on a request (HR released leave on a day worked, Phase 3): refresh the screens. */
+export function emitLeaveBalanceChanged(employeeId: string): void {
+  if (!io) return;
+  io.to(`user:${employeeId}`).emit("leave.balance.changed", { employeeId });
+}
+
 // Delivery for an already-persisted Notification row (spec §8) — never
 // the write itself, see modules/notifications/service.ts's
 // createNotification, which every caller invokes first, as its own step,

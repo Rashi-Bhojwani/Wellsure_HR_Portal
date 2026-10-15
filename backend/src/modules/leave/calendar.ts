@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { getTeamEmployeeIds } from "../../lib/dataScope";
 import type { LeaveViewer } from "./types";
+import { releasedDatesOf } from "./releases";
 import { inForceOn } from "../../lib/effectiveDating";
 
 export interface LeaveCalendarQuery {
@@ -20,6 +21,8 @@ export interface LeaveCalendarEntry {
   toDate: string;
   fromDayPart: string;
   toDayPart: string;
+  /** Days inside the range that HR released because the person worked them (Phase 3): not leave. */
+  releasedDates: string[];
 }
 
 // "Who's on leave" — a low-sensitivity courtesy view (approved leave only,
@@ -80,6 +83,7 @@ export async function getLeaveCalendar(query: LeaveCalendarQuery, viewer: LeaveV
     orderBy: { fromDate: "asc" },
   });
 
+  const released = await releasedDatesOf(prisma, rows.map((r) => r.id));
   return rows.map((r) => ({
     employeeId: r.employeeId,
     employeeCode: r.employee.employeeCode,
@@ -89,5 +93,6 @@ export async function getLeaveCalendar(query: LeaveCalendarQuery, viewer: LeaveV
     toDate: r.toDate.toISOString().slice(0, 10),
     fromDayPart: r.fromDayPart,
     toDayPart: r.toDayPart,
+    releasedDates: released.get(r.id) ?? [],
   }));
 }

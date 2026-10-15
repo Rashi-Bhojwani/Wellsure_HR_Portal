@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { Alert, Button, DatePicker, Form, Input, Modal, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
+import { Alert, Button, DatePicker, Drawer, Form, Input, Modal, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
 import type { Dayjs } from "dayjs";
 import { PlusOutlined } from "@ant-design/icons";
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
@@ -10,6 +10,7 @@ import * as leaveApi from "../../../api/leave";
 import type { LeaveRequestRow, LeaveRequestStatus } from "../../../api/leave";
 import * as employeeApi from "../../../api/employee";
 import { EmptyState } from "../../../components/common/EmptyState";
+import { LeaveLedgerTable } from "../../../components/leave/LeaveLedgerTable";
 import { useAuth } from "../../../hooks/useAuth";
 
 const { Title, Text } = Typography;
@@ -106,6 +107,7 @@ export function EmployeeLeavePage() {
   const [onBehalfOpen, setOnBehalfOpen] = useState(false);
   const [rejecting, setRejecting] = useState<LeaveRequestRow | null>(null);
   const [rejectComments, setRejectComments] = useState("");
+  const [ledgerFor, setLedgerFor] = useState<LeaveRequestRow | null>(null);
 
   // Requests nobody on the team side can decide (no manager with leave
   // approval, no delegate, or no manager at all) — HR's to decide. Linked
@@ -222,6 +224,7 @@ export function EmployeeLeavePage() {
           { title: "Status", dataIndex: "status", render: (v: string) => <Tag color={STATUS_COLORS[v]}>{v}</Tag> },
           { title: "Reason", dataIndex: "reason", render: (v: string | null) => v ?? <Text type="secondary">—</Text> },
           { title: "Decision Comments", dataIndex: "decisionComments", render: (v: string | null) => v ?? <Text type="secondary">—</Text> },
+          { title: "Balance", key: "history", render: (_, r) => <Button size="small" onClick={() => setLedgerFor(r)}>History</Button> },
           {
             title: "Actions",
             key: "actions",
@@ -248,6 +251,10 @@ export function EmployeeLeavePage() {
           },
         ]}
       />
+
+      <Drawer title={`Leave balance history: ${ledgerFor?.employeeName ?? ""}`} open={ledgerFor !== null} onClose={() => setLedgerFor(null)} size="large" destroyOnHidden>
+        {ledgerFor && <LeaveLedgerTable employeeId={ledgerFor.employeeId} />}
+      </Drawer>
 
       <Modal
         title={`Reject ${rejecting?.employeeName}'s request`}

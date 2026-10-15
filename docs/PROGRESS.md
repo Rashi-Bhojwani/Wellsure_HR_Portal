@@ -13,7 +13,7 @@ committed).
 | 1 | Auth, RBAC, org, employees | Done — data layer, authentication, org masters, employee management, import center, exports, audit log viewer and system settings all built and tested. Users & Roles admin screen deliberately deferred (built in Phase 5 commit E1 as Roles & Permissions). **Correction (2026-09-30): role assignment does not exist anywhere in the product** — Add Employee always assigns plain `EMPLOYEE` and nothing else assigns roles; an earlier version of this row claimed otherwise. Both are Phase 5 commit E1 ([`docs/plans/PHASE_5.md`](plans/PHASE_5.md)). |
 | 1.5 | AWS staging environment | Not started — **go-live checklist in [`DEPLOYMENT.md`](DEPLOYMENT.md): item 1, restrict `/iclock` to the office address, must be ticked before any ADMS push device is created in production** |
 | 2 | Biometric ingestion + attendance engine + real-time | In progress — plan approved ([`docs/plans/PHASE_2.md`](plans/PHASE_2.md)); P2-A (configuration), P2-B (ingestion), P2-C (rules engine), P2-D (manual entry and the muster) and P2-E (Attendance Info, Who Is In, the forgot-to-punch request) done, plus the fail-safe thresholds and the finalisation gate; P2-F done: F1 (the sync agent with our read-only device driver, and its server side), a follow-up (HR is told when punches are set aside) and F2 (the Windows service, release zip and INSTALL.md, proven on a Windows CI runner); P2-G done: G1 (the simulator's correctness: scenarios with expected outcomes, the month replay and its diff), G2a (the three routes, the `simulate` command, route replays) and G2b (the automated punch-to-screen latency test); P2-H done (device and agent health: incidents, alerts, recovery notices); P2-I done (the four gates recorded in [`PHASE_2_ACCEPTANCE.md`](plans/PHASE_2_ACCEPTANCE.md), an independent review with five fixes) and P2-J (the review follow-ups you approved) — **Phase 2 built and approved pending CI (green on 50ef7e8); awaiting your hands-on testing; close-out below** |
-| 3 | Attendance administration | In progress — plan approved with three changes ([`docs/plans/PHASE_3.md`](plans/PHASE_3.md)); **commit 1 (regularization, complete, plus the assignment self-guard) built, awaiting your review**; commits 2 (override, roster, swipes), 3 (finalisation, exceptions) and 4 (reports, close-out) not started |
+| 3 | Attendance administration | In progress — plan approved with three changes ([`docs/plans/PHASE_3.md`](plans/PHASE_3.md)); commit 1 (regularization, complete, plus the assignment self-guard) approved, CI green; **commit 2 (Manual Override incl. a leave day worked with the balance returned, Shift Override, Shift Roster, Employee Swipes) built, awaiting your review**; commits 3 (finalisation, exceptions) and 4 (reports, close-out) not started |
 | 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
 | 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | ✅ Done (2026-10-03) — commits A, B, C, D, D2, E1, E1.1, E2, E3, F and G (mobile bottom bar + PWA), plus interim commits. Full review — every screen and URL, every permission, what's stubbed, open questions, risks for Phase 6 — in [`docs/plans/PHASE_5_REVIEW.md`](plans/PHASE_5_REVIEW.md). Plan and as-built notes per commit in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
 | 5.5 | AWS production environment and go-live hardening | Not started |
@@ -4597,6 +4597,66 @@ for timing, so I am reading CI for that figure rather than loosening the guard.
 
 **Still to do in Phase 3:** commit 2 (Manual Override incl. leave-day-worked attendance side, Shift Override, Shift Roster, Employee
 Swipes), then the leave-ledger reversal as its own small commit, commit 3 (Finalisation + Exceptions), commit 4 (reports, close-out).
+
+### Phase 3, commit 2 — Manual Override, Shift Override, Shift Roster, Employee Swipes (2026-10-15)
+
+Design and as-built notes: [`docs/plans/PHASE_3.md`](plans/PHASE_3.md) ("Commit 2 — design as decided before building" and "Commit 2 — as built").
+
+**Your three changes on approving commit 1**
+1. **A leave day the person worked is correctable, with the balance returned.** Manual Override has an explicit, ticked option, "They worked on a day
+   of approved leave: release the leave and return the balance", with a written reason. In one transaction it writes the attendance override, a
+   release record, and a reversal in the leave ledger (comp-off goes back to the very lot it came from). The day then reads Present (or follows the
+   device's own punches if HR chooses that), marked "Corrected by hand" with "Approved leave released: PL 1 day went back to the leave balance";
+   the employee's leave ledger shows "Returned: you worked on a day of approved leave" with the date and HR's reason. Cancelling the leave request
+   later returns only what is still consumed (never the released day twice); the leave calendar and the dashboard skip released days. Without the
+   tick, a leave day is refused in the preview with a pointer to the option. The employee's own request screen still can't do it (an employee can't
+   give leave back) but now says to ask HR and what HR can do (also for holidays, week-offs and already-corrected days).
+2. **The muster export tells corrected days apart.** (My commit 1 note was wrong: it already marked `~` since Phase 2.) Now `~` an approved request,
+   `#` set by HR, `^` shift set for that day, and a **Corrected days** sheet listing each marked day with what was set, why, by whom, when and any
+   leave returned. The on-screen muster marks them too (corner mark and a bar under the cell; its legend explains each).
+3. **Local timing is not a baseline** is recorded in the plan (CI's figures only).
+
+**What exists now** (all under Workforce → Attendance; every screen is routed, none is a placeholder)
+- **Manual Override** (`/admin/workforce/attendance/manual-override`; HR Admin and Super Admin, permission `attendance.override.manage`): pick people (a
+  branch, a department or a list), dates and a status or times; preview shows each employee-day from → to, what it replaces, the leave days that would
+  come back, and what can't be set and why; confirm applies exactly that set. Holiday and week-off days accept only "worked". It supersedes an earlier
+  correction (history kept), and "Remove" takes a day back to the device (refused after a leave release). Also opens from a person's day ("Set this
+  day") and from a device-day cell in the muster. History of every override and approved correction below the form.
+- **Shift Override** (`.../shift-override`): a shift for specific dates, past (within the current and previous cycle) or up to the scheduling limit ahead;
+  only the shift changes. The day panel says "Shift set for this day by HR".
+- **Shift Roster** (`.../shift-roster`; the "Phase 2" label is gone): one shift for many people from tomorrow, or a rotation (steps of shift × days,
+  repeating until an end date, then back to their previous shift or staying). Writes the ordinary dated assignment changes, forward only; writing again
+  replaces what was scheduled from the start date, all or nothing.
+- **Employee Swipes** (`.../swipes`; permission `attendance.swipes.view`, manager-grantable at team scope): the raw punch log as received with
+  filters (dates, device, employee, route, used / not used, flagged state, matching nobody), paged on the server, Excel export (capped, audited).
+- **Leave ledger view:** Leave Balances → "Balance history" for the employee; Employee Leave → "History" for HR. (There was no screen showing ledger rows.)
+
+**Rules I decided myself** (veto any; the full list with reasons is in PHASE_3.md)
+1. Leave-day-worked is one transaction in this commit; releasing is not undone by removing the override (apply the leave again); the second override of
+   that day can still change it.
+2. I added "follow the device" (an override kind that changes nothing about the day except releasing the leave), because a status override discards the
+   person's real in and out times.
+3. The roster starts tomorrow at the earliest; after a repeating rotation people return to their previous shift unless HR picks "stay".
+4. Roster caps reuse the bulk caps (people per run) plus 60 shift changes per person; no new setting.
+5. Manual Override refuses manual-capture people (the muster is their route) and days with a correction request waiting.
+6. Shift Override changes the shift only; the device-health working window still follows the assignment's shift.
+7. Swipes: punches matching nobody are company-wide only. The raw-log export is audited; the muster export is not (unchanged).
+8. The Granted figure on Leave Balances no longer counts reversals.
+
+**Verification:** fresh scratch database from migrations (36 migrations, seed), `db:drift` clean; full backend suite 966 passing (112 files); frontend 16;
+agent 158; lint and typecheck clean in every project. New backend tests: `manualOverride.test.ts` (21: preview, leave release both sides, ledger and
+attendance day, cancel after release, comp-off lot, follow-the-device, off days, supersede, clear, finalised, pending, fingerprint, atomicity,
+append-only, muster export), `shiftOverride.test.ts` (8), `roster.test.ts` (11, including an all-or-nothing failure forced by a database trigger),
+`rotation.test.ts` (8), `swipes.test.ts` (7), four new manager-reach cases (swipes list, options, export; leave ledger), route inventory and cleanup
+classification. Mutation checks (rule removed → a named test fails): no ledger reversal, cancellation returning the released day again, own days not
+left out, leave day accepted without the tick, off-day "worked" ignored, shift override ignored, roster not forward-only, roster not all-or-nothing,
+swipes scope ignored, "used" flag wrong, muster export without the Corrected days rows: all eleven caught. Live walkthrough in two browsers as Super
+Admin and a plain employee: the employee's open Leave Balances page went from 3 to 4 with the ledger line appearing, and their open day changed to
+Present with "Approved leave released", both without a reload; refusal wording on a leave day; removal refused after the release; a shift override, a
+nine-person rotation preview and write, the swipes list and export, and a device-day cell opening Manual Override from the muster.
+
+**Still to do in Phase 3:** commit 3 (Period Finalisation, Attendance Exceptions), commit 4 (reports incl. Excess hours, close-out with
+`docs/CONNECTION_DAY.md`).
 
 ## Open questions
 

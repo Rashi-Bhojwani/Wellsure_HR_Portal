@@ -6,7 +6,9 @@ import { CheckCircleOutlined, CloudUploadOutlined, ExportOutlined, SaveOutlined,
 import type { AxiosError } from "axios";
 import * as musterApi from "../../../../api/muster";
 import type { MusterQuery } from "../../../../api/muster";
+import { ManualOverrideModal } from "../../../../components/attendance/ManualOverrideModal";
 import { HelpStrip } from "../../../../components/common/HelpStrip";
+import { useAuth } from "../../../../hooks/useAuth";
 import { apiErrorMessage } from "../../../../lib/apiError";
 import { useSocket } from "../../../../sockets/SocketProvider";
 import { MusterGrid } from "./MusterGrid";
@@ -35,6 +37,8 @@ export function MusterPage({ title = "Attendance Muster" }: { title?: string }) 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [presentDay, setPresentDay] = useState<Dayjs | null>(null);
   const [presentBranch, setPresentBranch] = useState<string | undefined>();
+  const { hasPermission } = useAuth();
+  const [overriding, setOverriding] = useState<{ employeeId: string; name: string; date: string } | null>(null);
 
   const cycles = useQuery({ queryKey: ["attendance", "muster", "cycles"], queryFn: musterApi.cycles });
   const muster = useQuery({ queryKey: ["attendance", "muster", query], queryFn: () => musterApi.getMuster(query), placeholderData: (prev) => prev, retry: false });
@@ -196,7 +200,15 @@ export function MusterPage({ title = "Attendance Muster" }: { title?: string }) 
       ) : data.rows.length === 0 ? (
         <Alert type="info" showIcon title="Nobody to show for this cycle and filter." />
       ) : (
-        <MusterGrid muster={data} pending={pending} errors={errors} onChange={change} focused={focused} onFocus={setFocused} />
+        <MusterGrid
+          muster={data}
+          pending={pending}
+          errors={errors}
+          onChange={change}
+          focused={focused}
+          onFocus={setFocused}
+          onOpenDay={hasPermission("attendance.override.manage") ? (row, cell) => setOverriding({ employeeId: row.employeeId, name: row.name, date: cell.date }) : undefined}
+        />
       )}
 
       {pendingCount > 0 && (
@@ -239,6 +251,9 @@ export function MusterPage({ title = "Attendance Muster" }: { title?: string }) 
                 <span><span style={{ display: "inline-block", width: 6, height: 6, borderRadius: 6, background: token.colorSuccess, marginRight: 4 }} />Worked on an off day</span>
                 <span><span style={{ display: "inline-block", width: 14, height: 14, verticalAlign: "middle", background: token.colorWarningBgHover, marginRight: 4 }} />Unsaved</span>
                 <span>🔒 Finalised</span>
+                <span><b style={{ color: token.colorPrimary }}>~</b> Corrected: a request was approved (not from the device)</span>
+                <span><b style={{ color: token.colorPrimary }}>#</b> Set by HR (Manual Override)</span>
+                <span><b style={{ color: token.colorPrimary }}>^</b> Shift set for that day by HR</span>
               </Flex>
             </div>
             {data.canMark && (
@@ -256,6 +271,8 @@ export function MusterPage({ title = "Attendance Muster" }: { title?: string }) 
           </Flex>
         </Card>
       )}
+
+      <ManualOverrideModal target={overriding} onClose={() => setOverriding(null)} />
 
       <Drawer open={uploadOpen} onClose={() => setUploadOpen(false)} size={720} title="Upload a filled-in muster" destroyOnHidden>
         {data && <MusterUploadPanel branches={markBranches} cycles={cycles.data?.cycles ?? []} defaultBranch={query.locationId} defaultCycle={data.cycle.start} />}

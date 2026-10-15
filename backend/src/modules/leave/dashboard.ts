@@ -36,14 +36,19 @@ export async function getWorkforceDashboard(year: number, viewer: { employeeId: 
 
   const requests = await prisma.leaveRequest.findMany({
     where: { status: "APPROVED", fromDate: { gte: yearStart, lte: yearEnd }, ...scoped },
-    select: { fromDate: true, totalDays: true, leaveType: { select: { code: true } } },
+    select: { id: true, fromDate: true, totalDays: true, leaveType: { select: { code: true } } },
   });
+  // Days HR released because the person worked them (Phase 3) were not taken.
+  const releasedByRequest = new Map<string, Prisma.Decimal>();
+  for (const rel of await prisma.leaveDayRelease.findMany({ where: { leaveRequestId: { in: requests.map((r) => r.id) } }, select: { leaveRequestId: true, days: true } })) {
+    releasedByRequest.set(rel.leaveRequestId, (releasedByRequest.get(rel.leaveRequestId) ?? new Prisma.Decimal(0)).plus(rel.days));
+  }
 
   const totals = new Map<string, Prisma.Decimal>(); // key: `${month}:${code}`
   for (const r of requests) {
     const month = r.fromDate.getUTCMonth() + 1;
     const key = `${month}:${r.leaveType.code}`;
-    totals.set(key, (totals.get(key) ?? new Prisma.Decimal(0)).plus(r.totalDays));
+    totals.set(key, (totals.get(key) ?? new Prisma.Decimal(0)).plus(r.totalDays).minus(releasedByRequest.get(r.id) ?? 0));
   }
   const byMonthAndType = [...totals.entries()].map(([key, days]) => {
     const [month, leaveTypeCode] = key.split(":");

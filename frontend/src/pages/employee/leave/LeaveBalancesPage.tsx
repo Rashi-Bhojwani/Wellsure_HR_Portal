@@ -4,6 +4,7 @@ import { Row, Col, Card, Typography, Button, Select, Space, Spin } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import * as leaveApi from "../../../api/leave";
 import { EmptyState } from "../../../components/common/EmptyState";
+import { LeaveLedgerTable } from "../../../components/leave/LeaveLedgerTable";
 
 const { Text, Title } = Typography;
 
@@ -56,6 +57,10 @@ export function LeaveBalancesPage() {
           ))}
         </Row>
       )}
+
+      <Card title="Balance history" size="small">
+        <LeaveLedgerTable />
+      </Card>
     </Space>
   );
 }

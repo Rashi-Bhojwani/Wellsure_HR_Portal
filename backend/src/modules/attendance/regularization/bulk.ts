@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { Prisma, type RegularizationReasonCode } from "@prisma/client";
 import { writeAuditLogs } from "../../../lib/audit";
 import { businessToday } from "../../../lib/businessDate";
-import { assignmentsBetween, namesOn, placementPeriods, rowInForce } from "../../../lib/effectiveDating";
+import { assignmentsBetween, namesOn, rowInForce } from "../../../lib/effectiveDating";
 import { getRegularizationSettings } from "../../../lib/regularizationSettings";
 import { prisma } from "../../../lib/prisma";
 import { HttpError } from "../../../middleware/errorHandler";
@@ -10,7 +10,7 @@ import { notifyEmployee } from "../../notifications/notifyEmployee";
 import { computeAttendance, shiftDef } from "../compute";
 import { addDays } from "../engine/time";
 import type { DayOverride } from "../engine/types";
-import { employeesInRange } from "../jobs";
+import { resolveTargets, spanDays } from "../dayTargets";
 import type { Viewer } from "../manual/scope";
 import { overrideKey } from "../overrides";
 import type { Meta } from "../processService";
@@ -51,33 +51,13 @@ async function plan(viewer: Viewer, input: BulkInput) {
     throw new HttpError(403, "Raising and approving in one action needs the permission to approve corrections.", "FORBIDDEN");
   }
   const settings = await getRegularizationSettings();
-  const span = Math.round((day(input.to).getTime() - day(input.from).getTime()) / 86_400_000) + 1;
+  const span = spanDays(input.from, input.to);
   if (span > settings.bulkMaxRangeDays) {
     throw new HttpError(400, `A bulk correction covers at most ${settings.bulkMaxRangeDays} days at a time (this is ${span}). Narrow the dates and do it in parts.`, "TOO_WIDE");
   }
 
   // Who: a list, or everyone placed at the branch/department on each day.
-  let candidateIds: string[];
-  if (input.selection.employeeIds) {
-    const found = await prisma.employee.findMany({ where: { id: { in: input.selection.employeeIds } }, select: { id: true } });
-    if (found.length !== new Set(input.selection.employeeIds).size) throw new HttpError(404, "Some of those employees weren't found.", "NOT_FOUND");
-    candidateIds = found.map((e) => e.id);
-  } else {
-    candidateIds = await employeesInRange(input.from, input.to);
-  }
-  const periods = input.selection.employeeIds ? null : await placementPeriods(candidateIds, day(input.from), day(input.to));
-  const placedOn = (employeeId: string, date: string) => {
-    if (!periods) return true;
-    const p = (periods.get(employeeId) ?? []).find((x) => x.from <= day(date) && day(date) <= x.to);
-    if (!p) return false;
-    return (!input.selection.locationId || p.locationId === input.selection.locationId) && (!input.selection.departmentId || p.departmentId === input.selection.departmentId);
-  };
-
-  const employed = new Map((await prisma.employee.findMany({ where: { id: { in: candidateIds } }, select: { id: true, dateOfJoining: true, lastWorkingDate: true } })).map((e) => [e.id, e]));
-  const employedOn = (employeeId: string, date: string) => {
-    const e = employed.get(employeeId);
-    return !!e && e.dateOfJoining <= day(date) && (!e.lastWorkingDate || e.lastWorkingDate >= day(date));
-  };
+  const { candidateIds, targeted } = await resolveTargets(input.selection, input.from, input.to);
   const [rows, pendingRows, approvedRows, assignments, earliest] = await Promise.all([
     prisma.dailyAttendance.findMany({ where: { employeeId: { in: candidateIds }, date: { gte: day(input.from), lte: day(input.to) } } }),
     prisma.regularizationRequest.findMany({ where: { employeeId: { in: candidateIds }, date: { gte: day(input.from), lte: day(input.to) }, status: "PENDING" }, select: { employeeId: true, date: true } }),
@@ -95,7 +75,7 @@ async function plan(viewer: Viewer, input: BulkInput) {
   let ownLeftOut = 0;
   for (const employeeId of candidateIds) {
     for (let date = input.from; date <= input.to; date = addDays(date, 1)) {
-      if (!placedOn(employeeId, date) || !employedOn(employeeId, date)) continue; // not there that day: nothing to correct, nothing to report
+      if (!targeted(employeeId, date)) continue; // not there that day: nothing to correct, nothing to report
       const key = overrideKey(employeeId, date);
       const row = rowOf.get(key); // none yet: reported below as "not processed yet", never skipped silently
       if (employeeId === viewer.employeeId) {

@@ -347,8 +347,10 @@ describe("regularization and override kinds (Phase 3)", () => {
   it("STATUS beats a manual entry on a manual-capture day", () => {
     expect(ev({ capture: "MANUAL", manual: { kind: "STATUS_ONLY", id: "m", status: "A" }, override: setStatus("o9", "P", "MANUAL_OVERRIDE") })).toMatchObject({ status: "P", source: "OVERRIDE" });
   });
-  it("a holiday, a week-off and a full-day leave come first: the override is recorded but not applied", () => {
-    expect(ev({ holiday: "Dussehra", override: setStatus("o10", "P") })).toMatchObject({ status: "H", source: "HOLIDAY", overrideId: null });
+  it("a holiday, a week-off and a full-day leave come first: an override is not applied, except 'worked' on an off day, which only records the work", () => {
+    expect(ev({ holiday: "Dussehra", override: setStatus("o10", "P") })).toMatchObject({ status: "H", source: "HOLIDAY", overrideId: "o10", workedOnOffDay: true });
+    expect(ev({ holiday: "Dussehra", override: setStatus("o10b", "WORKED") })).toMatchObject({ status: "H", source: "HOLIDAY", overrideId: "o10b", workedOnOffDay: true });
+    expect(ev({ holiday: "Dussehra", override: setStatus("o10c", "A") })).toMatchObject({ status: "H", source: "HOLIDAY", overrideId: null, workedOnOffDay: false });
     expect(ev({ weekOff: true, override: times("o11", "10:00", "19:00") })).toMatchObject({ status: "O", source: "WEEK_OFF", overrideId: null, workedOnOffDay: false });
     expect(ev({ leave: { first: PL, second: PL }, override: setStatus("o12", "P") })).toMatchObject({ status: "PL", source: "LEAVE", overrideId: null });
   });

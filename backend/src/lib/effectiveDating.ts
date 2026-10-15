@@ -227,6 +227,11 @@ export async function deviceMappingPeriods(employeeIds: string[], from: Date, to
   return out;
 }
 
+/** Everyone's whole assignment history with each shift's code, oldest first (the shift roster plans against it). */
+export async function assignmentHistories(employeeIds: string[]) {
+  return prisma.attendanceAssignment.findMany({ where: { employeeId: { in: employeeIds } }, orderBy: { effectiveFrom: "asc" }, include: { shift: { select: { id: true, code: true } } } });
+}
+
 /** One employee's whole assignment history, newest first (the Assignments tab). */
 export async function assignmentHistory(employeeId: string): Promise<AssignmentWithRules[]> {
   return prisma.attendanceAssignment.findMany({ where: { employeeId }, orderBy: { effectiveFrom: "desc" }, include: assignmentInclude });

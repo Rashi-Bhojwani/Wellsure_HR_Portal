@@ -10,6 +10,8 @@ import { ENGINE_VERSION, type DayInput, type DayOverride, type DayResult, type H
 import { attributePunches } from "./engine/windows";
 import { loadManualEntries } from "./manual/entries";
 import { loadOverrides } from "./overrides";
+import { loadReleasedLeave } from "./leaveReleases";
+import { loadShiftOverrides, shiftDefOf, type LoadedShiftOverride, type ShiftWithSessions } from "./shiftOverrides";
 
 // The engine's loader and writer (docs/plans/PHASE_2.md §4.1). The loader
 // gathers each employee-day's inputs — through the effective-dating readers
@@ -63,14 +65,16 @@ export function shiftDef(a: AssignmentWithRules): ShiftDef {
 }
 
 /** The fields that make up a day; two equal shapes mean nothing changed. */
-function rowData(employeeId: string, date: string, r: DayResult, a: AssignmentWithRules | null, outside: number) {
+function rowData(employeeId: string, date: string, r: DayResult, a: AssignmentWithRules | null, outside: number, shiftOverride: LoadedShiftOverride | null) {
+  const shift = shiftOverride?.shift ?? a?.shift ?? null;
   return {
     employeeId,
     date: utcDate(date),
-    shiftId: a?.shift.id ?? null,
+    shiftId: shift?.id ?? null,
     shiftCode: r.shiftCode,
-    shiftStart: a?.shift.startTime ?? null,
-    shiftEnd: a?.shift.endTime ?? null,
+    shiftStart: shift?.startTime ?? null,
+    shiftEnd: shift?.endTime ?? null,
+    shiftOverrideRef: shiftOverride?.id ?? null,
     policyId: a?.policy.id ?? null,
     firstIn: r.firstIn === null ? null : new Date(r.firstIn),
     lastOut: r.lastOut === null ? null : new Date(r.lastOut),
@@ -105,7 +109,7 @@ type RowData = ReturnType<typeof rowData>;
 const COMPARED: Array<keyof RowData> = [
   "shiftId", "shiftCode", "shiftStart", "shiftEnd", "policyId", "firstIn", "lastOut", "totalMinutes", "breakMinutes", "actualMinutes", "inShiftMinutes",
   "lateInMinutes", "earlyOutMinutes", "shortfallMinutes", "excessMinutes", "status", "firstHalfStatus", "secondHalfStatus", "lopDays", "exceptionFlags",
-  "source", "capture", "leaveTypeCode", "holidayName", "workedOnOffDay", "provisional", "punchCount", "computedFrom", "overrideKind", "overrideRef", "engineVersion",
+  "source", "capture", "leaveTypeCode", "holidayName", "workedOnOffDay", "provisional", "punchCount", "computedFrom", "overrideKind", "overrideRef", "shiftOverrideRef", "engineVersion",
 ];
 // Key order never matters: Postgres jsonb stores object keys in its own order
 // (by length, then bytes), so computedFrom read back can differ from the
@@ -125,11 +129,24 @@ export function sameDay(existing: DailyAttendance, next: RowData): boolean {
   return COMPARED.every((k) => canonical((existing as unknown as Record<string, unknown>)[k]) === canonical(next[k]));
 }
 
+export interface ComputeOptions {
+  now?: Date;
+  maxChanges?: number;
+  dryRun?: boolean;
+  collect?: boolean;
+  /** Overrides that do not exist yet, to see what a day would become (previews). */
+  hypothetical?: Map<string, DayOverride>;
+  /** Shifts that do not exist yet as overrides (null = the assignment's shift), keyed employee|date. */
+  hypotheticalShifts?: Map<string, ShiftWithSessions | null>;
+  /** Employee-days whose approved leave is treated as released (a preview of "they worked on a leave day"). */
+  hypotheticalReleased?: Set<string>;
+}
+
 /**
  * Recompute [from, to] (business dates, inclusive) for these employees. Days
  * after today are never computed. Callers chunk large employee sets.
  */
-export async function computeAttendance(employeeIds: string[], from: string, to: string, opts: { now?: Date; maxChanges?: number; dryRun?: boolean; collect?: boolean; hypothetical?: Map<string, DayOverride> } = {}): Promise<ComputeResult> {
+export async function computeAttendance(employeeIds: string[], from: string, to: string, opts: ComputeOptions = {}): Promise<ComputeResult> {
   const result: ComputeResult = { processed: 0, changed: 0, locked: 0, deleted: 0, changes: [] };
   const today = iso(businessToday());
   const last = to > today ? today : to;
@@ -139,19 +156,22 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
 
   const fromD = utcDate(from);
   const lastD = utcDate(last);
-  const [employees, assignments, mappings, holidays, leaves, existing, manual, overrides] = await Promise.all([
+  const [employees, assignments, mappings, holidays, leaves, existing, manual, overrides, shiftOverrides, released] = await Promise.all([
     prisma.employee.findMany({ where: { id: { in: employeeIds } }, select: { id: true, dateOfJoining: true, lastWorkingDate: true } }),
     assignmentsBetween(employeeIds, utcDate(addDays(from, -1)), utcDate(addDays(last, 1))),
     deviceMappingPeriods(employeeIds, fromD, lastD),
     prisma.holiday.findMany({ where: { date: { gte: fromD, lte: lastD } }, select: { date: true, name: true } }),
     prisma.leaveRequest.findMany({
       where: { employeeId: { in: employeeIds }, status: "APPROVED", fromDate: { lte: lastD }, toDate: { gte: fromD } },
-      select: { employeeId: true, fromDate: true, toDate: true, fromDayPart: true, toDayPart: true, leaveType: { select: { code: true, isPaid: true } } },
+      select: { id: true, employeeId: true, fromDate: true, toDate: true, fromDayPart: true, toDayPart: true, leaveType: { select: { code: true, isPaid: true } } },
     }),
     prisma.dailyAttendance.findMany({ where: { employeeId: { in: employeeIds }, date: { gte: fromD, lte: lastD } } }),
     loadManual(employeeIds, from, last),
     // The active override per employee-day (an approved regularization, or a manual override): latest wins.
     loadOverrides(employeeIds, from, last),
+    // A shift for the one day (Shift Override), and leave HR released because the person worked.
+    loadShiftOverrides(employeeIds, from, last),
+    loadReleasedLeave(employeeIds, from, last),
   ]);
   const overrideBy = opts.hypothetical ? new Map([...overrides, ...opts.hypothetical]) : overrides;
   const punches = await prisma.rawPunch.findMany({
@@ -166,6 +186,19 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
   for (const emp of employees) {
     const rows = assignments.filter((a) => a.employeeId === emp.id);
     const assignmentOnDate = (date: string) => rows.find((a) => rowInForce(a, utcDate(date))) ?? null;
+    // The shift for a day: a Shift Override if there is one, else the assignment's. Week-off pattern and policy stay the assignment's.
+    const shiftOverrideOn = (date: string): LoadedShiftOverride | null => {
+      const k = `${emp.id}|${date}`;
+      if (opts.hypotheticalShifts?.has(k)) {
+        const hypothetical = opts.hypotheticalShifts.get(k);
+        return hypothetical ? { id: "preview", shift: hypothetical } : null;
+      }
+      return shiftOverrides.get(k) ?? null;
+    };
+    const shiftOn = (date: string, a: AssignmentWithRules | null): ShiftDef | null => {
+      const o = shiftOverrideOn(date);
+      return o ? shiftDefOf(o.shift) : a ? shiftDef(a) : null;
+    };
     const periods = mappings.get(emp.id) ?? [];
     const captured = (date: string) => periods.some((p) => p.from <= utcDate(date) && (!p.to || p.to > utcDate(date)));
 
@@ -173,6 +206,8 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
     const leaveOn = new Map<string, { first: HalfLeave | null; second: HalfLeave | null }>();
     for (const l of leaves.filter((x) => x.employeeId === emp.id)) {
       for (let d = iso(l.fromDate); d <= iso(l.toDate); d = addDays(d, 1)) {
+        // HR released this day of the leave because the person worked it: it is an ordinary day now.
+        if (released.has(`${l.id}|${d}`) || opts.hypotheticalReleased?.has(`${emp.id}|${d}`)) continue;
         const part = d === iso(l.fromDate) ? l.fromDayPart : d === iso(l.toDate) ? l.toDayPart : "FULL";
         const half: HalfLeave = { code: l.leaveType.code, unpaid: !l.leaveType.isPaid };
         const cur = leaveOn.get(d) ?? { first: null, second: null };
@@ -194,7 +229,7 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
       .filter(employedOn)
       .map((date) => {
         const a = assignmentOnDate(date);
-        return { date, shift: a ? shiftDef(a) : null };
+        return { date, shift: shiftOn(date, a) };
       });
     const mine = punches.filter((p) => p.employeeId === emp.id);
     const usable: PunchRef[] = mine.filter((p) => !p.flag || p.flagResolution?.decision === "ACCEPTED").map((p) => ({ id: p.id, at: p.punchedAt.getTime() }));
@@ -219,7 +254,7 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
         date,
         employed,
         holiday: holidayOn.get(date) ?? null,
-        shift: a ? shiftDef(a) : null,
+        shift: shiftOn(date, a),
         weekOff: a ? isWeekOff(a.weekOffPattern.rules as unknown as WeekOffRule[], utcDate(date)) : false,
         leave: leaveOn.get(date) ?? { first: null, second: null },
         capture: captured(date) ? "DEVICE" : "MANUAL",
@@ -245,7 +280,7 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
         }
         continue;
       }
-      const data = rowData(emp.id, date, r, a, outsideOn.get(date) ?? 0);
+      const data = rowData(emp.id, date, r, a, outsideOn.get(date) ?? 0, shiftOverrideOn(date));
       if (before && sameDay(before, data)) continue;
       if (!opts.dryRun) await prisma.dailyAttendance.upsert({ where: { employeeId_date: { employeeId: emp.id, date: data.date } }, create: data, update: { ...data, processedAt: new Date() } });
       note(r.status);

@@ -61,6 +61,7 @@ export type RegularizationStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCEL
 export interface DayDetail {
   date: string;
   employed: boolean;
+  employeeName?: string | null;
   status?: string;
   code?: string;
   firstHalfStatus?: string | null;
@@ -82,6 +83,10 @@ export interface DayDetail {
   punches?: Array<{ id: string; time: string; date: string; device: string; route: string; role: "FIRST_IN" | "LAST_OUT" | "ONLY" | "BETWEEN" | "DUPLICATE" | "FLAGGED" | "DISCARDED" | "NOT_USED" }>;
   /** The correction this day was computed with (a regularization, or a manual override), and who and why. */
   override?: { id: string; origin: "REGULARIZATION" | "MANUAL_OVERRIDE"; kind: string; text: string; reasonLabel: string | null; reason: string; by: string | null; at: string; requestId: string | null } | null;
+  /** Approved leave HR released because the person worked this day, and the days that went back to their balance (Phase 3 commit 2). */
+  leaveReleased?: Array<{ type: string; days: number; reason: string; by: string | null; at: string }>;
+  /** The day's shift came from a Shift Override, not the person's assignment. */
+  shiftOverride?: { id: string; shiftName: string | null; reason: string; by: string | null; at: string } | null;
   requests?: Array<{ id: string; status: RegularizationStatus; reasonCode: ReasonCode; reasonLabel: string; correctionText: string; reason: string; decisionNote: string | null; decidedBy: string | null; decidedAt: string | null; createdAt: string }>;
   canRequest?: Eligibility | null;
 }

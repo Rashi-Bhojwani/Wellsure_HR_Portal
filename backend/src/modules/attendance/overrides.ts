@@ -18,6 +18,8 @@ export function toDayOverride(r: Pick<AttendanceOverride, "id" | "origin" | "kin
       return { kind: "TIMES", id: r.id, origin: r.origin, inTime: r.inTime!, outTime: r.outTime! };
     case "STATUS":
       return { kind: "STATUS", id: r.id, origin: r.origin, status: r.status as "P" | "A" | "HD_FIRST" | "HD_SECOND" | "WORKED" };
+    case "RELEASE_ONLY":
+      return { kind: "RELEASE_ONLY", id: r.id, origin: r.origin };
     case "CLEARED":
       return null;
   }
@@ -50,7 +52,7 @@ export type NewOverride = {
   employeeId: string;
   date: string;
   origin: "REGULARIZATION" | "MANUAL_OVERRIDE";
-  kind: "ADD_TIME" | "TIMES" | "STATUS" | "CLEARED";
+  kind: "ADD_TIME" | "TIMES" | "STATUS" | "CLEARED" | "RELEASE_ONLY";
   inTime?: string | null;
   outTime?: string | null;
   status?: string | null;

@@ -34,6 +34,7 @@ function describe(row: MusterRow, cell: MusterCell): string {
   if (cell.statusOnly) parts.push("status only, no times");
   if (cell.missingPunch) parts.push("one time only: forgot to punch out?");
   if (cell.corrected) parts.push(cell.overrideKind === "MANUAL_OVERRIDE" ? "overridden by HR (not from the device)" : "corrected: an approved request (not from the device)");
+  if (cell.shiftOverridden) parts.push("shift set for this day by HR");
   if (cell.workedOnOffDay) parts.push("worked on an off day");
   if (cell.provisional) parts.push("provisional (the day isn't over)");
   if (cell.entry) parts.push(`entered as "${cell.entry.text}"${cell.entry.via === "MUSTER_UPLOAD" ? " (upload)" : cell.entry.via === "BULK" ? " (mark all present)" : ""}${cell.entry.remark ? `: ${cell.entry.remark}` : ""}`);
@@ -50,9 +51,16 @@ interface Props {
   onChange: (key: string, text: string | null) => void; // null = back to the saved value
   focused: string | null;
   onFocus: (key: string | null) => void;
+  /** HR with Manual Override: a device day opens it (the grid itself only edits manual-capture days). */
+  onOpenDay?: (row: MusterRow, cell: MusterCell) => void;
 }
 
-export function MusterGrid({ muster, pending, errors, onChange, focused, onFocus }: Props) {
+/** Marks a day that did not come straight from the device: ~ an approved request, # set by HR, ^ a shift set for the day. */
+function marks(cell: MusterCell): string {
+  return `${cell.overrideKind === "REGULARIZATION" ? "~" : cell.overrideKind === "MANUAL_OVERRIDE" ? "#" : ""}${cell.shiftOverridden ? "^" : ""}`;
+}
+
+export function MusterGrid({ muster, pending, errors, onChange, focused, onFocus, onOpenDay }: Props) {
   const { token } = theme.useToken();
   const tones = useCellTones();
   const tableRef = useRef<HTMLTableElement>(null);
@@ -147,16 +155,28 @@ export function MusterGrid({ muster, pending, errors, onChange, focused, onFocus
                   ...td,
                   background: edited !== undefined ? token.colorWarningBgHover : tone.background,
                   color: tone.color,
-                  boxShadow: error ? `inset 0 0 0 2px ${token.colorError}` : cell.statusOnly ? `inset 0 0 0 1px ${token.colorTextQuaternary}` : undefined,
+                  boxShadow: error ? `inset 0 0 0 2px ${token.colorError}` : cell.statusOnly ? `inset 0 0 0 1px ${token.colorTextQuaternary}` : marks(cell) ? `inset 0 -3px 0 ${token.colorPrimary}` : undefined,
                   position: "relative",
                   fontWeight: 500,
                 };
                 const title = error ? `${describe(row, cell)}\n⚠ ${error}` : edited === "" ? `${describe(row, cell)}\nWill be cleared (back to not marked) when you save.` : describe(row, cell);
                 const corner = cell.missingPunch ? <span aria-hidden style={{ position: "absolute", top: 0, right: 0, borderTop: `7px solid ${token.colorError}`, borderLeft: "7px solid transparent" }} /> : null;
                 const worked = cell.workedOnOffDay ? <span aria-hidden style={{ position: "absolute", bottom: 2, right: 3, width: 5, height: 5, borderRadius: 5, background: token.colorSuccess }} /> : null;
+                const mark = marks(cell) ? (
+                  <span aria-hidden style={{ position: "absolute", top: 0, left: 2, fontSize: 11, lineHeight: "12px", color: token.colorPrimary, fontWeight: 700 }}>
+                    {marks(cell)}
+                  </span>
+                ) : null;
                 if (!cell.editable) {
+                  const openable = !!onOpenDay && cell.capture === "DEVICE" && !!cell.code && !cell.locked;
                   return (
-                    <td key={cell.date} title={title} style={{ ...base, cursor: "default", opacity: cell.capture === "DEVICE" || cell.locked ? 0.85 : 1, borderStyle: cell.statusOnly ? "dashed" : undefined }}>
+                    <td
+                      key={cell.date}
+                      title={openable ? `${title}\nClick to set this day (HR)` : title}
+                      onClick={openable ? () => onOpenDay!(row, cell) : undefined}
+                      style={{ ...base, cursor: openable ? "pointer" : "default", opacity: cell.capture === "DEVICE" || cell.locked ? 0.85 : 1, borderStyle: cell.statusOnly ? "dashed" : undefined }}
+                    >
+                      {mark}
                       {cell.code ?? ""}
                       {cell.locked && <span aria-label="finalised" style={{ fontSize: 9, marginLeft: 1 }}>🔒</span>}
                       {corner}
@@ -167,6 +187,7 @@ export function MusterGrid({ muster, pending, errors, onChange, focused, onFocus
                 const shown = edited ?? (focused === key ? (cell.entry?.text ?? "") : (cell.code ?? ""));
                 return (
                   <td key={cell.date} title={title} style={base}>
+                    {mark}
                     <input
                       data-r={r}
                       data-c={c}

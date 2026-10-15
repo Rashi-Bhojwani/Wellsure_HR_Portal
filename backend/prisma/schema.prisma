@@ -504,6 +504,8 @@ model Employee {
   manualAttendanceEntries    ManualAttendanceEntry[]
   regularizationRequests     RegularizationRequest[]
   attendanceOverrides        AttendanceOverride[]
+  shiftOverrides             ShiftOverride[]
+  leaveDayReleases           LeaveDayRelease[]
 
   @@index([status])
   @@index([dateOfJoining])
@@ -832,6 +834,7 @@ model LeaveType {
   policy        LeavePolicy?
   ledgerEntries LeaveLedger[]
   leaveRequests LeaveRequest[]
+  dayReleases   LeaveDayRelease[]
 
   @@map("leave_types")
 }
@@ -988,6 +991,7 @@ model LeaveRequest {
   cancellationReason      String?            @map("cancellation_reason")
   createdAt               DateTime           @default(now()) @map("created_at")
   updatedAt               DateTime           @updatedAt @map("updated_at")
+  dayReleases             LeaveDayRelease[]
 
   @@index([employeeId, status])
   @@index([fromDate, toDate])
@@ -1760,6 +1764,7 @@ model Shift {
   updatedAt           DateTime               @updatedAt @map("updated_at")
   sessions            ShiftSession[]
   assignments         AttendanceAssignment[]
+  overrides           ShiftOverride[]
 
   @@map("shifts")
 }
@@ -2144,6 +2149,7 @@ model DailyAttendance {
   // forgot-to-punch request; Phase 3 adds manual overrides) and what it was.
   overrideKind     String?           @map("override_kind")
   overrideRef      String?           @map("override_ref")
+  shiftOverrideRef String?           @map("shift_override_ref") // set when the day's shift came from a Shift Override
   isLocked         Boolean           @default(false) @map("is_locked") // Phase 3 finalisation
   processedAt      DateTime          @default(now()) @map("processed_at")
   engineVersion    Int               @map("engine_version")
@@ -2324,6 +2330,7 @@ enum OverrideKind {
   TIMES // in and out replace the device punches for the day
   STATUS // the day's status as set
   CLEARED // takes the override away (the day computes from its punches again)
+  RELEASE_ONLY // approved leave released because the person worked; the day follows the device's punches (Phase 3 commit 2)
 }
 
 // Every day-level correction (Phase 3): a regularization when approved, a manual
@@ -2346,9 +2353,56 @@ model AttendanceOverride {
   reason          String                    @default("")
   requestId       String?                   @unique @map("request_id")
   request         RegularizationRequest?    @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  releases        LeaveDayRelease[]
   createdByUserId String                    @map("created_by_user_id")
   createdAt       DateTime                  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@index([employeeId, date, seq])
   @@map("attendance_overrides")
+}
+
+// A shift for one employee on one date (Phase 3 commit 2, Shift Override): read by the engine ahead of the
+// assignment's shift. Append-only like attendance_overrides — the highest `seq` for an employee-day is the active
+// one, and a row with no shift clears the override. History is kept; nothing is edited.
+model ShiftOverride {
+  id              String   @id @default(cuid())
+  seq             Int      @unique @default(autoincrement())
+  employeeId      String   @map("employee_id")
+  employee        Employee @relation(fields: [employeeId], references: [id])
+  date            DateTime @db.Date
+  shiftId         String?  @map("shift_id") // null = cleared: the assignment's shift applies again
+  shift           Shift?   @relation(fields: [shiftId], references: [id], onDelete: Restrict)
+  reason          String   @default("")
+  createdByUserId String   @map("created_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([employeeId, date, seq])
+  @@map("shift_overrides")
+}
+
+// HR released approved leave because the person worked that day (Phase 3 commit 2). One row per leave request and
+// part of the day; the leave_ledger REVERSAL it caused points back here (reference_type LEAVE_DAY_RELEASE). The
+// engine reads these to stop treating the date as leave for that request; cancelling the request later returns only
+// what is still consumed. Never edited or removed: if it was a mistake, leave is applied again.
+model LeaveDayRelease {
+  id              String         @id @default(cuid())
+  employeeId      String         @map("employee_id")
+  employee        Employee       @relation(fields: [employeeId], references: [id])
+  date            DateTime       @db.Date
+  leaveRequestId  String         @map("leave_request_id")
+  leaveRequest    LeaveRequest   @relation(fields: [leaveRequestId], references: [id], onDelete: Restrict)
+  leaveTypeId     String         @map("leave_type_id")
+  leaveType       LeaveType      @relation(fields: [leaveTypeId], references: [id])
+  dayPart         LeaveDayPart   @map("day_part")
+  days            Decimal        @db.Decimal(3, 2) // returned to the balance: 1 for a full day, 0.5 for a half
+  overrideId      String         @map("override_id") // the attendance_overrides row written in the same action (two half-day requests on one date share it)
+  override        AttendanceOverride @relation(fields: [overrideId], references: [id], onDelete: Restrict)
+  reason          String
+  createdByUserId String         @map("created_by_user_id")
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([leaveRequestId, date, dayPart])
+  @@index([employeeId, date])
+  @@index([overrideId])
+  @@map("leave_day_releases")
 }

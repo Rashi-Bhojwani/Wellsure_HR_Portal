@@ -12,6 +12,8 @@ import { computeAttendance } from "../compute";
 import { addDays } from "../engine/time";
 import { employeesInRange } from "../jobs";
 import type { Meta } from "../processService";
+import { FOLLOW_DEVICE_TEXT } from "../override/manualOverride";
+import { describeCorrection, REASON_LABEL, type Correction } from "../regularization/correction";
 import { appendEntries, entryInput, entryKey, latestEntries, type NewEntry } from "./entries";
 import { hasAnyBranch, inBranches, markableBranches, viewableEmployeeIds, type Branches, type Viewer } from "./scope";
 
@@ -59,6 +61,9 @@ export interface MusterCell {
   missingPunch: boolean;
   corrected: boolean; // corrected by hand: a regularization or a manual override (Phase 3); overrideKind says which
   overrideKind: string | null; // REGULARIZATION | MANUAL_OVERRIDE
+  overrideRef: string | null; // the attendance_overrides row the day was computed with (the export lists them)
+  shiftOverridden: boolean; // the shift on this day came from a Shift Override
+  shiftOverrideRef: string | null;
   workedOnOffDay: boolean;
   provisional: boolean;
   locked: boolean;
@@ -190,7 +195,7 @@ function editRule(s: Scoped, employeeId: string, date: string, row: DailyAttenda
   if (!employedOn(e, date)) return { reason: "Not employed on this day.", offDayOnly: false };
   if (!inBranches(s.branches, locationOn(s.placements.get(employeeId), date))) return { reason: s.canMark ? "Not one of the branches you mark." : "View only.", offDayOnly: false };
   if (employeeId === s.self) return { reason: "Your own attendance is marked by someone else (HR or your branch's marker).", offDayOnly: false };
-  if (deviceOn(s.mappings.get(employeeId), date)) return { reason: "A biometric-device day: corrections are a Manual Override (Phase 3).", offDayOnly: false };
+  if (deviceOn(s.mappings.get(employeeId), date)) return { reason: "A biometric-device day: a correction request from the employee, or HR's Manual Override.", offDayOnly: false };
   if (row?.isLocked) return { reason: "This period is finalised.", offDayOnly: false };
   if (row?.source === "LEAVE") return { reason: `On approved leave (${row.leaveTypeCode ?? row.status}).`, offDayOnly: false };
   return { reason: null, offDayOnly: row?.status === "H" || row?.status === "O" };
@@ -222,6 +227,9 @@ function cellFor(s: Scoped, employeeId: string, date: string, row: DailyAttendan
     missingPunch: !!shown && row.exceptionFlags.includes("MISSING_PUNCH"),
     corrected: !!shown && row.overrideKind !== null,
     overrideKind: shown ? row.overrideKind : null,
+    overrideRef: shown ? row.overrideRef : null,
+    shiftOverridden: !!shown && row.shiftOverrideRef !== null,
+    shiftOverrideRef: shown ? row.shiftOverrideRef : null,
     workedOnOffDay: !!shown && row.workedOnOffDay,
     provisional: !!shown && row.provisional,
     locked: !!row?.isLocked,
@@ -476,13 +484,54 @@ export async function exportMuster(viewer: Viewer, q: MusterQuery) {
     { key: "notMarked", header: "NM", type: "number", width: 6 },
     { key: "missingPunch", header: "Missing punch", type: "number", width: 9 },
   ];
+  // How a corrected day is told apart in the file, in the cell and in a list of its own: ~ a correction request that was
+  // approved, # HR's Manual Override, ^ a shift set for that day (a Shift Override). Device-derived days carry none.
+  const markers = (c: { overrideKind: string | null; shiftOverridden: boolean }) => `${c.overrideKind === "REGULARIZATION" ? "~" : c.overrideKind === "MANUAL_OVERRIDE" ? "#" : ""}${c.shiftOverridden ? "^" : ""}`;
   const rows = m.rows.map((r) => ({
     code: r.employeeCode,
     name: r.name,
     branch: r.branch ?? "",
-    ...Object.fromEntries(r.cells.map((c) => [c.date, c.code ? `${c.code}${c.statusOnly ? "*" : ""}${c.missingPunch ? "!" : ""}${c.corrected ? "~" : ""}` : ""])),
+    ...Object.fromEntries(r.cells.map((c) => [c.date, c.code ? `${c.code}${c.statusOnly ? "*" : ""}${c.missingPunch ? "!" : ""}${markers(c)}` : ""])),
     ...r.totals,
   }));
+  const corrected = m.rows.flatMap((r) => r.cells.filter((c) => c.overrideRef || c.shiftOverrideRef).map((c) => ({ row: r, cell: c })));
+  const [overrideRows, shiftRows, releaseRows] = await Promise.all([
+    prisma.attendanceOverride.findMany({ where: { id: { in: corrected.map((x) => x.cell.overrideRef).filter((x): x is string => !!x) } } }),
+    prisma.shiftOverride.findMany({ where: { id: { in: corrected.map((x) => x.cell.shiftOverrideRef).filter((x): x is string => !!x) } }, include: { shift: { select: { code: true } } } }),
+    // Leave HR released on a day stays released however the day was changed afterwards, so it is matched by day, not by override.
+    prisma.leaveDayRelease.findMany({ where: { employeeId: { in: [...new Set(corrected.map((x) => x.row.employeeId))] }, date: { gte: day(m.cycle.start), lte: day(m.cycle.end) } }, include: { leaveType: { select: { code: true } } } }),
+  ]);
+  const overrideOf = new Map(overrideRows.map((o) => [o.id, o]));
+  const shiftOf = new Map(shiftRows.map((o) => [o.id, o]));
+  const userIds = [...new Set([...overrideRows.map((o) => o.createdByUserId), ...shiftRows.map((o) => o.createdByUserId)])];
+  const users = await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, employeeId: true } });
+  const by = await namesOn(users.map((u) => u.employeeId), businessToday());
+  const byUser = new Map(users.map((u) => [u.id, by.get(u.employeeId) ?? "someone"]));
+  const correctedRows = corrected.flatMap(({ row, cell }) => {
+    const out: Array<Record<string, unknown>> = [];
+    const o = cell.overrideRef ? overrideOf.get(cell.overrideRef) : undefined;
+    if (o) {
+      const released = releaseRows.filter((x) => x.employeeId === row.employeeId && iso(x.date) === cell.date).map((x) => `${x.leaveType.code} ${Number(x.days)} day returned`).join("; ");
+      out.push({
+        code: row.employeeCode,
+        name: row.name,
+        branch: row.branch ?? "",
+        date: cell.date,
+        shown: cell.code ?? "",
+        how: o.origin === "REGULARIZATION" ? "Correction request approved" : "Manual override by HR",
+        what: o.kind === "RELEASE_ONLY" ? FOLLOW_DEVICE_TEXT : describeCorrection({ inTime: o.inTime, outTime: o.outTime, status: o.status as Correction["status"] }),
+        reason: [o.reasonCode ? REASON_LABEL[o.reasonCode] : null, o.reason].filter(Boolean).join(": "),
+        by: byUser.get(o.createdByUserId) ?? "",
+        at: o.createdAt.toISOString().slice(0, 16).replace("T", " "),
+        leave: released,
+      });
+    }
+    const so = cell.shiftOverrideRef ? shiftOf.get(cell.shiftOverrideRef) : undefined;
+    if (so) {
+      out.push({ code: row.employeeCode, name: row.name, branch: row.branch ?? "", date: cell.date, shown: cell.code ?? "", how: "Shift set for the day by HR", what: so.shift?.code ?? "", reason: so.reason, by: byUser.get(so.createdByUserId) ?? "", at: so.createdAt.toISOString().slice(0, 16).replace("T", " "), leave: "" });
+    }
+    return out;
+  });
   const buffer = await buildXlsx([
     {
       name: `Muster ${m.cycle.label}`,
@@ -491,9 +540,29 @@ export async function exportMuster(viewer: Viewer, q: MusterQuery) {
       footer: [
         `Attendance muster, ${m.cycle.label} (${m.cycle.start} to ${m.cycle.end}). Exported ${m.today}.`,
         ...m.legend.map((l) => `${l.code}: ${l.label}`),
-        "* status only, no times   ! one time only (missing punch)   ~ corrected: a forgot-to-punch request was approved",
+        "* status only, no times   ! one time only (missing punch)",
+        "~ corrected: a correction request was approved   # set by HR (Manual Override)   ^ shift set for that day by HR. A day without these came from the device (or was marked by hand in the muster).",
+        `The "Corrected days" sheet lists each marked day: what was set, why, by whom and when (${correctedRows.length} in this file).`,
         "Paid days = days in the cycle so far less LOP; NM and NS days count 0 until resolved.",
       ],
+    },
+    {
+      name: "Corrected days",
+      columns: [
+        { key: "code", header: "Code", width: 8 },
+        { key: "name", header: "Name", width: 24 },
+        { key: "branch", header: "Branch", width: 18 },
+        { key: "date", header: "Date", type: "date", width: 13 },
+        { key: "shown", header: "Shown as", width: 10 },
+        { key: "how", header: "How", width: 28 },
+        { key: "what", header: "What was set", width: 30 },
+        { key: "reason", header: "Reason", width: 44 },
+        { key: "by", header: "By", width: 20 },
+        { key: "at", header: "When (UTC)", width: 18 },
+        { key: "leave", header: "Leave returned", width: 22 },
+      ],
+      rows: correctedRows,
+      footer: [correctedRows.length === 0 ? "No day in this file was corrected by hand: every day came from the device or was marked in the muster." : "Raw punches are never altered by a correction; they stay on record in Employee Swipes."],
     },
   ]);
   return { buffer, fileName: `attendance-muster-${m.cycle.start}.xlsx` };

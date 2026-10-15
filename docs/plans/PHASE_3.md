@@ -140,6 +140,136 @@ Built as planned; what differs from, or was decided beyond, the plan above:
   all-or-nothing, regenerate); swipes (shows flagged/unmapped/duplicates verbatim, "used" flag matches `computed_from`, scope IDOR,
   export); self-action guards; route inventory.
 
+### Commit 2 — design as decided before building (2026-10-15)
+
+**Changes the user made on approving commit 1 (2026-10-15)**
+
+1. **Leave days are not refused.** Someone on approved leave who comes in and works is common; refusing it would make the person
+   silently lose a leave day they did not take. HR corrects it with Manual Override **in this commit**, as one explicit action
+   (the attendance side and the leave-ledger reversal in a single transaction, so the day never reads worked while the ledger still
+   says consumed; the "own small commit" fallback was not needed). On the employee's own request screen, a leave day is still not
+   something the employee can fix themselves (an employee cannot give leave back), but the message now **says where to go**: ask HR,
+   who can mark the day as worked and return the leave balance.
+2. **The muster's Excel export carries the corrected marker now**, not in commit 4: the exported muster gets a "Corrected by
+   hand" distinction on every cell that was set by a regularization or an override, and the same for the shift override. Exports do
+   not stay silently inconsistent between commits.
+3. **Local timing is not a baseline.** This sandbox runs the 500-employee replay 2–4× slower than the CI runner (ingest 19.5 s vs
+   8.7 s, recompute 92.5 s vs 23 s, 2026-10-13). CI's figures (`backend/perf/baseline.json`, recorded from the CI runner) are the
+   only baseline; a local timing failure of the "2× baseline" guard is not a regression. Check CI before chasing it.
+
+**Leave day worked (HR, Manual Override on a leave day)** — the explicit "release leave" action:
+- Only HR with `attendance.override.manage` can do it; the form has a separate, ticked option "They worked on a day of approved
+  leave: release the leave and return the balance", with the reason required. Without the tick a leave day is reported in the
+  preview as "on approved leave" with a pointer to that option, not silently changed.
+- One transaction, per leave request covering the date: a `leave_day_releases` row (employee, date, leave request, leave type,
+  which part of the day, days returned, the override id, reason, who), a **REVERSAL** row in `leave_ledger` for exactly the days
+  that date had consumed (1 for a full day, 0.5 for a half; capped at what the request still has consumed), referencing the
+  override, with remarks naming the date and reason; comp-off (COF) is restored **per lot** from the ledger's own per-lot rows; the
+  attendance override row (STATUS present / half day, or corrected times); and one audit row.
+- The engine then sees no leave for that date (the release removes it for that request), so the day computes as an ordinary day
+  with the override applied. It reads "Corrected by hand" plus "Approved leave released: PL 1 day returned" in the day panel, and the
+  employee's leave ledger shows the REVERSAL line with the same words. The employee is notified.
+- Cancelling the whole leave request later reverses only what is still consumed (the released days are not returned twice); the
+  leave calendar and the "leave taken" dashboard skip released days.
+- A release is not undone by clearing the override (that would need the leave consumed again). If it was a mistake, HR applies
+  leave for the person again through Employee Leave. Clearing is refused for a day with a release, saying so.
+- Not allowed: releasing to "absent"; a finalised day; the actor's own day; a day with a pending regularization request.
+
+**Manual Override rules**
+- Permission `attendance.override.manage` (HR Admin, Super Admin; never manager-grantable). HR picks people (list, branch or
+  department), dates and a correction: set the status (present, absent, first or second half, or "worked" on a holiday or week-off),
+  or give the times (both replace the device's, or one adds to them). Reason code and a written reason are required.
+- Same preview, fingerprint-confirm, caps (`bulkMaxRangeDays`, `bulkMaxEmployeeDays`) and backdating limit as bulk
+  regularization; one audit row per employee-day in the same transaction; raw punches untouched; the actor's own days left out and
+  counted (`OWN_ATTENDANCE`); finalised days and days not yet over are reported, not changed.
+- It **supersedes**: a day that already carries a regularization or an earlier override gets a newer row (history kept, the screen
+  shows what it replaced). A pending regularization request on the day must be decided first (`PENDING_EXISTS`).
+- Holiday and week-off days accept only "worked" (the day stays H or O with `workedOnOffDay`, comp-off is HR's call as before).
+  Manual-capture people are corrected in the muster, as before; the muster's device-day cells now open Manual Override for HR.
+- **Clear override**: appends a CLEARED row, the day goes back to the device's punches; refused when a leave release stands.
+
+**Shift Override rules**
+- `shift_overrides` (append-only, latest wins, `shift_id` null = cleared, test-purge exception like the others): a shift for one
+  employee on specific dates. Read by the engine ahead of the assignment's shift for the punch window, the day's figures and the
+  `daily_attendance` shift columns; a marker `shift_override_ref` on the day says the shift was set for that day.
+- Same permission, caps and backdating limit as Manual Override; reason required; one audit row per employee-day; never one's own,
+  never a finalised day; holiday, week-off and leave days are accepted (the shift matters if they work); an inactive shift is refused.
+- Screen: Shift Override (people, dates, shift, reason, preview, confirm) and the list of overrides with a "clear" action.
+
+**Shift Roster rules**
+- Writes through `writeAssignmentChange` (effective-dated). **Forward only: from tomorrow** (stricter than "from today": today's
+  day may already have punches evaluated; today and the past are corrected with Shift Override), up to
+  `history.maxScheduleAheadDays` (366). A rotation is a list of steps (shift, number of days) that repeats from the start date
+  until an end date; a single step with no end is a plain bulk shift assignment. After the end date people either **return to the
+  shift they had before** (default) or stay on the last one; the preview says which.
+- Regenerating replaces the scheduled rows from the start date onward (cancel, latest first, then append) in one transaction, all or
+  nothing; scheduled changes before the start date are left alone. People whose history has ended, the actor, and inactive shifts are
+  refused/left out in the preview with the reason. Caps: people per run use the existing bulk cap (`bulkMaxEmployeeDays`), and a person can take at most 60 shift changes in one run (a constant: a daily alternation for a year is refused with the reason, not written). No new setting was added.
+- Preview shows, per person, the segments that will be written and the scheduled changes that will be replaced; confirm carries the
+  fingerprint. One audit row per employee. Permission: the existing Attendance Settings manage permission.
+- The "Phase 2" label on the menu entry is removed (the screen exists now).
+
+**Employee Swipes rules**
+- `attendance.swipes.view` (HR roles; manager-grantable at TEAM scope). The raw punch log exactly as received: employee (if
+  mapped), device, device user ID, device time as recorded and the instant, route, batch, flag and its decision, and whether it was
+  used in a computed day. Filters: dates, device, branch, employee, route, used/not used, flagged, unmapped. Paged server-side.
+  **Unmapped punches and punches of people outside the viewer's scope are visible at ALL scope only.** Excel export, capped, with the
+  same filters, and a header stating the filters used.
+- Read-only: nothing here changes a punch.
+
+**Schema (migration `20261014090000_manual_override_shift_override_swipes`)**: `shift_overrides` (+ trigger, check),
+`leave_day_releases` (+ FK RESTRICT to the override and leave request, unique per request and date), `daily_attendance.shift_override_ref`,
+permissions `attendance.override.manage` and `attendance.swipes.view`, and the roster-cap setting default is in code.
+
+**Rules I am deciding myself in commit 2** (veto any):
+1. Leave-day-worked is done in this commit in one transaction; releasing is not undone by clearing, and a mistaken release is
+   corrected by applying leave again.
+2. The roster starts tomorrow at the earliest, not today.
+3. After a generated rotation ends, people return to their previous shift unless HR chooses otherwise.
+4. Manual Override on a manual-capture person's day is refused and points to the muster.
+5. A pending regularization on the day blocks Manual Override and Shift Override until decided.
+6. Shift Override changes the shift only; the week-off pattern and policy stay the assignment's.
+7. The device-health working window still follows the assignment's shift, not a one-day shift override.
+8. Swipes shows unmapped and out-of-scope punches at ALL scope only, even to a manager who is otherwise allowed Swipes.
+
+### Commit 2 — as built (2026-10-15)
+
+Built as designed above; what differs, and what was added beyond it:
+
+- **Migrations (two):** `20261014085900_override_kind_release_only` (the enum value alone, as before) and
+  `20261014090000_manual_override_shift_override_swipes` (`shift_overrides`, `leave_day_releases`, `daily_attendance.shift_override_ref`,
+  the widened kind check, both permissions and their role grants). Both append-only tables carry the same trigger as `attendance_overrides`.
+  `shift_overrides.shift_id` is `ON DELETE RESTRICT` (a `SET NULL` would be an update, which the trigger refuses).
+- **Leave day worked, as built:** done in this commit in one transaction (the "own small commit" fallback was not needed). Per leave
+  request covering the date: a `leave_day_releases` row, a `REVERSAL` in `leave_ledger` (`reference_type LEAVE_DAY_RELEASE`, remarks naming
+  the date and reason), comp-off restored **per lot**, the attendance override, one audit row for the day and one for each release
+  (`leave.day_released`). The released day is no longer leave for the engine (the loader skips released request-dates), so it computes as an
+  ordinary day. Cancelling the request later returns `total_days − released days`; the leave calendar skips released dates; the Workforce
+  dashboard's leave-taken total subtracts them.
+- **Added beyond the design, decided myself:**
+  1. **"Follow the device"** (`attendance_overrides.kind = RELEASE_ONLY`): with the release, HR can leave the day's figures to the device's own
+     punches instead of setting a status (a status override drops the person's real in and out times from the day). Only with the release.
+  2. **A leave ledger view.** No screen showed ledger rows, so "visible in the leave ledger" had nothing to be visible in:
+     `GET /api/leave/ledger` (same visibility as balances), a "Balance history" table on the employee's Leave Balances and a "History" drawer
+     on Employee Leave. A `leave.balance.changed` socket event refreshes an open balance page.
+  3. The **Granted** figure on Leave Balances no longer counts reversals (a reversal is days given back, not days granted).
+  4. Muster export: see the next item.
+- **Muster export (user's note 1), and a correction to what I said in commit 1:** the export already carried a `~` after corrected cells since
+  Phase 2, so "exports carry no marker" was wrong. What was missing is telling the kinds apart and saying who and why. Now: `~` an approved
+  correction request, `#` set by HR (Manual Override, including a released leave day), `^` shift set for that day; and a second sheet,
+  **Corrected days**, with one row per marked day (what was set, reason, who, when, leave returned). The footer explains each mark. Employee
+  Swipes' export states its filters and scope in the file and is audited (`attendance.swipes.exported`).
+- **Refusal messages (user's note 2 to commit 1):** a leave day, a holiday or week-off, and an already-corrected day on the employee's own request
+  now say to ask HR and what HR can do. Manual Override on a leave day without the release option is refused in the preview with the
+  pointer to the option, not changed silently.
+- **Manual Override** also opens from a person's day in Attendance Info ("Set this day") and from a device-day cell in the muster (HR only).
+  The history page lists every override and approved correction with who and why, and "Remove" (refused after a release).
+- **Roster caps:** no new setting (see the revised rule above). Forward only: tomorrow at the earliest.
+- **Swipes:** `used` is computed in SQL from `daily_attendance.computed_from.punchIds` (±1 day for night shifts), so the filter pages correctly.
+  A manager with the key sees their team's punches only; punches matching nobody and the "matching nobody" filter are for company-wide scope.
+- **Day detail** now returns `employeeName`, `leaveReleased` and `shiftOverride`; the day panel shows each in words.
+- **Local timing note (user's note 3) is recorded above** ("Local timing is not a baseline").
+
 ## Commit 3 — Finalisation and exceptions
 
 - **Finalisation screen** (`attendance.finalise`: HR Admin, Payroll Admin, Super Admin): per period (the attendance cycles),

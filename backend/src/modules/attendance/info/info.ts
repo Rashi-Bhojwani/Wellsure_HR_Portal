@@ -12,6 +12,8 @@ import { entryInput, entryKey, latestEntries } from "../manual/entries";
 import { viewableEmployeeIds, type Viewer } from "../manual/scope";
 import { requestEligibility } from "../regularization/service";
 import { describeCorrection, REASON_LABEL, type Correction } from "../regularization/correction";
+import { shiftDefOf, shiftWithSessions } from "../shiftOverrides";
+import { FOLLOW_DEVICE_TEXT } from "../override/manualOverride";
 
 // Attendance Info and Who Is In? (Phase 2 P2-E, docs/plans/PHASE_2.md §8 and
 // "P2-E build design"). The employee's own view, the admin's view of anyone
@@ -124,7 +126,9 @@ export async function dayDetail(employeeId: string, date: string, opts: { self: 
   const row: DailyAttendance | null = await prisma.dailyAttendance.findUnique({ where: { employeeId_date: { employeeId, date: day(date) } } });
   if (!row) return { date, employed: false as const };
   const assignment = await assignmentOn(employeeId, day(date));
-  const def = assignment ? shiftDef(assignment) : null;
+  // A Shift Override (Phase 3) is the day's shift when there is one; the day row says so.
+  const shiftOverrideRow = row.shiftOverrideRef ? await prisma.shiftOverride.findUnique({ where: { id: row.shiftOverrideRef }, include: { shift: { include: shiftWithSessions } } }) : null;
+  const def = shiftOverrideRow?.shift ? shiftDefOf(shiftOverrideRow.shift) : assignment ? shiftDef(assignment) : null;
   const tl = def ? shiftTimeline(def) : null;
   const base = dayStartMs(date);
   const windowFrom = new Date(base + (tl ? tl.windowStart : 0) * 1000);
@@ -144,10 +148,13 @@ export async function dayDetail(employeeId: string, date: string, opts: { self: 
   ]);
   const entry = entries.get(entryKey(employeeId, date));
   const overrideRow = row.overrideKind && row.overrideRef ? await prisma.attendanceOverride.findUnique({ where: { id: row.overrideRef } }) : null;
-  const names = await userNames([entry?.enteredByUserId, overrideRow?.createdByUserId, ...requests.map((r) => r.decidedByUserId)]);
+  const releases = await prisma.leaveDayRelease.findMany({ where: { employeeId, date: day(date) }, include: { leaveType: { select: { code: true } } } });
+  const names = await userNames([entry?.enteredByUserId, overrideRow?.createdByUserId, shiftOverrideRow?.createdByUserId, ...releases.map((r) => r.createdByUserId), ...requests.map((r) => r.decidedByUserId)]);
+  const employeeName = (await namesOn([employeeId], day(date))).get(employeeId) ?? null;
   return {
     date,
     employed: true as const,
+    employeeName,
     status: row.status,
     code: musterCode(row.status),
     firstHalfStatus: row.firstHalfStatus,
@@ -211,13 +218,19 @@ export async function dayDetail(employeeId: string, date: string, opts: { self: 
           id: overrideRow.id,
           origin: overrideRow.origin,
           kind: overrideRow.kind,
-          text: describeCorrection({ inTime: overrideRow.inTime, outTime: overrideRow.outTime, status: overrideRow.status as Correction["status"] }),
+          text: overrideRow.kind === "RELEASE_ONLY" ? FOLLOW_DEVICE_TEXT : describeCorrection({ inTime: overrideRow.inTime, outTime: overrideRow.outTime, status: overrideRow.status as Correction["status"] }),
           reasonLabel: overrideRow.reasonCode ? (REASON_LABEL[overrideRow.reasonCode] ?? overrideRow.reasonCode) : null,
           reason: overrideRow.reason,
           by: names.get(overrideRow.createdByUserId) ?? null,
           at: overrideRow.createdAt.toISOString(),
           requestId: overrideRow.requestId,
         }
+      : null,
+    // Approved leave HR released because the person worked this day, and the days that went back to their balance.
+    leaveReleased: releases.map((r) => ({ type: r.leaveType.code, days: Number(r.days), reason: r.reason, by: names.get(r.createdByUserId) ?? null, at: r.createdAt.toISOString() })),
+    // The shift on this day came from a Shift Override, not the assignment.
+    shiftOverride: shiftOverrideRow
+      ? { id: shiftOverrideRow.id, shiftName: shiftOverrideRow.shift?.name ?? null, reason: shiftOverrideRow.reason, by: names.get(shiftOverrideRow.createdByUserId) ?? null, at: shiftOverrideRow.createdAt.toISOString() }
       : null,
     requests: requests.map((r) => ({
       id: r.id,

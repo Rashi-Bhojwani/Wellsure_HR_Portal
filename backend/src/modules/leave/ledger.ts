@@ -37,13 +37,14 @@ export interface LeaveBalanceDetail {
 export async function getLeaveBalanceDetail(db: Queryable, employeeId: string, leaveTypeId: string, asOfDate: Date = businessToday()): Promise<LeaveBalanceDetail> {
   const rows = await db.leaveLedger.findMany({
     where: { employeeId, leaveTypeId, entryDate: { lte: asOfDate } },
-    select: { days: true },
+    select: { days: true, entryType: true },
   });
   let granted = new Prisma.Decimal(0);
   let balance = new Prisma.Decimal(0);
   for (const row of rows) {
     balance = balance.plus(row.days);
-    if (row.days.greaterThan(0)) granted = granted.plus(row.days);
+    // A reversal is days given back (a cancelled request, or leave released on a day worked), not days granted.
+    if (row.days.greaterThan(0) && row.entryType !== "REVERSAL") granted = granted.plus(row.days);
   }
   return { granted, balance };
 }

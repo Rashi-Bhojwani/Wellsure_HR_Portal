@@ -109,6 +109,25 @@ export interface LeaveCalendarEntry {
   toDate: string;
   fromDayPart: LeaveDayPart;
   toDayPart: LeaveDayPart;
+  /** Days inside the range that HR released because the person worked them (Phase 3): not leave. */
+  releasedDates: string[];
+}
+
+/** One line of the leave ledger (Phase 3 commit 2): every credit and debit, newest first. */
+export interface LedgerLine {
+  id: string;
+  date: string;
+  leaveTypeCode: string;
+  entryType: string;
+  days: number;
+  description: string;
+  remarks: string | null;
+  /** Set when HR released leave on a day worked: the attendance day it concerns. */
+  releasedDate: string | null;
+}
+export async function getLeaveLedger(params: { employeeId?: string; leaveTypeId?: string } = {}): Promise<LedgerLine[]> {
+  const { data } = await apiClient.get<{ entries: LedgerLine[] }>("/api/leave/ledger", { params });
+  return data.entries;
 }
 
 export async function getLeaveCalendar(fromDate: string, toDate: string, params: { locationId?: string; departmentId?: string } = {}): Promise<LeaveCalendarEntry[]> {

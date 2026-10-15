@@ -74,6 +74,10 @@ import { MusterPage } from "../pages/admin/attendance/muster/MusterPage";
 import { WhoIsInPage } from "../pages/admin/attendance/WhoIsInPage";
 import { AttendanceInfoAdminPage } from "../pages/admin/attendance/AttendanceInfoAdminPage";
 import { RegularizationsPage } from "../pages/admin/attendance/RegularizationsPage";
+import { ManualOverridePage } from "../pages/admin/attendance/ManualOverridePage";
+import { ShiftOverridePage } from "../pages/admin/attendance/ShiftOverridePage";
+import { ShiftRosterPage } from "../pages/admin/attendance/ShiftRosterPage";
+import { EmployeeSwipesPage } from "../pages/admin/attendance/EmployeeSwipesPage";
 import { AttendanceSettingsPage, ShiftMasterPage, WeekOffPatternsPage } from "../pages/admin/attendance/AttendanceSettingsPage";
 
 // Single source of truth for the HR/Admin portal's App Switcher and each
@@ -169,16 +173,16 @@ export const adminApps: AdminApp[] = [
         label: "Attendance",
         items: [
           { key: "who-is-in", label: "Who Is In?", path: "workforce/attendance/who-is-in", icon: TeamOutlined, element: WhoIsInPage },
-          { key: "shift-roster", label: "Shift Roster", path: "workforce/attendance/shift-roster", icon: ScheduleOutlined, phase: "Phase 2" },
-          { key: "employee-swipes", label: "Employee Swipes", path: "workforce/attendance/swipes", icon: DesktopOutlined, phase: "Phase 3" },
+          { key: "shift-roster", label: "Shift Roster", path: "workforce/attendance/shift-roster", icon: ScheduleOutlined, element: ShiftRosterPage },
+          { key: "employee-swipes", label: "Employee Swipes", path: "workforce/attendance/swipes", icon: DesktopOutlined, element: EmployeeSwipesPage },
           { key: "attendance-muster", label: "Attendance Muster", path: "workforce/attendance/muster", icon: FileTextOutlined, element: MusterPage },
           { key: "attendance-info", label: "Attendance Info", path: "workforce/attendance/info", icon: CalendarOutlined, element: AttendanceInfoAdminPage },
           { key: "regularizations", label: "Regularizations", path: "workforce/attendance/regularizations", icon: AuditOutlined, element: RegularizationsPage },
           { key: "process-attendance", label: "Process Attendance", path: "workforce/attendance/process", icon: ToolOutlined, element: ProcessAttendancePage },
           { key: "period-finalisation", label: "Attendance Period Finalisation", path: "workforce/attendance/finalisation", icon: SafetyOutlined, phase: "Phase 3" },
           { key: "attendance-exception", label: "Attendance Exception", path: "workforce/attendance/exceptions", icon: AuditOutlined, phase: "Phase 3" },
-          { key: "manual-override", label: "Manual Override", path: "workforce/attendance/manual-override", icon: ToolOutlined, phase: "Phase 3" },
-          { key: "shift-override", label: "Shift Override", path: "workforce/attendance/shift-override", icon: SwapOutlined, phase: "Phase 3" },
+          { key: "manual-override", label: "Manual Override", path: "workforce/attendance/manual-override", icon: ToolOutlined, element: ManualOverridePage },
+          { key: "shift-override", label: "Shift Override", path: "workforce/attendance/shift-override", icon: SwapOutlined, element: ShiftOverridePage },
           { key: "attendance-settings", label: "Attendance Settings", path: "workforce/attendance/settings", icon: SettingOutlined, element: AttendanceSettingsPage },
         ],
       },

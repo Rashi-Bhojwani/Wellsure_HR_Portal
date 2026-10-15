@@ -57,6 +57,8 @@ const HR_EXECUTIVE_PERMS: string[] = [
   // Phase 2 P2-E — regularization (the forgot-to-punch request): HR decides any.
   "attendance.regularization.view",
   "attendance.regularization.approve",
+  // Phase 3 commit 2 — the raw punch log.
+  "attendance.swipes.view",
 ];
 const HR_ADMIN_PERMS: string[] = [
   ...HR_EXECUTIVE_PERMS,
@@ -73,6 +75,8 @@ const HR_ADMIN_PERMS: string[] = [
   "settings.manage",
   // Phase 3 commit 1 — bulk attendance corrections (HR Admin, not HR Executive).
   "attendance.regularization.bulk",
+  // Phase 3 commit 2 — Manual Override and Shift Override (HR Admin, not HR Executive).
+  "attendance.override.manage",
   "leave.policy.manage",
   "leave.recalculate",
   "leave.yearend.manage",

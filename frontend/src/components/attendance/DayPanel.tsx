@@ -7,7 +7,9 @@ import * as infoApi from "../../api/attendanceInfo";
 import type { DayDetail } from "../../api/attendanceInfo";
 import { apiErrorMessage } from "../../lib/apiError";
 import { hoursLabel } from "../../pages/admin/attendance/settings/format";
+import { useAuth } from "../../hooks/useAuth";
 import { CorrectionModal } from "./CorrectionModal";
+import { ManualOverrideModal } from "./ManualOverrideModal";
 
 const { Text } = Typography;
 
@@ -39,6 +41,8 @@ const STATUS_COLOR: Record<string, string> = { PENDING: "gold", APPROVED: "green
 export function DayPanel({ employeeId, date, self, onClose }: { employeeId?: string; date: string; self: boolean; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [asking, setAsking] = useState(false);
+  const [overriding, setOverriding] = useState(false);
+  const { hasPermission } = useAuth();
   const { data, isLoading } = useQuery({
     queryKey: ["attendance", "info", "day", employeeId ?? "me", date],
     queryFn: () => (self ? infoApi.myDay(date) : infoApi.employeeDay(employeeId!, date)),
@@ -53,8 +57,22 @@ export function DayPanel({ employeeId, date, self, onClose }: { employeeId?: str
   });
   const title = dayjs(date).format("ddd, D MMM YYYY");
   return (
-    <Card size="small" title={title} extra={<Button type="text" size="small" icon={<CloseOutlined />} onClick={onClose} aria-label="Hide day" />}>
+    <Card
+      size="small"
+      title={title}
+      extra={
+        <Space size={4}>
+          {!self && employeeId && data?.employed && hasPermission("attendance.override.manage") && (
+            <Button size="small" icon={<EditOutlined />} onClick={() => setOverriding(true)}>
+              Set this day
+            </Button>
+          )}
+          <Button type="text" size="small" icon={<CloseOutlined />} onClick={onClose} aria-label="Hide day" />
+        </Space>
+      }
+    >
       {isLoading || !data ? <Spin /> : !data.employed ? <Empty description="Not employed on this day." /> : <DayBody data={data} self={self} onAsk={() => setAsking(true)} onCancel={(id) => cancel.mutate(id)} />}
+      {employeeId && <ManualOverrideModal target={overriding ? { employeeId, name: data?.employeeName ?? "this employee", date } : null} onClose={() => setOverriding(false)} />}
       {data?.canRequest?.ok && <CorrectionModal date={date} day={data.canRequest.day} open={asking} onClose={() => setAsking(false)} />}
     </Card>
   );
@@ -76,6 +94,24 @@ function DayBody({ data, self, onAsk, onCancel }: { data: DayDetail; self: boole
           icon={<EditOutlined />}
           title={`${data.override.origin === "MANUAL_OVERRIDE" ? "Overridden by HR" : "Corrected"}: ${data.override.text}`}
           description={`${data.override.reasonLabel ? `${data.override.reasonLabel}. ` : ""}${data.override.reason ? `"${data.override.reason}" ` : ""}${data.override.origin === "MANUAL_OVERRIDE" ? "Set" : "Approved"}${data.override.by ? ` by ${data.override.by}` : ""} on ${dayjs(data.override.at).format("D MMM, HH:mm")}. The punches below are exactly what the device recorded; they were not changed.`}
+        />
+      )}
+
+      {data.leaveReleased?.map((r, i) => (
+        <Alert
+          key={i}
+          type="success"
+          showIcon
+          title={`Approved leave released: ${r.type} ${r.days} day${r.days === 1 ? "" : "s"} went back to the leave balance`}
+          description={`Worked on this day; "${r.reason}"${r.by ? `, by ${r.by}` : ""} on ${dayjs(r.at).format("D MMM, HH:mm")}. It is in the leave ledger too.`}
+        />
+      ))}
+      {data.shiftOverride && (
+        <Alert
+          type="info"
+          showIcon
+          title={`Shift set for this day by HR: ${data.shiftOverride.shiftName ?? ""}`}
+          description={`"${data.shiftOverride.reason}"${data.shiftOverride.by ? `, by ${data.shiftOverride.by}` : ""} on ${dayjs(data.shiftOverride.at).format("D MMM, HH:mm")}. The person's usual shift is unchanged.`}
         />
       )}
 

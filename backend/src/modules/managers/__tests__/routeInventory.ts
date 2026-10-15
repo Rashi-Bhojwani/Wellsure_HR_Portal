@@ -364,6 +364,22 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/attendance/regularizations": scoped("regularization view/approve keys, data scope (TEAM: reports), never one's own"),
   "POST /api/attendance/regularizations/bulk/preview": admin,
   "POST /api/attendance/regularizations/bulk": admin,
+  // Phase 3 commit 2: Manual Override and Shift Override (attendance.override.manage: HR only, never grantable), the
+  // roster (attendance.config.manage) and Employee Swipes (attendance.swipes.view: grantable, TEAM scope).
+  "POST /api/attendance/overrides/preview": admin,
+  "POST /api/attendance/overrides/clear": admin,
+  "POST /api/attendance/overrides": admin,
+  "GET /api/attendance/overrides": admin,
+  "POST /api/attendance/shift-overrides/preview": admin,
+  "POST /api/attendance/shift-overrides/clear": admin,
+  "POST /api/attendance/shift-overrides": admin,
+  "GET /api/attendance/shift-overrides": admin,
+  "POST /api/attendance/roster/preview": admin,
+  "POST /api/attendance/roster": admin,
+  "GET /api/attendance/swipes": scoped("swipes key, data scope: a manager sees their team's punches only; punches matching nobody are company-wide only"),
+  "GET /api/attendance/swipes/options": scoped("swipes key; device names only, the same for anyone allowed"),
+  "GET /api/attendance/swipes/export": scoped("the same rows as GET /swipes, capped, audited"),
+  "GET /api/leave/ledger": scoped("own ledger; someone else's only with leave.view in data scope (404 outside), as balances"),
   "POST /api/attendance/regularizations/:id/approve": scoped("approve key, data scope, never one's own; 404 outside"),
   "POST /api/attendance/regularizations/:id/reject": scoped("approve key, data scope, never one's own; 404 outside"),
 
@@ -449,4 +465,8 @@ export const MANAGER_REACHABLE_SCOPED = [
   "GET /api/attendance/regularizations",
   "POST /api/attendance/regularizations/:id/approve",
   "POST /api/attendance/regularizations/:id/reject",
+  "GET /api/attendance/swipes",
+  "GET /api/attendance/swipes/options",
+  "GET /api/attendance/swipes/export",
+  "GET /api/leave/ledger",
 ] as const;

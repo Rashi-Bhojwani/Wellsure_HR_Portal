@@ -7,6 +7,8 @@ import * as config from "./configController";
 import * as processRuns from "./processController";
 import * as manual from "./manual/controller";
 import * as info from "./info/controller";
+import * as overrides from "./override/controller";
+import * as swipes from "./swipes/controller";
 import {
   assignmentChangeSchema,
   assignmentListQuerySchema,
@@ -29,6 +31,17 @@ import {
   employeeDateParamsSchema,
   whoIsInQuerySchema,
   bulkRegularizationPreviewSchema,
+  overrideClearSchema,
+  overrideConfirmSchema,
+  overrideListQuerySchema,
+  overridePreviewSchema,
+  rosterConfirmSchema,
+  swipesQuerySchema,
+  rosterPreviewSchema,
+  shiftOverrideClearSchema,
+  shiftOverrideConfirmSchema,
+  shiftOverrideListQuerySchema,
+  shiftOverridePreviewSchema,
   bulkRegularizationSchema,
   eligibilityQuerySchema,
   raiseRegularizationSchema,
@@ -132,5 +145,23 @@ attendanceRouter.get("/regularizations", canSeeRegularizations, validate({ query
 const canBulkCorrect = requirePermission("attendance.regularization.bulk");
 attendanceRouter.post("/regularizations/bulk/preview", canBulkCorrect, validate({ body: bulkRegularizationPreviewSchema }), info.bulkPreview);
 attendanceRouter.post("/regularizations/bulk", canBulkCorrect, validate({ body: bulkRegularizationSchema }), info.bulkConfirm);
+// Manual Override (attendance.override.manage: HR only, never manager-grantable): preview, confirm the exact set, clear, history.
+const canOverride = requirePermission("attendance.override.manage");
+attendanceRouter.post("/overrides/preview", canOverride, validate({ body: overridePreviewSchema }), overrides.overridePreview);
+attendanceRouter.post("/overrides/clear", canOverride, validate({ body: overrideClearSchema }), overrides.overrideClear);
+attendanceRouter.post("/overrides", canOverride, validate({ body: overrideConfirmSchema }), overrides.overrideConfirm);
+attendanceRouter.get("/overrides", canOverride, validate({ query: overrideListQuerySchema }), overrides.overrideList);
+// Shift Roster: forward-only, through the same writers as the assignment change (attendance.config.manage).
+attendanceRouter.post("/roster/preview", canManage, validate({ body: rosterPreviewSchema }), overrides.rosterPreview);
+attendanceRouter.post("/roster", canManage, validate({ body: rosterConfirmSchema }), overrides.rosterConfirm);
+attendanceRouter.post("/shift-overrides/preview", canOverride, validate({ body: shiftOverridePreviewSchema }), overrides.shiftPreview);
+attendanceRouter.post("/shift-overrides/clear", canOverride, validate({ body: shiftOverrideClearSchema }), overrides.shiftClear);
+attendanceRouter.post("/shift-overrides", canOverride, validate({ body: shiftOverrideConfirmSchema }), overrides.shiftConfirm);
+attendanceRouter.get("/shift-overrides", canOverride, validate({ query: shiftOverrideListQuerySchema }), overrides.shiftList);
+// Employee Swipes: the raw punch log (attendance.swipes.view: HR; a manager by grant, their team only).
+const canSeeSwipes = requirePermission("attendance.swipes.view");
+attendanceRouter.get("/swipes", canSeeSwipes, validate({ query: swipesQuerySchema }), swipes.list);
+attendanceRouter.get("/swipes/options", canSeeSwipes, swipes.options);
+attendanceRouter.get("/swipes/export", canSeeSwipes, validate({ query: swipesQuerySchema }), swipes.exportXlsx);
 attendanceRouter.post("/regularizations/:id/approve", canDecideRegularizations, validate({ params: idParamsSchema, body: regularizationDecisionSchema }), info.approve);
 attendanceRouter.post("/regularizations/:id/reject", canDecideRegularizations, validate({ params: idParamsSchema, body: regularizationDecisionSchema }), info.reject);

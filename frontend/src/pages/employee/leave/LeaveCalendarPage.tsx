@@ -37,7 +37,7 @@ export function LeaveCalendarPage() {
       let cursor = dayjs(entry.fromDate);
       const end = dayjs(entry.toDate);
       while (cursor.isBefore(end) || cursor.isSame(end, "day")) {
-        if (cursor.isSame(monthStart, "month")) {
+        if (cursor.isSame(monthStart, "month") && !entry.releasedDates.includes(cursor.format("YYYY-MM-DD"))) {
           const list = map.get(cursor.date()) ?? [];
           list.push(entry);
           map.set(cursor.date(), list);

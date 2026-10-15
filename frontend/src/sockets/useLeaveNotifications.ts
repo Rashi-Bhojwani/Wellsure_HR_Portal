@@ -27,9 +27,11 @@ export function useLeaveNotifications(): void {
 
     socket.on("leave.applied", invalidateLeaveQueries);
     socket.on("leave.decided", invalidateLeaveQueries);
+    socket.on("leave.balance.changed", invalidateLeaveQueries);
     return () => {
       socket.off("leave.applied", invalidateLeaveQueries);
       socket.off("leave.decided", invalidateLeaveQueries);
+      socket.off("leave.balance.changed", invalidateLeaveQueries);
     };
   }, [socket, queryClient]);
 }

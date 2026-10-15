@@ -189,6 +189,12 @@ describe("manager reach — TEAM scope at every endpoint a manager can call (E2)
       }
     });
 
+    it("GET /api/leave/ledger — team member yes, outsider 404", async () => {
+      cover("GET /api/leave/ledger");
+      expect((await m().get(`/api/leave/ledger?employeeId=${p.member.employeeId}`)).status).toBe(200);
+      expect((await m().get(`/api/leave/ledger?employeeId=${p.outsider.employeeId}`)).status).toBe(404);
+    });
+
     it("GET /api/leave/calendar — can't widen to another department", async () => {
       cover("GET /api/leave/calendar");
       await prisma.leaveRequest.updateMany({ where: { id: { in: Object.values(req) } }, data: { status: "APPROVED" } });
@@ -471,6 +477,65 @@ describe("manager reach — TEAM scope at every endpoint a manager can call (E2)
       expect((await m().post(`/api/attendance/regularizations/${req.member2}/reject`, { note: "Not what the register says" })).status).toBe(200);
       expect((await prisma.regularizationRequest.findUniqueOrThrow({ where: { id: req.outsider } })).status).toBe("PENDING");
       cover("POST /api/attendance/regularizations/:id/reject");
+    });
+  });
+
+
+  // Employee Swipes (Phase 3 commit 2): the raw punch log, attendance.swipes.view, TEAM scope for a manager.
+  describe("Employee Swipes: the team's punches only, never punches matching nobody", () => {
+    let deviceId = "";
+    let batchId = "";
+    const SWIPE_DAY = "2026-09-12";
+    const binary = (r: request.Response, cb: (err: Error | null, body: Buffer) => void) => {
+      const chunks: Buffer[] = [];
+      r.on("data", (c: Buffer) => chunks.push(c));
+      r.on("end", () => cb(null, Buffer.concat(chunks)));
+    };
+    beforeAll(async () => {
+      deviceId = (await prisma.device.create({ data: { serialNumber: `SWR-${Date.now().toString(36)}`, name: "Swipes reach device", locationId: org.locationId } })).id;
+      batchId = (await prisma.ingestionBatch.create({ data: { route: "IMPORT", deviceId } })).id;
+      const mk = (deviceUserId: string, time: string, employeeId: string | null) =>
+        prisma.rawPunch.create({
+          data: { deviceId, deviceUserId, punchedAt: new Date(`${SWIPE_DAY}T${time}:00+05:30`), localTime: `${SWIPE_DAY} ${time}:00`, businessDate: new Date(`${SWIPE_DAY}T00:00:00Z`), status: "1", verifyMode: "255", workcode: "1", reserved: "0", rawLine: "test", route: "IMPORT", batchId, employeeId },
+        });
+      await mk(p.member.employeeCode, "10:00", p.member.employeeId);
+      await mk(p.outsider.employeeCode, "10:01", p.outsider.employeeId);
+      await mk("9999", "10:02", null); // matches nobody
+    });
+    afterAll(async () => {
+      await deleteWithDependents("RawPunch", (await prisma.rawPunch.findMany({ where: { deviceId }, select: { id: true } })).map((r) => r.id));
+      await deleteWithDependents("IngestionBatch", [batchId]);
+      await deleteWithDependents("Device", [deviceId]);
+    });
+
+    it("GET /api/attendance/swipes — the member's punch; not the outsider's, not the unmatched one; HR sees all three", async () => {
+      const res = await m().get(`/api/attendance/swipes?from=${SWIPE_DAY}&to=${SWIPE_DAY}&deviceId=${deviceId}`);
+      expect(res.status).toBe(200);
+      expect(res.body.entries.map((e: { deviceUserId: string }) => e.deviceUserId)).toEqual([p.member.employeeCode]);
+      expect((await m().get(`/api/attendance/swipes?from=${SWIPE_DAY}&to=${SWIPE_DAY}&employeeId=${p.outsider.employeeId}`)).body.total).toBe(0);
+      expect((await m().get(`/api/attendance/swipes?from=${SWIPE_DAY}&to=${SWIPE_DAY}&deviceId=${deviceId}&unmapped=true`)).body.total).toBe(0);
+      const all = await api(hrToken).get(`/api/attendance/swipes?from=${SWIPE_DAY}&to=${SWIPE_DAY}&deviceId=${deviceId}`);
+      expect(all.body.entries.map((e: { deviceUserId: string }) => e.deviceUserId).sort()).toEqual([p.member.employeeCode, p.outsider.employeeCode, "9999"].sort());
+      cover("GET /api/attendance/swipes");
+    });
+
+    it("GET /api/attendance/swipes/options — device names, nothing about punches", async () => {
+      const res = await m().get("/api/attendance/swipes/options");
+      expect(res.status).toBe(200);
+      expect(Object.keys(res.body).sort()).toEqual(["devices", "routes"]);
+      cover("GET /api/attendance/swipes/options");
+    });
+
+    it("GET /api/attendance/swipes/export — the file holds the member's punch only", async () => {
+      const res = await m().get(`/api/attendance/swipes/export?from=${SWIPE_DAY}&to=${SWIPE_DAY}&deviceId=${deviceId}`).buffer(true).parse(binary);
+      expect(res.status).toBe(200);
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(res.body as unknown as ExcelJS.Buffer);
+      const users = wb.worksheets[0]!.getColumn(5).values.map(String);
+      expect(users).toContain(p.member.employeeCode);
+      expect(users).not.toContain(p.outsider.employeeCode);
+      expect(users).not.toContain("9999");
+      cover("GET /api/attendance/swipes/export");
     });
   });
 

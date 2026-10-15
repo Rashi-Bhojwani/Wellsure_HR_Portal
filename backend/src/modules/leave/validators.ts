@@ -51,6 +51,11 @@ export const balancesQuerySchema = z.object({
   asOfDate: isoDateSchema.optional(),
 });
 
+export const ledgerQuerySchema = z.object({
+  employeeId: z.string().min(1).optional(),
+  leaveTypeId: z.string().min(1).optional(),
+});
+
 export const calendarQuerySchema = z.object({
   fromDate: isoDateSchema,
   toDate: isoDateSchema,
