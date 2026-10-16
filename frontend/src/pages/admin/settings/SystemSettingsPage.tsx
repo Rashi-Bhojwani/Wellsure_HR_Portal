@@ -203,6 +203,47 @@ function RegularizationSettingsCard() {
   );
 }
 
+// Phase 3 commit 4 — Attendance → Excess hours: the smallest excess the Excess hours report lists. There is no overtime
+// policy yet; the report says so, and these hours are not payable overtime.
+function ExcessHoursSettingsCard() {
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useQuery({ queryKey: ["settings", "excess-hours"], queryFn: settingsApi.getExcessHoursSettings });
+  const [form] = Form.useForm<{ minMinutes: number }>();
+  useEffect(() => {
+    if (data) form.setFieldsValue(data);
+  }, [data, form]);
+  const save = useMutation({
+    mutationFn: (values: { minMinutes: number }) => settingsApi.updateExcessHoursSettings(values),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["settings", "excess-hours"], updated);
+      void message.success("Excess hours setting saved.");
+    },
+    onError: (err) => void message.error(errorMessage(err, "Could not save the setting.")),
+  });
+  if (isLoading || !data) return <EmptyState message="Loading…" />;
+  return (
+    <Card>
+      <Form form={form} layout="vertical" initialValues={data} onFinish={(values) => save.mutate(values)} requiredMark={false}>
+        <Title level={5}>Excess hours</Title>
+        <Text type="secondary">
+          The Excess hours report lists the minutes people worked beyond the end of their shift. Overtime is not defined yet (no rate, no eligibility, no approval), so these hours are not payable overtime: the report only shows them.
+          Days with less excess than the number below are left out.
+        </Text>
+        <Row gutter={16} style={{ marginTop: 12 }}>
+          <Col xs={24} md={8}>
+            <Form.Item name="minMinutes" label="Smallest excess to list (minutes)" extra="0 lists every minute beyond the shift end." rules={[{ required: true }]}>
+              <InputNumber min={0} max={600} precision={0} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Button type="primary" htmlType="submit" loading={save.isPending}>
+          Save
+        </Button>
+      </Form>
+    </Card>
+  );
+}
+
 // Phase 2 P2-F — Attendance → Device health. Sent to every sync agent in its
 // heartbeat, and used for the warnings on the Devices screen and Admin Home.
 // The silence and morning-check settings are the Device alerts card below.
@@ -504,6 +545,7 @@ export function SystemSettingsPage() {
       <DeviceHealthSettingsCard />
       <DeviceAlertSettingsCard />
       <RegularizationSettingsCard />
+      <ExcessHoursSettingsCard />
     </Space>
   );
 }

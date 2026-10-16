@@ -60,3 +60,11 @@ export async function getRegularizationSettings(_req: Request, res: Response): P
 export async function updateRegularizationSettings(req: Request, res: Response): Promise<void> {
   res.status(200).json(await settingsService.updateRegularizationSettings(req.body, actorMeta(req)));
 }
+
+export async function getExcessHoursSettings(_req: Request, res: Response): Promise<void> {
+  res.status(200).json(await settingsService.getExcessHoursSettingsForAdmin());
+}
+
+export async function updateExcessHoursSettings(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await settingsService.updateExcessHoursSettings(req.body, actorMeta(req)));
+}

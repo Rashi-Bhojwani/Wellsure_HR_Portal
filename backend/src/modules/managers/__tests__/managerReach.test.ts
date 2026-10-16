@@ -287,6 +287,14 @@ describe("manager reach — TEAM scope at every endpoint a manager can call (E2)
   });
 
   describe("reports (F)", () => {
+    // Attendance reports (Phase 3 commit 4) read computed days: one late, long, flawed day each for the member and the outsider.
+    beforeAll(async () => {
+      for (const who of [p.member, p.outsider]) {
+        await prisma.dailyAttendance.create({
+          data: { employeeId: who.employeeId, date: new Date("2026-09-08T00:00:00Z"), status: "P", source: "DEVICE", capture: "DEVICE", engineVersion: 1, lateInMinutes: 10, excessMinutes: 60, exceptionFlags: ["LATE_IN", "MISSING_PUNCH"] },
+        });
+      }
+    });
     const codes = (body: { rows: Array<{ employeeCode: string }> }) => body.rows.map((r) => r.employeeCode);
     const cases: Array<[string, string, Array<"member" | "leaverIn">, Array<"outsider" | "leaverOut">]> = [
       ["headcount", "", ["member"], ["outsider"]],
@@ -295,7 +303,18 @@ describe("manager reach — TEAM scope at every endpoint a manager can call (E2)
       ["celebrations", "?from=2026-12-25&to=2027-01-05&kind=anniversary", ["member"], ["outsider"]],
       ["leave-balance", "", ["member"], ["outsider"]],
       ["lop", "?from=2031-04-01&to=2031-04-30", ["member"], ["outsider"]],
+      ["late-coming", "?from=2026-09-08&to=2026-09-08", ["member"], ["outsider"]],
+      ["excess-hours", "?from=2026-09-08&to=2026-09-08", ["member"], ["outsider"]],
+      ["exception-summary", "?from=2026-09-08&to=2026-09-08", ["member"], ["outsider"]],
+      ["attendance-muster", "?from=2026-09-08&to=2026-09-08", ["member"], ["outsider"]],
     ];
+    it("GET /api/reports/exception-summary — a manager's view never counts device IDs that match nobody (company-wide only)", async () => {
+      const mine = await m().get("/api/reports/exception-summary?from=2026-09-08&to=2026-09-08");
+      expect(mine.body.summary.map((x: { label: string }) => x.label)).not.toContain("Unmapped device IDs");
+      const all = await api(hrToken).get("/api/reports/exception-summary?from=2026-09-08&to=2026-09-08");
+      expect(all.body.summary.map((x: { label: string }) => x.label)).toContain("Unmapped device IDs");
+    });
+
     for (const [key, qs, inside, outside] of cases) {
       it(`GET /api/reports/${key} — the team only, never an outsider`, async () => {
         const res = await m().get(`/api/reports/${key}${qs}`);

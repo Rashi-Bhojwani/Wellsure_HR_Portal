@@ -2,10 +2,11 @@ import { getSetting, setSetting } from "../../lib/settings";
 import { writeAuditLog } from "../../lib/audit";
 import { RATE_LIMIT_DEFAULTS, RATE_LIMIT_KEYS, type LeaveSettings, type RateLimitSetting, type SecuritySettings } from "./types";
 import type { z } from "zod";
-import type { updateDeviceAlertSettingsSchema, updateRegularizationSettingsSchema, updateDeviceHealthSettingsSchema, updateHelpdeskSettingsSchema, updateLeaveSettingsSchema, updatePeopleDocumentsSettingsSchema, updateSettingsSchema } from "./validators";
+import type { updateDeviceAlertSettingsSchema, updateRegularizationSettingsSchema, updateExcessHoursSettingsSchema, updateDeviceHealthSettingsSchema, updateHelpdeskSettingsSchema, updateLeaveSettingsSchema, updatePeopleDocumentsSettingsSchema, updateSettingsSchema } from "./validators";
 import type { DeviceHealthThresholds } from "@shared/attendance/agentProtocol";
 import { DEVICE_ALERT_SETTING_KEY, getDeviceAlertSettings, type DeviceAlertSettings } from "../../lib/deviceAlertSettings";
 import { getRegularizationSettings, REGULARIZATION_SETTING_KEY, type RegularizationSettings } from "../../lib/regularizationSettings";
+import { EXCESS_HOURS_SETTING_KEY, getExcessHoursSettings, type ExcessHoursSettings } from "../../lib/excessHoursSettings";
 import { DEVICE_HEALTH_SETTING_KEY, getDeviceHealthThresholds } from "../../lib/deviceHealthSettings";
 import { HttpError } from "../../middleware/errorHandler";
 import { getPeopleDocumentsSettings, PEOPLE_DOCUMENTS_SETTING_KEYS, type PeopleDocumentsSettings } from "../../lib/peopleDocumentsSettings";
@@ -192,5 +193,21 @@ export async function updateRegularizationSettings(
   const after: RegularizationSettings = { ...before, ...(Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)) as Partial<RegularizationSettings>) };
   await setSetting(REGULARIZATION_SETTING_KEY, after, meta.actorUserId);
   await writeAuditLog({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "regularization", before, after });
+  return after;
+}
+
+// Phase 3 commit 4 — Attendance → Excess hours: the smallest excess the report lists.
+export async function getExcessHoursSettingsForAdmin(): Promise<ExcessHoursSettings> {
+  return getExcessHoursSettings();
+}
+
+export async function updateExcessHoursSettings(
+  input: z.infer<typeof updateExcessHoursSettingsSchema>,
+  meta: { actorUserId: string; ipAddress?: string | null; userAgent?: string | null },
+): Promise<ExcessHoursSettings> {
+  const before = await getExcessHoursSettings();
+  const after: ExcessHoursSettings = { ...before, ...(Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)) as Partial<ExcessHoursSettings>) };
+  await setSetting(EXCESS_HOURS_SETTING_KEY, after, meta.actorUserId);
+  await writeAuditLog({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "excessHours", before, after });
   return after;
 }

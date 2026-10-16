@@ -366,6 +366,91 @@ Built as specified above; what the build settled, and what was added:
   `docs/CONNECTION_DAY.md`, a step-by-step procedure to follow at the office (what to bring, what to run, what to check, what
   to do when each check fails).
 
+### Commit 3 — a change made after review (2026-10-16)
+
+On approving commit 3, the user decided the question of days that do not exist when a cycle is finalised (a joiner dated inside it):
+**do not refuse the joining date**; the engine instead **writes no day inside a finalised cycle**, and the Finalisation screen says so.
+- `attendance/lockedPeriods.ts` reads the finalised cycles (those whose latest event is FINALISE); `computeAttendance` skips every day
+  inside one, whether or not the day exists, and counts it as locked. After an unlock the cycle is not finalised, so the engine writes
+  again; a fresh finalise locks what it wrote.
+- `listPeriods` returns, for a finalised cycle, `unprocessed`: how many employed people have days in it that are not locked, how many days,
+  and the first ten by name. The screen shows "N employees have unprocessed days in the locked cycle <label>" at the top, a tag on the
+  period's row, and, on the period, who and how many days, with the way out (unlock, run Process Attendance, finalise again).
+- Tested end to end (`finalisedCycleJoiner.test.ts`): HR records a joiner through the real Add Employee route inside a finalised
+  cycle (201), the engine writes nothing there while a later cycle computes normally, the screen reports them, and unlock → reprocess →
+  finalise again brings them in with nobody left waiting.
+
+## Commit 4 — as built (2026-10-16)
+
+- **Four reports in the existing Reports app** (`modules/reports/attendanceReports.ts`; `reports.view`, manager-grantable, a manager sees their
+  team; the screen and the Excel export render one result; every export is audited as before): **Late coming** (each late day with how late),
+  **Excess hours** (minutes beyond the shift end, day by day), **Attendance exceptions** (per person, the Exceptions queue's days counted by
+  reason, plus the unmapped device IDs for a company-wide view), **Attendance summary** (`attendance-muster`: present, absent, leave, holiday,
+  week-off, not marked, no shift, LOP, late days and excess hours per person for a range; half-day statuses count half). At most 93 days at a
+  time; department and branch filter as each person was placed on each day (`placedAtSql`).
+- **The marker, in every one.** The per-day reports have a *How The Day Was Set* column: Device, Correction approved (~), Set by HR (#),
+  Marked by hand (muster), plus "shift set by HR (^)". The per-person reports count the days that were not the device's (Attendance summary:
+  four columns, one per kind; Exceptions: "Of which set by hand"). The notes under each say what the marks mean.
+- **Each warns when a figure rests on unconfirmed rule values** ("Computed with rule values HR has not confirmed: shift X, policy Y"), from the
+  placeholder fields of the shifts and policies the listed days used.
+- **Excess hours is not overtime.** The report always warns that overtime is not defined (no rate, eligibility or approval) and that these are
+  hours worked beyond the shift end, not payable overtime. Days still open (provisional) are left out. **The smallest excess listed is a
+  company setting** (System Settings → Attendance → Excess hours, `attendance.excessHours.minMinutes`, default 0 = any excess; audited when changed).
+- **Weekly clock audit in CI** (`.github/workflows/clock-audit.yml`, Tuesday 03:00 IST and on demand): the whole backend suite at each of five
+  instants; a failure is a finding to fix, never to skip.
+- **Tests:** `attendanceReports.test.ts` (8: catalog and refusal; late coming rows, markers and totals; per-day filters and the 93-day
+  limit; the placeholder warning; excess hours, the setting through the real route, the open day; exception summary incl. unmapped IDs;
+  attendance summary figures; the export with the marker header and the warnings in its footer, audited), four new manager-reach cases (the
+  team only, never an outsider; HR sees both), `finalisedCycleJoiner.test.ts` (4).
+
+## Phase 3 close-out
+
+### Every Phase 3 screen, and where it is
+
+Admin portal (sidebar: Workforce → Attendance unless stated):
+
+| Screen | Address | Who (permission) |
+|---|---|---|
+| Regularizations (requests, approve/reject, **Correct in bulk**) | `/admin/workforce/attendance/regularizations` | approvers; bulk: `attendance.regularization.bulk` |
+| Manual Override (set a day; a leave day worked returns the leave) | `/admin/workforce/attendance/manual-override` | `attendance.override.manage` (HR Admin, Super Admin) |
+| Shift Override (a shift for specific dates) | `/admin/workforce/attendance/shift-override` | `attendance.override.manage` |
+| Shift Roster (one shift or a rotation, from tomorrow) | `/admin/workforce/attendance/shift-roster` | `attendance.config.manage` |
+| Employee Swipes (the raw punch log, export) | `/admin/workforce/attendance/swipes` | `attendance.swipes.view` (a manager: their team) |
+| Attendance Exception (the queue and its bulk resolve) | `/admin/workforce/attendance/exceptions` | `attendance.view`; mapping needs `attendance.devices.manage`, assigning a shift `attendance.config.manage` |
+| Attendance Period Finalisation (lock, unlock) | `/admin/workforce/attendance/finalisation` | `attendance.finalise` (HR Admin, Payroll Admin); unlock `attendance.unlock` (Super Admin only) |
+| Reports → Attendance: summary, late coming, excess hours, exceptions | `/admin/reports/attendance-muster`, `/late-coming`, `/excess-hours`, `/exception-summary` | `reports.view` (a manager: their team) |
+| System Settings → Attendance: Regularization, Excess hours | `/admin/admin-tools/settings` | settings managers |
+| Leave: Employee Leave → History (ledger incl. leave returned) | `/admin/workforce/leave/employee-leave` | as before |
+
+Employee portal: *Attendance → Attendance Info* (`/app/attendance/info`: request a correction on any correctable day; days marked
+Corrected / Shift set / Leave released), *Leave → Leave Balances* (`/app/leave/balances`: Balance history).
+Built before Phase 3 and used throughout it: Attendance Muster, Who Is In?, Process Attendance (with the "Ready to finalise?" card),
+Attendance Settings, Admin Tools → Devices.
+
+### What stays unproven until the real device is connected
+
+Phase 3 reads computed days, so everything in it is as proven as the engine's input, and the engine's input is proven on the simulator.
+What Phase 3 adds to the list in `PHASE_2.md` §11:
+1. **The shape of real days.** Every Phase 3 screen has been exercised on simulated and fixture days. Real days will have the machine's own quirks
+   (a face that fails to verify twice, a person punching in at a second device, a duplicate burst). The Exceptions queue and the reports
+   are where those show up; expect the first week to teach the rules something.
+2. **The real volume of exceptions.** The queue is tested at hundreds of days and the replay at 500 employees for a month; the real proportion
+   (how many forgotten punches a day) is unknown, and decides whether the bulk actions or the per-day screens are what HR uses.
+3. **Rule values.** The reports and the finalisation gate both refuse or warn on placeholder values; every figure is only as right as HR's confirmed
+   grace, half-day and full-day hours.
+4. **Lateness and excess against the real shifts.** Both depend on the shift boundaries HR has confirmed and on the machine's clock.
+5. **The people at the branches without a machine** are covered by manual capture (proven by tests) but not by a real month of HR marking them.
+6. Everything in `PHASE_2.md` §11 (the protocol on the real firmware, the clock, the log capacity, ADMS, the office PC and network, end-to-end
+   latency): that list stands unchanged. **`docs/CONNECTION_DAY.md`** is the step-by-step procedure for the day, written for someone who did not
+   build the system.
+
+### To revisit after go-live (recorded at the user's request, 2026-10-16)
+
+- **Manager access to the Exceptions queue.** `attendance.view` is not manager-grantable, so the queue is HR's alone today. That is right for
+  now. Once the device is live and a branch has a bad day, the manager there is the one who knows what happened. Revisit: either make a
+  scoped, read-only view of the queue available to managers at team scope (the data-scope code is already in the queue and tested for a
+  scoped holder), or let the branch manager raise corrections for their team from it. Decide with a real week of exceptions in hand.
+
 ## Permissions added (seeded to the system roles; route inventory and IDOR tests updated)
 
 `attendance.regularization.bulk`, `attendance.override.manage`, `attendance.swipes.view` (manager-grantable, TEAM),

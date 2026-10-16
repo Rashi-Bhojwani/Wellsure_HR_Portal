@@ -13,7 +13,7 @@ committed).
 | 1 | Auth, RBAC, org, employees | Done — data layer, authentication, org masters, employee management, import center, exports, audit log viewer and system settings all built and tested. Users & Roles admin screen deliberately deferred (built in Phase 5 commit E1 as Roles & Permissions). **Correction (2026-09-30): role assignment does not exist anywhere in the product** — Add Employee always assigns plain `EMPLOYEE` and nothing else assigns roles; an earlier version of this row claimed otherwise. Both are Phase 5 commit E1 ([`docs/plans/PHASE_5.md`](plans/PHASE_5.md)). |
 | 1.5 | AWS staging environment | Not started — **go-live checklist in [`DEPLOYMENT.md`](DEPLOYMENT.md): item 1, restrict `/iclock` to the office address, must be ticked before any ADMS push device is created in production** |
 | 2 | Biometric ingestion + attendance engine + real-time | In progress — plan approved ([`docs/plans/PHASE_2.md`](plans/PHASE_2.md)); P2-A (configuration), P2-B (ingestion), P2-C (rules engine), P2-D (manual entry and the muster) and P2-E (Attendance Info, Who Is In, the forgot-to-punch request) done, plus the fail-safe thresholds and the finalisation gate; P2-F done: F1 (the sync agent with our read-only device driver, and its server side), a follow-up (HR is told when punches are set aside) and F2 (the Windows service, release zip and INSTALL.md, proven on a Windows CI runner); P2-G done: G1 (the simulator's correctness: scenarios with expected outcomes, the month replay and its diff), G2a (the three routes, the `simulate` command, route replays) and G2b (the automated punch-to-screen latency test); P2-H done (device and agent health: incidents, alerts, recovery notices); P2-I done (the four gates recorded in [`PHASE_2_ACCEPTANCE.md`](plans/PHASE_2_ACCEPTANCE.md), an independent review with five fixes) and P2-J (the review follow-ups you approved) — **Phase 2 built and approved pending CI (green on 50ef7e8); awaiting your hands-on testing; close-out below** |
-| 3 | Attendance administration | In progress — plan approved with three changes ([`docs/plans/PHASE_3.md`](plans/PHASE_3.md)); commit 1 (regularization, complete, plus the assignment self-guard) approved, CI green; commit 2 (Manual Override, Shift Override, Shift Roster, Employee Swipes) approved, pushed; **commit 3 (Period Finalisation, Attendance Exceptions, the latency-test fix and the time-dependence audit) built, awaiting your review**; commit 4 (reports, close-out) not started |
+| 3 | Attendance administration | In progress — plan approved with three changes ([`docs/plans/PHASE_3.md`](plans/PHASE_3.md)); commit 1 (regularization, complete, plus the assignment self-guard) approved, CI green; commits 1–3 approved and pushed; **commit 4 (the four attendance reports, joiners inside finalised cycles, the weekly clock audit, `docs/CONNECTION_DAY.md` and the close-out) built, awaiting your review** — Phase 3 complete |
 | 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
 | 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | ✅ Done (2026-10-03) — commits A, B, C, D, D2, E1, E1.1, E2, E3, F and G (mobile bottom bar + PWA), plus interim commits. Full review — every screen and URL, every permission, what's stubbed, open questions, risks for Phase 6 — in [`docs/plans/PHASE_5_REVIEW.md`](plans/PHASE_5_REVIEW.md). Plan and as-built notes per commit in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
 | 5.5 | AWS production environment and go-live hardening | Not started |
@@ -4725,6 +4725,60 @@ is in the automated tests (403 on every new route).
 
 **Still to do in Phase 3:** commit 4 (reports incl. Excess hours; close-out with every screen and URL, what stays unproven until the device is
 connected, and `docs/CONNECTION_DAY.md`).
+
+### Phase 3, commit 4 — reports, the finalised-cycle change, weekly clock audit, close-out (2026-10-16)
+
+Design and as-built notes: [`docs/plans/PHASE_3.md`](plans/PHASE_3.md) ("Commit 3 — a change made after review", "Commit 4 — as built", "Phase 3 close-out").
+**Phase 3 is complete**; what follows is awaiting your review.
+
+**Your decisions on approving commit 3**
+1. **Joiners inside a finalised cycle are not refused; the engine skips the cycle and the screen says so.** HR can record the joining (tested
+   through the real Add Employee route). `computeAttendance` writes no day inside a finalised cycle, existing or not; the Finalisation screen shows
+   "N employees have unprocessed days in the locked cycle <label>" (at the top, as a tag on the period, and on the period with who and how many
+   days) and the way out: unlock, Process Attendance, finalise again. After the unlock the engine writes again and the new finalise locks what
+   it wrote.
+2. **Weekly clock audit in CI** (`.github/workflows/clock-audit.yml`, Tuesday 03:00 IST, and on demand with your own instants): the whole
+   backend suite at 00:10 IST, 00:10 IST on 1 January, a June midday, a 2028 leap day and mid-2030, about seven minutes each. A failure is a
+   finding to fix, never to skip (the workflow says so).
+3. **Manager access to the Exceptions queue is recorded as a post-go-live item** (PHASE_3.md, "To revisit after go-live"), not changed now.
+
+**The four reports** (Reports → Attendance; `/admin/reports/attendance-muster`, `late-coming`, `excess-hours`, `exception-summary`): Attendance
+summary (present, absent, leave, holiday, week-off, not marked, no shift, LOP, late days, excess hours per person), Late coming (each late day),
+Excess hours (each day beyond the shift end), Attendance exceptions (per person by reason, and unmapped device IDs at company scope). In the existing
+framework: `reports.view`, a manager sees their team, screen and Excel export from one result, exports audited. Every one carries the marker
+(*How The Day Was Set*: Device, Correction approved ~, Set by HR #, Marked by hand, shift set by HR ^; or per-person counts of each kind) and warns
+when its figures rest on unconfirmed rule values. **Excess hours is not overtime** and says so on screen and in the file; the smallest excess
+listed is a company setting (System Settings → Attendance → Excess hours, default 0).
+
+**Close-out**
+- **Every Phase 3 screen and its address, and what stays unproven until the device is connected:** PHASE_3.md, "Phase 3 close-out".
+- **`docs/CONNECTION_DAY.md`:** the procedure for someone standing in the office who is not you: the rules that keep the machine and punching safe,
+  a checklist of what must be ready beforehand (each item defined so two people would agree it is ready), then eight steps in order, each with what
+  *working* looks like and what to do when it isn't, what to write down (model, firmware, log count and capacity, clock, first-read time), how to back
+  out completely, and the next day and first week. It reuses `biometric-agent/INSTALL.md` for the installer's own messages rather than repeating them.
+  **Two honest limits:** the optional pre-flight read in Step 4 (`diagnose` from the unzipped folder before installing, so the capacity and clock are
+  known before the first read starts) uses the agent's own commands as documented but has not been run on a Windows PC; and the page cannot say
+  what a real firmware will do (that is the point of the day).
+
+**Rules I decided myself** (veto any)
+1. The reports read the viewer's population like every other report (a manager sees their team), not `attendance.view`.
+2. Excess hours lists only days with at least `max(1, setting)` minutes and leaves out days whose shift window was still open when computed.
+3. The Attendance summary counts half-day statuses half a day each way (an HD day is half present, half absent) and is per person for the range; the
+   day-by-day grid remains the Attendance Muster screen.
+4. A range for these reports is at most 93 days, like the Exceptions queue.
+5. A finalised cycle with nothing in it can still be finalised, and an unprocessed count only looks at people employed in the cycle up to today.
+
+**To revisit after go-live:** manager access to the Exceptions queue (`attendance.view` is not manager-grantable, so it is HR's alone today).
+
+**Verification:** full backend suite 1007 passing (116 files), frontend 16, agent 160; lint and typecheck clean in every project; no migration in this commit
+(`db:drift` unchanged). Mutation checks (rule removed, a named test fails): 14 of 14 caught: the engine writing inside a finalised cycle, the unprocessed count
+never reported or wrong, every day listed as late, the correction and shift-set markers missing, open days counted as excess, the excess setting ignored, the
+overtime warning missing, the unconfirmed-rules warning missing, data scope ignored, the department filter ignored, unmapped IDs counted for a scoped viewer,
+half-days counted whole. Two survived on the first pass (a zero counted as late; unmapped IDs for a scoped viewer): a fixture and a manager-reach case now
+kill both. Live walkthrough as Super Admin on a scratch database: recorded a joiner dated 10 Sep inside the finalised September (201), and the Finalisation screen
+showed "1 employee has unprocessed days in the locked cycle Sep 2026" at the top, on the period (Late Joiner, 21 days) with the way out; all four reports
+opened with their warnings and markers, the exceptions report exported, and the Excess hours setting card is on System Settings. **Not exercised:** the
+connection-day pre-flight read on a Windows PC, and the weekly CI workflow (it runs for the first time on its schedule or by hand from the Actions tab).
 
 ## Open questions
 

@@ -12,6 +12,7 @@ import { loadManualEntries } from "./manual/entries";
 import { loadOverrides } from "./overrides";
 import { loadReleasedLeave } from "./leaveReleases";
 import { loadShiftOverrides, shiftDefOf, type LoadedShiftOverride, type ShiftWithSessions } from "./shiftOverrides";
+import { finalisedPeriodsOverlapping, inAnyPeriod } from "./lockedPeriods";
 
 // The engine's loader and writer (docs/plans/PHASE_2.md §4.1). The loader
 // gathers each employee-day's inputs — through the effective-dating readers
@@ -179,6 +180,10 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
     select: { id: true, employeeId: true, punchedAt: true, flag: true, flagResolution: { select: { decision: true } } },
   });
 
+  // A finalised cycle is frozen: no day inside it is written, whether or not the day exists yet. (Days that do exist are
+  // locked and skipped below; this covers the ones that did not, such as a joiner dated inside the cycle. The Finalisation
+  // screen lists the people with such days; an unlock, a reprocess and a fresh finalise is how they are brought in.)
+  const finalised = await finalisedPeriodsOverlapping(from, last);
   const holidayOn = new Map(holidays.map((h) => [iso(h.date), h.name]));
   const existingBy = new Map(existing.map((e) => [`${e.employeeId}|${iso(e.date)}`, e]));
   const changedByEmployee = new Map<string, string[]>();
@@ -243,9 +248,9 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
       result.processed += 1;
       const key = `${emp.id}|${date}`;
       const before = existingBy.get(key) ?? null;
-      if (before?.isLocked) {
+      if (before?.isLocked || inAnyPeriod(finalised, date)) {
         result.locked += 1;
-        if (opts.collect) (result.evaluated ??= []).push({ employeeId: emp.id, date, before: before.status, after: before.status, locked: true });
+        if (opts.collect) (result.evaluated ??= []).push({ employeeId: emp.id, date, before: before?.status ?? null, after: before?.status ?? null, locked: true });
         continue;
       }
       const a = assignmentOnDate(date);

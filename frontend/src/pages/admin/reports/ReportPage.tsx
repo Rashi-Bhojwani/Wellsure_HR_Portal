@@ -23,6 +23,10 @@ function defaultQuery(key: ReportKey): ReportQuery {
   switch (key) {
     case "joiners":
     case "lop":
+    case "late-coming":
+    case "excess-hours":
+    case "exception-summary":
+    case "attendance-muster":
       return { from: ymd(today.startOf("month")), to: ymd(today) };
     case "leavers":
       return { from: ymd(today.startOf("year")), to: ymd(today) };

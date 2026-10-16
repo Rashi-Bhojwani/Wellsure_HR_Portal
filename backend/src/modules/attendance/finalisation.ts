@@ -237,6 +237,42 @@ export interface PeriodRow {
   status: PeriodStatus;
   lockedDays: number;
   last: { action: "FINALISE" | "UNLOCK"; at: string; by: string | null; reason: string; payrollConsumed: boolean } | null;
+  /**
+   * Finalised cycles only: people employed in the cycle who have days in it that are not locked (days that did not exist
+   * when it was finalised, such as a joiner dated inside it). The engine does not write inside a finalised cycle, so these
+   * wait for an unlock, a reprocess and a fresh finalise. Null for a cycle that is not finalised.
+   */
+  unprocessed: { employees: number; days: number; people: Array<{ employeeId: string; employeeCode: string; name: string | null; days: number }> } | null;
+}
+
+const UNPROCESSED_LIST = 10;
+
+async function unprocessedIn(from: Date, to: Date): Promise<NonNullable<PeriodRow["unprocessed"]>> {
+  const today = businessToday();
+  const lastDay = to < today ? to : today;
+  const employees = await prisma.employee.findMany({
+    where: { dateOfJoining: { lte: lastDay }, OR: [{ lastWorkingDate: null }, { lastWorkingDate: { gte: from } }] },
+    select: { id: true, employeeCode: true, dateOfJoining: true, lastWorkingDate: true },
+    orderBy: { employeeCode: "asc" },
+  });
+  const locked = await prisma.dailyAttendance.groupBy({ by: ["employeeId"], where: { date: { gte: from, lte: to }, isLocked: true }, _count: { _all: true } });
+  const lockedBy = new Map(locked.map((l) => [l.employeeId, l._count._all]));
+  const missing: Array<{ id: string; code: string; days: number }> = [];
+  for (const e of employees) {
+    const first = e.dateOfJoining > from ? e.dateOfJoining : from;
+    const end = e.lastWorkingDate && e.lastWorkingDate < lastDay ? e.lastWorkingDate : lastDay;
+    if (end < first) continue;
+    const expected = Math.round((end.getTime() - first.getTime()) / 86_400_000) + 1;
+    const days = expected - (lockedBy.get(e.id) ?? 0);
+    if (days > 0) missing.push({ id: e.id, code: e.employeeCode, days });
+  }
+  const shown = missing.slice(0, UNPROCESSED_LIST);
+  const names = await namesOn(shown.map((m) => m.id), lastDay);
+  return {
+    employees: missing.length,
+    days: missing.reduce((n, m) => n + m.days, 0),
+    people: shown.map((m) => ({ employeeId: m.id, employeeCode: m.code, name: names.get(m.id) ?? null, days: m.days })),
+  };
 }
 
 async function userNames(userIds: string[]) {
@@ -260,7 +296,8 @@ export async function listPeriods(asOf?: string): Promise<PeriodRow[]> {
     }),
   );
   const names = await userNames(rows.flatMap((r) => (r.last ? [r.last.actorUserId] : [])));
-  return rows.map(({ c, last, lockedDays }) => ({
+  const unprocessed = await Promise.all(rows.map(({ c, last }) => (last?.action === "FINALISE" ? unprocessedIn(c.start, c.end) : Promise.resolve(null))));
+  return rows.map(({ c, last, lockedDays }, i) => ({
     from: iso(c.start),
     to: iso(c.end),
     label: c.label,
@@ -268,6 +305,7 @@ export async function listPeriods(asOf?: string): Promise<PeriodRow[]> {
     status: !last ? "OPEN" : last.action === "FINALISE" ? "FINALISED" : "UNLOCKED",
     lockedDays,
     last: last ? { action: last.action, at: last.createdAt.toISOString(), by: names.get(last.actorUserId) ?? null, reason: last.reason, payrollConsumed: last.payrollConsumed } : null,
+    unprocessed: unprocessed[i] ?? null,
   }));
 }
 

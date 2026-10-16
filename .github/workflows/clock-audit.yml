@@ -1,0 +1,82 @@
+name: Clock audit
+
+# The whole backend suite, run as if the wall clock read each of several instants (00:10 IST, a new year, a leap day, years
+# ahead). It finds tests that quietly depend on the hour, day or year they run in: the kind that pass today and fail at 00:10
+# IST, or in a year's time when a fixed-date test ages out of a "how far back" window. Weekly is enough; each instant is about
+# seven minutes. See backend/vitest.fakeClock.ts and backend/scripts/test-clock.sh. It is not part of the push CI.
+#
+# A failure here is a real finding, not a flake: find the test, make it independent of the clock (pin "today" with
+# setBusinessTodayForTests, or send times inside the window for the date it tests); never skip it.
+on:
+  schedule:
+    # Tuesday 03:00 IST (Monday 21:30 UTC)
+    - cron: "30 21 * * 1"
+  workflow_dispatch:
+    inputs:
+      instants:
+        description: "Space-separated ISO instants to run (default: the standard set in backend/scripts/test-clock.sh)"
+        required: false
+        default: ""
+
+concurrency:
+  group: clock-audit
+  cancel-in-progress: false
+
+jobs:
+  clock-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: wellsure
+          POSTGRES_PASSWORD: wellsure
+          POSTGRES_DB: wellsure_hr
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wellsure -d wellsure_hr"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://wellsure:wellsure@localhost:5432/wellsure_hr
+      REDIS_URL: redis://localhost:6379
+      CHROMIUM_PATH: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+            frontend/package-lock.json
+            biometric-agent/package-lock.json
+            infra/package-lock.json
+
+      - name: Install
+        run: npm run install:all
+
+      - name: Check services
+        run: npm run check:services
+
+      # The script builds its own database (wellsure_hr_clock) and uses Redis db 14 for each run.
+      - name: Run the suite at each instant
+        env:
+          INSTANTS: ${{ github.event.inputs.instants }}
+        run: |
+          # shellcheck disable=SC2086
+          npm run test:clock --prefix backend -- $INSTANTS

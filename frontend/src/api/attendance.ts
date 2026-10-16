@@ -262,6 +262,8 @@ export interface PeriodRow {
   status: PeriodStatus;
   lockedDays: number;
   last: { action: "FINALISE" | "UNLOCK"; at: string; by: string | null; reason: string; payrollConsumed: boolean } | null;
+  /** Finalised cycles only: people with days in it that are not locked (the engine writes nothing inside a locked cycle). */
+  unprocessed: { employees: number; days: number; people: Array<{ employeeId: string; employeeCode: string; name: string | null; days: number }> } | null;
 }
 export async function listPeriods(asOf?: string): Promise<PeriodRow[]> {
   return (await apiClient.get<{ periods: PeriodRow[] }>("/api/attendance/finalisation/periods", { params: { asOf } })).data.periods;

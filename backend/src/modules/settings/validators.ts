@@ -78,3 +78,8 @@ export const updateRegularizationSettingsSchema = z.object({
   bulkMaxRangeDays: z.number().int().min(1).max(92).optional(),
   bulkMaxEmployeeDays: z.number().int().min(1).max(5000).optional(),
 });
+
+// Phase 3 commit 4 — Attendance → Excess hours: the smallest excess that is listed.
+export const updateExcessHoursSettingsSchema = z.object({
+  minMinutes: z.number().int().min(0).max(600).optional(),
+});

@@ -139,6 +139,8 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "PUT /api/settings/device-alerts": admin,
   "GET /api/settings/regularization": admin,
   "PUT /api/settings/regularization": admin,
+  "GET /api/settings/excess-hours": admin,
+  "PUT /api/settings/excess-hours": admin,
 
   "GET /api/leave/types": everyone("active leave types (apply form)"),
   "GET /api/leave/types/all": admin,

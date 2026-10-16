@@ -66,7 +66,7 @@ import { LetterTemplatesPage } from "../pages/admin/letters/LetterTemplatesPage"
 import { RolesPermissionsPage } from "../pages/admin/adminTools/RolesPermissionsPage";
 import { WorkflowDelegatesAdminPage } from "../pages/admin/adminTools/WorkflowDelegatesAdminPage";
 import { ReportsHomePage } from "../pages/admin/reports/ReportsHomePage";
-import { CelebrationsReportPage, HeadcountReportPage, JoinersReportPage, LeaveBalanceReportPage, LeaveLiabilityReportPage, LeaversReportPage, LopReportPage } from "../pages/admin/reports/reportPages";
+import { CelebrationsReportPage, HeadcountReportPage, JoinersReportPage, LeaveBalanceReportPage, LeaveLiabilityReportPage, LeaversReportPage, LopReportPage, LateComingReportPage, ExcessHoursReportPage, ExceptionSummaryReportPage, AttendanceSummaryReportPage } from "../pages/admin/reports/reportPages";
 import { ManagerManagementPage } from "../pages/admin/adminTools/ManagerManagementPage";
 import { DevicesPage } from "../pages/admin/devices/DevicesPage";
 import { FinalisationPage } from "../pages/admin/attendance/FinalisationPage";
@@ -228,6 +228,16 @@ export const adminApps: AdminApp[] = [
           { key: "report-leave-balance", label: "Leave balance", path: "reports/leave-balance", element: LeaveBalanceReportPage },
           { key: "report-leave-liability", label: "Leave liability", path: "reports/leave-liability", element: LeaveLiabilityReportPage },
           { key: "report-lop", label: "Loss of pay (LOP)", path: "reports/lop", element: LopReportPage },
+        ],
+      },
+      {
+        key: "attendance-reports",
+        label: "Attendance",
+        items: [
+          { key: "report-attendance-summary", label: "Attendance summary", path: "reports/attendance-muster", element: AttendanceSummaryReportPage },
+          { key: "report-late-coming", label: "Late coming", path: "reports/late-coming", element: LateComingReportPage },
+          { key: "report-excess-hours", label: "Excess hours", path: "reports/excess-hours", element: ExcessHoursReportPage },
+          { key: "report-exception-summary", label: "Attendance exceptions", path: "reports/exception-summary", element: ExceptionSummaryReportPage },
         ],
       },
     ],

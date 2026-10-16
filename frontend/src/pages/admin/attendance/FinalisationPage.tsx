@@ -80,6 +80,16 @@ export function FinalisationPage() {
         A period is a whole attendance cycle. Finalising it locks every day in it, so what payroll reads cannot change underneath it. It is refused while anything below still blocks it. Unlocking is for a Super Admin only,
         with a reason, and every lock and unlock is on record.
       </Text>
+      {periods.filter((p) => p.unprocessed && p.unprocessed.employees > 0).map((p) => (
+        <Alert
+          key={p.from}
+          type="warning"
+          showIcon
+          title={`${p.unprocessed!.employees} employee${p.unprocessed!.employees === 1 ? " has" : "s have"} unprocessed days in the locked cycle ${p.label}`}
+          description="They were employed in the cycle but have days in it that are not locked, for example a joiner dated inside it. Nothing is written inside a finalised cycle, so those days wait. Open the period to see who."
+          action={<Button size="small" onClick={() => setPicked(p.from)}>Open {p.label}</Button>}
+        />
+      ))}
       <Card size="small" title="Periods" extra={<Text type="secondary">Newest first. Pick one to see what blocks it.</Text>}>
         <Table<PeriodRow>
           size="small"
@@ -92,7 +102,7 @@ export function FinalisationPage() {
           onRow={(r) => ({ onClick: () => setPicked(r.from), style: { cursor: "pointer" } })}
           columns={[
             { title: "Period", dataIndex: "label", render: (l: string, r) => <Text strong={r.from === chosen?.from}>{l}</Text> },
-            { title: "Status", dataIndex: "status", render: (s: PeriodStatus, r) => <Tag color={STATUS[s].color}>{STATUS[s].label}{!r.isOver && s === "OPEN" ? " · in progress" : ""}</Tag> },
+            { title: "Status", dataIndex: "status", render: (s: PeriodStatus, r) => <Space size={4}><Tag color={STATUS[s].color}>{STATUS[s].label}{!r.isOver && s === "OPEN" ? " · in progress" : ""}</Tag>{r.unprocessed && r.unprocessed.employees > 0 && <Tag color="orange">{r.unprocessed.employees} waiting</Tag>}</Space> },
             { title: "Locked days", dataIndex: "lockedDays", align: "right" },
             {
               title: "Last action",
@@ -139,6 +149,24 @@ export function FinalisationPage() {
                 title={`${chosen.label} is finalised.`}
                 description={`${chosen.lockedDays} days are locked: no override, correction, manual entry or reprocessing can change them. ${canUnlock ? "You can unlock it with a reason." : "Only a Super Admin can unlock it."}`}
               />
+              {chosen.unprocessed && chosen.unprocessed.employees > 0 && (
+                <Alert
+                  type="warning"
+                  showIcon
+                  title={`${chosen.unprocessed.employees} employee${chosen.unprocessed.employees === 1 ? " has" : "s have"} unprocessed days in this locked cycle (${chosen.unprocessed.days} day${chosen.unprocessed.days === 1 ? "" : "s"})`}
+                  description={
+                    <>
+                      <div>
+                        {chosen.unprocessed.people.map((p) => `${p.name ?? p.employeeCode} (${p.employeeCode}): ${p.days} day${p.days === 1 ? "" : "s"}`).join("; ")}
+                        {chosen.unprocessed.employees > chosen.unprocessed.people.length ? `; and ${chosen.unprocessed.employees - chosen.unprocessed.people.length} more` : ""}
+                      </div>
+                      <div style={{ marginTop: 4 }}>
+                        The engine writes nothing inside a finalised cycle. To bring them in: {canUnlock ? "unlock the cycle" : "ask a Super Admin to unlock the cycle"}, run Process Attendance for it, then finalise it again.
+                      </div>
+                    </>
+                  }
+                />
+              )}
               {chosen.last && (
                 <Descriptions size="small" column={1} bordered items={[{ key: "by", label: "Finalised", children: `${chosen.last.by ?? "someone"} on ${formatDateTime(chosen.last.at)}` }, ...(chosen.last.reason ? [{ key: "note", label: "Note", children: chosen.last.reason }] : [])]} />
               )}

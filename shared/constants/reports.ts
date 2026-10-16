@@ -13,7 +13,7 @@ export interface ReportInfo {
   extraPermission?: string;
 }
 
-export const REPORT_KEYS = ["headcount", "joiners", "leavers", "celebrations", "leave-balance", "leave-liability", "lop"] as const;
+export const REPORT_KEYS = ["headcount", "joiners", "leavers", "celebrations", "leave-balance", "leave-liability", "lop", "late-coming", "excess-hours", "exception-summary", "attendance-muster"] as const;
 export type ReportKey = (typeof REPORT_KEYS)[number];
 
 const ORG = ["department", "location", "employmentType"] as const;
@@ -32,6 +32,11 @@ export const REPORT_CATALOG: Record<ReportKey, ReportInfo> = {
     extraPermission: "reports.liability.view",
   },
   lop: { key: "lop", title: "Loss of pay (LOP)", description: "Approved unpaid leave days in a date range.", filters: ["range", ...ORG] },
+  // Attendance reports (Phase 3 commit 4): over the computed days, at most 93 days at a time.
+  "late-coming": { key: "late-coming", title: "Late coming", description: "Each day someone arrived after their shift start, with how late, and how the day was set (device, correction, HR).", filters: ["range", ...ORG] },
+  "excess-hours": { key: "excess-hours", title: "Excess hours", description: "Time worked beyond the end of the shift, day by day. Not overtime: overtime is not defined yet.", filters: ["range", ...ORG] },
+  "exception-summary": { key: "exception-summary", title: "Attendance exceptions", description: "Per person, the days with a missing punch, a shortfall, no shift or a set-aside punch in a date range.", filters: ["range", ...ORG] },
+  "attendance-muster": { key: "attendance-muster", title: "Attendance summary", description: "Present, absent, leave, holiday, week-off, not-marked and LOP days per person for a date range, with how many days were not the device's.", filters: ["range", ...ORG] },
 };
 
 export type ReportColumnType = "text" | "number" | "date" | "money" | "percent";

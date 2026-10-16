@@ -9,3 +9,7 @@ export const CelebrationsReportPage = () => <ReportPage reportKey="celebrations"
 export const LeaveBalanceReportPage = () => <ReportPage reportKey="leave-balance" />;
 export const LeaveLiabilityReportPage = () => <ReportPage reportKey="leave-liability" />;
 export const LopReportPage = () => <ReportPage reportKey="lop" />;
+export const LateComingReportPage = () => <ReportPage reportKey="late-coming" />;
+export const ExcessHoursReportPage = () => <ReportPage reportKey="excess-hours" />;
+export const ExceptionSummaryReportPage = () => <ReportPage reportKey="exception-summary" />;
+export const AttendanceSummaryReportPage = () => <ReportPage reportKey="attendance-muster" />;

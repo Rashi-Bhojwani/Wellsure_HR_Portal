@@ -123,3 +123,14 @@ export async function getRegularizationSettings(): Promise<RegularizationSetting
 export async function updateRegularizationSettings(input: Partial<RegularizationSettings>): Promise<RegularizationSettings> {
   return (await apiClient.put<RegularizationSettings>("/api/settings/regularization", input)).data;
 }
+
+// Phase 3 commit 4 — Attendance → Excess hours: the smallest excess (in minutes) the report lists.
+export interface ExcessHoursSettings {
+  minMinutes: number;
+}
+export async function getExcessHoursSettings(): Promise<ExcessHoursSettings> {
+  return (await apiClient.get<ExcessHoursSettings>("/api/settings/excess-hours")).data;
+}
+export async function updateExcessHoursSettings(input: Partial<ExcessHoursSettings>): Promise<ExcessHoursSettings> {
+  return (await apiClient.put<ExcessHoursSettings>("/api/settings/excess-hours", input)).data;
+}

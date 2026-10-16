@@ -3,7 +3,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { requirePermission } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
 import * as controller from "./controller";
-import { updateRegularizationSettingsSchema, updateDeviceAlertSettingsSchema, updateDeviceHealthSettingsSchema, updateHelpdeskSettingsSchema, updateLeaveSettingsSchema, updatePeopleDocumentsSettingsSchema, updateSettingsSchema } from "./validators";
+import { updateRegularizationSettingsSchema, updateExcessHoursSettingsSchema, updateDeviceAlertSettingsSchema, updateDeviceHealthSettingsSchema, updateHelpdeskSettingsSchema, updateLeaveSettingsSchema, updatePeopleDocumentsSettingsSchema, updateSettingsSchema } from "./validators";
 
 // System Settings (spec §7.8) — security policy (Phase 1: lockout,
 // password rules, invitation TTL, 2FA-required roles, auth rate limits)
@@ -42,3 +42,7 @@ settingsRouter.put("/device-alerts", manage, validate({ body: updateDeviceAlertS
 // Phase 3 commit 1: Attendance → Regularization (how far back a correction reaches; the bulk caps).
 settingsRouter.get("/regularization", manage, controller.getRegularizationSettings);
 settingsRouter.put("/regularization", manage, validate({ body: updateRegularizationSettingsSchema }), controller.updateRegularizationSettings);
+
+// Phase 3 commit 4: Attendance → Excess hours (the smallest excess the report lists).
+settingsRouter.get("/excess-hours", manage, controller.getExcessHoursSettings);
+settingsRouter.put("/excess-hours", manage, validate({ body: updateExcessHoursSettingsSchema }), controller.updateExcessHoursSettings);

@@ -6,6 +6,7 @@ import { HttpError } from "../../middleware/errorHandler";
 import { computeTotalLeaveDays } from "../leave/dayCount";
 import { resolveDayCountContext } from "../leave/dayCountContext";
 import { EncashmentRateNotConfiguredError, getEncashmentRateProvider } from "../leave/encashmentRate";
+import { attendanceMuster, excessHours, exceptionSummary, lateComing } from "./attendanceReports";
 import { currentName, employeeWhere, matchesOrg, nameOf, placementsOn, ymd, type Placement, type Population, type ReportQuery } from "./context";
 
 // The seven core reports (Phase 5 commit F, docs/plans/PHASE_5.md §F). Each
@@ -429,6 +430,10 @@ export const REPORT_DEFINITIONS: Record<ReportKey, Definition> = {
   "leave-balance": leaveBalance,
   "leave-liability": leaveLiability,
   lop,
+  "late-coming": lateComing,
+  "excess-hours": excessHours,
+  "exception-summary": exceptionSummary,
+  "attendance-muster": attendanceMuster,
 };
 
 export type { ReportSummaryItem };

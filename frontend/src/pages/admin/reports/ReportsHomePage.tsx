@@ -7,7 +7,7 @@ import { useAuth } from "../../../hooks/useAuth";
 const { Title, Text } = Typography;
 
 // Reports app landing page (Phase 5 commit F): the reports this viewer can
-// open. Attendance and payroll reports arrive with Phases 3 and 6.
+// open. Payroll reports arrive with Phase 6.
 export function ReportsHomePage() {
   const { hasPermission } = useAuth();
   const allowed = hasPermission("reports.view");
@@ -19,7 +19,7 @@ export function ReportsHomePage() {
         <Title level={3} style={{ margin: 0 }}>
           Reports
         </Title>
-        <Text type="secondary">Filter, review on screen, and export to Excel. Managers see their own team. Attendance and payroll reports arrive with those modules.</Text>
+        <Text type="secondary">Filter, review on screen, and export to Excel. Managers see their own team. Payroll reports arrive with payroll.</Text>
       </div>
       <Row gutter={[16, 16]}>
         {(isLoading ? [] : reports).map((r) => (
