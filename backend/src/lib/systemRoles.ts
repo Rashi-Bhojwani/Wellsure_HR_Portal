@@ -94,13 +94,41 @@ const HR_ADMIN_PERMS: string[] = [
   "manager.permissions.manage",
   // Phase 5 commit E3 — Workflow Delegates.
   "delegation.manage",
+  // Phase 6 — HR Admin sees the rules and salary and prepares revisions (a checker approves); it neither runs payroll nor approves it.
+  "payroll.rules.view",
+  "payroll.salary.view",
+  "payroll.salary.edit",
   // Phase 5 commit F — leave liability (salary-derived from Phase 6).
   "reports.liability.view",
   // Phase 2 — attendance settings and biometric devices.
   "attendance.config.manage",
   "attendance.devices.manage",
 ];
-const PAYROLL_ADMIN_PERMS = ["employee.view", "employee.bank.view", "employee.statutory.view", "leave.view", "reports.view", "reports.liability.view", "documents.pay.view", "attendance.view", "attendance.finalise"];
+// Phase 6: the maker set. Preparing and submitting; never approving (a different role holds payroll.approve).
+const PAYROLL_ADMIN_PERMS = [
+  "employee.view",
+  "employee.bank.view",
+  "employee.statutory.view",
+  "leave.view",
+  "reports.view",
+  "reports.liability.view",
+  "documents.pay.view",
+  "attendance.view",
+  "attendance.finalise",
+  "payroll.rules.view",
+  "payroll.rules.manage",
+  "payroll.salary.view",
+  "payroll.salary.edit",
+  "payroll.adjust",
+  "payroll.run",
+  "payroll.payslip.view",
+  "payroll.bank.view",
+  "reports.salary.view",
+];
+// Phase 6: the checker set. It sees the figures it approves and confirms rule values; it cannot prepare runs or edit rules,
+// so the same person cannot hold both halves by default. A separate role from APPROVER (leave): giving APPROVER payroll
+// figures would have widened what every leave approver sees.
+const PAYROLL_APPROVER_PERMS = ["payroll.rules.view", "payroll.rules.confirm", "payroll.salary.view", "payroll.approve", "payroll.payslip.view", "payroll.bank.view", "reports.salary.view"];
 // leave.approve/leave.view here is a real fix over commit A's original
 // seed, caught while designing commit B's approve endpoint: MANAGER is
 // TEAM-scoped (its Role.dataScope), but scope alone doesn't grant a
@@ -124,6 +152,7 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
   { code: "HR_ADMIN", name: "HR Admin", permissions: HR_ADMIN_PERMS, dataScope: "ALL" },
   { code: "HR_EXECUTIVE", name: "HR Executive", permissions: HR_EXECUTIVE_PERMS, dataScope: "ALL" },
   { code: "PAYROLL_ADMIN", name: "Payroll Admin", permissions: PAYROLL_ADMIN_PERMS, dataScope: "ALL" },
+  { code: "PAYROLL_APPROVER", name: "Payroll Approver", permissions: PAYROLL_APPROVER_PERMS, dataScope: "ALL" },
   { code: "MANAGER", name: "Manager", permissions: MANAGER_PERMS, dataScope: "TEAM" },
   { code: "APPROVER", name: "Approver", permissions: ["leave.approve", "leave.view"], dataScope: "ALL" }, // Phase 4 — more
   // permissions arrive with Phase 6 (payroll maker-checker)

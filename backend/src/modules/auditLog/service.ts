@@ -17,8 +17,19 @@ export interface ListAuditLogQuery {
 // write time (see lib/audit.ts's writeAuditLog), so it's safe to return
 // them as-is here; there is deliberately no route anywhere that can PATCH
 // or DELETE a row — see this module's routes.ts.
-export async function listAuditLogs(query: ListAuditLogQuery) {
+/**
+ * Payroll's own audit rows (rule changes, approvals, runs, salary revisions) are visible here only to people who may see salary. The audit viewer
+ * is open to more people (audit.view) than the payroll screens are, so without this it would be a side door onto payroll (Phase 6 §0A item 5).
+ * The match is on the action prefix AND the entity type, so a payroll row cannot slip out under an unexpected name.
+ */
+export const PAYROLL_AUDIT_ACTION_PREFIX = "payroll.";
+export const PAYROLL_AUDIT_ENTITY_PREFIX = "Payroll";
+
+export async function listAuditLogs(query: ListAuditLogQuery, viewer: { canSeePayroll: boolean; onlyPayroll?: boolean } = { canSeePayroll: false }) {
   const where: Prisma.AuditLogWhereInput = {};
+  const payrollRows = { OR: [{ action: { startsWith: PAYROLL_AUDIT_ACTION_PREFIX } }, { entityType: { startsWith: PAYROLL_AUDIT_ENTITY_PREFIX } }] };
+  if (!viewer.canSeePayroll) where.NOT = payrollRows;
+  else if (viewer.onlyPayroll) Object.assign(where, payrollRows);
   if (query.entityType) where.entityType = { contains: query.entityType, mode: "insensitive" };
   if (query.action) where.action = { contains: query.action, mode: "insensitive" };
   if (query.dateFrom || query.dateTo) {

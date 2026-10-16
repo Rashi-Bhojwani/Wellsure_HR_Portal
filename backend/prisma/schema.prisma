@@ -2429,3 +2429,100 @@ model LeaveDayRelease {
   @@index([overrideId])
   @@map("leave_day_releases")
 }
+
+// ── Payroll foundations (Phase 6 commit P6-1, docs/plans/PHASE_6.md §3, §6) ─────────────────────────
+// Governed items: a payroll rule, salary component, salary structure, bank layout or output layout. Every edit appends a version, and a
+// version is Confirmed only by a row in payroll_item_confirmations made by somebody other than its author. Runs pin the versions they read.
+// Actor columns are plain text, not foreign keys: nothing that happens to a user can alter these rows (as for audit_logs).
+enum PayrollItemKind {
+  RULE
+  COMPONENT
+  STRUCTURE
+  BANK_TEMPLATE
+  OUTPUT_TEMPLATE
+}
+
+enum PayrollApprovalSubject {
+  RUN_APPROVAL
+  PERIOD_FINALISE
+  PAYSLIP_PUBLISH
+  BANK_FILE
+  PERIOD_UNLOCK
+  RULE_CONFIRM
+  SALARY_REVISION
+}
+
+enum PayrollApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  VOIDED
+  CONSUMED
+}
+
+model PayrollItemVersion {
+  id           String          @id @default(cuid())
+  kind         PayrollItemKind
+  key          String
+  version      Int
+  value        Json
+  valueHash    String          @map("value_hash")
+  note         String          @default("")
+  authorUserId String?         @map("author_user_id") // null = the shipped placeholder
+  createdAt    DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([kind, key, version])
+  @@map("payroll_item_versions")
+}
+
+model PayrollItemConfirmation {
+  id                String          @id @default(cuid())
+  kind              PayrollItemKind
+  key               String
+  version           Int
+  valueHash         String          @map("value_hash")
+  confirmedByUserId String          @map("confirmed_by_user_id")
+  confirmedAt       DateTime        @default(now()) @map("confirmed_at") @db.Timestamptz(3)
+  note              String          @default("")
+  approvalId        String?         @map("approval_id")
+
+  @@unique([kind, key, version])
+  @@map("payroll_item_confirmations")
+}
+
+model PayrollApproval {
+  id                 String                 @id @default(cuid())
+  subject            PayrollApprovalSubject
+  subjectId          String                 @map("subject_id")
+  status             PayrollApprovalStatus  @default(PENDING)
+  contentHash        String                 @map("content_hash")
+  makerUserId        String                 @map("maker_user_id")
+  submittedAt        DateTime               @default(now()) @map("submitted_at") @db.Timestamptz(3)
+  submitNote         String                 @default("") @map("submit_note")
+  previewFingerprint String                 @map("preview_fingerprint")
+  checkerUserId      String?                @map("checker_user_id")
+  decidedAt          DateTime?              @map("decided_at") @db.Timestamptz(3)
+  decisionNote       String?                @map("decision_note")
+  hashAtDecision     String?                @map("hash_at_decision")
+  voidedAt           DateTime?              @map("voided_at") @db.Timestamptz(3)
+  voidReason         String?                @map("void_reason")
+  consumedAt         DateTime?              @map("consumed_at") @db.Timestamptz(3)
+  consumedByUserId   String?                @map("consumed_by_user_id")
+
+  @@index([subject, subjectId])
+  @@map("payroll_approvals")
+}
+
+model PayrollEvent {
+  id          String   @id @default(cuid())
+  seq         Int      @unique @default(autoincrement())
+  subjectType String   @map("subject_type")
+  subjectId   String   @map("subject_id")
+  type        String
+  actorUserId String?  @map("actor_user_id")
+  payload     Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([subjectType, subjectId, seq])
+  @@map("payroll_events")
+}

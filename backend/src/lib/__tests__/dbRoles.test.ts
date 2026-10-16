@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { env } from "../../config/env";
-import { REQUIRED_APPEND_ONLY_TABLES, appendOnlyTables, assertLeastPrivilegedDatabaseRole, ensureDatabaseRoles, leastPrivilegeProblems } from "../dbRoles";
+import { REQUIRED_APPEND_ONLY_TABLES, UPDATABLE_APPEND_ONLY_TABLES, appendOnlyTables, assertLeastPrivilegedDatabaseRole, ensureDatabaseRoles, leastPrivilegeProblems } from "../dbRoles";
 import { prisma } from "../prisma";
 
 // The privilege layer under the append-only triggers. Roles are cluster-wide, so each run makes its own and drops it again.
@@ -80,6 +80,21 @@ describe("the app role", () => {
     const tables = await appendOnlyTables(prisma);
     expect(tables).toEqual(expect.arrayContaining(["audit_logs", "security_events", "raw_punches", "manual_attendance_entries", "attendance_overrides", "shift_overrides", "leave_day_releases", "attendance_period_locks"]));
     for (const t of tables) expect(await denied(app.$executeRawUnsafe(`DELETE FROM "${t}" WHERE false`)), t).toMatch(/permission denied/);
+  });
+
+  it("keeps UPDATE (and only UPDATE) on the one append-only table whose rows change state: payroll approvals", async () => {
+    expect(UPDATABLE_APPEND_ONLY_TABLES).toEqual(["payroll_approvals"]);
+    expect(await appendOnlyTables(prisma)).toContain("payroll_approvals");
+    const priv = async (table: string) =>
+      (await app.$queryRawUnsafe<Array<{ upd: boolean; del: boolean; trunc: boolean; ins: boolean }>>(
+        `SELECT has_table_privilege(current_user, $1, 'UPDATE') AS upd, has_table_privilege(current_user, $1, 'DELETE') AS del,
+                has_table_privilege(current_user, $1, 'TRUNCATE') AS trunc, has_table_privilege(current_user, $1, 'INSERT') AS ins`,
+        table,
+      ))[0];
+    expect(await priv("payroll_approvals")).toEqual({ upd: true, del: false, trunc: false, ins: true });
+    expect(await priv("audit_logs")).toEqual({ upd: false, del: false, trunc: false, ins: true });
+    expect(await priv("payroll_item_versions")).toEqual({ upd: false, del: false, trunc: false, ins: true });
+    expect(await denied(app.$executeRawUnsafe(`DELETE FROM payroll_approvals WHERE false`))).toMatch(/permission denied/);
   });
 
   it("cannot change the schema or the migration history", async () => {

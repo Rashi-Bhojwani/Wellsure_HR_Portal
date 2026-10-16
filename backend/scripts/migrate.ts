@@ -15,6 +15,8 @@ execSync("npx prisma migrate deploy", { stdio: "inherit" });
 const { ensureAccessCatalog } = await import("../src/lib/accessCatalog");
 const { prisma } = await import("../src/lib/prisma");
 await ensureAccessCatalog();
+const { ensurePayrollRules } = await import("../src/modules/payroll/rules/governed");
+await ensurePayrollRules();
 // Effective dating (EF1): never repairs anything, only says so — the repair
 // is previewed and approved by a person (npm run history:repair).
 const { warnIfHistoryNeedsRepair } = await import("../src/lib/historyRepairNotice");

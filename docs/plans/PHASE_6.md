@@ -1,6 +1,6 @@
 # Phase 6 — Payroll: plan
 
-**Status: written 2026-10-16 for your review. Nothing in it is built.** It follows the brief you gave on 2026-10-16 (commit A approved;
+**Status: approved 2026-10-16 with the answers in §0A. P6-1 (foundations) is built, see §14A; P6-2 to P6-6 are not.** It follows the brief you gave on 2026-10-16 (commit A approved;
 Phase 1.5 commits B to F paused until after Phase 7; Phases 6 and 7 built and tested locally). Spec references: §5.2–5.3 (PL, ledger),
 §7.5 (payroll app), §9 (security), §11 (data model), §12 Phase 6 (maker-checker), §14 (open questions). The effective-dating contract
 (EF4) that payroll must obey is kept verbatim at the end of this file (Appendix A).
@@ -9,6 +9,31 @@ How to read it: §1 maps each of your principles to the mechanism that enforces 
 §3 is the one design idea everything else hangs on (governed items: rules, structures and templates all carry Placeholder/Confirmed).
 §4–§10 are the design in the order a payroll month happens. §11 is screens, permissions and jobs; §12 the tables; §13 how it is proved; §14 the build split (six commits, a pause after each). §15 is **the
 rules I decided myself**. §16 is **what I need from you to turn Placeholders into Confirmed**. §17 is what stays unproven locally.
+
+---
+
+## 0A. Your answers (2026-10-16), and what they changed
+
+1. **"Changing a Confirmed rule":** my reading is right. An edit takes effect at once as an unconfirmed value, usable for drafts and blocked for real runs until a
+   different person confirms it. Testing a proposed change on a draft first is the point.
+2. **Salary revisions need a checker.** They are a **seventh subject** in the same maker-checker core (§6), alongside the six: "nobody approves their own pay".
+3. **Shipped figures, narrowed.** PF and ESI figures ship as placeholders **only where the figure is genuinely a statutory rate or ceiling**, and **every one is
+   labelled "From memory, unverified"** so nobody mistakes it for a confirmed value. **Anything company-specific ships empty** (shown as *Not set*; a run that needs
+   it says so; an administrator enters a value, which is a Placeholder until confirmed). This replaces my earlier plan to ship neutral company choices (pay-days
+   basis, payment date, rounding of lines, leaver timing and the like): those are now empty. **New safeguard:** the Confirm action on a statutory figure shows the
+   placeholder's source label and **requires the confirmer to type the confirmed value again**; a mismatch is refused. Confirming means checking, not clicking.
+4. **My 20 rules (§15) are accepted**, including arrears for back-dated revisions, no unlock once payslips are published or a bank file exists, and no figures in
+   payslip emails.
+5. **The payroll audit screen is restricted to exactly the people who can see salary.** It has no permission of its own: it requires `payroll.salary.view`, so it
+   cannot be more open than the salary screens. The shared audit-log viewer also hides payroll-private rows from anyone without `payroll.salary.view`. Tests prove both.
+6. **Makers and checkers.** The two Super Admins can be checkers for each other, but an owner must not be the only possible checker for everything. **What happens with
+   exactly one eligible checker (built in P6-4, behaviour decided now, and made visible, never a silent block):** the Approvals screen and every run page show the
+   count of eligible checkers for the action at hand and name them. With exactly one, approvals still work, but a persistent warning says "all approvals depend on
+   one person" and Super Admins are notified once. When that one person is also the maker or edited the figures, **nobody is eligible**: the action shows the state
+   "Blocked: no eligible checker" with the reason, to the maker and to every Super Admin, and the way out is to appoint another checker. There is no override and no
+   bypass. P6-1 already ships the eligibility query and shows it on the rules screen.
+7. **A new system role, `PAYROLL_APPROVER`,** carries the checker permissions. I did not reuse the existing `APPROVER` role, which holds leave approval for whoever has
+   it: giving it payroll figures would have widened what those people see.
 
 ---
 
@@ -89,49 +114,49 @@ This is why one change covers principles 1, 2 and 5 at once, and why "a Placehol
 
 ### 3.1 The rules catalog (placeholders)
 
-Every rule below is editable by Payroll Admin (`payroll.rules.manage`) and starts as a **Placeholder**. Values marked ◆ are figures I recall
-from general knowledge of Indian payroll practice; they are shipped only so a test run has something realistic to compute, are **not verified,
-and are not treated as true until your CA confirms them** (several of them change by government notification). Values marked ○ are deliberately empty or neutral
-because they are open questions in spec §14 and I will not guess them.
+Every rule below is editable by Payroll Admin (`payroll.rules.manage`) and starts as a **Placeholder**. Values marked ◆ are **statutory rates or ceilings** I recall from general knowledge; they ship as Placeholders labelled **"From memory, unverified"**, are **not treated as true until your CA
+confirms them** (several change by government notification), and confirming one requires typing the value again. Everything else is company-specific or an open question in spec §14 and ships
+**empty (Not set)**: the "placeholder value" column below then shows what it is *for*, and a draft run needs an administrator to enter a value first. (This is the narrowed version approved on 2026-10-16, §0A.)
 
-| Group | Rule key | Placeholder value | Open question it belongs to / who confirms |
+| Group | Rule key | Ships as | Who confirms / what it is for |
 |---|---|---|---|
-| Period and days | `PAY_DAYS_BASIS` | CALENDAR_DAYS (alternatives: FIXED_DAYS, WORKING_DAYS) | HR + CA: how a month's pay is divided |
-| | `FIXED_DAYS_VALUE` | 30 | used only if FIXED_DAYS |
-| | `LOP_DIVISOR` | same as pay-days basis | HR + CA: LOP per day = monthly ÷ this |
-| | `PAYMENT_DATE_RULE` | next month, day 1 ○ | HR: decides which bank account is in force (`bankAccountOn(payment date)`) |
-| | `LEAVER_PAYMENT_TIMING` | PAY_WITH_RUN (alternative: HOLD_FOR_FNF) ○ | HR: final settlement is Phase 7 |
-| | `NEGATIVE_NET_POLICY` | BLOCK | HR |
-| Rounding | `LINE_ROUNDING` | HALF_UP to 0 decimals (whole rupees) ◆ | CA |
-| | `PF_ROUNDING` | HALF_UP to whole rupees ◆ | CA |
-| | `ESI_ROUNDING` | UP (ceiling) to whole rupees ◆ | CA |
-| | `NET_PAY_ROUNDING` | none (net is the sum of rounded lines) | HR |
-| Provident Fund | `PF_EMPLOYEE_RATE` | 12% ◆ | CA |
-| | `PF_EPS_RATE`, `PF_EPF_ER_RATE` | 8.33% and 3.67% of the employer 12% ◆ | CA |
-| | `PF_EDLI_RATE`, `PF_ADMIN_RATE` | 0.5% and 0.5% ◆ | CA |
-| | `PF_WAGE_CEILING` | ₹15,000 ◆ | CA |
-| | `PF_CEILING_MODE` | CAP_AT_CEILING (alternative: ACTUAL_WAGE) ○ | company policy |
-| Employees' State Insurance | `ESI_EMPLOYEE_RATE`, `ESI_EMPLOYER_RATE` | 0.75% and 3.25% ◆ | CA |
-| | `ESI_WAGE_CEILING` | ₹21,000 gross ◆ | CA |
-| | `ESI_PERIOD_RULE` | MONTHLY (alternative: STICKY_HALF_YEAR) ○ | CA |
-| Who is covered | `PF_ELIGIBLE_TYPES`, `ESI_ELIGIBLE_TYPES` | every employment type ○ | CA + HR: permanent, contract, interns |
-| Professional Tax | `PT_STATE_OF_PLACEMENT` | state of the branch the person was placed in on the last day of the period ○ | CA (spec §14) |
-| | `PT_SLABS` | **empty: no states configured, so PT is ₹0 and the rule says so** ○ | CA: which states, slabs, February exception |
-| | `STATE_NAME_MAP` | maps the free-text `Location.state` to a canonical state key ○ | HR: the branch list |
-| Labour Welfare Fund | `LWF_TABLE` | empty ○ | CA (spec §14) |
-| Tax | `TDS_MODE` | NONE until Phase 7 supplies the projection; lines show ₹0 with a notice ○ | CA (Phase 7) |
-| Leave encashment | `ENCASH_DAILY_RATE_FORMULA` | `BASIC / 30` (spec §5.2 default) ○ | CA (spec §14) |
-| | `ENCASH_TAXABLE`, `ENCASH_PF_APPLICABLE` | taxable yes; PF no ○ | CA |
-| | `ENCASH_PAYOUT_RULE` | the first run after the year end is committed ○ | HR |
-| Arrears | `ARREARS_PAYOUT` | SEPARATE_LINE_IN_NEXT_RUN ○ | HR + CA |
-| | `ARREARS_PF_ESI` | FOLLOW_COMPONENT_FLAGS ○ | CA |
-| Variance | `VARIANCE_FLAG_PERCENT`, `VARIANCE_FLAG_MIN_AMOUNT` | 10% and ₹1,000 | HR (only decides what the preview highlights) |
-| Payslip | `PAYSLIP_LAYOUT` | company header from `Company`; show employer contributions off; net pay in words, Indian numbering | HR |
-| Company identifiers | `PF_ESTABLISHMENT_CODE`, `ESI_EMPLOYER_CODE`, `PT_REGISTRATION`, `LWF_REGISTRATION` | empty ○ | HR (needed only by the outputs that print them) |
-| Bank | `BANK_TEMPLATE` (a governed item of its own) | a generic CSV layout ○ | the bank's format (spec §14) |
-| | `BANK_DEBIT_ACCOUNT` | empty; stored encrypted (it is a bank account) ○ | HR |
-| | `PAYMENT_MODE_THRESHOLDS` | NEFT/IMPS/RTGS by amount, placeholder ○ | bank |
-| Outputs | `ECR_TEMPLATE`, `ESI_RETURN_TEMPLATE`, `PT_STATEMENT_TEMPLATE`, `LWF_STATEMENT_TEMPLATE`, `SALARY_REGISTER_TEMPLATE` | each a governed `OUTPUT_TEMPLATE` ○ | CA / portal format |
+| Period and days | `PAY_DAYS_BASIS` | Not set (CALENDAR_DAYS, FIXED_DAYS or WORKING_DAYS) | HR + CA: how a month's pay is divided |
+| | `FIXED_DAYS_VALUE` | Not set | used only if FIXED_DAYS |
+| | `LOP_DIVISOR` | Not set | HR + CA: LOP per day = monthly ÷ this |
+| | `PAYMENT_DATE_RULE` | Not set | HR: decides which bank account is in force (`bankAccountOn(payment date)`) |
+| | `LEAVER_PAYMENT_TIMING` | Not set (PAY_WITH_RUN or HOLD_FOR_FNF) | HR: final settlement is Phase 7 |
+| | `NEGATIVE_NET_POLICY` | Not set (BLOCK is the safe choice) | HR |
+| Rounding | `LINE_ROUNDING` | Not set | HR + CA: mode and decimals for component lines |
+| | `PF_ROUNDING` | ◆ HALF_UP to whole rupees, **From memory, unverified** | CA |
+| | `ESI_ROUNDING` | ◆ UP (ceiling) to whole rupees, **From memory, unverified** | CA |
+| | `NET_PAY_ROUNDING` | Not set | HR |
+| Provident Fund | `PF_EMPLOYEE_RATE` | ◆ 12%, **From memory, unverified** | CA |
+| | `PF_EPS_RATE`, `PF_EPF_ER_RATE` | ◆ 8.33% and 3.67% of wages, **From memory, unverified** | CA |
+| | `PF_EDLI_RATE`, `PF_ADMIN_RATE` | ◆ 0.5% and 0.5%, **From memory, unverified** | CA |
+| | `PF_WAGE_CEILING` | ◆ ₹15,000, **From memory, unverified** | CA |
+| | `PF_CEILING_MODE` | Not set (CAP_AT_CEILING or ACTUAL_WAGE) | company policy |
+| Employees' State Insurance | `ESI_EMPLOYEE_RATE`, `ESI_EMPLOYER_RATE` | ◆ 0.75% and 3.25%, **From memory, unverified** | CA |
+| | `ESI_WAGE_CEILING` | ◆ ₹21,000 gross, **From memory, unverified** | CA |
+| | `ESI_PERIOD_RULE` | Not set (MONTHLY or STICKY_HALF_YEAR) | CA |
+| Who is covered | `PF_ELIGIBLE_TYPES`, `ESI_ELIGIBLE_TYPES` | Not set | CA + HR: permanent, contract, interns |
+| Professional Tax | `PT_STATE_OF_PLACEMENT` | Not set | CA (spec §14) |
+| | `PT_SLABS` | Not set: no states configured, so PT is ₹0 and the screen says so | CA: which states, slabs, February exception |
+| | `STATE_NAME_MAP` | Not set | HR: maps the free-text `Location.state` to a canonical state key |
+| Labour Welfare Fund | `LWF_TABLE` | Not set | CA (spec §14) |
+| Tax | `TDS_MODE` | Not set (Phase 7 supplies the projection; lines show ₹0 with a notice) | CA (Phase 7) |
+| Leave encashment | `ENCASH_DAILY_RATE_FORMULA` | Not set (spec §5.2 names `BASIC / 30` as the default, which I will offer as a suggestion on the screen, not ship) | CA (spec §14) |
+| | `ENCASH_TAXABLE`, `ENCASH_PF_APPLICABLE` | Not set | CA |
+| | `ENCASH_PAYOUT_RULE` | Not set | HR |
+| Arrears | `ARREARS_PAYOUT`, `ARREARS_PF_ESI` | Not set | HR + CA |
+| Variance | `VARIANCE_FLAG_PERCENT`, `VARIANCE_FLAG_MIN_AMOUNT` | Not set (they only decide what the preview highlights) | HR |
+| Payslip | `PAYSLIP_LAYOUT` | Not set | HR |
+| Company identifiers | `PF_ESTABLISHMENT_CODE`, `ESI_EMPLOYER_CODE`, `PT_REGISTRATION`, `LWF_REGISTRATION` | Not set | HR (needed only by the outputs that print them) |
+| Bank (P6-5) | `BANK_TEMPLATE` (a governed item of its own), `BANK_DEBIT_ACCOUNT` (stored encrypted), `PAYMENT_MODE_THRESHOLDS` | Not set | the bank's format (spec §14) |
+| Outputs (P6-5) | `ECR_TEMPLATE`, `ESI_RETURN_TEMPLATE`, `PT_STATEMENT_TEMPLATE`, `LWF_STATEMENT_TEMPLATE`, `SALARY_REGISTER_TEMPLATE` | Not set | CA / portal format |
+
+**Only the rows marked ◆ ship with a value** (eleven figures, all statutory rates, ceilings or prescribed rounding). Every one is a Placeholder, authored by "System (shipped placeholder)",
+labelled **From memory, unverified**, and **confirming it requires typing the value again.** Rules still to be built by their own commit (bank and outputs) are added to the catalog by that
+commit; a rule that does not exist yet cannot block anything.
 
 **Not rules, and deliberately not configurable:** the maker-checker invariants (checker differs from maker; approval bound to a hash; voided by any
 change), the rule that a Placeholder blocks a real run, append-only history, and exact decimal arithmetic. Making a safety property a setting would
@@ -252,7 +277,7 @@ change in totals. This is the same block shown in the submit, approve, finalise,
 
 ## 6. Maker-checker: one small core
 
-Six subjects, nothing else, nothing configurable about the invariants:
+Seven subjects (the six you named, plus salary revisions, added 2026-10-16), nothing else, nothing configurable about the invariants:
 
 | Subject | Maker acts | Checker decides | What the hash covers | Consumed by |
 |---|---|---|---|---|
@@ -261,7 +286,8 @@ Six subjects, nothing else, nothing configurable about the invariants:
 | `PAYSLIP_PUBLISH` | request to publish | approve | every payslip's content hash | publish |
 | `BANK_FILE` | request the bank file | approve | the file rows (employee, bank row id and its account hash, IFSC, amount, narration), the template version | generate |
 | `PERIOD_UNLOCK` | request, with a reason | approve (and the unlock itself is Super Admin only) | the period, the reason | the unlock |
-| `RULE_CONFIRM` | (the rule's author is the maker) | a different person confirms | the rule's value hash | marks the version Confirmed (§3) |
+| `RULE_CONFIRM` | (the rule's author is the maker) | a different person confirms; for a statutory figure they must type the value again | the rule's value hash | marks the version Confirmed (§3) |
+| `SALARY_REVISION` | prepare the revision (people, new CTC or structure, effective date) | approve | every person's old and new breakup, the dates, the arrears | writes the salary rows and creates the arrears adjustments |
 
 Enforced in the service and tested, for each subject:
 1. **Different people.** The checker is not the maker and not anyone recorded in `payroll_run_events` as having changed the run's figures since submission (recalculated,
@@ -346,13 +372,13 @@ The list, each with the preview contents it shows beyond the common block (figur
 
 **Permissions (new keys, none manager-grantable; the existing test is extended to prove it):** `payroll.rules.view`, `payroll.rules.manage`, `payroll.rules.confirm`,
 `payroll.salary.view`, `payroll.salary.edit`, `payroll.adjust`, `payroll.run` (maker), `payroll.approve` (checker), `payroll.unlock` (meta, Super Admin only), `payroll.payslip.view`,
-`payroll.bank.view`, `payroll.audit.view`, `reports.salary.view`. Defaults: `PAYROLL_ADMIN` gets the maker set; `APPROVER` gets the checker set (and `payroll.rules.confirm`);
+`payroll.bank.view`, `reports.salary.view`. **There is no audit permission of its own:** the Payroll audit trail requires `payroll.salary.view`. Defaults: `PAYROLL_ADMIN` gets the maker set; a new `PAYROLL_APPROVER` role gets the checker set (`payroll.approve`, `payroll.rules.confirm`, and the view keys a checker needs to see the figures they approve);
 `HR_ADMIN` gets view and salary edit but **not** run/approve; `HR_EXECUTIVE` gets nothing (they never see salary or bank data); an owner who is the only possible checker is a real
 case for a small company and is covered in §16.
 
 **Admin app (Payroll):** Rules and setup (rules, components, structures, templates; Placeholder/Confirmed badges, history, the confirm dialog); Employee Salaries (timeline, revision with preview);
 Adjustments; Payroll Run (a stepper: readiness, calculate, review, submit, approve, finalise, payslips, bank file, paid); Approvals inbox (the checker's list); Statutory outputs;
-Salary register and variance; Payroll audit trail. Every screen that touches a draft shows the **TEST — placeholder rules** banner with the list of rules and one click to the rule.
+Salary register and variance; Payroll audit trail (same people as salary). Every screen that touches a draft shows the **TEST — placeholder rules** banner with the list of rules and one click to the rule.
 **Employee portal (Salary):** Payslips (month picker, view, PDF, net in words), Salary revision history. Responsive at phone width (definition of done).
 
 **Jobs:** `payroll-calculate`, `payroll-payslips` (render and store in batches, resumable, idempotent per payslip), `payroll-notify` (paced). The scheduler stays a single instance; none of these needs it.
@@ -417,6 +443,41 @@ No salary figure is stored in `audit_logs` (§15 item 14). No table stores an ac
 | **P6-6 Close-out** | the parallel-run comparison tool (**built only against your anonymised greytHR payroll sample; waits for it**), remaining reports, the 500-employee measurement, docs (`PROGRESS`, `GETTING_STARTED`, this file as built), the Phase 6 review, a walkthrough of a full month end to end, the LOCAL_ASSUMPTIONS review | your review, then Phase 7 planning |
 
 I will plan Phase 7 (declarations, TDS, YTD, Form 16 data, loans, reimbursements, full and final, revision letters) after you have seen Phase 6; the seams in §5.2 (TDS, loans, reimbursements) are where it plugs in.
+
+### 14A. P6-1 as built (2026-10-16)
+
+**What exists.** Migration `20261016090000_payroll_foundations`; `backend/src/modules/payroll/` (money, hash, formula, events, approvals, exports, rules/{schemas,governed,context}); the Rules and Setup screen; 12 permissions; `PAYROLL_APPROVER` role; the payroll guard scans. Nothing in P6-1 calculates pay: it is the foundation the next five commits stand on.
+
+| Piece | Where | What it guarantees |
+|---|---|---|
+| Governed items | `payroll_item_versions`, `payroll_item_confirmations` (append-only, DB triggers) | A value is Confirmed iff a row in confirmations names it, made by a **different** person than its author (checked in code and again by a trigger). Edits append the next version, unconfirmed; the last Confirmed one stays visible and stays in every run that pinned it. |
+| Rules catalog | `shared/constants/payrollRules.ts` | Each rule has a label, shape, group, `origin` (STATUTORY or COMPANY) and, for the eleven statutory figures that ship, a value labelled "From memory, unverified". PT slabs and the LWF table are statutory in origin but ship empty, as every company-specific rule does. |
+| Confirm | `rules/governed.ts` | Preview first (fingerprint of exactly what was shown), then confirm with a note of at least five characters. A STATUTORY rule additionally needs the confirmer to **type the value again** (`RETYPE_REQUIRED`, `RETYPE_MISMATCH`). Only the current version can be confirmed. |
+| Pins and the gate | `rules/context.ts` | A run records `(key, version, valueHash)` of each rule it actually read. `assertRunIsReal` refuses with `PLACEHOLDER_RULES` while any pinned rule is a Placeholder, and `RULES_CHANGED` if a pinned rule has a newer version. `watermarkFor` returns the TEST banner; XLSX gets a banner row, a `TEST ` sheet-name prefix and a footer; HTML/PDF gets a rotated overlay. |
+| Exact money | `money.ts`, `hash.ts` | Decimal at 40 digits of precision, numbers refused at runtime, six named rounding modes, canonical JSON hashing that rejects floats and `undefined`. |
+| Formula engine | `formula.ts` | `+ - * / ( )`, `%`, MIN, MAX, ROUND, CEIL, FLOOR, uppercase names. No `eval`; no JavaScript numbers in the evaluator. |
+| Maker-checker core | `approvals.ts`, `payroll_approvals` | Seven subjects (run approval, period finalise, payslip publish, bank file, period unlock, rule confirm, salary revision). Checker is not the maker (code and a DB CHECK), not anyone who changed the figures since submission, approval is bound to a hash taken at submit and again at decision, a changed hash voids it, and it is single-use. One live approval per subject (partial unique index). `checkerAvailability` says NONE, ONE or MANY and why, so a screen can show it. |
+| Events | `payroll_events` (append-only) | Who changed which figures when; the checker rule above reads it. |
+| Audit | `/api/payroll/audit`, `/api/audit-logs` | Payroll rows are hidden from the general audit viewer for anyone without `payroll.salary.view`, and the payroll audit screen needs exactly that same permission, so it is not a side door. |
+| Guard scans | `payrollGuards.test.ts` | Fails on a numeric literal outside a short allowlist, `Number()`/`parseFloat`/`Math.round`/`.toNumber()` and the like, `new Date()` outside annotated instants, any HTTP or AWS client import, and any "sent to bank" state. The history-read scan in `currentRowGuard.test.ts` now covers `employeeSalary`. |
+
+**Rules I decided myself in P6-1** (additional to section 15; veto any):
+
+21. **Every confirmation needs a note** of at least five characters ("what did you check it against"), not just statutory ones.
+22. **Only the current version can be confirmed.** If a newer value was entered after you looked, the confirm is refused as stale.
+23. **`PAYROLL_APPROVER` is a new role**, separate from the leave `APPROVER`. It holds rules confirm, salary view, run approve, payslip view and bank view, and nothing that edits.
+24. **`TDS_MODE` accepts only `NONE`** until Phase 7 builds TDS, so no setting can claim a calculation that does not exist.
+25. **The bank-file layout and the output templates are added as governed items in their own commits** (P6-5), not stubbed here.
+26. **Demo accounts:** the seed puts employee 1025 in PAYROLL_ADMIN (maker) and 1027 in PAYROLL_APPROVER (checker), so the two-person flow can be walked locally. A real tenant has neither until a Super Admin appoints them.
+27. **The app database role keeps UPDATE on `payroll_approvals` only.** Every other append-only table loses it. This was a real conflict with the Phase 1.5 role step, fixed in `UPDATABLE_APPEND_ONLY_TABLES` and tested (see LOCAL_ASSUMPTIONS, note on row 11).
+
+**How P6-1 is proved** (all in `backend/src/modules/payroll/__tests__/` unless noted): full backend suite 134 files / 1,204 tests green run alone; the database refuses a self-confirmation, a hash mismatch and any edit or delete of a version (`rules.test.ts`); a person holding both permissions cannot confirm their own value (`rules.test.ts`); the checker is never the maker or a figure editor, and any change voids an approval before and after the decision, for every subject (`approvals.test.ts`); a Placeholder or a since-changed rule refuses a run, and confirming the very version a run used promotes it with no recalculation (`context.test.ts`); the general audit viewer hides payroll rows and every payroll permission is refused to a manager (`access.test.ts`); the app role has UPDATE on `payroll_approvals` and no other append-only table (`dbRoles.test.ts`).
+
+**Mutation checks** (each guard broken on purpose; the tests must fail): retype removed, Placeholder gate removed, stale-rule gate removed, audit filter removed, checker may equal maker, figure editor may approve, hash not checked at decision, hash not checked at consume: all caught. Guard-scan teeth: a decimal literal, `Number()`, `new Date()`, an HTTP client import, a "sent to bank" state as an identifier and as a string value: all caught (the string-value one was **not** caught until fixed in this commit). Removing only the rules-level "author may not confirm" check is *not* caught, by design: `recordCompletedApproval` and a database trigger enforce the same rule, and removing both is caught.
+
+**Live walkthrough** (scratch database, a maker and a checker in a browser): a company rule set then confirmed by a different person; a statutory figure refused on a wrong retype and accepted on the right one, showing "From memory, unverified" and who entered it; editing a Confirmed rule shows the warning, resets it to a Placeholder and keeps the last Confirmed value and the history; the maker is offered no Confirm button and the checker no Edit button; with the second checker suspended the banner reads "Only Aditi Sharma can approve this...". The "nobody" state could not be produced live (the database will not suspend the last Super Admin); it is covered by `availabilityFrom` tests.
+
+**The one-eligible-checker case** is shown, not silent, from this commit: the confirm dialog calls `/api/payroll/approvals/checkers` and says in plain words who can confirm and, when only one person or nobody can, that this is blocked and what to do about it. P6-4 extends the same message to run approval, publishing and the bank file.
 
 ---
 

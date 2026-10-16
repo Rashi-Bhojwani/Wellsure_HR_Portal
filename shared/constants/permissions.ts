@@ -71,6 +71,19 @@ export const PERMISSION_KEYS = [
   // Phase 3 commit 3 — Period Finalisation
   "attendance.finalise", // lock a finished attendance cycle so it can reach payroll
   "attendance.unlock", // open a finalised cycle again, with a reason (Super Admin only)
+  // Phase 6 — payroll (docs/plans/PHASE_6.md §11). None of these is ever manager-grantable.
+  "payroll.rules.view", // see the payroll rules, components, structures and templates, and their history
+  "payroll.rules.manage", // edit them (an edit is an unconfirmed value until somebody else confirms it)
+  "payroll.rules.confirm", // confirm a value (never the person who wrote it)
+  "payroll.salary.view", // see salary, payroll runs and the payroll audit trail (the audit trail has no permission of its own)
+  "payroll.salary.edit", // prepare salary revisions (a checker approves them)
+  "payroll.adjust", // add payroll adjustments (bonus, recovery, arrears)
+  "payroll.run", // the maker: calculate and submit runs, request publish / bank file / period actions
+  "payroll.approve", // the checker: approve or reject any of those
+  "payroll.unlock", // open a finalised payroll period (Super Admin only)
+  "payroll.payslip.view", // see any employee's payslip
+  "payroll.bank.view", // see bank transfer batches (masked)
+  "reports.salary.view", // salary and statutory reports
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
@@ -103,6 +116,7 @@ export const PERMISSION_GROUPS = [
   "Documents & letters",
   "Helpdesk",
   "Reports",
+  "Payroll",
 ] as const;
 
 export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
@@ -171,6 +185,18 @@ export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
   },
   "attendance.swipes.view": { group: "Attendance", label: "View Employee Swipes", description: "See the raw punch log — every punch exactly as the device sent it — for people in their data scope. Punches not matched to anyone are visible company-wide only.", managerGrantable: true },
   "attendance.finalise": { group: "Attendance", label: "Finalise attendance periods", description: "Lock a finished attendance cycle once nothing blocks it, so its attendance can reach payroll. Locked days can't be changed." },
+  "payroll.rules.view": { group: "Payroll", label: "View payroll rules", description: "See every payroll rule, component, structure and template, whether it is Placeholder or Confirmed, who confirmed it and when, and its history." },
+  "payroll.rules.manage": { group: "Payroll", label: "Edit payroll rules", description: "Change a payroll rule, component, structure or template. The change is an unconfirmed value (usable for test runs only) until a different person confirms it." },
+  "payroll.rules.confirm": { group: "Payroll", label: "Confirm payroll rules", description: "Confirm a rule value that somebody else wrote. For a statutory figure the confirmer types the value again. Never the person who edited it." },
+  "payroll.salary.view": { group: "Payroll", label: "View salary and payroll", description: "See salary, payroll runs, payslip figures and the Payroll audit trail. The audit trail is deliberately not a separate permission, so it can never be more open than salary." },
+  "payroll.salary.edit": { group: "Payroll", label: "Prepare salary revisions", description: "Prepare a salary revision or arrears. A different person approves it before it takes effect. Nobody can edit their own salary." },
+  "payroll.adjust": { group: "Payroll", label: "Add payroll adjustments", description: "Add a one-off earning, deduction or arrears line to a payroll run." },
+  "payroll.run": { group: "Payroll", label: "Prepare payroll runs (maker)", description: "Calculate a payroll run and submit it, and request publishing, the bank file or a period lock. A different person (the checker) approves." },
+  "payroll.approve": { group: "Payroll", label: "Approve payroll actions (checker)", description: "Approve or reject a payroll run, payslip publishing, the bank file, a period lock or a salary revision prepared by somebody else." },
+  "payroll.unlock": { group: "Payroll", label: "Unlock payroll periods", description: "Open a finalised payroll period again, with a written reason and a checker. Super Admin only; not possible once payslips are published or a bank file exists.", meta: true },
+  "payroll.payslip.view": { group: "Payroll", label: "View any payslip", description: "See any employee's payslip. Employees always see their own." },
+  "payroll.bank.view": { group: "Payroll", label: "View bank transfer batches", description: "See bank transfer batches (account numbers masked). Nothing here moves money: the file is for HR to upload to the bank." },
+  "reports.salary.view": { group: "Reports", label: "Salary and statutory reports", description: "Salary register, variance report and the PF, ESI, PT and LWF statements, with Excel export." },
   "attendance.unlock": { group: "Attendance", label: "Unlock attendance periods", description: "Open a finalised attendance cycle again, with a written reason (and a warning if payroll has used it). Super Admin only.", meta: true },
   "helpdesk.manage": { group: "Helpdesk", label: "Helpdesk queue", description: "Work the ticket queue: assign, status, replies, internal notes, categories." },
   "helpdesk.sensitive.view": { group: "Helpdesk", label: "Sensitive tickets", description: "See tickets in categories marked sensitive (e.g. Payroll & Salary, Grievance)." },

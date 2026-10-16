@@ -16,6 +16,7 @@ import { DEFAULT_HELPDESK_AUTO_CLOSE_DAYS, DEFAULT_HELPDESK_REOPEN_WINDOW_DAYS }
 import { LETTER_TEMPLATE_SEEDS } from "./seedLetterTemplates";
 import { SYSTEM_ROLES } from "../src/lib/systemRoles";
 import { ensureAccessCatalog } from "../src/lib/accessCatalog";
+import { ensurePayrollRules } from "../src/modules/payroll/rules/governed";
 import { dayAfter } from "../src/lib/effectiveDating";
 import { prisma as appPrisma } from "../src/lib/prisma";
 
@@ -349,6 +350,7 @@ async function main() {
   // definition from src/lib/systemRoles.ts. `npm run db:migrate` has usually
   // created them already; anything missing is created here.
   await ensureAccessCatalog();
+  await ensurePayrollRules(); // the statutory Placeholders ("From memory, unverified"); company-specific rules ship empty
   const roles: Record<string, { id: string }> = Object.fromEntries(
     (await prisma.role.findMany({ where: { code: { in: SYSTEM_ROLES.map((r) => r.code) } } })).map((r) => [r.code, r]),
   );
@@ -541,7 +543,12 @@ async function main() {
             // and the assertion at the end of main().
             ["1002", "1003", "1004", "1005", "1024", "1029"].includes(spec.employeeCode)
             ? "MANAGER"
-            : "EMPLOYEE";
+            : // Phase 6 demo fixtures: a payroll maker and a payroll checker, who are never the same person (docs/plans/PHASE_6.md §6).
+              spec.employeeCode === "1025"
+              ? "PAYROLL_ADMIN"
+              : spec.employeeCode === "1027"
+                ? "PAYROLL_APPROVER"
+                : "EMPLOYEE";
 
     const user = await prisma.user.create({
       data: {

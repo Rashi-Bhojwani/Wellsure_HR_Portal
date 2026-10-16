@@ -17,7 +17,7 @@ committed).
 | 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
 | 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | ✅ Done (2026-10-03) — commits A, B, C, D, D2, E1, E1.1, E2, E3, F and G (mobile bottom bar + PWA), plus interim commits. Full review — every screen and URL, every permission, what's stubbed, open questions, risks for Phase 6 — in [`docs/plans/PHASE_5_REVIEW.md`](plans/PHASE_5_REVIEW.md). Plan and as-built notes per commit in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
 | 5.5 | AWS production environment and go-live hardening | Not started |
-| 6 | Payroll | **Plan written 2026-10-16, awaiting your review: [`docs/plans/PHASE_6.md`](plans/PHASE_6.md)** (nothing built; six commits, a pause after each). Built locally; AWS comes last |
+| 6 | Payroll | **In progress, built locally (AWS comes last). Plan approved 2026-10-16 ([`docs/plans/PHASE_6.md`](plans/PHASE_6.md)); P6-1 Foundations built, awaiting your review; P6-2 to P6-6 not started.** One commit at a time, a pause after each |
 | 7 | Tax & benefits | Not started (planned after Phase 6 is reviewed) |
 | 8 | Extras | Not started |
 
@@ -4798,6 +4798,30 @@ touches AWS yet. What changed:
 - **`attendance.engineStartDate`**: the engine, Process Attendance and the nightly job never write, change or delete a day before the cut-over.
 - Still open for the next commits: the infrastructure itself (B), the deploy workflow and its checklist (C), and everything that needs your
   inputs (greytHR samples, the cut-off date, the domain). Not built and said so: rotating `FIELD_HASH_PEPPER`.
+
+### Phase 6, P6-1 of six: payroll foundations (2026-10-16)
+
+The plan was approved with six answers (recorded in `docs/plans/PHASE_6.md` §0A); this commit builds the foundation under the calculation. It calculates
+nothing yet. What exists, and how each part is proved, is in `docs/plans/PHASE_6.md` §14A.
+
+- **Governed items.** Rules are append-only versions; a version is Confirmed only when a *different* person confirms it (code, and again a database
+  trigger). Editing a Confirmed rule appends an unconfirmed version; the last Confirmed value stays visible. A run pins the rules it actually read,
+  and `assertRunIsReal` refuses while any is a Placeholder or has since changed. The TEST watermark exists for screen, workbook and PDF.
+- **The Rules and Setup screen** (Payroll menu): 41 rules, 11 shipped statutory Placeholders labelled "From memory, unverified" and 30 Not set.
+  Confirming a statutory figure shows its source label and needs the value typed again. Who can confirm is shown on the screen, including when it
+  is only one person.
+- **Maker-checker core** with all seven subjects (run approval, period finalise, payslip publish, bank file, period unlock, rule confirm, salary
+  revision): checker is not the maker or a figure editor, bound to a hash, voided by any change, single use, one live approval per subject.
+- **Exact money and the formula engine**, and guard scans that fail on a numeric literal, a float conversion, a business-date clock read, an HTTP or
+  bank client, or any "sent to the bank" state (in code, string values or the schema).
+- **Access.** 12 payroll permissions (none grantable to a manager), a `PAYROLL_APPROVER` role, payroll audit rows hidden from the general audit viewer
+  and the payroll audit screen open only to those who can see salary.
+- **Found and fixed on the way:** the Phase 1.5 database-role step would have taken UPDATE away from `payroll_approvals`; it now keeps UPDATE on that
+  one table and nothing else (`UPDATABLE_APPEND_ONLY_TABLES`, tested). A "no sent-to-bank state" guard that only looked at code missed string values;
+  fixed. A missing test (a person who holds both permissions confirming their own value) added.
+- Verified: full backend suite alone, 134 files and 1,204 tests, then the payroll, role and cleanup suites again after the last test changes
+  (121 tests); typecheck and lint clean in backend and frontend; no migration drift; mutation checks; a live walkthrough in a browser with a maker and
+  a checker. Local assumptions are tracked in `docs/plans/LOCAL_ASSUMPTIONS.md` (rows 11 to 14 added).
 
 ## Open questions
 

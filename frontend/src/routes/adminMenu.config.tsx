@@ -11,6 +11,7 @@ import {
   DollarOutlined,
   ExportOutlined,
   FileProtectOutlined,
+  SafetyCertificateOutlined,
   FileTextOutlined,
   FolderOpenOutlined,
   FundOutlined,
@@ -80,6 +81,7 @@ import { ManualOverridePage } from "../pages/admin/attendance/ManualOverridePage
 import { ShiftOverridePage } from "../pages/admin/attendance/ShiftOverridePage";
 import { ShiftRosterPage } from "../pages/admin/attendance/ShiftRosterPage";
 import { EmployeeSwipesPage } from "../pages/admin/attendance/EmployeeSwipesPage";
+import { RulesPage } from "../pages/admin/payroll/RulesPage";
 import { AttendanceSettingsPage, ShiftMasterPage, WeekOffPatternsPage } from "../pages/admin/attendance/AttendanceSettingsPage";
 
 // Single source of truth for the HR/Admin portal's App Switcher and each
@@ -271,6 +273,7 @@ export const adminApps: AdminApp[] = [
         key: "payroll",
         label: "Payroll",
         items: [
+          { key: "payroll-rules", label: "Rules and Setup", path: "payroll/rules", icon: SafetyCertificateOutlined, element: RulesPage },
           { key: "salary-components", label: "Salary Components", path: "payroll/components", icon: SettingOutlined, phase: "Phase 6" },
           { key: "salary-structures", label: "Salary Structures", path: "payroll/structures", icon: PartitionOutlined, phase: "Phase 6" },
           { key: "employee-salaries", label: "Employee Salaries", path: "payroll/salaries", icon: WalletOutlined, phase: "Phase 6" },

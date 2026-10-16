@@ -24,6 +24,12 @@ function ident(name: string): string {
 /** Tables the app role must be able to read and add to but never change: ones guarded by a TRUNCATE-blocking trigger, plus the two the spec names. */
 export const REQUIRED_APPEND_ONLY_TABLES = ["audit_logs", "security_events"] as const;
 
+/**
+ * Tables with a truncate-blocking trigger whose rows legitimately change state, so the app role keeps UPDATE (never DELETE or TRUNCATE). The row's own
+ * trigger is what limits WHICH changes are legal. Keep this list to the minimum: today only payroll approvals (PENDING -> APPROVED -> CONSUMED).
+ */
+export const UPDATABLE_APPEND_ONLY_TABLES: readonly string[] = ["payroll_approvals"];
+
 export async function appendOnlyTables(db: SqlClient): Promise<string[]> {
   const rows = await db.$queryRawUnsafe<Array<{ relname: string }>>(
     `SELECT DISTINCT c.relname FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -56,7 +62,10 @@ export async function ensureDatabaseRoles(db: SqlClient, opts: { appRole: string
   await db.$executeRawUnsafe(`ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO ${role}`);
   // ...and the append-only ones lose their write privileges again at the end of that same migrate task.
   const appendOnly = await appendOnlyTables(db);
-  for (const table of appendOnly) await db.$executeRawUnsafe(`REVOKE UPDATE, DELETE, TRUNCATE ON ${ident(table)} FROM ${role}`);
+  for (const table of appendOnly) {
+    const keepsUpdate = UPDATABLE_APPEND_ONLY_TABLES.includes(table);
+    await db.$executeRawUnsafe(`REVOKE ${keepsUpdate ? "" : "UPDATE, "}DELETE, TRUNCATE ON ${ident(table)} FROM ${role}`);
+  }
   await db.$executeRawUnsafe(`REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON "_prisma_migrations" FROM ${role}`); // readable (admin:preflight), never writable
   return { appendOnly };
 }

@@ -3,6 +3,7 @@ import { env } from "../config/env";
 import { ensureAccessCatalog } from "../lib/accessCatalog";
 import { ensureDatabaseRoles } from "../lib/dbRoles";
 import { warnIfHistoryNeedsRepair } from "../lib/historyRepairNotice";
+import { ensurePayrollRules } from "../modules/payroll/rules/governed";
 import { logger } from "../lib/logger";
 import { prisma } from "../lib/prisma";
 
@@ -26,6 +27,8 @@ export async function runMigrate(): Promise<void> {
   // A database that's never seeded (staging/production) still needs the
   // system roles and permission rows — additive only, never edits a role.
   await ensureAccessCatalog();
+  // The statutory figures payroll ships as Placeholders ("From memory, unverified"), additive and idempotent; company-specific rules ship empty.
+  await ensurePayrollRules();
   // Who may do what (lib/dbRoles.ts): the app role is created or refreshed, granted the data and denied every write to the append-only tables,
   // on every run, so a table a new migration made append-only is covered the same deploy. Required outside development.
   if (env.DB_APP_PASSWORD) {

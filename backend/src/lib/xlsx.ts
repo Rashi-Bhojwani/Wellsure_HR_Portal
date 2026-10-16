@@ -22,6 +22,8 @@ export interface XlsxSheet {
   totals?: Record<string, unknown>;
   // Italic lines after the table (filters used, "team only", caveats).
   footer?: string[];
+  // Bold red lines ABOVE the table, on every sheet that carries them (payroll's "TEST — placeholder rules" watermark), and a red tab.
+  banner?: string[];
 }
 
 const NUM_FMT: Partial<Record<XlsxColumnType, string>> = {
@@ -63,6 +65,14 @@ export async function buildXlsx(sheets: XlsxSheet[]): Promise<Buffer> {
     if (s.footer?.length) {
       sheet.addRow({});
       for (const line of s.footer) sheet.addRow([line]).font = { italic: true };
+    }
+    if (s.banner?.length) {
+      // Insert above the header (which moves down, keeping its bold), then style the banner lines.
+      sheet.spliceRows(1, 0, ...s.banner.map((line) => [line]));
+      s.banner.forEach((_, i) => {
+        sheet.getRow(i + 1).font = { bold: true, color: { argb: "FFC00000" }, size: 12 };
+      });
+      sheet.properties.tabColor = { argb: "FFC00000" };
     }
   }
   return Buffer.from(await workbook.xlsx.writeBuffer());
