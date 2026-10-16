@@ -17,7 +17,7 @@ import path from "node:path";
 //    state: the test database is dropped, recreated, migrated and seeded;
 //    the test Redis database is flushed; the test storage and mail folders
 //    are emptied.
-export default async function setup(): Promise<void> {
+export default async function setup(): Promise<() => Promise<void>> {
   const { env } = await import("./src/config/env");
   const started = Date.now();
 
@@ -25,6 +25,9 @@ export default async function setup(): Promise<void> {
   const testDbName = decodeURIComponent(testDbUrl.pathname.slice(1));
   const adminUrl = new URL(env.DATABASE_URL);
   adminUrl.pathname = "/postgres";
+  // Before anything is dropped: one run per test database and Redis database at a time (scripts/lib/testRunLock.ts). Held until teardown.
+  const { acquireTestRunLock } = await import("./scripts/lib/testRunLock");
+  const lock = await acquireTestRunLock(adminUrl.toString(), { database: testDbName, redis: `${new URL(env.REDIS_URL).host}${new URL(env.REDIS_URL).pathname}` });
   const { PrismaClient } = await import("@prisma/client");
   const admin = new PrismaClient({ datasourceUrl: adminUrl.toString() });
   try {
@@ -71,4 +74,8 @@ export default async function setup(): Promise<void> {
   run("the seed", ["prisma", "db", "seed"]);
 
   console.log(`Test services ready in ${((Date.now() - started) / 1000).toFixed(1)} s — Postgres "${testDbName}", Redis db ${new URL(env.REDIS_URL).pathname.slice(1)}, ${env.STORAGE_LOCAL_DIR}/, ${env.MAIL_DEV_DIR}/`);
+
+  return async () => {
+    await lock.release();
+  };
 }

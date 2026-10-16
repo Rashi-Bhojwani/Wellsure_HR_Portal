@@ -1,18 +1,498 @@
-# Phase 6 — Payroll (plan in progress)
+# Phase 6 — Payroll: plan
 
-The full Phase 6 plan is not written yet. It will be written, and shown to
-the user, before Phase 6 is built (CLAUDE.md: plans live in the repo). This
-file starts with the part that must exist first: the contract payroll
-builds on. It was written with effective dating EF4 (2026-10-08) so that no
-payroll code can be built on "current rows".
+**Status: written 2026-10-16 for your review. Nothing in it is built.** It follows the brief you gave on 2026-10-16 (commit A approved;
+Phase 1.5 commits B to F paused until after Phase 7; Phases 6 and 7 built and tested locally). Spec references: §5.2–5.3 (PL, ledger),
+§7.5 (payroll app), §9 (security), §11 (data model), §12 Phase 6 (maker-checker), §14 (open questions). The effective-dating contract
+(EF4) that payroll must obey is kept verbatim at the end of this file (Appendix A).
 
-Related, already decided:
-- **Maker-checker:** purpose-built for the payroll run and the bank
-  transfer file, never a general approval chain (spec §7.8, §12).
-- **Payroll and bank-file permissions are never manager-grantable**
-  (spec §2.2). A test fails if one ever becomes grantable.
+How to read it: §1 maps each of your principles to the mechanism that enforces it and the test that proves it. §2 is what already exists.
+§3 is the one design idea everything else hangs on (governed items: rules, structures and templates all carry Placeholder/Confirmed).
+§4–§10 are the design in the order a payroll month happens. §11 is screens, permissions and jobs; §12 the tables; §13 how it is proved; §14 the build split (six commits, a pause after each). §15 is **the
+rules I decided myself**. §16 is **what I need from you to turn Placeholders into Confirmed**. §17 is what stays unproven locally.
 
-## Effective-dating contract (EF4)
+---
+
+## 0. In one paragraph
+
+Payroll reads **finalised attendance** and **effective-dated history** (placement, name, bank, and now salary), through the readers only,
+and computes every rupee as an exact decimal. Every number that comes from a rule (PF and ESI rates and ceilings, PT slabs, the pay-days
+basis, rounding, the encashment formula, a salary structure's formulas, the bank file layout) lives in an admin-editable record that says
+**Placeholder** or **Confirmed**, who confirmed it and when; a run remembers exactly which rules (and which version of each) it used. A run
+made on Placeholders is a **draft**: it works, and every screen, export and payslip preview says "TEST — placeholder rules"; but it cannot be
+approved, finalised, published or turned into a bank file. A small maker-checker core (a different checker, an approval bound to a hash of
+the exact figures, voided by any change) guards the six actions you named. Every risky action shows a full preview first and then asks for
+an explicit confirmation. Nothing in this phase talks to a bank or moves a rupee: the bank file is a file for HR to upload.
+
+---
+
+## 1. Your principles, and where each one is enforced
+
+| Your principle | Mechanism | Proved by |
+|---|---|---|
+| **Everything configurable, nothing hardcoded; every rule an admin-editable setting at a clearly marked placeholder value, recording Placeholder or Confirmed, who confirmed, and when** | One catalog of rules (`shared/constants/payrollRules.ts`: key, label, what it affects, who should confirm it, the Zod shape of its value, its placeholder value). Values live in versioned records (§3). The calculator can only read a rule through `ctx.rule(key)`, which records the read | A test fails if any payroll code holds a rate, ceiling, slab, divisor, rounding scale or percentage as a literal: a source scan over `modules/payroll` (allowed literals: 0, 1, 2, 12 months, 100 for percent conversion, listed explicitly). A test that every catalog rule has a placeholder, a label and an owner |
+| **A run cannot be finalised, approved, published, or turned into a bank file while any rule it used is still a Placeholder. Draft runs on placeholders are allowed, watermarked "TEST — placeholder rules" on screen, in exports and on payslip previews** | Each run pins `(rule key, version)` for every rule it actually read. `assertRunHasNoPlaceholders(run)` is the first line of submit, approve, finalise, publish-request, publish, bank-file-request and generate. One `watermarkFor(run)` feeds the screen banner, the Excel writer (a banner row and a sheet-name prefix on every sheet) and the payslip PDF (a diagonal mark and a header line) | A gate test per action (six); a test per output channel that a draft's screen payload, workbook and PDF carry the mark and a confirmed run's carry none; a test that a rule *not read* by the run (PF disabled for everyone) does not block it |
+| **Every important or risky action shows a full preview (figures, who is affected, difference from last month), then explicit confirmation** | One shape for all of them: `…/preview` returns the figures, the people affected, the difference from the last comparable run, and a **fingerprint** of exactly that; `…/confirm` must carry the fingerprint and recomputes it, so what is confirmed is what was shown (the pattern of bulk regularization and flagged-punch accept) | A test per action that confirm without a preview, or with a stale fingerprint, is refused, and that nothing changes on a refused confirm |
+| **Maker-checker (different checker; approval bound to the exact figures; voided if anything changes) on: approving a run, publishing payslips, generating the bank file, finalising or unlocking a payroll period, changing a Confirmed rule** | One small core, `payroll_approvals` (§6), used by exactly these six subjects. The checker is never the maker, nor anyone who changed the figures since submission. The approval stores the hash it approved; the consuming action re-computes the live hash and refuses on a mismatch | For every subject: same person refused; a person who edited the figures refused; approve then change one input of each class (an adjustment, a salary row, a rule value, an attendance day, a bank account, a component amount) and the approval is void, the consuming action refuses, and the run is back to Draft |
+| **Changing a Confirmed rule resets it to unconfirmed until re-approved; every change audited with before and after** | A rule edit never mutates a version; it appends a new version, which has no confirmation. "Confirmed" is a fact about one version: a row in `payroll_item_confirmations` made by someone other than the version's author | Edit a Confirmed rule: it reads Placeholder (edited), the last Confirmed version is still shown beside it, any run that pinned the old version stays valid and any run on the new one is a draft; the audit row has before and after |
+| **Nothing moves money. The bank file is for HR to upload to the bank's own portal** | No bank API client, SDK or credential exists in the codebase; the file is built, stored, approved, downloaded and marked paid by a person | A scan test fails if `modules/payroll` imports an HTTP client or a bank SDK; the batch has no state that means "sent" |
+| **Payroll reads history only through the effective-dating readers; money is exact decimals throughout** | See Appendix A. Salary joins the same writer rules (append-only, DB overlap constraint). Money is `Prisma.Decimal` (decimal.js) until rendering; hashes are over canonical decimal strings | `currentRowGuard` extended to `employeeSalary`; a scan test fails on `Number(`, `parseFloat`, `toNumber(` or a float literal in money paths of `modules/payroll`; property tests that every line sums to its total exactly |
+| **Housekeeping 1: two test runs cannot share a database** | Done in this turn: a Postgres advisory lock held by global setup (`scripts/lib/testRunLock.ts`) | `lib/__tests__/testRunLock.test.ts`, and a real second `vitest` process refused while the first ran unharmed |
+| **Housekeeping 2: a running list of everything that assumes a local environment** | `docs/plans/LOCAL_ASSUMPTIONS.md`, a row added in the same commit as the code | Reviewed at each commit's close-out |
+
+---
+
+## 2. What already exists and payroll sits on
+
+- **Finalised attendance.** `daily_attendance` has, per employee-day, `status`, `lopDays` (Decimal, from the engine: unpaid leave, absence,
+  half-day-minimum-not-met) and `isLocked`. `attendance_period_locks` (append-only) records FINALISE/UNLOCK of an attendance cycle; the cycle
+  rule (calendar month today) is `attendanceCycle`. Payroll reads only a cycle in which **every** day is locked, and refuses (with a list of who
+  and why) otherwise. Attendance unlock already takes a `confirmPayrollConsumed` flag that today always answers "no": Phase 6 makes it real.
+- **The payroll lock hook.** `setPayrollLockCheck` / `assertNotInLockedPayroll` is called by every history writer (job, name, bank, assignment,
+  device mapping, separation) and pinned by `payrollContract.test.ts`. Phase 6 registers the real check: a day inside a payroll period that is
+  finalised refuses changes (`PAYROLL_LOCKED`).
+- **The readers.** `placementOn / placementSegments`, `nameOn`, `bankAccountOn`, `employedOn`, plus the `changeTimeline` writer family (and
+  `writeAssignmentChange`, the precedent for adding a new history kind). Salary becomes the fifth kind.
+- **Leave.** The append-only `leave_ledger`; Year End Process (preview, approve, commit) produces `year_end_run_items` with `encashedDays`,
+  `dailyRate`, `rateSource`, `encashedAmount`; the `EncashmentRateProvider` seam is waiting for a salary-based implementation (today a flat
+  setting, flagged "not final").
+- **Permissions.** `PAYROLL_ADMIN` exists with a read-only set; `APPROVER` exists for leave. No `payroll.*` key exists yet. A test already fails
+  if any `payroll.*`, `bank.*`, `salary.*`, `employee.salary.*` or `documents.pay.*` key becomes manager-grantable.
+- **Shared infrastructure.** `writeAuditLog(s)` with redaction; `StorageService`; `buildXlsx`; `renderPdf` (Chromium) used by letters;
+  `notifyEmployee` and the realtime rooms; BullMQ queues and workers; the preview-then-fingerprint pattern; schema-driven test cleanup;
+  the route inventory; the append-only trigger and test-purge exception pattern; `Company` (PAN, TAN, CIN, address); `Location.state` and `City.state`.
+- **Frontend.** The admin menu already has Payroll placeholders ("Salary Components", "Salary Structures", "Employee Salaries", "Payroll Run",
+  all marked Phase 6) and the employee portal has a Salary group marked "coming soon".
+
+---
+
+## 3. The idea everything hangs on: governed items
+
+A rule, a salary component, a salary structure, a bank file layout and a statutory output layout are all the same kind of thing:
+**something HR can edit that changes what money comes out, and that somebody accountable must vouch for.** So they share one mechanism:
+
+- A **governed item** has a `kind` (`RULE`, `COMPONENT`, `STRUCTURE`, `BANK_TEMPLATE`, `OUTPUT_TEMPLATE`) and a `key`.
+- Its value lives in an **append-only version** (`payroll_item_versions`: kind, key, version, value JSON, hash of the canonical value, note,
+  author, time). Editing never changes a version; it appends the next one.
+- A version is **Confirmed** if and only if a row exists in the append-only `payroll_item_confirmations` for that exact version and value hash,
+  made by a **different person from the version's author** (the maker-checker for "changing a Confirmed rule"), who must hold
+  `payroll.rules.confirm`. The row records who and when, and a note (for example "per CA letter dated …", "per bank sample file").
+  Otherwise it is **Placeholder**, which is also the state of every shipped default.
+- The **current version** of an item is its highest. If the current version is unconfirmed but an earlier one was Confirmed, the screen shows both
+  ("Placeholder, edited 12 Nov by A; last Confirmed value was X, confirmed by B on 3 Nov"). Nothing silently falls back to the old value.
+- A **run pins** the `(kind, key, version)` it actually read, through `ctx.rule(key)` and friends (the read itself records the pin, so a rule cannot
+  be used without being pinned). `placeholderKeys(run)` is the pinned set whose version has no confirmation. The status shown for a run is always
+  read live from the confirmations table, so confirming a rule with the same value turns a draft's placeholder into a confirmed one without a recalculation;
+  editing the rule means the pinned version is no longer current, which marks the run **stale** (must be recalculated before it can be submitted).
+- Confirmation is for a **value**, not a person: it records the value hash it vouches for, and the Confirm screen shows the value being vouched for.
+
+This is why one change covers principles 1, 2 and 5 at once, and why "a Placeholder slipping into a real run" has exactly one place to be caught.
+
+### 3.1 The rules catalog (placeholders)
+
+Every rule below is editable by Payroll Admin (`payroll.rules.manage`) and starts as a **Placeholder**. Values marked ◆ are figures I recall
+from general knowledge of Indian payroll practice; they are shipped only so a test run has something realistic to compute, are **not verified,
+and are not treated as true until your CA confirms them** (several of them change by government notification). Values marked ○ are deliberately empty or neutral
+because they are open questions in spec §14 and I will not guess them.
+
+| Group | Rule key | Placeholder value | Open question it belongs to / who confirms |
+|---|---|---|---|
+| Period and days | `PAY_DAYS_BASIS` | CALENDAR_DAYS (alternatives: FIXED_DAYS, WORKING_DAYS) | HR + CA: how a month's pay is divided |
+| | `FIXED_DAYS_VALUE` | 30 | used only if FIXED_DAYS |
+| | `LOP_DIVISOR` | same as pay-days basis | HR + CA: LOP per day = monthly ÷ this |
+| | `PAYMENT_DATE_RULE` | next month, day 1 ○ | HR: decides which bank account is in force (`bankAccountOn(payment date)`) |
+| | `LEAVER_PAYMENT_TIMING` | PAY_WITH_RUN (alternative: HOLD_FOR_FNF) ○ | HR: final settlement is Phase 7 |
+| | `NEGATIVE_NET_POLICY` | BLOCK | HR |
+| Rounding | `LINE_ROUNDING` | HALF_UP to 0 decimals (whole rupees) ◆ | CA |
+| | `PF_ROUNDING` | HALF_UP to whole rupees ◆ | CA |
+| | `ESI_ROUNDING` | UP (ceiling) to whole rupees ◆ | CA |
+| | `NET_PAY_ROUNDING` | none (net is the sum of rounded lines) | HR |
+| Provident Fund | `PF_EMPLOYEE_RATE` | 12% ◆ | CA |
+| | `PF_EPS_RATE`, `PF_EPF_ER_RATE` | 8.33% and 3.67% of the employer 12% ◆ | CA |
+| | `PF_EDLI_RATE`, `PF_ADMIN_RATE` | 0.5% and 0.5% ◆ | CA |
+| | `PF_WAGE_CEILING` | ₹15,000 ◆ | CA |
+| | `PF_CEILING_MODE` | CAP_AT_CEILING (alternative: ACTUAL_WAGE) ○ | company policy |
+| Employees' State Insurance | `ESI_EMPLOYEE_RATE`, `ESI_EMPLOYER_RATE` | 0.75% and 3.25% ◆ | CA |
+| | `ESI_WAGE_CEILING` | ₹21,000 gross ◆ | CA |
+| | `ESI_PERIOD_RULE` | MONTHLY (alternative: STICKY_HALF_YEAR) ○ | CA |
+| Who is covered | `PF_ELIGIBLE_TYPES`, `ESI_ELIGIBLE_TYPES` | every employment type ○ | CA + HR: permanent, contract, interns |
+| Professional Tax | `PT_STATE_OF_PLACEMENT` | state of the branch the person was placed in on the last day of the period ○ | CA (spec §14) |
+| | `PT_SLABS` | **empty: no states configured, so PT is ₹0 and the rule says so** ○ | CA: which states, slabs, February exception |
+| | `STATE_NAME_MAP` | maps the free-text `Location.state` to a canonical state key ○ | HR: the branch list |
+| Labour Welfare Fund | `LWF_TABLE` | empty ○ | CA (spec §14) |
+| Tax | `TDS_MODE` | NONE until Phase 7 supplies the projection; lines show ₹0 with a notice ○ | CA (Phase 7) |
+| Leave encashment | `ENCASH_DAILY_RATE_FORMULA` | `BASIC / 30` (spec §5.2 default) ○ | CA (spec §14) |
+| | `ENCASH_TAXABLE`, `ENCASH_PF_APPLICABLE` | taxable yes; PF no ○ | CA |
+| | `ENCASH_PAYOUT_RULE` | the first run after the year end is committed ○ | HR |
+| Arrears | `ARREARS_PAYOUT` | SEPARATE_LINE_IN_NEXT_RUN ○ | HR + CA |
+| | `ARREARS_PF_ESI` | FOLLOW_COMPONENT_FLAGS ○ | CA |
+| Variance | `VARIANCE_FLAG_PERCENT`, `VARIANCE_FLAG_MIN_AMOUNT` | 10% and ₹1,000 | HR (only decides what the preview highlights) |
+| Payslip | `PAYSLIP_LAYOUT` | company header from `Company`; show employer contributions off; net pay in words, Indian numbering | HR |
+| Company identifiers | `PF_ESTABLISHMENT_CODE`, `ESI_EMPLOYER_CODE`, `PT_REGISTRATION`, `LWF_REGISTRATION` | empty ○ | HR (needed only by the outputs that print them) |
+| Bank | `BANK_TEMPLATE` (a governed item of its own) | a generic CSV layout ○ | the bank's format (spec §14) |
+| | `BANK_DEBIT_ACCOUNT` | empty; stored encrypted (it is a bank account) ○ | HR |
+| | `PAYMENT_MODE_THRESHOLDS` | NEFT/IMPS/RTGS by amount, placeholder ○ | bank |
+| Outputs | `ECR_TEMPLATE`, `ESI_RETURN_TEMPLATE`, `PT_STATEMENT_TEMPLATE`, `LWF_STATEMENT_TEMPLATE`, `SALARY_REGISTER_TEMPLATE` | each a governed `OUTPUT_TEMPLATE` ○ | CA / portal format |
+
+**Not rules, and deliberately not configurable:** the maker-checker invariants (checker differs from maker; approval bound to a hash; voided by any
+change), the rule that a Placeholder blocks a real run, append-only history, and exact decimal arithmetic. Making a safety property a setting would
+let the setting be changed by the person it constrains. They are code and tests.
+
+---
+
+## 4. Salary: components, structures, and each person's salary
+
+**Components and structures are governed items (§3), so they carry Placeholder/Confirmed too.**
+- A **component** (`COMPONENT`, key = its code, e.g. `BASIC`, `HRA`): name, kind (`EARNING`, `DEDUCTION`, `EMPLOYER_CONTRIBUTION`), how its monthly amount is
+  worked out (`FIXED` per person, `PERCENT_OF` another component or of CTC, or a `FORMULA`), whether it is **taxable**, **PF-applicable**,
+  **ESI-applicable**, whether it **pro-rates with paid days**, its payslip order and label. Nothing about PF, ESI or tax is inferred from a component's
+  name: the flags say so.
+- A **structure** (`STRUCTURE`): an ordered list of components (each pinned to a component version) and how CTC splits across them (spec's example:
+  Basic = 40% of CTC). Structure formulas use a small expression language I write and test myself (numbers, component codes, `+ - * /`, parentheses,
+  `MIN`, `MAX`, `ROUND`); it is parsed, never `eval`'d, and evaluated in exact decimals. It can reference only components and `CTC`. A structure whose
+  components do not sum to CTC is refused at save, with the difference shown.
+- Statutory lines (employee and employer PF, ESI, PT, LWF, TDS) are **not** components: they are produced by the calculator from rules, under reserved codes.
+
+**Each person's salary is effective-dated, in the same family as job, name, bank and attendance assignment.** `employee_salaries`: employee, half-open
+`[effective_from, effective_to)`, structure key and version, annual CTC, per-person fixed amounts, the **frozen monthly breakup** (every component, exact
+decimals, computed once at save and never recomputed), reason (`JOINING`, `REVISION`, `CORRECTION`), author. The database enforces what it enforces for the
+others: a CHECK that a row does not end before it starts, an EXCLUDE constraint against overlap (per employee), append-only at the end of the timeline,
+written only through `writeSalaryChange` (a new `HistoryKind`). The readers: `salaryOn(employeeId, day)` and `salarySegments(employeeId, from, to)`. The
+current-row guard test is extended so payroll cannot read `employeeSalary` any other way.
+
+Freezing the breakup is deliberate. A run that recalculated salary from today's structure would change a past month when the structure is edited; instead a
+structure edit creates a new version, and people move to it by a **revision** (below), with a preview and an effective date.
+
+**A revision** (`payroll.salary.edit`): choose people (one, a branch, a grade, or everyone on a structure version), the new CTC or the new structure version, and an
+effective date. The **preview** shows, per person, the old and new monthly breakup, the difference, the first month affected, and, if the date is on or before a
+month that is already finalised, the **arrears** per month. The confirmation writes the salary rows and, for arrears, creates pending adjustments (§5.4); one
+audit row per person, with the amounts in the payroll tables and only references in `audit_logs` (§15 item 14).
+
+A revision dated inside a finalised payroll period would be refused by the payroll lock like any history change. Arrears are the sanctioned route: the salary timeline
+records the true effective date, the lock check is bypassed *only by the arrears flow* (a single named function, tested), and the money owed is not rewritten in the
+closed month but paid as a separate adjustment line in the next run.
+
+**Self-guard:** nobody can edit their own salary, adjustments or bank account in payroll (Super Admin included), as nobody corrects their own attendance.
+
+**Offer letters** (spec §12: "revisit offer letters here"): the letter template can draw CTC and the monthly breakup from `salaryOn(joining date)` instead of being typed. HR-only, as
+letters carrying pay already are.
+
+**Import.** Spec §10 item 7: Import Center datasets for salary structures and for opening salary rows / YTD figures. The row shapes are designed here and built in
+commit P6-2/6; the real files wait for the greytHR samples (as the converter did in Phase 1.5), so nothing assumes greytHR's columns.
+
+---
+
+## 5. The calculation
+
+### 5.1 Inputs to a run, and the readiness check
+
+A run is for **one attendance cycle** (the calendar month today: `attendanceCycle`). Starting one first shows **readiness**, the way the Finalisation screen does:
+
+- Attendance: every employee employed on any day of the cycle has all their days locked (the cycle is finalised). Otherwise a list: who, which days, why.
+- Salary: everyone employed has a salary row covering their employed days (a gap is listed; they are excluded from payment, never paid zero silently).
+- Bank: everyone to be paid has a valid account on the payment date (`bankAccountOn`), otherwise they are **HELD** with the reason, visible in the preview.
+- Rules: which governed items the run would use, and which of them are Placeholder (so the person starting it sees up front that it will be a TEST run).
+- Pending adjustments, year-end encashments awaiting payout, and unresolved items from the last run.
+
+Employment is `employedOn(day)`, never `status`. A joiner is paid from their date of joining; a leaver **through** their last working day (EF4).
+
+### 5.2 Per employee, in this order
+
+1. **Days.** Over the employed part of the cycle: payable days by `PAY_DAYS_BASIS`; LOP days = the sum of the locked days' `lopDays` (exact decimals);
+   paid days = payable days minus LOP days.
+2. **Salary segments.** `salarySegments(employee, from, to)`: a revision on the 16th gives two segments. Each earning component's month amount is prorated by the
+   segment's share of paid days, using the LOP days that fall *inside* that segment (the daily rows are dated, so this is exact, not averaged).
+3. **Placement.** `placementSegments`: cost centre, grade, department for the payslip and the register; the state for PT and LWF by `PT_STATE_OF_PLACEMENT`.
+4. **Earnings** = component lines, rounded by `LINE_ROUNDING`, plus adjustment lines (§5.4) and any year-end encashment (§5.5).
+5. **Statutory.** PF on the sum of PF-applicable earnings (capped per `PF_CEILING_MODE`), employee and the employer split; ESI on ESI-applicable gross if
+   under the ceiling, employee and employer, rounded per `ESI_ROUNDING`; PT from the slab for the state and the month; LWF from its table; TDS from the
+   Phase 7 provider (₹0 plus a notice until then). **Every rate and ceiling is read with `ctx.rule(...)`.**
+6. **Other deductions**: adjustments of kind deduction; loan EMIs and reimbursement credits come from provider seams that Phase 7 fills (empty now).
+7. **Net** = earnings − deductions. A negative net is handled by `NEGATIVE_NET_POLICY` (BLOCK: listed as an exception that must be resolved before submit).
+8. **Item hash**: a canonical-JSON SHA-256 of every line, every input id used and the pinned rule versions, so the run hash (§6) is built from per-person hashes.
+
+Every line stores `basis`: the inputs, the formula text, the rule keys and versions, and the days used. "Why is this ₹4,617?" is answerable on screen and in
+the register without re-running anything.
+
+### 5.3 Exact money
+
+- `Prisma.Decimal` everywhere (decimal.js: arbitrary precision). Columns are `Decimal(14,2)` for final amounts and `Decimal(18,6)` for stored intermediates. Rounding happens
+  only at the points the rules name, with the rule's mode and scale.
+- Canonical decimal strings (fixed scale, no exponent) for hashing and for every export; amounts are never `Number`, never a JSON number in storage (decimals are strings in JSON).
+- Property tests: for random salaries, joiners, leavers, LOP and revisions, every run's total equals the exact sum of its lines, and a shadow calculation written independently
+  in rational arithmetic agrees to the paisa.
+
+### 5.4 Adjustments
+
+`payroll_adjustments`: one-off earnings or deductions HR adds before a run (a bonus, a recovery, an arrears line from a revision, an imported correction), each with a
+component code, amount, reason, source and source reference (**unique** per source, so the same encashment or arrears cannot be added twice), and a status
+(`PENDING`, `CONSUMED` by a run, `CANCELLED`). Adding or changing one is previewed. They are part of the run hash, so editing one after approval voids the approval.
+
+### 5.5 Leave encashment
+
+Year End Process already produces committed `year_end_run_items` (days, rate, amount). Phase 6:
+- supplies the **salary-based `EncashmentRateProvider`** the seam is waiting for (formula from `ENCASH_DAILY_RATE_FORMULA`, over the person's `salaryOn(year-end)` breakup),
+  with `rateSource` recorded and `isFinal` true only if the rule is Confirmed (the Year End screen already flags a non-final rate);
+- makes a **committed item reach payroll exactly once**: the run that includes it creates a line with `source = YEAR_END_ENCASHMENT`, `sourceRef = item id` (unique), taxable
+  and PF-applicable per the encashment rules. The amount is the one committed at year end; payroll does not recompute it;
+- leaves tax treatment (an open CA question) to the rule, and to Phase 7.
+
+### 5.6 Running it
+
+Calculation is a BullMQ job (`payroll-calculate`) that works in chunks of employees, is **idempotent per employee** (an upsert keyed by run and employee), reports progress, can
+be resumed after a worker restart, and takes a lease on the run so two calculations cannot overlap. A recalculation replaces a Draft/Calculated run's items and records
+what changed; after submission it first voids the approval (with a preview that says so).
+
+### 5.7 The variance preview ("difference from last month")
+
+Against the previous finalised regular run: per employee, the change in gross, deductions and net, with the **reason tags** it can know (joined, left, salary revised, LOP
+changed, adjustment added, encashment, statutory change), flags above `VARIANCE_FLAG_PERCENT` / `…_MIN_AMOUNT`, joiners and leavers, people with no salary or held, and the
+change in totals. This is the same block shown in the submit, approve, finalise, publish and bank-file previews.
+
+---
+
+## 6. Maker-checker: one small core
+
+Six subjects, nothing else, nothing configurable about the invariants:
+
+| Subject | Maker acts | Checker decides | What the hash covers | Consumed by |
+|---|---|---|---|---|
+| `RUN_APPROVAL` | submit the calculated run | approve or reject (reason) | every item hash, the totals, the pinned rule and structure versions, the adjustments, the salary rows used, the attendance fingerprint (days, LOP) | finalise |
+| `PERIOD_FINALISE` | request to finalise the period | approve | the approved run's hash and the period | the lock |
+| `PAYSLIP_PUBLISH` | request to publish | approve | every payslip's content hash | publish |
+| `BANK_FILE` | request the bank file | approve | the file rows (employee, bank row id and its account hash, IFSC, amount, narration), the template version | generate |
+| `PERIOD_UNLOCK` | request, with a reason | approve (and the unlock itself is Super Admin only) | the period, the reason | the unlock |
+| `RULE_CONFIRM` | (the rule's author is the maker) | a different person confirms | the rule's value hash | marks the version Confirmed (§3) |
+
+Enforced in the service and tested, for each subject:
+1. **Different people.** The checker is not the maker and not anyone recorded in `payroll_run_events` as having changed the run's figures since submission (recalculated,
+   edited an adjustment, changed a salary row used by it). Permissions: maker `payroll.run`, checker `payroll.approve`; neither is manager-grantable.
+2. **Bound to the figures.** Submitting stores the hash. Approving stores the hash the checker saw. The checker's screen shows the same preview the maker confirmed.
+3. **Voided by change.** Any change that alters the live hash voids the approval at once (the mutation services void inside their own transaction, so the state shown is true) and the
+   run returns to Calculated. The consuming step also recomputes the live hash and refuses on a mismatch, as a second line of defence for anything the first misses.
+4. **Locked once approved.** An approved run cannot be recalculated or edited; reopening is an explicit, audited, previewed action that voids the approval.
+5. **Recorded.** Submit, approve, reject, void, reopen and consume are in `payroll_run_events` and in the append-only audit log, with the hash.
+6. **Rejected means a reason and a new submission.** A rejected run goes back to Calculated; the reason is shown to the maker.
+
+Approvals do not expire in this phase (a rule can add that later if you want it; see §15).
+
+---
+
+## 7. Preview, then explicit confirmation, for everything risky
+
+Previews are never state: they are computed, shown, and fingerprinted. The confirm call recomputes and must match, or it is refused with "this changed since you looked".
+The list, each with the preview contents it shows beyond the common block (figures, who is affected, difference from last month):
+
+| Action | Preview additionally shows |
+|---|---|
+| Edit or confirm a rule, component, structure or template | the old and new value side by side; every run and every person it would change, in rupees, computed by a dry run against the latest calculated run |
+| Salary revision / bulk revision | per-person old and new breakup; arrears per month |
+| Add or import adjustments | every row, who, amount, which run will pay it |
+| Calculate / recalculate | what changed since the last calculation; whether it will void an approval |
+| Submit for approval | the readiness result, the placeholder list (blocks), exceptions, variance |
+| Approve / reject | the same, as the checker sees it |
+| Finalise the period | the approved hash, the dates it will lock, the history changes it will then refuse |
+| Request and approve publish | the payslip count, a sample set, the people who will be notified |
+| Request and approve the bank file | every row (masked), totals, held people and why, the template and the debit account (masked) |
+| Unlock a period | what unlocking allows, what the attendance and history locks do next |
+| Mark a bank batch paid | the batch, the reference you typed |
+
+---
+
+## 8. Locking: payroll periods and the lock hook
+
+- `payroll_period_locks` (append-only, the same shape as attendance's): FINALISE and UNLOCK events for a cycle. A cycle is locked if its latest event is FINALISE.
+- Phase 6 calls `setPayrollLockCheck` with the real check: any history change, cancellation or separation dated inside a locked period is refused (`PAYROLL_LOCKED`), exactly
+  as the EF4 tests already pin. The tests in `payrollContract.test.ts` that assert "lock refuses" are re-run against the real check.
+- Attendance unlock's `confirmPayrollConsumed` stops answering "no": a cycle whose payroll run is submitted or beyond answers yes, and the existing warning dialog appears. Any
+  attendance change that follows (unlock, reprocess, finalise again) changes the attendance fingerprint and so voids the run's approval.
+- **Unlock rules (mine, §15):** a payroll period can be unlocked (maker-checker, Super Admin, reason) until payslips are published or a bank file is generated. After either, it cannot
+  be unlocked: corrections go through adjustments in the next run, or an off-cycle run. Once money has been released against a file, rewriting the month under it is the worst thing the
+  system could allow.
+- Finalising requires: an approved, hash-valid regular run, no Placeholder, attendance cycle finalised.
+
+---
+
+## 9. Payslips
+
+- `payslips`: one per run item at publish; immutable content (JSON of lines, name as of the period end via `nameOn`, masked bank and statutory identifiers, YTD placeholder until Phase 7),
+  its content hash, the stored PDF key, `publishedAt`. No update path exists; the table is append-only with the usual trigger.
+- The PDF is rendered from HTML by the existing Chromium renderer, in the **worker in bounded batches**, stored through `StorageService`, and downloaded with a short-lived signed
+  URL. A draft preview carries the watermark; a published payslip never does (it cannot exist on Placeholders).
+- Publishing = maker requests, checker approves, then the worker renders and stores everything, then marks `publishedAt` and notifies each employee in real time and by email. The email
+  carries **no figure**: only "your payslip for October is ready" and a link. Emails are paced (the same SES pacing the invitations will use).
+- Employees see **only their own** payslips (SELF scope, IDOR-tested); HR with `payroll.payslip.view` sees any. A manager sees none.
+- Net pay in words uses the Indian lakh/crore convention, tested on awkward values (₹1,00,000, ₹99,999.50, paise).
+- Reimbursement payslips and the IT statement are Phase 7.
+
+---
+
+## 10. The bank file, and the statutory outputs
+
+- `BANK_TEMPLATE` is a governed item: format (CSV, XLSX or fixed width), columns in order (each a source field, a constant or a pattern), header and trailer rows, delimiter, date and
+  amount formats, field widths and padding, narration pattern. It is **Placeholder** until you give me the bank's own specification or a sample file; a batch built on a Placeholder
+  template cannot be generated (the gate), and a test file cannot exist as a file at all (there is no "test file" for a bank: the preview on screen shows the rows).
+- A **batch** is built from a finalised, approved run: one row per PAYABLE person with the account that `bankAccountOn(payment date)` returns, decrypted only inside generation (one audit row
+  per person revealed, in one batch insert), then the file is stored through `StorageService`, its SHA-256 recorded, and the batch locked. HR downloads it (every download audited), uploads it
+  to the bank's own portal, and later **marks the batch paid** with the bank's reference. There is no state meaning "sent": the app never talks to a bank. HR can also attach the bank's
+  response file; it is stored, not parsed, until the format is known.
+- **Held people** (no valid account, negative net, leaver with `HOLD_FOR_FNF`, ₹0 net) are listed in the preview with the reason and are excluded from the file explicitly, never silently.
+- Statutory outputs from a finalised run, each from a governed `OUTPUT_TEMPLATE`: the **PF ECR** text file, the **ESI contribution** workbook, **PT** and **LWF** statements, the
+  **salary register**, the **variance report**. Each is Placeholder until its layout is confirmed against the portal's current format (I will say plainly that I cannot check a government
+  portal from here) and carries the TEST watermark while it is.
+
+---
+
+## 11. Screens, permissions, jobs, realtime
+
+**Permissions (new keys, none manager-grantable; the existing test is extended to prove it):** `payroll.rules.view`, `payroll.rules.manage`, `payroll.rules.confirm`,
+`payroll.salary.view`, `payroll.salary.edit`, `payroll.adjust`, `payroll.run` (maker), `payroll.approve` (checker), `payroll.unlock` (meta, Super Admin only), `payroll.payslip.view`,
+`payroll.bank.view`, `payroll.audit.view`, `reports.salary.view`. Defaults: `PAYROLL_ADMIN` gets the maker set; `APPROVER` gets the checker set (and `payroll.rules.confirm`);
+`HR_ADMIN` gets view and salary edit but **not** run/approve; `HR_EXECUTIVE` gets nothing (they never see salary or bank data); an owner who is the only possible checker is a real
+case for a small company and is covered in §16.
+
+**Admin app (Payroll):** Rules and setup (rules, components, structures, templates; Placeholder/Confirmed badges, history, the confirm dialog); Employee Salaries (timeline, revision with preview);
+Adjustments; Payroll Run (a stepper: readiness, calculate, review, submit, approve, finalise, payslips, bank file, paid); Approvals inbox (the checker's list); Statutory outputs;
+Salary register and variance; Payroll audit trail. Every screen that touches a draft shows the **TEST — placeholder rules** banner with the list of rules and one click to the rule.
+**Employee portal (Salary):** Payslips (month picker, view, PDF, net in words), Salary revision history. Responsive at phone width (definition of done).
+
+**Jobs:** `payroll-calculate`, `payroll-payslips` (render and store in batches, resumable, idempotent per payslip), `payroll-notify` (paced). The scheduler stays a single instance; none of these needs it.
+**Realtime:** a pending approval reaches the checkers' room at once; a published payslip reaches `user:{id}`; run progress reaches the maker.
+**Audit:** every state change in `payroll_run_events` (append-only, with the actor and hash) and in `audit_logs` (redacted; §15 item 14).
+
+---
+
+## 12. Data model (new tables; every one gets the usual cleanup classification, route inventory entries and, where it is history, a trigger)
+
+| Table | Holds | Notes |
+|---|---|---|
+| `payroll_item_versions` | every version of every governed item (kind, key, version, value JSON, value hash, note, author, time) | append-only (trigger, test-purge exception only in a seeded database) |
+| `payroll_item_confirmations` | who vouched for which version and value hash, when, with what note | append-only; author of the version cannot be the confirmer (checked in the service and by a CHECK-style trigger) |
+| `employee_salaries` | effective-dated salary: structure and version, CTC, frozen monthly breakup | half-open, EXCLUDE overlap, CHECK, written only by `writeSalaryChange`; in the current-row guard |
+| `payroll_adjustments` | one-off earnings, deductions, arrears, encashment lines | unique `(source, source_ref)` |
+| `payroll_runs` | a run: kind (REGULAR / OFF_CYCLE), cycle, status, version counter, totals, pinned rules, run hash, lease | one non-void REGULAR run per cycle (partial unique index) |
+| `payroll_run_items`, `payroll_run_lines` | per person and per component, with `basis` and item hash | replaced only by recalculation of an unapproved run |
+| `payroll_run_events` | every state change with actor and hash | append-only |
+| `payroll_approvals` | the maker-checker core (subject, subject id, hash, maker, checker, decision, reason, voided) | append-only decisions; a partial unique index allows one live approval per subject |
+| `payroll_period_locks` | FINALISE / UNLOCK events for a cycle | append-only |
+| `payslips` | immutable published payslips | append-only |
+| `bank_transfer_batches`, `bank_transfer_rows` | the batch, its rows, file key and hash, paid mark | rows append-only after generation |
+| `statutory_outputs` | generated PF/ESI/PT/LWF/register files | |
+
+No salary figure is stored in `audit_logs` (§15 item 14). No table stores an account number in the clear; the bank file is the only place it is decrypted.
+
+---
+
+## 13. How it is proved (the test plan)
+
+- **Rules and governed items:** version append-only; confirmation by a different person only; edit resets; same-value confirmation promotes a draft without recalculation; stale-run detection; the
+  rule-literal source scan; catalog completeness (placeholder, label, owner, Zod shape for every rule); `ctx.rule` read-tracking (an unread rule is not pinned).
+- **Gates:** for each of submit, approve, finalise, publish, bank file request and generate: refused on any Placeholder, allowed when none; draft allowed and watermarked on screen payload,
+  workbook, and payslip PDF; no watermark on a confirmed run.
+- **Calculation (golden cases, hand-worked and checked in rational arithmetic):** full month; joiner mid-month; leaver on the last working day; LOP in the first and second half of a revision
+  segment; a revision on the 16th; a transfer on the 16th with the PT state decided per rule; PF below, at and above the ceiling; ESI just under and just over; PT slab edges including February; encashment
+  from a committed year-end item, paid once; arrears from a back-dated revision; negative net; held (no bank); ₹0 net; rounding at each named point.
+- **Exactness:** no `Number`/float in money paths (source scan); line sums equal totals to the paisa (property tests); hashes stable across runs of the same inputs and different for any single changed paisa.
+- **Maker-checker (per subject):** same person; a person who edited; reject then resubmit; approve then change one input of each class (adjustment, salary row, rule value, structure version, attendance day,
+  bank account, component amount, a pending adjustment cancelled) voids; a consuming step with a stale hash refuses; concurrent approve/void is safe (conditional updates).
+- **Previews:** confirm without preview, with a stale fingerprint, or after the data changed: refused and nothing changes; the preview of an action equals what the action then does.
+- **Effective dating (EF4):** the existing `payrollContract` tests re-run against the real lock; plus payroll-specific: bank change on the 10th with payment on the 25th, name on the payslip as of the period
+  end, placement segments, `employedOn` for joiners and leavers, the current-row guard on `employeeSalary`, `PAYROLL_LOCKED` for history dated inside a finalised period.
+- **Security:** every new route classified in the route inventory; none of the new keys manager-grantable; HR Executive and Manager see no salary anywhere; an employee sees only their own payslip (IDOR
+  tests on every payslip route and on the PDF URL); no payroll module imports an HTTP client or a bank SDK; account numbers are decrypted only in generation; audit rows carry before and after for every
+  rule change and no salary amounts.
+- **Operational:** calculation resumes after a killed worker; a second calculation cannot start; payslip rendering resumes; a 500-employee run measured (time, memory) on the replay harness.
+- **Mutation checks** on the new rules at each commit (a rule removed, a named test fails), as in Phases 3 and 1.5. **Live walkthrough** on a scratch database with a real browser before each UI commit closes.
+
+---
+
+## 14. How I would build it: six commits, pausing after each
+
+| Commit | Contents | Pauses for |
+|---|---|---|
+| **P6-1 Foundations** | payroll permissions (and the non-grantable test extended); governed items (versions, confirmations, catalog, `ctx.rule`, pins, placeholder detection, `watermarkFor`); the exact-decimal and rounding library; the formula engine; the maker-checker core with all six subjects' mechanics (generic) and its tests; the guard scans (literals, floats, history reads, bank SDKs); **Rules and setup** screen (rules with Placeholder/Confirmed, history, confirm dialog); `payroll_run_events`; LOCAL_ASSUMPTIONS rows | your review |
+| **P6-2 Salary** | components, structures, `employee_salaries` (migration, constraints, `writeSalaryChange`, `salaryOn`, `salarySegments`, guard extended), revisions with preview and arrears, adjustments, self-guards, Employee Salaries and Structures screens, offer-letter figures from salary, import dataset shapes | your review |
+| **P6-3 Calculation** | cycle readiness, the run model, `payroll-calculate` job, days/proration/segments, PF/ESI/PT/LWF, encashment provider and year-end reach-through, TDS/loan/reimbursement seams, variance preview, explainability, Payroll Run screens up to Review, the TEST banner and watermarked workbook | your review |
+| **P6-4 Approval and locking** | submit/approve/reject/void for runs, period finalise and unlock, the real payroll lock registered, attendance unlock integration, previews and fingerprints on every action, Approvals inbox, attendance-fingerprint hashing | your review |
+| **P6-5 Payslips and the bank file** | payslip generation, publish with maker-checker, PDF with watermark, notifications, employee Salary screens, bank templates and batches, the file, mark paid, statutory outputs and the salary register | your review |
+| **P6-6 Close-out** | the parallel-run comparison tool (**built only against your anonymised greytHR payroll sample; waits for it**), remaining reports, the 500-employee measurement, docs (`PROGRESS`, `GETTING_STARTED`, this file as built), the Phase 6 review, a walkthrough of a full month end to end, the LOCAL_ASSUMPTIONS review | your review, then Phase 7 planning |
+
+I will plan Phase 7 (declarations, TDS, YTD, Form 16 data, loans, reimbursements, full and final, revision letters) after you have seen Phase 6; the seams in §5.2 (TDS, loans, reimbursements) are where it plugs in.
+
+---
+
+## 15. Rules I decided myself (veto any)
+
+1. **Governed items cover more than "rules".** Components, structures, bank layouts and output layouts carry Placeholder/Confirmed and pin into runs exactly like rules, because a structure's formula (Basic = 40% of CTC) is a rule in everything but name.
+2. **How I read "changing a Confirmed rule: maker-checker, resets to unconfirmed until re-approved".** An edit is allowed at once and takes effect only as an *unconfirmed* new version (usable for draft runs, blocked for real ones); the previous Confirmed version stays on record and in the runs that pinned it; a *different* person must then confirm the new value. The other reading is "the edit waits unapplied until a checker approves it". I chose mine because it lets you test a proposed change on a draft before asking anyone to vouch for it. Tell me if you meant the other.
+3. **Shipped placeholder values.** PF and ESI rates and ceilings, and the rounding conventions, are figures I recall; they ship labelled "recalled, unverified" so a test run is realistic. PT, LWF, TDS, the encashment treatment, the bank layout and the company identifiers ship empty or neutral because they are open questions in spec §14 and I will not guess them.
+4. **A run pins only what it actually read**, derived from the reads, not from a hand-kept list, so a rule can be neither forgotten nor over-reported.
+5. **A salary row freezes its monthly breakup.** Editing a structure never moves anyone's pay; people move by a previewed revision.
+6. **Back-dated revisions are paid as arrears in the next run.** The salary timeline keeps the true date; the payroll lock is bypassed only by that one named function; the closed month is never rewritten.
+7. **The maker-checker invariants are code, not settings.** Different people, bound to the hash, voided by change, locked once approved.
+8. **The checker also cannot be anyone who changed the run's figures since submission** (the spec's wording), and approvals do not expire in this phase.
+9. **A payroll period cannot be unlocked once payslips are published or a bank file is generated.** Corrections go through adjustments or an off-cycle run.
+10. **Nobody edits their own salary, adjustments or bank account in payroll** (Super Admin included), matching the attendance self-guards. A maker or checker who is on the run sees their own line highlighted in the preview; I did not block it.
+11. **Salary amounts are plain exact decimals, protected by permissions, not field-encrypted.** The spec's encryption list is bank account, PAN, Aadhaar and UAN; salary needs SQL totals and ordering. Bank accounts and identifiers stay encrypted; the company's debit account is stored encrypted.
+12. **Payslip emails carry no figures,** only a link to sign in.
+13. **Negative net blocks the run until resolved; a ₹0 net is held, not paid, and gets no bank row.**
+14. **`audit_logs` carries references and redacted salary amounts.** The audit viewer is open to more people than salary data is, so the figures live in the payroll tables and `payroll_run_events` behind payroll permissions and are shown on a Payroll audit trail screen; every change is still audited with before and after (rules in full, since they are not personal data).
+15. **One regular run per cycle; off-cycle runs exist** (bonus, correction, and the Phase 7 final settlement), each with its own approvals.
+16. **Leavers are paid through their last working day;** final settlement is Phase 7; `LEAVER_PAYMENT_TIMING` decides whether the last month is held for it.
+17. **The bank file contains PAYABLE people only; held people are listed with reasons.** The bank's response file is stored and not parsed until you give me its format.
+18. **Statutory logic is implemented as options driven by rules** (for example ESI's period rule, PF on arrears), because I can build the mechanics but cannot verify them against law; the Confirmed value is your CA's word, not mine.
+19. **Payroll data scope is ALL only.** No TEAM scope exists anywhere in payroll.
+20. **The test-run lock** is a Postgres advisory lock keyed by database and Redis database, so a clock-audit run (its own database) can still run beside a normal one.
+
+---
+
+## 16. What I need from you to turn Placeholders into Confirmed
+
+Each is a fact or a document. I build and test against stand-ins in the meantime; none blocks P6-1 to P6-3.
+
+**People (needed before P6-4)**
+- Who are the **makers** (prepare, submit, request) and who are the **checkers** (approve)? There must be at least two different people with `payroll.approve`/`payroll.run` between them. If the only possible checker is an owner who is not an employee, tell me; the checker must still be a user account.
+- Who may **confirm rules** (`payroll.rules.confirm`) and who is the Super Admin who unlocks.
+
+**For each group of rules (your CA, unless stated)**
+| Rules | What I need |
+|---|---|
+| Pay days, LOP divisor, payment date, leaver timing (HR + CA) | Do you pay on calendar days, a fixed 30, or working days? When is salary paid (date and which month)? Are leavers' last-month salaries paid with the run? |
+| Rounding | Whole rupees? Where does rounding happen (each line, PF, ESI up, nowhere on net)? |
+| PF | Confirm the rates and the ₹15,000 ceiling, whether PF is capped or on actual wage, which employment types are covered, how arrears are treated |
+| ESI | Rates, the ₹21,000 ceiling, monthly or the half-year contribution-period rule, which employment types |
+| PT and LWF (spec §14) | Which states you operate in, the PT slabs per state and the February exception, LWF amounts and months, and **the list of branches with their state** |
+| Encashment (spec §14) | The per-day formula (the spec's default is Basic ÷ 30), its tax treatment, which month it is paid in, whether PF applies |
+| Arrears | Paid as a separate line in the next run? PF/ESI on arrears? |
+| Salary structures | The component list per grade or band: names, which are taxable, PF-able, ESI-able, which pro-rate, and the split of CTC; **and what your CTC includes** (employer PF, ESI, gratuity, bonus?) |
+| Company identifiers | PF establishment code, ESI employer code, PT and LWF registration numbers; the company's PAN and TAN are already on file |
+| Bank file (spec §14) | Your bank's own specification or a sample bulk-transfer file; the debit account; whether the bank takes NEFT/IMPS/RTGS and the limits |
+| Outputs | A recent PF ECR file you filed (anonymised), the ESI return format you use, and the PT/LWF statements as filed |
+
+**Samples (anonymised; I will not guess a layout, as with the migration)**
+- A few months of greytHR payslips and the payroll register, anonymised, for the **parallel run**. Without them P6-6's comparison tool cannot be built, though everything else can.
+- A handful of real-shaped employees with the net pay greytHR gave (and the inputs), to become golden tests.
+- The date of the first parallel-run month, and the YTD figures cut-off (Phase 7 needs it).
+
+**Decisions**
+- Whether my reading of the Confirmed-rule change (§15 item 2) is what you meant.
+- Whether **salary revisions should also need a checker.** The spec's list does not include them and yours does not, but they are money. It is one more subject in the same core. I recommend yes.
+- Whether the shipped recalled PF/ESI figures (§15 item 3) are acceptable as placeholders, or you would rather every statutory figure ship empty.
+
+---
+
+## 17. What stays unproven locally, and the local-environment list
+
+- **Statutory correctness.** Until your CA confirms the rules, the arithmetic is verified against my own independent calculation, not against law.
+- **Government and bank formats** (ECR, ESI, bank file) are unproven until you give me the real specifications and, for ECR, until a file is accepted by the portal.
+- **A full-headcount payslip render on the real task size** and the worker's behaviour when ECS stops it mid-run are checked here in principle (resumable, idempotent) but measured only in the final stage.
+- **SES pacing for payslip emails** and **S3 storage of payslips and bank files** run against the local drivers.
+- Every item of this kind goes into `docs/plans/LOCAL_ASSUMPTIONS.md` in the commit that introduces it. Already added in advance: payslip PDFs and bank files through `StorageService` (#3), paced payslip email (#4), PDF memory and time at headcount (#5), idempotent resumable payroll jobs (#6), no `new Date()` for a business date (#7), the app role's privileges on the new tables (#8), links built only from `WEB_BASE_URL` (#9).
+
+**Risks I will watch:** a changed input that the run hash does not cover (guarded by a test that mutates every input class); statutory placeholders mistaken for facts (guarded by the watermark and the gates); the rules screen becoming a wall of settings (grouped, searchable, with the "needed for the next run" ones first); and PDF rendering at headcount.
+
+---
+
+## Appendix A — The effective-dating contract (EF4), kept as written
 
 Everything payroll reads that changes over time is effective-dated: the
 placement (branch for PT/LWF state, cost centre, grade, department), the

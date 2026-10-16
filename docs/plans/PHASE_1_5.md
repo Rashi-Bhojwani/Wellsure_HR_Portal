@@ -1,6 +1,15 @@
 # Phase 1.5 — AWS staging and the greytHR migration: plan
 
-**Status: approved 2026-10-16 (answers in §1A). Commit A (the app is deployable) is built, see §10A; B to F are not.** It follows the approved Phase 3 close-out and
+> **PAUSED (2026-10-16, by the user). Commit A is built and approved; commits B to F are on hold and resume after Phase 7.**
+> Decision, in the user's words: all AWS work, the migration and connecting the device come last, together, as the final stage.
+> Order from here: **Phase 6 (payroll), then Phase 7 (tax and benefits), built and tested locally; then the final stage**: B (CDK
+> infrastructure), C (deploy pipeline), D (migration tooling), E (reconciliation, invitations, the ADMS infrastructure gate) and F (the
+> first deployment and rehearsal), plus connecting the biometric device (`docs/CONNECTION_DAY.md`).
+> Nothing below needs to change for the pause except two things, both tracked: (1) **`docs/plans/LOCAL_ASSUMPTIONS.md`** is the running
+> list of everything built locally that assumes a local environment, so the final stage holds no surprises; (2) the migration (D) will now
+> also carry payroll data (salary structures, YTD figures: spec §10 item 7), which Phase 6 designs for (its plan names the import shapes).
+
+**Status: approved 2026-10-16 (answers in §1A). Commit A (the app is deployable) is built, see §10A; B to F are paused, see the box above.** It follows the approved Phase 3 close-out and
 the brief you gave on 2026-10-16. Spec references: §10 (migration), §12 (Phase 1.5), §15 (AWS), `docs/DEPLOYMENT.md`
 (the Phase 1.5 go-live checklist and the security wiring list).
 

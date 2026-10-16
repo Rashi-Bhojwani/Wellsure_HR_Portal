@@ -523,6 +523,12 @@ cd backend && npx prisma studio
 
 ## 10. Troubleshooting
 
+**`REFUSING TO START: another test run is already using this test environment`**
+Two test runs cannot share a test database (and Redis database): the second would drop and rebuild it under the first. The second run refuses
+before touching anything. Wait for the first to finish; the lock is released the moment that run ends or is killed, so there is nothing to clean up.
+To run two at once on purpose, give the second its own: `TEST_DATABASE_NAME=wellsure_hr_other REDIS_TEST_DB=13 npm test` (`npm run test:clock`
+already does this).
+
 **`Encrypted value was made with data key …` / values that used to decrypt now fail, after pulling Phase 1.5 commit A**
 Every encrypted value now starts with the id of the data key that made it. Values written before that (a local database seeded earlier) are
 not in the new layout. Nothing real exists yet, so re-seed: `npm run db:seed --prefix backend`.
