@@ -1,5 +1,20 @@
 # Connection day: connecting the real attendance machine
 
+> ## Read this first: what the program can and cannot do to the machine
+>
+> The program that is installed on the office PC (the "agent") **only reads** from the attendance machine. It asks the machine
+> a short, fixed list of questions (what is your serial number, how many punches do you hold, what time is it, give me the
+> punches) and it cannot send anything else.
+>
+> - **It cannot change anything on the machine.** It cannot add, edit or remove a person or a fingerprint, face or vein, and it cannot change a setting.
+> - **It cannot clear the machine's log.** It cannot delete a punch, and the punches stay on the machine after they are copied.
+> - **It cannot alter the machine's clock.** It reads the time and tells HR if it is wrong; setting it right is done by a person, on the machine's own menu.
+> - **It cannot stop anyone punching.** It cannot pause, lock or switch off the machine, and people punch exactly as before. greytHR keeps reading the machine as before.
+>
+> This is not only a promise. The program has no instruction in it that changes the machine, it refuses to send any request that is not on the fixed list, and the automated tests fail if it ever tried. **The one thing that could still go wrong is the machine being slow to answer while it is read, and that is what Step 5 watches for: if punching is ever slow or refused, stop the program (`Stop-Service WellsureAgent`, instant, and it changes nothing on the machine).**
+>
+> Whoever is standing next to the machine on the day, and whoever approves this, can rely on that.
+
 This is the procedure for the day the attendance machine (the biometric device) is connected to the HR system for the
 first time. It is written for **someone standing in the office who is not the person who built the system**. You do not
 need to be a developer. You do need to be able to follow steps in order, read what the screen says, and phone someone
