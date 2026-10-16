@@ -6,11 +6,16 @@ import { closePdfRenderer } from "../lib/pdf/renderer";
 import { closeLettersQueue } from "../jobs/lettersQueue";
 import { redis } from "../lib/redis";
 import { createApp } from "../app";
+import { assertLeastPrivilegedDatabaseRole } from "../lib/dbRoles";
+import { initFieldEncryption } from "../lib/fieldKeys";
+import { gracefulShutdown } from "../lib/lifecycle";
 import { createSocketServer } from "../realtime/socket";
 import { registerAttendanceEngine } from "../modules/attendance/wiring";
 import { closeAttendanceQueues } from "../jobs/attendanceQueues";
 
 export async function runApi(): Promise<void> {
+  await assertLeastPrivilegedDatabaseRole(prisma, env.APP_ENV); // outside development: not as a role that could rewrite the audit trail
+  await initFieldEncryption(); // unwraps the data keys once; refuses to start without them
   await redis.connect();
   registerAttendanceEngine();
 
@@ -26,18 +31,23 @@ export async function runApi(): Promise<void> {
   const shutdown = async (signal: string): Promise<void> => {
     if (shuttingDown) return;
     shuttingDown = true;
-    logger.info({ signal }, "shutting down");
-
-    await new Promise<void>((resolve) => io.close(() => resolve()));
-    await new Promise<void>((resolve) => httpServer.close(() => resolve()));
-    await closePdfRenderer(); // letters/preview may have Chromium open
-    await closeLettersQueue();
-    await closeAttendanceQueues();
-    await prisma.$disconnect();
-    redis.disconnect();
-
-    logger.info("shutdown complete");
-    process.exit(0);
+    await gracefulShutdown({
+      signal,
+      steps: [
+        // Disconnect the websocket clients and stop listening (socket.io's close() closes the HTTP server too); requests already in progress run to
+        // completion, and idle keep-alive connections are closed so the server can finish closing.
+        () =>
+          new Promise<void>((resolve) => {
+            io.close(() => resolve());
+            httpServer.closeIdleConnections();
+          }),
+        closePdfRenderer, // letters/preview may have Chromium open
+        closeLettersQueue,
+        closeAttendanceQueues,
+        () => prisma.$disconnect(),
+        async () => redis.disconnect(),
+      ],
+    });
   };
 
   process.on("SIGTERM", () => void shutdown("SIGTERM"));

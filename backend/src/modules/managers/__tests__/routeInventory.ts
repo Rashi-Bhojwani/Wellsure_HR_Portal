@@ -328,6 +328,8 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "PATCH /api/attendance/config/policies/:id": admin,
   "GET /api/attendance/config/defaults": admin,
   "PUT /api/attendance/config/defaults": admin,
+  "GET /api/attendance/config/engine-start": admin,
+  "PUT /api/attendance/config/engine-start": admin,
   "GET /api/attendance/config/cycle": admin,
   "POST /api/attendance/config/cycle": admin,
   "POST /api/attendance/config/cycle/:id/cancel": admin,

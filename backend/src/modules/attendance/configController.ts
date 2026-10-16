@@ -4,6 +4,13 @@ import * as service from "./configService";
 const meta = (req: Request): service.Meta => ({ actorUserId: req.user!.userId, actorEmployeeId: req.user!.employeeId, ipAddress: req.ip ?? null, userAgent: req.get("user-agent") ?? null });
 const id = (req: Request) => req.params.id as string;
 
+export async function getEngineStart(_req: Request, res: Response): Promise<void> {
+  res.status(200).json(await service.getEngineStart());
+}
+export async function setEngineStart(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await service.setEngineStart((req.body as { date: string | null }).date, meta(req)));
+}
+
 export async function listShifts(_req: Request, res: Response): Promise<void> {
   res.status(200).json({ shifts: await service.listShifts() });
 }

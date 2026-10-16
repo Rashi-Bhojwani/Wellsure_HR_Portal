@@ -159,6 +159,13 @@ export async function setDefaults(body: { shiftId: string; weekOffPatternId: str
   return (await apiClient.put<Defaults>(`${base}/defaults`, body)).data;
 }
 
+export async function getEngineStart(): Promise<{ date: string | null }> {
+  return (await apiClient.get<{ date: string | null }>(`${base}/engine-start`)).data;
+}
+export async function setEngineStart(date: string | null): Promise<{ date: string | null }> {
+  return (await apiClient.put<{ date: string | null }>(`${base}/engine-start`, { date })).data;
+}
+
 export async function getCycle(): Promise<CycleInfo> {
   return (await apiClient.get<CycleInfo>(`${base}/cycle`)).data;
 }

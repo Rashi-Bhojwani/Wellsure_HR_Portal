@@ -5,6 +5,7 @@ import { prisma } from "../../lib/prisma";
 import { env } from "../../config/env";
 import { logger } from "../../lib/logger";
 import { writeAuditLog } from "../../lib/audit";
+import { default2faRoles } from "../../lib/authDefaults";
 import { getSetting } from "../../lib/settings";
 import { resolveAccess, resolveUserRoleCodes } from "../../lib/permissions";
 import { signAccessToken, signTotpChallengeToken, verifyTotpChallengeToken } from "../../lib/jwt";
@@ -45,11 +46,9 @@ function hashOpaqueToken(token: string): string {
 }
 
 async function getRequire2faRoles(): Promise<string[]> {
-  // Disabled by default for now (temporary — re-enable by setting this
-  // SystemSetting, e.g. back to ["SUPER_ADMIN", "HR_ADMIN", "HR_EXECUTIVE",
-  // "PAYROLL_ADMIN"], once 2FA is ready to be required again). The setup/
-  // verify/disable/backup-code flows and their tests are untouched.
-  return getSetting<string[]>("auth.require2faRoles", []);
+  // The setting wins when it exists; otherwise the environment's starting value (lib/authDefaults.ts): none in development, the three admin
+  // roles in staging and production.
+  return getSetting<string[]>("auth.require2faRoles", default2faRoles());
 }
 
 async function getLockoutConfig(): Promise<{ maxAttempts: number; lockoutMinutes: number }> {

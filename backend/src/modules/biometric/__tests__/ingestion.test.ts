@@ -288,7 +288,7 @@ describe("biometric ingestion (P2-B)", () => {
     });
 
     it("defaults: off in production, on elsewhere, and an explicit setting wins", () => {
-      expect([admsPushEnabledFor("production", undefined), admsPushEnabledFor("staging", undefined), admsPushEnabledFor("development", undefined)]).toEqual([false, true, true]);
+      expect([admsPushEnabledFor("production", undefined), admsPushEnabledFor("staging", undefined), admsPushEnabledFor("development", undefined)]).toEqual([false, false, true]);
       expect([admsPushEnabledFor("production", "true"), admsPushEnabledFor("staging", "false")]).toEqual([true, false]);
     });
   });

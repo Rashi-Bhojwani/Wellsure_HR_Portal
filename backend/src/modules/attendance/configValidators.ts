@@ -61,6 +61,7 @@ export const updatePolicySchema = z
   .object({ ...policyFields, isActive: z.boolean(), confirmPlaceholders: z.array(z.enum(POLICY_PLACEHOLDER_FIELDS)) })
   .partial();
 
+export const engineStartSchema = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD").nullable() });
 export const defaultsSchema = z.object({ shiftId: z.string().min(1), weekOffPatternId: z.string().min(1), policyId: z.string().min(1) });
 
 export const cycleChangeSchema = z.object({ effectiveFrom: z.iso.date(), startDay: z.number().int().min(1).max(28) });

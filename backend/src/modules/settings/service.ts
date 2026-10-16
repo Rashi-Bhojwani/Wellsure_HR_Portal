@@ -1,3 +1,4 @@
+import { default2faRoles } from "../../lib/authDefaults";
 import { getSetting, setSetting } from "../../lib/settings";
 import { writeAuditLog } from "../../lib/audit";
 import { RATE_LIMIT_DEFAULTS, RATE_LIMIT_KEYS, type LeaveSettings, type RateLimitSetting, type SecuritySettings } from "./types";
@@ -25,7 +26,7 @@ export async function getSettings(): Promise<SecuritySettings> {
     getSetting("auth.lockout", { maxAttempts: 5, lockoutMinutes: 15 }),
     getSetting("auth.passwordMinLength", 8),
     getSetting("auth.invitationTtlHours", 48),
-    getSetting<string[]>("auth.require2faRoles", []),
+    getSetting<string[]>("auth.require2faRoles", default2faRoles()),
     ...RATE_LIMIT_KEYS.map((k) => getSetting<RateLimitSetting>(RATE_LIMIT_SETTING_KEY[k], RATE_LIMIT_DEFAULTS[k])),
   ]);
 

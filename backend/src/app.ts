@@ -5,6 +5,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
 import { env } from "./config/env";
+import { isDraining } from "./lib/lifecycle";
 import { logger } from "./lib/logger";
 import { prisma } from "./lib/prisma";
 import { redis } from "./lib/redis";
@@ -87,8 +88,18 @@ export function apiMountsFor(appEnv: string): ReadonlyArray<ApiMount> {
 
 export const API_MOUNTS = apiMountsFor(env.APP_ENV);
 
-export function createApp(): Express {
+/** How many proxy hops to believe about the client's address: one (the ALB) outside development, none in development and tests. */
+export function trustProxyHopsFor(appEnv: string, explicit: number | undefined): number {
+  return explicit ?? (appEnv === "development" ? 0 : 1);
+}
+
+export function createApp(opts: { trustProxyHops?: number } = {}): Express {
   const app = express();
+
+  // Behind the ALB, every connection comes from the ALB, so without this req.ip is the load balancer's address for everyone: the per-IP login
+  // limits would lock all users out after a few failures from anybody, and every audit row would record the ALB. Trust exactly the hops
+  // that exist: the rightmost X-Forwarded-For entries are the proxies' own, anything a client puts to the left of them is ignored.
+  app.set("trust proxy", opts.trustProxyHops ?? trustProxyHopsFor(env.APP_ENV, env.TRUST_PROXY_HOPS));
 
   app.disable("x-powered-by");
   // Auth/session and authenticated-data responses must never be cached —
@@ -121,13 +132,24 @@ export function createApp(): Express {
     }),
   );
 
+  // While shutting down (SIGTERM, lib/lifecycle.ts), tell keep-alive clients to reconnect, which sends them to a task that is staying.
+  app.use((_req, res, next) => {
+    if (isDraining()) res.setHeader("Connection", "close");
+    next();
+  });
+
   // Liveness — the process is up. Never checks dependencies.
   app.get("/health", (_req, res) => {
     res.status(200).json({ status: "ok" });
   });
 
   // Readiness — the process can actually serve traffic (DB + Redis reachable).
+  // It fails as soon as the task starts draining, so the load balancer stops sending it new requests before it stops listening.
   app.get("/ready", async (_req, res) => {
+    if (isDraining()) {
+      res.status(503).json({ status: "draining" });
+      return;
+    }
     const [dbOk, redisOk] = await Promise.all([
       prisma
         .$queryRaw`SELECT 1`

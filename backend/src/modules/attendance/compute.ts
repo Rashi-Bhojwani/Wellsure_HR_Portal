@@ -2,6 +2,7 @@ import { Prisma, type DailyAttendance } from "@prisma/client";
 import { isWeekOff, type WeekOffRule } from "@shared/utils/attendance";
 import { businessToday } from "../../lib/businessDate";
 import { assignmentsBetween, deviceMappingPeriods, placementsOn, rowInForce, type AssignmentWithRules } from "../../lib/effectiveDating";
+import { getEngineStartDate } from "../../lib/attendanceSettings";
 import { prisma } from "../../lib/prisma";
 import { emitAttendanceUpdated } from "../../realtime/emit";
 import { evaluateDay } from "./engine/engine";
@@ -36,6 +37,7 @@ export interface ComputeResult {
   processed: number; // employee-days evaluated
   changed: number; // written because something differed
   locked: number; // left alone: finalised
+  beforeEngineStart: number; // left alone: before the cut-over date (attendance.engineStartDate), greytHR's days
   deleted: number; // a record that should no longer exist (e.g. not employed that day)
   changes: DayChange[];
   /** Every employee-day evaluated, changed or not (only when `collect` is set): what a preview shows. */
@@ -148,7 +150,7 @@ export interface ComputeOptions {
  * after today are never computed. Callers chunk large employee sets.
  */
 export async function computeAttendance(employeeIds: string[], from: string, to: string, opts: ComputeOptions = {}): Promise<ComputeResult> {
-  const result: ComputeResult = { processed: 0, changed: 0, locked: 0, deleted: 0, changes: [] };
+  const result: ComputeResult = { processed: 0, changed: 0, locked: 0, beforeEngineStart: 0, deleted: 0, changes: [] };
   const today = iso(businessToday());
   const last = to > today ? today : to;
   if (employeeIds.length === 0 || from > last) return result;
@@ -184,6 +186,8 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
   // locked and skipped below; this covers the ones that did not, such as a joiner dated inside the cycle. The Finalisation
   // screen lists the people with such days; an unlock, a reprocess and a fresh finalise is how they are brought in.)
   const finalised = await finalisedPeriodsOverlapping(from, last);
+  // The cut-over guard: nothing before the engine start date is computed, written or deleted (lib/attendanceSettings.ts getEngineStartDate).
+  const engineStart = await getEngineStartDate();
   const holidayOn = new Map(holidays.map((h) => [iso(h.date), h.name]));
   const existingBy = new Map(existing.map((e) => [`${e.employeeId}|${iso(e.date)}`, e]));
   const changedByEmployee = new Map<string, string[]>();
@@ -248,6 +252,10 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
       result.processed += 1;
       const key = `${emp.id}|${date}`;
       const before = existingBy.get(key) ?? null;
+      if (engineStart && date < engineStart) {
+        result.beforeEngineStart += 1;
+        continue;
+      }
       if (before?.isLocked || inAnyPeriod(finalised, date)) {
         result.locked += 1;
         if (opts.collect) (result.evaluated ??= []).push({ employeeId: emp.id, date, before: before?.status ?? null, after: before?.status ?? null, locked: true });

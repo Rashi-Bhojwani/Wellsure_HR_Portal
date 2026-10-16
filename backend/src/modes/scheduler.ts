@@ -1,12 +1,18 @@
+import { env } from "../config/env";
 import { closeAttendanceQueues } from "../jobs/attendanceQueues";
 import { logger } from "../lib/logger";
 import { prisma } from "../lib/prisma";
+import { assertLeastPrivilegedDatabaseRole } from "../lib/dbRoles";
+import { initFieldEncryption } from "../lib/fieldKeys";
+import { gracefulShutdown } from "../lib/lifecycle";
 import { redis } from "../lib/redis";
 import { registerScheduledJobs } from "../jobs/scheduler";
 
 // Exactly one instance of this mode runs at a time (spec §15.2.3) —
 // registration must stay idempotent as real repeatable jobs are added.
 export async function runScheduler(): Promise<void> {
+  await assertLeastPrivilegedDatabaseRole(prisma, env.APP_ENV); // outside development: not as a role that could rewrite the audit trail
+  await initFieldEncryption();
   await redis.connect();
   await registerScheduledJobs();
   logger.info("scheduler ready");
@@ -20,15 +26,11 @@ export async function runScheduler(): Promise<void> {
   const shutdown = async (signal: string): Promise<void> => {
     if (shuttingDown) return;
     shuttingDown = true;
-    logger.info({ signal }, "shutting down");
-
-    clearInterval(heartbeat);
-    await closeAttendanceQueues();
-    await prisma.$disconnect();
-    redis.disconnect();
-
-    logger.info("shutdown complete");
-    process.exit(0);
+    await gracefulShutdown({
+      signal,
+      drainMs: 0,
+      steps: [async () => clearInterval(heartbeat), closeAttendanceQueues, () => prisma.$disconnect(), async () => redis.disconnect()],
+    });
   };
 
   process.on("SIGTERM", () => void shutdown("SIGTERM"));

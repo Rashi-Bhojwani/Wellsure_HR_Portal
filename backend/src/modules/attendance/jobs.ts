@@ -74,12 +74,13 @@ export async function employeesInRange(from: string, to: string, filter: { emplo
 
 /** Recompute a range for many employees, in chunks; `onChunk` reports progress. */
 export async function computeInChunks(employeeIds: string[], from: string, to: string, onChunk?: (r: Awaited<ReturnType<typeof computeAttendance>>) => Promise<void>) {
-  const total = { processed: 0, changed: 0, locked: 0, deleted: 0, changes: [] as Awaited<ReturnType<typeof computeAttendance>>["changes"] };
+  const total = { processed: 0, changed: 0, locked: 0, beforeEngineStart: 0, deleted: 0, changes: [] as Awaited<ReturnType<typeof computeAttendance>>["changes"] };
   for (let i = 0; i < employeeIds.length; i += CHUNK) {
     const r = await computeAttendance(employeeIds.slice(i, i + CHUNK), from, to, { maxChanges: Math.max(0, 500 - total.changes.length) });
     total.processed += r.processed;
     total.changed += r.changed;
     total.locked += r.locked;
+    total.beforeEngineStart += r.beforeEngineStart;
     total.deleted += r.deleted;
     total.changes.push(...r.changes);
     if (onChunk) await onChunk(r);

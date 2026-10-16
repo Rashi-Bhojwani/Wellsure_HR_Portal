@@ -20,6 +20,16 @@ export function CycleTab({ canManage }: { canManage: boolean }) {
   };
   const schedule = useMutation({ mutationFn: attendanceApi.scheduleCycleChange, ...done });
   const cancel = useMutation({ mutationFn: attendanceApi.cancelCycleChange, ...done });
+  const { data: engineStart } = useQuery({ queryKey: ["attendance", "config", "engine-start"], queryFn: attendanceApi.getEngineStart });
+  const [engineForm] = Form.useForm<{ date: Dayjs | null }>();
+  const setEngineStart = useMutation({
+    mutationFn: attendanceApi.setEngineStart,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["attendance", "config", "engine-start"] });
+      void message.success("Saved.");
+    },
+    onError: (err: unknown) => void message.error(apiErrorMessage(err, "Could not save the date.")),
+  });
   const scheduled = data?.rules.filter((r) => r.status === "scheduled") ?? [];
   if (!data) return null;
   return (
@@ -44,6 +54,20 @@ export function CycleTab({ canManage }: { canManage: boolean }) {
           action={canManage && <Popconfirm title="Cancel this change?" onConfirm={() => cancel.mutate(r.id)}><Button size="small" danger>Cancel</Button></Popconfirm>}
         />
       ))}
+      <Card size="small" title="When this system takes over from greytHR">
+        <Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
+          Days before this date belong to greytHR. This system will not compute, change or delete them, however it is asked (Process Attendance, the nightly run, a correction). Leave it empty
+          only before the cut-over is planned. {engineStart?.date ? <>Currently <Text strong>{longDate(engineStart.date)}</Text>.</> : <>Currently not set: no days are protected.</>}
+        </Text>
+        {canManage && (
+          <Form form={engineForm} layout="inline" initialValues={{ date: engineStart?.date ? dayjs(engineStart.date) : null }} key={engineStart?.date ?? "none"} onFinish={(v) => setEngineStart.mutate(v.date ? v.date.format("YYYY-MM-DD") : null)}>
+            <Form.Item name="date" label="First day this system is the record">
+              <DatePicker format="D MMM YYYY" allowClear />
+            </Form.Item>
+            <Button htmlType="submit" loading={setEngineStart.isPending}>Save</Button>
+          </Form>
+        )}
+      </Card>
       {canManage && (
         <Card size="small" title="Change the cycle start day">
           <Text type="secondary" style={{ display: "block", marginBottom: 12 }}>

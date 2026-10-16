@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 import { databaseGuardError } from "./databaseGuard";
+import { devSecret, productionConfigErrors, productionGuardMessage } from "./productionGuard";
 
 // Explicit, import-order-independent .env loading — must happen before the
 // safeParse below. This used to work by accident (Prisma Client's own
@@ -23,15 +24,16 @@ if (existsSync(envFilePath)) {
 // fast at boot if anything is missing or malformed. Extend this schema
 // whenever a new env var is introduced — see .env.example at the repo
 // root for the full list and docs/PROJECT_SPEC.md §15.3.
-const envSchema = z.object({
+export const envSchema = z.object({
   APP_ENV: z.enum(["development", "staging", "production"]).default("development"),
   APP_MODE: z.enum(["api", "worker", "scheduler", "migrate"]).default("api"),
   PORT: z.coerce.number().int().positive().default(4000),
   WEB_BASE_URL: z.url().default("http://localhost:5173"),
   API_BASE_URL: z.url().default("http://localhost:4000"),
   CORS_ORIGIN: z.string().default("http://localhost:5173"),
-  // ADMS push is authenticated by the device serial number alone, so in production it stays off until /iclock is restricted to the office's address
-  // (docs/DEPLOYMENT.md, "Phase 1.5 go-live checklist"). Setting this to "true" is the act of ticking that item. Unset: on, except in production.
+  // ADMS push is authenticated by the device serial number alone, so outside development it stays off until /iclock is restricted to the office's
+  // address (docs/DEPLOYMENT.md, "Phase 1.5 go-live checklist"; the infrastructure half is the ADMS gate in the CDK app). Setting this to "true" is
+  // the act of ticking that item. Unset: on in development only; staging and production are off.
   ADMS_PUSH_ENABLED: z.enum(["true", "false"]).optional(),
   TZ_BUSINESS: z.string().default("Asia/Kolkata"),
 
@@ -46,30 +48,39 @@ const envSchema = z.object({
   // (see isolateTestDatabase below). Defaults to "<dev database>_test".
   TEST_DATABASE_NAME: z.string().regex(/^[a-z_][a-z0-9_]*$/, "lowercase letters, digits and _ only").optional(),
   SOCKET_IO_REDIS_KEY: z.string().min(1).default("socket.io"),
+  // How many reverse proxies sit in front of the API and may be believed about the client's address (X-Forwarded-For). Behind the ALB it is
+  // exactly one; with no proxy (development, a test) it is 0, so a client cannot forge its own address. Unset: 0 in development, 1 elsewhere.
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).optional(),
+  // Seconds a task keeps answering (with /ready failing) after SIGTERM before it closes its server, so the load balancer stops sending it new
+  // requests first. Unset: 0 in development, 10 elsewhere.
+  SHUTDOWN_DRAIN_SECONDS: z.coerce.number().int().min(0).max(120).optional(),
+  // The most a task spends shutting down before it exits anyway (the ECS stop timeout is set above this). Unset: 25.
+  SHUTDOWN_HARD_LIMIT_SECONDS: z.coerce.number().int().min(1).max(600).optional(),
 
   // Auth (src/modules/auth): JWT access tokens are short-lived and
   // stateless; refresh tokens are opaque random strings tracked in
   // refresh_tokens (rotation + reuse detection), never JWTs themselves.
-  JWT_ACCESS_SECRET: z.string().min(1).default("change-me-access-secret"),
-  JWT_REFRESH_SECRET: z.string().min(1).default("change-me-refresh-secret"),
+  JWT_ACCESS_SECRET: devSecret("JWT_ACCESS_SECRET", "change-me-access-secret"),
+  JWT_REFRESH_SECRET: devSecret("JWT_REFRESH_SECRET", "change-me-refresh-secret"),
   JWT_ACCESS_TTL: z.string().default("15m"),
   JWT_REFRESH_TTL: z.string().default("30d"),
 
   // Field-level encryption (src/lib/encryption.ts) and blind-index hashing
   // (src/lib/fieldHash.ts) for bank account/PAN/Aadhaar/UAN — spec §9.
-  // Local dev derives a static key/pepper from these strings; staging/
-  // production swap in real KMS envelope encryption (spec §15.3) behind the
-  // same encrypt/decrypt call shape. The two must never be equal — the
-  // pepper is deliberately a separate secret from the encryption key so a
-  // leaked blind-index pepper alone can't help decrypt anything.
-  KMS_FIELD_KEY_ID: z.string().min(1).default("dev-local-key"),
-  FIELD_HASH_PEPPER: z.string().min(1).default("dev-local-pepper"),
+  // FIELD_ENCRYPTION_DRIVER=local derives one static key from KMS_FIELD_KEY_ID (development only: staging/production refuse to start on it);
+  // =kms keeps the data keys wrapped by a KMS key, KMS_FIELD_KEY_ID being that key's ARN or alias, and FIELD_KEYRING the wrapped data keys
+  // (docs/DEPLOYMENT.md, "Field encryption keys"). The pepper is deliberately a separate secret from the encryption key so a leaked
+  // blind-index pepper alone can't help decrypt anything.
+  FIELD_ENCRYPTION_DRIVER: z.enum(["local", "kms"]).default("local"),
+  KMS_FIELD_KEY_ID: devSecret("KMS_FIELD_KEY_ID", "dev-local-key", { minLength: 0 }),
+  FIELD_KEYRING: z.string().optional(),
+  FIELD_HASH_PEPPER: devSecret("FIELD_HASH_PEPPER", "dev-local-pepper"),
 
   // Storage — local filesystem for dev, S3 in staging/production
   // (see src/integrations/storage).
   STORAGE_DRIVER: z.enum(["local", "s3"]).default("local"),
   STORAGE_LOCAL_DIR: z.string().default(".storage"),
-  STORAGE_SIGNED_URL_SECRET: z.string().default("dev-local-signing-secret"),
+  STORAGE_SIGNED_URL_SECRET: devSecret("STORAGE_SIGNED_URL_SECRET", "dev-local-signing-secret"),
   S3_BUCKET: z.string().optional(),
 
   // Mail — console/.eml for dev, SES in staging/production
@@ -82,8 +93,18 @@ const envSchema = z.object({
   // compromised Super Admin account can't make disappear.
   SECURITY_ALERT_EMAIL: z.email().optional(),
 
-  // AWS (staging/production only — used by the S3 and SES clients).
+  // AWS (staging/production only — used by the S3, SES, KMS and CloudWatch clients).
   AWS_REGION: z.string().default("ap-south-1"),
+  // Metrics the alarms read (BullMQ backlog and failed jobs): nothing is published locally.
+  METRICS_DRIVER: z.enum(["local", "cloudwatch"]).default("local"),
+  METRICS_NAMESPACE: z.string().default("Wellsure/HR"),
+  // Used by admin:preflight to confirm the break-glass alarm has a confirmed subscriber (staging/production).
+  BREAKGLASS_ALARM_TOPIC_ARN: z.string().optional(),
+
+  // The database role the app (api/worker/scheduler) runs as, created by the migrate task (src/lib/dbRoles.ts). DB_APP_PASSWORD is only read
+  // by the migrate task, which connects as the master user; the app tasks' own DATABASE_URL carries it.
+  DB_APP_ROLE: z.string().regex(/^[a-z_][a-z0-9_]*$/).default("wellsure_app"),
+  DB_APP_PASSWORD: z.string().optional(),
 })
   .refine((v) => v.KMS_FIELD_KEY_ID !== v.FIELD_HASH_PEPPER, {
     message: "KMS_FIELD_KEY_ID and FIELD_HASH_PEPPER must be different secrets",
@@ -100,6 +121,11 @@ function loadEnv(): Env {
   const parsed = envSchema.safeParse(process.env);
   if (!parsed.success) {
     console.error("Invalid environment configuration:", z.treeifyError(parsed.error));
+    process.exit(1);
+  }
+  const configErrors = productionConfigErrors(parsed.data);
+  if (configErrors.length > 0) {
+    console.error(productionGuardMessage(parsed.data.APP_ENV, configErrors));
     process.exit(1);
   }
   const guardError = databaseGuardError({

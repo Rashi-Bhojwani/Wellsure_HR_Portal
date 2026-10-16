@@ -1,3 +1,6 @@
+import { env } from "../src/config/env";
+import { initFieldEncryption } from "../src/lib/fieldKeys";
+import { awsProbes, bootstrapRefusal } from "../src/lib/preflight";
 import { prisma } from "../src/lib/prisma";
 import { closeSecurityAlertQueue } from "../src/jobs/securityAlertQueue";
 import { AdminCliRefusal, assertBootstrapAllowed, bootstrapSuperAdmin, NEW_EMPLOYEE_FIELDS, type BootstrapInput } from "../src/modules/access/bootstrap";
@@ -40,6 +43,11 @@ async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   await startLiveSignals();
   printTarget("Wellsure HR — create the first Super Admin");
+
+  // An environment that cannot tell anyone a break-glass account was made must not make one (lib/preflight.ts; npm run admin:preflight shows everything).
+  await initFieldEncryption();
+  const refusal = await bootstrapRefusal({ appEnv: env.APP_ENV, sesFrom: env.SES_FROM, securityAlertEmail: env.SECURITY_ALERT_EMAIL, breakGlassTopicArn: env.BREAKGLASS_ALARM_TOPIC_ARN }, awsProbes());
+  if (refusal) throw new AdminCliRefusal(refusal);
 
   const input: Record<string, string | undefined> = {};
   for (const [key, f] of Object.entries(FIELDS)) {

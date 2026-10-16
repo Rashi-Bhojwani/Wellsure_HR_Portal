@@ -1,10 +1,125 @@
 # Deployment
 
-_To be written in Phase 1.5 (AWS staging environment) — see
-`docs/PROJECT_SPEC.md` §15.5 and the Phase 1.5 row in `docs/PROGRESS.md`._
+_Being written across Phase 1.5 (AWS staging environment; plan in `docs/plans/PHASE_1_5.md`). Commit A (the app made deployable)
+wrote the sections marked **[A]** below. The infrastructure (B), the deploy workflow and its human checklist, rollback and database
+restore (C), and the migration and invitation runbooks (D, E) are added by the commits that build them._
 
-Will cover: first-time bootstrap, DNS, SES domain verification, how to
-deploy, how to roll back, and how to restore a database backup.
+Sections in this file, in the order a person needs them:
+
+1. [What the app refuses to start without **[A]**](#what-the-app-refuses-to-start-without-a)
+2. [Database roles **[A]**](#database-roles-a)
+3. [Field encryption keys, and how to rotate them **[A]**](#field-encryption-keys-and-how-to-rotate-them-a)
+4. [Before the first administrator: `admin:preflight` **[A]**](#before-the-first-administrator-adminpreflight-a)
+5. [The cut-over guard **[A]**](#the-cut-over-guard-a)
+6. The go-live checklist, security wiring and attendance notes (older sections, below)
+
+---
+
+## What the app refuses to start without [A]
+
+Outside `development`, `config/env.ts` exits with a list of what is wrong instead of starting (`config/productionGuard.ts`):
+
+- **Any secret that is still a development default, a placeholder (`change-me…`, `dev-local…`), shorter than 32 characters, or the same as
+  another secret.** This is not a list of today's variable names: every secret with a development default is declared with `devSecret()`
+  in `env.ts`, and that declaration is what puts it under the guard. A test scans the real schema and fails if a variable that looks like
+  a secret has a default but was not declared that way, so a secret added later cannot be forgotten.
+- Storage must be `s3` (with `S3_BUCKET`), mail must be `ses` (with `SES_FROM`), `SECURITY_ALERT_EMAIL` must be set, field encryption
+  must be `kms` with a KMS key id/ARN, and the metrics driver must be `cloudwatch`.
+- `DATABASE_URL` must carry `sslmode=require` (or stricter) and not point at the machine itself; `REDIS_URL` must be `rediss://` with the
+  auth token in it; `WEB_BASE_URL`, `API_BASE_URL` and `CORS_ORIGIN` must be `https` and not `localhost`.
+
+The messages name the variable and the rule, never the value.
+
+Also at start, outside development: the api, worker and scheduler check that their database role is **least-privilege** (below) and
+refuse to start as a role that could rewrite the audit trail. `ADMS_PUSH_ENABLED` is off by default everywhere except development.
+`TRUST_PROXY_HOPS` defaults to 1 (the load balancer) outside development, so the client address, and with it the login rate limits and
+the audit trail's address column, is the one the ALB saw, and a forged `X-Forwarded-For` cannot change it.
+
+**To verify on the first deploy** (local Redis and Postgres have neither TLS nor a password, so nothing here can prove it ahead of time):
+that the app really connects to ElastiCache over `rediss://`, and that Prisma verifies RDS's certificate with `sslmode=require` (the RDS
+CA bundle may need to be in the image, or the connection string given the CA with `sslcert=`); the first deploy's smoke test records which.
+
+## Database roles [A]
+
+| Role | Used by | Can |
+|---|---|---|
+| **Migrate** = the database's master user | only the one-off `migrate` task | change the schema; owns every table |
+| **App** (`DB_APP_ROLE`, default `wellsure_app`) | api, worker, scheduler | read and write data; **no** UPDATE, DELETE or TRUNCATE on `audit_logs`, `security_events` or any other append-only table; cannot create or drop anything or touch `_prisma_migrations` |
+
+The `migrate` task creates or refreshes the app role at the end of every run (`lib/dbRoles.ts`, from `DB_APP_PASSWORD`, which only that
+task has), grants it the data, sets default privileges so tables a later migration adds are usable immediately, and then revokes writes
+again from every table guarded by an append-only trigger (it finds them from the triggers, so a table a new migration makes append-only is
+covered the same deploy). This sits under the append-only triggers: the database refuses with "permission denied" before a trigger could
+even run. The test `lib/__tests__/dbRoles.test.ts` proves it, including that the refusal is the privilege layer's and not the trigger's.
+Recorded decision: there is no third "owner" role distinct from the master user (fewer credentials to hold; the master user's secret is
+the migrate task's alone).
+
+## Field encryption keys, and how to rotate them [A]
+
+Bank account, PAN, Aadhaar, UAN and 2FA secrets are AES-256-GCM encrypted by `encryptField`/`decryptField`. The keys:
+
+```
+KMS customer-managed key (never leaves KMS; automatic yearly rotation is switched on by the infrastructure)
+  └─ wraps data key 1, 2, 3 …  (FIELD_KEYRING: JSON of the *wrapped* keys: useless without kms:Decrypt)
+       └─ encrypt the fields; every stored value starts with the id of the data key that made it
+```
+
+Each task unwraps the keyring once at start (one `kms:Decrypt` per data key) and holds the keys in memory only. The key id is also
+authenticated, so changing it fails the tag check. Development uses one static key (`FIELD_ENCRYPTION_DRIVER=local`); staging and
+production refuse to start on it.
+
+**Two honest limits.** (1) A key that leaks decrypts everything it ever encrypted, **including database backups taken before the
+rotation**; rotation protects what is written after, and what is re-encrypted in place, not old snapshots (below). (2) The blind-index
+**pepper** (`FIELD_HASH_PEPPER`, used for duplicate detection) is not covered by this procedure: it is a separate secret, and changing it
+means recomputing every hash. That is not built; if the pepper leaks, say so and it becomes a planned maintenance step.
+
+### The four phases (`npm run field-keys -- …`, from an ECS Exec shell in the api task)
+
+The order matters because a rolling deploy runs old and new tasks together: **a task must be able to read a key before any task writes with it.**
+
+1. **`field-keys status`**: shows the keyring and how many stored values each key made. Read it first and last.
+2. **PHASE 1, add**: `field-keys add` (or `add --cmk <arn>` to wrap the new key under a different KMS key, which is what you do when the
+   *KMS key itself* is suspect). It prints the new keyring; the new key is **not current**. Put that JSON in the `FIELD_KEYRING` secret,
+   deploy, and **wait until every api, worker and scheduler task has restarted**. Nothing has changed yet except that every task can now read the new key.
+3. **PHASE 2, promote**: `field-keys promote <id>` prints the keyring with the new key current. Update the secret, deploy. New writes use the new key;
+   a task that has not restarted yet can still read them.
+4. **PHASE 3, re-encrypt**: `field-keys reencrypt` (a dry run: counts only), then `field-keys reencrypt --apply`. Safe to stop and repeat, safe while
+   the app is serving (a value changed in the meantime is skipped, never overwritten, and each new value is read back before it is stored).
+   Finish with `field-keys status`: every value should be under the new key.
+5. **PHASE 4, retire**: `field-keys retire <old id>` refuses while anything is still encrypted under it, and otherwise prints the keyring without it.
+   Update the secret and deploy. Then, **only when no backup you might restore still depends on it**, disable the old KMS key (schedule deletion
+   with the longest waiting period). A restored backup older than the rotation needs the old key to be readable.
+
+If a key leaks today: run phases 1 to 4 with `--cmk` pointing at a new KMS key, then treat every backup older than phase 3 as still exposed until
+it ages out or is destroyed. This procedure is exercised end to end, including the mixed-fleet step and the refusal to retire a key still in use,
+by `lib/__tests__/fieldEncryption.test.ts`. The AWS calls themselves (`GenerateDataKey`, `Decrypt` with the encryption context) are exercised for
+the first time on the first deploy.
+
+## Before the first administrator: `admin:preflight` [A]
+
+From an ECS Exec shell in the api task, after the first `migrate` task has run:
+
+```
+npm run admin:preflight             # read-only: migrations applied, permission catalog, field encryption works, database role is least-privilege,
+                                    # SECURITY_ALERT_EMAIL set, SES can send from SES_FROM, the alert inbox can receive from SES,
+                                    # the break-glass alarm topic has a CONFIRMED subscriber
+npm run admin:preflight -- --send-test   # also sends one test message to SECURITY_ALERT_EMAIL: check that inbox, nothing else proves it
+```
+
+`admin:bootstrap` runs the **alerting** subset itself and refuses (exit 1, no account created) in an environment that cannot tell anyone a
+break-glass account was made. There is no flag to skip that. An SES account still in the sandbox is a warning, not a failure, as long as
+the alert address is a verified SES identity; invitations to employees' addresses will not arrive until SES production access is granted.
+The task role needs `ses:GetIdentityVerificationAttributes`, `ses:GetSendQuota`, `ses:GetAccountSendingEnabled` and
+`sns:ListSubscriptionsByTopic` for these checks (to be put in the task role by the infrastructure commit).
+
+## The cut-over guard [A]
+
+`attendance.engineStartDate` (Attendance Settings → Cycle → "When this system takes over from greytHR") is the first day this system is the
+record. Before it, **nothing computes, changes or deletes a day**: not Process Attendance (a range wholly before it is refused, one that
+straddles it skips the earlier days and the audit entry says how many), not the nightly job, not a recompute after a correction. Set it
+before any greytHR history is imported (commit D). Unset means no guard.
+
+---
 
 ## Phase 1.5 go-live checklist
 
@@ -119,7 +234,7 @@ list these. They are recorded here so the CDK work can't miss them:
   logging (CloudWatch Logs or S3) and CloudTrail capturing
   `ecs:ExecuteCommand`. That records which AWS identity opened a shell; the
   tool's `--operator` is only self-declared.
-- **Database roles**: the app connects as a role with no UPDATE, DELETE or
+- **Database roles** (built in Phase 1.5 commit A, see "Database roles" above): the app connects as a role with no UPDATE, DELETE or
   TRUNCATE on `audit_logs` and `security_events`, and the migrate task uses
   the owning role. This is a second layer under the append-only triggers.
 - **RDS log export / pgaudit** for writes to `users` and `audit_logs`. It

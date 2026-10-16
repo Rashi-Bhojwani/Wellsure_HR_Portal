@@ -1,6 +1,6 @@
 # Phase 1.5 — AWS staging and the greytHR migration: plan
 
-**Status: written 2026-10-16 for your review. Nothing in it is built.** It follows the approved Phase 3 close-out and
+**Status: approved 2026-10-16 (answers in §1A). Commit A (the app is deployable) is built, see §10A; B to F are not.** It follows the approved Phase 3 close-out and
 the brief you gave on 2026-10-16. Spec references: §10 (migration), §12 (Phase 1.5), §15 (AWS), `docs/DEPLOYMENT.md`
 (the Phase 1.5 go-live checklist and the security wiring list).
 
@@ -22,6 +22,27 @@ followed by a **reconciliation report with an Excel export and a "compare with g
 **sign-off that gates invitations**: nobody can be invited until you have signed the reconciliation for the data as it
 now stands. Invitations go out in batches you trigger, paced for SES. ADMS push is off everywhere except development
 until the office address allow-list exists at the edge and has been proven from outside.
+
+---
+
+## 1A. Your answers (2026-10-16), and what they changed
+
+- **D1: staging is for rehearsal** (two Super Admins, a pilot group, the migration dry run). Everyone is invited from production in 5.5 by
+  re-running the same files. No real employees in staging, so staging does not need production-grade infrastructure. **The
+  `dataProtection` switch (`standard` | `production`) is built either way** (commit B). One condition: staging receives real data in the
+  rehearsal, so it meets commit A's encryption, secrets and role requirements in full. *Cheap infrastructure, not cheap security.*
+- **D2: two AWS accounts** (staging, production).
+- **D3:** the domain and who controls DNS to be confirmed by you (same day); plan on delegating **one subdomain to Route 53**.
+- **D4/D5:** you will supply anonymised greytHR samples and the cut-off date; **12 months of daily statuses, read-only**. The converter
+  is built against the samples only: no guessed column layouts (commit D waits for them).
+- **D6:** imported rows may keep a non-Gmail personal email. The rule for imported rows is **a well-formed address and nothing more**.
+- **D7 (approved, with an addition):** KMS wrapping a data key held in memory, with a key id on every ciphertext so it can rotate;
+  **plus a documented and tested rotation procedure**: "encryption you can't rotate is a liability on the day a key leaks".
+- **The invitation gate on your reconciliation sign-off stays.**
+- **Cost:** the estimate is from memory and not a quote. **An AWS budget alert goes into the infrastructure from the start** (commit B),
+  rather than relying on you to set one.
+- **Commit A, beyond the five findings:** the app must refuse to start outside development if *any* secret still has a default value, not
+  just today's: built as a registry every `devSecret()` declaration joins, with a test that scans the schema (§10A).
 
 ---
 
@@ -400,6 +421,36 @@ prove by synth and assertions. **I cannot touch AWS**: no credentials, no consol
 and F are where it meets the real account, and **the channel is GitHub itself**: the deploy runs in Actions through the OIDC
 role, and I can read its job logs (as I read CI), so when AWS rejects something I see the exact error and fix it, without
 anyone pasting anything. Expect F to take several iterations, because the first deploy of seven stacks always does.
+
+---
+
+## 10A. Commit A as built (2026-10-16)
+
+| Item | What exists | Proved by |
+|---|---|---|
+| Default-secret guard | `config/productionGuard.ts`; `env.ts` declares each secret with `devSecret()`. Outside development: refuses a default, a placeholder, a secret under 32 characters or two secrets alike; local drivers; missing S3/SES/alert inbox; non-TLS Postgres/Redis; non-https URLs | `config/__tests__/productionGuard.test.ts` incl. a schema scan (a secret-looking variable with a default that is not under the guard fails the test) and a real boot of a staging process on the defaults |
+| Field encryption | `lib/fieldKeys.ts` (keyring, KMS wrapper, in-memory test wrapper), `lib/encryption.ts` (key id byte first, authenticated), `lib/fieldKeyRotation.ts`, `scripts/field-keys.ts` (`status`, `add`, `promote`, `reencrypt`, `retire`) | `lib/__tests__/fieldEncryption.test.ts`: round trip, tamper (body, tag, iv, key id), the four-phase rotation on real rows incl. a mixed fleet, a concurrent-change skip, retire refused while in use, and a scan that every `Bytes` column is known to the tooling. Procedure: `DEPLOYMENT.md` |
+| ADMS | `lib/admsGate.ts`: only development defaults on | `modules/biometric/__tests__/ingestion.test.ts` |
+| Trust proxy | `app.ts`: `TRUST_PROXY_HOPS`, default 1 outside development | `middleware/__tests__/trustProxy.test.ts`: forged `X-Forwarded-For` cannot dodge or frame the login limit |
+| Database roles | `lib/dbRoles.ts`, run by the `migrate` mode; apps refuse to start as a role that can rewrite the audit trail | `lib/__tests__/dbRoles.test.ts`: the database (not the trigger) refuses UPDATE/DELETE/TRUNCATE on every append-only table; a table added later is covered; idempotent; password change |
+| TLS | `rediss://` + token and `sslmode=require` are required by the guard | pinned client behaviour (`connectionTls.test.ts`); **first real proof is the first deploy** |
+| Two-factor | `lib/authDefaults.ts`: Super Admin, HR Admin, Payroll Admin outside development | `authDefaults.test.ts` |
+| Metrics | `integrations/metrics` (local publishes nothing, CloudWatch), `jobs/queueMetrics.ts`: waiting/active/delayed/failed per queue + heartbeat | `jobs/__tests__/queueMetrics.test.ts` incl. real BullMQ counts |
+| Shutdown | `lib/lifecycle.ts`: `/ready` fails and `Connection: close` while draining, in-flight requests finish, hard limit | `modes/__tests__/shutdown.test.ts`: a real api process, a real SIGTERM, a request held open across the drain |
+| Preflight | `lib/preflight.ts`, `scripts/admin-preflight.ts`; `admin:bootstrap` refuses where it cannot alert | `lib/__tests__/preflight.test.ts` |
+| Cut-over guard | `attendance.engineStartDate` (setting, endpoint, Attendance Settings card): the engine never computes, writes or deletes before it; Process Attendance refuses a range wholly before it | `attendance/__tests__/engineStartDate.test.ts` |
+
+Things the work found, recorded here so they are choices and not accidents:
+- **Local role.** The new database-roles test needs a Postgres user with `CREATEROLE` (CI's is a superuser). GETTING_STARTED §3 now says so.
+- **RDS and PostgreSQL 16.** The RDS master user is not a true superuser, and PostgreSQL 16 refuses it any statement that names the SUPERUSER,
+  REPLICATION or BYPASSRLS attributes, so the role step creates the role with them off and afterwards only sets the password. Caught by running
+  the step as a non-superuser; confirmed on RDS at the first deploy.
+- **No separate "owner" role** beyond the master user (§3 item 5 said a migrate role owns the tables): the master user is that role, and its
+  credential belongs to the migrate task alone. One fewer credential to keep.
+- **Old ciphertexts.** The new layout (key id first) is not readable from the old one. Nothing real exists yet, so local databases are re-seeded.
+- **Not built, said plainly:** rotating `FIELD_HASH_PEPPER` (it needs every hash recomputed); the task role's IAM for `kms:Decrypt`,
+  `kms:GenerateDataKey`, `ses:Get*`, `sns:ListSubscriptionsByTopic`, `cloudwatch:PutMetricData` (commit B); the break-glass alarm and
+  its subscription (commit B); the RDS CA bundle question (§ "To verify on the first deploy" in DEPLOYMENT.md).
 
 ---
 

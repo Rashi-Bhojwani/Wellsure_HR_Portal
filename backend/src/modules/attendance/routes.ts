@@ -19,6 +19,7 @@ import {
   createWeekOffPatternSchema,
   cycleChangeSchema,
   defaultsSchema,
+  engineStartSchema,
   employeeParamsSchema,
   employeeRowParamsSchema,
   idParamsSchema,
@@ -87,6 +88,9 @@ attendanceRouter.patch("/config/policies/:id", canManage, validate({ params: idP
 
 attendanceRouter.get("/config/defaults", canRead, config.getDefaults);
 attendanceRouter.put("/config/defaults", canManage, validate({ body: defaultsSchema }), config.setDefaults);
+
+attendanceRouter.get("/config/engine-start", canRead, config.getEngineStart);
+attendanceRouter.put("/config/engine-start", canManage, validate({ body: engineStartSchema }), config.setEngineStart);
 
 attendanceRouter.get("/config/cycle", canRead, config.getCycle);
 attendanceRouter.post("/config/cycle", canManage, validate({ body: cycleChangeSchema }), config.scheduleCycleChange);

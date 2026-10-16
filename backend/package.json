@@ -21,6 +21,8 @@
     "db:seed": "tsx scripts/reset-db.ts",
     "admin:bootstrap": "tsx scripts/admin-bootstrap.ts",
     "admin:recover": "tsx scripts/admin-recover.ts",
+    "admin:preflight": "tsx scripts/admin-preflight.ts",
+    "field-keys": "tsx scripts/field-keys.ts",
     "history:repair": "tsx scripts/history-repair.ts",
     "test:replay": "vitest run --config vitest.replay.config.ts",
     "test:clock": "bash scripts/test-clock.sh"
@@ -29,8 +31,11 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-cloudwatch": "^3.1152.0",
+    "@aws-sdk/client-kms": "^3.1152.0",
     "@aws-sdk/client-s3": "^3.1138.0",
     "@aws-sdk/client-ses": "^3.1138.0",
+    "@aws-sdk/client-sns": "^3.1152.0",
     "@aws-sdk/s3-request-presigner": "^3.1138.0",
     "@fontsource/noto-sans": "^5.3.0",
     "@prisma/client": "6.19.3",

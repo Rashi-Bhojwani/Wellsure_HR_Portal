@@ -78,13 +78,16 @@ These exact commands match the defaults in `.env.example` — adjust both
 if you use different credentials.
 
 ```bash
-psql -U postgres -c "CREATE ROLE wellsure LOGIN CREATEDB PASSWORD 'wellsure';"
+psql -U postgres -c "CREATE ROLE wellsure LOGIN CREATEDB CREATEROLE PASSWORD 'wellsure';"
 psql -U postgres -c "CREATE DATABASE wellsure_hr OWNER wellsure;"
 ```
 
 `CREATEDB` is required, not just `LOGIN` — Prisma's `migrate dev` creates
 a throwaway shadow database to compute each migration's diff, so the role
 needs permission to create databases, not just connect to one.
+
+`CREATEROLE` is needed by one test only (`lib/__tests__/dbRoles.test.ts`, which proves the production database-role setup by creating a
+temporary role). If you created the role before this was added: `psql -U postgres -c "ALTER ROLE wellsure CREATEROLE;"`.
 
 On Linux, PostgreSQL usually needs `sudo -u postgres psql -c "..."`
 instead of `psql -U postgres -c "..."`, unless you've set up peer/password
@@ -116,7 +119,7 @@ except the two marked **required**.
 | Variable | What it does | Required? | Local dev value |
 |---|---|---|---|
 | `APP_ENV` | `development` \| `staging` \| `production` — also gates destructive scripts (`npm run db:seed` refuses to run unless this is `development`) | No | `development` |
-| `ADMS_PUSH_ENABLED` | `true` \| `false`. Whether ADMS push (`/iclock`, and creating a PUSH device) is served. Unset = on, except in production, where it stays off until `/iclock` is restricted to the office address (`docs/DEPLOYMENT.md`, Phase 1.5 go-live checklist, item 1) | No | unset (on) |
+| `ADMS_PUSH_ENABLED` | `true` \| `false`. Whether ADMS push (`/iclock`, and creating a PUSH device) is served. Unset = on in development **only**; staging and production stay off until `/iclock` is restricted to the office address (`docs/DEPLOYMENT.md`, Phase 1.5 go-live checklist, item 1) | No | unset (on) |
 | `APP_MODE` | Which of the backend's four entrypoints to run: `api` \| `worker` \| `scheduler` \| `migrate` | No | `api` (`npm run dev` sets this itself) |
 | `PORT` | Backend HTTP port | No | `4000` |
 | `WEB_BASE_URL` | Frontend origin — used to build links in emails (set-password, reset-password) | No | `http://localhost:5173` |
@@ -133,7 +136,9 @@ except the two marked **required**.
 | `JWT_REFRESH_SECRET` | Not itself used to sign anything (refresh tokens are opaque, DB-tracked), reserved for future use — must differ from `JWT_ACCESS_SECRET` | No | change it before staging/production |
 | `JWT_ACCESS_TTL` | Access token lifetime | No | `15m` |
 | `JWT_REFRESH_TTL` | Refresh token lifetime | No | `30d` |
-| `KMS_FIELD_KEY_ID` | **Encryption key** for bank account/PAN/Aadhaar/UAN (AES-256-GCM). Local dev derives a static key from this string; staging/production use real AWS KMS envelope encryption | No locally | see warning below |
+| `FIELD_ENCRYPTION_DRIVER` | `local` \| `kms`. `local` (development only) derives one static key from `KMS_FIELD_KEY_ID`; `kms` keeps the data keys wrapped by an AWS KMS key. Staging and production refuse to start on `local` | No | `local` |
+| `KMS_FIELD_KEY_ID` | **Encryption key** for bank account/PAN/Aadhaar/UAN (AES-256-GCM). Local dev derives a static key from this string; with `FIELD_ENCRYPTION_DRIVER=kms` it is the KMS key's ARN | No locally | see warning below |
+| `FIELD_KEYRING` | JSON of the *wrapped* data keys (`kms` driver only; not secret, but useless without `kms:Decrypt`). Rotation: `docs/DEPLOYMENT.md` "Field encryption keys" | Conditional | — |
 | `FIELD_HASH_PEPPER` | **Blind-index pepper** — a *separate* secret used to compute a searchable hash of the same encrypted fields, so duplicates can be detected without decrypting | No locally | see warning below |
 | `STORAGE_DRIVER` | `local` \| `s3` | No | `local` |
 | `STORAGE_LOCAL_DIR` | Where uploaded files land in local dev | No | `.storage` |
@@ -144,7 +149,12 @@ except the two marked **required**.
 | `SES_FROM` | Required only when `MAIL_DRIVER=ses` | Conditional | — |
 | `SECURITY_ALERT_EMAIL` | An inbox **outside** this system (e.g. the owners' shared mailbox). It also receives every break-glass alert (§12). Set it in staging and production | No | unset |
 | `AGENT_API_KEYS` | Unused. Sync agent keys are created on Admin Tools → Devices → Sync agents (shown once, stored hashed) since Phase 2 P2-B | No | placeholder |
-| `AWS_REGION` | Used by the S3/SES clients when those drivers are active | No | `ap-south-1` |
+| `AWS_REGION` | Used by the S3, SES, KMS and CloudWatch clients when those drivers are active | No | `ap-south-1` |
+| `METRICS_DRIVER` / `METRICS_NAMESPACE` | `local` (publishes nothing) \| `cloudwatch`. The worker publishes queue backlog, failed-job counts and a heartbeat for the alarms. Required `cloudwatch` outside development | No | `local` |
+| `TRUST_PROXY_HOPS` | How many reverse proxies to believe about the client's address (`X-Forwarded-For`). Unset: 0 in development, 1 elsewhere (the ALB) | No | unset |
+| `SHUTDOWN_DRAIN_SECONDS` / `SHUTDOWN_HARD_LIMIT_SECONDS` | On SIGTERM a task fails `/ready` for the drain period, then finishes in-flight requests; it exits anyway at the hard limit. Unset: 0 / 25 in development; 10 / 25 elsewhere | No | unset |
+| `BREAKGLASS_ALARM_TOPIC_ARN` | The SNS topic `admin:preflight` checks has a confirmed subscriber | Staging/production | — |
+| `DB_APP_ROLE` / `DB_APP_PASSWORD` | The database role the **migrate** task creates for the app (`DB_APP_PASSWORD`, 24+ characters, is the migrate task's alone). Required outside development; see `docs/DEPLOYMENT.md` "Database roles" | Staging/production | `wellsure_app` / unset |
 
 > [!WARNING]
 > **`KMS_FIELD_KEY_ID` and `FIELD_HASH_PEPPER` must never be equal to
@@ -333,6 +343,8 @@ Run from the repo root unless noted.
 | `npm run fake-api --prefix biometric-agent -- --key <k> --serial <s>` | A stand-in for the agent's two API endpoints, to run the agent with no backend (also what the Windows CI job uses) |
 | `npm run build:exe --prefix biometric-agent` | Builds the agent as a single executable for this OS (the Windows release is built by CI) |
 | `npm run admin:bootstrap --prefix backend` | Create the **first** real Super Admin on a fresh staging/production database — see §12. Refuses once any active Super Admin exists, so it does nothing locally (seeded `1000` is one) |
+| `npm run admin:preflight --prefix backend` | Read-only readiness check for the first administrator (migrations, catalog, encryption, database role, SES, alert inbox, break-glass alarm subscriber). `admin:bootstrap` runs its alerting part itself and refuses if it fails — `docs/DEPLOYMENT.md` |
+| `npm run field-keys --prefix backend -- <status\|add\|promote\|reencrypt\|retire>` | Field-encryption key rotation, in four phases — `docs/DEPLOYMENT.md` "Field encryption keys". `status` is safe anywhere |
 | `npm run admin:recover --prefix backend` | Break-glass recovery for a Super Admin who lost their password or 2FA device — see §12 |
 | `npm run history:repair --prefix backend` | **Preview** history rows that don't fit the effective-dating model (e.g. a leaver whose placement was never closed) — every fix, current → new value, and why, plus rows a person must decide. Changes nothing. To apply, get the preview approved, then run the exact command it prints (`--apply --fingerprint … --approved-by … --operator …`); a changed list is refused. `db:migrate` warns when this is needed. See `docs/plans/EFFECTIVE_DATES.md` |
 
@@ -511,6 +523,14 @@ cd backend && npx prisma studio
 
 ## 10. Troubleshooting
 
+**`Encrypted value was made with data key …` / values that used to decrypt now fail, after pulling Phase 1.5 commit A**
+Every encrypted value now starts with the id of the data key that made it. Values written before that (a local database seeded earlier) are
+not in the new layout. Nothing real exists yet, so re-seed: `npm run db:seed --prefix backend`.
+
+**`REFUSING TO START: APP_ENV is "staging" …`**
+The configuration is not safe for that environment (a development default, a placeholder, a short or shared secret, a local driver, or an
+unencrypted connection). The message lists each problem by variable name. `docs/DEPLOYMENT.md`, "What the app refuses to start without".
+
 **"Postgres not running" / `ECONNREFUSED` on `DATABASE_URL`**
 Start it: `brew services start postgresql@16` (macOS) or
 `sudo systemctl start postgresql` (Linux), or check the Windows service
@@ -673,7 +693,7 @@ created once with `scripts/admin-bootstrap.ts`. It:
   departments exist.
 - **never handles a password.** The person gets the normal invitation
   email and sets their own password (and 2FA, where the
-  `auth.require2faRoles` setting requires it) in the browser.
+  `auth.require2faRoles` setting requires it) in the browser. Outside development that setting starts as Super Admin, HR Admin and Payroll Admin, so the first Super Admin is walked through 2FA enrolment as they accept the invitation.
 - writes an audit-log entry (`access.super_admin.bootstrapped`) with no
   actor.
 - **is loud** (E1.1). It needs `--operator "<your name>"`. Before anything
@@ -694,7 +714,11 @@ Steps:
    invitation goes to the person's personal Gmail. If email can't be
    relied on yet, add `--print-link`. The script then also prints the
    set-password link; hand it over in person and treat it like a password.
-3. Run the script **inside the backend image**, in the target environment,
+3. Run `npm run admin:preflight` first (same shell, read-only). `admin:bootstrap` then runs the
+   alerting part of it itself and **refuses to create anything** in an environment that
+   cannot tell anyone it happened (no confirmed subscriber on the break-glass alarm, SES
+   cannot send, the alert inbox cannot receive). There is no flag to skip that.
+   Run the script **inside the backend image**, in the target environment,
    from a shell on a running backend container (ECS Exec), so the details
    are typed at prompts and never stored anywhere:
 

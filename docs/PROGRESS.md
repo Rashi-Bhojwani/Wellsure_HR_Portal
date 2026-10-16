@@ -11,7 +11,7 @@ committed).
 | — | Initial project structure (this commit) | ✅ Done |
 | 0 | Foundation | ✅ Done |
 | 1 | Auth, RBAC, org, employees | Done — data layer, authentication, org masters, employee management, import center, exports, audit log viewer and system settings all built and tested. Users & Roles admin screen deliberately deferred (built in Phase 5 commit E1 as Roles & Permissions). **Correction (2026-09-30): role assignment does not exist anywhere in the product** — Add Employee always assigns plain `EMPLOYEE` and nothing else assigns roles; an earlier version of this row claimed otherwise. Both are Phase 5 commit E1 ([`docs/plans/PHASE_5.md`](plans/PHASE_5.md)). |
-| 1.5 | AWS staging environment and the greytHR migration | **Plan written, awaiting your review: [`docs/plans/PHASE_1_5.md`](plans/PHASE_1_5.md)** (nothing built). Go-live checklist in [`DEPLOYMENT.md`](DEPLOYMENT.md): item 1, restrict `/iclock` to the office address, must be ticked before any ADMS push device is created in production** |
+| 1.5 | AWS staging environment and the greytHR migration | **Plan approved 2026-10-16: [`docs/plans/PHASE_1_5.md`](plans/PHASE_1_5.md). Commit A of six built (the app is deployable: KMS key hierarchy with a tested rotation procedure, a guard that refuses default secrets outside development, database roles, ADMS off by default, trust proxy, 2FA defaults, metrics, graceful shutdown, `admin:preflight`, the cut-over guard); B to F not started.** Go-live checklist in [`DEPLOYMENT.md`](DEPLOYMENT.md): item 1, restrict `/iclock` to the office address, must be ticked before any ADMS push device is created in production** |
 | 2 | Biometric ingestion + attendance engine + real-time | In progress — plan approved ([`docs/plans/PHASE_2.md`](plans/PHASE_2.md)); P2-A (configuration), P2-B (ingestion), P2-C (rules engine), P2-D (manual entry and the muster) and P2-E (Attendance Info, Who Is In, the forgot-to-punch request) done, plus the fail-safe thresholds and the finalisation gate; P2-F done: F1 (the sync agent with our read-only device driver, and its server side), a follow-up (HR is told when punches are set aside) and F2 (the Windows service, release zip and INSTALL.md, proven on a Windows CI runner); P2-G done: G1 (the simulator's correctness: scenarios with expected outcomes, the month replay and its diff), G2a (the three routes, the `simulate` command, route replays) and G2b (the automated punch-to-screen latency test); P2-H done (device and agent health: incidents, alerts, recovery notices); P2-I done (the four gates recorded in [`PHASE_2_ACCEPTANCE.md`](plans/PHASE_2_ACCEPTANCE.md), an independent review with five fixes) and P2-J (the review follow-ups you approved) — **Phase 2 built and approved pending CI (green on 50ef7e8); awaiting your hands-on testing; close-out below** |
 | 3 | Attendance administration | In progress — plan approved with three changes ([`docs/plans/PHASE_3.md`](plans/PHASE_3.md)); commit 1 (regularization, complete, plus the assignment self-guard) approved, CI green; commits 1–3 approved and pushed; **commit 4 (the four attendance reports, joiners inside finalised cycles, the weekly clock audit, `docs/CONNECTION_DAY.md` and the close-out) built, awaiting your review** — Phase 3 complete |
 | 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
@@ -4779,6 +4779,25 @@ kill both. Live walkthrough as Super Admin on a scratch database: recorded a joi
 showed "1 employee has unprocessed days in the locked cycle Sep 2026" at the top, on the period (Late Joiner, 21 days) with the way out; all four reports
 opened with their warnings and markers, the exceptions report exported, and the Excess hours setting card is on System Settings. **Not exercised:** the
 connection-day pre-flight read on a Windows PC, and the weekly CI workflow (it runs for the first time on its schedule or by hand from the Actions tab).
+
+### Phase 1.5, commit A of six: the app is deployable (2026-10-16)
+
+Plan approved the same day (answers recorded in `docs/plans/PHASE_1_5.md` §1A; what was built, and how each part is proved, in §10A). Nothing
+touches AWS yet. What changed:
+
+- **The app refuses to start outside development on a default or weak configuration**, by a mechanism that covers secrets added later
+  (`devSecret()` registry + a schema-scan test), plus local drivers, missing S3/SES/alert inbox, non-TLS connections and non-https URLs.
+- **Field encryption is a KMS key hierarchy**: wrapped data keys in memory, a key id on every ciphertext, and a rotation procedure
+  (`npm run field-keys`, four phases, safe during a rolling deploy) that is documented in `DEPLOYMENT.md` and exercised end to end by tests.
+- **Database roles**: the migrate task creates the app role and takes UPDATE/DELETE/TRUNCATE away on every append-only table; the apps refuse
+  to run as a role that could rewrite the audit trail. Proved against Postgres, including that the database, not the trigger, refuses.
+- ADMS defaults off in staging; `trust proxy` is exactly one hop (a forged `X-Forwarded-For` can neither dodge nor frame the login limit);
+  admin roles require 2FA by default outside development; the worker publishes queue backlog, failed counts and a heartbeat (CloudWatch behind a
+  driver, nothing locally); SIGTERM drains (`/ready` fails first), finishes in-flight requests, exits 0 (tested with a real process).
+- **`npm run admin:preflight`** (read-only) and a refusal in `admin:bootstrap` where the environment cannot alert anyone.
+- **`attendance.engineStartDate`**: the engine, Process Attendance and the nightly job never write, change or delete a day before the cut-over.
+- Still open for the next commits: the infrastructure itself (B), the deploy workflow and its checklist (C), and everything that needs your
+  inputs (greytHR samples, the cut-off date, the domain). Not built and said so: rotating `FIELD_HASH_PEPPER`.
 
 ## Open questions
 

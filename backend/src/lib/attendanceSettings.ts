@@ -7,7 +7,21 @@ import { getSetting } from "./settings";
 // here; written only by the attendance config module.
 export const ATTENDANCE_SETTING_KEYS = {
   defaults: "attendance.defaults",
+  /** The cut-over guard: the engine never writes a day before this business date (YYYY-MM-DD). Unset: no guard. */
+  engineStartDate: "attendance.engineStartDate",
 } as const;
+
+export const isoDate = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`));
+
+/**
+ * greytHR runs attendance until the cut-over. From the cut-over date this engine is the record; before it, days come from greytHR (imported
+ * read-only) and the engine must never compute, overwrite or delete them, whoever asks (Process Attendance, the nightly job, a recompute after
+ * a correction). Null means no guard (development, and staging before the date is set).
+ */
+export async function getEngineStartDate(): Promise<string | null> {
+  const v = await getSetting<string | null>(ATTENDANCE_SETTING_KEYS.engineStartDate, null);
+  return isoDate(v) ? v : null;
+}
 
 /** The company default a new hire gets (HR 2026-10-08: GEN, Sunday off, the default policy). */
 export interface AttendanceDefaults {

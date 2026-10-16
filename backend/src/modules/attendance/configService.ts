@@ -3,7 +3,7 @@ import { describeWeekOff, sessionProblems, sessionTotals, weekOffRuleProblems, t
 import { prisma } from "../../lib/prisma";
 import { writeAuditLog } from "../../lib/audit";
 import { addCalendarDays, businessToday } from "../../lib/businessDate";
-import { ATTENDANCE_SETTING_KEYS, getAttendanceDefaults, type AttendanceDefaults } from "../../lib/attendanceSettings";
+import { ATTENDANCE_SETTING_KEYS, getAttendanceDefaults, getEngineStartDate, isoDate, type AttendanceDefaults } from "../../lib/attendanceSettings";
 import { cycleChangeProblem, cycleForRules, loadCycleRules, recentCycles } from "../../lib/attendanceCycle";
 import { setSetting } from "../../lib/settings";
 import { activeUsersHoldingPermission, resolveAccess } from "../../lib/permissions";
@@ -323,6 +323,20 @@ export async function setDefaults(input: { shiftId: string; weekOffPatternId: st
   await setSetting(ATTENDANCE_SETTING_KEYS.defaults, after, meta.actorUserId);
   await writeAuditLog({ ...meta, action: "attendance.defaults.updated", entityType: "SystemSetting", entityId: ATTENDANCE_SETTING_KEYS.defaults, before, after });
   return getDefaults();
+}
+
+// ── Engine start date (the cut-over guard) ──
+
+export async function getEngineStart() {
+  return { date: await getEngineStartDate() };
+}
+
+export async function setEngineStart(date: string | null, meta: Meta) {
+  if (date !== null && !isoDate(date)) throw new HttpError(400, "That is not a real date.", "VALIDATION_ERROR");
+  const before = await getEngineStartDate();
+  await setSetting(ATTENDANCE_SETTING_KEYS.engineStartDate, date, meta.actorUserId);
+  await writeAuditLog({ ...meta, action: "attendance.engine_start.updated", entityType: "SystemSetting", entityId: ATTENDANCE_SETTING_KEYS.engineStartDate, before: { date: before }, after: { date } });
+  return getEngineStart();
 }
 
 // ── Attendance cycle ──────────────────────────────────────────────────────

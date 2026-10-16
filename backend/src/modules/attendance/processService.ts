@@ -1,3 +1,5 @@
+import { addDays } from "./engine/time";
+import { getEngineStartDate } from "../../lib/attendanceSettings";
 import { writeAuditLog } from "../../lib/audit";
 import { businessToday } from "../../lib/businessDate";
 import { placementsOn } from "../../lib/effectiveDating";
@@ -38,6 +40,11 @@ export async function startProcessRun(input: { fromDate: string; toDate: string;
   if (input.fromDate > input.toDate) throw new HttpError(400, "The start date must be on or before the end date.", "VALIDATION_ERROR");
   if (input.toDate > today) throw new HttpError(400, "Attendance can't be processed for days that haven't happened yet.", "VALIDATION_ERROR");
   if (spanDays(input.fromDate, input.toDate) > MAX_PROCESS_DAYS) throw new HttpError(400, `Process at most ${MAX_PROCESS_DAYS} days at a time.`, "VALIDATION_ERROR");
+  // The cut-over guard (attendance.engineStartDate): days before it are greytHR's. Refuse a range entirely before it, say so for a range that straddles it.
+  const engineStart = await getEngineStartDate();
+  if (engineStart && input.toDate < engineStart) {
+    throw new HttpError(400, `Attendance before ${engineStart} is not processed here: that is when this system took over from greytHR. Choose dates from ${engineStart}.`, "BEFORE_ENGINE_START");
+  }
   const ids = await scope(input);
   if (ids.length === 0) throw new HttpError(400, "Nobody was employed in that range and selection.", "VALIDATION_ERROR");
   const run = await prisma.attendanceProcessRun.create({
@@ -51,7 +58,7 @@ export async function startProcessRun(input: { fromDate: string; toDate: string;
       totalDays: ids.length * spanDays(input.fromDate, input.toDate),
     },
   });
-  await writeAuditLog({ ...meta, action: "attendance.process.requested", entityType: "AttendanceProcessRun", entityId: run.id, after: { from: input.fromDate, to: input.toDate, employees: ids.length, locationId: input.locationId ?? null, reason: input.reason } });
+  await writeAuditLog({ ...meta, action: "attendance.process.requested", entityType: "AttendanceProcessRun", entityId: run.id, after: { from: input.fromDate, to: input.toDate, employees: ids.length, locationId: input.locationId ?? null, reason: input.reason, ...(engineStart && input.fromDate < engineStart ? { daysBeforeEngineStartSkipped: spanDays(input.fromDate, addDays(engineStart, -1)), engineStartDate: engineStart } : {}) } });
   await enqueueProcessRun(run.id);
   return run;
 }
