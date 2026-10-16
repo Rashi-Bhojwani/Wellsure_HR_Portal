@@ -28,6 +28,11 @@ export interface SubjectAdapter {
   describe(subjectId: string): Promise<string>;
   /** The hash of the live figures this approval is bound to. */
   hash(subjectId: string): Promise<string>;
+  /**
+   * Users whose own pay (or other personal interest) is in these figures. They can be neither the maker nor the checker: nobody prepares or
+   * approves a change to their own pay. Optional; a subject with nobody personally in it leaves it out.
+   */
+  affectedUserIds?(subjectId: string): Promise<string[]>;
 }
 
 const adapters = new Map<PayrollApprovalSubject, SubjectAdapter>();
@@ -76,6 +81,9 @@ export interface SubmitInput {
 export async function submit(input: SubmitInput): Promise<PayrollApproval> {
   const adapter = adapterFor(input.subject);
   if (!(await holds(input.makerUserId, adapter.makerPermission))) throw new HttpError(403, `Missing permission: ${adapter.makerPermission}`, "FORBIDDEN");
+  if (adapter.affectedUserIds && (await adapter.affectedUserIds(input.subjectId)).includes(input.makerUserId)) {
+    throw new HttpError(403, "This changes your own pay, so somebody else has to prepare it. Nobody prepares or approves a change to their own pay.", "MAKER_IS_AFFECTED");
+  }
   const contentHash = await adapter.hash(input.subjectId);
   try {
     const approval = await prisma.$transaction(async (tx) => {
@@ -108,6 +116,9 @@ export async function decide(input: DecideInput): Promise<PayrollApproval> {
   const adapter = adapterFor(approval.subject);
   if (!(await holds(input.checkerUserId, adapter.checkerPermission))) throw new HttpError(403, `Missing permission: ${adapter.checkerPermission}`, "FORBIDDEN");
   if (input.checkerUserId === approval.makerUserId) throw new HttpError(403, "You prepared this, so you cannot be the one who approves it. A different person must.", "CHECKER_IS_MAKER");
+  if (adapter.affectedUserIds && (await adapter.affectedUserIds(approval.subjectId)).includes(input.checkerUserId)) {
+    throw new HttpError(403, "This changes your own pay, so you cannot be the one who approves it. Nobody approves a change to their own pay.", "CHECKER_IS_AFFECTED");
+  }
   const editors = await figureEditorsSince(approval.subject, approval.subjectId, approval.submittedAt);
   if (editors.has(input.checkerUserId)) throw new HttpError(403, "You changed these figures after they were submitted, so you cannot be the one who approves them.", "CHECKER_EDITED_FIGURES");
 
@@ -166,18 +177,18 @@ export async function noteFiguresChanged(subject: PayrollApprovalSubject, subjec
  * The action an approval authorises asks for it here. The live hash must still equal the approved hash; otherwise the approval is void and the action
  * refuses. One use only.
  */
-export async function consume(subject: PayrollApprovalSubject, subjectId: string, actorUserId: string, ip: string | null = null): Promise<PayrollApproval> {
+export async function consume(subject: PayrollApprovalSubject, subjectId: string, actorUserId: string, ip: string | null = null, db: Db = prisma): Promise<PayrollApproval> {
   const adapter = adapterFor(subject);
-  const approval = await prisma.payrollApproval.findFirst({ where: { subject, subjectId, status: "APPROVED" } });
+  const approval = await db.payrollApproval.findFirst({ where: { subject, subjectId, status: "APPROVED" } });
   if (!approval) throw new HttpError(409, "This has not been approved by a second person, so it cannot go ahead.", "APPROVAL_REQUIRED");
   const liveHash = await adapter.hash(subjectId);
   if (liveHash !== approval.hashAtDecision) {
-    await voidApproval(approval, "The figures no longer match what was approved.", actorUserId);
+    await voidApproval(approval, "The figures no longer match what was approved.", actorUserId); // outside `db`: a void must survive the caller's rollback
     throw conflict("The figures changed after they were approved, so the approval is void. They need to be submitted and approved again.", "APPROVAL_VOIDED");
   }
-  const { count } = await prisma.payrollApproval.updateMany({ where: { id: approval.id, status: "APPROVED" }, data: { status: "CONSUMED", consumedAt: new Date(), consumedByUserId: actorUserId } }); // allow-clock: an instant, not a business date
+  const { count } = await db.payrollApproval.updateMany({ where: { id: approval.id, status: "APPROVED" }, data: { status: "CONSUMED", consumedAt: new Date(), consumedByUserId: actorUserId } }); // allow-clock: an instant, not a business date
   if (count !== 1) throw conflict("This approval was just used or voided.", "APPROVAL_VOIDED");
-  await recordEvent({ subjectType: subject, subjectId, type: "CONSUMED", actorUserId, payload: { approvalId: approval.id, hash: liveHash } });
+  await recordEvent({ subjectType: subject, subjectId, type: "CONSUMED", actorUserId, payload: { approvalId: approval.id, hash: liveHash } }, db);
   await writeAuditLog({ actorUserId, action: "payroll.approval.consumed", entityType: "PayrollApproval", entityId: approval.id, after: { subject, subjectId, hash: liveHash }, ipAddress: ip });
   return { ...approval, status: "CONSUMED" };
 }
@@ -218,13 +229,14 @@ export interface CheckerAvailability {
 /** The pure part, so every state can be tested whatever users the database happens to hold. */
 export function availabilityFrom(
   holders: Array<{ userId: string; name: string }>,
-  opts: { makerUserId?: string | null; editors?: ReadonlySet<string> } = {},
+  opts: { makerUserId?: string | null; editors?: ReadonlySet<string>; affected?: ReadonlySet<string> } = {},
 ): CheckerAvailability {
   const eligible: Checker[] = [];
   const excluded: Array<Checker & { reason: string }> = [];
   for (const who of holders) {
     if (opts.makerUserId && who.userId === opts.makerUserId) excluded.push({ ...who, reason: "prepared this" });
     else if (opts.editors?.has(who.userId)) excluded.push({ ...who, reason: "changed these figures" });
+    else if (opts.affected?.has(who.userId)) excluded.push({ ...who, reason: "is paid by this" });
     else eligible.push(who);
   }
   const state = eligible.length === 0 ? "NONE" : eligible.length === 1 ? "ONE" : "MANY";
@@ -237,13 +249,14 @@ export function availabilityFrom(
   return { eligible, excluded, state, message };
 }
 
-export async function checkerAvailability(subject: PayrollApprovalSubject, opts: { makerUserId?: string | null; subjectId?: string; since?: Date } = {}): Promise<CheckerAvailability> {
+export async function checkerAvailability(subject: PayrollApprovalSubject, opts: { makerUserId?: string | null; subjectId?: string; since?: Date; affectedUserIds?: readonly string[] } = {}): Promise<CheckerAvailability> {
   const adapter = adapterFor(subject);
   const holders = await activeUsersHoldingPermission(adapter.checkerPermission);
   const editors = opts.subjectId && opts.since ? await figureEditorsSince(subject, opts.subjectId, opts.since) : new Set<string>();
+  const affected = new Set<string>(opts.affectedUserIds ?? (opts.subjectId && adapter.affectedUserIds ? await adapter.affectedUserIds(opts.subjectId) : []));
   const names = await namesOfUsers(holders.map((h) => h.userId));
   return availabilityFrom(
     holders.map((h) => ({ userId: h.userId, name: names.get(h.userId) ?? "Someone" })),
-    { makerUserId: opts.makerUserId ?? null, editors },
+    { makerUserId: opts.makerUserId ?? null, editors, affected },
   );
 }

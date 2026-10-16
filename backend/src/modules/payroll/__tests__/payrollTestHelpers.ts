@@ -15,6 +15,10 @@ export async function cleanupPayrollRowsBy(userIds: string[]): Promise<void> {
     await ids(prisma.payrollApproval.findMany({ where: { OR: [{ makerUserId: { in: userIds } }, { checkerUserId: { in: userIds } }] }, select: { id: true } })),
   );
   await deleteWithDependents("PayrollEvent", await ids(prisma.payrollEvent.findMany({ where: { actorUserId: { in: userIds } }, select: { id: true } })));
+  // Salary revisions these people made, and any salary rows they wrote (a person's own rows go with the person: see cleanupFullTestEmployee).
+  const revisions = await ids(prisma.payrollSalaryRevision.findMany({ where: { createdByUserId: { in: userIds } }, select: { id: true } }));
+  await deleteWithDependents("PayrollSalaryRevision", revisions);
+  await deleteWithDependents("PayrollEvent", await ids(prisma.payrollEvent.findMany({ where: { subjectType: "SALARY_REVISION", subjectId: { in: revisions } }, select: { id: true } })));
 }
 
 /** Removes rows a test made with a fabricated subject id (no user involved). */

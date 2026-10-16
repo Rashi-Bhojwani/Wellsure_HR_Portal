@@ -1,4 +1,4 @@
-import { Prisma, type AttendanceAssignment, type DeviceUserMapping, type EmployeeBankAccount, type EmployeeJobHistory, type EmployeeNameHistory } from "@prisma/client";
+import { Prisma, type AttendanceAssignment, type DeviceUserMapping, type EmployeeBankAccount, type EmployeeJobHistory, type EmployeeNameHistory, type EmployeeSalary, type EmployeeSalaryLine, type SalaryChangeReason } from "@prisma/client";
 import { HttpError } from "../middleware/errorHandler";
 import { addCalendarDays, businessToday } from "./businessDate";
 import { prisma } from "./prisma";
@@ -220,6 +220,74 @@ export async function assignmentsBetween(employeeIds: string[], from: Date, to: 
   });
 }
 
+// ── Salary (Phase 6, docs/plans/PHASE_6.md §14B) ─────────────────────────
+// A person's salary is effective-dated in the same family, with one deliberate difference: a change dated the same day as the latest row is REFUSED,
+// never amended, because an amend would overwrite money. A salary row is written only through writeSalaryChange (called by a salary revision) and read
+// only through these functions; payroll code never queries employee_salaries directly (currentRowGuard.test.ts).
+
+export type SalaryWithLines = EmployeeSalary & { lines: EmployeeSalaryLine[] };
+const salaryInclude = { lines: { orderBy: { sortOrder: "asc" as const } } } as const;
+
+/** The salary (with its frozen breakup) in force on `day`; null before the first row or after leaving. */
+export async function salaryOn(employeeId: string, day: Date): Promise<SalaryWithLines | null> {
+  return prisma.employeeSalary.findFirst({ where: { employeeId, ...inForceOn(day) }, include: salaryInclude });
+}
+
+/** Everyone's salary in force on `day` (bulk screens), keyed by employee id. */
+export async function salariesOn(employeeIds: string[], day: Date): Promise<Map<string, SalaryWithLines>> {
+  const rows = await prisma.employeeSalary.findMany({ where: { employeeId: { in: employeeIds }, ...inForceOn(day) }, include: salaryInclude });
+  return new Map(rows.map((r) => [r.employeeId, r]));
+}
+
+/** Every salary row covering part of [from, to] (inclusive days), clipped to that range, oldest first: a revision on the 16th gives two segments. */
+export async function salarySegments(employeeId: string, from: Date, to: Date): Promise<Array<{ row: SalaryWithLines; from: Date; to: Date }>> {
+  const rows = await prisma.employeeSalary.findMany({
+    where: { employeeId, effectiveFrom: { lte: to }, OR: [{ effectiveTo: null }, { effectiveTo: { gt: from } }] },
+    orderBy: { effectiveFrom: "asc" },
+    include: salaryInclude,
+  });
+  return rows.map((row) => {
+    const lastDay = row.effectiveTo ? addCalendarDays(row.effectiveTo, -1) : to;
+    return { row, from: row.effectiveFrom > from ? row.effectiveFrom : from, to: lastDay < to ? lastDay : to };
+  });
+}
+
+/** One employee's whole salary history, newest first (past, current and scheduled), for the Employee Salaries screen. */
+export async function salaryHistory(employeeId: string): Promise<SalaryWithLines[]> {
+  return prisma.employeeSalary.findMany({ where: { employeeId }, orderBy: { effectiveFrom: "desc" }, include: salaryInclude });
+}
+
+/** The salary rows a salary revision wrote, for showing an applied revision as it was written. */
+export async function salaryRowsOfRevision(revisionId: string): Promise<SalaryWithLines[]> {
+  return prisma.employeeSalary.findMany({ where: { revisionId }, orderBy: { effectiveFrom: "asc" }, include: salaryInclude });
+}
+
+/** The latest salary row per employee (whatever its dates), keyed by employee id: where the next revision would start from. */
+export async function latestSalaries(employeeIds: string[]): Promise<Map<string, SalaryWithLines>> {
+  const rows = await prisma.employeeSalary.findMany({ where: { employeeId: { in: employeeIds } }, orderBy: { effectiveFrom: "asc" }, include: salaryInclude });
+  const out = new Map<string, SalaryWithLines>();
+  for (const r of rows) out.set(r.employeeId, r); // oldest first, so the last write per employee is the latest row
+  return out;
+}
+
+/** Employees employed on `day` who were placed at this branch and/or in this grade on it (a salary revision's "everyone in grade G" pick). */
+export async function employeeIdsPlacedOn(day: Date, filter: { locationId?: string; gradeId?: string }): Promise<string[]> {
+  const rows = await prisma.employeeJobHistory.findMany({
+    where: { ...inForceOn(day), ...(filter.locationId ? { locationId: filter.locationId } : {}), ...(filter.gradeId ? { gradeId: filter.gradeId } : {}), employee: employedOn(day) },
+    select: { employeeId: true },
+  });
+  return [...new Set(rows.map((r) => r.employeeId))];
+}
+
+/** Employees whose salary in force on `day` is on this structure (and version, if given). */
+export async function employeeIdsOnStructure(day: Date, structureKey: string, structureVersion?: number): Promise<string[]> {
+  const rows = await prisma.employeeSalary.findMany({
+    where: { ...inForceOn(day), structureKey, ...(structureVersion ? { structureVersion } : {}), employee: employedOn(day) },
+    select: { employeeId: true },
+  });
+  return [...new Set(rows.map((r) => r.employeeId))];
+}
+
 /** In-force test for a half-open row on `day` (shared by the engine's loader). */
 export function rowInForce(row: { effectiveFrom: Date; effectiveTo: Date | null }, day: Date): boolean {
   return row.effectiveFrom <= day && (!row.effectiveTo || row.effectiveTo > day);
@@ -397,9 +465,14 @@ export async function maxScheduleAheadDays(): Promise<number> {
 
 // Serialises every history write for one employee (two HR users changing
 // the same person at once can't interleave close + insert).
-async function lockEmployee(tx: Prisma.TransactionClient, employeeId: string): Promise<void> {
+export async function lockEmployee(tx: Prisma.TransactionClient, employeeId: string): Promise<void> {
   const rows = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM employees WHERE id = ${employeeId} FOR UPDATE`;
   if (rows.length === 0) throw new HttpError(404, "Employee not found.", "NOT_FOUND");
+}
+
+/** Locks several employees in a fixed order (so two bulk writers cannot deadlock). */
+export async function lockEmployees(tx: Prisma.TransactionClient, employeeIds: string[]): Promise<void> {
+  for (const id of [...new Set(employeeIds)].sort()) await lockEmployee(tx, id);
 }
 
 // ── Writers: the only code that changes history ──────────────────────────
@@ -634,6 +707,71 @@ export async function writeDeviceMapping(
   return { before: latest, after, plan: "append" };
 }
 
+// ── Writing salary ──
+
+export interface SalaryWrite {
+  reason: SalaryChangeReason;
+  annualCtc: string;
+  monthlyCtc: string;
+  structureKey: string;
+  structureVersion: number;
+  structureHash: string;
+  roundingPin: Prisma.InputJsonValue;
+  revisionId: string | null;
+  note: string;
+  lines: Array<{ componentCode: string; componentVersion: number; componentType: string; amount: string; sortOrder: number }>;
+}
+
+async function writeSalaryRow(tx: Prisma.TransactionClient, employeeId: string, day: Date, data: SalaryWrite, meta: { createdByUserId: string }, checkLock: boolean): Promise<TimelineWrite<SalaryWithLines>> {
+  await lockEmployee(tx, employeeId);
+  if (checkLock) await assertNotInLockedPayroll(day);
+  const employee = await tx.employee.findUniqueOrThrow({ where: { id: employeeId }, select: { dateOfJoining: true, lastWorkingDate: true } });
+  if (day < employee.dateOfJoining) throw new HttpError(400, `They joined on ${iso(employee.dateOfJoining)}, so a salary cannot start before that.`, "SALARY_BEFORE_JOINING");
+  if (employee.lastWorkingDate && day > employee.lastWorkingDate) throw new HttpError(409, `They left on ${iso(employee.lastWorkingDate)}, so a salary cannot start after that.`, "HISTORY_CLOSED");
+  const rows = await tx.employeeSalary.findMany({ where: { employeeId }, orderBy: { effectiveFrom: "asc" }, include: salaryInclude });
+  const plan = planTimelineChange(rows.map(toRow), day, businessToday(), await maxScheduleAheadDays());
+  if (plan.kind === "amend") {
+    throw new HttpError(409, `A salary already starts on ${iso(day)}. It is never overwritten: cancel it if it has not started, or date this change after it.`, "SALARY_SAME_DAY");
+  }
+  const latest = rows.at(-1) ?? null;
+  if (plan.kind === "append") await tx.employeeSalary.update({ where: { id: plan.closeId }, data: { effectiveTo: day } });
+  const { lines, ...row } = data;
+  const after = await tx.employeeSalary.create({
+    data: { employeeId, ...row, effectiveFrom: day, createdByUserId: meta.createdByUserId, lines: { create: lines } },
+    include: salaryInclude,
+  });
+  return { before: latest, after, plan: plan.kind };
+}
+
+/** Starts a new salary row on `day`. Refused inside a finalised payroll period; the only way round that is writeBackdatedSalaryChange. */
+export async function writeSalaryChange(tx: Prisma.TransactionClient, employeeId: string, day: Date, data: SalaryWrite, meta: { createdByUserId: string }): Promise<TimelineWrite<SalaryWithLines>> {
+  return writeSalaryRow(tx, employeeId, day, data, meta, true);
+}
+
+/**
+ * The ONE function that writes a salary row without asking the payroll lock. A revision dated inside a finalised period keeps its true date on the
+ * salary timeline and the closed period is never rewritten; what it owes is paid as arrears in the next run. Only the revision apply step may call
+ * this, and only after creating those arrears in the same transaction (a source scan in the tests fails on any other caller).
+ */
+export async function writeBackdatedSalaryChange(tx: Prisma.TransactionClient, employeeId: string, day: Date, data: SalaryWrite, meta: { createdByUserId: string }): Promise<TimelineWrite<SalaryWithLines>> {
+  return writeSalaryRow(tx, employeeId, day, data, meta, false);
+}
+
+/** Cancels the latest salary row if it has not started; the previous one reopens. A row already in force is never cancelled: make a revision after it. */
+export async function cancelScheduledSalary(tx: Prisma.TransactionClient, employeeId: string, rowId: string): Promise<{ removed: SalaryWithLines; reopened: SalaryWithLines }> {
+  await lockEmployee(tx, employeeId);
+  const rows = await tx.employeeSalary.findMany({ where: { employeeId }, orderBy: { effectiveFrom: "asc" }, include: salaryInclude });
+  const target = rows.find((r) => r.id === rowId);
+  if (!target) throw new HttpError(404, "That salary was not found.", "NOT_FOUND");
+  if (target !== rows.at(-1)) throw new HttpError(409, "Only the latest scheduled salary can be cancelled: cancel the later one first.", "HISTORY_NOT_LATEST");
+  if (target.effectiveFrom <= businessToday()) throw new HttpError(409, "This salary has already started, so it cannot be cancelled: make a revision dated after it.", "HISTORY_IN_FORCE");
+  const previous = rows.at(-2);
+  if (!previous) throw new HttpError(409, "This is the only salary on record, so it cannot be cancelled.", "HISTORY_ONLY_ROW");
+  await tx.employeeSalary.delete({ where: { id: target.id } });
+  const reopened = await tx.employeeSalary.update({ where: { id: previous.id }, data: { effectiveTo: null }, include: salaryInclude });
+  return { removed: target, reopened };
+}
+
 /** Turns the device-mapping constraints' errors into a friendly 409 (rethrows anything else). */
 export function translateMappingConflict(err: unknown, deviceUserId: string): never {
   if (err instanceof Prisma.PrismaClientUnknownRequestError && err.message.includes("device_user_mappings_device_no_overlap")) {
@@ -686,6 +824,12 @@ export async function closeHistoryOnLeaving(tx: Prisma.TransactionClient, employ
   // Phase 2: their attendance assignment ends with them; scheduled ones after the last day are dropped.
   await tx.attendanceAssignment.deleteMany({ where: { employeeId, effectiveFrom: { gte: end } } });
   await tx.attendanceAssignment.updateMany({ where: { employeeId, effectiveFrom: { lt: end }, OR: [{ effectiveTo: null }, { effectiveTo: { gt: end } }] }, data: { effectiveTo: end } });
+  // Phase 6: their salary ends with them too; a scheduled one after the last day is dropped, one already in force after it is refused.
+  const salaryAfter = await tx.employeeSalary.findMany({ where: { employeeId, effectiveFrom: { gte: end } }, select: { id: true, effectiveFrom: true } });
+  const salaryInForce = salaryAfter.find((r) => r.effectiveFrom <= businessToday());
+  if (salaryInForce) throw new HttpError(409, `A salary has been in force since ${iso(salaryInForce.effectiveFrom)}, after the last working day (${iso(lastWorkingDate)}): earlier history is never rewritten.`, "HISTORY_AFTER_LEAVING");
+  if (salaryAfter.length) await tx.employeeSalary.deleteMany({ where: { id: { in: salaryAfter.map((r) => r.id) } } });
+  await tx.employeeSalary.updateMany({ where: { employeeId, effectiveFrom: { lt: end }, OR: [{ effectiveTo: null }, { effectiveTo: { gt: end } }] }, data: { effectiveTo: end } });
   return { removedScheduled };
 }
 

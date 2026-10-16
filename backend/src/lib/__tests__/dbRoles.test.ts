@@ -97,6 +97,19 @@ describe("the app role", () => {
     expect(await denied(app.$executeRawUnsafe(`DELETE FROM payroll_approvals WHERE false`))).toMatch(/permission denied/);
   });
 
+  it("the salary tables are guarded by row triggers, not swept up as append-only: the app role can close a salary row and cancel a scheduled one, and none of them can be truncated", async () => {
+    const append = await appendOnlyTables(prisma);
+    for (const t of ["employee_salaries", "employee_salary_lines", "payroll_salary_revisions", "payroll_adjustments"]) expect(append, t).not.toContain(t);
+    for (const t of ["employee_salaries", "employee_salary_lines"]) {
+      const [p] = await app.$queryRawUnsafe<Array<{ upd: boolean; del: boolean; trunc: boolean }>>(
+        `SELECT has_table_privilege(current_user, $1, 'UPDATE') AS upd, has_table_privilege(current_user, $1, 'DELETE') AS del, has_table_privilege(current_user, $1, 'TRUNCATE') AS trunc`,
+        t,
+      );
+      expect(p, t).toEqual({ upd: true, del: true, trunc: false });
+    }
+    expect(await denied(app.$executeRawUnsafe(`TRUNCATE employee_salaries`))).toMatch(/permission denied/);
+  });
+
   it("cannot change the schema or the migration history", async () => {
     expect(await denied(app.$executeRawUnsafe(`CREATE TABLE zz_nope_${suffix} (id int)`))).toMatch(/permission denied/);
     expect(await denied(app.$executeRawUnsafe(`DROP TABLE departments`))).toMatch(/must be owner|permission denied/);

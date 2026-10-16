@@ -6,7 +6,24 @@ payroll runs (maker-checker), payslips, statutory outputs
 reimbursements, and full & final settlement. See spec §7.5 and
 `docs/plans/PHASE_6.md` (plan, and "14A. P6-1 as built").
 
-## Built so far (P6-1, foundations)
+## Built so far
+
+### P6-2, salary (`salary/`, `items.ts`)
+
+| File | What it is |
+|---|---|
+| `items.ts` | The governed-item core shared by rules, components and structures: versions, status, append, confirm (who may vouch for what is decided here, once). |
+| `salary/schemas.ts` | What a component and a structure look like as stored values, and the rules that need no database (a line may refer only to CTC or a line above it, one balance line, formulas parse). |
+| `salary/breakup.ts` | Pure: annual CTC and a structure to the frozen monthly lines, exact, with the balance absorbing rounding. |
+| `salary/components.ts`, `salary/structures.ts` | List, preview, save, confirm. A structure is proved to add up for a sample CTC before it can be saved. |
+| `salary/revisions.ts` | The plan (recomputed from a revision's inputs every time), preview, create, submit, decide, apply, withdraw; registers the SALARY_REVISION approval adapter. |
+| `salary/arrears.ts` | Arrears per locked cycle, and the provider seam P6-3 fills with what each person was paid. |
+| `salary/adjustments.ts` | One-off earnings and deductions, previewed then added, cancellable until a run uses them. |
+| `salary/employees.ts`, `salary/guards.ts` | Reading people's salaries; nobody changes their own pay. |
+
+A salary row is written only by `writeSalaryChange` (`lib/effectiveDating.ts`) and read only by `salaryOn` / `salariesOn` / `salarySegments` / `salaryHistory`. The payroll-lock bypass `writeBackdatedSalaryChange` has exactly one caller, the revision apply step.
+
+### P6-1, foundations
 
 | File | What it is |
 |---|---|

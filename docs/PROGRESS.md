@@ -17,7 +17,7 @@ committed).
 | 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
 | 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | ✅ Done (2026-10-03) — commits A, B, C, D, D2, E1, E1.1, E2, E3, F and G (mobile bottom bar + PWA), plus interim commits. Full review — every screen and URL, every permission, what's stubbed, open questions, risks for Phase 6 — in [`docs/plans/PHASE_5_REVIEW.md`](plans/PHASE_5_REVIEW.md). Plan and as-built notes per commit in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
 | 5.5 | AWS production environment and go-live hardening | Not started |
-| 6 | Payroll | **In progress, built locally (AWS comes last). Plan approved 2026-10-16 ([`docs/plans/PHASE_6.md`](plans/PHASE_6.md)); P6-1 Foundations built, awaiting your review; P6-2 to P6-6 not started.** One commit at a time, a pause after each |
+| 6 | Payroll | **In progress, built locally (AWS comes last). Plan approved 2026-10-16 ([`docs/plans/PHASE_6.md`](plans/PHASE_6.md)); P6-1 Foundations approved; P6-2 Salary built, awaiting your review; P6-3 to P6-6 not started.** One commit at a time, a pause after each |
 | 7 | Tax & benefits | Not started (planned after Phase 6 is reviewed) |
 | 8 | Extras | Not started |
 
@@ -4822,6 +4822,19 @@ nothing yet. What exists, and how each part is proved, is in `docs/plans/PHASE_6
 - Verified: full backend suite alone, 134 files and 1,204 tests, then the payroll, role and cleanup suites again after the last test changes
   (121 tests); typecheck and lint clean in backend and frontend; no migration drift; mutation checks; a live walkthrough in a browser with a maker and
   a checker. Local assumptions are tracked in `docs/plans/LOCAL_ASSUMPTIONS.md` (rows 11 to 14 added).
+
+### Phase 6, P6-2 of six: salary (2026-10-16)
+
+Built to the design written into `docs/plans/PHASE_6.md` §14B before any code; what exists, what I decided and what is not in this commit are in §14C.
+
+- **Components and structures** are governed items (Placeholder until a different person confirms), through one shared confirm path that rules now use too. A structure pins each component's version and hash and is proved to add up to CTC before it can be saved.
+- **A person's salary** is effective-dated with the same guarantees as job and bank history (database overlap and ordering constraints, one open row) plus immutability of the money, and is read only through `salaryOn`, `salariesOn`, `salarySegments`, `salaryHistory`.
+- **Salary revisions** are the only way a salary is written: preview, a different person approves exactly those figures (void if anything moves), the maker applies in one transaction. An applied revision reads back as written.
+- **Arrears** on a back-dated revision: pending adjustments per person per locked cycle, with the component breakdown; the payroll lock is bypassed by one named function that has one caller. Refused with a reason until the calculation commit records what each person was paid.
+- **Nobody changes their own pay**, Super Admin included; a checker whose own pay is in a revision cannot approve it.
+- **Also in this commit, from your two notes:** a test per layer that stops a person confirming their own value (rules service, approval core, approvals table, confirmations table), each proved by removing that layer alone; and a third fence against the demo payroll accounts reaching a deployed environment (`admin:preflight` fails if the development seed has ever written to the database).
+- **Found on the way:** the payroll literal scan missed numbers written with separators or exponents; fixed.
+- Verified: full backend suite alone (140 files, 1,276 tests), frontend tests, typecheck, lint and drift clean in both projects; mutation checks on every new guard (all caught, four first survived and each led to a test being added or sharpened); a live two-browser walkthrough. Detail in the Phase 6 plan §14C; LOCAL_ASSUMPTIONS rows 15 to 19.
 
 ## Open questions
 

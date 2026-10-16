@@ -132,6 +132,25 @@ describe("who actually gets in", () => {
     expect((await get("payrollAdmin", "/api/payroll/approvals/checkers?subject=SOMETHING_ELSE")).status).toBe(400);
   });
 
+  it("salary screens: people who may see salary may look, only the maker roles may prepare, only a checker may decide, and nobody else gets anything", async () => {
+    const reads = ["/components", "/structures", "/salary/employees", "/salary/revisions", "/adjustments", "/salary/people?q=x"];
+    for (const path of reads) {
+      for (const who of ["payrollAdmin", "approver", "hrAdmin"]) expect((await get(who, `/api/payroll${path}`)).status, `${who} ${path}`).toBe(200);
+      for (const who of ["hrExec", "manager", "employee"]) expect((await get(who, `/api/payroll${path}`)).status, `${who} ${path}`).toBe(403);
+    }
+    const post = (who: string, path: string) => request(app).post(`/api/payroll${path}`).set(...authHeader(tokens[who]!)).send({}); // an empty body: 403 is the permission, 400 is "allowed in, but not a valid request"
+    for (const path of ["/salary/revisions/preview", "/adjustments/preview", "/structures/breakup-preview"]) {
+      for (const who of ["payrollAdmin", "hrAdmin"]) expect((await post(who, path)).status, `${who} ${path}`).toBe(400);
+      for (const who of ["approver", "hrExec", "manager", "employee"]) expect((await post(who, path)).status, `${who} ${path}`).toBe(403);
+    }
+    // Deciding is the checker's alone: the makers are refused even though they can prepare.
+    for (const who of ["payrollAdmin", "hrAdmin", "hrExec", "manager", "employee"]) expect((await post(who, "/salary/revisions/some-id/decision")).status, who).toBe(403);
+    expect((await post("approver", "/salary/revisions/some-id/decision")).status).toBe(400);
+    // Confirming a component or structure is the same permission as confirming a rule.
+    for (const who of ["payrollAdmin", "hrAdmin", "hrExec", "manager", "employee"]) expect((await post(who, "/components/BASIC/confirm-preview")).status, who).toBe(403);
+    for (const path of ["/salary/revisions", "/components", "/adjustments"]) expect((await request(app).get(`/api/payroll${path}`)).status, path).toBe(401);
+  });
+
   it("is unreachable without signing in", async () => {
     expect((await request(app).get("/api/payroll/rules")).status).toBe(401);
     expect((await request(app).get("/api/payroll/audit")).status).toBe(401);

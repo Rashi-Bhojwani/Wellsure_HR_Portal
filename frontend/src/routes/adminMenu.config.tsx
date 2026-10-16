@@ -17,6 +17,7 @@ import {
   FundOutlined,
   GiftOutlined,
   GroupOutlined,
+  DiffOutlined,
   HistoryOutlined,
   HomeOutlined,
   IdcardOutlined,
@@ -82,6 +83,11 @@ import { ShiftOverridePage } from "../pages/admin/attendance/ShiftOverridePage";
 import { ShiftRosterPage } from "../pages/admin/attendance/ShiftRosterPage";
 import { EmployeeSwipesPage } from "../pages/admin/attendance/EmployeeSwipesPage";
 import { RulesPage } from "../pages/admin/payroll/RulesPage";
+import { ComponentsPage } from "../pages/admin/payroll/ComponentsPage";
+import { StructuresPage } from "../pages/admin/payroll/StructuresPage";
+import { EmployeeSalariesPage } from "../pages/admin/payroll/EmployeeSalariesPage";
+import { SalaryRevisionsPage } from "../pages/admin/payroll/SalaryRevisionsPage";
+import { AdjustmentsPage } from "../pages/admin/payroll/AdjustmentsPage";
 import { AttendanceSettingsPage, ShiftMasterPage, WeekOffPatternsPage } from "../pages/admin/attendance/AttendanceSettingsPage";
 
 // Single source of truth for the HR/Admin portal's App Switcher and each
@@ -274,9 +280,11 @@ export const adminApps: AdminApp[] = [
         label: "Payroll",
         items: [
           { key: "payroll-rules", label: "Rules and Setup", path: "payroll/rules", icon: SafetyCertificateOutlined, element: RulesPage },
-          { key: "salary-components", label: "Salary Components", path: "payroll/components", icon: SettingOutlined, phase: "Phase 6" },
-          { key: "salary-structures", label: "Salary Structures", path: "payroll/structures", icon: PartitionOutlined, phase: "Phase 6" },
-          { key: "employee-salaries", label: "Employee Salaries", path: "payroll/salaries", icon: WalletOutlined, phase: "Phase 6" },
+          { key: "salary-components", label: "Salary Components", path: "payroll/components", icon: SettingOutlined, element: ComponentsPage },
+          { key: "salary-structures", label: "Salary Structures", path: "payroll/structures", icon: PartitionOutlined, element: StructuresPage },
+          { key: "employee-salaries", label: "Employee Salaries", path: "payroll/salaries", icon: WalletOutlined, element: EmployeeSalariesPage },
+          { key: "salary-revisions", label: "Salary Revisions", path: "payroll/revisions", icon: AuditOutlined, element: SalaryRevisionsPage },
+          { key: "payroll-adjustments", label: "Adjustments", path: "payroll/adjustments", icon: DiffOutlined, element: AdjustmentsPage },
           { key: "payroll-run", label: "Payroll Run", path: "payroll/run", icon: FundOutlined, phase: "Phase 6" },
           { key: "payslips-admin", label: "Payslips", path: "payroll/payslips", icon: FileTextOutlined, phase: "Phase 6" },
           { key: "statutory-outputs", label: "Statutory Outputs", path: "payroll/statutory", icon: FileProtectOutlined, phase: "Phase 6" },

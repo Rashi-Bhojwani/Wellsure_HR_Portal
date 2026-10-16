@@ -6,13 +6,13 @@ import { ROUNDING_MODES, canonicalDecimal, dec } from "../money";
 // The validation of a rule's value, from the shape in the shared catalog. A value that passes comes out in its canonical form (decimals as
 // canonical strings, lists sorted), so the same value always has the same hash, and "type the value again" can be compared exactly.
 
-const decimalText = z
+export const decimalText = z
   .string()
   .trim()
   .regex(/^\d+(\.\d+)?$/, "A plain number, for example 12 or 8.33")
   .transform((s) => canonicalDecimal(dec(s)));
 
-const percent = decimalText.refine((s) => dec(s).lessThanOrEqualTo(dec("100")), "A percentage cannot be more than 100");
+export const percent = decimalText.refine((s) => dec(s).lessThanOrEqualTo(dec("100")), "A percentage cannot be more than 100");
 const stateKey = z.string().regex(/^[A-Z][A-Z0-9_]{1,39}$/, "A state key is upper-case letters, digits and underscores, for example TAMIL_NADU");
 const EMPLOYMENT_TYPES = ["PERMANENT", "CONTRACT", "INTERN", "CONSULTANT", "PROBATION"] as const;
 

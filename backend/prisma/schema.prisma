@@ -499,6 +499,8 @@ model Employee {
   helpdeskCategoriesAssigned HelpdeskCategory[]      @relation("HelpdeskCategoryDefaultAssignee")
   generatedLetters           GeneratedLetter[]
   attendanceAssignments      AttendanceAssignment[]
+  salaries                   EmployeeSalary[]
+  payrollAdjustments         PayrollAdjustment[]
   rawPunches                 RawPunch[]
   dailyAttendance            DailyAttendance[]
   manualAttendanceEntries    ManualAttendanceEntry[]
@@ -2408,21 +2410,21 @@ model AttendancePeriodLock {
 // engine reads these to stop treating the date as leave for that request; cancelling the request later returns only
 // what is still consumed. Never edited or removed: if it was a mistake, leave is applied again.
 model LeaveDayRelease {
-  id              String         @id @default(cuid())
-  employeeId      String         @map("employee_id")
-  employee        Employee       @relation(fields: [employeeId], references: [id])
-  date            DateTime       @db.Date
-  leaveRequestId  String         @map("leave_request_id")
-  leaveRequest    LeaveRequest   @relation(fields: [leaveRequestId], references: [id], onDelete: Restrict)
-  leaveTypeId     String         @map("leave_type_id")
-  leaveType       LeaveType      @relation(fields: [leaveTypeId], references: [id])
-  dayPart         LeaveDayPart   @map("day_part")
-  days            Decimal        @db.Decimal(3, 2) // returned to the balance: 1 for a full day, 0.5 for a half
-  overrideId      String         @map("override_id") // the attendance_overrides row written in the same action (two half-day requests on one date share it)
+  id              String             @id @default(cuid())
+  employeeId      String             @map("employee_id")
+  employee        Employee           @relation(fields: [employeeId], references: [id])
+  date            DateTime           @db.Date
+  leaveRequestId  String             @map("leave_request_id")
+  leaveRequest    LeaveRequest       @relation(fields: [leaveRequestId], references: [id], onDelete: Restrict)
+  leaveTypeId     String             @map("leave_type_id")
+  leaveType       LeaveType          @relation(fields: [leaveTypeId], references: [id])
+  dayPart         LeaveDayPart       @map("day_part")
+  days            Decimal            @db.Decimal(3, 2) // returned to the balance: 1 for a full day, 0.5 for a half
+  overrideId      String             @map("override_id") // the attendance_overrides row written in the same action (two half-day requests on one date share it)
   override        AttendanceOverride @relation(fields: [overrideId], references: [id], onDelete: Restrict)
   reason          String
-  createdByUserId String         @map("created_by_user_id")
-  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  createdByUserId String             @map("created_by_user_id")
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@unique([leaveRequestId, date, dayPart])
   @@index([employeeId, date])
@@ -2525,4 +2527,121 @@ model PayrollEvent {
 
   @@index([subjectType, subjectId, seq])
   @@map("payroll_events")
+}
+
+// ── Salary (Phase 6 commit P6-2, docs/plans/PHASE_6.md §4 and §14B) ─────────────────────────────────
+// A person's salary is effective-dated like job, name and bank history: a row covers [effective_from, effective_to). It is written only by
+// writeSalaryChange (lib/effectiveDating.ts), which a salary revision calls, and read only through salaryOn / salariesOn / salarySegments.
+// The row's values and its frozen monthly breakup (employee_salary_lines) are immutable: an UPDATE may only set effective_to, and a row may be
+// deleted only while it is still in the future. Money is exact decimals; user columns are plain text so nothing about a user can alter these rows.
+enum SalaryChangeReason {
+  JOINING
+  REVISION
+  CORRECTION
+}
+
+enum AdjustmentSource {
+  MANUAL
+  SALARY_ARREARS
+  IMPORT
+}
+
+enum AdjustmentStatus {
+  PENDING
+  CONSUMED
+  CANCELLED
+}
+
+enum AdjustmentDirection {
+  EARNING
+  DEDUCTION
+}
+
+model EmployeeSalary {
+  id               String                 @id @default(cuid())
+  employeeId       String                 @map("employee_id")
+  employee         Employee               @relation(fields: [employeeId], references: [id])
+  effectiveFrom    DateTime               @map("effective_from") @db.Date
+  effectiveTo      DateTime?              @map("effective_to") @db.Date
+  reason           SalaryChangeReason
+  annualCtc        Decimal                @map("annual_ctc") @db.Decimal(18, 2)
+  monthlyCtc       Decimal                @map("monthly_ctc") @db.Decimal(20, 6)
+  structureKey     String                 @map("structure_key")
+  structureVersion Int                    @map("structure_version")
+  structureHash    String                 @map("structure_hash")
+  roundingPin      Json                   @map("rounding_pin") // { key, version, valueHash } of the rule the breakup was rounded by
+  revisionId       String?                @map("revision_id")
+  revision         PayrollSalaryRevision? @relation(fields: [revisionId], references: [id], onDelete: Restrict)
+  note             String                 @default("")
+  createdByUserId  String                 @map("created_by_user_id")
+  createdAt        DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  lines            EmployeeSalaryLine[]
+
+  @@index([employeeId, effectiveTo])
+  @@index([revisionId])
+  @@map("employee_salaries")
+}
+
+model EmployeeSalaryLine {
+  id               String         @id @default(cuid())
+  salaryId         String         @map("salary_id")
+  salary           EmployeeSalary @relation(fields: [salaryId], references: [id], onDelete: Cascade)
+  componentCode    String         @map("component_code")
+  componentVersion Int            @map("component_version")
+  componentType    String         @map("component_type") // EARNING | DEDUCTION | EMPLOYER_CONTRIBUTION, copied so totals are plain SQL
+  amount           Decimal        @db.Decimal(20, 6)
+  sortOrder        Int            @map("sort_order")
+
+  @@unique([salaryId, componentCode])
+  @@map("employee_salary_lines")
+}
+
+// A salary change as a unit: who it covers (resolved to a list at creation and frozen), what changes, from when. Its figures are recomputed from
+// these inputs every time they are shown, approved or applied, so a checker approves exactly what would be written (the SALARY_REVISION subject).
+model PayrollSalaryRevision {
+  id              String             @id @default(cuid())
+  effectiveFrom   DateTime           @map("effective_from") @db.Date
+  reason          SalaryChangeReason
+  note            String             @default("")
+  selection       Json // how the people were picked, for display
+  employeeIds     Json               @map("employee_ids") // string[] frozen at creation
+  change          Json // { ctc?, structure?, perPerson? }
+  createdByUserId String             @map("created_by_user_id")
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  appliedAt       DateTime?          @map("applied_at") @db.Timestamptz(3)
+  appliedByUserId String?            @map("applied_by_user_id")
+  withdrawnAt     DateTime?          @map("withdrawn_at") @db.Timestamptz(3)
+  withdrawnReason String?            @map("withdrawn_reason")
+  salaries        EmployeeSalary[]
+
+  @@index([createdAt])
+  @@map("payroll_salary_revisions")
+}
+
+// A one-off earning or deduction HR adds before a run, or arrears a back-dated revision created. The same (source, source_ref) can exist once, so the
+// same arrears or encashment can never be added twice. A run consumes it; amounts and reasons never change after creation.
+model PayrollAdjustment {
+  id                String              @id @default(cuid())
+  employeeId        String              @map("employee_id")
+  employee          Employee            @relation(fields: [employeeId], references: [id])
+  componentCode     String              @map("component_code")
+  direction         AdjustmentDirection
+  amount            Decimal             @db.Decimal(20, 6) // always positive; direction says which way
+  reason            String
+  source            AdjustmentSource
+  sourceRef         String?             @map("source_ref")
+  periodStart       DateTime?           @map("period_start") @db.Date // the cycle arrears belong to; null for a plain adjustment
+  periodEnd         DateTime?           @map("period_end") @db.Date
+  breakdown         Json? // arrears: [{ component, amount (signed) }]
+  status            AdjustmentStatus    @default(PENDING)
+  consumedByRunId   String?             @map("consumed_by_run_id") // a foreign key once payroll runs exist (P6-3)
+  createdByUserId   String              @map("created_by_user_id")
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  cancelledAt       DateTime?           @map("cancelled_at") @db.Timestamptz(3)
+  cancelledByUserId String?             @map("cancelled_by_user_id")
+  cancelReason      String?             @map("cancel_reason")
+
+  @@unique([source, sourceRef])
+  @@index([employeeId, status])
+  @@map("payroll_adjustments")
 }

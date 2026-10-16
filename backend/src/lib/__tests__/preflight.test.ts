@@ -11,6 +11,7 @@ const healthy = (): PreflightProbes => ({
   topicSubscriptions: async () => ({ confirmed: 1, pending: 0 }),
   databaseRoleProblems: async () => [],
   encryptionRoundTrip: async () => true,
+  developmentSeedPresent: async () => false,
 });
 const staging = { appEnv: "staging", sesFrom: "no-reply@example.org", securityAlertEmail: "owners@example.org", breakGlassTopicArn: "arn:aws:sns:ap-south-1:1:breakglass" };
 const byId = (rs: Awaited<ReturnType<typeof runPreflight>>) => Object.fromEntries(rs.map((r) => [r.id, r]));
@@ -19,7 +20,7 @@ describe("preflight", () => {
   it("passes a healthy environment", async () => {
     const r = await runPreflight(staging, healthy());
     expect(blockingFailures(r)).toEqual([]);
-    expect(r.map((x) => x.id)).toEqual(["migrations", "catalog", "encryption", "db-role", "alert-email", "ses-sender", "alert-deliverable", "breakglass-alarm"]);
+    expect(r.map((x) => x.id)).toEqual(["migrations", "catalog", "encryption", "demo-data", "db-role", "alert-email", "ses-sender", "alert-deliverable", "breakglass-alarm"]);
     expect(await bootstrapRefusal(staging, healthy())).toBeNull();
   });
 
@@ -40,6 +41,15 @@ describe("preflight", () => {
     const r = byId(await runPreflight(staging, p));
     expect(r.encryption?.status).toBe("fail");
     expect(r["db-role"]).toMatchObject({ status: "fail", detail: expect.stringContaining("superuser") });
+  });
+
+  it("fails outside development when the development seed has ever written to the database, and skips in development", async () => {
+    const seeded = { ...healthy(), developmentSeedPresent: async () => true };
+    for (const appEnv of ["staging", "production"]) {
+      expect(byId(await runPreflight({ ...staging, appEnv }, seeded))["demo-data"]).toMatchObject({ status: "fail", detail: expect.stringContaining("demo payroll maker and checker") });
+    }
+    expect(byId(await runPreflight({ ...staging, appEnv: "development" }, seeded))["demo-data"]?.status).toBe("skip");
+    expect(byId(await runPreflight(staging, healthy()))["demo-data"]?.status).toBe("pass");
   });
 
   it("a probe that throws is a failed check, not a crash", async () => {
@@ -97,6 +107,7 @@ describe("the real probes (no AWS here: only the local ones run)", () => {
     const c = await probes.catalog();
     for (const k of PERMISSION_KEYS) expect(c.permissionKeys).toContain(k);
     expect(await probes.encryptionRoundTrip()).toBe(true);
+    expect(await probes.developmentSeedPresent()).toBe(true); // this is a development-seeded database, which is exactly what the marker means
   });
 });
 

@@ -78,17 +78,30 @@ export function codeOnly(src: string): string {
 // rest are HTTP status codes and hard limits on sizes (formula length, nodes, depth, hash and key lengths), none of which is a payroll rate.
 const ALLOWED_INTEGERS = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 16, 32, 40, 64, 100, 200, 201, 202, 204, 400, 401, 403, 404, 409, 422, 500, 1000]);
 // Value-shape bounds that belong to a rule's own validation (a payment day is 1 to 28, a month is 1 to 12, a state key is short).
-const EXTRA_ALLOWED: Record<string, number[]> = { "rules/schemas.ts": [28, 31, 39, 60], "validators.ts": [25, 60] };
+const EXTRA_ALLOWED: Record<string, number[]> = {
+  "rules/schemas.ts": [28, 31, 39, 60],
+  "validators.ts": [25, 60],
+  // Salary: lengths of form fields (a name, a reason), how many rows a page or a search shows, and the highest payslip position. None is a payroll figure.
+  "salary/schemas.ts": [60, 999],
+  "salary/validators.ts": [20, 25, 60, 300],
+  "salary/adjustments.ts": [300],
+  "salary/employees.ts": [20, 25, 60],
+  // How long the one transaction that applies a whole revision may run, in milliseconds. Not money.
+  "salary/revisions.ts": [15000, 120000],
+};
 
 export function numericLiteralsIn(src: string, extra: number[] = []): Array<{ line: number; text: string }> {
   const found: Array<{ line: number; text: string }> = [];
   codeOnly(src)
     .split("\n")
     .forEach((line, idx) => {
-      for (const m of line.matchAll(/(?<![\w.$])(\d+(?:\.\d+)?)(?![\w])/g)) {
-        const text = m[1]!;
-        const isDecimal = text.includes(".");
-        if (isDecimal || !(ALLOWED_INTEGERS.has(Number(text)) || extra.includes(Number(text)))) found.push({ line: idx + 1, text });
+      // A literal is a run starting with a digit. Written plainly it is checked against the allowlist; written any other way (1_000 with separators,
+      // 1e6, 0xFF, 100n, a decimal) it is flagged outright, because those spellings are exactly how a figure would slip past a scan for plain digits.
+      for (const m of line.matchAll(/(?<![\w.$])(\d[\w.]*)/g)) {
+        const raw = m[1]!.replace(/[._]+$/, ""); // a trailing . or _ is punctuation, as in the [0-9_] of a regular expression
+        const plain = raw.replace(/(?<=\d)_(?=\d)/g, "");
+        const isPlainInteger = /^\d+$/.test(plain);
+        if (!isPlainInteger || !(ALLOWED_INTEGERS.has(Number(plain)) || extra.includes(Number(plain)))) found.push({ line: idx + 1, text: plain });
       }
     });
   return found;
@@ -98,6 +111,9 @@ describe("the scanner itself", () => {
   it("ignores comments and strings but sees code, including inside template expressions", () => {
     const src = ['// the rate is 12.5 and the ceiling 15000', 'const m = "a 0.75 message"; /* 21000 */', "const ok = 12 * 100;", "const bad = amount * 0.12;", "const ceil = 15000;", "const t = `x ${y * 21000} z`;"].join("\n");
     expect(numericLiteralsIn(src)).toEqual([{ line: 4, text: "0.12" }, { line: 5, text: "15000" }, { line: 6, text: "21000" }]);
+  });
+  it("sees a figure however it is spelled: separators, exponents, hex, bigint, decimals", () => {
+    expect(numericLiteralsIn("const a = 120_000; const b = 1e6; const c = 0xFF; const d = 100n; const e = 12.5; const f = 12; const g = 1_0;").map((n) => n.text)).toEqual(["120000", "1e6", "0xFF", "100n", "12.5"]);
   });
   it("does not mistake identifiers or property digits for numbers", () => {
     expect(numericLiteralsIn("const a1 = b2.c3 + x_4; foo(v5);")).toEqual([]);
@@ -148,5 +164,24 @@ describe("modules/payroll", () => {
     const withoutComments = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").split("\n").map((l) => l.replace(/(^|\s)\/\/.*$/, "")).join("\n");
     for (const f of files) expect(withoutComments(f.src), f.rel).not.toMatch(meansSent);
     expect(withoutComments(readFileSync(path.join(__dirname, "../../../../prisma/schema.prisma"), "utf8").replace(/\/\/\/.*$/gm, "")), "prisma/schema.prisma").not.toMatch(meansSent);
+  });
+
+  it("the payroll-lock bypass for back-dated salary has exactly one caller, the revision apply step, and that step creates the arrears in the same transaction", () => {
+    const backend = path.resolve(ROOT, "../../..");
+    const hits: string[] = [];
+    const scan = (dir: string): void => {
+      for (const name of readdirSync(dir)) {
+        if (name === "node_modules" || name === "__tests__") continue;
+        const full = path.join(dir, name);
+        if (statSync(full).isDirectory()) scan(full);
+        else if (/\.tsx?$/.test(name) && !/\.test\./.test(name) && readFileSync(full, "utf8").includes("writeBackdatedSalaryChange")) hits.push(path.relative(backend, full).split(path.sep).join("/"));
+      }
+    };
+    for (const top of ["src", "scripts", "prisma"]) scan(path.join(backend, top));
+    expect(hits.sort()).toEqual(["src/lib/effectiveDating.ts", "src/modules/payroll/salary/revisions.ts"]);
+    const revisions = readFileSync(path.join(ROOT, "salary/revisions.ts"), "utf8");
+    expect(revisions.match(/writeBackdatedSalaryChange/g)!.length).toBe(2); // the import and the one choice between it and the ordinary writer
+    expect(revisions).toMatch(/const backdated = person\.lockedCycles\.length > 0;\s+const write = backdated \? writeBackdatedSalaryChange : writeSalaryChange;/);
+    expect(revisions).toMatch(/for \(const a of person\.arrears\) \{\s+const direction[\s\S]*?tx\.payrollAdjustment\.create/); // the arrears are made inside the same transaction, right after the write
   });
 });

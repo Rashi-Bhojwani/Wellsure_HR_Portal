@@ -31,6 +31,8 @@ export interface PreflightProbes {
   databaseRoleProblems(): Promise<string[]>;
   /** Encrypts and decrypts a throwaway value with the loaded data keys. */
   encryptionRoundTrip(): Promise<boolean>;
+  /** Is this database one the development seed has written to? (Only the seed writes the marker row.) */
+  developmentSeedPresent(): Promise<boolean>;
 }
 
 const SES_SANDBOX_QUOTA = 200;
@@ -76,6 +78,13 @@ export async function runPreflight(subject: Subject, probes: PreflightProbes, op
   });
 
   await attempt("encryption", "Field encryption keys load and work", false, async () => ((await probes.encryptionRoundTrip()) ? ["pass", "a throwaway value encrypted and decrypted"] : ["fail", "round trip returned a different value"]));
+
+  await attempt("demo-data", "No development seed data in this database", false, async () => {
+    if (!deployed) return ["skip", "development databases are seeded with demo accounts by design"];
+    return (await probes.developmentSeedPresent())
+      ? ["fail", "the development seed has written to this database (demo employees with a known password, and demo payroll maker and checker accounts). Never load real data here; build a fresh database"]
+      : ["pass", "no development marker"];
+  });
 
   await attempt("db-role", "The app's database role is least-privilege", false, async () => {
     if (!deployed) return ["skip", "development runs as a single database role by design"];
@@ -180,6 +189,9 @@ export function awsProbes(clients: { ses?: Pick<SESClient, "send">; sns?: Pick<S
       return { confirmed, pending };
     },
     databaseRoleProblems: () => leastPrivilegeProblems(prisma),
+    async developmentSeedPresent() {
+      return (await prisma.devDatabaseMarker.count()) > 0;
+    },
     async encryptionRoundTrip() {
       const probe = `preflight-${Date.now()}`;
       return decryptField(encryptField(probe)) === probe;
