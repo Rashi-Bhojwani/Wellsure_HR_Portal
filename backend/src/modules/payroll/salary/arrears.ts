@@ -2,7 +2,7 @@ import { addCalendarDays } from "../../../lib/businessDate";
 import { cycleForRules, type Cycle, type CycleRule } from "../../../lib/attendanceCycle";
 import { payrollLockedBetween } from "../../../lib/effectiveDating";
 import { HttpError } from "../../../middleware/errorHandler";
-import { ZERO, canonicalDecimal, intDec, roundTo, sum, type Money } from "../money";
+import { ZERO, canonicalDecimal, roundTo, sum, type Money } from "../money";
 import type { RoundingRule } from "./breakup";
 
 // Arrears on a back-dated salary revision (docs/plans/PHASE_6.md §14B). The payroll period is the attendance cycle. A revision dated inside a cycle that
@@ -12,9 +12,9 @@ import type { RoundingRule } from "./breakup";
 //   arrears for a cycle = for each line, (new amount - old amount) x the share of the cycle the person was actually paid
 //
 // "The share they were actually paid" is what the finalised run recorded: paid days over the days the month counts as, for a line that pro-rates with paid
-// days, and all-or-nothing for a line that does not. That record belongs to the payroll run, which is built in the calculation commit (P6-3), so it
-// arrives through a provider that commit registers. Until one is registered a revision that needs arrears is REFUSED with a clear message: arrears are
-// never guessed.
+// days, and all-or-nothing for a line that does not. That record belongs to the payroll run (P6-3, run/providers.ts registers the reader of it). Until a run
+// has been finalised for the month, a revision that needs arrears is REFUSED with a message that says it is waiting on payroll runs and that the revision
+// itself is fine: arrears are never guessed.
 
 export interface PaidShare {
   /** Days the person was paid within the part of the cycle the revision covers. */
@@ -36,11 +36,14 @@ export function getArrearsBasisProvider(): ArrearsBasisProvider | null {
   return provider;
 }
 
-/** The share of a full month's line a person is owed for part of a cycle. The calculation commit uses this same function for pro-rating a segment. */
-export function lineFactor(prorates: boolean, share: PaidShare): Money {
-  if (!prorates) return share.paid.greaterThan(ZERO) ? intDec(1) : ZERO;
+/**
+ * What `amount` comes to at a share, worked out as amount x paid / basis in one division, so that a share like 16/31 loses nothing before the rounding rule
+ * is applied. A line that does not pro-rate is the whole amount if the person was paid at all, and nothing if not.
+ */
+export function applyShare(amount: Money, prorates: boolean, share: PaidShare): Money {
+  if (!prorates) return share.paid.greaterThan(ZERO) ? amount : ZERO;
   if (share.basis.isZero()) throw new HttpError(409, "The pay-days basis for that month is zero, so a share of it cannot be worked out.", "ARREARS_BASIS_INVALID");
-  return share.paid.dividedBy(share.basis);
+  return amount.times(share.paid).dividedBy(share.basis);
 }
 
 export interface ArrearsLine {
@@ -80,14 +83,13 @@ export async function computeArrears(input: ArrearsInput): Promise<CycleArrears[
     if (from > cycle.end) continue; // the revision starts after this cycle
     const share = await input.provider.paidShare(input.employeeId, { start: cycle.start, end: cycle.end }, from, cycle.end);
     if (!share) {
-      throw new HttpError(409, `The finalised payroll for ${cycle.label} has no record of what this person was paid, so their arrears for it cannot be worked out.`, "ARREARS_BASIS_UNAVAILABLE", { cycle: cycle.label, employeeId: input.employeeId });
+      throw new HttpError(409, `${cycle.label} is closed, but there is no finalised payroll run on record showing what this person was paid in it, and arrears are worked out from what was actually paid. The revision itself is fine: it is waiting only on payroll runs being finalised for that month.`, "ARREARS_BASIS_UNAVAILABLE", { cycle: cycle.label, employeeId: input.employeeId });
     }
     const lines: ArrearsLine[] = [];
     for (const component of codes) {
       const diff = (input.next.get(component) ?? ZERO).minus(input.old.get(component) ?? ZERO);
       if (diff.isZero()) continue;
-      const factor = lineFactor(input.prorates.get(component) ?? true, share);
-      const amount = roundTo(diff.times(factor), input.rounding.scale, input.rounding.mode);
+      const amount = roundTo(applyShare(diff, input.prorates.get(component) ?? true, share), input.rounding.scale, input.rounding.mode);
       if (!amount.isZero()) lines.push({ component, amount });
     }
     const total = sum(lines.map((l) => l.amount));

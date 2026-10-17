@@ -17,6 +17,7 @@ import {
   salaryRowsOfRevision,
   writeBackdatedSalaryChange,
   writeSalaryChange,
+  cancelScheduledSalary,
   type SalaryWithLines,
 } from "../../../lib/effectiveDating";
 import { activeUsersHoldingPermission } from "../../../lib/permissions";
@@ -165,7 +166,7 @@ export async function computeRevisionPlan(rev: ResolvedRevision): Promise<Revisi
   const provider = getArrearsBasisProvider();
   if (lockedCycles.length && !provider) {
     blockers.push(
-      `This is dated inside a payroll period that has been finalised (${lockedCycles.map((c) => c.label).join(", ")}), so what it owes is paid as arrears in the next run, and arrears cannot be worked out yet: the record of what each person was paid is not available. Date it after the last finalised period.`,
+      `This is dated inside a payroll period that is already closed (${lockedCycles.map((c) => c.label).join(", ")}). What it owes is paid as arrears, and arrears are worked out from what each person was actually paid in the closed month. Nothing is wrong with the revision itself: it is waiting only because payroll runs have not been finalised for ${lockedCycles.length === 1 ? "that month" : "those months"} yet. Date it after the last closed period, or come back once the runs have been finalised.`,
     );
   }
 
@@ -396,6 +397,122 @@ export async function previewRevision(rawInput: unknown, actorUserId: string) {
   return { ...planToJson(plan), skipped: resolved.skipped, selection: input.selection, change: input.change, note: input.note, blockers, canSubmit: blockers.length === 0, checkers, fingerprint: plan.hash };
 }
 
+// ── Cancelling a scheduled salary row ──
+// A salary row that has been written but has not started can be cancelled, and that is a pay change like any other: it takes a raise away. So it goes through
+// the same checker as a revision: previewed, decided by a different person bound to the row's exact figures, applied by the maker in one transaction. It is a
+// PayrollSalaryRevision of kind CANCEL_SCHEDULED, so the approval, the withdraw, the self-guards and the screens are the ones revisions already have.
+
+export const cancelInputSchema = z.object({ employeeId: z.string().min(1).max(64), salaryId: z.string().min(1).max(64), note: z.string().trim().max(500).default("") }).strict();
+export type CancelInput = z.infer<typeof cancelInputSchema>;
+
+interface CancelPlan {
+  employeeId: string;
+  employeeCode: string;
+  name: string;
+  scheduled: PreviousSalary | null;
+  stays: PreviousSalary | null;
+  problems: string[];
+  hash: string;
+}
+
+export async function computeCancelPlan(employeeId: string, salaryId: string): Promise<CancelPlan> {
+  const today = businessToday();
+  const [emp, history] = await Promise.all([prisma.employee.findUnique({ where: { id: employeeId }, select: { employeeCode: true } }), salaryHistory(employeeId)]); // newest first
+  const names = await namesOn([employeeId], today);
+  const target = history.find((r) => r.id === salaryId) ?? null;
+  const problems: string[] = [];
+  let stays: SalaryWithLines | null = null;
+  if (!emp) problems.push("This person was not found.");
+  if (!target) problems.push("That salary row was not found for this person.");
+  else {
+    if (target.effectiveFrom <= today) problems.push(`This salary started on ${iso(target.effectiveFrom)}, so it cannot be cancelled. Make a revision dated after it instead.`);
+    if (history[0]?.id !== target.id) problems.push("Only the latest scheduled salary can be cancelled. Cancel the later one first.");
+    stays = history.find((r) => r.effectiveTo !== null && r.effectiveTo.getTime() === target.effectiveFrom.getTime()) ?? null;
+    if (!stays) problems.push("This is the only salary on record for them, so there is nothing to fall back to. It cannot be cancelled.");
+  }
+  const scheduled = target ? toPrev(target) : null;
+  const staysPrev = stays ? toPrev(stays) : null;
+  const rowHash = (r: PreviousSalary | null) => (r ? { id: r.id, from: iso(r.effectiveFrom), annual: canonicalDecimal(r.annualCtc), monthly: canonicalDecimal(r.monthlyCtc), structure: `${r.structureKey}@${r.structureVersion}`, lines: r.lines.map((l) => [l.component, l.version, canonicalDecimal(l.amount)]) } : null);
+  return {
+    employeeId,
+    employeeCode: emp?.employeeCode ?? "",
+    name: names.get(employeeId) ?? emp?.employeeCode ?? employeeId,
+    scheduled,
+    stays: staysPrev,
+    problems,
+    hash: payrollHash({ t: "SALARY_CANCEL", employeeId, scheduled: rowHash(scheduled), stays: rowHash(staysPrev), problems }),
+  };
+}
+
+const rowJson = (r: PreviousSalary) => ({ salaryId: r.id, startsOn: iso(r.effectiveFrom), annualCtc: s(r.annualCtc), monthlyCtc: s(r.monthlyCtc), structure: `${r.structureKey} v${r.structureVersion}`, lines: r.lines.map((l) => ({ component: l.component, amount: s(l.amount) })) });
+
+export function cancelPlanToJson(p: CancelPlan) {
+  return { kind: "CANCEL_SCHEDULED" as const, employeeId: p.employeeId, employeeCode: p.employeeCode, name: p.name, problems: p.problems, hash: p.hash, scheduled: p.scheduled ? rowJson(p.scheduled) : null, stays: p.stays ? { ...rowJson(p.stays), startedOn: iso(p.stays.effectiveFrom) } : null };
+}
+
+export async function previewCancel(rawInput: unknown, actorUserId: string) {
+  const input = cancelInputSchema.parse(rawInput);
+  await assertNotOwnPay(actorUserId, [input.employeeId], "This cancellation");
+  const plan = await computeCancelPlan(input.employeeId, input.salaryId);
+  const checkers = await checkersFor(actorUserId, [input.employeeId]);
+  const blockers = plan.problems.map((m) => `${plan.name}: ${m}`);
+  if (checkers.state === "NONE") blockers.push(checkers.message);
+  return { ...cancelPlanToJson(plan), blockers, canSubmit: blockers.length === 0, checkers, fingerprint: plan.hash };
+}
+
+export async function createCancel(rawInput: unknown, fingerprint: string, actor: { userId: string; ip?: string | null }) {
+  const input = cancelInputSchema.parse(rawInput);
+  await assertNotOwnPay(actor.userId, [input.employeeId], "This cancellation");
+  const plan = await computeCancelPlan(input.employeeId, input.salaryId);
+  if (fingerprint !== plan.hash) throw new HttpError(409, "This changed since you previewed it. Preview it again.", "PREVIEW_STALE");
+  if (plan.problems.length) throw new HttpError(409, `This cannot be submitted yet: ${plan.problems[0]}`, "REVISION_BLOCKED", { blockers: plan.problems });
+  const row = await prisma.payrollSalaryRevision.create({
+    data: {
+      kind: "CANCEL_SCHEDULED",
+      effectiveFrom: plan.scheduled!.effectiveFrom,
+      reason: "CORRECTION",
+      note: input.note,
+      selection: { kind: "EMPLOYEES", employeeIds: [input.employeeId] } as unknown as Prisma.InputJsonValue,
+      employeeIds: [input.employeeId] as unknown as Prisma.InputJsonValue,
+      change: { cancel: { employeeId: input.employeeId, salaryId: input.salaryId } } as unknown as Prisma.InputJsonValue,
+      createdByUserId: actor.userId,
+    },
+  });
+  await recordEvent({ subjectType: "SALARY_REVISION", subjectId: row.id, type: "CREATED", actorUserId: actor.userId, payload: { hash: plan.hash, kind: "CANCEL_SCHEDULED", employeeId: input.employeeId } });
+  await writeAuditLog({ actorUserId: actor.userId, action: "payroll.salary_revision.created", entityType: "PayrollSalaryRevision", entityId: row.id, after: { kind: "CANCEL_SCHEDULED", employeeId: input.employeeId, effectiveFrom: iso(plan.scheduled!.effectiveFrom), hash: plan.hash }, ipAddress: actor.ip ?? null });
+  await submit({ subject: "SALARY_REVISION", subjectId: row.id, makerUserId: actor.userId, previewFingerprint: plan.hash, note: input.note, ip: actor.ip ?? null });
+  return { id: row.id };
+}
+
+function cancelTarget(rev: { change: Prisma.JsonValue }): { employeeId: string; salaryId: string } {
+  return (rev.change as unknown as { cancel: { employeeId: string; salaryId: string } }).cancel;
+}
+
+async function applyCancel(rev: RevisionRow, actor: { userId: string; ip?: string | null }) {
+  const { employeeId, salaryId } = cancelTarget(rev);
+  await assertNotOwnPay(actor.userId, [employeeId], "Applying this cancellation");
+  let planJson: ReturnType<typeof cancelPlanToJson> | null = null;
+  await prisma.$transaction(async (tx) => {
+    await lockEmployees(tx, [employeeId]);
+    const approval = await tx.payrollApproval.findFirst({ where: { subject: "SALARY_REVISION", subjectId: rev.id, status: "APPROVED" } });
+    if (!approval) throw new HttpError(409, "A second person has not approved this, so it cannot be applied.", "APPROVAL_REQUIRED");
+    const plan = await computeCancelPlan(employeeId, salaryId);
+    if (plan.hash !== approval.hashAtDecision) {
+      await voidApproval(approval, "The figures no longer match what was approved.", actor.userId); // outside the transaction, so the void survives the rollback
+      throw new HttpError(409, "Something changed after this was approved (the salary rows of this person), so the approval is void. It needs to be submitted and approved again.", "APPROVAL_VOIDED");
+    }
+    if (plan.problems.length) throw new HttpError(409, `This cannot be applied: ${plan.problems[0]}`, "REVISION_BLOCKED", { blockers: plan.problems });
+    await cancelScheduledSalary(tx, employeeId, salaryId);
+    planJson = cancelPlanToJson(plan);
+    await tx.payrollSalaryRevision.update({ where: { id: rev.id }, data: { appliedAt: new Date(), appliedByUserId: actor.userId } }); // allow-clock: an instant, not a business date
+    await consume("SALARY_REVISION", rev.id, actor.userId, actor.ip ?? null, tx);
+    await recordEvent({ subjectType: "SALARY_REVISION", subjectId: rev.id, type: "APPLIED", actorUserId: actor.userId, payload: { kind: "CANCEL_SCHEDULED", hash: plan.hash, plan: planJson as unknown as Prisma.InputJsonValue } }, tx);
+  });
+  await writeAuditLog({ actorUserId: actor.userId, action: "payroll.salary.cancelled", entityType: "PayrollSalary", entityId: salaryId, after: { employeeId, revisionId: rev.id, effectiveFrom: iso(rev.effectiveFrom), amounts: "redacted" }, ipAddress: actor.ip ?? null });
+  await writeAuditLog({ actorUserId: actor.userId, action: "payroll.salary_revision.applied", entityType: "PayrollSalaryRevision", entityId: rev.id, after: { kind: "CANCEL_SCHEDULED", people: 1, effectiveFrom: iso(rev.effectiveFrom) }, ipAddress: actor.ip ?? null });
+  return { id: rev.id, applied: 1 };
+}
+
 // ── Creating, submitting, withdrawing ──
 
 type RevisionRow = Awaited<ReturnType<typeof prisma.payrollSalaryRevision.findUniqueOrThrow>>;
@@ -404,10 +521,21 @@ function resolvedOf(rev: RevisionRow): ResolvedRevision {
   return { employeeIds: rev.employeeIds as string[], change: rev.change as unknown as RevisionChange, effectiveFrom: rev.effectiveFrom, reason: rev.reason === "CORRECTION" ? "CORRECTION" : "REVISION" };
 }
 
+/** The hash a checker is bound to and the blockers in the way, for either kind of revision, from today's data. */
+async function stateOf(rev: RevisionRow): Promise<{ hash: string; blockers: string[] }> {
+  if (rev.kind === "CANCEL_SCHEDULED") {
+    const { employeeId, salaryId } = cancelTarget(rev);
+    const plan = await computeCancelPlan(employeeId, salaryId);
+    return { hash: plan.hash, blockers: plan.problems.map((m) => `${plan.name}: ${m}`) };
+  }
+  const plan = await computeRevisionPlan(resolvedOf(rev));
+  return { hash: plan.hash, blockers: [...plan.blockers, ...plan.people.flatMap((p) => p.problems.map((m) => `${p.name}: ${m}`))] };
+}
+
 async function liveHash(revisionId: string): Promise<string> {
   const rev = await prisma.payrollSalaryRevision.findUnique({ where: { id: revisionId } });
   if (!rev) throw new HttpError(404, "No such salary revision.", "NOT_FOUND");
-  return (await computeRevisionPlan(resolvedOf(rev))).hash;
+  return (await stateOf(rev)).hash;
 }
 
 export async function createRevision(rawInput: unknown, fingerprint: string, actor: { userId: string; ip?: string | null }) {
@@ -439,11 +567,10 @@ export async function submitRevision(revisionId: string, fingerprint: string, ac
   const rev = await prisma.payrollSalaryRevision.findUnique({ where: { id: revisionId } });
   if (!rev) throw new HttpError(404, "No such salary revision.", "NOT_FOUND");
   if (rev.appliedAt || rev.withdrawnAt) throw new HttpError(409, "This revision is already applied or withdrawn.", "CONFLICT");
-  const plan = await computeRevisionPlan(resolvedOf(rev));
-  if (fingerprint !== plan.hash) throw new HttpError(409, "This changed since you looked at it. Look at it again.", "PREVIEW_STALE");
-  const blockers = [...plan.blockers, ...plan.people.flatMap((p) => p.problems.map((m) => `${p.name}: ${m}`))];
+  const { hash, blockers } = await stateOf(rev);
+  if (fingerprint !== hash) throw new HttpError(409, "This changed since you looked at it. Look at it again.", "PREVIEW_STALE");
   if (blockers.length) throw new HttpError(409, `This cannot be submitted yet: ${blockers[0]}`, "REVISION_BLOCKED", { blockers });
-  await submit({ subject: "SALARY_REVISION", subjectId: revisionId, makerUserId: actor.userId, previewFingerprint: plan.hash, ip: actor.ip ?? null });
+  await submit({ subject: "SALARY_REVISION", subjectId: revisionId, makerUserId: actor.userId, previewFingerprint: hash, ip: actor.ip ?? null });
   return { id: revisionId };
 }
 
@@ -468,7 +595,7 @@ export async function decideRevision(revisionId: string, input: { decision: "APP
   if (rev.appliedAt || rev.withdrawnAt) throw new HttpError(409, "This revision is already applied or withdrawn.", "CONFLICT");
   const approval = await liveApproval("SALARY_REVISION", revisionId);
   if (!approval || approval.status !== "PENDING") throw new HttpError(409, "This is not waiting for a decision.", "APPROVAL_NOT_PENDING");
-  const live = (await computeRevisionPlan(resolvedOf(rev))).hash;
+  const live = (await stateOf(rev)).hash;
   if (input.fingerprint !== live) throw new HttpError(409, "The figures changed since you opened this. Look at it again before deciding.", "PREVIEW_STALE");
   return decide({ approvalId: approval.id, checkerUserId: checker.userId, decision: input.decision, ...(input.note !== undefined ? { note: input.note } : {}), ip: checker.ip ?? null });
 }
@@ -483,6 +610,7 @@ export async function applyRevision(revisionId: string, actor: { userId: string;
   if (!rev) throw new HttpError(404, "No such salary revision.", "NOT_FOUND");
   if (rev.appliedAt) throw new HttpError(409, "This revision has already been applied.", "CONFLICT");
   if (rev.withdrawnAt) throw new HttpError(409, "This revision was withdrawn.", "CONFLICT");
+  if (rev.kind === "CANCEL_SCHEDULED") return applyCancel(rev, actor);
   await assertNotOwnPay(actor.userId, rev.employeeIds as string[], "Applying this revision");
   const written: Array<{ employeeId: string; salaryId: string; arrears: number }> = [];
 
@@ -574,7 +702,7 @@ export async function listRevisions(page: number, pageSize: number) {
   const items = [];
   for (const r of rows) {
     const { status } = await statusOf(r);
-    items.push({ id: r.id, status, effectiveFrom: iso(r.effectiveFrom), reason: r.reason, people: (r.employeeIds as string[]).length, createdAt: r.createdAt.toISOString(), createdBy: makers.get(r.createdByUserId) ?? "Someone", note: r.note, selection: r.selection });
+    items.push({ id: r.id, kind: r.kind, status, effectiveFrom: iso(r.effectiveFrom), reason: r.reason, people: (r.employeeIds as string[]).length, createdAt: r.createdAt.toISOString(), createdBy: makers.get(r.createdByUserId) ?? "Someone", note: r.note, selection: r.selection });
   }
   return { total, items };
 }
@@ -623,15 +751,28 @@ export async function getRevision(revisionId: string, viewerUserId: string) {
   if (!rev) throw new HttpError(404, "No such salary revision.", "NOT_FOUND");
   const { status, approval } = await statusOf(rev);
   const closed = status === "APPLIED" || status === "WITHDRAWN";
+  const cancel = rev.kind === "CANCEL_SCHEDULED";
   // A closed revision is shown as it was recorded; an open one is recomputed from today's setup, which is exactly what a checker approves and apply writes.
-  const live = closed ? null : await computeRevisionPlan(resolvedOf(rev));
-  const plan = status === "APPLIED" ? await appliedPlanJson(rev) : live ? planToJson(live) : planToJson(await computeRevisionPlan(resolvedOf(rev)));
+  const live = closed ? null : cancel ? null : await computeRevisionPlan(resolvedOf(rev));
+  const liveCancel = cancel && !closed ? await computeCancelPlan(cancelTarget(rev).employeeId, cancelTarget(rev).salaryId) : null;
+  let plan: unknown;
+  if (cancel) {
+    if (status === "APPLIED") {
+      const event = await prisma.payrollEvent.findFirst({ where: { subjectType: "SALARY_REVISION", subjectId: rev.id, type: "APPLIED" }, orderBy: { createdAt: "desc" } });
+      plan = (event?.payload as { plan?: unknown } | undefined)?.plan ?? null; // the scheduled row is gone, so it is shown as it was recorded when it was removed
+    } else if (liveCancel) plan = cancelPlanToJson(liveCancel);
+    else {
+      const t = cancelTarget(rev);
+      plan = cancelPlanToJson(await computeCancelPlan(t.employeeId, t.salaryId));
+    }
+  } else plan = status === "APPLIED" ? await appliedPlanJson(rev) : live ? planToJson(live) : planToJson(await computeRevisionPlan(resolvedOf(rev)));
   const people = rev.employeeIds as string[];
   const people2 = await namesOfUsers([rev.createdByUserId, ...(approval?.checkerUserId ? [approval.checkerUserId] : []), ...(rev.appliedByUserId ? [rev.appliedByUserId] : [])]);
   const checkers = status === "DRAFT" || status === "WAITING_FOR_CHECKER" || status === "REJECTED" || status === "VOIDED" ? await checkersFor(rev.createdByUserId, people) : null;
   const viewerEmployee = await employeeIdOfUser(viewerUserId);
   return {
     id: rev.id,
+    kind: rev.kind,
     status,
     effectiveFrom: iso(rev.effectiveFrom),
     reason: rev.reason,
@@ -647,8 +788,8 @@ export async function getRevision(revisionId: string, viewerUserId: string) {
     withdrawnReason: rev.withdrawnReason,
     approval: approval ? { status: approval.status, decidedBy: approval.checkerUserId ? (people2.get(approval.checkerUserId) ?? "Someone") : null, decisionNote: approval.decisionNote, voidReason: approval.voidReason } : null,
     plan,
-    fingerprint: live?.hash ?? approval?.hashAtDecision ?? "",
-    blockers: live ? [...live.blockers, ...live.people.flatMap((p) => p.problems.map((m) => `${p.name}: ${m}`))] : [],
+    fingerprint: (cancel ? liveCancel?.hash : live?.hash) ?? approval?.hashAtDecision ?? "",
+    blockers: cancel ? (liveCancel ? liveCancel.problems.map((m) => `${liveCancel.name}: ${m}`) : []) : live ? [...live.blockers, ...live.people.flatMap((p) => p.problems.map((m) => `${p.name}: ${m}`))] : [],
     checkers,
     includesViewer: viewerEmployee !== null && people.includes(viewerEmployee),
   };

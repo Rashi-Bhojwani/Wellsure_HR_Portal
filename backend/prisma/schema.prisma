@@ -501,6 +501,7 @@ model Employee {
   attendanceAssignments      AttendanceAssignment[]
   salaries                   EmployeeSalary[]
   payrollAdjustments         PayrollAdjustment[]
+  payrollRunItems            PayrollRunItem[]
   rawPunches                 RawPunch[]
   dailyAttendance            DailyAttendance[]
   manualAttendanceEntries    ManualAttendanceEntry[]
@@ -2544,12 +2545,20 @@ enum AdjustmentSource {
   MANUAL
   SALARY_ARREARS
   IMPORT
+  YEAR_END_ENCASHMENT
 }
 
 enum AdjustmentStatus {
   PENDING
   CONSUMED
   CANCELLED
+}
+
+// A revision either writes new salary rows (CHANGE) or removes one salary row that has been written but not started (CANCEL_SCHEDULED). Both go
+// through the same checker: cancelling a raise is a pay change like any other.
+enum SalaryRevisionKind {
+  CHANGE
+  CANCEL_SCHEDULED
 }
 
 enum AdjustmentDirection {
@@ -2600,6 +2609,7 @@ model EmployeeSalaryLine {
 // these inputs every time they are shown, approved or applied, so a checker approves exactly what would be written (the SALARY_REVISION subject).
 model PayrollSalaryRevision {
   id              String             @id @default(cuid())
+  kind            SalaryRevisionKind @default(CHANGE)
   effectiveFrom   DateTime           @map("effective_from") @db.Date
   reason          SalaryChangeReason
   note            String             @default("")
@@ -2634,7 +2644,8 @@ model PayrollAdjustment {
   periodEnd         DateTime?           @map("period_end") @db.Date
   breakdown         Json? // arrears: [{ component, amount (signed) }]
   status            AdjustmentStatus    @default(PENDING)
-  consumedByRunId   String?             @map("consumed_by_run_id") // a foreign key once payroll runs exist (P6-3)
+  consumedByRunId   String?             @map("consumed_by_run_id") // set when a run is finalised (P6-4); until then a run only reads it
+  consumedByRun     PayrollRun?         @relation(fields: [consumedByRunId], references: [id], onDelete: Restrict)
   createdByUserId   String              @map("created_by_user_id")
   createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
   cancelledAt       DateTime?           @map("cancelled_at") @db.Timestamptz(3)
@@ -2644,4 +2655,151 @@ model PayrollAdjustment {
   @@unique([source, sourceRef])
   @@index([employeeId, status])
   @@map("payroll_adjustments")
+}
+
+// ── Phase 6, P6-3 — payroll runs (docs/plans/PHASE_6.md §14D) ──
+
+// NEW: made, never calculated. CALCULATING/CALCULATED/FAILED: the job's states. VOID: a discarded draft. FINALISED: unreachable until P6-4: a database
+// trigger refuses any change into or out of it unless the transaction has set payroll.finalising, which only the finaliser will do.
+enum PayrollRunStatus {
+  NEW
+  CALCULATING
+  CALCULATED
+  FAILED
+  VOID
+  FINALISED
+}
+
+enum PayrollItemStatus {
+  PAYABLE
+  HELD
+  EXCLUDED
+}
+
+enum PayrollLineKind {
+  EARNING
+  DEDUCTION
+  EMPLOYER_CONTRIBUTION
+  ROUNDING
+}
+
+enum PayrollLineSource {
+  COMPONENT
+  ADJUSTMENT
+  ARREARS
+  ENCASHMENT
+  PF
+  ESI
+  PT
+  LWF
+  NET_ROUNDING
+}
+
+// One regular run per attendance cycle (a partial unique index excludes VOID). The run records what it read: pins (every rule, and the structure,
+// components and rounding that each salary was frozen under), a fingerprint of the rule versions at the start, and a fingerprint of the inputs, so a
+// resumed or repeated calculation can tell whether the world moved.
+model PayrollRun {
+  id                 String           @id @default(cuid())
+  cycleStart         DateTime         @map("cycle_start") @db.Date
+  cycleEnd           DateTime         @map("cycle_end") @db.Date
+  cycleLabel         String           @map("cycle_label")
+  status             PayrollRunStatus @default(NEW)
+  calcVersion        Int              @default(0) @map("calc_version")
+  leaseOwner         String?          @map("lease_owner")
+  leaseExpiresAt     DateTime?        @map("lease_expires_at") @db.Timestamptz(3)
+  progressDone       Int              @default(0) @map("progress_done")
+  progressTotal      Int              @default(0) @map("progress_total")
+  pins               Json             @default("[]")
+  rulesFingerprint   String?          @map("rules_fingerprint")
+  inputsFingerprint  String?          @map("inputs_fingerprint")
+  runHash            String?          @map("run_hash")
+  totalGross         Decimal          @default(0) @map("total_gross") @db.Decimal(20, 6)
+  totalDeductions    Decimal          @default(0) @map("total_deductions") @db.Decimal(20, 6)
+  totalNet           Decimal          @default(0) @map("total_net") @db.Decimal(20, 6)
+  totalEmployerCost  Decimal          @default(0) @map("total_employer_cost") @db.Decimal(20, 6)
+  peopleCount        Int              @default(0) @map("people_count")
+  payableCount       Int              @default(0) @map("payable_count")
+  heldCount          Int              @default(0) @map("held_count")
+  excludedCount      Int              @default(0) @map("excluded_count")
+  exceptionCount     Int              @default(0) @map("exception_count")
+  calculatedAt       DateTime?        @map("calculated_at") @db.Timestamptz(3)
+  calculatedByUserId String?          @map("calculated_by_user_id")
+  failureReason      String?          @map("failure_reason")
+  createdByUserId    String           @map("created_by_user_id")
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  voidedAt           DateTime?        @map("voided_at") @db.Timestamptz(3)
+  voidedByUserId     String?          @map("voided_by_user_id")
+  voidReason         String?          @map("void_reason")
+
+  items       PayrollRunItem[]
+  lines       PayrollRunLine[]
+  adjustments PayrollAdjustment[]
+
+  @@index([cycleStart, status])
+  @@map("payroll_runs")
+}
+
+// One person in a run. HELD people are calculated but not payable (the reason is stored); EXCLUDED people had no salary for days they were employed.
+// `inputs` is the explanation: the days, the shares, the salary segments, the pins behind the figures; `notices` and `exceptions` are shown on the screen.
+model PayrollRunItem {
+  id                    String            @id @default(cuid())
+  runId                 String            @map("run_id")
+  run                   PayrollRun        @relation(fields: [runId], references: [id], onDelete: Cascade)
+  employeeId            String            @map("employee_id")
+  employee              Employee          @relation(fields: [employeeId], references: [id])
+  calcVersion           Int               @map("calc_version")
+  status                PayrollItemStatus
+  holdReason            String?           @map("hold_reason")
+  holdDetail            String?           @map("hold_detail")
+  employedFrom          DateTime?         @map("employed_from") @db.Date
+  employedTo            DateTime?         @map("employed_to") @db.Date
+  basisDays             Decimal           @default(0) @map("basis_days") @db.Decimal(8, 2)
+  lopDivisorDays        Decimal           @default(0) @map("lop_divisor_days") @db.Decimal(8, 2)
+  lopDays               Decimal           @default(0) @map("lop_days") @db.Decimal(8, 2)
+  paidDays              Decimal           @default(0) @map("paid_days") @db.Decimal(12, 6) // for display; money is never worked out from this column
+  gross                 Decimal           @default(0) @db.Decimal(20, 6)
+  deductions            Decimal           @default(0) @db.Decimal(20, 6)
+  employerContributions Decimal           @default(0) @map("employer_contributions") @db.Decimal(20, 6)
+  netBeforeRounding     Decimal           @default(0) @map("net_before_rounding") @db.Decimal(20, 6)
+  roundingAdjustment    Decimal           @default(0) @map("rounding_adjustment") @db.Decimal(20, 6)
+  netPay                Decimal           @default(0) @map("net_pay") @db.Decimal(20, 6)
+  employmentType        EmploymentType    @map("employment_type")
+  placement             Json              @default("{}")
+  structureKey          String?           @map("structure_key")
+  structureVersion      Int?              @map("structure_version")
+  inputs                Json              @default("{}")
+  notices               Json              @default("[]")
+  exceptions            Json              @default("[]")
+  itemHash              String            @map("item_hash")
+  updatedAt             DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  lines PayrollRunLine[]
+
+  @@unique([runId, employeeId])
+  @@index([runId, status])
+  @@map("payroll_run_items")
+}
+
+// One line on a person's payslip. `amount` is a magnitude (the kind says which way); only NET_ROUNDING is signed. `sourceRef` names the adjustment,
+// arrears row or year-end item the line came from, so finalising marks exactly those consumed.
+model PayrollRunLine {
+  id         String            @id @default(cuid())
+  runId      String            @map("run_id")
+  run        PayrollRun        @relation(fields: [runId], references: [id], onDelete: Cascade)
+  runItemId  String            @map("run_item_id")
+  runItem    PayrollRunItem    @relation(fields: [runItemId], references: [id], onDelete: Cascade)
+  employeeId String            @map("employee_id")
+  sortOrder  Int               @map("sort_order")
+  code       String
+  label      String
+  kind       PayrollLineKind
+  source     PayrollLineSource
+  sourceRef  String?           @map("source_ref")
+  amount     Decimal           @db.Decimal(20, 6)
+  basis      Json              @default("{}")
+
+  @@unique([runItemId, sortOrder])
+  @@index([runId, code])
+  @@index([source, sourceRef])
+  @@map("payroll_run_lines")
 }

@@ -49,13 +49,17 @@ describe("the rules catalog", () => {
   });
 
   it("checks the structure of a PT slab table: from zero, no gaps, open at the top", () => {
-    const ok = { states: { KARNATAKA: { slabs: [{ fromGross: "0", toGross: "15000", monthlyAmount: "0" }, { fromGross: "15000", toGross: null, monthlyAmount: "200" }], monthOverrides: { "2": "300" } } } };
+    const ok = { states: { KARNATAKA: { slabs: [{ fromGross: "0", toGross: "15000", monthlyAmount: "0" }, { fromGross: "15000", toGross: null, monthlyAmount: "200", monthOverrides: { "2": "300" } }] } } };
     expect(() => parseRuleValue("PT_SLABS", ok)).not.toThrow();
     const gap = { states: { KARNATAKA: { slabs: [{ fromGross: "0", toGross: "15000", monthlyAmount: "0" }, { fromGross: "16000", toGross: null, monthlyAmount: "200" }] } } };
     expect(() => parseRuleValue("PT_SLABS", gap)).toThrow(/should start at 15000/);
     const closed = { states: { KARNATAKA: { slabs: [{ fromGross: "0", toGross: "15000", monthlyAmount: "0" }] } } };
     expect(() => parseRuleValue("PT_SLABS", closed)).toThrow(/no upper limit/);
     expect(() => parseRuleValue("PT_SLABS", { states: { "bad key": ok.states.KARNATAKA } })).toThrow();
+    // A month exception sits on the slab it replaces. The old shape, on the whole state, is refused rather than guessed at.
+    const stateLevel = { states: { KARNATAKA: { slabs: [{ fromGross: "0", toGross: null, monthlyAmount: "200" }], monthOverrides: { "2": "300" } } } };
+    expect(() => parseRuleValue("PT_SLABS", stateLevel)).toThrow();
+    expect(() => parseRuleValue("PT_SLABS", { states: { KARNATAKA: { slabs: [{ fromGross: "0", toGross: null, monthlyAmount: "200", monthOverrides: { "13": "300" } }] } } })).toThrow();
   });
 });
 

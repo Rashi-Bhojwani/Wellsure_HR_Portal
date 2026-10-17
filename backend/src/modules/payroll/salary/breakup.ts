@@ -132,3 +132,14 @@ export function computeBreakup(input: BreakupInput): Breakup {
 export function breakupToJson(b: Breakup): { monthlyCtc: string; lines: Array<{ component: string; componentVersion: number; type: ComponentType; amount: string; order: number }> } {
   return { monthlyCtc: canonicalDecimal(b.monthlyCtc), lines: b.lines.map((l) => ({ component: l.component, componentVersion: l.componentVersion, type: l.type, amount: canonicalDecimal(l.amount), order: l.order })) };
 }
+
+/**
+ * Each line over a year (twelve months of the monthly amount), the total of the lines that count toward CTC, and how far that is from the yearly CTC. The monthly
+ * figures are rounded and the balance line absorbs the rounding, so the twelve months can differ from the yearly CTC by a few paise: the screen shows both
+ * side by side and names the difference, so nobody is surprised.
+ */
+export function annualView(b: Breakup, annualCtc: Money, ctcIncludes: readonly ComponentType[]): { annualCtc: string; lines: Array<{ component: string; annual: string }>; total: string; difference: string } {
+  const lines = b.lines.map((l) => ({ component: l.component, annual: canonicalDecimal(l.amount.times(MONTHS_IN_YEAR)) }));
+  const total = sum(b.lines.filter((l) => ctcIncludes.includes(l.type)).map((l) => l.amount.times(MONTHS_IN_YEAR)));
+  return { annualCtc: canonicalDecimal(annualCtc), lines, total: canonicalDecimal(total), difference: canonicalDecimal(total.minus(annualCtc)) };
+}

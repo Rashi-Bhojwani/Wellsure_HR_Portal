@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { addAdjustment, cancelAdjustment, listAdjustments, previewAdjustment } from "./adjustments";
 import { confirmComponent, getComponent, listComponents, previewComponentConfirm, previewComponentSave, saveComponent } from "./components";
 import { getEmployeeSalary, listEmployeeSalaries, searchPeople } from "./employees";
-import { applyRevision, createRevision, decideRevision, getRevision, listRevisions, previewRevision, submitRevision, withdrawRevision } from "./revisions";
+import { applyRevision, createCancel, createRevision, previewCancel, decideRevision, getRevision, listRevisions, previewRevision, submitRevision, withdrawRevision } from "./revisions";
 import { confirmStructure, getStructure, listStructures, previewBreakup, previewStructureConfirm, previewStructureSave, saveStructure } from "./structures";
 
 const actor = (req: Request) => ({ userId: req.user!.userId, ip: req.ip ?? null, userAgent: req.get("user-agent") ?? null });
@@ -69,4 +69,9 @@ export const adjustmentAdd = async (req: Request, res: Response): Promise<void> 
 export const adjustmentCancel = async (req: Request, res: Response): Promise<void> => {
   await cancelAdjustment(id(req), (req.body as { reason: string }).reason, actor(req));
   res.status(200).json({ ok: true });
+};
+export const cancelPreview = async (req: Request, res: Response): Promise<void> => void res.status(200).json(await previewCancel((req.body as { input: unknown }).input, req.user!.userId));
+export const cancelCreate = async (req: Request, res: Response): Promise<void> => {
+  const b = req.body as { input: unknown; fingerprint: string };
+  res.status(201).json(await createCancel(b.input, b.fingerprint, actor(req)));
 };

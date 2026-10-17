@@ -15,6 +15,10 @@ export async function cleanupPayrollRowsBy(userIds: string[]): Promise<void> {
     await ids(prisma.payrollApproval.findMany({ where: { OR: [{ makerUserId: { in: userIds } }, { checkerUserId: { in: userIds } }] }, select: { id: true } })),
   );
   await deleteWithDependents("PayrollEvent", await ids(prisma.payrollEvent.findMany({ where: { actorUserId: { in: userIds } }, select: { id: true } })));
+  // Payroll runs these people made (their items and lines go with them), and the events that describe them.
+  const runs = await ids(prisma.payrollRun.findMany({ where: { OR: [{ createdByUserId: { in: userIds } }, { calculatedByUserId: { in: userIds } }] }, select: { id: true } }));
+  await deleteWithDependents("PayrollRun", runs);
+  await deleteWithDependents("PayrollEvent", await ids(prisma.payrollEvent.findMany({ where: { subjectType: "PAYROLL_RUN", subjectId: { in: runs } }, select: { id: true } })));
   // Salary revisions these people made, and any salary rows they wrote (a person's own rows go with the person: see cleanupFullTestEmployee).
   const revisions = await ids(prisma.payrollSalaryRevision.findMany({ where: { createdByUserId: { in: userIds } }, select: { id: true } }));
   await deleteWithDependents("PayrollSalaryRevision", revisions);

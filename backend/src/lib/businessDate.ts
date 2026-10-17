@@ -37,3 +37,10 @@ export function addCalendarMonths(date: Date, months: number): Date {
 export function startOfMonthUTC(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
 }
+
+// The business date (IST) an instant falls on, as a UTC-midnight Date: when a year-end encashment was committed, whatever hour the server's clock was at.
+export function businessDateOf(instant: Date): Date {
+  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+  const ist = new Date(instant.getTime() + IST_OFFSET_MS);
+  return new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate()));
+}

@@ -9,6 +9,7 @@ import { useAuth } from "../../../hooks/useAuth";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatDate } from "../../../lib/dates";
 import { formatRupees } from "../../../lib/money";
+import { CancelScheduledModal } from "../../../components/payroll/CancelScheduledModal";
 import { REASON_LABEL } from "./salaryText";
 
 const { Title, Text } = Typography;
@@ -78,6 +79,9 @@ const STATUS_COLOR = { current: "green", scheduled: "blue", past: "gray" } as co
 function SalaryTimelineDrawer({ person, onClose, canEdit }: { person: EmployeeSalaryRow; onClose: () => void; canEdit: boolean }) {
   const navigate = useNavigate();
   const { data, isLoading } = useQuery({ queryKey: ["payroll", "salary-timeline", person.employeeId], queryFn: () => payrollApi.getEmployeeSalary(person.employeeId) });
+  const { data: components = [] } = useQuery({ queryKey: ["payroll", "components"], queryFn: payrollApi.listComponents });
+  const componentName = (code: string) => components.find((c) => c.code === code)?.value?.name ?? code;
+  const [cancelling, setCancelling] = useState<string | null>(null);
   return (
     <Drawer
       open
@@ -105,6 +109,11 @@ function SalaryTimelineDrawer({ person, onClose, canEdit }: { person: EmployeeSa
                   <Text>{formatRupees(r.annualCtc)} a year, {formatRupees(r.monthlyCtc)} a month, on {r.structure}</Text>
                   <Table size="small" pagination={false} rowKey="component" dataSource={r.lines} columns={[{ title: "Line", dataIndex: "component" }, { title: "A month", align: "right", render: (_, l) => formatRupees(l.amount) }]} />
                   {r.note && <Text type="secondary">“{r.note}”</Text>}
+                  {canEdit && r.status === "scheduled" && r.id === data.history[0]?.id && data.history.length > 1 && (
+                    <div>
+                      <Button size="small" danger onClick={() => setCancelling(r.id)}>Cancel this scheduled salary</Button>
+                    </div>
+                  )}
                 </Space>
               ),
             }))}
@@ -116,6 +125,15 @@ function SalaryTimelineDrawer({ person, onClose, canEdit }: { person: EmployeeSa
             </>
           )}
         </Flex>
+      )}
+      {cancelling && (
+        <CancelScheduledModal
+          employeeId={person.employeeId}
+          salaryId={cancelling}
+          componentName={componentName}
+          onClose={() => setCancelling(null)}
+          onSubmitted={(id) => navigate(`/admin/payroll/revisions?open=${id}`)}
+        />
       )}
     </Drawer>
   );

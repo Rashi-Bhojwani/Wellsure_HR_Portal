@@ -184,8 +184,20 @@ export interface BreakupJson {
   monthlyCtc: string;
   lines: Array<{ component: string; componentVersion: number; type: ComponentType; amount: string; order: number }>;
 }
+/** Each line over twelve months, the total of the lines that count toward CTC, and its distance from the yearly CTC (the rounding), to show beside the monthly figures. */
+export interface AnnualView {
+  annualCtc: string;
+  lines: Array<{ component: string; annual: string }>;
+  total: string;
+  difference: string;
+}
+export interface SampleResult {
+  annualCtc: string;
+  breakup: BreakupJson;
+  annual: AnnualView;
+}
 export interface StructureSavePreview extends ItemSavePreview<StructureValue> {
-  sample: { annualCtc: string; breakup: BreakupJson };
+  sample: SampleResult;
   unconfirmedComponents: string[];
 }
 export type StructureConfirmPreview = ItemConfirmPreview<StructureValue> & { unconfirmedComponents: string[] };
@@ -271,6 +283,7 @@ export interface RevisionPreview extends RevisionPlanView {
 export type RevisionStatus = "DRAFT" | "WAITING_FOR_CHECKER" | "APPROVED" | "REJECTED" | "VOIDED" | "APPLIED" | "WITHDRAWN";
 export interface RevisionListItem {
   id: string;
+  kind: "CHANGE" | "CANCEL_SCHEDULED";
   status: RevisionStatus;
   effectiveFrom: string;
   reason: string;
@@ -279,8 +292,26 @@ export interface RevisionListItem {
   createdBy: string;
   note: string;
 }
+/** Cancelling a salary row that has been written but has not started: the row that goes, and the salary that stays. */
+export interface CancelPlanView {
+  kind: "CANCEL_SCHEDULED";
+  employeeId: string;
+  employeeCode: string;
+  name: string;
+  problems: string[];
+  hash: string;
+  scheduled: { salaryId: string; startsOn: string; annualCtc: string; monthlyCtc: string; structure: string; lines: Array<{ component: string; amount: string }> } | null;
+  stays: { salaryId: string; startsOn: string; startedOn: string; annualCtc: string; monthlyCtc: string; structure: string; lines: Array<{ component: string; amount: string }> } | null;
+}
+export interface CancelPreview extends CancelPlanView {
+  blockers: string[];
+  canSubmit: boolean;
+  checkers: CheckerAvailability;
+  fingerprint: string;
+}
 export interface RevisionDetail {
   id: string;
+  kind: "CHANGE" | "CANCEL_SCHEDULED";
   status: RevisionStatus;
   effectiveFrom: string;
   reason: string;
@@ -293,7 +324,7 @@ export interface RevisionDetail {
   withdrawnAt: string | null;
   withdrawnReason: string | null;
   approval: { status: string; decidedBy: string | null; decisionNote: string | null; voidReason: string | null } | null;
-  plan: RevisionPlanView;
+  plan: RevisionPlanView | CancelPlanView;
   fingerprint: string;
   blockers: string[];
   checkers: CheckerAvailability | null;
@@ -309,7 +340,7 @@ export interface AdjustmentRow {
   direction: "EARNING" | "DEDUCTION";
   amount: string;
   reason: string;
-  source: "MANUAL" | "SALARY_ARREARS" | "IMPORT";
+  source: "MANUAL" | "SALARY_ARREARS" | "IMPORT" | "YEAR_END_ENCASHMENT";
   periodStart: string | null;
   periodEnd: string | null;
   breakdown: unknown;
@@ -354,7 +385,7 @@ export const previewStructureSave = (code: string, value: StructureValue, sample
 export const saveStructure = (code: string, body: { value: StructureValue; sampleAnnualCtc: string; note: string; fingerprint: string }) => put<StructureView>(`/structures/${code}`, body);
 export const previewStructureConfirm = (code: string) => post<StructureConfirmPreview>(`/structures/${code}/confirm-preview`);
 export const confirmStructure = (code: string, body: { version: number; note: string; fingerprint: string }) => post<StructureView>(`/structures/${code}/confirm`, body);
-export const previewBreakup = (value: StructureValue, annualCtc: string, perPerson?: Record<string, string>) => post<{ annualCtc: string; breakup: BreakupJson }>("/structures/breakup-preview", { value, annualCtc, perPerson });
+export const previewBreakup = (value: StructureValue, annualCtc: string, perPerson?: Record<string, string>) => post<SampleResult>("/structures/breakup-preview", { value, annualCtc, perPerson });
 
 export const listEmployeeSalaries = (params: { q?: string; missing?: boolean; page: number; pageSize: number }) =>
   get<{ total: number; items: EmployeeSalaryRow[] }>("/salary/employees", { ...params, missing: params.missing ? "true" : undefined });
@@ -375,3 +406,183 @@ export const listAdjustments = (params: { employeeId?: string; status?: string; 
 export const previewAdjustment = (input: AdjustmentInput) => post<AdjustmentPreview>("/adjustments/preview", { input });
 export const addAdjustment = (input: AdjustmentInput, fingerprint: string) => post<{ id: string }>("/adjustments", { input, fingerprint });
 export const cancelAdjustment = (id: string, reason: string) => post<{ ok: true }>(`/adjustments/${id}/cancel`, { reason });
+export const previewCancelScheduled = (input: { employeeId: string; salaryId: string; note?: string }) => post<CancelPreview>("/salary/revisions/cancel-preview", { input });
+export const createCancelScheduled = (input: { employeeId: string; salaryId: string; note?: string }, fingerprint: string) => post<{ id: string }>("/salary/revisions/cancel", { input, fingerprint });
+
+// ── Payroll runs (P6-3): readiness, a run, its people, the difference from last month ──
+
+export type RunStatus = "NEW" | "CALCULATING" | "CALCULATED" | "FAILED" | "VOID" | "FINALISED";
+export interface RunSummary {
+  id: string;
+  cycle: { start: string; end: string; label: string };
+  status: RunStatus;
+  statusLabel: string;
+  calcVersion: number;
+  progress: { done: number; total: number };
+  totals: { gross: string; deductions: string; net: string; employerCost: string };
+  counts: { people: number; payable: number; held: number; excluded: number; exceptions: number };
+  runHash: string | null;
+  calculatedAt: string | null;
+  failureReason: string | null;
+  createdAt: string;
+  voidReason: string | null;
+  test?: boolean;
+}
+export interface RunRuleStatus {
+  key: string;
+  kind: "RULE" | "COMPONENT" | "STRUCTURE";
+  version: number;
+  label: string;
+  status: "CONFIRMED" | "PLACEHOLDER";
+  stale: boolean;
+  notSet: boolean;
+  frozen: boolean;
+}
+export interface RunDetail extends RunSummary {
+  createdBy: string;
+  calculatedBy: string | null;
+  watermark: Watermark;
+  rules: RunRuleStatus[];
+  stale: boolean;
+  notices: string[];
+  events: Array<{ type: string; at: string }>;
+}
+export interface PersonProblem {
+  employeeId: string;
+  name: string;
+  days: number;
+  firstDays: string[];
+}
+export interface RunReadiness {
+  cycle: { start: string; end: string; label: string };
+  cycleOver: boolean;
+  paymentDate: string | null;
+  people: number;
+  attendance: { unfinalisedCount: number; unfinalised: PersonProblem[] };
+  salary: { gapCount: number; gaps: PersonProblem[] };
+  bank: { missingCount: number; missing: Array<{ employeeId: string; name: string }> };
+  rules: { missing: Array<{ key: string; label: string }>; placeholders: Array<{ key: string; kind: string; label: string; notSet: boolean }> };
+  adjustments: { pending: number; arrears: number; encashments: number; encashmentsPaidLater: number };
+  existingRun: { id: string; status: RunStatus } | null;
+  canCreate: boolean;
+}
+export type HoldReasonCode = "ATTENDANCE_NOT_FINAL" | "NO_SALARY" | "WORKING_DAYS_PART_MONTH" | "FINAL_SETTLEMENT" | "NEGATIVE_NET" | "ZERO_NET" | "NO_BANK_ACCOUNT";
+export interface RunItemRow {
+  employeeId: string;
+  employeeCode: string;
+  name: string;
+  isYou: boolean;
+  status: "PAYABLE" | "HELD" | "EXCLUDED";
+  holdReason: HoldReasonCode | null;
+  holdDetail: string | null;
+  paidDays: string;
+  lopDays: string;
+  gross: string;
+  deductions: string;
+  net: string;
+  exceptions: number;
+  blocking: boolean;
+}
+export interface RunLine {
+  code: string;
+  label: string;
+  kind: "EARNING" | "DEDUCTION" | "EMPLOYER_CONTRIBUTION" | "ROUNDING";
+  source: string;
+  sourceRef: string | null;
+  amount: string;
+  basis: Record<string, unknown>;
+}
+export interface RunItemDetail {
+  employeeId: string;
+  employeeCode: string;
+  name: string;
+  isYou: boolean;
+  status: "PAYABLE" | "HELD" | "EXCLUDED";
+  holdReason: HoldReasonCode | null;
+  holdDetail: string | null;
+  employedFrom: string | null;
+  employedTo: string | null;
+  days: { basis: string; lopDivisor: string; lop: string; paid: string };
+  totals: { gross: string; deductions: string; employerContributions: string; netBeforeRounding: string; roundingAdjustment: string; net: string };
+  employmentType: string;
+  structure: { key: string; version: number } | null;
+  inputs: {
+    days?: { cycleDays: number; employedDays: number; notEmployedDays: number; basisDays: string; lopDivisorDays: string; lopDays: string; employedShare: string; lopShare: string; factor: string; payBasis: string; lopDivisor: string; lopByDay: Array<{ date: string; lop: string }> };
+    segments?: Array<{ from: string; to: string; days: number; lop: string; factor: string; structure: string }>;
+    state?: { text: string | null; key: string | null; onDay: string };
+    missingDays?: string[];
+    salaryGapDays?: string[];
+  };
+  notices: string[];
+  exceptions: Array<{ code: string; severity: "BLOCKING" | "WARNING"; message: string }>;
+  itemHash: string;
+  lines: RunLine[];
+}
+export interface CalcPreview {
+  fingerprint: string;
+  first: boolean;
+  status: RunStatus;
+  cycle: string;
+  people: number;
+  unchanged: number;
+  changedCount: number;
+  removedCount: number;
+  changes: Array<{ employeeId: string; name: string; change: "NEW" | "CHANGED"; netBefore: string | null; netAfter: string; netChange: string | null }>;
+  totals: { gross: string; deductions: string; net: string; payable: number; held: number; excluded: number; exceptions: number };
+  before: { gross: string; deductions: string; net: string } | null;
+  watermark: Watermark;
+  runNotices: string[];
+  willVoidApproval: boolean;
+}
+export type VarianceTagCode = "JOINED" | "LEFT" | "SALARY_REVISED" | "LOP_CHANGED" | "ADJUSTMENT" | "ARREARS" | "ENCASHMENT" | "STATUTORY_CHANGE" | "HELD" | "NOT_CALCULATED" | "NOT_IN_THIS_RUN";
+export interface Figures {
+  gross: string;
+  deductions: string;
+  net: string;
+}
+export interface VarianceRow {
+  employeeId: string;
+  employeeCode: string;
+  name: string;
+  status: string;
+  current: Figures | null;
+  previous: Figures | null;
+  change: Figures | null;
+  percent: string | null;
+  tags: VarianceTagCode[];
+  flagged: boolean;
+}
+export interface VarianceView {
+  cycle: { start: string; end: string; label: string };
+  baseline: { runId: string; status: RunStatus; final: boolean; cycleLabel: string } | null;
+  thresholds: { percent: string | null; minAmount: string | null; set: boolean };
+  totals: { current: Figures | null; previous: Figures | null; change: Figures | null };
+  tagCounts: Record<string, number>;
+  flaggedCount: number;
+  total: number;
+  items: VarianceRow[];
+}
+
+export const listRuns = (page: number, pageSize: number) => get<{ total: number; items: RunSummary[] }>("/runs", { page, pageSize });
+export const getRunReadiness = (cycleStart: string) => get<RunReadiness>("/runs/readiness", { cycleStart });
+export const createRun = (cycleStart: string) => post<{ id: string }>("/runs", { cycleStart });
+export const getRun = (id: string) => get<RunDetail>(`/runs/${id}`);
+export const listRunItems = (id: string, params: { status?: string; search?: string; exceptionsOnly?: boolean; page: number; pageSize: number }) =>
+  get<{ total: number; items: RunItemRow[] }>(`/runs/${id}/items`, { ...params, exceptionsOnly: params.exceptionsOnly ? "true" : undefined });
+export const getRunItem = (id: string, employeeId: string) => get<RunItemDetail>(`/runs/${id}/items/${employeeId}`);
+export const getRunVariance = (id: string, params: { changedOnly: boolean; flaggedOnly: boolean; page: number; pageSize: number }) =>
+  get<VarianceView>(`/runs/${id}/variance`, { ...params, changedOnly: String(params.changedOnly), flaggedOnly: String(params.flaggedOnly) });
+export const previewCalculation = (id: string) => post<CalcPreview>(`/runs/${id}/calculate-preview`);
+export const requestCalculation = (id: string, fingerprint: string) => post<{ id: string; resumed: boolean }>(`/runs/${id}/calculate`, { fingerprint });
+export const voidRun = (id: string, reason: string) => post<{ ok: true }>(`/runs/${id}/void`, { reason });
+export async function downloadRunWorkbook(id: string): Promise<void> {
+  const res = await apiClient.get<Blob>(`${base}/runs/${id}/export`, { responseType: "blob" });
+  const disposition = String(res.headers["content-disposition"] ?? "");
+  const name = /filename="([^"]+)"/.exec(disposition)?.[1] ?? "payroll-register.xlsx";
+  const url = URL.createObjectURL(res.data);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
+}

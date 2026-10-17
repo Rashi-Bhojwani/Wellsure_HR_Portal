@@ -107,6 +107,7 @@ export async function previewEdit(key: string, rawValue: unknown): Promise<EditP
   const valueHash = payrollHash(value);
   const rule = (await getRule(key)).rule;
   const baseVersion = rule.current?.version ?? 0;
+  const used = await prisma.payrollRun.findMany({ where: { status: { not: "VOID" }, pins: { array_contains: [{ key }] } }, select: { cycleLabel: true }, orderBy: { cycleStart: "asc" } });
   return {
     key,
     label: def.label,
@@ -115,7 +116,9 @@ export async function previewEdit(key: string, rawValue: unknown): Promise<EditP
     unchanged: rule.current?.valueHash === valueHash,
     willResetConfirmation: rule.status === "CONFIRMED",
     lastConfirmed: rule.status === "CONFIRMED" && rule.current ? rule.current : rule.lastConfirmed,
-    impact: "No payroll run has used this value yet, so nothing changes in any figure. From now on test runs use it; real runs cannot until a different person confirms it.",
+    impact: used.length
+      ? `${used.length === 1 ? "A payroll run has" : `${used.length} payroll runs have`} used this rule (${used.map((r) => r.cycleLabel).join(", ")}). ${used.length === 1 ? "It keeps" : "They keep"} the version used and become${used.length === 1 ? "s" : ""} stale: ${used.length === 1 ? "it has" : "each has"} to be calculated again before going any further. Real runs cannot use the new value until a different person confirms it.`
+      : "No payroll run has used this value yet, so nothing changes in any figure. From now on test runs use it; real runs cannot until a different person confirms it.",
     fingerprint: editFingerprint(key, baseVersion, rule.current?.valueHash ?? null, valueHash),
   };
 }

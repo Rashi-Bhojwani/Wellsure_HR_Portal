@@ -7,8 +7,9 @@ import dayjs from "dayjs";
 import { REVISION_SELECTION_KINDS, type RevisionSelectionKind } from "@shared/constants/payrollSalary";
 import * as payrollApi from "../../../api/payroll";
 import * as orgApi from "../../../api/org";
-import type { PersonHit, RevisionChange, RevisionDetail, RevisionInput, RevisionListItem, RevisionPreview, RevisionSelection, RevisionStatus, StructureView } from "../../../api/payroll";
+import type { CancelPlanView, PersonHit, RevisionChange, RevisionDetail, RevisionInput, RevisionListItem, RevisionPreview, RevisionSelection, RevisionStatus, StructureView } from "../../../api/payroll";
 import { CheckersNote } from "../../../components/payroll/CheckersNote";
+import { CancelPlanBlock } from "../../../components/payroll/CancelScheduledModal";
 import { RevisionPlanTable } from "../../../components/payroll/RevisionPlanTable";
 import { useAuth } from "../../../hooks/useAuth";
 import { apiErrorMessage } from "../../../lib/apiError";
@@ -43,7 +44,7 @@ export function SalaryRevisionsPage() {
   const canEdit = hasPermission("payroll.salary.edit");
   const [page, setPage] = useState(1);
   const [wizard, setWizard] = useState(params.get("new") === "1");
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(params.get("open"));
   const { data, isLoading, error } = useQuery({ queryKey: ["payroll", "revisions", page], queryFn: () => payrollApi.listRevisions(page, 20) });
   const { data: components = [] } = useQuery({ queryKey: ["payroll", "components"], queryFn: payrollApi.listComponents });
   const componentName = (code: string) => components.find((c) => c.code === code)?.value?.name ?? code;
@@ -79,7 +80,7 @@ export function SalaryRevisionsPage() {
         columns={[
           { title: "From", render: (_, r) => formatDate(r.effectiveFrom) },
           { title: "People", dataIndex: "people", align: "right" },
-          { title: "Kind", render: (_, r) => (r.reason === "CORRECTION" ? "Correction" : "Revision") },
+          { title: "Kind", render: (_, r) => (r.kind === "CANCEL_SCHEDULED" ? "Cancel a scheduled salary" : r.reason === "CORRECTION" ? "Correction" : "Revision") },
           { title: "Status", render: (_, r) => <Tag color={STATUS[r.status].color}>{STATUS[r.status].label}</Tag> },
           { title: "Prepared by", render: (_, r) => <div>{r.createdBy}<div><Text type="secondary" style={{ fontSize: 12 }}>{formatDateTime(r.createdAt)}</Text></div></div> },
           { title: "Note", dataIndex: "note", ellipsis: true },
@@ -288,7 +289,7 @@ function RevisionDetailDrawer({ id, componentName, onClose }: { id: string; comp
 
   const open = r && !["APPLIED", "WITHDRAWN"].includes(r.status);
   return (
-    <Drawer open width={1000} title="Salary revision" onClose={onClose} destroyOnHidden>
+    <Drawer open width={1000} title={r?.kind === "CANCEL_SCHEDULED" ? "Cancel a scheduled salary" : "Salary revision"} onClose={onClose} destroyOnHidden>
       {isLoading && <Spin />}
       {r && <RevisionBody r={r} componentName={componentName} />}
       {r && (
@@ -306,7 +307,7 @@ function RevisionDetailDrawer({ id, componentName, onClose }: { id: string; comp
               </Space>
             </Space>
           )}
-          {canEdit && r.status === "APPROVED" && !r.includesViewer && <Button type="primary" size="large" loading={apply.isPending} onClick={() => apply.mutate()}>Apply: write these salaries</Button>}
+          {canEdit && r.status === "APPROVED" && !r.includesViewer && <Button type="primary" size="large" loading={apply.isPending} onClick={() => apply.mutate()}>{r.kind === "CANCEL_SCHEDULED" ? "Apply: remove this scheduled salary" : "Apply: write these salaries"}</Button>}
           {canEdit && ["DRAFT", "REJECTED", "VOIDED"].includes(r.status) && r.blockers.length === 0 && <Button type="primary" loading={submit.isPending} onClick={() => submit.mutate()}>Submit for approval</Button>}
           {canEdit && open && <Button onClick={() => setWithdrawing(true)}>Withdraw this revision</Button>}
         </Space>
@@ -327,9 +328,9 @@ function RevisionBody({ r, componentName }: { r: RevisionDetail; componentName: 
         bordered
         items={[
           { key: "s", label: "Status", children: <Tag color={STATUS[r.status].color}>{STATUS[r.status].label}</Tag> },
-          { key: "d", label: "From", children: formatDate(r.effectiveFrom) },
+          { key: "d", label: r.kind === "CANCEL_SCHEDULED" ? "The scheduled salary starts" : "From", children: formatDate(r.effectiveFrom) },
           { key: "b", label: "Prepared by", children: `${r.createdBy}, ${formatDateTime(r.createdAt)}` },
-          { key: "k", label: "Kind", children: r.reason === "CORRECTION" ? "A correction" : "A revision" },
+          { key: "k", label: "Kind", children: r.kind === "CANCEL_SCHEDULED" ? "Cancelling a scheduled salary" : r.reason === "CORRECTION" ? "A correction" : "A revision" },
           ...(r.approval?.decidedBy ? [{ key: "a", label: "Decided by", children: `${r.approval.decidedBy}${r.approval.decisionNote ? `: “${r.approval.decisionNote}”` : ""}` }] : []),
           ...(r.approval?.voidReason ? [{ key: "v", label: "Why it is void", children: r.approval.voidReason }] : []),
           ...(r.appliedAt ? [{ key: "p", label: "Applied", children: `${r.appliedBy}, ${formatDateTime(r.appliedAt)}` }] : []),
@@ -338,7 +339,7 @@ function RevisionBody({ r, componentName }: { r: RevisionDetail; componentName: 
         ]}
       />
       {r.status === "APPLIED" ? <Text type="secondary">These are the figures as they were written. A later revision does not change this record.</Text> : <Text type="secondary">These figures are worked out again from the current setup every time you open this, so what you approve is what would be written.</Text>}
-      <RevisionPlanTable people={r.plan.people} componentName={componentName} />
+      {r.kind === "CANCEL_SCHEDULED" ? <CancelPlanBlock plan={r.plan as CancelPlanView} componentName={componentName} /> : <RevisionPlanTable people={(r.plan as Exclude<RevisionDetail["plan"], CancelPlanView>).people} componentName={componentName} />}
       {r.checkers && ["DRAFT", "WAITING_FOR_CHECKER", "REJECTED", "VOIDED"].includes(r.status) && <CheckersNote checkers={r.checkers} what="this revision" />}
     </Space>
   );

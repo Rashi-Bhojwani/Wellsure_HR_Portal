@@ -30,8 +30,10 @@ const ptSlabs = z
       stateKey,
       z
         .object({
-          slabs: z.array(z.object({ fromGross: decimalText, toGross: decimalText.nullable(), monthlyAmount: decimalText }).strict()).min(1),
-          monthOverrides: z.record(z.string().regex(/^(?:[1-9]|1[0-2])$/), decimalText).optional(),
+          // monthOverrides sit on the slab they replace: the amount charged in that month (1 to 12) instead of monthlyAmount, for someone in that slab.
+          slabs: z
+            .array(z.object({ fromGross: decimalText, toGross: decimalText.nullable(), monthlyAmount: decimalText, monthOverrides: z.record(z.string().regex(/^(?:[1-9]|1[0-2])$/), decimalText).optional() }).strict())
+            .min(1),
         })
         .strict()
         .superRefine((state, ctx) => {

@@ -11,6 +11,8 @@ import { cleanupPayrollRowsBy } from "./payrollTestHelpers";
 
 let w: SalaryWorld;
 let firstRevisionId = "";
+// A fingerprint that is certainly not this one (changing the last character to "0" is no change at all one time in sixteen).
+const differentFingerprint = (f: string) => `${f.slice(0, -1)}${f.endsWith("0") ? "1" : "0"}`;
 const api = (token: string) => ({
   get: (p: string) => request(app).get(`/api/payroll${p}`).set(...authHeader(token)),
   post: (p: string, b: object = {}) => request(app).post(`/api/payroll${p}`).set(...authHeader(token)).send(b),
@@ -68,7 +70,7 @@ describe("components", () => {
     expect((await maker().post(`/components/${w.basic}/confirm-preview`)).status).toBe(403); // the maker role does not hold the confirm permission at all
     const c = await checkerA().post(`/components/${w.basic}/confirm-preview`);
     expect(c.status).toBe(200);
-    const stale = await checkerA().post(`/components/${w.basic}/confirm`, { version: 2, note: "checked the notification", fingerprint: `${c.body.fingerprint.slice(0, -1)}0` });
+    const stale = await checkerA().post(`/components/${w.basic}/confirm`, { version: 2, note: "checked the notification", fingerprint: differentFingerprint(c.body.fingerprint) });
     expect(stale.status).toBe(409);
     const ok = await checkerA().post(`/components/${w.basic}/confirm`, { version: 2, note: "checked the notification", fingerprint: c.body.fingerprint });
     expect(ok.status, JSON.stringify(ok.body)).toBe(200);
@@ -220,12 +222,12 @@ describe("a salary revision, from preparing to applying", () => {
     const e = w.staff[1]!;
     const input = joining(e.employeeId, "960000");
     const preview = await maker().post("/salary/revisions/preview", { input });
-    expect((await maker().post("/salary/revisions", { input, fingerprint: `${preview.body.fingerprint.slice(0, -1)}0` })).body.error.code).toBe("PREVIEW_STALE");
+    expect((await maker().post("/salary/revisions", { input, fingerprint: differentFingerprint(preview.body.fingerprint) })).body.error.code).toBe("PREVIEW_STALE");
     const created = await maker().post("/salary/revisions", { input, fingerprint: preview.body.fingerprint });
     const id = created.body.id as string;
     const seen = await checkerA().get(`/salary/revisions/${id}`);
     // The checker's screen is out of date: refused, nothing decided.
-    expect((await checkerA().post(`/salary/revisions/${id}/decision`, { decision: "APPROVE", fingerprint: `${seen.body.fingerprint.slice(0, -1)}0` })).body.error.code).toBe("PREVIEW_STALE");
+    expect((await checkerA().post(`/salary/revisions/${id}/decision`, { decision: "APPROVE", fingerprint: differentFingerprint(seen.body.fingerprint) })).body.error.code).toBe("PREVIEW_STALE");
     // The rounding rule changes after submission: the figures the checker would approve are not the figures that were submitted. Void.
     await setRule(w.maker.userId, "LINE_ROUNDING", { mode: "HALF_UP", scale: 1 });
     const fresh = await checkerA().get(`/salary/revisions/${id}`);

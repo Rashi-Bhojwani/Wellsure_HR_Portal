@@ -20,6 +20,8 @@ export const peopleSearchSchema = z.object({ q: z.string().trim().min(1).max(60)
 
 export const revisionPreviewSchema = z.object({ input: z.unknown() });
 export const revisionCreateSchema = z.object({ input: z.unknown(), fingerprint });
+export const cancelPreviewSchema = z.object({ input: z.unknown() });
+export const cancelCreateSchema = z.object({ input: z.unknown(), fingerprint });
 export const revisionSubmitSchema = z.object({ fingerprint });
 export const revisionWithdrawSchema = z.object({ reason: z.string().trim().min(1).max(300) });
 export const revisionDecisionSchema = z.object({ decision: z.enum(["APPROVE", "REJECT"]), note: z.string().trim().max(500).optional(), fingerprint });

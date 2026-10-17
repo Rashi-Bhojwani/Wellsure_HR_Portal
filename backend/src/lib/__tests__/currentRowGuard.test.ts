@@ -57,4 +57,18 @@ describe("no 'current = no end date' reads outside lib/effectiveDating.ts", () =
     }
     expect(offenders, "Use the readers in lib/effectiveDating.ts").toEqual([]);
   });
+
+  // Payroll pays only for FINALISED attendance and only for COMMITTED year-end encashments, and reads both through a reader that can only return those.
+  it("payroll never reads daily attendance or year-end tables itself", () => {
+    const FORBIDDEN = /\.(dailyAttendance|yearEndRunItem|yearEndRun)\.|daily_attendance|year_end_run/;
+    const offenders: string[] = [];
+    for (const file of walk(path.join(SRC, "modules/payroll"))) {
+      readFileSync(file, "utf8")
+        .split("\n")
+        .forEach((line, i) => {
+          if (FORBIDDEN.test(line) && !line.trim().startsWith("//")) offenders.push(`${path.relative(SRC, file)}:${i + 1}: ${line.trim()}`);
+        });
+    }
+    expect(offenders, "Use finalisedAttendanceDays (lib/effectiveDating.ts) and committedEncashments (modules/leave/payrollReader.ts)").toEqual([]);
+  });
 });

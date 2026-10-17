@@ -12,7 +12,26 @@ export const COMPONENT_TYPE_LABEL: Record<ComponentType, string> = {
 export const ITEM_CODE_PATTERN = /^[A-Z][A-Z0-9_]{1,24}$/;
 
 /** Produced by the calculator from rules, never entered as components, so a component can never be mistaken for them. */
-export const RESERVED_COMPONENT_CODES = ["CTC", "ANNUAL_CTC", "PF_EMPLOYEE", "PF_EMPLOYER", "ESI_EMPLOYEE", "ESI_EMPLOYER", "PT", "LWF", "TDS", "ARREARS"] as const;
+export const RESERVED_COMPONENT_CODES = [
+  "CTC",
+  "ANNUAL_CTC",
+  "PF_EMPLOYEE",
+  "PF_EMPLOYER",
+  "PF_EPS",
+  "PF_EPF_ER",
+  "PF_EDLI",
+  "PF_ADMIN",
+  "ESI_EMPLOYEE",
+  "ESI_EMPLOYER",
+  "PT",
+  "LWF",
+  "LWF_EMPLOYEE",
+  "LWF_EMPLOYER",
+  "TDS",
+  "ARREARS",
+  "LEAVE_ENCASHMENT",
+  "NET_ROUNDING",
+] as const;
 
 export const LINE_CALC_METHODS = ["PERCENT", "FIXED_AMOUNT", "PER_PERSON", "FORMULA", "BALANCE"] as const;
 export type LineCalcMethod = (typeof LINE_CALC_METHODS)[number];

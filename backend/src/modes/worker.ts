@@ -9,7 +9,9 @@ import { redis } from "../lib/redis";
 import { startSocketEmitter, stopSocketEmitter } from "../realtime/emitter";
 import { startWorkers } from "../jobs/worker";
 import { registerAttendanceEngine } from "../modules/attendance/wiring";
+import { registerPayrollSeams } from "../modules/payroll/wiring";
 import { closeAttendanceQueues } from "../jobs/attendanceQueues";
+import { closePayrollQueues } from "../jobs/payrollQueues";
 import { metricsService } from "../integrations/metrics";
 import { bullCountsFn, startQueueMetrics } from "../jobs/queueMetrics";
 
@@ -19,6 +21,7 @@ export async function runWorker(): Promise<void> {
   await redis.connect();
   await startSocketEmitter(); // live events from jobs reach the api's clients
   registerAttendanceEngine(); // jobs that change data (e.g. separations) ask for recompute too
+  registerPayrollSeams();
   const workers = startWorkers();
   logger.info({ count: workers.length }, "worker started");
   // Backlog, failed-job counts and a heartbeat for the alarms (nothing is published locally).
@@ -37,6 +40,7 @@ export async function runWorker(): Promise<void> {
         () => Promise.all(workers.map((w) => w.close())), // waits for the jobs running now to finish
         () => queueCounts.close(),
         closeAttendanceQueues,
+        closePayrollQueues,
         closePdfRenderer, // letters/preview may have Chromium open
         stopSocketEmitter,
         () => prisma.$disconnect(),

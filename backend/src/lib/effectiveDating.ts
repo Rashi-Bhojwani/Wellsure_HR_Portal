@@ -252,6 +252,23 @@ export async function salarySegments(employeeId: string, from: Date, to: Date): 
   });
 }
 
+/** Many people's salary rows covering part of [from, to], each clipped to that range, oldest first, keyed by employee id (one query, for a payroll run). */
+export async function salarySegmentsMany(employeeIds: string[], from: Date, to: Date): Promise<Map<string, Array<{ row: SalaryWithLines; from: Date; to: Date }>>> {
+  const rows = await prisma.employeeSalary.findMany({
+    where: { employeeId: { in: employeeIds }, effectiveFrom: { lte: to }, OR: [{ effectiveTo: null }, { effectiveTo: { gt: from } }] },
+    orderBy: [{ employeeId: "asc" }, { effectiveFrom: "asc" }],
+    include: salaryInclude,
+  });
+  const out = new Map<string, Array<{ row: SalaryWithLines; from: Date; to: Date }>>();
+  for (const row of rows) {
+    const lastDay = row.effectiveTo ? addCalendarDays(row.effectiveTo, -1) : to;
+    const list = out.get(row.employeeId) ?? [];
+    list.push({ row, from: row.effectiveFrom > from ? row.effectiveFrom : from, to: lastDay < to ? lastDay : to });
+    out.set(row.employeeId, list);
+  }
+  return out;
+}
+
 /** One employee's whole salary history, newest first (past, current and scheduled), for the Employee Salaries screen. */
 export async function salaryHistory(employeeId: string): Promise<SalaryWithLines[]> {
   return prisma.employeeSalary.findMany({ where: { employeeId }, orderBy: { effectiveFrom: "desc" }, include: salaryInclude });
@@ -362,6 +379,30 @@ export async function bankAccountOn(employeeId: string, day: Date): Promise<Empl
   return prisma.employeeBankAccount.findFirst({ where: { employeeId, ...inForceOn(day) } });
 }
 
+/** Many people's bank account in force on `day` (the payment date), keyed by employee id; a person with none is absent. */
+export async function bankAccountsOn(employeeIds: string[], day: Date): Promise<Map<string, EmployeeBankAccount>> {
+  const rows = await prisma.employeeBankAccount.findMany({ where: { employeeId: { in: employeeIds }, ...inForceOn(day) } });
+  return new Map(rows.map((r) => [r.employeeId, r]));
+}
+
+export interface PayrollPlacement {
+  locationId: string;
+  /** The free text on the branch (for example "Tamilnadu"), mapped to a state key by a payroll rule. */
+  locationState: string;
+  departmentId: string;
+  gradeId: string | null;
+  costCentreId: string | null;
+}
+
+/** Where each person was placed on `day`, with what payroll needs (state of the branch, grade, cost centre), keyed by employee id. */
+export async function payrollPlacementsOn(employeeIds: string[], day: Date): Promise<Map<string, PayrollPlacement>> {
+  const rows = await prisma.employeeJobHistory.findMany({
+    where: { employeeId: { in: employeeIds }, ...inForceOn(day) },
+    select: { employeeId: true, locationId: true, departmentId: true, gradeId: true, costCentreId: true, location: { select: { state: true } } },
+  });
+  return new Map(rows.map((r) => [r.employeeId, { locationId: r.locationId, locationState: r.location.state, departmentId: r.departmentId, gradeId: r.gradeId, costCentreId: r.costCentreId }]));
+}
+
 /** Whose punch is this: the employee a device user ID belonged to on `day`. */
 export async function employeeForDeviceUserOn(deviceUserId: string, day: Date): Promise<string | null> {
   const m = await prisma.deviceUserMapping.findFirst({ where: { deviceUserId, ...mappingInForceOn(day) }, select: { employeeId: true } });
@@ -392,6 +433,60 @@ export async function employeesForDeviceUsersOn(keys: Array<{ deviceUserId: stri
  */
 export function employedOn(day: Date) {
   return { dateOfJoining: { lte: day }, OR: [{ lastWorkingDate: null }, { lastWorkingDate: { gte: day } }] };
+}
+
+/** Prisma `where` on Employee: employed on at least one day of [from, to] (a payroll cycle). Never `status`. */
+export function employedBetween(from: Date, to: Date) {
+  return { dateOfJoining: { lte: to }, OR: [{ lastWorkingDate: null }, { lastWorkingDate: { gte: from } }] };
+}
+
+/** The part of [from, to] a person was employed: from the later of the start and their joining date to the earlier of the end and their last working day. */
+export function employmentSpan(person: { dateOfJoining: Date; lastWorkingDate: Date | null }, from: Date, to: Date): { from: Date; to: Date } | null {
+  const start = person.dateOfJoining > from ? person.dateOfJoining : from;
+  const end = person.lastWorkingDate && person.lastWorkingDate < to ? person.lastWorkingDate : to;
+  return start > end ? null : { from: start, to: end };
+}
+
+// ── Payroll's view of attendance ─────────────────────────────────────────
+// Payroll pays only for days attendance has FINALISED (locked). A day that is not locked does not exist as far as payroll is concerned: an unlocked
+// day can still change, and money is never calculated from a number that can still move. Payroll code reads attendance only through these two
+// functions (currentRowGuard.test.ts forbids `dailyAttendance` in modules/payroll).
+
+export interface FinalisedDay {
+  date: Date;
+  status: string;
+  lopDays: Prisma.Decimal;
+}
+
+/** The locked days of these people in [from, to], oldest first, keyed by employee id. */
+export async function finalisedAttendanceDays(employeeIds: string[], from: Date, to: Date): Promise<Map<string, FinalisedDay[]>> {
+  const rows = await prisma.dailyAttendance.findMany({
+    where: { employeeId: { in: employeeIds }, date: { gte: from, lte: to }, isLocked: true },
+    select: { employeeId: true, date: true, status: true, lopDays: true },
+    orderBy: [{ employeeId: "asc" }, { date: "asc" }],
+  });
+  const out = new Map<string, FinalisedDay[]>();
+  for (const r of rows) {
+    const list = out.get(r.employeeId) ?? [];
+    list.push({ date: r.date, status: r.status, lopDays: r.lopDays });
+    out.set(r.employeeId, list);
+  }
+  return out;
+}
+
+/** For each person, the days of their employment inside [from, to] that attendance has not locked (missing or still open), as ISO dates. People with none are absent. */
+export async function unfinalisedAttendanceDays(people: Array<{ id: string; dateOfJoining: Date; lastWorkingDate: Date | null }>, from: Date, to: Date): Promise<Map<string, string[]>> {
+  const locked = await finalisedAttendanceDays(people.map((p) => p.id), from, to);
+  const out = new Map<string, string[]>();
+  for (const p of people) {
+    const span = employmentSpan(p, from, to);
+    if (!span) continue;
+    const have = new Set((locked.get(p.id) ?? []).map((d) => iso(d.date)));
+    const missing: string[] = [];
+    for (let d = span.from; d <= span.to; d = addCalendarDays(d, 1)) if (!have.has(iso(d))) missing.push(iso(d));
+    if (missing.length) out.set(p.id, missing);
+  }
+  return out;
 }
 
 // ── Payroll lock (EF4 hook; enforced from Phase 6) ───────────────────────

@@ -13,6 +13,7 @@ import { ViewMyInfoPage } from "../pages/employee/profile/ViewMyInfoPage";
 import { HelpdeskTicketPage } from "../pages/employee/helpdesk/HelpdeskTicketPage";
 import { AdminHelpdeskTicketPage } from "../pages/admin/helpdesk/AdminHelpdeskTicketPage";
 import { LetterTemplateEditorPage } from "../pages/admin/letters/LetterTemplateEditorPage";
+import { PayrollRunPage } from "../pages/admin/payroll/PayrollRunPage";
 import { MobileActionPage } from "../pages/employee/mobile/MobileActionPage";
 import { MobileExplorePage } from "../pages/employee/mobile/MobileExplorePage";
 import { RequireAuth } from "./RequireAuth";
@@ -66,6 +67,7 @@ export function AppRouter() {
           <Route path="employee/profile/:id" element={<EmployeeProfilePage />} />
           <Route path="employee/helpdesk/:id" element={<AdminHelpdeskTicketPage />} />
           <Route path="admin-tools/templates/:id" element={<LetterTemplateEditorPage />} />
+          <Route path="payroll/run/:id" element={<PayrollRunPage />} />
           {adminRoutes()}
         </Route>
       </Route>

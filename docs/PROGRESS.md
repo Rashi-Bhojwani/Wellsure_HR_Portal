@@ -17,7 +17,7 @@ committed).
 | 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
 | 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | ✅ Done (2026-10-03) — commits A, B, C, D, D2, E1, E1.1, E2, E3, F and G (mobile bottom bar + PWA), plus interim commits. Full review — every screen and URL, every permission, what's stubbed, open questions, risks for Phase 6 — in [`docs/plans/PHASE_5_REVIEW.md`](plans/PHASE_5_REVIEW.md). Plan and as-built notes per commit in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
 | 5.5 | AWS production environment and go-live hardening | Not started |
-| 6 | Payroll | **In progress, built locally (AWS comes last). Plan approved 2026-10-16 ([`docs/plans/PHASE_6.md`](plans/PHASE_6.md)); P6-1 Foundations approved; P6-2 Salary built, awaiting your review; P6-3 to P6-6 not started.** One commit at a time, a pause after each |
+| 6 | Payroll | **In progress, built locally (AWS comes last). Plan approved 2026-10-16 ([`docs/plans/PHASE_6.md`](plans/PHASE_6.md)); P6-1 Foundations approved; P6-2 Salary approved; P6-3 The calculation built, awaiting your review; P6-4 to P6-6 not started.** One commit at a time, a pause after each |
 | 7 | Tax & benefits | Not started (planned after Phase 6 is reviewed) |
 | 8 | Extras | Not started |
 
@@ -4835,6 +4835,18 @@ Built to the design written into `docs/plans/PHASE_6.md` §14B before any code; 
 - **Also in this commit, from your two notes:** a test per layer that stops a person confirming their own value (rules service, approval core, approvals table, confirmations table), each proved by removing that layer alone; and a third fence against the demo payroll accounts reaching a deployed environment (`admin:preflight` fails if the development seed has ever written to the database).
 - **Found on the way:** the payroll literal scan missed numbers written with separators or exponents; fixed.
 - Verified: full backend suite alone (140 files, 1,276 tests), frontend tests, typecheck, lint and drift clean in both projects; mutation checks on every new guard (all caught, four first survived and each led to a test being added or sharpened); a live two-browser walkthrough. Detail in the Phase 6 plan §14C; LOCAL_ASSUMPTIONS rows 15 to 19.
+
+### Phase 6, P6-3 of six: the calculation (2026-10-17)
+
+Built to the design written into `docs/plans/PHASE_6.md` §14D before any code; what exists, what I decided (rules 39 to 52) and what is not in this commit are in §14E.
+
+- **A payroll run** for an attendance cycle: readiness (what stands in the way, listed), a calculation that is previewed first (who would change and by how much) and confirmed against the fingerprint of what was shown, run by a background job that holds a lease, writes in chunks, resumes after a killed worker and starts over if the rules or inputs moved.
+- **Paid days from finalised attendance only** (a day that is not locked does not exist for payroll), loss of pay, joiners and leavers, revisions mid-month (each salary segment gets its own share), PF, ESI, professional tax and labour welfare fund, all from rules; year-end leave encashment exactly once; arrears. Every line stores the basis it was worked out from, so any figure can be explained on screen without re-running.
+- **A run on Placeholder rules is a TEST** on screen and in the workbook. The run pins everything it read, including what each salary was frozen under, and a rule that is not set counts as a Placeholder. **Nothing real can come out of a draft:** the database refuses to make a run final (that is P6-4's one finaliser), and a source scan keeps it that way.
+- **Variance report** against last month (the finalised run if there is one, else the latest draft, and it says which), with the reasons it can know and the two highlight thresholds.
+- **Your three follow-ups:** the structure screen shows each line's monthly figure and yearly total side by side, naming the rounding difference; cancelling a scheduled salary goes through the same checker as any revision; the arrears refusal now says plainly that it is waiting on payroll runs being finalised and that the revision itself is fine.
+- **Found on the way:** carrying the share of a month as a decimal let a person who lost every day of a short month come out with a speck above zero and be paid the whole conveyance; it is now an exact fraction (a property test found it). The PT month exceptions moved onto the slab they replace.
+- Verified: full backend suite alone (144 files, 1,350 tests), frontend tests, typecheck, lint and drift clean in both projects; 20 mutation checks all caught (two first survived and led to a test being sharpened and a redundant line removed); a live walkthrough with a worker and two browsers. Detail in the Phase 6 plan §14E; LOCAL_ASSUMPTIONS rows 19 (updated) and 20 to 24.
 
 ## Open questions
 

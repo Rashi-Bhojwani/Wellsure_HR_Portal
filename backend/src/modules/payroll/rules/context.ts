@@ -14,11 +14,24 @@ import { dec, type Money } from "../money";
 //   - Confirmed or Placeholder is whether a confirmation exists for that exact version and value;
 //   - stale is whether a newer version has since been written (the run must be recalculated before it can go any further).
 
+export type PinKind = "RULE" | "COMPONENT" | "STRUCTURE";
+
+// What a run read, and the exact version it read. Absent `kind` means a rule and absent `live` means true, so a pin written before these existed hashes the same.
+//   live: false   a figure that was FROZEN earlier and is not re-read: the structure, components and rounding a salary row was built under. A newer
+//                 version of those does not make a run stale (people are deliberately left on the old one until a revision moves them), but if the
+//                 version the row was frozen under is a Placeholder, the run is still a test.
+//   unset: true   a rule that has no value at all, and was allowed to count as nothing (PT slabs, LWF table): version 0. It counts as a Placeholder, so
+//                 "zero because nobody set it" can never be mistaken for a confirmed figure.
 export interface RulePin {
   key: string;
   version: number;
   valueHash: string;
+  kind?: PinKind;
+  live?: boolean;
+  unset?: boolean;
 }
+
+export const UNSET_VALUE_HASH = "not-set";
 
 export class RuleNotSetError extends HttpError {
   constructor(public readonly key: string) {
@@ -44,6 +57,34 @@ export class RuleContext {
     return new RuleContext(latest);
   }
 
+  /**
+   * A rule that may legitimately have no value yet. Returns null (and pins it as "not set", which the gate and the watermark treat as a Placeholder)
+   * rather than stopping the calculation; once it has a value, the run is stale until it is calculated again.
+   */
+  optional<T = unknown>(key: string): T | null {
+    if (!RULE_BY_KEY[key]) throw new Error(`There is no payroll rule called ${key}`);
+    if (!this.current.has(key)) {
+      this.pinned.set(key, { key, version: 0, valueHash: UNSET_VALUE_HASH, unset: true });
+      return null;
+    }
+    return this.rule<T>(key);
+  }
+
+  /** Records a figure that was frozen earlier (a salary row's structure, component or rounding) so the run is judged on it too. Not re-read, so never stale. */
+  addFrozenPin(pin: Required<Pick<RulePin, "kind" | "key" | "version" | "valueHash">>): void {
+    this.pinned.set(`${pin.kind}|${pin.key}|${pin.version}`, { ...pin, live: false });
+  }
+
+  /** Records a salary component read live (an adjustment's flags). */
+  addLivePin(pin: Required<Pick<RulePin, "kind" | "key" | "version" | "valueHash">>): void {
+    this.pinned.set(`${pin.kind}|${pin.key}|${pin.version}|live`, { ...pin, live: true });
+  }
+
+  /** The current version number of every rule that has one: the fingerprint of the rule set a calculation starts from. */
+  versions(): Record<string, number> {
+    return Object.fromEntries([...this.current].sort((a, b) => a[0].localeCompare(b[0])).map(([k, c]) => [k, c.version]));
+  }
+
   /** Test helper: a context over given values, so a calculation can be exercised without the database. Every value is version 1. */
   static fromValuesForTests(values: Record<string, unknown>): RuleContext {
     if (!process.env.VITEST) throw new Error("for tests only");
@@ -67,13 +108,18 @@ export class RuleContext {
     throw new Error(`The rule ${key} is not a number`);
   }
 
+  /** A rule's value if it has one, without pinning it: for deciding what to gather. The calculation proper reads it again through rule(), which pins. */
+  peek<T = unknown>(key: string): T | undefined {
+    return this.current.get(key)?.value as T | undefined;
+  }
+
   isSet(key: string): boolean {
     return this.current.has(key);
   }
 
-  /** Exactly the rules read so far, sorted by key. */
+  /** Exactly what has been read or recorded so far, in a stable order. */
   pins(): RulePin[] {
-    return [...this.pinned.values()].sort((a, b) => a.key.localeCompare(b.key));
+    return [...this.pinned.values()].sort((a, b) => `${a.kind ?? "RULE"}|${a.key}|${a.version}|${a.live === false ? 0 : 1}`.localeCompare(`${b.kind ?? "RULE"}|${b.key}|${b.version}|${b.live === false ? 0 : 1}`));
   }
 }
 
@@ -86,23 +132,37 @@ export interface PinStatus {
   currentVersion: number;
 }
 
-/** The live state of each pin: is the exact pinned version confirmed, and is it still the current one. */
+const pinKind = (p: RulePin): PinKind => p.kind ?? "RULE";
+
+function pinLabel(p: RulePin): string {
+  const kind = pinKind(p);
+  const base = kind === "RULE" ? (RULE_BY_KEY[p.key]?.label ?? p.key) : kind === "COMPONENT" ? `Salary component ${p.key} (version ${p.version})` : `Salary structure ${p.key} (version ${p.version})`;
+  return p.unset ? `${base} (not set)` : base;
+}
+
+/** The live state of each pin: is the exact pinned version confirmed, and (for a pin that is read live) is it still the current one. */
 export async function pinStatuses(pins: readonly RulePin[]): Promise<PinStatus[]> {
   if (pins.length === 0) return [];
-  const keys = pins.map((p) => p.key);
+  const kinds = [...new Set(pins.map(pinKind))];
+  const keys = [...new Set(pins.map((p) => p.key))];
   const [versions, confirmations] = await Promise.all([
-    prisma.payrollItemVersion.groupBy({ by: ["key"], where: { kind: "RULE", key: { in: keys } }, _max: { version: true } }),
-    prisma.payrollItemConfirmation.findMany({ where: { kind: "RULE", key: { in: keys } }, select: { key: true, version: true, valueHash: true } }),
+    prisma.payrollItemVersion.groupBy({ by: ["kind", "key"], where: { kind: { in: kinds }, key: { in: keys } }, _max: { version: true } }),
+    prisma.payrollItemConfirmation.findMany({ where: { kind: { in: kinds }, key: { in: keys } }, select: { kind: true, key: true, version: true, valueHash: true } }),
   ]);
-  const latest = new Map(versions.map((v) => [v.key, v._max.version ?? 0]));
-  const confirmed = new Set(confirmations.map((c) => `${c.key}@${c.version}@${c.valueHash}`));
-  return pins.map((pin) => ({
-    pin,
-    label: RULE_BY_KEY[pin.key]?.label ?? pin.key,
-    status: confirmed.has(`${pin.key}@${pin.version}@${pin.valueHash}`) ? "CONFIRMED" : "PLACEHOLDER",
-    stale: (latest.get(pin.key) ?? 0) > pin.version,
-    currentVersion: latest.get(pin.key) ?? 0,
-  }));
+  const latest = new Map(versions.map((v) => [`${v.kind}|${v.key}`, v._max.version ?? 0]));
+  const confirmed = new Set(confirmations.map((c) => `${c.kind}|${c.key}@${c.version}@${c.valueHash}`));
+  return pins.map((pin) => {
+    const kind = pinKind(pin);
+    const newest = latest.get(`${kind}|${pin.key}`) ?? 0;
+    return {
+      pin,
+      label: pinLabel(pin),
+      status: !pin.unset && confirmed.has(`${kind}|${pin.key}@${pin.version}@${pin.valueHash}`) ? "CONFIRMED" : "PLACEHOLDER",
+      // A frozen pin is never stale. An unset pin is stale once the rule has been given a value; any other live pin once a newer version exists.
+      stale: pin.live === false ? false : newest > pin.version,
+      currentVersion: newest,
+    };
+  });
 }
 
 /**

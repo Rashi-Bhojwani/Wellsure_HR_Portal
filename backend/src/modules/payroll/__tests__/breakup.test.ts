@@ -1,6 +1,6 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { BreakupError, computeBreakup, type RoundingRule } from "../salary/breakup";
+import { BreakupError, annualView, computeBreakup, type RoundingRule } from "../salary/breakup";
 import { InvalidSalaryValueError, parseComponentValue, parseItemCode, parseStructureValue, type ComponentValue, type StructureValue } from "../salary/schemas";
 import { dec, sum } from "../money";
 
@@ -170,5 +170,31 @@ describe("component and structure values", () => {
     const v = parseStructureValue({ ...standard, lines: [{ ...pin("AA"), calc: { method: "PERCENT", of: "CTC", percent: "40.00" } }, { ...pin("BB"), calc: { method: "FIXED_AMOUNT", amount: "1600.0" } }] }, typeOf);
     expect(v.lines[0]!.calc).toMatchObject({ percent: "40" });
     expect(v.lines[1]!.calc).toMatchObject({ amount: "1600" });
+  });
+});
+
+describe("annualView: the monthly figure and the yearly total side by side", () => {
+  it("a CTC that divides evenly shows twelve months equal to the year", () => {
+    const b = computeBreakup({ annualCtc: dec("1200000"), structure: standard, components: stdComponents, rounding: whole });
+    const a = annualView(b, dec("1200000"), standard.ctcIncludes);
+    expect(a.lines.map((l) => [l.component, l.annual])).toEqual([["BASIC", "480000"], ["HRA", "240000"], ["CONV", "19200"], ["SPECIAL", "460800"]]);
+    expect([a.annualCtc, a.total, a.difference]).toEqual(["1200000", "1200000", "0"]);
+  });
+
+  it("a CTC that does not divide by twelve shows the few paise the rounding moves, named as a difference rather than hidden", () => {
+    // 1,000,000 / 12 = 83,333.33...: twelve months of 83,333 come to 999,996, which is 4 less than the yearly CTC.
+    const b = computeBreakup({ annualCtc: dec("1000000"), structure: standard, components: stdComponents, rounding: whole });
+    const a = annualView(b, dec("1000000"), standard.ctcIncludes);
+    expect([a.total, a.difference]).toEqual(["999996", "-4"]);
+    const paise = computeBreakup({ annualCtc: dec("1000000"), structure: standard, components: stdComponents, rounding: { mode: "HALF_UP", scale: 2 } });
+    expect(annualView(paise, dec("1000000"), standard.ctcIncludes).difference).toBe("-0.04");
+  });
+
+  it("counts only the kinds of line the structure says count toward CTC", () => {
+    const withDeduction: StructureValue = { ...standard, lines: [...standard.lines, { ...pin("RECOVERY", { type: "DEDUCTION" }), calc: { method: "FIXED_AMOUNT", amount: "500" } }] };
+    const b = computeBreakup({ annualCtc: dec("1200000"), structure: withDeduction, components: components(["BASIC"], ["HRA"], ["CONV"], ["SPECIAL"], ["RECOVERY", { type: "DEDUCTION" }]), rounding: whole });
+    const a = annualView(b, dec("1200000"), withDeduction.ctcIncludes);
+    expect(a.lines.find((l) => l.component === "RECOVERY")!.annual).toBe("6000"); // shown over the year...
+    expect(a.total).toBe("1200000"); // ...but not part of the CTC total
   });
 });

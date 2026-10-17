@@ -5,7 +5,7 @@ import { salaryHistory, setPayrollLockCheck } from "../../../lib/effectiveDating
 import { prisma } from "../../../lib/prisma";
 import { app, authHeader } from "../../employee/__tests__/employeeTestHelpers";
 import { ZERO, dec, intDec, type Money } from "../money";
-import { computeArrears, lineFactor, lockedCyclesFrom, setArrearsBasisProvider, type ArrearsBasisProvider } from "../salary/arrears";
+import { applyShare, computeArrears, lockedCyclesFrom, setArrearsBasisProvider, type ArrearsBasisProvider } from "../salary/arrears";
 import { FIRST_SALARY_DAY, buildSalaryWorld, giveSalary, teardownSalaryWorld, type SalaryWorld } from "./salaryTestHelpers";
 
 // Arrears on a back-dated revision. The payroll lock and the record of what each person was paid are the seams the calculation commit fills in; here
@@ -58,14 +58,14 @@ describe("the arrears arithmetic", () => {
   it("someone who was paid nothing in a cycle owes nothing for a line that pro-rates, and a line that does not is all-or-nothing on that", async () => {
     const unpaid: ArrearsBasisProvider = { paidShare: async () => ({ paid: ZERO, basis: intDec(31) }) };
     expect(await computeArrears({ ...base, effectiveFrom: d("2026-07-01"), lockedCycles: [JULY], provider: unpaid })).toEqual([]);
-    expect(lineFactor(false, { paid: ZERO, basis: intDec(31) }).toString()).toBe("0");
-    expect(lineFactor(true, { paid: intDec(10), basis: intDec(30) }).times(intDec(3)).toFixed(10)).toBe("1.0000000000");
-    expect(() => lineFactor(true, { paid: intDec(1), basis: ZERO })).toThrow(/zero/);
+    expect(applyShare(dec("100"), false, { paid: ZERO, basis: intDec(31) }).toString()).toBe("0");
+    expect(applyShare(dec("90"), true, { paid: intDec(10), basis: intDec(30) }).toString()).toBe("30");
+    expect(() => applyShare(dec("1"), true, { paid: intDec(1), basis: ZERO })).toThrow(/zero/);
   });
 
   it("a finalised cycle with no record of the person refuses, naming the cycle: arrears are never guessed", async () => {
     const none: ArrearsBasisProvider = { paidShare: async () => null };
-    await expect(computeArrears({ ...base, effectiveFrom: d("2026-07-16"), lockedCycles: [JULY], provider: none })).rejects.toMatchObject({ code: "ARREARS_BASIS_UNAVAILABLE", message: expect.stringContaining("Jul 2026") });
+    await expect(computeArrears({ ...base, effectiveFrom: d("2026-07-16"), lockedCycles: [JULY], provider: none })).rejects.toMatchObject({ code: "ARREARS_BASIS_UNAVAILABLE", message: expect.stringMatching(/Jul 2026 is closed.*no finalised payroll run on record.*The revision itself is fine/s) });
   });
 
   it("finds the locked cycles between the effective date and today, and none for a date that is not in the past", async () => {
@@ -112,7 +112,7 @@ describe("a back-dated revision, end to end", () => {
     const input = raise(e.employeeId, "1320000", "2026-07-16");
     const p = await api(w.tokens.maker).post("/salary/revisions/preview", { input });
     expect(p.body.canSubmit).toBe(false);
-    expect(p.body.blockers.join(" ")).toMatch(/finalised.*Jul 2026, Aug 2026.*arrears cannot be worked out yet/s);
+    expect(p.body.blockers.join(" ")).toMatch(/already closed \(Jul 2026, Aug 2026\).*Nothing is wrong with the revision itself.*waiting only because payroll runs have not been finalised/s);
     expect((await api(w.tokens.maker).post("/salary/revisions", { input, fingerprint: p.body.fingerprint })).body.error.code).toBe("REVISION_BLOCKED");
     expect((await salaryHistory(e.employeeId)).length).toBe(1);
   });

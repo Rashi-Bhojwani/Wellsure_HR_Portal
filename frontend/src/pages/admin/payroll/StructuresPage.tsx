@@ -4,7 +4,7 @@ import { Alert, Button, Checkbox, Drawer, Flex, Input, Select, Space, Table, Tag
 import { ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, EditOutlined, HistoryOutlined, PlusOutlined, SafetyCertificateOutlined } from "@ant-design/icons";
 import { COMPONENT_TYPES, COMPONENT_TYPE_LABEL, ITEM_CODE_PATTERN, LINE_CALC_LABEL, LINE_CALC_METHODS, type LineCalcMethod } from "@shared/constants/payrollSalary";
 import * as payrollApi from "../../../api/payroll";
-import type { ComponentType, ComponentView, LineCalc, StructureLine, StructureSavePreview, StructureValue, StructureView } from "../../../api/payroll";
+import type { ComponentType, ComponentView, LineCalc, SampleResult, StructureLine, StructureSavePreview, StructureValue, StructureView } from "../../../api/payroll";
 import { ItemConfirmModal, ItemHistoryDrawer } from "../../../components/payroll/ItemDialogs";
 import { ItemStatusTag } from "../../../components/payroll/ItemStatusTag";
 import { useAuth } from "../../../hooks/useAuth";
@@ -59,6 +59,7 @@ export function StructuresPage() {
           expandedRowRender: (s) => {
             const nameOf = componentName;
             return (
+              <Space orientation="vertical" size={12} style={{ width: "100%" }}>
               <Table
                 size="small"
                 pagination={false}
@@ -79,6 +80,8 @@ export function StructuresPage() {
                   { title: "How much", render: (_, l: StructureLine) => describeCalc(l.calc, nameOf) },
                 ]}
               />
+              {s.value && <StructureExample value={s.value} nameOf={nameOf} />}
+              </Space>
             );
           },
         }}
@@ -300,18 +303,7 @@ function StructureEditor({ initial, onClose, onSaved }: { initial: { code: strin
             {p.unchanged && <Alert type="warning" showIcon title="That is the value it already has. There is nothing to save." />}
             {p.willResetConfirmation && <Alert type="warning" showIcon title="This structure is Confirmed now." description="Saving adds a new version that is a Placeholder until a different person confirms it. The Confirmed version stays on record." />}
             {p.unconfirmedComponents.length > 0 && <Alert type="warning" showIcon title="Some components are not confirmed yet" description={`${p.unconfirmedComponents.join(", ")}. A salary built on this structure is a test until they are confirmed too.`} />}
-            <Table
-              size="small"
-              pagination={false}
-              rowKey="component"
-              title={() => <Text strong>At {formatRupees(p.sample.annualCtc)} a year ({formatRupees(p.sample.breakup.monthlyCtc)} a month); amounts typed per person count as ₹0 here</Text>}
-              dataSource={p.sample.breakup.lines}
-              columns={[
-                { title: "Line", render: (_, l) => nameOf(l.component) },
-                { title: "Kind", render: (_, l) => COMPONENT_TYPE_LABEL[l.type] },
-                { title: "A month", align: "right", render: (_, l) => formatRupees(l.amount) },
-              ]}
-            />
+            <SampleTable sample={p.sample} nameOf={nameOf} />
             <Alert type="info" showIcon title={p.impact} />
             <Input.TextArea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={500} placeholder="Why this, and where it came from (optional, but the person who confirms it will want it)" />
             <Button type="primary" loading={save.isPending} disabled={p.unchanged} onClick={() => save.mutate()}>
@@ -321,5 +313,70 @@ function StructureEditor({ initial, onClose, onSaved }: { initial: { code: strin
         )}
       </Space>
     </Drawer>
+  );
+}
+
+/**
+ * The split of a sample CTC, with the monthly figure and the yearly total of every line side by side, so nobody is surprised: the lines are rounded each month and the
+ * balance line absorbs the difference, so twelve months can differ from the yearly CTC by a few paise. The difference, when there is one, is named under the table.
+ */
+function SampleTable({ sample, nameOf }: { sample: SampleResult; nameOf: (code: string) => string }) {
+  const annualOf = new Map(sample.annual.lines.map((l) => [l.component, l.annual]));
+  const different = !/^-?0(\.0+)?$/.test(sample.annual.difference);
+  return (
+    <Table
+      size="small"
+      pagination={false}
+      rowKey="component"
+      title={() => <Text strong>At {formatRupees(sample.annualCtc)} a year ({formatRupees(sample.breakup.monthlyCtc)} a month); amounts typed per person count as ₹0 here</Text>}
+      dataSource={sample.breakup.lines}
+      columns={[
+        { title: "Line", render: (_, l) => nameOf(l.component) },
+        { title: "Kind", render: (_, l) => COMPONENT_TYPE_LABEL[l.type] },
+        { title: "A month", align: "right", render: (_, l) => formatRupees(l.amount, 2) },
+        { title: "Over a year", align: "right", render: (_, l) => formatRupees(annualOf.get(l.component) ?? "0", 2) },
+      ]}
+      summary={() => (
+        <Table.Summary>
+          <Table.Summary.Row>
+            <Table.Summary.Cell index={0} colSpan={2}>
+              <Text strong>Counts toward CTC</Text>
+            </Table.Summary.Cell>
+            <Table.Summary.Cell index={2} align="right">
+              <Text strong>{formatRupees(sample.breakup.monthlyCtc, 2)}</Text>
+            </Table.Summary.Cell>
+            <Table.Summary.Cell index={3} align="right">
+              <Text strong>{formatRupees(sample.annual.total, 2)}</Text>
+            </Table.Summary.Cell>
+          </Table.Summary.Row>
+          {different && (
+            <Table.Summary.Row>
+              <Table.Summary.Cell index={0} colSpan={4}>
+                <Text type="secondary">
+                  Twelve months of {formatRupees(sample.breakup.monthlyCtc, 2)} come to {formatRupees(sample.annual.total, 2)}, which is {formatRupees(sample.annual.difference.replace("-", ""), 2)} {sample.annual.difference.startsWith("-") ? "less" : "more"} than the yearly CTC of {formatRupees(sample.annual.annualCtc, 2)}. A month is rounded by the rule “Rounding of salary lines”, and the balance line absorbs the difference so each month adds up exactly.
+                </Text>
+              </Table.Summary.Cell>
+            </Table.Summary.Row>
+          )}
+        </Table.Summary>
+      )}
+    />
+  );
+}
+
+/** A worked example for any yearly CTC the reader types: the monthly figure of each line beside its yearly total, from the structure as it is saved. */
+function StructureExample({ value, nameOf }: { value: StructureValue; nameOf: (code: string) => string }) {
+  const [ctc, setCtc] = useState("1200000");
+  const valid = /^\d+(\.\d{1,2})?$/.test(ctc.trim()) && !/^0+(\.0+)?$/.test(ctc.trim()); // text only: an amount is never turned into a JavaScript number
+  const example = useQuery({ queryKey: ["payroll", "structure-example", JSON.stringify(value), ctc.trim()], enabled: valid, queryFn: () => payrollApi.previewBreakup(value, ctc.trim()), retry: false });
+  return (
+    <Space orientation="vertical" size={8} style={{ width: "100%" }}>
+      <Space>
+        <Text type="secondary">Worked example for a yearly CTC of</Text>
+        <Input prefix="₹" value={ctc} onChange={(e) => setCtc(e.target.value)} style={{ width: 180 }} />
+      </Space>
+      {example.error && <Alert type="warning" showIcon title={apiErrorMessage(example.error, "That does not work out for this CTC.")} />}
+      {example.data && <SampleTable sample={example.data} nameOf={nameOf} />}
+    </Space>
   );
 }

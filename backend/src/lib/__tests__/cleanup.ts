@@ -81,6 +81,8 @@ export const OPTIONAL_FK_POLICY: Record<string, Policy> = {
   "Post.groupId": "setNull",
   // A salary row belongs to the revision that wrote it (tests only: a salary row is never deleted once it has started, and a revision never is).
   "EmployeeSalary.revisionId": "delete",
+  // An adjustment only references the run that consumed it; it stays when a test removes the run.
+  "PayrollAdjustment.consumedByRunId": "setNull",
 };
 
 // Every model must be cleanable from somewhere. Most are reached as a
@@ -107,6 +109,7 @@ export const STANDALONE_ROOT_MODELS: Record<string, string> = {
   PayrollItemConfirmation: "append-only confirmations of payroll item versions (Phase 6); no employee; removed by test key through purgeAppendOnly",
   PayrollApproval: "the maker-checker core (Phase 6); actor columns are plain text, no FKs; removed by test subject id through purgeAppendOnly",
   PayrollEvent: "append-only payroll event record (Phase 6); no FKs; removed by test subject id through purgeAppendOnly",
+  PayrollRun: "a payroll run (Phase 6 P6-3); user columns are plain text, no employee FK; tests delete it by createdByUserId (its items and lines go with it)",
   PayrollSalaryRevision: "a salary change as a unit (Phase 6 P6-2); user columns are plain text, no employee FK; tests delete it by createdByUserId (its salary rows go with it)",
   ImportBatch: "import upload batch; tests delete it by id (staging rows cascade)",
   LeaveType: "leave catalog; tests delete by id",
@@ -331,7 +334,7 @@ function delegate(modelName: string): Delegate {
 
 // Tables a database trigger keeps immutable, deletable only through the
 // test-purge exception (app.audit_purge = 'test' in a dev-marked database).
-const PURGE_GUARDED_MODELS = new Set(["RawPunch", "ManualAttendanceEntry", "AttendanceOverride", "ShiftOverride", "LeaveDayRelease", "AttendancePeriodLock", "PayrollItemVersion", "PayrollItemConfirmation", "PayrollApproval", "PayrollEvent", "EmployeeSalary", "EmployeeSalaryLine", "PayrollSalaryRevision", "PayrollAdjustment"]);
+const PURGE_GUARDED_MODELS = new Set(["RawPunch", "ManualAttendanceEntry", "AttendanceOverride", "ShiftOverride", "LeaveDayRelease", "AttendancePeriodLock", "PayrollItemVersion", "PayrollItemConfirmation", "PayrollApproval", "PayrollEvent", "EmployeeSalary", "EmployeeSalaryLine", "PayrollSalaryRevision", "PayrollAdjustment", "PayrollRun", "PayrollRunItem", "PayrollRunLine"]);
 
 // Deletes the given rows of `model` and every row that depends on them,
 // transitively, in FK-safe order. Optional FKs follow OPTIONAL_FK_POLICY.

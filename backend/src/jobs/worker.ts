@@ -17,6 +17,8 @@ import { runManualReminder } from "../modules/attendance/manual/reminder";
 import { processRecomputeJob, runNightly } from "../modules/attendance/jobs";
 import { executeProcessRun } from "../modules/attendance/processService";
 import { runDeviceHealthChecks } from "../modules/biometric/health/runner";
+import { PAYROLL_CALCULATE_QUEUE } from "./payrollQueues";
+import { executeCalculation } from "../modules/payroll/run/engine";
 
 // Starts every BullMQ worker this service runs. Real workers (attendance
 // recompute, etc.) are added here starting Phase 2.
@@ -170,5 +172,10 @@ export function startWorkers(): Worker[] {
     logger.error({ event: "security.breakglass.alert_undelivered", jobId: job?.id, attempt: job?.attemptsMade, err }, "break-glass alert email still not delivered");
   });
 
-  return [pingWorker, rolloverWorker, separationsWorker, leavePlAccrualWorker, compOffExpiryWorker, engageAutoPostsWorker, helpdeskAutoCloseWorker, lettersWorker, securityAlertWorker, recomputeWorker, nightlyWorker, processWorker, reminderWorker, deviceHealthWorker];
+  // Payroll (Phase 6 P6-3): one calculation at a time per worker. The job id is the lease owner, so BullMQ handing a stalled job to this worker again
+  // takes the run over at once instead of waiting for the lease to run out.
+  const payrollCalculateWorker = new Worker(PAYROLL_CALCULATE_QUEUE, async (job) => executeCalculation((job.data as { runId: string }).runId, `job-${job.id}`), { connection: createBullConnection(), concurrency: 1 });
+  payrollCalculateWorker.on("failed", (job, err) => logger.error({ jobId: job?.id, err }, "payroll-calculate job failed"));
+
+  return [pingWorker, rolloverWorker, separationsWorker, leavePlAccrualWorker, compOffExpiryWorker, engageAutoPostsWorker, helpdeskAutoCloseWorker, lettersWorker, securityAlertWorker, recomputeWorker, nightlyWorker, processWorker, reminderWorker, deviceHealthWorker, payrollCalculateWorker];
 }

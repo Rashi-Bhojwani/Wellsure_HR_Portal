@@ -8,6 +8,21 @@ reimbursements, and full & final settlement. See spec §7.5 and
 
 ## Built so far
 
+### P6-3, the calculation (`run/`)
+
+| File | What it is |
+|---|---|
+| `run/rules.ts` | Every rule one calculation reads, as typed values, read through `RuleContext` (so each is pinned); a missing rule is collected with all the others, not thrown alone. |
+| `run/days.ts` | Pure: days, the share of a month a person is paid, and a salary segment's share, as **exact fractions** (numerator, denominator). |
+| `run/statutory.ts` | Pure: PF, ESI, professional tax, labour welfare fund, the rounding rule. No rate, ceiling or slab is written here. |
+| `run/person.ts` | Pure: one person's month (lines, statutory, net, holds, exceptions, hash), from what was gathered and the rules. |
+| `run/gather.ts` | Reads everything a run needs through the readers (locked attendance, salary segments, placement, bank, adjustments, encashments) and pins what a salary was frozen under. |
+| `run/engine.ts` | The calculation job: lease, chunks, resume, restart, failure in words; `computeRun` works a whole run out in memory without writing. |
+| `run/service.ts`, `run/variance.ts`, `run/export.ts` | Readiness, make, preview and request a calculation, discard, read; the variance report; the watermarked register workbook. |
+| `run/providers.ts` | The two seams earlier phases left: what each person was paid (arrears, from a FINALISED run) and the daily rate for leave encashment. |
+
+A run can never become FINALISED by anything here: the database refuses unless the transaction has set `payroll.finalising`, which only P6-4's finaliser will do (a source scan keeps it that way). Payroll code reads attendance only through `finalisedAttendanceDays` and year-end items only through `committedEncashments`.
+
 ### P6-2, salary (`salary/`, `items.ts`)
 
 | File | What it is |

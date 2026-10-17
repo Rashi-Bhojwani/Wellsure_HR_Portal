@@ -5,6 +5,8 @@ import { validate } from "../../middleware/validate";
 import * as controller from "./controller";
 import * as salary from "./salary/controller";
 import * as v from "./salary/validators";
+import * as runs from "./run/controller";
+import * as rv from "./run/validators";
 import { employeeSalaryQuerySchema } from "./salary/employees";
 import { checkersQuerySchema, payrollAuditQuerySchema, ruleConfirmSchema, ruleEditPreviewSchema, ruleEditSchema, ruleKeyParamsSchema } from "./validators";
 
@@ -54,6 +56,8 @@ payrollRouter.get("/salary/employees", view, validate({ query: employeeSalaryQue
 payrollRouter.get("/salary/employees/:employeeId", view, validate({ params: v.employeeParamsSchema }), salary.employeeSalary);
 
 payrollRouter.get("/salary/revisions", view, validate({ query: v.revisionListSchema }), salary.revisions);
+payrollRouter.post("/salary/revisions/cancel-preview", edit, validate({ body: v.cancelPreviewSchema }), salary.cancelPreview);
+payrollRouter.post("/salary/revisions/cancel", edit, validate({ body: v.cancelCreateSchema }), salary.cancelCreate);
 payrollRouter.post("/salary/revisions/preview", edit, validate({ body: v.revisionPreviewSchema }), salary.revisionPreview);
 payrollRouter.post("/salary/revisions", edit, validate({ body: v.revisionCreateSchema }), salary.revisionCreate);
 payrollRouter.get("/salary/revisions/:id", view, validate({ params: v.idParamsSchema }), salary.revision);
@@ -66,3 +70,18 @@ payrollRouter.get("/adjustments", view, validate({ query: v.adjustmentListSchema
 payrollRouter.post("/adjustments/preview", edit, validate({ body: v.adjustmentPreviewSchema }), salary.adjustmentPreview);
 payrollRouter.post("/adjustments", edit, validate({ body: v.adjustmentAddSchema }), salary.adjustmentAdd);
 payrollRouter.post("/adjustments/:id/cancel", edit, validate({ params: v.idParamsSchema, body: v.adjustmentCancelSchema }), salary.adjustmentCancel);
+
+// Payroll runs (P6-3): readiness, making a run, previewing and requesting a calculation, reading the result. Viewing needs payroll.salary.view (a run is salary
+// data); making, calculating and discarding need payroll.run. Nothing here can make a run real: that is P6-4's finaliser.
+const make = requirePermission("payroll.run");
+payrollRouter.get("/runs", view, validate({ query: rv.runListQuerySchema }), runs.runs);
+payrollRouter.get("/runs/readiness", view, validate({ query: rv.readinessQuerySchema }), runs.runReadiness);
+payrollRouter.post("/runs", make, validate({ body: rv.runCreateSchema }), runs.runCreate);
+payrollRouter.get("/runs/:id", view, validate({ params: rv.runIdParamsSchema }), runs.run);
+payrollRouter.get("/runs/:id/items", view, validate({ params: rv.runIdParamsSchema }), runs.runItems);
+payrollRouter.get("/runs/:id/items/:employeeId", view, validate({ params: rv.runItemParamsSchema }), runs.runItem);
+payrollRouter.get("/runs/:id/variance", view, validate({ params: rv.runIdParamsSchema, query: rv.varianceQuerySchema }), runs.runVariance);
+payrollRouter.get("/runs/:id/export", view, validate({ params: rv.runIdParamsSchema }), runs.runExport);
+payrollRouter.post("/runs/:id/calculate-preview", make, validate({ params: rv.runIdParamsSchema }), runs.runCalculatePreview);
+payrollRouter.post("/runs/:id/calculate", make, validate({ params: rv.runIdParamsSchema, body: rv.runCalculateSchema }), runs.runCalculate);
+payrollRouter.post("/runs/:id/void", make, validate({ params: rv.runIdParamsSchema, body: rv.runVoidSchema }), runs.runVoid);

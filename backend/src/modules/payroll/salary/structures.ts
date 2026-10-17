@@ -5,7 +5,7 @@ import type { Db } from "../events";
 import { payrollHash } from "../hash";
 import { appendVersion, confirmVersion, editFingerprint as itemEditFingerprint, keysIn, loadItems, previewConfirmation, summarise, type ItemStatus, type VersionView } from "../items";
 import { ZERO, dec } from "../money";
-import { computeBreakup, breakupToJson, type Breakup, type RoundingRule } from "./breakup";
+import { annualView, computeBreakup, breakupToJson, type Breakup, type RoundingRule } from "./breakup";
 import { asValidationError, loadLineRounding } from "./common";
 import { InvalidSalaryValueError, parseItemCode, parseStructureValue, type ComponentValue, type StructureValue } from "./schemas";
 
@@ -61,6 +61,8 @@ export const samplePerPerson = (value: StructureValue): Record<string, ReturnTyp
 export interface SampleResult {
   annualCtc: string;
   breakup: ReturnType<typeof breakupToJson>;
+  /** Each line over twelve months, the total that counts toward CTC, and its distance from the yearly CTC (rounding), to be shown beside the monthly figures. */
+  annual: ReturnType<typeof annualView>;
 }
 
 function sampleCtc(raw: unknown): ReturnType<typeof dec> {
@@ -166,7 +168,7 @@ export async function previewStructureSave(codeRaw: string, valueRaw: unknown, s
     unchanged: s.current?.valueHash === valueHash,
     willResetConfirmation: s.status === "CONFIRMED",
     lastConfirmed: s.status === "CONFIRMED" ? s.current : s.lastConfirmed,
-    sample: { annualCtc: annual.toString(), breakup: breakupToJson(breakup) },
+    sample: { annualCtc: annual.toString(), breakup: breakupToJson(breakup), annual: annualView(breakup, annual, value.ctcIncludes) },
     unconfirmedComponents: [...components].filter(([, c]) => c.status !== "CONFIRMED").map(([k]) => k),
     impact: "Nobody's salary changes when a structure is saved. People move to a new version only through a salary revision, which a second person approves.",
     fingerprint: fingerprintOf(code, s.current?.version ?? 0, s.current?.valueHash ?? null, valueHash),
@@ -188,14 +190,14 @@ export async function saveStructure(codeRaw: string, input: { value: unknown; sa
 }
 
 /** A breakup of any (unsaved) structure value for any CTC, for the editor to show as the author types. Saves nothing. */
-export async function previewBreakup(valueRaw: unknown, annualRaw: unknown, perPersonRaw: unknown): Promise<{ annualCtc: string; breakup: ReturnType<typeof breakupToJson> }> {
+export async function previewBreakup(valueRaw: unknown, annualRaw: unknown, perPersonRaw: unknown): Promise<SampleResult> {
   const { value, components } = await validateStructure(valueRaw);
   const annual = sampleCtc(annualRaw);
   const typed: Record<string, ReturnType<typeof dec>> = { ...samplePerPerson(value) };
   if (perPersonRaw && typeof perPersonRaw === "object") for (const [k, v] of Object.entries(perPersonRaw as Record<string, unknown>)) if (typeof v === "string" && /^\d+(\.\d+)?$/.test(v) && k in typed) typed[k] = dec(v);
   const { rule } = await loadLineRounding();
   const breakup = computeBreakup({ annualCtc: annual, structure: value, components: toBreakupComponents(components), perPerson: typed, rounding: rule });
-  return { annualCtc: annual.toString(), breakup: breakupToJson(breakup) };
+  return { annualCtc: annual.toString(), breakup: breakupToJson(breakup), annual: annualView(breakup, annual, value.ctcIncludes) };
 }
 
 // ── Confirming ──
