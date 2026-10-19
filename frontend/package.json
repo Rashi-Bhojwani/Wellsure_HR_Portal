@@ -5,6 +5,7 @@
   "description": "Wellsure HR Portal frontend — the Employee (ESS) portal and the HR/Admin portal, one React app.",
   "type": "module",
   "scripts": {
+    "check:popovers": "node e2e/popovers.mjs",
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "lint": "eslint .",

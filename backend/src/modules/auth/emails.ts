@@ -1,5 +1,5 @@
 import { env } from "../../config/env";
-import { mailService } from "../../integrations/mail";
+import { mailService, type MailReceipt } from "../../integrations/mail";
 
 export function emailLayout(title: string, bodyHtml: string): string {
   return `<!doctype html>
@@ -18,9 +18,9 @@ function button(url: string, label: string): string {
   <p style="color: #8c8c8c; font-size: 12px;">Or copy this link: ${url}</p>`;
 }
 
-export async function sendInvitationEmail(to: string, fullName: string, employeeCode: string, token: string): Promise<void> {
+export async function sendInvitationEmail(to: string, fullName: string, employeeCode: string, token: string): Promise<MailReceipt> {
   const url = `${env.WEB_BASE_URL}/set-password/${token}`;
-  await mailService.send({
+  return mailService.send({
     to,
     subject: "Welcome to Wellsure HR Portal — set your password",
     html: emailLayout(

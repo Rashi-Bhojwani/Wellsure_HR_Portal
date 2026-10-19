@@ -85,9 +85,21 @@ export const envSchema = z.object({
 
   // Mail — console/.eml for dev, SES in staging/production
   // (see src/integrations/mail).
-  MAIL_DRIVER: z.enum(["console", "ses"]).default("console"),
+  // MAIL_DRIVER=smtp sends real email through any SMTP account (a Gmail app password, Mailtrap, a company relay) so development can deliver to a real inbox. Development
+  // only: staging and production refuse to start on anything but "ses". The password is never logged and has no default.
+  MAIL_DRIVER: z.enum(["console", "smtp", "ses"]).default("console"),
   MAIL_DEV_DIR: z.string().default(".mail"),
   SES_FROM: z.string().optional(),
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+  // true = TLS from the first byte (port 465); false = start in the clear and upgrade with STARTTLS (port 587), which is required, never optional.
+  SMTP_SECURE: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
+  // Leave false only for a local catcher such as Mailpit that has no TLS; a real provider always gets it.
+  SMTP_REQUIRE_TLS: z.enum(["true", "false"]).default("true").transform((v) => v === "true"),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASSWORD: z.string().optional(),
+  // The From address and name on development mail ("Wellsure HR <you@gmail.com>"); defaults to SMTP_USER. Most providers refuse a From that is not the account's own.
+  MAIL_FROM: z.string().optional(),
   // Optional (E1.1): an inbox OUTSIDE this system (e.g. the owners' shared
   // mailbox) that also receives every break-glass alert — the one copy a
   // compromised Super Admin account can't make disappear.

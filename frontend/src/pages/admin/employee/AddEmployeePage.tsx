@@ -12,9 +12,9 @@ import {
   Space,
   Steps,
   Typography,
-  message,
 } from "antd";
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
+import { InvitationStatus } from "../../../components/common/InvitationStatus";
 import * as employeeApi from "../../../api/employee";
 import * as managersApi from "../../../api/managers";
 import * as orgApi from "../../../api/org";
@@ -31,6 +31,8 @@ export function AddEmployeePage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [deviceCheck, setDeviceCheck] = useState<employeeApi.DeviceCodeCheckResult | null>(null);
   const [checkingDevice, setCheckingDevice] = useState(false);
+  // Once the employee exists, the screen tells HR what really happened to the invitation email instead of jumping away.
+  const [created, setCreated] = useState<employeeApi.CreatedEmployee | null>(null);
 
   const { data: departments = [] } = useQuery({ queryKey: ["org", "departments"], queryFn: orgApi.departments.list });
   const { data: designations = [] } = useQuery({ queryKey: ["org", "designations"], queryFn: orgApi.designations.list });
@@ -119,8 +121,7 @@ export function AddEmployeePage() {
       const bank = values.bank?.accountNumber ? values.bank : undefined;
 
       const result = await employeeApi.createEmployee({ official, personal, statutory, bank });
-      void message.success(`Employee ${result.employeeCode} created and invited.`);
-      navigate(`/admin/employee/profile/${result.id}`);
+      setCreated(result);
     } catch (err) {
       setSubmitError(errorMessage(err, "Could not create employee."));
     } finally {
@@ -134,6 +135,32 @@ export function AddEmployeePage() {
     statutory?: Record<string, unknown>;
     bank?: Record<string, unknown>;
   };
+
+  if (created) {
+    return (
+      <Space orientation="vertical" size={16} style={{ width: "100%", maxWidth: 720 }} data-testid="employee-created">
+        <Title level={3} style={{ margin: 0 }}>
+          Employee {created.employeeCode} created
+        </Title>
+        <InvitationStatus employeeId={created.id} invitation={created.invitation} />
+        <Space wrap>
+          <Button type="primary" onClick={() => navigate(`/admin/employee/profile/${created.id}`)}>
+            Open profile
+          </Button>
+          <Button
+            onClick={() => {
+              form.resetFields();
+              setCurrent(0);
+              setCreated(null);
+              setDeviceCheck(null);
+            }}
+          >
+            Add another employee
+          </Button>
+        </Space>
+      </Space>
+    );
+  }
 
   return (
     <Space orientation="vertical" size={16} style={{ width: "100%" }}>

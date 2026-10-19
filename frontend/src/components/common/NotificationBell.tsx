@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Badge, Button, List, Popover, Space, Typography } from "antd";
+import { Badge, Button, Drawer, Grid, List, Popover, Space, Typography } from "antd";
 import { BellOutlined } from "@ant-design/icons";
 import * as notificationsApi from "../../api/notifications";
 import { EmptyState } from "./EmptyState";
 
 const { Text } = Typography;
+const { useBreakpoint } = Grid;
 
 // Shared bell + notification centre, used by both EmployeeLayout and
 // AdminLayout headers (spec §8) — one component so the two portals never
@@ -16,6 +17,16 @@ export function NotificationBell({ homePath }: { homePath: string }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
+
+  // Escape closes it wherever the focus happens to be.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
 
   const { data: unreadCount = 0 } = useQuery({
     queryKey: ["notifications", "unread-count"],
@@ -49,7 +60,7 @@ export function NotificationBell({ homePath }: { homePath: string }) {
   }
 
   const content = (
-    <div style={{ width: 340 }}>
+    <div style={{ width: isMobile ? "100%" : 340 }}>
       <Space style={{ width: "100%", justifyContent: "space-between", padding: "4px 4px 8px" }}>
         <Text strong>Notifications</Text>
         <Button
@@ -95,17 +106,28 @@ export function NotificationBell({ homePath }: { homePath: string }) {
     </div>
   );
 
+  const bell = (
+    <Badge count={unreadCount} size="small" offset={[-2, 2]}>
+      <BellOutlined style={{ fontSize: 18, cursor: "pointer" }} onClick={isMobile ? () => setOpen(true) : undefined} />
+    </Badge>
+  );
+
+  // On a phone a popover anchored to a bell near the right edge cannot be 340px wide and stay on the screen, so it is a sheet from the top instead: the full width,
+  // an opaque surface, closed by the X, a tap outside or Escape.
+  if (isMobile) {
+    return (
+      <>
+        {bell}
+        <Drawer title="Notifications" placement="top" size="auto" open={open} onClose={() => setOpen(false)} styles={{ body: { padding: 12 } }}>
+          {content}
+        </Drawer>
+      </>
+    );
+  }
+
   return (
-    <Popover
-      trigger="click"
-      placement="bottomRight"
-      open={open}
-      onOpenChange={setOpen}
-      content={content}
-    >
-      <Badge count={unreadCount} size="small" offset={[-2, 2]}>
-        <BellOutlined style={{ fontSize: 18, cursor: "pointer" }} />
-      </Badge>
+    <Popover trigger="click" placement="bottomRight" open={open} onOpenChange={setOpen} content={content}>
+      {bell}
     </Popover>
   );
 }

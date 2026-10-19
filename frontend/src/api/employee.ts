@@ -44,12 +44,52 @@ export interface CreateEmployeeInput {
   statutory?: { pan?: string; aadhaar?: string; uan?: string; esiNumber?: string };
   bank?: { accountHolderName: string; accountNumber: string; accountNumberConfirm: string; ifsc: string; bankName: string; branchName: string };
 }
-export async function createEmployee(input: CreateEmployeeInput): Promise<{ id: string; employeeCode: string }> {
-  const { data } = await apiClient.post<{ id: string; employeeCode: string }>("/api/employees", input);
+// What really happened to an invitation email. SENT = a mail server accepted it; FILE_ONLY = development writes it to a file and sends nothing;
+// FAILED = sending was tried and failed (`error` says why); NOT_SENT = no invitation has been issued yet.
+export interface InvitationDelivery {
+  status: "SENT" | "FILE_ONLY" | "FAILED" | "NOT_SENT";
+  to: string;
+  driver?: string;
+  error?: string;
+  attemptedAt?: string;
+  sentAt?: string;
+}
+export interface CreatedEmployee {
+  id: string;
+  employeeCode: string;
+  invitation: InvitationDelivery;
+}
+export async function createEmployee(input: CreateEmployeeInput): Promise<CreatedEmployee> {
+  const { data } = await apiClient.post<CreatedEmployee>("/api/employees", input);
   return data;
 }
-export async function resendInvite(employeeId: string): Promise<void> {
-  await apiClient.post(`/api/employees/${employeeId}/resend-invite`);
+export async function resendInvite(employeeId: string): Promise<InvitationDelivery> {
+  const { data } = await apiClient.post<InvitationDelivery>(`/api/employees/${employeeId}/resend-invite`);
+  return data;
+}
+
+export interface PendingInvitation {
+  employeeId: string;
+  employeeCode: string;
+  fullName: string;
+  email: string;
+  delivery: InvitationDelivery;
+  skipped?: string;
+}
+export async function listPendingInvitations(page = 1, pageSize = 50): Promise<{ total: number; items: PendingInvitation[] }> {
+  const { data } = await apiClient.get<{ total: number; items: PendingInvitation[] }>("/api/employees/invitations", { params: { page, pageSize } });
+  return data;
+}
+export interface InvitationBatchResult {
+  requested: number;
+  sent: number;
+  fileOnly: number;
+  failed: number;
+  results: PendingInvitation[];
+}
+export async function sendInvitations(employeeIds: string[]): Promise<InvitationBatchResult> {
+  const { data } = await apiClient.post<InvitationBatchResult>("/api/employees/invitations/send", { employeeIds });
+  return data;
 }
 
 // ── Grid ─────────────────────────────────────────────────────────────────
@@ -128,6 +168,8 @@ export interface EmployeeProfile {
   // Phase 2: MANUAL = no device mapping in force — attendance is marked by hand.
   attendanceCapture: "DEVICE" | "MANUAL";
   accountStatus: string | null;
+  // Only while the account is still waiting for its owner to set a password.
+  invitation: InvitationDelivery | null;
   totpEnabled: boolean;
   personal: {
     dateOfBirth: string;

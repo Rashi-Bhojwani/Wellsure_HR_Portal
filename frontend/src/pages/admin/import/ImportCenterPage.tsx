@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MusterUploadTab } from "../attendance/muster/MusterUploadPanel";
 import { PunchImportTab } from "./PunchImportTab";
+import { InvitationsTab } from "./InvitationsTab";
 import { Alert, Button, Input, Space, Table, Tabs, Tag, Typography, Upload, message } from "antd";
 import { DownloadOutlined, InboxOutlined } from "@ant-design/icons";
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
@@ -255,6 +256,7 @@ export function ImportCenterPage() {
           { key: "employees", label: "Employees", children: <ImportDatasetTab dataset="employees" /> },
           { key: "statutory", label: "Statutory", children: <ImportDatasetTab dataset="statutory" /> },
           { key: "bank", label: "Bank", children: <ImportDatasetTab dataset="bank" /> },
+          ...(hasPermission("employee.create") ? [{ key: "invitations", label: "Invitations", children: <InvitationsTab /> }] : []),
           { key: "reconciliation", label: "Reconciliation Report", children: <ReconciliationTab /> },
           // Phase 2 P2-B: the emergency punch upload (attendance.devices.manage).
           ...(hasPermission("attendance.devices.manage") ? [{ key: "punches", label: "Punches (ATTLOG)", children: <PunchImportTab /> }] : []),

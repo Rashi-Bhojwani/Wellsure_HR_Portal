@@ -804,7 +804,7 @@ order).
   an `options.sendInvitation` flag (default `true`, unchanged for the
   wizard); the import commit path passes `false`, so a bulk import
   creates `INVITED`-status accounts with no email sent; HR sends each
-  one's invite from the existing per-employee "Resend Invite" action.
+  one's invite from Import Center → Invitations (batch, at most 100, each person's own result) or the per-employee Resend button.
 - **Reconciliation report** (`GET /api/import/reconciliation`) — active
   headcount by branch and by department, computed live off
   `employee_job_history`'s current rows; a tab on the same Import Center
@@ -4859,6 +4859,14 @@ Built to the design written into `docs/plans/PHASE_6.md` §14F before any code; 
 - **All six subjects wired:** approving a run, closing a period, unlocking a period, publishing payslips, generating the bank file (both are approvals on a final run now; what they authorise is P6-5, and the bank file also needs a Confirmed bank layout that does not exist yet), and changing a Confirmed rule (P6-1). Run approval and finalising show "only X can approve this" when one person can, and an error when nobody can.
 - **ESI half-year rule:** recorded as an open question on the rule itself that blocks it from being Confirmed (`OPEN_QUESTION`, whatever is typed or noted), shown on the rules screen, and listed under Open questions below.
 - Verified: full backend suite alone (145 files, 1,385 tests), frontend tests, typecheck, lint and drift clean in both projects; 25 of 26 mutation checks caught (the one survivor is a deliberate second line of defence, and removing both is caught); the database's refusals proved by dropping each trigger in a rolled-back transaction; a live walkthrough with a worker and three browsers, which found that a checker could not open the preview (fixed). Detail in the Phase 6 plan §14G; LOCAL_ASSUMPTIONS rows 19 and 22 (updated) and 25 to 27.
+
+### Fix commit before P6-5: the app switcher, and the invitation email (2026-10-19)
+
+- **App switcher and every other popover.** The "Your Apps" panel had no background, border or stacking, so it sat over the breadcrumb and the page. It is now an opaque popover on the theme's own surface colours, above the page, inside the screen at phone width, closed by Escape and by a click outside. On a phone the notification bell opens as a drawer (its popover ran off the screen), and the admin menu has a hamburger in the header. A new check (`npm run check:popovers` in `frontend/`, also a CI step that keeps screenshots) opens a real browser at 390px and 1280px and measures, for the app switcher, the bell, the settings menu, the Leave and Attendance menus and Quick Links: opaque, nothing from the page showing through, inside the viewport, Escape and outside click close it. All 13 cases pass.
+- **Invitation email.** Every path now says what really happened. Creating an employee (wizard) sends the invitation; an Excel import never does (it creates the account, and HR sends invitations from **Import Center → Invitations**, up to 100 at a time, each person with their own result); Resend is on the creation screen, the employee's profile and that list. Each shows one of: **sent** (a mail server accepted it, and the screen says that is not the same as arriving), **nothing was emailed** (development's file mode), **failed** with the reason in words (and "this person has NOT been invited yet"), or **not invited yet**. The result is stored on the invitation token (`email_*` columns) and audited as what it was, so a refresh or another HR user sees the truth. A failed send never rolls back the employee and is never reported as success.
+- **SMTP for development.** `MAIL_DRIVER=smtp` with `SMTP_HOST/PORT/SECURE/USER/PASSWORD` and `MAIL_FROM`, for any SMTP account (including a Gmail app password). The file driver stays the default; SES stays the only driver accepted in staging and production (the existing guard, now with a test that `smtp` is refused there too). Setup, the Gmail app password steps and a no-account option (Mailpit) are in GETTING_STARTED "Sending real email in development".
+- **What I could and could not check.** Verified in a real browser against a local SMTP server that requires a login: sent, refused-address failure (with Try again), the profile page, the batch with a mixed result. **I cannot send to a real inbox from here**: that needs your own SMTP credentials on your machine, which I did not ask for and did not use.
+- Verified: full backend suite alone (147 files, 1,398 tests), frontend tests, typecheck, lint and drift clean in both projects.
 
 ## Open questions
 

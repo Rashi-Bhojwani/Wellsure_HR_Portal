@@ -4,6 +4,7 @@ import type { User } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { env } from "../../config/env";
 import { logger } from "../../lib/logger";
+import { describeMailError } from "../../integrations/mail";
 import { writeAuditLog } from "../../lib/audit";
 import { default2faRoles } from "../../lib/authDefaults";
 import { getSetting } from "../../lib/settings";
@@ -306,41 +307,95 @@ export async function revokeSession(userId: string, sessionId: string): Promise<
   await writeAuditLog({ actorUserId: userId, action: "auth.session.revoked", entityType: "RefreshToken", entityId: sessionId });
 }
 
+// What happened to an invitation, in terms a screen can state without guessing (see invitation_tokens.email_*):
+//   SENT       a real mail server accepted the email for delivery (it is "sent", not "read": nothing here can promise an inbox);
+//   FILE_ONLY  the system is set to write emails to a file (development, MAIL_DRIVER=console): nothing was sent to anyone;
+//   FAILED     sending was attempted and failed; `error` says why, in words;
+//   NOT_SENT   no invitation has been issued yet (an imported employee HR has not invited).
+export type InvitationDelivery = {
+  status: "SENT" | "FILE_ONLY" | "FAILED" | "NOT_SENT";
+  to: string;
+  driver?: string | undefined;
+  error?: string | undefined;
+  attemptedAt?: string | undefined;
+  sentAt?: string | undefined;
+};
+
+type TokenDelivery = { emailTo: string | null; emailDriver: string | null; emailAttemptedAt: Date | null; emailSentAt: Date | null; emailError: string | null };
+
+function deliveryOf(token: TokenDelivery | null, fallbackTo: string): InvitationDelivery {
+  if (!token || !token.emailAttemptedAt) return { status: "NOT_SENT", to: token?.emailTo ?? fallbackTo };
+  return {
+    status: token.emailSentAt ? "SENT" : token.emailError ? "FAILED" : "FILE_ONLY",
+    to: token.emailTo ?? fallbackTo,
+    driver: token.emailDriver ?? undefined,
+    error: token.emailError ?? undefined,
+    attemptedAt: token.emailAttemptedAt.toISOString(),
+    sentAt: token.emailSentAt?.toISOString(),
+  };
+}
+
+/** The state of the latest invitation issued to a user, for the profile and the list of people still waiting. */
+export async function latestInvitationDelivery(userId: string, email: string): Promise<InvitationDelivery> {
+  const token = await prisma.invitationToken.findFirst({ where: { userId }, orderBy: { createdAt: "desc" } });
+  return deliveryOf(token, email);
+}
+
 // Called by the employee module right after creating a new hire's User row
 // (status INVITED) — issues the single-use set-password token (TTL from the
 // auth.invitationTtlHours System Setting, spec §7.8) and sends the
 // invitation email. Not itself audit-logged: the caller's own
 // "employee.created" entry covers this as part of the same action.
+//
+// A failed email never makes this throw (the employee exists either way) and is never hidden: the result says exactly what happened and the same is stored on the token, so
+// HR is told "not sent, and why" instead of believing someone was invited.
 export async function createInvitation(params: {
   userId: string;
   email: string;
   fullName: string;
   employeeCode: string;
-}): Promise<{ link: string }> {
+  actorUserId?: string | null;
+}): Promise<{ link: string; delivery: InvitationDelivery }> {
   const raw = generateOpaqueToken();
   const ttlHours = await getInvitationTtlHours();
-  await prisma.invitationToken.create({
+  const token = await prisma.invitationToken.create({
     data: {
       userId: params.userId,
       tokenHash: hashOpaqueToken(raw),
       expiresAt: new Date(Date.now() + ttlHours * 60 * 60 * 1000),
+      createdByUserId: params.actorUserId ?? null,
+      emailTo: params.email,
     },
   });
-  await sendInvitationEmail(params.email, params.fullName, params.employeeCode, raw).catch((err: unknown) =>
-    logger.error({ err }, "failed to send invitation email"),
-  );
-  // Returned only for the SUPER_ADMIN bootstrap CLI's --print-link
+  const attemptedAt = new Date();
+  let delivery: InvitationDelivery;
+  try {
+    const receipt = await sendInvitationEmail(params.email, params.fullName, params.employeeCode, raw);
+    const updated = await prisma.invitationToken.update({
+      where: { id: token.id },
+      data: { emailDriver: receipt.driver, emailAttemptedAt: attemptedAt, emailSentAt: receipt.delivered ? attemptedAt : null },
+    });
+    delivery = deliveryOf(updated, params.email);
+  } catch (err: unknown) {
+    logger.error({ err, to: params.email }, "failed to send invitation email");
+    const updated = await prisma.invitationToken.update({
+      where: { id: token.id },
+      data: { emailDriver: env.MAIL_DRIVER, emailAttemptedAt: attemptedAt, emailError: describeMailError(err) },
+    });
+    delivery = deliveryOf(updated, params.email);
+  }
+  // `link` is returned only for the SUPER_ADMIN bootstrap CLI's --print-link
   // (modules/access/bootstrap.ts); every other caller ignores it.
-  return { link: `${env.WEB_BASE_URL}/set-password/${raw}` };
+  return { link: `${env.WEB_BASE_URL}/set-password/${raw}`, delivery };
 }
 
 // Resend: invalidates any still-outstanding invitation tokens for this user
 // (a stale link should stop working once a fresher one is issued) and
 // issues a new one. HR-triggered — see employee module's resend-invite
 // endpoint, which is what actually audit-logs this action.
-export async function resendInvitation(userId: string, email: string, fullName: string, employeeCode: string): Promise<{ link: string }> {
+export async function resendInvitation(userId: string, email: string, fullName: string, employeeCode: string, actorUserId?: string | null): Promise<{ link: string; delivery: InvitationDelivery }> {
   await prisma.invitationToken.updateMany({ where: { userId, usedAt: null }, data: { usedAt: new Date() } });
-  return createInvitation({ userId, email, fullName, employeeCode });
+  return createInvitation({ userId, email, fullName, employeeCode, actorUserId: actorUserId ?? null });
 }
 
 export async function getInvitationDetails(token: string): Promise<{ employeeCode: string; fullName: string }> {

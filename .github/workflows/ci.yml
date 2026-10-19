@@ -346,6 +346,17 @@ jobs:
           done
           echo "the stack did not come up"; tail -n 40 "$RUNNER_TEMP"/stack/*.log; exit 1
 
+      # Before the latency measurement, which logs in a lot: this logs in twice. Every popover, dropdown and drawer in both portals, at 390px and at desktop width.
+      - name: Popovers and dropdowns at phone and desktop width
+        run: npm run check:popovers --prefix frontend
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: popover-screenshots
+          path: frontend/e2e/out/*.png
+          if-no-files-found: ignore
+
       - name: Measure punch-to-screen latency, by every route
         run: npm run test:latency --prefix biometric-agent
 

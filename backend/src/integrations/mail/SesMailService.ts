@@ -1,6 +1,6 @@
 import { SendEmailCommand, SESClient } from "@aws-sdk/client-ses";
 import { env } from "../../config/env";
-import type { MailMessage, MailService } from "./MailService";
+import type { MailMessage, MailReceipt, MailService } from "./MailService";
 
 // The AWS implementation — selected by MAIL_DRIVER=ses (staging/production
 // only; local dev uses ConsoleMailService). Credentials and region come
@@ -17,8 +17,8 @@ export class SesMailService implements MailService {
     this.client = new SESClient({ region: env.AWS_REGION });
   }
 
-  async send(message: MailMessage): Promise<void> {
-    await this.client.send(
+  async send(message: MailMessage): Promise<MailReceipt> {
+    const result = await this.client.send(
       new SendEmailCommand({
         Source: this.from,
         Destination: { ToAddresses: [message.to] },
@@ -31,5 +31,6 @@ export class SesMailService implements MailService {
         },
       }),
     );
+    return { driver: "ses", delivered: true, to: message.to, detail: result.MessageId ?? "" };
   }
 }

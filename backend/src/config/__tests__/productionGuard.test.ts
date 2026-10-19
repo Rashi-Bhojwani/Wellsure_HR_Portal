@@ -71,6 +71,7 @@ describe("production config guard", () => {
   it.each([
     ["STORAGE_DRIVER", "local", 'STORAGE_DRIVER must be "s3"'],
     ["MAIL_DRIVER", "console", 'MAIL_DRIVER must be "ses"'],
+    ["MAIL_DRIVER", "smtp", 'MAIL_DRIVER must be "ses"'],
     ["FIELD_ENCRYPTION_DRIVER", "local", 'FIELD_ENCRYPTION_DRIVER must be "kms"'],
     ["METRICS_DRIVER", "local", 'METRICS_DRIVER must be "cloudwatch"'],
     ["S3_BUCKET", undefined, "S3_BUCKET is required"],

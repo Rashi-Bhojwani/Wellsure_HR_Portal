@@ -4,6 +4,7 @@ import request from "supertest";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { env } from "../../../config/env";
 import { mailService } from "../../../integrations/mail";
+import { fakeReceipt } from "../../../integrations/mail/testing";
 import { storageService } from "../../../integrations/storage";
 import { closeSecurityAlertQueue, securityAlertQueue } from "../../../jobs/securityAlertQueue";
 import { purgeAppendOnly } from "../../../lib/__tests__/cleanup";
@@ -148,6 +149,7 @@ describe("E1.1 — loud break-glass, append-only audit, manager data scope", () 
       const sent: string[] = [];
       vi.spyOn(mailService, "send").mockImplementation(async (m) => {
         sent.push(m.to);
+        return fakeReceipt(m.to);
       });
       await prisma.user.update({ where: { id: p.sa2.userId }, data: { totpEnabled: true, failedLoginAttempts: 5, lockedUntil: new Date(Date.now() + 60_000) } });
       try {
@@ -207,7 +209,7 @@ describe("E1.1 — loud break-glass, append-only audit, manager data scope", () 
     });
 
     it("the banner: listed for Super Admins; the target can't acknowledge their own; another can, once, audited", async () => {
-      vi.spyOn(mailService, "send").mockResolvedValue();
+      vi.spyOn(mailService, "send").mockResolvedValue(fakeReceipt());
       const r = await recoverSuperAdmin(recoverInput());
       eventIds.push(r.alert.eventId);
 
@@ -234,6 +236,7 @@ describe("E1.1 — loud break-glass, append-only audit, manager data scope", () 
     const sent: Array<{ to: string; html: string }> = [];
     vi.spyOn(mailService, "send").mockImplementation(async (m) => {
       sent.push(m);
+      return fakeReceipt(m.to);
     });
     await prisma.user.update({ where: { id: p.sa2.userId }, data: { totpEnabled: true, failedLoginAttempts: 5, lockedUntil: new Date(Date.now() + 60_000) } });
     expect((await api(tokens.sa).post(`/api/access/employees/${p.sa2.employeeId}/unlock`)).status).toBe(400);

@@ -15,6 +15,8 @@ import {
   employeeListQuerySchema,
   exportQuerySchema,
   idParamsSchema,
+  pendingInvitationsQuerySchema,
+  sendInvitationsSchema,
   initiateSeparationSchema,
   jobUpdateSchema,
   nameUpdateSchema,
@@ -79,6 +81,10 @@ employeeRouter.post(
 
 employeeRouter.get("/separations", canViewSeparations, controller.listSeparations);
 employeeRouter.post("/separations/:id/cancel", canSeparate, validate({ params: idParamsSchema }), controller.cancelSeparation);
+
+// Invitations: who is still waiting for their set-password email (and what happened to the last one), and sending it, one batch at a time, by hand.
+employeeRouter.get("/invitations", canCreate, validate({ query: pendingInvitationsQuerySchema }), controller.listPendingInvitations);
+employeeRouter.post("/invitations/send", canCreate, validate({ body: sendInvitationsSchema }), controller.sendInvitations);
 
 // ── :id routes ───────────────────────────────────────────────────────────
 

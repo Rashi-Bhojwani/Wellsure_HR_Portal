@@ -80,7 +80,7 @@ export function productionConfigErrors(cfg: GuardedConfig, registry: ReadonlyArr
   };
   need(cfg.STORAGE_DRIVER === "s3", `STORAGE_DRIVER must be "s3" in ${cfg.APP_ENV} (the local filesystem is for development only).`);
   need(Boolean(cfg.S3_BUCKET), "S3_BUCKET is required.");
-  need(cfg.MAIL_DRIVER === "ses", `MAIL_DRIVER must be "ses" in ${cfg.APP_ENV} (console mail is for development only).`);
+  need(cfg.MAIL_DRIVER === "ses", `MAIL_DRIVER must be "ses" in ${cfg.APP_ENV} (console and SMTP mail are for development only).`);
   need(Boolean(cfg.SES_FROM), "SES_FROM is required.");
   need(Boolean(cfg.SECURITY_ALERT_EMAIL), "SECURITY_ALERT_EMAIL is required: an inbox outside this system that every break-glass alert also reaches.");
   need(cfg.FIELD_ENCRYPTION_DRIVER === "kms", `FIELD_ENCRYPTION_DRIVER must be "kms" in ${cfg.APP_ENV} (the local static key is for development only).`);

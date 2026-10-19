@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { deleteWithDependents, purgeAppendOnly } from "../../../lib/__tests__/cleanup";
 import { DEFAULT_DEVICE_ALERT_SETTINGS, DEVICE_ALERT_SETTING_KEY } from "../../../lib/deviceAlertSettings";
 import { mailService } from "../../../integrations/mail";
+import { fakeReceipt } from "../../../integrations/mail/testing";
 import { prisma } from "../../../lib/prisma";
 import { setSetting } from "../../../lib/settings";
 import { app, authHeader, cleanupEmployeeTestOrgMasters, cleanupFullTestEmployee, createEmployeeTestOrgMasters, createFullTestEmployee, loginAs, type TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
@@ -35,7 +36,7 @@ describe("device and agent health (P2-H)", () => {
   let hrToken = "";
   let empToken = "";
   let savedAlerts: unknown = null;
-  const mail = vi.spyOn(mailService, "send").mockResolvedValue(undefined);
+  const mail = vi.spyOn(mailService, "send").mockResolvedValue(fakeReceipt());
 
   const mine = <T extends { deviceId: string | null; agentId: string | null }>(xs: T[]) => xs.filter((x) => x.deviceId === agentDeviceId || x.deviceId === pushDeviceId || x.agentId === agentId);
   const incidents = (where: object = {}) => prisma.deviceIncident.findMany({ where: { OR: [{ deviceId: { in: [agentDeviceId, pushDeviceId] } }, { agentId }], ...where }, orderBy: { openedAt: "asc" } });

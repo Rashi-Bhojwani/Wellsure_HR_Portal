@@ -27,6 +27,7 @@ import * as employeeApi from "../../../api/employee";
 import * as orgApi from "../../../api/org";
 import * as managersApi from "../../../api/managers";
 import { useAuth } from "../../../hooks/useAuth";
+import { InvitationStatus } from "../../../components/common/InvitationStatus";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { PhotoUploader } from "../../../components/common/PhotoUploader";
 import * as peopleApi from "../../../api/people";
@@ -51,6 +52,11 @@ function OfficialTab({ profile }: { profile: employeeApi.EmployeeProfile }) {
       <Descriptions.Item label="Cost Centre">{profile.job?.costCentre?.name ?? "—"}</Descriptions.Item>
       <Descriptions.Item label="Reporting Manager">{profile.job?.reportingManager?.fullName ?? "—"}</Descriptions.Item>
       <Descriptions.Item label="Account Status">{profile.accountStatus ?? "—"}</Descriptions.Item>
+      {profile.invitation && (
+        <Descriptions.Item label="Invitation email" span={2}>
+          <InvitationStatus employeeId={profile.id} invitation={profile.invitation} />
+        </Descriptions.Item>
+      )}
       <Descriptions.Item label="2FA">{profile.totpEnabled ? "Enabled" : "Not enabled"}</Descriptions.Item>
       <Descriptions.Item label="Attendance capture">
         {profile.attendanceCapture === "MANUAL" ? <Tag color="purple">Manual attendance — marked by whoever marks their branch</Tag> : "Biometric device"}

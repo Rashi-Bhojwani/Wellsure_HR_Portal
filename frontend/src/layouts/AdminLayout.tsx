@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Avatar,
@@ -11,6 +11,7 @@ import {
   Layout,
   Select,
   Space,
+  theme,
   Typography,
   type MenuProps,
 } from "antd";
@@ -42,9 +43,27 @@ function currentApp(pathname: string): AdminApp {
   return adminApps.find((a) => a.path === segment) ?? adminApps[0]!;
 }
 
+// The panel is custom content inside a Dropdown, and a Dropdown only gives a *menu* its background, border and shadow: custom content gets none, so on its own the
+// tiles were drawn straight over the breadcrumb and the page. This one carries its own opaque surface from the theme tokens (so it follows light and dark), and
+// never wider than the screen.
 function AppSwitcherPanel({ onSelect }: { onSelect: (app: AdminApp) => void }) {
+  const { token } = theme.useToken();
   return (
-    <div style={{ padding: 16, width: 320 }}>
+    <div
+      role="dialog"
+      aria-label="Your apps"
+      data-testid="app-switcher-panel"
+      style={{
+        padding: 16,
+        width: "min(320px, calc(100vw - 24px))",
+        maxHeight: "calc(100vh - 80px)",
+        overflowY: "auto",
+        background: token.colorBgElevated,
+        border: `1px solid ${token.colorBorderSecondary}`,
+        borderRadius: token.borderRadiusLG,
+        boxShadow: token.boxShadowSecondary,
+      }}
+    >
       <Text type="secondary" style={{ fontSize: 12 }}>
         YOUR APPS
       </Text>
@@ -72,6 +91,7 @@ function AppSwitcherPanel({ onSelect }: { onSelect: (app: AdminApp) => void }) {
                 style={{
                   width: 32,
                   height: 32,
+                  flex: "none",
                   borderRadius: 8,
                   background: "#eef1ff",
                   color: "#2f6fed",
@@ -96,7 +116,7 @@ function AppSwitcherPanel({ onSelect }: { onSelect: (app: AdminApp) => void }) {
   );
 }
 
-function TopBar() {
+function TopBar({ onOpenMenu }: { onOpenMenu?: () => void }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { logout } = useAuth();
@@ -104,6 +124,14 @@ function TopBar() {
   const screens = useBreakpoint();
   const isMobile = !screens.md;
   const app = currentApp(location.pathname);
+
+  // Escape closes it (a click outside already does).
+  useEffect(() => {
+    if (!switcherOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setSwitcherOpen(false);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [switcherOpen]);
 
   const goToApp = (target: AdminApp): void => {
     navigate(`/admin/${target.path}`);
@@ -134,14 +162,16 @@ function TopBar() {
         paddingBottom: 10,
       }}
     >
-      <Space size="middle" wrap>
+      <Space size="small" wrap>
+        {isMobile && onOpenMenu && <Button type="text" aria-label="Open the menu" icon={<MenuOutlined />} onClick={onOpenMenu} />}
         <Dropdown
           open={switcherOpen}
           onOpenChange={setSwitcherOpen}
           popupRender={() => <AppSwitcherPanel onSelect={goToApp} />}
           trigger={["click"]}
+          placement="bottomLeft"
         >
-          <Button type="text" icon={<AppstoreOutlined style={{ fontSize: 18 }} />} />
+          <Button type="text" aria-label="Your apps" icon={<AppstoreOutlined style={{ fontSize: 18 }} />} />
         </Dropdown>
         <div
           style={{
@@ -281,24 +311,11 @@ function AdminLayoutInner() {
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
-      {isMobile && (
-        <div style={{ position: "fixed", top: 10, left: 8, zIndex: 20 }}>
-          <Button type="text" icon={<MenuOutlined />} onClick={() => setDrawerOpen(true)} />
-        </div>
-      )}
-      <TopBar />
+      <TopBar onOpenMenu={() => setDrawerOpen(true)} />
       <SubBar />
 
       {isMobile && (
         <Drawer title={app.label} open={drawerOpen} onClose={() => setDrawerOpen(false)} placement="left">
-          <div style={{ marginBottom: 16 }}>
-            <AppSwitcherPanel
-              onSelect={(target) => {
-                navigate(`/admin/${target.path}`);
-                setDrawerOpen(false);
-              }}
-            />
-          </div>
           {menuItems && menuItems.length > 0 && (
             <Space orientation="vertical" style={{ width: "100%" }}>
               {app.menus?.map((group) => (

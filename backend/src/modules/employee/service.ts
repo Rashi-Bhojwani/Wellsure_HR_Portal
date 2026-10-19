@@ -10,7 +10,7 @@ import { reResolveUnmapped } from "../biometric/adminService";
 import { encryptField, decryptField } from "../../lib/encryption";
 import { blindIndex, last4, normalizeAadhaar, normalizeAccountNumber, normalizePan } from "../../lib/fieldHash";
 import { buildEmployeeScopeWhere, type DataScope } from "../../lib/dataScope";
-import { createInvitation, resendInvitation as resendInvitationEmail } from "../auth/service";
+import { createInvitation, latestInvitationDelivery, resendInvitation as resendInvitationEmail, type InvitationDelivery } from "../auth/service";
 import { assertReportingLine, assertReportingLineFor } from "../managers/hierarchy";
 import { emitPlacementRooms, emitTeamChanged } from "../../realtime/emit";
 import { notifyScheduledMove } from "./scheduledChanges";
@@ -267,13 +267,16 @@ export async function createEmployee(input: CreateEmployeeInput, meta: RequestMe
     await reResolveUnmapped(official.deviceUserId).catch((err: unknown) => logger.warn({ err, employeeId: employee.id }, "Could not attach earlier punches to the new employee; map them from the Unmapped queue"));
   }
 
+  // Sent unless the caller (the Import Center, never the wizard) says not to. Whether it was really sent, and if not why, is returned to the screen, never swallowed.
+  let invitation: InvitationDelivery = { status: "NOT_SENT", to: personal.personalEmail };
   if (options?.sendInvitation ?? true) {
-    await createInvitation({
+    ({ delivery: invitation } = await createInvitation({
       userId,
       email: personal.personalEmail,
       fullName: personal.fullName,
       employeeCode: official.employeeCode,
-    });
+      actorUserId: meta.actorUserId,
+    }));
   }
 
   await writeAuditLog({
@@ -286,10 +289,11 @@ export async function createEmployee(input: CreateEmployeeInput, meta: RequestMe
     userAgent: meta.userAgent,
   });
 
-  return { id: employee.id, employeeCode: official.employeeCode };
+  return { id: employee.id, employeeCode: official.employeeCode, invitation };
 }
 
-export async function resendInvite(employeeId: string, meta: RequestMetaInput): Promise<void> {
+/** Resend one person's invitation. Returns what happened to the email; a failed send is a result, not an error, and is audited as what it was. */
+export async function resendInvite(employeeId: string, meta: RequestMetaInput): Promise<InvitationDelivery> {
   const employee = await prisma.employee.findUnique({
     where: { id: employeeId },
     include: { user: true, personal: true, nameHistory: { where: inForceOn() } },
@@ -299,8 +303,78 @@ export async function resendInvite(employeeId: string, meta: RequestMetaInput): 
     throw new HttpError(400, "This employee has already activated their account.", "ALREADY_ACTIVE");
   }
   const fullName = employee.nameHistory[0]?.fullName ?? employee.employeeCode;
-  await resendInvitationEmail(employee.user.id, employee.personal!.personalEmail, fullName, employee.employeeCode);
-  await writeAuditLog({ ...meta, action: "employee.invite_resent", entityType: "Employee", entityId: employeeId });
+  const { delivery } = await resendInvitationEmail(employee.user.id, employee.personal!.personalEmail, fullName, employee.employeeCode, meta.actorUserId);
+  await writeAuditLog({ ...meta, action: "employee.invite_resent", entityType: "Employee", entityId: employeeId, after: { to: delivery.to, outcome: delivery.status, ...(delivery.error ? { error: delivery.error } : {}) } });
+  return delivery;
+}
+
+export interface PendingInvitation {
+  employeeId: string;
+  employeeCode: string;
+  fullName: string;
+  email: string;
+  delivery: InvitationDelivery;
+}
+
+const BATCH_LIMIT = 100;
+
+/** Everyone whose account is still waiting for its owner to set a password, with what happened to their last invitation email (newest joiners first). */
+export async function listPendingInvitations(page: number, pageSize: number): Promise<{ total: number; items: PendingInvitation[] }> {
+  const where = { status: { not: "SEPARATED" as const }, user: { is: { status: "INVITED" as const } } };
+  const [total, rows] = await Promise.all([
+    prisma.employee.count({ where }),
+    prisma.employee.findMany({ where, orderBy: [{ createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { user: true, personal: true, nameHistory: { where: inForceOn() } } }),
+  ]);
+  const items: PendingInvitation[] = [];
+  for (const e of rows) {
+    const email = e.personal?.personalEmail ?? "";
+    items.push({ employeeId: e.id, employeeCode: e.employeeCode, fullName: e.nameHistory[0]?.fullName ?? e.employeeCode, email, delivery: await latestInvitationDelivery(e.user!.id, email) });
+  }
+  return { total, items };
+}
+
+export interface InvitationBatchResult {
+  requested: number;
+  sent: number;
+  fileOnly: number;
+  failed: number;
+  results: Array<PendingInvitation & { skipped?: string }>;
+}
+
+/**
+ * HR sends invitations in a batch (spec §10: "in batches, HR-triggered, never automatically on import"). Each person is sent their own email and gets their own result; one
+ * failure does not stop the rest and is never reported as success. Anybody who has already activated, or has no email on file, is skipped and says so.
+ */
+export async function sendInvitations(employeeIds: string[], meta: RequestMetaInput): Promise<InvitationBatchResult> {
+  const ids = [...new Set(employeeIds)];
+  if (ids.length === 0) throw new HttpError(400, "Choose at least one person.", "VALIDATION_ERROR");
+  if (ids.length > BATCH_LIMIT) throw new HttpError(400, `Send at most ${BATCH_LIMIT} invitations at a time.`, "VALIDATION_ERROR");
+  const employees = await prisma.employee.findMany({ where: { id: { in: ids } }, include: { user: true, personal: true, nameHistory: { where: inForceOn() } } });
+  const byId = new Map(employees.map((e) => [e.id, e]));
+  const results: InvitationBatchResult["results"] = [];
+  for (const id of ids) {
+    const e = byId.get(id);
+    if (!e?.user) {
+      results.push({ employeeId: id, employeeCode: "", fullName: "", email: "", delivery: { status: "NOT_SENT", to: "" }, skipped: "That person was not found." });
+      continue;
+    }
+    const fullName = e.nameHistory[0]?.fullName ?? e.employeeCode;
+    const email = e.personal?.personalEmail ?? "";
+    const base = { employeeId: e.id, employeeCode: e.employeeCode, fullName, email };
+    if (e.user.status !== "INVITED" || e.status === "SEPARATED") {
+      results.push({ ...base, delivery: { status: "NOT_SENT", to: email }, skipped: "Already activated, or no longer employed, so there is nothing to send." });
+      continue;
+    }
+    if (!email) {
+      results.push({ ...base, delivery: { status: "NOT_SENT", to: "" }, skipped: "No personal email on file." });
+      continue;
+    }
+    const { delivery } = await resendInvitationEmail(e.user.id, email, fullName, e.employeeCode, meta.actorUserId);
+    await writeAuditLog({ ...meta, action: "employee.invite_sent", entityType: "Employee", entityId: e.id, after: { to: delivery.to, outcome: delivery.status, ...(delivery.error ? { error: delivery.error } : {}) } });
+    results.push({ ...base, delivery });
+  }
+  const count = (status: InvitationDelivery["status"]) => results.filter((r) => !r.skipped && r.delivery.status === status).length;
+  return { requested: ids.length, sent: count("SENT"), fileOnly: count("FILE_ONLY"), failed: count("FAILED"), results };
 }
 
 // ── Scope helpers ────────────────────────────────────────────────────────
@@ -329,7 +403,7 @@ async function loadProfileCore(employeeId: string) {
     include: {
       personal: true,
       nameHistory: { where: inForceOn() },
-      user: { select: { status: true, totpEnabled: true, lastLoginAt: true } },
+      user: { select: { id: true, status: true, totpEnabled: true, lastLoginAt: true } },
       jobHistory: {
         where: inForceOn(),
         include: { department: true, designation: true, location: true, grade: true, costCentre: true, reportingManager: { include: { nameHistory: { where: inForceOn() } } } },
@@ -355,6 +429,8 @@ async function loadProfileCore(employeeId: string) {
     status: employee.status,
     attendanceCapture,
     accountStatus: employee.user?.status ?? null,
+    // What happened to the latest invitation email, for an account still waiting for its owner (null once they have activated).
+    invitation: employee.user?.status === "INVITED" ? await latestInvitationDelivery(employee.user.id, employee.personal?.personalEmail ?? "") : null,
     totpEnabled: employee.user?.totpEnabled ?? false,
     personal: employee.personal
       ? {

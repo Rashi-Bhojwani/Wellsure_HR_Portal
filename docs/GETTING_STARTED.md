@@ -144,8 +144,10 @@ except the two marked **required**.
 | `STORAGE_LOCAL_DIR` | Where uploaded files land in local dev | No | `.storage` |
 | `STORAGE_SIGNED_URL_SECRET` | Signs simulated local "signed URLs" | No | any string |
 | `S3_BUCKET` | Required only when `STORAGE_DRIVER=s3` | Conditional | — |
-| `MAIL_DRIVER` | `console` \| `ses` | No | `console` |
+| `MAIL_DRIVER` | `console` (default: writes `.eml` files, sends nothing) \| `smtp` (development only: sends real email through your own SMTP account, see section 8) \| `ses` (the only one staging and production accept) | No | `console` |
 | `MAIL_DEV_DIR` | Where outgoing mail is written as `.eml` files | No | `.mail` |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_USER` / `SMTP_PASSWORD` / `MAIL_FROM` | Your SMTP account, used only when `MAIL_DRIVER=smtp`. Keep the real values in `backend/.env` (gitignored), never in a committed file | Conditional | port `587`, `SMTP_SECURE=false` |
+| `SMTP_REQUIRE_TLS` | Leave `true` for any real provider. `false` only for a local catcher such as Mailpit, which has no TLS | No | `true` |
 | `SES_FROM` | Required only when `MAIL_DRIVER=ses` | Conditional | — |
 | `SECURITY_ALERT_EMAIL` | An inbox **outside** this system (e.g. the owners' shared mailbox). It also receives every break-glass alert (§12). Set it in staging and production | No | unset |
 | `AGENT_API_KEYS` | Unused. Sync agent keys are created on Admin Tools → Devices → Sync agents (shown once, stored hashed) since Phase 2 P2-B | No | placeholder |
@@ -308,7 +310,7 @@ and lands in their Document Center under Letters.
 
 A few accounts are deliberately seeded in non-active states to exercise
 those code paths: some are `INVITED` (never activated — try
-`POST /api/auth/forgot-password` or the resend-invite flow once built),
+`POST /api/auth/forgot-password` or the Resend button on the employee's profile),
 one is locked out (5 failed attempts), two are separated. Check
 `backend/prisma/seed.ts`'s `specs` array for exact employee codes if you
 need a specific state.
@@ -321,15 +323,89 @@ real login flow, it just fills in the known demo password for you.
 
 ## 8. Where things land locally
 
-- **Outgoing email** — never actually sent in local dev. Logged to the
-  console and written as a real `.eml` file (openable in any mail client)
-  to `backend/.mail/` (gitignored).
+- **Outgoing email** — by default never actually sent in local dev. Logged
+  to the console and written as a real `.eml` file (openable in any mail
+  client) to `backend/.mail/` (gitignored). To send real email to a real
+  inbox, see "Sending real email in development" just below.
 - **Uploaded files** — written to `backend/.storage/` (gitignored), served
   back through a signed-URL-simulating dev route. The seed writes its demo
   Document Center PDFs under `.storage/seed/`; employee photos land under
   `.storage/employees/<id>/photo/` (only the re-encoded WebP copies — the
   uploaded original is never stored) and documents under
   `.storage/employees/<id>/documents/` and `.storage/company-documents/`.
+
+### Sending real email in development
+
+Creating an employee emails them a link to set their password. With the
+default `MAIL_DRIVER=console` that email is only written to `backend/.mail/`,
+and the screens say so ("Nothing was emailed … development mode"). To see it
+arrive in a real inbox, point the `smtp` driver at your own SMTP account.
+This is a development tool: staging and production refuse to start on
+anything but `MAIL_DRIVER=ses`, and that guard stays.
+
+Put these in `backend/.env` (never in a committed file; the password is
+never logged and is not shown on any screen):
+
+```
+MAIL_DRIVER=smtp
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=you@gmail.com
+SMTP_PASSWORD=<the 16-character app password, see below>
+MAIL_FROM=Wellsure HR <you@gmail.com>
+```
+
+Restart the backend (`npm run dev`). Then **Admin → Employee → Add Employee**:
+after you create someone, the screen shows one of
+
+- **Invitation email sent to …** — the mail server accepted it. That means
+  accepted, not "reached the inbox": check spam if it is missing.
+- **Nothing was emailed to …** — you are still on the `console` driver.
+- **The invitation email … could not be sent**, with the reason in words
+  (wrong password, server unreachable, address refused). The person has *not*
+  been invited. Fix the cause and press **Try again**.
+
+Each screen has a **Resend** button (here, on the employee's profile, and in
+**Import Center → Invitations**). Resending replaces the earlier link, which
+stops working.
+
+**Gmail app password.** Gmail will not accept your normal password from an
+app. You need 2-Step Verification on, then an app password:
+
+1. Go to <https://myaccount.google.com/security> and turn on **2-Step
+   Verification** if it is off.
+2. Open <https://myaccount.google.com/apppasswords> (or search "App
+   passwords" in your Google Account settings).
+3. Name it (e.g. "Wellsure dev") and choose **Create**. Google shows a
+   16-character password once; copy it without the spaces into
+   `SMTP_PASSWORD`.
+4. Use `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_SECURE=false`
+   (Gmail upgrades the connection with STARTTLS), `SMTP_USER` = your full
+   Gmail address, and `MAIL_FROM` = the same address. Gmail rewrites any other
+   From address.
+5. If you stop needing it, delete the app password from the same page.
+
+If sending fails you will see the reason on screen: "refused the sign-in" is
+the wrong user or password (an app password is required, not your normal one);
+"Could not reach <host>" is the host/port or your network. Gmail
+limits free accounts to a few hundred emails a day, plenty for development.
+
+**To try it without any account**, run a local catcher such as
+[Mailpit](https://mailpit.axllent.org/) and set `MAIL_DRIVER=smtp`,
+`SMTP_HOST=localhost`, `SMTP_PORT=1025`, `SMTP_REQUIRE_TLS=false`; the
+emails show up in its web page (<http://localhost:8025>) and go nowhere else.
+
+**Careful with the demo data.** The seeded accounts that are still `INVITED`
+have made-up Gmail addresses that may belong to real strangers. With
+`MAIL_DRIVER=smtp` do not use "Select everyone not yet sent" in
+**Import Center → Invitations** on a seeded database: tick only the people
+you created yourself with an address you own.
+
+**Imported employees are never emailed automatically.** After an Excel import
+HR opens **Import Center → Invitations**, chooses who to invite (up to 100 at
+a time) and presses **Send invitations**; each person gets their own result,
+and a failure is shown against their name, never counted as sent.
 
 ---
 
@@ -346,6 +422,7 @@ Run from the repo root unless noted.
 | `npm run lint` | ESLint across backend, frontend, biometric-agent |
 | `npm run typecheck` | `tsc --noEmit` across every project |
 | `npm run test` | Vitest, backend + frontend + biometric-agent — backend is an integration suite against your real local Postgres/Redis, not mocks; frontend covers route-config wiring (`frontend/src/routes/__tests__/`). Safe to run while `npm run dev` is up, with no interaction either way: the suite uses its own Postgres database (`<dev database>_test`), Redis database and Socket.IO channel (`REDIS_TEST_DB`), and `.storage-test/`/`.mail-test/` folders. Each run drops, recreates, migrates and seeds that database first (about 10 s), so every run starts from the same state |
+| `npm run check:popovers` (in `frontend/`) | Opens a real browser at 390px and 1280px and checks every popover and dropdown (Your Apps, notification bell, settings menu, Leave/Attendance menus, Quick Links): opaque, above the page, inside the screen, closes on Escape and on a click outside. Needs the API, the worker and `npm run dev` running and the seeded accounts; CI runs it too and keeps screenshots as an artifact |
 | `npm run test:replay --prefix backend` | The month replay: 500 simulated employees for a month through the real ingestion and recompute, diffed field by field against what each named scenario says should happen (about 75 s, needs the same local Postgres/Redis; not part of `npm run test`; CI runs it as `attendance-replay`). Writes `backend/perf/last-run.json`; see `backend/perf/README.md`. Override size with `REPLAY_EMPLOYEES` / `REPLAY_SEED` |
 | `npm run test:clock --prefix backend` | The whole backend suite run as if the wall clock read each of several instants (00:10 IST, a new year, a leap day, years ahead; or `-- <ISO instant>` for one), to find tests that depend on the hour or date they run in. About 7 minutes per instant on CI-class hardware; uses its own database and Redis db, so it can run beside `npm test`. Only JavaScript's clock moves (the database's `now()` stays real). Not part of `npm run test`, but CI runs it weekly (the "Clock audit" workflow: Tuesday 03:00 IST, or on demand with your own instants); run it yourself after adding a test with fixed dates or one that sends "now" punches. See `backend/vitest.fakeClock.ts` |
 | `npm run simulate --prefix biometric-agent -- <command>` | The punch simulator CLI (see "The punch simulator" above): `setup`, `scenarios`, `scenario <name>`, `replay`, `drip` |

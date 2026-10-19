@@ -244,6 +244,13 @@ model InvitationToken {
   usedAt          DateTime? @map("used_at")
   createdByUserId String?   @map("created_by_user_id")
   createdAt       DateTime  @default(now()) @map("created_at")
+  // What happened to the email that carried this token. `email_sent_at` is set only when a real mail server accepted the message; the console driver (a file on the
+  // server, nothing sent) leaves it empty and a failure stores its reason in words, so no screen has to guess whether somebody was really invited.
+  emailTo          String?   @map("email_to")
+  emailDriver      String?   @map("email_driver")
+  emailAttemptedAt DateTime? @map("email_attempted_at")
+  emailSentAt      DateTime? @map("email_sent_at")
+  emailError       String?   @map("email_error")
 
   @@index([userId])
   @@map("invitation_tokens")
