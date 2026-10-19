@@ -33,6 +33,11 @@ export interface SubjectAdapter {
    * approves a change to their own pay. Optional; a subject with nobody personally in it leaves it out.
    */
   affectedUserIds?(subjectId: string): Promise<string[]>;
+  /**
+   * Called inside the same transaction when a live approval of this subject is voided, for any reason (withdrawn, changed figures, reopened). A subject whose
+   * state follows its approval (a run that is SUBMITTED only while its approval is live) puts that state right here, so the two can never disagree.
+   */
+  onVoided?(approval: PayrollApproval, reason: string, actorUserId: string | null, db: Db): Promise<void>;
 }
 
 const adapters = new Map<PayrollApprovalSubject, SubjectAdapter>();
@@ -75,6 +80,8 @@ export interface SubmitInput {
   previewFingerprint: string;
   note?: string;
   ip?: string | null;
+  /** Runs inside the same transaction as the approval row, so a state that must follow it (a run becoming SUBMITTED) can never be seen without it. */
+  inTransaction?: (tx: Prisma.TransactionClient, approval: PayrollApproval) => Promise<void>;
 }
 
 /** The maker submits. Refused if they lack the maker permission or a live approval already exists. */
@@ -91,6 +98,7 @@ export async function submit(input: SubmitInput): Promise<PayrollApproval> {
         data: { subject: input.subject, subjectId: input.subjectId, contentHash, makerUserId: input.makerUserId, previewFingerprint: input.previewFingerprint, submitNote: input.note ?? "" },
       });
       await recordEvent({ subjectType: input.subject, subjectId: input.subjectId, type: "SUBMITTED", actorUserId: input.makerUserId, payload: { approvalId: a.id, hash: contentHash } }, tx);
+      await input.inTransaction?.(tx, a);
       return a;
     });
     await writeAuditLog({ actorUserId: input.makerUserId, action: "payroll.approval.submitted", entityType: "PayrollApproval", entityId: approval.id, after: { subject: input.subject, subjectId: input.subjectId, hash: contentHash }, ipAddress: input.ip ?? null });
@@ -107,6 +115,10 @@ export interface DecideInput {
   decision: "APPROVE" | "REJECT";
   note?: string;
   ip?: string | null;
+  /** The hash the checker was shown. When given, a different live hash is a stale screen, not a decision. */
+  expectedHash?: string;
+  /** Runs inside the decision's transaction (a run becoming APPROVED, or going back to CALCULATED on a rejection). */
+  inTransaction?: (tx: Prisma.TransactionClient, approval: PayrollApproval) => Promise<void>;
 }
 
 export async function decide(input: DecideInput): Promise<PayrollApproval> {
@@ -134,6 +146,7 @@ export async function decide(input: DecideInput): Promise<PayrollApproval> {
     await voidApproval(approval, "The figures changed after they were submitted.", input.checkerUserId);
     throw conflict("The figures changed after they were submitted, so this approval is void. They need to be submitted again.", "APPROVAL_VOIDED");
   }
+  if (input.expectedHash !== undefined && input.expectedHash !== liveHash) throw new HttpError(409, "What you were looking at is not what is there now. Look at it again before you decide.", "PREVIEW_STALE");
   return finish(approval, { status: "APPROVED", checkerUserId: input.checkerUserId, decidedAt: new Date(), decisionNote: input.note?.trim() ?? null, hashAtDecision: liveHash }, "APPROVED", input); // allow-clock: an instant, not a business date
 }
 
@@ -143,7 +156,9 @@ async function finish(approval: PayrollApproval, data: Prisma.PayrollApprovalUpd
     const { count } = await tx.payrollApproval.updateMany({ where: { id: approval.id, status: "PENDING" }, data });
     if (count !== 1) throw conflict("Somebody else decided this a moment ago.", "APPROVAL_NOT_PENDING");
     await recordEvent({ subjectType: approval.subject, subjectId: approval.subjectId, type: event, actorUserId: input.checkerUserId, payload: { approvalId: approval.id, hash: approval.contentHash, note: input.note ?? null } }, tx);
-    return tx.payrollApproval.findUniqueOrThrow({ where: { id: approval.id } });
+    const decided = await tx.payrollApproval.findUniqueOrThrow({ where: { id: approval.id } });
+    await input.inTransaction?.(tx, decided);
+    return decided;
   });
   await writeAuditLog({ actorUserId: input.checkerUserId, action: `payroll.approval.${event.toLowerCase()}`, entityType: "PayrollApproval", entityId: approval.id, before: { status: approval.status }, after: { status: result.status, subject: approval.subject, subjectId: approval.subjectId, hash: approval.contentHash }, ipAddress: input.ip ?? null });
   return result;
@@ -153,6 +168,7 @@ export async function voidApproval(approval: PayrollApproval, reason: string, ac
   const { count } = await db.payrollApproval.updateMany({ where: { id: approval.id, status: { in: [...live] } }, data: { status: "VOIDED", voidedAt: new Date(), voidReason: reason } }); // allow-clock: an instant, not a business date
   if (count !== 1) return false;
   await recordEvent({ subjectType: approval.subject, subjectId: approval.subjectId, type: "VOIDED", actorUserId, payload: { approvalId: approval.id, reason, hash: approval.contentHash } }, db);
+  await adapters.get(approval.subject)?.onVoided?.(approval, reason, actorUserId, db);
   await writeAuditLog({ actorUserId, action: "payroll.approval.voided", entityType: "PayrollApproval", entityId: approval.id, before: { status: approval.status }, after: { status: "VOIDED", reason, subject: approval.subject, subjectId: approval.subjectId } });
   return true;
 }

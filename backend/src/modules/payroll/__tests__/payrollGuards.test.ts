@@ -93,7 +93,9 @@ const EXTRA_ALLOWED: Record<string, number[]> = {
   "run/engine.ts": [50, 120000],
   "run/export.ts": [28, 50, 60, 80],
   "run/service.ts": [20, 50, 60],
-  "run/validators.ts": [25, 50, 60, 300],
+  // Closing: how many flagged people the submit preview lists before it says "and more" (a display limit), and the lengths of reason and note fields.
+  "run/closing.ts": [25],
+  "run/validators.ts": [25, 50, 60, 300, 500],
 };
 
 export function numericLiteralsIn(src: string, extra: number[] = []): Array<{ line: number; text: string }> {
@@ -172,10 +174,10 @@ describe("modules/payroll", () => {
     expect(withoutComments(readFileSync(path.join(__dirname, "../../../../prisma/schema.prisma"), "utf8").replace(/\/\/\/.*$/gm, "")), "prisma/schema.prisma").not.toMatch(meansSent);
   });
 
-  it("nothing can make a run final in this commit: no code sets the finaliser's switch or writes the FINALISED status", () => {
-    // The database refuses FINALISED unless the transaction sets `payroll.finalising`, and the only code that will is P6-4's finaliser. Until it exists the list is
-    // empty; when it does, its one file is added here, with the reason, and the test keeps it to that one file.
-    const ALLOWED_FINALISERS: string[] = [];
+  it("only the finaliser can make a run final or unlock one: no other code sets the switches or writes the FINALISED status", () => {
+    // The database refuses FINALISED unless the transaction sets `payroll.finalising`, and refuses to take a run out of it unless it sets `payroll.unlocking`. The one file
+    // that does either is the finaliser (P6-4); this keeps it to that one file.
+    const ALLOWED_FINALISERS: string[] = ["src/modules/payroll/run/finaliser.ts"];
     const backend = path.resolve(ROOT, "../../..");
     const hits: string[] = [];
     const scan = (dir: string) => {
@@ -186,12 +188,12 @@ describe("modules/payroll", () => {
         } else if (/\.tsx?$/.test(name) && !/\.test\./.test(name)) {
           const raw = readFileSync(full, "utf8").replace(/\/\/.*$/gm, "");
           // The switch itself, or a write of the status (a `data: { ... status: "FINALISED" }`). Reading the status in a `where` is how the arrears reader finds a final run.
-          if (/payroll\.finalising/.test(raw) || /data:\s*\{[^}]*status:\s*["']FINALISED["']/.test(raw)) hits.push(path.relative(backend, full).split(path.sep).join("/"));
+          if (/payroll\.(?:finalising|unlocking)/.test(raw) || /data:\s*\{[^}]*status:\s*["']FINALISED["']/.test(raw)) hits.push(path.relative(backend, full).split(path.sep).join("/"));
         }
       }
     };
     scan(backend);
-    expect(hits.filter((h) => !ALLOWED_FINALISERS.includes(h))).toEqual([]);
+    expect(hits.sort()).toEqual(ALLOWED_FINALISERS);
   });
 
   it("the payroll-lock bypass for back-dated salary has exactly one caller, the revision apply step, and that step creates the arrears in the same transaction", () => {

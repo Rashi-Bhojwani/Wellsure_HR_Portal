@@ -9,7 +9,7 @@ import { confirmRule, previewConfirm } from "../rules/governed";
 import { finalisedRunArrearsProvider, registerPayroll, SalaryBasedEncashmentRateProvider } from "../run/providers";
 import { setArrearsBasisProvider } from "../salary/arrears";
 import { Frac } from "./rational";
-import { CYCLE, api, buildRunWorld, calculateAgain, calculateRun, day, lockCycle, setRules, teardownRunWorld, type RunWorld } from "./runTestHelpers";
+import { CYCLE, api, buildRunWorld, calculateAgain, calculateRun, day, handFinalise, lockCycle, setRules, teardownRunWorld, type RunWorld } from "./runTestHelpers";
 import { FIRST_SALARY_DAY, giveSalary } from "./salaryTestHelpers";
 
 // What a run is joined to: the finalised state that only P6-4 will reach (proved here by the database), the arrears that are worked out from what a finalised
@@ -23,11 +23,7 @@ describe("runs, finalised runs, arrears, encashment and variance", () => {
   let augId: string;
   let septId: string;
   const who = (n: (typeof NAMES)[number]) => world.named[n]!.employeeId;
-  const finalise = (id: string) =>
-    prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT set_config('payroll.finalising', 'yes', true)`; // what P6-4's one finaliser will do for its own transaction
-      await tx.payrollRun.update({ where: { id }, data: { status: "FINALISED" } });
-    });
+  const finalise = (id: string) => handFinalise(id, world.maker.userId, world.checkerA.userId);
   const yearEndRunIds: string[] = [];
   let flatRateBefore: number | null;
 
@@ -53,10 +49,20 @@ describe("runs, finalised runs, arrears, encashment and variance", () => {
     await teardownRunWorld(world);
   });
 
-  describe("the finalised state, which nothing in this commit can reach", () => {
+  describe("the finalised state, which only the finaliser can reach", () => {
     it("the database refuses to make a run final except inside the finaliser's own transaction, and refuses to change a final run", async () => {
       await expect(prisma.payrollRun.update({ where: { id: augId }, data: { status: "FINALISED" } })).rejects.toThrow(/RUN_FINALISE_FORBIDDEN/);
       await expect(prisma.payrollRun.create({ data: { cycleStart: day("2026-05-01"), cycleEnd: day("2026-05-31"), cycleLabel: "May 2026", status: "FINALISED", createdByUserId: world.maker.userId } })).rejects.toThrow(/RUN_FINALISE_FORBIDDEN/);
+      // The switch alone is not enough: from a draft, or from an approved run whose two approvals have not both been used, it is still refused.
+      const withSwitch = (status: "FINALISED") =>
+        prisma.$transaction(async (tx) => {
+          await tx.$executeRaw`SELECT set_config('payroll.finalising', 'yes', true)`;
+          await tx.payrollRun.update({ where: { id: augId }, data: { status, finalisedAt: new Date(), finalisedByUserId: world.maker.userId } }); // allow-clock: a test instant
+        });
+      await expect(withSwitch("FINALISED")).rejects.toThrow(/RUN_FINALISE_FORBIDDEN/);
+      await prisma.payrollRun.update({ where: { id: augId }, data: { status: "APPROVED" } });
+      await expect(withSwitch("FINALISED")).rejects.toThrow(/second person's approval/);
+      await prisma.payrollRun.update({ where: { id: augId }, data: { status: "CALCULATED" } });
       await finalise(augId);
       expect((await prisma.payrollRun.findUniqueOrThrow({ where: { id: augId } })).status).toBe("FINALISED");
       const item = await prisma.payrollRunItem.findFirstOrThrow({ where: { runId: augId, employeeId: who("full") }, include: { lines: true } });
@@ -190,7 +196,11 @@ describe("runs, finalised runs, arrears, encashment and variance", () => {
       expect(rows.map((r) => [r.status, r.amount.toString(), r.componentCode])).toEqual([["PENDING", "10000", "LEAVE_ENCASHMENT"]]);
       await expect(prisma.payrollAdjustment.create({ data: { employeeId: who("full"), componentCode: "LEAVE_ENCASHMENT", direction: "EARNING", amount: "10000", reason: "again", source: "YEAR_END_ENCASHMENT", sourceRef: item.id, createdByUserId: world.maker.userId } })).rejects.toThrow(); // the unique source reference
       // Once a run has paid it (consumed), no run includes it again.
-      await prisma.payrollAdjustment.update({ where: { id: rows[0]!.id }, data: { status: "CONSUMED", consumedByRunId: augId } });
+      await expect(prisma.payrollAdjustment.update({ where: { id: rows[0]!.id }, data: { status: "CONSUMED", consumedByRunId: augId } })).rejects.toThrow(/ADJUSTMENT_CONSUMED_BY_FINALISER_ONLY/);
+      await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT set_config('payroll.finalising', 'yes', true)`;
+        await tx.payrollAdjustment.update({ where: { id: rows[0]!.id }, data: { status: "CONSUMED", consumedByRunId: augId } });
+      });
       await calculateAgain(world, septId);
       expect(await prisma.payrollRunLine.count({ where: { runId: septId, source: "ENCASHMENT" } })).toBe(0);
     });

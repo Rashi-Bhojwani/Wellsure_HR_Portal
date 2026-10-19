@@ -1,11 +1,13 @@
 // Payroll run vocabulary shared by the backend and the Payroll Run screens. Phase 6, docs/plans/PHASE_6.md §14D.
 
-export const RUN_STATUSES = ["NEW", "CALCULATING", "CALCULATED", "FAILED", "VOID", "FINALISED"] as const;
+export const RUN_STATUSES = ["NEW", "CALCULATING", "CALCULATED", "SUBMITTED", "APPROVED", "FAILED", "VOID", "FINALISED"] as const;
 export type RunStatus = (typeof RUN_STATUSES)[number];
 export const RUN_STATUS_LABEL: Record<RunStatus, string> = {
   NEW: "Not calculated yet",
   CALCULATING: "Calculating",
   CALCULATED: "Calculated (draft)",
+  SUBMITTED: "Waiting for approval",
+  APPROVED: "Approved, not yet final",
   FAILED: "Calculation failed",
   VOID: "Discarded",
   FINALISED: "Finalised",

@@ -112,6 +112,11 @@ export function RulesPage() {
                   render: (_, r) => (
                     <Space orientation="vertical" size={2}>
                       <Tag color={STATUS_TAG[r.status].color}>{STATUS_TAG[r.status].label}</Tag>
+                      {r.openQuestion && (
+                        <Tooltip title={r.openQuestion.question}>
+                          <Tag color="volcano">Open question: cannot be confirmed yet</Tag>
+                        </Tooltip>
+                      )}
                       {r.sourceLabel && (
                         <Text type={r.status === "PLACEHOLDER" ? "warning" : "secondary"} style={{ fontSize: 12 }}>
                           {r.sourceLabel}

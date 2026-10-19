@@ -1,6 +1,7 @@
 import { Prisma, type PayrollItemKind } from "@prisma/client";
 import { PLACEHOLDER_SOURCE_LABEL } from "@shared/constants/payrollRules";
 import { writeAuditLog } from "../../lib/audit";
+import { notifyPayrollInputsChanged } from "../../lib/effectiveDating";
 import { prisma } from "../../lib/prisma";
 import { HttpError } from "../../middleware/errorHandler";
 import { SYSTEM_MAKER, checkerAvailability, recordCompletedApproval, registerSubject, type CheckerAvailability } from "./approvals";
@@ -172,6 +173,7 @@ export async function appendVersion(
     ipAddress: actor.ip ?? null,
     userAgent: actor.userAgent ?? null,
   });
+  await notifyPayrollInputsChanged(`${audit.entityType === "PayrollRule" ? "a rule" : "a salary item"} was edited`, actor.userId);
 }
 
 // ── Confirming a version ──

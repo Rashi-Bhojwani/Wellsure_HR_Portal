@@ -6,6 +6,8 @@ export const RUN_STATUS_COLOR: Record<RunStatus, string> = {
   NEW: "default",
   CALCULATING: "processing",
   CALCULATED: "blue",
+  SUBMITTED: "gold",
+  APPROVED: "cyan",
   FAILED: "red",
   VOID: "default",
   FINALISED: "green",
@@ -26,3 +28,11 @@ export const VARIANCE_TAG_LABEL: Record<VarianceTagCode, string> = {
 };
 
 export const LINE_KIND_LABEL = { EARNING: "Earning", DEDUCTION: "Deduction", EMPLOYER_CONTRIBUTION: "Employer contribution", ROUNDING: "Rounding" } as const;
+
+export const STEP_TITLE: Record<"run" | "finalise" | "unlock" | "publish" | "bank-file", string> = {
+  run: "Submit the run for approval",
+  finalise: "Close the payroll period",
+  unlock: "Unlock the payroll period",
+  publish: "Publish payslips",
+  "bank-file": "Generate the bank file",
+};

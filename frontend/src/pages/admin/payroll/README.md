@@ -16,6 +16,8 @@ settlement, bank disbursement. Phase 6+. See spec §7.5 and
 | Employee Salaries | `EmployeeSalariesPage.tsx` | Everyone's current salary and each person's timeline. Nothing is edited here (P6-2) |
 | Salary Revisions | `SalaryRevisionsPage.tsx` | The only way a salary is written: prepare with a preview, a different person approves, the preparer applies (P6-2) |
 | Adjustments | `AdjustmentsPage.tsx` | One-off earnings and deductions, and the arrears a back-dated revision made (P6-2) |
+| Payroll Runs, one run | `PayrollRunsPage.tsx`, `PayrollRunPage.tsx` | Start a run, calculate it, read every person and why, the difference from last month, what it used (P6-3); the Approval panel on the run says what is next (P6-4) |
+| One step on a run | `RunStepPage.tsx` | Submit for approval, close the period, unlock it, publish payslips, the bank file: look at exactly what it would do, say you have, ask or decide. **The people a run leaves out are the first thing on the submit page.** (P6-4) |
 
 Shared pieces live in `components/payroll/` (`ItemStatusTag`, `CheckersNote`, `ItemDialogs`, `RevisionPlanTable`) and `lib/money.ts`, which formats
 exact decimal strings as rupees without ever turning them into a JavaScript number.

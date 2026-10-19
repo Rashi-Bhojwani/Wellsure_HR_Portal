@@ -129,3 +129,40 @@ export async function calculateAgain(world: RunWorld, runId: string): Promise<vo
   if (asked.status !== 202) throw new Error(`calculate: ${JSON.stringify(asked.body)}`);
   await executeCalculation(runId, "test");
 }
+
+/**
+ * Makes a calculated run final without going through the screens, for tests of what is built on a final run (arrears, the year-end reader, the lock): an approved
+ * run, both approvals recorded as used, and the finaliser's switch set for its own transaction, exactly as the database demands. The tests of the real route are in
+ * runClosing.test.ts.
+ */
+export async function handFinalise(runId: string, makerUserId: string, checkerUserId: string): Promise<void> {
+  const run = await prisma.payrollRun.findUniqueOrThrow({ where: { id: runId } });
+  await prisma.payrollRun.update({ where: { id: runId }, data: { status: "APPROVED" } });
+  for (const subject of ["RUN_APPROVAL", "PERIOD_FINALISE"] as const) {
+    await prisma.payrollApproval.create({
+      data: { subject, subjectId: runId, status: "CONSUMED", contentHash: run.runHash!, hashAtDecision: run.runHash!, makerUserId, checkerUserId, previewFingerprint: "test", decidedAt: new Date(), consumedAt: new Date(), consumedByUserId: makerUserId }, // allow-clock: a test instant
+    });
+  }
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT set_config('payroll.finalising', 'yes', true)`;
+    await tx.payrollRun.update({ where: { id: runId }, data: { status: "FINALISED", finalisedAt: new Date(), finalisedByUserId: makerUserId } }); // allow-clock: a test instant
+  });
+}
+
+/**
+ * The seeded company is in the test database, and a payroll run is for everybody employed in the cycle, so a run that is meant to contain three test people also
+ * contains the seeded staff (each left out for want of finalised attendance, exactly as a real run would list them). A test of the road to approval needs a run with
+ * nobody left out, so it moves everyone else's joining date past the cycle for as long as it runs. Returns the function that puts them back.
+ */
+export async function sidelineEveryoneBut(keepEmployeeIds: string[]): Promise<() => Promise<void>> {
+  const others = await prisma.employee.findMany({
+    where: { id: { notIn: keepEmployeeIds }, dateOfJoining: { lte: day(CYCLE.end) }, OR: [{ lastWorkingDate: null }, { lastWorkingDate: { gte: day(CYCLE.start) } }] },
+    select: { id: true, dateOfJoining: true },
+  });
+  const byDate = new Map<string, string[]>();
+  for (const o of others) byDate.set(iso(o.dateOfJoining), [...(byDate.get(iso(o.dateOfJoining)) ?? []), o.id]);
+  await prisma.employee.updateMany({ where: { id: { in: others.map((o) => o.id) } }, data: { dateOfJoining: day("2026-12-01") } });
+  return async () => {
+    for (const [date, ids] of byDate) await prisma.employee.updateMany({ where: { id: { in: ids } }, data: { dateOfJoining: day(date) } });
+  };
+}

@@ -18,6 +18,7 @@ import {
   writeBackdatedSalaryChange,
   writeSalaryChange,
   cancelScheduledSalary,
+  notifyPayrollInputsChanged,
   type SalaryWithLines,
 } from "../../../lib/effectiveDating";
 import { activeUsersHoldingPermission } from "../../../lib/permissions";
@@ -510,6 +511,7 @@ async function applyCancel(rev: RevisionRow, actor: { userId: string; ip?: strin
   });
   await writeAuditLog({ actorUserId: actor.userId, action: "payroll.salary.cancelled", entityType: "PayrollSalary", entityId: salaryId, after: { employeeId, revisionId: rev.id, effectiveFrom: iso(rev.effectiveFrom), amounts: "redacted" }, ipAddress: actor.ip ?? null });
   await writeAuditLog({ actorUserId: actor.userId, action: "payroll.salary_revision.applied", entityType: "PayrollSalaryRevision", entityId: rev.id, after: { kind: "CANCEL_SCHEDULED", people: 1, effectiveFrom: iso(rev.effectiveFrom) }, ipAddress: actor.ip ?? null });
+  await notifyPayrollInputsChanged("a scheduled salary was cancelled", actor.userId);
   return { id: rev.id, applied: 1 };
 }
 
@@ -675,6 +677,7 @@ export async function applyRevision(revisionId: string, actor: { userId: string;
     await writeAuditLog({ actorUserId: actor.userId, action: "payroll.salary.revised", entityType: "PayrollSalary", entityId: w.salaryId, after: { employeeId: w.employeeId, revisionId, effectiveFrom: iso(rev.effectiveFrom), arrearsCycles: w.arrears, amounts: "redacted" }, ipAddress: actor.ip ?? null });
   }
   await writeAuditLog({ actorUserId: actor.userId, action: "payroll.salary_revision.applied", entityType: "PayrollSalaryRevision", entityId: revisionId, after: { people: written.length, effectiveFrom: iso(rev.effectiveFrom) }, ipAddress: actor.ip ?? null });
+  await notifyPayrollInputsChanged("a salary revision was applied", actor.userId);
   return { id: revisionId, applied: written.length };
 }
 

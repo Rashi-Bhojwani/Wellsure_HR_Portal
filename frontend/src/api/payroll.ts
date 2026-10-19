@@ -29,6 +29,8 @@ export interface RuleView {
   status: RuleStatus;
   sourceLabel: string | null;
   requiresRetype: boolean;
+  /** An unanswered question that stops this rule being Confirmed, when it applies to the value it has now. */
+  openQuestion: { id: string; question: string } | null;
   current: VersionView | null;
   lastConfirmed: VersionView | null;
 }
@@ -411,7 +413,7 @@ export const createCancelScheduled = (input: { employeeId: string; salaryId: str
 
 // ── Payroll runs (P6-3): readiness, a run, its people, the difference from last month ──
 
-export type RunStatus = "NEW" | "CALCULATING" | "CALCULATED" | "FAILED" | "VOID" | "FINALISED";
+export type RunStatus = "NEW" | "CALCULATING" | "CALCULATED" | "SUBMITTED" | "APPROVED" | "FAILED" | "VOID" | "FINALISED";
 export interface RunSummary {
   id: string;
   cycle: { start: string; end: string; label: string };
@@ -426,6 +428,7 @@ export interface RunSummary {
   failureReason: string | null;
   createdAt: string;
   voidReason: string | null;
+  finalisedAt: string | null;
   test?: boolean;
 }
 export interface RunRuleStatus {
@@ -586,3 +589,99 @@ export async function downloadRunWorkbook(id: string): Promise<void> {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+// ── Submit, approve, finalise, unlock, publish, bank file (P6-4): one shape for every step ──
+
+export type StepSlug = "run" | "finalise" | "unlock" | "publish" | "bank-file";
+export interface Blocker {
+  code: string;
+  title: string;
+  message: string;
+  details?: Record<string, unknown>;
+}
+export interface PersonNote {
+  employeeId: string;
+  employeeCode: string;
+  name: string;
+  code: string;
+  reason: string;
+  detail: string | null;
+}
+export interface StepPreview {
+  slug: StepSlug;
+  subject: string;
+  title: string;
+  runId: string;
+  cycle: { start: string; end: string; label: string };
+  runStatus: RunStatus;
+  runStatusLabel: string;
+  blockers: Blocker[];
+  canRequest: boolean;
+  /** The submit preview of a run that is already waiting: shown to the checker, not offered for submission. */
+  review?: boolean;
+  checkers: CheckerAvailability;
+  fingerprint: string;
+  watermark: Watermark;
+  totals: { gross: string; deductions: string; net: string; employerCost: string };
+  counts: { people: number; payable: number; held: number; excluded: number; exceptions: number };
+  leftOut?: PersonNote[];
+  blockingExceptions?: PersonNote[];
+  held?: PersonNote[];
+  variance?: VarianceView;
+  affected?: { people: number; payable: number; held: number; ownLine: { employeeId: string; name: string; net: string } | null; changes: Record<string, number> };
+  approvedBy?: string | null;
+  lock?: { from: string; to: string; refuses: string[] };
+  adjustmentsMarkedPaid?: { count: number; bySource: Record<string, number> };
+  allows?: string[];
+  adjustmentsReturned?: number;
+  rows?: number;
+  rowsTotal?: string;
+}
+export interface ApprovalView {
+  id: string;
+  status: "PENDING" | "APPROVED" | "REJECTED" | "VOIDED" | "CONSUMED";
+  hash: string;
+  maker: { userId: string; name: string };
+  submittedAt: string;
+  note: string;
+  checker: { userId: string; name: string } | null;
+  decidedAt: string | null;
+  decisionNote: string | null;
+  voidedAt: string | null;
+  voidReason: string | null;
+  consumedAt: string | null;
+}
+export interface StepState {
+  slug: StepSlug;
+  subject: string;
+  label: string;
+  live: ApprovalView | null;
+  last: ApprovalView | null;
+  checkers: CheckerAvailability | null;
+  you: { canMake: boolean; canDecide: boolean; isMaker: boolean; editedFigures: boolean };
+}
+export interface ApprovalState {
+  runId: string;
+  runStatus: RunStatus;
+  runStatusLabel: string;
+  cycle: string;
+  steps: StepState[];
+}
+export interface WithdrawPreview {
+  slug: StepSlug;
+  runId: string;
+  cycle: string;
+  runStatus: RunStatus;
+  willVoid: Array<{ approvalId: string; subject: string; status: string; maker: string; checker: string | null; decidedAt: string | null }>;
+  runWill: string | null;
+  fingerprint: string;
+}
+
+export const getApprovalState = (id: string) => get<ApprovalState>(`/runs/${id}/approvals`);
+export const previewStep = (id: string, slug: StepSlug) => post<StepPreview>(`/runs/${id}/approvals/${slug}/preview`);
+export const requestStep = (id: string, slug: StepSlug, body: { fingerprint: string; note?: string }) => post<{ approvalId: string; status: string; runStatus: RunStatus }>(`/runs/${id}/approvals/${slug}/request`, body);
+export const decideStep = (id: string, slug: StepSlug, body: { decision: "APPROVE" | "REJECT"; note?: string; hash?: string }) => post<{ approvalId: string; status: string }>(`/runs/${id}/approvals/${slug}/decision`, body);
+export const previewWithdraw = (id: string, slug: StepSlug) => post<WithdrawPreview>(`/runs/${id}/approvals/${slug}/withdraw-preview`);
+export const withdrawStep = (id: string, slug: StepSlug, body: { reason: string; fingerprint: string }) => post<{ ok: true; runStatus: RunStatus }>(`/runs/${id}/approvals/${slug}/withdraw`, body);
+export const finaliseRun = (id: string) => post<{ id: string; status: "FINALISED"; lockedFrom: string; lockedTo: string; adjustmentsPaid: number }>(`/runs/${id}/finalise`);
+export const unlockRun = (id: string) => post<{ id: string; status: "VOID"; adjustmentsReturned: number }>(`/runs/${id}/unlock`);

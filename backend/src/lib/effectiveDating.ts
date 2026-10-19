@@ -1,6 +1,7 @@
 import { Prisma, type AttendanceAssignment, type DeviceUserMapping, type EmployeeBankAccount, type EmployeeJobHistory, type EmployeeNameHistory, type EmployeeSalary, type EmployeeSalaryLine, type SalaryChangeReason } from "@prisma/client";
 import { HttpError } from "../middleware/errorHandler";
 import { addCalendarDays, businessToday } from "./businessDate";
+import { logger } from "./logger";
 import { prisma } from "./prisma";
 import { getSetting } from "./settings";
 
@@ -507,6 +508,35 @@ export async function payrollLockedBetween(from: Date, to: Date): Promise<{ lock
   }
   return { locked: false };
 }
+
+// Two more seams, for what attendance must know about payroll without importing it (Phase 6, P6-4).
+//   Consumption: has payroll relied on these days? True once a run for the period is submitted for approval, approved or finalised (the lock above is only the last
+//     of those). Attendance's unlock asks it, and warns.
+//   Inputs changed: something payroll reads has moved (attendance was unlocked), so any run waiting for a decision should be checked against its approved figures.
+type PayrollConsumptionCheck = (from: Date, to: Date) => Promise<{ consumed: boolean; period?: string; stage?: "SUBMITTED" | "APPROVED" | "FINALISED" }>;
+let payrollConsumptionCheck: PayrollConsumptionCheck = async () => ({ consumed: false });
+export function setPayrollConsumptionCheck(check: PayrollConsumptionCheck | null): void {
+  payrollConsumptionCheck = check ?? (async () => ({ consumed: false }));
+}
+export async function payrollConsumedBetween(from: Date, to: Date): Promise<{ consumed: boolean; period?: string; stage?: "SUBMITTED" | "APPROVED" | "FINALISED" }> {
+  const locked = await payrollLockedBetween(from, to); // a locked period is a final one, whatever the second check says
+  if (locked.locked) return { consumed: true, period: locked.period ?? iso(from), stage: "FINALISED" };
+  return payrollConsumptionCheck(from, to);
+}
+type PayrollInputsListener = (what: string, actorUserId: string | null) => Promise<void>;
+let payrollInputsListener: PayrollInputsListener = async () => undefined;
+export function setPayrollInputsListener(listener: PayrollInputsListener | null): void {
+  payrollInputsListener = listener ?? (async () => undefined);
+}
+/** Tells payroll that something it reads has moved. Never throws into the caller: the change has already happened and payroll re-checks on its own at every step. */
+export async function notifyPayrollInputsChanged(what: string, actorUserId: string | null): Promise<void> {
+  try {
+    await payrollInputsListener(what, actorUserId);
+  } catch (err) {
+    logger.error({ err, what }, "payroll could not re-check its open runs");
+  }
+}
+
 export async function assertNotInLockedPayroll(day: Date): Promise<void> {
   const r = await payrollLockCheck(day);
   if (r.locked) {

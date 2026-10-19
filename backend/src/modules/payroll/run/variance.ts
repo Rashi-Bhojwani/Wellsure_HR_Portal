@@ -44,7 +44,7 @@ export async function computeVariance(runId: string) {
   const previousCycle = cycleForRules(rules, addCalendarDays(run.cycleStart, -1));
   // At most one live run exists per cycle (a database index), so this is "the previous cycle's run": finalised if it has got that far, otherwise a draft, and the
   // report says which. A discarded, failed or never-calculated run is nothing to compare with.
-  const baseline = await prisma.payrollRun.findFirst({ where: { cycleStart: previousCycle.start, cycleEnd: previousCycle.end, status: { in: ["FINALISED", "CALCULATED"] } } });
+  const baseline = await prisma.payrollRun.findFirst({ where: { cycleStart: previousCycle.start, cycleEnd: previousCycle.end, status: { in: ["FINALISED", "APPROVED", "SUBMITTED", "CALCULATED"] } } });
 
   const ctx = await RuleContext.load();
   const percentRule = ctx.peek<string>("VARIANCE_FLAG_PERCENT");

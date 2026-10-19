@@ -59,6 +59,11 @@ export interface RuleDef {
   placeholder?: unknown;
   /** Offered on the screen as a suggestion, never shipped as a value. */
   suggestion?: string;
+  /**
+   * A question nobody has answered yet that stops this rule being Confirmed, for the values it applies to. It is not a setting and nobody can switch it off: it is removed
+   * by a change to this catalog, made after the answer is recorded in docs/PROGRESS.md. Until then a run that uses such a value is a test, whatever anyone types or notes.
+   */
+  openQuestion?: { id: string; whenValue?: unknown; question: string };
 }
 
 const ROUNDING_NOTE = "A mode (half up, half even, up, down, ceiling, floor) and a number of decimal places.";
@@ -90,7 +95,7 @@ export const RULE_CATALOG: readonly RuleDef[] = [
   { key: "ESI_EMPLOYEE_RATE", group: "Employees' State Insurance", label: "ESI: employee rate", description: "Employee's ESI contribution, as a percentage of gross wages.", affects: "ESI deducted from every covered employee.", shape: { kind: "percent" }, origin: "STATUTORY", whoConfirms: STAT, placeholder: "0.75" },
   { key: "ESI_EMPLOYER_RATE", group: "Employees' State Insurance", label: "ESI: employer rate", description: "Employer's ESI contribution, as a percentage of gross wages.", affects: "Employer cost and the ESI return.", shape: { kind: "percent" }, origin: "STATUTORY", whoConfirms: STAT, placeholder: "3.25" },
   { key: "ESI_WAGE_CEILING", group: "Employees' State Insurance", label: "ESI: monthly wage ceiling", description: "ESI applies only if monthly gross wages are within this amount.", affects: "Who is covered by ESI at all.", shape: { kind: "money" }, origin: "STATUTORY", whoConfirms: STAT, placeholder: "21000" },
-  { key: "ESI_PERIOD_RULE", group: "Employees' State Insurance", label: "ESI: coverage period rule", description: "Whether eligibility is tested every month, or fixed for the half-year contribution period once it starts.", affects: "Whether someone who crosses the ceiling mid-period stays covered.", shape: { kind: "choice", choices: ["MONTHLY", "STICKY_HALF_YEAR"] }, origin: "COMPANY", whoConfirms: "CA" },
+  { key: "ESI_PERIOD_RULE", group: "Employees' State Insurance", label: "ESI: coverage period rule", description: "Whether eligibility is tested every month, or fixed for the half-year contribution period once it starts.", affects: "Whether someone who crosses the ceiling mid-period stays covered.", shape: { kind: "choice", choices: ["MONTHLY", "STICKY_HALF_YEAR"] }, origin: "COMPANY", whoConfirms: "CA", openQuestion: { id: "ESI-HALF-YEAR", whenValue: "STICKY_HALF_YEAR", question: "How the half-year ESI coverage rule works is the developer's reading of it, not something that has been checked. The company's CA needs to say exactly when coverage starts and stops for someone who crosses the wage ceiling part-way through a contribution period. Until that is answered and recorded this value cannot be confirmed." } },
   // ── Who is covered ──
   { key: "PF_ELIGIBLE_TYPES", group: "Who is covered", label: "PF: employment types covered", description: "Which employment types have PF deducted.", affects: "Who has PF at all.", shape: { kind: "employmentTypes" }, origin: "COMPANY", whoConfirms: "CA + HR" },
   { key: "ESI_ELIGIBLE_TYPES", group: "Who is covered", label: "ESI: employment types covered", description: "Which employment types have ESI deducted.", affects: "Who has ESI at all.", shape: { kind: "employmentTypes" }, origin: "COMPANY", whoConfirms: "CA + HR" },

@@ -1,7 +1,7 @@
 import { writeAuditLogs } from "../../lib/audit";
 import { businessToday } from "../../lib/businessDate";
 import { loadCycleRules, recentCycles } from "../../lib/attendanceCycle";
-import { assignmentsBetween, namesOn, payrollLockedBetween } from "../../lib/effectiveDating";
+import { assignmentsBetween, namesOn, notifyPayrollInputsChanged, payrollConsumedBetween } from "../../lib/effectiveDating";
 import { prisma } from "../../lib/prisma";
 import { HttpError } from "../../middleware/errorHandler";
 import { computeAttendance } from "./compute";
@@ -342,15 +342,17 @@ export async function unlockCycle(fromDate: string, toDate: string, input: { rea
   if (reason.length < 5) throw new HttpError(400, "Say why the period is being unlocked (a few words).", "VALIDATION_ERROR");
   const last = await latestAction(fromDate, toDate);
   if (last?.action !== "FINALISE") throw new HttpError(409, "This period isn't finalised, so there is nothing to unlock.", "NOT_FINALISED");
-  const payroll = await payrollLockedBetween(day(fromDate), day(toDate));
-  if (payroll.locked && !input.confirmPayrollConsumed) {
-    throw new HttpError(409, `Payroll for ${payroll.period} has already used this period's attendance. Unlocking it lets attendance change under a payroll that was run on the old figures. Confirm that you understand, or leave it locked.`, "PAYROLL_CONSUMED", { period: payroll.period });
+  const payroll = await payrollConsumedBetween(day(fromDate), day(toDate));
+  if (payroll.consumed && !input.confirmPayrollConsumed) {
+    const stage = payroll.stage === "FINALISED" ? "has already used" : payroll.stage === "APPROVED" ? "has had a run approved on" : "has a run waiting for approval on";
+    throw new HttpError(409, `Payroll for ${payroll.period} ${stage} this period's attendance. Unlocking it lets attendance change under a payroll that was run on the old figures${payroll.stage === "FINALISED" ? "" : ", and voids that run's approval"}. Confirm that you understand, or leave it locked.`, "PAYROLL_CONSUMED", { period: payroll.period, stage: payroll.stage });
   }
   const unlocked = await prisma.$transaction(async (tx) => {
     const { count } = await tx.dailyAttendance.updateMany({ where: { date: { gte: day(fromDate), lte: day(toDate) }, isLocked: true }, data: { isLocked: false } });
-    await tx.attendancePeriodLock.create({ data: { periodStart: day(fromDate), periodEnd: day(toDate), action: "UNLOCK", reason, lockedDays: count, payrollConsumed: payroll.locked, actorUserId: meta.actorUserId } });
-    await writeAuditLogs([{ ...meta, action: "attendance.period.unlocked", entityType: "DailyAttendance", entityId: `${fromDate}..${toDate}`, after: { from: fromDate, to: toDate, unlocked: count, reason, payrollConsumed: payroll.locked, payrollPeriod: payroll.period ?? null } }], tx);
+    await tx.attendancePeriodLock.create({ data: { periodStart: day(fromDate), periodEnd: day(toDate), action: "UNLOCK", reason, lockedDays: count, payrollConsumed: payroll.consumed, actorUserId: meta.actorUserId } });
+    await writeAuditLogs([{ ...meta, action: "attendance.period.unlocked", entityType: "DailyAttendance", entityId: `${fromDate}..${toDate}`, after: { from: fromDate, to: toDate, unlocked: count, reason, payrollConsumed: payroll.consumed, payrollPeriod: payroll.period ?? null } }], tx);
     return count;
   });
+  if (payroll.consumed) await notifyPayrollInputsChanged(`attendance for ${fromDate} to ${toDate} was unlocked`, meta.actorUserId ?? null);
   return { unlocked };
 }

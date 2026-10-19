@@ -85,3 +85,15 @@ payrollRouter.get("/runs/:id/export", view, validate({ params: rv.runIdParamsSch
 payrollRouter.post("/runs/:id/calculate-preview", make, validate({ params: rv.runIdParamsSchema }), runs.runCalculatePreview);
 payrollRouter.post("/runs/:id/calculate", make, validate({ params: rv.runIdParamsSchema, body: rv.runCalculateSchema }), runs.runCalculate);
 payrollRouter.post("/runs/:id/void", make, validate({ params: rv.runIdParamsSchema, body: rv.runVoidSchema }), runs.runVoid);
+
+// Submit, approve, finalise, unlock, publish, bank file (P6-4). The slug says which: run | finalise | unlock | publish | bank-file. Who may make a request is decided
+// in the service by the subject (unlocking needs payroll.unlock, the rest payroll.run) and again by the maker-checker core; deciding is payroll.approve for all of them.
+// A checker may also read the preview: they are shown exactly what the maker saw before they decide.
+payrollRouter.get("/runs/:id/approvals", view, validate({ params: rv.runIdParamsSchema }), runs.runApprovals);
+payrollRouter.post("/runs/:id/approvals/:slug/preview", requireAnyPermission("payroll.run", "payroll.unlock", "payroll.approve"), validate({ params: rv.stepParamsSchema }), runs.stepPreview);
+payrollRouter.post("/runs/:id/approvals/:slug/request", requireAnyPermission("payroll.run", "payroll.unlock"), validate({ params: rv.stepParamsSchema, body: rv.stepRequestSchema }), runs.stepRequest);
+payrollRouter.post("/runs/:id/approvals/:slug/decision", approve, validate({ params: rv.stepParamsSchema, body: rv.stepDecisionSchema }), runs.stepDecision);
+payrollRouter.post("/runs/:id/approvals/:slug/withdraw-preview", requireAnyPermission("payroll.run", "payroll.unlock"), validate({ params: rv.stepParamsSchema }), runs.stepWithdrawPreview);
+payrollRouter.post("/runs/:id/approvals/:slug/withdraw", requireAnyPermission("payroll.run", "payroll.unlock"), validate({ params: rv.stepParamsSchema, body: rv.stepWithdrawSchema }), runs.stepWithdraw);
+payrollRouter.post("/runs/:id/finalise", make, validate({ params: rv.runIdParamsSchema }), runs.runFinalise);
+payrollRouter.post("/runs/:id/unlock", requirePermission("payroll.unlock"), validate({ params: rv.runIdParamsSchema }), runs.runUnlock);

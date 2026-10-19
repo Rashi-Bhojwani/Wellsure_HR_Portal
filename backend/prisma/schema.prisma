@@ -2659,12 +2659,16 @@ model PayrollAdjustment {
 
 // ── Phase 6, P6-3 — payroll runs (docs/plans/PHASE_6.md §14D) ──
 
-// NEW: made, never calculated. CALCULATING/CALCULATED/FAILED: the job's states. VOID: a discarded draft. FINALISED: unreachable until P6-4: a database
-// trigger refuses any change into or out of it unless the transaction has set payroll.finalising, which only the finaliser will do.
+// NEW: made, never calculated. CALCULATING/CALCULATED/FAILED: the job's states. SUBMITTED: waiting for a checker; APPROVED: a checker approved these exact
+// figures. VOID: a discarded draft, or a final run that was unlocked. FINALISED: a database trigger refuses any change into or out of it unless the
+// transaction has set payroll.finalising (into it, and only from APPROVED with both approvals consumed) or payroll.unlocking (out of it, to VOID, and only
+// while nothing has been released against it). Only run/finaliser.ts sets either.
 enum PayrollRunStatus {
   NEW
   CALCULATING
   CALCULATED
+  SUBMITTED
+  APPROVED
   FAILED
   VOID
   FINALISED
@@ -2730,10 +2734,14 @@ model PayrollRun {
   voidedAt           DateTime?        @map("voided_at") @db.Timestamptz(3)
   voidedByUserId     String?          @map("voided_by_user_id")
   voidReason         String?          @map("void_reason")
+  finalisedAt        DateTime?        @map("finalised_at") @db.Timestamptz(3)
+  finalisedByUserId  String?          @map("finalised_by_user_id")
 
   items       PayrollRunItem[]
   lines       PayrollRunLine[]
   adjustments PayrollAdjustment[]
+  locks       PayrollPeriodLock[]
+  releases    PayrollRunRelease[]
 
   @@index([cycleStart, status])
   @@map("payroll_runs")
@@ -2802,4 +2810,49 @@ model PayrollRunLine {
   @@index([runId, code])
   @@index([source, sourceRef])
   @@map("payroll_run_lines")
+}
+
+// ── Phase 6, P6-4 — the payroll lock and what has been released (docs/plans/PHASE_6.md §14F) ──
+
+enum PayrollLockAction {
+  FINALISE
+  UNLOCK
+}
+
+// One row each time a payroll cycle is finalised or unlocked, append-only. A cycle is locked while its latest row is FINALISE. The real payroll lock reads this.
+model PayrollPeriodLock {
+  id          String            @id @default(cuid())
+  seq         Int               @unique @default(autoincrement())
+  cycleStart  DateTime          @map("cycle_start") @db.Date
+  cycleEnd    DateTime          @map("cycle_end") @db.Date
+  cycleLabel  String            @map("cycle_label")
+  action      PayrollLockAction
+  runId       String            @map("run_id")
+  run         PayrollRun        @relation(fields: [runId], references: [id], onDelete: Restrict)
+  runHash     String?           @map("run_hash")
+  reason      String?
+  actorUserId String            @map("actor_user_id")
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([cycleStart, cycleEnd, seq])
+  @@map("payroll_period_locks")
+}
+
+enum PayrollReleaseKind {
+  PAYSLIPS_PUBLISHED
+  BANK_FILE_GENERATED
+}
+
+// Written (P6-5) in the same transaction as publishing payslips or generating a bank file. While one exists for a run, the run's period cannot be unlocked.
+model PayrollRunRelease {
+  id          String             @id @default(cuid())
+  runId       String             @map("run_id")
+  run         PayrollRun         @relation(fields: [runId], references: [id], onDelete: Restrict)
+  kind        PayrollReleaseKind
+  reference   String?
+  actorUserId String             @map("actor_user_id")
+  createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([runId, kind])
+  @@map("payroll_run_releases")
 }

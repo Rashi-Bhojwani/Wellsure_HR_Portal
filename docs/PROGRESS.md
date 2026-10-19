@@ -17,7 +17,7 @@ committed).
 | 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
 | 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | ✅ Done (2026-10-03) — commits A, B, C, D, D2, E1, E1.1, E2, E3, F and G (mobile bottom bar + PWA), plus interim commits. Full review — every screen and URL, every permission, what's stubbed, open questions, risks for Phase 6 — in [`docs/plans/PHASE_5_REVIEW.md`](plans/PHASE_5_REVIEW.md). Plan and as-built notes per commit in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
 | 5.5 | AWS production environment and go-live hardening | Not started |
-| 6 | Payroll | **In progress, built locally (AWS comes last). Plan approved 2026-10-16 ([`docs/plans/PHASE_6.md`](plans/PHASE_6.md)); P6-1 Foundations approved; P6-2 Salary approved; P6-3 The calculation built, awaiting your review; P6-4 to P6-6 not started.** One commit at a time, a pause after each |
+| 6 | Payroll | **In progress, built locally (AWS comes last). Plan approved 2026-10-16 ([`docs/plans/PHASE_6.md`](plans/PHASE_6.md)); P6-1 Foundations approved; P6-2 Salary approved; P6-3 The calculation approved; P6-4 Submit, approve, finalise and the lock built, awaiting your review; P6-5 and P6-6 not started.** One commit at a time, a pause after each |
 | 7 | Tax & benefits | Not started (planned after Phase 6 is reviewed) |
 | 8 | Extras | Not started |
 
@@ -4848,6 +4848,18 @@ Built to the design written into `docs/plans/PHASE_6.md` §14D before any code; 
 - **Found on the way:** carrying the share of a month as a decimal let a person who lost every day of a short month come out with a speck above zero and be paid the whole conveyance; it is now an exact fraction (a property test found it). The PT month exceptions moved onto the slab they replace.
 - Verified: full backend suite alone (144 files, 1,350 tests), frontend tests, typecheck, lint and drift clean in both projects; 20 mutation checks all caught (two first survived and led to a test being sharpened and a redundant line removed); a live walkthrough with a worker and two browsers. Detail in the Phase 6 plan §14E; LOCAL_ASSUMPTIONS rows 19 (updated) and 20 to 24.
 
+### Phase 6, P6-4 of six: submit, approve, finalise and the real lock (2026-10-17)
+
+Built to the design written into `docs/plans/PHASE_6.md` §14F before any code; what exists, what I decided (rules 53 to 64) and how it is proved are in §14G.
+
+- **A run that leaves anybody out cannot be submitted.** The people left out are the first thing on the submit page, every name with the reason in words, and the server refuses to submit while there is anyone, whatever the preview said and even when the rules are confirmed. Also refused, each in words: figures that moved since the calculation, a problem that must be put right (with names), a Placeholder or changed rule, nobody payable. There is no waiver; if you want one it should be its own approval.
+- **Submit, approve, finalise.** A full preview first (who is left out, who is affected, the change from last month, who could approve), then an explicit confirmation. The approval is bound to a hash of the exact figures and is voided by any change: a change that announces itself voids it at once, and one that does not is caught the next time the run is read, decided on or finalised. Closing the period is a second approval, and the person who decides is never the person who carries it out.
+- **The real payroll lock.** A finalised period refuses every history change, cancellation and separation dated inside it. The log of locks and unlocks is append-only in the database.
+- **Unlock** needs the unlock permission, a reason and a second person, and is **refused once payslips are published or a bank file exists** (checked in the service and again by two database triggers).
+- **All six subjects wired:** approving a run, closing a period, unlocking a period, publishing payslips, generating the bank file (both are approvals on a final run now; what they authorise is P6-5, and the bank file also needs a Confirmed bank layout that does not exist yet), and changing a Confirmed rule (P6-1). Run approval and finalising show "only X can approve this" when one person can, and an error when nobody can.
+- **ESI half-year rule:** recorded as an open question on the rule itself that blocks it from being Confirmed (`OPEN_QUESTION`, whatever is typed or noted), shown on the rules screen, and listed under Open questions below.
+- Verified: full backend suite alone (145 files, 1,385 tests), frontend tests, typecheck, lint and drift clean in both projects; 25 of 26 mutation checks caught (the one survivor is a deliberate second line of defence, and removing both is caught); the database's refusals proved by dropping each trigger in a rolled-back transaction; a live walkthrough with a worker and three browsers, which found that a checker could not open the preview (fixed). Detail in the Phase 6 plan §14G; LOCAL_ASSUMPTIONS rows 19 and 22 (updated) and 25 to 27.
+
 ## Open questions
 
 - [x] **Approval Workflows — dropped (user decision 2026-10-03).** No
@@ -4856,6 +4868,8 @@ Built to the design written into `docs/plans/PHASE_6.md` §14D before any code; 
       written into spec §7.8 so it isn't reintroduced. The Workflow app and
       Admin Tools → Approval Workflows placeholders were removed (Phase 5
       G prep).
+
+- [ ] **ESI half-year ("sticky") coverage rule: exactly how it works** (user, 2026-10-17: "record it explicitly as an open question that blocks that rule from being marked Confirmed"). The mechanics are the developer's reading of the rule (Phase 6 plan rule 43), not something that has been checked. The user's CA needs to say when coverage starts and stops for someone who crosses the wage ceiling part-way through a contribution period. Until it is answered and recorded here, the value `STICKY_HALF_YEAR` of the rule "ESI: coverage period rule" **cannot be marked Confirmed**: the rule carries `openQuestion` ESI-HALF-YEAR in `shared/constants/payrollRules.ts`, the confirm preview says so, and confirming is refused with `OPEN_QUESTION`; a run that uses it stays a test and cannot be submitted. The monthly value is not held up. Cleared only by removing the `openQuestion` after the answer is written here.
 
 - [ ] **Privacy notice (DPDP Act 2023) and Terms of Service wording —
       the user supplies it. Needed BEFORE real employee data goes onto

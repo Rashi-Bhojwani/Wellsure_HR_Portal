@@ -8,6 +8,17 @@ reimbursements, and full & final settlement. See spec §7.5 and
 
 ## Built so far
 
+### P6-4, submit, approve, finalise and the lock (`run/closing.ts`, `run/finaliser.ts`, `run/lock.ts`, `run/submitCheck.ts`)
+
+| File | What it is |
+|---|---|
+| `run/submitCheck.ts` | What stands between a calculated run and a second person: anyone left out (named, with the reason), blocking problems, placeholder or changed rules, nobody payable, figures that moved. The server repeats it on submit; the preview shows the same list. |
+| `run/closing.ts` | The five run-level approvals (`run`, `finalise`, `unlock`, `publish`, `bank-file`) as one shape: preview, request (repeats every check, needs the preview's fingerprint), decide (bound to the hash the checker saw), withdraw or reopen (previewed). Registers the RUN_APPROVAL, PERIOD_FINALISE, PERIOD_UNLOCK, PAYSLIP_PUBLISH and BANK_FILE adapters, and keeps a run's state true to its approval (`reverifyRun`). |
+| `run/finaliser.ts` | The only file that may make a run final or unlock one. Each is one transaction that sets the database switch (`payroll.finalising` / `payroll.unlocking`); a source scan keeps it to this file. |
+| `run/lock.ts` | The real payroll lock and the "payroll has relied on this attendance" answer, registered in `wiring.ts`. |
+
+A run is SUBMITTED or APPROVED only while its approval is live: voiding the approval for any reason puts the run back to CALCULATED in the same transaction (`onVoided` in the approval core). A change that moves the figures voids the approval at once (adjustments, salary revisions, rule edits and an attendance unlock announce themselves through `notifyPayrollInputsChanged`), and anything that does not announce itself is caught when the run is read, decided on or finalised, because each of those recomputes the hash.
+
 ### P6-3, the calculation (`run/`)
 
 | File | What it is |
@@ -21,7 +32,7 @@ reimbursements, and full & final settlement. See spec §7.5 and
 | `run/service.ts`, `run/variance.ts`, `run/export.ts` | Readiness, make, preview and request a calculation, discard, read; the variance report; the watermarked register workbook. |
 | `run/providers.ts` | The two seams earlier phases left: what each person was paid (arrears, from a FINALISED run) and the daily rate for leave encashment. |
 
-A run can never become FINALISED by anything here: the database refuses unless the transaction has set `payroll.finalising`, which only P6-4's finaliser will do (a source scan keeps it that way). Payroll code reads attendance only through `finalisedAttendanceDays` and year-end items only through `committedEncashments`.
+A run can never become FINALISED by anything but the finaliser: the database refuses unless the transaction has set `payroll.finalising`, the run was APPROVED and its two approvals are used up (a source scan keeps the switch to `run/finaliser.ts`). Payroll code reads attendance only through `finalisedAttendanceDays` and year-end items only through `committedEncashments`.
 
 ### P6-2, salary (`salary/`, `items.ts`)
 

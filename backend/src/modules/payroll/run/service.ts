@@ -12,6 +12,7 @@ import { canonicalDecimal, dec } from "../money";
 import { namesOfUsers } from "../names";
 import { RuleContext, pinStatuses, watermarkFromStatuses, type RulePin, type Watermark } from "../rules/context";
 import { employeeIdOfUser } from "../salary/guards";
+import { reverifyRun } from "./closing";
 import { computeRun, enqueueCalculation } from "./engine";
 import { gatherRunInputs } from "./gather";
 import { RulesMissingError, loadRunRules, type MissingRule } from "./rules";
@@ -102,7 +103,19 @@ export async function voidRun(runId: string, reason: string, actor: { userId: st
   const run = await prisma.payrollRun.findUnique({ where: { id: runId } });
   if (!run) throw new HttpError(404, "No such payroll run.", "NOT_FOUND");
   const { count } = await prisma.payrollRun.updateMany({ where: { id: runId, status: { in: ["NEW", "CALCULATED", "FAILED"] } }, data: { status: "VOID", voidedAt: new Date(), voidedByUserId: actor.userId, voidReason: why } }); // allow-clock: an instant
-  if (count !== 1) throw new HttpError(409, run.status === "CALCULATING" ? "It is being calculated. Wait for that to finish, then discard it." : `A run that is ${RUN_STATUS_LABEL[run.status].toLowerCase()} cannot be discarded.`, "CONFLICT");
+  if (count !== 1) {
+    throw new HttpError(
+      409,
+      run.status === "CALCULATING"
+        ? "It is being calculated. Wait for that to finish, then discard it."
+        : run.status === "SUBMITTED" || run.status === "APPROVED"
+          ? "It has been sent for approval. Withdraw it from approval first, then it can be discarded."
+          : run.status === "FINALISED"
+            ? "A final run is never discarded. Unlock the period if it has to be corrected."
+            : `A run that is ${RUN_STATUS_LABEL[run.status].toLowerCase()} cannot be discarded.`,
+      "CONFLICT",
+    );
+  }
   await recordEvent({ subjectType: "PAYROLL_RUN", subjectId: runId, type: "VOIDED", actorUserId: actor.userId, payload: { reason: why } });
   await writeAuditLog({ actorUserId: actor.userId, action: "payroll.run.voided", entityType: "PayrollRun", entityId: runId, after: { reason: why, cycle: run.cycleLabel }, ipAddress: actor.ip ?? null });
 }
@@ -115,9 +128,14 @@ async function loadRun(runId: string) {
   return run;
 }
 
+function refuseIfNotCalculable(status: string): void {
+  if (status === "VOID" || status === "FINALISED") throw new HttpError(409, `A run that is ${RUN_STATUS_LABEL[status as keyof typeof RUN_STATUS_LABEL].toLowerCase()} is not calculated again.`, "CONFLICT");
+  if (status === "SUBMITTED" || status === "APPROVED") throw new HttpError(409, "This run has been sent for approval, so it is not calculated again. Withdraw it from approval first (which voids the approval), then calculate.", "RUN_LOCKED_FOR_APPROVAL");
+}
+
 export async function previewCalculation(runId: string) {
   const run = await loadRun(runId);
-  if (run.status === "VOID" || run.status === "FINALISED") throw new HttpError(409, `A run that is ${RUN_STATUS_LABEL[run.status].toLowerCase()} is not calculated again.`, "CONFLICT");
+  refuseIfNotCalculable(run.status);
   const computed = await computeRun({ start: run.cycleStart, end: run.cycleEnd, label: run.cycleLabel });
   const before = new Map((await prisma.payrollRunItem.findMany({ where: { runId } })).map((i) => [i.employeeId, i]));
   const names = await namesOn(computed.items.map((i) => i.employeeId), run.cycleEnd);
@@ -159,7 +177,7 @@ export function runNotices(ptNotSet: boolean, lwfNotSet: boolean): string[] {
 
 export async function requestCalculation(runId: string, fingerprint: string, actor: { userId: string; ip?: string | null }) {
   const run = await loadRun(runId);
-  if (run.status === "VOID" || run.status === "FINALISED") throw new HttpError(409, `A run that is ${RUN_STATUS_LABEL[run.status].toLowerCase()} is not calculated again.`, "CONFLICT");
+  refuseIfNotCalculable(run.status);
   // Taken over after a crash: still marked as calculating, but the worker holding it has gone (its lease ran out).
   if (run.status === "CALCULATING") {
     if (run.leaseExpiresAt && run.leaseExpiresAt > new Date()) throw new HttpError(409, "It is being calculated right now.", "CONFLICT"); // allow-clock: an instant
@@ -195,6 +213,7 @@ const runRow = (r: Awaited<ReturnType<typeof loadRun>>) => ({
   failureReason: r.failureReason,
   createdAt: r.createdAt.toISOString(),
   voidReason: r.voidReason,
+  finalisedAt: r.finalisedAt?.toISOString() ?? null,
 });
 
 export async function listRuns(page: number, pageSize: number) {
@@ -204,6 +223,8 @@ export async function listRuns(page: number, pageSize: number) {
 }
 
 export async function getRun(runId: string) {
+  // A run waiting for a decision is only that while its figures are the ones it was submitted with: looking at it checks.
+  await reverifyRun(runId, "the figures changed", null);
   const run = await loadRun(runId);
   const statuses = await pinStatuses((run.pins as unknown as RulePin[]) ?? []);
   const watermark = run.runHash === null ? { test: false, text: "", rules: [] } : watermarkFromStatuses(statuses);

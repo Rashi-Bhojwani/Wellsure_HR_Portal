@@ -2,7 +2,7 @@ import { Prisma, type AdjustmentDirection } from "@prisma/client";
 import { z } from "zod";
 import { ARREARS_CODE } from "@shared/constants/payrollSalary";
 import { businessToday } from "../../../lib/businessDate";
-import { namesOn } from "../../../lib/effectiveDating";
+import { namesOn, notifyPayrollInputsChanged } from "../../../lib/effectiveDating";
 import { writeAuditLog } from "../../../lib/audit";
 import { prisma } from "../../../lib/prisma";
 import { HttpError } from "../../../middleware/errorHandler";
@@ -89,6 +89,7 @@ export async function addAdjustment(rawInput: unknown, fingerprint: string, acto
     return created;
   });
   await writeAuditLog({ actorUserId: actor.userId, action: "payroll.adjustment.added", entityType: "PayrollAdjustment", entityId: row.id, after: { employeeId: input.employeeId, componentCode: input.componentCode, direction: input.direction, source: "MANUAL" }, ipAddress: actor.ip ?? null });
+  await notifyPayrollInputsChanged("an adjustment was added", actor.userId);
   return { id: row.id };
 }
 
@@ -110,6 +111,7 @@ export async function cancelAdjustment(id: string, reason: string, actor: { user
     throw err;
   }
   await writeAuditLog({ actorUserId: actor.userId, action: "payroll.adjustment.cancelled", entityType: "PayrollAdjustment", entityId: id, before: { status: "PENDING" }, after: { status: "CANCELLED", reason: why }, ipAddress: actor.ip ?? null });
+  await notifyPayrollInputsChanged("an adjustment was cancelled", actor.userId);
 }
 
 export async function listAdjustments(filter: { employeeId?: string; status?: "PENDING" | "CONSUMED" | "CANCELLED"; page: number; pageSize: number }) {

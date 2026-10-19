@@ -32,9 +32,19 @@ export interface RuleView {
   sourceLabel: string | null;
   /** Typing the value again is required to confirm it. */
   requiresRetype: boolean;
+  /** An unanswered question that stops this rule being Confirmed, if it applies to the value it has now. */
+  openQuestion: { id: string; question: string } | null;
   current: VersionView | null;
   /** The most recent Confirmed version, shown beside an edited one so nothing silently falls back and nothing is lost from view. */
   lastConfirmed: VersionView | null;
+}
+
+/** The open question on a rule, when it applies to the value in question (a question with no value named applies to all of them). */
+function openQuestionFor(def: RuleDef, value: unknown): { id: string; question: string } | null {
+  const q = def.openQuestion;
+  if (!q) return null;
+  if (q.whenValue !== undefined && (value === undefined || canonicalJson(value) !== canonicalJson(q.whenValue))) return null;
+  return { id: q.id, question: q.question };
 }
 
 function viewOf(def: RuleDef, data: Awaited<ReturnType<typeof loadItems>>): RuleView {
@@ -52,6 +62,7 @@ function viewOf(def: RuleDef, data: Awaited<ReturnType<typeof loadItems>>): Rule
     status: s.status,
     sourceLabel: s.sourceLabel,
     requiresRetype: def.origin === "STATUTORY",
+    openQuestion: openQuestionFor(def, s.current?.value),
     current: s.current,
     lastConfirmed: s.lastConfirmed,
   };
@@ -159,8 +170,10 @@ export interface ConfirmPreview {
 export async function previewConfirm(key: string, actorUserId: string): Promise<ConfirmPreview> {
   const def = defOf(key);
   const data = await loadItems(KIND, [key]);
-  const p = await previewConfirmation("RULE_CONFIRM", KIND, key, summarise(data, key), actorUserId);
-  return { key, label: def.label, ...p, requiresRetype: def.origin === "STATUTORY" };
+  const summary = summarise(data, key);
+  const p = await previewConfirmation("RULE_CONFIRM", KIND, key, summary, actorUserId);
+  const open = openQuestionFor(def, summary.current?.value);
+  return { key, label: def.label, ...p, blocked: open ? `This cannot be confirmed yet. ${open.question}` : p.blocked, requiresRetype: def.origin === "STATUTORY" };
 }
 
 export async function confirmRule(
@@ -170,6 +183,9 @@ export async function confirmRule(
 ): Promise<RuleView> {
   const def = defOf(key);
   const summary = summarise(await loadItems(KIND, [key]), key);
+  // An open question comes before everything else, so nothing typed, noted or retyped can get past it.
+  const open = openQuestionFor(def, summary.current?.value);
+  if (open) throw new HttpError(409, `This cannot be confirmed yet. ${open.question}`, "OPEN_QUESTION", { questionId: open.id });
   await confirmVersion(
     "RULE_CONFIRM",
     KIND,

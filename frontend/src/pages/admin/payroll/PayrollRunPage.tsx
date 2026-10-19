@@ -8,6 +8,7 @@ import * as payrollApi from "../../../api/payroll";
 import type { RunDetail, RunItemRow, VarianceRow } from "../../../api/payroll";
 import { CalculateModal } from "../../../components/payroll/CalculateModal";
 import { PlaceholderBanner } from "../../../components/payroll/PlaceholderBanner";
+import { RunApprovalPanel } from "../../../components/payroll/RunApprovalPanel";
 import { RunItemDrawer } from "../../../components/payroll/RunItemDrawer";
 import { useAuth } from "../../../hooks/useAuth";
 import { apiErrorMessage } from "../../../lib/apiError";
@@ -18,8 +19,8 @@ import { RUN_STATUS_COLOR, VARIANCE_TAG_LABEL } from "./runText";
 
 const { Title, Text } = Typography;
 
-// Payroll → one payroll run (Phase 6 P6-3): where it stands, who is in it and why each figure is what it is, how it differs from last month, and what it used. Up to
-// Review: submitting, approving and finalising are the next commit. A run on Placeholder rules carries the TEST banner here and in the workbook.
+// Payroll → one payroll run (Phase 6 P6-3, P6-4): where it stands, who is in it and why each figure is what it is, how it differs from last month, what it used, and
+// the road from a draft to a final, locked month (submit, approve, close the period). A run on Placeholder rules carries the TEST banner here and in the workbook.
 
 export function PayrollRunPage() {
   const { id = "" } = useParams();
@@ -76,6 +77,7 @@ export function PayrollRunPage() {
         </Space>
       </Flex>
       {run.runHash && <PlaceholderBanner watermark={run.watermark} />}
+      <RunApprovalPanel run={run} />
       {run.status === "CALCULATING" && (
         <Alert type="info" showIcon title="Calculating" description={<Progress percent={run.progress.total ? Math.floor((run.progress.done * 100) / run.progress.total) : 0} status="active" />} />
       )}
