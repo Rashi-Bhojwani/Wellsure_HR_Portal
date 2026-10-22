@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
-import { generate } from "otplib";
+import { generate as generateAt } from "otplib";
 import { prisma } from "../../../lib/prisma";
 import { cleanupTestData, type TestOrgMasters } from "../../../lib/__tests__/testHelpers";
 import { app, cleanupTestRole, cleanupTestUser, clearRateLimits, createTestOrgMasters, createTestUser, TEST_PASSWORD } from "./authTestHelpers";
@@ -10,6 +10,15 @@ import { decryptTotpSecret } from "../totp";
 // service setup) and a login from a role that requires 2FA (a
 // requires_totp_setup challenge instead — setup/verify go through the
 // challengeToken and verify itself completes the login).
+// A code is valid for its 30-second step and the server checks it with no tolerance, so a code made in the last moments of a step can expire between being made and
+// being checked (this failed once in CI, 401 instead of 204). Wait for the start of a fresh step when fewer than three seconds remain.
+const STEP_MS = 30_000;
+async function generate(opts: { secret: string }): Promise<string> {
+  const left = STEP_MS - (Date.now() % STEP_MS);
+  if (left < 3000) await new Promise((r) => setTimeout(r, left + 50));
+  return generateAt(opts);
+}
+
 async function enrollTotp(employeeCode: string): Promise<{ accessToken: string; secret: string }> {
   const login = await request(app).post("/api/auth/login").send({ employeeCode, password: TEST_PASSWORD });
 
