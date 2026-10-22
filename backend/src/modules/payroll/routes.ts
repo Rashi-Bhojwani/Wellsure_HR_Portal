@@ -12,6 +12,7 @@ import { memoryUpload } from "../../lib/uploads";
 import { employeeSalaryQuerySchema } from "./salary/employees";
 import { ruleGate, layoutGate } from "./gates";
 import * as setup from "./setup/controller";
+import { compareRegistersRoute, compareUpload } from "./compare/controller";
 import { setupAreaParamsSchema, setupSignoffSchema, checkersQuerySchema, payrollAuditQuerySchema, ruleConfirmSchema, ruleEditPreviewSchema, ruleEditSchema, ruleKeyParamsSchema } from "./validators";
 
 // Payroll. Every route here is gated on keys a manager can never hold (a test fails if any becomes manager-grantable) and none has a TEAM scope:
@@ -36,6 +37,9 @@ payrollRouter.get("/setup/ready", requirePermission("payroll.rules.view"), setup
 payrollRouter.get("/setup/access", requireAnyPermission("payroll.rules.view", "role.view"), setup.access);
 payrollRouter.post("/setup/signoffs/:area/preview", requirePermission("payroll.approve"), validate({ params: setupAreaParamsSchema }), setup.signoffPreview);
 payrollRouter.post("/setup/signoffs/:area", requirePermission("payroll.approve"), validate({ params: setupAreaParamsSchema, body: setupSignoffSchema }), setup.signoff);
+
+// Comparing two registers (ours against greytHR's): two uploads read in memory and dropped, nothing stored. Salary and statutory reports' permission.
+payrollRouter.post("/compare", requirePermission("reports.salary.view"), compareUpload, compareRegistersRoute);
 
 // Who could decide an action (made visible rather than silently blocking)
 payrollRouter.get("/approvals/checkers", requireAnyPermission("payroll.rules.view", "payroll.run", "payroll.approve", "payroll.rules.confirm"), validate({ query: checkersQuerySchema }), controller.checkers);

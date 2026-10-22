@@ -1,3 +1,4 @@
+import { getSetting } from "../../../lib/settings";
 import { storageService } from "../../../integrations/storage";
 import { renderPdf } from "../../../lib/pdf/renderer";
 import { prisma } from "../../../lib/prisma";
@@ -104,6 +105,6 @@ export async function draftPreview(runId: string, employeeId: string) {
 
 export async function draftPreviewPdf(runId: string, employeeId: string): Promise<Buffer> {
   const { content, watermark } = await draftPreview(runId, employeeId);
-  const { pdf } = await renderPdf(payslipHtml(content, { watermark: watermark ?? "DRAFT — NOT A PAYSLIP" }), new Date(0)); // allow-clock: a fixed PDF date, not a business date
+  const { pdf } = await renderPdf(payslipHtml(content, { watermark: watermark ?? ((await getSetting<boolean>("demo.company", false)) === true ? "DEMO COMPANY — NOT REAL" : "DRAFT — NOT A PAYSLIP") }), new Date(0)); // allow-clock: a fixed PDF date, not a business date
   return pdf;
 }

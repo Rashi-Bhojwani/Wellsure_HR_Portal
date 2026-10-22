@@ -105,6 +105,13 @@ const EXTRA_ALLOWED: Record<string, number[]> = {
   "run/outputs.ts": [300],
   "run/layout.ts": [20, 60, 80, 500],
   "run/layouts.ts": [20, 500],
+  // The register comparison (P6-6): the length limits of the upload's text fields and its size in megabytes, the most rows a register may have, an HTTP status, and the widths of the
+  // result workbook's columns. None is a payroll figure.
+  "compare/controller.ts": [20, 40, 80, 1024, 4000],
+  "compare/parse.ts": [501, 20000],
+  "compare/service.ts": [28, 36, 46, 50],
+  // The sign-off lists at most this many names of people still missing a detail.
+  "setup/signoffs.ts": [25],
 };
 
 export function numericLiteralsIn(src: string, extra: number[] = []): Array<{ line: number; text: string }> {

@@ -3,6 +3,7 @@ import { logger } from "../lib/logger";
 import { prisma } from "../lib/prisma";
 import { closePdfRenderer } from "../lib/pdf/renderer";
 import { assertLeastPrivilegedDatabaseRole } from "../lib/dbRoles";
+import { assertNoDemoCompany } from "../lib/demoGuard";
 import { initFieldEncryption } from "../lib/fieldKeys";
 import { gracefulShutdown } from "../lib/lifecycle";
 import { redis } from "../lib/redis";
@@ -17,6 +18,7 @@ import { bullCountsFn, startQueueMetrics } from "../jobs/queueMetrics";
 
 export async function runWorker(): Promise<void> {
   await assertLeastPrivilegedDatabaseRole(prisma, env.APP_ENV); // outside development: not as a role that could rewrite the audit trail
+  await assertNoDemoCompany(prisma, env.APP_ENV); // outside development: never with the made-up demo company in the database
   await initFieldEncryption();
   await redis.connect();
   await startSocketEmitter(); // live events from jobs reach the api's clients

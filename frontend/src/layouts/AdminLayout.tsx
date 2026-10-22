@@ -33,6 +33,8 @@ import { useAuth } from "../hooks/useAuth";
 import { NotificationBell } from "../components/common/NotificationBell";
 import { SecurityEventsBanner } from "../components/access/SecurityEventsBanner";
 
+import { DemoCompanyBanner } from "../components/common/DemoCompanyBanner";
+
 const { Header, Content, Footer } = Layout;
 const { Text } = Typography;
 const { useBreakpoint } = Grid;
@@ -311,6 +313,7 @@ function AdminLayoutInner() {
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
+      <DemoCompanyBanner />
       <TopBar onOpenMenu={() => setDrawerOpen(true)} />
       <SubBar />
 

@@ -12,6 +12,7 @@ const healthy = (): PreflightProbes => ({
   databaseRoleProblems: async () => [],
   encryptionRoundTrip: async () => true,
   developmentSeedPresent: async () => false,
+  demoCompanyPresent: async () => false,
 });
 const staging = { appEnv: "staging", sesFrom: "no-reply@example.org", securityAlertEmail: "owners@example.org", breakGlassTopicArn: "arn:aws:sns:ap-south-1:1:breakglass" };
 const byId = (rs: Awaited<ReturnType<typeof runPreflight>>) => Object.fromEntries(rs.map((r) => [r.id, r]));
@@ -20,7 +21,7 @@ describe("preflight", () => {
   it("passes a healthy environment", async () => {
     const r = await runPreflight(staging, healthy());
     expect(blockingFailures(r)).toEqual([]);
-    expect(r.map((x) => x.id)).toEqual(["migrations", "catalog", "encryption", "demo-data", "db-role", "alert-email", "ses-sender", "alert-deliverable", "breakglass-alarm"]);
+    expect(r.map((x) => x.id)).toEqual(["migrations", "catalog", "encryption", "demo-data", "demo-company", "db-role", "alert-email", "ses-sender", "alert-deliverable", "breakglass-alarm"]);
     expect(await bootstrapRefusal(staging, healthy())).toBeNull();
   });
 
@@ -50,6 +51,11 @@ describe("preflight", () => {
     }
     expect(byId(await runPreflight({ ...staging, appEnv: "development" }, seeded))["demo-data"]?.status).toBe("skip");
     expect(byId(await runPreflight(staging, healthy()))["demo-data"]?.status).toBe("pass");
+    // The demo company has its own check, with the same rule.
+    const withDemo = { ...healthy(), demoCompanyPresent: async () => true };
+    expect(byId(await runPreflight(staging, withDemo))["demo-company"]).toMatchObject({ status: "fail", detail: expect.stringContaining("DEMO COMPANY") });
+    expect(byId(await runPreflight({ ...staging, appEnv: "development" }, withDemo))["demo-company"]?.status).toBe("skip");
+    expect(byId(await runPreflight(staging, healthy()))["demo-company"]?.status).toBe("pass");
   });
 
   it("a probe that throws is a failed check, not a crash", async () => {

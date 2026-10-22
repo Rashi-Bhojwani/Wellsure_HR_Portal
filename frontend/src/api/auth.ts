@@ -84,6 +84,8 @@ export interface MeResponse {
   dataScope: "SELF" | "TEAM" | "ALL";
   totpEnabled: boolean;
   privacyNoticeAccepted: boolean;
+  /** The development database holds the made-up demo company: every screen says so. */
+  demoCompany?: boolean;
 }
 
 export async function me(): Promise<MeResponse> {

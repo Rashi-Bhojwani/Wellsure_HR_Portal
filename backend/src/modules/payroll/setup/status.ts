@@ -222,7 +222,7 @@ export async function buildSetupReport(): Promise<SetupReport> {
   const plain = new Map<string, unknown>(RULE_CATALOG.map((d, i) => [d.key, d.sensitiveClass ? undefined : summaries[i]!.current?.value]));
   const items: SetupItem[] = [...ruleItems(summaries, plain), ...(await salaryItems()), ...(await layoutItems()), ...(await peopleItems()), ...(await safetyItems(demo))];
   const sections: SetupSection[] = SECTION_ORDER.map((id) => ({ id, ...SECTION_TEXT[id], items: items.filter((i) => i.section === id) }));
-  return { generatedAt: new Date().toISOString(), environment: env.APP_ENV, demo, sections };
+  return { generatedAt: new Date().toISOString() /* allow-clock: the instant the report was made */, environment: env.APP_ENV, demo, sections };
 }
 
 /** What is missing before the first real run, from the same report. Red until every required item is Confirmed and nothing is wrong. */

@@ -1010,3 +1010,52 @@ export async function previewSignoff(area: SetupArea): Promise<SignoffPreview> {
 export async function giveSignoff(area: SetupArea, body: { fingerprint: string; note: string }): Promise<{ id: string }> {
   return (await apiClient.post(`${base}/setup/signoffs/${area}`, body)).data;
 }
+
+// ── Comparing two registers (P6-6) ──
+
+export type RegisterSource = "OWN" | "GENERIC" | "GREYTHR";
+export interface CompareDifference {
+  label: string;
+  a: string | null;
+  b: string | null;
+  difference: string;
+  percent: string | null;
+  flagged: boolean;
+}
+export interface CompareResult {
+  a: { label: string; people: number; columns: string[]; ignoredColumns: string[] };
+  b: { label: string; people: number; columns: string[]; ignoredColumns: string[] };
+  options: { toleranceAmount: string; tolerancePercent: string };
+  summary: { matchedPeople: number; identical: number; differing: number; flagged: number; onlyInA: number; onlyInB: number };
+  people: Array<{ code: string; name: string | null; flagged: boolean; differences: CompareDifference[] }>;
+  onlyInA: Array<{ code: string; name: string | null }>;
+  onlyInB: Array<{ code: string; name: string | null }>;
+  columns: { matched: string[]; onlyInA: string[]; onlyInB: string[] };
+  totals: Array<{ label: string; a: string; b: string; difference: string }>;
+}
+export interface CompareForm {
+  a: File;
+  b: File;
+  labelA: string;
+  labelB: string;
+  sourceA: RegisterSource;
+  sourceB: RegisterSource;
+  toleranceAmount: string;
+  tolerancePercent: string;
+  aliases: Record<string, string>;
+}
+function compareBody(f: CompareForm, format: "json" | "xlsx"): FormData {
+  const body = new FormData();
+  body.append("a", f.a);
+  body.append("b", f.b);
+  for (const k of ["labelA", "labelB", "sourceA", "sourceB", "toleranceAmount", "tolerancePercent"] as const) body.append(k, f[k]);
+  body.append("aliases", JSON.stringify(f.aliases));
+  body.append("format", format);
+  return body;
+}
+export async function compareRegisters(f: CompareForm): Promise<CompareResult> {
+  return (await apiClient.post(`${base}/compare`, compareBody(f, "json"))).data;
+}
+export async function downloadComparison(f: CompareForm): Promise<Blob> {
+  return (await apiClient.post(`${base}/compare`, compareBody(f, "xlsx"), { responseType: "blob" })).data as Blob;
+}

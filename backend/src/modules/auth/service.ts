@@ -584,6 +584,8 @@ export async function getMe(userId: string) {
     dataScope,
     totpEnabled: employee.user.totpEnabled,
     privacyNoticeAccepted: employee.user.privacyNoticeAcceptedAt !== null,
+    // True only in the development database that holds the made-up demo company: every screen then says so (docs/plans/PHASE_6.md §14J).
+    demoCompany: (await getSetting<boolean>("demo.company", false)) === true,
   };
 }
 

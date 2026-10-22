@@ -5,6 +5,7 @@ import { ListSubscriptionsByTopicCommand, SNSClient } from "@aws-sdk/client-sns"
 import { PERMISSION_KEYS } from "@shared/constants/permissions";
 import { env } from "../config/env";
 import { leastPrivilegeProblems } from "./dbRoles";
+import { demoCompanyPresent } from "./demoGuard";
 import { decryptField, encryptField } from "./encryption";
 import { prisma } from "./prisma";
 import { SYSTEM_ROLES } from "./systemRoles";
@@ -33,6 +34,8 @@ export interface PreflightProbes {
   encryptionRoundTrip(): Promise<boolean>;
   /** Is this database one the development seed has written to? (Only the seed writes the marker row.) */
   developmentSeedPresent(): Promise<boolean>;
+  /** Does it hold the demo company (the made-up company the demo seed makes)? */
+  demoCompanyPresent(): Promise<boolean>;
 }
 
 const SES_SANDBOX_QUOTA = 200;
@@ -84,6 +87,13 @@ export async function runPreflight(subject: Subject, probes: PreflightProbes, op
     return (await probes.developmentSeedPresent())
       ? ["fail", "the development seed has written to this database (demo employees with a known password, and demo payroll maker and checker accounts). Never load real data here; build a fresh database"]
       : ["pass", "no development marker"];
+  });
+
+  await attempt("demo-company", "No demo company in this database", false, async () => {
+    if (!deployed) return ["skip", "the demo company exists only in development, by design"];
+    return (await probes.demoCompanyPresent())
+      ? ["fail", "this database holds the DEMO COMPANY (made-up people, salaries and a fictional bank format). The application will not start with it. Build a fresh database"]
+      : ["pass", "no demo company"];
   });
 
   await attempt("db-role", "The app's database role is least-privilege", false, async () => {
@@ -192,6 +202,7 @@ export function awsProbes(clients: { ses?: Pick<SESClient, "send">; sns?: Pick<S
     async developmentSeedPresent() {
       return (await prisma.devDatabaseMarker.count()) > 0;
     },
+    demoCompanyPresent: () => demoCompanyPresent(prisma),
     async encryptionRoundTrip() {
       const probe = `preflight-${Date.now()}`;
       return decryptField(encryptField(probe)) === probe;

@@ -92,6 +92,7 @@ import { PayrollRunsPage } from "../pages/admin/payroll/PayrollRunsPage";
 import { LayoutsPage } from "../pages/admin/payroll/LayoutsPage";
 import { SetupChecklistPage } from "../pages/admin/payroll/SetupChecklistPage";
 import { ReadyPage } from "../pages/admin/payroll/ReadyPage";
+import { CompareRegistersPage } from "../pages/admin/payroll/CompareRegistersPage";
 import { AttendanceSettingsPage, ShiftMasterPage, WeekOffPatternsPage } from "../pages/admin/attendance/AttendanceSettingsPage";
 
 // Single source of truth for the HR/Admin portal's App Switcher and each
@@ -292,6 +293,7 @@ export const adminApps: AdminApp[] = [
           { key: "salary-revisions", label: "Salary Revisions", path: "payroll/revisions", icon: AuditOutlined, element: SalaryRevisionsPage },
           { key: "payroll-adjustments", label: "Adjustments", path: "payroll/adjustments", icon: DiffOutlined, element: AdjustmentsPage },
           { key: "payroll-run", label: "Payroll Run", path: "payroll/run", icon: FundOutlined, element: PayrollRunsPage },
+          { key: "payroll-compare", label: "Compare Registers", path: "payroll/compare", icon: DiffOutlined, element: CompareRegistersPage },
           { key: "payroll-layouts", label: "Bank and Statutory Layouts", path: "payroll/layouts", icon: FileProtectOutlined, element: LayoutsPage },
           { key: "loans-admin", label: "Loans & Advances", path: "payroll/loans", icon: BankOutlined, phase: "Phase 6" },
         ],

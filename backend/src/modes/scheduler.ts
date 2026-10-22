@@ -3,6 +3,7 @@ import { closeAttendanceQueues } from "../jobs/attendanceQueues";
 import { logger } from "../lib/logger";
 import { prisma } from "../lib/prisma";
 import { assertLeastPrivilegedDatabaseRole } from "../lib/dbRoles";
+import { assertNoDemoCompany } from "../lib/demoGuard";
 import { initFieldEncryption } from "../lib/fieldKeys";
 import { gracefulShutdown } from "../lib/lifecycle";
 import { redis } from "../lib/redis";
@@ -12,6 +13,7 @@ import { registerScheduledJobs } from "../jobs/scheduler";
 // registration must stay idempotent as real repeatable jobs are added.
 export async function runScheduler(): Promise<void> {
   await assertLeastPrivilegedDatabaseRole(prisma, env.APP_ENV); // outside development: not as a role that could rewrite the audit trail
+  await assertNoDemoCompany(prisma, env.APP_ENV); // outside development: never with the made-up demo company in the database
   await initFieldEncryption();
   await redis.connect();
   await registerScheduledJobs();
