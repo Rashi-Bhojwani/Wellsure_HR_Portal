@@ -70,6 +70,11 @@ jobs:
       - name: Install
         run: npm run install:all
 
+      # The job builds the same environment a developer has: backend/.env from .env.example (its DATABASE_URL and REDIS_URL are
+      # exactly the service containers above). Without it the script had nothing to connect to and no test ever ran.
+      - name: Create backend/.env
+        run: cp .env.example backend/.env
+
       - name: Check services
         run: npm run check:services
 
