@@ -1,7 +1,37 @@
 # Phase 7 — Tax and benefits: plan
 
-**Status: DRAFT, awaiting approval (written 2026-10-22). Nothing is built.** When approved, the answers go into §0A and this file becomes the plan
-that is built, one commit at a time, pausing after each.
+**Status: APPROVED 2026-10-22 with the answers in §0A, which override anything below that differs. P7-0 is being built.** One commit at a
+time, pausing after each.
+
+## 0A. Your answers (2026-10-22), and what they changed
+
+1. **Tax rules are per financial year**; copying a year forward creates Placeholders.
+2. **Tax slabs and limits ship empty (Not set).** No recalled figures across a change of Act. The demo company supplies made-up figures.
+3. **Tax rules reuse the payroll rules permissions** (`payroll.rules.manage` / `payroll.rules.confirm`); no `tax.rules.*` keys.
+4. **Default regime is the new regime** when none is chosen; changing regime is allowed until the proof-of-investment window closes.
+5. **After the proof cut-off only verified amounts count.** One verifier, no second checker per proof. **The verifier and the declaring employee
+   are always different people, HR included**, and every verification is audited **with the amount verified**.
+6. **One-offs are taxed in the month paid**, as a rule that ships **Not set** until the CA confirms.
+7. **Form 16:** we generate Part B; HR uploads Part A; nothing calls the tax portal. **Every Form 16 output is labelled DRAFT until the CA has
+   confirmed Part B's content** (a Confirmed rule `FORM16_PARTB_CONTENT_CONFIRMED` the CA's sign-off sets), and nothing describes it as
+   filing-ready.
+8. **Quarterly return:** our own workbook; the government format is an empty layout.
+9. **Loan disbursement** only through the next run or an off-cycle run, never "paid outside".
+10. **Reimbursements: the manager-grantable list is NOT widened.** Payroll alone approves claims (`reimbursement.process`), one step, never the
+    claimant. Recorded in PROGRESS as a post-go-live item to revisit if the workload demands it. §9's two-step flow and `reimbursement.approve`
+    are dropped.
+11. **Separation gains resignation date, notice required and notice served.** The recovery formula stays Not set.
+12. **Leavers read their F&F statement and Form 16 for N days after payment, default 90** (a setting).
+13. **Mid-year opening figures:** the dataset shape now; the greytHR mapping waits for the sample.
+14. **Revision letters and offer-letter figures are in;** flexible benefits are out.
+15. **My self-decided rules (§16) are accepted**, including HR reopening a declaration but never editing it, and no TDS refund through payroll.
+
+**From the docs review, built in P7-0:**
+- Company PAN and TAN move into the sealed, encrypted store and the plaintext `company.pan` / `company.tan` columns are dropped.
+- `FIRST_REAL_PAYROLL_RUN.md` stops promising off-cycle runs until P7-6 and says so in the procedure.
+- The weekly clock audit creates its own environment in CI and is called fixed only after **one real passing run**.
+- The docs show the real order of remaining work: Phase 7, the UI pass, Phase 8, the device rehearsal, then AWS (Phase 1.5).
+- ESI numbers are encrypted like UANs (Phase 6 review decision 91, answered yes).
 
 Scope (user, 2026-10-22): investment declarations and proof of investment, TDS under both tax regimes, Form 16 data, loans and advances,
 reimbursements, full and final settlement. Spec §12 also lists the IT statement, YTD and salary revision letters; they are included because the
@@ -144,9 +174,8 @@ person's **opening figures** (below). Draft runs never count.
 
 - **Claim types** (admin-editable): name, monthly/annual cap, bills required, taxable or not, which component the payment lands in.
 - **Employee** (Salary → Reimbursement): a claim with lines, dates, amounts and bills (uploads). Draft, submit, withdraw.
-- **Approval: a fixed two-step flow** (spec §7.8 names exactly this case): **(1) the reporting manager** (D10), then **(2) payroll**
-  (`reimbursement.process`), each approve, reject with reason, or (payroll) approve a lower amount. Nobody acts on their own claim. If the manager
-  cannot approve (no grant, no manager) it goes straight to payroll and says so (as leave's "no manager can approve").
+- **Approval: payroll alone** (`reimbursement.process`; decision 10): approve, reject with a reason, or approve a lower amount. Never the
+  claimant. The manager-grantable list is not widened; a manager step is a post-go-live question.
 - **Payment:** an approved claim becomes a pending line of the next regular run (`REIMBURSEMENT`, sourceRef = claim), consumed once at finalise,
   taxable or not by its type. A **reimbursement statement** per run (UI_REFERENCE §1.3's "Reimb. Payslip" tab) lists what was paid.
 - Request Hub and Tasks inbox gain the source; the claim is visible live to the claimant and the approvers.
@@ -173,9 +202,9 @@ count as the cycle's regular run. A partial unique index keeps one non-void regu
 
 ## 11. Permissions and the sensitive-data registry
 
-New keys (none manager-grantable unless D10 says so): `tax.rules.manage` / `tax.rules.confirm` (or reuse `payroll.rules.*`: D3),
+New keys (none manager-grantable; tax rules reuse `payroll.rules.*`):
 `tax.windows.manage`, `tax.declarations.view`, `tax.proofs.verify`, `payroll.loans.view`, `payroll.loans.manage`, `reimbursement.process`,
-`reimbursement.approve` (TEAM, D10), `payroll.fnf.prepare`, `payroll.tax.challans.manage` / `.confirm`. Checkers use `payroll.approve`.
+`payroll.fnf.prepare`, `payroll.tax.challans.manage` / `.confirm`. Checkers use `payroll.approve`.
 New sensitive class **"Tax declarations and proofs"**; loans, reimbursements and F&F join "Salaries and payroll figures". The registry test, the
 developer ceiling, `SENSITIVE_DATA.md` (generated) and the route inventory cover all of them.
 
@@ -191,26 +220,38 @@ developer ceiling, `SENSITIVE_DATA.md` (generated) and the route inventory cover
 
 | Commit | Contents |
 |---|---|
-| **P7-0 (small, before anything)** | Fix the weekly Clock audit (it has never run a test: see the playback), the stale doc items, ESI numbers encrypted (your answer), PROGRESS open questions closed with your answers |
+| **P7-0 (small, before anything)** | The weekly Clock audit builds its own environment and has one real passing run; ESI numbers encrypted; company PAN/TAN sealed and the plaintext columns dropped; FIRST_REAL_PAYROLL_RUN.md stops promising off-cycle runs; the real order of remaining work in the docs; stale status rows, menu markers and comments; PROGRESS open questions closed with the answers |
 | **P7-1 Tax foundations** | FY model, FY-scoped tax rules and the section catalogue, the tax engine + independent model, YTD reader, opening figures with TAX_OPENING maker-checker and the import shape, permissions/registry, demo company tax rules |
 | **P7-2 Declarations and POI** | windows, regime choice with comparison, declarations, proofs and verification, employee screens (IT Declaration, Proof Of Investment, Home cards), HR queues |
 | **P7-3 TDS in the run** | `TDS_MODE=PROJECTED`, the TDS line and its explanation, IT Statement, YTD Reports, payslip YTD, Salary Revision page, revision letters and offer-letter figures |
 | **P7-4 Loans and advances** | types, request, sanction, ledger, schedule, disbursement, EMI recovery, perquisite, statements |
-| **P7-5 Reimbursements** | types, claims with bills, two-step approval, payment through the run, reimbursement statement, Request Hub/Tasks |
+| **P7-5 Reimbursements** | types, claims with bills, payroll approval (one step), payment through the run, reimbursement statement, Request Hub/Tasks |
 | **P7-6 Off-cycle runs and F&F** | run kind, off-cycle road, settlement computation, maker-checker, F&F statement, separation integration |
 | **P7-7 Form 16 and close-out** | challan register, quarterly return data and layout, Form 16 Part B + Part A pairing, publish; Phase 7 review, first-real-year-end procedure, sensitive scans re-run, LOCAL_ASSUMPTIONS review, 500-person measurement of TDS |
 
-## 14. Decisions I need from you (my recommendation first)
+## 14. Decisions
 
-See the session reply; recorded here with your answers once given (§0A).
+Answered; see §0A.
 
-## 15. What needs the CA
+## 15. What needs the CA (also in PROGRESS "Open questions")
 
-See the session reply; the list moves into PROGRESS "Open questions" on approval.
+Tax slabs, standard deduction, rebate and marginal relief, surcharge and cess for FY 2026-27 under the new Act; section names and caps (HRA metro
+list and percentages included); the no-PAN rate; TDS rounding; taxing one-offs; previous-employer income; leave encashment's tax treatment;
+the loan perquisite rate and small-loan limit; gratuity (formula, eligibility, cap); notice-period recovery; F&F tax at exit; whether CONSULTANT
+employment falls under salary TDS; the quarterly return format; the content of Form 16 Part B; and (from Phase 6) the ESI half-year rule.
 
-## 16. Rules I would decide myself (veto any)
+## 16. Rules decided by me (accepted 2026-10-22), numbered after Phase 6's
 
-See the session reply; they become numbered rules 98 onward on approval.
+98. An employee edits only their own declaration, and only while its window is open.
+99. HR reopens a declaration (with a reason, audited, employee notified) but never edits it.
+100. Landlord and lender PANs are encrypted like employee PANs (last four shown, Reveal audited).
+101. TDS is never refunded through payroll (the monthly TDS is floored at the rule's minimum).
+102. Published payslips stay without a YTD column; only payslips published after P7-3 carry one.
+103. A loan EMI never makes net pay negative.
+104. Off-cycle runs do not lock the attendance cycle.
+105. A negative F&F settlement is never paid; it is listed for HR to recover.
+106. Draft runs never count towards YTD.
+107. Section, form and certificate names are editable labels, never code.
 
 ## 17. Unproven locally
 
