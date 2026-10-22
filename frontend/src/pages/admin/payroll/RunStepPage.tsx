@@ -294,8 +294,8 @@ function Summary({ p, slug }: { p: StepPreview; slug: StepSlug }) {
         <Alert
           type="info"
           showIcon
-          title={slug === "publish" ? "What this approves" : "What this approves"}
-          description={`${p.rows ?? 0} ${slug === "publish" ? "payslips" : "bank rows"}${p.rowsTotal ? `, ${formatRupees(p.rowsTotal, 2)} in all` : ""}. Producing them is the next build step; the approval is real and is bound to these exact figures now, and an unlock or a change voids it.`}
+          title="What this approves"
+          description={`${p.rows ?? 0} ${slug === "publish" ? "payslips" : "bank rows"}${p.rowsTotal ? `, ${formatRupees(p.rowsTotal, 2)} in all` : ""}. The approval is bound to these exact figures; a change to any of them voids it and it has to be asked for again.`}
         />
       )}
     </Flex>

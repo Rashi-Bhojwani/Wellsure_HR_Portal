@@ -95,6 +95,13 @@ it ages out or is destroyed. This procedure is exercised end to end, including t
 by `lib/__tests__/fieldEncryption.test.ts`. The AWS calls themselves (`GenerateDataKey`, `Decrypt` with the encryption context) are exercised for
 the first time on the first deploy.
 
+**Values held inside a record (added in Phase 6).** `reencrypt` rewrites the encrypted *columns* above. Three kinds of ciphertext sit inside a JSON column instead, where
+it cannot (or must not) rewrite them: the owners' **sealed payroll values** (company identifiers and the bank layout with the debit account, in append-only version
+history), a **profile change request** still waiting for a decision, and an **upload** not yet committed. `field-keys status` lists them and `retire` refuses while any is
+still under the key, so a key can never be retired out from under a value that only it can read. To move them: decide or discard the pending requests and uploads, and
+have the payroll admin enter each sealed value again as a new version (the approver confirms it as usual). Only the version in force and the latest version count; older
+versions are history that nothing decrypts.
+
 ## Before the first administrator: `admin:preflight` [A]
 
 From an ECS Exec shell in the api task, after the first `migrate` task has run:

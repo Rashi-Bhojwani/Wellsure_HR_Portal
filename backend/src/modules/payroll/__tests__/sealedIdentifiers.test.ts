@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DEVELOPER_ROLE_CODE } from "@shared/constants/sensitiveData";
 import { prisma } from "../../../lib/prisma";
 import { app, authHeader, cleanupEmployeeTestOrgMasters, cleanupFullTestEmployee, cleanupTestRole, createEmployeeTestOrgMasters, createFullTestEmployee, grantPermissions, loginAs, type TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
+import { JSON_HELD_COLUMNS, keyUsage, retireBlockers } from "../../../lib/fieldKeyRotation";
 import { isSealed, unseal } from "../sealed";
 import { cleanupPayrollRowsBy } from "./payrollTestHelpers";
 
@@ -66,6 +67,14 @@ describe("sealed company identifiers", () => {
     expect(JSON.stringify(row)).not.toContain(SECRET);
     expect(unseal(row.value as { sealed: string })).toBe(SECRET);
     expect(row.valueHash).toMatch(/^sealed-hash-v1:/);
+  });
+
+  it("key rotation knows about it: it is counted under its data key and blocks retiring that key (a sealed value must never be stranded)", async () => {
+    const row = await prisma.payrollItemVersion.findFirstOrThrow({ where: { kind: "RULE", key: KEY, version: 1 }, select: { id: true } });
+    const only = (id: string) => id === row.id;
+    expect(await keyUsage({ filter: only })).toEqual([{ column: JSON_HELD_COLUMNS.sealed, keyId: 1, count: 1 }]);
+    expect(await retireBlockers(1, { filter: only })).toEqual([{ column: JSON_HELD_COLUMNS.sealed, keyId: 1, count: 1 }]);
+    expect(await retireBlockers(2, { filter: only })).toEqual([]);
   });
 
   it("nobody sees it in a list, a detail, a history or the audit viewer; even the person who entered it must Reveal it, and that is recorded without the value", async () => {

@@ -1,4 +1,5 @@
 import { ciphertextKeyId, decryptField, encryptField } from "./encryption";
+import { unpackBytes } from "./bytesJson";
 import { activeFieldKeys } from "./fieldKeys";
 import { prisma } from "./prisma";
 
@@ -50,6 +51,54 @@ export type RowFilter = (rowId: string) => boolean;
 
 export type KeyUsage = { column: string; keyId: number; count: number };
 
+// Ciphertext that sits inside a JSON column cannot be rewritten by reencryptAll (the payroll versions are append-only history; a pending request or an upload
+// is something a person still has to decide), but it MUST be counted: otherwise a key could be retired while a value only it can read is still stored, and
+// that value would be lost. They are listed by `field-keys status` and they block `retire`; the way to move one is to decide or discard the request or upload, or
+// (for the owners' sealed identifiers and bank layout) to enter the value again as a new version.
+const PACKED_FIELDS = ["panEncrypted", "aadhaarEncrypted", "uanEncrypted", "accountNumberEncrypted"] as const;
+const packedKeyIds = (json: unknown): number[] => {
+  if (typeof json !== "object" || json === null) return [];
+  const o = json as Record<string, unknown>;
+  return PACKED_FIELDS.flatMap((f) => (typeof o[f] === "string" ? [ciphertextKeyId(unpackBytes(o[f]))] : []));
+};
+
+export const JSON_HELD_COLUMNS = {
+  sealed: "PayrollItemVersion.value (a sealed rule or layout, the version in force or the latest)",
+  changeRequests: "ProfileChangeRequest.changesJson (a request still waiting for a decision)",
+  imports: "ImportStagingRow.data (an upload not yet committed)",
+} as const;
+
+async function jsonHeldUsage(opts: { filter?: RowFilter }): Promise<KeyUsage[]> {
+  const counts = new Map<string, Map<number, number>>();
+  const add = (column: string, keyId: number) => {
+    const m = counts.get(column) ?? new Map<number, number>();
+    m.set(keyId, (m.get(keyId) ?? 0) + 1);
+    counts.set(column, m);
+  };
+  const keep = (id: string) => !opts.filter || opts.filter(id);
+
+  // Sealed payroll values: only the version in force (latest confirmed) and the latest version are ever read again; superseded versions are history nothing decrypts.
+  const versions = await prisma.$queryRaw<Array<{ id: string; kind: string; key: string; version: number; sealed: string }>>`SELECT id, kind::text AS kind, key, version, value->>'sealed' AS sealed FROM payroll_item_versions WHERE value ? 'sealed'`;
+  const confirmed = await prisma.$queryRaw<Array<{ kind: string; key: string; version: number }>>`SELECT kind::text AS kind, key, version FROM payroll_item_confirmations`;
+  const newest = new Map<string, number>();
+  for (const v of versions) newest.set(`${v.kind}/${v.key}`, Math.max(newest.get(`${v.kind}/${v.key}`) ?? 0, v.version));
+  const newestConfirmed = new Map<string, number>();
+  for (const c of confirmed) newestConfirmed.set(`${c.kind}/${c.key}`, Math.max(newestConfirmed.get(`${c.kind}/${c.key}`) ?? 0, c.version));
+  for (const v of versions) {
+    const k = `${v.kind}/${v.key}`;
+    if (!keep(v.id) || (v.version !== newest.get(k) && v.version !== newestConfirmed.get(k))) continue;
+    add(JSON_HELD_COLUMNS.sealed, ciphertextKeyId(unpackBytes(v.sealed)));
+  }
+
+  for (const r of await prisma.$queryRaw<Array<{ id: string; changes_json: unknown }>>`SELECT id, changes_json FROM profile_change_requests WHERE status = 'PENDING'`) {
+    if (keep(r.id)) for (const id of packedKeyIds(r.changes_json)) add(JSON_HELD_COLUMNS.changeRequests, id);
+  }
+  for (const r of await prisma.$queryRaw<Array<{ id: string; data: unknown }>>`SELECT r.id, r.data FROM import_staging_rows r JOIN import_batches b ON b.id = r.batch_id WHERE b.committed_at IS NULL`) {
+    if (keep(r.id)) for (const id of packedKeyIds(r.data)) add(JSON_HELD_COLUMNS.imports, id);
+  }
+  return [...counts].flatMap(([column, m]) => [...m].sort((a, b) => a[0] - b[0]).map(([keyId, count]) => ({ column, keyId, count })));
+}
+
 /** How many stored values each data key made, per column. keyId 0 is a value too short to be ciphertext at all. */
 export async function keyUsage(opts: { filter?: RowFilter } = {}): Promise<KeyUsage[]> {
   const out: KeyUsage[] = [];
@@ -62,6 +111,7 @@ export async function keyUsage(opts: { filter?: RowFilter } = {}): Promise<KeyUs
     }
     for (const [keyId, count] of [...counts].sort((a, b) => a[0] - b[0])) out.push({ column: `${column.model}.${column.field}`, keyId, count });
   }
+  out.push(...(await jsonHeldUsage(opts)));
   return out;
 }
 

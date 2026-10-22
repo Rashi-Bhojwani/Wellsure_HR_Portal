@@ -53,7 +53,7 @@ export const SENSITIVE_CLASSES: readonly SensitiveClass[] = [
     label: "Employees' bank accounts",
     what: "The account each person is paid into.",
     view: ["employee.bank.view"],
-    edit: ["employee.bank.edit", "profile.changerequest.approve"],
+    edit: ["employee.bank.edit"], // approving a bank change request needs this same key (changeRequests.ts), so profile.changerequest.approve alone edits nothing here
     confirm: [],
   },
   {
@@ -61,7 +61,7 @@ export const SENSITIVE_CLASSES: readonly SensitiveClass[] = [
     label: "Employees' PAN, Aadhaar, UAN and ESI numbers",
     what: "The government identifiers of each person.",
     view: ["employee.statutory.view"],
-    edit: ["employee.statutory.edit", "profile.changerequest.approve"],
+    edit: ["employee.statutory.edit"], // likewise for a statutory change request
     confirm: [],
   },
   {
@@ -115,6 +115,7 @@ export const isSensitivePermission = (key: string): boolean => SENSITIVE_SET.has
  * means saying here which it is.
  */
 export const REVIEWED_NOT_SENSITIVE: readonly PermissionKey[] = [
+  "profile.changerequest.approve", // decides personal-details requests; a bank or statutory request also needs employee.bank.edit / employee.statutory.edit (checked in approveChangeRequest)
   "employee.view",
   "employee.create",
   "employee.edit",

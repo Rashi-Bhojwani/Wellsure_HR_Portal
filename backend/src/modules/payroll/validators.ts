@@ -17,6 +17,7 @@ export const checkersQuerySchema = z.object({
 });
 
 export const payrollAuditQuerySchema = z.object({
+  actorSearch: z.string().trim().max(100).optional(),
   action: z.string().trim().max(100).optional(),
   entityType: z.string().trim().max(100).optional(),
   dateFrom: z.iso.date().optional(),

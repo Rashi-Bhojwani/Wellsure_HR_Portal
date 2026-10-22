@@ -20,6 +20,8 @@
     "check:services": "tsx scripts/check-services.ts",
     "db:seed": "tsx scripts/reset-db.ts",
     "seed:demo-company": "tsx scripts/seed-demo-company.ts",
+    "measure:payroll": "tsx scripts/measure-payroll.ts",
+    "docs:sensitive": "tsx scripts/sensitive-docs.ts",
     "admin:bootstrap": "tsx scripts/admin-bootstrap.ts",
     "admin:recover": "tsx scripts/admin-recover.ts",
     "admin:preflight": "tsx scripts/admin-preflight.ts",

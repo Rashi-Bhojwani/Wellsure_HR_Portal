@@ -14,6 +14,18 @@ import { registerPayrollSeams } from "../wiring";
 import type { RulePin } from "../rules/context";
 import { crawlGets } from "./sensitiveCrawl";
 
+interface SetupItemShape {
+  id: string;
+  required: boolean;
+  status: string;
+  problem?: unknown;
+  detail: string;
+  coverage: { covered: number; total: number; missing: Array<{ employeeId: string }> };
+  enteredBy?: { name?: string; at?: string } | null;
+  confirmedBy: { name?: string; at?: string };
+}
+
+
 // The demo company, built from scratch on the suite's own database and then driven through a whole payroll run, as the demo users, by the same API the screens use. What it proves:
 // the Setup Checklist can really be completed (Ready goes green with nothing left out), the run that follows is a real one (no TEST mark), and the developer's login sees none of it.
 
@@ -45,7 +57,7 @@ describe("the demo company", () => {
     expect(ready.body).toMatchObject({ ready: true, demo: true });
     expect(ready.body.confirmed).toBe(ready.body.required);
     // Every item the demo makes is confirmed by someone other than who entered it.
-    for (const item of setup.body.sections.flatMap((s: { items: Array<Record<string, any>> }) => s.items)) {
+    for (const item of setup.body.sections.flatMap((s: { items: Array<SetupItemShape> }) => s.items)) {
       expect(item.problem, item.id).toBeUndefined();
       if (item.enteredBy && item.confirmedBy && item.enteredBy.name && item.enteredBy.at) expect(item.enteredBy.name, item.id).not.toBe(item.confirmedBy.name);
     }
@@ -126,10 +138,10 @@ describe("the demo company", () => {
     // Every rule the run read is one the Ready screen requires; and every required rule is read, or is one that only a statutory file or a later phase uses.
     const pinned = new Set((run.pins as unknown as RulePin[]).filter((p) => (p.kind ?? "RULE") === "RULE").map((p) => p.key));
     const setup = await call("DEMO001", "get", "payroll/setup");
-    const items = new Map<string, any>(setup.body.sections.flatMap((s: { items: Array<{ id: string }> }) => s.items).map((i: { id: string }) => [i.id, i]));
-    const notRequired = RULE_CATALOG.filter((r) => !items.get(`rule:${r.key}`).required).map((r) => r.key);
+    const items = new Map<string, SetupItemShape>(setup.body.sections.flatMap((s: { items: Array<{ id: string }> }) => s.items).map((i: { id: string }) => [i.id, i]));
+    const notRequired = RULE_CATALOG.filter((r) => !items.get(`rule:${r.key}`)?.required).map((r) => r.key);
     expect([...pinned].filter((k) => notRequired.includes(k)), "a rule the run read must be required for a first run").toEqual([]);
-    const unread = RULE_CATALOG.filter((r) => items.get(`rule:${r.key}`).required && !pinned.has(r.key)).map((r) => r.key);
+    const unread = RULE_CATALOG.filter((r) => items.get(`rule:${r.key}`)?.required && !pinned.has(r.key)).map((r) => r.key);
     // Required, but used somewhere other than the calculation of a run: each one's reason is written here, so a rule cannot become required without anybody knowing why.
     const READ_ELSEWHERE: Record<string, string> = {
       REVISION_CTC_ROUNDING: "rounds a CTC after a percentage salary revision",

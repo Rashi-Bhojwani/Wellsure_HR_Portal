@@ -52,7 +52,7 @@ import { AddEmployeePage } from "../pages/admin/employee/AddEmployeePage";
 import { SeparationsPage } from "../pages/admin/employee/SeparationsPage";
 import { ChangeRequestsPage } from "../pages/admin/employee/ChangeRequestsPage";
 import { ImportCenterPage } from "../pages/admin/import/ImportCenterPage";
-import { AuditLogPage } from "../pages/admin/auditLog/AuditLogPage";
+import { AuditLogPage, PayrollAuditPage } from "../pages/admin/auditLog/AuditLogPage";
 import { SystemSettingsPage } from "../pages/admin/settings/SystemSettingsPage";
 import { CompanyDocumentsPage } from "../pages/admin/documents/CompanyDocumentsPage";
 import { LeaveTypesPoliciesPage } from "../pages/admin/adminTools/LeaveTypesPoliciesPage";
@@ -294,6 +294,7 @@ export const adminApps: AdminApp[] = [
           { key: "payroll-adjustments", label: "Adjustments", path: "payroll/adjustments", icon: DiffOutlined, element: AdjustmentsPage },
           { key: "payroll-run", label: "Payroll Run", path: "payroll/run", icon: FundOutlined, element: PayrollRunsPage },
           { key: "payroll-compare", label: "Compare Registers", path: "payroll/compare", icon: DiffOutlined, element: CompareRegistersPage },
+          { key: "payroll-audit", label: "Payroll Audit Trail", path: "payroll/audit", icon: AuditOutlined, element: PayrollAuditPage },
           { key: "payroll-layouts", label: "Bank and Statutory Layouts", path: "payroll/layouts", icon: FileProtectOutlined, element: LayoutsPage },
           { key: "loans-admin", label: "Loans & Advances", path: "payroll/loans", icon: BankOutlined, phase: "Phase 6" },
         ],

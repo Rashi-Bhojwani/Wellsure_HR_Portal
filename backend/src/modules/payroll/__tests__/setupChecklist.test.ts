@@ -7,6 +7,18 @@ import { buildSetupReport, readinessOf } from "../setup/status";
 import { buildSalaryWorld, giveSalary, teardownSalaryWorld, type SalaryWorld } from "./salaryTestHelpers";
 import { cleanupPayrollRowsBy } from "./payrollTestHelpers";
 
+interface SetupItemShape {
+  id: string;
+  required: boolean;
+  status: string;
+  problem?: unknown;
+  detail: string;
+  coverage: { covered: number; total: number; missing: Array<{ employeeId: string }> };
+  enteredBy?: { name?: string; at?: string } | null;
+  confirmedBy: { name?: string; at?: string };
+}
+
+
 // The Setup Checklist, "Ready for first real run" and the sign-offs behind them (docs/plans/PHASE_6.md §14J), against the real API and database.
 
 describe("the setup checklist and the readiness screen", () => {
@@ -27,7 +39,7 @@ describe("the setup checklist and the readiness screen", () => {
   const item = async (id: string) => {
     const r = await get(supToken, "/setup");
     expect(r.status).toBe(200);
-    return (r.body.sections as Array<{ items: Array<Record<string, any>> }>).flatMap((s) => s.items).find((i) => i.id === id)!;
+    return (r.body.sections as Array<{ items: Array<SetupItemShape> }>).flatMap((s) => s.items).find((i) => i.id === id)!;
   };
 
   beforeAll(async () => {
@@ -66,7 +78,7 @@ describe("the setup checklist and the readiness screen", () => {
     const identifiers = r.body.sections[0].items;
     expect(identifiers.map((i: { id: string }) => i.id).sort()).toEqual(["rule:ESI_EMPLOYER_CODE", "rule:LWF_REGISTRATION", "rule:PF_ESTABLISHMENT_CODE", "rule:PT_REGISTRATION", "rule:TAN"]);
     for (const i of identifiers) expect(i.permissionNote).toMatch(/Company identifiers/);
-    for (const i of r.body.sections.flatMap((s: { items: Array<Record<string, unknown>> }) => s.items)) {
+    for (const i of r.body.sections.flatMap((s: { items: Array<SetupItemShape> }) => s.items)) {
       expect(["NOT_SET", "PLACEHOLDER", "CONFIRMED"]).toContain(i.status);
       expect(typeof i.why).toBe("string");
       expect((i.where as { path: string }).path).toMatch(/^\/admin\//);

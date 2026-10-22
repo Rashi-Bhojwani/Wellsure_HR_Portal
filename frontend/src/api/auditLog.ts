@@ -32,7 +32,8 @@ export interface AuditLogPage {
   rows: AuditLogRow[];
 }
 
-export async function listAuditLogs(query: AuditLogQuery): Promise<AuditLogPage> {
-  const { data } = await apiClient.get<AuditLogPage>("/api/audit-logs", { params: query });
+/** `payroll` reads the Payroll audit trail (payroll's own rows, behind the salary permission) instead of the general log. */
+export async function listAuditLogs(query: AuditLogQuery, scope: "all" | "payroll" = "all"): Promise<AuditLogPage> {
+  const { data } = await apiClient.get<AuditLogPage>(scope === "payroll" ? "/api/payroll/audit" : "/api/audit-logs", { params: query });
   return data;
 }

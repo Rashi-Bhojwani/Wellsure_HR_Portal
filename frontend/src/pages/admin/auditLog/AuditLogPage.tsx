@@ -9,7 +9,7 @@ import { EmptyState } from "../../../components/common/EmptyState";
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
 
-export function AuditLogPage() {
+export function AuditLogPage({ payroll = false }: { payroll?: boolean } = {}) {
   const [actorSearch, setActorSearch] = useState("");
   const [entityType, setEntityType] = useState("");
   const [action, setAction] = useState("");
@@ -27,13 +27,14 @@ export function AuditLogPage() {
     page,
     pageSize,
   };
-  const { data, isLoading } = useQuery({ queryKey: ["audit-log", query], queryFn: () => auditLogApi.listAuditLogs(query) });
+  const { data, isLoading } = useQuery({ queryKey: ["audit-log", payroll ? "payroll" : "all", query], queryFn: () => auditLogApi.listAuditLogs(query, payroll ? "payroll" : "all") });
 
   return (
     <Space orientation="vertical" size={16} style={{ width: "100%" }}>
       <Title level={3} style={{ margin: 0 }}>
-        Audit Log
+        {payroll ? "Payroll Audit Trail" : "Audit Log"}
       </Title>
+      {payroll && <Text type="secondary">Who prepared, confirmed, approved and carried out each payroll step, and when. It records that something changed, never a secret value.</Text>}
 
       <Space wrap>
         <Input
@@ -128,4 +129,9 @@ export function AuditLogPage() {
       </Modal>
     </Space>
   );
+}
+
+/** The Payroll audit trail: the same viewer, restricted to payroll's own rows. */
+export function PayrollAuditPage() {
+  return <AuditLogPage payroll />;
 }

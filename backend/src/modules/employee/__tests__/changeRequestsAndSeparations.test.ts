@@ -26,7 +26,8 @@ describe("Profile change requests", () => {
 
   beforeAll(async () => {
     org = await createEmployeeTestOrgMasters();
-    await grantPermissions(hrRoleCode, ["profile.changerequest.approve", "employee.view"]);
+    // Approving a bank change request also needs employee.bank.edit (P6-6: it writes bank data, so it needs what editing it directly needs).
+    await grantPermissions(hrRoleCode, ["profile.changerequest.approve", "employee.view", "employee.bank.edit"]);
     await grantPermissions(employeeRoleCode, []);
 
     const hr = await createFullTestEmployee(org, { roleCode: hrRoleCode });

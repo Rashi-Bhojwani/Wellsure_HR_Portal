@@ -76,6 +76,7 @@ describe("the development seed cannot carry demo accounts or payroll roles into 
       .sort();
     expect(assigners).toEqual([
       "prisma/seed.ts", // development only, behind the guard
+      "scripts/demo/seedDemoCompany.ts", // the fictional demo company: development only (its command asserts it, it needs the seed's marker, and the app refuses to start where it has been run)
       "src/modules/access/bootstrap.ts", // SUPER_ADMIN and EMPLOYEE only, refused where the environment cannot alert
       "src/modules/access/service.ts", // an authenticated administrator picks the role; assignedByUserId is the actor
       "src/modules/employee/service.ts", // EMPLOYEE only

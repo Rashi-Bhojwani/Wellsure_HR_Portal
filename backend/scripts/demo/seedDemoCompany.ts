@@ -95,7 +95,7 @@ export interface DemoResult {
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
-async function createPerson(spec: { code: string; name: string; role: string }, org: { departmentId: string; designationId: string; locationId: string; gradeId: string | null; costCentreId: string | null }, passwordHash: string, index: number) {
+export async function createPerson(spec: { code: string; name: string; role: string }, org: { departmentId: string; designationId: string; locationId: string; gradeId: string | null; costCentreId: string | null }, passwordHash: string, index: number) {
   const employee = await prisma.employee.create({ data: { employeeCode: spec.code, dateOfJoining: new Date("2024-04-01T00:00:00Z"), employmentType: "PERMANENT", officialEmail: `${spec.code.toLowerCase()}@demo.example.invalid` } });
   const user = await prisma.user.create({ data: { employeeId: employee.id, status: "ACTIVE", passwordHash, privacyNoticeAcceptedAt: new Date() } });
   await prisma.employeeNameHistory.create({ data: { employeeId: employee.id, fullName: spec.name, effectiveFrom: new Date("2024-04-01T00:00:00Z"), createdByUserId: user.id } });
@@ -110,7 +110,7 @@ async function createPerson(spec: { code: string; name: string; role: string }, 
 }
 
 /** Pay details for everyone active who lacks them: made-up numbers in a pattern that cannot be real (accounts begin 9999, PANs begin DEMO). */
-async function fillPayDetails(by: string): Promise<void> {
+export async function fillPayDetails(by: string): Promise<void> {
   const people = await prisma.employee.findMany({ where: { status: "ACTIVE" }, select: { id: true, employeeCode: true, bankAccounts: { select: { id: true } }, statutory: { select: { uanEncrypted: true, panEncrypted: true } } }, orderBy: { employeeCode: "asc" } });
   let n = 0;
   for (const p of people) {
