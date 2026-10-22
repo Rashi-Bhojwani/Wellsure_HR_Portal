@@ -3,6 +3,7 @@ import { ZodError } from "zod";
 import { MulterError } from "multer";
 import { env } from "../config/env";
 import { logger } from "../lib/logger";
+import { scrubText } from "../lib/redact";
 
 export class HttpError extends Error {
   constructor(
@@ -26,7 +27,8 @@ export function notFoundHandler(req: Request, res: Response): void {
 export function errorHandler(err: unknown, req: Request, res: Response, next: NextFunction): void {
   if (err instanceof ZodError) {
     res.status(400).json({
-      error: { message: "Validation failed", code: "VALIDATION_ERROR", issues: err.issues },
+      // Never the input that failed: an issue carries where and what is wrong, and a message that has been scrubbed of anything that looks like an account number or a PAN.
+      error: { message: "Validation failed", code: "VALIDATION_ERROR", issues: err.issues.map((i) => ({ ...i, input: undefined, message: scrubText(i.message) })) },
     });
     return;
   }
@@ -55,7 +57,7 @@ export function errorHandler(err: unknown, req: Request, res: Response, next: Ne
     return;
   }
 
-  const message = err instanceof Error ? err.message : "Unknown error";
+  const message = scrubText(err instanceof Error ? err.message : "Unknown error");
   logger.error({ err }, "Unhandled error");
   res.status(500).json({
     error: {
