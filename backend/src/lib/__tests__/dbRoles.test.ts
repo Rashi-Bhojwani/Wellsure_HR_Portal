@@ -82,8 +82,8 @@ describe("the app role", () => {
     for (const t of tables) expect(await denied(app.$executeRawUnsafe(`DELETE FROM "${t}" WHERE false`)), t).toMatch(/permission denied/);
   });
 
-  it("keeps UPDATE (and only UPDATE) on the one append-only table whose rows change state: payroll approvals", async () => {
-    expect(UPDATABLE_APPEND_ONLY_TABLES).toEqual(["payroll_approvals"]);
+  it("keeps UPDATE (and only UPDATE) on the append-only tables whose rows change state: payroll approvals and bank batches", async () => {
+    expect(UPDATABLE_APPEND_ONLY_TABLES).toEqual(["payroll_approvals", "bank_transfer_batches"]);
     expect(await appendOnlyTables(prisma)).toContain("payroll_approvals");
     const priv = async (table: string) =>
       (await app.$queryRawUnsafe<Array<{ upd: boolean; del: boolean; trunc: boolean; ins: boolean }>>(
@@ -92,6 +92,8 @@ describe("the app role", () => {
         table,
       ))[0];
     expect(await priv("payroll_approvals")).toEqual({ upd: true, del: false, trunc: false, ins: true });
+    expect(await priv("bank_transfer_batches")).toEqual({ upd: true, del: false, trunc: false, ins: true });
+    for (const t of ["payslips", "bank_transfer_rows", "payroll_outputs"]) expect(await priv(t), t).toEqual({ upd: false, del: false, trunc: false, ins: true });
     expect(await priv("audit_logs")).toEqual({ upd: false, del: false, trunc: false, ins: true });
     expect(await priv("payroll_item_versions")).toEqual({ upd: false, del: false, trunc: false, ins: true });
     expect(await denied(app.$executeRawUnsafe(`DELETE FROM payroll_approvals WHERE false`))).toMatch(/permission denied/);

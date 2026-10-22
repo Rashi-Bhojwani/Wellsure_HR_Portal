@@ -72,3 +72,20 @@ Rules for anyone adding payroll code (a test fails if you break the first three)
 4. **A figure that decides pay is a rule**, read through `ctx.rule()` / `ctx.decimal()` so the run pins it. Never a constant in code.
 5. **History is read through the effective-dating readers**, never a raw `effective_to IS NULL`.
 6. **Anything risky is preview, then confirm** with a fingerprint of exactly what was previewed (`PREVIEW_STALE` if it moved).
+
+### P6-5, releasing a final run
+
+| File | What it is |
+|---|---|
+| `run/payslip.ts` | `buildPayslips`: the whole content of each payable person's payslip, from a final run's stored items and lines (name as of the period end, last four digits only, net in words). |
+| `run/release.ts` | **The only file that writes payslips, bank batches and release rows** (a source scan keeps it so): `publishPayslips`, `generateBankFile`. Each is carried out by somebody other than the person who decided, re-checks the approval's hash, and writes what it releases together with the release row in one transaction. The only place an account number is decrypted. |
+| `run/payslipDelivery.ts`, `run/payslipHtml.ts` | The worker's job: render the PDF (Chromium), store it, notify, email (no figure), one payslip at a time, idempotent. |
+| `run/payslipAccess.ts` | Who reads a payslip: an employee only their own (404 otherwise), HR with `payroll.payslip.view`, the watermarked draft preview. |
+| `run/layout.ts` | The layout engine behind the bank file and the statutory files: delimited, fixed width or Excel, header and trailer rows, formats. Refuses (too wide, would change an amount, unknown field) rather than guesses. |
+| `run/layouts.ts` | Layouts as governed items (`BANK_TEMPLATE`, `OUTPUT_TEMPLATE`); the debit account is encrypted inside the version and shown only as its last four digits. |
+| `run/bank.ts`, `run/bankBatches.ts` | The plan of who is in the bank file (the account in force on the payment date; anyone without one is listed, never dropped), and after it: download (audited), mark paid, attach the bank's response. |
+| `run/outputs.ts` | The four statutory files (each from a confirmed layout) and the salary register. |
+| `run/releaseController.ts`, `payslipRoutes.ts` | The routes; `/api/payslips/mine` is the employee's own. |
+
+Three more rules: **a layout is data from a specification, never guessed**; **no account number is stored outside the encrypted bank account row** (a batch row has only the hash, the last four digits and the IFSC); **the app never talks to a bank**.
+

@@ -636,6 +636,15 @@ export interface StepPreview {
   adjustmentsReturned?: number;
   rows?: number;
   rowsTotal?: string;
+  // Publishing payslips (P6-5)
+  payslips?: number;
+  netTotal?: string;
+  noPayslip?: Array<{ employeeId: string; name: string; reason: string | null; detail: string | null }>;
+  // The bank file (P6-5)
+  paymentDate?: string | null;
+  excluded?: Array<{ employeeId: string; employeeCode: string; name: string; reason: string; detail: string }>;
+  people?: Array<{ employeeCode: string; name: string; bankName: string; accountLast4: string; ifsc: string; amount: string }>;
+  willDo?: string[];
 }
 export interface ApprovalView {
   id: string;
@@ -685,3 +694,220 @@ export const previewWithdraw = (id: string, slug: StepSlug) => post<WithdrawPrev
 export const withdrawStep = (id: string, slug: StepSlug, body: { reason: string; fingerprint: string }) => post<{ ok: true; runStatus: RunStatus }>(`/runs/${id}/approvals/${slug}/withdraw`, body);
 export const finaliseRun = (id: string) => post<{ id: string; status: "FINALISED"; lockedFrom: string; lockedTo: string; adjustmentsPaid: number }>(`/runs/${id}/finalise`);
 export const unlockRun = (id: string) => post<{ id: string; status: "VOID"; adjustmentsReturned: number }>(`/runs/${id}/unlock`);
+
+
+// ── P6-5: payslips, the bank file, statutory files, layouts ──
+
+export async function publishPayslips(runId: string): Promise<{ runId: string; published: number }> {
+  return (await apiClient.post(`${base}/runs/${runId}/payslips/publish`)).data;
+}
+export async function generateBankFile(runId: string): Promise<{ batchId: string; rows: number; total: string; excluded: number; fileName: string }> {
+  return (await apiClient.post(`${base}/runs/${runId}/bank-file/generate`)).data;
+}
+
+export type EmailStatus = "SENT" | "FILE_ONLY" | "FAILED" | "PENDING";
+export interface PayslipRow {
+  id: string;
+  employeeId: string;
+  employeeCode: string;
+  name: string;
+  net: string;
+  publishedAt: string;
+  pdfReady: boolean;
+  delivery: { rendered: boolean; renderError: string | null; notified: boolean; emailStatus: EmailStatus; emailTo: string | null; emailError: string | null };
+}
+export async function listRunPayslips(runId: string): Promise<{ runId: string; cycle: string; payslips: PayslipRow[] }> {
+  return (await apiClient.get(`${base}/runs/${runId}/payslips`)).data;
+}
+export async function preparePayslipsAgain(runId: string): Promise<{ queued: boolean }> {
+  return (await apiClient.post(`${base}/runs/${runId}/payslips/prepare-again`)).data;
+}
+
+export interface PayslipLine {
+  code: string;
+  label: string;
+  amount: string;
+}
+export interface PayslipContent {
+  version: 1;
+  company: { legalName: string; address: string };
+  period: { label: string; start: string; end: string };
+  employee: { code: string; name: string; dateOfJoining: string; department: string; designation: string; location: string };
+  days: { paid: string; lop: string; basis: string };
+  earnings: PayslipLine[];
+  deductions: PayslipLine[];
+  employerContributions: PayslipLine[];
+  rounding: string | null;
+  totals: { gross: string; deductions: string; net: string; employerContributions: string };
+  netInWords: string;
+  bank: { bankName: string; accountLast4: string } | null;
+  statutory: { panLast4: string | null; uanLast4: string | null; esiNumber: string | null };
+  runHash: string;
+}
+export interface PayslipSummary {
+  id: string;
+  cycleLabel: string;
+  cycleStart: string;
+  cycleEnd: string;
+  net: string;
+  netInWords: string;
+  publishedAt: string;
+  pdfReady: boolean;
+}
+export async function getPayslip(id: string): Promise<PayslipSummary & { content: PayslipContent }> {
+  return (await apiClient.get(`${base}/payslips/${id}`)).data;
+}
+export type PdfLink = { ready: true; url: string; expiresInSeconds: number } | { ready: false; message: string };
+export async function getPayslipPdf(id: string): Promise<PdfLink> {
+  return (await apiClient.get(`${base}/payslips/${id}/pdf`)).data;
+}
+export async function previewPayslip(runId: string, employeeId: string): Promise<{ content: PayslipContent; watermark: string | null }> {
+  return (await apiClient.get(`${base}/runs/${runId}/items/${employeeId}/payslip-preview`)).data;
+}
+
+export interface BankBatchView {
+  id: string;
+  runId: string;
+  cycle: string;
+  status: "GENERATED" | "PAID";
+  paymentDate: string;
+  rowCount: number;
+  total: string;
+  excluded: Array<{ employeeId: string; employeeCode: string; name: string; reason: string; detail: string }>;
+  fileName: string;
+  fileSha256: string;
+  generatedAt: string;
+  paid: { at: string | null; on: string | null; reference: string | null } | null;
+  response: { fileName: string | null; sha256: string | null; attachedAt: string | null } | null;
+}
+export interface BankBatchDetail extends BankBatchView {
+  rows: Array<{ serial: number; employeeCode: string; name: string; accountLast4: string; ifsc: string; amount: string; narration: string }>;
+}
+export async function getBankBatchForRun(runId: string): Promise<{ batch: BankBatchView | null }> {
+  return (await apiClient.get(`${base}/runs/${runId}/bank-batch`)).data;
+}
+export async function getBankBatch(id: string): Promise<BankBatchDetail> {
+  return (await apiClient.get(`${base}/bank-batches/${id}`)).data;
+}
+export async function bankBatchFileLink(id: string): Promise<{ url: string; fileName: string; sha256: string; expiresInSeconds: number }> {
+  return (await apiClient.get(`${base}/bank-batches/${id}/file`)).data;
+}
+export async function markBatchPaid(id: string, body: { reference: string; paidOn: string; confirm: string }): Promise<BankBatchDetail> {
+  return (await apiClient.post(`${base}/bank-batches/${id}/mark-paid`, body)).data;
+}
+export async function attachBatchResponse(id: string, file: File): Promise<BankBatchDetail> {
+  const form = new FormData();
+  form.append("file", file);
+  return (await apiClient.post(`${base}/bank-batches/${id}/response`, form)).data;
+}
+
+export type OutputKind = "PF_ECR" | "ESI" | "PT" | "LWF" | "SALARY_REGISTER";
+export interface OutputRow {
+  id: string;
+  kind: OutputKind;
+  rows: number;
+  fileName: string;
+  sha256: string;
+  generatedAt: string;
+  templateVersion: number | null;
+}
+export async function listOutputs(runId: string): Promise<{ outputs: OutputRow[]; layouts: Array<{ kind: OutputKind; ready: boolean; status: RuleStatus }> }> {
+  return (await apiClient.get(`${base}/runs/${runId}/outputs`)).data;
+}
+export async function generateOutput(runId: string, kind: OutputKind): Promise<OutputRow> {
+  return (await apiClient.post(`${base}/runs/${runId}/outputs`, { kind })).data;
+}
+export async function outputFileLink(id: string): Promise<{ url: string; fileName: string; sha256: string; expiresInSeconds: number }> {
+  return (await apiClient.get(`${base}/outputs/${id}/file`)).data;
+}
+
+export type LayoutKey = "BANK_TEMPLATE" | "PF_ECR" | "ESI" | "PT" | "LWF";
+export interface LayoutView {
+  key: LayoutKey;
+  label: string;
+  description: string;
+  whoConfirms: string;
+  layoutKind: "BANK" | "PF_ECR" | "ESI" | "PT" | "LWF";
+  fields: Array<{ name: string; description: string; isAmount: boolean; isDate: boolean }>;
+  tokens: string[];
+  status: RuleStatus;
+  sourceLabel: string | null;
+  current: VersionView | null;
+  lastConfirmed: VersionView | null;
+}
+export interface LayoutColumn {
+  header?: string;
+  source: "FIELD" | "CONSTANT" | "PATTERN";
+  value: string;
+  width?: number;
+  align?: "LEFT" | "RIGHT";
+  pad?: string;
+  numeric?: boolean;
+}
+export interface LayoutValue {
+  format: "DELIMITED" | "FIXED_WIDTH" | "XLSX";
+  delimiter?: string;
+  quote?: boolean;
+  lineEnding?: "LF" | "CRLF";
+  extension: string;
+  dateFormat?: string;
+  amountDecimals?: number;
+  header?: LayoutColumn[][];
+  trailer?: LayoutColumn[][];
+  columnHeaders?: boolean;
+  columns: LayoutColumn[];
+  narrationPattern?: string;
+  hasDebitAccount?: boolean;
+  debitAccountLast4?: string;
+  /** Sent only when the account is being entered or changed. */
+  debitAccountNumber?: string;
+}
+export async function listLayouts(): Promise<LayoutView[]> {
+  return (await apiClient.get(`${base}/layouts`)).data.layouts;
+}
+export async function getLayout(key: LayoutKey): Promise<{ layout: LayoutView; history: VersionView[] }> {
+  return (await apiClient.get(`${base}/layouts/${key}`)).data;
+}
+export interface LayoutSavePreview {
+  key: LayoutKey;
+  isNew: boolean;
+  before: { version: number; value: LayoutValue; status: RuleStatus } | null;
+  after: { value: LayoutValue };
+  unchanged: boolean;
+  willResetConfirmation: boolean;
+  fingerprint: string;
+}
+export async function previewLayoutSave(key: LayoutKey, value: LayoutValue): Promise<LayoutSavePreview> {
+  return (await apiClient.post(`${base}/layouts/${key}/save-preview`, { value })).data;
+}
+export async function saveLayout(key: LayoutKey, body: { value: LayoutValue; note?: string; fingerprint: string }): Promise<LayoutView> {
+  return (await apiClient.put(`${base}/layouts/${key}`, body)).data;
+}
+export interface LayoutConfirmPreview {
+  key: LayoutKey;
+  version: number;
+  value: LayoutValue;
+  valueHash: string;
+  sourceLabel: string | null;
+  authorName: string;
+  blocked: string | null;
+  checkers: CheckerAvailability;
+  fingerprint: string;
+}
+export async function previewLayoutConfirm(key: LayoutKey): Promise<LayoutConfirmPreview> {
+  return (await apiClient.post(`${base}/layouts/${key}/confirm-preview`)).data;
+}
+export async function confirmLayout(key: LayoutKey, body: { version: number; note: string; fingerprint: string }): Promise<LayoutView> {
+  return (await apiClient.post(`${base}/layouts/${key}/confirm`, body)).data;
+}
+
+// ── An employee's own payslips ──
+export async function myPayslips(): Promise<{ payslips: PayslipSummary[] }> {
+  return (await apiClient.get("/api/payslips/mine")).data;
+}
+export async function myPayslip(id: string): Promise<PayslipSummary & { content: PayslipContent }> {
+  return (await apiClient.get(`/api/payslips/mine/${id}`)).data;
+}
+export async function myPayslipPdf(id: string): Promise<PdfLink> {
+  return (await apiClient.get(`/api/payslips/mine/${id}/pdf`)).data;
+}

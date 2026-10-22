@@ -44,6 +44,7 @@ import { TasksPage } from "../pages/employee/todo/TasksPage";
 import { WorkflowDelegatesPage } from "../pages/employee/workflow-delegates/WorkflowDelegatesPage";
 import { MarkAttendancePage } from "../pages/employee/attendance/MarkAttendancePage";
 import { AttendanceInfoPage } from "../pages/employee/attendance/AttendanceInfoPage";
+import { PayslipsPage } from "../pages/employee/salary/PayslipsPage";
 
 // Single source of truth for the Employee portal left sidebar
 // (docs/UI_REFERENCE.md §1.0). The sidebar, the route tree and the
@@ -128,7 +129,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
     icon: DollarOutlined,
     description: "Payslips, tax and salary details.",
     children: [
-      { key: "payslips", label: "Payslips", path: "salary/payslips", icon: FileTextOutlined, phase: "Phase 6" },
+      { key: "payslips", label: "Payslips", path: "salary/payslips", icon: FileTextOutlined, element: PayslipsPage },
       {
         key: "ytd-reports",
         label: "YTD Reports",

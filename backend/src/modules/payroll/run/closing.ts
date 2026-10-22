@@ -13,6 +13,8 @@ import { canonicalDecimal, dec } from "../money";
 import { namesOfUsers } from "../names";
 import { assertRunIsReal, pinStatuses, watermarkFromStatuses, type RulePin, type Watermark } from "../rules/context";
 import { employeeIdOfUser } from "../salary/guards";
+import { buildPayslips } from "./payslip";
+import { bankHashParts, planBank } from "./bank";
 import { computeRun } from "./engine";
 import { assessForSubmission, type Assessment, type Blocker } from "./submitCheck";
 import { varianceJson } from "./variance";
@@ -55,13 +57,6 @@ export async function liveHashOf(run: PayrollRun): Promise<string> {
 
 const finaliseHash = (run: Pick<PayrollRun, "id" | "cycleLabel">, live: string) => payrollHash({ t: "finalise", run: run.id, live, cycle: run.cycleLabel });
 const releasesOf = (runId: string) => prisma.payrollRunRelease.findMany({ where: { runId }, orderBy: { createdAt: "asc" } });
-
-async function bankTemplateReady(): Promise<{ ready: boolean; version: number | null; valueHash: string | null }> {
-  const cur = await prisma.payrollItemVersion.findFirst({ where: { kind: "BANK_TEMPLATE", key: BANK_TEMPLATE_KEY }, orderBy: { version: "desc" } });
-  if (!cur) return { ready: false, version: null, valueHash: null };
-  const confirmed = await prisma.payrollItemConfirmation.findFirst({ where: { kind: "BANK_TEMPLATE", key: BANK_TEMPLATE_KEY, version: cur.version, valueHash: cur.valueHash } });
-  return { ready: confirmed !== null, version: cur.version, valueHash: cur.valueHash };
-}
 
 // ── The seven subjects' adapters that belong to a run (rules and salary revisions register theirs where they live) ──
 
@@ -113,12 +108,13 @@ registerSubject({
   async describe(id) {
     return `publishing the payslips for ${(await loadRun(id)).cycleLabel}`;
   },
-  // A final run never changes, so its stored figures are the figures: P6-5 adds the payslip content hashes to this.
+  // A final run never changes, so the payslips built from it are fixed too; their content hashes (name, placement and last four digits as they stand now) are what the
+  // approval is bound to, so a change to somebody's bank account or name between approval and publishing voids it.
   async hash(id) {
     const run = await loadRun(id);
     if (run.status !== "FINALISED") return payrollHash({ t: "publish", run: id, final: false });
-    const items = await prisma.payrollRunItem.findMany({ where: { runId: id, status: { not: "EXCLUDED" } }, select: { employeeId: true, itemHash: true }, orderBy: { employeeId: "asc" } });
-    return payrollHash({ t: "publish", run: id, runHash: run.runHash, items: items.map((i) => [i.employeeId, i.itemHash]) });
+    const slips = await buildPayslips(run);
+    return payrollHash({ t: "publish", run: id, runHash: run.runHash, slips: [...slips].sort(([a], [b]) => (a < b ? -1 : 1)).map(([employeeId, s]) => [employeeId, s.contentHash]) });
   },
 });
 registerSubject({
@@ -128,12 +124,11 @@ registerSubject({
   async describe(id) {
     return `the bank file for ${(await loadRun(id)).cycleLabel}`;
   },
+  // The rows, the accounts they go to (by hash), the payment date and the exact layout: a bank account changed after approval, or a layout edited, voids it.
   async hash(id) {
     const run = await loadRun(id);
-    const template = await bankTemplateReady();
     if (run.status !== "FINALISED") return payrollHash({ t: "bank", run: id, final: false });
-    const items = await prisma.payrollRunItem.findMany({ where: { runId: id, status: "PAYABLE" }, select: { employeeId: true, itemHash: true, netPay: true }, orderBy: { employeeId: "asc" } });
-    return payrollHash({ t: "bank", run: id, runHash: run.runHash, template: [template.version, template.valueHash], rows: items.map((i) => [i.employeeId, i.itemHash, canonicalDecimal(dec(i.netPay.toString()))]) });
+    return payrollHash({ t: "bank", run: id, ...(bankHashParts(run.runHash, await planBank(run)) as Record<string, unknown>) });
   },
 });
 
@@ -315,20 +310,44 @@ export async function previewStep(slug: Slug, runId: string, actor: Actor): Prom
     });
   }
 
-  // Publishing payslips and the bank file: from a final run only. What they authorise is built in the next step; the approval is real and bound now.
+  // Publishing payslips and the bank file: from a final run only. The approval is bound to exactly what the act will write (payslip content, or the bank rows and layout).
   const wrong = statusBlocker(run, "FINALISED", slug === "publish" ? "published" : "turned into a bank file");
   if (wrong) return envelope(slug, run, actor, [wrong], payrollHash({ state: run.status }), {});
   const blockers = await realBlocker(run, slug === "publish" ? "published" : "turned into a bank file");
   const releases = await releasesOf(run.id);
-  if (slug === "publish" && releases.some((r) => r.kind === "PAYSLIPS_PUBLISHED")) blockers.push({ code: "ALREADY_RELEASED", title: "Already published", message: "The payslips for this period have already been published." });
-  if (slug === "bank-file") {
-    if (releases.some((r) => r.kind === "BANK_FILE_GENERATED")) blockers.push({ code: "ALREADY_RELEASED", title: "Already generated", message: "A bank file has already been generated for this period." });
-    const template = await bankTemplateReady();
-    if (!template.ready) blockers.push({ code: "BANK_TEMPLATE_PLACEHOLDER", title: "The bank file layout is not confirmed", message: "The layout of the bank file has not been set up and confirmed by a second person yet, so a bank file cannot be asked for. The layout comes from your bank's own specification." });
+  if (slug === "publish") {
+    if (releases.some((r) => r.kind === "PAYSLIPS_PUBLISHED")) blockers.push({ code: "ALREADY_RELEASED", title: "Already published", message: "The payslips for this period have already been published." });
+    const slips = await buildPayslips(run);
+    const held = await prisma.payrollRunItem.findMany({ where: { runId: run.id, status: "HELD" }, include: { employee: { select: { employeeCode: true } } }, orderBy: { employee: { employeeCode: "asc" } } });
+    const names = await namesOn(held.map((h) => h.employeeId), run.cycleEnd);
+    if (slips.size === 0) blockers.push({ code: "NO_PAYSLIPS", title: "Nobody to publish payslips to", message: "Nobody in this run is payable, so there are no payslips to publish." });
+    return envelope(slug, run, actor, blockers, await adapterFor("PAYSLIP_PUBLISH").hash(run.id), {
+      payslips: slips.size,
+      netTotal: canonicalDecimal([...slips.values()].reduce((a, v) => a.plus(dec(v.content.totals.net)), dec("0"))),
+      noPayslip: held.map((h) => ({ employeeId: h.employeeId, name: names.get(h.employeeId) ?? h.employee.employeeCode, reason: h.holdReason, detail: h.holdDetail })),
+      willDo: ["Each payable person can read their own payslip the moment this is carried out; nobody else can.", "A PDF of each is prepared in the background and the person is told, in the app and by email. The email has no figure in it.", "From then on this period can no longer be unlocked. A correction goes through an adjustment in the next run."],
+    });
   }
-  const adapterHash = await adapterFor(SUBJECT_OF[slug]).hash(run.id);
-  const people = await prisma.payrollRunItem.findMany({ where: { runId: run.id, status: slug === "bank-file" ? "PAYABLE" : { not: "EXCLUDED" } }, select: { netPay: true } });
-  return envelope(slug, run, actor, blockers, adapterHash, { rows: people.length, rowsTotal: canonicalDecimal(people.reduce((a, p) => a.plus(dec(p.netPay.toString())), dec("0"))) });
+  const plan = await planBank(run);
+  if (releases.some((r) => r.kind === "BANK_FILE_GENERATED")) blockers.push({ code: "ALREADY_RELEASED", title: "Already generated", message: "A bank file has already been generated for this period." });
+  if (!plan.template.ready) {
+    blockers.push({
+      code: "BANK_TEMPLATE_PLACEHOLDER",
+      title: "The bank file layout is not confirmed",
+      message: plan.template.status === "NOT_SET" ? "The layout of the bank file has not been entered yet. It comes from your bank's own specification or a sample file; once entered, a second person must confirm it." : "The layout of the bank file has been entered but not confirmed by a second person yet, so a bank file cannot be asked for.",
+    });
+  }
+  if (plan.paymentDate === null) blockers.push({ code: "PAYMENT_DATE_UNSET", title: "The payment date is not set", message: "The rule \"Payment date\" has no value, so it is not known which bank account applies. Set and confirm it under Rules and setup, then calculate the run again." });
+  if (plan.rows.length === 0) blockers.push({ code: "NOTHING_TO_PAY", title: "No rows for the file", message: "Nobody in this run has a bank account in force on the payment date, so the file would be empty." });
+  return envelope(slug, run, actor, blockers, await adapterFor("BANK_FILE").hash(run.id), {
+    rows: plan.rows.length,
+    rowsTotal: plan.total,
+    paymentDate: plan.paymentDate,
+    excluded: plan.excluded,
+    held: plan.held,
+    people: plan.rows.map((r) => ({ employeeCode: r.employeeCode, name: r.name, bankName: r.bankName, accountLast4: r.accountLast4, ifsc: r.ifsc, amount: r.amount })),
+    willDo: ["A file is made in the layout your bank gave, from exactly these rows. The account numbers are read from the encrypted store only while the file is being written, and each is logged.", "Nothing is sent anywhere. HR downloads the file and uploads it to the bank's own net banking.", "From then on this period can no longer be unlocked."],
+  });
 }
 
 // ── Requesting ──

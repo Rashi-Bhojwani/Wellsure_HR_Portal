@@ -17,7 +17,8 @@ import { runManualReminder } from "../modules/attendance/manual/reminder";
 import { processRecomputeJob, runNightly } from "../modules/attendance/jobs";
 import { executeProcessRun } from "../modules/attendance/processService";
 import { runDeviceHealthChecks } from "../modules/biometric/health/runner";
-import { PAYROLL_CALCULATE_QUEUE } from "./payrollQueues";
+import { PAYROLL_CALCULATE_QUEUE, PAYROLL_PAYSLIPS_QUEUE } from "./payrollQueues";
+import { deliverPayslips } from "../modules/payroll/run/payslipDelivery";
 import { executeCalculation } from "../modules/payroll/run/engine";
 
 // Starts every BullMQ worker this service runs. Real workers (attendance
@@ -176,6 +177,8 @@ export function startWorkers(): Worker[] {
   // takes the run over at once instead of waiting for the lease to run out.
   const payrollCalculateWorker = new Worker(PAYROLL_CALCULATE_QUEUE, async (job) => executeCalculation((job.data as { runId: string }).runId, `job-${job.id}`), { connection: createBullConnection(), concurrency: 1 });
   payrollCalculateWorker.on("failed", (job, err) => logger.error({ jobId: job?.id, err }, "payroll-calculate job failed"));
+  const payrollPayslipsWorker = new Worker(PAYROLL_PAYSLIPS_QUEUE, async (job) => deliverPayslips((job.data as { runId: string }).runId), { connection: createBullConnection(), concurrency: 1 });
+  payrollPayslipsWorker.on("failed", (job, err) => logger.error({ jobId: job?.id, err }, "payroll-payslips job failed"));
 
-  return [pingWorker, rolloverWorker, separationsWorker, leavePlAccrualWorker, compOffExpiryWorker, engageAutoPostsWorker, helpdeskAutoCloseWorker, lettersWorker, securityAlertWorker, recomputeWorker, nightlyWorker, processWorker, reminderWorker, deviceHealthWorker, payrollCalculateWorker];
+  return [pingWorker, rolloverWorker, separationsWorker, leavePlAccrualWorker, compOffExpiryWorker, engageAutoPostsWorker, helpdeskAutoCloseWorker, lettersWorker, securityAlertWorker, recomputeWorker, nightlyWorker, processWorker, reminderWorker, deviceHealthWorker, payrollCalculateWorker, payrollPayslipsWorker];
 }

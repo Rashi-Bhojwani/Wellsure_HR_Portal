@@ -12,8 +12,23 @@ export function payrollCalculateQueue(): Queue {
   return queue;
 }
 
+//   payroll-payslips: render, store and announce one run's payslips, a few at a time, idempotent per payslip (P6-5)
+export const PAYROLL_PAYSLIPS_QUEUE = "payroll-payslips";
+let payslipQueue: Queue | null = null;
+export function payrollPayslipsQueue(): Queue {
+  payslipQueue ??= new Queue(PAYROLL_PAYSLIPS_QUEUE, { connection: createBullConnection() });
+  return payslipQueue;
+}
+/** The worker runs these one at a time and each payslip is claimed before it is worked on, so a repeat (Prepare again) never does anything twice. */
+export async function enqueuePayslipJob(runId: string): Promise<void> {
+  await payrollPayslipsQueue().add("deliver", { runId }, { jobId: `payslips-${runId}-${Date.now()}`, attempts: 3, backoff: { type: "exponential", delay: 5000 }, removeOnComplete: 100, removeOnFail: 100 }); // allow-clock
+}
+
 export async function closePayrollQueues(): Promise<void> {
   const q = queue;
+  const p = payslipQueue;
   queue = null;
+  payslipQueue = null;
   if (q) await q.close();
+  if (p) await p.close();
 }

@@ -19,5 +19,9 @@ settlement, bank disbursement. Phase 6+. See spec §7.5 and
 | Payroll Runs, one run | `PayrollRunsPage.tsx`, `PayrollRunPage.tsx` | Start a run, calculate it, read every person and why, the difference from last month, what it used (P6-3); the Approval panel on the run says what is next (P6-4) |
 | One step on a run | `RunStepPage.tsx` | Submit for approval, close the period, unlock it, publish payslips, the bank file: look at exactly what it would do, say you have, ask or decide. **The people a run leaves out are the first thing on the submit page.** (P6-4) |
 
+| Bank and Statutory Layouts | `LayoutsPage.tsx` | The layout of the bank file and of the PF, ESI, PT and LWF files, typed from the bank's or the portal's specification: check it, save it as a Placeholder, a different person confirms it (P6-5). The debit account is entered here and never shown again. |
+
+What a final run has produced (payslips and whether each person has been told, the bank file and the record of uploading it, the statutory files and the register) is `components/payroll/ReleasePanels.tsx`, shown on the run page; an employee's own payslips are `pages/employee/salary/PayslipsPage.tsx`, and `components/payroll/PayslipView.tsx` shows one.
+
 Shared pieces live in `components/payroll/` (`ItemStatusTag`, `CheckersNote`, `ItemDialogs`, `RevisionPlanTable`) and `lib/money.ts`, which formats
 exact decimal strings as rupees without ever turning them into a JavaScript number.

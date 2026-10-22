@@ -95,7 +95,16 @@ const EXTRA_ALLOWED: Record<string, number[]> = {
   "run/service.ts": [20, 50, 60],
   // Closing: how many flagged people the submit preview lists before it says "and more" (a display limit), and the lengths of reason and note fields.
   "run/closing.ts": [25],
-  "run/validators.ts": [25, 50, 60, 300, 500],
+  "run/validators.ts": [20, 25, 50, 60, 300, 500],
+  // Release (P6-5): how long the one transaction that writes every payslip or every bank row may run (milliseconds), the pause between payslip emails (milliseconds), and
+  // the limits of a layout (how many columns or header rows, how wide a column or a text field is). None is a payroll figure.
+  "run/release.ts": [120000],
+  "run/payslipDelivery.ts": [250, 300],
+  "run/payslipAccess.ts": [300],
+  "run/bankBatches.ts": [80, 300, 5000000],
+  "run/outputs.ts": [300],
+  "run/layout.ts": [20, 60, 80, 500],
+  "run/layouts.ts": [20, 500],
 };
 
 export function numericLiteralsIn(src: string, extra: number[] = []): Array<{ line: number; text: string }> {
@@ -194,6 +203,29 @@ describe("modules/payroll", () => {
     };
     scan(backend);
     expect(hits.sort()).toEqual(ALLOWED_FINALISERS);
+  });
+
+  it("only release.ts writes payslips, bank batches and release rows; account numbers are decrypted only there and in the statutory outputs", () => {
+    const backend = path.resolve(ROOT, "../../..");
+    const creators: string[] = [];
+    const decrypters: string[] = [];
+    const scan = (dir: string): void => {
+      for (const name of readdirSync(dir)) {
+        if (name === "node_modules" || name === "__tests__") continue;
+        const full = path.join(dir, name);
+        if (statSync(full).isDirectory()) scan(full);
+        else if (/\.tsx?$/.test(name) && !/\.test\./.test(name)) {
+          const raw = readFileSync(full, "utf8").replace(/\/\/.*$/gm, "");
+          const rel = path.relative(backend, full).split(path.sep).join("/");
+          if (/(?:payslip|bankTransferBatch|bankTransferRow|payrollRunRelease)\.(?:create|createMany|upsert)\(/.test(raw)) creators.push(rel);
+          if (/accountNumberEncrypted/.test(raw) && /decryptField\(/.test(raw)) decrypters.push(rel);
+        }
+      }
+    };
+    scan(path.join(backend, "src/modules/payroll"));
+    expect(creators.sort()).toEqual(["src/modules/payroll/run/release.ts"]);
+    // The employee module's own audited reveal is outside payroll; inside payroll the bank file's generation is the only place an account number is read.
+    expect(decrypters.sort()).toEqual(["src/modules/payroll/run/release.ts"]);
   });
 
   it("the payroll-lock bypass for back-dated salary has exactly one caller, the revision apply step, and that step creates the arrears in the same transaction", () => {

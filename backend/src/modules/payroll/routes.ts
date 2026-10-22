@@ -7,6 +7,8 @@ import * as salary from "./salary/controller";
 import * as v from "./salary/validators";
 import * as runs from "./run/controller";
 import * as rv from "./run/validators";
+import * as rel from "./run/releaseController";
+import { memoryUpload } from "../../lib/uploads";
 import { employeeSalaryQuerySchema } from "./salary/employees";
 import { checkersQuerySchema, payrollAuditQuerySchema, ruleConfirmSchema, ruleEditPreviewSchema, ruleEditSchema, ruleKeyParamsSchema } from "./validators";
 
@@ -97,3 +99,35 @@ payrollRouter.post("/runs/:id/approvals/:slug/withdraw-preview", requireAnyPermi
 payrollRouter.post("/runs/:id/approvals/:slug/withdraw", requireAnyPermission("payroll.run", "payroll.unlock"), validate({ params: rv.stepParamsSchema, body: rv.stepWithdrawSchema }), runs.stepWithdraw);
 payrollRouter.post("/runs/:id/finalise", make, validate({ params: rv.runIdParamsSchema }), runs.runFinalise);
 payrollRouter.post("/runs/:id/unlock", requirePermission("payroll.unlock"), validate({ params: rv.runIdParamsSchema }), runs.runUnlock);
+
+// ── P6-5: payslips, the bank file, statutory files, layouts ──
+// The acts are carried out by somebody other than the person who decided (checked in the service); the permission here is the maker's.
+payrollRouter.post("/runs/:id/payslips/publish", make, validate({ params: rv.runIdParamsSchema }), rel.publish);
+payrollRouter.post("/runs/:id/bank-file/generate", make, validate({ params: rv.runIdParamsSchema }), rel.bankGenerate);
+// Payslips as HR reads them (payroll.payslip.view), and the draft preview (payroll.salary.view: it shows a person's pay before it is real).
+const readSlips = requirePermission("payroll.payslip.view");
+payrollRouter.get("/runs/:id/payslips", readSlips, validate({ params: rv.runIdParamsSchema }), rel.runSlips);
+payrollRouter.post("/runs/:id/payslips/prepare-again", make, validate({ params: rv.runIdParamsSchema }), rel.slipsPrepareAgain);
+payrollRouter.get("/payslips/:id", readSlips, validate({ params: rv.slipIdParamsSchema }), rel.slip);
+payrollRouter.get("/payslips/:id/pdf", readSlips, validate({ params: rv.slipIdParamsSchema }), rel.slipPdf);
+payrollRouter.get("/runs/:id/items/:employeeId/payslip-preview", view, validate({ params: rv.previewParamsSchema }), rel.preview);
+payrollRouter.get("/runs/:id/items/:employeeId/payslip-preview.pdf", view, validate({ params: rv.previewParamsSchema }), rel.previewPdf);
+// The bank batch (payroll.bank.view) and what HR does after uploading the file to the bank.
+const bankView = requirePermission("payroll.bank.view");
+payrollRouter.get("/runs/:id/bank-batch", bankView, validate({ params: rv.runIdParamsSchema }), rel.batchOfRun);
+payrollRouter.get("/bank-batches/:id", bankView, validate({ params: rv.slipIdParamsSchema }), rel.batch);
+payrollRouter.get("/bank-batches/:id/file", bankView, validate({ params: rv.slipIdParamsSchema }), rel.batchDownload);
+payrollRouter.post("/bank-batches/:id/mark-paid", make, validate({ params: rv.slipIdParamsSchema, body: rv.markPaidSchema }), rel.batchPaid);
+payrollRouter.post("/bank-batches/:id/response", make, validate({ params: rv.slipIdParamsSchema }), memoryUpload(5), rel.batchResponse);
+// Statutory files and the register: made by payroll.run, read by reports.salary.view.
+const reportView = requirePermission("reports.salary.view");
+payrollRouter.get("/runs/:id/outputs", reportView, validate({ params: rv.runIdParamsSchema }), rel.outputs);
+payrollRouter.post("/runs/:id/outputs", make, validate({ params: rv.runIdParamsSchema, body: rv.outputGenerateSchema }), rel.outputGenerate);
+payrollRouter.get("/outputs/:id/file", reportView, validate({ params: rv.slipIdParamsSchema }), rel.outputDownload);
+// Layouts: saved by payroll.rules.manage, confirmed by a different person with payroll.rules.confirm, read by payroll.rules.view.
+payrollRouter.get("/layouts", requirePermission("payroll.rules.view"), rel.layouts);
+payrollRouter.get("/layouts/:key", requirePermission("payroll.rules.view"), validate({ params: rv.layoutKeyParamsSchema }), rel.layout);
+payrollRouter.post("/layouts/:key/save-preview", requirePermission("payroll.rules.manage"), validate({ params: rv.layoutKeyParamsSchema, body: rv.layoutSavePreviewSchema }), rel.layoutSavePreview);
+payrollRouter.put("/layouts/:key", requirePermission("payroll.rules.manage"), validate({ params: rv.layoutKeyParamsSchema, body: rv.layoutSaveSchema }), rel.layoutSave);
+payrollRouter.post("/layouts/:key/confirm-preview", confirmItem, validate({ params: rv.layoutKeyParamsSchema }), rel.layoutConfirmPreview);
+payrollRouter.post("/layouts/:key/confirm", confirmItem, validate({ params: rv.layoutKeyParamsSchema, body: rv.layoutConfirmSchema }), rel.layoutConfirm);

@@ -146,6 +146,10 @@ export const STORAGE_KEY_COLUMNS: Record<string, string[]> = {
   YearEndRun: ["reportStorageKey"],
   LeaveRequest: ["attachmentStorageKey"],
   Company: ["logoStorageKey"],
+  // Phase 6 P6-5: the rendered payslip PDF, the bank file and the bank's response to it, and a generated statutory file.
+  PayslipDelivery: ["fileKey"],
+  BankTransferBatch: ["fileKey", "responseKey"],
+  PayrollOutput: ["fileKey"],
 };
 const STORAGE_KEY_COLUMN_PATTERN = /(StorageKey|^fileKey|^storageKey)$/;
 
@@ -334,7 +338,7 @@ function delegate(modelName: string): Delegate {
 
 // Tables a database trigger keeps immutable, deletable only through the
 // test-purge exception (app.audit_purge = 'test' in a dev-marked database).
-const PURGE_GUARDED_MODELS = new Set(["RawPunch", "ManualAttendanceEntry", "AttendanceOverride", "ShiftOverride", "LeaveDayRelease", "AttendancePeriodLock", "PayrollItemVersion", "PayrollItemConfirmation", "PayrollApproval", "PayrollEvent", "EmployeeSalary", "EmployeeSalaryLine", "PayrollSalaryRevision", "PayrollAdjustment", "PayrollRun", "PayrollRunItem", "PayrollRunLine", "PayrollPeriodLock", "PayrollRunRelease"]);
+const PURGE_GUARDED_MODELS = new Set(["RawPunch", "ManualAttendanceEntry", "AttendanceOverride", "ShiftOverride", "LeaveDayRelease", "AttendancePeriodLock", "PayrollItemVersion", "PayrollItemConfirmation", "PayrollApproval", "PayrollEvent", "EmployeeSalary", "EmployeeSalaryLine", "PayrollSalaryRevision", "PayrollAdjustment", "PayrollRun", "PayrollRunItem", "PayrollRunLine", "PayrollPeriodLock", "PayrollRunRelease", "Payslip", "BankTransferBatch", "BankTransferRow", "PayrollOutput"]);
 
 // Deletes the given rows of `model` and every row that depends on them,
 // transitively, in FK-safe order. Optional FKs follow OPTIONAL_FK_POLICY.

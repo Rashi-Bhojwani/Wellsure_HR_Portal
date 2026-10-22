@@ -38,10 +38,11 @@ describe("mobile tabs and their contents come from the employee menu", () => {
     }
   });
 
-  it("anything over payroll data, or not built yet, is 'coming soon'; Attendance Info is real now", () => {
-    // The Phase 0 payslip mock-up is retired: phase-marked, no page, so desktop shows the placeholder too.
-    expect([leaf("payslips").phase, leaf("payslips").element]).toEqual(["Phase 6", undefined]);
-    expect(isComingSoon(leaf("payslips"))).toBe(true);
+  it("anything not built yet is 'coming soon'; Attendance Info and Payslips are real now", () => {
+    // Payslips are real now (Phase 6 P6-5): a page, no phase mark.
+    expect(leaf("payslips").phase).toBeUndefined();
+    expect(leaf("payslips").element).toBeDefined();
+    expect(isComingSoon(leaf("payslips"))).toBe(false);
     // Attendance Info is built on real data (Phase 2 P2-E).
     expect(leaf("attendance-info").phase).toBeUndefined();
     expect(isComingSoon(leaf("attendance-info"))).toBe(false);

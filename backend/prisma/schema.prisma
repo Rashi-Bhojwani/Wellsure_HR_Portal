@@ -236,14 +236,14 @@ model RefreshToken {
 // an already-rotated (replacedByTokenId set) token revokes the whole chain.
 
 model InvitationToken {
-  id              String    @id @default(cuid())
-  userId          String    @map("user_id")
-  user            User      @relation(fields: [userId], references: [id])
-  tokenHash       String    @unique @map("token_hash")
-  expiresAt       DateTime  @map("expires_at") // now + 48h
-  usedAt          DateTime? @map("used_at")
-  createdByUserId String?   @map("created_by_user_id")
-  createdAt       DateTime  @default(now()) @map("created_at")
+  id               String    @id @default(cuid())
+  userId           String    @map("user_id")
+  user             User      @relation(fields: [userId], references: [id])
+  tokenHash        String    @unique @map("token_hash")
+  expiresAt        DateTime  @map("expires_at") // now + 48h
+  usedAt           DateTime? @map("used_at")
+  createdByUserId  String?   @map("created_by_user_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
   // What happened to the email that carried this token. `email_sent_at` is set only when a real mail server accepted the message; the console driver (a file on the
   // server, nothing sent) leaves it empty and a failure stores its reason in words, so no screen has to guess whether somebody was really invited.
   emailTo          String?   @map("email_to")
@@ -509,6 +509,8 @@ model Employee {
   salaries                   EmployeeSalary[]
   payrollAdjustments         PayrollAdjustment[]
   payrollRunItems            PayrollRunItem[]
+  payslips                   Payslip[]
+  bankTransferRows           BankTransferRow[]
   rawPunches                 RawPunch[]
   dailyAttendance            DailyAttendance[]
   manualAttendanceEntries    ManualAttendanceEntry[]
@@ -2749,6 +2751,9 @@ model PayrollRun {
   adjustments PayrollAdjustment[]
   locks       PayrollPeriodLock[]
   releases    PayrollRunRelease[]
+  payslips    Payslip[]
+  bankBatch   BankTransferBatch?
+  outputs     PayrollOutput[]
 
   @@index([cycleStart, status])
   @@map("payroll_runs")
@@ -2788,7 +2793,8 @@ model PayrollRunItem {
   itemHash              String            @map("item_hash")
   updatedAt             DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  lines PayrollRunLine[]
+  lines   PayrollRunLine[]
+  payslip Payslip?
 
   @@unique([runId, employeeId])
   @@index([runId, status])
@@ -2862,4 +2868,137 @@ model PayrollRunRelease {
 
   @@index([runId, kind])
   @@map("payroll_run_releases")
+}
+
+// ── Phase 6, P6-5 — payslips, the bank file and the statutory outputs (docs/plans/PHASE_6.md §14H) ──
+
+// One payslip per payable person of a final run, written in the transaction that publishes them. The content is immutable and complete (see run/payslip.ts); the table is
+// append-only. What changes afterwards (the PDF, the notices) is in payslip_deliveries.
+model Payslip {
+  id                String         @id @default(cuid())
+  runId             String         @map("run_id")
+  run               PayrollRun     @relation(fields: [runId], references: [id], onDelete: Restrict)
+  runItemId         String         @unique @map("run_item_id")
+  runItem           PayrollRunItem @relation(fields: [runItemId], references: [id], onDelete: Restrict)
+  employeeId        String         @map("employee_id")
+  employee          Employee       @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  cycleLabel        String         @map("cycle_label")
+  cycleStart        DateTime       @map("cycle_start") @db.Date
+  cycleEnd          DateTime       @map("cycle_end") @db.Date
+  content           Json
+  contentHash       String         @map("content_hash")
+  publishedAt       DateTime       @default(now()) @map("published_at") @db.Timestamptz(3)
+  publishedByUserId String         @map("published_by_user_id")
+
+  delivery PayslipDelivery?
+
+  @@unique([runId, employeeId])
+  @@index([employeeId, cycleStart])
+  @@map("payslips")
+}
+
+// Bookkeeping about getting a payslip to its owner, mutable by design and never content: the rendered PDF, the in-app notice and the email.
+model PayslipDelivery {
+  id               String    @id @default(cuid())
+  payslipId        String    @unique @map("payslip_id")
+  payslip          Payslip   @relation(fields: [payslipId], references: [id], onDelete: Cascade)
+  fileKey          String?   @map("file_key")
+  fileSha256       String?   @map("file_sha256")
+  renderedAt       DateTime? @map("rendered_at") @db.Timestamptz(3)
+  renderError      String?   @map("render_error")
+  notifiedAt       DateTime? @map("notified_at") @db.Timestamptz(3)
+  emailStatus      String?   @map("email_status") // SENT | FILE_ONLY | FAILED, the same words as invitations
+  emailTo          String?   @map("email_to")
+  emailError       String?   @map("email_error")
+  emailAttemptedAt DateTime? @map("email_attempted_at") @db.Timestamptz(3)
+  attempts         Int       @default(0)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("payslip_deliveries")
+}
+
+enum BankBatchStatus {
+  GENERATED
+  PAID
+}
+
+// The bank file made from a final run: one per run. The app never talks to a bank; PAID is HR's own statement, with the bank's reference. The batch can only move
+// GENERATED to PAID and attach the bank's response; everything else about it is fixed by a trigger.
+model BankTransferBatch {
+  id                       String          @id @default(cuid())
+  runId                    String          @unique @map("run_id")
+  run                      PayrollRun      @relation(fields: [runId], references: [id], onDelete: Restrict)
+  runHash                  String          @map("run_hash")
+  status                   BankBatchStatus @default(GENERATED)
+  paymentDate              DateTime        @map("payment_date") @db.Date
+  templateVersion          Int             @map("template_version")
+  templateHash             String          @map("template_hash")
+  rowCount                 Int             @map("row_count")
+  total                    Decimal         @db.Decimal(20, 6)
+  excluded                 Json            @default("[]") // people payable but not in the file, with the reason
+  fileKey                  String          @map("file_key")
+  fileName                 String          @map("file_name")
+  fileSha256               String          @map("file_sha256")
+  generatedByUserId        String          @map("generated_by_user_id")
+  generatedAt              DateTime        @default(now()) @map("generated_at") @db.Timestamptz(3)
+  paidAt                   DateTime?       @map("paid_at") @db.Timestamptz(3)
+  paidOn                   DateTime?       @map("paid_on") @db.Date
+  paidByUserId             String?         @map("paid_by_user_id")
+  bankReference            String?         @map("bank_reference")
+  responseKey              String?         @map("response_key")
+  responseFileName         String?         @map("response_file_name")
+  responseSha256           String?         @map("response_sha256")
+  responseAttachedByUserId String?         @map("response_attached_by_user_id")
+  responseAttachedAt       DateTime?       @map("response_attached_at") @db.Timestamptz(3)
+
+  rows BankTransferRow[]
+
+  @@map("bank_transfer_batches")
+}
+
+// A row of the bank file. No account number is stored: only its blind-index hash, its last four digits and the IFSC; the number is decrypted once, inside generation.
+model BankTransferRow {
+  id            String            @id @default(cuid())
+  batchId       String            @map("batch_id")
+  batch         BankTransferBatch @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  employeeId    String            @map("employee_id")
+  employee      Employee          @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  bankAccountId String            @map("bank_account_id")
+  accountHash   String            @map("account_hash")
+  accountLast4  String            @map("account_last4")
+  ifsc          String
+  amount        Decimal           @db.Decimal(20, 6)
+  narration     String
+  serial        Int
+
+  @@unique([batchId, employeeId])
+  @@map("bank_transfer_rows")
+}
+
+enum PayrollOutputKind {
+  PF_ECR
+  ESI
+  PT
+  LWF
+  SALARY_REGISTER
+}
+
+// A generated statutory file or the register: who made it, from which final run and which confirmed layout, and the file's hash. Append-only.
+model PayrollOutput {
+  id                String            @id @default(cuid())
+  runId             String            @map("run_id")
+  run               PayrollRun        @relation(fields: [runId], references: [id], onDelete: Restrict)
+  kind              PayrollOutputKind
+  runHash           String            @map("run_hash")
+  templateVersion   Int?              @map("template_version")
+  templateHash      String?           @map("template_hash")
+  rowCount          Int               @map("row_count")
+  fileKey           String            @map("file_key")
+  fileName          String            @map("file_name")
+  fileSha256        String            @map("file_sha256")
+  generatedByUserId String            @map("generated_by_user_id")
+  generatedAt       DateTime          @default(now()) @map("generated_at") @db.Timestamptz(3)
+
+  @@index([runId, kind])
+  @@map("payroll_outputs")
 }

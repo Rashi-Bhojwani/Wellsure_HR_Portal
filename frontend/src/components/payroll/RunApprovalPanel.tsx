@@ -107,15 +107,15 @@ export function RunApprovalPanel({ run }: { run: RunDetail }) {
                   <Flex key={slug} justify="space-between" align="center" gap={8} wrap>
                     <Space>
                       <Text strong>{slug === "publish" ? "Publish payslips" : "Generate the bank file"}</Text>
-                      {s.live ? <StateTag s={s} /> : <Tag>Not asked for</Tag>}
+                      {s.live ? <StateTag s={s} /> : s.last?.status === "CONSUMED" ? <Tag color="green">Done</Tag> : <Tag>Not asked for</Tag>}
                     </Space>
                     <Link to={stepLink(run.id, slug)}>
-                      <Button size="small">{s.live ? "Open…" : "Look at it…"}</Button>
+                      <Button size="small">{s.live ? "Open…" : s.last?.status === "CONSUMED" ? "See it…" : "Look at it…"}</Button>
                     </Link>
                   </Flex>
                 );
               })}
-              <Text type="secondary">Producing the payslips and the file is the next build step. The approvals are real now and are bound to these figures.</Text>
+              <Text type="secondary">Publishing and the file each need a second person’s approval, then somebody other than that person carries it out. What has been produced is shown below.</Text>
             </Flex>
             {unlock.you.canMake && (
               <Flex justify="space-between" align="center" gap={8} wrap>

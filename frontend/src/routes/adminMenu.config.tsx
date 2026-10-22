@@ -89,6 +89,7 @@ import { EmployeeSalariesPage } from "../pages/admin/payroll/EmployeeSalariesPag
 import { SalaryRevisionsPage } from "../pages/admin/payroll/SalaryRevisionsPage";
 import { AdjustmentsPage } from "../pages/admin/payroll/AdjustmentsPage";
 import { PayrollRunsPage } from "../pages/admin/payroll/PayrollRunsPage";
+import { LayoutsPage } from "../pages/admin/payroll/LayoutsPage";
 import { AttendanceSettingsPage, ShiftMasterPage, WeekOffPatternsPage } from "../pages/admin/attendance/AttendanceSettingsPage";
 
 // Single source of truth for the HR/Admin portal's App Switcher and each
@@ -287,10 +288,8 @@ export const adminApps: AdminApp[] = [
           { key: "salary-revisions", label: "Salary Revisions", path: "payroll/revisions", icon: AuditOutlined, element: SalaryRevisionsPage },
           { key: "payroll-adjustments", label: "Adjustments", path: "payroll/adjustments", icon: DiffOutlined, element: AdjustmentsPage },
           { key: "payroll-run", label: "Payroll Run", path: "payroll/run", icon: FundOutlined, element: PayrollRunsPage },
-          { key: "payslips-admin", label: "Payslips", path: "payroll/payslips", icon: FileTextOutlined, phase: "Phase 6" },
-          { key: "statutory-outputs", label: "Statutory Outputs", path: "payroll/statutory", icon: FileProtectOutlined, phase: "Phase 6" },
+          { key: "payroll-layouts", label: "Bank and Statutory Layouts", path: "payroll/layouts", icon: FileProtectOutlined, element: LayoutsPage },
           { key: "loans-admin", label: "Loans & Advances", path: "payroll/loans", icon: BankOutlined, phase: "Phase 6" },
-          { key: "bank-disbursement", label: "Bank Disbursement", path: "payroll/disbursement", icon: BankOutlined, phase: "Phase 6" },
         ],
       },
     ],

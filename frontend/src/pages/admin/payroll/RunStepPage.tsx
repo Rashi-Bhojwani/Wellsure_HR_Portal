@@ -9,7 +9,7 @@ import type { ApprovalView, PersonNote, StepPreview, StepSlug, StepState } from 
 import { CheckersNote } from "../../../components/payroll/CheckersNote";
 import { PlaceholderBanner } from "../../../components/payroll/PlaceholderBanner";
 import { apiErrorMessage } from "../../../lib/apiError";
-import { formatDateTime } from "../../../lib/dates";
+import { formatDate, formatDateTime } from "../../../lib/dates";
 import { formatDifference, formatRupees } from "../../../lib/money";
 import { useSocket } from "../../../sockets/SocketProvider";
 import { STEP_TITLE, VARIANCE_TAG_LABEL } from "./runText";
@@ -247,6 +247,31 @@ function Summary({ p, slug }: { p: StepPreview; slug: StepSlug }) {
         </Card>
       )}
       {p.held && <PersonList title="Held, not paid by this run" people={p.held.map((h) => ({ ...h, reason: HOLD_REASON_LABEL[h.code as keyof typeof HOLD_REASON_LABEL] ?? h.reason }))} />}
+      {slug === "publish" && p.payslips !== undefined && (
+        <Card size="small" title="What publishing does">
+          <Flex vertical gap={8}>
+            <Text>
+              <Text strong>{p.payslips}</Text> {p.payslips === 1 ? "payslip" : "payslips"}, net pay <Text strong>{formatRupees(p.netTotal ?? "0", 2)}</Text> in all.
+            </Text>
+            <ul style={{ margin: 0, paddingLeft: 20 }}>{(p.willDo ?? []).map((w) => <li key={w}>{w}</li>)}</ul>
+            {p.noPayslip && p.noPayslip.length > 0 && <PersonList title="No payslip yet: held, not paid by this run" people={p.noPayslip.map((h) => ({ employeeId: h.employeeId, employeeCode: "", code: h.reason ?? "HELD", name: h.name, reason: HOLD_REASON_LABEL[(h.reason ?? "") as keyof typeof HOLD_REASON_LABEL] ?? h.reason ?? "Held", detail: h.detail }))} />}
+          </Flex>
+        </Card>
+      )}
+      {slug === "bank-file" && p.paymentDate !== undefined && (
+        <Card size="small" title="What the bank file would contain">
+          <Flex vertical gap={8}>
+            <Text>
+              <Text strong>{p.rows ?? 0}</Text> {p.rows === 1 ? "row" : "rows"}, total <Text strong>{formatRupees(p.rowsTotal ?? "0", 2)}</Text>, for the payment date <Text strong>{p.paymentDate ? formatDate(p.paymentDate) : "not set"}</Text>. Each goes to the account in force on that date.
+            </Text>
+            {p.excluded && p.excluded.length > 0 && (
+              <Alert type="warning" showIcon title={`${p.excluded.length} ${p.excluded.length === 1 ? "person is" : "people are"} payable but not in this file`} description={<ul style={{ margin: 0, paddingLeft: 20 }}>{p.excluded.map((e) => <li key={e.employeeId}>{e.name} ({e.employeeCode}): {e.detail}</li>)}</ul>} />
+            )}
+            <Table size="small" rowKey="employeeCode" pagination={{ pageSize: 10, hideOnSinglePage: true }} dataSource={p.people ?? []} scroll={{ x: "max-content" }} columns={[{ title: "Code", dataIndex: "employeeCode" }, { title: "Name", dataIndex: "name" }, { title: "Bank", dataIndex: "bankName" }, { title: "Account", render: (_, r) => `ending ${r.accountLast4}` }, { title: "IFSC", dataIndex: "ifsc" }, { title: "Amount", align: "right", render: (_, r) => formatRupees(r.amount, 2) }]} />
+            <ul style={{ margin: 0, paddingLeft: 20 }}>{(p.willDo ?? []).map((w) => <li key={w}>{w}</li>)}</ul>
+          </Flex>
+        </Card>
+      )}
       {slug === "finalise" && p.lock && (
         <Card size="small" title="What closing the period does">
           <ul style={{ margin: 0, paddingLeft: 20 }}>
@@ -314,10 +339,12 @@ function Actions({ p, step, slug, runId }: { p: StepPreview; step: StepState; sl
   const execute = useMutation({
     mutationFn: async () => {
       if (slug === "finalise") await payrollApi.finaliseRun(runId);
+      else if (slug === "publish") await payrollApi.publishPayslips(runId);
+      else if (slug === "bank-file") await payrollApi.generateBankFile(runId);
       else await payrollApi.unlockRun(runId);
     },
     onSuccess: () => {
-      void message.success(slug === "finalise" ? "The period is closed." : "The period is unlocked.");
+      void message.success(slug === "finalise" ? "The period is closed." : slug === "publish" ? "The payslips are published." : slug === "bank-file" ? "The bank file is ready." : "The period is unlocked.");
       refresh();
       navigate(`/admin/payroll/run/${runId}`);
     },
@@ -392,7 +419,20 @@ function Actions({ p, step, slug, runId }: { p: StepPreview; step: StepState; sl
             )}
           </>
         )}
-        {live?.status === "APPROVED" && (slug === "publish" || slug === "bank-file") && <Text type="secondary">Approved. Carrying it out arrives in the next build step.</Text>}
+        {live?.status === "APPROVED" && (slug === "publish" || slug === "bank-file") && (
+          <>
+            <Paragraph style={{ margin: 0 }}>
+              {slug === "publish" ? "A second person approved publishing. Carrying it out is done by someone other than the person who approved it." : "A second person approved making the bank file. Carrying it out is done by someone other than the person who approved it. Nothing is sent to the bank: you download the file and upload it yourself."}
+            </Paragraph>
+            {step.you.canMake && live.checker && (
+              <Space>
+                <Button type="primary" loading={execute.isPending} onClick={() => execute.mutate()}>
+                  {slug === "publish" ? "Publish the payslips now" : "Make the bank file now"}
+                </Button>
+              </Space>
+            )}
+          </>
+        )}
         {live?.status === "APPROVED" && slug === "run" && <Text type="secondary">Approved. The next step is to ask for the period to be closed, from the run page.</Text>}
 
         {live && step.you.canMake && (

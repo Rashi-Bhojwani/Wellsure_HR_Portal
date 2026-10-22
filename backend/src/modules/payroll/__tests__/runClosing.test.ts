@@ -1,98 +1,19 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { setArrearsBasisProvider } from "../salary/arrears";
 import { deleteWithDependents, purgeAppendOnly } from "../../../lib/__tests__/cleanup";
-import { setPayrollConsumptionCheck, setPayrollInputsListener, setPayrollLockCheck, writeJobChange } from "../../../lib/effectiveDating";
+import { writeJobChange } from "../../../lib/effectiveDating";
 import * as permissions from "../../../lib/permissions";
 import { prisma } from "../../../lib/prisma";
-import { cleanupFullTestEmployee, createFullTestEmployee, loginAs } from "../../employee/__tests__/employeeTestHelpers";
-import { SettingsBasedEncashmentRateProvider, setEncashmentRateProvider } from "../../leave/encashmentRate";
 import { unlockCycle } from "../../attendance/finalisation";
-import { registerPayrollSeams } from "../wiring";
 import { confirmRule, previewConfirm } from "../rules/governed";
-import type { RulePin } from "../rules/context";
 import { payrollLockOn } from "../run/lock";
-import { CYCLE, api, buildRunWorld, calculateAgain, calculateRun, day, lockCycle, setRules, sidelineEveryoneBut, teardownRunWorld, type RunWorld } from "./runTestHelpers";
+import { CYCLE, api, buildRunWorld, calculateAgain, calculateRun, day, lockCycle, setRules, teardownRunWorld, type RunWorld } from "./runTestHelpers";
 import { FIRST_SALARY_DAY, giveSalary, makeComponent } from "./salaryTestHelpers";
 
 // Submitting, approving, finalising and unlocking a run through the real API, the real database and the real lock (docs/plans/PHASE_6.md §14F). The first world is
 // the one that matters most: a run that leaves somebody out is not approvable, and the names are in the preview.
 
-const REAL_RULES = { PT_SLABS: { states: {} }, LWF_TABLE: { states: {} }, STATE_NAME_MAP: { "Test State": "TEST_STATE" }, PT_STATE_OF_PLACEMENT: "LAST_DAY_OF_PERIOD" };
+import { REAL_RULES, approve, closeWorld, closingWorld, confirmAllPins, driveToFinal, requestStep, resetSeams, runRow, staffWith, state, step, stepOf, submit, type Closing } from "./closeTestHelpers";
 
-type Closing = RunWorld & { sup: { employeeId: string; userId: string; employeeCode: string }; supToken: string; restore: () => Promise<void> };
-
-async function closingWorld(names: string[]): Promise<Closing> {
-  registerPayrollSeams();
-  const world = (await buildRunWorld(names)) as Closing;
-  world.sup = await createFullTestEmployee(world.org, { roleCode: "SUPER_ADMIN" });
-  world.supToken = await loginAs(world.sup.employeeCode);
-  world.userIds.push(world.sup.userId);
-  world.restore = await sidelineEveryoneBut(Object.values(world.named).map((p) => p.employeeId)); // see sidelineEveryoneBut: the seeded staff are not part of these runs
-  return world;
-}
-async function closeWorld(world: Closing): Promise<void> {
-  await world.restore();
-  await cleanupFullTestEmployee(world.sup.employeeId);
-  await teardownRunWorld(world);
-}
-
-async function staffWith(world: RunWorld, who: string[], over: { salary?: boolean; lock?: boolean } = {}): Promise<void> {
-  for (const n of who) {
-    const id = world.named[n]!.employeeId;
-    if (over.salary !== false) await giveSalary(world, id, "600000", FIRST_SALARY_DAY);
-    if (over.lock !== false) await lockCycle(id, CYCLE.start, CYCLE.end);
-  }
-}
-
-/** Confirms every rule a run pinned, as a different person from the one who set them, so the run is real. */
-async function confirmAllPins(world: RunWorld, runId: string): Promise<void> {
-  const run = await prisma.payrollRun.findUniqueOrThrow({ where: { id: runId } });
-  for (const p of (run.pins as unknown as RulePin[]).filter((x) => (x.kind ?? "RULE") === "RULE")) {
-    const pre = await previewConfirm(p.key, world.checkerA.userId);
-    if (pre.blocked) continue;
-    await confirmRule(p.key, { version: pre.version, typedValue: pre.requiresRetype ? pre.value : undefined, note: "checked in the test", fingerprint: pre.fingerprint }, { userId: world.checkerA.userId });
-  }
-}
-
-const step = (token: string, runId: string, slug: string, what: string, body?: object) => api(token, "post", `/runs/${runId}/approvals/${slug}/${what}`, body);
-const state = async (token: string, runId: string) => (await api(token, "get", `/runs/${runId}/approvals`)).body as { runStatus: string; steps: Array<{ slug: string; live: { status: string; hash: string; checker: { name: string } | null } | null; last: { status: string; decisionNote: string | null; voidReason: string | null } | null; checkers: { state: string; message: string } | null; you: { canMake: boolean; canDecide: boolean } }> };
-const stepOf = async (token: string, runId: string, slug: string) => (await state(token, runId)).steps.find((s) => s.slug === slug)!;
-const runRow = (runId: string) => prisma.payrollRun.findUniqueOrThrow({ where: { id: runId } });
-
-async function submit(world: RunWorld, runId: string, note = "please check") {
-  const p = await step(world.tokens.maker, runId, "run", "preview");
-  if (p.status !== 200 || !p.body.canRequest) throw new Error(`submit preview: ${JSON.stringify(p.body)}`);
-  const r = await step(world.tokens.maker, runId, "run", "request", { fingerprint: p.body.fingerprint, note });
-  if (r.status !== 201) throw new Error(`submit: ${JSON.stringify(r.body)}`);
-}
-async function approve(world: Closing, token: string, runId: string, slug: string) {
-  const live = (await stepOf(token, runId, slug)).live;
-  const r = await step(token, runId, slug, "decision", { decision: "APPROVE", hash: live!.hash, note: "looks right" });
-  if (r.status !== 200) throw new Error(`approve ${slug}: ${JSON.stringify(r.body)}`);
-}
-async function requestStep(token: string, runId: string, slug: string, note?: string) {
-  const p = await step(token, runId, slug, "preview");
-  if (p.status !== 200 || !p.body.canRequest) throw new Error(`${slug} preview: ${JSON.stringify(p.body)}`);
-  const r = await step(token, runId, slug, "request", { fingerprint: p.body.fingerprint, ...(note ? { note } : {}) });
-  if (r.status !== 201) throw new Error(`${slug} request: ${JSON.stringify(r.body)}`);
-}
-/** The whole road: submit, approve, request the lock, approve it, carry it out. */
-async function driveToFinal(world: Closing, runId: string): Promise<void> {
-  await submit(world, runId);
-  await approve(world, world.tokens.checkerA, runId, "run");
-  await requestStep(world.tokens.maker, runId, "finalise");
-  await approve(world, world.tokens.checkerB, runId, "finalise");
-  const done = await api(world.tokens.maker, "post", `/runs/${runId}/finalise`);
-  if (done.status !== 200) throw new Error(`finalise: ${JSON.stringify(done.body)}`);
-}
-
-const resetSeams = () => {
-  setPayrollLockCheck(null);
-  setPayrollConsumptionCheck(null);
-  setPayrollInputsListener(null);
-  setArrearsBasisProvider(null);
-  setEncashmentRateProvider(new SettingsBasedEncashmentRateProvider());
-};
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 describe("a run that leaves somebody out cannot be approved", () => {
@@ -368,7 +289,7 @@ describe("submit, approve, finalise, the lock and unlock", () => {
 
   it("publishing payslips and the bank file are approvals on a final run, bound to it and decided by a second person", async () => {
     const pub = await step(world.tokens.maker, runId, "publish", "preview");
-    expect(pub.body).toMatchObject({ canRequest: true, blockers: [], rows: 3 });
+    expect(pub.body).toMatchObject({ canRequest: true, blockers: [], payslips: 3 });
     await requestStep(world.tokens.maker, runId, "publish");
     expect((await step(world.tokens.maker, runId, "publish", "decision", { decision: "REJECT", note: "no" })).status).toBe(403);
     await approve(world, world.tokens.checkerB, runId, "publish");
@@ -426,6 +347,9 @@ describe("submit, approve, finalise, the lock and unlock", () => {
     // Unlocking is asked for and approved first; then payslips go out; then somebody tries to carry the unlock out.
     await requestStep(world.supToken, runId, "unlock", "A day was found to be wrong");
     await approve(world, world.tokens.checkerA, runId, "unlock");
+    // A release is written only with the thing it releases (P6-5's trigger), so one payslip goes in first, directly, as the real publish would write it.
+    const item = await prisma.payrollRunItem.findFirstOrThrow({ where: { runId, employeeId: who("a") } });
+    await prisma.payslip.create({ data: { runId, runItemId: item.id, employeeId: who("a"), cycleLabel: CYCLE.label, cycleStart: day(CYCLE.start), cycleEnd: day(CYCLE.end), content: {}, contentHash: "test", publishedByUserId: world.maker.userId } });
     await prisma.payrollRunRelease.create({ data: { runId, kind: "PAYSLIPS_PUBLISHED", reference: "test", actorUserId: world.maker.userId } });
     const carried = await api(world.supToken, "post", `/runs/${runId}/unlock`);
     expect([carried.status, carried.body.error.code]).toEqual([409, "RUN_RELEASED"]); // the service says so in words; the database is only the second line
@@ -447,6 +371,8 @@ describe("submit, approve, finalise, the lock and unlock", () => {
     await expect(prisma.payrollPeriodLock.create({ data: { cycleStart: run.cycleStart, cycleEnd: run.cycleEnd, cycleLabel: run.cycleLabel, action: "UNLOCK", runId, reason: "bypass the service", actorUserId: world.sup.userId } })).rejects.toThrow(/RUN_RELEASED/);
     // A bank file generated counts the same way.
     await deleteWithDependents("PayrollRunRelease", (await prisma.payrollRunRelease.findMany({ where: { runId }, select: { id: true } })).map((x) => x.id));
+    await expect(prisma.payrollRunRelease.create({ data: { runId, kind: "BANK_FILE_GENERATED", reference: "test", actorUserId: world.maker.userId } })).rejects.toThrow(/RELEASE_NEEDS_BATCH/); // nothing to release yet
+    await prisma.bankTransferBatch.create({ data: { runId, runHash: run.runHash!, paymentDate: day("2026-08-31"), templateVersion: 1, templateHash: "test", rowCount: 0, total: "0", fileKey: "test/none", fileName: "none.csv", fileSha256: "0", generatedByUserId: world.maker.userId } });
     await prisma.payrollRunRelease.create({ data: { runId, kind: "BANK_FILE_GENERATED", reference: "test", actorUserId: world.maker.userId } });
     expect((await step(world.supToken, runId, "unlock", "preview")).body.blockers[0].message).toMatch(/bank file has been generated/);
     expect((await runRow(runId)).status).toBe("FINALISED");

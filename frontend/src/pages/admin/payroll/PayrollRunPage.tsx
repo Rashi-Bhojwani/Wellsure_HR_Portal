@@ -9,6 +9,7 @@ import type { RunDetail, RunItemRow, VarianceRow } from "../../../api/payroll";
 import { CalculateModal } from "../../../components/payroll/CalculateModal";
 import { PlaceholderBanner } from "../../../components/payroll/PlaceholderBanner";
 import { RunApprovalPanel } from "../../../components/payroll/RunApprovalPanel";
+import { ReleasePanels } from "../../../components/payroll/ReleasePanels";
 import { RunItemDrawer } from "../../../components/payroll/RunItemDrawer";
 import { useAuth } from "../../../hooks/useAuth";
 import { apiErrorMessage } from "../../../lib/apiError";
@@ -78,6 +79,7 @@ export function PayrollRunPage() {
       </Flex>
       {run.runHash && <PlaceholderBanner watermark={run.watermark} />}
       <RunApprovalPanel run={run} />
+      <ReleasePanels run={run} />
       {run.status === "CALCULATING" && (
         <Alert type="info" showIcon title="Calculating" description={<Progress percent={run.progress.total ? Math.floor((run.progress.done * 100) / run.progress.total) : 0} status="active" />} />
       )}
