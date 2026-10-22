@@ -113,8 +113,8 @@ async function applyBankChange(employeeId: string, changesJson: Record<string, u
   );
 }
 
-async function applyStatutoryChange(employeeId: string, changesJson: Record<string, unknown>): Promise<void> {
-  const data: Record<string, unknown> = {};
+async function applyStatutoryChange(employeeId: string, changesJson: Record<string, unknown>, byUserId: string): Promise<void> {
+  const data: Record<string, unknown> = { updatedByUserId: byUserId };
   if (changesJson.panEncrypted) {
     data.panEncrypted = unpackBytes(changesJson.panEncrypted as string);
     data.panLast4 = changesJson.panLast4;
@@ -150,7 +150,7 @@ export async function approveChangeRequest(id: string, remarks: string | undefin
 
   const changesJson = row.changesJson as Record<string, unknown>;
   if (row.fieldGroup === "bank") await applyBankChange(row.employeeId, changesJson, meta);
-  else if (row.fieldGroup === "statutory") await applyStatutoryChange(row.employeeId, changesJson);
+  else if (row.fieldGroup === "statutory") await applyStatutoryChange(row.employeeId, changesJson, meta.actorUserId);
   else await applyPersonalChange(row.employeeId, changesJson);
 
   await prisma.profileChangeRequest.update({

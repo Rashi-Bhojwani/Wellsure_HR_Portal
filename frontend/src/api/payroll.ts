@@ -927,3 +927,86 @@ export async function myPayslip(id: string): Promise<PayslipSummary & { content:
 export async function myPayslipPdf(id: string): Promise<PdfLink> {
   return (await apiClient.get(`/api/payslips/mine/${id}/pdf`)).data;
 }
+
+// ── The Setup Checklist and "Ready for first real run" (P6-6) ──
+
+export type SetupStatus = "NOT_SET" | "PLACEHOLDER" | "CONFIRMED";
+export type SetupArea = "SALARIES" | "BANK_ACCOUNTS" | "STATUTORY_IDS";
+export interface SetupItem {
+  id: string;
+  section: string;
+  category?: string;
+  title: string;
+  why: string;
+  required: boolean;
+  notRequiredReason?: string;
+  status: SetupStatus;
+  enteredBy: { name: string; at: string } | null;
+  confirmedBy: { name: string; at: string } | null;
+  detail: string;
+  where: { label: string; path: string };
+  permissionNote?: string;
+  problem?: string;
+  coverage?: { covered: number; total: number; missing: Array<{ employeeId: string; code: string; name: string }> };
+  signoffArea?: SetupArea;
+  question?: string;
+}
+export interface SetupSection {
+  id: string;
+  title: string;
+  intro: string;
+  items: SetupItem[];
+}
+export interface Readiness {
+  ready: boolean;
+  demo: boolean;
+  generatedAt: string;
+  required: number;
+  confirmed: number;
+  blockers: Array<{ itemId: string; section: string; sectionTitle: string; title: string; status: SetupStatus; missing: string; where: { label: string; path: string } }>;
+  notRequiredYet: Array<{ itemId: string; title: string; status: SetupStatus; reason: string }>;
+}
+export interface SetupReport {
+  generatedAt: string;
+  environment: string;
+  demo: boolean;
+  sections: SetupSection[];
+  readiness: Readiness;
+}
+export interface AccessHolder {
+  userId: string;
+  name: string;
+  employeeCode: string;
+  roles: string[];
+  via: string[];
+  isDeveloper: boolean;
+}
+export interface AccessReport {
+  classes: Array<{ id: string; label: string; what: string; view: AccessHolder[]; edit: AccessHolder[]; confirm: AccessHolder[] }>;
+  developers: Array<{ userId: string; name: string; employeeCode: string; holdsAnySecret: boolean; isSuperAdmin: boolean }>;
+}
+export interface SignoffPreview {
+  area: SetupArea;
+  label: string;
+  covered: number;
+  total: number;
+  missing: Array<{ employeeId: string; code: string; name: string }>;
+  enteredBy: string[];
+  blocked: string | null;
+  fingerprint: string;
+}
+export async function getSetup(): Promise<SetupReport> {
+  return (await apiClient.get(`${base}/setup`)).data;
+}
+export async function getReadiness(): Promise<Readiness> {
+  return (await apiClient.get(`${base}/setup/ready`)).data;
+}
+export async function getAccessReport(): Promise<AccessReport> {
+  return (await apiClient.get(`${base}/setup/access`)).data;
+}
+export async function previewSignoff(area: SetupArea): Promise<SignoffPreview> {
+  return (await apiClient.post(`${base}/setup/signoffs/${area}/preview`)).data;
+}
+export async function giveSignoff(area: SetupArea, body: { fingerprint: string; note: string }): Promise<{ id: string }> {
+  return (await apiClient.post(`${base}/setup/signoffs/${area}`, body)).data;
+}

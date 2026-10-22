@@ -90,6 +90,8 @@ import { SalaryRevisionsPage } from "../pages/admin/payroll/SalaryRevisionsPage"
 import { AdjustmentsPage } from "../pages/admin/payroll/AdjustmentsPage";
 import { PayrollRunsPage } from "../pages/admin/payroll/PayrollRunsPage";
 import { LayoutsPage } from "../pages/admin/payroll/LayoutsPage";
+import { SetupChecklistPage } from "../pages/admin/payroll/SetupChecklistPage";
+import { ReadyPage } from "../pages/admin/payroll/ReadyPage";
 import { AttendanceSettingsPage, ShiftMasterPage, WeekOffPatternsPage } from "../pages/admin/attendance/AttendanceSettingsPage";
 
 // Single source of truth for the HR/Admin portal's App Switcher and each
@@ -281,6 +283,8 @@ export const adminApps: AdminApp[] = [
         key: "payroll",
         label: "Payroll",
         items: [
+          { key: "payroll-setup", label: "Setup Checklist", path: "payroll/setup", icon: CheckSquareOutlined, element: SetupChecklistPage },
+          { key: "payroll-ready", label: "Ready for First Run", path: "payroll/ready", icon: SafetyOutlined, element: ReadyPage },
           { key: "payroll-rules", label: "Rules and Setup", path: "payroll/rules", icon: SafetyCertificateOutlined, element: RulesPage },
           { key: "salary-components", label: "Salary Components", path: "payroll/components", icon: SettingOutlined, element: ComponentsPage },
           { key: "salary-structures", label: "Salary Structures", path: "payroll/structures", icon: PartitionOutlined, element: StructuresPage },

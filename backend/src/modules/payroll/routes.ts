@@ -11,7 +11,8 @@ import * as rel from "./run/releaseController";
 import { memoryUpload } from "../../lib/uploads";
 import { employeeSalaryQuerySchema } from "./salary/employees";
 import { ruleGate, layoutGate } from "./gates";
-import { checkersQuerySchema, payrollAuditQuerySchema, ruleConfirmSchema, ruleEditPreviewSchema, ruleEditSchema, ruleKeyParamsSchema } from "./validators";
+import * as setup from "./setup/controller";
+import { setupAreaParamsSchema, setupSignoffSchema, checkersQuerySchema, payrollAuditQuerySchema, ruleConfirmSchema, ruleEditPreviewSchema, ruleEditSchema, ruleKeyParamsSchema } from "./validators";
 
 // Payroll. Every route here is gated on keys a manager can never hold (a test fails if any becomes manager-grantable) and none has a TEAM scope:
 // payroll data is ALL or nothing. Nothing here moves money.
@@ -28,6 +29,13 @@ payrollRouter.post("/rules/:key/confirm", ruleGate("confirm"), validate({ params
 
 // Reveal of an owner's secret (a sealed rule): the identifiers' own permission, and the audit row says who looked.
 payrollRouter.post("/rules/:key/reveal", requirePermission("payroll.identifiers.manage"), validate({ params: ruleKeyParamsSchema }), controller.reveal);
+
+// The Setup Checklist, "Ready for first real run", who can see what, and the sign-off of people's data (P6-6). Statuses and counts only, never a value.
+payrollRouter.get("/setup", requirePermission("payroll.rules.view"), setup.checklist);
+payrollRouter.get("/setup/ready", requirePermission("payroll.rules.view"), setup.ready);
+payrollRouter.get("/setup/access", requireAnyPermission("payroll.rules.view", "role.view"), setup.access);
+payrollRouter.post("/setup/signoffs/:area/preview", requirePermission("payroll.approve"), validate({ params: setupAreaParamsSchema }), setup.signoffPreview);
+payrollRouter.post("/setup/signoffs/:area", requirePermission("payroll.approve"), validate({ params: setupAreaParamsSchema, body: setupSignoffSchema }), setup.signoff);
 
 // Who could decide an action (made visible rather than silently blocking)
 payrollRouter.get("/approvals/checkers", requireAnyPermission("payroll.rules.view", "payroll.run", "payroll.approve", "payroll.rules.confirm"), validate({ query: checkersQuerySchema }), controller.checkers);

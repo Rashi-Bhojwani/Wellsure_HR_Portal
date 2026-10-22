@@ -313,7 +313,7 @@ async function commitEmployees(tx: Prisma.TransactionClient, rows: { data: Recor
   return createdIds;
 }
 
-async function commitStatutory(tx: Prisma.TransactionClient, rows: { data: Record<string, unknown> }[]): Promise<void> {
+async function commitStatutory(tx: Prisma.TransactionClient, rows: { data: Record<string, unknown> }[], meta: ActorMeta): Promise<void> {
   const employees = await tx.employee.findMany({ select: { id: true, employeeCode: true } });
   const empByCode = new Map(employees.map((e) => [e.employeeCode.toLowerCase(), e.id]));
 
@@ -338,6 +338,7 @@ async function commitStatutory(tx: Prisma.TransactionClient, rows: { data: Recor
     }
     if (d.esiNumber) update.esiNumber = d.esiNumber;
     if (Object.keys(update).length === 0) continue;
+    update.updatedByUserId = meta.actorUserId;
     await tx.employeeStatutory.upsert({ where: { employeeId }, create: { employeeId, ...update }, update });
   }
 }
@@ -456,7 +457,7 @@ export async function commitBatch(
     async (tx) => {
       if (dataset === "org-masters") await commitOrgMasters(tx, rowInputs);
       else if (dataset === "employees") await commitEmployees(tx, rowInputs, meta);
-      else if (dataset === "statutory") await commitStatutory(tx, rowInputs);
+      else if (dataset === "statutory") await commitStatutory(tx, rowInputs, meta);
       else if (dataset === "bank") await commitBank(tx, rowInputs, meta);
       else await commitLeaveGrants(tx, rowInputs, meta);
 

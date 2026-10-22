@@ -238,6 +238,13 @@ export async function confirmLayout(key: string, input: { version: number; note:
   return (await getLayout(key)).layout;
 }
 
+/** What the Setup Checklist needs to know about the bank layout without ever seeing it: whether a debit account has been entered with it. */
+export async function bankLayoutFacts(): Promise<{ hasDebitAccount: boolean; columns: number }> {
+  const cur = await currentLayout("BANK_TEMPLATE");
+  const layout = cur ? (cur.value as Layout) : null;
+  return { hasDebitAccount: Boolean(layout?.debitAccountEnc), columns: layout?.columns?.length ?? 0 };
+}
+
 /** Whether a layout exists and its current version is Confirmed, for the gates; never throws. */
 export async function layoutReady(key: string): Promise<{ ready: boolean; version: number | null; valueHash: string | null; status: ItemStatus | "NOT_SET" }> {
   const cur = await currentLayout(key);
