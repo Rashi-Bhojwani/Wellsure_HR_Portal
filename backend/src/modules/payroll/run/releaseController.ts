@@ -1,7 +1,8 @@
 import type { Request, Response } from "express";
 import { requireFile } from "../../../lib/uploads";
 import { attachResponse, batchForRun, downloadBatchFile, getBatch, markPaid } from "./bankBatches";
-import { confirmLayout, getLayout, listLayouts, previewLayoutConfirm, previewLayoutSave, saveLayout } from "./layouts";
+import { confirmLayout, getLayout, listLayouts, previewLayoutConfirm, previewLayoutSave, saveLayout, showsBankLayout, viewerOf } from "./layouts";
+import { writeAuditLog } from "../../../lib/audit";
 import { downloadOutput, generateOutput, listOutputs } from "./outputs";
 import { anyPayslip, anyPayslipPdf, draftPreview, draftPreviewPdf, myPayslip, myPayslipPdf, myPayslips, prepareAgain, runPayslips } from "./payslipAccess";
 import { generateBankFile, publishPayslips } from "./release";
@@ -49,8 +50,22 @@ export const outputGenerate = async (req: Request, res: Response): Promise<void>
 export const outputDownload = async (req: Request, res: Response): Promise<void> => send(res, 200, await downloadOutput(id(req), actor(req)));
 
 // Layouts (the bank file and the four statutory files, as governed items)
-export const layouts = async (_req: Request, res: Response): Promise<void> => send(res, 200, { layouts: await listLayouts() });
-export const layout = async (req: Request, res: Response): Promise<void> => send(res, 200, await getLayout(req.params.key as string));
+// Looking at the bank layout is recorded: one audit row says who and when, never what it said. Everyone else sees only that it exists, its status, and who confirmed it and when.
+const noteBankLayoutSeen = async (req: Request): Promise<void> => {
+  await writeAuditLog({ actorUserId: req.user!.userId, action: "payroll.layout.revealed", entityType: "PayrollLayout", entityId: "BANK_TEMPLATE", ipAddress: req.ip ?? null, userAgent: req.get("user-agent") ?? null });
+};
+export const layouts = async (req: Request, res: Response): Promise<void> => {
+  const viewer = viewerOf(req.user!.permissions);
+  const all = await listLayouts(viewer);
+  if (showsBankLayout(viewer, all)) await noteBankLayoutSeen(req);
+  send(res, 200, { layouts: all });
+};
+export const layout = async (req: Request, res: Response): Promise<void> => {
+  const viewer = viewerOf(req.user!.permissions);
+  const one = await getLayout(req.params.key as string, viewer);
+  if (one.layout.key === "BANK_TEMPLATE" && showsBankLayout(viewer, [one.layout])) await noteBankLayoutSeen(req);
+  send(res, 200, one);
+};
 export const layoutSavePreview = async (req: Request, res: Response): Promise<void> => send(res, 200, await previewLayoutSave(req.params.key as string, (req.body as { value: unknown }).value));
 export const layoutSave = async (req: Request, res: Response): Promise<void> => send(res, 200, await saveLayout(req.params.key as string, req.body as { value: unknown; note?: string; fingerprint: string }, meta(req)));
 export const layoutConfirmPreview = async (req: Request, res: Response): Promise<void> => send(res, 200, await previewLayoutConfirm(req.params.key as string, req.user!.userId));

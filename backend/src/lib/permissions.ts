@@ -1,5 +1,6 @@
 import { PERMISSION_KEYS, MANAGER_GRANTABLE_KEYS } from "@shared/constants/permissions";
 import type { DataScope } from "@shared/constants/roles";
+import { DEVELOPER_FORBIDDEN_KEYS, DEVELOPER_ROLE_CODE } from "@shared/constants/sensitiveData";
 import { prisma } from "./prisma";
 
 // THE one place effective access is computed (Phase 5 commit E1). Used by
@@ -30,6 +31,7 @@ export function widestScope(scopes: DataScope[]): DataScope {
 
 const MANAGER_ROLE = "MANAGER";
 const MANAGER_GRANTABLE = new Set<string>(MANAGER_GRANTABLE_KEYS);
+const DEVELOPER_FORBIDDEN = new Set<string>(DEVELOPER_FORBIDDEN_KEYS);
 
 export async function resolveAccess(userId: string): Promise<ResolvedAccess> {
   const [userRoles, overrides] = await Promise.all([
@@ -37,6 +39,17 @@ export async function resolveAccess(userId: string): Promise<ResolvedAccess> {
     prisma.userPermissionOverride.findMany({ where: { userId }, include: { permission: true } }),
   ]);
   const roleCodes = userRoles.map((ur) => ur.role.code);
+  if (roleCodes.includes(DEVELOPER_ROLE_CODE)) {
+    // P6-6, the developer ceiling (docs/plans/PHASE_6.md §14J): the person who builds and runs the system never holds an owner's secret. Whatever the role definitions, a
+    // per-user grant or a raw SQL row say, every key in the sensitive registry is removed here, the one place access is resolved. Someone who somehow holds this role
+    // together with SUPER_ADMIN is treated as a developer only: the Super Admin role is dropped from what they are seen to hold.
+    const permissions = new Set<string>();
+    for (const ur of userRoles) for (const rp of ur.role.permissions) permissions.add(rp.permission.key);
+    for (const o of overrides) if (o.effect === "GRANT") permissions.add(o.permission.key);
+    for (const o of overrides) if (o.effect === "REVOKE") permissions.delete(o.permission.key);
+    for (const key of [...permissions]) if (DEVELOPER_FORBIDDEN.has(key)) permissions.delete(key);
+    return { roleCodes: roleCodes.filter((c) => c !== SUPER_ADMIN_ROLE_CODE), permissions, dataScope: widestScope(userRoles.map((ur) => ur.role.dataScope)), isSuperAdmin: false };
+  }
   if (roleCodes.includes(SUPER_ADMIN_ROLE_CODE)) {
     return { roleCodes, permissions: new Set<string>(PERMISSION_KEYS), dataScope: "ALL", isSuperAdmin: true };
   }

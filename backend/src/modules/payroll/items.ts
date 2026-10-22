@@ -149,10 +149,12 @@ export const editFingerprint = (type: string, key: string, baseVersion: number, 
 export async function appendVersion(
   kind: PayrollItemKind,
   audit: AuditNames,
-  input: { key: string; value: unknown; note: string; before: ItemSummary; auditValue?: unknown },
+  input: { key: string; value: unknown; note: string; before: ItemSummary; auditValue?: unknown; valueHash?: string; maskForAudit?: (value: unknown) => unknown },
   actor: Actor,
 ): Promise<void> {
-  const valueHash = payrollHash(input.value);
+  // A sealed item (an owner's secret) brings its own keyed hash and a mask for anything that goes into an audit row; everything else hashes its plain value, as before.
+  const valueHash = input.valueHash ?? payrollHash(input.value);
+  const mask = input.maskForAudit ?? ((v: unknown) => v);
   const baseVersion = input.before.current?.version ?? 0;
   try {
     await prisma.$transaction(async (tx) => {
@@ -168,8 +170,8 @@ export async function appendVersion(
     action: `${audit.actionPrefix}.edited`,
     entityType: audit.entityType,
     entityId: input.key,
-    before: input.before.current ? { version: input.before.current.version, value: input.before.current.value, status: input.before.status } : null,
-    after: { version: baseVersion + 1, value: input.auditValue ?? input.value, status: "PLACEHOLDER", note: input.note, resetConfirmation: input.before.status === "CONFIRMED" },
+    before: input.before.current ? { version: input.before.current.version, value: mask(input.before.current.value), status: input.before.status } : null,
+    after: { version: baseVersion + 1, value: input.auditValue ?? mask(input.value), status: "PLACEHOLDER", note: input.note, resetConfirmation: input.before.status === "CONFIRMED" },
     ipAddress: actor.ip ?? null,
     userAgent: actor.userAgent ?? null,
   });
@@ -192,7 +194,7 @@ export interface ConfirmPreviewData {
 
 export const confirmFingerprint = (type: string, key: string, version: number, valueHash: string): string => payrollHash({ t: type, key, version, valueHash });
 
-export async function previewConfirmation(type: string, kind: PayrollItemKind, key: string, summary: ItemSummary, actorUserId: string): Promise<ConfirmPreviewData> {
+export async function previewConfirmation(type: string, kind: PayrollItemKind, key: string, summary: ItemSummary, actorUserId: string, checkerPermission?: string): Promise<ConfirmPreviewData> {
   void kind;
   if (!summary.current) throw new HttpError(409, "There is no value yet, so there is nothing to confirm.", "RULE_NOT_SET");
   const cur = summary.current;
@@ -207,7 +209,7 @@ export async function previewConfirmation(type: string, kind: PayrollItemKind, k
     sourceLabel: summary.sourceLabel,
     authorName: cur.authorName,
     blocked,
-    checkers: await checkerAvailability("RULE_CONFIRM", { makerUserId: cur.authorUserId }),
+    checkers: await checkerAvailability("RULE_CONFIRM", { makerUserId: cur.authorUserId, ...(checkerPermission ? { checkerPermission } : {}) }),
     fingerprint: confirmFingerprint(type, key, cur.version, cur.valueHash),
   };
 }
@@ -222,7 +224,7 @@ export async function confirmVersion(
   type: string,
   kind: PayrollItemKind,
   audit: AuditNames,
-  input: { key: string; version: number; note: string; fingerprint: string; summary: ItemSummary; extraCheck?: (cur: VersionView) => void; auditExtra?: Record<string, unknown> },
+  input: { key: string; version: number; note: string; fingerprint: string; summary: ItemSummary; extraCheck?: (cur: VersionView) => void; auditExtra?: Record<string, unknown>; maskForAudit?: (value: unknown) => unknown },
   actor: Actor,
 ): Promise<void> {
   const cur = input.summary.current;
@@ -248,8 +250,8 @@ export async function confirmVersion(
     action: `${audit.actionPrefix}.confirmed`,
     entityType: audit.entityType,
     entityId: input.key,
-    before: { version: cur.version, value: cur.value, status: "PLACEHOLDER", source: input.summary.sourceLabel },
-    after: { version: cur.version, value: cur.value, status: "CONFIRMED", note, ...input.auditExtra },
+    before: { version: cur.version, value: (input.maskForAudit ?? ((v: unknown) => v))(cur.value), status: "PLACEHOLDER", source: input.summary.sourceLabel },
+    after: { version: cur.version, value: (input.maskForAudit ?? ((v: unknown) => v))(cur.value), status: "CONFIRMED", note, ...input.auditExtra },
     ipAddress: actor.ip ?? null,
     userAgent: actor.userAgent ?? null,
   });

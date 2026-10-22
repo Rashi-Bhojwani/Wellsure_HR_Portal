@@ -3,6 +3,7 @@ import { decryptField, encryptField } from "../../../lib/encryption";
 import { blindIndex, last4, normalizeAccountNumber } from "../../../lib/fieldHash";
 import { type CheckerAvailability } from "../approvals";
 import { payrollHash } from "../hash";
+import { HIDDEN, isSealed, keyedHash, seal, unseal } from "../sealed";
 import { appendVersion, confirmVersion, editFingerprint, loadItems, previewConfirmation, summarise, type ItemStatus, type VersionView } from "../items";
 import { LAYOUT_FIELDS, parseLayout, FILE_TOKENS, type Layout, type LayoutKind } from "./layout";
 
@@ -35,6 +36,24 @@ const itemOf = (key: string): LayoutItem => {
 };
 const AUDIT = (item: LayoutItem) => ({ entityType: "PayrollLayout", actionPrefix: "payroll.layout", eventSubject: item.itemKind });
 
+// The bank layout (and with it the company's debit account) is one of the owners' secrets: its whole version is stored sealed (encrypted), its hash is keyed, and what a screen sees depends on
+// who is asking (docs/plans/PHASE_6.md §14J). The four statutory layouts are not secret; they are stored and shown as before.
+const isSealedItem = (item: LayoutItem): boolean => item.layoutKind === "BANK";
+const openRaw = (value: unknown): Layout => (isSealed(value) ? unseal<Layout>(value) : (value as Layout));
+
+export interface Viewer {
+  /** Holds payroll.banklayout.manage or payroll.banklayout.confirm: may see the bank layout itself. Everyone else sees that it exists, its status, who confirmed it and when. */
+  seesBankLayout: boolean;
+}
+export const viewerOf = (permissions: ReadonlySet<string>): Viewer => ({ seesBankLayout: permissions.has("payroll.banklayout.manage") || permissions.has("payroll.banklayout.confirm") });
+const GATED: Viewer = { seesBankLayout: true };
+
+const logicalHashOf = (item: LayoutItem, layout: Layout): string => {
+  const { debitAccountEnc: _drop, ...logical } = layout;
+  void _drop;
+  return isSealedItem(item) ? keyedHash(`layout:${item.key}`, logical) : payrollHash(logical);
+};
+
 /** What a screen or an audit row may see of a stored layout: the encrypted debit account and its hash are removed, the last four digits stay. */
 export function redactLayout(value: unknown): unknown {
   if (!value || typeof value !== "object") return value;
@@ -44,7 +63,11 @@ export function redactLayout(value: unknown): unknown {
   delete rest.debitAccountHash;
   return { ...rest, hasDebitAccount };
 }
-const redactVersion = (v: VersionView | null): VersionView | null => (v ? { ...v, value: redactLayout(v.value) } : v);
+const openVersion = (item: LayoutItem, v: VersionView | null, viewer: Viewer): VersionView | null => {
+  if (!v) return v;
+  if (isSealedItem(item) && !viewer.seesBankLayout) return { ...v, value: { restricted: true } };
+  return { ...v, value: redactLayout(openRaw(v.value)) };
+};
 
 /** The debit account number out of a stored bank layout, for the one place that needs it: writing the file. */
 export function debitAccountOf(layout: Layout): string | undefined {
@@ -65,7 +88,7 @@ export interface LayoutView {
   lastConfirmed: VersionView | null;
 }
 
-function viewOf(item: LayoutItem, data: Awaited<ReturnType<typeof loadItems>>): LayoutView {
+function viewOf(item: LayoutItem, data: Awaited<ReturnType<typeof loadItems>>, viewer: Viewer): LayoutView {
   const s = summarise(data, item.key);
   const spec = LAYOUT_FIELDS[item.layoutKind];
   return {
@@ -78,28 +101,31 @@ function viewOf(item: LayoutItem, data: Awaited<ReturnType<typeof loadItems>>): 
     tokens: FILE_TOKENS,
     status: s.status,
     sourceLabel: s.sourceLabel,
-    current: redactVersion(s.current),
-    lastConfirmed: redactVersion(s.lastConfirmed),
+    current: openVersion(item, s.current, viewer),
+    lastConfirmed: openVersion(item, s.lastConfirmed, viewer),
   };
 }
 
-export async function listLayouts(): Promise<LayoutView[]> {
+export async function listLayouts(viewer: Viewer = GATED): Promise<LayoutView[]> {
   const bank = await loadItems("BANK_TEMPLATE");
   const outputs = await loadItems("OUTPUT_TEMPLATE");
-  return LAYOUT_ITEMS.map((i) => viewOf(i, i.itemKind === "BANK_TEMPLATE" ? bank : outputs));
+  return LAYOUT_ITEMS.map((i) => viewOf(i, i.itemKind === "BANK_TEMPLATE" ? bank : outputs, viewer));
 }
 
-export async function getLayout(key: string): Promise<{ layout: LayoutView; history: VersionView[] }> {
+export async function getLayout(key: string, viewer: Viewer = GATED): Promise<{ layout: LayoutView; history: VersionView[] }> {
   const item = itemOf(key);
   const data = await loadItems(item.itemKind, [key]);
-  return { layout: viewOf(item, data), history: [...summarise(data, key).history].reverse().map((v) => redactVersion(v)!) };
+  return { layout: viewOf(item, data, viewer), history: [...summarise(data, key).history].reverse().map((v) => openVersion(item, v, viewer)!) };
 }
+
+/** Whether this reading shows the bank layout's content to someone, so the caller can record that it was looked at. */
+export const showsBankLayout = (viewer: Viewer, layouts: readonly LayoutView[]): boolean => viewer.seesBankLayout && layouts.some((l) => l.key === "BANK_TEMPLATE" && l.current !== null);
 
 /** The stored (unredacted) current value and its status, for generation. Null when nothing has ever been saved. */
 export async function currentLayout(key: string): Promise<{ version: number; valueHash: string; value: unknown; status: ItemStatus } | null> {
   const item = itemOf(key);
   const s = summarise(await loadItems(item.itemKind, [key]), key);
-  return s.current ? { version: s.current.version, valueHash: s.current.valueHash, value: s.current.value, status: s.status } : null;
+  return s.current ? { version: s.current.version, valueHash: s.current.valueHash, value: openRaw(s.current.value), status: s.status } : null;
 }
 
 // ── Saving ──
@@ -125,10 +151,11 @@ function prepare(item: LayoutItem, raw: unknown, current: Layout | null): Prepar
     debit = current?.debitAccountHash === hash && current.debitAccountEnc ? { debitAccountEnc: current.debitAccountEnc, debitAccountLast4: current.debitAccountLast4 ?? last4(digits), debitAccountHash: hash } : { debitAccountEnc: Buffer.from(encryptField(digits)).toString("base64"), debitAccountLast4: last4(digits), debitAccountHash: hash };
   }
   const stored = parseLayout(item.layoutKind, { ...rest, ...debit });
-  const { debitAccountEnc: _drop, ...logical } = stored;
-  void _drop;
-  return { stored, logicalHash: payrollHash(logical) };
+  return { stored, logicalHash: logicalHashOf(item, stored) };
 }
+
+/** What stands in an audit row for a stored layout value: nothing at all for the bank layout, the layout without its encrypted debit account for the others. */
+const auditMask = (item: LayoutItem) => (value: unknown): unknown => (isSealedItem(item) || isSealed(value) ? HIDDEN : redactLayout(value));
 
 const fingerprintOf = (key: string, baseVersion: number, baseHash: string | null, logicalHash: string) => editFingerprint("LAYOUT_EDIT", key, baseVersion, baseHash, logicalHash);
 
@@ -145,7 +172,7 @@ export interface LayoutSavePreview {
 
 async function load(item: LayoutItem) {
   const before = summarise(await loadItems(item.itemKind, [item.key]), item.key);
-  const currentLayout = before.current ? (before.current.value as Layout) : null;
+  const currentLayout = before.current ? openRaw(before.current.value) : null;
   return { before, currentLayout };
 }
 
@@ -153,15 +180,15 @@ export async function previewLayoutSave(key: string, raw: unknown): Promise<Layo
   const item = itemOf(key);
   const { before, currentLayout } = await load(item);
   const { stored, logicalHash } = prepare(item, raw, currentLayout);
-  const currentLogical = currentLayout ? (({ debitAccountEnc: _d, ...r }) => (void _d, payrollHash(r)))(currentLayout) : null;
+  const currentLogical = currentLayout ? logicalHashOf(item, currentLayout) : null;
   return {
     key,
     isNew: !before.current,
-    before: before.current ? { version: before.current.version, value: redactLayout(before.current.value), status: before.status } : null,
+    before: before.current ? { version: before.current.version, value: redactLayout(currentLayout), status: before.status } : null,
     after: { value: redactLayout(stored) },
     unchanged: currentLogical === logicalHash,
     willResetConfirmation: before.status === "CONFIRMED",
-    lastConfirmed: before.status === "CONFIRMED" ? redactVersion(before.current) : redactVersion(before.lastConfirmed),
+    lastConfirmed: before.status === "CONFIRMED" ? openVersion(item, before.current, GATED) : openVersion(item, before.lastConfirmed, GATED),
     fingerprint: fingerprintOf(key, before.current?.version ?? 0, before.current?.valueHash ?? null, logicalHash),
   };
 }
@@ -171,9 +198,14 @@ export async function saveLayout(key: string, input: { value: unknown; note?: st
   const { before, currentLayout } = await load(item);
   const { stored, logicalHash } = prepare(item, input.value, currentLayout);
   if (input.fingerprint !== fingerprintOf(key, before.current?.version ?? 0, before.current?.valueHash ?? null, logicalHash)) throw new HttpError(409, "This changed since you previewed it. Preview it again.", "PREVIEW_STALE");
-  const currentLogical = currentLayout ? (({ debitAccountEnc: _d, ...r }) => (void _d, payrollHash(r)))(currentLayout) : null;
+  const currentLogical = currentLayout ? logicalHashOf(item, currentLayout) : null;
   if (currentLogical === logicalHash) throw new HttpError(409, "That is already the current layout. Nothing to change.", "NO_CHANGE");
-  await appendVersion(item.itemKind, AUDIT(item), { key, value: stored, note: (input.note ?? "").trim().slice(0, 500), before, auditValue: redactLayout(stored) }, actor);
+  await appendVersion(
+    item.itemKind,
+    AUDIT(item),
+    { key, value: isSealedItem(item) ? seal(stored) : stored, ...(isSealedItem(item) ? { valueHash: logicalHash } : {}), note: (input.note ?? "").trim().slice(0, 500), before, auditValue: isSealedItem(item) ? HIDDEN : redactLayout(stored), maskForAudit: auditMask(item) },
+    actor,
+  );
   return (await getLayout(key)).layout;
 }
 
@@ -194,14 +226,15 @@ export interface LayoutConfirmPreview {
 export async function previewLayoutConfirm(key: string, actorUserId: string): Promise<LayoutConfirmPreview> {
   const item = itemOf(key);
   const data = await loadItems(item.itemKind, [key]);
-  const p = await previewConfirmation("LAYOUT_CONFIRM", item.itemKind, key, summarise(data, key), actorUserId);
-  return { key, ...p, value: redactLayout(p.value) };
+  const p = await previewConfirmation("LAYOUT_CONFIRM", item.itemKind, key, summarise(data, key), actorUserId, isSealedItem(item) ? "payroll.banklayout.confirm" : undefined);
+  // The confirmer is shown the layout: checking it against the bank's specification is what confirming is.
+  return { key, ...p, value: redactLayout(openRaw(p.value)) };
 }
 
 export async function confirmLayout(key: string, input: { version: number; note: string; fingerprint: string }, actor: { userId: string; ip?: string | null; userAgent?: string | null }): Promise<LayoutView> {
   const item = itemOf(key);
   const data = await loadItems(item.itemKind, [key]);
-  await confirmVersion("LAYOUT_CONFIRM", item.itemKind, AUDIT(item), { key, version: input.version, note: input.note, fingerprint: input.fingerprint, summary: summarise(data, key) }, actor);
+  await confirmVersion("LAYOUT_CONFIRM", item.itemKind, AUDIT(item), { key, version: input.version, note: input.note, fingerprint: input.fingerprint, summary: summarise(data, key), maskForAudit: auditMask(item) }, actor);
   return (await getLayout(key)).layout;
 }
 

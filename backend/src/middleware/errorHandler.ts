@@ -38,6 +38,11 @@ export function errorHandler(err: unknown, req: Request, res: Response, next: Ne
     return;
   }
 
+  if (err instanceof Error && err.message.includes("DEVELOPER_NOT_SUPER_ADMIN:")) {
+    res.status(409).json({ error: { message: "Nobody can be both a developer and a Super Admin: the developer is the one person who must not hold the owners' secrets.", code: "DEVELOPER_CEILING" } });
+    return;
+  }
+
   if (err instanceof HttpError) {
     res.status(err.status).json({ error: { message: err.message, code: err.code, ...(err.details ? { details: err.details } : {}) } });
     return;

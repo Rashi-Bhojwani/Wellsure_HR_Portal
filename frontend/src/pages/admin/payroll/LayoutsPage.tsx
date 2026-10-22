@@ -45,14 +45,22 @@ export function LayoutsPage() {
         columns={[
           { title: "File", render: (_, r) => <div><Text strong>{r.label}</Text><div><Text type="secondary" style={{ fontSize: 12 }}>{r.description}</Text></div></div> },
           { title: "Status", render: (_, r) => <Tag color={STATUS_TAG[r.status].color}>{STATUS_TAG[r.status].label}</Tag> },
-          { title: "Layout", render: (_, r) => (r.current ? `${(r.current.value as LayoutValue).format.toLowerCase().replace("_", " ")}, ${(r.current.value as LayoutValue).columns.length} columns` : "Not entered") },
+          {
+            title: "Layout",
+            render: (_, r) => {
+              if (!r.current) return "Not entered";
+              // The bank layout is one of the owners' secrets: without the bank-layout permissions the screen says that it exists, and nothing of it.
+              if ((r.current.value as { restricted?: boolean }).restricted) return <Text type="secondary">Entered. Only the people who enter and check the bank layout can see it.</Text>;
+              return `${(r.current.value as LayoutValue).format.toLowerCase().replace("_", " ")}, ${(r.current.value as LayoutValue).columns.length} columns`;
+            },
+          },
           { title: "Source", render: (_, r) => <Text type="secondary" style={{ fontSize: 12 }}>{r.sourceLabel ?? r.whoConfirms}</Text> },
           {
             title: "",
             render: (_, r) => (
               <Space>
-                {hasPermission("payroll.rules.manage") && <Button size="small" onClick={() => setEditing(r)}>{r.current ? "Edit…" : "Enter…"}</Button>}
-                {hasPermission("payroll.rules.confirm") && r.status === "PLACEHOLDER" && <Button size="small" type="primary" onClick={() => setConfirming(r)}>Confirm…</Button>}
+                {hasPermission(r.key === "BANK_TEMPLATE" ? "payroll.banklayout.manage" : "payroll.rules.manage") && <Button size="small" onClick={() => setEditing(r)}>{r.current ? "Edit…" : "Enter…"}</Button>}
+                {hasPermission(r.key === "BANK_TEMPLATE" ? "payroll.banklayout.confirm" : "payroll.rules.confirm") && r.status === "PLACEHOLDER" && <Button size="small" type="primary" onClick={() => setConfirming(r)}>Confirm…</Button>}
               </Space>
             ),
           },

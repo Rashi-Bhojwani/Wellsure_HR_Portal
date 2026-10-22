@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, Button, Descriptions, Drawer, Flex, Input, Modal, Segmented, Space, Spin, Table, Tag, Timeline, Tooltip, Typography, message } from "antd";
-import { CheckCircleOutlined, EditOutlined, HistoryOutlined, SafetyCertificateOutlined } from "@ant-design/icons";
+import { CheckCircleOutlined, EditOutlined, EyeOutlined, HistoryOutlined, SafetyCertificateOutlined } from "@ant-design/icons";
 import { RULE_GROUPS } from "@shared/constants/payrollRules";
 import * as payrollApi from "../../../api/payroll";
 import type { CheckerAvailability, RuleStatus, RuleView, VersionView } from "../../../api/payroll";
@@ -32,8 +32,10 @@ function CheckersNote({ checkers }: { checkers: CheckerAvailability | undefined 
 export function RulesPage() {
   const { hasPermission } = useAuth();
   const queryClient = useQueryClient();
-  const canManage = hasPermission("payroll.rules.manage");
-  const canConfirm = hasPermission("payroll.rules.confirm");
+  // The company's identifiers are the owners' secrets and have their own permissions, apart from the ordinary rules.
+  const mayManage = (r: RuleView) => hasPermission(r.sealed ? "payroll.identifiers.manage" : "payroll.rules.manage");
+  const mayConfirm = (r: RuleView) => hasPermission(r.sealed ? "payroll.identifiers.confirm" : "payroll.rules.confirm");
+  const [revealing, setRevealing] = useState<RuleView | null>(null);
   const [filter, setFilter] = useState<"ALL" | RuleStatus>("ALL");
   const [editing, setEditing] = useState<RuleView | null>(null);
   const [confirming, setConfirming] = useState<RuleView | null>(null);
@@ -136,12 +138,17 @@ export function RulesPage() {
                   align: "right",
                   render: (_, r) => (
                     <Space wrap>
-                      {canManage && (
+                      {mayManage(r) && (
                         <Button size="small" icon={<EditOutlined />} onClick={() => setEditing(r)}>
                           {r.current ? "Edit" : "Set value"}
                         </Button>
                       )}
-                      {canConfirm && r.status === "PLACEHOLDER" && (
+                      {r.sealed && r.current && hasPermission("payroll.identifiers.manage") && (
+                        <Button size="small" icon={<EyeOutlined />} onClick={() => setRevealing(r)}>
+                          Reveal
+                        </Button>
+                      )}
+                      {mayConfirm(r) && r.status === "PLACEHOLDER" && (
                         <Button size="small" type="primary" icon={<SafetyCertificateOutlined />} onClick={() => setConfirming(r)}>
                           Confirm…
                         </Button>
@@ -160,14 +167,36 @@ export function RulesPage() {
       {editing && <EditModal rule={editing} onClose={() => setEditing(null)} onSaved={refresh} />}
       {confirming && <ConfirmModal rule={confirming} onClose={() => setConfirming(null)} onDone={refresh} />}
       {history && <HistoryDrawer rule={history} onClose={() => setHistory(null)} />}
+      {revealing && <RevealModal rule={revealing} onClose={() => setRevealing(null)} />}
     </Flex>
+  );
+}
+
+// ── Reveal: an owner's secret, shown on request, audited ──
+
+function RevealModal({ rule, onClose }: { rule: RuleView; onClose: () => void }) {
+  const reveal = useMutation({ mutationFn: () => payrollApi.revealRule(rule.key) });
+  return (
+    <Modal open title={`Reveal: ${rule.label}`} onCancel={onClose} footer={<Button onClick={onClose}>Close</Button>} destroyOnHidden>
+      <Flex vertical gap={12}>
+        <Text>This shows the value on this screen only. It is recorded that you looked, and when, but never what it said. Do not copy it into a message, a ticket or a chat.</Text>
+        {reveal.error && <Alert type="error" showIcon title={apiErrorMessage(reveal.error, "Could not reveal it.")} />}
+        {!reveal.data && (
+          <Button type="primary" loading={reveal.isPending} onClick={() => reveal.mutate()}>
+            Show it
+          </Button>
+        )}
+        {reveal.data && <Text code style={{ fontSize: 18 }}>{String(reveal.data.value)}</Text>}
+      </Flex>
+    </Modal>
   );
 }
 
 // ── Edit: enter a value, see exactly what it changes, then save it as an unconfirmed value ──
 
 function EditModal({ rule, onClose, onSaved }: { rule: RuleView; onClose: () => void; onSaved: () => void }) {
-  const [state, setState] = useState<InputState>(() => initialInputState(rule.shape, rule.current?.value ?? null));
+  // An owner's secret is never put back in the box: whoever edits it types the new value.
+  const [state, setState] = useState<InputState>(() => initialInputState(rule.shape, rule.sealed ? null : (rule.current?.value ?? null)));
   const [note, setNote] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
   const submitted = toSubmitValue(rule.shape, state);

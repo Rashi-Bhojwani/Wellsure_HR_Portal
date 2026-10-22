@@ -378,6 +378,7 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/payroll/rules/:key": admin,
   "POST /api/payroll/rules/:key/edit-preview": admin,
   "PUT /api/payroll/rules/:key": admin,
+  "POST /api/payroll/rules/:key/reveal": admin,
   "POST /api/payroll/rules/:key/confirm-preview": admin,
   "POST /api/payroll/rules/:key/confirm": admin,
   "GET /api/payroll/approvals/checkers": admin,

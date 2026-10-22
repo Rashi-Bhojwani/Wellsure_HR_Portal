@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { listAuditLogs } from "../auditLog/service";
 import { checkerAvailability } from "./approvals";
-import { confirmRule, editRule, getRule, listRules, previewConfirm, previewEdit } from "./rules/governed";
+import { confirmRule, editRule, getRule, listRules, previewConfirm, previewEdit, revealRule } from "./rules/governed";
 import "./rules/governed"; // registers the RULE_CONFIRM maker-checker subject
 
 const actor = (req: Request) => ({ userId: req.user!.userId, ip: req.ip ?? null, userAgent: req.get("user-agent") ?? null });
@@ -26,6 +26,9 @@ export async function confirmPreview(req: Request, res: Response): Promise<void>
 export async function confirm(req: Request, res: Response): Promise<void> {
   const b = req.body as { version: number; typedValue?: unknown; note: string; fingerprint: string };
   res.status(200).json(await confirmRule(key(req), b, actor(req)));
+}
+export async function reveal(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await revealRule(key(req), actor(req)));
 }
 export async function checkers(req: Request, res: Response): Promise<void> {
   const { subject } = req.query as { subject: Parameters<typeof checkerAvailability>[0] };

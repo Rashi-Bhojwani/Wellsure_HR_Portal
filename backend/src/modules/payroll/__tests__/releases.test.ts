@@ -5,6 +5,7 @@ import { mailService } from "../../../integrations/mail";
 import { fakeReceipt } from "../../../integrations/mail/testing";
 import { storageService } from "../../../integrations/storage";
 import { decryptField, encryptField } from "../../../lib/encryption";
+import { unseal } from "../sealed";
 import { prisma } from "../../../lib/prisma";
 import { app, authHeader, createFullTestEmployee, cleanupFullTestEmployee, loginAs } from "../../employee/__tests__/employeeTestHelpers";
 import { markPaid } from "../run/bankBatches";
@@ -211,12 +212,24 @@ describe("payslips, the bank file and the statutory files from a final run", () 
     expect(saved.body.status).toBe("PLACEHOLDER");
     // Stored encrypted; the plaintext appears nowhere a person can read.
     const version = await prisma.payrollItemVersion.findFirstOrThrow({ where: { kind: "BANK_TEMPLATE", key: "BANK_TEMPLATE" }, orderBy: { version: "desc" } });
-    const stored = version.value as { debitAccountEnc: string; debitAccountLast4: string };
+    // The whole version is sealed: nothing readable, not even the layout's columns.
+    expect(Object.keys(version.value as object)).toEqual(["sealed"]);
     expect(JSON.stringify(version.value)).not.toContain(DEBIT);
+    expect(JSON.stringify(version.value)).not.toContain("HDR");
+    const stored = unseal<{ debitAccountEnc: string; debitAccountLast4: string }>(version.value as { sealed: string });
     expect(decryptField(Buffer.from(stored.debitAccountEnc, "base64"))).toBe(DEBIT);
     const audit = await prisma.auditLog.findMany({ where: { action: "payroll.layout.edited", entityId: "BANK_TEMPLATE" } });
     expect(JSON.stringify(audit)).not.toContain(DEBIT);
-    expect(JSON.stringify((await api(world.tokens.maker, "get", "/layouts/BANK_TEMPLATE")).body)).not.toContain(stored.debitAccountEnc);
+    expect(JSON.stringify(audit)).not.toContain(stored.debitAccountEnc);
+    expect(JSON.stringify(audit)).not.toContain("HDR");
+    const read = await api(world.tokens.maker, "get", "/layouts/BANK_TEMPLATE"); // the person who enters the layout may see it, and that is recorded
+    expect(JSON.stringify(read.body)).not.toContain(stored.debitAccountEnc);
+    expect(read.body.layout.current.value).toMatchObject({ hasDebitAccount: true, debitAccountLast4: "3444", columns: expect.any(Array) });
+    expect(await prisma.auditLog.count({ where: { action: "payroll.layout.revealed", entityId: "BANK_TEMPLATE", actorUserId: world.maker.userId } })).toBeGreaterThan(0);
+    // Somebody without the bank-layout permissions (a payroll approver who is not given it here is the checker, who may; an HR executive may not) sees that it exists and its status, nothing of it.
+    const blind = await api(hrExecToken, "get", "/layouts/BANK_TEMPLATE");
+    expect(blind.status).toBe(403); // payroll.rules.view is not held by an HR executive at all
+    expect(await prisma.auditLog.count({ where: { action: "payroll.layout.revealed", actorUserId: hrExec.userId } })).toBe(0);
     // Saving the same thing again is "no change", even though a fresh encryption would differ.
     const again = await api(world.tokens.maker, "post", "/layouts/BANK_TEMPLATE/save-preview", { value: { ...LAYOUT, debitAccountNumber: DEBIT } });
     expect(again.body.unchanged).toBe(true);

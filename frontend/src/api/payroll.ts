@@ -18,6 +18,8 @@ export interface VersionView {
 
 export interface RuleView {
   key: string;
+  /** An owner's secret (a company identifier): stored encrypted and never in this response; Reveal shows it to someone who may. */
+  sealed: boolean;
   group: string;
   label: string;
   description: string;
@@ -91,6 +93,9 @@ export async function previewRuleEdit(key: string, value: unknown): Promise<Edit
 }
 export async function saveRule(key: string, body: { value: unknown; note: string; fingerprint: string }): Promise<RuleView> {
   return (await apiClient.put<RuleView>(`${base}/rules/${key}`, body)).data;
+}
+export async function revealRule(key: string): Promise<{ key: string; version: number; value: unknown }> {
+  return (await apiClient.post(`${base}/rules/${key}/reveal`)).data;
 }
 export async function previewRuleConfirm(key: string): Promise<ConfirmPreview> {
   return (await apiClient.post<ConfirmPreview>(`${base}/rules/${key}/confirm-preview`)).data;

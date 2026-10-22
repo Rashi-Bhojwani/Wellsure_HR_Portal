@@ -44,6 +44,10 @@ export async function uploadAndValidate(dataset: ImportDatasetKey, fileBuffer: B
   if (dataset === "bank" && !viewerPermissions.has("employee.bank.edit")) {
     throw new HttpError(403, "Missing permission: employee.bank.edit", "FORBIDDEN");
   }
+  // PAN, Aadhaar, UAN and ESI numbers are changed only by someone who holds employee.statutory.edit, here as everywhere (P6-6: this dataset was not gated).
+  if (dataset === "statutory" && !viewerPermissions.has("employee.statutory.edit")) {
+    throw new HttpError(403, "Missing permission: employee.statutory.edit", "FORBIDDEN");
+  }
   const parsedRows = await parseUpload(dataset, fileBuffer);
   if (parsedRows.length === 0) {
     throw new HttpError(400, "No data rows found in this file.", "EMPTY_FILE");
@@ -440,6 +444,9 @@ export async function commitBatch(
     if (options?.confirmText !== "IMPORT BANK DATA") {
       throw new HttpError(400, 'Type "IMPORT BANK DATA" to confirm committing bank account details.', "CONFIRMATION_REQUIRED");
     }
+  }
+  if (dataset === "statutory" && !viewerPermissions.has("employee.statutory.edit")) {
+    throw new HttpError(403, "Missing permission: employee.statutory.edit", "FORBIDDEN");
   }
 
   const rows = await prisma.importStagingRow.findMany({ where: { batchId: id }, orderBy: { rowNumber: "asc" } });

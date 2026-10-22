@@ -64,6 +64,16 @@ export interface RuleDef {
    * by a change to this catalog, made after the answer is recorded in docs/PROGRESS.md. Until then a run that uses such a value is a test, whatever anyone types or notes.
    */
   openQuestion?: { id: string; whenValue?: unknown; question: string };
+  /**
+   * The value is one of the owners' secrets (docs/plans/PHASE_6.md §14J): stored encrypted, never shown in a list, a history, an audit row or an error, revealed only by an
+   * explicit audited Reveal to someone holding the class's `manage` permission, entered and confirmed only with that class's permissions (not payroll.rules.manage / confirm).
+   */
+  sensitiveClass?: "COMPANY_IDENTIFIERS";
+  /**
+   * Set (with the reason) when the rule cannot affect the first real payroll run, so the "Ready for first real run" screen does not wait for it. Absent means required.
+   * A test calculates a run in the demo company and fails if a run reads a rule marked here, or if a required rule is never read and is not conditional.
+   */
+  notRequiredForFirstRun?: string;
 }
 
 const ROUNDING_NOTE = "A mode (half up, half even, up, down, ceiling, floor) and a number of decimal places.";
@@ -106,12 +116,12 @@ export const RULE_CATALOG: readonly RuleDef[] = [
   // ── LWF ──
   { key: "LWF_TABLE", group: "Labour Welfare Fund", label: "LWF: amounts by state", description: "For each state: the employee and employer amounts, how often, and in which months.", affects: "Labour welfare fund deducted. With nothing set, LWF is ₹0.", shape: { kind: "json", example: '{"states":{"EXAMPLE_STATE":{"employee":"10","employer":"20","frequency":"HALF_YEARLY","months":[6,12]}}}' }, origin: "STATUTORY", whoConfirms: STAT },
   // ── Tax ──
-  { key: "TDS_MODE", group: "Tax", label: "Income tax (TDS)", description: "How income tax is deducted. Until Phase 7 builds the projection, only NONE exists and the TDS line shows ₹0 with a notice.", affects: "The TDS line on every payslip.", shape: { kind: "choice", choices: ["NONE"] }, origin: "COMPANY", whoConfirms: "CA" },
+  { key: "TDS_MODE", group: "Tax", label: "Income tax (TDS)", description: "How income tax is deducted. Until Phase 7 builds the projection, only NONE exists and the TDS line shows ₹0 with a notice.", affects: "The TDS line on every payslip.", shape: { kind: "choice", choices: ["NONE"] }, origin: "COMPANY", whoConfirms: "CA", notRequiredForFirstRun: "Income tax deduction arrives with Phase 7; until then the line is nil and says so." },
   // ── Leave encashment ──
-  { key: "ENCASH_DAILY_RATE_FORMULA", group: "Leave encashment", label: "Encashment: daily rate formula", description: "How one day of encashed leave is valued, from the person's salary components, for example BASIC / 30.", affects: "Year-end leave encashment amounts and the leave liability report.", shape: { kind: "formula" }, origin: "COMPANY", whoConfirms: "CA", suggestion: "BASIC / 30 (the default named in the specification, §5.2)" },
-  { key: "ENCASH_TAXABLE", group: "Leave encashment", label: "Encashment: taxable", description: "Whether leave encashment is treated as taxable income.", affects: "TDS projection (Phase 7).", shape: { kind: "boolean" }, origin: "COMPANY", whoConfirms: "CA" },
-  { key: "ENCASH_PF_APPLICABLE", group: "Leave encashment", label: "Encashment: PF applies", description: "Whether PF is computed on leave encashment.", affects: "PF wages in the payout month.", shape: { kind: "boolean" }, origin: "COMPANY", whoConfirms: "CA" },
-  { key: "ENCASH_PAYOUT_RULE", group: "Leave encashment", label: "Encashment: when it is paid", description: "Which run pays a committed year-end encashment.", affects: "The month encashment appears on payslips.", shape: { kind: "choice", choices: ["FIRST_RUN_AFTER_COMMIT", "SAME_MONTH_AS_COMMIT"] }, origin: "COMPANY", whoConfirms: "HR" },
+  { key: "ENCASH_DAILY_RATE_FORMULA", group: "Leave encashment", label: "Encashment: daily rate formula", description: "How one day of encashed leave is valued, from the person's salary components, for example BASIC / 30.", affects: "Year-end leave encashment amounts and the leave liability report.", shape: { kind: "formula" }, origin: "COMPANY", whoConfirms: "CA", suggestion: "BASIC / 30 (the default named in the specification, §5.2)", notRequiredForFirstRun: "Leave encashment is paid at the first year end (December), not in the first run." },
+  { key: "ENCASH_TAXABLE", group: "Leave encashment", label: "Encashment: taxable", description: "Whether leave encashment is treated as taxable income.", affects: "TDS projection (Phase 7).", shape: { kind: "boolean" }, origin: "COMPANY", whoConfirms: "CA", notRequiredForFirstRun: "Leave encashment is paid at the first year end (December), not in the first run." },
+  { key: "ENCASH_PF_APPLICABLE", group: "Leave encashment", label: "Encashment: PF applies", description: "Whether PF is computed on leave encashment.", affects: "PF wages in the payout month.", shape: { kind: "boolean" }, origin: "COMPANY", whoConfirms: "CA", notRequiredForFirstRun: "Leave encashment is paid at the first year end (December), not in the first run." },
+  { key: "ENCASH_PAYOUT_RULE", group: "Leave encashment", label: "Encashment: when it is paid", description: "Which run pays a committed year-end encashment.", affects: "The month encashment appears on payslips.", shape: { kind: "choice", choices: ["FIRST_RUN_AFTER_COMMIT", "SAME_MONTH_AS_COMMIT"] }, origin: "COMPANY", whoConfirms: "HR", notRequiredForFirstRun: "Leave encashment is paid at the first year end (December), not in the first run." },
   // ── Arrears ──
   { key: "ARREARS_PAYOUT", group: "Arrears", label: "Arrears: how they are paid", description: "How the difference for months already closed is paid after a back-dated revision.", affects: "Where arrears appear on a payslip.", shape: { kind: "choice", choices: ["SEPARATE_LINE_IN_NEXT_RUN"] }, origin: "COMPANY", whoConfirms: "HR + CA" },
   { key: "ARREARS_PF_ESI", group: "Arrears", label: "Arrears: PF and ESI", description: "Whether PF and ESI are computed on arrears.", affects: "PF and ESI in the month arrears are paid.", shape: { kind: "choice", choices: ["FOLLOW_COMPONENT_FLAGS", "EXCLUDE"] }, origin: "COMPANY", whoConfirms: "CA" },
@@ -121,10 +131,11 @@ export const RULE_CATALOG: readonly RuleDef[] = [
   // ── Payslip ──
   { key: "PAYSLIP_LAYOUT", group: "Payslip", label: "Payslip layout", description: "Which blocks a payslip shows.", affects: "Every payslip.", shape: { kind: "json", example: '{"showEmployerContributions":false,"showYearToDate":false}' }, origin: "COMPANY", whoConfirms: "HR" },
   // ── Company identifiers ──
-  { key: "PF_ESTABLISHMENT_CODE", group: "Company identifiers", label: "PF establishment code", description: "The company's provident fund establishment code, printed on the ECR file.", affects: "The PF ECR file.", shape: { kind: "text" }, origin: "COMPANY", whoConfirms: "HR" },
-  { key: "ESI_EMPLOYER_CODE", group: "Company identifiers", label: "ESI employer code", description: "The company's ESI employer code, printed on the ESI return.", affects: "The ESI return.", shape: { kind: "text" }, origin: "COMPANY", whoConfirms: "HR" },
-  { key: "PT_REGISTRATION", group: "Company identifiers", label: "PT registration number", description: "The company's professional tax registration number.", affects: "The PT statement.", shape: { kind: "text" }, origin: "COMPANY", whoConfirms: "HR" },
-  { key: "LWF_REGISTRATION", group: "Company identifiers", label: "LWF registration number", description: "The company's labour welfare fund registration number.", affects: "The LWF statement.", shape: { kind: "text" }, origin: "COMPANY", whoConfirms: "HR" },
+  { key: "PF_ESTABLISHMENT_CODE", group: "Company identifiers", label: "PF establishment code", description: "The company's provident fund establishment code, printed on the ECR file.", affects: "The PF ECR file.", shape: { kind: "text" }, origin: "COMPANY", whoConfirms: "HR", sensitiveClass: "COMPANY_IDENTIFIERS" },
+  { key: "ESI_EMPLOYER_CODE", group: "Company identifiers", label: "ESI employer code", description: "The company's ESI employer code, printed on the ESI return.", affects: "The ESI return.", shape: { kind: "text" }, origin: "COMPANY", whoConfirms: "HR", sensitiveClass: "COMPANY_IDENTIFIERS" },
+  { key: "PT_REGISTRATION", group: "Company identifiers", label: "PT registration number", description: "The company's professional tax registration number.", affects: "The PT statement.", shape: { kind: "text" }, origin: "COMPANY", whoConfirms: "HR", sensitiveClass: "COMPANY_IDENTIFIERS" },
+  { key: "LWF_REGISTRATION", group: "Company identifiers", label: "LWF registration number", description: "The company's labour welfare fund registration number.", affects: "The LWF statement.", shape: { kind: "text" }, origin: "COMPANY", whoConfirms: "HR", sensitiveClass: "COMPANY_IDENTIFIERS" },
+  { key: "TAN", group: "Company identifiers", label: "Tax deduction account number (TAN)", description: "The company's TAN, printed on the income tax returns and certificates.", affects: "Income tax returns (Phase 7).", shape: { kind: "text" }, origin: "COMPANY", whoConfirms: "CA", sensitiveClass: "COMPANY_IDENTIFIERS", notRequiredForFirstRun: "Income tax filing arrives with Phase 7." },
 ];
 
 export const RULE_KEYS = RULE_CATALOG.map((r) => r.key);

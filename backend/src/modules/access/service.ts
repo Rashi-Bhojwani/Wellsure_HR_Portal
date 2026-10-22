@@ -1,3 +1,4 @@
+import { DEVELOPER_FORBIDDEN_KEYS, DEVELOPER_ROLE_CODE } from "@shared/constants/sensitiveData";
 import { MANAGER_GRANTABLE_KEYS, META_PERMISSION_KEYS, PERMISSION_CATALOG, PERMISSION_KEYS, type PermissionKey } from "@shared/constants/permissions";
 import type { DataScope } from "@shared/constants/roles";
 import { writeAuditLog } from "../../lib/audit";
@@ -74,6 +75,19 @@ function assertManagerGrantable(keys: readonly string[]) {
   }
 }
 
+// P6-6 (docs/plans/PHASE_6.md §14J): the developer role holds none of the owners' secrets and none of the power over others' access. lib/permissions.ts removes those keys
+// from a developer whatever is stored; these checks stop anyone being told otherwise, in words, at the moment of the click.
+const isDeveloperForbidden = (key: string) => (DEVELOPER_FORBIDDEN_KEYS as readonly string[]).includes(key);
+function assertDeveloperCeiling(keys: readonly string[]) {
+  const outside = keys.filter(isDeveloperForbidden);
+  if (outside.length) {
+    throw forbid(
+      `A developer can't be given ${outside.map((k) => PERMISSION_CATALOG[k as PermissionKey]?.label ?? k).join(", ")}. The person who builds and runs the system never holds the owners' salaries, bank details, identifiers or bank layout, nor power over other people's access. This is fixed in code.`,
+      "DEVELOPER_CEILING",
+    );
+  }
+}
+
 function requireSuperAdmin(actor: AccessActor, what: string) {
   if (!isSuperAdmin(actor)) throw forbid(`Only a Super Admin can ${what}.`, "SUPER_ADMIN_ONLY");
 }
@@ -127,6 +141,7 @@ export async function updateRole(roleCode: string, input: { permissions?: string
   const before = { permissions: role.permissions.map((p) => p.permission.key).sort(), dataScope: role.dataScope };
   let next = before.permissions;
   if (input.permissions) {
+    if (role.code === DEVELOPER_ROLE_CODE) assertDeveloperCeiling(input.permissions);
     const unknown = input.permissions.filter((k) => !isKnownKey(k));
     if (unknown.length) throw new HttpError(400, `Unknown permission: ${unknown.join(", ")}.`, "VALIDATION_ERROR");
     next = [...new Set(input.permissions)].sort();
@@ -226,6 +241,7 @@ async function assertMayOverride(targetUserId: string, key: string, effect: "GRA
   }
   if (effect === "GRANT") {
     if (target.roleCodes.includes(MANAGER_ROLE_CODE)) assertManagerGrantable([key]); // E2
+    if (target.roleCodes.includes(DEVELOPER_ROLE_CODE)) assertDeveloperCeiling([key]); // P6-6
     if (!actor.permissions.has(key)) throw forbid("You can't grant a permission you don't hold.", "NOT_HELD"); // rule 3
     if (isMeta(key) && target.roleCodes.includes(MANAGER_ROLE_CODE)) {
       throw forbid("A manager can never hold access-management permissions.", "META_TO_MANAGER"); // rule 4
@@ -287,6 +303,13 @@ export async function assignRole(employeeId: string, roleCode: string, actor: Ac
   // E2: a manager holds no role but EMPLOYEE alongside MANAGER.
   const combo = checkRoleCombination([...before, role.code]);
   if (combo) throw new HttpError(400, combo, "HIERARCHY");
+  // P6-6: nobody is both a developer and a Super Admin, and a developer is never given a role that carries an owner's secret.
+  const nowHolding = [...before, role.code];
+  if (nowHolding.includes(DEVELOPER_ROLE_CODE)) {
+    if (nowHolding.includes(SUPER_ADMIN_ROLE_CODE)) throw forbid("Nobody can be both a developer and a Super Admin: the developer is the one person who must not hold the owners' secrets.", "DEVELOPER_CEILING");
+    const carried = await prisma.rolePermission.findMany({ where: { role: { code: { in: nowHolding } }, permission: { key: { in: [...DEVELOPER_FORBIDDEN_KEYS] } } }, include: { permission: true, role: true } });
+    if (carried.length) assertDeveloperCeiling([...new Set(carried.map((c) => c.permission.key))]);
+  }
   await prisma.$transaction(async (tx) => {
     await tx.userRole.create({ data: { userId: user.id, roleId: role.id, assignedByUserId: actor.userId } });
     // Model A: Super Admins and HR Admins sit directly under Admin.

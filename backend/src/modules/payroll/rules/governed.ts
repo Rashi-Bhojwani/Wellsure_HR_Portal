@@ -5,6 +5,8 @@ import { HttpError } from "../../../middleware/errorHandler";
 import { type CheckerAvailability } from "../approvals";
 import { canonicalJson, payrollHash } from "../hash";
 import { appendVersion, confirmVersion, editFingerprint as itemEditFingerprint, loadItems, previewConfirmation, summarise, type ItemStatus, type VersionView } from "../items";
+import { writeAuditLog } from "../../../lib/audit";
+import { HIDDEN, isSealed, keyedHash, seal, unseal } from "../sealed";
 import { InvalidRuleValueError, parseRuleValue } from "./schemas";
 
 // Governed rules (docs/plans/PHASE_6.md §3): a payroll rule is an append-only series of versions; a version is Confirmed only by somebody other than its
@@ -19,6 +21,8 @@ export type { VersionView };
 
 export interface RuleView {
   key: string;
+  /** An owner's secret: stored encrypted, never in this response. Revealed only by an audited Reveal. */
+  sealed: boolean;
   group: string;
   label: string;
   description: string;
@@ -47,10 +51,17 @@ function openQuestionFor(def: RuleDef, value: unknown): { id: string; question: 
   return { id: q.id, question: q.question };
 }
 
+/** The hash a version of this rule carries: the plain canonical hash, or, for an owner's secret, one only this system can compute. */
+const hashOf = (def: RuleDef, value: unknown): string => (def.sensitiveClass ? keyedHash(`rule:${def.key}`, value) : payrollHash(value));
+/** A version as a screen may see it: the value of a sealed rule is replaced, never shown. */
+const shown = (def: RuleDef, v: VersionView | null): VersionView | null => (v && def.sensitiveClass ? { ...v, value: HIDDEN } : v);
+const maskFor = (def: RuleDef) => (value: unknown) => (def.sensitiveClass || isSealed(value) ? HIDDEN : value);
+
 function viewOf(def: RuleDef, data: Awaited<ReturnType<typeof loadItems>>): RuleView {
   const s = summarise(data, def.key);
   return {
     key: def.key,
+    sealed: Boolean(def.sensitiveClass),
     group: def.group,
     label: def.label,
     description: def.description,
@@ -61,10 +72,10 @@ function viewOf(def: RuleDef, data: Awaited<ReturnType<typeof loadItems>>): Rule
     suggestion: def.suggestion ?? null,
     status: s.status,
     sourceLabel: s.sourceLabel,
-    requiresRetype: def.origin === "STATUTORY",
+    requiresRetype: def.origin === "STATUTORY" || Boolean(def.sensitiveClass),
     openQuestion: openQuestionFor(def, s.current?.value),
-    current: s.current,
-    lastConfirmed: s.lastConfirmed,
+    current: shown(def, s.current),
+    lastConfirmed: shown(def, s.lastConfirmed),
   };
 }
 
@@ -76,7 +87,7 @@ export async function listRules(): Promise<RuleView[]> {
 export async function getRule(key: string): Promise<{ rule: RuleView; history: VersionView[] }> {
   const def = defOf(key);
   const data = await loadItems(KIND, [key]);
-  return { rule: viewOf(def, data), history: [...summarise(data, key).history].reverse() };
+  return { rule: viewOf(def, data), history: [...summarise(data, key).history].reverse().map((v) => shown(def, v)!) };
 }
 
 function defOf(key: string): RuleDef {
@@ -115,7 +126,7 @@ const editFingerprint = (key: string, baseVersion: number, baseHash: string | nu
 export async function previewEdit(key: string, rawValue: unknown): Promise<EditPreview> {
   const def = defOf(key);
   const value = canonicalValue(key, rawValue);
-  const valueHash = payrollHash(value);
+  const valueHash = hashOf(def, value);
   const rule = (await getRule(key)).rule;
   const baseVersion = rule.current?.version ?? 0;
   const used = await prisma.payrollRun.findMany({ where: { status: { not: "VOID" }, pins: { array_contains: [{ key }] } }, select: { cycleLabel: true }, orderBy: { cycleStart: "asc" } });
@@ -123,7 +134,7 @@ export async function previewEdit(key: string, rawValue: unknown): Promise<EditP
     key,
     label: def.label,
     before: rule.current ? { version: rule.current.version, value: rule.current.value, status: rule.status } : null,
-    after: { value, valueHash },
+    after: { value: def.sensitiveClass ? HIDDEN : value, valueHash },
     unchanged: rule.current?.valueHash === valueHash,
     willResetConfirmation: rule.status === "CONFIRMED",
     lastConfirmed: rule.status === "CONFIRMED" && rule.current ? rule.current : rule.lastConfirmed,
@@ -135,9 +146,9 @@ export async function previewEdit(key: string, rawValue: unknown): Promise<EditP
 }
 
 export async function editRule(key: string, input: { value: unknown; note?: string; fingerprint: string }, actor: { userId: string; ip?: string | null; userAgent?: string | null }): Promise<RuleView> {
-  defOf(key);
+  const def = defOf(key);
   const value = canonicalValue(key, input.value);
-  const valueHash = payrollHash(value);
+  const valueHash = hashOf(def, value);
   const before = (await getRule(key)).rule;
   const baseVersion = before.current?.version ?? 0;
   if (before.current?.valueHash === valueHash) throw new HttpError(409, "That is already the current value. Nothing to change.", "NO_CHANGE");
@@ -145,7 +156,7 @@ export async function editRule(key: string, input: { value: unknown; note?: stri
     throw new HttpError(409, "This changed since you previewed it (somebody else edited the rule, or the value is different). Preview it again.", "PREVIEW_STALE");
   }
   const note = (input.note ?? "").trim().slice(0, 500);
-  await appendVersion(KIND, AUDIT, { key, value, note, before: summarise(await loadItems(KIND, [key]), key) }, actor);
+  await appendVersion(KIND, AUDIT, { key, value: def.sensitiveClass ? seal(value) : value, valueHash, note, before: summarise(await loadItems(KIND, [key]), key), maskForAudit: maskFor(def) }, actor);
   return (await getRule(key)).rule;
 }
 
@@ -171,9 +182,9 @@ export async function previewConfirm(key: string, actorUserId: string): Promise<
   const def = defOf(key);
   const data = await loadItems(KIND, [key]);
   const summary = summarise(data, key);
-  const p = await previewConfirmation("RULE_CONFIRM", KIND, key, summary, actorUserId);
+  const p = await previewConfirmation("RULE_CONFIRM", KIND, key, summary, actorUserId, def.sensitiveClass ? "payroll.identifiers.confirm" : undefined);
   const open = openQuestionFor(def, summary.current?.value);
-  return { key, label: def.label, ...p, blocked: open ? `This cannot be confirmed yet. ${open.question}` : p.blocked, requiresRetype: def.origin === "STATUTORY" };
+  return { key, label: def.label, ...p, value: def.sensitiveClass ? HIDDEN : p.value, blocked: open ? `This cannot be confirmed yet. ${open.question}` : p.blocked, requiresRetype: def.origin === "STATUTORY" || Boolean(def.sensitiveClass) };
 }
 
 export async function confirmRule(
@@ -196,12 +207,13 @@ export async function confirmRule(
       note: input.note,
       fingerprint: input.fingerprint,
       summary,
-      auditExtra: { retyped: def.origin === "STATUTORY" },
+      auditExtra: { retyped: def.origin === "STATUTORY" || Boolean(def.sensitiveClass) },
+      maskForAudit: maskFor(def),
       extraCheck: (cur) => {
-        if (def.origin !== "STATUTORY") return;
+        if (def.origin !== "STATUTORY" && !def.sensitiveClass) return;
         // Confirming means checking, not clicking: the confirmer types the value in again, and it has to be the value on the screen.
         if (input.typedValue === undefined || input.typedValue === null || input.typedValue === "") {
-          throw new HttpError(400, `Type the value in again to confirm it. It is a statutory figure (${summary.sourceLabel ?? "unverified"}), so confirming means checking it against its source.`, "RETYPE_REQUIRED");
+          throw new HttpError(400, `Type the value in again to confirm it. ${def.sensitiveClass ? "It is one of the company's identifiers" : `It is a statutory figure (${summary.sourceLabel ?? "unverified"})`}, so confirming means checking it against its source.`, "RETYPE_REQUIRED");
         }
         let typed: unknown;
         try {
@@ -210,7 +222,9 @@ export async function confirmRule(
           if (err instanceof InvalidRuleValueError) throw new HttpError(400, `What you typed is not a valid value: ${err.issues.join("; ")}`, "RETYPE_MISMATCH");
           throw err;
         }
-        if (canonicalJson(typed) !== canonicalJson(cur.value)) {
+        // An owner's secret is compared by its keyed hash, so the confirmer types it from their own document and never has to see it.
+        const same = def.sensitiveClass ? hashOf(def, typed) === cur.valueHash : canonicalJson(typed) === canonicalJson(cur.value);
+        if (!same) {
           throw new HttpError(400, "What you typed does not match the value on the screen. Check it against its source and try again; nothing was confirmed.", "RETYPE_MISMATCH");
         }
       },
@@ -218,6 +232,18 @@ export async function confirmRule(
     actor,
   );
   return (await getRule(key)).rule;
+}
+
+// ── Reveal: the only way an owner's secret leaves this module ──
+
+/** The current value of a sealed rule, in the clear, for someone who holds the class's manage permission (the route checks). One audit row says who looked and which version, never what it said. */
+export async function revealRule(key: string, actor: { userId: string; ip?: string | null; userAgent?: string | null }): Promise<{ key: string; version: number; value: unknown }> {
+  const def = defOf(key);
+  if (!def.sensitiveClass) throw new HttpError(400, "That rule is not hidden; it is shown on the screen.", "NOT_SEALED");
+  const cur = summarise(await loadItems(KIND, [key]), key).current;
+  if (!cur || !isSealed(cur.value)) throw new HttpError(404, "There is no value to reveal.", "NOT_FOUND");
+  await writeAuditLog({ actorUserId: actor.userId, action: "payroll.rule.revealed", entityType: "PayrollRule", entityId: key, after: { version: cur.version }, ipAddress: actor.ip ?? null, userAgent: actor.userAgent ?? null });
+  return { key, version: cur.version, value: unseal(cur.value) };
 }
 
 // ── The shipped placeholders ──

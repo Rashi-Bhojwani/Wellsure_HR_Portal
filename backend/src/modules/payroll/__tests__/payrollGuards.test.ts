@@ -228,6 +228,24 @@ describe("modules/payroll", () => {
     expect(decrypters.sort()).toEqual(["src/modules/payroll/run/release.ts"]);
   });
 
+  it("an owner's secret is opened in only three places: the rule Reveal, the layout module, and the sealing module itself", () => {
+    const backend = path.resolve(ROOT, "../../..");
+    const hits: string[] = [];
+    const scan = (dir: string): void => {
+      for (const name of readdirSync(dir)) {
+        if (name === "node_modules" || name === "__tests__") continue;
+        const full = path.join(dir, name);
+        if (statSync(full).isDirectory()) scan(full);
+        else if (/\.tsx?$/.test(name) && !/\.test\./.test(name)) {
+          const raw = readFileSync(full, "utf8").replace(/\/\/.*$/gm, "");
+          if (/\bunseal(?:<[^>]*>)?\(/.test(raw)) hits.push(path.relative(backend, full).split(path.sep).join("/"));
+        }
+      }
+    };
+    scan(path.join(backend, "src"));
+    expect(hits.sort()).toEqual(["src/modules/payroll/rules/governed.ts", "src/modules/payroll/run/layouts.ts", "src/modules/payroll/sealed.ts"]);
+  });
+
   it("the payroll-lock bypass for back-dated salary has exactly one caller, the revision apply step, and that step creates the arrears in the same transaction", () => {
     const backend = path.resolve(ROOT, "../../..");
     const hits: string[] = [];
