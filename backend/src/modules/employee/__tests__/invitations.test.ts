@@ -59,6 +59,8 @@ describe("invitation emails: what really happened is what HR is told", () => {
   const create = (body: object) => request(app).post("/api/employees").set(...authHeader(hrToken)).send(body);
   const tokenOf = async (code: string) => prisma.invitationToken.findFirstOrThrow({ where: { user: { employee: { employeeCode: code } } }, orderBy: { createdAt: "desc" } });
 
+  const emailAudits = async (tokenId: string) => prisma.auditLog.findMany({ where: { action: "auth.invitation.email", entityType: "InvitationToken", entityId: tokenId } });
+
   it("the wizard: when a mail server accepts it, the answer says SENT, to which address, and the record says so", async () => {
     const send = vi.spyOn(mailService, "send").mockImplementation(async (m) => ({ ...fakeReceipt(m.to), driver: "smtp" }));
     const p = payload("someone@gmail.com");
@@ -69,6 +71,12 @@ describe("invitation emails: what really happened is what HR is told", () => {
     expect(send.mock.calls[0]![0]).toMatchObject({ to: "someone@gmail.com", subject: expect.stringContaining("set your password") });
     const token = await tokenOf(p.official.employeeCode);
     expect([token.emailTo, token.emailSentAt !== null, token.emailError]).toEqual(["someone@gmail.com", true, null]);
+    // The audit log records that, to whom, by which driver and who sent it.
+    const audits = await emailAudits(token.id);
+    expect(audits).toHaveLength(1);
+    expect(audits[0]!.actorUserId).toBe(hrUserId);
+    expect(audits[0]!.after).toMatchObject({ outcome: "SENT", to: "someone@gmail.com", driver: "smtp", error: null, employeeCode: p.official.employeeCode });
+    expect((audits[0]!.after as { sentAt: string | null }).sentAt).toBeTruthy();
   });
 
   it("the wizard: when the system only writes the email to a file (development), it says FILE_ONLY and that nothing was sent", async () => {
@@ -79,6 +87,7 @@ describe("invitation emails: what really happened is what HR is told", () => {
     expect(res.body.invitation).toMatchObject({ status: "FILE_ONLY", driver: "console" });
     const token = await tokenOf(p.official.employeeCode);
     expect([token.emailAttemptedAt !== null, token.emailSentAt, token.emailError]).toEqual([true, null, null]);
+    expect((await emailAudits(token.id)).map((a) => (a.after as { outcome: string }).outcome)).toEqual(["FILE_ONLY"]);
   });
 
   it("the wizard: when sending fails, the employee is still created, the answer says FAILED and why, and nothing pretends it worked", async () => {
@@ -91,6 +100,9 @@ describe("invitation emails: what really happened is what HR is told", () => {
     expect(res.body.invitation.sentAt).toBeUndefined();
     const token = await tokenOf(p.official.employeeCode);
     expect([token.emailSentAt, token.emailError]).toEqual([null, expect.stringMatching(/refused the sign-in/)]);
+    const failedAudits = await emailAudits(token.id);
+    expect(failedAudits).toHaveLength(1);
+    expect(failedAudits[0]!.after).toMatchObject({ outcome: "FAILED", to: "unreachable@gmail.com", sentAt: null, error: expect.stringMatching(/refused the sign-in/) });
     const profile = await request(app).get(`/api/employees/${res.body.id}`).set(...authHeader(hrToken));
     expect([profile.status, profile.body.accountStatus]).toEqual([200, "INVITED"]);
     expect(profile.body.invitation).toMatchObject({ status: "FAILED", to: "unreachable@gmail.com" });
@@ -110,6 +122,9 @@ describe("invitation emails: what really happened is what HR is told", () => {
     expect(ok.body).toMatchObject({ status: "SENT" });
     const audits = await prisma.auditLog.findMany({ where: { action: "employee.invite_resent", entityId: made.body.id }, orderBy: { createdAt: "asc" } });
     expect(audits.map((a) => (a.after as { outcome: string }).outcome)).toEqual(["FAILED", "SENT"]);
+    // Every send has its own invitation-email row, so there is a record of each attempt and its time: the wizard's, the failed resend, the good one.
+    const rows = await prisma.auditLog.findMany({ where: { action: "auth.invitation.email", after: { path: ["employeeCode"], equals: p.official.employeeCode } }, orderBy: { createdAt: "asc" } });
+    expect(rows.map((r) => (r.after as { outcome: string }).outcome)).toEqual(["FILE_ONLY", "FAILED", "SENT"]);
     // Somebody who has already activated is told so, not "sent".
     await prisma.user.updateMany({ where: { employeeId: made.body.id }, data: { status: "ACTIVE" } });
     expect((await request(app).post(`/api/employees/${made.body.id}/resend-invite`).set(...authHeader(hrToken))).status).toBe(400);

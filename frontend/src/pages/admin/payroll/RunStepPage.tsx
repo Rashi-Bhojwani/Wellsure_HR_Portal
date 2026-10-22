@@ -5,6 +5,7 @@ import { ArrowLeftOutlined } from "@ant-design/icons";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { HOLD_REASON_LABEL } from "@shared/constants/payrollRun";
 import * as payrollApi from "../../../api/payroll";
+import { NoPayslipAlert } from "../../../components/payroll/NoPayslipAlert";
 import type { ApprovalView, PersonNote, StepPreview, StepSlug, StepState } from "../../../api/payroll";
 import { CheckersNote } from "../../../components/payroll/CheckersNote";
 import { PlaceholderBanner } from "../../../components/payroll/PlaceholderBanner";
@@ -64,6 +65,7 @@ export function RunStepPage() {
         {p.watermark.test && <Tag color="red">TEST</Tag>}
       </Flex>
       {slug === "run" && <LeftOut people={p.leftOut ?? []} />}
+      {slug === "publish" && <NoPayslipAlert people={p.noPayslip ?? []} willGet={p.payslips ?? 0} />}
       {!p.blockers.some((b) => b.code === "PLACEHOLDER_RULES") && <PlaceholderBanner watermark={p.watermark} />}
       <Blockers p={p} />
       <Where step={step} />
@@ -254,7 +256,6 @@ function Summary({ p, slug }: { p: StepPreview; slug: StepSlug }) {
               <Text strong>{p.payslips}</Text> {p.payslips === 1 ? "payslip" : "payslips"}, net pay <Text strong>{formatRupees(p.netTotal ?? "0", 2)}</Text> in all.
             </Text>
             <ul style={{ margin: 0, paddingLeft: 20 }}>{(p.willDo ?? []).map((w) => <li key={w}>{w}</li>)}</ul>
-            {p.noPayslip && p.noPayslip.length > 0 && <PersonList title="No payslip yet: held, not paid by this run" people={p.noPayslip.map((h) => ({ employeeId: h.employeeId, employeeCode: "", code: h.reason ?? "HELD", name: h.name, reason: HOLD_REASON_LABEL[(h.reason ?? "") as keyof typeof HOLD_REASON_LABEL] ?? h.reason ?? "Held", detail: h.detail }))} />}
           </Flex>
         </Card>
       )}

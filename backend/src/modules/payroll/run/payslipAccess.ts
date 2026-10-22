@@ -3,6 +3,7 @@ import { renderPdf } from "../../../lib/pdf/renderer";
 import { prisma } from "../../../lib/prisma";
 import { HttpError } from "../../../middleware/errorHandler";
 import { watermarkFor, type RulePin } from "../rules/context";
+import { peopleWithoutPayslip } from "./held";
 import { buildPayslips, type PayslipContent } from "./payslip";
 import { payslipHtml } from "./payslipHtml";
 import { startDelivery } from "./release";
@@ -38,12 +39,14 @@ export async function myPayslip(employeeId: string, id: string) {
 // ── HR: any payslip of a run ──
 
 export async function runPayslips(runId: string) {
-  const run = await prisma.payrollRun.findUnique({ where: { id: runId }, select: { id: true, cycleLabel: true } });
+  const run = await prisma.payrollRun.findUnique({ where: { id: runId }, select: { id: true, cycleLabel: true, cycleEnd: true } });
   if (!run) throw new HttpError(404, "No such payroll run.", "NOT_FOUND");
   const rows = await prisma.payslip.findMany({ where: { runId }, include: { delivery: true, employee: { select: { employeeCode: true } } }, orderBy: { employee: { employeeCode: "asc" } } });
   return {
     runId,
     cycle: run.cycleLabel,
+    /** Everyone in the run who has no payslip, with the reason and what to do, so the list is still there after publishing. */
+    noPayslip: await peopleWithoutPayslip(run),
     payslips: rows.map((r) => ({
       ...summary(r),
       employeeId: r.employeeId,

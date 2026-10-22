@@ -58,6 +58,17 @@ export const HOLD_REASON_LABEL: Record<HoldReason, string> = {
   NO_BANK_ACCOUNT: "No bank account on the payment date",
 };
 
+/** What the person who sees a held name should do about it: shown beside the reason wherever people without a payslip are listed. */
+export const HOLD_REASON_ACTION: Record<HoldReason, string> = {
+  ATTENDANCE_NOT_FINAL: "Finalise attendance for the period, then calculate the run again.",
+  NO_SALARY: "Enter their salary (a salary revision, approved by a checker), then calculate the run again.",
+  WORKING_DAYS_PART_MONTH: "Change the pay-days basis in Rules and setup, or pay them through an adjustment.",
+  FINAL_SETTLEMENT: "Nothing now: they are paid with their final settlement.",
+  NEGATIVE_NET: "Reduce a deduction or add an adjustment, then calculate the run again.",
+  ZERO_NET: "Nothing is owed to them this month, so there is nothing to pay.",
+  NO_BANK_ACCOUNT: "Enter their bank account in force on the payment date (Employee profile), then calculate the run again.",
+};
+
 /** Things a person is calculated with that someone must look at. BLOCKING ones stop the run being submitted (P6-4); WARNING ones are for the reader. */
 export const EXCEPTION_CODES = ["NEGATIVE_NET", "STATE_UNMAPPED", "LOP_EXCEEDS_DAYS", "NO_PLACEMENT"] as const;
 export type ExceptionCode = (typeof EXCEPTION_CODES)[number];

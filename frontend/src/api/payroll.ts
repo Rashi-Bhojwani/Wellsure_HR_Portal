@@ -607,6 +607,17 @@ export interface PersonNote {
   reason: string;
   detail: string | null;
 }
+/** Someone in the run who will not get a payslip: held or not calculated, why, and what to do about it. */
+export interface NoPayslipPerson {
+  employeeId: string;
+  employeeCode: string;
+  name: string;
+  kind: "HELD" | "EXCLUDED";
+  reason: string | null;
+  reasonLabel: string;
+  detail: string | null;
+  action: string;
+}
 export interface StepPreview {
   slug: StepSlug;
   subject: string;
@@ -639,7 +650,7 @@ export interface StepPreview {
   // Publishing payslips (P6-5)
   payslips?: number;
   netTotal?: string;
-  noPayslip?: Array<{ employeeId: string; name: string; reason: string | null; detail: string | null }>;
+  noPayslip?: NoPayslipPerson[];
   // The bank file (P6-5)
   paymentDate?: string | null;
   excluded?: Array<{ employeeId: string; employeeCode: string; name: string; reason: string; detail: string }>;
@@ -716,7 +727,7 @@ export interface PayslipRow {
   pdfReady: boolean;
   delivery: { rendered: boolean; renderError: string | null; notified: boolean; emailStatus: EmailStatus; emailTo: string | null; emailError: string | null };
 }
-export async function listRunPayslips(runId: string): Promise<{ runId: string; cycle: string; payslips: PayslipRow[] }> {
+export async function listRunPayslips(runId: string): Promise<{ runId: string; cycle: string; noPayslip: NoPayslipPerson[]; payslips: PayslipRow[] }> {
   return (await apiClient.get(`${base}/runs/${runId}/payslips`)).data;
 }
 export async function preparePayslipsAgain(runId: string): Promise<{ queued: boolean }> {
