@@ -18,6 +18,8 @@ export interface VersionView {
 
 export interface RuleView {
   key: string;
+  /** An owner's secret (a company identifier): stored encrypted and never in this response; Reveal shows it to someone who may. */
+  sealed: boolean;
   group: string;
   label: string;
   description: string;
@@ -91,6 +93,9 @@ export async function previewRuleEdit(key: string, value: unknown): Promise<Edit
 }
 export async function saveRule(key: string, body: { value: unknown; note: string; fingerprint: string }): Promise<RuleView> {
   return (await apiClient.put<RuleView>(`${base}/rules/${key}`, body)).data;
+}
+export async function revealRule(key: string): Promise<{ key: string; version: number; value: unknown }> {
+  return (await apiClient.post(`${base}/rules/${key}/reveal`)).data;
 }
 export async function previewRuleConfirm(key: string): Promise<ConfirmPreview> {
   return (await apiClient.post<ConfirmPreview>(`${base}/rules/${key}/confirm-preview`)).data;
@@ -607,6 +612,17 @@ export interface PersonNote {
   reason: string;
   detail: string | null;
 }
+/** Someone in the run who will not get a payslip: held or not calculated, why, and what to do about it. */
+export interface NoPayslipPerson {
+  employeeId: string;
+  employeeCode: string;
+  name: string;
+  kind: "HELD" | "EXCLUDED";
+  reason: string | null;
+  reasonLabel: string;
+  detail: string | null;
+  action: string;
+}
 export interface StepPreview {
   slug: StepSlug;
   subject: string;
@@ -639,7 +655,7 @@ export interface StepPreview {
   // Publishing payslips (P6-5)
   payslips?: number;
   netTotal?: string;
-  noPayslip?: Array<{ employeeId: string; name: string; reason: string | null; detail: string | null }>;
+  noPayslip?: NoPayslipPerson[];
   // The bank file (P6-5)
   paymentDate?: string | null;
   excluded?: Array<{ employeeId: string; employeeCode: string; name: string; reason: string; detail: string }>;
@@ -716,7 +732,7 @@ export interface PayslipRow {
   pdfReady: boolean;
   delivery: { rendered: boolean; renderError: string | null; notified: boolean; emailStatus: EmailStatus; emailTo: string | null; emailError: string | null };
 }
-export async function listRunPayslips(runId: string): Promise<{ runId: string; cycle: string; payslips: PayslipRow[] }> {
+export async function listRunPayslips(runId: string): Promise<{ runId: string; cycle: string; noPayslip: NoPayslipPerson[]; payslips: PayslipRow[] }> {
   return (await apiClient.get(`${base}/runs/${runId}/payslips`)).data;
 }
 export async function preparePayslipsAgain(runId: string): Promise<{ queued: boolean }> {
@@ -910,4 +926,136 @@ export async function myPayslip(id: string): Promise<PayslipSummary & { content:
 }
 export async function myPayslipPdf(id: string): Promise<PdfLink> {
   return (await apiClient.get(`/api/payslips/mine/${id}/pdf`)).data;
+}
+
+// ── The Setup Checklist and "Ready for first real run" (P6-6) ──
+
+export type SetupStatus = "NOT_SET" | "PLACEHOLDER" | "CONFIRMED";
+export type SetupArea = "SALARIES" | "BANK_ACCOUNTS" | "STATUTORY_IDS";
+export interface SetupItem {
+  id: string;
+  section: string;
+  category?: string;
+  title: string;
+  why: string;
+  required: boolean;
+  notRequiredReason?: string;
+  status: SetupStatus;
+  enteredBy: { name: string; at: string } | null;
+  confirmedBy: { name: string; at: string } | null;
+  detail: string;
+  where: { label: string; path: string };
+  permissionNote?: string;
+  problem?: string;
+  coverage?: { covered: number; total: number; missing: Array<{ employeeId: string; code: string; name: string }> };
+  signoffArea?: SetupArea;
+  question?: string;
+}
+export interface SetupSection {
+  id: string;
+  title: string;
+  intro: string;
+  items: SetupItem[];
+}
+export interface Readiness {
+  ready: boolean;
+  demo: boolean;
+  generatedAt: string;
+  required: number;
+  confirmed: number;
+  blockers: Array<{ itemId: string; section: string; sectionTitle: string; title: string; status: SetupStatus; missing: string; where: { label: string; path: string } }>;
+  notRequiredYet: Array<{ itemId: string; title: string; status: SetupStatus; reason: string }>;
+}
+export interface SetupReport {
+  generatedAt: string;
+  environment: string;
+  demo: boolean;
+  sections: SetupSection[];
+  readiness: Readiness;
+}
+export interface AccessHolder {
+  userId: string;
+  name: string;
+  employeeCode: string;
+  roles: string[];
+  via: string[];
+  isDeveloper: boolean;
+}
+export interface AccessReport {
+  classes: Array<{ id: string; label: string; what: string; view: AccessHolder[]; edit: AccessHolder[]; confirm: AccessHolder[] }>;
+  developers: Array<{ userId: string; name: string; employeeCode: string; holdsAnySecret: boolean; isSuperAdmin: boolean }>;
+}
+export interface SignoffPreview {
+  area: SetupArea;
+  label: string;
+  covered: number;
+  total: number;
+  missing: Array<{ employeeId: string; code: string; name: string }>;
+  enteredBy: string[];
+  blocked: string | null;
+  fingerprint: string;
+}
+export async function getSetup(): Promise<SetupReport> {
+  return (await apiClient.get(`${base}/setup`)).data;
+}
+export async function getReadiness(): Promise<Readiness> {
+  return (await apiClient.get(`${base}/setup/ready`)).data;
+}
+export async function getAccessReport(): Promise<AccessReport> {
+  return (await apiClient.get(`${base}/setup/access`)).data;
+}
+export async function previewSignoff(area: SetupArea): Promise<SignoffPreview> {
+  return (await apiClient.post(`${base}/setup/signoffs/${area}/preview`)).data;
+}
+export async function giveSignoff(area: SetupArea, body: { fingerprint: string; note: string }): Promise<{ id: string }> {
+  return (await apiClient.post(`${base}/setup/signoffs/${area}`, body)).data;
+}
+
+// ── Comparing two registers (P6-6) ──
+
+export type RegisterSource = "OWN" | "GENERIC" | "GREYTHR";
+export interface CompareDifference {
+  label: string;
+  a: string | null;
+  b: string | null;
+  difference: string;
+  percent: string | null;
+  flagged: boolean;
+}
+export interface CompareResult {
+  a: { label: string; people: number; columns: string[]; ignoredColumns: string[] };
+  b: { label: string; people: number; columns: string[]; ignoredColumns: string[] };
+  options: { toleranceAmount: string; tolerancePercent: string };
+  summary: { matchedPeople: number; identical: number; differing: number; flagged: number; onlyInA: number; onlyInB: number };
+  people: Array<{ code: string; name: string | null; flagged: boolean; differences: CompareDifference[] }>;
+  onlyInA: Array<{ code: string; name: string | null }>;
+  onlyInB: Array<{ code: string; name: string | null }>;
+  columns: { matched: string[]; onlyInA: string[]; onlyInB: string[] };
+  totals: Array<{ label: string; a: string; b: string; difference: string }>;
+}
+export interface CompareForm {
+  a: File;
+  b: File;
+  labelA: string;
+  labelB: string;
+  sourceA: RegisterSource;
+  sourceB: RegisterSource;
+  toleranceAmount: string;
+  tolerancePercent: string;
+  aliases: Record<string, string>;
+}
+function compareBody(f: CompareForm, format: "json" | "xlsx"): FormData {
+  const body = new FormData();
+  body.append("a", f.a);
+  body.append("b", f.b);
+  for (const k of ["labelA", "labelB", "sourceA", "sourceB", "toleranceAmount", "tolerancePercent"] as const) body.append(k, f[k]);
+  body.append("aliases", JSON.stringify(f.aliases));
+  body.append("format", format);
+  return body;
+}
+export async function compareRegisters(f: CompareForm): Promise<CompareResult> {
+  return (await apiClient.post(`${base}/compare`, compareBody(f, "json"))).data;
+}
+export async function downloadComparison(f: CompareForm): Promise<Blob> {
+  return (await apiClient.post(`${base}/compare`, compareBody(f, "xlsx"), { responseType: "blob" })).data as Blob;
 }

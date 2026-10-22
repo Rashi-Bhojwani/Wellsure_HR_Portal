@@ -1,3 +1,4 @@
+import { DemoCompanyBanner } from "../components/common/DemoCompanyBanner";
 import { useMemo } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -217,6 +218,7 @@ export function EmployeeLayout() {
         </Header>
 
         <Content style={{ padding: isMobile ? 12 : 24, paddingBottom: isMobile ? `calc(${MOBILE_TAB_BAR_HEIGHT + 16}px + env(safe-area-inset-bottom))` : 24 }}>
+          <DemoCompanyBanner />
           {isMobile && <InstallAppBanner />}
           <Outlet />
         </Content>

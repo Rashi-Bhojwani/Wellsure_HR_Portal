@@ -141,7 +141,7 @@ export async function listChangeRequests(req: Request, res: Response): Promise<v
 }
 export async function approveChangeRequest(req: Request, res: Response): Promise<void> {
   const { remarks } = req.body as { remarks?: string };
-  await changeRequestService.approveChangeRequest(req.params.id as string, remarks, actorMeta(req));
+  await changeRequestService.approveChangeRequest(req.params.id as string, remarks, actorMeta(req), req.user!.permissions);
   res.status(204).send();
 }
 export async function rejectChangeRequest(req: Request, res: Response): Promise<void> {

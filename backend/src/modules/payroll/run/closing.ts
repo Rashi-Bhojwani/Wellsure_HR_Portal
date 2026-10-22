@@ -2,6 +2,7 @@ import type { PayrollApproval, PayrollApprovalSubject, PayrollRun } from "@prism
 import { RUN_STATUS_LABEL } from "@shared/constants/payrollRun";
 import { writeAuditLog } from "../../../lib/audit";
 import { namesOn } from "../../../lib/effectiveDating";
+import { peopleWithoutPayslip } from "./held";
 import { resolveAccess } from "../../../lib/permissions";
 import { prisma } from "../../../lib/prisma";
 import { permissionRoom, getSocketServer } from "../../../realtime/emit";
@@ -318,13 +319,12 @@ export async function previewStep(slug: Slug, runId: string, actor: Actor): Prom
   if (slug === "publish") {
     if (releases.some((r) => r.kind === "PAYSLIPS_PUBLISHED")) blockers.push({ code: "ALREADY_RELEASED", title: "Already published", message: "The payslips for this period have already been published." });
     const slips = await buildPayslips(run);
-    const held = await prisma.payrollRunItem.findMany({ where: { runId: run.id, status: "HELD" }, include: { employee: { select: { employeeCode: true } } }, orderBy: { employee: { employeeCode: "asc" } } });
-    const names = await namesOn(held.map((h) => h.employeeId), run.cycleEnd);
+    const noPayslip = await peopleWithoutPayslip(run);
     if (slips.size === 0) blockers.push({ code: "NO_PAYSLIPS", title: "Nobody to publish payslips to", message: "Nobody in this run is payable, so there are no payslips to publish." });
     return envelope(slug, run, actor, blockers, await adapterFor("PAYSLIP_PUBLISH").hash(run.id), {
       payslips: slips.size,
       netTotal: canonicalDecimal([...slips.values()].reduce((a, v) => a.plus(dec(v.content.totals.net)), dec("0"))),
-      noPayslip: held.map((h) => ({ employeeId: h.employeeId, name: names.get(h.employeeId) ?? h.employee.employeeCode, reason: h.holdReason, detail: h.holdDetail })),
+      noPayslip,
       willDo: ["Each payable person can read their own payslip the moment this is carried out; nobody else can.", "A PDF of each is prepared in the background and the person is told, in the app and by email. The email has no figure in it.", "From then on this period can no longer be unlocked. A correction goes through an adjustment in the next run."],
     });
   }

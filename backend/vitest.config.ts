@@ -10,8 +10,9 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],
-    // The 500-employee month replay is its own job (`npm run test:replay`), not part of every run.
-    exclude: [...configDefaults.exclude, "**/*.replay.test.ts"],
+    // The 500-employee month replay is its own job (`npm run test:replay`), not part of every run. Nor is the demo company's (`npm run test:demo`): it seeds a whole
+    // fictional company into the test database, which changes the company every other test assumes.
+    exclude: [...configDefaults.exclude, "**/*.replay.test.ts", "**/*.demo.test.ts"],
     globalSetup: ["./vitest.globalSetup.ts"],
     // Does nothing unless TEST_FAKE_NOW is set (npm run test:clock).
     setupFiles: ["./vitest.fakeClock.ts"],

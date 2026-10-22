@@ -113,8 +113,8 @@ async function applyBankChange(employeeId: string, changesJson: Record<string, u
   );
 }
 
-async function applyStatutoryChange(employeeId: string, changesJson: Record<string, unknown>): Promise<void> {
-  const data: Record<string, unknown> = {};
+async function applyStatutoryChange(employeeId: string, changesJson: Record<string, unknown>, byUserId: string): Promise<void> {
+  const data: Record<string, unknown> = { updatedByUserId: byUserId };
   if (changesJson.panEncrypted) {
     data.panEncrypted = unpackBytes(changesJson.panEncrypted as string);
     data.panLast4 = changesJson.panLast4;
@@ -139,14 +139,18 @@ async function applyPersonalChange(employeeId: string, changesJson: Record<strin
   await prisma.employeePersonal.update({ where: { employeeId }, data: changesJson });
 }
 
-export async function approveChangeRequest(id: string, remarks: string | undefined, meta: RequestMetaInput): Promise<void> {
+export async function approveChangeRequest(id: string, remarks: string | undefined, meta: RequestMetaInput, viewerPermissions: ReadonlySet<string>): Promise<void> {
   const row = await prisma.profileChangeRequest.findUnique({ where: { id } });
   if (!row) throw new HttpError(404, "Change request not found.", "NOT_FOUND");
   if (row.status !== "PENDING") throw new HttpError(400, "This request has already been decided.", "ALREADY_DECIDED");
+  // Approving a change to a bank account or to PAN/Aadhaar/UAN/ESI writes that data, so it needs the same permission as editing it directly (P6-6): an HR Executive,
+  // who is deliberately kept away from bank and statutory data, can approve a personal-details change but not these.
+  if (row.fieldGroup === "bank" && !viewerPermissions.has("employee.bank.edit")) throw new HttpError(403, "Missing permission: employee.bank.edit", "FORBIDDEN");
+  if (row.fieldGroup === "statutory" && !viewerPermissions.has("employee.statutory.edit")) throw new HttpError(403, "Missing permission: employee.statutory.edit", "FORBIDDEN");
 
   const changesJson = row.changesJson as Record<string, unknown>;
   if (row.fieldGroup === "bank") await applyBankChange(row.employeeId, changesJson, meta);
-  else if (row.fieldGroup === "statutory") await applyStatutoryChange(row.employeeId, changesJson);
+  else if (row.fieldGroup === "statutory") await applyStatutoryChange(row.employeeId, changesJson, meta.actorUserId);
   else await applyPersonalChange(row.employeeId, changesJson);
 
   await prisma.profileChangeRequest.update({

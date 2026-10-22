@@ -599,6 +599,7 @@ model EmployeeStatutory {
   aadhaarHash      String?  @unique @map("aadhaar_hash")
   uanEncrypted     Bytes?   @map("uan_encrypted")
   uanLast4         String?  @map("uan_last4")
+  updatedByUserId  String?  @map("updated_by_user_id") // who last wrote this row (P6-6): the Setup sign-off cannot be given by someone who entered what it covers
   esiNumber        String?  @map("esi_number") // deliberately unencrypted — spec §9 lists only bank account/PAN/Aadhaar/UAN as requiring encryption; ESI is not in that list
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
@@ -3001,4 +3002,28 @@ model PayrollOutput {
 
   @@index([runId, kind])
   @@map("payroll_outputs")
+}
+
+
+// P6-6: a person's statement that they checked a whole class of people's data before the first real payroll run (docs/plans/PHASE_6.md §14J). The set that was checked is fixed by
+// contentHash (keyed), so a change to any covered row afterwards makes it stale. Append-only.
+enum PayrollSetupArea {
+  SALARIES
+  BANK_ACCOUNTS
+  STATUTORY_IDS
+}
+
+model PayrollSetupSignoff {
+  id             String           @id @default(cuid())
+  area           PayrollSetupArea
+  contentHash    String           @map("content_hash")
+  covered        Int
+  total          Int
+  note           String
+  authorUserIds  Json             @default("[]") @map("author_user_ids")
+  signedByUserId String           @map("signed_by_user_id")
+  signedAt       DateTime         @default(now()) @map("signed_at") @db.Timestamptz(3)
+
+  @@index([area, signedAt])
+  @@map("payroll_setup_signoffs")
 }

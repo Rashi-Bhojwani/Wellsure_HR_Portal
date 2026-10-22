@@ -89,3 +89,17 @@ Rules for anyone adding payroll code (a test fails if you break the first three)
 
 Three more rules: **a layout is data from a specification, never guessed**; **no account number is stored outside the encrypted bank account row** (a batch row has only the hash, the last four digits and the IFSC); **the app never talks to a bank**.
 
+### P6-6, the owners' secrets and the close-out
+
+| File | What it is |
+|---|---|
+| `sealed.ts` | Sealed values (the company identifiers, the whole bank layout including the debit account): AES-256-GCM, a keyed hash, `seal` / `unseal` / `shown` (what any response, audit row or log line gets instead). Key rotation counts them (`lib/fieldKeyRotation.ts`) but cannot rewrite them: they are append-only history. |
+| `setup/status.ts` | `buildSetupReport`: the one function behind the Setup Checklist and Ready screens (Not set / Placeholder / Confirmed, who, when, where to enter it). Computed from the data each time; there is no stored "ready" flag. |
+| `setup/signoffs.ts` | Sign-offs of people's data (salaries, bank accounts, UAN), bound to a keyed hash of the exact set; the signer cannot be the requester or an author of a covered row. `payroll_setup_signoffs` is append-only. |
+| `setup/access.ts` | "Who can see and change this": the named people who hold each registry permission right now, resolved from live access. |
+| `compare/` | Register comparison: `parse.ts` (our workbook, a generic table, the greytHR stub that answers `PARSER_WAITING_FOR_SAMPLE`), `diff.ts` (exact decimals, tolerance, aliases), `service.ts`. Uploads stay in memory. |
+
+The sensitive-data rules (`shared/constants/sensitiveData.ts`, `docs/SENSITIVE_DATA.md`): a permission that opens a secret is in the registry or in `REVIEWED_NOT_SENSITIVE`
+(a test fails otherwise); the Developer / operator role holds none of them, enforced in `lib/permissions.ts`; **no log line, error, audit row, export or event carries a secret**
+(`lib/redact.ts` scrubs, and the crawl in `__tests__/releases.test.ts` fails the build if a sentinel appears).
+

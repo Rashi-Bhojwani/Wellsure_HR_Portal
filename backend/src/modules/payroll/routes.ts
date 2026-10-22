@@ -10,7 +10,10 @@ import * as rv from "./run/validators";
 import * as rel from "./run/releaseController";
 import { memoryUpload } from "../../lib/uploads";
 import { employeeSalaryQuerySchema } from "./salary/employees";
-import { checkersQuerySchema, payrollAuditQuerySchema, ruleConfirmSchema, ruleEditPreviewSchema, ruleEditSchema, ruleKeyParamsSchema } from "./validators";
+import { ruleGate, layoutGate } from "./gates";
+import * as setup from "./setup/controller";
+import { compareRegistersRoute, compareUpload } from "./compare/controller";
+import { setupAreaParamsSchema, setupSignoffSchema, checkersQuerySchema, payrollAuditQuerySchema, ruleConfirmSchema, ruleEditPreviewSchema, ruleEditSchema, ruleKeyParamsSchema } from "./validators";
 
 // Payroll. Every route here is gated on keys a manager can never hold (a test fails if any becomes manager-grantable) and none has a TEAM scope:
 // payroll data is ALL or nothing. Nothing here moves money.
@@ -20,10 +23,23 @@ payrollRouter.use(authenticate);
 // Rules and setup (P6-1)
 payrollRouter.get("/rules", requirePermission("payroll.rules.view"), controller.rules);
 payrollRouter.get("/rules/:key", requirePermission("payroll.rules.view"), validate({ params: ruleKeyParamsSchema }), controller.rule);
-payrollRouter.post("/rules/:key/edit-preview", requirePermission("payroll.rules.manage"), validate({ params: ruleKeyParamsSchema, body: ruleEditPreviewSchema }), controller.editPreview);
-payrollRouter.put("/rules/:key", requirePermission("payroll.rules.manage"), validate({ params: ruleKeyParamsSchema, body: ruleEditSchema }), controller.edit);
-payrollRouter.post("/rules/:key/confirm-preview", requirePermission("payroll.rules.confirm"), validate({ params: ruleKeyParamsSchema }), controller.confirmPreview);
-payrollRouter.post("/rules/:key/confirm", requirePermission("payroll.rules.confirm"), validate({ params: ruleKeyParamsSchema, body: ruleConfirmSchema }), controller.confirm);
+payrollRouter.post("/rules/:key/edit-preview", ruleGate("manage"), validate({ params: ruleKeyParamsSchema, body: ruleEditPreviewSchema }), controller.editPreview);
+payrollRouter.put("/rules/:key", ruleGate("manage"), validate({ params: ruleKeyParamsSchema, body: ruleEditSchema }), controller.edit);
+payrollRouter.post("/rules/:key/confirm-preview", ruleGate("confirm"), validate({ params: ruleKeyParamsSchema }), controller.confirmPreview);
+payrollRouter.post("/rules/:key/confirm", ruleGate("confirm"), validate({ params: ruleKeyParamsSchema, body: ruleConfirmSchema }), controller.confirm);
+
+// Reveal of an owner's secret (a sealed rule): the identifiers' own permission, and the audit row says who looked.
+payrollRouter.post("/rules/:key/reveal", requirePermission("payroll.identifiers.manage"), validate({ params: ruleKeyParamsSchema }), controller.reveal);
+
+// The Setup Checklist, "Ready for first real run", who can see what, and the sign-off of people's data (P6-6). Statuses and counts only, never a value.
+payrollRouter.get("/setup", requirePermission("payroll.rules.view"), setup.checklist);
+payrollRouter.get("/setup/ready", requirePermission("payroll.rules.view"), setup.ready);
+payrollRouter.get("/setup/access", requireAnyPermission("payroll.rules.view", "role.view"), setup.access);
+payrollRouter.post("/setup/signoffs/:area/preview", requirePermission("payroll.approve"), validate({ params: setupAreaParamsSchema }), setup.signoffPreview);
+payrollRouter.post("/setup/signoffs/:area", requirePermission("payroll.approve"), validate({ params: setupAreaParamsSchema, body: setupSignoffSchema }), setup.signoff);
+
+// Comparing two registers (ours against greytHR's): two uploads read in memory and dropped, nothing stored. Salary and statutory reports' permission.
+payrollRouter.post("/compare", requirePermission("reports.salary.view"), compareUpload, compareRegistersRoute);
 
 // Who could decide an action (made visible rather than silently blocking)
 payrollRouter.get("/approvals/checkers", requireAnyPermission("payroll.rules.view", "payroll.run", "payroll.approve", "payroll.rules.confirm"), validate({ query: checkersQuerySchema }), controller.checkers);
@@ -127,7 +143,7 @@ payrollRouter.get("/outputs/:id/file", reportView, validate({ params: rv.slipIdP
 // Layouts: saved by payroll.rules.manage, confirmed by a different person with payroll.rules.confirm, read by payroll.rules.view.
 payrollRouter.get("/layouts", requirePermission("payroll.rules.view"), rel.layouts);
 payrollRouter.get("/layouts/:key", requirePermission("payroll.rules.view"), validate({ params: rv.layoutKeyParamsSchema }), rel.layout);
-payrollRouter.post("/layouts/:key/save-preview", requirePermission("payroll.rules.manage"), validate({ params: rv.layoutKeyParamsSchema, body: rv.layoutSavePreviewSchema }), rel.layoutSavePreview);
-payrollRouter.put("/layouts/:key", requirePermission("payroll.rules.manage"), validate({ params: rv.layoutKeyParamsSchema, body: rv.layoutSaveSchema }), rel.layoutSave);
-payrollRouter.post("/layouts/:key/confirm-preview", confirmItem, validate({ params: rv.layoutKeyParamsSchema }), rel.layoutConfirmPreview);
-payrollRouter.post("/layouts/:key/confirm", confirmItem, validate({ params: rv.layoutKeyParamsSchema, body: rv.layoutConfirmSchema }), rel.layoutConfirm);
+payrollRouter.post("/layouts/:key/save-preview", layoutGate("manage"), validate({ params: rv.layoutKeyParamsSchema, body: rv.layoutSavePreviewSchema }), rel.layoutSavePreview);
+payrollRouter.put("/layouts/:key", layoutGate("manage"), validate({ params: rv.layoutKeyParamsSchema, body: rv.layoutSaveSchema }), rel.layoutSave);
+payrollRouter.post("/layouts/:key/confirm-preview", layoutGate("confirm"), validate({ params: rv.layoutKeyParamsSchema }), rel.layoutConfirmPreview);
+payrollRouter.post("/layouts/:key/confirm", layoutGate("confirm"), validate({ params: rv.layoutKeyParamsSchema, body: rv.layoutConfirmSchema }), rel.layoutConfirm);

@@ -5,6 +5,12 @@ import { mailService } from "../../../integrations/mail";
 import { fakeReceipt } from "../../../integrations/mail/testing";
 import { storageService } from "../../../integrations/storage";
 import { decryptField, encryptField } from "../../../lib/encryption";
+import { unseal } from "../sealed";
+import { SYSTEM_ROLES } from "../../../lib/systemRoles";
+import { DEVELOPER_ROLE_CODE } from "@shared/constants/sensitiveData";
+import { cleanupTestRole, grantPermissions } from "../../employee/__tests__/employeeTestHelpers";
+import { encryptStatutoryFields } from "../../employee/service";
+import { crawlGets } from "./sensitiveCrawl";
 import { prisma } from "../../../lib/prisma";
 import { app, authHeader, createFullTestEmployee, cleanupFullTestEmployee, loginAs } from "../../employee/__tests__/employeeTestHelpers";
 import { markPaid } from "../run/bankBatches";
@@ -22,7 +28,7 @@ const LAYOUT = {
   extension: "csv",
   dateFormat: "DD-MM-YYYY",
   amountDecimals: 2,
-  header: [[{ source: "CONSTANT", value: "HDR" }, { source: "PATTERN", value: "{DEBIT_ACCOUNT}" }, { source: "PATTERN", value: "{COUNT}" }, { source: "PATTERN", value: "{TOTAL}" }]],
+  header: [[{ source: "CONSTANT", value: "ZZHDR9917" }, { source: "PATTERN", value: "{DEBIT_ACCOUNT}" }, { source: "PATTERN", value: "{COUNT}" }, { source: "PATTERN", value: "{TOTAL}" }]],
   columns: [{ source: "FIELD", value: "SERIAL" }, { source: "FIELD", value: "NAME" }, { source: "FIELD", value: "ACCOUNT_NUMBER" }, { source: "FIELD", value: "IFSC" }, { source: "FIELD", value: "AMOUNT" }, { source: "FIELD", value: "NARRATION" }],
   narrationPattern: "Salary {PERIOD}",
 };
@@ -211,12 +217,24 @@ describe("payslips, the bank file and the statutory files from a final run", () 
     expect(saved.body.status).toBe("PLACEHOLDER");
     // Stored encrypted; the plaintext appears nowhere a person can read.
     const version = await prisma.payrollItemVersion.findFirstOrThrow({ where: { kind: "BANK_TEMPLATE", key: "BANK_TEMPLATE" }, orderBy: { version: "desc" } });
-    const stored = version.value as { debitAccountEnc: string; debitAccountLast4: string };
+    // The whole version is sealed: nothing readable, not even the layout's columns.
+    expect(Object.keys(version.value as object)).toEqual(["sealed"]);
     expect(JSON.stringify(version.value)).not.toContain(DEBIT);
+    expect(JSON.stringify(version.value)).not.toContain("ZZHDR9917");
+    const stored = unseal<{ debitAccountEnc: string; debitAccountLast4: string }>(version.value as { sealed: string });
     expect(decryptField(Buffer.from(stored.debitAccountEnc, "base64"))).toBe(DEBIT);
     const audit = await prisma.auditLog.findMany({ where: { action: "payroll.layout.edited", entityId: "BANK_TEMPLATE" } });
     expect(JSON.stringify(audit)).not.toContain(DEBIT);
-    expect(JSON.stringify((await api(world.tokens.maker, "get", "/layouts/BANK_TEMPLATE")).body)).not.toContain(stored.debitAccountEnc);
+    expect(JSON.stringify(audit)).not.toContain(stored.debitAccountEnc);
+    expect(JSON.stringify(audit)).not.toContain("ZZHDR9917");
+    const read = await api(world.tokens.maker, "get", "/layouts/BANK_TEMPLATE"); // the person who enters the layout may see it, and that is recorded
+    expect(JSON.stringify(read.body)).not.toContain(stored.debitAccountEnc);
+    expect(read.body.layout.current.value).toMatchObject({ hasDebitAccount: true, debitAccountLast4: "3444", columns: expect.any(Array) });
+    expect(await prisma.auditLog.count({ where: { action: "payroll.layout.revealed", entityId: "BANK_TEMPLATE", actorUserId: world.maker.userId } })).toBeGreaterThan(0);
+    // Somebody without the bank-layout permissions (a payroll approver who is not given it here is the checker, who may; an HR executive may not) sees that it exists and its status, nothing of it.
+    const blind = await api(hrExecToken, "get", "/layouts/BANK_TEMPLATE");
+    expect(blind.status).toBe(403); // payroll.rules.view is not held by an HR executive at all
+    expect(await prisma.auditLog.count({ where: { action: "payroll.layout.revealed", actorUserId: hrExec.userId } })).toBe(0);
     // Saving the same thing again is "no change", even though a fresh encryption would differ.
     const again = await api(world.tokens.maker, "post", "/layouts/BANK_TEMPLATE/save-preview", { value: { ...LAYOUT, debitAccountNumber: DEBIT } });
     expect(again.body.unchanged).toBe(true);
@@ -283,7 +301,7 @@ describe("payslips, the bank file and the statutory files from a final run", () 
     // The file: the real account numbers, in the layout, with its header and the debit account.
     const file = (await storageService.getObject(batch.fileKey)).body.toString("utf8").trimEnd().split("\n");
     const net = batch.rows.reduce((a, r) => a + Math.round(Number(r.amount) * 100), 0);
-    expect(file[0]).toBe(`HDR,${DEBIT},3,${(net / 100).toFixed(2)}`);
+    expect(file[0]).toBe(`ZZHDR9917,${DEBIT},3,${(net / 100).toFixed(2)}`);
     expect(file).toHaveLength(4);
     for (const r of batch.rows) {
       const acct = await prisma.employeeBankAccount.findFirstOrThrow({ where: { employeeId: r.employeeId } });
@@ -366,6 +384,145 @@ describe("payslips, the bank file and the statutory files from a final run", () 
     expect(text[0]).toMatch(/^10000000000\d+#~#Test Employee .+#~#\d+(\.\d+)?#~#\d+(\.\d+)?#~#0$/);
     expect(await prisma.auditLog.count({ where: { action: "payroll.output.identifier_read", entityId: { in: ["a", "b", "c"].map(who) } } })).toBe(slipRows);
     await expect(prisma.payrollOutput.update({ where: { id: out.id }, data: { rowCount: 1 } })).rejects.toThrow(/APPEND_ONLY/);
+  });
+});
+
+// ── The scan: nothing an owner keeps to themselves is on any screen, in any export or in any error a person without the permission can reach ──
+describe("the sensitive-data scan, on a company with a published run and a bank file", () => {
+  let world: Closing;
+  let runId: string;
+  const hrRole = `TEST_CRAWL_HR_${Date.now()}`;
+  let hr: { employeeId: string; userId: string; employeeCode: string };
+  let dev: { employeeId: string; userId: string; employeeCode: string };
+  let sentinels: Array<{ label: string; value: string; owner?: string }> = [];
+  const IDENTIFIER = "ZZESI/55120/SENTINEL-77";
+  const who = (n: string) => world.named[n]!.employeeId;
+
+  beforeAll(async () => {
+    world = await closingWorld(["a", "b", "c"]);
+    await staffWith(world, ["a", "b", "c"]);
+    await setRules(world.maker.userId, REAL_RULES);
+    runId = await calculateRun(world);
+    await confirmAllPins(world, runId);
+    await driveToFinal(world, runId);
+    // Statutory numbers and the company's secrets, entered the way the owners do.
+    for (const [i, n] of ["a", "b", "c"].entries()) {
+      await prisma.employeeStatutory.update({ where: { employeeId: who(n) }, data: encryptStatutoryFields({ uan: `1002003004${i}${i}`, esiNumber: `ESI-SENT-${i}${i}${i}${i}${i}` }) });
+    }
+    const pre = await api(world.tokens.maker, "post", "/layouts/BANK_TEMPLATE/save-preview", { value: { ...LAYOUT, debitAccountNumber: DEBIT } });
+    await request(app).put("/api/payroll/layouts/BANK_TEMPLATE").set(...authHeader(world.tokens.maker)).send({ value: { ...LAYOUT, debitAccountNumber: DEBIT }, fingerprint: pre.body.fingerprint });
+    const cp = await api(world.tokens.checkerA, "post", "/layouts/BANK_TEMPLATE/confirm-preview");
+    await api(world.tokens.checkerA, "post", "/layouts/BANK_TEMPLATE/confirm", { version: cp.body.version, note: "matches the sheet the bank gave", fingerprint: cp.body.fingerprint });
+    const ep = await api(world.tokens.maker, "post", "/rules/ESI_EMPLOYER_CODE/edit-preview", { value: IDENTIFIER });
+    await request(app).put("/api/payroll/rules/ESI_EMPLOYER_CODE").set(...authHeader(world.tokens.maker)).send({ value: IDENTIFIER, fingerprint: ep.body.fingerprint });
+    const cc = await api(world.tokens.checkerA, "post", "/rules/ESI_EMPLOYER_CODE/confirm-preview");
+    await api(world.tokens.checkerA, "post", "/rules/ESI_EMPLOYER_CODE/confirm", { version: cc.body.version, typedValue: IDENTIFIER, note: "against the registration letter", fingerprint: cc.body.fingerprint });
+    // Publish the payslips and make the bank file, so slips, a batch and their files exist to be looked for.
+    await requestStep(world.tokens.maker, runId, "publish");
+    await approve(world, world.tokens.checkerA, runId, "publish");
+    await api(world.tokens.maker, "post", `/runs/${runId}/payslips/publish`);
+    await requestStep(world.tokens.maker, runId, "bank-file");
+    await approve(world, world.tokens.checkerB, runId, "bank-file");
+    await api(world.tokens.maker, "post", `/runs/${runId}/bank-file/generate`);
+    await api(world.tokens.maker, "post", `/runs/${runId}/outputs`, { kind: "SALARY_REGISTER" });
+
+    // An HR executive without bank, statutory or salary rights, and a developer: the two people the scan is about.
+    await grantPermissions(hrRole, [...SYSTEM_ROLES.find((r) => r.code === "HR_EXECUTIVE")!.permissions]);
+    await prisma.role.update({ where: { code: hrRole }, data: { dataScope: "ALL" } });
+    hr = await createFullTestEmployee(world.org, { roleCode: hrRole });
+    dev = await createFullTestEmployee(world.org, { roleCode: DEVELOPER_ROLE_CODE });
+    world.userIds.push(hr.userId, dev.userId);
+
+    // What must never appear: every real value, taken from the database in the clear.
+    const found: typeof sentinels = [];
+    for (const n of ["a", "b", "c"]) {
+      const id = who(n);
+      const bank = await prisma.employeeBankAccount.findFirstOrThrow({ where: { employeeId: id } });
+      const st = await prisma.employeeStatutory.findFirstOrThrow({ where: { employeeId: id } });
+      found.push({ label: `${n} bank account`, value: decryptField(bank.accountNumberEncrypted), owner: id });
+      found.push({ label: `${n} PAN`, value: decryptField(st.panEncrypted!), owner: id });
+      found.push({ label: `${n} Aadhaar`, value: decryptField(st.aadhaarEncrypted!), owner: id });
+      found.push({ label: `${n} UAN`, value: decryptField(st.uanEncrypted!), owner: id });
+      found.push({ label: `${n} ESI number`, value: st.esiNumber!, owner: id });
+    }
+    found.push({ label: "debit account", value: DEBIT }, { label: "bank layout constant", value: "ZZHDR9917" }, { label: "company identifier", value: IDENTIFIER });
+    sentinels = found;
+  }, 900_000);
+  afterAll(async () => {
+    resetSeams();
+    await cleanupFullTestEmployee(hr.employeeId);
+    await cleanupFullTestEmployee(dev.employeeId);
+    await cleanupTestRole(hrRole);
+    await closeWorld(world);
+  });
+
+  const SALARY = ["600000", "144600", "48200"]; // the annual CTC, the run's net total and one person's net: what the salary class holds
+
+  const idsFor = async () => {
+    const slips = await prisma.payslip.findMany({ where: { runId }, select: { id: true } });
+    const batch = await prisma.bankTransferBatch.findUniqueOrThrow({ where: { runId } });
+    const outputs = await prisma.payrollOutput.findMany({ where: { runId }, select: { id: true } });
+    return {
+      id: [who("a"), runId, slips[0]!.id, batch.id, outputs[0]?.id ?? "x", who("b")],
+      employeeId: [who("a"), who("b"), who("c")],
+      userId: [world.named.a!.userId],
+      key: ["ESI_EMPLOYER_CODE", "BANK_TEMPLATE", "PF_ECR"],
+      rowId: ["x"],
+    };
+  };
+
+  for (const persona of ["developer", "hr executive without bank, statutory or salary rights"] as const) {
+    it(`${persona}: no GET route answers with an owner's secret`, async () => {
+      const token = await loginAs((persona === "developer" ? dev : hr).employeeCode);
+      const crawled = await crawlGets(app, token, await idsFor());
+      expect(crawled.filter((c) => c.status === 200).length).toBeGreaterThan(20); // the crawl really reached things
+      const leaks: string[] = [];
+      for (const c of crawled) {
+        for (const s of [...sentinels.map((x) => ({ label: x.label, value: x.value })), ...SALARY.map((v) => ({ label: `salary figure ${v}`, value: v }))]) {
+          if (c.text.includes(s.value)) leaks.push(`${c.route} (${c.url}) → ${s.label}`);
+        }
+      }
+      expect(leaks).toEqual([]);
+    }, 600_000);
+  }
+
+  it("an ordinary employee reads their own payslip and nothing of anyone else's, or the company's", async () => {
+    const token = await loginAs(world.named.a!.employeeCode);
+    const crawled = await crawlGets(app, token, await idsFor());
+    const leaks: string[] = [];
+    for (const c of crawled) for (const s of sentinels) if (s.owner !== who("a") && c.text.includes(s.value)) leaks.push(`${c.route} (${c.url}) → ${s.label}`);
+    expect(leaks).toEqual([]);
+  }, 600_000);
+
+  it("a failed request never echoes a value it was sent: validation errors on bank, statutory, layout and identifier endpoints", async () => {
+    const SENT = "998877665544332";
+    const SENT_PAN = "ZZZZZ9999Z";
+    const bad = [
+      await request(app).patch(`/api/employees/${who("a")}/bank`).set(...authHeader(world.supToken)).send({ accountNumber: SENT, accountNumberConfirm: "999", ifsc: "BAD", bankName: "", branchName: "" }),
+      await request(app).patch(`/api/employees/${who("a")}/statutory`).set(...authHeader(world.supToken)).send({ pan: SENT_PAN + "X", aadhaar: SENT }),
+      await request(app).put("/api/payroll/layouts/BANK_TEMPLATE").set(...authHeader(world.tokens.maker)).send({ value: { debitAccountNumber: SENT, format: "NOPE" }, fingerprint: "x".repeat(12) }),
+      await request(app).post("/api/payroll/layouts/BANK_TEMPLATE/save-preview").set(...authHeader(world.tokens.maker)).send({ value: { ...LAYOUT, debitAccountNumber: SENT.slice(0, 3) } }),
+      await request(app).post("/api/payroll/rules/ESI_EMPLOYER_CODE/confirm").set(...authHeader(world.tokens.checkerA)).send({ version: 1, typedValue: SENT, note: "x", fingerprint: "y".repeat(12) }),
+    ];
+    for (const r of bad) {
+      expect(r.status).toBeGreaterThanOrEqual(400);
+      expect(JSON.stringify(r.body)).not.toContain(SENT);
+      expect(JSON.stringify(r.body)).not.toContain(SENT_PAN);
+    }
+  });
+
+  it("no table of the database holds the debit account, the bank layout's constant or a company identifier in the clear", async () => {
+    const needles = [DEBIT, "ZZHDR9917", IDENTIFIER];
+    const cols = await prisma.$queryRaw<Array<{ table_name: string; column_name: string }>>`
+      SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = 'public' AND data_type IN ('text', 'character varying', 'json', 'jsonb')`;
+    const hits: string[] = [];
+    for (const c of cols) {
+      for (const needle of needles) {
+        const n = await prisma.$queryRawUnsafe<Array<{ c: bigint }>>(`SELECT count(*)::bigint AS c FROM "${c.table_name}" WHERE "${c.column_name}"::text LIKE $1`, `%${needle}%`);
+        if (Number(n[0]!.c) > 0) hits.push(`${c.table_name}.${c.column_name} holds ${needle.slice(0, 6)}…`);
+      }
+    }
+    expect(hits).toEqual([]);
   });
 });
 

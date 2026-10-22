@@ -19,12 +19,16 @@
     "db:drift": "prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --exit-code",
     "check:services": "tsx scripts/check-services.ts",
     "db:seed": "tsx scripts/reset-db.ts",
+    "seed:demo-company": "tsx scripts/seed-demo-company.ts",
+    "measure:payroll": "tsx scripts/measure-payroll.ts",
+    "docs:sensitive": "tsx scripts/sensitive-docs.ts",
     "admin:bootstrap": "tsx scripts/admin-bootstrap.ts",
     "admin:recover": "tsx scripts/admin-recover.ts",
     "admin:preflight": "tsx scripts/admin-preflight.ts",
     "field-keys": "tsx scripts/field-keys.ts",
     "history:repair": "tsx scripts/history-repair.ts",
     "test:replay": "vitest run --config vitest.replay.config.ts",
+    "test:demo": "vitest run --config vitest.demo.config.ts",
     "test:clock": "bash scripts/test-clock.sh"
   },
   "prisma": {

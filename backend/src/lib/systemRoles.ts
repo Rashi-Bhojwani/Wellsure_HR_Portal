@@ -1,4 +1,5 @@
 import { PERMISSION_KEYS } from "@shared/constants/permissions";
+import { DEVELOPER_ROLE_CODE, DEVELOPER_ROLE_PERMISSIONS } from "@shared/constants/sensitiveData";
 import type { DataScope } from "@shared/constants/roles";
 
 // The seven system roles' DEFAULT definitions (spec §2) — used to seed a dev
@@ -124,11 +125,14 @@ const PAYROLL_ADMIN_PERMS = [
   "payroll.payslip.view",
   "payroll.bank.view",
   "reports.salary.view",
+  // P6-6: the owners' secrets are entered by the people who hold these two (never by the developer). Confirming is the checker's.
+  "payroll.identifiers.manage",
+  "payroll.banklayout.manage",
 ];
 // Phase 6: the checker set. It sees the figures it approves and confirms rule values; it cannot prepare runs or edit rules,
 // so the same person cannot hold both halves by default. A separate role from APPROVER (leave): giving APPROVER payroll
 // figures would have widened what every leave approver sees.
-const PAYROLL_APPROVER_PERMS = ["payroll.rules.view", "payroll.rules.confirm", "payroll.salary.view", "payroll.approve", "payroll.payslip.view", "payroll.bank.view", "reports.salary.view"];
+const PAYROLL_APPROVER_PERMS = ["payroll.rules.view", "payroll.rules.confirm", "payroll.salary.view", "payroll.approve", "payroll.payslip.view", "payroll.bank.view", "reports.salary.view", "payroll.identifiers.confirm", "payroll.banklayout.confirm"];
 // leave.approve/leave.view here is a real fix over commit A's original
 // seed, caught while designing commit B's approve endpoint: MANAGER is
 // TEAM-scoped (its Role.dataScope), but scope alone doesn't grant a
@@ -153,6 +157,9 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
   { code: "HR_EXECUTIVE", name: "HR Executive", permissions: HR_EXECUTIVE_PERMS, dataScope: "ALL" },
   { code: "PAYROLL_ADMIN", name: "Payroll Admin", permissions: PAYROLL_ADMIN_PERMS, dataScope: "ALL" },
   { code: "PAYROLL_APPROVER", name: "Payroll Approver", permissions: PAYROLL_APPROVER_PERMS, dataScope: "ALL" },
+  // P6-6: the person who builds and runs the system. Everything needed for that and none of the owners' secrets: lib/permissions.ts removes every key in
+  // shared/constants/sensitiveData.ts from anyone who holds this role, whatever else they are given, and it can never be held together with SUPER_ADMIN.
+  { code: DEVELOPER_ROLE_CODE, name: "Developer / operator", permissions: DEVELOPER_ROLE_PERMISSIONS, dataScope: "ALL" },
   { code: "MANAGER", name: "Manager", permissions: MANAGER_PERMS, dataScope: "TEAM" },
   { code: "APPROVER", name: "Approver", permissions: ["leave.approve", "leave.view"], dataScope: "ALL" }, // Phase 4 — more
   // permissions arrive with Phase 6 (payroll maker-checker)

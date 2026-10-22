@@ -436,6 +436,11 @@ Run from the repo root unless noted.
 | `npm run admin:bootstrap --prefix backend` | Create the **first** real Super Admin on a fresh staging/production database — see §12. Refuses once any active Super Admin exists, so it does nothing locally (seeded `1000` is one) |
 | `npm run admin:preflight --prefix backend` | Read-only readiness check for the first administrator (migrations, catalog, encryption, database role, SES, alert inbox, break-glass alarm subscriber). `admin:bootstrap` runs its alerting part itself and refuses if it fails — `docs/DEPLOYMENT.md` |
 | `npm run field-keys --prefix backend -- <status\|add\|promote\|reencrypt\|retire>` | Field-encryption key rotation, in four phases — `docs/DEPLOYMENT.md` "Field encryption keys". `status` is safe anywhere |
+| `npm run seed:demo-company --prefix backend` | **Development only.** Adds the fictional *demo company* (made-up people, salaries, a fictional bank file format; a DEMO COMPANY banner on every screen) on top of the seeded database, so payroll can be shown and tested end to end without a real figure. Refuses outside development, and the app refuses to start anywhere else if it has been run there. To start again: `npm run db:seed --prefix backend`. See "The demo company" below |
+| `npm run test:demo --prefix backend` | The demo company's own test (builds it in the test database and drives a month through every payroll step as its users, then crawls it as the developer). Its own run on purpose: it is excluded from `npm test` because it fills the test database with a whole company |
+| `npm run check:sensitive-ui --prefix frontend` | Opens every page of both portals in a real browser as the demo company's developer and as an employee, and fails if any made-up secret is on a page or the DEMO COMPANY banner is missing. Needs the stack up and the demo company seeded (CI does both) |
+| `npm run measure:payroll --prefix backend -- 500` | **Development only, on a seeded demo database.** Adds made-up people up to the headcount and times the payroll calculation, the approval re-check, the register workbook and payslip PDFs. Numbers are in `docs/plans/PHASE_6_REVIEW.md` §6 |
+| `npm run docs:sensitive --prefix backend` | Prints the generated tables in `docs/SENSITIVE_DATA.md` (who can see, change and confirm each kind of secret). A test fails if the document and the code disagree: paste the output between the markers |
 | `npm run admin:recover --prefix backend` | Break-glass recovery for a Super Admin who lost their password or 2FA device — see §12 |
 | `npm run history:repair --prefix backend` | **Preview** history rows that don't fit the effective-dating model (e.g. a leaver whose placement was never closed) — every fix, current → new value, and why, plus rows a person must decide. Changes nothing. To apply, get the preview approved, then run the exact command it prints (`--apply --fingerprint … --approved-by … --operator …`); a changed list is refused. `db:migrate` warns when this is needed. See `docs/plans/EFFECTIVE_DATES.md` |
 
@@ -611,6 +616,21 @@ cd backend && npx prisma studio
 ```
 
 ---
+
+### The demo company (Phase 6)
+
+Payroll is built so that the people who build and run the system never need to see a real salary, bank account, registration number or bank layout: the owners enter those themselves ([`SENSITIVE_DATA.md`](SENSITIVE_DATA.md)). To work on payroll without any real figure, seed the **demo company** on a development database:
+
+```
+npm run db:seed --prefix backend            # a clean development database
+npm run seed:demo-company --prefix backend  # the fictional company on top of it
+```
+
+It creates `DEMO001` Demo Owner (Super Admin), `DEMO002` Demo Payroll Admin, `DEMO003` Demo Payroll Approver, `DEMO004` Demo HR Admin, `DEMO005` Demo Developer and more employees, all with the password `Wellsure@123`; every rule, component, structure and the bank layout Confirmed by two different demo users; salaries entered as revisions and approved by a second person; a month of attendance locked; and the people's pay details signed off. So **Payroll → Ready for First Run is green** and a run for the last month can be taken through every step. Everything is made up and says so (bank accounts begin `9999`, PANs `DEMOX`, the bank format is fictional), and every screen shows a **DEMO COMPANY** banner.
+
+- **What the production developer login sees:** sign in as `DEMO005`. It holds the Developer / operator role: it can open Payroll → Setup Checklist and see where each item stands, but no salary, payslip, bank account, identifier, layout or debit account. The `1000` Super Admin of the ordinary seed sees everything of the *made-up* company, which is fine.
+- **Fenced:** the seed command and the `demo.company` setting refuse outside `APP_ENV=development`; the API, worker and scheduler **refuse to start** elsewhere if the setting is on or any employee code begins `DEMO`; `admin:preflight` fails the same way.
+- **To start again:** `npm run db:seed --prefix backend` (wipes the database).
 
 ## 10. Troubleshooting
 

@@ -1,3 +1,4 @@
+import { getSetting } from "../../../lib/settings";
 import { createHash } from "node:crypto";
 import { env } from "../../../config/env";
 import { mailService, describeMailError } from "../../../integrations/mail";
@@ -21,7 +22,9 @@ export const payslipPdfKey = (runId: string, payslipId: string) => `payroll/pays
 
 /** Renders one payslip to PDF and stores it. Returns the stored key. Never stores a draft: this is only for published payslips. */
 async function renderAndStore(slip: { id: string; runId: string; content: unknown; publishedAt: Date }): Promise<{ key: string; sha256: string }> {
-  const { pdf } = await renderPdf(payslipHtml(slip.content as PayslipContent), slip.publishedAt);
+  // In the demo company every payslip says so across the page, so none can be taken for a real one.
+  const demo = (await getSetting<boolean>("demo.company", false)) === true;
+  const { pdf } = await renderPdf(payslipHtml(slip.content as PayslipContent, { watermark: demo ? "DEMO COMPANY — NOT REAL" : null }), slip.publishedAt);
   const key = payslipPdfKey(slip.runId, slip.id);
   await storageService.putObject(key, pdf, "application/pdf");
   return { key, sha256: createHash("sha256").update(pdf).digest("hex") };

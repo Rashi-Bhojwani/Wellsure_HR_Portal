@@ -44,6 +44,10 @@ export async function uploadAndValidate(dataset: ImportDatasetKey, fileBuffer: B
   if (dataset === "bank" && !viewerPermissions.has("employee.bank.edit")) {
     throw new HttpError(403, "Missing permission: employee.bank.edit", "FORBIDDEN");
   }
+  // PAN, Aadhaar, UAN and ESI numbers are changed only by someone who holds employee.statutory.edit, here as everywhere (P6-6: this dataset was not gated).
+  if (dataset === "statutory" && !viewerPermissions.has("employee.statutory.edit")) {
+    throw new HttpError(403, "Missing permission: employee.statutory.edit", "FORBIDDEN");
+  }
   const parsedRows = await parseUpload(dataset, fileBuffer);
   if (parsedRows.length === 0) {
     throw new HttpError(400, "No data rows found in this file.", "EMPTY_FILE");
@@ -309,7 +313,7 @@ async function commitEmployees(tx: Prisma.TransactionClient, rows: { data: Recor
   return createdIds;
 }
 
-async function commitStatutory(tx: Prisma.TransactionClient, rows: { data: Record<string, unknown> }[]): Promise<void> {
+async function commitStatutory(tx: Prisma.TransactionClient, rows: { data: Record<string, unknown> }[], meta: ActorMeta): Promise<void> {
   const employees = await tx.employee.findMany({ select: { id: true, employeeCode: true } });
   const empByCode = new Map(employees.map((e) => [e.employeeCode.toLowerCase(), e.id]));
 
@@ -334,6 +338,7 @@ async function commitStatutory(tx: Prisma.TransactionClient, rows: { data: Recor
     }
     if (d.esiNumber) update.esiNumber = d.esiNumber;
     if (Object.keys(update).length === 0) continue;
+    update.updatedByUserId = meta.actorUserId;
     await tx.employeeStatutory.upsert({ where: { employeeId }, create: { employeeId, ...update }, update });
   }
 }
@@ -441,6 +446,9 @@ export async function commitBatch(
       throw new HttpError(400, 'Type "IMPORT BANK DATA" to confirm committing bank account details.', "CONFIRMATION_REQUIRED");
     }
   }
+  if (dataset === "statutory" && !viewerPermissions.has("employee.statutory.edit")) {
+    throw new HttpError(403, "Missing permission: employee.statutory.edit", "FORBIDDEN");
+  }
 
   const rows = await prisma.importStagingRow.findMany({ where: { batchId: id }, orderBy: { rowNumber: "asc" } });
   const rowInputs = rows.map((r) => ({ data: r.data as Record<string, unknown> }));
@@ -449,7 +457,7 @@ export async function commitBatch(
     async (tx) => {
       if (dataset === "org-masters") await commitOrgMasters(tx, rowInputs);
       else if (dataset === "employees") await commitEmployees(tx, rowInputs, meta);
-      else if (dataset === "statutory") await commitStatutory(tx, rowInputs);
+      else if (dataset === "statutory") await commitStatutory(tx, rowInputs, meta);
       else if (dataset === "bank") await commitBank(tx, rowInputs, meta);
       else await commitLeaveGrants(tx, rowInputs, meta);
 

@@ -10,13 +10,20 @@ import { decryptTotpSecret } from "../totp";
 // service setup) and a login from a role that requires 2FA (a
 // requires_totp_setup challenge instead — setup/verify go through the
 // challengeToken and verify itself completes the login).
-// A code is valid for its 30-second step and the server checks it with no tolerance, so a code made in the last moments of a step can expire between being made and
-// being checked (this failed once in CI, 401 instead of 204). Wait for the start of a fresh step when fewer than three seconds remain.
-const STEP_MS = 30_000;
+// The server accepts the previous, the current and the next 30-second step, and refuses a code it has already accepted. So this hands out a code that has not been
+// used yet: the current step's if it is free, otherwise the next step's, otherwise the previous one's. That also means no test depends on how many seconds are left
+// in the current step (a CI run once failed on exactly that, under the old zero-tolerance check).
+const usedCodes = new Set<string>();
 async function generate(opts: { secret: string }): Promise<string> {
-  const left = STEP_MS - (Date.now() % STEP_MS);
-  if (left < 3000) await new Promise((r) => setTimeout(r, left + 50));
-  return generateAt(opts);
+  const now = Math.floor(Date.now() / 1000);
+  for (const offset of [0, 30, -30]) {
+    const code = await generateAt({ secret: opts.secret, epoch: now + offset });
+    if (!usedCodes.has(`${opts.secret}:${code}`)) {
+      usedCodes.add(`${opts.secret}:${code}`);
+      return code;
+    }
+  }
+  throw new Error("No unused code left in the accepted window");
 }
 
 async function enrollTotp(employeeCode: string): Promise<{ accessToken: string; secret: string }> {

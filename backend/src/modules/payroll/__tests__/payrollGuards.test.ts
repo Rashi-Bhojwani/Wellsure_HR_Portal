@@ -105,6 +105,13 @@ const EXTRA_ALLOWED: Record<string, number[]> = {
   "run/outputs.ts": [300],
   "run/layout.ts": [20, 60, 80, 500],
   "run/layouts.ts": [20, 500],
+  // The register comparison (P6-6): the length limits of the upload's text fields and its size in megabytes, the most rows a register may have, an HTTP status, and the widths of the
+  // result workbook's columns. None is a payroll figure.
+  "compare/controller.ts": [20, 40, 80, 1024, 4000],
+  "compare/parse.ts": [501, 20000],
+  "compare/service.ts": [28, 36, 46, 50],
+  // The sign-off lists at most this many names of people still missing a detail.
+  "setup/signoffs.ts": [25],
 };
 
 export function numericLiteralsIn(src: string, extra: number[] = []): Array<{ line: number; text: string }> {
@@ -226,6 +233,24 @@ describe("modules/payroll", () => {
     expect(creators.sort()).toEqual(["src/modules/payroll/run/release.ts"]);
     // The employee module's own audited reveal is outside payroll; inside payroll the bank file's generation is the only place an account number is read.
     expect(decrypters.sort()).toEqual(["src/modules/payroll/run/release.ts"]);
+  });
+
+  it("an owner's secret is opened in only three places: the rule Reveal, the layout module, and the sealing module itself", () => {
+    const backend = path.resolve(ROOT, "../../..");
+    const hits: string[] = [];
+    const scan = (dir: string): void => {
+      for (const name of readdirSync(dir)) {
+        if (name === "node_modules" || name === "__tests__") continue;
+        const full = path.join(dir, name);
+        if (statSync(full).isDirectory()) scan(full);
+        else if (/\.tsx?$/.test(name) && !/\.test\./.test(name)) {
+          const raw = readFileSync(full, "utf8").replace(/\/\/.*$/gm, "");
+          if (/\bunseal(?:<[^>]*>)?\(/.test(raw)) hits.push(path.relative(backend, full).split(path.sep).join("/"));
+        }
+      }
+    };
+    scan(path.join(backend, "src"));
+    expect(hits.sort()).toEqual(["src/modules/payroll/rules/governed.ts", "src/modules/payroll/run/layouts.ts", "src/modules/payroll/sealed.ts"]);
   });
 
   it("the payroll-lock bypass for back-dated salary has exactly one caller, the revision apply step, and that step creates the arrears in the same transaction", () => {

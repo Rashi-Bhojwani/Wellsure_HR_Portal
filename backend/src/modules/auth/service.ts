@@ -28,6 +28,7 @@ import {
   generateTotpEnrollment,
   generateTotpSecret,
   hashBackupCode,
+  consumeTotpCode,
   verifyTotpCode,
 } from "./totp";
 import { sendInvitationEmail, sendPasswordResetEmail, sendWelcomeEmail } from "./emails";
@@ -74,7 +75,7 @@ async function assertPasswordMeetsPolicy(password: string): Promise<void> {
 async function verifyTotpOrBackupCode(user: User, code: string): Promise<boolean> {
   if (user.totpSecretEncrypted) {
     const secret = decryptTotpSecret(user.totpSecretEncrypted);
-    if (await verifyTotpCode(secret, code)) {
+    if ((await verifyTotpCode(secret, code)) && (await consumeTotpCode(user.id, code))) {
       return true;
     }
   }
@@ -185,7 +186,9 @@ export async function login(employeeCode: string, password: string, meta: Reques
     const challengeToken = signTotpChallengeToken(user.id, "totp_setup_challenge");
     return { status: "requires_totp_setup", challengeToken };
   }
-  if (needs2fa) {
+  // Anyone who has 2FA turned on is asked for the code, whether or not their role requires it: a person who switched it on themselves would otherwise be let in
+  // by the password alone, which made their 2FA decorative (found while checking every login path for the 2FA time-step edge, 2026-10-22).
+  if (needs2fa || user.totpEnabled) {
     const challengeToken = signTotpChallengeToken(user.id, "totp_challenge");
     return { status: "requires_totp", challengeToken };
   }
@@ -344,8 +347,8 @@ export async function latestInvitationDelivery(userId: string, email: string): P
 // Called by the employee module right after creating a new hire's User row
 // (status INVITED) — issues the single-use set-password token (TTL from the
 // auth.invitationTtlHours System Setting, spec §7.8) and sends the
-// invitation email. Not itself audit-logged: the caller's own
-// "employee.created" entry covers this as part of the same action.
+// invitation email. Every send is audit-logged here, one row per attempt (`auth.invitation.email`: to whom, the outcome, the driver, when, the error if it
+// failed, and who triggered it), so there is a record of whether and when each person was sent their link, whichever path sent it.
 //
 // A failed email never makes this throw (the employee exists either way) and is never hidden: the result says exactly what happened and the same is stored on the token, so
 // HR is told "not sent, and why" instead of believing someone was invited.
@@ -383,6 +386,27 @@ export async function createInvitation(params: {
       data: { emailDriver: env.MAIL_DRIVER, emailAttemptedAt: attemptedAt, emailError: describeMailError(err) },
     });
     delivery = deliveryOf(updated, params.email);
+  }
+  try {
+    await writeAuditLog({
+      actorUserId: params.actorUserId ?? null,
+      action: "auth.invitation.email",
+      entityType: "InvitationToken",
+      entityId: token.id,
+      after: {
+        userId: params.userId,
+        employeeCode: params.employeeCode,
+        to: delivery.to,
+        outcome: delivery.status,
+        driver: delivery.driver ?? null,
+        attemptedAt: delivery.attemptedAt ?? attemptedAt.toISOString(),
+        sentAt: delivery.sentAt ?? null,
+        error: delivery.error ?? null,
+      },
+    });
+  } catch (err: unknown) {
+    // The invitation exists and the email has been dealt with either way; a record that could not be written is logged, never allowed to undo them.
+    logger.error({ err }, "failed to record the invitation email in the audit log");
   }
   // `link` is returned only for the SUPER_ADMIN bootstrap CLI's --print-link
   // (modules/access/bootstrap.ts); every other caller ignores it.
@@ -560,6 +584,8 @@ export async function getMe(userId: string) {
     dataScope,
     totpEnabled: employee.user.totpEnabled,
     privacyNoticeAccepted: employee.user.privacyNoticeAcceptedAt !== null,
+    // True only in the development database that holds the made-up demo company: every screen then says so (docs/plans/PHASE_6.md §14J).
+    demoCompany: (await getSetting<boolean>("demo.company", false)) === true,
   };
 }
 
@@ -579,7 +605,7 @@ export async function verifyTotpSetup(userId: string, code: string): Promise<{ b
     throw new HttpError(400, "No 2FA setup in progress.", "NO_TOTP_SETUP");
   }
   const secret = decryptTotpSecret(user.totpSecretEncrypted);
-  if (!(await verifyTotpCode(secret, code))) {
+  if (!(await verifyTotpCode(secret, code)) || !(await consumeTotpCode(userId, code))) {
     throw new HttpError(401, "Invalid authentication code.", "INVALID_TOTP");
   }
 

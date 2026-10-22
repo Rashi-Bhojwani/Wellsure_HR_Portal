@@ -230,7 +230,7 @@ export async function createEmployeeInTx(
 
   if (statutory && (statutory.pan ?? statutory.aadhaar ?? statutory.uan ?? statutory.esiNumber)) {
     await tx.employeeStatutory.create({
-      data: { employeeId: employeeRow.id, ...encryptStatutoryFields(statutory) },
+      data: { employeeId: employeeRow.id, ...encryptStatutoryFields(statutory), updatedByUserId: meta.actorUserId },
     });
   }
 
@@ -706,7 +706,7 @@ export async function updateStatutory(employeeId: string, input: StatutoryFields
   const employee = await prisma.employee.findUnique({ where: { id: employeeId } });
   if (!employee) throw new HttpError(404, "Employee not found.", "NOT_FOUND");
 
-  const data = encryptStatutoryFields(input);
+  const data = { ...encryptStatutoryFields(input), updatedByUserId: meta.actorUserId };
   await runConflictSafe(() => prisma.employeeStatutory.upsert({ where: { employeeId }, create: { employeeId, ...data }, update: data }));
   await writeAuditLog({ ...meta, action: "employee.statutory.updated", entityType: "Employee", entityId: employeeId, after: input });
   return loadMaskedStatutory(employeeId);

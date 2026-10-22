@@ -10,6 +10,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { apiErrorMessage } from "../../lib/apiError";
 import { formatDate, formatDateTime } from "../../lib/dates";
 import { formatRupees } from "../../lib/money";
+import { NoPayslipAlert } from "./NoPayslipAlert";
 import { PayslipView } from "./PayslipView";
 
 const { Text, Paragraph } = Typography;
@@ -66,6 +67,7 @@ function PayslipsCard({ run }: { run: RunDetail }) {
           </Flex>
         )}
         {!canView && <Text type="secondary">You do not have permission to see payslips.</Text>}
+        {slips.length > 0 && (data?.noPayslip.length ?? 0) > 0 && <NoPayslipAlert people={data!.noPayslip} willGet={slips.length} />}
         {slips.length > 0 && (
           <>
             <Text>

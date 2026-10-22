@@ -1,8 +1,10 @@
+import { getSetting } from "../../../lib/settings";
 import { storageService } from "../../../integrations/storage";
 import { renderPdf } from "../../../lib/pdf/renderer";
 import { prisma } from "../../../lib/prisma";
 import { HttpError } from "../../../middleware/errorHandler";
 import { watermarkFor, type RulePin } from "../rules/context";
+import { peopleWithoutPayslip } from "./held";
 import { buildPayslips, type PayslipContent } from "./payslip";
 import { payslipHtml } from "./payslipHtml";
 import { startDelivery } from "./release";
@@ -38,12 +40,14 @@ export async function myPayslip(employeeId: string, id: string) {
 // ── HR: any payslip of a run ──
 
 export async function runPayslips(runId: string) {
-  const run = await prisma.payrollRun.findUnique({ where: { id: runId }, select: { id: true, cycleLabel: true } });
+  const run = await prisma.payrollRun.findUnique({ where: { id: runId }, select: { id: true, cycleLabel: true, cycleEnd: true } });
   if (!run) throw new HttpError(404, "No such payroll run.", "NOT_FOUND");
   const rows = await prisma.payslip.findMany({ where: { runId }, include: { delivery: true, employee: { select: { employeeCode: true } } }, orderBy: { employee: { employeeCode: "asc" } } });
   return {
     runId,
     cycle: run.cycleLabel,
+    /** Everyone in the run who has no payslip, with the reason and what to do, so the list is still there after publishing. */
+    noPayslip: await peopleWithoutPayslip(run),
     payslips: rows.map((r) => ({
       ...summary(r),
       employeeId: r.employeeId,
@@ -101,6 +105,6 @@ export async function draftPreview(runId: string, employeeId: string) {
 
 export async function draftPreviewPdf(runId: string, employeeId: string): Promise<Buffer> {
   const { content, watermark } = await draftPreview(runId, employeeId);
-  const { pdf } = await renderPdf(payslipHtml(content, { watermark: watermark ?? "DRAFT — NOT A PAYSLIP" }), new Date(0)); // allow-clock: a fixed PDF date, not a business date
+  const { pdf } = await renderPdf(payslipHtml(content, { watermark: watermark ?? ((await getSetting<boolean>("demo.company", false)) === true ? "DEMO COMPANY — NOT REAL" : "DRAFT — NOT A PAYSLIP") }), new Date(0)); // allow-clock: a fixed PDF date, not a business date
   return pdf;
 }

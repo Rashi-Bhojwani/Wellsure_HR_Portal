@@ -7,6 +7,7 @@ import { closeLettersQueue } from "../jobs/lettersQueue";
 import { redis } from "../lib/redis";
 import { createApp } from "../app";
 import { assertLeastPrivilegedDatabaseRole } from "../lib/dbRoles";
+import { assertNoDemoCompany } from "../lib/demoGuard";
 import { initFieldEncryption } from "../lib/fieldKeys";
 import { gracefulShutdown } from "../lib/lifecycle";
 import { createSocketServer } from "../realtime/socket";
@@ -17,6 +18,7 @@ import { closePayrollQueues } from "../jobs/payrollQueues";
 
 export async function runApi(): Promise<void> {
   await assertLeastPrivilegedDatabaseRole(prisma, env.APP_ENV); // outside development: not as a role that could rewrite the audit trail
+  await assertNoDemoCompany(prisma, env.APP_ENV); // outside development: never with the made-up demo company in the database
   await initFieldEncryption(); // unwraps the data keys once; refuses to start without them
   await redis.connect();
   registerAttendanceEngine();

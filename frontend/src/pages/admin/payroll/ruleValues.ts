@@ -15,8 +15,12 @@ export const ROUNDING_LABEL: Record<string, string> = {
 export const TYPE_LABEL: Record<string, string> = { PERMANENT: "Permanent", CONTRACT: "Contract", INTERN: "Intern", CONSULTANT: "Consultant", PROBATION: "Probation" };
 const rupees = (s: string) => `₹${Number(s).toLocaleString("en-IN")}`; // display only: nothing is computed from this string
 
+export const HIDDEN_TEXT = "Entered. Hidden for safety";
+export const isHidden = (value: unknown): boolean => typeof value === "object" && value !== null && (value as { hidden?: unknown }).hidden === true;
+
 export function formatRuleValue(shape: RuleShape, value: unknown): string {
   if (value === null || value === undefined) return "Not set";
+  if (isHidden(value)) return HIDDEN_TEXT;
   switch (shape.kind) {
     case "percent":
       return `${String(value)}%`;

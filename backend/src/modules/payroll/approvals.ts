@@ -265,9 +265,10 @@ export function availabilityFrom(
   return { eligible, excluded, state, message };
 }
 
-export async function checkerAvailability(subject: PayrollApprovalSubject, opts: { makerUserId?: string | null; subjectId?: string; since?: Date; affectedUserIds?: readonly string[] } = {}): Promise<CheckerAvailability> {
+export async function checkerAvailability(subject: PayrollApprovalSubject, opts: { makerUserId?: string | null; subjectId?: string; since?: Date; affectedUserIds?: readonly string[]; checkerPermission?: string } = {}): Promise<CheckerAvailability> {
   const adapter = adapterFor(subject);
-  const holders = await activeUsersHoldingPermission(adapter.checkerPermission);
+  // An owner's secret is confirmed with its own permission (payroll.identifiers.confirm, payroll.banklayout.confirm), so "who could confirm this" counts the people who hold that one.
+  const holders = await activeUsersHoldingPermission(opts.checkerPermission ?? adapter.checkerPermission);
   const editors = opts.subjectId && opts.since ? await figureEditorsSince(subject, opts.subjectId, opts.since) : new Set<string>();
   const affected = new Set<string>(opts.affectedUserIds ?? (opts.subjectId && adapter.affectedUserIds ? await adapter.affectedUserIds(opts.subjectId) : []));
   const names = await namesOfUsers(holders.map((h) => h.userId));

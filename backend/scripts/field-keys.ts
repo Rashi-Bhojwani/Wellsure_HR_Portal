@@ -1,6 +1,6 @@
 import { env } from "../src/config/env";
 import { initFieldEncryption, addDataKey, parseKeyring, promoteDataKey, retireDataKey, KmsDataKeyWrapper, type Keyring } from "../src/lib/fieldKeys";
-import { idsInUse, keyUsage, reencryptAll, retireBlockers } from "../src/lib/fieldKeyRotation";
+import { JSON_HELD_COLUMNS, idsInUse, keyUsage, reencryptAll, retireBlockers } from "../src/lib/fieldKeyRotation";
 import { prisma } from "../src/lib/prisma";
 import { parseArgs } from "./lib/cli";
 
@@ -65,7 +65,7 @@ async function main(): Promise<void> {
     await initFieldEncryption();
     const id = Number(positional[0]);
     const still = await retireBlockers(id);
-    if (still.length > 0) throw new Error(`Refusing: ${still.reduce((n, u) => n + u.count, 0)} stored value(s) are still encrypted under key ${id} (${still.map((u) => u.column).join(", ")}). Run reencrypt --apply first.`);
+    if (still.length > 0) throw new Error(`Refusing: ${still.reduce((n, u) => n + u.count, 0)} stored value(s) are still encrypted under key ${id} (${still.map((u) => u.column).join(", ")}). Run reencrypt --apply first.${still.some((u) => (Object.values(JSON_HELD_COLUMNS) as string[]).includes(u.column)) ? " Values held inside a record (a sealed payroll value, a pending request, an upload) are not rewritten by reencrypt: decide or discard the request or upload, or enter the sealed value again as a new version (docs/DEPLOYMENT.md)." : ""}`);
     const keyring = retireDataKey(currentKeyring(), id);
     say(`Nothing is encrypted under key ${id}. The keyring below no longer has it.`);
     say("Backups taken before the rotation still hold values under that key: see docs/DEPLOYMENT.md before destroying the old KMS key.");

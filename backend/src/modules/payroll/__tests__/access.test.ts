@@ -32,7 +32,8 @@ describe("payroll permissions", () => {
     // Every route is gated on at least one payroll key; none is open to a signed-in employee by accident.
     for (const [route, keys] of Object.entries(gates)) {
       expect(keys.length, route).toBeGreaterThan(0);
-      for (const k of keys) expect(PAYROLL_KEYS, `${route} uses ${k}`).toContain(k);
+      // The one deliberate exception: "who can see and change this" lists people's roles and permissions, so it also needs role.view.
+      for (const k of keys) expect(route === "GET /setup/access" && k === "role.view" ? PAYROLL_KEYS.concat(["role.view"]) : PAYROLL_KEYS, `${route} uses ${k}`).toContain(k);
     }
   });
 });

@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "check:popovers": "node e2e/popovers.mjs",
+    "check:sensitive-ui": "node e2e/sensitive-ui.mjs",
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "lint": "eslint .",

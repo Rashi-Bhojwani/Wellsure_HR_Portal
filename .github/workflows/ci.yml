@@ -97,6 +97,10 @@ jobs:
       - name: Test
         run: npm run test
 
+      # The demo company (made-up people, salaries and a fictional bank file) is built on the test database and the sensitive-data crawl is repeated on it as the developer.
+      - name: Demo company tests
+        run: npm run test:demo --prefix backend
+
   docker-build:
     runs-on: ubuntu-latest
     steps:
@@ -377,3 +381,10 @@ jobs:
             biometric-agent/perf/latency-last-run.json
             ${{ runner.temp }}/stack/*.log
           if-no-files-found: ignore
+
+      # Last, because it fills the database with the demo company: the developer and an employee open every page of both portals; no made-up secret may be on any, and
+      # the DEMO COMPANY banner must be on all of them (docs/plans/PHASE_6.md §14J).
+      - name: Seed the demo company, then look for secrets on every page
+        run: |
+          npm run seed:demo-company --prefix backend
+          npm run check:sensitive-ui --prefix frontend
