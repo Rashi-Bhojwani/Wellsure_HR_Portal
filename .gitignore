@@ -44,3 +44,7 @@ backend/perf/last-run.json
 
 # Screenshots written by frontend/e2e/popovers.mjs
 frontend/e2e/out/
+
+# UI design boards: originals are too big for the repo (they live on main as
+# "docs/design/Wellsure HR Portal *.png"); only the reduced JPEG slices are committed
+docs/design/Wellsure_HR_Portal_*.png

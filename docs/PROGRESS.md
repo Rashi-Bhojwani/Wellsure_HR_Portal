@@ -20,6 +20,7 @@ committed).
 | 6 | Payroll | ✅ Done, built locally (approved 2026-10-22). Plan and as-built notes: [`docs/plans/PHASE_6.md`](plans/PHASE_6.md); the review: [`docs/plans/PHASE_6_REVIEW.md`](plans/PHASE_6_REVIEW.md); the first real run: [`docs/FIRST_REAL_PAYROLL_RUN.md`](FIRST_REAL_PAYROLL_RUN.md). **Off-cycle runs and offer-letter figures from salary, which earlier text described, were never built: they are Phase 7 steps P7-6 and P7-3** |
 | 7 | Tax & benefits | **In progress.** Plan approved 2026-10-22 with the user's answers ([`docs/plans/PHASE_7.md`](plans/PHASE_7.md) §0A). P7-0 (corrections before the phase) built, awaiting review; P7-1 to P7-7 not started. One commit at a time, a pause after each |
 | 8 | Extras | Not started |
+| UI | One-time UI/UX pass over every existing screen (user, 2026-10-23), on branch `ui/design-pass` | **In progress.** Step 1 (design system extracted from the boards) built, awaiting the user's OK on the tokens. Steps 2 to 5 not started. Frontend and docs only; Phase 7 continues separately. Plan and rules: [`docs/DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) |
 
 ## Log
 
@@ -4928,6 +4929,54 @@ Loans & Advances reads "Phase 7"; no console errors beyond the known login-page 
 
 **Rules I decided myself:** the migration's dev-marker rule above; a payslip published before P7-0 keeps the whole ESI number in its immutable
 stored content (only development databases have any) and the screen shows its last four; ESI numbers get no blind-index hash (like UANs).
+
+### UI pass, step 1: design system extracted from the boards (`ui/design-pass`, 2026-10-23)
+
+The user asked for a one-time UI/UX pass over every existing screen, to match their design boards in light and dark, desktop and phone, and then
+to make the result the standing rule for future screens. Visual and interaction work only: no backend, API, schema, permission or business-logic
+change; Phase 7 and payroll work continue separately. The full brief is the user's message of 2026-10-23; its steps are recorded here so a new
+session can pick up from the repo:
+
+1. `docs/DESIGN_SYSTEM.md` from the boards (tokens light and dark, type, spacing, radii, shadows, icons, table density, form heights, app shell,
+   component inventory, responsive rules at 390 / 768 / 1280 / 1920). **This commit.**
+2. `docs/UI_SCREEN_MAP.md` (every route: URL, screen, permission, roles, board frame, MAPPED / MAPPED-PARTIAL / NOT IN BOARD; board sections
+   without a backend listed as "later") and a developer-only `/dev/screens` page.
+3. UI-1 foundation: tokens in Ant Design's ConfigProvider and CSS variables, a lint check against raw hex colours and one-off font sizes, a
+   light / dark / system toggle applied before first paint, shared components in `frontend/src/ui/`, the app shell, route-level lazy loading.
+4. Screens, one commit per group: UI-2 auth, UI-3 dashboards and tasks, UI-4 employees, UI-5 leave and attendance, UI-6 payroll (DEMO COMPANY
+   banner and TEST watermark kept exactly), UI-7 everything else, UI-8 polish, performance, accessibility, screenshots, docs.
+5. The standing rule: a "UI rules" section in `CLAUDE.md`, a "How to build a new screen" checklist and example in `DESIGN_SYSTEM.md`, and a CI
+   check against raw hex colours and missing dark tokens.
+
+Ground rules from the brief: one commit per step and a pause after each; never commit to `main`, never force-push, merge or open a PR (the user
+merges); changes stay inside `frontend/` and `docs/` (plus the CLAUDE.md addition); nothing new may render salary, bank, PAN, Aadhaar, UAN or ESI
+values; `check:sensitive-ui` and `check:popovers` stay green and are extended to the new shell; demo company only in screenshots; proof at every
+pause (board vs ours at 1280 light and dark and at 390, under `docs/design/compare/`).
+
+**Base branch.** `ui/design-pass` starts from `claude/optimistic-sagan-9xw3y9` at `60132e0` (the only branch carrying P7-0 and
+`docs/plans/PHASE_7.md`). The boards are on `main` (commit `a1b558a`, named with spaces); they are copied here untracked and git-ignored, and only
+reduced JPEG slices are committed.
+
+**What step 1 did:**
+- Found every frame on the boards (135 desktop frames per theme, and the same 135 screens as phone frames on a third board,
+  `Wellsure HR Portal Responsive.png`, which the brief did not mention) and sliced them one frame per JPEG, plus a labelled contact sheet per
+  section and `index.json` (`docs/design/slices/`). All 540 frames were read.
+- Sampled colours from solid regions and text, measured sizes (desktop frames are a 1440 design at 0.85), computed WCAG contrast for every
+  text pair, and wrote `docs/DESIGN_SYSTEM.md`. Proof sheets: `docs/design/compare/step1-tokens-{light,dark}.jpg` (board sample vs ours,
+  with contrast). The scripts are in `docs/design/tools/`.
+- Font: Manrope, to be self-hosted via npm in step 3.
+
+**Rules I decided myself (the user may veto; `DESIGN_SYSTEM.md` §10 D1 to D15):** AA-driven darker secondary text, placeholder, link green,
+nav-pill green, chip text and action fills; control border `#DADDE2`; two table densities; 40 px filter controls on dense admin screens; a System
+theme option; `Ctrl/⌘ K` for search; 13 px table text; a header close button on drawers; a dark info banner; an Alerts tab for admin-only phone
+users; estimated shadows.
+
+**Deviations from the board** (`DESIGN_SYSTEM.md` §9): our brand and illustrations; no sign-up, social login or company onboarding; the four-tab
+phone bar and stacked-card tables (brief) instead of the board's phone header-only navigation and sideways tables; the admin portal gets the
+sidebar shell; sections with no backend (Recruitment, Checklist templates, Messages, Subscription, Integrations) are "later".
+
+**Not verified:** nothing is rendered yet (no frontend change in this step; frontend lint and typecheck clean, tests 21 passed; backend
+untouched); the font is identified by eye; shadows are estimates; sizes are ±2 px. The project is on Ant Design 6, not 5 as the brief says.
 
 ## Open questions
 
