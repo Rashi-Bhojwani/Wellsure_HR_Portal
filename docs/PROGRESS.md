@@ -4904,7 +4904,7 @@ Plan approved with the user's answers: [`docs/plans/PHASE_7.md`](plans/PHASE_7.m
   **Called fixed only on a real passing run.** Its first real run (run 2, 45 minutes) did run every test, and **found a real time bomb**: 1,512 of
   1,512 passed at 00:10 IST and on 1 January, but from June 2027 three `setupChecklist.test.ts` tests failed at every instant. The test moved the
   seeded staff's joining date to a fixed "future" 2027-06-01, which stops being in the future that day; ordinary CI would have gone red in eight
-  months. Reproduced locally at 2027-06-15 (the same three failures), fixed with a date a year after today, and passing at 2027 and 2030.
+  months. Reproduced locally at 2027-06-15 (the same three failures), fixed with a date a year after today, and passing at 2027 and 2030. **The run on the P7-0 commit (clock audit run 3, cc95037) passed 5 of 5 instants, 1,515 tests at each**: the first real pass.
 - **ESI numbers are encrypted** like UANs (`esi_encrypted`, `esi_last4`; reveal audited; ESI file reads audited like UANs; key rotation covers
   them). Found on the way: contrary to the Phase 6 notes they were **not** masked everywhere: the HR profile, View My Info and payslips showed the
   whole number. A change request carrying an ESI number was also passed through `redact()` before being applied, so approving one would have
