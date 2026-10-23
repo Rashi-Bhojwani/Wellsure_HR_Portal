@@ -139,14 +139,18 @@ Payroll → Payroll Run → open the month.
 | 1 | **Calculate** | Preparer | "Who is left out" at the top, every blocking problem, the totals. The **variance** table shows who changed most compared with last month and why (joiner, leaver, revision, loss of pay, arrears). Read it. |
 | 2 | **Submit for approval** | Preparer | The submit screen lists, first, everyone left out of the run and why; then rules that changed since calculation. Confirming sends the fingerprint of *exactly what you saw*; if anything moved since, it refuses and you look again. |
 | 3 | **Approve** | Checker (not the preparer, and not anyone who changed the figures since submission) | The checker sees the same preview and approves *that exact content*. If any figure changes later the approval is voided. |
-| 4 | **Close the period (finalise)** | A third action, done by someone other than the approver | The month is **locked**: attendance, joining/leaving, salary, leave and bank changes dated inside the month are refused. Late corrections go through **Adjustments** or an off-cycle run. |
+| 4 | **Close the period (finalise)** | A third action, done by someone other than the approver | The month is **locked**: attendance, joining/leaving, salary, leave and bank changes dated inside the month are refused. Late corrections go through **Adjustments** in the next month's run. |
 | 5 | **Publish payslips** | Preparer asks, checker approves, then someone else carries it out | **At the top of this screen: everyone who will get no payslip and why** (held for no bank account, zero net pay, and so on), with what to do. Read it before approving. After publishing, each person reads *only their own* payslip under Salary → Payslips; the email contains no figures, only a link to sign in. |
 | 6 | **Bank file** | Preparer asks, checker approves, then someone else generates | The preview names everyone in the file and, **by name**, anyone payable who has no bank account on the payment date. The file is made in the confirmed layout. The approval is tied to the rows, the accounts and the layout; a change voids it. |
 | 7 | **Upload the file to your bank** | You, on the bank's website | The system never talks to a bank. |
 | 8 | **Record that it was paid** | HR | Type the bank's reference. This is HR's own statement; the bank's response file can be stored but is not read by the system. |
 | 9 | **Statutory files** | Preparer | PF, ESI, PT and LWF files need their own confirmed layouts; until a layout is entered and confirmed its button is disabled. Take each file to its government portal's validator before filing. |
 
-Once payslips are published or a bank file exists, **the period can no longer be unlocked.** Corrections after that go into the next month as adjustments, or into an off-cycle run.
+Once payslips are published or a bank file exists, **the period can no longer be unlocked.** Corrections after that go into the next month as adjustments.
+
+**There are no off-cycle runs yet.** A run outside the monthly cycle (to pay someone the month's run held, a correction that cannot wait, a final settlement) arrives with Phase 7 (step P7-6). Until then:
+- **a held person is not paid automatically later.** Nothing carries their held pay into the next month. The preparer adds it by hand as an **Adjustment** (Payroll → Adjustments) in the next month's run, using the figures the held run shows for them, and the checker sees it in that run's approval;
+- **a final settlement for a leaver** is worked out and paid as greytHR does it today.
 
 If you need to unlock a month *before* payslips are published (for example a salary was wrongly entered): only a Super Admin can ask, a second person approves, and it is carried out by someone other than the approver; the reason is recorded.
 
@@ -160,7 +164,7 @@ greytHR keeps running alongside this system for two to three months. Each month:
 2. Compare it with greytHR's register (Section 3, step 4).
 3. Keep a short note of every difference and how it was settled.
 
-**Do not switch greytHR off** until your CA agrees, in writing, that three months in a row matched. Phase 7 (tax deducted at source, declarations, full and final settlements, loans, reimbursements) is not built yet, so anything those would affect is still done in greytHR.
+**Do not switch greytHR off** until your CA agrees, in writing, that three months in a row matched. Phase 7 (tax deducted at source, declarations, full and final settlements, off-cycle runs, loans, reimbursements) is being built step by step; until a step is finished, what it covers is still done in greytHR.
 
 ---
 
@@ -170,7 +174,7 @@ greytHR keeps running alongside this system for two to three months. Each month:
 |---|---|---|
 | The run says **TEST** | A rule, component, structure or layout it used is still a Placeholder | Open the line named, have it confirmed by the second person |
 | "Left out of this run" lists a person | The run cannot pay them: no salary, not active, attendance not final… | Read the reason; fix it; calculate again |
-| A person is **held** (no payslip) | Zero or negative net, or no bank account on the payment date | Fix the cause; pay them in the next run as arrears, or in an off-cycle run |
+| A person is **held** (no payslip) | Zero or negative net, or no bank account on the payment date | Fix the cause; then add what they were owed as an **Adjustment** in the next month's run (nothing carries it over automatically, and there are no off-cycle runs until Phase 7, P7-6) |
 | The approval disappeared | Something the approval covered changed after it was given | Submit again; this is the safety working |
 | "Only X can approve this" | You are the only person who could; the system will not let you approve your own work | Give the Payroll Approver role to a second person |
 | The bank rejects the file | The layout is not what the bank expects | Do not edit by guess. Ask the bank for the exact error, correct the layout from the specification, have it confirmed again, and make a new file |

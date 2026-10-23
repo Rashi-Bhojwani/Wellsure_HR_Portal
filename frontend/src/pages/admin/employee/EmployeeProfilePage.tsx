@@ -113,7 +113,7 @@ function StatutoryTab({ employeeId, profile, canEdit }: { employeeId: string; pr
         <Descriptions.Item label="PAN">{revealed?.pan ?? (profile.statutory.hasPan ? `••••${profile.statutory.panLast4}` : "—")}</Descriptions.Item>
         <Descriptions.Item label="Aadhaar">{revealed?.aadhaar ?? (profile.statutory.hasAadhaar ? `••••${profile.statutory.aadhaarLast4}` : "—")}</Descriptions.Item>
         <Descriptions.Item label="UAN">{revealed?.uan ?? (profile.statutory.hasUan ? `••••${profile.statutory.uanLast4}` : "—")}</Descriptions.Item>
-        <Descriptions.Item label="ESI Number">{profile.statutory.esiNumber ?? "—"}</Descriptions.Item>
+        <Descriptions.Item label="ESI Number">{revealed?.esiNumber ?? (profile.statutory.hasEsi ? `••••${profile.statutory.esiLast4}` : "—")}</Descriptions.Item>
       </Descriptions>
       <Space>
         <Button icon={<EyeOutlined />} loading={revealMutation.isPending} onClick={() => revealMutation.mutate()}>

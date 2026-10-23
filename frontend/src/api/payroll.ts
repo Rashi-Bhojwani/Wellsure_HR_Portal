@@ -757,7 +757,8 @@ export interface PayslipContent {
   totals: { gross: string; deductions: string; net: string; employerContributions: string };
   netInWords: string;
   bank: { bankName: string; accountLast4: string } | null;
-  statutory: { panLast4: string | null; uanLast4: string | null; esiNumber: string | null };
+  // esiNumber: payslips published before P7-0 stored the whole ESI number; they are immutable, so the screen shows only its last four.
+  statutory: { panLast4: string | null; uanLast4: string | null; esiLast4?: string | null; esiNumber?: string | null };
   runHash: string;
 }
 export interface PayslipSummary {

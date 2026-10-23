@@ -89,7 +89,10 @@ export function encryptStatutoryFields(input: StatutoryFieldsInput) {
     data.uanLast4 = input.uan.slice(-4);
   }
   if (input.esiNumber !== undefined) {
-    data.esiNumber = input.esiNumber;
+    // An empty or null ESI number clears it.
+    const esi = input.esiNumber?.trim() ?? "";
+    data.esiEncrypted = esi ? encryptField(esi) : null;
+    data.esiLast4 = esi ? esi.slice(-4) : null;
   }
   return data;
 }
@@ -472,10 +475,11 @@ async function loadMaskedStatutory(employeeId: string) {
     panLast4: row.panLast4,
     aadhaarLast4: row.aadhaarLast4,
     uanLast4: row.uanLast4,
-    esiNumber: row.esiNumber,
+    esiLast4: row.esiLast4,
     hasPan: row.panEncrypted !== null,
     hasAadhaar: row.aadhaarEncrypted !== null,
     hasUan: row.uanEncrypted !== null,
+    hasEsi: row.esiEncrypted !== null,
   };
 }
 
@@ -532,7 +536,7 @@ export async function revealStatutory(employeeId: string, viewerEmployeeId: stri
     pan: row.panEncrypted ? decryptField(row.panEncrypted) : null,
     aadhaar: row.aadhaarEncrypted ? decryptField(row.aadhaarEncrypted) : null,
     uan: row.uanEncrypted ? decryptField(row.uanEncrypted) : null,
-    esiNumber: row.esiNumber,
+    esiNumber: row.esiEncrypted ? decryptField(row.esiEncrypted) : null,
   };
   await writeAuditLog({ ...meta, action: "employee.statutory.revealed", entityType: "Employee", entityId: employeeId });
   return result;

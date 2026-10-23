@@ -1,7 +1,7 @@
 # Things built locally that assume a local environment
 
-Started 2026-10-16, when the user paused Phase 1.5 (commits B to F) until after Phase 7: all AWS work, the migration and connecting
-the device come last, together, as the final stage. Phases 6 and 7 are built and tested **locally**, so anything that quietly depends on
+Started 2026-10-16, when the user paused Phase 1.5 (commits B to F). The order since 2026-10-22: Phase 7, a UI pass, Phase 8, the device
+rehearsal on a local network, then all AWS work and the migration as the final stage. Everything before it is built and tested **locally**, so anything that quietly depends on
 the laptop, the CI runner or a single process is recorded here **as it is written**, not found on the first deploy.
 
 How to use it: add a row the moment you write something that works locally for a reason that will not hold on AWS. The final stage

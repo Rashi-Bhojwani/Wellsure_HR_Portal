@@ -72,7 +72,7 @@ New role **Developer / operator**: everything needed to build and run the system
 | ESI "half-year" coverage rule as a Confirmable value | Open question for your CA (`PHASE_6.md` §16) |
 | Re-encrypting sealed payroll values during a data-key rotation | They live in append-only history; they are counted and block retiring a key, and the owners re-enter them (see §7, `DEPLOYMENT.md`) |
 | Encryption of salary amounts at rest | Rule 11: SQL needs the numbers; protected by permissions, not encryption. Anyone with direct database access can read them; this is an infrastructure control (`SENSITIVE_DATA.md`) |
-| ESI numbers encrypted at rest | The spec's encryption list is bank, PAN, Aadhaar, UAN. They are masked on every view; my recommendation is to add them to the list (one column) |
+| ESI numbers encrypted at rest | **Answered yes (2026-10-22) and built in P7-0.** Correction: they were not masked on every view; the HR profile, View My Info and payslips showed them whole |
 
 ## 5. What the developer's login can and cannot see (checked, not assumed)
 

@@ -85,7 +85,7 @@ export const PERMISSION_KEYS = [
   "payroll.bank.view", // see bank transfer batches (masked)
   "reports.salary.view", // salary and statutory reports
   // Phase 6, P6-6 — the owners' secrets (docs/plans/PHASE_6.md §14J). Entered, revealed and confirmed only by the people who hold these.
-  "payroll.identifiers.manage", // enter, change and reveal the company's PF, ESI, PT, LWF and TAN identifiers
+  "payroll.identifiers.manage", // enter, change and reveal the company's PF, ESI, PT, LWF, PAN and TAN identifiers
   "payroll.identifiers.confirm", // confirm one by typing it again from the owner's own document (a different person from who entered it)
   "payroll.banklayout.manage", // enter and change the bank file layout and the company's debit account, and see them
   "payroll.banklayout.confirm", // check a bank layout against the bank's specification and confirm it (a different person)
@@ -201,7 +201,7 @@ export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
   "payroll.unlock": { group: "Payroll", label: "Unlock payroll periods", description: "Open a finalised payroll period again, with a written reason and a checker. Super Admin only; not possible once payslips are published or a bank file exists.", meta: true },
   "payroll.payslip.view": { group: "Payroll", label: "View any payslip", description: "See any employee's payslip. Employees always see their own." },
   "payroll.bank.view": { group: "Payroll", label: "View bank transfer batches", description: "See bank transfer batches (account numbers masked). Nothing here moves money: the file is for HR to upload to the bank." },
-  "payroll.identifiers.manage": { group: "Sensitive data", label: "Company identifiers: enter and reveal", description: "Enter or change the company's PF, ESI, PT, LWF and TAN identifiers, and reveal them (audited). They are stored encrypted. Not the same as editing payroll rules." },
+  "payroll.identifiers.manage": { group: "Sensitive data", label: "Company identifiers: enter and reveal", description: "Enter or change the company's PF, ESI, PT, LWF, PAN and TAN identifiers, and reveal them (audited). They are stored encrypted. Not the same as editing payroll rules." },
   "payroll.identifiers.confirm": { group: "Sensitive data", label: "Company identifiers: confirm", description: "Confirm a company identifier by typing it again from the company's own document. Never the person who entered it. Does not reveal anything." },
   "payroll.banklayout.manage": { group: "Sensitive data", label: "Bank file layout and debit account: enter", description: "Enter or change the bank file layout and the company's debit account, and see them (audited). They are stored encrypted." },
   "payroll.banklayout.confirm": { group: "Sensitive data", label: "Bank file layout and debit account: confirm", description: "Check the bank file layout against the bank's own specification and confirm it. Never the person who entered it. Sees the layout, to check it." },

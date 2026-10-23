@@ -12,7 +12,7 @@ import { autoCloseAt, getHelpdeskSettings } from "../../lib/helpdeskSettings";
 // there.
 //
 // Sources plug in through REQUEST_HUB_SOURCES: attendance regularizations
-// (Phase 3) and reimbursements (Phase 6) add a source here and a type to
+// (Phase 3) and reimbursements (Phase 7) add a source here and a type to
 // shared/types/inbox.ts, and nothing else changes.
 
 export interface RequestHubSource {

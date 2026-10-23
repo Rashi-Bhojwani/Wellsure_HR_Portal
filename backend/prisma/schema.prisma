@@ -333,8 +333,7 @@ model Company {
   id                String   @id @default(cuid())
   name              String
   legalName         String?  @map("legal_name")
-  pan               String?
-  tan               String?
+  // The company's PAN and TAN are sealed payroll identifiers (rules COMPANY_PAN and TAN), never plain columns here (P7-0).
   cin               String?
   registeredAddress String?  @map("registered_address")
   logoStorageKey    String?  @map("logo_storage_key")
@@ -600,7 +599,8 @@ model EmployeeStatutory {
   uanEncrypted     Bytes?   @map("uan_encrypted")
   uanLast4         String?  @map("uan_last4")
   updatedByUserId  String?  @map("updated_by_user_id") // who last wrote this row (P6-6): the Setup sign-off cannot be given by someone who entered what it covers
-  esiNumber        String?  @map("esi_number") // deliberately unencrypted — spec §9 lists only bank account/PAN/Aadhaar/UAN as requiring encryption; ESI is not in that list
+  esiEncrypted     Bytes?   @map("esi_encrypted") // encrypted like the UAN since Phase 7 P7-0 (user decision 2026-10-22; it was plaintext before)
+  esiLast4         String?  @map("esi_last4")
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 

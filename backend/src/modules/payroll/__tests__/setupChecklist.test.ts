@@ -2,6 +2,7 @@ import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DEVELOPER_ROLE_CODE } from "@shared/constants/sensitiveData";
 import { prisma } from "../../../lib/prisma";
+import { addCalendarDays, businessToday } from "../../../lib/businessDate";
 import { app, authHeader, cleanupFullTestEmployee, cleanupTestRole, createFullTestEmployee, grantPermissions, loginAs } from "../../employee/__tests__/employeeTestHelpers";
 import { buildSetupReport, readinessOf } from "../setup/status";
 import { buildSalaryWorld, giveSalary, teardownSalaryWorld, type SalaryWorld } from "./salaryTestHelpers";
@@ -56,7 +57,8 @@ describe("the setup checklist and the readiness screen", () => {
     // The seeded company is in the test database: the set under test is these ten people, so everyone else "joins" after today for the length of the test.
     await prisma.employee.updateMany({ where: { id: { in: [world.maker, world.checkerA, world.checkerB, sup, dev, signer].map((p) => p.employeeId) } }, data: { status: "INACTIVE" } });
     const others = await prisma.employee.findMany({ where: { id: { notIn: everyone.map((e) => e.employeeId) }, status: "ACTIVE" }, select: { id: true, dateOfJoining: true } });
-    await prisma.employee.updateMany({ where: { id: { in: others.map((o) => o.id) } }, data: { dateOfJoining: new Date("2027-06-01T00:00:00Z") } });
+    // A year after "today", never a fixed date: a fixed 2027-06-01 made them employed again from that day on, and the clock audit failed this file from June 2027.
+    await prisma.employee.updateMany({ where: { id: { in: others.map((o) => o.id) } }, data: { dateOfJoining: addCalendarDays(businessToday(), 366) } });
     restoreSeeded = async () => {
       for (const o of others) await prisma.employee.update({ where: { id: o.id }, data: { dateOfJoining: o.dateOfJoining } });
     };
@@ -76,7 +78,7 @@ describe("the setup checklist and the readiness screen", () => {
     expect(r.status).toBe(200);
     expect(r.body.sections.map((s: { id: string }) => s.id)).toEqual(["identifiers", "law", "company", "salary", "bank", "files", "people", "safety"]);
     const identifiers = r.body.sections[0].items;
-    expect(identifiers.map((i: { id: string }) => i.id).sort()).toEqual(["rule:ESI_EMPLOYER_CODE", "rule:LWF_REGISTRATION", "rule:PF_ESTABLISHMENT_CODE", "rule:PT_REGISTRATION", "rule:TAN"]);
+    expect(identifiers.map((i: { id: string }) => i.id).sort()).toEqual(["rule:COMPANY_PAN", "rule:ESI_EMPLOYER_CODE", "rule:LWF_REGISTRATION", "rule:PF_ESTABLISHMENT_CODE", "rule:PT_REGISTRATION", "rule:TAN"]);
     for (const i of identifiers) expect(i.permissionNote).toMatch(/Company identifiers/);
     for (const i of r.body.sections.flatMap((s: { items: Array<SetupItemShape> }) => s.items)) {
       expect(["NOT_SET", "PLACEHOLDER", "CONFIRMED"]).toContain(i.status);

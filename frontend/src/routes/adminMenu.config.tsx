@@ -278,7 +278,6 @@ export const adminApps: AdminApp[] = [
     label: "Payroll",
     icon: DollarOutlined,
     path: "payroll",
-    phase: "Phase 6",
     menus: [
       {
         key: "payroll",
@@ -296,7 +295,7 @@ export const adminApps: AdminApp[] = [
           { key: "payroll-compare", label: "Compare Registers", path: "payroll/compare", icon: DiffOutlined, element: CompareRegistersPage },
           { key: "payroll-audit", label: "Payroll Audit Trail", path: "payroll/audit", icon: AuditOutlined, element: PayrollAuditPage },
           { key: "payroll-layouts", label: "Bank and Statutory Layouts", path: "payroll/layouts", icon: FileProtectOutlined, element: LayoutsPage },
-          { key: "loans-admin", label: "Loans & Advances", path: "payroll/loans", icon: BankOutlined, phase: "Phase 6" },
+          { key: "loans-admin", label: "Loans & Advances", path: "payroll/loans", icon: BankOutlined, phase: "Phase 7" },
         ],
       },
     ],

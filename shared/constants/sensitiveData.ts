@@ -66,7 +66,7 @@ export const SENSITIVE_CLASSES: readonly SensitiveClass[] = [
   },
   {
     id: "COMPANY_IDENTIFIERS",
-    label: "The company's PF, ESI, PT, LWF and TAN identifiers",
+    label: "The company's PF, ESI, PT, LWF, PAN and TAN identifiers",
     what: "The company's own registration numbers, printed on statutory files.",
     view: ["payroll.identifiers.manage"],
     edit: ["payroll.identifiers.manage"],

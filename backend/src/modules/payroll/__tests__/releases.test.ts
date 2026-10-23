@@ -443,7 +443,7 @@ describe("the sensitive-data scan, on a company with a published run and a bank 
       found.push({ label: `${n} PAN`, value: decryptField(st.panEncrypted!), owner: id });
       found.push({ label: `${n} Aadhaar`, value: decryptField(st.aadhaarEncrypted!), owner: id });
       found.push({ label: `${n} UAN`, value: decryptField(st.uanEncrypted!), owner: id });
-      found.push({ label: `${n} ESI number`, value: st.esiNumber!, owner: id });
+      found.push({ label: `${n} ESI number`, value: decryptField(st.esiEncrypted!), owner: id });
     }
     found.push({ label: "debit account", value: DEBIT }, { label: "bank layout constant", value: "ZZHDR9917" }, { label: "company identifier", value: IDENTIFIER });
     sentinels = found;
@@ -511,8 +511,9 @@ describe("the sensitive-data scan, on a company with a published run and a bank 
     }
   });
 
-  it("no table of the database holds the debit account, the bank layout's constant or a company identifier in the clear", async () => {
-    const needles = [DEBIT, "ZZHDR9917", IDENTIFIER];
+  it("no table of the database holds the debit account, the bank layout's constant, a company identifier or an employee's ESI number in the clear", async () => {
+    // ESI numbers joined in P7-0: until then they were stored as plain text (esi_number), so this scan could not include them.
+    const needles = [DEBIT, "ZZHDR9917", IDENTIFIER, "ESI-SENT-00000", "ESI-SENT-11111", "ESI-SENT-22222"];
     const cols = await prisma.$queryRaw<Array<{ table_name: string; column_name: string }>>`
       SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = 'public' AND data_type IN ('text', 'character varying', 'json', 'jsonb')`;
     const hits: string[] = [];

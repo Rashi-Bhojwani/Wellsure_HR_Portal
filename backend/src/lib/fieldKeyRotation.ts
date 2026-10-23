@@ -15,6 +15,7 @@ export const ENCRYPTED_COLUMNS: ReadonlyArray<EncryptedColumn> = [
   { model: "EmployeeStatutory", delegate: "employeeStatutory", field: "panEncrypted" },
   { model: "EmployeeStatutory", delegate: "employeeStatutory", field: "aadhaarEncrypted" },
   { model: "EmployeeStatutory", delegate: "employeeStatutory", field: "uanEncrypted" },
+  { model: "EmployeeStatutory", delegate: "employeeStatutory", field: "esiEncrypted" },
   { model: "EmployeeBankAccount", delegate: "employeeBankAccount", field: "accountNumberEncrypted" },
 ];
 
@@ -55,7 +56,7 @@ export type KeyUsage = { column: string; keyId: number; count: number };
 // is something a person still has to decide), but it MUST be counted: otherwise a key could be retired while a value only it can read is still stored, and
 // that value would be lost. They are listed by `field-keys status` and they block `retire`; the way to move one is to decide or discard the request or upload, or
 // (for the owners' sealed identifiers and bank layout) to enter the value again as a new version.
-const PACKED_FIELDS = ["panEncrypted", "aadhaarEncrypted", "uanEncrypted", "accountNumberEncrypted"] as const;
+const PACKED_FIELDS = ["panEncrypted", "aadhaarEncrypted", "uanEncrypted", "esiEncrypted", "accountNumberEncrypted"] as const;
 const packedKeyIds = (json: unknown): number[] => {
   if (typeof json !== "object" || json === null) return [];
   const o = json as Record<string, unknown>;

@@ -33,8 +33,10 @@ function Lines({ title, lines, total, totalLabel }: { title: string; lines: Pays
   );
 }
 
+const esiLast4Of = (c: PayslipContent): string | null => c.statutory.esiLast4 ?? (c.statutory.esiNumber ? c.statutory.esiNumber.slice(-4) : null);
+
 export function PayslipView({ content: c, watermark }: { content: PayslipContent; watermark?: string | null }) {
-  const ids = [c.statutory.panLast4 ? `PAN ending ${c.statutory.panLast4}` : null, c.statutory.uanLast4 ? `UAN ending ${c.statutory.uanLast4}` : null, c.statutory.esiNumber ? `ESI ${c.statutory.esiNumber}` : null].filter(Boolean).join(" · ");
+  const ids = [c.statutory.panLast4 ? `PAN ending ${c.statutory.panLast4}` : null, c.statutory.uanLast4 ? `UAN ending ${c.statutory.uanLast4}` : null, esiLast4Of(c) ? `ESI ending ${esiLast4Of(c)}` : null].filter(Boolean).join(" · ");
   return (
     <Flex vertical gap={12} data-testid="payslip">
       {watermark && <Alert type="error" showIcon title={watermark} description="This is a preview of a draft. It is not a payslip and nobody else can see it." />}

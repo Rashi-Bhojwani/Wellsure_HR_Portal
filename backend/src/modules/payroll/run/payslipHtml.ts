@@ -15,7 +15,7 @@ function lineRows(lines: PayslipLine[]): string {
 export function payslipHtml(c: PayslipContent, opts: { watermark?: string | null } = {}): string {
   const wm = opts.watermark ? `<div class="wm">${esc(opts.watermark)}</div><div class="banner">${esc(opts.watermark)}</div>` : "";
   const s = c.statutory;
-  const ids = [s.panLast4 ? `PAN ending ${esc(s.panLast4)}` : "", s.uanLast4 ? `UAN ending ${esc(s.uanLast4)}` : "", s.esiNumber ? `ESI ${esc(s.esiNumber)}` : ""].filter(Boolean).join(" · ");
+  const ids = [s.panLast4 ? `PAN ending ${esc(s.panLast4)}` : "", s.uanLast4 ? `UAN ending ${esc(s.uanLast4)}` : "", s.esiLast4 ? `ESI ending ${esc(s.esiLast4)}` : ""].filter(Boolean).join(" · ");
   return `<!doctype html><html><head><meta charset="utf-8"><style>
 ${embeddedFontCss()}
 @page { size: A4; margin: 14mm 14mm 14mm 14mm; }

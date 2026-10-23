@@ -172,7 +172,7 @@ export function ViewMyInfoPage() {
                     <Descriptions.Item label="PAN">{profile.statutory.hasPan ? `••••${profile.statutory.panLast4}` : "—"}</Descriptions.Item>
                     <Descriptions.Item label="Aadhaar">{profile.statutory.hasAadhaar ? `••••${profile.statutory.aadhaarLast4}` : "—"}</Descriptions.Item>
                     <Descriptions.Item label="UAN">{profile.statutory.hasUan ? `••••${profile.statutory.uanLast4}` : "—"}</Descriptions.Item>
-                    <Descriptions.Item label="ESI Number">{profile.statutory.esiNumber ?? "—"}</Descriptions.Item>
+                    <Descriptions.Item label="ESI Number">{profile.statutory.hasEsi ? `••••${profile.statutory.esiLast4}` : "—"}</Descriptions.Item>
                   </Descriptions>
                   <Button onClick={() => setRequestGroup("statutory")}>Request a change</Button>
                 </Space>

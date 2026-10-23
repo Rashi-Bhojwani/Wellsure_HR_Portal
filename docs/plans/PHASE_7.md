@@ -186,6 +186,10 @@ person's **opening figures** (below). Draft runs never count.
 (calculate, preview, submit, approve, finalise, publish, bank file) and approvals; it **does not lock the attendance cycle** and does not
 count as the cycle's regular run. A partial unique index keeps one non-void regular run per cycle as now.
 
+**Releasing held pay** (found in P7-0): today nothing carries a HELD person's pay into a later run; the preparer adds it by hand as an
+adjustment. P7-6 adds "pay what this run held": an off-cycle run that takes a HELD item of a final run as its input, consumed exactly once
+(sourceRef = the item), for whoever's cause has been fixed.
+
 **Full and final settlement** (`fnf_settlements`), per completed or scheduled separation:
 - **Inputs, each with its source:** the held last-month item (P6 `HOLD_FOR_FNF`), consumed exactly once; days up to the last working day not yet
   paid (from finalised attendance); leave encashment of the balance at exit (ledger, rule formula; writes an ENCASHMENT ledger entry with
