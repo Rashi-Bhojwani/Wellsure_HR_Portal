@@ -125,6 +125,24 @@ assuming:
   FK or a new standalone table, `cleanup.test.ts` fails and tells you
   exactly what to classify.
 
+## UI rules (standing rule for every screen, from the 2026-10 UI pass)
+
+The design system is `docs/DESIGN_SYSTEM.md` (tokens, components, behaviour; §13 is the checklist for a new screen) and the route map is
+`docs/UI_SCREEN_MAP.md`. Every new or changed screen:
+
+- uses the tokens (`frontend/src/theme/tokens.ts`: `v.*`, `fs.*`, `space`, `radius`) and the shared components in `frontend/src/ui/`
+  (PageHeader, Panel, DataTable, FilterBar, SideDrawer, ConfirmModal, EmptyState/QueryState, Skeletons, StatCard, StatusChip, …) — no raw
+  colours, no one-off font sizes or styles; Ant Design only, no second UI library;
+- works in light and dark, on phone (390), tablet and desktop, and by keyboard (focus visible, Esc closes, no hover-only actions,
+  44 px touch targets on phones);
+- has loading (skeletons shaped like the content, no whole-page spinners), empty, error and forbidden states;
+- never renders salary, bank, PAN, Aadhaar, UAN or ESI values for a role without the permission (the API decides; the UI never widens it);
+- passes `npm run lint` (ESLint + `check:tokens`: raw hex/rgb colours or numeric font sizes outside `frontend/src/theme` fail; a light token
+  without a dark twin fails), `npm run typecheck`, the tests, and `npm run build && npm run check:bundle` (login < 250 KB gzip, shell + home
+  < 400 KB). CI runs all of them.
+- gets a menu entry in `routes/employeeMenu.config.tsx` / `routes/adminMenu.config.tsx` with a `lazyPage(...)` element; the shell, sidebar,
+  phone tabs, search and page title follow from that.
+
 ## Commands
 
 Local dev needs PostgreSQL 16 and Redis 7 **installed and running on the

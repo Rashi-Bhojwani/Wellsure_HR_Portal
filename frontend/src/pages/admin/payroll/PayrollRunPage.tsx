@@ -50,75 +50,96 @@ export function PayrollRunPage() {
     };
   }, [socket, id, queryClient]);
 
-  if (isLoading) return <Spin />;
-  if (error || !run) return <Alert type="error" showIcon title={apiErrorMessage(error, "Could not load this run.")} />;
+  if (isLoading) return <PageSkeleton />;
+  if (error || !run) return <EmptyState kind="error" title="Could not load this run" description={apiErrorMessage(error, "Could not load this run.")} />;
   const open = ["NEW", "CALCULATED", "FAILED"].includes(run.status);
-  const download = () => void payrollApi.downloadRunWorkbook(id).catch((e) => void message.error(apiErrorMessage(e, "Could not download the register.")));
+  const download = () => void payrollApi.downloadRunWorkbook(id).catch((e) => toast.error(apiErrorMessage(e, "Could not download the register.")));
+  const stepIndex = STEP_OF[run.status];
 
   return (
-    <Flex vertical gap={16}>
-      <Link to="/admin/payroll/run">
-        <ArrowLeftOutlined /> All payroll runs
-      </Link>
-      <Flex justify="space-between" align="center" wrap gap={8}>
-        <Space>
-          <Title level={3} style={{ margin: 0 }}>
-            Payroll run: {run.cycle.label}
-          </Title>
-          <Tag color={RUN_STATUS_COLOR[run.status]}>{run.statusLabel}</Tag>
-          {run.watermark.test && <Tag color="red">TEST</Tag>}
-        </Space>
-        <Space wrap>
-          {run.runHash && (
-            <Button icon={<DownloadOutlined />} onClick={download}>
-              Download the register (Excel)
-            </Button>
-          )}
-          {canRun && open && <Button type="primary" onClick={() => setCalculating(true)}>{run.runHash ? "Calculate again" : "Calculate"}</Button>}
-          {canRun && open && <Button danger onClick={() => setDiscarding(true)}>Discard this draft</Button>}
-        </Space>
-      </Flex>
-      {run.runHash && <PlaceholderBanner watermark={run.watermark} />}
-      <RunApprovalPanel run={run} />
-      <ReleasePanels run={run} />
-      {run.status === "CALCULATING" && (
-        <Alert type="info" showIcon title="Calculating" description={<Progress percent={run.progress.total ? Math.floor((run.progress.done * 100) / run.progress.total) : 0} status="active" />} />
-      )}
-      {run.status === "FAILED" && <Alert type="error" showIcon title="The calculation did not finish" description={run.failureReason ?? "Nothing was changed."} />}
-      {run.stale && <Alert type="warning" showIcon title="A rule this run used has changed since it was calculated" description="Calculate it again before it goes any further. Until then the figures below are the ones that were worked out with the earlier value." />}
-      {run.status === "NEW" && <Alert type="info" showIcon title="Not calculated yet" description="Choose Calculate to see what it would do. Nothing is calculated until you confirm." />}
-      {run.status === "VOID" && <Alert type="info" showIcon title="Discarded" description={run.voidReason} />}
-      {run.runHash && (
-        <Flex gap={32} wrap>
-          <Statistic title="Gross" value={formatRupees(run.totals.gross)} />
-          <Statistic title="Deductions" value={formatRupees(run.totals.deductions)} />
-          <Statistic title="Net pay" value={formatRupees(run.totals.net)} />
-          <Statistic title="Employer cost (PF, ESI, LWF)" value={formatRupees(run.totals.employerCost)} />
-          <Statistic title="Payable" value={run.counts.payable} />
-          <Statistic title="Held" value={run.counts.held} />
-          <Statistic title="Left out" value={run.counts.excluded} />
-          <Statistic title="To resolve" value={run.counts.exceptions} styles={{ content: { color: run.counts.exceptions ? "#cf1322" : undefined } }} />
-        </Flex>
-      )}
-      {run.runHash && (
-        <Text type="secondary">
-          Calculated {run.calculatedAt ? formatDateTime(run.calculatedAt) : ""}{run.calculatedBy ? ` by ${run.calculatedBy}` : ""}. Version {run.calcVersion}.
-        </Text>
-      )}
-      {run.runHash && (
-        <Tabs
-          items={[
-            { key: "people", label: "People", children: <PeopleTab runId={id} /> },
-            { key: "variance", label: "Difference from last month", children: <VarianceTab runId={id} /> },
-            { key: "used", label: "What it used", children: <UsedTab run={run} /> },
-          ]}
-        />
-      )}
+    <>
+      <PageHeader
+        back="/admin/payroll/run"
+        title={`Payroll run: ${run.cycle.label}`}
+        breadcrumb={[{ label: "Payroll runs", to: "/admin/payroll/run" }, { label: run.cycle.label }]}
+        tags={
+          <>
+            <RunStatusChip status={run.status} label={run.statusLabel} />
+            {run.watermark.test && <TestChip />}
+          </>
+        }
+        actions={
+          <>
+            {run.runHash && (
+              <Button icon={<DownloadOutlined />} onClick={download}>
+                Download the register (Excel)
+              </Button>
+            )}
+            {canRun && open && <Button danger onClick={() => setDiscarding(true)}>Discard this draft</Button>}
+            {canRun && open && <Button type="primary" onClick={() => setCalculating(true)}>{run.runHash ? "Calculate again" : "Calculate"}</Button>}
+          </>
+        }
+      />
+      <Stack>
+        {run.runHash && <PlaceholderBanner watermark={run.watermark} />}
+        {stepIndex !== null && (
+          <Panel>
+            <StepStrip steps={RUN_STEPS} current={stepIndex} done={run.status === "FINALISED"} />
+          </Panel>
+        )}
+        <RunApprovalPanel run={run} />
+        <ReleasePanels run={run} />
+        {run.status === "CALCULATING" && (
+          <ApprovalBanner tone="info" title="Calculating" description={<Progress percent={run.progress.total ? Math.floor((run.progress.done * 100) / run.progress.total) : 0} status="active" />} />
+        )}
+        {run.status === "FAILED" && <ApprovalBanner tone="danger" title="The calculation did not finish" description={run.failureReason ?? "Nothing was changed."} />}
+        {run.stale && <ApprovalBanner tone="warning" title="A rule this run used has changed since it was calculated" description="Calculate it again before it goes any further. Until then the figures below are the ones that were worked out with the earlier value." />}
+        {run.status === "NEW" && <ApprovalBanner tone="info" title="Not calculated yet" description="Choose Calculate to see what it would do. Nothing is calculated until you confirm." />}
+        {run.status === "VOID" && <ApprovalBanner tone="info" title="Discarded" description={run.voidReason} />}
+        {run.runHash && (
+          <Panel
+            title="What it came to"
+            subtitle={`Calculated ${run.calculatedAt ? formatDateTime(run.calculatedAt) : ""}${run.calculatedBy ? ` by ${run.calculatedBy}` : ""}. Version ${run.calcVersion}.`}
+          >
+            <FigureRow>
+              <Figure label="Gross" value={formatRupees(run.totals.gross)} />
+              <Figure label="Deductions" value={formatRupees(run.totals.deductions)} />
+              <Figure label="Net pay" value={formatRupees(run.totals.net)} />
+              <Figure label="Employer cost (PF, ESI, LWF)" value={formatRupees(run.totals.employerCost)} />
+              <Figure label="Payable" value={run.counts.payable} />
+              <Figure label="Held" value={run.counts.held} />
+              <Figure label="Left out" value={run.counts.excluded} />
+              <Figure label="To resolve" value={run.counts.exceptions} tone={run.counts.exceptions ? "danger" : undefined} />
+            </FigureRow>
+          </Panel>
+        )}
+        {run.runHash && (
+          <Panel>
+            <Tabs
+              items={[
+                { key: "people", label: "People", children: <PeopleTab runId={id} /> },
+                { key: "variance", label: "Difference from last month", children: <VarianceTab runId={id} /> },
+                { key: "used", label: "What it used", children: <UsedTab run={run} /> },
+              ]}
+            />
+          </Panel>
+        )}
+      </Stack>
       {calculating && <CalculateModal runId={id} onClose={() => setCalculating(false)} />}
       {discarding && <DiscardModal runId={id} cycle={run.cycle.label} onClose={() => setDiscarding(false)} />}
-    </Flex>
+    </>
   );
 }
+
+// The road from a draft to a final month, shown as numbered steps. Worked out from the run's status alone; the Approval panel below says what is next and who does it.
+const RUN_STEPS: StepItem[] = [
+  { key: "calc", label: "Calculate" },
+  { key: "submit", label: "Submit for approval" },
+  { key: "approve", label: "Approval" },
+  { key: "close", label: "Close the period" },
+  { key: "release", label: "Payslips and bank file" },
+];
+const STEP_OF: Record<RunDetail["status"], number | null> = { NEW: 0, CALCULATING: 0, FAILED: 0, CALCULATED: 1, SUBMITTED: 2, APPROVED: 3, FINALISED: 4, VOID: null };
 
 function DiscardModal({ runId, cycle, onClose }: { runId: string; cycle: string; onClose: () => void }) {
   const queryClient = useQueryClient();
@@ -133,22 +154,35 @@ function DiscardModal({ runId, cycle, onClose }: { runId: string; cycle: string;
     onError: (e) => setProblem(apiErrorMessage(e, "That did not work.")),
   });
   return (
-    <Modal open title={`Discard the draft for ${cycle}`} onCancel={onClose} okText="Discard" okButtonProps={{ danger: true, disabled: why.trim().length < 3, loading: discard.isPending }} onOk={() => discard.mutate()} destroyOnHidden>
+    <ConfirmModal
+      open
+      title={`Discard the draft for ${cycle}`}
+      description="A discarded run is kept on record and is never changed again. You can start a new run for the same cycle."
+      onCancel={onClose}
+      confirmLabel="Discard"
+      danger
+      confirmDisabled={why.trim().length < 3}
+      loading={discard.isPending}
+      onConfirm={() => discard.mutate()}
+    >
       <Space orientation="vertical" size={8} style={{ width: "100%" }}>
-        <Text>A discarded run is kept on record and is never changed again. You can start a new run for the same cycle.</Text>
-        <Input.TextArea value={why} onChange={(e) => setWhy(e.target.value)} rows={2} maxLength={300} placeholder="Why" />
+        <Input.TextArea value={why} onChange={(e) => setWhy(e.target.value)} rows={2} maxLength={300} placeholder="Why" aria-label="Why" />
         {problem && <Alert type="error" showIcon title={problem} />}
       </Space>
-    </Modal>
+    </ConfirmModal>
   );
 }
 
 function StatusCell({ r }: { r: RunItemRow }) {
-  if (r.status === "PAYABLE") return <Tag color="green">Payable</Tag>;
+  if (r.status === "PAYABLE") return <StatusChip tone="success">Payable</StatusChip>;
   const label = r.holdReason ? HOLD_REASON_LABEL[r.holdReason] : "";
   return (
     <Tooltip title={r.holdDetail ?? label}>
-      <Tag color={r.status === "HELD" ? "orange" : "red"}>{r.status === "HELD" ? "Held" : "Left out"}: {label}</Tag>
+      <span tabIndex={0}>
+        <StatusChip tone={r.status === "HELD" ? "warning" : "danger"}>
+          {r.status === "HELD" ? "Held" : "Left out"}: {label}
+        </StatusChip>
+      </span>
     </Tooltip>
   );
 }
@@ -159,34 +193,54 @@ function PeopleTab({ runId }: { runId: string }) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState<string | null>(null);
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ["payroll", "run-items", runId, status, exceptionsOnly, search, page],
     queryFn: () => payrollApi.listRunItems(runId, { ...(status === "ALL" ? {} : { status }), ...(search ? { search } : {}), exceptionsOnly, page, pageSize: 50 }),
+    placeholderData: keepPreviousData,
   });
   return (
     <Flex vertical gap={12}>
-      <Flex gap={12} wrap align="center">
-        <Segmented value={status} onChange={(v) => { setStatus(v as typeof status); setPage(1); }} options={[{ value: "ALL", label: "Everyone" }, { value: "PAYABLE", label: "Payable" }, { value: "HELD", label: "Held" }, { value: "EXCLUDED", label: "Left out" }]} />
-        <Checkbox checked={exceptionsOnly} onChange={(e) => { setExceptionsOnly(e.target.checked); setPage(1); }}>Only people with something to resolve or look at</Checkbox>
-        <Input.Search allowClear placeholder="Employee code or name" style={{ width: 260 }} onSearch={(v) => { setSearch(v.trim()); setPage(1); }} />
-      </Flex>
-      {error && <Alert type="error" showIcon title={apiErrorMessage(error, "Could not load the people.")} />}
-      <Table<RunItemRow>
-        size="small"
+      <FilterBar
+        onSearch={(v) => { setSearch(v.trim()); setPage(1); }}
+        searchPlaceholder="Employee code or name"
+        activeCount={(status === "ALL" ? 0 : 1) + (exceptionsOnly ? 1 : 0)}
+        onClear={() => { setStatus("ALL"); setExceptionsOnly(false); setPage(1); }}
+        filters={
+          <>
+            <Segmented value={status} onChange={(v) => { setStatus(v as typeof status); setPage(1); }} options={[{ value: "ALL", label: "Everyone" }, { value: "PAYABLE", label: "Payable" }, { value: "HELD", label: "Held" }, { value: "EXCLUDED", label: "Left out" }]} />
+            <Checkbox checked={exceptionsOnly} onChange={(e) => { setExceptionsOnly(e.target.checked); setPage(1); }}>Only people with something to resolve or look at</Checkbox>
+          </>
+        }
+      />
+      <DataTable<RunItemRow>
+        density="compact"
         rowKey="employeeId"
-        loading={isLoading}
+        loading={isLoading || isFetching}
+        error={error}
+        onRetry={() => void refetch()}
+        mobile={{
+          title: (r) => r.name,
+          subtitle: (r) => r.employeeCode,
+          status: (r) => <StatusCell r={r} />,
+          fields: [
+            { label: "Paid days", render: (r) => (r.status === "EXCLUDED" ? "—" : <Num>{r.paidDays.replace(/0+$/, "").replace(/\.$/, "")}</Num>) },
+            { label: "Gross", render: (r) => (r.status === "EXCLUDED" ? "—" : <Num>{formatRupees(r.gross, 2)}</Num>) },
+            { label: "Net pay", render: (r) => (r.status === "EXCLUDED" ? "—" : <Num strong>{formatRupees(r.net, 2)}</Num>) },
+          ],
+          actions: (r) => <Button block onClick={() => setOpen(r.employeeId)}>Why?</Button>,
+        }}
         dataSource={data?.items ?? []}
         pagination={{ current: page, pageSize: 50, total: data?.total ?? 0, showSizeChanger: false, onChange: setPage }}
         columns={[
-          { title: "Employee", render: (_, r) => <div><Space size={4}><Text strong>{r.name}</Text>{r.isYou && <Tag color="gold">You</Tag>}</Space><div><Text type="secondary" style={{ fontSize: fs.sm }}>{r.employeeCode}</Text></div></div> },
-          { title: "Status", render: (_, r) => <StatusCell r={r} /> },
-          { title: "Paid days", align: "right", render: (_, r) => (r.status === "EXCLUDED" ? "" : r.paidDays.replace(/0+$/, "").replace(/\.$/, "")) },
-          { title: "LOP", align: "right", render: (_, r) => (r.status === "EXCLUDED" ? "" : r.lopDays) },
-          { title: "Gross", align: "right", render: (_, r) => (r.status === "EXCLUDED" ? "" : formatRupees(r.gross, 2)) },
-          { title: "Deductions", align: "right", render: (_, r) => (r.status === "EXCLUDED" ? "" : formatRupees(r.deductions, 2)) },
-          { title: "Net pay", align: "right", render: (_, r) => (r.status === "EXCLUDED" ? "" : <Text strong>{formatRupees(r.net, 2)}</Text>) },
-          { title: "", render: (_, r) => (r.exceptions > 0 ? <Tag color={r.blocking ? "red" : "gold"}>{r.blocking ? "Resolve" : "Look"}</Tag> : null) },
-          { title: "", align: "right", render: (_, r) => <Button size="small" onClick={() => setOpen(r.employeeId)}>Why?</Button> },
+          { title: "Employee", key: "emp", render: (_, r) => <PersonCell name={r.name} code={r.employeeCode} extra={r.isYou && <StatusChip tone="warning">You</StatusChip>} /> },
+          { title: "Status", key: "status", render: (_, r) => <StatusCell r={r} /> },
+          { title: "Paid days", key: "paid", align: "right", className: "ws-num", render: (_, r) => (r.status === "EXCLUDED" ? "" : r.paidDays.replace(/0+$/, "").replace(/\.$/, "")) },
+          { title: "LOP", key: "lop", align: "right", className: "ws-num", render: (_, r) => (r.status === "EXCLUDED" ? "" : r.lopDays) },
+          { title: "Gross", key: "gross", align: "right", className: "ws-num", render: (_, r) => (r.status === "EXCLUDED" ? "" : formatRupees(r.gross, 2)) },
+          { title: "Deductions", key: "ded", align: "right", className: "ws-num", render: (_, r) => (r.status === "EXCLUDED" ? "" : formatRupees(r.deductions, 2)) },
+          { title: "Net pay", key: "net", align: "right", className: "ws-num", render: (_, r) => (r.status === "EXCLUDED" ? "" : <Text strong>{formatRupees(r.net, 2)}</Text>) },
+          { title: "To do", key: "exc", render: (_, r) => (r.exceptions > 0 ? <StatusChip tone={r.blocking ? "danger" : "warning"}>{r.blocking ? "Resolve" : "Look"}</StatusChip> : null) },
+          { title: "", key: "actions", align: "right", render: (_, r) => <Button size="small" onClick={() => setOpen(r.employeeId)}>Why?</Button> },
         ]}
       />
       {open && <RunItemDrawer runId={runId} employeeId={open} onClose={() => setOpen(null)} />}

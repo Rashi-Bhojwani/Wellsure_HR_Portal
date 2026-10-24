@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import dayjs from "dayjs";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Button, Tooltip } from "antd";
-import { ClockCircleOutlined, EditOutlined, FieldTimeOutlined, LeftOutlined, RightOutlined, ScheduleOutlined, WarningOutlined, DollarOutlined } from "@ant-design/icons";
+import { ClockCircleOutlined, EditOutlined, LeftOutlined, RightOutlined } from "@ant-design/icons";
 import * as infoApi from "../../api/attendanceInfo";
 import type { MonthDay } from "../../api/attendanceInfo";
 import { hoursLabel } from "../../pages/admin/attendance/settings/format";
@@ -205,9 +205,3 @@ function Legend() {
     </div>
   );
 }
-
-// Icons kept for the stat cards' future use are not imported unused.
-void FieldTimeOutlined;
-void ScheduleOutlined;
-void WarningOutlined;
-void DollarOutlined;

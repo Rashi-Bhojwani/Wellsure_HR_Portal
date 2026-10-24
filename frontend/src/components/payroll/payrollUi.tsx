@@ -117,7 +117,7 @@ export function StepStrip({ steps, current, done }: { steps: StepItem[]; current
             <span style={{ minWidth: 0 }}>
               <span style={{ display: "block", fontSize: fs.md, fontWeight: active ? fw.bold : fw.medium, color: active || isDone ? v.textPrimary : v.textSecondary, lineHeight: 1.3 }}>
                 {s.label}
-                <span className="sr-only" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>
+                <span className="ws-sr-only">
                   {isDone ? " (done)" : active ? " (current step)" : " (to do)"}
                 </span>
               </span>

@@ -1,21 +1,24 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Alert, Button, Form, Image, Input, Space, Spin, Typography, Tag } from "antd";
-import { SafetyOutlined } from "@ant-design/icons";
+import { Button, Form, Input, Typography } from "antd";
 import type { AxiosError } from "axios";
 import { AuthShell } from "../AuthShell";
+import { AuthError, codeInputStyle } from "../authParts";
+import { BackupCodeGrid } from "./BackupCodeGrid";
 import { useAuth } from "../../../hooks/useAuth";
 import * as authApi from "../../../api/auth";
 import type { LoginTokensResponse } from "../../../api/auth";
-import { fs } from "../../../theme/tokens";
+import { Skel, StepperLayout } from "../../../ui";
+import { fs, radius, space, v } from "../../../theme/tokens";
 
-const { Text, Paragraph } = Typography;
+const { Text } = Typography;
 
 interface TotpForm {
   code: string;
 }
 
 const ADMIN_TIER_ROLES = ["HR_ADMIN", "HR_EXECUTIVE", "PAYROLL_ADMIN", "SUPER_ADMIN"];
+const STEPS = ["Scan and verify", "Save backup codes"];
 
 // Reached from LoginPage when login() returns { status: "requires_totp_setup" }
 // — this role requires 2FA (spec §3.7) and hasn't enrolled yet. Also
@@ -75,61 +78,68 @@ export function TotpSetupPage() {
 
   if (backupCodes) {
     return (
-      <AuthShell title="Save your backup codes" width={440}>
-        <Paragraph type="secondary">
-          Each code can be used once if you lose access to your authenticator app. Store them somewhere safe — they won't be
-          shown again.
-        </Paragraph>
-        <Space wrap style={{ marginBottom: 20 }}>
-          {backupCodes.map((code) => (
-            <Tag key={code} style={{ fontFamily: "monospace", fontSize: fs.md, padding: "4px 8px" }}>
-              {code}
-            </Tag>
-          ))}
-        </Space>
-        <Button type="primary" block size="large" onClick={() => void onContinue()}>
-          I've saved these — continue
-        </Button>
+      <AuthShell title="Save your backup codes" width={480}>
+        <StepperLayout
+          steps={STEPS}
+          current={1}
+          description="Each code can be used once if you lose access to your authenticator app. Store them somewhere safe — they won't be shown again."
+          footer={
+            <Button type="primary" block size="large" onClick={() => void onContinue()}>
+              I've saved these — continue
+            </Button>
+          }
+        >
+          <BackupCodeGrid codes={backupCodes} />
+        </StepperLayout>
       </AuthShell>
     );
   }
 
   return (
-    <AuthShell title="Set up two-factor authentication" subtitle="Your role requires 2FA" width={420}>
-      {error && <Alert type="error" showIcon title={error} style={{ marginBottom: 20 }} />}
+    <AuthShell
+      title="Set up two-step sign-in"
+      subtitle={challengeToken ? "Your role requires two-step sign-in (2FA)." : "Add a code from your phone to every sign-in."}
+      width={480}
+    >
+      <StepperLayout steps={STEPS} current={0} description="Scan this QR code with Google Authenticator, Authy, or any TOTP app, then enter the 6-digit code it shows.">
+        <AuthError message={error} />
+        {loadingEnrollment ? (
+          <div aria-busy="true" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: space[4] }}>
+            <Skel w={212} h={212} r={radius.lg} />
+            <Skel w={260} h={14} />
+            <Skel h={48} r={radius.md} />
+          </div>
+        ) : (
+          <>
+            {qrCodeDataUrl && (
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: space[4] }}>
+                <div style={{ padding: space[4], border: `1px solid ${v.borderDefault}`, borderRadius: radius.lg, background: v.bgSurface }}>
+                  <img src={qrCodeDataUrl} alt="2FA QR code" width={180} height={180} style={{ display: "block", borderRadius: radius.sm }} />
+                </div>
+              </div>
+            )}
+            {secret && (
+              <div style={{ textAlign: "center", fontSize: fs.sm, color: v.textSecondary, marginBottom: space[5] }}>
+                Can't scan it? Enter this code manually:{" "}
+                <Text code copyable style={{ fontSize: fs.sm }}>
+                  {secret}
+                </Text>
+              </div>
+            )}
 
-      {loadingEnrollment ? (
-        <div style={{ textAlign: "center", padding: 24 }}>
-          <Spin />
-        </div>
-      ) : (
-        <>
-          <Paragraph type="secondary">
-            Scan this QR code with Google Authenticator, Authy, or any TOTP app, then enter the 6-digit code it shows.
-          </Paragraph>
-          {qrCodeDataUrl && (
-            <div style={{ textAlign: "center", marginBottom: 12 }}>
-              <Image src={qrCodeDataUrl} alt="2FA QR code" width={180} preview={false} />
-            </div>
-          )}
-          {secret && (
-            <Paragraph type="secondary" style={{ textAlign: "center", fontSize: fs.sm }}>
-              Can't scan it? Enter this code manually: <Text code>{secret}</Text>
-            </Paragraph>
-          )}
-
-          <Form<TotpForm> layout="vertical" onFinish={onFinish} requiredMark={false}>
-            <Form.Item name="code" label="Authentication code" rules={[{ required: true, message: "Enter the 6-digit code" }]}>
-              <Input prefix={<SafetyOutlined />} placeholder="123456" size="large" maxLength={10} autoFocus />
-            </Form.Item>
-            <Form.Item>
-              <Button type="primary" htmlType="submit" block size="large" loading={submitting}>
-                Verify and enable 2FA
-              </Button>
-            </Form.Item>
-          </Form>
-        </>
-      )}
+            <Form<TotpForm> layout="vertical" onFinish={onFinish} requiredMark={false}>
+              <Form.Item name="code" label="Authentication code" rules={[{ required: true, message: "Enter the 6-digit code" }]}>
+                <Input placeholder="123456" size="large" maxLength={10} autoFocus autoComplete="one-time-code" inputMode="numeric" style={codeInputStyle} />
+              </Form.Item>
+              <Form.Item style={{ marginBottom: 0 }}>
+                <Button type="primary" htmlType="submit" block size="large" loading={submitting}>
+                  Verify and enable 2FA
+                </Button>
+              </Form.Item>
+            </Form>
+          </>
+        )}
+      </StepperLayout>
     </AuthShell>
   );
 }

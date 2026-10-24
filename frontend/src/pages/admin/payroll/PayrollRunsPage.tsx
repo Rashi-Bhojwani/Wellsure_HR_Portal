@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Button, Drawer, Flex, List, Select, Space, Spin, Table, Tag, Typography, message } from "antd";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Alert, Button, List, Select, Space, Typography } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import { Link, useNavigate } from "react-router-dom";
 import * as payrollApi from "../../../api/payroll";
@@ -10,65 +10,92 @@ import { useAuth } from "../../../hooks/useAuth";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatDate, formatDateTime } from "../../../lib/dates";
 import { formatRupees } from "../../../lib/money";
-import { RUN_STATUS_COLOR } from "./runText";
+import { ApprovalBanner, DataTable, EmptyState, PageHeader, Panel, SideDrawer, SkeletonCard, Stack, toast } from "../../../ui";
+import { Num, RunStatusChip, TestChip } from "../../../components/payroll/payrollUi";
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 // Payroll → Payroll runs (Phase 6 P6-3). One regular run per attendance cycle. Starting one shows what stands in its way first, the way the Finalisation screen does.
 // A run on Placeholder rules is a TEST: it can be looked at, compared and exported, and nothing real can come out of it.
 
 export function PayrollRunsPage() {
   const { hasPermission } = useAuth();
+  const navigate = useNavigate();
   const canRun = hasPermission("payroll.run");
   const [page, setPage] = useState(1);
   const [starting, setStarting] = useState(false);
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ["payroll", "runs", page],
     queryFn: () => payrollApi.listRuns(page, 25),
+    placeholderData: keepPreviousData,
     refetchInterval: (q) => (q.state.data?.items.some((r) => r.status === "CALCULATING") ? 3000 : false),
   });
+  const open = (r: RunSummary) => navigate(`/admin/payroll/run/${r.id}`);
   return (
-    <Flex vertical gap={16}>
-      <Flex justify="space-between" align="center" wrap gap={8}>
-        <Title level={3} style={{ margin: 0 }}>
-          Payroll runs
-        </Title>
-        {canRun && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setStarting(true)}>
-            Start a payroll run
-          </Button>
-        )}
-      </Flex>
-      <Text type="secondary">
-        A run pays one attendance cycle, from the days attendance has finalised and the salary in force on each of them. You see what stands in its way before you start, what it came to once calculated, and how it differs from last month. A run that used any Placeholder rule is marked TEST everywhere, and cannot be approved, finalised, published or turned into a bank file.
-      </Text>
-      {error && <Alert type="error" showIcon title={apiErrorMessage(error, "Could not load the runs.")} />}
-      <Table<RunSummary>
-        rowKey="id"
-        loading={isLoading}
-        dataSource={data?.items ?? []}
-        pagination={{ current: page, pageSize: 25, total: data?.total ?? 0, showSizeChanger: false, onChange: setPage }}
-        locale={{ emptyText: "No payroll runs yet." }}
-        columns={[
-          { title: "Cycle", render: (_, r) => <Link to={`/admin/payroll/run/${r.id}`}><Text strong>{r.cycle.label}</Text></Link> },
-          {
-            title: "Status",
-            render: (_, r) => (
-              <Space size={4}>
-                <Tag color={RUN_STATUS_COLOR[r.status]}>{r.statusLabel}</Tag>
-                {r.test && <Tag color="red">TEST</Tag>}
-              </Space>
-            ),
-          },
-          { title: "People", align: "right", render: (_, r) => (r.runHash ? `${r.counts.payable} payable${r.counts.held ? `, ${r.counts.held} held` : ""}${r.counts.excluded ? `, ${r.counts.excluded} left out` : ""}` : "") },
-          { title: "Gross", align: "right", render: (_, r) => (r.runHash ? formatRupees(r.totals.gross) : "") },
-          { title: "Net", align: "right", render: (_, r) => (r.runHash ? formatRupees(r.totals.net) : "") },
-          { title: "Calculated", render: (_, r) => (r.calculatedAt ? formatDateTime(r.calculatedAt) : "") },
-          { title: "", align: "right", render: (_, r) => <Link to={`/admin/payroll/run/${r.id}`}>Open</Link> },
-        ]}
+    <>
+      <PageHeader
+        title="Payroll runs"
+        subtitle="One regular run per attendance cycle"
+        actions={
+          canRun && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setStarting(true)}>
+              Start a payroll run
+            </Button>
+          )
+        }
       />
+      <Stack>
+        <ApprovalBanner
+          tone="info"
+          title="How a run works"
+          description="A run pays one attendance cycle, from the days attendance has finalised and the salary in force on each of them. You see what stands in its way before you start, what it came to once calculated, and how it differs from last month. A run that used any Placeholder rule is marked TEST everywhere, and cannot be approved, finalised, published or turned into a bank file."
+        />
+        <Panel title="All runs" flush={false}>
+          <DataTable<RunSummary>
+            rowKey="id"
+            loading={isLoading || isFetching}
+            error={error}
+            onRetry={() => void refetch()}
+            dataSource={data?.items ?? []}
+            pagination={{ current: page, pageSize: 25, total: data?.total ?? 0, showSizeChanger: false, onChange: setPage }}
+            onRowOpen={open}
+            empty={<EmptyState title="No payroll runs yet" description={canRun ? "Start a run for a finalised attendance cycle." : "When a run is started it appears here."} action={canRun ? <Button type="primary" icon={<PlusOutlined />} onClick={() => setStarting(true)}>Start a payroll run</Button> : undefined} compact />}
+            mobile={{
+              title: (r) => r.cycle.label,
+              subtitle: (r) => (r.calculatedAt ? `Calculated ${formatDateTime(r.calculatedAt)}` : "Not calculated yet"),
+              status: (r) => <RunChips r={r} />,
+              fields: [
+                { label: "People", render: (r) => people(r) || "—" },
+                { label: "Gross", render: (r) => (r.runHash ? <Num>{formatRupees(r.totals.gross)}</Num> : "—") },
+                { label: "Net", render: (r) => (r.runHash ? <Num>{formatRupees(r.totals.net)}</Num> : "—") },
+              ],
+              actions: (r) => <Button block onClick={() => open(r)}>Open</Button>,
+            }}
+            columns={[
+              { title: "Cycle", key: "cycle", render: (_, r) => <Link to={`/admin/payroll/run/${r.id}`} style={{ fontWeight: 600 }}>{r.cycle.label}</Link> },
+              { title: "Status", key: "status", render: (_, r) => <RunChips r={r} /> },
+              { title: "People", key: "people", align: "right", render: (_, r) => <Num>{people(r)}</Num> },
+              { title: "Gross", key: "gross", align: "right", className: "ws-num", render: (_, r) => (r.runHash ? formatRupees(r.totals.gross) : "") },
+              { title: "Net", key: "net", align: "right", className: "ws-num", render: (_, r) => (r.runHash ? formatRupees(r.totals.net) : "") },
+              { title: "Calculated", key: "calc", render: (_, r) => (r.calculatedAt ? formatDateTime(r.calculatedAt) : "") },
+              { title: "", key: "actions", align: "right", render: (_, r) => <Link to={`/admin/payroll/run/${r.id}`}>Open</Link> },
+            ]}
+          />
+        </Panel>
+      </Stack>
       {starting && <StartRunDrawer onClose={() => setStarting(false)} />}
-    </Flex>
+    </>
+  );
+}
+
+const people = (r: RunSummary) => (r.runHash ? `${r.counts.payable} payable${r.counts.held ? `, ${r.counts.held} held` : ""}${r.counts.excluded ? `, ${r.counts.excluded} left out` : ""}` : "");
+
+function RunChips({ r }: { r: RunSummary }) {
+  return (
+    <span style={{ display: "inline-flex", gap: 4, flexWrap: "wrap" }}>
+      <RunStatusChip status={r.status} label={r.statusLabel} />
+      {r.test && <TestChip />}
+    </span>
   );
 }
 
@@ -104,15 +131,25 @@ function StartRunDrawer({ onClose }: { onClose: () => void }) {
       void queryClient.invalidateQueries({ queryKey: ["payroll", "runs"] });
       navigate(`/admin/payroll/run/${id}`);
     },
-    onError: (e) => void message.error(apiErrorMessage(e, "Could not start the run.")),
+    onError: (e) => toast.error(apiErrorMessage(e, "Could not start the run.")),
   });
   const r: RunReadiness | undefined = readiness.data;
   return (
-    <Drawer open width={720} title="Start a payroll run" onClose={onClose} destroyOnHidden>
+    <SideDrawer
+      open
+      size="wide"
+      title="Start a payroll run"
+      onClose={onClose}
+      primaryLabel={r ? `Create the run for ${r.cycle.label}` : "Create the run"}
+      onPrimary={() => create.mutate()}
+      primaryDisabled={!r?.canCreate}
+      primaryLoading={create.isPending}
+    >
       <Space orientation="vertical" size={16} style={{ width: "100%" }}>
         <div>
-          <Text type="secondary">Which attendance cycle</Text>
+          <label htmlFor="run-cycle" style={{ display: "block", marginBottom: 6 }}>Which attendance cycle</label>
           <Select
+            id="run-cycle"
             style={{ width: "100%" }}
             placeholder="Choose a cycle"
             loading={cycles.isLoading}
@@ -121,7 +158,7 @@ function StartRunDrawer({ onClose }: { onClose: () => void }) {
             options={(cycles.data?.recent ?? []).map((c) => ({ value: c.start, label: `${c.label} (${formatDate(c.start)} to ${formatDate(c.end)})` }))}
           />
         </div>
-        {readiness.isLoading && <Spin />}
+        {readiness.isLoading && <SkeletonCard lines={5} />}
         {readiness.error && <Alert type="error" showIcon title={apiErrorMessage(readiness.error, "Could not check this cycle.")} />}
         {r && (
           <Space orientation="vertical" size={10} style={{ width: "100%" }}>
@@ -173,13 +210,10 @@ function StartRunDrawer({ onClose }: { onClose: () => void }) {
             {r.existingRun && (
               <Alert type="warning" showIcon title="There is already a run for this cycle" description={<Link to={`/admin/payroll/run/${r.existingRun.id}`}>Open it</Link>} />
             )}
-            <Button type="primary" size="large" disabled={!r.canCreate} loading={create.isPending} onClick={() => create.mutate()}>
-              Create the run for {r.cycle.label}
-            </Button>
             <Text type="secondary">Creating the run does not calculate anything. You will see exactly what the calculation changes before you confirm it.</Text>
           </Space>
         )}
       </Space>
-    </Drawer>
+    </SideDrawer>
   );
 }

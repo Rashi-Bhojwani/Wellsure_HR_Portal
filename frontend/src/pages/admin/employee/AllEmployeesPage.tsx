@@ -240,9 +240,11 @@ export function AllEmployeesPage() {
           }
           actions={
             <>
-              <Dropdown menu={{ items: columnMenuItems }} trigger={["click"]}>
-                <Button icon={<SettingOutlined />}>Columns</Button>
-              </Dropdown>
+              {!phone && (
+                <Dropdown menu={{ items: columnMenuItems }} trigger={["click"]}>
+                  <Button icon={<SettingOutlined />}>Columns</Button>
+                </Dropdown>
+              )}
               <Button icon={<SaveOutlined />} onClick={() => setSaveViewOpen(true)}>
                 Save view
               </Button>

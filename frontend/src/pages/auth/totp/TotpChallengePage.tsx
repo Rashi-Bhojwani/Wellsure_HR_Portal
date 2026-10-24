@@ -3,17 +3,14 @@ import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Button, Form, Input } from "antd";
 import type { AxiosError } from "axios";
 import { AuthShell } from "../AuthShell";
-import { AuthError } from "../authParts";
+import { AuthError, codeInputStyle } from "../authParts";
 import { useAuth } from "../../../hooks/useAuth";
 import * as authApi from "../../../api/auth";
-import { fs, fw, space, v } from "../../../theme/tokens";
+import { fs, space, v } from "../../../theme/tokens";
 
 interface TotpForm {
   code: string;
 }
-
-/** One large centred code field (auth-08's OTP boxes, as a single input so paste, autofill and backup codes keep working). */
-export const codeInputStyle = { textAlign: "center", fontSize: fs.h1, fontWeight: fw.semibold, letterSpacing: "0.3em", fontVariantNumeric: "tabular-nums" } as const;
 
 // Reached from LoginPage when login() returns { status: "requires_totp" }
 // — the account already has 2FA enrolled, this just verifies a code

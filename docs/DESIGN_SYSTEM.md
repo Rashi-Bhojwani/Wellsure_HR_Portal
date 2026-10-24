@@ -229,7 +229,7 @@ From `home-02`, `employees-01`, every section's first frame.
   - Items come from the existing permission-driven menus
     (`frontend/src/routes/employeeMenu.config.tsx` and the admin menu) — nothing
     appears that the user cannot open.
-- **Top bar, 96 px** (measured ≈ 94), `bg.surface`, bottom 1 px border:
+- **Top bar, 80 px** ⚑ (board ≈ 94 at 1440; 80 keeps more of a 1280 screen for content), `bg.surface`, bottom 1 px border:
   - Left: search field (318 × 48, `bg.subtle`, radius 8) "Search anything…" with a
     `⌘ K` / `Ctrl K` shortcut chip (board shows `⌘ F`; we use K so the browser's own
     find keeps working ⚑).
@@ -525,4 +525,70 @@ buttons and inputs); sensitive values only where they already appear, for the ro
 
 ## 13. How to build a new screen
 
-Written in step 5 (the standing rule).
+The standing rule (also in `CLAUDE.md` "UI rules"). Before calling a screen done:
+
+1. **Route and menu.** Add the page to `routes/employeeMenu.config.tsx` or `routes/adminMenu.config.tsx` as
+   `const MyPage = lazyPage(() => import("../pages/…/MyPage"), "MyPage")`. The sidebar, phone tabs, search (⌘/Ctrl K), page title and
+   `/dev/screens` pick it up. Add it to `docs/UI_SCREEN_MAP.md` (URL, permission, roles, board frame or "NOT IN BOARD").
+2. **Structure.** `PageHeader` (title, subtitle or breadcrumb, actions with the primary last) → `Stack` → `Panel`s. Tables are `DataTable`
+   (with a `mobile` spec), filters `FilterBar`, statuses `StatusChip`, numbers `StatCard`, add/edit forms `SideDrawer`, confirmations
+   `ConfirmModal`.
+3. **Tokens only.** `v.*` colours, `fs.*` sizes, `space` / `radius`. No hex, no rgb, no numeric `fontSize` — `npm run lint` fails.
+4. **States.** Loading = a skeleton shaped like the content (`QueryState` / `DataTable` do it); empty = `EmptyState` with a next step;
+   error = `EmptyState kind="error"` with retry; forbidden = the API's 403 shown as `kind="forbidden"`; validation inline on the field.
+5. **Data.** `placeholderData: keepPreviousData` on paginated/filtered lists; server pagination; search through `FilterBar` (debounced);
+   `staleTime` for reference data; optimistic updates only where rollback is safe — never money, approvals or audited actions.
+6. **Both themes, all widths.** Check light and dark at 1280 and 390 (`node e2e/screenshots.mjs --routes /your/path`). No horizontal page
+   scroll on a phone; every action reachable without hover; touch targets ≥ 44 px.
+7. **Keyboard and screen readers.** Every control reachable with Tab, visible focus, Esc closes layers, icon-only buttons have `aria-label`
+   + `Tooltip`, status never colour-only.
+8. **Sensitive data.** Show salary, bank, PAN, Aadhaar, UAN, ESI only where the API returns them to that role, masked by default;
+   `npm run check:sensitive-ui` must stay green.
+9. **Checks.** `npm run lint && npm run typecheck && npm test && npm run build && npm run check:bundle` in `frontend/`.
+
+### Example: a small list screen
+
+```tsx
+import { useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { Button, Select } from "antd";
+import { PlusOutlined } from "@ant-design/icons";
+import { DataTable, FilterBar, PageHeader, Panel, SideDrawer, Stack, StatusChip } from "../../../ui";
+import * as api from "../../../api/widgets";
+
+export function WidgetsPage() {
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState<string>();
+  const [page, setPage] = useState(1);
+  const [adding, setAdding] = useState(false);
+  const query = useQuery({
+    queryKey: ["widgets", { search, status, page }],
+    queryFn: () => api.list({ search, status, page, pageSize: 25 }),
+    placeholderData: keepPreviousData,
+  });
+  return (
+    <>
+      <PageHeader title="Widgets" subtitle="Everything the team has set up"
+        actions={<Button type="primary" icon={<PlusOutlined />} onClick={() => setAdding(true)}>Add widget</Button>} />
+      <Stack>
+        <Panel>
+          <FilterBar onSearch={(s) => { setSearch(s); setPage(1); }} searchPlaceholder="Search widgets"
+            filters={<Select allowClear placeholder="Status" value={status} onChange={setStatus}
+              options={[{ value: "ACTIVE", label: "Active" }, { value: "INACTIVE", label: "Inactive" }]} />}
+            activeCount={status ? 1 : 0} onClear={() => setStatus(undefined)} />
+          <DataTable rowKey="id" loading={query.isFetching} error={query.error} onRetry={() => void query.refetch()}
+            dataSource={query.data?.rows} pagination={{ current: page, pageSize: 25, total: query.data?.total, onChange: setPage }}
+            columns={[
+              { title: "Name", dataIndex: "name" },
+              { title: "Status", dataIndex: "status", render: (s: string) => <StatusChip status={s} /> },
+            ]}
+            mobile={{ title: (r) => r.name, status: (r) => <StatusChip status={r.status} /> }} />
+        </Panel>
+      </Stack>
+      <SideDrawer open={adding} onClose={() => setAdding(false)} title="Add widget" formId="widget-form" primaryLabel="Create">
+        {/* <Form id="widget-form" layout="vertical" onFinish={…}> … </Form> */}
+      </SideDrawer>
+    </>
+  );
+}
+```

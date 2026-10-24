@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Tooltip } from "antd";
-import { ArrowRightOutlined, FileProtectOutlined, IdcardOutlined, SafetyCertificateOutlined, SoundOutlined, WalletOutlined } from "@ant-design/icons";
+import { ArrowRightOutlined, IdcardOutlined, SafetyCertificateOutlined, SoundOutlined, WalletOutlined } from "@ant-design/icons";
 import { Link } from "react-router-dom";
 import * as leaveApi from "../../../api/leave";
 import * as inboxApi from "../../../api/inbox";
@@ -302,7 +302,6 @@ export function HomePage() {
         <Panel title="Quick Access" style={{ height: "100%" }}>
           <RowList>
             <InfoRow first icon={<WalletOutlined />} title="Salary documents" text="Salary documents are coming in Phase 6" />
-            <InfoRow icon={<FileProtectOutlined />} title="Letters" text="Letters issued to you live under Documents." />
           </RowList>
         </Panel>
 

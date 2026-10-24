@@ -59,3 +59,6 @@ export function PasswordRules({ value }: { value: string | undefined }) {
     </ul>
   );
 }
+
+/** One large centred code field (auth-08's OTP boxes, as a single input so paste, autofill and backup codes keep working). */
+export const codeInputStyle = { textAlign: "center", fontSize: fs.h1, fontWeight: fw.semibold, letterSpacing: "0.3em", fontVariantNumeric: "tabular-nums" } as const;

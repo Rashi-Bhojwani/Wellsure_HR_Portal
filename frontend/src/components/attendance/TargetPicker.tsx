@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Form, Radio, Select, Space } from "antd";
+import { Form, Radio, Select } from "antd";
+import { space } from "../../theme/tokens";
 import * as employeeApi from "../../api/employee";
 import * as orgApi from "../../api/org";
 import type { TargetValues } from "./targetSelection";
@@ -25,14 +26,14 @@ export function TargetPicker({ fixed, known = [] }: { fixed?: { employeeId: stri
         <Radio.Group options={[{ value: "GROUP", label: "Everyone at a branch or department" }, { value: "LIST", label: "Specific employees" }]} />
       </Form.Item>
       {who === "GROUP" ? (
-        <Space wrap>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(220px, 100%), 1fr))", gap: `0 ${space[4]}px`, maxWidth: 520 }}>
           <Form.Item name="locationId" label="Branch">
-            <Select allowClear placeholder="Any branch" style={{ width: 240 }} options={locations.map((l) => ({ value: l.id, label: l.name }))} />
+            <Select allowClear placeholder="Any branch" options={locations.map((l) => ({ value: l.id, label: l.name }))} />
           </Form.Item>
           <Form.Item name="departmentId" label="Department">
-            <Select allowClear placeholder="Any department" style={{ width: 240 }} options={departments.map((d) => ({ value: d.id, label: d.name }))} />
+            <Select allowClear placeholder="Any department" options={departments.map((d) => ({ value: d.id, label: d.name }))} />
           </Form.Item>
-        </Space>
+        </div>
       ) : (
         <Form.Item name="employeeIds" label="Employees">
           <Select mode="multiple" showSearch={{ filterOption: false, onSearch: setSearch }} placeholder="Search by name or code" options={[...known, ...(people?.rows ?? []).filter((e) => !known.some((k) => k.value === e.id)).map((e) => ({ value: e.id, label: `${e.fullName} (${e.employeeCode})` }))]} />

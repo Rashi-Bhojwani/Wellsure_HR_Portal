@@ -1,30 +1,41 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import {
-  Alert,
-  Button,
-  DatePicker,
-  Form,
-  Input,
-  Radio,
-  Select,
-  Space,
-  Steps,
-  Typography,
-} from "antd";
+import type { CSSProperties, ReactNode } from "react";
+import { Alert, Button, DatePicker, Form, Input, Radio, Select, Space, Typography } from "antd";
+import { ArrowLeftOutlined, ArrowRightOutlined, SendOutlined } from "@ant-design/icons";
+import { FormGroupTitle, Illustration, PageHeader, Panel, Stack, StepperLayout, useIsPhone } from "../../../ui";
+import { fs, fw, space, v } from "../../../theme/tokens";
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import { InvitationStatus } from "../../../components/common/InvitationStatus";
 import * as employeeApi from "../../../api/employee";
 import * as managersApi from "../../../api/managers";
 import * as orgApi from "../../../api/org";
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 const STEPS = ["Official", "Personal", "Statutory", "Bank", "Review"];
+const REFERENCE_STALE = 30_000;
+const WIDE: CSSProperties = { gridColumn: "1 / -1" };
+
+/** The drawer form's field grid (employees-03): two columns on desktop, one on phones. */
+function FieldGrid({ children }: { children: ReactNode }) {
+  const phone = useIsPhone();
+  return <div style={{ display: "grid", gridTemplateColumns: phone ? "minmax(0, 1fr)" : "repeat(2, minmax(0, 1fr))", columnGap: space[6] }}>{children}</div>;
+}
+
+function ReviewRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: space[2], padding: `${space[3]}px 0`, borderBottom: `1px solid ${v.borderDefault}` }}>
+      <span style={{ color: v.textSecondary, fontSize: fs.md, minWidth: 160 }}>{label}</span>
+      <span style={{ color: v.textBody, fontSize: fs.md, fontWeight: fw.medium, flex: 1, minWidth: 0, wordBreak: "break-word" }}>{children}</span>
+    </div>
+  );
+}
 
 export function AddEmployeePage() {
   const navigate = useNavigate();
+  const phone = useIsPhone();
   const [form] = Form.useForm();
   const [current, setCurrent] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -34,11 +45,11 @@ export function AddEmployeePage() {
   // Once the employee exists, the screen tells HR what really happened to the invitation email instead of jumping away.
   const [created, setCreated] = useState<employeeApi.CreatedEmployee | null>(null);
 
-  const { data: departments = [] } = useQuery({ queryKey: ["org", "departments"], queryFn: orgApi.departments.list });
-  const { data: designations = [] } = useQuery({ queryKey: ["org", "designations"], queryFn: orgApi.designations.list });
-  const { data: locations = [] } = useQuery({ queryKey: ["org", "locations"], queryFn: () => orgApi.listLocations(false) });
-  const { data: grades = [] } = useQuery({ queryKey: ["org", "grades"], queryFn: orgApi.grades.list });
-  const { data: costCentres = [] } = useQuery({ queryKey: ["org", "cost-centres"], queryFn: orgApi.costCentres.list });
+  const { data: departments = [] } = useQuery({ queryKey: ["org", "departments"], queryFn: orgApi.departments.list, staleTime: REFERENCE_STALE });
+  const { data: designations = [] } = useQuery({ queryKey: ["org", "designations"], queryFn: orgApi.designations.list, staleTime: REFERENCE_STALE });
+  const { data: locations = [] } = useQuery({ queryKey: ["org", "locations"], queryFn: () => orgApi.listLocations(false), staleTime: REFERENCE_STALE });
+  const { data: grades = [] } = useQuery({ queryKey: ["org", "grades"], queryFn: orgApi.grades.list, staleTime: REFERENCE_STALE });
+  const { data: costCentres = [] } = useQuery({ queryKey: ["org", "cost-centres"], queryFn: orgApi.costCentres.list, staleTime: REFERENCE_STALE });
   // E2 (model A): only active managers can be someone's reporting manager.
   const { data: managerOptions = [] } = useQuery({ queryKey: ["managers", "options"], queryFn: managersApi.managerOptions });
 

@@ -493,7 +493,7 @@ function ActionTile({ icon, label, hint, onClick, tone }: { icon: ReactNode; lab
         cursor: "pointer",
         textAlign: "left",
         font: "inherit",
-        flex: "1 1 180px",
+        flex: "1 1 140px",
         minWidth: 0,
       }}
     >
@@ -671,7 +671,7 @@ export function EngagePage({ initialActivity = "all" }: { initialActivity?: Acti
               <InitialsAvatar name={user?.fullName ?? "?"} size={48} />
               <div style={{ fontSize: isPhone ? fs.lg : fs.xl, fontWeight: fw.bold, color: v.textPrimary, lineHeight: 1.3 }}>Hey {firstName}, ready to dive in?</div>
             </div>
-            <div style={{ display: "flex", gap: space[3], flexWrap: "wrap", flex: "1 1 380px" }}>
+            <div style={{ display: "flex", gap: space[3], flexWrap: "wrap", flex: "1 1 300px" }}>
               <ActionTile icon={<TrophyOutlined />} label="Give Kudos" hint="Recognise a colleague" onClick={() => setKudosOpen(true)} tone={{ bg: v.chipWarningBg, fg: v.chipWarningText }} />
               <ActionTile icon={<SmileOutlined />} label="Create Poll" hint="Ask the company" onClick={() => setPollOpen(true)} tone={{ bg: v.chipPurpleBg, fg: v.chipPurpleText }} />
             </div>
