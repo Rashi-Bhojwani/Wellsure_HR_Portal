@@ -20,7 +20,7 @@ committed).
 | 6 | Payroll | ✅ Done, built locally (approved 2026-10-22). Plan and as-built notes: [`docs/plans/PHASE_6.md`](plans/PHASE_6.md); the review: [`docs/plans/PHASE_6_REVIEW.md`](plans/PHASE_6_REVIEW.md); the first real run: [`docs/FIRST_REAL_PAYROLL_RUN.md`](FIRST_REAL_PAYROLL_RUN.md). **Off-cycle runs and offer-letter figures from salary, which earlier text described, were never built: they are Phase 7 steps P7-6 and P7-3** |
 | 7 | Tax & benefits | **In progress.** Plan approved 2026-10-22 with the user's answers ([`docs/plans/PHASE_7.md`](plans/PHASE_7.md) §0A). P7-0 (corrections before the phase) built, awaiting review; P7-1 to P7-7 not started. One commit at a time, a pause after each |
 | 8 | Extras | Not started |
-| UI | One-time UI/UX pass over every existing screen (user, 2026-10-23), on branch `ui/design-pass` | **In progress.** Step 1 (design system extracted from the boards) built, awaiting the user's OK on the tokens. Steps 2 to 5 not started. Frontend and docs only; Phase 7 continues separately. Plan and rules: [`docs/DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) |
+| UI | One-time UI/UX pass over every existing screen (user, 2026-10-23), on branch `ui/design-pass` | **In progress.** Step 1 (design system) done; the user approved the plan and its defaults on 2026-10-24 ("go ahead and do the frontend transformation"). Step 2 (screen map, `/dev/screens`) done; steps 3 to 5 in progress. Frontend and docs only; Phase 7 continues separately. Plan and rules: [`docs/DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) |
 
 ## Log
 
@@ -4977,6 +4977,23 @@ sidebar shell; sections with no backend (Recruitment, Checklist templates, Messa
 
 **Not verified:** nothing is rendered yet (no frontend change in this step; frontend lint and typecheck clean, tests 21 passed; backend
 untouched); the font is identified by eye; shadows are estimates; sizes are ±2 px. The project is on Ant Design 6, not 5 as the brief says.
+
+### UI pass, step 2: screen map and the developer screen index (`ui/design-pass`, 2026-10-24)
+
+The user approved the plan and its defaults ("Let's now go ahead and do the frontend transformation … not only about the styling but the entire
+user experience and smoothness"), so the §10 decisions in `DESIGN_SYSTEM.md` stand as written.
+
+- `docs/UI_SCREEN_MAP.md`: every route (103 URLs, public, employee and admin portals, detail routes included) with its screen, the permission
+  the API enforces for its main data, the roles that see it, its board frame and MAPPED / MAPPED-PARTIAL / NOT IN BOARD; board sections with no
+  backend (Recruitment, Checklist templates, Messages, Subscription, Integrations, Help Center content) listed as "later". The privacy page the
+  brief mentions does not exist yet (it waits on the user's DPDP wording) and is listed as such, not built.
+- `/dev/screens` (`frontend/src/pages/dev/ScreensIndexPage.tsx`): every screen URL, generated from the same `resolveMenuRoutes` the router uses.
+  Registered only under `import.meta.env.DEV` (a production build contains none of it — checked), and even in development it redirects to
+  `/login` until the developer flag is set by opening `/dev/screens?enable=1` once.
+- A local demo stack in the session container (fresh database: migrations, `prisma/seed.ts`, `seed:demo-company`, `measure:payroll -- 500`
+  for the 500-person demo company). `db:seed` itself was not run: it is a reset, and the brief says to ask first; on an empty database the
+  migrate-then-seed path is equivalent and destroys nothing.
+- `frontend/e2e/screenshots.mjs`: signs in as a demo-company user and captures routes at chosen widths and themes (for the proof sets).
 
 ## Open questions
 

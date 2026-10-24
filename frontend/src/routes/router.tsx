@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { EmployeeLayout } from "../layouts/EmployeeLayout";
 import { AdminLayout } from "../layouts/AdminLayout";
@@ -25,6 +26,9 @@ import { resolveAdminRoutes, resolveEmployeeRoutes } from "./resolveMenuRoutes";
 // routes.test.tsx, so a route that resolves to PlaceholderPage here is
 // guaranteed to fail that test too, not just something discovered by
 // clicking around.
+// Development builds only: the screen index for reviewing the UI pass (docs/UI_SCREEN_MAP.md). Behind import.meta.env.DEV so production bundles never contain it.
+const ScreensIndexPage = import.meta.env.DEV ? lazy(() => import("../pages/dev/ScreensIndexPage").then((m) => ({ default: m.ScreensIndexPage }))) : null;
+
 function employeeRoutes() {
   return resolveEmployeeRoutes().map((route) => <Route key={route.relativePath} path={route.relativePath} element={route.element} />);
 }
@@ -49,6 +53,16 @@ export function AppRouter() {
       <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
       <Route path="/totp-challenge" element={<TotpChallengePage />} />
       <Route path="/totp-setup" element={<TotpSetupPage />} />
+      {ScreensIndexPage && (
+        <Route
+          path="/dev/screens"
+          element={
+            <Suspense fallback={null}>
+              <ScreensIndexPage />
+            </Suspense>
+          }
+        />
+      )}
 
       <Route element={<RequireAuth />}>
         <Route path="/app" element={<EmployeeLayout />}>
