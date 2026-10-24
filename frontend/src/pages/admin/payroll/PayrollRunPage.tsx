@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Button, Checkbox, Flex, Input, Modal, Progress, Segmented, Space, Spin, Statistic, Table, Tabs, Tag, Tooltip, Typography, message } from "antd";
-import { ArrowLeftOutlined, DownloadOutlined } from "@ant-design/icons";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Alert, Button, Checkbox, Flex, Input, Progress, Segmented, Space, Tabs, Tooltip, Typography } from "antd";
+import { DownloadOutlined } from "@ant-design/icons";
 import { Link, useParams } from "react-router-dom";
 import { HOLD_REASON_LABEL } from "@shared/constants/payrollRun";
 import * as payrollApi from "../../../api/payroll";
@@ -16,10 +16,12 @@ import { apiErrorMessage } from "../../../lib/apiError";
 import { formatDate, formatDateTime } from "../../../lib/dates";
 import { formatDifference, formatRupees } from "../../../lib/money";
 import { useSocket } from "../../../sockets/SocketProvider";
-import { RUN_STATUS_COLOR, VARIANCE_TAG_LABEL } from "./runText";
-import { fs } from "../../../theme/tokens";
+import { VARIANCE_TAG_LABEL } from "./runText";
+import { fs, fw } from "../../../theme/tokens";
+import { ApprovalBanner, ConfirmModal, DataTable, EmptyState, FilterBar, PageHeader, PageSkeleton, Panel, Stack, StatusChip, toast } from "../../../ui";
+import { Caption, Figure, FigureRow, Num, PersonCell, RunStatusChip, StepStrip, TestChip, type StepItem } from "../../../components/payroll/payrollUi";
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 // Payroll → one payroll run (Phase 6 P6-3, P6-4): where it stands, who is in it and why each figure is what it is, how it differs from last month, what it used, and
 // the road from a draft to a final, locked month (submit, approve, close the period). A run on Placeholder rules carries the TEST banner here and in the workbook.
@@ -251,11 +253,12 @@ function PeopleTab({ runId }: { runId: string }) {
 function VarianceTab({ runId }: { runId: string }) {
   const [view, setView] = useState<"CHANGED" | "FLAGGED" | "ALL">("CHANGED");
   const [page, setPage] = useState(1);
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ["payroll", "run-variance", runId, view, page],
     queryFn: () => payrollApi.getRunVariance(runId, { changedOnly: view === "CHANGED", flaggedOnly: view === "FLAGGED", page, pageSize: 50 }),
+    placeholderData: keepPreviousData,
   });
-  if (error) return <Alert type="error" showIcon title={apiErrorMessage(error, "Could not work out the difference.")} />;
+  if (error) return <EmptyState kind="error" compact title="Could not work out the difference" description={apiErrorMessage(error, "Could not work out the difference.")} onRetry={() => void refetch()} />;
   return (
     <Flex vertical gap={12}>
       {data && !data.baseline && <Alert type="info" showIcon title="There is no run for the previous cycle to compare with" />}
@@ -269,29 +272,40 @@ function VarianceTab({ runId }: { runId: string }) {
       )}
       {data && !data.thresholds.set && <Alert type="info" showIcon title="Nothing is highlighted yet" description={<>The rules “Variance: flag above (percent)” and “Variance: ignore below (rupees)” have no value. <Link to="/admin/payroll/rules">Set them</Link> to have large changes flagged. They only decide what is highlighted; they never change a figure.</>} />}
       {data?.totals.previous && data.totals.change && (
-        <Flex gap={32} wrap>
-          <Statistic title="Gross" value={formatRupees(data.totals.current!.gross)} suffix={<Text type="secondary" style={{ fontSize: fs.table }}> {formatDifference(data.totals.change.gross)}</Text>} />
-          <Statistic title="Deductions" value={formatRupees(data.totals.current!.deductions)} suffix={<Text type="secondary" style={{ fontSize: fs.table }}> {formatDifference(data.totals.change.deductions)}</Text>} />
-          <Statistic title="Net pay" value={formatRupees(data.totals.current!.net)} suffix={<Text type="secondary" style={{ fontSize: fs.table }}> {formatDifference(data.totals.change.net)}</Text>} />
-        </Flex>
+        <FigureRow>
+          <Figure label="Gross" value={<>{formatRupees(data.totals.current!.gross)} <Text type="secondary" style={{ fontSize: fs.table, fontWeight: fw.regular }}>{formatDifference(data.totals.change.gross)}</Text></>} />
+          <Figure label="Deductions" value={<>{formatRupees(data.totals.current!.deductions)} <Text type="secondary" style={{ fontSize: fs.table, fontWeight: fw.regular }}>{formatDifference(data.totals.change.deductions)}</Text></>} />
+          <Figure label="Net pay" value={<>{formatRupees(data.totals.current!.net)} <Text type="secondary" style={{ fontSize: fs.table, fontWeight: fw.regular }}>{formatDifference(data.totals.change.net)}</Text></>} />
+        </FigureRow>
       )}
       <Flex gap={8} wrap align="center">
         <Segmented value={view} onChange={(v) => { setView(v as typeof view); setPage(1); }} options={[{ value: "CHANGED", label: "Who changed" }, { value: "FLAGGED", label: `Flagged${data ? ` (${data.flaggedCount})` : ""}` }, { value: "ALL", label: "Everyone" }]} />
-        {data && Object.entries(data.tagCounts).map(([tag, n]) => <Tag key={tag}>{VARIANCE_TAG_LABEL[tag as keyof typeof VARIANCE_TAG_LABEL] ?? tag}: {n}</Tag>)}
+        {data && Object.entries(data.tagCounts).map(([tag, n]) => <StatusChip key={tag} tone="neutral">{VARIANCE_TAG_LABEL[tag as keyof typeof VARIANCE_TAG_LABEL] ?? tag}: {n}</StatusChip>)}
       </Flex>
-      <Table<VarianceRow>
-        size="small"
+      <DataTable<VarianceRow>
+        density="compact"
         rowKey="employeeId"
-        loading={isLoading}
+        loading={isLoading || isFetching}
+        mobile={{
+          title: (r) => r.name,
+          subtitle: (r) => r.employeeCode,
+          status: (r) => (r.flagged ? <StatusChip tone="danger">Flagged</StatusChip> : null),
+          fields: [
+            { label: "Net last month", render: (r) => (r.previous ? <Num>{formatRupees(r.previous.net, 2)}</Num> : "—") },
+            { label: "Net this month", render: (r) => (r.current ? <Num>{formatRupees(r.current.net, 2)}</Num> : "—") },
+            { label: "Change", render: (r) => (r.change ? <Num tone={r.flagged ? "danger" : undefined} strong={r.flagged}>{formatDifference(r.change.net)}{r.percent ? ` (${r.percent}%)` : ""}</Num> : "—") },
+            { label: "Why", render: (r) => r.tags.map((t) => VARIANCE_TAG_LABEL[t]).join(", ") || "—" },
+          ],
+        }}
         dataSource={data?.items ?? []}
         pagination={{ current: page, pageSize: 50, total: data?.total ?? 0, showSizeChanger: false, onChange: setPage }}
         columns={[
-          { title: "Employee", render: (_, r) => <div><Text strong>{r.name}</Text><div><Text type="secondary" style={{ fontSize: fs.sm }}>{r.employeeCode}</Text></div></div> },
-          { title: "Net last month", align: "right", render: (_, r) => (r.previous ? formatRupees(r.previous.net, 2) : "") },
-          { title: "Net this month", align: "right", render: (_, r) => (r.current ? formatRupees(r.current.net, 2) : "") },
-          { title: "Change", align: "right", render: (_, r) => (r.change ? <Text type={r.flagged ? "danger" : undefined} strong={r.flagged}>{formatDifference(r.change.net)}{r.percent ? ` (${r.percent}%)` : ""}</Text> : "") },
-          { title: "Why", render: (_, r) => <Space size={4} wrap>{r.tags.map((t) => <Tag key={t}>{VARIANCE_TAG_LABEL[t]}</Tag>)}</Space> },
-          { title: "", render: (_, r) => (r.flagged ? <Tag color="red">Flagged</Tag> : null) },
+          { title: "Employee", key: "emp", render: (_, r) => <PersonCell name={r.name} code={r.employeeCode} /> },
+          { title: "Net last month", key: "prev", align: "right", className: "ws-num", render: (_, r) => (r.previous ? formatRupees(r.previous.net, 2) : "") },
+          { title: "Net this month", key: "cur", align: "right", className: "ws-num", render: (_, r) => (r.current ? formatRupees(r.current.net, 2) : "") },
+          { title: "Change", key: "chg", align: "right", className: "ws-num", render: (_, r) => (r.change ? <Text type={r.flagged ? "danger" : undefined} strong={r.flagged}>{formatDifference(r.change.net)}{r.percent ? ` (${r.percent}%)` : ""}</Text> : "") },
+          { title: "Why", key: "why", render: (_, r) => <Space size={4} wrap>{r.tags.map((t) => <StatusChip key={t} tone="neutral">{VARIANCE_TAG_LABEL[t]}</StatusChip>)}</Space> },
+          { title: "Flag", key: "flag", render: (_, r) => (r.flagged ? <StatusChip tone="danger">Flagged</StatusChip> : null) },
         ]}
       />
     </Flex>
@@ -302,17 +316,17 @@ function UsedTab({ run }: { run: RunDetail }) {
   return (
     <Flex vertical gap={12}>
       <Text type="secondary">Everything this run actually read. A run is real only when every item below is Confirmed by somebody other than the person who entered it.</Text>
-      {run.notices.map((n) => <Alert key={n} type="info" showIcon title={n} />)}
-      <Table
-        size="small"
+      {run.notices.map((n) => <ApprovalBanner key={n} tone="info" title={n} />)}
+      <DataTable
+        density="compact"
         rowKey={(r) => `${r.kind}-${r.key}-${r.version}-${r.frozen}`}
         pagination={false}
         dataSource={run.rules}
         columns={[
-          { title: "What", render: (_, r) => <div>{r.kind === "RULE" ? <Link to="/admin/payroll/rules">{r.label}</Link> : r.label}{r.frozen && <div><Text type="secondary" style={{ fontSize: fs.sm }}>What a salary was frozen under</Text></div>}</div> },
-          { title: "Version", align: "right", render: (_, r) => (r.notSet ? "" : r.version) },
-          { title: "Status", render: (_, r) => <Tag color={r.status === "CONFIRMED" ? "green" : "orange"}>{r.status === "CONFIRMED" ? "Confirmed" : r.notSet ? "Not set" : "Placeholder"}</Tag> },
-          { title: "", render: (_, r) => (r.stale ? <Tag color="gold">Changed since</Tag> : null) },
+          { title: "What", key: "what", render: (_, r) => <div>{r.kind === "RULE" ? <Link to="/admin/payroll/rules">{r.label}</Link> : r.label}{r.frozen && <Caption>What a salary was frozen under</Caption>}</div> },
+          { title: "Version", key: "ver", align: "right", className: "ws-num", render: (_, r) => (r.notSet ? "" : r.version) },
+          { title: "Status", key: "status", render: (_, r) => <StatusChip tone={r.status === "CONFIRMED" ? "success" : r.notSet ? "neutral" : "warning"}>{r.status === "CONFIRMED" ? "Confirmed" : r.notSet ? "Not set" : "Placeholder"}</StatusChip> },
+          { title: "Changed", key: "stale", render: (_, r) => (r.stale ? <StatusChip tone="warning">Changed since</StatusChip> : null) },
         ]}
       />
       <Text type="secondary">Created by {run.createdBy} on {formatDate(run.createdAt)}.</Text>

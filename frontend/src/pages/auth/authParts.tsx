@@ -1,23 +1,8 @@
-import type { ReactNode } from "react";
 import { Alert } from "antd";
 import { CheckCircleFilled, CloseCircleFilled, MinusCircleOutlined } from "@ant-design/icons";
-import { fs, fw, space, v } from "../../theme/tokens";
+import { fs, space, v } from "../../theme/tokens";
 
 // Small pieces shared by the auth pages (board auth-01..09).
-
-/** The board's required mark: a red asterisk after the label (antd's default puts it before). */
-export function requiredMark(label: ReactNode, { required }: { required: boolean }): ReactNode {
-  return (
-    <span style={{ fontWeight: fw.medium }}>
-      {label}
-      {required && (
-        <span aria-hidden style={{ color: v.danger, marginLeft: 4 }}>
-          *
-        </span>
-      )}
-    </span>
-  );
-}
 
 /** Error banner above the form (honest messages: e.g. "The server can't be reached…" from lib/apiError). */
 export function AuthError({ message }: { message: string | null }) {
@@ -60,5 +45,3 @@ export function PasswordRules({ value }: { value: string | undefined }) {
   );
 }
 
-/** One large centred code field (auth-08's OTP boxes, as a single input so paste, autofill and backup codes keep working). */
-export const codeInputStyle = { textAlign: "center", fontSize: fs.h1, fontWeight: fw.semibold, letterSpacing: "0.3em", fontVariantNumeric: "tabular-nums" } as const;

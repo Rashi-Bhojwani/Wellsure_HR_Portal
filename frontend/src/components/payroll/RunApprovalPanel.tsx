@@ -1,12 +1,14 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Button, Card, Flex, Space, Tag, Typography } from "antd";
+import { Button, Flex, Space, Typography } from "antd";
 import { Link } from "react-router-dom";
 import * as payrollApi from "../../api/payroll";
 import type { RunDetail, StepSlug, StepState } from "../../api/payroll";
 import { formatDate, formatDateTime } from "../../lib/dates";
 import { useSocket } from "../../sockets/SocketProvider";
 import { CheckersNote } from "./CheckersNote";
+import { ApprovalBanner, Panel, StatusChip } from "../../ui";
+import { space, v } from "../../theme/tokens";
 
 const { Text } = Typography;
 
@@ -17,7 +19,7 @@ const stepLink = (runId: string, slug: StepSlug) => `/admin/payroll/run/${runId}
 
 function StateTag({ s }: { s: StepState }) {
   if (!s.live) return null;
-  return s.live.status === "APPROVED" ? <Tag color="green">Approved</Tag> : <Tag color="gold">Waiting for {s.checkers?.eligible.length === 1 ? s.checkers.eligible[0]!.name : "a decision"}</Tag>;
+  return s.live.status === "APPROVED" ? <StatusChip tone="success">Approved</StatusChip> : <StatusChip tone="warning">Waiting for {s.checkers?.eligible.length === 1 ? s.checkers.eligible[0]!.name : "a decision"}</StatusChip>;
 }
 
 export function RunApprovalPanel({ run }: { run: RunDetail }) {
@@ -45,16 +47,16 @@ export function RunApprovalPanel({ run }: { run: RunDetail }) {
   const unlock = step("unlock");
 
   return (
-    <Card size="small" title="Approval">
+    <Panel title="Approval" subtitle="Who prepared it, who has to approve it, and what is next">
       <Flex vertical gap={12}>
         {run.status === "CALCULATED" && (
           <>
-            {runStep.last?.status === "REJECTED" && <Alert type="warning" showIcon title={`Rejected by ${runStep.last.checker?.name ?? "the checker"}`} description={runStep.last.decisionNote} />}
-            {runStep.last?.status === "VOIDED" && <Alert type="info" showIcon title="The last approval was voided" description={runStep.last.voidReason} />}
+            {runStep.last?.status === "REJECTED" && <ApprovalBanner tone="warning" title={`Rejected by ${runStep.last.checker?.name ?? "the checker"}`} description={runStep.last.decisionNote} />}
+            {runStep.last?.status === "VOIDED" && <ApprovalBanner tone="info" title="The last approval was voided" description={runStep.last.voidReason} />}
             {run.counts.excluded > 0 ? (
-              <Alert type="error" showIcon title={`${run.counts.excluded} ${run.counts.excluded === 1 ? "person is" : "people are"} left out of this run, so it cannot be submitted`} description="Open the submit page to see who, and why." />
+              <ApprovalBanner tone="danger" title={`${run.counts.excluded} ${run.counts.excluded === 1 ? "person is" : "people are"} left out of this run, so it cannot be submitted`} description="Open the submit page to see who, and why." />
             ) : (
-              <Text>When the figures look right, send the run to a second person for approval.</Text>
+              <ApprovalBanner tone="info" title="Ready to submit" description="When the figures look right, send the run to a second person for approval." />
             )}
             <CheckersNote checkers={runStep.checkers} what="this run" />
             <Space>
@@ -67,9 +69,15 @@ export function RunApprovalPanel({ run }: { run: RunDetail }) {
 
         {run.status === "SUBMITTED" && runStep.live && (
           <>
-            <Text>
-              Waiting for approval. Submitted by <Text strong>{runStep.live.maker.name}</Text> on {formatDateTime(runStep.live.submittedAt)}. The run cannot be recalculated or changed while it waits.
-            </Text>
+            <ApprovalBanner
+              tone="warning"
+              title="Waiting for approval"
+              description={
+                <>
+                  Submitted by <Text strong>{runStep.live.maker.name}</Text> on {formatDateTime(runStep.live.submittedAt)}. The run cannot be recalculated or changed while it waits.
+                </>
+              }
+            />
             <CheckersNote checkers={runStep.checkers} what="this run" />
             <Space>
               <Link to={stepLink(run.id, "run")}>
@@ -81,9 +89,15 @@ export function RunApprovalPanel({ run }: { run: RunDetail }) {
 
         {run.status === "APPROVED" && (
           <>
-            <Text>
-              Approved by <Text strong>{runStep.live?.checker?.name ?? "a checker"}</Text>. The next step is to close the period, which also needs a second person.
-            </Text>
+            <ApprovalBanner
+              tone="success"
+              title="Approved"
+              description={
+                <>
+                  Approved by <Text strong>{runStep.live?.checker?.name ?? "a checker"}</Text>. The next step is to close the period, which also needs a second person.
+                </>
+              }
+            />
             {!finalise.live && <CheckersNote checkers={finalise.checkers} what="closing the period" />}
             <Space wrap>
               <StateTag s={finalise} />
@@ -99,15 +113,15 @@ export function RunApprovalPanel({ run }: { run: RunDetail }) {
 
         {run.status === "FINALISED" && (
           <>
-            <Alert type="success" showIcon title="This month is final and locked" description={`Closed ${run.finalisedAt ? formatDate(run.finalisedAt) : ""}. Changes to people’s history dated ${formatDate(run.cycle.start)} to ${formatDate(run.cycle.end)} are refused.`} />
+            <ApprovalBanner tone="success" title="This month is final and locked" description={`Closed ${run.finalisedAt ? formatDate(run.finalisedAt) : ""}. Changes to people’s history dated ${formatDate(run.cycle.start)} to ${formatDate(run.cycle.end)} are refused.`} />
             <Flex vertical gap={8}>
               {(["publish", "bank-file"] as const).map((slug) => {
                 const s = step(slug);
                 return (
-                  <Flex key={slug} justify="space-between" align="center" gap={8} wrap>
+                  <Flex key={slug} justify="space-between" align="center" gap={8} wrap style={{ padding: `${space[3]}px 0`, borderBottom: `1px solid ${v.borderDefault}` }}>
                     <Space>
                       <Text strong>{slug === "publish" ? "Publish payslips" : "Generate the bank file"}</Text>
-                      {s.live ? <StateTag s={s} /> : s.last?.status === "CONSUMED" ? <Tag color="green">Done</Tag> : <Tag>Not asked for</Tag>}
+                      {s.live ? <StateTag s={s} /> : s.last?.status === "CONSUMED" ? <StatusChip tone="success">Done</StatusChip> : <StatusChip tone="neutral">Not asked for</StatusChip>}
                     </Space>
                     <Link to={stepLink(run.id, slug)}>
                       <Button size="small">{s.live ? "Open…" : s.last?.status === "CONSUMED" ? "See it…" : "Look at it…"}</Button>
@@ -133,6 +147,6 @@ export function RunApprovalPanel({ run }: { run: RunDetail }) {
           </>
         )}
       </Flex>
-    </Card>
+    </Panel>
   );
 }

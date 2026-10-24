@@ -4,7 +4,7 @@ import { Button, DatePicker, Form, Input, Select } from "antd";
 import type { Dayjs } from "dayjs";
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as leaveApi from "../../../api/leave";
-import { fs, fw, space, v } from "../../../theme/tokens";
+import { fs, fw, radius, space, v } from "../../../theme/tokens";
 import { ApprovalBanner, EmptyState, InitialsAvatar, PageHeader, Panel, StatusChip, toast, useIsPhone } from "../../../ui";
 
 const { RangePicker } = DatePicker;
@@ -117,7 +117,7 @@ export function LeaveApplyPage() {
                 borderTop: `1px solid ${v.borderDefault}`,
                 margin: phone ? `0 -${space[4]}px` : `0 -${space[6]}px`,
                 padding: phone ? space[4] : `${space[4]}px ${space[6]}px`,
-                borderRadius: "0 0 16px 16px",
+                borderRadius: `0 0 ${radius.lg}px ${radius.lg}px`,
                 display: "flex",
                 justifyContent: "flex-end",
                 gap: space[3],

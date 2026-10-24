@@ -1,9 +1,10 @@
 import { useRef } from "react";
-import { Button, Popconfirm, Space, Typography, message } from "antd";
-import { DeleteOutlined, UploadOutlined } from "@ant-design/icons";
+import { Button, Popconfirm, Tooltip } from "antd";
+import { CameraOutlined, DeleteOutlined, UploadOutlined } from "@ant-design/icons";
 import { apiErrorMessage } from "../../lib/apiError";
 import { EmployeeAvatar } from "./EmployeeAvatar";
-import { fs } from "../../theme/tokens";
+import { toast } from "../../ui";
+import { fs, space, v } from "../../theme/tokens";
 
 interface PhotoUploaderProps {
   employeeId: string;
@@ -13,58 +14,92 @@ interface PhotoUploaderProps {
   remove: () => Promise<unknown>;
   onChanged: () => void;
   disabled?: boolean;
+  /** Avatar size (default 72). */
+  size?: number;
+  /** Profile-card layout (employees-05): avatar centred, compact photo actions underneath. */
+  stacked?: boolean;
 }
+
+const HINT = "JPEG, PNG or WebP. Location and camera details are removed automatically.";
 
 // Photo upload/remove with a live preview. The server re-encodes every photo
 // and strips its metadata (location included), so any JPEG/PNG/WebP straight
 // off a phone is fine.
-export function PhotoUploader({ employeeId, name, photoVersion, upload, remove, onChanged, disabled }: PhotoUploaderProps) {
+export function PhotoUploader({ employeeId, name, photoVersion, upload, remove, onChanged, disabled, size = 72, stacked = false }: PhotoUploaderProps) {
   const input = useRef<HTMLInputElement>(null);
 
   async function run(action: () => Promise<unknown>, success: string) {
     try {
       await action();
-      void message.success(success);
+      toast.success(success);
       onChanged();
     } catch (err) {
-      void message.error(apiErrorMessage(err, "That didn't work — please try again."));
+      toast.error(apiErrorMessage(err, "That didn't work — please try again."));
     }
   }
 
+  const fileInput = (
+    <input
+      ref={input}
+      type="file"
+      accept="image/jpeg,image/png,image/webp"
+      hidden
+      aria-label="Choose a photo"
+      onChange={(e) => {
+        const file = e.target.files?.[0];
+        e.target.value = "";
+        if (file) void run(() => upload(file), "Photo updated.");
+      }}
+    />
+  );
+  const removeButton = (small: boolean) =>
+    photoVersion && (
+      <Popconfirm title="Remove this photo?" okText="Remove" onConfirm={() => run(remove, "Photo removed.")}>
+        <Button size={small ? "small" : undefined} icon={<DeleteOutlined />} danger>
+          Remove
+        </Button>
+      </Popconfirm>
+    );
+
+  if (stacked) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: space[2] }}>
+        <div style={{ position: "relative" }}>
+          <EmployeeAvatar employeeId={employeeId} name={name} photoVersion={photoVersion} size={size} variant="full" />
+          {!disabled && (
+            <Tooltip title={`${photoVersion ? "Change photo" : "Upload photo"}. ${HINT}`}>
+              <Button
+                shape="circle"
+                size="small"
+                icon={<CameraOutlined />}
+                aria-label={photoVersion ? "Change photo" : "Upload photo"}
+                onClick={() => input.current?.click()}
+                style={{ position: "absolute", right: -2, bottom: -2, background: v.bgSurface }}
+              />
+            </Tooltip>
+          )}
+        </div>
+        {!disabled && photoVersion && removeButton(true)}
+        {fileInput}
+      </div>
+    );
+  }
+
   return (
-    <Space align="center" size={16} wrap>
-      <EmployeeAvatar employeeId={employeeId} name={name} photoVersion={photoVersion} size={72} variant="full" />
+    <div style={{ display: "flex", alignItems: "center", gap: space[4], flexWrap: "wrap" }}>
+      <EmployeeAvatar employeeId={employeeId} name={name} photoVersion={photoVersion} size={size} variant="full" />
       {!disabled && (
-        <Space orientation="vertical" size={4}>
-          <Space wrap>
+        <div style={{ display: "flex", flexDirection: "column", gap: space[1] }}>
+          <div style={{ display: "flex", gap: space[2], flexWrap: "wrap" }}>
             <Button icon={<UploadOutlined />} onClick={() => input.current?.click()}>
               {photoVersion ? "Change photo" : "Upload photo"}
             </Button>
-            {photoVersion && (
-              <Popconfirm title="Remove this photo?" okText="Remove" onConfirm={() => run(remove, "Photo removed.")}>
-                <Button icon={<DeleteOutlined />} danger>
-                  Remove
-                </Button>
-              </Popconfirm>
-            )}
-          </Space>
-          <Typography.Text type="secondary" style={{ fontSize: fs.sm }}>
-            JPEG, PNG or WebP. Location and camera details are removed automatically.
-          </Typography.Text>
-        </Space>
+            {removeButton(false)}
+          </div>
+          <span style={{ fontSize: fs.sm, color: v.textSecondary }}>{HINT}</span>
+        </div>
       )}
-      <input
-        ref={input}
-        type="file"
-        accept="image/jpeg,image/png,image/webp"
-        hidden
-        aria-label="Choose a photo"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          e.target.value = "";
-          if (file) void run(() => upload(file), "Photo updated.");
-        }}
-      />
-    </Space>
+      {fileInput}
+    </div>
   );
 }

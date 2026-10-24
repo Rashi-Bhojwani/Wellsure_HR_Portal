@@ -1,6 +1,7 @@
-import { Alert, Flex, Table, Typography } from "antd";
+import { Alert, Flex, Typography } from "antd";
+import { DataTable } from "../../ui";
 import type { NoPayslipPerson } from "../../api/payroll";
-import { fs } from "../../theme/tokens";
+import { Caption, PersonCell } from "./payrollUi";
 
 const { Text } = Typography;
 
@@ -17,14 +18,14 @@ export function NoPayslipAlert({ people, willGet }: { people: NoPayslipPerson[];
       description={
         <Flex vertical gap={8}>
           <Text>Nobody on this list is paid, and nobody on this list is told anything, until the reason is put right and a run is made for them. Check it before you publish.</Text>
-          <Table<NoPayslipPerson>
-            size="small"
+          <DataTable<NoPayslipPerson>
+            density="compact"
             rowKey="employeeId"
             pagination={people.length > 15 ? { pageSize: 15, showSizeChanger: false } : false}
             dataSource={people}
             columns={[
-              { title: "Who", render: (_, r) => <div><Text strong>{r.name}</Text><div><Text type="secondary" style={{ fontSize: fs.sm }}>{r.employeeCode}</Text></div></div> },
-              { title: "Why", render: (_, r) => <div>{r.reasonLabel}{r.detail && <div><Text type="secondary" style={{ fontSize: fs.sm }}>{r.detail}</Text></div>}</div> },
+              { title: "Who", render: (_, r) => <PersonCell name={r.name} code={r.employeeCode} /> },
+              { title: "Why", render: (_, r) => <div>{r.reasonLabel}{r.detail && <Caption>{r.detail}</Caption>}</div> },
               { title: "What to do", dataIndex: "action" },
             ]}
           />

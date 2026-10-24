@@ -1,4 +1,4 @@
-import { Alert } from "antd";
+import { ApprovalBanner } from "../../ui";
 
 // The leave encashment daily rate is still a flat HR-entered amount
 // (System Settings → Leave), pending our CA's confirmation of the formula
@@ -7,9 +7,8 @@ import { Alert } from "antd";
 // Leave liability report — so nobody mistakes an estimate for a final figure.
 export function ProvisionalRateAlert({ rateMissing = false }: { rateMissing?: boolean }) {
   return (
-    <Alert
-      type="warning"
-      showIcon
+    <ApprovalBanner
+      tone="warning"
       title={rateMissing ? "No encashment rate is set — showing days only" : "Encashment rate is provisional"}
       description={
         rateMissing

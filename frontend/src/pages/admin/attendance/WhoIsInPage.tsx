@@ -1,41 +1,91 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import dayjs from "dayjs";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Card, Col, Empty, Flex, List, Row, Select, Statistic, Tag, Typography } from "antd";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Segmented, Select, Typography } from "antd";
+import { CalendarOutlined, ClockCircleOutlined, EditOutlined, LoginOutlined, UserDeleteOutlined } from "@ant-design/icons";
 import * as infoApi from "../../../api/attendanceInfo";
-import type { WhoPerson } from "../../../api/attendanceInfo";
+import type { WhoIsIn } from "../../../api/attendanceInfo";
 import { useSocket } from "../../../sockets/SocketProvider";
-import { fs } from "../../../theme/tokens";
+import { ApprovalBanner, CardGrid, DataTable, FilterBar, InitialsAvatar, PageHeader, Panel, Stack, StatCard, StatusChip, EmptyState } from "../../../ui";
+import { fs, radius, space, v } from "../../../theme/tokens";
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
-function Person({ p, extra }: { p: WhoPerson; extra?: React.ReactNode }) {
-  return (
-    <List.Item style={{ padding: "6px 0" }}>
-      <Flex justify="space-between" style={{ width: "100%" }} gap={8}>
-        <div>
-          <div>{p.name}</div>
-          <Text type="secondary" style={{ fontSize: fs.sm }}>
-            {p.employeeCode} · {p.branch ?? "—"}
-            {p.department ? ` · ${p.department}` : ""}
-          </Text>
-        </div>
-        <div style={{ textAlign: "right" }}>{extra}</div>
-      </Flex>
-    </List.Item>
-  );
+type Group = "ARRIVED" | "NOT_ARRIVED" | "MANUAL" | "AWAY";
+const GROUP_LABEL: Record<Group, string> = { ARRIVED: "Arrived", NOT_ARRIVED: "Not yet arrived", MANUAL: "Marked by hand", AWAY: "Away" };
+const GROUP_TONE = { ARRIVED: "success", NOT_ARRIVED: "warning", MANUAL: "info", AWAY: "purple" } as const;
+
+interface Row {
+  key: string;
+  group: Group;
+  employeeCode: string;
+  name: string;
+  branch: string | null;
+  department: string | null;
+  /** Time column: punch time, due time, manual time. */
+  time: ReactNode;
+  /** Chips / notes. */
+  detail: ReactNode;
+}
+
+function rowsOf(data: WhoIsIn | undefined): Row[] {
+  if (!data) return [];
+  const base = (p: { employeeId: string; employeeCode: string; name: string; branch: string | null; department: string | null }, group: Group) => ({
+    key: `${group}|${p.employeeId}`,
+    group,
+    employeeCode: p.employeeCode,
+    name: p.name,
+    branch: p.branch,
+    department: p.department,
+  });
+  return [
+    ...data.arrived.map((p) => ({
+      ...base(p, "ARRIVED"),
+      time: <Text strong className="ws-num">{p.time ?? "—"}</Text>,
+      detail: (
+        <span style={{ display: "inline-flex", gap: space[1], flexWrap: "wrap" }}>
+          {p.lateInMinutes ? <StatusChip tone="warning">late {p.lateInMinutes}m</StatusChip> : null}
+          {p.halfDayLeave ? <StatusChip tone="neutral">{p.halfDayLeave} half day</StatusChip> : null}
+          {!p.lateInMinutes && !p.halfDayLeave ? <Text type="secondary">—</Text> : null}
+        </span>
+      ),
+    })),
+    ...data.notArrived.map((p) => ({
+      ...base(p, "NOT_ARRIVED"),
+      time: p.shiftStart ? <Text type="secondary">due {p.shiftStart}</Text> : <Text type="secondary">—</Text>,
+      detail: <Text type="secondary">—</Text>,
+    })),
+    ...data.manual.map((p) => ({
+      ...base(p, "MANUAL"),
+      time: p.state === "TIMED" ? <Text strong className="ws-num">{p.time}</Text> : <Text type="secondary">—</Text>,
+      detail: p.state === "NOT_MARKED" ? <StatusChip tone="neutral">not marked yet</StatusChip> : p.state === "STATUS_ONLY" ? <StatusChip tone="neutral">{p.status} · status only</StatusChip> : <StatusChip tone="info">manual</StatusChip>,
+    })),
+    ...data.away.map((p) => ({
+      ...base(p, "AWAY"),
+      time: <Text type="secondary">—</Text>,
+      detail: (
+        <span style={{ display: "inline-flex", gap: space[1], flexWrap: "wrap", alignItems: "center" }}>
+          <Text type="secondary">{p.why}</Text>
+          {p.workedToday ? <StatusChip tone="success">worked anyway</StatusChip> : null}
+        </span>
+      ),
+    })),
+  ];
 }
 
 /**
  * Who Is In? (Phase 2 P2-E, plan §8): today's live board. Our device sends no
  * IN/OUT direction, so "in" means "has punched today" — it never claims who
  * has left. Manual-capture people are shown as manual, never as absent.
+ * Live: socket events invalidate the query; the old rows stay on screen while it refetches (no flash), rows keep stable keys.
  */
 export function WhoIsInPage() {
   const queryClient = useQueryClient();
   const { socket } = useSocket();
   const [q, setQ] = useState<{ locationId?: string; departmentId?: string }>({});
-  const { data } = useQuery({ queryKey: ["attendance", "who-is-in", q], queryFn: () => infoApi.whoIsIn(q), refetchInterval: 60_000 });
+  const [group, setGroup] = useState<Group | "ALL">("ALL");
+  const [search, setSearch] = useState("");
+  const { data, isLoading, error, refetch } = useQuery({ queryKey: ["attendance", "who-is-in", q], queryFn: () => infoApi.whoIsIn(q), refetchInterval: 60_000, placeholderData: keepPreviousData });
   useEffect(() => {
     if (!socket) return;
     const refresh = () => void queryClient.invalidateQueries({ queryKey: ["attendance", "who-is-in"] });
@@ -47,66 +97,116 @@ export function WhoIsInPage() {
     };
   }, [socket, queryClient]);
 
-  const column = (title: string, count: number | undefined, children: React.ReactNode) => (
-    <Col xs={24} md={12} xl={6}>
-      <Card size="small" title={`${title} (${count ?? 0})`} styles={{ body: { maxHeight: 520, overflow: "auto" } }}>
-        {children}
-      </Card>
-    </Col>
-  );
+  const all = useMemo(() => rowsOf(data), [data]);
+  const rows = useMemo(() => {
+    const s = search.trim().toLowerCase();
+    return all.filter((r) => (group === "ALL" || r.group === group) && (!s || r.name.toLowerCase().includes(s) || r.employeeCode.toLowerCase().includes(s)));
+  }, [all, group, search]);
+  const c = data?.counts;
+  const pick = (g: Group) => setGroup((cur) => (cur === g ? "ALL" : g));
+
   return (
-    <Flex vertical gap={12}>
-      <Flex align="center" gap={12} wrap>
-        <Title level={3} style={{ margin: 0 }}>
-          Who Is In?
-        </Title>
-        {data && <Text type="secondary">{dayjs(data.date).format("dddd, D MMM YYYY")} · updated {dayjs(data.asOf).format("HH:mm:ss")} · live</Text>}
-      </Flex>
-      <Alert type="info" showIcon title="Who has punched today, not who is in the building right now" description="The device records punches without IN or OUT, so someone who has left still shows as arrived. People at branches without a machine are shown as marked by hand." />
-      <Flex gap={8} wrap>
-        <Select allowClear placeholder="All branches" aria-label="Branch" style={{ width: 220 }} value={q.locationId} onChange={(v) => setQ((x) => ({ ...x, locationId: v }))} options={(data?.filters.locations ?? []).map((l) => ({ value: l.id, label: l.name }))} />
-        <Select allowClear placeholder="All departments" aria-label="Department" style={{ width: 220 }} value={q.departmentId} onChange={(v) => setQ((x) => ({ ...x, departmentId: v }))} options={(data?.filters.departments ?? []).map((l) => ({ value: l.id, label: l.name }))} />
-      </Flex>
-      <Row gutter={[12, 12]}>
-        <Col xs={12} md={6}><Card size="small"><Statistic title="Arrived" value={data?.counts.arrived ?? 0} suffix={data ? `/ ${data.counts.total}` : undefined} /></Card></Col>
-        <Col xs={12} md={6}><Card size="small"><Statistic title="Late" value={data?.counts.late ?? 0} /></Card></Col>
-        <Col xs={12} md={6}><Card size="small"><Statistic title="Not yet arrived" value={data?.counts.notArrived ?? 0} /></Card></Col>
-        <Col xs={12} md={6}><Card size="small"><Statistic title="Away (leave, holiday, week-off)" value={data?.counts.away ?? 0} /></Card></Col>
-      </Row>
-      <Row gutter={[12, 12]}>
-        {column(
-          "Arrived",
-          data?.counts.arrived,
-          data?.arrived.length ? (
-            <List size="small" dataSource={data.arrived} renderItem={(p) => <Person p={p} extra={<><Text strong>{p.time}</Text>{p.lateInMinutes ? <div><Tag color="orange">late {p.lateInMinutes}m</Tag></div> : null}{p.halfDayLeave ? <div><Tag>{p.halfDayLeave} half day</Tag></div> : null}</>} />} />
+    <>
+      <PageHeader
+        title="Who Is In?"
+        subtitle={
+          data ? (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: space[2], flexWrap: "wrap" }}>
+              {dayjs(data.date).format("dddd, D MMM YYYY")} · updated {dayjs(data.asOf).format("HH:mm:ss")}
+              <span style={{ display: "inline-flex", alignItems: "center", gap: space[1], color: v.accentText, fontWeight: 600 }}>
+                <span aria-hidden style={{ width: 8, height: 8, borderRadius: radius.pill, background: v.accent, display: "inline-block" }} />
+                live
+              </span>
+            </span>
           ) : (
-            <Empty description="Nobody has punched yet" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-          ),
-        )}
-        {column(
-          "Not yet arrived",
-          data?.counts.notArrived,
-          data?.notArrived.length ? <List size="small" dataSource={data.notArrived} renderItem={(p) => <Person p={p} extra={p.shiftStart ? <Text type="secondary">due {p.shiftStart}</Text> : null} />} /> : <Empty description="Everyone expected has punched" image={Empty.PRESENTED_IMAGE_SIMPLE} />,
-        )}
-        {column(
-          "Marked by hand",
-          data?.counts.manual,
-          data?.manual.length ? (
-            <List
-              size="small"
-              dataSource={data.manual}
-              renderItem={(p) => <Person p={p} extra={p.state === "NOT_MARKED" ? <Tag>not marked yet</Tag> : p.state === "STATUS_ONLY" ? <Tag>{p.status} · status only</Tag> : <Text strong>{p.time} <Tag>manual</Tag></Text>} />}
+            "Today's live board"
+          )
+        }
+      />
+      <Stack>
+        <ApprovalBanner tone="info" title="Who has punched today, not who is in the building right now" description="The device records punches without IN or OUT, so someone who has left still shows as arrived. People at branches without a machine are shown as marked by hand." />
+        <CardGrid min={180}>
+          <StatCard icon={<LoginOutlined />} tone="accent" label="Arrived" loading={isLoading} value={c ? `${c.arrived} / ${c.total}` : 0} onClick={() => pick("ARRIVED")} />
+          <StatCard icon={<ClockCircleOutlined />} tone="warning" label="Late" loading={isLoading} value={c?.late ?? 0} onClick={() => pick("ARRIVED")} />
+          <StatCard icon={<UserDeleteOutlined />} tone="danger" label="Not yet arrived" loading={isLoading} value={c?.notArrived ?? 0} onClick={() => pick("NOT_ARRIVED")} />
+          <StatCard icon={<EditOutlined />} tone="info" label="Marked by hand" loading={isLoading} value={c?.manual ?? 0} onClick={() => pick("MANUAL")} />
+          <StatCard icon={<CalendarOutlined />} tone="neutral" label="Away (leave, holiday, week-off)" loading={isLoading} value={c?.away ?? 0} onClick={() => pick("AWAY")} />
+        </CardGrid>
+        <Panel
+          title="Today"
+          extra={
+            <Segmented<Group | "ALL">
+              value={group}
+              onChange={setGroup}
+              options={[
+                { value: "ALL", label: "All" },
+                ...(Object.keys(GROUP_LABEL) as Group[]).map((g) => ({ value: g, label: `${GROUP_LABEL[g]} (${(c ? { ARRIVED: c.arrived, NOT_ARRIVED: c.notArrived, MANUAL: c.manual, AWAY: c.away }[g] : 0) ?? 0})` })),
+              ]}
+              style={{ maxWidth: "100%", overflowX: "auto" }}
             />
-          ) : (
-            <Empty description="No branches marked by hand" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-          ),
-        )}
-        {column(
-          "Away",
-          data?.counts.away,
-          data?.away.length ? <List size="small" dataSource={data.away} renderItem={(p) => <Person p={p} extra={<><Text type="secondary">{p.why}</Text>{p.workedToday ? <div><Tag color="green">worked anyway</Tag></div> : null}</>} />} /> : <Empty description="Nobody away" image={Empty.PRESENTED_IMAGE_SIMPLE} />,
-        )}
-      </Row>
-    </Flex>
+          }
+        >
+          <FilterBar
+            onSearch={setSearch}
+            searchValue={search}
+            searchPlaceholder="Search name or code"
+            activeCount={(q.locationId ? 1 : 0) + (q.departmentId ? 1 : 0)}
+            onClear={() => setQ({})}
+            filters={
+              <>
+                <Select allowClear placeholder="All branches" aria-label="Branch" style={{ width: 220 }} value={q.locationId} onChange={(val) => setQ((x) => ({ ...x, locationId: val }))} options={(data?.filters.locations ?? []).map((l) => ({ value: l.id, label: l.name }))} />
+                <Select allowClear placeholder="All departments" aria-label="Department" style={{ width: 220 }} value={q.departmentId} onChange={(val) => setQ((x) => ({ ...x, departmentId: val }))} options={(data?.filters.departments ?? []).map((l) => ({ value: l.id, label: l.name }))} />
+              </>
+            }
+          />
+          <DataTable<Row>
+            rowKey="key"
+            loading={isLoading}
+            error={error}
+            onRetry={() => void refetch()}
+            dataSource={rows}
+            pagination={{ pageSize: 25 }}
+            empty={
+              <EmptyState
+                kind={search || group !== "ALL" ? "no-results" : "empty"}
+                compact
+                title={group === "ARRIVED" ? "Nobody has punched yet" : group === "NOT_ARRIVED" ? "Everyone expected has punched" : group === "AWAY" ? "Nobody away" : group === "MANUAL" ? "No branches marked by hand" : "Nobody here"}
+                description={search ? "Try another name or code." : null}
+              />
+            }
+            mobile={{
+              avatar: (r) => <InitialsAvatar name={r.name} size={36} />,
+              title: (r) => r.name,
+              subtitle: (r) => `${r.employeeCode} · ${r.branch ?? "—"}${r.department ? ` · ${r.department}` : ""}`,
+              status: (r) => <StatusChip tone={GROUP_TONE[r.group]}>{GROUP_LABEL[r.group]}</StatusChip>,
+              fields: [
+                { label: "Time", render: (r) => r.time },
+                { label: "Note", render: (r) => r.detail },
+              ],
+            }}
+            columns={[
+              {
+                title: "Employee",
+                key: "name",
+                render: (_, r) => (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: space[3] }}>
+                    <InitialsAvatar name={r.name} size={32} />
+                    <span>
+                      <div style={{ color: v.textPrimary, fontWeight: 600 }}>{r.name}</div>
+                      <div style={{ color: v.textSecondary, fontSize: fs.sm }}>{r.employeeCode}</div>
+                    </span>
+                  </span>
+                ),
+              },
+              { title: "Branch", dataIndex: "branch", render: (val: string | null) => val ?? "—" },
+              { title: "Department", dataIndex: "department", render: (val: string | null) => val ?? "—" },
+              { title: "State", key: "group", render: (_, r) => <StatusChip tone={GROUP_TONE[r.group]}>{GROUP_LABEL[r.group]}</StatusChip> },
+              { title: "Time", key: "time", render: (_, r) => r.time },
+              { title: "Note", key: "detail", render: (_, r) => r.detail },
+            ]}
+          />
+        </Panel>
+      </Stack>
+    </>
   );
 }

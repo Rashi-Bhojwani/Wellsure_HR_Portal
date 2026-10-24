@@ -1,7 +1,7 @@
-import { Select } from "antd";
-import type { ReactNode } from "react";
-import { EmptyState, Panel, Skel } from "../../ui";
-import { radius, space } from "../../theme/tokens";
+import { Select } from 'antd';
+import type { ReactNode } from 'react';
+import { EmptyState, Panel, Skel } from '../../ui';
+import { radius, space } from '../../theme/tokens';
 
 interface ChartCardProps {
   title: string;
@@ -22,9 +22,20 @@ interface ChartCardProps {
 function ChartSkeleton({ height }: { height: number }) {
   const bars = [0.45, 0.7, 0.55, 0.85, 0.6, 0.4, 0.75];
   return (
-    <div aria-hidden="true" style={{ height, display: "flex", flexDirection: "column", gap: space[3] }}>
+    <div
+      aria-hidden="true"
+      style={{ height, display: 'flex', flexDirection: 'column', gap: space[3] }}
+    >
       <Skel w={140} h={12} />
-      <div style={{ flex: 1, display: "flex", alignItems: "flex-end", gap: space[3], paddingTop: space[2] }}>
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'flex-end',
+          gap: space[3],
+          paddingTop: space[2],
+        }}
+      >
         {bars.map((b, i) => (
           <Skel key={i} w="100%" h={`${b * 100}%`} r={radius.xs} />
         ))}
@@ -35,12 +46,22 @@ function ChartSkeleton({ height }: { height: number }) {
 
 // The board's chart card (home-02, reports-02/05): a Panel with the title, an optional filter or extra on the right, and a body of fixed height,
 // so a chart never makes the page jump. Loading shows a chart-shaped skeleton; no data shows the chart empty state.
-export function ChartCard({ title, subtitle, filter, extra, height = 280, loading, empty, emptyText = "No data to show yet", children }: ChartCardProps) {
+export function ChartCard({
+  title,
+  subtitle,
+  filter,
+  extra,
+  height = 280,
+  loading,
+  empty,
+  emptyText = 'No data to show yet',
+  children,
+}: ChartCardProps) {
   return (
     <Panel
       title={title}
       subtitle={subtitle}
-      style={{ height: "100%" }}
+      style={{ height: '100%' }}
       extra={
         filter || extra ? (
           <>
@@ -58,11 +79,11 @@ export function ChartCard({ title, subtitle, filter, extra, height = 280, loadin
         ) : undefined
       }
     >
-      <div style={{ width: "100%", height, position: "relative" }} aria-busy={loading || undefined}>
+      <div style={{ width: '100%', height, position: 'relative' }} aria-busy={loading || undefined}>
         {loading ? (
           <ChartSkeleton height={height} />
         ) : empty ? (
-          <div style={{ height, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <EmptyState compact illustration="chart" title={emptyText} description={null} />
           </div>
         ) : (

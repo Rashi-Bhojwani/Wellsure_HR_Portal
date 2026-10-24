@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Alert, Button, Descriptions, Drawer, Input, Modal, Space, Spin, Timeline, Typography, message } from "antd";
+import { Alert, Button, Descriptions, Input, Modal, Space, Typography } from "antd";
+import { EmptyState, SideDrawer, SkeletonCard, StatusChip, Timeline, toast } from "../../ui";
 import { CheckCircleOutlined } from "@ant-design/icons";
 import type { CheckerAvailability, VersionView } from "../../api/payroll";
 import { apiErrorMessage } from "../../lib/apiError";
@@ -45,7 +46,7 @@ export function ItemConfirmModal<P extends ConfirmPreviewLike>({
   const run = useMutation({
     mutationFn: () => confirm({ version: preview!.version, note, fingerprint: preview!.fingerprint }),
     onSuccess: () => {
-      void message.success("Confirmed.");
+      toast.success("Confirmed.");
       onDone();
       onClose();
     },
@@ -68,7 +69,7 @@ export function ItemConfirmModal<P extends ConfirmPreviewLike>({
         </Space>
       }
     >
-      {isLoading && <Spin />}
+      {isLoading && <SkeletonCard lines={4} />}
       {error && <Alert type="error" showIcon title={apiErrorMessage(error, "Could not load.")} />}
       {preview && (
         <Space orientation="vertical" size={12} style={{ width: "100%" }}>
@@ -97,30 +98,32 @@ export function ItemConfirmModal<P extends ConfirmPreviewLike>({
 export function ItemHistoryDrawer({ title, load, queryKey, renderValue, onClose }: { title: string; queryKey: readonly unknown[]; load: () => Promise<VersionView[]>; renderValue: (v: unknown) => ReactNode; onClose: () => void }) {
   const { data, isLoading } = useQuery({ queryKey, queryFn: load });
   return (
-    <Drawer open width={560} title={title} onClose={onClose} destroyOnHidden>
-      {isLoading && <Spin />}
+    <SideDrawer open title={title} subtitle="Every version, who entered it and who confirmed it" onClose={onClose} footer={null}>
+      {isLoading && <SkeletonCard lines={4} />}
       <Timeline
+        empty={!isLoading ? <EmptyState compact title="No versions yet" description={null} /> : null}
         items={(data ?? []).map((v) => ({
-          color: v.confirmation ? "green" : "orange",
+          key: String(v.version),
+          tone: v.confirmation ? "accent" : "warning",
           content: (
-            <Space orientation="vertical" size={2}>
-              <Text strong>Version {v.version}</Text>
+            <>
+              <Text strong>Version {v.version}</Text> <span style={{ marginLeft: 4 }}>{v.confirmation ? <StatusChip tone="success">Confirmed</StatusChip> : <StatusChip tone="warning">Never confirmed</StatusChip>}</span>
               <div>{renderValue(v.value)}</div>
-              <Text type="secondary">
-                Entered by {v.authorName} on {formatDate(v.createdAt)}
-                {v.note ? `: “${v.note}”` : ""}
-              </Text>
-              {v.confirmation ? (
-                <Text type="success">
-                  Confirmed by {v.confirmation.confirmedByName} on {formatDate(v.confirmation.confirmedAt)}: “{v.confirmation.note}”
-                </Text>
-              ) : (
-                <Text type="warning">Never confirmed</Text>
-              )}
-            </Space>
+            </>
           ),
+          time: (
+            <>
+              Entered by {v.authorName} on {formatDate(v.createdAt)}
+              {v.note ? `: “${v.note}”` : ""}
+            </>
+          ),
+          detail: v.confirmation ? (
+            <Text type="success">
+              Confirmed by {v.confirmation.confirmedByName} on {formatDate(v.confirmation.confirmedAt)}: “{v.confirmation.note}”
+            </Text>
+          ) : undefined,
         }))}
       />
-    </Drawer>
+    </SideDrawer>
   );
 }

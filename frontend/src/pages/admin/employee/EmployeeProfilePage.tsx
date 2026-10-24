@@ -1,26 +1,9 @@
 import { EffectiveDateHint, HistoryStatusCell, type HistoryStatus } from "../../../lib/effectiveDate";
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Alert,
-  Button,
-  Card,
-  DatePicker,
-  Descriptions,
-  Form,
-  Input,
-  Modal,
-  Popconfirm,
-  Select,
-  Space,
-  Table,
-  Tabs,
-  Tag,
-  Typography,
-  message,
-} from "antd";
-import { EyeOutlined, ExportOutlined as SeparateIcon } from "@ant-design/icons";
+import { Alert, Button, DatePicker, Form, Input, Popconfirm, Select, type MenuProps } from "antd";
+import { EditOutlined, EyeOutlined, ExportOutlined as SeparateIcon } from "@ant-design/icons";
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import dayjs from "dayjs";
 import * as employeeApi from "../../../api/employee";
@@ -28,59 +11,81 @@ import * as orgApi from "../../../api/org";
 import * as managersApi from "../../../api/managers";
 import { useAuth } from "../../../hooks/useAuth";
 import { InvitationStatus } from "../../../components/common/InvitationStatus";
-import { EmptyState } from "../../../components/common/EmptyState";
 import { PhotoUploader } from "../../../components/common/PhotoUploader";
 import * as peopleApi from "../../../api/people";
 import { EmployeeDocumentsTab } from "./EmployeeDocumentsTab";
 import { EmployeeAccessTab } from "../../../components/access/EmployeeAccessTab";
-import { fs } from "../../../theme/tokens";
+import { EmptyState, PageHeader, QueryState, SideDrawer, Skel, SkeletonCard, StatusChip, Timeline, toast, type TimelineItem } from "../../../ui";
+import { fs, space, v } from "../../../theme/tokens";
+import { Grid, ProfileCard, ProfileSection, ProfileShell, ProfileTabs, SectionStack, personalSections, statutoryItems } from "./ProfileLayout";
 
-const { Title, Text } = Typography;
+const REFERENCE_STALE = 30_000;
 
-function OfficialTab({ profile }: { profile: employeeApi.EmployeeProfile }) {
+function OfficialTab({ profile, onEditJob }: { profile: employeeApi.EmployeeProfile; onEditJob?: () => void }) {
   return (
-    <Descriptions column={2} bordered size="small">
-      <Descriptions.Item label="Employee Code">{profile.employeeCode}</Descriptions.Item>
-      <Descriptions.Item label="Status"><Tag color={profile.status === "ACTIVE" ? "green" : profile.status === "SEPARATED" ? "default" : "orange"}>{profile.status}</Tag></Descriptions.Item>
-      <Descriptions.Item label="Date of Joining">{profile.dateOfJoining}</Descriptions.Item>
-      <Descriptions.Item label="Last Working Date">{profile.lastWorkingDate ?? "—"}</Descriptions.Item>
-      <Descriptions.Item label="Employment Type">{profile.employmentType}</Descriptions.Item>
-      <Descriptions.Item label="Official Email">{profile.officialEmail ?? "—"}</Descriptions.Item>
-      <Descriptions.Item label="Department">{profile.job?.department.name ?? "—"}</Descriptions.Item>
-      <Descriptions.Item label="Designation">{profile.job?.designation.name ?? "—"}</Descriptions.Item>
-      <Descriptions.Item label="Location">{profile.job?.location.name ?? "—"}</Descriptions.Item>
-      <Descriptions.Item label="Grade">{profile.job?.grade?.name ?? "—"}</Descriptions.Item>
-      <Descriptions.Item label="Cost Centre">{profile.job?.costCentre?.name ?? "—"}</Descriptions.Item>
-      <Descriptions.Item label="Reporting Manager">{profile.job?.reportingManager?.fullName ?? "—"}</Descriptions.Item>
-      <Descriptions.Item label="Account Status">{profile.accountStatus ?? "—"}</Descriptions.Item>
-      {profile.invitation && (
-        <Descriptions.Item label="Invitation email" span={2}>
-          <InvitationStatus employeeId={profile.id} invitation={profile.invitation} />
-        </Descriptions.Item>
-      )}
-      <Descriptions.Item label="2FA">{profile.totpEnabled ? "Enabled" : "Not enabled"}</Descriptions.Item>
-      <Descriptions.Item label="Attendance capture">
-        {profile.attendanceCapture === "MANUAL" ? <Tag color="purple">Manual attendance — marked by whoever marks their branch</Tag> : "Biometric device"}
-      </Descriptions.Item>
-    </Descriptions>
+    <SectionStack>
+      <ProfileSection title="Employment information">
+        <Grid
+          items={[
+            { label: "Employee Code", value: profile.employeeCode },
+            { label: "Status", value: <StatusChip status={profile.status} /> },
+            { label: "Date of Joining", value: profile.dateOfJoining },
+            { label: "Last Working Date", value: profile.lastWorkingDate ?? "—" },
+            { label: "Employment Type", value: profile.employmentType },
+            { label: "Official Email", value: profile.officialEmail ?? "—" },
+          ]}
+        />
+      </ProfileSection>
+      <ProfileSection title="Job" onEdit={onEditJob} editLabel="Change job details">
+        <Grid
+          items={[
+            { label: "Department", value: profile.job?.department.name ?? "—" },
+            { label: "Designation", value: profile.job?.designation.name ?? "—" },
+            { label: "Location", value: profile.job?.location.name ?? "—" },
+            { label: "Grade", value: profile.job?.grade?.name ?? "—" },
+            { label: "Cost Centre", value: profile.job?.costCentre?.name ?? "—" },
+            { label: "Reporting Manager", value: profile.job?.reportingManager?.fullName ?? "—" },
+          ]}
+        />
+      </ProfileSection>
+      <ProfileSection title="Account and attendance">
+        <Grid
+          items={[
+            { label: "Account Status", value: profile.accountStatus ?? "—" },
+            { label: "2FA", value: profile.totpEnabled ? "Enabled" : "Not enabled" },
+            {
+              label: "Attendance capture",
+              value: profile.attendanceCapture === "MANUAL" ? <StatusChip tone="purple">Manual attendance — marked by whoever marks their branch</StatusChip> : "Biometric device",
+              wide: profile.attendanceCapture === "MANUAL",
+            },
+          ]}
+        />
+        {profile.invitation && (
+          <div style={{ marginTop: space[5] }}>
+            <div style={{ color: v.textSecondary, fontSize: fs.md, marginBottom: space[2] }}>Invitation email</div>
+            <InvitationStatus employeeId={profile.id} invitation={profile.invitation} />
+          </div>
+        )}
+      </ProfileSection>
+    </SectionStack>
   );
 }
 
 function PersonalTab({ profile }: { profile: employeeApi.EmployeeProfile }) {
-  if (!profile.personal) return <EmptyState message="No personal details on file." />;
-  const p = profile.personal;
+  if (!profile.personal) return <EmptyState compact title="No personal details on file." description={null} />;
+  const s = personalSections(profile.personal);
   return (
-    <Descriptions column={2} bordered size="small">
-      <Descriptions.Item label="Date of Birth">{p.dateOfBirth}</Descriptions.Item>
-      <Descriptions.Item label="Gender">{p.gender}</Descriptions.Item>
-      <Descriptions.Item label="Personal Email">{p.personalEmail}</Descriptions.Item>
-      <Descriptions.Item label="Mobile">{p.mobile}</Descriptions.Item>
-      <Descriptions.Item label="Current Address" span={2}>{p.currentAddress}</Descriptions.Item>
-      <Descriptions.Item label="Permanent Address" span={2}>{p.permanentAddress}</Descriptions.Item>
-      <Descriptions.Item label="Emergency Contact">{p.emergencyContactName} ({p.emergencyContactRelation})</Descriptions.Item>
-      <Descriptions.Item label="Emergency Phone">{p.emergencyContactPhone}</Descriptions.Item>
-      <Descriptions.Item label="Blood Group">{p.bloodGroup ?? "—"}</Descriptions.Item>
-    </Descriptions>
+    <SectionStack>
+      <ProfileSection title="Personal info">
+        <Grid items={[{ label: "Full Name", value: profile.fullName }, ...s.info]} />
+      </ProfileSection>
+      <ProfileSection title="Address">
+        <Grid items={s.address} />
+      </ProfileSection>
+      <ProfileSection title="Emergency contact">
+        <Grid items={s.emergency} />
+      </ProfileSection>
+    </SectionStack>
   );
 }
 
@@ -93,56 +98,51 @@ function StatutoryTab({ employeeId, profile, canEdit }: { employeeId: string; pr
   const revealMutation = useMutation({
     mutationFn: () => employeeApi.revealStatutory(employeeId),
     onSuccess: setRevealed,
-    onError: (err) => void message.error(errorMessage(err, "Could not reveal statutory details.")),
+    onError: (err) => toast.error(errorMessage(err, "Could not reveal statutory details.")),
   });
   const saveMutation = useMutation({
     mutationFn: (values: { pan?: string; aadhaar?: string; uan?: string; esiNumber?: string }) => employeeApi.updateStatutory(employeeId, values),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["employees", "profile", employeeId] });
       setEditOpen(false);
-      void message.success("Statutory details updated.");
+      toast.success("Statutory details updated.");
     },
-    onError: (err) => void message.error(errorMessage(err, "Could not update.")),
+    onError: (err) => toast.error(errorMessage(err, "Could not update.")),
   });
 
-  if (profile.statutory === undefined) return <EmptyState message="You don't have permission to view statutory details." />;
-  if (profile.statutory === null) return <EmptyState message="No statutory details on file." />;
+  if (profile.statutory === undefined) return <EmptyState kind="forbidden" compact title="You don't have permission to view statutory details." description={null} />;
+  if (profile.statutory === null) return <EmptyState compact title="No statutory details on file." description={null} />;
 
   return (
-    <Space orientation="vertical" style={{ width: "100%" }}>
-      <Descriptions column={2} bordered size="small">
-        <Descriptions.Item label="PAN">{revealed?.pan ?? (profile.statutory.hasPan ? `••••${profile.statutory.panLast4}` : "—")}</Descriptions.Item>
-        <Descriptions.Item label="Aadhaar">{revealed?.aadhaar ?? (profile.statutory.hasAadhaar ? `••••${profile.statutory.aadhaarLast4}` : "—")}</Descriptions.Item>
-        <Descriptions.Item label="UAN">{revealed?.uan ?? (profile.statutory.hasUan ? `••••${profile.statutory.uanLast4}` : "—")}</Descriptions.Item>
-        <Descriptions.Item label="ESI Number">{revealed?.esiNumber ?? (profile.statutory.hasEsi ? `••••${profile.statutory.esiLast4}` : "—")}</Descriptions.Item>
-      </Descriptions>
-      <Space>
-        <Button icon={<EyeOutlined />} loading={revealMutation.isPending} onClick={() => revealMutation.mutate()}>
-          Reveal full details
-        </Button>
-        {canEdit && (
-          <Button
-            onClick={() => {
-              form.resetFields();
-              setEditOpen(true);
-            }}
-          >
-            Edit
+    <SectionStack>
+      <ProfileSection
+        title="Statutory details"
+        onEdit={
+          canEdit
+            ? () => {
+                form.resetFields();
+                setEditOpen(true);
+              }
+            : undefined
+        }
+        editLabel="Edit statutory details"
+        extra={
+          <Button icon={<EyeOutlined />} loading={revealMutation.isPending} onClick={() => revealMutation.mutate()}>
+            Reveal full details
           </Button>
-        )}
-      </Space>
-      <Modal title="Edit statutory details" open={editOpen} onCancel={() => setEditOpen(false)} footer={null} destroyOnHidden>
-        <Form form={form} layout="vertical" onFinish={(v) => saveMutation.mutate(v)} requiredMark={false}>
+        }
+      >
+        <Grid items={statutoryItems(profile.statutory, revealed)} />
+      </ProfileSection>
+      <SideDrawer title="Edit statutory details" open={editOpen} onClose={() => setEditOpen(false)} formId="statutory-edit-form" primaryLabel="Save" primaryLoading={saveMutation.isPending}>
+        <Form id="statutory-edit-form" form={form} layout="vertical" onFinish={(val) => saveMutation.mutate(val)} requiredMark={false}>
           <Form.Item name="pan" label="PAN"><Input /></Form.Item>
           <Form.Item name="aadhaar" label="Aadhaar"><Input /></Form.Item>
           <Form.Item name="uan" label="UAN"><Input /></Form.Item>
           <Form.Item name="esiNumber" label="ESI Number"><Input /></Form.Item>
-          <Form.Item style={{ marginBottom: 0, textAlign: "right" }}>
-            <Button type="primary" htmlType="submit" loading={saveMutation.isPending}>Save</Button>
-          </Form.Item>
         </Form>
-      </Modal>
-    </Space>
+      </SideDrawer>
+    </SectionStack>
   );
 }
 
@@ -155,7 +155,7 @@ function BankTab({ employeeId, profile, canEdit }: { employeeId: string; profile
   const revealMutation = useMutation({
     mutationFn: () => employeeApi.revealBank(employeeId),
     onSuccess: setRevealed,
-    onError: (err) => void message.error(errorMessage(err, "Could not reveal bank details.")),
+    onError: (err) => toast.error(errorMessage(err, "Could not reveal bank details.")),
   });
   const saveMutation = useMutation({
     mutationFn: (values: { accountHolderName: string; accountNumber: string; accountNumberConfirm: string; ifsc: string; bankName: string; branchName: string }) =>
@@ -163,42 +163,51 @@ function BankTab({ employeeId, profile, canEdit }: { employeeId: string; profile
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["employees", "profile", employeeId] });
       setEditOpen(false);
-      void message.success("Bank details updated — the previous account is closed as of today, this one is now active.");
+      toast.success("Bank details updated — the previous account is closed as of today, this one is now active.");
     },
-    onError: (err) => void message.error(errorMessage(err, "Could not update.")),
+    onError: (err) => toast.error(errorMessage(err, "Could not update.")),
   });
 
-  if (profile.bank === undefined) return <EmptyState message="You don't have permission to view bank details." />;
-  if (profile.bank === null) return <EmptyState message="No bank account on file." />;
+  if (profile.bank === undefined) return <EmptyState kind="forbidden" compact title="You don't have permission to view bank details." description={null} />;
+  if (profile.bank === null) return <EmptyState compact title="No bank account on file." description={null} />;
 
   return (
-    <Space orientation="vertical" style={{ width: "100%" }}>
-      <Descriptions column={2} bordered size="small">
-        <Descriptions.Item label="Account Holder">{profile.bank.accountHolderName}</Descriptions.Item>
-        <Descriptions.Item label="Account Number">{revealed?.accountNumber ?? `••••${profile.bank.accountNumberLast4}`}</Descriptions.Item>
-        <Descriptions.Item label="IFSC">{profile.bank.ifsc}</Descriptions.Item>
-        <Descriptions.Item label="Bank">{profile.bank.bankName}</Descriptions.Item>
-        <Descriptions.Item label="Branch">{profile.bank.branchName}</Descriptions.Item>
-        <Descriptions.Item label="Effective From">{profile.bank.effectiveFrom}</Descriptions.Item>
-      </Descriptions>
-      <Space>
-        <Button icon={<EyeOutlined />} loading={revealMutation.isPending} onClick={() => revealMutation.mutate()}>
-          Reveal full account number
-        </Button>
-        {canEdit && (
-          <Button
-            onClick={() => {
-              form.resetFields();
-              setEditOpen(true);
-            }}
-          >
-            Change bank account
-          </Button>
-        )}
-      </Space>
-      <Modal title="Change bank account" open={editOpen} onCancel={() => setEditOpen(false)} footer={null} destroyOnHidden>
-        <Alert type="info" showIcon style={{ marginBottom: 16 }} message="This closes the current account (effective today) and opens the new one." />
-        <Form form={form} layout="vertical" onFinish={(v) => saveMutation.mutate(v)} requiredMark={false}>
+    <SectionStack>
+      <ProfileSection
+        title="Bank account"
+        extra={
+          <>
+            <Button icon={<EyeOutlined />} loading={revealMutation.isPending} onClick={() => revealMutation.mutate()}>
+              Reveal full account number
+            </Button>
+            {canEdit && (
+              <Button
+                icon={<EditOutlined />}
+                onClick={() => {
+                  form.resetFields();
+                  setEditOpen(true);
+                }}
+              >
+                Change bank account
+              </Button>
+            )}
+          </>
+        }
+      >
+        <Grid
+          items={[
+            { label: "Account Holder", value: profile.bank.accountHolderName },
+            { label: "Account Number", value: revealed?.accountNumber ?? `••••${profile.bank.accountNumberLast4}` },
+            { label: "IFSC", value: profile.bank.ifsc },
+            { label: "Bank", value: profile.bank.bankName },
+            { label: "Branch", value: profile.bank.branchName },
+            { label: "Effective From", value: profile.bank.effectiveFrom },
+          ]}
+        />
+      </ProfileSection>
+      <SideDrawer title="Change bank account" open={editOpen} onClose={() => setEditOpen(false)} formId="bank-edit-form" primaryLabel="Save" primaryLoading={saveMutation.isPending}>
+        <Alert type="info" showIcon style={{ marginBottom: space[4] }} title="This closes the current account (effective today) and opens the new one." />
+        <Form id="bank-edit-form" form={form} layout="vertical" onFinish={(val) => saveMutation.mutate(val)} requiredMark={false}>
           <Form.Item name="accountHolderName" label="Account Holder Name" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="accountNumber" label="Account Number" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item
@@ -212,23 +221,20 @@ function BankTab({ employeeId, profile, canEdit }: { employeeId: string; profile
           <Form.Item name="ifsc" label="IFSC" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="bankName" label="Bank Name" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="branchName" label="Branch Name" rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item style={{ marginBottom: 0, textAlign: "right" }}>
-            <Button type="primary" htmlType="submit" loading={saveMutation.isPending}>Save</Button>
-          </Form.Item>
         </Form>
-      </Modal>
-    </Space>
+      </SideDrawer>
+    </SectionStack>
   );
 }
 
-function JobEditModal({ employeeId, open, onClose }: { employeeId: string; open: boolean; onClose: () => void }) {
+function JobEditDrawer({ employeeId, open, onClose }: { employeeId: string; open: boolean; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
   const effectiveFrom = Form.useWatch("effectiveFrom", form) as dayjs.Dayjs | undefined;
-  const { data: departments = [] } = useQuery({ queryKey: ["org", "departments"], queryFn: orgApi.departments.list });
-  const { data: designations = [] } = useQuery({ queryKey: ["org", "designations"], queryFn: orgApi.designations.list });
-  const { data: locations = [] } = useQuery({ queryKey: ["org", "locations"], queryFn: () => orgApi.listLocations(false) });
-  // Only once the dialog opens: a viewer who can see the profile but not edit it (a manager) would get a 403.
+  const { data: departments = [] } = useQuery({ queryKey: ["org", "departments"], queryFn: orgApi.departments.list, staleTime: REFERENCE_STALE });
+  const { data: designations = [] } = useQuery({ queryKey: ["org", "designations"], queryFn: orgApi.designations.list, staleTime: REFERENCE_STALE });
+  const { data: locations = [] } = useQuery({ queryKey: ["org", "locations"], queryFn: () => orgApi.listLocations(false), staleTime: REFERENCE_STALE });
+  // Only once the drawer opens: a viewer who can see the profile but not edit it (a manager) would get a 403.
   const { data: managers = [] } = useQuery({ queryKey: ["managers", "options"], queryFn: managersApi.managerOptions, enabled: open });
 
   const mutation = useMutation({
@@ -239,14 +245,14 @@ function JobEditModal({ employeeId, open, onClose }: { employeeId: string; open:
       void queryClient.invalidateQueries({ queryKey: ["employees", "history", employeeId, "job"] });
       void queryClient.invalidateQueries({ queryKey: ["managers"] });
       onClose();
-      void message.success("Job details updated.");
+      toast.success("Job details updated.");
     },
-    onError: (err) => void message.error(errorMessage(err, "Could not update job details.")),
+    onError: (err) => toast.error(errorMessage(err, "Could not update job details.")),
   });
 
   return (
-    <Modal title="Change job details" open={open} onCancel={onClose} footer={null} destroyOnHidden>
-      <Form form={form} layout="vertical" onFinish={(v) => mutation.mutate(v)} requiredMark={false} initialValues={{ effectiveFrom: dayjs() }}>
+    <SideDrawer title="Change job details" open={open} onClose={onClose} formId="job-edit-form" primaryLabel="Save" primaryLoading={mutation.isPending}>
+      <Form id="job-edit-form" form={form} layout="vertical" onFinish={(val) => mutation.mutate(val)} requiredMark={false} initialValues={{ effectiveFrom: dayjs() }}>
         <Form.Item name="departmentId" label="Department"><Select allowClear options={departments.map((d) => ({ value: d.id, label: d.name }))} /></Form.Item>
         <Form.Item name="designationId" label="Designation"><Select allowClear options={designations.map((d) => ({ value: d.id, label: d.name }))} /></Form.Item>
         <Form.Item name="locationId" label="Location"><Select allowClear options={locations.map((l) => ({ value: l.id, label: l.name }))} /></Form.Item>
@@ -255,88 +261,106 @@ function JobEditModal({ employeeId, open, onClose }: { employeeId: string; open:
         </Form.Item>
         <Form.Item name="effectiveFrom" label="Effective From" rules={[{ required: true }]} extra={<EffectiveDateHint value={effectiveFrom} />}><DatePicker style={{ width: "100%" }} /></Form.Item>
         <Form.Item name="changeReason" label="Reason"><Input placeholder="e.g. Promotion, Transfer" /></Form.Item>
-        <Form.Item style={{ marginBottom: 0, textAlign: "right" }}>
-          <Button type="primary" htmlType="submit" loading={mutation.isPending}>Save</Button>
-        </Form.Item>
       </Form>
-    </Modal>
+    </SideDrawer>
   );
 }
+
+const TONE: Record<HistoryStatus, TimelineItem["tone"]> = { current: "accent", scheduled: "warning", past: "neutral" };
 
 function HistoryTab({ employeeId, canViewBank }: { employeeId: string; canViewBank: boolean }) {
   const queryClient = useQueryClient();
   const { hasPermission } = useAuth();
-  const { data: jobHistory = [] } = useQuery({ queryKey: ["employees", "history", employeeId, "job"], queryFn: () => employeeApi.getJobHistory(employeeId) });
-  const { data: nameHistory = [] } = useQuery({ queryKey: ["employees", "history", employeeId, "name"], queryFn: () => employeeApi.getNameHistory(employeeId) });
-  const { data: bankHistory = [] } = useQuery({ queryKey: ["employees", "history", employeeId, "bank"], queryFn: () => employeeApi.getBankHistory(employeeId), enabled: canViewBank });
+  const job = useQuery({ queryKey: ["employees", "history", employeeId, "job"], queryFn: () => employeeApi.getJobHistory(employeeId) });
+  const name = useQuery({ queryKey: ["employees", "history", employeeId, "name"], queryFn: () => employeeApi.getNameHistory(employeeId) });
+  const bank = useQuery({ queryKey: ["employees", "history", employeeId, "bank"], queryFn: () => employeeApi.getBankHistory(employeeId), enabled: canViewBank });
   // EF3: a scheduled change can be cancelled until its day (the previous row reopens).
   const cancel = useMutation({
     mutationFn: ({ kind, rowId }: { kind: "job" | "name" | "bank"; rowId: string }) => employeeApi.cancelScheduledChange(employeeId, kind, rowId),
     onSuccess: () => {
-      void message.success("Scheduled change cancelled.");
+      toast.success("Scheduled change cancelled.");
       void queryClient.invalidateQueries({ queryKey: ["employees", "history", employeeId] });
       void queryClient.invalidateQueries({ queryKey: ["employees", "profile", employeeId] });
     },
-    onError: (err) => void message.error(errorMessage(err, "Couldn't cancel it.")),
+    onError: (err) => toast.error(errorMessage(err, "Couldn't cancel it.")),
   });
   const canCancel = { job: hasPermission("employee.edit") || hasPermission("manager.team.assign"), name: hasPermission("employee.edit"), bank: hasPermission("employee.bank.edit") };
-  const statusColumn = (kind: "job" | "name" | "bank") => ({
-    title: "Until",
-    key: "status",
-    render: (_: unknown, r: { id: string; status: HistoryStatus; effectiveFrom: string; effectiveTo: string | null }) => (
-      <Space size={6}>
-        <HistoryStatusCell status={r.status} effectiveFrom={r.effectiveFrom} effectiveTo={r.effectiveTo} />
-        {r.status === "scheduled" && canCancel[kind] && (
-          <Popconfirm title="Cancel this scheduled change? The current record stays as it is." okText="Cancel change" cancelText="Keep it" onConfirm={() => cancel.mutate({ kind, rowId: r.id })}>
-            <Button size="small" danger type="link">
-              Cancel
-            </Button>
-          </Popconfirm>
-        )}
-      </Space>
-    ),
-  });
+
+  // Effective-dated rows as a timeline (recruitment-08 / employees-07): what changed, from when, until when, why.
+  const when = (kind: "job" | "name" | "bank", r: { id: string; status: HistoryStatus; effectiveFrom: string; effectiveTo: string | null }) => (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: space[2], flexWrap: "wrap" }}>
+      From {r.effectiveFrom} · <HistoryStatusCell status={r.status} effectiveFrom={r.effectiveFrom} effectiveTo={r.effectiveTo} />
+      {r.status === "scheduled" && canCancel[kind] && (
+        <Popconfirm title="Cancel this scheduled change? The current record stays as it is." okText="Cancel change" cancelText="Keep it" onConfirm={() => cancel.mutate({ kind, rowId: r.id })}>
+          <Button size="small" danger type="link">
+            Cancel
+          </Button>
+        </Popconfirm>
+      )}
+    </span>
+  );
+  const empty = <EmptyState compact title="No history yet." description={null} />;
+  const caption = (parts: (string | null)[]) => <span style={{ color: v.textSecondary, fontSize: fs.sm }}>{parts.filter(Boolean).join(" · ")}</span>;
 
   return (
-    <Space orientation="vertical" size={24} style={{ width: "100%" }}>
-      <div>
-        <Title level={5}>Job History</Title>
-        <Table rowKey="id" size="small" pagination={false} dataSource={jobHistory} columns={[
-          { title: "Department", dataIndex: "department" },
-          { title: "Designation", dataIndex: "designation" },
-          { title: "Location", dataIndex: "location" },
-          { title: "Manager", dataIndex: "reportingManager", render: (v: string | null) => v ?? "—" },
-          { title: "From", dataIndex: "effectiveFrom" },
-          statusColumn("job"),
-          { title: "Reason", dataIndex: "changeReason", render: (v: string | null) => v ?? "—" },
-        ]} />
-      </div>
-      <div>
-        <Title level={5}>Name History</Title>
-        <Table rowKey="id" size="small" pagination={false} dataSource={nameHistory} columns={[
-          { title: "Full Name", dataIndex: "fullName" },
-          { title: "From", dataIndex: "effectiveFrom" },
-          statusColumn("name"),
-          { title: "Reason", dataIndex: "changeReason", render: (v: string | null) => v ?? "—" },
-        ]} />
-      </div>
+    <SectionStack>
+      <ProfileSection title="Job history">
+        <QueryState isLoading={job.isLoading} error={job.error} onRetry={() => void job.refetch()} skeleton={<SkeletonCard lines={3} />}>
+          <Timeline
+            empty={empty}
+            items={(job.data ?? []).map((r) => ({
+              key: r.id,
+              tone: TONE[r.status],
+              content: (
+                <>
+                  <strong>{r.designation}</strong> · {r.department} · {r.location}
+                </>
+              ),
+              time: when("job", r),
+              detail: caption([r.reportingManager ? `Manager: ${r.reportingManager}` : "Manager: —", r.changeReason ? `Reason: ${r.changeReason}` : null]),
+            }))}
+          />
+        </QueryState>
+      </ProfileSection>
+      <ProfileSection title="Name history">
+        <QueryState isLoading={name.isLoading} error={name.error} onRetry={() => void name.refetch()} skeleton={<SkeletonCard lines={2} />}>
+          <Timeline
+            empty={empty}
+            items={(name.data ?? []).map((r) => ({
+              key: r.id,
+              tone: TONE[r.status],
+              content: <strong>{r.fullName}</strong>,
+              time: when("name", r),
+              detail: r.changeReason ? caption([`Reason: ${r.changeReason}`]) : undefined,
+            }))}
+          />
+        </QueryState>
+      </ProfileSection>
       {canViewBank && (
-        <div>
-          <Title level={5}>Bank History</Title>
-          <Table rowKey="id" size="small" pagination={false} dataSource={bankHistory} columns={[
-            { title: "Bank", dataIndex: "bankName" },
-            { title: "Account (last 4)", dataIndex: "accountNumberLast4" },
-            { title: "IFSC", dataIndex: "ifsc" },
-            { title: "From", dataIndex: "effectiveFrom" },
-            statusColumn("bank"),
-          ]} />
-        </div>
+        <ProfileSection title="Bank history">
+          <QueryState isLoading={bank.isLoading} error={bank.error} onRetry={() => void bank.refetch()} skeleton={<SkeletonCard lines={2} />}>
+            <Timeline
+              empty={empty}
+              items={(bank.data ?? []).map((r) => ({
+                key: r.id,
+                tone: TONE[r.status],
+                content: (
+                  <>
+                    <strong>{r.bankName}</strong> · account ending {r.accountNumberLast4}
+                  </>
+                ),
+                time: when("bank", r),
+                detail: caption([`IFSC ${r.ifsc}`]),
+              }))}
+            />
+          </QueryState>
+        </ProfileSection>
       )}
-    </Space>
+    </SectionStack>
   );
 }
 
-function SeparationModal({ employeeId, open, onClose }: { employeeId: string; open: boolean; onClose: () => void }) {
+function SeparationDrawer({ employeeId, open, onClose }: { employeeId: string; open: boolean; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
   const mutation = useMutation({
@@ -345,79 +369,96 @@ function SeparationModal({ employeeId, open, onClose }: { employeeId: string; op
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["employees", "profile", employeeId] });
       onClose();
-      void message.success("Separation initiated. Login will be disabled automatically the day after the last working date.");
+      toast.success("Separation initiated. Login will be disabled automatically the day after the last working date.");
     },
-    onError: (err) => void message.error(errorMessage(err, "Could not initiate separation.")),
+    onError: (err) => toast.error(errorMessage(err, "Could not initiate separation.")),
   });
   return (
-    <Modal title="Initiate separation" open={open} onCancel={onClose} footer={null} destroyOnHidden>
-      <Form form={form} layout="vertical" onFinish={(v) => mutation.mutate(v)} requiredMark={false}>
+    <SideDrawer title="Initiate separation" open={open} onClose={onClose} formId="separation-form" primaryLabel="Initiate" primaryDanger primaryLoading={mutation.isPending}>
+      <Form id="separation-form" form={form} layout="vertical" onFinish={(val) => mutation.mutate(val)} requiredMark={false}>
         <Form.Item name="lastWorkingDate" label="Last Working Date" rules={[{ required: true }]}><DatePicker style={{ width: "100%" }} /></Form.Item>
         <Form.Item name="reason" label="Reason" rules={[{ required: true }]}><Input /></Form.Item>
         <Form.Item name="notes" label="Notes"><Input.TextArea rows={2} /></Form.Item>
-        <Form.Item style={{ marginBottom: 0, textAlign: "right" }}>
-          <Button type="primary" danger htmlType="submit" loading={mutation.isPending}>Initiate</Button>
-        </Form.Item>
       </Form>
-    </Modal>
+    </SideDrawer>
+  );
+}
+
+function ProfileSkeleton() {
+  return (
+    <ProfileShell card={<SkeletonCard lines={8} height={520} />}>
+      <div style={{ display: "flex", flexDirection: "column", gap: space[4] }}>
+        <Skel h={40} />
+        <SkeletonCard lines={5} />
+        <SkeletonCard lines={4} />
+      </div>
+    </ProfileShell>
   );
 }
 
 export function EmployeeProfilePage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { hasPermission, hasRole } = useAuth();
   const [jobEditOpen, setJobEditOpen] = useState(false);
   const [separationOpen, setSeparationOpen] = useState(false);
 
-  const { data: profile, isLoading } = useQuery({
+  const { data: profile, isLoading, error, refetch } = useQuery({
     queryKey: ["employees", "profile", id],
     queryFn: () => employeeApi.getEmployeeProfile(id!),
     enabled: !!id,
   });
 
-  if (isLoading || !profile) return <EmptyState message="Loading…" />;
+  const header = <PageHeader title="Employee details" back />;
+  if (isLoading || error || !profile) {
+    return (
+      <>
+        {header}
+        <QueryState isLoading={isLoading || (!error && !profile)} error={error} onRetry={() => void refetch()} skeleton={<ProfileSkeleton />}>
+          {null}
+        </QueryState>
+      </>
+    );
+  }
 
   const canEdit = hasPermission("employee.edit");
   const canViewBank = hasPermission("employee.bank.view");
   const canSeparate = hasPermission("employee.separate");
 
-  return (
-    <Space orientation="vertical" size={16} style={{ width: "100%" }}>
-      <Space style={{ width: "100%", justifyContent: "space-between" }} wrap>
-        <Space size={16} align="center" wrap>
-          <PhotoUploader
-            employeeId={id!}
-            name={profile.fullName}
-            photoVersion={profile.personal?.photoVersion ?? null}
-            upload={(file) => peopleApi.uploadEmployeePhoto(id!, file)}
-            remove={() => peopleApi.removeEmployeePhoto(id!)}
-            onChanged={() => void queryClient.invalidateQueries({ queryKey: ["employees", "profile", id] })}
-            disabled={!canEdit || !profile.personal}
-          />
-          <Title level={3} style={{ margin: 0 }}>
-            {profile.fullName} <Text type="secondary" style={{ fontSize: fs.lg }}>({profile.employeeCode})</Text>
-            {profile.attendanceCapture === "MANUAL" && (
-              <Tag color="purple" style={{ marginInlineStart: 8, verticalAlign: "middle" }} title="No biometric device: their attendance is marked manually by whoever marks their branch.">
-                Manual attendance
-              </Tag>
-            )}
-          </Title>
-        </Space>
-        <Space>
-          {canEdit && <Button onClick={() => setJobEditOpen(true)}>Change job details</Button>}
-          {canSeparate && profile.status === "ACTIVE" && (
-            <Button danger icon={<SeparateIcon />} onClick={() => setSeparationOpen(true)}>
-              Initiate Separation
-            </Button>
-          )}
-        </Space>
-      </Space>
+  const actions: MenuProps["items"] = [
+    ...(canEdit ? [{ key: "job", icon: <EditOutlined />, label: "Change job details", onClick: () => setJobEditOpen(true) }] : []),
+    ...(canSeparate && profile.status === "ACTIVE" ? [{ key: "separate", icon: <SeparateIcon />, danger: true, label: "Initiate Separation", onClick: () => setSeparationOpen(true) }] : []),
+  ];
 
-      <Card>
-        <Tabs
+  return (
+    <>
+      {header}
+      <ProfileShell
+        card={
+          <ProfileCard
+            profile={profile}
+            actions={actions}
+            onOpenManager={(mid) => navigate(`/admin/employee/profile/${mid}`)}
+            avatar={
+              <PhotoUploader
+                stacked
+                size={84}
+                employeeId={id!}
+                name={profile.fullName}
+                photoVersion={profile.personal?.photoVersion ?? null}
+                upload={(file) => peopleApi.uploadEmployeePhoto(id!, file)}
+                remove={() => peopleApi.removeEmployeePhoto(id!)}
+                onChanged={() => void queryClient.invalidateQueries({ queryKey: ["employees", "profile", id] })}
+                disabled={!canEdit || !profile.personal}
+              />
+            }
+          />
+        }
+      >
+        <ProfileTabs
           items={[
-            { key: "official", label: "Official", children: <OfficialTab profile={profile} /> },
+            { key: "official", label: "Official", children: <OfficialTab profile={profile} onEditJob={canEdit ? () => setJobEditOpen(true) : undefined} /> },
             { key: "personal", label: "Personal", children: <PersonalTab profile={profile} /> },
             { key: "statutory", label: "Statutory", children: <StatutoryTab employeeId={id!} profile={profile} canEdit={hasPermission("employee.statutory.edit")} /> },
             { key: "bank", label: "Bank", children: <BankTab employeeId={id!} profile={profile} canEdit={hasPermission("employee.bank.edit")} /> },
@@ -430,10 +471,10 @@ export function EmployeeProfilePage() {
               : []),
           ]}
         />
-      </Card>
+      </ProfileShell>
 
-      <JobEditModal employeeId={id!} open={jobEditOpen} onClose={() => setJobEditOpen(false)} />
-      <SeparationModal employeeId={id!} open={separationOpen} onClose={() => setSeparationOpen(false)} />
-    </Space>
+      <JobEditDrawer employeeId={id!} open={jobEditOpen} onClose={() => setJobEditOpen(false)} />
+      <SeparationDrawer employeeId={id!} open={separationOpen} onClose={() => setSeparationOpen(false)} />
+    </>
   );
 }

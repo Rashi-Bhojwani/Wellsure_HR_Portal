@@ -268,6 +268,8 @@ export function AccountSecurityPage() {
           <Form.Item name="code" label="Current authentication code" rules={[{ required: true, message: "Enter your current code" }]} style={{ marginBottom: 0 }}>
             <Input size="large" placeholder="123456" inputMode="numeric" autoComplete="one-time-code" />
           </Form.Item>
+          {/* Lets Enter submit the form; the visible button is the modal's own. */}
+          <button type="submit" tabIndex={-1} aria-hidden style={{ display: "none" }} />
         </Form>
       </ConfirmModal>
     </>

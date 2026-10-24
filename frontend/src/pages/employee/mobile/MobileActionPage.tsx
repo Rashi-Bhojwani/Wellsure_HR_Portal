@@ -1,35 +1,61 @@
 import { useNavigate } from "react-router-dom";
-import { Card, Flex, Space, Typography, theme } from "antd";
-import { RightOutlined } from "@ant-design/icons";
 import { quickActions } from "../../../routes/employeeMenu.config";
 import { tintFor } from "./tints";
-import { fs } from "../../../theme/tokens";
-
-const { Text } = Typography;
+import { EmptyState, PageHeader, useIsPhone } from "../../../ui";
+import { fs, fw, radius, space, v } from "../../../theme/tokens";
 
 // Mobile Action tab (Phase 5 commit G, docs/UI_REFERENCE.md Part 4 §4.1):
 // the menu's quickAction pages, flattened, in menu order. Anything not built
 // yet, or built over data that doesn't exist yet, is left out here (Explore
-// shows it as "Coming soon").
+// shows it as "Coming soon"). Full-width white cards, a tinted icon tile by
+// area, the label — no chevrons or subtitles (PART 4).
 export function MobileActionPage() {
   const navigate = useNavigate();
-  const { token } = theme.useToken();
+  const phone = useIsPhone();
   const actions = quickActions();
   return (
-    <Space orientation="vertical" size={10} style={{ width: "100%" }}>
-      {actions.map((a, i) => {
-        const Icon = a.icon;
-        const tint = tintFor(a.path, i, token);
-        return (
-          <Card key={a.key} size="small" hoverable onClick={() => navigate(`/app/${a.path}`)} styles={{ body: { padding: 12 } }} role="link" aria-label={a.label}>
-            <Flex align="center" gap={14}>
-              <span style={{ width: 44, height: 44, borderRadius: 10, background: tint.bg, color: tint.fg, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: fs.h2 }}>{Icon && <Icon />}</span>
-              <Text style={{ flex: 1, fontSize: fs.lg }}>{a.label}</Text>
-              <RightOutlined style={{ color: token.colorTextQuaternary }} />
-            </Flex>
-          </Card>
-        );
-      })}
-    </Space>
+    <>
+      {!phone && <PageHeader title="Actions" subtitle="The things you do most, one tap away." />}
+      {actions.length === 0 ? (
+        <EmptyState title="No quick actions yet" description="Use Explore to find every section." />
+      ) : (
+        <nav aria-label="Quick actions">
+          <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: space[3], gridTemplateColumns: phone ? "1fr" : "repeat(auto-fill, minmax(280px, 1fr))" }}>
+            {actions.map((a, i) => {
+              const Icon = a.icon;
+              const tint = tintFor(a.path, i);
+              return (
+                <li key={a.key}>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/app/${a.path}`)}
+                    style={{
+                      width: "100%",
+                      minHeight: 64,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: space[4],
+                      padding: `${space[3]}px ${space[4]}px`,
+                      background: v.bgSurface,
+                      border: `1px solid ${v.borderDefault}`,
+                      borderRadius: radius.lg,
+                      cursor: "pointer",
+                      textAlign: "left",
+                      font: "inherit",
+                      color: v.textPrimary,
+                    }}
+                  >
+                    <span aria-hidden style={{ width: 44, height: 44, flex: "none", borderRadius: radius.md, background: tint.bg, color: tint.fg, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: fs.h2 }}>
+                      {Icon && <Icon />}
+                    </span>
+                    <span style={{ flex: 1, fontSize: fs.lg, fontWeight: fw.semibold }}>{a.label}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+      )}
+    </>
   );
 }

@@ -1,18 +1,50 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Alert, Row, Col, Space, Typography, Button } from "antd";
-import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis } from "recharts";
+import { Select } from "antd";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, LabelList } from "recharts";
 import * as leaveApi from "../../../api/leave";
 import { HelpStrip } from "../../../components/common/HelpStrip";
-import { ChartCard } from "../../../components/charts/ChartCard";
-import { EmptyState } from "../../../components/common/EmptyState";
 import { useThemeMode } from "../../../theme/ThemeProvider";
 import { useChartColors } from "../../../theme/chartPalette";
-import { fs } from "../../../theme/tokens";
-
-const { Text } = Typography;
+import { fs, fw, radius, space, v } from "../../../theme/tokens";
+import { ApprovalBanner, CardGrid, EmptyState, PageHeader, Panel, Skel, Stack, useIsPhone } from "../../../ui";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const CHART_HEIGHT = 260;
+
+const tooltipStyle = {
+  contentStyle: { background: v.bgSurface, border: `1px solid ${v.borderDefault}`, borderRadius: radius.md, fontSize: fs.sm, color: v.textPrimary },
+  itemStyle: { color: v.textBody },
+  labelStyle: { color: v.textSecondary },
+  cursor: false as const,
+};
+
+function ChartPanel({ title, subtitle, filter, children }: { title: string; subtitle?: string; filter?: { value: string; options: string[]; onChange?: (val: string) => void; label: string }; children: ReactNode }) {
+  return (
+    <Panel
+      title={title}
+      subtitle={subtitle}
+      extra={
+        filter && (
+          <Select
+            aria-label={filter.label}
+            size="small"
+            value={filter.value}
+            style={{ width: 130 }}
+            onChange={filter.onChange}
+            disabled={!filter.onChange}
+            options={filter.options.map((o) => ({ value: o, label: o === "All" ? "All types" : o }))}
+          />
+        )
+      }
+      style={{ height: "100%" }}
+    >
+      <div style={{ minHeight: CHART_HEIGHT }}>{children}</div>
+    </Panel>
+  );
+}
+
+const noData = (title: string) => <EmptyState compact illustration="chart" title={title} description={null} />;
 
 // Workforce Overview (docs/UI_REFERENCE.md §2.3) — real data from
 // GET /api/leave/dashboard (leave.view; company-wide for ALL scope, the
@@ -22,13 +54,14 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 // matrix is small enough to slice locally without extra round trips.
 export function WorkforceOverviewPage() {
   const year = new Date().getFullYear();
+  const phone = useIsPhone();
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [pieFilter, setPieFilter] = useState("All");
   const [barFilter, setBarFilter] = useState("All");
   const { mode } = useThemeMode();
   const colors = useChartColors(mode);
 
-  const { data } = useQuery({ queryKey: ["leave", "dashboard", year], queryFn: () => leaveApi.getWorkforceDashboard(year) });
+  const { data, isLoading, error, refetch } = useQuery({ queryKey: ["leave", "dashboard", year], queryFn: () => leaveApi.getWorkforceDashboard(year) });
   const leaveTypes = useMemo(() => data?.leaveTypes ?? [], [data]);
   const byMonthAndType = useMemo(() => data?.byMonthAndType ?? [], [data]);
   const rhBreakdown = data?.rhBreakdown ?? [];
@@ -37,9 +70,10 @@ export function WorkforceOverviewPage() {
     const types = pieFilter === "All" ? leaveTypes : [pieFilter];
     return types.map((type) => ({
       type,
+      colour: colors.categorical[Math.max(0, leaveTypes.indexOf(type)) % colors.categorical.length]!,
       value: byMonthAndType.filter((e) => e.month === selectedMonth + 1 && e.leaveTypeCode === type).reduce((sum, e) => sum + e.days, 0),
     }));
-  }, [leaveTypes, byMonthAndType, selectedMonth, pieFilter]);
+  }, [leaveTypes, byMonthAndType, selectedMonth, pieFilter, colors.categorical]);
   const total = leaveTypeBreakdown.reduce((sum, l) => sum + l.value, 0);
 
   const monthlyLeaves = useMemo(() => {
@@ -49,128 +83,136 @@ export function WorkforceOverviewPage() {
       total: byMonthAndType.filter((e) => e.month === i + 1 && types.includes(e.leaveTypeCode)).reduce((sum, e) => sum + e.days, 0),
     }));
   }, [leaveTypes, byMonthAndType, barFilter]);
+  const yearTotal = monthlyLeaves.reduce((s, m) => s + m.total, 0);
 
   const typeFilterOptions = ["All", ...leaveTypes];
+  const axisTick = { fontSize: fs.xs, fill: colors.ink.muted };
+  const valuePill = { fontSize: fs.xs, fill: colors.ink.primary, fontWeight: fw.semibold };
 
   return (
-    <Space orientation="vertical" size={16} style={{ width: "100%" }}>
-      <HelpStrip storageKey="workforce-overview">
-        This page summarises leave usage patterns across the organisation for the selected month.
-      </HelpStrip>
-      {data?.scope === "team" && <Alert type="info" showIcon title="Showing your team only — you and the people who report to you." />}
+    <>
+      <PageHeader title="Workforce Overview" subtitle={`Leave usage · Jan ${year} – Dec ${year}`} />
+      <Stack>
+        <HelpStrip storageKey="workforce-overview">This page summarises leave usage patterns across the organisation for the selected month.</HelpStrip>
+        {data?.scope === "team" && <ApprovalBanner tone="info" title="Showing your team only — you and the people who report to you." />}
 
-      <Row justify="end">
-        <Text type="secondary">Jan {year} - Dec {year}</Text>
-      </Row>
+        {/* Month strip: pill tiles, scrolls sideways on phones. */}
+        <div role="radiogroup" aria-label="Month" style={{ display: "flex", gap: space[2], overflowX: "auto", paddingBottom: 2, scrollbarWidth: "none" }}>
+          {MONTHS.map((m, i) => {
+            const active = i === selectedMonth;
+            return (
+              <button
+                key={m}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => setSelectedMonth(i)}
+                style={{
+                  flex: phone ? "0 0 auto" : "1 1 0",
+                  minWidth: 56,
+                  height: phone ? 44 : 40,
+                  borderRadius: radius.pill,
+                  border: `1px solid ${active ? v.primary : v.borderControl}`,
+                  background: active ? v.primary : v.bgSurface,
+                  color: active ? v.primaryText : v.textBody,
+                  fontSize: fs.md,
+                  fontWeight: active ? fw.semibold : fw.medium,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                {m}
+              </button>
+            );
+          })}
+        </div>
 
-      <Row gutter={4} wrap>
-        {MONTHS.map((m, i) => (
-          <Col key={m}>
-            <Button
-              type={i === selectedMonth ? "primary" : "default"}
-              size="small"
-              shape="round"
-              onClick={() => setSelectedMonth(i)}
-              style={{ marginBottom: 4 }}
-            >
-              {m}
-            </Button>
-          </Col>
-        ))}
-      </Row>
-
-      <Typography.Title level={5} style={{ margin: 0 }}>
-        {MONTHS[selectedMonth]} {year}
-      </Typography.Title>
-
-      <Row gutter={[16, 16]}>
-        <Col xs={24} lg={8}>
-          <ChartCard
-            title="Type of leaves taken"
-            filter={{ value: pieFilter, options: typeFilterOptions, onChange: setPieFilter }}
-          >
-            {total === 0 ? (
-              <EmptyState message="No leave taken this month" />
-            ) : (
-              <div style={{ position: "relative", width: "100%", height: "100%" }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={leaveTypeBreakdown}
-                      dataKey="value"
-                      nameKey="type"
-                      innerRadius="55%"
-                      outerRadius="80%"
-                      paddingAngle={2}
-                      cx="35%"
-                      isAnimationActive={false}
-                    >
-                      {leaveTypeBreakdown.map((entry, i) => (
-                        <Cell key={entry.type} fill={colors.categorical[i % colors.categorical.length]} />
-                      ))}
-                    </Pie>
-                    <Legend layout="vertical" align="right" verticalAlign="middle" formatter={(v) => `${v}`} />
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div
-                  style={{
-                    position: "absolute",
-                    left: "35%",
-                    top: "50%",
-                    transform: "translate(-50%, -50%)",
-                    textAlign: "center",
-                    pointerEvents: "none",
-                  }}
-                >
-                  <Text strong style={{ fontSize: fs.xl }}>
-                    {total}
-                  </Text>
-                  <div style={{ fontSize: fs.xs, color: colors.ink.muted }}>Leaves taken</div>
+        {error ? (
+          <Panel>
+            <EmptyState kind="error" onRetry={() => void refetch()} compact />
+          </Panel>
+        ) : (
+          <CardGrid min={320}>
+            <ChartPanel title="Type of leaves taken" subtitle={`${MONTHS[selectedMonth]} ${year}`} filter={{ label: "Leave type (donut)", value: pieFilter, options: typeFilterOptions, onChange: setPieFilter }}>
+              {isLoading ? (
+                <Skel h={CHART_HEIGHT} r={radius.md} />
+              ) : total === 0 ? (
+                noData("No leave taken this month")
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: space[4] }}>
+                  <div style={{ position: "relative", width: "100%", height: 180 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={leaveTypeBreakdown} dataKey="value" nameKey="type" innerRadius={56} outerRadius={84} paddingAngle={2} stroke="none" isAnimationActive={false}>
+                          {leaveTypeBreakdown.map((entry) => (
+                            <Cell key={entry.type} fill={entry.colour} />
+                          ))}
+                        </Pie>
+                        <Tooltip {...tooltipStyle} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+                      <span className="ws-num" style={{ fontSize: fs.h1, fontWeight: fw.bold, color: v.textPrimary, lineHeight: 1.1 }}>
+                        {total}
+                      </span>
+                      <span style={{ fontSize: fs.xs, color: v.textSecondary }}>Leaves taken</span>
+                    </div>
+                  </div>
+                  <ul aria-label="Legend" style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexWrap: "wrap", justifyContent: "center", gap: `${space[2]}px ${space[4]}px` }}>
+                    {leaveTypeBreakdown.map((l) => (
+                      <li key={l.type} style={{ display: "inline-flex", alignItems: "center", gap: space[2], fontSize: fs.sm, color: v.textSecondary }}>
+                        <span aria-hidden style={{ width: 10, height: 10, borderRadius: radius.pill, background: l.colour }} />
+                        {l.type}
+                        <span className="ws-num" style={{ fontWeight: fw.bold, color: v.textPrimary }}>
+                          {l.value}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-              </div>
-            )}
-          </ChartCard>
-        </Col>
+              )}
+            </ChartPanel>
 
-        <Col xs={24} lg={8}>
-          <ChartCard
-            title="Total leaves taken this year"
-            filter={{ value: barFilter, options: typeFilterOptions, onChange: setBarFilter }}
-          >
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlyLeaves} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid stroke={colors.ink.grid} vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize: fs.xs, fill: colors.ink.muted }} />
-                <YAxis tick={{ fontSize: fs.xs, fill: colors.ink.muted }} width={28} />
-                <Tooltip />
-                <Bar dataKey="total" name="Leaves" fill={colors.sequential} radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartCard>
-        </Col>
+            <ChartPanel title="Total leaves taken this year" subtitle={`${yearTotal} day(s) in ${year}`} filter={{ label: "Leave type (year)", value: barFilter, options: typeFilterOptions, onChange: setBarFilter }}>
+              {isLoading ? (
+                <Skel h={CHART_HEIGHT} r={radius.md} />
+              ) : yearTotal === 0 ? (
+                noData("No leave taken this year")
+              ) : (
+                <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
+                  <BarChart data={monthlyLeaves} margin={{ top: 20, right: 4, left: 4, bottom: 0 }} barCategoryGap="20%">
+                    <XAxis dataKey="month" tick={axisTick} axisLine={false} tickLine={false} interval={0} tickFormatter={(m: string) => m.slice(0, phone ? 1 : 3)} />
+                    <YAxis hide />
+                    <Tooltip {...tooltipStyle} />
+                    <Bar dataKey="total" name="Leaves" fill={colors.sequential} radius={[6, 6, 6, 6]} background={{ fill: colors.track, radius: 6 }} isAnimationActive={false}>
+                      {!phone && <LabelList dataKey="total" position="top" style={valuePill} formatter={(val: unknown) => (Number(val) > 0 ? String(val) : "")} />}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </ChartPanel>
 
-        <Col xs={24} lg={8}>
-          <ChartCard
-            title="Employees on Leave for each RH"
-            filter={{ value: "All", options: ["All"] }}
-          >
-            {rhBreakdown.length === 0 ? (
-              <EmptyState message="No records found" />
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={rhBreakdown} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid stroke={colors.ink.grid} vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: fs.xs, fill: colors.ink.muted }} />
-                  <YAxis tick={{ fontSize: fs.xs, fill: colors.ink.muted }} width={28} allowDecimals={false} />
-                  <Tooltip />
-                  <Bar dataKey="employeeCount" name="Employees" fill={colors.sequential} radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </ChartCard>
-        </Col>
-      </Row>
-    </Space>
+            <ChartPanel title="Employees on Leave for each RH" subtitle="Restricted holidays taken">
+              {isLoading ? (
+                <Skel h={CHART_HEIGHT} r={radius.md} />
+              ) : rhBreakdown.length === 0 ? (
+                noData("No records found")
+              ) : (
+                <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
+                  <BarChart data={rhBreakdown} margin={{ top: 20, right: 4, left: 4, bottom: 0 }} barCategoryGap="25%">
+                    <XAxis dataKey="name" tick={axisTick} axisLine={false} tickLine={false} />
+                    <YAxis hide allowDecimals={false} />
+                    <Tooltip {...tooltipStyle} />
+                    <Bar dataKey="employeeCount" name="Employees" fill={colors.categorical[2]} radius={[6, 6, 6, 6]} background={{ fill: colors.track, radius: 6 }} isAnimationActive={false}>
+                      <LabelList dataKey="employeeCount" position="top" style={valuePill} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </ChartPanel>
+          </CardGrid>
+        )}
+      </Stack>
+    </>
   );
 }

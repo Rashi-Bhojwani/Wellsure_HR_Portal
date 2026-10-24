@@ -1,5 +1,5 @@
-import { TasksInbox } from "../../../components/inbox/TasksInbox";
-import { PageHeader } from "../../../ui";
+import { TasksInbox } from '../../../components/inbox/TasksInbox';
+import { PageHeader } from '../../../ui';
 
 export function TasksPage() {
   return (

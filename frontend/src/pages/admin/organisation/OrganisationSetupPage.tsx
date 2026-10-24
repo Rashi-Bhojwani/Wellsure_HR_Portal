@@ -21,7 +21,7 @@ import type { City, Location, SimpleMaster } from "../../../api/org";
 import { HelpStrip } from "../../../components/common/HelpStrip";
 import { RowActionButton } from "../../../components/leave/RowActionButton";
 import { useAuth } from "../../../hooks/useAuth";
-import { ApprovalBanner, CardGrid, ConfirmModal, DataTable, EmptyState, KeyValueGrid, PageHeader, Panel, QueryState, SideDrawer, Skel, SkeletonCard, StatusChip, toast, useIsPhone } from "../../../ui";
+import { ApprovalBanner, CardGrid, ConfirmModal, DataTable, EmptyState, KeyValueGrid, PageHeader, Panel, QueryState, SideDrawer, SkeletonCard, StatusChip, toast, useIsPhone } from "../../../ui";
 import { fs, fw, radius, space, v } from "../../../theme/tokens";
 import { SectionNav, SettingsLayout, ToggleRow } from "../settings/SettingsNav";
 
@@ -555,7 +555,3 @@ export function OrganisationSetupPage() {
   );
 }
 
-// Loading placeholder for lazy routes that render this page (kept tiny; the sections bring their own skeletons).
-export function OrganisationSetupSkeleton() {
-  return <Skel h={320} r={radius.lg} />;
-}

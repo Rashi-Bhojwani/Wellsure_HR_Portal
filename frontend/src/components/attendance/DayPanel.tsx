@@ -1,16 +1,18 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import dayjs from "dayjs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Button, Card, Descriptions, Empty, List, Space, Spin, Tag, Typography, message } from "antd";
-import { CloseOutlined, EditOutlined } from "@ant-design/icons";
+import { Button, Tooltip, Typography } from "antd";
+import { CloseOutlined, EditOutlined, LockOutlined } from "@ant-design/icons";
 import * as infoApi from "../../api/attendanceInfo";
 import type { DayDetail } from "../../api/attendanceInfo";
 import { apiErrorMessage } from "../../lib/apiError";
 import { hoursLabel } from "../../pages/admin/attendance/settings/format";
 import { useAuth } from "../../hooks/useAuth";
+import { ApprovalBanner, EmptyState, KeyValueGrid, Panel, Skel, StatusChip, toast } from "../../ui";
+import { fs, fw, radius, space, v } from "../../theme/tokens";
 import { CorrectionModal } from "./CorrectionModal";
 import { ManualOverrideModal } from "./ManualOverrideModal";
-import { fs } from "../../theme/tokens";
+import { statusTone } from "./statusTone";
 
 const { Text } = Typography;
 
@@ -36,7 +38,6 @@ const ROLE_TEXT: Record<string, string> = {
   DISCARDED: "discarded by HR",
   NOT_USED: "not used for this day",
 };
-const STATUS_COLOR: Record<string, string> = { PENDING: "gold", APPROVED: "green", REJECTED: "red", CANCELLED: "default" };
 
 /** One day of Attendance Info (Phase 2 P2-E): times, shift, status, raw punches, and the correction request (Phase 3). */
 export function DayPanel({ employeeId, date, self, onClose }: { employeeId?: string; date: string; self: boolean; onClose: () => void }) {
@@ -44,54 +45,78 @@ export function DayPanel({ employeeId, date, self, onClose }: { employeeId?: str
   const [asking, setAsking] = useState(false);
   const [overriding, setOverriding] = useState(false);
   const { hasPermission } = useAuth();
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["attendance", "info", "day", employeeId ?? "me", date],
     queryFn: () => (self ? infoApi.myDay(date) : infoApi.employeeDay(employeeId!, date)),
   });
   const cancel = useMutation({
     mutationFn: (id: string) => infoApi.cancelRegularization(id),
     onSuccess: () => {
-      void message.success("Request cancelled.");
+      toast.success("Request cancelled.");
       void queryClient.invalidateQueries({ queryKey: ["attendance", "info"] });
     },
-    onError: (err) => void message.error(apiErrorMessage(err, "Could not cancel.")),
+    onError: (err) => toast.error(apiErrorMessage(err, "Could not cancel.")),
   });
   const title = dayjs(date).format("ddd, D MMM YYYY");
   return (
-    <Card
-      size="small"
+    <Panel
       title={title}
+      subtitle={data?.employed && data.code ? statusTone(data.code).label : undefined}
       extra={
-        <Space size={4}>
+        <>
           {!self && employeeId && data?.employed && hasPermission("attendance.override.manage") && (
-            <Button size="small" icon={<EditOutlined />} onClick={() => setOverriding(true)}>
+            <Button icon={<EditOutlined />} onClick={() => setOverriding(true)}>
               Set this day
             </Button>
           )}
-          <Button type="text" size="small" icon={<CloseOutlined />} onClick={onClose} aria-label="Hide day" />
-        </Space>
+          <Tooltip title="Hide day">
+            <Button type="text" icon={<CloseOutlined />} onClick={onClose} aria-label="Hide day" />
+          </Tooltip>
+        </>
       }
     >
-      {isLoading || !data ? <Spin /> : !data.employed ? <Empty description="Not employed on this day." /> : <DayBody data={data} self={self} onAsk={() => setAsking(true)} onCancel={(id) => cancel.mutate(id)} />}
+      {isLoading ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: space[3] }} aria-busy>
+          <Skel h={64} r={radius.md} />
+          <Skel w="70%" />
+          <Skel w="55%" />
+          <Skel h={120} r={radius.md} />
+        </div>
+      ) : error && !data ? (
+        <EmptyState kind="error" compact title="Could not load this day" description={apiErrorMessage(error, "Try again.")} onRetry={() => void refetch()} />
+      ) : !data ? null : !data.employed ? (
+        <EmptyState kind="empty" compact title="Not employed on this day." description={null} />
+      ) : (
+        <DayBody data={data} self={self} onAsk={() => setAsking(true)} onCancel={(id) => cancel.mutate(id)} cancelling={cancel.isPending} />
+      )}
       {employeeId && <ManualOverrideModal target={overriding ? { employeeId, name: data?.employeeName ?? "this employee", date } : null} onClose={() => setOverriding(false)} />}
       {data?.canRequest?.ok && <CorrectionModal date={date} day={data.canRequest.day} open={asking} onClose={() => setAsking(false)} />}
-    </Card>
+    </Panel>
   );
 }
 
-function DayBody({ data, self, onAsk, onCancel }: { data: DayDetail; self: boolean; onAsk: () => void; onCancel: (id: string) => void }) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section>
+      <h3 style={{ margin: `0 0 ${space[3]}px`, fontSize: fs.md, fontWeight: fw.semibold, color: v.textPrimary }}>{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+function DayBody({ data, self, onAsk, onCancel, cancelling }: { data: DayDetail; self: boolean; onAsk: () => void; onCancel: (id: string) => void; cancelling: boolean }) {
   const t = data.times!;
   const pending = data.requests?.find((r) => r.status === "PENDING");
   const exceptions = (data.flags ?? []).filter((f) => f !== "LATE_IN" && f !== "EARLY_OUT");
+  const tone = statusTone(data.code);
   return (
-    <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: space[5] }}>
       {exceptions.map((f) => (
-        <Alert key={f} type="warning" showIcon title={FLAG_TEXT[f] ?? f} description={f === "MISSING_PUNCH" && data.lopDays ? `${data.lopDays} day(s) of LOP until it's corrected.` : undefined} />
+        <ApprovalBanner key={f} tone="warning" title={FLAG_TEXT[f] ?? f} description={f === "MISSING_PUNCH" && data.lopDays ? `${data.lopDays} day(s) of LOP until it's corrected.` : undefined} />
       ))}
       {data.override && (
-        <Alert
-          type="success"
-          showIcon
+        <ApprovalBanner
+          tone="success"
           icon={<EditOutlined />}
           title={`${data.override.origin === "MANUAL_OVERRIDE" ? "Overridden by HR" : "Corrected"}: ${data.override.text}`}
           description={`${data.override.reasonLabel ? `${data.override.reasonLabel}. ` : ""}${data.override.reason ? `"${data.override.reason}" ` : ""}${data.override.origin === "MANUAL_OVERRIDE" ? "Set" : "Approved"}${data.override.by ? ` by ${data.override.by}` : ""} on ${dayjs(data.override.at).format("D MMM, HH:mm")}. The punches below are exactly what the device recorded; they were not changed.`}
@@ -99,45 +124,41 @@ function DayBody({ data, self, onAsk, onCancel }: { data: DayDetail; self: boole
       )}
 
       {data.leaveReleased?.map((r, i) => (
-        <Alert
+        <ApprovalBanner
           key={i}
-          type="success"
-          showIcon
+          tone="success"
           title={`Approved leave released: ${r.type} ${r.days} day${r.days === 1 ? "" : "s"} went back to the leave balance`}
           description={`Worked on this day; "${r.reason}"${r.by ? `, by ${r.by}` : ""} on ${dayjs(r.at).format("D MMM, HH:mm")}. It is in the leave ledger too.`}
         />
       ))}
       {data.shiftOverride && (
-        <Alert
-          type="info"
-          showIcon
+        <ApprovalBanner
+          tone="info"
           title={`Shift set for this day by HR: ${data.shiftOverride.shiftName ?? ""}`}
           description={`"${data.shiftOverride.reason}"${data.shiftOverride.by ? `, by ${data.shiftOverride.by}` : ""} on ${dayjs(data.shiftOverride.at).format("D MMM, HH:mm")}. The person's usual shift is unchanged.`}
         />
       )}
 
       {self && data.canRequest?.ok && !pending && (
-        <Alert
-          type="info"
-          showIcon
+        <ApprovalBanner
+          tone="info"
           title={data.canRequest.day.punchCount === 0 ? "No punches were recorded for this day." : "Something wrong with this day?"}
           description="Missing punches, wrong times, or the wrong status can be corrected: your manager or HR approves it."
-          action={
-            <Button size="small" type="primary" onClick={onAsk}>
+          actions={
+            <Button type="primary" onClick={onAsk}>
               Ask for a correction
             </Button>
           }
         />
       )}
       {pending && (
-        <Alert
-          type="info"
-          showIcon
+        <ApprovalBanner
+          tone="info"
           title={`You asked for a correction (${pending.reasonLabel}): ${pending.correctionText}. Waiting for approval`}
           description={pending.reason ? `"${pending.reason}"` : undefined}
-          action={
+          actions={
             self ? (
-              <Button size="small" onClick={() => onCancel(pending.id)}>
+              <Button loading={cancelling} onClick={() => onCancel(pending.id)}>
                 Cancel request
               </Button>
             ) : undefined
@@ -145,130 +166,147 @@ function DayBody({ data, self, onAsk, onCancel }: { data: DayDetail; self: boole
         />
       )}
 
-      <div>
-        <Text strong>
-          {data.shift ? `${data.shift.name} (${data.shift.code})` : "No shift"}
-        </Text>
-        {data.shift && (
-          <Text type="secondary">
-            {" "}
-            · {data.shift.startTime} to {data.shift.endTime}
-          </Text>
-        )}
-        {data.policy && <Text type="secondary"> · {data.policy.name}</Text>}
-        <div>
-          <Text type="secondary" style={{ fontSize: fs.sm }}>
+      {/* The shift block */}
+      <div style={{ display: "flex", gap: space[4], alignItems: "center", padding: space[4], borderRadius: radius.md, background: v.bgSubtle }}>
+        <span
+          aria-hidden
+          className="ws-num"
+          style={{ flex: "none", minWidth: 52, height: 52, padding: `0 ${space[2]}px`, borderRadius: radius.md, display: "inline-flex", alignItems: "center", justifyContent: "center", background: tone.bg === "transparent" ? v.bgSurface : tone.bg, color: tone.fg, fontWeight: fw.bold, fontSize: fs.lg }}
+        >
+          {data.code}
+        </span>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: fw.semibold, color: v.textPrimary }}>
+            {data.shift ? `${data.shift.name} (${data.shift.code})` : "No shift"}
+            {data.shift && <Text type="secondary" style={{ fontWeight: fw.regular }}> · {data.shift.startTime} to {data.shift.endTime}</Text>}
+          </div>
+          {data.policy && <div style={{ color: v.textSecondary, fontSize: fs.sm }}>{data.policy.name}</div>}
+          <div style={{ color: v.textSecondary, fontSize: fs.sm }}>
             Processed on {dayjs(data.processedAt).format("D MMM, HH:mm")}
             {data.provisional ? " · provisional: the day isn't over yet" : ""}
-            {data.locked ? " · 🔒 finalised" : ""}
-          </Text>
+            {data.locked ? (
+              <>
+                {" · "}
+                <LockOutlined aria-hidden /> finalised
+              </>
+            ) : (
+              ""
+            )}
+          </div>
         </div>
       </div>
 
-      <Descriptions
-        size="small"
-        bordered
-        column={{ xs: 1, sm: 2, md: 2, lg: 2, xl: 2, xxl: 2 }}
-        items={[
-          { key: "in", label: "First In", children: t.firstIn ?? "—" },
-          { key: "out", label: "Last Out", children: t.lastOut ?? "—" },
-          { key: "late", label: "Late In", children: minutes(t.lateInMinutes) },
-          { key: "early", label: "Early Out", children: minutes(t.earlyOutMinutes) },
-          { key: "total", label: "Total Work Hrs", children: minutes(t.totalMinutes) },
-          { key: "break", label: "Break Hrs", children: minutes(t.breakMinutes) },
-          { key: "actual", label: "Actual Work Hrs", children: minutes(t.actualMinutes) },
-          { key: "inshift", label: "Work Hrs in Shift Time", children: minutes(t.inShiftMinutes) },
-          { key: "short", label: "Shortfall Hrs", children: minutes(t.shortfallMinutes) },
-          { key: "excess", label: "Excess Hrs", children: minutes(t.excessMinutes) },
-        ]}
-      />
+      <Section title="Times">
+        <KeyValueGrid
+          items={[
+            { label: "First In", value: <span className="ws-num">{t.firstIn ?? "—"}</span> },
+            { label: "Last Out", value: <span className="ws-num">{t.lastOut ?? "—"}</span> },
+            { label: "Late In", value: minutes(t.lateInMinutes) },
+            { label: "Early Out", value: minutes(t.earlyOutMinutes) },
+            { label: "Total Work Hrs", value: minutes(t.totalMinutes) },
+            { label: "Break Hrs", value: minutes(t.breakMinutes) },
+            { label: "Actual Work Hrs", value: minutes(t.actualMinutes) },
+            { label: "Work Hrs in Shift Time", value: minutes(t.inShiftMinutes) },
+            { label: "Shortfall Hrs", value: minutes(t.shortfallMinutes) },
+            { label: "Excess Hrs", value: minutes(t.excessMinutes) },
+          ]}
+        />
+      </Section>
 
-      <Descriptions
-        size="small"
-        column={1}
-        title="Status details"
-        items={[
-          {
-            key: "status",
-            label: "Status",
-            children: (
-              <Space size={4} wrap>
-                <Tag>{data.code}</Tag>
-                {data.firstHalfStatus && data.secondHalfStatus && data.firstHalfStatus !== data.secondHalfStatus && (
-                  <Text type="secondary">
-                    first half {data.firstHalfStatus}, second half {data.secondHalfStatus}
-                  </Text>
-                )}
-                {data.lopDays ? <Text type="danger">{data.lopDays} day LOP</Text> : null}
-                {data.workedOnOffDay && <Tag color="green">worked on an off day</Tag>}
-              </Space>
-            ),
-          },
-          { key: "source", label: "Source", children: `${SOURCE_TEXT[data.source ?? ""] ?? data.source}${data.holidayName ? ` (${data.holidayName})` : ""}${data.leaveTypeCode ? ` (${data.leaveTypeCode})` : ""}` },
-          ...(data.manualEntry
-            ? [
-                {
-                  key: "manual",
-                  label: "Entered",
-                  children: (
-                    <>
-                      <Text code>{data.manualEntry.text}</Text> {data.manualEntry.kind === "STATUS_ONLY" && <Tag>status only, no times</Tag>}
-                      <Text type="secondary">
-                        by {data.manualEntry.enteredBy ?? "someone"} on {dayjs(data.manualEntry.enteredAt).format("D MMM, HH:mm")}
-                        {data.manualEntry.via === "MUSTER_UPLOAD" ? " (upload)" : data.manualEntry.via === "BULK" ? " (mark all present)" : ""}
-                        {data.manualEntry.remark ? `: ${data.manualEntry.remark}` : ""}
-                      </Text>
-                    </>
-                  ),
-                },
-              ]
-            : []),
-        ]}
-      />
+      <Section title="Status details">
+        <KeyValueGrid
+          columns={1}
+          items={[
+            {
+              label: "Status",
+              value: (
+                <span style={{ display: "inline-flex", flexWrap: "wrap", alignItems: "center", gap: space[2] }}>
+                  <span style={{ background: tone.bg, color: tone.fg, borderRadius: radius.xs, padding: "1px 8px", fontWeight: fw.bold, fontSize: fs.sm }}>{data.code}</span>
+                  <span>{tone.label}</span>
+                  {data.firstHalfStatus && data.secondHalfStatus && data.firstHalfStatus !== data.secondHalfStatus && (
+                    <Text type="secondary">
+                      first half {data.firstHalfStatus}, second half {data.secondHalfStatus}
+                    </Text>
+                  )}
+                  {data.lopDays ? <Text type="danger">{data.lopDays} day LOP</Text> : null}
+                  {data.workedOnOffDay && <StatusChip tone="success">worked on an off day</StatusChip>}
+                </span>
+              ),
+            },
+            { label: "Source", value: `${SOURCE_TEXT[data.source ?? ""] ?? data.source}${data.holidayName ? ` (${data.holidayName})` : ""}${data.leaveTypeCode ? ` (${data.leaveTypeCode})` : ""}` },
+            ...(data.manualEntry
+              ? [
+                  {
+                    label: "Entered",
+                    value: (
+                      <>
+                        <Text code>{data.manualEntry.text}</Text> {data.manualEntry.kind === "STATUS_ONLY" && <StatusChip tone="neutral">status only, no times</StatusChip>}{" "}
+                        <Text type="secondary">
+                          by {data.manualEntry.enteredBy ?? "someone"} on {dayjs(data.manualEntry.enteredAt).format("D MMM, HH:mm")}
+                          {data.manualEntry.via === "MUSTER_UPLOAD" ? " (upload)" : data.manualEntry.via === "BULK" ? " (mark all present)" : ""}
+                          {data.manualEntry.remark ? `: ${data.manualEntry.remark}` : ""}
+                        </Text>
+                      </>
+                    ),
+                  },
+                ]
+              : []),
+          ]}
+        />
+      </Section>
+
+      {data.shift && data.shift.sessions.length > 0 && (
+        <Section title="Session details">
+          <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
+            {data.shift.sessions.map((s, i) => (
+              <div key={`${s.kind}-${i}`} style={{ display: "flex", justifyContent: "space-between", gap: space[3], padding: `${space[2]}px ${space[3]}px`, border: `1px solid ${v.borderDefault}`, borderRadius: radius.sm, fontSize: fs.table }}>
+                <span style={{ color: v.textBody }}>{s.label}</span>
+                <span className="ws-num" style={{ color: v.textSecondary }}>
+                  {s.startTime} to {s.endTime}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
 
       {data.capture === "DEVICE" && (
-        <div>
-          <Text strong>Punches</Text>
+        <Section title="Punches">
           {data.punches?.length ? (
-            <List
-              size="small"
-              dataSource={data.punches}
-              renderItem={(p) => (
-                <List.Item style={{ padding: "4px 0", display: "block" }}>
-                  <Text code>{p.time}</Text>
-                  {p.date !== data.date && <Text type="secondary"> (next day)</Text>}
-                  <Text type="secondary" strong={p.role === "FIRST_IN" || p.role === "LAST_OUT" || p.role === "ONLY"}>
-                    {" "}
-                    · {ROLE_TEXT[p.role] ?? p.role}
-                  </Text>
-                  <Text type="secondary"> · {p.device}</Text>
-                </List.Item>
-              )}
-            />
+            <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: space[2] }}>
+              {data.punches.map((p) => {
+                const used = p.role === "FIRST_IN" || p.role === "LAST_OUT" || p.role === "ONLY";
+                return (
+                  <li key={p.id} style={{ display: "flex", gap: space[3], alignItems: "baseline", flexWrap: "wrap", fontSize: fs.table }}>
+                    <span className="ws-num" style={{ fontWeight: fw.semibold, color: v.textPrimary, minWidth: 64 }}>
+                      {p.time}
+                    </span>
+                    {p.date !== data.date && <Text type="secondary">(next day)</Text>}
+                    <span style={{ color: used ? v.textBody : v.textSecondary, fontWeight: used ? fw.semibold : fw.regular }}>{ROLE_TEXT[p.role] ?? p.role}</span>
+                    <Text type="secondary">· {p.device}</Text>
+                  </li>
+                );
+              })}
+            </ol>
           ) : (
-            <div>
-              <Text type="secondary">No punches in this day's punch window.</Text>
-            </div>
+            <Text type="secondary">No punches in this day's punch window.</Text>
           )}
-        </div>
+        </Section>
       )}
 
       {(data.requests?.length ?? 0) > 0 && (
-        <div>
-          <Text strong>Forgot-to-punch requests</Text>
-          <List
-            size="small"
-            dataSource={data.requests}
-            renderItem={(r) => (
-              <List.Item style={{ padding: "4px 0", display: "block" }}>
-                <Space size={6} wrap>
-                  <Tag color={STATUS_COLOR[r.status]}>{r.status.toLowerCase()}</Tag>
+        <Section title="Forgot-to-punch requests">
+          <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
+            {data.requests!.map((r) => (
+              <div key={r.id} style={{ fontSize: fs.table }}>
+                <div style={{ display: "flex", gap: space[2], flexWrap: "wrap", alignItems: "center" }}>
+                  <StatusChip status={r.status} />
                   <Text>
                     {r.reasonLabel}: {r.correctionText}
                   </Text>
                   <Text type="secondary">· {dayjs(r.createdAt).format("D MMM, HH:mm")}</Text>
-                </Space>
-                <div>
+                </div>
+                <div style={{ marginTop: 2 }}>
                   {r.reason && <Text type="secondary">"{r.reason}"</Text>}
                   {r.decidedBy && (
                     <Text type="secondary">
@@ -278,12 +316,12 @@ function DayBody({ data, self, onAsk, onCancel }: { data: DayDetail; self: boole
                     </Text>
                   )}
                 </div>
-              </List.Item>
-            )}
-          />
-        </div>
+              </div>
+            ))}
+          </div>
+        </Section>
       )}
       {self && data.canRequest && !data.canRequest.ok && !pending && !data.provisional && <Text type="secondary">A correction can't be asked for on this day: {data.canRequest.reason}</Text>}
-    </Space>
+    </div>
   );
 }

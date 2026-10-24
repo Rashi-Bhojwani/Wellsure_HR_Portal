@@ -1,8 +1,9 @@
-import { Alert, Space, Table, Tag, Typography } from "antd";
+import { Alert, Space, Table, Typography } from "antd";
+import { StatusChip } from "../../ui";
 import { COMPONENT_TYPE_LABEL } from "@shared/constants/payrollSalary";
 import type { PlanPerson } from "../../api/payroll";
 import { formatDifference, formatRupees } from "../../lib/money";
-import { fs } from "../../theme/tokens";
+import { PersonCell } from "./payrollUi";
 
 const { Text } = Typography;
 
@@ -26,9 +27,9 @@ export function RevisionPlanTable({ people, componentName }: { people: PlanPerso
               dataSource={p.differences}
               columns={[
                 { title: "Line", render: (_, d) => componentName(d.component) },
-                { title: "Now", align: "right", render: (_, d) => formatRupees(d.old) },
-                { title: "After", align: "right", render: (_, d) => formatRupees(d.next) },
-                { title: "Difference", align: "right", render: (_, d) => <Text type={d.difference.startsWith("-") ? "danger" : /^0(\.0+)?$/.test(d.difference) ? "secondary" : "success"}>{formatDifference(d.difference)}</Text> },
+                { title: "Now", align: "right", className: "ws-num", render: (_, d) => formatRupees(d.old) },
+                { title: "After", align: "right", className: "ws-num", render: (_, d) => formatRupees(d.next) },
+                { title: "Difference", align: "right", className: "ws-num", render: (_, d) => <Text type={d.difference.startsWith("-") ? "danger" : /^0(\.0+)?$/.test(d.difference) ? "secondary" : "success"}>{formatDifference(d.difference)}</Text> },
               ]}
             />
             {p.next && <Text type="secondary">{COMPONENT_TYPE_LABEL.EARNING} lines add up to {formatRupees(p.next.monthlyCtc)} a month ({formatRupees(p.next.annualCtc)} a year) on {p.next.structure}.</Text>}
@@ -53,13 +54,13 @@ export function RevisionPlanTable({ people, componentName }: { people: PlanPerso
         ),
       }}
       columns={[
-        { title: "Employee", render: (_, p) => <div><Text strong>{p.name}</Text><div><Text type="secondary" style={{ fontSize: fs.sm }}>{p.employeeCode}</Text></div></div> },
-        { title: "", render: (_, p) => <Tag color={p.rowReason === "JOINING" ? "blue" : "default"}>{p.rowReason === "JOINING" ? "First salary" : p.rowReason === "CORRECTION" ? "Correction" : "Revision"}</Tag> },
-        { title: "A month now", align: "right", render: (_, p) => (p.previous ? formatRupees(p.previous.monthlyCtc) : "None") },
-        { title: "A month after", align: "right", render: (_, p) => (p.next ? formatRupees(p.next.monthlyCtc) : <Tag color="red">Cannot be worked out</Tag>) },
-        { title: "Difference", align: "right", render: (_, p) => (p.next ? formatDifference(String(subtract(p.next.monthlyCtc, p.previous?.monthlyCtc ?? "0"))) : null) },
+        { title: "Employee", render: (_, p) => <PersonCell name={p.name} code={p.employeeCode} /> },
+        { title: "Kind", render: (_, p) => <StatusChip tone={p.rowReason === "JOINING" ? "info" : "neutral"}>{p.rowReason === "JOINING" ? "First salary" : p.rowReason === "CORRECTION" ? "Correction" : "Revision"}</StatusChip> },
+        { title: "A month now", align: "right", className: "ws-num", render: (_, p) => (p.previous ? formatRupees(p.previous.monthlyCtc) : "None") },
+        { title: "A month after", align: "right", className: "ws-num", render: (_, p) => (p.next ? formatRupees(p.next.monthlyCtc) : <StatusChip tone="danger">Cannot be worked out</StatusChip>) },
+        { title: "Difference", align: "right", className: "ws-num", render: (_, p) => (p.next ? formatDifference(String(subtract(p.next.monthlyCtc, p.previous?.monthlyCtc ?? "0"))) : null) },
         { title: "First cycle", render: (_, p) => p.firstCycle },
-        { title: "", render: (_, p) => (p.arrears.length ? <Tag color="gold">Arrears</Tag> : null) },
+        { title: "Arrears", render: (_, p) => (p.arrears.length ? <StatusChip tone="warning">Arrears</StatusChip> : null) },
       ]}
     />
   );

@@ -3,7 +3,8 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button, Form, Input } from "antd";
 import type { AxiosError } from "axios";
 import { AuthShell } from "../AuthShell";
-import { AuthError, PasswordRules, requiredMark } from "../authParts";
+import { AuthError, PasswordRules } from "../authParts";
+import { requiredMark } from "../authStyles";
 import * as authApi from "../../../api/auth";
 import { fs, space } from "../../../theme/tokens";
 
