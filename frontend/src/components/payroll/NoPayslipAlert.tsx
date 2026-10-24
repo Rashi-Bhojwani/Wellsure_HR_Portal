@@ -1,5 +1,6 @@
 import { Alert, Flex, Table, Typography } from "antd";
 import type { NoPayslipPerson } from "../../api/payroll";
+import { fs } from "../../theme/tokens";
 
 const { Text } = Typography;
 
@@ -22,8 +23,8 @@ export function NoPayslipAlert({ people, willGet }: { people: NoPayslipPerson[];
             pagination={people.length > 15 ? { pageSize: 15, showSizeChanger: false } : false}
             dataSource={people}
             columns={[
-              { title: "Who", render: (_, r) => <div><Text strong>{r.name}</Text><div><Text type="secondary" style={{ fontSize: 12 }}>{r.employeeCode}</Text></div></div> },
-              { title: "Why", render: (_, r) => <div>{r.reasonLabel}{r.detail && <div><Text type="secondary" style={{ fontSize: 12 }}>{r.detail}</Text></div>}</div> },
+              { title: "Who", render: (_, r) => <div><Text strong>{r.name}</Text><div><Text type="secondary" style={{ fontSize: fs.sm }}>{r.employeeCode}</Text></div></div> },
+              { title: "Why", render: (_, r) => <div>{r.reasonLabel}{r.detail && <div><Text type="secondary" style={{ fontSize: fs.sm }}>{r.detail}</Text></div>}</div> },
               { title: "What to do", dataIndex: "action" },
             ]}
           />

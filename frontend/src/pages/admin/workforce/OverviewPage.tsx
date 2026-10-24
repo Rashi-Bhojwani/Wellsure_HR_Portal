@@ -8,6 +8,7 @@ import { ChartCard } from "../../../components/charts/ChartCard";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { useThemeMode } from "../../../theme/ThemeProvider";
 import { useChartColors } from "../../../theme/chartPalette";
+import { fs } from "../../../theme/tokens";
 
 const { Text } = Typography;
 
@@ -122,10 +123,10 @@ export function WorkforceOverviewPage() {
                     pointerEvents: "none",
                   }}
                 >
-                  <Text strong style={{ fontSize: 18 }}>
+                  <Text strong style={{ fontSize: fs.xl }}>
                     {total}
                   </Text>
-                  <div style={{ fontSize: 11, color: colors.ink.muted }}>Leaves taken</div>
+                  <div style={{ fontSize: fs.xs, color: colors.ink.muted }}>Leaves taken</div>
                 </div>
               </div>
             )}
@@ -140,8 +141,8 @@ export function WorkforceOverviewPage() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthlyLeaves} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke={colors.ink.grid} vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: colors.ink.muted }} />
-                <YAxis tick={{ fontSize: 11, fill: colors.ink.muted }} width={28} />
+                <XAxis dataKey="month" tick={{ fontSize: fs.xs, fill: colors.ink.muted }} />
+                <YAxis tick={{ fontSize: fs.xs, fill: colors.ink.muted }} width={28} />
                 <Tooltip />
                 <Bar dataKey="total" name="Leaves" fill={colors.sequential} radius={[4, 4, 0, 0]} />
               </BarChart>
@@ -160,8 +161,8 @@ export function WorkforceOverviewPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={rhBreakdown} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
                   <CartesianGrid stroke={colors.ink.grid} vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: colors.ink.muted }} />
-                  <YAxis tick={{ fontSize: 11, fill: colors.ink.muted }} width={28} allowDecimals={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: fs.xs, fill: colors.ink.muted }} />
+                  <YAxis tick={{ fontSize: fs.xs, fill: colors.ink.muted }} width={28} allowDecimals={false} />
                   <Tooltip />
                   <Bar dataKey="employeeCount" name="Employees" fill={colors.sequential} radius={[4, 4, 0, 0]} />
                 </BarChart>

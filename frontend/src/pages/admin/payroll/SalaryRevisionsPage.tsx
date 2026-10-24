@@ -14,6 +14,7 @@ import { RevisionPlanTable } from "../../../components/payroll/RevisionPlanTable
 import { useAuth } from "../../../hooks/useAuth";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatDate, formatDateTime } from "../../../lib/dates";
+import { fs } from "../../../theme/tokens";
 
 const { Title, Text } = Typography;
 
@@ -82,7 +83,7 @@ export function SalaryRevisionsPage() {
           { title: "People", dataIndex: "people", align: "right" },
           { title: "Kind", render: (_, r) => (r.kind === "CANCEL_SCHEDULED" ? "Cancel a scheduled salary" : r.reason === "CORRECTION" ? "Correction" : "Revision") },
           { title: "Status", render: (_, r) => <Tag color={STATUS[r.status].color}>{STATUS[r.status].label}</Tag> },
-          { title: "Prepared by", render: (_, r) => <div>{r.createdBy}<div><Text type="secondary" style={{ fontSize: 12 }}>{formatDateTime(r.createdAt)}</Text></div></div> },
+          { title: "Prepared by", render: (_, r) => <div>{r.createdBy}<div><Text type="secondary" style={{ fontSize: fs.sm }}>{formatDateTime(r.createdAt)}</Text></div></div> },
           { title: "Note", dataIndex: "note", ellipsis: true },
           { title: "", align: "right", render: (_, r) => <Button size="small" onClick={() => setOpenId(r.id)}>Open</Button> },
         ]}

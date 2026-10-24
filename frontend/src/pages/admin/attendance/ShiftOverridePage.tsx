@@ -11,6 +11,7 @@ import { TargetPicker } from "../../../components/attendance/TargetPicker";
 import { selectionOf, type CarriedSelection, type TargetValues } from "../../../components/attendance/targetSelection";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { apiErrorMessage } from "../../../lib/apiError";
+import { fs } from "../../../theme/tokens";
 
 const { Title, Text } = Typography;
 
@@ -136,7 +137,7 @@ export function ShiftOverridePage() {
                     <div key={g.code}>
                       <Tag color="orange">{g.count}</Tag>
                       {g.label}
-                      <Text type="secondary" style={{ fontSize: 12 }}>
+                      <Text type="secondary" style={{ fontSize: fs.sm }}>
                         {" "}
                         e.g. {g.examples.map((e) => `${e.name} ${dayjs(e.date).format("D MMM")}`).join(", ")}
                       </Text>

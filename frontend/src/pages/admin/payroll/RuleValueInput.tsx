@@ -1,6 +1,7 @@
 import { Input, InputNumber, Select, Space, Switch, Typography } from "antd";
 import type { RuleShape } from "@shared/constants/payrollRules";
 import { ROUNDING_LABEL, TYPE_LABEL, type InputState } from "./ruleValues";
+import { fs } from "../../../theme/tokens";
 
 const { Text } = Typography;
 
@@ -49,7 +50,7 @@ export function RuleValueInput({ shape, value, onChange, disabled, autoFocus }: 
       return (
         <Space orientation="vertical" style={{ width: "100%" }} size={4}>
           <Input.TextArea value={value as string} onChange={(e) => onChange(e.target.value)} rows={8} style={{ fontFamily: "monospace" }} disabled={disabled} spellCheck={false} />
-          <Text type="secondary" style={{ fontSize: 12 }}>Shape, for example: <code>{shape.example}</code></Text>
+          <Text type="secondary" style={{ fontSize: fs.sm }}>Shape, for example: <code>{shape.example}</code></Text>
         </Space>
       );
   }

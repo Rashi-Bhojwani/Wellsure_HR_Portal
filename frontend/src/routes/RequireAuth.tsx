@@ -1,5 +1,5 @@
 import { Navigate, Outlet } from "react-router-dom";
-import { Spin } from "antd";
+import { BrandMark } from "../layouts/shell/BrandMark";
 import { useAuth } from "../hooks/useAuth";
 import { useLeaveNotifications } from "../sockets/useLeaveNotifications";
 import { useNotifications } from "../sockets/useNotifications";
@@ -24,8 +24,9 @@ export function RequireAuth() {
 
   if (isLoading) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
-        <Spin size="large" />
+      // The session check takes a moment on a reload: a quiet brand splash in the page colour, not a spinner.
+      <div aria-busy="true" aria-label="Loading" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", animation: "ws-fade-in 0.4s 0.2s both" }}>
+        <BrandMark />
       </div>
     );
   }

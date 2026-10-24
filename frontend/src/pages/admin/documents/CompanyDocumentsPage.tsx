@@ -8,6 +8,7 @@ import type { CategoryScope, CompanyDocument, DocumentCategory } from "../../../
 import * as orgApi from "../../../api/org";
 import { HelpStrip } from "../../../components/common/HelpStrip";
 import { apiErrorMessage } from "../../../lib/apiError";
+import { fs } from "../../../theme/tokens";
 
 const ACCEPT = Object.values(DOCUMENT_MIME_TYPES).flatMap((t) => t.extensions).join(",");
 const formatDate = (iso: string) => new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
@@ -155,7 +156,7 @@ function DocumentsTab() {
             render: (_, d) => (
               <Space orientation="vertical" size={0}>
                 <Typography.Text strong>{d.title}</Typography.Text>
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                <Typography.Text type="secondary" style={{ fontSize: fs.sm }}>
                   {d.fileName} · {docsApi.formatBytes(d.sizeBytes)}
                 </Typography.Text>
               </Space>

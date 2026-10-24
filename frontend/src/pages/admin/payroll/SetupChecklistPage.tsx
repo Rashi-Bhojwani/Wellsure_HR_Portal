@@ -8,6 +8,7 @@ import { SetupStatusTag } from "../../../components/payroll/SetupStatusTag";
 import { useAuth } from "../../../hooks/useAuth";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatDate } from "../../../lib/dates";
+import { fs } from "../../../theme/tokens";
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -45,7 +46,7 @@ export function SetupChecklistPage() {
         <Flex gap={24} wrap align="center">
           <Progress type="circle" size={72} percent={r.required ? Math.round((r.confirmed / r.required) * 100) : 0} status={r.ready ? "success" : "active"} />
           <Flex vertical gap={4}>
-            <Text strong style={{ fontSize: 16 }}>{r.confirmed} of {r.required} required items are confirmed</Text>
+            <Text strong style={{ fontSize: fs.lg }}>{r.confirmed} of {r.required} required items are confirmed</Text>
             <Text type={r.ready ? "success" : "danger"}>{r.ready ? "Ready for the first real run." : `${r.blockers.length} still stand in the way of the first real run.`}</Text>
             <Link to="/admin/payroll/ready">Open “Ready for first real run”</Link>
           </Flex>
@@ -78,9 +79,9 @@ function SectionCard({ section, items, onSignoff, canSign }: { section: SetupSec
             render: (_, i) => (
               <div style={{ maxWidth: 360 }}>
                 <Text strong>{i.title}</Text> {!i.required && <Tag>Not needed for the first run</Tag>}
-                <div><Text type="secondary" style={{ fontSize: 12 }}>{i.why}</Text></div>
-                {i.category && <div><Text type="secondary" style={{ fontSize: 12 }}>{i.category}</Text></div>}
-                {!i.required && i.notRequiredReason && <div><Text type="secondary" style={{ fontSize: 12 }}>{i.notRequiredReason}</Text></div>}
+                <div><Text type="secondary" style={{ fontSize: fs.sm }}>{i.why}</Text></div>
+                {i.category && <div><Text type="secondary" style={{ fontSize: fs.sm }}>{i.category}</Text></div>}
+                {!i.required && i.notRequiredReason && <div><Text type="secondary" style={{ fontSize: fs.sm }}>{i.notRequiredReason}</Text></div>}
               </div>
             ),
           },
@@ -91,12 +92,12 @@ function SectionCard({ section, items, onSignoff, canSign }: { section: SetupSec
               <Flex vertical gap={4} style={{ maxWidth: 380 }}>
                 <Text>{i.detail}</Text>
                 {i.coverage && i.coverage.total > 0 && <Progress percent={Math.round((i.coverage.covered / i.coverage.total) * 100)} size="small" format={() => `${i.coverage!.covered} of ${i.coverage!.total}`} />}
-                {i.coverage && i.coverage.missing.length > 0 && <Text type="secondary" style={{ fontSize: 12 }}>Still missing: {i.coverage.missing.slice(0, 6).map((m) => m.name).join(", ")}{i.coverage.covered + i.coverage.missing.length < i.coverage.total || i.coverage.missing.length > 6 ? " and others" : ""}</Text>}
-                {person(i.enteredBy) && <Text type="secondary" style={{ fontSize: 12 }}>Entered by {person(i.enteredBy)}</Text>}
-                {person(i.confirmedBy) && <Text type="secondary" style={{ fontSize: 12 }}>Confirmed by {person(i.confirmedBy)}</Text>}
+                {i.coverage && i.coverage.missing.length > 0 && <Text type="secondary" style={{ fontSize: fs.sm }}>Still missing: {i.coverage.missing.slice(0, 6).map((m) => m.name).join(", ")}{i.coverage.covered + i.coverage.missing.length < i.coverage.total || i.coverage.missing.length > 6 ? " and others" : ""}</Text>}
+                {person(i.enteredBy) && <Text type="secondary" style={{ fontSize: fs.sm }}>Entered by {person(i.enteredBy)}</Text>}
+                {person(i.confirmedBy) && <Text type="secondary" style={{ fontSize: fs.sm }}>Confirmed by {person(i.confirmedBy)}</Text>}
                 {i.question && <Tag color="volcano">An open question stops this being confirmed</Tag>}
                 {i.problem && <Alert type="error" showIcon title={i.problem} />}
-                {i.permissionNote && <Text type="secondary" style={{ fontSize: 12 }}>{i.permissionNote}</Text>}
+                {i.permissionNote && <Text type="secondary" style={{ fontSize: fs.sm }}>{i.permissionNote}</Text>}
               </Flex>
             ),
           },
@@ -166,7 +167,7 @@ function AccessCard() {
         dataSource={data.classes}
         scroll={{ x: "max-content" }}
         columns={[
-          { title: "What", render: (_, c) => <div style={{ maxWidth: 280 }}><Text strong>{c.label}</Text><div><Text type="secondary" style={{ fontSize: 12 }}>{c.what}</Text></div></div> },
+          { title: "What", render: (_, c) => <div style={{ maxWidth: 280 }}><Text strong>{c.label}</Text><div><Text type="secondary" style={{ fontSize: fs.sm }}>{c.what}</Text></div></div> },
           { title: "Can see it", render: (_, c) => names(c.view) },
           { title: "Can change it", render: (_, c) => names(c.edit) },
           { title: "Can confirm it", render: (_, c) => names(c.confirm) },

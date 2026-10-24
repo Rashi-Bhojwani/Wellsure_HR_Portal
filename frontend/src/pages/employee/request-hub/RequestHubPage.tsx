@@ -6,6 +6,7 @@ import { REQUEST_HUB_TYPES, REQUEST_HUB_TYPE_LABELS, type RequestHubItem, type R
 import * as inboxApi from "../../../api/inbox";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { formatDate, formatDateTime } from "../../../lib/dates";
+import { fs } from "../../../theme/tokens";
 
 const { Text } = Typography;
 const STATE_COLORS: Record<string, string> = { OPEN: "gold", CLOSED: "default" };
@@ -59,8 +60,8 @@ export function RequestHubPage() {
             render: (_: string, r) => (
               <Flex vertical>
                 <Text strong>{r.title}</Text>
-                {r.detail && <Text type="secondary" style={{ fontSize: 12 }}>{r.detail}</Text>}
-                {r.autoClosesAt && <Text type="secondary" style={{ fontSize: 12 }}>Closes automatically on {formatDate(r.autoClosesAt)} unless you reply</Text>}
+                {r.detail && <Text type="secondary" style={{ fontSize: fs.sm }}>{r.detail}</Text>}
+                {r.autoClosesAt && <Text type="secondary" style={{ fontSize: fs.sm }}>Closes automatically on {formatDate(r.autoClosesAt)} unless you reply</Text>}
               </Flex>
             ),
           },

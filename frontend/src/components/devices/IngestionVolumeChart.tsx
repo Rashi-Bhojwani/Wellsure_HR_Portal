@@ -5,6 +5,7 @@ import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAx
 import * as biometricApi from "../../api/biometric";
 import type { VolumeBucket } from "../../api/biometric";
 import { useThemeMode } from "../../theme/ThemeProvider";
+import { fs } from "../../theme/tokens";
 
 const { Text } = Typography;
 
@@ -90,8 +91,8 @@ export function IngestionVolumeChart({ devices }: { devices: Array<{ id: string;
           <ResponsiveContainer>
             <BarChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
               <CartesianGrid stroke={grid} vertical={false} />
-              <XAxis dataKey="bucket" tickFormatter={label} tick={{ fill: ink, fontSize: 12 }} tickLine={false} axisLine={{ stroke: grid }} interval="preserveStartEnd" />
-              <YAxis allowDecimals={false} tick={{ fill: ink, fontSize: 12 }} tickLine={false} axisLine={false} width={40} />
+              <XAxis dataKey="bucket" tickFormatter={label} tick={{ fill: ink, fontSize: fs.sm }} tickLine={false} axisLine={{ stroke: grid }} interval="preserveStartEnd" />
+              <YAxis allowDecimals={false} tick={{ fill: ink, fontSize: fs.sm }} tickLine={false} axisLine={false} width={40} />
               <Tooltip
                 cursor={{ fill: grid, opacity: 0.4 }}
                 labelFormatter={(b) => (scope === "today" ? `${String(b).slice(11)} IST` : String(b))}

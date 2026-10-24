@@ -16,6 +16,10 @@ const config: UserConfig = {
       "@shared": path.resolve(__dirname, "../shared"),
     },
   },
+  build: {
+    // dist/.vite/manifest.json: scripts/check-bundle.mjs reads it to hold the JS budgets (DESIGN_SYSTEM.md §7: login < 250 KB gzip, shell + home < 400 KB).
+    manifest: true,
+  },
   server: {
     fs: {
       allow: [path.resolve(__dirname, ".."), path.resolve(__dirname, "../shared")],

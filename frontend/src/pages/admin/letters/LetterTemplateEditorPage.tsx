@@ -12,6 +12,7 @@ import { EmployeePicker, ExtraFieldInputs } from "../../../components/letters/Le
 import { placeholderOptions, stringifyExtras } from "../../../components/letters/letterUtils";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatDateTime } from "../../../lib/dates";
+import { fs } from "../../../theme/tokens";
 
 const { Title, Text } = Typography;
 const TYPE_LABELS: Record<string, string> = { text: "Text", number: "Number", currency: "Amount (₹)", date: "Date" };
@@ -122,7 +123,7 @@ export function LetterTemplateEditorPage() {
           <Flex vertical gap={16}>
             <Card title="Wording">
               <LetterEditor value={body} onChange={setBody} placeholders={placeholders} />
-              <Text type="secondary" style={{ display: "block", marginTop: 8, fontSize: 12 }}>
+              <Text type="secondary" style={{ display: "block", marginTop: 8, fontSize: fs.sm }}>
                 The letterhead (company name, address, logo) is added above automatically. Insert values from the placeholder menu; each is filled in as it stands on the day the letter is issued.
               </Text>
             </Card>
@@ -226,7 +227,7 @@ export function LetterTemplateEditorPage() {
           </Form.Item>
           <ExtraFieldInputs fields={fields.filter((f) => f.key)} />
         </Form>
-        <Text type="secondary" style={{ fontSize: 12 }}>
+        <Text type="secondary" style={{ fontSize: fs.sm }}>
           Nothing is stored or sent to the employee.
         </Text>
       </Modal>

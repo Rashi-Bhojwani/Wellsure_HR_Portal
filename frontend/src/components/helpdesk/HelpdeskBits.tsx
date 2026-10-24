@@ -9,6 +9,7 @@ import { startDownload } from "../../api/documents";
 import { apiErrorMessage } from "../../lib/apiError";
 import { formatDateTime } from "../../lib/dates";
 import { toFiles } from "./helpdeskUtils";
+import { fs } from "../../theme/tokens";
 
 const { Text, Paragraph } = Typography;
 
@@ -118,7 +119,7 @@ export function Thread({ messages, viewer }: { messages: HelpdeskMessage[]; view
                     Internal note — not visible to the employee
                   </Tag>
                 )}
-                <Text type="secondary" style={{ fontSize: 12 }}>
+                <Text type="secondary" style={{ fontSize: fs.sm }}>
                   {formatDateTime(m.createdAt)}
                 </Text>
               </Space>

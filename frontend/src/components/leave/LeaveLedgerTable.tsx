@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Table, Tag, Typography } from "antd";
 import * as leaveApi from "../../api/leave";
 import { EmptyState } from "../common/EmptyState";
+import { fs } from "../../theme/tokens";
 
 const { Text } = Typography;
 
@@ -36,7 +37,7 @@ export function LeaveLedgerTable({ employeeId }: { employeeId?: string }) {
               )}
               {r.remarks && (
                 <div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
+                  <Text type="secondary" style={{ fontSize: fs.sm }}>
                     {r.remarks}
                   </Text>
                 </div>

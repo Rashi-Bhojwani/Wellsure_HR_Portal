@@ -5,6 +5,7 @@ import { TASK_TYPE_LABELS, type TaskItem, type TaskType } from "@shared/types/in
 import * as inboxApi from "../../api/inbox";
 import { EmptyState } from "../common/EmptyState";
 import { formatDateTime } from "../../lib/dates";
+import { fs } from "../../theme/tokens";
 
 const { Text } = Typography;
 const TYPE_COLORS: Record<TaskType, string> = { LEAVE_APPROVAL: "blue", PROFILE_CHANGE_APPROVAL: "purple", HELPDESK_ASSIGNED: "cyan", REGULARIZATION_APPROVAL: "orange" };
@@ -35,7 +36,7 @@ export function TasksInbox({ portal }: { portal: "employee" | "admin" }) {
             render: (_: string, t) => (
               <Flex vertical>
                 <Text strong>{t.title}</Text>
-                {t.detail && <Text type="secondary" style={{ fontSize: 12 }}>{t.detail}</Text>}
+                {t.detail && <Text type="secondary" style={{ fontSize: fs.sm }}>{t.detail}</Text>}
               </Flex>
             ),
           },

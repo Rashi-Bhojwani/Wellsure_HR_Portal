@@ -1,58 +1,92 @@
 /* eslint-disable react-refresh/only-export-components -- context + hook are colocated by design */
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { ConfigProvider, theme as antdTheme } from "antd";
-import { darkTheme, lightTheme } from "./tokens";
+import { App as AntApp, ConfigProvider } from "antd";
+import { antdThemeFor } from "./antdTheme";
+import { cssVarsFor, type ThemeMode } from "./tokens";
 
-type ThemeMode = "light" | "dark";
+export type ThemePreference = ThemeMode | "system";
 
 interface ThemeContextValue {
+  /** The theme actually shown. */
   mode: ThemeMode;
+  /** What the person chose: light, dark, or follow the device. */
+  preference: ThemePreference;
+  setPreference: (p: ThemePreference) => void;
   toggleMode: () => void;
 }
 
 const ThemeModeContext = createContext<ThemeContextValue | undefined>(undefined);
 
-const STORAGE_KEY = "wellsure-theme-mode";
+// Per-viewer convenience only (DESIGN_SYSTEM.md: never state that must persist). index.html reads the same key before the first paint, so there is no flash.
+export const THEME_STORAGE_KEY = "wellsure-theme-mode";
 
-function readStoredMode(): ThemeMode {
+export function readStoredPreference(): ThemePreference {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored === "dark" ? "dark" : "light";
+    const stored = localStorage.getItem(THEME_STORAGE_KEY);
+    return stored === "dark" || stored === "light" || stored === "system" ? stored : "system";
+  } catch {
+    return "system";
+  }
+}
+
+function systemMode(): ThemeMode {
+  try {
+    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   } catch {
     return "light";
   }
 }
 
+export function resolveMode(preference: ThemePreference): ThemeMode {
+  return preference === "system" ? systemMode() : preference;
+}
+
+/** Writes the `--ws-*` variables and `data-theme` onto <html>. Called before React renders (main.tsx) and on every change. */
+export function applyThemeVars(mode: ThemeMode): void {
+  const root = document.documentElement;
+  for (const [name, value] of Object.entries(cssVarsFor(mode))) root.style.setProperty(name, value);
+  root.dataset.theme = mode;
+  root.style.colorScheme = mode;
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", cssVarsFor(mode)["--ws-bg-surface"] ?? "");
+}
+
 export function AppThemeProvider({ children }: { children: ReactNode }) {
-  const [mode, setMode] = useState<ThemeMode>(readStoredMode);
+  const [preference, setPreferenceState] = useState<ThemePreference>(readStoredPreference);
+  const [system, setSystem] = useState<ThemeMode>(systemMode);
+  const mode: ThemeMode = preference === "system" ? system : preference;
 
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, mode);
-    } catch {
-      // ignore — per-viewer convenience only
-    }
+    const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
+    if (!mq) return;
+    const onChange = () => setSystem(mq.matches ? "dark" : "light");
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  useEffect(() => {
+    applyThemeVars(mode);
   }, [mode]);
 
-  const value = useMemo<ThemeContextValue>(
-    () => ({
-      mode,
-      toggleMode: () => setMode((m) => (m === "light" ? "dark" : "light")),
-    }),
-    [mode],
-  );
-
-  const themeConfig = useMemo(() => {
-    const base = mode === "dark" ? darkTheme : lightTheme;
-    return {
-      ...base,
-      algorithm: mode === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+  const value = useMemo<ThemeContextValue>(() => {
+    const setPreference = (p: ThemePreference) => {
+      setPreferenceState(p);
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, p);
+      } catch {
+        // per-viewer convenience only
+      }
     };
-  }, [mode]);
+    return { mode, preference, setPreference, toggleMode: () => setPreference(mode === "light" ? "dark" : "light") };
+  }, [mode, preference]);
+
+  const themeConfig = useMemo(() => antdThemeFor(mode), [mode]);
 
   return (
     <ThemeModeContext.Provider value={value}>
-      <ConfigProvider theme={themeConfig}>{children}</ConfigProvider>
+      <ConfigProvider theme={themeConfig} wave={{ disabled: true }}>
+        <AntApp component={false}>{children}</AntApp>
+      </ConfigProvider>
     </ThemeModeContext.Provider>
   );
 }

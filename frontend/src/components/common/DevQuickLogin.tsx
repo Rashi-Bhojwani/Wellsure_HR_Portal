@@ -6,6 +6,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { isLoginChallenge } from "../../api/auth";
 import { quickLoginFailure } from "../../lib/loginErrors";
 import { MOBILE_TAB_BAR_HEIGHT } from "../../lib/mobileNav";
+import { fs, shadow, v } from "../../theme/tokens";
 
 // Mirrors prisma/seed.ts's DEV_PASSWORD — dev/demo-only, printed to the
 // console by the seed script itself, never a real secret.
@@ -59,15 +60,15 @@ export function DevQuickLogin() {
         bottom: isPhone ? MOBILE_TAB_BAR_HEIGHT + 12 : 16,
         right: isPhone ? 8 : 16,
         zIndex: 1000,
-        background: "#fff",
-        border: "1px solid #d9d9d9",
-        borderRadius: 8,
+        background: v.bgSurface,
+        border: `1px solid ${v.borderDefault}`,
+        borderRadius: 12,
         padding: 8,
-        boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+        boxShadow: shadow.popover,
       }}
     >
       <Space size={8}>
-        <span style={{ fontSize: 11, color: "#8c8c8c" }}>DEV</span>
+        <span style={{ fontSize: fs.xs, color: v.textSecondary }}>DEV</span>
         <Dropdown menu={{ items: menuItems }} trigger={["click"]}>
           <Button size="small" icon={<LoginOutlined />}>
             Quick login

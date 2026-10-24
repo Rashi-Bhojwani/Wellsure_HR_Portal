@@ -5,6 +5,7 @@ import { PlusOutlined } from "@ant-design/icons";
 import * as leaveApi from "../../../api/leave";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { LeaveLedgerTable } from "../../../components/leave/LeaveLedgerTable";
+import { fs } from "../../../theme/tokens";
 
 const { Text, Title } = Typography;
 
@@ -37,19 +38,19 @@ export function LeaveBalancesPage() {
             <Col key={b.leaveTypeId} xs={24} sm={12} md={8} xl={4} style={{ display: "flex" }}>
               <Card style={{ width: "100%", textAlign: "center" }}>
                 <Row justify="space-between" align="top">
-                  <Text strong style={{ fontSize: 13 }}>
+                  <Text strong style={{ fontSize: fs.table }}>
                     {b.name}
                   </Text>
                 </Row>
                 <Row justify="end">
-                  <Text type="secondary" style={{ fontSize: 11 }}>
+                  <Text type="secondary" style={{ fontSize: fs.xs }}>
                     Granted: {b.granted}
                   </Text>
                 </Row>
                 <Title level={2} style={{ margin: "16px 0 0" }}>
                   {b.balance}
                 </Title>
-                <Text type="secondary" style={{ fontSize: 12 }}>
+                <Text type="secondary" style={{ fontSize: fs.sm }}>
                   Balance
                 </Text>
               </Card>

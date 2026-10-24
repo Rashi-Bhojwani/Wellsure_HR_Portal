@@ -2,6 +2,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { Button, Card, Flex, Typography } from "antd";
 import { CloseOutlined, DownloadOutlined } from "@ant-design/icons";
 import { canPromptInstall, isIos, isStandalone, promptInstall, subscribeInstall } from "../../lib/pwa";
+import { fs } from "../../theme/tokens";
 
 const { Text } = Typography;
 const DISMISS_KEY = "wellsure.installPromptDismissed";
@@ -41,7 +42,7 @@ export function InstallAppBanner() {
         <div style={{ flex: 1 }}>
           <Text strong>Install the Wellsure app</Text>
           <div>
-            <Text type="secondary" style={{ fontSize: 12 }}>
+            <Text type="secondary" style={{ fontSize: fs.sm }}>
               {installable ? "Open it from your home screen, full-screen, like any app." : "Tap Share, then “Add to Home Screen”."}
             </Text>
           </div>

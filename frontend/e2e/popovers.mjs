@@ -1,4 +1,4 @@
-// A visual check of every popover, dropdown and drawer in both portals, at a phone width (390px) and at desktop width. Run against a running stack:
+// A visual check of every popover, dropdown and drawer of the app shell in both portals, at a phone width (390px) and at desktop width, in light and dark. Run against a running stack:
 //
 //   npm run check:popovers            (from frontend/; needs the API, the worker and `npm run dev` up, the seeded accounts, and Chrome)
 //
@@ -114,41 +114,43 @@ async function check(page, where, name, { open, root, surface, closeByEscape = t
   if (await measure(page, root, surface)) fail(label, "it did not close on a click outside it");
 }
 
+for (const theme of ["light", "dark"]) {
 for (const [width, height] of [
   [390, 844],
   [1280, 800],
 ]) {
   const phone = width < 768;
   const ctx = await browser.newContext({ viewport: { width, height } });
+  await ctx.addInitScript((t) => {
+    try {
+      localStorage.setItem("wellsure-theme-mode", t);
+    } catch {
+      /* private mode */
+    }
+  }, theme);
   const page = await ctx.newPage();
   await login(page);
-  const where = `${width}px`;
+  const where = `${width}px ${theme}`;
+  const header = () => page.locator("header.ws-topbar").first();
 
-  // ── Admin portal ──
+  // ── Admin portal (the shared shell: sidebar, top bar, search, bell, avatar menu) ──
   await page.goto(`${BASE}/admin`);
-  await page.getByText("Wellsure HR Portal v0.1.0").waitFor({ timeout: 30000 });
-  const header = page.locator("header").first();
-  await check(page, where, "admin: Your Apps", { open: () => header.getByRole("button", { name: "Your apps" }).click(), root: ".ant-dropdown", surface: "[data-testid=app-switcher-panel]" });
-  await check(page, where, "admin: notification bell", { open: () => header.locator(".ant-badge").first().click(), root: ".ant-popover, .ant-drawer-content-wrapper", surface: ".ant-popover-container, .ant-drawer-section" });
-  await check(page, where, "admin: settings menu", { open: () => header.locator(".anticon-setting").first().click(), root: ".ant-dropdown", surface: ".ant-dropdown-menu" });
-
-  await page.goto(`${BASE}/admin/workforce`);
-  await page.getByText("Wellsure HR Portal v0.1.0").waitFor({ timeout: 30000 });
+  await page.locator("header.ws-topbar").waitFor({ timeout: 30000 });
+  await check(page, where, "admin: notification bell", { open: () => header().locator(".ant-badge").first().click(), root: ".ant-popover, .ant-drawer-content-wrapper", surface: ".ant-popover-container, .ant-drawer-section" });
+  await check(page, where, "admin: account menu", { open: () => header().locator(".ws-avatar-btn").click(), root: ".ant-dropdown", surface: ".ant-dropdown-menu" });
+  await check(page, where, "admin: search", { open: () => header().getByRole("button", { name: "Search pages and actions" }).click(), root: ".ant-modal-wrap .ant-modal", surface: ".ant-modal-container" });
   if (phone) {
-    await check(page, where, "admin: menu drawer (Leave and Attendance)", { open: () => page.getByRole("button", { name: "Open the menu" }).click(), root: ".ant-drawer-content-wrapper", surface: ".ant-drawer-section" });
-  } else {
-    for (const group of ["Leave", "Attendance"]) {
-      await check(page, where, `admin: ${group} menu`, { open: () => page.locator("header a", { hasText: group }).first().hover(), root: ".ant-dropdown", surface: ".ant-dropdown-menu" });
-    }
+    await check(page, where, "admin: menu drawer", { open: () => page.getByRole("button", { name: "Open the menu" }).click(), root: ".ant-drawer-content-wrapper", surface: ".ant-drawer-section" });
   }
 
   // ── Employee portal ──
   await page.goto(`${BASE}/app/home`);
-  await page.waitForTimeout(1500);
-  const eHeader = page.locator("header").first();
-  await check(page, where, "employee: notification bell", { open: () => eHeader.locator(".ant-badge").first().click(), root: ".ant-popover, .ant-drawer-content-wrapper", surface: ".ant-popover-container, .ant-drawer-section" });
-  if (!phone) await check(page, where, "employee: Quick Links", { open: () => eHeader.locator("a", { hasText: "Quick Links" }).hover(), root: ".ant-dropdown", surface: ".ant-dropdown-menu" });
+  await page.locator("header.ws-topbar").waitFor({ timeout: 30000 });
+  await page.waitForTimeout(800);
+  await check(page, where, "employee: notification bell", { open: () => header().locator(".ant-badge").first().click(), root: ".ant-popover, .ant-drawer-content-wrapper", surface: ".ant-popover-container, .ant-drawer-section" });
+  await check(page, where, "employee: account menu", { open: () => header().locator(".ws-avatar-btn").click(), root: ".ant-dropdown", surface: ".ant-dropdown-menu" });
   await ctx.close();
+}
 }
 
 await browser.close();

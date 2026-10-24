@@ -12,6 +12,7 @@ import { AttachmentPicker, StatusTag } from "../../../components/helpdesk/Helpde
 import { lifecycleHint, toFiles } from "../../../components/helpdesk/helpdeskUtils";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatDateTime } from "../../../lib/dates";
+import { fs } from "../../../theme/tokens";
 
 const { Text } = Typography;
 
@@ -111,7 +112,7 @@ export function HelpdeskPage() {
                 <Text strong>{t.subject}</Text>
                 {lifecycleHint(t) && (
                   <div>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
+                    <Text type="secondary" style={{ fontSize: fs.sm }}>
                       {lifecycleHint(t)}
                     </Text>
                   </div>

@@ -8,6 +8,7 @@ import type { LetterTemplateSummary } from "../../../api/letters";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatDateTime } from "../../../lib/dates";
+import { fs } from "../../../theme/tokens";
 
 const { Title, Text } = Typography;
 
@@ -69,7 +70,7 @@ export function LetterTemplatesPage() {
               <div>
                 <Text strong>{v}</Text>
                 <div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
+                  <Text type="secondary" style={{ fontSize: fs.sm }}>
                     {t.description ?? t.code}
                   </Text>
                 </div>

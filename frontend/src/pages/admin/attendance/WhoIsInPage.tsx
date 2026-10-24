@@ -5,6 +5,7 @@ import { Alert, Card, Col, Empty, Flex, List, Row, Select, Statistic, Tag, Typog
 import * as infoApi from "../../../api/attendanceInfo";
 import type { WhoPerson } from "../../../api/attendanceInfo";
 import { useSocket } from "../../../sockets/SocketProvider";
+import { fs } from "../../../theme/tokens";
 
 const { Title, Text } = Typography;
 
@@ -14,7 +15,7 @@ function Person({ p, extra }: { p: WhoPerson; extra?: React.ReactNode }) {
       <Flex justify="space-between" style={{ width: "100%" }} gap={8}>
         <div>
           <div>{p.name}</div>
-          <Text type="secondary" style={{ fontSize: 12 }}>
+          <Text type="secondary" style={{ fontSize: fs.sm }}>
             {p.employeeCode} · {p.branch ?? "—"}
             {p.department ? ` · ${p.department}` : ""}
           </Text>

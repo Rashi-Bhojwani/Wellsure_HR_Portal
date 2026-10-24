@@ -6,6 +6,7 @@ import type { AxiosError } from "axios";
 import { useAuth } from "../../hooks/useAuth";
 import * as authApi from "../../api/auth";
 import type { Session } from "../../api/auth";
+import { fs } from "../../theme/tokens";
 
 const { Title, Text } = Typography;
 
@@ -71,7 +72,7 @@ export function AccountSecurityPage() {
           <Text type="secondary">Your old backup codes no longer work. Save these somewhere safe.</Text>
           <Space wrap style={{ marginTop: 12 }}>
             {codes.map((code) => (
-              <Tag key={code} style={{ fontFamily: "monospace", fontSize: 14, padding: "4px 8px" }}>
+              <Tag key={code} style={{ fontFamily: "monospace", fontSize: fs.md, padding: "4px 8px" }}>
                 {code}
               </Tag>
             ))}
@@ -133,7 +134,7 @@ export function AccountSecurityPage() {
           locale={{ emptyText: "No active sessions" }}
           renderItem={(session) => (
             <List.Item actions={[<a key="revoke" onClick={() => void onRevokeSession(session.id)}>Revoke</a>]}>
-              <Text style={{ fontSize: 13 }}>{formatSession(session)}</Text>
+              <Text style={{ fontSize: fs.table }}>{formatSession(session)}</Text>
             </List.Item>
           )}
         />

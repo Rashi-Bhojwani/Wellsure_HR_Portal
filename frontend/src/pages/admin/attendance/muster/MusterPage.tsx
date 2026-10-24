@@ -14,6 +14,7 @@ import { useSocket } from "../../../../sockets/SocketProvider";
 import { MusterGrid } from "./MusterGrid";
 import { cellKey, useCellTones } from "./musterCells";
 import { MusterUploadPanel } from "./MusterUploadPanel";
+import { fs } from "../../../../theme/tokens";
 
 const { Title, Text } = Typography;
 
@@ -239,13 +240,13 @@ export function MusterPage({ title = "Attendance Muster" }: { title?: string }) 
                   const tone = tones(l.code.split(/[ ,/]/)[0]!);
                   return (
                     <span key={l.code} style={{ display: "inline-flex", alignItems: "center", gap: 6, marginRight: 8 }}>
-                      <span style={{ background: tone.background, color: tone.color, border: `1px solid ${token.colorBorderSecondary}`, borderRadius: 4, padding: "0 6px", fontWeight: 500, fontSize: 12 }}>{l.code}</span>
-                      <Text style={{ fontSize: 12 }}>{l.label}</Text>
+                      <span style={{ background: tone.background, color: tone.color, border: `1px solid ${token.colorBorderSecondary}`, borderRadius: 4, padding: "0 6px", fontWeight: 500, fontSize: fs.sm }}>{l.code}</span>
+                      <Text style={{ fontSize: fs.sm }}>{l.label}</Text>
                     </span>
                   );
                 })}
               </Flex>
-              <Flex gap={16} wrap style={{ marginTop: 8, fontSize: 12 }}>
+              <Flex gap={16} wrap style={{ marginTop: 8, fontSize: fs.sm }}>
                 <span><span style={{ display: "inline-block", width: 14, height: 14, verticalAlign: "middle", boxShadow: `inset 0 0 0 1px ${token.colorTextQuaternary}`, marginRight: 4, textDecoration: "underline dotted" }} />Status only, no times</span>
                 <span><span style={{ display: "inline-block", width: 0, height: 0, borderTop: `8px solid ${token.colorError}`, borderLeft: "8px solid transparent", marginRight: 4 }} />One time only (forgot to punch out?)</span>
                 <span><span style={{ display: "inline-block", width: 6, height: 6, borderRadius: 6, background: token.colorSuccess, marginRight: 4 }} />Worked on an off day</span>
@@ -259,7 +260,7 @@ export function MusterPage({ title = "Attendance Muster" }: { title?: string }) 
             {data.canMark && (
               <div>
                 <Text type="secondary">What you can type</Text>
-                <ul style={{ margin: "6px 0 0", paddingLeft: 18, fontSize: 12 }}>
+                <ul style={{ margin: "6px 0 0", paddingLeft: 18, fontSize: fs.sm }}>
                   {data.inputHelp.map((h) => (
                     <li key={h.code}>
                       <Text code>{h.code}</Text> {h.label}

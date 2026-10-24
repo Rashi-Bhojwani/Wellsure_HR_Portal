@@ -7,6 +7,7 @@ import type { LayoutColumn, LayoutValue, LayoutView, RuleStatus } from "../../..
 import { useAuth } from "../../../hooks/useAuth";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatDate } from "../../../lib/dates";
+import { fs } from "../../../theme/tokens";
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -43,7 +44,7 @@ export function LayoutsPage() {
         pagination={false}
         dataSource={data}
         columns={[
-          { title: "File", render: (_, r) => <div><Text strong>{r.label}</Text><div><Text type="secondary" style={{ fontSize: 12 }}>{r.description}</Text></div></div> },
+          { title: "File", render: (_, r) => <div><Text strong>{r.label}</Text><div><Text type="secondary" style={{ fontSize: fs.sm }}>{r.description}</Text></div></div> },
           { title: "Status", render: (_, r) => <Tag color={STATUS_TAG[r.status].color}>{STATUS_TAG[r.status].label}</Tag> },
           {
             title: "Layout",
@@ -54,7 +55,7 @@ export function LayoutsPage() {
               return `${(r.current.value as LayoutValue).format.toLowerCase().replace("_", " ")}, ${(r.current.value as LayoutValue).columns.length} columns`;
             },
           },
-          { title: "Source", render: (_, r) => <Text type="secondary" style={{ fontSize: 12 }}>{r.sourceLabel ?? r.whoConfirms}</Text> },
+          { title: "Source", render: (_, r) => <Text type="secondary" style={{ fontSize: fs.sm }}>{r.sourceLabel ?? r.whoConfirms}</Text> },
           {
             title: "",
             render: (_, r) => (
@@ -121,7 +122,7 @@ function RowsEditor({ name, tokens, fixed, title }: { name: string; tokens: stri
           {rows.map((row, i) => (
             <Card key={row.key} size="small" title={`${title} row ${i + 1}`} extra={<Button type="text" icon={<MinusCircleOutlined />} aria-label="Remove row" onClick={() => remove(row.name)} />}>
               <CellsEditor name={[row.name]} abs={[name, row.name]} fields={[]} allowField={false} fixed={fixed} title="cell" />
-              <Text type="secondary" style={{ fontSize: 12 }}>Tokens: {tokens.map((t) => `{${t}}`).join(" ")}</Text>
+              <Text type="secondary" style={{ fontSize: fs.sm }}>Tokens: {tokens.map((t) => `{${t}}`).join(" ")}</Text>
             </Card>
           ))}
           <Button type="dashed" icon={<PlusOutlined />} onClick={() => add([{ source: "CONSTANT", value: "" }])} style={{ alignSelf: "flex-start" }}>
@@ -264,13 +265,13 @@ function ConfirmModal({ layout, onClose, onDone }: { layout: LayoutView; onClose
           <>
             <Text>Version {p.version}, entered by {p.authorName}. {p.sourceLabel}</Text>
             {p.blocked && <Alert type="warning" showIcon title={p.blocked} />}
-            <pre style={{ margin: 0, maxHeight: 280, overflow: "auto", background: "rgba(0,0,0,0.04)", padding: 8, fontSize: 12 }}>{JSON.stringify(p.value, null, 2)}</pre>
+            <pre style={{ margin: 0, maxHeight: 280, overflow: "auto", background: "rgba(0,0,0,0.04)", padding: 8, fontSize: fs.sm }}>{JSON.stringify(p.value, null, 2)}</pre>
             <Input.TextArea rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder="What you checked it against (required)" />
             <Checkbox checked={seen} onChange={(e) => setSeen(e.target.checked)}>I have compared this layout with the bank’s or the portal’s own specification.</Checkbox>
           </>
         )}
         {problem && <Alert type="error" showIcon title={problem} />}
-        {layout.lastConfirmed && <Text type="secondary" style={{ fontSize: 12 }}>The last confirmed layout was version {layout.lastConfirmed.version}, confirmed {layout.lastConfirmed.confirmation ? formatDate(layout.lastConfirmed.confirmation.confirmedAt) : ""}.</Text>}
+        {layout.lastConfirmed && <Text type="secondary" style={{ fontSize: fs.sm }}>The last confirmed layout was version {layout.lastConfirmed.version}, confirmed {layout.lastConfirmed.confirmation ? formatDate(layout.lastConfirmed.confirmation.confirmedAt) : ""}.</Text>}
       </Flex>
     </Modal>
   );

@@ -8,6 +8,7 @@ import { apiErrorMessage } from "../../lib/apiError";
 import { formatDateTime } from "../../lib/dates";
 import { ExtraFieldInputs } from "./LetterFields";
 import { stringifyExtras } from "./letterUtils";
+import { fs } from "../../theme/tokens";
 
 const { Text } = Typography;
 const STATUS: Record<IssuedLetter["status"], { color: string; label: string }> = {
@@ -83,7 +84,7 @@ export function IssuedLetters({ employeeId }: { employeeId: string }) {
         scroll={{ x: true }}
         locale={{ emptyText: "No letters issued yet." }}
         columns={[
-          { title: "Reference", dataIndex: "reference", render: (v: string, l) => (<span>{v}{l.reissueOf && <Text type="secondary" style={{ fontSize: 12 }}> · reissue of {l.reissueOf.reference}</Text>}</span>) },
+          { title: "Reference", dataIndex: "reference", render: (v: string, l) => (<span>{v}{l.reissueOf && <Text type="secondary" style={{ fontSize: fs.sm }}> · reissue of {l.reissueOf.reference}</Text>}</span>) },
           { title: "Letter", key: "template", render: (_: unknown, l) => `${l.template.name} (v${l.templateVersion})` },
           { title: "Issued", dataIndex: "generatedAt", render: (v: string) => formatDateTime(v) },
           {

@@ -1,6 +1,7 @@
 import { Alert, Button, Space, Typography } from "antd";
 import { Link } from "react-router-dom";
 import type { FinalisationBlocker, FinalisationReadiness, FinalisationWarning } from "../../api/attendance";
+import { fs } from "../../theme/tokens";
 
 const { Text } = Typography;
 const ATTENDANCE = "/admin/workforce/attendance";
@@ -63,7 +64,7 @@ export function FinalisationBlockers({ readiness }: { readiness: FinalisationRea
               <>
                 <div>{b.message}</div>
                 {eg && (
-                  <Text type="secondary" style={{ fontSize: 12 }}>
+                  <Text type="secondary" style={{ fontSize: fs.sm }}>
                     {eg}
                   </Text>
                 )}

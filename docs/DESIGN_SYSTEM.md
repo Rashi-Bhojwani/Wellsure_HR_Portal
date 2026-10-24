@@ -467,7 +467,61 @@ wrapper in `frontend/src/ui/` from step 3). Board frames in brackets.
 
 ## 12. Shared components — usage notes
 
-Written in step 3, with `frontend/src/ui/`.
+Everything lives in `frontend/src/ui/` (import from `../../ui` — the barrel `index.ts`) and is styled only by `frontend/src/theme/tokens.ts`.
+
+**Tokens in code.**
+- Colours: `v.textSecondary`, `v.accentText`, `v.bgSubtle`, `v.danger`, … (CSS variables, follow the theme without a hook; safe in module
+  constants). Or `theme.useToken()` for Ant Design's own tokens. **Never** a hex/rgb literal outside `src/theme/` — `npm run lint` fails.
+- Type: `fs.chip 10 · xs 11 · sm 12 · table 13 · md 14 · lg 16 · xl 18 · h2 20 · h1 24 · stat 32 · display 40`; weights `fw.*`.
+  **Never** `fontSize: 12` — use `fontSize: fs.sm` (lint fails otherwise).
+- Spacing `space[1..16]` (4 px steps), radii `radius.xs/sm/md/lg/pill`, control heights `control.*`.
+- Charts: `useChartColors(mode)` from `theme/chartPalette` (`mode` from `useThemeMode()`); fixed slot order, always a legend.
+- Attendance day colours: `attendanceStatusColor[code]` (CSS variables).
+
+**Page skeleton.** Every page:
+```tsx
+<PageHeader title="All Employees" subtitle="Manage your employees" actions={<Button type="primary" icon={<PlusOutlined/>}>Add employee</Button>} />
+<Stack>                         {/* 24 px rhythm, 16 on phones */}
+  <CardGrid min={220}>{stats}</CardGrid>
+  <Panel title="Employees" extra={...}>
+    <FilterBar onSearch={setSearch} searchPlaceholder="Search employee" filters={<>{selects}</>} activeCount={n} onClear={clear} />
+    <DataTable rowKey="id" columns={columns} dataSource={rows} loading={isLoading} error={error} onRetry={refetch}
+               pagination={{ current, pageSize, total, onChange }} onRowOpen={(r) => navigate(...)} mobile={{ title, subtitle, status, fields, actions }} />
+  </Panel>
+</Stack>
+```
+
+| Component | Use it for | Notes |
+|---|---|---|
+| `PageHeader` | the page's h1 | `subtitle` or `breadcrumb` (`[{label,to}]`), `back` (detail pages), `actions` (primary last), `tags`. Actions wrap full-width on phones. |
+| `Panel` | every content block (the board's card) | `title`, `subtitle`, `extra`, `onEdit` (pencil), `flush` (no body padding), `tone="subtle"`. Replaces bare `Card`. |
+| `Stack`, `CardGrid` | vertical rhythm; responsive card grids | `CardGrid min={280}` = columns at least 280 px wide. |
+| `StatCard` | one number with a label | `icon` (48 px circle, `tone`), `delta` (only from figures the API returns), `info`, `onClick`, `variant="compact"`. |
+| `StatusChip` | every status | `status="APPROVED"` picks the tone; or `tone` + children. Always a word, never colour alone. |
+| `DataTable` | every table | wraps antd `Table`: rounded header band, 64 px rows (`density="compact"` 44 px for dense grids), skeleton on first load, faded old rows while refetching, `error`/`onRetry`, empty state, "Showing x to y of z", phone stacked cards (`mobile` spec, else derived from columns), `onRowOpen` (click + Enter), virtualises unpaginated lists > 100 rows. Use `useQuery({ placeholderData: keepPreviousData })` for paginated queries. |
+| `FilterBar` | search + filters above a table | search is debounced 250 ms (pass the setter); on phones filters move into a "Filter" sheet. |
+| `SideDrawer` | "Add" / detail forms | right drawer 440 / 640 (`size="wide"`), full-screen sheet on phones; sticky footer Cancel + primary (`onPrimary` or `formId` to submit an antd Form by id), `status` chip, `secondaryAction`. Focus trap, Esc, overlay close. |
+| `ConfirmModal` | confirmations, success | `illustration="success"`, `info`, `danger`, `loading`. Bottom sheet on phones. Never close before the server answered for money, approvals or audited actions. |
+| `EmptyState` | empty, no results, error, forbidden, offline | `kind`, `title`, `description` (`null` hides), `action`, `onRetry`, `compact`, `illustration`. |
+| `QueryState` | wrap a query's content | renders skeleton / forbidden (API 403) / offline / error with retry / empty / children. |
+| `Skeletons` | loading shapes | `Skel`, `SkeletonCard`, `SkeletonStats`, `SkeletonTable`, `PageSkeleton` (route fallback). No whole-page spinners. |
+| `StepperLayout` | multi-step flows | `variant="dots"` (onboarding) or `"numbered"` (drawer steps); announces "Step 2 of 4". |
+| `FormSection`, `KeyValueGrid`, `FormGroupTitle` | profile/detail blocks, read-only label/value grids, sub-heads in long forms | KeyValueGrid stacks on phones. |
+| `ApprovalBanner` | maker-checker state, page notices | `tone` info/warning/success/danger, `actions`. |
+| `Timeline` | history, audit trails, activity | items `{key, content, time, marker?, tone?}`. |
+| `toast` | transient results | `toast.success("Saved")`, `toast.error(apiErrorMessage(err, "…"))`. |
+| `InitialsAvatar` | people without photos | tint from the name. `EmployeeAvatar` (components/common) shows the photo when there is one. |
+| `Illustration` | our own line art | empty, search, error, forbidden, offline, success, documents, upload, calendar, inbox, chart, people. |
+| hooks | `useIsPhone()` (< 768), `useIsCompact()` (< 1280), `useDebouncedValue`, `isForbidden(err)` | |
+
+**Shell** (`frontend/src/layouts/shell/`): `AppShell` (sidebar, top bar with search ⌘/Ctrl K, notification bell, avatar menu, phone tab
+bars, route Suspense + 180 ms page transition), `Sidebar`, `CommandPalette`, `ThemeToggle`, `nav.ts` (menu model from the two menu configs).
+Pages never render their own app chrome.
+
+**Behaviour rules for every screen.** Loading = skeletons shaped like the content; every query has empty, error and forbidden states;
+search debounced; paginated tables keep previous data; optimistic updates only where rollback is already safe (never money, approvals or
+audited actions); icon-only buttons have `aria-label` + tooltip; no hover-only actions; touch targets ≥ 44 px on phones (global CSS does
+buttons and inputs); sensitive values only where they already appear, for the roles that already see them.
 
 ## 13. How to build a new screen
 

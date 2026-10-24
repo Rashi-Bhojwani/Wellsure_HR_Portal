@@ -6,6 +6,7 @@ import * as helpdeskApi from "../../../api/helpdesk";
 import type { HelpdeskCategoryAdmin } from "../../../api/helpdesk";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { apiErrorMessage } from "../../../lib/apiError";
+import { fs } from "../../../theme/tokens";
 
 const { Title, Text } = Typography;
 
@@ -66,7 +67,7 @@ export function HelpdeskCategoriesPage() {
         scroll={{ x: true }}
         locale={{ emptyText: <EmptyState message="No categories yet." /> }}
         columns={[
-          { title: "Name", dataIndex: "name", render: (v: string, c) => (<div><Text strong>{v}</Text><div><Text type="secondary" style={{ fontSize: 12 }}>{c.code}</Text></div></div>) },
+          { title: "Name", dataIndex: "name", render: (v: string, c) => (<div><Text strong>{v}</Text><div><Text type="secondary" style={{ fontSize: fs.sm }}>{c.code}</Text></div></div>) },
           {
             title: "Sensitive",
             dataIndex: "isSensitive",

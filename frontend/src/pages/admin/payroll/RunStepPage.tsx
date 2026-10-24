@@ -14,6 +14,7 @@ import { formatDate, formatDateTime } from "../../../lib/dates";
 import { formatDifference, formatRupees } from "../../../lib/money";
 import { useSocket } from "../../../sockets/SocketProvider";
 import { STEP_TITLE, VARIANCE_TAG_LABEL } from "./runText";
+import { fs } from "../../../theme/tokens";
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -93,8 +94,8 @@ function LeftOut({ people }: { people: PersonNote[] }) {
             pagination={people.length > 15 ? { pageSize: 15, showSizeChanger: false } : false}
             dataSource={people}
             columns={[
-              { title: "Who", render: (_, r) => <div><Text strong>{r.name}</Text><div><Text type="secondary" style={{ fontSize: 12 }}>{r.employeeCode}</Text></div></div> },
-              { title: "Why they are left out", render: (_, r) => <div>{r.reason}{r.detail && <div><Text type="secondary" style={{ fontSize: 12 }}>{r.detail}</Text></div>}</div> },
+              { title: "Who", render: (_, r) => <div><Text strong>{r.name}</Text><div><Text type="secondary" style={{ fontSize: fs.sm }}>{r.employeeCode}</Text></div></div> },
+              { title: "Why they are left out", render: (_, r) => <div>{r.reason}{r.detail && <div><Text type="secondary" style={{ fontSize: fs.sm }}>{r.detail}</Text></div>}</div> },
             ]}
           />
         </Flex>
@@ -172,7 +173,7 @@ function PersonList({ title, people }: { title: string; people: PersonNote[] }) 
         dataSource={people}
         columns={[
           { title: "Who", dataIndex: "name" },
-          { title: "Why", render: (_, r) => <div>{r.reason}{r.detail && <div><Text type="secondary" style={{ fontSize: 12 }}>{r.detail}</Text></div>}</div> },
+          { title: "Why", render: (_, r) => <div>{r.reason}{r.detail && <div><Text type="secondary" style={{ fontSize: fs.sm }}>{r.detail}</Text></div>}</div> },
         ]}
       />
     </Card>
@@ -222,8 +223,8 @@ function Summary({ p, slug }: { p: StepPreview; slug: StepSlug }) {
               </Text>
               {v.totals.change && (
                 <Flex gap={32} wrap>
-                  <Statistic title="Net pay" value={formatRupees(v.totals.current!.net)} suffix={<Text type="secondary" style={{ fontSize: 13 }}> {formatDifference(v.totals.change.net)}</Text>} />
-                  <Statistic title="Gross" value={formatRupees(v.totals.current!.gross)} suffix={<Text type="secondary" style={{ fontSize: 13 }}> {formatDifference(v.totals.change.gross)}</Text>} />
+                  <Statistic title="Net pay" value={formatRupees(v.totals.current!.net)} suffix={<Text type="secondary" style={{ fontSize: fs.table }}> {formatDifference(v.totals.change.net)}</Text>} />
+                  <Statistic title="Gross" value={formatRupees(v.totals.current!.gross)} suffix={<Text type="secondary" style={{ fontSize: fs.table }}> {formatDifference(v.totals.change.gross)}</Text>} />
                 </Flex>
               )}
               {v.flaggedCount > 0 && (

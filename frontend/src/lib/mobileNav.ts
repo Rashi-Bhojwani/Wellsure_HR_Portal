@@ -1,6 +1,6 @@
 import { quickActions, type MobileTab } from "../routes/employeeMenu.config";
 
-export const MOBILE_TAB_BAR_HEIGHT = 60;
+export const MOBILE_TAB_BAR_HEIGHT = 64;
 
 // Which bottom tab a path belongs to (Phase 5 commit G): Home and Engage by
 // their own paths; Action for its page and any quick-action page;

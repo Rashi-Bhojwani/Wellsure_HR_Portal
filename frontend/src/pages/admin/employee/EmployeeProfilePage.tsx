@@ -33,6 +33,7 @@ import { PhotoUploader } from "../../../components/common/PhotoUploader";
 import * as peopleApi from "../../../api/people";
 import { EmployeeDocumentsTab } from "./EmployeeDocumentsTab";
 import { EmployeeAccessTab } from "../../../components/access/EmployeeAccessTab";
+import { fs } from "../../../theme/tokens";
 
 const { Title, Text } = Typography;
 
@@ -395,7 +396,7 @@ export function EmployeeProfilePage() {
             disabled={!canEdit || !profile.personal}
           />
           <Title level={3} style={{ margin: 0 }}>
-            {profile.fullName} <Text type="secondary" style={{ fontSize: 16 }}>({profile.employeeCode})</Text>
+            {profile.fullName} <Text type="secondary" style={{ fontSize: fs.lg }}>({profile.employeeCode})</Text>
             {profile.attendanceCapture === "MANUAL" && (
               <Tag color="purple" style={{ marginInlineStart: 8, verticalAlign: "middle" }} title="No biometric device: their attendance is marked manually by whoever marks their branch.">
                 Manual attendance

@@ -1,11 +1,7 @@
 import { Avatar, type AvatarProps } from "antd";
 import { photoUrl } from "../../api/people";
 import { usePhotoToken } from "../../hooks/usePhotoToken";
-
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : "")).toUpperCase() || "?";
-}
+import { InitialsAvatar } from "../../ui/Avatar";
 
 interface EmployeeAvatarProps {
   employeeId: string;
@@ -21,13 +17,6 @@ interface EmployeeAvatarProps {
 export function EmployeeAvatar({ employeeId, name, photoVersion, size = 40, variant = "thumb" }: EmployeeAvatarProps) {
   const token = usePhotoToken(Boolean(photoVersion));
   const src = photoVersion && token ? photoUrl(employeeId, photoVersion, variant, token) : undefined;
-  return (
-    <Avatar
-      size={size}
-      src={src ? <img src={src} alt={name} loading="lazy" decoding="async" /> : undefined}
-      style={src ? undefined : { backgroundColor: "#1677ff", flexShrink: 0 }}
-    >
-      {initials(name)}
-    </Avatar>
-  );
+  if (!src) return <InitialsAvatar name={name} size={typeof size === "number" ? size : 40} />;
+  return <Avatar size={size} src={<img src={src} alt={name} loading="lazy" decoding="async" />} style={{ flexShrink: 0 }} />;
 }

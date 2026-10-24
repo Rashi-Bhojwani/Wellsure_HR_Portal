@@ -9,6 +9,7 @@ import { EmployeeAvatar } from "../../../components/common/EmployeeAvatar";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { OrgChart } from "./OrgChart";
 import { PersonDrawer } from "./PersonDrawer";
+import { fs } from "../../../theme/tokens";
 
 const PAGE_SIZE = 24;
 const ellipsis = { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } as const;
@@ -101,23 +102,23 @@ function Directory({ onOpenPerson }: { onOpenPerson: (id: string) => void }) {
                         with several measured ellipses each was the directory's main render cost. */}
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontWeight: 600, ...ellipsis }}>{person.name}</div>
-                      <div style={{ fontSize: 12, ...ellipsis }}>
-                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      <div style={{ fontSize: fs.sm, ...ellipsis }}>
+                        <Typography.Text type="secondary" style={{ fontSize: fs.sm }}>
                           {person.designation.name} · {person.department.name}
                         </Typography.Text>
                       </div>
-                      <div style={{ fontSize: 12, ...ellipsis }}>
-                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      <div style={{ fontSize: fs.sm, ...ellipsis }}>
+                        <Typography.Text type="secondary" style={{ fontSize: fs.sm }}>
                           {person.location.name} · {person.employeeCode}
                         </Typography.Text>
                       </div>
                       {person.officialEmail && (
-                        <div style={{ fontSize: 12, ...ellipsis }}>
+                        <div style={{ fontSize: fs.sm, ...ellipsis }}>
                           <MailOutlined /> {person.officialEmail}
                         </div>
                       )}
                       {person.mobile && (
-                        <div style={{ fontSize: 12 }}>
+                        <div style={{ fontSize: fs.sm }}>
                           <PhoneOutlined /> {person.mobile}
                         </div>
                       )}

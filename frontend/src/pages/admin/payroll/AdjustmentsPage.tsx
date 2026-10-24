@@ -8,6 +8,7 @@ import { useAuth } from "../../../hooks/useAuth";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatDate } from "../../../lib/dates";
 import { formatRupees } from "../../../lib/money";
+import { fs } from "../../../theme/tokens";
 
 const { Title, Text } = Typography;
 
@@ -49,11 +50,11 @@ export function AdjustmentsPage() {
         dataSource={data?.items ?? []}
         pagination={{ current: page, pageSize: 25, total: data?.total ?? 0, showSizeChanger: false, onChange: setPage }}
         columns={[
-          { title: "Employee", render: (_, a) => <div><Text strong>{a.employeeName}</Text><div><Text type="secondary" style={{ fontSize: 12 }}>{a.employeeCode}</Text></div></div> },
-          { title: "What", render: (_, a) => <div>{a.reason}{a.periodStart && <div><Text type="secondary" style={{ fontSize: 12 }}>For {formatDate(a.periodStart)} to {a.periodEnd ? formatDate(a.periodEnd) : ""}</Text></div>}</div> },
+          { title: "Employee", render: (_, a) => <div><Text strong>{a.employeeName}</Text><div><Text type="secondary" style={{ fontSize: fs.sm }}>{a.employeeCode}</Text></div></div> },
+          { title: "What", render: (_, a) => <div>{a.reason}{a.periodStart && <div><Text type="secondary" style={{ fontSize: fs.sm }}>For {formatDate(a.periodStart)} to {a.periodEnd ? formatDate(a.periodEnd) : ""}</Text></div>}</div> },
           { title: "Kind", render: (_, a) => <Space size={4}><Tag color={a.direction === "EARNING" ? "green" : "red"}>{a.direction === "EARNING" ? "Earning" : "Deduction"}</Tag>{a.source === "SALARY_ARREARS" && <Tag color="gold">Arrears</Tag>}</Space> },
           { title: "Amount", align: "right", render: (_, a) => `${a.direction === "DEDUCTION" ? "-" : ""}${formatRupees(a.amount)}` },
-          { title: "Status", render: (_, a) => <div><Tag color={STATUS_COLOR[a.status]}>{a.status === "PENDING" ? "Waiting" : a.status === "CONSUMED" ? "Used" : "Cancelled"}</Tag>{a.cancelReason && <div><Text type="secondary" style={{ fontSize: 12 }}>{a.cancelReason}</Text></div>}</div> },
+          { title: "Status", render: (_, a) => <div><Tag color={STATUS_COLOR[a.status]}>{a.status === "PENDING" ? "Waiting" : a.status === "CONSUMED" ? "Used" : "Cancelled"}</Tag>{a.cancelReason && <div><Text type="secondary" style={{ fontSize: fs.sm }}>{a.cancelReason}</Text></div>}</div> },
           { title: "", align: "right", render: (_, a) => (canEdit && a.status === "PENDING" ? <Button size="small" danger onClick={() => setCancelling(a)}>Cancel</Button> : null) },
         ]}
       />

@@ -2,6 +2,7 @@ import { Alert, Space, Table, Tag, Typography } from "antd";
 import { COMPONENT_TYPE_LABEL } from "@shared/constants/payrollSalary";
 import type { PlanPerson } from "../../api/payroll";
 import { formatDifference, formatRupees } from "../../lib/money";
+import { fs } from "../../theme/tokens";
 
 const { Text } = Typography;
 
@@ -52,7 +53,7 @@ export function RevisionPlanTable({ people, componentName }: { people: PlanPerso
         ),
       }}
       columns={[
-        { title: "Employee", render: (_, p) => <div><Text strong>{p.name}</Text><div><Text type="secondary" style={{ fontSize: 12 }}>{p.employeeCode}</Text></div></div> },
+        { title: "Employee", render: (_, p) => <div><Text strong>{p.name}</Text><div><Text type="secondary" style={{ fontSize: fs.sm }}>{p.employeeCode}</Text></div></div> },
         { title: "", render: (_, p) => <Tag color={p.rowReason === "JOINING" ? "blue" : "default"}>{p.rowReason === "JOINING" ? "First salary" : p.rowReason === "CORRECTION" ? "Correction" : "Revision"}</Tag> },
         { title: "A month now", align: "right", render: (_, p) => (p.previous ? formatRupees(p.previous.monthlyCtc) : "None") },
         { title: "A month after", align: "right", render: (_, p) => (p.next ? formatRupees(p.next.monthlyCtc) : <Tag color="red">Cannot be worked out</Tag>) },

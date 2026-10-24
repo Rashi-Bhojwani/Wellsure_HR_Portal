@@ -11,6 +11,7 @@ import { useAuth } from "../../../hooks/useAuth";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatRupees } from "../../../lib/money";
 import { describeCalc } from "./salaryText";
+import { fs } from "../../../theme/tokens";
 
 const { Title, Text } = Typography;
 
@@ -92,7 +93,7 @@ export function StructuresPage() {
               <div>
                 <Text strong>{s.value?.name}</Text>
                 <div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
+                  <Text type="secondary" style={{ fontSize: fs.sm }}>
                     {s.code}
                   </Text>
                 </div>
@@ -215,7 +216,7 @@ function StructureEditor({ initial, onClose, onSaved }: { initial: { code: strin
           <div>
             <Checkbox.Group options={COMPONENT_TYPES.map((t) => ({ value: t, label: COMPONENT_TYPE_LABEL[t] }))} value={includes} onChange={(v) => { setIncludes(v as ComponentType[]); changed(); }} />
           </div>
-          <Text type="secondary" style={{ fontSize: 12 }}>The lines of these kinds have to add up to CTC. A line of another kind (a deduction, say) is worked out but is not part of CTC.</Text>
+          <Text type="secondary" style={{ fontSize: fs.sm }}>The lines of these kinds have to add up to CTC. A line of another kind (a deduction, say) is worked out but is not part of CTC.</Text>
         </div>
 
         <Table
@@ -242,7 +243,7 @@ function StructureEditor({ initial, onClose, onSaved }: { initial: { code: strin
                       onChange={(v) => patch(i, pin(v))}
                     />
                     <Space size={4}>
-                      <Text type="secondary" style={{ fontSize: 12 }}>v{l.componentVersion}</Text>
+                      <Text type="secondary" style={{ fontSize: fs.sm }}>v{l.componentVersion}</Text>
                       {c && c.status !== "CONFIRMED" && <Tag color="orange" style={{ marginInlineEnd: 0 }}>Placeholder</Tag>}
                       {behind && <Button size="small" type="link" onClick={() => patch(i, pin(l.component))}>use v{c.current!.version}</Button>}
                     </Space>
@@ -283,7 +284,7 @@ function StructureEditor({ initial, onClose, onSaved }: { initial: { code: strin
         <Button icon={<PlusOutlined />} onClick={() => { setLines((ls) => [...ls, { component: "", componentVersion: 1, componentHash: "", calc: { method: "PERCENT", of: "CTC", percent: "" } }]); changed(); }}>
           Add a line
         </Button>
-        <Text type="secondary" style={{ fontSize: 12 }}>
+        <Text type="secondary" style={{ fontSize: fs.sm }}>
           A line can be a percentage of CTC or of a line above it, the same amount for everyone, an amount typed for each person, a formula (CTC and the lines above it, with + - * / ( ), MIN, MAX, ROUND, CEIL, FLOOR), or the balance: whatever is left, so the lines always add up.
         </Text>
 

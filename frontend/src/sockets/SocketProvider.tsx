@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components -- context + hook are colocated by design */
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { io, type Socket } from "socket.io-client";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import type { Socket } from "socket.io-client";
 import { getAccessToken } from "../api/client";
 
 // Socket.IO client wrapper (spec §8). Connection is opt-in via `enabled`
@@ -28,9 +28,25 @@ export function SocketProvider({
 }) {
   // `enabled` only flips on login/logout, so recreating the instance on
   // change (rather than mutating one in a ref) is cheap and keeps the
-  // instance safe to read during render.
-  const socket = useMemo(() => (enabled ? io(API_BASE_URL, { withCredentials: true, auth: { token: getAccessToken() } }) : null), [enabled]);
+  // instance safe to read during render. The client library itself loads
+  // only once someone is signed in, so the login screen never downloads it
+  // (bundle budget, docs/DESIGN_SYSTEM.md §7).
+  const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState(false);
+
+  useEffect(() => {
+    if (!enabled) {
+      setSocket(null);
+      return;
+    }
+    let cancelled = false;
+    void import("socket.io-client").then(({ io }) => {
+      if (!cancelled) setSocket(io(API_BASE_URL, { withCredentials: true, auth: { token: getAccessToken() } }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled]);
 
   useEffect(() => {
     if (!socket) return;

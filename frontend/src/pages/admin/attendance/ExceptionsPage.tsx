@@ -12,6 +12,7 @@ import { EmptyState } from "../../../components/common/EmptyState";
 import { useAuth } from "../../../hooks/useAuth";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { hoursLabel } from "./settings/format";
+import { fs } from "../../../theme/tokens";
 
 const { Title, Text } = Typography;
 const ATTENDANCE = "/admin/workforce/attendance";
@@ -299,11 +300,11 @@ function UnmappedTable({
                     {r.suggestion.employeeName ?? r.suggestion.employeeCode} ({r.suggestion.employeeCode})
                   </span>
                   {r.suggestion.problem ? (
-                    <Text type="warning" style={{ fontSize: 12 }}>
+                    <Text type="warning" style={{ fontSize: fs.sm }}>
                       {r.suggestion.problem}
                     </Text>
                   ) : r.suggestion.partial ? (
-                    <Text type="secondary" style={{ fontSize: 12 }}>
+                    <Text type="secondary" style={{ fontSize: fs.sm }}>
                       They joined after the first punch; the earlier ones stay unmapped.
                     </Text>
                   ) : null}

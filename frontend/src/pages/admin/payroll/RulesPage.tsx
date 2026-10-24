@@ -10,6 +10,7 @@ import { apiErrorMessage } from "../../../lib/apiError";
 import { formatDate } from "../../../lib/dates";
 import { RuleValueInput } from "./RuleValueInput";
 import { formatRuleValue, initialInputState, toSubmitValue, type InputState } from "./ruleValues";
+import { fs } from "../../../theme/tokens";
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -97,7 +98,7 @@ export function RulesPage() {
                       <div style={{ maxWidth: 320 }}>
                         <Text strong>{r.label}</Text>
                         <div>
-                          <Text type="secondary" style={{ fontSize: 12 }}>
+                          <Text type="secondary" style={{ fontSize: fs.sm }}>
                             {r.key}
                           </Text>
                         </div>
@@ -120,12 +121,12 @@ export function RulesPage() {
                         </Tooltip>
                       )}
                       {r.sourceLabel && (
-                        <Text type={r.status === "PLACEHOLDER" ? "warning" : "secondary"} style={{ fontSize: 12 }}>
+                        <Text type={r.status === "PLACEHOLDER" ? "warning" : "secondary"} style={{ fontSize: fs.sm }}>
                           {r.sourceLabel}
                         </Text>
                       )}
                       {r.lastConfirmed && (
-                        <Text type="secondary" style={{ fontSize: 12 }}>
+                        <Text type="secondary" style={{ fontSize: fs.sm }}>
                           Last confirmed value: {formatRuleValue(r.shape, r.lastConfirmed.value)}
                         </Text>
                       )}
@@ -186,7 +187,7 @@ function RevealModal({ rule, onClose }: { rule: RuleView; onClose: () => void })
             Show it
           </Button>
         )}
-        {reveal.data && <Text code style={{ fontSize: 18 }}>{String(reveal.data.value)}</Text>}
+        {reveal.data && <Text code style={{ fontSize: fs.xl }}>{String(reveal.data.value)}</Text>}
       </Flex>
     </Modal>
   );

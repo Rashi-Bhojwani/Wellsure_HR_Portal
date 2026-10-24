@@ -7,6 +7,7 @@ import { AuthShell } from "../AuthShell";
 import { useAuth } from "../../../hooks/useAuth";
 import * as authApi from "../../../api/auth";
 import type { LoginTokensResponse } from "../../../api/auth";
+import { fs } from "../../../theme/tokens";
 
 const { Text, Paragraph } = Typography;
 
@@ -81,7 +82,7 @@ export function TotpSetupPage() {
         </Paragraph>
         <Space wrap style={{ marginBottom: 20 }}>
           {backupCodes.map((code) => (
-            <Tag key={code} style={{ fontFamily: "monospace", fontSize: 14, padding: "4px 8px" }}>
+            <Tag key={code} style={{ fontFamily: "monospace", fontSize: fs.md, padding: "4px 8px" }}>
               {code}
             </Tag>
           ))}
@@ -112,7 +113,7 @@ export function TotpSetupPage() {
             </div>
           )}
           {secret && (
-            <Paragraph type="secondary" style={{ textAlign: "center", fontSize: 12 }}>
+            <Paragraph type="secondary" style={{ textAlign: "center", fontSize: fs.sm }}>
               Can't scan it? Enter this code manually: <Text code>{secret}</Text>
             </Paragraph>
           )}

@@ -3,6 +3,7 @@ import { Button, Popconfirm, Space, Typography, message } from "antd";
 import { DeleteOutlined, UploadOutlined } from "@ant-design/icons";
 import { apiErrorMessage } from "../../lib/apiError";
 import { EmployeeAvatar } from "./EmployeeAvatar";
+import { fs } from "../../theme/tokens";
 
 interface PhotoUploaderProps {
   employeeId: string;
@@ -47,7 +48,7 @@ export function PhotoUploader({ employeeId, name, photoVersion, upload, remove, 
               </Popconfirm>
             )}
           </Space>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary" style={{ fontSize: fs.sm }}>
             JPEG, PNG or WebP. Location and camera details are removed automatically.
           </Typography.Text>
         </Space>

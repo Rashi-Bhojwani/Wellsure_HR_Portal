@@ -4,6 +4,7 @@ import { Alert, Button, Card, Input, InputNumber, Space, Switch, Typography, mes
 import * as engageApi from "../../../api/engage";
 import { HelpStrip } from "../../../components/common/HelpStrip";
 import { apiErrorMessage } from "../../../lib/apiError";
+import { fs } from "../../../theme/tokens";
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -45,7 +46,7 @@ function SettingCard({ setting }: { setting: engageApi.AutoPostSettingRow }) {
       title={KIND_LABEL[setting.kind]}
       extra={<Switch checked={setting.enabled} onChange={(enabled) => mutation.mutate({ enabled })} checkedChildren="On" unCheckedChildren="Off" />}
     >
-      <Text type="secondary" style={{ fontSize: 12 }}>
+      <Text type="secondary" style={{ fontSize: fs.sm }}>
         Placeholders: {KIND_PLACEHOLDERS[setting.kind]}
       </Text>
       <TextArea rows={2} value={template} onChange={(e) => setDraftTemplate(e.target.value)} maxLength={500} style={{ marginTop: 8 }} />

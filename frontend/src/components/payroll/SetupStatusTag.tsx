@@ -1,12 +1,13 @@
-import { Tag } from "antd";
+import { StatusChip, type ChipTone } from "../../ui";
 import type { SetupStatus } from "../../api/payroll";
 
-const TAG: Record<SetupStatus, { color: string; label: string }> = {
-  CONFIRMED: { color: "green", label: "Confirmed" },
-  PLACEHOLDER: { color: "orange", label: "Placeholder" },
-  NOT_SET: { color: "default", label: "Not set" },
+const TAG: Record<SetupStatus, { tone: ChipTone; label: string }> = {
+  CONFIRMED: { tone: "success", label: "Confirmed" },
+  PLACEHOLDER: { tone: "warning", label: "Placeholder" },
+  NOT_SET: { tone: "neutral", label: "Not set" },
 };
 
+/** Not set / Placeholder / Confirmed, always in words (colour is never the only signal). */
 export function SetupStatusTag({ status }: { status: SetupStatus }) {
-  return <Tag color={TAG[status].color}>{TAG[status].label}</Tag>;
+  return <StatusChip tone={TAG[status].tone}>{TAG[status].label}</StatusChip>;
 }

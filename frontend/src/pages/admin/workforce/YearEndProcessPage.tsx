@@ -8,6 +8,7 @@ import type { YearEndRunItemRow, YearEndRunRow, YearEndRunStatus } from "../../.
 import { HelpStrip } from "../../../components/common/HelpStrip";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { ProvisionalRateAlert } from "../../../components/leave/ProvisionalRateAlert";
+import { fs } from "../../../theme/tokens";
 
 const { Title, Text } = Typography;
 
@@ -91,7 +92,7 @@ export function YearEndProcessPage() {
       <Card size="small">
         <Space wrap align="end">
           <Space orientation="vertical" size={0}>
-            <Text type="secondary" style={{ fontSize: 12 }}>
+            <Text type="secondary" style={{ fontSize: fs.sm }}>
               Leave Year
             </Text>
             <InputNumber value={leaveYear} onChange={(v) => setLeaveYear(v ?? new Date().getFullYear())} min={2000} max={2100} style={{ width: 120 }} />

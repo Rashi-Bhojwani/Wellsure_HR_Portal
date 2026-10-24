@@ -1,6 +1,7 @@
 import { Alert, Descriptions, Flex, Table, Typography } from "antd";
 import type { PayslipContent, PayslipLine } from "../../api/payroll";
 import { formatRupees } from "../../lib/money";
+import { fs } from "../../theme/tokens";
 
 const { Text, Title } = Typography;
 
@@ -64,7 +65,7 @@ export function PayslipView({ content: c, watermark }: { content: PayslipContent
           <Lines title="Deductions" lines={c.rounding ? [...c.deductions, { code: "ROUNDING", label: "Rounding", amount: c.rounding }] : c.deductions} total={c.totals.deductions} totalLabel="Total deductions" />
         </div>
       </Flex>
-      <Alert type="success" showIcon={false} title={<Text strong style={{ fontSize: 18 }}>Net pay {formatRupees(c.totals.net, 2)}</Text>} description={c.netInWords} />
+      <Alert type="success" showIcon={false} title={<Text strong style={{ fontSize: fs.xl }}>Net pay {formatRupees(c.totals.net, 2)}</Text>} description={c.netInWords} />
       {c.employerContributions.length > 0 && (
         <Text type="secondary">
           Employer contributions, for information and not part of your pay: {c.employerContributions.map((l) => `${l.label} ${formatRupees(l.amount, 2)}`).join(" · ")}

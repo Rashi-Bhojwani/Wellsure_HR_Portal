@@ -5,6 +5,7 @@ import * as engageApi from "../../../api/engage";
 import { HelpStrip } from "../../../components/common/HelpStrip";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { apiErrorMessage } from "../../../lib/apiError";
+import { fs } from "../../../theme/tokens";
 
 const { Title, Text } = Typography;
 
@@ -81,7 +82,7 @@ export function ModerationPage() {
                     <Space>
                       <Tag color="blue">{KIND_LABEL[post.kind]}</Tag>
                       {post.groupName && <Tag>{post.groupName}</Tag>}
-                      <Text type="secondary" style={{ fontSize: 12 }}>{new Date(post.createdAt).toLocaleString()}</Text>
+                      <Text type="secondary" style={{ fontSize: fs.sm }}>{new Date(post.createdAt).toLocaleString()}</Text>
                     </Space>
                   }
                   description={

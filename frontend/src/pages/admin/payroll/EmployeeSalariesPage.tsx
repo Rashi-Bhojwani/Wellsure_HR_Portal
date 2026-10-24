@@ -11,6 +11,7 @@ import { formatDate } from "../../../lib/dates";
 import { formatRupees } from "../../../lib/money";
 import { CancelScheduledModal } from "../../../components/payroll/CancelScheduledModal";
 import { REASON_LABEL } from "./salaryText";
+import { fs } from "../../../theme/tokens";
 
 const { Title, Text } = Typography;
 
@@ -60,7 +61,7 @@ export function EmployeeSalariesPage() {
         dataSource={data?.items ?? []}
         pagination={{ current: page, pageSize: 25, total: data?.total ?? 0, showSizeChanger: false, onChange: setPage }}
         columns={[
-          { title: "Employee", render: (_, r) => <div><Text strong>{r.name}</Text><div><Text type="secondary" style={{ fontSize: 12 }}>{r.employeeCode}{r.branch ? ` · ${r.branch}` : ""}</Text></div></div> },
+          { title: "Employee", render: (_, r) => <div><Text strong>{r.name}</Text><div><Text type="secondary" style={{ fontSize: fs.sm }}>{r.employeeCode}{r.branch ? ` · ${r.branch}` : ""}</Text></div></div> },
           { title: "Yearly CTC", align: "right", render: (_, r) => (r.current ? formatRupees(r.current.annualCtc) : <Tag>No salary yet</Tag>) },
           { title: "A month", align: "right", render: (_, r) => (r.current ? formatRupees(r.current.monthlyCtc) : null) },
           { title: "Structure", render: (_, r) => r.current?.structure },

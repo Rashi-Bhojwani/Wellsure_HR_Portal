@@ -7,6 +7,7 @@ import { apiErrorMessage } from "../../lib/apiError";
 import { formatDate } from "../../lib/dates";
 import { formatRupees } from "../../lib/money";
 import { LINE_KIND_LABEL } from "../../pages/admin/payroll/runText";
+import { fs } from "../../theme/tokens";
 
 const { Text } = Typography;
 
@@ -122,7 +123,7 @@ function Body({ d, nameOf }: { d: RunItemDetail; nameOf: (code: string) => strin
         rowKey={(l) => `${l.code}-${l.sourceRef ?? ""}`}
         dataSource={d.lines}
         columns={[
-          { title: "Line", render: (_, l) => <div>{l.source === "COMPONENT" ? nameOf(l.code) : l.label}<div><Text type="secondary" style={{ fontSize: 12 }}>{LINE_KIND_LABEL[l.kind]}</Text></div></div> },
+          { title: "Line", render: (_, l) => <div>{l.source === "COMPONENT" ? nameOf(l.code) : l.label}<div><Text type="secondary" style={{ fontSize: fs.sm }}>{LINE_KIND_LABEL[l.kind]}</Text></div></div> },
           { title: "Amount", align: "right", render: (_, l) => <Text type={l.kind === "DEDUCTION" ? "danger" : undefined}>{l.kind === "DEDUCTION" ? "-" : ""}{money(l.amount)}</Text> },
         ]}
         expandable={{ expandedRowRender: (l) => <LineBasis line={l} nameOf={nameOf} />, rowExpandable: () => true }}

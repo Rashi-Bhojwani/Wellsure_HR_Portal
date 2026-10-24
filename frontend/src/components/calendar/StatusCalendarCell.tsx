@@ -1,6 +1,6 @@
 import { Space } from "antd";
 import { CalendarOutlined, EditOutlined } from "@ant-design/icons";
-import { attendanceStatusColor } from "../../theme/tokens";
+import { attendanceStatusColor, fs } from "../../theme/tokens";
 
 export interface AttendanceDayData {
   date: number;
@@ -46,16 +46,16 @@ export function StatusCalendarCell({ day, selected, onSelect }: StatusCalendarCe
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <span style={{ fontSize: 12, fontWeight: 600 }}>{day.date}</span>
+        <span style={{ fontSize: fs.sm, fontWeight: 600 }}>{day.date}</span>
         {day.hasException && (
           <Space size={4}>
-            <EditOutlined style={{ fontSize: 11, color: fg }} />
-            <CalendarOutlined style={{ fontSize: 11, color: fg }} />
+            <EditOutlined style={{ fontSize: fs.xs, color: fg }} />
+            <CalendarOutlined style={{ fontSize: fs.xs, color: fg }} />
           </Space>
         )}
       </div>
-      <div style={{ textAlign: "center", fontWeight: 700, fontSize: 15, color: fg }}>{day.status}</div>
-      <div style={{ textAlign: "right", fontSize: 10, color: "#6b7280" }}>{day.shift ?? ""}</div>
+      <div style={{ textAlign: "center", fontWeight: 700, fontSize: fs.md, color: fg }}>{day.status}</div>
+      <div style={{ textAlign: "right", fontSize: fs.chip, color: "#6b7280" }}>{day.shift ?? ""}</div>
     </div>
   );
 }

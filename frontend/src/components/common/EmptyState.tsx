@@ -1,5 +1,6 @@
-import { Empty } from "antd";
 import type { ReactNode } from "react";
+import { EmptyState as UiEmptyState } from "../../ui/EmptyState";
+import type { IllustrationName } from "../../ui/Illustrations";
 
 interface EmptyStateProps {
   message: string;
@@ -8,19 +9,11 @@ interface EmptyStateProps {
   // siblings (e.g. Employee Home's Review/Track cards), so the row doesn't
   // stretch taller than it needs to.
   compact?: boolean;
+  description?: ReactNode;
+  illustration?: IllustrationName;
 }
 
-// Icon/empty-state in place of greytHR's illustrations, per the branding
-// constraint in docs/UI_REFERENCE.md (e.g. "Nothing to review", "Nothing
-// new to track", "No records found").
-export function EmptyState({ message, extra, compact = false }: EmptyStateProps) {
-  return (
-    <Empty
-      image={Empty.PRESENTED_IMAGE_SIMPLE}
-      description={message}
-      style={{ padding: compact ? "8px 0" : "24px 0" }}
-    >
-      {extra}
-    </Empty>
-  );
+// Kept for the screens that already use it; it is the design system's EmptyState (src/ui) with our own illustration (docs/DESIGN_SYSTEM.md §6.13).
+export function EmptyState({ message, extra, compact = false, description = null, illustration }: EmptyStateProps) {
+  return <UiEmptyState title={message} description={description} action={extra} compact={compact} illustration={illustration} />;
 }

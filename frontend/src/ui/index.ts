@@ -1,0 +1,20 @@
+// The shared component library (docs/DESIGN_SYSTEM.md §12). Every screen is built from these + Ant Design, styled only by src/theme/tokens.ts.
+export { PageHeader, type Crumb, type PageHeaderProps } from "./PageHeader";
+export { Panel, CardGrid, Stack, type PanelProps } from "./Panel";
+export { StatCard, type StatCardProps } from "./StatCard";
+export { StatusChip, toneForStatus, type ChipTone } from "./StatusChip";
+export { DataTable, type DataTableProps, type MobileCardSpec } from "./DataTable";
+export { FilterBar, type FilterBarProps } from "./FilterBar";
+export { SideDrawer, type SideDrawerProps } from "./SideDrawer";
+export { ConfirmModal, type ConfirmModalProps } from "./ConfirmModal";
+export { EmptyState, type EmptyKind, type EmptyStateProps } from "./EmptyState";
+export { StepperLayout } from "./StepperLayout";
+export { FormSection, FormGroupTitle, KeyValueGrid, type KeyValueItem } from "./FormSection";
+export { Skel, SkeletonCard, SkeletonStats, SkeletonTable, PageSkeleton } from "./Skeletons";
+export { toast } from "./Toast";
+export { ApprovalBanner, type BannerTone } from "./ApprovalBanner";
+export { Timeline, type TimelineItem } from "./Timeline";
+export { QueryState } from "./QueryState";
+export { Illustration, type IllustrationName } from "./Illustrations";
+export { InitialsAvatar, initialsOf } from "./Avatar";
+export { useIsPhone, useIsCompact, useDebouncedValue, usePrefersReducedMotion, isForbidden, isOffline, errorStatus } from "./hooks";

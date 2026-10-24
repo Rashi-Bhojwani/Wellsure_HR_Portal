@@ -11,6 +11,7 @@ import * as leaveApi from "../../../api/leave";
 import { ProvisionalRateAlert } from "../../../components/leave/ProvisionalRateAlert";
 import { useAuth } from "../../../hooks/useAuth";
 import { apiErrorMessage } from "../../../lib/apiError";
+import { fs } from "../../../theme/tokens";
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -220,7 +221,7 @@ export function ReportPage({ reportKey }: { reportKey: ReportKey }) {
       {data && data.notes.length > 0 && (
         <div>
           {data.notes.map((n) => (
-            <Paragraph key={n} type="secondary" style={{ marginBottom: 4, fontSize: 12 }}>
+            <Paragraph key={n} type="secondary" style={{ marginBottom: 4, fontSize: fs.sm }}>
               {n}
             </Paragraph>
           ))}

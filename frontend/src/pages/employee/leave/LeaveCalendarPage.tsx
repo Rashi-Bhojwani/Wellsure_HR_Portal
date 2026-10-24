@@ -5,6 +5,7 @@ import { Button, Card, Space, Tag, Typography } from "antd";
 import { LeftOutlined, RightOutlined } from "@ant-design/icons";
 import * as leaveApi from "../../../api/leave";
 import { EmptyState } from "../../../components/common/EmptyState";
+import { fs } from "../../../theme/tokens";
 
 const { Title, Text } = Typography;
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -66,7 +67,7 @@ export function LeaveCalendarPage() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginBottom: 4 }}>
           {WEEKDAYS.map((w) => (
             <div key={w} style={{ textAlign: "center" }}>
-              <Text type="secondary" style={{ fontSize: 11 }}>
+              <Text type="secondary" style={{ fontSize: fs.xs }}>
                 {w}
               </Text>
             </div>
@@ -76,15 +77,15 @@ export function LeaveCalendarPage() {
           {cells.map((date, idx) =>
             date ? (
               <div key={date} style={{ background: "#f4f5f7", borderRadius: 8, padding: 6, minHeight: 76 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>{date}</div>
+                <div style={{ fontSize: fs.sm, fontWeight: 600, marginBottom: 4 }}>{date}</div>
                 <Space orientation="vertical" size={2} style={{ width: "100%" }}>
                   {(entriesByDate.get(date) ?? []).slice(0, 2).map((entry, i) => (
-                    <Tag key={i} color="blue" style={{ fontSize: 10, margin: 0, whiteSpace: "normal" }}>
+                    <Tag key={i} color="blue" style={{ fontSize: fs.chip, margin: 0, whiteSpace: "normal" }}>
                       {entry.employeeName} · {entry.leaveTypeCode}
                     </Tag>
                   ))}
                   {(entriesByDate.get(date)?.length ?? 0) > 2 && (
-                    <Text type="secondary" style={{ fontSize: 10 }}>
+                    <Text type="secondary" style={{ fontSize: fs.chip }}>
                       +{(entriesByDate.get(date)?.length ?? 0) - 2} more
                     </Text>
                   )}

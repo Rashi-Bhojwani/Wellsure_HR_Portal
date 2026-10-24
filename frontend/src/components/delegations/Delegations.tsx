@@ -4,6 +4,7 @@ import { Button, DatePicker, Form, Input, Modal, Select, Space, Table, Tag, Tool
 import { WarningOutlined } from "@ant-design/icons";
 import dayjs, { type Dayjs } from "dayjs";
 import type { DelegateOption, DelegationPerson, DelegationRow, DelegationStatus } from "../../api/delegations";
+import { fs } from "../../theme/tokens";
 
 const { Text } = Typography;
 
@@ -23,7 +24,7 @@ const who = (p: DelegationPerson) => (
     <span>
       {p.name} <Text type="secondary">({p.employeeCode})</Text>
     </span>
-    {(p.designation || p.department) && <Text type="secondary" style={{ fontSize: 12 }}>{[p.designation, p.department].filter(Boolean).join(" · ")}</Text>}
+    {(p.designation || p.department) && <Text type="secondary" style={{ fontSize: fs.sm }}>{[p.designation, p.department].filter(Boolean).join(" · ")}</Text>}
   </Space>
 );
 
@@ -77,9 +78,9 @@ export function DelegationsTable({ rows, loading, showDelegator, showDelegate = 
           key: "history",
           render: (_, r) => (
             <Space orientation="vertical" size={0}>
-              <Text type="secondary" style={{ fontSize: 12 }}>Set up {r.createdBy ? `by ${r.createdBy} ` : ""}on {fmt(r.createdAt)}</Text>
+              <Text type="secondary" style={{ fontSize: fs.sm }}>Set up {r.createdBy ? `by ${r.createdBy} ` : ""}on {fmt(r.createdAt)}</Text>
               {r.revokedAt && (
-                <Text type="secondary" style={{ fontSize: 12 }}>
+                <Text type="secondary" style={{ fontSize: fs.sm }}>
                   Revoked {r.revokedBy ? `by ${r.revokedBy} ` : ""}on {fmt(r.revokedAt)}
                   {r.revokeReason ? ` — ${r.revokeReason}` : ""}
                 </Text>

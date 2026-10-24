@@ -11,6 +11,7 @@ import { ItemStatusTag } from "../../../components/payroll/ItemStatusTag";
 import { useAuth } from "../../../hooks/useAuth";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { describeComponent } from "./salaryText";
+import { fs } from "../../../theme/tokens";
 
 const { Title, Text } = Typography;
 
@@ -61,7 +62,7 @@ export function ComponentsPage() {
               <div>
                 <Text strong>{c.value?.name}</Text>
                 <div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
+                  <Text type="secondary" style={{ fontSize: fs.sm }}>
                     {c.code}
                   </Text>
                 </div>
@@ -85,7 +86,7 @@ export function ComponentsPage() {
             render: (_, c) => (
               <Space orientation="vertical" size={2}>
                 <ItemStatusTag status={c.status} sourceLabel={c.sourceLabel} />
-                {c.lastConfirmed && <Text type="secondary" style={{ fontSize: 12 }}>Last confirmed: version {c.lastConfirmed.version}</Text>}
+                {c.lastConfirmed && <Text type="secondary" style={{ fontSize: fs.sm }}>Last confirmed: version {c.lastConfirmed.version}</Text>}
               </Space>
             ),
           },

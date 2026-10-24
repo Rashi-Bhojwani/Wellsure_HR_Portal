@@ -12,6 +12,7 @@ import { formatDate, formatDateTime } from "../../lib/dates";
 import { formatRupees } from "../../lib/money";
 import { NoPayslipAlert } from "./NoPayslipAlert";
 import { PayslipView } from "./PayslipView";
+import { fs } from "../../theme/tokens";
 
 const { Text, Paragraph } = Typography;
 
@@ -90,8 +91,8 @@ function PayslipsCard({ run }: { run: RunDetail }) {
                   render: (_, r) => (
                     <Space orientation="vertical" size={0}>
                       <Tag color={EMAIL_TAG[r.delivery.emailStatus].color}>{EMAIL_TAG[r.delivery.emailStatus].label}</Tag>
-                      {r.delivery.emailTo && <Text type="secondary" style={{ fontSize: 12 }}>{r.delivery.emailTo}</Text>}
-                      {r.delivery.emailError && <Text type="danger" style={{ fontSize: 12 }}>{r.delivery.emailError}</Text>}
+                      {r.delivery.emailTo && <Text type="secondary" style={{ fontSize: fs.sm }}>{r.delivery.emailTo}</Text>}
+                      {r.delivery.emailError && <Text type="danger" style={{ fontSize: fs.sm }}>{r.delivery.emailError}</Text>}
                     </Space>
                   ),
                 },

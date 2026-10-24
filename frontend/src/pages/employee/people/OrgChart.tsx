@@ -6,6 +6,7 @@ import { getOrgChart, photoUrl, type OrgChart as OrgChartData, type OrgChartNode
 import { EmptyState } from "../../../components/common/EmptyState";
 import { usePhotoToken } from "../../../hooks/usePhotoToken";
 import { useAuth } from "../../../hooks/useAuth";
+import { fs } from "../../../theme/tokens";
 
 // The company org chart: Admin (the Super Admins) → Managers and HR Admins →
 // teams (the three-level structure, hierarchy model A — E2). The whole company arrives
@@ -91,7 +92,7 @@ const OrgCard = memo(function OrgCard({
             alignItems: "center",
             justifyContent: "center",
             flexShrink: 0,
-            fontSize: 16,
+            fontSize: fs.lg,
           }}
         >
           {initials(node.name)}
@@ -99,7 +100,7 @@ const OrgCard = memo(function OrgCard({
       )}
       <span style={{ minWidth: 0, flex: 1 }}>
         <span style={{ display: "block", fontWeight: 600, ...ellipsis }}>{node.name}</span>
-        <span style={{ display: "block", fontSize: 12, color: palette.textSecondary, ...ellipsis }}>{subtitle}</span>
+        <span style={{ display: "block", fontSize: fs.sm, color: palette.textSecondary, ...ellipsis }}>{subtitle}</span>
       </span>
       <KindBadge kind={node.kind} reportCount={reportCount} palette={palette} />
     </button>
@@ -119,7 +120,7 @@ function KindBadge({ kind, reportCount, palette }: { kind: OrgChartNode["kind"];
       aria-label={label}
       style={{
         flexShrink: 0,
-        fontSize: 12,
+        fontSize: fs.sm,
         padding: "0 7px",
         borderRadius: 4,
         whiteSpace: "nowrap",

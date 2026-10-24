@@ -7,6 +7,7 @@ import * as infoApi from "../../api/attendanceInfo";
 import type { QueueRow, ReasonCode, RegularizationStatus } from "../../api/attendanceInfo";
 import { apiErrorMessage } from "../../lib/apiError";
 import { EmptyState } from "../common/EmptyState";
+import { fs } from "../../theme/tokens";
 
 const { Text } = Typography;
 const STATUS_COLOR: Record<string, string> = { PENDING: "gold", APPROVED: "green", REJECTED: "red", CANCELLED: "default" };
@@ -73,7 +74,7 @@ export function RegularizationQueue({ emptyText = "No correction requests waitin
         scroll={{ x: true }}
         locale={{ emptyText: <EmptyState message={emptyText} compact /> }}
         columns={[
-          { title: "Employee", key: "who", render: (_, r) => (<><div>{r.name}</div><Text type="secondary" style={{ fontSize: 12 }}>{r.employeeCode}</Text></>) },
+          { title: "Employee", key: "who", render: (_, r) => (<><div>{r.name}</div><Text type="secondary" style={{ fontSize: fs.sm }}>{r.employeeCode}</Text></>) },
           { title: "Day", dataIndex: "date", render: (d: string) => dayjs(d).format("ddd, D MMM") },
           { title: "Reason", key: "why", render: (_, r) => (<><div>{r.reasonLabel}</div>{r.batchId && <Tag>bulk</Tag>}</>) },
           {
@@ -82,7 +83,7 @@ export function RegularizationQueue({ emptyText = "No correction requests waitin
             render: (_, r) => (
               <>
                 <div>{r.dayStatus ?? "—"}</div>
-                <Text type="secondary" style={{ fontSize: 12 }}>
+                <Text type="secondary" style={{ fontSize: fs.sm }}>
                   {r.punches ? (r.punches.count === 0 ? "no punches" : `${r.punches.firstIn ?? "—"}${r.punches.lastOut ? `–${r.punches.lastOut}` : ""} (${r.punches.count} punch${r.punches.count === 1 ? "" : "es"})`) : "no record"}
                   {r.shift ? ` · ${r.shift}` : ""}
                 </Text>
@@ -111,7 +112,7 @@ export function RegularizationQueue({ emptyText = "No correction requests waitin
                 <>
                   <Tag color={STATUS_COLOR[r.status]}>{r.status.toLowerCase()}</Tag>
                   {r.decidedBy && (
-                    <Text type="secondary" style={{ fontSize: 12 }}>
+                    <Text type="secondary" style={{ fontSize: fs.sm }}>
                       by {r.decidedBy}
                       {r.decisionNote ? `: "${r.decisionNote}"` : ""}
                     </Text>

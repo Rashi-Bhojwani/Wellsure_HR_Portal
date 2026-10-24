@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <!-- PWA (Phase 5 commit G): installable, with our own icons. -->
     <link rel="manifest" href="/manifest.webmanifest" />
-    <meta name="theme-color" content="#2f6fed" />
+    <meta name="theme-color" content="#FFFFFF" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -14,9 +14,24 @@
     <title>Wellsure HR Portal</title>
     <link
       rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fed'/%3E%3Ctext x='16' y='23' font-size='18' font-family='sans-serif' font-weight='700' fill='white' text-anchor='middle'%3EW%3C/text%3E%3C/svg%3E"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23121828'/%3E%3Ctext x='16' y='22.5' font-size='17' font-family='sans-serif' font-weight='800' fill='%2328A174' text-anchor='middle'%3EW%3C/text%3E%3C/svg%3E"
     />
-    <!-- Logo placeholder — replace with the real Wellsure logo/favicon -->
+    <!-- Before the first paint: the saved theme (or the device's), so a dark-mode user never sees a white flash. The colours are tokens.ts bgPage/textBody
+         (src/theme/__tests__/theme.test.ts keeps them equal). -->
+    <script>
+      (function () {
+        var p = "system";
+        try {
+          p = localStorage.getItem("wellsure-theme-mode") || "system";
+        } catch (e) {}
+        var dark = p === "dark" || (p !== "light" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        var root = document.documentElement;
+        root.setAttribute("data-theme", dark ? "dark" : "light");
+        root.style.colorScheme = dark ? "dark" : "light";
+        root.style.background = dark ? "#121828" : "#FAFAFA";
+        root.style.color = dark ? "#E1E8F0" : "#2C2B31";
+      })();
+    </script>
 
   </head>
   <body>

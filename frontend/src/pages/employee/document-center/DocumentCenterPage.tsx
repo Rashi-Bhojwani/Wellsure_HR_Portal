@@ -7,6 +7,7 @@ import * as docsApi from "../../../api/documents";
 import type { SignedDownload } from "../../../api/documents";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { apiErrorMessage } from "../../../lib/apiError";
+import { fs } from "../../../theme/tokens";
 
 async function download(get: () => Promise<SignedDownload>) {
   try {
@@ -22,7 +23,7 @@ function DocumentRow({ title, details, onDownload }: { title: ReactNode; details
   return (
     <Flex gap={12} align="center" justify="space-between" wrap style={{ padding: "12px 0", borderBottom: "1px solid rgba(128,128,128,0.15)" }}>
       <Flex gap={12} align="flex-start" style={{ minWidth: 0, flex: 1 }}>
-        <FileTextOutlined style={{ fontSize: 20, marginTop: 2 }} />
+        <FileTextOutlined style={{ fontSize: fs.h2, marginTop: 2 }} />
         <div style={{ minWidth: 0 }}>
           <Typography.Text strong>{title}</Typography.Text>
           <div>{details}</div>
@@ -71,7 +72,7 @@ function CompanyDocuments() {
                 details={
                   <Space orientation="vertical" size={0}>
                     {doc.description && <Typography.Text type="secondary">{doc.description}</Typography.Text>}
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    <Typography.Text type="secondary" style={{ fontSize: fs.sm }}>
                       {doc.fileName} · {docsApi.formatBytes(doc.sizeBytes)} · {formatDate(doc.uploadedAt)}
                       {(doc.scopeDepartment || doc.scopeLocation) && ` · For ${[doc.scopeDepartment?.name, doc.scopeLocation?.name].filter(Boolean).join(", ")}`}
                     </Typography.Text>
@@ -103,7 +104,7 @@ function MyDocuments() {
           }
           onDownload={() => download(() => docsApi.downloadMyDocument(doc.id))}
           details={
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" style={{ fontSize: fs.sm }}>
               {doc.fileName} · {docsApi.formatBytes(doc.sizeBytes)} · {formatDate(doc.uploadedAt)}
             </Typography.Text>
           }

@@ -28,23 +28,25 @@ import {
   UnorderedListOutlined,
   WalletOutlined,
 } from "@ant-design/icons";
-import { HomePage } from "../pages/employee/home/HomePage";
-import { EngagePage } from "../pages/employee/engage/EngagePage";
-import { KudosPage } from "../pages/employee/engage/KudosPage";
-import { ReviewPage } from "../pages/employee/todo/ReviewPage";
-import { LeaveApplyPage } from "../pages/employee/leave/LeaveApplyPage";
-import { LeaveBalancesPage } from "../pages/employee/leave/LeaveBalancesPage";
-import { LeaveCalendarPage } from "../pages/employee/leave/LeaveCalendarPage";
-import { HolidayCalendarPage } from "../pages/employee/leave/HolidayCalendarPage";
-import { DocumentCenterPage } from "../pages/employee/document-center/DocumentCenterPage";
-import { PeoplePage } from "../pages/employee/people/PeoplePage";
-import { HelpdeskPage } from "../pages/employee/helpdesk/HelpdeskPage";
-import { RequestHubPage } from "../pages/employee/request-hub/RequestHubPage";
-import { TasksPage } from "../pages/employee/todo/TasksPage";
-import { WorkflowDelegatesPage } from "../pages/employee/workflow-delegates/WorkflowDelegatesPage";
-import { MarkAttendancePage } from "../pages/employee/attendance/MarkAttendancePage";
-import { AttendanceInfoPage } from "../pages/employee/attendance/AttendanceInfoPage";
-import { PayslipsPage } from "../pages/employee/salary/PayslipsPage";
+import { lazyPage } from "./lazyPage";
+
+const HomePage = lazyPage(() => import("../pages/employee/home/HomePage"), "HomePage");
+const EngagePage = lazyPage(() => import("../pages/employee/engage/EngagePage"), "EngagePage");
+const KudosPage = lazyPage(() => import("../pages/employee/engage/KudosPage"), "KudosPage");
+const ReviewPage = lazyPage(() => import("../pages/employee/todo/ReviewPage"), "ReviewPage");
+const LeaveApplyPage = lazyPage(() => import("../pages/employee/leave/LeaveApplyPage"), "LeaveApplyPage");
+const LeaveBalancesPage = lazyPage(() => import("../pages/employee/leave/LeaveBalancesPage"), "LeaveBalancesPage");
+const LeaveCalendarPage = lazyPage(() => import("../pages/employee/leave/LeaveCalendarPage"), "LeaveCalendarPage");
+const HolidayCalendarPage = lazyPage(() => import("../pages/employee/leave/HolidayCalendarPage"), "HolidayCalendarPage");
+const DocumentCenterPage = lazyPage(() => import("../pages/employee/document-center/DocumentCenterPage"), "DocumentCenterPage");
+const PeoplePage = lazyPage(() => import("../pages/employee/people/PeoplePage"), "PeoplePage");
+const HelpdeskPage = lazyPage(() => import("../pages/employee/helpdesk/HelpdeskPage"), "HelpdeskPage");
+const RequestHubPage = lazyPage(() => import("../pages/employee/request-hub/RequestHubPage"), "RequestHubPage");
+const TasksPage = lazyPage(() => import("../pages/employee/todo/TasksPage"), "TasksPage");
+const WorkflowDelegatesPage = lazyPage(() => import("../pages/employee/workflow-delegates/WorkflowDelegatesPage"), "WorkflowDelegatesPage");
+const MarkAttendancePage = lazyPage(() => import("../pages/employee/attendance/MarkAttendancePage"), "MarkAttendancePage");
+const AttendanceInfoPage = lazyPage(() => import("../pages/employee/attendance/AttendanceInfoPage"), "AttendanceInfoPage");
+const PayslipsPage = lazyPage(() => import("../pages/employee/salary/PayslipsPage"), "PayslipsPage");
 
 // Single source of truth for the Employee portal left sidebar
 // (docs/UI_REFERENCE.md §1.0). The sidebar, the route tree and the

@@ -13,6 +13,7 @@ import { IngestionVolumeChart } from "../../../components/devices/IngestionVolum
 import { EmployeePicker } from "../../../components/letters/LetterFields";
 import { HelpStrip } from "../../../components/common/HelpStrip";
 import { apiErrorMessage } from "../../../lib/apiError";
+import { fs } from "../../../theme/tokens";
 
 const { Title, Text, Paragraph } = Typography;
 const when = (v: string | null) => (v ? dayjs(v).format("D MMM YYYY, HH:mm") : "—");
@@ -194,7 +195,7 @@ function AgentReportCell({ d }: { d: DeviceRow }) {
       <Tooltip title={h.report.lastError ?? undefined}>
         <Tag color={tag.color}>{tag.label}</Tag>
       </Tooltip>
-      <Text type="secondary" style={{ fontSize: 12 }}>
+      <Text type="secondary" style={{ fontSize: fs.sm }}>
         last read {when(h.lastReadAt)}
       </Text>
     </Space>
@@ -223,11 +224,11 @@ function RetentionCell({ d }: { d: DeviceRow }) {
       <Tooltip title={`Log assumed to hold ${Math.round(r.windowHours / 24)} days. Warning at half, alarm at three quarters.`}>
         <Tag color={color}>{r.state === "OK" ? "OK" : r.state === "RISK" ? "At risk" : "Warning"}</Tag>
       </Tooltip>
-      <Text type="secondary" style={{ fontSize: 12 }}>
+      <Text type="secondary" style={{ fontSize: fs.sm }}>
         {gap}
       </Text>
       {r.logFullPercent !== null && (
-        <Text type={r.logNearlyFull ? "danger" : "secondary"} style={{ fontSize: 12 }}>
+        <Text type={r.logNearlyFull ? "danger" : "secondary"} style={{ fontSize: fs.sm }}>
           log {d.health.report?.logCount ?? "?"} / {r.capacityUsed ?? "?"} ({r.logFullPercent}%)
         </Text>
       )}

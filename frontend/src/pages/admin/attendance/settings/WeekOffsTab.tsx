@@ -8,6 +8,7 @@ import * as attendanceApi from "../../../../api/attendance";
 import type { WeekOffPatternRow } from "../../../../api/attendance";
 import { apiErrorMessage } from "../../../../lib/apiError";
 import { ActiveTag } from "./common";
+import { fs } from "../../../../theme/tokens";
 
 const { Text } = Typography;
 const WEEK_OPTIONS = [1, 2, 3, 4, 5].map((w) => ({ value: w, label: ["1st", "2nd", "3rd", "4th", "5th"][w - 1] }));
@@ -25,7 +26,7 @@ export function WeekOffPreview({ rules }: { rules: WeekOffRule[] }) {
   const monday = dayjs().startOf("day").subtract((dayjs().day() + 6) % 7, "day");
   const weeks = Array.from({ length: 6 }, (_, w) => Array.from({ length: 7 }, (_, d) => monday.add(w * 7 + d, "day")));
   return (
-    <table style={{ borderCollapse: "collapse", fontSize: 12 }} aria-label="Six-week preview">
+    <table style={{ borderCollapse: "collapse", fontSize: fs.sm }} aria-label="Six-week preview">
       <thead>
         <tr>{["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((h) => <th key={h} style={{ padding: "2px 6px", fontWeight: 500 }}>{h}</th>)}</tr>
       </thead>

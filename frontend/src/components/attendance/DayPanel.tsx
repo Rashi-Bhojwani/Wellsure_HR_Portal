@@ -10,6 +10,7 @@ import { hoursLabel } from "../../pages/admin/attendance/settings/format";
 import { useAuth } from "../../hooks/useAuth";
 import { CorrectionModal } from "./CorrectionModal";
 import { ManualOverrideModal } from "./ManualOverrideModal";
+import { fs } from "../../theme/tokens";
 
 const { Text } = Typography;
 
@@ -156,7 +157,7 @@ function DayBody({ data, self, onAsk, onCancel }: { data: DayDetail; self: boole
         )}
         {data.policy && <Text type="secondary"> · {data.policy.name}</Text>}
         <div>
-          <Text type="secondary" style={{ fontSize: 12 }}>
+          <Text type="secondary" style={{ fontSize: fs.sm }}>
             Processed on {dayjs(data.processedAt).format("D MMM, HH:mm")}
             {data.provisional ? " · provisional: the day isn't over yet" : ""}
             {data.locked ? " · 🔒 finalised" : ""}

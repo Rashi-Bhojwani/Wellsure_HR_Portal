@@ -8,6 +8,7 @@ import * as accessApi from "../../../api/access";
 import type { RoleDefinition } from "../../../api/access";
 import { useAuth } from "../../../hooks/useAuth";
 import { apiErrorMessage } from "../../../lib/apiError";
+import { fs } from "../../../theme/tokens";
 
 const { Title, Text } = Typography;
 const SCOPE_LABELS: Record<DataScope, string> = { SELF: "Self only", TEAM: "Their team", ALL: "Everyone" };
@@ -99,7 +100,7 @@ export function RolesPermissionsPage() {
                         </Tag>
                       )}
                       <br />
-                      <Text type="secondary" style={{ fontSize: 11 }}>
+                      <Text type="secondary" style={{ fontSize: fs.xs }}>
                         {r.key}
                       </Text>
                     </span>
@@ -115,7 +116,7 @@ export function RolesPermissionsPage() {
                   <Text strong>
                     {(role.locked || role.managerLocked) && <LockOutlined />} {role.name}
                   </Text>
-                  <Text type="secondary" style={{ fontSize: 11 }}>
+                  <Text type="secondary" style={{ fontSize: fs.xs }}>
                     {role.holderCount} {role.holderCount === 1 ? "person" : "people"}
                   </Text>
                   <Select<DataScope>

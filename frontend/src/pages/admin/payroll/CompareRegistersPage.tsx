@@ -6,6 +6,7 @@ import * as payrollApi from "../../../api/payroll";
 import type { CompareForm, CompareResult, RegisterSource } from "../../../api/payroll";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatRupees } from "../../../lib/money";
+import { fs } from "../../../theme/tokens";
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -77,7 +78,7 @@ export function CompareRegistersPage() {
             {(fields, { add, remove }) => (
               <Flex vertical gap={4}>
                 <Text strong>Columns with different names</Text>
-                <Text type="secondary" style={{ fontSize: 12 }}>If the second file calls a column something else (for example “Basic Salary” where the first says “Basic”), say which is which.</Text>
+                <Text type="secondary" style={{ fontSize: fs.sm }}>If the second file calls a column something else (for example “Basic Salary” where the first says “Basic”), say which is which.</Text>
                 {fields.map((f) => (
                   <Space key={f.key} align="baseline" wrap>
                     <Form.Item name={[f.name, "from"]} style={{ marginBottom: 0 }}><Input placeholder="Name in the second file" /></Form.Item>

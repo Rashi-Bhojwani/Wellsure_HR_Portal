@@ -3,6 +3,7 @@ import { Card, Flex, Space, Typography, theme } from "antd";
 import { RightOutlined } from "@ant-design/icons";
 import { quickActions } from "../../../routes/employeeMenu.config";
 import { tintFor } from "./tints";
+import { fs } from "../../../theme/tokens";
 
 const { Text } = Typography;
 
@@ -22,8 +23,8 @@ export function MobileActionPage() {
         return (
           <Card key={a.key} size="small" hoverable onClick={() => navigate(`/app/${a.path}`)} styles={{ body: { padding: 12 } }} role="link" aria-label={a.label}>
             <Flex align="center" gap={14}>
-              <span style={{ width: 44, height: 44, borderRadius: 10, background: tint.bg, color: tint.fg, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>{Icon && <Icon />}</span>
-              <Text style={{ flex: 1, fontSize: 16 }}>{a.label}</Text>
+              <span style={{ width: 44, height: 44, borderRadius: 10, background: tint.bg, color: tint.fg, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: fs.h2 }}>{Icon && <Icon />}</span>
+              <Text style={{ flex: 1, fontSize: fs.lg }}>{a.label}</Text>
               <RightOutlined style={{ color: token.colorTextQuaternary }} />
             </Flex>
           </Card>

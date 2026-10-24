@@ -5,6 +5,7 @@ import { DownOutlined, RightOutlined, UpOutlined } from "@ant-design/icons";
 import { canSeeLeaf, exploreEntries, isComingSoon, isEmployeeMenuGroup, type EmployeeMenuLeaf } from "../../../routes/employeeMenu.config";
 import { useAuth } from "../../../hooks/useAuth";
 import { tintFor } from "./tints";
+import { fs } from "../../../theme/tokens";
 
 const { Text } = Typography;
 
@@ -34,9 +35,9 @@ export function MobileExplorePage() {
         onClick={soon ? undefined : () => navigate(`/app/${leaf.path}`)}
         style={{ padding: "10px 4px", borderTop: `1px solid ${token.colorSplit}`, cursor: soon ? "default" : "pointer", opacity: soon ? 0.55 : 1 }}
       >
-        <span style={{ fontSize: 16, color: token.colorTextSecondary }}>{Icon && <Icon />}</span>
+        <span style={{ fontSize: fs.lg, color: token.colorTextSecondary }}>{Icon && <Icon />}</span>
         <Text style={{ flex: 1 }}>{leaf.label}</Text>
-        {soon ? <Tag>Coming soon</Tag> : <RightOutlined style={{ color: token.colorTextQuaternary, fontSize: 12 }} />}
+        {soon ? <Tag>Coming soon</Tag> : <RightOutlined style={{ color: token.colorTextQuaternary, fontSize: fs.sm }} />}
       </Flex>
     );
   };
@@ -55,15 +56,15 @@ export function MobileExplorePage() {
             <Flex align="center" gap={12} onClick={onClick} style={{ cursor: onClick ? "pointer" : "default" }} role="button" aria-expanded={group ? isOpen : undefined}>
               <div style={{ flex: 1 }}>
                 <Flex align="center" gap={8}>
-                  <Text strong style={{ fontSize: 20 }}>
+                  <Text strong style={{ fontSize: fs.h2 }}>
                     {entry.label}
                   </Text>
-                  {group && (isOpen ? <UpOutlined style={{ fontSize: 12 }} /> : <DownOutlined style={{ fontSize: 12 }} />)}
+                  {group && (isOpen ? <UpOutlined style={{ fontSize: fs.sm }} /> : <DownOutlined style={{ fontSize: fs.sm }} />)}
                   {soon && <Tag>Coming soon</Tag>}
                 </Flex>
                 {entry.description && <Text type="secondary">{entry.description}</Text>}
               </div>
-              <span style={{ fontSize: 30, color: tint.fg }}>{Icon && <Icon />}</span>
+              <span style={{ fontSize: fs.stat, color: tint.fg }}>{Icon && <Icon />}</span>
             </Flex>
             {group && isOpen && <div style={{ marginTop: 10 }}>{group.children.filter((l) => canSeeLeaf(l, hasPermission)).map(leafRow)}</div>}
           </Card>

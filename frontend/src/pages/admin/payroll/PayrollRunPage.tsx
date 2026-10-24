@@ -17,6 +17,7 @@ import { formatDate, formatDateTime } from "../../../lib/dates";
 import { formatDifference, formatRupees } from "../../../lib/money";
 import { useSocket } from "../../../sockets/SocketProvider";
 import { RUN_STATUS_COLOR, VARIANCE_TAG_LABEL } from "./runText";
+import { fs } from "../../../theme/tokens";
 
 const { Title, Text } = Typography;
 
@@ -177,7 +178,7 @@ function PeopleTab({ runId }: { runId: string }) {
         dataSource={data?.items ?? []}
         pagination={{ current: page, pageSize: 50, total: data?.total ?? 0, showSizeChanger: false, onChange: setPage }}
         columns={[
-          { title: "Employee", render: (_, r) => <div><Space size={4}><Text strong>{r.name}</Text>{r.isYou && <Tag color="gold">You</Tag>}</Space><div><Text type="secondary" style={{ fontSize: 12 }}>{r.employeeCode}</Text></div></div> },
+          { title: "Employee", render: (_, r) => <div><Space size={4}><Text strong>{r.name}</Text>{r.isYou && <Tag color="gold">You</Tag>}</Space><div><Text type="secondary" style={{ fontSize: fs.sm }}>{r.employeeCode}</Text></div></div> },
           { title: "Status", render: (_, r) => <StatusCell r={r} /> },
           { title: "Paid days", align: "right", render: (_, r) => (r.status === "EXCLUDED" ? "" : r.paidDays.replace(/0+$/, "").replace(/\.$/, "")) },
           { title: "LOP", align: "right", render: (_, r) => (r.status === "EXCLUDED" ? "" : r.lopDays) },
@@ -215,9 +216,9 @@ function VarianceTab({ runId }: { runId: string }) {
       {data && !data.thresholds.set && <Alert type="info" showIcon title="Nothing is highlighted yet" description={<>The rules “Variance: flag above (percent)” and “Variance: ignore below (rupees)” have no value. <Link to="/admin/payroll/rules">Set them</Link> to have large changes flagged. They only decide what is highlighted; they never change a figure.</>} />}
       {data?.totals.previous && data.totals.change && (
         <Flex gap={32} wrap>
-          <Statistic title="Gross" value={formatRupees(data.totals.current!.gross)} suffix={<Text type="secondary" style={{ fontSize: 13 }}> {formatDifference(data.totals.change.gross)}</Text>} />
-          <Statistic title="Deductions" value={formatRupees(data.totals.current!.deductions)} suffix={<Text type="secondary" style={{ fontSize: 13 }}> {formatDifference(data.totals.change.deductions)}</Text>} />
-          <Statistic title="Net pay" value={formatRupees(data.totals.current!.net)} suffix={<Text type="secondary" style={{ fontSize: 13 }}> {formatDifference(data.totals.change.net)}</Text>} />
+          <Statistic title="Gross" value={formatRupees(data.totals.current!.gross)} suffix={<Text type="secondary" style={{ fontSize: fs.table }}> {formatDifference(data.totals.change.gross)}</Text>} />
+          <Statistic title="Deductions" value={formatRupees(data.totals.current!.deductions)} suffix={<Text type="secondary" style={{ fontSize: fs.table }}> {formatDifference(data.totals.change.deductions)}</Text>} />
+          <Statistic title="Net pay" value={formatRupees(data.totals.current!.net)} suffix={<Text type="secondary" style={{ fontSize: fs.table }}> {formatDifference(data.totals.change.net)}</Text>} />
         </Flex>
       )}
       <Flex gap={8} wrap align="center">
@@ -231,7 +232,7 @@ function VarianceTab({ runId }: { runId: string }) {
         dataSource={data?.items ?? []}
         pagination={{ current: page, pageSize: 50, total: data?.total ?? 0, showSizeChanger: false, onChange: setPage }}
         columns={[
-          { title: "Employee", render: (_, r) => <div><Text strong>{r.name}</Text><div><Text type="secondary" style={{ fontSize: 12 }}>{r.employeeCode}</Text></div></div> },
+          { title: "Employee", render: (_, r) => <div><Text strong>{r.name}</Text><div><Text type="secondary" style={{ fontSize: fs.sm }}>{r.employeeCode}</Text></div></div> },
           { title: "Net last month", align: "right", render: (_, r) => (r.previous ? formatRupees(r.previous.net, 2) : "") },
           { title: "Net this month", align: "right", render: (_, r) => (r.current ? formatRupees(r.current.net, 2) : "") },
           { title: "Change", align: "right", render: (_, r) => (r.change ? <Text type={r.flagged ? "danger" : undefined} strong={r.flagged}>{formatDifference(r.change.net)}{r.percent ? ` (${r.percent}%)` : ""}</Text> : "") },
@@ -254,7 +255,7 @@ function UsedTab({ run }: { run: RunDetail }) {
         pagination={false}
         dataSource={run.rules}
         columns={[
-          { title: "What", render: (_, r) => <div>{r.kind === "RULE" ? <Link to="/admin/payroll/rules">{r.label}</Link> : r.label}{r.frozen && <div><Text type="secondary" style={{ fontSize: 12 }}>What a salary was frozen under</Text></div>}</div> },
+          { title: "What", render: (_, r) => <div>{r.kind === "RULE" ? <Link to="/admin/payroll/rules">{r.label}</Link> : r.label}{r.frozen && <div><Text type="secondary" style={{ fontSize: fs.sm }}>What a salary was frozen under</Text></div>}</div> },
           { title: "Version", align: "right", render: (_, r) => (r.notSet ? "" : r.version) },
           { title: "Status", render: (_, r) => <Tag color={r.status === "CONFIRMED" ? "green" : "orange"}>{r.status === "CONFIRMED" ? "Confirmed" : r.notSet ? "Not set" : "Placeholder"}</Tag> },
           { title: "", render: (_, r) => (r.stale ? <Tag color="gold">Changed since</Tag> : null) },

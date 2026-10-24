@@ -7,6 +7,7 @@ import * as accessApi from "../../api/access";
 import type { EmployeeAccess, EmployeePermission } from "../../api/access";
 import { apiErrorMessage } from "../../lib/apiError";
 import { formatDateTime } from "../../lib/dates";
+import { fs } from "../../theme/tokens";
 
 const { Text } = Typography;
 const SCOPE_LABELS = { SELF: "Self only", TEAM: "Their team", ALL: "Everyone" } as const;
@@ -133,7 +134,7 @@ export function EmployeeAccessTab({ employeeId }: { employeeId: string }) {
           )}
         </Flex>
         {!can.editRoles && (
-          <Text type="secondary" style={{ display: "block", marginTop: 8, fontSize: 12 }}>
+          <Text type="secondary" style={{ display: "block", marginTop: 8, fontSize: fs.sm }}>
             Only a Super Admin can change roles.
           </Text>
         )}
