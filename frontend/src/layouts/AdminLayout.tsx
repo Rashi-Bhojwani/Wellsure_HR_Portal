@@ -1,8 +1,9 @@
-import { useMemo } from "react";
+import { lazy, Suspense, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { DatePicker, Select } from "antd";
-import { CustomerServiceOutlined, SafetyOutlined, SettingOutlined, SwapOutlined, TeamOutlined } from "@ant-design/icons";
-import { AdminFiltersProvider, useAdminFilters } from "../context/AdminFiltersContext";
+import { CustomerServiceOutlined, SafetyOutlined, SettingOutlined, SwapOutlined } from "@ant-design/icons";
+import { AdminFiltersProvider } from "../context/AdminFiltersContext";
+import { Skel } from "../ui/Skeletons";
+import { control, radius, space } from "../theme/tokens";
 import { SecurityEventsBanner } from "../components/access/SecurityEventsBanner";
 import { useIsPhone } from "../ui/hooks";
 import { AppShell } from "./shell/AppShell";
@@ -18,27 +19,21 @@ const EXTRA_TITLES: [RegExp, string][] = [
   [/^\/admin\/payroll\/run\/[^/]+$/, "Payroll run"],
 ];
 
-// The admin portal's global context (docs/UI_REFERENCE.md §2.0): payroll month and employee filter, in the top bar on desktop.
-function AdminContextControls() {
-  const { payrollMonth, setPayrollMonth, employeeFilter, setEmployeeFilter } = useAdminFilters();
+// Payroll month + employee filter (top bar, desktop): lazy, with control-shaped placeholders so the bar never jumps.
+const AdminContextControls = lazy(() => import("./shell/AdminContextControls").then((m) => ({ default: m.AdminContextControls })));
+
+function AdminContextControlsSlot() {
   return (
-    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-      <DatePicker picker="month" aria-label="Payroll month" value={payrollMonth} onChange={(m) => m && setPayrollMonth(m)} allowClear={false} format="[Payroll] MMM YYYY" style={{ width: 168 }} />
-      <Select
-        aria-label="Employee filter"
-        value={employeeFilter}
-        onChange={setEmployeeFilter}
-        suffixIcon={<TeamOutlined />}
-        style={{ width: 168 }}
-        options={[
-          { value: "all", label: "All employees" },
-          { value: "c-10-panchsheel", label: "C-10 Panchsheel" },
-          { value: "ajmer", label: "Ajmer" },
-          { value: "spn-panchsheel", label: "SPN-Panchsheel" },
-          { value: "b-22-panchsheel", label: "B-22 Panchsheel" },
-        ]}
-      />
-    </div>
+    <Suspense
+      fallback={
+        <div aria-hidden style={{ display: "flex", gap: space[2] }}>
+          <Skel w={168} h={control.md} r={radius.sm} />
+          <Skel w={168} h={control.md} r={radius.sm} />
+        </div>
+      }
+    >
+      <AdminContextControls />
+    </Suspense>
   );
 }
 
@@ -55,7 +50,7 @@ function AdminLayoutInner() {
         { key: "help", label: "Help Center", path: "/admin/employee/helpdesk", icon: <CustomerServiceOutlined /> },
         { key: "settings", label: "Settings", path: "/admin/security", icon: <SettingOutlined /> },
       ]}
-      topExtras={<AdminContextControls />}
+      topExtras={<AdminContextControlsSlot />}
       userMenu={[
         { key: "security", icon: <SafetyOutlined />, label: "Account & security", onClick: () => navigate("/admin/security") },
         { key: "ess", icon: <SwapOutlined />, label: "Go to my employee portal", onClick: () => navigate("/app/home") },
