@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import * as biometricApi from "../../api/biometric";
 import type { DeviceWarning } from "../../api/biometric";
 import { space, v } from "../../theme/tokens";
-import { ApprovalBanner } from "../../ui";
+import { ApprovalBanner } from "../../ui/ApprovalBanner";
 
 // Device warnings worded for HR (Phase 2 P2-F, docs/plans/PHASE_2.md "P2-F
 // build design"): a device clock beyond the threshold — "a drifting device

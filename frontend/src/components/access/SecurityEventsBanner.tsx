@@ -9,7 +9,10 @@ import { apiErrorMessage } from "../../lib/apiError";
 import { formatDateTime } from "../../lib/dates";
 import { useSocket } from "../../sockets/SocketProvider";
 import { radius, space, v } from "../../theme/tokens";
-import { ApprovalBanner, ConfirmModal, KeyValueGrid, toast } from "../../ui";
+import { ApprovalBanner } from "../../ui/ApprovalBanner";
+import { ConfirmModal } from "../../ui/ConfirmModal";
+import { KeyValueGrid } from "../../ui/FormSection";
+import { toast } from "../../ui/Toast";
 
 // Phase 5 commit E1.1: a break-glass tool (admin:recover / admin:bootstrap)
 // was used from a server shell. Every Super Admin sees this on every admin

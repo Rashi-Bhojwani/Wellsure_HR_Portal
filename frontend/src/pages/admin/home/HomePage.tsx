@@ -41,20 +41,17 @@ import { useChartColors } from '../../../theme/chartPalette';
 import { fs, fw, radius, space, v } from '../../../theme/tokens';
 import { apiErrorMessage } from '../../../lib/apiError';
 import { formatDate } from '../../../lib/dates';
-import {
-  ApprovalBanner,
-  EmptyState,
-  PageHeader,
-  Panel,
-  QueryState,
-  SideDrawer,
-  Skel,
-  Stack,
-  StatCard,
-  toast,
-  useIsCompact,
-  useIsPhone,
-} from '../../../ui';
+// Direct ui/* imports, not the barrel: this page is on the "shell + admin home" bundle budget, and the barrel would drag DataTable (antd Table) along.
+import { ApprovalBanner } from '../../../ui/ApprovalBanner';
+import { EmptyState } from '../../../ui/EmptyState';
+import { PageHeader } from '../../../ui/PageHeader';
+import { Panel, Stack } from '../../../ui/Panel';
+import { QueryState } from '../../../ui/QueryState';
+import { SideDrawer } from '../../../ui/SideDrawer';
+import { Skel } from '../../../ui/Skeletons';
+import { StatCard } from '../../../ui/StatCard';
+import { toast } from '../../../ui/Toast';
+import { useIsCompact, useIsPhone } from '../../../ui/hooks';
 
 function greeting(): string {
   const hour = new Date().getHours();

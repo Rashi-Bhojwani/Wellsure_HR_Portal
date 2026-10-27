@@ -4,7 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge, Button, Drawer, Grid, Popover, Typography } from "antd";
 import { BellOutlined } from "@ant-design/icons";
 import * as notificationsApi from "../../api/notifications";
-import { EmptyState, Skel } from "../../ui";
+import { EmptyState } from "../../ui/EmptyState";
+import { Skel } from "../../ui/Skeletons";
 import { fs, fw, radius, space, v } from "../../theme/tokens";
 
 function relativeTime(iso: string): string {

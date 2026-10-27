@@ -1,6 +1,8 @@
 import { Select } from 'antd';
 import type { ReactNode } from 'react';
-import { EmptyState, Panel, Skel } from '../../ui';
+import { EmptyState } from '../../ui/EmptyState';
+import { Panel } from '../../ui/Panel';
+import { Skel } from '../../ui/Skeletons';
 import { radius, space } from '../../theme/tokens';
 
 interface ChartCardProps {
