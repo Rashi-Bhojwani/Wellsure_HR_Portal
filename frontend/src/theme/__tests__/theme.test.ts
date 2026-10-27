@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
+// Read through Vite's ?raw import (typed by vite/client), so this test needs no Node typings in the app tsconfig.
+import indexHtml from "../../../index.html?raw";
 import { describe, expect, it } from "vitest";
 import { AA_TEXT_PAIRS, chart, cssVarsFor, dark, light, palettes, v, type Palette } from "../tokens";
 import { antdThemeFor } from "../antdTheme";
@@ -59,7 +59,7 @@ describe("design tokens (docs/DESIGN_SYSTEM.md)", () => {
   });
 
   it("index.html's before-first-paint colours equal the tokens (no flash)", () => {
-    const html = readFileSync(path.resolve(import.meta.dirname, "../../../index.html"), "utf8");
+    const html = indexHtml;
     expect(html).toContain(`dark ? "${dark.bgPage}" : "${light.bgPage}"`);
     expect(html).toContain(`dark ? "${dark.textBody}" : "${light.textBody}"`);
   });
