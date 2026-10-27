@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Button, Checkbox, Input, Tooltip, Upload } from "antd";
 import type { UploadFile } from "antd";
 import { LockOutlined, PaperClipOutlined, SendOutlined } from "@ant-design/icons";
@@ -31,7 +31,7 @@ export function StatusTag({ status, viewer = "raiser" }: { status: HelpdeskStatu
 }
 
 const PRIORITY_TONES: Record<HelpdeskPriority, ChipTone> = { LOW: "neutral", NORMAL: "info", HIGH: "danger" };
-export const priorityLabel = (p: HelpdeskPriority) => p.charAt(0) + p.slice(1).toLowerCase();
+const priorityLabel = (p: HelpdeskPriority) => p.charAt(0) + p.slice(1).toLowerCase();
 export function PriorityTag({ priority }: { priority: HelpdeskPriority }) {
   return <StatusChip tone={PRIORITY_TONES[priority]}>{priorityLabel(priority)}</StatusChip>;
 }

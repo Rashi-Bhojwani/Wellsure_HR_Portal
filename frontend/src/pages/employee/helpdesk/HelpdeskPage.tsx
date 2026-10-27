@@ -7,7 +7,7 @@ import { CheckCircleOutlined, ClockCircleOutlined, CustomerServiceOutlined, Mess
 import { HELPDESK_PRIORITIES, type HelpdeskPriority } from "@shared/constants/helpdesk";
 import * as helpdeskApi from "../../../api/helpdesk";
 import type { HelpdeskTicketSummary } from "../../../api/helpdesk";
-import { AttachmentPicker, StatusTag, priorityLabel } from "../../../components/helpdesk/HelpdeskBits";
+import { AttachmentPicker, StatusTag } from "../../../components/helpdesk/HelpdeskBits";
 import { lifecycleHint, toFiles } from "../../../components/helpdesk/helpdeskUtils";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatDateTime } from "../../../lib/dates";
@@ -61,7 +61,7 @@ function RaiseTicketDrawer({ open, onClose }: { open: boolean; onClose: () => vo
           <Input.TextArea autoSize={{ minRows: 4, maxRows: 10 }} maxLength={5000} showCount />
         </Form.Item>
         <Form.Item name="priority" label="Priority">
-          <Segmented block options={HELPDESK_PRIORITIES.map((p) => ({ value: p, label: priorityLabel(p) }))} />
+          <Segmented block options={HELPDESK_PRIORITIES.map((p) => ({ value: p, label: p.charAt(0) + p.slice(1).toLowerCase() }))} />
         </Form.Item>
         <Form.Item label="Attachments" extra="PDF, image, Word or Excel. Photos are cleaned of location and camera details before they're stored.">
           <AttachmentPicker files={files} onChange={setFiles} />

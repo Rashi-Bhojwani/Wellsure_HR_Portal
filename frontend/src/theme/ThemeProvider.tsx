@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components -- context + hook are colocated by design */
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { App as AntApp, ConfigProvider } from "antd";
+import { ConfigProvider } from "antd";
 import { antdThemeFor } from "./antdTheme";
 import { cssVarsFor, type ThemeMode } from "./tokens";
 
@@ -82,10 +82,22 @@ export function AppThemeProvider({ children }: { children: ReactNode }) {
 
   const themeConfig = useMemo(() => antdThemeFor(mode), [mode]);
 
+  // toast (message) and socket notifications use antd's static methods, which render outside this tree: give their holder the same theme, so they follow
+  // light/dark too. (No antd <App> wrapper: nothing uses App.useApp(), and it would put Modal into the login screen's bundle.)
+  useEffect(() => {
+    ConfigProvider.config({
+      holderRender: (children) => (
+        <ConfigProvider theme={themeConfig} wave={{ disabled: true }}>
+          {children}
+        </ConfigProvider>
+      ),
+    });
+  }, [themeConfig]);
+
   return (
     <ThemeModeContext.Provider value={value}>
       <ConfigProvider theme={themeConfig} wave={{ disabled: true }}>
-        <AntApp component={false}>{children}</AntApp>
+        {children}
       </ConfigProvider>
     </ThemeModeContext.Provider>
   );

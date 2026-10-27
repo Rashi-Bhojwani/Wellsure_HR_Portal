@@ -25,7 +25,7 @@ import {
   UserAddOutlined,
 } from '@ant-design/icons';
 import { ChartCard } from '../../../components/charts/ChartCard';
-import { ColumnChart, DonutChart, SmoothLineChart } from '../../../components/charts/chartKit';
+import { ColumnChart, DonutChart, SmoothLineChart } from '../../../components/charts/lazyCharts';
 import { useAuth } from '../../../hooks/useAuth';
 import * as managersApi from '../../../api/managers';
 import * as adminHomeApi from '../../../api/adminHome';

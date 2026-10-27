@@ -1,9 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { Alert, Button, Space } from "antd";
+import { Button } from "antd";
 import dayjs from "dayjs";
 import { useNavigate } from "react-router-dom";
 import * as biometricApi from "../../api/biometric";
 import type { DeviceWarning } from "../../api/biometric";
+import { space, v } from "../../theme/tokens";
+import { ApprovalBanner } from "../../ui";
 
 // Device warnings worded for HR (Phase 2 P2-F, docs/plans/PHASE_2.md "P2-F
 // build design"): a device clock beyond the threshold — "a drifting device
@@ -25,25 +27,26 @@ const TITLES: Record<DeviceWarning["kind"], string> = {
   NO_PUNCHES_TODAY: "No punches today",
 };
 
+const SEVERE = new Set<DeviceWarning["kind"]>(["RETENTION_RISK", "CLOCK_DRIFT", "BATCHES_SET_ASIDE", "DEVICE_SILENT", "AGENT_SILENT"]);
+
 export function DeviceWarnings({ enabled = true, linkToDevices = false }: { enabled?: boolean; linkToDevices?: boolean }) {
   const navigate = useNavigate();
   const { data: warnings = [] } = useQuery({ queryKey: ["biometric", "device-warnings"], queryFn: biometricApi.listDeviceWarnings, enabled });
   if (!warnings.length) return null;
   return (
-    <Space orientation="vertical" size={8} style={{ width: "100%" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: space[2], width: "100%" }}>
       {warnings.map((w) => (
-        <Alert
+        <ApprovalBanner
           key={`${w.deviceId ?? w.agentId}-${w.kind}`}
-          type={w.kind === "RETENTION_RISK" || w.kind === "CLOCK_DRIFT" || w.kind === "BATCHES_SET_ASIDE" || w.kind === "DEVICE_SILENT" || w.kind === "AGENT_SILENT" ? "error" : "warning"}
-          showIcon
+          tone={SEVERE.has(w.kind) ? "danger" : "warning"}
           title={`${TITLES[w.kind]}: ${w.deviceName ?? w.agentName}`}
           description={
             <>
               {w.message}
-              {w.reportAt && <span style={{ opacity: 0.7 }}> (as reported {dayjs(w.reportAt).format("D MMM, HH:mm")})</span>}
+              {w.reportAt && <span style={{ color: v.textSecondary }}> (as reported {dayjs(w.reportAt).format("D MMM, HH:mm")})</span>}
             </>
           }
-          action={
+          actions={
             linkToDevices ? (
               <Button size="small" onClick={() => navigate("/admin/admin-tools/devices")}>
                 Devices
@@ -52,6 +55,6 @@ export function DeviceWarnings({ enabled = true, linkToDevices = false }: { enab
           }
         />
       ))}
-    </Space>
+    </div>
   );
 }

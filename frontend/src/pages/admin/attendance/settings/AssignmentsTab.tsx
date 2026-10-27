@@ -52,8 +52,13 @@ function DefaultsPanel({ canManage }: { canManage: boolean }) {
       <Panel
         title="New joiners get"
         subtitle="The shift, week-off pattern and policy given to people added from now on"
-        onEdit={canManage ? () => setEditing(true) : undefined}
-        editLabel="Change"
+        extra={
+          canManage && (
+            <Button icon={<EditOutlined />} onClick={() => setEditing(true)}>
+              Change
+            </Button>
+          )
+        }
       >
         {isLoading ? (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(180px, 100%), 1fr))", gap: space[4] }}>

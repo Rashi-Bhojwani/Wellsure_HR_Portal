@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Col, Form, Row, Select } from "antd";
 import { HELPDESK_PRIORITIES, HELPDESK_STATUSES, type HelpdeskPriority, type HelpdeskStatus } from "@shared/constants/helpdesk";
 import * as helpdeskApi from "../../../api/helpdesk";
-import { Conversation, LifecycleNotice, PriorityTag, ReplyBox, SensitiveChip, StatusTag, TicketSkeleton, priorityLabel } from "../../../components/helpdesk/HelpdeskBits";
+import { Conversation, LifecycleNotice, PriorityTag, ReplyBox, SensitiveChip, StatusTag, TicketSkeleton } from "../../../components/helpdesk/HelpdeskBits";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatDateTime } from "../../../lib/dates";
 import { space } from "../../../theme/tokens";
@@ -109,7 +109,7 @@ export function AdminHelpdeskTicketPage() {
                     loading={saving?.priority !== undefined}
                     disabled={update.isPending}
                     onChange={(priority) => update.mutate({ priority })}
-                    options={HELPDESK_PRIORITIES.map((p) => ({ value: p, label: priorityLabel(p) }))}
+                    options={HELPDESK_PRIORITIES.map((p) => ({ value: p, label: p.charAt(0) + p.slice(1).toLowerCase() }))}
                   />
                 </Form.Item>
                 <Form.Item label="Assignee" style={{ marginBottom: 0 }}>
