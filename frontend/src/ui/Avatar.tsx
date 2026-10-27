@@ -1,4 +1,5 @@
 import { fw, radius, v } from "../theme/tokens";
+import { initialsOf } from "./avatarUtils";
 
 const TONES = [
   { bg: v.chipSuccessBg, fg: v.chipSuccessText },
@@ -7,11 +8,6 @@ const TONES = [
   { bg: v.chipWarningBg, fg: v.chipWarningText },
   { bg: v.chipDangerBg, fg: v.chipDangerText },
 ];
-
-export function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : "")).toUpperCase() || "?";
-}
 
 /** Initials on a tint picked from the name (the board's "MG" avatars). No photos in fixtures, ever. */
 export function InitialsAvatar({ name, size = 40 }: { name: string; size?: number }) {

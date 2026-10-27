@@ -2,7 +2,8 @@
 export { PageHeader, type Crumb, type PageHeaderProps } from "./PageHeader";
 export { Panel, CardGrid, Stack, type PanelProps } from "./Panel";
 export { StatCard, type StatCardProps } from "./StatCard";
-export { StatusChip, toneForStatus, type ChipTone } from "./StatusChip";
+export { StatusChip } from "./StatusChip";
+export { toneForStatus, type ChipTone } from "./statusTone";
 export { DataTable, type DataTableProps, type MobileCardSpec } from "./DataTable";
 export { FilterBar, type FilterBarProps } from "./FilterBar";
 export { SideDrawer, type SideDrawerProps } from "./SideDrawer";
@@ -16,5 +17,6 @@ export { ApprovalBanner, type BannerTone } from "./ApprovalBanner";
 export { Timeline, type TimelineItem } from "./Timeline";
 export { QueryState } from "./QueryState";
 export { Illustration, type IllustrationName } from "./Illustrations";
-export { InitialsAvatar, initialsOf } from "./Avatar";
+export { InitialsAvatar } from "./Avatar";
+export { initialsOf } from "./avatarUtils";
 export { useIsPhone, useIsCompact, useDebouncedValue, usePrefersReducedMotion, isForbidden, isOffline, errorStatus } from "./hooks";

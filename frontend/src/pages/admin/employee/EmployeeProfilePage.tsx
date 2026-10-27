@@ -17,7 +17,8 @@ import { EmployeeDocumentsTab } from "./EmployeeDocumentsTab";
 import { EmployeeAccessTab } from "../../../components/access/EmployeeAccessTab";
 import { EmptyState, PageHeader, QueryState, SideDrawer, Skel, SkeletonCard, StatusChip, Timeline, toast, type TimelineItem } from "../../../ui";
 import { fs, space, v } from "../../../theme/tokens";
-import { Grid, ProfileCard, ProfileSection, ProfileShell, ProfileTabs, SectionStack, personalSections, statutoryItems } from "./ProfileLayout";
+import { Grid, ProfileCard, ProfileSection, ProfileShell, ProfileTabs, SectionStack } from "./ProfileLayout";
+import { personalSections, statutoryItems } from "./profileItems";
 
 const REFERENCE_STALE = 30_000;
 

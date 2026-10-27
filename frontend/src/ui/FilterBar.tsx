@@ -27,7 +27,12 @@ export function FilterBar({ onSearch, searchPlaceholder = "Search", searchValue 
   const [sheet, setSheet] = useState(false);
   const settled = useDebouncedValue(text, 250);
 
-  useEffect(() => setText(searchValue), [searchValue]);
+  // When the parent changes searchValue (e.g. "Clear filters"), adopt it — adjusted during render, not in an effect.
+  const [syncedFrom, setSyncedFrom] = useState(searchValue);
+  if (syncedFrom !== searchValue) {
+    setSyncedFrom(searchValue);
+    setText(searchValue);
+  }
   useEffect(() => {
     if (settled !== searchValue) onSearch?.(settled);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fire only when the typed value settles
