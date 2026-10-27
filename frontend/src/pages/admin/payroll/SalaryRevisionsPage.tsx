@@ -191,7 +191,7 @@ function RevisionWizard({ prefillEmployee, componentName, onClose, onCreated }: 
   return (
     <SideDrawer
       open
-      size="wide"
+      size="xwide"
       title="Prepare a salary revision"
       subtitle={p ? "Check every figure, then submit it for approval" : "Who, what changes, and from when"}
       onClose={onClose}
@@ -280,9 +280,7 @@ function RevisionWizard({ prefillEmployee, componentName, onClose, onCreated }: 
             <FormGroupTitle>What it does</FormGroupTitle>
             {p.blockers.length > 0 && <ApprovalBanner tone="danger" title="This cannot be submitted yet" description={<ul style={{ margin: 0, paddingLeft: space[5] }}>{p.blockers.map((b) => <li key={b}>{b}</li>)}</ul>} />}
             {p.skipped.length > 0 && <ApprovalBanner tone="info" title={`${p.skipped.length} left out`} description={<ul style={{ margin: 0, paddingLeft: space[5] }}>{p.skipped.slice(0, 8).map((sk) => <li key={sk.employeeId}>{sk.name}: {sk.reason}</li>)}{p.skipped.length > 8 && <li>and {p.skipped.length - 8} more</li>}</ul>} />}
-            <div style={{ overflowX: "auto" }}>
-              <RevisionPlanTable people={p.people} componentName={componentName} />
-            </div>
+            <RevisionPlanTable people={p.people} componentName={componentName} />
             <CheckersNote checkers={p.checkers} what="this revision" />
           </Stack>
         )}
@@ -331,7 +329,7 @@ function RevisionDetailDrawer({ id, componentName, onClose }: { id: string; comp
   return (
     <SideDrawer
       open
-      size="wide"
+      size="xwide"
       title={r?.kind === "CANCEL_SCHEDULED" ? "Cancel a scheduled salary" : "Salary revision"}
       status={r ? statusChip(r.status) : undefined}
       onClose={onClose}

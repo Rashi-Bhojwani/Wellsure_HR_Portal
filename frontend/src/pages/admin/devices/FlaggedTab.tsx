@@ -140,6 +140,7 @@ export function FlaggedTab() {
           { title: "", key: "actions", align: "right", render: (_, r) => <span style={{ display: "inline-flex", gap: space[1] }}>{decideButtons(r)}</span> },
         ]}
         mobile={{
+          selection: false, // renders its own select control on the card
           title: (r) => r.employee?.name ?? `Unmapped · ${r.deviceUserId}`,
           subtitle: (r) => `${r.device} · ${r.localTime}`,
           status: (r) => <FlagChip flag={r.flag} />,

@@ -378,6 +378,7 @@ export function ManagerManagementPage() {
                           { title: "Why", dataIndex: "why", render: (val: string) => <span style={{ color: v.textSecondary }}>{val}</span> },
                         ]}
                         mobile={{
+                          selection: false, // renders its own select control on the card
                           avatar: (r) => <InitialsAvatar name={r.name} size={40} />,
                           title: (r) => <Link to={`/admin/employee/profile/${r.employeeId}`}>{r.name}</Link>,
                           subtitle: (r) => [r.employeeCode, r.department].filter(Boolean).join(" · "),

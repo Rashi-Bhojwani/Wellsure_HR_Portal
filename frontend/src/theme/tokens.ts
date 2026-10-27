@@ -310,6 +310,7 @@ export const layout = {
   contentMax: 1600,
   drawer: 440,
   drawerWide: 640,
+  drawerXWide: 960,
   phoneTabBar: 64,
 } as const;
 

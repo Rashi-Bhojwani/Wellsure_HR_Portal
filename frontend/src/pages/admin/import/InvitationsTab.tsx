@@ -88,6 +88,7 @@ export function InvitationsTab() {
         pagination={{ current: page, pageSize: 50, total: data?.total ?? 0, onChange: setPage, showSizeChanger: false }}
         empty={<EmptyState compact illustration="inbox" title="Everyone has been invited" description="People who still need to set a password will show up here." />}
         mobile={{
+          selection: false, // renders its own select control on the card
           avatar: (r) => <InitialsAvatar name={r.fullName} size={40} />,
           title: (r) => r.fullName,
           subtitle: (r) => `${r.employeeCode} · ${r.email}`,

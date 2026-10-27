@@ -13,6 +13,7 @@ export function RevisionPlanTable({ people, componentName }: { people: PlanPerso
     <Table<PlanPerson>
       size="small"
       rowKey="employeeId"
+      scroll={{ x: "max-content" }}
       pagination={people.length > 10 ? { pageSize: 10, showSizeChanger: false } : false}
       dataSource={people}
       expandable={{

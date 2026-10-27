@@ -346,6 +346,7 @@ export function AssignmentsTab({ canManage }: { canManage: boolean }) {
             { title: "", key: "actions", render: (_, r) => rowActions(r) },
           ]}
           mobile={{
+            selection: false, // renders its own select control on the card
             title: (r) => r.fullName,
             subtitle: (r) => `${r.employeeCode}${r.location ? ` · ${r.location}` : ""}`,
             status: (r) => <CaptureTag capture={r.capture} />,

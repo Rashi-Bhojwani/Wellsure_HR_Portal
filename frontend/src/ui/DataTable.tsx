@@ -1,5 +1,5 @@
-import { type Key, type ReactNode } from "react";
-import { Pagination, Table, type TableColumnType, type TableProps } from "antd";
+import { useState, type Key, type ReactNode } from "react";
+import { Checkbox, Pagination, Radio, Table, type TableColumnType, type TableProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { fs, fw, radius, space, v } from "../theme/tokens";
 import { EmptyState } from "./EmptyState";
@@ -17,6 +17,11 @@ export interface MobileCardSpec<T> {
   /** Row actions as buttons at the bottom of the card (≥ 44px on phones; never hover-only). */
   actions?: (row: T) => ReactNode;
   avatar?: (row: T) => ReactNode;
+  /**
+   * With `rowSelection`, each card gets a selection checkbox (and "Select all on this page" above the cards). Set `false` when the spec already renders
+   * its own selection control on the card.
+   */
+  selection?: boolean;
 }
 
 export interface DataTableProps<T> extends Omit<TableProps<T>, "size"> {
@@ -83,6 +88,10 @@ export function DataTable<T extends object>({
 }: DataTableProps<T>) {
   const phone = useIsPhone();
   const rows = (dataSource ?? []) as T[];
+  // Phone card mode: client-side paging (as antd's Table does on desktop when no onChange is given) and uncontrolled selection.
+  const [localPage, setLocalPage] = useState<number | undefined>(undefined);
+  const [localSize, setLocalSize] = useState<number | undefined>(undefined);
+  const [localKeys, setLocalKeys] = useState<Key[]>([]);
   const isLoading = Boolean(typeof loading === "object" ? loading.spinning : loading);
   const firstLoad = isLoading && rows.length === 0;
 
@@ -93,26 +102,83 @@ export function DataTable<T extends object>({
 
   if (phone) {
     const spec = mobile ?? deriveMobile(columns);
-    const pg = pagination === false ? null : pagination;
+    const pg = pagination === false ? null : (pagination ?? {});
+    // Server-side when the page drives it (onChange) or says there are more rows than it gave us; otherwise slice here, like antd does on desktop.
+    const server = !!pg && (!!pg.onChange || (pg.total !== undefined && pg.total > rows.length));
+    const pageSize = (server ? pg?.pageSize : (localSize ?? pg?.pageSize)) ?? pg?.defaultPageSize ?? 10;
+    const total = server ? (pg?.total ?? rows.length) : rows.length;
+    const lastPage = Math.max(1, Math.ceil(total / pageSize));
+    const current = server ? (pg?.current ?? 1) : Math.min(localPage ?? pg?.current ?? pg?.defaultCurrent ?? 1, lastPage);
+    const visible = pg && !server ? rows.slice((current - 1) * pageSize, current * pageSize) : rows;
+
+    const sel = spec.selection === false ? undefined : rest.rowSelection;
+    const selKeys = sel ? (sel.selectedRowKeys ?? localKeys) : [];
+    const radio = sel?.type === "radio";
+    const keyOf = (row: T) => rowKeyOf(row, rowKey, rows.indexOf(row));
+    const setKeys = (keys: Key[], method: "single" | "multiple" | "all") => {
+      if (!sel) return;
+      if (!sel.selectedRowKeys) setLocalKeys(keys);
+      const picked = rows.filter((r) => keys.includes(keyOf(r)));
+      sel.onChange?.(keys, picked, { type: method });
+    };
+    const selectable = visible.filter((r) => !sel?.getCheckboxProps?.(r)?.disabled);
+    const pageKeys = selectable.map(keyOf);
+    const pageChecked = pageKeys.filter((k) => selKeys.includes(k)).length;
+    const hit = { minWidth: 44, minHeight: 44, display: "inline-flex", alignItems: "center", justifyContent: "center", marginInlineEnd: 0 } as const;
+
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: space[3], opacity: isLoading ? 0.6 : 1, transition: "opacity 0.15s" }} aria-busy={isLoading}>
-        {rows.length === 0
+        {sel && !radio && sel.hideSelectAll !== true && pageKeys.length > 0 && (
+          <Checkbox
+            checked={pageChecked === pageKeys.length}
+            indeterminate={pageChecked > 0 && pageChecked < pageKeys.length}
+            onChange={(e) =>
+              setKeys(e.target.checked ? [...new Set([...selKeys, ...pageKeys])] : selKeys.filter((k) => !pageKeys.includes(k)), "all")
+            }
+            style={{ minHeight: 44, alignItems: "center", alignSelf: "flex-start" }}
+          >
+            Select all on this page{selKeys.length > 0 ? ` (${selKeys.length} selected)` : ""}
+          </Checkbox>
+        )}
+        {visible.length === 0
           ? emptyNode
-          : rows.map((row, i) => {
+          : visible.map((row, i) => {
               const open = onRowOpen ? () => onRowOpen(row) : undefined;
+              const key = rowKeyOf(row, rowKey, rows.indexOf(row) >= 0 ? rows.indexOf(row) : i);
+              const cbProps = sel?.getCheckboxProps?.(row);
+              const checked = selKeys.includes(key);
+              const titleNode = spec.title(row);
+              const label = `Select ${typeof titleNode === "string" || typeof titleNode === "number" ? titleNode : "row"}`;
+              const toggle = (on: boolean) => setKeys(radio ? (on ? [key] : []) : on ? [...selKeys, key] : selKeys.filter((k) => k !== key), radio ? "single" : "multiple");
               return (
                 <article
-                  key={rowKeyOf(row, rowKey, i)}
+                  key={key}
                   onClick={open}
-                  onKeyDown={open ? (e) => e.key === "Enter" && open() : undefined}
+                  onKeyDown={open ? (e) => e.key === "Enter" && e.target === e.currentTarget && open() : undefined}
                   tabIndex={open ? 0 : undefined}
                   role={open ? "button" : undefined}
-                  style={{ background: v.bgSurface, border: `1px solid ${v.borderDefault}`, borderRadius: radius.md, padding: space[4], cursor: open ? "pointer" : undefined }}
+                  style={{
+                    background: v.bgSurface,
+                    border: `1px solid ${checked ? v.accent : v.borderDefault}`,
+                    borderRadius: radius.md,
+                    padding: space[4],
+                    cursor: open ? "pointer" : undefined,
+                  }}
                 >
                   <div style={{ display: "flex", alignItems: "flex-start", gap: space[3] }}>
+                    {sel && (
+                      // The control's own label is the 44px hit area; clicks on it never open the row.
+                      <span onClick={(e) => e.stopPropagation()} style={{ display: "inline-flex", flex: "none", margin: `-${space[3]}px 0 -${space[3]}px -${space[3]}px` }}>
+                        {radio ? (
+                          <Radio checked={checked} disabled={cbProps?.disabled} onChange={(e) => toggle(e.target.checked)} aria-label={label} style={hit} />
+                        ) : (
+                          <Checkbox checked={checked} disabled={cbProps?.disabled} onChange={(e) => toggle(e.target.checked)} aria-label={label} style={hit} />
+                        )}
+                      </span>
+                    )}
                     {spec.avatar?.(row)}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: fw.semibold, color: v.textPrimary, fontSize: fs.md, wordBreak: "break-word" }}>{spec.title(row)}</div>
+                      <div style={{ fontWeight: fw.semibold, color: v.textPrimary, fontSize: fs.md, wordBreak: "break-word" }}>{titleNode}</div>
                       {spec.subtitle && <div style={{ color: v.textSecondary, fontSize: fs.sm, marginTop: 2 }}>{spec.subtitle(row)}</div>}
                     </div>
                     {spec.status && <div style={{ flex: "none" }}>{spec.status(row)}</div>}
@@ -135,8 +201,22 @@ export function DataTable<T extends object>({
                 </article>
               );
             })}
-        {pg && (pg.total ?? rows.length) > (pg.pageSize ?? 10) && (
-          <Pagination simple current={pg.current} pageSize={pg.pageSize} total={pg.total} onChange={pg.onChange} style={{ alignSelf: "center", marginTop: space[2] }} />
+        {pg && total > pageSize && (
+          <Pagination
+            simple
+            current={current}
+            pageSize={pageSize}
+            total={total}
+            onChange={(page, size) => {
+              if (server) pg.onChange?.(page, size);
+              else {
+                setLocalPage(page);
+                setLocalSize(size);
+                pg.onChange?.(page, size);
+              }
+            }}
+            style={{ alignSelf: "center", marginTop: space[2] }}
+          />
         )}
       </div>
     );

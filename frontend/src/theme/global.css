@@ -73,6 +73,32 @@ a:focus-visible {
   scrollbar-width: thin;
   scrollbar-color: var(--ws-border-control) transparent;
 }
+/* Older WebKit (Safari < 18.2) ignores scrollbar-color: same thin, themed bar. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--ws-border-control);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Phones: no grey flash on tap, no font inflation on rotate. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+body {
+  -webkit-tap-highlight-color: transparent;
+}
 
 /* ── Motion: animate only transform and opacity; none at all when reduced ── */
 @keyframes ws-page-in {
@@ -105,6 +131,9 @@ a:focus-visible {
   animation: ws-page-in 0.18s cubic-bezier(0.2, 0, 0, 1) both;
 }
 @media (prefers-reduced-motion: reduce) {
+  .ws-page-enter {
+    animation: none;
+  }
   *,
   *::before,
   *::after {
@@ -200,6 +229,27 @@ html[data-theme="dark"] .ant-btn-default:not(.ant-btn-dangerous) {
   .ant-btn-icon-only:not(.ant-btn-sm) {
     min-width: 44px;
     min-height: 44px;
+  }
+  .ant-checkbox-wrapper,
+  .ant-radio-wrapper,
+  .ant-tabs-tab {
+    min-height: 44px;
+    align-items: center;
+  }
+  .ant-segmented:not(.ant-segmented-sm) .ant-segmented-item-label {
+    min-height: 44px;
+    line-height: 44px;
+  }
+  .ant-pagination .ant-pagination-item,
+  .ant-pagination .ant-pagination-prev,
+  .ant-pagination .ant-pagination-next {
+    min-width: 44px;
+    height: 44px;
+    line-height: 42px;
+  }
+  .ant-pagination .ant-pagination-prev .ant-pagination-item-link,
+  .ant-pagination .ant-pagination-next .ant-pagination-item-link {
+    height: 44px;
   }
   .ant-modal {
     max-width: calc(100vw - 16px);

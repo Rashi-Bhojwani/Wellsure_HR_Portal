@@ -12,8 +12,8 @@ export interface SideDrawerProps {
   status?: ReactNode;
   subtitle?: ReactNode;
   children: ReactNode;
-  /** "form" 440px, "wide" 640px (time-off-13). Phones: always a full-screen sheet. */
-  size?: "form" | "wide";
+  /** "form" 440px, "wide" 640px (time-off-13), "xwide" 960px for wizards and wide plans (never wider than the window less a margin). Phones: always a full-screen sheet. */
+  size?: "form" | "wide" | "xwide";
   /** Footer: by default Cancel + primary. Pass `footer` to replace it, or `null` for none. */
   footer?: ReactNode | null;
   primaryLabel?: string;
@@ -80,7 +80,7 @@ export function SideDrawer({
       open={open}
       onClose={onClose}
       placement={phone ? "bottom" : "right"}
-      size={phone ? "100%" : size === "wide" ? layout.drawerWide : layout.drawer}
+      size={phone ? "100%" : size === "xwide" ? `min(${layout.drawerXWide}px, calc(100vw - ${space[12]}px))` : size === "wide" ? layout.drawerWide : layout.drawer}
       destroyOnHidden={destroyOnHidden}
       closable={false}
       title={

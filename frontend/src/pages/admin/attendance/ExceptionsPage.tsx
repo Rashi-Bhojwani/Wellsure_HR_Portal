@@ -256,6 +256,7 @@ export function ExceptionsPage() {
                 rowSelection={{ selectedRowKeys: picked, onChange: setPicked, getCheckboxProps: (r) => ({ disabled: r.locked, "aria-label": `Select ${r.employeeName ?? r.employeeCode} on ${r.date}` }) }}
                 pagination={{ current: page, pageSize: PAGE_SIZE, total: data?.total ?? 0, onChange: (p) => setPage(p), showSizeChanger: false, showTotal: (t) => plural(t, "day") }}
                 mobile={{
+                  selection: false, // renders its own select control on the card
                   title: (r) => `${r.employeeName ?? r.employeeCode} (${r.employeeCode})`,
                   subtitle: (r) => dayjs(r.date).format("ddd, D MMM YYYY"),
                   status: (r) => <DayCode status={r.status} />,
@@ -396,6 +397,7 @@ function UnmappedTable({
         rowSelection={canMap ? { selectedRowKeys: picked, onChange: setPicked } : undefined}
         pagination={{ current: page, pageSize: PAGE_SIZE, total, onChange: onPage, showSizeChanger: false, showTotal: (t) => plural(t, "device ID") }}
         mobile={{
+          selection: false, // renders its own select control on the card
           title: (r) => `Device ID ${r.deviceUserId}`,
           subtitle: dates,
           fields: [
