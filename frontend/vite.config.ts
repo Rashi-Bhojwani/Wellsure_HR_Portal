@@ -19,6 +19,17 @@ const config: UserConfig = {
   build: {
     // dist/.vite/manifest.json: scripts/check-bundle.mjs reads it to hold the JS budgets (DESIGN_SYSTEM.md §7: login < 250 KB gzip, shell + home < 400 KB).
     manifest: true,
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            // Everything the first screen needs from node_modules (React, the router, antd's core, axios, TanStack Query…) in one cacheable chunk, instead of
+            // a dozen small shared chunks that each gzip on their own — fewer requests and a smaller login download. Route-only libraries stay split.
+            { name: "vendor", test: /node_modules[\\/]/, tags: ["$initial"] },
+          ],
+        },
+      },
+    },
   },
   server: {
     fs: {

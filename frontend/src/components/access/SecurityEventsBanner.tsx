@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Form, Input, Tooltip } from "antd";
 import { SafetyOutlined } from "@ant-design/icons";
@@ -10,9 +10,11 @@ import { formatDateTime } from "../../lib/dates";
 import { useSocket } from "../../sockets/SocketProvider";
 import { radius, space, v } from "../../theme/tokens";
 import { ApprovalBanner } from "../../ui/ApprovalBanner";
-import { ConfirmModal } from "../../ui/ConfirmModal";
 import { KeyValueGrid } from "../../ui/FormSection";
 import { toast } from "../../ui/Toast";
+
+// The dialog (antd Modal) loads the first time someone opens it: this banner sits in the admin shell, which is on a bundle budget.
+const ConfirmModal = lazy(() => import("../../ui/ConfirmModal").then((m) => ({ default: m.ConfirmModal })));
 
 // Phase 5 commit E1.1: a break-glass tool (admin:recover / admin:bootstrap)
 // was used from a server shell. Every Super Admin sees this on every admin
@@ -26,6 +28,9 @@ export function SecurityEventsBanner() {
   const { socket } = useSocket();
   const { data: events = [] } = useQuery({ queryKey: ["access", "security-events", "open"], queryFn: () => accessApi.listSecurityEvents("open"), enabled: isSuperAdmin, refetchInterval: 60_000 });
   const [open, setOpen] = useState<SecurityEvent | null>(null);
+  // Mounted from the first open on (and kept, so it can animate closed).
+  const [modalUsed, setModalUsed] = useState(false);
+  if (open && !modalUsed) setModalUsed(true);
   const [form] = Form.useForm<{ note: string }>();
 
   useEffect(() => {
@@ -70,40 +75,44 @@ export function SecurityEventsBanner() {
           }
         />
       ))}
-      <ConfirmModal
-        open={open !== null}
-        onCancel={() => !ack.isPending && setOpen(null)}
-        onConfirm={() => form.submit()}
-        title="Acknowledge security event"
-        description="Only acknowledge once you've confirmed with the person concerned that this was expected. If it wasn't, treat it as an incident."
-        confirmLabel="Acknowledge"
-        loading={ack.isPending}
-        width={560}
-      >
-        {open && (
-          <div style={{ display: "flex", flexDirection: "column", gap: space[4] }}>
-            <div style={{ border: `1px solid ${v.borderDefault}`, borderRadius: radius.md, padding: space[4], background: v.bgSubtle }}>
-              <KeyValueGrid
-                columns={1}
-                items={[
-                  { label: "What", value: open.summary },
-                  { label: "When", value: formatDateTime(open.createdAt) },
-                  { label: "Operator (self-declared)", value: open.details.operator ?? "—" },
-                  { label: "Machine", value: `${open.details.origin?.hostname ?? "?"} (${open.details.origin?.appEnv ?? "?"})` },
-                  { label: "Reason", value: open.details.reason ?? "—" },
-                  ...(open.details.justification ? [{ label: "Why not in the app", value: open.details.justification }] : []),
-                  { label: "Alert emailed to", value: (open.details.emailed ?? []).join(", ") || "nobody" },
-                ]}
-              />
-            </div>
-            <Form form={form} layout="vertical" requiredMark={false} onFinish={(vals) => ack.mutate({ id: open.id, note: vals.note })}>
-              <Form.Item name="note" label="What you checked" rules={[{ required: true, min: 3, message: "Say what you checked." }]} style={{ marginBottom: 0 }}>
-                <Input.TextArea rows={2} maxLength={500} />
-              </Form.Item>
-            </Form>
-          </div>
-        )}
-      </ConfirmModal>
+      {modalUsed && (
+        <Suspense fallback={null}>
+          <ConfirmModal
+            open={open !== null}
+            onCancel={() => !ack.isPending && setOpen(null)}
+            onConfirm={() => form.submit()}
+            title="Acknowledge security event"
+            description="Only acknowledge once you've confirmed with the person concerned that this was expected. If it wasn't, treat it as an incident."
+            confirmLabel="Acknowledge"
+            loading={ack.isPending}
+            width={560}
+          >
+            {open && (
+              <div style={{ display: "flex", flexDirection: "column", gap: space[4] }}>
+                <div style={{ border: `1px solid ${v.borderDefault}`, borderRadius: radius.md, padding: space[4], background: v.bgSubtle }}>
+                  <KeyValueGrid
+                    columns={1}
+                    items={[
+                      { label: "What", value: open.summary },
+                      { label: "When", value: formatDateTime(open.createdAt) },
+                      { label: "Operator (self-declared)", value: open.details.operator ?? "—" },
+                      { label: "Machine", value: `${open.details.origin?.hostname ?? "?"} (${open.details.origin?.appEnv ?? "?"})` },
+                      { label: "Reason", value: open.details.reason ?? "—" },
+                      ...(open.details.justification ? [{ label: "Why not in the app", value: open.details.justification }] : []),
+                      { label: "Alert emailed to", value: (open.details.emailed ?? []).join(", ") || "nobody" },
+                    ]}
+                  />
+                </div>
+                <Form form={form} layout="vertical" requiredMark={false} onFinish={(vals) => ack.mutate({ id: open.id, note: vals.note })}>
+                  <Form.Item name="note" label="What you checked" rules={[{ required: true, min: 3, message: "Say what you checked." }]} style={{ marginBottom: 0 }}>
+                    <Input.TextArea rows={2} maxLength={500} />
+                  </Form.Item>
+                </Form>
+              </div>
+            )}
+          </ConfirmModal>
+        </Suspense>
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Drawer, Dropdown, type MenuProps } from "antd";
 import { DownOutlined, LogoutOutlined, MenuOutlined, MoonOutlined, SearchOutlined, SunOutlined } from "@ant-design/icons";
@@ -10,11 +10,14 @@ import { PageSkeleton } from "../../ui/Skeletons";
 import { useIsCompact, useIsPhone } from "../../ui/hooks";
 import { NotificationBell } from "../../components/common/NotificationBell";
 import { DemoCompanyBanner } from "../../components/common/DemoCompanyBanner";
-import { CommandPalette, type PaletteAction } from "./CommandPalette";
+import type { PaletteAction } from "./CommandPalette";
 import { Sidebar, type PinnedLink } from "./Sidebar";
 import { ThemeToggle } from "./ThemeToggle";
 import { activeLeafFor, type NavEntry } from "./nav";
 import "./shell.css";
+
+const loadPalette = () => import("./CommandPalette");
+const CommandPalette = lazy(() => loadPalette().then((m) => ({ default: m.CommandPalette })));
 
 const COLLAPSE_KEY = "wellsure-sidebar-collapsed";
 
@@ -60,6 +63,13 @@ export function AppShell({ nav, homeKey, homePath, pinned, topLinks = [], topExt
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [drawer, setDrawer] = useState(false);
   const [palette, setPalette] = useState(false);
+  // The palette (an antd Modal) loads on first use, or when the browser is idle, never in the shell's first download.
+  const [paletteUsed, setPaletteUsed] = useState(false);
+  if (palette && !paletteUsed) setPaletteUsed(true);
+  useEffect(() => {
+    const idle = window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 2000));
+    idle(() => void loadPalette().catch(() => undefined));
+  }, []);
 
   const active = activeLeafFor(nav, location.pathname);
   const title = titleFor?.(location.pathname) ?? active?.label ?? "Wellsure HR";
@@ -240,7 +250,11 @@ export function AppShell({ nav, homeKey, homePath, pinned, topLinks = [], topExt
         </main>
       </div>
       {phone && tabBar}
-      <CommandPalette open={palette} onClose={() => setPalette(false)} nav={nav} actions={paletteActions} />
+      {paletteUsed && (
+        <Suspense fallback={null}>
+          <CommandPalette open={palette} onClose={() => setPalette(false)} nav={nav} actions={paletteActions} />
+        </Suspense>
+      )}
     </div>
   );
 }

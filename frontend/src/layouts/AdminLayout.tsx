@@ -4,7 +4,6 @@ import { CustomerServiceOutlined, SafetyOutlined, SettingOutlined, SwapOutlined 
 import { AdminFiltersProvider } from "../context/AdminFiltersContext";
 import { Skel } from "../ui/Skeletons";
 import { control, radius, space } from "../theme/tokens";
-import { SecurityEventsBanner } from "../components/access/SecurityEventsBanner";
 import { useIsPhone } from "../ui/hooks";
 import { AppShell } from "./shell/AppShell";
 import { AdminPhoneTabBar } from "./shell/AdminPhoneTabBar";
@@ -18,6 +17,9 @@ const EXTRA_TITLES: [RegExp, string][] = [
   [/^\/admin\/payroll\/run\/[^/]+\/step\//, "Payroll run step"],
   [/^\/admin\/payroll\/run\/[^/]+$/, "Payroll run"],
 ];
+
+// Break-glass security notices (Super Admins only, rare): loaded after the shell paints.
+const SecurityEventsBanner = lazy(() => import("../components/access/SecurityEventsBanner").then((m) => ({ default: m.SecurityEventsBanner })));
 
 // Payroll month + employee filter (top bar, desktop): lazy, with control-shaped placeholders so the bar never jumps.
 const AdminContextControls = lazy(() => import("./shell/AdminContextControls").then((m) => ({ default: m.AdminContextControls })));
@@ -57,7 +59,11 @@ function AdminLayoutInner() {
       ]}
       tabBar={<AdminPhoneTabBar />}
       phoneMenu={phone}
-      notices={<SecurityEventsBanner />}
+      notices={
+        <Suspense fallback={null}>
+          <SecurityEventsBanner />
+        </Suspense>
+      }
       titleFor={(p) => EXTRA_TITLES.find(([re]) => re.test(p))?.[1]}
     />
   );

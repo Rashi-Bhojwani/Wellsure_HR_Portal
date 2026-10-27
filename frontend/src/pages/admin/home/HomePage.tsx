@@ -1,43 +1,22 @@
-import { useMemo, useState, type ComponentType, type ReactNode } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Form, Input, Popconfirm, Segmented, Select, Switch, Tooltip } from 'antd';
+import { Button, Popconfirm, Segmented, Tooltip } from 'antd';
 import {
-  ArrowDownOutlined,
-  ArrowUpOutlined,
-  AuditOutlined,
-  BankOutlined,
-  CalendarOutlined,
   CloseOutlined,
-  DollarOutlined,
-  EditOutlined,
   EyeOutlined,
   FileSearchOutlined,
-  FileTextOutlined,
-  HomeOutlined,
   LinkOutlined,
   PlusOutlined,
   RightOutlined,
-  SettingOutlined,
   SoundOutlined,
-  TeamOutlined,
-  TrophyOutlined,
-  UserAddOutlined,
 } from '@ant-design/icons';
-import { ChartCard } from '../../../components/charts/ChartCard';
-import { ColumnChart, DonutChart, SmoothLineChart } from '../../../components/charts/lazyCharts';
 import { useAuth } from '../../../hooks/useAuth';
 import * as managersApi from '../../../api/managers';
 import * as adminHomeApi from '../../../api/adminHome';
 import * as announcementsApi from '../../../api/announcements';
-import type {
-  DashboardWidgetKey,
-  DashboardWidgets,
-  WidgetLayoutEntry,
-} from '../../../api/adminHome';
+import { FAVOURITE_ICONS } from './favouriteIcons';
 import { DeviceWarnings } from '../../../components/devices/DeviceWarnings';
-import { useThemeMode } from '../../../theme/ThemeProvider';
-import { useChartColors } from '../../../theme/chartPalette';
 import { fs, fw, radius, space, v } from '../../../theme/tokens';
 import { apiErrorMessage } from '../../../lib/apiError';
 import { formatDate } from '../../../lib/dates';
@@ -47,7 +26,6 @@ import { EmptyState } from '../../../ui/EmptyState';
 import { PageHeader } from '../../../ui/PageHeader';
 import { Panel, Stack } from '../../../ui/Panel';
 import { QueryState } from '../../../ui/QueryState';
-import { SideDrawer } from '../../../ui/SideDrawer';
 import { Skel } from '../../../ui/Skeletons';
 import { StatCard } from '../../../ui/StatCard';
 import { toast } from '../../../ui/Toast';
@@ -58,89 +36,6 @@ function greeting(): string {
   if (hour < 12) return 'Good morning';
   if (hour < 17) return 'Good afternoon';
   return 'Good evening';
-}
-
-// Fixed icon set for My Favourites shortcut tiles — UserFavourite.icon
-// stores one of these keys, never a free-form icon name.
-const FAVOURITE_ICONS: Record<string, ComponentType> = {
-  useradd: UserAddOutlined,
-  team: TeamOutlined,
-  calendar: CalendarOutlined,
-  file: FileTextOutlined,
-  dollar: DollarOutlined,
-  setting: SettingOutlined,
-  audit: AuditOutlined,
-  home: HomeOutlined,
-  trophy: TrophyOutlined,
-  bank: BankOutlined,
-};
-
-const WIDGET_LABELS: Record<DashboardWidgetKey, string> = {
-  yearsInService: 'Years In Service Distribution',
-  additionsAttrition: 'Additions & Attrition',
-  headcountByLocation: 'Employee Count By Branch',
-  headcountByCity: 'Employee Count By City',
-  ageDistribution: 'Age Distribution',
-  genderSplit: 'Gender Split',
-  departmentHeadcount: 'Department Headcount',
-};
-
-const CHART_HEIGHT = 280;
-
-function AddFavouriteDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [form] = Form.useForm<{ label: string; path: string; icon: string }>();
-  const queryClient = useQueryClient();
-  const mutation = useMutation({
-    mutationFn: adminHomeApi.createFavourite,
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['admin', 'favourites'] });
-      form.resetFields();
-      toast.success('Shortcut added');
-      onClose();
-    },
-    onError: (err) => toast.error(apiErrorMessage(err, 'Could not add this shortcut.')),
-  });
-
-  return (
-    <SideDrawer
-      open={open}
-      onClose={onClose}
-      title="Add Shortcut"
-      formId="add-favourite-form"
-      primaryLabel="Add"
-      primaryLoading={mutation.isPending}
-    >
-      <Form
-        id="add-favourite-form"
-        form={form}
-        layout="vertical"
-        requiredMark
-        onFinish={(values) => mutation.mutate(values)}
-      >
-        <Form.Item name="label" label="Label" rules={[{ required: true, max: 60 }]}>
-          <Input placeholder="Add Employee" />
-        </Form.Item>
-        <Form.Item name="path" label="Link" rules={[{ required: true, max: 200 }]}>
-          <Input placeholder="/admin/employee/add" />
-        </Form.Item>
-        <Form.Item name="icon" label="Icon" rules={[{ required: true }]}>
-          <Select
-            options={Object.keys(FAVOURITE_ICONS).map((key) => {
-              const Icon = FAVOURITE_ICONS[key]!;
-              return {
-                value: key,
-                label: (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: space[2] }}>
-                    <Icon /> {key}
-                  </span>
-                ),
-              };
-            })}
-          />
-        </Form.Item>
-      </Form>
-    </SideDrawer>
-  );
 }
 
 const tileStyle: React.CSSProperties = {
@@ -165,6 +60,9 @@ function FavouriteTiles() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
+  // The drawer mounts from its first open on (then stays, so it animates closed).
+  const [addUsed, setAddUsed] = useState(false);
+  if (addOpen && !addUsed) setAddUsed(true);
   const {
     data: favourites = [],
     isLoading,
@@ -295,7 +193,11 @@ function FavouriteTiles() {
           </button>
         </div>
       </QueryState>
-      <AddFavouriteDrawer open={addOpen} onClose={() => setAddOpen(false)} />
+      {addUsed && (
+        <Suspense fallback={null}>
+          <AddFavouriteDrawer open={addOpen} onClose={() => setAddOpen(false)} />
+        </Suspense>
+      )}
     </Panel>
   );
 }
@@ -606,303 +508,23 @@ function WelcomeTab() {
   );
 }
 
-function EditLayoutDrawer({
-  open,
-  onClose,
-  layout,
-}: {
-  open: boolean;
-  onClose: () => void;
-  layout: WidgetLayoutEntry[];
-}) {
-  const queryClient = useQueryClient();
-  const [draft, setDraft] = useState<WidgetLayoutEntry[]>(layout);
-  const [openedWith, setOpenedWith] = useState<WidgetLayoutEntry[] | null>(null);
-  // Start from the saved layout each time the drawer opens.
-  if (open && openedWith !== layout) {
-    setOpenedWith(layout);
-    setDraft(layout);
-  }
-  if (!open && openedWith !== null) setOpenedWith(null);
+const AddFavouriteDrawer = lazy(() => import('./AddFavouriteDrawer').then((m) => ({ default: m.AddFavouriteDrawer })));
 
-  const mutation = useMutation({
-    mutationFn: adminHomeApi.saveLayout,
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard-layout'] });
-      toast.success('Dashboard saved');
-      onClose();
-    },
-    onError: (err) => toast.error(apiErrorMessage(err, 'Could not save the dashboard.')),
-  });
+// The Dashboard tab (charts) is its own chunk; hovering or focusing the switcher starts loading it.
+const loadDashboard = () => import('./AdminDashboardTab');
+const AdminDashboardTab = lazy(() => loadDashboard().then((m) => ({ default: m.AdminDashboardTab })));
 
-  function move(index: number, delta: number): void {
-    const next = [...draft];
-    const target = index + delta;
-    if (target < 0 || target >= next.length) return;
-    [next[index], next[target]] = [next[target]!, next[index]!];
-    setDraft(next);
-  }
-
-  function toggle(index: number): void {
-    const next = [...draft];
-    next[index] = { ...next[index]!, visible: !next[index]!.visible };
-    setDraft(next);
-  }
-
+function DashboardSkeleton() {
   return (
-    <SideDrawer
-      open={open}
-      onClose={onClose}
-      title="Edit Dashboard"
-      subtitle="Choose which widgets show, and in what order."
-      primaryLabel="Save"
-      onPrimary={() => mutation.mutate(draft)}
-      primaryLoading={mutation.isPending}
+    <div
+      aria-busy="true"
+      aria-label="Loading dashboard"
+      style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(400px, 100%), 1fr))', gap: space[6] }}
     >
-      <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-        {draft.map((entry, index) => {
-          const label = WIDGET_LABELS[entry.key];
-          return (
-            <li
-              key={entry.key}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: space[2],
-                padding: `${space[3]}px 0`,
-                borderTop: index === 0 ? undefined : `1px solid ${v.borderDefault}`,
-              }}
-            >
-              <span
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  fontWeight: fw.medium,
-                  color: entry.visible ? v.textPrimary : v.textSecondary,
-                }}
-              >
-                {label}
-              </span>
-              <Tooltip title="Move up">
-                <Button
-                  type="text"
-                  aria-label={`Move ${label} up`}
-                  icon={<ArrowUpOutlined />}
-                  disabled={index === 0}
-                  onClick={() => move(index, -1)}
-                />
-              </Tooltip>
-              <Tooltip title="Move down">
-                <Button
-                  type="text"
-                  aria-label={`Move ${label} down`}
-                  icon={<ArrowDownOutlined />}
-                  disabled={index === draft.length - 1}
-                  onClick={() => move(index, 1)}
-                />
-              </Tooltip>
-              <Switch
-                aria-label={`Show ${label}`}
-                checked={entry.visible}
-                onChange={() => toggle(index)}
-              />
-            </li>
-          );
-        })}
-      </ul>
-    </SideDrawer>
-  );
-}
-
-function GenderDonut({ data }: { data: { gender: string; count: number }[] }) {
-  return (
-    <DonutChart
-      data={data.map((d) => ({ name: d.gender, value: d.count }))}
-      totalLabel="Employees"
-      height={CHART_HEIGHT}
-    />
-  );
-}
-
-function AdditionsAttritionChart({
-  data,
-}: {
-  data: { month: string; joined: number; resigned: number }[];
-}) {
-  const { mode } = useThemeMode();
-  const colors = useChartColors(mode);
-  return (
-    <SmoothLineChart
-      data={data}
-      xKey="month"
-      height={CHART_HEIGHT}
-      series={[
-        { key: 'joined', label: 'Joined', color: colors.positive },
-        { key: 'resigned', label: 'Resigned', color: colors.negative },
-      ]}
-    />
-  );
-}
-
-function DashboardTab() {
-  const [editOpen, setEditOpen] = useState(false);
-  const phone = useIsPhone();
-  const widgetsQ = useQuery({
-    queryKey: ['admin', 'dashboard', 'widgets'],
-    queryFn: adminHomeApi.getDashboardWidgets,
-  });
-  const layoutQ = useQuery({
-    queryKey: ['admin', 'dashboard-layout'],
-    queryFn: adminHomeApi.getLayout,
-  });
-  const widgets = widgetsQ.data;
-  const layout = layoutQ.data;
-  const loading = widgetsQ.isLoading || layoutQ.isLoading;
-
-  const orderedVisible = useMemo(() => (layout ?? []).filter((entry) => entry.visible), [layout]);
-
-  function renderWidget(key: DashboardWidgetKey, w: DashboardWidgets | undefined): ReactNode {
-    const card = (body: ReactNode, empty: boolean) => (
-      <ChartCard title={WIDGET_LABELS[key]} height={CHART_HEIGHT} loading={!w} empty={empty}>
-        {body}
-      </ChartCard>
-    );
-    const sum = (rows: { count: number }[]) => rows.reduce((s, r) => s + r.count, 0);
-    switch (key) {
-      case 'yearsInService':
-        return card(
-          w && (
-            <SmoothLineChart
-              data={w.yearsInService}
-              xKey="bucket"
-              series={[{ key: 'count', label: 'Employees' }]}
-              height={CHART_HEIGHT}
-              showValues
-            />
-          ),
-          !!w && sum(w.yearsInService) === 0,
-        );
-      case 'ageDistribution':
-        return card(
-          w && (
-            <SmoothLineChart
-              data={w.ageDistribution}
-              xKey="bucket"
-              series={[{ key: 'count', label: 'Employees' }]}
-              height={CHART_HEIGHT}
-              showValues
-            />
-          ),
-          !!w && sum(w.ageDistribution) === 0,
-        );
-      case 'additionsAttrition':
-        return card(
-          w && <AdditionsAttritionChart data={w.additionsAttrition} />,
-          !!w && w.additionsAttrition.length === 0,
-        );
-      case 'headcountByLocation':
-        return card(
-          w && (
-            <ColumnChart
-              data={w.headcountByLocation}
-              seriesLabel="Employees"
-              height={CHART_HEIGHT}
-            />
-          ),
-          !!w && w.headcountByLocation.length === 0,
-        );
-      case 'headcountByCity':
-        return card(
-          w && (
-            <ColumnChart data={w.headcountByCity} seriesLabel="Employees" height={CHART_HEIGHT} />
-          ),
-          !!w && w.headcountByCity.length === 0,
-        );
-      case 'departmentHeadcount':
-        return card(
-          w && (
-            <ColumnChart
-              data={w.departmentHeadcount}
-              seriesLabel="Employees"
-              height={CHART_HEIGHT}
-            />
-          ),
-          !!w && w.departmentHeadcount.length === 0,
-        );
-      case 'genderSplit':
-        return card(w && <GenderDonut data={w.genderSplit} />, !!w && sum(w.genderSplit) === 0);
-      default:
-        return null;
-    }
-  }
-
-  const gridStyle: React.CSSProperties = {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(min(400px, 100%), 1fr))',
-    gap: phone ? space[4] : space[6],
-  };
-  const error = widgetsQ.error ?? layoutQ.error;
-
-  return (
-    <Stack>
-      <div style={{ display: 'flex', alignItems: 'center', gap: space[3], flexWrap: 'wrap' }}>
-        <div style={{ flex: '1 1 280px', minWidth: 0 }}>
-          {widgets?.scope === 'team' && (
-            <ApprovalBanner
-              tone="info"
-              title="Showing your team only — you and the people who report to you."
-            />
-          )}
-        </div>
-        <Button
-          icon={<EditOutlined />}
-          onClick={() => setEditOpen(true)}
-          disabled={!layout}
-          block={phone}
-        >
-          Edit
-        </Button>
-      </div>
-      {error ? (
-        <Panel>
-          <QueryState
-            isLoading={false}
-            error={error}
-            onRetry={() => void (widgetsQ.error ? widgetsQ.refetch() : layoutQ.refetch())}
-          >
-            {null}
-          </QueryState>
-        </Panel>
-      ) : loading ? (
-        <div style={gridStyle} aria-busy="true" aria-label="Loading dashboard">
-          {[0, 1, 2, 3].map((i) => (
-            <ChartCard key={i} title=" " height={CHART_HEIGHT} loading>
-              {null}
-            </ChartCard>
-          ))}
-        </div>
-      ) : orderedVisible.length === 0 ? (
-        <Panel>
-          <EmptyState
-            illustration="chart"
-            title="No widgets are visible"
-            description="Use Edit to choose which widgets show, and in what order."
-            action={<Button onClick={() => setEditOpen(true)}>Edit dashboard</Button>}
-          />
-        </Panel>
-      ) : (
-        <div style={gridStyle}>
-          {orderedVisible.map((entry) => (
-            <div key={entry.key} style={{ minWidth: 0 }}>
-              {renderWidget(entry.key, widgets)}
-            </div>
-          ))}
-        </div>
-      )}
-      {layout && (
-        <EditLayoutDrawer open={editOpen} onClose={() => setEditOpen(false)} layout={layout} />
-      )}
-    </Stack>
+      {[0, 1, 2, 3].map((i) => (
+        <Skel key={i} h={360} r={radius.md} />
+      ))}
+    </div>
   );
 }
 
@@ -935,6 +557,7 @@ export function AdminHomePage() {
             : 'Your people at a glance, from the figures we hold.'
         }
         actions={
+          <span onPointerEnter={() => void loadDashboard()} onFocus={() => void loadDashboard()}>
           <Segmented<View>
             options={['Welcome', 'Dashboard']}
             value={tab}
@@ -943,9 +566,16 @@ export function AdminHomePage() {
             block={phone}
             aria-label="Home view"
           />
+          </span>
         }
       />
-      {tab === 'Welcome' ? <WelcomeTab /> : <DashboardTab />}
+      {tab === 'Welcome' ? (
+        <WelcomeTab />
+      ) : (
+        <Suspense fallback={<DashboardSkeleton />}>
+          <AdminDashboardTab />
+        </Suspense>
+      )}
     </div>
   );
 }

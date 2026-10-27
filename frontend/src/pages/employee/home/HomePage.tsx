@@ -15,19 +15,16 @@ import { REQUEST_HUB_TYPE_LABELS } from '@shared/types/inbox';
 import * as announcementsApi from '../../../api/announcements';
 import { useAuth } from '../../../hooks/useAuth';
 import { fs, fw, radius, space, v } from '../../../theme/tokens';
-import {
-  ApprovalBanner,
-  CardGrid,
-  EmptyState,
-  Illustration,
-  InitialsAvatar,
-  Panel,
-  QueryState,
-  Skel,
-  Stack,
-  StatusChip,
-  useIsPhone,
-} from '../../../ui';
+// Direct ui/* imports, not the barrel: this page is on the "shell + employee home" bundle budget, and the barrel would drag DataTable (antd Table) along.
+import { ApprovalBanner } from '../../../ui/ApprovalBanner';
+import { CardGrid, Panel, Stack } from '../../../ui/Panel';
+import { EmptyState } from '../../../ui/EmptyState';
+import { Illustration } from '../../../ui/Illustrations';
+import { InitialsAvatar } from '../../../ui/Avatar';
+import { QueryState } from '../../../ui/QueryState';
+import { Skel } from '../../../ui/Skeletons';
+import { StatusChip } from '../../../ui/StatusChip';
+import { useIsPhone } from '../../../ui/hooks';
 
 const QUOTES = [
   { text: 'Small daily improvements lead to stunning results.', author: 'Robin Sharma' },
