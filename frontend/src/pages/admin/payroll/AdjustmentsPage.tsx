@@ -199,7 +199,7 @@ function AddDrawer({ onClose, onDone }: { onClose: () => void; onDone: () => voi
           </Form.Item>
         </Form>
       ) : (
-        <Stack>
+        <Stack gap={space[3]}>
           <KeyValueGrid
             columns={1}
             items={[

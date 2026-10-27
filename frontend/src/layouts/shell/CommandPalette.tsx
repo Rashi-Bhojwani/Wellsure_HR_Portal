@@ -51,14 +51,20 @@ export function CommandPalette({ open, onClose, nav, actions = [] }: Props) {
     return [...pages, ...acts].filter((i) => i.s > 0).sort((a, b) => b.s - a.s).slice(0, 12);
   }, [q, nav, actions, navigate]);
 
-  useEffect(() => {
+  // Each time it opens: an empty query and the first result selected (adjusted during render), then focus the box.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
     if (open) {
       setQ("");
       setSel(0);
-      setTimeout(() => input.current?.focus(), 30);
     }
+  }
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(() => input.current?.focus(), 30);
+    return () => clearTimeout(t);
   }, [open]);
-  useEffect(() => setSel(0), [q]);
   useEffect(() => {
     preloadElement(items[sel]?.element);
   }, [items, sel]);
@@ -89,7 +95,10 @@ export function CommandPalette({ open, onClose, nav, actions = [] }: Props) {
         prefix={<SearchOutlined aria-hidden style={{ color: v.textSecondary }} />}
         placeholder="Search pages and actions…"
         value={q}
-        onChange={(e) => setQ(e.target.value)}
+        onChange={(e) => {
+          setQ(e.target.value);
+          setSel(0);
+        }}
         role="combobox"
         aria-expanded
         aria-controls="ws-palette-list"

@@ -1,17 +1,18 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import dayjs from "dayjs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Button, Checkbox, Form, Input, Modal, Select, Space, Table, Typography, message } from "antd";
-import { EditOutlined, PlusOutlined } from "@ant-design/icons";
+import { Button, Checkbox, Form, Input, Select } from "antd";
+import { CalendarOutlined, EditOutlined, PlusOutlined } from "@ant-design/icons";
 import { WEEKDAY_NAMES, isWeekOff, weekOffRuleProblems, type WeekOffRule } from "@shared/utils/attendance";
 import * as attendanceApi from "../../../../api/attendance";
 import type { WeekOffPatternRow } from "../../../../api/attendance";
 import { apiErrorMessage } from "../../../../lib/apiError";
-import { ActiveTag } from "./common";
-import { fs } from "../../../../theme/tokens";
+import { ApprovalBanner, DataTable, EmptyState, FormGroupTitle, Panel, SideDrawer, toast, useIsPhone } from "../../../../ui";
+import { fs, fw, radius, space, v } from "../../../../theme/tokens";
+import { ActiveTag, CodeName, FieldGrid, Hint } from "./common";
 
-const { Text } = Typography;
 const WEEK_OPTIONS = [1, 2, 3, 4, 5].map((w) => ({ value: w, label: ["1st", "2nd", "3rd", "4th", "5th"][w - 1] }));
+const FORM_ID = "attendance-week-off-form";
 
 // One row per weekday: off every week, off on chosen weeks of the month, or working.
 type DayRule = { off: boolean; weeks: number[] };
@@ -21,152 +22,224 @@ const toForm = (rules: WeekOffRule[]): DayRule[] => WEEKDAY_NAMES.map((_, d) => 
 });
 const fromForm = (days: DayRule[]): WeekOffRule[] => days.flatMap((d, weekday) => (d.off ? [d.weeks.length ? { weekday, weeks: d.weeks } : { weekday }] : []));
 
+const cell = { padding: `${space[1]}px ${space[2]}px`, textAlign: "center" as const, border: `1px solid ${v.borderDefault}`, minWidth: 36 };
+
 /** The next six weeks from this Monday, week-offs shaded — what the pattern actually does. */
 export function WeekOffPreview({ rules }: { rules: WeekOffRule[] }) {
   const monday = dayjs().startOf("day").subtract((dayjs().day() + 6) % 7, "day");
   const weeks = Array.from({ length: 6 }, (_, w) => Array.from({ length: 7 }, (_, d) => monday.add(w * 7 + d, "day")));
   return (
-    <table style={{ borderCollapse: "collapse", fontSize: fs.sm }} aria-label="Six-week preview">
-      <thead>
-        <tr>{["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((h) => <th key={h} style={{ padding: "2px 6px", fontWeight: 500 }}>{h}</th>)}</tr>
-      </thead>
-      <tbody>
-        {weeks.map((week) => (
-          <tr key={week[0]!.format("YYYY-MM-DD")}>
-            {week.map((day) => {
-              const off = isWeekOff(rules, new Date(`${day.format("YYYY-MM-DD")}T00:00:00Z`));
-              return (
-                <td
-                  key={day.format("YYYY-MM-DD")}
-                  title={`${day.format("ddd D MMM")}: ${off ? "week-off" : "working day"}`}
-                  style={{ padding: "2px 6px", textAlign: "center", border: "1px solid var(--ant-color-border-secondary, #eee)", background: off ? "var(--ant-color-fill-secondary, #f0f0f0)" : undefined, color: off ? "var(--ant-color-text-tertiary, #999)" : undefined }}
-                >
-                  {off ? "OFF" : day.format("D")}
-                </td>
-              );
-            })}
+    <div style={{ overflowX: "auto", maxWidth: "100%" }}>
+      <table style={{ borderCollapse: "collapse", fontSize: fs.sm, borderRadius: radius.sm }} aria-label="Six-week preview">
+        <thead>
+          <tr>
+            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((h) => (
+              <th key={h} scope="col" style={{ ...cell, background: v.bgTableHeader, color: v.textSecondary, fontWeight: fw.medium }}>
+                {h}
+              </th>
+            ))}
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {weeks.map((week) => (
+            <tr key={week[0]!.format("YYYY-MM-DD")}>
+              {week.map((day) => {
+                const off = isWeekOff(rules, new Date(`${day.format("YYYY-MM-DD")}T00:00:00Z`));
+                return (
+                  <td
+                    key={day.format("YYYY-MM-DD")}
+                    title={`${day.format("ddd D MMM")}: ${off ? "week-off" : "working day"}`}
+                    style={{ ...cell, background: off ? v.attOBg : v.bgSurface, color: off ? v.attOFg : v.textBody, fontWeight: off ? fw.semibold : fw.regular }}
+                  >
+                    {off ? "OFF" : day.format("D")}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
-function PatternModal({ editing, open, onClose }: { editing: WeekOffPatternRow | null; open: boolean; onClose: () => void }) {
-  const [form] = Form.useForm<{ code: string; name: string; days: DayRule[] }>();
+type FormValues = { code: string; name: string; days: DayRule[] };
+
+function PatternDrawer({ editing, open, onClose }: { editing: WeekOffPatternRow | null; open: boolean; onClose: () => void }) {
+  const [form] = Form.useForm<FormValues>();
   const queryClient = useQueryClient();
+  const phone = useIsPhone();
   const days = (Form.useWatch("days", form) ?? []) as DayRule[];
   const rules = fromForm(days.length === 7 ? days : toForm([]));
   const problems = weekOffRuleProblems(rules);
+
+  useEffect(() => {
+    if (!open) return;
+    form.resetFields();
+    form.setFieldsValue({ code: editing?.code ?? "", name: editing?.name ?? "", days: toForm(editing?.rules ?? [{ weekday: 0 }]) });
+  }, [open, editing, form]);
+
   const save = useMutation({
-    mutationFn: (v: { code: string; name: string; days: DayRule[] }) =>
-      editing ? attendanceApi.updateWeekOffPattern(editing.id, { name: v.name, rules: fromForm(v.days) }) : attendanceApi.createWeekOffPattern({ code: v.code, name: v.name, rules: fromForm(v.days) }),
+    mutationFn: (val: FormValues) =>
+      editing ? attendanceApi.updateWeekOffPattern(editing.id, { name: val.name, rules: fromForm(val.days) }) : attendanceApi.createWeekOffPattern({ code: val.code, name: val.name, rules: fromForm(val.days) }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["attendance", "config"] });
-      void message.success("Week-off pattern saved. Days already computed keep the old rule until you run Process Attendance for them.");
+      toast.success("Week-off pattern saved. Days already computed keep the old rule until you run Process Attendance for them.");
       onClose();
     },
-    onError: (err) => void message.error(apiErrorMessage(err, "Could not save this pattern.")),
+    onError: (err) => toast.error(apiErrorMessage(err, "Could not save this pattern.")),
   });
+
   return (
-    <Modal
-      title={editing ? `Edit ${editing.name}` : "Add Week-off Pattern"}
+    <SideDrawer
       open={open}
-      onCancel={onClose}
-      footer={null}
-      width={680}
-      destroyOnHidden
-      afterOpenChange={(o) => o && form.setFieldsValue({ code: editing?.code ?? "", name: editing?.name ?? "", days: toForm(editing?.rules ?? [{ weekday: 0 }]) })}
+      onClose={onClose}
+      size="wide"
+      title={editing ? `Edit ${editing.name}` : "Add Week-off Pattern"}
+      subtitle="Tick the days off; limit a day to chosen weeks of the month if it isn't off every week."
+      formId={FORM_ID}
+      primaryLabel="Save"
+      primaryLoading={save.isPending}
+      primaryDisabled={problems.length > 0}
     >
-      <Form form={form} layout="vertical" requiredMark={false} onFinish={(v) => save.mutate(v)}>
-        <Space size={12} style={{ width: "100%" }}>
+      <Form id={FORM_ID} form={form} layout="vertical" requiredMark={false} onFinish={(val) => save.mutate(val)}>
+        <FieldGrid min={160}>
           <Form.Item name="code" label="Code" rules={[{ required: true }, { pattern: /^[A-Za-z0-9_-]+$/, message: "Letters, digits, - or _" }]}>
-            <Input disabled={!!editing} style={{ width: 120 }} />
+            <Input disabled={!!editing} />
           </Form.Item>
-          <Form.Item name="name" label="Name" rules={[{ required: true }]} style={{ flex: 1 }}>
+          <Form.Item name="name" label="Name" rules={[{ required: true }]}>
             <Input placeholder="e.g. Sunday + 2nd and 4th Saturday" />
           </Form.Item>
-        </Space>
-        <Space align="start" size={24} wrap>
-          <div>
-            {WEEKDAY_NAMES.map((name, d) => (
-              <Space key={name} size={8} style={{ display: "flex", marginBottom: 6 }}>
-                <Form.Item name={["days", d, "off"]} valuePropName="checked" noStyle>
-                  <Checkbox style={{ width: 120 }}>{name}</Checkbox>
-                </Form.Item>
-                <Form.Item name={["days", d, "weeks"]} noStyle>
-                  <Select mode="multiple" allowClear disabled={!days[d]?.off} placeholder="every week" options={WEEK_OPTIONS} style={{ width: 200 }} aria-label={`${name}: which weeks of the month`} />
-                </Form.Item>
-              </Space>
-            ))}
-          </div>
-          <div>
-            <Text type="secondary">Next six weeks</Text>
-            <WeekOffPreview rules={rules} />
-          </div>
-        </Space>
-        {problems.length > 0 && <Alert type="warning" showIcon style={{ marginTop: 12 }} title={problems.join(" ")} />}
-        <Form.Item style={{ marginTop: 12, marginBottom: 0, textAlign: "right" }}>
-          <Button type="primary" htmlType="submit" loading={save.isPending} disabled={problems.length > 0}>
-            Save
-          </Button>
-        </Form.Item>
+        </FieldGrid>
+        <FormGroupTitle>Days off</FormGroupTitle>
+        <div style={{ display: "flex", flexDirection: "column", gap: space[2], marginBottom: space[5] }}>
+          {WEEKDAY_NAMES.map((name, d) => (
+            <div
+              key={name}
+              style={{
+                display: "grid",
+                gridTemplateColumns: phone ? "1fr" : "140px minmax(0, 1fr)",
+                gap: space[2],
+                alignItems: "center",
+                padding: `${space[2]}px ${space[3]}px`,
+                border: `1px solid ${v.borderDefault}`,
+                borderRadius: radius.md,
+                background: days[d]?.off ? v.bgSubtle : v.bgSurface,
+              }}
+            >
+              <Form.Item name={["days", d, "off"]} valuePropName="checked" noStyle>
+                <Checkbox style={{ minHeight: phone ? 44 : undefined, alignItems: "center" }}>{name}</Checkbox>
+              </Form.Item>
+              <Form.Item name={["days", d, "weeks"]} noStyle>
+                <Select mode="multiple" allowClear disabled={!days[d]?.off} placeholder="every week" options={WEEK_OPTIONS} aria-label={`${name}: which weeks of the month`} />
+              </Form.Item>
+            </div>
+          ))}
+        </div>
+        <FormGroupTitle>Next six weeks</FormGroupTitle>
+        <Hint>Shaded days are week-offs under this pattern.</Hint>
+        <WeekOffPreview rules={rules} />
+        {problems.length > 0 && <ApprovalBanner tone="warning" title={problems.join(" ")} style={{ marginTop: space[4] }} />}
       </Form>
-    </Modal>
+    </SideDrawer>
   );
 }
 
 export function WeekOffsTab({ canManage }: { canManage: boolean }) {
   const queryClient = useQueryClient();
-  const { data = [], isLoading } = useQuery({ queryKey: ["attendance", "config", "week-offs"], queryFn: attendanceApi.listWeekOffPatterns });
+  const phone = useIsPhone();
+  const { data = [], isLoading, error, refetch } = useQuery({ queryKey: ["attendance", "config", "week-offs"], queryFn: attendanceApi.listWeekOffPatterns });
   const [editing, setEditing] = useState<WeekOffPatternRow | null>(null);
   const [open, setOpen] = useState(false);
+  const [previewing, setPreviewing] = useState<WeekOffPatternRow | null>(null);
   const toggle = useMutation({
     mutationFn: (p: WeekOffPatternRow) => attendanceApi.updateWeekOffPattern(p.id, { isActive: !p.isActive }),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["attendance", "config"] }),
-    onError: (err) => void message.error(apiErrorMessage(err, "Could not update this pattern.")),
+    onSuccess: (_r, p) => {
+      void queryClient.invalidateQueries({ queryKey: ["attendance", "config"] });
+      toast.success(p.isActive ? "Pattern deactivated." : "Pattern reactivated.");
+    },
+    onError: (err) => toast.error(apiErrorMessage(err, "Could not update this pattern.")),
   });
-  return (
-    <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+  const openNew = () => {
+    setEditing(null);
+    setOpen(true);
+  };
+  const openEdit = (p: WeekOffPatternRow) => {
+    setEditing(p);
+    setOpen(true);
+  };
+  const size = phone ? "middle" : "small";
+  const actions = (p: WeekOffPatternRow) => (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: space[2] }}>
+      <Button size={size} icon={<CalendarOutlined />} onClick={() => setPreviewing(p)}>
+        Preview
+      </Button>
       {canManage && (
-        <Button type="primary" icon={<PlusOutlined />} style={{ alignSelf: "flex-end" }} onClick={() => { setEditing(null); setOpen(true); }}>
-          Add Week-off Pattern
-        </Button>
+        <>
+          <Button size={size} icon={<EditOutlined />} onClick={() => openEdit(p)}>
+            Edit
+          </Button>
+          <Button size={size} loading={toggle.isPending && toggle.variables?.id === p.id} onClick={() => toggle.mutate(p)}>
+            {p.isActive ? "Deactivate" : "Reactivate"}
+          </Button>
+        </>
       )}
-      <Table<WeekOffPatternRow>
-        rowKey="id"
-        loading={isLoading}
-        dataSource={data}
-        pagination={false}
-        scroll={{ x: true }}
-        expandable={{ expandedRowRender: (p) => <WeekOffPreview rules={p.rules} />, expandRowByClick: false }}
-        columns={[
-          { title: "Code", dataIndex: "code" },
-          { title: "Name", dataIndex: "name" },
-          { title: "Week-offs", dataIndex: "summary" },
-          { title: "People", dataIndex: "employeeCount" },
-          { title: "Status", key: "status", render: (_, p) => <ActiveTag isActive={p.isActive} isDefault={p.isDefault} /> },
-          ...(canManage
-            ? [
-                {
-                  title: "Actions",
-                  key: "actions",
-                  render: (_: unknown, p: WeekOffPatternRow) => (
-                    <Space>
-                      <Button size="small" icon={<EditOutlined />} onClick={() => { setEditing(p); setOpen(true); }}>
-                        Edit
-                      </Button>
-                      <Button size="small" onClick={() => toggle.mutate(p)}>
-                        {p.isActive ? "Deactivate" : "Reactivate"}
-                      </Button>
-                    </Space>
-                  ),
-                },
-              ]
-            : []),
-        ]}
-      />
-      <PatternModal editing={editing} open={open} onClose={() => setOpen(false)} />
-    </Space>
+    </div>
+  );
+
+  return (
+    <>
+      <Panel
+        title="Week-off patterns"
+        subtitle="Which days of the week are off, and on which weeks of the month"
+        extra={
+          canManage && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={openNew}>
+              Add Week-off Pattern
+            </Button>
+          )
+        }
+      >
+        <DataTable<WeekOffPatternRow>
+          rowKey="id"
+          loading={isLoading}
+          error={error}
+          onRetry={() => void refetch()}
+          dataSource={data}
+          pagination={false}
+          expandable={{ expandedRowRender: (p) => <WeekOffPreview rules={p.rules} />, expandRowByClick: false }}
+          empty={
+            <EmptyState
+              compact
+              title="No week-off patterns yet"
+              description={canManage ? "Add one, such as Sunday off, to start computing attendance." : "HR hasn't set up any patterns yet."}
+              action={canManage && <Button type="primary" icon={<PlusOutlined />} onClick={openNew}>Add Week-off Pattern</Button>}
+            />
+          }
+          columns={[
+            { title: "Pattern", key: "pattern", render: (_, p) => <CodeName code={p.code} name={p.name} /> },
+            { title: "Week-offs", dataIndex: "summary" },
+            { title: "People", dataIndex: "employeeCount", align: "right" },
+            { title: "Status", key: "status", render: (_, p) => <ActiveTag isActive={p.isActive} isDefault={p.isDefault} /> },
+            { title: "", key: "actions", render: (_: unknown, p: WeekOffPatternRow) => actions(p) },
+          ]}
+          mobile={{
+            title: (p) => p.name,
+            subtitle: (p) => p.code,
+            status: (p) => <ActiveTag isActive={p.isActive} isDefault={p.isDefault} />,
+            fields: [
+              { label: "Week-offs", render: (p) => p.summary },
+              { label: "People", render: (p) => p.employeeCount },
+            ],
+            actions,
+          }}
+        />
+      </Panel>
+      <PatternDrawer editing={editing} open={open} onClose={() => setOpen(false)} />
+      <SideDrawer open={!!previewing} onClose={() => setPreviewing(null)} title={previewing?.name ?? ""} subtitle={previewing?.summary} footer={null}>
+        <Hint>The next six weeks from this Monday. Shaded days are week-offs.</Hint>
+        {previewing && <WeekOffPreview rules={previewing.rules} />}
+      </SideDrawer>
+    </>
   );
 }

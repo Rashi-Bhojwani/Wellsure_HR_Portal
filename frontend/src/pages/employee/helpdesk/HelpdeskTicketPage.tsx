@@ -1,21 +1,21 @@
-import { Link, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Card, Descriptions, Flex, Result, Space, Typography, message } from "antd";
-import { ArrowLeftOutlined } from "@ant-design/icons";
+import { Button, Col, Row } from "antd";
 import * as helpdeskApi from "../../../api/helpdesk";
-import { EmptyState } from "../../../components/common/EmptyState";
-import { LifecycleNotice, PriorityTag, ReplyBox, StatusTag, Thread } from "../../../components/helpdesk/HelpdeskBits";
+import { Conversation, LifecycleNotice, PriorityTag, ReplyBox, StatusTag, TicketSkeleton } from "../../../components/helpdesk/HelpdeskBits";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatDateTime } from "../../../lib/dates";
-
-const { Title, Text } = Typography;
+import { space } from "../../../theme/tokens";
+import { EmptyState, KeyValueGrid, PageHeader, Panel, Stack, errorStatus, isForbidden, toast } from "../../../ui";
 
 // One of my tickets: the conversation, its status, and — whenever it's
 // resolved or closed — exactly when it closes / until when it can be reopened.
+// Live: helpdesk.ticket invalidates ["helpdesk","ticket",id], so HR's replies appear without a reload.
 export function HelpdeskTicketPage() {
   const { id = "" } = useParams();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { data: ticket, isLoading, isError } = useQuery({ queryKey: ["helpdesk", "ticket", id], queryFn: () => helpdeskApi.getTicket(id), retry: false });
+  const { data: ticket, isLoading, error, refetch } = useQuery({ queryKey: ["helpdesk", "ticket", id], queryFn: () => helpdeskApi.getTicket(id), retry: false });
 
   const refreshAfter = (updated: helpdeskApi.HelpdeskTicket) => {
     queryClient.setQueryData(["helpdesk", "ticket", id], updated);
@@ -25,19 +25,24 @@ export function HelpdeskTicketPage() {
   const send = useMutation({
     mutationFn: (input: { body: string; files: File[] }) => helpdeskApi.addMessage(id, { body: input.body }, input.files),
     onSuccess: refreshAfter,
-    onError: (err) => void message.error(apiErrorMessage(err, "Couldn't send your reply.")),
+    onError: (err) => toast.error(apiErrorMessage(err, "Couldn't send your reply.")),
   });
   const reopen = useMutation({
     mutationFn: () => helpdeskApi.reopenTicket(id),
     onSuccess: (t) => {
       refreshAfter(t);
-      void message.success("Ticket reopened.");
+      toast.success("Ticket reopened.");
     },
-    onError: (err) => void message.error(apiErrorMessage(err, "Couldn't reopen the ticket.")),
+    onError: (err) => toast.error(apiErrorMessage(err, "Couldn't reopen the ticket.")),
   });
 
-  if (isLoading) return <EmptyState message="Loading…" />;
-  if (isError || !ticket) return <Result status="404" title="Ticket not found" extra={<Link to="/app/helpdesk">Back to Helpdesk</Link>} />;
+  if (isLoading) return <TicketSkeleton />;
+  if (error || !ticket) {
+    const back = <Button onClick={() => navigate("/app/helpdesk")}>Back to Helpdesk</Button>;
+    if (isForbidden(error)) return <EmptyState kind="forbidden" action={back} />;
+    if (errorStatus(error) === 404 || !error) return <EmptyState illustration="search" title="Ticket not found" description="It may have been removed, or the link is wrong." action={back} />;
+    return <EmptyState kind="error" description={apiErrorMessage(error, "We couldn't load this ticket.")} onRetry={() => void refetch()} action={back} />;
+  }
 
   const closedReason =
     ticket.status === "CLOSED"
@@ -47,37 +52,45 @@ export function HelpdeskTicketPage() {
         : null;
 
   return (
-    <Flex vertical gap={16}>
-      <Link to="/app/helpdesk">
-        <ArrowLeftOutlined /> All tickets
-      </Link>
-      <Card>
-        <Space orientation="vertical" size={12} style={{ width: "100%" }}>
-          <div>
-            <Text type="secondary">{ticket.number}</Text>
-            <Title level={4} style={{ margin: 0 }}>
-              {ticket.subject}
-            </Title>
-          </div>
-          <Descriptions size="small" column={{ xs: 1, sm: 2, md: 4 }}>
-            <Descriptions.Item label="Status">
-              <StatusTag status={ticket.status} />
-            </Descriptions.Item>
-            <Descriptions.Item label="Category">{ticket.category.name}</Descriptions.Item>
-            <Descriptions.Item label="Priority">
-              <PriorityTag priority={ticket.priority} />
-            </Descriptions.Item>
-            <Descriptions.Item label="Raised">{formatDateTime(ticket.createdAt)}</Descriptions.Item>
-          </Descriptions>
-          <LifecycleNotice ticket={ticket} viewer="raiser" onReopen={() => reopen.mutate()} reopening={reopen.isPending} />
-        </Space>
-      </Card>
-      <Card>
-        <Thread messages={ticket.messages} viewer="raiser" />
-      </Card>
-      <Card>
-        <ReplyBox allowInternal={false} disabledReason={closedReason} submitting={send.isPending} onSubmit={(input) => send.mutateAsync(input)} />
-      </Card>
-    </Flex>
+    <>
+      <PageHeader
+        back="/app/helpdesk"
+        title={ticket.subject}
+        subtitle={`${ticket.number} · ${ticket.category.name}`}
+        tags={
+          <>
+            <StatusTag status={ticket.status} />
+            <PriorityTag priority={ticket.priority} />
+          </>
+        }
+      />
+      <Row gutter={[space[6], space[6]]}>
+        <Col xs={24} lg={16}>
+          <Stack>
+            <LifecycleNotice ticket={ticket} viewer="raiser" onReopen={() => reopen.mutate()} reopening={reopen.isPending} />
+            <Conversation
+              messages={ticket.messages}
+              viewer="raiser"
+              composer={<ReplyBox allowInternal={false} disabledReason={closedReason} submitting={send.isPending} onSubmit={(input) => send.mutateAsync(input)} />}
+            />
+          </Stack>
+        </Col>
+        <Col xs={24} lg={8}>
+          <Panel title="Details">
+            <KeyValueGrid
+              columns={1}
+              items={[
+                { label: "Ticket", value: ticket.number },
+                { label: "Status", value: <StatusTag status={ticket.status} /> },
+                { label: "Category", value: ticket.category.name },
+                { label: "Priority", value: <PriorityTag priority={ticket.priority} /> },
+                { label: "Raised", value: formatDateTime(ticket.createdAt) },
+                { label: "Last update", value: formatDateTime(ticket.lastActivityAt) },
+              ]}
+            />
+          </Panel>
+        </Col>
+      </Row>
+    </>
   );
 }

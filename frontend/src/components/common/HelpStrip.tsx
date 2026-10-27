@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "antd";
 import { CloseOutlined } from "@ant-design/icons";
 import { ApprovalBanner } from "../../ui/ApprovalBanner";
+import { space } from "../../theme/tokens";
 
 interface HelpStripProps {
   children: React.ReactNode;
@@ -34,7 +35,7 @@ export function HelpStrip({ children, storageKey }: HelpStripProps) {
     <ApprovalBanner
       tone="info"
       title={children}
-      style={{ marginBottom: 16 }}
+      style={{ marginBottom: space[4] }}
       actions={
         <Button type="text" size="small" onClick={hide} icon={<CloseOutlined />}>
           Hide help

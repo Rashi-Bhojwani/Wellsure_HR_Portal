@@ -1,6 +1,6 @@
 // JS budgets (docs/DESIGN_SYSTEM.md §7): what a browser must download, gzipped, before the screen can render.
 //   login            ≤ 250 KB: the entry chunk + the LoginPage chunk + everything they import statically;
-//   shell + home     ≤ 400 KB: the entry (which holds both layouts / the app shell) + the employee HomePage chunk + their static imports.
+//   shell + home     ≤ 400 KB: the entry + the signed-in router (PortalRoutes) + that portal's layout + its HomePage chunk + their static imports.
 // Run after `vite build` (needs dist/.vite/manifest.json): npm run build && npm run check:bundle.
 import { readFileSync } from "node:fs";
 import { gzipSync } from "node:zlib";
@@ -28,8 +28,8 @@ const find = (needle) => Object.keys(manifest).find((k) => k.includes(needle));
 
 const budgets = [
   { name: "login", limit: 250 * 1024, keys: [entry, find("pages/auth/login/LoginPage")] },
-  { name: "shell + employee home", limit: 400 * 1024, keys: [entry, find("layouts/EmployeeLayout"), find("pages/employee/home/HomePage")] },
-  { name: "shell + admin home", limit: 400 * 1024, keys: [entry, find("layouts/AdminLayout"), find("pages/admin/home/HomePage")] },
+  { name: "shell + employee home", limit: 400 * 1024, keys: [entry, find("routes/PortalRoutes"), find("layouts/EmployeeLayout"), find("pages/employee/home/HomePage")] },
+  { name: "shell + admin home", limit: 400 * 1024, keys: [entry, find("routes/PortalRoutes"), find("layouts/AdminLayout"), find("pages/admin/home/HomePage")] },
 ];
 
 let failed = false;

@@ -20,28 +20,14 @@ import { fs } from "../../../theme/tokens";
 // so even "Expand all" renders in interruptible slices instead of one long
 // main-thread block.
 
-interface Palette {
-  cardBg: string;
-  border: string;
-  primary: string;
-  text: string;
-  textSecondary: string;
-  line: string;
-  tagBg: string;
-}
-
 const ellipsis = { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } as const;
-
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : "")).toUpperCase();
-}
+// Connector lines between levels: the stronger border token, so the tree reads in both themes.
+const LINE = `2px solid ${v.borderControl}`;
 
 const OrgCard = memo(function OrgCard({
   node,
   subtitle,
   photoToken,
-  palette,
   onOpen,
   highlighted,
   reportCount,
@@ -49,7 +35,6 @@ const OrgCard = memo(function OrgCard({
   node: OrgChartNode;
   subtitle: string;
   photoToken: string | undefined;
-  palette: Palette;
   onOpen: (id: string) => void;
   highlighted: boolean;
   reportCount: number;
@@ -60,49 +45,36 @@ const OrgCard = memo(function OrgCard({
       type="button"
       data-orgchart-id={node.id}
       onClick={() => onOpen(node.id)}
+      aria-current={highlighted ? "true" : undefined}
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 10,
+        gap: space[3],
         width: "100%",
         minWidth: 0,
-        padding: 10,
+        minHeight: 60,
+        padding: `${space[2]}px ${space[3]}px`,
         textAlign: "left",
         cursor: "pointer",
         font: "inherit",
-        color: palette.text,
-        background: palette.cardBg,
-        border: `1px solid ${highlighted ? palette.primary : palette.border}`,
-        boxShadow: highlighted ? `0 0 0 2px ${palette.primary}40` : undefined,
-        borderRadius: 8,
+        color: v.textPrimary,
+        background: highlighted ? v.accentSubtle : v.bgSurface,
+        border: `1px solid ${highlighted ? v.accent : v.borderDefault}`,
+        boxShadow: highlighted ? `0 0 0 2px ${v.accent}` : undefined,
+        borderRadius: radius.md,
+        transition: "border-color 0.15s, background 0.15s",
       }}
     >
       {src ? (
-        <img src={src} alt={node.name} loading="lazy" decoding="async" width={40} height={40} style={{ borderRadius: "50%", flexShrink: 0, objectFit: "cover" }} />
+        <img src={src} alt="" loading="lazy" decoding="async" width={40} height={40} style={{ borderRadius: radius.pill, flexShrink: 0, objectFit: "cover" }} />
       ) : (
-        <span
-          aria-hidden
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: "50%",
-            background: palette.primary,
-            color: "#fff",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-            fontSize: fs.lg,
-          }}
-        >
-          {initials(node.name)}
-        </span>
+        <InitialsAvatar name={node.name} size={40} />
       )}
       <span style={{ minWidth: 0, flex: 1 }}>
-        <span style={{ display: "block", fontWeight: 600, ...ellipsis }}>{node.name}</span>
-        <span style={{ display: "block", fontSize: fs.sm, color: palette.textSecondary, ...ellipsis }}>{subtitle}</span>
+        <span style={{ display: "block", fontWeight: fw.semibold, fontSize: fs.md, ...ellipsis }}>{node.name}</span>
+        <span style={{ display: "block", fontSize: fs.sm, color: v.textSecondary, ...ellipsis }}>{subtitle}</span>
       </span>
-      <KindBadge kind={node.kind} reportCount={reportCount} palette={palette} />
+      <KindBadge kind={node.kind} reportCount={reportCount} />
     </button>
   );
 });
@@ -110,26 +82,15 @@ const OrgCard = memo(function OrgCard({
 // E2: a manager is always labelled as one — "Manager · No team yet" is
 // visibly different from a plain employee (who has no badge) and from an HR
 // Admin (top level, never a team). That was the old chart's ambiguity.
-function KindBadge({ kind, reportCount, palette }: { kind: OrgChartNode["kind"]; reportCount: number; palette: Palette }) {
+function KindBadge({ kind, reportCount }: { kind: OrgChartNode["kind"]; reportCount: number }) {
   if (kind === "employee") return null;
   const text = kind === "manager" ? `Manager · ${reportCount === 0 ? "No team yet" : reportCount}` : kind === "adminStaff" ? "HR Admin" : "Super Admin";
   const label = kind === "manager" ? (reportCount === 0 ? "Manager with no team yet" : `Manager with ${reportCount} direct reports`) : text;
   return (
-    <span
-      title={label}
-      aria-label={label}
-      style={{
-        flexShrink: 0,
-        fontSize: fs.sm,
-        padding: "0 7px",
-        borderRadius: 4,
-        whiteSpace: "nowrap",
-        border: `1px solid ${kind === "manager" ? palette.primary : palette.border}`,
-        color: kind === "manager" ? palette.primary : palette.textSecondary,
-        background: palette.tagBg,
-      }}
-    >
-      {text}
+    <span aria-label={label} style={{ flexShrink: 0, display: "inline-flex" }}>
+      <StatusChip tone={kind === "manager" ? "info" : kind === "adminStaff" ? "purple" : "neutral"} title={label}>
+        {text}
+      </StatusChip>
     </span>
   );
 }

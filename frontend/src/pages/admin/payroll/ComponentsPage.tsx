@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Button, Flex, Form, Input, InputNumber, Modal, Select, Space, Switch, Table, Tag, Tooltip, Typography, message } from "antd";
+import { Button, Form, Input, InputNumber, Select, Switch, Tooltip } from "antd";
 import { EditOutlined, HistoryOutlined, PlusOutlined, SafetyCertificateOutlined } from "@ant-design/icons";
 import { COMPONENT_TYPES, COMPONENT_TYPE_LABEL, ITEM_CODE_PATTERN } from "@shared/constants/payrollSalary";
 import * as payrollApi from "../../../api/payroll";
@@ -11,9 +11,9 @@ import { ItemStatusTag } from "../../../components/payroll/ItemStatusTag";
 import { useAuth } from "../../../hooks/useAuth";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { describeComponent } from "./salaryText";
-import { fs } from "../../../theme/tokens";
-
-const { Title, Text } = Typography;
+import { ApprovalBanner, DataTable, EmptyState, FilterBar, FormGroupTitle, KeyValueGrid, PageHeader, Panel, SideDrawer, Stack, StatusChip, toast } from "../../../ui";
+import { Caption, PersonCell } from "../../../components/payroll/payrollUi";
+import { space } from "../../../theme/tokens";
 
 // Payroll → Salary components (Phase 6 P6-2). A component says what a line IS: whether it is an earning or a deduction, and which tax and statutory
 // treatments apply. How much each line gets is the structure's job. A component is a Placeholder until a different person confirms it; editing one adds
@@ -29,108 +29,119 @@ export function ComponentsPage() {
   const [editing, setEditing] = useState<{ code: string | null; value: ComponentValue } | null>(null);
   const [confirming, setConfirming] = useState<ComponentView | null>(null);
   const [history, setHistory] = useState<ComponentView | null>(null);
-  const { data = [], isLoading, error } = useQuery({ queryKey: ["payroll", "components"], queryFn: payrollApi.listComponents });
+  const [search, setSearch] = useState("");
+  const { data = [], isLoading, error, refetch } = useQuery({ queryKey: ["payroll", "components"], queryFn: payrollApi.listComponents });
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["payroll"] });
+  const q = search.trim().toLowerCase();
+  const shown = q ? data.filter((c) => c.code.toLowerCase().includes(q) || (c.value?.name ?? "").toLowerCase().includes(q)) : data;
+  const addButton = canEdit && (
+    <Button type="primary" icon={<PlusOutlined />} onClick={() => setEditing({ code: null, value: EMPTY })}>
+      Add a component
+    </Button>
+  );
+
+  const actions = (c: ComponentView, block?: boolean) => (
+    <div style={{ display: "flex", gap: space[2], flexWrap: "wrap", justifyContent: block ? "stretch" : "flex-end", width: block ? "100%" : undefined }}>
+      {canEdit && (
+        <Button size={block ? undefined : "small"} style={block ? { flex: 1 } : undefined} icon={<EditOutlined />} onClick={() => setEditing({ code: c.code, value: c.value! })}>
+          Edit
+        </Button>
+      )}
+      {canConfirm && c.status === "PLACEHOLDER" && (
+        <Button size={block ? undefined : "small"} style={block ? { flex: 1 } : undefined} type="primary" icon={<SafetyCertificateOutlined />} onClick={() => setConfirming(c)}>
+          Confirm…
+        </Button>
+      )}
+      <Button size={block ? undefined : "small"} style={block ? { flex: 1 } : undefined} icon={<HistoryOutlined />} onClick={() => setHistory(c)}>
+        History
+      </Button>
+    </div>
+  );
+
+  const treatedAs = (c: ComponentView) => {
+    const chips = [c.value?.taxable && <StatusChip key="t" tone="info">Taxable</StatusChip>, c.value?.pfApplicable && <StatusChip key="pf" tone="purple">PF</StatusChip>, c.value?.esiApplicable && <StatusChip key="esi" tone="purple">ESI</StatusChip>, c.value?.prorates && <StatusChip key="p" tone="neutral">Pro-rates with paid days</StatusChip>].filter(Boolean);
+    return chips.length ? <span style={{ display: "inline-flex", gap: space[1], flexWrap: "wrap" }}>{chips}</span> : "—";
+  };
+  const statusCell = (c: ComponentView) => (
+    <div>
+      <ItemStatusTag status={c.status} sourceLabel={c.sourceLabel} />
+      {c.lastConfirmed && <Caption>Last confirmed: version {c.lastConfirmed.version}</Caption>}
+    </div>
+  );
+  const usedBy = (c: ComponentView) =>
+    c.usedBy.length === 0 ? (
+      <Caption>No structure yet</Caption>
+    ) : (
+      <div style={{ display: "flex", flexDirection: "column", gap: space[1] }}>
+        {c.usedBy.map((u) => (
+          <span key={u.structure} style={{ display: "inline-flex", gap: space[1], alignItems: "center", flexWrap: "wrap" }}>
+            {u.structureName}
+            {u.behind && (
+              <Tooltip title={`This structure uses version ${u.pinnedVersion}; a newer version exists. Save a new version of the structure to use it.`}>
+                <span tabIndex={0} aria-label={`${u.structureName} uses version ${u.pinnedVersion}; a newer version exists. Save a new version of the structure to use it.`}>
+                  <StatusChip tone="warning">older version</StatusChip>
+                </span>
+              </Tooltip>
+            )}
+          </span>
+        ))}
+      </div>
+    );
 
   return (
-    <Flex vertical gap={16}>
-      <Flex justify="space-between" align="center" wrap gap={8}>
-        <Title level={3} style={{ margin: 0 }}>
-          Salary components
-        </Title>
-        {canEdit && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setEditing({ code: null, value: EMPTY })}>
-            Add a component
-          </Button>
-        )}
-      </Flex>
-      <Text type="secondary">
-        A component is one line of a salary: Basic, HRA, Special allowance, a deduction. It says what the line is and how it is treated for tax, PF and ESI. How much each line gets is set in the{" "}
-        <Link to="/admin/payroll/structures">salary structure</Link>. PF, ESI, professional tax, LWF and TDS are not components: the calculation produces them from the rules.
-      </Text>
-      {error && <Alert type="error" showIcon title={apiErrorMessage(error, "Could not load the components.")} />}
-      <Table<ComponentView>
-        rowKey="code"
-        loading={isLoading}
-        dataSource={data}
-        pagination={false}
-        locale={{ emptyText: "No components yet. Add the lines your salaries are made of." }}
-        columns={[
-          {
-            title: "Component",
-            render: (_, c) => (
-              <div>
-                <Text strong>{c.value?.name}</Text>
-                <div>
-                  <Text type="secondary" style={{ fontSize: fs.sm }}>
-                    {c.code}
-                  </Text>
-                </div>
-              </div>
-            ),
-          },
-          { title: "Kind", render: (_, c) => (c.value ? <Tag>{COMPONENT_TYPE_LABEL[c.value.type]}</Tag> : null) },
-          {
-            title: "Treated as",
-            render: (_, c) => (
-              <Space size={4} wrap>
-                {c.value?.taxable && <Tag color="blue">Taxable</Tag>}
-                {c.value?.pfApplicable && <Tag color="purple">PF</Tag>}
-                {c.value?.esiApplicable && <Tag color="purple">ESI</Tag>}
-                {c.value?.prorates && <Tag>Pro-rates with paid days</Tag>}
-              </Space>
-            ),
-          },
-          {
-            title: "Status",
-            render: (_, c) => (
-              <Space orientation="vertical" size={2}>
-                <ItemStatusTag status={c.status} sourceLabel={c.sourceLabel} />
-                {c.lastConfirmed && <Text type="secondary" style={{ fontSize: fs.sm }}>Last confirmed: version {c.lastConfirmed.version}</Text>}
-              </Space>
-            ),
-          },
-          {
-            title: "Used by",
-            render: (_, c) =>
-              c.usedBy.length === 0 ? (
-                <Text type="secondary">No structure yet</Text>
+    <>
+      <PageHeader title="Salary components" subtitle="The lines a salary is made of" actions={addButton} />
+      <Stack>
+        <ApprovalBanner
+          tone="info"
+          title="What a line is, not how much"
+          description={
+            <>
+              A component is one line of a salary: Basic, HRA, Special allowance, a deduction. It says what the line is and how it is treated for tax, PF and ESI. How much each line gets is set in the{" "}
+              <Link to="/admin/payroll/structures">salary structure</Link>. PF, ESI, professional tax, LWF and TDS are not components: the calculation produces them from the rules.
+            </>
+          }
+        />
+        <Panel>
+          <FilterBar onSearch={setSearch} searchPlaceholder="Search a component" />
+          <DataTable<ComponentView>
+            rowKey="code"
+            density="compact"
+            loading={isLoading}
+            error={error}
+            onRetry={() => void refetch()}
+            dataSource={shown}
+            pagination={false}
+            empty={
+              q ? (
+                <EmptyState kind="no-results" compact title="No component matches" description="Try another name or code." />
               ) : (
-                <Space orientation="vertical" size={0}>
-                  {c.usedBy.map((u) => (
-                    <Tooltip key={u.structure} title={u.behind ? `This structure uses version ${u.pinnedVersion}; a newer version exists. Save a new version of the structure to use it.` : undefined}>
-                      <Text>
-                        {u.structureName} {u.behind && <Tag color="gold">older version</Tag>}
-                      </Text>
-                    </Tooltip>
-                  ))}
-                </Space>
-              ),
-          },
-          {
-            title: "",
-            align: "right",
-            render: (_, c) => (
-              <Space wrap>
-                {canEdit && (
-                  <Button size="small" icon={<EditOutlined />} onClick={() => setEditing({ code: c.code, value: c.value! })}>
-                    Edit
-                  </Button>
-                )}
-                {canConfirm && c.status === "PLACEHOLDER" && (
-                  <Button size="small" type="primary" icon={<SafetyCertificateOutlined />} onClick={() => setConfirming(c)}>
-                    Confirm…
-                  </Button>
-                )}
-                <Button size="small" icon={<HistoryOutlined />} onClick={() => setHistory(c)}>
-                  History
-                </Button>
-              </Space>
-            ),
-          },
-        ]}
-      />
-      {editing && <EditModal initial={editing} onClose={() => setEditing(null)} onSaved={refresh} />}
+                <EmptyState compact title="No components yet" description="Add the lines your salaries are made of." action={addButton || undefined} />
+              )
+            }
+            mobile={{
+              title: (c) => c.value?.name,
+              subtitle: (c) => c.code,
+              status: (c) => (c.value ? <StatusChip tone="neutral">{COMPONENT_TYPE_LABEL[c.value.type]}</StatusChip> : null),
+              fields: [
+                { label: "Treated as", render: treatedAs },
+                { label: "Status", render: statusCell },
+                { label: "Used by", render: usedBy },
+              ],
+              actions: (c) => actions(c, true),
+            }}
+            columns={[
+              { title: "Component", key: "component", render: (_, c) => <PersonCell name={c.value?.name} code={c.code} /> },
+              { title: "Kind", key: "kind", render: (_, c) => (c.value ? <StatusChip tone="neutral">{COMPONENT_TYPE_LABEL[c.value.type]}</StatusChip> : null) },
+              { title: "Treated as", key: "treated", render: (_, c) => treatedAs(c) },
+              { title: "Status", key: "status", render: (_, c) => statusCell(c) },
+              { title: "Used by", key: "usedBy", render: (_, c) => usedBy(c) },
+              { title: "", key: "actions", align: "right", render: (_, c) => actions(c) },
+            ]}
+          />
+        </Panel>
+      </Stack>
+      {editing && <EditDrawer initial={editing} onClose={() => setEditing(null)} onSaved={refresh} />}
       {confirming && (
         <ItemConfirmModal
           title={`Confirm: ${confirming.value?.name}`}
@@ -143,11 +154,11 @@ export function ComponentsPage() {
         />
       )}
       {history && <ItemHistoryDrawer title={`History: ${history.value?.name}`} queryKey={["payroll", "component-history", history.code]} load={async () => (await payrollApi.getComponent(history.code)).history} renderValue={describeComponent} onClose={() => setHistory(null)} />}
-    </Flex>
+    </>
   );
 }
 
-function EditModal({ initial, onClose, onSaved }: { initial: { code: string | null; value: ComponentValue }; onClose: () => void; onSaved: () => void }) {
+function EditDrawer({ initial, onClose, onSaved }: { initial: { code: string | null; value: ComponentValue }; onClose: () => void; onSaved: () => void }) {
   const [form] = Form.useForm<ComponentValue & { code: string }>();
   const [note, setNote] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
@@ -158,49 +169,55 @@ function EditModal({ initial, onClose, onSaved }: { initial: { code: string | nu
       const { code, ...value } = v;
       return { code: isNew ? code : initial.code!, value: value as ComponentValue, result: await payrollApi.previewComponentSave(isNew ? code : initial.code!, value as ComponentValue) };
     },
-    onError: (err) => setProblem(apiErrorMessage(err, "Could not check that.")),
+    onError: (err) => {
+      // A field that fails its own check is shown on the field; anything else is the server's answer.
+      if (err && typeof err === "object" && "errorFields" in err) return;
+      setProblem(apiErrorMessage(err, "Could not check that."));
+    },
     onSuccess: () => setProblem(null),
   });
   const save = useMutation({
     mutationFn: () => payrollApi.saveComponent(preview.data!.code, { value: preview.data!.value, note, fingerprint: preview.data!.result.fingerprint }),
     onSuccess: () => {
-      void message.success("Saved as an unconfirmed version.");
+      toast.success("Saved as an unconfirmed version.");
       onSaved();
       onClose();
     },
-    onError: (err) => setProblem(apiErrorMessage(err, "Could not save.")),
+    onError: (err) => setProblem(apiErrorMessage(err, "Could not save."))
   });
   const p = preview.data?.result;
   return (
-    <Modal
+    <SideDrawer
       open
-      width={620}
       title={isNew ? "Add a component" : `Edit ${initial.value.name}`}
-      onCancel={onClose}
-      destroyOnHidden
+      subtitle={p ? "Check the change, then save it" : "A new version is a Placeholder until a different person confirms it"}
+      onClose={onClose}
       footer={
-        p ? (
-          <Space>
-            <Button onClick={() => preview.reset()}>Back</Button>
-            <Button type="primary" loading={save.isPending} disabled={p.unchanged} onClick={() => save.mutate()}>
-              Save as an unconfirmed version
-            </Button>
-          </Space>
-        ) : (
-          <Space>
-            <Button onClick={onClose}>Cancel</Button>
-            <Button type="primary" loading={preview.isPending} onClick={() => preview.mutate()}>
-              Preview
-            </Button>
-          </Space>
-        )
+        <div style={{ display: "flex", gap: space[3], width: "100%" }}>
+          {p ? (
+            <>
+              <Button size="large" style={{ flex: 1 }} onClick={() => preview.reset()}>Back</Button>
+              <Button size="large" type="primary" style={{ flex: 1 }} loading={save.isPending} disabled={p.unchanged} onClick={() => save.mutate()}>
+                Save as an unconfirmed version
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button size="large" style={{ flex: 1 }} onClick={onClose}>Cancel</Button>
+              <Button size="large" type="primary" style={{ flex: 1 }} loading={preview.isPending} onClick={() => preview.mutate()}>
+                Preview
+              </Button>
+            </>
+          )}
+        </div>
       }
     >
-      {!p ? (
-        <Form form={form} layout="vertical" initialValues={{ ...initial.value, code: initial.code ?? "" }}>
+      {/* The form stays mounted while the preview is shown, so Back returns to exactly what was typed. */}
+      <div hidden={!!p}>
+        <Form form={form} layout="vertical" initialValues={{ ...initial.value, code: initial.code ?? "" }} onValuesChange={() => setProblem(null)}>
           {isNew && (
             <Form.Item name="code" label="Code" extra="Capital letters, digits and underscores, for example BASIC. It cannot be changed later." rules={[{ required: true, pattern: ITEM_CODE_PATTERN, message: "Use capital letters, digits and underscores, starting with a letter" }]}>
-              <Input placeholder="BASIC" maxLength={25} />
+              <Input placeholder="BASIC" maxLength={25} autoComplete="off" />
             </Form.Item>
           )}
           <Form.Item name="name" label="Name" rules={[{ required: true, min: 2, max: 60 }]}>
@@ -209,7 +226,8 @@ function EditModal({ initial, onClose, onSaved }: { initial: { code: string | nu
           <Form.Item name="type" label="Kind" rules={[{ required: true }]}>
             <Select options={COMPONENT_TYPES.map((t) => ({ value: t, label: COMPONENT_TYPE_LABEL[t] }))} />
           </Form.Item>
-          <Flex gap={24} wrap>
+          <FormGroupTitle>Treatment</FormGroupTitle>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", columnGap: space[4] }}>
             <Form.Item name="taxable" label="Taxable" valuePropName="checked">
               <Switch />
             </Form.Item>
@@ -222,28 +240,39 @@ function EditModal({ initial, onClose, onSaved }: { initial: { code: string | nu
             <Form.Item name="prorates" label="Pro-rates with paid days" valuePropName="checked">
               <Switch />
             </Form.Item>
-          </Flex>
-          <Flex gap={16} wrap>
+          </div>
+          <FormGroupTitle>On the payslip</FormGroupTitle>
+          <div style={{ display: "flex", gap: space[4], flexWrap: "wrap" }}>
             <Form.Item name="payslipLabel" label="Called on the payslip" rules={[{ required: true, max: 60 }]} style={{ flex: 1, minWidth: 200 }}>
               <Input maxLength={60} />
             </Form.Item>
             <Form.Item name="payslipOrder" label="Position on the payslip" rules={[{ required: true }]}>
               <InputNumber min={1} max={999} precision={0} />
             </Form.Item>
-          </Flex>
-          {problem && <Alert type="error" showIcon title={problem} />}
+          </div>
+          {problem && <ApprovalBanner tone="danger" title={problem} />}
         </Form>
-      ) : (
-        <Space orientation="vertical" size={12} style={{ width: "100%" }}>
-          <Text strong>{describeComponent(p.after.value)}</Text>
-          {p.before && <Text type="secondary">Now: version {p.before.version}, {p.before.status === "CONFIRMED" ? "Confirmed" : "Placeholder"}.</Text>}
-          {p.unchanged && <Alert type="warning" showIcon title="That is the value it already has. There is nothing to save." />}
-          {p.willResetConfirmation && <Alert type="warning" showIcon title="This component is Confirmed now." description="Saving adds a new version that is a Placeholder until a different person confirms it. The Confirmed version stays on record and in every structure that pinned it." />}
-          <Alert type="info" showIcon title={p.impact} />
-          <Input.TextArea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={500} placeholder="Why this, and where it came from (optional, but the person who confirms it will want it)" />
-          {problem && <Alert type="error" showIcon title={problem} />}
-        </Space>
+      </div>
+      {p && (
+        <Stack gap={space[3]}>
+          <KeyValueGrid
+            columns={1}
+            items={[
+              { label: "After saving", value: describeComponent(p.after.value) },
+              ...(p.before ? [{ label: "Now", value: `Version ${p.before.version}, ${p.before.status === "CONFIRMED" ? "Confirmed" : "Placeholder"}` }] : []),
+            ]}
+          />
+          {p.unchanged && <ApprovalBanner tone="warning" title="That is the value it already has. There is nothing to save." />}
+          {p.willResetConfirmation && <ApprovalBanner tone="warning" title="This component is Confirmed now." description="Saving adds a new version that is a Placeholder until a different person confirms it. The Confirmed version stays on record and in every structure that pinned it." />}
+          <ApprovalBanner tone="info" title={p.impact} />
+          <Form layout="vertical" component="div">
+            <Form.Item label="Why this, and where it came from" htmlFor="component-note" extra="Optional, but the person who confirms it will want it." style={{ marginBottom: 0 }}>
+              <Input.TextArea id="component-note" value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={500} placeholder="Why this, and where it came from (optional, but the person who confirms it will want it)" />
+            </Form.Item>
+          </Form>
+          {problem && <ApprovalBanner tone="danger" title={problem} />}
+        </Stack>
       )}
-    </Modal>
+    </SideDrawer>
   );
 }

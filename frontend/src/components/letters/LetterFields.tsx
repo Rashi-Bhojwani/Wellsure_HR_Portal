@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { DatePicker, Form, Input, InputNumber, Select } from "antd";
 import type { LetterExtraField } from "@shared/constants/letters";
 import * as employeeApi from "../../api/employee";
@@ -10,6 +10,7 @@ export function EmployeePicker({ value, onChange }: { value?: string; onChange?:
   const { data, isFetching } = useQuery({
     queryKey: ["employees", "picker", search],
     queryFn: () => employeeApi.listEmployees({ search: search || undefined, pageSize: 20, status: "ACTIVE" }),
+    placeholderData: keepPreviousData,
   });
   return (
     <Select
@@ -17,6 +18,8 @@ export function EmployeePicker({ value, onChange }: { value?: string; onChange?:
       value={value}
       onChange={onChange}
       loading={isFetching}
+      style={{ width: "100%" }}
+      notFoundContent={isFetching ? "Searching…" : "No active employee matches"}
       placeholder="Search by name or code"
       options={(data?.rows ?? []).map((e) => ({ value: e.id, label: `${e.fullName} (${e.employeeCode})` }))}
     />

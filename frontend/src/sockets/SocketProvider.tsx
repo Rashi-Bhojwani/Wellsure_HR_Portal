@@ -35,16 +35,15 @@ export function SocketProvider({
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    if (!enabled) {
-      setSocket(null);
-      return;
-    }
+    if (!enabled) return;
     let cancelled = false;
     void import("socket.io-client").then(({ io }) => {
       if (!cancelled) setSocket(io(API_BASE_URL, { withCredentials: true, auth: { token: getAccessToken() } }));
     });
     return () => {
+      // Signing out (or unmounting) drops the instance; the effect below then disconnects it.
       cancelled = true;
+      setSocket(null);
     };
   }, [enabled]);
 
@@ -64,7 +63,7 @@ export function SocketProvider({
   }, [socket]);
 
   return (
-    <SocketContext.Provider value={{ socket, connected }}>{children}</SocketContext.Provider>
+    <SocketContext.Provider value={{ socket, connected: socket ? connected : false }}>{children}</SocketContext.Provider>
   );
 }
 

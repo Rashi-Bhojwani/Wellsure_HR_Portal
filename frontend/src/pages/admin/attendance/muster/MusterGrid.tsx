@@ -3,7 +3,7 @@ import { LockOutlined } from "@ant-design/icons";
 import { parseMusterCell } from "@shared/attendance/muster";
 import type { Muster, MusterCell, MusterRow } from "../../../../api/muster";
 import { cellKey, useCellTones } from "./musterCells";
-import { fs, fw, radius, v } from "../../../../theme/tokens";
+import { fs, fw, radius, space, v } from "../../../../theme/tokens";
 
 // The editable grid (Phase 2 P2-D, docs/plans/PHASE_2.md §5.1): employees ×
 // days, click a cell and type — a status letter or IN-OUT times. Tab or
@@ -107,23 +107,23 @@ export function MusterGrid({ muster, pending, errors, onChange, focused, onFocus
 
   const sticky = (left: number, width: number): CSSProperties => ({ position: "sticky", left, zIndex: 2, minWidth: width, maxWidth: width, background: v.bgSurface });
   const border = `1px solid ${v.borderDefault}`;
-  const th: CSSProperties = { padding: "6px 2px", fontWeight: fw.semibold, color: v.textOnRaised, fontSize: fs.sm, borderBottom: border, borderRight: border, textAlign: "center", background: v.bgTableHeader, position: "sticky", top: 0, zIndex: 1 };
+  const th: CSSProperties = { padding: `${space[1] + 2}px 2px`, fontWeight: fw.semibold, color: v.textOnRaised, fontSize: fs.sm, borderBottom: border, borderRight: border, textAlign: "center", background: v.bgTableHeader, position: "sticky", top: 0, zIndex: 1 };
   const td: CSSProperties = { padding: 0, borderBottom: border, borderRight: border, textAlign: "center", height: 36 };
 
   return (
-    <div style={{ overflow: "auto", maxHeight: "calc(100vh - 320px)", minHeight: 240, border, borderRadius: radius.md }}>
+    <div role="region" aria-label="Muster grid (scrolls sideways)" tabIndex={0} style={{ overflow: "auto", maxHeight: "calc(100vh - 320px)", minHeight: 240, maxWidth: "100%", border, borderRadius: radius.md, background: v.bgSurface, overscrollBehaviorX: "contain" }}>
       <table ref={tableRef} style={{ borderCollapse: "separate", borderSpacing: 0, fontSize: fs.sm, width: "max-content" }} aria-label={`Attendance muster, ${muster.cycle.label}`}>
         <thead>
           <tr>
-            <th style={{ ...th, ...sticky(0, 200), zIndex: 3, textAlign: "left", paddingLeft: 8, background: v.bgTableHeader }}>Employee</th>
+            <th style={{ ...th, ...sticky(0, 200), zIndex: 3, left: 0, textAlign: "left", paddingLeft: space[2], background: v.bgTableHeader }}>Employee</th>
             {muster.days.map((d) => {
               const n = Number(d.date.slice(8));
               const sunday = d.weekday === 0;
               return (
                 <th key={d.date} style={{ ...th, minWidth: 46, color: sunday ? v.textSecondary : undefined, outline: d.date === muster.today ? `2px solid ${v.focusRing}` : undefined, outlineOffset: -2 }}>
                   <div>{n}</div>
-                  <div style={{ fontWeight: 400, color: v.textSecondary }}>{WEEKDAYS[d.weekday]}</div>
-                  <div title={`${d.notMarked} not marked`} style={{ fontWeight: 400, fontSize: fs.xs, color: d.notMarked ? v.warningText : "transparent" }}>
+                  <div style={{ fontWeight: fw.regular, color: v.textSecondary }}>{WEEKDAYS[d.weekday]}</div>
+                  <div title={`${d.notMarked} not marked`} style={{ fontWeight: fw.regular, fontSize: fs.xs, color: d.notMarked ? v.warningText : "transparent" }}>
                     {d.notMarked ? `${d.notMarked} NM` : "·"}
                   </div>
                 </th>
@@ -139,8 +139,8 @@ export function MusterGrid({ muster, pending, errors, onChange, focused, onFocus
         <tbody>
           {muster.rows.map((row, r) => (
             <tr key={row.employeeId}>
-              <th scope="row" style={{ ...td, ...sticky(0, 200), textAlign: "left", padding: "2px 8px", fontWeight: 400 }}>
-                <div style={{ fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.name}</div>
+              <th scope="row" style={{ ...td, ...sticky(0, 200), textAlign: "left", padding: `2px ${space[2]}px`, fontWeight: fw.regular, boxShadow: `1px 0 0 ${v.borderDefault}` }}>
+                <div style={{ fontWeight: fw.medium, color: v.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.name}</div>
                 <div style={{ color: v.textSecondary, fontSize: fs.xs }}>
                   {row.employeeCode}
                   {row.branch ? ` · ${row.branch}` : ""}
@@ -157,13 +157,13 @@ export function MusterGrid({ muster, pending, errors, onChange, focused, onFocus
                   color: tone.color,
                   boxShadow: error ? `inset 0 0 0 2px ${v.danger}` : cell.statusOnly ? `inset 0 0 0 1px ${v.borderControl}` : marks(cell) ? `inset 0 -3px 0 ${v.accentText}` : undefined,
                   position: "relative",
-                  fontWeight: 500,
+                  fontWeight: fw.medium,
                 };
                 const title = error ? `${describe(row, cell)}\n⚠ ${error}` : edited === "" ? `${describe(row, cell)}\nWill be cleared (back to not marked) when you save.` : describe(row, cell);
                 const corner = cell.missingPunch ? <span aria-hidden style={{ position: "absolute", top: 0, right: 0, borderTop: `7px solid ${v.danger}`, borderLeft: "7px solid transparent" }} /> : null;
                 const worked = cell.workedOnOffDay ? <span aria-hidden style={{ position: "absolute", bottom: 2, right: 3, width: 5, height: 5, borderRadius: 5, background: v.success }} /> : null;
                 const mark = marks(cell) ? (
-                  <span aria-hidden style={{ position: "absolute", top: 0, left: 2, fontSize: fs.xs, lineHeight: "12px", color: v.accentText, fontWeight: 700 }}>
+                  <span aria-hidden style={{ position: "absolute", top: 0, left: 2, fontSize: fs.xs, lineHeight: "12px", color: v.accentText, fontWeight: fw.bold }}>
                     {marks(cell)}
                   </span>
                 ) : null;
@@ -174,6 +174,10 @@ export function MusterGrid({ muster, pending, errors, onChange, focused, onFocus
                       key={cell.date}
                       title={openable ? `${title}\nClick to set this day (HR)` : title}
                       onClick={openable ? () => onOpenDay!(row, cell) : undefined}
+                      tabIndex={openable ? 0 : undefined}
+                      role={openable ? "button" : undefined}
+                      aria-label={openable ? `${describe(row, cell)}. Set this day` : undefined}
+                      onKeyDown={openable ? (e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onOpenDay!(row, cell)) : undefined}
                       style={{ ...base, cursor: openable ? "pointer" : "default", opacity: cell.capture === "DEVICE" || cell.locked ? 0.85 : 1, borderStyle: cell.statusOnly ? "dashed" : undefined }}
                     >
                       {mark}
@@ -228,7 +232,7 @@ export function MusterGrid({ muster, pending, errors, onChange, focused, onFocus
                 );
               })}
               {TOTALS.map((t) => (
-                <td key={t.key} style={{ ...td, padding: "0 4px", fontWeight: t.key === "paidDays" ? 600 : 400, background: t.key === "paidDays" ? v.accentSubtle : undefined, color: t.key === "missingPunch" && row.totals.missingPunch ? v.danger : undefined }}>
+                <td key={t.key} className="ws-num" style={{ ...td, padding: `0 ${space[1]}px`, fontWeight: t.key === "paidDays" ? fw.semibold : fw.regular, background: t.key === "paidDays" ? v.accentSubtle : undefined, color: t.key === "missingPunch" && row.totals.missingPunch ? v.danger : undefined }}>
                   {row.totals[t.key] || (t.key === "paidDays" ? 0 : "")}
                 </td>
               ))}

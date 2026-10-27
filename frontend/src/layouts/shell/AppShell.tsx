@@ -68,10 +68,14 @@ export function AppShell({ nav, homeKey, homePath, pinned, topLinks = [], topExt
     document.title = `${title} · Wellsure HR Portal`;
   }, [title]);
 
-  // New page: back to the top, menu drawer closed.
+  // New page: menu drawer closed (adjusted during render, so it never flashes open) and back to the top.
+  const [drawerPath, setDrawerPath] = useState(location.pathname);
+  if (drawerPath !== location.pathname) {
+    setDrawerPath(location.pathname);
+    setDrawer(false);
+  }
   useEffect(() => {
     window.scrollTo({ top: 0 });
-    setDrawer(false);
   }, [location.pathname]);
 
   // Ctrl/⌘ K and "/" open search (DESIGN_SYSTEM.md §10 D10).

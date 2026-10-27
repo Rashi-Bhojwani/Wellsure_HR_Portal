@@ -4,8 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge, Button, Drawer, Grid, Popover, Typography } from "antd";
 import { BellOutlined } from "@ant-design/icons";
 import * as notificationsApi from "../../api/notifications";
-import { EmptyState } from "./EmptyState";
-import { fs, v } from "../../theme/tokens";
+import { EmptyState, Skel } from "../../ui";
+import { fs, fw, radius, space, v } from "../../theme/tokens";
 
 function relativeTime(iso: string): string {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -71,7 +71,7 @@ export function NotificationBell({ homePath }: { homePath: string }) {
 
   const content = (
     <div style={{ width: isMobile ? "100%" : 380 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 4px 12px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: `${space[1]}px ${space[1]}px ${space[3]}px` }}>
         <Text strong style={{ fontSize: fs.lg }}>
           Notifications
         </Text>
@@ -79,8 +79,20 @@ export function NotificationBell({ homePath }: { homePath: string }) {
           Mark all read
         </Button>
       </div>
-      <div style={{ maxHeight: 420, overflowY: "auto", margin: "0 -4px" }}>
-        {data && data.rows.length > 0 ? (
+      <div style={{ maxHeight: 420, overflowY: "auto", margin: `0 -${space[1]}px` }}>
+        {!data ? (
+          <div aria-busy="true" aria-label="Loading notifications" style={{ display: "flex", flexDirection: "column", gap: space[4], padding: `${space[3]}px ${space[2]}px` }}>
+            {[0, 1, 2].map((i) => (
+              <div key={i} style={{ display: "flex", gap: space[3], alignItems: "center" }}>
+                <Skel w={40} h={40} r={radius.pill} />
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: space[2] }}>
+                  <Skel w="60%" h={14} />
+                  <Skel w="90%" h={12} />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : data.rows.length > 0 ? (
           <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
             {data.rows.map((row) => (
               <li key={row.id}>
@@ -89,9 +101,10 @@ export function NotificationBell({ homePath }: { homePath: string }) {
                   onClick={() => handleClick(row)}
                   style={{
                     display: "flex",
-                    gap: 12,
+                    gap: space[3],
                     width: "100%",
-                    padding: "12px 8px",
+                    minHeight: 64,
+                    padding: `${space[3]}px ${space[2]}px`,
                     border: 0,
                     borderBottom: `1px solid ${v.borderDefault}`,
                     background: "transparent",
@@ -101,17 +114,17 @@ export function NotificationBell({ homePath }: { homePath: string }) {
                     color: "inherit",
                   }}
                 >
-                  <span aria-hidden style={{ width: 40, height: 40, flex: "none", borderRadius: 999, background: row.readAt ? v.bgSubtle : v.accentSubtle, color: row.readAt ? v.textSecondary : v.accentText, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: fs.lg }}>
+                  <span aria-hidden style={{ width: 40, height: 40, flex: "none", borderRadius: radius.pill, background: row.readAt ? v.bgSubtle : v.accentSubtle, color: row.readAt ? v.textSecondary : v.accentText, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: fs.lg }}>
                     <BellOutlined />
                   </span>
                   <span style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-                      <span style={{ flex: 1, minWidth: 0, fontWeight: row.readAt ? 500 : 700, color: v.textPrimary, fontSize: fs.md, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.title}</span>
+                    <span style={{ display: "flex", gap: space[2], alignItems: "baseline" }}>
+                      <span style={{ flex: 1, minWidth: 0, fontWeight: row.readAt ? fw.medium : fw.bold, color: v.textPrimary, fontSize: fs.md, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.title}</span>
                       <span style={{ flex: "none", fontSize: fs.xs, color: v.textSecondary }}>{relativeTime(row.createdAt)}</span>
                     </span>
-                    <span style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 2 }}>
+                    <span style={{ display: "flex", gap: space[2], alignItems: "center", marginTop: 2 }}>
                       <span style={{ flex: 1, minWidth: 0, fontSize: fs.sm, color: v.textSecondary, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{row.body}</span>
-                      {!row.readAt && <span aria-label="Unread" style={{ width: 8, height: 8, borderRadius: 999, background: v.danger, flex: "none" }} />}
+                      {!row.readAt && <span role="img" aria-label="Unread" style={{ width: 8, height: 8, borderRadius: radius.pill, background: v.danger, flex: "none" }} />}
                     </span>
                   </span>
                 </button>
@@ -119,7 +132,7 @@ export function NotificationBell({ homePath }: { homePath: string }) {
             ))}
           </ul>
         ) : (
-          <EmptyState message="You're all caught up" description="New notifications will appear here." compact illustration="inbox" />
+          <EmptyState title="You're all caught up" description="New notifications will appear here." compact illustration="inbox" />
         )}
       </div>
     </div>
@@ -139,7 +152,7 @@ export function NotificationBell({ homePath }: { homePath: string }) {
     return (
       <>
         {bell}
-        <Drawer title="Notifications" placement="top" size="auto" open={open} onClose={() => setOpen(false)} styles={{ body: { padding: 12 } }}>
+        <Drawer title="Notifications" placement="top" size="auto" open={open} onClose={() => setOpen(false)} styles={{ body: { padding: space[3] } }}>
           {content}
         </Drawer>
       </>

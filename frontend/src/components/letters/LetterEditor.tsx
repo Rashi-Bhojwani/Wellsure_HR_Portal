@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import TextAlign from "@tiptap/extension-text-align";
-import { Button, Divider, Flex, Select, Tooltip } from "antd";
+import { Button, Divider, Select, Tooltip } from "antd";
 import {
   AlignCenterOutlined,
   AlignLeftOutlined,
@@ -17,6 +17,8 @@ import {
   UndoOutlined,
   UnorderedListOutlined,
 } from "@ant-design/icons";
+import { radius, space, v } from "../../theme/tokens";
+import { useIsPhone } from "../../ui";
 
 export interface PlaceholderOption {
   key: string; // e.g. "employee.fullName" or "extra.ctcAnnual"
@@ -33,11 +35,14 @@ export function LetterEditor({
   onChange,
   placeholders = [],
   readOnly = false,
+  bare = false,
 }: {
   value: string;
   onChange?: (html: string) => void;
   placeholders?: PlaceholderOption[];
   readOnly?: boolean;
+  /** Read-only without its own frame (inside a preview "page"). */
+  bare?: boolean;
 }) {
   const editor = useEditor({
     extensions: [
@@ -73,27 +78,32 @@ export function LetterEditor({
     }),
   });
 
+  const phone = useIsPhone();
   if (!editor) return null;
   const chain = () => editor.chain().focus();
   const tool = (title: string, icon: React.ReactNode, active: boolean, run: () => void) => (
     <Tooltip title={title}>
-      <Button size="small" type={active ? "primary" : "text"} icon={icon} aria-label={title} aria-pressed={active} onClick={run} />
+      <Button size={phone ? "middle" : "small"} type={active ? "primary" : "text"} icon={icon} aria-label={title} aria-pressed={active} onClick={run} />
     </Tooltip>
   );
 
   return (
-    <div className="letter-editor" style={{ border: "1px solid rgba(128,128,128,0.35)", borderRadius: 8 }}>
+    <div className="letter-editor" data-readonly={readOnly || undefined} style={bare ? { color: v.textBody } : { border: `1px solid ${readOnly ? v.borderDefault : v.borderControl}`, borderRadius: radius.md, background: v.bgSurface, color: v.textBody }}>
       {!readOnly && (
-        <Flex wrap gap={4} align="center" style={{ padding: 6, borderBottom: "1px solid rgba(128,128,128,0.25)" }}>
+        <div
+          role="toolbar"
+          aria-label="Formatting"
+          style={{ display: "flex", flexWrap: "wrap", gap: space[1], alignItems: "center", padding: space[2], borderBottom: `1px solid ${v.borderDefault}`, background: v.bgSubtle, borderRadius: `${radius.md}px ${radius.md}px 0 0` }}
+        >
           {tool("Bold", <BoldOutlined />, state?.bold ?? false, () => chain().toggleBold().run())}
           {tool("Italic", <ItalicOutlined />, state?.italic ?? false, () => chain().toggleItalic().run())}
           {tool("Underline", <UnderlineOutlined />, state?.underline ?? false, () => chain().toggleUnderline().run())}
           {tool("Strikethrough", <StrikethroughOutlined />, state?.strike ?? false, () => chain().toggleStrike().run())}
           <Divider orientation="vertical" />
-          <Button size="small" type={state?.h2 ? "primary" : "text"} onClick={() => chain().toggleHeading({ level: 2 }).run()}>
+          <Button size={phone ? "middle" : "small"} type={state?.h2 ? "primary" : "text"} onClick={() => chain().toggleHeading({ level: 2 }).run()}>
             Heading
           </Button>
-          <Button size="small" type={state?.h3 ? "primary" : "text"} onClick={() => chain().toggleHeading({ level: 3 }).run()}>
+          <Button size={phone ? "middle" : "small"} type={state?.h3 ? "primary" : "text"} onClick={() => chain().toggleHeading({ level: 3 }).run()}>
             Subheading
           </Button>
           <Divider orientation="vertical" />
@@ -108,8 +118,9 @@ export function LetterEditor({
           {tool("Redo", <RedoOutlined />, false, () => chain().redo().run())}
           {placeholders.length > 0 && (
             <Select
-              size="small"
-              style={{ minWidth: 220, marginLeft: "auto" }}
+              size={phone ? "middle" : "small"}
+              aria-label="Insert placeholder"
+              style={{ minWidth: phone ? "100%" : 220, marginLeft: phone ? 0 : "auto" }}
               placeholder="Insert placeholder…"
               value={null}
               showSearch={{ optionFilterProp: "label" }}
@@ -117,13 +128,19 @@ export function LetterEditor({
               onChange={(key: string) => chain().insertContent(`{{${key}}}`).run()}
             />
           )}
-        </Flex>
+        </div>
       )}
-      <EditorContent editor={editor} className="letter-editor-content" />
+      <EditorContent editor={editor} className={`letter-editor-content${readOnly ? " is-readonly" : ""}${bare ? " is-bare" : ""}`} />
       <style>{`
-        .letter-editor-content .tiptap { min-height: ${readOnly ? 0 : 320}px; padding: 16px 20px; outline: none; line-height: 1.55; }
-        .letter-editor-content .tiptap p { margin: 0 0 8px; }
-        .letter-editor-content .tiptap h1, .letter-editor-content .tiptap h2, .letter-editor-content .tiptap h3 { margin: 8px 0; }
+        .letter-editor:focus-within:not([data-readonly]) { border-color: ${v.focusRing}; box-shadow: 0 0 0 2px ${v.accentSubtle}; }
+        .letter-editor-content .tiptap { min-height: ${phone ? 240 : 360}px; padding: ${space[4]}px ${phone ? space[4] : space[5]}px; outline: none; line-height: 1.6; color: ${v.textBody}; caret-color: ${v.textPrimary}; overflow-wrap: anywhere; }
+        .letter-editor-content.is-readonly .tiptap { min-height: 0; }
+        .letter-editor-content.is-bare .tiptap { padding: 0; }
+        .letter-editor-content .tiptap p { margin: 0 0 ${space[2]}px; }
+        .letter-editor-content .tiptap h1, .letter-editor-content .tiptap h2, .letter-editor-content .tiptap h3 { margin: ${space[2]}px 0; color: ${v.textPrimary}; }
+        .letter-editor-content .tiptap blockquote { margin: ${space[2]}px 0; padding-left: ${space[3]}px; border-left: 3px solid ${v.borderControl}; color: ${v.textSecondary}; }
+        .letter-editor-content .tiptap hr { border: 0; border-top: 1px solid ${v.borderDefault}; margin: ${space[3]}px 0; }
+        .letter-editor-content .tiptap ::selection { background: ${v.accentSubtle}; }
       `}</style>
     </div>
   );

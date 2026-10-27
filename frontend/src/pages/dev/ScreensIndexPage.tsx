@@ -1,10 +1,9 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
-import { Card, Flex, Input, Tag, Typography } from "antd";
-import { useState } from "react";
 import { resolveAdminRoutes, resolveEmployeeRoutes, type ResolvedRoute } from "../../routes/resolveMenuRoutes";
+import { EmptyState, FilterBar, PageHeader, Panel, Stack, StatusChip } from "../../ui";
+import { fs, layout, space, v } from "../../theme/tokens";
 
-const { Title, Text, Paragraph } = Typography;
 const FLAG = "wellsure-dev-screens";
 
 // Routes that are not menu entries (router.tsx). Detail routes need an id from the demo company, so they are listed but not linked.
@@ -65,31 +64,46 @@ export function ScreensIndexPage() {
 
   if (!enabled) return <Navigate to="/login" replace />;
 
+  const total = groups.reduce((n, [, routes]) => n + routes.length, 0);
+
   return (
-    <div style={{ maxWidth: 1100, margin: "0 auto", padding: 24 }}>
-      <Title level={2}>Screens (developer index)</Title>
-      <Paragraph type="secondary">
-        Every screen URL, for reviewing the UI pass against the <Text strong>demo company</Text> only. Development builds only. Map and board frames:{" "}
-        <Text code>docs/UI_SCREEN_MAP.md</Text>.
-      </Paragraph>
-      <Input.Search placeholder="Filter by name or URL" allowClear value={filter} onChange={(e) => setFilter(e.target.value)} style={{ maxWidth: 360, marginBottom: 16 }} />
-      <Flex vertical gap={16}>
-        {groups.map(([group, routes]) => (
-          <Card key={group} title={`${group} (${routes.length})`}>
-            <Flex vertical gap={6}>
-              {routes.map((r) => (
-                <Flex key={`${r.group}${r.path}`} gap={12} align="center" wrap>
-                  {r.needsId ? <Text type="secondary">{r.label}</Text> : <Link to={r.path.replace(/^\/admin$/, "/admin")}>{r.label}</Link>}
-                  <Text code>{r.path}</Text>
-                  {r.kind === "placeholder" && <Tag>{r.phase ?? "later"}</Tag>}
-                  {r.kind === "redirect" && <Tag>redirect</Tag>}
-                  {r.needsId && <Tag>needs a demo id</Tag>}
-                </Flex>
-              ))}
-            </Flex>
-          </Card>
-        ))}
-      </Flex>
-    </div>
+    <main style={{ maxWidth: Math.min(layout.contentMax, 1100), margin: "0 auto", padding: space[6], background: v.bgPage, minHeight: "100vh" }}>
+      <PageHeader
+        title="Screens (developer index)"
+        subtitle={
+          <>
+            Every screen URL, for reviewing the UI pass against the <strong>demo company</strong> only. Development builds only. Map and board frames:{" "}
+            <code>docs/UI_SCREEN_MAP.md</code>.
+          </>
+        }
+      />
+      <FilterBar searchPlaceholder="Filter by name or URL" searchValue={filter} onSearch={setFilter} />
+      {total === 0 ? (
+        <Panel>
+          <EmptyState kind="no-results" title="No screens match" description="Try part of the page name or its URL." />
+        </Panel>
+      ) : (
+        <Stack>
+          {groups.map(([group, routes]) => (
+            <Panel key={group} title={`${group} (${routes.length})`}>
+              <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column" }}>
+                {routes.map((r) => (
+                  <li
+                    key={`${r.group}${r.path}`}
+                    style={{ display: "flex", gap: space[3], alignItems: "center", flexWrap: "wrap", minHeight: 36, padding: `${space[1]}px 0`, borderBottom: `1px solid ${v.borderDefault}` }}
+                  >
+                    {r.needsId ? <span style={{ color: v.textSecondary }}>{r.label}</span> : <Link to={r.path}>{r.label}</Link>}
+                    <code style={{ fontSize: fs.sm, color: v.textSecondary, overflowWrap: "anywhere" }}>{r.path}</code>
+                    {r.kind === "placeholder" && <StatusChip tone="neutral">{r.phase ?? "later"}</StatusChip>}
+                    {r.kind === "redirect" && <StatusChip tone="info">redirect</StatusChip>}
+                    {r.needsId && <StatusChip tone="warning">needs a demo id</StatusChip>}
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          ))}
+        </Stack>
+      )}
+    </main>
   );
 }

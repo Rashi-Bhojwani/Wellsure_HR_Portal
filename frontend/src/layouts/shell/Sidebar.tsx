@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button, Tooltip } from "antd";
 import { DoubleLeftOutlined, DoubleRightOutlined, DownOutlined } from "@ant-design/icons";
@@ -67,11 +67,12 @@ export function Sidebar({ nav, homeKey, pinned, footer, collapsed = false, onTog
   const activeGroup = nav.find((e) => e.kind === "group" && e.children.some((c) => c.kind === "leaf" && c.key === active?.key));
   const [open, setOpen] = useState<Set<string>>(() => new Set(activeGroup ? [activeGroup.key] : []));
 
-  // Opening a page inside a closed group opens that group.
-  useEffect(() => {
+  // Opening a page inside a closed group opens that group (adjusted during render when the active group changes).
+  const [seenGroup, setSeenGroup] = useState(activeGroup?.key);
+  if (seenGroup !== activeGroup?.key) {
+    setSeenGroup(activeGroup?.key);
     if (activeGroup && !open.has(activeGroup.key)) setOpen((s) => new Set(s).add(activeGroup.key));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the active group changes
-  }, [activeGroup?.key]);
+  }
 
   const toggle = (key: string) =>
     setOpen((s) => {
