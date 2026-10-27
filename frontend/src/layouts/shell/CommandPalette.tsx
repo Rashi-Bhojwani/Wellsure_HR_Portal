@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { Input, Modal, type InputRef } from "antd";
+import { Button, Input, Modal, type InputRef } from "antd";
 import { EnterOutlined, FileTextOutlined, SearchOutlined } from "@ant-design/icons";
 import { fs, space, v } from "../../theme/tokens";
 import { preloadElement } from "../../routes/lazyPage";
@@ -82,12 +82,13 @@ export function CommandPalette({ open, onClose, nav, actions = [] }: Props) {
       onCancel={onClose}
       footer={null}
       closable={false}
-      width={phone ? "100%" : 600}
-      style={{ top: phone ? 0 : 96, maxWidth: phone ? "100vw" : undefined, margin: phone ? 0 : undefined, paddingBottom: 0 }}
+      width={phone ? `calc(100vw - ${space[6]}px)` : 600}
+      style={{ top: phone ? space[3] : 96, maxWidth: phone ? `calc(100vw - ${space[6]}px)` : undefined, paddingBottom: 0 }}
       styles={{ container: { padding: space[3] } }}
       destroyOnHidden
       aria-label="Search pages"
     >
+      <div style={{ display: "flex", gap: space[2], alignItems: "center" }}>
       <Input
         ref={input}
         size="large"
@@ -116,7 +117,14 @@ export function CommandPalette({ open, onClose, nav, actions = [] }: Props) {
           }
         }}
       />
-      <ul id="ws-palette-list" role="listbox" aria-label="Results" style={{ listStyle: "none", margin: `${space[3]}px 0 0`, padding: 0, maxHeight: phone ? "calc(100vh - 120px)" : 420, overflowY: "auto" }}>
+      {/* A phone has no Escape key: give the sheet a visible way out. */}
+      {phone && (
+        <Button type="text" onClick={onClose} style={{ flexShrink: 0 }}>
+          Cancel
+        </Button>
+      )}
+      </div>
+      <ul id="ws-palette-list" role="listbox" aria-label="Results" style={{ listStyle: "none", margin: `${space[3]}px 0 0`, padding: 0, maxHeight: phone ? "calc(100vh - 140px)" : 420, overflowY: "auto" }}>
         {items.length === 0 && <li style={{ padding: space[6], textAlign: "center", color: v.textSecondary }}>No page called “{q}”.</li>}
         {items.map((it, i) => (
           <li
