@@ -213,7 +213,7 @@ h5.ant-typography {
 }
 
 /* Default buttons on dark keep a visible edge. */
-html[data-theme="dark"] .ant-btn-default:not(.ant-btn-dangerous) {
+html[data-theme="dark"] .ant-btn-default:not(.ant-btn-dangerous):not(:disabled):not(.ant-btn-disabled) {
   border-color: var(--ws-border-control);
   color: var(--ws-text-primary);
 }

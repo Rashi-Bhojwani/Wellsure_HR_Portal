@@ -16,6 +16,12 @@ export interface Palette {
   bgReadonly: string;
   bgOverlay: string;
   bgHover: string;
+  /** The chosen option of a Segmented control: must stand off its track (bgSubtle) in both themes. */
+  bgSegmentSelected: string;
+  /** Disabled controls (buttons): visibly inert, never mistaken for an enabled button. */
+  bgDisabled: string;
+  borderDisabled: string;
+  textDisabled: string;
   borderDefault: string;
   borderControl: string;
   textPrimary: string;
@@ -93,6 +99,10 @@ export const light: Palette = {
   bgReadonly: "#F3F4F6",
   bgOverlay: "rgba(0, 0, 0, 0.5)",
   bgHover: "#F5F6F7",
+  bgSegmentSelected: "#FFFFFF",
+  bgDisabled: "#F3F4F6",
+  borderDisabled: "#E2E4E8",
+  textDisabled: "#9CA1AA",
   borderDefault: "#EAEAEA",
   borderControl: "#DADDE2", // ⚑ board #F0F0F0
   textPrimary: "#121828",
@@ -167,6 +177,10 @@ export const dark: Palette = {
   bgReadonly: "#303948",
   bgOverlay: "rgba(0, 0, 0, 0.6)",
   bgHover: "#283142",
+  bgSegmentSelected: "#4A5466",
+  bgDisabled: "#262F3E",
+  borderDisabled: "#323B4B",
+  textDisabled: "#6B7484",
   borderDefault: "#2C3545",
   borderControl: "#4A5363", // ⚑ board #3C4554
   textPrimary: "#FFFFFF",
