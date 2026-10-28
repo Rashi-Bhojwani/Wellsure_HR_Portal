@@ -40,7 +40,7 @@ export function LeaveLedgerTable({ employeeId }: { employeeId?: string }) {
       onRetry={() => void refetch()}
       dataSource={data}
       pagination={{ pageSize: 15, showSizeChanger: false }}
-      empty={<EmptyState compact illustration="documents" title="No entries yet." description="Credits and debits to your leave balances will be listed here." />}
+      empty={<EmptyState compact illustration="documents" title="No entries yet." description="Leave credits and debits will be listed here." />}
       mobile={{
         title: (r) => r.description,
         subtitle: (r) => `${r.date} · ${r.leaveTypeCode}`,

@@ -5,8 +5,8 @@ approved design boards (step 1 of the UI pass, `ui/design-pass`). Later steps ad
 Ant Design mapping (step 3), the shared components' usage notes (step 3) and the
 "How to build a new screen" checklist (step 5).
 
-**Status: DRAFT for the user's OK on the tokens.** Nothing in `frontend/` uses these
-values yet; step 3 wires them in.
+**Status: in use.** Every screen in `frontend/` is built on these tokens and the components in
+`frontend/src/ui/` (UI pass, 2026-10-28); §13 is the checklist for new screens.
 
 ---
 
@@ -454,8 +454,6 @@ wrapper in `frontend/src/ui/` from step 3). Board frames in brackets.
 
 ## 11. Not verified yet (honest list)
 
-- No screen uses these tokens yet; nothing has been rendered. Board-vs-ours
-  screenshots start at step 3 (`docs/design/compare/`).
 - Font identification (Manrope) is by eye from glyph shapes (single-storey `g`,
   numerals, `y` tail); the board embeds no font metadata.
 - Shadow values are estimates (§3).
@@ -498,9 +496,9 @@ Everything lives in `frontend/src/ui/` (import from `../../ui` — the barrel `i
 | `Stack`, `CardGrid` | vertical rhythm; responsive card grids | `CardGrid min={280}` = columns at least 280 px wide. |
 | `StatCard` | one number with a label | `icon` (48 px circle, `tone`), `delta` (only from figures the API returns), `info`, `onClick`, `variant="compact"`. |
 | `StatusChip` | every status | `status="APPROVED"` picks the tone; or `tone` + children. Always a word, never colour alone. |
-| `DataTable` | every table | wraps antd `Table`: rounded header band, 64 px rows (`density="compact"` 44 px for dense grids), skeleton on first load, faded old rows while refetching, `error`/`onRetry`, empty state, "Showing x to y of z", phone stacked cards (`mobile` spec, else derived from columns), `onRowOpen` (click + Enter), virtualises unpaginated lists > 100 rows. Use `useQuery({ placeholderData: keepPreviousData })` for paginated queries. |
+| `DataTable` | every table | wraps antd `Table`: rounded header band, 64 px rows (`density="compact"` 44 px for dense grids), skeleton on first load, faded old rows while refetching, `error`/`onRetry`, empty state, "Showing x to y of z", phone stacked cards (`mobile` spec, else derived from columns; cards paginate like the table and get a selection checkbox when `rowSelection` is set — `mobile.selection: false` if the card draws its own), `onRowOpen` (click + Enter), virtualises unpaginated lists > 100 rows. Use `useQuery({ placeholderData: keepPreviousData })` for paginated queries. |
 | `FilterBar` | search + filters above a table | search is debounced 250 ms (pass the setter); on phones filters move into a "Filter" sheet. |
-| `SideDrawer` | "Add" / detail forms | right drawer 440 / 640 (`size="wide"`), full-screen sheet on phones; sticky footer Cancel + primary (`onPrimary` or `formId` to submit an antd Form by id), `status` chip, `secondaryAction`. Focus trap, Esc, overlay close. |
+| `SideDrawer` | "Add" / detail forms | right drawer 440 / 640 (`size="wide"`) / 960 (`size="xwide"`, capped to the window), full-screen sheet on phones; sticky footer Cancel + primary (`onPrimary` or `formId` to submit an antd Form by id), `status` chip, `secondaryAction`. Focus trap, Esc, overlay close. |
 | `ConfirmModal` | confirmations, success | `illustration="success"`, `info`, `danger`, `loading`. Bottom sheet on phones. Never close before the server answered for money, approvals or audited actions. |
 | `EmptyState` | empty, no results, error, forbidden, offline | `kind`, `title`, `description` (`null` hides), `action`, `onRetry`, `compact`, `illustration`. |
 | `QueryState` | wrap a query's content | renders skeleton / forbidden (API 403) / offline / error with retry / empty / children. |

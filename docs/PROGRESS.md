@@ -20,7 +20,7 @@ committed).
 | 6 | Payroll | ✅ Done, built locally (approved 2026-10-22). Plan and as-built notes: [`docs/plans/PHASE_6.md`](plans/PHASE_6.md); the review: [`docs/plans/PHASE_6_REVIEW.md`](plans/PHASE_6_REVIEW.md); the first real run: [`docs/FIRST_REAL_PAYROLL_RUN.md`](FIRST_REAL_PAYROLL_RUN.md). **Off-cycle runs and offer-letter figures from salary, which earlier text described, were never built: they are Phase 7 steps P7-6 and P7-3** |
 | 7 | Tax & benefits | **In progress.** Plan approved 2026-10-22 with the user's answers ([`docs/plans/PHASE_7.md`](plans/PHASE_7.md) §0A). P7-0 (corrections before the phase) built, awaiting review; P7-1 to P7-7 not started. One commit at a time, a pause after each |
 | 8 | Extras | Not started |
-| UI | One-time UI/UX pass over every existing screen (user, 2026-10-23), on branch `ui/design-pass` | **In progress.** Step 1 (design system) done; the user approved the plan and its defaults on 2026-10-24 ("go ahead and do the frontend transformation"). Step 2 (screen map, `/dev/screens`) done; steps 3 to 5 in progress. Frontend and docs only; Phase 7 continues separately. Plan and rules: [`docs/DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) |
+| UI | One-time UI/UX pass over every existing screen (user, 2026-10-23), on branch `ui/design-pass` | **Built, waiting for the user's review** (PR #2, 2026-10-28). Steps 1 to 5 done: design system, screen map, foundation and shell, every screen converted, the standing rule; browser-tested end to end (see "UI pass, steps 3 to 5" below). Frontend and docs only; Phase 7 continues separately. Plan and rules: [`docs/DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) |
 
 ## Log
 
@@ -4994,6 +4994,50 @@ user experience and smoothness"), so the §10 decisions in `DESIGN_SYSTEM.md` st
   for the 500-person demo company). `db:seed` itself was not run: it is a reset, and the brief says to ask first; on an empty database the
   migrate-then-seed path is equivalent and destroys nothing.
 - `frontend/e2e/screenshots.mjs`: signs in as a demo-company user and captures routes at chosen widths and themes (for the proof sets).
+
+### UI pass, steps 3 to 5: every screen, the standing rule, browser testing (`ui/design-pass`, 2026-10-24 to 2026-10-28)
+
+The first session built the foundation and about 60% of the screens before its usage limit ended it mid-run (WIP commits `f1f83c3`,
+`6ef7803`, `f5365c6`). The second session classified every page file (converted = uses `ui/` + `PageHeader` + tokens; not converted =
+bare `Card`, `Typography.Title`, raw colours, `<Spin>`), then finished the rest in parallel by disjoint file group:
+
+- **Attendance admin:** settings (section nav + tabs; shifts, week-offs, policies, assignments, cycle, manual-entry branches), shift roster
+  (new `RosterGrid`), shift and manual override, exceptions, finalisation, process, regularizations, bulk correction (drawer), muster grid
+  (one tab stop, roving tabindex, arrow keys, grid roles), status calendar cell.
+- **Payroll:** adjustments, compare registers, components, salaries, layouts, revisions (`SideDrawer size="xwide"`), structures.
+  DEMO COMPANY banner and TEST watermark untouched.
+- **Employees and people:** change requests, separations, Access tab, security alerts, Import Center and its tabs, View My Info (reuses the
+  admin profile shell), people directory, person drawer, org chart (still an indented tree: readable with ~500 people on a phone).
+- **Helpdesk, letters:** ticket threads as conversations (bubbles, date dividers, sticky reply box, auto-scroll, live), queue, categories,
+  template list and two-pane editor with live preview, issued letters.
+- **Admin tools:** Manager Management, Roles & Permissions (sticky matrix; one role at a time on phones; save confirmation lists the
+  changes), Audit Log (entry drawer), Devices (split into one file per tab; cards for devices and agents).
+- **Shell and foundation:** foundation lint errors fixed; legacy common components restyled; signed-in routes moved into a lazy
+  `routes/PortalRoutes.tsx` (paths unchanged; `check-bundle.mjs` counts it); `ui/*` imported directly on the first screens; antd `<App>`
+  wrapper removed (toasts themed via `ConfigProvider.config({ holderRender })`); `DataTable` paginates and selects on phone cards
+  (`mobile.selection`); `SideDrawer size="xwide"`; account avatar shows the photo.
+
+**Bundle (gzip, budgets unchanged):** login 231.5 KB (250), shell + employee home 317.0 KB (400), shell + admin home 337.8 KB (400).
+
+**Testing, once at the end (user's instruction):** lint (ESLint + token check, 75 tokens in both themes), typecheck, 42 frontend tests,
+build, bundle budgets, `check:sensitive-ui`, `check:popovers` (both themes, 390 and 1280), a sweep of all 93 menu routes at 390 and 1280 in
+light and dark (page errors, console errors, error boundaries, sideways scroll on phones), then four browser-test agents drove the risky
+flows end to end against the seeded stack and checked server state after reload. About 45 bugs were found and fixed, among them: the phone
+search sheet could not be closed without a keyboard; Who is in? scrolled sideways on phones; reject and removal notes carried over after
+Cancel; View My Info could send a duplicate change request; reissuing a letter with an amount failed (prefill used the printed "₹6,54,321");
+employee pickers loaded only 200 of 502 people (now search the server); payroll action columns off-screen at 1280; dark-mode Segmented
+selection invisible and disabled buttons looking enabled; unknown signed-in URLs sent people to the sign-in form.
+
+**Behaviour changes the user may veto:** payslip amounts on Salary → Payslips are masked until "Show salary", like the Home card (they were
+shown in full before; more private, no new data); one flagged punch's accept/discard now flags a missing reason on click instead of a
+disabled button; the agent-key dialog stays a plain modal so it cannot be dismissed before "I've stored it".
+
+**Not verified / left as is:** Finalise and Unlock were exercised only against faked server answers (every period is blocked by HR's
+placeholder rule values, and confirming them changes company-wide rules); security-event acknowledge (no events in the seed); real payslips
+(none published; tested with intercepted responses). The bank-layout confirm drawer still shows the layout as JSON (deliberate: the checker
+confirms the exact stored text). Leave liability shows a clear error on the demo data (its formula needs a BASIC component the demo pay
+setup lacks; server 409, not a UI fault). The local test database now holds test-only data (punches 12 to 17 Oct, an EVE shift and roster,
+a SUN-ALTSAT week-off pattern, QA devices and agent, two moved reporting lines, a TEST_BONUS_UI component).
 
 ## Open questions
 

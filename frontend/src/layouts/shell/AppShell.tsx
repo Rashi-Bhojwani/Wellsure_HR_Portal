@@ -1,11 +1,13 @@
 import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Drawer, Dropdown, type MenuProps } from "antd";
 import { DownOutlined, LogoutOutlined, MenuOutlined, MoonOutlined, SearchOutlined, SunOutlined } from "@ant-design/icons";
 import { useAuth } from "../../hooks/useAuth";
 import { useThemeMode } from "../../theme/ThemeProvider";
 import { fs, fw, v } from "../../theme/tokens";
-import { InitialsAvatar } from "../../ui/Avatar";
+import { getMyProfile } from "../../api/employee";
+import { EmployeeAvatar } from "../../components/common/EmployeeAvatar";
 import { PageSkeleton } from "../../ui/Skeletons";
 import { useIsCompact, useIsPhone } from "../../ui/hooks";
 import { NotificationBell } from "../../components/common/NotificationBell";
@@ -131,6 +133,8 @@ export function AppShell({ nav, homeKey, homePath, pinned, topLinks = [], topExt
   );
 
   const name = user?.fullName ?? "";
+  // The account avatar shows the person's photo once they have one (same query as View My Info, so an upload there updates it here), else initials.
+  const { data: me } = useQuery({ queryKey: ["employees", "me"], queryFn: getMyProfile, enabled: Boolean(user?.employeeId), staleTime: 5 * 60_000, retry: false });
   const firstName = name.split(" ")[0] ?? "";
   const menuItems: MenuProps["items"] = [
     {
@@ -229,7 +233,7 @@ export function AppShell({ nav, homeKey, homePath, pinned, topLinks = [], topExt
             <NotificationBell homePath={homePath} />
             <Dropdown menu={{ items: menuItems }} trigger={["click"]} placement="bottomRight">
               <button type="button" className="ws-avatar-btn" aria-label={`Account menu for ${name}`}>
-                <InitialsAvatar name={name || "?"} size={phone ? 36 : 40} />
+                <EmployeeAvatar employeeId={user?.employeeId ?? ""} name={name || "?"} photoVersion={me?.personal?.photoVersion} size={phone ? 36 : 40} />
                 {!compact && (
                   <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", lineHeight: 1.2 }}>
                     <span style={{ fontWeight: fw.semibold, fontSize: fs.md }}>{firstName}</span>
