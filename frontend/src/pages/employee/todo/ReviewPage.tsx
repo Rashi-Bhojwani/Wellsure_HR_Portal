@@ -213,7 +213,8 @@ function LeaveReview() {
               dataIndex: 'status',
               render: (s: string) => <StatusChip status={s} />,
             },
-            { title: 'Actions', key: 'actions', render: (_, r) => <Space>{actions(r)}</Space> },
+            // Pinned right: on a laptop with the sidebar open the row is wider than the panel, and the decision buttons must not hide behind a scroll.
+            { title: 'Actions', key: 'actions', fixed: 'right', render: (_, r) => <Space>{actions(r)}</Space> },
           ]}
           mobile={{
             avatar: (r) => <InitialsAvatar name={r.employeeName} size={36} />,
@@ -278,10 +279,10 @@ export function ReviewPage() {
       ? [
           {
             key: 'attendance',
-            label: 'Attendance (forgot to punch)',
+            label: 'Attendance corrections',
             children: (
-              <Panel title="Forgot-to-punch requests">
-                <RegularizationQueue emptyText="No forgot-to-punch requests from your team" />
+              <Panel title="Attendance correction requests">
+                <RegularizationQueue emptyText="No correction requests from your team" />
               </Panel>
             ),
           },

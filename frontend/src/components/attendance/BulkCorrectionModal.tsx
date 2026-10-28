@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import dayjs from "dayjs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Checkbox, DatePicker, Form, Input, Radio, Select } from "antd";
@@ -83,7 +83,8 @@ export function BulkCorrectionModal({ open, onClose, carried }: { open: boolean;
   const confirm = useMutation({
     mutationFn: () => infoApi.confirmBulkCorrection(preview!.body, preview!.data.fingerprint),
     onSuccess: (r) => {
-      toast.success(r.approved ? `${r.requests} employee-days corrected for ${r.employees} people.` : `${r.requests} requests raised for ${r.employees} people; they wait for an approver.`);
+      const people = `${r.employees} ${r.employees === 1 ? "person" : "people"}`;
+      toast.success(r.approved ? `${r.requests} ${r.requests === 1 ? "employee-day" : "employee-days"} corrected for ${people}.` : `${r.requests} ${r.requests === 1 ? "request" : "requests"} raised for ${people}; ${r.requests === 1 ? "it waits" : "they wait"} for an approver.`);
       void queryClient.invalidateQueries({ queryKey: ["attendance"] });
       void queryClient.invalidateQueries({ queryKey: ["tasks"] });
       setPreview(null);
@@ -98,6 +99,11 @@ export function BulkCorrectionModal({ open, onClose, carried }: { open: boolean;
   });
 
   const data = preview?.data;
+  // The preview lands below the form: bring it into view, so the (still disabled) confirm has its reason on screen.
+  const previewRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (data) previewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [data]);
   const rows = useMemo(() => data?.rows ?? [], [data]);
   const canConfirm = !!data && data.count > 0;
   const fieldWidth = (w: number) => (phone ? "100%" : w);
@@ -105,14 +111,20 @@ export function BulkCorrectionModal({ open, onClose, carried }: { open: boolean;
   return (
     <SideDrawer
       open={open}
-      onClose={() => !confirm.isPending && onClose()}
+      onClose={() => {
+        if (confirm.isPending) return;
+        // A preview belongs to this sitting: reopening starts from the form, never from a stale "Correct N".
+        setPreview(null);
+        setLooked(false);
+        onClose();
+      }}
       title="Correct attendance in bulk"
       subtitle="For when a device was down, or a group was away on duty"
       size="wide"
       {...(canConfirm
         ? {
             onPrimary: () => confirm.mutate(),
-            primaryLabel: data.action === "RAISE" ? `Raise ${data.count} requests` : `Correct ${data.count} employee-days`,
+            primaryLabel: data.action === "RAISE" ? `Raise ${data.count} ${data.count === 1 ? "request" : "requests"}` : `Correct ${data.count} ${phone ? (data.count === 1 ? "day" : "days") : data.count === 1 ? "employee-day" : "employee-days"}`,
             primaryDisabled: !looked,
             primaryLoading: confirm.isPending,
           }
@@ -123,7 +135,7 @@ export function BulkCorrectionModal({ open, onClose, carried }: { open: boolean;
         form={form}
         layout="vertical"
         requiredMark={false}
-        initialValues={{ who: "GROUP", reasonCode: "DEVICE_DOWN", mode: "TIMES", action: "RAISE_AND_APPROVE" }}
+        initialValues={{ who: "GROUP", reasonCode: "DEVICE_DOWN", mode: "TIMES", action: canApprove ? "RAISE_AND_APPROVE" : "RAISE" }}
         onValuesChange={() => {
           setPreview(null);
           setLooked(false);
@@ -206,7 +218,7 @@ export function BulkCorrectionModal({ open, onClose, carried }: { open: boolean;
       </Form>
 
       {data && (
-        <section aria-label="Preview" aria-live="polite" style={{ display: "flex", flexDirection: "column", gap: space[4], marginTop: space[2] }}>
+        <section ref={previewRef} aria-label="Preview" aria-live="polite" style={{ display: "flex", flexDirection: "column", gap: space[4], marginTop: space[2] }}>
           <FormGroupTitle>Preview</FormGroupTitle>
           {data.count === 0 ? (
             <ApprovalBanner tone="warning" title="Nothing in that selection can be corrected." description="See why below, then change the dates, people or correction." />
@@ -259,7 +271,7 @@ export function BulkCorrectionModal({ open, onClose, carried }: { open: boolean;
                 ]}
               />
               <Checkbox checked={looked} onChange={(e) => setLooked(e.target.checked)}>
-                I have looked at these {data.count} employee-days and want them {data.action === "RAISE" ? "raised" : "corrected"}.
+                {data.count === 1 ? "I have looked at this employee-day and want it" : `I have looked at these ${data.count} employee-days and want them`} {data.action === "RAISE" ? "raised" : "corrected"}.
               </Checkbox>
             </>
           )}

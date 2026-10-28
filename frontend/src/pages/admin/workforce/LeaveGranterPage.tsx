@@ -5,15 +5,10 @@ import type { Dayjs } from "dayjs";
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as leaveApi from "../../../api/leave";
 import type { CompOffCreditRow } from "../../../api/leave";
-import * as employeeApi from "../../../api/employee";
+import { EmployeePicker } from "../../../components/letters/LetterFields";
 import { ImportDatasetTab } from "../import/ImportCenterPage";
 import { fs, fw, space, v } from "../../../theme/tokens";
 import { ApprovalBanner, DataTable, EmptyState, PageHeader, Panel, StatusChip, toast, useIsPhone, type ChipTone } from "../../../ui";
-
-function useEmployeeOptions() {
-  const { data } = useQuery({ queryKey: ["employees", "picker"], queryFn: () => employeeApi.listEmployees({ pageSize: 200, sortBy: "fullName", sortDir: "asc" }), staleTime: 30_000 });
-  return (data?.rows ?? []).map((e) => ({ value: e.id, label: `${e.fullName} (${e.employeeCode})` }));
-}
 
 function SubmitRow({ children }: { children: React.ReactNode }) {
   const phone = useIsPhone();
@@ -32,7 +27,6 @@ function ManualGrantTab() {
   const [form] = Form.useForm<ManualGrantFormValues>();
   const queryClient = useQueryClient();
   const phone = useIsPhone();
-  const employeeOptions = useEmployeeOptions();
   const { data: leaveTypes = [] } = useQuery({ queryKey: ["leave", "types"], queryFn: leaveApi.listLeaveTypes, staleTime: 30_000 });
   const nonCompOffTypes = leaveTypes.filter((t) => t.code !== "COF");
 
@@ -56,7 +50,7 @@ function ManualGrantTab() {
       />
       <Form form={form} layout="vertical" requiredMark={false} size="large" onFinish={(val) => mutation.mutate(val)}>
         <Form.Item name="employeeId" label="Employee" rules={[{ required: true }]}>
-          <Select showSearch optionFilterProp="label" options={employeeOptions} placeholder="Select an employee" />
+          <EmployeePicker />
         </Form.Item>
         <Form.Item name="leaveTypeId" label="Leave Type" rules={[{ required: true }]}>
           <Select options={nonCompOffTypes.map((t) => ({ value: t.id, label: t.name }))} placeholder="Select a leave type" />
@@ -94,7 +88,6 @@ const COMP_OFF_TONE: Record<string, ChipTone> = { AVAILABLE: "success", CONSUMED
 function CompOffGrantTab() {
   const [form] = Form.useForm<CompOffGrantFormValues>();
   const phone = useIsPhone();
-  const employeeOptions = useEmployeeOptions();
   const selectedEmployeeId = Form.useWatch("employeeId", form) as string | undefined;
 
   const { data: credits = [], isLoading, error, refetch } = useQuery<CompOffCreditRow[]>({
@@ -117,7 +110,7 @@ function CompOffGrantTab() {
     <div style={{ display: "flex", flexWrap: "wrap", gap: space[6], alignItems: "flex-start" }}>
       <Form form={form} layout="vertical" requiredMark={false} size="large" onFinish={(val) => mutation.mutate(val)} style={{ flex: "1 1 360px", maxWidth: 560 }}>
         <Form.Item name="employeeId" label="Employee" rules={[{ required: true }]}>
-          <Select showSearch optionFilterProp="label" options={employeeOptions} placeholder="Select an employee" />
+          <EmployeePicker />
         </Form.Item>
         <div style={{ display: "flex", gap: space[4], flexWrap: phone ? "wrap" : "nowrap" }}>
           <Form.Item name="earnedDate" label="Earned Date (the worked holiday/week-off)" rules={[{ required: true }]} style={{ flex: "1 1 220px" }}>

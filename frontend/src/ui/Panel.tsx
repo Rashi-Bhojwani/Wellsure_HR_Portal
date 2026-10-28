@@ -46,7 +46,7 @@ export function Panel({ title, subtitle, extra, onEdit, editLabel = "Edit", chil
             {title && <h2 style={{ margin: 0, fontSize: phone ? fs.lg : fs.xl, fontWeight: fw.semibold, color: v.textPrimary, lineHeight: 1.35 }}>{title}</h2>}
             {subtitle && <div style={{ color: v.textSecondary, fontSize: fs.sm, marginTop: 2 }}>{subtitle}</div>}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: space[2], flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: space[2], flexWrap: "wrap", minWidth: 0, maxWidth: "100%" }}>
             {extra}
             {onEdit && (
               <Tooltip title={editLabel}>

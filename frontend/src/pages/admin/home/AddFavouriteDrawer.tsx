@@ -7,6 +7,9 @@ import { SideDrawer } from '../../../ui/SideDrawer';
 import { toast } from '../../../ui/Toast';
 import { FAVOURITE_ICONS } from './favouriteIcons';
 
+// What each icon key reads as in the picker (the key itself, e.g. "useradd", is only a stored id).
+const ICON_LABELS: Record<string, string> = { useradd: 'Add person', team: 'Team', calendar: 'Calendar', file: 'Document', dollar: 'Money', setting: 'Settings', audit: 'Audit', home: 'Home', trophy: 'Trophy', bank: 'Bank' };
+
 // "Add Shortcut" (Admin Home → My Favourites). Its own chunk: loaded the first time the drawer opens, so the form code stays out of the home page's budget.
 export function AddFavouriteDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [form] = Form.useForm<{ label: string; path: string; icon: string }>();
@@ -52,7 +55,7 @@ export function AddFavouriteDrawer({ open, onClose }: { open: boolean; onClose: 
                 value: key,
                 label: (
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: space[2] }}>
-                    <Icon /> {key}
+                    <Icon /> {ICON_LABELS[key] ?? key}
                   </span>
                 ),
               };

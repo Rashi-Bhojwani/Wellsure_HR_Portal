@@ -308,16 +308,22 @@ export function Conversation({ messages, viewer, composer, title = "Conversation
   const reduced = usePrefersReducedMotion();
   const scrollRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
-  const seen = useRef<number | null>(null);
+  const composerRef = useRef<HTMLDivElement>(null);
+  const seen = useRef<{ count: number; phone: boolean } | null>(null);
 
   useLayoutEffect(() => {
-    const first = seen.current === null;
-    const grew = !first && messages.length > (seen.current ?? 0);
-    seen.current = messages.length;
+    // A switch between the phone and desktop layouts counts as opening afresh (the scroller changes from the page to the panel).
+    const first = seen.current === null || seen.current.phone !== phone;
+    const grew = !first && messages.length > (seen.current?.count ?? 0);
+    seen.current = { count: messages.length, phone };
     if (!first && !grew) return;
     const behavior: ScrollBehavior = first || reduced ? "auto" : "smooth";
     if (!phone && scrollRef.current) scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior });
-    else if (grew) endRef.current?.scrollIntoView({ block: "end", behavior });
+    else if (endRef.current) {
+      // The page scrolls on a phone: stop the newest message above the sticky composer and the tab bar, not behind them.
+      endRef.current.style.scrollMarginBottom = `${(composerRef.current?.offsetHeight ?? 0) + layout.phoneTabBar + space[2]}px`;
+      endRef.current.scrollIntoView({ block: "end", behavior });
+    }
   }, [messages.length, phone, reduced]);
 
   return (
@@ -330,7 +336,8 @@ export function Conversation({ messages, viewer, composer, title = "Conversation
         tabIndex={phone ? undefined : 0}
         style={{
           padding: phone ? space[4] : `${space[2]}px ${space[6]}px ${space[6]}px`,
-          maxHeight: phone ? undefined : "min(62vh, 720px)",
+          // Short enough that header + thread + composer fit one screen: the composer is sticky, so a taller thread hid its newest message.
+          maxHeight: phone ? undefined : "clamp(280px, calc(100vh - 480px), 720px)",
           minHeight: phone ? undefined : 280,
           overflowY: phone ? undefined : "auto",
           borderTop: `1px solid ${v.borderDefault}`,
@@ -340,6 +347,7 @@ export function Conversation({ messages, viewer, composer, title = "Conversation
         <div ref={endRef} />
       </div>
       <div
+        ref={composerRef}
         style={{
           position: "sticky",
           bottom: phone ? layout.phoneTabBar : 0,

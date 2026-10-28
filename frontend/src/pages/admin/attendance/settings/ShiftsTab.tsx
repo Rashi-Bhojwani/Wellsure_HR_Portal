@@ -46,9 +46,14 @@ function ShiftDrawer({ editing, open, onClose }: { editing: ShiftRow | null; ope
       if (!editing) return attendanceApi.createShift(val);
       // Only what changed — so an untouched placeholder stays a placeholder.
       const changed = Object.fromEntries(Object.entries(val).filter(([k, x]) => k !== "code" && JSON.stringify(x) !== JSON.stringify(editing[k as keyof ShiftRow])));
-      return attendanceApi.updateShift(editing.id, changed);
+      return Object.keys(changed).length === 0 ? Promise.resolve(null) : attendanceApi.updateShift(editing.id, changed);
     },
-    onSuccess: () => {
+    onSuccess: (saved) => {
+      if (editing && !saved) {
+        toast.info("Nothing changed.");
+        onClose();
+        return;
+      }
       void queryClient.invalidateQueries({ queryKey: ["attendance", "config"] });
       toast.success(editing ? "Shift saved. Days already computed keep the old rule until you run Process Attendance for them." : "Shift created.");
       onClose();
@@ -307,7 +312,7 @@ export function ShiftsTab({ canManage }: { canManage: boolean }) {
             { title: "Grace in / out", key: "grace", render: (_, s) => <GraceCell s={s} /> },
             { title: "People", dataIndex: "employeeCount", align: "right" },
             { title: "Status", key: "status", render: (_, s) => <ActiveTag isActive={s.isActive} isDefault={s.isDefault} /> },
-            ...(canManage ? [{ title: "", key: "actions", render: (_: unknown, s: ShiftRow) => actions(s) }] : []),
+            ...(canManage ? [{ title: "", key: "actions", fixed: "right" as const, render: (_: unknown, s: ShiftRow) => actions(s) }] : []),
           ]}
           mobile={{
             title: (s) => s.name,

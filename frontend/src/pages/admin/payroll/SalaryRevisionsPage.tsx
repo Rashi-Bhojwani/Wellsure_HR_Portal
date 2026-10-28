@@ -107,7 +107,7 @@ export function SalaryRevisionsPage() {
         </Panel>
       </Stack>
       {wizard && <RevisionWizard prefillEmployee={prefill} componentName={componentName} onClose={closeWizard} onCreated={(id) => { closeWizard(); setOpenId(id); }} />}
-      {openId && <RevisionDetailDrawer id={openId} componentName={componentName} onClose={() => setOpenId(null)} />}
+      {openId && <RevisionDetailDrawer id={openId} componentName={componentName} onClose={() => { setOpenId(null); if (params.has("open")) setParams({}, { replace: true }); }} />}
     </>
   );
 }
@@ -399,12 +399,11 @@ function RevisionBody({ r, componentName }: { r: RevisionDetail; componentName: 
       <KeyValueGrid
         columns={2}
         items={[
-          { key: "s", label: "Status", value: statusChip(r.status) },
           { key: "d", label: r.kind === "CANCEL_SCHEDULED" ? "The scheduled salary starts" : "From", value: formatDate(r.effectiveFrom) },
           { key: "b", label: "Prepared by", value: `${r.createdBy}, ${formatDateTime(r.createdAt)}` },
           { key: "k", label: "Kind", value: r.kind === "CANCEL_SCHEDULED" ? "Cancelling a scheduled salary" : r.reason === "CORRECTION" ? "A correction" : "A revision" },
           ...(r.approval?.decidedBy ? [{ key: "a", label: "Decided by", value: `${r.approval.decidedBy}${r.approval.decisionNote ? `: “${r.approval.decisionNote}”` : ""}` }] : []),
-          ...(r.approval?.voidReason ? [{ key: "v", label: "Why it is void", value: r.approval.voidReason }] : []),
+          ...(r.approval?.voidReason && !r.withdrawnAt ? [{ key: "v", label: "Why it is void", value: r.approval.voidReason }] : []),
           ...(r.appliedAt ? [{ key: "p", label: "Applied", value: `${r.appliedBy}, ${formatDateTime(r.appliedAt)}` }] : []),
           ...(r.withdrawnAt ? [{ key: "w", label: "Withdrawn", value: r.withdrawnReason }] : []),
           ...(r.note ? [{ key: "n", label: "Note", value: r.note, wide: true }] : []),

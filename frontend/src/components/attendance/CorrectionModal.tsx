@@ -58,8 +58,8 @@ export function CorrectionModal({ date, day, open, onClose }: { date: string; da
         style={{ marginBottom: space[5] }}
         title={
           noPunches
-            ? `No punches were recorded on ${date}.`
-            : `Recorded on ${date}: ${day.firstIn ?? "—"}${day.lastOut ? ` to ${day.lastOut}` : " (one punch)"}.`
+            ? `No punches were recorded on ${dayjs(date).format("D MMM")}.`
+            : `Recorded on ${dayjs(date).format("D MMM")}: ${day.firstIn ?? "—"}${day.lastOut ? ` to ${day.lastOut}` : " (one punch)"}.`
         }
         description="Tell us what it should have been. Your manager or HR approves it; the device's own punches never change, and the corrected day is marked as such."
       />

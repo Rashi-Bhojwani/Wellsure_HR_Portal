@@ -2,16 +2,23 @@ import { useEffect, useState } from "react";
 import { Grid } from "antd";
 import { isAxiosError } from "axios";
 
+// antd's useBreakpoint answers {} on a component's first render (it subscribes in a layout effect), so every component used to render — and run its
+// layout effects — once as a phone before correcting itself. Until it answers, ask the browser directly (antd's default md/xl breakpoints).
+function firstScreens(): { md?: boolean; xl?: boolean } {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return {};
+  return { md: window.matchMedia("(min-width: 768px)").matches, xl: window.matchMedia("(min-width: 1200px)").matches };
+}
+
 /** < 768 px: phone layout (bottom tabs, stacked-card tables, full-screen sheets). */
 export function useIsPhone(): boolean {
   const screens = Grid.useBreakpoint();
-  return !screens.md;
+  return !(screens.md ?? firstScreens().md);
 }
 
 /** < 1280 px: tablet layout (sidebar becomes a drawer). */
 export function useIsCompact(): boolean {
   const screens = Grid.useBreakpoint();
-  return !screens.xl;
+  return !(screens.xl ?? firstScreens().xl);
 }
 
 /** A value that settles `delay` ms after its last change (search boxes: about 250 ms, DESIGN_SYSTEM.md §7). */

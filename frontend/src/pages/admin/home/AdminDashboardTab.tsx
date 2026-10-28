@@ -144,7 +144,7 @@ function EditLayoutDrawer({
 function GenderDonut({ data }: { data: { gender: string; count: number }[] }) {
   return (
     <DonutChart
-      data={data.map((d) => ({ name: d.gender, value: d.count }))}
+      data={data.map((d) => ({ name: d.gender.charAt(0) + d.gender.slice(1).toLowerCase().replace(/_/g, ' '), value: d.count }))}
       totalLabel="Employees"
       height={CHART_HEIGHT}
     />

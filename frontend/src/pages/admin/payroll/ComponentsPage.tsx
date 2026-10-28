@@ -133,10 +133,11 @@ export function ComponentsPage() {
             columns={[
               { title: "Component", key: "component", render: (_, c) => <PersonCell name={c.value?.name} code={c.code} /> },
               { title: "Kind", key: "kind", render: (_, c) => (c.value ? <StatusChip tone="neutral">{COMPONENT_TYPE_LABEL[c.value.type]}</StatusChip> : null) },
-              { title: "Treated as", key: "treated", render: (_, c) => treatedAs(c) },
-              { title: "Status", key: "status", render: (_, c) => statusCell(c) },
+              { title: "Treated as", key: "treated", width: 200, render: (_, c) => treatedAs(c) },
+              { title: "Status", key: "status", width: 190, render: (_, c) => statusCell(c) },
               { title: "Used by", key: "usedBy", render: (_, c) => usedBy(c) },
-              { title: "", key: "actions", align: "right", render: (_, c) => actions(c) },
+              // Narrow on purpose: the buttons stack rather than push the table into a sideways scroll at laptop widths.
+              { title: "", key: "actions", align: "right", width: 116, render: (_, c) => actions(c) },
             ]}
           />
         </Panel>
@@ -193,11 +194,11 @@ function EditDrawer({ initial, onClose, onSaved }: { initial: { code: string | n
       subtitle={p ? "Check the change, then save it" : "A new version is a Placeholder until a different person confirms it"}
       onClose={onClose}
       footer={
-        <div style={{ display: "flex", gap: space[3], width: "100%" }}>
+        <div style={{ display: "flex", gap: space[3], width: "100%", flexWrap: "wrap" }}>
           {p ? (
             <>
-              <Button size="large" style={{ flex: 1 }} onClick={() => preview.reset()}>Back</Button>
-              <Button size="large" type="primary" style={{ flex: 1 }} loading={save.isPending} disabled={p.unchanged} onClick={() => save.mutate()}>
+              <Button size="large" style={{ flex: "1 1 120px" }} onClick={() => preview.reset()}>Back</Button>
+              <Button size="large" type="primary" style={{ flex: "1 1 260px" }} loading={save.isPending} disabled={p.unchanged} onClick={() => save.mutate()}>
                 Save as an unconfirmed version
               </Button>
             </>
@@ -267,7 +268,7 @@ function EditDrawer({ initial, onClose, onSaved }: { initial: { code: string | n
           <ApprovalBanner tone="info" title={p.impact} />
           <Form layout="vertical" component="div">
             <Form.Item label="Why this, and where it came from" htmlFor="component-note" extra="Optional, but the person who confirms it will want it." style={{ marginBottom: 0 }}>
-              <Input.TextArea id="component-note" value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={500} placeholder="Why this, and where it came from (optional, but the person who confirms it will want it)" />
+              <Input.TextArea id="component-note" value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={500} placeholder="For example: as agreed with the CA" />
             </Form.Item>
           </Form>
           {problem && <ApprovalBanner tone="danger" title={problem} />}

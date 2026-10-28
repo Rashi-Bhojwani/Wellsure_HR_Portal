@@ -28,7 +28,7 @@ export function AgentReportCell({ d }: { d: DeviceRow }) {
     return (
       <Tooltip title="The agent reported in but didn't mention this device: it isn't in that PC's config.json.">
         <span tabIndex={0}>
-          <StatusChip tone="warning">Not configured on the agent PC</StatusChip>
+          <StatusChip tone="warning">Not in agent config</StatusChip>
         </span>
       </Tooltip>
     );

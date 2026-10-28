@@ -27,23 +27,36 @@ function RequestChangeDrawer({ open, fieldGroup, onClose }: { open: boolean; fie
   const mutation = useMutation({
     mutationFn: (changes: Record<string, unknown>) => employeeApi.createChangeRequest({ fieldGroup: fieldGroup!, changes } as employeeApi.CreateChangeRequestInput),
     onSuccess: () => {
-      onClose();
+      close();
       toast.success("Change request submitted — HR will review it.");
     },
     onError: (err) => toast.error(errorMessage(err, "Could not submit request.")),
   });
+  // The drawer's form instance outlives the drawer, so clear it on close: a reopened drawer (or another field group) starts empty instead of resubmitting the last request.
+  const close = () => {
+    form.resetFields();
+    onClose();
+  };
+  const submit = (vals: Record<string, unknown>) => {
+    const changes = Object.fromEntries(Object.entries(vals).filter(([, value]) => typeof value === "string" ? value.trim() !== "" : value !== undefined && value !== null));
+    if (Object.keys(changes).length === 0) {
+      toast.warning("Enter at least one change to request.");
+      return;
+    }
+    mutation.mutate(changes);
+  };
 
   return (
     <SideDrawer
       open={open}
-      onClose={onClose}
+      onClose={close}
       title={fieldGroup ? REQUEST_TITLE[fieldGroup] : "Request a change"}
       subtitle="HR reviews every request. Nothing changes on your profile until they approve it."
       formId={REQUEST_FORM_ID}
       primaryLabel="Submit for HR approval"
       primaryLoading={mutation.isPending}
     >
-      <Form id={REQUEST_FORM_ID} form={form} layout="vertical" onFinish={(vals) => mutation.mutate(vals)} requiredMark={false}>
+      <Form id={REQUEST_FORM_ID} form={form} layout="vertical" onFinish={submit} requiredMark={false}>
         {fieldGroup === "personal" && (
           <>
             <Form.Item name="mobile" label="New mobile number"><Input inputMode="tel" autoComplete="tel" /></Form.Item>

@@ -109,7 +109,7 @@ export function RegularizationQueue({ emptyText = "No correction requests waitin
             aria-label="Request status"
             value={status}
             onChange={(val) => setStatus(val as RegularizationStatus | "ALL")}
-            block={phone}
+            style={{ maxWidth: "100%", overflowX: "auto" }}
             options={[
               { value: "PENDING", label: "Waiting" },
               { value: "APPROVED", label: "Approved" },
@@ -191,7 +191,7 @@ export function RegularizationQueue({ emptyText = "No correction requests waitin
             render: (val: string) => (val ? <span style={{ maxWidth: 240, display: "inline-block" }}>"{val}"</span> : <span style={{ color: v.textSecondary }}>—</span>),
           },
           { title: "Raised", dataIndex: "createdAt", render: (val: string) => <span className="ws-num">{dayjs(val).format("D MMM, HH:mm")}</span> },
-          { title: status === "PENDING" ? "Decide" : "Status", key: "actions", align: "right", render: (_, r) => decision(r) },
+          { title: status === "PENDING" ? "Decide" : "Status", key: "actions", align: "right", fixed: "right", render: (_, r) => decision(r) },
         ]}
       />
 
@@ -208,7 +208,11 @@ export function RegularizationQueue({ emptyText = "No correction requests waitin
 
       <ConfirmModal
         open={!!rejecting}
-        onCancel={() => !reject.isPending && setRejecting(null)}
+        onCancel={() => {
+          if (reject.isPending) return;
+          setRejecting(null);
+          setNote("");
+        }}
         onConfirm={() => reject.mutate()}
         title="Reject this request?"
         description={`Say why, so ${rejecting?.name ?? "they"} knows what to do next. The day stays as it is.`}

@@ -32,10 +32,17 @@ function saveBlob(blob: Blob, fileName: string): void {
   URL.revokeObjectURL(url);
 }
 
+// A short chip plus the messages as wrapping text: the messages can be long, and inside a chip (no wrap) they stretched the fixed Status column over the whole table.
 function rowStatus(r: StagingRow) {
-  if (r.errors.length > 0) return <StatusChip tone="danger">{r.errors.join(" · ")}</StatusChip>;
-  if (r.warnings.length > 0) return <StatusChip tone="warning">{r.warnings.join(" · ")}</StatusChip>;
-  return <StatusChip tone="success">OK</StatusChip>;
+  const issues = r.errors.length > 0 ? r.errors : r.warnings;
+  if (issues.length === 0) return <StatusChip tone="success">OK</StatusChip>;
+  const danger = r.errors.length > 0;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: space[1], whiteSpace: "normal" }}>
+      <StatusChip tone={danger ? "danger" : "warning"}>{danger ? "Error" : "Warning"}</StatusChip>
+      <span style={{ color: danger ? v.danger : v.warningText, fontSize: fs.sm }}>{issues.join(" · ")}</span>
+    </div>
+  );
 }
 
 function RowsTable({ rows }: { rows: StagingRow[] }) {
@@ -227,9 +234,11 @@ export function ImportDatasetTab({ dataset }: { dataset: ImportDataset }) {
             }
           />
           <div style={{ display: "flex", flexWrap: "wrap", gap: space[2], alignItems: "center", flexDirection: phone ? "column" : "row" }}>
-            <Button icon={<DownloadOutlined />} loading={busy === "errors"} onClick={() => void downloadErrorReport()} block={phone}>
-              Download error report
-            </Button>
+            {result.errorRows > 0 && (
+              <Button icon={<DownloadOutlined />} loading={busy === "errors"} onClick={() => void downloadErrorReport()} block={phone}>
+                Download error report
+              </Button>
+            )}
             {isBank && !alreadyCommitted && (
               <Input
                 aria-label="Type IMPORT BANK DATA to confirm"

@@ -23,7 +23,7 @@ function KeyModal({ shown, onClose }: { shown: { name: string; key: string } | n
       cancelButtonProps={{ style: { display: "none" } }}
       closable={false}
       keyboard={false}
-      maskClosable={false}
+      mask={{ closable: false }}
     >
       <ApprovalBanner
         tone="warning"

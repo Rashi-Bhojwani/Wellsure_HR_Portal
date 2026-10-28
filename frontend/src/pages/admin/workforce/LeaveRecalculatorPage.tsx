@@ -1,21 +1,16 @@
 import { useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { Button, DatePicker, Form, Input, Select } from "antd";
+import { useMutation } from "@tanstack/react-query";
+import { Button, DatePicker, Form, Input } from "antd";
 import type { Dayjs } from "dayjs";
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as leaveApi from "../../../api/leave";
 import type { RecalcAction, RecalcEmployeeResult } from "../../../api/leave";
-import * as employeeApi from "../../../api/employee";
+import { EmployeePicker } from "../../../components/letters/LetterFields";
 import { HelpStrip } from "../../../components/common/HelpStrip";
 import { fw, space, v } from "../../../theme/tokens";
 import { ApprovalBanner, ConfirmModal, DataTable, EmptyState, PageHeader, Panel, Stack, StatusChip, StepperLayout, toast, useIsPhone } from "../../../ui";
 
 const CONFIRM_PHRASE = "APPLY RECALCULATION";
-
-function useEmployeeOptions() {
-  const { data } = useQuery({ queryKey: ["employees", "picker"], queryFn: () => employeeApi.listEmployees({ pageSize: 200, sortBy: "fullName", sortDir: "asc" }), staleTime: 30_000 });
-  return (data?.rows ?? []).map((e) => ({ value: e.id, label: `${e.fullName} (${e.employeeCode})` }));
-}
 
 interface FormValues {
   employeeIds: string[];
@@ -55,7 +50,6 @@ function Actions({ actions }: { actions: RecalcAction[] }) {
 export function LeaveRecalculatorPage() {
   const [form] = Form.useForm<FormValues>();
   const phone = useIsPhone();
-  const employeeOptions = useEmployeeOptions();
   const [results, setResults] = useState<RecalcEmployeeResult[] | null>(null);
   const [lastParams, setLastParams] = useState<{ employeeIds: string[]; fromDate: string } | null>(null);
   const [confirmText, setConfirmText] = useState("");
@@ -105,7 +99,7 @@ export function LeaveRecalculatorPage() {
             <Form form={form} layout="vertical" requiredMark={false} size="large" onFinish={(val) => previewMutation.mutate(val)}>
               <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: space[4] }}>
                 <Form.Item name="employeeIds" label="Employees" rules={[{ required: true }]} style={{ flex: "1 1 360px", marginBottom: 0 }}>
-                  <Select mode="multiple" showSearch optionFilterProp="label" options={employeeOptions} placeholder="Select one or more employees" maxTagCount="responsive" />
+                  <EmployeePicker multiple placeholder="Search and add one or more employees" />
                 </Form.Item>
                 <Form.Item name="fromDate" label="Recompute From" rules={[{ required: true }]} style={{ flex: phone ? "1 1 100%" : "0 0 200px", marginBottom: 0 }}>
                   <DatePicker picker="month" style={{ width: "100%" }} format="MMM YYYY" />

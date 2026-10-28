@@ -8,7 +8,7 @@ import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as adminHomeApi from "../../../api/adminHome";
 import * as leaveApi from "../../../api/leave";
 import type { LeaveRequestRow, LeaveRequestStatus } from "../../../api/leave";
-import * as employeeApi from "../../../api/employee";
+import { EmployeePicker } from "../../../components/letters/LetterFields";
 import { LeaveLedgerTable } from "../../../components/leave/LeaveLedgerTable";
 import { useAuth } from "../../../hooks/useAuth";
 import { fs, fw, space, v } from "../../../theme/tokens";
@@ -36,7 +36,6 @@ interface OnBehalfFormValues {
 function OnBehalfDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [form] = Form.useForm<OnBehalfFormValues>();
   const queryClient = useQueryClient();
-  const { data: employees } = useQuery({ queryKey: ["employees", "picker"], queryFn: () => employeeApi.listEmployees({ pageSize: 200, sortBy: "fullName", sortDir: "asc" }), enabled: open, staleTime: 30_000 });
   const { data: leaveTypes = [] } = useQuery({ queryKey: ["leave", "types"], queryFn: leaveApi.listLeaveTypes, enabled: open, staleTime: 30_000 });
 
   const applyMutation = useMutation({
@@ -64,12 +63,7 @@ function OnBehalfDrawer({ open, onClose }: { open: boolean; onClose: () => void 
     <SideDrawer open={open} onClose={onClose} title="Apply for Leave on Behalf" formId={ON_BEHALF_FORM} primaryLabel="Submit" primaryLoading={applyMutation.isPending}>
       <Form id={ON_BEHALF_FORM} form={form} layout="vertical" requiredMark={false} size="large" onFinish={(val) => applyMutation.mutate(val)}>
         <Form.Item name="employeeId" label="Employee" rules={[{ required: true }]}>
-          <Select
-            showSearch
-            optionFilterProp="label"
-            options={(employees?.rows ?? []).map((e) => ({ value: e.id, label: `${e.fullName} (${e.employeeCode})` }))}
-            placeholder="Select an employee"
-          />
+          <EmployeePicker />
         </Form.Item>
         <Form.Item name="leaveTypeId" label="Leave Type" rules={[{ required: true }]}>
           <Select options={leaveTypes.map((t) => ({ value: t.id, label: t.name }))} placeholder="Select a leave type" />
@@ -294,7 +288,8 @@ export function EmployeeLeavePage() {
             { title: "Status", dataIndex: "status", render: (s: string) => <StatusChip status={s} /> },
             { title: "Reason", dataIndex: "reason", render: (val: string | null) => val ?? <span style={{ color: v.textSecondary }}>—</span> },
             { title: "Decision Comments", dataIndex: "decisionComments", render: (val: string | null) => val ?? <span style={{ color: v.textSecondary }}>—</span> },
-            { title: "Actions", key: "actions", align: "right", render: (_, r) => rowActions(r) },
+            // Pinned right so the decision buttons never sit behind the horizontal scroll on a laptop.
+            { title: "Actions", key: "actions", align: "right", fixed: "right", render: (_, r) => rowActions(r) },
           ]}
         />
       </Panel>

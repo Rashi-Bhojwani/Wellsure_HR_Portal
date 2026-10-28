@@ -17,10 +17,11 @@ export function KeyValueGrid({ items, columns = 2 }: { items: KeyValueItem[]; co
   const cols = phone ? 1 : columns;
   return (
     <dl style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap: `${space[4]}px ${space[8]}px`, margin: 0 }}>
+      {/* A wide item keeps its label as wide as the labels in one column, so its value lines up with theirs. */}
       {items.map((it, i) => (
         <div
           key={it.key ?? (typeof it.label === "string" ? it.label : i)}
-          style={{ display: phone ? "block" : "grid", gridTemplateColumns: "minmax(120px, 40%) 1fr", gap: space[4], gridColumn: it.wide ? "1 / -1" : undefined, minWidth: 0 }}
+          style={{ display: phone ? "block" : "grid", gridTemplateColumns: `${it.wide && cols > 1 ? `minmax(120px, calc((100% - ${(cols - 1) * space[8]}px) / ${cols} * 0.4))` : "minmax(120px, 40%)"} 1fr`, gap: space[4], gridColumn: it.wide ? "1 / -1" : undefined, minWidth: 0 }}
         >
           <dt style={{ color: v.textSecondary, fontSize: fs.md, marginBottom: phone ? 2 : 0 }}>{it.label}</dt>
           <dd style={{ margin: 0, color: v.textBody, fontSize: fs.md, fontWeight: fw.medium, wordBreak: "break-word" }}>{it.value ?? "—"}</dd>

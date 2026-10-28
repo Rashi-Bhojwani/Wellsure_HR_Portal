@@ -74,11 +74,12 @@ export function LayoutsPage() {
                 actions: (r) => actions(r, true),
               }}
               columns={[
-                { title: "File", key: "file", render: (_, r) => <PersonCell name={r.label} code={r.description} /> },
-                { title: "Status", key: "status", render: (_, r) => statusChip(r.status) },
-                { title: "Layout", key: "layout", render: (_, r) => <LayoutSummary r={r} /> },
-                { title: "Source", key: "source", render: (_, r) => <Caption>{r.sourceLabel ?? r.whoConfirms}</Caption> },
-                { title: "", key: "actions", align: "right", render: (_, r) => actions(r) },
+                // Widths keep the long descriptions wrapping inside their column, so the actions stay on screen at laptop widths.
+                { title: "File", key: "file", width: 300, render: (_, r) => <PersonCell name={r.label} code={r.description} /> },
+                { title: "Status", key: "status", width: 120, render: (_, r) => statusChip(r.status) },
+                { title: "Layout", key: "layout", width: 170, render: (_, r) => <LayoutSummary r={r} /> },
+                { title: "Source", key: "source", width: 180, render: (_, r) => <Caption>{r.sourceLabel ?? r.whoConfirms}</Caption> },
+                { title: "", key: "actions", align: "right", width: 110, render: (_, r) => actions(r) },
               ]}
             />
           </QueryState>

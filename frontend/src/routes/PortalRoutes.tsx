@@ -84,6 +84,8 @@ export function PortalRoutes() {
             <Route path="payroll/run/:id" element={<PayrollRunPage />} />
             <Route path="payroll/run/:id/step/:slug" element={<RunStepPage />} />
             {adminRoutes()}
+            {/* A stale or mistyped portal URL for a signed-in person goes to that portal's home, not back to the sign-in form. */}
+            <Route path="*" element={<Navigate to="/admin" replace />} />
           </Route>
         ) : (
           <Route element={<EmployeeLayout />}>
@@ -96,6 +98,7 @@ export function PortalRoutes() {
             <Route path="action" element={<MobileActionPage />} />
             <Route path="explore" element={<MobileExplorePage />} />
             {employeeRoutes()}
+            <Route path="*" element={<Navigate to="/app/home" replace />} />
           </Route>
         )}
       </Route>

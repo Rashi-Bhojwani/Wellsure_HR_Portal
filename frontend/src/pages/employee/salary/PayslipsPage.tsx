@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button, Select } from "antd";
-import { FilePdfOutlined } from "@ant-design/icons";
+import { EyeInvisibleOutlined, EyeOutlined, FilePdfOutlined } from "@ant-design/icons";
 import * as payrollApi from "../../../api/payroll";
 import type { PayslipSummary } from "../../../api/payroll";
 import { PayslipView } from "../../../components/payroll/PayslipView";
@@ -16,6 +16,9 @@ import { DataTable, EmptyState, PageHeader, Panel, QueryState, SkeletonCard, Ske
 export function PayslipsPage() {
   const [open, setOpen] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Amounts stay masked until the person asks to see them, here as on the Home payslip card (docs/UI_REFERENCE.md §1.1); it is not remembered.
+  const [revealed, setRevealed] = useState(false);
+  const money = (net: string) => (revealed ? formatRupees(net, 2) : "₹ *****");
   const { data, isLoading, error, refetch } = useQuery({ queryKey: ["payslips", "mine"], queryFn: payrollApi.myPayslips });
   const slips = data?.payslips ?? [];
 
@@ -40,6 +43,9 @@ export function PayslipsPage() {
         actions={
           slips.length > 0 && (
             <>
+              <Button icon={revealed ? <EyeInvisibleOutlined /> : <EyeOutlined />} aria-pressed={revealed} onClick={() => setRevealed((r) => !r)}>
+                {revealed ? "Hide salary" : "Show salary"}
+              </Button>
               <Select
                 aria-label="Month"
                 placeholder="Choose a month"
@@ -74,7 +80,7 @@ export function PayslipsPage() {
               mobile={{
                 title: (s) => s.cycleLabel,
                 subtitle: (s) => `Published ${formatDate(s.publishedAt)}`,
-                fields: [{ label: "Net pay", render: (s) => <span className="ws-num">{formatRupees(s.net, 2)}</span> }],
+                fields: [{ label: "Net pay", render: (s) => <span className="ws-num">{money(s.net)}</span> }],
                 actions: (s) => (
                   <Button block type={s.id === open ? "primary" : "default"} onClick={() => setOpen(s.id)}>
                     Read
@@ -84,21 +90,21 @@ export function PayslipsPage() {
               columns={[
                 { title: "Month", dataIndex: "cycleLabel", render: (v: string) => <strong>{v}</strong> },
                 { title: "Published", key: "pub", render: (_, s) => formatDate(s.publishedAt) },
-                { title: "Net pay", key: "net", align: "right", className: "ws-num", render: (_, s) => formatRupees(s.net, 2) },
+                { title: "Net pay", key: "net", align: "right", className: "ws-num", render: (_, s) => money(s.net) },
                 { title: "", key: "actions", align: "right", render: (_, s) => <Button type="link" onClick={() => setOpen(s.id)}>Read</Button> },
               ]}
             />
           </Panel>
-          {open && <One id={open} />}
+          {open && <One id={open} masked={!revealed} />}
         </Stack>
       </QueryState>
     </>
   );
 }
 
-function One({ id }: { id: string }) {
+function One({ id, masked }: { id: string; masked: boolean }) {
   const { data, isLoading, error } = useQuery({ queryKey: ["payslips", "mine", id], queryFn: () => payrollApi.myPayslip(id) });
   if (isLoading) return <SkeletonCard lines={8} />;
   if (error || !data) return <EmptyState kind="error" compact title="Could not load this payslip" description={apiErrorMessage(error, "Could not load this payslip.")} />;
-  return <PayslipView content={data.content} />;
+  return <PayslipView content={data.content} masked={masked} />;
 }

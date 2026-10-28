@@ -103,9 +103,9 @@ export function StructuresPage() {
               { title: "Structure", key: "structure", render: (_, s) => <PersonCell name={s.value?.name} code={s.code} /> },
               { title: "Counts toward CTC", key: "includes", render: (_, s) => includes(s) },
               { title: "Lines", key: "lines", align: "right", render: (_, s) => <Num>{s.value?.lines.length}</Num> },
-              { title: "Status", key: "status", render: (_, s) => <ItemStatusTag status={s.status} sourceLabel={s.sourceLabel} /> },
+              { title: "Status", key: "status", width: 200, render: (_, s) => <ItemStatusTag status={s.status} sourceLabel={s.sourceLabel} /> },
               { title: "Components", key: "components", render: (_, s) => componentsCell(s) },
-              { title: "", key: "actions", align: "right", render: (_, s) => actions(s) },
+              { title: "", key: "actions", align: "right", width: 196, render: (_, s) => actions(s) },
             ]}
           />
         </Panel>
@@ -233,10 +233,10 @@ function StructureEditor({ initial, onClose, onSaved }: { initial: { code: strin
       subtitle="Check that it adds up, then save it as an unconfirmed version"
       onClose={onClose}
       footer={
-        <div style={{ display: "flex", gap: space[3], width: "100%" }}>
-          <Button size="large" style={{ flex: 1 }} onClick={onClose}>Cancel</Button>
+        <div style={{ display: "flex", gap: space[3], width: "100%", flexWrap: "wrap" }}>
+          <Button size="large" style={{ flex: "1 1 120px" }} onClick={onClose}>Cancel</Button>
           {p ? (
-            <Button size="large" type="primary" style={{ flex: 1 }} loading={save.isPending} disabled={p.unchanged} onClick={() => save.mutate()}>
+            <Button size="large" type="primary" style={{ flex: "1 1 260px" }} loading={save.isPending} disabled={p.unchanged} onClick={() => save.mutate()}>
               Save as an unconfirmed version
             </Button>
           ) : (
@@ -341,7 +341,7 @@ function StructureEditor({ initial, onClose, onSaved }: { initial: { code: strin
             <ApprovalBanner tone="info" title={p.impact} />
             <Form layout="vertical" component="div">
               <Form.Item label="Why this, and where it came from" htmlFor="structure-note" extra="Optional, but the person who confirms it will want it." style={{ marginBottom: 0 }}>
-                <Input.TextArea id="structure-note" value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={500} placeholder="Why this, and where it came from (optional, but the person who confirms it will want it)" />
+                <Input.TextArea id="structure-note" value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={500} placeholder="For example: as agreed with the CA" />
               </Form.Item>
             </Form>
           </Stack>

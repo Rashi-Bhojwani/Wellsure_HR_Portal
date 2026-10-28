@@ -63,6 +63,7 @@ export function RulesPage() {
     {
       title: "Rule",
       key: "rule",
+      width: "25%",
       render: (_, r) => (
         <div style={{ maxWidth: 340, display: "flex", gap: 8, alignItems: "flex-start" }}>
           <div style={{ minWidth: 0 }}>
@@ -78,16 +79,18 @@ export function RulesPage() {
     {
       title: "Value",
       key: "value",
-      render: (_, r) => (r.current ? <Text code>{formatRuleValue(r.shape, r.current.value)}</Text> : <Text type="secondary">Not set</Text>),
+      width: "20%",
+      // A long table value (PT slabs, state names) is cut to the column with the whole of it on hover, so it never pushes the actions off screen.
+      render: (_, r) => (r.current ? <Text code ellipsis={{ tooltip: formatRuleValue(r.shape, r.current.value) }} style={{ maxWidth: "100%" }}>{formatRuleValue(r.shape, r.current.value)}</Text> : <Text type="secondary">Not set</Text>),
     },
-    { title: "Status", key: "status", render: (_, r) => <RuleStatusCell r={r} /> },
-    { title: "Who confirms", dataIndex: "whoConfirms" },
-    { title: "", key: "actions", align: "right", render: (_, r) => <RuleActions r={r} /> },
+    { title: "Status", key: "status", width: "22%", render: (_, r) => <RuleStatusCell r={r} /> },
+    { title: "Who confirms", dataIndex: "whoConfirms", width: "12%" },
+    { title: "", key: "actions", align: "right", width: "21%", render: (_, r) => <RuleActions r={r} /> },
   ];
 
   function RuleActions({ r }: { r: RuleView }) {
     return (
-      <Space wrap>
+      <Space wrap style={{ justifyContent: "flex-end" }}>
         {mayManage(r) && (
           <Button size="small" icon={<EditOutlined />} onClick={() => setEditing(r)}>
             {r.current ? "Edit" : "Set value"}
@@ -156,6 +159,8 @@ export function RulesPage() {
               <DataTable<RuleView>
                 density="compact"
                 rowKey="key"
+                tableLayout="fixed"
+                scroll={{ x: 820 }}
                 dataSource={rows}
                 pagination={false}
                 columns={columns}

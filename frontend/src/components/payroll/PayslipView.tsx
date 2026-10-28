@@ -9,7 +9,10 @@ import { KeyValueGrid } from "../../ui";
 
 const box = { border: `1px solid ${v.borderDefault}`, borderRadius: radius.lg, background: v.bgSurface, padding: space[5], minWidth: 0 } as const;
 
-function Lines({ title, lines, total, totalLabel }: { title: string; lines: PayslipLine[]; total: string; totalLabel: string }) {
+// The employee's own screen opens a payslip with every amount masked until they choose "Show salary" (docs/UI_REFERENCE.md §1.1); HR screens pass nothing and see figures.
+const MASK = "₹ *****";
+
+function Lines({ title, lines, total, totalLabel, masked }: { title: string; lines: PayslipLine[]; total: string; totalLabel: string; masked?: boolean }) {
   return (
     <section style={{ ...box, flex: "1 1 280px" }} aria-label={title}>
       <h3 style={{ margin: 0, fontSize: fs.lg, fontWeight: fw.semibold, color: v.textPrimary }}>{title}</h3>
@@ -18,12 +21,12 @@ function Lines({ title, lines, total, totalLabel }: { title: string; lines: Pays
         {lines.map((r) => (
           <div key={r.code} style={{ display: "flex", justifyContent: "space-between", gap: space[3], padding: `${space[2]}px 0`, borderBottom: `1px solid ${v.borderDefault}` }}>
             <dt style={{ color: v.textBody }}>{r.label}</dt>
-            <dd className="ws-num" style={{ margin: 0, color: v.textPrimary, whiteSpace: "nowrap" }}>{formatRupees(r.amount, 2)}</dd>
+            <dd className="ws-num" style={{ margin: 0, color: v.textPrimary, whiteSpace: "nowrap" }}>{masked ? MASK : formatRupees(r.amount, 2)}</dd>
           </div>
         ))}
         <div style={{ display: "flex", justifyContent: "space-between", gap: space[3], paddingTop: space[3] }}>
           <dt style={{ fontWeight: fw.bold, color: v.textPrimary }}>{totalLabel}</dt>
-          <dd className="ws-num" style={{ margin: 0, fontWeight: fw.bold, color: v.textPrimary, whiteSpace: "nowrap" }}>{formatRupees(total, 2)}</dd>
+          <dd className="ws-num" style={{ margin: 0, fontWeight: fw.bold, color: v.textPrimary, whiteSpace: "nowrap" }}>{masked ? MASK : formatRupees(total, 2)}</dd>
         </div>
       </dl>
     </section>
@@ -32,7 +35,7 @@ function Lines({ title, lines, total, totalLabel }: { title: string; lines: Pays
 
 const esiLast4Of = (c: PayslipContent): string | null => c.statutory.esiLast4 ?? (c.statutory.esiNumber ? c.statutory.esiNumber.slice(-4) : null);
 
-export function PayslipView({ content: c, watermark }: { content: PayslipContent; watermark?: string | null }) {
+export function PayslipView({ content: c, watermark, masked }: { content: PayslipContent; watermark?: string | null; masked?: boolean }) {
   const ids = [c.statutory.panLast4 ? `PAN ending ${c.statutory.panLast4}` : null, c.statutory.uanLast4 ? `UAN ending ${c.statutory.uanLast4}` : null, esiLast4Of(c) ? `ESI ending ${esiLast4Of(c)}` : null].filter(Boolean).join(" · ");
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: space[4] }} data-testid="payslip">
@@ -56,17 +59,17 @@ export function PayslipView({ content: c, watermark }: { content: PayslipContent
         />
       </section>
       <div style={{ display: "flex", gap: space[4], flexWrap: "wrap" }}>
-        <Lines title="Earnings" lines={c.earnings} total={c.totals.gross} totalLabel="Gross" />
-        <Lines title="Deductions" lines={c.rounding ? [...c.deductions, { code: "ROUNDING", label: "Rounding", amount: c.rounding }] : c.deductions} total={c.totals.deductions} totalLabel="Total deductions" />
+        <Lines title="Earnings" lines={c.earnings} total={c.totals.gross} totalLabel="Gross" masked={masked} />
+        <Lines title="Deductions" lines={c.rounding ? [...c.deductions, { code: "ROUNDING", label: "Rounding", amount: c.rounding }] : c.deductions} total={c.totals.deductions} totalLabel="Total deductions" masked={masked} />
       </div>
       <section style={{ ...box, background: v.accentSubtle, borderColor: v.accent }} aria-label="Net pay">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: space[3], flexWrap: "wrap" }}>
           <span style={{ fontSize: fs.lg, fontWeight: fw.semibold, color: v.textPrimary }}>Net pay</span>
-          <span className="ws-num" style={{ fontSize: fs.h1, fontWeight: fw.bold, color: v.textPrimary }}>{formatRupees(c.totals.net, 2)}</span>
+          <span className="ws-num" style={{ fontSize: fs.h1, fontWeight: fw.bold, color: v.textPrimary }}>{masked ? MASK : formatRupees(c.totals.net, 2)}</span>
         </div>
-        <div style={{ color: v.textBody, marginTop: space[1] }}>{c.netInWords}</div>
+        {!masked && <div style={{ color: v.textBody, marginTop: space[1] }}>{c.netInWords}</div>}
       </section>
-      {c.employerContributions.length > 0 && (
+      {c.employerContributions.length > 0 && !masked && (
         <div style={{ color: v.textSecondary, fontSize: fs.md }}>
           Employer contributions, for information and not part of your pay: {c.employerContributions.map((l) => `${l.label} ${formatRupees(l.amount, 2)}`).join(" · ")}
         </div>

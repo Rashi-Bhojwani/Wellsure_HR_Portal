@@ -67,6 +67,7 @@ export function ManagerManagementPage() {
   const unassigned = unassignedQuery.data ?? [];
   const [tab, setTab] = useState("managers");
   const [search, setSearch] = useState("");
+  const [unassignedSearch, setUnassignedSearch] = useState("");
   const [canDo, setCanDo] = useState<CanDoFilter>();
   const [teamOf, setTeamOf] = useState<ManagerRow | null>(null);
   const [permsOf, setPermsOf] = useState<ManagerRow | null>(null);
@@ -177,6 +178,9 @@ export function ManagerManagementPage() {
     </>
   );
 
+  // Hundreds can be unassigned (a fresh import): find the people to assign by name or code instead of paging.
+  const uq = unassignedSearch.trim().toLowerCase();
+  const visibleUnassigned = uq ? unassigned.filter((r) => r.name.toLowerCase().includes(uq) || r.employeeCode.toLowerCase().includes(uq) || (r.department ?? "").toLowerCase().includes(uq)) : unassigned;
   const toggleSelected = (id: string, on: boolean) => setSelected((s) => (on ? [...s, id] : s.filter((k) => k !== id)));
 
   return (
@@ -353,14 +357,21 @@ export function ManagerManagementPage() {
                           </Button>
                         </Form>
                       )}
+                      {unassigned.length > 0 && <FilterBar onSearch={setUnassignedSearch} searchValue={unassignedSearch} searchPlaceholder="Search name, code or department" style={{ marginBottom: 0 }} />}
                       <DataTable<UnassignedRow>
                         rowKey="employeeId"
                         loading={unassignedQuery.isLoading}
                         error={unassignedQuery.error}
                         onRetry={() => void unassignedQuery.refetch()}
-                        dataSource={unassigned}
+                        dataSource={visibleUnassigned}
                         pagination={{ pageSize: 20, hideOnSinglePage: true }}
-                        empty={<EmptyState compact illustration="people" title="Everyone who needs a manager has one." description={null} />}
+                        empty={
+                          uq ? (
+                            <EmptyState compact kind="no-results" title="Nobody unassigned matches" description="Try another name or code." />
+                          ) : (
+                            <EmptyState compact illustration="people" title="Everyone who needs a manager has one." description={null} />
+                          )
+                        }
                         rowSelection={canAssign ? { selectedRowKeys: selected, onChange: (keys) => setSelected(keys as string[]), getCheckboxProps: (r) => ({ disabled: !r.placedSince, "aria-label": `Select ${r.name}` }) } : undefined}
                         columns={[
                           {

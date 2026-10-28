@@ -557,7 +557,7 @@ export function AdminHomePage() {
             : 'Your people at a glance, from the figures we hold.'
         }
         actions={
-          <span onPointerEnter={() => void loadDashboard()} onFocus={() => void loadDashboard()}>
+          <span onPointerEnter={() => void loadDashboard()} onFocus={() => void loadDashboard()} style={phone ? { flex: 1, minWidth: 0 } : undefined}>
           <Segmented<View>
             options={['Welcome', 'Dashboard']}
             value={tab}

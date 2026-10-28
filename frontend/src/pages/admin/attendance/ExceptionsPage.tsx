@@ -254,7 +254,7 @@ export function ExceptionsPage() {
                   />
                 }
                 rowSelection={{ selectedRowKeys: picked, onChange: setPicked, getCheckboxProps: (r) => ({ disabled: r.locked, "aria-label": `Select ${r.employeeName ?? r.employeeCode} on ${r.date}` }) }}
-                pagination={{ current: page, pageSize: PAGE_SIZE, total: data?.total ?? 0, onChange: (p) => setPage(p), showSizeChanger: false, showTotal: (t) => plural(t, "day") }}
+                pagination={{ current: page, pageSize: PAGE_SIZE, total: data?.total ?? 0, onChange: (p) => { setPage(p); setPicked([]); }, showSizeChanger: false, showTotal: (t) => plural(t, "day") }}
                 mobile={{
                   selection: false, // renders its own select control on the card
                   title: (r) => `${r.employeeName ?? r.employeeCode} (${r.employeeCode})`,
@@ -355,7 +355,10 @@ function UnmappedTable({
   hasDepartmentFilter: boolean;
 }) {
   const phone = useIsPhone();
-  const [picked, setPicked] = useState<React.Key[]>([]);
+  const [pickedRaw, setPicked] = useState<React.Key[]>([]);
+  // Only IDs still listed on this page count as selected: mapped ones leave the list, and another page is another set.
+  const listed = useMemo(() => new Set(groups.map((g) => g.deviceUserId)), [groups]);
+  const picked = useMemo(() => pickedRaw.filter((k) => listed.has(k as string)), [pickedRaw, listed]);
   const dates = (r: UnmappedGroup) => (r.firstDay === r.lastDay ? dayjs(r.firstDay).format("D MMM YYYY") : `${dayjs(r.firstDay).format("D MMM")} – ${dayjs(r.lastDay).format("D MMM YYYY")}`);
   const suggestion = (r: UnmappedGroup) =>
     r.suggestion ? (
