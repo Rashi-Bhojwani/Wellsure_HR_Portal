@@ -178,7 +178,7 @@ const DayCell = memo(function DayCell({ date, day: d, selected, today, compact, 
 
 function Legend() {
   const item = (node: React.ReactNode, text: string) => (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: space[1] + 2, color: v.textSecondary }}>
+    <span key={text} style={{ display: "inline-flex", alignItems: "center", gap: space[1] + 2, color: v.textSecondary }}>
       {node}
       {text}
     </span>
@@ -189,7 +189,7 @@ function Legend() {
         {STATUS_LEGEND.map((s) => {
           const t = statusTone(s.code);
           return item(
-            <span key={s.code} style={{ background: t.bg, color: t.fg, borderRadius: radius.xs, padding: "1px 6px", fontWeight: fw.bold, fontSize: fs.xs }}>
+            <span style={{ background: t.bg, color: t.fg, borderRadius: radius.xs, padding: "1px 6px", fontWeight: fw.bold, fontSize: fs.xs }}>
               {s.code}
             </span>,
             s.label,

@@ -261,7 +261,6 @@ export function ReportPage({ reportKey }: { reportKey: ReportKey }) {
         <Panel title="Overview" subtitle={info.description}>
           <FilterBar filters={filters} activeCount={activeFilters} onClear={() => reset()} />
 
-          {error ? <ApprovalBanner tone="danger" title={apiErrorMessage(error, "Couldn't load the report.")} actions={<Button onClick={() => void refetch()}>Try again</Button>} style={{ marginBottom: space[5] }} /> : null}
           {(data?.warnings ?? [])
             .filter((w) => !(reportKey === "leave-liability" && w.startsWith("No encashment daily rate")))
             .map((w) => (

@@ -56,7 +56,7 @@ export function Panel({ title, subtitle, extra, onEdit, editLabel = "Edit", chil
           </div>
         </header>
       )}
-      {children !== undefined && <div style={{ padding: flush ? 0 : `${hasHead ? space[5] : pad}px ${pad}px ${pad}px`, ...bodyStyle }}>{children}</div>}
+      {children !== undefined && <div style={{ paddingTop: flush ? 0 : hasHead ? space[5] : pad, paddingInline: flush ? 0 : pad, paddingBottom: flush ? 0 : pad, ...bodyStyle }}>{children}</div>}
     </Tag>
   );
 }
