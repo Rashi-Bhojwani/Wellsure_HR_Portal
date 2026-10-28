@@ -93,6 +93,11 @@ export function FinalisationPage() {
     },
   });
 
+  // On a phone the period's detail sits below the whole list: bring it into view when one is picked.
+  const openPeriod = (from: string, scroll = phone) => {
+    setPicked(from);
+    if (scroll) requestAnimationFrame(() => document.getElementById("finalisation-detail")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
   const waiting = periods.filter((p) => p.unprocessed && p.unprocessed.employees > 0);
 
   const detailActions = chosen && (
@@ -135,7 +140,7 @@ export function FinalisationPage() {
             tone="warning"
             title={`${p.unprocessed!.employees} employee${plural(p.unprocessed!.employees, " has", "s have")} unprocessed days in the locked cycle ${p.label}`}
             description="They were employed in the cycle but have days in it that are not locked, for example a joiner dated inside it. Nothing is written inside a finalised cycle, so those days wait. Open the period to see who."
-            actions={<Button onClick={() => setPicked(p.from)}>Open {p.label}</Button>}
+            actions={<Button onClick={() => openPeriod(p.from, true)}>Open {p.label}</Button>}
           />
         ))}
 
@@ -149,7 +154,7 @@ export function FinalisationPage() {
                 onRetry={() => void refetch()}
                 dataSource={periods}
                 pagination={false}
-                onRowOpen={(r) => setPicked(r.from)}
+                onRowOpen={(r) => openPeriod(r.from)}
                 rowClassName={(r) => (r.from === chosen?.from ? "ant-table-row-selected" : "")}
                 empty={<EmptyState compact illustration="calendar" title="No attendance periods yet" description="Periods appear here once the attendance cycle is set up in Attendance Settings." />}
                 mobile={{
@@ -192,7 +197,7 @@ export function FinalisationPage() {
           </Panel>
 
           {chosen && (
-            <Panel title={chosen.label} subtitle={`${formatDate(chosen.from)} – ${formatDate(chosen.to)}`} extra={phone ? undefined : detailActions}>
+            <Panel id="finalisation-detail" title={chosen.label} subtitle={`${formatDate(chosen.from)} – ${formatDate(chosen.to)}`} extra={phone ? undefined : detailActions}>
               <div aria-live="polite" style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
                 {phone && detailActions}
                 {chosen.status === "FINALISED" ? (
