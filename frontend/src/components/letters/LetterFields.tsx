@@ -2,7 +2,9 @@ import { useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { DatePicker, Form, Input, InputNumber, Select } from "antd";
 import type { LetterExtraField } from "@shared/constants/letters";
+import dayjs from "dayjs";
 import * as employeeApi from "../../api/employee";
+import { toInputNumber, toIsoDate } from "./letterUtils";
 
 // Search-as-you-type employee picker: asks the server (by name or code) instead of loading a fixed first page, so every active employee is reachable
 // however large the company. `multiple` keeps each chosen person's label while the search moves on to others.
@@ -54,7 +56,13 @@ export function ExtraFieldInputs({ fields, namePrefix = "extraValues" }: { field
           label={f.label}
           rules={f.required ? [{ required: true, message: `${f.label} is required.` }] : []}
           getValueFromEvent={f.type === "date" ? (d: { format: (s: string) => string } | null) => (d ? d.format("YYYY-MM-DD") : "") : undefined}
-          getValueProps={f.type === "date" ? () => ({}) : undefined}
+          getValueProps={
+            f.type === "date"
+              ? (val: unknown) => ({ value: toIsoDate(val) ? dayjs(toIsoDate(val)) : undefined })
+              : f.type === "currency" || f.type === "number"
+                ? (val: unknown) => ({ value: toInputNumber(val) })
+                : undefined
+          }
         >
           {f.type === "currency" ? (
             <InputNumber min={0} style={{ width: "100%" }} prefix="₹" />

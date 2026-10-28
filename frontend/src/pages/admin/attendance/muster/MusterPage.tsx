@@ -42,6 +42,7 @@ export function MusterPage({ title = "Attendance Muster" }: { title?: string }) 
   const [presentDay, setPresentDay] = useState<Dayjs | null>(null);
   const [presentBranch, setPresentBranch] = useState<string | undefined>();
   const { hasPermission } = useAuth();
+  const canOverride = hasPermission("attendance.override.manage");
   const [overriding, setOverriding] = useState<{ employeeId: string; name: string; date: string } | null>(null);
 
   const cycles = useQuery({ queryKey: ["attendance", "muster", "cycles"], queryFn: musterApi.cycles, staleTime: 30_000 });
@@ -180,7 +181,7 @@ export function MusterPage({ title = "Attendance Muster" }: { title?: string }) 
         <HelpStrip storageKey="muster-help">
           Each row is one person, each column one day. For people marked by hand, click a day and type the IN and OUT times (10:05-19:10): they're worked out by
           exactly the same rules as a punch, so lateness and half days come out the same. If the times truly aren't known, type a status (P, A, P:A, A:P) — it's
-          recorded as "status only". Tab or Enter moves on, then Save. Device days are read-only here.
+          recorded as "status only". Tab or Enter moves on, then Save. Device days can't be typed into{canOverride ? "; click one to set it by Manual Override" : ""}.
         </HelpStrip>
 
         <Panel

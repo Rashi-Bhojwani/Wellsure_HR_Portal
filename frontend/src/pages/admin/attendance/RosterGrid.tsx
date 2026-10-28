@@ -24,7 +24,8 @@ function shiftOn(row: Row, day: string): { code: string; starts: boolean } {
 export function RosterGrid({ data }: { data: RosterPreview }) {
   const [page, setPage] = useState(1);
   const start = dayjs(data.start);
-  const span = data.until ? Math.min(dayjs(data.until).diff(start, "day") + 1, 42) : 14;
+  // A rotation shows one day past its end too, so what happens "after that" (back to the old shift, or stay) is visible.
+  const span = data.until ? Math.min(dayjs(data.until).diff(start, "day") + 1 + (data.then ? 1 : 0), 42) : 14;
   const days = Array.from({ length: Math.max(span, 1) }, (_, i) => start.add(i, "day"));
   const rows = data.rows.slice((page - 1) * PAGE, page * PAGE);
   const th = { padding: `${space[1]}px ${space[2]}px`, background: v.bgTableHeader, color: v.textSecondary, fontWeight: fw.medium, fontSize: fs.xs, borderBottom: `1px solid ${v.borderDefault}`, position: "sticky" as const, top: 0, zIndex: 1, whiteSpace: "nowrap" as const };

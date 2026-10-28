@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Checkbox, Select, Table, Tooltip } from "antd";
 import { LockOutlined, SaveOutlined, UndoOutlined } from "@ant-design/icons";
@@ -8,7 +8,7 @@ import * as accessApi from "../../../api/access";
 import type { RoleDefinition } from "../../../api/access";
 import { useAuth } from "../../../hooks/useAuth";
 import { apiErrorMessage } from "../../../lib/apiError";
-import { fs, fw, radius, space, v } from "../../../theme/tokens";
+import { fs, fw, layout, radius, space, v } from "../../../theme/tokens";
 import { ApprovalBanner, CardGrid, ConfirmModal, PageHeader, Panel, QueryState, Skel, SkeletonTable, Stack, StatusChip, toast, useIsPhone } from "../../../ui";
 
 const SCOPE_LABELS: Record<DataScope, string> = { SELF: "Self only", TEAM: "Their team", ALL: "Everyone" };
@@ -25,6 +25,21 @@ function lockReason(role: RoleDefinition, key: PermissionKey, checked: boolean):
   // E2: the Manager role only ever holds manager-grantable keys (fixed in code; the server refuses anything else).
   if (role.code === "MANAGER" && !PERMISSION_CATALOG[key].managerGrantable && !checked) return "Managers can never hold this — they only get permissions limited to their own team. Fixed in code.";
   return undefined;
+}
+
+// The app's header (demo banner + top bar) is sticky, so the matrix's sticky column headers sit just below it rather than hidden behind it.
+function useShellHeaderHeight(): number {
+  const [height, setHeight] = useState(0);
+  useEffect(() => {
+    const el = document.querySelector<HTMLElement>(".ws-header");
+    if (!el) return;
+    const measure = () => setHeight(Math.round(el.getBoundingClientRect().height));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return height;
 }
 
 function PermissionLabel({ k }: { k: PermissionKey }) {
@@ -53,6 +68,7 @@ function PermissionLabel({ k }: { k: PermissionKey }) {
 export function RolesPermissionsPage() {
   const queryClient = useQueryClient();
   const phone = useIsPhone();
+  const headerHeight = useShellHeaderHeight();
   const { hasRole } = useAuth();
   const isSuperAdmin = hasRole("SUPER_ADMIN");
   const { data: roles = [], isLoading, error, refetch } = useQuery({ queryKey: ["access", "roles"], queryFn: accessApi.listRoles, retry: false });
@@ -236,7 +252,21 @@ export function RolesPermissionsPage() {
                     </ul>
                   </section>
                 ))}
-                {saveButtons(activePhoneRole, false)}
+                {/* Sticky above the tab bar once there is something to save: the list is long, and the buttons were only at its very end. */}
+                {editable(activePhoneRole) && (
+                  <div
+                    style={{
+                      position: isDirty(activePhoneRole) ? "sticky" : undefined,
+                      bottom: layout.phoneTabBar,
+                      zIndex: 2,
+                      background: v.bgSurface,
+                      padding: `${space[3]}px 0`,
+                      borderTop: isDirty(activePhoneRole) ? `1px solid ${v.borderDefault}` : undefined,
+                    }}
+                  >
+                    {saveButtons(activePhoneRole, false)}
+                  </div>
+                )}
               </Stack>
             </Panel>
           ) : (
@@ -246,7 +276,7 @@ export function RolesPermissionsPage() {
                 dataSource={rows}
                 pagination={false}
                 size="small"
-                sticky
+                sticky={{ offsetHeader: headerHeight }}
                 scroll={{ x: 260 + roles.length * 150 }}
                 columns={[
                   {
@@ -254,7 +284,7 @@ export function RolesPermissionsPage() {
                     key: "perm",
                     fixed: "left",
                     width: 260,
-                    onCell: (r) => (r.kind === "group" ? { colSpan: roles.length + 1, style: { background: v.bgSubtle } } : {}),
+                    onCell: (r) => (r.kind === "group" ? { style: { background: v.bgSubtle } } : {}),
                     render: (_: unknown, r) =>
                       r.kind === "group" ? (
                         <span style={{ fontWeight: fw.semibold, color: v.textPrimary }}>{r.group}</span>
@@ -282,7 +312,7 @@ export function RolesPermissionsPage() {
                         {saveButtons(role)}
                       </div>
                     ),
-                    onCell: (r: Row) => (r.kind === "group" ? { colSpan: 0 } : {}),
+                    onCell: (r: Row) => (r.kind === "group" ? { style: { background: v.bgSubtle } } : {}),
                     render: (_: unknown, r: Row) => (r.kind === "group" ? null : permissionCell(role, r.key)),
                   })),
                 ]}

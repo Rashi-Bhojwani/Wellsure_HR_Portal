@@ -622,6 +622,7 @@ function AssignDrawer({ open, onClose, selection, count, onDone }: { open: boole
               pagination={{ pageSize: 8, hideOnSinglePage: true, showSizeChanger: false }}
               showTotal={false}
               dataSource={preview.items}
+              empty={<EmptyState compact title="None of the selected days is still without a shift." description="They may have been given one since the list loaded. Close this and refresh the list." />}
               mobile={{
                 title: (r) => `${r.employeeName ?? r.employeeCode} (${r.employeeCode})`,
                 subtitle: (r) => `From ${dayjs(r.from).format("D MMM YYYY")}`,

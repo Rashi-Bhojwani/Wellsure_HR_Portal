@@ -127,7 +127,11 @@ export function ManualOverridePage() {
       </Stack>
       <ConfirmModal
         open={removing !== null}
-        onCancel={() => setRemoving(null)}
+        onCancel={() => {
+          if (clear.isPending) return;
+          setRemoving(null);
+          form.resetFields(); // a note is for one removal, never carried to the next
+        }}
         title={removing ? `Remove the override: ${removing.employeeName}, ${dayjs(removing.date).format("D MMM")}` : ""}
         description="The day goes back to what the device recorded."
         confirmLabel="Remove"

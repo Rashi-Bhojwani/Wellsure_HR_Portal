@@ -125,7 +125,8 @@ export function ProfileTabs({ items, activeKey, onChange }: { items: NonNullable
   const phone = useIsPhone();
   return (
     <Panel bodyStyle={{ paddingTop: phone ? space[2] : space[3] }}>
-      <Tabs items={items} activeKey={activeKey} onChange={onChange} destroyOnHidden={false} />
+      {/* A tighter gutter so all seven admin tabs (up to Access) fit beside the profile card at 1280 instead of hiding the last ones behind "…". */}
+      <Tabs items={items} activeKey={activeKey} onChange={onChange} destroyOnHidden={false} tabBarGutter={phone ? undefined : space[6]} />
     </Panel>
   );
 }

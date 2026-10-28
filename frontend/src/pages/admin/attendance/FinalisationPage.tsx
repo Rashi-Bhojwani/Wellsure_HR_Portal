@@ -197,7 +197,7 @@ export function FinalisationPage() {
           </Panel>
 
           {chosen && (
-            <Panel id="finalisation-detail" title={chosen.label} subtitle={`${formatDate(chosen.from)} – ${formatDate(chosen.to)}`} extra={phone ? undefined : detailActions}>
+            <Panel id="finalisation-detail" style={{ scrollMarginTop: space[4] }} title={chosen.label} subtitle={`${formatDate(chosen.from)} – ${formatDate(chosen.to)}`} extra={phone ? undefined : detailActions}>
               <div aria-live="polite" style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
                 {phone && detailActions}
                 {chosen.status === "FINALISED" ? (

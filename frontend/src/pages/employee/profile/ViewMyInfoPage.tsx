@@ -53,7 +53,7 @@ function RequestChangeDrawer({ open, fieldGroup, onClose }: { open: boolean; fie
       title={fieldGroup ? REQUEST_TITLE[fieldGroup] : "Request a change"}
       subtitle="HR reviews every request. Nothing changes on your profile until they approve it."
       formId={REQUEST_FORM_ID}
-      primaryLabel="Submit for HR approval"
+      primaryLabel="Send to HR"
       primaryLoading={mutation.isPending}
     >
       <Form id={REQUEST_FORM_ID} form={form} layout="vertical" onFinish={submit} requiredMark={false}>

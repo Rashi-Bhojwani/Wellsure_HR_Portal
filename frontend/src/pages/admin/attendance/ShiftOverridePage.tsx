@@ -251,7 +251,11 @@ export function ShiftOverridePage() {
 
       <ConfirmModal
         open={removing !== null}
-        onCancel={() => setRemoving(null)}
+        onCancel={() => {
+          if (clear.isPending) return;
+          setRemoving(null);
+          noteForm.resetFields(); // a note is for one removal, never carried to the next
+        }}
         title={removing ? `Remove the shift override: ${removing.employeeName}, ${dayjs(removing.date).format("D MMM")}` : ""}
         description="The day goes back to the person's usual shift."
         confirmLabel="Remove"

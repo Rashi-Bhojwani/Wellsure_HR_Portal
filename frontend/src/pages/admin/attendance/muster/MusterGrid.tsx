@@ -176,7 +176,7 @@ export function MusterGrid({ muster, pending, errors, onChange, focused, onFocus
                       onClick={openable ? () => onOpenDay!(row, cell) : undefined}
                       tabIndex={openable ? 0 : undefined}
                       role={openable ? "button" : undefined}
-                      aria-label={openable ? `${describe(row, cell)}. Set this day` : undefined}
+                      aria-label={openable ? `${describe(row, cell).replace(/\.+$/, "")}. Set this day` : undefined}
                       onKeyDown={openable ? (e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onOpenDay!(row, cell)) : undefined}
                       style={{ ...base, cursor: openable ? "pointer" : "default", opacity: cell.capture === "DEVICE" || cell.locked ? 0.85 : 1, borderStyle: cell.statusOnly ? "dashed" : undefined }}
                     >

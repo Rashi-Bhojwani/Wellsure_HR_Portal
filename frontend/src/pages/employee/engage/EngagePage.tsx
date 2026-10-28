@@ -420,7 +420,7 @@ function PostCard({ post }: { post: engageApi.PostRow }) {
                 onClick={() => reactMutation.mutate(emoji)}
                 style={{
                   minWidth: phone ? 44 : 40,
-                  height: phone ? 40 : 32,
+                  height: phone ? 44 : 32,
                   padding: `0 ${space[2]}px`,
                   borderRadius: radius.pill,
                   border: `1px solid ${mine ? v.accent : v.borderDefault}`,

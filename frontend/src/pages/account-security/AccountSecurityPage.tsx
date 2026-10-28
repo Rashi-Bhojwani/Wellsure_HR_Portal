@@ -117,7 +117,7 @@ export function AccountSecurityPage() {
 
   return (
     <>
-      <PageHeader title="Account & Security" subtitle="Your sign-in details, two-step sign-in and the devices you're signed in on." />
+      <PageHeader title="Account & security" subtitle="Your sign-in details, two-step sign-in and the devices you're signed in on." />
       <Stack>
         <Panel title="Sign-in details">
           <KeyValueGrid

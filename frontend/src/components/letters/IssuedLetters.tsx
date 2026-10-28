@@ -7,7 +7,7 @@ import type { IssuedLetter, LetterTemplateSummary } from "../../api/letters";
 import { apiErrorMessage } from "../../lib/apiError";
 import { formatDateTime } from "../../lib/dates";
 import { ExtraFieldInputs } from "./LetterFields";
-import { stringifyExtras } from "./letterUtils";
+import { rawExtras, stringifyExtras } from "./letterUtils";
 import { fs, fw, space, v } from "../../theme/tokens";
 import { ApprovalBanner, DataTable, EmptyState, SideDrawer, StatusChip, toast, useIsPhone, type ChipTone } from "../../ui";
 
@@ -54,8 +54,8 @@ export function IssuedLetters({ employeeId }: { employeeId: string }) {
   const issue = useMutation({
     mutationFn: (vals: { templateId: string; visibleToEmployee: boolean; extraValues?: Record<string, unknown> }) =>
       issuing?.reissueOf
-        ? lettersApi.reissueLetter(issuing.reissueOf.id, { extraValues: stringifyExtras(vals.extraValues), visibleToEmployee: vals.visibleToEmployee })
-        : lettersApi.issueLetter(employeeId, { templateId: vals.templateId, extraValues: stringifyExtras(vals.extraValues), visibleToEmployee: vals.visibleToEmployee }),
+        ? lettersApi.reissueLetter(issuing.reissueOf.id, { extraValues: stringifyExtras(rawExtras(chosen?.extraFields ?? [], vals.extraValues)), visibleToEmployee: vals.visibleToEmployee })
+        : lettersApi.issueLetter(employeeId, { templateId: vals.templateId, extraValues: stringifyExtras(rawExtras(chosen?.extraFields ?? [], vals.extraValues)), visibleToEmployee: vals.visibleToEmployee }),
     onSuccess: (l) => {
       refresh();
       setIssuing(null);

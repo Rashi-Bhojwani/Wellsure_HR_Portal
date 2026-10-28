@@ -1,4 +1,4 @@
-import { useState, type Key, type ReactNode } from "react";
+import { useRef, useState, type Key, type ReactNode } from "react";
 import { Checkbox, Pagination, Radio, Table, type TableColumnType, type TableProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { fs, fw, radius, space, v } from "../theme/tokens";
@@ -92,6 +92,7 @@ export function DataTable<T extends object>({
   const [localPage, setLocalPage] = useState<number | undefined>(undefined);
   const [localSize, setLocalSize] = useState<number | undefined>(undefined);
   const [localKeys, setLocalKeys] = useState<Key[]>([]);
+  const cardsRef = useRef<HTMLDivElement>(null);
   const isLoading = Boolean(typeof loading === "object" ? loading.spinning : loading);
   const firstLoad = isLoading && rows.length === 0;
 
@@ -127,7 +128,7 @@ export function DataTable<T extends object>({
     const hit = { minWidth: 44, minHeight: 44, display: "inline-flex", alignItems: "center", justifyContent: "center", marginInlineEnd: 0 } as const;
 
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: space[3], opacity: isLoading ? 0.6 : 1, transition: "opacity 0.15s" }} aria-busy={isLoading}>
+      <div ref={cardsRef} style={{ display: "flex", flexDirection: "column", gap: space[3], opacity: isLoading ? 0.6 : 1, transition: "opacity 0.15s" }} aria-busy={isLoading}>
         {sel && !radio && sel.hideSelectAll !== true && pageKeys.length > 0 && (
           <Checkbox
             checked={pageChecked === pageKeys.length}
@@ -208,6 +209,12 @@ export function DataTable<T extends object>({
             pageSize={pageSize}
             total={total}
             onChange={(page, size) => {
+              // The pager sits under the cards: bring the new page's first card into view (below the sticky header), not its last.
+              requestAnimationFrame(() => {
+                const top = cardsRef.current?.getBoundingClientRect().top;
+                const headerBottom = document.querySelector(".ws-header")?.getBoundingClientRect().bottom ?? 0;
+                if (top !== undefined && top < headerBottom) window.scrollBy({ top: top - headerBottom - space[3], behavior: "smooth" });
+              });
               if (server) pg.onChange?.(page, size);
               else {
                 setLocalPage(page);

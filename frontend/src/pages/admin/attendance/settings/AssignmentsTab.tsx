@@ -244,6 +244,8 @@ export function AssignmentsTab({ canManage }: { canManage: boolean }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [changing, setChanging] = useState<AssignmentListRow[]>([]);
   const [history, setHistory] = useState<AssignmentListRow | null>(null);
+  // Only people in the current list count: a filter or search that hides someone also drops them from "Change selected".
+  const selectedRows = data.filter((r) => selected.includes(r.employeeId));
   const activeCount = [filters.locationId, filters.shiftId, filters.capture].filter(Boolean).length;
   const size = phone ? "middle" : "small";
 
@@ -304,8 +306,8 @@ export function AssignmentsTab({ canManage }: { canManage: boolean }) {
           }
           actions={
             canManage && (
-              <Button type="primary" disabled={selected.length === 0} onClick={() => setChanging(data.filter((r) => selected.includes(r.employeeId)))}>
-                Change selected ({selected.length})
+              <Button type="primary" disabled={selectedRows.length === 0} onClick={() => setChanging(selectedRows)}>
+                Change selected ({selectedRows.length})
               </Button>
             )
           }
