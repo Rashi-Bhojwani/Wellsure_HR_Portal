@@ -181,7 +181,7 @@ export function MusterPage({ title = "Attendance Muster" }: { title?: string }) 
         <HelpStrip storageKey="muster-help">
           Each row is one person, each column one day. For people marked by hand, click a day and type the IN and OUT times (10:05-19:10): they're worked out by
           exactly the same rules as a punch, so lateness and half days come out the same. If the times truly aren't known, type a status (P, A, P:A, A:P) — it's
-          recorded as "status only". Tab or Enter moves on, then Save. Device days can't be typed into{canOverride ? "; click one to set it by Manual Override" : ""}.
+          recorded as "status only". Enter moves on and the arrow keys move around (Tab leaves the grid), then Save. Device days can't be typed into{canOverride ? "; click one to set it by Manual Override" : ""}.
         </HelpStrip>
 
         <Panel
