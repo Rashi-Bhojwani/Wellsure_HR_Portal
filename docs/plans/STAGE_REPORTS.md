@@ -181,4 +181,6 @@ Plan: `HR_CAPABILITIES.md`. 1.1 is the report above (no code).
 
 **Unverified.** No full browser walkthrough of authority mode as both directors this round (only API and scans). The demo seed still leaves the two directors off the demo payroll; putting them on it was not done. IDENTITY_DIRECTOR_ENTRY is not built (needs H2). CI for the earlier Stage 1 commits and this one is read after the push (see below).
 
+**Commit.** `c179e7c`. CI: `829e5dd` (Stage 1 close) green except `latency` (the known failing job; every other job incl. sensitive-ui, tests, bundle budget, drift, docker, Windows agent passed). CI for `c179e7c` was still running when this was written.
+
 **Waiting.** Whether a third Super Admin may approve payroll (until then, create none).
