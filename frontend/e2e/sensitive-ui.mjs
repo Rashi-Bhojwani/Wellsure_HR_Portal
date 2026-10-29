@@ -51,8 +51,17 @@ async function visit(user, label, base, paths) {
   await page.getByRole("button", { name: /sign in|log in/i }).click();
   await page.waitForURL((u) => !u.pathname.includes("login"), { timeout: 30000 });
   for (const p of paths) {
-    const url = `${BASE}${base}/${p}`;
-    await page.goto(url);
+    const url = `${BASE}${base}/${p}`; if (process.env.SENSITIVE_UI_VERBOSE) console.log("visit", label, url);
+    // A navigation can be aborted when the previous page was still redirecting (a menu path that sends you on); it is tried again, never skipped.
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        await page.goto(url);
+        break;
+      } catch (err) {
+        if (attempt >= 3) throw err;
+        await page.waitForTimeout(800);
+      }
+    }
     await page.waitForLoadState("networkidle").catch(() => undefined);
     await page.waitForTimeout(600);
     pages += 1;
@@ -67,6 +76,12 @@ async function visit(user, label, base, paths) {
 await visit("DEMO005", "the developer", "/admin", adminPaths);
 await visit("DEMO005", "the developer (own portal)", "/app", employeePaths);
 await visit("DEMO006", "an ordinary employee", "/app", employeePaths);
+// Added with the master build (Stage 0.2): the people who are allowed to see most of the system must not see the demo's secrets on a page either: pay details are masked
+// by default and shown only through an audited Reveal, never printed on a page.
+await visit("DEMO004", "an HR Admin", "/admin", adminPaths);
+await visit("DEMO004", "an HR Admin (own portal)", "/app", employeePaths);
+await visit("DEMO001", "a director", "/admin", adminPaths);
+await visit("DEMO001", "a director (own portal)", "/app", employeePaths);
 await browser.close();
 
 if (problems.length) {
