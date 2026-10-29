@@ -1,5 +1,5 @@
 import { DIRECTOR_ONLY_ROLE_CODES } from "@shared/constants/directorAuthority";
-import { DEVELOPER_FORBIDDEN_KEYS, DEVELOPER_ROLE_CODE } from "@shared/constants/sensitiveData";
+import { DEVELOPER_FORBIDDEN_KEYS, DEVELOPER_ROLE_CODE, HR_FORBIDDEN_KEYS, HR_ROLE_CODES } from "@shared/constants/sensitiveData";
 import { MANAGER_GRANTABLE_KEYS, META_PERMISSION_KEYS, PERMISSION_CATALOG, PERMISSION_KEYS, type PermissionKey } from "@shared/constants/permissions";
 import type { DataScope } from "@shared/constants/roles";
 import { writeAuditLog } from "../../lib/audit";
@@ -89,6 +89,20 @@ function assertDeveloperCeiling(keys: readonly string[]) {
   }
 }
 
+// The HR hard lock (docs/plans/HR_CAPABILITIES.md §1A): pay data is never HR's. lib/permissions.ts removes these keys from every HR holder whatever is stored; these checks say why, in
+// words, at the moment of the click. A director who also holds an HR role is not affected, so only the HR roles themselves and non-director holders are guarded.
+const isHrForbidden = (key: string) => (HR_FORBIDDEN_KEYS as readonly string[]).includes(key);
+const isHrRole = (code: string) => (HR_ROLE_CODES as readonly string[]).includes(code);
+function assertHrCeiling(keys: readonly string[]) {
+  const outside = keys.filter(isHrForbidden);
+  if (outside.length) {
+    throw forbid(
+      `HR can't be given ${outside.map((k) => PERMISSION_CATALOG[k as PermissionKey]?.label ?? k).join(", ")}. Salaries, payroll, bank files and pay documents are for the directors only; this is fixed in code.`,
+      "HR_CEILING",
+    );
+  }
+}
+
 function requireSuperAdmin(actor: AccessActor, what: string) {
   if (!isSuperAdmin(actor)) throw forbid(`Only a Super Admin can ${what}.`, "SUPER_ADMIN_ONLY");
 }
@@ -145,6 +159,7 @@ export async function updateRole(roleCode: string, input: { permissions?: string
   let next = before.permissions;
   if (input.permissions) {
     if (role.code === DEVELOPER_ROLE_CODE) assertDeveloperCeiling(input.permissions);
+    if (isHrRole(role.code)) assertHrCeiling(input.permissions);
     const unknown = input.permissions.filter((k) => !isKnownKey(k));
     if (unknown.length) throw new HttpError(400, `Unknown permission: ${unknown.join(", ")}.`, "VALIDATION_ERROR");
     next = [...new Set(input.permissions)].sort();
@@ -245,6 +260,7 @@ async function assertMayOverride(targetUserId: string, key: string, effect: "GRA
   if (effect === "GRANT") {
     if (target.roleCodes.includes(MANAGER_ROLE_CODE)) assertManagerGrantable([key]); // E2
     if (target.roleCodes.includes(DEVELOPER_ROLE_CODE)) assertDeveloperCeiling([key]); // P6-6
+    if (target.roleCodes.some(isHrRole)) assertHrCeiling([key]); // the HR hard lock
     // D1: payroll permissions belong to directors, who hold every key already (and a Super Admin's access can't be overridden at all, above).
     if (key.startsWith("payroll.")) throw forbid("Payroll permissions are for directors (Super Admins), who hold them already. They can't be granted to anyone else.", "PAYROLL_GRANT_DIRECTORS_ONLY");
     if (!actor.permissions.has(key)) throw forbid("You can't grant a permission you don't hold.", "NOT_HELD"); // rule 3

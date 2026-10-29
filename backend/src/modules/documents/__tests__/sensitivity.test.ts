@@ -23,7 +23,7 @@ import { cleanupTestCategories, createTestCategory, pdf } from "./documentsTestH
 describe("Document category sensitivity", () => {
   let org: TestOrgMasters;
   type Person = { employeeId: string; employeeCode: string; userId: string };
-  const p = {} as Record<"hrAdmin" | "hrExec" | "manager" | "member", Person>;
+  const p = {} as Record<"director" | "hrAdmin" | "hrExec" | "manager" | "member", Person>;
   const tok = {} as Record<keyof typeof p, string>;
   const cat = {} as Record<"general" | "pay" | "statutory", string>;
   const doc = {} as Record<"general" | "pay" | "statutory", string>;
@@ -44,6 +44,7 @@ describe("Document category sensitivity", () => {
 
   beforeAll(async () => {
     org = await createEmployeeTestOrgMasters();
+    p.director = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
     p.hrAdmin = await createFullTestEmployee(org, { roleCode: "HR_ADMIN" });
     p.hrExec = await createFullTestEmployee(org, { roleCode: "HR_EXECUTIVE" });
     p.manager = await createFullTestEmployee(org, { roleCode: "MANAGER" });
@@ -65,7 +66,7 @@ describe("Document category sensitivity", () => {
   afterAll(async () => {
     await cleanupTestCategories(categoryIds);
     await prisma.userPermissionOverride.deleteMany({ where: { userId: p.manager.userId } });
-    for (const k of ["member", "manager", "hrExec", "hrAdmin"] as const) await cleanupFullTestEmployee(p[k].employeeId);
+    for (const k of ["member", "manager", "hrExec", "hrAdmin", "director"] as const) await cleanupFullTestEmployee(p[k].employeeId);
     await cleanupEmployeeTestOrgMasters(org);
   });
 
@@ -80,12 +81,15 @@ describe("Document category sensitivity", () => {
     expect((await as("manager").post(`/api/documents/employee-documents/${doc.statutory}/download`)).status).toBe(404);
   });
 
-  it("an HR Executive (no salary, bank or statutory data — spec §2) sees GENERAL only; HR Admin sees all three", async () => {
+  it("an HR Executive (no salary, bank or statutory data — spec §2) sees GENERAL only; HR Admin sees GENERAL and STATUTORY but, since Stage 1, never PAY; a director sees all three", async () => {
     const exec = await listed("hrExec");
     expect(exec).toContain(doc.general);
     expect(exec).not.toContain(doc.pay);
     expect(exec).not.toContain(doc.statutory);
-    expect(await listed("hrAdmin")).toEqual(expect.arrayContaining([doc.general, doc.pay, doc.statutory]));
+    const admin = await listed("hrAdmin");
+    expect(admin).toEqual(expect.arrayContaining([doc.general, doc.statutory]));
+    expect(admin).not.toContain(doc.pay);
+    expect(await listed("director")).toEqual(expect.arrayContaining([doc.general, doc.pay, doc.statutory]));
   });
 
   it("the keys that open PAY and STATUTORY are never manager-grantable", () => {
@@ -104,7 +108,7 @@ describe("Document category sensitivity", () => {
   });
 
   it("a document can't move to a less sensitive category", async () => {
-    const res = await as("hrAdmin").patch(`/api/documents/employee-documents/${doc.pay}`, { categoryId: cat.general });
+    const res = await as("director").patch(`/api/documents/employee-documents/${doc.pay}`, { categoryId: cat.general });
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("SENSITIVITY_LOWERING");
   });

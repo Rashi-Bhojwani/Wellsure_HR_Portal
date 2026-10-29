@@ -3078,3 +3078,16 @@ model DirectorActionReceipt {
   @@index([recipientUserId, acknowledgedAt])
   @@map("director_action_receipts")
 }
+
+// Stage 1 (docs/plans/HR_CAPABILITIES.md §1A): every role_permissions row the HR hard-lock migration removed, copied here first. Append-only (database trigger), so the removal
+// can be put back by a forward migration and nobody can rewrite what it was.
+model RolePermissionRemoval {
+  id            String   @id @default(cuid())
+  roleCode      String   @map("role_code")
+  permissionKey String   @map("permission_key")
+  reason        String
+  removedAt     DateTime @default(now()) @map("removed_at") @db.Timestamptz(3)
+
+  @@index([roleCode])
+  @@map("role_permission_removals")
+}

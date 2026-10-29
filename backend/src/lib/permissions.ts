@@ -1,7 +1,7 @@
 import { PERMISSION_KEYS, MANAGER_GRANTABLE_KEYS } from "@shared/constants/permissions";
 import type { DataScope } from "@shared/constants/roles";
 import { DIRECTOR_ONLY_ROLE_CODES } from "@shared/constants/directorAuthority";
-import { DEVELOPER_FORBIDDEN_KEYS, DEVELOPER_ROLE_CODE } from "@shared/constants/sensitiveData";
+import { DEVELOPER_FORBIDDEN_KEYS, DEVELOPER_ROLE_CODE, HR_FORBIDDEN_KEYS, HR_ROLE_CODES } from "@shared/constants/sensitiveData";
 import { prisma } from "./prisma";
 
 // THE one place effective access is computed (Phase 5 commit E1). Used by
@@ -33,6 +33,7 @@ export function widestScope(scopes: DataScope[]): DataScope {
 const MANAGER_ROLE = "MANAGER";
 const MANAGER_GRANTABLE = new Set<string>(MANAGER_GRANTABLE_KEYS);
 const DEVELOPER_FORBIDDEN = new Set<string>(DEVELOPER_FORBIDDEN_KEYS);
+const HR_FORBIDDEN = new Set<string>(HR_FORBIDDEN_KEYS);
 
 export async function resolveAccess(userId: string): Promise<ResolvedAccess> {
   const [allRoles, overrides] = await Promise.all([
@@ -63,6 +64,11 @@ export async function resolveAccess(userId: string): Promise<ResolvedAccess> {
   for (const o of overrides) if (o.effect === "GRANT") permissions.add(o.permission.key);
   for (const o of overrides) if (o.effect === "REVOKE") permissions.delete(o.permission.key);
   const dataScope = widestScope(userRoles.map((ur) => ur.role.dataScope));
+  // The HR hard lock (docs/plans/HR_CAPABILITIES.md §1A): whatever a role row, a per-user grant or a raw SQL insert says, pay data is not HR's. A director who also holds an HR
+  // role is not affected (they are handled above).
+  if (roleCodes.some((c) => (HR_ROLE_CODES as readonly string[]).includes(c))) {
+    for (const key of [...permissions]) if (HR_FORBIDDEN.has(key)) permissions.delete(key);
+  }
   if (roleCodes.includes(MANAGER_ROLE)) {
     // E2 manager-grantable guard, enforced at resolution as well as on every
     // write: whatever rows say (a stale role definition, a raw SQL grant, a

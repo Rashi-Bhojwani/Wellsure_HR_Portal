@@ -84,9 +84,9 @@ describe("who actually gets in", () => {
 
   const get = (who: string, path: string) => request(app).get(path).set(...authHeader(tokens[who]!));
 
-  it("rules: a director and HR admin may look; HR executive, manager (even with a payroll key somebody granted) and employee may not", async () => {
-    for (const who of ["director", "hrAdmin"]) expect((await get(who, "/api/payroll/rules")).status, who).toBe(200);
-    for (const who of ["hrExec", "manager", "employee"]) expect((await get(who, "/api/payroll/rules")).status, who).toBe(403);
+  it("rules: a director may look; HR admin and HR executive (since Stage 1), manager (even with a payroll key somebody granted) and employee may not", async () => {
+    for (const who of ["director"]) expect((await get(who, "/api/payroll/rules")).status, who).toBe(200);
+    for (const who of ["hrAdmin", "hrExec", "manager", "employee"]) expect((await get(who, "/api/payroll/rules")).status, who).toBe(403);
   });
 
   it("a director may write and look at confirming; HR admin can do neither; the different-person rule still applies to the record (until D2 lets a director act alone)", async () => {
@@ -100,9 +100,9 @@ describe("who actually gets in", () => {
   });
 
   it("the Payroll audit trail opens for exactly the people who may see salary", async () => {
-    // A director and HR_ADMIN hold payroll.salary.view; HR_EXECUTIVE (even with audit.view), MANAGER and EMPLOYEE do not.
-    for (const who of ["director", "hrAdmin"]) expect((await get(who, "/api/payroll/audit")).status, who).toBe(200);
-    for (const who of ["hrExec", "manager", "employee"]) expect((await get(who, "/api/payroll/audit")).status, who).toBe(403);
+    // A director holds payroll.salary.view; HR_ADMIN (since Stage 1), HR_EXECUTIVE (even with audit.view), MANAGER and EMPLOYEE do not.
+    for (const who of ["director"]) expect((await get(who, "/api/payroll/audit")).status, who).toBe(200);
+    for (const who of ["hrAdmin", "hrExec", "manager", "employee"]) expect((await get(who, "/api/payroll/audit")).status, who).toBe(403);
     const trail = await get("director", "/api/payroll/audit?pageSize=200");
     expect(trail.body.rows.length).toBeGreaterThan(0);
     expect(trail.body.rows.every((r: { action: string; entityType: string }) => r.action.startsWith("payroll.") || r.entityType.startsWith("Payroll"))).toBe(true);
@@ -110,9 +110,12 @@ describe("who actually gets in", () => {
   });
 
   it("the general audit log viewer is not a side door: payroll rows are hidden from anyone who cannot see salary", async () => {
+    const fromDirector = await get("director", "/api/audit-logs?pageSize=200&action=payroll.");
+    expect(fromDirector.status).toBe(200);
+    expect(fromDirector.body.rows.some((r: { action: string }) => r.action === "payroll.rule.edited")).toBe(true); // a director may see salary, so sees payroll rows here too
     const fromHr = await get("hrAdmin", "/api/audit-logs?pageSize=200&action=payroll.");
-    expect(fromHr.status).toBe(200);
-    expect(fromHr.body.rows.some((r: { action: string }) => r.action === "payroll.rule.edited")).toBe(true); // HR admin may see salary, so may see payroll rows here too
+    expect(fromHr.status).toBe(200); // HR admin may open the viewer (Stage 1: pay data is no longer theirs)...
+    expect(fromHr.body.total).toBe(0); // ...and sees no payroll row
     const fromExec = await get("hrExec", "/api/audit-logs?pageSize=200&action=payroll.");
     expect(fromExec.status).toBe(200); // may open the audit viewer...
     expect(fromExec.body.total).toBe(0); // ...and sees no payroll row, even when searching for exactly them
@@ -127,8 +130,8 @@ describe("who actually gets in", () => {
   });
 
   it("checker availability is visible to makers and checkers, and to nobody else", async () => {
-    for (const who of ["director", "hrAdmin"]) expect((await get(who, "/api/payroll/approvals/checkers?subject=RULE_CONFIRM")).status, who).toBe(200);
-    for (const who of ["hrExec", "employee"]) expect((await get(who, "/api/payroll/approvals/checkers?subject=RULE_CONFIRM")).status, who).toBe(403);
+    for (const who of ["director"]) expect((await get(who, "/api/payroll/approvals/checkers?subject=RULE_CONFIRM")).status, who).toBe(200);
+    for (const who of ["hrAdmin", "hrExec", "employee"]) expect((await get(who, "/api/payroll/approvals/checkers?subject=RULE_CONFIRM")).status, who).toBe(403);
     const seen = await get("director", "/api/payroll/approvals/checkers?subject=RULE_CONFIRM");
     expect(seen.body.eligible.length).toBeGreaterThanOrEqual(1);
     expect(["ONE", "MANY"]).toContain(seen.body.state);
@@ -138,13 +141,13 @@ describe("who actually gets in", () => {
   it("salary screens: people who may see salary may look, only the maker roles may prepare, only a checker may decide, and nobody else gets anything", async () => {
     const reads = ["/components", "/structures", "/salary/employees", "/salary/revisions", "/adjustments", "/salary/people?q=x"];
     for (const path of reads) {
-      for (const who of ["director", "hrAdmin"]) expect((await get(who, `/api/payroll${path}`)).status, `${who} ${path}`).toBe(200);
-      for (const who of ["hrExec", "manager", "employee"]) expect((await get(who, `/api/payroll${path}`)).status, `${who} ${path}`).toBe(403);
+      for (const who of ["director"]) expect((await get(who, `/api/payroll${path}`)).status, `${who} ${path}`).toBe(200);
+      for (const who of ["hrAdmin", "hrExec", "manager", "employee"]) expect((await get(who, `/api/payroll${path}`)).status, `${who} ${path}`).toBe(403);
     }
     const post = (who: string, path: string) => request(app).post(`/api/payroll${path}`).set(...authHeader(tokens[who]!)).send({}); // an empty body: 403 is the permission, 400 is "allowed in, but not a valid request"
     for (const path of ["/salary/revisions/preview", "/adjustments/preview", "/structures/breakup-preview"]) {
-      for (const who of ["director", "hrAdmin"]) expect((await post(who, path)).status, `${who} ${path}`).toBe(400);
-      for (const who of ["hrExec", "manager", "employee"]) expect((await post(who, path)).status, `${who} ${path}`).toBe(403);
+      for (const who of ["director"]) expect((await post(who, path)).status, `${who} ${path}`).toBe(400);
+      for (const who of ["hrAdmin", "hrExec", "manager", "employee"]) expect((await post(who, path)).status, `${who} ${path}`).toBe(403);
     }
     // Deciding is a director's: HR admin can prepare but is refused.
     for (const who of ["hrAdmin", "hrExec", "manager", "employee"]) expect((await post(who, "/salary/revisions/some-id/decision")).status, who).toBe(403);

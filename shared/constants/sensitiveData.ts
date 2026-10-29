@@ -1,4 +1,4 @@
-import { META_PERMISSION_KEYS, type PermissionKey } from "./permissions";
+import { META_PERMISSION_KEYS, PERMISSION_KEYS, type PermissionKey } from "./permissions";
 
 // The registry of sensitive data (docs/plans/PHASE_6.md §14J). The owners enter their own salaries, bank accounts, debit account, PF/ESI/PT/LWF/TAN identifiers and bank file layout, and the
 // developer must be able to build and run the system without holding any permission that reveals or changes them. This file is the single place that says what is sensitive and which
@@ -162,6 +162,19 @@ export const REVIEWED_NOT_SENSITIVE: readonly PermissionKey[] = [
 /** The keys nobody can hold together with the DEVELOPER role. */
 export const DEVELOPER_ROLE_CODE = "DEVELOPER";
 export const DEVELOPER_FORBIDDEN_KEYS: readonly PermissionKey[] = SENSITIVE_PERMISSION_KEYS;
+
+/**
+ * The HR hard lock (docs/plans/HR_CAPABILITIES.md §1A): pay data is never HR's. lib/permissions.ts removes these from anyone who holds an HR role without also being a Super Admin,
+ * the access service refuses to give them to an HR role or holder, and a database trigger refuses the rows. Every `payroll.*` key (so a payroll key added later is locked
+ * from its first day), plus the salary-derived reports and PAY documents.
+ */
+export const HR_ROLE_CODES = ["HR_ADMIN", "HR_EXECUTIVE"] as const;
+export const HR_FORBIDDEN_KEYS: readonly PermissionKey[] = [
+  ...PERMISSION_KEYS.filter((k) => k.startsWith("payroll.")),
+  "reports.salary.view",
+  "reports.liability.view",
+  "documents.pay.view",
+];
 
 /** What the DEVELOPER role is given: what is needed to build and run the system, and nothing in SENSITIVE_PERMISSION_KEYS (a test pins that). */
 export const DEVELOPER_ROLE_PERMISSIONS: readonly PermissionKey[] = [

@@ -51,7 +51,7 @@ const sha256 = (b: Buffer) => createHash("sha256").update(b).digest("hex");
 describe("Letters", { timeout: 30_000 }, () => {
   let org: TestOrgMasters;
   type Person = { employeeId: string; employeeCode: string; userId: string };
-  const people = {} as Record<"hrAdmin" | "hrExec" | "manager" | "report" | "outsider" | "leaver", Person>;
+  const people = {} as Record<"director" | "hrAdmin" | "hrExec" | "manager" | "report" | "outsider" | "leaver", Person>;
   const tokens = {} as Record<keyof typeof people, string>;
   const templateIds: string[] = [];
   const letterIds: string[] = [];
@@ -77,6 +77,7 @@ describe("Letters", { timeout: 30_000 }, () => {
     // (CI run 37835475091 timed out at letters.test.ts "issues a letter").
     await renderPdf("<!doctype html><p>warm-up</p>", new Date("2026-01-01T00:00:00Z"));
     org = await createEmployeeTestOrgMasters();
+    people.director = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" }); // Stage 1: HR no longer opens PAY documents (a letter carries CTC), so the director does
     people.hrAdmin = await createFullTestEmployee(org, { roleCode: "HR_ADMIN" });
     people.hrExec = await createFullTestEmployee(org, { roleCode: "HR_EXECUTIVE" });
     people.manager = await createFullTestEmployee(org, { roleCode: "MANAGER" });
@@ -190,8 +191,9 @@ describe("Letters", { timeout: 30_000 }, () => {
   it("reproduces the issued letter byte-for-byte; a repeated job does nothing", async () => {
     expect(issued.id).not.toBe("");
     // Reproduce: from the stored version + values + timestamp, same bytes.
-    // (HR Admin: a letter is a PAY document, which an HR Executive can't open.)
-    const repro = await as("hrAdmin").post(`/api/letters/${issued.id}/reproduce`).buffer(true).parse((r, cb) => {
+    // (A director: a letter is a PAY document, which neither HR role can open since Stage 1.)
+    expect((await as("hrAdmin").post(`/api/letters/${issued.id}/reproduce`)).status).toBe(403);
+    const repro = await as("director").post(`/api/letters/${issued.id}/reproduce`).buffer(true).parse((r, cb) => {
       const chunks: Buffer[] = [];
       r.on("data", (c: Buffer) => chunks.push(c));
       r.on("end", () => cb(null, Buffer.concat(chunks)));
@@ -274,7 +276,7 @@ describe("Letters", { timeout: 30_000 }, () => {
     const original = await prisma.generatedLetter.findUniqueOrThrow({ where: { id: first.body.id }, include: { employeeDocument: true } });
     const originalBytes = (await storageService.getObject(original.employeeDocument!.fileKey)).body;
 
-    const re = await as("hrAdmin").post(`/api/letters/${first.body.id}/reissue`, { extraValues: { ctc: "750000" } });
+    const re = await as("director").post(`/api/letters/${first.body.id}/reissue`, { extraValues: { ctc: "750000" } });
     expect(re.status).toBe(202);
     letterIds.push(re.body.id);
     expect(re.body.reissueOf).toEqual({ id: first.body.id, reference: first.body.reference });
@@ -302,10 +304,10 @@ describe("Letters", { timeout: 30_000 }, () => {
 
   it("an issued letter's document keeps its title and category; visibility can still change", async () => {
     const letter = await prisma.generatedLetter.findFirstOrThrow({ where: { id: { in: letterIds }, status: "GENERATED", employeeId: people.report.employeeId } });
-    const rename = await as("hrAdmin").patch(`/api/documents/employee-documents/${letter.employeeDocumentId}`, { title: "Something else" });
+    const rename = await as("director").patch(`/api/documents/employee-documents/${letter.employeeDocumentId}`, { title: "Something else" });
     expect(rename.status).toBe(409);
     expect(rename.body.error.code).toBe("LETTER_IMMUTABLE");
-    const hide = await as("hrAdmin").patch(`/api/documents/employee-documents/${letter.employeeDocumentId}`, { visibleToEmployee: false });
+    const hide = await as("director").patch(`/api/documents/employee-documents/${letter.employeeDocumentId}`, { visibleToEmployee: false });
     expect(hide.status).toBe(200);
   });
 

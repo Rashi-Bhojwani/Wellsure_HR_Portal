@@ -418,9 +418,12 @@ describe("director authority", () => {
 
     it("the service says why, in words, and the same for a per-user grant of a payroll key", async () => {
       await expect(assignRole(p.hr.employeeId, "PAYROLL_APPROVER", await actorOf(p.b), meta(p.b))).rejects.toMatchObject({ code: "PAYROLL_ROLE_DIRECTORS_ONLY" });
-      await expect(setOverride(p.hr.employeeId, "payroll.run", { effect: "GRANT", reason: "test" }, await actorOf(p.b), meta(p.b))).rejects.toMatchObject({ code: "PAYROLL_GRANT_DIRECTORS_ONLY" });
+      // Stage 1: for someone who holds an HR role the HR hard lock speaks first (it says the same thing about pay data); for anyone else it is this rule.
+      await expect(setOverride(p.hr.employeeId, "payroll.run", { effect: "GRANT", reason: "test" }, await actorOf(p.b), meta(p.b))).rejects.toMatchObject({ code: "HR_CEILING" });
+      await expect(setOverride(p.emp.employeeId, "payroll.run", { effect: "GRANT", reason: "test" }, await actorOf(p.b), meta(p.b))).rejects.toMatchObject({ code: "PAYROLL_GRANT_DIRECTORS_ONLY" });
       const permission = await prisma.permission.findUniqueOrThrow({ where: { key: "payroll.run" } });
-      await expect(prisma.userPermissionOverride.create({ data: { userId: p.hr.userId, permissionId: permission.id, effect: "GRANT", reason: "raw", createdByUserId: p.b.userId } })).rejects.toThrow(/PAYROLL_GRANT_DIRECTORS_ONLY/);
+      await expect(prisma.userPermissionOverride.create({ data: { userId: p.emp.userId, permissionId: permission.id, effect: "GRANT", reason: "raw", createdByUserId: p.b.userId } })).rejects.toThrow(/PAYROLL_GRANT_DIRECTORS_ONLY/);
+      await expect(prisma.userPermissionOverride.create({ data: { userId: p.hr.userId, permissionId: permission.id, effect: "GRANT", reason: "raw", createdByUserId: p.b.userId } })).rejects.toThrow(/HR_HARD_LOCK/);
     });
 
     it("a payroll role held without Super Admin (a row that got past everything) grants nothing and is not seen as held", async () => {

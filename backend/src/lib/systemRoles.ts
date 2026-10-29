@@ -69,8 +69,6 @@ const HR_ADMIN_PERMS: string[] = [
   "employee.statutory.edit",
   "employee.bank.view",
   "employee.bank.edit",
-  // 2026-10-03 — documents in PAY categories (issued letters carry CTC).
-  "documents.pay.view",
   "user.security.manage",
   "audit.view",
   "settings.manage",
@@ -95,12 +93,7 @@ const HR_ADMIN_PERMS: string[] = [
   "manager.permissions.manage",
   // Phase 5 commit E3 — Workflow Delegates.
   "delegation.manage",
-  // Phase 6 — HR Admin sees the rules and salary and prepares revisions (a checker approves); it neither runs payroll nor approves it.
-  "payroll.rules.view",
-  "payroll.salary.view",
-  "payroll.salary.edit",
-  // Phase 5 commit F — leave liability (salary-derived from Phase 6).
-  "reports.liability.view",
+  // Stage 1 (docs/plans/HR_CAPABILITIES.md): no pay data. Salary, payroll rules, leave liability in rupees and PAY documents are the directors' (HR_FORBIDDEN_KEYS).
   // Phase 2 — attendance settings and biometric devices.
   "attendance.config.manage",
   "attendance.devices.manage",
