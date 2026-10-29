@@ -16,7 +16,7 @@ import { Caption, PersonCell } from "../../../components/payroll/payrollUi";
 import { space } from "../../../theme/tokens";
 
 // Payroll → Salary components (Phase 6 P6-2). A component says what a line IS: whether it is an earning or a deduction, and which tax and statutory
-// treatments apply. How much each line gets is the structure's job. A component is a Placeholder until a different person confirms it; editing one adds
+// treatments apply. How much each line gets is the structure's job. A component is a Placeholder until a director confirms it; editing one adds
 // the next version and nobody's pay moves until a structure and a salary revision pick it up.
 
 const EMPTY: ComponentValue = { name: "", type: "EARNING", taxable: true, pfApplicable: false, esiApplicable: false, prorates: true, payslipLabel: "", payslipOrder: 1 };
@@ -191,7 +191,7 @@ function EditDrawer({ initial, onClose, onSaved }: { initial: { code: string | n
     <SideDrawer
       open
       title={isNew ? "Add a component" : `Edit ${initial.value.name}`}
-      subtitle={p ? "Check the change, then save it" : "A new version is a Placeholder until a different person confirms it"}
+      subtitle={p ? "Check the change, then save it" : "A new version is a Placeholder until a director confirms it"}
       onClose={onClose}
       footer={
         <div style={{ display: "flex", gap: space[3], width: "100%", flexWrap: "wrap" }}>
@@ -264,7 +264,7 @@ function EditDrawer({ initial, onClose, onSaved }: { initial: { code: string | n
             ]}
           />
           {p.unchanged && <ApprovalBanner tone="warning" title="That is the value it already has. There is nothing to save." />}
-          {p.willResetConfirmation && <ApprovalBanner tone="warning" title="This component is Confirmed now." description="Saving adds a new version that is a Placeholder until a different person confirms it. The Confirmed version stays on record and in every structure that pinned it." />}
+          {p.willResetConfirmation && <ApprovalBanner tone="warning" title="This component is Confirmed now." description="Saving adds a new version that is a Placeholder until a director confirms it. The Confirmed version stays on record and in every structure that pinned it." />}
           <ApprovalBanner tone="info" title={p.impact} />
           <Form layout="vertical" component="div">
             <Form.Item label="Why this, and where it came from" htmlFor="component-note" extra="Optional, but the person who confirms it will want it." style={{ marginBottom: 0 }}>

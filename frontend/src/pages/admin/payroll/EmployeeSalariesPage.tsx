@@ -56,7 +56,7 @@ export function EmployeeSalariesPage() {
         <ApprovalBanner
           tone="info"
           title="A salary is never edited"
-          description="It changes through a salary revision: one person prepares it with a preview, a different person approves exactly those figures, and only then is it written, from the date it says. Everyone employed today is listed."
+          description="It changes through a salary revision: one person prepares it with a preview, a director approves exactly those figures, and only then is it written, from the date it says. Everyone employed today is listed."
         />
         <Panel>
           <FilterBar

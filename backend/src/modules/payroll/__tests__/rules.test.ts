@@ -5,7 +5,7 @@ import { prisma } from "../../../lib/prisma";
 import { app, authHeader, cleanupEmployeeTestOrgMasters, cleanupFullTestEmployee, createEmployeeTestOrgMasters, createFullTestEmployee, loginAs, type TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
 import { ensurePayrollRules, getRule, listRules } from "../rules/governed";
 import { parseRuleValue } from "../rules/schemas";
-import { cleanupPayrollRowsBy } from "./payrollTestHelpers";
+import { cleanupPayrollRowsBy, useSecondDirectorChecks } from "./payrollTestHelpers";
 
 // Phase 6 P6-1: governed rules. A COMPANY rule ships empty; a STATUTORY figure ships as a Placeholder labelled "From memory, unverified"; an edit is an
 // unconfirmed new version; a different person confirms; a statutory figure is confirmed only by typing it again.
@@ -71,7 +71,9 @@ describe("governed rules in the database", () => {
   let checkerToken = "";
   const userIds: string[] = [];
 
+  let restoreChecks: () => Promise<void>; // these tests describe the two-director behaviour: a value is confirmed by a different director
   beforeAll(async () => {
+    restoreChecks = await useSecondDirectorChecks();
     await ensurePayrollRules();
     org = await createEmployeeTestOrgMasters();
     maker = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
@@ -82,6 +84,7 @@ describe("governed rules in the database", () => {
   });
 
   afterAll(async () => {
+    await restoreChecks();
     await cleanupPayrollRowsBy(userIds);
     await cleanupFullTestEmployee(maker.employeeId);
     await cleanupFullTestEmployee(checker.employeeId);

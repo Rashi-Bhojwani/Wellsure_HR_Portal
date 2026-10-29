@@ -335,7 +335,7 @@ function StructureEditor({ initial, onClose, onSaved }: { initial: { code: strin
         {p && (
           <Stack gap={space[3]}>
             {p.unchanged && <ApprovalBanner tone="warning" title="That is the value it already has. There is nothing to save." />}
-            {p.willResetConfirmation && <ApprovalBanner tone="warning" title="This structure is Confirmed now." description="Saving adds a new version that is a Placeholder until a different person confirms it. The Confirmed version stays on record." />}
+            {p.willResetConfirmation && <ApprovalBanner tone="warning" title="This structure is Confirmed now." description="Saving adds a new version that is a Placeholder until a director confirms it. The Confirmed version stays on record." />}
             {p.unconfirmedComponents.length > 0 && <ApprovalBanner tone="warning" title="Some components are not confirmed yet" description={`${p.unconfirmedComponents.join(", ")}. A salary built on this structure is a test until they are confirmed too.`} />}
             <SampleTable sample={p.sample} nameOf={nameOf} />
             <ApprovalBanner tone="info" title={p.impact} />

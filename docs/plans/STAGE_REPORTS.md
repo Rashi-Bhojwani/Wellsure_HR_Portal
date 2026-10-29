@@ -162,3 +162,23 @@ Plan: `HR_CAPABILITIES.md`. 1.1 is the report above (no code).
 **Unverified.** The Stage 1.4 banner on Admin Home / Tasks was not exercised in a browser. Phone layout of What HR Can Do checked in dark mode only (no horizontal scroll). No live walkthrough as a *manager*. The frontend of favourites filtering has a unit test but was not clicked.
 
 **Waiting.** Everything in `MASTER_CHECKLIST.md`, plus: whether HR may see leave/attendance counts when a duty is off; the four "not locked yet" keys above; whether a manager-and-HR person should keep manager-granted keys when an HR duty is off.
+
+
+## Stage 2 — D2: payroll flows on director authority (+ D3 docs)
+
+**Built**
+- Every payroll step now follows the step's switch (`payroll.secondDirector`, default: the director acts alone and the other director is told; switched on: a different director decides, exactly as before): run approval/finalise/publish/bank file/unlock (`run/closing.ts`, `finaliser.ts`, `release.ts`), salary revisions, confirmation of rules/components/structures/layouts (`items.ts`, `approvals.ts`), and the setup sign-offs (`setup/signoffs.ts`; new `authority` column on `payroll_setup_signoffs`, migration `20261027090000`).
+- The Ready-for-first-run rows now say "At least two active directors" and "Every director uses two-step sign-in" (no development exemption once 2FA is enforced); a self-confirmed value or sign-off recorded under director authority is not flagged.
+- Every System Settings change made by a director tells the other director (area only, never a value); a non-director with `settings.manage` produces no notice.
+- Screen copy no longer says "a different person" where a director may act alone; the run step toast says when it was done on the director's own authority. FIRST_REAL_PAYROLL_RUN.md and GETTING_STARTED.md state two-step sign-in for every director as a go-live condition with the steps.
+
+**Tests.** Full backend suite run alone: 170 files, 1,632 tests, all passed. New: `runAuthority`, `confirmAuthority`, `revisionAuthority`, the sign-off authority case in `setupChecklist`, `settingsNotice`. Old tests that assumed the second-person rule now run with `useSecondDirectorChecks()` (the old behaviour is kept and still tested) and the authority behaviour is tested beside it. Frontend 53 tests, lint, typecheck, build and `check:bundle` (login 231.5 KB, shell+employee home 320.4 KB, shell+admin home 341.6 KB) pass. `check:sensitive-ui` (451 pages, no secret, DEMO banner on all) and `check:popovers` pass. `db:drift` clean on the dev database and on the freshly built test database.
+**Mutation checks (each caught by a test).** Sign-off: entrant barred even on authority; switch ignored. Settings: no notice at all; notice for non-directors. (Run steps, confirmations and revisions were mutation-checked while built, in the same way.)
+
+**Live check.** Against the running stack: the director sees the setup checklist with the new safety rows; HR and a plain employee get 403 on it. The sensitive-ui scan signs in as developer and employee.
+
+**Decided by me.** (1) Settings notices go from the service layer after the audit entry, not inside one transaction with the change (the settings writers are not transactional). (2) The notice is raised only when the actor is a director. (3) Screen copy says "a director" rather than reading the switch per screen.
+
+**Unverified.** No full browser walkthrough of authority mode as both directors this round (only API and scans). The demo seed still leaves the two directors off the demo payroll; putting them on it was not done. IDENTITY_DIRECTOR_ENTRY is not built (needs H2). CI for the earlier Stage 1 commits and this one is read after the push (see below).
+
+**Waiting.** Whether a third Super Admin may approve payroll (until then, create none).

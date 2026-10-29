@@ -38,7 +38,7 @@ authority mode in **D2**, so after D1 the existing two-person behaviour of every
 second person is now the other director).
 
 
-**Status: APPROVED 2026-10-29 (see §0). D1 in progress; D2 and D3 not started.**
+**Status: APPROVED 2026-10-29 (see §0). D1 done; D2 built (steps wired, setup sign-off and settings notices); D3 docs done in the D2 commit. Not built: IDENTITY_DIRECTOR_ENTRY (needs H2).**
 Branch `feat/hr-payroll-separation`. This plan comes **before H1** of
 [HR_PAYROLL_SEPARATION.md](HR_PAYROLL_SEPARATION.md) and amends it (§9). No real figures, names, accounts or
 identifiers appear here; employee codes are the made-up seed/demo accounts.

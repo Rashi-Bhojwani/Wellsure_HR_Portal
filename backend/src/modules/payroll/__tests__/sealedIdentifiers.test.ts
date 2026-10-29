@@ -5,7 +5,7 @@ import { prisma } from "../../../lib/prisma";
 import { app, authHeader, cleanupEmployeeTestOrgMasters, cleanupFullTestEmployee, cleanupTestRole, createEmployeeTestOrgMasters, createFullTestEmployee, grantPermissions, loginAs, type TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
 import { JSON_HELD_COLUMNS, keyUsage, retireBlockers } from "../../../lib/fieldKeyRotation";
 import { isSealed, unseal } from "../sealed";
-import { cleanupPayrollRowsBy } from "./payrollTestHelpers";
+import { cleanupPayrollRowsBy, useSecondDirectorChecks } from "./payrollTestHelpers";
 
 // The company's PF, ESI, PT, LWF and TAN identifiers are the owners' secrets (docs/plans/PHASE_6.md §14J): entered and revealed only with payroll.identifiers.manage, confirmed
 // only with payroll.identifiers.confirm (by typing the value again, so the confirmer never needs to see it), stored encrypted, and shown nowhere else.
@@ -25,7 +25,9 @@ describe("sealed company identifiers", () => {
     put: (p: string, b: object = {}) => request(app).put(`/api/payroll${p}`).set(...authHeader(t)).send(b),
   });
 
+  let restoreChecks: () => Promise<void>; // these tests describe the two-director behaviour: a value is confirmed by a different director
   beforeAll(async () => {
+    restoreChecks = await useSecondDirectorChecks();
     org = await createEmployeeTestOrgMasters();
     await grantPermissions(rulesOnlyRole, ["payroll.rules.view", "payroll.rules.manage"]);
     await grantPermissions(rulesConfirmRole, ["payroll.rules.view", "payroll.rules.confirm"]);
@@ -37,6 +39,7 @@ describe("sealed company identifiers", () => {
     for (const k of Object.keys(people) as Array<keyof typeof people>) tokens[k] = await loginAs(people[k].employeeCode);
   });
   afterAll(async () => {
+    await restoreChecks();
     await cleanupPayrollRowsBy(Object.values(people).map((p) => p.userId));
     for (const p of Object.values(people)) await cleanupFullTestEmployee(p.employeeId);
     await cleanupTestRole(rulesOnlyRole);

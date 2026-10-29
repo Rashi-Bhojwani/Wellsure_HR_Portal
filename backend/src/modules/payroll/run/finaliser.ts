@@ -30,8 +30,9 @@ export async function finaliseRun(runId: string, actor: Actor) {
   if (!run) throw new HttpError(404, "No such payroll run.", "NOT_FOUND");
   if (run.status !== "APPROVED") throw new HttpError(409, `This run is ${run.status === "FINALISED" ? "already final" : "not approved yet"}, so it cannot be finalised now.`, "RUN_STATE");
   const approvals = await prisma.payrollApproval.findMany({ where: { subjectId: runId, subject: { in: ["RUN_APPROVAL", "PERIOD_FINALISE"] }, status: "APPROVED" } });
-  if (approvals.length !== 2) throw new HttpError(409, "The period has not been approved for closing by a second person yet.", "APPROVAL_REQUIRED");
-  if (approvals.some((a) => a.checkerUserId === actor.userId)) throw new HttpError(403, "You approved this, so somebody else carries out the finalising. The person who decides is never the person who does.", "CHECKER_IS_EXECUTOR");
+  if (approvals.length !== 2) throw new HttpError(409, "The period has not been approved for closing yet.", "APPROVAL_REQUIRED");
+  // On director authority the director who decided is the one who carries it out: that is the point. Otherwise the person who decides is never the person who does.
+  if (approvals.some((a) => a.authority !== "DIRECTOR_AUTHORITY" && a.checkerUserId === actor.userId)) throw new HttpError(403, "You approved this, so somebody else carries out the finalising. The person who decides is never the person who does.", "CHECKER_IS_EXECUTOR");
 
   const computed = await computeRun({ start: run.cycleStart, end: run.cycleEnd, label: run.cycleLabel });
   if (computed.runHash !== run.runHash) {
@@ -72,8 +73,8 @@ export async function unlockRun(runId: string, actor: Actor) {
   if (!run) throw new HttpError(404, "No such payroll run.", "NOT_FOUND");
   if (run.status !== "FINALISED") throw new HttpError(409, "This period is not final, so there is nothing to unlock.", "RUN_STATE");
   const approval = await prisma.payrollApproval.findFirst({ where: { subject: "PERIOD_UNLOCK", subjectId: runId, status: "APPROVED" } });
-  if (!approval) throw new HttpError(409, "Unlocking has not been approved by a second person yet.", "APPROVAL_REQUIRED");
-  if (approval.checkerUserId === actor.userId) throw new HttpError(403, "You approved this, so somebody else carries out the unlocking. The person who decides is never the person who does.", "CHECKER_IS_EXECUTOR");
+  if (!approval) throw new HttpError(409, "Unlocking has not been approved yet.", "APPROVAL_REQUIRED");
+  if (approval.authority !== "DIRECTOR_AUTHORITY" && approval.checkerUserId === actor.userId) throw new HttpError(403, "You approved this, so somebody else carries out the unlocking. The person who decides is never the person who does.", "CHECKER_IS_EXECUTOR");
   const reason = approval.submitNote;
 
   const released = await prisma.payrollRunRelease.findMany({ where: { runId } });

@@ -2,6 +2,7 @@ import { RULE_CATALOG, type RuleDef } from "@shared/constants/payrollRules";
 import { DEVELOPER_ROLE_CODE, SENSITIVE_PERMISSION_KEYS } from "@shared/constants/sensitiveData";
 import { env } from "../../../config/env";
 import { businessToday } from "../../../lib/businessDate";
+import { activeDirectors, twoFactorEnforced } from "../../../lib/directorAuthority";
 import { salariesOn } from "../../../lib/effectiveDating";
 import { activeUsersHoldingPermission, resolveAccess } from "../../../lib/permissions";
 import { prisma } from "../../../lib/prisma";
@@ -37,7 +38,7 @@ const person = (name: string | undefined, at: string | undefined): Person | null
 
 function governed(summary: ItemSummary): Pick<SetupItem, "status" | "enteredBy" | "confirmedBy" | "detail" | "problem"> {
   const cur = summary.current;
-  const problem = cur?.confirmation && cur.authorUserId && cur.confirmation.confirmedByUserId === cur.authorUserId ? "This is marked confirmed, but it was confirmed by the person who entered it. That should be impossible. It needs to be entered or confirmed again by two different people." : undefined;
+  const problem = cur?.confirmation && cur.authorUserId && cur.confirmation.confirmedByUserId === cur.authorUserId && !cur.confirmation.selfConfirmed ? "This is marked confirmed, but it was confirmed by the person who entered it. That should be impossible. It needs to be entered or confirmed again by two different people." : undefined;
   return {
     status: summary.status,
     enteredBy: cur && cur.authorUserId ? person(cur.authorName, cur.createdAt) : null,
@@ -101,7 +102,7 @@ async function peopleItems(): Promise<SetupItem[]> {
     } else {
       status = "CONFIRMED";
       detail = `All ${set.total} are on record and were checked by ${names.get(sign.signedByUserId) ?? "someone"} on ${iso(sign.signedAt)}.`;
-      if (set.authorUserIds.includes(sign.signedByUserId)) problem = "The sign-off was given by a person who entered some of what it covers. That should be impossible. It needs signing off again by someone else.";
+      if (set.authorUserIds.includes(sign.signedByUserId) && sign.authority !== "DIRECTOR_AUTHORITY") problem = "The sign-off was given by a person who entered some of what it covers. That should be impossible. It needs signing off again by someone else.";
     }
     out.push({
       id: m.id,
@@ -180,18 +181,20 @@ async function layoutItems(): Promise<SetupItem[]> {
 async function safetyItems(demo: boolean): Promise<SetupItem[]> {
   const out: SetupItem[] = [];
   const where = { label: "Admin Tools, Roles & Permissions", path: "/admin/admin-tools/users-roles" };
-  const makers = await activeUsersHoldingPermission("payroll.run");
-  const checkers = await activeUsersHoldingPermission("payroll.approve");
-  const pairOk = makers.some((m) => checkers.some((c) => c.userId !== m.userId));
-  out.push({ id: "safety:two-people", section: "safety", title: "At least two different people can prepare and approve payroll", why: "Payroll is prepared by one person and approved by another. If only one person could do both, nothing would be checked.", required: true, status: pairOk ? "CONFIRMED" : "NOT_SET", enteredBy: null, confirmedBy: null, detail: pairOk ? `${makers.length} can prepare it and ${checkers.length} can approve it, and they are not all the same person.` : `${makers.length} can prepare payroll and ${checkers.length} can approve it, and there is no pair of different people. Give the roles Payroll Admin and Payroll Approver to two different people.`, where });
+  // D2 (docs/plans/DIRECTOR_AUTHORITY.md §4.6): payroll is the two directors'. Each one is told of the other's acts, and sets the other's pay.
+  const directors = await activeDirectors();
+  const pairOk = directors.length >= 2;
+  out.push({ id: "safety:two-people", section: "safety", title: "At least two active directors", why: "Payroll belongs to the two directors. Each is told what the other does on their own authority, and each sets the other's pay, so nobody ever sets their own. With only one, none of that can work.", required: true, status: pairOk ? "CONFIRMED" : "NOT_SET", enteredBy: null, confirmedBy: null, detail: pairOk ? `${directors.length} directors are active.` : `${directors.length} active ${directors.length === 1 ? "director" : "directors"}. Appoint the second director (Super Admin) in Employee profile, Access.`, where });
 
-  const payrollHolders = new Map<string, true>();
+  // Every Super Admin, and anyone who somehow holds a payroll key: two-step sign-in is required of all of them, and the demo exemption never applies where it is enforced.
+  const payrollHolders = new Map<string, true>(directors.map((d) => [d.userId, true] as const));
   for (const key of ["payroll.run", "payroll.approve", "payroll.identifiers.manage", "payroll.banklayout.manage", "payroll.salary.edit"]) for (const h of await activeUsersHoldingPermission(key)) payrollHolders.set(h.userId, true);
   const holders = await prisma.user.findMany({ where: { id: { in: [...payrollHolders.keys()] } }, select: { id: true, totpEnabled: true } });
   const without = holders.filter((u) => !u.totpEnabled);
   const noTwoFactor = await namesOfUsers(without.map((u) => u.id));
-  const twoFactorOk = demo || without.length === 0;
-  out.push({ id: "safety:two-factor", section: "safety", title: "Everyone who handles payroll uses two-step sign-in", why: "These people can move money and see everyone's pay. A password alone is not enough.", required: true, status: twoFactorOk ? "CONFIRMED" : "NOT_SET", enteredBy: null, confirmedBy: null, detail: demo ? "Not enforced in the demo company." : without.length === 0 ? `All ${holders.length} have it on.` : `${without.length} do not have it on yet: ${[...noTwoFactor.values()].join(", ")}.`, where });
+  const exempt = demo && !twoFactorEnforced();
+  const twoFactorOk = exempt || without.length === 0;
+  out.push({ id: "safety:two-factor", section: "safety", title: "Every director uses two-step sign-in", why: "These people can move money and see everyone's pay. A password alone is not enough.", required: true, status: twoFactorOk ? "CONFIRMED" : "NOT_SET", enteredBy: null, confirmedBy: null, detail: exempt ? "Not enforced in the demo company." : without.length === 0 ? `All ${holders.length} have it on.` : `${without.length} do not have it on yet: ${[...noTwoFactor.values()].join(", ")}.`, where });
 
   const real = env.APP_ENV === "production" || env.APP_ENV === "staging";
   const mailOk = !real || env.MAIL_DRIVER === "ses" || env.MAIL_DRIVER === "smtp";

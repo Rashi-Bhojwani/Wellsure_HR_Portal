@@ -23,7 +23,7 @@ Plain terms used below:
 | The person who checks payroll | Payroll Approver | Confirms what the preparer typed, approves runs and signs off people's details |
 | HR | HR Admin | Keeps employee records; does **not** see salaries or bank details unless you also give them those permissions |
 
-The checklist has an item "At least two different people can prepare and approve payroll". It stays red until this is true. Everyone who handles payroll must also turn on two-step sign-in (Account Security); that is another checklist item.
+The checklist has an item "At least two active directors" (two Super Admin accounts). It stays red until this is true. **Go-live condition: every director must turn on two-step sign-in (Account Security) before the first real run.** The checklist row covers every director and, outside development, no exemption applies. Steps: sign in, open Account Security, choose two-step sign-in, scan the code with an authenticator app, keep the backup codes somewhere safe and separate. A director acts on their own authority by default and the other director is told of each act; the owners may switch any step's second-director check on in System Settings → Director authority.
 
 **The developer** should have the role *Developer / operator* and nothing else. This role is cut off, in the program, from every salary, bank, identifier and layout screen. The checklist has a table, **Payroll → Setup Checklist → "Who can see and change this"**, that names every person who can see each kind of secret. Read it once before you start; if any name there surprises you, fix the roles first.
 

@@ -147,7 +147,7 @@ function Blockers({ p }: { p: StepPreview }) {
 // ── Where this stands, and who could decide ──
 
 function approvalLine(a: ApprovalView): string {
-  if (a.status === "PENDING") return `Asked by ${a.maker.name} on ${formatDateTime(a.submittedAt)}${a.note ? `: “${a.note}”` : ""}. Waiting for a different person to decide.`;
+  if (a.status === "PENDING") return `Asked by ${a.maker.name} on ${formatDateTime(a.submittedAt)}${a.note ? `: “${a.note}”` : ""}. Waiting for a director to decide.`;
   if (a.status === "APPROVED") return `Approved by ${a.checker?.name ?? "someone"} on ${a.decidedAt ? formatDateTime(a.decidedAt) : ""}${a.decisionNote ? `: “${a.decisionNote}”` : ""}.`;
   if (a.status === "REJECTED") return `Rejected by ${a.checker?.name ?? "someone"}: ${a.decisionNote ?? ""}`;
   if (a.status === "VOIDED") return `Withdrawn or voided: ${a.voidReason ?? ""}`;
@@ -325,8 +325,8 @@ function Actions({ p, step, slug, runId }: { p: StepPreview; step: StepState; sl
 
   const request = useMutation({
     mutationFn: () => payrollApi.requestStep(runId, slug, { fingerprint: p.fingerprint, ...(note.trim() ? { note: note.trim() } : {}) }),
-    onSuccess: () => {
-      toast.success("Sent. A different person has to approve it.");
+    onSuccess: (r) => {
+      toast.success(r.authority === "DIRECTOR_AUTHORITY" ? "Done on your authority. The other director has been told." : "Sent. A director has to approve it.");
       setSeen(false);
       setNote("");
       refresh();

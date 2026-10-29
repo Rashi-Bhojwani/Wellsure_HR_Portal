@@ -3024,6 +3024,8 @@ model PayrollSetupSignoff {
   total          Int
   note           String
   authorUserIds  Json             @default("[]") @map("author_user_ids")
+  /// D2: DIRECTOR_AUTHORITY when the signer was allowed to sign what they entered themselves (the other director was told); SECOND_DIRECTOR otherwise.
+  authority      ApprovalAuthority @default(SECOND_DIRECTOR)
   signedByUserId String           @map("signed_by_user_id")
   signedAt       DateTime         @default(now()) @map("signed_at") @db.Timestamptz(3)
 

@@ -33,7 +33,7 @@ pause only at CHECKPOINT 1 (after Stage 2), CHECKPOINT 2 (after P7-3) and stop c
 - [x] 1.6 `check:sensitive-ui` extended + test matrix — `ba554e9`, bundle fix `e3a40c3`
 
 ## Stage 2 — D2 (as in DIRECTOR_AUTHORITY.md) → CHECKPOINT 1
-- [ ] D2 built and verified
+- [x] D2 built and verified — commit hash in STAGE_REPORTS.md (Stage 2)
 - [ ] CHECKPOINT 1: report Stages 0–2, wait for go-ahead
 
 ## Stage 3 — payroll model (capabilities only, no values)

@@ -1,4 +1,5 @@
 import { deleteWithDependents } from "../../../lib/__tests__/cleanup";
+import { DIRECTOR_AUTHORITY_SETTING_KEY, DIRECTOR_STEPS } from "@shared/constants/directorAuthority";
 import { prisma } from "../../../lib/prisma";
 
 // Fixtures for the payroll tests. Payroll's own tables are append-only and shared with every other test file (and with the shipped
@@ -8,6 +9,8 @@ import { prisma } from "../../../lib/prisma";
 export async function cleanupPayrollRowsBy(userIds: string[]): Promise<void> {
   if (userIds.length === 0) return;
   const ids = async (rows: Promise<Array<{ id: string }>>) => (await rows).map((r) => r.id);
+  // What these directors' acts told the other director (and the receipts that go with each notice).
+  await deleteWithDependents("DirectorActionNotice", await ids(prisma.directorActionNotice.findMany({ where: { actorUserId: { in: userIds } }, select: { id: true } })));
   await deleteWithDependents("PayrollItemConfirmation", await ids(prisma.payrollItemConfirmation.findMany({ where: { confirmedByUserId: { in: userIds } }, select: { id: true } })));
   await deleteWithDependents("PayrollItemVersion", await ids(prisma.payrollItemVersion.findMany({ where: { authorUserId: { in: userIds } }, select: { id: true } })));
   await deleteWithDependents(
@@ -29,4 +32,18 @@ export async function cleanupPayrollRowsBy(userIds: string[]): Promise<void> {
 export async function cleanupPayrollSubject(subjectPrefix: string): Promise<void> {
   await deleteWithDependents("PayrollApproval", (await prisma.payrollApproval.findMany({ where: { subjectId: { startsWith: subjectPrefix } }, select: { id: true } })).map((r) => r.id));
   await deleteWithDependents("PayrollEvent", (await prisma.payrollEvent.findMany({ where: { subjectId: { startsWith: subjectPrefix } }, select: { id: true } })).map((r) => r.id));
+}
+
+/**
+ * Puts the owners' second-director checks ON for every step, for tests that describe the two-director behaviour (a different director decides what one prepared), and returns
+ * what puts the setting back. A new installation starts the other way round (a director acts alone, docs/plans/DIRECTOR_AUTHORITY.md §2), and the tests of that say so themselves.
+ */
+export async function useSecondDirectorChecks(on: boolean | Partial<Record<(typeof DIRECTOR_STEPS)[number], boolean>> = true): Promise<() => Promise<void>> {
+  const before = await prisma.systemSetting.findUnique({ where: { key: DIRECTOR_AUTHORITY_SETTING_KEY } });
+  const value = typeof on === "boolean" ? Object.fromEntries(DIRECTOR_STEPS.map((s) => [s, on])) : on;
+  await prisma.systemSetting.upsert({ where: { key: DIRECTOR_AUTHORITY_SETTING_KEY }, create: { key: DIRECTOR_AUTHORITY_SETTING_KEY, value }, update: { value } });
+  return async () => {
+    if (before) await prisma.systemSetting.update({ where: { key: DIRECTOR_AUTHORITY_SETTING_KEY }, data: { value: before.value as object } });
+    else await prisma.systemSetting.deleteMany({ where: { key: DIRECTOR_AUTHORITY_SETTING_KEY } });
+  };
 }

@@ -313,7 +313,8 @@ export interface CheckerAvailability {
   eligible: Checker[];
   /** People who hold the permission but are excluded here, and why. */
   excluded: Array<Checker & { reason: string }>;
-  state: "NONE" | "ONE" | "MANY";
+  /** "SELF": the step is on director authority, so nobody else needs to decide it. */
+  state: "NONE" | "ONE" | "MANY" | "SELF";
   message: string;
 }
 

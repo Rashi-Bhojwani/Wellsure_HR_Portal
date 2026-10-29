@@ -24,7 +24,8 @@ import {
 import { activeUsersHoldingPermission } from "../../../lib/permissions";
 import { prisma } from "../../../lib/prisma";
 import { HttpError } from "../../../middleware/errorHandler";
-import { adapterFor, availabilityFrom, consume, decide, liveApproval, registerSubject, submit, voidApproval, voidLive, type CheckerAvailability } from "../approvals";
+import { authorityFor } from "../../../lib/directorAuthority";
+import { adapterFor, authorise, availabilityFrom, consume, decide, liveApproval, registerSubject, submit, voidApproval, voidLive, type CheckerAvailability } from "../approvals";
 import { recordEvent } from "../events";
 import { payrollHash } from "../hash";
 import { ZERO, canonicalDecimal, dec, percentOf, roundTo, type Money } from "../money";
@@ -377,6 +378,8 @@ export function planToJson(plan: RevisionPlan) {
 }
 
 async function checkersFor(makerUserId: string, employeeIds: readonly string[]): Promise<CheckerAvailability> {
+  // On director authority (the default) nobody else has to decide it: the director does, and the other director is told. Whose pay it is stays checked everywhere else.
+  if ((await authorityFor("SALARY_REVISION")) === "DIRECTOR_AUTHORITY") return { eligible: [], excluded: [], state: "SELF", message: "You can do this yourself. It takes effect at once, and the other director is told." };
   const adapter = adapterFor("SALARY_REVISION");
   const holders = await activeUsersHoldingPermission(adapter.checkerPermission);
   const names = await namesOfUsers(holders.map((h) => h.userId));
@@ -481,7 +484,7 @@ export async function createCancel(rawInput: unknown, fingerprint: string, actor
   });
   await recordEvent({ subjectType: "SALARY_REVISION", subjectId: row.id, type: "CREATED", actorUserId: actor.userId, payload: { hash: plan.hash, kind: "CANCEL_SCHEDULED", employeeId: input.employeeId } });
   await writeAuditLog({ actorUserId: actor.userId, action: "payroll.salary_revision.created", entityType: "PayrollSalaryRevision", entityId: row.id, after: { kind: "CANCEL_SCHEDULED", employeeId: input.employeeId, effectiveFrom: iso(plan.scheduled!.effectiveFrom), hash: plan.hash }, ipAddress: actor.ip ?? null });
-  await submit({ subject: "SALARY_REVISION", subjectId: row.id, makerUserId: actor.userId, previewFingerprint: plan.hash, note: input.note, ip: actor.ip ?? null });
+  await submitForDecision(row.id, plan.hash, input.note, 1, actor);
   return { id: row.id };
 }
 
@@ -496,7 +499,7 @@ async function applyCancel(rev: RevisionRow, actor: { userId: string; ip?: strin
   await prisma.$transaction(async (tx) => {
     await lockEmployees(tx, [employeeId]);
     const approval = await tx.payrollApproval.findFirst({ where: { subject: "SALARY_REVISION", subjectId: rev.id, status: "APPROVED" } });
-    if (!approval) throw new HttpError(409, "A second person has not approved this, so it cannot be applied.", "APPROVAL_REQUIRED");
+    if (!approval) throw new HttpError(409, "This has not been approved yet, so it cannot be applied.", "APPROVAL_REQUIRED");
     const plan = await computeCancelPlan(employeeId, salaryId);
     if (plan.hash !== approval.hashAtDecision) {
       await voidApproval(approval, "The figures no longer match what was approved.", actor.userId); // outside the transaction, so the void survives the rollback
@@ -516,6 +519,18 @@ async function applyCancel(rev: RevisionRow, actor: { userId: string; ip?: strin
 }
 
 // ── Creating, submitting, withdrawing ──
+
+/**
+ * Sends a revision for its decision: to the other director to decide (the owners switched the check on for salary revisions), or, by default, the director decides it in the same
+ * act (docs/plans/DIRECTOR_AUTHORITY.md §5.5) and the other director is told. Either way nobody prepares or approves a change to their own pay (`authorise` checks it again).
+ */
+async function submitForDecision(revisionId: string, hash: string, note: string | undefined, people: number, actor: { userId: string; ip?: string | null }): Promise<void> {
+  if ((await authorityFor("SALARY_REVISION")) === "DIRECTOR_AUTHORITY") {
+    await authorise({ subject: "SALARY_REVISION", subjectId: revisionId, actorUserId: actor.userId, previewFingerprint: hash, step: "SALARY_REVISION", subjectLabel: "a salary revision", itemCount: people, ...(note ? { note } : {}), ip: actor.ip ?? null });
+    return;
+  }
+  await submit({ subject: "SALARY_REVISION", subjectId: revisionId, makerUserId: actor.userId, previewFingerprint: hash, ...(note ? { note } : {}), ip: actor.ip ?? null });
+}
 
 type RevisionRow = Awaited<ReturnType<typeof prisma.payrollSalaryRevision.findUniqueOrThrow>>;
 
@@ -560,7 +575,7 @@ export async function createRevision(rawInput: unknown, fingerprint: string, act
   });
   await recordEvent({ subjectType: "SALARY_REVISION", subjectId: row.id, type: "CREATED", actorUserId: actor.userId, payload: { hash: plan.hash, people: resolved.employeeIds.length, effectiveFrom: iso(resolved.effectiveFrom) } });
   await writeAuditLog({ actorUserId: actor.userId, action: "payroll.salary_revision.created", entityType: "PayrollSalaryRevision", entityId: row.id, after: { effectiveFrom: iso(resolved.effectiveFrom), people: resolved.employeeIds.length, reason: input.reason, hash: plan.hash }, ipAddress: actor.ip ?? null });
-  await submit({ subject: "SALARY_REVISION", subjectId: row.id, makerUserId: actor.userId, previewFingerprint: plan.hash, note: input.note, ip: actor.ip ?? null });
+  await submitForDecision(row.id, plan.hash, input.note, resolved.employeeIds.length, actor);
   return { id: row.id };
 }
 
@@ -572,7 +587,7 @@ export async function submitRevision(revisionId: string, fingerprint: string, ac
   const { hash, blockers } = await stateOf(rev);
   if (fingerprint !== hash) throw new HttpError(409, "This changed since you looked at it. Look at it again.", "PREVIEW_STALE");
   if (blockers.length) throw new HttpError(409, `This cannot be submitted yet: ${blockers[0]}`, "REVISION_BLOCKED", { blockers });
-  await submit({ subject: "SALARY_REVISION", subjectId: revisionId, makerUserId: actor.userId, previewFingerprint: hash, ip: actor.ip ?? null });
+  await submitForDecision(revisionId, hash, undefined, Array.isArray(rev.employeeIds) ? (rev.employeeIds as unknown[]).length : 1, actor);
   return { id: revisionId };
 }
 
@@ -619,7 +634,7 @@ export async function applyRevision(revisionId: string, actor: { userId: string;
   await prisma.$transaction(async (tx) => {
     await lockEmployees(tx, rev.employeeIds as string[]);
     const approval = await tx.payrollApproval.findFirst({ where: { subject: "SALARY_REVISION", subjectId: revisionId, status: "APPROVED" } });
-    if (!approval) throw new HttpError(409, "A second person has not approved this, so it cannot be applied.", "APPROVAL_REQUIRED");
+    if (!approval) throw new HttpError(409, "This has not been approved yet, so it cannot be applied.", "APPROVAL_REQUIRED");
     const plan = await computeRevisionPlan(resolvedOf(rev));
     if (plan.hash !== approval.hashAtDecision) {
       await voidApproval(approval, "The figures no longer match what was approved.", actor.userId); // outside the transaction, so the void survives the rollback

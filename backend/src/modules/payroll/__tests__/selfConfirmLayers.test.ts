@@ -3,7 +3,7 @@ import { prisma } from "../../../lib/prisma";
 import { cleanupEmployeeTestOrgMasters, cleanupFullTestEmployee, createEmployeeTestOrgMasters, createFullTestEmployee, type TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
 import { confirmRule, editRule, getRule, previewConfirm, previewEdit } from "../rules/governed";
 import { confirmComponent, previewComponentConfirm, previewComponentSave, saveComponent } from "../salary/components";
-import { cleanupPayrollRowsBy, cleanupPayrollSubject } from "./payrollTestHelpers";
+import { cleanupPayrollRowsBy, cleanupPayrollSubject, useSecondDirectorChecks } from "./payrollTestHelpers";
 
 // "Nobody confirms a value they wrote" is stopped by four independent layers. rules.test.ts proves the whole stack refuses it; THIS file proves each
 // layer refuses it on its own, so weakening one is caught even though the others still hold:
@@ -31,7 +31,9 @@ describe("a person cannot confirm their own value: each layer on its own", () =>
   let author: { employeeId: string; userId: string; employeeCode: string };
   const key = "NEGATIVE_NET_POLICY";
 
+  let restoreChecks: () => Promise<void>; // these tests describe the two-director behaviour: a value is confirmed by a different director
   beforeAll(async () => {
+    restoreChecks = await useSecondDirectorChecks();
     org = await createEmployeeTestOrgMasters();
     author = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
     const confirmPermission = await prisma.permission.findUniqueOrThrow({ where: { key: "payroll.rules.confirm" } });
@@ -41,6 +43,7 @@ describe("a person cannot confirm their own value: each layer on its own", () =>
   });
 
   afterAll(async () => {
+    await restoreChecks();
     await prisma.userPermissionOverride.deleteMany({ where: { userId: author.userId } });
     await cleanupPayrollRowsBy([author.userId]);
     await cleanupPayrollSubject("layer-test-");

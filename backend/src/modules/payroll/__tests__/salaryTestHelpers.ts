@@ -5,7 +5,7 @@ import { cleanupEmployeeTestOrgMasters, cleanupFullTestEmployee, createEmployeeT
 import { editRule, ensurePayrollRules, previewEdit } from "../rules/governed";
 import { confirmComponent, previewComponentConfirm, previewComponentSave, saveComponent } from "../salary/components";
 import { confirmStructure, previewStructureConfirm, previewStructureSave, saveStructure } from "../salary/structures";
-import { cleanupPayrollRowsBy } from "./payrollTestHelpers";
+import { cleanupPayrollRowsBy, useSecondDirectorChecks } from "./payrollTestHelpers";
 
 // A small world for the salary tests: a maker, two checkers, three ordinary employees, the rounding rule set, three components and a structure
 // (Basic 40% of CTC, HRA 50% of Basic, Special allowance the balance), the components confirmed by one checker and the structure by the other.
@@ -33,6 +33,8 @@ export interface SalaryWorld {
   conveyance: string;
   structure: string;
   userIds: string[];
+  /** Puts the second-director setting back (see useSecondDirectorChecks). */
+  restoreSwitches?: () => Promise<void>;
 }
 
 export const FIRST_SALARY_DAY = "2025-04-01"; // always in the past, after the test employees' joining date (2024-01-01)
@@ -68,6 +70,7 @@ export async function makeStructure(world: Pick<SalaryWorld, "maker" | "checkerB
 }
 
 export async function buildSalaryWorld(): Promise<SalaryWorld> {
+  const restoreSwitches = await useSecondDirectorChecks(); // these tests describe the two-director behaviour; D2's own tests cover a director acting alone
   await ensurePayrollRules();
   const org = await createEmployeeTestOrgMasters();
   const prefix = `T${randomBytes(2).toString("hex").toUpperCase()}`;
@@ -91,6 +94,7 @@ export async function buildSalaryWorld(): Promise<SalaryWorld> {
     conveyance: `${prefix}_CONV`,
     structure: `${prefix}_STD`,
     userIds: [maker.userId, checkerA.userId, checkerB.userId, outsider.userId, ...staff.map((s) => s.userId)],
+    restoreSwitches,
   };
   await setRule(maker.userId, "LINE_ROUNDING", { mode: "HALF_UP", scale: 0 });
   await makeComponent(world, world.basic, { payslipOrder: 1 });
@@ -114,6 +118,7 @@ export async function teardownSalaryWorld(world: SalaryWorld): Promise<void> {
   for (const p of [...world.staff, world.outsider, world.checkerB, world.checkerA, world.maker]) await cleanupFullTestEmployee(p.employeeId);
   await cleanupPayrollRowsBy(world.userIds);
   await cleanupEmployeeTestOrgMasters(world.org);
+  await world.restoreSwitches?.();
 }
 
 /** Gives somebody a salary the way the product does: a revision, a decision by a checker, and the maker applying it. Returns the revision id. */
