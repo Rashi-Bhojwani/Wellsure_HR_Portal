@@ -1,5 +1,10 @@
 # HR / payroll separation — plan
 
+> **Amended by [DIRECTOR_AUTHORITY.md](DIRECTOR_AUTHORITY.md) (2026-10-29):** payroll roles are director-only;
+> Q2, Q14 and Q15 were answered differently from the recommendations; Q3 and Q7 are re-answered there. §3.5, §4,
+> §6, §7, §9, §10 and §11 below are amended as listed in that document's §9. Nothing is built until both
+> documents are approved.
+
 **Status: PLAN, awaiting the owner's approval. Nothing in this document is built.** Branch
 `feat/hr-payroll-separation`, based on `main` at `58a6e13` (it contains P7-0 and the UI pass, both verified
 by ancestry: `cc95037`, `60132e0`, `46a3064`). The only other commit on the branch is the docs-only
