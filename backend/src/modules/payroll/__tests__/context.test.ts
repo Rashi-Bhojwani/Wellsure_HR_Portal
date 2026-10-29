@@ -19,8 +19,8 @@ describe("RuleContext, the gates and the watermark", () => {
   beforeAll(async () => {
     await ensurePayrollRules();
     org = await createEmployeeTestOrgMasters();
-    maker = await createFullTestEmployee(org, { roleCode: "PAYROLL_ADMIN" });
-    checker = await createFullTestEmployee(org, { roleCode: "PAYROLL_APPROVER" });
+    maker = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
+    checker = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
   });
 
   afterAll(async () => {
@@ -124,7 +124,7 @@ describe("RuleContext, the gates and the watermark", () => {
     expect(seen.eligible.map((e) => e.userId)).not.toContain(checker.userId);
     const open = await checkerAvailability("RULE_CONFIRM", { makerUserId: null });
     expect(open.eligible.map((e) => e.userId)).toContain(checker.userId);
-    expect(open.eligible.map((e) => e.userId)).not.toContain(maker.userId); // PAYROLL_ADMIN cannot confirm
+    expect(open.eligible.map((e) => e.userId)).toContain(maker.userId); // D1: both are directors, so either could confirm what the other wrote
   });
 });
 

@@ -12,6 +12,9 @@ import {
   type TestOrgMasters,
 } from "../../leave/__tests__/leaveTestHelpers";
 import { prisma } from "../../../lib/prisma";
+import { cleanupTestRole, grantPermissions } from "../../employee/__tests__/employeeTestHelpers";
+
+const VIEW_ALL_ROLE = "TEST_VIEW_ALL_NO_APPROVE";
 import { writeLedgerEntry } from "../../leave/ledger";
 import { getRegularizationRequestSink, setRegularizationRequestSink, type RegularizationRequestSink } from "../regularizationIntegration";
 
@@ -32,6 +35,7 @@ describe("GET /api/admin/tasks/counts", () => {
   const originalSink = getRegularizationRequestSink();
 
   afterAll(async () => {
+    // (the view-only role is removed after its holder, below)
     // Later tests in this file depend on the pending request the first
     // test creates staying PENDING throughout — deleted only at the very
     // end, not between tests (an afterEach here would wipe it right after
@@ -39,6 +43,7 @@ describe("GET /api/admin/tasks/counts", () => {
     // zero pending requests).
     await prisma.leaveRequest.deleteMany({ where: { id: { in: requestIds } } });
     for (const id of [...employeeIds].reverse()) await cleanupLoginableTestEmployee(id);
+    await cleanupTestRole(VIEW_ALL_ROLE);
     await cleanupEmployeeTestOrgMasters(org);
     setRegularizationRequestSink(originalSink);
   });
@@ -60,11 +65,14 @@ describe("GET /api/admin/tasks/counts", () => {
     employeeIds.push(hrAdmin.employeeId);
     hrAdminToken = await loginAs(hrAdmin.employeeCode);
 
-    // PAYROLL_ADMIN: leave.view + ALL scope, but NOT leave.approve (per
-    // seed) — unlike HR_ADMIN, its own "review" query (canApprove gated)
-    // never runs, so the org-wide pending count shows up entirely under
-    // "monitor" instead of being absorbed into "review" first.
-    const payrollAdmin = await createLoginableTestEmployee(org, { roleCode: "PAYROLL_ADMIN" });
+    // A viewer with leave.view + ALL scope but NOT leave.approve — unlike HR_ADMIN,
+    // its own "review" query (canApprove gated) never runs, so the org-wide pending
+    // count shows up entirely under "monitor" instead of being absorbed into
+    // "review" first. (It used to be PAYROLL_ADMIN; the payroll roles are for
+    // directors only now, so this is a role made for the test.)
+    await grantPermissions(VIEW_ALL_ROLE, ["leave.view"]);
+    await prisma.role.update({ where: { code: VIEW_ALL_ROLE }, data: { dataScope: "ALL" } });
+    const payrollAdmin = await createLoginableTestEmployee(org, { roleCode: VIEW_ALL_ROLE });
     employeeIds.push(payrollAdmin.employeeId);
     payrollAdminToken = await loginAs(payrollAdmin.employeeCode);
 
@@ -96,7 +104,7 @@ describe("GET /api/admin/tasks/counts", () => {
   it("an ALL-scope, leave.view-only viewer (no leave.approve) sees the org-wide pending count under monitor, not review", async () => {
     const res = await request(app).get("/api/admin/tasks/counts").set(...authHeader(payrollAdminToken));
     expect(res.status).toBe(200);
-    expect(res.body.review.total).toBe(0); // PAYROLL_ADMIN has no leave.approve at all
+    expect(res.body.review.total).toBe(0); // this viewer has no leave.approve at all
     expect(res.body.monitor.total).toBeGreaterThanOrEqual(1);
     expect(res.body.monitor.byType.find((t: { type: string }) => t.type === "LEAVE").count).toBeGreaterThanOrEqual(1);
   });

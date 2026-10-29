@@ -84,7 +84,8 @@ describe("the developer ceiling", () => {
     const role = await prisma.role.findUniqueOrThrow({ where: { code: DEVELOPER_ROLE_CODE } });
     const keys = ["payroll.salary.view", "employee.bank.view", "payroll.identifiers.manage", "payroll.banklayout.manage", "settings.manage"];
     const perms = await prisma.permission.findMany({ where: { key: { in: keys } } });
-    await prisma.userPermissionOverride.createMany({ data: perms.map((p) => ({ userId: dev.userId, permissionId: p.id, effect: "GRANT" as const, reason: "raw", createdByUserId: sa.userId })) });
+    // (A per-user grant of a payroll key is refused by the database since D1, so those two reach the developer only through the role row, below.)
+    await prisma.userPermissionOverride.createMany({ data: perms.filter((p) => !p.key.startsWith("payroll.")).map((p) => ({ userId: dev.userId, permissionId: p.id, effect: "GRANT" as const, reason: "raw", createdByUserId: sa.userId })) });
     await prisma.rolePermission.createMany({ data: perms.map((p) => ({ roleId: role.id, permissionId: p.id })), skipDuplicates: true });
     try {
       const a = await resolveAccess(dev.userId);

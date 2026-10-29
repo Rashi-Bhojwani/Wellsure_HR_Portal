@@ -2498,6 +2498,8 @@ model PayrollItemConfirmation {
   confirmedAt       DateTime        @default(now()) @map("confirmed_at") @db.Timestamptz(3)
   note              String          @default("")
   approvalId        String?         @map("approval_id")
+  // D1 (docs/plans/DIRECTOR_AUTHORITY.md): true when the confirmer is the author, which is allowed only to a Super Admin acting under director authority.
+  selfConfirmed     Boolean         @default(false) @map("self_confirmed")
 
   @@unique([kind, key, version])
   @@map("payroll_item_confirmations")
@@ -2521,6 +2523,8 @@ model PayrollApproval {
   voidReason         String?                @map("void_reason")
   consumedAt         DateTime?              @map("consumed_at") @db.Timestamptz(3)
   consumedByUserId   String?                @map("consumed_by_user_id")
+  // D1: SECOND_DIRECTOR = a different person decided it (the original rule); DIRECTOR_AUTHORITY = one Super Admin prepared and decided it in one act.
+  authority          ApprovalAuthority      @default(SECOND_DIRECTOR)
 
   @@index([subject, subjectId])
   @@map("payroll_approvals")
@@ -3004,7 +3008,6 @@ model PayrollOutput {
   @@map("payroll_outputs")
 }
 
-
 // P6-6: a person's statement that they checked a whole class of people's data before the first real payroll run (docs/plans/PHASE_6.md §14J). The set that was checked is fixed by
 // contentHash (keyed), so a change to any covered row afterwards makes it stale. Append-only.
 enum PayrollSetupArea {
@@ -3026,4 +3029,52 @@ model PayrollSetupSignoff {
 
   @@index([area, signedAt])
   @@map("payroll_setup_signoffs")
+}
+
+// ── Director authority (D1, docs/plans/DIRECTOR_AUTHORITY.md) ────────────
+
+enum ApprovalAuthority {
+  SECOND_DIRECTOR
+  DIRECTOR_AUTHORITY
+}
+
+// What a director did on their own authority, written in the same transaction as the act (so an act without a notice cannot exist). Counts only: no amounts, no
+// names, no identifiers (the notice leaves the system by e-mail). No foreign keys, so a notice outlives the people it mentions. Append-only (database trigger).
+model DirectorActionNotice {
+  id           String             @id @default(cuid())
+  kind         String // ACTION | SWITCH_CHANGED | SETTING_CHANGED
+  step         String
+  subjectType  String             @map("subject_type")
+  subjectId    String             @map("subject_id")
+  subjectLabel String             @map("subject_label")
+  itemCount    Int?               @map("item_count")
+  actorUserId  String             @map("actor_user_id")
+  approvalId   String?            @map("approval_id")
+  authority    ApprovalAuthority?
+  detail       Json               @default("{}")
+  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  receipts DirectorActionReceipt[]
+
+  @@index([createdAt])
+  @@map("director_action_notices")
+}
+
+// One row per other director. Delivery, seen, acknowledgement and escalation are each filled in once (database trigger); nothing else ever changes.
+model DirectorActionReceipt {
+  id              String               @id @default(cuid())
+  noticeId        String               @map("notice_id")
+  notice          DirectorActionNotice @relation(fields: [noticeId], references: [id])
+  recipientUserId String               @map("recipient_user_id")
+  deliveredAt     DateTime?            @map("delivered_at") @db.Timestamptz(3)
+  emailedAt       DateTime?            @map("emailed_at") @db.Timestamptz(3)
+  failedReason    String?              @map("failed_reason")
+  seenAt          DateTime?            @map("seen_at") @db.Timestamptz(3)
+  acknowledgedAt  DateTime?            @map("acknowledged_at") @db.Timestamptz(3)
+  escalatedAt     DateTime?            @map("escalated_at") @db.Timestamptz(3)
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([noticeId, recipientUserId])
+  @@index([recipientUserId, acknowledgedAt])
+  @@map("director_action_receipts")
 }

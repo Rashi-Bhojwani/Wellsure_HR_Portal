@@ -89,9 +89,9 @@ export async function sendPasswordReset(employeeId: string, reason: string): Pro
 // Security events (E1.1) — Super Admins only.
 export interface SecurityEvent {
   id: string;
-  kind: "break_glass.recover" | "break_glass.bootstrap";
+  kind: "break_glass.recover" | "break_glass.bootstrap" | "director.switch_changed" | "director.unacknowledged";
   summary: string;
-  details: { reason?: string; justification?: string | null; operator?: string; origin?: { hostname?: string; appEnv?: string }; emailed?: string[]; queued?: string[] };
+  details: { noticeId?: string; reason?: string; justification?: string | null; operator?: string; origin?: { hostname?: string; appEnv?: string }; emailed?: string[]; queued?: string[] };
   createdAt: string;
   acknowledgedAt: string | null;
   acknowledgedByUserId: string | null;

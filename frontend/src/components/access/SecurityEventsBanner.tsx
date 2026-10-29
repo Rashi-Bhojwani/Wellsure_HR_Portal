@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Form, Input, Tooltip } from "antd";
 import { SafetyOutlined } from "@ant-design/icons";
 import * as accessApi from "../../api/access";
+import * as directorApi from "../../api/director";
 import type { SecurityEvent } from "../../api/access";
 import { useAuth } from "../../hooks/useAuth";
 import { apiErrorMessage } from "../../lib/apiError";
@@ -43,7 +44,8 @@ export function SecurityEventsBanner() {
   }, [socket, isSuperAdmin, queryClient]);
 
   const ack = useMutation({
-    mutationFn: (vars: { id: string; note: string }) => accessApi.acknowledgeSecurityEvent(vars.id, vars.note),
+    // A director banner (docs/plans/DIRECTOR_AUTHORITY.md) is cleared by acknowledging the notice it was raised for, which clears every banner raised for it.
+    mutationFn: (vars: { id: string; note: string; noticeId?: string }) => (vars.noticeId ? directorApi.acknowledgeNotice(vars.noticeId, vars.note) : accessApi.acknowledgeSecurityEvent(vars.id, vars.note)),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["access", "security-events"] });
       setOpen(null);
@@ -61,8 +63,12 @@ export function SecurityEventsBanner() {
           key={e.id}
           tone="danger"
           icon={<SafetyOutlined />}
-          title={`Security: ${e.summary}`}
-          description={`${formatDateTime(e.createdAt)} · run by "${e.details.operator ?? "?"}" on ${e.details.origin?.hostname ?? "?"} · reason: ${e.details.reason ?? "—"}`}
+          title={`${e.kind.startsWith("director.") ? "Director" : "Security"}: ${e.summary}`}
+          description={
+            e.kind.startsWith("director.")
+              ? `${formatDateTime(e.createdAt)} · done on a director's own authority and recorded in the audit log. Acknowledge it once you have checked it.`
+              : `${formatDateTime(e.createdAt)} · run by "${e.details.operator ?? "?"}" on ${e.details.origin?.hostname ?? "?"} · reason: ${e.details.reason ?? "—"}`
+          }
           actions={
             <Tooltip title={e.youAreTarget ? "This was done to your own account — another Super Admin has to acknowledge it." : undefined}>
               {/* A span keeps the tooltip reachable when the button is disabled. */}
@@ -103,7 +109,7 @@ export function SecurityEventsBanner() {
                     ]}
                   />
                 </div>
-                <Form form={form} layout="vertical" requiredMark={false} onFinish={(vals) => ack.mutate({ id: open.id, note: vals.note })}>
+                <Form form={form} layout="vertical" requiredMark={false} onFinish={(vals) => ack.mutate({ id: open.id, note: vals.note, noticeId: open.details.noticeId })}>
                   <Form.Item name="note" label="What you checked" rules={[{ required: true, min: 3, message: "Say what you checked." }]} style={{ marginBottom: 0 }}>
                     <Input.TextArea rows={2} maxLength={500} />
                   </Form.Item>

@@ -153,7 +153,7 @@ describe("submit, approve, finalise, the lock and unlock", () => {
 
   it("is refused to a checker, with a fingerprint that is not the preview's, and on a run that is not at this step", async () => {
     const p = await step(world.tokens.maker, runId, "run", "preview");
-    expect((await step(world.tokens.checkerA, runId, "run", "request", { fingerprint: p.body.fingerprint })).status).toBe(403);
+    expect((await step(world.tokens.outsider, runId, "run", "request", { fingerprint: p.body.fingerprint })).status).toBe(403);
     const stale = await step(world.tokens.maker, runId, "run", "request", { fingerprint: "f".repeat(40) });
     expect([stale.status, stale.body.error.code]).toEqual([409, "PREVIEW_STALE"]);
     expect((await runRow(runId)).status).toBe("CALCULATED");
@@ -232,7 +232,7 @@ describe("submit, approve, finalise, the lock and unlock", () => {
     const p = await step(world.tokens.maker, runId, "finalise", "preview");
     expect(p.body).toMatchObject({ canRequest: true, blockers: [], lock: { from: "2026-08-01", to: "2026-08-31" }, adjustmentsMarkedPaid: { count: 1, bySource: { MANUAL: 1 } } });
     expect(p.body.approvedBy).toBeTruthy();
-    expect((await step(world.tokens.checkerA, runId, "finalise", "request", { fingerprint: p.body.fingerprint })).status).toBe(403);
+    expect((await step(world.tokens.outsider, runId, "finalise", "request", { fingerprint: p.body.fingerprint })).status).toBe(403);
     await requestStep(world.tokens.maker, runId, "finalise");
     expect((await step(world.tokens.maker, runId, "finalise", "decision", { decision: "APPROVE", hash: "a".repeat(64) })).status).toBe(403);
     await approve(world, world.supToken, runId, "finalise"); // the Super Admin holds every permission, which is exactly why they must not also carry it out
@@ -306,8 +306,8 @@ describe("submit, approve, finalise, the lock and unlock", () => {
     const preview = await step(world.supToken, runId, "unlock", "preview");
     expect(preview.body).toMatchObject({ canRequest: true, blockers: [], adjustmentsReturned: 1 });
     expect(preview.body.allows.length).toBeGreaterThanOrEqual(4);
-    expect((await step(world.tokens.maker, runId, "unlock", "preview")).status).toBe(200); // a payroll admin may look...
-    expect((await step(world.tokens.maker, runId, "unlock", "request", { fingerprint: preview.body.fingerprint, note: "A day was wrong" })).status).toBe(403); // ...but not ask
+    expect((await step(world.tokens.outsider, runId, "unlock", "preview")).status).toBe(403); // somebody with no payroll permission may not even look...
+    expect((await step(world.tokens.outsider, runId, "unlock", "request", { fingerprint: preview.body.fingerprint, note: "A day was wrong" })).status).toBe(403); // ...or ask
     expect((await step(world.supToken, runId, "unlock", "request", { fingerprint: preview.body.fingerprint })).status).toBe(400); // a reason is needed
     expect((await api(world.supToken, "post", `/runs/${runId}/unlock`)).body.error.code).toBe("APPROVAL_REQUIRED");
     const asked = await step(world.supToken, runId, "unlock", "request", { fingerprint: preview.body.fingerprint, note: "A day was found to be wrong" });
@@ -315,8 +315,8 @@ describe("submit, approve, finalise, the lock and unlock", () => {
     expect((await step(world.supToken, runId, "unlock", "decision", { decision: "APPROVE", hash: (await stepOf(world.supToken, runId, "unlock")).live!.hash })).status).toBe(403); // not the maker
     expect((await api(world.supToken, "post", `/runs/${runId}/unlock`)).body.error.code).toBe("APPROVAL_REQUIRED");
     await approve(world, world.tokens.checkerA, runId, "unlock");
-    const out = await api(world.tokens.maker, "post", `/runs/${runId}/unlock`);
-    expect(out.status).toBe(403); // the maker holds no unlock permission
+    const out = await api(world.tokens.outsider, "post", `/runs/${runId}/unlock`);
+    expect(out.status).toBe(403); // an HR Executive holds no unlock permission
     const done = await api(world.supToken, "post", `/runs/${runId}/unlock`);
     expect([done.status, done.body.status, done.body.adjustmentsReturned]).toEqual([200, "VOID", 1]);
   });

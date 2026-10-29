@@ -22,10 +22,13 @@ describe("maker-checker core", () => {
 
   beforeAll(async () => {
     org = await createEmployeeTestOrgMasters();
-    people.maker = await createFullTestEmployee(org, { roleCode: "PAYROLL_ADMIN" });
-    people.checkerA = await createFullTestEmployee(org, { roleCode: "PAYROLL_APPROVER" });
-    people.checkerB = await createFullTestEmployee(org, { roleCode: "PAYROLL_APPROVER" });
-    people.both = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" }); // holds every permission: maker and checker
+    // D1 (docs/plans/DIRECTOR_AUTHORITY.md): the payroll roles are for directors, so the maker and the checkers are all Super Admins (three of them, so the
+    // concurrency and exclusion cases still have someone left). An HR Admin is the person who is neither.
+    people.maker = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
+    people.checkerA = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
+    people.checkerB = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
+    people.both = people.maker; // holds every permission: maker and checker
+    people.outsider = await createFullTestEmployee(org, { roleCode: "HR_ADMIN" });
     for (const s of SUBJECTS) {
       registerSubject({
         subject: s,
@@ -43,7 +46,7 @@ describe("maker-checker core", () => {
     for (const s of SUBJECTS) unregisterSubjectForTests(s);
     await cleanupPayrollSubject(prefix);
     await cleanupPayrollRowsBy(Object.values(people).map((p) => p.userId));
-    for (const p of Object.values(people)) await cleanupFullTestEmployee(p.employeeId);
+    for (const p of new Set(Object.values(people))) await cleanupFullTestEmployee(p.employeeId);
     await cleanupEmployeeTestOrgMasters(org);
   });
 
@@ -85,12 +88,12 @@ describe("maker-checker core", () => {
     });
   });
 
-  it("only a maker can submit and only a checker can decide", async () => {
+  it("only a director can submit and only a director can decide: an HR Admin can do neither", async () => {
     const id = newId();
     figures.set(id, "5");
-    await expect(submit({ subject: "RUN_APPROVAL", subjectId: id, makerUserId: people.checkerA!.userId, previewFingerprint: "x" })).rejects.toMatchObject({ status: 403 });
+    await expect(submit({ subject: "RUN_APPROVAL", subjectId: id, makerUserId: people.outsider!.userId, previewFingerprint: "x" })).rejects.toMatchObject({ status: 403, code: "FORBIDDEN" });
     const a = await submitAs("RUN_APPROVAL", id);
-    await expect(decide({ approvalId: a.id, checkerUserId: people.maker!.userId, decision: "APPROVE" })).rejects.toMatchObject({ status: 403, code: "FORBIDDEN" });
+    await expect(decide({ approvalId: a.id, checkerUserId: people.outsider!.userId, decision: "APPROVE" })).rejects.toMatchObject({ status: 403, code: "FORBIDDEN" });
   });
 
   it("the checker is never the maker, even for someone who holds both permissions", async () => {

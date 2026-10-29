@@ -187,7 +187,7 @@ describe("the comparison through the API", () => {
 
   beforeAll(async () => {
     org = await createEmployeeTestOrgMasters();
-    maker = await createFullTestEmployee(org, { roleCode: "PAYROLL_ADMIN" });
+    maker = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
     employee = await createFullTestEmployee(org, { roleCode: "EMPLOYEE" });
     makerToken = await loginAs(maker.employeeCode);
     employeeToken = await loginAs(employee.employeeCode);

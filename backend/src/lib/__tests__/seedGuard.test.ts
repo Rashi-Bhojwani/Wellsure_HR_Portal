@@ -51,7 +51,7 @@ describe("the development seed cannot carry demo accounts or payroll roles into 
     const seed = read("prisma/seed.ts");
     const guard = seed.indexOf("\nassertDevelopmentEnvironment(");
     expect(guard, "prisma/seed.ts must call assertDevelopmentEnvironment() at the top level").toBeGreaterThan(0);
-    for (const later of ["new PrismaClient(", "prisma.user.create", "userRole.create", "PAYROLL_ADMIN", "PAYROLL_APPROVER", "ensurePayrollRules()", "devDatabaseMarker.create"]) {
+    for (const later of ["new PrismaClient(", "prisma.user.create", "userRole.create", "SUPER_ADMIN", "ensurePayrollRules()", "devDatabaseMarker.create"]) {
       expect(seed.indexOf(later), `${later} must come after the guard`).toBeGreaterThan(guard);
     }
     // Importing things is allowed to come first; running anything is not. Only imports and comments may precede the guard.
@@ -89,8 +89,8 @@ describe("the development seed cannot carry demo accounts or payroll roles into 
     expect(read("src/modules/access/service.ts")).toMatch(/assignedByUserId: actor\.userId/);
   });
 
-  it("fence 2c: the payroll maker/checker demo assignment exists only inside the seed", () => {
-    const hits = sourceFiles(backendRoot).filter((f) => /spec\.employeeCode === "10(25|27)"/.test(read(f)));
+  it("fence 2c: the second-director demo assignment (1031) exists only inside the seed", () => {
+    const hits = sourceFiles(backendRoot).filter((f) => /spec\.employeeCode === "1031"/.test(read(f)));
     expect(hits).toEqual(["prisma/seed.ts"]);
   });
 });

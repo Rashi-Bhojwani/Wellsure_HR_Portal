@@ -1,4 +1,5 @@
-import { default2faRoles } from "../../lib/authDefaults";
+import { env } from "../../config/env";
+import { default2faRoles, with2faFloor } from "../../lib/authDefaults";
 import { getSetting, setSetting } from "../../lib/settings";
 import { writeAuditLog } from "../../lib/audit";
 import { RATE_LIMIT_DEFAULTS, RATE_LIMIT_KEYS, type LeaveSettings, type RateLimitSetting, type SecuritySettings } from "./types";
@@ -26,7 +27,7 @@ export async function getSettings(): Promise<SecuritySettings> {
     getSetting("auth.lockout", { maxAttempts: 5, lockoutMinutes: 15 }),
     getSetting("auth.passwordMinLength", 8),
     getSetting("auth.invitationTtlHours", 48),
-    getSetting<string[]>("auth.require2faRoles", default2faRoles()),
+    getSetting<string[]>("auth.require2faRoles", default2faRoles()).then((roles) => with2faFloor(roles, env.APP_ENV)),
     ...RATE_LIMIT_KEYS.map((k) => getSetting<RateLimitSetting>(RATE_LIMIT_SETTING_KEY[k], RATE_LIMIT_DEFAULTS[k])),
   ]);
 
@@ -65,6 +66,10 @@ export async function updateSettings(input: UpdateInput, meta: { actorUserId: st
     await setSetting("auth.invitationTtlHours", input.invitationTtlHours, meta.actorUserId);
   }
   if (input.require2faRoles !== undefined) {
+    // D1: outside development a Super Admin always needs two-step sign-in; the list can add roles but cannot drop this one.
+    if (env.APP_ENV !== "development" && !input.require2faRoles.includes("SUPER_ADMIN")) {
+      throw new HttpError(400, "Two-step sign-in is always required of a Super Admin: they can run payroll on their own authority. You can add other roles, but not remove this one.", "TWO_FACTOR_FLOOR");
+    }
     await setSetting("auth.require2faRoles", input.require2faRoles, meta.actorUserId);
   }
   if (input.rateLimits) {

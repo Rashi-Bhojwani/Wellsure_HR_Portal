@@ -16,6 +16,7 @@ import {
   cleanupTestRole,
   createEmployeeTestOrgMasters,
   createFullTestEmployee,
+  grantPermissions,
   loginAs,
   type TestOrgMasters,
 } from "../../employee/__tests__/employeeTestHelpers";
@@ -26,6 +27,7 @@ import { AdminCliRefusal, assertBootstrapAllowed, bootstrapSuperAdmin, provision
 // Uses the SEEDED system roles, so the matrix under test is the real one.
 // Role definitions are only ever edited on a throwaway test role.
 type Person = { employeeId: string; employeeCode: string; userId: string };
+const RAW_ROLE = "TEST_RAW_BANK_VIEW_ALL";
 
 describe("Roles & permissions (E1)", () => {
   let org: TestOrgMasters;
@@ -106,7 +108,10 @@ describe("Roles & permissions (E1)", () => {
     it("E2: a manager's access is clipped to the manager-grantable list and TEAM scope, whatever the rows say", async () => {
       const u = people.manager.userId;
       const perm = (key: string) => prisma.permission.findUniqueOrThrow({ where: { key } });
-      const payroll = await prisma.role.findUniqueOrThrow({ where: { code: "PAYROLL_ADMIN" } }); // bank view, scope ALL
+      // A role with bank view and leave view at scope ALL (it used to be PAYROLL_ADMIN; the payroll roles are for directors only and the database refuses them here).
+      await grantPermissions(RAW_ROLE, ["employee.bank.view", "leave.view"]);
+      await prisma.role.update({ where: { code: RAW_ROLE }, data: { dataScope: "ALL" } });
+      const payroll = await prisma.role.findUniqueOrThrow({ where: { code: RAW_ROLE } });
       // Raw rows the API would refuse: another role, and a non-grantable GRANT.
       await prisma.userRole.create({ data: { userId: u, roleId: payroll.id } });
       await prisma.userPermissionOverride.create({ data: { userId: u, permissionId: (await perm("helpdesk.manage")).id, effect: "GRANT", reason: "raw", createdByUserId: people.sa.userId } });
@@ -121,6 +126,7 @@ describe("Roles & permissions (E1)", () => {
       } finally {
         await prisma.userPermissionOverride.deleteMany({ where: { userId: u } });
         await prisma.userRole.delete({ where: { userId_roleId: { userId: u, roleId: payroll.id } } });
+        await cleanupTestRole(RAW_ROLE);
       }
     });
 

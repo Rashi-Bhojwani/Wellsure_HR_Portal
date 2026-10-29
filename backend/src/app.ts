@@ -30,6 +30,7 @@ import { requestHubRouter } from "./modules/requestHub/routes";
 import { tasksRouter } from "./modules/tasks/routes";
 import { lettersRouter } from "./modules/letters/routes";
 import { accessRouter } from "./modules/access/routes";
+import { directorRouter } from "./modules/director/routes";
 import { managersRouter } from "./modules/managers/routes";
 import { delegationsRouter } from "./modules/delegations/routes";
 import { attendanceRouter } from "./modules/attendance/routes";
@@ -76,6 +77,7 @@ const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   { path: "/api/tasks", router: tasksRouter },
   { path: "/api/letters", router: lettersRouter },
   { path: "/api/access", router: accessRouter },
+  { path: "/api/director", router: directorRouter },
   { path: "/api/managers", router: managersRouter },
   { path: "/api/delegations", router: delegationsRouter },
   { path: "/api/reports", router: reportsRouter },

@@ -33,7 +33,7 @@ describe("a person cannot confirm their own value: each layer on its own", () =>
 
   beforeAll(async () => {
     org = await createEmployeeTestOrgMasters();
-    author = await createFullTestEmployee(org, { roleCode: "PAYROLL_ADMIN" });
+    author = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
     const confirmPermission = await prisma.permission.findUniqueOrThrow({ where: { key: "payroll.rules.confirm" } });
     await prisma.userPermissionOverride.create({ data: { userId: author.userId, permissionId: confirmPermission.id, effect: "GRANT", reason: "test: holds maker and checker permissions", createdByUserId: author.userId } });
     const preview = await previewEdit(key, "BLOCK");

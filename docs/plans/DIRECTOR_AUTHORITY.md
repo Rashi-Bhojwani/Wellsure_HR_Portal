@@ -1,6 +1,39 @@
 # Director authority — plan
 
-**Status: PLAN, awaiting the owner's approval. Nothing here is built and no guard in code has been changed.**
+## 0. Approved (2026-10-29) — owner's answers, recorded before building
+
+The plan below was **approved**. Questions not listed here take the recommendation given in §12.
+
+| Q | Answer |
+|---|---|
+| Q-DA-1 | keep the content safeguards (§3) |
+| Q-DA-2 | Option A: own pay stays absolute; a director's own bank/statutory change is confirmed by the other director |
+| Q-DA-3 | unlock, bank file and settings stay OFF (director acts alone) with **visible** switches |
+| Q-DA-4 | bar the entrant only |
+| Q-DA-5 | option (a): **either director can switch any step either way at once**; the other director is notified **and a red banner is raised** |
+| Q-DA-6 | red banner after **3 days** unacknowledged; **no** extra e-mail |
+| Q-DA-7 | notices carry **counts only** — no amounts, no names |
+| Q-DA-8 | keep `PAYROLL_ADMIN`/`PAYROLL_APPROVER` as **director-only markers**; convert the non-director holders (`1025`, `1027`, `DEMO002`, `DEMO003`) to ordinary employees; **add a second director to both datasets** |
+| Q-DA-9 | D1–D3 before H1 |
+| Q-DA-10 | notify on **all** settings changes |
+| Q-DA-11 | no extra report |
+
+**Added requirement — two-step sign-in for every Super Admin before real use.** Where it goes:
+- **D1** (this commit): (a) `SUPER_ADMIN` can no longer be removed from `auth.require2faRoles` in staging/production
+  (`getRequire2faRoles` always includes it outside development; the Settings validator and service refuse removing
+  it); (b) a director action in authority mode, a switch change and a notice acknowledgement are **refused unless the
+  actor has two-step sign-in enabled**, outside development. 
+- **D2**: the Ready-for-first-run row "Everyone who handles payroll uses two-step sign-in" is rewritten to "every
+  Super Admin", is required, and cannot be satisfied by the development exemption in staging/production.
+- **D3**: `FIRST_REAL_PAYROLL_RUN.md` and `GETTING_STARTED.md` state it as a go-live condition, with the setup steps.
+
+**D1 consequence worth knowing:** D1 builds the authority core, the switches, the notices and the director-only role
+ceiling, and converts the seeds/tests to two directors. The payroll flows themselves are switched over to the
+authority mode in **D2**, so after D1 the existing two-person behaviour of every payroll flow is unchanged (the
+second person is now the other director).
+
+
+**Status: APPROVED 2026-10-29 (see §0). D1 in progress; D2 and D3 not started.**
 Branch `feat/hr-payroll-separation`. This plan comes **before H1** of
 [HR_PAYROLL_SEPARATION.md](HR_PAYROLL_SEPARATION.md) and amends it (§9). No real figures, names, accounts or
 identifiers appear here; employee codes are the made-up seed/demo accounts.

@@ -65,7 +65,7 @@ describe("the demo company", () => {
 
   it("the people are made up, and so is everything about them", async () => {
     const demoPeople = await prisma.employee.findMany({ where: { employeeCode: { startsWith: "DEMO" } }, include: { bankAccounts: true, nameHistory: true } });
-    expect(demoPeople).toHaveLength(12);
+    expect(demoPeople).toHaveLength(13);
     for (const p of demoPeople) {
       expect(p.nameHistory[0]!.fullName).toMatch(/^Demo /);
       for (const b of p.bankAccounts) {
@@ -92,11 +92,11 @@ describe("the demo company", () => {
   it("a whole payroll run goes through every step on the demo company, and it is a real run, not a test", async () => {
     const queued: string[] = [];
     setCalculationEnqueuer(async (id) => void queued.push(id));
-    const created = await call("DEMO002", "post", "payroll/runs", { cycleStart: demo.cycle.start });
+    const created = await call("DEMO001", "post", "payroll/runs", { cycleStart: demo.cycle.start });
     expect(created.status, JSON.stringify(created.body)).toBe(201);
     const runId = created.body.id as string;
-    const pre = await call("DEMO002", "post", `payroll/runs/${runId}/calculate-preview`);
-    expect((await call("DEMO002", "post", `payroll/runs/${runId}/calculate`, { fingerprint: pre.body.fingerprint })).status).toBe(202);
+    const pre = await call("DEMO001", "post", `payroll/runs/${runId}/calculate-preview`);
+    expect((await call("DEMO001", "post", `payroll/runs/${runId}/calculate`, { fingerprint: pre.body.fingerprint })).status).toBe(202);
     await executeCalculation(runId, "demo-test");
     const run = await prisma.payrollRun.findUniqueOrThrow({ where: { id: runId } });
     expect(run.status).toBe("CALCULATED");
@@ -104,27 +104,27 @@ describe("the demo company", () => {
 
     const step = (who: string, slug: string, what: string, body?: object) => call(who, "post", `payroll/runs/${runId}/approvals/${slug}/${what}`, body);
     const asked = async (slug: string) => {
-      const p = await step("DEMO002", slug, "preview");
+      const p = await step("DEMO001", slug, "preview");
       expect(p.body.canRequest, JSON.stringify(p.body.blockers)).toBe(true);
       expect(p.body.watermark.test).toBe(false);
-      expect((await step("DEMO002", slug, "request", { fingerprint: p.body.fingerprint, note: "demo" })).status).toBe(201);
+      expect((await step("DEMO001", slug, "request", { fingerprint: p.body.fingerprint, note: "demo" })).status).toBe(201);
     };
     const decide = async (who: string, slug: string) => {
       const state = (await call(who, "get", `payroll/runs/${runId}/approvals`)).body.steps.find((s: { slug: string }) => s.slug === slug);
       expect((await step(who, slug, "decision", { decision: "APPROVE", hash: state.live.hash, note: "demo" })).status).toBe(200);
     };
     await asked("run");
-    await decide("DEMO003", "run");
+    await decide("DEMO013", "run");
     await asked("finalise");
-    await decide("DEMO001", "finalise");
-    expect((await call("DEMO002", "post", `payroll/runs/${runId}/finalise`)).status).toBe(200);
+    await decide("DEMO013", "finalise");
+    expect((await call("DEMO001", "post", `payroll/runs/${runId}/finalise`)).status).toBe(200);
     await asked("publish");
-    await decide("DEMO003", "publish");
-    const published = await call("DEMO002", "post", `payroll/runs/${runId}/payslips/publish`);
+    await decide("DEMO013", "publish");
+    const published = await call("DEMO001", "post", `payroll/runs/${runId}/payslips/publish`);
     expect([published.status, published.body.published]).toEqual([201, demo.paid]);
     await asked("bank-file");
-    await decide("DEMO001", "bank-file");
-    const made = await call("DEMO002", "post", `payroll/runs/${runId}/bank-file/generate`);
+    await decide("DEMO013", "bank-file");
+    const made = await call("DEMO001", "post", `payroll/runs/${runId}/bank-file/generate`);
     expect([made.status, made.body.rows]).toEqual([201, demo.paid]);
 
     // The bank file is the fictional one and holds only made-up accounts.

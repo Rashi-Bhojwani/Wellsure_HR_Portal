@@ -29,8 +29,8 @@ describe("sealed company identifiers", () => {
     org = await createEmployeeTestOrgMasters();
     await grantPermissions(rulesOnlyRole, ["payroll.rules.view", "payroll.rules.manage"]);
     await grantPermissions(rulesConfirmRole, ["payroll.rules.view", "payroll.rules.confirm"]);
-    people.maker = await createFullTestEmployee(org, { roleCode: "PAYROLL_ADMIN" });
-    people.checker = await createFullTestEmployee(org, { roleCode: "PAYROLL_APPROVER" });
+    people.maker = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
+    people.checker = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
     people.rulesOnly = await createFullTestEmployee(org, { roleCode: rulesOnlyRole });
     people.rulesChecker = await createFullTestEmployee(org, { roleCode: rulesConfirmRole });
     people.dev = await createFullTestEmployee(org, { roleCode: DEVELOPER_ROLE_CODE });
@@ -48,7 +48,7 @@ describe("sealed company identifiers", () => {
     const attempt = (t: string, key: string, value: unknown) => api(t).post(`/rules/${key}/edit-preview`, { value });
     expect((await attempt(tokens.rulesOnly, KEY, SECRET)).status).toBe(403);
     expect((await attempt(tokens.dev, KEY, SECRET)).status).toBe(403);
-    expect((await attempt(tokens.checker, KEY, SECRET)).status).toBe(403); // a checker confirms, never enters
+    expect((await attempt(tokens.rulesChecker, KEY, SECRET)).status).toBe(403); // a holder of the confirm key only confirms, never enters
     expect((await attempt(tokens.rulesOnly, "PAY_DAYS_BASIS", "CALENDAR_DAYS")).status).toBe(200);
     expect((await attempt(tokens.maker, KEY, SECRET)).status).toBe(200);
   });
@@ -91,7 +91,7 @@ describe("sealed company identifiers", () => {
     expect(rows).toHaveLength(1);
     expect(JSON.stringify(rows)).not.toContain(SECRET);
     // The checker, the developer, a rules-only editor and an ordinary rule cannot use Reveal.
-    for (const t of [tokens.checker, tokens.dev, tokens.rulesOnly]) expect((await api(t).post(`/rules/${KEY}/reveal`)).status).toBe(403);
+    for (const t of [tokens.rulesChecker, tokens.dev, tokens.rulesOnly]) expect((await api(t).post(`/rules/${KEY}/reveal`)).status).toBe(403);
     expect((await api(tokens.maker).post("/rules/PAY_DAYS_BASIS/reveal")).status).toBe(400);
     // The edit is in the audit log as an edit, with no value.
     const edits = await prisma.auditLog.findMany({ where: { entityType: "PayrollRule", entityId: KEY } });
@@ -104,7 +104,7 @@ describe("sealed company identifiers", () => {
   it("confirming needs payroll.identifiers.confirm, a different person, and the value typed again; the confirmer is never shown it", async () => {
     // payroll.rules.confirm alone is not enough.
     expect((await api(tokens.rulesChecker).post(`/rules/${KEY}/confirm-preview`)).status).toBe(403);
-    expect((await api(tokens.maker).post(`/rules/${KEY}/confirm-preview`)).body.error?.code ?? "").not.toBe("");
+    expect((await api(tokens.maker).post(`/rules/${KEY}/confirm-preview`)).body.blocked).toMatch(/You wrote this value/); // a director holds both keys, and is told why they cannot confirm their own
     const pre = await api(tokens.checker).post(`/rules/${KEY}/confirm-preview`);
     expect(pre.status).toBe(200);
     expect(pre.body.requiresRetype).toBe(true);

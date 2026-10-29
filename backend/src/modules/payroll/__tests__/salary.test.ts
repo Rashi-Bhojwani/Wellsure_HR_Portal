@@ -67,7 +67,8 @@ describe("components", () => {
     expect(saved.body.usedBy[0]).toMatchObject({ pinnedVersion: 1, behind: true });
 
     // The author cannot confirm it, a different person can; a stale fingerprint is refused.
-    expect((await maker().post(`/components/${w.basic}/confirm-preview`)).status).toBe(403); // the maker role does not hold the confirm permission at all
+    const own = await maker().post(`/components/${w.basic}/confirm-preview`);
+    expect([own.status, /You wrote this value/.test(String(own.body.blocked))]).toEqual([200, true]); // D1: a director holds both permissions, so they may look and are told why they cannot confirm their own
     const c = await checkerA().post(`/components/${w.basic}/confirm-preview`);
     expect(c.status).toBe(200);
     const stale = await checkerA().post(`/components/${w.basic}/confirm`, { version: 2, note: "checked the notification", fingerprint: differentFingerprint(c.body.fingerprint) });
@@ -342,7 +343,7 @@ describe("nobody changes their own pay, whatever their role", () => {
   });
 
   it("somebody whose own pay is in an approved revision cannot be the one who applies it, even though they hold the permission to", async () => {
-    const other = await createFullTestEmployee(w.org, { roleCode: "PAYROLL_ADMIN" });
+    const other = await createFullTestEmployee(w.org, { roleCode: "SUPER_ADMIN" });
     try {
       const tokenOther = await loginAs(other.employeeCode);
       const id = (await createRevision(w.tokens.maker, joining(other.employeeId, "900000"))).created.body.id as string;
@@ -399,9 +400,10 @@ describe("who can see and do what", () => {
     expect((await maker().get(`/salary/people?q=${w.staff[2]!.employeeCode}`)).body.people[0]).toMatchObject({ hasSalary: true });
   });
 
-  it("a person with only the checker role can look and decide but not prepare, and an ordinary employee can do nothing", async () => {
+  it("an HR Executive (no payroll permission) can neither look nor prepare, a director can, and an ordinary employee can do nothing", async () => {
     const input = joining(w.checkerB.employeeId);
-    expect((await checkerA().post("/salary/revisions/preview", { input })).status).toBe(403);
+    expect((await api(w.tokens.outsider).post("/salary/revisions/preview", { input })).status).toBe(403);
+    expect((await api(w.tokens.outsider).get("/salary/revisions")).status).toBe(403);
     expect((await checkerA().get("/salary/revisions")).status).toBe(200);
     const plain = await createFullTestEmployee(w.org);
     try {

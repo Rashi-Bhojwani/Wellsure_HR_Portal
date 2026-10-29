@@ -74,8 +74,8 @@ describe("governed rules in the database", () => {
   beforeAll(async () => {
     await ensurePayrollRules();
     org = await createEmployeeTestOrgMasters();
-    maker = await createFullTestEmployee(org, { roleCode: "PAYROLL_ADMIN" });
-    checker = await createFullTestEmployee(org, { roleCode: "PAYROLL_APPROVER" });
+    maker = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
+    checker = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
     userIds.push(maker.userId, checker.userId);
     makerToken = await loginAs(maker.employeeCode);
     checkerToken = await loginAs(checker.employeeCode);
@@ -139,7 +139,8 @@ describe("governed rules in the database", () => {
 
     // The author cannot confirm their own value.
     const own = await api(makerToken).post(`/rules/${key}/confirm-preview`);
-    expect(own.status).toBe(403); // the maker role does not even hold the confirm permission
+    expect(own.status).toBe(200); // D1: a director holds both permissions, so they may look...
+    expect(own.body.blocked).toMatch(/You wrote this value/); // ...and are told why they cannot confirm what they wrote
     // A different person confirms.
     const done = await confirmRule(checkerToken, key);
     expect(done.status, JSON.stringify(done.body)).toBe(200);
@@ -151,7 +152,7 @@ describe("governed rules in the database", () => {
   });
 
   it("a person who holds BOTH permissions still cannot confirm a value they wrote: the preview says so and the confirm is refused", async () => {
-    const both = await createFullTestEmployee(org, { roleCode: "PAYROLL_ADMIN" });
+    const both = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
     userIds.push(both.userId);
     try {
       const perm = await prisma.permission.findUniqueOrThrow({ where: { key: "payroll.rules.confirm" } });

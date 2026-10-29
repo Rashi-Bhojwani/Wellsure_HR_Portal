@@ -281,6 +281,11 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "POST /api/letters/:id/reissue": scoped("letters.generate + scope of the letter's employee"),
   "POST /api/letters/:id/reproduce": scoped("letters.generate + scope of the letter's employee"),
 
+  "GET /api/director/switches": adminInService("Directors (active Super Admins) only (lib/directorAuthority.ts requireDirector)"),
+  "PUT /api/director/switches/:step": adminInService("Directors only, with two-step sign-in outside development"),
+  "GET /api/director/notices": adminInService("Directors only; each sees only the notices addressed to them"),
+  "POST /api/director/notices/:id/seen": adminInService("Directors only; own receipt"),
+  "POST /api/director/notices/:id/acknowledge": adminInService("Directors only, with two-step sign-in outside development; own receipt"),
   "GET /api/access/roles": admin,
   "PUT /api/access/roles/:code": adminInService("Super Admin only (access/service.ts rule 2)"),
   "GET /api/access/employees/:employeeId": admin,

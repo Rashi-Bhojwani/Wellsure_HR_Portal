@@ -6,7 +6,7 @@ import { env } from "../../config/env";
 import { logger } from "../../lib/logger";
 import { describeMailError } from "../../integrations/mail";
 import { writeAuditLog } from "../../lib/audit";
-import { default2faRoles } from "../../lib/authDefaults";
+import { default2faRoles, with2faFloor } from "../../lib/authDefaults";
 import { getSetting } from "../../lib/settings";
 import { resolveAccess, resolveUserRoleCodes } from "../../lib/permissions";
 import { signAccessToken, signTotpChallengeToken, verifyTotpChallengeToken } from "../../lib/jwt";
@@ -50,7 +50,7 @@ function hashOpaqueToken(token: string): string {
 async function getRequire2faRoles(): Promise<string[]> {
   // The setting wins when it exists; otherwise the environment's starting value (lib/authDefaults.ts): none in development, the three admin
   // roles in staging and production.
-  return getSetting<string[]>("auth.require2faRoles", default2faRoles());
+  return with2faFloor(await getSetting<string[]>("auth.require2faRoles", default2faRoles()), env.APP_ENV);
 }
 
 async function getLockoutConfig(): Promise<{ maxAttempts: number; lockoutMinutes: number }> {

@@ -25,12 +25,22 @@ import { RULE_CATALOG } from "@shared/constants/payrollRules";
 export const DEMO_PASSWORD = "Wellsure@123";
 export const DEMO_PEOPLE = [
   { code: "DEMO001", name: "Demo Owner", role: "SUPER_ADMIN" },
-  { code: "DEMO002", name: "Demo Payroll Admin", role: "PAYROLL_ADMIN" },
-  { code: "DEMO003", name: "Demo Payroll Approver", role: "PAYROLL_APPROVER" },
+  // D1 (docs/plans/DIRECTOR_AUTHORITY.md, Q-DA-8): the payroll roles are for directors only. DEMO002 and DEMO003 used to hold them and are ordinary employees now.
+  { code: "DEMO002", name: "Demo Employee 002", role: "EMPLOYEE" },
+  { code: "DEMO003", name: "Demo Employee 003", role: "EMPLOYEE" },
   { code: "DEMO004", name: "Demo HR Admin", role: "HR_ADMIN" },
   { code: "DEMO005", name: "Demo Developer", role: "DEVELOPER" },
   ...Array.from({ length: 7 }, (_, i) => ({ code: `DEMO${String(i + 6).padStart(3, "0")}`, name: `Demo Employee ${String(i + 6).padStart(3, "0")}`, role: "EMPLOYEE" })),
+  // The second director. The two directors check each other's work; each sets the other's pay.
+  { code: "DEMO013", name: "Demo Second Owner", role: "SUPER_ADMIN" },
 ] as const;
+
+/**
+ * The directors are not on the demo payroll for now: nobody changes their own pay, and with two directors a director's pay needs the other to make it AND a third person
+ * to approve it, which does not exist. D2 lets one director prepare and decide the other's revision in one act (director authority); the demo then pays them too.
+ * Until then they join after the demo's cycle, so a run does not list them as left out.
+ */
+const DEMO_DIRECTORS: readonly string[] = ["DEMO001", "DEMO013"];
 
 const FAKE_IFSC = "DEMO0000001";
 export const DEMO_DEBIT_ACCOUNT = "999900000000";
@@ -96,7 +106,7 @@ export interface DemoResult {
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
 export async function createPerson(spec: { code: string; name: string; role: string }, org: { departmentId: string; designationId: string; locationId: string; gradeId: string | null; costCentreId: string | null }, passwordHash: string, index: number) {
-  const employee = await prisma.employee.create({ data: { employeeCode: spec.code, dateOfJoining: new Date("2024-04-01T00:00:00Z"), employmentType: "PERMANENT", officialEmail: `${spec.code.toLowerCase()}@demo.example.invalid` } });
+  const employee = await prisma.employee.create({ data: { employeeCode: spec.code, dateOfJoining: DEMO_DIRECTORS.includes(spec.code) ? addCalendarDays(businessToday(), 366) : new Date("2024-04-01T00:00:00Z"), employmentType: "PERMANENT", officialEmail: `${spec.code.toLowerCase()}@demo.example.invalid` } });
   const user = await prisma.user.create({ data: { employeeId: employee.id, status: "ACTIVE", passwordHash, privacyNoticeAcceptedAt: new Date() } });
   await prisma.employeeNameHistory.create({ data: { employeeId: employee.id, fullName: spec.name, effectiveFrom: new Date("2024-04-01T00:00:00Z"), createdByUserId: user.id } });
   await prisma.employeePersonal.create({ data: { employeeId: employee.id, dateOfBirth: new Date("1990-01-01T00:00:00Z"), gender: "OTHER", personalEmail: `${spec.code.toLowerCase()}@demo.example.invalid`, mobile: "0000000000", currentAddress: "Demo address (made up)", permanentAddress: "Demo address (made up)", emergencyContactName: "Demo Contact", emergencyContactPhone: "0000000001", emergencyContactRelation: "Demo" } });
@@ -144,14 +154,10 @@ export async function seedDemoCompany(): Promise<DemoResult> {
   const who: Record<string, { employeeId: string; userId: string }> = {};
   for (const [i, spec] of DEMO_PEOPLE.entries()) who[spec.code] = await createPerson(spec, org, passwordHash, i);
   const owner = who.DEMO001!.userId;
-  const maker = who.DEMO002!.userId;
-  const checker = who.DEMO003!.userId;
+  // The two directors: the owner prepares, the second owner checks (a Super Admin holds every permission, bank and statutory details included).
+  const maker = owner;
+  const checker = who.DEMO013!.userId;
   await setSetting(DEMO_SETTING, true, owner);
-  // The approver also checks people's bank accounts and PF numbers when they are signed off, so (as a company would arrange it) is allowed to see them. The developer is given nothing.
-  for (const key of ["employee.bank.view", "employee.statutory.view"]) {
-    const permission = await prisma.permission.findUniqueOrThrow({ where: { key } });
-    await prisma.userPermissionOverride.create({ data: { userId: checker, permissionId: permission.id, effect: "GRANT", reason: "DEMO COMPANY: the approver checks pay details", createdByUserId: owner } });
-  }
 
   lap("before: pay details");
   await fillPayDetails(who.DEMO004!.userId);
@@ -199,7 +205,7 @@ export async function seedDemoCompany(): Promise<DemoResult> {
   await confirmLayout("BANK_TEMPLATE", { version: lc.version, note: "DEMO COMPANY", fingerprint: lc.fingerprint }, { userId: checker });
 
   lap("before: layout done");
-  // Salaries: three pay levels, each a salary revision a different person approves. Nobody changes their own pay, so the payroll admin's own is set by the owner.
+  // Salaries: three pay levels, each a salary revision a different person approves. The directors are not on the demo payroll (see DEMO_DIRECTORS).
   const todayDate = businessToday();
   const active = await prisma.employee.findMany({ where: { status: "ACTIVE", dateOfJoining: { lte: todayDate } }, select: { id: true, employeeCode: true, dateOfJoining: true }, orderBy: { employeeCode: "asc" } });
   const tiers = ["420000", "720000", "1080000"];
@@ -207,7 +213,6 @@ export async function seedDemoCompany(): Promise<DemoResult> {
   const salaryFloor = iso(new Date(Date.UTC(todayDate.getUTCFullYear(), todayDate.getUTCMonth() - 3, 1)));
   const groups = new Map<string, { annual: string; from: string; ids: string[] }>();
   active.forEach((e, i) => {
-    if (e.id === who.DEMO002!.employeeId || e.id === who.DEMO003!.employeeId) return; // the payroll admin and the approver have their own revisions below (nobody makes or approves a change to their own pay)
     const annual = tiers[i % tiers.length]!;
     const joined = iso(e.dateOfJoining);
     const from = joined > salaryFloor ? joined : salaryFloor;
@@ -230,8 +235,6 @@ export async function seedDemoCompany(): Promise<DemoResult> {
     lap("applied");
   };
   for (const g of groups.values()) await revise(g.annual, g.ids, maker, g.from);
-  await revise("720000", [who.DEMO002!.employeeId], owner, salaryFloor);
-  await revise("1080000", [who.DEMO003!.employeeId], maker, salaryFloor, owner);
 
   lap("before: salaries done");
   // Attendance for the last full month, locked, so a run for it has nobody left out.

@@ -1,5 +1,8 @@
-import { Prisma, type PayrollApproval, type PayrollApprovalSubject } from "@prisma/client";
+import { Prisma, type ApprovalAuthority, type PayrollApproval, type PayrollApprovalSubject } from "@prisma/client";
+import type { DirectorStep } from "@shared/constants/directorAuthority";
 import { writeAuditLog } from "../../lib/audit";
+import { authorityFor, requireDirector, requireDirectorTwoFactor } from "../../lib/directorAuthority";
+import { recordDirectorNotice, scheduleDelivery } from "../../lib/directorNotices";
 import { activeUsersHoldingPermission, resolveAccess } from "../../lib/permissions";
 import { prisma } from "../../lib/prisma";
 import { HttpError } from "../../middleware/errorHandler";
@@ -88,6 +91,7 @@ export interface SubmitInput {
 export async function submit(input: SubmitInput): Promise<PayrollApproval> {
   const adapter = adapterFor(input.subject);
   if (!(await holds(input.makerUserId, adapter.makerPermission))) throw new HttpError(403, `Missing permission: ${adapter.makerPermission}`, "FORBIDDEN");
+  await requireDirector(input.makerUserId, "prepare payroll"); // D1: the payroll roles are held by directors only
   if (adapter.affectedUserIds && (await adapter.affectedUserIds(input.subjectId)).includes(input.makerUserId)) {
     throw new HttpError(403, "This changes your own pay, so somebody else has to prepare it. Nobody prepares or approves a change to their own pay.", "MAKER_IS_AFFECTED");
   }
@@ -127,6 +131,7 @@ export async function decide(input: DecideInput): Promise<PayrollApproval> {
   if (approval.status !== "PENDING") throw conflict(`This is already ${approval.status.toLowerCase()}.`, "APPROVAL_NOT_PENDING");
   const adapter = adapterFor(approval.subject);
   if (!(await holds(input.checkerUserId, adapter.checkerPermission))) throw new HttpError(403, `Missing permission: ${adapter.checkerPermission}`, "FORBIDDEN");
+  await requireDirector(input.checkerUserId, "approve payroll"); // D1: the second person is the other director
   if (input.checkerUserId === approval.makerUserId) throw new HttpError(403, "You prepared this, so you cannot be the one who approves it. A different person must.", "CHECKER_IS_MAKER");
   if (adapter.affectedUserIds && (await adapter.affectedUserIds(approval.subjectId)).includes(input.checkerUserId)) {
     throw new HttpError(403, "This changes your own pay, so you cannot be the one who approves it. Nobody approves a change to their own pay.", "CHECKER_IS_AFFECTED");
@@ -214,17 +219,87 @@ export async function consume(subject: PayrollApprovalSubject, subjectId: string
  * confirmer the checker). Goes through the same table and the same checks, so a rule confirmation is a real maker-checker record.
  */
 export async function recordCompletedApproval(
-  input: { subject: PayrollApprovalSubject; subjectId: string; hash: string; makerUserId: string; checkerUserId: string; previewFingerprint: string; note: string },
+  input: { subject: PayrollApprovalSubject; subjectId: string; hash: string; makerUserId: string; checkerUserId: string; previewFingerprint: string; note: string; authority?: ApprovalAuthority },
   db: Db,
 ): Promise<PayrollApproval> {
-  if (input.checkerUserId === input.makerUserId) throw new HttpError(403, "The person who wrote a value cannot be the one who confirms it. A different person must.", "CHECKER_IS_MAKER");
+  const authority = input.authority ?? "SECOND_DIRECTOR";
+  // The same person may be both only on director authority (the database refuses it otherwise, and for anyone but a Super Admin).
+  if (input.checkerUserId === input.makerUserId && authority !== "DIRECTOR_AUTHORITY") throw new HttpError(403, "The person who wrote a value cannot be the one who confirms it. A different person must.", "CHECKER_IS_MAKER");
+  await requireDirector(input.checkerUserId, "confirm payroll values", db);
   const created = await db.payrollApproval.create({
-    data: { subject: input.subject, subjectId: input.subjectId, contentHash: input.hash, makerUserId: input.makerUserId, previewFingerprint: input.previewFingerprint },
+    data: { subject: input.subject, subjectId: input.subjectId, contentHash: input.hash, makerUserId: input.makerUserId, previewFingerprint: input.previewFingerprint, authority },
   });
   const decided = await db.payrollApproval.update({ where: { id: created.id }, data: { status: "APPROVED", checkerUserId: input.checkerUserId, decidedAt: new Date(), decisionNote: input.note, hashAtDecision: input.hash } }); // allow-clock: an instant, not a business date
   const consumed = await db.payrollApproval.update({ where: { id: decided.id }, data: { status: "CONSUMED", consumedAt: new Date(), consumedByUserId: input.checkerUserId } }); // allow-clock: an instant, not a business date
-  await recordEvent({ subjectType: input.subject, subjectId: input.subjectId, type: "CONSUMED", actorUserId: input.checkerUserId, payload: { approvalId: consumed.id, hash: input.hash, maker: input.makerUserId } }, db);
+  await recordEvent({ subjectType: input.subject, subjectId: input.subjectId, type: "CONSUMED", actorUserId: input.checkerUserId, payload: { approvalId: consumed.id, hash: input.hash, maker: input.makerUserId, authority } }, db);
   return consumed;
+}
+
+export interface AuthoriseInput {
+  subject: PayrollApprovalSubject;
+  subjectId: string;
+  /** The director. */
+  actorUserId: string;
+  /** The fingerprint of the preview the director confirmed. */
+  previewFingerprint: string;
+  /** Which switch governs this act. */
+  step: DirectorStep;
+  /** "the payroll run for October 2026": goes in the notice. Never a figure, never a person. */
+  subjectLabel: string;
+  itemCount?: number | null;
+  note?: string;
+  ip?: string | null;
+  /** Runs inside the same transaction (a run becoming APPROVED, a notice that must commit with it). */
+  inTransaction?: (tx: Prisma.TransactionClient, approval: PayrollApproval) => Promise<void>;
+}
+
+/**
+ * Director authority (docs/plans/DIRECTOR_AUTHORITY.md §5.3): one director prepares and decides in one act, and it takes effect at once. In one transaction: the
+ * switch for the step is read (if a second director is required this refuses and the caller uses submit/decide), the approval is written as PENDING and then
+ * APPROVED by the same person under DIRECTOR_AUTHORITY, and the notice for the other director commits with it. What does NOT change: the hash is taken and bound at the
+ * decision, and `consume` still re-checks it when the act is carried out; nobody changes their own pay; every step is an event and an audit row.
+ */
+export async function authorise(input: AuthoriseInput): Promise<PayrollApproval> {
+  const adapter = adapterFor(input.subject);
+  if (!(await holds(input.actorUserId, adapter.makerPermission))) throw new HttpError(403, `Missing permission: ${adapter.makerPermission}`, "FORBIDDEN");
+  await requireDirector(input.actorUserId, "act on director authority");
+  await requireDirectorTwoFactor(input.actorUserId);
+  // Nobody prepares or approves a change to their own pay, on director authority or any other.
+  if (adapter.affectedUserIds && (await adapter.affectedUserIds(input.subjectId)).includes(input.actorUserId)) {
+    throw new HttpError(403, "This changes your own pay, so the other director has to do it. Nobody prepares or approves a change to their own pay.", "MAKER_IS_AFFECTED");
+  }
+  const contentHash = await adapter.hash(input.subjectId);
+  let noticeId = "";
+  let approval: PayrollApproval;
+  try {
+    approval = await prisma.$transaction(async (tx) => {
+      // Read inside the transaction: the mode recorded is the mode in force when the act was written, not what a request said.
+      if ((await authorityFor(input.step, tx)) !== "DIRECTOR_AUTHORITY") {
+        throw new HttpError(409, "This step needs the other director to decide it. Submit it for them.", "SECOND_DIRECTOR_REQUIRED");
+      }
+      const pending = await tx.payrollApproval.create({
+        data: { subject: input.subject, subjectId: input.subjectId, contentHash, makerUserId: input.actorUserId, previewFingerprint: input.previewFingerprint, submitNote: input.note ?? "", authority: "DIRECTOR_AUTHORITY" },
+      });
+      await recordEvent({ subjectType: input.subject, subjectId: input.subjectId, type: "SUBMITTED", actorUserId: input.actorUserId, payload: { approvalId: pending.id, hash: contentHash, authority: "DIRECTOR_AUTHORITY" } }, tx);
+      const decided = await tx.payrollApproval.update({
+        where: { id: pending.id },
+        data: { status: "APPROVED", checkerUserId: input.actorUserId, decidedAt: new Date(), decisionNote: input.note?.trim() ?? null, hashAtDecision: contentHash }, // allow-clock: an instant, not a business date
+      });
+      await recordEvent({ subjectType: input.subject, subjectId: input.subjectId, type: "APPROVED", actorUserId: input.actorUserId, payload: { approvalId: pending.id, hash: contentHash, authority: "DIRECTOR_AUTHORITY", note: input.note ?? null } }, tx);
+      await input.inTransaction?.(tx, decided);
+      ({ noticeId } = await recordDirectorNotice(
+        { kind: "ACTION", step: input.step, subjectType: input.subject, subjectId: input.subjectId, subjectLabel: input.subjectLabel, itemCount: input.itemCount ?? null, actorUserId: input.actorUserId, approvalId: pending.id, authority: "DIRECTOR_AUTHORITY" },
+        tx,
+      ));
+      return decided;
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") throw conflict("This is already waiting for a decision, or already approved. Void or consume that first.", "APPROVAL_ALREADY_LIVE");
+    throw err;
+  }
+  await writeAuditLog({ actorUserId: input.actorUserId, action: "payroll.approval.authorised", entityType: "PayrollApproval", entityId: approval.id, after: { subject: input.subject, subjectId: input.subjectId, step: input.step, hash: contentHash, authority: "DIRECTOR_AUTHORITY" }, ipAddress: input.ip ?? null });
+  await scheduleDelivery(noticeId);
+  return approval;
 }
 
 // ── Who can check: made visible, never a silent block ──

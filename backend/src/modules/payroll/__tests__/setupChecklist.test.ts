@@ -55,7 +55,7 @@ describe("the setup checklist and the readiness screen", () => {
     // (nobody changes their own pay, so they could not be given a salary by the same maker anyway).
     everyone.push(...world.staff, employee);
     // The seeded company is in the test database: the set under test is these ten people, so everyone else "joins" after today for the length of the test.
-    await prisma.employee.updateMany({ where: { id: { in: [world.maker, world.checkerA, world.checkerB, sup, dev, signer].map((p) => p.employeeId) } }, data: { status: "INACTIVE" } });
+    await prisma.employee.updateMany({ where: { id: { in: [world.maker, world.checkerA, world.checkerB, world.outsider, sup, dev, signer].map((p) => p.employeeId) } }, data: { status: "INACTIVE" } });
     const others = await prisma.employee.findMany({ where: { id: { notIn: everyone.map((e) => e.employeeId) }, status: "ACTIVE" }, select: { id: true, dateOfJoining: true } });
     // A year after "today", never a fixed date: a fixed 2027-06-01 made them employed again from that day on, and the clock audit failed this file from June 2027.
     await prisma.employee.updateMany({ where: { id: { in: others.map((o) => o.id) } }, data: { dateOfJoining: addCalendarDays(businessToday(), 366) } });
@@ -126,8 +126,8 @@ describe("the setup checklist and the readiness screen", () => {
 
   it("a sign-off needs a payroll approver who may see the data, and never someone who entered some of it", async () => {
     const preview = (t: string, area: string) => post(t, `/setup/signoffs/${area}/preview`);
-    expect((await preview(world.tokens.maker, "SALARIES")).status).toBe(403); // a maker holds no payroll.approve
-    expect((await preview(world.tokens.checkerA, "BANK_ACCOUNTS")).body.blocked).toMatch(/must be allowed to see them/); // a payroll approver cannot see bank details by default
+    expect((await preview(world.tokens.outsider, "SALARIES")).status).toBe(403); // somebody with no payroll permission holds no payroll.approve
+    expect((await preview(world.tokens.checkerA, "BANK_ACCOUNTS")).status).toBe(200); // a director holds every permission, bank details included
     // The salaries were applied by the maker, so the maker could not sign (and holds no approve anyway); a signer with the right permissions can.
     const p = await preview(signerToken, "SALARIES");
     expect(p.status).toBe(200);

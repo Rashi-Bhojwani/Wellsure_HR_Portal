@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MANAGER_GRANTABLE_KEYS, PERMISSION_KEYS } from "@shared/constants/permissions";
 import { GATE_KEYS } from "../../../middleware/rbac";
 import { prisma } from "../../../lib/prisma";
-import { app, authHeader, cleanupEmployeeTestOrgMasters, cleanupFullTestEmployee, createEmployeeTestOrgMasters, createFullTestEmployee, loginAs, type TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
+import { app, authHeader, cleanupEmployeeTestOrgMasters, cleanupTestRole, grantPermissions, cleanupFullTestEmployee, createEmployeeTestOrgMasters, createFullTestEmployee, loginAs, type TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
 import { ensurePayrollRules } from "../rules/governed";
 import { payrollRouter } from "../routes";
 import { cleanupPayrollRowsBy } from "./payrollTestHelpers";
@@ -38,6 +38,8 @@ describe("payroll permissions", () => {
   });
 });
 
+const MANAGER_EXTRA_ROLE = "TEST_MANAGER_EXTRA_PAYROLL_KEYS";
+
 describe("who actually gets in", () => {
   let org: TestOrgMasters;
   const people: Record<string, { employeeId: string; userId: string; employeeCode: string }> = {};
@@ -47,8 +49,7 @@ describe("who actually gets in", () => {
     await ensurePayrollRules();
     org = await createEmployeeTestOrgMasters();
     for (const [name, roleCode] of Object.entries({
-      payrollAdmin: "PAYROLL_ADMIN",
-      approver: "PAYROLL_APPROVER",
+      director: "SUPER_ADMIN", // D1: the payroll roles are for directors, so payroll is a Super Admin's
       hrAdmin: "HR_ADMIN",
       hrExec: "HR_EXECUTIVE",
       manager: "MANAGER",
@@ -60,20 +61,22 @@ describe("who actually gets in", () => {
     // An HR Executive who has been given the audit viewer and nothing else: the side door the audit screen could have been.
     const audit = await prisma.permission.findUniqueOrThrow({ where: { key: "audit.view" } });
     await prisma.userPermissionOverride.create({ data: { userId: people.hrExec!.userId, permissionId: audit.id, effect: "GRANT", reason: "test: audit viewer only", createdByUserId: people.hrAdmin!.userId } });
-    // A manager somebody tried to give payroll keys to.
-    for (const key of ["payroll.rules.view", "payroll.salary.view"]) {
-      const p = await prisma.permission.findUniqueOrThrow({ where: { key } });
-      await prisma.userPermissionOverride.create({ data: { userId: people.manager!.userId, permissionId: p.id, effect: "GRANT", reason: "test: someone tried to grant a manager payroll", createdByUserId: people.hrAdmin!.userId } });
-    }
+    // A manager somebody tried to give payroll keys to. (A per-user grant of a payroll key is refused by the database now, so it is given through a role the manager
+    // also holds, which the database cannot see; resolution still strips it because a manager may hold manager-grantable keys only.)
+    await grantPermissions(MANAGER_EXTRA_ROLE, ["payroll.rules.view", "payroll.salary.view"]);
+    const extra = await prisma.role.findUniqueOrThrow({ where: { code: MANAGER_EXTRA_ROLE } });
+    await prisma.userRole.create({ data: { userId: people.manager!.userId, roleId: extra.id } });
     tokens.hrExec = await loginAs(people.hrExec!.employeeCode);
     tokens.manager = await loginAs(people.manager!.employeeCode);
     // Something payroll-ish in the audit log for the audit tests to find: a rule edit by the payroll admin.
-    const preview = await request(app).post("/api/payroll/rules/FIXED_DAYS_VALUE/edit-preview").set(...authHeader(tokens.payrollAdmin!)).send({ value: 30 });
-    await request(app).put("/api/payroll/rules/FIXED_DAYS_VALUE").set(...authHeader(tokens.payrollAdmin!)).send({ value: 30, fingerprint: preview.body.fingerprint });
+    const preview = await request(app).post("/api/payroll/rules/FIXED_DAYS_VALUE/edit-preview").set(...authHeader(tokens.director!)).send({ value: 30 });
+    await request(app).put("/api/payroll/rules/FIXED_DAYS_VALUE").set(...authHeader(tokens.director!)).send({ value: 30, fingerprint: preview.body.fingerprint });
   });
 
   afterAll(async () => {
     await prisma.userPermissionOverride.deleteMany({ where: { userId: { in: Object.values(people).map((p) => p.userId) } } });
+    await prisma.userRole.deleteMany({ where: { userId: people.manager!.userId, role: { code: MANAGER_EXTRA_ROLE } } });
+    await cleanupTestRole(MANAGER_EXTRA_ROLE);
     await cleanupPayrollRowsBy(Object.values(people).map((p) => p.userId));
     for (const p of Object.values(people)) await cleanupFullTestEmployee(p.employeeId);
     await cleanupEmployeeTestOrgMasters(org);
@@ -81,27 +84,26 @@ describe("who actually gets in", () => {
 
   const get = (who: string, path: string) => request(app).get(path).set(...authHeader(tokens[who]!));
 
-  it("rules: payroll admin, approver and HR admin may look; HR executive, manager (even with a payroll key somebody granted) and employee may not", async () => {
-    for (const who of ["payrollAdmin", "approver", "hrAdmin"]) expect((await get(who, "/api/payroll/rules")).status, who).toBe(200);
+  it("rules: a director and HR admin may look; HR executive, manager (even with a payroll key somebody granted) and employee may not", async () => {
+    for (const who of ["director", "hrAdmin"]) expect((await get(who, "/api/payroll/rules")).status, who).toBe(200);
     for (const who of ["hrExec", "manager", "employee"]) expect((await get(who, "/api/payroll/rules")).status, who).toBe(403);
   });
 
-  it("writing and confirming are separate: the maker cannot confirm, the checker cannot edit, HR admin can do neither", async () => {
+  it("a director may write and look at confirming; HR admin can do neither; the different-person rule still applies to the record (until D2 lets a director act alone)", async () => {
     const edit = (who: string) => request(app).post("/api/payroll/rules/FIXED_DAYS_VALUE/edit-preview").set(...authHeader(tokens[who]!)).send({ value: 31 });
-    expect((await edit("payrollAdmin")).status).toBe(200);
-    expect((await edit("approver")).status).toBe(403);
+    expect((await edit("director")).status).toBe(200);
     expect((await edit("hrAdmin")).status).toBe(403);
     const confirm = (who: string) => request(app).post("/api/payroll/rules/FIXED_DAYS_VALUE/confirm-preview").set(...authHeader(tokens[who]!));
-    expect((await confirm("approver")).status).toBe(200);
-    expect((await confirm("payrollAdmin")).status).toBe(403);
     expect((await confirm("hrAdmin")).status).toBe(403);
+    const seen = await confirm("director");
+    expect(seen.status).toBe(200);
   });
 
   it("the Payroll audit trail opens for exactly the people who may see salary", async () => {
-    // PAYROLL_ADMIN, PAYROLL_APPROVER and HR_ADMIN hold payroll.salary.view; HR_EXECUTIVE (even with audit.view), MANAGER and EMPLOYEE do not.
-    for (const who of ["payrollAdmin", "approver", "hrAdmin"]) expect((await get(who, "/api/payroll/audit")).status, who).toBe(200);
+    // A director and HR_ADMIN hold payroll.salary.view; HR_EXECUTIVE (even with audit.view), MANAGER and EMPLOYEE do not.
+    for (const who of ["director", "hrAdmin"]) expect((await get(who, "/api/payroll/audit")).status, who).toBe(200);
     for (const who of ["hrExec", "manager", "employee"]) expect((await get(who, "/api/payroll/audit")).status, who).toBe(403);
-    const trail = await get("payrollAdmin", "/api/payroll/audit?pageSize=200");
+    const trail = await get("director", "/api/payroll/audit?pageSize=200");
     expect(trail.body.rows.length).toBeGreaterThan(0);
     expect(trail.body.rows.every((r: { action: string; entityType: string }) => r.action.startsWith("payroll.") || r.entityType.startsWith("Payroll"))).toBe(true);
     expect(trail.body.rows.some((r: { action: string; entityId: string }) => r.action === "payroll.rule.edited" && r.entityId === "FIXED_DAYS_VALUE")).toBe(true);
@@ -125,30 +127,30 @@ describe("who actually gets in", () => {
   });
 
   it("checker availability is visible to makers and checkers, and to nobody else", async () => {
-    for (const who of ["payrollAdmin", "approver", "hrAdmin"]) expect((await get(who, "/api/payroll/approvals/checkers?subject=RULE_CONFIRM")).status, who).toBe(200);
+    for (const who of ["director", "hrAdmin"]) expect((await get(who, "/api/payroll/approvals/checkers?subject=RULE_CONFIRM")).status, who).toBe(200);
     for (const who of ["hrExec", "employee"]) expect((await get(who, "/api/payroll/approvals/checkers?subject=RULE_CONFIRM")).status, who).toBe(403);
-    const seen = await get("payrollAdmin", "/api/payroll/approvals/checkers?subject=RULE_CONFIRM");
+    const seen = await get("director", "/api/payroll/approvals/checkers?subject=RULE_CONFIRM");
     expect(seen.body.eligible.length).toBeGreaterThanOrEqual(1);
     expect(["ONE", "MANY"]).toContain(seen.body.state);
-    expect((await get("payrollAdmin", "/api/payroll/approvals/checkers?subject=SOMETHING_ELSE")).status).toBe(400);
+    expect((await get("director", "/api/payroll/approvals/checkers?subject=SOMETHING_ELSE")).status).toBe(400);
   });
 
   it("salary screens: people who may see salary may look, only the maker roles may prepare, only a checker may decide, and nobody else gets anything", async () => {
     const reads = ["/components", "/structures", "/salary/employees", "/salary/revisions", "/adjustments", "/salary/people?q=x"];
     for (const path of reads) {
-      for (const who of ["payrollAdmin", "approver", "hrAdmin"]) expect((await get(who, `/api/payroll${path}`)).status, `${who} ${path}`).toBe(200);
+      for (const who of ["director", "hrAdmin"]) expect((await get(who, `/api/payroll${path}`)).status, `${who} ${path}`).toBe(200);
       for (const who of ["hrExec", "manager", "employee"]) expect((await get(who, `/api/payroll${path}`)).status, `${who} ${path}`).toBe(403);
     }
     const post = (who: string, path: string) => request(app).post(`/api/payroll${path}`).set(...authHeader(tokens[who]!)).send({}); // an empty body: 403 is the permission, 400 is "allowed in, but not a valid request"
     for (const path of ["/salary/revisions/preview", "/adjustments/preview", "/structures/breakup-preview"]) {
-      for (const who of ["payrollAdmin", "hrAdmin"]) expect((await post(who, path)).status, `${who} ${path}`).toBe(400);
-      for (const who of ["approver", "hrExec", "manager", "employee"]) expect((await post(who, path)).status, `${who} ${path}`).toBe(403);
+      for (const who of ["director", "hrAdmin"]) expect((await post(who, path)).status, `${who} ${path}`).toBe(400);
+      for (const who of ["hrExec", "manager", "employee"]) expect((await post(who, path)).status, `${who} ${path}`).toBe(403);
     }
-    // Deciding is the checker's alone: the makers are refused even though they can prepare.
-    for (const who of ["payrollAdmin", "hrAdmin", "hrExec", "manager", "employee"]) expect((await post(who, "/salary/revisions/some-id/decision")).status, who).toBe(403);
-    expect((await post("approver", "/salary/revisions/some-id/decision")).status).toBe(400);
+    // Deciding is a director's: HR admin can prepare but is refused.
+    for (const who of ["hrAdmin", "hrExec", "manager", "employee"]) expect((await post(who, "/salary/revisions/some-id/decision")).status, who).toBe(403);
+    expect((await post("director", "/salary/revisions/some-id/decision")).status).toBe(400);
     // Confirming a component or structure is the same permission as confirming a rule.
-    for (const who of ["payrollAdmin", "hrAdmin", "hrExec", "manager", "employee"]) expect((await post(who, "/components/BASIC/confirm-preview")).status, who).toBe(403);
+    for (const who of ["hrAdmin", "hrExec", "manager", "employee"]) expect((await post(who, "/components/BASIC/confirm-preview")).status, who).toBe(403);
     for (const path of ["/salary/revisions", "/components", "/adjustments"]) expect((await request(app).get(`/api/payroll${path}`)).status, path).toBe(401);
   });
 

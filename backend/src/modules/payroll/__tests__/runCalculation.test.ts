@@ -254,8 +254,8 @@ describe("making, discarding and reaching a run", () => {
       expect((await api(token, "get", `/runs/readiness?cycleStart=${CYCLE.start}`)).status).toBe(403);
       expect((await api(token, "post", "/runs", { cycleStart: CYCLE.start })).status).toBe(403);
     }
-    expect((await api(world.tokens.checkerA, "get", "/runs")).status).toBe(200); // a checker sees runs
-    expect((await api(world.tokens.checkerA, "post", "/runs", { cycleStart: CYCLE.start })).status).toBe(403); // but does not prepare them
+    expect((await api(world.tokens.outsider, "get", "/runs")).status).toBe(403); // an HR Executive holds no payroll permission
+    expect((await api(world.tokens.checkerA, "get", "/runs")).status).toBe(200); // a director sees runs (D1: the payroll roles are for directors, who hold both halves)
   });
 });
 
