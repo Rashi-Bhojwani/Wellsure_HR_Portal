@@ -54,13 +54,14 @@ describe("who actually gets in", () => {
       hrExec: "HR_EXECUTIVE",
       manager: "MANAGER",
       employee: "EMPLOYEE",
+      auditor: "EMPLOYEE", // Stage 1: HR no longer holds the audit viewer (it is hard-locked), so the person given it alone is an ordinary employee
     })) {
       people[name] = await createFullTestEmployee(org, { roleCode });
       tokens[name] = await loginAs(people[name]!.employeeCode);
     }
-    // An HR Executive who has been given the audit viewer and nothing else: the side door the audit screen could have been.
+    // Somebody who has been given the audit viewer and nothing else: the side door the audit screen could have been.
     const audit = await prisma.permission.findUniqueOrThrow({ where: { key: "audit.view" } });
-    await prisma.userPermissionOverride.create({ data: { userId: people.hrExec!.userId, permissionId: audit.id, effect: "GRANT", reason: "test: audit viewer only", createdByUserId: people.hrAdmin!.userId } });
+    await prisma.userPermissionOverride.create({ data: { userId: people.auditor!.userId, permissionId: audit.id, effect: "GRANT", reason: "test: audit viewer only", createdByUserId: people.hrAdmin!.userId } });
     // A manager somebody tried to give payroll keys to. (A per-user grant of a payroll key is refused by the database now, so it is given through a role the manager
     // also holds, which the database cannot see; resolution still strips it because a manager may hold manager-grantable keys only.)
     await grantPermissions(MANAGER_EXTRA_ROLE, ["payroll.rules.view", "payroll.salary.view"]);
@@ -114,14 +115,13 @@ describe("who actually gets in", () => {
     expect(fromDirector.status).toBe(200);
     expect(fromDirector.body.rows.some((r: { action: string }) => r.action === "payroll.rule.edited")).toBe(true); // a director may see salary, so sees payroll rows here too
     const fromHr = await get("hrAdmin", "/api/audit-logs?pageSize=200&action=payroll.");
-    expect(fromHr.status).toBe(200); // HR admin may open the viewer (Stage 1: pay data is no longer theirs)...
-    expect(fromHr.body.total).toBe(0); // ...and sees no payroll row
-    const fromExec = await get("hrExec", "/api/audit-logs?pageSize=200&action=payroll.");
+    expect(fromHr.status).toBe(403); // Stage 1: the audit viewer is a director's, so HR does not even open it
+    const fromExec = await get("auditor", "/api/audit-logs?pageSize=200&action=payroll.");
     expect(fromExec.status).toBe(200); // may open the audit viewer...
     expect(fromExec.body.total).toBe(0); // ...and sees no payroll row, even when searching for exactly them
-    const everything = await get("hrExec", "/api/audit-logs?pageSize=200");
+    const everything = await get("auditor", "/api/audit-logs?pageSize=200");
     expect(everything.body.rows.some((r: { action: string; entityType: string }) => r.action.startsWith("payroll.") || r.entityType.startsWith("Payroll"))).toBe(false);
-    const byEntity = await get("hrExec", "/api/audit-logs?pageSize=200&entityType=PayrollRule");
+    const byEntity = await get("auditor", "/api/audit-logs?pageSize=200&entityType=PayrollRule");
     expect(byEntity.body.total).toBe(0);
   });
 

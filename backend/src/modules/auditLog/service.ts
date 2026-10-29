@@ -25,6 +25,14 @@ export interface ListAuditLogQuery {
 export const PAYROLL_AUDIT_ACTION_PREFIX = "payroll.";
 export const PAYROLL_AUDIT_ENTITY_PREFIX = "Payroll";
 
+// Rows that are not payroll's own can still carry a rupee amount (the leave year-end's total encashment). A viewer who may not see salary does not get it from the audit viewer either.
+const MONEY_FIELDS = new Set(["totalEncashedAmount"]);
+function withoutMoney<T>(value: T): T {
+  if (Array.isArray(value)) return value.map(withoutMoney) as unknown as T;
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).filter(([k]) => !MONEY_FIELDS.has(k)).map(([k, v]) => [k, withoutMoney(v)])) as T;
+  return value;
+}
+
 export async function listAuditLogs(query: ListAuditLogQuery, viewer: { canSeePayroll: boolean; onlyPayroll?: boolean } = { canSeePayroll: false }) {
   const where: Prisma.AuditLogWhereInput = {};
   const payrollRows = { OR: [{ action: { startsWith: PAYROLL_AUDIT_ACTION_PREFIX } }, { entityType: { startsWith: PAYROLL_AUDIT_ENTITY_PREFIX } }] };
@@ -84,8 +92,8 @@ export async function listAuditLogs(query: ListAuditLogQuery, viewer: { canSeePa
       action: r.action,
       entityType: r.entityType,
       entityId: r.entityId,
-      before: r.before,
-      after: r.after,
+      before: viewer.canSeePayroll ? r.before : withoutMoney(r.before),
+      after: viewer.canSeePayroll ? r.after : withoutMoney(r.after),
       ipAddress: r.ipAddress,
       userAgent: r.userAgent,
       createdAt: r.createdAt.toISOString(),

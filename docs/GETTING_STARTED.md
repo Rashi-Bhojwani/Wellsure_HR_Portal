@@ -252,6 +252,21 @@ Super Admin) appoints and removes managers, moves people between teams
 (effective-dated, never in the future) and edits a manager's permissions.
 A move shows up live on the managers' screens.
 
+**What HR can do (Stage 1).** Two things, both in `docs/plans/HR_CAPABILITIES.md`:
+
+- **A hard lock.** HR (HR Admin, HR Executive) can never hold salary, payroll, bank-file or tax data, leave liability in rupees,
+  pay documents (a letter carrying CTC), or the Admin Tools keys for roles, the audit log, system settings and workflow
+  delegates. It is enforced where access is worked out, refused by the Roles screen and by database triggers, and a director who
+  is also HR is not affected. What is *not* locked yet, and is listed as open: HR *entering* a masked bank/statutory change (a director
+  confirming it is D2), `letters.generate` (per-type grants are not built), `user.security.manage`, `import.manage`,
+  `leave.yearend.manage`. Existing databases lose the locked rows through a migration that first copies them into
+  `role_permission_removals` (append-only).
+- **Switches.** Admin Tools → **What HR Can Do** (directors only; `/admin/admin-tools/hr-capabilities`). Eleven attendance and leave duties,
+  each *As today / On / Off*, for the HR Admin role, the HR Executive role, or one named person. A named person beats the role; Off beats On
+  between two roles. A change needs a reason, may start now or later, is in force on the person's very next click (their menu, counts,
+  inbox and live screen follow without a reload) and stays in the history. Work HR can no longer decide waits for the directors with a
+  note; nothing is approved or lost. In development try it as `1000` (director) and `1001` (HR Admin).
+
 **Workflow Delegates.** A manager (e.g. `1002`) delegates their leave
 approvals from the employee portal's **Workflow Delegates** page to someone
 who can already approve leave (e.g. `1003`). For those dates the delegate's

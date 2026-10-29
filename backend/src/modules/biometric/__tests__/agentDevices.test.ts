@@ -42,8 +42,9 @@ function report(device: string, over: Partial<AgentDeviceReport> = {}): AgentDev
 
 describe("sync agent: the server side (P2-F)", () => {
   let org: TestOrgMasters;
-  const p = {} as Record<"hr" | "emp", Person>;
+  const p = {} as Record<"hr" | "sa" | "emp", Person>;
   let hrToken: string;
+  let saToken: string; // Stage 1: System Settings (settings.manage) are a director's, no longer HR's
   let empToken: string;
   const deviceIds: string[] = [];
   const agentIds: string[] = [];
@@ -56,8 +57,10 @@ describe("sync agent: the server side (P2-F)", () => {
   beforeAll(async () => {
     org = await createEmployeeTestOrgMasters();
     p.hr = await createFullTestEmployee(org, { roleCode: "HR_ADMIN" });
+    p.sa = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
     p.emp = await createFullTestEmployee(org, { roleCode: "EMPLOYEE" });
     hrToken = await loginAs(p.hr.employeeCode);
+    saToken = await loginAs(p.sa.employeeCode);
     empToken = await loginAs(p.emp.employeeCode);
     savedThresholds = (await prisma.systemSetting.findUnique({ where: { key: DEVICE_HEALTH_SETTING_KEY } }))?.value ?? null;
 
@@ -90,6 +93,9 @@ describe("sync agent: the server side (P2-F)", () => {
     await cleanupEmployeeTestOrgMasters(org);
   });
 
+  function sa() {
+    return { get: (path: string) => request(app).get(path).set(...authHeader(saToken)), put: (path: string) => request(app).put(path).set(...authHeader(saToken)) };
+  }
   function hr() {
     return {
       get: (path: string) => request(app).get(path).set(...authHeader(hrToken)),
@@ -249,14 +255,14 @@ describe("sync agent: the server side (P2-F)", () => {
 
   describe("System Settings → Attendance → Device health", () => {
     it("reads and changes the thresholds (audited), refuses a warning at or above the alarm, and the agent gets the new values", async () => {
-      expect((await hr().get("/api/settings/device-health")).body).toEqual(DEFAULT_DEVICE_HEALTH_THRESHOLDS);
-      const bad = await hr().put("/api/settings/device-health").send({ retentionWarningPercent: 80 });
+      expect((await sa().get("/api/settings/device-health")).body).toEqual(DEFAULT_DEVICE_HEALTH_THRESHOLDS);
+      const bad = await sa().put("/api/settings/device-health").send({ retentionWarningPercent: 80 });
       expect(bad.status).toBe(400);
       expect(bad.body.error.message).toMatch(/before the alarm/);
-      const ok = await hr().put("/api/settings/device-health").send({ clockDriftWarningSeconds: 60, logNearlyFullPercent: 95 });
+      const ok = await sa().put("/api/settings/device-health").send({ clockDriftWarningSeconds: 60, logNearlyFullPercent: 95 });
       expect(ok.status).toBe(200);
       expect(ok.body).toEqual({ ...DEFAULT_DEVICE_HEALTH_THRESHOLDS, clockDriftWarningSeconds: 60, logNearlyFullPercent: 95 });
-      const audit = await prisma.auditLog.findFirstOrThrow({ where: { entityId: "deviceHealth", actorUserId: p.hr.userId }, orderBy: { createdAt: "desc" } });
+      const audit = await prisma.auditLog.findFirstOrThrow({ where: { entityId: "deviceHealth", actorUserId: p.sa.userId }, orderBy: { createdAt: "desc" } });
       expect(audit.before).toMatchObject({ clockDriftWarningSeconds: 120 });
       expect(audit.after).toMatchObject({ clockDriftWarningSeconds: 60 });
       expect((await beat(body([]))).body.thresholds.clockDriftWarningSeconds).toBe(60);
@@ -268,6 +274,7 @@ describe("sync agent: the server side (P2-F)", () => {
     it("needs settings.manage", async () => {
       expect((await request(app).get("/api/settings/device-health").set(...authHeader(empToken))).status).toBe(403);
       expect((await request(app).put("/api/settings/device-health").set(...authHeader(empToken)).send({ clockDriftWarningSeconds: 30 })).status).toBe(403);
+      expect((await hr().get("/api/settings/device-health")).status).toBe(403); // and HR has no more of it than an employee does
     });
   });
 

@@ -179,6 +179,12 @@ export const HR_FORBIDDEN_KEYS: readonly PermissionKey[] = [
   "reports.salary.view",
   "reports.liability.view",
   "documents.pay.view",
+  // Admin Tools are the directors' (docs/plans/HR_CAPABILITIES.md §1A): who holds which role, the audit log, system settings and workflow delegations. Not locked yet, and listed as open
+  // for the owner: user.security.manage and import.manage (HR's own onboarding may need them), letters.generate (per-type grants are not built), leave.yearend.manage.
+  "role.view",
+  "audit.view",
+  "settings.manage",
+  "delegation.manage",
 ];
 
 /** What the DEVELOPER role is given: what is needed to build and run the system, and nothing in SENSITIVE_PERMISSION_KEYS (a test pins that). */

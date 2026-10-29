@@ -32,7 +32,6 @@ const HR_EXECUTIVE_PERMS: string[] = [
   "profile.changerequest.approve",
   "org.manage",
   "import.manage",
-  "role.view",
   // Phase 4 — leave administration stays with HR_EXECUTIVE; config/
   // financial actions (policy.manage/recalculate/yearend.manage) are
   // HR_ADMIN+ only, same narrowing as settings.manage/import.manage.
@@ -71,8 +70,6 @@ const HR_ADMIN_PERMS: string[] = [
   "employee.bank.view",
   "employee.bank.edit",
   "user.security.manage",
-  "audit.view",
-  "settings.manage",
   // Phase 3 commit 1 — bulk attendance corrections (HR Admin, not HR Executive).
   "attendance.regularization.bulk",
   // Phase 3 commit 2 — Manual Override and Shift Override (HR Admin, not HR Executive).
@@ -92,9 +89,7 @@ const HR_ADMIN_PERMS: string[] = [
   "manager.appoint",
   "manager.team.assign",
   "manager.permissions.manage",
-  // Phase 5 commit E3 — Workflow Delegates.
-  "delegation.manage",
-  // Stage 1 (docs/plans/HR_CAPABILITIES.md): no pay data. Salary, payroll rules, leave liability in rupees and PAY documents are the directors' (HR_FORBIDDEN_KEYS).
+  // Stage 1 (docs/plans/HR_CAPABILITIES.md): no pay data and no Admin Tools keys (roles, audit, settings, delegations): the directors' (HR_FORBIDDEN_KEYS).
   // Phase 2 — attendance settings and biometric devices.
   "attendance.config.manage",
   "attendance.devices.manage",

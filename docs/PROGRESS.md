@@ -5050,6 +5050,16 @@ revisions, publishing, bank file, sign-off, settings notices) to director author
 - Two-step sign-in for every director outside development: `SUPER_ADMIN` cannot be removed from `auth.require2faRoles`, and a director's act, switch change and acknowledgement are refused without it.
 - Seeds: `1000` and the new `1031` are the two directors; `1025`/`1027` and `DEMO002`/`DEMO003` are ordinary employees; the demo company has a second owner `DEMO013` (the directors are off the demo payroll until D2).
 
+### Master build, Stage 0 and Stage 1: the HR hard lock and the HR capability switches (`feat/hr-payroll-separation`, 2026-10-29)
+
+Plans: [HR_CAPABILITIES.md](plans/HR_CAPABILITIES.md). Report and per-stage results: [STAGE_REPORTS.md](plans/STAGE_REPORTS.md); the checklist to resume from: [MASTER_CHECKLIST.md](plans/MASTER_CHECKLIST.md).
+
+- Stage 0 (D1 close-out): `check:sensitive-ui` is its own CI job; the same person can never be maker and checker, proven for all six approval subjects; `docs/CONTINUITY_AND_RECOVERY.md`; director-only markers on the role screens.
+- The hard lock: every `payroll.*` key, `reports.salary.view`, `reports.liability.view`, `documents.pay.view`, `role.view`, `audit.view`, `settings.manage` and `delegation.manage` are removed at resolution from anyone holding an HR role without Super Admin; refused by the Roles screen and by database triggers; taken out of the HR defaults; removed from existing HR roles by two migrations that copy every row into the append-only `role_permission_removals` first. Year-end encashment amounts are the directors' too (days only for HR, in the screens, the download and the audit viewer).
+- The switches: eleven attendance and leave duties a director turns on or off for the HR Admin role, the HR Executive role or one named person (Admin Tools, What HR Can Do), with a reason, optionally from a later time, in an append-only history. Applied inside `resolveAccess` (no cache), so routes, counts, inbox, socket rooms, menus, favourites and reports follow on the next request. Five keys were split from older ones for this (`attendance.manual.upload`, `attendance.roster.manage`, `attendance.exceptions.view`, `reports.attendance.view`, `reports.leave.view`); roles and per-user grants were copied so nothing changed on the day.
+- Pending work HR can no longer decide waits for the directors, with a note; nothing is approved, lost or re-created.
+- Still open (listed, not guessed): HR entering a masked bank/statutory change that a director confirms (D2); `letters.generate` per-type grants (H4); `user.security.manage`, `import.manage`, `leave.yearend.manage`; the real company's branch names in `seed.ts` and several docs (public repo, tell the owner).
+
 ## Open questions
 
 - [x] **Approval Workflows — dropped (user decision 2026-10-03).** No

@@ -21,8 +21,8 @@ const tag = Date.now().toString(36).slice(-5);
 
 describe("regularization for any correctable day (Phase 3 commit 1)", () => {
   let org: TestOrgMasters;
-  const p = {} as Record<"dev" | "leaver" | "manual" | "hr" | "emp", Person>;
-  const tok = {} as Record<"dev" | "hr" | "emp" | "manual", string>;
+  const p = {} as Record<"dev" | "leaver" | "manual" | "hr" | "sa" | "emp", Person>;
+  const tok = {} as Record<"dev" | "hr" | "sa" | "emp" | "manual", string>;
   let deviceId = "";
   let batchId = "";
   let savedSettings: unknown = null;
@@ -46,9 +46,10 @@ describe("regularization for any correctable day (Phase 3 commit 1)", () => {
     p.leaver = await createFullTestEmployee(org); // on approved leave one day
     p.manual = await createFullTestEmployee(org);
     p.hr = await createFullTestEmployee(org, { roleCode: "HR_ADMIN" });
+    p.sa = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" }); // Stage 1: the Regularization settings (settings.manage) are a director's
     p.emp = await createFullTestEmployee(org, { roleCode: "EMPLOYEE" });
     await prisma.deviceUserMapping.deleteMany({ where: { employeeId: p.manual.employeeId } });
-    for (const k of ["dev", "hr", "emp", "manual"] as const) tok[k] = await loginAs(p[k].employeeCode);
+    for (const k of ["dev", "hr", "sa", "emp", "manual"] as const) tok[k] = await loginAs(p[k].employeeCode);
     savedSettings = (await prisma.systemSetting.findUnique({ where: { key: REGULARIZATION_SETTING_KEY } }))?.value ?? null;
     await setSetting(REGULARIZATION_SETTING_KEY, DEFAULT_REGULARIZATION_SETTINGS, p.hr.userId);
 
@@ -196,12 +197,13 @@ describe("regularization for any correctable day (Phase 3 commit 1)", () => {
       const put = (t: string, b: object) => request(app).put("/api/settings/regularization").set(...authHeader(t)).send(b);
       expect((await get(tok.emp)).status).toBe(403);
       expect((await put(tok.emp, { backdateCycles: 2 })).status).toBe(403);
-      expect((await get(tok.hr)).body).toEqual(DEFAULT_REGULARIZATION_SETTINGS);
-      expect((await put(tok.hr, { backdateCycles: 9 })).status).toBe(400);
-      expect((await put(tok.hr, { bulkMaxEmployeeDays: 0 })).status).toBe(400);
-      const ok = await put(tok.hr, { bulkMaxRangeDays: 14 });
+      expect((await get(tok.hr)).status).toBe(403); // HR no longer reads or changes them
+      expect((await get(tok.sa)).body).toEqual(DEFAULT_REGULARIZATION_SETTINGS);
+      expect((await put(tok.sa, { backdateCycles: 9 })).status).toBe(400);
+      expect((await put(tok.sa, { bulkMaxEmployeeDays: 0 })).status).toBe(400);
+      const ok = await put(tok.sa, { bulkMaxRangeDays: 14 });
       expect(ok.body).toEqual({ ...DEFAULT_REGULARIZATION_SETTINGS, bulkMaxRangeDays: 14 });
-      expect((await put(tok.hr, { bulkMaxRangeDays: 31 })).status).toBe(200);
+      expect((await put(tok.sa, { bulkMaxRangeDays: 31 })).status).toBe(200);
     });
   });
 });

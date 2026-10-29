@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { PERMISSION_KEYS } from "@shared/constants/permissions";
 import { HR_CAPABILITIES } from "@shared/constants/hrCapabilities";
-import { adminApps } from "../../../routes/adminMenu.config";
+import { adminApps, adminNeedsForPath, adminNeedsMet } from "../../../routes/adminMenu.config";
 import { adminNav, flattenLeaves } from "../nav";
 
 // The admin menu follows what a director has switched on or off for a person: an item the person's permissions don't cover is not in the sidebar, the search or the phone menu.
@@ -42,5 +42,21 @@ describe("the admin menu", () => {
     const labels = reports && reports.kind === "group" ? reports.children.filter((c) => c.kind === "section").map((c) => c.label) : [];
     expect(labels).not.toContain("Attendance");
     expect(labels).not.toContain("Leave");
+  });
+
+  it("a shortcut (favourite) to a page follows the page's own rule, with or without a query string", () => {
+    const needs = adminNeedsForPath("/admin/workforce/attendance/exceptions?type=NO_SHIFT");
+    expect(needs?.any).toEqual(["attendance.exceptions.view"]);
+    expect(adminNeedsMet(needs, () => false, false)).toBe(false);
+    expect(adminNeedsMet(needs, (k) => k === "attendance.exceptions.view", false)).toBe(true);
+    expect(adminNeedsMet(needs, () => false, true)).toBe(true); // a director
+    expect(adminNeedsForPath("/admin/somewhere/else")).toBeUndefined(); // not a menu page: nothing special is needed
+  });
+
+  it("the Admin Tools that are the directors' are not in HR's menu: roles, audit log, system settings, workflow delegates", () => {
+    const hr = new Set(["employee.view", "org.manage", "leave.policy.manage", "attendance.config.manage", "helpdesk.manage", "letters.template.manage", "import.manage", "manager.appoint"]);
+    const keys = leavesFor(hr);
+    for (const gone of ["users-roles", "audit-log", "system-settings", "workflow-delegates-admin", "hr-capabilities"]) expect(keys, gone).not.toContain(gone);
+    for (const kept of ["organisation-setup", "holiday-calendars", "managers", "import-export"]) expect(keys, kept).toContain(kept);
   });
 });

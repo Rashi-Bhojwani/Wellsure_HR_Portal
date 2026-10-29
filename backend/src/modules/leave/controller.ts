@@ -151,18 +151,22 @@ export async function listCompOffCredits(req: Request, res: Response): Promise<v
 
 // ── Admin: Year End Process (leave.yearend.manage) ──────────────────────
 
+// The encashment amounts are money: only whoever may see the leave liability report (a director) gets them; HR gets days alone.
+const canSeeEncashment = (req: Request): boolean => req.user!.permissions.has("reports.liability.view");
+const yearEndMoney = <T,>(req: Request, payload: T): T => (canSeeEncashment(req) ? payload : yearEndService.withoutEncashmentMoney(payload));
+
 export async function listYearEndRuns(req: Request, res: Response): Promise<void> {
   const { year } = req.query as { year?: number };
-  res.status(200).json({ runs: await yearEndService.listYearEndRuns(year) });
+  res.status(200).json({ runs: yearEndMoney(req, await yearEndService.listYearEndRuns(year)) });
 }
 
 export async function getYearEndRun(req: Request, res: Response): Promise<void> {
-  res.status(200).json(await yearEndService.getYearEndRun(req.params.id as string));
+  res.status(200).json(yearEndMoney(req, await yearEndService.getYearEndRun(req.params.id as string)));
 }
 
 export async function previewYearEnd(req: Request, res: Response): Promise<void> {
   const { leaveYear } = req.body as { leaveYear: number };
-  res.status(201).json(await yearEndService.previewYearEnd(leaveYear, actorMeta(req)));
+  res.status(201).json(yearEndMoney(req, await yearEndService.previewYearEnd(leaveYear, actorMeta(req))));
 }
 
 export async function discardYearEndRun(req: Request, res: Response): Promise<void> {
@@ -172,11 +176,11 @@ export async function discardYearEndRun(req: Request, res: Response): Promise<vo
 
 export async function commitYearEndRun(req: Request, res: Response): Promise<void> {
   const { confirmText } = req.body as { confirmText?: string };
-  res.status(200).json(await yearEndService.commitYearEndRun(req.params.id as string, actorMeta(req), { confirmText }));
+  res.status(200).json(yearEndMoney(req, await yearEndService.commitYearEndRun(req.params.id as string, actorMeta(req), { confirmText })));
 }
 
 export async function downloadYearEndReport(req: Request, res: Response): Promise<void> {
-  const { buffer, fileName } = await yearEndService.buildYearEndReport(req.params.id as string);
+  const { buffer, fileName } = await yearEndService.buildYearEndReport(req.params.id as string, canSeeEncashment(req));
   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
   res.status(200).send(buffer);

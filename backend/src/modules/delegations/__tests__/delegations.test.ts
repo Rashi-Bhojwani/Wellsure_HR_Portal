@@ -76,9 +76,11 @@ describe("Workflow Delegates (E3)", () => {
     await prisma.workflowDelegate.updateMany({ where: { revokedAt: null }, data: { revokedAt: new Date(), revokedByUserId: p.sa.userId } });
   };
 
-  it("HR_ADMIN holds delegation.manage by default; a manager doesn't, and can't reach HR's endpoints", async () => {
+  it("HR_ADMIN no longer holds delegation.manage (Stage 1: it is a director's); a manager doesn't either, and neither can reach the manage endpoints", async () => {
     const hr = await prisma.role.findUniqueOrThrow({ where: { code: "HR_ADMIN" }, include: { permissions: { include: { permission: true } } } });
-    expect(hr.permissions.map((x) => x.permission.key)).toContain("delegation.manage");
+    expect(hr.permissions.map((x) => x.permission.key)).not.toContain("delegation.manage");
+    expect((await api(tok.hrAdmin).get("/api/delegations")).status).toBe(403);
+    expect((await api(tok.sa).get("/api/delegations")).status).toBe(200);
     const mgr = await prisma.role.findUniqueOrThrow({ where: { code: "MANAGER" }, include: { permissions: { include: { permission: true } } } });
     expect(mgr.permissions.map((x) => x.permission.key)).not.toContain("delegation.manage");
     expect((await api(tok.mgrA).get("/api/delegations")).status).toBe(403);
@@ -238,18 +240,18 @@ describe("Workflow Delegates (E3)", () => {
       await revokeAll();
       const d = (await delegate("mgrA", p.mgrB)).body;
       expect((await api(tok.mgrC).post(`/api/delegations/mine/${d.id}/revoke`, {})).status).toBe(404);
-      const byHr = await api(tok.hrAdmin).post(`/api/delegations/${d.id}/revoke`, { reason: "manager returned early" });
+      const byHr = await api(tok.sa).post(`/api/delegations/${d.id}/revoke`, { reason: "manager returned early" });
       expect(byHr.status).toBe(200);
       expect(byHr.body).toMatchObject({ status: "REVOKED", revokeReason: "manager returned early" });
       expect((await api(tok.mgrA).post(`/api/delegations/mine/${d.id}/revoke`, {})).body.error.code).toBe("ALREADY_REVOKED");
       const ended = await prisma.workflowDelegate.create({
         data: { delegatorUserId: p.mgrA.userId, delegateUserId: p.mgrB.userId, startDate: addCalendarDays(today(), -9), endDate: addCalendarDays(today(), -7), createdByUserId: p.mgrA.userId },
       });
-      expect((await api(tok.hrAdmin).post(`/api/delegations/${ended.id}/revoke`, {})).body.error.code).toBe("ALREADY_ENDED");
+      expect((await api(tok.sa).post(`/api/delegations/${ended.id}/revoke`, {})).body.error.code).toBe("ALREADY_ENDED");
       const audit = await prisma.auditLog.findMany({ where: { entityType: "WorkflowDelegate", entityId: d.id }, orderBy: { createdAt: "asc" } });
       expect(audit.map((a) => [a.action, a.actorUserId])).toEqual([
         ["delegation.created", p.mgrA.userId],
-        ["delegation.revoked", p.hrAdmin.userId],
+        ["delegation.revoked", p.sa.userId],
       ]);
     });
   });
@@ -257,19 +259,19 @@ describe("Workflow Delegates (E3)", () => {
   describe("HR's view", () => {
     it("HR lists everyone's, filters by status, and sets one up for a manager (who is told)", async () => {
       await revokeAll();
-      const created = await api(tok.hrAdmin).post("/api/delegations", { delegatorUserId: p.mgrC.userId, delegateUserId: p.mgrB.userId, startDate: inDays(0), endDate: inDays(2) });
+      const created = await api(tok.sa).post("/api/delegations", { delegatorUserId: p.mgrC.userId, delegateUserId: p.mgrB.userId, startDate: inDays(0), endDate: inDays(2) });
       expect(created.status).toBe(201);
       expect(created.body.createdBy).toBeTruthy();
-      const active = (await api(tok.hrAdmin).get("/api/delegations?status=ACTIVE")).body.delegations;
+      const active = (await api(tok.sa).get("/api/delegations?status=ACTIVE")).body.delegations;
       expect(active.map((d: { id: string }) => d.id)).toContain(created.body.id);
       expect(active.every((d: { status: string }) => d.status === "ACTIVE")).toBe(true);
       expect(await prisma.notification.count({ where: { userId: p.mgrC.userId, type: "delegation.created", title: "Your approvals were delegated" } })).toBe(1);
       expect(await prisma.notification.count({ where: { userId: p.mgrB.userId, type: "delegation.created" } })).toBeGreaterThan(0);
-      const managers = (await api(tok.hrAdmin).get("/api/delegations/managers")).body.options.map((o: { userId: string }) => o.userId);
+      const managers = (await api(tok.sa).get("/api/delegations/managers")).body.options.map((o: { userId: string }) => o.userId);
       expect(managers).toEqual(expect.arrayContaining([p.mgrA.userId, p.mgrB.userId, p.mgrC.userId]));
       expect(managers).not.toContain(p.hrAdmin.userId);
       // HR can't set one up for a Super Admin either.
-      expect((await api(tok.hrAdmin).post("/api/delegations", { delegatorUserId: p.sa.userId, delegateUserId: p.hrAdmin.userId, startDate: inDays(0), endDate: inDays(2) })).status).toBe(409);
+      expect((await api(tok.sa).post("/api/delegations", { delegatorUserId: p.sa.userId, delegateUserId: p.hrAdmin.userId, startDate: inDays(0), endDate: inDays(2) })).status).toBe(409);
     });
 
     it("the delegate's 'covering for' list shows it", async () => {

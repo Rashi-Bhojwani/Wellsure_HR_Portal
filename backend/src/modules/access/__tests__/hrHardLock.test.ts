@@ -73,20 +73,32 @@ describe("the HR hard lock, layer by layer", () => {
     }
   });
 
+  it("the Admin Tools are the directors': HR reaches neither roles, the audit log, system settings nor workflow delegates, and the director does", async () => {
+    const doors = ["/api/access/roles", "/api/audit-logs", "/api/settings/regularization", "/api/delegations"];
+    for (const who of [hr, hrx]) {
+      const token = await loginAs(who.employeeCode);
+      for (const path of doors) expect((await request(app).get(path).set(...authHeader(token))).status, path).toBe(403);
+      for (const k of ["role.view", "audit.view", "settings.manage", "delegation.manage"]) expect((await resolveAccess(who.userId)).permissions.has(k), k).toBe(false);
+    }
+    const dir = await loginAs(sa.employeeCode);
+    for (const path of doors) expect((await request(app).get(path).set(...authHeader(dir))).status, path).toBe(200);
+  });
+
   it("layer 1, the resolver: a locked key put on the HR role or granted to an HR person is removed whatever the rows say (database triggers off for the moment)", async () => {
     const role = await prisma.role.findUniqueOrThrow({ where: { code: "HR_ADMIN" } });
-    const roleKey = await keyId("payroll.salary.view");
-    const grantKey = await keyId("reports.salary.view");
+    const roleKeys = ["payroll.salary.view", "role.view", "delegation.manage"];
+    const grantKeys = ["reports.salary.view", "audit.view", "settings.manage"];
     await withoutTrigger("role_permissions", "role_permissions_hr_hard_lock", async () => {
       await withoutTrigger("user_permission_overrides", "user_permission_overrides_hr_hard_lock", async () => {
-        await prisma.rolePermission.create({ data: { roleId: role.id, permissionId: roleKey } });
-        await prisma.userPermissionOverride.create({ data: { userId: hrx.userId, permissionId: grantKey, effect: "GRANT", reason: "raw", createdByUserId: sa.userId } });
+        for (const k of roleKeys) await prisma.rolePermission.create({ data: { roleId: role.id, permissionId: await keyId(k) } });
+        for (const k of grantKeys) await prisma.userPermissionOverride.create({ data: { userId: hrx.userId, permissionId: await keyId(k), effect: "GRANT", reason: "raw", createdByUserId: sa.userId } });
         try {
-          expect((await resolveAccess(hr.userId)).permissions.has("payroll.salary.view")).toBe(false);
-          expect((await resolveAccess(hrx.userId)).permissions.has("reports.salary.view")).toBe(false);
+          for (const k of roleKeys) expect((await resolveAccess(hr.userId)).permissions.has(k), k).toBe(false);
+          for (const k of grantKeys) expect((await resolveAccess(hrx.userId)).permissions.has(k), k).toBe(false);
           expect((await request(app).get("/api/payroll/salary/employees").set(...authHeader(await loginAs(hr.employeeCode)))).status).toBe(403);
+          expect((await request(app).get("/api/access/roles").set(...authHeader(await loginAs(hr.employeeCode)))).status).toBe(403);
         } finally {
-          await prisma.rolePermission.deleteMany({ where: { roleId: role.id, permissionId: roleKey } });
+          for (const k of roleKeys) await prisma.rolePermission.deleteMany({ where: { roleId: role.id, permissionId: await keyId(k) } });
           await prisma.userPermissionOverride.deleteMany({ where: { userId: hrx.userId } });
         }
       });

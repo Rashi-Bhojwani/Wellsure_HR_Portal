@@ -160,6 +160,13 @@ export interface AdminApp {
   menus?: AdminMenuGroup[];
 }
 
+/** What the admin page at `path` (an in-app path such as /admin/workforce/attendance/who-is-in) needs, or undefined when it needs nothing special / is not a menu page. */
+export function adminNeedsForPath(path: string): AdminNeeds | undefined {
+  const clean = path.split(/[?#]/)[0]!.replace(/\/+$/, "");
+  for (const app of adminApps) for (const group of app.menus ?? []) for (const item of group.items) if (`/admin/${item.path}` === clean) return item.needs;
+  return undefined;
+}
+
 export const adminApps: AdminApp[] = [
   {
     key: "homepage",
@@ -346,21 +353,21 @@ export const adminApps: AdminApp[] = [
         key: "admin-tools",
         label: "Admin Tools",
         items: [
-          { key: "organisation-setup", label: "Organisation Setup", path: "admin-tools/organisation", icon: PartitionOutlined, element: OrganisationSetupPage },
-          { key: "holiday-calendars", label: "Holiday Calendars", path: "admin-tools/holidays", icon: GiftOutlined, element: HolidayCalendarsAdminPage },
-          { key: "shift-master", label: "Shift Master", path: "admin-tools/shifts", icon: ScheduleOutlined, element: ShiftMasterPage },
-          { key: "week-off-patterns", label: "Week-off Patterns", path: "admin-tools/week-offs", icon: CalendarOutlined, element: WeekOffPatternsPage },
-          { key: "leave-types-policies", label: "Leave Types & Policies", path: "admin-tools/leave-policies", icon: SolutionOutlined, element: LeaveTypesPoliciesPage },
-          { key: "workflow-delegates-admin", label: "Workflow Delegates", path: "admin-tools/delegates", icon: UserSwitchOutlined, element: WorkflowDelegatesAdminPage },
-          { key: "users-roles", label: "Roles & Permissions", path: "admin-tools/users-roles", icon: TeamOutlined, element: RolesPermissionsPage },
+          { key: "organisation-setup", label: "Organisation Setup", path: "admin-tools/organisation", icon: PartitionOutlined, element: OrganisationSetupPage, needs: { any: ["org.manage"] } },
+          { key: "holiday-calendars", label: "Holiday Calendars", path: "admin-tools/holidays", icon: GiftOutlined, element: HolidayCalendarsAdminPage, needs: { any: ["leave.policy.manage"] } },
+          { key: "shift-master", label: "Shift Master", path: "admin-tools/shifts", icon: ScheduleOutlined, element: ShiftMasterPage, needs: { any: ["attendance.config.manage"] } },
+          { key: "week-off-patterns", label: "Week-off Patterns", path: "admin-tools/week-offs", icon: CalendarOutlined, element: WeekOffPatternsPage, needs: { any: ["attendance.config.manage"] } },
+          { key: "leave-types-policies", label: "Leave Types & Policies", path: "admin-tools/leave-policies", icon: SolutionOutlined, element: LeaveTypesPoliciesPage, needs: { any: ["leave.policy.manage"] } },
+          { key: "workflow-delegates-admin", label: "Workflow Delegates", path: "admin-tools/delegates", icon: UserSwitchOutlined, element: WorkflowDelegatesAdminPage, needs: { any: ["delegation.manage"] } },
+          { key: "users-roles", label: "Roles & Permissions", path: "admin-tools/users-roles", icon: TeamOutlined, element: RolesPermissionsPage, needs: { any: ["role.view"] } },
           { key: "hr-capabilities", label: "What HR Can Do", path: "admin-tools/hr-capabilities", icon: SafetyOutlined, element: HrCapabilitiesPage, needs: { director: true } },
-          { key: "managers", label: "Manager Management", path: "admin-tools/managers", icon: ApartmentOutlined, element: ManagerManagementPage },
-          { key: "helpdesk-categories", label: "Helpdesk Categories", path: "admin-tools/helpdesk-categories", icon: CustomerServiceOutlined, element: HelpdeskCategoriesPage },
-          { key: "templates", label: "Email & Letter Templates", path: "admin-tools/templates", icon: FileTextOutlined, element: LetterTemplatesPage },
-          { key: "devices", label: "Devices", path: "admin-tools/devices", icon: UsbOutlined, element: DevicesPage },
-          { key: "import-export", label: "Data Import/Export", path: "admin-tools/import-export", icon: CloudUploadOutlined, element: ImportCenterPage },
-          { key: "audit-log", label: "Audit Log", path: "admin-tools/audit-log", icon: AuditOutlined, element: AuditLogPage },
-          { key: "system-settings", label: "System Settings", path: "admin-tools/settings", icon: SettingOutlined, element: SystemSettingsPage },
+          { key: "managers", label: "Manager Management", path: "admin-tools/managers", icon: ApartmentOutlined, element: ManagerManagementPage, needs: { any: ["manager.appoint", "manager.team.assign", "manager.permissions.manage"] } },
+          { key: "helpdesk-categories", label: "Helpdesk Categories", path: "admin-tools/helpdesk-categories", icon: CustomerServiceOutlined, element: HelpdeskCategoriesPage, needs: { any: ["helpdesk.manage"] } },
+          { key: "templates", label: "Email & Letter Templates", path: "admin-tools/templates", icon: FileTextOutlined, element: LetterTemplatesPage, needs: { any: ["letters.template.manage"] } },
+          { key: "devices", label: "Devices", path: "admin-tools/devices", icon: UsbOutlined, element: DevicesPage, needs: { any: ["attendance.devices.manage"] } },
+          { key: "import-export", label: "Data Import/Export", path: "admin-tools/import-export", icon: CloudUploadOutlined, element: ImportCenterPage, needs: { any: ["import.manage"] } },
+          { key: "audit-log", label: "Audit Log", path: "admin-tools/audit-log", icon: AuditOutlined, element: AuditLogPage, needs: { any: ["audit.view"] } },
+          { key: "system-settings", label: "System Settings", path: "admin-tools/settings", icon: SettingOutlined, element: SystemSettingsPage, needs: { any: ["settings.manage"] } },
         ],
       },
     ],

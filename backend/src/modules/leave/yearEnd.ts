@@ -17,6 +17,14 @@ import { inForceOn } from "../../lib/effectiveDating";
 // preview — see schema.prisma's comment on YearEndRun for the full
 // reasoning.
 
+// Encashment is money. Who may see it is whoever may see the leave liability report (a director, since the HR hard lock); HR runs the year-end process on days alone.
+const MONEY_KEYS = new Set(["totalEncashedAmount", "dailyRate", "rateSource", "encashedAmount"]);
+export function withoutEncashmentMoney<T>(value: T): T {
+  if (Array.isArray(value)) return value.map(withoutEncashmentMoney) as unknown as T;
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, MONEY_KEYS.has(k) ? null : withoutEncashmentMoney(v)])) as T;
+  return value;
+}
+
 function cutoffDate(leaveYear: number): Date {
   return new Date(Date.UTC(leaveYear, 11, 31));
 }
@@ -224,7 +232,7 @@ export async function commitYearEndRun(runId: string, meta: ActorMeta, options: 
 // (PREVIEW items never change after their run leaves PREVIEW, COMMITTED
 // items never change at all), so regenerating is exactly as correct as a
 // stored copy, with no extra integration surface.
-export async function buildYearEndReport(runId: string): Promise<{ buffer: Buffer; fileName: string }> {
+export async function buildYearEndReport(runId: string, withMoney: boolean): Promise<{ buffer: Buffer; fileName: string }> {
   const run = await prisma.yearEndRun.findUnique({ where: { id: runId }, include: { items: { include: { employee: { include: { nameHistory: { where: inForceOn() } } } } } } });
   if (!run) throw new HttpError(404, "Year End run not found.", "NOT_FOUND");
 
@@ -236,21 +244,23 @@ export async function buildYearEndReport(runId: string): Promise<{ buffer: Buffe
         { header: "Employee Name", key: "name", width: 28 },
         { header: "Closing PL Balance", key: "balance", type: "number", width: 18 },
         { header: "Encashed Days", key: "days", type: "number", width: 16 },
-        { header: "Daily Rate", key: "rate", type: "money", width: 14 },
-        { header: "Rate Source", key: "rateSource", width: 16 },
-        { header: "Encashed Amount", key: "amount", type: "money", width: 18 },
+        ...(withMoney
+          ? ([
+              { header: "Daily Rate", key: "rate", type: "money", width: 14 },
+              { header: "Rate Source", key: "rateSource", width: 16 },
+              { header: "Encashed Amount", key: "amount", type: "money", width: 18 },
+            ] as const)
+          : []),
       ],
       rows: run.items.map((item) => ({
         code: item.employee.employeeCode,
         name: item.employee.nameHistory[0]?.fullName ?? item.employee.employeeCode,
         balance: item.closingPlBalance.toNumber(),
         days: item.encashedDays.toNumber(),
-        rate: item.dailyRate.toNumber(),
-        rateSource: item.rateSource,
-        amount: item.encashedAmount.toNumber(),
+        ...(withMoney ? { rate: item.dailyRate.toNumber(), rateSource: item.rateSource, amount: item.encashedAmount.toNumber() } : {}),
       })),
-      totals: { name: "Total", days: run.totalEncashedDays.toNumber(), amount: run.totalEncashedAmount.toNumber() },
-      footer: run.items.some((i) => i.rateSource === "MANUAL_SETTING") ? ["Daily rate: provisional flat HR-entered amount, pending CA confirmation of the encashment formula and its tax treatment (spec §5.2)."] : [],
+      totals: { name: "Total", days: run.totalEncashedDays.toNumber(), ...(withMoney ? { amount: run.totalEncashedAmount.toNumber() } : {}) },
+      footer: !withMoney ? undefined : run.items.some((i) => i.rateSource === "MANUAL_SETTING") ? ["Daily rate: provisional flat HR-entered amount, pending CA confirmation of the encashment formula and its tax treatment (spec §5.2)."] : [],
     },
   ]);
 

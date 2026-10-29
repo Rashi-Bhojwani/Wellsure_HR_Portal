@@ -34,6 +34,7 @@ describe("device and agent health (P2-H)", () => {
   let agentDeviceId = "";
   let pushDeviceId = "";
   let hrToken = "";
+  let bossToken = ""; // Stage 1: System Settings are a director's, no longer HR's
   let empToken = "";
   let savedAlerts: unknown = null;
   const mail = vi.spyOn(mailService, "send").mockResolvedValue(fakeReceipt());
@@ -88,6 +89,7 @@ describe("device and agent health (P2-H)", () => {
     p.b = await createFullTestEmployee(org, { roleCode: "EMPLOYEE" });
     p.c = await createFullTestEmployee(org, { roleCode: "EMPLOYEE" });
     hrToken = await loginAs(p.hr.employeeCode);
+    bossToken = await loginAs(p.boss.employeeCode);
     empToken = await loginAs(p.emp.employeeCode);
     savedAlerts = (await prisma.systemSetting.findUnique({ where: { key: DEVICE_ALERT_SETTING_KEY } }))?.value ?? null;
     await setSetting(DEVICE_ALERT_SETTING_KEY, { ...DEFAULT_DEVICE_ALERT_SETTINGS, alertEmails: ["ops@example.com"] }, p.hr.userId);
@@ -497,9 +499,10 @@ describe("device and agent health (P2-H)", () => {
 
   describe("the alert settings are admin-editable, validated and audited", () => {
     it("reads, updates and rejects nonsense", async () => {
-      const put = (body: object, token = hrToken) => request(app).put("/api/settings/device-alerts").set(...authHeader(token)).send(body);
+      const put = (body: object, token = bossToken) => request(app).put("/api/settings/device-alerts").set(...authHeader(token)).send(body);
       expect((await request(app).get("/api/settings/device-alerts").set(...authHeader(empToken))).status).toBe(403);
-      const before = (await request(app).get("/api/settings/device-alerts").set(...authHeader(hrToken))).body;
+      expect((await request(app).get("/api/settings/device-alerts").set(...authHeader(hrToken))).status).toBe(403); // HR no longer reads or changes them
+      const before = (await request(app).get("/api/settings/device-alerts").set(...authHeader(bossToken))).body;
       expect(before).toMatchObject({ deviceSilentMinutes: 30, agentSilentMinutes: 5, agentWindowMarginMinutes: 30, morningCheckTime: "10:30", alertSuperAdmins: true });
       expect((await put({ morningCheckTime: "25:00" })).status).toBe(400);
       expect((await put({ alertEmails: ["not an email"] })).status).toBe(400);

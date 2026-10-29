@@ -12,6 +12,7 @@ import {
   SoundOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../../../hooks/useAuth';
+import { adminNeedsForPath, adminNeedsMet } from '../../../routes/adminMenu.config';
 import * as managersApi from '../../../api/managers';
 import * as adminHomeApi from '../../../api/adminHome';
 import * as announcementsApi from '../../../api/announcements';
@@ -63,8 +64,10 @@ function FavouriteTiles() {
   // The drawer mounts from its first open on (then stays, so it animates closed).
   const [addUsed, setAddUsed] = useState(false);
   if (addOpen && !addUsed) setAddUsed(true);
+  const { user, hasPermission } = useAuth();
+  const isDirector = Boolean(user?.roleCodes.includes('SUPER_ADMIN'));
   const {
-    data: favourites = [],
+    data: allFavourites = [],
     isLoading,
     error,
     refetch,
@@ -72,6 +75,8 @@ function FavouriteTiles() {
     queryKey: ['admin', 'favourites'],
     queryFn: adminHomeApi.listFavourites,
   });
+  // A shortcut to a page the person's permissions no longer cover (a duty a director switched off) is not shown; it comes back by itself when the duty does.
+  const favourites = allFavourites.filter((f) => adminNeedsMet(adminNeedsForPath(f.path), hasPermission, isDirector));
   const deleteFavourite = useMutation({
     mutationFn: adminHomeApi.deleteFavourite,
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['admin', 'favourites'] }),

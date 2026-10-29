@@ -147,7 +147,8 @@ describe("Roles & permissions (E1)", () => {
 
   describe("role definitions", () => {
     it("lists roles; Super Admin shows every permission and is locked; role.view may read, others may not", async () => {
-      const res = await api(tokens.hrAdmin).get("/api/access/roles");
+      expect((await api(tokens.hrAdmin).get("/api/access/roles")).status).toBe(403); // Stage 1: who holds which role is a director's to see, not HR's
+      const res = await api(tokens.sa).get("/api/access/roles");
       expect(res.status).toBe(200);
       const sa = res.body.roles.find((r: { code: string }) => r.code === "SUPER_ADMIN");
       expect(sa.locked).toBe(true);

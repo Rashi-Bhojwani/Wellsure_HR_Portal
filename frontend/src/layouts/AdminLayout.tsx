@@ -26,6 +26,10 @@ const SecurityEventsBanner = lazy(() => import("../components/access/SecurityEve
 const AdminContextControls = lazy(() => import("./shell/AdminContextControls").then((m) => ({ default: m.AdminContextControls })));
 
 function AdminContextControlsSlot() {
+  const { user, hasPermission } = useAuth();
+  // The payroll month belongs to payroll: people who hold no payroll permission (HR) are not shown it, so a page about attendance never looks like it is about pay.
+  const forPayroll = Boolean(user?.roleCodes.includes("SUPER_ADMIN")) || hasPermission("payroll.salary.view") || hasPermission("payroll.run");
+  if (!forPayroll) return null;
   return (
     <Suspense
       fallback={
