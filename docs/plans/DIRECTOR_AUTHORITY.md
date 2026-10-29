@@ -18,6 +18,11 @@ The plan below was **approved**. Questions not listed here take the recommendati
 | Q-DA-10 | notify on **all** settings changes |
 | Q-DA-11 | no extra report |
 
+**Note (Stage 0.4, not a change to the model).** Director authority is held by the two Super Admin accounts. The code
+treats *every active Super Admin* as a director, so a third Super Admin would also be able to prepare, approve and flip
+switches. Whether a third Super Admin may approve payroll needs an explicit owner decision; until then, don't create one
+(see `docs/CONTINUITY_AND_RECOVERY.md` §e).
+
 **Added requirement — two-step sign-in for every Super Admin before real use.** Where it goes:
 - **D1** (this commit): (a) `SUPER_ADMIN` can no longer be removed from `auth.require2faRoles` in staging/production
   (`getRequire2faRoles` always includes it outside development; the Settings validator and service refuse removing
