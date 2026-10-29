@@ -130,7 +130,8 @@ async function main(): Promise<number> {
     const hr = await signIn(browser, web, user, password);
     pages.push(hr);
     await hr.goto(`${web}/admin/workforce/attendance/who-is-in`);
-    await hr.waitForSelector(".ant-statistic");
+    // The board's tiles are StatCards since the UI pass (they stopped being antd Statistics, which is what this used to wait for, and the wait timed out from then on).
+    await hr.getByText("Not yet arrived").first().waitFor();
 
     // Only people HR's board actually lists today (it is scoped, and not everyone is expected) can be measured on it.
     await hr.waitForFunction('document.body.innerText.includes(" · ")', undefined, { timeout: 15_000 });
