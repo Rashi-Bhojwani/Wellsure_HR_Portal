@@ -10,6 +10,7 @@ export interface RoleDefinition {
   description: string | null;
   isSystem: boolean;
   locked: boolean; // SUPER_ADMIN: every permission, can't be changed
+  directorOnly?: boolean; // PAYROLL_ADMIN / PAYROLL_APPROVER: only a Super Admin can hold them (D1)
   managerLocked?: boolean; // MANAGER: always empty — granted per manager (2026-10-03)
   dataScope: DataScope;
   permissions: string[];
