@@ -188,7 +188,8 @@ describe("submit, approve, finalise, the lock and unlock", () => {
 
   it("is not decided by the maker; the checker needs the hash they were shown, and a rejection needs a reason", async () => {
     const hash = (await stepOf(world.tokens.checkerA, runId, "run")).live!.hash;
-    expect((await step(world.tokens.maker, runId, "run", "decision", { decision: "APPROVE", hash })).status).toBe(403);
+    const r191 = await step(world.tokens.maker, runId, "run", "decision", { decision: "APPROVE", hash });
+    expect([r191.status, r191.body.error.code]).toEqual([403, "CHECKER_IS_MAKER"]);
     expect((await step(world.tokens.checkerA, runId, "run", "decision", { decision: "APPROVE" })).status).toBe(400);
     const wrong = await step(world.tokens.checkerA, runId, "run", "decision", { decision: "APPROVE", hash: "e".repeat(64) });
     expect([wrong.status, wrong.body.error.code]).toEqual([409, "PREVIEW_STALE"]);
@@ -234,7 +235,8 @@ describe("submit, approve, finalise, the lock and unlock", () => {
     expect(p.body.approvedBy).toBeTruthy();
     expect((await step(world.tokens.outsider, runId, "finalise", "request", { fingerprint: p.body.fingerprint })).status).toBe(403);
     await requestStep(world.tokens.maker, runId, "finalise");
-    expect((await step(world.tokens.maker, runId, "finalise", "decision", { decision: "APPROVE", hash: "a".repeat(64) })).status).toBe(403);
+    const r237 = await step(world.tokens.maker, runId, "finalise", "decision", { decision: "APPROVE", hash: "a".repeat(64) });
+    expect([r237.status, r237.body.error.code]).toEqual([403, "CHECKER_IS_MAKER"]);
     await approve(world, world.supToken, runId, "finalise"); // the Super Admin holds every permission, which is exactly why they must not also carry it out
     const approved = await prisma.payrollApproval.findFirstOrThrow({ where: { subject: "PERIOD_FINALISE", subjectId: runId } });
     expect(approved.status).toBe("APPROVED");
@@ -291,7 +293,8 @@ describe("submit, approve, finalise, the lock and unlock", () => {
     const pub = await step(world.tokens.maker, runId, "publish", "preview");
     expect(pub.body).toMatchObject({ canRequest: true, blockers: [], payslips: 3 });
     await requestStep(world.tokens.maker, runId, "publish");
-    expect((await step(world.tokens.maker, runId, "publish", "decision", { decision: "REJECT", note: "no" })).status).toBe(403);
+    const r294 = await step(world.tokens.maker, runId, "publish", "decision", { decision: "REJECT", note: "no" });
+    expect([r294.status, r294.body.error.code]).toEqual([403, "CHECKER_IS_MAKER"]);
     await approve(world, world.tokens.checkerB, runId, "publish");
     expect((await stepOf(world.tokens.maker, runId, "publish")).live).toMatchObject({ status: "APPROVED", checker: { name: expect.any(String) } });
     // The bank file cannot even be asked for until its layout exists and a second person has confirmed it.
@@ -312,7 +315,8 @@ describe("submit, approve, finalise, the lock and unlock", () => {
     expect((await api(world.supToken, "post", `/runs/${runId}/unlock`)).body.error.code).toBe("APPROVAL_REQUIRED");
     const asked = await step(world.supToken, runId, "unlock", "request", { fingerprint: preview.body.fingerprint, note: "A day was found to be wrong" });
     expect(asked.status).toBe(201);
-    expect((await step(world.supToken, runId, "unlock", "decision", { decision: "APPROVE", hash: (await stepOf(world.supToken, runId, "unlock")).live!.hash })).status).toBe(403); // not the maker
+    const r315 = await step(world.supToken, runId, "unlock", "decision", { decision: "APPROVE", hash: (await stepOf(world.supToken, runId, "unlock")).live!.hash }); // not the maker
+    expect([r315.status, r315.body.error.code]).toEqual([403, "CHECKER_IS_MAKER"]);
     expect((await api(world.supToken, "post", `/runs/${runId}/unlock`)).body.error.code).toBe("APPROVAL_REQUIRED");
     await approve(world, world.tokens.checkerA, runId, "unlock");
     const out = await api(world.tokens.outsider, "post", `/runs/${runId}/unlock`);

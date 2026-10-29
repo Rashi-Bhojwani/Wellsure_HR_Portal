@@ -157,7 +157,8 @@ describe("a salary revision, from preparing to applying", () => {
     expect(detail.body.status).toBe("WAITING_FOR_CHECKER");
     // Not yet written; the maker cannot decide it (no checker permission), cannot apply it unapproved.
     expect(await salaryOn(e.employeeId, new Date("2025-05-01"))).toBeNull();
-    expect((await api(w.tokens.maker).post(`/salary/revisions/${id}/decision`, { decision: "APPROVE", fingerprint: detail.body.fingerprint })).status).toBe(403);
+    const r160 = await api(w.tokens.maker).post(`/salary/revisions/${id}/decision`, { decision: "APPROVE", fingerprint: detail.body.fingerprint });
+    expect([r160.status, r160.body.error.code]).toEqual([403, "CHECKER_IS_MAKER"]);
     const early = await maker().post(`/salary/revisions/${id}/apply`);
     expect(early.status).toBe(409);
     expect(early.body.error.code).toBe("APPROVAL_REQUIRED");

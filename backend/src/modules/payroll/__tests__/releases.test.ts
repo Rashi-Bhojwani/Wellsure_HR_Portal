@@ -15,7 +15,7 @@ import { prisma } from "../../../lib/prisma";
 import { app, authHeader, createFullTestEmployee, cleanupFullTestEmployee, loginAs } from "../../employee/__tests__/employeeTestHelpers";
 import { markPaid } from "../run/bankBatches";
 import { deliverPayslips } from "../run/payslipDelivery";
-import { REAL_RULES, approve, closeWorld, closingWorld, confirmAllPins, driveToFinal, requestStep, resetSeams, staffWith, step, type Closing } from "./closeTestHelpers";
+import { REAL_RULES, approve, closeWorld, closingWorld, confirmAllPins, driveToFinal, requestStep, resetSeams, staffWith, step, stepOf, type Closing } from "./closeTestHelpers";
 import { CYCLE, api, calculateRun, day, setRules } from "./runTestHelpers";
 
 // What a final run releases: payslips, the bank file, the statutory files and the register (docs/plans/PHASE_6.md §14H), through the real API and the real database.
@@ -291,6 +291,9 @@ describe("payslips, the bank file and the statutory files from a final run", () 
 
   it("generates the file, and the batch, the audit rows and the release are all written together; the checker cannot carry it out", async () => {
     await requestStep(world.tokens.maker, runId, "bank-file");
+    // Stage 0.3: the person who asked for the file cannot approve it themselves.
+    const own = await step(world.tokens.maker, runId, "bank-file", "decision", { decision: "APPROVE", hash: (await stepOf(world.tokens.maker, runId, "bank-file")).live!.hash });
+    expect([own.status, own.body.error.code]).toEqual([403, "CHECKER_IS_MAKER"]);
     await approve(world, world.supToken, runId, "bank-file");
     expect((await api(world.supToken, "post", `/runs/${runId}/bank-file/generate`)).body.error.code).toBe("CHECKER_IS_EXECUTOR");
     const done = await api(world.tokens.maker, "post", `/runs/${runId}/bank-file/generate`);

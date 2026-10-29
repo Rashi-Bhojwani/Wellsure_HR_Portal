@@ -105,6 +105,8 @@ export async function listRoles() {
     return {
       // MANAGER: locked empty — permissions are granted per manager (2026-10-03).
       managerLocked: r.code === MANAGER_ROLE_CODE,
+      // D1: the payroll roles can be held by a Super Admin only; they are markers, a Super Admin already holds every permission.
+      directorOnly: (DIRECTOR_ONLY_ROLE_CODES as readonly string[]).includes(r.code),
       id: r.id,
       code: r.code,
       name: r.name,
