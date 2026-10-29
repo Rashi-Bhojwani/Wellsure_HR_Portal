@@ -126,3 +126,39 @@ fix it only if you want (it changes who hears about punches). (4) Re-routing of 
 
 **Not checked / unverified.** Every email template; the global search box (it is built from the menu config, so it will follow the menu fix);
 push/mobile channels (none seen); whether any non-attendance screen embeds attendance numbers (e.g. the employee profile header).
+
+---
+
+## Stage 1 — HR capability switches (commits `8142bdd` … `e3a40c3`)
+
+Plan: `HR_CAPABILITIES.md`. 1.1 is the report above (no code).
+
+**Built**
+- 1.2a `bdda0c3` **The hard lock.** `HR_FORBIDDEN_KEYS` (every `payroll.*` key, `reports.salary.view`, `reports.liability.view`, `documents.pay.view`). Four layers, each proven alone: the resolver strips them from any HR holder who is not also a Super Admin; the Roles screen/service refuses them in words; database triggers refuse the rows; the HR defaults no longer hold them. A migration removed what existing HR roles held, copying each row first into the append-only `role_permission_removals`.
+- 1.2b/c `279d54e` **Switches.** Eleven duties, per HR role or named person, reason required, optionally from a later time, append-only history (`hr_capability_switches`; database refuses a writer who is not a Super Admin, and any update/delete). Applied inside `resolveAccess` (no cache). Named person beats role; OFF beats ON between two roles; the hard-locked set is stripped last. Five keys split from older ones (muster upload, shift roster, exceptions queue, attendance reports, leave reports); roles and per-user grants were copied so nothing changed on the day. Screen: Admin Tools → What HR Can Do.
+- 1.3 `3c9bf82` **Immediate everywhere.** Admin menu items carry `needs`; the sidebar, search and phone menu leave out what is off, a direct URL shows "This is not switched on for you". Task counts, inbox, `/me`, live Socket.IO rooms tested per place, both directions, for HR role, named person, employee, manager, director.
+- 1.4 `5f60826` **Pending work.** When no HR person holds Approve leave / Approve regularizations, directors see a note and count (Admin Home, Tasks). Nothing is decided, moved or re-created; it returns to HR when the duty is back on.
+- 1.5/1.6 `ba554e9` **Reports and the matrix.** Each report names its duty; the gallery lists only what may be opened and run/export refuse the rest on the server. The hard lock grew by `role.view`, `audit.view`, `settings.manage`, `delegation.manage` (second migration, rows copied first). Year-end encashment amounts: HR gets days only (screens, download, audit viewer). Shortcuts to pages a person can no longer open are hidden. Persona matrix test (15 doors × HR default, each duty off, named person, employee, manager, director) and a crawl of every GET route as HR with every duty on/off/as it is: no payroll or payslip route (except your own payslips) ever answers HR. `check:sensitive-ui` also scans the HR Admin with every duty on and off.
+- `e3a40c3` fix: the first Stage 1.4 CI run failed the **bundle budget** (shell + home 410 and 428 KB against 400); `RequireAccess` was pulling the whole `ui` barrel into the first download. Now 320 and 342 KB.
+
+**Tests / numbers.** Full backend suite run alone after the last backend change: **166 files, 1,611 tests, all passed**. New tests: `approvals` (6 subjects), `hrHardLock` (9), `hrCapabilities` (18), `immediacy` (8), `hrMatrix` (15), `reportsPermissions` (5), `yearEndMoney` (3), frontend `adminNav` (7). Frontend 53 tests, lint, typecheck, design tokens, bundle budget (after the fix) all pass. `check:sensitive-ui` locally: **451 pages, no secret, DEMO banner on every one**. `db:drift` clean. **Mutation checks, all caught by a named test:** resolver strip off; service refusal off; each of four hard-lock layers; switch precedence (person over role, OFF over ON); future-dated rows; hard-lock strip after switches; roster, upload and exceptions routes; director check; database director-only trigger; notify-on-change (the socket tests); reports permission, year-end money (three places); menu filter; Admin Tools keys in the resolver.
+
+**Changed tests (old → new, why still meaningful).** HR Admin used to read rules, salary, the Payroll audit trail, leave liability, PAY documents, settings, the audit log, the roles list and workflow delegates; those assertions now expect 403 for HR and a director (or, for the audit viewer, a developer or plain employee given the audit viewer) does the work, so each test still proves the same rule for the people who may do it. Files: `payroll/access.test.ts`, `access/access.test.ts`, `directorAuthority.test.ts` (HR gets the HR ceiling message first; a plain employee still proves the payroll one), `documents/sensitivity.test.ts`, `letters.test.ts`, `reports.test.ts`, `regularization.test.ts`, `agentDevices.test.ts`, `health.test.ts`, `helpdesk.test.ts`, `delegations.test.ts`. Split keys: `exceptions.test.ts` and `manual.test.ts` grant the new key too; `config.test.ts` expects `attendance.exceptions.view` on Payroll Admin; `routeInventory.ts` lists the new routes.
+
+**CI.** `bdda0c3` run: green except `latency`. The `5f60826` run: bundle budget failed (fixed by `e3a40c3`) and `latency` (known); `sensitive-ui`, attendance-replay, agent-windows, docker-build green. The `279d54e` and `3c9bf82` runs were cancelled by the next push (same tree as `5f60826`). The runs for `ba554e9` and `e3a40c3`: read at the Stage 2 close.
+
+**Decided by me.**
+1. HR keeps *entering* a masked bank/statutory change (the approved plan); the prompt's list says HR is locked from bank/statutory. Followed the plan; flagged.
+2. The hard lock covers payroll, pay reports and documents, and four Admin Tools keys. **Not locked, listed as open:** `letters.generate` (HR can still issue letters, including ones with pay figures, until per-type grants exist), `user.security.manage`, `import.manage`, `leave.yearend.manage` (days only for HR now).
+3. A switch for a person who is also a manager removes the key entirely (no provenance in the permission set).
+4. Uploading the muster also needs Edit muster; the exceptions queue also needs View attendance.
+5. "View leave" is not one of the eleven duties, so HR keeps seeing leave counts when Approve leave is off (WAITING ON: whether that should be switchable).
+6. The payroll-month selector shows only to people with payroll permissions; the hand-typed branch names in the top-bar filter were removed (branches are data).
+7. Delayed (future-dated) switches update sockets/menus by a delayed job; access itself is right at the moment (resolved on every request).
+8. The admin menu's per-item `needs` was added for the Admin Tools items too (it was H7).
+
+**Found and not changed.** (a) `punch.received.batch` / `attendance.updated` go to everyone in `perm:attendance.view` regardless of data scope (ids, times, device and branch; no names). (b) The real company's branch names appear in `backend/prisma/seed.ts`, several docs and the product spec (public repo): listed for the owner, no values repeated here, history not rewritten. (c) `GET /api/payroll/setup/access` was open to HR through `role.view`; now closed by the lock.
+
+**Unverified.** The Stage 1.4 banner on Admin Home / Tasks was not exercised in a browser. Phone layout of What HR Can Do checked in dark mode only (no horizontal scroll). No live walkthrough as a *manager*. The frontend of favourites filtering has a unit test but was not clicked.
+
+**Waiting.** Everything in `MASTER_CHECKLIST.md`, plus: whether HR may see leave/attendance counts when a duty is off; the four "not locked yet" keys above; whether a manager-and-HR person should keep manager-granted keys when an HR duty is off.

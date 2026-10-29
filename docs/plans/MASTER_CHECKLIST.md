@@ -26,11 +26,11 @@ pause only at CHECKPOINT 1 (after Stage 2), CHECKPOINT 2 (after P7-3) and stop c
 
 ## Stage 1 — HR capability switches
 - [x] 1.1 REPORT FIRST (no code): HR attendance/leave permissions and where each is exposed/enforced — STAGE_REPORTS.md (commit below)
-- [ ] 1.2 capability switches (role + named person, effective-dated, audited, history)
-- [ ] 1.3 switching off is immediate everywhere (cache, sockets, counts, search, emails, direct URLs)
-- [ ] 1.4 pending work re-routed to directors' queue on switch-off
-- [ ] 1.5 Reports Gallery permission-driven; every report endpoint enforces server-side
-- [ ] 1.6 `check:sensitive-ui` extended + test matrix
+- [x] 1.2 capability switches (role + named person, effective-dated, audited, history) — `bdda0c3`, `279d54e`
+- [x] 1.3 switching off is immediate everywhere — `3c9bf82`
+- [x] 1.4 pending work waits for the directors with a note — `5f60826`
+- [x] 1.5 Reports Gallery permission-driven; every report endpoint enforces server-side — `ba554e9`
+- [x] 1.6 `check:sensitive-ui` extended + test matrix — `ba554e9`, bundle fix `e3a40c3`
 
 ## Stage 2 — D2 (as in DIRECTOR_AUTHORITY.md) → CHECKPOINT 1
 - [ ] D2 built and verified
