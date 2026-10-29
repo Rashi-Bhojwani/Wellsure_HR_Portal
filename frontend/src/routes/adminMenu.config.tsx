@@ -69,6 +69,7 @@ const HelpdeskCategoriesPage = lazyPage(() => import("../pages/admin/helpdesk/He
 const AdminTasksPage = lazyPage(() => import("../pages/admin/tasks/AdminTasksPage"), "AdminTasksPage");
 const LetterTemplatesPage = lazyPage(() => import("../pages/admin/letters/LetterTemplatesPage"), "LetterTemplatesPage");
 const RolesPermissionsPage = lazyPage(() => import("../pages/admin/adminTools/RolesPermissionsPage"), "RolesPermissionsPage");
+const HrCapabilitiesPage = lazyPage(() => import("../pages/admin/adminTools/HrCapabilitiesPage"), "HrCapabilitiesPage");
 const WorkflowDelegatesAdminPage = lazyPage(() => import("../pages/admin/adminTools/WorkflowDelegatesAdminPage"), "WorkflowDelegatesAdminPage");
 const ReportsHomePage = lazyPage(() => import("../pages/admin/reports/ReportsHomePage"), "ReportsHomePage");
 const CelebrationsReportPage = lazyPage(() => import("../pages/admin/reports/reportPages"), "CelebrationsReportPage");
@@ -335,6 +336,7 @@ export const adminApps: AdminApp[] = [
           { key: "leave-types-policies", label: "Leave Types & Policies", path: "admin-tools/leave-policies", icon: SolutionOutlined, element: LeaveTypesPoliciesPage },
           { key: "workflow-delegates-admin", label: "Workflow Delegates", path: "admin-tools/delegates", icon: UserSwitchOutlined, element: WorkflowDelegatesAdminPage },
           { key: "users-roles", label: "Roles & Permissions", path: "admin-tools/users-roles", icon: TeamOutlined, element: RolesPermissionsPage },
+          { key: "hr-capabilities", label: "What HR Can Do", path: "admin-tools/hr-capabilities", icon: SafetyOutlined, element: HrCapabilitiesPage },
           { key: "managers", label: "Manager Management", path: "admin-tools/managers", icon: ApartmentOutlined, element: ManagerManagementPage },
           { key: "helpdesk-categories", label: "Helpdesk Categories", path: "admin-tools/helpdesk-categories", icon: CustomerServiceOutlined, element: HelpdeskCategoriesPage },
           { key: "templates", label: "Email & Letter Templates", path: "admin-tools/templates", icon: FileTextOutlined, element: LetterTemplatesPage },

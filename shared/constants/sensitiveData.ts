@@ -156,6 +156,11 @@ export const REVIEWED_NOT_SENSITIVE: readonly PermissionKey[] = [
   "attendance.override.manage",
   "attendance.swipes.view",
   "attendance.finalise",
+  "attendance.manual.upload",
+  "attendance.roster.manage",
+  "attendance.exceptions.view",
+  "reports.attendance.view",
+  "reports.leave.view",
   "payroll.rules.view",
 ];
 
@@ -189,9 +194,13 @@ export const DEVELOPER_ROLE_PERMISSIONS: readonly PermissionKey[] = [
   "attendance.devices.manage",
   "attendance.swipes.view",
   "attendance.regularization.view",
+  "attendance.exceptions.view",
+  "attendance.roster.manage",
   "leave.view",
   "leave.policy.manage",
   "reports.view",
+  "reports.attendance.view",
+  "reports.leave.view",
   "helpdesk.manage",
   "payroll.rules.view",
 ];

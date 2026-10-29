@@ -33,7 +33,13 @@ async function branchMuster(viewer: Viewer, locationId: string, cycleStart: stri
   return { ...m, rows };
 }
 
+// Stage 1: uploading the workbook is its own capability (a director switches it for HR alone), checked here as well as at the route.
+function requireUpload(viewer: Viewer): void {
+  if (!viewer.permissions.has("attendance.manual.upload")) throw new HttpError(403, "Missing permission: attendance.manual.upload", "FORBIDDEN");
+}
+
 export async function musterTemplate(viewer: Viewer, q: { locationId: string; cycleStart?: string }) {
+  requireUpload(viewer);
   const location = await assertBranch(viewer, q.locationId);
   const m = await branchMuster(viewer, q.locationId, q.cycleStart);
   const entries = await latestEntries(
@@ -131,6 +137,7 @@ export interface UploadIssue {
 }
 
 export async function previewUpload(viewer: Viewer, file: { buffer: Buffer; originalname: string }) {
+  requireUpload(viewer);
   const wb = new ExcelJS.Workbook();
   try {
     await wb.xlsx.load(file.buffer as unknown as ExcelJS.Buffer);
@@ -259,6 +266,7 @@ export async function previewUpload(viewer: Viewer, file: { buffer: Buffer; orig
 }
 
 export async function commitUpload(viewer: Viewer, uploadId: string, meta: Meta) {
+  requireUpload(viewer);
   const upload = await prisma.manualMusterUpload.findUnique({ where: { id: uploadId } });
   if (!upload || upload.uploadedByUserId !== viewer.userId) throw new HttpError(404, "Upload not found.", "NOT_FOUND");
   if (upload.status !== "PREVIEW") throw new HttpError(409, "This upload has already been committed.", "ALREADY_COMMITTED");

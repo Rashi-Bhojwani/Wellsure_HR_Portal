@@ -124,6 +124,7 @@ export const STANDALONE_ROOT_MODELS: Record<string, string> = {
   DocumentCategory: "document category master; deleteWithDependents(\"DocumentCategory\", ids) takes its documents with it",
   EngageAutoPostSetting: "id-less closed catalog keyed by `kind`; cleanupAutoPostSetting",
   AuditLog: "append-only (E1.1); no FKs — rows about a fixture go via deleteEmployeesAndDependents, through purgeAppendOnly",
+  HrCapabilitySwitch: "the append-only record of what a director switched on or off for HR (Stage 1); subject_key is a role code or a user id as plain text, no FKs; tests remove their own rows by id through purgeAppendOnly",
   RolePermissionRemoval: "the append-only record of the pay keys the HR hard-lock migration removed from the HR roles (Stage 1); no FKs; only the one test that proves it is append-only writes to it, and the test database is rebuilt each run",
   DirectorActionNotice: "what a director's own-authority act tells the other director (D1); user columns are plain text, no FKs to users; its receipts go with it; removed by id through purgeAppendOnly",
   SecurityEvent: "append-only (E1.1); no FKs — tests remove their own rows by id through purgeAppendOnly",
@@ -341,7 +342,7 @@ function delegate(modelName: string): Delegate {
 
 // Tables a database trigger keeps immutable, deletable only through the
 // test-purge exception (app.audit_purge = 'test' in a dev-marked database).
-const PURGE_GUARDED_MODELS = new Set(["RawPunch", "ManualAttendanceEntry", "AttendanceOverride", "ShiftOverride", "LeaveDayRelease", "AttendancePeriodLock", "PayrollItemVersion", "PayrollItemConfirmation", "PayrollApproval", "PayrollEvent", "EmployeeSalary", "EmployeeSalaryLine", "PayrollSalaryRevision", "PayrollAdjustment", "PayrollRun", "PayrollRunItem", "PayrollRunLine", "PayrollPeriodLock", "PayrollRunRelease", "Payslip", "BankTransferBatch", "BankTransferRow", "PayrollOutput", "PayrollSetupSignoff", "DirectorActionNotice", "DirectorActionReceipt", "RolePermissionRemoval"]);
+const PURGE_GUARDED_MODELS = new Set(["RawPunch", "ManualAttendanceEntry", "AttendanceOverride", "ShiftOverride", "LeaveDayRelease", "AttendancePeriodLock", "PayrollItemVersion", "PayrollItemConfirmation", "PayrollApproval", "PayrollEvent", "EmployeeSalary", "EmployeeSalaryLine", "PayrollSalaryRevision", "PayrollAdjustment", "PayrollRun", "PayrollRunItem", "PayrollRunLine", "PayrollPeriodLock", "PayrollRunRelease", "Payslip", "BankTransferBatch", "BankTransferRow", "PayrollOutput", "PayrollSetupSignoff", "DirectorActionNotice", "DirectorActionReceipt", "RolePermissionRemoval", "HrCapabilitySwitch"]);
 
 // Deletes the given rows of `model` and every row that depends on them,
 // transitively, in FK-safe order. Optional FKs follow OPTIONAL_FK_POLICY.
@@ -413,10 +414,12 @@ export async function deleteWithDependents(model: string, ids: string[]): Promis
 // (E1.1). The only way a test may remove its fixture rows is the trigger's
 // test exception: app.audit_purge = 'test' for this transaction, honoured
 // only in a database the dev seed marked (a row in dev_database_marker).
-export async function purgeAppendOnly(model: "AuditLog" | "SecurityEvent", where: object): Promise<void> {
+export async function purgeAppendOnly(model: "AuditLog" | "SecurityEvent" | "HrCapabilitySwitch" | "RolePermissionRemoval", where: object): Promise<void> {
   await prisma.$transaction(async (tx) => {
     await tx.$executeRawUnsafe("SELECT set_config('app.audit_purge', 'test', true)");
     if (model === "AuditLog") await tx.auditLog.deleteMany({ where });
+    else if (model === "HrCapabilitySwitch") await tx.hrCapabilitySwitch.deleteMany({ where });
+    else if (model === "RolePermissionRemoval") await tx.rolePermissionRemoval.deleteMany({ where });
     else await tx.securityEvent.deleteMany({ where });
   });
 }

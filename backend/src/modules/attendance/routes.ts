@@ -126,6 +126,8 @@ attendanceRouter.post("/finalisation/unlock", requirePermission("attendance.unlo
 // changed only with attendance.manual.enter, branch-limited per day.
 const canSeeMuster = requireAnyPermission("attendance.view", "attendance.manual.enter");
 const canMark = requirePermission("attendance.manual.enter");
+// Uploading the workbook is a form of editing the muster, so it needs both (Stage 1: a director switches them separately for HR).
+const canUpload = requirePermission("attendance.manual.upload");
 const musterUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
@@ -136,9 +138,9 @@ attendanceRouter.get("/muster", canSeeMuster, validate({ query: musterQuerySchem
 attendanceRouter.get("/muster/export", canSeeMuster, validate({ query: musterQuerySchema }), manual.exportMuster);
 attendanceRouter.post("/muster/entries", canMark, validate({ body: musterEntriesSchema }), manual.saveEntries);
 attendanceRouter.post("/muster/mark-present", canMark, validate({ body: markPresentSchema }), manual.markPresent);
-attendanceRouter.get("/muster/template", canMark, validate({ query: musterTemplateQuerySchema }), manual.template);
-attendanceRouter.post("/muster/upload", canMark, musterUpload.single("file"), manual.previewUpload);
-attendanceRouter.post("/muster/upload/:id/commit", canMark, validate({ params: idParamsSchema }), manual.commitUpload);
+attendanceRouter.get("/muster/template", canMark, canUpload, validate({ query: musterTemplateQuerySchema }), manual.template);
+attendanceRouter.post("/muster/upload", canMark, canUpload, musterUpload.single("file"), manual.previewUpload);
+attendanceRouter.post("/muster/upload/:id/commit", canMark, canUpload, validate({ params: idParamsSchema }), manual.commitUpload);
 
 // Attendance Info, Who Is In? and the forgot-to-punch request (P2-E).
 // Own attendance needs no key (always SELF). Anyone else's needs
@@ -167,9 +169,10 @@ attendanceRouter.post("/overrides/preview", canOverride, validate({ body: overri
 attendanceRouter.post("/overrides/clear", canOverride, validate({ body: overrideClearSchema }), overrides.overrideClear);
 attendanceRouter.post("/overrides", canOverride, validate({ body: overrideConfirmSchema }), overrides.overrideConfirm);
 attendanceRouter.get("/overrides", canOverride, validate({ query: overrideListQuerySchema }), overrides.overrideList);
-// Shift Roster: forward-only, through the same writers as the assignment change (attendance.config.manage).
-attendanceRouter.post("/roster/preview", canManage, validate({ body: rosterPreviewSchema }), overrides.rosterPreview);
-attendanceRouter.post("/roster", canManage, validate({ body: rosterConfirmSchema }), overrides.rosterConfirm);
+// Shift Roster: forward-only, through the same writers as the assignment change. Its own key since Stage 1, so a director can switch it for HR alone.
+const canRoster = requirePermission("attendance.roster.manage");
+attendanceRouter.post("/roster/preview", canRoster, validate({ body: rosterPreviewSchema }), overrides.rosterPreview);
+attendanceRouter.post("/roster", canRoster, validate({ body: rosterConfirmSchema }), overrides.rosterConfirm);
 attendanceRouter.post("/shift-overrides/preview", canOverride, validate({ body: shiftOverridePreviewSchema }), overrides.shiftPreview);
 attendanceRouter.post("/shift-overrides/clear", canOverride, validate({ body: shiftOverrideClearSchema }), overrides.shiftClear);
 attendanceRouter.post("/shift-overrides", canOverride, validate({ body: shiftOverrideConfirmSchema }), overrides.shiftConfirm);
@@ -177,11 +180,11 @@ attendanceRouter.get("/shift-overrides", canOverride, validate({ query: shiftOve
 // Exceptions queue: days that need a person to look (attendance.view, data-scoped; the unmapped device IDs are for company-wide
 // scope). Bulk resolve is preview then confirm: mapping device IDs needs attendance.devices.manage, assigning a shift
 // attendance.config.manage (both checked again in the service, with the actor's own items left out).
-attendanceRouter.get("/exceptions", requirePermission("attendance.view"), validate({ query: exceptionsQuerySchema }), exceptionsQueue.list);
-attendanceRouter.post("/exceptions/map-device-ids/preview", requirePermission("attendance.devices.manage"), validate({ body: mapDeviceIdsPreviewSchema }), exceptionsQueue.previewMap);
-attendanceRouter.post("/exceptions/map-device-ids", requirePermission("attendance.devices.manage"), validate({ body: mapDeviceIdsSchema }), exceptionsQueue.confirmMap);
-attendanceRouter.post("/exceptions/assign-shift/preview", requirePermission("attendance.config.manage"), validate({ body: assignShiftPreviewSchema }), exceptionsQueue.previewAssign);
-attendanceRouter.post("/exceptions/assign-shift", requirePermission("attendance.config.manage"), validate({ body: assignShiftSchema }), exceptionsQueue.confirmAssign);
+attendanceRouter.get("/exceptions", requirePermission("attendance.view"), requirePermission("attendance.exceptions.view"), validate({ query: exceptionsQuerySchema }), exceptionsQueue.list);
+attendanceRouter.post("/exceptions/map-device-ids/preview", requirePermission("attendance.exceptions.view"), requirePermission("attendance.devices.manage"), validate({ body: mapDeviceIdsPreviewSchema }), exceptionsQueue.previewMap);
+attendanceRouter.post("/exceptions/map-device-ids", requirePermission("attendance.exceptions.view"), requirePermission("attendance.devices.manage"), validate({ body: mapDeviceIdsSchema }), exceptionsQueue.confirmMap);
+attendanceRouter.post("/exceptions/assign-shift/preview", requirePermission("attendance.exceptions.view"), requirePermission("attendance.config.manage"), validate({ body: assignShiftPreviewSchema }), exceptionsQueue.previewAssign);
+attendanceRouter.post("/exceptions/assign-shift", requirePermission("attendance.exceptions.view"), requirePermission("attendance.config.manage"), validate({ body: assignShiftSchema }), exceptionsQueue.confirmAssign);
 
 // Employee Swipes: the raw punch log (attendance.swipes.view: HR; a manager by grant, their team only).
 const canSeeSwipes = requirePermission("attendance.swipes.view");

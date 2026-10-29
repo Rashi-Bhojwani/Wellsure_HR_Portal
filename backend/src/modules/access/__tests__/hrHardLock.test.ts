@@ -7,6 +7,7 @@ import { resolveAccess } from "../../../lib/permissions";
 import { prisma } from "../../../lib/prisma";
 import { SYSTEM_ROLES } from "../../../lib/systemRoles";
 import { app, authHeader, cleanupEmployeeTestOrgMasters, cleanupFullTestEmployee, createEmployeeTestOrgMasters, createFullTestEmployee, loginAs, type TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
+import { purgeAppendOnly } from "../../../lib/__tests__/cleanup";
 import { setOverride, updateRole, type AccessActor } from "../service";
 
 // The HR hard lock (docs/plans/HR_CAPABILITIES.md §1A): pay data is never HR's. Each of the four layers is proven on its own, so weakening one is caught while the others still hold.
@@ -123,5 +124,6 @@ describe("the HR hard lock, layer by layer", () => {
     await expect(prisma.$executeRawUnsafe(`UPDATE "role_permission_removals" SET "reason" = 'x' WHERE "id" = '${row.id}'`)).rejects.toThrow(/ROLE_PERMISSION_REMOVALS_APPEND_ONLY/);
     await expect(prisma.$executeRawUnsafe(`DELETE FROM "role_permission_removals" WHERE "id" = '${row.id}'`)).rejects.toThrow(/ROLE_PERMISSION_REMOVALS_APPEND_ONLY/);
     await expect(prisma.$executeRawUnsafe('TRUNCATE "role_permission_removals"')).rejects.toThrow(/ROLE_PERMISSION_REMOVALS_APPEND_ONLY/);
+    await purgeAppendOnly("RolePermissionRemoval", { id: row.id }); // the test-only purge path, as for the other append-only tables
   });
 });

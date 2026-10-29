@@ -3091,3 +3091,22 @@ model RolePermissionRemoval {
   @@index([roleCode])
   @@map("role_permission_removals")
 }
+
+// Stage 1 (docs/plans/HR_CAPABILITIES.md §1B): what a director has switched on or off for HR. Append-only: a change is a new row, the state at any moment is the latest row in force
+// per capability and subject, and the whole history is shown on the screen. subject_key is a role code (ROLE) or a user id (USER), plain text with no foreign key, like the other
+// append-only records.
+model HrCapabilitySwitch {
+  id              String   @id @default(cuid())
+  capability      String
+  subjectKind     String   @map("subject_kind") // ROLE | USER
+  subjectKey      String   @map("subject_key")
+  state           String // ON | OFF | DEFAULT
+  effectiveFrom   DateTime @map("effective_from") @db.Timestamptz(3)
+  reason          String
+  createdByUserId String   @map("created_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([capability, subjectKind, subjectKey, effectiveFrom])
+  @@index([subjectKind, subjectKey])
+  @@map("hr_capability_switches")
+}

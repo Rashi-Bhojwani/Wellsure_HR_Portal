@@ -3,6 +3,7 @@ import type { DataScope } from "@shared/constants/roles";
 import { DIRECTOR_ONLY_ROLE_CODES } from "@shared/constants/directorAuthority";
 import { DEVELOPER_FORBIDDEN_KEYS, DEVELOPER_ROLE_CODE, HR_FORBIDDEN_KEYS, HR_ROLE_CODES } from "@shared/constants/sensitiveData";
 import { prisma } from "./prisma";
+import { applyCapabilities, switchRowsFor } from "./hrCapabilities";
 
 // THE one place effective access is computed (Phase 5 commit E1). Used by
 // middleware/authenticate.ts, the Socket.IO handshake, the photo route and
@@ -68,6 +69,8 @@ export async function resolveAccess(userId: string): Promise<ResolvedAccess> {
   // role is not affected (they are handled above).
   if (roleCodes.some((c) => (HR_ROLE_CODES as readonly string[]).includes(c))) {
     for (const key of [...permissions]) if (HR_FORBIDDEN.has(key)) permissions.delete(key);
+    // What a director has switched on or off for HR (docs/plans/HR_CAPABILITIES.md §1B): applied here, in the one place access is resolved. It strips the hard-locked set again at the end.
+    applyCapabilities(permissions, await switchRowsFor(userId, roleCodes), userId, roleCodes, new Date()); // allow-clock: an instant, not a business date
   }
   if (roleCodes.includes(MANAGER_ROLE)) {
     // E2 manager-grantable guard, enforced at resolution as well as on every
@@ -100,6 +103,8 @@ export async function activeUsersHoldingPermission(key: string): Promise<Array<{
         { roles: { some: { role: { code: SUPER_ADMIN_ROLE_CODE } } } },
         { roles: { some: { role: { permissions: { some: { permission: { key } } } } } } },
         { permissionOverrides: { some: { effect: "GRANT", permission: { key } } } },
+        // An HR switch can add a key no row gives them, so every HR holder is a candidate (each is resolved exactly below).
+        { roles: { some: { role: { code: { in: [...HR_ROLE_CODES] } } } } },
       ],
     },
     select: { id: true, employeeId: true },

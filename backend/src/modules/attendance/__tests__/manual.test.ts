@@ -58,6 +58,9 @@ describe("manual entry and the attendance muster (P2-D)", () => {
     // the marker: a manager granted attendance.manual.enter, marking branch X only
     const perm = await prisma.permission.findUniqueOrThrow({ where: { key: "attendance.manual.enter" } });
     await prisma.userPermissionOverride.create({ data: { userId: p.marker.userId, permissionId: perm.id, effect: "GRANT", reason: "manual test", createdByUserId: p.hr.userId } });
+    // Stage 1: uploading the workbook is its own key (split from Mark attendance manually), so a marker who uploads is granted both.
+    const uploadPerm = await prisma.permission.findUniqueOrThrow({ where: { key: "attendance.manual.upload" } });
+    await prisma.userPermissionOverride.create({ data: { userId: p.marker.userId, permissionId: uploadPerm.id, effect: "GRANT", reason: "manual test", createdByUserId: p.hr.userId } });
     await prisma.attendanceManualBranch.create({ data: { userId: p.marker.userId, locationId: org.locationId, assignedByUserId: p.hr.userId } });
     for (const k of ["marker", "hr", "emp"] as const) tok[k] = await loginAs(p[k].employeeCode);
 

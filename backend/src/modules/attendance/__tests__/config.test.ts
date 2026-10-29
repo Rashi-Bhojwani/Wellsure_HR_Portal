@@ -89,7 +89,7 @@ describe("Attendance Settings (P2-A)", () => {
       expect((await api(tok.hrExec).patch("/shifts/shift_gen", { name: "x" })).status).toBe(403);
       expect((await api(tok.emp).get("/shifts")).status).toBe(403);
       const payroll = await prisma.role.findUniqueOrThrow({ where: { code: "PAYROLL_ADMIN" }, include: { permissions: { include: { permission: true } } } });
-      expect(payroll.permissions.map((x) => x.permission.key).filter((k) => k.startsWith("attendance.")).sort()).toEqual(["attendance.finalise", "attendance.view"]); // reads attendance, and finalises a period (Phase 3 commit 3); not Settings
+      expect(payroll.permissions.map((x) => x.permission.key).filter((k) => k.startsWith("attendance.")).sort()).toEqual(["attendance.exceptions.view", "attendance.finalise", "attendance.view"]); // reads attendance (and its exceptions queue, split from View attendance in Stage 1), and finalises a period (Phase 3 commit 3); not Settings
     });
 
     it("a manager granted manual entry still can't read or change company configuration", async () => {

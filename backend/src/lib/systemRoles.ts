@@ -1,4 +1,5 @@
 import { PERMISSION_KEYS } from "@shared/constants/permissions";
+import { withSplitKeys } from "@shared/constants/hrCapabilities";
 import { DEVELOPER_ROLE_CODE, DEVELOPER_ROLE_PERMISSIONS } from "@shared/constants/sensitiveData";
 import type { DataScope } from "@shared/constants/roles";
 
@@ -146,10 +147,10 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
   // SUPER_ADMIN's rows are informational only: lib/permissions.ts gives a
   // SUPER_ADMIN holder every key and ALL scope in code (E1).
   { code: "SUPER_ADMIN", name: "Super Admin", permissions: SUPER_ADMIN_PERMS, dataScope: "ALL" },
-  { code: "HR_ADMIN", name: "HR Admin", permissions: HR_ADMIN_PERMS, dataScope: "ALL" },
-  { code: "HR_EXECUTIVE", name: "HR Executive", permissions: HR_EXECUTIVE_PERMS, dataScope: "ALL" },
-  { code: "PAYROLL_ADMIN", name: "Payroll Admin", permissions: PAYROLL_ADMIN_PERMS, dataScope: "ALL" },
-  { code: "PAYROLL_APPROVER", name: "Payroll Approver", permissions: PAYROLL_APPROVER_PERMS, dataScope: "ALL" },
+  { code: "HR_ADMIN", name: "HR Admin", permissions: withSplitKeys(HR_ADMIN_PERMS), dataScope: "ALL" },
+  { code: "HR_EXECUTIVE", name: "HR Executive", permissions: withSplitKeys(HR_EXECUTIVE_PERMS), dataScope: "ALL" },
+  { code: "PAYROLL_ADMIN", name: "Payroll Admin", permissions: withSplitKeys(PAYROLL_ADMIN_PERMS), dataScope: "ALL" },
+  { code: "PAYROLL_APPROVER", name: "Payroll Approver", permissions: withSplitKeys(PAYROLL_APPROVER_PERMS), dataScope: "ALL" },
   // P6-6: the person who builds and runs the system. Everything needed for that and none of the owners' secrets: lib/permissions.ts removes every key in
   // shared/constants/sensitiveData.ts from anyone who holds this role, whatever else they are given, and it can never be held together with SUPER_ADMIN.
   { code: DEVELOPER_ROLE_CODE, name: "Developer / operator", permissions: DEVELOPER_ROLE_PERMISSIONS, dataScope: "ALL" },
