@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { adminApps } from "../../routes/adminMenu.config";
+import { adminApps, adminNeedsMet } from "../../routes/adminMenu.config";
 import { canSeeLeaf, employeeMenu, isComingSoon, isEmployeeMenuGroup } from "../../routes/employeeMenu.config";
 
 // The shell's navigation model, generated from the two menu configs (still the single source of truth for routes, sidebar, phone tabs and page titles).
@@ -48,24 +48,32 @@ export function employeeNav(hasPermission: (key: string) => boolean): NavEntry[]
     .filter((e): e is NavEntry => e !== null);
 }
 
-/** HR / Admin portal: each app is a group (Homepage and Tasks are single items); an app's own overview page comes first, then its menus as sections. */
-export function adminNav(): NavEntry[] {
-  return adminApps.map((app): NavEntry => {
-    const path = app.path === "" ? "/admin" : `/admin/${app.path}`;
-    if (!app.menus || app.menus.length === 0) {
-      return { kind: "leaf", key: app.key, label: app.label === "Homepage" ? "Home" : app.label, path, icon: app.icon, soon: app.phase, element: app.element };
-    }
-    const children: (NavLeaf | NavSection)[] = [];
-    if (app.element) children.push({ kind: "leaf", key: `${app.key}-overview`, label: "Overview", path, element: app.element });
-    const multi = app.menus.length > 1 || app.element;
-    for (const group of app.menus) {
-      if (multi) children.push({ kind: "section", key: `${app.key}-${group.key}`, label: group.label });
-      for (const item of group.items) {
-        children.push({ kind: "leaf", key: item.key, label: item.label, path: `/admin/${item.path}`, icon: item.icon, soon: item.phase, element: item.element });
+/**
+ * HR / Admin portal: each app is a group (Homepage and Tasks are single items); an app's own overview page comes first, then its menus as sections. An item the person's permissions
+ * (as switched on or off for them) do not cover is left out, and a section or app left with nothing goes with it.
+ */
+export function adminNav(hasPermission: (key: string) => boolean = () => true, isDirector = true): NavEntry[] {
+  return adminApps
+    .map((app): NavEntry | null => {
+      const path = app.path === "" ? "/admin" : `/admin/${app.path}`;
+      if (!app.menus || app.menus.length === 0) {
+        return { kind: "leaf", key: app.key, label: app.label === "Homepage" ? "Home" : app.label, path, icon: app.icon, soon: app.phase, element: app.element };
       }
-    }
-    return { kind: "group", key: app.key, label: app.label, icon: app.icon, children };
-  });
+      const children: (NavLeaf | NavSection)[] = [];
+      if (app.element) children.push({ kind: "leaf", key: `${app.key}-overview`, label: "Overview", path, element: app.element });
+      const multi = app.menus.length > 1 || app.element;
+      for (const group of app.menus) {
+        const leaves: NavLeaf[] = group.items
+          .filter((item) => adminNeedsMet(item.needs, hasPermission, isDirector))
+          .map((item) => ({ kind: "leaf" as const, key: item.key, label: item.label, path: `/admin/${item.path}`, icon: item.icon, soon: item.phase, element: item.element }));
+        if (leaves.length === 0) continue;
+        if (multi) children.push({ kind: "section", key: `${app.key}-${group.key}`, label: group.label });
+        children.push(...leaves);
+      }
+      if (children.every((c) => c.kind === "section") ) return null;
+      return { kind: "group", key: app.key, label: app.label, icon: app.icon, children };
+    })
+    .filter((e): e is NavEntry => e !== null);
 }
 
 export function flattenLeaves(nav: NavEntry[]): (NavLeaf & { group?: string })[] {

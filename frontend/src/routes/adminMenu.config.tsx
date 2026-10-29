@@ -117,6 +117,15 @@ const WeekOffPatternsPage = lazyPage(() => import("../pages/admin/attendance/Att
 // "Reports" and "Engage" are greytHR's own app tiles (greytHR's "Workflow" tile is deliberately absent — no general approval chains, spec §7.8); Payroll
 // and Admin Tools are ours, added per docs/PROJECT_SPEC.md §7.
 
+/**
+ * What a person needs to see (and open) a menu item. `any`: one of these permission keys. `director`: only a Super Admin. Without it the item shows to everyone who reaches the admin portal
+ * (the server still decides; this is so a switched-off duty disappears from the sidebar, the search box and the page itself, instead of opening onto an error).
+ */
+export interface AdminNeeds {
+  any?: readonly string[];
+  director?: boolean;
+}
+
 export interface AdminMenuLeaf {
   key: string;
   label: string;
@@ -124,6 +133,14 @@ export interface AdminMenuLeaf {
   icon?: ComponentType;
   element?: ComponentType;
   phase?: string;
+  needs?: AdminNeeds;
+}
+
+export function adminNeedsMet(needs: AdminNeeds | undefined, hasPermission: (key: string) => boolean, isDirector: boolean): boolean {
+  if (!needs) return true;
+  if (isDirector) return true;
+  if (needs.director) return false;
+  return !needs.any || needs.any.some(hasPermission);
 }
 
 export interface AdminMenuGroup {
@@ -193,28 +210,28 @@ export const adminApps: AdminApp[] = [
         label: "Leave",
         items: [
           { key: "leave-calendar", label: "Leave Calendar", path: "workforce/leave/calendar", icon: CalendarOutlined, element: AdminLeaveCalendarPage },
-          { key: "employee-leave", label: "Employee Leave", path: "workforce/leave/employee-leave", icon: SolutionOutlined, element: EmployeeLeavePage },
-          { key: "leave-granter", label: "Leave Granter", path: "workforce/leave/granter", icon: GiftOutlined, element: LeaveGranterPage },
-          { key: "year-end-process", label: "Year End Process", path: "workforce/leave/year-end", icon: HistoryOutlined, element: YearEndProcessPage },
-          { key: "leave-recalculator", label: "Leave Recalculator", path: "workforce/leave/recalculator", icon: CalculatorOutlined, element: LeaveRecalculatorPage },
+          { key: "employee-leave", label: "Employee Leave", path: "workforce/leave/employee-leave", icon: SolutionOutlined, element: EmployeeLeavePage, needs: { any: ["leave.view", "leave.approve"] } },
+          { key: "leave-granter", label: "Leave Granter", path: "workforce/leave/granter", icon: GiftOutlined, element: LeaveGranterPage, needs: { any: ["leave.grant"] } },
+          { key: "year-end-process", label: "Year End Process", path: "workforce/leave/year-end", icon: HistoryOutlined, element: YearEndProcessPage, needs: { any: ["leave.yearend.manage"] } },
+          { key: "leave-recalculator", label: "Leave Recalculator", path: "workforce/leave/recalculator", icon: CalculatorOutlined, element: LeaveRecalculatorPage, needs: { any: ["leave.recalculate"] } },
         ],
       },
       {
         key: "attendance",
         label: "Attendance",
         items: [
-          { key: "who-is-in", label: "Who Is In?", path: "workforce/attendance/who-is-in", icon: TeamOutlined, element: WhoIsInPage },
-          { key: "shift-roster", label: "Shift Roster", path: "workforce/attendance/shift-roster", icon: ScheduleOutlined, element: ShiftRosterPage },
-          { key: "employee-swipes", label: "Employee Swipes", path: "workforce/attendance/swipes", icon: DesktopOutlined, element: EmployeeSwipesPage },
-          { key: "attendance-muster", label: "Attendance Muster", path: "workforce/attendance/muster", icon: FileTextOutlined, element: MusterPage },
-          { key: "attendance-info", label: "Attendance Info", path: "workforce/attendance/info", icon: CalendarOutlined, element: AttendanceInfoAdminPage },
-          { key: "regularizations", label: "Regularizations", path: "workforce/attendance/regularizations", icon: AuditOutlined, element: RegularizationsPage },
-          { key: "process-attendance", label: "Process Attendance", path: "workforce/attendance/process", icon: ToolOutlined, element: ProcessAttendancePage },
-          { key: "period-finalisation", label: "Attendance Period Finalisation", path: "workforce/attendance/finalisation", icon: SafetyOutlined, element: FinalisationPage },
-          { key: "attendance-exception", label: "Attendance Exception", path: "workforce/attendance/exceptions", icon: AuditOutlined, element: ExceptionsPage },
-          { key: "manual-override", label: "Manual Override", path: "workforce/attendance/manual-override", icon: ToolOutlined, element: ManualOverridePage },
-          { key: "shift-override", label: "Shift Override", path: "workforce/attendance/shift-override", icon: SwapOutlined, element: ShiftOverridePage },
-          { key: "attendance-settings", label: "Attendance Settings", path: "workforce/attendance/settings", icon: SettingOutlined, element: AttendanceSettingsPage },
+          { key: "who-is-in", label: "Who Is In?", path: "workforce/attendance/who-is-in", icon: TeamOutlined, element: WhoIsInPage, needs: { any: ["attendance.view"] } },
+          { key: "shift-roster", label: "Shift Roster", path: "workforce/attendance/shift-roster", icon: ScheduleOutlined, element: ShiftRosterPage, needs: { any: ["attendance.roster.manage"] } },
+          { key: "employee-swipes", label: "Employee Swipes", path: "workforce/attendance/swipes", icon: DesktopOutlined, element: EmployeeSwipesPage, needs: { any: ["attendance.swipes.view"] } },
+          { key: "attendance-muster", label: "Attendance Muster", path: "workforce/attendance/muster", icon: FileTextOutlined, element: MusterPage, needs: { any: ["attendance.view", "attendance.manual.enter"] } },
+          { key: "attendance-info", label: "Attendance Info", path: "workforce/attendance/info", icon: CalendarOutlined, element: AttendanceInfoAdminPage, needs: { any: ["attendance.view"] } },
+          { key: "regularizations", label: "Regularizations", path: "workforce/attendance/regularizations", icon: AuditOutlined, element: RegularizationsPage, needs: { any: ["attendance.regularization.view", "attendance.regularization.approve"] } },
+          { key: "process-attendance", label: "Process Attendance", path: "workforce/attendance/process", icon: ToolOutlined, element: ProcessAttendancePage, needs: { any: ["attendance.process"] } },
+          { key: "period-finalisation", label: "Attendance Period Finalisation", path: "workforce/attendance/finalisation", icon: SafetyOutlined, element: FinalisationPage, needs: { any: ["attendance.finalise", "attendance.process"] } },
+          { key: "attendance-exception", label: "Attendance Exception", path: "workforce/attendance/exceptions", icon: AuditOutlined, element: ExceptionsPage, needs: { any: ["attendance.exceptions.view"] } },
+          { key: "manual-override", label: "Manual Override", path: "workforce/attendance/manual-override", icon: ToolOutlined, element: ManualOverridePage, needs: { any: ["attendance.override.manage"] } },
+          { key: "shift-override", label: "Shift Override", path: "workforce/attendance/shift-override", icon: SwapOutlined, element: ShiftOverridePage, needs: { any: ["attendance.override.manage"] } },
+          { key: "attendance-settings", label: "Attendance Settings", path: "workforce/attendance/settings", icon: SettingOutlined, element: AttendanceSettingsPage, needs: { any: ["attendance.config.manage", "attendance.view"] } },
         ],
       },
     ],
@@ -244,29 +261,29 @@ export const adminApps: AdminApp[] = [
         key: "people-reports",
         label: "People",
         items: [
-          { key: "report-headcount", label: "Headcount", path: "reports/headcount", element: HeadcountReportPage },
-          { key: "report-joiners", label: "Joiners", path: "reports/joiners", element: JoinersReportPage },
-          { key: "report-leavers", label: "Leavers & attrition", path: "reports/leavers", element: LeaversReportPage },
-          { key: "report-celebrations", label: "Birthdays & anniversaries", path: "reports/celebrations", element: CelebrationsReportPage },
+          { key: "report-headcount", label: "Headcount", path: "reports/headcount", element: HeadcountReportPage, needs: { any: ["reports.view"] } },
+          { key: "report-joiners", label: "Joiners", path: "reports/joiners", element: JoinersReportPage, needs: { any: ["reports.view"] } },
+          { key: "report-leavers", label: "Leavers & attrition", path: "reports/leavers", element: LeaversReportPage, needs: { any: ["reports.view"] } },
+          { key: "report-celebrations", label: "Birthdays & anniversaries", path: "reports/celebrations", element: CelebrationsReportPage, needs: { any: ["reports.view"] } },
         ],
       },
       {
         key: "leave-reports",
         label: "Leave",
         items: [
-          { key: "report-leave-balance", label: "Leave balance", path: "reports/leave-balance", element: LeaveBalanceReportPage },
-          { key: "report-leave-liability", label: "Leave liability", path: "reports/leave-liability", element: LeaveLiabilityReportPage },
-          { key: "report-lop", label: "Loss of pay (LOP)", path: "reports/lop", element: LopReportPage },
+          { key: "report-leave-balance", label: "Leave balance", path: "reports/leave-balance", element: LeaveBalanceReportPage, needs: { any: ["reports.leave.view"] } },
+          { key: "report-leave-liability", label: "Leave liability", path: "reports/leave-liability", element: LeaveLiabilityReportPage, needs: { any: ["reports.liability.view"] } },
+          { key: "report-lop", label: "Loss of pay (LOP)", path: "reports/lop", element: LopReportPage, needs: { any: ["reports.leave.view"] } },
         ],
       },
       {
         key: "attendance-reports",
         label: "Attendance",
         items: [
-          { key: "report-attendance-summary", label: "Attendance summary", path: "reports/attendance-muster", element: AttendanceSummaryReportPage },
-          { key: "report-late-coming", label: "Late coming", path: "reports/late-coming", element: LateComingReportPage },
-          { key: "report-excess-hours", label: "Excess hours", path: "reports/excess-hours", element: ExcessHoursReportPage },
-          { key: "report-exception-summary", label: "Attendance exceptions", path: "reports/exception-summary", element: ExceptionSummaryReportPage },
+          { key: "report-attendance-summary", label: "Attendance summary", path: "reports/attendance-muster", element: AttendanceSummaryReportPage, needs: { any: ["reports.attendance.view"] } },
+          { key: "report-late-coming", label: "Late coming", path: "reports/late-coming", element: LateComingReportPage, needs: { any: ["reports.attendance.view"] } },
+          { key: "report-excess-hours", label: "Excess hours", path: "reports/excess-hours", element: ExcessHoursReportPage, needs: { any: ["reports.attendance.view"] } },
+          { key: "report-exception-summary", label: "Attendance exceptions", path: "reports/exception-summary", element: ExceptionSummaryReportPage, needs: { any: ["reports.attendance.view"] } },
         ],
       },
     ],
@@ -336,7 +353,7 @@ export const adminApps: AdminApp[] = [
           { key: "leave-types-policies", label: "Leave Types & Policies", path: "admin-tools/leave-policies", icon: SolutionOutlined, element: LeaveTypesPoliciesPage },
           { key: "workflow-delegates-admin", label: "Workflow Delegates", path: "admin-tools/delegates", icon: UserSwitchOutlined, element: WorkflowDelegatesAdminPage },
           { key: "users-roles", label: "Roles & Permissions", path: "admin-tools/users-roles", icon: TeamOutlined, element: RolesPermissionsPage },
-          { key: "hr-capabilities", label: "What HR Can Do", path: "admin-tools/hr-capabilities", icon: SafetyOutlined, element: HrCapabilitiesPage },
+          { key: "hr-capabilities", label: "What HR Can Do", path: "admin-tools/hr-capabilities", icon: SafetyOutlined, element: HrCapabilitiesPage, needs: { director: true } },
           { key: "managers", label: "Manager Management", path: "admin-tools/managers", icon: ApartmentOutlined, element: ManagerManagementPage },
           { key: "helpdesk-categories", label: "Helpdesk Categories", path: "admin-tools/helpdesk-categories", icon: CustomerServiceOutlined, element: HelpdeskCategoriesPage },
           { key: "templates", label: "Email & Letter Templates", path: "admin-tools/templates", icon: FileTextOutlined, element: LetterTemplatesPage },

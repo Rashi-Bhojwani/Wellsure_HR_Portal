@@ -2,6 +2,7 @@ import { lazy, Suspense, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { CustomerServiceOutlined, SafetyOutlined, SettingOutlined, SwapOutlined } from "@ant-design/icons";
 import { AdminFiltersProvider } from "../context/AdminFiltersContext";
+import { useAuth } from "../hooks/useAuth";
 import { Skel } from "../ui/Skeletons";
 import { control, radius, space } from "../theme/tokens";
 import { useIsPhone } from "../ui/hooks";
@@ -42,7 +43,11 @@ function AdminContextControlsSlot() {
 function AdminLayoutInner() {
   const navigate = useNavigate();
   const phone = useIsPhone();
-  const nav = useMemo(() => adminNav(), []);
+  const { user, hasPermission } = useAuth();
+  const isDirector = Boolean(user?.roleCodes.includes("SUPER_ADMIN"));
+  // Follows the person's permissions: when a director switches a duty off for them, /me is refetched (permissions.changed) and the item leaves the menu, the search and the phone menu.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const nav = useMemo(() => adminNav(hasPermission, isDirector), [user?.permissions, isDirector]);
   return (
     <AppShell
       nav={nav}
