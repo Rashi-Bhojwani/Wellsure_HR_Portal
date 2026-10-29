@@ -25,7 +25,7 @@ pause only at CHECKPOINT 1 (after Stage 2), CHECKPOINT 2 (after P7-3) and stop c
 - [x] 0.7 departments are data (report), director-only markers, D-phase list — `ceb2468`
 
 ## Stage 1 — HR capability switches
-- [ ] 1.1 REPORT FIRST (no code): HR attendance/leave permissions and where each is exposed/enforced
+- [x] 1.1 REPORT FIRST (no code): HR attendance/leave permissions and where each is exposed/enforced — STAGE_REPORTS.md (commit below)
 - [ ] 1.2 capability switches (role + named person, effective-dated, audited, history)
 - [ ] 1.3 switching off is immediate everywhere (cache, sockets, counts, search, emails, direct URLs)
 - [ ] 1.4 pending work re-routed to directors' queue on switch-off
