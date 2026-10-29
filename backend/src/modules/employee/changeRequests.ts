@@ -42,6 +42,7 @@ function buildChangesJson(input: CreateChangeRequestInput): Record<string, unkno
     if (encrypted.panEncrypted) packed.panEncrypted = packBytes(encrypted.panEncrypted as Uint8Array);
     if (encrypted.aadhaarEncrypted) packed.aadhaarEncrypted = packBytes(encrypted.aadhaarEncrypted as Uint8Array);
     if (encrypted.uanEncrypted) packed.uanEncrypted = packBytes(encrypted.uanEncrypted as Uint8Array);
+    if (encrypted.esiEncrypted) packed.esiEncrypted = packBytes(encrypted.esiEncrypted as Uint8Array);
     return redact(packed);
   }
   return redact({ ...input.changes });
@@ -129,8 +130,9 @@ async function applyStatutoryChange(employeeId: string, changesJson: Record<stri
     data.uanEncrypted = unpackBytes(changesJson.uanEncrypted as string);
     data.uanLast4 = changesJson.uanLast4;
   }
-  if (changesJson.esiNumber !== undefined) {
-    data.esiNumber = changesJson.esiNumber;
+  if (changesJson.esiEncrypted !== undefined) {
+    data.esiEncrypted = changesJson.esiEncrypted ? unpackBytes(changesJson.esiEncrypted as string) : null;
+    data.esiLast4 = changesJson.esiLast4 ?? null;
   }
   await prisma.employeeStatutory.upsert({ where: { employeeId }, create: { employeeId, ...data }, update: data });
 }

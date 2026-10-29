@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Alert, Button, Form, Input, Spin, Typography } from "antd";
-import { LockOutlined } from "@ant-design/icons";
+import { Button, Form, Input, Typography } from "antd";
 import type { AxiosError } from "axios";
 import { AuthShell } from "../AuthShell";
+import { AuthError, PasswordRules } from "../authParts";
+import { requiredMark } from "../authStyles";
 import { useAuth } from "../../../hooks/useAuth";
 import * as authApi from "../../../api/auth";
 import { isLoginChallenge } from "../../../api/auth";
+import { Illustration, Skel } from "../../../ui";
+import { fs, radius, space, v } from "../../../theme/tokens";
 
 const { Text } = Typography;
 
@@ -21,6 +24,8 @@ export function SetPasswordPage() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
   const { completeLoginWithTokens } = useAuth();
+  const [form] = Form.useForm<SetPasswordForm>();
+  const password = Form.useWatch("password", form);
 
   const [loadingInvitation, setLoadingInvitation] = useState(true);
   const [invitationError, setInvitationError] = useState<string | null>(null);
@@ -67,9 +72,13 @@ export function SetPasswordPage() {
 
   if (loadingInvitation) {
     return (
-      <AuthShell title="Wellsure HR Portal">
-        <div style={{ textAlign: "center", padding: 24 }}>
-          <Spin />
+      <AuthShell title="Set your password" subtitle="Checking your invitation link…">
+        <div aria-busy="true" style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
+          <Skel w={120} h={14} />
+          <Skel h={48} r={radius.md} />
+          <Skel w={140} h={14} style={{ marginTop: space[2] }} />
+          <Skel h={48} r={radius.md} />
+          <Skel h={48} r={radius.md} style={{ marginTop: space[4] }} />
         </div>
       </AuthShell>
     );
@@ -77,37 +86,38 @@ export function SetPasswordPage() {
 
   if (invitationError || !employee) {
     return (
-      <AuthShell title="Wellsure HR Portal">
-        <Alert type="error" showIcon title={invitationError ?? "This invitation link is invalid or has expired."} />
+      <AuthShell
+        title="This link can't be used"
+        hero={<Illustration name="error" size={140} />}
+        subtitle={<span role="alert">{invitationError ?? "This invitation link is invalid or has expired."}</span>}
+      >
+        <Button type="primary" block size="large" onClick={() => navigate("/login")}>
+          Go to sign in
+        </Button>
       </AuthShell>
     );
   }
 
   return (
     <AuthShell title="Set your password" subtitle={`Welcome, ${employee.fullName} (${employee.employeeCode})`}>
-      {submitError && <Alert type="error" showIcon title={submitError} style={{ marginBottom: 20 }} />}
+      <AuthError message={submitError} />
 
-      <Form<SetPasswordForm> layout="vertical" onFinish={onFinish} requiredMark={false}>
-        <Form.Item
-          name="password"
-          label="New password"
-          rules={[{ required: true, message: "Enter a password" }]}
-          extra="At least 8 characters, with an uppercase letter, a lowercase letter and a number."
-        >
-          <Input.Password prefix={<LockOutlined />} placeholder="New password" size="large" />
+      <Form<SetPasswordForm> form={form} layout="vertical" onFinish={onFinish} requiredMark={requiredMark}>
+        <Form.Item name="password" label="New password" rules={[{ required: true, message: "Enter a password" }]} extra={<PasswordRules value={password} />}>
+          <Input.Password placeholder="New password" size="large" autoComplete="new-password" />
         </Form.Item>
         <Form.Item name="confirmPassword" label="Confirm password" rules={[{ required: true, message: "Confirm your password" }]}>
-          <Input.Password prefix={<LockOutlined />} placeholder="Confirm password" size="large" />
+          <Input.Password placeholder="Confirm password" size="large" autoComplete="new-password" />
         </Form.Item>
-        <Form.Item>
+        <Form.Item style={{ marginBottom: space[4] }}>
           <Button type="primary" htmlType="submit" block size="large" loading={submitting}>
             Set password and sign in
           </Button>
         </Form.Item>
       </Form>
-      <Text type="secondary" style={{ fontSize: 12 }}>
+      <div style={{ textAlign: "center", fontSize: fs.sm, color: v.textSecondary }}>
         Your Employee Code, <Text strong>{employee.employeeCode}</Text>, is your permanent username.
-      </Text>
+      </div>
     </AuthShell>
   );
 }

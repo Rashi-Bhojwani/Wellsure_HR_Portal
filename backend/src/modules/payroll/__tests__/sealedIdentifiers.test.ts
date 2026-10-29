@@ -145,6 +145,25 @@ describe("sealed company identifiers", () => {
     expect(JSON.stringify(r.body)).not.toContain("LONG-SENTINEL");
   });
 
+  it("the company's PAN and TAN are sealed identifiers like the others, and the company record has no plain PAN or TAN column (P7-0)", async () => {
+    const cols = await prisma.$queryRaw<Array<{ column_name: string }>>`SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'company'`;
+    expect(cols.map((c) => c.column_name)).not.toContain("pan");
+    expect(cols.map((c) => c.column_name)).not.toContain("tan");
+    for (const key of ["COMPANY_PAN", "TAN"]) {
+      expect((await api(tokens.rulesOnly).post(`/rules/${key}/edit-preview`, { value: "AAAPZ9999Q" })).status).toBe(403);
+      expect((await api(tokens.dev).post(`/rules/${key}/edit-preview`, { value: "AAAPZ9999Q" })).status).toBe(403);
+    }
+    const value = "ZZPAN-SENTINEL-0099";
+    const pre = await api(tokens.maker).post(`/rules/COMPANY_PAN/edit-preview`, { value });
+    expect(pre.status).toBe(200);
+    expect(JSON.stringify(pre.body)).not.toContain(value);
+    expect((await api(tokens.maker).put(`/rules/COMPANY_PAN`, { value, fingerprint: pre.body.fingerprint })).status).toBe(200);
+    const row = await prisma.payrollItemVersion.findFirstOrThrow({ where: { kind: "RULE", key: "COMPANY_PAN" }, orderBy: { version: "desc" } });
+    if (!isSealed(row.value)) throw new Error("COMPANY_PAN was stored unsealed");
+    expect(unseal(row.value)).toBe(value);
+    expect(JSON.stringify(row.value)).not.toContain(value);
+  });
+
   it("nothing in the database holds an identifier in the clear: no column of any table, whichever table it is", async () => {
     const tables = await prisma.$queryRaw<Array<{ table_name: string; column_name: string }>>`
       SELECT table_name, column_name FROM information_schema.columns

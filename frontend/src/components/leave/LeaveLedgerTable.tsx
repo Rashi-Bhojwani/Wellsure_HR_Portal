@@ -1,9 +1,29 @@
 import { useQuery } from "@tanstack/react-query";
-import { Table, Tag, Typography } from "antd";
 import * as leaveApi from "../../api/leave";
-import { EmptyState } from "../common/EmptyState";
+import { fs, fw, space, v } from "../../theme/tokens";
+import { DataTable, EmptyState, StatusChip } from "../../ui";
 
-const { Text } = Typography;
+function Days({ value }: { value: number }) {
+  return (
+    <span className="ws-num" style={{ fontWeight: fw.semibold, color: value < 0 ? v.danger : v.accentText }}>
+      {value > 0 ? `+${value}` : value}
+    </span>
+  );
+}
+
+function What({ r }: { r: leaveApi.LedgerLine }) {
+  return (
+    <div style={{ minWidth: 0 }}>
+      <span>{r.description}</span>
+      {r.releasedDate && (
+        <span style={{ marginInlineStart: space[2] }}>
+          <StatusChip tone="success">Worked on {r.releasedDate}</StatusChip>
+        </span>
+      )}
+      {r.remarks && <div style={{ color: v.textSecondary, fontSize: fs.sm, marginTop: 2 }}>{r.remarks}</div>}
+    </div>
+  );
+}
 
 /**
  * The leave ledger as a person reads it (Phase 3 commit 2): every credit and debit, newest first. When HR released
@@ -11,40 +31,30 @@ const { Text } = Typography;
  * the leave was taken.
  */
 export function LeaveLedgerTable({ employeeId }: { employeeId?: string }) {
-  const { data = [], isLoading } = useQuery({ queryKey: ["leave", "balances", "ledger", employeeId ?? "me"], queryFn: () => leaveApi.getLeaveLedger({ employeeId }) });
+  const { data = [], isLoading, error, refetch } = useQuery({ queryKey: ["leave", "balances", "ledger", employeeId ?? "me"], queryFn: () => leaveApi.getLeaveLedger({ employeeId }) });
   return (
-    <Table<leaveApi.LedgerLine>
-      size="small"
+    <DataTable<leaveApi.LedgerLine>
       rowKey="id"
       loading={isLoading}
+      error={error}
+      onRetry={() => void refetch()}
       dataSource={data}
-      pagination={{ pageSize: 15, size: "small", showSizeChanger: false }}
-      locale={{ emptyText: <EmptyState message="No entries yet." compact /> }}
+      pagination={{ pageSize: 15, showSizeChanger: false }}
+      empty={<EmptyState compact illustration="documents" title="No entries yet." description="Leave credits and debits will be listed here." />}
+      mobile={{
+        title: (r) => r.description,
+        subtitle: (r) => `${r.date} · ${r.leaveTypeCode}`,
+        status: (r) => <Days value={r.days} />,
+        fields: [
+          { label: "Worked on", render: (r) => r.releasedDate ?? "—" },
+          { label: "Remarks", render: (r) => r.remarks ?? "—" },
+        ],
+      }}
       columns={[
-        { title: "Date", dataIndex: "date", width: 110 },
-        { title: "Leave", dataIndex: "leaveTypeCode", width: 70 },
-        {
-          title: "What",
-          key: "what",
-          render: (_, r) => (
-            <>
-              {r.description}
-              {r.releasedDate && (
-                <Tag color="green" style={{ marginInlineStart: 8 }}>
-                  Worked on {r.releasedDate}
-                </Tag>
-              )}
-              {r.remarks && (
-                <div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    {r.remarks}
-                  </Text>
-                </div>
-              )}
-            </>
-          ),
-        },
-        { title: "Days", dataIndex: "days", align: "right", width: 80, render: (v: number) => <Text type={v < 0 ? "danger" : "success"}>{v > 0 ? `+${v}` : v}</Text> },
+        { title: "Date", dataIndex: "date", width: 120 },
+        { title: "Leave", dataIndex: "leaveTypeCode", width: 90 },
+        { title: "What", key: "what", render: (_, r) => <What r={r} /> },
+        { title: "Days", dataIndex: "days", align: "right", width: 90, render: (value: number) => <Days value={value} /> },
       ]}
     />
   );

@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Alert, Button, Form, Input } from "antd";
-import { LockOutlined } from "@ant-design/icons";
+import { Button, Form, Input } from "antd";
 import type { AxiosError } from "axios";
 import { AuthShell } from "../AuthShell";
+import { AuthError, PasswordRules } from "../authParts";
+import { requiredMark } from "../authStyles";
 import * as authApi from "../../../api/auth";
+import { fs, space } from "../../../theme/tokens";
 
 interface ResetPasswordForm {
   password: string;
@@ -14,6 +16,8 @@ interface ResetPasswordForm {
 export function ResetPasswordPage() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
+  const [form] = Form.useForm<ResetPasswordForm>();
+  const password = Form.useWatch("password", form);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,30 +41,25 @@ export function ResetPasswordPage() {
   };
 
   return (
-    <AuthShell title="Reset your password">
-      {error && <Alert type="error" showIcon title={error} style={{ marginBottom: 20 }} />}
+    <AuthShell title="Reset your password" subtitle="Choose a new password for your account.">
+      <AuthError message={error} />
 
-      <Form<ResetPasswordForm> layout="vertical" onFinish={onFinish} requiredMark={false}>
-        <Form.Item
-          name="password"
-          label="New password"
-          rules={[{ required: true, message: "Enter a password" }]}
-          extra="At least 8 characters, with an uppercase letter, a lowercase letter and a number."
-        >
-          <Input.Password prefix={<LockOutlined />} placeholder="New password" size="large" autoFocus />
+      <Form<ResetPasswordForm> form={form} layout="vertical" onFinish={onFinish} requiredMark={requiredMark}>
+        <Form.Item name="password" label="New password" rules={[{ required: true, message: "Enter a password" }]} extra={<PasswordRules value={password} />}>
+          <Input.Password placeholder="New password" size="large" autoFocus autoComplete="new-password" />
         </Form.Item>
         <Form.Item name="confirmPassword" label="Confirm password" rules={[{ required: true, message: "Confirm your password" }]}>
-          <Input.Password prefix={<LockOutlined />} placeholder="Confirm password" size="large" />
+          <Input.Password placeholder="Confirm password" size="large" autoComplete="new-password" />
         </Form.Item>
-        <Form.Item>
+        <Form.Item style={{ marginBottom: space[4] }}>
           <Button type="primary" htmlType="submit" block size="large" loading={submitting}>
             Reset password
           </Button>
         </Form.Item>
       </Form>
-      <Link to="/login" style={{ fontSize: 12 }}>
-        Back to sign in
-      </Link>
+      <div style={{ textAlign: "center", fontSize: fs.md }}>
+        <Link to="/login">Back to sign in</Link>
+      </div>
     </AuthShell>
   );
 }

@@ -1,0 +1,5950 @@
+{
+ "light": [
+  {
+   "id": "auth-01",
+   "section": "auth",
+   "box": [
+    0,
+    448,
+    1224,
+    1320
+   ],
+   "file": "docs/design/slices/light/auth/auth-01.jpg"
+  },
+  {
+   "id": "auth-02",
+   "section": "auth",
+   "box": [
+    1296,
+    448,
+    2520,
+    1320
+   ],
+   "file": "docs/design/slices/light/auth/auth-02.jpg"
+  },
+  {
+   "id": "auth-03",
+   "section": "auth",
+   "box": [
+    2584,
+    448,
+    3816,
+    1320
+   ],
+   "file": "docs/design/slices/light/auth/auth-03.jpg"
+  },
+  {
+   "id": "auth-04",
+   "section": "auth",
+   "box": [
+    3880,
+    448,
+    5104,
+    1320
+   ],
+   "file": "docs/design/slices/light/auth/auth-04.jpg"
+  },
+  {
+   "id": "auth-05",
+   "section": "auth",
+   "box": [
+    5176,
+    448,
+    6400,
+    1320
+   ],
+   "file": "docs/design/slices/light/auth/auth-05.jpg"
+  },
+  {
+   "id": "auth-06",
+   "section": "auth",
+   "box": [
+    0,
+    1448,
+    1224,
+    2320
+   ],
+   "file": "docs/design/slices/light/auth/auth-06.jpg"
+  },
+  {
+   "id": "auth-07",
+   "section": "auth",
+   "box": [
+    1296,
+    1448,
+    2520,
+    2320
+   ],
+   "file": "docs/design/slices/light/auth/auth-07.jpg"
+  },
+  {
+   "id": "auth-08",
+   "section": "auth",
+   "box": [
+    2584,
+    1448,
+    3816,
+    2320
+   ],
+   "file": "docs/design/slices/light/auth/auth-08.jpg"
+  },
+  {
+   "id": "auth-09",
+   "section": "auth",
+   "box": [
+    3880,
+    1448,
+    5104,
+    2320
+   ],
+   "file": "docs/design/slices/light/auth/auth-09.jpg"
+  },
+  {
+   "id": "auth-10",
+   "section": "auth",
+   "box": [
+    0,
+    2448,
+    1224,
+    3320
+   ],
+   "file": "docs/design/slices/light/auth/auth-10.jpg"
+  },
+  {
+   "id": "auth-11",
+   "section": "auth",
+   "box": [
+    1296,
+    2448,
+    2520,
+    3320
+   ],
+   "file": "docs/design/slices/light/auth/auth-11.jpg"
+  },
+  {
+   "id": "auth-12",
+   "section": "auth",
+   "box": [
+    2584,
+    2448,
+    3816,
+    3320
+   ],
+   "file": "docs/design/slices/light/auth/auth-12.jpg"
+  },
+  {
+   "id": "auth-13",
+   "section": "auth",
+   "box": [
+    3880,
+    2448,
+    5104,
+    3320
+   ],
+   "file": "docs/design/slices/light/auth/auth-13.jpg"
+  },
+  {
+   "id": "home-01",
+   "section": "home",
+   "box": [
+    0,
+    3712,
+    1224,
+    4584
+   ],
+   "file": "docs/design/slices/light/home/home-01.jpg"
+  },
+  {
+   "id": "home-02",
+   "section": "home",
+   "box": [
+    1296,
+    3712,
+    2520,
+    4584
+   ],
+   "file": "docs/design/slices/light/home/home-02.jpg"
+  },
+  {
+   "id": "home-03",
+   "section": "home",
+   "box": [
+    2584,
+    3712,
+    3816,
+    4584
+   ],
+   "file": "docs/design/slices/light/home/home-03.jpg"
+  },
+  {
+   "id": "home-04",
+   "section": "home",
+   "box": [
+    3880,
+    3712,
+    5104,
+    4584
+   ],
+   "file": "docs/design/slices/light/home/home-04.jpg"
+  },
+  {
+   "id": "home-05",
+   "section": "home",
+   "box": [
+    5176,
+    3712,
+    6400,
+    4584
+   ],
+   "file": "docs/design/slices/light/home/home-05.jpg"
+  },
+  {
+   "id": "employees-01",
+   "section": "employees",
+   "box": [
+    0,
+    4976,
+    1224,
+    5848
+   ],
+   "file": "docs/design/slices/light/employees/employees-01.jpg"
+  },
+  {
+   "id": "employees-02",
+   "section": "employees",
+   "box": [
+    1296,
+    4976,
+    2520,
+    5848
+   ],
+   "file": "docs/design/slices/light/employees/employees-02.jpg"
+  },
+  {
+   "id": "employees-03",
+   "section": "employees",
+   "box": [
+    2584,
+    4976,
+    3816,
+    5848
+   ],
+   "file": "docs/design/slices/light/employees/employees-03.jpg"
+  },
+  {
+   "id": "employees-04",
+   "section": "employees",
+   "box": [
+    3880,
+    4976,
+    5104,
+    5848
+   ],
+   "file": "docs/design/slices/light/employees/employees-04.jpg"
+  },
+  {
+   "id": "employees-05",
+   "section": "employees",
+   "box": [
+    5176,
+    4976,
+    6400,
+    5848
+   ],
+   "file": "docs/design/slices/light/employees/employees-05.jpg"
+  },
+  {
+   "id": "employees-06",
+   "section": "employees",
+   "box": [
+    0,
+    5976,
+    1224,
+    6848
+   ],
+   "file": "docs/design/slices/light/employees/employees-06.jpg"
+  },
+  {
+   "id": "employees-07",
+   "section": "employees",
+   "box": [
+    1296,
+    5976,
+    2520,
+    6848
+   ],
+   "file": "docs/design/slices/light/employees/employees-07.jpg"
+  },
+  {
+   "id": "employees-08",
+   "section": "employees",
+   "box": [
+    2584,
+    5976,
+    3816,
+    6848
+   ],
+   "file": "docs/design/slices/light/employees/employees-08.jpg"
+  },
+  {
+   "id": "employees-09",
+   "section": "employees",
+   "box": [
+    3880,
+    5976,
+    5104,
+    6848
+   ],
+   "file": "docs/design/slices/light/employees/employees-09.jpg"
+  },
+  {
+   "id": "employees-10",
+   "section": "employees",
+   "box": [
+    5176,
+    5976,
+    6400,
+    6848
+   ],
+   "file": "docs/design/slices/light/employees/employees-10.jpg"
+  },
+  {
+   "id": "employees-11",
+   "section": "employees",
+   "box": [
+    0,
+    6976,
+    1224,
+    7848
+   ],
+   "file": "docs/design/slices/light/employees/employees-11.jpg"
+  },
+  {
+   "id": "employees-12",
+   "section": "employees",
+   "box": [
+    1296,
+    6976,
+    2520,
+    7848
+   ],
+   "file": "docs/design/slices/light/employees/employees-12.jpg"
+  },
+  {
+   "id": "employees-13",
+   "section": "employees",
+   "box": [
+    2584,
+    6976,
+    3816,
+    7848
+   ],
+   "file": "docs/design/slices/light/employees/employees-13.jpg"
+  },
+  {
+   "id": "time-off-01",
+   "section": "time-off",
+   "box": [
+    0,
+    8240,
+    1224,
+    9112
+   ],
+   "file": "docs/design/slices/light/time-off/time-off-01.jpg"
+  },
+  {
+   "id": "time-off-02",
+   "section": "time-off",
+   "box": [
+    1296,
+    8240,
+    2520,
+    9112
+   ],
+   "file": "docs/design/slices/light/time-off/time-off-02.jpg"
+  },
+  {
+   "id": "time-off-03",
+   "section": "time-off",
+   "box": [
+    2584,
+    8240,
+    3816,
+    9112
+   ],
+   "file": "docs/design/slices/light/time-off/time-off-03.jpg"
+  },
+  {
+   "id": "time-off-04",
+   "section": "time-off",
+   "box": [
+    3880,
+    8240,
+    5104,
+    9112
+   ],
+   "file": "docs/design/slices/light/time-off/time-off-04.jpg"
+  },
+  {
+   "id": "time-off-05",
+   "section": "time-off",
+   "box": [
+    5176,
+    8240,
+    6400,
+    9112
+   ],
+   "file": "docs/design/slices/light/time-off/time-off-05.jpg"
+  },
+  {
+   "id": "time-off-06",
+   "section": "time-off",
+   "box": [
+    0,
+    9240,
+    1224,
+    10112
+   ],
+   "file": "docs/design/slices/light/time-off/time-off-06.jpg"
+  },
+  {
+   "id": "time-off-07",
+   "section": "time-off",
+   "box": [
+    1296,
+    9240,
+    2520,
+    10112
+   ],
+   "file": "docs/design/slices/light/time-off/time-off-07.jpg"
+  },
+  {
+   "id": "time-off-08",
+   "section": "time-off",
+   "box": [
+    2584,
+    9240,
+    3816,
+    10112
+   ],
+   "file": "docs/design/slices/light/time-off/time-off-08.jpg"
+  },
+  {
+   "id": "time-off-09",
+   "section": "time-off",
+   "box": [
+    3880,
+    9240,
+    5104,
+    10112
+   ],
+   "file": "docs/design/slices/light/time-off/time-off-09.jpg"
+  },
+  {
+   "id": "time-off-10",
+   "section": "time-off",
+   "box": [
+    5176,
+    9240,
+    6400,
+    10112
+   ],
+   "file": "docs/design/slices/light/time-off/time-off-10.jpg"
+  },
+  {
+   "id": "time-off-11",
+   "section": "time-off",
+   "box": [
+    0,
+    10240,
+    1224,
+    11112
+   ],
+   "file": "docs/design/slices/light/time-off/time-off-11.jpg"
+  },
+  {
+   "id": "time-off-12",
+   "section": "time-off",
+   "box": [
+    1296,
+    10240,
+    2520,
+    11112
+   ],
+   "file": "docs/design/slices/light/time-off/time-off-12.jpg"
+  },
+  {
+   "id": "time-off-13",
+   "section": "time-off",
+   "box": [
+    2584,
+    10240,
+    3816,
+    11112
+   ],
+   "file": "docs/design/slices/light/time-off/time-off-13.jpg"
+  },
+  {
+   "id": "attendance-01",
+   "section": "attendance",
+   "box": [
+    0,
+    11512,
+    1224,
+    12376
+   ],
+   "file": "docs/design/slices/light/attendance/attendance-01.jpg"
+  },
+  {
+   "id": "attendance-02",
+   "section": "attendance",
+   "box": [
+    1296,
+    11512,
+    2520,
+    12376
+   ],
+   "file": "docs/design/slices/light/attendance/attendance-02.jpg"
+  },
+  {
+   "id": "attendance-03",
+   "section": "attendance",
+   "box": [
+    2584,
+    11512,
+    3816,
+    12376
+   ],
+   "file": "docs/design/slices/light/attendance/attendance-03.jpg"
+  },
+  {
+   "id": "attendance-04",
+   "section": "attendance",
+   "box": [
+    3880,
+    11512,
+    5104,
+    12376
+   ],
+   "file": "docs/design/slices/light/attendance/attendance-04.jpg"
+  },
+  {
+   "id": "attendance-05",
+   "section": "attendance",
+   "box": [
+    5176,
+    11512,
+    6400,
+    12376
+   ],
+   "file": "docs/design/slices/light/attendance/attendance-05.jpg"
+  },
+  {
+   "id": "attendance-06",
+   "section": "attendance",
+   "box": [
+    0,
+    12504,
+    1224,
+    13376
+   ],
+   "file": "docs/design/slices/light/attendance/attendance-06.jpg"
+  },
+  {
+   "id": "attendance-07",
+   "section": "attendance",
+   "box": [
+    1296,
+    12504,
+    2520,
+    13376
+   ],
+   "file": "docs/design/slices/light/attendance/attendance-07.jpg"
+  },
+  {
+   "id": "attendance-08",
+   "section": "attendance",
+   "box": [
+    2584,
+    12504,
+    3816,
+    13376
+   ],
+   "file": "docs/design/slices/light/attendance/attendance-08.jpg"
+  },
+  {
+   "id": "payroll-01",
+   "section": "payroll",
+   "box": [
+    0,
+    13776,
+    1224,
+    14648
+   ],
+   "file": "docs/design/slices/light/payroll/payroll-01.jpg"
+  },
+  {
+   "id": "payroll-02",
+   "section": "payroll",
+   "box": [
+    1296,
+    13776,
+    2520,
+    14648
+   ],
+   "file": "docs/design/slices/light/payroll/payroll-02.jpg"
+  },
+  {
+   "id": "payroll-03",
+   "section": "payroll",
+   "box": [
+    2584,
+    13776,
+    3816,
+    14648
+   ],
+   "file": "docs/design/slices/light/payroll/payroll-03.jpg"
+  },
+  {
+   "id": "payroll-04",
+   "section": "payroll",
+   "box": [
+    3880,
+    13776,
+    5104,
+    14648
+   ],
+   "file": "docs/design/slices/light/payroll/payroll-04.jpg"
+  },
+  {
+   "id": "payroll-05",
+   "section": "payroll",
+   "box": [
+    5176,
+    13776,
+    6400,
+    14648
+   ],
+   "file": "docs/design/slices/light/payroll/payroll-05.jpg"
+  },
+  {
+   "id": "recruitment-01",
+   "section": "recruitment",
+   "box": [
+    0,
+    15040,
+    1224,
+    15912
+   ],
+   "file": "docs/design/slices/light/recruitment/recruitment-01.jpg"
+  },
+  {
+   "id": "recruitment-02",
+   "section": "recruitment",
+   "box": [
+    1296,
+    15040,
+    2520,
+    15912
+   ],
+   "file": "docs/design/slices/light/recruitment/recruitment-02.jpg"
+  },
+  {
+   "id": "recruitment-03",
+   "section": "recruitment",
+   "box": [
+    2584,
+    15040,
+    3816,
+    15912
+   ],
+   "file": "docs/design/slices/light/recruitment/recruitment-03.jpg"
+  },
+  {
+   "id": "recruitment-04",
+   "section": "recruitment",
+   "box": [
+    3880,
+    15040,
+    5104,
+    15912
+   ],
+   "file": "docs/design/slices/light/recruitment/recruitment-04.jpg"
+  },
+  {
+   "id": "recruitment-05",
+   "section": "recruitment",
+   "box": [
+    5176,
+    15040,
+    6400,
+    15912
+   ],
+   "file": "docs/design/slices/light/recruitment/recruitment-05.jpg"
+  },
+  {
+   "id": "recruitment-06",
+   "section": "recruitment",
+   "box": [
+    0,
+    16040,
+    1224,
+    16912
+   ],
+   "file": "docs/design/slices/light/recruitment/recruitment-06.jpg"
+  },
+  {
+   "id": "recruitment-07",
+   "section": "recruitment",
+   "box": [
+    1296,
+    16040,
+    2520,
+    16912
+   ],
+   "file": "docs/design/slices/light/recruitment/recruitment-07.jpg"
+  },
+  {
+   "id": "recruitment-08",
+   "section": "recruitment",
+   "box": [
+    2584,
+    16040,
+    3816,
+    16912
+   ],
+   "file": "docs/design/slices/light/recruitment/recruitment-08.jpg"
+  },
+  {
+   "id": "recruitment-09",
+   "section": "recruitment",
+   "box": [
+    3880,
+    16040,
+    5104,
+    16912
+   ],
+   "file": "docs/design/slices/light/recruitment/recruitment-09.jpg"
+  },
+  {
+   "id": "recruitment-10",
+   "section": "recruitment",
+   "box": [
+    5176,
+    16040,
+    6400,
+    16912
+   ],
+   "file": "docs/design/slices/light/recruitment/recruitment-10.jpg"
+  },
+  {
+   "id": "recruitment-11",
+   "section": "recruitment",
+   "box": [
+    0,
+    17040,
+    1224,
+    17912
+   ],
+   "file": "docs/design/slices/light/recruitment/recruitment-11.jpg"
+  },
+  {
+   "id": "recruitment-12",
+   "section": "recruitment",
+   "box": [
+    1296,
+    17040,
+    2520,
+    17912
+   ],
+   "file": "docs/design/slices/light/recruitment/recruitment-12.jpg"
+  },
+  {
+   "id": "recruitment-13",
+   "section": "recruitment",
+   "box": [
+    2584,
+    17040,
+    3816,
+    17912
+   ],
+   "file": "docs/design/slices/light/recruitment/recruitment-13.jpg"
+  },
+  {
+   "id": "recruitment-14",
+   "section": "recruitment",
+   "box": [
+    3880,
+    17040,
+    5104,
+    17912
+   ],
+   "file": "docs/design/slices/light/recruitment/recruitment-14.jpg"
+  },
+  {
+   "id": "recruitment-15",
+   "section": "recruitment",
+   "box": [
+    5176,
+    17040,
+    6400,
+    17912
+   ],
+   "file": "docs/design/slices/light/recruitment/recruitment-15.jpg"
+  },
+  {
+   "id": "recruitment-16",
+   "section": "recruitment",
+   "box": [
+    0,
+    18040,
+    1224,
+    18912
+   ],
+   "file": "docs/design/slices/light/recruitment/recruitment-16.jpg"
+  },
+  {
+   "id": "recruitment-17",
+   "section": "recruitment",
+   "box": [
+    1296,
+    18040,
+    2520,
+    18912
+   ],
+   "file": "docs/design/slices/light/recruitment/recruitment-17.jpg"
+  },
+  {
+   "id": "recruitment-18",
+   "section": "recruitment",
+   "box": [
+    2584,
+    18040,
+    3816,
+    18912
+   ],
+   "file": "docs/design/slices/light/recruitment/recruitment-18.jpg"
+  },
+  {
+   "id": "recruitment-19",
+   "section": "recruitment",
+   "box": [
+    3880,
+    18040,
+    5104,
+    18912
+   ],
+   "file": "docs/design/slices/light/recruitment/recruitment-19.jpg"
+  },
+  {
+   "id": "documents-01",
+   "section": "documents",
+   "box": [
+    0,
+    19304,
+    1224,
+    20176
+   ],
+   "file": "docs/design/slices/light/documents/documents-01.jpg"
+  },
+  {
+   "id": "documents-02",
+   "section": "documents",
+   "box": [
+    1296,
+    19304,
+    2520,
+    20176
+   ],
+   "file": "docs/design/slices/light/documents/documents-02.jpg"
+  },
+  {
+   "id": "documents-03",
+   "section": "documents",
+   "box": [
+    2584,
+    19304,
+    3816,
+    20176
+   ],
+   "file": "docs/design/slices/light/documents/documents-03.jpg"
+  },
+  {
+   "id": "documents-04",
+   "section": "documents",
+   "box": [
+    3880,
+    19304,
+    5104,
+    20176
+   ],
+   "file": "docs/design/slices/light/documents/documents-04.jpg"
+  },
+  {
+   "id": "documents-05",
+   "section": "documents",
+   "box": [
+    5176,
+    19304,
+    6400,
+    20176
+   ],
+   "file": "docs/design/slices/light/documents/documents-05.jpg"
+  },
+  {
+   "id": "checklist-01",
+   "section": "checklist",
+   "box": [
+    0,
+    20568,
+    1224,
+    21440
+   ],
+   "file": "docs/design/slices/light/checklist/checklist-01.jpg"
+  },
+  {
+   "id": "checklist-02",
+   "section": "checklist",
+   "box": [
+    1296,
+    20568,
+    2520,
+    21440
+   ],
+   "file": "docs/design/slices/light/checklist/checklist-02.jpg"
+  },
+  {
+   "id": "checklist-03",
+   "section": "checklist",
+   "box": [
+    2584,
+    20568,
+    3816,
+    21440
+   ],
+   "file": "docs/design/slices/light/checklist/checklist-03.jpg"
+  },
+  {
+   "id": "checklist-04",
+   "section": "checklist",
+   "box": [
+    3880,
+    20568,
+    5104,
+    21440
+   ],
+   "file": "docs/design/slices/light/checklist/checklist-04.jpg"
+  },
+  {
+   "id": "checklist-05",
+   "section": "checklist",
+   "box": [
+    5176,
+    20568,
+    6400,
+    21440
+   ],
+   "file": "docs/design/slices/light/checklist/checklist-05.jpg"
+  },
+  {
+   "id": "checklist-06",
+   "section": "checklist",
+   "box": [
+    0,
+    21568,
+    1224,
+    22440
+   ],
+   "file": "docs/design/slices/light/checklist/checklist-06.jpg"
+  },
+  {
+   "id": "checklist-07",
+   "section": "checklist",
+   "box": [
+    1296,
+    21568,
+    2520,
+    22440
+   ],
+   "file": "docs/design/slices/light/checklist/checklist-07.jpg"
+  },
+  {
+   "id": "checklist-08",
+   "section": "checklist",
+   "box": [
+    2584,
+    21568,
+    3816,
+    22440
+   ],
+   "file": "docs/design/slices/light/checklist/checklist-08.jpg"
+  },
+  {
+   "id": "checklist-09",
+   "section": "checklist",
+   "box": [
+    3880,
+    21568,
+    5104,
+    22440
+   ],
+   "file": "docs/design/slices/light/checklist/checklist-09.jpg"
+  },
+  {
+   "id": "checklist-10",
+   "section": "checklist",
+   "box": [
+    5176,
+    21568,
+    6400,
+    22440
+   ],
+   "file": "docs/design/slices/light/checklist/checklist-10.jpg"
+  },
+  {
+   "id": "news-01",
+   "section": "news",
+   "box": [
+    0,
+    22832,
+    1224,
+    23704
+   ],
+   "file": "docs/design/slices/light/news/news-01.jpg"
+  },
+  {
+   "id": "news-02",
+   "section": "news",
+   "box": [
+    1296,
+    22832,
+    2520,
+    23704
+   ],
+   "file": "docs/design/slices/light/news/news-02.jpg"
+  },
+  {
+   "id": "news-03",
+   "section": "news",
+   "box": [
+    2584,
+    22832,
+    3816,
+    23704
+   ],
+   "file": "docs/design/slices/light/news/news-03.jpg"
+  },
+  {
+   "id": "news-04",
+   "section": "news",
+   "box": [
+    3880,
+    22832,
+    5104,
+    23704
+   ],
+   "file": "docs/design/slices/light/news/news-04.jpg"
+  },
+  {
+   "id": "news-05",
+   "section": "news",
+   "box": [
+    5176,
+    22832,
+    6400,
+    23704
+   ],
+   "file": "docs/design/slices/light/news/news-05.jpg"
+  },
+  {
+   "id": "reports-01",
+   "section": "reports",
+   "box": [
+    0,
+    24104,
+    1224,
+    24976
+   ],
+   "file": "docs/design/slices/light/reports/reports-01.jpg"
+  },
+  {
+   "id": "reports-02",
+   "section": "reports",
+   "box": [
+    1296,
+    24104,
+    2528,
+    24976
+   ],
+   "file": "docs/design/slices/light/reports/reports-02.jpg"
+  },
+  {
+   "id": "reports-03",
+   "section": "reports",
+   "box": [
+    2584,
+    24104,
+    3816,
+    24976
+   ],
+   "file": "docs/design/slices/light/reports/reports-03.jpg"
+  },
+  {
+   "id": "reports-04",
+   "section": "reports",
+   "box": [
+    3880,
+    24104,
+    5104,
+    24976
+   ],
+   "file": "docs/design/slices/light/reports/reports-04.jpg"
+  },
+  {
+   "id": "reports-05",
+   "section": "reports",
+   "box": [
+    5176,
+    24104,
+    6400,
+    24976
+   ],
+   "file": "docs/design/slices/light/reports/reports-05.jpg"
+  },
+  {
+   "id": "reports-06",
+   "section": "reports",
+   "box": [
+    0,
+    25096,
+    1224,
+    25968
+   ],
+   "file": "docs/design/slices/light/reports/reports-06.jpg"
+  },
+  {
+   "id": "reports-07",
+   "section": "reports",
+   "box": [
+    1296,
+    25096,
+    2520,
+    25968
+   ],
+   "file": "docs/design/slices/light/reports/reports-07.jpg"
+  },
+  {
+   "id": "reports-08",
+   "section": "reports",
+   "box": [
+    2584,
+    25096,
+    3816,
+    25968
+   ],
+   "file": "docs/design/slices/light/reports/reports-08.jpg"
+  },
+  {
+   "id": "reports-09",
+   "section": "reports",
+   "box": [
+    3880,
+    25096,
+    5104,
+    25968
+   ],
+   "file": "docs/design/slices/light/reports/reports-09.jpg"
+  },
+  {
+   "id": "reports-10",
+   "section": "reports",
+   "box": [
+    5176,
+    25096,
+    6400,
+    25968
+   ],
+   "file": "docs/design/slices/light/reports/reports-10.jpg"
+  },
+  {
+   "id": "settings-01",
+   "section": "settings",
+   "box": [
+    0,
+    26368,
+    1224,
+    27240
+   ],
+   "file": "docs/design/slices/light/settings/settings-01.jpg"
+  },
+  {
+   "id": "settings-02",
+   "section": "settings",
+   "box": [
+    1296,
+    26368,
+    2520,
+    27240
+   ],
+   "file": "docs/design/slices/light/settings/settings-02.jpg"
+  },
+  {
+   "id": "settings-03",
+   "section": "settings",
+   "box": [
+    2584,
+    26368,
+    3816,
+    27240
+   ],
+   "file": "docs/design/slices/light/settings/settings-03.jpg"
+  },
+  {
+   "id": "settings-04",
+   "section": "settings",
+   "box": [
+    3880,
+    26368,
+    5104,
+    27240
+   ],
+   "file": "docs/design/slices/light/settings/settings-04.jpg"
+  },
+  {
+   "id": "settings-05",
+   "section": "settings",
+   "box": [
+    5176,
+    26368,
+    6400,
+    27240
+   ],
+   "file": "docs/design/slices/light/settings/settings-05.jpg"
+  },
+  {
+   "id": "settings-06",
+   "section": "settings",
+   "box": [
+    0,
+    27368,
+    1224,
+    28240
+   ],
+   "file": "docs/design/slices/light/settings/settings-06.jpg"
+  },
+  {
+   "id": "settings-07",
+   "section": "settings",
+   "box": [
+    1296,
+    27368,
+    2520,
+    28240
+   ],
+   "file": "docs/design/slices/light/settings/settings-07.jpg"
+  },
+  {
+   "id": "settings-08",
+   "section": "settings",
+   "box": [
+    2584,
+    27368,
+    3816,
+    28240
+   ],
+   "file": "docs/design/slices/light/settings/settings-08.jpg"
+  },
+  {
+   "id": "settings-09",
+   "section": "settings",
+   "box": [
+    3880,
+    27368,
+    5104,
+    28240
+   ],
+   "file": "docs/design/slices/light/settings/settings-09.jpg"
+  },
+  {
+   "id": "settings-10",
+   "section": "settings",
+   "box": [
+    5176,
+    27368,
+    6400,
+    28240
+   ],
+   "file": "docs/design/slices/light/settings/settings-10.jpg"
+  },
+  {
+   "id": "settings-11",
+   "section": "settings",
+   "box": [
+    0,
+    28368,
+    1224,
+    29240
+   ],
+   "file": "docs/design/slices/light/settings/settings-11.jpg"
+  },
+  {
+   "id": "settings-12",
+   "section": "settings",
+   "box": [
+    1296,
+    28368,
+    2520,
+    29240
+   ],
+   "file": "docs/design/slices/light/settings/settings-12.jpg"
+  },
+  {
+   "id": "settings-13",
+   "section": "settings",
+   "box": [
+    2584,
+    28368,
+    3816,
+    29240
+   ],
+   "file": "docs/design/slices/light/settings/settings-13.jpg"
+  },
+  {
+   "id": "settings-14",
+   "section": "settings",
+   "box": [
+    3880,
+    28368,
+    5104,
+    29240
+   ],
+   "file": "docs/design/slices/light/settings/settings-14.jpg"
+  },
+  {
+   "id": "settings-15",
+   "section": "settings",
+   "box": [
+    5176,
+    28368,
+    6400,
+    29240
+   ],
+   "file": "docs/design/slices/light/settings/settings-15.jpg"
+  },
+  {
+   "id": "settings-16",
+   "section": "settings",
+   "box": [
+    0,
+    29360,
+    1224,
+    30232
+   ],
+   "file": "docs/design/slices/light/settings/settings-16.jpg"
+  },
+  {
+   "id": "settings-17",
+   "section": "settings",
+   "box": [
+    1296,
+    29360,
+    2520,
+    30232
+   ],
+   "file": "docs/design/slices/light/settings/settings-17.jpg"
+  },
+  {
+   "id": "settings-18",
+   "section": "settings",
+   "box": [
+    2584,
+    29360,
+    3816,
+    30232
+   ],
+   "file": "docs/design/slices/light/settings/settings-18.jpg"
+  },
+  {
+   "id": "settings-19",
+   "section": "settings",
+   "box": [
+    3880,
+    29360,
+    5104,
+    30232
+   ],
+   "file": "docs/design/slices/light/settings/settings-19.jpg"
+  },
+  {
+   "id": "notifications-01",
+   "section": "notifications",
+   "box": [
+    0,
+    30632,
+    1224,
+    31504
+   ],
+   "file": "docs/design/slices/light/notifications/notifications-01.jpg"
+  },
+  {
+   "id": "notifications-02",
+   "section": "notifications",
+   "box": [
+    1296,
+    30632,
+    2520,
+    31504
+   ],
+   "file": "docs/design/slices/light/notifications/notifications-02.jpg"
+  },
+  {
+   "id": "notifications-03",
+   "section": "notifications",
+   "box": [
+    2584,
+    30632,
+    3816,
+    31504
+   ],
+   "file": "docs/design/slices/light/notifications/notifications-03.jpg"
+  },
+  {
+   "id": "notifications-04",
+   "section": "notifications",
+   "box": [
+    3880,
+    30632,
+    5104,
+    31504
+   ],
+   "file": "docs/design/slices/light/notifications/notifications-04.jpg"
+  },
+  {
+   "id": "notifications-05",
+   "section": "notifications",
+   "box": [
+    5176,
+    30632,
+    6400,
+    31504
+   ],
+   "file": "docs/design/slices/light/notifications/notifications-05.jpg"
+  },
+  {
+   "id": "help-01",
+   "section": "help",
+   "box": [
+    0,
+    31896,
+    1224,
+    32768
+   ],
+   "file": "docs/design/slices/light/help/help-01.jpg"
+  },
+  {
+   "id": "help-02",
+   "section": "help",
+   "box": [
+    1296,
+    31896,
+    2520,
+    32768
+   ],
+   "file": "docs/design/slices/light/help/help-02.jpg"
+  },
+  {
+   "id": "help-03",
+   "section": "help",
+   "box": [
+    2584,
+    31896,
+    3816,
+    32768
+   ],
+   "file": "docs/design/slices/light/help/help-03.jpg"
+  },
+  {
+   "id": "help-04",
+   "section": "help",
+   "box": [
+    3880,
+    31896,
+    5104,
+    32768
+   ],
+   "file": "docs/design/slices/light/help/help-04.jpg"
+  },
+  {
+   "id": "help-05",
+   "section": "help",
+   "box": [
+    5176,
+    31896,
+    6400,
+    32768
+   ],
+   "file": "docs/design/slices/light/help/help-05.jpg"
+  }
+ ],
+ "dark": [
+  {
+   "id": "auth-01",
+   "section": "auth",
+   "box": [
+    0,
+    448,
+    1224,
+    1320
+   ],
+   "file": "docs/design/slices/dark/auth/auth-01.jpg"
+  },
+  {
+   "id": "auth-02",
+   "section": "auth",
+   "box": [
+    1296,
+    448,
+    2520,
+    1320
+   ],
+   "file": "docs/design/slices/dark/auth/auth-02.jpg"
+  },
+  {
+   "id": "auth-03",
+   "section": "auth",
+   "box": [
+    2584,
+    448,
+    3816,
+    1320
+   ],
+   "file": "docs/design/slices/dark/auth/auth-03.jpg"
+  },
+  {
+   "id": "auth-04",
+   "section": "auth",
+   "box": [
+    3880,
+    448,
+    5104,
+    1320
+   ],
+   "file": "docs/design/slices/dark/auth/auth-04.jpg"
+  },
+  {
+   "id": "auth-05",
+   "section": "auth",
+   "box": [
+    5176,
+    448,
+    6400,
+    1320
+   ],
+   "file": "docs/design/slices/dark/auth/auth-05.jpg"
+  },
+  {
+   "id": "auth-06",
+   "section": "auth",
+   "box": [
+    0,
+    1448,
+    1224,
+    2320
+   ],
+   "file": "docs/design/slices/dark/auth/auth-06.jpg"
+  },
+  {
+   "id": "auth-07",
+   "section": "auth",
+   "box": [
+    1296,
+    1448,
+    2520,
+    2320
+   ],
+   "file": "docs/design/slices/dark/auth/auth-07.jpg"
+  },
+  {
+   "id": "auth-08",
+   "section": "auth",
+   "box": [
+    2584,
+    1448,
+    3816,
+    2320
+   ],
+   "file": "docs/design/slices/dark/auth/auth-08.jpg"
+  },
+  {
+   "id": "auth-09",
+   "section": "auth",
+   "box": [
+    3880,
+    1448,
+    5104,
+    2320
+   ],
+   "file": "docs/design/slices/dark/auth/auth-09.jpg"
+  },
+  {
+   "id": "auth-10",
+   "section": "auth",
+   "box": [
+    0,
+    2448,
+    1224,
+    3320
+   ],
+   "file": "docs/design/slices/dark/auth/auth-10.jpg"
+  },
+  {
+   "id": "auth-11",
+   "section": "auth",
+   "box": [
+    1296,
+    2448,
+    2520,
+    3320
+   ],
+   "file": "docs/design/slices/dark/auth/auth-11.jpg"
+  },
+  {
+   "id": "auth-12",
+   "section": "auth",
+   "box": [
+    2584,
+    2448,
+    3816,
+    3320
+   ],
+   "file": "docs/design/slices/dark/auth/auth-12.jpg"
+  },
+  {
+   "id": "auth-13",
+   "section": "auth",
+   "box": [
+    3880,
+    2448,
+    5104,
+    3320
+   ],
+   "file": "docs/design/slices/dark/auth/auth-13.jpg"
+  },
+  {
+   "id": "home-01",
+   "section": "home",
+   "box": [
+    0,
+    3712,
+    1224,
+    4584
+   ],
+   "file": "docs/design/slices/dark/home/home-01.jpg"
+  },
+  {
+   "id": "home-02",
+   "section": "home",
+   "box": [
+    1296,
+    3712,
+    2520,
+    4584
+   ],
+   "file": "docs/design/slices/dark/home/home-02.jpg"
+  },
+  {
+   "id": "home-03",
+   "section": "home",
+   "box": [
+    2584,
+    3712,
+    3816,
+    4584
+   ],
+   "file": "docs/design/slices/dark/home/home-03.jpg"
+  },
+  {
+   "id": "home-04",
+   "section": "home",
+   "box": [
+    3880,
+    3712,
+    5104,
+    4584
+   ],
+   "file": "docs/design/slices/dark/home/home-04.jpg"
+  },
+  {
+   "id": "home-05",
+   "section": "home",
+   "box": [
+    5176,
+    3712,
+    6400,
+    4584
+   ],
+   "file": "docs/design/slices/dark/home/home-05.jpg"
+  },
+  {
+   "id": "employees-01",
+   "section": "employees",
+   "box": [
+    0,
+    4976,
+    1224,
+    5848
+   ],
+   "file": "docs/design/slices/dark/employees/employees-01.jpg"
+  },
+  {
+   "id": "employees-02",
+   "section": "employees",
+   "box": [
+    1296,
+    4976,
+    2520,
+    5848
+   ],
+   "file": "docs/design/slices/dark/employees/employees-02.jpg"
+  },
+  {
+   "id": "employees-03",
+   "section": "employees",
+   "box": [
+    2584,
+    4976,
+    3816,
+    5848
+   ],
+   "file": "docs/design/slices/dark/employees/employees-03.jpg"
+  },
+  {
+   "id": "employees-04",
+   "section": "employees",
+   "box": [
+    3880,
+    4976,
+    5104,
+    5848
+   ],
+   "file": "docs/design/slices/dark/employees/employees-04.jpg"
+  },
+  {
+   "id": "employees-05",
+   "section": "employees",
+   "box": [
+    5176,
+    4976,
+    6400,
+    5848
+   ],
+   "file": "docs/design/slices/dark/employees/employees-05.jpg"
+  },
+  {
+   "id": "employees-06",
+   "section": "employees",
+   "box": [
+    0,
+    5976,
+    1224,
+    6848
+   ],
+   "file": "docs/design/slices/dark/employees/employees-06.jpg"
+  },
+  {
+   "id": "employees-07",
+   "section": "employees",
+   "box": [
+    1296,
+    5976,
+    2520,
+    6848
+   ],
+   "file": "docs/design/slices/dark/employees/employees-07.jpg"
+  },
+  {
+   "id": "employees-08",
+   "section": "employees",
+   "box": [
+    2584,
+    5976,
+    3816,
+    6848
+   ],
+   "file": "docs/design/slices/dark/employees/employees-08.jpg"
+  },
+  {
+   "id": "employees-09",
+   "section": "employees",
+   "box": [
+    3880,
+    5976,
+    5104,
+    6848
+   ],
+   "file": "docs/design/slices/dark/employees/employees-09.jpg"
+  },
+  {
+   "id": "employees-10",
+   "section": "employees",
+   "box": [
+    5176,
+    5976,
+    6400,
+    6848
+   ],
+   "file": "docs/design/slices/dark/employees/employees-10.jpg"
+  },
+  {
+   "id": "employees-11",
+   "section": "employees",
+   "box": [
+    0,
+    6976,
+    1224,
+    7848
+   ],
+   "file": "docs/design/slices/dark/employees/employees-11.jpg"
+  },
+  {
+   "id": "employees-12",
+   "section": "employees",
+   "box": [
+    1296,
+    6976,
+    2520,
+    7848
+   ],
+   "file": "docs/design/slices/dark/employees/employees-12.jpg"
+  },
+  {
+   "id": "employees-13",
+   "section": "employees",
+   "box": [
+    2584,
+    6976,
+    3816,
+    7848
+   ],
+   "file": "docs/design/slices/dark/employees/employees-13.jpg"
+  },
+  {
+   "id": "time-off-01",
+   "section": "time-off",
+   "box": [
+    0,
+    8240,
+    1224,
+    9112
+   ],
+   "file": "docs/design/slices/dark/time-off/time-off-01.jpg"
+  },
+  {
+   "id": "time-off-02",
+   "section": "time-off",
+   "box": [
+    1296,
+    8240,
+    2520,
+    9112
+   ],
+   "file": "docs/design/slices/dark/time-off/time-off-02.jpg"
+  },
+  {
+   "id": "time-off-03",
+   "section": "time-off",
+   "box": [
+    2584,
+    8240,
+    3816,
+    9112
+   ],
+   "file": "docs/design/slices/dark/time-off/time-off-03.jpg"
+  },
+  {
+   "id": "time-off-04",
+   "section": "time-off",
+   "box": [
+    3880,
+    8240,
+    5104,
+    9112
+   ],
+   "file": "docs/design/slices/dark/time-off/time-off-04.jpg"
+  },
+  {
+   "id": "time-off-05",
+   "section": "time-off",
+   "box": [
+    5176,
+    8240,
+    6400,
+    9112
+   ],
+   "file": "docs/design/slices/dark/time-off/time-off-05.jpg"
+  },
+  {
+   "id": "time-off-06",
+   "section": "time-off",
+   "box": [
+    0,
+    9240,
+    1224,
+    10112
+   ],
+   "file": "docs/design/slices/dark/time-off/time-off-06.jpg"
+  },
+  {
+   "id": "time-off-07",
+   "section": "time-off",
+   "box": [
+    1296,
+    9240,
+    2520,
+    10112
+   ],
+   "file": "docs/design/slices/dark/time-off/time-off-07.jpg"
+  },
+  {
+   "id": "time-off-08",
+   "section": "time-off",
+   "box": [
+    2584,
+    9240,
+    3816,
+    10112
+   ],
+   "file": "docs/design/slices/dark/time-off/time-off-08.jpg"
+  },
+  {
+   "id": "time-off-09",
+   "section": "time-off",
+   "box": [
+    3880,
+    9240,
+    5104,
+    10112
+   ],
+   "file": "docs/design/slices/dark/time-off/time-off-09.jpg"
+  },
+  {
+   "id": "time-off-10",
+   "section": "time-off",
+   "box": [
+    5176,
+    9240,
+    6400,
+    10112
+   ],
+   "file": "docs/design/slices/dark/time-off/time-off-10.jpg"
+  },
+  {
+   "id": "time-off-11",
+   "section": "time-off",
+   "box": [
+    0,
+    10240,
+    1224,
+    11112
+   ],
+   "file": "docs/design/slices/dark/time-off/time-off-11.jpg"
+  },
+  {
+   "id": "time-off-12",
+   "section": "time-off",
+   "box": [
+    1296,
+    10240,
+    2520,
+    11112
+   ],
+   "file": "docs/design/slices/dark/time-off/time-off-12.jpg"
+  },
+  {
+   "id": "time-off-13",
+   "section": "time-off",
+   "box": [
+    2584,
+    10240,
+    3816,
+    11112
+   ],
+   "file": "docs/design/slices/dark/time-off/time-off-13.jpg"
+  },
+  {
+   "id": "attendance-01",
+   "section": "attendance",
+   "box": [
+    0,
+    11512,
+    1224,
+    12376
+   ],
+   "file": "docs/design/slices/dark/attendance/attendance-01.jpg"
+  },
+  {
+   "id": "attendance-02",
+   "section": "attendance",
+   "box": [
+    1296,
+    11512,
+    2520,
+    12376
+   ],
+   "file": "docs/design/slices/dark/attendance/attendance-02.jpg"
+  },
+  {
+   "id": "attendance-03",
+   "section": "attendance",
+   "box": [
+    2584,
+    11512,
+    3816,
+    12376
+   ],
+   "file": "docs/design/slices/dark/attendance/attendance-03.jpg"
+  },
+  {
+   "id": "attendance-04",
+   "section": "attendance",
+   "box": [
+    3880,
+    11512,
+    5104,
+    12376
+   ],
+   "file": "docs/design/slices/dark/attendance/attendance-04.jpg"
+  },
+  {
+   "id": "attendance-05",
+   "section": "attendance",
+   "box": [
+    5176,
+    11512,
+    6400,
+    12376
+   ],
+   "file": "docs/design/slices/dark/attendance/attendance-05.jpg"
+  },
+  {
+   "id": "attendance-06",
+   "section": "attendance",
+   "box": [
+    0,
+    12504,
+    1224,
+    13376
+   ],
+   "file": "docs/design/slices/dark/attendance/attendance-06.jpg"
+  },
+  {
+   "id": "attendance-07",
+   "section": "attendance",
+   "box": [
+    1296,
+    12504,
+    2520,
+    13376
+   ],
+   "file": "docs/design/slices/dark/attendance/attendance-07.jpg"
+  },
+  {
+   "id": "attendance-08",
+   "section": "attendance",
+   "box": [
+    2584,
+    12504,
+    3816,
+    13376
+   ],
+   "file": "docs/design/slices/dark/attendance/attendance-08.jpg"
+  },
+  {
+   "id": "payroll-01",
+   "section": "payroll",
+   "box": [
+    0,
+    13776,
+    1224,
+    14648
+   ],
+   "file": "docs/design/slices/dark/payroll/payroll-01.jpg"
+  },
+  {
+   "id": "payroll-02",
+   "section": "payroll",
+   "box": [
+    1296,
+    13776,
+    2520,
+    14648
+   ],
+   "file": "docs/design/slices/dark/payroll/payroll-02.jpg"
+  },
+  {
+   "id": "payroll-03",
+   "section": "payroll",
+   "box": [
+    2584,
+    13776,
+    3816,
+    14648
+   ],
+   "file": "docs/design/slices/dark/payroll/payroll-03.jpg"
+  },
+  {
+   "id": "payroll-04",
+   "section": "payroll",
+   "box": [
+    3880,
+    13776,
+    5104,
+    14648
+   ],
+   "file": "docs/design/slices/dark/payroll/payroll-04.jpg"
+  },
+  {
+   "id": "payroll-05",
+   "section": "payroll",
+   "box": [
+    5176,
+    13776,
+    6400,
+    14648
+   ],
+   "file": "docs/design/slices/dark/payroll/payroll-05.jpg"
+  },
+  {
+   "id": "recruitment-01",
+   "section": "recruitment",
+   "box": [
+    0,
+    15040,
+    1224,
+    15912
+   ],
+   "file": "docs/design/slices/dark/recruitment/recruitment-01.jpg"
+  },
+  {
+   "id": "recruitment-02",
+   "section": "recruitment",
+   "box": [
+    1296,
+    15040,
+    2520,
+    15912
+   ],
+   "file": "docs/design/slices/dark/recruitment/recruitment-02.jpg"
+  },
+  {
+   "id": "recruitment-03",
+   "section": "recruitment",
+   "box": [
+    2584,
+    15040,
+    3816,
+    15912
+   ],
+   "file": "docs/design/slices/dark/recruitment/recruitment-03.jpg"
+  },
+  {
+   "id": "recruitment-04",
+   "section": "recruitment",
+   "box": [
+    3880,
+    15040,
+    5104,
+    15912
+   ],
+   "file": "docs/design/slices/dark/recruitment/recruitment-04.jpg"
+  },
+  {
+   "id": "recruitment-05",
+   "section": "recruitment",
+   "box": [
+    5176,
+    15040,
+    6400,
+    15912
+   ],
+   "file": "docs/design/slices/dark/recruitment/recruitment-05.jpg"
+  },
+  {
+   "id": "recruitment-06",
+   "section": "recruitment",
+   "box": [
+    0,
+    16040,
+    1224,
+    16912
+   ],
+   "file": "docs/design/slices/dark/recruitment/recruitment-06.jpg"
+  },
+  {
+   "id": "recruitment-07",
+   "section": "recruitment",
+   "box": [
+    1296,
+    16040,
+    2520,
+    16912
+   ],
+   "file": "docs/design/slices/dark/recruitment/recruitment-07.jpg"
+  },
+  {
+   "id": "recruitment-08",
+   "section": "recruitment",
+   "box": [
+    2584,
+    16040,
+    3816,
+    16912
+   ],
+   "file": "docs/design/slices/dark/recruitment/recruitment-08.jpg"
+  },
+  {
+   "id": "recruitment-09",
+   "section": "recruitment",
+   "box": [
+    3880,
+    16040,
+    5104,
+    16912
+   ],
+   "file": "docs/design/slices/dark/recruitment/recruitment-09.jpg"
+  },
+  {
+   "id": "recruitment-10",
+   "section": "recruitment",
+   "box": [
+    5176,
+    16040,
+    6400,
+    16912
+   ],
+   "file": "docs/design/slices/dark/recruitment/recruitment-10.jpg"
+  },
+  {
+   "id": "recruitment-11",
+   "section": "recruitment",
+   "box": [
+    0,
+    17040,
+    1224,
+    17912
+   ],
+   "file": "docs/design/slices/dark/recruitment/recruitment-11.jpg"
+  },
+  {
+   "id": "recruitment-12",
+   "section": "recruitment",
+   "box": [
+    1296,
+    17040,
+    2520,
+    17912
+   ],
+   "file": "docs/design/slices/dark/recruitment/recruitment-12.jpg"
+  },
+  {
+   "id": "recruitment-13",
+   "section": "recruitment",
+   "box": [
+    2584,
+    17040,
+    3816,
+    17912
+   ],
+   "file": "docs/design/slices/dark/recruitment/recruitment-13.jpg"
+  },
+  {
+   "id": "recruitment-14",
+   "section": "recruitment",
+   "box": [
+    3880,
+    17040,
+    5104,
+    17912
+   ],
+   "file": "docs/design/slices/dark/recruitment/recruitment-14.jpg"
+  },
+  {
+   "id": "recruitment-15",
+   "section": "recruitment",
+   "box": [
+    5176,
+    17040,
+    6400,
+    17912
+   ],
+   "file": "docs/design/slices/dark/recruitment/recruitment-15.jpg"
+  },
+  {
+   "id": "recruitment-16",
+   "section": "recruitment",
+   "box": [
+    0,
+    18040,
+    1224,
+    18912
+   ],
+   "file": "docs/design/slices/dark/recruitment/recruitment-16.jpg"
+  },
+  {
+   "id": "recruitment-17",
+   "section": "recruitment",
+   "box": [
+    1296,
+    18040,
+    2520,
+    18912
+   ],
+   "file": "docs/design/slices/dark/recruitment/recruitment-17.jpg"
+  },
+  {
+   "id": "recruitment-18",
+   "section": "recruitment",
+   "box": [
+    2584,
+    18040,
+    3816,
+    18912
+   ],
+   "file": "docs/design/slices/dark/recruitment/recruitment-18.jpg"
+  },
+  {
+   "id": "recruitment-19",
+   "section": "recruitment",
+   "box": [
+    3880,
+    18040,
+    5104,
+    18912
+   ],
+   "file": "docs/design/slices/dark/recruitment/recruitment-19.jpg"
+  },
+  {
+   "id": "documents-01",
+   "section": "documents",
+   "box": [
+    0,
+    19304,
+    1224,
+    20176
+   ],
+   "file": "docs/design/slices/dark/documents/documents-01.jpg"
+  },
+  {
+   "id": "documents-02",
+   "section": "documents",
+   "box": [
+    1296,
+    19304,
+    2520,
+    20176
+   ],
+   "file": "docs/design/slices/dark/documents/documents-02.jpg"
+  },
+  {
+   "id": "documents-03",
+   "section": "documents",
+   "box": [
+    2584,
+    19304,
+    3816,
+    20176
+   ],
+   "file": "docs/design/slices/dark/documents/documents-03.jpg"
+  },
+  {
+   "id": "documents-04",
+   "section": "documents",
+   "box": [
+    3880,
+    19304,
+    5104,
+    20176
+   ],
+   "file": "docs/design/slices/dark/documents/documents-04.jpg"
+  },
+  {
+   "id": "documents-05",
+   "section": "documents",
+   "box": [
+    5176,
+    19304,
+    6400,
+    20176
+   ],
+   "file": "docs/design/slices/dark/documents/documents-05.jpg"
+  },
+  {
+   "id": "checklist-01",
+   "section": "checklist",
+   "box": [
+    0,
+    20568,
+    1224,
+    21440
+   ],
+   "file": "docs/design/slices/dark/checklist/checklist-01.jpg"
+  },
+  {
+   "id": "checklist-02",
+   "section": "checklist",
+   "box": [
+    1296,
+    20568,
+    2520,
+    21440
+   ],
+   "file": "docs/design/slices/dark/checklist/checklist-02.jpg"
+  },
+  {
+   "id": "checklist-03",
+   "section": "checklist",
+   "box": [
+    2584,
+    20568,
+    3816,
+    21440
+   ],
+   "file": "docs/design/slices/dark/checklist/checklist-03.jpg"
+  },
+  {
+   "id": "checklist-04",
+   "section": "checklist",
+   "box": [
+    3880,
+    20568,
+    5104,
+    21440
+   ],
+   "file": "docs/design/slices/dark/checklist/checklist-04.jpg"
+  },
+  {
+   "id": "checklist-05",
+   "section": "checklist",
+   "box": [
+    5176,
+    20568,
+    6400,
+    21440
+   ],
+   "file": "docs/design/slices/dark/checklist/checklist-05.jpg"
+  },
+  {
+   "id": "checklist-06",
+   "section": "checklist",
+   "box": [
+    0,
+    21568,
+    1224,
+    22440
+   ],
+   "file": "docs/design/slices/dark/checklist/checklist-06.jpg"
+  },
+  {
+   "id": "checklist-07",
+   "section": "checklist",
+   "box": [
+    1296,
+    21568,
+    2520,
+    22440
+   ],
+   "file": "docs/design/slices/dark/checklist/checklist-07.jpg"
+  },
+  {
+   "id": "checklist-08",
+   "section": "checklist",
+   "box": [
+    2584,
+    21568,
+    3816,
+    22440
+   ],
+   "file": "docs/design/slices/dark/checklist/checklist-08.jpg"
+  },
+  {
+   "id": "checklist-09",
+   "section": "checklist",
+   "box": [
+    3880,
+    21568,
+    5104,
+    22440
+   ],
+   "file": "docs/design/slices/dark/checklist/checklist-09.jpg"
+  },
+  {
+   "id": "checklist-10",
+   "section": "checklist",
+   "box": [
+    5176,
+    21568,
+    6400,
+    22440
+   ],
+   "file": "docs/design/slices/dark/checklist/checklist-10.jpg"
+  },
+  {
+   "id": "news-01",
+   "section": "news",
+   "box": [
+    0,
+    22832,
+    1224,
+    23704
+   ],
+   "file": "docs/design/slices/dark/news/news-01.jpg"
+  },
+  {
+   "id": "news-02",
+   "section": "news",
+   "box": [
+    1296,
+    22832,
+    2520,
+    23704
+   ],
+   "file": "docs/design/slices/dark/news/news-02.jpg"
+  },
+  {
+   "id": "news-03",
+   "section": "news",
+   "box": [
+    2584,
+    22832,
+    3816,
+    23704
+   ],
+   "file": "docs/design/slices/dark/news/news-03.jpg"
+  },
+  {
+   "id": "news-04",
+   "section": "news",
+   "box": [
+    3880,
+    22832,
+    5104,
+    23704
+   ],
+   "file": "docs/design/slices/dark/news/news-04.jpg"
+  },
+  {
+   "id": "news-05",
+   "section": "news",
+   "box": [
+    5176,
+    22832,
+    6400,
+    23704
+   ],
+   "file": "docs/design/slices/dark/news/news-05.jpg"
+  },
+  {
+   "id": "reports-01",
+   "section": "reports",
+   "box": [
+    0,
+    24104,
+    1224,
+    24976
+   ],
+   "file": "docs/design/slices/dark/reports/reports-01.jpg"
+  },
+  {
+   "id": "reports-02",
+   "section": "reports",
+   "box": [
+    1296,
+    24104,
+    2528,
+    24976
+   ],
+   "file": "docs/design/slices/dark/reports/reports-02.jpg"
+  },
+  {
+   "id": "reports-03",
+   "section": "reports",
+   "box": [
+    2584,
+    24104,
+    3816,
+    24976
+   ],
+   "file": "docs/design/slices/dark/reports/reports-03.jpg"
+  },
+  {
+   "id": "reports-04",
+   "section": "reports",
+   "box": [
+    3880,
+    24104,
+    5104,
+    24976
+   ],
+   "file": "docs/design/slices/dark/reports/reports-04.jpg"
+  },
+  {
+   "id": "reports-05",
+   "section": "reports",
+   "box": [
+    5176,
+    24104,
+    6400,
+    24976
+   ],
+   "file": "docs/design/slices/dark/reports/reports-05.jpg"
+  },
+  {
+   "id": "reports-06",
+   "section": "reports",
+   "box": [
+    0,
+    25096,
+    1224,
+    25968
+   ],
+   "file": "docs/design/slices/dark/reports/reports-06.jpg"
+  },
+  {
+   "id": "reports-07",
+   "section": "reports",
+   "box": [
+    1296,
+    25096,
+    2520,
+    25968
+   ],
+   "file": "docs/design/slices/dark/reports/reports-07.jpg"
+  },
+  {
+   "id": "reports-08",
+   "section": "reports",
+   "box": [
+    2584,
+    25096,
+    3816,
+    25968
+   ],
+   "file": "docs/design/slices/dark/reports/reports-08.jpg"
+  },
+  {
+   "id": "reports-09",
+   "section": "reports",
+   "box": [
+    3880,
+    25096,
+    5104,
+    25968
+   ],
+   "file": "docs/design/slices/dark/reports/reports-09.jpg"
+  },
+  {
+   "id": "reports-10",
+   "section": "reports",
+   "box": [
+    5176,
+    25096,
+    6400,
+    25968
+   ],
+   "file": "docs/design/slices/dark/reports/reports-10.jpg"
+  },
+  {
+   "id": "settings-01",
+   "section": "settings",
+   "box": [
+    0,
+    26368,
+    1224,
+    27240
+   ],
+   "file": "docs/design/slices/dark/settings/settings-01.jpg"
+  },
+  {
+   "id": "settings-02",
+   "section": "settings",
+   "box": [
+    1296,
+    26368,
+    2520,
+    27240
+   ],
+   "file": "docs/design/slices/dark/settings/settings-02.jpg"
+  },
+  {
+   "id": "settings-03",
+   "section": "settings",
+   "box": [
+    2584,
+    26368,
+    3816,
+    27240
+   ],
+   "file": "docs/design/slices/dark/settings/settings-03.jpg"
+  },
+  {
+   "id": "settings-04",
+   "section": "settings",
+   "box": [
+    3880,
+    26368,
+    5104,
+    27240
+   ],
+   "file": "docs/design/slices/dark/settings/settings-04.jpg"
+  },
+  {
+   "id": "settings-05",
+   "section": "settings",
+   "box": [
+    5176,
+    26368,
+    6400,
+    27240
+   ],
+   "file": "docs/design/slices/dark/settings/settings-05.jpg"
+  },
+  {
+   "id": "settings-06",
+   "section": "settings",
+   "box": [
+    0,
+    27368,
+    1224,
+    28240
+   ],
+   "file": "docs/design/slices/dark/settings/settings-06.jpg"
+  },
+  {
+   "id": "settings-07",
+   "section": "settings",
+   "box": [
+    1296,
+    27368,
+    2520,
+    28240
+   ],
+   "file": "docs/design/slices/dark/settings/settings-07.jpg"
+  },
+  {
+   "id": "settings-08",
+   "section": "settings",
+   "box": [
+    2584,
+    27368,
+    3816,
+    28240
+   ],
+   "file": "docs/design/slices/dark/settings/settings-08.jpg"
+  },
+  {
+   "id": "settings-09",
+   "section": "settings",
+   "box": [
+    3880,
+    27368,
+    5104,
+    28240
+   ],
+   "file": "docs/design/slices/dark/settings/settings-09.jpg"
+  },
+  {
+   "id": "settings-10",
+   "section": "settings",
+   "box": [
+    5176,
+    27368,
+    6400,
+    28240
+   ],
+   "file": "docs/design/slices/dark/settings/settings-10.jpg"
+  },
+  {
+   "id": "settings-11",
+   "section": "settings",
+   "box": [
+    0,
+    28368,
+    1224,
+    29240
+   ],
+   "file": "docs/design/slices/dark/settings/settings-11.jpg"
+  },
+  {
+   "id": "settings-12",
+   "section": "settings",
+   "box": [
+    1296,
+    28368,
+    2520,
+    29240
+   ],
+   "file": "docs/design/slices/dark/settings/settings-12.jpg"
+  },
+  {
+   "id": "settings-13",
+   "section": "settings",
+   "box": [
+    2584,
+    28368,
+    3816,
+    29240
+   ],
+   "file": "docs/design/slices/dark/settings/settings-13.jpg"
+  },
+  {
+   "id": "settings-14",
+   "section": "settings",
+   "box": [
+    3880,
+    28368,
+    5104,
+    29240
+   ],
+   "file": "docs/design/slices/dark/settings/settings-14.jpg"
+  },
+  {
+   "id": "settings-15",
+   "section": "settings",
+   "box": [
+    5176,
+    28368,
+    6400,
+    29240
+   ],
+   "file": "docs/design/slices/dark/settings/settings-15.jpg"
+  },
+  {
+   "id": "settings-16",
+   "section": "settings",
+   "box": [
+    0,
+    29360,
+    1224,
+    30232
+   ],
+   "file": "docs/design/slices/dark/settings/settings-16.jpg"
+  },
+  {
+   "id": "settings-17",
+   "section": "settings",
+   "box": [
+    1296,
+    29360,
+    2520,
+    30232
+   ],
+   "file": "docs/design/slices/dark/settings/settings-17.jpg"
+  },
+  {
+   "id": "settings-18",
+   "section": "settings",
+   "box": [
+    2584,
+    29360,
+    3816,
+    30232
+   ],
+   "file": "docs/design/slices/dark/settings/settings-18.jpg"
+  },
+  {
+   "id": "settings-19",
+   "section": "settings",
+   "box": [
+    3880,
+    29360,
+    5104,
+    30232
+   ],
+   "file": "docs/design/slices/dark/settings/settings-19.jpg"
+  },
+  {
+   "id": "notifications-01",
+   "section": "notifications",
+   "box": [
+    0,
+    30632,
+    1224,
+    31504
+   ],
+   "file": "docs/design/slices/dark/notifications/notifications-01.jpg"
+  },
+  {
+   "id": "notifications-02",
+   "section": "notifications",
+   "box": [
+    1296,
+    30632,
+    2520,
+    31504
+   ],
+   "file": "docs/design/slices/dark/notifications/notifications-02.jpg"
+  },
+  {
+   "id": "notifications-03",
+   "section": "notifications",
+   "box": [
+    2584,
+    30632,
+    3816,
+    31504
+   ],
+   "file": "docs/design/slices/dark/notifications/notifications-03.jpg"
+  },
+  {
+   "id": "notifications-04",
+   "section": "notifications",
+   "box": [
+    3880,
+    30632,
+    5104,
+    31504
+   ],
+   "file": "docs/design/slices/dark/notifications/notifications-04.jpg"
+  },
+  {
+   "id": "notifications-05",
+   "section": "notifications",
+   "box": [
+    5176,
+    30632,
+    6400,
+    31504
+   ],
+   "file": "docs/design/slices/dark/notifications/notifications-05.jpg"
+  },
+  {
+   "id": "help-01",
+   "section": "help",
+   "box": [
+    0,
+    31896,
+    1224,
+    32768
+   ],
+   "file": "docs/design/slices/dark/help/help-01.jpg"
+  },
+  {
+   "id": "help-02",
+   "section": "help",
+   "box": [
+    1296,
+    31896,
+    2520,
+    32768
+   ],
+   "file": "docs/design/slices/dark/help/help-02.jpg"
+  },
+  {
+   "id": "help-03",
+   "section": "help",
+   "box": [
+    2584,
+    31896,
+    3816,
+    32768
+   ],
+   "file": "docs/design/slices/dark/help/help-03.jpg"
+  },
+  {
+   "id": "help-04",
+   "section": "help",
+   "box": [
+    3880,
+    31896,
+    5104,
+    32768
+   ],
+   "file": "docs/design/slices/dark/help/help-04.jpg"
+  },
+  {
+   "id": "help-05",
+   "section": "help",
+   "box": [
+    5176,
+    31896,
+    6400,
+    32768
+   ],
+   "file": "docs/design/slices/dark/help/help-05.jpg"
+  }
+ ],
+ "light-phone": [
+  {
+   "id": "m-auth-01",
+   "section": "auth",
+   "box": [
+    0,
+    528,
+    376,
+    1336
+   ],
+   "file": "docs/design/slices/light-phone/auth/m-auth-01.jpg"
+  },
+  {
+   "id": "m-auth-02",
+   "section": "auth",
+   "box": [
+    416,
+    528,
+    792,
+    1336
+   ],
+   "file": "docs/design/slices/light-phone/auth/m-auth-01.jpg"
+  },
+  {
+   "id": "m-auth-03",
+   "section": "auth",
+   "box": [
+    832,
+    528,
+    1208,
+    1336
+   ],
+   "file": "docs/design/slices/light-phone/auth/m-auth-01.jpg"
+  },
+  {
+   "id": "m-auth-04",
+   "section": "auth",
+   "box": [
+    1248,
+    528,
+    1616,
+    1336
+   ],
+   "file": "docs/design/slices/light-phone/auth/m-auth-01.jpg"
+  },
+  {
+   "id": "m-auth-05",
+   "section": "auth",
+   "box": [
+    1656,
+    528,
+    2032,
+    1336
+   ],
+   "file": "docs/design/slices/light-phone/auth/m-auth-02.jpg"
+  },
+  {
+   "id": "m-auth-06",
+   "section": "auth",
+   "box": [
+    2072,
+    528,
+    2448,
+    1336
+   ],
+   "file": "docs/design/slices/light-phone/auth/m-auth-02.jpg"
+  },
+  {
+   "id": "m-auth-07",
+   "section": "auth",
+   "box": [
+    2488,
+    528,
+    2864,
+    1336
+   ],
+   "file": "docs/design/slices/light-phone/auth/m-auth-02.jpg"
+  },
+  {
+   "id": "m-auth-08",
+   "section": "auth",
+   "box": [
+    2904,
+    528,
+    3280,
+    1336
+   ],
+   "file": "docs/design/slices/light-phone/auth/m-auth-02.jpg"
+  },
+  {
+   "id": "m-auth-09",
+   "section": "auth",
+   "box": [
+    3320,
+    528,
+    3696,
+    1336
+   ],
+   "file": "docs/design/slices/light-phone/auth/m-auth-03.jpg"
+  },
+  {
+   "id": "m-auth-10",
+   "section": "auth",
+   "box": [
+    3736,
+    528,
+    4112,
+    1336
+   ],
+   "file": "docs/design/slices/light-phone/auth/m-auth-03.jpg"
+  },
+  {
+   "id": "m-auth-11",
+   "section": "auth",
+   "box": [
+    4152,
+    528,
+    4520,
+    1336
+   ],
+   "file": "docs/design/slices/light-phone/auth/m-auth-03.jpg"
+  },
+  {
+   "id": "m-auth-12",
+   "section": "auth",
+   "box": [
+    4560,
+    528,
+    4936,
+    1336
+   ],
+   "file": "docs/design/slices/light-phone/auth/m-auth-03.jpg"
+  },
+  {
+   "id": "m-auth-13",
+   "section": "auth",
+   "box": [
+    4976,
+    528,
+    5352,
+    1336
+   ],
+   "file": "docs/design/slices/light-phone/auth/m-auth-04.jpg"
+  },
+  {
+   "id": "m-home-01",
+   "section": "home",
+   "box": [
+    0,
+    1808,
+    376,
+    2624
+   ],
+   "file": "docs/design/slices/light-phone/home/m-home-01.jpg"
+  },
+  {
+   "id": "m-home-02",
+   "section": "home",
+   "box": [
+    416,
+    1808,
+    792,
+    2624
+   ],
+   "file": "docs/design/slices/light-phone/home/m-home-01.jpg"
+  },
+  {
+   "id": "m-home-03",
+   "section": "home",
+   "box": [
+    832,
+    1808,
+    1208,
+    2624
+   ],
+   "file": "docs/design/slices/light-phone/home/m-home-01.jpg"
+  },
+  {
+   "id": "m-home-04",
+   "section": "home",
+   "box": [
+    1248,
+    1808,
+    1616,
+    2624
+   ],
+   "file": "docs/design/slices/light-phone/home/m-home-01.jpg"
+  },
+  {
+   "id": "m-home-05",
+   "section": "home",
+   "box": [
+    1656,
+    1808,
+    2032,
+    2624
+   ],
+   "file": "docs/design/slices/light-phone/home/m-home-02.jpg"
+  },
+  {
+   "id": "m-employees-01",
+   "section": "employees",
+   "box": [
+    0,
+    3048,
+    376,
+    3856
+   ],
+   "file": "docs/design/slices/light-phone/employees/m-employees-01.jpg"
+  },
+  {
+   "id": "m-employees-02",
+   "section": "employees",
+   "box": [
+    416,
+    3048,
+    792,
+    3856
+   ],
+   "file": "docs/design/slices/light-phone/employees/m-employees-01.jpg"
+  },
+  {
+   "id": "m-employees-03",
+   "section": "employees",
+   "box": [
+    832,
+    3048,
+    1208,
+    3856
+   ],
+   "file": "docs/design/slices/light-phone/employees/m-employees-01.jpg"
+  },
+  {
+   "id": "m-employees-04",
+   "section": "employees",
+   "box": [
+    1248,
+    3048,
+    1616,
+    3856
+   ],
+   "file": "docs/design/slices/light-phone/employees/m-employees-01.jpg"
+  },
+  {
+   "id": "m-employees-05",
+   "section": "employees",
+   "box": [
+    1656,
+    3048,
+    2032,
+    3856
+   ],
+   "file": "docs/design/slices/light-phone/employees/m-employees-02.jpg"
+  },
+  {
+   "id": "m-employees-06",
+   "section": "employees",
+   "box": [
+    2072,
+    3048,
+    2448,
+    3856
+   ],
+   "file": "docs/design/slices/light-phone/employees/m-employees-02.jpg"
+  },
+  {
+   "id": "m-employees-07",
+   "section": "employees",
+   "box": [
+    2488,
+    3048,
+    2864,
+    3856
+   ],
+   "file": "docs/design/slices/light-phone/employees/m-employees-02.jpg"
+  },
+  {
+   "id": "m-employees-08",
+   "section": "employees",
+   "box": [
+    2904,
+    3048,
+    3280,
+    3856
+   ],
+   "file": "docs/design/slices/light-phone/employees/m-employees-02.jpg"
+  },
+  {
+   "id": "m-employees-09",
+   "section": "employees",
+   "box": [
+    3320,
+    3048,
+    3696,
+    3856
+   ],
+   "file": "docs/design/slices/light-phone/employees/m-employees-03.jpg"
+  },
+  {
+   "id": "m-employees-10",
+   "section": "employees",
+   "box": [
+    3736,
+    3048,
+    4112,
+    3856
+   ],
+   "file": "docs/design/slices/light-phone/employees/m-employees-03.jpg"
+  },
+  {
+   "id": "m-employees-11",
+   "section": "employees",
+   "box": [
+    4152,
+    3048,
+    4520,
+    3856
+   ],
+   "file": "docs/design/slices/light-phone/employees/m-employees-03.jpg"
+  },
+  {
+   "id": "m-employees-12",
+   "section": "employees",
+   "box": [
+    4560,
+    3048,
+    4936,
+    3856
+   ],
+   "file": "docs/design/slices/light-phone/employees/m-employees-03.jpg"
+  },
+  {
+   "id": "m-employees-13",
+   "section": "employees",
+   "box": [
+    4976,
+    3048,
+    5352,
+    3856
+   ],
+   "file": "docs/design/slices/light-phone/employees/m-employees-04.jpg"
+  },
+  {
+   "id": "m-time-off-01",
+   "section": "time-off",
+   "box": [
+    0,
+    4280,
+    376,
+    5096
+   ],
+   "file": "docs/design/slices/light-phone/time-off/m-time-off-01.jpg"
+  },
+  {
+   "id": "m-time-off-02",
+   "section": "time-off",
+   "box": [
+    416,
+    4280,
+    792,
+    5096
+   ],
+   "file": "docs/design/slices/light-phone/time-off/m-time-off-01.jpg"
+  },
+  {
+   "id": "m-time-off-03",
+   "section": "time-off",
+   "box": [
+    832,
+    4280,
+    1208,
+    5096
+   ],
+   "file": "docs/design/slices/light-phone/time-off/m-time-off-01.jpg"
+  },
+  {
+   "id": "m-time-off-04",
+   "section": "time-off",
+   "box": [
+    1248,
+    4280,
+    1616,
+    5096
+   ],
+   "file": "docs/design/slices/light-phone/time-off/m-time-off-01.jpg"
+  },
+  {
+   "id": "m-time-off-05",
+   "section": "time-off",
+   "box": [
+    1656,
+    4280,
+    2032,
+    5096
+   ],
+   "file": "docs/design/slices/light-phone/time-off/m-time-off-02.jpg"
+  },
+  {
+   "id": "m-time-off-06",
+   "section": "time-off",
+   "box": [
+    2072,
+    4280,
+    2448,
+    5096
+   ],
+   "file": "docs/design/slices/light-phone/time-off/m-time-off-02.jpg"
+  },
+  {
+   "id": "m-time-off-07",
+   "section": "time-off",
+   "box": [
+    2488,
+    4280,
+    2864,
+    5096
+   ],
+   "file": "docs/design/slices/light-phone/time-off/m-time-off-02.jpg"
+  },
+  {
+   "id": "m-time-off-08",
+   "section": "time-off",
+   "box": [
+    2904,
+    4280,
+    3280,
+    5096
+   ],
+   "file": "docs/design/slices/light-phone/time-off/m-time-off-02.jpg"
+  },
+  {
+   "id": "m-time-off-09",
+   "section": "time-off",
+   "box": [
+    3320,
+    4280,
+    3696,
+    5096
+   ],
+   "file": "docs/design/slices/light-phone/time-off/m-time-off-03.jpg"
+  },
+  {
+   "id": "m-time-off-10",
+   "section": "time-off",
+   "box": [
+    3736,
+    4280,
+    4112,
+    5096
+   ],
+   "file": "docs/design/slices/light-phone/time-off/m-time-off-03.jpg"
+  },
+  {
+   "id": "m-time-off-11",
+   "section": "time-off",
+   "box": [
+    4152,
+    4280,
+    4520,
+    5096
+   ],
+   "file": "docs/design/slices/light-phone/time-off/m-time-off-03.jpg"
+  },
+  {
+   "id": "m-time-off-12",
+   "section": "time-off",
+   "box": [
+    4560,
+    4280,
+    4936,
+    5096
+   ],
+   "file": "docs/design/slices/light-phone/time-off/m-time-off-03.jpg"
+  },
+  {
+   "id": "m-time-off-13",
+   "section": "time-off",
+   "box": [
+    4976,
+    4280,
+    5352,
+    5096
+   ],
+   "file": "docs/design/slices/light-phone/time-off/m-time-off-04.jpg"
+  },
+  {
+   "id": "m-attendance-01",
+   "section": "attendance",
+   "box": [
+    0,
+    5520,
+    376,
+    6328
+   ],
+   "file": "docs/design/slices/light-phone/attendance/m-attendance-01.jpg"
+  },
+  {
+   "id": "m-attendance-02",
+   "section": "attendance",
+   "box": [
+    416,
+    5520,
+    792,
+    6328
+   ],
+   "file": "docs/design/slices/light-phone/attendance/m-attendance-01.jpg"
+  },
+  {
+   "id": "m-attendance-03",
+   "section": "attendance",
+   "box": [
+    832,
+    5520,
+    1208,
+    6328
+   ],
+   "file": "docs/design/slices/light-phone/attendance/m-attendance-01.jpg"
+  },
+  {
+   "id": "m-attendance-04",
+   "section": "attendance",
+   "box": [
+    1248,
+    5520,
+    1616,
+    6328
+   ],
+   "file": "docs/design/slices/light-phone/attendance/m-attendance-01.jpg"
+  },
+  {
+   "id": "m-attendance-05",
+   "section": "attendance",
+   "box": [
+    1656,
+    5520,
+    2032,
+    6328
+   ],
+   "file": "docs/design/slices/light-phone/attendance/m-attendance-02.jpg"
+  },
+  {
+   "id": "m-attendance-06",
+   "section": "attendance",
+   "box": [
+    2072,
+    5520,
+    2448,
+    6328
+   ],
+   "file": "docs/design/slices/light-phone/attendance/m-attendance-02.jpg"
+  },
+  {
+   "id": "m-attendance-07",
+   "section": "attendance",
+   "box": [
+    2488,
+    5520,
+    2864,
+    6328
+   ],
+   "file": "docs/design/slices/light-phone/attendance/m-attendance-02.jpg"
+  },
+  {
+   "id": "m-attendance-08",
+   "section": "attendance",
+   "box": [
+    2904,
+    5520,
+    3280,
+    6328
+   ],
+   "file": "docs/design/slices/light-phone/attendance/m-attendance-02.jpg"
+  },
+  {
+   "id": "m-payroll-01",
+   "section": "payroll",
+   "box": [
+    0,
+    6752,
+    376,
+    7568
+   ],
+   "file": "docs/design/slices/light-phone/payroll/m-payroll-01.jpg"
+  },
+  {
+   "id": "m-payroll-02",
+   "section": "payroll",
+   "box": [
+    416,
+    6752,
+    792,
+    7568
+   ],
+   "file": "docs/design/slices/light-phone/payroll/m-payroll-01.jpg"
+  },
+  {
+   "id": "m-payroll-03",
+   "section": "payroll",
+   "box": [
+    832,
+    6752,
+    1208,
+    7568
+   ],
+   "file": "docs/design/slices/light-phone/payroll/m-payroll-01.jpg"
+  },
+  {
+   "id": "m-payroll-04",
+   "section": "payroll",
+   "box": [
+    1248,
+    6752,
+    1616,
+    7568
+   ],
+   "file": "docs/design/slices/light-phone/payroll/m-payroll-01.jpg"
+  },
+  {
+   "id": "m-payroll-05",
+   "section": "payroll",
+   "box": [
+    1656,
+    6752,
+    2032,
+    7568
+   ],
+   "file": "docs/design/slices/light-phone/payroll/m-payroll-02.jpg"
+  },
+  {
+   "id": "m-recruitment-01",
+   "section": "recruitment",
+   "box": [
+    0,
+    7992,
+    376,
+    8800
+   ],
+   "file": "docs/design/slices/light-phone/recruitment/m-recruitment-01.jpg"
+  },
+  {
+   "id": "m-recruitment-02",
+   "section": "recruitment",
+   "box": [
+    416,
+    7992,
+    792,
+    8800
+   ],
+   "file": "docs/design/slices/light-phone/recruitment/m-recruitment-01.jpg"
+  },
+  {
+   "id": "m-recruitment-03",
+   "section": "recruitment",
+   "box": [
+    832,
+    7992,
+    1208,
+    8800
+   ],
+   "file": "docs/design/slices/light-phone/recruitment/m-recruitment-01.jpg"
+  },
+  {
+   "id": "m-recruitment-04",
+   "section": "recruitment",
+   "box": [
+    1248,
+    7992,
+    1616,
+    8800
+   ],
+   "file": "docs/design/slices/light-phone/recruitment/m-recruitment-01.jpg"
+  },
+  {
+   "id": "m-recruitment-05",
+   "section": "recruitment",
+   "box": [
+    1656,
+    7992,
+    2032,
+    8800
+   ],
+   "file": "docs/design/slices/light-phone/recruitment/m-recruitment-02.jpg"
+  },
+  {
+   "id": "m-recruitment-06",
+   "section": "recruitment",
+   "box": [
+    2072,
+    7992,
+    2448,
+    8800
+   ],
+   "file": "docs/design/slices/light-phone/recruitment/m-recruitment-02.jpg"
+  },
+  {
+   "id": "m-recruitment-07",
+   "section": "recruitment",
+   "box": [
+    2488,
+    7992,
+    2864,
+    8800
+   ],
+   "file": "docs/design/slices/light-phone/recruitment/m-recruitment-02.jpg"
+  },
+  {
+   "id": "m-recruitment-08",
+   "section": "recruitment",
+   "box": [
+    2904,
+    7992,
+    3280,
+    8800
+   ],
+   "file": "docs/design/slices/light-phone/recruitment/m-recruitment-02.jpg"
+  },
+  {
+   "id": "m-recruitment-09",
+   "section": "recruitment",
+   "box": [
+    3320,
+    7992,
+    3696,
+    8800
+   ],
+   "file": "docs/design/slices/light-phone/recruitment/m-recruitment-03.jpg"
+  },
+  {
+   "id": "m-recruitment-10",
+   "section": "recruitment",
+   "box": [
+    3736,
+    7992,
+    4112,
+    8800
+   ],
+   "file": "docs/design/slices/light-phone/recruitment/m-recruitment-03.jpg"
+  },
+  {
+   "id": "m-recruitment-11",
+   "section": "recruitment",
+   "box": [
+    4152,
+    7992,
+    4520,
+    8800
+   ],
+   "file": "docs/design/slices/light-phone/recruitment/m-recruitment-03.jpg"
+  },
+  {
+   "id": "m-recruitment-12",
+   "section": "recruitment",
+   "box": [
+    4560,
+    7992,
+    4936,
+    8800
+   ],
+   "file": "docs/design/slices/light-phone/recruitment/m-recruitment-03.jpg"
+  },
+  {
+   "id": "m-recruitment-13",
+   "section": "recruitment",
+   "box": [
+    4976,
+    7992,
+    5352,
+    8800
+   ],
+   "file": "docs/design/slices/light-phone/recruitment/m-recruitment-04.jpg"
+  },
+  {
+   "id": "m-recruitment-14",
+   "section": "recruitment",
+   "box": [
+    5392,
+    7992,
+    5768,
+    8800
+   ],
+   "file": "docs/design/slices/light-phone/recruitment/m-recruitment-04.jpg"
+  },
+  {
+   "id": "m-recruitment-15",
+   "section": "recruitment",
+   "box": [
+    5808,
+    7992,
+    6184,
+    8800
+   ],
+   "file": "docs/design/slices/light-phone/recruitment/m-recruitment-04.jpg"
+  },
+  {
+   "id": "m-recruitment-16",
+   "section": "recruitment",
+   "box": [
+    6224,
+    7992,
+    6600,
+    8800
+   ],
+   "file": "docs/design/slices/light-phone/recruitment/m-recruitment-04.jpg"
+  },
+  {
+   "id": "m-recruitment-17",
+   "section": "recruitment",
+   "box": [
+    6640,
+    7992,
+    7016,
+    8800
+   ],
+   "file": "docs/design/slices/light-phone/recruitment/m-recruitment-05.jpg"
+  },
+  {
+   "id": "m-recruitment-18",
+   "section": "recruitment",
+   "box": [
+    7056,
+    7992,
+    7424,
+    8800
+   ],
+   "file": "docs/design/slices/light-phone/recruitment/m-recruitment-05.jpg"
+  },
+  {
+   "id": "m-recruitment-19",
+   "section": "recruitment",
+   "box": [
+    7464,
+    7992,
+    7840,
+    8800
+   ],
+   "file": "docs/design/slices/light-phone/recruitment/m-recruitment-05.jpg"
+  },
+  {
+   "id": "m-documents-01",
+   "section": "documents",
+   "box": [
+    0,
+    9224,
+    376,
+    10040
+   ],
+   "file": "docs/design/slices/light-phone/documents/m-documents-01.jpg"
+  },
+  {
+   "id": "m-documents-02",
+   "section": "documents",
+   "box": [
+    416,
+    9224,
+    792,
+    10040
+   ],
+   "file": "docs/design/slices/light-phone/documents/m-documents-01.jpg"
+  },
+  {
+   "id": "m-documents-03",
+   "section": "documents",
+   "box": [
+    832,
+    9224,
+    1208,
+    10040
+   ],
+   "file": "docs/design/slices/light-phone/documents/m-documents-01.jpg"
+  },
+  {
+   "id": "m-documents-04",
+   "section": "documents",
+   "box": [
+    1248,
+    9224,
+    1616,
+    10040
+   ],
+   "file": "docs/design/slices/light-phone/documents/m-documents-01.jpg"
+  },
+  {
+   "id": "m-documents-05",
+   "section": "documents",
+   "box": [
+    1656,
+    9224,
+    2032,
+    10040
+   ],
+   "file": "docs/design/slices/light-phone/documents/m-documents-02.jpg"
+  },
+  {
+   "id": "m-checklist-01",
+   "section": "checklist",
+   "box": [
+    0,
+    10448,
+    376,
+    11264
+   ],
+   "file": "docs/design/slices/light-phone/checklist/m-checklist-01.jpg"
+  },
+  {
+   "id": "m-checklist-02",
+   "section": "checklist",
+   "box": [
+    416,
+    10448,
+    792,
+    11264
+   ],
+   "file": "docs/design/slices/light-phone/checklist/m-checklist-01.jpg"
+  },
+  {
+   "id": "m-checklist-03",
+   "section": "checklist",
+   "box": [
+    832,
+    10448,
+    1208,
+    11264
+   ],
+   "file": "docs/design/slices/light-phone/checklist/m-checklist-01.jpg"
+  },
+  {
+   "id": "m-checklist-04",
+   "section": "checklist",
+   "box": [
+    1248,
+    10448,
+    1616,
+    11264
+   ],
+   "file": "docs/design/slices/light-phone/checklist/m-checklist-01.jpg"
+  },
+  {
+   "id": "m-checklist-05",
+   "section": "checklist",
+   "box": [
+    1656,
+    10448,
+    2032,
+    11264
+   ],
+   "file": "docs/design/slices/light-phone/checklist/m-checklist-02.jpg"
+  },
+  {
+   "id": "m-checklist-06",
+   "section": "checklist",
+   "box": [
+    2072,
+    10448,
+    2448,
+    11264
+   ],
+   "file": "docs/design/slices/light-phone/checklist/m-checklist-02.jpg"
+  },
+  {
+   "id": "m-checklist-07",
+   "section": "checklist",
+   "box": [
+    2488,
+    10448,
+    2864,
+    11264
+   ],
+   "file": "docs/design/slices/light-phone/checklist/m-checklist-02.jpg"
+  },
+  {
+   "id": "m-checklist-08",
+   "section": "checklist",
+   "box": [
+    2904,
+    10448,
+    3280,
+    11264
+   ],
+   "file": "docs/design/slices/light-phone/checklist/m-checklist-02.jpg"
+  },
+  {
+   "id": "m-checklist-09",
+   "section": "checklist",
+   "box": [
+    3320,
+    10448,
+    3696,
+    11264
+   ],
+   "file": "docs/design/slices/light-phone/checklist/m-checklist-03.jpg"
+  },
+  {
+   "id": "m-checklist-10",
+   "section": "checklist",
+   "box": [
+    3736,
+    10448,
+    4112,
+    11264
+   ],
+   "file": "docs/design/slices/light-phone/checklist/m-checklist-03.jpg"
+  },
+  {
+   "id": "m-news-01",
+   "section": "news",
+   "box": [
+    0,
+    11680,
+    376,
+    12488
+   ],
+   "file": "docs/design/slices/light-phone/news/m-news-01.jpg"
+  },
+  {
+   "id": "m-news-02",
+   "section": "news",
+   "box": [
+    416,
+    11680,
+    792,
+    12488
+   ],
+   "file": "docs/design/slices/light-phone/news/m-news-01.jpg"
+  },
+  {
+   "id": "m-news-03",
+   "section": "news",
+   "box": [
+    832,
+    11680,
+    1208,
+    12488
+   ],
+   "file": "docs/design/slices/light-phone/news/m-news-01.jpg"
+  },
+  {
+   "id": "m-news-04",
+   "section": "news",
+   "box": [
+    1248,
+    11680,
+    1616,
+    12488
+   ],
+   "file": "docs/design/slices/light-phone/news/m-news-01.jpg"
+  },
+  {
+   "id": "m-news-05",
+   "section": "news",
+   "box": [
+    1656,
+    11680,
+    2032,
+    12488
+   ],
+   "file": "docs/design/slices/light-phone/news/m-news-02.jpg"
+  },
+  {
+   "id": "m-reports-01",
+   "section": "reports",
+   "box": [
+    0,
+    12904,
+    376,
+    13712
+   ],
+   "file": "docs/design/slices/light-phone/reports/m-reports-01.jpg"
+  },
+  {
+   "id": "m-reports-02",
+   "section": "reports",
+   "box": [
+    416,
+    12912,
+    792,
+    13720
+   ],
+   "file": "docs/design/slices/light-phone/reports/m-reports-01.jpg"
+  },
+  {
+   "id": "m-reports-03",
+   "section": "reports",
+   "box": [
+    832,
+    12912,
+    1208,
+    13720
+   ],
+   "file": "docs/design/slices/light-phone/reports/m-reports-01.jpg"
+  },
+  {
+   "id": "m-reports-04",
+   "section": "reports",
+   "box": [
+    1248,
+    12912,
+    1616,
+    13720
+   ],
+   "file": "docs/design/slices/light-phone/reports/m-reports-01.jpg"
+  },
+  {
+   "id": "m-reports-05",
+   "section": "reports",
+   "box": [
+    1656,
+    12912,
+    2032,
+    13720
+   ],
+   "file": "docs/design/slices/light-phone/reports/m-reports-02.jpg"
+  },
+  {
+   "id": "m-reports-06",
+   "section": "reports",
+   "box": [
+    2072,
+    12912,
+    2448,
+    13720
+   ],
+   "file": "docs/design/slices/light-phone/reports/m-reports-02.jpg"
+  },
+  {
+   "id": "m-reports-07",
+   "section": "reports",
+   "box": [
+    2488,
+    12912,
+    2864,
+    13720
+   ],
+   "file": "docs/design/slices/light-phone/reports/m-reports-02.jpg"
+  },
+  {
+   "id": "m-reports-08",
+   "section": "reports",
+   "box": [
+    2904,
+    12912,
+    3280,
+    13720
+   ],
+   "file": "docs/design/slices/light-phone/reports/m-reports-02.jpg"
+  },
+  {
+   "id": "m-reports-09",
+   "section": "reports",
+   "box": [
+    3320,
+    12912,
+    3696,
+    13720
+   ],
+   "file": "docs/design/slices/light-phone/reports/m-reports-03.jpg"
+  },
+  {
+   "id": "m-reports-10",
+   "section": "reports",
+   "box": [
+    3736,
+    12912,
+    4112,
+    13720
+   ],
+   "file": "docs/design/slices/light-phone/reports/m-reports-03.jpg"
+  },
+  {
+   "id": "m-settings-01",
+   "section": "settings",
+   "box": [
+    0,
+    14136,
+    376,
+    14952
+   ],
+   "file": "docs/design/slices/light-phone/settings/m-settings-01.jpg"
+  },
+  {
+   "id": "m-settings-02",
+   "section": "settings",
+   "box": [
+    416,
+    14136,
+    792,
+    14952
+   ],
+   "file": "docs/design/slices/light-phone/settings/m-settings-01.jpg"
+  },
+  {
+   "id": "m-settings-03",
+   "section": "settings",
+   "box": [
+    832,
+    14136,
+    1208,
+    14952
+   ],
+   "file": "docs/design/slices/light-phone/settings/m-settings-01.jpg"
+  },
+  {
+   "id": "m-settings-04",
+   "section": "settings",
+   "box": [
+    1248,
+    14136,
+    1616,
+    14952
+   ],
+   "file": "docs/design/slices/light-phone/settings/m-settings-01.jpg"
+  },
+  {
+   "id": "m-settings-05",
+   "section": "settings",
+   "box": [
+    1656,
+    14136,
+    2032,
+    14952
+   ],
+   "file": "docs/design/slices/light-phone/settings/m-settings-02.jpg"
+  },
+  {
+   "id": "m-settings-06",
+   "section": "settings",
+   "box": [
+    2072,
+    14136,
+    2448,
+    14952
+   ],
+   "file": "docs/design/slices/light-phone/settings/m-settings-02.jpg"
+  },
+  {
+   "id": "m-settings-07",
+   "section": "settings",
+   "box": [
+    2488,
+    14136,
+    2864,
+    14952
+   ],
+   "file": "docs/design/slices/light-phone/settings/m-settings-02.jpg"
+  },
+  {
+   "id": "m-settings-08",
+   "section": "settings",
+   "box": [
+    2904,
+    14136,
+    3280,
+    14952
+   ],
+   "file": "docs/design/slices/light-phone/settings/m-settings-02.jpg"
+  },
+  {
+   "id": "m-settings-09",
+   "section": "settings",
+   "box": [
+    3320,
+    14136,
+    3696,
+    14952
+   ],
+   "file": "docs/design/slices/light-phone/settings/m-settings-03.jpg"
+  },
+  {
+   "id": "m-settings-10",
+   "section": "settings",
+   "box": [
+    3736,
+    14136,
+    4112,
+    14952
+   ],
+   "file": "docs/design/slices/light-phone/settings/m-settings-03.jpg"
+  },
+  {
+   "id": "m-settings-11",
+   "section": "settings",
+   "box": [
+    4152,
+    14136,
+    4520,
+    14952
+   ],
+   "file": "docs/design/slices/light-phone/settings/m-settings-03.jpg"
+  },
+  {
+   "id": "m-settings-12",
+   "section": "settings",
+   "box": [
+    4560,
+    14136,
+    4936,
+    14952
+   ],
+   "file": "docs/design/slices/light-phone/settings/m-settings-03.jpg"
+  },
+  {
+   "id": "m-settings-13",
+   "section": "settings",
+   "box": [
+    4976,
+    14136,
+    5352,
+    14952
+   ],
+   "file": "docs/design/slices/light-phone/settings/m-settings-04.jpg"
+  },
+  {
+   "id": "m-settings-14",
+   "section": "settings",
+   "box": [
+    5392,
+    14136,
+    5768,
+    14952
+   ],
+   "file": "docs/design/slices/light-phone/settings/m-settings-04.jpg"
+  },
+  {
+   "id": "m-settings-15",
+   "section": "settings",
+   "box": [
+    5808,
+    14136,
+    6184,
+    14952
+   ],
+   "file": "docs/design/slices/light-phone/settings/m-settings-04.jpg"
+  },
+  {
+   "id": "m-settings-16",
+   "section": "settings",
+   "box": [
+    6224,
+    14136,
+    6600,
+    14952
+   ],
+   "file": "docs/design/slices/light-phone/settings/m-settings-04.jpg"
+  },
+  {
+   "id": "m-settings-17",
+   "section": "settings",
+   "box": [
+    6640,
+    14136,
+    7016,
+    14952
+   ],
+   "file": "docs/design/slices/light-phone/settings/m-settings-05.jpg"
+  },
+  {
+   "id": "m-settings-18",
+   "section": "settings",
+   "box": [
+    7056,
+    14136,
+    7424,
+    14952
+   ],
+   "file": "docs/design/slices/light-phone/settings/m-settings-05.jpg"
+  },
+  {
+   "id": "m-settings-19",
+   "section": "settings",
+   "box": [
+    7464,
+    14136,
+    7840,
+    14952
+   ],
+   "file": "docs/design/slices/light-phone/settings/m-settings-05.jpg"
+  },
+  {
+   "id": "m-notifications-01",
+   "section": "notifications",
+   "box": [
+    0,
+    15360,
+    376,
+    16176
+   ],
+   "file": "docs/design/slices/light-phone/notifications/m-notifications-01.jpg"
+  },
+  {
+   "id": "m-notifications-02",
+   "section": "notifications",
+   "box": [
+    416,
+    15360,
+    792,
+    16176
+   ],
+   "file": "docs/design/slices/light-phone/notifications/m-notifications-01.jpg"
+  },
+  {
+   "id": "m-notifications-03",
+   "section": "notifications",
+   "box": [
+    832,
+    15360,
+    1208,
+    16176
+   ],
+   "file": "docs/design/slices/light-phone/notifications/m-notifications-01.jpg"
+  },
+  {
+   "id": "m-notifications-04",
+   "section": "notifications",
+   "box": [
+    1248,
+    15360,
+    1616,
+    16176
+   ],
+   "file": "docs/design/slices/light-phone/notifications/m-notifications-01.jpg"
+  },
+  {
+   "id": "m-notifications-05",
+   "section": "notifications",
+   "box": [
+    1656,
+    15360,
+    2032,
+    16176
+   ],
+   "file": "docs/design/slices/light-phone/notifications/m-notifications-02.jpg"
+  },
+  {
+   "id": "m-help-01",
+   "section": "help",
+   "box": [
+    0,
+    16592,
+    376,
+    17400
+   ],
+   "file": "docs/design/slices/light-phone/help/m-help-01.jpg"
+  },
+  {
+   "id": "m-help-02",
+   "section": "help",
+   "box": [
+    416,
+    16592,
+    792,
+    17400
+   ],
+   "file": "docs/design/slices/light-phone/help/m-help-01.jpg"
+  },
+  {
+   "id": "m-help-03",
+   "section": "help",
+   "box": [
+    832,
+    16592,
+    1208,
+    17400
+   ],
+   "file": "docs/design/slices/light-phone/help/m-help-01.jpg"
+  },
+  {
+   "id": "m-help-04",
+   "section": "help",
+   "box": [
+    1248,
+    16592,
+    1616,
+    17400
+   ],
+   "file": "docs/design/slices/light-phone/help/m-help-01.jpg"
+  },
+  {
+   "id": "m-help-05",
+   "section": "help",
+   "box": [
+    1656,
+    16592,
+    2032,
+    17400
+   ],
+   "file": "docs/design/slices/light-phone/help/m-help-02.jpg"
+  }
+ ],
+ "dark-phone": [
+  {
+   "id": "m-auth-01",
+   "section": "auth",
+   "box": [
+    10208,
+    528,
+    10584,
+    1336
+   ],
+   "file": "docs/design/slices/dark-phone/auth/m-auth-01.jpg"
+  },
+  {
+   "id": "m-auth-02",
+   "section": "auth",
+   "box": [
+    10624,
+    528,
+    10992,
+    1336
+   ],
+   "file": "docs/design/slices/dark-phone/auth/m-auth-01.jpg"
+  },
+  {
+   "id": "m-auth-03",
+   "section": "auth",
+   "box": [
+    11032,
+    528,
+    11408,
+    1336
+   ],
+   "file": "docs/design/slices/dark-phone/auth/m-auth-01.jpg"
+  },
+  {
+   "id": "m-auth-04",
+   "section": "auth",
+   "box": [
+    11448,
+    528,
+    11824,
+    1336
+   ],
+   "file": "docs/design/slices/dark-phone/auth/m-auth-01.jpg"
+  },
+  {
+   "id": "m-auth-05",
+   "section": "auth",
+   "box": [
+    11864,
+    528,
+    12240,
+    1336
+   ],
+   "file": "docs/design/slices/dark-phone/auth/m-auth-02.jpg"
+  },
+  {
+   "id": "m-auth-06",
+   "section": "auth",
+   "box": [
+    12280,
+    528,
+    12656,
+    1336
+   ],
+   "file": "docs/design/slices/dark-phone/auth/m-auth-02.jpg"
+  },
+  {
+   "id": "m-auth-07",
+   "section": "auth",
+   "box": [
+    12696,
+    528,
+    13072,
+    1336
+   ],
+   "file": "docs/design/slices/dark-phone/auth/m-auth-02.jpg"
+  },
+  {
+   "id": "m-auth-08",
+   "section": "auth",
+   "box": [
+    13112,
+    528,
+    13488,
+    1336
+   ],
+   "file": "docs/design/slices/dark-phone/auth/m-auth-02.jpg"
+  },
+  {
+   "id": "m-auth-09",
+   "section": "auth",
+   "box": [
+    13528,
+    528,
+    13896,
+    1336
+   ],
+   "file": "docs/design/slices/dark-phone/auth/m-auth-03.jpg"
+  },
+  {
+   "id": "m-auth-10",
+   "section": "auth",
+   "box": [
+    13936,
+    528,
+    14312,
+    1336
+   ],
+   "file": "docs/design/slices/dark-phone/auth/m-auth-03.jpg"
+  },
+  {
+   "id": "m-auth-11",
+   "section": "auth",
+   "box": [
+    14352,
+    528,
+    14728,
+    1336
+   ],
+   "file": "docs/design/slices/dark-phone/auth/m-auth-03.jpg"
+  },
+  {
+   "id": "m-auth-12",
+   "section": "auth",
+   "box": [
+    14768,
+    528,
+    15144,
+    1336
+   ],
+   "file": "docs/design/slices/dark-phone/auth/m-auth-03.jpg"
+  },
+  {
+   "id": "m-auth-13",
+   "section": "auth",
+   "box": [
+    15184,
+    528,
+    15560,
+    1336
+   ],
+   "file": "docs/design/slices/dark-phone/auth/m-auth-04.jpg"
+  },
+  {
+   "id": "m-home-01",
+   "section": "home",
+   "box": [
+    10208,
+    1808,
+    10584,
+    2624
+   ],
+   "file": "docs/design/slices/dark-phone/home/m-home-01.jpg"
+  },
+  {
+   "id": "m-home-02",
+   "section": "home",
+   "box": [
+    10624,
+    1808,
+    10992,
+    2624
+   ],
+   "file": "docs/design/slices/dark-phone/home/m-home-01.jpg"
+  },
+  {
+   "id": "m-home-03",
+   "section": "home",
+   "box": [
+    11032,
+    1808,
+    11408,
+    2624
+   ],
+   "file": "docs/design/slices/dark-phone/home/m-home-01.jpg"
+  },
+  {
+   "id": "m-home-04",
+   "section": "home",
+   "box": [
+    11448,
+    1808,
+    11824,
+    2624
+   ],
+   "file": "docs/design/slices/dark-phone/home/m-home-01.jpg"
+  },
+  {
+   "id": "m-home-05",
+   "section": "home",
+   "box": [
+    11864,
+    1808,
+    12240,
+    2624
+   ],
+   "file": "docs/design/slices/dark-phone/home/m-home-02.jpg"
+  },
+  {
+   "id": "m-employees-01",
+   "section": "employees",
+   "box": [
+    12280,
+    3040,
+    12656,
+    3848
+   ],
+   "file": "docs/design/slices/dark-phone/employees/m-employees-01.jpg"
+  },
+  {
+   "id": "m-employees-02",
+   "section": "employees",
+   "box": [
+    10208,
+    3048,
+    10584,
+    3856
+   ],
+   "file": "docs/design/slices/dark-phone/employees/m-employees-01.jpg"
+  },
+  {
+   "id": "m-employees-03",
+   "section": "employees",
+   "box": [
+    10624,
+    3048,
+    10992,
+    3856
+   ],
+   "file": "docs/design/slices/dark-phone/employees/m-employees-01.jpg"
+  },
+  {
+   "id": "m-employees-04",
+   "section": "employees",
+   "box": [
+    11032,
+    3048,
+    11408,
+    3856
+   ],
+   "file": "docs/design/slices/dark-phone/employees/m-employees-01.jpg"
+  },
+  {
+   "id": "m-employees-05",
+   "section": "employees",
+   "box": [
+    11448,
+    3048,
+    11824,
+    3856
+   ],
+   "file": "docs/design/slices/dark-phone/employees/m-employees-02.jpg"
+  },
+  {
+   "id": "m-employees-06",
+   "section": "employees",
+   "box": [
+    11864,
+    3048,
+    12240,
+    3856
+   ],
+   "file": "docs/design/slices/dark-phone/employees/m-employees-02.jpg"
+  },
+  {
+   "id": "m-employees-07",
+   "section": "employees",
+   "box": [
+    12696,
+    3048,
+    13072,
+    3856
+   ],
+   "file": "docs/design/slices/dark-phone/employees/m-employees-02.jpg"
+  },
+  {
+   "id": "m-employees-08",
+   "section": "employees",
+   "box": [
+    13112,
+    3048,
+    13488,
+    3856
+   ],
+   "file": "docs/design/slices/dark-phone/employees/m-employees-02.jpg"
+  },
+  {
+   "id": "m-employees-09",
+   "section": "employees",
+   "box": [
+    13528,
+    3048,
+    13896,
+    3856
+   ],
+   "file": "docs/design/slices/dark-phone/employees/m-employees-03.jpg"
+  },
+  {
+   "id": "m-employees-10",
+   "section": "employees",
+   "box": [
+    13936,
+    3048,
+    14312,
+    3856
+   ],
+   "file": "docs/design/slices/dark-phone/employees/m-employees-03.jpg"
+  },
+  {
+   "id": "m-employees-11",
+   "section": "employees",
+   "box": [
+    14352,
+    3048,
+    14728,
+    3856
+   ],
+   "file": "docs/design/slices/dark-phone/employees/m-employees-03.jpg"
+  },
+  {
+   "id": "m-employees-12",
+   "section": "employees",
+   "box": [
+    14768,
+    3048,
+    15144,
+    3856
+   ],
+   "file": "docs/design/slices/dark-phone/employees/m-employees-03.jpg"
+  },
+  {
+   "id": "m-employees-13",
+   "section": "employees",
+   "box": [
+    15184,
+    3048,
+    15560,
+    3856
+   ],
+   "file": "docs/design/slices/dark-phone/employees/m-employees-04.jpg"
+  },
+  {
+   "id": "m-time-off-01",
+   "section": "time-off",
+   "box": [
+    10208,
+    4280,
+    10584,
+    5096
+   ],
+   "file": "docs/design/slices/dark-phone/time-off/m-time-off-01.jpg"
+  },
+  {
+   "id": "m-time-off-02",
+   "section": "time-off",
+   "box": [
+    10624,
+    4280,
+    10992,
+    5096
+   ],
+   "file": "docs/design/slices/dark-phone/time-off/m-time-off-01.jpg"
+  },
+  {
+   "id": "m-time-off-03",
+   "section": "time-off",
+   "box": [
+    11032,
+    4280,
+    11408,
+    5096
+   ],
+   "file": "docs/design/slices/dark-phone/time-off/m-time-off-01.jpg"
+  },
+  {
+   "id": "m-time-off-04",
+   "section": "time-off",
+   "box": [
+    11448,
+    4280,
+    11824,
+    5096
+   ],
+   "file": "docs/design/slices/dark-phone/time-off/m-time-off-01.jpg"
+  },
+  {
+   "id": "m-time-off-05",
+   "section": "time-off",
+   "box": [
+    11864,
+    4280,
+    12240,
+    5096
+   ],
+   "file": "docs/design/slices/dark-phone/time-off/m-time-off-02.jpg"
+  },
+  {
+   "id": "m-time-off-06",
+   "section": "time-off",
+   "box": [
+    12280,
+    4280,
+    12656,
+    5096
+   ],
+   "file": "docs/design/slices/dark-phone/time-off/m-time-off-02.jpg"
+  },
+  {
+   "id": "m-time-off-07",
+   "section": "time-off",
+   "box": [
+    12696,
+    4280,
+    13072,
+    5096
+   ],
+   "file": "docs/design/slices/dark-phone/time-off/m-time-off-02.jpg"
+  },
+  {
+   "id": "m-time-off-08",
+   "section": "time-off",
+   "box": [
+    13112,
+    4280,
+    13488,
+    5096
+   ],
+   "file": "docs/design/slices/dark-phone/time-off/m-time-off-02.jpg"
+  },
+  {
+   "id": "m-time-off-09",
+   "section": "time-off",
+   "box": [
+    13528,
+    4280,
+    13896,
+    5096
+   ],
+   "file": "docs/design/slices/dark-phone/time-off/m-time-off-03.jpg"
+  },
+  {
+   "id": "m-time-off-10",
+   "section": "time-off",
+   "box": [
+    13936,
+    4280,
+    14312,
+    5096
+   ],
+   "file": "docs/design/slices/dark-phone/time-off/m-time-off-03.jpg"
+  },
+  {
+   "id": "m-time-off-11",
+   "section": "time-off",
+   "box": [
+    14352,
+    4280,
+    14728,
+    5096
+   ],
+   "file": "docs/design/slices/dark-phone/time-off/m-time-off-03.jpg"
+  },
+  {
+   "id": "m-time-off-12",
+   "section": "time-off",
+   "box": [
+    14768,
+    4280,
+    15144,
+    5096
+   ],
+   "file": "docs/design/slices/dark-phone/time-off/m-time-off-03.jpg"
+  },
+  {
+   "id": "m-time-off-13",
+   "section": "time-off",
+   "box": [
+    15184,
+    4280,
+    15560,
+    5096
+   ],
+   "file": "docs/design/slices/dark-phone/time-off/m-time-off-04.jpg"
+  },
+  {
+   "id": "m-attendance-01",
+   "section": "attendance",
+   "box": [
+    10208,
+    5520,
+    10584,
+    6328
+   ],
+   "file": "docs/design/slices/dark-phone/attendance/m-attendance-01.jpg"
+  },
+  {
+   "id": "m-attendance-02",
+   "section": "attendance",
+   "box": [
+    10624,
+    5520,
+    10992,
+    6328
+   ],
+   "file": "docs/design/slices/dark-phone/attendance/m-attendance-01.jpg"
+  },
+  {
+   "id": "m-attendance-03",
+   "section": "attendance",
+   "box": [
+    11032,
+    5520,
+    11408,
+    6328
+   ],
+   "file": "docs/design/slices/dark-phone/attendance/m-attendance-01.jpg"
+  },
+  {
+   "id": "m-attendance-04",
+   "section": "attendance",
+   "box": [
+    11448,
+    5520,
+    11824,
+    6328
+   ],
+   "file": "docs/design/slices/dark-phone/attendance/m-attendance-01.jpg"
+  },
+  {
+   "id": "m-attendance-05",
+   "section": "attendance",
+   "box": [
+    11864,
+    5520,
+    12240,
+    6328
+   ],
+   "file": "docs/design/slices/dark-phone/attendance/m-attendance-02.jpg"
+  },
+  {
+   "id": "m-attendance-06",
+   "section": "attendance",
+   "box": [
+    12280,
+    5520,
+    12656,
+    6328
+   ],
+   "file": "docs/design/slices/dark-phone/attendance/m-attendance-02.jpg"
+  },
+  {
+   "id": "m-attendance-07",
+   "section": "attendance",
+   "box": [
+    12696,
+    5520,
+    13072,
+    6328
+   ],
+   "file": "docs/design/slices/dark-phone/attendance/m-attendance-02.jpg"
+  },
+  {
+   "id": "m-attendance-08",
+   "section": "attendance",
+   "box": [
+    13112,
+    5520,
+    13488,
+    6328
+   ],
+   "file": "docs/design/slices/dark-phone/attendance/m-attendance-02.jpg"
+  },
+  {
+   "id": "m-payroll-01",
+   "section": "payroll",
+   "box": [
+    10208,
+    6752,
+    10584,
+    7568
+   ],
+   "file": "docs/design/slices/dark-phone/payroll/m-payroll-01.jpg"
+  },
+  {
+   "id": "m-payroll-02",
+   "section": "payroll",
+   "box": [
+    10624,
+    6752,
+    10992,
+    7568
+   ],
+   "file": "docs/design/slices/dark-phone/payroll/m-payroll-01.jpg"
+  },
+  {
+   "id": "m-payroll-03",
+   "section": "payroll",
+   "box": [
+    11032,
+    6752,
+    11408,
+    7568
+   ],
+   "file": "docs/design/slices/dark-phone/payroll/m-payroll-01.jpg"
+  },
+  {
+   "id": "m-payroll-04",
+   "section": "payroll",
+   "box": [
+    11448,
+    6752,
+    11824,
+    7568
+   ],
+   "file": "docs/design/slices/dark-phone/payroll/m-payroll-01.jpg"
+  },
+  {
+   "id": "m-payroll-05",
+   "section": "payroll",
+   "box": [
+    11864,
+    6752,
+    12240,
+    7568
+   ],
+   "file": "docs/design/slices/dark-phone/payroll/m-payroll-02.jpg"
+  },
+  {
+   "id": "m-recruitment-01",
+   "section": "recruitment",
+   "box": [
+    10208,
+    7992,
+    10584,
+    8800
+   ],
+   "file": "docs/design/slices/dark-phone/recruitment/m-recruitment-01.jpg"
+  },
+  {
+   "id": "m-recruitment-02",
+   "section": "recruitment",
+   "box": [
+    10624,
+    7992,
+    10992,
+    8800
+   ],
+   "file": "docs/design/slices/dark-phone/recruitment/m-recruitment-01.jpg"
+  },
+  {
+   "id": "m-recruitment-03",
+   "section": "recruitment",
+   "box": [
+    11032,
+    7992,
+    11408,
+    8800
+   ],
+   "file": "docs/design/slices/dark-phone/recruitment/m-recruitment-01.jpg"
+  },
+  {
+   "id": "m-recruitment-04",
+   "section": "recruitment",
+   "box": [
+    11448,
+    7992,
+    11824,
+    8800
+   ],
+   "file": "docs/design/slices/dark-phone/recruitment/m-recruitment-01.jpg"
+  },
+  {
+   "id": "m-recruitment-05",
+   "section": "recruitment",
+   "box": [
+    11864,
+    7992,
+    12240,
+    8800
+   ],
+   "file": "docs/design/slices/dark-phone/recruitment/m-recruitment-02.jpg"
+  },
+  {
+   "id": "m-recruitment-06",
+   "section": "recruitment",
+   "box": [
+    12280,
+    7992,
+    12656,
+    8800
+   ],
+   "file": "docs/design/slices/dark-phone/recruitment/m-recruitment-02.jpg"
+  },
+  {
+   "id": "m-recruitment-07",
+   "section": "recruitment",
+   "box": [
+    12696,
+    7992,
+    13072,
+    8800
+   ],
+   "file": "docs/design/slices/dark-phone/recruitment/m-recruitment-02.jpg"
+  },
+  {
+   "id": "m-recruitment-08",
+   "section": "recruitment",
+   "box": [
+    13112,
+    7992,
+    13488,
+    8800
+   ],
+   "file": "docs/design/slices/dark-phone/recruitment/m-recruitment-02.jpg"
+  },
+  {
+   "id": "m-recruitment-09",
+   "section": "recruitment",
+   "box": [
+    13528,
+    7992,
+    13896,
+    8800
+   ],
+   "file": "docs/design/slices/dark-phone/recruitment/m-recruitment-03.jpg"
+  },
+  {
+   "id": "m-recruitment-10",
+   "section": "recruitment",
+   "box": [
+    13936,
+    7992,
+    14312,
+    8800
+   ],
+   "file": "docs/design/slices/dark-phone/recruitment/m-recruitment-03.jpg"
+  },
+  {
+   "id": "m-recruitment-11",
+   "section": "recruitment",
+   "box": [
+    14352,
+    7992,
+    14728,
+    8800
+   ],
+   "file": "docs/design/slices/dark-phone/recruitment/m-recruitment-03.jpg"
+  },
+  {
+   "id": "m-recruitment-12",
+   "section": "recruitment",
+   "box": [
+    14768,
+    7992,
+    15144,
+    8800
+   ],
+   "file": "docs/design/slices/dark-phone/recruitment/m-recruitment-03.jpg"
+  },
+  {
+   "id": "m-recruitment-13",
+   "section": "recruitment",
+   "box": [
+    15184,
+    7992,
+    15560,
+    8800
+   ],
+   "file": "docs/design/slices/dark-phone/recruitment/m-recruitment-04.jpg"
+  },
+  {
+   "id": "m-recruitment-14",
+   "section": "recruitment",
+   "box": [
+    15600,
+    7992,
+    15976,
+    8800
+   ],
+   "file": "docs/design/slices/dark-phone/recruitment/m-recruitment-04.jpg"
+  },
+  {
+   "id": "m-recruitment-15",
+   "section": "recruitment",
+   "box": [
+    16016,
+    7992,
+    16392,
+    8800
+   ],
+   "file": "docs/design/slices/dark-phone/recruitment/m-recruitment-04.jpg"
+  },
+  {
+   "id": "m-recruitment-16",
+   "section": "recruitment",
+   "box": [
+    16432,
+    7992,
+    16800,
+    8800
+   ],
+   "file": "docs/design/slices/dark-phone/recruitment/m-recruitment-04.jpg"
+  },
+  {
+   "id": "m-recruitment-17",
+   "section": "recruitment",
+   "box": [
+    16840,
+    7992,
+    17216,
+    8800
+   ],
+   "file": "docs/design/slices/dark-phone/recruitment/m-recruitment-05.jpg"
+  },
+  {
+   "id": "m-recruitment-18",
+   "section": "recruitment",
+   "box": [
+    17256,
+    7992,
+    17632,
+    8800
+   ],
+   "file": "docs/design/slices/dark-phone/recruitment/m-recruitment-05.jpg"
+  },
+  {
+   "id": "m-recruitment-19",
+   "section": "recruitment",
+   "box": [
+    17672,
+    7992,
+    18048,
+    8800
+   ],
+   "file": "docs/design/slices/dark-phone/recruitment/m-recruitment-05.jpg"
+  },
+  {
+   "id": "m-documents-01",
+   "section": "documents",
+   "box": [
+    10208,
+    9224,
+    10584,
+    10040
+   ],
+   "file": "docs/design/slices/dark-phone/documents/m-documents-01.jpg"
+  },
+  {
+   "id": "m-documents-02",
+   "section": "documents",
+   "box": [
+    10624,
+    9224,
+    10992,
+    10040
+   ],
+   "file": "docs/design/slices/dark-phone/documents/m-documents-01.jpg"
+  },
+  {
+   "id": "m-documents-03",
+   "section": "documents",
+   "box": [
+    11032,
+    9224,
+    11408,
+    10040
+   ],
+   "file": "docs/design/slices/dark-phone/documents/m-documents-01.jpg"
+  },
+  {
+   "id": "m-documents-04",
+   "section": "documents",
+   "box": [
+    11448,
+    9224,
+    11824,
+    10040
+   ],
+   "file": "docs/design/slices/dark-phone/documents/m-documents-01.jpg"
+  },
+  {
+   "id": "m-documents-05",
+   "section": "documents",
+   "box": [
+    11864,
+    9224,
+    12240,
+    10040
+   ],
+   "file": "docs/design/slices/dark-phone/documents/m-documents-02.jpg"
+  },
+  {
+   "id": "m-checklist-01",
+   "section": "checklist",
+   "box": [
+    10208,
+    10448,
+    10584,
+    11264
+   ],
+   "file": "docs/design/slices/dark-phone/checklist/m-checklist-01.jpg"
+  },
+  {
+   "id": "m-checklist-02",
+   "section": "checklist",
+   "box": [
+    10624,
+    10448,
+    10992,
+    11264
+   ],
+   "file": "docs/design/slices/dark-phone/checklist/m-checklist-01.jpg"
+  },
+  {
+   "id": "m-checklist-03",
+   "section": "checklist",
+   "box": [
+    11032,
+    10448,
+    11408,
+    11264
+   ],
+   "file": "docs/design/slices/dark-phone/checklist/m-checklist-01.jpg"
+  },
+  {
+   "id": "m-checklist-04",
+   "section": "checklist",
+   "box": [
+    11448,
+    10448,
+    11824,
+    11264
+   ],
+   "file": "docs/design/slices/dark-phone/checklist/m-checklist-01.jpg"
+  },
+  {
+   "id": "m-checklist-05",
+   "section": "checklist",
+   "box": [
+    11864,
+    10448,
+    12240,
+    11264
+   ],
+   "file": "docs/design/slices/dark-phone/checklist/m-checklist-02.jpg"
+  },
+  {
+   "id": "m-checklist-06",
+   "section": "checklist",
+   "box": [
+    12280,
+    10448,
+    12656,
+    11264
+   ],
+   "file": "docs/design/slices/dark-phone/checklist/m-checklist-02.jpg"
+  },
+  {
+   "id": "m-checklist-07",
+   "section": "checklist",
+   "box": [
+    12696,
+    10448,
+    13072,
+    11264
+   ],
+   "file": "docs/design/slices/dark-phone/checklist/m-checklist-02.jpg"
+  },
+  {
+   "id": "m-checklist-08",
+   "section": "checklist",
+   "box": [
+    13112,
+    10448,
+    13488,
+    11264
+   ],
+   "file": "docs/design/slices/dark-phone/checklist/m-checklist-02.jpg"
+  },
+  {
+   "id": "m-checklist-09",
+   "section": "checklist",
+   "box": [
+    13528,
+    10448,
+    13896,
+    11264
+   ],
+   "file": "docs/design/slices/dark-phone/checklist/m-checklist-03.jpg"
+  },
+  {
+   "id": "m-checklist-10",
+   "section": "checklist",
+   "box": [
+    13936,
+    10448,
+    14312,
+    11264
+   ],
+   "file": "docs/design/slices/dark-phone/checklist/m-checklist-03.jpg"
+  },
+  {
+   "id": "m-news-01",
+   "section": "news",
+   "box": [
+    10208,
+    11680,
+    10584,
+    12488
+   ],
+   "file": "docs/design/slices/dark-phone/news/m-news-01.jpg"
+  },
+  {
+   "id": "m-news-02",
+   "section": "news",
+   "box": [
+    10624,
+    11680,
+    10992,
+    12488
+   ],
+   "file": "docs/design/slices/dark-phone/news/m-news-01.jpg"
+  },
+  {
+   "id": "m-news-03",
+   "section": "news",
+   "box": [
+    11032,
+    11680,
+    11408,
+    12488
+   ],
+   "file": "docs/design/slices/dark-phone/news/m-news-01.jpg"
+  },
+  {
+   "id": "m-news-04",
+   "section": "news",
+   "box": [
+    11448,
+    11680,
+    11824,
+    12488
+   ],
+   "file": "docs/design/slices/dark-phone/news/m-news-01.jpg"
+  },
+  {
+   "id": "m-news-05",
+   "section": "news",
+   "box": [
+    11864,
+    11680,
+    12240,
+    12488
+   ],
+   "file": "docs/design/slices/dark-phone/news/m-news-02.jpg"
+  },
+  {
+   "id": "m-reports-01",
+   "section": "reports",
+   "box": [
+    10208,
+    12904,
+    10584,
+    13712
+   ],
+   "file": "docs/design/slices/dark-phone/reports/m-reports-01.jpg"
+  },
+  {
+   "id": "m-reports-02",
+   "section": "reports",
+   "box": [
+    10624,
+    12912,
+    10992,
+    13720
+   ],
+   "file": "docs/design/slices/dark-phone/reports/m-reports-01.jpg"
+  },
+  {
+   "id": "m-reports-03",
+   "section": "reports",
+   "box": [
+    11032,
+    12912,
+    11408,
+    13720
+   ],
+   "file": "docs/design/slices/dark-phone/reports/m-reports-01.jpg"
+  },
+  {
+   "id": "m-reports-04",
+   "section": "reports",
+   "box": [
+    11448,
+    12912,
+    11824,
+    13720
+   ],
+   "file": "docs/design/slices/dark-phone/reports/m-reports-01.jpg"
+  },
+  {
+   "id": "m-reports-05",
+   "section": "reports",
+   "box": [
+    11864,
+    12912,
+    12240,
+    13720
+   ],
+   "file": "docs/design/slices/dark-phone/reports/m-reports-02.jpg"
+  },
+  {
+   "id": "m-reports-06",
+   "section": "reports",
+   "box": [
+    12280,
+    12912,
+    12656,
+    13720
+   ],
+   "file": "docs/design/slices/dark-phone/reports/m-reports-02.jpg"
+  },
+  {
+   "id": "m-reports-07",
+   "section": "reports",
+   "box": [
+    12696,
+    12912,
+    13072,
+    13720
+   ],
+   "file": "docs/design/slices/dark-phone/reports/m-reports-02.jpg"
+  },
+  {
+   "id": "m-reports-08",
+   "section": "reports",
+   "box": [
+    13112,
+    12912,
+    13488,
+    13720
+   ],
+   "file": "docs/design/slices/dark-phone/reports/m-reports-02.jpg"
+  },
+  {
+   "id": "m-reports-09",
+   "section": "reports",
+   "box": [
+    13528,
+    12912,
+    13896,
+    13720
+   ],
+   "file": "docs/design/slices/dark-phone/reports/m-reports-03.jpg"
+  },
+  {
+   "id": "m-reports-10",
+   "section": "reports",
+   "box": [
+    13936,
+    12912,
+    14312,
+    13720
+   ],
+   "file": "docs/design/slices/dark-phone/reports/m-reports-03.jpg"
+  },
+  {
+   "id": "m-settings-01",
+   "section": "settings",
+   "box": [
+    10208,
+    14136,
+    10584,
+    14944
+   ],
+   "file": "docs/design/slices/dark-phone/settings/m-settings-01.jpg"
+  },
+  {
+   "id": "m-settings-02",
+   "section": "settings",
+   "box": [
+    10624,
+    14136,
+    10992,
+    14952
+   ],
+   "file": "docs/design/slices/dark-phone/settings/m-settings-01.jpg"
+  },
+  {
+   "id": "m-settings-03",
+   "section": "settings",
+   "box": [
+    11032,
+    14136,
+    11408,
+    14952
+   ],
+   "file": "docs/design/slices/dark-phone/settings/m-settings-01.jpg"
+  },
+  {
+   "id": "m-settings-04",
+   "section": "settings",
+   "box": [
+    11448,
+    14136,
+    11824,
+    14952
+   ],
+   "file": "docs/design/slices/dark-phone/settings/m-settings-01.jpg"
+  },
+  {
+   "id": "m-settings-05",
+   "section": "settings",
+   "box": [
+    11864,
+    14136,
+    12240,
+    14952
+   ],
+   "file": "docs/design/slices/dark-phone/settings/m-settings-02.jpg"
+  },
+  {
+   "id": "m-settings-06",
+   "section": "settings",
+   "box": [
+    12280,
+    14136,
+    12656,
+    14952
+   ],
+   "file": "docs/design/slices/dark-phone/settings/m-settings-02.jpg"
+  },
+  {
+   "id": "m-settings-07",
+   "section": "settings",
+   "box": [
+    12696,
+    14136,
+    13072,
+    14952
+   ],
+   "file": "docs/design/slices/dark-phone/settings/m-settings-02.jpg"
+  },
+  {
+   "id": "m-settings-08",
+   "section": "settings",
+   "box": [
+    13112,
+    14136,
+    13488,
+    14952
+   ],
+   "file": "docs/design/slices/dark-phone/settings/m-settings-02.jpg"
+  },
+  {
+   "id": "m-settings-09",
+   "section": "settings",
+   "box": [
+    13528,
+    14136,
+    13896,
+    14952
+   ],
+   "file": "docs/design/slices/dark-phone/settings/m-settings-03.jpg"
+  },
+  {
+   "id": "m-settings-10",
+   "section": "settings",
+   "box": [
+    13936,
+    14136,
+    14312,
+    14952
+   ],
+   "file": "docs/design/slices/dark-phone/settings/m-settings-03.jpg"
+  },
+  {
+   "id": "m-settings-11",
+   "section": "settings",
+   "box": [
+    14352,
+    14136,
+    14728,
+    14952
+   ],
+   "file": "docs/design/slices/dark-phone/settings/m-settings-03.jpg"
+  },
+  {
+   "id": "m-settings-12",
+   "section": "settings",
+   "box": [
+    14768,
+    14136,
+    15144,
+    14952
+   ],
+   "file": "docs/design/slices/dark-phone/settings/m-settings-03.jpg"
+  },
+  {
+   "id": "m-settings-13",
+   "section": "settings",
+   "box": [
+    15184,
+    14136,
+    15560,
+    14952
+   ],
+   "file": "docs/design/slices/dark-phone/settings/m-settings-04.jpg"
+  },
+  {
+   "id": "m-settings-14",
+   "section": "settings",
+   "box": [
+    15600,
+    14136,
+    15976,
+    14952
+   ],
+   "file": "docs/design/slices/dark-phone/settings/m-settings-04.jpg"
+  },
+  {
+   "id": "m-settings-15",
+   "section": "settings",
+   "box": [
+    16016,
+    14136,
+    16392,
+    14952
+   ],
+   "file": "docs/design/slices/dark-phone/settings/m-settings-04.jpg"
+  },
+  {
+   "id": "m-settings-16",
+   "section": "settings",
+   "box": [
+    16432,
+    14136,
+    16800,
+    14952
+   ],
+   "file": "docs/design/slices/dark-phone/settings/m-settings-04.jpg"
+  },
+  {
+   "id": "m-settings-17",
+   "section": "settings",
+   "box": [
+    16840,
+    14136,
+    17216,
+    14952
+   ],
+   "file": "docs/design/slices/dark-phone/settings/m-settings-05.jpg"
+  },
+  {
+   "id": "m-settings-18",
+   "section": "settings",
+   "box": [
+    17256,
+    14136,
+    17632,
+    14952
+   ],
+   "file": "docs/design/slices/dark-phone/settings/m-settings-05.jpg"
+  },
+  {
+   "id": "m-settings-19",
+   "section": "settings",
+   "box": [
+    17672,
+    14136,
+    18048,
+    14952
+   ],
+   "file": "docs/design/slices/dark-phone/settings/m-settings-05.jpg"
+  },
+  {
+   "id": "m-notifications-01",
+   "section": "notifications",
+   "box": [
+    10208,
+    15360,
+    10584,
+    16176
+   ],
+   "file": "docs/design/slices/dark-phone/notifications/m-notifications-01.jpg"
+  },
+  {
+   "id": "m-notifications-02",
+   "section": "notifications",
+   "box": [
+    10624,
+    15360,
+    10992,
+    16176
+   ],
+   "file": "docs/design/slices/dark-phone/notifications/m-notifications-01.jpg"
+  },
+  {
+   "id": "m-notifications-03",
+   "section": "notifications",
+   "box": [
+    11032,
+    15360,
+    11408,
+    16176
+   ],
+   "file": "docs/design/slices/dark-phone/notifications/m-notifications-01.jpg"
+  },
+  {
+   "id": "m-notifications-04",
+   "section": "notifications",
+   "box": [
+    11448,
+    15360,
+    11824,
+    16176
+   ],
+   "file": "docs/design/slices/dark-phone/notifications/m-notifications-01.jpg"
+  },
+  {
+   "id": "m-notifications-05",
+   "section": "notifications",
+   "box": [
+    11864,
+    15360,
+    12240,
+    16176
+   ],
+   "file": "docs/design/slices/dark-phone/notifications/m-notifications-02.jpg"
+  },
+  {
+   "id": "m-help-01",
+   "section": "help",
+   "box": [
+    10208,
+    16592,
+    10584,
+    17400
+   ],
+   "file": "docs/design/slices/dark-phone/help/m-help-01.jpg"
+  },
+  {
+   "id": "m-help-02",
+   "section": "help",
+   "box": [
+    10624,
+    16592,
+    10992,
+    17400
+   ],
+   "file": "docs/design/slices/dark-phone/help/m-help-01.jpg"
+  },
+  {
+   "id": "m-help-03",
+   "section": "help",
+   "box": [
+    11032,
+    16592,
+    11408,
+    17400
+   ],
+   "file": "docs/design/slices/dark-phone/help/m-help-01.jpg"
+  },
+  {
+   "id": "m-help-04",
+   "section": "help",
+   "box": [
+    11448,
+    16592,
+    11824,
+    17400
+   ],
+   "file": "docs/design/slices/dark-phone/help/m-help-01.jpg"
+  },
+  {
+   "id": "m-help-05",
+   "section": "help",
+   "box": [
+    11864,
+    16592,
+    12240,
+    17400
+   ],
+   "file": "docs/design/slices/dark-phone/help/m-help-02.jpg"
+  }
+ ]
+}

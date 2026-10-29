@@ -25,7 +25,7 @@ const LAYOUT_OF: Record<Exclude<PayrollOutputKind, "SALARY_REGISTER">, LayoutKin
 
 type Item = Awaited<ReturnType<typeof loadItems>>[number];
 async function loadItems(runId: string) {
-  return prisma.payrollRunItem.findMany({ where: { runId, status: { in: ["PAYABLE", "HELD"] } }, include: { lines: true, employee: { select: { employeeCode: true, statutory: { select: { uanEncrypted: true, esiNumber: true } } } } }, orderBy: { employee: { employeeCode: "asc" } } });
+  return prisma.payrollRunItem.findMany({ where: { runId, status: { in: ["PAYABLE", "HELD"] } }, include: { lines: true, employee: { select: { employeeCode: true, statutory: { select: { uanEncrypted: true, esiEncrypted: true } } } } }, orderBy: { employee: { employeeCode: "asc" } } });
 }
 
 const amountOf = (item: Item, code: string): string => canonicalDecimal(item.lines.filter((l) => l.code === code).reduce((a, l) => a.plus(dec(l.amount.toString())), ZERO));
@@ -60,12 +60,13 @@ function build(kind: Exclude<PayrollOutputKind, "SALARY_REGISTER">, items: Item[
       rows.push({ UAN: decryptField(enc), NAME: nameOf(i), EMPLOYEE_CODE: i.employee.employeeCode, GROSS_WAGES: canonicalDecimal(dec(i.gross.toString())), EPF_WAGES: basisOf(i, base, "wages"), EPS_WAGES: basisOf(i, base, "cappedWages"), EDLI_WAGES: basisOf(i, base, "cappedWages"), EPF_CONTRIBUTION: amountOf(i, "PF_EMPLOYEE"), EPS_CONTRIBUTION: amountOf(i, "PF_EPS"), EPF_EPS_DIFF: amountOf(i, "PF_EPF_ER"), NCP_DAYS: canonicalDecimal(dec(i.lopDays.toString())), REFUND: "0" });
     } else if (kind === "ESI") {
       if (!has(i, "ESI_EMPLOYEE") && !has(i, "ESI_EMPLOYER")) continue;
-      const esi = i.employee.statutory?.esiNumber;
-      if (!esi) {
+      const esiEnc = i.employee.statutory?.esiEncrypted;
+      if (!esiEnc) {
         missing.push(`${nameOf(i)} (${i.employee.employeeCode}): no ESI number`);
         continue;
       }
-      rows.push({ ESI_NUMBER: esi, NAME: nameOf(i), EMPLOYEE_CODE: i.employee.employeeCode, DAYS_PAID: canonicalDecimal(dec(i.paidDays.toString()).toDecimalPlaces(2)), ESI_WAGES: basisOf(i, has(i, "ESI_EMPLOYEE") ? "ESI_EMPLOYEE" : "ESI_EMPLOYER", "wages"), EMPLOYEE_CONTRIBUTION: amountOf(i, "ESI_EMPLOYEE"), EMPLOYER_CONTRIBUTION: amountOf(i, "ESI_EMPLOYER") });
+      revealed.push(i.employeeId);
+      rows.push({ ESI_NUMBER: decryptField(esiEnc), NAME: nameOf(i), EMPLOYEE_CODE: i.employee.employeeCode, DAYS_PAID: canonicalDecimal(dec(i.paidDays.toString()).toDecimalPlaces(2)), ESI_WAGES: basisOf(i, has(i, "ESI_EMPLOYEE") ? "ESI_EMPLOYEE" : "ESI_EMPLOYER", "wages"), EMPLOYEE_CONTRIBUTION: amountOf(i, "ESI_EMPLOYEE"), EMPLOYER_CONTRIBUTION: amountOf(i, "ESI_EMPLOYER") });
     } else if (kind === "PT") {
       if (!has(i, "PT")) continue;
       rows.push({ EMPLOYEE_CODE: i.employee.employeeCode, NAME: nameOf(i), STATE: basisOf(i, "PT", "state"), PT_AMOUNT: amountOf(i, "PT") });

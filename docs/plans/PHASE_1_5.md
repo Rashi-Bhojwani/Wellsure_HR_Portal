@@ -1,10 +1,11 @@
 # Phase 1.5 — AWS staging and the greytHR migration: plan
 
-> **PAUSED (2026-10-16, by the user). Commit A is built and approved; commits B to F are on hold and resume after Phase 7.**
-> Decision, in the user's words: all AWS work, the migration and connecting the device come last, together, as the final stage.
-> Order from here: **Phase 6 (payroll), then Phase 7 (tax and benefits), built and tested locally; then the final stage**: B (CDK
-> infrastructure), C (deploy pipeline), D (migration tooling), E (reconciliation, invitations, the ADMS infrastructure gate) and F (the
-> first deployment and rehearsal), plus connecting the biometric device (`docs/CONNECTION_DAY.md`).
+> **PAUSED (2026-10-16, by the user). Commit A is built and approved; commits B to F are on hold.**
+> **The order of the remaining work (user, 2026-10-22), which replaces "resume after Phase 7":** Phase 7 (tax and benefits) → a UI pass
+> directed by the user, screen by screen → Phase 8 (assets, performance, custom report builder) → connecting the biometric device, first as
+> a **rehearsal against a backend on a local network** (`docs/CONNECTION_DAY.md`) → **this phase**: B (CDK infrastructure), C (deploy
+> pipeline), D (migration tooling), E (reconciliation, invitations, the ADMS infrastructure gate) and F (the first deployment and
+> rehearsal) → production. Everything before it is built and tested locally.
 > Nothing below needs to change for the pause except two things, both tracked: (1) **`docs/plans/LOCAL_ASSUMPTIONS.md`** is the running
 > list of everything built locally that assumes a local environment, so the final stage holds no surprises; (2) the migration (D) will now
 > also carry payroll data (salary structures, YTD figures: spec §10 item 7), which Phase 6 designs for (its plan names the import shapes).

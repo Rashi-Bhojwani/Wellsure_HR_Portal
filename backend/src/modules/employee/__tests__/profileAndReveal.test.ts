@@ -13,6 +13,8 @@ import {
   loginAs,
   type TestOrgMasters,
 } from "./employeeTestHelpers";
+import { prisma } from "../../../lib/prisma";
+import { encryptStatutoryFields } from "../service";
 
 describe("Employee profile, reveal + history — scope and permission IDOR", () => {
   // each seeded role's Role.dataScope (E1) matches these exact literal role
@@ -167,6 +169,30 @@ describe("Employee profile, reveal + history — scope and permission IDOR", () 
         where: { entityId: strangerId, action: { in: ["employee.bank.revealed", "employee.statutory.revealed"] } },
       });
       expect(revealedActions.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe("ESI numbers are encrypted like UANs (P7-0)", () => {
+    const ESI = "ESI-P70-SENTINEL-4417";
+    beforeAll(async () => {
+      // Written the way the statutory edit and the import write it (the service's own encryption), not through a route this file's HR_ADMIN may lack.
+      await prisma.employeeStatutory.update({ where: { employeeId: strangerId }, data: encryptStatutoryFields({ esiNumber: ESI }) });
+    });
+
+    it("stores no ESI number in the clear: the row holds ciphertext and the last four only", async () => {
+      const raw = await prisma.$queryRaw<Array<Record<string, unknown>>>`SELECT * FROM employee_statutory WHERE employee_id = ${strangerId}`;
+      expect(raw[0]!.esi_last4).toBe("4417");
+      expect(raw[0]!.esi_encrypted).toBeInstanceOf(Uint8Array);
+      expect(JSON.stringify(raw[0], (_k, v) => (v instanceof Uint8Array ? "<bytes>" : typeof v === "bigint" ? String(v) : v))).not.toContain("SENTINEL");
+      expect(Buffer.from(raw[0]!.esi_encrypted as Uint8Array).toString("latin1")).not.toContain("SENTINEL");
+    });
+
+    it("the profile shows only the last four; the audited reveal shows the whole number", async () => {
+      const profile = await request(app).get(`/api/employees/${strangerId}`).set(...authHeader(hrAdminToken));
+      expect(profile.body.statutory).toMatchObject({ esiLast4: "4417", hasEsi: true });
+      expect(JSON.stringify(profile.body)).not.toContain("SENTINEL");
+      const revealed = await request(app).get(`/api/employees/${strangerId}/statutory/reveal`).set(...authHeader(hrAdminToken));
+      expect(revealed.body.esiNumber).toBe(ESI);
     });
   });
 

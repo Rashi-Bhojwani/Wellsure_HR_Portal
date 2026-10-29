@@ -1,73 +1,86 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Select, Space, Table, Tabs, Typography } from "antd";
+import { useMemo, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { Segmented, Select } from "antd";
 import * as leaveApi from "../../../api/leave";
-import { EmptyState } from "../../../components/common/EmptyState";
+import { fmtHolidayDate, holidayColumns, holidayWeekday, type HolidayListRow } from "../../../components/leave/holidayColumns";
+import { HolidayKindChip, type HolidayKind } from "../../../components/leave/HolidayKindChip";
+import { DataTable, EmptyState, PageHeader, Panel, useIsPhone } from "../../../ui";
 
-const { Title } = Typography;
 const CURRENT_YEAR = new Date().getFullYear();
 const YEAR_OPTIONS = [CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1].map((y) => ({ value: y, label: String(y) }));
-
-const COLUMNS = [
-  { title: "Date", dataIndex: "date", render: (v: string) => new Date(v).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "long", year: "numeric" }) },
-  { title: "Occasion", dataIndex: "name" },
-];
+type Show = "ALL" | HolidayKind;
 
 // Company-wide — holidays don't vary by branch (spec §5.4, HR-confirmed
 // 2026-09-28).
 export function HolidayCalendarPage() {
+  const phone = useIsPhone();
   const [year, setYear] = useState(CURRENT_YEAR);
+  const [show, setShow] = useState<Show>("ALL");
 
-  const { data: holidays = [], isLoading: loadingHolidays } = useQuery({
+  const holidaysQ = useQuery({
     queryKey: ["leave", "holidays", year],
     queryFn: () => leaveApi.listHolidays(year),
+    placeholderData: keepPreviousData,
   });
-  const { data: restrictedHolidays = [], isLoading: loadingRh } = useQuery({
+  const restrictedQ = useQuery({
     queryKey: ["leave", "restricted-holidays", year],
     queryFn: () => leaveApi.listRestrictedHolidays(year),
+    placeholderData: keepPreviousData,
   });
 
-  return (
-    <Space orientation="vertical" size={16} style={{ width: "100%" }}>
-      <Space style={{ width: "100%", justifyContent: "space-between" }}>
-        <Title level={3} style={{ margin: 0 }}>
-          Holiday Calendar
-        </Title>
-        <Select value={year} onChange={setYear} options={YEAR_OPTIONS} style={{ width: 120 }} />
-      </Space>
+  const holidays = holidaysQ.data;
+  const restricted = restrictedQ.data;
+  const rows = useMemo<HolidayListRow[]>(() => {
+    const all = [
+      ...(show !== "RESTRICTED" ? (holidays ?? []).map((h) => ({ ...h, kind: "HOLIDAY" as const })) : []),
+      ...(show !== "HOLIDAY" ? (restricted ?? []).map((h) => ({ ...h, kind: "RESTRICTED" as const })) : []),
+    ];
+    return all.sort((a, b) => a.date.localeCompare(b.date));
+  }, [holidays, restricted, show]);
 
-      <Tabs
-        items={[
-          {
-            key: "holidays",
-            label: "Holidays",
-            children: (
-              <Table
-                rowKey="id"
-                loading={loadingHolidays}
-                dataSource={holidays}
-                columns={COLUMNS}
-                pagination={false}
-                locale={{ emptyText: <EmptyState message="No holidays found for this year." /> }}
-              />
-            ),
-          },
-          {
-            key: "restricted",
-            label: "Restricted Holidays",
-            children: (
-              <Table
-                rowKey="id"
-                loading={loadingRh}
-                dataSource={restrictedHolidays}
-                columns={COLUMNS}
-                pagination={false}
-                locale={{ emptyText: <EmptyState message="No restricted holidays found for this year." /> }}
-              />
-            ),
-          },
-        ]}
+  const loading = holidaysQ.isLoading || restrictedQ.isLoading || holidaysQ.isFetching || restrictedQ.isFetching;
+  const emptyTitle = show === "RESTRICTED" ? "No restricted holidays found for this year." : "No holidays found for this year.";
+
+  return (
+    <>
+      <PageHeader
+        title="Holiday Calendar"
+        subtitle="Company-wide holidays, and restricted holidays you can choose to take"
+        actions={<Select aria-label="Year" value={year} onChange={setYear} options={YEAR_OPTIONS} style={{ width: phone ? "100%" : 120 }} />}
       />
-    </Space>
+      <Panel
+        title={`Holidays ${year}`}
+        extra={
+          <Segmented<Show>
+            value={show}
+            onChange={setShow}
+            options={[
+              { value: "ALL", label: `All (${(holidays?.length ?? 0) + (restricted?.length ?? 0)})` },
+              { value: "HOLIDAY", label: `Holidays (${holidays?.length ?? 0})` },
+              { value: "RESTRICTED", label: `Restricted (${restricted?.length ?? 0})` },
+            ]}
+          />
+        }
+      >
+        <DataTable<HolidayListRow>
+          rowKey={(r) => `${r.kind}-${r.id}`}
+          loading={loading}
+          error={holidaysQ.error ?? restrictedQ.error}
+          onRetry={() => {
+            void holidaysQ.refetch();
+            void restrictedQ.refetch();
+          }}
+          dataSource={rows}
+          pagination={false}
+          columns={holidayColumns<HolidayListRow>({ withKind: (r) => r.kind })}
+          empty={<EmptyState compact illustration="calendar" title={emptyTitle} description={null} />}
+          mobile={{
+            title: (r) => r.name,
+            subtitle: (r) => `${fmtHolidayDate(r.date)} · ${holidayWeekday(r.date)}`,
+            status: (r) => <HolidayKindChip kind={r.kind} />,
+          }}
+        />
+      </Panel>
+    </>
   );
 }

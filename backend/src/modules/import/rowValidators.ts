@@ -372,7 +372,11 @@ export function validateStatutoryRow(row: ParsedRow, refs: ReferenceData, tracke
     data.uanEncrypted = packBytes(enc.uanEncrypted as Uint8Array);
     data.uanLast4 = enc.uanLast4;
   }
-  if (v.esiNumber) data.esiNumber = v.esiNumber;
+  if (v.esiNumber) {
+    const enc = encryptStatutoryFields({ esiNumber: v.esiNumber });
+    data.esiEncrypted = packBytes(enc.esiEncrypted as Uint8Array);
+    data.esiLast4 = enc.esiLast4;
+  }
 
   return { data, errors, warnings };
 }

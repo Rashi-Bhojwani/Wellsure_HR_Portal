@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
 import dayjs from "dayjs";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Alert, Button, Checkbox, DatePicker, Descriptions, Form, Input, Radio, Select, Space, Table, Tag, Typography, message } from "antd";
+import { Button, Checkbox, DatePicker, Form, Input, Radio, Select, Typography } from "antd";
+import { ClockCircleOutlined } from "@ant-design/icons";
 import * as adminApi from "../../api/attendanceAdmin";
 import type { OverrideBody, OverridePreview } from "../../api/attendanceAdmin";
 import { REASON_OPTIONS, type ReasonCode } from "../../api/attendanceInfo";
 import { apiErrorMessage } from "../../lib/apiError";
 import { TargetPicker } from "./TargetPicker";
 import { selectionOf, type CarriedSelection, type TargetValues } from "./targetSelection";
+import { fs, fw, radius, space, v as tk } from "../../theme/tokens";
+import { ApprovalBanner, DataTable, FormGroupTitle, KeyValueGrid, StatusChip, toast } from "../../ui";
 
 const { Text } = Typography;
 const TIME = /^([01]?\d|2[0-3]):[0-5]\d$/;
@@ -44,7 +47,7 @@ export function ManualOverrideForm({ fixed, onDone, carried }: { fixed?: { emplo
   const bodyOf = (v: Values): OverrideBody | null => {
     const sel = selectionOf(v, fixed?.employeeId);
     if (!sel.selection) {
-      void message.error(sel.error);
+      toast.error(sel.error);
       return null;
     }
     const range = fixed ? ([dayjs(fixed.date), dayjs(fixed.date)] as const) : v.range!;
@@ -64,12 +67,12 @@ export function ManualOverrideForm({ fixed, onDone, carried }: { fixed?: { emplo
       setPreview(r);
       setLooked(false);
     },
-    onError: (err) => void message.error(apiErrorMessage(err, "Could not preview this override.")),
+    onError: (err) => toast.error(apiErrorMessage(err, "Could not preview this override.")),
   });
   const confirm = useMutation({
     mutationFn: () => adminApi.confirmOverride(preview!.body, preview!.data.fingerprint),
     onSuccess: (r) => {
-      void message.success(`${r.days} employee-day${r.days === 1 ? "" : "s"} set for ${r.employees} ${r.employees === 1 ? "person" : "people"}${r.leaveDaysReleased > 0 ? `; ${r.leaveDaysReleased} day${r.leaveDaysReleased === 1 ? "" : "s"} of leave returned to balances` : ""}.`);
+      toast.success(`${r.days} employee-day${r.days === 1 ? "" : "s"} set for ${r.employees} ${r.employees === 1 ? "person" : "people"}${r.leaveDaysReleased > 0 ? `; ${r.leaveDaysReleased} day${r.leaveDaysReleased === 1 ? "" : "s"} of leave returned to balances` : ""}.`);
       void queryClient.invalidateQueries({ queryKey: ["attendance"] });
       void queryClient.invalidateQueries({ queryKey: ["leave"] });
       setPreview(null);
@@ -77,7 +80,7 @@ export function ManualOverrideForm({ fixed, onDone, carried }: { fixed?: { emplo
       onDone?.();
     },
     onError: (err) => {
-      void message.error(apiErrorMessage(err, "Could not apply this override."));
+      toast.error(apiErrorMessage(err, "Could not apply this override."));
       setPreview(null); // the set may have changed: look again
       setLooked(false);
     },
@@ -97,27 +100,30 @@ export function ManualOverrideForm({ fixed, onDone, carried }: { fixed?: { emplo
           if ("releaseLeave" in changed && !changed.releaseLeave && form.getFieldValue("mode") === "FOLLOW") form.setFieldValue("mode", "STATUS");
         }}
         onFinish={(v) => {
-          if (v.mode === "TIMES" && !v.inTime && !v.outTime) return void message.error("Give the time in, the time out, or both.");
+          if (v.mode === "TIMES" && !v.inTime && !v.outTime) return void toast.error("Give the time in, the time out, or both.");
           const body = bodyOf(v);
           if (body) previewMutation.mutate(body);
         }}
       >
-        <Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
+        <Text type="secondary" style={{ display: "block", marginBottom: space[4] }}>
           Set a day directly when a correction request is not the right route (HR knows what happened). You will see exactly what changes before anything is applied. The device's punches never change, your own days are left out
           (another HR admin does those), and a finalised day can't be touched.
         </Text>
         {fixed ? (
-          <Alert type="info" showIcon style={{ marginBottom: 12 }} title={`${fixed.name}, ${dayjs(fixed.date).format("ddd D MMM YYYY")}`} />
+          <ApprovalBanner tone="info" style={{ marginBottom: space[4] }} title={`${fixed.name}, ${dayjs(fixed.date).format("ddd D MMM YYYY")}`} />
         ) : (
           <>
+            <FormGroupTitle>Who and when</FormGroupTitle>
             <TargetPicker known={carried?.people} />
             <Form.Item name="range" label="Dates" rules={[{ required: true, message: "Choose the dates" }]}>
-              <DatePicker.RangePicker format="D MMM YYYY" disabledDate={(d) => d.isAfter(dayjs().subtract(1, "day"), "day")} />
+              <DatePicker.RangePicker format="D MMM YYYY" disabledDate={(d) => d.isAfter(dayjs().subtract(1, "day"), "day")} style={{ width: "100%", maxWidth: 360 }} />
             </Form.Item>
           </>
         )}
+        <FormGroupTitle>What to set</FormGroupTitle>
         <Form.Item name="mode" label="What should be set?">
           <Radio.Group
+            style={{ display: "flex", flexDirection: "column", gap: space[2] }}
             options={[
               { value: "STATUS", label: "The day's status" },
               { value: "TIMES", label: "The times" },
@@ -126,32 +132,37 @@ export function ManualOverrideForm({ fixed, onDone, carried }: { fixed?: { emplo
           />
         </Form.Item>
         {mode === "FOLLOW" ? (
-          <Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
+          <Text type="secondary" style={{ display: "block", marginBottom: space[3] }}>
             Nothing is set for the day itself: its times and status are worked out from what the device recorded, as on any ordinary day. Only the leave is released.
           </Text>
         ) : mode === "STATUS" ? (
           <Form.Item name="status" label="The day should be" rules={[{ required: true, message: "Choose a status" }]}>
-            <Select style={{ width: 320 }} options={adminApi.OVERRIDE_STATUS_OPTIONS} placeholder="Choose" />
+            <Select style={{ width: "100%", maxWidth: 360 }} options={adminApi.OVERRIDE_STATUS_OPTIONS} placeholder="Choose" />
           </Form.Item>
         ) : (
-          <Space wrap align="start">
-            <Form.Item name="inTime" label="Time in" rules={[{ pattern: TIME, message: "HH:MM, e.g. 10:00" }]}>
-              <Input placeholder="10:00" style={{ width: 120 }} />
-            </Form.Item>
-            <Form.Item name="outTime" label="Time out" rules={[{ pattern: TIME, message: "HH:MM, e.g. 19:00" }]}>
-              <Input placeholder="19:00" style={{ width: 120 }} />
-            </Form.Item>
-            <Text type="secondary" style={{ display: "block", marginTop: 30 }}>
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 180px))", gap: space[4] }}>
+              <Form.Item name="inTime" label="Time in" rules={[{ pattern: TIME, message: "HH:MM, e.g. 10:00" }]}>
+                <Input placeholder="10:00" inputMode="numeric" suffix={<ClockCircleOutlined aria-hidden />} />
+              </Form.Item>
+              <Form.Item name="outTime" label="Time out" rules={[{ pattern: TIME, message: "HH:MM, e.g. 19:00" }]}>
+                <Input placeholder="19:00" inputMode="numeric" suffix={<ClockCircleOutlined aria-hidden />} />
+              </Form.Item>
+            </div>
+            <Text type="secondary" style={{ display: "block", marginTop: -space[2], marginBottom: space[4], fontSize: fs.sm }}>
               Both replace the device's times for the day; one adds to them. A leave day or an already-corrected day needs both.
             </Text>
-          </Space>
+          </>
         )}
-        <Form.Item name="reasonCode" label="Why?">
-          <Select style={{ width: 240 }} options={REASON_OPTIONS} />
-        </Form.Item>
-        <Form.Item name="note" label="Say what happened (required, kept with every change)" rules={[{ required: true, min: 5, message: "A few words, e.g. worked at the client site that day" }]}>
-          <Input.TextArea rows={2} maxLength={500} />
-        </Form.Item>
+        <div style={{ border: `1px solid ${tk.borderControl}`, borderRadius: radius.md, padding: space[4], marginBottom: space[4], background: tk.bgSubtle }}>
+          <div style={{ fontWeight: fw.semibold, color: tk.textPrimary, marginBottom: space[3] }}>Reason (kept in the audit log)</div>
+          <Form.Item name="reasonCode" label="Why?">
+            <Select style={{ width: "100%", maxWidth: 320 }} options={REASON_OPTIONS} />
+          </Form.Item>
+          <Form.Item name="note" label="Say what happened (required, kept with every change)" rules={[{ required: true, min: 5, message: "A few words, e.g. worked at the client site that day" }]} style={{ marginBottom: 0 }}>
+            <Input.TextArea rows={3} maxLength={500} showCount />
+          </Form.Item>
+        </div>
         <Form.Item name="releaseLeave" valuePropName="checked" extra="Only for a day that is on approved leave but the person actually worked. The leave for that day is released and its days go back to their balance, in the same step, with your reason. This can't be undone by removing the override; if it was a mistake, apply the leave again.">
           <Checkbox>They worked on a day of approved leave: release the leave and return the balance</Checkbox>
         </Form.Item>
@@ -161,30 +172,32 @@ export function ManualOverrideForm({ fixed, onDone, carried }: { fixed?: { emplo
       </Form>
 
       {data && (
-        <Space orientation="vertical" size={12} style={{ width: "100%", marginTop: 16 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: space[4], marginTop: space[6], paddingTop: space[6], borderTop: `1px solid ${tk.borderDefault}` }}>
+          <FormGroupTitle>Preview</FormGroupTitle>
           {data.count === 0 ? (
-            <Alert type="warning" showIcon title="Nothing in that selection can be set." description="See why below, then change the dates, people or what to set." />
+            <ApprovalBanner tone="warning" title="Nothing in that selection can be set." description="See why below, then change the dates, people or what to set." />
           ) : (
-            <Descriptions size="small" bordered column={2}>
-              <Descriptions.Item label="Employee-days">{data.count}</Descriptions.Item>
-              <Descriptions.Item label="People">{data.employees}</Descriptions.Item>
-              <Descriptions.Item label="Will be set to" span={2}>{data.correction}</Descriptions.Item>
-            </Descriptions>
+            <KeyValueGrid
+              items={[
+                { label: "Employee-days", value: data.count },
+                { label: "People", value: data.employees },
+                { label: "Will be set to", value: data.correction, wide: true },
+              ]}
+            />
           )}
           {data.leaveDaysReleased > 0 && (
-            <Alert type="warning" showIcon title={`${data.leaveDaysReleased} day${data.leaveDaysReleased === 1 ? "" : "s"} of approved leave will be released and returned to leave balances.`} description="It appears in the leave ledger with your reason and in the attendance day. Confirming does both together." />
+            <ApprovalBanner tone="warning" title={`${data.leaveDaysReleased} day${data.leaveDaysReleased === 1 ? "" : "s"} of approved leave will be released and returned to leave balances.`} description="It appears in the leave ledger with your reason and in the attendance day. Confirming does both together." />
           )}
-          {data.ownLeftOut > 0 && <Alert type="info" showIcon title={`${data.ownLeftOut} of your own days are left out.`} description="Nobody changes their own attendance. Another HR admin does those." />}
+          {data.ownLeftOut > 0 && <ApprovalBanner tone="info" title={`${data.ownLeftOut} of your own days are left out.`} description="Nobody changes their own attendance. Another HR admin does those." />}
           {data.cannotOverride.length > 0 && (
             <div>
               <Text strong>Not set, and why</Text>
-              <div style={{ marginTop: 4 }}>
+              <div style={{ marginTop: space[2], display: "flex", flexDirection: "column", gap: space[2] }}>
                 {data.cannotOverride.map((g) => (
-                  <div key={g.code}>
-                    <Tag color="orange">{g.count}</Tag>
-                    {g.label}
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      {" "}
+                  <div key={g.code} style={{ display: "flex", gap: space[2], alignItems: "baseline", flexWrap: "wrap" }}>
+                    <StatusChip tone="warning">{g.count}</StatusChip>
+                    <span>{g.label}</span>
+                    <Text type="secondary" style={{ fontSize: fs.sm }}>
                       e.g. {g.examples.map((e) => `${e.name} ${dayjs(e.date).format("D MMM")}`).join(", ")}
                     </Text>
                   </div>
@@ -194,29 +207,40 @@ export function ManualOverrideForm({ fixed, onDone, carried }: { fixed?: { emplo
           )}
           {data.count > 0 && (
             <>
-              <Table
-                size="small"
+              <DataTable
+                density="compact"
                 rowKey={(r) => `${r.employeeId}|${r.date}`}
                 dataSource={data.rows}
-                pagination={{ pageSize: 10, size: "small", showSizeChanger: false }}
+                pagination={{ pageSize: 10, showSizeChanger: false }}
+                mobile={{
+                  title: (r) => `${r.name} (${r.employeeCode})`,
+                  subtitle: (r) => dayjs(r.date).format("ddd, D MMM"),
+                  fields: [
+                    { label: "Now", render: (r) => r.before ?? "—" },
+                    { label: "After", render: (r) => <Text strong>{r.after ?? "—"}</Text> },
+                    { label: "Leave returned", render: (r) => (r.leave.length ? r.leave.map((l) => `${l.type} ${l.days}`).join(", ") : "—") },
+                  ],
+                }}
                 columns={[
                   { title: "Employee", key: "e", render: (_, r) => `${r.name} (${r.employeeCode})` },
                   { title: "Day", dataIndex: "date", render: (d: string) => dayjs(d).format("ddd, D MMM") },
                   { title: "Now", dataIndex: "before", render: (v: string | null) => v ?? "—" },
                   { title: "After", dataIndex: "after", render: (v: string | null) => <Text strong>{v ?? "—"}</Text> },
-                  { title: "Replaces", dataIndex: "replaces", render: (v: string | null) => (v ? <Tag>{v === "REGULARIZATION" ? "an approved request" : "an earlier override"}</Tag> : "—") },
+                  { title: "Replaces", dataIndex: "replaces", render: (v: string | null) => (v ? <StatusChip tone="neutral">{v === "REGULARIZATION" ? "an approved request" : "an earlier override"}</StatusChip> : "—") },
                   { title: "Leave returned", key: "leave", render: (_, r) => (r.leave.length ? r.leave.map((l) => `${l.type} ${l.days}`).join(", ") : "—") },
                 ]}
               />
               <Checkbox checked={looked} onChange={(e) => setLooked(e.target.checked)}>
                 I have looked at these {data.count} employee-days{releaseLeave && data.leaveDaysReleased > 0 ? " and the leave that will be returned" : ""} and want them set.
               </Checkbox>
-              <Button type="primary" disabled={!looked} loading={confirm.isPending} onClick={() => confirm.mutate()}>
-                Set {data.count} employee-day{data.count === 1 ? "" : "s"}
-              </Button>
+              <div>
+                <Button type="primary" size="large" disabled={!looked} loading={confirm.isPending} onClick={() => confirm.mutate()}>
+                  Set {data.count} employee-day{data.count === 1 ? "" : "s"}
+                </Button>
+              </div>
             </>
           )}
-        </Space>
+        </div>
       )}
     </>
   );

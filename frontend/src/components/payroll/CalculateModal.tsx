@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Descriptions, Modal, Space, Spin, Table, Typography, message } from "antd";
+import { Alert, Descriptions, Modal, Space, Table, Typography } from "antd";
+import { SkeletonCard, toast } from "../../ui";
 import * as payrollApi from "../../api/payroll";
 import { apiErrorMessage } from "../../lib/apiError";
 import { formatDifference, formatRupees } from "../../lib/money";
@@ -20,7 +21,7 @@ export function CalculateModal({ runId, onClose }: { runId: string; onClose: () 
     mutationFn: () => payrollApi.requestCalculation(runId, preview.data!.fingerprint),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["payroll"] });
-      void message.success("Calculating. The figures appear as each group of people is done.");
+      toast.success("Calculating. The figures appear as each group of people is done.");
       onClose();
     },
     onError: (e) => setProblem(apiErrorMessage(e, "That did not work.")),
@@ -29,7 +30,7 @@ export function CalculateModal({ runId, onClose }: { runId: string; onClose: () 
   return (
     <Modal open width={820} title={p?.first ? "Calculate this run" : "Calculate this run again"} onCancel={onClose} okText="Calculate now" okButtonProps={{ disabled: !p, loading: confirm.isPending }} onOk={() => confirm.mutate()} destroyOnHidden>
       <Space orientation="vertical" size={12} style={{ width: "100%" }}>
-        {preview.isLoading && <Spin />}
+        {preview.isLoading && <SkeletonCard lines={4} />}
         {preview.error && <Alert type="error" showIcon title="It cannot be calculated yet" description={apiErrorMessage(preview.error, "Could not work out what this would do.")} />}
         {p && (
           <>
@@ -61,9 +62,9 @@ export function CalculateModal({ runId, onClose }: { runId: string; onClose: () 
                 scroll={{ y: 260 }}
                 columns={[
                   { title: "Who", dataIndex: "name" },
-                  { title: "Net now", align: "right", render: (_, c) => (c.netBefore === null ? <Text type="secondary">new to the run</Text> : formatRupees(c.netBefore, 2)) },
-                  { title: "Net after", align: "right", render: (_, c) => formatRupees(c.netAfter, 2) },
-                  { title: "Change", align: "right", render: (_, c) => (c.netBefore === null ? "" : formatDifference(c.netChange ?? "0")) },
+                  { title: "Net now", align: "right", className: "ws-num", render: (_, c) => (c.netBefore === null ? <Text type="secondary">new to the run</Text> : formatRupees(c.netBefore, 2)) },
+                  { title: "Net after", align: "right", className: "ws-num", render: (_, c) => formatRupees(c.netAfter, 2) },
+                  { title: "Change", align: "right", className: "ws-num", render: (_, c) => (c.netBefore === null ? "" : formatDifference(c.netChange ?? "0")) },
                 ]}
               />
             )}

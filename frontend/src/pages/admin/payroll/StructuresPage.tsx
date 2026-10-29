@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Button, Checkbox, Drawer, Flex, Input, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
-import { ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, EditOutlined, HistoryOutlined, PlusOutlined, SafetyCertificateOutlined } from "@ant-design/icons";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Button, Checkbox, Form, Input, Select, Table, Tooltip } from "antd";
+import { ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, EditOutlined, HistoryOutlined, PlusOutlined, SafetyCertificateOutlined, UnorderedListOutlined } from "@ant-design/icons";
 import { COMPONENT_TYPES, COMPONENT_TYPE_LABEL, ITEM_CODE_PATTERN, LINE_CALC_LABEL, LINE_CALC_METHODS, type LineCalcMethod } from "@shared/constants/payrollSalary";
 import * as payrollApi from "../../../api/payroll";
 import type { ComponentType, ComponentView, LineCalc, SampleResult, StructureLine, StructureSavePreview, StructureValue, StructureView } from "../../../api/payroll";
@@ -11,8 +11,9 @@ import { useAuth } from "../../../hooks/useAuth";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatRupees } from "../../../lib/money";
 import { describeCalc } from "./salaryText";
-
-const { Title, Text } = Typography;
+import { ApprovalBanner, DataTable, EmptyState, FormGroupTitle, PageHeader, Panel, SideDrawer, SkeletonTable, Stack, StatusChip, toast, useIsPhone } from "../../../ui";
+import { Caption, Figure, FigureRow, Num, PersonCell } from "../../../components/payroll/payrollUi";
+import { fw, radius, space, v } from "../../../theme/tokens";
 
 // Payroll → Salary structures (Phase 6 P6-2). A structure says how much each line of a salary gets out of CTC. Saving one proves, for a sample CTC, that its
 // lines add up to CTC exactly; a structure that cannot produce a salary cannot be saved. Nobody's pay changes when a structure is saved: people move to a
@@ -29,100 +30,87 @@ export function StructuresPage() {
   const [editing, setEditing] = useState<{ code: string | null; value: StructureValue } | null>(null);
   const [confirming, setConfirming] = useState<StructureView | null>(null);
   const [history, setHistory] = useState<StructureView | null>(null);
-  const { data = [], isLoading, error } = useQuery({ queryKey: ["payroll", "structures"], queryFn: payrollApi.listStructures });
+  const [viewing, setViewing] = useState<StructureView | null>(null);
+  const { data = [], isLoading, error, refetch } = useQuery({ queryKey: ["payroll", "structures"], queryFn: payrollApi.listStructures });
   const { data: components = [] } = useQuery({ queryKey: ["payroll", "components"], queryFn: payrollApi.listComponents });
   const componentName = (code: string) => components.find((c) => c.code === code)?.value?.name ?? code;
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["payroll"] });
+  const addButton = canEdit && (
+    <Button type="primary" icon={<PlusOutlined />} onClick={() => setEditing({ code: null, value: { name: "", description: "", ctcIncludes: ["EARNING"], lines: [] } })}>
+      Add a structure
+    </Button>
+  );
+
+  const actions = (s: StructureView, block?: boolean) => {
+    const size = block ? undefined : ("small" as const);
+    const style = block ? { flex: 1 } : undefined;
+    return (
+      <div style={{ display: "flex", gap: space[2], flexWrap: "wrap", justifyContent: "flex-end", width: block ? "100%" : undefined }}>
+        <Button size={size} style={style} icon={<UnorderedListOutlined />} onClick={() => setViewing(s)}>Lines</Button>
+        {canEdit && <Button size={size} style={style} icon={<EditOutlined />} onClick={() => setEditing({ code: s.code, value: s.value! })}>Edit</Button>}
+        {canConfirm && s.status === "PLACEHOLDER" && <Button size={size} style={style} type="primary" icon={<SafetyCertificateOutlined />} onClick={() => setConfirming(s)}>Confirm…</Button>}
+        <Button size={size} style={style} icon={<HistoryOutlined />} onClick={() => setHistory(s)}>History</Button>
+      </div>
+    );
+  };
+  const includes = (s: StructureView) => <span style={{ display: "inline-flex", gap: space[1], flexWrap: "wrap" }}>{s.value?.ctcIncludes.map((t) => <StatusChip key={t} tone="neutral">{COMPONENT_TYPE_LABEL[t]}</StatusChip>)}</span>;
+  const componentsCell = (s: StructureView) => {
+    const unconfirmed = s.components.filter((c) => c.status !== "CONFIRMED").length;
+    const newer = s.components.filter((c) => c.newerVersion).length;
+    return unconfirmed + newer === 0 ? (
+      <Caption>All Confirmed</Caption>
+    ) : (
+      <span style={{ display: "inline-flex", gap: space[1], flexWrap: "wrap" }}>
+        {unconfirmed > 0 && <StatusChip tone="warning">{unconfirmed} not confirmed</StatusChip>}
+        {newer > 0 && <StatusChip tone="warning">{newer} newer version{newer > 1 ? "s" : ""}</StatusChip>}
+      </span>
+    );
+  };
 
   return (
-    <Flex vertical gap={16}>
-      <Flex justify="space-between" align="center" wrap gap={8}>
-        <Title level={3} style={{ margin: 0 }}>
-          Salary structures
-        </Title>
-        {canEdit && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setEditing({ code: null, value: { name: "", description: "", ctcIncludes: ["EARNING"], lines: [] } })}>
-            Add a structure
-          </Button>
-        )}
-      </Flex>
-      <Text type="secondary">
-        A structure splits a person&apos;s CTC across the components: for example Basic is 40% of CTC, HRA is half of Basic, and Special allowance is whatever is left. Saving a structure never changes anybody&apos;s salary; people move to it through a salary revision.
-      </Text>
-      {error && <Alert type="error" showIcon title={apiErrorMessage(error, "Could not load the structures.")} />}
-      <Table<StructureView>
-        rowKey="code"
-        loading={isLoading}
-        dataSource={data}
-        pagination={false}
-        expandable={{
-          expandedRowRender: (s) => {
-            const nameOf = componentName;
-            return (
-              <Space orientation="vertical" size={12} style={{ width: "100%" }}>
-              <Table
-                size="small"
-                pagination={false}
-                rowKey="component"
-                dataSource={s.value?.lines ?? []}
-                columns={[
-                  { title: "Line", render: (_, l: StructureLine) => nameOf(l.component) },
-                  { title: "Component version", render: (_, l: StructureLine) => {
-                      const c = s.components.find((x) => x.component === l.component);
-                      return (
-                        <Space size={4}>
-                          <Text>v{l.componentVersion}</Text>
-                          {c?.status !== "CONFIRMED" && <Tag color="orange">Placeholder</Tag>}
-                          {c?.newerVersion && <Tooltip title={`Version ${c.newerVersion} exists. Edit the structure to use it.`}><Tag color="gold">newer exists</Tag></Tooltip>}
-                        </Space>
-                      );
-                    } },
-                  { title: "How much", render: (_, l: StructureLine) => describeCalc(l.calc, nameOf) },
-                ]}
-              />
-              {s.value && <StructureExample value={s.value} nameOf={nameOf} />}
-              </Space>
-            );
-          },
-        }}
-        columns={[
-          {
-            title: "Structure",
-            render: (_, s) => (
-              <div>
-                <Text strong>{s.value?.name}</Text>
-                <div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    {s.code}
-                  </Text>
-                </div>
-              </div>
-            ),
-          },
-          { title: "Counts toward CTC", render: (_, s) => <Space size={4} wrap>{s.value?.ctcIncludes.map((t) => <Tag key={t}>{COMPONENT_TYPE_LABEL[t]}</Tag>)}</Space> },
-          { title: "Lines", render: (_, s) => s.value?.lines.length },
-          { title: "Status", render: (_, s) => <ItemStatusTag status={s.status} sourceLabel={s.sourceLabel} /> },
-          {
-            title: "Components",
-            render: (_, s) => {
-              const unconfirmed = s.components.filter((c) => c.status !== "CONFIRMED").length;
-              const newer = s.components.filter((c) => c.newerVersion).length;
-              return unconfirmed + newer === 0 ? <Text type="secondary">All Confirmed</Text> : <Space size={4} wrap>{unconfirmed > 0 && <Tag color="orange">{unconfirmed} not confirmed</Tag>}{newer > 0 && <Tag color="gold">{newer} newer version{newer > 1 ? "s" : ""}</Tag>}</Space>;
-            },
-          },
-          {
-            title: "",
-            align: "right",
-            render: (_, s) => (
-              <Space wrap>
-                {canEdit && <Button size="small" icon={<EditOutlined />} onClick={() => setEditing({ code: s.code, value: s.value! })}>Edit</Button>}
-                {canConfirm && s.status === "PLACEHOLDER" && <Button size="small" type="primary" icon={<SafetyCertificateOutlined />} onClick={() => setConfirming(s)}>Confirm…</Button>}
-                <Button size="small" icon={<HistoryOutlined />} onClick={() => setHistory(s)}>History</Button>
-              </Space>
-            ),
-          },
-        ]}
-      />
+    <>
+      <PageHeader title="Salary structures" subtitle="How a CTC is split across the components" actions={addButton} />
+      <Stack>
+        <ApprovalBanner
+          tone="info"
+          title="Saving a structure never changes anybody's salary"
+          description="A structure splits a person's CTC across the components: for example Basic is 40% of CTC, HRA is half of Basic, and Special allowance is whatever is left. Saving a structure never changes anybody's salary; people move to it through a salary revision."
+        />
+        <Panel>
+          <DataTable<StructureView>
+            rowKey="code"
+            density="compact"
+            loading={isLoading}
+            error={error}
+            onRetry={() => void refetch()}
+            dataSource={data}
+            pagination={false}
+            onRowOpen={setViewing}
+            empty={<EmptyState compact title="No structures yet" description="Add a structure to say how a CTC is split across the components." action={addButton || undefined} />}
+            mobile={{
+              title: (s) => s.value?.name,
+              subtitle: (s) => s.code,
+              status: (s) => <ItemStatusTag status={s.status} />,
+              fields: [
+                { label: "Counts toward CTC", render: includes },
+                { label: "Lines", render: (s) => s.value?.lines.length ?? "—" },
+                { label: "Components", render: componentsCell },
+                ...(data.some((s) => s.sourceLabel) ? [{ label: "Source", render: (s: StructureView) => s.sourceLabel ?? "—" }] : []),
+              ],
+              actions: (s) => actions(s, true),
+            }}
+            columns={[
+              { title: "Structure", key: "structure", render: (_, s) => <PersonCell name={s.value?.name} code={s.code} /> },
+              { title: "Counts toward CTC", key: "includes", render: (_, s) => includes(s) },
+              { title: "Lines", key: "lines", align: "right", render: (_, s) => <Num>{s.value?.lines.length}</Num> },
+              { title: "Status", key: "status", width: 200, render: (_, s) => <ItemStatusTag status={s.status} sourceLabel={s.sourceLabel} /> },
+              { title: "Components", key: "components", render: (_, s) => componentsCell(s) },
+              { title: "", key: "actions", align: "right", width: 196, render: (_, s) => actions(s) },
+            ]}
+          />
+        </Panel>
+      </Stack>
+      {viewing && <StructureDrawer s={viewing} nameOf={componentName} onClose={() => setViewing(null)} />}
       {editing && <StructureEditor initial={editing} onClose={() => setEditing(null)} onSaved={refresh} />}
       {confirming && (
         <ItemConfirmModal
@@ -131,13 +119,58 @@ export function StructuresPage() {
           loadPreview={() => payrollApi.previewStructureConfirm(confirming.code)}
           confirm={(b) => payrollApi.confirmStructure(confirming.code, b)}
           renderValue={(p) => `${p.value.name}: ${p.value.lines.length} lines`}
-          extra={(p) => (p.unconfirmedComponents.length ? <Alert type="warning" showIcon title="Some components are not confirmed yet" description={`${p.unconfirmedComponents.join(", ")}. A salary built on this structure is a test until they are confirmed too.`} /> : null)}
+          extra={(p) => (p.unconfirmedComponents.length ? <ApprovalBanner tone="warning" title="Some components are not confirmed yet" description={`${p.unconfirmedComponents.join(", ")}. A salary built on this structure is a test until they are confirmed too.`} /> : null)}
           onClose={() => setConfirming(null)}
           onDone={refresh}
         />
       )}
       {history && <ItemHistoryDrawer title={`History: ${history.value?.name}`} queryKey={["payroll", "structure-history", history.code]} load={async () => (await payrollApi.getStructure(history.code)).history} renderValue={(v) => `${(v as StructureValue).name}: ${(v as StructureValue).lines.length} lines`} onClose={() => setHistory(null)} />}
-    </Flex>
+    </>
+  );
+}
+
+/** One structure's lines and a worked example (was the expanded row; a drawer so it reads the same on a phone). */
+function StructureDrawer({ s, nameOf, onClose }: { s: StructureView; nameOf: (code: string) => string; onClose: () => void }) {
+  return (
+    <SideDrawer open size="wide" title={s.value?.name ?? s.code} subtitle={s.code} status={<ItemStatusTag status={s.status} />} onClose={onClose} footer={null}>
+      <Stack gap={space[3]}>
+        <DataTable<StructureLine>
+          density="compact"
+          pagination={false}
+          rowKey="component"
+          dataSource={s.value?.lines ?? []}
+          empty={<EmptyState compact title="No lines" description="Edit the structure to add its lines." />}
+          mobile={{
+            title: (l) => nameOf(l.component),
+            subtitle: (l) => describeCalc(l.calc, nameOf),
+            fields: [{ label: "Component version", render: (l) => <VersionCell s={s} l={l} /> }],
+          }}
+          columns={[
+            { title: "Line", key: "line", render: (_, l) => nameOf(l.component) },
+            { title: "Component version", key: "version", render: (_, l) => <VersionCell s={s} l={l} /> },
+            { title: "How much", key: "calc", render: (_, l) => describeCalc(l.calc, nameOf) },
+          ]}
+        />
+        {s.value && <StructureExample value={s.value} nameOf={nameOf} />}
+      </Stack>
+    </SideDrawer>
+  );
+}
+
+function VersionCell({ s, l }: { s: StructureView; l: StructureLine }) {
+  const c = s.components.find((x) => x.component === l.component);
+  return (
+    <span style={{ display: "inline-flex", gap: space[1], alignItems: "center", flexWrap: "wrap" }}>
+      <span className="ws-num">v{l.componentVersion}</span>
+      {c?.status !== "CONFIRMED" && <StatusChip tone="warning">Placeholder</StatusChip>}
+      {c?.newerVersion && (
+        <Tooltip title={`Version ${c.newerVersion} exists. Edit the structure to use it.`}>
+          <span tabIndex={0} aria-label={`Version ${c.newerVersion} exists. Edit the structure to use it.`}>
+            <StatusChip tone="warning">newer exists</StatusChip>
+          </span>
+        </Tooltip>
+      )}
+    </span>
   );
 }
 
@@ -164,7 +197,7 @@ function StructureEditor({ initial, onClose, onSaved }: { initial: { code: strin
   const save = useMutation({
     mutationFn: () => payrollApi.saveStructure(code, { value, sampleAnnualCtc: sample, note, fingerprint: check.data!.fingerprint }),
     onSuccess: () => {
-      void message.success("Saved as an unconfirmed version.");
+      toast.success("Saved as an unconfirmed version.");
       onSaved();
       onClose();
     },
@@ -190,129 +223,131 @@ function StructureEditor({ initial, onClose, onSaved }: { initial: { code: strin
     changed();
   };
   const p: StructureSavePreview | undefined = check.data;
+  const codeBad = !!code && !ITEM_CODE_PATTERN.test(code);
 
   return (
-    <Drawer open width={920} title={isNew ? "Add a structure" : `Edit ${initial.value.name}`} onClose={onClose} destroyOnHidden>
-      <Space orientation="vertical" size={14} style={{ width: "100%" }}>
-        <Flex gap={12} wrap>
-          {isNew && (
-            <div>
-              <Text type="secondary">Code</Text>
-              <Input value={code} onChange={(e) => { setCode(e.target.value.toUpperCase()); changed(); }} placeholder="STANDARD" maxLength={25} status={code && !ITEM_CODE_PATTERN.test(code) ? "error" : undefined} style={{ width: 200 }} />
-            </div>
-          )}
-          <div style={{ flex: 1, minWidth: 220 }}>
-            <Text type="secondary">Name</Text>
-            <Input value={name} onChange={(e) => { setName(e.target.value); changed(); }} maxLength={60} />
-          </div>
-        </Flex>
-        <div>
-          <Text type="secondary">What it is for (optional)</Text>
-          <Input value={description} onChange={(e) => { setDescription(e.target.value); changed(); }} maxLength={200} placeholder="For example: all permanent staff, grades G1 to G3" />
-        </div>
-        <div>
-          <Text type="secondary">Counts toward CTC</Text>
-          <div>
-            <Checkbox.Group options={COMPONENT_TYPES.map((t) => ({ value: t, label: COMPONENT_TYPE_LABEL[t] }))} value={includes} onChange={(v) => { setIncludes(v as ComponentType[]); changed(); }} />
-          </div>
-          <Text type="secondary" style={{ fontSize: 12 }}>The lines of these kinds have to add up to CTC. A line of another kind (a deduction, say) is worked out but is not part of CTC.</Text>
-        </div>
-
-        <Table
-          size="small"
-          pagination={false}
-          rowKey={(_, i) => String(i)}
-          dataSource={lines}
-          locale={{ emptyText: "No lines yet. Add the first one." }}
-          columns={[
-            {
-              title: "Component",
-              width: 230,
-              render: (_, l, i) => {
-                const c = byCode.get(l.component);
-                const behind = c?.current && c.current.version > l.componentVersion;
-                return (
-                  <Space orientation="vertical" size={2}>
-                    <Select
-                      showSearch
-                      style={{ width: 210 }}
-                      value={l.component || undefined}
-                      placeholder="Choose"
-                      options={components.map((x) => ({ value: x.code, label: `${x.value?.name} (${x.code})` }))}
-                      onChange={(v) => patch(i, pin(v))}
-                    />
-                    <Space size={4}>
-                      <Text type="secondary" style={{ fontSize: 12 }}>v{l.componentVersion}</Text>
-                      {c && c.status !== "CONFIRMED" && <Tag color="orange" style={{ marginInlineEnd: 0 }}>Placeholder</Tag>}
-                      {behind && <Button size="small" type="link" onClick={() => patch(i, pin(l.component))}>use v{c.current!.version}</Button>}
-                    </Space>
-                  </Space>
-                );
-              },
-            },
-            {
-              title: "How much",
-              render: (_, l, i) => (
-                <Space orientation="vertical" size={4} style={{ width: "100%" }}>
-                  <Select style={{ width: 260 }} value={l.calc.method} options={LINE_CALC_METHODS.map((m) => ({ value: m, label: LINE_CALC_LABEL[m] }))} onChange={(m) => patch(i, { calc: defaultCalc(m) })} />
-                  {l.calc.method === "PERCENT" && (
-                    <Space>
-                      <Input style={{ width: 90 }} suffix="%" value={l.calc.percent} onChange={(e) => patch(i, { calc: { ...(l.calc as Extract<LineCalc, { method: "PERCENT" }>), percent: e.target.value } })} />
-                      <Text>of</Text>
-                      <Select style={{ width: 180 }} value={l.calc.of} options={[{ value: "CTC", label: "CTC" }, ...lines.slice(0, i).filter((x) => x.component).map((x) => ({ value: x.component, label: nameOf(x.component) }))]} onChange={(of) => patch(i, { calc: { ...(l.calc as Extract<LineCalc, { method: "PERCENT" }>), of } })} />
-                    </Space>
-                  )}
-                  {l.calc.method === "FIXED_AMOUNT" && <Input style={{ width: 160 }} prefix="₹" value={l.calc.amount} onChange={(e) => patch(i, { calc: { method: "FIXED_AMOUNT", amount: e.target.value } })} suffix="a month" />}
-                  {l.calc.method === "FORMULA" && <Input value={l.calc.formula} placeholder="MIN(BASIC * 0.5, 15000)" onChange={(e) => patch(i, { calc: { method: "FORMULA", formula: e.target.value } })} />}
-                </Space>
-              ),
-            },
-            {
-              title: "",
-              width: 120,
-              render: (_, __, i) => (
-                <Space>
-                  <Button size="small" icon={<ArrowUpOutlined />} disabled={i === 0} onClick={() => move(i, -1)} aria-label="Move up" />
-                  <Button size="small" icon={<ArrowDownOutlined />} disabled={i === lines.length - 1} onClick={() => move(i, 1)} aria-label="Move down" />
-                  <Button size="small" danger icon={<DeleteOutlined />} onClick={() => { setLines((ls) => ls.filter((_, k) => k !== i)); changed(); }} aria-label="Remove line" />
-                </Space>
-              ),
-            },
-          ]}
-        />
-        <Button icon={<PlusOutlined />} onClick={() => { setLines((ls) => [...ls, { component: "", componentVersion: 1, componentHash: "", calc: { method: "PERCENT", of: "CTC", percent: "" } }]); changed(); }}>
-          Add a line
-        </Button>
-        <Text type="secondary" style={{ fontSize: 12 }}>
-          A line can be a percentage of CTC or of a line above it, the same amount for everyone, an amount typed for each person, a formula (CTC and the lines above it, with + - * / ( ), MIN, MAX, ROUND, CEIL, FLOOR), or the balance: whatever is left, so the lines always add up.
-        </Text>
-
-        <Flex gap={12} align="end" wrap>
-          <div>
-            <Text type="secondary">Check it against a yearly CTC of</Text>
-            <Input prefix="₹" value={sample} onChange={(e) => { setSample(e.target.value); changed(); }} style={{ width: 200 }} />
-          </div>
-          <Button type="primary" loading={check.isPending} onClick={() => check.mutate()}>
-            Check it adds up
-          </Button>
-        </Flex>
-
-        {problem && <Alert type="error" showIcon title="It cannot be saved yet" description={problem} />}
-        {p && (
-          <Space orientation="vertical" size={10} style={{ width: "100%" }}>
-            {p.unchanged && <Alert type="warning" showIcon title="That is the value it already has. There is nothing to save." />}
-            {p.willResetConfirmation && <Alert type="warning" showIcon title="This structure is Confirmed now." description="Saving adds a new version that is a Placeholder until a different person confirms it. The Confirmed version stays on record." />}
-            {p.unconfirmedComponents.length > 0 && <Alert type="warning" showIcon title="Some components are not confirmed yet" description={`${p.unconfirmedComponents.join(", ")}. A salary built on this structure is a test until they are confirmed too.`} />}
-            <SampleTable sample={p.sample} nameOf={nameOf} />
-            <Alert type="info" showIcon title={p.impact} />
-            <Input.TextArea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={500} placeholder="Why this, and where it came from (optional, but the person who confirms it will want it)" />
-            <Button type="primary" loading={save.isPending} disabled={p.unchanged} onClick={() => save.mutate()}>
+    <SideDrawer
+      open
+      size="wide"
+      title={isNew ? "Add a structure" : `Edit ${initial.value.name}`}
+      subtitle="Check that it adds up, then save it as an unconfirmed version"
+      onClose={onClose}
+      footer={
+        <div style={{ display: "flex", gap: space[3], width: "100%", flexWrap: "wrap" }}>
+          <Button size="large" style={{ flex: "1 1 120px" }} onClick={onClose}>Cancel</Button>
+          {p ? (
+            <Button size="large" type="primary" style={{ flex: "1 1 260px" }} loading={save.isPending} disabled={p.unchanged} onClick={() => save.mutate()}>
               Save as an unconfirmed version
             </Button>
-          </Space>
+          ) : (
+            <Button size="large" type="primary" style={{ flex: 1 }} loading={check.isPending} onClick={() => check.mutate()}>
+              Check it adds up
+            </Button>
+          )}
+        </div>
+      }
+    >
+      <Form layout="vertical" component="div" requiredMark={false}>
+        <div style={{ display: "flex", gap: space[3], flexWrap: "wrap" }}>
+          {isNew && (
+            <Form.Item label="Code" htmlFor="structure-code" validateStatus={codeBad ? "error" : undefined} help={codeBad ? "Use capital letters, digits and underscores, starting with a letter" : undefined} style={{ width: 200 }}>
+              <Input id="structure-code" value={code} onChange={(e) => { setCode(e.target.value.toUpperCase()); changed(); }} placeholder="STANDARD" maxLength={25} autoComplete="off" />
+            </Form.Item>
+          )}
+          <Form.Item label="Name" htmlFor="structure-name" style={{ flex: 1, minWidth: 220 }}>
+            <Input id="structure-name" value={name} onChange={(e) => { setName(e.target.value); changed(); }} maxLength={60} />
+          </Form.Item>
+        </div>
+        <Form.Item label="What it is for (optional)" htmlFor="structure-description">
+          <Input id="structure-description" value={description} onChange={(e) => { setDescription(e.target.value); changed(); }} maxLength={200} placeholder="For example: all permanent staff, grades G1 to G3" />
+        </Form.Item>
+        <Form.Item label="Counts toward CTC" extra="The lines of these kinds have to add up to CTC. A line of another kind (a deduction, say) is worked out but is not part of CTC.">
+          <Checkbox.Group options={COMPONENT_TYPES.map((t) => ({ value: t, label: COMPONENT_TYPE_LABEL[t] }))} value={includes} onChange={(val) => { setIncludes(val as ComponentType[]); changed(); }} />
+        </Form.Item>
+      </Form>
+
+      <FormGroupTitle>Lines</FormGroupTitle>
+      <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: space[3] }}>
+        {lines.length === 0 && <EmptyState compact title="No lines yet" description="Add the first one." />}
+        {lines.map((l, i) => {
+          const c = byCode.get(l.component);
+          const behind = c?.current && c.current.version > l.componentVersion;
+          const label = l.component ? nameOf(l.component) : `Line ${i + 1}`;
+          return (
+            <li key={i} style={{ border: `1px solid ${v.borderDefault}`, borderRadius: radius.md, padding: space[3], background: v.bgSubtle }}>
+              <div style={{ display: "flex", gap: space[3], flexWrap: "wrap", alignItems: "flex-start" }}>
+                <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+                  <Select
+                    showSearch
+                    optionFilterProp="label"
+                    aria-label={`Component for line ${i + 1}`}
+                    style={{ width: "100%" }}
+                    value={l.component || undefined}
+                    placeholder="Choose"
+                    options={components.map((x) => ({ value: x.code, label: `${x.value?.name} (${x.code})` }))}
+                    onChange={(val) => patch(i, pin(val))}
+                  />
+                  <div style={{ display: "flex", gap: space[1], alignItems: "center", flexWrap: "wrap", marginTop: space[1] }}>
+                    <Caption>v{l.componentVersion}</Caption>
+                    {c && c.status !== "CONFIRMED" && <StatusChip tone="warning">Placeholder</StatusChip>}
+                    {behind && <Button size="small" type="link" onClick={() => patch(i, pin(l.component))}>use v{c.current!.version}</Button>}
+                  </div>
+                </div>
+                <div style={{ flex: "2 1 260px", minWidth: 0, display: "flex", flexDirection: "column", gap: space[2] }}>
+                  <Select aria-label={`How much for ${label}`} style={{ width: "100%" }} value={l.calc.method} options={LINE_CALC_METHODS.map((m) => ({ value: m, label: LINE_CALC_LABEL[m] }))} onChange={(m) => patch(i, { calc: defaultCalc(m) })} />
+                  {l.calc.method === "PERCENT" && (
+                    <div style={{ display: "flex", gap: space[2], alignItems: "center", flexWrap: "wrap" }}>
+                      <Input aria-label={`Percent for ${label}`} style={{ width: 100 }} suffix="%" inputMode="decimal" value={l.calc.percent} onChange={(e) => patch(i, { calc: { ...(l.calc as Extract<LineCalc, { method: "PERCENT" }>), percent: e.target.value } })} />
+                      <span>of</span>
+                      <Select aria-label={`Percent of what, for ${label}`} style={{ flex: 1, minWidth: 140 }} value={l.calc.of} options={[{ value: "CTC", label: "CTC" }, ...lines.slice(0, i).filter((x) => x.component).map((x) => ({ value: x.component, label: nameOf(x.component) }))]} onChange={(of) => patch(i, { calc: { ...(l.calc as Extract<LineCalc, { method: "PERCENT" }>), of } })} />
+                    </div>
+                  )}
+                  {l.calc.method === "FIXED_AMOUNT" && <Input aria-label={`Amount for ${label}`} style={{ maxWidth: 220 }} prefix="₹" inputMode="decimal" value={l.calc.amount} onChange={(e) => patch(i, { calc: { method: "FIXED_AMOUNT", amount: e.target.value } })} suffix="a month" />}
+                  {l.calc.method === "FORMULA" && <Input aria-label={`Formula for ${label}`} value={l.calc.formula} placeholder="MIN(BASIC * 0.5, 15000)" spellCheck={false} onChange={(e) => patch(i, { calc: { method: "FORMULA", formula: e.target.value } })} />}
+                </div>
+                <div style={{ display: "flex", gap: space[1], flex: "none" }}>
+                  <Tooltip title="Move up"><Button icon={<ArrowUpOutlined />} disabled={i === 0} onClick={() => move(i, -1)} aria-label="Move up" /></Tooltip>
+                  <Tooltip title="Move down"><Button icon={<ArrowDownOutlined />} disabled={i === lines.length - 1} onClick={() => move(i, 1)} aria-label="Move down" /></Tooltip>
+                  <Tooltip title="Remove line"><Button danger icon={<DeleteOutlined />} onClick={() => { setLines((ls) => ls.filter((_, k) => k !== i)); changed(); }} aria-label="Remove line" /></Tooltip>
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+      <Stack gap={space[3]} style={{ marginTop: space[3] }}>
+        <div>
+          <Button icon={<PlusOutlined />} onClick={() => { setLines((ls) => [...ls, { component: "", componentVersion: 1, componentHash: "", calc: { method: "PERCENT", of: "CTC", percent: "" } }]); changed(); }}>
+            Add a line
+          </Button>
+        </div>
+        <Caption>
+          A line can be a percentage of CTC or of a line above it, the same amount for everyone, an amount typed for each person, a formula (CTC and the lines above it, with + - * / ( ), MIN, MAX, ROUND, CEIL, FLOOR), or the balance: whatever is left, so the lines always add up.
+        </Caption>
+
+        <Form layout="vertical" component="div">
+          <Form.Item label="Check it against a yearly CTC of" htmlFor="structure-sample" style={{ marginBottom: 0 }}>
+            <Input id="structure-sample" prefix="₹" inputMode="decimal" value={sample} onChange={(e) => { setSample(e.target.value); changed(); }} style={{ maxWidth: 220 }} />
+          </Form.Item>
+        </Form>
+
+        {problem && <ApprovalBanner tone="danger" title="It cannot be saved yet" description={problem} />}
+        {p && (
+          <Stack gap={space[3]}>
+            {p.unchanged && <ApprovalBanner tone="warning" title="That is the value it already has. There is nothing to save." />}
+            {p.willResetConfirmation && <ApprovalBanner tone="warning" title="This structure is Confirmed now." description="Saving adds a new version that is a Placeholder until a different person confirms it. The Confirmed version stays on record." />}
+            {p.unconfirmedComponents.length > 0 && <ApprovalBanner tone="warning" title="Some components are not confirmed yet" description={`${p.unconfirmedComponents.join(", ")}. A salary built on this structure is a test until they are confirmed too.`} />}
+            <SampleTable sample={p.sample} nameOf={nameOf} />
+            <ApprovalBanner tone="info" title={p.impact} />
+            <Form layout="vertical" component="div">
+              <Form.Item label="Why this, and where it came from" htmlFor="structure-note" extra="Optional, but the person who confirms it will want it." style={{ marginBottom: 0 }}>
+                <Input.TextArea id="structure-note" value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={500} placeholder="For example: as agreed with the CA" />
+              </Form.Item>
+            </Form>
+          </Stack>
         )}
-      </Space>
-    </Drawer>
+      </Stack>
+    </SideDrawer>
   );
 }
 
@@ -321,46 +356,67 @@ function StructureEditor({ initial, onClose, onSaved }: { initial: { code: strin
  * balance line absorbs the difference, so twelve months can differ from the yearly CTC by a few paise. The difference, when there is one, is named under the table.
  */
 function SampleTable({ sample, nameOf }: { sample: SampleResult; nameOf: (code: string) => string }) {
+  const phone = useIsPhone();
   const annualOf = new Map(sample.annual.lines.map((l) => [l.component, l.annual]));
   const different = !/^-?0(\.0+)?$/.test(sample.annual.difference);
+  const differenceText = `Twelve months of ${formatRupees(sample.breakup.monthlyCtc, 2)} come to ${formatRupees(sample.annual.total, 2)}, which is ${formatRupees(sample.annual.difference.replace("-", ""), 2)} ${sample.annual.difference.startsWith("-") ? "less" : "more"} than the yearly CTC of ${formatRupees(sample.annual.annualCtc, 2)}. A month is rounded by the rule “Rounding of salary lines”, and the balance line absorbs the difference so each month adds up exactly.`;
   return (
-    <Table
-      size="small"
-      pagination={false}
-      rowKey="component"
-      title={() => <Text strong>At {formatRupees(sample.annualCtc)} a year ({formatRupees(sample.breakup.monthlyCtc)} a month); amounts typed per person count as ₹0 here</Text>}
-      dataSource={sample.breakup.lines}
-      columns={[
-        { title: "Line", render: (_, l) => nameOf(l.component) },
-        { title: "Kind", render: (_, l) => COMPONENT_TYPE_LABEL[l.type] },
-        { title: "A month", align: "right", render: (_, l) => formatRupees(l.amount, 2) },
-        { title: "Over a year", align: "right", render: (_, l) => formatRupees(annualOf.get(l.component) ?? "0", 2) },
-      ]}
-      summary={() => (
-        <Table.Summary>
-          <Table.Summary.Row>
-            <Table.Summary.Cell index={0} colSpan={2}>
-              <Text strong>Counts toward CTC</Text>
-            </Table.Summary.Cell>
-            <Table.Summary.Cell index={2} align="right">
-              <Text strong>{formatRupees(sample.breakup.monthlyCtc, 2)}</Text>
-            </Table.Summary.Cell>
-            <Table.Summary.Cell index={3} align="right">
-              <Text strong>{formatRupees(sample.annual.total, 2)}</Text>
-            </Table.Summary.Cell>
-          </Table.Summary.Row>
-          {different && (
+    <div>
+      <div style={{ fontWeight: fw.semibold, color: v.textPrimary, marginBottom: space[2] }}>
+        At <span className="ws-num">{formatRupees(sample.annualCtc)}</span> a year (<span className="ws-num">{formatRupees(sample.breakup.monthlyCtc)}</span> a month); amounts typed per person count as ₹0 here
+      </div>
+      <DataTable
+        density="compact"
+        pagination={false}
+        rowKey="component"
+        dataSource={sample.breakup.lines}
+        mobile={{
+          title: (l) => nameOf(l.component),
+          subtitle: (l) => COMPONENT_TYPE_LABEL[l.type],
+          fields: [
+            { label: "A month", render: (l) => <Num>{formatRupees(l.amount, 2)}</Num> },
+            { label: "Over a year", render: (l) => <Num>{formatRupees(annualOf.get(l.component) ?? "0", 2)}</Num> },
+          ],
+        }}
+        columns={[
+          { title: "Line", key: "line", render: (_, l) => nameOf(l.component) },
+          { title: "Kind", key: "kind", render: (_, l) => COMPONENT_TYPE_LABEL[l.type] },
+          { title: "A month", key: "month", align: "right", render: (_, l) => <Num>{formatRupees(l.amount, 2)}</Num> },
+          { title: "Over a year", key: "year", align: "right", render: (_, l) => <Num>{formatRupees(annualOf.get(l.component) ?? "0", 2)}</Num> },
+        ]}
+        summary={() => (
+          <Table.Summary>
             <Table.Summary.Row>
-              <Table.Summary.Cell index={0} colSpan={4}>
-                <Text type="secondary">
-                  Twelve months of {formatRupees(sample.breakup.monthlyCtc, 2)} come to {formatRupees(sample.annual.total, 2)}, which is {formatRupees(sample.annual.difference.replace("-", ""), 2)} {sample.annual.difference.startsWith("-") ? "less" : "more"} than the yearly CTC of {formatRupees(sample.annual.annualCtc, 2)}. A month is rounded by the rule “Rounding of salary lines”, and the balance line absorbs the difference so each month adds up exactly.
-                </Text>
+              <Table.Summary.Cell index={0} colSpan={2}>
+                <strong>Counts toward CTC</strong>
+              </Table.Summary.Cell>
+              <Table.Summary.Cell index={2} align="right">
+                <Num strong>{formatRupees(sample.breakup.monthlyCtc, 2)}</Num>
+              </Table.Summary.Cell>
+              <Table.Summary.Cell index={3} align="right">
+                <Num strong>{formatRupees(sample.annual.total, 2)}</Num>
               </Table.Summary.Cell>
             </Table.Summary.Row>
-          )}
-        </Table.Summary>
+            {different && (
+              <Table.Summary.Row>
+                <Table.Summary.Cell index={0} colSpan={4}>
+                  <Caption>{differenceText}</Caption>
+                </Table.Summary.Cell>
+              </Table.Summary.Row>
+            )}
+          </Table.Summary>
+        )}
+      />
+      {phone && (
+        <div style={{ marginTop: space[3] }}>
+          <FigureRow>
+            <Figure label="Counts toward CTC, a month" value={formatRupees(sample.breakup.monthlyCtc, 2)} />
+            <Figure label="Over a year" value={formatRupees(sample.annual.total, 2)} />
+          </FigureRow>
+          {different && <Caption>{differenceText}</Caption>}
+        </div>
       )}
-    />
+    </div>
   );
 }
 
@@ -368,15 +424,17 @@ function SampleTable({ sample, nameOf }: { sample: SampleResult; nameOf: (code: 
 function StructureExample({ value, nameOf }: { value: StructureValue; nameOf: (code: string) => string }) {
   const [ctc, setCtc] = useState("1200000");
   const valid = /^\d+(\.\d{1,2})?$/.test(ctc.trim()) && !/^0+(\.0+)?$/.test(ctc.trim()); // text only: an amount is never turned into a JavaScript number
-  const example = useQuery({ queryKey: ["payroll", "structure-example", JSON.stringify(value), ctc.trim()], enabled: valid, queryFn: () => payrollApi.previewBreakup(value, ctc.trim()), retry: false });
+  const example = useQuery({ queryKey: ["payroll", "structure-example", JSON.stringify(value), ctc.trim()], enabled: valid, queryFn: () => payrollApi.previewBreakup(value, ctc.trim()), retry: false, placeholderData: keepPreviousData });
   return (
-    <Space orientation="vertical" size={8} style={{ width: "100%" }}>
-      <Space>
-        <Text type="secondary">Worked example for a yearly CTC of</Text>
-        <Input prefix="₹" value={ctc} onChange={(e) => setCtc(e.target.value)} style={{ width: 180 }} />
-      </Space>
-      {example.error && <Alert type="warning" showIcon title={apiErrorMessage(example.error, "That does not work out for this CTC.")} />}
+    <Stack gap={space[3]}>
+      <Form layout="vertical" component="div">
+        <Form.Item label="Worked example for a yearly CTC of" htmlFor="structure-example-ctc" validateStatus={ctc.trim() && !valid ? "error" : undefined} help={ctc.trim() && !valid ? "Type an amount in rupees, for example 1200000" : undefined} style={{ marginBottom: 0 }}>
+          <Input id="structure-example-ctc" prefix="₹" inputMode="decimal" value={ctc} onChange={(e) => setCtc(e.target.value)} style={{ maxWidth: 220 }} />
+        </Form.Item>
+      </Form>
+      {example.isLoading && <SkeletonTable rows={4} columns={4} />}
+      {example.error && <ApprovalBanner tone="warning" title={apiErrorMessage(example.error, "That does not work out for this CTC.")} />}
       {example.data && <SampleTable sample={example.data} nameOf={nameOf} />}
-    </Space>
+    </Stack>
   );
 }

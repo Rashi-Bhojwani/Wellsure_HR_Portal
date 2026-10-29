@@ -103,7 +103,7 @@ describe("rotation procedure", () => {
     }
     for (const eid of employeeIds) {
       const s = await prisma.employeeStatutory.findUniqueOrThrow({ where: { employeeId: eid } });
-      out.push(decryptField(s.panEncrypted!), decryptField(s.aadhaarEncrypted!), decryptField(s.uanEncrypted!));
+      out.push(decryptField(s.panEncrypted!), decryptField(s.aadhaarEncrypted!), decryptField(s.uanEncrypted!), decryptField(s.esiEncrypted!));
       const b = await prisma.employeeBankAccount.findFirstOrThrow({ where: { employeeId: eid } });
       out.push(decryptField(b.accountNumberEncrypted));
     }
@@ -121,7 +121,7 @@ describe("rotation procedure", () => {
       employeeIds.push(u.employeeId);
       userIds.add(u.userId);
       await prisma.user.update({ where: { id: u.userId }, data: { totpSecretEncrypted: encryptField(`TOTPSECRET${i}`) } });
-      const s = await prisma.employeeStatutory.create({ data: { employeeId: u.employeeId, panEncrypted: encryptField(`PAN${i}`), aadhaarEncrypted: encryptField(`AAD${i}`), uanEncrypted: encryptField(`UAN${i}`) } });
+      const s = await prisma.employeeStatutory.create({ data: { employeeId: u.employeeId, panEncrypted: encryptField(`PAN${i}`), aadhaarEncrypted: encryptField(`AAD${i}`), uanEncrypted: encryptField(`UAN${i}`), esiEncrypted: encryptField(`ESI${i}`) } });
       const b = await prisma.employeeBankAccount.create({
         data: { employeeId: u.employeeId, accountHolderName: "T", accountNumberEncrypted: encryptField(`ACC${i}`), accountNumberLast4: "0000", accountNumberHash: randomBytes(8).toString("hex"), ifsc: "X", bankName: "X", branchName: "X", createdByUserId: u.userId },
       });
@@ -141,7 +141,8 @@ describe("rotation procedure", () => {
 
   it("phase 0: everything is under key 1", async () => {
     expect(await inUse()).toEqual([1]);
-    expect(await readAll()).toHaveLength(15);
+    // 3 people x (TOTP secret, PAN, Aadhaar, UAN, ESI number, bank account) = 18 encrypted values.
+    expect(await readAll()).toHaveLength(18);
   });
 
   it("phase 1: add key 2 without making it current; nothing changes, and tasks on the old keyring still work", async () => {
@@ -164,31 +165,31 @@ describe("rotation procedure", () => {
     expect(decryptField(written)).toBe("written by a promoted task");
     keyring = phase2;
     await load(keyring);
-    expect(await readAll()).toHaveLength(15); // old values still read
+    expect(await readAll()).toHaveLength(18); // old values still read
     expect(await inUse()).toEqual([1]);
   });
 
   it("retire is refused while values remain under the old key", async () => {
     const blockers = await retireBlockers(1, { filter: (id) => ids.has(id) }); // what `field-keys retire 1` checks, and refuses on
-    expect(blockers.reduce((n, u) => n + u.count, 0)).toBe(15);
+    expect(blockers.reduce((n, u) => n + u.count, 0)).toBe(18);
     expect(blockers.map((b) => b.column).sort()).toEqual(
-      ["EmployeeBankAccount.accountNumberEncrypted", "EmployeeStatutory.aadhaarEncrypted", "EmployeeStatutory.panEncrypted", "EmployeeStatutory.uanEncrypted", "User.totpSecretEncrypted"],
+      ["EmployeeBankAccount.accountNumberEncrypted", "EmployeeStatutory.aadhaarEncrypted", "EmployeeStatutory.esiEncrypted", "EmployeeStatutory.panEncrypted", "EmployeeStatutory.uanEncrypted", "User.totpSecretEncrypted"],
     );
     expect(() => retireDataKey(keyring, 2)).toThrow(/current key/);
   });
 
   it("phase 3: a dry run counts without writing, then --apply moves every value to key 2, and it is safe to run again", async () => {
     const dry = await reencryptAll({ apply: false, filter: (id) => ids.has(id) });
-    expect(dry).toMatchObject({ examined: 15, reencrypted: 15, alreadyCurrent: 0, failed: [] });
+    expect(dry).toMatchObject({ examined: 18, reencrypted: 18, alreadyCurrent: 0, failed: [] });
     expect(await inUse()).toEqual([1]); // nothing written
 
     const done = await reencryptAll({ apply: true, filter: (id) => ids.has(id) });
-    expect(done).toMatchObject({ reencrypted: 15, failed: [], skippedChangedMeanwhile: 0 });
+    expect(done).toMatchObject({ reencrypted: 18, failed: [], skippedChangedMeanwhile: 0 });
     expect(await inUse()).toEqual([2]);
-    expect(await readAll()).toEqual(expect.arrayContaining(["TOTPSECRET0", "PAN1", "AAD2", "UAN0", "ACC1"]));
+    expect(await readAll()).toEqual(expect.arrayContaining(["TOTPSECRET0", "PAN1", "AAD2", "UAN0", "ESI2", "ACC1"]));
 
     const again = await reencryptAll({ apply: true, filter: (id) => ids.has(id) });
-    expect(again).toMatchObject({ reencrypted: 0, alreadyCurrent: 15 });
+    expect(again).toMatchObject({ reencrypted: 0, alreadyCurrent: 18 });
   });
 
   it("phase 4: with nothing under key 1 it can be retired, and everything still reads without it", async () => {
@@ -196,7 +197,7 @@ describe("rotation procedure", () => {
     keyring = retireDataKey(keyring, 1);
     expect(keyring.keys.map((k) => k.id)).toEqual([2]);
     await load(keyring);
-    expect(await readAll()).toHaveLength(15);
+    expect(await readAll()).toHaveLength(18);
     // A value left on the retired key is unreadable: that is why retire is refused while any remain.
     const stray = Uint8Array.from(encryptField("stray"));
     stray[0] = 1;

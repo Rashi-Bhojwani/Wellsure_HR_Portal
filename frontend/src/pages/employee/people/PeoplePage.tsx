@@ -1,136 +1,206 @@
-import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Card, Col, Empty, Input, Pagination, Row, Select, Space, Tabs, Typography } from "antd";
+import { memo, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { Button, Pagination, Select, Tabs } from "antd";
 import { MailOutlined, PhoneOutlined } from "@ant-design/icons";
 import { useSearchParams } from "react-router-dom";
 import * as orgApi from "../../../api/org";
-import { listDirectory } from "../../../api/people";
+import { listDirectory, type DirectoryEntry } from "../../../api/people";
 import { EmployeeAvatar } from "../../../components/common/EmployeeAvatar";
-import { EmptyState } from "../../../components/common/EmptyState";
 import { OrgChart } from "./OrgChart";
 import { PersonDrawer } from "./PersonDrawer";
+import { fs, fw, radius, space, v } from "../../../theme/tokens";
+import { CardGrid, EmptyState, FilterBar, PageHeader, Panel, QueryState, Skel, useIsPhone } from "../../../ui";
 
 const PAGE_SIZE = 24;
+const REFERENCE_STALE = 5 * 60_000;
 const ellipsis = { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } as const;
 
-function useDebounced<T>(value: T, ms: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), ms);
-    return () => clearTimeout(t);
-  }, [value, ms]);
-  return debounced;
+// The board's directory card (employees-12): photo, name, designation, a divider, then contact rows. A real <button>, so it opens by keyboard too.
+// CSS ellipsis, not Typography's measured ellipsis: a page of cards with several measured ellipses each was the directory's main render cost.
+const PersonCard = memo(function PersonCard({ person, onOpen }: { person: DirectoryEntry; onOpen: (id: string) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(person.id)}
+      aria-label={`${person.name}, ${person.designation.name}, ${person.department.name}`}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: space[1],
+        width: "100%",
+        height: "100%",
+        minWidth: 0,
+        padding: `${space[5]}px ${space[4]}px`,
+        background: v.bgSurface,
+        border: `1px solid ${v.borderDefault}`,
+        borderRadius: radius.lg,
+        cursor: "pointer",
+        font: "inherit",
+        color: "inherit",
+        textAlign: "center",
+      }}
+    >
+      <EmployeeAvatar employeeId={person.id} name={person.name} photoVersion={person.photoVersion} size={56} />
+      <span style={{ display: "block", maxWidth: "100%", marginTop: space[2], fontSize: fs.lg, fontWeight: fw.semibold, color: v.textPrimary, ...ellipsis }}>{person.name}</span>
+      <span style={{ display: "block", maxWidth: "100%", fontSize: fs.sm, color: v.textSecondary, ...ellipsis }}>
+        {person.designation.name} · {person.department.name}
+      </span>
+      <span style={{ display: "block", maxWidth: "100%", fontSize: fs.sm, color: v.textSecondary, ...ellipsis }}>
+        {person.location.name} · {person.employeeCode}
+      </span>
+      {(person.officialEmail || person.mobile) && (
+        <span style={{ display: "flex", flexDirection: "column", gap: space[1], alignItems: "center", width: "100%", marginTop: space[3], paddingTop: space[3], borderTop: `1px solid ${v.borderDefault}` }}>
+          {person.officialEmail && (
+            <span style={{ display: "flex", alignItems: "center", gap: space[2], maxWidth: "100%", fontSize: fs.sm, color: v.textBody }}>
+              <MailOutlined aria-hidden style={{ color: v.textSecondary, flex: "none" }} />
+              <span style={ellipsis}>{person.officialEmail}</span>
+            </span>
+          )}
+          {person.mobile && (
+            <span style={{ display: "flex", alignItems: "center", gap: space[2], fontSize: fs.sm, color: v.textBody, fontWeight: fw.medium }}>
+              <PhoneOutlined aria-hidden style={{ color: v.textSecondary }} />
+              <span className="ws-num">{person.mobile}</span>
+            </span>
+          )}
+        </span>
+      )}
+    </button>
+  );
+});
+
+function DirectorySkeleton() {
+  return (
+    <CardGrid min={220} gap={space[4]}>
+      {Array.from({ length: 8 }, (_, i) => (
+        <div key={i} style={{ border: `1px solid ${v.borderDefault}`, borderRadius: radius.lg, padding: space[5], display: "flex", flexDirection: "column", alignItems: "center", gap: space[2] }}>
+          <Skel w={56} h={56} r={radius.pill} />
+          <Skel w="70%" h={16} />
+          <Skel w="55%" h={12} />
+          <Skel w="80%" h={12} style={{ marginTop: space[3] }} />
+        </div>
+      ))}
+    </CardGrid>
+  );
 }
 
 function Directory({ onOpenPerson }: { onOpenPerson: (id: string) => void }) {
+  const phone = useIsPhone();
   const [search, setSearch] = useState("");
   const [departmentId, setDepartmentId] = useState<string>();
   const [locationId, setLocationId] = useState<string>();
   const [page, setPage] = useState(1);
-  const debouncedSearch = useDebounced(search, 300);
 
-  const { data: departments = [] } = useQuery({ queryKey: ["org", "departments"], queryFn: orgApi.departments.list });
-  const { data: locations = [] } = useQuery({ queryKey: ["org", "locations"], queryFn: () => orgApi.listLocations() });
-  const { data, isLoading } = useQuery({
-    queryKey: ["people", "directory", debouncedSearch, departmentId, locationId, page],
-    queryFn: () => listDirectory({ search: debouncedSearch || undefined, departmentId, locationId, page, pageSize: PAGE_SIZE }),
-    placeholderData: (previous) => previous,
+  const { data: departments = [] } = useQuery({ queryKey: ["org", "departments"], queryFn: orgApi.departments.list, staleTime: REFERENCE_STALE });
+  const { data: locations = [] } = useQuery({ queryKey: ["org", "locations"], queryFn: () => orgApi.listLocations(), staleTime: REFERENCE_STALE });
+  const { data, isLoading, isFetching, error, refetch } = useQuery({
+    queryKey: ["people", "directory", search, departmentId, locationId, page],
+    queryFn: () => listDirectory({ search: search || undefined, departmentId, locationId, page, pageSize: PAGE_SIZE }),
+    placeholderData: keepPreviousData,
   });
 
-  return (
-    <Space orientation="vertical" size={16} style={{ width: "100%" }}>
-      <Row gutter={[12, 12]}>
-        <Col xs={24} md={10}>
-          <Input.Search
-            allowClear
-            placeholder="Search by name or employee code"
-            aria-label="Search people"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-          />
-        </Col>
-        <Col xs={12} md={7}>
-          <Select
-            allowClear
-            showSearch={{ optionFilterProp: "label" }}
-            placeholder="All departments"
-            aria-label="Filter by department"
-            style={{ width: "100%" }}
-            value={departmentId}
-            onChange={(v) => {
-              setDepartmentId(v);
-              setPage(1);
-            }}
-            options={departments.map((d) => ({ value: d.id, label: d.name }))}
-          />
-        </Col>
-        <Col xs={12} md={7}>
-          <Select
-            allowClear
-            showSearch={{ optionFilterProp: "label" }}
-            placeholder="All branches"
-            aria-label="Filter by branch"
-            style={{ width: "100%" }}
-            value={locationId}
-            onChange={(v) => {
-              setLocationId(v);
-              setPage(1);
-            }}
-            options={locations.map((l) => ({ value: l.id, label: l.name }))}
-          />
-        </Col>
-      </Row>
+  const activeCount = (departmentId ? 1 : 0) + (locationId ? 1 : 0);
+  const clearAll = () => {
+    setDepartmentId(undefined);
+    setLocationId(undefined);
+    setPage(1);
+  };
 
-      {isLoading || !data ? (
-        <EmptyState message="Loading…" />
-      ) : data.items.length === 0 ? (
-        <Empty description="No one matches these filters." />
-      ) : (
-        <>
-          <Typography.Text type="secondary">{data.total} {data.total === 1 ? "person" : "people"}</Typography.Text>
-          <Row gutter={[12, 12]}>
-            {data.items.map((person) => (
-              <Col key={person.id} xs={24} sm={12} lg={8} xxl={6}>
-                <Card hoverable size="small" onClick={() => onOpenPerson(person.id)} style={{ height: "100%" }}>
-                  <Space align="start" size={12} style={{ width: "100%" }}>
-                    <EmployeeAvatar employeeId={person.id} name={person.name} photoVersion={person.photoVersion} size={56} />
-                    {/* CSS ellipsis, not Typography's measured ellipsis: a page of cards
-                        with several measured ellipses each was the directory's main render cost. */}
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, ...ellipsis }}>{person.name}</div>
-                      <div style={{ fontSize: 12, ...ellipsis }}>
-                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                          {person.designation.name} · {person.department.name}
-                        </Typography.Text>
-                      </div>
-                      <div style={{ fontSize: 12, ...ellipsis }}>
-                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                          {person.location.name} · {person.employeeCode}
-                        </Typography.Text>
-                      </div>
-                      {person.officialEmail && (
-                        <div style={{ fontSize: 12, ...ellipsis }}>
-                          <MailOutlined /> {person.officialEmail}
-                        </div>
-                      )}
-                      {person.mobile && (
-                        <div style={{ fontSize: 12 }}>
-                          <PhoneOutlined /> {person.mobile}
-                        </div>
-                      )}
-                    </div>
-                  </Space>
-                </Card>
-              </Col>
-            ))}
-          </Row>
-          <Pagination current={page} pageSize={PAGE_SIZE} total={data.total} onChange={setPage} showSizeChanger={false} align="center" />
-        </>
-      )}
-    </Space>
+  return (
+    <div style={{ paddingTop: space[2] }}>
+      <FilterBar
+        onSearch={(s) => {
+          setSearch(s);
+          setPage(1);
+        }}
+        searchValue={search}
+        searchPlaceholder="Search by name or employee code"
+        activeCount={activeCount}
+        onClear={clearAll}
+        filters={
+          <>
+            <Select
+              allowClear
+              showSearch={{ optionFilterProp: "label" }}
+              placeholder="All departments"
+              aria-label="Filter by department"
+              style={{ width: phone ? "100%" : 200 }}
+              value={departmentId}
+              onChange={(val) => {
+                setDepartmentId(val);
+                setPage(1);
+              }}
+              options={departments.map((d) => ({ value: d.id, label: d.name }))}
+            />
+            <Select
+              allowClear
+              showSearch={{ optionFilterProp: "label" }}
+              placeholder="All branches"
+              aria-label="Filter by branch"
+              style={{ width: phone ? "100%" : 200 }}
+              value={locationId}
+              onChange={(val) => {
+                setLocationId(val);
+                setPage(1);
+              }}
+              options={locations.map((l) => ({ value: l.id, label: l.name }))}
+            />
+          </>
+        }
+      />
+
+      <QueryState
+        isLoading={isLoading}
+        error={data ? undefined : error}
+        onRetry={() => void refetch()}
+        skeleton={<DirectorySkeleton />}
+        isEmpty={!data || data.items.length === 0}
+        empty={
+          search || activeCount > 0 ? (
+            <EmptyState
+              kind="no-results"
+              title="No one matches these filters."
+              description="Try a different name or code, or clear the filters."
+              action={
+                activeCount > 0 ? (
+                  <Button onClick={clearAll}>Clear filters</Button>
+                ) : undefined
+              }
+            />
+          ) : (
+            <EmptyState illustration="people" title="No one in the directory yet" description="Colleagues show up here once HR adds them." />
+          )
+        }
+      >
+        {data && (
+          <div style={{ opacity: isFetching && !isLoading ? 0.6 : 1, transition: "opacity 0.15s" }} aria-busy={isFetching}>
+            <div style={{ color: v.textSecondary, fontSize: fs.sm, marginBottom: space[3] }} aria-live="polite">
+              {data.total} {data.total === 1 ? "person" : "people"}
+            </div>
+            <CardGrid min={phone ? 160 : 220} gap={phone ? space[3] : space[4]}>
+              {data.items.map((person) => (
+                <PersonCard key={person.id} person={person} onOpen={onOpenPerson} />
+              ))}
+            </CardGrid>
+            {data.total > PAGE_SIZE && (
+              <Pagination
+                current={page}
+                pageSize={PAGE_SIZE}
+                total={data.total}
+                onChange={(p) => {
+                  setPage(p);
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                showSizeChanger={false}
+                simple={phone}
+                align="center"
+                style={{ marginTop: space[6] }}
+              />
+            )}
+          </div>
+        )}
+      </QueryState>
+    </div>
   );
 }
 
@@ -141,16 +211,19 @@ export function PeoplePage() {
   const tab = params.get("tab") === "org-chart" ? "org-chart" : "directory";
 
   return (
-    <Card>
-      <Tabs
-        activeKey={tab}
-        onChange={(key) => setParams(key === "directory" ? {} : { tab: key }, { replace: true })}
-        items={[
-          { key: "directory", label: "Directory", children: <Directory onOpenPerson={setOpenPersonId} /> },
-          { key: "org-chart", label: "Org Chart", children: <OrgChart onOpenPerson={setOpenPersonId} /> },
-        ]}
-      />
+    <>
+      <PageHeader title="People" subtitle="Find a colleague, or see who reports to whom" />
+      <Panel>
+        <Tabs
+          activeKey={tab}
+          onChange={(key) => setParams(key === "directory" ? {} : { tab: key }, { replace: true })}
+          items={[
+            { key: "directory", label: "Directory", children: <Directory onOpenPerson={setOpenPersonId} /> },
+            { key: "org-chart", label: "Org Chart", children: <OrgChart onOpenPerson={setOpenPersonId} /> },
+          ]}
+        />
+      </Panel>
       <PersonDrawer employeeId={openPersonId} onClose={() => setOpenPersonId(null)} onSelectPerson={setOpenPersonId} />
-    </Card>
+    </>
   );
 }

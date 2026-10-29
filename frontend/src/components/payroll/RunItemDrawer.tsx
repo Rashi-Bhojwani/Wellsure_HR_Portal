@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { Alert, Descriptions, Drawer, Space, Spin, Table, Tag, Typography } from "antd";
+import { Alert, Descriptions, Space, Table, Typography } from "antd";
+import { EmptyState, SideDrawer, SkeletonCard, StatusChip } from "../../ui";
 import { HOLD_REASON_LABEL } from "@shared/constants/payrollRun";
 import * as payrollApi from "../../api/payroll";
 import type { RunItemDetail, RunLine } from "../../api/payroll";
@@ -7,6 +8,7 @@ import { apiErrorMessage } from "../../lib/apiError";
 import { formatDate } from "../../lib/dates";
 import { formatRupees } from "../../lib/money";
 import { LINE_KIND_LABEL } from "../../pages/admin/payroll/runText";
+import { fs } from "../../theme/tokens";
 
 const { Text } = Typography;
 
@@ -81,11 +83,11 @@ export function RunItemDrawer({ runId, employeeId, onClose }: { runId: string; e
   const { data: components = [] } = useQuery({ queryKey: ["payroll", "components"], queryFn: payrollApi.listComponents });
   const nameOf = (code: string) => components.find((c) => c.code === code)?.value?.name ?? code;
   return (
-    <Drawer open width={860} title={data ? `${data.name} (${data.employeeCode})` : "Why this figure"} onClose={onClose} destroyOnHidden>
-      {isLoading && <Spin />}
-      {error && <Alert type="error" showIcon title={apiErrorMessage(error, "Could not load this person.")} />}
+    <SideDrawer open size="wide" title={data ? `${data.name} (${data.employeeCode})` : "Why this figure"} subtitle="How each figure was worked out" onClose={onClose} footer={null}>
+      {isLoading && <SkeletonCard lines={8} />}
+      {error && <EmptyState kind="error" compact title="Could not load this person" description={apiErrorMessage(error, "Could not load this person.")} />}
       {data && <Body d={data} nameOf={nameOf} />}
-    </Drawer>
+    </SideDrawer>
   );
 }
 
@@ -102,7 +104,7 @@ function Body({ d, nameOf }: { d: RunItemDetail; nameOf: (code: string) => strin
         <Descriptions
           size="small"
           bordered
-          column={2}
+          column={{ xs: 1, sm: 2 }}
           title="The days"
           items={[
             { key: "e", label: "Employed", children: `${days.employedDays} of the ${days.cycleDays} days of the cycle${d.employedFrom ? ` (${formatDate(d.employedFrom)} to ${formatDate(d.employedTo!)})` : ""}` },
@@ -122,39 +124,39 @@ function Body({ d, nameOf }: { d: RunItemDetail; nameOf: (code: string) => strin
         rowKey={(l) => `${l.code}-${l.sourceRef ?? ""}`}
         dataSource={d.lines}
         columns={[
-          { title: "Line", render: (_, l) => <div>{l.source === "COMPONENT" ? nameOf(l.code) : l.label}<div><Text type="secondary" style={{ fontSize: 12 }}>{LINE_KIND_LABEL[l.kind]}</Text></div></div> },
-          { title: "Amount", align: "right", render: (_, l) => <Text type={l.kind === "DEDUCTION" ? "danger" : undefined}>{l.kind === "DEDUCTION" ? "-" : ""}{money(l.amount)}</Text> },
+          { title: "Line", render: (_, l) => <div>{l.source === "COMPONENT" ? nameOf(l.code) : l.label}<div><Text type="secondary" style={{ fontSize: fs.sm }}>{LINE_KIND_LABEL[l.kind]}</Text></div></div> },
+          { title: "Amount", align: "right", className: "ws-num", render: (_, l) => <Text type={l.kind === "DEDUCTION" ? "danger" : undefined}>{l.kind === "DEDUCTION" ? "-" : ""}{money(l.amount)}</Text> },
         ]}
         expandable={{ expandedRowRender: (l) => <LineBasis line={l} nameOf={nameOf} />, rowExpandable: () => true }}
         summary={() => (
           <Table.Summary>
             <Table.Summary.Row>
               <Table.Summary.Cell index={0}><Text strong>Gross earnings</Text></Table.Summary.Cell>
-              <Table.Summary.Cell index={1} align="right"><Text strong>{money(d.totals.gross)}</Text></Table.Summary.Cell>
+              <Table.Summary.Cell index={1} align="right" className="ws-num"><Text strong>{money(d.totals.gross)}</Text></Table.Summary.Cell>
             </Table.Summary.Row>
             <Table.Summary.Row>
               <Table.Summary.Cell index={0}><Text strong>Deductions</Text></Table.Summary.Cell>
-              <Table.Summary.Cell index={1} align="right"><Text strong>-{money(d.totals.deductions)}</Text></Table.Summary.Cell>
+              <Table.Summary.Cell index={1} align="right" className="ws-num"><Text strong>-{money(d.totals.deductions)}</Text></Table.Summary.Cell>
             </Table.Summary.Row>
             {d.totals.roundingAdjustment !== "0" && (
               <Table.Summary.Row>
                 <Table.Summary.Cell index={0}><Text>Rounding of net pay</Text></Table.Summary.Cell>
-                <Table.Summary.Cell index={1} align="right">{money(d.totals.roundingAdjustment)}</Table.Summary.Cell>
+                <Table.Summary.Cell index={1} align="right" className="ws-num">{money(d.totals.roundingAdjustment)}</Table.Summary.Cell>
               </Table.Summary.Row>
             )}
             <Table.Summary.Row>
               <Table.Summary.Cell index={0}><Text strong>Net pay</Text></Table.Summary.Cell>
-              <Table.Summary.Cell index={1} align="right"><Text strong>{money(d.totals.net)}</Text></Table.Summary.Cell>
+              <Table.Summary.Cell index={1} align="right" className="ws-num"><Text strong>{money(d.totals.net)}</Text></Table.Summary.Cell>
             </Table.Summary.Row>
             <Table.Summary.Row>
               <Table.Summary.Cell index={0}><Text type="secondary">Employer contributions (not part of net pay)</Text></Table.Summary.Cell>
-              <Table.Summary.Cell index={1} align="right"><Text type="secondary">{money(d.totals.employerContributions)}</Text></Table.Summary.Cell>
+              <Table.Summary.Cell index={1} align="right" className="ws-num"><Text type="secondary">{money(d.totals.employerContributions)}</Text></Table.Summary.Cell>
             </Table.Summary.Row>
           </Table.Summary>
         )}
       />
       <Text type="secondary">
-        <Tag>{d.employmentType.toLowerCase()}</Tag> {d.structure ? `Salary structure ${d.structure.key}, version ${d.structure.version}. ` : ""}Open a line to see how it was worked out. Everything here is read from what the run stored; nothing is recalculated to show it.
+        <StatusChip tone="neutral">{d.employmentType.toLowerCase()}</StatusChip> {d.structure ? `Salary structure ${d.structure.key}, version ${d.structure.version}. ` : ""}Open a line to see how it was worked out. Everything here is read from what the run stored; nothing is recalculated to show it.
       </Text>
     </Space>
   );

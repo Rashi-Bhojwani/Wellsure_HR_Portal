@@ -1,18 +1,20 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
-import { Alert, Button, Form, Input, Typography } from "antd";
-import { UserOutlined } from "@ant-design/icons";
+import { Link, useNavigate } from "react-router-dom";
+import { Button, Form, Input } from "antd";
 import type { AxiosError } from "axios";
 import { AuthShell } from "../AuthShell";
+import { AuthError } from "../authParts";
+import { requiredMark } from "../authStyles";
 import * as authApi from "../../../api/auth";
-
-const { Text } = Typography;
+import { Illustration } from "../../../ui";
+import { fs, space, v } from "../../../theme/tokens";
 
 interface ForgotPasswordForm {
   employeeCode: string;
 }
 
 export function ForgotPasswordPage() {
+  const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
@@ -35,36 +37,40 @@ export function ForgotPasswordPage() {
 
   if (sent) {
     return (
-      <AuthShell title="Check your email">
-        <Alert
-          type="info"
-          showIcon
-          title="If that Employee Code exists, a reset link has been sent"
-          description="Check the personal email on file. The link is valid for 1 hour."
-          style={{ marginBottom: 20 }}
-        />
-        <Link to="/login">Back to sign in</Link>
+      <AuthShell
+        title="Check your email"
+        hero={<Illustration name="inbox" size={140} />}
+        subtitle={
+          <>
+            <span style={{ display: "block", color: v.textPrimary }}>If that Employee Code exists, a reset link has been sent</span>
+            Check the personal email on file. The link is valid for 1 hour.
+          </>
+        }
+      >
+        <Button block size="large" onClick={() => navigate("/login")}>
+          Back to sign in
+        </Button>
       </AuthShell>
     );
   }
 
   return (
     <AuthShell title="Forgot password" subtitle="Enter your Employee Code and we'll email you a reset link">
-      {error && <Alert type="error" showIcon title={error} style={{ marginBottom: 20 }} />}
+      <AuthError message={error} />
 
-      <Form<ForgotPasswordForm> layout="vertical" onFinish={onFinish} requiredMark={false}>
+      <Form<ForgotPasswordForm> layout="vertical" onFinish={onFinish} requiredMark={requiredMark}>
         <Form.Item name="employeeCode" label="Employee Code" rules={[{ required: true, message: "Enter your Employee Code" }]}>
-          <Input prefix={<UserOutlined />} placeholder="e.g. 1042" size="large" autoFocus />
+          <Input placeholder="e.g. 1042" size="large" autoFocus autoComplete="username" />
         </Form.Item>
-        <Form.Item>
+        <Form.Item style={{ marginBottom: space[4] }}>
           <Button type="primary" htmlType="submit" block size="large" loading={submitting}>
             Send reset link
           </Button>
         </Form.Item>
       </Form>
-      <Text type="secondary" style={{ fontSize: 12 }}>
+      <div style={{ textAlign: "center", fontSize: fs.md }}>
         <Link to="/login">Back to sign in</Link>
-      </Text>
+      </div>
     </AuthShell>
   );
 }

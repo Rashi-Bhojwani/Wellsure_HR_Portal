@@ -76,6 +76,14 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # The design system's standing rule (CLAUDE.md "UI rules", docs/DESIGN_SYSTEM.md §13): no raw colours outside
+      # frontend/src/theme, every light token has a dark twin (also run inside `npm run lint` above), and the JS budgets hold.
+      - name: Design tokens and bundle budgets
+        run: |
+          npm run check:tokens --prefix frontend
+          npm run build --prefix frontend
+          npm run check:bundle --prefix frontend
+
       - name: Check services
         run: npm run check:services
 

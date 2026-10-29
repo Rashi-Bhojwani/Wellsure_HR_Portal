@@ -34,6 +34,7 @@ function toDisplayRow(dataset: ImportDatasetKey, data: Record<string, unknown>):
     if (data.panLast4) display.pan = `•••••${String(data.panLast4)}`;
     if (data.aadhaarLast4) display.aadhaar = `••••••••${String(data.aadhaarLast4)}`;
     if (data.uanLast4) display.uan = `••••••••${String(data.uanLast4)}`;
+    if (data.esiLast4) display.esiNumber = `••••••${String(data.esiLast4)}`;
   }
   return display;
 }
@@ -336,7 +337,10 @@ async function commitStatutory(tx: Prisma.TransactionClient, rows: { data: Recor
       update.uanEncrypted = unpackBytes(d.uanEncrypted);
       update.uanLast4 = d.uanLast4;
     }
-    if (d.esiNumber) update.esiNumber = d.esiNumber;
+    if (d.esiEncrypted) {
+      update.esiEncrypted = unpackBytes(d.esiEncrypted);
+      update.esiLast4 = d.esiLast4;
+    }
     if (Object.keys(update).length === 0) continue;
     update.updatedByUserId = meta.actorUserId;
     await tx.employeeStatutory.upsert({ where: { employeeId }, create: { employeeId, ...update }, update });

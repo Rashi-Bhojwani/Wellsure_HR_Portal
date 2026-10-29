@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Button, Card, DatePicker, Drawer, Flex, Input, Modal, Space, Spin, Table, Tag, Tooltip, Typography, Upload, message } from "antd";
+import { Alert, Button, DatePicker, Flex, Input, Space, Tooltip, Typography, Upload } from "antd";
 import { DownloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { Link } from "react-router-dom";
@@ -12,6 +12,9 @@ import { formatDate, formatDateTime } from "../../lib/dates";
 import { formatRupees } from "../../lib/money";
 import { NoPayslipAlert } from "./NoPayslipAlert";
 import { PayslipView } from "./PayslipView";
+import { fs } from "../../theme/tokens";
+import { ConfirmModal, DataTable, EmptyState, Panel, SideDrawer, SkeletonCard, Stack, StatusChip, toast, type ChipTone } from "../../ui";
+import { FileRow, Num } from "./payrollUi";
 
 const { Text, Paragraph } = Typography;
 
@@ -28,11 +31,11 @@ function open(url: string) {
   a.click();
 }
 
-const EMAIL_TAG: Record<payrollApi.EmailStatus, { color: string; label: string }> = {
-  SENT: { color: "green", label: "Email sent" },
-  FILE_ONLY: { color: "orange", label: "Not emailed (development)" },
-  FAILED: { color: "red", label: "Email failed" },
-  PENDING: { color: "default", label: "Not yet" },
+const EMAIL_TAG: Record<payrollApi.EmailStatus, { tone: ChipTone; label: string }> = {
+  SENT: { tone: "success", label: "Email sent" },
+  FILE_ONLY: { tone: "warning", label: "Not emailed (development)" },
+  FAILED: { tone: "danger", label: "Email failed" },
+  PENDING: { tone: "neutral", label: "Not yet" },
 };
 
 // ── Payslips ──
@@ -46,18 +49,19 @@ function PayslipsCard({ run }: { run: RunDetail }) {
   const again = useMutation({
     mutationFn: () => payrollApi.preparePayslipsAgain(run.id),
     onSuccess: (r) => {
-      void message[r.queued ? "success" : "error"](r.queued ? "Preparing again. Anything not yet done will be done; nothing is repeated." : "The background worker could not be reached. Try again in a moment.");
+      toast[r.queued ? "success" : "error"](r.queued ? "Preparing again. Anything not yet done will be done; nothing is repeated." : "The background worker could not be reached. Try again in a moment.");
       window.setTimeout(() => void queryClient.invalidateQueries({ queryKey: ["payroll", "payslips", run.id] }), 3000);
     },
-    onError: (e) => void message.error(apiErrorMessage(e, "That did not work.")),
+    onError: (e) => toast.error(apiErrorMessage(e, "That did not work.")),
   });
   const slips = data?.payslips ?? [];
   const failed = slips.filter((s) => s.delivery.emailStatus === "FAILED").length;
   const noPdf = slips.filter((s) => !s.delivery.rendered).length;
   return (
-    <Card size="small" title="Payslips" data-testid="payslips-card">
+    <div data-testid="payslips-card">
+    <Panel title="Payslips" extra={slips.length > 0 ? <StatusChip tone="success">{slips.length} published</StatusChip> : undefined}>
       <Flex vertical gap={10}>
-        {isLoading && <Spin />}
+        {isLoading && <SkeletonCard lines={3} />}
         {canView && !isLoading && slips.length === 0 && (
           <Flex justify="space-between" align="center" wrap gap={8}>
             <Text>Not published yet. Employees cannot see their payslips until they are.</Text>
@@ -74,28 +78,39 @@ function PayslipsCard({ run }: { run: RunDetail }) {
               {slips.length} published. {noPdf > 0 ? `${noPdf} PDF${noPdf === 1 ? " is" : "s are"} still being prepared. ` : "Every PDF is ready. "}
             </Text>
             {failed > 0 && <Alert type="error" showIcon title={`${failed} ${failed === 1 ? "person has" : "people have"} not been emailed`} description="They can still read their payslip in the app. The reason is shown against each name; Prepare again tries the ones that failed." />}
-            <Table<PayslipRow>
-              size="small"
+            <DataTable<PayslipRow>
+              density="compact"
               rowKey="id"
-              scroll={{ x: "max-content" }}
-              pagination={{ pageSize: 10, hideOnSinglePage: true }}
+              pagination={slips.length > 10 ? { pageSize: 10, showSizeChanger: false } : false}
               dataSource={slips}
+              mobile={{
+                title: (r) => r.name,
+                subtitle: (r) => r.employeeCode,
+                status: (r) => <StatusChip tone={EMAIL_TAG[r.delivery.emailStatus].tone}>{EMAIL_TAG[r.delivery.emailStatus].label}</StatusChip>,
+                fields: [
+                  { label: "Net pay", render: (r) => <Num>{formatRupees(r.net, 2)}</Num> },
+                  { label: "PDF", render: (r) => (r.delivery.rendered ? "Ready" : r.delivery.renderError ? `Failed: ${r.delivery.renderError}` : "Preparing") },
+                  ...(slips.some((x) => x.delivery.emailError) ? [{ label: "Email problem", render: (r: PayslipRow) => r.delivery.emailError ?? "—" }] : []),
+                ],
+                actions: (r) => <Button block onClick={() => setViewing(r.id)}>Read</Button>,
+              }}
               columns={[
                 { title: "Code", dataIndex: "employeeCode" },
                 { title: "Name", dataIndex: "name" },
-                { title: "Net pay", align: "right", render: (_, r) => formatRupees(r.net, 2) },
-                { title: "PDF", render: (_, r) => (r.delivery.rendered ? <Tag color="green">Ready</Tag> : r.delivery.renderError ? <Tooltip title={r.delivery.renderError}><Tag color="red">Failed</Tag></Tooltip> : <Tag>Preparing</Tag>) },
+                { title: "Net pay", key: "net", align: "right", className: "ws-num", render: (_, r) => formatRupees(r.net, 2) },
+                { title: "PDF", key: "pdf", render: (_, r) => (r.delivery.rendered ? <StatusChip tone="success">Ready</StatusChip> : r.delivery.renderError ? <Tooltip title={r.delivery.renderError}><span tabIndex={0}><StatusChip tone="danger">Failed</StatusChip></span></Tooltip> : <StatusChip tone="neutral">Preparing</StatusChip>) },
                 {
                   title: "Told",
+                  key: "told",
                   render: (_, r) => (
-                    <Space orientation="vertical" size={0}>
-                      <Tag color={EMAIL_TAG[r.delivery.emailStatus].color}>{EMAIL_TAG[r.delivery.emailStatus].label}</Tag>
-                      {r.delivery.emailTo && <Text type="secondary" style={{ fontSize: 12 }}>{r.delivery.emailTo}</Text>}
-                      {r.delivery.emailError && <Text type="danger" style={{ fontSize: 12 }}>{r.delivery.emailError}</Text>}
+                    <Space orientation="vertical" size={2}>
+                      <StatusChip tone={EMAIL_TAG[r.delivery.emailStatus].tone}>{EMAIL_TAG[r.delivery.emailStatus].label}</StatusChip>
+                      {r.delivery.emailTo && <Text type="secondary" style={{ fontSize: fs.sm }}>{r.delivery.emailTo}</Text>}
+                      {r.delivery.emailError && <Text type="danger" style={{ fontSize: fs.sm }}>{r.delivery.emailError}</Text>}
                     </Space>
                   ),
                 },
-                { title: "", render: (_, r) => <Button size="small" onClick={() => setViewing(r.id)}>Read</Button> },
+                { title: "", key: "actions", align: "right", render: (_, r) => <Button size="small" onClick={() => setViewing(r.id)}>Read</Button> },
               ]}
             />
             {hasPermission("payroll.run") && (
@@ -108,17 +123,18 @@ function PayslipsCard({ run }: { run: RunDetail }) {
           </>
         )}
       </Flex>
-      <Drawer open={viewing !== null} onClose={() => setViewing(null)} size="large" title="Payslip" destroyOnHidden>
+      <SideDrawer open={viewing !== null} onClose={() => setViewing(null)} size="wide" title="Payslip" footer={null}>
         {viewing && <OnePayslip id={viewing} />}
-      </Drawer>
-    </Card>
+      </SideDrawer>
+    </Panel>
+    </div>
   );
 }
 
 function OnePayslip({ id }: { id: string }) {
   const { data, isLoading, error } = useQuery({ queryKey: ["payroll", "payslip", id], queryFn: () => payrollApi.getPayslip(id) });
-  if (isLoading) return <Spin />;
-  if (error || !data) return <Alert type="error" showIcon title={apiErrorMessage(error, "Could not load this payslip.")} />;
+  if (isLoading) return <SkeletonCard lines={8} />;
+  if (error || !data) return <EmptyState kind="error" compact title="Could not load this payslip" description={apiErrorMessage(error, "Could not load this payslip.")} />;
   return <PayslipView content={data.content} />;
 }
 
@@ -135,20 +151,21 @@ function BankCard({ run }: { run: RunDetail }) {
   const download = useMutation({
     mutationFn: () => payrollApi.bankBatchFileLink(batch!.id),
     onSuccess: (r) => open(r.url),
-    onError: (e) => void message.error(apiErrorMessage(e, "Could not get the file.")),
+    onError: (e) => toast.error(apiErrorMessage(e, "Could not get the file.")),
   });
   const upload = useMutation({
     mutationFn: (file: File) => payrollApi.attachBatchResponse(batch!.id, file),
     onSuccess: () => {
-      void message.success("The bank's response is stored. It is not read by this system.");
+      toast.success("The bank's response is stored. It is not read by this system.");
       refresh();
     },
-    onError: (e) => void message.error(apiErrorMessage(e, "Could not store that file.")),
+    onError: (e) => toast.error(apiErrorMessage(e, "Could not store that file.")),
   });
   return (
-    <Card size="small" title="Bank file" data-testid="bank-card">
+    <div data-testid="bank-card">
+    <Panel title="Bank file" subtitle="Nothing is sent to the bank from here" extra={batch ? <StatusChip tone={batch.status === "PAID" ? "success" : "info"}>{batch.status === "PAID" ? "Marked paid" : "File made, not yet marked paid"}</StatusChip> : undefined}>
       <Flex vertical gap={10}>
-        {isLoading && <Spin />}
+        {isLoading && <SkeletonCard lines={3} />}
         {!canView && <Text type="secondary">You do not have permission to see bank files.</Text>}
         {canView && !isLoading && !batch && (
           <Flex justify="space-between" align="center" wrap gap={8}>
@@ -160,16 +177,19 @@ function BankCard({ run }: { run: RunDetail }) {
         )}
         {batch && (
           <>
-            <Space wrap>
-              <Tag color={batch.status === "PAID" ? "green" : "blue"}>{batch.status === "PAID" ? "Marked paid" : "File made, not yet marked paid"}</Tag>
-              <Text>
-                {batch.rowCount} {batch.rowCount === 1 ? "row" : "rows"}, {formatRupees(batch.total, 2)}, payment date {formatDate(batch.paymentDate)}
-              </Text>
-            </Space>
-            {batch.excluded.length > 0 && <Alert type="warning" showIcon title={`${batch.excluded.length} payable ${batch.excluded.length === 1 ? "person is" : "people are"} not in this file`} description={<ul style={{ margin: 0, paddingLeft: 20 }}>{batch.excluded.map((e) => <li key={e.employeeId}>{e.name} ({e.employeeCode}): {e.detail}</li>)}</ul>} />}
-            <Text type="secondary">
-              {batch.fileName} · SHA-256 {batch.fileSha256.slice(0, 16)}… · made {formatDateTime(batch.generatedAt)}
+            <Text>
+              {batch.rowCount} {batch.rowCount === 1 ? "row" : "rows"}, <span className="ws-num">{formatRupees(batch.total, 2)}</span>, payment date {formatDate(batch.paymentDate)}
             </Text>
+            {batch.excluded.length > 0 && <Alert type="warning" showIcon title={`${batch.excluded.length} payable ${batch.excluded.length === 1 ? "person is" : "people are"} not in this file`} description={<ul style={{ margin: 0, paddingLeft: 20 }}>{batch.excluded.map((e) => <li key={e.employeeId}>{e.name} ({e.employeeCode}): {e.detail}</li>)}</ul>} />}
+            <FileRow
+              name={batch.fileName}
+              meta={`SHA-256 ${batch.fileSha256.slice(0, 16)}… · made ${formatDateTime(batch.generatedAt)}`}
+              actions={
+                <Button icon={<DownloadOutlined />} loading={download.isPending} onClick={() => download.mutate()}>
+                  Download the file
+                </Button>
+              }
+            />
             {batch.paid && (
               <Text>
                 Recorded as paid by the bank on {batch.paid.on ? formatDate(batch.paid.on) : ""}, reference <Text strong>{batch.paid.reference}</Text>. This is HR’s own record; the system does not check it with the bank.
@@ -177,9 +197,6 @@ function BankCard({ run }: { run: RunDetail }) {
             )}
             {batch.response && <Text type="secondary">The bank’s response ({batch.response.fileName}) is stored, attached {batch.response.attachedAt ? formatDateTime(batch.response.attachedAt) : ""}. It has not been read.</Text>}
             <Space wrap>
-              <Button icon={<DownloadOutlined />} loading={download.isPending} onClick={() => download.mutate()}>
-                Download the file
-              </Button>
               {batch.status === "GENERATED" && hasPermission("payroll.run") && <Button type="primary" onClick={() => setPaying(true)}>Record that it was paid…</Button>}
               {!batch.response && hasPermission("payroll.run") && (
                 <Upload showUploadList={false} beforeUpload={(f) => { upload.mutate(f); return false; }}>
@@ -191,7 +208,8 @@ function BankCard({ run }: { run: RunDetail }) {
         )}
       </Flex>
       {paying && batch && <MarkPaidModal batchId={batch.id} onClose={() => setPaying(false)} onDone={refresh} />}
-    </Card>
+    </Panel>
+    </div>
   );
 }
 
@@ -203,22 +221,22 @@ function MarkPaidModal({ batchId, onClose, onDone }: { batchId: string; onClose:
   const mark = useMutation({
     mutationFn: () => payrollApi.markBatchPaid(batchId, { reference: reference.trim(), paidOn: paidOn.format("YYYY-MM-DD"), confirm }),
     onSuccess: () => {
-      void message.success("Recorded.");
+      toast.success("Recorded.");
       onDone();
       onClose();
     },
     onError: (e) => setProblem(apiErrorMessage(e, "That did not work.")),
   });
   return (
-    <Modal open title="Record that the bank paid this batch" onCancel={onClose} okText="Record" okButtonProps={{ disabled: reference.trim().length < 3 || confirm.trim().toUpperCase() !== "PAID", loading: mark.isPending }} onOk={() => mark.mutate()} destroyOnHidden>
+    <ConfirmModal open title="Record that the bank paid this batch" onCancel={onClose} confirmLabel="Record" confirmDisabled={reference.trim().length < 3 || confirm.trim().toUpperCase() !== "PAID"} loading={mark.isPending} onConfirm={() => mark.mutate()}>
       <Space orientation="vertical" style={{ width: "100%" }} size={10}>
-        <Paragraph style={{ margin: 0 }}>This is your own statement that you uploaded the file and the bank gave this reference. It moves no money and is not checked with the bank. It is recorded under your name and cannot be changed.</Paragraph>
-        <Input placeholder="The bank’s reference for the batch" value={reference} onChange={(e) => setReference(e.target.value)} maxLength={60} />
-        <DatePicker value={paidOn} onChange={(d) => d && setPaidOn(d)} format="DD MMM YYYY" style={{ width: "100%" }} />
-        <Input placeholder="Type PAID to confirm" value={confirm} onChange={(e) => setConfirm(e.target.value)} maxLength={20} />
+        <Paragraph type="secondary" style={{ margin: 0 }}>This is your own statement that you uploaded the file and the bank gave this reference. It moves no money and is not checked with the bank. It is recorded under your name and cannot be changed.</Paragraph>
+        <Input aria-label="The bank’s reference for the batch" placeholder="The bank’s reference for the batch" value={reference} onChange={(e) => setReference(e.target.value)} maxLength={60} />
+        <DatePicker aria-label="Paid on" value={paidOn} onChange={(d) => d && setPaidOn(d)} format="DD MMM YYYY" style={{ width: "100%" }} />
+        <Input aria-label="Type PAID to confirm" placeholder="Type PAID to confirm" value={confirm} onChange={(e) => setConfirm(e.target.value)} maxLength={20} />
         {problem && <Alert type="error" showIcon title={problem} />}
       </Space>
-    </Modal>
+    </ConfirmModal>
   );
 }
 
@@ -243,13 +261,14 @@ function OutputsCard({ run }: { run: RunDetail }) {
   const download = useMutation({
     mutationFn: (id: string) => payrollApi.outputFileLink(id),
     onSuccess: (r) => open(r.url),
-    onError: (e) => void message.error(apiErrorMessage(e, "Could not get the file.")),
+    onError: (e) => toast.error(apiErrorMessage(e, "Could not get the file.")),
   });
   const ready = (k: OutputKind) => k === "SALARY_REGISTER" || data?.layouts.find((l) => l.kind === k)?.ready === true;
   return (
-    <Card size="small" title="Statutory files and the register" data-testid="outputs-card">
+    <div data-testid="outputs-card">
+    <Panel title="Statutory files and the register">
       <Flex vertical gap={10}>
-        {isLoading && <Spin />}
+        {isLoading && <SkeletonCard lines={3} />}
         {!canView && <Text type="secondary">You do not have permission to see these files.</Text>}
         {canView && (
           <>
@@ -266,35 +285,41 @@ function OutputsCard({ run }: { run: RunDetail }) {
                 </Tooltip>
               ))}
             </Space>
-            <Table
-              size="small"
-              rowKey="id"
-              pagination={{ pageSize: 8, hideOnSinglePage: true }}
-              dataSource={data?.outputs ?? []}
-              scroll={{ x: "max-content" }}
-              locale={{ emptyText: "Nothing made yet" }}
-              columns={[
-                { title: "File", render: (_, r) => OUTPUT_LABEL[r.kind] },
-                { title: "Rows", dataIndex: "rows" },
-                { title: "Made", render: (_, r) => formatDateTime(r.generatedAt) },
-                { title: "SHA-256", render: (_, r) => <Text code>{r.sha256.slice(0, 12)}…</Text> },
-                { title: "", render: (_, r) => <Button size="small" icon={<DownloadOutlined />} loading={download.isPending && download.variables === r.id} onClick={() => download.mutate(r.id)}>Download</Button> },
-              ]}
-            />
+            <div>
+              {(data?.outputs ?? []).length === 0 && !isLoading && <EmptyState compact illustration="documents" title="Nothing made yet" description="Files you make appear here, ready to download." />}
+              {(data?.outputs ?? []).map((r) => (
+                <FileRow
+                  key={r.id}
+                  kind={r.kind === "SALARY_REGISTER" ? "excel" : "text"}
+                  name={OUTPUT_LABEL[r.kind]}
+                  meta={
+                    <>
+                      <span className="ws-num">{r.rows}</span> rows · made {formatDateTime(r.generatedAt)} · SHA-256 <Text code style={{ fontSize: fs.sm }}>{r.sha256.slice(0, 12)}…</Text>
+                    </>
+                  }
+                  actions={
+                    <Button size="small" icon={<DownloadOutlined />} loading={download.isPending && download.variables === r.id} onClick={() => download.mutate(r.id)}>
+                      Download
+                    </Button>
+                  }
+                />
+              ))}
+            </div>
           </>
         )}
       </Flex>
-    </Card>
+    </Panel>
+    </div>
   );
 }
 
 export function ReleasePanels({ run }: { run: RunDetail }) {
   if (run.status !== "FINALISED") return null;
   return (
-    <Flex vertical gap={12}>
+    <Stack>
       <PayslipsCard run={run} />
       <BankCard run={run} />
       <OutputsCard run={run} />
-    </Flex>
+    </Stack>
   );
 }

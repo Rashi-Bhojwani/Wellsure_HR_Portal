@@ -1,21 +1,21 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Alert, Button, Checkbox, Drawer, Flex, Input, Space, Spin, Table, Tag, Timeline, Typography } from "antd";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { Button, Checkbox } from "antd";
 import { HistoryOutlined, PlusOutlined } from "@ant-design/icons";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import * as payrollApi from "../../../api/payroll";
 import type { EmployeeSalaryRow, SalaryRowView } from "../../../api/payroll";
 import { useAuth } from "../../../hooks/useAuth";
-import { apiErrorMessage } from "../../../lib/apiError";
 import { formatDate } from "../../../lib/dates";
 import { formatRupees } from "../../../lib/money";
 import { CancelScheduledModal } from "../../../components/payroll/CancelScheduledModal";
 import { REASON_LABEL } from "./salaryText";
-
-const { Title, Text } = Typography;
+import { ApprovalBanner, DataTable, EmptyState, FilterBar, FormGroupTitle, PageHeader, Panel, QueryState, SideDrawer, SkeletonCard, Stack, StatusChip, Timeline, type ChipTone } from "../../../ui";
+import { Caption, Num, PersonCell } from "../../../components/payroll/payrollUi";
+import { fw, space, v } from "../../../theme/tokens";
 
 // Payroll → Employee salaries (Phase 6 P6-2). Everybody's current salary, and each person's whole timeline. Nothing is edited here: a salary changes only through
-// a salary revision, which somebody else approves. Amounts are exact; what is shown is what is stored.
+// a salary revision, which somebody else approves. Amounts are exact; what is shown is what is stored. (The API decides who sees amounts; the UI never widens it.)
 
 export function EmployeeSalariesPage() {
   const { hasPermission } = useAuth();
@@ -25,107 +25,205 @@ export function EmployeeSalariesPage() {
   const [missing, setMissing] = useState(false);
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState<EmployeeSalaryRow | null>(null);
-  const { data, isLoading, error } = useQuery({ queryKey: ["payroll", "salaries", q, missing, page], queryFn: () => payrollApi.listEmployeeSalaries({ q: q || undefined, missing, page, pageSize: 25 }) });
+  const { data, isLoading, isFetching, error, refetch } = useQuery({
+    queryKey: ["payroll", "salaries", q, missing, page],
+    queryFn: () => payrollApi.listEmployeeSalaries({ q: q || undefined, missing, page, pageSize: 25 }),
+    placeholderData: keepPreviousData,
+  });
+  const timelineButton = (r: EmployeeSalaryRow, block?: boolean) => (
+    <Button size={block ? undefined : "small"} block={block} icon={<HistoryOutlined />} onClick={(e) => { e.stopPropagation(); setOpen(r); }}>
+      Timeline
+    </Button>
+  );
 
   return (
-    <Flex vertical gap={16}>
-      <Flex justify="space-between" align="center" wrap gap={8}>
-        <Title level={3} style={{ margin: 0 }}>
-          Employee salaries
-        </Title>
-        <Space>
-          <Link to="/admin/payroll/revisions">
-            <Button>Salary revisions</Button>
-          </Link>
-          {canEdit && (
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate("/admin/payroll/revisions?new=1")}>
-              Prepare a revision
-            </Button>
-          )}
-        </Space>
-      </Flex>
-      <Text type="secondary">
-        A salary is never edited. It changes through a salary revision: one person prepares it with a preview, a different person approves exactly those figures, and only then is it written, from the date it says. Everyone employed today is listed.
-      </Text>
-      <Flex gap={12} wrap align="center">
-        <Input.Search allowClear placeholder="Employee code or name" style={{ width: 280 }} onSearch={(v) => { setQ(v.trim()); setPage(1); }} />
-        <Checkbox checked={missing} onChange={(e) => { setMissing(e.target.checked); setPage(1); }}>
-          Only people with no salary on record
-        </Checkbox>
-      </Flex>
-      {error && <Alert type="error" showIcon title={apiErrorMessage(error, "Could not load the salaries.")} />}
-      <Table<EmployeeSalaryRow>
-        rowKey="employeeId"
-        loading={isLoading}
-        dataSource={data?.items ?? []}
-        pagination={{ current: page, pageSize: 25, total: data?.total ?? 0, showSizeChanger: false, onChange: setPage }}
-        columns={[
-          { title: "Employee", render: (_, r) => <div><Text strong>{r.name}</Text><div><Text type="secondary" style={{ fontSize: 12 }}>{r.employeeCode}{r.branch ? ` · ${r.branch}` : ""}</Text></div></div> },
-          { title: "Yearly CTC", align: "right", render: (_, r) => (r.current ? formatRupees(r.current.annualCtc) : <Tag>No salary yet</Tag>) },
-          { title: "A month", align: "right", render: (_, r) => (r.current ? formatRupees(r.current.monthlyCtc) : null) },
-          { title: "Structure", render: (_, r) => r.current?.structure },
-          { title: "Since", render: (_, r) => (r.current ? formatDate(r.current.since) : null) },
-          { title: "Next change", render: (_, r) => (r.scheduled ? <Tag color="blue">{formatRupees(r.scheduled.annualCtc)} from {formatDate(r.scheduled.effectiveFrom)}</Tag> : null) },
-          { title: "", align: "right", render: (_, r) => <Button size="small" icon={<HistoryOutlined />} onClick={() => setOpen(r)}>Timeline</Button> },
-        ]}
+    <>
+      <PageHeader
+        title="Employee salaries"
+        subtitle="Everyone employed today, and the salary in force"
+        actions={
+          <>
+            <Button onClick={() => navigate("/admin/payroll/revisions")}>Salary revisions</Button>
+            {canEdit && (
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate("/admin/payroll/revisions?new=1")}>
+                Prepare a revision
+              </Button>
+            )}
+          </>
+        }
       />
+      <Stack>
+        <ApprovalBanner
+          tone="info"
+          title="A salary is never edited"
+          description="It changes through a salary revision: one person prepares it with a preview, a different person approves exactly those figures, and only then is it written, from the date it says. Everyone employed today is listed."
+        />
+        <Panel>
+          <FilterBar
+            onSearch={(s) => { setQ(s.trim()); setPage(1); }}
+            searchValue={q}
+            searchPlaceholder="Employee code or name"
+            activeCount={missing ? 1 : 0}
+            onClear={() => { setMissing(false); setPage(1); }}
+            filters={
+              <Checkbox checked={missing} onChange={(e) => { setMissing(e.target.checked); setPage(1); }}>
+                Only people with no salary on record
+              </Checkbox>
+            }
+          />
+          <DataTable<EmployeeSalaryRow>
+            rowKey="employeeId"
+            density="compact"
+            loading={isLoading || isFetching}
+            error={error}
+            onRetry={() => void refetch()}
+            dataSource={data?.items ?? []}
+            pagination={{ current: page, pageSize: 25, total: data?.total ?? 0, showSizeChanger: false, onChange: setPage }}
+            showTotal
+            onRowOpen={setOpen}
+            empty={
+              q || missing ? (
+                <EmptyState kind="no-results" compact title="Nobody matches" description="Try another name or code, or clear the filter." action={<Button onClick={() => { setQ(""); setMissing(false); setPage(1); }}>Clear search and filter</Button>} />
+              ) : (
+                <EmptyState compact title="Nobody to list yet" description="People appear here once they are employed." />
+              )
+            }
+            mobile={{
+              title: (r) => r.name,
+              subtitle: (r) => `${r.employeeCode}${r.branch ? ` · ${r.branch}` : ""}`,
+              status: (r) => (r.current ? null : <StatusChip tone="neutral">No salary yet</StatusChip>),
+              fields: [
+                { label: "Yearly CTC", render: (r) => (r.current ? <Num>{formatRupees(r.current.annualCtc)}</Num> : "—") },
+                { label: "A month", render: (r) => (r.current ? <Num>{formatRupees(r.current.monthlyCtc)}</Num> : "—") },
+                { label: "Structure", render: (r) => r.current?.structure ?? "—" },
+                { label: "Next change", render: (r) => (r.scheduled ? <NextChange s={r.scheduled} /> : "—") },
+              ],
+              actions: (r) => timelineButton(r, true),
+            }}
+            columns={[
+              { title: "Employee", key: "employee", render: (_, r) => <PersonCell name={r.name} code={`${r.employeeCode}${r.branch ? ` · ${r.branch}` : ""}`} /> },
+              { title: "Yearly CTC", key: "annual", align: "right", render: (_, r) => (r.current ? <Num>{formatRupees(r.current.annualCtc)}</Num> : <StatusChip tone="neutral">No salary yet</StatusChip>) },
+              { title: "A month", key: "monthly", align: "right", render: (_, r) => (r.current ? <Num>{formatRupees(r.current.monthlyCtc)}</Num> : null) },
+              { title: "Structure", key: "structure", render: (_, r) => r.current?.structure },
+              { title: "Since", key: "since", render: (_, r) => (r.current ? formatDate(r.current.since) : null) },
+              { title: "Next change", key: "next", render: (_, r) => (r.scheduled ? <NextChange s={r.scheduled} /> : null) },
+              { title: "", key: "actions", align: "right", render: (_, r) => timelineButton(r) },
+            ]}
+          />
+        </Panel>
+      </Stack>
       {open && <SalaryTimelineDrawer person={open} onClose={() => setOpen(null)} canEdit={canEdit} />}
-    </Flex>
+    </>
   );
 }
 
-const STATUS_COLOR = { current: "green", scheduled: "blue", past: "gray" } as const;
+function NextChange({ s }: { s: NonNullable<EmployeeSalaryRow["scheduled"]> }) {
+  return (
+    <StatusChip tone="info">
+      <span className="ws-num">{formatRupees(s.annualCtc)}</span> from {formatDate(s.effectiveFrom)}
+    </StatusChip>
+  );
+}
+
+const ROW_STATUS: Record<SalaryRowView["status"], { tone: ChipTone; label: string; dot: "accent" | "info" | "neutral" }> = {
+  current: { tone: "success", label: "In force", dot: "accent" },
+  scheduled: { tone: "info", label: "Scheduled", dot: "info" },
+  past: { tone: "neutral", label: "Past", dot: "neutral" },
+};
 
 function SalaryTimelineDrawer({ person, onClose, canEdit }: { person: EmployeeSalaryRow; onClose: () => void; canEdit: boolean }) {
   const navigate = useNavigate();
-  const { data, isLoading } = useQuery({ queryKey: ["payroll", "salary-timeline", person.employeeId], queryFn: () => payrollApi.getEmployeeSalary(person.employeeId) });
+  const { data, isLoading, error, refetch } = useQuery({ queryKey: ["payroll", "salary-timeline", person.employeeId], queryFn: () => payrollApi.getEmployeeSalary(person.employeeId) });
   const { data: components = [] } = useQuery({ queryKey: ["payroll", "components"], queryFn: payrollApi.listComponents });
   const componentName = (code: string) => components.find((c) => c.code === code)?.value?.name ?? code;
   const [cancelling, setCancelling] = useState<string | null>(null);
   return (
-    <Drawer
+    <SideDrawer
       open
-      width={640}
+      size="wide"
       title={`${person.name} (${person.employeeCode})`}
+      subtitle="Salary timeline"
       onClose={onClose}
-      destroyOnHidden
-      extra={canEdit && <Button type="primary" onClick={() => navigate(`/admin/payroll/revisions?new=1&employee=${person.employeeId}`)}>{data && data.history.length === 0 ? "Give a first salary" : "Prepare a revision"}</Button>}
+      footer={
+        canEdit ? (
+          <div style={{ display: "flex", gap: space[3], width: "100%" }}>
+            <Button size="large" style={{ flex: 1 }} onClick={onClose}>Close</Button>
+            <Button size="large" type="primary" style={{ flex: 1 }} disabled={!data} onClick={() => navigate(`/admin/payroll/revisions?new=1&employee=${person.employeeId}`)}>
+              {data && data.history.length === 0 ? "Give a first salary" : "Prepare a revision"}
+            </Button>
+          </div>
+        ) : null
+      }
     >
-      {isLoading && <Spin />}
-      {data && (
-        <Flex vertical gap={16}>
-          <Text type="secondary">Joined {formatDate(data.joinedOn)}{data.lastWorkingDate ? `, last working day ${formatDate(data.lastWorkingDate)}` : ""}.</Text>
-          {data.history.length === 0 && <Alert type="info" showIcon title="No salary on record yet." description="A first salary is given through a salary revision, like every change." />}
-          <Timeline
-            items={data.history.map((r: SalaryRowView) => ({
-              color: STATUS_COLOR[r.status],
-              content: (
-                <Space orientation="vertical" size={4} style={{ width: "100%" }}>
-                  <Space wrap>
-                    <Text strong>{formatDate(r.effectiveFrom)}{r.effectiveTo ? ` to before ${formatDate(r.effectiveTo)}` : " onwards"}</Text>
-                    <Tag color={STATUS_COLOR[r.status]}>{r.status === "current" ? "In force" : r.status === "scheduled" ? "Scheduled" : "Past"}</Tag>
-                    <Tag>{REASON_LABEL[r.reason]}</Tag>
-                  </Space>
-                  <Text>{formatRupees(r.annualCtc)} a year, {formatRupees(r.monthlyCtc)} a month, on {r.structure}</Text>
-                  <Table size="small" pagination={false} rowKey="component" dataSource={r.lines} columns={[{ title: "Line", dataIndex: "component" }, { title: "A month", align: "right", render: (_, l) => formatRupees(l.amount) }]} />
-                  {r.note && <Text type="secondary">“{r.note}”</Text>}
-                  {canEdit && r.status === "scheduled" && r.id === data.history[0]?.id && data.history.length > 1 && (
-                    <div>
-                      <Button size="small" danger onClick={() => setCancelling(r.id)}>Cancel this scheduled salary</Button>
-                    </div>
-                  )}
-                </Space>
-              ),
-            }))}
-          />
-          {data.pendingAdjustments.length > 0 && (
-            <>
-              <Text strong>Waiting for the next run</Text>
-              <Table size="small" pagination={false} rowKey="id" dataSource={data.pendingAdjustments} columns={[{ title: "What", dataIndex: "reason" }, { title: "Amount", align: "right", render: (_, a) => `${a.direction === "DEDUCTION" ? "-" : ""}${formatRupees(a.amount)}` }]} />
-            </>
-          )}
-        </Flex>
-      )}
+      <QueryState isLoading={isLoading} error={error} onRetry={() => void refetch()} skeleton={<SkeletonCard lines={6} />} compact>
+        {data && (
+          <Stack gap={space[3]}>
+            <Caption>
+              Joined {formatDate(data.joinedOn)}
+              {data.lastWorkingDate ? `, last working day ${formatDate(data.lastWorkingDate)}` : ""}.
+            </Caption>
+            {data.history.length === 0 && <ApprovalBanner tone="info" title="No salary on record yet." description="A first salary is given through a salary revision, like every change." />}
+            <Timeline
+              items={data.history.map((r: SalaryRowView) => ({
+                key: r.id,
+                tone: ROW_STATUS[r.status].dot,
+                content: (
+                  <span style={{ display: "inline-flex", gap: space[2], flexWrap: "wrap", alignItems: "center" }}>
+                    <span style={{ fontWeight: fw.semibold, color: v.textPrimary }}>
+                      {formatDate(r.effectiveFrom)}
+                      {r.effectiveTo ? ` to before ${formatDate(r.effectiveTo)}` : " onwards"}
+                    </span>
+                    <StatusChip tone={ROW_STATUS[r.status].tone}>{ROW_STATUS[r.status].label}</StatusChip>
+                    <StatusChip tone="neutral">{REASON_LABEL[r.reason]}</StatusChip>
+                  </span>
+                ),
+                time: (
+                  <span className="ws-num">
+                    {formatRupees(r.annualCtc)} a year, {formatRupees(r.monthlyCtc)} a month, on {r.structure}
+                  </span>
+                ),
+                detail: (
+                  <Stack gap={space[3]}>
+                    <DataTable
+                      density="compact"
+                      pagination={false}
+                      rowKey="component"
+                      dataSource={r.lines}
+                      columns={[
+                        { title: "Line", dataIndex: "component" },
+                        { title: "A month", key: "amount", align: "right", render: (_, l) => <Num>{formatRupees(l.amount)}</Num> },
+                      ]}
+                      mobile={{ title: (l) => l.component, status: (l) => <Num>{formatRupees(l.amount)}</Num> }}
+                    />
+                    {r.note && <Caption>“{r.note}”</Caption>}
+                    {canEdit && r.status === "scheduled" && r.id === data.history[0]?.id && data.history.length > 1 && (
+                      <div>
+                        <Button danger onClick={() => setCancelling(r.id)}>Cancel this scheduled salary</Button>
+                      </div>
+                    )}
+                  </Stack>
+                ),
+              }))}
+            />
+            {data.pendingAdjustments.length > 0 && (
+              <div>
+                <FormGroupTitle>Waiting for the next run</FormGroupTitle>
+                <DataTable
+                  density="compact"
+                  pagination={false}
+                  rowKey="id"
+                  dataSource={data.pendingAdjustments}
+                  columns={[
+                    { title: "What", dataIndex: "reason" },
+                    { title: "Amount", key: "amount", align: "right", render: (_, a) => <Num>{`${a.direction === "DEDUCTION" ? "-" : ""}${formatRupees(a.amount)}`}</Num> },
+                  ]}
+                  mobile={{ title: (a) => a.reason, status: (a) => <Num>{`${a.direction === "DEDUCTION" ? "-" : ""}${formatRupees(a.amount)}`}</Num> }}
+                />
+              </div>
+            )}
+          </Stack>
+        )}
+      </QueryState>
       {cancelling && (
         <CancelScheduledModal
           employeeId={person.employeeId}
@@ -135,6 +233,6 @@ function SalaryTimelineDrawer({ person, onClose, canEdit }: { person: EmployeeSa
           onSubmitted={(id) => navigate(`/admin/payroll/revisions?open=${id}`)}
         />
       )}
-    </Drawer>
+    </SideDrawer>
   );
 }

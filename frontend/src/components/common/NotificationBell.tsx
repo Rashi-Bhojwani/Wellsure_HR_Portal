@@ -1,10 +1,21 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Badge, Button, Drawer, Grid, List, Popover, Space, Typography } from "antd";
+import { Badge, Button, Drawer, Grid, Popover, Typography } from "antd";
 import { BellOutlined } from "@ant-design/icons";
 import * as notificationsApi from "../../api/notifications";
-import { EmptyState } from "./EmptyState";
+import { EmptyState } from "../../ui/EmptyState";
+import { Skel } from "../../ui/Skeletons";
+import { fs, fw, radius, space, v } from "../../theme/tokens";
+
+function relativeTime(iso: string): string {
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60) return "now";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 7 * 86400) return `${Math.floor(diff / 86400)}d ago`;
+  return new Date(iso).toLocaleDateString(undefined, { day: "2-digit", month: "short" });
+}
 
 const { Text } = Typography;
 const { useBreakpoint } = Grid;
@@ -60,55 +71,79 @@ export function NotificationBell({ homePath }: { homePath: string }) {
   }
 
   const content = (
-    <div style={{ width: isMobile ? "100%" : 340 }}>
-      <Space style={{ width: "100%", justifyContent: "space-between", padding: "4px 4px 8px" }}>
-        <Text strong>Notifications</Text>
-        <Button
-          type="link"
-          size="small"
-          disabled={unreadCount === 0}
-          onClick={() => markAllReadMutation.mutate()}
-        >
+    <div style={{ width: isMobile ? "100%" : 380 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: `${space[1]}px ${space[1]}px ${space[3]}px` }}>
+        <Text strong style={{ fontSize: fs.lg }}>
+          Notifications
+        </Text>
+        <Button type="link" size="small" disabled={unreadCount === 0} onClick={() => markAllReadMutation.mutate()}>
           Mark all read
         </Button>
-      </Space>
-      <div style={{ maxHeight: 360, overflowY: "auto" }}>
-        {data && data.rows.length > 0 ? (
-          <List
-            size="small"
-            dataSource={data.rows}
-            renderItem={(row) => (
-              <List.Item
-                onClick={() => handleClick(row)}
-                style={{ cursor: "pointer", background: row.readAt ? undefined : "#f0f5ff", padding: "8px 8px" }}
-              >
-                <List.Item.Meta
-                  title={<Text strong={!row.readAt}>{row.title}</Text>}
-                  description={
-                    <>
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        {row.body}
-                      </Text>
-                      <br />
-                      <Text type="secondary" style={{ fontSize: 11 }}>
-                        {new Date(row.createdAt).toLocaleString()}
-                      </Text>
-                    </>
-                  }
-                />
-              </List.Item>
-            )}
-          />
+      </div>
+      <div style={{ maxHeight: 420, overflowY: "auto", margin: `0 -${space[1]}px` }}>
+        {!data ? (
+          <div aria-busy="true" aria-label="Loading notifications" style={{ display: "flex", flexDirection: "column", gap: space[4], padding: `${space[3]}px ${space[2]}px` }}>
+            {[0, 1, 2].map((i) => (
+              <div key={i} style={{ display: "flex", gap: space[3], alignItems: "center" }}>
+                <Skel w={40} h={40} r={radius.pill} />
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: space[2] }}>
+                  <Skel w="60%" h={14} />
+                  <Skel w="90%" h={12} />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : data.rows.length > 0 ? (
+          <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+            {data.rows.map((row) => (
+              <li key={row.id}>
+                <button
+                  type="button"
+                  onClick={() => handleClick(row)}
+                  style={{
+                    display: "flex",
+                    gap: space[3],
+                    width: "100%",
+                    minHeight: 64,
+                    padding: `${space[3]}px ${space[2]}px`,
+                    border: 0,
+                    borderBottom: `1px solid ${v.borderDefault}`,
+                    background: "transparent",
+                    textAlign: "left",
+                    font: "inherit",
+                    cursor: "pointer",
+                    color: "inherit",
+                  }}
+                >
+                  <span aria-hidden style={{ width: 40, height: 40, flex: "none", borderRadius: radius.pill, background: row.readAt ? v.bgSubtle : v.accentSubtle, color: row.readAt ? v.textSecondary : v.accentText, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: fs.lg }}>
+                    <BellOutlined />
+                  </span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: "flex", gap: space[2], alignItems: "baseline" }}>
+                      <span style={{ flex: 1, minWidth: 0, fontWeight: row.readAt ? fw.medium : fw.bold, color: v.textPrimary, fontSize: fs.md, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.title}</span>
+                      <span style={{ flex: "none", fontSize: fs.xs, color: v.textSecondary }}>{relativeTime(row.createdAt)}</span>
+                    </span>
+                    <span style={{ display: "flex", gap: space[2], alignItems: "center", marginTop: 2 }}>
+                      <span style={{ flex: 1, minWidth: 0, fontSize: fs.sm, color: v.textSecondary, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{row.body}</span>
+                      {!row.readAt && <span role="img" aria-label="Unread" style={{ width: 8, height: 8, borderRadius: radius.pill, background: v.danger, flex: "none" }} />}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
         ) : (
-          <EmptyState message="No notifications yet" compact />
+          <EmptyState title="You're all caught up" description="New notifications will appear here." compact illustration="inbox" />
         )}
       </div>
     </div>
   );
 
   const bell = (
-    <Badge count={unreadCount} size="small" offset={[-2, 2]}>
-      <BellOutlined style={{ fontSize: 18, cursor: "pointer" }} onClick={isMobile ? () => setOpen(true) : undefined} />
+    <Badge count={unreadCount} size="small" offset={[-6, 6]}>
+      <button type="button" className="ws-icon-btn" aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : "Notifications"} onClick={isMobile ? () => setOpen(true) : undefined}>
+        <BellOutlined />
+      </button>
     </Badge>
   );
 
@@ -118,7 +153,7 @@ export function NotificationBell({ homePath }: { homePath: string }) {
     return (
       <>
         {bell}
-        <Drawer title="Notifications" placement="top" size="auto" open={open} onClose={() => setOpen(false)} styles={{ body: { padding: 12 } }}>
+        <Drawer title="Notifications" placement="top" size="auto" open={open} onClose={() => setOpen(false)} styles={{ body: { padding: space[3] } }}>
           {content}
         </Drawer>
       </>

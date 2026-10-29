@@ -1,9 +1,8 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { Button, Card, Flex, Typography } from "antd";
+import { Button, Tooltip } from "antd";
 import { CloseOutlined, DownloadOutlined } from "@ant-design/icons";
 import { canPromptInstall, isIos, isStandalone, promptInstall, subscribeInstall } from "../../lib/pwa";
-
-const { Text } = Typography;
+import { fs, fw, radius, space, v } from "../../theme/tokens";
 const DISMISS_KEY = "wellsure.installPromptDismissed";
 
 function readDismissed(): boolean {
@@ -35,24 +34,27 @@ export function InstallAppBanner() {
     }
   };
   return (
-    <Card size="small" style={{ marginBottom: 12 }} data-testid="install-banner">
-      <Flex align="center" gap={12}>
-        <img src="/icons/icon-192.png" alt="" width={36} height={36} style={{ borderRadius: 8 }} />
-        <div style={{ flex: 1 }}>
-          <Text strong>Install the Wellsure app</Text>
-          <div>
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              {installable ? "Open it from your home screen, full-screen, like any app." : "Tap Share, then “Add to Home Screen”."}
-            </Text>
-          </div>
+    <div
+      data-testid="install-banner"
+      role="region"
+      aria-label="Install the app"
+      style={{ display: "flex", alignItems: "center", gap: space[3], background: v.infoSubtle, borderRadius: radius.md, padding: `${space[3]}px ${space[3]}px ${space[3]}px ${space[4]}px`, marginBottom: space[3] }}
+    >
+      <img src="/icons/icon-192.png" alt="" width={40} height={40} style={{ borderRadius: radius.sm, flex: "none" }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ color: v.infoText, fontWeight: fw.semibold, fontSize: fs.md }}>Install the Wellsure app</div>
+        <div style={{ color: v.textBody, fontSize: fs.sm, marginTop: 2 }}>
+          {installable ? "Open it from your home screen, full-screen, like any app." : "Tap Share, then “Add to Home Screen”."}
         </div>
-        {installable && (
-          <Button type="primary" size="small" icon={<DownloadOutlined />} onClick={() => void promptInstall()}>
-            Install
-          </Button>
-        )}
-        <Button type="text" size="small" icon={<CloseOutlined />} aria-label="Dismiss" onClick={dismiss} />
-      </Flex>
-    </Card>
+      </div>
+      {installable && (
+        <Button type="primary" icon={<DownloadOutlined />} onClick={() => void promptInstall()}>
+          Install
+        </Button>
+      )}
+      <Tooltip title="Dismiss">
+        <Button type="text" icon={<CloseOutlined />} aria-label="Dismiss" onClick={dismiss} style={{ color: v.textSecondary, flex: "none" }} />
+      </Tooltip>
+    </div>
   );
 }

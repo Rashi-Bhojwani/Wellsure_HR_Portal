@@ -1,26 +1,14 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import {
-  Button,
-  Checkbox,
-  Dropdown,
-  Input,
-  Modal,
-  Select,
-  Space,
-  Table,
-  Tag,
-  Typography,
-  message,
-  type MenuProps,
-} from "antd";
-import { DownloadOutlined, SettingOutlined, UserAddOutlined } from "@ant-design/icons";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { Button, Checkbox, Dropdown, Input, Modal, Select, type MenuProps } from "antd";
+import { DownloadOutlined, PlusOutlined, SaveOutlined, SettingOutlined } from "@ant-design/icons";
 import * as employeeApi from "../../../api/employee";
 import * as orgApi from "../../../api/org";
 import { useAuth } from "../../../hooks/useAuth";
-
-const { Title } = Typography;
+import { EmployeeAvatar } from "../../../components/common/EmployeeAvatar";
+import { ConfirmModal, DataTable, FilterBar, PageHeader, Panel, StatusChip, toast, useIsPhone } from "../../../ui";
+import { fs, fw, space, v } from "../../../theme/tokens";
 
 const ALL_COLUMNS = [
   { key: "employeeCode", title: "Code" },
@@ -38,11 +26,28 @@ const ALL_COLUMNS = [
 ] as const;
 type ColumnKey = (typeof ALL_COLUMNS)[number]["key"];
 const DEFAULT_COLUMNS: ColumnKey[] = ["employeeCode", "fullName", "department", "designation", "location", "status"];
+type Row = employeeApi.EmployeeGridRow;
 
-const STATUS_COLORS: Record<string, string> = { ACTIVE: "green", INACTIVE: "orange", SEPARATED: "default" };
+const REFERENCE_STALE = 30_000;
+
+function NameCell({ row }: { row: Row }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: space[3], minWidth: 0 }}>
+      <EmployeeAvatar employeeId={row.id} name={row.fullName} photoVersion={row.photoVersion} size={36} />
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontWeight: fw.semibold, color: v.textPrimary, whiteSpace: "nowrap" }}>{row.fullName}</div>
+        <div style={{ fontSize: fs.sm, color: v.textSecondary, whiteSpace: "nowrap" }}>
+          {row.employeeCode}
+          {row.officialEmail ? ` · ${row.officialEmail}` : ""}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function AllEmployeesPage() {
   const navigate = useNavigate();
+  const phone = useIsPhone();
   const { hasPermission } = useAuth();
   const canCreate = hasPermission("employee.create");
   const canExport = hasPermission("employee.export");
@@ -56,34 +61,37 @@ export function AllEmployeesPage() {
   const [pageSize, setPageSize] = useState(25);
   const [visibleColumns, setVisibleColumns] = useState<ColumnKey[]>(DEFAULT_COLUMNS);
   const [exportConfirmOpen, setExportConfirmOpen] = useState(false);
+  const [exporting, setExporting] = useState<"plain" | "sensitive" | null>(null);
   const [saveViewOpen, setSaveViewOpen] = useState(false);
   const [viewName, setViewName] = useState("");
 
   const query = { search: search || undefined, departmentId, locationId, status, page, pageSize, sortBy: "employeeCode" as const, sortDir: "asc" as const };
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["employees", "grid", query],
     queryFn: () => employeeApi.listEmployees(query),
+    placeholderData: keepPreviousData,
   });
-  const { data: departments = [] } = useQuery({ queryKey: ["org", "departments"], queryFn: orgApi.departments.list });
-  const { data: locations = [] } = useQuery({ queryKey: ["org", "locations", "all"], queryFn: () => orgApi.listLocations(true) });
+  const { data: departments = [] } = useQuery({ queryKey: ["org", "departments"], queryFn: orgApi.departments.list, staleTime: REFERENCE_STALE });
+  const { data: locations = [] } = useQuery({ queryKey: ["org", "locations", "all"], queryFn: () => orgApi.listLocations(true), staleTime: REFERENCE_STALE });
   const { data: savedViews = [], refetch: refetchViews } = useQuery({ queryKey: ["employees", "saved-views"], queryFn: () => employeeApi.listSavedViews() });
+
+  const openProfile = (row: Row) => navigate(`/admin/employee/profile/${row.id}`);
 
   const columns = useMemo(
     () =>
       ALL_COLUMNS.filter((c) => visibleColumns.includes(c.key)).map((c) => ({
         title: c.title,
         dataIndex: c.key,
+        key: c.key,
         render:
           c.key === "status"
-            ? (v: string) => <Tag color={STATUS_COLORS[v]}>{v}</Tag>
+            ? (val: string) => <StatusChip status={val} />
             : c.key === "fullName"
-              ? (v: string, record: employeeApi.EmployeeGridRow) => (
-                  <a onClick={() => navigate(`/admin/employee/profile/${record.id}`)}>{v}</a>
-                )
-              : undefined,
+              ? (_: string, record: Row) => <NameCell row={record} />
+              : (val: unknown) => (val === null || val === undefined || val === "" ? "—" : String(val)),
       })),
-    [visibleColumns, navigate],
+    [visibleColumns],
   );
 
   const columnMenuItems: MenuProps["items"] = ALL_COLUMNS.map((c) => ({
@@ -91,9 +99,7 @@ export function AllEmployeesPage() {
     label: (
       <Checkbox
         checked={visibleColumns.includes(c.key)}
-        onChange={(e) =>
-          setVisibleColumns((prev) => (e.target.checked ? [...prev, c.key] : prev.filter((k) => k !== c.key)))
-        }
+        onChange={(e) => setVisibleColumns((prev) => (e.target.checked ? [...prev, c.key] : prev.filter((k) => k !== c.key)))}
       >
         {c.title}
       </Checkbox>
@@ -101,6 +107,7 @@ export function AllEmployeesPage() {
   }));
 
   async function doExport(includeSensitive: boolean) {
+    setExporting(includeSensitive ? "sensitive" : "plain");
     try {
       const blob = await employeeApi.exportEmployees({ ...query, page: undefined, pageSize: undefined, includeSensitive });
       const url = URL.createObjectURL(blob);
@@ -111,7 +118,9 @@ export function AllEmployeesPage() {
       URL.revokeObjectURL(url);
       setExportConfirmOpen(false);
     } catch {
-      void message.error("Export failed.");
+      toast.error("Export failed.");
+    } finally {
+      setExporting(null);
     }
   }
 
@@ -121,7 +130,7 @@ export function AllEmployeesPage() {
     setSaveViewOpen(false);
     setViewName("");
     void refetchViews();
-    void message.success("View saved.");
+    toast.success("View saved.");
   }
 
   function applyView(view: employeeApi.SavedView) {
@@ -130,81 +139,169 @@ export function AllEmployeesPage() {
     setDepartmentId(config.departmentId);
     setLocationId(config.locationId);
     setStatus(config.status);
+    setPage(1);
     if (config.columns) setVisibleColumns(config.columns);
   }
 
+  const resetPage = <T,>(set: (val: T) => void) => (val: T) => {
+    set(val);
+    setPage(1);
+  };
+  const activeCount = [departmentId, locationId, status].filter(Boolean).length;
+  const selectWidth = phone ? "100%" : 180;
+
   return (
-    <Space orientation="vertical" size={16} style={{ width: "100%" }}>
-      <Space style={{ width: "100%", justifyContent: "space-between" }} wrap>
-        <Title level={3} style={{ margin: 0 }}>
-          All Employees
-        </Title>
-        {canCreate && (
-          <Button type="primary" icon={<UserAddOutlined />} onClick={() => navigate("/admin/employee/add")}>
-            Add Employee
-          </Button>
-        )}
-      </Space>
-
-      <Space wrap>
-        <Input.Search placeholder="Search name, code, email, mobile" value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: 260 }} allowClear />
-        <Select placeholder="Department" allowClear style={{ width: 180 }} value={departmentId} onChange={setDepartmentId} options={departments.map((d) => ({ value: d.id, label: d.name }))} />
-        <Select placeholder="Location" allowClear style={{ width: 180 }} value={locationId} onChange={setLocationId} options={locations.map((l) => ({ value: l.id, label: l.name }))} />
-        <Select placeholder="Status" allowClear style={{ width: 140 }} value={status} onChange={setStatus} options={[{ value: "ACTIVE", label: "Active" }, { value: "INACTIVE", label: "Inactive" }, { value: "SEPARATED", label: "Separated" }]} />
-        {savedViews.length > 0 && (
-          <Select placeholder="Saved views" style={{ width: 180 }} onChange={(id) => { const v = savedViews.find((sv) => sv.id === id); if (v) applyView(v); }} options={savedViews.map((v) => ({ value: v.id, label: v.name }))} />
-        )}
-        <Button onClick={() => setSaveViewOpen(true)}>Save view</Button>
-        <Dropdown menu={{ items: columnMenuItems }} trigger={["click"]}>
-          <Button icon={<SettingOutlined />}>Columns</Button>
-        </Dropdown>
-        {canExport && (
-          <Button icon={<DownloadOutlined />} onClick={() => (canSeeSensitive ? setExportConfirmOpen(true) : void doExport(false))}>
-            Export
-          </Button>
-        )}
-      </Space>
-
-      <Table
-        rowKey="id"
-        loading={isLoading}
-        dataSource={data?.rows ?? []}
-        columns={columns}
-        scroll={{ x: "max-content" }}
-        pagination={{
-          current: page,
-          pageSize,
-          total: data?.total ?? 0,
-          showSizeChanger: true,
-          onChange: (p, ps) => {
-            setPage(p);
-            setPageSize(ps);
-          },
-        }}
+    <>
+      <PageHeader
+        title="Employees"
+        subtitle="Everyone in the company, with their job and status"
+        actions={
+          <>
+            {canExport && (
+              <Button
+                size="large"
+                icon={<DownloadOutlined />}
+                loading={exporting !== null && !exportConfirmOpen}
+                onClick={() => (canSeeSensitive ? setExportConfirmOpen(true) : void doExport(false))}
+                style={phone ? { flex: 1 } : undefined}
+              >
+                Export
+              </Button>
+            )}
+            {canCreate && (
+              <Button size="large" type="primary" icon={<PlusOutlined />} onClick={() => navigate("/admin/employee/add")} style={phone ? { flex: 1 } : undefined}>
+                Add employee
+              </Button>
+            )}
+          </>
+        }
       />
 
-      <Modal
-        title="Export includes sensitive data"
+      <Panel>
+        <FilterBar
+          onSearch={resetPage(setSearch)}
+          searchValue={search}
+          searchPlaceholder="Search name, code, email, mobile"
+          activeCount={activeCount}
+          onClear={() => {
+            setDepartmentId(undefined);
+            setLocationId(undefined);
+            setStatus(undefined);
+            setPage(1);
+          }}
+          filters={
+            <>
+              <Select
+                placeholder="All departments"
+                aria-label="Department"
+                allowClear
+                showSearch={{ optionFilterProp: "label" }}
+                style={{ width: selectWidth }}
+                value={departmentId}
+                onChange={resetPage(setDepartmentId)}
+                options={departments.map((d) => ({ value: d.id, label: d.name }))}
+              />
+              <Select
+                placeholder="All locations"
+                aria-label="Location"
+                allowClear
+                showSearch={{ optionFilterProp: "label" }}
+                style={{ width: selectWidth }}
+                value={locationId}
+                onChange={resetPage(setLocationId)}
+                options={locations.map((l) => ({ value: l.id, label: l.name }))}
+              />
+              <Select
+                placeholder="All status"
+                aria-label="Status"
+                allowClear
+                style={{ width: phone ? "100%" : 150 }}
+                value={status}
+                onChange={resetPage(setStatus)}
+                options={[
+                  { value: "ACTIVE", label: "Active" },
+                  { value: "INACTIVE", label: "Inactive" },
+                  { value: "SEPARATED", label: "Separated" },
+                ]}
+              />
+              {savedViews.length > 0 && (
+                <Select
+                  placeholder="Saved views"
+                  aria-label="Saved views"
+                  style={{ width: selectWidth }}
+                  onChange={(id) => {
+                    const sv = savedViews.find((x) => x.id === id);
+                    if (sv) applyView(sv);
+                  }}
+                  options={savedViews.map((sv) => ({ value: sv.id, label: sv.name }))}
+                />
+              )}
+            </>
+          }
+          actions={
+            <>
+              {!phone && (
+                <Dropdown menu={{ items: columnMenuItems }} trigger={["click"]}>
+                  <Button icon={<SettingOutlined />}>Columns</Button>
+                </Dropdown>
+              )}
+              <Button icon={<SaveOutlined />} onClick={() => setSaveViewOpen(true)}>
+                Save view
+              </Button>
+            </>
+          }
+        />
+
+        <DataTable<Row>
+          rowKey="id"
+          loading={isLoading}
+          error={error}
+          onRetry={() => void refetch()}
+          dataSource={data?.rows ?? []}
+          columns={columns}
+          onRowOpen={openProfile}
+          pagination={{
+            current: page,
+            pageSize,
+            total: data?.total ?? 0,
+            onChange: (p, ps) => {
+              setPage(p);
+              setPageSize(ps);
+            },
+          }}
+          mobile={{
+            avatar: (r) => <EmployeeAvatar employeeId={r.id} name={r.fullName} photoVersion={r.photoVersion} size={40} />,
+            title: (r) => r.fullName,
+            subtitle: (r) => r.employeeCode,
+            status: (r) => <StatusChip status={r.status} />,
+            fields: [
+              { label: "Designation", render: (r) => r.designation },
+              { label: "Department", render: (r) => r.department },
+            ],
+          }}
+        />
+      </Panel>
+
+      <ConfirmModal
         open={exportConfirmOpen}
         onCancel={() => setExportConfirmOpen(false)}
-        footer={[
-          <Button key="plain" onClick={() => void doExport(false)}>
-            Export without bank/PAN/Aadhaar
-          </Button>,
-          <Button key="sensitive" type="primary" danger onClick={() => void doExport(true)}>
-            Include bank/PAN/Aadhaar (last 4 only)
-          </Button>,
-        ]}
+        title="Export includes sensitive data"
+        description="You have permission to export masked bank account and statutory details (last 4 digits only — never the full number). This action is audit-logged. Choose whether to include those columns in this export."
+        cancelLabel={null}
       >
-        <Typography.Paragraph>
-          You have permission to export masked bank account and statutory details (last 4 digits only — never the full
-          number). This action is audit-logged. Choose whether to include those columns in this export.
-        </Typography.Paragraph>
-      </Modal>
+        <div style={{ display: "flex", flexDirection: "column", gap: space[3], marginTop: space[2] }}>
+          <Button size="large" block loading={exporting === "plain"} disabled={exporting === "sensitive"} onClick={() => void doExport(false)}>
+            Export without bank/PAN/Aadhaar
+          </Button>
+          <Button size="large" block type="primary" danger loading={exporting === "sensitive"} disabled={exporting === "plain"} onClick={() => void doExport(true)}>
+            Include bank/PAN/Aadhaar (last 4 only)
+          </Button>
+        </div>
+      </ConfirmModal>
 
-      <Modal title="Save current view" open={saveViewOpen} onCancel={() => setSaveViewOpen(false)} onOk={() => void saveCurrentView()} destroyOnHidden>
-        <Input placeholder="View name" value={viewName} onChange={(e) => setViewName(e.target.value)} onPressEnter={() => void saveCurrentView()} />
+      <Modal title="Save current view" open={saveViewOpen} onCancel={() => setSaveViewOpen(false)} onOk={() => void saveCurrentView()} okText="Save view" okButtonProps={{ disabled: !viewName.trim() }} destroyOnHidden>
+        <Input autoFocus placeholder="View name" aria-label="View name" value={viewName} onChange={(e) => setViewName(e.target.value)} onPressEnter={() => void saveCurrentView()} />
       </Modal>
-    </Space>
+    </>
   );
 }

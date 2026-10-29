@@ -21,7 +21,7 @@ data (the demo company), and so that a real company starts from an empty system 
 | Payroll rules, components and structures | The rates, ceilings and choices that decide how pay is worked out. Not secret, but whoever changes or confirms them decides what people are paid. | nobody by permission | Edit payroll rules | Confirm payroll rules |
 | Employees' bank accounts | The account each person is paid into. | View bank details | Edit bank details | nobody by permission |
 | Employees' PAN, Aadhaar, UAN and ESI numbers | The government identifiers of each person. | View statutory details | Edit statutory details | nobody by permission |
-| The company's PF, ESI, PT, LWF and TAN identifiers | The company's own registration numbers, printed on statutory files. | Company identifiers: enter and reveal | Company identifiers: enter and reveal | Company identifiers: confirm |
+| The company's PF, ESI, PT, LWF, PAN and TAN identifiers | The company's own registration numbers, printed on statutory files. | Company identifiers: enter and reveal | Company identifiers: enter and reveal | Company identifiers: confirm |
 | The bank file layout and the company's debit account | How the bank wants its transfer file laid out, and the company account the salaries are paid from. | Bank file layout and debit account: enter; Bank file layout and debit account: confirm | Bank file layout and debit account: enter | Bank file layout and debit account: confirm |
 | Employees' HR-held documents | ID proofs, certificates and letters kept on file for each person. | View employee documents | Manage employee documents | nobody by permission |
 | Sensitive helpdesk tickets | Tickets in categories such as Payroll and Salary or Grievance, where people write private things. | Sensitive tickets | nobody by permission | nobody by permission |
@@ -29,7 +29,7 @@ data (the demo company), and so that a real company starts from an empty system 
 
 #### What each default role can do with each kind (S = see, C = change, K = confirm; a role's permissions are the Super Admins' to edit, so this is the starting point)
 
-| Role | Salaries and payroll figures | Payroll rules, components and structures | Employees' bank accounts | Employees' PAN, Aadhaar, UAN and ESI numbers | The company's PF, ESI, PT, LWF and TAN identifiers | The bank file layout and the company's debit account | Employees' HR-held documents | Sensitive helpdesk tickets | Power over other people's access |
+| Role | Salaries and payroll figures | Payroll rules, components and structures | Employees' bank accounts | Employees' PAN, Aadhaar, UAN and ESI numbers | The company's PF, ESI, PT, LWF, PAN and TAN identifiers | The bank file layout and the company's debit account | Employees' HR-held documents | Sensitive helpdesk tickets | Power over other people's access |
 |---|---|---|---|---|---|---|---|---|---|
 | Super Admin | SCK | CK | SC | SC | SCK | SCK | SC | S | C |
 | HR Admin | SC | — | SC | SC | — | — | SC | S | C |
@@ -70,7 +70,7 @@ On a development machine the seeded sign-in `1000` is a Super Admin of a **made-
 
 | Where | What is done |
 |---|---|
-| **Stored** | Bank accounts, PAN, Aadhaar and UAN are AES-256-GCM encrypted (a key held in KMS in production). The company's identifiers and the whole bank layout (including the debit account) are **sealed**: encrypted, with a keyed hash so a short code cannot be guessed back from it. |
+| **Stored** | Bank accounts, PAN, Aadhaar, UAN and ESI numbers are AES-256-GCM encrypted (a key held in KMS in production). The company's identifiers (PF, ESI, PT, LWF, PAN and TAN) and the whole bank layout (including the debit account) are **sealed**: encrypted, with a keyed hash so a short code cannot be guessed back from it. |
 | **Shown** | Lists and profiles show the last four characters at most. A secret is shown in full only by an explicit **Reveal**, to someone who may, and each Reveal is recorded (who, when, never what). The person who **confirms** a company identifier types it again from the company's own letter and never needs to see it. |
 | **Audit log** | Records that something changed, by whom and when. The value is never in it. |
 | **Logs and errors** | The logger masks the sensitive keys wherever they appear and scrubs account-like numbers and PAN-shaped words out of any error text; a validation error never carries back what was typed; a 500 message is scrubbed too. |
@@ -92,7 +92,7 @@ On a development machine the seeded sign-in `1000` is a Super Admin of a **made-
 Be clear about these. They are about who holds the keys to the house, not the locks on the doors inside it.
 
 1. **Salaries are stored as plain exact numbers in the database** (the calculation needs to add and order them). Anyone with direct database access can read them. Protect the database credentials: the production database user the application uses cannot change the audit trail, but **a person who is given a database login can read salaries**. The developer must not be given production database credentials, a database console, or a copy of a production backup.
-2. **Employees' ESI numbers are stored unencrypted** (the specification lists only bank, PAN, Aadhaar and UAN). They are masked on every screen, but they are readable in the database. Encrypting them like UANs is a small change; it is recorded as a recommendation, not done here.
+2. **Employees' ESI numbers are encrypted** like UANs since Phase 7 (P7-0, the owners' decision). Before that they were stored as plain text and shown whole on the HR profile and on payslips; payslips published before then are immutable and keep the number in their stored content (the screen shows only its last four). No real payslip existed when this changed.
 3. **The encryption key is the lock on everything encrypted.** In production it lives in AWS KMS, and **who may use the key** is an AWS policy, not something in this application. Set the key policy so the developer's AWS identity cannot call Decrypt. The application cannot enforce that.
 4. **Whoever holds the AWS account's administrator rights** can, by definition, reach everything in it. The owners should hold those; the developer should have the narrower rights deployment needs.
 5. **A Super Admin holds every permission.** The owners are Super Admins; keep the number small. Anyone who is made a Super Admin can see all of the above.

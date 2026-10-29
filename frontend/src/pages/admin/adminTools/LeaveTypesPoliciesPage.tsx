@@ -1,16 +1,19 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Button, Form, Input, InputNumber, Modal, Select, Space, Switch, Table, Tag, Typography, message } from "antd";
-import { EditOutlined, PlusOutlined, SettingOutlined } from "@ant-design/icons";
+import { Button, Dropdown, Form, Input, InputNumber, Select, Switch, Tooltip } from "antd";
+import { EditOutlined, MoreOutlined, PlusOutlined, SettingOutlined } from "@ant-design/icons";
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as leaveApi from "../../../api/leave";
 import type { LeavePolicy, LeaveTypeAdminRow } from "../../../api/leave";
 import { HelpStrip } from "../../../components/common/HelpStrip";
 import { useAuth } from "../../../hooks/useAuth";
+import { space } from "../../../theme/tokens";
+import { ApprovalBanner, CardGrid, EmptyState, FormGroupTitle, KeyValueGrid, PageHeader, Panel, SideDrawer, SkeletonCard, Stack, StatusChip, toast, useIsPhone } from "../../../ui";
 
-const { Title } = Typography;
+const TYPE_FORM = "leave-type-form";
+const POLICY_FORM = "leave-policy-form";
 
-function TypeModal({ open, editing, onClose }: { open: boolean; editing: LeaveTypeAdminRow | null; onClose: () => void }) {
+function TypeDrawer({ open, editing, onClose }: { open: boolean; editing: LeaveTypeAdminRow | null; onClose: () => void }) {
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
 
@@ -19,22 +22,24 @@ function TypeModal({ open, editing, onClose }: { open: boolean; editing: LeaveTy
       editing ? leaveApi.updateLeaveType(editing.id, values) : leaveApi.createLeaveType(values),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["leave", "types"] });
-      void message.success(editing ? "Leave type updated." : "Leave type created.");
+      toast.success(editing ? "Leave type updated." : "Leave type created.");
       onClose();
     },
-    onError: (err) => void message.error(errorMessage(err, "Could not save this leave type.")),
+    onError: (err) => toast.error(errorMessage(err, "Could not save this leave type.")),
   });
 
   return (
-    <Modal
-      title={editing ? `Edit ${editing.name}` : "Add Leave Type"}
-      open={open}
-      onCancel={onClose}
-      footer={null}
-      destroyOnHidden
-      afterOpenChange={(isOpen) => isOpen && form.setFieldsValue(editing ?? { isPaid: true, allowHalfDay: true, isActive: true })}
-    >
-      <Form form={form} layout="vertical" requiredMark={false} onFinish={(v) => saveMutation.mutate(v)}>
+    <SideDrawer open={open} onClose={onClose} title={editing ? `Edit ${editing.name}` : "Add Leave Type"} formId={TYPE_FORM} primaryLabel="Save" primaryLoading={saveMutation.isPending}>
+      <Form
+        id={TYPE_FORM}
+        key={editing?.id ?? "new"}
+        form={form}
+        layout="vertical"
+        requiredMark={false}
+        size="large"
+        initialValues={editing ?? { isPaid: true, allowHalfDay: true, isActive: true }}
+        onFinish={(val) => saveMutation.mutate(val)}
+      >
         <Form.Item name="code" label="Code" rules={[{ required: true }, { pattern: /^[A-Z0-9_]+$/, message: "Upper-case letters, digits or underscore" }]}>
           <Input disabled={!!editing} placeholder="e.g. SICK" />
         </Form.Item>
@@ -52,21 +57,18 @@ function TypeModal({ open, editing, onClose }: { open: boolean; editing: LeaveTy
             <Switch />
           </Form.Item>
         )}
-        <Form.Item style={{ marginBottom: 0, textAlign: "right" }}>
-          <Button type="primary" htmlType="submit" loading={saveMutation.isPending}>
-            Save
-          </Button>
-        </Form.Item>
       </Form>
-    </Modal>
+    </SideDrawer>
   );
 }
+
+const twoCol = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", columnGap: space[4] } as const;
 
 // Every leave_policies field is shown here, uniformly, regardless of which
 // leave type conventionally uses it — the standing rule that every
 // configurable value gets an admin screen, and a future 6th leave type
 // might use a field only PL/COF/WFH/RH use today.
-function PolicyModal({ open, leaveType, onClose }: { open: boolean; leaveType: LeaveTypeAdminRow | null; onClose: () => void }) {
+function PolicyDrawer({ open, leaveType, onClose }: { open: boolean; leaveType: LeaveTypeAdminRow | null; onClose: () => void }) {
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
 
@@ -74,34 +76,24 @@ function PolicyModal({ open, leaveType, onClose }: { open: boolean; leaveType: L
     mutationFn: (values: Partial<Omit<LeavePolicy, "id" | "leaveTypeId">>) => leaveApi.upsertLeavePolicy(leaveType!.id, values),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["leave", "types", "all"] });
-      void message.success("Policy updated.");
+      toast.success("Policy updated.");
       onClose();
     },
-    onError: (err) => void message.error(errorMessage(err, "Could not save this policy.")),
+    onError: (err) => toast.error(errorMessage(err, "Could not save this policy.")),
   });
 
   return (
-    <Modal
-      title={`${leaveType?.name} — Policy`}
-      open={open}
-      onCancel={onClose}
-      footer={null}
-      destroyOnHidden
-      width={640}
-      afterOpenChange={(isOpen) => isOpen && form.setFieldsValue(leaveType?.policy ?? {})}
-    >
-      <Form form={form} layout="vertical" requiredMark={false} onFinish={(v) => saveMutation.mutate(v)}>
-        <Title level={5}>Accrual</Title>
-        <Space size={16} style={{ width: "100%" }}>
-          <Form.Item name="accrualEnabled" label="Accrual enabled" valuePropName="checked" style={{ flex: 1 }}>
+    <SideDrawer open={open} onClose={onClose} size="wide" title={`${leaveType?.name ?? ""} — Policy`} subtitle={leaveType?.code} formId={POLICY_FORM} primaryLabel="Save Policy" primaryLoading={saveMutation.isPending}>
+      <Form id={POLICY_FORM} key={leaveType?.id ?? "none"} form={form} layout="vertical" requiredMark={false} size="large" initialValues={leaveType?.policy ?? {}} onFinish={(val) => saveMutation.mutate(val)}>
+        <FormGroupTitle>Accrual</FormGroupTitle>
+        <div style={twoCol}>
+          <Form.Item name="accrualEnabled" label="Accrual enabled" valuePropName="checked">
             <Switch />
           </Form.Item>
-          <Form.Item name="accrualDaysPerMonth" label="Days per month" style={{ flex: 1 }}>
+          <Form.Item name="accrualDaysPerMonth" label="Days per month">
             <InputNumber style={{ width: "100%" }} min={0} max={31} step={0.5} />
           </Form.Item>
-        </Space>
-        <Space size={16} style={{ width: "100%" }}>
-          <Form.Item name="eligibilityMode" label="Eligibility mode" style={{ flex: 1 }}>
+          <Form.Item name="eligibilityMode" label="Eligibility mode">
             <Select
               allowClear
               options={[
@@ -110,148 +102,195 @@ function PolicyModal({ open, leaveType, onClose }: { open: boolean; leaveType: L
               ]}
             />
           </Form.Item>
-          <Form.Item name="eligibilityValue" label="Eligibility value" style={{ flex: 1 }}>
+          <Form.Item name="eligibilityValue" label="Eligibility value">
             <InputNumber style={{ width: "100%" }} min={0} />
           </Form.Item>
-        </Space>
+        </div>
+
+        <FormGroupTitle>Carry over</FormGroupTitle>
         <Form.Item name="carryForwardCapDays" label="Carry-forward cap (days) — leave blank for uncapped">
           <InputNumber style={{ width: "100%" }} min={0} />
         </Form.Item>
 
-        <Title level={5}>Balance rules</Title>
-        <Space size={16} style={{ width: "100%" }}>
-          <Form.Item name="negativeBalanceAllowed" label="Negative balance allowed" valuePropName="checked" style={{ flex: 1 }}>
+        <FormGroupTitle>Balance rules</FormGroupTitle>
+        <div style={twoCol}>
+          <Form.Item name="negativeBalanceAllowed" label="Negative balance allowed" valuePropName="checked">
             <Switch />
           </Form.Item>
-          <Form.Item name="skipBalanceCheck" label="Skip balance check entirely" valuePropName="checked" style={{ flex: 1 }}>
+          <Form.Item name="skipBalanceCheck" label="Skip balance check entirely" valuePropName="checked">
             <Switch />
           </Form.Item>
-          <Form.Item name="yearEndEncashment" label="Year-end encashment" valuePropName="checked" style={{ flex: 1 }}>
+          <Form.Item name="yearEndEncashment" label="Year-end encashment" valuePropName="checked">
             <Switch />
           </Form.Item>
-        </Space>
+        </div>
 
-        <Title level={5}>Comp-off (COF only)</Title>
-        <Space size={16} style={{ width: "100%" }}>
-          <Form.Item name="compOffMinHoursWorked" label="Min hours worked to earn a credit" style={{ flex: 1 }}>
+        <FormGroupTitle>Comp-off (COF only)</FormGroupTitle>
+        <div style={twoCol}>
+          <Form.Item name="compOffMinHoursWorked" label="Min hours worked to earn a credit">
             <InputNumber style={{ width: "100%" }} min={0} max={24} step={0.5} />
           </Form.Item>
-          <Form.Item name="compOffExpiryDays" label="Expiry (days from earning)" style={{ flex: 1 }}>
+          <Form.Item name="compOffExpiryDays" label="Expiry (days from earning)">
             <InputNumber style={{ width: "100%" }} min={0} />
           </Form.Item>
-        </Space>
+        </div>
 
-        <Title level={5}>WFH (WFH only)</Title>
-        <Space size={16} style={{ width: "100%" }}>
-          <Form.Item name="wfhMonthlyLimit" label="Monthly limit — blank for unlimited" style={{ flex: 1 }}>
+        <FormGroupTitle>WFH (WFH only)</FormGroupTitle>
+        <div style={twoCol}>
+          <Form.Item name="wfhMonthlyLimit" label="Monthly limit — blank for unlimited">
             <InputNumber style={{ width: "100%" }} min={0} />
           </Form.Item>
-          <Form.Item name="wfhYearlyLimit" label="Yearly limit — blank for unlimited" style={{ flex: 1 }}>
+          <Form.Item name="wfhYearlyLimit" label="Yearly limit — blank for unlimited">
             <InputNumber style={{ width: "100%" }} min={0} />
           </Form.Item>
-        </Space>
+        </div>
 
-        <Title level={5}>Restricted Holiday (RH only)</Title>
+        <FormGroupTitle>Restricted Holiday (RH only)</FormGroupTitle>
         <Form.Item name="rhYearlyQuota" label="Yearly quota — blank for unlimited">
           <InputNumber style={{ width: "100%" }} min={0} />
         </Form.Item>
-
-        <Form.Item style={{ marginBottom: 0, textAlign: "right" }}>
-          <Button type="primary" htmlType="submit" loading={saveMutation.isPending}>
-            Save Policy
-          </Button>
-        </Form.Item>
       </Form>
-    </Modal>
+    </SideDrawer>
+  );
+}
+
+const blankAs = (val: number | null, unit: string, blank: string) => (val === null || val === undefined ? blank : `${val} ${unit}`);
+const yesNo = (b: boolean) => (b ? "Yes" : "No");
+
+function policyItems(p: LeavePolicy) {
+  return [
+    { key: "accrual", label: "Accrual", value: p.accrualEnabled ? `${p.accrualDaysPerMonth ?? 0} day(s) / month` : "Off" },
+    { key: "elig", label: "Eligibility", value: p.eligibilityMode ? `${p.eligibilityValue ?? 0} ${p.eligibilityMode === "DAYS" ? "days" : "months"} from DOJ` : "Not set" },
+    { key: "cf", label: "Carry-forward cap", value: blankAs(p.carryForwardCapDays, "days", "Uncapped") },
+    { key: "enc", label: "Year-end encashment", value: yesNo(p.yearEndEncashment) },
+    { key: "neg", label: "Negative balance", value: p.skipBalanceCheck ? "No balance check" : yesNo(p.negativeBalanceAllowed) },
+  ];
+}
+
+function TypePanel({ t, canManage, onEditType, onEditPolicy }: { t: LeaveTypeAdminRow; canManage: boolean; onEditType: () => void; onEditPolicy: () => void }) {
+  return (
+    <Panel
+      title={
+        <span style={{ display: "inline-flex", alignItems: "center", gap: space[2], flexWrap: "wrap" }}>
+          {t.name}
+          <StatusChip tone="neutral">{t.code}</StatusChip>
+          <StatusChip tone={t.isPaid ? "success" : "neutral"}>{t.isPaid ? "Paid" : "Unpaid"}</StatusChip>
+          {t.allowHalfDay && <StatusChip tone="info">Half-day</StatusChip>}
+        </span>
+      }
+      extra={
+        <>
+          <StatusChip status={t.isActive ? "ACTIVE" : "INACTIVE"}>{t.isActive ? "Active" : "Inactive"}</StatusChip>
+          {canManage && (
+            <Dropdown
+              trigger={["click"]}
+              menu={{
+                items: [
+                  { key: "type", icon: <EditOutlined />, label: "Edit type", onClick: onEditType },
+                  { key: "policy", icon: <SettingOutlined />, label: t.policy ? "Edit policy" : "Set policy", onClick: onEditPolicy },
+                ],
+              }}
+            >
+              <Tooltip title="More actions">
+                <Button type="text" aria-label={`More actions for ${t.name}`} icon={<MoreOutlined />} />
+              </Tooltip>
+            </Dropdown>
+          )}
+        </>
+      }
+      style={{ height: "100%" }}
+    >
+      {t.policy ? (
+        <KeyValueGrid items={policyItems(t.policy)} />
+      ) : (
+        <ApprovalBanner
+          tone="warning"
+          title="No policy set"
+          actions={
+            canManage ? (
+              <Button size="small" onClick={onEditPolicy}>
+                Set policy
+              </Button>
+            ) : undefined
+          }
+        />
+      )}
+    </Panel>
   );
 }
 
 export function LeaveTypesPoliciesPage() {
   const { hasPermission } = useAuth();
+  const phone = useIsPhone();
   const canManage = hasPermission("leave.policy.manage");
-  const { data: leaveTypes = [], isLoading } = useQuery({ queryKey: ["leave", "types", "all"], queryFn: leaveApi.listAllLeaveTypes });
-  const [typeModalOpen, setTypeModalOpen] = useState(false);
+  const { data: leaveTypes = [], isLoading, error, refetch } = useQuery({ queryKey: ["leave", "types", "all"], queryFn: leaveApi.listAllLeaveTypes });
+  const [typeDrawerOpen, setTypeDrawerOpen] = useState(false);
   const [editingType, setEditingType] = useState<LeaveTypeAdminRow | null>(null);
-  const [policyModalOpen, setPolicyModalOpen] = useState(false);
+  const [policyDrawerOpen, setPolicyDrawerOpen] = useState(false);
   const [editingPolicyFor, setEditingPolicyFor] = useState<LeaveTypeAdminRow | null>(null);
 
   function openCreate() {
     setEditingType(null);
-    setTypeModalOpen(true);
+    setTypeDrawerOpen(true);
   }
   function openEditType(t: LeaveTypeAdminRow) {
     setEditingType(t);
-    setTypeModalOpen(true);
+    setTypeDrawerOpen(true);
   }
   function openEditPolicy(t: LeaveTypeAdminRow) {
     setEditingPolicyFor(t);
-    setPolicyModalOpen(true);
+    setPolicyDrawerOpen(true);
   }
 
   return (
-    <Space orientation="vertical" size={16} style={{ width: "100%" }}>
-      <Title level={3} style={{ margin: 0 }}>
-        Leave Types & Policies
-      </Title>
-      <HelpStrip storageKey="leave-types-policies-help">
-        Every leave type's policy is configurable here — accrual, eligibility, carry-forward, balance rules, comp-off, WFH and Restricted Holiday
-        limits. Several defaults below are still pending HR/CA confirmation (see docs/PROGRESS.md's Open Questions) — change them here once confirmed.
-      </HelpStrip>
-      {canManage && (
-        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate} style={{ alignSelf: "flex-end" }}>
-          Add Leave Type
-        </Button>
-      )}
-      <Table<LeaveTypeAdminRow>
-        rowKey="id"
-        loading={isLoading}
-        dataSource={leaveTypes}
-        pagination={false}
-        columns={[
-          { title: "Code", dataIndex: "code" },
-          { title: "Name", dataIndex: "name" },
-          { title: "Paid", dataIndex: "isPaid", render: (v: boolean) => <Tag color={v ? "green" : "default"}>{v ? "Paid" : "Unpaid"}</Tag> },
-          { title: "Half-day", dataIndex: "allowHalfDay", render: (v: boolean) => (v ? "Yes" : "No") },
-          { title: "Status", dataIndex: "isActive", render: (v: boolean) => <Tag color={v ? "green" : "default"}>{v ? "Active" : "Inactive"}</Tag> },
-          {
-            title: "Policy summary",
-            key: "policy",
-            render: (_, t) =>
-              t.policy ? (
-                <Space size={4} wrap>
-                  {t.policy.accrualEnabled && <Tag>Accrual {t.policy.accrualDaysPerMonth}/mo</Tag>}
-                  {t.policy.eligibilityMode && <Tag>{t.policy.eligibilityValue} {t.policy.eligibilityMode === "DAYS" ? "days" : "months"} wait</Tag>}
-                  {t.policy.skipBalanceCheck && <Tag>No balance check</Tag>}
-                  {t.policy.negativeBalanceAllowed && <Tag>Negative allowed</Tag>}
-                  {t.policy.yearEndEncashment && <Tag color="blue">Year-end encashment</Tag>}
-                </Space>
-              ) : (
-                <Alert type="warning" showIcon message="No policy set" banner style={{ padding: "2px 8px" }} />
-              ),
-          },
-          ...(canManage
-            ? [
-                {
-                  title: "Actions",
-                  key: "actions",
-                  render: (_: unknown, t: LeaveTypeAdminRow) => (
-                    <Space>
-                      <Button size="small" icon={<EditOutlined />} onClick={() => openEditType(t)}>
-                        Edit
-                      </Button>
-                      <Button size="small" icon={<SettingOutlined />} onClick={() => openEditPolicy(t)}>
-                        Policy
-                      </Button>
-                    </Space>
-                  ),
-                },
-              ]
-            : []),
-        ]}
+    <>
+      <PageHeader
+        title="Leave Types & Policies"
+        subtitle="Leave types and how each one accrues, carries over and is checked"
+        actions={
+          canManage && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate} block={phone}>
+              Add Leave Type
+            </Button>
+          )
+        }
       />
+      <Stack>
+        <HelpStrip storageKey="leave-types-policies-help">
+          Every leave type's policy is configurable here — accrual, eligibility, carry-forward, balance rules, comp-off, WFH and Restricted Holiday limits. Several defaults below are still pending HR/CA
+          confirmation (see docs/PROGRESS.md's Open Questions) — change them here once confirmed.
+        </HelpStrip>
 
-      <TypeModal open={typeModalOpen} editing={editingType} onClose={() => setTypeModalOpen(false)} />
-      <PolicyModal open={policyModalOpen} leaveType={editingPolicyFor} onClose={() => setPolicyModalOpen(false)} />
-    </Space>
+        {error ? (
+          <Panel>
+            <EmptyState kind="error" compact onRetry={() => void refetch()} />
+          </Panel>
+        ) : isLoading ? (
+          <CardGrid min={420}>
+            {[0, 1, 2, 3].map((i) => (
+              <SkeletonCard key={i} lines={4} />
+            ))}
+          </CardGrid>
+        ) : leaveTypes.length === 0 ? (
+          <Panel>
+            <EmptyState
+              illustration="documents"
+              title="No leave types yet"
+              description={canManage ? "Add the first leave type, then set its policy." : null}
+              action={canManage ? <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>Add Leave Type</Button> : undefined}
+            />
+          </Panel>
+        ) : (
+          <CardGrid min={420}>
+            {leaveTypes.map((t) => (
+              <TypePanel key={t.id} t={t} canManage={canManage} onEditType={() => openEditType(t)} onEditPolicy={() => openEditPolicy(t)} />
+            ))}
+          </CardGrid>
+        )}
+      </Stack>
+
+      <TypeDrawer open={typeDrawerOpen} editing={editingType} onClose={() => setTypeDrawerOpen(false)} />
+      <PolicyDrawer open={policyDrawerOpen} leaveType={editingPolicyFor} onClose={() => setPolicyDrawerOpen(false)} />
+    </>
   );
 }

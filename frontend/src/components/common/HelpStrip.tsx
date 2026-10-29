@@ -1,17 +1,16 @@
 import { useState } from "react";
-import { Button, Space, Typography } from "antd";
-import { CloseOutlined, InfoCircleOutlined } from "@ant-design/icons";
-
-const { Text } = Typography;
+import { Button } from "antd";
+import { CloseOutlined } from "@ant-design/icons";
+import { ApprovalBanner } from "../../ui/ApprovalBanner";
+import { space } from "../../theme/tokens";
 
 interface HelpStripProps {
   children: React.ReactNode;
   storageKey: string;
 }
 
-// Dismissible light-cyan help banner shown at the top of many admin pages
-// (docs/UI_REFERENCE.md §2.0). Dismissal is remembered per browser only —
-// it's a per-viewer UI convenience, not server state.
+// Dismissible help banner at the top of many admin pages (docs/UI_REFERENCE.md §2.0), in the design system's info banner. Dismissal is remembered per browser only —
+// a per-viewer convenience, not server state.
 export function HelpStrip({ children, storageKey }: HelpStripProps) {
   const [hidden, setHidden] = useState(() => {
     try {
@@ -33,26 +32,15 @@ export function HelpStrip({ children, storageKey }: HelpStripProps) {
   };
 
   return (
-    <div
-      style={{
-        background: "#e6f7fb",
-        border: "1px solid #b7e6f2",
-        borderRadius: 8,
-        padding: "10px 16px",
-        marginBottom: 16,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 12,
-      }}
-    >
-      <Space>
-        <InfoCircleOutlined style={{ color: "#0e7f9c" }} />
-        <Text>{children}</Text>
-      </Space>
-      <Button type="text" size="small" onClick={hide} icon={<CloseOutlined />}>
-        Hide Help
-      </Button>
-    </div>
+    <ApprovalBanner
+      tone="info"
+      title={children}
+      style={{ marginBottom: space[4] }}
+      actions={
+        <Button type="text" size="small" onClick={hide} icon={<CloseOutlined />}>
+          Hide help
+        </Button>
+      }
+    />
   );
 }

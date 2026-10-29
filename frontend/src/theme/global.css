@@ -1,0 +1,293 @@
+/* Global styles for the design system (docs/DESIGN_SYSTEM.md). Colours come only from the --ws-* variables that ThemeProvider writes from tokens.ts. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+html {
+  background: var(--ws-bg-page);
+  color-scheme: light;
+}
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+body {
+  font-family: "Manrope Variable", Manrope, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--ws-bg-page);
+  color: var(--ws-text-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "cv11";
+}
+
+/* Money and figures line up. */
+.ws-num,
+.ant-table td.ws-num,
+.ant-statistic-content {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Focus: always visible for keyboard users, never for mouse clicks ── */
+:focus-visible {
+  outline: 2px solid var(--ws-focus-ring);
+  outline-offset: 2px;
+}
+.ant-btn:focus-visible,
+.ant-select:focus-within .ant-select-selector,
+a:focus-visible {
+  outline: 2px solid var(--ws-focus-ring) !important;
+  outline-offset: 2px !important;
+}
+
+/* Skip link */
+.ws-skip-link {
+  position: absolute;
+  left: 12px;
+  top: -60px;
+  z-index: 2000;
+  background: var(--ws-primary);
+  color: var(--ws-primary-text);
+  padding: 10px 16px;
+  border-radius: 12px;
+  font-weight: 600;
+  transition: top 0.15s;
+}
+.ws-skip-link:focus {
+  top: 12px;
+}
+
+/* ── Scrollbars that match the theme ── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ws-border-control) transparent;
+}
+/* Older WebKit (Safari < 18.2) ignores scrollbar-color: same thin, themed bar. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--ws-border-control);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Phones: no grey flash on tap, no font inflation on rotate. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+body {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Motion: animate only transform and opacity; none at all when reduced ── */
+@keyframes ws-page-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ws-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes ws-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+.ws-page-enter {
+  animation: ws-page-in 0.18s cubic-bezier(0.2, 0, 0, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ws-page-enter {
+    animation: none;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── Ant Design refinements the token API cannot express ── */
+
+/* Table header band: rounded, inset look of the board (employees-01). */
+.ant-table-wrapper .ant-table-thead > tr > th {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ant-table-wrapper .ant-table-thead > tr > th::before {
+  display: none;
+}
+.ant-table-wrapper .ant-table-container table > thead > tr:first-child > *:first-child {
+  border-start-start-radius: 12px;
+  border-end-start-radius: 12px;
+}
+.ant-table-wrapper .ant-table-container table > thead > tr:first-child > *:last-child {
+  border-start-end-radius: 12px;
+  border-end-end-radius: 12px;
+}
+.ant-table-wrapper .ant-table-thead > tr > th,
+.ant-table-wrapper .ant-table-thead > tr > td {
+  border-bottom: none !important;
+}
+.ant-table-wrapper .ant-table-tbody > tr > td {
+  color: var(--ws-text-body);
+}
+.ant-table-wrapper .ant-table-pagination.ant-pagination {
+  margin: 20px 0 4px;
+}
+
+/* Cards: flat, thin border (DESIGN_SYSTEM.md §3). */
+.ant-card {
+  box-shadow: none;
+}
+.ant-card .ant-card-head-title {
+  font-weight: 600;
+  color: var(--ws-text-primary);
+}
+.ant-card-bordered {
+  border-color: var(--ws-border-default);
+}
+
+/* Headings in the board's weight. */
+h1.ant-typography,
+h2.ant-typography,
+h3.ant-typography,
+h4.ant-typography,
+h5.ant-typography {
+  font-weight: 700 !important;
+  letter-spacing: -0.01em;
+  color: var(--ws-text-primary);
+}
+
+/* Status chips: uppercase, small, tinted (StatusChip). */
+.ws-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+/* Default buttons on dark keep a visible edge. */
+html[data-theme="dark"] .ant-btn-default:not(.ant-btn-dangerous):not(:disabled):not(.ant-btn-disabled) {
+  border-color: var(--ws-border-control);
+  color: var(--ws-text-primary);
+}
+
+/* Touch targets on phones: every button and control at least 44px tall. */
+@media (max-width: 767px) {
+  .ant-btn:not(.ant-btn-sm):not(.ant-btn-icon-only),
+  .ant-select:not(.ant-select-sm) .ant-select-selector,
+  .ant-input-affix-wrapper:not(.ant-input-affix-wrapper-sm),
+  .ant-picker:not(.ant-picker-small) {
+    min-height: 44px;
+  }
+  .ant-btn-icon-only:not(.ant-btn-sm) {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .ant-checkbox-wrapper,
+  .ant-radio-wrapper,
+  .ant-tabs-tab {
+    min-height: 44px;
+    align-items: center;
+  }
+  .ant-segmented:not(.ant-segmented-sm) .ant-segmented-item-label {
+    min-height: 44px;
+    line-height: 44px;
+  }
+  .ant-pagination .ant-pagination-item,
+  .ant-pagination .ant-pagination-prev,
+  .ant-pagination .ant-pagination-next {
+    min-width: 44px;
+    height: 44px;
+    line-height: 42px;
+  }
+  .ant-pagination .ant-pagination-prev .ant-pagination-item-link,
+  .ant-pagination .ant-pagination-next .ant-pagination-item-link {
+    height: 44px;
+  }
+  .ant-modal {
+    max-width: calc(100vw - 16px);
+  }
+}
+
+/* Popups always opaque (check:popovers). */
+.ant-dropdown .ant-dropdown-menu,
+.ant-popover .ant-popover-container,
+.ant-select-dropdown,
+.ant-picker-dropdown .ant-picker-panel-container {
+  background: var(--ws-bg-surface);
+}
+
+/* Skeleton shimmer (ui/Skeletons). */
+.ws-skel {
+  position: relative;
+  overflow: hidden;
+  background: var(--ws-skeleton);
+  border-radius: 8px;
+}
+.ws-skel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--ws-skeleton-shine), transparent);
+  animation: ws-shimmer 1.4s infinite;
+}
+
+/* Visually hidden but available to screen readers. */
+.ws-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

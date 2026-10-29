@@ -1,14 +1,16 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, DatePicker, Form, Input, Modal, Popconfirm, Select, Space, Table, Tabs, Typography, message } from "antd";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Button, DatePicker, Form, Input, Select, Tabs } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
-import { DeleteOutlined, EditOutlined, PlusOutlined } from "@ant-design/icons";
+import { PlusOutlined } from "@ant-design/icons";
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as leaveApi from "../../../api/leave";
 import type { HolidayRow } from "../../../api/leave";
 import { useAuth } from "../../../hooks/useAuth";
-
-const { Title } = Typography;
+import { RowActionButton } from "../../../components/leave/RowActionButton";
+import { fmtHolidayDate, holidayColumns, holidayWeekday } from "../../../components/leave/holidayColumns";
+import { space } from "../../../theme/tokens";
+import { ConfirmModal, DataTable, EmptyState, PageHeader, Panel, SideDrawer, toast, useIsPhone } from "../../../ui";
 
 interface HolidayApi {
   list: (year?: number) => Promise<HolidayRow[]>;
@@ -32,104 +34,136 @@ const RESTRICTED_HOLIDAY_API: HolidayApi = {
 
 // One company-wide list — holidays don't vary by branch (HR-confirmed
 // 2026-09-28; see schema.prisma's comment on the Holiday model).
-function HolidayListTab({ api, queryKey, canManage }: { api: HolidayApi; queryKey: string; canManage: boolean }) {
+function HolidayListTab({ api, queryKey, canManage, noun }: { api: HolidayApi; queryKey: string; canManage: boolean; noun: string }) {
   const queryClient = useQueryClient();
+  const phone = useIsPhone();
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
 
-  const { data = [], isLoading } = useQuery({
+  const { data = [], isLoading, isFetching, error, refetch } = useQuery({
     queryKey: [queryKey, year],
     queryFn: () => api.list(year),
+    placeholderData: keepPreviousData,
   });
 
-  const [modalOpen, setModalOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<HolidayRow | null>(null);
+  const [deleting, setDeleting] = useState<HolidayRow | null>(null);
   const [form] = Form.useForm();
+  const formId = `holiday-form-${queryKey}`;
 
   const saveMutation = useMutation({
     mutationFn: (values: { date: Dayjs; name: string }) =>
       editing ? api.update(editing.id, { date: values.date.format("YYYY-MM-DD"), name: values.name }) : api.create({ date: values.date.format("YYYY-MM-DD"), name: values.name }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: [queryKey] });
-      void message.success(editing ? "Updated." : "Created.");
-      setModalOpen(false);
+      toast.success(editing ? "Updated." : "Created.");
+      setDrawerOpen(false);
     },
-    onError: (err) => void message.error(errorMessage(err, "Could not save.")),
+    onError: (err) => toast.error(errorMessage(err, "Could not save.")),
   });
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.remove(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: [queryKey] });
-      void message.success("Deleted.");
+      toast.success("Deleted.");
+      setDeleting(null);
     },
-    onError: (err) => void message.error(errorMessage(err, "Could not delete.")),
+    onError: (err) => toast.error(errorMessage(err, "Could not delete.")),
   });
 
   function openCreate() {
     setEditing(null);
     form.resetFields();
-    setModalOpen(true);
+    setDrawerOpen(true);
   }
   function openEdit(row: HolidayRow) {
     setEditing(row);
     form.setFieldsValue({ name: row.name, date: dayjs(row.date) });
-    setModalOpen(true);
+    setDrawerOpen(true);
   }
 
+  const actions = (row: HolidayRow) => (
+    <div style={{ display: "flex", gap: space[2], justifyContent: "flex-end" }}>
+      <RowActionButton kind="edit" label={`Edit ${row.name}`} onClick={() => openEdit(row)} />
+      <RowActionButton kind="delete" label={`Delete ${row.name}`} onClick={() => setDeleting(row)} />
+    </div>
+  );
+
   return (
-    <Space orientation="vertical" size={12} style={{ width: "100%" }}>
-      <Space wrap>
-        <Select style={{ width: 120 }} value={year} onChange={setYear} options={[year - 1, year, year + 1, year + 2].map((y) => ({ value: y, label: String(y) }))} />
+    <>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: space[3], alignItems: "center", marginBottom: space[4] }}>
+        <Select
+          aria-label="Year"
+          style={{ width: phone ? undefined : 120, flex: phone ? 1 : undefined }}
+          value={year}
+          onChange={setYear}
+          options={[currentYear - 1, currentYear, currentYear + 1, currentYear + 2].map((y) => ({ value: y, label: String(y) }))}
+        />
         {canManage && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-            Add
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate} style={{ marginLeft: phone ? 0 : "auto", flex: phone ? 1 : undefined }}>
+            New {noun}
           </Button>
         )}
-      </Space>
+      </div>
 
-      <Table<HolidayRow>
+      <DataTable<HolidayRow>
         rowKey="id"
-        loading={isLoading}
+        loading={isLoading || isFetching}
+        error={error}
+        onRetry={() => void refetch()}
         dataSource={data}
         pagination={false}
+        empty={
+          <EmptyState
+            compact
+            illustration="calendar"
+            title={`No ${noun}s for ${year}`}
+            description={canManage ? `Add the first ${noun} for ${year}.` : null}
+            action={canManage ? <Button icon={<PlusOutlined />} onClick={openCreate}>New {noun}</Button> : undefined}
+          />
+        }
         columns={[
-          { title: "Date", dataIndex: "date", render: (v: string) => new Date(v).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "long", year: "numeric" }) },
-          { title: "Occasion", dataIndex: "name" },
-          ...(canManage
-            ? [
-                {
-                  title: "Actions",
-                  key: "actions",
-                  render: (_: unknown, row: HolidayRow) => (
-                    <Space>
-                      <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(row)} />
-                      <Popconfirm title="Delete this holiday?" onConfirm={() => deleteMutation.mutate(row.id)}>
-                        <Button size="small" danger icon={<DeleteOutlined />} />
-                      </Popconfirm>
-                    </Space>
-                  ),
-                },
-              ]
-            : []),
+          ...holidayColumns<HolidayRow>(),
+          ...(canManage ? [{ title: "Actions", key: "actions", align: "right" as const, width: 120, render: (_: unknown, row: HolidayRow) => actions(row) }] : []),
         ]}
+        mobile={{
+          title: (r) => r.name,
+          subtitle: (r) => `${fmtHolidayDate(r.date)} · ${holidayWeekday(r.date)}`,
+          actions: canManage ? actions : undefined,
+        }}
       />
 
-      <Modal title={editing ? "Edit" : "Add"} open={modalOpen} onCancel={() => setModalOpen(false)} footer={null} destroyOnHidden>
-        <Form form={form} layout="vertical" requiredMark={false} onFinish={(v: { date: Dayjs; name: string }) => saveMutation.mutate(v)}>
+      <SideDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        title={editing ? `Edit ${noun}` : `New ${noun}`}
+        formId={formId}
+        primaryLabel="Save"
+        primaryLoading={saveMutation.isPending}
+        destroyOnHidden={false}
+      >
+        <Form id={formId} form={form} layout="vertical" requiredMark={false} size="large" onFinish={(val: { date: Dayjs; name: string }) => saveMutation.mutate(val)}>
           <Form.Item name="date" label="Date" rules={[{ required: true }]}>
-            <DatePicker style={{ width: "100%" }} />
+            <DatePicker style={{ width: "100%" }} format="DD MMM YYYY" />
           </Form.Item>
           <Form.Item name="name" label="Occasion" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item style={{ marginBottom: 0, textAlign: "right" }}>
-            <Button type="primary" htmlType="submit" loading={saveMutation.isPending}>
-              Save
-            </Button>
+            <Input placeholder="e.g. Republic Day" />
           </Form.Item>
         </Form>
-      </Modal>
-    </Space>
+      </SideDrawer>
+
+      <ConfirmModal
+        open={deleting !== null}
+        onCancel={() => setDeleting(null)}
+        onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
+        title={`Delete this ${noun}?`}
+        description={deleting ? `${deleting.name} on ${fmtHolidayDate(deleting.date)} will be removed from the calendar.` : undefined}
+        confirmLabel="Delete"
+        danger
+        loading={deleteMutation.isPending}
+      />
+    </>
   );
 }
 
@@ -137,16 +171,20 @@ export function HolidayCalendarsAdminPage() {
   const { hasPermission } = useAuth();
   const canManage = hasPermission("leave.policy.manage");
   return (
-    <Space orientation="vertical" size={16} style={{ width: "100%" }}>
-      <Title level={3} style={{ margin: 0 }}>
-        Holiday Calendars
-      </Title>
-      <Tabs
-        items={[
-          { key: "holidays", label: "Holidays", children: <HolidayListTab api={HOLIDAY_API} queryKey="admin-holidays" canManage={canManage} /> },
-          { key: "restricted", label: "Restricted Holidays", children: <HolidayListTab api={RESTRICTED_HOLIDAY_API} queryKey="admin-restricted-holidays" canManage={canManage} /> },
-        ]}
-      />
-    </Space>
+    <>
+      <PageHeader title="Holiday Calendars" subtitle="Company-wide holidays and restricted holidays, by year" />
+      <Panel>
+        <Tabs
+          items={[
+            { key: "holidays", label: "Holidays", children: <HolidayListTab api={HOLIDAY_API} queryKey="admin-holidays" canManage={canManage} noun="holiday" /> },
+            {
+              key: "restricted",
+              label: "Restricted Holidays",
+              children: <HolidayListTab api={RESTRICTED_HOLIDAY_API} queryKey="admin-restricted-holidays" canManage={canManage} noun="restricted holiday" />,
+            },
+          ]}
+        />
+      </Panel>
+    </>
   );
 }

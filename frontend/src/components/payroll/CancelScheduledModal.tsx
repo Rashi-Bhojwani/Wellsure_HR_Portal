@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Descriptions, Input, Modal, Space, Spin, Table, Typography } from "antd";
+import { Alert, Descriptions, Input, Modal, Space, Table, Typography } from "antd";
+import { SkeletonCard } from "../../ui";
 import * as payrollApi from "../../api/payroll";
 import type { CancelPlanView } from "../../api/payroll";
 import { apiErrorMessage } from "../../lib/apiError";
@@ -13,7 +14,7 @@ const { Text } = Typography;
 /** What cancelling a scheduled salary does, in one picture: the row that goes, and the salary that stays in force with no end date. */
 export function CancelPlanBlock({ plan, componentName }: { plan: CancelPlanView; componentName: (c: string) => string }) {
   const table = (lines: Array<{ component: string; amount: string }>) => (
-    <Table size="small" pagination={false} rowKey="component" dataSource={lines} columns={[{ title: "Line", render: (_, l) => componentName(l.component) }, { title: "A month", align: "right", render: (_, l) => formatRupees(l.amount, 2) }]} />
+    <Table size="small" pagination={false} rowKey="component" dataSource={lines} columns={[{ title: "Line", render: (_, l) => componentName(l.component) }, { title: "A month", align: "right", className: "ws-num", render: (_, l) => formatRupees(l.amount, 2) }]} />
   );
   return (
     <Space orientation="vertical" size={12} style={{ width: "100%" }}>
@@ -55,7 +56,7 @@ export function CancelScheduledModal({ employeeId, salaryId, componentName, onCl
   return (
     <Modal open width={760} title="Cancel a scheduled salary" onCancel={onClose} okText="Submit for approval" okButtonProps={{ disabled: !data?.canSubmit || note.trim().length < 3, loading: submit.isPending }} onOk={() => submit.mutate()} destroyOnHidden>
       <Space orientation="vertical" size={12} style={{ width: "100%" }}>
-        {isLoading && <Spin />}
+        {isLoading && <SkeletonCard lines={4} />}
         {error && <Alert type="error" showIcon title={apiErrorMessage(error, "Could not prepare the cancellation.")} />}
         {data && (
           <>

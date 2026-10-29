@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { notification as antdNotification } from "antd";
+import { notifyInfo } from "./notify";
 import { useSocket } from "./SocketProvider";
 
 interface NotificationEventPayload {
@@ -26,7 +26,7 @@ export function useNotifications(): void {
     if (!socket) return;
 
     function onNotificationNew(payload: NotificationEventPayload): void {
-      antdNotification.info({
+      notifyInfo({
         title: payload.title,
         description: payload.body,
         placement: "topRight",

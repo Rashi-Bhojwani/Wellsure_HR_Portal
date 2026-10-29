@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { notification } from "antd";
+import { notifyInfo } from "./notify";
 import { useSocket } from "./SocketProvider";
 import type { PostRow } from "../api/engage";
 
@@ -24,7 +24,7 @@ export function useEngageRealtime(): void {
     function onCelebration(kind: "birthday" | "joining" | "anniversary") {
       return (payload: PostRow) => {
         const titles = { birthday: "🎂 Birthday", joining: "🎉 New joiner", anniversary: "🏆 Work anniversary" };
-        notification.info({ message: titles[kind], description: payload.body, placement: "topRight" });
+        notifyInfo({ message: titles[kind], description: payload.body, placement: "topRight" });
         invalidateFeed();
       };
     }

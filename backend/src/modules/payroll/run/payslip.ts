@@ -31,7 +31,7 @@ export interface PayslipContent {
   totals: { gross: string; deductions: string; net: string; employerContributions: string };
   netInWords: string;
   bank: { bankName: string; accountLast4: string } | null;
-  statutory: { panLast4: string | null; uanLast4: string | null; esiNumber: string | null };
+  statutory: { panLast4: string | null; uanLast4: string | null; esiLast4: string | null };
   runHash: string;
 }
 
@@ -47,7 +47,7 @@ export async function buildPayslips(run: PayrollRun): Promise<Map<string, { runI
   const names = await namesOn(ids, run.cycleEnd);
   const letterhead = await getLetterhead();
   const placements = await placementsOn(ids, run.cycleEnd); // where each person was at the end of the period (the nearest placement for someone who left earlier)
-  const statutory = new Map((await prisma.employeeStatutory.findMany({ where: { employeeId: { in: ids } }, select: { employeeId: true, panLast4: true, uanLast4: true, esiNumber: true } })).map((s) => [s.employeeId, s]));
+  const statutory = new Map((await prisma.employeeStatutory.findMany({ where: { employeeId: { in: ids } }, select: { employeeId: true, panLast4: true, uanLast4: true, esiLast4: true } })).map((s) => [s.employeeId, s]));
   // The account the salary goes to: the one in force on the payment date (the cycle end if the run read no payment date), the same account the bank file uses.
   const paidOn = (await paymentDateOf(run)) ?? run.cycleEnd;
   const banks = await bankAccountsOn(ids, paidOn);
@@ -81,7 +81,7 @@ export async function buildPayslips(run: PayrollRun): Promise<Map<string, { runI
       totals: { gross: money(item.gross), deductions: money(item.deductions), net, employerContributions: money(item.employerContributions) },
       netInWords: rupeesInWords(net),
       bank: bank ? { bankName: bank.bankName, accountLast4: bank.accountNumberLast4 } : null,
-      statutory: { panLast4: stat?.panLast4 ?? null, uanLast4: stat?.uanLast4 ?? null, esiNumber: stat?.esiNumber ?? null },
+      statutory: { panLast4: stat?.panLast4 ?? null, uanLast4: stat?.uanLast4 ?? null, esiLast4: stat?.esiLast4 ?? null },
       runHash: run.runHash ?? "",
     };
     out.set(item.employeeId, { runItemId: item.id, content, contentHash: payslipHash(content) });

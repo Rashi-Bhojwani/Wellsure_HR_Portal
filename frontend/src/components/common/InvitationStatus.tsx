@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Alert, Button, Space, Typography } from "antd";
+import { Button } from "antd";
 import { apiErrorMessage } from "../../lib/apiError";
 import * as employeeApi from "../../api/employee";
-
-const { Text } = Typography;
+import { fw, space } from "../../theme/tokens";
+import { ApprovalBanner } from "../../ui";
 
 function when(iso?: string): string {
   return iso ? new Date(iso).toLocaleString() : "";
@@ -33,7 +33,7 @@ export function InvitationStatus({ employeeId, invitation, onChange }: { employe
   }
 
   const resendButton = (label: string) => (
-    <Button size="small" loading={busy} onClick={() => void resend()} data-testid="resend-invitation">
+    <Button loading={busy} onClick={() => void resend()} data-testid="resend-invitation">
       {label}
     </Button>
   );
@@ -41,59 +41,51 @@ export function InvitationStatus({ employeeId, invitation, onChange }: { employe
   let alert;
   if (current.status === "SENT") {
     alert = (
-      <Alert
-        type="success"
-        showIcon
+      <ApprovalBanner
+        tone="success"
         title={`Invitation email sent to ${current.to}`}
-        description={
-          <Text>
-            The mail server accepted it{current.sentAt ? ` at ${when(current.sentAt)}` : ""}. That does not guarantee it reached the inbox: if they cannot find it, ask them to check spam, or resend.
-          </Text>
-        }
-        action={resendButton("Resend")}
+        description={`The mail server accepted it${current.sentAt ? ` at ${when(current.sentAt)}` : ""}. That does not guarantee it reached the inbox: if they cannot find it, ask them to check spam, or resend.`}
+        actions={resendButton("Resend")}
       />
     );
   } else if (current.status === "FILE_ONLY") {
     alert = (
-      <Alert
-        type="warning"
-        showIcon
+      <ApprovalBanner
+        tone="warning"
         title={`Nothing was emailed to ${current.to}`}
         description="This system is in development mode: the email was only written to a file on the server (backend/.mail/), so nobody has received it. Set the SMTP variables in backend/.env to send real emails (see GETTING_STARTED.md), then resend."
-        action={resendButton("Resend")}
+        actions={resendButton("Resend")}
       />
     );
   } else if (current.status === "FAILED") {
     alert = (
-      <Alert
-        type="error"
-        showIcon
+      <ApprovalBanner
+        tone="danger"
         title={`The invitation email to ${current.to} could not be sent`}
         description={
-          <Space orientation="vertical" size={2}>
-            <Text>{current.error ?? "Sending failed."}</Text>
-            <Text strong>This person has NOT been invited yet. The account exists, but they have no way to set a password until an invitation is sent.</Text>
-          </Space>
+          <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <span>{current.error ?? "Sending failed."}</span>
+            <strong style={{ fontWeight: fw.semibold }}>This person has NOT been invited yet. The account exists, but they have no way to set a password until an invitation is sent.</strong>
+          </span>
         }
-        action={resendButton("Try again")}
+        actions={resendButton("Try again")}
       />
     );
   } else {
     alert = (
-      <Alert
-        type="info"
-        showIcon
+      <ApprovalBanner
+        tone="info"
         title={`No invitation has been sent to ${current.to || "this person"} yet`}
         description="Their account exists but they cannot sign in until you send the invitation."
-        action={resendButton("Send invitation")}
+        actions={resendButton("Send invitation")}
       />
     );
   }
 
   return (
-    <Space orientation="vertical" size={8} style={{ width: "100%" }} data-testid="invitation-status" data-status={current.status}>
+    <div style={{ display: "flex", flexDirection: "column", gap: space[2], width: "100%" }} data-testid="invitation-status" data-status={current.status}>
       {alert}
-      {problem && <Alert type="error" showIcon title={problem} />}
-    </Space>
+      {problem && <ApprovalBanner tone="danger" title={problem} />}
+    </div>
   );
 }

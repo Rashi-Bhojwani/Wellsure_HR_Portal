@@ -1,13 +1,16 @@
-import { useRef, type CSSProperties, type KeyboardEvent } from "react";
-import { theme } from "antd";
+import { useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import { LockOutlined } from "@ant-design/icons";
 import { parseMusterCell } from "@shared/attendance/muster";
 import type { Muster, MusterCell, MusterRow } from "../../../../api/muster";
 import { cellKey, useCellTones } from "./musterCells";
+import { fs, fw, radius, space, v } from "../../../../theme/tokens";
 
 // The editable grid (Phase 2 P2-D, docs/plans/PHASE_2.md §5.1): employees ×
-// days, click a cell and type — a status letter or IN-OUT times. Tab or
-// Enter moves to the next day, ↑/↓ to the next person, Esc undoes the cell.
+// days, click a cell and type — a status letter or IN-OUT times. Enter moves
+// to the next day, arrows move between cells, Esc undoes the cell.
 // Unsaved cells are yellow; a cell the parser or the server refused is red.
+// Keyboard: a roving tabindex — the grid is ONE tab stop (the last cell used); arrows move between the cells you can act on, Home/End go
+// to the row's first/last, Enter/Space open a device day (HR). Tab leaves the grid.
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -61,9 +64,56 @@ function marks(cell: MusterCell): string {
 }
 
 export function MusterGrid({ muster, pending, errors, onChange, focused, onFocus, onOpenDay }: Props) {
-  const { token } = theme.useToken();
   const tones = useCellTones();
   const tableRef = useRef<HTMLTableElement>(null);
+  const openable = (cell: MusterCell) => !!onOpenDay && !cell.editable && cell.capture === "DEVICE" && !!cell.code && !cell.locked;
+  const actionable = (cell: MusterCell) => cell.editable || openable(cell);
+  // The one cell that is in the tab order: the last one used, else the first one there is.
+  const first = useMemo(() => {
+    for (let r = 0; r < muster.rows.length; r++) {
+      const c = muster.rows[r]!.cells.findIndex((cell) => cell.editable || (!!onOpenDay && cell.capture === "DEVICE" && !!cell.code && !cell.locked));
+      if (c >= 0) return { r, c };
+    }
+    return null;
+  }, [muster, onOpenDay]);
+  const [active, setActive] = useState<{ r: number; c: number } | null>(null);
+  const current = active && muster.rows[active.r]?.cells[active.c] && actionable(muster.rows[active.r]!.cells[active.c]!) ? active : first;
+
+  const focusCell = (r: number, c: number) => {
+    const el = tableRef.current?.querySelector<HTMLElement>(`[data-r="${r}"][data-c="${c}"]`);
+    if (!el) return false;
+    setActive({ r, c });
+    el.focus();
+    if (el instanceof HTMLInputElement) el.select();
+    return true;
+  };
+  /** Arrow keys: the next cell you can act on in that direction (skipping holidays, locked days…); none, stay put. */
+  const step = (r: number, c: number, dRow: number, dDay: number) => {
+    for (let rr = r + dRow, cc = c + dDay; rr >= 0 && rr < muster.rows.length && cc >= 0 && cc < muster.days.length; rr += dRow, cc += dDay) {
+      if (actionable(muster.rows[rr]!.cells[cc]!) && focusCell(rr, cc)) return;
+    }
+  };
+  const rowEnd = (r: number, last: boolean) => {
+    const cells = muster.rows[r]!.cells;
+    const idx = last ? cells.map((x) => actionable(x)).lastIndexOf(true) : cells.findIndex((x) => actionable(x));
+    if (idx >= 0) focusCell(r, idx);
+  };
+  /** Grid navigation shared by device cells and inputs; returns true when it handled the key. */
+  const navigate = (e: KeyboardEvent<HTMLElement>, r: number, c: number): boolean => {
+    const moves: Record<string, [number, number]> = { ArrowLeft: [0, -1], ArrowRight: [0, 1], ArrowUp: [-1, 0], ArrowDown: [1, 0] };
+    const m = moves[e.key];
+    if (m) {
+      e.preventDefault();
+      step(r, c, m[0], m[1]);
+      return true;
+    }
+    if (e.key === "Home" || e.key === "End") {
+      e.preventDefault();
+      rowEnd(r, e.key === "End");
+      return true;
+    }
+    return false;
+  };
 
   const move = (rowIdx: number, dayIdx: number, dRow: number, dDay: number) => {
     let r = rowIdx;
@@ -80,57 +130,53 @@ export function MusterGrid({ muster, pending, errors, onChange, focused, onFocus
         r -= 1;
       }
       if (r < 0 || r >= muster.rows.length) return;
-      const el = tableRef.current?.querySelector<HTMLInputElement>(`input[data-r="${r}"][data-c="${c}"]`);
-      if (el) {
-        el.focus();
-        el.select();
-        return;
-      }
+      if (tableRef.current?.querySelector(`input[data-r="${r}"][data-c="${c}"]`) && focusCell(r, c)) return;
       if (dRow !== 0 && dDay === 0) continue;
     }
   };
 
   const onKey = (e: KeyboardEvent<HTMLInputElement>, r: number, c: number, key: string) => {
+    const input = e.currentTarget;
+    // Left/Right/Home/End edit the text while there is a caret inside it; with the whole text selected (as on arrival) or at the edge, they move.
+    const whole = input.selectionStart === 0 && input.selectionEnd === input.value.length;
+    const atStart = input.selectionStart === 0 && input.selectionEnd === 0;
+    const atEnd = input.selectionStart === input.value.length && input.selectionEnd === input.value.length;
     if (e.key === "Enter") {
       e.preventDefault();
       move(r, c, 0, e.shiftKey ? -1 : 1);
-    } else if (e.key === "ArrowDown") {
-      e.preventDefault();
-      move(r, c, 1, 0);
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      move(r, c, -1, 0);
     } else if (e.key === "Escape") {
       onChange(key, null);
+    } else if (e.key === "ArrowUp" || e.key === "ArrowDown" || (e.key === "ArrowLeft" && (whole || atStart)) || (e.key === "ArrowRight" && (whole || atEnd)) || ((e.key === "Home" || e.key === "End") && whole)) {
+      navigate(e, r, c);
     }
   };
 
-  const sticky = (left: number, width: number): CSSProperties => ({ position: "sticky", left, zIndex: 2, minWidth: width, maxWidth: width, background: token.colorBgContainer });
-  const border = `1px solid ${token.colorBorderSecondary}`;
-  const th: CSSProperties = { padding: "4px 2px", fontWeight: 500, fontSize: 12, borderBottom: border, borderRight: border, textAlign: "center", background: token.colorFillQuaternary, position: "sticky", top: 0, zIndex: 1 };
-  const td: CSSProperties = { padding: 0, borderBottom: border, borderRight: border, textAlign: "center", height: 30 };
+  const sticky = (left: number, width: number): CSSProperties => ({ position: "sticky", left, zIndex: 2, minWidth: width, maxWidth: width, background: v.bgSurface });
+  const border = `1px solid ${v.borderDefault}`;
+  const th: CSSProperties = { padding: `${space[1] + 2}px 2px`, fontWeight: fw.semibold, color: v.textOnRaised, fontSize: fs.sm, borderBottom: border, borderRight: border, textAlign: "center", background: v.bgTableHeader, position: "sticky", top: 0, zIndex: 1 };
+  const td: CSSProperties = { padding: 0, borderBottom: border, borderRight: border, textAlign: "center", height: 36 };
 
   return (
-    <div style={{ overflow: "auto", maxHeight: "calc(100vh - 320px)", minHeight: 240, border, borderRadius: token.borderRadius }}>
-      <table ref={tableRef} style={{ borderCollapse: "separate", borderSpacing: 0, fontSize: 12, width: "max-content" }} aria-label={`Attendance muster, ${muster.cycle.label}`}>
+    <div role="region" aria-label="Muster grid (scrolls sideways)" tabIndex={first ? undefined : 0} style={{ overflow: "auto", maxHeight: "calc(100vh - 320px)", minHeight: 240, maxWidth: "100%", border, borderRadius: radius.md, background: v.bgSurface, overscrollBehaviorX: "contain" }}>
+      <table ref={tableRef} style={{ borderCollapse: "separate", borderSpacing: 0, fontSize: fs.sm, width: "max-content" }} role="grid" aria-label={`Attendance muster, ${muster.cycle.label}`} aria-rowcount={muster.rows.length + 1}>
         <thead>
-          <tr>
-            <th style={{ ...th, ...sticky(0, 200), zIndex: 3, textAlign: "left", paddingLeft: 8, background: token.colorFillQuaternary }}>Employee</th>
+          <tr role="row">
+            <th role="columnheader" style={{ ...th, ...sticky(0, 200), zIndex: 3, left: 0, textAlign: "left", paddingLeft: space[2], background: v.bgTableHeader }}>Employee</th>
             {muster.days.map((d) => {
               const n = Number(d.date.slice(8));
               const sunday = d.weekday === 0;
               return (
-                <th key={d.date} style={{ ...th, minWidth: 46, color: sunday ? token.colorTextTertiary : undefined, outline: d.date === muster.today ? `2px solid ${token.colorPrimary}` : undefined, outlineOffset: -2 }}>
+                <th key={d.date} role="columnheader" style={{ ...th, minWidth: 46, color: sunday ? v.textSecondary : undefined, outline: d.date === muster.today ? `2px solid ${v.focusRing}` : undefined, outlineOffset: -2 }}>
                   <div>{n}</div>
-                  <div style={{ fontWeight: 400, color: token.colorTextTertiary }}>{WEEKDAYS[d.weekday]}</div>
-                  <div title={`${d.notMarked} not marked`} style={{ fontWeight: 400, fontSize: 11, color: d.notMarked ? token.colorWarningText : "transparent" }}>
+                  <div style={{ fontWeight: fw.regular, color: v.textSecondary }}>{WEEKDAYS[d.weekday]}</div>
+                  <div title={`${d.notMarked} not marked`} style={{ fontWeight: fw.regular, fontSize: fs.xs, color: d.notMarked ? v.warningText : "transparent" }}>
                     {d.notMarked ? `${d.notMarked} NM` : "·"}
                   </div>
                 </th>
               );
             })}
             {TOTALS.map((t) => (
-              <th key={t.key} title={t.title} style={{ ...th, minWidth: t.key === "paidDays" ? 52 : 40, background: t.key === "paidDays" ? token.colorPrimaryBg : token.colorFillQuaternary }}>
+              <th key={t.key} role="columnheader" title={t.title} style={{ ...th, minWidth: t.key === "paidDays" ? 52 : 40, background: t.key === "paidDays" ? v.accentSubtle : v.bgTableHeader }}>
                 {t.label}
               </th>
             ))}
@@ -138,10 +184,10 @@ export function MusterGrid({ muster, pending, errors, onChange, focused, onFocus
         </thead>
         <tbody>
           {muster.rows.map((row, r) => (
-            <tr key={row.employeeId}>
-              <th scope="row" style={{ ...td, ...sticky(0, 200), textAlign: "left", padding: "2px 8px", fontWeight: 400 }}>
-                <div style={{ fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.name}</div>
-                <div style={{ color: token.colorTextTertiary, fontSize: 11 }}>
+            <tr key={row.employeeId} role="row">
+              <th scope="row" role="rowheader" style={{ ...td, ...sticky(0, 200), textAlign: "left", padding: `2px ${space[2]}px`, fontWeight: fw.regular, boxShadow: `1px 0 0 ${v.borderDefault}` }}>
+                <div style={{ fontWeight: fw.medium, color: v.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.name}</div>
+                <div style={{ color: v.textSecondary, fontSize: fs.xs }}>
                   {row.employeeCode}
                   {row.branch ? ` · ${row.branch}` : ""}
                 </div>
@@ -153,32 +199,56 @@ export function MusterGrid({ muster, pending, errors, onChange, focused, onFocus
                 const tone = tones(cell.code);
                 const base: CSSProperties = {
                   ...td,
-                  background: edited !== undefined ? token.colorWarningBgHover : tone.background,
+                  background: edited !== undefined ? v.warningSubtle : tone.background,
                   color: tone.color,
-                  boxShadow: error ? `inset 0 0 0 2px ${token.colorError}` : cell.statusOnly ? `inset 0 0 0 1px ${token.colorTextQuaternary}` : marks(cell) ? `inset 0 -3px 0 ${token.colorPrimary}` : undefined,
+                  boxShadow: error ? `inset 0 0 0 2px ${v.danger}` : cell.statusOnly ? `inset 0 0 0 1px ${v.borderControl}` : marks(cell) ? `inset 0 -3px 0 ${v.accentText}` : undefined,
                   position: "relative",
-                  fontWeight: 500,
+                  fontWeight: fw.medium,
                 };
                 const title = error ? `${describe(row, cell)}\n⚠ ${error}` : edited === "" ? `${describe(row, cell)}\nWill be cleared (back to not marked) when you save.` : describe(row, cell);
-                const corner = cell.missingPunch ? <span aria-hidden style={{ position: "absolute", top: 0, right: 0, borderTop: `7px solid ${token.colorError}`, borderLeft: "7px solid transparent" }} /> : null;
-                const worked = cell.workedOnOffDay ? <span aria-hidden style={{ position: "absolute", bottom: 2, right: 3, width: 5, height: 5, borderRadius: 5, background: token.colorSuccess }} /> : null;
+                const corner = cell.missingPunch ? <span aria-hidden style={{ position: "absolute", top: 0, right: 0, borderTop: `7px solid ${v.danger}`, borderLeft: "7px solid transparent" }} /> : null;
+                const worked = cell.workedOnOffDay ? <span aria-hidden style={{ position: "absolute", bottom: 2, right: 3, width: 5, height: 5, borderRadius: 5, background: v.success }} /> : null;
                 const mark = marks(cell) ? (
-                  <span aria-hidden style={{ position: "absolute", top: 0, left: 2, fontSize: 11, lineHeight: "12px", color: token.colorPrimary, fontWeight: 700 }}>
+                  <span aria-hidden style={{ position: "absolute", top: 0, left: 2, fontSize: fs.xs, lineHeight: "12px", color: v.accentText, fontWeight: fw.bold }}>
                     {marks(cell)}
                   </span>
                 ) : null;
+                const isActive = current?.r === r && current.c === c;
                 if (!cell.editable) {
-                  const openable = !!onOpenDay && cell.capture === "DEVICE" && !!cell.code && !cell.locked;
+                  const canOpen = openable(cell);
                   return (
                     <td
                       key={cell.date}
-                      title={openable ? `${title}\nClick to set this day (HR)` : title}
-                      onClick={openable ? () => onOpenDay!(row, cell) : undefined}
-                      style={{ ...base, cursor: openable ? "pointer" : "default", opacity: cell.capture === "DEVICE" || cell.locked ? 0.85 : 1, borderStyle: cell.statusOnly ? "dashed" : undefined }}
+                      role="gridcell"
+                      data-r={canOpen ? r : undefined}
+                      data-c={canOpen ? c : undefined}
+                      title={canOpen ? `${title}\nClick to set this day (HR)` : title}
+                      onClick={
+                        canOpen
+                          ? () => {
+                              setActive({ r, c });
+                              onOpenDay!(row, cell);
+                            }
+                          : undefined
+                      }
+                      onFocus={canOpen ? () => setActive({ r, c }) : undefined}
+                      tabIndex={canOpen ? (isActive ? 0 : -1) : undefined}
+                      aria-label={canOpen ? `${describe(row, cell).replace(/\.+$/, "")}. Press Enter to set this day` : undefined}
+                      onKeyDown={
+                        canOpen
+                          ? (e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                onOpenDay!(row, cell);
+                              } else navigate(e, r, c);
+                            }
+                          : undefined
+                      }
+                      style={{ ...base, cursor: canOpen ? "pointer" : "default", opacity: cell.capture === "DEVICE" || cell.locked ? 0.85 : 1, borderStyle: cell.statusOnly ? "dashed" : undefined }}
                     >
                       {mark}
                       {cell.code ?? ""}
-                      {cell.locked && <span aria-label="finalised" style={{ fontSize: 9, marginLeft: 1 }}>🔒</span>}
+                      {cell.locked && <LockOutlined aria-label="finalised" style={{ fontSize: fs.chip, marginLeft: 1 }} />}
                       {corner}
                       {worked}
                     </td>
@@ -186,16 +256,18 @@ export function MusterGrid({ muster, pending, errors, onChange, focused, onFocus
                 }
                 const shown = edited ?? (focused === key ? (cell.entry?.text ?? "") : (cell.code ?? ""));
                 return (
-                  <td key={cell.date} title={title} style={base}>
+                  <td key={cell.date} role="gridcell" title={title} style={base}>
                     {mark}
                     <input
                       data-r={r}
                       data-c={c}
+                      tabIndex={isActive ? 0 : -1}
                       aria-label={describe(row, cell)}
                       aria-invalid={error ? true : undefined}
                       value={shown}
                       placeholder={edited === "" ? "clear" : undefined}
                       onFocus={(e) => {
+                        setActive({ r, c });
                         onFocus(key);
                         requestAnimationFrame(() => e.target.select());
                       }}
@@ -209,10 +281,10 @@ export function MusterGrid({ muster, pending, errors, onChange, focused, onFocus
                         width: focused === key ? 110 : 44,
                         position: focused === key ? "relative" : undefined,
                         zIndex: focused === key ? 4 : undefined,
-                        height: 28,
+                        height: 34,
                         border: "none",
-                        outline: focused === key ? `2px solid ${token.colorPrimary}` : "none",
-                        background: focused === key ? token.colorBgElevated : "transparent",
+                        outline: focused === key ? `2px solid ${v.focusRing}` : "none",
+                        background: focused === key ? v.bgSurface : "transparent",
                         color: "inherit",
                         font: "inherit",
                         textAlign: "center",
@@ -228,7 +300,7 @@ export function MusterGrid({ muster, pending, errors, onChange, focused, onFocus
                 );
               })}
               {TOTALS.map((t) => (
-                <td key={t.key} style={{ ...td, padding: "0 4px", fontWeight: t.key === "paidDays" ? 600 : 400, background: t.key === "paidDays" ? token.colorPrimaryBg : undefined, color: t.key === "missingPunch" && row.totals.missingPunch ? token.colorErrorText : undefined }}>
+                <td key={t.key} role="gridcell" className="ws-num" style={{ ...td, padding: `0 ${space[1]}px`, fontWeight: t.key === "paidDays" ? fw.semibold : fw.regular, background: t.key === "paidDays" ? v.accentSubtle : undefined, color: t.key === "missingPunch" && row.totals.missingPunch ? v.danger : undefined }}>
                   {row.totals[t.key] || (t.key === "paidDays" ? 0 : "")}
                 </td>
               ))}

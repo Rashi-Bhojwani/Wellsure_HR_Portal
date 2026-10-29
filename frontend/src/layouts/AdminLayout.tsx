@@ -1,361 +1,71 @@
-import { useEffect, useMemo, useState } from "react";
-import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import {
-  Avatar,
-  Breadcrumb,
-  Button,
-  DatePicker,
-  Drawer,
-  Dropdown,
-  Grid,
-  Layout,
-  Select,
-  Space,
-  theme,
-  Typography,
-  type MenuProps,
-} from "antd";
-import {
-  AppstoreOutlined,
-  CalendarOutlined,
-  DownOutlined,
-  HistoryOutlined,
-  LogoutOutlined,
-  MenuOutlined,
-  SearchOutlined,
-  SettingOutlined,
-  TeamOutlined,
-  UserOutlined,
-} from "@ant-design/icons";
-import { adminApps, type AdminApp } from "../routes/adminMenu.config";
-import { AdminFiltersProvider, useAdminFilters } from "../context/AdminFiltersContext";
-import { useAuth } from "../hooks/useAuth";
-import { NotificationBell } from "../components/common/NotificationBell";
-import { SecurityEventsBanner } from "../components/access/SecurityEventsBanner";
+import { lazy, Suspense, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { CustomerServiceOutlined, SafetyOutlined, SettingOutlined, SwapOutlined } from "@ant-design/icons";
+import { AdminFiltersProvider } from "../context/AdminFiltersContext";
+import { Skel } from "../ui/Skeletons";
+import { control, radius, space } from "../theme/tokens";
+import { useIsPhone } from "../ui/hooks";
+import { AppShell } from "./shell/AppShell";
+import { AdminPhoneTabBar } from "./shell/AdminPhoneTabBar";
+import { adminNav } from "./shell/nav";
 
-import { DemoCompanyBanner } from "../components/common/DemoCompanyBanner";
+const EXTRA_TITLES: [RegExp, string][] = [
+  [/^\/admin\/security$/, "Account & security"],
+  [/^\/admin\/employee\/profile\//, "Employee profile"],
+  [/^\/admin\/employee\/helpdesk\/.+/, "Helpdesk ticket"],
+  [/^\/admin\/admin-tools\/templates\/.+/, "Template editor"],
+  [/^\/admin\/payroll\/run\/[^/]+\/step\//, "Payroll run step"],
+  [/^\/admin\/payroll\/run\/[^/]+$/, "Payroll run"],
+];
 
-const { Header, Content, Footer } = Layout;
-const { Text } = Typography;
-const { useBreakpoint } = Grid;
+// Break-glass security notices (Super Admins only, rare): loaded after the shell paints.
+const SecurityEventsBanner = lazy(() => import("../components/access/SecurityEventsBanner").then((m) => ({ default: m.SecurityEventsBanner })));
 
-function currentApp(pathname: string): AdminApp {
-  const rest = pathname.replace(/^\/admin\/?/, "");
-  const segment = rest.split("/")[0];
-  return adminApps.find((a) => a.path === segment) ?? adminApps[0]!;
-}
+// Payroll month + employee filter (top bar, desktop): lazy, with control-shaped placeholders so the bar never jumps.
+const AdminContextControls = lazy(() => import("./shell/AdminContextControls").then((m) => ({ default: m.AdminContextControls })));
 
-// The panel is custom content inside a Dropdown, and a Dropdown only gives a *menu* its background, border and shadow: custom content gets none, so on its own the
-// tiles were drawn straight over the breadcrumb and the page. This one carries its own opaque surface from the theme tokens (so it follows light and dark), and
-// never wider than the screen.
-function AppSwitcherPanel({ onSelect }: { onSelect: (app: AdminApp) => void }) {
-  const { token } = theme.useToken();
+function AdminContextControlsSlot() {
   return (
-    <div
-      role="dialog"
-      aria-label="Your apps"
-      data-testid="app-switcher-panel"
-      style={{
-        padding: 16,
-        width: "min(320px, calc(100vw - 24px))",
-        maxHeight: "calc(100vh - 80px)",
-        overflowY: "auto",
-        background: token.colorBgElevated,
-        border: `1px solid ${token.colorBorderSecondary}`,
-        borderRadius: token.borderRadiusLG,
-        boxShadow: token.boxShadowSecondary,
-      }}
-    >
-      <Text type="secondary" style={{ fontSize: 12 }}>
-        YOUR APPS
-      </Text>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12 }}>
-        {adminApps.map((app) => {
-          const Icon = app.icon;
-          return (
-            <div
-              key={app.key}
-              role="button"
-              tabIndex={0}
-              onClick={() => onSelect(app)}
-              onKeyDown={(e) => e.key === "Enter" && onSelect(app)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                padding: 10,
-                borderRadius: 8,
-                cursor: "pointer",
-              }}
-              className="wellsure-app-tile"
-            >
-              <span
-                style={{
-                  width: 32,
-                  height: 32,
-                  flex: "none",
-                  borderRadius: 8,
-                  background: "#eef1ff",
-                  color: "#2f6fed",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Icon />
-              </span>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 500 }}>{app.label}</div>
-                {app.subLabel && (
-                  <div style={{ fontSize: 11, color: "#8c8c8c" }}>{app.subLabel}</div>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function TopBar({ onOpenMenu }: { onOpenMenu?: () => void }) {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { logout } = useAuth();
-  const [switcherOpen, setSwitcherOpen] = useState(false);
-  const screens = useBreakpoint();
-  const isMobile = !screens.md;
-  const app = currentApp(location.pathname);
-
-  // Escape closes it (a click outside already does).
-  useEffect(() => {
-    if (!switcherOpen) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setSwitcherOpen(false);
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [switcherOpen]);
-
-  const goToApp = (target: AdminApp): void => {
-    navigate(`/admin/${target.path}`);
-    setSwitcherOpen(false);
-  };
-
-  async function handleLogout(): Promise<void> {
-    await logout();
-    navigate("/login");
-  }
-
-  const settingsMenu: MenuProps["items"] = [
-    { key: "security", label: "Account & Security", onClick: () => navigate("/admin/security") },
-  ];
-
-  return (
-    <Header
-      style={{
-        background: "#fff",
-        borderBottom: "1px solid #f0f0f0",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "0 20px",
-        height: "auto",
-        lineHeight: "normal",
-        paddingTop: 10,
-        paddingBottom: 10,
-      }}
-    >
-      <Space size="small" wrap>
-        {isMobile && onOpenMenu && <Button type="text" aria-label="Open the menu" icon={<MenuOutlined />} onClick={onOpenMenu} />}
-        <Dropdown
-          open={switcherOpen}
-          onOpenChange={setSwitcherOpen}
-          popupRender={() => <AppSwitcherPanel onSelect={goToApp} />}
-          trigger={["click"]}
-          placement="bottomLeft"
-        >
-          <Button type="text" aria-label="Your apps" icon={<AppstoreOutlined style={{ fontSize: 18 }} />} />
-        </Dropdown>
-        <div
-          style={{
-            width: 30,
-            height: 30,
-            borderRadius: 7,
-            background: "#2f6fed",
-            color: "#fff",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontWeight: 700,
-            fontSize: 14,
-          }}
-        >
-          W
+    <Suspense
+      fallback={
+        <div aria-hidden style={{ display: "flex", gap: space[2] }}>
+          <Skel w={168} h={control.md} r={radius.sm} />
+          <Skel w={168} h={control.md} r={radius.sm} />
         </div>
-        {!isMobile && (
-          <>
-            <span
-              style={{
-                background: "#eef1ff",
-                color: "#2f6fed",
-                padding: "4px 12px",
-                borderRadius: 16,
-                fontSize: 13,
-                fontWeight: 500,
-              }}
-            >
-              {app.label}
-            </span>
-            {app.menus?.map((group) => (
-              <Dropdown
-                key={group.key}
-                menu={{
-                  items: group.items.map((item) => ({ key: item.path, label: item.label })),
-                  onClick: ({ key }) => navigate(`/admin/${key}`),
-                }}
-              >
-                <a onClick={(e) => e.preventDefault()} style={{ color: "rgba(0,0,0,0.85)" }}>
-                  <Space size={4}>
-                    {group.label} <DownOutlined style={{ fontSize: 10 }} />
-                  </Space>
-                </a>
-              </Dropdown>
-            ))}
-          </>
-        )}
-      </Space>
-
-      <Space size="large">
-        <SearchOutlined style={{ fontSize: 16 }} />
-        <NotificationBell homePath="/admin" />
-        <Dropdown menu={{ items: settingsMenu }}>
-          <SettingOutlined style={{ fontSize: 16, cursor: "pointer" }} />
-        </Dropdown>
-        <Avatar size={28} icon={<UserOutlined />} />
-        <LogoutOutlined style={{ fontSize: 16, cursor: "pointer" }} onClick={() => void handleLogout()} />
-      </Space>
-    </Header>
-  );
-}
-
-function SubBar() {
-  const location = useLocation();
-  const { payrollMonth, setPayrollMonth, employeeFilter, setEmployeeFilter } = useAdminFilters();
-  const app = currentApp(location.pathname);
-
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        flexWrap: "wrap",
-        gap: 12,
-        padding: "10px 20px",
-        borderBottom: "1px solid #f0f0f0",
-        background: "#fafbfc",
-      }}
+      }
     >
-      <Breadcrumb
-        items={[{ title: "Home" }, { title: app.label }]}
-        style={{ fontSize: 13 }}
-      />
-      <Space size="middle" wrap>
-        <Space size={6}>
-          <CalendarOutlined style={{ color: "#8c8c8c" }} />
-          <Text style={{ fontSize: 12, color: "#8c8c8c" }}>Payroll Month:</Text>
-          <DatePicker
-            picker="month"
-            value={payrollMonth}
-            onChange={(v) => v && setPayrollMonth(v)}
-            allowClear={false}
-            size="small"
-            format="MMM'YY"
-          />
-        </Space>
-        <Space size={6}>
-          <TeamOutlined style={{ color: "#8c8c8c" }} />
-          <Select
-            size="small"
-            value={employeeFilter}
-            onChange={setEmployeeFilter}
-            style={{ width: 150 }}
-            options={[
-              { value: "all", label: "All" },
-              { value: "c-10-panchsheel", label: "C-10 Panchsheel" },
-              { value: "ajmer", label: "Ajmer" },
-              { value: "spn-panchsheel", label: "SPN-Panchsheel" },
-              { value: "b-22-panchsheel", label: "B-22 Panchsheel" },
-            ]}
-          />
-        </Space>
-        <HistoryOutlined style={{ fontSize: 16, color: "#8c8c8c" }} />
-      </Space>
-    </div>
+      <AdminContextControls />
+    </Suspense>
   );
 }
 
 function AdminLayoutInner() {
-  const screens = useBreakpoint();
-  const isMobile = !screens.md;
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const location = useLocation();
   const navigate = useNavigate();
-  const app = currentApp(location.pathname);
-
-  const menuItems = useMemo<MenuProps["items"]>(() => {
-    if (!app.menus) return [];
-    return app.menus.map((group) => ({
-      key: group.key,
-      label: group.label,
-      children: group.items.map((item) => ({ key: item.path, label: item.label })),
-    }));
-  }, [app]);
-
+  const phone = useIsPhone();
+  const nav = useMemo(() => adminNav(), []);
   return (
-    <Layout style={{ minHeight: "100vh" }}>
-      <DemoCompanyBanner />
-      <TopBar onOpenMenu={() => setDrawerOpen(true)} />
-      <SubBar />
-
-      {isMobile && (
-        <Drawer title={app.label} open={drawerOpen} onClose={() => setDrawerOpen(false)} placement="left">
-          {menuItems && menuItems.length > 0 && (
-            <Space orientation="vertical" style={{ width: "100%" }}>
-              {app.menus?.map((group) => (
-                <div key={group.key}>
-                  <Text strong>{group.label}</Text>
-                  <div style={{ display: "flex", flexDirection: "column", marginTop: 4 }}>
-                    {group.items.map((item) => (
-                      <a
-                        key={item.path}
-                        onClick={() => {
-                          navigate(`/admin/${item.path}`);
-                          setDrawerOpen(false);
-                        }}
-                        style={{ padding: "6px 0" }}
-                      >
-                        {item.label}
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </Space>
-          )}
-        </Drawer>
-      )}
-
-      <Content style={{ padding: isMobile ? 12 : 24 }}>
-        <SecurityEventsBanner />
-        <Outlet />
-      </Content>
-
-      <Footer style={{ textAlign: "center", color: "#8c8c8c", fontSize: 12 }}>
-        {/* No Privacy Policy / Terms links until those pages exist (the §9
-            privacy notice is its own item) — dead links read as broken. */}
-        Wellsure HR Portal v0.1.0
-      </Footer>
-    </Layout>
+    <AppShell
+      nav={nav}
+      homeKey="homepage"
+      homePath="/admin"
+      pinned={[
+        { key: "help", label: "Help Center", path: "/admin/employee/helpdesk", icon: <CustomerServiceOutlined /> },
+        { key: "settings", label: "Settings", path: "/admin/security", icon: <SettingOutlined /> },
+      ]}
+      topExtras={<AdminContextControlsSlot />}
+      userMenu={[
+        { key: "security", icon: <SafetyOutlined />, label: "Account & security", onClick: () => navigate("/admin/security") },
+        { key: "ess", icon: <SwapOutlined />, label: "Go to my employee portal", onClick: () => navigate("/app/home") },
+      ]}
+      tabBar={<AdminPhoneTabBar />}
+      phoneMenu={phone}
+      notices={
+        <Suspense fallback={null}>
+          <SecurityEventsBanner />
+        </Suspense>
+      }
+      titleFor={(p) => EXTRA_TITLES.find(([re]) => re.test(p))?.[1]}
+    />
   );
 }
 

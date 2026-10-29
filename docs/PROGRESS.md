@@ -11,15 +11,16 @@ committed).
 | — | Initial project structure (this commit) | ✅ Done |
 | 0 | Foundation | ✅ Done |
 | 1 | Auth, RBAC, org, employees | Done — data layer, authentication, org masters, employee management, import center, exports, audit log viewer and system settings all built and tested. Users & Roles admin screen deliberately deferred (built in Phase 5 commit E1 as Roles & Permissions). **Correction (2026-09-30): role assignment does not exist anywhere in the product** — Add Employee always assigns plain `EMPLOYEE` and nothing else assigns roles; an earlier version of this row claimed otherwise. Both are Phase 5 commit E1 ([`docs/plans/PHASE_5.md`](plans/PHASE_5.md)). |
-| 1.5 | AWS staging environment and the greytHR migration | **PAUSED 2026-10-16 by the user: commit A is built and approved; commits B to F (CDK, deploy pipeline, migration tooling, reconciliation, first deployment) resume after Phase 7, as the final stage together with connecting the biometric device. Running list of local-only assumptions: [`docs/plans/LOCAL_ASSUMPTIONS.md`](plans/LOCAL_ASSUMPTIONS.md).** Plan approved 2026-10-16: [`docs/plans/PHASE_1_5.md`](plans/PHASE_1_5.md). Commit A of six built (the app is deployable: KMS key hierarchy with a tested rotation procedure, a guard that refuses default secrets outside development, database roles, ADMS off by default, trust proxy, 2FA defaults, metrics, graceful shutdown, `admin:preflight`, the cut-over guard); B to F not started.** Go-live checklist in [`DEPLOYMENT.md`](DEPLOYMENT.md): item 1, restrict `/iclock` to the office address, must be ticked before any ADMS push device is created in production** |
-| 2 | Biometric ingestion + attendance engine + real-time | In progress — plan approved ([`docs/plans/PHASE_2.md`](plans/PHASE_2.md)); P2-A (configuration), P2-B (ingestion), P2-C (rules engine), P2-D (manual entry and the muster) and P2-E (Attendance Info, Who Is In, the forgot-to-punch request) done, plus the fail-safe thresholds and the finalisation gate; P2-F done: F1 (the sync agent with our read-only device driver, and its server side), a follow-up (HR is told when punches are set aside) and F2 (the Windows service, release zip and INSTALL.md, proven on a Windows CI runner); P2-G done: G1 (the simulator's correctness: scenarios with expected outcomes, the month replay and its diff), G2a (the three routes, the `simulate` command, route replays) and G2b (the automated punch-to-screen latency test); P2-H done (device and agent health: incidents, alerts, recovery notices); P2-I done (the four gates recorded in [`PHASE_2_ACCEPTANCE.md`](plans/PHASE_2_ACCEPTANCE.md), an independent review with five fixes) and P2-J (the review follow-ups you approved) — **Phase 2 built and approved pending CI (green on 50ef7e8); awaiting your hands-on testing; close-out below** |
-| 3 | Attendance administration | ✅ Done (approved 2026-10-16; the history below is kept) — plan approved with three changes ([`docs/plans/PHASE_3.md`](plans/PHASE_3.md)); commit 1 (regularization, complete, plus the assignment self-guard) approved, CI green; commits 1–3 approved and pushed; **commit 4 (the four attendance reports, joiners inside finalised cycles, the weekly clock audit, `docs/CONNECTION_DAY.md` and the close-out) built, awaiting your review** — Phase 3 complete |
+| 1.5 | AWS staging environment and the greytHR migration | **PAUSED by the user.** Commit A (the app is deployable) is built and approved; commits B to F (CDK, deploy pipeline, migration tooling, reconciliation, first deployment) come **last**. The order of the remaining work (user, 2026-10-22): **Phase 7 → a UI pass directed by the user screen by screen → Phase 8 → connecting the device, first as a rehearsal against a backend on a local network → Phase 1.5 (AWS staging and the greytHR migration), then production.** Plan: [`docs/plans/PHASE_1_5.md`](plans/PHASE_1_5.md); local-only assumptions: [`docs/plans/LOCAL_ASSUMPTIONS.md`](plans/LOCAL_ASSUMPTIONS.md). Go-live checklist item 1 in [`DEPLOYMENT.md`](DEPLOYMENT.md) (restrict `/iclock` to the office address before any ADMS push device exists in production) stands |
+| 2 | Biometric ingestion + attendance engine + real-time | ✅ Done (approved 2026-10-12, CI green on 50ef7e8). Plan and as-built notes: [`docs/plans/PHASE_2.md`](plans/PHASE_2.md); the acceptance gates: [`PHASE_2_ACCEPTANCE.md`](plans/PHASE_2_ACCEPTANCE.md). Connecting the real device is a later stage (see 1.5's order) |
+| 3 | Attendance administration | ✅ Done (approved 2026-10-16). Plan and as-built notes: [`docs/plans/PHASE_3.md`](plans/PHASE_3.md); the connection-day procedure: [`docs/CONNECTION_DAY.md`](CONNECTION_DAY.md) |
 | 4 | Leave | ✅ Done — schema/ledger/accrual/comp-off/jobs (commit A), employee self-service (commit B), admin management incl. manager Review/Employee Leave/Leave Granter/Leave Types & Policies/Holiday Calendars (commit C), and Year End Process/Leave Recalculator/Workforce Overview dashboard/real Socket.IO (commit D) all built and tested. Holidays simplified to company-wide (HR-confirmed 2026-09-28) between commits C and D. |
 | 5 | Homepage, dashboards, engage, notifications, documents, helpdesk, reports | ✅ Done (2026-10-03) — commits A, B, C, D, D2, E1, E1.1, E2, E3, F and G (mobile bottom bar + PWA), plus interim commits. Full review — every screen and URL, every permission, what's stubbed, open questions, risks for Phase 6 — in [`docs/plans/PHASE_5_REVIEW.md`](plans/PHASE_5_REVIEW.md). Plan and as-built notes per commit in [`docs/plans/PHASE_5.md`](plans/PHASE_5.md). |
 | 5.5 | AWS production environment and go-live hardening | Not started |
-| 6 | Payroll | **In progress, built locally (AWS comes last). Plan approved 2026-10-16 ([`docs/plans/PHASE_6.md`](plans/PHASE_6.md)); P6-1 Foundations approved; P6-2 Salary approved; P6-3 The calculation approved; P6-4 Submit, approve, finalise and the lock approved; P6-5 Payslips, the bank file and the statutory files approved; P6-6 The owners' secrets, the demo company, the comparison tool and the close-out built, awaiting your review (the Phase 6 review is [`docs/plans/PHASE_6_REVIEW.md`](plans/PHASE_6_REVIEW.md)); then Phase 7 planning.** One commit at a time, a pause after each |
-| 7 | Tax & benefits | Not started (planned after Phase 6 is reviewed) |
+| 6 | Payroll | ✅ Done, built locally (approved 2026-10-22). Plan and as-built notes: [`docs/plans/PHASE_6.md`](plans/PHASE_6.md); the review: [`docs/plans/PHASE_6_REVIEW.md`](plans/PHASE_6_REVIEW.md); the first real run: [`docs/FIRST_REAL_PAYROLL_RUN.md`](FIRST_REAL_PAYROLL_RUN.md). **Off-cycle runs and offer-letter figures from salary, which earlier text described, were never built: they are Phase 7 steps P7-6 and P7-3** |
+| 7 | Tax & benefits | **In progress.** Plan approved 2026-10-22 with the user's answers ([`docs/plans/PHASE_7.md`](plans/PHASE_7.md) §0A). P7-0 (corrections before the phase) built, awaiting review; P7-1 to P7-7 not started. One commit at a time, a pause after each |
 | 8 | Extras | Not started |
+| UI | One-time UI/UX pass over every existing screen (user, 2026-10-23), on branch `ui/design-pass` | **Built, waiting for the user's review** (PR #2, 2026-10-28). Steps 1 to 5 done: design system, screen map, foundation and shell, every screen converted, the standing rule; browser-tested end to end (see "UI pass, steps 3 to 5" below). Frontend and docs only; Phase 7 continues separately. Plan and rules: [`docs/DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) |
 
 ## Log
 
@@ -4894,6 +4895,150 @@ Built to the design written into `docs/plans/PHASE_6.md` §14J before any code; 
 - **Not provable here** (LOCAL_ASSUMPTIONS 32 to 36): the demo fences against a real staging deploy, KMS-wrapped sealed values and a real key rotation, the scans against the deployed environment's logs and snapshots, replay protection with a failing-over cache, and the 500-person numbers on the real task size. And, as before, that any bank or portal accepts a file (28).
 - Verified: lint, typecheck (all four projects) and migration drift clean; frontend 21 tests and biometric-agent 160 tests; `npm run test:demo` 5 tests in about a minute; `check:sensitive-ui` on a stack with the demo company at 500 people: no secret on any of 124 pages and the DEMO COMPANY banner on every one; the popover check at 390 and 1280 still passes; a live walk as `DEMO005` (developer) and `DEMO001` (owner): the developer gets 403 on the Payroll Audit Trail and salaries, sees the Setup Checklist without a value, and the Ready screen, correctly, went red after 458 people were added behind the sign-offs ("something changed since the sign-off"). Full backend suite run alone: 159 files, 1,512 tests, all green (the run before it had three failures, all follow-ups to this commit's own gates, fixed and then the whole suite repeated).
 
+### Phase 7, P7-0: corrections before the phase (2026-10-22)
+
+Plan approved with the user's answers: [`docs/plans/PHASE_7.md`](plans/PHASE_7.md) §0A. P7-0 is the corrections the start-of-phase review found.
+
+- **The weekly clock audit had never run a test.** Its first scheduled run (20 Oct) stopped in four seconds on configuration: `test-clock.sh`
+  dropped `DATABASE_URL` so `backend/.env` would win, but CI has no `.env`. The job now writes `backend/.env` from `.env.example`, the script keeps
+  an exported URL when there is no `.env`, proves the configuration loads once before spending minutes per instant, and prints how many passed.
+  **Called fixed only on a real passing run.** Its first real run (run 2, 45 minutes) did run every test, and **found a real time bomb**: 1,512 of
+  1,512 passed at 00:10 IST and on 1 January, but from June 2027 three `setupChecklist.test.ts` tests failed at every instant. The test moved the
+  seeded staff's joining date to a fixed "future" 2027-06-01, which stops being in the future that day; ordinary CI would have gone red in eight
+  months. Reproduced locally at 2027-06-15 (the same three failures), fixed with a date a year after today, and passing at 2027 and 2030. **The run on the P7-0 commit (clock audit run 3, cc95037) passed 5 of 5 instants, 1,515 tests at each**: the first real pass.
+- **ESI numbers are encrypted** like UANs (`esi_encrypted`, `esi_last4`; reveal audited; ESI file reads audited like UANs; key rotation covers
+  them). Found on the way: contrary to the Phase 6 notes they were **not** masked everywhere: the HR profile, View My Info and payslips showed the
+  whole number. A change request carrying an ESI number was also passed through `redact()` before being applied, so approving one would have
+  stored the masked text; it now carries the encrypted value.
+- **Company PAN and TAN** are sealed payroll identifiers (`COMPANY_PAN` joins `TAN`); the plain `company.pan` / `company.tan` columns are dropped.
+- **Migration `20261024090000_p7_0_esi_encrypted_company_ids`** drops the plain columns only on a database the development seed built (their
+  values are made up); on any other database holding a value it stops before changing anything (tested both ways on scratch databases).
+- **Docs:** `FIRST_REAL_PAYROLL_RUN.md` no longer promises off-cycle runs (they are P7-6) and says plainly that **a held person's pay is not carried
+  to a later run automatically**: the preparer adds it as an adjustment (P7-6 adds "pay what this run held"). PHASE_6 rule 15 and the offer-letter
+  note are corrected. The real order of remaining work is in this table, PHASE_1_5 and LOCAL_ASSUMPTIONS. Status rows, the Payroll menu markers,
+  a stale comment and a duplicated sentence are fixed; the open questions carry your answers and the CA list for Phase 7.
+
+**Verification:** fresh scratch databases from migrations (and the migration's refusal and its dev path, each on its own scratch database);
+`db:drift` clean; full backend suite run alone 159 files / 1,515 tests; frontend 21; agent 160; lint and typecheck clean in every project. New tests:
+ESI stored as ciphertext and last four, profile last four only, reveal whole and audited (`profileAndReveal`); company PAN sealed, plain columns
+gone, developer and rules-only refused (`sealedIdentifiers`); ESI numbers in the sensitive table scan (`releases`); key rotation over ESI numbers
+(`fieldEncryption`, now 18 values). Mutation checks, each caught by a named test: the last-four column holding the whole number, the profile
+showing the whole number, Company PAN not sealed. Live in a browser on a scratch database: HR Admin (1001) sees ESI ••••7417, Reveal shows the
+whole number; Arjun (1006) at 390 px sees ••••7417 in View My Info; Payroll Admin (1025) sees Company PAN under Company identifiers; Payroll →
+Loans & Advances reads "Phase 7"; no console errors beyond the known login-page refresh probe.
+
+**Rules I decided myself:** the migration's dev-marker rule above; a payslip published before P7-0 keeps the whole ESI number in its immutable
+stored content (only development databases have any) and the screen shows its last four; ESI numbers get no blind-index hash (like UANs).
+
+### UI pass, step 1: design system extracted from the boards (`ui/design-pass`, 2026-10-23)
+
+The user asked for a one-time UI/UX pass over every existing screen, to match their design boards in light and dark, desktop and phone, and then
+to make the result the standing rule for future screens. Visual and interaction work only: no backend, API, schema, permission or business-logic
+change; Phase 7 and payroll work continue separately. The full brief is the user's message of 2026-10-23; its steps are recorded here so a new
+session can pick up from the repo:
+
+1. `docs/DESIGN_SYSTEM.md` from the boards (tokens light and dark, type, spacing, radii, shadows, icons, table density, form heights, app shell,
+   component inventory, responsive rules at 390 / 768 / 1280 / 1920). **This commit.**
+2. `docs/UI_SCREEN_MAP.md` (every route: URL, screen, permission, roles, board frame, MAPPED / MAPPED-PARTIAL / NOT IN BOARD; board sections
+   without a backend listed as "later") and a developer-only `/dev/screens` page.
+3. UI-1 foundation: tokens in Ant Design's ConfigProvider and CSS variables, a lint check against raw hex colours and one-off font sizes, a
+   light / dark / system toggle applied before first paint, shared components in `frontend/src/ui/`, the app shell, route-level lazy loading.
+4. Screens, one commit per group: UI-2 auth, UI-3 dashboards and tasks, UI-4 employees, UI-5 leave and attendance, UI-6 payroll (DEMO COMPANY
+   banner and TEST watermark kept exactly), UI-7 everything else, UI-8 polish, performance, accessibility, screenshots, docs.
+5. The standing rule: a "UI rules" section in `CLAUDE.md`, a "How to build a new screen" checklist and example in `DESIGN_SYSTEM.md`, and a CI
+   check against raw hex colours and missing dark tokens.
+
+Ground rules from the brief: one commit per step and a pause after each; never commit to `main`, never force-push, merge or open a PR (the user
+merges); changes stay inside `frontend/` and `docs/` (plus the CLAUDE.md addition); nothing new may render salary, bank, PAN, Aadhaar, UAN or ESI
+values; `check:sensitive-ui` and `check:popovers` stay green and are extended to the new shell; demo company only in screenshots; proof at every
+pause (board vs ours at 1280 light and dark and at 390, under `docs/design/compare/`).
+
+**Base branch.** `ui/design-pass` starts from `claude/optimistic-sagan-9xw3y9` at `60132e0` (the only branch carrying P7-0 and
+`docs/plans/PHASE_7.md`). The boards are on `main` (commit `a1b558a`, named with spaces); they are copied here untracked and git-ignored, and only
+reduced JPEG slices are committed.
+
+**What step 1 did:**
+- Found every frame on the boards (135 desktop frames per theme, and the same 135 screens as phone frames on a third board,
+  `Wellsure HR Portal Responsive.png`, which the brief did not mention) and sliced them one frame per JPEG, plus a labelled contact sheet per
+  section and `index.json` (`docs/design/slices/`). All 540 frames were read.
+- Sampled colours from solid regions and text, measured sizes (desktop frames are a 1440 design at 0.85), computed WCAG contrast for every
+  text pair, and wrote `docs/DESIGN_SYSTEM.md`. Proof sheets: `docs/design/compare/step1-tokens-{light,dark}.jpg` (board sample vs ours,
+  with contrast). The scripts are in `docs/design/tools/`.
+- Font: Manrope, to be self-hosted via npm in step 3.
+
+**Rules I decided myself (the user may veto; `DESIGN_SYSTEM.md` §10 D1 to D15):** AA-driven darker secondary text, placeholder, link green,
+nav-pill green, chip text and action fills; control border `#DADDE2`; two table densities; 40 px filter controls on dense admin screens; a System
+theme option; `Ctrl/⌘ K` for search; 13 px table text; a header close button on drawers; a dark info banner; an Alerts tab for admin-only phone
+users; estimated shadows.
+
+**Deviations from the board** (`DESIGN_SYSTEM.md` §9): our brand and illustrations; no sign-up, social login or company onboarding; the four-tab
+phone bar and stacked-card tables (brief) instead of the board's phone header-only navigation and sideways tables; the admin portal gets the
+sidebar shell; sections with no backend (Recruitment, Checklist templates, Messages, Subscription, Integrations) are "later".
+
+**Not verified:** nothing is rendered yet (no frontend change in this step; frontend lint and typecheck clean, tests 21 passed; backend
+untouched); the font is identified by eye; shadows are estimates; sizes are ±2 px. The project is on Ant Design 6, not 5 as the brief says.
+
+### UI pass, step 2: screen map and the developer screen index (`ui/design-pass`, 2026-10-24)
+
+The user approved the plan and its defaults ("Let's now go ahead and do the frontend transformation … not only about the styling but the entire
+user experience and smoothness"), so the §10 decisions in `DESIGN_SYSTEM.md` stand as written.
+
+- `docs/UI_SCREEN_MAP.md`: every route (103 URLs, public, employee and admin portals, detail routes included) with its screen, the permission
+  the API enforces for its main data, the roles that see it, its board frame and MAPPED / MAPPED-PARTIAL / NOT IN BOARD; board sections with no
+  backend (Recruitment, Checklist templates, Messages, Subscription, Integrations, Help Center content) listed as "later". The privacy page the
+  brief mentions does not exist yet (it waits on the user's DPDP wording) and is listed as such, not built.
+- `/dev/screens` (`frontend/src/pages/dev/ScreensIndexPage.tsx`): every screen URL, generated from the same `resolveMenuRoutes` the router uses.
+  Registered only under `import.meta.env.DEV` (a production build contains none of it — checked), and even in development it redirects to
+  `/login` until the developer flag is set by opening `/dev/screens?enable=1` once.
+- A local demo stack in the session container (fresh database: migrations, `prisma/seed.ts`, `seed:demo-company`, `measure:payroll -- 500`
+  for the 500-person demo company). `db:seed` itself was not run: it is a reset, and the brief says to ask first; on an empty database the
+  migrate-then-seed path is equivalent and destroys nothing.
+- `frontend/e2e/screenshots.mjs`: signs in as a demo-company user and captures routes at chosen widths and themes (for the proof sets).
+
+### UI pass, steps 3 to 5: every screen, the standing rule, browser testing (`ui/design-pass`, 2026-10-24 to 2026-10-28)
+
+The first session built the foundation and about 60% of the screens before its usage limit ended it mid-run (WIP commits `f1f83c3`,
+`6ef7803`, `f5365c6`). The second session classified every page file (converted = uses `ui/` + `PageHeader` + tokens; not converted =
+bare `Card`, `Typography.Title`, raw colours, `<Spin>`), then finished the rest in parallel by disjoint file group:
+
+- **Attendance admin:** settings (section nav + tabs; shifts, week-offs, policies, assignments, cycle, manual-entry branches), shift roster
+  (new `RosterGrid`), shift and manual override, exceptions, finalisation, process, regularizations, bulk correction (drawer), muster grid
+  (one tab stop, roving tabindex, arrow keys, grid roles), status calendar cell.
+- **Payroll:** adjustments, compare registers, components, salaries, layouts, revisions (`SideDrawer size="xwide"`), structures.
+  DEMO COMPANY banner and TEST watermark untouched.
+- **Employees and people:** change requests, separations, Access tab, security alerts, Import Center and its tabs, View My Info (reuses the
+  admin profile shell), people directory, person drawer, org chart (still an indented tree: readable with ~500 people on a phone).
+- **Helpdesk, letters:** ticket threads as conversations (bubbles, date dividers, sticky reply box, auto-scroll, live), queue, categories,
+  template list and two-pane editor with live preview, issued letters.
+- **Admin tools:** Manager Management, Roles & Permissions (sticky matrix; one role at a time on phones; save confirmation lists the
+  changes), Audit Log (entry drawer), Devices (split into one file per tab; cards for devices and agents).
+- **Shell and foundation:** foundation lint errors fixed; legacy common components restyled; signed-in routes moved into a lazy
+  `routes/PortalRoutes.tsx` (paths unchanged; `check-bundle.mjs` counts it); `ui/*` imported directly on the first screens; antd `<App>`
+  wrapper removed (toasts themed via `ConfigProvider.config({ holderRender })`); `DataTable` paginates and selects on phone cards
+  (`mobile.selection`); `SideDrawer size="xwide"`; account avatar shows the photo.
+
+**Bundle (gzip, budgets unchanged):** login 231.5 KB (250), shell + employee home 317.0 KB (400), shell + admin home 337.8 KB (400).
+
+**Testing, once at the end (user's instruction):** lint (ESLint + token check, 75 tokens in both themes), typecheck, 42 frontend tests,
+build, bundle budgets, `check:sensitive-ui`, `check:popovers` (both themes, 390 and 1280), a sweep of all 93 menu routes at 390 and 1280 in
+light and dark (page errors, console errors, error boundaries, sideways scroll on phones), then four browser-test agents drove the risky
+flows end to end against the seeded stack and checked server state after reload. About 45 bugs were found and fixed, among them: the phone
+search sheet could not be closed without a keyboard; Who is in? scrolled sideways on phones; reject and removal notes carried over after
+Cancel; View My Info could send a duplicate change request; reissuing a letter with an amount failed (prefill used the printed "₹6,54,321");
+employee pickers loaded only 200 of 502 people (now search the server); payroll action columns off-screen at 1280; dark-mode Segmented
+selection invisible and disabled buttons looking enabled; unknown signed-in URLs sent people to the sign-in form.
+
+**Behaviour changes the user may veto:** payslip amounts on Salary → Payslips are masked until "Show salary", like the Home card (they were
+shown in full before; more private, no new data); one flagged punch's accept/discard now flags a missing reason on click instead of a
+disabled button; the agent-key dialog stays a plain modal so it cannot be dismissed before "I've stored it".
+
+**Not verified / left as is:** Finalise and Unlock were exercised only against faked server answers (every period is blocked by HR's
+placeholder rule values, and confirming them changes company-wide rules); security-event acknowledge (no events in the seed); real payslips
+(none published; tested with intercepted responses). The bank-layout confirm drawer still shows the layout as JSON (deliberate: the checker
+confirms the exact stored text). Leave liability shows a clear error on the demo data (its formula needs a BASIC component the demo pay
+setup lacks; server 409, not a UI fault). The local test database now holds test-only data (punches 12 to 17 Oct, an EVE shift and roster,
+a SUN-ALTSAT week-off pattern, QA devices and agent, two moved reporting lines, a TEST_BONUS_UI component).
+
 ## Open questions
 
 - [x] **Approval Workflows — dropped (user decision 2026-10-03).** No
@@ -4906,8 +5051,12 @@ Built to the design written into `docs/plans/PHASE_6.md` §14J before any code; 
 - [ ] **ESI half-year ("sticky") coverage rule: exactly how it works** (user, 2026-10-17: "record it explicitly as an open question that blocks that rule from being marked Confirmed"). The mechanics are the developer's reading of the rule (Phase 6 plan rule 43), not something that has been checked. The user's CA needs to say when coverage starts and stops for someone who crosses the wage ceiling part-way through a contribution period. Until it is answered and recorded here, the value `STICKY_HALF_YEAR` of the rule "ESI: coverage period rule" **cannot be marked Confirmed**: the rule carries `openQuestion` ESI-HALF-YEAR in `shared/constants/payrollRules.ts`, the confirm preview says so, and confirming is refused with `OPEN_QUESTION`; a run that uses it stays a test and cannot be submitted. The monthly value is not held up. Cleared only by removing the `openQuestion` after the answer is written here.
 
 - [ ] **greytHR register sample (anonymised) for the parser** (P6-6). The comparison tool is built and tested on registers it generates; the greytHR parser (`PARSER_WAITING_FOR_SAMPLE`) waits for one or two real registers with the names removed.
-- [ ] **Salary spreadsheet import: build or not?** (P6-6, rule 89). It would create one maker-checker approval per person. Until you decide, salaries are entered as revisions, one per distinct CTC and structure.
-- [ ] **Encrypt employees' ESI numbers?** (P6-6, rule 91). Spec §9 lists bank, PAN, Aadhaar, UAN; ESI numbers are masked on every view but stored in the clear. Recommended: add them (one column).
+- [x] **Salary spreadsheet import: not now** (user, 2026-10-22). The owners enter salaries as revisions; revisit once real data exists.
+- [x] **Employees' ESI numbers are encrypted** (user, 2026-10-22; built in P7-0). They were stored in the clear and, contrary to the Phase 6 notes, shown whole on the HR profile, View My Info and payslips; now encrypted like UANs, last four shown, Reveal audited.
+- [ ] **For the CA, from Phase 7** (`docs/plans/PHASE_7.md` §15; each is a rule that ships Not set): tax slabs, standard deduction, rebate and marginal relief, surcharge and cess for FY 2026-27 under the Income-tax Act, 2025; section names and caps (HRA metro list and percentages included); the no-PAN rate; TDS rounding; taxing one-offs in the month paid; previous-employer income; leave encashment's tax treatment; the loan perquisite rate and small-loan limit; gratuity; notice-period recovery; F&F tax at exit; whether CONSULTANT employment falls under salary TDS; the quarterly return format; the content of Form 16 Part B (every Form 16 output stays DRAFT until this is confirmed).
+
+To revisit after go-live:
+- **A manager step for reimbursement claims** (user, 2026-10-22: the manager-grantable list is not widened; payroll alone approves claims). Revisit if the workload demands it.
 
 - [ ] **Privacy notice (DPDP Act 2023) and Terms of Service wording —
       the user supplies it. Needed BEFORE real employee data goes onto

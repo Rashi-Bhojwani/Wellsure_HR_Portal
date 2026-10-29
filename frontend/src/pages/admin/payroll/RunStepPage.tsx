@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Button, Card, Checkbox, Flex, Input, Modal, Space, Spin, Statistic, Table, Tag, Typography, message } from "antd";
-import { ArrowLeftOutlined } from "@ant-design/icons";
+import { Alert, Button, Checkbox, Flex, Input, Space, Typography } from "antd";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { HOLD_REASON_LABEL } from "@shared/constants/payrollRun";
 import * as payrollApi from "../../../api/payroll";
@@ -14,8 +13,11 @@ import { formatDate, formatDateTime } from "../../../lib/dates";
 import { formatDifference, formatRupees } from "../../../lib/money";
 import { useSocket } from "../../../sockets/SocketProvider";
 import { STEP_TITLE, VARIANCE_TAG_LABEL } from "./runText";
+import { fs, fw } from "../../../theme/tokens";
+import { ApprovalBanner, ConfirmModal, DataTable, EmptyState, PageHeader, PageSkeleton, Panel, SkeletonCard, Stack, StatusChip, toast } from "../../../ui";
+import { Caption, Figure, FigureRow, PersonCell, TestChip } from "../../../components/payroll/payrollUi";
 
-const { Title, Text, Paragraph } = Typography;
+const { Text, Paragraph } = Typography;
 
 // Payroll → one step on a run (Phase 6 P6-4): submit for approval, close the period, unlock it, publish payslips, generate the bank file. The same page for all of them,
 // because they are the same thing: look at exactly what would happen, say you have looked, and either ask a second person or, if you are that person, decide. The first
@@ -46,24 +48,26 @@ export function RunStepPage() {
   const state = useQuery({ queryKey: ["payroll", "approvals", id], queryFn: () => payrollApi.getApprovalState(id) });
   const preview = useQuery({ queryKey: ["payroll", "step-preview", id, slug, state.data?.runStatus, state.data?.steps.find((s) => s.slug === slug)?.live?.id ?? "none"], queryFn: () => payrollApi.previewStep(id, slug), enabled: !!state.data, refetchOnWindowFocus: false });
 
-  if (state.isLoading || (state.data && preview.isLoading)) return <Spin />;
-  if (state.error || !state.data) return <Alert type="error" showIcon title={apiErrorMessage(state.error, "Could not load this run.")} />;
-  if (preview.error || !preview.data) return <Alert type="error" showIcon title={apiErrorMessage(preview.error, "Could not work out what this would do.")} />;
+  if (state.isLoading || (state.data && preview.isLoading)) return <PageSkeleton />;
+  if (state.error || !state.data) return <EmptyState kind="error" title="Could not load this run" description={apiErrorMessage(state.error, "Could not load this run.")} onRetry={() => void state.refetch()} />;
+  if (preview.error || !preview.data) return <EmptyState kind="error" title="Could not work out what this would do" description={apiErrorMessage(preview.error, "Could not work out what this would do.")} onRetry={() => void preview.refetch()} />;
   const step = state.data.steps.find((s) => s.slug === slug)!;
   const p = preview.data;
 
   return (
-    <Flex vertical gap={16}>
-      <Link to={`/admin/payroll/run/${id}`}>
-        <ArrowLeftOutlined /> Back to the run
-      </Link>
-      <Flex align="center" gap={12} wrap>
-        <Title level={3} style={{ margin: 0 }}>
-          {STEP_TITLE[slug]}: {p.cycle.label}
-        </Title>
-        <Tag>{p.runStatusLabel}</Tag>
-        {p.watermark.test && <Tag color="red">TEST</Tag>}
-      </Flex>
+    <>
+      <PageHeader
+        back={`/admin/payroll/run/${id}`}
+        title={`${STEP_TITLE[slug]}: ${p.cycle.label}`}
+        breadcrumb={[{ label: "Payroll runs", to: "/admin/payroll/run" }, { label: p.cycle.label, to: `/admin/payroll/run/${id}` }, { label: STEP_TITLE[slug] }]}
+        tags={
+          <>
+            <StatusChip tone="neutral">{p.runStatusLabel}</StatusChip>
+            {p.watermark.test && <TestChip />}
+          </>
+        }
+      />
+      <Stack>
       {slug === "run" && <LeftOut people={p.leftOut ?? []} />}
       {slug === "publish" && <NoPayslipAlert people={p.noPayslip ?? []} willGet={p.payslips ?? 0} />}
       {!p.blockers.some((b) => b.code === "PLACEHOLDER_RULES") && <PlaceholderBanner watermark={p.watermark} />}
@@ -71,7 +75,8 @@ export function RunStepPage() {
       <Where step={step} />
       <Summary p={p} slug={slug} />
       <Actions p={p} step={step} slug={slug} runId={id} />
-    </Flex>
+      </Stack>
+    </>
   );
 }
 
@@ -87,14 +92,14 @@ function LeftOut({ people }: { people: PersonNote[] }) {
       description={
         <Flex vertical gap={8}>
           <Text>A run that leaves anybody out would quietly not pay them, so it cannot go for approval. Put right the reason against each name, calculate the run again, then come back.</Text>
-          <Table<PersonNote>
-            size="small"
+          <DataTable<PersonNote>
+            density="compact"
             rowKey="employeeId"
             pagination={people.length > 15 ? { pageSize: 15, showSizeChanger: false } : false}
             dataSource={people}
             columns={[
-              { title: "Who", render: (_, r) => <div><Text strong>{r.name}</Text><div><Text type="secondary" style={{ fontSize: 12 }}>{r.employeeCode}</Text></div></div> },
-              { title: "Why they are left out", render: (_, r) => <div>{r.reason}{r.detail && <div><Text type="secondary" style={{ fontSize: 12 }}>{r.detail}</Text></div>}</div> },
+              { title: "Who", key: "who", render: (_, r) => <PersonCell name={r.name} code={r.employeeCode} /> },
+              { title: "Why they are left out", key: "why", render: (_, r) => <div>{r.reason}{r.detail && <Caption>{r.detail}</Caption>}</div> },
             ]}
           />
         </Flex>
@@ -119,8 +124,8 @@ function Blockers({ p }: { p: StepPreview }) {
             <Flex vertical gap={4}>
               <Text>{b.message}</Text>
               {b.code === "BLOCKING_EXCEPTIONS" && p.blockingExceptions && (
-                <Table<PersonNote>
-                  size="small"
+                <DataTable<PersonNote>
+                  density="compact"
                   rowKey={(r) => `${r.employeeId}-${r.code}`}
                   pagination={false}
                   dataSource={p.blockingExceptions}
@@ -152,8 +157,8 @@ function approvalLine(a: ApprovalView): string {
 function Where({ step }: { step: StepState }) {
   return (
     <Flex vertical gap={8}>
-      {step.live && <Alert type={step.live.status === "APPROVED" ? "success" : "info"} showIcon title={step.live.status === "APPROVED" ? "Approved" : "Waiting for a decision"} description={approvalLine(step.live)} />}
-      {!step.live && step.last && step.last.status !== "CONSUMED" && <Alert type={step.last.status === "REJECTED" ? "warning" : "info"} showIcon title={step.last.status === "REJECTED" ? "The last request was rejected" : "The last request was voided"} description={approvalLine(step.last)} />}
+      {step.live && <ApprovalBanner tone={step.live.status === "APPROVED" ? "success" : "warning"} title={step.live.status === "APPROVED" ? "Approved" : "Waiting for a decision"} description={approvalLine(step.live)} />}
+      {!step.live && step.last && step.last.status !== "CONSUMED" && <ApprovalBanner tone={step.last.status === "REJECTED" ? "warning" : "info"} title={step.last.status === "REJECTED" ? "The last request was rejected" : "The last request was voided"} description={approvalLine(step.last)} />}
       <CheckersNote checkers={step.live?.status === "APPROVED" ? null : step.checkers} what="this" />
     </Flex>
   );
@@ -164,18 +169,18 @@ function Where({ step }: { step: StepState }) {
 function PersonList({ title, people }: { title: string; people: PersonNote[] }) {
   if (people.length === 0) return null;
   return (
-    <Card size="small" title={`${title} (${people.length})`}>
-      <Table<PersonNote>
-        size="small"
+    <Panel title={`${title} (${people.length})`}>
+      <DataTable<PersonNote>
+        density="compact"
         rowKey="employeeId"
         pagination={people.length > 10 ? { pageSize: 10, showSizeChanger: false } : false}
         dataSource={people}
         columns={[
           { title: "Who", dataIndex: "name" },
-          { title: "Why", render: (_, r) => <div>{r.reason}{r.detail && <div><Text type="secondary" style={{ fontSize: 12 }}>{r.detail}</Text></div>}</div> },
+          { title: "Why", key: "why", render: (_, r) => <div>{r.reason}{r.detail && <Caption>{r.detail}</Caption>}</div> },
         ]}
       />
-    </Card>
+    </Panel>
   );
 }
 
@@ -183,16 +188,18 @@ function Summary({ p, slug }: { p: StepPreview; slug: StepSlug }) {
   const v = p.variance;
   return (
     <Flex vertical gap={12}>
-      <Flex gap={32} wrap>
-        <Statistic title="Gross" value={formatRupees(p.totals.gross)} />
-        <Statistic title="Deductions" value={formatRupees(p.totals.deductions)} />
-        <Statistic title="Net pay" value={formatRupees(p.totals.net)} />
-        <Statistic title="People" value={p.counts.people} />
-        <Statistic title="Payable" value={p.counts.payable} />
-        <Statistic title="Held" value={p.counts.held} />
-      </Flex>
+      <Panel title="The figures">
+        <FigureRow>
+          <Figure label="Gross" value={formatRupees(p.totals.gross)} />
+          <Figure label="Deductions" value={formatRupees(p.totals.deductions)} />
+          <Figure label="Net pay" value={formatRupees(p.totals.net)} />
+          <Figure label="People" value={p.counts.people} />
+          <Figure label="Payable" value={p.counts.payable} />
+          <Figure label="Held" value={p.counts.held} />
+        </FigureRow>
+      </Panel>
       {p.affected && (
-        <Card size="small" title="Who this affects">
+        <Panel title="Who this affects">
           <Flex vertical gap={6}>
             <Text>
               Everyone in the run: {p.affected.people} {p.affected.people === 1 ? "person" : "people"}, of whom {p.affected.payable} would be paid{p.affected.held ? ` and ${p.affected.held} are held` : ""}.
@@ -202,17 +209,17 @@ function Summary({ p, slug }: { p: StepPreview; slug: StepSlug }) {
               <Space size={4} wrap>
                 <Text type="secondary">What changed since last month:</Text>
                 {Object.entries(p.affected.changes).map(([tag, n]) => (
-                  <Tag key={tag}>
+                  <StatusChip key={tag} tone="neutral">
                     {VARIANCE_TAG_LABEL[tag as keyof typeof VARIANCE_TAG_LABEL] ?? tag}: {n}
-                  </Tag>
+                  </StatusChip>
                 ))}
               </Space>
             )}
           </Flex>
-        </Card>
+        </Panel>
       )}
       {v && (
-        <Card size="small" title="Difference from last month">
+        <Panel title="Difference from last month">
           {!v.baseline && <Text type="secondary">There is no run for the previous cycle to compare with.</Text>}
           {v.baseline && (
             <Flex vertical gap={8}>
@@ -221,24 +228,24 @@ function Summary({ p, slug }: { p: StepPreview; slug: StepSlug }) {
                 {v.baseline.final ? ", which is finalised." : ", which is only a draft: a closed month it is not."}
               </Text>
               {v.totals.change && (
-                <Flex gap={32} wrap>
-                  <Statistic title="Net pay" value={formatRupees(v.totals.current!.net)} suffix={<Text type="secondary" style={{ fontSize: 13 }}> {formatDifference(v.totals.change.net)}</Text>} />
-                  <Statistic title="Gross" value={formatRupees(v.totals.current!.gross)} suffix={<Text type="secondary" style={{ fontSize: 13 }}> {formatDifference(v.totals.change.gross)}</Text>} />
-                </Flex>
+                <FigureRow>
+                  <Figure label="Net pay" value={<>{formatRupees(v.totals.current!.net)} <Text type="secondary" style={{ fontSize: fs.table, fontWeight: fw.regular }}>{formatDifference(v.totals.change.net)}</Text></>} />
+                  <Figure label="Gross" value={<>{formatRupees(v.totals.current!.gross)} <Text type="secondary" style={{ fontSize: fs.table, fontWeight: fw.regular }}>{formatDifference(v.totals.change.gross)}</Text></>} />
+                </FigureRow>
               )}
               {v.flaggedCount > 0 && (
                 <>
                   <Text strong>{v.flaggedCount} flagged as a large change</Text>
-                  <Table
-                    size="small"
+                  <DataTable
+                    density="compact"
                     rowKey="employeeId"
                     pagination={false}
                     dataSource={v.items}
                     columns={[
                       { title: "Who", dataIndex: "name" },
-                      { title: "Last month", align: "right", render: (_, r) => (r.previous ? formatRupees(r.previous.net, 2) : "") },
-                      { title: "This month", align: "right", render: (_, r) => (r.current ? formatRupees(r.current.net, 2) : "") },
-                      { title: "Change", align: "right", render: (_, r) => (r.change ? formatDifference(r.change.net) : "") },
+                      { title: "Last month", align: "right", className: "ws-num", render: (_, r) => (r.previous ? formatRupees(r.previous.net, 2) : "") },
+                      { title: "This month", align: "right", className: "ws-num", render: (_, r) => (r.current ? formatRupees(r.current.net, 2) : "") },
+                      { title: "Change", align: "right", className: "ws-num", render: (_, r) => (r.change ? formatDifference(r.change.net) : "") },
                     ]}
                   />
                 </>
@@ -246,21 +253,21 @@ function Summary({ p, slug }: { p: StepPreview; slug: StepSlug }) {
               {!v.thresholds.set && <Text type="secondary">Nothing is flagged because the variance thresholds in Rules and setup have no value yet.</Text>}
             </Flex>
           )}
-        </Card>
+        </Panel>
       )}
       {p.held && <PersonList title="Held, not paid by this run" people={p.held.map((h) => ({ ...h, reason: HOLD_REASON_LABEL[h.code as keyof typeof HOLD_REASON_LABEL] ?? h.reason }))} />}
       {slug === "publish" && p.payslips !== undefined && (
-        <Card size="small" title="What publishing does">
+        <Panel title="What publishing does">
           <Flex vertical gap={8}>
             <Text>
               <Text strong>{p.payslips}</Text> {p.payslips === 1 ? "payslip" : "payslips"}, net pay <Text strong>{formatRupees(p.netTotal ?? "0", 2)}</Text> in all.
             </Text>
             <ul style={{ margin: 0, paddingLeft: 20 }}>{(p.willDo ?? []).map((w) => <li key={w}>{w}</li>)}</ul>
           </Flex>
-        </Card>
+        </Panel>
       )}
       {slug === "bank-file" && p.paymentDate !== undefined && (
-        <Card size="small" title="What the bank file would contain">
+        <Panel title="What the bank file would contain">
           <Flex vertical gap={8}>
             <Text>
               <Text strong>{p.rows ?? 0}</Text> {p.rows === 1 ? "row" : "rows"}, total <Text strong>{formatRupees(p.rowsTotal ?? "0", 2)}</Text>, for the payment date <Text strong>{p.paymentDate ? formatDate(p.paymentDate) : "not set"}</Text>. Each goes to the account in force on that date.
@@ -268,13 +275,13 @@ function Summary({ p, slug }: { p: StepPreview; slug: StepSlug }) {
             {p.excluded && p.excluded.length > 0 && (
               <Alert type="warning" showIcon title={`${p.excluded.length} ${p.excluded.length === 1 ? "person is" : "people are"} payable but not in this file`} description={<ul style={{ margin: 0, paddingLeft: 20 }}>{p.excluded.map((e) => <li key={e.employeeId}>{e.name} ({e.employeeCode}): {e.detail}</li>)}</ul>} />
             )}
-            <Table size="small" rowKey="employeeCode" pagination={{ pageSize: 10, hideOnSinglePage: true }} dataSource={p.people ?? []} scroll={{ x: "max-content" }} columns={[{ title: "Code", dataIndex: "employeeCode" }, { title: "Name", dataIndex: "name" }, { title: "Bank", dataIndex: "bankName" }, { title: "Account", render: (_, r) => `ending ${r.accountLast4}` }, { title: "IFSC", dataIndex: "ifsc" }, { title: "Amount", align: "right", render: (_, r) => formatRupees(r.amount, 2) }]} />
+            <DataTable density="compact" rowKey="employeeCode" pagination={(p.people ?? []).length > 10 ? { pageSize: 10, showSizeChanger: false } : false} dataSource={p.people ?? []} columns={[{ title: "Code", dataIndex: "employeeCode" }, { title: "Name", dataIndex: "name" }, { title: "Bank", dataIndex: "bankName" }, { title: "Account", key: "acct", className: "ws-num", render: (_, r) => `ending ${r.accountLast4}` }, { title: "IFSC", dataIndex: "ifsc" }, { title: "Amount", key: "amt", align: "right", className: "ws-num", render: (_, r) => formatRupees(r.amount, 2) }]} />
             <ul style={{ margin: 0, paddingLeft: 20 }}>{(p.willDo ?? []).map((w) => <li key={w}>{w}</li>)}</ul>
           </Flex>
-        </Card>
+        </Panel>
       )}
       {slug === "finalise" && p.lock && (
-        <Card size="small" title="What closing the period does">
+        <Panel title="What closing the period does">
           <ul style={{ margin: 0, paddingLeft: 20 }}>
             <li>Locks {p.lock.from} to {p.lock.to}. From then on the system refuses:</li>
             <ul>{p.lock.refuses.map((r) => <li key={r}>{r}</li>)}</ul>
@@ -283,17 +290,16 @@ function Summary({ p, slug }: { p: StepPreview; slug: StepSlug }) {
             </li>
             <li>Makes these figures final. A correction after that is an adjustment in the next run, or an unlock with a second person’s approval, until payslips are published or a bank file is made.</li>
           </ul>
-        </Card>
+        </Panel>
       )}
       {slug === "unlock" && p.allows && (
-        <Card size="small" title="What unlocking allows">
+        <Panel title="What unlocking allows">
           <ul style={{ margin: 0, paddingLeft: 20 }}>{p.allows.map((a) => <li key={a}>{a}</li>)}</ul>
-        </Card>
+        </Panel>
       )}
       {(slug === "publish" || slug === "bank-file") && (
-        <Alert
-          type="info"
-          showIcon
+        <ApprovalBanner
+          tone="info"
           title="What this approves"
           description={`${p.rows ?? 0} ${slug === "publish" ? "payslips" : "bank rows"}${p.rowsTotal ? `, ${formatRupees(p.rowsTotal, 2)} in all` : ""}. The approval is bound to these exact figures; a change to any of them voids it and it has to be asked for again.`}
         />
@@ -320,7 +326,7 @@ function Actions({ p, step, slug, runId }: { p: StepPreview; step: StepState; sl
   const request = useMutation({
     mutationFn: () => payrollApi.requestStep(runId, slug, { fingerprint: p.fingerprint, ...(note.trim() ? { note: note.trim() } : {}) }),
     onSuccess: () => {
-      void message.success("Sent. A different person has to approve it.");
+      toast.success("Sent. A different person has to approve it.");
       setSeen(false);
       setNote("");
       refresh();
@@ -330,7 +336,7 @@ function Actions({ p, step, slug, runId }: { p: StepPreview; step: StepState; sl
   const decide = useMutation({
     mutationFn: (decision: "APPROVE" | "REJECT") => payrollApi.decideStep(runId, slug, { decision, ...(note.trim() ? { note: note.trim() } : {}), ...(decision === "APPROVE" ? { hash: step.live!.hash } : {}) }),
     onSuccess: (_, decision) => {
-      void message.success(decision === "APPROVE" ? "Approved." : "Rejected.");
+      toast.success(decision === "APPROVE" ? "Approved." : "Rejected.");
       setNote("");
       setSeen(false);
       refresh();
@@ -345,7 +351,7 @@ function Actions({ p, step, slug, runId }: { p: StepPreview; step: StepState; sl
       else await payrollApi.unlockRun(runId);
     },
     onSuccess: () => {
-      void message.success(slug === "finalise" ? "The period is closed." : slug === "publish" ? "The payslips are published." : slug === "bank-file" ? "The bank file is ready." : "The period is unlocked.");
+      toast.success(slug === "finalise" ? "The period is closed." : slug === "publish" ? "The payslips are published." : slug === "bank-file" ? "The bank file is ready." : "The period is unlocked.");
       refresh();
       navigate(`/admin/payroll/run/${runId}`);
     },
@@ -355,7 +361,7 @@ function Actions({ p, step, slug, runId }: { p: StepPreview; step: StepState; sl
   const live = step.live;
   const needsReason = slug === "unlock";
   return (
-    <Card size="small" title="Your part">
+    <Panel title="Your part" subtitle={live ? (live.status === "APPROVED" ? "Approved by a second person" : "Waiting for a second person") : "Nothing has been asked for yet"}>
       <Flex vertical gap={12}>
         {problem && <Alert type="error" showIcon title={problem} closable onClose={() => setProblem(null)} />}
 
@@ -443,7 +449,7 @@ function Actions({ p, step, slug, runId }: { p: StepPreview; step: StepState; sl
         )}
       </Flex>
       {withdrawing && <WithdrawModal runId={runId} slug={slug} onClose={() => setWithdrawing(false)} />}
-    </Card>
+    </Panel>
   );
 }
 
@@ -462,9 +468,9 @@ function WithdrawModal({ runId, slug, onClose }: { runId: string; slug: StepSlug
   });
   const p = preview.data;
   return (
-    <Modal open title="Withdraw" onCancel={onClose} okText="Withdraw" okButtonProps={{ danger: true, disabled: !p || why.trim().length < 3, loading: withdraw.isPending }} onOk={() => withdraw.mutate()} destroyOnHidden>
+    <ConfirmModal open title="Withdraw" onCancel={onClose} confirmLabel="Withdraw" danger confirmDisabled={!p || why.trim().length < 3} loading={withdraw.isPending} onConfirm={() => withdraw.mutate()}>
       <Space orientation="vertical" size={8} style={{ width: "100%" }}>
-        {preview.isLoading && <Spin />}
+        {preview.isLoading && <SkeletonCard lines={3} />}
         {p && (
           <>
             <Text>This voids {p.willVoid.length === 1 ? "this approval" : "these approvals"}:</Text>
@@ -477,11 +483,11 @@ function WithdrawModal({ runId, slug, onClose }: { runId: string; slug: StepSlug
               ))}
             </ul>
             {p.runWill && <Text>The run will {p.runWill}.</Text>}
-            <Input.TextArea value={why} onChange={(e) => setWhy(e.target.value)} rows={2} maxLength={300} placeholder="Why" />
+            <Input.TextArea value={why} onChange={(e) => setWhy(e.target.value)} rows={2} maxLength={300} placeholder="Why" aria-label="Why" />
           </>
         )}
         {problem && <Alert type="error" showIcon title={problem} />}
       </Space>
-    </Modal>
+    </ConfirmModal>
   );
 }

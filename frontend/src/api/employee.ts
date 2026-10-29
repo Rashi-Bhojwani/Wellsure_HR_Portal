@@ -193,7 +193,7 @@ export interface EmployeeProfile {
     reportingManager: { id: string; fullName: string } | null;
     effectiveFrom: string;
   } | null;
-  statutory?: { panLast4: string | null; aadhaarLast4: string | null; uanLast4: string | null; esiNumber: string | null; hasPan: boolean; hasAadhaar: boolean; hasUan: boolean } | null;
+  statutory?: { panLast4: string | null; aadhaarLast4: string | null; uanLast4: string | null; esiLast4: string | null; hasPan: boolean; hasAadhaar: boolean; hasUan: boolean; hasEsi: boolean } | null;
   bank?: { accountHolderName: string; accountNumberLast4: string; ifsc: string; bankName: string; branchName: string; effectiveFrom: string } | null;
 }
 export async function getEmployeeProfile(id: string): Promise<EmployeeProfile> {

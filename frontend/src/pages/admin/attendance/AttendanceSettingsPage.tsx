@@ -1,9 +1,12 @@
+import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { Alert, Space, Tabs, Typography } from "antd";
+import { CalendarOutlined, ClockCircleOutlined, EditOutlined, FieldTimeOutlined, SafetyCertificateOutlined, TeamOutlined } from "@ant-design/icons";
 import * as attendanceApi from "../../../api/attendance";
 import { HelpStrip } from "../../../components/common/HelpStrip";
 import { useAuth } from "../../../hooks/useAuth";
+import { ApprovalBanner, PageHeader, Stack } from "../../../ui";
+import { SectionNav, SettingsLayout, type SectionNavItem } from "../settings/SettingsNav";
 import { AssignmentsTab } from "./settings/AssignmentsTab";
 import { CycleTab } from "./settings/CycleTab";
 import { ManualBranchesTab } from "./settings/ManualBranchesTab";
@@ -11,8 +14,6 @@ import { PoliciesTab } from "./settings/PoliciesTab";
 import { ShiftsTab } from "./settings/ShiftsTab";
 import { WeekOffsTab } from "./settings/WeekOffsTab";
 import { PLACEHOLDER_LABELS } from "./settings/format";
-
-const { Title } = Typography;
 
 type TabKey = "shifts" | "week-offs" | "policies" | "assignments" | "cycle" | "manual-branches";
 
@@ -26,9 +27,8 @@ function PlaceholderBanner() {
   ];
   if (pending.length === 0) return null;
   return (
-    <Alert
-      type="warning"
-      showIcon
+    <ApprovalBanner
+      tone="warning"
       title="Some values are placeholders, awaiting HR"
       description={<>These are in use but not yet confirmed: {pending.join("; ")}. Enter HR's values, or confirm the current ones once HR agrees.</>}
     />
@@ -39,32 +39,47 @@ function PlaceholderBanner() {
 // company's shifts with their sessions, week-off patterns, policies, who
 // works what from when, the attendance cycle, and who marks attendance by
 // hand for which branch. Readable with attendance.view; changed with
-// attendance.config.manage.
+// attendance.config.manage. Layout follows the board's settings frames
+// (attendance-06, settings-06): a section nav on the left, the section's
+// panels on the right; scrollable tabs on phones.
 export function AttendanceSettingsPage({ initialTab = "shifts" }: { initialTab?: TabKey }) {
   const { hasPermission } = useAuth();
   const canManage = hasPermission("attendance.config.manage");
   const [params, setParams] = useSearchParams();
-  const tab = (params.get("tab") as TabKey | null) ?? initialTab;
-  const items = [
-    { key: "shifts", label: "Shifts", children: <ShiftsTab canManage={canManage} /> },
-    { key: "week-offs", label: "Week-off patterns", children: <WeekOffsTab canManage={canManage} /> },
-    { key: "policies", label: "Policies", children: <PoliciesTab canManage={canManage} /> },
-    { key: "assignments", label: "Assignments", children: <AssignmentsTab canManage={canManage} /> },
-    { key: "cycle", label: "Attendance cycle", children: <CycleTab canManage={canManage} /> },
-    ...(canManage ? [{ key: "manual-branches", label: "Manual-entry branches", children: <ManualBranchesTab /> }] : []),
+  const items: SectionNavItem[] = [
+    { key: "shifts", label: "Shifts", icon: <ClockCircleOutlined /> },
+    { key: "week-offs", label: "Week-off patterns", icon: <CalendarOutlined /> },
+    { key: "policies", label: "Policies", icon: <SafetyCertificateOutlined /> },
+    { key: "assignments", label: "Assignments", icon: <TeamOutlined /> },
+    { key: "cycle", label: "Attendance cycle", icon: <FieldTimeOutlined /> },
+    ...(canManage ? [{ key: "manual-branches", label: "Manual-entry branches", icon: <EditOutlined /> }] : []),
   ];
+  const requested = (params.get("tab") as TabKey | null) ?? initialTab;
+  const tab: TabKey = items.some((i) => i.key === requested) ? requested : initialTab;
+  const content: Record<TabKey, ReactNode> = {
+    shifts: <ShiftsTab canManage={canManage} />,
+    "week-offs": <WeekOffsTab canManage={canManage} />,
+    policies: <PoliciesTab canManage={canManage} />,
+    assignments: <AssignmentsTab canManage={canManage} />,
+    cycle: <CycleTab canManage={canManage} />,
+    "manual-branches": <ManualBranchesTab />,
+  };
   return (
-    <Space orientation="vertical" size={16} style={{ width: "100%" }}>
-      <Title level={3} style={{ margin: 0 }}>
-        Attendance Settings
-      </Title>
-      <HelpStrip storageKey="attendance-settings-help">
-        Company-wide attendance rules. HR confirmed (8 Oct 2026): Monday to Saturday working with Sunday off; the General shift 10:00–19:00 in two sessions
-        with lunch 14:00–14:45; no late penalty; a calendar-month cycle. Every change is audited. Shift and policy changes apply to days computed from now on.
-      </HelpStrip>
-      <PlaceholderBanner />
-      <Tabs activeKey={tab} onChange={(k) => setParams({ tab: k }, { replace: true })} items={items} destroyOnHidden />
-    </Space>
+    <>
+      <PageHeader title="Attendance Settings" subtitle="Shifts, week-offs, policies and who works what" />
+      <Stack>
+        <HelpStrip storageKey="attendance-settings-help">
+          Company-wide attendance rules. HR confirmed (8 Oct 2026): Monday to Saturday working with Sunday off; the General shift 10:00–19:00 in two sessions
+          with lunch 14:00–14:45; no late penalty; a calendar-month cycle. Every change is audited. Shift and policy changes apply to days computed from now on.
+        </HelpStrip>
+        <PlaceholderBanner />
+        <SettingsLayout nav={<SectionNav label="Attendance settings sections" items={items} active={tab} onChange={(k) => setParams({ tab: k }, { replace: true })} />}>
+          <div key={tab} style={{ display: "contents" }}>
+            {content[tab]}
+          </div>
+        </SettingsLayout>
+      </Stack>
+    </>
   );
 }
 

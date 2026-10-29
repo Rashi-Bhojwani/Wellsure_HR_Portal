@@ -1,8 +1,9 @@
-import { Alert, Button, Space, Typography } from "antd";
-import { Link } from "react-router-dom";
+import { Button } from "antd";
+import { ArrowRightOutlined } from "@ant-design/icons";
+import { useNavigate } from "react-router-dom";
 import type { FinalisationBlocker, FinalisationReadiness, FinalisationWarning } from "../../api/attendance";
-
-const { Text } = Typography;
+import { fs, space, v } from "../../theme/tokens";
+import { ApprovalBanner } from "../../ui";
 const ATTENDANCE = "/admin/workforce/attendance";
 
 const BLOCKER_TITLES: Record<FinalisationBlocker["code"], string> = {
@@ -47,55 +48,37 @@ function warningLink(w: FinalisationWarning, from: string, to: string): { to: st
 
 /** Every blocker grouped by reason with its count and a link to where it is fixed, then the warnings that do not block. */
 export function FinalisationBlockers({ readiness }: { readiness: FinalisationReadiness }) {
+  const navigate = useNavigate();
   const { from, to } = readiness;
+  const go = (link: { to: string; label: string }) => (
+    <Button onClick={() => navigate(link.to)} icon={<ArrowRightOutlined />} iconPlacement="end">
+      {link.label}
+    </Button>
+  );
   return (
-    <Space orientation="vertical" size={8} style={{ width: "100%" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: space[3], width: "100%" }}>
       {readiness.blockers.map((b) => {
         const link = linkFor(b.code, from, to);
         const eg = sample(b);
         return (
-          <Alert
+          <ApprovalBanner
             key={b.code}
-            type={b.code === "PLACEHOLDER_RULES" ? "error" : "warning"}
-            showIcon
+            tone={b.code === "PLACEHOLDER_RULES" ? "danger" : "warning"}
             title={`${BLOCKER_TITLES[b.code]}${"count" in b ? ` (${b.count})` : ""}`}
             description={
               <>
                 <div>{b.message}</div>
-                {eg && (
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    {eg}
-                  </Text>
-                )}
-                {link && (
-                  <div style={{ marginTop: 4 }}>
-                    <Link to={link.to}>{link.label}</Link>
-                  </div>
-                )}
+                {eg && <div style={{ fontSize: fs.sm, color: v.textSecondary, marginTop: space[1] }}>{eg}</div>}
               </>
             }
+            actions={link ? go(link) : undefined}
           />
         );
       })}
       {readiness.warnings.map((w) => {
         const link = warningLink(w, from, to);
-        return (
-          <Alert
-            key={w.code}
-            type="info"
-            showIcon
-            title={`Does not block: ${w.count} punch${w.count === 1 ? "" : "es"} matched to nobody`}
-            description={
-              <>
-                <div>{w.message}</div>
-                <Button type="link" size="small" style={{ padding: 0 }}>
-                  <Link to={link.to}>{link.label}</Link>
-                </Button>
-              </>
-            }
-          />
-        );
+        return <ApprovalBanner key={w.code} tone="info" title={`Does not block: ${w.count} punch${w.count === 1 ? "" : "es"} matched to nobody`} description={w.message} actions={go(link)} />;
       })}
-    </Space>
+    </div>
   );
 }

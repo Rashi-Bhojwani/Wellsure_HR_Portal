@@ -1,6 +1,6 @@
-import { Space } from "antd";
 import { CalendarOutlined, EditOutlined } from "@ant-design/icons";
-import { attendanceStatusColor } from "../../theme/tokens";
+import { statusTone } from "../attendance/statusTone";
+import { fs, fw, radius, space, v } from "../../theme/tokens";
 
 export interface AttendanceDayData {
   date: number;
@@ -15,47 +15,67 @@ interface StatusCalendarCellProps {
   onSelect?: () => void;
 }
 
-function colorFor(status: string): { bg: string; fg: string } {
-  const primaryCode = status.split(":")[0] ?? status;
-  return attendanceStatusColor[primaryCode] ?? { bg: "#f4f5f7", fg: "#6b7280" };
+/** Colour pair from the attendanceStatusColor tokens (via statusTone, the same mapping as the muster grid and the day panel). */
+function colorFor(status: string): { bg: string; fg: string; label: string } {
+  if (!status) return { bg: v.bgSubtle, fg: v.textSecondary, label: "No record" };
+  const t = statusTone(status.startsWith("L:") ? (status.split(":")[1] ?? status) : status);
+  return { bg: t.bg === "transparent" ? v.bgSubtle : t.bg, fg: t.fg, label: t.label };
 }
 
 // One day cell in the Attendance Info month calendar
 // (docs/UI_REFERENCE.md §1.5): date top-left, status code centred, shift
 // code bottom-right, edit/regularize + leave-apply icons top-right,
-// background colour keyed off status.
+// background colour keyed off status (theme tokens, so it follows light/dark). The status code is always written, never colour alone.
+// A button only when it can be selected (Enter / Space select it); otherwise a plain cell.
 export function StatusCalendarCell({ day, selected, onSelect }: StatusCalendarCellProps) {
-  const { bg, fg } = colorFor(day.status);
+  const { bg, fg, label } = colorFor(day.status);
+  const interactive = !!onSelect;
 
   return (
     <div
-      role="button"
-      tabIndex={0}
+      role={interactive ? "button" : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      aria-pressed={interactive ? !!selected : undefined}
+      aria-label={`${day.date}: ${day.status} (${label})${day.shift ? `, shift ${day.shift}` : ""}${day.hasException ? ", needs attention" : ""}`}
       onClick={onSelect}
-      onKeyDown={(e) => e.key === "Enter" && onSelect?.()}
+      onKeyDown={
+        interactive
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelect();
+              }
+            }
+          : undefined
+      }
       style={{
         background: bg,
-        borderRadius: 8,
-        padding: 8,
+        borderRadius: radius.sm,
+        padding: space[2],
         minHeight: 72,
-        cursor: onSelect ? "pointer" : "default",
-        outline: selected ? "2px solid #2f6fed" : "none",
+        cursor: interactive ? "pointer" : "default",
+        outline: selected ? `2px solid ${v.accent}` : undefined,
+        outlineOffset: 1,
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
+        minWidth: 0,
+        transition: "outline-color 0.15s",
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <span style={{ fontSize: 12, fontWeight: 600 }}>{day.date}</span>
+        <span className="ws-num" style={{ fontSize: fs.sm, fontWeight: fw.semibold, color: v.textBody }}>
+          {day.date}
+        </span>
         {day.hasException && (
-          <Space size={4}>
-            <EditOutlined style={{ fontSize: 11, color: fg }} />
-            <CalendarOutlined style={{ fontSize: 11, color: fg }} />
-          </Space>
+          <span style={{ display: "inline-flex", gap: space[1] }}>
+            <EditOutlined aria-hidden style={{ fontSize: fs.xs, color: fg }} />
+            <CalendarOutlined aria-hidden style={{ fontSize: fs.xs, color: fg }} />
+          </span>
         )}
       </div>
-      <div style={{ textAlign: "center", fontWeight: 700, fontSize: 15, color: fg }}>{day.status}</div>
-      <div style={{ textAlign: "right", fontSize: 10, color: "#6b7280" }}>{day.shift ?? ""}</div>
+      <div style={{ textAlign: "center", fontWeight: fw.bold, fontSize: fs.md, color: fg, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{day.status}</div>
+      <div style={{ textAlign: "right", fontSize: fs.chip, color: v.textSecondary }}>{day.shift ?? ""}</div>
     </div>
   );
 }
