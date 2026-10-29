@@ -109,6 +109,42 @@ describe("a switch is felt everywhere at once", () => {
     expect(await reviewRegularizations("hrExec")).toBeGreaterThanOrEqual(1);
   });
 
+  it("work HR can no longer decide waits for the directors, with a note saying why; it is never decided, lost or recreated, and returns to HR when the switch is back on", async () => {
+    const before = await prisma.leaveRequest.findUniqueOrThrow({ where: { id: leaveId } });
+    const heldBy = async (who: keyof typeof p) => (await get(who, "/api/admin/tasks/counts")).body.heldFromHr;
+    expect(await heldBy("director")).toBeNull(); // HR can decide: no note
+    await roleSwitch("APPROVE_LEAVE", "HR_ADMIN", "OFF");
+    expect(await heldBy("director")).toBeNull(); // the other HR role still can
+    await roleSwitch("APPROVE_LEAVE", "HR_EXECUTIVE", "OFF");
+    const note = await heldBy("director");
+    expect(note.leave).toBeGreaterThanOrEqual(1);
+    expect(await reviewLeave("director")).toBeGreaterThanOrEqual(1); // it is in their queue
+    for (const who of ["hrAdmin", "hrExec", "hrNamed", "employee", "manager"] as const) expect(await heldBy(who), who).toBeNull(); // only a director is told
+    await personSwitch("APPROVE_LEAVE", "hrNamed", "ON"); // one named person is still allowed: so HR can decide again, and the note goes
+    expect(await heldBy("director")).toBeNull();
+    await personSwitch("APPROVE_LEAVE", "hrNamed", "DEFAULT");
+    expect((await heldBy("director")).leave).toBeGreaterThanOrEqual(1);
+    const mid = await prisma.leaveRequest.findUniqueOrThrow({ where: { id: leaveId } });
+    expect([mid.status, mid.decidedByUserId ?? null]).toEqual(["PENDING", null]); // not approved, not rejected, not touched
+    await roleSwitch("APPROVE_LEAVE", "HR_ADMIN", "DEFAULT");
+    await roleSwitch("APPROVE_LEAVE", "HR_EXECUTIVE", "DEFAULT");
+    expect(await heldBy("director")).toBeNull();
+    expect(await inbox("hrAdmin")).toContain(leaveId); // the very same request, back in HR's inbox
+    const after = await prisma.leaveRequest.findUniqueOrThrow({ where: { id: leaveId } });
+    expect(after.createdAt.getTime()).toBe(before.createdAt.getTime());
+  });
+
+  it("the same note for attendance regularizations", async () => {
+    await roleSwitch("APPROVE_REGULARIZATIONS", "HR_ADMIN", "OFF");
+    await roleSwitch("APPROVE_REGULARIZATIONS", "HR_EXECUTIVE", "OFF");
+    expect((await get("director", "/api/admin/tasks/counts")).body.heldFromHr.regularizations).toBeGreaterThanOrEqual(1);
+    expect((await get("hrAdmin", "/api/admin/tasks/counts")).body.heldFromHr).toBeNull();
+    expect((await prisma.regularizationRequest.findUniqueOrThrow({ where: { id: requestIds[0]! } })).status).toBe("PENDING");
+    await roleSwitch("APPROVE_REGULARIZATIONS", "HR_ADMIN", "DEFAULT");
+    await roleSwitch("APPROVE_REGULARIZATIONS", "HR_EXECUTIVE", "DEFAULT");
+    expect((await get("director", "/api/admin/tasks/counts")).body.heldFromHr).toBeNull();
+  });
+
   it("a switch for HR never touches a manager's own grants or an employee", async () => {
     await roleSwitch("APPROVE_LEAVE", "HR_ADMIN", "OFF");
     await roleSwitch("APPROVE_LEAVE", "HR_EXECUTIVE", "OFF");
@@ -121,6 +157,7 @@ describe("a switch is felt everywhere at once", () => {
     let httpServer: ReturnType<typeof createServer>;
     let previous: ReturnType<typeof getSocketServer>;
     let client: Socket;
+    let ioServer: Awaited<ReturnType<typeof createSocketServer>>;
     const next = (event: string, ms = 4000) =>
       new Promise<unknown>((resolve, reject) => {
         const timer = setTimeout(() => reject(new Error(`no ${event} within ${ms} ms`)), ms);
@@ -143,7 +180,8 @@ describe("a switch is felt everywhere at once", () => {
     beforeAll(async () => {
       previous = getSocketServer();
       httpServer = createServer();
-      setSocketServer(await createSocketServer(httpServer));
+      ioServer = await createSocketServer(httpServer);
+      setSocketServer(ioServer);
       await new Promise<void>((resolve) => httpServer.listen(0, "127.0.0.1", resolve));
       const { port } = httpServer.address() as AddressInfo;
       client = connect(`http://127.0.0.1:${port}`, { transports: ["websocket"], auth: { token: signAccessToken(p.hrAdmin.userId) } });
@@ -154,7 +192,7 @@ describe("a switch is felt everywhere at once", () => {
     });
     afterAll(async () => {
       client.disconnect();
-      await new Promise<void>((resolve) => getSocketServer()!.close(() => resolve()));
+      await new Promise<void>((resolve) => void ioServer.close(() => resolve()));
       setSocketServer(previous);
     });
 

@@ -462,9 +462,18 @@ function WelcomeTab() {
     enabled: canAssignTeams,
   });
   const noApprover = taskCounts?.leaveNoTeamApprover ?? 0;
+  const held = taskCounts?.heldFromHr ?? null;
 
   return (
     <Stack>
+      {held && (
+        <ApprovalBanner
+          tone="info"
+          title={[held.leave > 0 && `${held.leave} leave ${held.leave === 1 ? "request" : "requests"}`, held.regularizations > 0 && `${held.regularizations} attendance ${held.regularizations === 1 ? "correction" : "corrections"}`].filter(Boolean).join(" and ") + " waiting for you"}
+          description="HR has been switched off from deciding these (Admin Tools, What HR Can Do). Nothing was approved or lost; they are in your queue, and go back to HR if you switch the duty on again."
+          actions={<Button onClick={() => navigate("/admin/tasks")}>Open</Button>}
+        />
+      )}
       {noApprover > 0 && (
         <ApprovalBanner
           tone="warning"
