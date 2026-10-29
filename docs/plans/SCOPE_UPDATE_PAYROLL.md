@@ -1,5 +1,10 @@
 # Scope update — HR/payroll separation, Monthly Inputs and four new features
 
+> **Partly superseded (2026-10-29):** the owner replaced "HR has no Admin Tools access" with the decisions in
+> [HR_PAYROLL_SEPARATION.md](HR_PAYROLL_SEPARATION.md) §1 (HR keeps most Admin Tools items and may *enter*
+> bank/statutory data, pending confirmation). Sections 2 and 3 below are replaced by that plan; the Monthly
+> Inputs, loss-of-pay reversal, Hold Salary, Raise-a-query and Check in/out material here is unchanged.
+
 **Status: DRAFT for the owner's review. Nothing in this document is built, and nothing in it is decided
 beyond what section 1 quotes from the owner.** Everything marked *Proposal* is mine and needs approval.
 Everything in section 6 is an open question; none has a default and none has been guessed.
