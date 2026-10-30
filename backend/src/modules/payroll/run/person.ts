@@ -386,6 +386,15 @@ function adjustmentLine(adj: AdjustmentIn, ctx: CalcContext): { line: LineOut; p
     };
   }
   const current = ctx.components.current.get(adj.componentCode);
+  if (adj.source === "MONTHLY_INPUT") {
+    const flags = current?.value;
+    return {
+      line: { code: adj.componentCode, label: flags?.payslipLabel ?? adj.componentCode, kind: adj.direction, source: "MONTHLY_INPUT", sourceRef: adj.sourceRef, amount: adj.amount, basis: { kind: "MONTHLY_INPUT", month: adj.periodLabel ?? null, componentVersion: current?.version ?? null, pfApplicable: flags?.pfApplicable === true, esiApplicable: flags?.esiApplicable === true } },
+      pf: flags?.pfApplicable ? adj.amount : ZERO,
+      esi: flags?.esiApplicable ? adj.amount : ZERO,
+      notices: current ? notices : [...notices, `The pay head ${adj.componentCode} used by a Monthly Input has no version on record.`],
+    };
+  }
   if (!current) notices.push(`The component ${adj.componentCode} used by an adjustment has no version on record.`);
   const flags = current?.value;
   return {

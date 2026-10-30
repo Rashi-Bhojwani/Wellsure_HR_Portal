@@ -45,7 +45,7 @@ export async function finaliseRun(runId: string, actor: Actor) {
 
   // The adjustments this run paid: every adjustment behind a line of a person who is in it. One without a row yet (an encashment committed since) is a change.
   const statusOf = new Map(computed.items.map((i) => [i.employeeId, i.status]));
-  const paid = computed.inputs.people.filter((p) => statusOf.get(p.employeeId) !== "EXCLUDED").flatMap((p) => p.adjustments);
+  const paid = computed.inputs.people.filter((p) => statusOf.get(p.employeeId) !== "EXCLUDED").flatMap((p) => p.adjustments).filter((a) => a.source !== "MONTHLY_INPUT"); // a month's Monthly Inputs belong to the month: there is no row to consume
   const ids = paid.flatMap((a) => (a.id ? [a.id] : []));
   if (ids.length !== paid.length) throw new HttpError(409, "An adjustment was added since this run was calculated. Reopen it and calculate it again.", "RUN_STALE");
 

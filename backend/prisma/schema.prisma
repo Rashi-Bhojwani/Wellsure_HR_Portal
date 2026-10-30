@@ -2466,6 +2466,7 @@ enum PayrollApprovalSubject {
   PERIOD_UNLOCK
   RULE_CONFIRM
   SALARY_REVISION
+  MONTHLY_INPUTS
 }
 
 enum PayrollApprovalStatus {
@@ -2714,6 +2715,7 @@ enum PayrollLineSource {
   ADJUSTMENT
   HOLD_RELEASE
   LOP_REVERSAL
+  MONTHLY_INPUT
   ARREARS
   ENCASHMENT
   PF
@@ -3151,4 +3153,50 @@ model PayrollSalaryRelease {
   createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@map("payroll_salary_releases")
+}
+
+// ── Stage 4 — Monthly Inputs (docs/plans/STAGE_4_PLAN.md) ──
+// One row per entry of one figure: a pay head flagged "takes its value from Monthly Inputs", for one person, for one payroll month. Append-only; the current figure of
+// a cell is its newest row. `cleared` returns the cell to blank (nothing entered), which is not the same as zero. Only a Super Admin writes (a trigger holds that
+// whatever the code does). employee_id and the actor are plain text: nothing that happens to an employee or a user can alter this history.
+model PayrollMonthlyInput {
+  id              String   @id @default(cuid())
+  employeeId      String   @map("employee_id")
+  componentCode   String   @map("component_code")
+  cycleStart      DateTime @map("cycle_start") @db.Date
+  amount          Decimal? @db.Decimal(20, 6) // exact; always zero or more; the head says earning or deduction. Null when cleared.
+  cleared         Boolean  @default(false)
+  reason          String
+  enteredByUserId String   @map("entered_by_user_id")
+  batchId         String?  @map("batch_id")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([cycleStart, componentCode])
+  @@index([employeeId, cycleStart, componentCode, createdAt])
+  @@map("payroll_monthly_inputs")
+}
+
+enum MonthlyInputBatchStatus {
+  PREVIEW
+  APPLIED
+  DISCARDED
+}
+
+// An uploaded file after it has been read and checked, kept so a director can look at the preview and confirm it. Nothing in it is a figure of a month until it is
+// APPLIED. The same file (by hash) can be APPLIED once (a partial unique index). A batch is only ever changed while it is a PREVIEW.
+model PayrollInputBatch {
+  id               String                  @id @default(cuid())
+  fileName         String                  @map("file_name")
+  fileHash         String                  @map("file_hash")
+  status           MonthlyInputBatchStatus @default(PREVIEW)
+  parsed           Json // the rows as read: line number, employee number, months, figures as text, problems
+  summary          Json
+  skipInvalid      Boolean                 @default(false) @map("skip_invalid")
+  uploadedByUserId String                  @map("uploaded_by_user_id")
+  appliedByUserId  String?                 @map("applied_by_user_id")
+  appliedAt        DateTime?               @map("applied_at") @db.Timestamptz(3)
+  createdAt        DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([fileHash])
+  @@map("payroll_input_batches")
 }

@@ -15,6 +15,9 @@ export async function cleanupPayrollRowsBy(userIds: string[]): Promise<void> {
   const holdIds = await ids(prisma.payrollSalaryHold.findMany({ where: { heldByUserId: { in: userIds } }, select: { id: true } }));
   await deleteWithDependents("PayrollSalaryRelease", await ids(prisma.payrollSalaryRelease.findMany({ where: { OR: [{ holdId: { in: holdIds } }, { releasedByUserId: { in: userIds } }] }, select: { id: true } })));
   await deleteWithDependents("PayrollSalaryHold", holdIds);
+  // Monthly inputs these directors entered, and the import batches they uploaded.
+  await deleteWithDependents("PayrollMonthlyInput", await ids(prisma.payrollMonthlyInput.findMany({ where: { enteredByUserId: { in: userIds } }, select: { id: true } })));
+  await deleteWithDependents("PayrollInputBatch", await ids(prisma.payrollInputBatch.findMany({ where: { uploadedByUserId: { in: userIds } }, select: { id: true } })));
   await deleteWithDependents("PayrollItemConfirmation", await ids(prisma.payrollItemConfirmation.findMany({ where: { confirmedByUserId: { in: userIds } }, select: { id: true } })));
   await deleteWithDependents("PayrollItemVersion", await ids(prisma.payrollItemVersion.findMany({ where: { authorUserId: { in: userIds } }, select: { id: true } })));
   await deleteWithDependents(

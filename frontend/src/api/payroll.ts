@@ -59,7 +59,7 @@ export interface Checker {
 export interface CheckerAvailability {
   eligible: Checker[];
   excluded: Array<Checker & { reason: string }>;
-  state: "NONE" | "ONE" | "MANY";
+  state: "NONE" | "ONE" | "MANY" | "SELF";
   message: string;
 }
 
@@ -1217,4 +1217,139 @@ export async function compareRegisters(f: CompareForm): Promise<CompareResult> {
 }
 export async function downloadComparison(f: CompareForm): Promise<Blob> {
   return (await apiClient.post(`${base}/compare`, compareBody(f, "xlsx"), { responseType: "blob" })).data as Blob;
+}
+
+// ── Stage 4: Monthly Inputs (directors only) ──
+
+export type MonthState = "CLOSED" | "OPEN" | "CONFIRMED" | "LOCKED";
+export interface InputHead {
+  code: string;
+  name: string;
+  type: "EARNING" | "DEDUCTION";
+  version: number;
+}
+export interface MonthView {
+  cycleStart: string;
+  cycleEnd: string;
+  label: string;
+  state: MonthState;
+  reason: string | null;
+  heads: InputHead[];
+  people: number;
+  cells: number;
+  entered: number;
+  blank: number;
+  peopleWithBlanks: number;
+  confirmation: { status: "NONE" | "PENDING" | "CONFIRMED" | "OUT_OF_DATE"; approvalId: string | null; makerName: string | null; checkerName: string | null; at: string | null; authority: string | null };
+  hash: string;
+}
+export interface InputGridRow {
+  employeeId: string;
+  employeeCode: string;
+  name: string;
+  departmentId: string | null;
+  departmentName: string | null;
+  cells: Array<{ head: string; amount: string | null; entries: number; lastAt: string | null }>;
+}
+export interface InputGridQuery {
+  cycleStart: string;
+  departmentId?: string;
+  employeeId?: string;
+  head?: string;
+  status?: "NOT_ENTERED" | "ENTERED" | "CHANGED";
+  page: number;
+  pageSize: number;
+}
+export interface InputHistoryEntry {
+  id: string;
+  employeeId: string;
+  employeeCode: string;
+  name: string;
+  head: string;
+  amount: string | null;
+  cleared: boolean;
+  reason: string;
+  by: string;
+  at: string;
+  fromFile: boolean;
+}
+export interface InputConfirmPreview {
+  month: MonthView;
+  fingerprint: string;
+  mode: "SECOND_DIRECTOR" | "DIRECTOR_AUTHORITY" | "NOT_SET";
+  checkers: CheckerAvailability;
+  warnings: string[];
+}
+export interface ImportRow {
+  line: number;
+  employeeNumber: string;
+  employeeId: string | null;
+  name: string | null;
+  from: string | null;
+  till: string | null;
+  months: string[];
+  figures: Record<string, string>;
+  principal: string | null;
+  interest: string | null;
+  remarks: string;
+  problems: string[];
+}
+export interface ImportView {
+  id: string;
+  fileName: string;
+  fileHash: string;
+  status: "PREVIEW" | "APPLIED" | "DISCARDED";
+  analysis: {
+    columns: Array<{ header: string; kind: "FIXED" | "HEAD" | "IGNORED_EMPTY" | "UNKNOWN"; head?: string }>;
+    fileProblems: string[];
+    rows: ImportRow[];
+    valid: number;
+    invalid: number;
+    cells: number;
+    months: string[];
+    notices: string[];
+  };
+  alreadyApplied: { batchId: string; at: string } | null;
+  fingerprint: string;
+  canApply: boolean;
+  canApplySkippingInvalid: boolean;
+}
+export interface ImportListRow {
+  id: string;
+  fileName: string;
+  status: string;
+  summary: { rows?: number; valid?: number; invalid?: number; cells?: number };
+  createdAt: string;
+  appliedAt: string | null;
+}
+
+const mi = "/monthly-inputs";
+export const inputMonths = async () => (await get<{ months: Array<{ cycleStart: string; cycleEnd: string; label: string }> }>(`${mi}/months`)).months;
+export const inputMonth = (cycleStart: string) => get<MonthView>(`${mi}/month`, { cycleStart });
+export const inputGrid = (q: InputGridQuery) => get<{ month: MonthView; rows: InputGridRow[]; total: number; page: number; pageSize: number }>(mi, q);
+export const inputHistory = async (q: { cycleStart: string; employeeId?: string; head?: string }) => (await get<{ entries: InputHistoryEntry[] }>(`${mi}/history`, q)).entries;
+export const enterInputs = (body: { cycleStart: string; entries: Array<{ employeeId: string; head: string; amount: string | null }>; reason: string }) => post<{ written: number; voidedConfirmation: boolean }>(`${mi}/entries`, body);
+export const fillInputBlanks = (body: { cycleStart: string; head?: string; reason: string }) => post<{ written: number; voidedConfirmation: boolean }>(`${mi}/fill-blanks`, body);
+export const previewInputConfirmation = (cycleStart: string) => post<InputConfirmPreview>(`${mi}/confirm-preview`, { cycleStart });
+export const requestInputConfirmation = (body: { cycleStart: string; fingerprint: string; note?: string }) => post<{ status: string; authority: string }>(`${mi}/confirm`, body);
+export const decideInputConfirmation = (cycleStart: string, body: { decision: "APPROVE" | "REJECT"; fingerprint: string; note?: string }) => post<{ status: string }>(`${mi}/decision/${cycleStart}`, body);
+export const listImports = async () => (await get<{ batches: ImportListRow[] }>(`${mi}/import`)).batches;
+export const getImport = (id: string) => get<ImportView>(`${mi}/import/${id}`);
+export async function uploadImport(file: File): Promise<ImportView> {
+  const form = new FormData();
+  form.append("file", file);
+  return (await apiClient.post<ImportView>(`${base}${mi}/import`, form)).data;
+}
+export const applyImport = (id: string, body: { fingerprint: string; skipInvalid: boolean; reason: string }) => post<{ written: number; skippedRows: number; months: string[] }>(`${mi}/import/${id}/apply`, body);
+export const discardImport = (id: string) => post<{ ok: true }>(`${mi}/import/${id}/discard`, {});
+export async function downloadImportTemplate(format: "xlsx" | "csv"): Promise<void> {
+  const res = await apiClient.get<Blob>(`${base}${mi}/import/template`, { params: { format }, responseType: "blob" });
+  const url = URL.createObjectURL(res.data);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `monthly-inputs-template.${format}`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }

@@ -12,6 +12,7 @@ import { iso } from "./days";
 import { loadOverrideItems, resolveOverrides } from "../rules/overrides";
 import type { RuleNeeds } from "./rules";
 import { contributionPeriodStart } from "./statutory";
+import { figuresForRun } from "../inputs/service";
 import type { AdjustmentIn, ComponentLookup, CycleSpan, PersonInput, SegmentInput } from "./types";
 
 // Everything a payroll run reads, gathered through the readers and nothing else (docs/plans/PHASE_6.md §14D):
@@ -127,6 +128,10 @@ export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promi
     for (const [day, group] of byDay) for (const [id, row] of await salariesOn(group, new Date(`${day}T00:00:00Z`))) periodRows.set(id, row);
   }
 
+  // The figures a director entered in Monthly Inputs for this month: each is a line of the run, by the same path as an adjustment. They are read, never consumed:
+  // a month's figures belong to the month, and a run for it that is unlocked reads them again.
+  const monthly = await figuresForRun(iso(cycle.start), ids);
+
   // Every component version any of this is built from, with its flags: the exact version each salary line was frozen under, and the newest for adjustments.
   const codes = new Set<string>();
   for (const segs of segmentsByEmployee.values()) for (const s of segs) for (const l of s.row.lines) codes.add(l.componentCode);
@@ -135,6 +140,7 @@ export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promi
     codes.add(a.componentCode);
     for (const part of breakdownOf(a)) codes.add(part.component);
   }
+  for (const list of monthly.values()) for (const f of list) codes.add(f.head.code);
   if (codes.size > MAX_CODES) throw new Error("A run reads more salary components than any structure could hold");
   const loadVersions = (keys: Iterable<string>) => prisma.payrollItemVersion.findMany({ where: { kind: "COMPONENT" as PayrollItemKind, key: { in: [...keys] } }, orderBy: [{ key: "asc" }, { version: "asc" }] });
   let versionRows = codes.size ? await loadVersions(codes) : [];
@@ -182,7 +188,7 @@ export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promi
       }
     }
   }
-  const usedByAdjustments = new Set(pendingAdjustments.map((a) => a.componentCode));
+  const usedByAdjustments = new Set([...pendingAdjustments.map((a) => a.componentCode), ...[...monthly.values()].flatMap((l) => l.map((f) => f.head.code))]);
   for (const code of usedByAdjustments) {
     const cur = current.get(code);
     const h = cur ? componentHashes.get(`${code}@${cur.version}`) : undefined;
@@ -226,6 +232,10 @@ export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promi
         breakdown: breakdownOf(a),
       }));
     adjustments.push(...(encashmentsByEmployee.get(e.id) ?? []));
+    for (const f of monthly.get(e.id) ?? []) {
+      if (dec(f.amount).isZero()) continue; // a zero was entered (so the run may go ahead), and pays or takes nothing: there is no line to print
+      adjustments.push({ id: null, source: "MONTHLY_INPUT", sourceRef: f.entryId, componentCode: f.head.code, direction: f.head.type, amount: dec(f.amount), reason: "Entered in Monthly Inputs", periodLabel: cycle.label });
+    }
     if (adjustments.some((a) => a.source === "SALARY_ARREARS" || a.source === "LOP_REVERSAL")) arrears = true; // a reversal follows the same PF and ESI rule
     if (adjustments.some((a) => a.source === "LOP_REVERSAL")) reversals = true;
     if (adjustments.some((a) => a.source === "YEAR_END_ENCASHMENT")) encashment = true;

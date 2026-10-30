@@ -17,6 +17,7 @@ import { computeRun, enqueueCalculation } from "./engine";
 import { gatherRunInputs } from "./gather";
 import { RulesMissingError, loadRunRules, type MissingRule } from "./rules";
 import { iso } from "./days";
+import { checkForRun } from "../inputs/service";
 
 // Payroll runs, the part that is not arithmetic (docs/plans/PHASE_6.md §14D): readiness, making a run, previewing and requesting a calculation, discarding a
 // draft, reading a run. A run is made by the maker (payroll.run) and seen by anyone who can see salary (payroll.salary.view). Nothing here can make a run real.
@@ -57,6 +58,7 @@ export async function readiness(cycleStart: string) {
   const gaps = inputs.people.filter((p) => p.missingDays.length === 0 && p.salaryGapDays.length > 0);
   const noBank = inputs.people.filter((p) => !p.hasBankAccount);
   const adjustments = inputs.people.flatMap((p) => p.adjustments);
+  const monthly = await checkForRun(iso(cycle.start), inputs.people.map((p) => p.employeeId));
   const cycleOver = cycle.end < today;
   return {
     cycle: { start: iso(cycle.start), end: iso(cycle.end), label: cycle.label },
@@ -66,6 +68,12 @@ export async function readiness(cycleStart: string) {
     attendance: { unfinalisedCount: unfinalised.length, unfinalised: unfinalised.slice(0, LIMIT).map((p) => ({ employeeId: p.employeeId, name: nameOf(p.employeeId), days: p.missingDays.length, firstDays: p.missingDays.slice(0, 5) })) },
     salary: { gapCount: gaps.length, gaps: gaps.slice(0, LIMIT).map((p) => ({ employeeId: p.employeeId, name: nameOf(p.employeeId), days: p.salaryGapDays.length, firstDays: p.salaryGapDays.slice(0, 5) })) },
     bank: { missingCount: noBank.length, missing: noBank.slice(0, LIMIT).map((p) => ({ employeeId: p.employeeId, name: nameOf(p.employeeId) })) },
+    monthlyInputs: {
+      heads: monthly.heads.length,
+      missingCount: monthly.missing.length,
+      missing: monthly.missing.slice(0, LIMIT).map((x) => ({ employeeId: x.employeeId, name: x.name, employeeCode: x.employeeCode, head: x.headName })),
+      notConfirmed: monthly.notConfirmed,
+    },
     rules: {
       missing,
       placeholders: statuses.filter((s) => s.status === "PLACEHOLDER").map((s) => ({ key: s.pin.key, kind: s.pin.kind ?? "RULE", label: s.label, notSet: s.pin.unset === true })),

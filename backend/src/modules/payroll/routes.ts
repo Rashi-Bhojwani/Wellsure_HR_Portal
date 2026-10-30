@@ -12,6 +12,9 @@ import { memoryUpload } from "../../lib/uploads";
 import { employeeSalaryQuerySchema } from "./salary/employees";
 import { ruleGate, layoutGate } from "./gates";
 import * as setup from "./setup/controller";
+import * as mi from "./inputs/controller";
+import * as miSvc from "./inputs/service";
+import * as imp from "./inputs/importService";
 import { compareRegistersRoute, compareUpload } from "./compare/controller";
 import { overrideKeyParamsSchema, overridePreviewSchema, overrideSaveSchema, setupAreaParamsSchema, setupSignoffSchema, checkersQuerySchema, payrollAuditQuerySchema, ruleConfirmSchema, ruleEditPreviewSchema, ruleEditSchema, ruleKeyParamsSchema } from "./validators";
 
@@ -160,3 +163,21 @@ payrollRouter.post("/layouts/:key/save-preview", layoutGate("manage"), validate(
 payrollRouter.put("/layouts/:key", layoutGate("manage"), validate({ params: rv.layoutKeyParamsSchema, body: rv.layoutSaveSchema }), rel.layoutSave);
 payrollRouter.post("/layouts/:key/confirm-preview", layoutGate("confirm"), validate({ params: rv.layoutKeyParamsSchema }), rel.layoutConfirmPreview);
 payrollRouter.post("/layouts/:key/confirm", layoutGate("confirm"), validate({ params: rv.layoutKeyParamsSchema, body: rv.layoutConfirmSchema }), rel.layoutConfirm);
+
+// ── Stage 4: Monthly Inputs (docs/plans/STAGE_4_PLAN.md). Directors only: the same permissions as salary, and a director check on every route. ──
+const dirs = mi.directorsOnly;
+payrollRouter.get("/monthly-inputs/months", view, dirs, mi.months);
+payrollRouter.get("/monthly-inputs/month", view, dirs, validate({ query: mi.monthQuerySchema }), mi.month);
+payrollRouter.get("/monthly-inputs/history", view, dirs, validate({ query: miSvc.historyQuerySchema }), mi.historyRoute);
+payrollRouter.post("/monthly-inputs/entries", edit, dirs, validate({ body: miSvc.enterSchema }), mi.enterRoute);
+payrollRouter.post("/monthly-inputs/fill-blanks", edit, dirs, validate({ body: miSvc.fillBlanksSchema }), mi.fillBlanksRoute);
+payrollRouter.post("/monthly-inputs/confirm-preview", edit, dirs, validate({ body: miSvc.confirmationQuerySchema }), mi.confirmPreview);
+payrollRouter.post("/monthly-inputs/confirm", edit, dirs, validate({ body: miSvc.requestSchema }), mi.confirmRequest);
+payrollRouter.post("/monthly-inputs/decision/:cycleStart", approve, dirs, validate({ params: mi.cycleParamsSchema, body: miSvc.decisionSchema }), mi.decisionRoute);
+payrollRouter.get("/monthly-inputs/import/template", view, dirs, validate({ query: mi.templateQuerySchema }), mi.importTemplate);
+payrollRouter.get("/monthly-inputs/import", view, dirs, mi.importList);
+payrollRouter.post("/monthly-inputs/import", edit, dirs, memoryUpload(5), mi.importUpload);
+payrollRouter.get("/monthly-inputs/import/:id", view, dirs, validate({ params: mi.idParamsSchema }), mi.importGet);
+payrollRouter.post("/monthly-inputs/import/:id/apply", edit, dirs, validate({ params: mi.idParamsSchema, body: imp.applySchema }), mi.importApply);
+payrollRouter.post("/monthly-inputs/import/:id/discard", edit, dirs, validate({ params: mi.idParamsSchema }), mi.importDiscard);
+payrollRouter.get("/monthly-inputs", view, dirs, validate({ query: miSvc.gridQuerySchema }), mi.gridRoute);

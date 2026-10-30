@@ -27,6 +27,7 @@ import {
   PieChartOutlined,
   RocketOutlined,
   SafetyOutlined,
+  TableOutlined,
   ScheduleOutlined,
   SettingOutlined,
   SolutionOutlined,
@@ -103,6 +104,7 @@ const StructuresPage = lazyPage(() => import("../pages/admin/payroll/StructuresP
 const EmployeeSalariesPage = lazyPage(() => import("../pages/admin/payroll/EmployeeSalariesPage"), "EmployeeSalariesPage");
 const SalaryRevisionsPage = lazyPage(() => import("../pages/admin/payroll/SalaryRevisionsPage"), "SalaryRevisionsPage");
 const RuleOverridesPage = lazyPage(() => import("../pages/admin/payroll/RuleOverridesPage"), "RuleOverridesPage");
+const MonthlyInputsPage = lazyPage(() => import("../pages/admin/payroll/MonthlyInputsPage"), "MonthlyInputsPage");
 const HeldSalariesPage = lazyPage(() => import("../pages/admin/payroll/HeldSalariesPage"), "HeldSalariesPage");
 const AdjustmentsPage = lazyPage(() => import("../pages/admin/payroll/AdjustmentsPage"), "AdjustmentsPage");
 const PayrollRunsPage = lazyPage(() => import("../pages/admin/payroll/PayrollRunsPage"), "PayrollRunsPage");
@@ -337,6 +339,7 @@ export const adminApps: AdminApp[] = [
           { key: "employee-salaries", label: "Employee Salaries", path: "payroll/salaries", icon: WalletOutlined, element: EmployeeSalariesPage, needs: PAYROLL_NEEDS },
           { key: "salary-revisions", label: "Salary Revisions", path: "payroll/revisions", icon: AuditOutlined, element: SalaryRevisionsPage, needs: PAYROLL_NEEDS },
           { key: "payroll-adjustments", label: "Adjustments", path: "payroll/adjustments", icon: DiffOutlined, element: AdjustmentsPage, needs: PAYROLL_NEEDS },
+          { key: "payroll-monthly-inputs", label: "Monthly Inputs", path: "payroll/monthly-inputs", icon: TableOutlined, element: MonthlyInputsPage, needs: { any: ["payroll.salary.edit"] } },
           { key: "payroll-holds", label: "Held Salaries", path: "payroll/holds", icon: PauseCircleOutlined, element: HeldSalariesPage, needs: PAYROLL_NEEDS },
           { key: "payroll-run", label: "Payroll Run", path: "payroll/run", icon: FundOutlined, element: PayrollRunsPage, needs: PAYROLL_NEEDS },
           { key: "payroll-compare", label: "Compare Registers", path: "payroll/compare", icon: DiffOutlined, element: CompareRegistersPage, needs: PAYROLL_NEEDS },

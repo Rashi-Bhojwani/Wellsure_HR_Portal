@@ -49,8 +49,9 @@ pause only at CHECKPOINT 1 (after Stage 2), CHECKPOINT 2 (after P7-3) and stop c
 - [x] 0.1 dump.rdb untracked and ignored · [x] 0.2 .env checked, prisma guard · [x] 0.3 CI read · [x] 0.4 flaky tests · [x] 0.5 owner decisions applied · [x] 0.6 samples read · [x] 0.7 decisions table
 
 ## Stage 4 — Monthly inputs
-- [ ] grid, history, Excel import (needs the sample template — not in repo, see WAITING)
-- [ ] no money field writable via muster/attendance finalisation, tested
+- [x] grid, history, Excel and CSV import (layout read from the Bulk Salary Overrides sample on origin/main; "Override From/Till" read as an inclusive month range, flagged for the owners)
+- [x] maker-checker bound to the hash of the figures; any change voids it; the run refuses naming each missing figure
+- [x] no money field writable via muster/attendance finalisation, tested (`attendance/__tests__/noMoney.test.ts`)
 
 ## Stage 5
 - [ ] 5.1 payslip delivery · [ ] 5.2 not-on-payroll flag · [ ] 5.3 WFH check-in/out · [ ] 5.4 bank layouts (.xls question) · [ ] 5.5 repayment batch · [ ] 5.6 loans (if missing)

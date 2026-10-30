@@ -145,6 +145,7 @@ today, for the roles that already see them; the UI pass adds none.
 | `/admin/payroll/salaries` | Employee salaries | `payroll.salary.view` | SA HA PA PP | `payroll-01` | MAPPED-PARTIAL | Amounts stay masked/permissioned as today |
 | `/admin/payroll/revisions` | Salary revisions (maker-checker) | `payroll.salary.view` / edit / approve | SA HA PA PP | `payroll-01` | MAPPED-PARTIAL | |
 | `/admin/payroll/adjustments` | Adjustments | `payroll.adjust` | SA PA | `payroll-01` | NOT IN BOARD | |
+| `/admin/payroll/monthly-inputs` | Monthly Inputs (grid, history, confirm, import a file) | `payroll.salary.edit` | SA (directors only) | none | NOT IN BOARD | Opens when the month's attendance is final; one column per head flagged "takes its value from Monthly Inputs"; figures are exact, never overwritten, confirmed by a second director |
 | `/admin/payroll/holds` | Held salaries (hold, release) | `payroll.salary.view` / edit | SA | none | NOT IN BOARD | Director-only act; shows reason and status, never an amount |
 | `/admin/payroll/run` | Payroll runs list | `payroll.run` / `payroll.approve` | SA PA PP | `payroll-01` | MAPPED-PARTIAL | |
 | `/admin/payroll/run/:id` | Payroll run (steps, preview, approval) | `payroll.run` / `payroll.approve` | SA PA PP | stepper `recruitment-09` + `payroll-02` | MAPPED-PARTIAL | Maker-checker states via ApprovalBanner; TEST watermark kept |

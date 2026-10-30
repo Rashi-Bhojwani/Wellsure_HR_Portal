@@ -31,7 +31,7 @@ export interface SegmentInput {
 export interface AdjustmentIn {
   /** Null for a year-end encashment that has not yet been turned into an adjustment row (a preview). */
   id: string | null;
-  source: "MANUAL" | "SALARY_ARREARS" | "YEAR_END_ENCASHMENT" | "IMPORT" | "LOP_REVERSAL" | "HOLD_RELEASE";
+  source: "MANUAL" | "SALARY_ARREARS" | "YEAR_END_ENCASHMENT" | "IMPORT" | "LOP_REVERSAL" | "HOLD_RELEASE" | "MONTHLY_INPUT";
   sourceRef: string | null;
   componentCode: string;
   direction: "EARNING" | "DEDUCTION";
@@ -94,7 +94,7 @@ export interface LineOut {
   code: string;
   label: string;
   kind: "EARNING" | "DEDUCTION" | "EMPLOYER_CONTRIBUTION" | "ROUNDING";
-  source: "COMPONENT" | "ADJUSTMENT" | "LOP_REVERSAL" | "HOLD_RELEASE" | "ARREARS" | "ENCASHMENT" | "PF" | "ESI" | "PT" | "LWF" | "NET_ROUNDING";
+  source: "COMPONENT" | "ADJUSTMENT" | "LOP_REVERSAL" | "HOLD_RELEASE" | "MONTHLY_INPUT" | "ARREARS" | "ENCASHMENT" | "PF" | "ESI" | "PT" | "LWF" | "NET_ROUNDING";
   sourceRef: string | null;
   amount: Money;
   basis: Record<string, unknown>;

@@ -17,7 +17,7 @@ export const ruleConfirmSchema = z.object({
 });
 
 export const checkersQuerySchema = z.object({
-  subject: z.enum(["RUN_APPROVAL", "PERIOD_FINALISE", "PAYSLIP_PUBLISH", "BANK_FILE", "PERIOD_UNLOCK", "RULE_CONFIRM", "SALARY_REVISION"]),
+  subject: z.enum(["RUN_APPROVAL", "PERIOD_FINALISE", "PAYSLIP_PUBLISH", "BANK_FILE", "PERIOD_UNLOCK", "RULE_CONFIRM", "SALARY_REVISION", "MONTHLY_INPUTS"]),
 });
 
 export const payrollAuditQuerySchema = z.object({
