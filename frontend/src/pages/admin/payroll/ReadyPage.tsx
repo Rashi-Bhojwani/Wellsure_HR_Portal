@@ -59,6 +59,9 @@ export function ReadyPage() {
             description={`${data.blockers.length} of ${data.required} required items still need something. Until every one is confirmed by a person other than the one who entered it, a real run cannot be started.`}
           />
         )}
+        {(data.warnings ?? []).map((w) => (
+          <Alert key={w.itemId} type="warning" showIcon title={`Warning (does not block the first run): ${w.title}`} description={<>{w.warning} <Link to={w.where.path}>{w.where.label}</Link></>} />
+        ))}
         <Panel>
           <Flex justify="space-between" align="center" gap={12} wrap>
             <Text type="secondary">Worked out just now ({formatDateTime(data.generatedAt)}) from what is entered. Nothing is switched on or off by hand.</Text>

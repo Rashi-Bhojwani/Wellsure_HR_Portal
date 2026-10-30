@@ -520,7 +520,14 @@ function SecuritySettingsCard() {
           </Row>
 
           <FormGroupTitle>Two-factor authentication</FormGroupTitle>
-          <Form.Item name="require2faRoles" label="Roles required to set up 2FA">
+          <SectionIntro>
+            Two-step sign-in is optional for directors: they can turn it on for their own account any time, and sign in normally without it. Directors hold full authority (they can move money and
+            see everyone&apos;s pay), so turning it on is strongly recommended before real salaries. Only a director can change the setting below.
+          </SectionIntro>
+          <Form.Item name="requireDirectorTwoFactor" label="Require two-step sign-in for directors" valuePropName="checked" extra="Off by default. When on, a director without it is asked to set it up at sign-in and cannot act until they have.">
+            <Switch checkedChildren="Required" unCheckedChildren="Optional" />
+          </Form.Item>
+          <Form.Item name="require2faRoles" label="Other roles required to set up 2FA">
             <Select mode="multiple" options={ROLE_OPTIONS} placeholder="No role requires 2FA" />
           </Form.Item>
 

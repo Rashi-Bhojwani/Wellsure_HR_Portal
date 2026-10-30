@@ -26,6 +26,8 @@ export interface SecuritySettings {
   passwordMinLength: number;
   invitationTtlHours: number;
   require2faRoles: string[];
+  /** Whether two-step sign-in is required of directors (off by default: it is optional, strongly recommended). */
+  requireDirectorTwoFactor: boolean;
   rateLimits: Record<RateLimitKey, RateLimitSetting>;
 }
 

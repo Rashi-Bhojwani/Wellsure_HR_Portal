@@ -2,7 +2,7 @@ import { RULE_CATALOG, type RuleDef } from "@shared/constants/payrollRules";
 import { DEVELOPER_ROLE_CODE, SENSITIVE_PERMISSION_KEYS } from "@shared/constants/sensitiveData";
 import { env } from "../../../config/env";
 import { businessToday } from "../../../lib/businessDate";
-import { activeDirectors, choiceFacts, twoFactorEnforced } from "../../../lib/directorAuthority";
+import { activeDirectors, choiceFacts, directorTwoFactorRequired } from "../../../lib/directorAuthority";
 import { salariesOn } from "../../../lib/effectiveDating";
 import { activeUsersHoldingPermission, resolveAccess } from "../../../lib/permissions";
 import { prisma } from "../../../lib/prisma";
@@ -178,7 +178,7 @@ async function layoutItems(): Promise<SetupItem[]> {
   return out;
 }
 
-async function safetyItems(demo: boolean): Promise<SetupItem[]> {
+async function safetyItems(_demo: boolean): Promise<SetupItem[]> {
   const out: SetupItem[] = [];
   const where = { label: "Admin Tools, Roles & Permissions", path: "/admin/admin-tools/users-roles" };
   // D2 (docs/plans/DIRECTOR_AUTHORITY.md §4.6): payroll is the two directors'. Each one is told of the other's acts, and sets the other's pay.
@@ -199,15 +199,29 @@ async function safetyItems(demo: boolean): Promise<SetupItem[]> {
     );
   }
 
-  // Every Super Admin, and anyone who somehow holds a payroll key: two-step sign-in is required of all of them, and the demo exemption never applies where it is enforced.
+  // Two-step sign-in for directors is optional (the owners' decision): this row never blocks the first real run. It is a prominent warning while any director (or anyone who holds a
+  // payroll key) has not turned it on, and says so when the owners have made it compulsory.
   const payrollHolders = new Map<string, true>(directors.map((d) => [d.userId, true] as const));
   for (const key of ["payroll.run", "payroll.approve", "payroll.identifiers.manage", "payroll.banklayout.manage", "payroll.salary.edit"]) for (const h of await activeUsersHoldingPermission(key)) payrollHolders.set(h.userId, true);
   const holders = await prisma.user.findMany({ where: { id: { in: [...payrollHolders.keys()] } }, select: { id: true, totpEnabled: true } });
   const without = holders.filter((u) => !u.totpEnabled);
   const noTwoFactor = await namesOfUsers(without.map((u) => u.id));
-  const exempt = demo && !twoFactorEnforced();
-  const twoFactorOk = exempt || without.length === 0;
-  out.push({ id: "safety:two-factor", section: "safety", title: "Every director uses two-step sign-in", why: "These people can move money and see everyone's pay. A password alone is not enough.", required: true, status: twoFactorOk ? "CONFIRMED" : "NOT_SET", enteredBy: null, confirmedBy: null, detail: exempt ? "Not enforced in the demo company." : without.length === 0 ? `All ${holders.length} have it on.` : `${without.length} do not have it on yet: ${[...noTwoFactor.values()].join(", ")}.`, where });
+  const compulsory = await directorTwoFactorRequired();
+  const twoFactorOk = without.length === 0;
+  out.push({
+    id: "safety:two-factor",
+    section: "safety",
+    title: "Directors use two-step sign-in (strongly recommended)",
+    why: "Directors hold full authority: they can move money and see everyone's pay. A password alone is a weak lock for that.",
+    required: false,
+    notRequiredReason: "Optional: directors can enrol any time and sign in normally without it.",
+    status: twoFactorOk ? "CONFIRMED" : "NOT_SET",
+    enteredBy: null,
+    confirmedBy: null,
+    detail: twoFactorOk ? `All ${holders.length} have it on.${compulsory ? " It is compulsory for directors." : ""}` : `${without.length} do not have it on yet: ${[...noTwoFactor.values()].join(", ")}.`,
+    ...(twoFactorOk ? {} : { warning: "Directors hold full authority; turning on two-step sign-in is strongly recommended before real salaries." }),
+    where,
+  });
 
   const real = env.APP_ENV === "production" || env.APP_ENV === "staging";
   const mailOk = !real || env.MAIL_DRIVER === "ses" || env.MAIL_DRIVER === "smtp";
@@ -247,8 +261,10 @@ export function readinessOf(report: SetupReport): Readiness {
   let required = 0;
   let confirmed = 0;
   const notRequiredYet: Readiness["notRequiredYet"] = [];
+  const warnings: Readiness["warnings"] = [];
   for (const section of report.sections) {
     for (const item of section.items) {
+      if (item.warning) warnings.push({ itemId: item.id, title: item.title, warning: item.warning, where: item.where });
       if (!item.required) {
         if (item.status !== "CONFIRMED") notRequiredYet.push({ itemId: item.id, title: item.title, status: item.status, reason: item.notRequiredReason ?? "Not needed for the first run." });
         continue;
@@ -269,5 +285,5 @@ export function readinessOf(report: SetupReport): Readiness {
       });
     }
   }
-  return { ready: blockers.length === 0, demo: report.demo, generatedAt: report.generatedAt, required, confirmed, blockers, notRequiredYet };
+  return { ready: blockers.length === 0, demo: report.demo, generatedAt: report.generatedAt, required, confirmed, blockers, warnings, notRequiredYet };
 }

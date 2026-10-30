@@ -970,6 +970,8 @@ export interface Readiness {
   required: number;
   confirmed: number;
   blockers: Array<{ itemId: string; section: string; sectionTitle: string; title: string; status: SetupStatus; missing: string; where: { label: string; path: string } }>;
+  /** Prominent, non-blocking: they never turn Ready red. */
+  warnings?: Array<{ itemId: string; title: string; warning: string; where: { label: string; path: string } }>;
   notRequiredYet: Array<{ itemId: string; title: string; status: SetupStatus; reason: string }>;
 }
 export interface SetupReport {

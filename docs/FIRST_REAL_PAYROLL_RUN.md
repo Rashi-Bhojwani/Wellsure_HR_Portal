@@ -23,7 +23,7 @@ Plain terms used below:
 | The person who checks payroll | Payroll Approver | Confirms what the preparer typed, approves runs and signs off people's details |
 | HR | HR Admin | Keeps employee records; does **not** see salaries or bank details unless you also give them those permissions |
 
-The checklist has an item "At least two active directors" (two Super Admin accounts). It stays red until this is true. **Go-live condition: every director must turn on two-step sign-in (Account Security) before the first real run.** The checklist row covers every director and, outside development, no exemption applies. Steps: sign in, open Account Security, choose two-step sign-in, scan the code with an authenticator app, keep the backup codes somewhere safe and separate. A director acts on their own authority by default and the other director is told of each act; the owners may switch any step's second-director check on in System Settings → Director authority.
+The checklist has an item "At least two active directors" (two Super Admin accounts). It stays red until this is true. **Strongly recommended before real salaries (optional, the owners' decision): every director turns on two-step sign-in** (Account Security), and the owners may make it compulsory (System Settings, Security, "Require two-step sign-in for directors"). Directors hold full authority; until it is on, the checklist shows a prominent warning (it does not block the first run). Steps: sign in, open Account Security, choose two-step sign-in, scan the code with an authenticator app, keep the backup codes somewhere safe and separate. A director acts on their own authority by default and the other director is told of each act; the owners may switch any step's second-director check on in System Settings → Director authority.
 
 **The developer** should have the role *Developer / operator* and nothing else. This role is cut off, in the program, from every salary, bank, identifier and layout screen. The checklist has a table, **Payroll → Setup Checklist → "Who can see and change this"**, that names every person who can see each kind of secret. Read it once before you start; if any name there surprises you, fix the roles first.
 
@@ -98,7 +98,7 @@ When all are entered, a **payroll approver who is allowed to see salaries and ba
 
 ### 1.7 Safety setup
 
-Two different people for payroll (see Section 0), two-step sign-in for all of them, real email switched on (payslip notices go out by email; with no mail driver they are only written to a file) and no developer account with access to any of the above. These are checked from the live system, not by a tick box.
+Two different people for payroll (see Section 0), two-step sign-in for all of them (strongly recommended, optional), real email switched on (payslip notices go out by email; with no mail driver they are only written to a file) and no developer account with access to any of the above. These are checked from the live system, not by a tick box.
 
 ---
 

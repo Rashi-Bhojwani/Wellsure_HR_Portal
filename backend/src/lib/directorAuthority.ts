@@ -10,7 +10,6 @@ import {
   type DirectorStep,
   type DirectorSwitchView,
 } from "@shared/constants/directorAuthority";
-import { env } from "../config/env";
 import { HttpError } from "../middleware/errorHandler";
 import { writeAuditLog } from "./audit";
 import { SUPER_ADMIN_ROLE_CODE } from "./permissions";
@@ -35,13 +34,22 @@ export async function requireDirector(userId: string, what: string, db: Db = pri
   if (!(await isDirector(userId, db))) throw new HttpError(403, `Only a director (a Super Admin) can ${what}.`, "DIRECTOR_ONLY");
 }
 
-/** Two-step sign-in is required of every director outside development (the development laptop needs no authenticator app). */
-export const twoFactorEnforced = (): boolean => env.APP_ENV !== "development";
+/**
+ * Two-step sign-in for directors is OPTIONAL. They can enrol any time and sign in normally without it. Whether it is REQUIRED of them is one setting, off by default, changeable only
+ * by a director (System Settings, Security). When it is on, a director without it cannot act on payroll, change a switch or acknowledge a notice, and must enrol at sign-in.
+ */
+export const DIRECTOR_2FA_SETTING_KEY = "auth.requireDirectorTwoFactor";
 
-export async function requireDirectorTwoFactor(userId: string, db: Db = prisma, enforced: boolean = twoFactorEnforced()): Promise<void> {
-  if (!enforced) return;
+export async function directorTwoFactorRequired(db: Db = prisma): Promise<boolean> {
+  const row = await db.systemSetting.findUnique({ where: { key: DIRECTOR_2FA_SETTING_KEY } });
+  return row?.value === true;
+}
+
+/** `enforced` overrides the setting (tests of the enforced mode); omitted, the setting decides. */
+export async function requireDirectorTwoFactor(userId: string, db: Db = prisma, enforced?: boolean): Promise<void> {
+  if (!(enforced ?? (await directorTwoFactorRequired(db)))) return;
   const user = await db.user.findUnique({ where: { id: userId }, select: { totpEnabled: true } });
-  if (!user?.totpEnabled) throw new HttpError(403, "A director's actions need two-step sign-in. Turn it on for your account first (your profile, Security), then do this again.", "DIRECTOR_2FA_REQUIRED");
+  if (!user?.totpEnabled) throw new HttpError(403, "The owners have made two-step sign-in compulsory for directors. Turn it on for your account first (your profile, Security), then do this again.", "DIRECTOR_2FA_REQUIRED");
 }
 
 // ── The choices (no default for a payroll step) ──
