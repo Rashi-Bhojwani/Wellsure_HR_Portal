@@ -43,3 +43,13 @@ describe("development database guard", () => {
     expect(maskDatabaseUrl("postgresql://user:hunter2@host:5432/db")).toBe("postgresql://user:****@host:5432/db");
   });
 });
+
+describe("every npm script that runs the Prisma CLI goes through the database guard", () => {
+  it("no script calls `prisma` (or `npx prisma`) without scripts/guard-prisma.ts in front of it", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { fileURLToPath } = await import("node:url");
+    const pkg = JSON.parse(readFileSync(fileURLToPath(new URL("../../../package.json", import.meta.url)), "utf8")) as { scripts: Record<string, string> };
+    const direct = Object.entries(pkg.scripts).filter(([, cmd]) => /(^|[\s&;|])(npx\s+)?prisma\s/.test(cmd) && cmd.trim() !== "prisma generate" /* builds the client, never touches a database */ && !cmd.startsWith("tsx scripts/guard-prisma.ts &&"));
+    expect(direct.map(([n]) => n), "these scripts call prisma without the guard").toEqual([]);
+  });
+});
