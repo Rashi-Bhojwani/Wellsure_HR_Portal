@@ -110,6 +110,36 @@ async function ruleFacts(pins: RulePin[], wanted: Set<string>): Promise<Map<stri
   return out;
 }
 
+/** The rules this person was calculated under that came from a department or employee override, with the override's own source note, dates and confirmer. */
+async function overrideFacts(runItemId: string): Promise<Map<string, WhyRule>> {
+  const item = await prisma.payrollRunItem.findUnique({ where: { id: runItemId }, select: { inputs: true } });
+  const used = ((item?.inputs as { ruleOverrides?: Array<{ rule: string; level: "DEPARTMENT" | "EMPLOYEE"; item: string; version: number; registrationRef: string | null }> } | null)?.ruleOverrides) ?? [];
+  const out = new Map<string, WhyRule>();
+  if (used.length === 0) return out;
+  const data = await loadItems("RULE_OVERRIDE", used.map((u) => u.item));
+  for (const u of used) {
+    const v = summarise(data, u.item).history.find((h) => h.version === u.version);
+    if (!v) continue;
+    const ov = v.value as { value: unknown; reason: string };
+    out.set(u.rule, {
+      key: u.rule,
+      label: RULE_BY_KEY[u.rule]?.label ?? u.rule,
+      value: ov.value,
+      version: v.version,
+      status: v.confirmation ? "CONFIRMED" : "PLACEHOLDER",
+      sourceNote: v.sourceNote || null,
+      effectiveFrom: v.effectiveFrom,
+      enteredBy: v.authorUserId ? v.authorName : null,
+      confirmedBy: v.confirmation?.confirmedByName ?? null,
+      confirmedOn: v.confirmation ? v.confirmation.confirmedAt.slice(0, 10) : null,
+      level: u.level,
+      overridden: true,
+      registrationRef: u.registrationRef,
+    });
+  }
+  return out;
+}
+
 export interface PayslipWhy {
   payslipId: string;
   cycleLabel: string;
@@ -124,6 +154,7 @@ export async function whyForPayslip(payslip: { id: string; runItemId: string; ru
   const showsEmployer = ((payslip.content as PayslipContent).employerContributions ?? []).length > 0;
   const wanted = new Set(Object.values(RULES_FOR_SOURCE).flat());
   const facts = await ruleFacts(pins, wanted);
+  for (const [k, f] of await overrideFacts(payslip.runItemId)) if (wanted.has(k)) facts.set(k, f);
   const out: WhyLine[] = [];
   for (const l of lines) {
     if (l.kind === "EMPLOYER_CONTRIBUTION" && !showsEmployer) continue;

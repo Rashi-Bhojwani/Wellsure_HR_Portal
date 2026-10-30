@@ -102,6 +102,7 @@ const ComponentsPage = lazyPage(() => import("../pages/admin/payroll/ComponentsP
 const StructuresPage = lazyPage(() => import("../pages/admin/payroll/StructuresPage"), "StructuresPage");
 const EmployeeSalariesPage = lazyPage(() => import("../pages/admin/payroll/EmployeeSalariesPage"), "EmployeeSalariesPage");
 const SalaryRevisionsPage = lazyPage(() => import("../pages/admin/payroll/SalaryRevisionsPage"), "SalaryRevisionsPage");
+const RuleOverridesPage = lazyPage(() => import("../pages/admin/payroll/RuleOverridesPage"), "RuleOverridesPage");
 const HeldSalariesPage = lazyPage(() => import("../pages/admin/payroll/HeldSalariesPage"), "HeldSalariesPage");
 const AdjustmentsPage = lazyPage(() => import("../pages/admin/payroll/AdjustmentsPage"), "AdjustmentsPage");
 const PayrollRunsPage = lazyPage(() => import("../pages/admin/payroll/PayrollRunsPage"), "PayrollRunsPage");
@@ -330,6 +331,7 @@ export const adminApps: AdminApp[] = [
           { key: "payroll-setup", label: "Setup Checklist", path: "payroll/setup", icon: CheckSquareOutlined, element: SetupChecklistPage, needs: PAYROLL_NEEDS },
           { key: "payroll-ready", label: "Ready for First Run", path: "payroll/ready", icon: SafetyOutlined, element: ReadyPage, needs: PAYROLL_NEEDS },
           { key: "payroll-rules", label: "Rules and Setup", path: "payroll/rules", icon: SafetyCertificateOutlined, element: RulesPage, needs: PAYROLL_NEEDS },
+          { key: "payroll-overrides", label: "Rule Overrides", path: "payroll/overrides", icon: ApartmentOutlined, element: RuleOverridesPage, needs: PAYROLL_NEEDS },
           { key: "salary-components", label: "Salary Components", path: "payroll/components", icon: SettingOutlined, element: ComponentsPage, needs: PAYROLL_NEEDS },
           { key: "salary-structures", label: "Salary Structures", path: "payroll/structures", icon: PartitionOutlined, element: StructuresPage, needs: PAYROLL_NEEDS },
           { key: "employee-salaries", label: "Employee Salaries", path: "payroll/salaries", icon: WalletOutlined, element: EmployeeSalariesPage, needs: PAYROLL_NEEDS },

@@ -9,6 +9,7 @@ import { ZERO, canonicalDecimal, dec, sum, type Money } from "../money";
 import type { RuleContext, RulePin } from "../rules/context";
 import type { ComponentValue } from "../salary/schemas";
 import { iso } from "./days";
+import { loadOverrideItems, resolveOverrides } from "../rules/overrides";
 import type { RuleNeeds } from "./rules";
 import { contributionPeriodStart } from "./statutory";
 import type { AdjustmentIn, ComponentLookup, CycleSpan, PersonInput, SegmentInput } from "./types";
@@ -90,6 +91,7 @@ export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promi
   }
   const holdRows = await prisma.payrollSalaryHold.findMany({ where: { cycleStart: cycle.start, release: null, employeeId: { in: employees.map((e) => e.id) } }, select: { employeeId: true, reason: true } });
   const holdBy = new Map(holdRows.map((h) => [h.employeeId, h.reason]));
+  const overrideItems = await loadOverrideItems();
   const placements = new Map<string, PayrollPlacement>();
   for (const [day, group] of idsByDay) for (const [id, p] of await payrollPlacementsOn(group, new Date(`${day}T00:00:00Z`))) placements.set(id, p);
 
@@ -245,11 +247,16 @@ export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promi
       placement: placements.get(e.id) ?? null,
       placementDay: placementDayOf(span),
       hasBankAccount: paymentDate ? bank.has(e.id) : true,
+      ruleOverrides: [...resolveOverrides(overrideItems, { employeeId: e.id, departmentId: placements.get(e.id)?.departmentId ?? null }, iso(cycle.end)).values()].map((o) => ({ ruleKey: o.ruleKey, level: o.level, itemKey: o.itemKey, version: o.version, valueHash: o.valueHash, value: o.value, registrationRef: o.registrationRef })),
       directorHold: holdBy.has(e.id) ? { reason: holdBy.get(e.id)! } : null,
       adjustments,
       esiPeriodStartEntitlement,
     });
   }
+  // Every override a person was calculated under is pinned live: a run that used a Placeholder override is a test run, and editing an override makes the run stale.
+  const usedOverrides = new Map<string, { itemKey: string; version: number; valueHash: string }>();
+  for (const p of people) for (const o of p.ruleOverrides ?? []) usedOverrides.set(`${o.itemKey}|${o.version}`, o);
+  for (const o of usedOverrides.values()) ctx.addLivePin({ kind: "RULE_OVERRIDE", key: o.itemKey, version: o.version, valueHash: o.valueHash });
   return { cycle, payrollMonth, payrollYear, paymentDate, people, components, needs: { arrears, encashment, reversals }, componentHashes, encashmentsNotThisCycle };
 }
 
@@ -270,6 +277,7 @@ export function inputsFingerprint(inputs: RunInputs): string {
       placement: p.placement ? [p.placement.locationId, p.placement.locationState, p.placement.departmentId, p.placement.gradeId, p.placement.costCentreId] : null,
       bank: p.hasBankAccount,
       ...(p.directorHold ? { held: true } : {}),
+      ...(p.ruleOverrides && p.ruleOverrides.length > 0 ? { overrides: p.ruleOverrides.map((o) => [o.itemKey, o.version, o.valueHash]) } : {}),
       adjustments: p.adjustments.map((a) => [a.id, a.source, a.sourceRef, a.componentCode, a.direction, canonicalDecimal(a.amount)]),
       esi: p.esiPeriodStartEntitlement ? canonicalDecimal(p.esiPeriodStartEntitlement) : null,
     })),

@@ -4,6 +4,7 @@ import { payrollHash } from "../hash";
 import { ZERO, canonicalDecimal, intDec, sum, type Money } from "../money";
 import { applyShare } from "../salary/arrears";
 import type { ComponentValue } from "../salary/schemas";
+import { applyRuleOverrides } from "./rules";
 import { computeDayFigures, countDays, iso, segmentFactor, type DayFigures } from "./days";
 import { computeEsi, computeLwf, computePf, computePt, resolveState, roundByRule } from "./statutory";
 import type { AdjustmentIn, CalcContext, ExceptionOut, ItemOut, LineOut, PersonInput } from "./types";
@@ -60,7 +61,8 @@ function excluded(input: PersonInput, reason: HoldReason, detail: string, inputs
 const listDates = (dates: readonly string[]) => (dates.length <= 5 ? dates.join(", ") : `${dates.slice(0, 5).join(", ")} and ${dates.length - 5} more`);
 
 export function calculatePerson(input: PersonInput, ctx: CalcContext): ItemOut {
-  const { rules } = ctx;
+  // The company's rules, with this person's department or employee overrides laid over the parameters they name.
+  const rules = applyRuleOverrides(ctx.rules, input.ruleOverrides);
   const digest = payrollHash(input.days.map((d) => [iso(d.date), d.status, c(d.lopDays)]));
   const baseInputs: Record<string, unknown> = {
     cycle: { start: iso(ctx.cycle.start), end: iso(ctx.cycle.end), label: ctx.cycle.label },
@@ -168,6 +170,7 @@ export function calculatePerson(input: PersonInput, ctx: CalcContext): ItemOut {
 
   // ── PF ──
   const inputsOut: Record<string, unknown> = { ...baseInputs };
+  if (input.ruleOverrides && input.ruleOverrides.length > 0) inputsOut.ruleOverrides = input.ruleOverrides.map((o) => ({ rule: o.ruleKey, level: o.level, item: o.itemKey, version: o.version, hash: o.valueHash, registrationRef: o.registrationRef }));
   const statutoryDeductions: LineOut[] = [];
   const pfCovered = rules.pf.eligibleTypes.includes(input.employmentType);
   if (!pfCovered) notices.push(`Provident fund does not apply to ${input.employmentType.toLowerCase()} staff under the rule "PF: employment types covered".`);

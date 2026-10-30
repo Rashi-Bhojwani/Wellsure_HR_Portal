@@ -148,3 +148,27 @@ export const RULE_CATALOG: readonly RuleDef[] = [
 export const RULE_KEYS = RULE_CATALOG.map((r) => r.key);
 export const RULE_BY_KEY: Record<string, RuleDef> = Object.fromEntries(RULE_CATALOG.map((r) => [r.key, r]));
 export const SHIPPED_PLACEHOLDER_KEYS = RULE_CATALOG.filter((r) => r.placeholder !== undefined).map((r) => r.key);
+
+// ── Stage 3.4: the rule hierarchy. Company default (the rule itself) → department override → employee override; the most specific wins. ──
+// Only the parameters of PF, ESI, professional tax and labour welfare fund can be overridden. Coverage, voluntary contribution and the tax regime are ordinary
+// per-person choices, not overrides; rounding, state mapping and payment choices stay company-wide.
+export const OVERRIDABLE_RULE_KEYS = [
+  "PF_EMPLOYEE_RATE",
+  "PF_EPS_RATE",
+  "PF_EPF_ER_RATE",
+  "PF_EDLI_RATE",
+  "PF_ADMIN_RATE",
+  "PF_WAGE_CEILING",
+  "PF_CEILING_MODE",
+  "PF_ELIGIBLE_TYPES",
+  "ESI_EMPLOYEE_RATE",
+  "ESI_EMPLOYER_RATE",
+  "ESI_WAGE_CEILING",
+  "ESI_PERIOD_RULE",
+  "ESI_ELIGIBLE_TYPES",
+  "PT_SLABS",
+  "LWF_TABLE",
+] as const;
+export type OverridableRuleKey = (typeof OVERRIDABLE_RULE_KEYS)[number];
+export const OVERRIDE_LEVELS = ["DEPARTMENT", "EMPLOYEE"] as const;
+export type OverrideLevel = (typeof OVERRIDE_LEVELS)[number];

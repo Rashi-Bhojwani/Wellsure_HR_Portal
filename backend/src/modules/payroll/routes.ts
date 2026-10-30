@@ -13,7 +13,7 @@ import { employeeSalaryQuerySchema } from "./salary/employees";
 import { ruleGate, layoutGate } from "./gates";
 import * as setup from "./setup/controller";
 import { compareRegistersRoute, compareUpload } from "./compare/controller";
-import { setupAreaParamsSchema, setupSignoffSchema, checkersQuerySchema, payrollAuditQuerySchema, ruleConfirmSchema, ruleEditPreviewSchema, ruleEditSchema, ruleKeyParamsSchema } from "./validators";
+import { overrideKeyParamsSchema, overridePreviewSchema, overrideSaveSchema, setupAreaParamsSchema, setupSignoffSchema, checkersQuerySchema, payrollAuditQuerySchema, ruleConfirmSchema, ruleEditPreviewSchema, ruleEditSchema, ruleKeyParamsSchema } from "./validators";
 
 // Payroll. Every route here is gated on keys a manager can never hold (a test fails if any becomes manager-grantable) and none has a TEAM scope:
 // payroll data is ALL or nothing. Nothing here moves money.
@@ -22,6 +22,12 @@ payrollRouter.use(authenticate);
 
 // Rules and setup (P6-1)
 payrollRouter.get("/rules", requirePermission("payroll.rules.view"), controller.rules);
+payrollRouter.get("/rule-overrides", requirePermission("payroll.rules.view"), controller.overrides);
+payrollRouter.post("/rule-overrides/preview", requirePermission("payroll.rules.manage"), validate({ body: overridePreviewSchema }), controller.overridePreview);
+payrollRouter.put("/rule-overrides", requirePermission("payroll.rules.manage"), validate({ body: overrideSaveSchema }), controller.overrideSave);
+payrollRouter.get("/rule-overrides/:key/history", requirePermission("payroll.rules.view"), validate({ params: overrideKeyParamsSchema }), controller.overrideHistory);
+payrollRouter.post("/rule-overrides/:key/confirm-preview", requirePermission("payroll.rules.confirm"), validate({ params: overrideKeyParamsSchema }), controller.overrideConfirmPreview);
+payrollRouter.post("/rule-overrides/:key/confirm", requirePermission("payroll.rules.confirm"), validate({ params: overrideKeyParamsSchema, body: ruleConfirmSchema }), controller.overrideConfirm);
 payrollRouter.get("/rules/:key", requirePermission("payroll.rules.view"), validate({ params: ruleKeyParamsSchema }), controller.rule);
 payrollRouter.post("/rules/:key/edit-preview", ruleGate("manage"), validate({ params: ruleKeyParamsSchema, body: ruleEditPreviewSchema }), controller.editPreview);
 payrollRouter.put("/rules/:key", ruleGate("manage"), validate({ params: ruleKeyParamsSchema, body: ruleEditSchema }), controller.edit);

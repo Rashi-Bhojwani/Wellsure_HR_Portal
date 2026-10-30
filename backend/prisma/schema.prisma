@@ -2449,6 +2449,7 @@ model LeaveDayRelease {
 // Actor columns are plain text, not foreign keys: nothing that happens to a user can alter these rows (as for audit_logs).
 enum PayrollItemKind {
   RULE
+  RULE_OVERRIDE
   COMPONENT
   STRUCTURE
   BANK_TEMPLATE

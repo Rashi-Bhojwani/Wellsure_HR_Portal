@@ -139,6 +139,7 @@ today, for the roles that already see them; the UI pass adds none.
 | `/admin/payroll/setup` | Setup checklist | `payroll.rules.view` | SA HA PA PP DEV | `checklist-03` | NOT IN BOARD | Progress rows |
 | `/admin/payroll/ready` | Ready for first run | `payroll.run` / view | SA PA PP | `checklist-09` | NOT IN BOARD | |
 | `/admin/payroll/rules` | Rules and setup (maker-checker) | `payroll.rules.view` (manage/confirm) | SA HA PA PP DEV | `payroll-04`/`05` | MAPPED-PARTIAL | Confirm never optimistic |
+| `/admin/payroll/overrides` | Rule overrides (department, person) | `payroll.rules.view` / manage / confirm | SA | none | NOT IN BOARD | Placeholder until a different director confirms by retyping; shows source note, dates and reason |
 | `/admin/payroll/components` | Salary components | `payroll.rules.view` | SA HA PA PP | `settings-05` | NOT IN BOARD | |
 | `/admin/payroll/structures` | Salary structures | `payroll.rules.view` | SA HA PA PP | `payroll-04` | NOT IN BOARD | |
 | `/admin/payroll/salaries` | Employee salaries | `payroll.salary.view` | SA HA PA PP | `payroll-01` | MAPPED-PARTIAL | Amounts stay masked/permissioned as today |

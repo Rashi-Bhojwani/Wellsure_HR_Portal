@@ -4,6 +4,7 @@ import { checkerAvailability } from "./approvals";
 import { confirmRule, editRule, getRule, listRules, previewConfirm, previewEdit, revealRule } from "./rules/governed";
 import "./rules/governed"; // registers the RULE_CONFIRM maker-checker subject
 
+import { confirmOverride, getOverrideHistory, listOverrides, previewOverride, previewOverrideConfirm, saveOverride, type OverrideInput } from "./rules/overrides";
 const actor = (req: Request) => ({ userId: req.user!.userId, ip: req.ip ?? null, userAgent: req.get("user-agent") ?? null });
 const key = (req: Request) => req.params.key as string;
 
@@ -38,3 +39,17 @@ export async function checkers(req: Request, res: Response): Promise<void> {
 export async function audit(req: Request, res: Response): Promise<void> {
   res.status(200).json(await listAuditLogs(req.query as never, { canSeePayroll: true, onlyPayroll: true }));
 }
+
+// ── Stage 3.4: department and employee overrides ──
+export const overrides = async (_req: Request, res: Response): Promise<void> => void res.status(200).json({ overrides: await listOverrides() });
+export const overrideHistory = async (req: Request, res: Response): Promise<void> => void res.status(200).json({ history: await getOverrideHistory(req.params.key as string) });
+export const overridePreview = async (req: Request, res: Response): Promise<void> => void res.status(200).json(await previewOverride((req.body as { input: OverrideInput }).input, req.user!.userId));
+export const overrideSave = async (req: Request, res: Response): Promise<void> => {
+  const b = req.body as { input: OverrideInput; fingerprint: string };
+  res.status(200).json(await saveOverride(b.input, b.fingerprint, actor(req)));
+};
+export const overrideConfirmPreview = async (req: Request, res: Response): Promise<void> => void res.status(200).json(await previewOverrideConfirm(req.params.key as string, req.user!.userId));
+export const overrideConfirm = async (req: Request, res: Response): Promise<void> => {
+  await confirmOverride(req.params.key as string, req.body as { version: number; typedValue?: unknown; note: string; fingerprint: string }, actor(req));
+  res.status(200).json({ ok: true });
+};

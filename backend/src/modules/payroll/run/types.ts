@@ -69,6 +69,8 @@ export interface PersonInput {
   hasBankAccount: boolean;
   /** A director has held this person's salary for this cycle and not released it: they are calculated but not payable. */
   directorHold?: { reason: string } | null;
+  /** The department or employee overrides that apply to this person on the cycle's last day, by rule key (Stage 3.4). Absent or empty: the company's rules stand. */
+  ruleOverrides?: Array<{ ruleKey: string; level: "DEPARTMENT" | "EMPLOYEE"; itemKey: string; version: number; valueHash: string; value: unknown; registrationRef: string | null }>;
   adjustments: AdjustmentIn[];
   /** Under a half-year ESI rule: the full-month ESI-applicable entitlement at the start of the contribution period (or at joining, if later). Null otherwise. */
   esiPeriodStartEntitlement: Money | null;

@@ -480,6 +480,58 @@ export interface HoldRow {
 export const listHolds = async (status?: "HELD" | "RELEASED") => (await get<{ holds: HoldRow[] }>("/holds", status ? { status } : undefined)).holds;
 export const addHold = (input: { employeeId: string; cycleStart: string; reason: string }) => post<{ id: string }>("/holds", { input });
 export const releaseHold = (id: string, note: string) => post<{ id: string; adjustmentId: string | null }>(`/holds/${id}/release`, { input: { note } });
+export interface RuleOverrideView {
+  itemKey: string;
+  ruleKey: string;
+  ruleLabel: string;
+  level: "DEPARTMENT" | "EMPLOYEE";
+  targetId: string;
+  targetName: string;
+  value: unknown;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  version: number;
+  status: ItemStatus;
+  sourceLabel: string | null;
+  sourceNote: string;
+  reason: string;
+  registrationRef: string | null;
+}
+export interface RuleOverrideInput {
+  ruleKey: string;
+  level: "DEPARTMENT" | "EMPLOYEE";
+  targetId: string;
+  value: unknown;
+  effectiveFrom: string;
+  effectiveTo?: string | null;
+  reason: string;
+  sourceNote: string;
+  registrationRef?: string | null;
+}
+export interface RuleOverridePreview {
+  key: string;
+  isNew: boolean;
+  unchanged: boolean;
+  willResetConfirmation: boolean;
+  impact: string;
+  fingerprint: string;
+}
+export interface RuleOverrideConfirmPreview {
+  key: string;
+  version: number;
+  value: { ruleKey: string; level: string; targetId: string; value: unknown; effectiveFrom: string; effectiveTo: string | null; reason: string; registrationRef: string | null };
+  authorName: string;
+  sourceLabel: string | null;
+  sourceNote: string;
+  blocked: string | null;
+  checkers: CheckerAvailability;
+  fingerprint: string;
+}
+export const listRuleOverrides = async () => (await get<{ overrides: RuleOverrideView[] }>("/rule-overrides")).overrides;
+export const previewRuleOverride = (input: RuleOverrideInput) => post<RuleOverridePreview>("/rule-overrides/preview", { input });
+export const saveRuleOverride = (input: RuleOverrideInput, fingerprint: string) => put<RuleOverrideView>("/rule-overrides", { input, fingerprint });
+export const previewRuleOverrideConfirm = (key: string) => post<RuleOverrideConfirmPreview>(`/rule-overrides/${key}/confirm-preview`);
+export const confirmRuleOverride = (key: string, body: { version: number; typedValue: unknown; note: string; fingerprint: string }) => post<{ ok: true }>(`/rule-overrides/${key}/confirm`, body);
 export const cancelAdjustment = (id: string, reason: string) => post<{ ok: true }>(`/adjustments/${id}/cancel`, { reason });
 export const previewCancelScheduled = (input: { employeeId: string; salaryId: string; note?: string }) => post<CancelPreview>("/salary/revisions/cancel-preview", { input });
 export const createCancelScheduled = (input: { employeeId: string; salaryId: string; note?: string }, fingerprint: string) => post<{ id: string }>("/salary/revisions/cancel", { input, fingerprint });
