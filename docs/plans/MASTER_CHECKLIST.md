@@ -45,6 +45,9 @@ pause only at CHECKPOINT 1 (after Stage 2), CHECKPOINT 2 (after P7-3) and stop c
 - [x] 3.5 property/boundary/mutation tests — this commit
 - [x] Stage 3 walkthrough (both directors, HR, employee; phone width and dark theme) — see STAGE_REPORTS.md
 
+## Fix-ups after the Stage 3 review
+- [x] 0.1 dump.rdb untracked and ignored · [x] 0.2 .env checked, prisma guard · [x] 0.3 CI read · [x] 0.4 flaky tests · [x] 0.5 owner decisions applied · [x] 0.6 samples read · [x] 0.7 decisions table
+
 ## Stage 4 — Monthly inputs
 - [ ] grid, history, Excel import (needs the sample template — not in repo, see WAITING)
 - [ ] no money field writable via muster/attendance finalisation, tested
