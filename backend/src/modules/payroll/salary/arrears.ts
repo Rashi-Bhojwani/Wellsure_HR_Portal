@@ -53,6 +53,8 @@ export interface ArrearsLine {
 }
 
 export interface CycleArrears {
+  /** Heads whose new-minus-old was NOT paid because arrear-on-arrear is off and they are worked out from another head. Shown so nobody is surprised. */
+  leftOut?: string[];
   cycleStart: Date;
   cycleEnd: Date;
   cycleLabel: string;
@@ -72,6 +74,11 @@ export interface ArrearsInput {
   lockedCycles: readonly Cycle[];
   rounding: RoundingRule & { mode: Exclude<RoundingRule["mode"], "NONE"> };
   provider: ArrearsBasisProvider;
+  /**
+   * Heads that are worked out from another head (a percentage or formula of it, a table keyed by it, or the balance). With arrear-on-arrear ON they get arrears
+   * like any head, because their new amount already includes the base head's rise; OFF, they get none and are reported as left out. Absent means ON.
+   */
+  dependentHeads?: ReadonlySet<string>;
 }
 
 /** The arrears a revision owes, cycle by cycle. A cycle where the lines cancel out (or nothing changed) owes nothing and is left out. */
@@ -86,7 +93,12 @@ export async function computeArrears(input: ArrearsInput): Promise<CycleArrears[
       throw new HttpError(409, `${cycle.label} is closed, but there is no finalised payroll run on record showing what this person was paid in it, and arrears are worked out from what was actually paid. The revision itself is fine: it is waiting only on payroll runs being finalised for that month.`, "ARREARS_BASIS_UNAVAILABLE", { cycle: cycle.label, employeeId: input.employeeId });
     }
     const lines: ArrearsLine[] = [];
+    const leftOut: string[] = [];
     for (const component of codes) {
+      if (input.dependentHeads?.has(component)) {
+        if (!(input.next.get(component) ?? ZERO).minus(input.old.get(component) ?? ZERO).isZero()) leftOut.push(component);
+        continue;
+      }
       const diff = (input.next.get(component) ?? ZERO).minus(input.old.get(component) ?? ZERO);
       if (diff.isZero()) continue;
       const amount = roundTo(applyShare(diff, input.prorates.get(component) ?? true, share), input.rounding.scale, input.rounding.mode);
@@ -94,7 +106,7 @@ export async function computeArrears(input: ArrearsInput): Promise<CycleArrears[
     }
     const total = sum(lines.map((l) => l.amount));
     if (lines.length === 0 || total.isZero()) continue;
-    out.push({ cycleStart: cycle.start, cycleEnd: cycle.end, cycleLabel: cycle.label, lines, total });
+    out.push({ cycleStart: cycle.start, cycleEnd: cycle.end, cycleLabel: cycle.label, lines, total, ...(leftOut.length ? { leftOut } : {}) });
   }
   return out;
 }
@@ -115,4 +127,4 @@ export async function lockedCyclesFrom(rules: CycleRule[], effectiveFrom: Date, 
   return out;
 }
 
-export const arrearsToJson = (c: CycleArrears) => ({ cycleStart: c.cycleStart.toISOString().slice(0, 10), cycleEnd: c.cycleEnd.toISOString().slice(0, 10), total: canonicalDecimal(c.total), lines: c.lines.map((l) => ({ component: l.component, amount: canonicalDecimal(l.amount) })) });
+export const arrearsToJson = (c: CycleArrears) => ({ cycleStart: c.cycleStart.toISOString().slice(0, 10), cycleEnd: c.cycleEnd.toISOString().slice(0, 10), total: canonicalDecimal(c.total), lines: c.lines.map((l) => ({ component: l.component, amount: canonicalDecimal(l.amount) })), ...(c.leftOut ? { leftOut: c.leftOut } : {}) });

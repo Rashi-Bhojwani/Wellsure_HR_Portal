@@ -191,6 +191,11 @@ function safeIdentifiers(formula: string): string[] {
   }
 }
 
+/** The lines of a structure that are worked out from another line (a percentage, formula or table that reads one, or the balance). */
+export function dependentHeads(structure: StructureValue): Set<string> {
+  return new Set(calculationOrder(structure).filter((s) => s.dependsOn.some((d) => d !== "CTC" && d !== "ANNUAL_CTC")).map((s) => s.component));
+}
+
 export interface CalculationStep {
   component: string;
   /** Position in the order the lines are worked out (1 first). */

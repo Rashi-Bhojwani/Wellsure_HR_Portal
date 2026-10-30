@@ -6,7 +6,7 @@ import { prisma } from "../../../lib/prisma";
 import { app, authHeader } from "../../employee/__tests__/employeeTestHelpers";
 import { ZERO, dec, intDec, type Money } from "../money";
 import { applyShare, computeArrears, lockedCyclesFrom, setArrearsBasisProvider, type ArrearsBasisProvider } from "../salary/arrears";
-import { FIRST_SALARY_DAY, buildSalaryWorld, giveSalary, teardownSalaryWorld, type SalaryWorld } from "./salaryTestHelpers";
+import { FIRST_SALARY_DAY, buildSalaryWorld, giveSalary, setRule, teardownSalaryWorld, type SalaryWorld } from "./salaryTestHelpers";
 
 // Arrears on a back-dated revision. The payroll lock and the record of what each person was paid are the seams the calculation commit fills in; here
 // they are faked, so the arithmetic and the rules around it are proved now.
@@ -117,7 +117,20 @@ describe("a back-dated revision, end to end", () => {
     expect((await salaryHistory(e.employeeId)).length).toBe(1);
   });
 
+  it("is refused, naming the rule, while 'arrear on arrear' is Not set: nothing is guessed about dependent heads", async () => {
+    const e = w.staff[0]!;
+    lockThroughAugust();
+    setArrearsBasisProvider(calendarProvider);
+    const input = raise(e.employeeId, "1320000", "2026-07-16");
+    const p = await api(w.tokens.maker).post("/salary/revisions/preview", { input });
+    expect(p.body.canSubmit).toBe(false);
+    expect(p.body.blockers.join(" ")).toMatch(/Arrears: arrear on arrear/);
+    expect(p.body.blockers.filter((b: string) => /arrear on arrear/.test(b))).toHaveLength(1); // once, not once per person
+    expect((await api(w.tokens.maker).post("/salary/revisions", { input, fingerprint: p.body.fingerprint })).body.error.code).toBe("REVISION_BLOCKED");
+  });
+
   it("is written with its true date inside the finalised period, pays the difference as pending arrears per cycle, and each arrears line can exist once", async () => {
+    await setRule(w.maker.userId, "ARREAR_ON_ARREAR", true);
     const e = w.staff[1]!;
     lockThroughAugust();
     setArrearsBasisProvider(calendarProvider);
@@ -179,5 +192,42 @@ describe("a back-dated revision, end to end", () => {
         writeSalaryChange(tx, e.employeeId, d("2026-08-10"), { reason: "REVISION", annualCtc: "1", monthlyCtc: "1", structureKey: "S", structureVersion: 1, structureHash: "h", roundingPin: {}, revisionId: null, note: "", lines: [] }, { createdByUserId: w.maker.userId }),
       ),
     ).rejects.toMatchObject({ code: "PAYROLL_LOCKED" });
+  });
+
+  it("with arrear-on-arrear OFF, heads worked out from another head get no arrears and are reported as left out", async () => {
+    await setRule(w.maker.userId, "ARREAR_ON_ARREAR", false);
+    const e = w.staff[0]!;
+    lockThroughAugust();
+    setArrearsBasisProvider(calendarProvider);
+    const p = await api(w.tokens.maker).post("/salary/revisions/preview", { input: raise(e.employeeId, "1320000", "2026-07-16") });
+    expect(p.status, JSON.stringify(p.body)).toBe(200);
+    expect(p.body.blockers).toEqual([]);
+    const arrears = p.body.people[0].arrears;
+    expect(arrears.map((a: { cycle: string; total: string }) => [a.cycle, a.total])).toEqual([["Jul 2026", "2065"], ["Aug 2026", "4000"]]); // basic only
+    expect(arrears[0].lines.map((l: { component: string }) => l.component)).toEqual([w.basic]);
+    expect(arrears[0].leftOut.sort()).toEqual([w.hra, w.special].sort());
+    await setRule(w.maker.userId, "ARREAR_ON_ARREAR", true);
+    const on = await api(w.tokens.maker).post("/salary/revisions/preview", { input: raise(e.employeeId, "1320000", "2026-07-16") });
+    expect(on.body.people[0].arrears[1].total).toBe("10000"); // back ON: every head
+    expect(on.body.people[0].arrears[0].leftOut).toBeUndefined();
+  });
+});
+
+describe("heads worked out from another head (pure)", () => {
+  const amounts = (o: Record<string, string>) => new Map(Object.entries(o).map(([k, v]) => [k, dec(v)] as [string, Money]));
+  const input = { employeeId: "e", old: amounts({ BASIC: "40000", HRA: "20000" }), next: amounts({ BASIC: "44000", HRA: "22000" }), prorates: new Map([["BASIC", true], ["HRA", true]]), rounding, provider: calendarProvider, effectiveFrom: d("2026-08-01"), lockedCycles: [AUGUST] };
+
+  it("ON (nothing excluded) pays every head; OFF leaves a dependent head out and says so", async () => {
+    const on = await computeArrears(input);
+    expect(on[0]!.lines.map((l) => l.component)).toEqual(["BASIC", "HRA"]);
+    const off = await computeArrears({ ...input, dependentHeads: new Set(["HRA"]) });
+    expect(off[0]!.lines.map((l) => l.component)).toEqual(["BASIC"]);
+    expect(off[0]!.total.toString()).toBe("4000");
+    expect(off[0]!.leftOut).toEqual(["HRA"]);
+  });
+
+  it("a dependent head that did not change is not reported as left out", async () => {
+    const off = await computeArrears({ ...input, next: amounts({ BASIC: "44000", HRA: "20000" }), dependentHeads: new Set(["HRA"]) });
+    expect(off[0]!.leftOut).toBeUndefined();
   });
 });
