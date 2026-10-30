@@ -170,3 +170,59 @@ exactly one payroll/F&F adjustment per recovery; approval is not settlement. Und
 A missing or disputed acknowledgement creating an HR task (needs a source in the shared tasks inbox); IMEI/SIM identifiers beyond the serial;
 spreadsheet import of assets and current allocations; an Assets tab on the employee profile (`GET /api/assets/employees/:employeeId` exists for it);
 the recovery workflow above.
+
+---
+
+## Scope change D-28 / D-29 and Pair 1 — STOPPED at the framework check (2026-10-30)
+
+**Why I stopped.** The prompt says: add the Founder's Office role and its switches only inside PEEPS blocks, do not change the switch framework,
+and "if the framework cannot take them additively, STOP and report". It cannot. Nothing in Pair 1 was built, and Step 0's Assets changes were not
+made either, because they depend on the new role (the Founder's Office manages the register). No application code changed in this stage.
+
+### Step 0, part 1: the Assets results (done before this prompt, re-checked)
+- Full backend suite run alone after merging `093de72`: **178 files, 1,737 tests, all passed** (recorded in `923a0de`).
+- CI run 206 on `e929962`: green on every job (recorded in `923a0de`). `923a0de` itself is docs only.
+- The base has moved since (`76b4da2`, `d875811`: Session A's Stage 3.1b/3.2). Not merged in this stage, because nothing was built; the next build stage
+  merges it first.
+
+### What the switch framework can and cannot take (facts from the code at `923a0de`, identical to the base)
+| Place | What it does | Why a Founder's Office switch does not fit additively |
+|---|---|---|
+| `backend/src/lib/permissions.ts` `resolveAccess` | Calls `applyCapabilities(…)` **only inside the branch for people holding `HR_ADMIN`/`HR_EXECUTIVE`** | A Founder's Office holder who is not HR never reaches the call, so no switch would ever apply to them. Making it apply means editing the resolver. |
+| `backend/src/lib/hrCapabilities.ts` `switchRowsFor` | Returns `[]` (no query) for anyone without an HR role | Same: Founder's Office rows would never be read. |
+| `backend/src/lib/hrCapabilities.ts` `capabilityState` / `applyCapabilities` | Role-level rows only count for HR roles; **every** entry of `HR_CAPABILITIES` is applied to **every** HR holder | Adding Founder's Office entries to `HR_CAPABILITIES` (the only additive spot) would make them HR duties too: they would appear on "What HR Can Do" and switching them ON would give HR the Founder's Office keys. |
+| `hr_capability_switches` table (Session A's migrations) | CHECK constraints: `subject_key IN ('HR_ADMIN','HR_EXECUTIVE')` for role rows, and a fixed list of capability names | A Founder's Office capability or role row is refused by the database. Changing the constraints alters a table Session A owns. |
+| `modules/hrCapabilities/validators.ts`, `service.ts` | `roleCode: z.enum(["HR_ADMIN","HR_EXECUTIVE"])`; holders listed are HR role holders | The API and screen cannot address the Founder's Office. |
+
+### Options for the owners (my recommendation first; nothing chosen)
+1. **(Recommended) A Peeps-owned switch store for the Founder's Office, applied through per-person permission overrides.** New append-only
+   table `founders_office_switches` in my module (capability, state, effective-from, reason, director, confirming director), a "What the Founder's
+   Office can do" screen for directors, and an applier that writes/removes ordinary `user_permission_overrides` (GRANT/REVOKE) for the appointed
+   person — which `resolveAccess` already honours. No change to the resolver, the HR framework, its table or its screen. Costs: a future-dated
+   switch or appointment needs a small scheduled job to apply it at its time; the overrides are visible on the Roles & Permissions screen (I would
+   mark their reason "set by Founder's Office switch" and a test would detect drift); re-appointment moves the overrides from the old person to
+   the new one in one transaction.
+2. **Session A generalises their framework** (role rows for `FOUNDERS_OFFICE`, a second capability list applied to Founder's Office holders,
+   the CHECK constraints and validators widened). Cleanest single mechanism; the work and the files are Session A's.
+3. **One additive hook in `resolveAccess`** (a PEEPS block calling a Peeps applier for Founder's Office holders). Small, but it edits the one
+   place access is computed, which I listed as "not mine by caution"; needs your explicit permission.
+4. **Service-level checks only** (the role holds the Peeps keys; each Peeps service reads the switch table before acting). No shared change, but
+   menus, sockets and search would not follow a switch automatically the way they do for HR.
+
+### Proposed Assets changes for D-28 / D-29 (Step 0, to build once the role exists)
+| Today (built) | Proposed |
+|---|---|
+| HR Executive and HR Admin hold `assets.view` + `assets.manage` (role defaults + migration) | Register managed by the **Founder's Office and the directors**: the keys move to the `FOUNDERS_OFFICE` role (switchable per the chosen option); a forward `peeps_` migration removes them from the HR roles (directors keep everything as Super Admins). |
+| HR issues to anyone in scope | HR may **only issue to new joiners during onboarding**, behind a director switch (Q-14): new key `assets.onboarding.issue`, accepted only for an employee who is "in onboarding". That state does not exist until the onboarding module; until then "new joiner" is a setting (for example: joined on or after a date window) that is **Not set**, so HR issuing refuses. HR never sees the register. |
+| HR Admin prepares setting lists; a director confirms | The Founder's Office (or a director) prepares; a director who did not prepare confirms. |
+| Employees see their own assets | Unchanged. |
+| Directors see everything (Super Admin holds every key, ALL scope) | Unchanged in code; **add an explicit test**: a director sees every asset, its full history and any employee's assignments, including ones held by HR people and by the Founder's Office person. |
+| Audience fixed in code | `peeps.audience.assets` becomes a director-controlled setting (who manages, who may issue at onboarding), per D-29. |
+
+### Owner questions recorded (to build as recommended, each a setting)
+Q-14 asset register (Founder's Office + directors manage; HR issues to new joiners at onboarding only, director switch) · Q-15 new leave types not
+this round · Q-16 badge/nudge givers: managers, Founder's Office, directors; not HR · Q-17 Founder's Office appointed by the directors, no pay access.
+
+### What I need to continue
+A choice among options 1–4 (or another). With option 1, I can build Step 0 and Pair 1 without touching any file outside PEEPS blocks.
+With option 2, Pair 1 waits for Session A's framework change.

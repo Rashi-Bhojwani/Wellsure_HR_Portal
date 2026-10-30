@@ -36,7 +36,13 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 - [x] 10 screens, DEMO data, check:sensitive-ui / check:popovers extended — `1a244e2`
 - [ ] Asset requests by employees (plan §B.2) — not in this brief
 - [ ] Follow-ups from the guide: unacknowledged-asset HR task, IMEI/SIM, asset import, profile Assets tab, recovery (Session A + directors)
-- [ ] **STOP: wait for the next build prompt**
+- [x] Next build prompt received (scope change D-28/D-29, Pair 1)
+- [x] Step 0 part 1: Assets full suite (1,737 passed) and CI run 206 green recorded — `923a0de`
+- [ ] **STOPPED:** the HR switch framework cannot take Founder's Office switches additively (PEEPS_STAGE_REPORTS, "Scope change D-28 / D-29"); owner to choose an option
+- [ ] Step 0 part 2: Assets adjusted to D-28/D-29 (Founder's Office + directors manage; HR onboarding-only issue; director-sees-all test; audience setting)
+- [ ] Pair 1 / Module 1: Founder's Office role + switches + Unmute
+- [ ] Pair 1 / Module 2: badges and private nudges
+- [ ] Ticket desk changes: withdrawn by D-29 (no change)
 
 ## Ticket desk
 - [ ] 11 category visibility (general categories), move between categories

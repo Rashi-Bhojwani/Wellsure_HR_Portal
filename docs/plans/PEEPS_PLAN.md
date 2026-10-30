@@ -34,6 +34,23 @@ Also from the base since the first plan (merged at `0621f82`): HR now has narrow
 `letters.issue.nopay` (letters the engine proves carry no pay figure), `invitations.send`,
 `import.details.manage` (`2bdaaf2`). Used in §B.5 (relieving/experience letters) and §B.6 (invitations).
 
+## Owner scope change (2026-10-30, D-28 / D-29) — wins over everything below, including the answers table
+
+- **D-28.** The two directors can see everything any HR user, manager or employee can see, including Unmute bookings, private nudges, exit
+  interviews, medical documents and interview feedback. Every "director refused" design in this plan is withdrawn (AS1's "even from directors" is
+  reversed). Kept: employees cannot read each other's data; HR and managers cannot see each other's private data or pay data; the Developer never
+  sees values. A director opening a sensitive item (medical document, exit interview, Unmute booking, private nudge) writes an audit entry; never blocked.
+- **D-29 audiences.** Employees (and HR as employees): badges and private nudges (receive), own issued assets, Unmute (book the Founder's Office),
+  avatars. Everyone: avatars. Ticket desk: **no change** (§B.3 withdrawn). Founder's Office and directors only: recruitment, exits, insights and
+  everything else. HR: the onboarding process only (joining checks, documents, autofill); HR cannot give badges or nudges and cannot see recruitment,
+  exits or insights. **Founder's Office**: a new role, one person appointed by the directors (Not set until appointed, effective-dated), no pay/bank/
+  statutory access unless granted, capabilities are director-controlled switches. Every module's audience becomes a director-controlled setting.
+- Open questions, built as recommended and kept as settings: Q-14 (assets: Founder's Office + directors manage; HR issues to new joiners at
+  onboarding only), Q-15 (new leave types not this round), Q-16 (badge/nudge givers: managers, Founder's Office, directors), Q-17 (Founder's Office
+  appointed by directors, no pay access).
+- **Status:** building stopped at the switch-framework check (it cannot take Founder's Office switches additively); options are in
+  `PEEPS_STAGE_REPORTS.md`, "Scope change D-28 / D-29".
+
 ## 0. Ground facts found while starting (read these first)
 
 1. **The integration guide is not in the repo.** First check: no copy anywhere. Second check (2026-10-30,
