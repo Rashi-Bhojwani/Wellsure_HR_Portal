@@ -33,3 +33,32 @@ prompt says although existing screens use `pages/`; readings of "leave extension
 (listed as questions Q-L1, Q-U1, Q-I1).
 
 **Waiting.** PEEPS_PLAN §F. STOP here until you review.
+
+---
+
+## P0b — Owner's answers applied (2026-10-30)
+
+**Git.** `git fetch --all`: the base moved `8979072 → 0fade2e` (`2bdaaf2` narrower HR keys: `letters.issue.nopay`,
+`invitations.send`, `import.details.manage`; `74c1496` layout author cannot confirm; `0fade2e` bank files
+.xlsx/.csv only). Merged into `peeps/foundation` at `0621f82` (clean).
+
+**Integration guide.** The owner said it is in `docs/integration/`. It is **not** on any remote branch: I fetched
+all of them and searched every branch's history for `docs/integration/` and for guide-like file names. Most likely
+it was committed locally but not pushed. The chapter mapping (plan commit 2) stays blocked; nothing else waits on it.
+
+**Plan changes (docs only).** An answers table at the top of `PEEPS_PLAN.md`; §B.3 rewritten (general desk,
+visibility by category, Payroll category is Session A's); §B.4 rewritten (four new leave types, HR prepares /
+director approves, HR-only supporting documents checked as HR role plus key because Super Admins hold every key,
+Annual Leave = PL, new types left out of year-end until their rule is approved); §B.9 rewritten (Unmute: scheduling
+and completion only, participants only, no notes or topic); §B.10 rewritten (four metrics, definitions Not set,
+small-group minimum); §B.0.4 (switch keys in a PEEPS block only); HR enters bank/identity details at joining through
+the existing writers; relieving/experience letters through `letters.issue.nopay` when pay-free; remote attendance
+added to Session A's list; §A, §C, §D, §F, §G updated to match.
+
+**Checkpoint run.** Full backend suite on `0621f82`: running at the time of this commit; result recorded in the next commit.
+
+**Decided by me.** (1) Existing helpdesk categories get no visibility row on migration, so today's behaviour holds
+until an owner sets one (no preset). (2) The team-calendar label for the new types defaults to a generic "Leave"
+until set. (3) Extending an approved leave is dropped (not in the answer).
+
+**Waiting.** The guide push; the first build prompt.

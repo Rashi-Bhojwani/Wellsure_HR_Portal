@@ -1,7 +1,7 @@
 # Peeps — plan for the second build session
 
 **Status: PLAN ONLY. Nothing in this document has been built.** Branch `peeps/foundation`, which holds
-`feat/hr-payroll-separation` at `8979072` (merged in, see §0). The other session owns payroll and the files
+`feat/hr-payroll-separation` up to `0fade2e` (merged in at `0621f82`; first merge `8979072`, see §0). The other session owns payroll and the files
 listed in §C.1. This document, `PEEPS_CHECKLIST.md` and `PEEPS_STAGE_REPORTS.md` are this session's only
 reporting files.
 
@@ -13,15 +13,35 @@ values, each labelled DEMO.
 
 ---
 
+## Owner's answers (2026-10-30, after the first review) — these win over anything below that disagrees
+
+| Item | Answer | Where applied |
+|---|---|---|
+| Q0 guide | Said to be in `docs/integration/`. **Not found on any remote branch on 2026-10-30** (fetched all; searched every branch's history for `docs/integration/`). Chapter mapping still pending. | §0.1, §A |
+| Q-L1 leave extension | New leave types **menstrual, medical, wedding, bereavement**; configurable rules and approval routes, every value Not set; **HR prepares, a director approves**; supporting documents **HR-only**. "Annual Leave" is the existing Privilege Leave balance (no new balance). | §B.4 (rewritten) |
+| Q-U1 Unmute | Authorised hosts from any department; scheduling and completion status only; visible to the participants only; **no notes, no topic field**. | §B.9 (rewritten) |
+| Q-I1 insights | Turnover, tenure, exit reasons, hiring funnel; data-scoped; small-group privacy; every metric definition Not set. | §B.10 (rewritten) |
+| AS1 | Confirmed: confidential even from directors; relationship-based design stays. | §1, §B.0.3 |
+| AS2–AS4 | Stay settings, Not set. | §1 |
+| Q-X2 two-step | Session A is making two-step sign-in optional. **Not touched by me.** | §0.4, §A |
+| Q-T1 helpdesk | Session A owns the Payroll ticket category and its director-only routing. I own the general desk. **Visibility is by category** (no queue enum). | §B.3 (rewritten), §C |
+| Q-F2 HR switches | I add switch entries only inside a `PEEPS-BEGIN/END` block; no framework changes. | §B.0.4, §C.2 |
+| Q-F3 | Keep `peeps/foundation` as it is. | §0.2 |
+| Earlier decision | HR may **enter** bank and identity details (masked; the existing pending-until-confirmed flow). | §B.6 joining, §A |
+| Earlier decision | Remote attendance (WFH check-in/out) belongs to Session A. | §C.1, §B.4 |
+
+Also from the base since the first plan (merged at `0621f82`): HR now has narrower non-pay keys —
+`letters.issue.nopay` (letters the engine proves carry no pay figure), `invitations.send`,
+`import.details.manage` (`2bdaaf2`). Used in §B.5 (relieving/experience letters) and §B.6 (invitations).
+
 ## 0. Ground facts found while starting (read these first)
 
-1. **The integration guide is not in the repo** and no copy was attached to this session. I searched
-   `docs/`, every branch on `origin` (`main`, `master`, `ui/design-pass`, `feat/hr-payroll-separation`) and
-   the whole working tree for "integration guide", "Peeps", "Unmute". So **section A cannot be mapped
-   chapter by chapter yet.** Section A is written per module/topic named in your prompt. When you commit
-   the guide (I suggest `docs/integration/PEEPS_GUIDE.md`) I will add a chapter-number column to the A
-   table in one docs-only commit before building anything. Wherever this plan has to guess what the guide
-   means (e.g. "leave extension", "Unmute", "insights"), it says so and lists the guess as a question in §F.
+1. **The integration guide is not in the repo.** First check: no copy anywhere. Second check (2026-10-30,
+   after the owner said it is in `docs/integration/`): `git fetch --all`, then every remote branch and the
+   history of all branches searched for `docs/integration/` and for guide-like files — **still absent**
+   (it was probably committed locally but not pushed). Section A stays per topic; the chapter column is
+   commit 2 in §G and waits for the push. The owner's answers (table above) have replaced my earlier guesses
+   about leave extension, Unmute and insights.
 2. **Branch.** `origin/peeps/foundation` already existed, equal to `main` (`c787e92`), with no commits of
    its own. Resetting it to the base would need a force-push (forbidden), so I **merged**
    `origin/feat/hr-payroll-separation` (`8979072`) into it (`2a4fad1`). Clean merge. The only things on
@@ -32,14 +52,14 @@ values, each labelled DEMO.
    instead (still no force-push).
 3. **Directors and confidentiality, in code.** `lib/permissions.ts` gives every `SUPER_ADMIN` holder
    *every* key in `PERMISSION_KEYS`, computed in code. So a permission key **cannot** keep anything from a
-   director. If the owners confirm that Unmute bookings, exit interviews, medical documents and private
-   nudges are hidden even from directors (§2, assumption 1), those must be gated by **relationship**
-   (booker/host, interviewer of record, document custodian, sender/recipient), not by a key. The plan is
+   director. The owners have confirmed that Unmute bookings, exit interviews, medical documents and private
+   nudges are hidden even from directors (AS1), so those are gated by **relationship**
+   (booker/host, interviewer of record, sender/recipient, the employee themself) or, for leave supporting
+   documents, by **HR role plus key** (§B.4), never by a key alone. The plan is
    designed that way from the start, so the answer changes configuration, not schema.
 4. **Two-step sign-in.** `backend/src/lib/authDefaults.ts` enforces 2FA for every Super Admin outside
-   development, and payroll's Ready-for-first-run checklist requires it (Stage 2). Decision 2 says it is
-   optional for directors "for now". This is **auth / payroll-readiness code, not mine**; listed in A as a
-   conflict for the other session or you to settle. I will not touch it.
+   development, and payroll's Ready-for-first-run checklist requires it (Stage 2). **Answered:** Session A
+   is making it optional; I do not touch it, and no Peeps feature depends on 2FA being on or off.
 5. **Frontend layout.** Existing screens live in `frontend/src/pages/{employee,admin}/…`; there is no
    `frontend/src/features/` folder. Your prompt names `frontend/src/features/<name>/`, so I will create it
    (one folder per module: `pages/`, `api.ts`, `components/`), lazy-loaded from the menu configs. Nothing
@@ -48,9 +68,9 @@ values, each labelled DEMO.
    `payroll_item_confirmations`, `modules/payroll/items.ts`) — owned by the other session. Peeps needs the
    same rule for its own settings (§B.0), so I will build a small, separate `peeps_setting_versions` store
    rather than import or extend payroll's.
-7. **Helpdesk queues (H3) are designed but not built.** `HR_PAYROLL_SEPARATION.md` §7 designs `queue = HR |
-   PAYROLL | DIRECTORS`; the schema has no `queue` column yet. Payroll tickets are the other session's;
-   grievance and "concerns HR" routing are mine. §B.7 proposes who builds which half.
+7. **Helpdesk queues (H3) were designed but not built.** **Answered:** no queue enum. Visibility is by
+   category; Session A owns the Payroll category and its director-only routing, and I own the general desk
+   (§B.3).
 8. **Migration folder ordering.** Prisma applies migration folders in lexicographic order. `peeps_…`
    sorts after every `2026…` folder, so on a fresh database all of the other session's migrations always
    run before all of mine, whatever their dates. That is safe **only if a Peeps migration never depends on
@@ -78,11 +98,11 @@ values, each labelled DEMO.
 
 | # | Assumption | Default in the build until answered |
 |---|---|---|
-| AS1 | Unmute bookings, exit interviews, medical documents and private nudges are confidential **even from directors**, exactly as the guide says. | Built relationship-gated; directors get **no** reader. A director can be added as a named custodian later by configuration, never by code. |
+| AS1 | Unmute bookings, exit interviews, medical documents and private nudges are confidential **even from directors**, exactly as the guide says. | **Confirmed by the owners.** Relationship-gated; directors get **no** reader. Leave supporting documents (including medical) are HR-only (§B.4). |
 | AS2 | Who may issue **corrective** private nudges (manager of the person? HR? directors only?). | Not set → corrective nudges refuse to send; appreciative nudges follow AS2b. |
 | AS2b | Who may send **appreciative** private nudges. | Not set → refuses. |
 | AS3 | Who approves a **joining-document exception** (a joiner without a required document by day one). | Not set → an exception cannot be granted; conversion waits until documents are complete. |
-| AS4 | **Missing-manager fallback**: who decides when a person has no manager (or the manager has left) for leave extensions, exit acceptance, asset requests. | Not set → the item waits in the directors' queue with a "no manager" note (same mechanism as `noTeamApprover.ts`). |
+| AS4 | **Missing-manager fallback**: who decides when a person has no manager (or the manager has left) for requests of the new leave types, exit acceptance, asset requests. | Not set → the item waits in the directors' queue with a "no manager" note (same mechanism as `noTeamApprover.ts`). |
 
 ---
 
@@ -95,21 +115,21 @@ Chapter numbers of the guide: **pending the guide** (§0.1). Rows are by topic.
 | **Roles, permissions, scope** | `shared/constants/permissions.ts` (catalog), `shared/constants/roles.ts`, `backend/src/lib/systemRoles.ts`, `lib/permissions.ts` (`resolveAccess`), `lib/dataScope.ts`, `middleware/rbac.ts` (`requireAuth`, `requirePermission`), `shared/constants/sensitiveData.ts` (sensitive classes, Developer ceiling, `HR_FORBIDDEN_KEYS`) | Peeps keys (§B per module), new sensitive classes, relationship-based readers for confidential classes | Super Admin gets every key (§0.3): confidentiality "even from directors" must be relationship-gated |
 | **HR switch framework** | `shared/constants/hrCapabilities.ts`, `lib/hrCapabilities.ts`, `modules/hrCapabilities/*`, `pages/admin/adminTools/HrCapabilitiesPage.tsx` | Switches for the Peeps duties HR may lose (e.g. approve leave extensions, accept resignations, run exit clearance) | **Owned by the other session.** I need additive entries in `HR_CAPABILITY_IDS`/`HR_CAPABILITIES`; see §C.2 |
 | **Director authority** | `shared/constants/directorAuthority.ts`, `lib/directorAuthority.ts`, `lib/directorNotices.ts` (notice to the other director) | Peeps "second director" steps (offer approval, exit approval, asset write-off) | The setting `payroll.secondDirector` is payroll's; Peeps uses its own `peeps.secondDirector` setting, reusing `lib/directorNotices.ts` read-only |
-| **Two-step sign-in** | `lib/authDefaults.ts` (mandatory for Super Admins outside development), payroll readiness row | — | Conflicts with "optional for directors for now". Not mine; flagged for you / the other session |
+| **Two-step sign-in** | `lib/authDefaults.ts` (mandatory for Super Admins outside development), payroll readiness row | — | Session A is making it optional (answered). Not touched by me |
 | **Audit, append-only, DB roles** | `lib/audit.ts`, append-only triggers, `lib/dbRoles.ts` (`appendOnlyTables` reads the triggers; `UPDATABLE_APPEND_ONLY_TABLES`), `lib/__tests__/dbRoles.test.ts` | Every new append-only Peeps table gets a truncate-blocking trigger (picked up automatically); any that must keep UPDATE needs an additive entry in `UPDATABLE_APPEND_ONLY_TABLES` | None |
-| **Field encryption** | `lib/encryption.ts`, `lib/fieldKeys.ts`, `lib/fieldKeyRotation.ts` (`ENCRYPTED_COLUMNS`; a test fails on an unlisted `Bytes` column), `lib/fieldHash.ts` (blind index) | Candidate phone/email/ID numbers, medical notes, nudge bodies, Unmute notes, exit-interview answers, interview feedback | None |
-| **Employees, onboarding** | `modules/employee/service.ts` (`createEmployee`, `createEmployeeInTx`), Add Employee wizard, invitations, `modules/import/*` | Candidate → employee conversion (idempotent), joining documents checklist, pre-joining portal | `import.manage` is hard-locked to directors (Checkpoint 1); bulk candidate import must not reuse the Import Center |
-| **Separation / exits** | `modules/employee/separations.ts` (initiate, cancel, complete → `markSeparatedInTx`), `separations` table (INITIATED/COMPLETED/CANCELLED), `pages/admin/employee/SeparationsPage.tsx`, Leavers report | Employee resignation request, notice rules, acceptance flow, clearance checklist, exit interview (confidential), asset return gate, F&F hand-off, relieving letter request | F&F and recoveries are money → director-only and payroll's; relieving/experience letters need `letters.generate` (hard-locked to directors) |
+| **Field encryption** | `lib/encryption.ts`, `lib/fieldKeys.ts`, `lib/fieldKeyRotation.ts` (`ENCRYPTED_COLUMNS`; a test fails on an unlisted `Bytes` column), `lib/fieldHash.ts` (blind index) | Candidate phone/email/ID numbers, nudge bodies, exit-interview answers, interview feedback (Unmute stores no free text; leave supporting documents are files in a separate storage prefix) | None |
+| **Employees, onboarding** | `modules/employee/service.ts` (`createEmployee`, `createEmployeeInTx`), Add Employee wizard, invitations (`invitations.send`, HR switch since `2bdaaf2`), `modules/import/*` (`import.details.manage` for non-pay sheets), bank/statutory writers and the pending-until-confirmed change flow (`modules/employee/changeRequests.ts`) | Candidate → employee conversion (idempotent), joining documents checklist, pre-joining portal | `import.manage` is hard-locked to directors; bulk candidate import does not reuse the Import Center. HR **may enter** bank and identity details at joining (decision), through the existing writers, masked, pending until confirmed — no separate Peeps store for them |
+| **Separation / exits** | `modules/employee/separations.ts` (initiate, cancel, complete → `markSeparatedInTx`), `separations` table (INITIATED/COMPLETED/CANCELLED), `pages/admin/employee/SeparationsPage.tsx`, Leavers report | Employee resignation request, notice rules, acceptance flow, clearance checklist, exit interview (confidential), asset return gate, F&F hand-off, relieving letter request | F&F and recoveries are money → director-only and payroll's; relieving/experience letters: HR may issue them through `letters.issue.nopay` when the template is proven pay-free (`2bdaaf2`), otherwise a director (`letters.generate`) |
 | **Assets** | Spec §12 Phase 8 "Assets management"; route placeholder `/admin/assets` (`UI_SCREEN_MAP.md`); spec §7.2 profile tab "Assets" | Everything: catalogue, items, assignment, return, condition, requests, recovery intent | Recovery amounts are money → director-only, payroll implements deduction |
 | **Recruitment** | Nothing (UI_SCREEN_MAP: "No recruitment module in the spec's phases"); board frames `recruitment-01..19` | Everything: requisitions, jobs, candidates, pipeline, interviews, feedback, offers (non-pay), joining | Offer compensation is money → director-only; spec Phase 6 note "offer letter figures from salary assignment" is payroll's |
-| **Leave** | `modules/leave/*` (5 fixed types `PL/LOP/COF/WFH/RH`, one-row-per-type `leave_policies`, append-only `leave_ledger`, requests, year-end, recalculator, `noTeamApprover.ts`) | "Leave extension" — my reading: extend an approved leave, owner-defined extra leave types, supporting/medical documents (confidential). Guide needed (§F) | HR leave approval is a switch (`APPROVE_LEAVE`) — extensions must obey it. Year-end/encashment is money → untouched. WFH is the other session's (§C.1) |
-| **Lateness waiver** | No lateness model in the schema; attendance engine computes late-in | A waiver request/approval if the guide wants it | **Attendance engine is the other session's.** HR approval must sit behind a switch (decision). I will not build it; interface only (§B.4) |
+| **Leave** | `modules/leave/*` (5 fixed types `PL/LOP/COF/WFH/RH`, one-row-per-type `leave_policies`, append-only `leave_ledger`, requests, year-end, recalculator, `noTeamApprover.ts`) | Leave extension (answered): four new types — menstrual, medical, wedding, bereavement — with configurable rules and routes (all Not set), HR prepares / a director approves, HR-only supporting documents. "Annual Leave" = the PL balance (label only) | HR leave approval is a switch (`APPROVE_LEAVE`) — requests for new types obey it. Year-end/encashment is money: new types are kept out of year-end until a director confirms their carry-forward/encashment rule. WFH and remote attendance are Session A's (§C.1) |
+| **Lateness waiver** | No lateness model in the schema; attendance engine computes late-in | Nothing in Peeps | **Attendance engine is Session A's.** Not built by me; interface only if Session A asks (§B.4) |
 | **Engage, kudos** | `modules/engage/*` (posts, kudos, polls, auto-posts), `PostKind` enum, `emitEngage*` | Badges (catalogue, awards, limits) shown on the feed and profile; private nudges (never on the feed) | None |
-| **Helpdesk** | `modules/helpdesk/*`, `helpdesk_categories.is_sensitive`, `helpdesk.sensitive.view`, no queues | H3 queues: HR / DIRECTORS (mine), PAYROLL (theirs); "this concerns HR" and escalate-to-directors | Payroll tickets are the other session's |
+| **Helpdesk** | `modules/helpdesk/*`, `helpdesk_categories.is_sensitive`, `helpdesk.sensitive.view`, no queues | General desk with **visibility by category** (answered); no queue enum | The Payroll category and its director-only routing are Session A's |
 | **People directory, avatars** | `modules/people/directory.ts`, `fieldPolicy.ts` (every Employee column classified), `photos.ts` (sharp re-encode, signed photo token), org chart, company-wide toggles in `peopleDocumentsSettings.ts` | Initials avatars everywhere a person is named, per-person privacy choices (if the guide wants them), photo change review (if wanted), directory search/filters by skills/badges | None |
-| **Documents** | `modules/documents/*`, `DocumentSensitivity GENERAL/PAY/STATUTORY`, `lib/sensitiveDocs.ts`, `lib/uploads.ts` (magic bytes, sharp re-encode) | MEDICAL class — not a new enum value on the shared table but a separate store (§B.4), since confidential classes never appear in shared lists | Adding `MEDICAL` to `DocumentSensitivity` would surface medical files in Document Center lists/counts — rejected |
+| **Documents** | `modules/documents/*`, `DocumentSensitivity GENERAL/PAY/STATUTORY`, `lib/sensitiveDocs.ts`, `lib/uploads.ts` (magic bytes, sharp re-encode) | Leave supporting documents (HR-only) — not a new enum value on the shared table but a separate store (§B.4), since confidential classes never appear in shared lists | Adding `MEDICAL` to `DocumentSensitivity` would surface medical files in Document Center lists/counts — rejected |
 | **Tasks, notifications, realtime** | `modules/tasks/service.ts` (`TaskSource` registry, no task table), `modules/notifications/*` (`type` is a free string), `realtime/emit.ts`, rooms `user:/manager:/dept:/location:/role:/perm:/org` | Task sources per module; a real checklist task table (exits, joining) | Confidential classes must never emit to `perm:*`, `role:*`, `dept:*`, `org` rooms; only `user:{id}` of the people in the relationship |
-| **Reports / insights** | `modules/reports/*` (definitions, gallery, permission per report), Admin Dashboard widgets | Insights (aggregates for owners/HR/managers) | Report gallery code is the other session's; Insights is a **separate** module with its own endpoints and screens, not new gallery entries |
+| **Reports / insights** | `modules/reports/*` (definitions, gallery, permission per report; the Leavers report reads `Employee.exitReason`), Admin Dashboard widgets | Insights (answered): turnover, tenure, exit reasons, hiring funnel; scoped; small-group privacy; definitions Not set | Report gallery code is the other session's; Insights is a **separate** module with its own endpoints and screens, not new gallery entries |
 | **Settings** | `system_settings` + `lib/settings.ts` (free JSON), `pages/admin/settings/SystemSettingsPage.tsx`, director settings screens (other session) | Peeps settings with Placeholder/Confirmed and Not set | Director settings screens are the other session's; Peeps gets its own Admin Tools page "Peeps settings" |
 | **Design system** | `docs/DESIGN_SYSTEM.md` (§13 checklist), `frontend/src/ui/*`, `theme/tokens.ts`, `check:tokens`, `check:bundle`, `check:sensitive-ui`, `check:popovers`, board slices `docs/design/slices/` | Screens per module | None |
 | **Document autofill** | Nothing | Provider choice and questions only (§E) | — |
@@ -124,8 +144,8 @@ Chapter numbers of the guide: **pending the guide** (§0.1). Rows are by topic.
 0. **Peeps foundation** (settings store, confidential-access helper, module switch, sensitive classes) — every module needs it.
 1. **Directory and avatars** — small, low risk, gives the shared `PersonAvatar` every later screen uses.
 2. **Assets** — self-contained; exits and joining depend on it (return gate, issue on day one).
-3. **Ticket desk changes** — small; grievance routing is a prerequisite for exits (exit concerns) and Unmute escalation.
-4. **Leave extension** — extends an existing flow; medical-document store is reused by exits (not needed) and Unmute (no).
+3. **General ticket desk** — small; category visibility is used by exits (concerns raised during exit).
+4. **Leave extension** — four new leave types with prepared/approved rules and HR-only supporting documents; extends the existing leave flow.
 5. **Exits** — depends on assets (return gate), ticket desk (concerns), separations.
 6. **Recruitment and joining** — largest; depends on assets (day-one issue) and directory.
 7. **Badges and private nudges**.
@@ -152,18 +172,21 @@ people who can set them. Demo values carry `demo: true` and only exist in the de
 
 **B.0.3 Confidential-access helper.** `lib/confidential.ts` (new file in my module space:
 `backend/src/modules/peepsCore/confidential.ts`): `assertRelationship(kind, subjectId, viewerEmployeeId)`
-with one resolver per class (booker/host, interviewer of record, custodian, sender/recipient, the employee
-themself). It **ignores roles and keys entirely**, so a Super Admin is not a reader unless named. A test
+with one resolver per class (booker/host, interviewer of record, sender/recipient, the employee
+themself; leave supporting documents use HR role plus key, §B.4). It **ignores roles and keys entirely**, so a Super Admin is not a reader unless named. A test
 crawls every Peeps route as a director, HR Admin, HR Executive, manager, Developer and unrelated employee
 and proves no confidential row comes back. Confidential tables are excluded from: Tasks sources, the
 notification body (title is generic: "You have a new private message"), e-mail body, Socket.IO rooms
 other than `user:{id}` of the related people, logs (`lib/redact.ts` allowlist), exports, search, Insights,
 the audit log's `before/after` (audit rows store ids and the action only, never content).
 
-**B.0.4 HR switches for Peeps duties.** The framework is the other session's. I will add entries to
-`HR_CAPABILITY_IDS`/`HR_CAPABILITIES` only inside a `// PEEPS-BEGIN hr-capabilities` block at the end of
-each list, after you (or they) agree — see §C.2. Until then, Peeps duties for HR are ordinary keys in the
-HR role defaults and the directors can remove them through Roles & Permissions.
+**B.0.4 HR switches for Peeps duties (answered).** The framework is Session A's. I add entries to
+`HR_CAPABILITY_IDS`/`HR_CAPABILITIES` (and `SPLIT_KEYS` if a key is split) **only** inside a
+`// PEEPS-BEGIN hr-capabilities` … `// PEEPS-END` block at the end of each list, and change nothing else:
+no edit to `lib/hrCapabilities.ts`, the service, the routes or the screen. The screen lists my switches
+because it reads the list. Planned switches (defaults decided per module, listed in each commit):
+accept resignations, run exit clearance, prepare leave-type rules, manage assets, manage recruitment.
+A test in my module pins that every Peeps switch key is outside `HR_FORBIDDEN_KEYS`.
 
 **B.0.5 Second-director steps for Peeps.** `peeps.secondDirector` (confirmed setting) with steps
 `OFFER_APPROVAL`, `EXIT_APPROVAL`, `ASSET_WRITE_OFF`, `RECRUITMENT_REQUISITION`, each Not set; a step whose
@@ -235,61 +258,99 @@ and proves no route reads it without `assertRelationship`.
 - **Risks.** Concurrent issue of the same asset (index + lock + race test); returning an asset during an
   exit after the separation completed (allowed; clearance records it late).
 
-### B.3 Ticket desk changes (non-payroll)
+### B.3 General ticket desk (answered: visibility by category)
 
-- **Data.** Build the `queue` half of H3 that is not payroll's: `helpdesk_categories.queue` and
-  `helpdesk_tickets.queue` with values `HR | DIRECTORS | PAYROLL`. I add the enum with all three values and
-  the HR/DIRECTORS behaviour; `PAYROLL` behaviour (who sees it, migrating open payroll tickets) is the other
-  session's (§F Q-T1). Columns added to existing helpdesk tables (helpdesk is not on the other session's
-  list, but this is still an additive column, default `HR`). Append-only `helpdesk_queue_moves`.
-- **States.** Ticket statuses unchanged. Queue moves: `HR → DIRECTORS` (escalate, reason required, one way
-  for HR); `DIRECTORS → HR` (hand back, directors only). Raising a Grievance with "This concerns HR" creates
-  it directly in `DIRECTORS`.
-- **Permissions.** `helpdesk.directors.manage` (directors; hard-locked from HR), `helpdesk.routing.manage`
-  (directors; changing a category's queue). Existing `helpdesk.manage`, `helpdesk.sensitive.view` unchanged
-  for the HR queue. After escalation the HR handler loses access (404); the raiser keeps the thread.
-- **Confidentiality.** DIRECTORS-queue tickets never reach HR's queue, counts, Tasks, search or sockets.
-- **Notifications.** Escalation → directors (bell, `perm:helpdesk.directors.manage` room is fine because
-  only directors hold it); raiser gets a neutral "your ticket was moved to another team".
-- **Screens.** Existing `/admin/employee/helpdesk` (MAPPED-PARTIAL `help-01`) gains a queue filter and
-  Escalate action; Raise form gains the checkbox. Styled by system.
-- **Settings Not set.** Which categories go to DIRECTORS by default.
-- **Payroll hooks.** PAYROLL queue visibility and migration of open payroll tickets — other session.
-- **Risks.** Shared helpdesk files edited by both sessions if the other one builds PAYROLL at the same
-  time → agree the split before either starts (§C.3).
+- **Split (answered).** Session A owns the **Payroll** ticket category and its director-only routing. I own
+  the general desk: every other category. No queue enum. Who can see a ticket follows from its category.
+- **Data.** `helpdesk_category_visibility` (new table, one row per category): who may work that category's
+  tickets, as a list of HR roles and/or named people. **Not set** for a category → raising a ticket in it
+  is refused ("This category is not set up yet"), and the screen says who can set it up. Existing
+  categories get no row from the migration: today's behaviour (`helpdesk.manage` +
+  `helpdesk.sensitive.view` for sensitive ones) holds until an owner sets one. That keeps day-one
+  behaviour and avoids a preset. Append-only `helpdesk_category_visibility_history` (who changed it, why).
+  The Payroll category is **excluded** from this table by a check constraint/test; Session A's routing
+  decides it, and my code never reads or changes it.
+- **Grievances that concern HR.** These need no queue. They are a category whose visibility an owner sets to
+  named directors only. Whether such a category exists, and what it is called, is Not set (owners). After
+  it is raised, an HR handler can **move** a ticket to another general category (reason required, audited,
+  system note). If the new category is outside the handler's visibility, the handler loses access (404).
+  The raiser keeps the thread.
+- **Permissions.** `helpdesk.visibility.manage` (directors; added to `HR_FORBIDDEN_KEYS` in a PEEPS block, so
+  HR cannot widen its own reach). `helpdesk.manage` / `helpdesk.sensitive.view` stay as the "may work the
+  desk at all" gate, intersected with category visibility once a row exists.
+- **Confidentiality.** A ticket in a category the viewer cannot see is absent everywhere: queue, counts,
+  Tasks, search, attachments, notifications and sockets (emit to the named people's `user:{id}` rooms,
+  not `perm:helpdesk.manage`, once a category has a visibility row).
+- **Notifications.** New ticket → the category's visible handlers. Move → the new handlers. The raiser gets
+  a neutral "your ticket was moved to another team".
+- **Screens.** Existing `/admin/employee/helpdesk` (MAPPED-PARTIAL `help-01`) gains a category filter and a
+  Move action. The Helpdesk Categories page gains a "Who can see this" panel (directors only). Styled by
+  system.
+- **Settings Not set.** Visibility per category, and whether a "concerns HR" category exists.
+- **Coordination.** Before either session starts on helpdesk, check whether Session A's payroll routing
+  adds a mechanism I should reuse. Whoever lands second merges the other's work before touching
+  `modules/helpdesk/*` (§C.3).
+- **Risks.** Both sessions edit `modules/helpdesk/service.ts` → keep my changes in a separate
+  `categoryVisibility.ts` with one call site in a marked block.
 
-### B.4 Leave extension (my reading; guide needed)
+### B.4 Leave extension (answered)
 
+- **What (answered).** Four new leave types: **menstrual, medical, wedding, bereavement**. Each has
+  configurable rules and an approval route, every value **Not set**. **HR prepares** a type's rules and a
+  **director approves** them before the type can be used. Supporting documents are **HR-only**. "Annual
+  Leave" is the existing **Privilege Leave (PL)** balance: a display label wherever the guide says Annual
+  Leave, with no new type, ledger or balance.
 - **Data.**
-  - `leave_extension_requests`: original approved request, new end date/day part, reason, status, decided
-    by. Approving writes the extra days as an **additional** leave request linked to the original (the
-    ledger stays append-only; nothing in an approved request is edited).
-  - Owner-defined extra leave types: today `leave_types` has 5 seeded codes and `leave_policies` is one row
-    per fixed type. If the guide wants more types (sick, bereavement, parental…), that is a change to the
-    leave module's policy model; I will propose it as its own small plan first, because accrual and
-    year-end touch payroll (encashment).
-  - `medical_documents` (confidential store, **not** `employee_documents`): owner employee, linked leave
-    request (optional), file key (separate storage prefix), uploaded at, custodian(s) of record, retention
-    until (Not set → upload refuses), an append-only `medical_document_access_log`.
-- **States.** Extension: `PENDING → APPROVED | REJECTED | CANCELLED`; on APPROVED the linked request goes
-  through the normal leave service (balance check, attendance integration).
-- **Permissions.** Deciding an extension = deciding leave: `leave.approve` in scope, obeying the
-  `APPROVE_LEAVE` HR switch; no self-approval; missing manager → AS4. Medical documents: the employee and
-  the named custodian(s) only (relationship); the approver sees "a medical document is on file: yes/no",
-  never the file, unless the owners decide otherwise (§F).
-- **Confidentiality.** Medical documents: confidential class (B.0.3).
-- **Notifications.** Same as leave applied/decided (`emitLeaveApplied`, existing rooms) for extensions;
-  medical uploads notify the custodian with a generic title.
-- **Screens.** Employee: "Extend" action on an approved leave (`time-off-03/04` drawer pattern, MAPPED);
-  approver: extension appears in Review (`time-off-05`). Medical upload: styled by system.
-- **Settings Not set.** Whether extensions are allowed per type, max extension, document requirement
-  threshold (days), custodians, retention.
-- **Lateness waiver (not built).** Attendance engine is the other session's. Interface proposal only:
-  they expose `lateWaiverEligible(employeeId, date)` and accept a `LatenessWaiverDecision`; HR approval is
-  a new HR switch in their framework.
-- **Payroll hooks.** None directly (LOP flows through attendance as today).
-- **Risks.** Extension over a holiday/week-off or across the year boundary; concurrent apply + extend
-  (reuse `leave/concurrency.ts` lock).
+  - The four types are rows in `leave_types` (new codes, `isActive = false` until approved). Today
+    `leave_policies` is one typed row per fixed type, so the new types get their own rule table rather
+    than new columns on it: `leave_type_rule_versions` (append-only). Each row holds a type, version and
+    rule JSON: quota and period, eligibility (DOJ boundary, gender or other criteria only if an owner sets
+    them), paid or unpaid, half-day allowed, notice/backdating, max days per request, document requirement
+    (when and which), carry-forward and encashment (encashment is money: a director-only part of the rule),
+    approval route. It also records prepared by, prepared at and a source note where a value is legal.
+    Rule confirmations (append-only) record a director who is not the preparer; the per-step
+    second-director choice applies if the owners set one.
+  - Balances stay on the append-only `leave_ledger` (accrual/grant entries for the new types, written by
+    the existing ledger writer; never a mutable number).
+  - `leave_supporting_documents` (separate store, **not** `employee_documents`, own storage prefix): the
+    employee, leave request, file key, uploaded at, retention until (Not set → upload refuses), and an
+    append-only `leave_supporting_document_access_log`.
+- **States.** Type rules: `NOT_SET → PREPARED (Placeholder) → APPROVED (Confirmed) → superseded by a new
+  version`. The type activates on its first approved version and can be deactivated (history kept).
+  Requests use the existing leave request states and service (balance check, attendance integration,
+  `leave/concurrency.ts` lock) with the route from the approved rule.
+- **Permissions.**
+  - `leave.types.prepare` (HR; behind a Peeps HR switch, "Prepare leave-type rules").
+  - `leave.types.approve` (directors; hard-locked from HR in a PEEPS block of `HR_FORBIDDEN_KEYS`).
+  - Deciding a request = `leave.approve` in scope, obeying the `APPROVE_LEAVE` switch and the type's route.
+    No self-approval. Missing manager → AS4 (Not set → directors' queue with a note).
+  - **Supporting documents, HR-only (answered):** readable by the employee who uploaded them and by holders
+    of an HR role (`HR_ADMIN`/`HR_EXECUTIVE`) with `leave.documents.view`. This is checked as **role plus
+    key**, because Super Admins hold every key in code (§0.3). Directors, managers and approvers who are not
+    HR see only "supporting document on file: yes/no". Every read is logged.
+- **Confidentiality.** Supporting documents form a confidential class (never in shared lists, counts,
+  search, exports, emails, logs or socket rooms). The leave request itself shows the type name to the
+  approver as usual. Whether the type name (e.g. menstrual) is shown on team calendars instead of a
+  generic "Leave" is a Not set setting per type; the default until set is the generic label.
+- **Year-end.** New types are left out of the Year End Process until a director has approved their
+  carry-forward/encashment rule. Year-end then lists them as "not processed: rule Not set". PL year-end is
+  unchanged. Year-end itself stays the directors' (`leave.yearend.manage`).
+- **Notifications.** Rule prepared → directors (`perm:leave.types.approve`). Rule approved → the preparer.
+  Requests use the existing `emitLeaveApplied`/`emitLeaveDecided`. A document upload notifies HR with a
+  generic title.
+- **Screens.** Employee apply/balances (`time-off-01`, `-03/04`, MAPPED) show the new types once active and
+  label PL as Annual Leave if the owners want that wording (Not set). Admin: a "Leave types (new)" page
+  with prepare/approve states, styled by system next to the existing Leave Types & Policies page (which I
+  do not restructure).
+- **Settings Not set.** Every rule value of every type, routes, document thresholds, retention, calendar
+  label, the Annual Leave label.
+- **Not built.** Extending an approved leave (not in the answer). The lateness waiver and remote attendance
+  belong to Session A.
+- **Payroll hooks.** Paid/unpaid flows to payroll through attendance as today (unpaid → LOP). Encashment of
+  a new type, if a director ever enables it, is payroll's computation; I expose the confirmed rule only.
+- **Risks.** The fixed-type assumption in existing leave code (`leave_policies` one row per type, places
+  that switch on type codes). The first commit audits every such place and lists it before any change.
+  Gender-based eligibility is sensitive: only if owners set it, and never inferred.
 
 ### B.5 Exits
 
@@ -324,7 +385,8 @@ and proves no route reads it without `assertRelationship`.
   different director if legal), whether a manager may reject, checklist templates, interview questions,
   overdue thresholds, retention of interview answers.
 - **Payroll hooks.** `ExitSettlementInputs` (read), `onSettlementCompleted(exitCaseId)` (they call me).
-  Relieving/experience letters: requested from exits, **issued** by a director (`letters.generate`).
+  Relieving/experience letters: requested from exits; HR issues them through `letters.issue.nopay` when the
+  template is proven pay-free, otherwise a director issues them (`letters.generate`).
 - **Risks.** Two resignations at once (unique active per employee); separation cancelled after
   acceptance; last day moved after assets are returned.
 
@@ -344,7 +406,8 @@ and proves no route reads it without `assertRelationship`.
     (scorecards Not set), recommendation, submitted at. An interviewer sees **only their own** feedback
     until they submit (no anchoring), then the rest of the panel's.
   - `offers` (non-pay part: designation, joining date, location, manager) and `offer_compensation`
-    (director-only; money; exact decimals). Offer letter is a letter → `letters.generate` (directors).
+    (director-only; money; exact decimals). An offer letter carrying compensation needs `letters.generate` (directors); a pay-free letter (e.g. an
+    interview invitation, if templated) can go through `letters.issue.nopay`.
   - `joining_document_requirements` (Not set), `candidate_documents` (uploaded through an **expiring
     private link**: random token, hashed at rest, single candidate, expiry Not set → links refuse to be
     created, revocable, rate-limited, no auth cookie), `joining_document_exceptions` (approver per AS3).
@@ -357,7 +420,9 @@ and proves no route reads it without `assertRelationship`.
 - **Conversion.** One transaction: lock the conversion row by candidate id (`INSERT … ON CONFLICT DO
   NOTHING` then select), call `createEmployeeInTx` (employee module, unchanged), copy documents into
   `employee_documents` via the documents service, write the conversion row. Repeating it returns the same
-  employee. Invitation goes through the existing invitation flow. Assets for day one: B.2 requests.
+  employee. The sign-in invitation goes through the existing flow (`invitations.send`, an HR switch). Bank
+  and identity details collected at joining are **entered by HR** through the existing writers (masked,
+  pending until confirmed, as decided), never stored in a Peeps table. Assets for day one: B.2 requests.
 - **Permissions.** `recruitment.view`, `recruitment.manage` (HR: jobs, candidates, stages, scheduling, non-pay
   offer), `recruitment.requisition.raise` (manager-grantable), `recruitment.offer.approve` (director),
   `recruitment.compensation.view/edit` (director-only, hard-locked from HR), `recruitment.convert` (HR).
@@ -402,38 +467,52 @@ and proves no route reads it without `assertRelationship`.
 - **Payroll hooks.** None (no monetary rewards; if the guide has them → payroll).
 - **Risks.** Using nudges for discipline (records policy — owners); limit counting under concurrency.
 
-### B.9 Unmute (my reading: private conversations booked with a trained host)
+### B.9 Unmute (answered)
 
-- **Data.** `unmute_hosts` (roster Not set; a host is an employee), `unmute_availability` (host slots),
-  `unmute_bookings` (confidential: booker, host, slot start/end, mode, status), `unmute_notes` (host's
-  private notes, encrypted, host-only; retention Not set).
-- **Double booking.** Partial unique index `UNIQUE (host_id, slot_start) WHERE status IN
-  ('BOOKED','CONFIRMED')` + a per-host advisory lock; a person cannot book their own manager as host if the
-  owners say so (Not set).
-- **States.** `BOOKED → CONFIRMED → COMPLETED | CANCELLED_BY_BOOKER | CANCELLED_BY_HOST | NO_SHOW`.
-- **Permissions.** No keys for content. `unmute.hosts.manage` (who may maintain the roster — Not set; the
-  roster screen shows names only, never bookings). Directors and HR see nothing about bookings (AS1);
-  Insights shows nothing.
-- **Notifications.** Booker and host only, generic titles, `user:{id}` rooms only; e-mails carry the time
-  and no reason.
-- **Screens.** Styled by system (calendar slots like `attendance-01`, booking drawer).
-- **Settings Not set.** Host roster, slot length, booking window, cancellation rules, retention,
-  escalation path if a host is worried about safety (owners must decide; Unmute never auto-escalates).
-- **Payroll hooks.** None.
-- **Risks.** Duty-of-care escalation conflicts with confidentiality → owners' policy before go-live.
+- **What (answered).** Booked conversations with **authorised hosts from any department**. The system holds
+  **scheduling and completion status only**. A booking is visible to its **two participants only**. There is
+  **no notes field and no topic field**, anywhere (schema, API, e-mail, notification).
+- **Data.** `unmute_hosts` (employee, authorised by, authorised at, active; roster Not set → booking
+  refuses), `unmute_host_history` (append-only), `unmute_availability` (host's slots), `unmute_bookings`
+  (booker, host, slot start/end, status, status changed at). No free-text columns on bookings: a test pins
+  the column list.
+- **Double booking.** Partial unique index `UNIQUE (host_id, slot_start) WHERE status = 'BOOKED'`, a per-host
+  advisory lock in the service, and a test with parallel bookings. A booker has at most one open booking
+  per host (also an index).
+- **States.** `BOOKED → COMPLETED | CANCELLED | NOT_HELD`. Either participant may cancel. The host records
+  COMPLETED or NOT_HELD after the slot.
+- **Permissions.** No key opens a booking: booker and host only (relationship, B.0.3). Directors, HR and
+  managers see nothing about bookings, not even counts. `unmute.hosts.manage` maintains the roster; who
+  holds it is Not set (owners). The roster page shows host names only. Whether a person may book their
+  own manager or someone in their own reporting line is Not set.
+- **Notifications.** Booker and host only, generic titles ("Your Unmute booking is confirmed"),
+  `user:{id}` rooms only. E-mails carry the time and nothing else.
+- **Screens.** Host list and slot picker (calendar like `attendance-01`), my bookings, host's schedule.
+  Styled by system.
+- **Settings Not set.** Roster and who maintains it, slot length, booking window, cancellation cut-off,
+  how long completed bookings are kept.
+- **Insights.** Unmute is never a source.
+- **Risks.** People may expect counselling records: the UI states plainly that nothing about the
+  conversation is stored.
 
-### B.10 Insights (new)
+### B.10 Insights (answered)
 
-- **What.** Aggregates for directors, HR and managers (in scope): headcount trend, joiners/leavers,
-  time-to-hire, offer acceptance, open requisitions, exit reasons (categories), asset utilisation, badge
-  counts. Never: anything from a confidential class (not even counts), any money, any individual row.
-- **Minimum cohort size** (Not set → Insights refuses): a bucket with fewer people is shown as "fewer than
-  N". Managers see their team only and only if the team is ≥ N.
-- **Permissions.** `insights.view` (data scope applies); pay-derived insights do not exist here.
-- **Screens.** `home-02` KPI/charts (MAPPED-PARTIAL), `reports-*` frames for charts; uses the dataviz rules
-  in `DESIGN_SYSTEM.md` §1.5.
-- **Payroll hooks.** None. **Not** in the report gallery (other session's code).
-- **Risks.** Re-identification by slicing (filters respect the cohort minimum after every filter).
+- **Metrics (answered).** **Turnover, tenure, exit reasons, hiring funnel.** Nothing else.
+- **Definitions Not set.** Each metric has a definition setting (Placeholder → Confirmed, B.0.1), e.g. how
+  turnover is computed (leavers ÷ average headcount over which period, voluntary vs all), tenure buckets,
+  exit-reason categories (from exits), and funnel stages (from recruitment pipelines). A metric whose
+  definition is not Confirmed shows "Not set up yet" and its endpoint refuses.
+- **Sources.** Turnover/tenure: employees and separations (`Employee.dateOfJoining`, `lastWorkingDate`,
+  `exitReason`). Exit reasons: exit cases. Funnel: application stage moves. Never: exit interviews,
+  interview feedback, nudges, Unmute, leave supporting documents, or any money.
+- **Scope.** `insights.view` with the viewer's data scope (managers: their team; HR/directors: ALL).
+- **Small-group privacy.** Minimum group size Not set → Insights refuses. Any bucket below it shows as
+  "fewer than N", re-checked after every filter and on totals, so subtraction across buckets cannot
+  reveal one. Managers whose whole team is under N see nothing.
+- **Screens.** `home-02` KPI cards and `reports-*` chart frames (MAPPED-PARTIAL), with the dataviz rules in
+  `DESIGN_SYSTEM.md` §1.5. Not in the report gallery (Session A's code).
+- **Risks.** Re-identification by slicing (property test over filter combinations). Definitions changing
+  history: each figure shows the definition version it used.
 
 ### B.11 Interfaces to the payroll session (I will NOT implement the payroll side)
 
@@ -444,7 +523,6 @@ and proves no route reads it without `assertRelationship`.
 | `onSettlementCompleted` | payroll → Peeps | exit case id, completed at (no figures) | — |
 | `OfferCompensation` | Peeps → payroll | conversion id, employee, offer compensation lines (exact decimals), approved by | Directors |
 | `NotOnPayrollFlag` | read by Peeps | whether a joiner is on payroll yet (their Stage 5.2) — used only to show "awaiting payroll set-up" | HR sees yes/no only |
-| `LatenessWaiverDecision` | Peeps ↔ attendance | only if the guide requires it and the attendance owner agrees | — |
 
 Each is a TypeScript type in `shared/constants/peepsPayrollContract.ts` plus a read function in my
 module; a contract test pins the shape so a change on either side fails loudly.
@@ -458,7 +536,7 @@ module; a contract test pins the shape so a change on either side fails loudly.
 tax, loans, reimbursements, settlement, parity reports; report gallery code (`modules/reports/*`,
 `pages/admin/reports/*`); director navigation and settings screens; the HR switch framework
 (`shared/constants/hrCapabilities.ts`, `lib/hrCapabilities.ts`, `modules/hrCapabilities/*`,
-`HrCapabilitiesPage.tsx`); the attendance engine and WFH; `.github/workflows/*`;
+`HrCapabilitiesPage.tsx`); the attendance engine, WFH and remote attendance (check-in/out); `.github/workflows/*`;
 `docs/plans/MASTER_CHECKLIST.md`, `STAGE_REPORTS.md`, `docs/PROGRESS.md`. Also not mine by caution:
 `lib/permissions.ts`, `lib/authDefaults.ts`, `lib/directorAuthority.ts`, `lib/directorNotices.ts`
 (read/import only).
@@ -467,10 +545,10 @@ tax, loans, reimbursements, settlement, parity reports; report gallery code (`mo
 
 | File | What I add | How it stays additive |
 |---|---|---|
-| `backend/prisma/schema.prisma` | New models/enums at the **end of the file** in one block per module. Prisma requires back-relation fields on `Employee`/`User`: added as the **last lines** of those models inside `// PEEPS-BEGIN <module>` … `// PEEPS-END`. One new enum value `BADGE` on `PostKind` (last value). `queue` columns on two helpdesk models (last field). | Never reorder; never edit existing lines; `prisma format` run only if it changes nothing outside my blocks (checked by diff before commit) |
+| `backend/prisma/schema.prisma` | New models/enums at the **end of the file** in one block per module. Prisma requires back-relation fields on `Employee`/`User`: added as the **last lines** of those models inside `// PEEPS-BEGIN <module>` … `// PEEPS-END`. One new enum value `BADGE` on `PostKind` (last value). The four new leave types are **seed/migration rows** in `leave_types` (inactive), not schema changes. | Never reorder; never edit existing lines; `prisma format` run only if it changes nothing outside my blocks (checked by diff before commit) |
 | `backend/prisma/migrations/peeps_*` | One small migration per commit | New folders only; never touch a payroll table |
 | `shared/constants/permissions.ts` | Keys at the end of `PERMISSION_KEYS`, entries at the end of `PERMISSION_CATALOG`, groups at the end of `PERMISSION_GROUPS`, manager-grantable keys at the end of that list | Blocks at the end of each literal |
-| `shared/constants/sensitiveData.ts` | New classes, `REVIEWED_NOT_SENSITIVE` entries, `HR_FORBIDDEN_KEYS` additions (compensation, recovery, directors queue) | End-of-list blocks |
+| `shared/constants/sensitiveData.ts` | New classes, `REVIEWED_NOT_SENSITIVE` entries, `HR_FORBIDDEN_KEYS` additions (offer compensation, asset recovery, `helpdesk.visibility.manage`, `leave.types.approve`) | End-of-list blocks |
 | `shared/constants/hrCapabilities.ts` | **Only with agreement** (other session owns it): new Peeps capabilities | End-of-list block; or the other session adds them for me |
 | `backend/src/lib/systemRoles.ts` | Peeps keys in HR/manager/developer defaults | End-of-list blocks; plus a `peeps_` migration granting existing roles (defaults touch only new databases) |
 | `backend/src/app.ts` (`BASE_MOUNTS`) | `/api/assets`, `/api/exits`, `/api/recruitment`, `/api/badges`, `/api/nudges`, `/api/unmute`, `/api/insights`, `/api/peeps` (settings), `/api/candidate-links` (public, before `/api` auth) | Appended at the end of the list, except the public candidate-link mount, which must sit before authenticated routers (one line, in a marked block next to `/api/people/photos`) |
@@ -494,7 +572,8 @@ tax, loans, reimbursements, settlement, parity reports; report gallery code (`mo
    `feat/hr-payroll-separation` into `peeps/foundation` and re-run the suite, so step 2 should be a clean
    merge. If the other branch moves after my last checkpoint, I merge it again before you merge mine.
 3. Before step 1, agree two things with the other session: (a) who adds the Peeps HR capabilities
-   (B.0.4); (b) the helpdesk queue split (B.3) — I add the enum and HR/DIRECTORS; they add PAYROLL behaviour
+   (B.0.4) — **answered: me, in a PEEPS block**; (b) the helpdesk split (B.3) — **answered: by category; Session A
+   owns the Payroll category and its routing, I own the rest**. The text below is kept for the merge rule:
    **after** mine is merged, or they build the whole enum and I build on it. Whichever lands first, the
    other merges it before touching helpdesk.
 4. Migrations: theirs are timestamp-named and sort before every `peeps_` folder. A database that already
@@ -522,12 +601,12 @@ test must fail); full backend suite run **alone**; frontend lint, typecheck, tes
 | Foundation | Placeholder → Confirmed only by a different person (service + DB trigger + test as the app role); Not set refuses; module switch off → 404 on every route; `peepsConfidential.test.ts`: every confidential table × every persona (director, HR Admin, HR Executive, manager, Developer, unrelated employee, related people) via every route, search, tasks, notifications, exports, socket rooms (joined-room assertion) and log lines (captured pino output) |
 | Directory/avatars | `fieldPolicy` guard still green; initials fallback; per-person preference can only narrow |
 | Assets | **Single active assignment**: 20 parallel issue calls for one asset → exactly one succeeds, the rest 409, index holds even with the service lock disabled (mutation); return idempotent; HR gets 403 on valuation/recovery (hard lock, persona matrix); recovery intent append-only |
-| Ticket desk | Escalation removes HR access everywhere (queue, ticket, attachment, Tasks, socket); "concerns HR" never visible to HR; directors hand back; routing key required to change a category's queue |
-| Leave extension | Extension obeys `APPROVE_LEAVE` switch and data scope; no self-approval; ledger append-only; concurrent extend + cancel; medical document unreadable by approver/HR/director unless custodian; retention Not set refuses upload |
+| Ticket desk | A ticket in a category outside the viewer's visibility is absent everywhere (queue, ticket, attachment, Tasks, counts, search, socket); a move out of the handler's visibility removes their access; only directors change visibility (HR hard-locked); my code never reads or writes the Payroll category; existing categories without a row behave exactly as today |
+| Leave extension | A new type cannot be requested until a director (not the preparer) approves its rules; every Not set rule value refuses; requests obey `APPROVE_LEAVE` and scope; no self-approval; ledger append-only; supporting documents readable only by the uploader and HR-role holders with the key — **a Super Admin without an HR role gets 404** (mutation: drop the role check → test fails); retention Not set refuses upload; new types excluded from year-end until their rule is approved; PL year-end unchanged (existing tests) |
 | Exits | One active resignation per employee (race); acceptance creates exactly one `separations` row (idempotent on retry); checklist generated from active asset assignments; exit interview confidential matrix; `ExitSettlementInputs` contains no money field (type + runtime assertion) |
 | Recruitment | Conversion idempotent: same candidate converted twice in parallel → one employee, same id returned; re-conversion after an employee edit doesn't overwrite; offer compensation 403 for HR (hard lock) and absent from HR responses (deep scan of JSON); interviewer sees only assigned candidates and only own feedback before submitting; **expiring private links**: expired/revoked/used-up/wrong-token → same 404, token stored hashed, timing-safe compare, rate limit, no cookies accepted, upload type/size/magic-byte checks |
 | Badges/nudges | Award limit under concurrency (parallel awards over the limit → exactly the limit succeed); private nudge absent from feed, search, counts; corrective nudge cannot be edited/deleted |
-| Unmute | **Double-booking race**: N parallel bookings of one host slot → exactly one; partial unique index holds with the lock disabled (mutation); cancelled slot can be rebooked; host notes host-only; no booking data in any director/HR response, count or Insights |
+| Unmute | **Double-booking race**: N parallel bookings of one host slot → exactly one; partial unique index holds with the lock disabled (mutation); cancelled slot can be rebooked; the bookings table has no free-text column (schema test); no booking data in any director/HR/manager response, count or Insights |
 | Insights | Cohort minimum enforced after every filter combination (property test); no confidential source queried (static check of the module's Prisma calls); scope respected |
 | Payroll contract | Shape tests for every §B.11 type; Peeps never imports from `modules/payroll` except declared read functions (a lint rule / test greps imports) |
 
@@ -562,17 +641,17 @@ extraction failure must never block a joiner.
 
 | # | Module | Question | Who answers |
 |---|---|---|---|
-| Q0 | All | Please commit the integration guide (19 chapters) so section A can carry chapter numbers and my readings below can be checked. | You |
-| Q-F1 | Foundation | Confirm AS1 (confidential even from directors). | Owners |
-| Q-F2 | Foundation | Who adds the Peeps HR capabilities to the switch framework (me in a PEEPS block, or the other session)? | You / other session |
-| Q-F3 | Foundation | May `peeps/foundation` keep `main`'s three docs commits (§0.2), or start a fresh branch name from the base? | You |
+| Q0 | All | The guide was said to be in `docs/integration/` but is not on any remote branch (checked 2026-10-30). Please push it (to `feat/hr-payroll-separation`, `main` or this branch); then commit 2 adds the chapter column. | You |
+| Q-F1 | Foundation | **Answered:** AS1 confirmed. | — |
+| Q-F2 | Foundation | **Answered:** me, keys only, inside a PEEPS block; no framework change. | — |
+| Q-F3 | Foundation | **Answered:** keep `peeps/foundation`. | — |
 | Q-D1 | Directory | Per-person hiding of directory fields: wanted? Photo change review: wanted? | Owners, HR |
 | Q-A1 | Assets | Asset categories, whether employees may request, request approval route, overdue threshold. | Owners, HR |
 | Q-A2 | Assets | Is recovery for lost/damaged assets ever made, and from F&F only or salary too? (Legal side: never guessed.) | Owners |
-| Q-T1 | Ticket desk | Helpdesk queue split: who builds the `queue` enum and the PAYROLL half; which categories default to DIRECTORS. | You / other session; owners |
-| Q-L1 | Leave extension | What "leave extension" means in the guide (extend an approved leave? new leave types? medical documents?). | You (guide) |
-| Q-L2 | Leave extension | Who may see a medical document (custodians), retention period, document threshold. | Owners |
-| Q-L3 | Leave extension | Lateness waiver: in scope? If so, the attendance owner builds the engine side. | You / other session |
+| Q-T1 | Ticket desk | ~~Queue split~~ **Answered** (by category; Payroll category is Session A's). Still Not set: visibility per category; whether a "concerns HR" category exists. | Owners |
+| Q-L1 | Leave extension | **Answered** (four new types, HR prepares, director approves, HR-only documents, Annual Leave = PL). | — |
+| Q-L2 | Leave extension | Every rule value per type; retention of supporting documents; calendar label; whether to show "Annual Leave" for PL. | HR prepares, a director approves |
+| Q-L3 | Leave extension | ~~Lateness waiver~~ Out of my scope (attendance and remote attendance are Session A's). | — |
 | Q-E1 | Exits | Notice rules (per type/grade), legal minimums with source note; may a manager reject a resignation; who accepts when the manager is missing (AS4). | Owners (legal values: an owner enters, a different director confirms) |
 | Q-E2 | Exits | Exit checklist templates and owners; exit interview questions; who interviews; retention. | HR, owners |
 | Q-E3 | Exits | Does exits trigger the relieving letter request automatically (directors issue)? | Owners |
@@ -581,10 +660,10 @@ extraction failure must never block a joiner.
 | Q-R3 | Recruitment | Joining-document list, link expiry, exception approver (AS3). | HR, owners |
 | Q-R4 | Recruitment | Candidate e-mails: reuse letter/email templates (`letters.template.manage`, HR may edit) or a separate recruitment template set? | Owners |
 | Q-B1 | Badges/nudges | Badge catalogue, who awards, limits, public vs private; who sends nudges of each kind (AS2/AS2b). | Owners, HR |
-| Q-U1 | Unmute | Confirm my reading (private conversations with trained hosts); host roster; slot length; booking window; safety escalation policy; retention of host notes. | You (guide), owners |
-| Q-I1 | Insights | Which insights, for whom; minimum cohort size. | Owners |
+| Q-U1 | Unmute | **Answered** (authorised hosts from any department; scheduling and completion only; participants only; no notes/topic). Still Not set: roster and who maintains it, slot length, booking window, cancellation cut-off, retention. | Owners |
+| Q-I1 | Insights | **Answered** (turnover, tenure, exit reasons, hiring funnel; scoped; small-group privacy). Still Not set: each metric definition, minimum group size. | Owners |
 | Q-X1 | Autofill | §E questions. | Owners |
-| Q-X2 | Auth | 2FA optional for directors (decision) vs mandatory in code and payroll readiness — who changes it? | You / other session |
+| Q-X2 | Auth | **Answered:** Session A makes it optional; not touched by me. | — |
 
 ---
 
@@ -593,7 +672,7 @@ extraction failure must never block a joiner.
 | # | Module | Commit | Size |
 |---|---|---|---|
 | 1 | Docs | This plan, checklist, stage report | small (this commit) |
-| 2 | Docs | Chapter mapping once the guide is committed | small |
+| 2 | Docs | Chapter mapping once the guide is pushed (**blocked**: not on the remote) | small |
 | 3 | Foundation | `peeps_setting_versions` / confirmations, `assertModuleReady`, module switches, migration, tests | medium |
 | 4 | Foundation | Confidential-access helper + `peepsConfidential.test.ts` harness (empty class list, grows per module) | medium |
 | 5 | Foundation | Peeps settings screen (Admin Tools), Not set / Placeholder / Confirmed states | medium |
@@ -602,9 +681,9 @@ extraction failure must never block a joiner.
 | 8 | Assets | Assignment/return with single-active guarantee, race test, history | medium |
 | 9 | Assets | Requests, incidents, recovery intents (director-only), contract type | medium |
 | 10 | Assets | Screens (admin inventory, detail, my assets, profile tab), sensitive-ui/popovers | medium |
-| 11 | Ticket desk | Queue enum + HR/DIRECTORS + escalation + "concerns HR", tests, screen changes | medium |
-| 12 | Leave ext. | Extension requests through the leave service, tests | medium |
-| 13 | Leave ext. | Medical document store (confidential), retention, access log, screens | medium |
+| 11 | Ticket desk | Category visibility (general categories only), move between categories, tests, screen changes | medium |
+| 12 | Leave ext. | Audit of fixed-type assumptions in the leave code; four inactive types; rule versions (HR prepares, director approves); requests through the leave service; tests | large |
+| 13 | Leave ext. | HR-only supporting documents, retention, access log, year-end exclusion, screens | medium |
 | 14 | Exits | Resignations + acceptance → `initiateSeparation`, tests | medium |
 | 15 | Exits | Checklist templates/items + asset return gate; screens from `checklist-*` | large |
 | 16 | Exits | Exit interviews (confidential), `ExitSettlementInputs` contract | medium |
@@ -617,8 +696,8 @@ extraction failure must never block a joiner.
 | 23 | Recruitment | Screens from `recruitment-01..19` (+ phone) | large |
 | 24 | Badges | Catalogue, awards, limits, Engage `BADGE` posts, screens | medium |
 | 25 | Nudges | Private nudges (confidential), screens | small |
-| 26 | Unmute | Hosts, availability, bookings with race guard, notes, screens | large |
-| 27 | Insights | Aggregates with cohort minimum, screens | medium |
+| 26 | Unmute | Hosts, availability, bookings with race guard (no notes or topic), screens | medium |
+| 27 | Insights | Turnover, tenure, exit reasons, hiring funnel; definition settings; small-group minimum; screens | medium |
 | 28 | All | Seed + demo company (DEMO values), GETTING_STARTED, UI_SCREEN_MAP rows, stage report | medium |
 | — | Autofill | Nothing until §E is answered | — |
 

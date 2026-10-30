@@ -7,14 +7,17 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 ## P0 — Planning (this stage)
 - [x] Git clean; fetched; base `feat/hr-payroll-separation` at `8979072` merged into `peeps/foundation` (`2a4fad1`, no force-push)
 - [x] `PEEPS_PLAN.md` sections A–G, `PEEPS_CHECKLIST.md`, `PEEPS_STAGE_REPORTS.md` — commit: see stage report P0
-- [ ] **STOP: owner reviews the plan and answers §F** (at least Q0, Q-F1..Q-F3 before commit 3)
+- [x] Owner reviewed the plan; answers recorded at the top of `PEEPS_PLAN.md` (2026-10-30)
+- [x] Plan updated with the answers; base merged again (`0621f82`)
+- [ ] **STOP: wait for the first build prompt**
 
 ## Waiting on (never guessed)
-- [ ] Q0 integration guide committed → commit 2 (chapter mapping)
-- [ ] AS1–AS4 confirmed by the owners
-- [ ] Q-F2 Peeps HR capabilities: who edits `hrCapabilities.ts`
-- [ ] Q-T1 helpdesk queue split agreed with the other session
-- [ ] Q-X2 two-step sign-in for directors (not mine)
+- [ ] Q0 integration guide **pushed** → commit 2 (chapter mapping). Not on the remote as of 2026-10-30
+- [x] AS1 confirmed (relationship-based design stays)
+- [ ] AS2–AS4 stay settings, Not set (answered: build them as settings)
+- [x] Q-F2 answered: me, keys only, inside a PEEPS block
+- [x] Q-T1 answered: visibility by category; Payroll category is Session A's
+- [x] Q-X2 answered: Session A makes it optional; not touched by me
 - [ ] Every module's Not set settings (PEEPS_PLAN §F) — modules refuse to switch on until set and confirmed
 
 ## Foundation (checkpoint after 5)
@@ -33,12 +36,12 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 - [ ] 10 screens, sensitive-ui/popovers
 
 ## Ticket desk
-- [ ] 11 queues HR/DIRECTORS, escalation, "concerns HR"
+- [ ] 11 category visibility (general categories), move between categories
 - [ ] CHECKPOINT B
 
 ## Leave extension
-- [ ] 12 extension requests
-- [ ] 13 medical document store (confidential)
+- [ ] 12 four new leave types: rules prepared by HR, approved by a director; requests
+- [ ] 13 HR-only supporting documents; year-end exclusion until rules approved
 
 ## Exits
 - [ ] 14 resignations → `initiateSeparation`
@@ -59,8 +62,8 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 ## Badges, nudges, Unmute, Insights
 - [ ] 24 badges
 - [ ] 25 private nudges (confidential)
-- [ ] 26 Unmute (double-booking race test)
-- [ ] 27 Insights (cohort minimum)
+- [ ] 26 Unmute: scheduling + completion only, participants only, no notes/topic (double-booking race test)
+- [ ] 27 Insights: turnover, tenure, exit reasons, hiring funnel (definitions Not set, small-group minimum)
 
 ## Close-out
 - [ ] 28 seed + demo (DEMO labels), GETTING_STARTED, UI_SCREEN_MAP
