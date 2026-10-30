@@ -146,11 +146,12 @@ describe("a correction to a final month, end to end", () => {
     expect(other.lines.filter((l: { source: string }) => l.source === "LOP_REVERSAL")).toEqual([]);
   });
 
-  it("is a director's act: somebody without payroll permission is refused, and nobody can correct their own pay", async () => {
+  it("is a director's act: somebody without payroll permission is refused; a director's own is allowed (and recorded), then meets the ordinary checks", async () => {
     expect((await preview({ correctionRef: "ATT-9" }, w.tokens.outsider)).status).toBe(403);
     expect((await post("/lop-corrections", { input: input({ correctionRef: "ATT-9" }), fingerprint: "x" }, w.tokens.outsider)).status).toBe(403);
     const own = await request(app).post("/api/payroll/lop-corrections/preview").set(...authHeader(maker())).send({ input: input({ employeeId: w.maker.employeeId, correctionRef: "ATT-9" }) });
-    expect(own.status).toBe(403);
+    expect([own.status, own.body.error.code]).toEqual([409, "NOT_IN_RUN"]); // not refused as their own pay: it goes on to the ordinary checks (they were not in that run)
+    expect(await prisma.auditLog.count({ where: { actorUserId: w.maker.userId, action: "payroll.self_pay_change" } })).toBeGreaterThan(0);
   });
 
   it("a preview that no longer matches is refused", async () => {

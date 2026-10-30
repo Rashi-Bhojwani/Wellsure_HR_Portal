@@ -341,7 +341,7 @@ export async function resolveSelection(input: RevisionInput, actorUserId: string
     else ids = (await prisma.employee.findMany({ where: employedOn(day), select: { id: true } })).map((e) => e.id);
     const names = await namesOn(ids, day);
     if (own && ids.includes(own)) {
-      skipped.push({ employeeId: own, name: names.get(own) ?? "You", reason: "Your own pay: somebody else has to prepare a change to it." });
+      skipped.push({ employeeId: own, name: names.get(own) ?? "You", reason: "Your own pay is not part of a bulk change. Pick yourself by name to change it (it is recorded, and the other director is told)." });
       ids = ids.filter((i) => i !== own);
     }
     if (sel.kind !== "STRUCTURE") {

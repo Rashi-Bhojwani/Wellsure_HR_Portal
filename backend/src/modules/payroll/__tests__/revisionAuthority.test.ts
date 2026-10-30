@@ -49,18 +49,19 @@ describe("a salary revision on director authority", () => {
     expect(r.status).toBe(403);
   });
 
-  it("a director's own pay is never set by that director: the other one does it, on authority, at once", async () => {
+  it("a director may set their own pay on their own authority: the act is audited, tagged SELF_CHANGE, and the other director is told", async () => {
     const own = world.maker.employeeId;
-    const refused = await call(world.tokens.maker, "post", "/salary/revisions/preview", { input: inputFor(own, "9000000") });
-    expect(refused.status).toBe(403);
-    const { created } = await create(world.tokens.checkerA, own, "900000");
-    expect(created.status).toBe(201);
+    const preview = await call(world.tokens.maker, "post", "/salary/revisions/preview", { input: inputFor(own, "9000000") });
+    expect(preview.status, JSON.stringify(preview.body)).toBe(200);
+    const { created } = await create(world.tokens.maker, own, "900000");
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
     const approval = await prisma.payrollApproval.findFirstOrThrow({ where: { subject: "SALARY_REVISION", subjectId: created.body.id } });
-    expect([approval.status, approval.authority, approval.makerUserId]).toEqual(["APPROVED", "DIRECTOR_AUTHORITY", world.checkerA.userId]);
-    // The director whose pay it is may neither apply nor cancel it.
-    const own1 = await call(world.tokens.maker, "post", `/salary/revisions/${created.body.id}/apply`);
-    expect(own1.status).toBe(403);
-    expect((await call(world.tokens.checkerA, "post", `/salary/revisions/${created.body.id}/apply`)).status).toBe(200);
+    expect([approval.status, approval.authority, approval.makerUserId]).toEqual(["APPROVED", "DIRECTOR_AUTHORITY", world.maker.userId]);
+    expect((await call(world.tokens.maker, "post", `/salary/revisions/${created.body.id}/apply`)).status).toBe(200);
+    expect(await prisma.auditLog.count({ where: { actorUserId: world.maker.userId, action: "payroll.self_pay_change" } })).toBeGreaterThan(0);
+    const notices = await prisma.directorActionNotice.findMany({ where: { actorUserId: world.maker.userId, subjectType: "SELF_PAY_CHANGE" }, include: { receipts: true } });
+    expect(notices.length).toBeGreaterThan(0);
+    expect(notices.every((n) => n.receipts.some((r) => r.recipientUserId !== world.maker.userId))).toBe(true); // somebody else is told
   });
 
   it("with the check switched on for salary revisions it waits for the other director, as it always did", async () => {

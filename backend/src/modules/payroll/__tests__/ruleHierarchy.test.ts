@@ -146,9 +146,14 @@ describe("overrides, end to end", () => {
     await bad({ targetId: "no-such-person" }, "NOT_FOUND");
     await bad({ level: "DEPARTMENT", targetId: "no-such-department" }, "NOT_FOUND");
     await bad({ level: "COMPANY" }, "VALIDATION_ERROR");
-    await bad({ targetId: w.maker.employeeId }, "SELF_PAY");
     expect((await preview({}, w.tokens.outsider)).status).toBe(403);
     expect((await request(app).get("/api/payroll/rule-overrides").set(...authHeader(w.tokens.outsider))).status).toBe(403);
+  });
+
+  it("a director may make an override for themselves: it is recorded as a self-change and the other director is told", async () => {
+    const own = await preview({ targetId: w.maker.employeeId, ruleKey: "PF_ADMIN_RATE", value: "0.4" });
+    expect(own.status, JSON.stringify(own.body)).toBe(200);
+    expect(await prisma.auditLog.count({ where: { actorUserId: w.maker.userId, action: "payroll.self_pay_change" } })).toBeGreaterThan(0);
   });
 
   it("saves as a Placeholder with its dates, reason, source note and registration reference; the same window cannot be entered twice, and windows cannot overlap", async () => {

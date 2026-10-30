@@ -31,20 +31,22 @@ describe("hold salary and release it", () => {
     await teardownRunWorld(w);
   });
 
-  it("holds a person's month with a reason; only a director, never for their own pay; a month is held once", async () => {
+  it("holds a person's month with a reason; only a director; a director's own is allowed and recorded; a month is held once", async () => {
     const a = await hold("a");
     expect(a.status, JSON.stringify(a.body)).toBe(201);
     holdIds.a = a.body.id;
     holdIds.b = (await hold("b")).body.id;
     expect((await hold("c", {}, w.tokens.outsider)).status).toBe(403);
-    expect((await hold("c", { employeeId: w.maker.employeeId })).status).toBe(403); // not their own pay
+    const ownHold = await hold("c", { employeeId: w.maker.employeeId, cycleStart: "2026-07-01" });
+    expect(ownHold.status, JSON.stringify(ownHold.body)).toBe(201); // a director may hold their own pay (owner decision) ...
+    expect(await prisma.auditLog.count({ where: { actorUserId: w.maker.userId, action: "payroll.self_pay_change" } })).toBeGreaterThan(0); // ... and it is recorded
     const again = await hold("a");
     expect([again.status, again.body.error.code]).toEqual([409, "HOLD_EXISTS"]);
     expect((await hold("c", { reason: "x" })).status).toBe(400);
     expect((await hold("c", { cycleStart: "2026-08-15" })).status).toBe(400); // not the first day of a period
     const list = await request(app).get("/api/payroll/holds?status=HELD").set(...authHeader(maker()));
     expect(list.status).toBe(200);
-    expect(list.body.holds.map((h: { id: string }) => h.id).sort()).toEqual([holdIds.a, holdIds.b].sort());
+    expect(list.body.holds.map((h: { id: string }) => h.id)).toEqual(expect.arrayContaining([holdIds.a, holdIds.b])); // (and the director's own hold of the line above)
     expect((await request(app).get("/api/payroll/holds").set(...authHeader(w.tokens.outsider))).status).toBe(403);
   });
 
