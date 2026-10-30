@@ -6,7 +6,7 @@ import { formatRupees } from "../../../lib/money";
 
 export const describeComponent = (v: unknown): string => {
   const c = v as ComponentValue;
-  return `${c.name}: ${COMPONENT_TYPE_LABEL[c.type].toLowerCase()}${c.taxable ? ", taxable" : ""}${c.pfApplicable ? ", PF" : ""}${c.esiApplicable ? ", ESI" : ""}${c.prorates ? ", pro-rates" : ""}`;
+  return `${c.name}: ${COMPONENT_TYPE_LABEL[c.type].toLowerCase()}${c.taxable === null ? ", taxable: not set" : c.taxable ? ", taxable" : ""}${c.pfApplicable ? ", PF" : ""}${c.esiApplicable ? ", ESI" : ""}${c.prorates ? ", pro-rates" : ""}`;
 };
 
 export function describeCalc(calc: LineCalc, nameOf: (code: string) => string): string {

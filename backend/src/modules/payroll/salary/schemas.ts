@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { COMPONENT_TYPES, ITEM_CODE_PATTERN, RESERVED_COMPONENT_CODES, type ComponentType } from "@shared/constants/payrollSalary";
+import { COMPONENT_TYPES, HEAD_KINDS, HEAD_KINDS_NOT_IN_STRUCTURE, ITEM_CODE_PATTERN, RESERVED_COMPONENT_CODES, type ComponentType } from "@shared/constants/payrollSalary";
 import { FormulaError, parseFormula } from "../formula";
 import { decimalText, percent } from "../rules/schemas";
 
@@ -19,18 +19,39 @@ const code = z
   .regex(ITEM_CODE_PATTERN, "A code is capital letters, digits and underscores, starting with a letter (for example BASIC or SPECIAL_ALLOWANCE)")
   .refine((c) => !(RESERVED_COMPONENT_CODES as readonly string[]).includes(c), "That code is reserved: PF, ESI, PT, LWF and TDS are produced by the calculator from rules, and CTC and ARREARS have fixed meanings");
 
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "A date is written year-month-day, for example 2027-04-01");
+
+// A pay head. The first block is what a component has always had. The second is what the directors may add; every one of them is optional so that a stored
+// version from before them still reads, and "absent" always means Not set, never a default. `taxable: null` is "Not set": a head in that state cannot go into a
+// structure or a salary.
 export const componentValueSchema = z
   .object({
     name: z.string().trim().min(2, "Give it a name").max(60),
     type: z.enum(COMPONENT_TYPES),
-    taxable: z.boolean(),
+    taxable: z.boolean().nullable(),
     pfApplicable: z.boolean(),
     esiApplicable: z.boolean(),
     prorates: z.boolean(),
     payslipLabel: z.string().trim().min(1, "Say what it is called on the payslip").max(60),
     payslipOrder: z.number().int().min(1).max(999),
+    headKind: z.enum(HEAD_KINDS).optional(),
+    oneTime: z.boolean().optional(),
+    carryForward: z.boolean().optional(),
+    reimbursement: z.boolean().optional(),
+    ctcGroup: z.string().trim().min(1).max(40).optional(),
+    ytd: z.boolean().optional(),
+    bankTransfer: z.boolean().optional(),
+    payslipVisible: z.boolean().optional(),
+    activeFrom: isoDate.optional(),
+    activeTo: isoDate.optional(),
+    arrearsHead: code.optional(),
+    reversalHead: code.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((v, ctx) => {
+    if (v.activeFrom && v.activeTo && v.activeTo < v.activeFrom) ctx.addIssue({ code: "custom", path: ["activeTo"], message: "The last day cannot be before the first day" });
+    if (v.reimbursement && v.headKind && v.headKind !== "REIMBURSEMENT" && v.headKind !== "EARNING") ctx.addIssue({ code: "custom", path: ["reimbursement"], message: "Only an earning or a reimbursement can be flagged as a reimbursement" });
+  });
 export type ComponentValue = z.infer<typeof componentValueSchema>;
 
 const calcSchema = z.discriminatedUnion("method", [
@@ -57,6 +78,29 @@ export const structureValueSchema = z
 export type StructureValue = z.infer<typeof structureValueSchema>;
 
 const issuesOf = (err: z.ZodError): string[] => err.issues.map((i) => `${i.path.length ? `${i.path.join(".")}: ` : ""}${i.message}`);
+
+/** What has to be chosen before a head can be used in a structure or a salary. Empty when nothing is Not set. */
+export function notSetChoices(v: ComponentValue): string[] {
+  const out: string[] = [];
+  if (v.taxable === null) out.push("whether it is taxable");
+  return out;
+}
+
+/** A head is active on a day when that day is inside its from/to dates (a missing date is open on that side). */
+export function isActiveOn(v: Pick<ComponentValue, "activeFrom" | "activeTo">, day: string): boolean {
+  return (!v.activeFrom || v.activeFrom <= day) && (!v.activeTo || v.activeTo >= day);
+}
+
+/** Why a head cannot be a line of a structure, or null. Pure: the caller supplies the day. */
+export function unusableInStructure(code: string, v: ComponentValue, day: string): string | null {
+  if (v.headKind && HEAD_KINDS_NOT_IN_STRUCTURE.includes(v.headKind)) {
+    return `${code} is a ${v.headKind === "COUNTER" ? "counter, which feeds formulas and is not a paid line" : "statutory head, which the calculator produces from rules"}, so it cannot be a line of a structure.`;
+  }
+  const missing = notSetChoices(v);
+  if (missing.length) return `${code} has ${missing.join(" and ")} not set yet. Choose it (and have a different director confirm) before using the head.`;
+  if (!isActiveOn(v, day)) return `${code} is not active on ${day} (it runs ${v.activeFrom ?? "from the start"} to ${v.activeTo ?? "no end date"}).`;
+  return null;
+}
 
 export function parseComponentValue(raw: unknown): ComponentValue {
   const r = componentValueSchema.safeParse(raw);

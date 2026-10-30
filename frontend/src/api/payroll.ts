@@ -115,17 +115,31 @@ export async function getCheckers(subject: string): Promise<CheckerAvailability>
 // ── Salary (P6-2): components, structures, people's salaries, revisions, adjustments ──
 
 export type ComponentType = "EARNING" | "DEDUCTION" | "EMPLOYER_CONTRIBUTION";
+export type HeadKind = "EARNING" | "DEDUCTION" | "ONE_OFF" | "REIMBURSEMENT" | "COUNTER" | "STATUTORY";
 export type ItemStatus = RuleStatus;
 
 export interface ComponentValue {
   name: string;
   type: ComponentType;
-  taxable: boolean;
+  /** null is "Not set": the head cannot be used until somebody chooses. */
+  taxable: boolean | null;
   pfApplicable: boolean;
   esiApplicable: boolean;
   prorates: boolean;
   payslipLabel: string;
   payslipOrder: number;
+  headKind?: HeadKind;
+  oneTime?: boolean;
+  carryForward?: boolean;
+  reimbursement?: boolean;
+  ctcGroup?: string;
+  ytd?: boolean;
+  bankTransfer?: boolean;
+  payslipVisible?: boolean;
+  activeFrom?: string;
+  activeTo?: string;
+  arrearsHead?: string;
+  reversalHead?: string;
 }
 
 export interface ComponentView {
