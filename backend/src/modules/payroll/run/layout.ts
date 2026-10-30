@@ -108,6 +108,10 @@ export function parseLayout(kind: LayoutKind, raw: unknown): Layout {
     if (c.source === "PATTERN") for (const t of tokensIn(c.value)) if (!tokens.has(t) || (!rowCell && known.has(t) && !FILE_TOKENS.includes(t as (typeof FILE_TOKENS)[number]))) problems.push(`${where}: {${t}} is not available here`);
     if (layout.format === "FIXED_WIDTH" && c.width === undefined) problems.push(`${where}: a fixed-width file needs a width for every column`);
   };
+  // The files this system writes: .xlsx (a spreadsheet) and .csv (or another delimited text). A legacy .xls writer is deliberately not built, so a layout cannot ask for one.
+  if (["xls", "xlsm", "xlsb"].includes(layout.extension)) problems.push(`extension: a .${layout.extension} file is not written (only .xlsx for a spreadsheet, or a delimited text file such as .csv)`);
+  if (layout.format === "XLSX" && layout.extension !== "xlsx") problems.push("extension: a spreadsheet layout is written as .xlsx");
+  if (layout.format !== "XLSX" && layout.extension === "xlsx") problems.push("extension: a text layout cannot be named .xlsx; choose the spreadsheet format for an .xlsx file");
   layout.columns.forEach((c, i) => checkCell(c, `column ${i + 1}`, true));
   layout.header.forEach((row, r) => row.forEach((c, i) => checkCell(c, `header row ${r + 1}, cell ${i + 1}`, false)));
   layout.trailer.forEach((row, r) => row.forEach((c, i) => checkCell(c, `trailer row ${r + 1}, cell ${i + 1}`, false)));
