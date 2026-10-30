@@ -37,7 +37,7 @@ export function CancelPlanBlock({ plan, componentName }: { plan: CancelPlanView;
 }
 
 /**
- * Cancelling a salary that has been written but has not started. Cancelling a raise is a pay change like any other, so it is previewed, a different person approves
+ * Cancelling a salary that has been written but has not started. Cancelling a raise is a pay change like any other, so it is previewed, a director approves
  * exactly these figures, and only then is it removed: this dialog prepares and submits it, and the revision page is where it is decided and applied.
  */
 export function CancelScheduledModal({ employeeId, salaryId, componentName, onClose, onSubmitted }: { employeeId: string; salaryId: string; componentName: (c: string) => string; onClose: () => void; onSubmitted: (revisionId: string) => void }) {
@@ -63,7 +63,7 @@ export function CancelScheduledModal({ employeeId, salaryId, componentName, onCl
             <CancelPlanBlock plan={data} componentName={componentName} />
             {data.blockers.length > 0 && <Alert type="error" showIcon title="It cannot be submitted yet" description={<ul style={{ margin: 0, paddingLeft: 18 }}>{data.blockers.map((b) => <li key={b}>{b}</li>)}</ul>} />}
             <CheckersNote checkers={data.checkers} what="this cancellation" />
-            <Descriptions size="small" column={1} items={[{ key: "w", label: "What happens next", children: "A different person approves exactly what is shown above. Nothing changes until they have, and then you apply it. If this person's salary changes in between, the approval is void." }]} />
+            <Descriptions size="small" column={1} items={[{ key: "w", label: "What happens next", children: "A director approves exactly what is shown above. Nothing changes until they have, and then you apply it. If this person's salary changes in between, the approval is void." }]} />
             <Input.TextArea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={500} placeholder="Why this scheduled salary is being cancelled (required: the person who approves it will read this)" />
             {problem && <Alert type="error" showIcon title={problem} />}
           </>

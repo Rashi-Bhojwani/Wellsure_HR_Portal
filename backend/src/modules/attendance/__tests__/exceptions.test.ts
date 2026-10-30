@@ -146,6 +146,10 @@ describe("Exceptions queue (Phase 3 commit 3)", () => {
     expect((await api(tok.emp).get(`/exceptions?${q()}`)).status).toBe(403);
     const perm = await prisma.permission.findUniqueOrThrow({ where: { key: "attendance.view" } });
     const grant = await prisma.userPermissionOverride.create({ data: { userId: p.emp.userId, permissionId: perm.id, effect: "GRANT", reason: "exceptions test", createdByUserId: p.hr.userId } });
+    // Stage 1: the queue has its own key (split from View attendance); View attendance alone no longer opens it.
+    expect((await api(await loginAs(p.emp.employeeCode)).get(`/exceptions?${q()}`)).status).toBe(403);
+    const queuePerm = await prisma.permission.findUniqueOrThrow({ where: { key: "attendance.exceptions.view" } });
+    const queueGrant = await prisma.userPermissionOverride.create({ data: { userId: p.emp.userId, permissionId: queuePerm.id, effect: "GRANT", reason: "exceptions test", createdByUserId: p.hr.userId } });
     await day(p.emp, D[1]!, ["MISSING_PUNCH"]);
     try {
       const mine = await api(await loginAs(p.emp.employeeCode)).get(`/exceptions?${q({ pageSize: 100 })}`);
@@ -159,6 +163,7 @@ describe("Exceptions queue (Phase 3 commit 3)", () => {
       expect((await api(await loginAs(p.emp.employeeCode)).post("/exceptions/assign-shift/preview", { keys: [{ employeeId: p.emp.employeeId, date: D[1] }], shiftId })).status).toBe(403);
     } finally {
       await prisma.userPermissionOverride.delete({ where: { id: grant.id } });
+      await prisma.userPermissionOverride.delete({ where: { id: queueGrant.id } });
     }
   });
 

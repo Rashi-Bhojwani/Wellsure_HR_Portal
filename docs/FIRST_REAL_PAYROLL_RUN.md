@@ -23,7 +23,7 @@ Plain terms used below:
 | The person who checks payroll | Payroll Approver | Confirms what the preparer typed, approves runs and signs off people's details |
 | HR | HR Admin | Keeps employee records; does **not** see salaries or bank details unless you also give them those permissions |
 
-The checklist has an item "At least two different people can prepare and approve payroll". It stays red until this is true. Everyone who handles payroll must also turn on two-step sign-in (Account Security); that is another checklist item.
+The checklist has an item "At least two active directors" (two Super Admin accounts). It stays red until this is true. **Go-live condition: every director must turn on two-step sign-in (Account Security) before the first real run.** The checklist row covers every director and, outside development, no exemption applies. Steps: sign in, open Account Security, choose two-step sign-in, scan the code with an authenticator app, keep the backup codes somewhere safe and separate. A director acts on their own authority by default and the other director is told of each act; the owners may switch any step's second-director check on in System Settings → Director authority.
 
 **The developer** should have the role *Developer / operator* and nothing else. This role is cut off, in the program, from every salary, bank, identifier and layout screen. The checklist has a table, **Payroll → Setup Checklist → "Who can see and change this"**, that names every person who can see each kind of secret. Read it once before you start; if any name there surprises you, fix the roles first.
 
@@ -195,3 +195,7 @@ These cannot be proved without your real data and real bank and portals; the dev
 - That payslip **emails arrive** (the production mail service, its sending limits and its bounce handling are set up last).
 
 Do each of these once, on the first real month, with someone watching, and write down the result.
+
+
+## Before anything else: who decides each payroll step
+Open Admin Tools, System Settings, **Director authority**. For each of the eight payroll steps one director chooses "a different director must decide" or "the acting director decides alone (the other is told)", and the **other** director confirms it. There is no default. Until all eight are set and confirmed, payroll will not run and **Ready for first real run** is red. We recommend "a different director must decide" for approving a run, the bank file, salary revisions and confirming rules.

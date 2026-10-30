@@ -11,6 +11,10 @@ import { autoCloseResolvedTickets } from "../modules/helpdesk/service";
 import { processLetterJob } from "../modules/letters/service";
 import { LETTERS_QUEUE_NAME } from "./lettersQueue";
 import { SECURITY_ALERT_QUEUE_NAME } from "./securityAlertQueue";
+import { DIRECTOR_NOTICE_QUEUE } from "./directorNoticeQueue";
+import { HR_CAPABILITY_QUEUE } from "./hrCapabilityQueue";
+import { notifySubjectAccessChanged } from "../modules/hrCapabilities/service";
+import { deliverDirectorNotice, sweepDirectorNotices } from "../lib/directorNotices";
 import { mailService, type MailMessage } from "../integrations/mail";
 import { ATTENDANCE_DEVICE_HEALTH_QUEUE, ATTENDANCE_MANUAL_REMINDER_QUEUE, ATTENDANCE_NIGHTLY_QUEUE, ATTENDANCE_PROCESS_QUEUE, ATTENDANCE_RECOMPUTE_QUEUE } from "./attendanceQueues";
 import { runManualReminder } from "../modules/attendance/manual/reminder";
@@ -173,6 +177,26 @@ export function startWorkers(): Worker[] {
     logger.error({ event: "security.breakglass.alert_undelivered", jobId: job?.id, attempt: job?.attemptsMade, err }, "break-glass alert email still not delivered");
   });
 
+  // D1 (docs/plans/DIRECTOR_AUTHORITY.md §6): what a director's act tells the other director, delivered after the act has committed, and the hourly sweep that
+  // retries undelivered notices and raises the red banner for one left unacknowledged past the escalation days.
+  const directorNoticeWorker = new Worker(
+    DIRECTOR_NOTICE_QUEUE,
+    async (job) => {
+      if (job.name === "sweep") return sweepDirectorNotices();
+      return deliverDirectorNotice((job.data as { noticeId: string }).noticeId);
+    },
+    { connection: createBullConnection() },
+  );
+  directorNoticeWorker.on("failed", (job, err) => logger.error({ event: "director.notice.job_failed", jobId: job?.id, err }, "director notice job failed"));
+
+  // Stage 1: an HR capability switch with a future start takes effect for sockets and menus at its own moment (access is resolved from the rows on every request regardless).
+  const hrCapabilityWorker = new Worker(
+    HR_CAPABILITY_QUEUE,
+    async (job) => notifySubjectAccessChanged((job.data as { subjectKind: string; subjectKey: string }).subjectKind, (job.data as { subjectKind: string; subjectKey: string }).subjectKey),
+    { connection: createBullConnection() },
+  );
+  hrCapabilityWorker.on("failed", (job, err) => logger.error({ event: "hr.capability.activate_failed", jobId: job?.id, err }, "hr capability activation job failed"));
+
   // Payroll (Phase 6 P6-3): one calculation at a time per worker. The job id is the lease owner, so BullMQ handing a stalled job to this worker again
   // takes the run over at once instead of waiting for the lease to run out.
   const payrollCalculateWorker = new Worker(PAYROLL_CALCULATE_QUEUE, async (job) => executeCalculation((job.data as { runId: string }).runId, `job-${job.id}`), { connection: createBullConnection(), concurrency: 1 });
@@ -180,5 +204,5 @@ export function startWorkers(): Worker[] {
   const payrollPayslipsWorker = new Worker(PAYROLL_PAYSLIPS_QUEUE, async (job) => deliverPayslips((job.data as { runId: string }).runId), { connection: createBullConnection(), concurrency: 1 });
   payrollPayslipsWorker.on("failed", (job, err) => logger.error({ jobId: job?.id, err }, "payroll-payslips job failed"));
 
-  return [pingWorker, rolloverWorker, separationsWorker, leavePlAccrualWorker, compOffExpiryWorker, engageAutoPostsWorker, helpdeskAutoCloseWorker, lettersWorker, securityAlertWorker, recomputeWorker, nightlyWorker, processWorker, reminderWorker, deviceHealthWorker, payrollCalculateWorker, payrollPayslipsWorker];
+  return [pingWorker, rolloverWorker, separationsWorker, leavePlAccrualWorker, compOffExpiryWorker, engageAutoPostsWorker, helpdeskAutoCloseWorker, lettersWorker, securityAlertWorker, recomputeWorker, nightlyWorker, processWorker, reminderWorker, deviceHealthWorker, payrollCalculateWorker, payrollPayslipsWorker, directorNoticeWorker, hrCapabilityWorker];
 }

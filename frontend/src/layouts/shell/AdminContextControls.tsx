@@ -3,6 +3,8 @@ import { TeamOutlined } from "@ant-design/icons";
 import { useAdminFilters } from "../../context/AdminFiltersContext";
 import { space } from "../../theme/tokens";
 
+// Stage 1: the branch names that used to be listed here were typed in by hand. Branches are data (Organisation Setup), never code, so the list is only "All employees" until this filter
+// is built to read them from the server and to change what a page shows.
 // The admin portal's global context (docs/UI_REFERENCE.md §2.0): payroll month and employee filter, in the top bar on desktop. Loaded lazily by AdminLayout so
 // the date picker (and dayjs) stays out of the shell's first download.
 export function AdminContextControls() {
@@ -16,13 +18,7 @@ export function AdminContextControls() {
         onChange={setEmployeeFilter}
         suffixIcon={<TeamOutlined />}
         style={{ width: 168 }}
-        options={[
-          { value: "all", label: "All employees" },
-          { value: "c-10-panchsheel", label: "C-10 Panchsheel" },
-          { value: "ajmer", label: "Ajmer" },
-          { value: "spn-panchsheel", label: "SPN-Panchsheel" },
-          { value: "b-22-panchsheel", label: "B-22 Panchsheel" },
-        ]}
+        options={[{ value: "all", label: "All employees" }]}
       />
     </div>
   );

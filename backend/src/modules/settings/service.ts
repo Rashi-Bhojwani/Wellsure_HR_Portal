@@ -1,6 +1,10 @@
-import { default2faRoles } from "../../lib/authDefaults";
+import { env } from "../../config/env";
+import { default2faRoles, with2faFloor } from "../../lib/authDefaults";
 import { getSetting, setSetting } from "../../lib/settings";
 import { writeAuditLog } from "../../lib/audit";
+import { isDirector } from "../../lib/directorAuthority";
+import { recordDirectorNotice, scheduleDelivery } from "../../lib/directorNotices";
+import { prisma } from "../../lib/prisma";
 import { RATE_LIMIT_DEFAULTS, RATE_LIMIT_KEYS, type LeaveSettings, type RateLimitSetting, type SecuritySettings } from "./types";
 import type { z } from "zod";
 import type { updateDeviceAlertSettingsSchema, updateRegularizationSettingsSchema, updateExcessHoursSettingsSchema, updateDeviceHealthSettingsSchema, updateHelpdeskSettingsSchema, updateLeaveSettingsSchema, updatePeopleDocumentsSettingsSchema, updateSettingsSchema } from "./validators";
@@ -12,6 +16,19 @@ import { DEVICE_HEALTH_SETTING_KEY, getDeviceHealthThresholds } from "../../lib/
 import { HttpError } from "../../middleware/errorHandler";
 import { getPeopleDocumentsSettings, PEOPLE_DOCUMENTS_SETTING_KEYS, type PeopleDocumentsSettings } from "../../lib/peopleDocumentsSettings";
 import { getHelpdeskSettings, HELPDESK_SETTING_KEYS, type HelpdeskSettings } from "../../lib/helpdeskSettings";
+
+type SettingsAudit = Parameters<typeof writeAuditLog>[0];
+
+/** Every System Settings change is audited; one made by a director also tells the other director (docs/plans/DIRECTOR_AUTHORITY.md Q-DA-10). The notice names the area, never a value. */
+async function auditSettingsChange(entry: SettingsAudit): Promise<void> {
+  await writeAuditLog(entry);
+  if (!entry.actorUserId || !(await isDirector(entry.actorUserId))) return;
+  const area = String(entry.entityId ?? "settings");
+  const { noticeId } = await prisma.$transaction((tx) =>
+    recordDirectorNotice({ kind: "ACTION", step: "SETTINGS", subjectType: "SYSTEM_SETTING", subjectId: area, subjectLabel: `the ${area} settings`, actorUserId: entry.actorUserId!, approvalId: null, authority: "DIRECTOR_AUTHORITY" }, tx),
+  );
+  await scheduleDelivery(noticeId);
+}
 
 const RATE_LIMIT_SETTING_KEY: Record<(typeof RATE_LIMIT_KEYS)[number], string> = {
   login: "auth.rateLimit.login",
@@ -26,7 +43,7 @@ export async function getSettings(): Promise<SecuritySettings> {
     getSetting("auth.lockout", { maxAttempts: 5, lockoutMinutes: 15 }),
     getSetting("auth.passwordMinLength", 8),
     getSetting("auth.invitationTtlHours", 48),
-    getSetting<string[]>("auth.require2faRoles", default2faRoles()),
+    getSetting<string[]>("auth.require2faRoles", default2faRoles()).then((roles) => with2faFloor(roles, env.APP_ENV)),
     ...RATE_LIMIT_KEYS.map((k) => getSetting<RateLimitSetting>(RATE_LIMIT_SETTING_KEY[k], RATE_LIMIT_DEFAULTS[k])),
   ]);
 
@@ -65,6 +82,10 @@ export async function updateSettings(input: UpdateInput, meta: { actorUserId: st
     await setSetting("auth.invitationTtlHours", input.invitationTtlHours, meta.actorUserId);
   }
   if (input.require2faRoles !== undefined) {
+    // D1: outside development a Super Admin always needs two-step sign-in; the list can add roles but cannot drop this one.
+    if (env.APP_ENV !== "development" && !input.require2faRoles.includes("SUPER_ADMIN")) {
+      throw new HttpError(400, "Two-step sign-in is always required of a Super Admin: they can run payroll on their own authority. You can add other roles, but not remove this one.", "TWO_FACTOR_FLOOR");
+    }
     await setSetting("auth.require2faRoles", input.require2faRoles, meta.actorUserId);
   }
   if (input.rateLimits) {
@@ -75,7 +96,7 @@ export async function updateSettings(input: UpdateInput, meta: { actorUserId: st
   }
 
   const after = await getSettings();
-  await writeAuditLog({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "security", before, after });
+  await auditSettingsChange({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "security", before, after });
   return after;
 }
 
@@ -92,7 +113,7 @@ export async function updateLeaveSettings(input: UpdateLeaveInput, meta: { actor
     await setSetting("leave.encashment.defaultDailyRate", input.encashmentDefaultDailyRate, meta.actorUserId);
   }
   const after = await getLeaveSettings();
-  await writeAuditLog({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "leave", before, after });
+  await auditSettingsChange({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "leave", before, after });
   return after;
 }
 
@@ -112,7 +133,7 @@ export async function updatePeopleDocumentsSettings(
     if (input[field] !== undefined) await setSetting(key, input[field], meta.actorUserId);
   }
   const after = await getPeopleDocumentsSettings();
-  await writeAuditLog({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "peopleDocuments", before, after });
+  await auditSettingsChange({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "peopleDocuments", before, after });
   return after;
 }
 
@@ -132,7 +153,7 @@ export async function updateHelpdeskSettings(
     if (input[field] !== undefined) await setSetting(key, input[field], meta.actorUserId);
   }
   const after = await getHelpdeskSettings();
-  await writeAuditLog({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "helpdesk", before, after });
+  await auditSettingsChange({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "helpdesk", before, after });
   return after;
 }
 
@@ -155,7 +176,7 @@ export async function updateDeviceHealthSettings(
     throw new HttpError(400, "The retention warning must come before the alarm (a lower percentage).", "VALIDATION_ERROR");
   }
   await setSetting(DEVICE_HEALTH_SETTING_KEY, after, meta.actorUserId);
-  await writeAuditLog({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "deviceHealth", before, after });
+  await auditSettingsChange({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "deviceHealth", before, after });
   return after;
 }
 
@@ -175,7 +196,7 @@ export async function updateDeviceAlertSettings(
   const after: DeviceAlertSettings = { ...before, ...(Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)) as Partial<DeviceAlertSettings>) };
   after.alertEmails = [...new Set(after.alertEmails)];
   await setSetting(DEVICE_ALERT_SETTING_KEY, after, meta.actorUserId);
-  await writeAuditLog({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "deviceAlerts", before, after });
+  await auditSettingsChange({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "deviceAlerts", before, after });
   return after;
 }
 
@@ -193,7 +214,7 @@ export async function updateRegularizationSettings(
   const before = await getRegularizationSettings();
   const after: RegularizationSettings = { ...before, ...(Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)) as Partial<RegularizationSettings>) };
   await setSetting(REGULARIZATION_SETTING_KEY, after, meta.actorUserId);
-  await writeAuditLog({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "regularization", before, after });
+  await auditSettingsChange({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "regularization", before, after });
   return after;
 }
 
@@ -209,6 +230,6 @@ export async function updateExcessHoursSettings(
   const before = await getExcessHoursSettings();
   const after: ExcessHoursSettings = { ...before, ...(Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)) as Partial<ExcessHoursSettings>) };
   await setSetting(EXCESS_HOURS_SETTING_KEY, after, meta.actorUserId);
-  await writeAuditLog({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "excessHours", before, after });
+  await auditSettingsChange({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "excessHours", before, after });
   return after;
 }

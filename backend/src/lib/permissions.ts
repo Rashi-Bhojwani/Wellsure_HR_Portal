@@ -1,7 +1,9 @@
 import { PERMISSION_KEYS, MANAGER_GRANTABLE_KEYS } from "@shared/constants/permissions";
 import type { DataScope } from "@shared/constants/roles";
-import { DEVELOPER_FORBIDDEN_KEYS, DEVELOPER_ROLE_CODE } from "@shared/constants/sensitiveData";
+import { DIRECTOR_ONLY_ROLE_CODES } from "@shared/constants/directorAuthority";
+import { DEVELOPER_FORBIDDEN_KEYS, DEVELOPER_ROLE_CODE, HR_FORBIDDEN_KEYS, HR_ROLE_CODES } from "@shared/constants/sensitiveData";
 import { prisma } from "./prisma";
+import { applyCapabilities, switchRowsFor } from "./hrCapabilities";
 
 // THE one place effective access is computed (Phase 5 commit E1). Used by
 // middleware/authenticate.ts, the Socket.IO handshake, the photo route and
@@ -32,12 +34,17 @@ export function widestScope(scopes: DataScope[]): DataScope {
 const MANAGER_ROLE = "MANAGER";
 const MANAGER_GRANTABLE = new Set<string>(MANAGER_GRANTABLE_KEYS);
 const DEVELOPER_FORBIDDEN = new Set<string>(DEVELOPER_FORBIDDEN_KEYS);
+const HR_FORBIDDEN = new Set<string>(HR_FORBIDDEN_KEYS);
 
 export async function resolveAccess(userId: string): Promise<ResolvedAccess> {
-  const [userRoles, overrides] = await Promise.all([
+  const [allRoles, overrides] = await Promise.all([
     prisma.userRole.findMany({ where: { userId }, include: { role: { include: { permissions: { include: { permission: true } } } } } }),
     prisma.userPermissionOverride.findMany({ where: { userId }, include: { permission: true } }),
   ]);
+  // D1 (docs/plans/DIRECTOR_AUTHORITY.md, decision 1): PAYROLL_ADMIN and PAYROLL_APPROVER are held by directors only. Whatever rows say (a raw SQL insert, a role that
+  // predates the trigger), one held WITHOUT SUPER_ADMIN grants nothing and is not seen as held: the same belt-and-braces as the manager and developer ceilings.
+  const isDirector = allRoles.some((ur) => ur.role.code === SUPER_ADMIN_ROLE_CODE);
+  const userRoles = isDirector ? allRoles : allRoles.filter((ur) => !(DIRECTOR_ONLY_ROLE_CODES as readonly string[]).includes(ur.role.code));
   const roleCodes = userRoles.map((ur) => ur.role.code);
   if (roleCodes.includes(DEVELOPER_ROLE_CODE)) {
     // P6-6, the developer ceiling (docs/plans/PHASE_6.md §14J): the person who builds and runs the system never holds an owner's secret. Whatever the role definitions, a
@@ -58,6 +65,13 @@ export async function resolveAccess(userId: string): Promise<ResolvedAccess> {
   for (const o of overrides) if (o.effect === "GRANT") permissions.add(o.permission.key);
   for (const o of overrides) if (o.effect === "REVOKE") permissions.delete(o.permission.key);
   const dataScope = widestScope(userRoles.map((ur) => ur.role.dataScope));
+  // The HR hard lock (docs/plans/HR_CAPABILITIES.md §1A): whatever a role row, a per-user grant or a raw SQL insert says, pay data is not HR's. A director who also holds an HR
+  // role is not affected (they are handled above).
+  if (roleCodes.some((c) => (HR_ROLE_CODES as readonly string[]).includes(c))) {
+    for (const key of [...permissions]) if (HR_FORBIDDEN.has(key)) permissions.delete(key);
+    // What a director has switched on or off for HR (docs/plans/HR_CAPABILITIES.md §1B): applied here, in the one place access is resolved. It strips the hard-locked set again at the end.
+    applyCapabilities(permissions, await switchRowsFor(userId, roleCodes), userId, roleCodes, new Date()); // allow-clock: an instant, not a business date
+  }
   if (roleCodes.includes(MANAGER_ROLE)) {
     // E2 manager-grantable guard, enforced at resolution as well as on every
     // write: whatever rows say (a stale role definition, a raw SQL grant, a
@@ -89,6 +103,8 @@ export async function activeUsersHoldingPermission(key: string): Promise<Array<{
         { roles: { some: { role: { code: SUPER_ADMIN_ROLE_CODE } } } },
         { roles: { some: { role: { permissions: { some: { permission: { key } } } } } } },
         { permissionOverrides: { some: { effect: "GRANT", permission: { key } } } },
+        // An HR switch can add a key no row gives them, so every HR holder is a candidate (each is resolved exactly below).
+        { roles: { some: { role: { code: { in: [...HR_ROLE_CODES] } } } } },
       ],
     },
     select: { id: true, employeeId: true },

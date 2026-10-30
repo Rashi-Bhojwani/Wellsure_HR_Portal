@@ -1,4 +1,5 @@
 import { PERMISSION_KEYS } from "@shared/constants/permissions";
+import { withSplitKeys } from "@shared/constants/hrCapabilities";
 import { DEVELOPER_ROLE_CODE, DEVELOPER_ROLE_PERMISSIONS } from "@shared/constants/sensitiveData";
 import type { DataScope } from "@shared/constants/roles";
 
@@ -30,8 +31,6 @@ const HR_EXECUTIVE_PERMS: string[] = [
   "employee.separate.view",
   "profile.changerequest.approve",
   "org.manage",
-  "import.manage",
-  "role.view",
   // Phase 4 — leave administration stays with HR_EXECUTIVE; config/
   // financial actions (policy.manage/recalculate/yearend.manage) are
   // HR_ADMIN+ only, same narrowing as settings.manage/import.manage.
@@ -48,7 +47,6 @@ const HR_EXECUTIVE_PERMS: string[] = [
   // (Payroll & Salary, Grievance): same bar as "no salary or bank data".
   "helpdesk.manage",
   // Phase 5 commit D2 — issuing letters (templates themselves are HR_ADMIN+).
-  "letters.generate",
   // Phase 5 commit F — the Reports app (leave liability is HR_ADMIN+ only).
   "reports.view",
   // Phase 2 — attendance operations (settings and devices are HR_ADMIN+).
@@ -69,11 +67,6 @@ const HR_ADMIN_PERMS: string[] = [
   "employee.statutory.edit",
   "employee.bank.view",
   "employee.bank.edit",
-  // 2026-10-03 — documents in PAY categories (issued letters carry CTC).
-  "documents.pay.view",
-  "user.security.manage",
-  "audit.view",
-  "settings.manage",
   // Phase 3 commit 1 — bulk attendance corrections (HR Admin, not HR Executive).
   "attendance.regularization.bulk",
   // Phase 3 commit 2 — Manual Override and Shift Override (HR Admin, not HR Executive).
@@ -82,7 +75,6 @@ const HR_ADMIN_PERMS: string[] = [
   "attendance.finalise",
   "leave.policy.manage",
   "leave.recalculate",
-  "leave.yearend.manage",
   // Phase 5 — config/financial actions stay HR_ADMIN+, same narrowing as settings.manage/leave.policy.manage
   "announcements.manage",
   "engage.moderate",
@@ -93,14 +85,7 @@ const HR_ADMIN_PERMS: string[] = [
   "manager.appoint",
   "manager.team.assign",
   "manager.permissions.manage",
-  // Phase 5 commit E3 — Workflow Delegates.
-  "delegation.manage",
-  // Phase 6 — HR Admin sees the rules and salary and prepares revisions (a checker approves); it neither runs payroll nor approves it.
-  "payroll.rules.view",
-  "payroll.salary.view",
-  "payroll.salary.edit",
-  // Phase 5 commit F — leave liability (salary-derived from Phase 6).
-  "reports.liability.view",
+  // Stage 1 (docs/plans/HR_CAPABILITIES.md): no pay data and no Admin Tools keys (roles, audit, settings, delegations): the directors' (HR_FORBIDDEN_KEYS).
   // Phase 2 — attendance settings and biometric devices.
   "attendance.config.manage",
   "attendance.devices.manage",
@@ -153,10 +138,10 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
   // SUPER_ADMIN's rows are informational only: lib/permissions.ts gives a
   // SUPER_ADMIN holder every key and ALL scope in code (E1).
   { code: "SUPER_ADMIN", name: "Super Admin", permissions: SUPER_ADMIN_PERMS, dataScope: "ALL" },
-  { code: "HR_ADMIN", name: "HR Admin", permissions: HR_ADMIN_PERMS, dataScope: "ALL" },
-  { code: "HR_EXECUTIVE", name: "HR Executive", permissions: HR_EXECUTIVE_PERMS, dataScope: "ALL" },
-  { code: "PAYROLL_ADMIN", name: "Payroll Admin", permissions: PAYROLL_ADMIN_PERMS, dataScope: "ALL" },
-  { code: "PAYROLL_APPROVER", name: "Payroll Approver", permissions: PAYROLL_APPROVER_PERMS, dataScope: "ALL" },
+  { code: "HR_ADMIN", name: "HR Admin", permissions: withSplitKeys(HR_ADMIN_PERMS), dataScope: "ALL" },
+  { code: "HR_EXECUTIVE", name: "HR Executive", permissions: withSplitKeys(HR_EXECUTIVE_PERMS), dataScope: "ALL" },
+  { code: "PAYROLL_ADMIN", name: "Payroll Admin", permissions: withSplitKeys(PAYROLL_ADMIN_PERMS), dataScope: "ALL" },
+  { code: "PAYROLL_APPROVER", name: "Payroll Approver", permissions: withSplitKeys(PAYROLL_APPROVER_PERMS), dataScope: "ALL" },
   // P6-6: the person who builds and runs the system. Everything needed for that and none of the owners' secrets: lib/permissions.ts removes every key in
   // shared/constants/sensitiveData.ts from anyone who holds this role, whatever else they are given, and it can never be held together with SUPER_ADMIN.
   { code: DEVELOPER_ROLE_CODE, name: "Developer / operator", permissions: DEVELOPER_ROLE_PERMISSIONS, dataScope: "ALL" },

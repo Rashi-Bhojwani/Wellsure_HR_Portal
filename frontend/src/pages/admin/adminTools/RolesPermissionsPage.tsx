@@ -209,6 +209,7 @@ export function RolesPermissionsPage() {
                     </span>
                     {role.locked && <StatusChip tone="neutral">Everything</StatusChip>}
                     {role.managerLocked && <StatusChip tone="neutral">Per manager</StatusChip>}
+                    {role.directorOnly && <StatusChip tone="purple" title="Only a Super Admin (a director) can hold this role. It marks who does payroll work; a Super Admin already holds every permission.">Director only</StatusChip>}
                     {isDirty(role) && <StatusChip tone="warning">Unsaved</StatusChip>}
                   </div>
                   {role.description && <span style={{ color: v.textSecondary, fontSize: fs.sm }}>{role.description}</span>}
@@ -236,6 +237,7 @@ export function RolesPermissionsPage() {
                 </div>
                 {activePhoneRole.locked && <ApprovalBanner tone="info" title="A Super Admin always has every permission." />}
                 {activePhoneRole.managerLocked && <ApprovalBanner tone="info" title="Managers start with nothing. Grant each manager what they need in Manager Management." />}
+                {activePhoneRole.directorOnly && <ApprovalBanner tone="info" title="Director only: only a Super Admin can hold this role." />}
                 {PERMISSION_GROUPS.map((group) => (
                   <section key={group} aria-label={group}>
                     <h3 style={{ margin: `0 0 ${space[2]}px`, fontSize: fs.md, fontWeight: fw.semibold, color: v.textPrimary }}>{group}</h3>

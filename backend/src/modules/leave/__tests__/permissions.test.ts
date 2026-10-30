@@ -23,9 +23,9 @@ describe("Leave — seeded role -> permission grants", () => {
     for (const key of LEAVE_PERMISSION_KEYS) expect(perms.has(key)).toBe(true);
   });
 
-  it("HR_ADMIN has all 7", async () => {
+  it("HR_ADMIN has all the leave keys except the year-end, which is hard-locked to directors", async () => {
     const perms = await leavePermissionsFor("HR_ADMIN");
-    for (const key of LEAVE_PERMISSION_KEYS) expect(perms.has(key)).toBe(true);
+    for (const key of LEAVE_PERMISSION_KEYS) expect(perms.has(key), key).toBe(key !== "leave.yearend.manage");
   });
 
   it("HR_EXECUTIVE has view/approve/grant/onBehalf but not policy/recalculate/yearend (config & financial stays HR_ADMIN+)", async () => {

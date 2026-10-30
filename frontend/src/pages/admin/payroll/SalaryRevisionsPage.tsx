@@ -69,7 +69,7 @@ export function SalaryRevisionsPage() {
       <Stack>
         <ApprovalBanner
           tone="info"
-          title="A different person has to approve it"
+          title="A director has to approve it"
           description="A revision gives somebody a first salary or changes one, from a date. You see the old and new figures for every person, and what a back-dated change owes as arrears, before anything is submitted. A different person has to approve it. If anything it depends on changes after that, the approval is void."
         />
         <Panel>

@@ -8,3 +8,11 @@ export function default2faRolesFor(appEnv: string): string[] {
 }
 
 export const default2faRoles = (): string[] => default2faRolesFor(env.APP_ENV);
+
+/**
+ * Two-step sign-in for a Super Admin is not optional outside development (docs/plans/DIRECTOR_AUTHORITY.md, owner's requirement): a director can move the whole of payroll
+ * on their own authority, so a password alone is not enough. Whatever the setting says, SUPER_ADMIN is always in the list there.
+ */
+export function with2faFloor(configured: string[], appEnv: string): string[] {
+  return appEnv === "development" || configured.includes("SUPER_ADMIN") ? configured : [...configured, "SUPER_ADMIN"];
+}

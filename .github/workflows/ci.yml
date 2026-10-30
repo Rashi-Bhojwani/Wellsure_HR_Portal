@@ -17,6 +17,8 @@ concurrency:
 jobs:
   install-lint-typecheck-test:
     runs-on: ubuntu-latest
+    # Every job has a time limit (the longest, this one, takes about 15 minutes): a hung step fails the job and the logs are kept, instead of running for hours.
+    timeout-minutes: 25
     # Postgres/Redis as service containers — nothing needed on the runner
     # beyond Docker (which GitHub-hosted runners already have). Same
     # DATABASE_URL/REDIS_URL shape as local dev (see README.md), just
@@ -103,14 +105,17 @@ jobs:
         run: npm run db:seed
 
       - name: Test
+        timeout-minutes: 18
         run: npm run test
 
       # The demo company (made-up people, salaries and a fictional bank file) is built on the test database and the sensitive-data crawl is repeated on it as the developer.
       - name: Demo company tests
+        timeout-minutes: 5
         run: npm run test:demo --prefix backend
 
   docker-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -125,7 +130,7 @@ jobs:
   # reboot: restart on failure plus automatic start stand in for that.
   agent-windows:
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 25
     env:
       NSSM_VERSION: "2.24"
       # nssm.cc is the only official source and is sometimes unreliable: the
@@ -219,7 +224,7 @@ jobs:
   # backend/perf/baseline.json (fail if more than 2x), which this runner records.
   attendance-replay:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16-alpine
@@ -390,9 +395,92 @@ jobs:
             ${{ runner.temp }}/stack/*.log
           if-no-files-found: ignore
 
-      # Last, because it fills the database with the demo company: the developer and an employee open every page of both portals; no made-up secret may be on any, and
-      # the DEMO COMPANY banner must be on all of them (docs/plans/PHASE_6.md §14J).
-      - name: Seed the demo company, then look for secrets on every page
+  # Its own job (Stage 0.2 of the master build): the secrets-on-every-page check used to be the last step of the latency job, so a latency failure skipped it
+  # (which is what happened from the UI pass until now). It seeds the demo company, then the developer and an employee open every page of both portals; no
+  # made-up secret may be on any, and the DEMO COMPANY banner must be on all of them (docs/plans/PHASE_6.md §14J).
+  sensitive-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: wellsure
+          POSTGRES_PASSWORD: wellsure
+          POSTGRES_DB: wellsure_hr
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wellsure -d wellsure_hr"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://wellsure:wellsure@localhost:5432/wellsure_hr
+      REDIS_URL: redis://localhost:6379
+      # The seeded development accounts' documented password (a throwaway database).
+      SIM_USER: "1000"
+      SIM_PASSWORD: Wellsure@123
+      # The GitHub-hosted Ubuntu image ships Google Chrome here.
+      PLAYWRIGHT_CHROMIUM_EXECUTABLE: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+            frontend/package-lock.json
+            biometric-agent/package-lock.json
+
+      - name: Install
         run: |
-          npm run seed:demo-company --prefix backend
-          npm run check:sensitive-ui --prefix frontend
+          npm install
+          npm install --prefix backend
+          npm install --prefix frontend
+          npm install --prefix biometric-agent
+
+      - name: Migrate and seed
+        run: |
+          npm run db:migrate
+          npm run db:seed
+
+      - name: Start the API, the worker and the frontend
+        run: |
+          mkdir -p "$RUNNER_TEMP/stack"
+          nohup npm run start --prefix backend > "$RUNNER_TEMP/stack/api.log" 2>&1 &
+          nohup npm run start --prefix backend -- worker > "$RUNNER_TEMP/stack/worker.log" 2>&1 &
+          nohup npm run dev --prefix frontend > "$RUNNER_TEMP/stack/frontend.log" 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fs http://localhost:4000/ready > /dev/null && curl -fs http://localhost:5173/login > /dev/null; then echo "stack is up after ${i} checks"; exit 0; fi
+            sleep 2
+          done
+          echo "the stack did not come up"; tail -n 40 "$RUNNER_TEMP"/stack/*.log; exit 1
+
+      # Two steps with their own limits: a seed that fails or hangs is reported as that, within 3 minutes, and the scan (about 12 minutes) cannot take the job past its limit.
+      - name: Seed the demo company
+        timeout-minutes: 3
+        run: npm run seed:demo-company --prefix backend
+
+      - name: Look for secrets on every page
+        timeout-minutes: 16
+        run: npm run check:sensitive-ui --prefix frontend
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sensitive-ui-stack-logs
+          path: ${{ runner.temp }}/stack/*.log
+          if-no-files-found: ignore

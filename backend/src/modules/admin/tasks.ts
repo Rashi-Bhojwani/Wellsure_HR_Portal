@@ -1,3 +1,4 @@
+import { hrCannotDecide } from "../../lib/hrDutyHeld";
 import { prisma } from "../../lib/prisma";
 import { pendingWithNoTeamApprover } from "../leave/noTeamApprover";
 import * as leaveRequestsService from "../leave/requests";
@@ -22,6 +23,8 @@ export interface TaskCounts {
   // Pending leave no manager or delegate can decide (company-wide approvers
   // only; null for everyone else) — shown as an alert on Admin Home.
   leaveNoTeamApprover: number | null;
+  // For directors only: work that is waiting for them because HR has been switched off for it (docs/plans/HR_CAPABILITIES.md §2). Null when HR can still decide it, or for anyone else.
+  heldFromHr: { leave: number; regularizations: number } | null;
 }
 
 export async function getTaskCounts(viewer: LeaveViewer): Promise<TaskCounts> {
@@ -46,7 +49,16 @@ export async function getTaskCounts(viewer: LeaveViewer): Promise<TaskCounts> {
 
   const leaveNoTeamApprover = canApprove && scope === "ALL" ? (await pendingWithNoTeamApprover()).size : null;
 
+  let heldFromHr: TaskCounts["heldFromHr"] = null;
+  if (viewer.roleCodes.includes("SUPER_ADMIN")) {
+    const off = await hrCannotDecide();
+    const leave = off.leave ? await prisma.leaveRequest.count({ where: { status: "PENDING", employeeId: { not: viewer.employeeId } } }) : 0;
+    const regularizations = off.regularizations ? await prisma.regularizationRequest.count({ where: { status: "PENDING", employeeId: { not: viewer.employeeId } } }) : 0;
+    if (leave > 0 || regularizations > 0) heldFromHr = { leave, regularizations };
+  }
+
   return {
+    heldFromHr,
     review: { total: leaveReview + regularization.review, byType: reviewByType },
     monitor: { total: leaveMonitor + regularization.monitor, byType: monitorByType },
     leaveNoTeamApprover,

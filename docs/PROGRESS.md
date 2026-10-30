@@ -5039,6 +5039,27 @@ confirms the exact stored text). Leave liability shows a clear error on the demo
 setup lacks; server 409, not a UI fault). The local test database now holds test-only data (punches 12 to 17 Oct, an EVE shift and roster,
 a SUN-ALTSAT week-off pattern, QA devices and agent, two moved reporting lines, a TEST_BONUS_UI component).
 
+### Director authority, D1 of three: the core (`feat/hr-payroll-separation`, 2026-10-29)
+
+Plan: [docs/plans/DIRECTOR_AUTHORITY.md](plans/DIRECTOR_AUTHORITY.md) (approved, §0 holds the owner's answers). D1 builds the core and leaves every payroll flow as it was; **D2** switches the flows (rules, runs,
+revisions, publishing, bank file, sign-off, settings notices) to director authority; **D3** is the UI copy and the remaining docs. Then H1 to H8 of [HR_PAYROLL_SEPARATION.md](plans/HR_PAYROLL_SEPARATION.md).
+
+- `approvals.authorise()`: one director prepares and decides in one act, at once; the mode is read inside the transaction and recorded (`payroll_approvals.authority`), the hash is still bound and re-checked by `consume`, a director still cannot change their own pay, and the notice for the other director commits with the act.
+- Database: the "checker is not the maker" CHECK and the "different person confirms" trigger are rewritten to allow exactly director authority and only for a Super Admin (`self_confirmed`); append-only `director_action_notices` / `director_action_receipts`; the payroll roles can be assigned to a Super Admin only (trigger, service refusal, and a role held without Super Admin grants nothing).
+- The ten switches (`payroll.secondDirector` setting, every step OFF), System Settings → Director authority; either director can switch any step either way at once and the other is told and sees a red banner. Notices carry counts only; delivery is a worker job (bell, realtime, e-mail) that never blocks the act; unacknowledged for 3 days (setting) raises the red banner, no extra e-mail.
+- Two-step sign-in for every director outside development: `SUPER_ADMIN` cannot be removed from `auth.require2faRoles`, and a director's act, switch change and acknowledgement are refused without it.
+- Seeds: `1000` and the new `1031` are the two directors; `1025`/`1027` and `DEMO002`/`DEMO003` are ordinary employees; the demo company has a second owner `DEMO013` (the directors are off the demo payroll until D2).
+
+### Master build, Stage 0 and Stage 1: the HR hard lock and the HR capability switches (`feat/hr-payroll-separation`, 2026-10-29)
+
+Plans: [HR_CAPABILITIES.md](plans/HR_CAPABILITIES.md). Report and per-stage results: [STAGE_REPORTS.md](plans/STAGE_REPORTS.md); the checklist to resume from: [MASTER_CHECKLIST.md](plans/MASTER_CHECKLIST.md).
+
+- Stage 0 (D1 close-out): `check:sensitive-ui` is its own CI job; the same person can never be maker and checker, proven for all six approval subjects; `docs/CONTINUITY_AND_RECOVERY.md`; director-only markers on the role screens.
+- The hard lock: every `payroll.*` key, `reports.salary.view`, `reports.liability.view`, `documents.pay.view`, `role.view`, `audit.view`, `settings.manage` and `delegation.manage` are removed at resolution from anyone holding an HR role without Super Admin; refused by the Roles screen and by database triggers; taken out of the HR defaults; removed from existing HR roles by two migrations that copy every row into the append-only `role_permission_removals` first. Year-end encashment amounts are the directors' too (days only for HR, in the screens, the download and the audit viewer).
+- The switches: eleven attendance and leave duties a director turns on or off for the HR Admin role, the HR Executive role or one named person (Admin Tools, What HR Can Do), with a reason, optionally from a later time, in an append-only history. Applied inside `resolveAccess` (no cache), so routes, counts, inbox, socket rooms, menus, favourites and reports follow on the next request. Five keys were split from older ones for this (`attendance.manual.upload`, `attendance.roster.manage`, `attendance.exceptions.view`, `reports.attendance.view`, `reports.leave.view`); roles and per-user grants were copied so nothing changed on the day.
+- Pending work HR can no longer decide waits for the directors, with a note; nothing is approved, lost or re-created.
+- Still open (listed, not guessed): HR entering a masked bank/statutory change that a director confirms (D2); `letters.generate` per-type grants (H4); `user.security.manage`, `import.manage`, `leave.yearend.manage`; the real company's branch names in `seed.ts` and several docs (public repo, tell the owner).
+
 ## Open questions
 
 - [x] **Approval Workflows — dropped (user decision 2026-10-03).** No

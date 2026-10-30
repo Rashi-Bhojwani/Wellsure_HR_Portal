@@ -14,7 +14,7 @@ export function PlaceholderBanner({ watermark }: { watermark: Watermark | null |
       title={`${watermark.text}. This is a test: it cannot be approved, finalised, published or turned into a bank file.`}
       description={
         <>
-          Still a Placeholder: {watermark.rules.map((r, i) => (<span key={r.key}>{i > 0 && "; "}<Link to="/admin/payroll/rules">{r.label}</Link></span>))}. A different person has to confirm each one.
+          Still a Placeholder: {watermark.rules.map((r, i) => (<span key={r.key}>{i > 0 && "; "}<Link to="/admin/payroll/rules">{r.label}</Link></span>))}. A director has to confirm each one.
         </>
       }
     />

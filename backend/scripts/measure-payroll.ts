@@ -40,11 +40,11 @@ async function timed<T>(what: string, fn: () => Promise<T>): Promise<T> {
 try {
   const code = (c: string) => prisma.employee.findUniqueOrThrow({ where: { employeeCode: c }, select: { id: true, user: { select: { id: true } } } });
   const owner = (await code("DEMO001")).user!.id;
-  const maker = (await code("DEMO002")).user!.id;
-  const checker = (await code("DEMO003")).user!.id;
+  const maker = owner; // D1: the payroll roles are for directors, so the demo's two directors are the maker and the checker
+  const checker = (await code("DEMO013")).user!.id;
   const hr = (await code("DEMO004")).user!.id;
   if ((await prisma.systemSetting.findUnique({ where: { key: "demo.company" } }))?.value !== true) throw new Error("Seed the demo company first (npm run seed:demo-company).");
-  void owner;
+
 
   const have = await prisma.employee.count({ where: { status: "ACTIVE" } });
   const add = Math.max(0, target - have);

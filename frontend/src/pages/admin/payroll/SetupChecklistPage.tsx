@@ -68,7 +68,7 @@ export function SetupChecklistPage() {
               <ProgressRow done={r.confirmed} total={r.required} label="confirmed" width={180} />
             </Flex>
             <Text type="secondary">
-              Each item is <SetupStatusTag status="NOT_SET" /> until somebody enters it, a <SetupStatusTag status="PLACEHOLDER" /> until a different person confirms it, and <SetupStatusTag status="CONFIRMED" /> after. Nothing on this page shows a figure, a number or a code: it shows where each thing stands and who has done what.
+              Each item is <SetupStatusTag status="NOT_SET" /> until somebody enters it, a <SetupStatusTag status="PLACEHOLDER" /> until a director confirms it, and <SetupStatusTag status="CONFIRMED" /> after. Nothing on this page shows a figure, a number or a code: it shows where each thing stands and who has done what.
             </Text>
           </Flex>
         </Panel>

@@ -53,23 +53,28 @@ const watcherSource = (before: string, condition: string, failure: string): stri
   return true;
 })()`;
 
-/** The employee's day panel lists one more punch from `device` than it did. */
+/** The employee's day panel lists one more punch from `device` than it did (the screen's own test hooks: data-testid="day-punch" with data-device). */
 async function watchEmployeePanel(page: Page, device: string): Promise<void> {
-  const count = `[...document.querySelectorAll(".ant-list-item")].filter((e) => (e.textContent || "").includes(${JSON.stringify(device)})).length`;
+  const count = `document.querySelectorAll('[data-testid="day-punch"]').length === 0 ? 0 : [...document.querySelectorAll('[data-testid="day-punch"]')].filter((e) => e.getAttribute("data-device") === ${JSON.stringify(device)}).length`;
   await page.evaluate(watcherSource(count, `(${count}) > before`, `the punch never appeared in the employee's day panel within ${WAIT_MS} ms`));
 }
 
-/** HR's Who Is In?: the person appears under "Arrived", or under "Away" as having worked anyway. */
+/** HR's Who Is In?: the person's row (data-testid="whoisin-row", data-employee-code) moves to Arrived, or to Away as having worked anyway. The board is searched by the code first, so paging cannot hide the row. */
 async function watchWhoIsIn(page: Page, code: string): Promise<void> {
+  await showOnlyBoardRow(page, code);
   const present = `(() => {
-    const re = new RegExp("(?<![0-9])" + ${JSON.stringify(code)} + " ·");
-    const cards = [...document.querySelectorAll(".ant-card")];
-    const card = (prefix) => cards.find((c) => ((c.querySelector(".ant-card-head-title") || {}).textContent || "").startsWith(prefix));
-    const item = (c) => (c ? [...c.querySelectorAll(".ant-list-item")].find((li) => re.test(li.textContent || "")) : undefined);
-    const away = item(card("Away"));
-    return !!item(card("Arrived (")) || (!!away && (away.textContent || "").includes("worked anyway"));
+    const row = document.querySelector('[data-testid="whoisin-row"][data-employee-code=${JSON.stringify(code)}]');
+    if (!row) return false;
+    const group = row.getAttribute("data-group");
+    return group === "ARRIVED" || (group === "AWAY" && row.getAttribute("data-worked") === "1");
   })()`;
   await page.evaluate(watcherSource("null", present, `${code} never appeared on Who Is In? within ${WAIT_MS} ms`));
+}
+
+/** Types the code into the board's search box and waits for that person's row. */
+async function showOnlyBoardRow(page: Page, code: string): Promise<void> {
+  await page.getByPlaceholder("Search name or code").fill(code);
+  await page.waitForSelector(`[data-testid="whoisin-row"][data-employee-code="${code}"]`, { timeout: 15_000 });
 }
 
 const arrivedAt = (page: Page): Promise<number> => page.evaluate("window.__latency") as Promise<number>;
@@ -130,12 +135,19 @@ async function main(): Promise<number> {
     const hr = await signIn(browser, web, user, password);
     pages.push(hr);
     await hr.goto(`${web}/admin/workforce/attendance/who-is-in`);
-    await hr.waitForSelector(".ant-statistic");
+    // The board's tiles are StatCards since the UI pass (they stopped being antd Statistics, which is what this used to wait for, and the wait timed out from then on).
+    await hr.getByText("Not yet arrived").first().waitFor();
 
     // Only people HR's board actually lists today (it is scoped, and not everyone is expected) can be measured on it.
-    await hr.waitForFunction('document.body.innerText.includes(" · ")', undefined, { timeout: 15_000 });
-    const listed = new Set(((await hr.evaluate("document.body.innerText")) as string).match(/[0-9]+(?= ·)/g) ?? []);
-    const candidates = measured.filter((e) => listed.has(e.code));
+    const candidates: typeof measured = [];
+    for (const e of measured) {
+      try {
+        await showOnlyBoardRow(hr, e.code);
+        candidates.push(e);
+      } catch {
+        /* not on this board today */
+      }
+    }
     if (candidates.length < 6) throw new Error(`Need at least 6 people on HR's Who Is In? board with no punches today; found ${candidates.length}. Use a freshly seeded development database.`);
 
     // Three employees watching their own Attendance Info, today's day panel open. Anyone who cannot sign in is passed over.

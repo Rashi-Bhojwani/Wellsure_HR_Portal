@@ -198,12 +198,16 @@ describe("Year End Process", () => {
     let org: TestOrgMasters;
     let managerToken: string;
     let plainToken: string;
+    let directorToken: string;
     const routeTestEmployeeIds: string[] = [];
 
     beforeAll(async () => {
       org = await createEmployeeTestOrgMasters();
       const manager = await createLoginableTestEmployee(org, { roleCode: "HR_ADMIN" });
       routeTestEmployeeIds.push(manager.employeeId);
+      const director = await createLoginableTestEmployee(org, { roleCode: "SUPER_ADMIN" });
+      routeTestEmployeeIds.push(director.employeeId);
+      directorToken = await loginAs(director.employeeCode);
       managerToken = await loginAs(manager.employeeCode);
       const plain = await createLoginableTestEmployee(org, { roleCode: "EMPLOYEE" });
       routeTestEmployeeIds.push(plain.employeeId);
@@ -220,8 +224,9 @@ describe("Year End Process", () => {
       expect(res.status).toBe(403);
     });
 
-    it("lets an HR_ADMIN list runs", async () => {
-      const res = await request(app).get("/api/leave/year-end").set(...authHeader(managerToken));
+    it("refuses an HR_ADMIN (the key is hard-locked to directors) and lets a Super Admin list runs", async () => {
+      expect((await request(app).get("/api/leave/year-end").set(...authHeader(managerToken))).status).toBe(403);
+      const res = await request(app).get("/api/leave/year-end").set(...authHeader(directorToken));
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body.runs)).toBe(true);
     });

@@ -2,6 +2,8 @@ import type { PayrollSetupArea, PayrollSetupSignoff } from "@prisma/client";
 import { writeAuditLog } from "../../../lib/audit";
 import { businessToday } from "../../../lib/businessDate";
 import { bankAccountsOn, namesOn, salariesOn } from "../../../lib/effectiveDating";
+import { authorityFor, authorityForDisplay, isDirector, requireDirectorTwoFactor } from "../../../lib/directorAuthority";
+import { recordDirectorNotice, scheduleDelivery } from "../../../lib/directorNotices";
 import { prisma } from "../../../lib/prisma";
 import { HttpError } from "../../../middleware/errorHandler";
 import { payrollHash } from "../hash";
@@ -88,12 +90,13 @@ interface Block {
   code: string;
 }
 
-function blockReason(set: AreaSet, actorUserId: string, permissions: ReadonlySet<string>): Block | null {
+/** On director authority a director may sign off rows they entered themselves (recorded, and the other director is told); otherwise the entrant is barred, as before. */
+async function blockReason(set: AreaSet, actorUserId: string, permissions: ReadonlySet<string>): Promise<Block | null> {
   if (!permissions.has("payroll.approve")) return { message: "Only a payroll approver can sign this off.", status: 403, code: "FORBIDDEN" };
   if (!permissions.has(AREA_VIEW_PERMISSION[set.area])) return { message: `To check ${AREA_LABEL[set.area]} you must be allowed to see them (${AREA_VIEW_PERMISSION[set.area]}).`, status: 403, code: "FORBIDDEN" };
   if (set.total === 0) return { message: `There is nobody whose ${AREA_LABEL[set.area]} could be checked yet.`, status: 409, code: "SIGNOFF_INCOMPLETE" };
   if (set.covered < set.total) return { message: `${set.total - set.covered} of ${set.total} people still have no ${AREA_LABEL[set.area]} on record. Enter them first; then this can be checked as a whole.`, status: 409, code: "SIGNOFF_INCOMPLETE" };
-  if (set.authorUserIds.includes(actorUserId)) return { message: `You entered some of these ${AREA_LABEL[set.area]}, so somebody else has to check them.`, status: 403, code: "SIGNER_ENTERED_THIS" };
+  if (set.authorUserIds.includes(actorUserId) && !((await isDirector(actorUserId)) && (await authorityForDisplay("SETUP_SIGNOFF")) === "DIRECTOR_AUTHORITY")) return { message: `You entered some of these ${AREA_LABEL[set.area]}, so somebody else has to check them.`, status: 403, code: "SIGNER_ENTERED_THIS" };
   return null;
 }
 
@@ -107,7 +110,7 @@ export async function previewSignoff(area: PayrollSetupArea, actorUserId: string
     total: set.total,
     missing: set.missing,
     enteredBy: set.authorUserIds.map((id) => names.get(id) ?? "Someone"),
-    blocked: blockReason(set, actorUserId, permissions)?.message ?? null,
+    blocked: (await blockReason(set, actorUserId, permissions))?.message ?? null,
     fingerprint: fingerprintOf(set),
   };
 }
@@ -118,12 +121,29 @@ export async function giveSignoff(
   actor: { userId: string; permissions: ReadonlySet<string>; ip?: string | null; userAgent?: string | null },
 ): Promise<PayrollSetupSignoff> {
   const set = await currentSet(area);
-  const blocked = blockReason(set, actor.userId, actor.permissions);
+  const blocked = await blockReason(set, actor.userId, actor.permissions);
   if (blocked) throw new HttpError(blocked.status, blocked.message, blocked.code);
   if (input.fingerprint !== fingerprintOf(set)) throw new HttpError(409, "This changed since you looked at it. Look at it again.", "PREVIEW_STALE");
   const note = input.note.trim();
   if (note.length < 5) throw new HttpError(400, "Say what you checked it against (a few words, for example the signed salary letters).", "VALIDATION_ERROR");
-  const row = await prisma.payrollSetupSignoff.create({ data: { area, contentHash: set.contentHash, covered: set.covered, total: set.total, note, authorUserIds: set.authorUserIds, signedByUserId: actor.userId } });
+  const own = set.authorUserIds.includes(actor.userId);
+  if (own) await requireDirectorTwoFactor(actor.userId);
+  let noticeId: string | null = null;
+  const row = await prisma.$transaction(async (tx) => {
+    // Read inside the transaction: the mode recorded is the mode in force when it was signed.
+    if (own && (await authorityFor("SETUP_SIGNOFF", tx)) !== "DIRECTOR_AUTHORITY") throw new HttpError(409, "The second-director check was switched on a moment ago, so a different director has to sign this off.", "SECOND_DIRECTOR_REQUIRED");
+    const created = await tx.payrollSetupSignoff.create({
+      data: { area, contentHash: set.contentHash, covered: set.covered, total: set.total, note, authorUserIds: set.authorUserIds, signedByUserId: actor.userId, ...(own ? { authority: "DIRECTOR_AUTHORITY" as const } : {}) },
+    });
+    if (own) {
+      ({ noticeId } = await recordDirectorNotice(
+        { kind: "ACTION", step: "SETUP_SIGNOFF", subjectType: "PAYROLL_SETUP", subjectId: area, subjectLabel: `the sign-off of ${AREA_LABEL[area]}`, itemCount: set.covered, actorUserId: actor.userId, approvalId: null, authority: "DIRECTOR_AUTHORITY" },
+        tx,
+      ));
+    }
+    return created;
+  });
+  if (noticeId) await scheduleDelivery(noticeId);
   await writeAuditLog({ actorUserId: actor.userId, action: "payroll.setup.signed_off", entityType: "PayrollSetup", entityId: area, after: { area, covered: set.covered, total: set.total, note }, ipAddress: actor.ip ?? null, userAgent: actor.userAgent ?? null });
   return row;
 }

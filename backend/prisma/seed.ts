@@ -393,6 +393,22 @@ async function main() {
       locationCode: "PAN-C10",
       account: "active",
     },
+    // The second director (docs/plans/DIRECTOR_AUTHORITY.md, Q-DA-2/Q-DA-8): directors are the two Super Admins, 1000 and 1031. Each sets the other's pay.
+    {
+      employeeCode: "1031",
+      deviceUserId: "1031",
+      fullName: "Tara Bhandari",
+      gender: "FEMALE",
+      dob: "1983-04-12",
+      doj: "2022-01-10",
+      employmentType: "PERMANENT",
+      deptCode: "ADMIN",
+      designationCode: "DIR",
+      gradeCode: "G6",
+      costCentreCode: "CC-ADMIN",
+      locationCode: "PAN-C10",
+      account: "active",
+    },
     // Managers
     {
       employeeCode: "1002",
@@ -533,7 +549,7 @@ async function main() {
     employeeIdByCode[spec.employeeCode] = employee.id;
 
     const roleCode =
-      spec.employeeCode === "1000"
+      spec.employeeCode === "1000" || spec.employeeCode === "1031"
         ? "SUPER_ADMIN"
         : spec.employeeCode === "1001"
           ? "HR_ADMIN"
@@ -543,12 +559,8 @@ async function main() {
             // and the assertion at the end of main().
             ["1002", "1003", "1004", "1005", "1024", "1029"].includes(spec.employeeCode)
             ? "MANAGER"
-            : // Phase 6 demo fixtures: a payroll maker and a payroll checker, who are never the same person (docs/plans/PHASE_6.md §6).
-              spec.employeeCode === "1025"
-              ? "PAYROLL_ADMIN"
-              : spec.employeeCode === "1027"
-                ? "PAYROLL_APPROVER"
-                : "EMPLOYEE";
+            : // The payroll roles are for directors (D1): 1025 and 1027 used to hold them and are now ordinary employees.
+              "EMPLOYEE";
 
     const user = await prisma.user.create({
       data: {
@@ -975,7 +987,7 @@ async function main() {
   }
 
   console.log(`Seeded ${n} employees across ${locations.length} branches in 2 cities.`);
-  console.log(`Dev login: Employee Code 1000 (Super Admin) or 1001 (HR Admin), password "${DEV_PASSWORD}".`);
+  console.log(`Dev login: Employee Code 1000 or 1031 (the two directors, Super Admin) or 1001 (HR Admin), password "${DEV_PASSWORD}".`);
   console.log(`Device-ID reuse fixture: employee code/device ID ${reuseFixtureCode} (Gaurav Singh, separated).`);
 }
 

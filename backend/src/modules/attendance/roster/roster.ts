@@ -42,7 +42,7 @@ export const ROSTER_PROBLEM_LABEL: Record<string, string> = {
 };
 
 function requireManage(viewer: Viewer): void {
-  if (!viewer.permissions.has("attendance.config.manage")) throw new HttpError(403, "Missing permission: attendance.config.manage", "FORBIDDEN");
+  if (!viewer.permissions.has("attendance.roster.manage")) throw new HttpError(403, "Missing permission: attendance.roster.manage", "FORBIDDEN");
 }
 
 async function plan(viewer: Viewer, input: RosterInput) {

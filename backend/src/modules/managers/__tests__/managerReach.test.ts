@@ -34,7 +34,7 @@ type Person = { employeeId: string; employeeCode: string; userId: string };
 describe("manager reach — TEAM scope at every endpoint a manager can call (E2)", () => {
   let org: TestOrgMasters;
   let otherOrg: TestOrgMasters;
-  const p = {} as Record<"manager" | "member" | "otherManager" | "outsider" | "hrAdmin" | "leaverIn" | "leaverOut", Person>;
+  const p = {} as Record<"manager" | "member" | "otherManager" | "outsider" | "hrAdmin" | "director" | "leaverIn" | "leaverOut", Person>;
   let token: string; // the manager's
   let hrToken: string;
   const covered = new Set<string>();
@@ -63,6 +63,7 @@ describe("manager reach — TEAM scope at every endpoint a manager can call (E2)
     p.otherManager = await createFullTestEmployee(otherOrg, { roleCode: "MANAGER" });
     p.outsider = await createFullTestEmployee(otherOrg, { managerId: p.otherManager.employeeId });
     p.hrAdmin = await createFullTestEmployee(org, { roleCode: "HR_ADMIN" });
+    p.director = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" }); // issues the letters: a letter can carry the CTC, which no HR role may issue
     p.leaverIn = await createFullTestEmployee(org, { managerId: p.manager.employeeId });
     p.leaverOut = await createFullTestEmployee(otherOrg, { managerId: p.otherManager.employeeId });
 
@@ -92,7 +93,7 @@ describe("manager reach — TEAM scope at every endpoint a manager can call (E2)
     expect(tpl.status).toBe(201);
     templateId = tpl.body.id;
     for (const who of ["member", "outsider"] as const) {
-      const res = await api(hrToken).post(`/api/letters/employees/${p[who].employeeId}`, { templateId });
+      const res = await api(await loginAs(p.director.employeeCode)).post(`/api/letters/employees/${p[who].employeeId}`, { templateId });
       expect(res.status).toBe(202);
       letter[who] = res.body.id;
     }

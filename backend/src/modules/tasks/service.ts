@@ -3,6 +3,7 @@ import type { DataScope } from "@shared/constants/roles";
 import type { Prisma } from "@prisma/client";
 import { formatTicketNumber, HELPDESK_STATUS_LABELS, helpdeskAdminPath, helpdeskEmployeePath } from "@shared/constants/helpdesk";
 import type { TaskItem, TaskType } from "@shared/types/inbox";
+import { DIRECTOR_STEP_INFO, type DirectorStep } from "@shared/constants/directorAuthority";
 import { prisma } from "../../lib/prisma";
 import { approvalEmployeeIdFilter, resolveApprovalReach } from "../leave/scope";
 import { getTeamEmployeeIds } from "../../lib/dataScope";
@@ -17,6 +18,7 @@ import { inForceOn } from "../../lib/effectiveDating";
 // (P2-E, the forgot-to-punch request) are a source here.
 
 export interface TaskViewer {
+  userId: string;
   employeeId: string;
   roleCodes: string[];
   dataScope: DataScope; // resolved per request (lib/permissions.ts)
@@ -137,7 +139,26 @@ const regularizationApprovals: TaskSource = {
   },
 };
 
-export const TASK_SOURCES: TaskSource[] = [leaveApprovals, profileChangeApprovals, assignedTickets, regularizationApprovals];
+// What the other director did on their own authority and I have not acknowledged yet (docs/plans/DIRECTOR_AUTHORITY.md §6). Counts only: no amounts, no names.
+const directorNotices: TaskSource = {
+  type: "DIRECTOR_NOTICE",
+  async list(viewer, limit) {
+    if (!viewer.roleCodes.includes("SUPER_ADMIN")) return [];
+    const rows = await prisma.directorActionReceipt.findMany({ where: { recipientUserId: viewer.userId, acknowledgedAt: null }, include: { notice: true }, orderBy: { createdAt: "asc" }, take: limit });
+    return rows.map((r) => ({
+      type: "DIRECTOR_NOTICE" as const,
+      id: r.noticeId,
+      title: r.notice.kind === "SWITCH_CHANGED" ? "A second-director check was changed" : "The other director acted on their own authority",
+      detail: `${DIRECTOR_STEP_INFO[r.notice.step as DirectorStep]?.label ?? r.notice.step} · ${r.notice.subjectLabel}${r.notice.itemCount != null ? ` · ${r.notice.itemCount}` : ""}`,
+      employeeName: null,
+      waitingSince: r.notice.createdAt.toISOString(),
+      link: "/admin/admin-tools/settings",
+      adminLink: "/admin/admin-tools/settings",
+    }));
+  },
+};
+
+export const TASK_SOURCES: TaskSource[] = [leaveApprovals, profileChangeApprovals, assignedTickets, regularizationApprovals, directorNotices];
 
 // Oldest-waiting first: the inbox is a queue, not a feed.
 export async function listMyTasks(viewer: TaskViewer, limit = 100): Promise<TaskItem[]> {

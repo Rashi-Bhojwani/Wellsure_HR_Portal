@@ -5,7 +5,7 @@ import { prisma } from "../../../lib/prisma";
 import { app, authHeader, cleanupEmployeeTestOrgMasters, cleanupFullTestEmployee, createEmployeeTestOrgMasters, createFullTestEmployee, loginAs, type TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
 import { ensurePayrollRules, getRule, listRules } from "../rules/governed";
 import { parseRuleValue } from "../rules/schemas";
-import { cleanupPayrollRowsBy } from "./payrollTestHelpers";
+import { cleanupPayrollRowsBy, useSecondDirectorChecks } from "./payrollTestHelpers";
 
 // Phase 6 P6-1: governed rules. A COMPANY rule ships empty; a STATUTORY figure ships as a Placeholder labelled "From memory, unverified"; an edit is an
 // unconfirmed new version; a different person confirms; a statutory figure is confirmed only by typing it again.
@@ -71,17 +71,20 @@ describe("governed rules in the database", () => {
   let checkerToken = "";
   const userIds: string[] = [];
 
+  let restoreChecks: () => Promise<void>; // these tests describe the two-director behaviour: a value is confirmed by a different director
   beforeAll(async () => {
+    restoreChecks = await useSecondDirectorChecks();
     await ensurePayrollRules();
     org = await createEmployeeTestOrgMasters();
-    maker = await createFullTestEmployee(org, { roleCode: "PAYROLL_ADMIN" });
-    checker = await createFullTestEmployee(org, { roleCode: "PAYROLL_APPROVER" });
+    maker = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
+    checker = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
     userIds.push(maker.userId, checker.userId);
     makerToken = await loginAs(maker.employeeCode);
     checkerToken = await loginAs(checker.employeeCode);
   });
 
   afterAll(async () => {
+    await restoreChecks();
     await cleanupPayrollRowsBy(userIds);
     await cleanupFullTestEmployee(maker.employeeId);
     await cleanupFullTestEmployee(checker.employeeId);
@@ -139,7 +142,8 @@ describe("governed rules in the database", () => {
 
     // The author cannot confirm their own value.
     const own = await api(makerToken).post(`/rules/${key}/confirm-preview`);
-    expect(own.status).toBe(403); // the maker role does not even hold the confirm permission
+    expect(own.status).toBe(200); // D1: a director holds both permissions, so they may look...
+    expect(own.body.blocked).toMatch(/You wrote this value/); // ...and are told why they cannot confirm what they wrote
     // A different person confirms.
     const done = await confirmRule(checkerToken, key);
     expect(done.status, JSON.stringify(done.body)).toBe(200);
@@ -151,7 +155,7 @@ describe("governed rules in the database", () => {
   });
 
   it("a person who holds BOTH permissions still cannot confirm a value they wrote: the preview says so and the confirm is refused", async () => {
-    const both = await createFullTestEmployee(org, { roleCode: "PAYROLL_ADMIN" });
+    const both = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
     userIds.push(both.userId);
     try {
       const perm = await prisma.permission.findUniqueOrThrow({ where: { key: "payroll.rules.confirm" } });

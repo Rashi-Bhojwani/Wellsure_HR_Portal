@@ -5,6 +5,7 @@ import {
   CalendarOutlined,
   ClockCircleOutlined,
   CustomerServiceOutlined,
+  SafetyCertificateOutlined,
   UserSwitchOutlined,
 } from '@ant-design/icons';
 import { TASK_TYPE_LABELS, type TaskItem, type TaskType } from '@shared/types/inbox';
@@ -37,6 +38,12 @@ const TYPE_META: Record<TaskType, { icon: ReactNode; tone: ChipTone; bg: string;
     tone: 'warning',
     bg: v.chipWarningBg,
     fg: v.chipWarningText,
+  },
+  DIRECTOR_NOTICE: {
+    icon: <SafetyCertificateOutlined />,
+    tone: 'danger',
+    bg: v.chipDangerBg,
+    fg: v.chipDangerText,
   },
 };
 

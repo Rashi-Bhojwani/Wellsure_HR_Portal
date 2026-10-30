@@ -28,7 +28,7 @@ describe("Helpdesk tickets", () => {
   let sensitive: { id: string };
   let restoreSettings: () => Promise<void>;
   type Person = { employeeId: string; employeeCode: string; userId: string };
-  const people = {} as Record<"hrAdmin" | "hrExec" | "raiser" | "other" | "manager", Person>;
+  const people = {} as Record<"director" | "hrAdmin" | "hrExec" | "raiser" | "other" | "manager", Person>;
   const tokens = {} as Record<keyof typeof people, string>;
 
   beforeAll(async () => {
@@ -36,6 +36,7 @@ describe("Helpdesk tickets", () => {
     restoreSettings = await snapshotHelpdeskSettings();
     await setSetting(HELPDESK_SETTING_KEYS.autoCloseDays, 7);
     await setSetting(HELPDESK_SETTING_KEYS.reopenWindowDays, 7);
+    people.director = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
     people.hrAdmin = await createFullTestEmployee(org, { roleCode: "HR_ADMIN" });
     people.hrExec = await createFullTestEmployee(org, { roleCode: "HR_EXECUTIVE" });
     people.manager = await createFullTestEmployee(org, { roleCode: "MANAGER" });
@@ -324,11 +325,12 @@ describe("Helpdesk tickets", () => {
 
     it("Helpdesk settings: settings.manage only, validated, audited", async () => {
       expect((await get(tokens.hrExec, "/api/settings/helpdesk")).status).toBe(403);
-      expect((await request(app).put("/api/settings/helpdesk").set(...authHeader(tokens.hrAdmin)).send({ autoCloseDays: 0 })).status).toBe(400);
-      const res = await request(app).put("/api/settings/helpdesk").set(...authHeader(tokens.hrAdmin)).send({ autoCloseDays: 10, reopenWindowDays: 14 });
+      expect((await get(tokens.hrAdmin, "/api/settings/helpdesk")).status).toBe(403); // Stage 1: System Settings are a director's
+      expect((await request(app).put("/api/settings/helpdesk").set(...authHeader(tokens.director)).send({ autoCloseDays: 0 })).status).toBe(400);
+      const res = await request(app).put("/api/settings/helpdesk").set(...authHeader(tokens.director)).send({ autoCloseDays: 10, reopenWindowDays: 14 });
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ autoCloseDays: 10, reopenWindowDays: 14 });
-      expect((await get(tokens.hrAdmin, "/api/settings/helpdesk")).body).toEqual({ autoCloseDays: 10, reopenWindowDays: 14 });
+      expect((await get(tokens.director, "/api/settings/helpdesk")).body).toEqual({ autoCloseDays: 10, reopenWindowDays: 14 });
       const audit = await prisma.auditLog.findFirst({ where: { entityId: "helpdesk", action: "settings.updated" }, orderBy: { createdAt: "desc" } });
       expect(audit?.after).toMatchObject({ autoCloseDays: 10, reopenWindowDays: 14 });
       await setSetting(HELPDESK_SETTING_KEYS.autoCloseDays, 7);

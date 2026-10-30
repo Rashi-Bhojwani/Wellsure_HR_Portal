@@ -11,6 +11,7 @@ import {
   FileTextOutlined,
   HeartOutlined,
   LockOutlined,
+  SafetyCertificateOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
 import {
@@ -25,6 +26,7 @@ import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as settingsApi from "../../../api/settings";
 import type { DeviceAlertSettings, DeviceHealthThresholds, HelpdeskSettings, LeaveSettings, PeopleDocumentsSettings, RegularizationSettings, SecuritySettings } from "../../../api/settings";
 import { LettersSettingsCard } from "../../../components/letters/LettersSettingsCard";
+import { DirectorAuthorityCard } from "../../../components/payroll/DirectorAuthorityCard";
 import { useAuth } from "../../../hooks/useAuth";
 import { FormGroupTitle, PageHeader, Panel, QueryState, Skel, toast } from "../../../ui";
 import { fs, fw, radius, space, v } from "../../../theme/tokens";
@@ -557,12 +559,14 @@ function LettersSection() {
 }
 
 export function SystemSettingsPage() {
-  const { hasPermission } = useAuth();
+  const { hasPermission, hasRole } = useAuth();
   const canLetters = hasPermission("letters.template.manage");
+  const isDirector = hasRole("SUPER_ADMIN");
   const [params, setParams] = useSearchParams();
 
   const sections: (SectionNavItem & { render: () => ReactNode })[] = [
     { key: "security", label: "Security", icon: <LockOutlined />, group: "General", render: () => <SecuritySettingsCard /> },
+    ...(isDirector ? [{ key: "director", label: "Director authority", icon: <SafetyCertificateOutlined />, group: "General", render: () => <DirectorAuthorityCard /> }] : []),
     { key: "leave", label: "Leave encashment", icon: <CalendarOutlined />, group: "Leave & people", render: () => <LeaveSettingsCard /> },
     { key: "people", label: "People & documents", icon: <TeamOutlined />, group: "Leave & people", render: () => <PeopleDocumentsSettingsCard /> },
     { key: "helpdesk", label: "Helpdesk", icon: <CustomerServiceOutlined />, group: "Leave & people", render: () => <HelpdeskSettingsCard /> },

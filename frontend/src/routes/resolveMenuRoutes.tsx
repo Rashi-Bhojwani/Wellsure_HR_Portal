@@ -1,6 +1,7 @@
 import { Navigate } from "react-router-dom";
 import type { ComponentType, ReactElement } from "react";
 import { PlaceholderPage } from "../components/common/PlaceholderPage";
+import { RequireAccess } from "../components/common/RequireAccess";
 import { adminApps, type AdminApp } from "./adminMenu.config";
 import { employeeMenu, isEmployeeMenuGroup } from "./employeeMenu.config";
 
@@ -71,7 +72,9 @@ export function resolveAdminRoutes(): ResolvedRoute[] {
     for (const group of app.menus ?? []) {
       for (const item of group.items) {
         const kind2: RouteKind = item.element ? "real" : "placeholder";
-        const element2 = item.element ? render(item.element) : <PlaceholderPage title={item.label} phase={item.phase} />;
+        const page = item.element ? render(item.element) : <PlaceholderPage title={item.label} phase={item.phase} />;
+        // A page the person's permissions no longer cover (a duty a director switched off, a link from before) says so, instead of opening onto an error or an empty board.
+        const element2 = item.needs ? <RequireAccess needs={item.needs}>{page}</RequireAccess> : page;
         routes.push({ fullPath: `/admin/${item.path}`, relativePath: item.path, isIndex: false, label: item.label, phase: item.phase, kind: kind2, element: element2 });
       }
     }

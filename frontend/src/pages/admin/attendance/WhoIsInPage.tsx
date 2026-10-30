@@ -26,6 +26,8 @@ interface Row {
   time: ReactNode;
   /** Chips / notes. */
   detail: ReactNode;
+  /** For the test hooks: an away person who punched anyway. */
+  worked?: boolean;
 }
 
 function rowsOf(data: WhoIsIn | undefined): Row[] {
@@ -62,6 +64,7 @@ function rowsOf(data: WhoIsIn | undefined): Row[] {
     })),
     ...data.away.map((p) => ({
       ...base(p, "AWAY"),
+      worked: Boolean(p.workedToday),
       time: <Text type="secondary">—</Text>,
       detail: (
         <span style={{ display: "inline-flex", gap: space[1], flexWrap: "wrap", alignItems: "center" }}>
@@ -161,6 +164,8 @@ export function WhoIsInPage() {
           />
           <DataTable<Row>
             rowKey="key"
+            // Stable hooks for the punch-to-screen latency test (biometric-agent/src/simulator/latency): what it reads is the employee code, the group and the time, not the look of the row.
+            onRow={(r) => ({ "data-testid": "whoisin-row", "data-employee-code": r.employeeCode, "data-group": r.group, "data-worked": r.worked ? "1" : "0" }) as import("react").HTMLAttributes<HTMLElement>}
             loading={isLoading}
             error={error}
             onRetry={() => void refetch()}

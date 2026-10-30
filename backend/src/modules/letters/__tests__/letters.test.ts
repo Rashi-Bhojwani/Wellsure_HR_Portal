@@ -51,7 +51,7 @@ const sha256 = (b: Buffer) => createHash("sha256").update(b).digest("hex");
 describe("Letters", { timeout: 30_000 }, () => {
   let org: TestOrgMasters;
   type Person = { employeeId: string; employeeCode: string; userId: string };
-  const people = {} as Record<"hrAdmin" | "hrExec" | "manager" | "report" | "outsider" | "leaver", Person>;
+  const people = {} as Record<"director" | "hrAdmin" | "hrExec" | "manager" | "report" | "outsider" | "leaver", Person>;
   const tokens = {} as Record<keyof typeof people, string>;
   const templateIds: string[] = [];
   const letterIds: string[] = [];
@@ -77,6 +77,7 @@ describe("Letters", { timeout: 30_000 }, () => {
     // (CI run 37835475091 timed out at letters.test.ts "issues a letter").
     await renderPdf("<!doctype html><p>warm-up</p>", new Date("2026-01-01T00:00:00Z"));
     org = await createEmployeeTestOrgMasters();
+    people.director = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" }); // Stage 1: HR no longer opens PAY documents (a letter carries CTC), so the director does
     people.hrAdmin = await createFullTestEmployee(org, { roleCode: "HR_ADMIN" });
     people.hrExec = await createFullTestEmployee(org, { roleCode: "HR_EXECUTIVE" });
     people.manager = await createFullTestEmployee(org, { roleCode: "MANAGER" });
@@ -120,15 +121,19 @@ describe("Letters", { timeout: 30_000 }, () => {
     const has = (code: string, key: string) => roles.find((r) => r.code === code)?.permissions.some((p) => p.permission.key === key) ?? false;
     expect(["SUPER_ADMIN", "HR_ADMIN"].every((c) => has(c, "letters.template.manage"))).toBe(true);
     expect(["HR_EXECUTIVE", "PAYROLL_ADMIN", "MANAGER", "EMPLOYEE"].some((c) => has(c, "letters.template.manage"))).toBe(false);
-    expect(["SUPER_ADMIN", "HR_ADMIN", "HR_EXECUTIVE"].every((c) => has(c, "letters.generate"))).toBe(true);
-    expect(["PAYROLL_ADMIN", "MANAGER", "EMPLOYEE"].some((c) => has(c, "letters.generate"))).toBe(false);
+    // Issuing a letter is the directors' since the HR hard lock grew (a letter can carry the CTC): no HR role holds it.
+    expect(has("SUPER_ADMIN", "letters.generate")).toBe(true);
+    expect(["HR_ADMIN", "HR_EXECUTIVE", "PAYROLL_ADMIN", "MANAGER", "EMPLOYEE"].some((c) => has(c, "letters.generate"))).toBe(false);
   });
 
-  it("route gates: employees and managers are refused; HR_EXECUTIVE can list and issue but not edit templates", async () => {
+  it("route gates: employees, managers and both HR roles are refused issuing; HR_EXECUTIVE cannot even list, or edit, templates", async () => {
     expect((await as("outsider").get("/api/letters/templates")).status).toBe(403);
     expect((await as("manager").get("/api/letters/templates")).status).toBe(403);
     expect((await as("outsider").post(`/api/letters/employees/${people.outsider.employeeId}`, { templateId })).status).toBe(403);
-    expect((await as("hrExec").get("/api/letters/templates")).status).toBe(200);
+    expect((await as("hrExec").get("/api/letters/templates")).status).toBe(403);
+    expect((await as("hrExec").post(`/api/letters/employees/${people.outsider.employeeId}`, { templateId })).status).toBe(403);
+    expect((await as("hrAdmin").post(`/api/letters/employees/${people.outsider.employeeId}`, { templateId })).status).toBe(403);
+    expect((await as("director").get("/api/letters/templates")).status).toBe(200);
     expect((await as("hrExec").post("/api/letters/templates", { code: "NOPE", name: "x", bodyHtml: "<p>x</p>" })).status).toBe(403);
     expect((await as("hrExec").post(`/api/letters/templates/${templateId}/versions`, { bodyHtml: "<p>x</p>" })).status).toBe(403);
     expect((await as("hrExec").get("/api/letters/letterhead")).status).toBe(403);
@@ -157,7 +162,7 @@ describe("Letters", { timeout: 30_000 }, () => {
   // with its own budget (CI runs are several times slower than local ones).
   let issued = { id: "", reference: "", sha: "" };
   it("issues a letter: values, version and timestamp frozen; rendered and filed in Letters; employee notified", async () => {
-    const res = await issue("hrExec", people.report.employeeId, { templateId, extraValues: { ctc: "1200000" } });
+    const res = await issue("director", people.report.employeeId, { templateId, extraValues: { ctc: "1200000" } });
     expect(res.status).toBe(202);
     expect(res.body).toMatchObject({ status: "QUEUED", templateVersion: 2, visibleToEmployee: true });
     expect(res.body.reference).toMatch(/^LTR-\d{6}$/);
@@ -190,8 +195,9 @@ describe("Letters", { timeout: 30_000 }, () => {
   it("reproduces the issued letter byte-for-byte; a repeated job does nothing", async () => {
     expect(issued.id).not.toBe("");
     // Reproduce: from the stored version + values + timestamp, same bytes.
-    // (HR Admin: a letter is a PAY document, which an HR Executive can't open.)
-    const repro = await as("hrAdmin").post(`/api/letters/${issued.id}/reproduce`).buffer(true).parse((r, cb) => {
+    // (A director: a letter is a PAY document, which neither HR role can open since Stage 1.)
+    expect((await as("hrAdmin").post(`/api/letters/${issued.id}/reproduce`)).status).toBe(403);
+    const repro = await as("director").post(`/api/letters/${issued.id}/reproduce`).buffer(true).parse((r, cb) => {
       const chunks: Buffer[] = [];
       r.on("data", (c: Buffer) => chunks.push(c));
       r.on("end", () => cb(null, Buffer.concat(chunks)));
@@ -213,7 +219,7 @@ describe("Letters", { timeout: 30_000 }, () => {
     await prisma.employeeNameHistory.update({ where: { id: current.id }, data: { effectiveTo: tomorrow } });
     await prisma.employeeNameHistory.create({ data: { employeeId: people.outsider.employeeId, fullName: "Renamed Person", effectiveFrom: tomorrow, createdByUserId: people.hrAdmin.userId } });
 
-    const res = await issue("hrAdmin", people.outsider.employeeId, { templateId, extraValues: { ctc: "500000" } });
+    const res = await issue("director", people.outsider.employeeId, { templateId, extraValues: { ctc: "500000" } });
     await processLetterJob(res.body.id);
     const letter = await prisma.generatedLetter.findUniqueOrThrow({ where: { id: res.body.id }, include: { employeeDocument: true } });
     expect((letter.mergeValues as { values: Record<string, string> }).values["employee.fullName"]).toBe(current.fullName);
@@ -235,22 +241,22 @@ describe("Letters", { timeout: 30_000 }, () => {
 
   it("refuses up front, without burning a reference: missing required field, no separation, incomplete letterhead", async () => {
     const before = (await prisma.generatedLetter.aggregate({ _max: { number: true } }))._max.number ?? 0;
-    const missing = await issue("hrAdmin", people.report.employeeId, { templateId, extraValues: {} });
+    const missing = await issue("director", people.report.employeeId, { templateId, extraValues: {} });
     expect(missing.status).toBe(400);
     expect(missing.body.error.message).toMatch(/Annual CTC/);
 
     const experience = await prisma.letterTemplate.findUniqueOrThrow({ where: { code: "EXPERIENCE" } });
-    const noSep = await issue("hrAdmin", people.report.employeeId, { templateId: experience.id });
+    const noSep = await issue("director", people.report.employeeId, { templateId: experience.id });
     expect(noSep.status).toBe(409);
     expect(noSep.body.error.code).toBe("NO_SEPARATION");
 
     await setSetting(SIGNATORY_NAME_KEY, "");
-    const noHead = await issue("hrAdmin", people.report.employeeId, { templateId, extraValues: { ctc: "1" } });
+    const noHead = await issue("director", people.report.employeeId, { templateId, extraValues: { ctc: "1" } });
     expect(noHead.status).toBe(409);
     expect(noHead.body.error.code).toBe("LETTERHEAD_INCOMPLETE");
     await setSetting(SIGNATORY_NAME_KEY, originalSignatory ?? "Test Signatory");
 
-    const ok = await issue("hrAdmin", people.report.employeeId, { templateId, extraValues: { ctc: "1" } });
+    const ok = await issue("director", people.report.employeeId, { templateId, extraValues: { ctc: "1" } });
     expect(ok.body.reference).toBe(`LTR-${String(before + 1).padStart(6, "0")}`);
   });
 
@@ -258,7 +264,7 @@ describe("Letters", { timeout: 30_000 }, () => {
     const seeded = await prisma.letterTemplate.findMany({ where: { code: { in: ["OFFER", "APPOINTMENT", "EXPERIENCE", "RELIEVING", "ADDRESS_PROOF"] } } });
     expect(seeded).toHaveLength(5);
     for (const t of seeded) {
-      const res = await issue("hrAdmin", people.leaver.employeeId, { templateId: t.id, extraValues: { ctcAnnual: "900000", probationMonths: "3", addressedTo: "The Branch Manager" } });
+      const res = await issue("director", people.leaver.employeeId, { templateId: t.id, extraValues: { ctcAnnual: "900000", probationMonths: "3", addressedTo: "The Branch Manager" } });
       expect(res.status, t.code).toBe(202);
       expect(await processLetterJob(res.body.id), t.code).toEqual({ status: "GENERATED" });
       const letter = await prisma.generatedLetter.findUniqueOrThrow({ where: { id: res.body.id }, include: { employeeDocument: true } });
@@ -269,12 +275,12 @@ describe("Letters", { timeout: 30_000 }, () => {
   });
 
   it("reissue creates a new letter and document; the original stays exactly as issued", async () => {
-    const first = await issue("hrAdmin", people.report.employeeId, { templateId, extraValues: { ctc: "700000" } });
+    const first = await issue("director", people.report.employeeId, { templateId, extraValues: { ctc: "700000" } });
     await processLetterJob(first.body.id);
     const original = await prisma.generatedLetter.findUniqueOrThrow({ where: { id: first.body.id }, include: { employeeDocument: true } });
     const originalBytes = (await storageService.getObject(original.employeeDocument!.fileKey)).body;
 
-    const re = await as("hrAdmin").post(`/api/letters/${first.body.id}/reissue`, { extraValues: { ctc: "750000" } });
+    const re = await as("director").post(`/api/letters/${first.body.id}/reissue`, { extraValues: { ctc: "750000" } });
     expect(re.status).toBe(202);
     letterIds.push(re.body.id);
     expect(re.body.reissueOf).toEqual({ id: first.body.id, reference: first.body.reference });
@@ -302,15 +308,15 @@ describe("Letters", { timeout: 30_000 }, () => {
 
   it("an issued letter's document keeps its title and category; visibility can still change", async () => {
     const letter = await prisma.generatedLetter.findFirstOrThrow({ where: { id: { in: letterIds }, status: "GENERATED", employeeId: people.report.employeeId } });
-    const rename = await as("hrAdmin").patch(`/api/documents/employee-documents/${letter.employeeDocumentId}`, { title: "Something else" });
+    const rename = await as("director").patch(`/api/documents/employee-documents/${letter.employeeDocumentId}`, { title: "Something else" });
     expect(rename.status).toBe(409);
     expect(rename.body.error.code).toBe("LETTER_IMMUTABLE");
-    const hide = await as("hrAdmin").patch(`/api/documents/employee-documents/${letter.employeeDocumentId}`, { visibleToEmployee: false });
+    const hide = await as("director").patch(`/api/documents/employee-documents/${letter.employeeDocumentId}`, { visibleToEmployee: false });
     expect(hide.status).toBe(200);
   });
 
   it("a render failure marks the letter FAILED with a reason and files nothing", async () => {
-    const res = await issue("hrAdmin", people.report.employeeId, { templateId, extraValues: { ctc: "1" } });
+    const res = await issue("director", people.report.employeeId, { templateId, extraValues: { ctc: "1" } });
     await closePdfRenderer();
     const saved = process.env.CHROMIUM_PATH;
     process.env.CHROMIUM_PATH = "/nonexistent/chromium";

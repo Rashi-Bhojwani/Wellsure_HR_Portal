@@ -5,7 +5,7 @@ import { prisma } from "../../../lib/prisma";
 import { app, authHeader, cleanupEmployeeTestOrgMasters, cleanupFullTestEmployee, createEmployeeTestOrgMasters, createFullTestEmployee, loginAs } from "../../employee/__tests__/employeeTestHelpers";
 import { ensurePayrollRules } from "../rules/governed";
 import { executeCalculation, setCalculationEnqueuer } from "../run/engine";
-import { cleanupPayrollRowsBy } from "./payrollTestHelpers";
+import { cleanupPayrollRowsBy, useSecondDirectorChecks } from "./payrollTestHelpers";
 import { componentPin, makeComponent, makeStructure, setRule, type Person, type SalaryWorld } from "./salaryTestHelpers";
 
 // A world for the payroll-run tests: a maker, two checkers, named staff, the company rules set, four components (Basic and HRA and the balance count for ESI, Basic
@@ -39,12 +39,14 @@ export async function setRules(actorUserId: string, rules: Record<string, unknow
 }
 
 export async function buildRunWorld(names: string[], over: { companyRules?: boolean } = {}): Promise<RunWorld> {
+  const restoreSwitches = await useSecondDirectorChecks(); // these tests describe the two-director behaviour; D2's own tests cover a director acting alone
   await ensurePayrollRules();
   const org = await createEmployeeTestOrgMasters();
   const prefix = `R${randomBytes(2).toString("hex").toUpperCase()}`;
-  const maker = await createFullTestEmployee(org, { roleCode: "PAYROLL_ADMIN" });
-  const checkerA = await createFullTestEmployee(org, { roleCode: "PAYROLL_APPROVER" });
-  const checkerB = await createFullTestEmployee(org, { roleCode: "PAYROLL_APPROVER" });
+  const maker = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
+  const checkerA = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
+  const checkerB = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
+  const outsider = await createFullTestEmployee(org, { roleCode: "HR_EXECUTIVE" }); // holds no payroll permission: stands for somebody who is neither a maker nor a checker
   const named: Record<string, Person> = {};
   for (const n of names) named[n] = await createFullTestEmployee(org);
   const world: RunWorld = {
@@ -52,16 +54,18 @@ export async function buildRunWorld(names: string[], over: { companyRules?: bool
     maker,
     checkerA,
     checkerB,
+    outsider,
     staff: Object.values(named),
     named,
-    tokens: { maker: await loginAs(maker.employeeCode), checkerA: await loginAs(checkerA.employeeCode), checkerB: await loginAs(checkerB.employeeCode) },
+    tokens: { maker: await loginAs(maker.employeeCode), checkerA: await loginAs(checkerA.employeeCode), checkerB: await loginAs(checkerB.employeeCode), outsider: await loginAs(outsider.employeeCode) },
     prefix,
     basic: `${prefix}_BASIC`,
     hra: `${prefix}_HRA`,
     special: `${prefix}_SPECIAL`,
     conveyance: `${prefix}_CONV`,
     structure: `${prefix}_STD`,
-    userIds: [maker.userId, checkerA.userId, checkerB.userId, ...Object.values(named).map((s) => s.userId)],
+    userIds: [maker.userId, checkerA.userId, checkerB.userId, outsider.userId, ...Object.values(named).map((s) => s.userId)],
+    restoreSwitches,
   };
   if (over.companyRules !== false) await setRules(maker.userId, COMPANY_RULES);
   else await setRules(maker.userId, { LINE_ROUNDING: COMPANY_RULES.LINE_ROUNDING }); // a salary cannot be built without it; everything else stays unset
@@ -85,9 +89,10 @@ export async function buildRunWorld(names: string[], over: { companyRules?: bool
 
 export async function teardownRunWorld(world: RunWorld): Promise<void> {
   setCalculationEnqueuer(null);
-  for (const p of [...world.staff, world.checkerB, world.checkerA, world.maker]) await cleanupFullTestEmployee(p.employeeId);
+  for (const p of [...world.staff, world.outsider, world.checkerB, world.checkerA, world.maker]) await cleanupFullTestEmployee(p.employeeId);
   await cleanupPayrollRowsBy(world.userIds);
   await cleanupEmployeeTestOrgMasters(world.org);
+  await world.restoreSwitches?.();
 }
 
 /** Locked attendance for a whole cycle: present every day (Sundays a week off), except where `over` says otherwise. Days can also be left unlocked. */

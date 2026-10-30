@@ -7,7 +7,9 @@ import { resolveAccess } from "../../../lib/permissions";
 import { prisma } from "../../../lib/prisma";
 import { permissionRoom, getSocketServer } from "../../../realtime/emit";
 import { HttpError } from "../../../middleware/errorHandler";
-import { adapterFor, checkerAvailability, decide as decideApproval, liveApproval, noteFiguresChanged, registerSubject, submit as submitApproval, voidApproval, voidLive, type CheckerAvailability } from "../approvals";
+import type { DirectorStep } from "@shared/constants/directorAuthority";
+import { authorityFor, authorityForDisplay, unsetRequiredSteps } from "../../../lib/directorAuthority";
+import { adapterFor, authorise, checkerAvailability, decide as decideApproval, liveApproval, noteFiguresChanged, registerSubject, submit as submitApproval, voidApproval, voidLive, type CheckerAvailability } from "../approvals";
 import { recordEvent, figureEditorsSince } from "../events";
 import { payrollHash } from "../hash";
 import { canonicalDecimal, dec } from "../money";
@@ -29,6 +31,8 @@ import { iso } from "./days";
 export type Slug = "run" | "finalise" | "unlock" | "publish" | "bank-file";
 export const SLUGS = ["run", "finalise", "unlock", "publish", "bank-file"] as const;
 export const SUBJECT_OF: Record<Slug, PayrollApprovalSubject> = { run: "RUN_APPROVAL", finalise: "PERIOD_FINALISE", unlock: "PERIOD_UNLOCK", publish: "PAYSLIP_PUBLISH", "bank-file": "BANK_FILE" };
+/** Which switch governs each step (docs/plans/DIRECTOR_AUTHORITY.md §2.1). */
+export const STEP_OF: Record<Slug, DirectorStep> = { run: "RUN_APPROVAL", finalise: "PERIOD_FINALISE", unlock: "PERIOD_UNLOCK", publish: "PAYSLIP_PUBLISH", "bank-file": "BANK_FILE" };
 export const MAKER_PERMISSION: Record<Slug, string> = { run: "payroll.run", finalise: "payroll.run", unlock: "payroll.unlock", publish: "payroll.run", "bank-file": "payroll.run" };
 const LABEL: Record<Slug, string> = { run: "Submit the run for approval", finalise: "Finalise the payroll period", unlock: "Unlock the payroll period", publish: "Publish payslips", "bank-file": "Generate the bank file" };
 
@@ -187,6 +191,7 @@ export interface Preview {
   canRequest: boolean;
   /** Who could decide this, in words, and whether that is one person or nobody. */
   checkers: CheckerAvailability;
+  authority: "DIRECTOR_AUTHORITY" | "SECOND_DIRECTOR";
   fingerprint: string;
   watermark: Watermark;
   totals: { gross: string; deductions: string; net: string; employerCost: string };
@@ -209,7 +214,12 @@ function statusBlocker(run: PayrollRun, need: string, doing: string): Blocker | 
 async function envelope(slug: Slug, run: PayrollRun, actor: Actor, blockers: Blocker[], fingerprintHash: string, extra: Record<string, unknown>): Promise<Preview> {
   const subject = SUBJECT_OF[slug];
   const approval = await liveApproval(subject, run.id);
-  const checkers = await checkerAvailability(subject, { makerUserId: approval ? approval.makerUserId : actor.userId, ...(approval ? { subjectId: run.id, since: approval.submittedAt } : {}) });
+  const authority = await authorityForDisplay(STEP_OF[slug]);
+  if (!blockers.some((b) => b.code === "DIRECTOR_CHOICE_NOT_SET")) blockers = [...(await choiceBlockers(slug === "run" ? "approved" : "carried out")), ...blockers];
+  const checkers =
+    authority === "DIRECTOR_AUTHORITY" && !approval
+      ? ({ eligible: [], excluded: [], state: "SELF", message: "You can do this yourself. It takes effect at once, and the other director is told." } satisfies CheckerAvailability)
+      : await checkerAvailability(subject, { makerUserId: approval ? approval.makerUserId : actor.userId, ...(approval ? { subjectId: run.id, since: approval.submittedAt } : {}) });
   const watermark = run.runHash === null ? { test: false, text: "", rules: [] } : watermarkFromStatuses(await pinStatuses(pinsOf(run)));
   return {
     slug,
@@ -221,6 +231,8 @@ async function envelope(slug: Slug, run: PayrollRun, actor: Actor, blockers: Blo
     runStatusLabel: RUN_STATUS_LABEL[run.status],
     blockers,
     canRequest: blockers.length === 0,
+    /** Who decides this step now: one director alone ("DIRECTOR_AUTHORITY") or the other director too ("SECOND_DIRECTOR"). */
+    authority,
     checkers,
     fingerprint: payrollHash({ t: `close:${slug}`, run: run.id, hash: fingerprintHash }),
     watermark,
@@ -230,7 +242,16 @@ async function envelope(slug: Slug, run: PayrollRun, actor: Actor, blockers: Blo
   };
 }
 
+/** Payroll does not run while the two directors have not both chosen, for every step that can commit money or change pay rules, who decides it. */
+async function choiceBlockers(action: string): Promise<Blocker[]> {
+  const unset = await unsetRequiredSteps();
+  if (unset.length === 0) return [];
+  return [{ code: "DIRECTOR_CHOICE_NOT_SET", title: "Who decides each step is not set", message: `The two directors have not both chosen, and confirmed, who decides: ${unset.map((u) => u.label).join("; ")}. One sets it, the other confirms it (Admin Tools, Director authority). Until then the run cannot be ${action}.` }];
+}
+
 async function realBlocker(run: PayrollRun, action: string): Promise<Blocker[]> {
+  const unsetChoice = await choiceBlockers(action);
+  if (unsetChoice.length > 0) return unsetChoice;
   try {
     await assertRunIsReal(pinsOf(run), action);
     return [];
@@ -368,6 +389,29 @@ export async function requestStep(slug: Slug, runId: string, input: { fingerprin
   const first = p.blockers[0];
   if (first) throw new HttpError(409, first.message, first.code, { blockers: p.blockers, ...(first.details ?? {}) });
   if (p.fingerprint !== input.fingerprint) throw new HttpError(409, "Something changed since you looked. Look at it again before you go on.", "PREVIEW_STALE");
+  const runStep = async (tx: Parameters<NonNullable<Parameters<typeof submitApproval>[0]["inTransaction"]>>[0], to: "SUBMITTED" | "APPROVED") => {
+    const { count } = await tx.payrollRun.updateMany({ where: { id: runId, status: "CALCULATED", runHash: run.runHash }, data: { status: to } });
+    if (count !== 1) throw new HttpError(409, "This run was just changed by somebody else. Look at it again.", "CONFLICT");
+  };
+  // Director authority (docs/plans/DIRECTOR_AUTHORITY.md §5.3): unless the owners have switched the second-director check on for this step, the director prepares and decides in
+  // one act, at once; the approval is recorded as such, the other director is told, and the hash is still bound and re-checked when the act is carried out.
+  if ((await authorityFor(STEP_OF[slug])) === "DIRECTOR_AUTHORITY") {
+    const approved = await authorise({
+      subject,
+      subjectId: runId,
+      actorUserId: actor.userId,
+      previewFingerprint: input.fingerprint,
+      step: STEP_OF[slug],
+      subjectLabel: await adapterFor(subject).describe(runId),
+      itemCount: slug === "bank-file" || slug === "publish" ? run.payableCount : run.peopleCount,
+      note,
+      ip: actor.ip ?? null,
+      ...(slug === "run" ? { inTransaction: async (tx) => runStep(tx, "APPROVED") } : {}),
+    });
+    await writeAuditLog({ actorUserId: actor.userId, action: `payroll.run.${slug === "run" ? "approved_on_authority" : `${slug}_authorised`}`, entityType: "PayrollRun", entityId: runId, after: { cycle: run.cycleLabel, hash: approved.contentHash, authority: "DIRECTOR_AUTHORITY" }, ipAddress: actor.ip ?? null });
+    emitTo(["payroll.run", "payroll.approve"], "payroll.approval.decided", { runId, slug, cycle: run.cycleLabel, decision: "APPROVED" });
+    return { approvalId: approved.id, status: approved.status, authority: "DIRECTOR_AUTHORITY" as const, runStatus: slug === "run" ? "APPROVED" : run.status };
+  }
   const approval = await submitApproval({
     subject,
     subjectId: runId,
@@ -375,6 +419,7 @@ export async function requestStep(slug: Slug, runId: string, input: { fingerprin
     previewFingerprint: input.fingerprint,
     note,
     ip: actor.ip ?? null,
+    notify: { step: STEP_OF[slug], subjectLabel: await adapterFor(subject).describe(runId), itemCount: slug === "bank-file" || slug === "publish" ? run.payableCount : run.peopleCount },
     ...(slug === "run"
       ? {
           inTransaction: async (tx) => {
@@ -386,7 +431,7 @@ export async function requestStep(slug: Slug, runId: string, input: { fingerprin
   });
   await writeAuditLog({ actorUserId: actor.userId, action: `payroll.run.${slug === "run" ? "submitted" : `${slug}_requested`}`, entityType: "PayrollRun", entityId: runId, after: { cycle: run.cycleLabel, hash: approval.contentHash, ...(slug === "unlock" ? { reason: note } : {}) }, ipAddress: actor.ip ?? null });
   emitTo(["payroll.approve"], "payroll.approval.requested", { runId, slug, cycle: run.cycleLabel });
-  return { approvalId: approval.id, status: approval.status, runStatus: slug === "run" ? "SUBMITTED" : run.status };
+  return { approvalId: approval.id, status: approval.status, authority: "SECOND_DIRECTOR" as const, runStatus: slug === "run" ? "SUBMITTED" : run.status };
 }
 
 // ── Deciding ──
@@ -521,16 +566,21 @@ export async function approvalState(runId: string, viewerUserId: string) {
     const last = mine.find((a) => a.status !== "PENDING" && a.status !== "APPROVED") ?? null;
     const editors = live ? await figureEditorsSince(subject, runId, live.submittedAt) : new Set<string>();
     // Who could decide it: for a request waiting, excluding its maker and anyone who changed the figures; for one not yet asked, as it would be if the viewer asked.
+    const authority = await authorityForDisplay(STEP_OF[slug]);
     const checkers = live
       ? live.status === "PENDING"
         ? await checkerAvailability(subject, { makerUserId: live.makerUserId, subjectId: runId, since: live.submittedAt })
         : null
-      : await checkerAvailability(subject, { makerUserId: access.permissions.has(MAKER_PERMISSION[slug]) ? viewerUserId : null });
+      : authority === "DIRECTOR_AUTHORITY"
+        ? ({ eligible: [], excluded: [], state: "SELF", message: "You can do this yourself. It takes effect at once, and the other director is told." } satisfies CheckerAvailability)
+        : await checkerAvailability(subject, { makerUserId: access.permissions.has(MAKER_PERMISSION[slug]) ? viewerUserId : null });
     steps.push({
       slug,
       subject,
       label: LABEL[slug],
-      live: live ? view(live) : null,
+      /** The mode in force now (an approval already written keeps the mode it was written under: see live.authority). */
+      authority,
+      live: live ? { ...view(live), authority: live.authority } : null,
       last: last ? view(last) : null,
       checkers,
       you: {

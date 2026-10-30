@@ -32,7 +32,7 @@ export interface RequestHubItem {
   link: string; // employee-portal path
 }
 
-export const TASK_TYPES = ["LEAVE_APPROVAL", "PROFILE_CHANGE_APPROVAL", "HELPDESK_ASSIGNED", "REGULARIZATION_APPROVAL"] as const;
+export const TASK_TYPES = ["LEAVE_APPROVAL", "PROFILE_CHANGE_APPROVAL", "HELPDESK_ASSIGNED", "REGULARIZATION_APPROVAL", "DIRECTOR_NOTICE"] as const;
 export type TaskType = (typeof TASK_TYPES)[number];
 
 export const TASK_TYPE_LABELS: Record<TaskType, string> = {
@@ -40,6 +40,7 @@ export const TASK_TYPE_LABELS: Record<TaskType, string> = {
   PROFILE_CHANGE_APPROVAL: "Profile change approval",
   HELPDESK_ASSIGNED: "Helpdesk ticket",
   REGULARIZATION_APPROVAL: "Attendance regularization",
+  DIRECTOR_NOTICE: "Director action",
 };
 
 export interface TaskItem {

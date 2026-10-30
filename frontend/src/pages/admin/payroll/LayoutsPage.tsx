@@ -12,7 +12,7 @@ import { Caption, PersonCell } from "../../../components/payroll/payrollUi";
 import { fs, fw, radius, space, v } from "../../../theme/tokens";
 
 // Payroll → Bank and statutory layouts (Phase 6 P6-5). The layout of the bank file and of each statutory file is data typed in from the bank's or the portal's own
-// specification, saved as a Placeholder and confirmed by a different person. Nothing is pre-filled with a guess: until a layout is entered and confirmed, no file can be made.
+// specification, saved as a Placeholder and confirmed by a director. Nothing is pre-filled with a guess: until a layout is entered and confirmed, no file can be made.
 
 const STATUS_TAG: Record<RuleStatus, { tone: ChipTone; label: string }> = { CONFIRMED: { tone: "success", label: "Confirmed" }, PLACEHOLDER: { tone: "warning", label: "Placeholder" }, NOT_SET: { tone: "neutral", label: "Not set" } };
 const statusChip = (s: RuleStatus) => <StatusChip tone={STATUS_TAG[s].tone}>{STATUS_TAG[s].label}</StatusChip>;
@@ -52,7 +52,7 @@ export function LayoutsPage() {
           description={
             <>
               A layout says which fields go in which columns, how amounts and dates are written, and what header and trailer rows the file has. It comes from your bank’s specification (or a sample file) or from the layout the portal currently accepts, never from this system’s idea of one.
-              A layout is {statusChip("PLACEHOLDER")} when saved, and {statusChip("CONFIRMED")} only when a different person has checked it. A file cannot be made from one that is not Confirmed.
+              A layout is {statusChip("PLACEHOLDER")} when saved, and {statusChip("CONFIRMED")} only when a director has checked it. A file cannot be made from one that is not Confirmed.
             </>
           }
         />
@@ -198,7 +198,7 @@ function EditDrawer({ layout, onClose, onDone }: { layout: LayoutView; onClose: 
   const save = useMutation({
     mutationFn: () => payrollApi.saveLayout(layout.key, { value: value!, fingerprint: preview!.fingerprint, ...(note.trim() ? { note: note.trim() } : {}) }),
     onSuccess: () => {
-      toast.success("Saved as a Placeholder. A different person has to confirm it.");
+      toast.success("Saved as a Placeholder. A director has to confirm it.");
       onDone();
       onClose();
     },
@@ -210,7 +210,7 @@ function EditDrawer({ layout, onClose, onDone }: { layout: LayoutView; onClose: 
       size="wide"
       title={`${layout.label}: layout`}
       status={statusChip(layout.status)}
-      subtitle={preview ? "Checked. Save it as a Placeholder for a different person to confirm." : "Enter it exactly as the specification says, then check it"}
+      subtitle={preview ? "Checked. Save it as a Placeholder for a director to confirm." : "Enter it exactly as the specification says, then check it"}
       onClose={onClose}
       footer={
         <div style={{ display: "flex", gap: space[3], width: "100%" }}>
@@ -269,7 +269,7 @@ function EditDrawer({ layout, onClose, onDone }: { layout: LayoutView; onClose: 
             <ApprovalBanner tone="info" title="This is the same as the current layout. Nothing to save." />
           ) : (
             <>
-              <ApprovalBanner tone="success" title="The layout is valid." description={preview.willResetConfirmation ? "Saving makes this the new current layout, as a Placeholder. The last Confirmed layout stays on record, but no file can be made until the new one is confirmed by a different person." : "Saving adds it as a Placeholder. A different person has to confirm it before a file can be made."} />
+              <ApprovalBanner tone="success" title="The layout is valid." description={preview.willResetConfirmation ? "Saving makes this the new current layout, as a Placeholder. The last Confirmed layout stays on record, but no file can be made until the new one is confirmed by a director." : "Saving adds it as a Placeholder. A different person has to confirm it before a file can be made."} />
               <Form layout="vertical" component="div">
                 <Form.Item label="Where this came from" htmlFor="layout-note" style={{ marginBottom: 0 }}>
                   <Input.TextArea id="layout-note" rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Where this came from (for example: the bank’s sheet dated …)" />

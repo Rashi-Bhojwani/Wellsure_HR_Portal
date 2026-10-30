@@ -105,6 +105,8 @@ export interface TaskCounts {
   review: { total: number; byType: TaskCountsByType[] };
   monitor: { total: number; byType: TaskCountsByType[] };
   leaveNoTeamApprover: number | null; // company-wide approvers only
+  /** Directors only: work waiting for them because HR has been switched off for it. */
+  heldFromHr: { leave: number; regularizations: number } | null;
 }
 
 export async function getTaskCounts(): Promise<TaskCounts> {

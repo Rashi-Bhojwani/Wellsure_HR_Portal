@@ -22,10 +22,18 @@ describe("maker-checker core", () => {
 
   beforeAll(async () => {
     org = await createEmployeeTestOrgMasters();
-    people.maker = await createFullTestEmployee(org, { roleCode: "PAYROLL_ADMIN" });
-    people.checkerA = await createFullTestEmployee(org, { roleCode: "PAYROLL_APPROVER" });
-    people.checkerB = await createFullTestEmployee(org, { roleCode: "PAYROLL_APPROVER" });
-    people.both = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" }); // holds every permission: maker and checker
+    // D1 (docs/plans/DIRECTOR_AUTHORITY.md): the payroll roles are for directors, so the maker and the checkers are all Super Admins (three of them, so the
+    // concurrency and exclusion cases still have someone left). An HR Admin is the person who is neither.
+    people.maker = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
+    people.checkerA = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
+    people.checkerB = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
+    // Stage 0.3: the person who is both maker and checker holds BOTH payroll marker roles on top of Super Admin, not just one broad role.
+    people.both = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
+    for (const code of ["PAYROLL_ADMIN", "PAYROLL_APPROVER"]) {
+      const role = await prisma.role.findUniqueOrThrow({ where: { code } });
+      await prisma.userRole.create({ data: { userId: people.both.userId, roleId: role.id } });
+    }
+    people.outsider = await createFullTestEmployee(org, { roleCode: "HR_ADMIN" });
     for (const s of SUBJECTS) {
       registerSubject({
         subject: s,
@@ -43,7 +51,7 @@ describe("maker-checker core", () => {
     for (const s of SUBJECTS) unregisterSubjectForTests(s);
     await cleanupPayrollSubject(prefix);
     await cleanupPayrollRowsBy(Object.values(people).map((p) => p.userId));
-    for (const p of Object.values(people)) await cleanupFullTestEmployee(p.employeeId);
+    for (const p of new Set(Object.values(people))) await cleanupFullTestEmployee(p.employeeId);
     await cleanupEmployeeTestOrgMasters(org);
   });
 
@@ -85,24 +93,26 @@ describe("maker-checker core", () => {
     });
   });
 
-  it("only a maker can submit and only a checker can decide", async () => {
+  it("only a director can submit and only a director can decide: an HR Admin can do neither", async () => {
     const id = newId();
     figures.set(id, "5");
-    await expect(submit({ subject: "RUN_APPROVAL", subjectId: id, makerUserId: people.checkerA!.userId, previewFingerprint: "x" })).rejects.toMatchObject({ status: 403 });
+    await expect(submit({ subject: "RUN_APPROVAL", subjectId: id, makerUserId: people.outsider!.userId, previewFingerprint: "x" })).rejects.toMatchObject({ status: 403, code: "FORBIDDEN" });
     const a = await submitAs("RUN_APPROVAL", id);
-    await expect(decide({ approvalId: a.id, checkerUserId: people.maker!.userId, decision: "APPROVE" })).rejects.toMatchObject({ status: 403, code: "FORBIDDEN" });
+    await expect(decide({ approvalId: a.id, checkerUserId: people.outsider!.userId, decision: "APPROVE" })).rejects.toMatchObject({ status: 403, code: "FORBIDDEN" });
   });
 
-  it("the checker is never the maker, even for someone who holds both permissions", async () => {
-    const id = newId();
-    figures.set(id, "5");
-    const a = await submitAs("RUN_APPROVAL", id, people.both!);
-    await expect(decide({ approvalId: a.id, checkerUserId: people.both!.userId, decision: "APPROVE" })).rejects.toMatchObject({ code: "CHECKER_IS_MAKER" });
-    // And the database refuses it whatever the code does.
-    await expect(prisma.payrollApproval.update({ where: { id: a.id }, data: { status: "APPROVED", checkerUserId: people.both!.userId, hashAtDecision: a.contentHash, decidedAt: new Date() } })).rejects.toThrow(/payroll_approvals_checker_not_maker/);
-    // A different person can.
-    const ok = await decide({ approvalId: a.id, checkerUserId: people.checkerA!.userId, decision: "APPROVE" });
-    expect(ok.status).toBe("APPROVED");
+  describe.each(SUBJECTS)("%s: the checker is never the maker, even for someone who holds both payroll roles", (subject) => {
+    it("refuses in the code and in the database, and a different person can still decide", async () => {
+      const id = newId();
+      figures.set(id, "5");
+      const a = await submitAs(subject, id, people.both!);
+      await expect(decide({ approvalId: a.id, checkerUserId: people.both!.userId, decision: "APPROVE" })).rejects.toMatchObject({ status: 403, code: "CHECKER_IS_MAKER" });
+      await expect(decide({ approvalId: a.id, checkerUserId: people.both!.userId, decision: "REJECT", note: "my own" })).rejects.toMatchObject({ code: "CHECKER_IS_MAKER" });
+      // And the database refuses it whatever the code does.
+      await expect(prisma.payrollApproval.update({ where: { id: a.id }, data: { status: "APPROVED", checkerUserId: people.both!.userId, hashAtDecision: a.contentHash, decidedAt: new Date() } })).rejects.toThrow(/payroll_approvals_checker_not_maker/);
+      const ok = await decide({ approvalId: a.id, checkerUserId: people.checkerA!.userId, decision: "APPROVE" });
+      expect(ok.status).toBe("APPROVED");
+    });
   });
 
   it("nobody who changed the figures since submission can be the checker", async () => {

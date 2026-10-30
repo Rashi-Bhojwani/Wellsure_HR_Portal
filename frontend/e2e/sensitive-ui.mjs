@@ -42,7 +42,10 @@ const browser = await chromium.launch({ ...(CHROME ? { executablePath: CHROME } 
 const problems = [];
 let pages = 0;
 
-async function visit(user, label, base, paths) {
+// One sign-in per person, kept for every visit that person makes (the login is rate-limited to ten a quarter of an hour, and the HR Admin is now visited in four states).
+const sessions = new Map();
+async function sessionFor(user) {
+  if (sessions.has(user)) return sessions.get(user);
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();
   await page.goto(`${BASE}/login`);
@@ -50,9 +53,24 @@ async function visit(user, label, base, paths) {
   await page.getByPlaceholder("Password").fill(PASSWORD);
   await page.getByRole("button", { name: /sign in|log in/i }).click();
   await page.waitForURL((u) => !u.pathname.includes("login"), { timeout: 30000 });
+  sessions.set(user, page);
+  return page;
+}
+
+async function visit(user, label, base, paths) {
+  const page = await sessionFor(user);
   for (const p of paths) {
-    const url = `${BASE}${base}/${p}`;
-    await page.goto(url);
+    const url = `${BASE}${base}/${p}`; if (process.env.SENSITIVE_UI_VERBOSE) console.log("visit", label, url);
+    // A navigation can be aborted when the previous page was still redirecting (a menu path that sends you on); it is tried again, never skipped.
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        await page.goto(url);
+        break;
+      } catch (err) {
+        if (attempt >= 3) throw err;
+        await page.waitForTimeout(800);
+      }
+    }
     await page.waitForLoadState("networkidle").catch(() => undefined);
     await page.waitForTimeout(600);
     pages += 1;
@@ -61,12 +79,45 @@ async function visit(user, label, base, paths) {
     if (!(await page.getByTestId("demo-company-banner").first().isVisible().catch(() => false))) problems.push(`${label} on ${base}/${p}: the DEMO COMPANY banner is not on the page`);
   }
   await page.screenshot({ path: path.join(OUT, `sensitive-ui-${label.replace(/\W+/g, "-")}.png`) });
-  await ctx.close();
 }
 
 await visit("DEMO005", "the developer", "/admin", adminPaths);
 await visit("DEMO005", "the developer (own portal)", "/app", employeePaths);
 await visit("DEMO006", "an ordinary employee", "/app", employeePaths);
+// Added with the master build (Stage 0.2): the people who are allowed to see most of the system must not see the demo's secrets on a page either: pay details are masked
+// by default and shown only through an audited Reveal, never printed on a page.
+await visit("DEMO004", "an HR Admin", "/admin", adminPaths);
+await visit("DEMO004", "an HR Admin (own portal)", "/app", employeePaths);
+// Stage 1.6: the same HR Admin with every switch the directors have turned all the way ON (the most HR can ever be given) and then all the way OFF (every duty closed), set through the
+// real API by the demo's director and put back as they were. No switch may show a secret, and every page must still say it is the demo.
+const API = process.env.API_URL ?? "http://localhost:4000";
+const CAPABILITIES = ["VIEW_ATTENDANCE", "APPROVE_REGULARIZATIONS", "APPROVE_LEAVE", "EDIT_MUSTER", "UPLOAD_MANUAL_MUSTER", "FINALISE_MONTH", "CORRECTIONS", "SHIFT_ROSTER", "EXCEPTIONS_QUEUE", "ATTENDANCE_REPORTS", "LEAVE_REPORTS"];
+let directorToken;
+async function setAllDuties(state) {
+  if (!directorToken) {
+  const login = await fetch(`${API}/api/auth/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ employeeCode: "DEMO001", password: PASSWORD }) });
+  directorToken = (await login.json()).accessToken;
+  }
+  const token = directorToken;
+  if (!token) throw new Error("could not sign in as the demo director to set the HR switches");
+  for (const roleCode of ["HR_ADMIN", "HR_EXECUTIVE"]) {
+    for (const capability of CAPABILITIES) {
+      const res = await fetch(`${API}/api/hr-capabilities`, { method: "PUT", headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: JSON.stringify({ capability, subject: { kind: "ROLE", roleCode }, state, reason: "the sensitive-data scan" }) });
+      if (!res.ok) throw new Error(`could not set ${capability} for ${roleCode} to ${state}: ${res.status}`);
+    }
+  }
+}
+try {
+  await setAllDuties("ON");
+  await visit("DEMO004", "an HR Admin (every duty on)", "/admin", adminPaths);
+  await setAllDuties("OFF");
+  await visit("DEMO004", "an HR Admin (every duty off)", "/admin", adminPaths);
+} finally {
+  await setAllDuties("DEFAULT");
+}
+await visit("DEMO001", "a director", "/admin", adminPaths);
+await visit("DEMO001", "a director (own portal)", "/app", employeePaths);
+for (const page of sessions.values()) await page.context().close();
 await browser.close();
 
 if (problems.length) {

@@ -53,6 +53,8 @@ export const PERMISSION_KEYS = [
   "delegation.manage", // see and manage anyone's approval delegations (a manager manages their own with no key)
   // Phase 5 — Core reports (commit F)
   "reports.view", // the Reports app: headcount, joiners, leavers & attrition, birthdays & anniversaries, leave balance, LOP — in data scope
+  "reports.attendance.view", // the attendance reports: late coming, excess hours, exceptions, attendance summary (parent: reports.view)
+  "reports.leave.view", // the leave reports: leave balance, loss of pay (parent: reports.view)
   "reports.liability.view", // leave liability (days × encashment rate — salary-derived from Phase 6, so never a manager's)
   // Phase 2 — Attendance (docs/plans/PHASE_2.md §2.4)
   "attendance.view", // others' attendance (calendar, day detail, muster, Who Is In?) in data scope
@@ -70,6 +72,10 @@ export const PERMISSION_KEYS = [
   "attendance.swipes.view", // Employee Swipes: the raw punch log in data scope (a manager: their team)
   // Phase 3 commit 3 — Period Finalisation
   "attendance.finalise", // lock a finished attendance cycle so it can reach payroll
+  // Stage 1 (docs/plans/HR_CAPABILITIES.md): four pieces split from the keys above so a director can switch each for HR on its own. Each is held by everyone who held its parent.
+  "attendance.manual.upload", // upload a manual-branch muster workbook (parent: attendance.manual.enter)
+  "attendance.roster.manage", // plan and publish the shift roster (parent: attendance.config.manage)
+  "attendance.exceptions.view", // the Attendance Exceptions queue (parent: attendance.view)
   "attendance.unlock", // open a finalised cycle again, with a reason (Super Admin only)
   // Phase 6 — payroll (docs/plans/PHASE_6.md §11). None of these is ever manager-grantable.
   "payroll.rules.view", // see the payroll rules, components, structures and templates, and their history
@@ -165,6 +171,18 @@ export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
   "manager.permissions.manage": { group: "Managers", label: "Manager permission exceptions", description: "Grant or revoke individual permissions for a manager — only from the manager-grantable list, never sensitive data.", meta: true },
   "delegation.manage": { group: "Managers", label: "Workflow delegations", description: "See every manager's approval delegations, set one up for a manager, and revoke one. Moves no permission: a delegate must already hold Approve leave." },
   "reports.view": { group: "Reports", label: "Reports", description: "Headcount, joiners, leavers & attrition, birthdays & anniversaries, leave balance and LOP reports, with Excel export — only for people in their data scope.", managerGrantable: true },
+  "reports.attendance.view": {
+    group: "Reports",
+    label: "Attendance reports",
+    description: "Late coming, excess hours, attendance exceptions and the attendance summary, in their data scope. Also needs Reports.",
+    managerGrantable: true,
+  },
+  "reports.leave.view": {
+    group: "Reports",
+    label: "Leave reports",
+    description: "Leave balance and loss of pay, in their data scope. Also needs Reports.",
+    managerGrantable: true,
+  },
   "reports.liability.view": { group: "Reports", label: "Leave liability report", description: "Leave liability in rupees (encashable balance × the encashment daily rate). Salary-derived once payroll exists, so it sits with salary data, never with managers." },
   "attendance.view": { group: "Attendance", label: "View attendance", description: "See other employees' attendance — calendar, day detail, muster, Who Is In? — in their data scope." },
   "attendance.config.manage": { group: "Attendance", label: "Attendance settings", description: "Shifts and their sessions, week-off patterns, policies, assignments, the attendance cycle, and who marks which branch." },
@@ -174,6 +192,14 @@ export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
     description: "Enter IN/OUT times (or a status) for employees with no biometric device — only in the branches assigned to them. Changes open days only; Admin finalises.",
     managerGrantable: true,
   },
+  "attendance.manual.upload": {
+    group: "Attendance",
+    label: "Upload manual attendance",
+    description: "Upload the manual-branch muster workbook (template, preview, commit). Also needs Mark attendance manually, and only in the branches assigned to them.",
+    managerGrantable: true,
+  },
+  "attendance.roster.manage": { group: "Attendance", label: "Shift roster", description: "Plan the shift roster and publish it (preview first)." },
+  "attendance.exceptions.view": { group: "Attendance", label: "Attendance exceptions queue", description: "See the queue of days with a missing punch, a shortfall, no shift or an unmapped device ID. Also needs View attendance." },
   "attendance.process": { group: "Attendance", label: "Process attendance", description: "Re-process a date range from raw punches and manual entries, before the period is locked." },
   "attendance.devices.manage": { group: "Attendance", label: "Biometric devices", description: "Devices, sync agents and their keys, unmapped punches, clock warnings." },
   "attendance.regularization.view": { group: "Attendance", label: "View regularizations", description: "See attendance regularization requests (e.g. forgot to punch out) from people in their data scope — a manager: their team.", managerGrantable: true },

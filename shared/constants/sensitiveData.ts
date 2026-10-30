@@ -1,4 +1,4 @@
-import { META_PERMISSION_KEYS, type PermissionKey } from "./permissions";
+import { META_PERMISSION_KEYS, PERMISSION_KEYS, type PermissionKey } from "./permissions";
 
 // The registry of sensitive data (docs/plans/PHASE_6.md §14J). The owners enter their own salaries, bank accounts, debit account, PF/ESI/PT/LWF/TAN identifiers and bank file layout, and the
 // developer must be able to build and run the system without holding any permission that reveals or changes them. This file is the single place that says what is sensitive and which
@@ -156,12 +156,41 @@ export const REVIEWED_NOT_SENSITIVE: readonly PermissionKey[] = [
   "attendance.override.manage",
   "attendance.swipes.view",
   "attendance.finalise",
+  "attendance.manual.upload",
+  "attendance.roster.manage",
+  "attendance.exceptions.view",
+  "reports.attendance.view",
+  "reports.leave.view",
   "payroll.rules.view",
 ];
 
 /** The keys nobody can hold together with the DEVELOPER role. */
 export const DEVELOPER_ROLE_CODE = "DEVELOPER";
 export const DEVELOPER_FORBIDDEN_KEYS: readonly PermissionKey[] = SENSITIVE_PERMISSION_KEYS;
+
+/**
+ * The HR hard lock (docs/plans/HR_CAPABILITIES.md §1A): pay data is never HR's. lib/permissions.ts removes these from anyone who holds an HR role without also being a Super Admin,
+ * the access service refuses to give them to an HR role or holder, and a database trigger refuses the rows. Every `payroll.*` key (so a payroll key added later is locked
+ * from its first day), plus the salary-derived reports and PAY documents.
+ */
+export const HR_ROLE_CODES = ["HR_ADMIN", "HR_EXECUTIVE"] as const;
+export const HR_FORBIDDEN_KEYS: readonly PermissionKey[] = [
+  ...PERMISSION_KEYS.filter((k) => k.startsWith("payroll.")),
+  "reports.salary.view",
+  "reports.liability.view",
+  "documents.pay.view",
+  // Admin Tools are the directors' (docs/plans/HR_CAPABILITIES.md §1A): who holds which role, the audit log, system settings and workflow delegations.
+  "role.view",
+  "audit.view",
+  "settings.manage",
+  "delegation.manage",
+  // Locked after Checkpoint 1: sign-in security of other people (reset, unlock, sessions), the Import Center (it carries pay and bank sheets), letters (a letter can carry the CTC; per-type grants
+  // are not built, so the whole key is the directors' for now) and the leave year-end (encashment amounts).
+  "user.security.manage",
+  "import.manage",
+  "letters.generate",
+  "leave.yearend.manage",
+];
 
 /** What the DEVELOPER role is given: what is needed to build and run the system, and nothing in SENSITIVE_PERMISSION_KEYS (a test pins that). */
 export const DEVELOPER_ROLE_PERMISSIONS: readonly PermissionKey[] = [
@@ -176,9 +205,13 @@ export const DEVELOPER_ROLE_PERMISSIONS: readonly PermissionKey[] = [
   "attendance.devices.manage",
   "attendance.swipes.view",
   "attendance.regularization.view",
+  "attendance.exceptions.view",
+  "attendance.roster.manage",
   "leave.view",
   "leave.policy.manage",
   "reports.view",
+  "reports.attendance.view",
+  "reports.leave.view",
   "helpdesk.manage",
   "payroll.rules.view",
 ];

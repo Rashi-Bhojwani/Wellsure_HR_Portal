@@ -47,8 +47,8 @@ async function finalRun(runId: string): Promise<PayrollRun> {
 
 async function decidedBy(subject: "PAYSLIP_PUBLISH" | "BANK_FILE", runId: string, actor: Actor): Promise<void> {
   const approval = await prisma.payrollApproval.findFirst({ where: { subject, subjectId: runId, status: "APPROVED" } });
-  if (!approval) throw new HttpError(409, `${subject === "BANK_FILE" ? "The bank file" : "Publishing"} has not been approved by a second person yet.`, "APPROVAL_REQUIRED");
-  if (approval.checkerUserId === actor.userId) throw new HttpError(403, "You approved this, so somebody else carries it out. The person who decides is never the person who does.", "CHECKER_IS_EXECUTOR");
+  if (!approval) throw new HttpError(409, `${subject === "BANK_FILE" ? "The bank file" : "Publishing"} has not been approved yet.`, "APPROVAL_REQUIRED");
+  if (approval.authority !== "DIRECTOR_AUTHORITY" && approval.checkerUserId === actor.userId) throw new HttpError(403, "You approved this, so somebody else carries it out. The person who decides is never the person who does.", "CHECKER_IS_EXECUTOR");
   // What was approved must still be what would be written. Checked first, so a change (a bank account, a layout) voids the approval in words before anything is prepared.
   if ((await adapterFor(subject).hash(runId)) !== approval.hashAtDecision) {
     await voidApproval(approval, "What was approved no longer matches what would be written (a bank account, a name or the layout changed).", actor.userId);

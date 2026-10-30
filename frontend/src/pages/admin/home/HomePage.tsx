@@ -12,6 +12,7 @@ import {
   SoundOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../../../hooks/useAuth';
+import { adminNeedsForPath, adminNeedsMet } from '../../../routes/adminMenu.config';
 import * as managersApi from '../../../api/managers';
 import * as adminHomeApi from '../../../api/adminHome';
 import * as announcementsApi from '../../../api/announcements';
@@ -63,8 +64,10 @@ function FavouriteTiles() {
   // The drawer mounts from its first open on (then stays, so it animates closed).
   const [addUsed, setAddUsed] = useState(false);
   if (addOpen && !addUsed) setAddUsed(true);
+  const { user, hasPermission } = useAuth();
+  const isDirector = Boolean(user?.roleCodes.includes('SUPER_ADMIN'));
   const {
-    data: favourites = [],
+    data: allFavourites = [],
     isLoading,
     error,
     refetch,
@@ -72,6 +75,8 @@ function FavouriteTiles() {
     queryKey: ['admin', 'favourites'],
     queryFn: adminHomeApi.listFavourites,
   });
+  // A shortcut to a page the person's permissions no longer cover (a duty a director switched off) is not shown; it comes back by itself when the duty does.
+  const favourites = allFavourites.filter((f) => adminNeedsMet(adminNeedsForPath(f.path), hasPermission, isDirector));
   const deleteFavourite = useMutation({
     mutationFn: adminHomeApi.deleteFavourite,
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['admin', 'favourites'] }),
@@ -462,9 +467,18 @@ function WelcomeTab() {
     enabled: canAssignTeams,
   });
   const noApprover = taskCounts?.leaveNoTeamApprover ?? 0;
+  const held = taskCounts?.heldFromHr ?? null;
 
   return (
     <Stack>
+      {held && (
+        <ApprovalBanner
+          tone="info"
+          title={[held.leave > 0 && `${held.leave} leave ${held.leave === 1 ? "request" : "requests"}`, held.regularizations > 0 && `${held.regularizations} attendance ${held.regularizations === 1 ? "correction" : "corrections"}`].filter(Boolean).join(" and ") + " waiting for you"}
+          description="HR has been switched off from deciding these (Admin Tools, What HR Can Do). Nothing was approved or lost; they are in your queue, and go back to HR if you switch the duty on again."
+          actions={<Button onClick={() => navigate("/admin/tasks")}>Open</Button>}
+        />
+      )}
       {noApprover > 0 && (
         <ApprovalBanner
           tone="warning"

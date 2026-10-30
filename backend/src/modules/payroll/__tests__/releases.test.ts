@@ -15,7 +15,7 @@ import { prisma } from "../../../lib/prisma";
 import { app, authHeader, createFullTestEmployee, cleanupFullTestEmployee, loginAs } from "../../employee/__tests__/employeeTestHelpers";
 import { markPaid } from "../run/bankBatches";
 import { deliverPayslips } from "../run/payslipDelivery";
-import { REAL_RULES, approve, closeWorld, closingWorld, confirmAllPins, driveToFinal, requestStep, resetSeams, staffWith, step, type Closing } from "./closeTestHelpers";
+import { REAL_RULES, approve, closeWorld, closingWorld, confirmAllPins, driveToFinal, requestStep, resetSeams, staffWith, step, stepOf, type Closing } from "./closeTestHelpers";
 import { CYCLE, api, calculateRun, day, setRules } from "./runTestHelpers";
 
 // What a final run releases: payslips, the bank file, the statutory files and the register (docs/plans/PHASE_6.md §14H), through the real API and the real database.
@@ -83,7 +83,7 @@ describe("payslips, the bank file and the statutory files from a final run", () 
     await approve(world, world.supToken, runId, "publish"); // a Super Admin holds every permission, so the only thing that can stop them carrying it out is having decided it
     const byChecker = await api(world.supToken, "post", `/runs/${runId}/payslips/publish`);
     expect([byChecker.status, byChecker.body.error.code]).toEqual([403, "CHECKER_IS_EXECUTOR"]);
-    expect((await api(world.tokens.checkerB, "post", `/runs/${runId}/payslips/publish`)).status).toBe(403); // an approver who is not a maker holds no maker permission
+    expect((await api(world.tokens.outsider, "post", `/runs/${runId}/payslips/publish`)).status).toBe(403); // somebody who holds no payroll permission
     expect((await api(aToken, "post", `/runs/${runId}/payslips/publish`)).status).toBe(403);
     expect(await prisma.payslip.count({ where: { runId } })).toBe(0);
   });
@@ -211,7 +211,7 @@ describe("payslips, the bank file and the statutory files from a final run", () 
     expect(pre.status).toBe(200);
     expect(JSON.stringify(pre.body)).not.toContain(DEBIT);
     expect(pre.body.after.value).toMatchObject({ hasDebitAccount: true, debitAccountLast4: "3444" });
-    expect((await api(world.tokens.checkerA, "post", "/layouts/BANK_TEMPLATE/save-preview", { value: LAYOUT })).status).toBe(403); // a checker does not write layouts
+    expect((await api(world.tokens.outsider, "post", "/layouts/BANK_TEMPLATE/save-preview", { value: LAYOUT })).status).toBe(403); // somebody without the layout permission does not write layouts
     const saved = await put(world.tokens.maker, "/layouts/BANK_TEMPLATE", { value: { ...LAYOUT, debitAccountNumber: DEBIT }, fingerprint: pre.body.fingerprint, note: "from the test bank's specification" });
     expect(saved.status).toBe(200);
     expect(saved.body.status).toBe("PLACEHOLDER");
@@ -240,7 +240,7 @@ describe("payslips, the bank file and the statutory files from a final run", () 
     expect(again.body.unchanged).toBe(true);
     // Confirming: not by its author, by a different person.
     const cp = await api(world.tokens.maker, "post", "/layouts/BANK_TEMPLATE/confirm-preview");
-    expect(cp.status).toBe(403);
+    expect([cp.status, /You wrote this value/.test(String(cp.body.blocked))]).toEqual([200, true]); // D1: a director holds both permissions; the preview says why they cannot confirm their own
     const cpB = await api(world.tokens.checkerA, "post", "/layouts/BANK_TEMPLATE/confirm-preview");
     expect(cpB.status).toBe(200);
     const done = await api(world.tokens.checkerA, "post", "/layouts/BANK_TEMPLATE/confirm", { version: cpB.body.version, note: "matches the sheet the bank gave", fingerprint: cpB.body.fingerprint });
@@ -291,6 +291,9 @@ describe("payslips, the bank file and the statutory files from a final run", () 
 
   it("generates the file, and the batch, the audit rows and the release are all written together; the checker cannot carry it out", async () => {
     await requestStep(world.tokens.maker, runId, "bank-file");
+    // Stage 0.3: the person who asked for the file cannot approve it themselves.
+    const own = await step(world.tokens.maker, runId, "bank-file", "decision", { decision: "APPROVE", hash: (await stepOf(world.tokens.maker, runId, "bank-file")).live!.hash });
+    expect([own.status, own.body.error.code]).toEqual([403, "CHECKER_IS_MAKER"]);
     await approve(world, world.supToken, runId, "bank-file");
     expect((await api(world.supToken, "post", `/runs/${runId}/bank-file/generate`)).body.error.code).toBe("CHECKER_IS_EXECUTOR");
     const done = await api(world.tokens.maker, "post", `/runs/${runId}/bank-file/generate`);

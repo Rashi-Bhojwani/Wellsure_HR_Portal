@@ -17,9 +17,14 @@ export interface Meta {
 }
 
 function canOpen(key: ReportKey, viewer: ReportViewer): boolean {
-  const extra = REPORT_CATALOG[key].extraPermission;
-  return !extra || viewer.permissions.has(extra);
+  const { extraPermission, permission } = REPORT_CATALOG[key];
+  return (!permission || viewer.permissions.has(permission)) && (!extraPermission || viewer.permissions.has(extraPermission));
 }
+
+const missingFor = (key: ReportKey, viewer: ReportViewer): string => {
+  const { extraPermission, permission } = REPORT_CATALOG[key];
+  return permission && !viewer.permissions.has(permission) ? permission : (extraPermission ?? "reports.view");
+};
 
 export function catalogFor(viewer: ReportViewer) {
   return REPORT_KEYS.filter((k) => canOpen(k, viewer)).map((k) => REPORT_CATALOG[k]);
@@ -41,7 +46,7 @@ async function describeFilters(key: ReportKey, q: ReportQuery): Promise<string[]
 }
 
 export async function runReport(key: ReportKey, q: ReportQuery, viewer: ReportViewer): Promise<ReportResult> {
-  if (!canOpen(key, viewer)) throw new HttpError(403, `Missing permission: ${REPORT_CATALOG[key].extraPermission}`, "FORBIDDEN");
+  if (!canOpen(key, viewer)) throw new HttpError(403, `Missing permission: ${missingFor(key, viewer)}`, "FORBIDDEN");
   const pop = await populationFor(viewer);
   const body = await REPORT_DEFINITIONS[key](q, pop);
   return {

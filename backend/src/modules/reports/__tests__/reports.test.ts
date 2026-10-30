@@ -25,19 +25,20 @@ const D = (s: string) => new Date(`${s}T00:00:00Z`);
 describe("Core reports (F)", () => {
   let org: TestOrgMasters;
   let other: TestOrgMasters;
-  const p = {} as Record<"hrAdmin" | "hrExec" | "plain" | "a" | "b" | "c" | "d" | "e" | "f", Person>;
-  const tok = {} as Record<"hrAdmin" | "hrExec" | "plain", string>;
+  const p = {} as Record<"director" | "hrAdmin" | "hrExec" | "plain" | "a" | "b" | "c" | "d" | "e" | "f", Person>;
+  const tok = {} as Record<"director" | "hrAdmin" | "hrExec" | "plain", string>;
   const created = { separations: [] as string[], requests: [] as string[], ledger: [] as string[] };
   let pl: { id: string };
 
   beforeAll(async () => {
     org = await createEmployeeTestOrgMasters();
     other = await createEmployeeTestOrgMasters();
+    p.director = await createFullTestEmployee(other, { roleCode: "SUPER_ADMIN" });
     p.hrAdmin = await createFullTestEmployee(other, { roleCode: "HR_ADMIN" });
     p.hrExec = await createFullTestEmployee(other, { roleCode: "HR_EXECUTIVE" });
     p.plain = await createFullTestEmployee(other, { roleCode: "EMPLOYEE" });
     for (const k of ["a", "b", "c", "d", "e", "f"] as const) p[k] = await createFullTestEmployee(org);
-    for (const k of ["hrAdmin", "hrExec", "plain"] as const) tok[k] = await loginAs(p[k].employeeCode);
+    for (const k of ["director", "hrAdmin", "hrExec", "plain"] as const) tok[k] = await loginAs(p[k].employeeCode);
 
     // a: joined 2024-01-01, born on 29 Feb.
     await prisma.employeePersonal.update({ where: { employeeId: p.a.employeeId }, data: { dateOfBirth: D("2000-02-29") } });
@@ -134,16 +135,18 @@ describe("Core reports (F)", () => {
   });
 
   describe("leave liability", () => {
-    it("balance × the encashment rate, flagged provisional; HR_EXECUTIVE can't see it", async () => {
+    it("balance × the encashment rate, flagged provisional; a director sees it, neither HR role does (Stage 1: it is in rupees)", async () => {
       const original = getEncashmentRateProvider();
       setEncashmentRateProvider({ getDailyRate: async () => ({ amount: new Prisma.Decimal(1000), source: "MANUAL_SETTING", isFinal: false }) });
       try {
-        const r = await run("leave-liability", "&asOf=2025-03-01");
+        const r = await run("leave-liability", "&asOf=2025-03-01", tok.director);
         expect(r.rows.find((x) => x.employeeCode === p.a.employeeCode)).toMatchObject({ leaveType: "PL", balance: 3, dailyRate: 1000, liability: 3000 });
         expect(r.rateProvisional).toBe(true);
         expect((await get(tok.hrExec, "/api/reports/leave-liability")).status).toBe(403);
         expect((await get(tok.hrExec, "/api/reports")).body.reports.map((x: { key: string }) => x.key)).not.toContain("leave-liability");
-        expect((await get(tok.hrAdmin, "/api/reports")).body.reports.map((x: { key: string }) => x.key)).toContain("leave-liability");
+        expect((await get(tok.hrAdmin, "/api/reports/leave-liability")).status).toBe(403);
+        expect((await get(tok.hrAdmin, "/api/reports")).body.reports.map((x: { key: string }) => x.key)).not.toContain("leave-liability");
+        expect((await get(tok.director, "/api/reports")).body.reports.map((x: { key: string }) => x.key)).toContain("leave-liability");
       } finally {
         setEncashmentRateProvider(original);
       }
@@ -157,7 +160,7 @@ describe("Core reports (F)", () => {
         },
       });
       try {
-        const r = await run("leave-liability", "&asOf=2025-03-01");
+        const r = await run("leave-liability", "&asOf=2025-03-01", tok.director);
         expect(r.rows.find((x) => x.employeeCode === p.a.employeeCode)).toMatchObject({ balance: 3, dailyRate: null, liability: null });
         expect(summary(r, "Total liability")).toBeNull();
         expect(r.warnings.join(" ")).toMatch(/No encashment daily rate is configured/);

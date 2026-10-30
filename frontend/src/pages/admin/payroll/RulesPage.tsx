@@ -19,7 +19,7 @@ import { Caption } from "../../../components/payroll/payrollUi";
 const { Text } = Typography;
 
 // Payroll → Rules and setup (Phase 6 P6-1). Every number that decides what comes out of a payroll run lives here, as a rule that is either Not set, a
-// Placeholder or Confirmed. A run on a Placeholder is a TEST. A value is confirmed by a different person from the one who wrote it, and a statutory figure
+// Placeholder or Confirmed. A run on a Placeholder is a TEST. A value is confirmed by a director (a different one, if the second-director check is on), and a statutory figure
 // is confirmed only by typing it in again.
 
 const STATUS_TAG: Record<RuleStatus, { tone: ChipTone; label: string }> = {
@@ -122,7 +122,7 @@ export function RulesPage() {
           title="Not set, Placeholder, Confirmed"
           description={
             <>
-              A rule is <StatusChip tone="neutral">Not set</StatusChip> until somebody enters it, a <StatusChip tone="warning">Placeholder</StatusChip> until a different person confirms it, and <StatusChip tone="success">Confirmed</StatusChip> after. A payroll run that used any Placeholder is a <Text strong>test</Text>: it can be calculated and looked at, with a TEST mark on screen, in files and on payslip previews, but it cannot be approved, finalised, published or turned into a bank file.
+              A rule is <StatusChip tone="neutral">Not set</StatusChip> until somebody enters it, a <StatusChip tone="warning">Placeholder</StatusChip> until a director confirms it, and <StatusChip tone="success">Confirmed</StatusChip> after. A payroll run that used any Placeholder is a <Text strong>test</Text>: it can be calculated and looked at, with a TEST mark on screen, in files and on payslip previews, but it cannot be approved, finalised, published or turned into a bank file.
               Editing a Confirmed rule makes the new value a Placeholder again; the last Confirmed value stays on record.
             </>
           }
@@ -249,7 +249,7 @@ function EditModal({ rule, onClose, onSaved }: { rule: RuleView; onClose: () => 
       return payrollApi.saveRule(rule.key, { value: submitted.value, note, fingerprint: preview.data.fingerprint });
     },
     onSuccess: () => {
-      toast.success(`${rule.label} saved as an unconfirmed value. A different person has to confirm it before a real run can use it.`);
+      toast.success(`${rule.label} saved as an unconfirmed value. A director has to confirm it before a real run can use it.`);
       onSaved();
       onClose();
     },
@@ -312,7 +312,7 @@ function EditModal({ rule, onClose, onSaved }: { rule: RuleView; onClose: () => 
                 type="warning"
                 showIcon
                 title="This rule is Confirmed now."
-                description={`Saving makes the new value a Placeholder: test runs can use it, real runs cannot until a different person confirms it. The Confirmed value (${p.lastConfirmed ? formatRuleValue(rule.shape, p.lastConfirmed.value) : "—"}) stays on record and in any run that used it.`}
+                description={`Saving makes the new value a Placeholder: test runs can use it, real runs cannot until a director confirms it. The Confirmed value (${p.lastConfirmed ? formatRuleValue(rule.shape, p.lastConfirmed.value) : "—"}) stays on record and in any run that used it.`}
               />
             )}
             <Input.TextArea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={500} aria-label="Why this value" placeholder="Why this value, and where it came from (optional, but the person who confirms it will want it)" />

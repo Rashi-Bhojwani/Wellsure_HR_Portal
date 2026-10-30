@@ -1,4 +1,5 @@
-import { DEVELOPER_FORBIDDEN_KEYS, DEVELOPER_ROLE_CODE } from "@shared/constants/sensitiveData";
+import { DIRECTOR_ONLY_ROLE_CODES } from "@shared/constants/directorAuthority";
+import { DEVELOPER_FORBIDDEN_KEYS, DEVELOPER_ROLE_CODE, HR_FORBIDDEN_KEYS, HR_ROLE_CODES } from "@shared/constants/sensitiveData";
 import { MANAGER_GRANTABLE_KEYS, META_PERMISSION_KEYS, PERMISSION_CATALOG, PERMISSION_KEYS, type PermissionKey } from "@shared/constants/permissions";
 import type { DataScope } from "@shared/constants/roles";
 import { writeAuditLog } from "../../lib/audit";
@@ -88,6 +89,20 @@ function assertDeveloperCeiling(keys: readonly string[]) {
   }
 }
 
+// The HR hard lock (docs/plans/HR_CAPABILITIES.md §1A): pay data is never HR's. lib/permissions.ts removes these keys from every HR holder whatever is stored; these checks say why, in
+// words, at the moment of the click. A director who also holds an HR role is not affected, so only the HR roles themselves and non-director holders are guarded.
+const isHrForbidden = (key: string) => (HR_FORBIDDEN_KEYS as readonly string[]).includes(key);
+const isHrRole = (code: string) => (HR_ROLE_CODES as readonly string[]).includes(code);
+function assertHrCeiling(keys: readonly string[]) {
+  const outside = keys.filter(isHrForbidden);
+  if (outside.length) {
+    throw forbid(
+      `HR can't be given ${outside.map((k) => PERMISSION_CATALOG[k as PermissionKey]?.label ?? k).join(", ")}. Salaries, payroll, bank files and pay documents are for the directors only; this is fixed in code.`,
+      "HR_CEILING",
+    );
+  }
+}
+
 function requireSuperAdmin(actor: AccessActor, what: string) {
   if (!isSuperAdmin(actor)) throw forbid(`Only a Super Admin can ${what}.`, "SUPER_ADMIN_ONLY");
 }
@@ -104,6 +119,8 @@ export async function listRoles() {
     return {
       // MANAGER: locked empty — permissions are granted per manager (2026-10-03).
       managerLocked: r.code === MANAGER_ROLE_CODE,
+      // D1: the payroll roles can be held by a Super Admin only; they are markers, a Super Admin already holds every permission.
+      directorOnly: (DIRECTOR_ONLY_ROLE_CODES as readonly string[]).includes(r.code),
       id: r.id,
       code: r.code,
       name: r.name,
@@ -142,6 +159,7 @@ export async function updateRole(roleCode: string, input: { permissions?: string
   let next = before.permissions;
   if (input.permissions) {
     if (role.code === DEVELOPER_ROLE_CODE) assertDeveloperCeiling(input.permissions);
+    if (isHrRole(role.code)) assertHrCeiling(input.permissions);
     const unknown = input.permissions.filter((k) => !isKnownKey(k));
     if (unknown.length) throw new HttpError(400, `Unknown permission: ${unknown.join(", ")}.`, "VALIDATION_ERROR");
     next = [...new Set(input.permissions)].sort();
@@ -242,6 +260,9 @@ async function assertMayOverride(targetUserId: string, key: string, effect: "GRA
   if (effect === "GRANT") {
     if (target.roleCodes.includes(MANAGER_ROLE_CODE)) assertManagerGrantable([key]); // E2
     if (target.roleCodes.includes(DEVELOPER_ROLE_CODE)) assertDeveloperCeiling([key]); // P6-6
+    if (target.roleCodes.some(isHrRole)) assertHrCeiling([key]); // the HR hard lock
+    // D1: payroll permissions belong to directors, who hold every key already (and a Super Admin's access can't be overridden at all, above).
+    if (key.startsWith("payroll.")) throw forbid("Payroll permissions are for directors (Super Admins), who hold them already. They can't be granted to anyone else.", "PAYROLL_GRANT_DIRECTORS_ONLY");
     if (!actor.permissions.has(key)) throw forbid("You can't grant a permission you don't hold.", "NOT_HELD"); // rule 3
     if (isMeta(key) && target.roleCodes.includes(MANAGER_ROLE_CODE)) {
       throw forbid("A manager can never hold access-management permissions.", "META_TO_MANAGER"); // rule 4
@@ -310,6 +331,10 @@ export async function assignRole(employeeId: string, roleCode: string, actor: Ac
     const carried = await prisma.rolePermission.findMany({ where: { role: { code: { in: nowHolding } }, permission: { key: { in: [...DEVELOPER_FORBIDDEN_KEYS] } } }, include: { permission: true, role: true } });
     if (carried.length) assertDeveloperCeiling([...new Set(carried.map((c) => c.permission.key))]);
   }
+  // D1: the payroll roles are for directors. (The database refuses it too; this says why, in words.)
+  if ((DIRECTOR_ONLY_ROLE_CODES as readonly string[]).includes(role.code) && !before.includes(SUPER_ADMIN_ROLE_CODE)) {
+    throw forbid("The payroll roles are held by directors only. Make this person a Super Admin first, or leave payroll to the directors.", "PAYROLL_ROLE_DIRECTORS_ONLY");
+  }
   await prisma.$transaction(async (tx) => {
     await tx.userRole.create({ data: { userId: user.id, roleId: role.id, assignedByUserId: actor.userId } });
     // Model A: Super Admins and HR Admins sit directly under Admin.
@@ -335,8 +360,12 @@ export async function removeRole(employeeId: string, roleCode: string, actor: Ac
     throw new HttpError(409, "Remove a manager from Admin Tools → Manager Management, which reassigns their team and gives them a manager of their own.", "USE_MANAGER_MANAGEMENT");
   }
   const before = (await prisma.userRole.findMany({ where: { userId: user.id }, include: { role: true } })).map((ur) => ur.role.code).sort();
-  await prisma.userRole.delete({ where: { userId_roleId: { userId: user.id, roleId: userRole.roleId } } });
-  await writeAuditLog({ ...meta, action: "access.role.removed", entityType: "User", entityId: user.id, before: { roles: before }, after: { roles: before.filter((c) => c !== roleCode) } });
+  // D1: a payroll role is meaningless without Super Admin, so removing Super Admin takes the payroll markers with it, in the same step.
+  const alsoRemoved = roleCode === SUPER_ADMIN_ROLE_CODE ? before.filter((c) => (DIRECTOR_ONLY_ROLE_CODES as readonly string[]).includes(c)) : [];
+  await prisma.$transaction([
+    prisma.userRole.deleteMany({ where: { userId: user.id, role: { code: { in: [roleCode, ...alsoRemoved] } } } }),
+  ]);
+  await writeAuditLog({ ...meta, action: "access.role.removed", entityType: "User", entityId: user.id, before: { roles: before }, after: { roles: before.filter((c) => c !== roleCode && !alsoRemoved.includes(c)) } });
   await notifyAccessChanged([user]);
   return getEmployeeAccess(employeeId, actor);
 }
@@ -400,7 +429,10 @@ export async function sendPasswordReset(employeeId: string, reason: string, acto
 
 export async function listSecurityEvents(actor: AccessActor, status: "open" | "all") {
   requireSuperAdmin(actor, "see security events");
-  const rows = await prisma.securityEvent.findMany({ where: status === "open" ? { acknowledgedAt: null } : {}, orderBy: { createdAt: "desc" }, take: 100 });
+  // A director's red banner (docs/plans/DIRECTOR_AUTHORITY.md) is for the OTHER director: the one who acted is not shown a banner about their own act. (A break-glass
+  // event is shown to its target too, disabled, because that one is about their own account.)
+  const notOwnDirectorAct = { NOT: { kind: { startsWith: "director." }, targetUserId: actor.userId } };
+  const rows = await prisma.securityEvent.findMany({ where: { ...(status === "open" ? { acknowledgedAt: null } : {}), ...notOwnDirectorAct }, orderBy: { createdAt: "desc" }, take: 100 });
   return rows.map((e) => ({
     id: e.id,
     kind: e.kind,

@@ -704,7 +704,7 @@ export interface WithdrawPreview {
 
 export const getApprovalState = (id: string) => get<ApprovalState>(`/runs/${id}/approvals`);
 export const previewStep = (id: string, slug: StepSlug) => post<StepPreview>(`/runs/${id}/approvals/${slug}/preview`);
-export const requestStep = (id: string, slug: StepSlug, body: { fingerprint: string; note?: string }) => post<{ approvalId: string; status: string; runStatus: RunStatus }>(`/runs/${id}/approvals/${slug}/request`, body);
+export const requestStep = (id: string, slug: StepSlug, body: { fingerprint: string; note?: string }) => post<{ approvalId: string; status: string; authority?: "SECOND_DIRECTOR" | "DIRECTOR_AUTHORITY"; runStatus: RunStatus }>(`/runs/${id}/approvals/${slug}/request`, body);
 export const decideStep = (id: string, slug: StepSlug, body: { decision: "APPROVE" | "REJECT"; note?: string; hash?: string }) => post<{ approvalId: string; status: string }>(`/runs/${id}/approvals/${slug}/decision`, body);
 export const previewWithdraw = (id: string, slug: StepSlug) => post<WithdrawPreview>(`/runs/${id}/approvals/${slug}/withdraw-preview`);
 export const withdrawStep = (id: string, slug: StepSlug, body: { reason: string; fingerprint: string }) => post<{ ok: true; runStatus: RunStatus }>(`/runs/${id}/approvals/${slug}/withdraw`, body);

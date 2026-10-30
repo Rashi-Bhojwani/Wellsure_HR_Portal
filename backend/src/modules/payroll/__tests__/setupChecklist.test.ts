@@ -6,7 +6,7 @@ import { addCalendarDays, businessToday } from "../../../lib/businessDate";
 import { app, authHeader, cleanupFullTestEmployee, cleanupTestRole, createFullTestEmployee, grantPermissions, loginAs } from "../../employee/__tests__/employeeTestHelpers";
 import { buildSetupReport, readinessOf } from "../setup/status";
 import { buildSalaryWorld, giveSalary, teardownSalaryWorld, type SalaryWorld } from "./salaryTestHelpers";
-import { cleanupPayrollRowsBy } from "./payrollTestHelpers";
+import { cleanupPayrollRowsBy, useSecondDirectorChecks } from "./payrollTestHelpers";
 
 interface SetupItemShape {
   id: string;
@@ -55,7 +55,7 @@ describe("the setup checklist and the readiness screen", () => {
     // (nobody changes their own pay, so they could not be given a salary by the same maker anyway).
     everyone.push(...world.staff, employee);
     // The seeded company is in the test database: the set under test is these ten people, so everyone else "joins" after today for the length of the test.
-    await prisma.employee.updateMany({ where: { id: { in: [world.maker, world.checkerA, world.checkerB, sup, dev, signer].map((p) => p.employeeId) } }, data: { status: "INACTIVE" } });
+    await prisma.employee.updateMany({ where: { id: { in: [world.maker, world.checkerA, world.checkerB, world.outsider, sup, dev, signer].map((p) => p.employeeId) } }, data: { status: "INACTIVE" } });
     const others = await prisma.employee.findMany({ where: { id: { notIn: everyone.map((e) => e.employeeId) }, status: "ACTIVE" }, select: { id: true, dateOfJoining: true } });
     // A year after "today", never a fixed date: a fixed 2027-06-01 made them employed again from that day on, and the clock audit failed this file from June 2027.
     await prisma.employee.updateMany({ where: { id: { in: others.map((o) => o.id) } }, data: { dateOfJoining: addCalendarDays(businessToday(), 366) } });
@@ -126,8 +126,8 @@ describe("the setup checklist and the readiness screen", () => {
 
   it("a sign-off needs a payroll approver who may see the data, and never someone who entered some of it", async () => {
     const preview = (t: string, area: string) => post(t, `/setup/signoffs/${area}/preview`);
-    expect((await preview(world.tokens.maker, "SALARIES")).status).toBe(403); // a maker holds no payroll.approve
-    expect((await preview(world.tokens.checkerA, "BANK_ACCOUNTS")).body.blocked).toMatch(/must be allowed to see them/); // a payroll approver cannot see bank details by default
+    expect((await preview(world.tokens.outsider, "SALARIES")).status).toBe(403); // somebody with no payroll permission holds no payroll.approve
+    expect((await preview(world.tokens.checkerA, "BANK_ACCOUNTS")).status).toBe(200); // a director holds every permission, bank details included
     // The salaries were applied by the maker, so the maker could not sign (and holds no approve anyway); a signer with the right permissions can.
     const p = await preview(signerToken, "SALARIES");
     expect(p.status).toBe(200);
@@ -145,6 +145,32 @@ describe("the setup checklist and the readiness screen", () => {
     expect(noUan.body.blocked).toMatch(/still have no PF numbers/);
     expect((await post(signerToken, "/setup/signoffs/STATUTORY_IDS", { fingerprint: noUan.body.fingerprint, note: "should not work" })).status).toBe(409);
   });
+
+  it("on director authority a director may sign off bank accounts they entered themselves: recorded as such, the other director told; a plain approver still may not", async () => {
+    const restore = await useSecondDirectorChecks({ SETUP_SIGNOFF: false });
+    try {
+      const p = await post(supToken, "/setup/signoffs/BANK_ACCOUNTS/preview"); // sup wrote one of the bank accounts in the test above
+      expect(p.body.blocked).toBeNull();
+      const done = await post(supToken, "/setup/signoffs/BANK_ACCOUNTS", { fingerprint: p.body.fingerprint, note: "checked against the bank letters" });
+      expect(done.status).toBe(201);
+      const row = await prisma.payrollSetupSignoff.findUniqueOrThrow({ where: { id: done.body.id } });
+      expect([row.authority, row.signedByUserId]).toEqual(["DIRECTOR_AUTHORITY", sup.userId]);
+      const notice = await prisma.directorActionNotice.findFirstOrThrow({ where: { step: "SETUP_SIGNOFF", actorUserId: sup.userId }, include: { receipts: true } });
+      expect(notice.receipts.map((r) => r.recipientUserId)).not.toContain(sup.userId);
+      expect(notice.receipts.length).toBeGreaterThan(0);
+      // The readiness screen does not flag it, because it is a recorded director-authority act.
+      expect((await item("people:bank")).status).toBe("CONFIRMED");
+      // Someone who is not a director gains nothing from the switch: the signer role who entered rows is still barred.
+      await prisma.employeeBankAccount.updateMany({ where: { employeeId: world.staff[1]!.employeeId }, data: { createdByUserId: signer.userId } });
+      const q = await post(signerToken, "/setup/signoffs/BANK_ACCOUNTS/preview");
+      expect(q.body.blocked).toMatch(/You entered some of these/);
+    } finally {
+      await restore();
+    }
+    // Switched back on: the same director is refused again.
+    const again = await post(supToken, "/setup/signoffs/BANK_ACCOUNTS/preview");
+    expect(again.body.blocked).toMatch(/You entered some of these/);
+  }, 300_000);
 
   it("signing off makes the item Confirmed, by a named person on a date; any change afterwards makes it stale again", async () => {
     const p = await post(signerToken, "/setup/signoffs/SALARIES/preview");

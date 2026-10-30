@@ -1,6 +1,8 @@
 import { Prisma, type PayrollItemKind } from "@prisma/client";
 import { PLACEHOLDER_SOURCE_LABEL } from "@shared/constants/payrollRules";
 import { writeAuditLog } from "../../lib/audit";
+import { authorityFor, authorityForDisplay, isDirector, requireDirector, requireDirectorTwoFactor } from "../../lib/directorAuthority";
+import { recordDirectorNotice, scheduleDelivery } from "../../lib/directorNotices";
 import { notifyPayrollInputsChanged } from "../../lib/effectiveDating";
 import { prisma } from "../../lib/prisma";
 import { HttpError } from "../../middleware/errorHandler";
@@ -25,7 +27,7 @@ export interface VersionView {
   authorUserId: string | null;
   authorName: string;
   createdAt: string;
-  confirmation: { confirmedByUserId: string; confirmedByName: string; confirmedAt: string; note: string } | null;
+  confirmation: { confirmedByUserId: string; confirmedByName: string; confirmedAt: string; note: string; /** the author confirmed it themselves, on director authority */ selfConfirmed: boolean } | null;
 }
 
 export interface ItemSummary {
@@ -82,7 +84,7 @@ export function summarise(data: ItemData, key: string): ItemSummary {
       authorUserId: v.authorUserId,
       authorName: v.authorUserId ? (data.people.get(v.authorUserId) ?? "Someone") : SYSTEM_NAME,
       createdAt: v.createdAt.toISOString(),
-      confirmation: c ? { confirmedByUserId: c.confirmedByUserId, confirmedByName: data.people.get(c.confirmedByUserId) ?? "Someone", confirmedAt: c.confirmedAt.toISOString(), note: c.note } : null,
+      confirmation: c ? { confirmedByUserId: c.confirmedByUserId, confirmedByName: data.people.get(c.confirmedByUserId) ?? "Someone", confirmedAt: c.confirmedAt.toISOString(), note: c.note, selfConfirmed: c.selfConfirmed } : null,
     };
   };
   const history = versions.map(viewOf);
@@ -92,7 +94,7 @@ export function summarise(data: ItemData, key: string): ItemSummary {
   const lastConfirmed = lastConfirmedRow && lastConfirmedRow !== currentRow ? viewOf(lastConfirmedRow) : null;
   const status: ItemStatus = !current ? "NOT_SET" : current.confirmation ? "CONFIRMED" : "PLACEHOLDER";
   let sourceLabel: string | null = null;
-  if (current?.confirmation) sourceLabel = `Confirmed by ${current.confirmation.confirmedByName} on ${day(new Date(current.confirmation.confirmedAt))}`;
+  if (current?.confirmation) sourceLabel = `Confirmed by ${current.confirmation.confirmedByName} on ${day(new Date(current.confirmation.confirmedAt))}${current.confirmation.selfConfirmed ? " (on their own authority; the other director was told)" : ""}`;
   else if (current) sourceLabel = current.authorUserId === null ? PLACEHOLDER_SOURCE_LABEL : `Entered by ${current.authorName} on ${day(new Date(current.createdAt))}; not yet confirmed`;
   return { status, sourceLabel, current, lastConfirmed, history };
 }
@@ -200,8 +202,14 @@ export async function previewConfirmation(type: string, kind: PayrollItemKind, k
   const cur = summary.current;
   const maker = cur.authorUserId ?? SYSTEM_MAKER;
   let blocked: string | null = null;
+  // On director authority (docs/plans/DIRECTOR_AUTHORITY.md §4.3) a director may confirm what they wrote themselves: it is recorded as such and the other director is told.
+  const mayConfirmOwn = maker === actorUserId && (await isDirector(actorUserId)) && (await authorityForDisplay("RULE_CONFIRM")) === "DIRECTOR_AUTHORITY";
   if (cur.confirmation) blocked = "This value is already confirmed.";
-  else if (maker === actorUserId) blocked = "You wrote this value, so a different person has to confirm it.";
+  else if (maker === actorUserId && !mayConfirmOwn) blocked = "You wrote this value, so a different person has to confirm it.";
+  const checkers: CheckerAvailability =
+    mayConfirmOwn
+      ? { eligible: [], excluded: [], state: "SELF", message: "You can confirm this yourself. It takes effect at once, and the other director is told." }
+      : await checkerAvailability("RULE_CONFIRM", { makerUserId: cur.authorUserId, ...(checkerPermission ? { checkerPermission } : {}) });
   return {
     version: cur.version,
     value: cur.value,
@@ -209,7 +217,7 @@ export async function previewConfirmation(type: string, kind: PayrollItemKind, k
     sourceLabel: summary.sourceLabel,
     authorName: cur.authorName,
     blocked,
-    checkers: await checkerAvailability("RULE_CONFIRM", { makerUserId: cur.authorUserId, ...(checkerPermission ? { checkerPermission } : {}) }),
+    checkers,
     fingerprint: confirmFingerprint(type, key, cur.version, cur.valueHash),
   };
 }
@@ -232,19 +240,35 @@ export async function confirmVersion(
   if (cur.version !== input.version) throw new HttpError(409, "A newer value has been entered since you looked. Look at it again.", "PREVIEW_STALE");
   if (cur.confirmation) throw new HttpError(409, "This value is already confirmed.", "ALREADY_CONFIRMED");
   const maker = cur.authorUserId ?? SYSTEM_MAKER;
-  if (maker === actor.userId) throw new HttpError(403, "You wrote this value, so a different person has to confirm it.", "CHECKER_IS_MAKER");
+  // The author confirming their own value is allowed only on director authority, by a director with two-step sign-in; the mode is read again inside the transaction below.
+  const own = maker === actor.userId;
+  if (own) {
+    if (!(await isDirector(actor.userId)) || (await authorityFor("RULE_CONFIRM")) !== "DIRECTOR_AUTHORITY") throw new HttpError(403, "You wrote this value, so a different person has to confirm it.", "CHECKER_IS_MAKER");
+    await requireDirectorTwoFactor(actor.userId);
+  }
   if (input.fingerprint !== confirmFingerprint(type, input.key, cur.version, cur.valueHash)) throw new HttpError(409, "This changed since you looked at it. Look at it again.", "PREVIEW_STALE");
   const note = input.note.trim();
   if (note.length < 5) throw new HttpError(400, "Say what you checked it against (a few words, for example the CA's letter and its date).", "VALIDATION_ERROR");
   input.extraCheck?.(cur);
+  let noticeId: string | null = null;
   await prisma.$transaction(async (tx) => {
+    const subjectId = itemSubjectId(kind, input.key, cur.version);
+    if (own && (await authorityFor("RULE_CONFIRM", tx)) !== "DIRECTOR_AUTHORITY") throw new HttpError(409, "The second-director check was switched on a moment ago, so a different director has to confirm this.", "SECOND_DIRECTOR_REQUIRED");
     const approval = await recordCompletedApproval(
-      { subject: "RULE_CONFIRM", subjectId: itemSubjectId(kind, input.key, cur.version), hash: cur.valueHash, makerUserId: maker, checkerUserId: actor.userId, previewFingerprint: input.fingerprint, note },
+      { subject: "RULE_CONFIRM", subjectId, hash: cur.valueHash, makerUserId: maker, checkerUserId: actor.userId, previewFingerprint: input.fingerprint, note, ...(own ? { authority: "DIRECTOR_AUTHORITY" as const } : {}) },
       tx,
     );
-    await tx.payrollItemConfirmation.create({ data: { kind, key: input.key, version: cur.version, valueHash: cur.valueHash, confirmedByUserId: actor.userId, note, approvalId: approval.id } });
-    await recordEvent({ subjectType: audit.eventSubject, subjectId: input.key, type: "CONFIRMED", actorUserId: actor.userId, payload: { version: cur.version, valueHash: cur.valueHash, ...input.auditExtra } }, tx);
+    await tx.payrollItemConfirmation.create({ data: { kind, key: input.key, version: cur.version, valueHash: cur.valueHash, confirmedByUserId: actor.userId, note, approvalId: approval.id, ...(own ? { selfConfirmed: true } : {}) } });
+    await recordEvent({ subjectType: audit.eventSubject, subjectId: input.key, type: "CONFIRMED", actorUserId: actor.userId, payload: { version: cur.version, valueHash: cur.valueHash, ...(own ? { authority: "DIRECTOR_AUTHORITY" } : {}), ...input.auditExtra } }, tx);
+    if (own) {
+      await requireDirector(actor.userId, "confirm what they wrote", tx);
+      ({ noticeId } = await recordDirectorNotice(
+        { kind: "ACTION", step: "RULE_CONFIRM", subjectType: "RULE_CONFIRM", subjectId, subjectLabel: `the ${kind.toLowerCase()} ${input.key}`, itemCount: null, actorUserId: actor.userId, approvalId: approval.id, authority: "DIRECTOR_AUTHORITY" },
+        tx,
+      ));
+    }
   });
+  if (noticeId) await scheduleDelivery(noticeId);
   await writeAuditLog({
     actorUserId: actor.userId,
     action: `${audit.actionPrefix}.confirmed`,

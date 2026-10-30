@@ -5,7 +5,7 @@ import { cleanupEmployeeTestOrgMasters, cleanupFullTestEmployee, createEmployeeT
 import { editRule, ensurePayrollRules, previewEdit } from "../rules/governed";
 import { confirmComponent, previewComponentConfirm, previewComponentSave, saveComponent } from "../salary/components";
 import { confirmStructure, previewStructureConfirm, previewStructureSave, saveStructure } from "../salary/structures";
-import { cleanupPayrollRowsBy } from "./payrollTestHelpers";
+import { cleanupPayrollRowsBy, useSecondDirectorChecks } from "./payrollTestHelpers";
 
 // A small world for the salary tests: a maker, two checkers, three ordinary employees, the rounding rule set, three components and a structure
 // (Basic 40% of CTC, HRA 50% of Basic, Special allowance the balance), the components confirmed by one checker and the structure by the other.
@@ -22,8 +22,10 @@ export interface SalaryWorld {
   maker: Person;
   checkerA: Person;
   checkerB: Person;
+  /** An HR Executive: holds no payroll permission at all, so it stands for "somebody who is neither a maker nor a checker". (The payroll roles are for directors only, so the three above are Super Admins.) */
+  outsider: Person;
   staff: Person[];
-  tokens: { maker: string; checkerA: string; checkerB: string };
+  tokens: { maker: string; checkerA: string; checkerB: string; outsider: string };
   prefix: string;
   basic: string;
   hra: string;
@@ -31,6 +33,8 @@ export interface SalaryWorld {
   conveyance: string;
   structure: string;
   userIds: string[];
+  /** Puts the second-director setting back (see useSecondDirectorChecks). */
+  restoreSwitches?: () => Promise<void>;
 }
 
 export const FIRST_SALARY_DAY = "2025-04-01"; // always in the past, after the test employees' joining date (2024-01-01)
@@ -66,27 +70,31 @@ export async function makeStructure(world: Pick<SalaryWorld, "maker" | "checkerB
 }
 
 export async function buildSalaryWorld(): Promise<SalaryWorld> {
+  const restoreSwitches = await useSecondDirectorChecks(); // these tests describe the two-director behaviour; D2's own tests cover a director acting alone
   await ensurePayrollRules();
   const org = await createEmployeeTestOrgMasters();
   const prefix = `T${randomBytes(2).toString("hex").toUpperCase()}`;
-  const maker = await createFullTestEmployee(org, { roleCode: "PAYROLL_ADMIN" });
-  const checkerA = await createFullTestEmployee(org, { roleCode: "PAYROLL_APPROVER" });
-  const checkerB = await createFullTestEmployee(org, { roleCode: "PAYROLL_APPROVER" });
+  const maker = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
+  const checkerA = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
+  const checkerB = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
+  const outsider = await createFullTestEmployee(org, { roleCode: "HR_EXECUTIVE" });
   const staff = [await createFullTestEmployee(org), await createFullTestEmployee(org), await createFullTestEmployee(org)];
   const world: SalaryWorld = {
     org,
     maker,
     checkerA,
     checkerB,
+    outsider,
     staff,
-    tokens: { maker: await loginAs(maker.employeeCode), checkerA: await loginAs(checkerA.employeeCode), checkerB: await loginAs(checkerB.employeeCode) },
+    tokens: { maker: await loginAs(maker.employeeCode), checkerA: await loginAs(checkerA.employeeCode), checkerB: await loginAs(checkerB.employeeCode), outsider: await loginAs(outsider.employeeCode) },
     prefix,
     basic: `${prefix}_BASIC`,
     hra: `${prefix}_HRA`,
     special: `${prefix}_SPECIAL`,
     conveyance: `${prefix}_CONV`,
     structure: `${prefix}_STD`,
-    userIds: [maker.userId, checkerA.userId, checkerB.userId, ...staff.map((s) => s.userId)],
+    userIds: [maker.userId, checkerA.userId, checkerB.userId, outsider.userId, ...staff.map((s) => s.userId)],
+    restoreSwitches,
   };
   await setRule(maker.userId, "LINE_ROUNDING", { mode: "HALF_UP", scale: 0 });
   await makeComponent(world, world.basic, { payslipOrder: 1 });
@@ -107,9 +115,10 @@ export async function buildSalaryWorld(): Promise<SalaryWorld> {
 }
 
 export async function teardownSalaryWorld(world: SalaryWorld): Promise<void> {
-  for (const p of [...world.staff, world.checkerB, world.checkerA, world.maker]) await cleanupFullTestEmployee(p.employeeId);
+  for (const p of [...world.staff, world.outsider, world.checkerB, world.checkerA, world.maker]) await cleanupFullTestEmployee(p.employeeId);
   await cleanupPayrollRowsBy(world.userIds);
   await cleanupEmployeeTestOrgMasters(world.org);
+  await world.restoreSwitches?.();
 }
 
 /** Gives somebody a salary the way the product does: a revision, a decision by a checker, and the maker applying it. Returns the revision id. */
