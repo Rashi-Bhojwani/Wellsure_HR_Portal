@@ -31,6 +31,9 @@ export const adjustmentPreviewSchema = z.object({ input: z.unknown() });
 export const adjustmentAddSchema = z.object({ input: z.unknown(), fingerprint });
 export const lopCorrectionPreviewSchema = z.object({ input: z.unknown() });
 export const lopCorrectionAddSchema = z.object({ input: z.unknown(), fingerprint });
+export const holdAddSchema = z.object({ input: z.unknown() });
+export const holdReleaseSchema = z.object({ input: z.unknown() });
+export const holdListSchema = z.object({ status: z.enum(["HELD", "RELEASED"]).optional() });
 export const adjustmentCancelSchema = z.object({ reason: z.string().trim().min(1).max(300) });
 export const adjustmentListSchema = z.object({
   employeeId: z.string().max(64).optional(),

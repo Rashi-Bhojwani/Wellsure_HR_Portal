@@ -144,6 +144,7 @@ today, for the roles that already see them; the UI pass adds none.
 | `/admin/payroll/salaries` | Employee salaries | `payroll.salary.view` | SA HA PA PP | `payroll-01` | MAPPED-PARTIAL | Amounts stay masked/permissioned as today |
 | `/admin/payroll/revisions` | Salary revisions (maker-checker) | `payroll.salary.view` / edit / approve | SA HA PA PP | `payroll-01` | MAPPED-PARTIAL | |
 | `/admin/payroll/adjustments` | Adjustments | `payroll.adjust` | SA PA | `payroll-01` | NOT IN BOARD | |
+| `/admin/payroll/holds` | Held salaries (hold, release) | `payroll.salary.view` / edit | SA | none | NOT IN BOARD | Director-only act; shows reason and status, never an amount |
 | `/admin/payroll/run` | Payroll runs list | `payroll.run` / `payroll.approve` | SA PA PP | `payroll-01` | MAPPED-PARTIAL | |
 | `/admin/payroll/run/:id` | Payroll run (steps, preview, approval) | `payroll.run` / `payroll.approve` | SA PA PP | stepper `recruitment-09` + `payroll-02` | MAPPED-PARTIAL | Maker-checker states via ApprovalBanner; TEST watermark kept |
 | `/admin/payroll/run/:id/step/:slug` | Run step (register, variance, bank file, statutory files, payslips) | as above; bank file `payroll.bank.view` | SA PA PP | `payroll-02`/`03`, `documents-03` | MAPPED-PARTIAL | Downloads never cached by the service worker |

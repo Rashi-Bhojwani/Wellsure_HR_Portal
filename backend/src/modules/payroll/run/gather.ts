@@ -88,6 +88,8 @@ export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promi
     const k = iso(placementDayOf(spans.get(e.id)!));
     idsByDay.set(k, [...(idsByDay.get(k) ?? []), e.id]);
   }
+  const holdRows = await prisma.payrollSalaryHold.findMany({ where: { cycleStart: cycle.start, release: null, employeeId: { in: employees.map((e) => e.id) } }, select: { employeeId: true, reason: true } });
+  const holdBy = new Map(holdRows.map((h) => [h.employeeId, h.reason]));
   const placements = new Map<string, PayrollPlacement>();
   for (const [day, group] of idsByDay) for (const [id, p] of await payrollPlacementsOn(group, new Date(`${day}T00:00:00Z`))) placements.set(id, p);
 
@@ -243,6 +245,7 @@ export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promi
       placement: placements.get(e.id) ?? null,
       placementDay: placementDayOf(span),
       hasBankAccount: paymentDate ? bank.has(e.id) : true,
+      directorHold: holdBy.has(e.id) ? { reason: holdBy.get(e.id)! } : null,
       adjustments,
       esiPeriodStartEntitlement,
     });
@@ -266,6 +269,7 @@ export function inputsFingerprint(inputs: RunInputs): string {
       segments: p.segments.map((s) => [s.salaryId, iso(s.from), iso(s.to), s.structureHash]),
       placement: p.placement ? [p.placement.locationId, p.placement.locationState, p.placement.departmentId, p.placement.gradeId, p.placement.costCentreId] : null,
       bank: p.hasBankAccount,
+      ...(p.directorHold ? { held: true } : {}),
       adjustments: p.adjustments.map((a) => [a.id, a.source, a.sourceRef, a.componentCode, a.direction, canonicalDecimal(a.amount)]),
       esi: p.esiPeriodStartEntitlement ? canonicalDecimal(p.esiPeriodStartEntitlement) : null,
     })),

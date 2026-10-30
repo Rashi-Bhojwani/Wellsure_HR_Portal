@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { addAdjustment, cancelAdjustment, listAdjustments, previewAdjustment } from "./adjustments";
 import { confirmComponent, getComponent, listComponents, previewComponentConfirm, previewComponentSave, refuseDeleteComponent, saveComponent } from "./components";
+import { addHold, listHolds, releaseHold } from "./holds";
 import { addLopCorrection, previewLopCorrection } from "./lopReversal";
 import { getEmployeeSalary, listEmployeeSalaries, searchPeople } from "./employees";
 import { applyRevision, createCancel, createRevision, previewCancel, decideRevision, getRevision, listRevisions, previewRevision, submitRevision, withdrawRevision } from "./revisions";
@@ -68,6 +69,9 @@ export const lopCorrectionAdd = async (req: Request, res: Response): Promise<voi
   const b = req.body as { input: unknown; fingerprint: string };
   res.status(201).json(await addLopCorrection(b.input, b.fingerprint, actor(req)));
 };
+export const holds = async (req: Request, res: Response): Promise<void> => void res.status(200).json({ holds: await listHolds(req.query as { status?: "HELD" | "RELEASED" }) });
+export const holdAdd = async (req: Request, res: Response): Promise<void> => void res.status(201).json(await addHold((req.body as { input: unknown }).input, actor(req)));
+export const holdRelease = async (req: Request, res: Response): Promise<void> => void res.status(200).json(await releaseHold(id(req), (req.body as { input: unknown }).input, actor(req)));
 export const adjustmentPreview = async (req: Request, res: Response): Promise<void> => void res.status(200).json(await previewAdjustment((req.body as { input: unknown }).input, req.user!.userId));
 export const adjustmentAdd = async (req: Request, res: Response): Promise<void> => {
   const b = req.body as { input: unknown; fingerprint: string };

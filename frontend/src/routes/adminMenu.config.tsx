@@ -18,6 +18,7 @@ import {
   GiftOutlined,
   GroupOutlined,
   DiffOutlined,
+  PauseCircleOutlined,
   HistoryOutlined,
   HomeOutlined,
   IdcardOutlined,
@@ -101,6 +102,7 @@ const ComponentsPage = lazyPage(() => import("../pages/admin/payroll/ComponentsP
 const StructuresPage = lazyPage(() => import("../pages/admin/payroll/StructuresPage"), "StructuresPage");
 const EmployeeSalariesPage = lazyPage(() => import("../pages/admin/payroll/EmployeeSalariesPage"), "EmployeeSalariesPage");
 const SalaryRevisionsPage = lazyPage(() => import("../pages/admin/payroll/SalaryRevisionsPage"), "SalaryRevisionsPage");
+const HeldSalariesPage = lazyPage(() => import("../pages/admin/payroll/HeldSalariesPage"), "HeldSalariesPage");
 const AdjustmentsPage = lazyPage(() => import("../pages/admin/payroll/AdjustmentsPage"), "AdjustmentsPage");
 const PayrollRunsPage = lazyPage(() => import("../pages/admin/payroll/PayrollRunsPage"), "PayrollRunsPage");
 const LayoutsPage = lazyPage(() => import("../pages/admin/payroll/LayoutsPage"), "LayoutsPage");
@@ -333,6 +335,7 @@ export const adminApps: AdminApp[] = [
           { key: "employee-salaries", label: "Employee Salaries", path: "payroll/salaries", icon: WalletOutlined, element: EmployeeSalariesPage, needs: PAYROLL_NEEDS },
           { key: "salary-revisions", label: "Salary Revisions", path: "payroll/revisions", icon: AuditOutlined, element: SalaryRevisionsPage, needs: PAYROLL_NEEDS },
           { key: "payroll-adjustments", label: "Adjustments", path: "payroll/adjustments", icon: DiffOutlined, element: AdjustmentsPage, needs: PAYROLL_NEEDS },
+          { key: "payroll-holds", label: "Held Salaries", path: "payroll/holds", icon: PauseCircleOutlined, element: HeldSalariesPage, needs: PAYROLL_NEEDS },
           { key: "payroll-run", label: "Payroll Run", path: "payroll/run", icon: FundOutlined, element: PayrollRunsPage, needs: PAYROLL_NEEDS },
           { key: "payroll-compare", label: "Compare Registers", path: "payroll/compare", icon: DiffOutlined, element: CompareRegistersPage, needs: PAYROLL_NEEDS },
           { key: "payroll-audit", label: "Payroll Audit Trail", path: "payroll/audit", icon: AuditOutlined, element: PayrollAuditPage, needs: PAYROLL_NEEDS },

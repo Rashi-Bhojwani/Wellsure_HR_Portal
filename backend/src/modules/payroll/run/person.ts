@@ -1,5 +1,5 @@
 import { HOLD_REASON_LABEL, STATUTORY_LINE_CODES, STATUTORY_LINE_LABEL, type HoldReason } from "@shared/constants/payrollRun";
-import { ARREARS_CODE, LOP_REVERSAL_CODE } from "@shared/constants/payrollSalary";
+import { ARREARS_CODE, HOLD_RELEASE_CODE, LOP_REVERSAL_CODE } from "@shared/constants/payrollSalary";
 import { payrollHash } from "../hash";
 import { ZERO, canonicalDecimal, intDec, sum, type Money } from "../money";
 import { applyShare } from "../salary/arrears";
@@ -260,6 +260,7 @@ export function calculatePerson(input: PersonInput, ctx: CalcContext): ItemOut {
     else exceptions.push({ code: "NEGATIVE_NET", severity: "BLOCKING", message: `Deductions (${c(deductions)}) are more than earnings (${c(gross)}), so net pay is negative (${c(netPay)}). Resolve it before the run can be submitted.` });
   } else if (netPay.isZero()) holds.push("ZERO_NET");
   if (!input.hasBankAccount) holds.push("NO_BANK_ACCOUNT");
+  if (input.directorHold) holds.push("DIRECTOR_HOLD");
   const status = holds.length > 0 ? ("HELD" as const) : ("PAYABLE" as const);
 
   const last = input.segments.at(-1)!;
@@ -360,6 +361,15 @@ function adjustmentLine(adj: AdjustmentIn, ctx: CalcContext): { line: LineOut; p
       line: { code: ARREARS_CODE, label: `${STATUTORY_LINE_LABEL.ARREARS} for ${adj.periodLabel ?? "an earlier month"}`, kind: adj.direction, source: "ARREARS", sourceRef: adj.id, amount: adj.amount, basis: { reason: adj.reason, breakdown: (adj.breakdown ?? []).map((p) => ({ component: p.component, amount: c(p.amount) })), pfEsi: ctx.rules.arrearsPfEsi } },
       pf,
       esi,
+      notices,
+    };
+  }
+  if (adj.source === "HOLD_RELEASE") {
+    // Pays a month whose salary a director held and has now released. Its statutory deductions were worked out, and stay, in the held month's own run: this only moves the payment.
+    return {
+      line: { code: HOLD_RELEASE_CODE, label: `Held salary released for ${adj.periodLabel ?? "an earlier month"}`, kind: "EARNING", source: "HOLD_RELEASE", sourceRef: adj.id, amount: adj.amount, basis: { kind: "HOLD_RELEASE", holdId: adj.sourceRef, sourceMonth: adj.periodLabel ?? null, reason: adj.reason, netOfStatutory: true } },
+      pf: ZERO,
+      esi: ZERO,
       notices,
     };
   }

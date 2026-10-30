@@ -2560,6 +2560,7 @@ enum SalaryChangeReason {
 
 enum AdjustmentSource {
   MANUAL
+  HOLD_RELEASE
   LOP_REVERSAL
   SALARY_ARREARS
   IMPORT
@@ -2708,6 +2709,7 @@ enum PayrollLineKind {
 enum PayrollLineSource {
   COMPONENT
   ADJUSTMENT
+  HOLD_RELEASE
   LOP_REVERSAL
   ARREARS
   ENCASHMENT
@@ -3116,4 +3118,34 @@ model HrCapabilitySwitch {
   @@unique([capability, subjectKind, subjectKey, effectiveFrom])
   @@index([subjectKind, subjectKey])
   @@map("hr_capability_switches")
+}
+
+// ── Stage 3.3c — a director's hold on one person's salary for one month, and its release (docs/plans/PAYROLL_MODEL_PLAN.md) ──
+// Append-only, written only by a Super Admin (a database trigger holds that whatever the code does). A hold with no release is "held". employee_id and the actor
+// columns are plain text: nothing that happens to an employee or a user can alter these records.
+model PayrollSalaryHold {
+  id           String   @id @default(cuid())
+  employeeId   String   @map("employee_id")
+  cycleStart   DateTime @map("cycle_start") @db.Date
+  reason       String
+  heldByUserId String   @map("held_by_user_id")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  release PayrollSalaryRelease?
+
+  @@unique([employeeId, cycleStart])
+  @@map("payroll_salary_holds")
+}
+
+model PayrollSalaryRelease {
+  id               String            @id @default(cuid())
+  holdId           String            @unique @map("hold_id")
+  hold             PayrollSalaryHold @relation(fields: [holdId], references: [id])
+  note             String
+  releasedByUserId String            @map("released_by_user_id")
+  /** The pending adjustment that pays the held amount, when the held month's run was already final; null when the hold was lifted before the run was final. */
+  adjustmentId     String?           @map("adjustment_id")
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("payroll_salary_releases")
 }

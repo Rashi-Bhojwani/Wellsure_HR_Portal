@@ -47,6 +47,7 @@ export const RESERVED_COMPONENT_CODES = [
   "ARREARS",
   "LEAVE_ENCASHMENT",
   "LOP_REVERSAL",
+  "HOLD_RELEASE",
   "NET_ROUNDING",
 ] as const;
 
@@ -69,6 +70,9 @@ export type RevisionSelectionKind = (typeof REVISION_SELECTION_KINDS)[number];
 
 /** The reserved component code a loss-of-pay reversal is carried under (each head's line takes the head's own reversal head when it has one). */
 export const LOP_REVERSAL_CODE = "LOP_REVERSAL";
+
+/** The reserved component code a released salary hold is paid under. */
+export const HOLD_RELEASE_CODE = "HOLD_RELEASE";
 
 /** The reserved component code arrears are paid under. */
 export const ARREARS_CODE = "ARREARS";

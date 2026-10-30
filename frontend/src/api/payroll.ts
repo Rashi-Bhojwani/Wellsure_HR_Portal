@@ -464,6 +464,22 @@ export interface LopCorrectionPreview {
 }
 export const previewLopCorrection = (input: LopCorrectionInput) => post<LopCorrectionPreview>("/lop-corrections/preview", { input });
 export const addLopCorrection = (input: LopCorrectionInput, fingerprint: string) => post<{ id: string }>("/lop-corrections", { input, fingerprint });
+export interface HoldRow {
+  id: string;
+  employeeId: string;
+  employeeCode: string;
+  employeeName: string;
+  cycleStart: string;
+  reason: string;
+  heldAt: string;
+  status: "HELD" | "RELEASED";
+  releasedAt: string | null;
+  releaseNote: string | null;
+  runFinal: boolean;
+}
+export const listHolds = async (status?: "HELD" | "RELEASED") => (await get<{ holds: HoldRow[] }>("/holds", status ? { status } : undefined)).holds;
+export const addHold = (input: { employeeId: string; cycleStart: string; reason: string }) => post<{ id: string }>("/holds", { input });
+export const releaseHold = (id: string, note: string) => post<{ id: string; adjustmentId: string | null }>(`/holds/${id}/release`, { input: { note } });
 export const cancelAdjustment = (id: string, reason: string) => post<{ ok: true }>(`/adjustments/${id}/cancel`, { reason });
 export const previewCancelScheduled = (input: { employeeId: string; salaryId: string; note?: string }) => post<CancelPreview>("/salary/revisions/cancel-preview", { input });
 export const createCancelScheduled = (input: { employeeId: string; salaryId: string; note?: string }, fingerprint: string) => post<{ id: string }>("/salary/revisions/cancel", { input, fingerprint });
