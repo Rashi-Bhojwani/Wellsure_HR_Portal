@@ -10,6 +10,9 @@ export interface VersionView {
   value: unknown;
   valueHash: string;
   note: string;
+  /** Where the number came from, in the author's words, and the date it applies from (a statutory rule has both). */
+  sourceNote?: string;
+  effectiveFrom?: string | null;
   authorUserId: string | null;
   authorName: string;
   createdAt: string;
@@ -69,6 +72,8 @@ export interface ConfirmPreview {
   sourceLabel: string | null;
   requiresRetype: boolean;
   authorName: string;
+  sourceNote?: string;
+  effectiveFrom?: string | null;
   blocked: string | null;
   checkers: CheckerAvailability;
   fingerprint: string;
@@ -91,7 +96,7 @@ export async function getRule(key: string): Promise<{ rule: RuleView; history: V
 export async function previewRuleEdit(key: string, value: unknown): Promise<EditPreview> {
   return (await apiClient.post<EditPreview>(`${base}/rules/${key}/edit-preview`, { value })).data;
 }
-export async function saveRule(key: string, body: { value: unknown; note: string; fingerprint: string }): Promise<RuleView> {
+export async function saveRule(key: string, body: { value: unknown; note: string; sourceNote?: string; effectiveFrom?: string; fingerprint: string }): Promise<RuleView> {
   return (await apiClient.put<RuleView>(`${base}/rules/${key}`, body)).data;
 }
 export async function revealRule(key: string): Promise<{ key: string; version: number; value: unknown }> {
@@ -110,17 +115,31 @@ export async function getCheckers(subject: string): Promise<CheckerAvailability>
 // ── Salary (P6-2): components, structures, people's salaries, revisions, adjustments ──
 
 export type ComponentType = "EARNING" | "DEDUCTION" | "EMPLOYER_CONTRIBUTION";
+export type HeadKind = "EARNING" | "DEDUCTION" | "ONE_OFF" | "REIMBURSEMENT" | "COUNTER" | "STATUTORY";
 export type ItemStatus = RuleStatus;
 
 export interface ComponentValue {
   name: string;
   type: ComponentType;
-  taxable: boolean;
+  /** null is "Not set": the head cannot be used until somebody chooses. */
+  taxable: boolean | null;
   pfApplicable: boolean;
   esiApplicable: boolean;
   prorates: boolean;
   payslipLabel: string;
   payslipOrder: number;
+  headKind?: HeadKind;
+  oneTime?: boolean;
+  carryForward?: boolean;
+  reimbursement?: boolean;
+  ctcGroup?: string;
+  ytd?: boolean;
+  bankTransfer?: boolean;
+  payslipVisible?: boolean;
+  activeFrom?: string;
+  activeTo?: string;
+  arrearsHead?: string;
+  reversalHead?: string;
 }
 
 export interface ComponentView {
@@ -965,6 +984,8 @@ export interface Readiness {
   required: number;
   confirmed: number;
   blockers: Array<{ itemId: string; section: string; sectionTitle: string; title: string; status: SetupStatus; missing: string; where: { label: string; path: string } }>;
+  /** Prominent, non-blocking: they never turn Ready red. */
+  warnings?: Array<{ itemId: string; title: string; warning: string; where: { label: string; path: string } }>;
   notRequiredYet: Array<{ itemId: string; title: string; status: SetupStatus; reason: string }>;
 }
 export interface SetupReport {

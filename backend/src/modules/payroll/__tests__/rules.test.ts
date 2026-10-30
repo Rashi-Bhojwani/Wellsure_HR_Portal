@@ -101,7 +101,7 @@ describe("governed rules in the database", () => {
   async function setRule(token: string, key: string, value: unknown, note = "") {
     const preview = await api(token).post(`/rules/${key}/edit-preview`, { value });
     expect(preview.status, JSON.stringify(preview.body)).toBe(200);
-    return api(token).put(`/rules/${key}`, { value, note, fingerprint: preview.body.fingerprint });
+    return api(token).put(`/rules/${key}`, { value, note, sourceNote: "test fixture: a made-up source note", effectiveFrom: "2026-04-01", fingerprint: preview.body.fingerprint });
   }
   async function confirmRule(token: string, key: string, over: { typedValue?: unknown; note?: string } = {}) {
     const preview = await api(token).post(`/rules/${key}/confirm-preview`);
@@ -294,5 +294,45 @@ describe("governed rules in the database", () => {
     const approvals = await prisma.payrollApproval.findMany({ where: { subject: "RULE_CONFIRM", checkerUserId: checker.userId } });
     expect(approvals.length).toBeGreaterThanOrEqual(3);
     expect(approvals.every((a) => a.status === "CONSUMED" && a.hashAtDecision === a.contentHash && a.makerUserId !== a.checkerUserId)).toBe(true);
+  });
+
+  describe("a statutory figure carries its source note and the date it applies from", () => {
+    const put = async (token: string, key: string, value: unknown, extra: object) => {
+      const preview = await api(token).post(`/rules/${key}/edit-preview`, { value });
+      expect(preview.status, JSON.stringify(preview.body)).toBe(200);
+      return api(token).put(`/rules/${key}`, { value, fingerprint: preview.body.fingerprint, ...extra });
+    };
+
+    it("refuses a statutory figure with no source note, a one-word note, no date, or a bad date; accepts it with all", async () => {
+      const key = "PF_ADMIN_RATE";
+      const none = await put(makerToken, key, "0.61", {});
+      expect([none.status, none.body.error.code]).toEqual([400, "SOURCE_NOTE_REQUIRED"]);
+      const short = await put(makerToken, key, "0.61", { sourceNote: "memo", effectiveFrom: "2026-04-01" });
+      expect([short.status, short.body.error.code]).toEqual([400, "SOURCE_NOTE_REQUIRED"]);
+      const nodate = await put(makerToken, key, "0.61", { sourceNote: "the notification dated 1 April" });
+      expect([nodate.status, nodate.body.error.code]).toEqual([400, "EFFECTIVE_FROM_REQUIRED"]);
+      const bad = await put(makerToken, key, "0.61", { sourceNote: "the notification dated 1 April", effectiveFrom: "1st April" });
+      expect(bad.status).toBe(400);
+      const ok = await put(makerToken, key, "0.61", { sourceNote: "the notification dated 1 April, para 3", effectiveFrom: "2026-04-01" });
+      expect(ok.status).toBe(200);
+      expect([ok.body.current.sourceNote, ok.body.current.effectiveFrom]).toEqual(["the notification dated 1 April, para 3", "2026-04-01"]);
+    });
+
+    it("an ordinary company choice does not need them, but keeps them if given", async () => {
+      const r = await put(makerToken, "NEGATIVE_NET_POLICY", "HOLD_PAYMENT", {});
+      expect(r.status).toBe(200);
+      expect([r.body.current.sourceNote, r.body.current.effectiveFrom]).toEqual(["", null]);
+    });
+
+    it("the confirming director is shown the source note and the date, confirms against them, and the rule then shows who confirmed it", async () => {
+      const key = "PF_ADMIN_RATE";
+      const cp = await api(checkerToken).post(`/rules/${key}/confirm-preview`);
+      expect([cp.body.sourceNote, cp.body.effectiveFrom]).toEqual(["the notification dated 1 April, para 3", "2026-04-01"]);
+      const done = await confirmRule(checkerToken, key, { typedValue: "0.61", note: "checked against the notification" });
+      expect(done.status, JSON.stringify(done.body)).toBe(200);
+      const view = (await api(checkerToken).get(`/rules/${key}`)).body.rule ?? done.body;
+      expect(view.current.sourceNote).toBe("the notification dated 1 April, para 3");
+      expect([view.current.confirmation.confirmedByName.length > 0, view.current.confirmation.selfConfirmed]).toEqual([true, false]);
+    });
   });
 });

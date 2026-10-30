@@ -4,8 +4,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import type { PayrollApprovalSubject } from "@prisma/client";
 import { DIRECTOR_AUTHORITY_SETTING_KEY, DIRECTOR_STEPS, DIRECTOR_STEP_INFO } from "@shared/constants/directorAuthority";
 import { purgeAppendOnly, deleteWithDependents } from "../../../lib/__tests__/cleanup";
-import { with2faFloor } from "../../../lib/authDefaults";
-import { authorityFor, confirmChoice, listSwitches, proposeChoice, requireDirectorTwoFactor } from "../../../lib/directorAuthority";
+import { default2faRolesFor, with2faDirectors } from "../../../lib/authDefaults";
+import { DIRECTOR_2FA_SETTING_KEY, authorityFor, confirmChoice, directorTwoFactorRequired, listSwitches, proposeChoice, requireDirectorTwoFactor } from "../../../lib/directorAuthority";
 import { acknowledgeNotice, deliverDirectorNotice, listMyNotices, sweepDirectorNotices } from "../../../lib/directorNotices";
 import { resolveAccess } from "../../../lib/permissions";
 import { prisma } from "../../../lib/prisma";
@@ -433,19 +433,84 @@ describe("director authority", () => {
     });
   });
 
-  describe("two-step sign-in for every director", () => {
-    it("is required of an actor outside development and not inside it", async () => {
-      await expect(requireDirectorTwoFactor(p.a.userId, prisma, true)).rejects.toMatchObject({ status: 403, code: "DIRECTOR_2FA_REQUIRED" });
-      await expect(requireDirectorTwoFactor(p.a.userId, prisma, false)).resolves.toBeUndefined();
-      await prisma.user.update({ where: { id: p.a.userId }, data: { totpEnabled: true } });
-      await expect(requireDirectorTwoFactor(p.a.userId, prisma, true)).resolves.toBeUndefined();
-      await prisma.user.update({ where: { id: p.a.userId }, data: { totpEnabled: false } });
+  // Two-step sign-in for directors is OPTIONAL (the owners' decision): off by default, and when the setting is on it is enforced exactly as it was.
+  describe("two-step sign-in for directors is optional, and enforced only when the owners turn it on", () => {
+    const setting = (on: boolean | null) => (on === null ? prisma.systemSetting.deleteMany({ where: { key: DIRECTOR_2FA_SETTING_KEY } }) : prisma.systemSetting.upsert({ where: { key: DIRECTOR_2FA_SETTING_KEY }, create: { key: DIRECTOR_2FA_SETTING_KEY, value: on }, update: { value: on } }));
+    afterEach(async () => {
+      await setting(null);
+      await prisma.user.updateMany({ where: { id: { in: [p.a.userId, p.b.userId] } }, data: { totpEnabled: false } });
     });
 
-    it("the Super Admin role can never be left off the list that needs it, outside development", () => {
-      expect(with2faFloor(["HR_ADMIN"], "production")).toEqual(["HR_ADMIN", "SUPER_ADMIN"]);
-      expect(with2faFloor(["HR_ADMIN", "SUPER_ADMIN"], "staging")).toEqual(["HR_ADMIN", "SUPER_ADMIN"]);
-      expect(with2faFloor([], "development")).toEqual([]);
+    it("the setting is off by default: a director with no two-step sign-in acts, proposes a choice and switches a duty as normal", async () => {
+      await setting(null);
+      expect(await directorTwoFactorRequired()).toBe(false);
+      await expect(requireDirectorTwoFactor(p.a.userId)).resolves.toBeUndefined();
+      const id = newId();
+      figures.set(id, "1");
+      expect((await act(p.a, id)).status).toBe("APPROVED");
+      const r = await proposeChoice("PERIOD_UNLOCK", "SECOND_DIRECTOR", { userId: p.a.userId });
+      if (r.noticeId) noticeIds.push(r.noticeId);
+      const done = await confirmChoice("PERIOD_UNLOCK", "SECOND_DIRECTOR", { userId: p.b.userId });
+      noticeIds.push(done.noticeId);
+    });
+
+    it("turned on, a director without it is refused every director act, and one who enrolled is not", async () => {
+      await setting(true);
+      expect(await directorTwoFactorRequired()).toBe(true);
+      await expect(requireDirectorTwoFactor(p.a.userId)).rejects.toMatchObject({ status: 403, code: "DIRECTOR_2FA_REQUIRED" });
+      const id = newId();
+      figures.set(id, "1");
+      await expect(act(p.a, id)).rejects.toMatchObject({ code: "DIRECTOR_2FA_REQUIRED" });
+      await expect(proposeChoice("BANK_FILE", "SECOND_DIRECTOR", { userId: p.a.userId })).rejects.toMatchObject({ code: "DIRECTOR_2FA_REQUIRED" });
+      await prisma.user.update({ where: { id: p.a.userId }, data: { totpEnabled: true } });
+      await expect(requireDirectorTwoFactor(p.a.userId)).resolves.toBeUndefined();
+      expect((await act(p.a, id)).status).toBe("APPROVED");
+    });
+
+    it("the explicit argument still overrides the setting (the enforced mode stays testable on its own)", async () => {
+      await expect(requireDirectorTwoFactor(p.a.userId, prisma, true)).rejects.toMatchObject({ code: "DIRECTOR_2FA_REQUIRED" });
+      await expect(requireDirectorTwoFactor(p.a.userId, prisma, false)).resolves.toBeUndefined();
+    });
+
+    it("directors join the roles that must enrol at sign-in only when the setting is on; the other administrators' defaults are unchanged", () => {
+      expect(with2faDirectors(["HR_ADMIN"], false)).toEqual(["HR_ADMIN"]);
+      expect(with2faDirectors(["HR_ADMIN"], true)).toEqual(["HR_ADMIN", "SUPER_ADMIN"]);
+      expect(with2faDirectors(["SUPER_ADMIN"], true)).toEqual(["SUPER_ADMIN"]);
+      expect(default2faRolesFor("production")).not.toContain("SUPER_ADMIN");
+      expect(default2faRolesFor("development")).toEqual([]);
+    });
+
+    it("the Setup Checklist shows a prominent warning, never a blocker, while a director has not enrolled, and none once they all have", async () => {
+      const { buildSetupReport, readinessOf } = await import("../setup/status");
+      const report = await buildSetupReport();
+      const row = report.sections.flatMap((x) => x.items).find((i) => i.id === "safety:two-factor")!;
+      expect([row.required, row.status === "CONFIRMED" ? "ok" : "warn"]).toEqual([false, "warn"]);
+      expect(row.warning).toMatch(/strongly recommended before real salaries/);
+      const ready = readinessOf(report);
+      expect(ready.blockers.map((b) => b.itemId)).not.toContain("safety:two-factor");
+      expect(ready.warnings.map((w) => w.itemId)).toContain("safety:two-factor");
+    });
+
+    it("only a director can change the setting: through the Settings API, a director can; someone who holds only settings.manage cannot", async () => {
+      const role = `TEST_SETMGR_${Date.now()}`;
+      await grantPermissions(role, ["settings.manage"]);
+      const x = await createFullTestEmployee(org, { roleCode: role });
+      extraUserIds.push(x.userId);
+      try {
+        const [ta, tm] = await Promise.all([loginAs(p.a.employeeCode), loginAs(x.employeeCode)]);
+        const put = (token: string, on: boolean) => request(app).put("/api/settings/security").set(...authHeader(token)).send({ requireDirectorTwoFactor: on });
+        const refused = await put(tm, true);
+        expect([refused.status, refused.body.error.code]).toEqual([403, "DIRECTOR_ONLY"]);
+        expect(await directorTwoFactorRequired()).toBe(false);
+        const ok = await put(ta, true);
+        expect([ok.status, ok.body.requireDirectorTwoFactor]).toEqual([200, true]);
+        expect(await directorTwoFactorRequired()).toBe(true);
+        expect((await request(app).get("/api/settings/security").set(...authHeader(tm))).body.requireDirectorTwoFactor).toBe(true);
+        expect((await put(ta, false)).body.requireDirectorTwoFactor).toBe(false);
+      } finally {
+        await cleanupFullTestEmployee(x.employeeId);
+        await cleanupTestRole(role);
+      }
     });
   });
 

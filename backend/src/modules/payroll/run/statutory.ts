@@ -4,7 +4,7 @@ import type { RoundingRule } from "../salary/breakup";
 import type { LwfTable, PtTable, RunRules } from "./rules";
 
 // PF, ESI, professional tax and labour welfare fund (docs/plans/PHASE_6.md §14D). Pure functions of the figures and the rules passed in: not one rate, ceiling or
-// slab is written here. What each rule means is the rule's own description in the catalog; whether the figure is law is the CA's confirmation.
+// slab is written here. What each rule means is the rule's own description in the catalog; whether the figure is law is what the owners confirm against the source they note.
 
 /** Money is stored to six decimal places. A rule that says "no rounding" is honoured only while the figure fits; otherwise it is refused, never quietly trimmed. */
 const STORAGE_SCALE = 6;

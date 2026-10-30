@@ -27,6 +27,8 @@ export interface SetupItem {
   where: { label: string; path: string };
   /** Which permission is needed to enter or confirm it, when that is not the usual one. */
   permissionNote?: string;
+  /** A prominent, NON-blocking warning: it never makes Ready for first real run red. */
+  warning?: string;
   /** Something that should be impossible but is true: a value confirmed by the person who entered it, a developer who can see a secret. */
   problem?: string;
   /** For people's data: how many are covered, and the first few who are not. */
@@ -70,6 +72,8 @@ export interface Readiness {
   required: number;
   confirmed: number;
   blockers: Blocker[];
+  /** Prominent, NON-blocking warnings (they never turn Ready red). */
+  warnings: Array<{ itemId: string; title: string; warning: string; where: { label: string; path: string } }>;
   /** Shown, not blocking. */
   notRequiredYet: Array<{ itemId: string; title: string; status: SetupStatus; reason: string }>;
 }

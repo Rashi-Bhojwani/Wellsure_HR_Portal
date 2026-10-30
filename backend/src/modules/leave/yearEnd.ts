@@ -260,7 +260,7 @@ export async function buildYearEndReport(runId: string, withMoney: boolean): Pro
         ...(withMoney ? { rate: item.dailyRate.toNumber(), rateSource: item.rateSource, amount: item.encashedAmount.toNumber() } : {}),
       })),
       totals: { name: "Total", days: run.totalEncashedDays.toNumber(), ...(withMoney ? { amount: run.totalEncashedAmount.toNumber() } : {}) },
-      footer: !withMoney ? undefined : run.items.some((i) => i.rateSource === "MANUAL_SETTING") ? ["Daily rate: provisional flat HR-entered amount, pending CA confirmation of the encashment formula and its tax treatment (spec §5.2)."] : [],
+      footer: !withMoney ? undefined : run.items.some((i) => i.rateSource === "MANUAL_SETTING") ? ["Daily rate: provisional flat HR-entered amount, pending the owners' confirmation of the encashment formula and its tax treatment (spec §5.2)."] : [],
     },
   ]);
 

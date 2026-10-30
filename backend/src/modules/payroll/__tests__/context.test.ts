@@ -92,7 +92,7 @@ describe("RuleContext, the gates and the watermark", () => {
     // The rule is then edited (a proposed change): the run that used the old version is stale and must be recalculated; a fresh read is a Placeholder again.
     const preview = await previewEdit("PF_ADMIN_RATE", "0.6");
     expect(preview.willResetConfirmation).toBe(true);
-    await editRule("PF_ADMIN_RATE", { value: "0.6", note: "trying a change", fingerprint: preview.fingerprint }, who(maker.userId));
+    await editRule("PF_ADMIN_RATE", { value: "0.6", note: "trying a change", sourceNote: "test fixture: a made-up source", effectiveFrom: "2026-04-01", fingerprint: preview.fingerprint }, who(maker.userId));
     expect((await pinStatuses(pins))[0]).toMatchObject({ status: "CONFIRMED", stale: true, currentVersion: 2 }); // the old version is still the confirmed one it used
     await expect(assertRunIsReal(pins, "approved")).rejects.toMatchObject({ status: 409, code: "RULES_CHANGED" });
     const fresh = await RuleContext.load();

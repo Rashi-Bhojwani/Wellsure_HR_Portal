@@ -1,5 +1,8 @@
 # Phase 7 — Tax and benefits: plan
 
+> **Amendment, 2026-10-30 (owners' decision): there is no CA.** Wherever this document says CA, accountant or "CA confirmation", read: the owners enter and verify every statutory and tax figure themselves. Each carries a required source note (where the number came from) and an effective-from date, and a different director confirms it against that note. Nothing statutory is filled in by the system. See `CHECKPOINT_1_FOLLOWUP.md` §9.
+
+
 **Status: APPROVED 2026-10-22 with the answers in §0A, which override anything below that differs. P7-0 is being built.** One commit at a
 time, pausing after each.
 

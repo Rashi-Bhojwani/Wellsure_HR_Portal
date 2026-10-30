@@ -2,7 +2,7 @@ import type { ComponentType } from "@shared/constants/payrollSalary";
 import { HttpError } from "../../../middleware/errorHandler";
 import { evaluateFormula } from "../formula";
 import { ZERO, canonicalDecimal, dec, fixed, intDec, percentOf, roundTo, sum, type Money, type RoundingMode } from "../money";
-import type { ComponentValue, StructureValue } from "./schemas";
+import { notSetChoices, type ComponentValue, type StructureValue } from "./schemas";
 
 // From an annual CTC and a structure to the frozen monthly breakup of a salary row (docs/plans/PHASE_6.md §14B). Pure: no database, no clock.
 //
@@ -75,6 +75,8 @@ export function computeBreakup(input: BreakupInput): Breakup {
   for (const [order, line] of structure.lines.entries()) {
     const pinned = input.components.get(line.component);
     if (!pinned) throw new BreakupError("COMPONENT_MISSING", `The structure uses ${line.component}, which has no version on record.`);
+    const unset = notSetChoices(pinned.value);
+    if (unset.length) throw new BreakupError("HEAD_NOT_SET", `${line.component} has ${unset.join(" and ")} not set yet, so no salary can be worked out with it.`, { component: line.component, notSet: unset });
     const type = pinned.value.type;
     const base: BreakupLine = { component: line.component, componentVersion: pinned.version, type, amount: ZERO, order };
     const calc = line.calc;

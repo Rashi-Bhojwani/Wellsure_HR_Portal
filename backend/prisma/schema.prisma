@@ -2484,6 +2484,9 @@ model PayrollItemVersion {
   value        Json
   valueHash    String          @map("value_hash")
   note         String          @default("")
+  // Where the number came from (the notification, circular or letter), in the author's words, and the date it starts to apply. Required for a statutory rule; confirmed by a different director.
+  sourceNote   String          @default("") @map("source_note")
+  effectiveFrom DateTime?      @map("effective_from") @db.Date
   authorUserId String?         @map("author_user_id") // null = the shipped placeholder
   createdAt    DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
 

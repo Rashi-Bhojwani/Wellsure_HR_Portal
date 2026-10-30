@@ -22,7 +22,7 @@ What works today:
   request stays PENDING and is voided only if the figures change.
 - After D2 (not built yet): a step whose second-director switch is OFF (the default for every step) is done by one
   director alone, recorded, and the other director gets a notice and, after 3 days unacknowledged, a red banner.
-- Either director can turn any step's second-director check on or off at once (needs two-step sign-in, outside
+- Either director can turn any step's second-director check on or off at once (needs two-step sign-in only if the owners made it compulsory; outside
   development); the other director is notified and sees a red banner. This switch exists now but nothing reads it
   until D2.
 - HR keeps its own work (employee records, and whichever attendance capabilities are switched on) with no pay data.

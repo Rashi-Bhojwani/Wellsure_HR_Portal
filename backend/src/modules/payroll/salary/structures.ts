@@ -7,7 +7,8 @@ import { appendVersion, confirmVersion, editFingerprint as itemEditFingerprint, 
 import { ZERO, dec } from "../money";
 import { annualView, computeBreakup, breakupToJson, type Breakup, type RoundingRule } from "./breakup";
 import { asValidationError, loadLineRounding } from "./common";
-import { InvalidSalaryValueError, parseItemCode, parseStructureValue, type ComponentValue, type StructureValue } from "./schemas";
+import { businessToday } from "../../../lib/businessDate";
+import { InvalidSalaryValueError, parseItemCode, parseStructureValue, unusableInStructure, type ComponentValue, type StructureValue } from "./schemas";
 
 // Salary structures as governed items (docs/plans/PHASE_6.md §14B): how much each line gets. A structure pins a component version and hash on every line;
 // saving one proves it adds up to CTC for a sample CTC, using the rounding rule, so a structure that cannot produce a salary cannot be saved.
@@ -45,6 +46,9 @@ export async function validateStructure(raw: unknown): Promise<{ value: Structur
     const shaped = parseStructureValue(raw, () => undefined);
     const components = await resolvePinnedComponents(shaped);
     const value = parseStructureValue(raw, (code) => components.get(code)?.value.type);
+    const day = businessToday().toISOString().slice(0, 10);
+    const unusable = [...components].map(([code, c]) => unusableInStructure(code, c.value, day)).filter((m): m is string => m !== null);
+    if (unusable.length) throw new InvalidSalaryValueError(unusable);
     return { value, components };
   } catch (err) {
     return asValidationError(err);

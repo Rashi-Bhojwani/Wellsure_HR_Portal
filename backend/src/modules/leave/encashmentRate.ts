@@ -5,7 +5,7 @@ import { HttpError } from "../../middleware/errorHandler";
 export interface EncashmentRateResult {
   amount: Prisma.Decimal;
   source: "MANUAL_SETTING" | "SALARY_STRUCTURE";
-  isFinal: boolean; // false = pending CA confirmation — Year End Process's UI must flag this clearly
+  isFinal: boolean; // false = pending the owners' confirmation — Year End Process's UI must flag this clearly
 }
 
 export interface EncashmentRateProvider {
@@ -26,7 +26,7 @@ export class EncashmentRateNotConfiguredError extends HttpError {
 // every employee (system_settings key "leave.encashment.defaultDailyRate"),
 // standing in for spec §5.2's real formula. HR has confirmed "one working
 // day's salary per leave day" as the intended rule, but not yet the exact
-// formula or its tax treatment (both await CA confirmation) — salary
+// formula or its tax treatment (both await the owners' confirmation) — salary
 // structures don't exist until Phase 6 regardless, so there is no
 // per-employee salary to compute from today.
 //

@@ -1,5 +1,8 @@
 # Phase 6 review (2026-10-22)
 
+> **Amendment, 2026-10-30 (owners' decision): there is no CA.** Wherever this document says CA, accountant or "CA confirmation", read: the owners enter and verify every statutory and tax figure themselves. Each carries a required source note (where the number came from) and an effective-from date, and a different director confirms it against that note. Nothing statutory is filled in by the system. See `CHECKPOINT_1_FOLLOWUP.md` §9.
+
+
 Written at the end of Phase 6 (commit P6-6), before your own testing. Per-commit detail is in [`PHASE_6.md`](PHASE_6.md) (plans and as-built notes, §14A to §14K) and [`../PROGRESS.md`](../PROGRESS.md) (what was verified). The procedure for the first real payroll, written for the people who will run it, is [`../FIRST_REAL_PAYROLL_RUN.md`](../FIRST_REAL_PAYROLL_RUN.md); who can see what is [`../SENSITIVE_DATA.md`](../SENSITIVE_DATA.md).
 
 **How to read the URLs:**

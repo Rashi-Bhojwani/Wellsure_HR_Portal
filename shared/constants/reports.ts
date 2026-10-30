@@ -74,5 +74,5 @@ export interface ReportResult {
   breakdowns: ReportBreakdown[];
   notes: string[]; // what the report does / doesn't include
   warnings: string[]; // e.g. provisional encashment rate
-  rateProvisional?: boolean; // leave liability: rate awaits CA confirmation
+  rateProvisional?: boolean; // leave liability: rate awaits the owners' confirmation
 }

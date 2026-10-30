@@ -558,16 +558,16 @@ describe("the half-year ESI rule cannot be confirmed while its question is open"
     await setRules(world.maker.userId, { ESI_PERIOD_RULE: "STICKY_HALF_YEAR" });
     const pre = await previewConfirm("ESI_PERIOD_RULE", world.checkerA.userId);
     expect(pre.blocked).toMatch(/cannot be confirmed yet/);
-    expect(pre.blocked).toMatch(/CA/);
+    expect(pre.blocked).toMatch(/owners/);
     const listed = (await api(world.tokens.maker, "get", "/rules/ESI_PERIOD_RULE")).body.rule;
     expect(listed.openQuestion).toMatchObject({ id: "ESI-HALF-YEAR" });
-    await expect(confirmRule("ESI_PERIOD_RULE", { version: pre.version, typedValue: "STICKY_HALF_YEAR", note: "CA letter dated today, checked", fingerprint: pre.fingerprint }, { userId: world.checkerA.userId })).rejects.toMatchObject({ status: 409, code: "OPEN_QUESTION" });
+    await expect(confirmRule("ESI_PERIOD_RULE", { version: pre.version, typedValue: "STICKY_HALF_YEAR", note: "the notification dated today, checked", fingerprint: pre.fingerprint }, { userId: world.checkerA.userId })).rejects.toMatchObject({ status: 409, code: "OPEN_QUESTION" });
     expect(await prisma.payrollItemConfirmation.count({ where: { kind: "RULE", key: "ESI_PERIOD_RULE", version: pre.version } })).toBe(0);
     // The question is about the half-year reading, so the monthly value is not held up by it.
     await setRules(world.maker.userId, { ESI_PERIOD_RULE: "MONTHLY" });
     const monthly = await previewConfirm("ESI_PERIOD_RULE", world.checkerA.userId);
     expect(monthly.blocked).toBeNull();
-    await confirmRule("ESI_PERIOD_RULE", { version: monthly.version, typedValue: undefined, note: "checked against the CA's letter", fingerprint: monthly.fingerprint }, { userId: world.checkerA.userId });
+    await confirmRule("ESI_PERIOD_RULE", { version: monthly.version, typedValue: undefined, note: "checked against the notification", fingerprint: monthly.fingerprint }, { userId: world.checkerA.userId });
     expect((await api(world.tokens.maker, "get", "/rules/ESI_PERIOD_RULE")).body.rule.status).toBe("CONFIRMED");
     expect((await api(world.tokens.maker, "get", "/rules/ESI_PERIOD_RULE")).body.rule.openQuestion).toBeNull();
   });
