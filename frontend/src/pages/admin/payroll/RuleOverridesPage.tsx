@@ -19,14 +19,20 @@ import { space } from "../../../theme/tokens";
 
 const valueText = (v: unknown): string => (typeof v === "string" || typeof v === "number" || typeof v === "boolean" ? String(v) : JSON.stringify(v));
 
-/** What the director typed, as the rule's value: JSON when it parses (a list, a table, a number), else the text as it is. */
+/**
+ * What the director typed, as the rule's value. Every overridable rule takes text (a rate such as "10", an amount, a choice), a list (employment types) or a table;
+ * so only text that starts like a list or a table is read as JSON, and everything else is sent as the text it is (never as a number).
+ */
 const parseTyped = (text: string): unknown => {
   const t = text.trim();
-  try {
-    return JSON.parse(t);
-  } catch {
-    return t;
+  if (t.startsWith("{") || t.startsWith("[")) {
+    try {
+      return JSON.parse(t);
+    } catch {
+      return t;
+    }
   }
+  return t;
 };
 
 export function RuleOverridesPage() {

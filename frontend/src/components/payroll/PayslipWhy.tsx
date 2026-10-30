@@ -70,7 +70,7 @@ export function PayslipWhyButton({ queryKey, load, masked }: { queryKey: readonl
       </Button>
       <SideDrawer open={open} onClose={() => setOpen(false)} size="wide" title="Why is my payslip this way?" subtitle={data?.cycleLabel} footer={null}>
         {isLoading && <SkeletonCard lines={8} />}
-        {(error || (!isLoading && !data)) && <EmptyState kind="error" compact title="Could not load the explanation" description={apiErrorMessage(error, "Could not load the explanation.")} />}
+        {error && <EmptyState kind="error" compact title="Could not load the explanation" description={apiErrorMessage(error, "Could not load the explanation.")} />}
         {data && (
           <Stack gap={space[3]}>
             {data.lines.map((l, i) => (
