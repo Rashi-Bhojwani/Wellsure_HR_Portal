@@ -29,6 +29,9 @@ const HR_EXECUTIVE_PERMS: string[] = [
   "employee.manage",
   "employee.separate",
   "employee.separate.view",
+  // After Checkpoint 1: the narrower pieces of what the hard lock took (no pay data in any of them); each is a director-controlled HR switch.
+  "import.details.manage",
+  "letters.issue.nopay",
   "profile.changerequest.approve",
   "org.manage",
   // Phase 4 — leave administration stays with HR_EXECUTIVE; config/

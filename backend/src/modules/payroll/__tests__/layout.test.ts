@@ -103,3 +103,22 @@ describe("dates", () => {
     expect(["YYYY-MM-DD", "DD-MM-YYYY", "DD/MM/YYYY", "YYYYMMDD", "DD-MMM-YYYY"].map((f) => formatDate("2026-03-07", f as never))).toEqual(["2026-03-07", "07-03-2026", "07/03/2026", "20260307", "07-Mar-2026"]);
   });
 });
+
+describe("the file types written", () => {
+  const xlsx = { format: "XLSX", extension: "xlsx", columnHeaders: true, columns: [col("EMPLOYEE_CODE", { header: "Code" }), col("AMOUNT", { header: "Amount", numeric: true })] };
+  it("a bank file is written as .xlsx or as .csv, and the bytes of the .xlsx are a real spreadsheet", async () => {
+    const x = await renderLayout("BANK", xlsx, rows, ctx);
+    expect([x.extension, x.contentType]).toEqual(["xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]);
+    expect(x.bytes.subarray(0, 2).toString()).toBe("PK");
+    const c = await renderLayout("BANK", delimited, rows, ctx);
+    expect([c.extension, c.contentType]).toEqual(["csv", "text/csv"]);
+  });
+  it("a legacy .xls (or .xlsm, .xlsb) file is refused, and a layout's extension has to match its format", () => {
+    for (const ext of ["xls", "xlsm", "xlsb"]) expect(() => parseLayout("BANK", { ...xlsx, extension: ext }), ext).toThrow(/not written/);
+    expect(() => parseLayout("BANK", { ...delimited, extension: "xls" })).toThrow(/not written/);
+    expect(() => parseLayout("BANK", { ...xlsx, extension: "csv" })).toThrow(/written as \.xlsx/);
+    expect(() => parseLayout("BANK", { ...delimited, extension: "xlsx" })).toThrow(/cannot be named \.xlsx/);
+    expect(() => parseLayout("BANK", xlsx)).not.toThrow();
+    expect(() => parseLayout("BANK", delimited)).not.toThrow();
+  });
+});

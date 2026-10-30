@@ -13,7 +13,7 @@ import { HttpError } from "../../middleware/errorHandler";
 import { emitLetterUpdated } from "../../realtime/emit";
 import { findScopedEmployee } from "../employee/service";
 import { notifyEmployee } from "../notifications/notifyEmployee";
-import { letterDocument, mergeIntoBody, sanitizeTemplateHtml, validateExtraFields, validatePlaceholders, type Letterhead } from "./template";
+import { letterDocument, mergeIntoBody, payFreeProof, payFreeValueProblem, sanitizeTemplateHtml, validateExtraFields, validatePlaceholders, type Letterhead } from "./template";
 import { inForceOn } from "../../lib/effectiveDating";
 
 // Letters (spec §7.2, Phase 5 commit D2). Letters are legal documents
@@ -108,6 +108,8 @@ export async function listTemplates() {
     visibleToEmployeeDefault: t.visibleToEmployeeDefault,
     currentVersion: t.versions[0]?.version ?? 0,
     extraFields: t.versions[0] ? extraFieldsOf(t.versions[0].extraFields) : [],
+    // What HR without the pay-letters key may issue: shown on the screen, enforced again when issuing.
+    payFree: t.versions[0] ? payFreeProof(t.versions[0].bodyHtml, extraFieldsOf(t.versions[0].extraFields)) : { ok: false, reasons: ["The template has no content yet."] },
     lastEditedAt: (t.versions[0]?.createdAt ?? t.updatedAt).toISOString(),
   }));
 }
@@ -455,6 +457,18 @@ export async function issueLetter(
   if (!template || !template.isActive) throw new HttpError(400, "Choose an active letter template.", "VALIDATION_ERROR");
   const version = await currentVersion(template.id);
   if (!version) throw new HttpError(409, "This template has no content yet.", "CONFLICT");
+  // Without Issue letters (the directors') a letter may be issued only when the template PROVES it cannot carry a pay figure, and what was typed is not a pay figure either.
+  if (!viewer.permissions.has("letters.generate")) {
+    if (!viewer.permissions.has("letters.issue.nopay")) throw new HttpError(403, "Missing permission: letters.generate", "FORBIDDEN");
+    const fields = extraFieldsOf(version.extraFields);
+    const proof = payFreeProof(version.bodyHtml, fields);
+    if (!proof.ok) throw new HttpError(403, `This letter could carry a pay figure, so a director has to issue it. ${proof.reasons.join(" ")}`, "PAY_LETTER_DIRECTOR_ONLY", { reasons: proof.reasons });
+    for (const f of fields) {
+      const problem = payFreeValueProblem(f.label, input.extraValues[f.key] ?? "");
+      if (problem) throw new HttpError(403, problem, "PAY_LETTER_DIRECTOR_ONLY", { reasons: [problem] });
+    }
+    // Keys the template does not ask for are not stored, but they are not carried either.
+  }
 
   // The reference number and the timestamp are fixed now and frozen with
   // the values; the letter's own date never depends on when the job runs.

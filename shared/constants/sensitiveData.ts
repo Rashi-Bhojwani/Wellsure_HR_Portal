@@ -161,6 +161,9 @@ export const REVIEWED_NOT_SENSITIVE: readonly PermissionKey[] = [
   "attendance.exceptions.view",
   "reports.attendance.view",
   "reports.leave.view",
+  "invitations.send",
+  "import.details.manage",
+  "letters.issue.nopay",
   "payroll.rules.view",
 ];
 

@@ -52,6 +52,41 @@ export function validateExtraFields(fields: LetterExtraField[]): void {
   }
 }
 
+// ── Proof that a letter contains no pay figure ───────────────────────────────────────────────
+// HR may issue a letter without the pay-letters key only when the template version PROVES it cannot carry a pay figure: (1) the closed placeholder catalog has no pay placeholder, so
+// the body can only print those; (2) no extra field is a number or currency, nor named or labelled like pay; (3) the fixed text of the body has no pay word, currency sign or
+// amount. Anything else is refused, in words, with the reasons. The values HR types at issue are checked the same way (payFreeValueProblem). It is a conservative test: a false
+// refusal sends the letter to a director; a false pass would be a leak, so the word list errs wide.
+const PAY_VOCABULARY = /\b(ctc|cost to company|salary|salaries|wage|wages|stipend|remuneration|compensation|emolument|gross|net pay|take[- ]home|basic pay|basic salary|allowance|allowances|bonus|incentive|variable pay|pay ?(?:scale|band|grade|package|slip|structure)|per annum|p\.a\.|per month|lpa|lakh|lakhs|crore|gratuity|provident fund|pf contribution|esi|increment|hike|rupee|rupees|inr|rs\.?)\b|₹/i;
+const GROUPED_AMOUNT = /\b\d{1,3}(,\d{2,3})+(\.\d+)?\b/;
+
+export interface PayFreeProof {
+  ok: boolean;
+  reasons: string[];
+}
+
+export function payFreeProof(bodyHtml: string, extraFields: LetterExtraField[]): PayFreeProof {
+  const reasons: string[] = [];
+  for (const f of extraFields) {
+    if (f.type === "number" || f.type === "currency") reasons.push(`The field "${f.label}" is a ${f.type} field, which could carry a pay figure.`);
+    else if (PAY_VOCABULARY.test(`${f.key} ${f.label}`)) reasons.push(`The field "${f.label}" is named like pay.`);
+  }
+  const text = textOnly(bodyHtml.replace(LETTER_PLACEHOLDER_PATTERN, " ")).replace(/\s+/g, " ");
+  const word = text.match(PAY_VOCABULARY);
+  if (word) reasons.push(`The letter's own text mentions pay ("${word[0].trim()}").`);
+  if (GROUPED_AMOUNT.test(text)) reasons.push("The letter's own text contains an amount.");
+  const used = [...bodyHtml.matchAll(LETTER_PLACEHOLDER_PATTERN)].map((m) => m[1]!);
+  const unknown = used.filter((k) => !(k in LETTER_PLACEHOLDERS) && !k.startsWith("extra."));
+  if (unknown.length > 0) reasons.push(`It uses a placeholder that is not in the closed list (${[...new Set(unknown)].join(", ")}).`);
+  return { ok: reasons.length === 0, reasons };
+}
+
+/** What HR typed into a field of a pay-free letter: refused if it looks like pay, so a text field cannot be used to carry a figure. */
+export function payFreeValueProblem(label: string, value: string): string | null {
+  if (PAY_VOCABULARY.test(value) || GROUPED_AMOUNT.test(value)) return `"${label}" looks like a pay figure, so this letter needs a director.`;
+  return null;
+}
+
 const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
 // Merge values are plain text: escaped, with line breaks kept (addresses).

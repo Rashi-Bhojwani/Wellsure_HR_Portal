@@ -9,6 +9,7 @@ function actorMeta(req: Request) {
 
 export async function downloadTemplate(req: Request, res: Response): Promise<void> {
   const dataset = req.params.dataset as ImportDatasetKey;
+  importService.assertDatasetAllowed(dataset, req.user!.permissions);
   const buffer = await importService.buildTemplate(dataset);
   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   res.setHeader("Content-Disposition", `attachment; filename="${dataset}-template.xlsx"`);
@@ -25,15 +26,15 @@ export async function upload(req: Request, res: Response): Promise<void> {
 
 export async function listBatches(req: Request, res: Response): Promise<void> {
   const dataset = req.query.dataset as ImportDatasetKey | undefined;
-  res.status(200).json({ batches: await importService.listBatches(dataset) });
+  res.status(200).json({ batches: await importService.listBatches(dataset, req.user!.permissions) });
 }
 
 export async function getBatch(req: Request, res: Response): Promise<void> {
-  res.status(200).json(await importService.getBatch(req.params.id as string));
+  res.status(200).json(await importService.getBatch(req.params.id as string, req.user!.permissions));
 }
 
 export async function downloadErrorReport(req: Request, res: Response): Promise<void> {
-  const { buffer, fileName } = await importService.buildErrorReport(req.params.id as string);
+  const { buffer, fileName } = await importService.buildErrorReport(req.params.id as string, req.user!.permissions);
   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
   res.status(200).send(buffer);

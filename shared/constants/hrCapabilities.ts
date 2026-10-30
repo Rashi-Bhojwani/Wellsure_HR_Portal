@@ -18,6 +18,9 @@ export const HR_CAPABILITY_IDS = [
   "ATTENDANCE_REPORTS",
   "LEAVE_REPORTS",
   "SEE_LEAVE_COUNTS",
+  "SEND_INVITATIONS",
+  "IMPORT_EMPLOYEE_DETAILS",
+  "ISSUE_LETTERS_NO_PAY",
 ] as const;
 export type HrCapabilityId = (typeof HR_CAPABILITY_IDS)[number];
 
@@ -42,6 +45,9 @@ export const HR_CAPABILITIES: readonly HrCapability[] = [
   { id: "ATTENDANCE_REPORTS", label: "Attendance reports", what: "Open and download the attendance reports.", keys: ["reports.attendance.view"] },
   { id: "LEAVE_REPORTS", label: "Leave reports", what: "Open and download the leave reports (balances, loss of pay).", keys: ["reports.leave.view"] },
   { id: "SEE_LEAVE_COUNTS", label: "See leave counts", what: "See other people's leave balances and ledgers, the leave dashboard and the org-wide leave calendar. Approving leave is its own switch and is not affected.", keys: ["leave.view"] },
+  { id: "SEND_INVITATIONS", label: "Send invitations", what: "Send and resend sign-in invitations to employees. No pay data is involved.", keys: ["invitations.send"] },
+  { id: "IMPORT_EMPLOYEE_DETAILS", label: "Import employee details", what: "Import org masters, employees and leave grants from a spreadsheet. A file with a salary, bank or statutory column is refused; those imports are the directors'.", keys: ["import.details.manage"] },
+  { id: "ISSUE_LETTERS_NO_PAY", label: "Issue letters without pay figures", what: "Issue a letter only from a template the system has checked contains no pay figure (and no field that could carry one). Letters that carry a CTC or any pay figure are the directors'.", keys: ["letters.issue.nopay"] },
 ];
 
 export const hrCapability = (id: string): HrCapability | undefined => HR_CAPABILITIES.find((c) => c.id === id);
@@ -61,6 +67,7 @@ export const SPLIT_KEYS: ReadonlyArray<{ child: PermissionKey; parent: Permissio
   { child: "attendance.exceptions.view", parent: "attendance.view" },
   { child: "reports.attendance.view", parent: "reports.view" },
   { child: "reports.leave.view", parent: "reports.view" },
+  { child: "invitations.send", parent: "employee.create" },
 ];
 
 export function withSplitKeys(keys: readonly string[]): string[] {

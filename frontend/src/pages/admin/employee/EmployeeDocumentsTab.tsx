@@ -71,7 +71,7 @@ export function EmployeeDocumentsTab({ employeeId, canManage }: { employeeId: st
 
   return (
     <SectionStack>
-      {hasPermission("letters.generate") && (
+      {(hasPermission("letters.generate") || hasPermission("letters.issue.nopay")) && (
         <ProfileSection title="Letters">
           <IssuedLetters employeeId={employeeId} />
         </ProfileSection>

@@ -21,6 +21,8 @@ import {
   type TestOrgMasters,
 } from "../../employee/__tests__/employeeTestHelpers";
 import { setSetting } from "../../people/__tests__/peopleTestHelpers";
+import { purgeAppendOnly } from "../../../lib/__tests__/cleanup";
+import { setSwitch } from "../../hrCapabilities/service";
 import { processLetterJob, SIGNATORY_NAME_KEY } from "../service";
 
 // Letters (Phase 5 commit D2) against the real database and a real
@@ -124,13 +126,16 @@ describe("Letters", { timeout: 30_000 }, () => {
     // Issuing a letter is the directors' since the HR hard lock grew (a letter can carry the CTC): no HR role holds it.
     expect(has("SUPER_ADMIN", "letters.generate")).toBe(true);
     expect(["HR_ADMIN", "HR_EXECUTIVE", "PAYROLL_ADMIN", "MANAGER", "EMPLOYEE"].some((c) => has(c, "letters.generate"))).toBe(false);
+    // ...and the narrow key (letters proven to carry no pay figure) is HR's, as before the lock.
+    expect(["HR_ADMIN", "HR_EXECUTIVE"].every((c) => has(c, "letters.issue.nopay"))).toBe(true);
+    expect(["PAYROLL_ADMIN", "MANAGER", "EMPLOYEE"].some((c) => has(c, "letters.issue.nopay"))).toBe(false);
   });
 
-  it("route gates: employees, managers and both HR roles are refused issuing; HR_EXECUTIVE cannot even list, or edit, templates", async () => {
+  it("route gates: employees and managers are refused; both HR roles are refused a letter that could carry pay; HR_EXECUTIVE can list but not edit templates", async () => {
     expect((await as("outsider").get("/api/letters/templates")).status).toBe(403);
     expect((await as("manager").get("/api/letters/templates")).status).toBe(403);
     expect((await as("outsider").post(`/api/letters/employees/${people.outsider.employeeId}`, { templateId })).status).toBe(403);
-    expect((await as("hrExec").get("/api/letters/templates")).status).toBe(403);
+    expect((await as("hrExec").get("/api/letters/templates")).status).toBe(200); // the narrow key lists templates (with whether HR may issue each); editing them stays HR Admin's
     expect((await as("hrExec").post(`/api/letters/employees/${people.outsider.employeeId}`, { templateId })).status).toBe(403);
     expect((await as("hrAdmin").post(`/api/letters/employees/${people.outsider.employeeId}`, { templateId })).status).toBe(403);
     expect((await as("director").get("/api/letters/templates")).status).toBe(200);
@@ -363,5 +368,99 @@ describe("Letters", { timeout: 30_000 }, () => {
     expect(res.status).toBe(200);
     expect((res.body as Buffer).subarray(0, 5).toString()).toBe("%PDF-");
     expect(await prisma.generatedLetter.count()).toBe(before);
+  });
+
+  // ── HR issues a letter only when the template is proven to carry no pay figure (the narrow key, a director-controlled switch) ──
+  describe("letters without pay figures", () => {
+    let freeId: string;
+    const meta = () => ({ actorUserId: people.director.userId, ipAddress: null, userAgent: null });
+    const flip = (state: "ON" | "OFF" | "DEFAULT", who: "hrAdmin" | "hrExec" | "all" = "all") =>
+      Promise.all(
+        (who === "all" ? (["HR_ADMIN", "HR_EXECUTIVE"] as const) : [who === "hrAdmin" ? "HR_ADMIN" : "HR_EXECUTIVE"]).map((roleCode) =>
+          setSwitch({ capability: "ISSUE_LETTERS_NO_PAY", subject: { kind: "ROLE", roleCode }, state, reason: "test" } as never, meta()),
+        ),
+      );
+
+    beforeAll(async () => {
+      const t = await as("director").post("/api/letters/templates", {
+        code: `TEST_FREE_${Date.now()}`,
+        name: "Employment confirmation",
+        bodyHtml: "<p>Ref {{letter.reference}}</p><p>This confirms that {{employee.fullName}} ({{employee.code}}) works with us as {{employee.designation}}. Addressed to {{extra.addressedTo}}.</p><p>{{signatory.name}}</p>",
+        extraFields: [{ key: "addressedTo", label: "Addressed to", type: "text", required: false }],
+      });
+      expect(t.status).toBe(201);
+      freeId = t.body.id;
+      templateIds.push(freeId);
+    });
+    afterAll(async () => {
+      await purgeAppendOnly("HrCapabilitySwitch", { createdByUserId: people.director.userId });
+    });
+
+    it("the template list says, for each template, whether HR may issue it, and why not", async () => {
+      const list = (await as("hrAdmin").get("/api/letters/templates")).body as Array<{ id: string; payFree: { ok: boolean; reasons: string[] } }>;
+      expect(list.find((t) => t.id === freeId)!.payFree.ok).toBe(true);
+      const offer = list.find((t) => t.id === templateId)!; // the test offer letter carries a currency CTC field
+      expect(offer.payFree.ok).toBe(false);
+      expect(offer.payFree.reasons.join(" ")).toMatch(/currency/);
+    });
+
+    it("HR Admin and HR Executive issue a proven pay-free letter; a letter that could carry pay is refused with the reasons, and a director may issue both", async () => {
+      for (const who of ["hrAdmin", "hrExec"] as const) {
+        expect((await issue(who, people.report.employeeId, { templateId: freeId, extraValues: { addressedTo: "The Branch Manager" } })).status, who).toBe(202);
+        const refused = await issue(who, people.report.employeeId, { templateId, extraValues: { ctc: "1200000" } });
+        expect([refused.status, refused.body.error.code], who).toEqual([403, "PAY_LETTER_DIRECTOR_ONLY"]);
+        expect(refused.body.error.message).toMatch(/director has to issue it/);
+      }
+      expect((await issue("director", people.report.employeeId, { templateId, extraValues: { ctc: "1200000" } })).status).toBe(202);
+      expect((await issue("director", people.report.employeeId, { templateId: freeId, extraValues: {} })).status).toBe(202);
+    });
+
+    it("a pay figure typed into a text field of a pay-free letter is refused for HR", async () => {
+      for (const bad of ["₹ 5,00,000", "CTC 12 LPA", "salary 40000"]) {
+        const r = await issue("hrAdmin", people.report.employeeId, { templateId: freeId, extraValues: { addressedTo: bad } });
+        expect([r.status, r.body.error.code], bad).toEqual([403, "PAY_LETTER_DIRECTOR_ONLY"]);
+      }
+    });
+
+    it("editing a pay-free template into one that mentions pay takes it out of HR's hands at once (the proof is made at issue, from the current version)", async () => {
+      const saved = await as("director").post(`/api/letters/templates/${freeId}/versions`, {
+        bodyHtml: "<p>Dear {{employee.fullName}}, your salary is revised.</p>",
+        extraFields: [],
+      });
+      expect(saved.status).toBe(201);
+      const r = await issue("hrAdmin", people.report.employeeId, { templateId: freeId, extraValues: {} });
+      expect([r.status, r.body.error.code]).toEqual([403, "PAY_LETTER_DIRECTOR_ONLY"]);
+      await as("director").post(`/api/letters/templates/${freeId}/versions`, {
+        bodyHtml: "<p>This confirms that {{employee.fullName}} works with us. Addressed to {{extra.addressedTo}}.</p>",
+        extraFields: [{ key: "addressedTo", label: "Addressed to", type: "text", required: false }],
+      });
+    });
+
+    it("the switch: off closes every letter route for HR, on one named person opens it, and the others never had it", async () => {
+      await flip("OFF");
+      try {
+        for (const who of ["hrAdmin", "hrExec"] as const) {
+          expect((await issue(who, people.report.employeeId, { templateId: freeId, extraValues: {} })).status, who).toBe(403);
+          expect((await as(who).get(`/api/letters/employees/${people.report.employeeId}`)).status, who).toBe(403);
+          expect((await as(who).get("/api/letters/templates")).status, `${who} list: HR_ADMIN keeps template management`).toBe(who === "hrAdmin" ? 200 : 403);
+        }
+        expect((await issue("director", people.report.employeeId, { templateId: freeId, extraValues: {} })).status).toBe(202);
+      } finally {
+        await flip("DEFAULT");
+      }
+      expect((await issue("hrAdmin", people.report.employeeId, { templateId: freeId, extraValues: {} })).status).toBe(202);
+    });
+
+    it("an employee and a manager never issue a letter, and nobody below a director reissues or reproduces one", async () => {
+      for (const who of ["outsider", "manager"] as const) {
+        expect((await issue(who, people.report.employeeId, { templateId: freeId, extraValues: {} })).status, who).toBe(403);
+        expect((await as(who).get(`/api/letters/employees/${people.report.employeeId}`)).status, who).toBe(403);
+      }
+      const mine = await issue("hrAdmin", people.report.employeeId, { templateId: freeId, extraValues: {} });
+      for (const who of ["hrAdmin", "hrExec"] as const) {
+        expect((await as(who).post(`/api/letters/${mine.body.id}/reissue`, {})).status, who).toBe(403);
+        expect((await as(who).post(`/api/letters/${mine.body.id}/reproduce`)).status, who).toBe(403);
+      }
+    });
   });
 });
