@@ -14,14 +14,18 @@ const id = (req: Request) => req.params.id as string;
 const kind = (req: Request) => req.params.kind as AssetSettingKind;
 
 // Settings
-export async function getSettings(_req: Request, res: Response): Promise<void> {
-  res.status(200).json(await settings.getSettings());
+export async function getSettings(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await settings.getSettings(req.user!.userId));
 }
 export async function proposeSetting(req: Request, res: Response): Promise<void> {
   res.status(201).json(await settings.proposeSetting(kind(req), req.body, meta(req)));
 }
 export async function confirmSetting(req: Request, res: Response): Promise<void> {
   res.status(200).json(await settings.confirmSetting(kind(req), req.body, meta(req)));
+}
+
+export async function getLists(_req: Request, res: Response): Promise<void> {
+  res.status(200).json(await settings.inForceLists());
 }
 
 // Register

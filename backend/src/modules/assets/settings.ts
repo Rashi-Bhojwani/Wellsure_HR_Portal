@@ -15,7 +15,7 @@ export interface SettingVersionView {
   version: number;
   items: AssetSettingItem[];
   note: string;
-  enteredByUserId: string;
+  enteredByMe: boolean;
   enteredByName: string | null;
   enteredAt: string;
   confirmedByName: string | null;
@@ -76,6 +76,12 @@ export async function loadInForce(client: Prisma.TransactionClient | typeof pris
   };
 }
 
+/** The confirmed lists only (what the register's forms offer), for readers of the register who may not see the settings screen. */
+export async function inForceLists(): Promise<{ ready: boolean; missing: AssetSettingKind[]; categories: AssetSettingItem[]; statuses: AssetSettingItem[]; conditions: AssetSettingItem[] }> {
+  const { ready, missing, categories, statuses, conditions } = await loadInForce();
+  return { ready, missing, categories, statuses, conditions };
+}
+
 export const NOT_SET_UP_CODE = "ASSETS_NOT_SET_UP";
 
 export function assertReady(lists: InForceLists): void {
@@ -84,14 +90,14 @@ export function assertReady(lists: InForceLists): void {
   throw new HttpError(409, `The asset register is not set up yet: ${names} ${lists.missing.length === 1 ? "is" : "are"} Not set. HR Admin enters them and a director confirms them.`, NOT_SET_UP_CODE);
 }
 
-export async function getSettings(): Promise<AssetSettingsView> {
+export async function getSettings(viewerUserId: string): Promise<AssetSettingsView> {
   const versions = await prisma.assetSettingVersion.findMany({ orderBy: [{ kind: "asc" }, { version: "desc" }], include: { confirmation: true } });
   const names = await userNames(versions.flatMap((v) => [v.enteredByUserId, ...(v.confirmation ? [v.confirmation.confirmedByUserId] : [])]));
   const view = (v: (typeof versions)[number]): SettingVersionView => ({
     version: v.version,
     items: asItems(v.value),
     note: v.note,
-    enteredByUserId: v.enteredByUserId,
+    enteredByMe: v.enteredByUserId === viewerUserId,
     enteredByName: names.get(v.enteredByUserId) ?? null,
     enteredAt: v.enteredAt.toISOString(),
     confirmedByName: v.confirmation ? (names.get(v.confirmation.confirmedByUserId) ?? null) : null,
@@ -156,7 +162,7 @@ export async function proposeSetting(kind: AssetSettingKind, input: { items: Ass
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
   );
-  return (await getSettings()).kinds.find((k) => k.kind === kind)!;
+  return (await getSettings(meta.actorUserId)).kinds.find((k) => k.kind === kind)!;
 }
 
 export async function confirmSetting(kind: AssetSettingKind, input: { version: number; note?: string }, meta: ActorMeta): Promise<SettingKindView> {
@@ -172,5 +178,5 @@ export async function confirmSetting(kind: AssetSettingKind, input: { version: n
     const confirmation = await tx.assetSettingConfirmation.create({ data: { versionId: row.id, confirmedByUserId: meta.actorUserId, note: input.note ?? "" } });
     await writeAuditLogs([{ ...meta, action: "assets.setting.confirmed", entityType: "AssetSettingVersion", entityId: row.id, after: { kind, version: row.version, confirmationId: confirmation.id } }], tx);
   });
-  return (await getSettings()).kinds.find((k) => k.kind === kind)!;
+  return (await getSettings(meta.actorUserId)).kinds.find((k) => k.kind === kind)!;
 }

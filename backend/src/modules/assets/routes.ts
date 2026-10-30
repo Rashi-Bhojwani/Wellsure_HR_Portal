@@ -38,6 +38,7 @@ assetsRouter.get("/settings", settings, controller.getSettings);
 assetsRouter.post("/settings/:kind", settings, validate({ params: kindParamsSchema, body: proposeSettingSchema }), controller.proposeSetting);
 assetsRouter.post("/settings/:kind/confirm", settings, validate({ params: kindParamsSchema, body: confirmSettingSchema }), controller.confirmSetting);
 
+assetsRouter.get("/lists", view, controller.getLists);
 assetsRouter.get("/holders", manage, validate({ query: holdersQuerySchema }), controller.searchHolders);
 assetsRouter.get("/employees/:employeeId", view, validate({ params: employeeParamsSchema }), controller.listEmployeeAssets);
 assetsRouter.get("/", view, validate({ query: listQuerySchema }), controller.listAssets);

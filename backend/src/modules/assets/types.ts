@@ -49,7 +49,7 @@ export interface AssignmentView {
   issueNote: string | null;
   acknowledgedAt: string | null;
   endedAt: string | null;
-  endReason: "RETURNED" | "TRANSFERRED" | "LOST" | null;
+  endReason: "RETURNED" | "REASSIGNED" | "LOST" | null;
   returnCondition: CodeLabel | null;
   endNote: string | null;
 }
@@ -83,5 +83,5 @@ export interface MyAssetView {
   issueCondition: string;
   acknowledgedAt: string | null;
   endedAt: string | null;
-  endReason: "RETURNED" | "TRANSFERRED" | "LOST" | null;
+  endReason: "RETURNED" | "REASSIGNED" | "LOST" | null;
 }

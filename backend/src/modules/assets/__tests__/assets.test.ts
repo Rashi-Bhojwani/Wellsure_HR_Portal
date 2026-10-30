@@ -98,6 +98,10 @@ describe("asset register", () => {
       expect(byDirector.status).toBe(201);
       const self = await post("director", "/api/assets/settings/STATUSES/confirm", { version: 1 });
       expect(self.status).toBe(403);
+      const notDirector = await post("hrAdmin", "/api/assets/settings/STATUSES/confirm", { version: 1 }); // HR Admin did not enter this one: refused as a non-director
+      expect(notDirector.status).toBe(403);
+      expect(JSON.stringify(notDirector.body)).toContain("DIRECTORS_ONLY");
+      expect(JSON.stringify(self.body)).toContain("SAME_PERSON");
       expect((await post("director2", "/api/assets/settings/STATUSES/confirm", { version: 1 })).status).toBe(200);
       expect((await post("director", "/api/assets/settings/CATEGORIES/confirm", { version: 1 })).status).toBe(200);
       expect((await post("director", "/api/assets/settings/CATEGORIES/confirm", { version: 1 })).status).toBe(409); // already confirmed
@@ -116,10 +120,12 @@ describe("asset register", () => {
       expect((await post("hrAdmin", "/api/assets/settings/CONDITIONS", { items: [CONDITIONS[0], CONDITIONS[0]] })).status).toBe(400);
     });
 
-    it("with all three confirmed the register is ready", async () => {
+    it("with all three confirmed the register is ready, and its readers see the confirmed lists (not the pending ones)", async () => {
       expect((await post("hrAdmin", "/api/assets/settings/CONDITIONS", { items: CONDITIONS })).status).toBe(201);
+      expect((await get("hrExec", "/api/assets/lists")).body).toMatchObject({ ready: false, missing: ["CONDITIONS"], conditions: [] });
       expect((await post("director2", "/api/assets/settings/CONDITIONS/confirm", { version: 1 })).status).toBe(200);
       expect((await get("hrAdmin", "/api/assets/settings")).body).toMatchObject({ ready: true, missing: [] });
+      expect((await get("hrExec", "/api/assets/lists")).body).toMatchObject({ ready: true, categories: CATEGORIES, conditions: CONDITIONS });
     });
 
     it("a new version cannot drop a code an asset still uses", async () => {
@@ -136,6 +142,7 @@ describe("asset register", () => {
       ["GET /api/assets/:id", () => (w) => get(w, `/api/assets/${assetId}`)],
       ["GET /api/assets/employees/:employeeId", () => (w) => get(w, `/api/assets/employees/${p.employee.employeeId}`)],
       ["GET /api/assets/holders", () => (w) => get(w, "/api/assets/holders?q=TEST")],
+      ["GET /api/assets/lists", () => (w) => get(w, "/api/assets/lists")],
       ["POST /api/assets", () => (w) => post(w, "/api/assets", {})], // 400 on input once let in
       ["PATCH /api/assets/:id", () => (w) => patch(w, `/api/assets/${assetId}`, {})],
       ["POST /api/assets/:id/issue", () => (w) => post(w, `/api/assets/${assetId}/issue`, {})],
@@ -232,7 +239,7 @@ describe("asset register", () => {
       expect(moved.body.holder).toMatchObject({ employeeId: p.other.employeeId });
       expect(await openRows(assetId)).toBe(1);
       const ended = await prisma.assetAssignment.findFirstOrThrow({ where: { assetId, employeeId: p.employee.employeeId } });
-      expect(ended.endReason).toBe("TRANSFERRED");
+      expect(ended.endReason).toBe("REASSIGNED");
       expect(await prisma.notification.count({ where: { type: "assets.transferred", userId: { in: [p.employee.userId, p.other.userId] } } })).toBeGreaterThanOrEqual(2);
       expect((await post("hrExec", `/api/assets/${assetId}/transfer`, { toEmployeeId: p.other.employeeId, conditionCode: "DEMO_GOOD" })).status).toBe(409);
     });
@@ -266,7 +273,7 @@ describe("asset register", () => {
       await post("hrExec", `/api/assets/${assetId}/issue`, { employeeId: p.employee.employeeId, conditionCode: "DEMO_WORN" });
       await post("hrExec", `/api/assets/${assetId}/lost`, { statusCode: "DEMO_GONE", note: "DEMO gone" });
       const events = await prisma.assetEvent.findMany({ where: { assetId }, orderBy: { at: "asc" } });
-      expect(events.map((e) => e.kind)).toEqual(["CREATED", "EDITED", "ISSUED", "ACKNOWLEDGED", "DAMAGED", "TRANSFERRED", "RETURNED", "ISSUED", "LOST"]);
+      expect(events.map((e) => e.kind)).toEqual(["CREATED", "EDITED", "ISSUED", "ACKNOWLEDGED", "DAMAGED", "REASSIGNED", "RETURNED", "ISSUED", "LOST"]);
       const audits = await prisma.auditLog.findMany({ where: { entityType: "Asset", entityId: assetId } });
       expect(audits.map((a) => a.action).sort()).toEqual(events.map((e) => `assets.${e.kind.toLowerCase()}`).sort());
       for (const a of audits) expect(a.actorUserId).toBeTruthy();

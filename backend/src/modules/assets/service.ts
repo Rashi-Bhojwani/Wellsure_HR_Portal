@@ -383,14 +383,14 @@ export async function transferAsset(id: string, input: { toEmployeeId: string; c
       if (current.employeeId === input.toEmployeeId) throw new HttpError(409, "The asset is already with this person.", "SAME_HOLDER");
       const to = await activeEmployeeInScope(tx, input.toEmployeeId, viewer);
       const now = new Date(); // allow-clock: an instant
-      await tx.assetAssignment.update({ where: { id: current.id }, data: { endedAt: now, endedByUserId: meta.actorUserId, endReason: "TRANSFERRED", endNote: input.note ?? null } });
+      await tx.assetAssignment.update({ where: { id: current.id }, data: { endedAt: now, endedByUserId: meta.actorUserId, endReason: "REASSIGNED", endNote: input.note ?? null } });
       const next = await tx.assetAssignment.create({
         data: { assetId: id, employeeId: to.id, issuedAt: now, issuedByUserId: meta.actorUserId, issueConditionCode: input.conditionCode, issueNote: input.note ?? null },
       });
       await record(
         tx,
         meta,
-        { assetId: id, kind: "TRANSFERRED", assignmentId: next.id, employeeId: to.id, conditionCode: input.conditionCode, note: input.note ?? null, details: { fromAssignmentId: current.id, fromEmployeeId: current.employeeId } },
+        { assetId: id, kind: "REASSIGNED", assignmentId: next.id, employeeId: to.id, conditionCode: input.conditionCode, note: input.note ?? null, details: { fromAssignmentId: current.id, fromEmployeeId: current.employeeId } },
       );
       return { from: current.employeeId, to, asset: current.asset };
     })

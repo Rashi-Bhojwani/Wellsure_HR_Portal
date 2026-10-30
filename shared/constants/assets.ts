@@ -12,7 +12,7 @@ export const ASSET_SETTING_LABELS: Record<AssetSettingKind, { label: string; wha
   CONDITIONS: { label: "Conditions", what: "How an asset's condition is recorded when it is issued, returned or reported damaged." },
 };
 
-export const ASSET_EVENT_KINDS = ["CREATED", "EDITED", "ISSUED", "ACKNOWLEDGED", "RETURNED", "TRANSFERRED", "LOST", "DAMAGED"] as const;
+export const ASSET_EVENT_KINDS = ["CREATED", "EDITED", "ISSUED", "ACKNOWLEDGED", "RETURNED", "REASSIGNED", "LOST", "DAMAGED"] as const;
 export type AssetEventKind = (typeof ASSET_EVENT_KINDS)[number];
 
 export const ASSET_EVENT_LABELS: Record<AssetEventKind, string> = {
@@ -21,12 +21,12 @@ export const ASSET_EVENT_LABELS: Record<AssetEventKind, string> = {
   ISSUED: "Issued",
   ACKNOWLEDGED: "Receipt acknowledged",
   RETURNED: "Returned",
-  TRANSFERRED: "Transferred",
+  REASSIGNED: "Transferred",
   LOST: "Reported lost",
   DAMAGED: "Reported damaged",
 };
 
-export const ASSET_END_REASONS = ["RETURNED", "TRANSFERRED", "LOST"] as const;
+export const ASSET_END_REASONS = ["RETURNED", "REASSIGNED", "LOST"] as const;
 export type AssetEndReason = (typeof ASSET_END_REASONS)[number];
 
 /** One entry of a setting list. `issuable` is used by statuses only. */

@@ -3131,7 +3131,7 @@ enum AssetSettingKind {
 
 enum AssetAssignmentEndReason {
   RETURNED
-  TRANSFERRED
+  REASSIGNED
   LOST
 }
 
@@ -3141,7 +3141,7 @@ enum AssetEventKind {
   ISSUED
   ACKNOWLEDGED
   RETURNED
-  TRANSFERRED
+  REASSIGNED
   LOST
   DAMAGED
 }

@@ -542,6 +542,7 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/assets/settings": admin,
   "POST /api/assets/settings/:kind": admin,
   "POST /api/assets/settings/:kind/confirm": adminInService("assets.settings.manage, and the confirmer must be a director who did not enter the version (service + database trigger)"),
+  "GET /api/assets/lists": admin,
   "GET /api/assets/holders": admin,
   "GET /api/assets/employees/:employeeId": admin,
   "GET /api/assets": admin,
