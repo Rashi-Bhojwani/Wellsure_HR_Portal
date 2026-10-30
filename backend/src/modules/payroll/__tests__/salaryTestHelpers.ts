@@ -42,7 +42,7 @@ export const REVISION_DAY = "2026-04-01";
 
 export async function setRule(actorUserId: string, key: string, value: unknown): Promise<void> {
   const preview = await previewEdit(key, value);
-  await editRule(key, { value, note: "test", fingerprint: preview.fingerprint }, { userId: actorUserId });
+  await editRule(key, { value, note: "test", sourceNote: "test fixture: a made-up source", effectiveFrom: "2026-04-01", fingerprint: preview.fingerprint }, { userId: actorUserId });
 }
 
 export async function makeComponent(world: Pick<SalaryWorld, "maker" | "checkerA">, code: string, over: Record<string, unknown> = {}, confirm = true): Promise<void> {

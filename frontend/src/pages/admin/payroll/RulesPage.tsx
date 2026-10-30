@@ -200,6 +200,7 @@ function RuleStatusCell({ r, hideChip }: { r: RuleView; hideChip?: boolean }) {
         </Tooltip>
       )}
       {r.sourceLabel && <Caption tone={r.status === "PLACEHOLDER" ? "warning" : undefined}>{r.sourceLabel}</Caption>}
+      {r.current?.sourceNote && <Caption>Source: {r.current.sourceNote}{r.current.effectiveFrom ? ` (applies from ${formatDate(r.current.effectiveFrom)})` : ""}</Caption>}
       {r.lastConfirmed && <Caption>Last confirmed value: {formatRuleValue(r.shape, r.lastConfirmed.value)}</Caption>}
       {hideChip && !r.openQuestion && !r.sourceLabel && !r.lastConfirmed && "—"}
     </Space>
@@ -232,6 +233,11 @@ function EditModal({ rule, onClose, onSaved }: { rule: RuleView; onClose: () => 
   // An owner's secret is never put back in the box: whoever edits it types the new value.
   const [state, setState] = useState<InputState>(() => initialInputState(rule.shape, rule.sealed ? null : (rule.current?.value ?? null)));
   const [note, setNote] = useState("");
+  // A statutory figure is entered with a note of where it came from and the date it applies from; the director who confirms it checks the value against them.
+  const [sourceNote, setSourceNote] = useState("");
+  const [effectiveFrom, setEffectiveFrom] = useState("");
+  const needsSource = rule.origin === "STATUTORY" && !rule.sealed;
+  const sourceOk = !needsSource || (sourceNote.trim().length >= 10 && /^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom));
   const [problem, setProblem] = useState<string | null>(null);
   const submitted = toSubmitValue(rule.shape, state);
 
@@ -246,7 +252,7 @@ function EditModal({ rule, onClose, onSaved }: { rule: RuleView; onClose: () => 
   const save = useMutation({
     mutationFn: () => {
       if (!submitted.ok || !preview.data) throw new Error("Preview first.");
-      return payrollApi.saveRule(rule.key, { value: submitted.value, note, fingerprint: preview.data.fingerprint });
+      return payrollApi.saveRule(rule.key, { value: submitted.value, note, ...(sourceNote.trim() ? { sourceNote: sourceNote.trim() } : {}), ...(effectiveFrom ? { effectiveFrom } : {}), fingerprint: preview.data.fingerprint });
     },
     onSuccess: () => {
       toast.success(`${rule.label} saved as an unconfirmed value. A director has to confirm it before a real run can use it.`);
@@ -271,7 +277,7 @@ function EditModal({ rule, onClose, onSaved }: { rule: RuleView; onClose: () => 
         p ? (
           <DrawerFooter>
             <Button size="large" onClick={() => preview.reset()} style={{ flex: 1 }}>Back</Button>
-            <Button size="large" type="primary" loading={save.isPending} disabled={p.unchanged} onClick={() => save.mutate()} style={{ flex: 1 }}>
+            <Button size="large" type="primary" loading={save.isPending} disabled={p.unchanged || !sourceOk} onClick={() => save.mutate()} style={{ flex: 1 }}>
               Save as an unconfirmed value
             </Button>
           </DrawerFooter>
@@ -296,6 +302,19 @@ function EditModal({ rule, onClose, onSaved }: { rule: RuleView; onClose: () => 
               <RuleValueInput shape={rule.shape} value={state} onChange={(val) => { setState(val); setProblem(null); }} autoFocus />
             </div>
             {!submitted.ok && <InfoHint>{submitted.problem}</InfoHint>}
+            {needsSource && (
+              <>
+                <div>
+                  <div style={{ fontWeight: fw.medium, marginBottom: 6 }}>Where this number came from (required)</div>
+                  <Input.TextArea value={sourceNote} onChange={(e) => setSourceNote(e.target.value)} rows={2} maxLength={500} aria-label="Source note" placeholder="For example: the notification, circular or letter, with its date and paragraph" />
+                </div>
+                <div>
+                  <div style={{ fontWeight: fw.medium, marginBottom: 6 }}>Applies from (required)</div>
+                  <Input type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} aria-label="Applies from" style={{ maxWidth: 220 }} />
+                </div>
+                <InfoHint>Nothing is filled in for you. A different director confirms this value against the source you note here.</InfoHint>
+              </>
+            )}
             <InfoHint>Affects: {rule.affects}</InfoHint>
           </>
         ) : (
@@ -371,19 +390,21 @@ function ConfirmModal({ rule, onClose, onDone }: { rule: RuleView; onClose: () =
             { key: "value", label: "Value", children: <Text strong>{formatRuleValue(rule.shape, preview.value)}</Text> },
             { key: "source", label: "Where it came from", children: <Text type={preview.sourceLabel?.startsWith("From memory") ? "danger" : undefined} strong={!!preview.sourceLabel?.startsWith("From memory")}>{preview.sourceLabel}</Text> },
             { key: "who", label: "Entered by", children: preview.authorName },
+            { key: "src", label: "Source note", children: preview.sourceNote || <Text type="secondary">None given</Text> },
+            { key: "from", label: "Applies from", children: preview.effectiveFrom ? formatDate(preview.effectiveFrom) : <Text type="secondary">Not given</Text> },
             { key: "ver", label: "Version", children: preview.version },
             { key: "affects", label: "What it affects", children: rule.affects },
           ]} />
           <CheckersNote checkers={preview.checkers} />
           {mustRetype ? (
             <div>
-              <Alert type="info" showIcon title="This is a statutory figure. Confirming means checking it against its source." description="Open the source (the CA's letter, the notification, the circular) and type the value in below from there. Do not copy it from this screen. If it does not match, nothing is confirmed." style={{ marginBottom: 8 }} />
+              <Alert type="info" showIcon title="This is a statutory figure. Confirming means checking it against its source." description="Open the source (the notification, the circular, the letter) and type the value in below from there. Do not copy it from this screen. If it does not match, nothing is confirmed." style={{ marginBottom: 8 }} />
               <RuleValueInput shape={rule.shape} value={typed} onChange={(val) => { setTyped(val); setProblem(null); }} autoFocus />
             </div>
           ) : (
             <Text type="secondary">Check the value above against your source before confirming.</Text>
           )}
-          <Input.TextArea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={500} aria-label="What you checked it against" placeholder="What you checked it against, for example “CA's letter dated 14 Oct” (required)" />
+          <Input.TextArea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={500} aria-label="What you checked it against" placeholder="What you checked it against, for example “the notification dated 14 Oct” (required)" />
           {problem && <Alert type="error" showIcon title={problem} />}
         </Space>
       )}
@@ -420,6 +441,7 @@ function HistoryDrawer({ rule, onClose }: { rule: RuleView; onClose: () => void 
             detail: (
               <>
                 {h.note && <div style={{ color: v.textSecondary }}>“{h.note}”</div>}
+                {h.sourceNote && <div style={{ color: v.textSecondary }}>Source: {h.sourceNote}{h.effectiveFrom ? ` (applies from ${formatDate(h.effectiveFrom)})` : ""}</div>}
                 {h.confirmation && (
                   <Text type="success">
                     Confirmed by {h.confirmation.confirmedByName} on {formatDate(h.confirmation.confirmedAt)}: “{h.confirmation.note}”

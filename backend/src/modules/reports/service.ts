@@ -66,7 +66,7 @@ export async function exportReport(key: ReportKey, q: ReportQuery, viewer: Repor
     ...(r.scope === "team" ? ["Team only: limited to the people in your data scope."] : []),
     ...r.filtersApplied,
     ...r.warnings,
-    ...(r.rateProvisional ? ["The encashment daily rate is provisional, pending CA confirmation of the formula and its tax treatment (spec §5.2)."] : []),
+    ...(r.rateProvisional ? ["The encashment daily rate is provisional, pending the owners' confirmation of the formula and its tax treatment (spec §5.2)."] : []),
     ...r.notes,
   ];
   const buffer = await buildXlsx([

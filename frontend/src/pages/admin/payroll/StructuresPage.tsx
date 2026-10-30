@@ -341,7 +341,7 @@ function StructureEditor({ initial, onClose, onSaved }: { initial: { code: strin
             <ApprovalBanner tone="info" title={p.impact} />
             <Form layout="vertical" component="div">
               <Form.Item label="Why this, and where it came from" htmlFor="structure-note" extra="Optional, but the person who confirms it will want it." style={{ marginBottom: 0 }}>
-                <Input.TextArea id="structure-note" value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={500} placeholder="For example: as agreed with the CA" />
+                <Input.TextArea id="structure-note" value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={500} placeholder="For example: as agreed with the owners, in the offer letters" />
               </Form.Item>
             </Form>
           </Stack>

@@ -145,7 +145,7 @@ export async function previewEdit(key: string, rawValue: unknown): Promise<EditP
   };
 }
 
-export async function editRule(key: string, input: { value: unknown; note?: string; fingerprint: string }, actor: { userId: string; ip?: string | null; userAgent?: string | null }): Promise<RuleView> {
+export async function editRule(key: string, input: { value: unknown; note?: string; sourceNote?: string; effectiveFrom?: string; fingerprint: string }, actor: { userId: string; ip?: string | null; userAgent?: string | null }): Promise<RuleView> {
   const def = defOf(key);
   const value = canonicalValue(key, input.value);
   const valueHash = hashOf(def, value);
@@ -156,7 +156,15 @@ export async function editRule(key: string, input: { value: unknown; note?: stri
     throw new HttpError(409, "This changed since you previewed it (somebody else edited the rule, or the value is different). Preview it again.", "PREVIEW_STALE");
   }
   const note = (input.note ?? "").trim().slice(0, 500);
-  await appendVersion(KIND, AUDIT, { key, value: def.sensitiveClass ? seal(value) : value, valueHash, note, before: summarise(await loadItems(KIND, [key]), key), maskForAudit: maskFor(def) }, actor);
+  // No CA: a statutory figure is entered with a note of where it came from and the date it starts to apply; the other director confirms it against that note.
+  const sourceNote = (input.sourceNote ?? "").trim().slice(0, 500);
+  const effectiveFrom = input.effectiveFrom?.trim() || null;
+  if (def.origin === "STATUTORY" && !def.sensitiveClass) {
+    if (sourceNote.length < 10) throw new HttpError(400, "Say where this number came from (the notification, circular or letter, and its date): a few words at least. The director who confirms it checks it against that.", "SOURCE_NOTE_REQUIRED");
+    if (!effectiveFrom) throw new HttpError(400, "Say from which date this number applies.", "EFFECTIVE_FROM_REQUIRED");
+  }
+  if (effectiveFrom && !/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom)) throw new HttpError(400, "The date it applies from must be a date (YYYY-MM-DD).", "VALIDATION_ERROR");
+  await appendVersion(KIND, AUDIT, { key, value: def.sensitiveClass ? seal(value) : value, valueHash, note, sourceNote, effectiveFrom, before: summarise(await loadItems(KIND, [key]), key), maskForAudit: maskFor(def) }, actor);
   return (await getRule(key)).rule;
 }
 
@@ -172,6 +180,9 @@ export interface ConfirmPreview {
   sourceLabel: string | null;
   requiresRetype: boolean;
   authorName: string;
+  /** Where the author says the number came from, and the date it applies from: the confirmer checks the value against this. */
+  sourceNote: string;
+  effectiveFrom: string | null;
   /** The reason the actor cannot confirm, if they cannot. */
   blocked: string | null;
   checkers: CheckerAvailability;
@@ -184,7 +195,7 @@ export async function previewConfirm(key: string, actorUserId: string): Promise<
   const summary = summarise(data, key);
   const p = await previewConfirmation("RULE_CONFIRM", KIND, key, summary, actorUserId, def.sensitiveClass ? "payroll.identifiers.confirm" : undefined);
   const open = openQuestionFor(def, summary.current?.value);
-  return { key, label: def.label, ...p, value: def.sensitiveClass ? HIDDEN : p.value, blocked: open ? `This cannot be confirmed yet. ${open.question}` : p.blocked, requiresRetype: def.origin === "STATUTORY" || Boolean(def.sensitiveClass) };
+  return { key, label: def.label, ...p, sourceNote: summary.current?.sourceNote ?? "", effectiveFrom: summary.current?.effectiveFrom ?? null, value: def.sensitiveClass ? HIDDEN : p.value, blocked: open ? `This cannot be confirmed yet. ${open.question}` : p.blocked, requiresRetype: def.origin === "STATUTORY" || Boolean(def.sensitiveClass) };
 }
 
 export async function confirmRule(

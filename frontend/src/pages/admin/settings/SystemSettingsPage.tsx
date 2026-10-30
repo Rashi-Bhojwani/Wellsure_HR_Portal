@@ -110,7 +110,7 @@ function LeaveSettingsCard() {
     <SettingsSection title="Year-end PL encashment" isLoading={isLoading || (!data && !error)} error={error} onRetry={() => void refetch()} fields={1}>
       {data && (
         <Form form={form} layout="vertical" initialValues={data} onFinish={(values) => saveMutation.mutate(values)} requiredMark={false}>
-          <SectionIntro>One flat rupee amount per encashed leave day, used by Year End Process — pending CA confirmation of both the rate and its tax treatment (spec §5.2).</SectionIntro>
+          <SectionIntro>One flat rupee amount per encashed leave day, used by Year End Process — pending the owners' confirmation of both the rate and its tax treatment (spec §5.2).</SectionIntro>
           <Row gutter={[24, 0]}>
             <Col {...half}>
               <Form.Item name="encashmentDefaultDailyRate" label="Default daily rate (₹)">

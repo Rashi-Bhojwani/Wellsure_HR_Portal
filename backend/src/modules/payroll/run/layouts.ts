@@ -22,11 +22,11 @@ export interface LayoutItem {
 }
 
 export const LAYOUT_ITEMS: readonly LayoutItem[] = [
-  { key: "BANK_TEMPLATE", itemKind: "BANK_TEMPLATE", layoutKind: "BANK", label: "Bank file", description: "The layout of the file HR uploads to the bank's net banking, from the bank's own specification or a sample file.", whoConfirms: "HR, against the bank's specification" },
-  { key: "PF_ECR", itemKind: "OUTPUT_TEMPLATE", layoutKind: "PF_ECR", label: "PF return (ECR)", description: "The provident fund file, from the layout the PF portal currently accepts.", whoConfirms: "Your CA, against a file the portal accepted" },
-  { key: "ESI", itemKind: "OUTPUT_TEMPLATE", layoutKind: "ESI", label: "ESI contribution file", description: "The ESI file, from the layout the ESI portal currently accepts.", whoConfirms: "Your CA, against a file the portal accepted" },
-  { key: "PT", itemKind: "OUTPUT_TEMPLATE", layoutKind: "PT", label: "Professional tax statement", description: "The professional tax statement, in the layout your state asks for.", whoConfirms: "Your CA" },
-  { key: "LWF", itemKind: "OUTPUT_TEMPLATE", layoutKind: "LWF", label: "Labour welfare fund statement", description: "The labour welfare fund statement, in the layout your state asks for.", whoConfirms: "Your CA" },
+  { key: "BANK_TEMPLATE", itemKind: "BANK_TEMPLATE", layoutKind: "BANK", label: "Bank file", description: "The layout of the file HR uploads to the bank's net banking, from the bank's own specification or a sample file.", whoConfirms: "A different director, against the bank's specification" },
+  { key: "PF_ECR", itemKind: "OUTPUT_TEMPLATE", layoutKind: "PF_ECR", label: "PF return (ECR)", description: "The provident fund file, from the layout the PF portal currently accepts.", whoConfirms: "A different director, against a file the portal accepted" },
+  { key: "ESI", itemKind: "OUTPUT_TEMPLATE", layoutKind: "ESI", label: "ESI contribution file", description: "The ESI file, from the layout the ESI portal currently accepts.", whoConfirms: "A different director, against a file the portal accepted" },
+  { key: "PT", itemKind: "OUTPUT_TEMPLATE", layoutKind: "PT", label: "Professional tax statement", description: "The professional tax statement, in the layout your state asks for.", whoConfirms: "A different director" },
+  { key: "LWF", itemKind: "OUTPUT_TEMPLATE", layoutKind: "LWF", label: "Labour welfare fund statement", description: "The labour welfare fund statement, in the layout your state asks for.", whoConfirms: "A different director" },
 ];
 
 const itemOf = (key: string): LayoutItem => {

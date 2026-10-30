@@ -10,6 +10,9 @@ export interface VersionView {
   value: unknown;
   valueHash: string;
   note: string;
+  /** Where the number came from, in the author's words, and the date it applies from (a statutory rule has both). */
+  sourceNote?: string;
+  effectiveFrom?: string | null;
   authorUserId: string | null;
   authorName: string;
   createdAt: string;
@@ -69,6 +72,8 @@ export interface ConfirmPreview {
   sourceLabel: string | null;
   requiresRetype: boolean;
   authorName: string;
+  sourceNote?: string;
+  effectiveFrom?: string | null;
   blocked: string | null;
   checkers: CheckerAvailability;
   fingerprint: string;
@@ -91,7 +96,7 @@ export async function getRule(key: string): Promise<{ rule: RuleView; history: V
 export async function previewRuleEdit(key: string, value: unknown): Promise<EditPreview> {
   return (await apiClient.post<EditPreview>(`${base}/rules/${key}/edit-preview`, { value })).data;
 }
-export async function saveRule(key: string, body: { value: unknown; note: string; fingerprint: string }): Promise<RuleView> {
+export async function saveRule(key: string, body: { value: unknown; note: string; sourceNote?: string; effectiveFrom?: string; fingerprint: string }): Promise<RuleView> {
   return (await apiClient.put<RuleView>(`${base}/rules/${key}`, body)).data;
 }
 export async function revealRule(key: string): Promise<{ key: string; version: number; value: unknown }> {
