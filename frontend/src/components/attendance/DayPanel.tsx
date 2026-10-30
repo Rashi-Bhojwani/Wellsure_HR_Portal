@@ -273,11 +273,11 @@ function DayBody({ data, self, onAsk, onCancel, cancelling }: { data: DayDetail;
       {data.capture === "DEVICE" && (
         <Section title="Punches">
           {data.punches?.length ? (
-            <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: space[2] }}>
+            <ol data-testid="day-punches" style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: space[2] }}>
               {data.punches.map((p) => {
                 const used = p.role === "FIRST_IN" || p.role === "LAST_OUT" || p.role === "ONLY";
                 return (
-                  <li key={p.id} style={{ display: "flex", gap: space[3], alignItems: "baseline", flexWrap: "wrap", fontSize: fs.table }}>
+                  <li key={p.id} data-testid="day-punch" data-device={p.device} data-time={p.time} style={{ display: "flex", gap: space[3], alignItems: "baseline", flexWrap: "wrap", fontSize: fs.table }}>
                     <span className="ws-num" style={{ fontWeight: fw.semibold, color: v.textPrimary, minWidth: 64 }}>
                       {p.time}
                     </span>
