@@ -23,7 +23,10 @@ encoding-only `frontend/package.json` description line (PEEPS_PLAN §0.2, Q-F3).
 5. Placeholder/Confirmed exists only inside payroll → Peeps gets its own small store.
 6. `peeps_` migration folders sort after every timestamped one (PEEPS_PLAN §0.8, §C.3).
 
-**Checkpoint run (after merging the base).** SUITE_RESULT
+**Checkpoint run (after merging the base).** Full backend suite run alone on `2a4fad1` against a local Postgres 16 /
+Redis 7: **172 files, 1,651 tests, all passed** (about 17 minutes). Frontend checks were not run: this stage changes only
+docs, and the merge brought no frontend change except the encoding-only `package.json` description line. Note for later
+sessions: start `redis-server` outside the repo root, because the repo tracks a `dump.rdb` that a local Redis overwrites.
 
 **Decided by me.** Merge instead of reset (no force-push); `frontend/src/features/<name>/` created as the
 prompt says although existing screens use `pages/`; readings of "leave extension", "Unmute" and "insights"
