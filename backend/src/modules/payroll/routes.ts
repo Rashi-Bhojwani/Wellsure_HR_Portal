@@ -86,6 +86,8 @@ payrollRouter.post("/salary/revisions/:id/decision", approve, validate({ params:
 payrollRouter.post("/salary/revisions/:id/apply", edit, validate({ params: v.idParamsSchema }), salary.revisionApply);
 
 payrollRouter.get("/adjustments", view, validate({ query: v.adjustmentListSchema }), salary.adjustments);
+payrollRouter.post("/lop-corrections/preview", edit, validate({ body: v.lopCorrectionPreviewSchema }), salary.lopCorrectionPreview);
+payrollRouter.post("/lop-corrections", edit, validate({ body: v.lopCorrectionAddSchema }), salary.lopCorrectionAdd);
 payrollRouter.post("/adjustments/preview", edit, validate({ body: v.adjustmentPreviewSchema }), salary.adjustmentPreview);
 payrollRouter.post("/adjustments", edit, validate({ body: v.adjustmentAddSchema }), salary.adjustmentAdd);
 payrollRouter.post("/adjustments/:id/cancel", edit, validate({ params: v.idParamsSchema, body: v.adjustmentCancelSchema }), salary.adjustmentCancel);

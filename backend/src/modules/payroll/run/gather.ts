@@ -49,6 +49,12 @@ function clip(seg: { from: Date; to: Date }, span: { from: Date; to: Date }): { 
   return from > to ? null : { from, to };
 }
 
+/** The per-head amounts an adjustment carries: an arrears row stores an array; a loss-of-pay reversal stores them under `lines`, beside the days it covers. */
+function breakdownOf(a: { source: string; breakdown: unknown }): Array<{ component: string; amount: Money }> {
+  const raw = a.source === "LOP_REVERSAL" ? ((a.breakdown as { lines?: unknown } | null)?.lines ?? []) : (a.breakdown ?? []);
+  return (raw as Array<{ component: string; amount: string }>).map((p) => ({ component: p.component, amount: dec(p.amount) }));
+}
+
 export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promise<RunInputs> {
   const employees = await prisma.employee.findMany({
     where: employedBetween(cycle.start, cycle.end),
@@ -123,10 +129,25 @@ export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promi
   for (const row of periodRows.values()) for (const l of row.lines) codes.add(l.componentCode);
   for (const a of pendingAdjustments) {
     codes.add(a.componentCode);
-    for (const part of (a.breakdown as Array<{ component: string }> | null) ?? []) codes.add(part.component);
+    for (const part of breakdownOf(a)) codes.add(part.component);
   }
   if (codes.size > MAX_CODES) throw new Error("A run reads more salary components than any structure could hold");
-  const versionRows = codes.size ? await prisma.payrollItemVersion.findMany({ where: { kind: "COMPONENT" as PayrollItemKind, key: { in: [...codes] } }, orderBy: [{ key: "asc" }, { version: "asc" }] }) : [];
+  const loadVersions = (keys: Iterable<string>) => prisma.payrollItemVersion.findMany({ where: { kind: "COMPONENT" as PayrollItemKind, key: { in: [...keys] } }, orderBy: [{ key: "asc" }, { version: "asc" }] });
+  let versionRows = codes.size ? await loadVersions(codes) : [];
+  // A loss-of-pay reversal line is carried under its head's reversal head, so the heads a reversal names are read as well.
+  const reversalCodes = new Set<string>();
+  for (const a of pendingAdjustments) {
+    if (a.source !== "LOP_REVERSAL") continue;
+    for (const part of breakdownOf(a)) {
+      const latest = versionRows.filter((v) => v.key === part.component).at(-1);
+      const link = (latest?.value as { reversalHead?: string } | undefined)?.reversalHead;
+      if (link && !codes.has(link)) reversalCodes.add(link);
+    }
+  }
+  if (reversalCodes.size) {
+    for (const c of reversalCodes) codes.add(c);
+    versionRows = await loadVersions(codes);
+  }
   const byVersion = new Map<string, ComponentValue>();
   const componentHashes = new Map<string, string>();
   const current = new Map<string, { version: number; value: ComponentValue }>();
@@ -167,6 +188,7 @@ export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promi
   const people: PersonInput[] = [];
   let arrears = false;
   let encashment = false;
+  let reversals = false;
   for (const e of employees) {
     const span = spans.get(e.id)!;
     const segments: SegmentInput[] = [];
@@ -197,10 +219,11 @@ export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promi
         amount: dec(a.amount.toString()),
         reason: a.reason,
         periodLabel: a.periodStart ? `${iso(a.periodStart)} to ${iso(a.periodEnd ?? a.periodStart)}` : undefined,
-        breakdown: ((a.breakdown as Array<{ component: string; amount: string }> | null) ?? []).map((p) => ({ component: p.component, amount: dec(p.amount) })),
+        breakdown: breakdownOf(a),
       }));
     adjustments.push(...(encashmentsByEmployee.get(e.id) ?? []));
-    if (adjustments.some((a) => a.source === "SALARY_ARREARS")) arrears = true;
+    if (adjustments.some((a) => a.source === "SALARY_ARREARS" || a.source === "LOP_REVERSAL")) arrears = true; // a reversal follows the same PF and ESI rule
+    if (adjustments.some((a) => a.source === "LOP_REVERSAL")) reversals = true;
     if (adjustments.some((a) => a.source === "YEAR_END_ENCASHMENT")) encashment = true;
 
     const pr = periodRows.get(e.id);
@@ -224,7 +247,7 @@ export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promi
       esiPeriodStartEntitlement,
     });
   }
-  return { cycle, payrollMonth, payrollYear, paymentDate, people, components, needs: { arrears, encashment }, componentHashes, encashmentsNotThisCycle };
+  return { cycle, payrollMonth, payrollYear, paymentDate, people, components, needs: { arrears, encashment, reversals }, componentHashes, encashmentsNotThisCycle };
 }
 
 /** A fingerprint of everything gathered, so a resumed or repeated calculation can tell whether the world moved, and a confirm can tell that what was previewed is still true. */

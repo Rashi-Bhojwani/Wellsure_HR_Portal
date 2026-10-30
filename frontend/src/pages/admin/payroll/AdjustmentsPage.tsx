@@ -10,6 +10,7 @@ import { formatDate } from "../../../lib/dates";
 import { formatRupees } from "../../../lib/money";
 import { ApprovalBanner, ConfirmModal, DataTable, EmptyState, FilterBar, KeyValueGrid, PageHeader, Panel, SideDrawer, Stack, StatusChip, toast, type ChipTone } from "../../../ui";
 import { Caption, Num, PersonCell } from "../../../components/payroll/payrollUi";
+import { LopCorrectionDrawer } from "./LopCorrectionDrawer";
 import { space } from "../../../theme/tokens";
 
 // Payroll → Adjustments (Phase 6 P6-2). One-off earnings and deductions HR adds before a run, and the arrears a back-dated salary revision made. Adding one is
@@ -32,6 +33,7 @@ export function AdjustmentsPage() {
   const [status, setStatus] = useState<StatusFilter>("PENDING");
   const [page, setPage] = useState(1);
   const [adding, setAdding] = useState(false);
+  const [correcting, setCorrecting] = useState(false);
   const [cancelling, setCancelling] = useState<AdjustmentRow | null>(null);
   const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ["payroll", "adjustments", status, page],
@@ -40,9 +42,12 @@ export function AdjustmentsPage() {
   });
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["payroll"] });
   const addButton = canEdit && (
-    <Button type="primary" icon={<PlusOutlined />} onClick={() => setAdding(true)}>
-      Add an adjustment
-    </Button>
+    <div style={{ display: "flex", gap: space[2], flexWrap: "wrap" }}>
+      <Button onClick={() => setCorrecting(true)}>Correct loss of pay</Button>
+      <Button type="primary" icon={<PlusOutlined />} onClick={() => setAdding(true)}>
+        Add an adjustment
+      </Button>
+    </div>
   );
   const cancelButton = (a: AdjustmentRow, block?: boolean) =>
     canEdit && a.status === "PENDING" ? (
@@ -122,6 +127,7 @@ export function AdjustmentsPage() {
         </Panel>
       </Stack>
       {adding && <AddDrawer onClose={() => setAdding(false)} onDone={refresh} />}
+      {correcting && <LopCorrectionDrawer onClose={() => setCorrecting(false)} onDone={refresh} />}
       {cancelling && <CancelModal row={cancelling} onClose={() => setCancelling(null)} onDone={refresh} />}
     </>
   );
@@ -141,6 +147,7 @@ function KindChips({ a }: { a: AdjustmentRow }) {
     <span style={{ display: "inline-flex", gap: space[1], flexWrap: "wrap" }}>
       <StatusChip tone={a.direction === "EARNING" ? "success" : "danger"}>{a.direction === "EARNING" ? "Earning" : "Deduction"}</StatusChip>
       {a.source === "SALARY_ARREARS" && <StatusChip tone="warning">Arrears</StatusChip>}
+      {a.source === "LOP_REVERSAL" && <StatusChip tone="warning">Loss-of-pay correction</StatusChip>}
     </span>
   );
 }

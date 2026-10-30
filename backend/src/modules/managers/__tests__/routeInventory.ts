@@ -426,6 +426,8 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "POST /api/payroll/salary/revisions/:id/decision": admin,
   "POST /api/payroll/salary/revisions/:id/apply": admin,
   "GET /api/payroll/adjustments": admin,
+  "POST /api/payroll/lop-corrections/preview": admin,
+  "POST /api/payroll/lop-corrections": admin,
   "POST /api/payroll/adjustments/preview": admin,
   "POST /api/payroll/adjustments": admin,
   "POST /api/payroll/adjustments/:id/cancel": admin,

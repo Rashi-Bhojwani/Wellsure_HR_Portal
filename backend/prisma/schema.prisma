@@ -2560,6 +2560,7 @@ enum SalaryChangeReason {
 
 enum AdjustmentSource {
   MANUAL
+  LOP_REVERSAL
   SALARY_ARREARS
   IMPORT
   YEAR_END_ENCASHMENT
@@ -2707,6 +2708,7 @@ enum PayrollLineKind {
 enum PayrollLineSource {
   COMPONENT
   ADJUSTMENT
+  LOP_REVERSAL
   ARREARS
   ENCASHMENT
   PF

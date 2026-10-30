@@ -46,6 +46,7 @@ export const RESERVED_COMPONENT_CODES = [
   "TDS",
   "ARREARS",
   "LEAVE_ENCASHMENT",
+  "LOP_REVERSAL",
   "NET_ROUNDING",
 ] as const;
 
@@ -65,6 +66,9 @@ export type SalaryChangeReason = (typeof SALARY_CHANGE_REASONS)[number];
 
 export const REVISION_SELECTION_KINDS = ["EMPLOYEES", "BRANCH", "GRADE", "STRUCTURE", "ALL"] as const;
 export type RevisionSelectionKind = (typeof REVISION_SELECTION_KINDS)[number];
+
+/** The reserved component code a loss-of-pay reversal is carried under (each head's line takes the head's own reversal head when it has one). */
+export const LOP_REVERSAL_CODE = "LOP_REVERSAL";
 
 /** The reserved component code arrears are paid under. */
 export const ARREARS_CODE = "ARREARS";

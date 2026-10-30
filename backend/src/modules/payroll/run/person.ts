@@ -1,5 +1,5 @@
 import { HOLD_REASON_LABEL, STATUTORY_LINE_CODES, STATUTORY_LINE_LABEL, type HoldReason } from "@shared/constants/payrollRun";
-import { ARREARS_CODE } from "@shared/constants/payrollSalary";
+import { ARREARS_CODE, LOP_REVERSAL_CODE } from "@shared/constants/payrollSalary";
 import { payrollHash } from "../hash";
 import { ZERO, canonicalDecimal, intDec, sum, type Money } from "../money";
 import { applyShare } from "../salary/arrears";
@@ -142,6 +142,17 @@ export function calculatePerson(input: PersonInput, ctx: CalcContext): ItemOut {
   // ── Adjustments, arrears and year-end encashment: each a line of its own, carrying where it came from ──
   let adjustmentPf = ZERO;
   for (const adj of input.adjustments) {
+    if (adj.source === "LOP_REVERSAL") {
+      const rev = reversalLines(adj, ctx);
+      for (const l of rev.lines) (l.kind === "EARNING" ? earningLines : deductionLines).push(l);
+      if (adj.direction === "EARNING") {
+        pfWages = pfWages.plus(rev.pf);
+        esiWages = esiWages.plus(rev.esi);
+        adjustmentPf = adjustmentPf.plus(rev.pf);
+      }
+      notices.push(...rev.notices);
+      continue;
+    }
     const line = adjustmentLine(adj, ctx);
     if (adj.direction === "EARNING") earningLines.push(line.line);
     else deductionLines.push(line.line);
@@ -301,6 +312,34 @@ export function calculatePerson(input: PersonInput, ctx: CalcContext): ItemOut {
     exceptions,
     itemHash: payrollHash({ e: input.employeeId, s: status, h: holds, l: lineHash, n: c(netPay), i: inputsOut, x: exceptions.map((x) => x.code) }),
   };
+}
+
+// ── A loss-of-pay reversal: a line for each prorated head, linked to the month it belongs to ──
+
+function reversalLines(adj: AdjustmentIn, ctx: CalcContext): { lines: LineOut[]; pf: Money; esi: Money; notices: string[] } {
+  const notices: string[] = [];
+  const follow = ctx.rules.arrearsPfEsi === "FOLLOW_COMPONENT_FLAGS";
+  let pf = ZERO;
+  let esi = ZERO;
+  const lines: LineOut[] = [];
+  for (const part of adj.breakdown ?? []) {
+    const head = ctx.components.current.get(part.component)?.value;
+    const link = head?.reversalHead ? ctx.components.current.get(head.reversalHead)?.value : undefined;
+    if (head?.reversalHead && !link) notices.push(`The reversal head ${head.reversalHead} of ${part.component} has no version on record, so its line is carried under the general loss-of-pay reversal head.`);
+    if (follow && head?.pfApplicable) pf = pf.plus(part.amount);
+    if (follow && head?.esiApplicable) esi = esi.plus(part.amount);
+    const earning = part.amount.greaterThan(ZERO);
+    lines.push({
+      code: link && head?.reversalHead ? head.reversalHead : LOP_REVERSAL_CODE,
+      label: `${link?.payslipLabel ?? "Loss of pay reversal"}: ${head?.payslipLabel ?? part.component} for ${adj.periodLabel ?? "an earlier month"}`,
+      kind: earning ? "EARNING" : "DEDUCTION",
+      source: "LOP_REVERSAL",
+      sourceRef: adj.id,
+      amount: part.amount.abs(),
+      basis: { kind: "LOP_REVERSAL", head: part.component, sourceMonth: adj.periodLabel ?? null, correctionKey: adj.sourceRef, reason: adj.reason, signed: c(part.amount), reversalHead: head?.reversalHead ?? null },
+    });
+  }
+  return { lines, pf, esi, notices };
 }
 
 // ── An adjustment, an arrears row or a year-end encashment as a line ──

@@ -29,6 +29,8 @@ export const revisionListSchema = z.object({ page: z.coerce.number().int().min(1
 
 export const adjustmentPreviewSchema = z.object({ input: z.unknown() });
 export const adjustmentAddSchema = z.object({ input: z.unknown(), fingerprint });
+export const lopCorrectionPreviewSchema = z.object({ input: z.unknown() });
+export const lopCorrectionAddSchema = z.object({ input: z.unknown(), fingerprint });
 export const adjustmentCancelSchema = z.object({ reason: z.string().trim().min(1).max(300) });
 export const adjustmentListSchema = z.object({
   employeeId: z.string().max(64).optional(),

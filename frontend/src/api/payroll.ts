@@ -375,7 +375,7 @@ export interface AdjustmentRow {
   direction: "EARNING" | "DEDUCTION";
   amount: string;
   reason: string;
-  source: "MANUAL" | "SALARY_ARREARS" | "IMPORT" | "YEAR_END_ENCASHMENT";
+  source: "MANUAL" | "SALARY_ARREARS" | "IMPORT" | "YEAR_END_ENCASHMENT" | "LOP_REVERSAL";
   periodStart: string | null;
   periodEnd: string | null;
   breakdown: unknown;
@@ -440,6 +440,30 @@ export const applyRevision = (id: string) => post<{ id: string; applied: number 
 export const listAdjustments = (params: { employeeId?: string; status?: string; page: number; pageSize: number }) => get<{ total: number; items: AdjustmentRow[] }>("/adjustments", params);
 export const previewAdjustment = (input: AdjustmentInput) => post<AdjustmentPreview>("/adjustments/preview", { input });
 export const addAdjustment = (input: AdjustmentInput, fingerprint: string) => post<{ id: string }>("/adjustments", { input, fingerprint });
+export interface LopCorrectionInput {
+  employeeId: string;
+  cycleStart: string;
+  correctionRef: string;
+  days: Array<{ date: string; restored: string }>;
+  reason: string;
+  overrideReason?: string;
+}
+export interface LopCorrectionPreview {
+  employeeName: string;
+  cycleLabel: string;
+  correctionRef: string;
+  days: Array<{ date: string; restored: string; hadLop: string }>;
+  lines: Array<{ component: string; amount: string; exact: string }>;
+  net: string;
+  lookbackMonths: number;
+  monthsBack: number;
+  needsOverride: boolean;
+  overrideReason: string | null;
+  effect: string;
+  fingerprint: string;
+}
+export const previewLopCorrection = (input: LopCorrectionInput) => post<LopCorrectionPreview>("/lop-corrections/preview", { input });
+export const addLopCorrection = (input: LopCorrectionInput, fingerprint: string) => post<{ id: string }>("/lop-corrections", { input, fingerprint });
 export const cancelAdjustment = (id: string, reason: string) => post<{ ok: true }>(`/adjustments/${id}/cancel`, { reason });
 export const previewCancelScheduled = (input: { employeeId: string; salaryId: string; note?: string }) => post<CancelPreview>("/salary/revisions/cancel-preview", { input });
 export const createCancelScheduled = (input: { employeeId: string; salaryId: string; note?: string }, fingerprint: string) => post<{ id: string }>("/salary/revisions/cancel", { input, fingerprint });
