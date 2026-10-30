@@ -85,6 +85,8 @@ export interface SubmitInput {
   ip?: string | null;
   /** Runs inside the same transaction as the approval row, so a state that must follow it (a run becoming SUBMITTED) can never be seen without it. */
   inTransaction?: (tx: Prisma.TransactionClient, approval: PayrollApproval) => Promise<void>;
+  /** The other director is told, in the same transaction, that this waits for their decision (counts only, never a figure or a person). */
+  notify?: { step: DirectorStep; subjectLabel: string; itemCount?: number | null };
 }
 
 /** The maker submits. Refused if they lack the maker permission or a live approval already exists. */
@@ -96,6 +98,7 @@ export async function submit(input: SubmitInput): Promise<PayrollApproval> {
     throw new HttpError(403, "This changes your own pay, so somebody else has to prepare it. Nobody prepares or approves a change to their own pay.", "MAKER_IS_AFFECTED");
   }
   const contentHash = await adapter.hash(input.subjectId);
+  let noticeId: string | null = null;
   try {
     const approval = await prisma.$transaction(async (tx) => {
       const a = await tx.payrollApproval.create({
@@ -103,8 +106,15 @@ export async function submit(input: SubmitInput): Promise<PayrollApproval> {
       });
       await recordEvent({ subjectType: input.subject, subjectId: input.subjectId, type: "SUBMITTED", actorUserId: input.makerUserId, payload: { approvalId: a.id, hash: contentHash } }, tx);
       await input.inTransaction?.(tx, a);
+      if (input.notify) {
+        ({ noticeId } = await recordDirectorNotice(
+          { kind: "ACTION", step: input.notify.step, subjectType: input.subject, subjectId: input.subjectId, subjectLabel: `${input.notify.subjectLabel}, waiting for your decision`, itemCount: input.notify.itemCount ?? null, actorUserId: input.makerUserId, approvalId: a.id, authority: "SECOND_DIRECTOR" },
+          tx,
+        ));
+      }
       return a;
     });
+    if (noticeId) await scheduleDelivery(noticeId);
     await writeAuditLog({ actorUserId: input.makerUserId, action: "payroll.approval.submitted", entityType: "PayrollApproval", entityId: approval.id, after: { subject: input.subject, subjectId: input.subjectId, hash: contentHash }, ipAddress: input.ip ?? null });
     return approval;
   } catch (err) {

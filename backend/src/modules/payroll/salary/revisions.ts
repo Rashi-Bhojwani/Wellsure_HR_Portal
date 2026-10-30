@@ -24,7 +24,7 @@ import {
 import { activeUsersHoldingPermission } from "../../../lib/permissions";
 import { prisma } from "../../../lib/prisma";
 import { HttpError } from "../../../middleware/errorHandler";
-import { authorityFor } from "../../../lib/directorAuthority";
+import { authorityFor, authorityForDisplay } from "../../../lib/directorAuthority";
 import { adapterFor, authorise, availabilityFrom, consume, decide, liveApproval, registerSubject, submit, voidApproval, voidLive, type CheckerAvailability } from "../approvals";
 import { recordEvent } from "../events";
 import { payrollHash } from "../hash";
@@ -379,7 +379,7 @@ export function planToJson(plan: RevisionPlan) {
 
 async function checkersFor(makerUserId: string, employeeIds: readonly string[]): Promise<CheckerAvailability> {
   // On director authority (the default) nobody else has to decide it: the director does, and the other director is told. Whose pay it is stays checked everywhere else.
-  if ((await authorityFor("SALARY_REVISION")) === "DIRECTOR_AUTHORITY") return { eligible: [], excluded: [], state: "SELF", message: "You can do this yourself. It takes effect at once, and the other director is told." };
+  if ((await authorityForDisplay("SALARY_REVISION")) === "DIRECTOR_AUTHORITY") return { eligible: [], excluded: [], state: "SELF", message: "You can do this yourself. It takes effect at once, and the other director is told." };
   const adapter = adapterFor("SALARY_REVISION");
   const holders = await activeUsersHoldingPermission(adapter.checkerPermission);
   const names = await namesOfUsers(holders.map((h) => h.userId));
@@ -529,7 +529,7 @@ async function submitForDecision(revisionId: string, hash: string, note: string 
     await authorise({ subject: "SALARY_REVISION", subjectId: revisionId, actorUserId: actor.userId, previewFingerprint: hash, step: "SALARY_REVISION", subjectLabel: "a salary revision", itemCount: people, ...(note ? { note } : {}), ip: actor.ip ?? null });
     return;
   }
-  await submit({ subject: "SALARY_REVISION", subjectId: revisionId, makerUserId: actor.userId, previewFingerprint: hash, ...(note ? { note } : {}), ip: actor.ip ?? null });
+  await submit({ subject: "SALARY_REVISION", subjectId: revisionId, makerUserId: actor.userId, previewFingerprint: hash, ...(note ? { note } : {}), ip: actor.ip ?? null, notify: { step: "SALARY_REVISION", subjectLabel: "a salary revision", itemCount: people } });
 }
 
 type RevisionRow = Awaited<ReturnType<typeof prisma.payrollSalaryRevision.findUniqueOrThrow>>;

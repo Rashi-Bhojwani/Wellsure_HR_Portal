@@ -13,6 +13,7 @@ import { confirmLayout, previewLayoutConfirm, previewLayoutSave, saveLayout } fr
 import { DEMO_SETTING } from "../../src/modules/payroll/setup/status";
 import { giveSignoff, previewSignoff } from "../../src/modules/payroll/setup/signoffs";
 import { RULE_CATALOG } from "@shared/constants/payrollRules";
+import { DIRECTOR_AUTHORITY_SETTING_KEY, DIRECTOR_CHOICE_REQUIRED_STEPS } from "@shared/constants/directorAuthority";
 
 // THE DEMO COMPANY (docs/plans/PHASE_6.md §14J). A fictional company so that payroll can be finished, tested and shown end to end without any real figure. Development only: the command
 // that runs this refuses anywhere else, and the application refuses to start in staging or production if this has been run there. Everything it makes is made up and says so:
@@ -158,6 +159,14 @@ export async function seedDemoCompany(): Promise<DemoResult> {
   const maker = owner;
   const checker = who.DEMO013!.userId;
   await setSetting(DEMO_SETTING, true, owner);
+  // The two directors' choice for each payroll step, made up for the DEMO company only and labelled so: "a different director must decide", proposed by the owner and confirmed by the
+  // second owner. (A real company starts with every one of these Not set.)
+  const at = new Date().toISOString(); // allow-clock: an instant
+  await setSetting(
+    DIRECTOR_AUTHORITY_SETTING_KEY,
+    { v: 2, steps: Object.fromEntries(DIRECTOR_CHOICE_REQUIRED_STEPS.map((step) => [step, { current: { mode: "SECOND_DIRECTOR", proposedBy: maker, proposedAt: at, confirmedBy: checker, confirmedAt: at, demo: true } }])) },
+    owner,
+  );
 
   lap("before: pay details");
   await fillPayDetails(who.DEMO004!.userId);

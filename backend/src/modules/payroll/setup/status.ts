@@ -2,7 +2,7 @@ import { RULE_CATALOG, type RuleDef } from "@shared/constants/payrollRules";
 import { DEVELOPER_ROLE_CODE, SENSITIVE_PERMISSION_KEYS } from "@shared/constants/sensitiveData";
 import { env } from "../../../config/env";
 import { businessToday } from "../../../lib/businessDate";
-import { activeDirectors, twoFactorEnforced } from "../../../lib/directorAuthority";
+import { activeDirectors, choiceFacts, twoFactorEnforced } from "../../../lib/directorAuthority";
 import { salariesOn } from "../../../lib/effectiveDating";
 import { activeUsersHoldingPermission, resolveAccess } from "../../../lib/permissions";
 import { prisma } from "../../../lib/prisma";
@@ -185,6 +185,19 @@ async function safetyItems(demo: boolean): Promise<SetupItem[]> {
   const directors = await activeDirectors();
   const pairOk = directors.length >= 2;
   out.push({ id: "safety:two-people", section: "safety", title: "At least two active directors", why: "Payroll belongs to the two directors. Each is told what the other does on their own authority, and each sets the other's pay, so nobody ever sets their own. With only one, none of that can work.", required: true, status: pairOk ? "CONFIRMED" : "NOT_SET", enteredBy: null, confirmedBy: null, detail: pairOk ? `${directors.length} directors are active.` : `${directors.length} active ${directors.length === 1 ? "director" : "directors"}. Appoint the second director (Super Admin) in Employee profile, Access.`, where });
+
+  // The choice for each payroll step, with no default: "a different director must decide" or "the acting director decides alone, the other is told". One director sets it, the other
+  // confirms it. Until both have, payroll refuses to run that step, so each Not set (or waiting) is a blocker.
+  const choiceNames = await namesOfUsers((await choiceFacts()).flatMap((c) => (c.confirmedBy ? [c.confirmedBy] : [])));
+  for (const c of await choiceFacts()) {
+    const label = `${c.label}: who decides`;
+    const base = { id: `safety:director-choice:${c.step}`, section: "safety" as const, title: c.demo ? `${label} (DEMO choice)` : label, why: "The two directors choose, with no default, whether a different director must decide this step or the acting director decides alone (the other is told either way). One sets it; the other confirms it. Payroll will not run this step until both have.", required: true, enteredBy: null, where: { label: "Admin Tools, System Settings, Director authority", path: "/admin/admin-tools/settings?section=director" } };
+    out.push(
+      c.status === "CONFIRMED"
+        ? { ...base, status: "CONFIRMED", confirmedBy: c.confirmedBy ? { name: choiceNames.get(c.confirmedBy) ?? "A director", at: c.confirmedAt ?? "" } : null, detail: c.demo ? "A made-up choice, for the DEMO company only." : "Chosen by one director and confirmed by the other." }
+        : { ...base, status: c.status === "PENDING_CONFIRMATION" ? "PLACEHOLDER" : "NOT_SET", confirmedBy: null, detail: c.status === "PENDING_CONFIRMATION" ? "Proposed. The other director has not confirmed it yet." : "Not set. Neither director has chosen yet." },
+    );
+  }
 
   // Every Super Admin, and anyone who somehow holds a payroll key: two-step sign-in is required of all of them, and the demo exemption never applies where it is enforced.
   const payrollHolders = new Map<string, true>(directors.map((d) => [d.userId, true] as const));

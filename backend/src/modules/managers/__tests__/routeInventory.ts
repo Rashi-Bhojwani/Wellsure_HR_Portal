@@ -283,6 +283,7 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
 
   "GET /api/director/switches": adminInService("Directors (active Super Admins) only (lib/directorAuthority.ts requireDirector)"),
   "PUT /api/director/switches/:step": adminInService("Directors only, with two-step sign-in outside development"),
+  "POST /api/director/switches/:step/confirm": adminInService("Directors only, two-step sign-in outside development; the confirmer must be a different director from the proposer"),
   "GET /api/hr-capabilities": adminInService("Directors only (lib/directorAuthority.ts requireDirector); what HR can do"),
   "GET /api/hr-capabilities/history": adminInService("Directors only"),
   "PUT /api/hr-capabilities": adminInService("Directors only, with two-step sign-in outside development"),

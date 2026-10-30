@@ -1,6 +1,7 @@
 // Director authority (docs/plans/DIRECTOR_AUTHORITY.md). A director (a Super Admin) acts on their own authority: what two people used to do, one does, at once, and the
-// other director is told. For each step an owner can switch a second-director check back on. The switches live in SystemSetting `payroll.secondDirector`; a missing
-// step means "off" (the director acts alone).
+// other director is told. For each payroll step that can move or commit money or change pay rules the two directors MUST choose, with no default, between "a different director
+// must decide" and "the acting director decides alone, the other is told". One director proposes the choice and the other confirms it; until both have, the choice is Not set and
+// payroll refuses to run that step. The choices live in SystemSetting `payroll.secondDirector`. Both modes tell the other director.
 
 export const DIRECTOR_STEPS = [
   "RULE_CONFIRM",
@@ -15,6 +16,17 @@ export const DIRECTOR_STEPS = [
   "SETTINGS",
 ] as const;
 export type DirectorStep = (typeof DIRECTOR_STEPS)[number];
+
+/** The steps whose choice is required (no default). Settings and a director's own identity entry stay "act alone, other is told" and may optionally be chosen too. */
+export const DIRECTOR_CHOICE_REQUIRED_STEPS = ["RULE_CONFIRM", "RUN_APPROVAL", "PERIOD_FINALISE", "PERIOD_UNLOCK", "SALARY_REVISION", "PAYSLIP_PUBLISH", "BANK_FILE", "SETUP_SIGNOFF"] as const satisfies readonly DirectorStep[];
+export const isChoiceRequired = (step: string): boolean => (DIRECTOR_CHOICE_REQUIRED_STEPS as readonly string[]).includes(step);
+/** The recommendation shown on the screen: switch the second-director check ON for these. */
+export const DIRECTOR_RECOMMENDED_SECOND_STEPS = ["RUN_APPROVAL", "BANK_FILE", "SALARY_REVISION", "RULE_CONFIRM"] as const satisfies readonly DirectorStep[];
+
+export const DIRECTOR_CHOICE_MODES = ["SECOND_DIRECTOR", "DIRECTOR_AUTHORITY"] as const;
+export type DirectorChoiceMode = (typeof DIRECTOR_CHOICE_MODES)[number];
+export const DIRECTOR_CHOICE_STATUSES = ["NOT_SET", "PENDING_CONFIRMATION", "CONFIRMED"] as const;
+export type DirectorChoiceStatus = (typeof DIRECTOR_CHOICE_STATUSES)[number];
 
 export interface DirectorStepInfo {
   label: string;
@@ -69,6 +81,15 @@ export interface DirectorSwitchView {
   step: DirectorStep;
   label: string;
   covers: string;
-  /** true = a second director must decide; false (the default) = a director acts alone and the other is told. */
-  requireSecondDirector: boolean;
+  /** Payroll will not run this step until the choice is Confirmed. */
+  required: boolean;
+  /** The screen recommends "a different director must decide" for this step. */
+  recommendedSecond: boolean;
+  status: DirectorChoiceStatus;
+  /** The mode in force: only when Confirmed. A change waiting for confirmation does not take effect. */
+  mode: DirectorChoiceMode | null;
+  /** A made-up choice in the DEMO company, labelled as such. */
+  demo: boolean;
+  confirmed: { byName: string; at: string } | null;
+  proposed: { mode: DirectorChoiceMode; byName: string; at: string; byMe: boolean } | null;
 }

@@ -40,10 +40,20 @@ export async function cleanupPayrollSubject(subjectPrefix: string): Promise<void
  */
 export async function useSecondDirectorChecks(on: boolean | Partial<Record<(typeof DIRECTOR_STEPS)[number], boolean>> = true): Promise<() => Promise<void>> {
   const before = await prisma.systemSetting.findUnique({ where: { key: DIRECTOR_AUTHORITY_SETTING_KEY } });
-  const value = typeof on === "boolean" ? Object.fromEntries(DIRECTOR_STEPS.map((s) => [s, on])) : on;
-  await prisma.systemSetting.upsert({ where: { key: DIRECTOR_AUTHORITY_SETTING_KEY }, create: { key: DIRECTOR_AUTHORITY_SETTING_KEY, value }, update: { value } });
+  // Every step gets a CONFIRMED choice (true = a different director must decide, false = the acting director decides alone). A step not named is "alone", which is what an unset step
+  // used to mean; the tests of "Not set" itself write nothing, or call setDirectorChoices directly.
+  const mode = (s: (typeof DIRECTOR_STEPS)[number]) => ((typeof on === "boolean" ? on : on[s] === true) ? "SECOND_DIRECTOR" : "DIRECTOR_AUTHORITY");
+  await setDirectorChoices(Object.fromEntries(DIRECTOR_STEPS.map((s) => [s, mode(s)])) as Record<string, "SECOND_DIRECTOR" | "DIRECTOR_AUTHORITY">);
   return async () => {
     if (before) await prisma.systemSetting.update({ where: { key: DIRECTOR_AUTHORITY_SETTING_KEY }, data: { value: before.value as object } });
     else await prisma.systemSetting.deleteMany({ where: { key: DIRECTOR_AUTHORITY_SETTING_KEY } });
   };
+}
+
+/** Writes Confirmed choices straight into the setting (made-up ids: the setting holds no foreign keys). Steps not named are left Not set. */
+export async function setDirectorChoices(modes: Partial<Record<(typeof DIRECTOR_STEPS)[number], "SECOND_DIRECTOR" | "DIRECTOR_AUTHORITY">>): Promise<void> {
+  const at = new Date().toISOString(); // allow-clock: a test fixture
+  const steps = Object.fromEntries(Object.entries(modes).map(([step, m]) => [step, { current: { mode: m, proposedBy: "test-proposer", proposedAt: at, confirmedBy: "test-confirmer", confirmedAt: at } }]));
+  const value = { v: 2, steps };
+  await prisma.systemSetting.upsert({ where: { key: DIRECTOR_AUTHORITY_SETTING_KEY }, create: { key: DIRECTOR_AUTHORITY_SETTING_KEY, value }, update: { value } });
 }

@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import request from "supertest";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PayrollApprovalSubject } from "@prisma/client";
 import { DIRECTOR_AUTHORITY_SETTING_KEY, DIRECTOR_STEPS, DIRECTOR_STEP_INFO } from "@shared/constants/directorAuthority";
 import { purgeAppendOnly, deleteWithDependents } from "../../../lib/__tests__/cleanup";
 import { with2faFloor } from "../../../lib/authDefaults";
-import { authorityFor, getSwitches, requireDirectorTwoFactor, setSwitch } from "../../../lib/directorAuthority";
+import { authorityFor, confirmChoice, listSwitches, proposeChoice, requireDirectorTwoFactor } from "../../../lib/directorAuthority";
 import { acknowledgeNotice, deliverDirectorNotice, listMyNotices, sweepDirectorNotices } from "../../../lib/directorNotices";
 import { resolveAccess } from "../../../lib/permissions";
 import { prisma } from "../../../lib/prisma";
@@ -13,7 +13,7 @@ import { mailService } from "../../../integrations/mail";
 import { assignRole, listSecurityEvents, removeRole, setOverride } from "../../access/service";
 import { app, authHeader, cleanupEmployeeTestOrgMasters, cleanupFullTestEmployee, cleanupTestRole, createEmployeeTestOrgMasters, createFullTestEmployee, grantPermissions, loginAs, type TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
 import { authorise, consume, decide, recordCompletedApproval, registerSubject, submit, unregisterSubjectForTests } from "../approvals";
-import { cleanupPayrollRowsBy, cleanupPayrollSubject } from "./payrollTestHelpers";
+import { cleanupPayrollRowsBy, cleanupPayrollSubject, setDirectorChoices } from "./payrollTestHelpers";
 
 // Director authority, the core (D1, docs/plans/DIRECTOR_AUTHORITY.md): one director prepares and decides in one act and it takes effect at once; the other director is
 // told, in the same transaction; a second-director check can be switched back on per step; the payroll roles are for directors only; two-step sign-in is required of
@@ -53,6 +53,11 @@ describe("director authority", () => {
     });
   });
 
+  // These tests describe the acts themselves, so every step starts Confirmed as "the acting director decides alone" (what the first test of "the choices" replaces with Not set).
+  beforeEach(async () => {
+    await setDirectorChoices(Object.fromEntries(DIRECTOR_STEPS.map((x) => [x, "DIRECTOR_AUTHORITY"])) as Record<string, "DIRECTOR_AUTHORITY">);
+  });
+
   afterEach(async () => {
     figures.clear();
     affected.clear();
@@ -78,54 +83,98 @@ describe("director authority", () => {
   const act = (who: Person, id: string, extra: Partial<Parameters<typeof authorise>[0]> = {}) =>
     authorise({ subject: SUBJECT, subjectId: id, actorUserId: who.userId, previewFingerprint: "payroll-hash-v1:preview", step: "BANK_FILE", subjectLabel: "the bank file for a test month", itemCount: 7, ...extra });
 
-  describe("the switches", () => {
-    it("every step starts OFF: a director acts alone", async () => {
-      const switches = await getSwitches();
-      expect(Object.keys(switches).sort()).toEqual([...DIRECTOR_STEPS].sort());
-      expect(Object.values(switches).every((on) => on === false)).toBe(true);
-      expect(await authorityFor("BANK_FILE")).toBe("DIRECTOR_AUTHORITY");
+  // One director proposes, the other confirms. Returns the confirming notice id so it can be cleaned up.
+  const choose = async (step: (typeof DIRECTOR_STEPS)[number], mode: "SECOND_DIRECTOR" | "DIRECTOR_AUTHORITY") => {
+    const proposed = await proposeChoice(step, mode, { userId: p.a.userId });
+    if (proposed.noticeId) noticeIds.push(proposed.noticeId);
+    const confirmed = await confirmChoice(step, mode, { userId: p.b.userId });
+    noticeIds.push(confirmed.noticeId);
+    return confirmed.noticeId;
+  };
+
+  describe("the choices", () => {
+    it("start Not set: a payroll step refuses to run, while settings and a director's own entry still default to acting alone", async () => {
+      await prisma.systemSetting.deleteMany({ where: { key: DIRECTOR_AUTHORITY_SETTING_KEY } });
+      const list = await listSwitches(p.a.userId);
+      expect(list.map((x) => x.step).sort()).toEqual([...DIRECTOR_STEPS].sort());
+      for (const row of list) expect([row.step, row.status, row.mode], row.step).toEqual([row.step, "NOT_SET", null]);
+      for (const step of ["BANK_FILE", "RUN_APPROVAL", "SALARY_REVISION", "RULE_CONFIRM", "SETUP_SIGNOFF", "PERIOD_UNLOCK", "PERIOD_FINALISE", "PAYSLIP_PUBLISH"] as const) {
+        await expect(authorityFor(step), step).rejects.toMatchObject({ status: 409, code: "DIRECTOR_CHOICE_NOT_SET" });
+      }
+      expect(await authorityFor("SETTINGS")).toBe("DIRECTOR_AUTHORITY");
+      expect(await authorityFor("IDENTITY_DIRECTOR_ENTRY")).toBe("DIRECTOR_AUTHORITY");
+      const id = newId();
+      figures.set(id, "1");
+      await expect(act(p.a, id)).rejects.toMatchObject({ code: "DIRECTOR_CHOICE_NOT_SET" });
+      expect(await prisma.payrollApproval.count({ where: { subjectId: id } })).toBe(0);
     });
 
-    it("has words for every step, and says what it covers", () => {
+    it("the old true/false form that nobody confirmed reads as Not set", async () => {
+      await prisma.systemSetting.upsert({ where: { key: DIRECTOR_AUTHORITY_SETTING_KEY }, create: { key: DIRECTOR_AUTHORITY_SETTING_KEY, value: { BANK_FILE: false } }, update: { value: { BANK_FILE: false } } });
+      await expect(authorityFor("BANK_FILE")).rejects.toMatchObject({ code: "DIRECTOR_CHOICE_NOT_SET" });
+    });
+
+    it("has words for every step, says what it covers, and recommends the second director for the four that matter most", () => {
       for (const s of DIRECTOR_STEPS) expect(DIRECTOR_STEP_INFO[s].label.length > 3 && DIRECTOR_STEP_INFO[s].covers.length > 20, s).toBe(true);
     });
 
-    it("either director can switch any step either way at once: audited, the other told, a red banner raised for them", async () => {
-      const r = await setSwitch("PERIOD_UNLOCK", true, { userId: p.a.userId });
+    it("one director proposes, nothing changes until the OTHER confirms; both are audited and the other is told", async () => {
+      await prisma.systemSetting.deleteMany({ where: { key: DIRECTOR_AUTHORITY_SETTING_KEY } });
+      const r = await proposeChoice("PERIOD_UNLOCK", "SECOND_DIRECTOR", { userId: p.a.userId });
       expect(r.changed).toBe(true);
       noticeIds.push(r.noticeId!);
-      expect((await getSwitches()).PERIOD_UNLOCK).toBe(true);
-      expect(await authorityFor("PERIOD_UNLOCK")).toBe("SECOND_DIRECTOR");
-      const audit = await prisma.auditLog.findFirstOrThrow({ where: { action: "director.switch.changed", actorUserId: p.a.userId }, orderBy: { createdAt: "desc" } });
-      expect(audit.after).toMatchObject({ step: "PERIOD_UNLOCK", requireSecondDirector: true });
+      expect((await listSwitches(p.a.userId)).find((x) => x.step === "PERIOD_UNLOCK")).toMatchObject({ status: "PENDING_CONFIRMATION", mode: null, proposed: { mode: "SECOND_DIRECTOR", byMe: true } });
+      await expect(authorityFor("PERIOD_UNLOCK")).rejects.toMatchObject({ code: "DIRECTOR_CHOICE_NOT_SET" }); // proposed is not in force
+      // The proposer cannot confirm their own proposal.
+      await expect(confirmChoice("PERIOD_UNLOCK", "SECOND_DIRECTOR", { userId: p.a.userId })).rejects.toMatchObject({ status: 403, code: "CHOICE_CONFIRMER_IS_PROPOSER" });
+      // A confirmation is bound to what the confirmer was shown.
+      await expect(confirmChoice("PERIOD_UNLOCK", "DIRECTOR_AUTHORITY", { userId: p.b.userId })).rejects.toMatchObject({ code: "PREVIEW_STALE" });
       const notice = await prisma.directorActionNotice.findUniqueOrThrow({ where: { id: r.noticeId! }, include: { receipts: true } });
       expect(notice).toMatchObject({ kind: "SWITCH_CHANGED", step: "PERIOD_UNLOCK", actorUserId: p.a.userId });
       expect(notice.receipts.map((x) => x.recipientUserId)).toContain(p.b.userId);
       expect(notice.receipts.map((x) => x.recipientUserId)).not.toContain(p.a.userId);
       const banner = await prisma.securityEvent.findFirstOrThrow({ where: { kind: "director.switch_changed", targetUserId: p.a.userId, acknowledgedAt: null } });
       expect(banner.details).toMatchObject({ noticeId: r.noticeId });
-      // The other director is shown the banner; the one who acted is not shown a banner about their own act.
       const viewer = async (who: Person) => {
         const access = await resolveAccess(who.userId);
         return { userId: who.userId, employeeId: who.employeeId, roleCodes: access.roleCodes, permissions: access.permissions, dataScope: access.dataScope };
       };
       expect((await listSecurityEvents(await viewer(p.b), "open")).map((e) => e.id)).toContain(banner.id);
       expect((await listSecurityEvents(await viewer(p.a), "open")).map((e) => e.id)).not.toContain(banner.id);
-      // The other way, by the other director, at once.
-      const back = await setSwitch("PERIOD_UNLOCK", false, { userId: p.b.userId });
-      noticeIds.push(back.noticeId!);
-      expect((await getSwitches()).PERIOD_UNLOCK).toBe(false);
+      const done = await confirmChoice("PERIOD_UNLOCK", "SECOND_DIRECTOR", { userId: p.b.userId });
+      noticeIds.push(done.noticeId);
+      expect(await authorityFor("PERIOD_UNLOCK")).toBe("SECOND_DIRECTOR");
+      expect((await listSwitches(p.b.userId)).find((x) => x.step === "PERIOD_UNLOCK")).toMatchObject({ status: "CONFIRMED", mode: "SECOND_DIRECTOR", proposed: null });
+      const audits = await prisma.auditLog.findMany({ where: { action: { in: ["director.choice.proposed", "director.choice.confirmed"] }, entityId: DIRECTOR_AUTHORITY_SETTING_KEY }, orderBy: { createdAt: "asc" } });
+      expect(audits.map((x) => x.action)).toEqual(expect.arrayContaining(["director.choice.proposed", "director.choice.confirmed"]));
     });
 
-    it("changing it to what it already is changes nothing and tells nobody", async () => {
-      const r = await setSwitch("RUN_APPROVAL", false, { userId: p.a.userId });
-      expect(r).toEqual({ changed: false, noticeId: null });
+    it("a change to a Confirmed choice takes effect only when the other director confirms it: until then the old one stays in force", async () => {
+      await prisma.systemSetting.deleteMany({ where: { key: DIRECTOR_AUTHORITY_SETTING_KEY } });
+      await choose("BANK_FILE", "SECOND_DIRECTOR");
+      expect(await authorityFor("BANK_FILE")).toBe("SECOND_DIRECTOR");
+      const r = await proposeChoice("BANK_FILE", "DIRECTOR_AUTHORITY", { userId: p.b.userId });
+      noticeIds.push(r.noticeId!);
+      expect(await authorityFor("BANK_FILE")).toBe("SECOND_DIRECTOR");
+      expect((await listSwitches(p.a.userId)).find((x) => x.step === "BANK_FILE")).toMatchObject({ status: "PENDING_CONFIRMATION", mode: "SECOND_DIRECTOR" });
+      const done = await confirmChoice("BANK_FILE", "DIRECTOR_AUTHORITY", { userId: p.a.userId });
+      noticeIds.push(done.noticeId);
+      expect(await authorityFor("BANK_FILE")).toBe("DIRECTOR_AUTHORITY");
     });
 
-    it("only a director can change it", async () => {
-      await expect(setSwitch("BANK_FILE", true, { userId: p.hr.userId })).rejects.toMatchObject({ status: 403, code: "DIRECTOR_ONLY" });
-      await expect(setSwitch("BANK_FILE", true, { userId: p.emp.userId })).rejects.toMatchObject({ status: 403, code: "DIRECTOR_ONLY" });
-      expect((await getSwitches()).BANK_FILE).toBe(false);
+    it("proposing what is already in force changes nothing and tells nobody", async () => {
+      await prisma.systemSetting.deleteMany({ where: { key: DIRECTOR_AUTHORITY_SETTING_KEY } });
+      await choose("RUN_APPROVAL", "DIRECTOR_AUTHORITY");
+      expect(await proposeChoice("RUN_APPROVAL", "DIRECTOR_AUTHORITY", { userId: p.a.userId })).toEqual({ changed: false, noticeId: null });
+    });
+
+    it("only a director can propose or confirm, and confirming with nothing proposed is refused", async () => {
+      await prisma.systemSetting.deleteMany({ where: { key: DIRECTOR_AUTHORITY_SETTING_KEY } });
+      await expect(proposeChoice("BANK_FILE", "SECOND_DIRECTOR", { userId: p.hr.userId })).rejects.toMatchObject({ status: 403, code: "DIRECTOR_ONLY" });
+      await expect(proposeChoice("BANK_FILE", "SECOND_DIRECTOR", { userId: p.emp.userId })).rejects.toMatchObject({ status: 403, code: "DIRECTOR_ONLY" });
+      await expect(confirmChoice("BANK_FILE", "SECOND_DIRECTOR", { userId: p.hr.userId })).rejects.toMatchObject({ code: "DIRECTOR_ONLY" });
+      await expect(confirmChoice("BANK_FILE", "SECOND_DIRECTOR", { userId: p.b.userId })).rejects.toMatchObject({ status: 409, code: "NOTHING_PENDING" });
+      expect((await listSwitches(p.a.userId)).find((x) => x.step === "BANK_FILE")!.status).toBe("NOT_SET");
     });
   });
 
@@ -195,8 +244,7 @@ describe("director authority", () => {
     });
 
     it("refuses when the step needs a second director, and writes nothing", async () => {
-      const r = await setSwitch("BANK_FILE", true, { userId: p.b.userId });
-      noticeIds.push(r.noticeId!);
+      await choose("BANK_FILE", "SECOND_DIRECTOR");
       const id = newId();
       figures.set(id, "1");
       await expect(act(p.a, id)).rejects.toMatchObject({ status: 409, code: "SECOND_DIRECTOR_REQUIRED" });
@@ -208,7 +256,7 @@ describe("director authority", () => {
       const id = newId();
       figures.set(id, "1");
       onHash = async () => {
-        await prisma.systemSetting.upsert({ where: { key: DIRECTOR_AUTHORITY_SETTING_KEY }, create: { key: DIRECTOR_AUTHORITY_SETTING_KEY, value: { BANK_FILE: true }, updatedByUserId: null }, update: { value: { BANK_FILE: true } } });
+        await setDirectorChoices({ BANK_FILE: "SECOND_DIRECTOR" });
       };
       await expect(act(p.a, id)).rejects.toMatchObject({ code: "SECOND_DIRECTOR_REQUIRED" });
     });
@@ -290,7 +338,7 @@ describe("director authority", () => {
     });
 
     it("notices and receipts are append-only", async () => {
-      const r = await setSwitch("SETTINGS", true, { userId: p.a.userId });
+      const r = await proposeChoice("SETTINGS", "SECOND_DIRECTOR", { userId: p.a.userId });
       noticeIds.push(r.noticeId!);
       await expect(prisma.directorActionNotice.update({ where: { id: r.noticeId! }, data: { subjectLabel: "x" } })).rejects.toThrow(/DIRECTOR_NOTICE_APPEND_ONLY/);
       await expect(prisma.directorActionNotice.delete({ where: { id: r.noticeId! } })).rejects.toThrow(/DIRECTOR_NOTICE_APPEND_ONLY/);
@@ -464,12 +512,18 @@ describe("director authority", () => {
       const list = await request(app).get("/api/director/switches").set(...authHeader(ta));
       expect(list.status).toBe(200);
       expect(list.body.switches).toHaveLength(DIRECTOR_STEPS.length);
-      expect(list.body.switches.every((s: { requireSecondDirector: boolean }) => s.requireSecondDirector === false)).toBe(true);
+      expect(list.body.switches.every((s: { status: string; mode: string }) => s.status === "CONFIRMED" && s.mode === "DIRECTOR_AUTHORITY")).toBe(true); // the beforeEach fixture
 
-      const put = await request(app).put("/api/director/switches/RUN_APPROVAL").set(...authHeader(ta)).send({ requireSecondDirector: true });
+      const put = await request(app).put("/api/director/switches/RUN_APPROVAL").set(...authHeader(ta)).send({ mode: "SECOND_DIRECTOR" });
       expect(put.status).toBe(200);
       noticeIds.push(put.body.noticeId);
-      expect(put.body.switches.find((s: { step: string }) => s.step === "RUN_APPROVAL").requireSecondDirector).toBe(true);
+      expect(put.body.switches.find((s: { step: string }) => s.step === "RUN_APPROVAL")).toMatchObject({ status: "PENDING_CONFIRMATION", mode: "DIRECTOR_AUTHORITY" });
+      // The proposer cannot confirm; the other director can.
+      expect((await request(app).post("/api/director/switches/RUN_APPROVAL/confirm").set(...authHeader(ta)).send({ mode: "SECOND_DIRECTOR" })).status).toBe(403);
+      const conf = await request(app).post("/api/director/switches/RUN_APPROVAL/confirm").set(...authHeader(tb)).send({ mode: "SECOND_DIRECTOR" });
+      expect(conf.status).toBe(200);
+      noticeIds.push(conf.body.noticeId);
+      expect(conf.body.switches.find((s: { step: string }) => s.step === "RUN_APPROVAL")).toMatchObject({ status: "CONFIRMED", mode: "SECOND_DIRECTOR" });
 
       const notices = await request(app).get("/api/director/notices").set(...authHeader(tb));
       expect(notices.status).toBe(200);
@@ -482,9 +536,10 @@ describe("director authority", () => {
           const r = await request(app)[method](path).set(...authHeader(token));
           expect([path, r.status, r.body.error?.code]).toEqual([path, 403, "DIRECTOR_ONLY"]);
         }
-        expect((await request(app).put("/api/director/switches/RUN_APPROVAL").set(...authHeader(token)).send({ requireSecondDirector: false })).status).toBe(403);
+        expect((await request(app).put("/api/director/switches/RUN_APPROVAL").set(...authHeader(token)).send({ mode: "DIRECTOR_AUTHORITY" })).status).toBe(403);
+        expect((await request(app).post("/api/director/switches/RUN_APPROVAL/confirm").set(...authHeader(token)).send({ mode: "DIRECTOR_AUTHORITY" })).status).toBe(403);
       }
-      expect((await request(app).put("/api/director/switches/NOPE").set(...authHeader(ta)).send({ requireSecondDirector: true })).status).toBe(400);
+      expect((await request(app).put("/api/director/switches/NOPE").set(...authHeader(ta)).send({ mode: "SECOND_DIRECTOR" })).status).toBe(400);
       expect((await request(app).get("/api/director/switches")).status).toBe(401);
     });
   });

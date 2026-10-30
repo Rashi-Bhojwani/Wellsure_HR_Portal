@@ -11,6 +11,7 @@ directorRouter.use(authenticate);
 
 directorRouter.get("/switches", controller.getSwitches);
 directorRouter.put("/switches/:step", validate({ params: stepParamsSchema, body: setSwitchSchema }), controller.putSwitch);
+directorRouter.post("/switches/:step/confirm", validate({ params: stepParamsSchema, body: setSwitchSchema }), controller.confirmSwitch);
 directorRouter.get("/notices", validate({ query: noticesQuerySchema }), controller.getNotices);
 directorRouter.post("/notices/:id/seen", validate({ params: noticeIdParamsSchema }), controller.seenNotice);
 directorRouter.post("/notices/:id/acknowledge", validate({ params: noticeIdParamsSchema, body: acknowledgeNoticeSchema }), controller.ackNotice);

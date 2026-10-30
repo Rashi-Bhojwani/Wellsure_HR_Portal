@@ -489,3 +489,13 @@ code and the audit log already records them.
 
 **Q-DA-11. Existing records.** Old approvals stay `SECOND_DIRECTOR` (truthful). Do you want a one-off report "records
 made before director authority" for the CA? *Recommend:* no; the `authority` column suffices.
+
+
+## Amendment after Checkpoint 1: no default for the second-director choice
+The owners' review changed Q-DA-3/Q-DA-5: the second-director check is **not** OFF by default any more.
+- For the eight payroll steps that can move or commit money or change pay rules (`RULE_CONFIRM`, `RUN_APPROVAL`, `PERIOD_FINALISE`, `PERIOD_UNLOCK`, `SALARY_REVISION`, `PAYSLIP_PUBLISH`, `BANK_FILE`, `SETUP_SIGNOFF`) the choice "a different director must decide" vs "the acting director decides alone, the other is told" is a **required setting with no default**. One director proposes it and the **other director confirms** it (the proposer cannot; a confirmation is bound to the mode the confirmer was shown). A change to a Confirmed choice is proposed and confirmed the same way; until then the Confirmed one stays in force.
+- While any of the eight is Not set (or only proposed), every payroll step refuses (`DIRECTOR_CHOICE_NOT_SET`), previews show a blocker, and Ready for first real run has one red row per unset step. `SETTINGS` and `IDENTITY_DIRECTOR_ENTRY` are not payroll steps: unset, the director acts and the other is told.
+- Both modes tell the other director: on director authority (as before) and, new, when a request is submitted for a different director to decide ("... waiting for your decision", counts only).
+- The screen (Admin Tools, System Settings, Director authority) shows the recommendation to choose "a different director must decide" for run approval, bank file, salary revisions and rule confirmation.
+- Storage: SystemSetting `payroll.secondDirector` is now `{ v: 2, steps: { STEP: { current?, pending? } } }`. The old true/false form was never confirmed by anyone and reads as Not set. History is the audit log (`director.choice.proposed` / `.confirmed`) and the director notices, both append-only.
+- The DEMO company ships made-up, labelled choices (a different director must decide; proposed by the demo owner, confirmed by the second demo owner). A real company starts with all eight Not set.

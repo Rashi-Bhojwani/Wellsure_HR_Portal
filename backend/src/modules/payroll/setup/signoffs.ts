@@ -2,7 +2,7 @@ import type { PayrollSetupArea, PayrollSetupSignoff } from "@prisma/client";
 import { writeAuditLog } from "../../../lib/audit";
 import { businessToday } from "../../../lib/businessDate";
 import { bankAccountsOn, namesOn, salariesOn } from "../../../lib/effectiveDating";
-import { authorityFor, isDirector, requireDirectorTwoFactor } from "../../../lib/directorAuthority";
+import { authorityFor, authorityForDisplay, isDirector, requireDirectorTwoFactor } from "../../../lib/directorAuthority";
 import { recordDirectorNotice, scheduleDelivery } from "../../../lib/directorNotices";
 import { prisma } from "../../../lib/prisma";
 import { HttpError } from "../../../middleware/errorHandler";
@@ -96,7 +96,7 @@ async function blockReason(set: AreaSet, actorUserId: string, permissions: Reado
   if (!permissions.has(AREA_VIEW_PERMISSION[set.area])) return { message: `To check ${AREA_LABEL[set.area]} you must be allowed to see them (${AREA_VIEW_PERMISSION[set.area]}).`, status: 403, code: "FORBIDDEN" };
   if (set.total === 0) return { message: `There is nobody whose ${AREA_LABEL[set.area]} could be checked yet.`, status: 409, code: "SIGNOFF_INCOMPLETE" };
   if (set.covered < set.total) return { message: `${set.total - set.covered} of ${set.total} people still have no ${AREA_LABEL[set.area]} on record. Enter them first; then this can be checked as a whole.`, status: 409, code: "SIGNOFF_INCOMPLETE" };
-  if (set.authorUserIds.includes(actorUserId) && !((await isDirector(actorUserId)) && (await authorityFor("SETUP_SIGNOFF")) === "DIRECTOR_AUTHORITY")) return { message: `You entered some of these ${AREA_LABEL[set.area]}, so somebody else has to check them.`, status: 403, code: "SIGNER_ENTERED_THIS" };
+  if (set.authorUserIds.includes(actorUserId) && !((await isDirector(actorUserId)) && (await authorityForDisplay("SETUP_SIGNOFF")) === "DIRECTOR_AUTHORITY")) return { message: `You entered some of these ${AREA_LABEL[set.area]}, so somebody else has to check them.`, status: 403, code: "SIGNER_ENTERED_THIS" };
   return null;
 }
 

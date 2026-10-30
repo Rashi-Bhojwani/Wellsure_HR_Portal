@@ -1,7 +1,7 @@
 import { Prisma, type PayrollItemKind } from "@prisma/client";
 import { PLACEHOLDER_SOURCE_LABEL } from "@shared/constants/payrollRules";
 import { writeAuditLog } from "../../lib/audit";
-import { authorityFor, isDirector, requireDirector, requireDirectorTwoFactor } from "../../lib/directorAuthority";
+import { authorityFor, authorityForDisplay, isDirector, requireDirector, requireDirectorTwoFactor } from "../../lib/directorAuthority";
 import { recordDirectorNotice, scheduleDelivery } from "../../lib/directorNotices";
 import { notifyPayrollInputsChanged } from "../../lib/effectiveDating";
 import { prisma } from "../../lib/prisma";
@@ -203,7 +203,7 @@ export async function previewConfirmation(type: string, kind: PayrollItemKind, k
   const maker = cur.authorUserId ?? SYSTEM_MAKER;
   let blocked: string | null = null;
   // On director authority (docs/plans/DIRECTOR_AUTHORITY.md §4.3) a director may confirm what they wrote themselves: it is recorded as such and the other director is told.
-  const mayConfirmOwn = maker === actorUserId && (await isDirector(actorUserId)) && (await authorityFor("RULE_CONFIRM")) === "DIRECTOR_AUTHORITY";
+  const mayConfirmOwn = maker === actorUserId && (await isDirector(actorUserId)) && (await authorityForDisplay("RULE_CONFIRM")) === "DIRECTOR_AUTHORITY";
   if (cur.confirmation) blocked = "This value is already confirmed.";
   else if (maker === actorUserId && !mayConfirmOwn) blocked = "You wrote this value, so a different person has to confirm it.";
   const checkers: CheckerAvailability =

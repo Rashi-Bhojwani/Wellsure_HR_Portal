@@ -195,3 +195,7 @@ These cannot be proved without your real data and real bank and portals; the dev
 - That payslip **emails arrive** (the production mail service, its sending limits and its bounce handling are set up last).
 
 Do each of these once, on the first real month, with someone watching, and write down the result.
+
+
+## Before anything else: who decides each payroll step
+Open Admin Tools, System Settings, **Director authority**. For each of the eight payroll steps one director chooses "a different director must decide" or "the acting director decides alone (the other is told)", and the **other** director confirms it. There is no default. Until all eight are set and confirmed, payroll will not run and **Ready for first real run** is red. We recommend "a different director must decide" for approving a run, the bank file, salary revisions and confirming rules.

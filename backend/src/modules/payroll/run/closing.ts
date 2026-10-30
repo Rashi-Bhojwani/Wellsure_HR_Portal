@@ -8,7 +8,7 @@ import { prisma } from "../../../lib/prisma";
 import { permissionRoom, getSocketServer } from "../../../realtime/emit";
 import { HttpError } from "../../../middleware/errorHandler";
 import type { DirectorStep } from "@shared/constants/directorAuthority";
-import { authorityFor } from "../../../lib/directorAuthority";
+import { authorityFor, authorityForDisplay, unsetRequiredSteps } from "../../../lib/directorAuthority";
 import { adapterFor, authorise, checkerAvailability, decide as decideApproval, liveApproval, noteFiguresChanged, registerSubject, submit as submitApproval, voidApproval, voidLive, type CheckerAvailability } from "../approvals";
 import { recordEvent, figureEditorsSince } from "../events";
 import { payrollHash } from "../hash";
@@ -214,7 +214,8 @@ function statusBlocker(run: PayrollRun, need: string, doing: string): Blocker | 
 async function envelope(slug: Slug, run: PayrollRun, actor: Actor, blockers: Blocker[], fingerprintHash: string, extra: Record<string, unknown>): Promise<Preview> {
   const subject = SUBJECT_OF[slug];
   const approval = await liveApproval(subject, run.id);
-  const authority = await authorityFor(STEP_OF[slug]);
+  const authority = await authorityForDisplay(STEP_OF[slug]);
+  if (!blockers.some((b) => b.code === "DIRECTOR_CHOICE_NOT_SET")) blockers = [...(await choiceBlockers(slug === "run" ? "approved" : "carried out")), ...blockers];
   const checkers =
     authority === "DIRECTOR_AUTHORITY" && !approval
       ? ({ eligible: [], excluded: [], state: "SELF", message: "You can do this yourself. It takes effect at once, and the other director is told." } satisfies CheckerAvailability)
@@ -241,7 +242,16 @@ async function envelope(slug: Slug, run: PayrollRun, actor: Actor, blockers: Blo
   };
 }
 
+/** Payroll does not run while the two directors have not both chosen, for every step that can commit money or change pay rules, who decides it. */
+async function choiceBlockers(action: string): Promise<Blocker[]> {
+  const unset = await unsetRequiredSteps();
+  if (unset.length === 0) return [];
+  return [{ code: "DIRECTOR_CHOICE_NOT_SET", title: "Who decides each step is not set", message: `The two directors have not both chosen, and confirmed, who decides: ${unset.map((u) => u.label).join("; ")}. One sets it, the other confirms it (Admin Tools, Director authority). Until then the run cannot be ${action}.` }];
+}
+
 async function realBlocker(run: PayrollRun, action: string): Promise<Blocker[]> {
+  const unsetChoice = await choiceBlockers(action);
+  if (unsetChoice.length > 0) return unsetChoice;
   try {
     await assertRunIsReal(pinsOf(run), action);
     return [];
@@ -409,6 +419,7 @@ export async function requestStep(slug: Slug, runId: string, input: { fingerprin
     previewFingerprint: input.fingerprint,
     note,
     ip: actor.ip ?? null,
+    notify: { step: STEP_OF[slug], subjectLabel: await adapterFor(subject).describe(runId), itemCount: slug === "bank-file" || slug === "publish" ? run.payableCount : run.peopleCount },
     ...(slug === "run"
       ? {
           inTransaction: async (tx) => {
@@ -555,7 +566,7 @@ export async function approvalState(runId: string, viewerUserId: string) {
     const last = mine.find((a) => a.status !== "PENDING" && a.status !== "APPROVED") ?? null;
     const editors = live ? await figureEditorsSince(subject, runId, live.submittedAt) : new Set<string>();
     // Who could decide it: for a request waiting, excluding its maker and anyone who changed the figures; for one not yet asked, as it would be if the viewer asked.
-    const authority = await authorityFor(STEP_OF[slug]);
+    const authority = await authorityForDisplay(STEP_OF[slug]);
     const checkers = live
       ? live.status === "PENDING"
         ? await checkerAvailability(subject, { makerUserId: live.makerUserId, subjectId: runId, since: live.submittedAt })
