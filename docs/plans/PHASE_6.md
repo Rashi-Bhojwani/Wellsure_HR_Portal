@@ -1,5 +1,8 @@
 # Phase 6 — Payroll: plan
 
+> **Amendment, 2026-10-30 (owners' decision): there is no CA.** Wherever this document says CA, accountant or "CA confirmation", read: the owners enter and verify every statutory and tax figure themselves. Each carries a required source note (where the number came from) and an effective-from date, and a different director confirms it against that note. Nothing statutory is filled in by the system. See `CHECKPOINT_1_FOLLOWUP.md` §9.
+
+
 **Status: approved 2026-10-16 with the answers in §0A. P6-1 (foundations) is built, see §14A; P6-2 (salary) is built, see §14B and §14C; P6-3 to P6-6 are not.** It follows the brief you gave on 2026-10-16 (commit A approved;
 Phase 1.5 commits B to F paused until after Phase 7; Phases 6 and 7 built and tested locally). Spec references: §5.2–5.3 (PL, ledger),
 §7.5 (payroll app), §9 (security), §11 (data model), §12 Phase 6 (maker-checker), §14 (open questions). The effective-dating contract

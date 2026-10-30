@@ -98,6 +98,11 @@ export const PERMISSION_KEYS = [
   "payroll.identifiers.confirm", // confirm one by typing it again from the owner's own document (a different person from who entered it)
   "payroll.banklayout.manage", // enter and change the bank file layout and the company's debit account, and see them
   "payroll.banklayout.confirm", // check a bank layout against the bank's specification and confirm it (a different person)
+  // PEEPS-BEGIN assets
+  "assets.view", // the asset register: every asset, its holder and its history (holders narrowed to the caller's data scope)
+  "assets.manage", // add and edit assets; issue, return, transfer; record a loss or damage
+  "assets.settings.manage", // prepare the asset categories, statuses and conditions (a director other than the preparer confirms them)
+  // PEEPS-END
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
@@ -131,6 +136,9 @@ export const PERMISSION_GROUPS = [
   "Helpdesk",
   "Reports",
   "Payroll",
+  // PEEPS-BEGIN assets
+  "Assets",
+  // PEEPS-END
 ] as const;
 
 export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
@@ -241,6 +249,11 @@ export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
   "attendance.unlock": { group: "Attendance", label: "Unlock attendance periods", description: "Open a finalised attendance cycle again, with a written reason (and a warning if payroll has used it). Super Admin only.", meta: true },
   "helpdesk.manage": { group: "Helpdesk", label: "Helpdesk queue", description: "Work the ticket queue: assign, status, replies, internal notes, categories." },
   "helpdesk.sensitive.view": { group: "Helpdesk", label: "Sensitive tickets", description: "See tickets in categories marked sensitive (e.g. Payroll & Salary, Grievance)." },
+  // PEEPS-BEGIN assets
+  "assets.view": { group: "Assets", label: "View the asset register", description: "See every asset, who holds it and its full history. Holders outside the person's data scope are not shown." },
+  "assets.manage": { group: "Assets", label: "Manage the asset register", description: "Add and edit assets, issue them to employees, take them back, transfer them, and record a loss or damage. No money is involved." },
+  "assets.settings.manage": { group: "Assets", label: "Prepare asset settings", description: "Enter the lists of asset categories, statuses and conditions. A list is used only after a director who did not enter it confirms it." },
+  // PEEPS-END
 };
 
 // "Grant leave approval" — the one-click grant on Manager Management (user

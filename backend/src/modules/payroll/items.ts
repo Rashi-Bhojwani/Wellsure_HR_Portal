@@ -24,6 +24,10 @@ export interface VersionView {
   value: unknown;
   valueHash: string;
   note: string;
+  /** Where the number came from, in the author's words (required for a statutory rule). */
+  sourceNote: string;
+  /** The date it starts to apply (YYYY-MM-DD), or null. */
+  effectiveFrom: string | null;
   authorUserId: string | null;
   authorName: string;
   createdAt: string;
@@ -81,6 +85,8 @@ export function summarise(data: ItemData, key: string): ItemSummary {
       value: v.value,
       valueHash: v.valueHash,
       note: v.note,
+      sourceNote: v.sourceNote,
+      effectiveFrom: v.effectiveFrom ? day(v.effectiveFrom) : null,
       authorUserId: v.authorUserId,
       authorName: v.authorUserId ? (data.people.get(v.authorUserId) ?? "Someone") : SYSTEM_NAME,
       createdAt: v.createdAt.toISOString(),
@@ -151,7 +157,7 @@ export const editFingerprint = (type: string, key: string, baseVersion: number, 
 export async function appendVersion(
   kind: PayrollItemKind,
   audit: AuditNames,
-  input: { key: string; value: unknown; note: string; before: ItemSummary; auditValue?: unknown; valueHash?: string; maskForAudit?: (value: unknown) => unknown },
+  input: { key: string; value: unknown; note: string; sourceNote?: string; effectiveFrom?: string | null; before: ItemSummary; auditValue?: unknown; valueHash?: string; maskForAudit?: (value: unknown) => unknown },
   actor: Actor,
 ): Promise<void> {
   // A sealed item (an owner's secret) brings its own keyed hash and a mask for anything that goes into an audit row; everything else hashes its plain value, as before.
@@ -160,7 +166,7 @@ export async function appendVersion(
   const baseVersion = input.before.current?.version ?? 0;
   try {
     await prisma.$transaction(async (tx) => {
-      await tx.payrollItemVersion.create({ data: { kind, key: input.key, version: baseVersion + 1, value: input.value as Prisma.InputJsonValue, valueHash, note: input.note, authorUserId: actor.userId } });
+      await tx.payrollItemVersion.create({ data: { kind, key: input.key, version: baseVersion + 1, value: input.value as Prisma.InputJsonValue, valueHash, note: input.note, sourceNote: input.sourceNote ?? "", effectiveFrom: input.effectiveFrom ? new Date(`${input.effectiveFrom}T00:00:00Z`) : null, authorUserId: actor.userId } });
       await recordEvent({ subjectType: audit.eventSubject, subjectId: input.key, type: "EDITED", actorUserId: actor.userId, payload: { version: baseVersion + 1, valueHash, wasConfirmed: input.before.status === "CONFIRMED" } }, tx);
     });
   } catch (err) {
@@ -173,7 +179,7 @@ export async function appendVersion(
     entityType: audit.entityType,
     entityId: input.key,
     before: input.before.current ? { version: input.before.current.version, value: mask(input.before.current.value), status: input.before.status } : null,
-    after: { version: baseVersion + 1, value: input.auditValue ?? mask(input.value), status: "PLACEHOLDER", note: input.note, resetConfirmation: input.before.status === "CONFIRMED" },
+    after: { version: baseVersion + 1, value: input.auditValue ?? mask(input.value), status: "PLACEHOLDER", note: input.note, ...(input.sourceNote ? { sourceNote: input.sourceNote } : {}), ...(input.effectiveFrom ? { effectiveFrom: input.effectiveFrom } : {}), resetConfirmation: input.before.status === "CONFIRMED" },
     ipAddress: actor.ip ?? null,
     userAgent: actor.userAgent ?? null,
   });
@@ -248,7 +254,7 @@ export async function confirmVersion(
   }
   if (input.fingerprint !== confirmFingerprint(type, input.key, cur.version, cur.valueHash)) throw new HttpError(409, "This changed since you looked at it. Look at it again.", "PREVIEW_STALE");
   const note = input.note.trim();
-  if (note.length < 5) throw new HttpError(400, "Say what you checked it against (a few words, for example the CA's letter and its date).", "VALIDATION_ERROR");
+  if (note.length < 5) throw new HttpError(400, "Say what you checked it against (a few words, for example the notification and its date).", "VALIDATION_ERROR");
   input.extraCheck?.(cur);
   let noticeId: string | null = null;
   await prisma.$transaction(async (tx) => {

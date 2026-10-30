@@ -103,7 +103,7 @@ describe("the setup checklist and the readiness screen", () => {
     expect(optional).toEqual(expect.arrayContaining(["rule:TAN", "rule:ENCASH_TAXABLE", "layout:PF_ECR"]));
     expect(ids).not.toContain("rule:TAN");
     expect(ids).not.toContain("layout:PF_ECR");
-    // The shipped placeholders need a CA's confirmation: they are blockers too.
+    // The shipped placeholders need a director's confirmation: they are blockers too.
     expect(ids).toContain("rule:PF_EMPLOYEE_RATE");
   });
 

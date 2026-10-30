@@ -8,6 +8,22 @@ export const COMPONENT_TYPE_LABEL: Record<ComponentType, string> = {
   EMPLOYER_CONTRIBUTION: "Employer contribution",
 };
 
+// What a pay head is for. COMPONENT_TYPES above is the direction money flows (the engine reads it); the head kind is the director's own classification and is
+// never preselected. A COUNTER (days, LOP days) feeds formulas and is not a paid line; a STATUTORY head is produced by the calculator from rules. Neither can be
+// a line of a salary structure.
+export const HEAD_KINDS = ["EARNING", "DEDUCTION", "ONE_OFF", "REIMBURSEMENT", "COUNTER", "STATUTORY"] as const;
+export type HeadKind = (typeof HEAD_KINDS)[number];
+export const HEAD_KIND_LABEL: Record<HeadKind, string> = {
+  EARNING: "Earning",
+  DEDUCTION: "Deduction",
+  ONE_OFF: "One-off",
+  REIMBURSEMENT: "Reimbursement",
+  COUNTER: "Counter",
+  STATUTORY: "Statutory",
+};
+/** Head kinds that are never a line of a salary structure. */
+export const HEAD_KINDS_NOT_IN_STRUCTURE: readonly HeadKind[] = ["COUNTER", "STATUTORY"];
+
 /** A component or structure code: capitals, digits and underscores, starting with a letter. Also usable as a name in a structure formula. */
 export const ITEM_CODE_PATTERN = /^[A-Z][A-Z0-9_]{1,24}$/;
 

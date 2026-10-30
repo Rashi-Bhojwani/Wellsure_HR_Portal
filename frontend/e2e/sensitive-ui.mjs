@@ -117,6 +117,38 @@ try {
 }
 await visit("DEMO001", "a director", "/admin", adminPaths);
 await visit("DEMO001", "a director (own portal)", "/app", employeePaths);
+// PEEPS-BEGIN assets
+// The asset register (Peeps module 1). (1) No asset screen ever shows an amount: the module records events, never money. (2) Who holds what is the
+// register's business: the asset the demo issued to DEMO007 (named DEMO-ASSET-HELD-BY-007 by backend/src/modules/assets/demoSeed.ts) must never reach
+// another employee's or the developer's screens, while the HR Admin's register does show it (so the check is known to be looking at real data).
+{
+  const MARKER = "DEMO-ASSET-HELD-BY-007";
+  const MONEY = /₹|\bINR\b|\bRs\.?\s?\d/;
+  const assetAdmin = adminPaths.filter((p) => p.startsWith("assets/"));
+  const textOf = async (page, url) => {
+    await page.goto(url);
+    await page.waitForLoadState("networkidle").catch(() => undefined);
+    await page.waitForTimeout(600);
+    pages += 1;
+    return page.evaluate(() => document.body.innerText + "\n" + document.body.innerHTML);
+  };
+  for (const [user, label] of [["DEMO006", "an ordinary employee"], ["DEMO005", "the developer"]]) {
+    const page = await sessionFor(user);
+    for (const url of [`${BASE}/app/my-assets`, ...assetAdmin.map((p) => `${BASE}/admin/${p}`)]) {
+      const text = await textOf(page, url);
+      if (text.includes(MARKER)) problems.push(`${label} on ${url}: sees an asset held by someone else`);
+      if (MONEY.test(text)) problems.push(`${label} on ${url}: an amount is shown on an asset screen`);
+    }
+  }
+  const hr = await sessionFor("DEMO004");
+  const register = await textOf(hr, `${BASE}/admin/assets/register`);
+  if (!register.includes(MARKER)) problems.push("the HR Admin's asset register does not list the demo's issued asset (is the demo company seeded with assets?)");
+  for (const user of ["DEMO004", "DEMO001"]) {
+    const page = await sessionFor(user);
+    for (const p of assetAdmin) if (MONEY.test(await textOf(page, `${BASE}/admin/${p}`))) problems.push(`${user} on /admin/${p}: an amount is shown on an asset screen`);
+  }
+}
+// PEEPS-END
 for (const page of sessions.values()) await page.context().close();
 await browser.close();
 

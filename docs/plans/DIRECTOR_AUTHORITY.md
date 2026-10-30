@@ -1,5 +1,8 @@
 # Director authority — plan
 
+> **Amendment, 2026-10-30 (owners' decision): there is no CA.** Wherever this document says CA, accountant or "CA confirmation", read: the owners enter and verify every statutory and tax figure themselves. Each carries a required source note (where the number came from) and an effective-from date, and a different director confirms it against that note. Nothing statutory is filled in by the system. See `CHECKPOINT_1_FOLLOWUP.md` §9.
+
+
 ## 0. Approved (2026-10-29) — owner's answers, recorded before building
 
 The plan below was **approved**. Questions not listed here take the recommendation given in §12.

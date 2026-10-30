@@ -375,3 +375,24 @@ export const adminApps: AdminApp[] = [
     ],
   },
 ];
+
+// PEEPS-BEGIN assets
+// The Assets Management app above was a Phase 8 placeholder. The Peeps asset register (docs/plans/PEEPS_PLAN.md §B.2) fills it in here, so the lines
+// above stay as they were (shared file: additive edits only, PEEPS_PLAN.md §C.2).
+const AssetRegisterPage = lazyPage(() => import("../features/assets/pages/AssetRegisterPage"), "AssetRegisterPage");
+const AssetSettingsPage = lazyPage(() => import("../features/assets/pages/AssetSettingsPage"), "AssetSettingsPage");
+const assetsApp = adminApps.find((a) => a.key === "assets");
+if (assetsApp) {
+  delete assetsApp.phase;
+  assetsApp.menus = [
+    {
+      key: "assets",
+      label: "Assets Management",
+      items: [
+        { key: "asset-register", label: "Asset Register", path: "assets/register", icon: DesktopOutlined, element: AssetRegisterPage, needs: { any: ["assets.view"] } },
+        { key: "asset-settings", label: "Asset Settings", path: "assets/settings", icon: SettingOutlined, element: AssetSettingsPage, needs: { any: ["assets.settings.manage"] } },
+      ],
+    },
+  ];
+}
+// PEEPS-END

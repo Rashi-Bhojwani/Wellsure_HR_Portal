@@ -13,6 +13,8 @@ export interface SecuritySettings {
   passwordMinLength: number;
   invitationTtlHours: number;
   require2faRoles: string[];
+  /** Optional by default: only a director can change it. */
+  requireDirectorTwoFactor: boolean;
   rateLimits: {
     login: RateLimitSetting;
     totpVerify: RateLimitSetting;

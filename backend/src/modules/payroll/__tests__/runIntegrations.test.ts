@@ -229,7 +229,7 @@ describe("runs, finalised runs, arrears, encashment and variance", () => {
       const rate = await provider.getDailyRate(who("full"), day("2026-12-31"));
       expect([rate.amount.toString(), rate.source, rate.isFinal]).toEqual(["800", "SALARY_STRUCTURE", false]); // 24,000 / 30 on the 720,000 salary
       const pre = await previewConfirm("ENCASH_DAILY_RATE_FORMULA", world.checkerA.userId);
-      await confirmRule("ENCASH_DAILY_RATE_FORMULA", { version: pre.version, note: "checked against the CA letter", fingerprint: pre.fingerprint }, { userId: world.checkerA.userId });
+      await confirmRule("ENCASH_DAILY_RATE_FORMULA", { version: pre.version, note: "checked against the notification", fingerprint: pre.fingerprint }, { userId: world.checkerA.userId });
       expect((await provider.getDailyRate(who("full"), day("2026-12-31"))).isFinal).toBe(true);
       await expect(provider.getDailyRate(who("other"), day("2026-07-01"))).resolves.toMatchObject({ source: "SALARY_STRUCTURE" }); // 20,000 / 30 on a 600,000 salary
       await expect(provider.getDailyRate(world.checkerA.employeeId, day("2026-12-31"))).rejects.toMatchObject({ code: "ENCASHMENT_NO_SALARY" }); // somebody with no salary: named, never guessed

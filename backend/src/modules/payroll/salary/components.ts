@@ -3,7 +3,7 @@ import { type CheckerAvailability } from "../approvals";
 import { payrollHash } from "../hash";
 import { appendVersion, confirmVersion, editFingerprint as itemEditFingerprint, keysIn, loadItems, previewConfirmation, summarise, type ItemStatus, type VersionView } from "../items";
 import { asValidationError } from "./common";
-import { parseComponentValue, parseItemCode, type ComponentValue } from "./schemas";
+import { InvalidSalaryValueError, isActiveOn, parseComponentValue, parseItemCode, type ComponentValue } from "./schemas";
 import type { StructureValue } from "./schemas";
 
 // Salary components as governed items (docs/plans/PHASE_6.md §14B): what a line IS. Placeholder until a different person confirms it. Editing one adds
@@ -92,8 +92,50 @@ function parse(codeRaw: unknown, valueRaw: unknown): { code: string; value: Comp
   }
 }
 
+/**
+ * The links from a head to its arrears head and its reversal head: each must be a head that exists, not the head itself, and active over the whole time this
+ * head is active; and following the links must never lead back to the head you started from (a ring of links would never finish explaining a payslip line).
+ */
+export async function assertLinksSound(code: string, value: ComponentValue): Promise<void> {
+  const links = [["arrears head", value.arrearsHead], ["reversal head", value.reversalHead]] as const;
+  const wanted = links.filter(([, c]) => c !== undefined) as Array<[string, string]>;
+  if (wanted.length === 0) return;
+  const problems: string[] = [];
+  const data = await loadItems(KIND);
+  const current = new Map(keysIn(data).map((k) => [k, summarise(data, k).current?.value as ComponentValue | undefined]));
+  for (const [label, target] of wanted) {
+    if (target === code) {
+      problems.push(`The ${label} cannot be the head itself.`);
+      continue;
+    }
+    const t = current.get(target);
+    if (!t) {
+      problems.push(`The ${label} ${target} does not exist. Create it first (it is an ordinary head).`);
+      continue;
+    }
+    if (value.activeFrom && !isActiveOn(t, value.activeFrom)) problems.push(`The ${label} ${target} is not active on ${value.activeFrom}, when this head starts.`);
+    if (!value.activeFrom && (t.activeFrom || t.activeTo)) problems.push(`The ${label} ${target} has active dates, but this head has none, so ${target} would not always be there.`);
+    if (value.activeTo && t.activeTo && t.activeTo < value.activeTo) problems.push(`The ${label} ${target} ends on ${t.activeTo}, before this head does (${value.activeTo}).`);
+  }
+  // A walk along the links from each target; reaching `code` again is a ring.
+  const seen = new Set<string>();
+  const queue = wanted.map(([, c]) => c).filter((c) => c !== code);
+  while (queue.length) {
+    const at = queue.pop()!;
+    if (seen.has(at)) continue;
+    seen.add(at);
+    const v = current.get(at);
+    for (const next of [v?.arrearsHead, v?.reversalHead]) {
+      if (next === code) problems.push(`That would make a ring: ${at} links back to ${code}.`);
+      else if (next) queue.push(next);
+    }
+  }
+  if (problems.length) throw new InvalidSalaryValueError([...new Set(problems.filter(Boolean))]);
+}
+
 export async function previewComponentSave(codeRaw: string, valueRaw: unknown): Promise<ComponentSavePreview> {
   const { code, value } = parse(codeRaw, valueRaw);
+  await assertLinksSound(code, value).catch(asValidationError);
   const valueHash = payrollHash(value);
   const data = await loadItems(KIND, [code]);
   const s = summarise(data, code);
@@ -117,6 +159,7 @@ export async function previewComponentSave(codeRaw: string, valueRaw: unknown): 
 
 export async function saveComponent(codeRaw: string, input: { value: unknown; note?: string; fingerprint: string }, actor: { userId: string; ip?: string | null; userAgent?: string | null }): Promise<ComponentView> {
   const { code, value } = parse(codeRaw, input.value);
+  await assertLinksSound(code, value).catch(asValidationError);
   const valueHash = payrollHash(value);
   const before = summarise(await loadItems(KIND, [code]), code);
   if (before.current?.valueHash === valueHash) throw new HttpError(409, "That is already the current value. Nothing to change.", "NO_CHANGE");

@@ -149,6 +149,48 @@ for (const [width, height] of [
   await page.waitForTimeout(800);
   await check(page, where, "employee: notification bell", { open: () => header().locator(".ant-badge").first().click(), root: ".ant-popover, .ant-drawer-content-wrapper", surface: ".ant-popover-container, .ant-drawer-section" });
   await check(page, where, "employee: account menu", { open: () => header().locator(".ws-avatar-btn").click(), root: ".ant-dropdown", surface: ".ant-dropdown-menu" });
+  // PEEPS-BEGIN assets
+  // The asset register's layers: a filter dropdown, and the settings drawer (always there for a director, set up or not).
+  await page.goto(`${BASE}/admin/assets/register`);
+  await page.locator("header.ws-topbar").waitFor({ timeout: 30000 });
+  await page.waitForTimeout(800);
+  // Phones put the filters in a sheet (FilterBar); desktops show them inline.
+  if (phone) await check(page, where, "assets: filter sheet", { open: () => page.getByRole("button", { name: /filter/i }).first().click(), root: ".ant-drawer-content-wrapper", surface: ".ant-drawer-section" });
+  else await check(page, where, "assets: holder filter", { open: () => page.locator(".ant-select").filter({ has: page.locator("[aria-label=Holder]") }).first().click(), root: ".ant-select-dropdown", surface: null });
+  await page.goto(`${BASE}/admin/assets/settings`);
+  await page.locator("header.ws-topbar").waitFor({ timeout: 30000 });
+  await page.waitForTimeout(800);
+  // A right-hand drawer always covers the right edge, where check() clicks "outside"; so this one is measured the same way, closed with Escape, and then
+  // closed by clicking the mask on the left (on a phone it fills the screen and is closed with Escape or its close button instead).
+  {
+    const label = `${where} / assets: settings drawer`;
+    const open = () => page.getByRole("button", { name: /^Change categories$/ }).click();
+    const root = ".ant-drawer-content-wrapper";
+    const surface = ".ant-drawer-section";
+    console.log(label);
+    await open();
+    await page.waitForTimeout(700);
+    const m = await measure(page, root, surface);
+    if (!m) fail(label, "did not open (nothing visible)");
+    else {
+      await page.screenshot({ path: path.join(OUT, `${label.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.png`) });
+      if (m.alpha < 0.95) fail(label, `its surface is not opaque (background alpha ${m.alpha})`);
+      if (!m.hasEdge) fail(label, "it has neither a border nor a shadow, so it does not read as a layer above the page");
+      if (m.coveredPoints > 0) fail(label, `${m.coveredPoints} of ${m.checkedPoints} points inside it are covered by the page behind it`);
+      if (m.rect.left < -0.5 || m.rect.right > m.viewport.w + 0.5) fail(label, "it does not fit the screen");
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(1000);
+      if (await measure(page, root, surface)) fail(label, "it did not close on Escape");
+      if (!phone) {
+        await open();
+        await page.waitForTimeout(700);
+        await page.mouse.click(3, Math.round(m.viewport.h / 2));
+        await page.waitForTimeout(1000);
+        if (await measure(page, root, surface)) fail(label, "it did not close on a click outside it");
+      }
+    }
+  }
+  // PEEPS-END
   await ctx.close();
 }
 }

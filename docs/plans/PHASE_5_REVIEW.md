@@ -1,5 +1,8 @@
 # Phase 5 review (2026-10-03)
 
+> **Amendment, 2026-10-30 (owners' decision): there is no CA.** Wherever this document says CA, accountant or "CA confirmation", read: the owners enter and verify every statutory and tax figure themselves. Each carries a required source note (where the number came from) and an effective-from date, and a different director confirms it against that note. Nothing statutory is filled in by the system. See `CHECKPOINT_1_FOLLOWUP.md` §9.
+
+
 Written at the end of Phase 5 (commit G), before the user's own testing.
 Per-commit detail is in [`PHASE_5.md`](PHASE_5.md) (plans and as-built
 notes) and [`../PROGRESS.md`](../PROGRESS.md) (what was verified).

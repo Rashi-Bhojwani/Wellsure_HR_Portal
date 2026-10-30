@@ -179,7 +179,7 @@ export async function seedDemoCompany(): Promise<DemoResult> {
     if (value === undefined && def.placeholder === undefined) continue; // nothing to enter and nothing shipped (for example the fixed number of days, unused on a calendar-days basis)
     if (value !== undefined) {
       const p = await previewEdit(def.key, value);
-      await editRule(def.key, { value, note: "DEMO COMPANY: made-up value", fingerprint: p.fingerprint }, { userId: maker });
+      await editRule(def.key, { value, note: "DEMO COMPANY: made-up value", sourceNote: "DEMO COMPANY: a made-up value, from no real notification", effectiveFrom: "2026-04-01", fingerprint: p.fingerprint }, { userId: maker });
     }
     const c = await previewConfirm(def.key, checker);
     if (c.blocked) throw new Error(`The demo cannot confirm ${def.key}: ${c.blocked}`);
@@ -267,5 +267,8 @@ export async function seedDemoCompany(): Promise<DemoResult> {
   }
 
   lap("before: signoffs done");
+  // PEEPS-BEGIN assets
+  await (await import("../../src/modules/assets/demoSeed")).seedDemoAssets(who);
+  // PEEPS-END
   return { people: active.length, paid: active.length, password: DEMO_PASSWORD, logins: DEMO_PEOPLE.map((p) => ({ code: p.code, name: p.name, role: p.role })), cycle: { start: iso(first), end: iso(last) } };
 }

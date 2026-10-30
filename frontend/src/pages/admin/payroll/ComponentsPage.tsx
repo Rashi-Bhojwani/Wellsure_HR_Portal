@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Form, Input, InputNumber, Select, Switch, Tooltip } from "antd";
+import { Button, Form, Input, InputNumber, Select, Tooltip } from "antd";
 import { EditOutlined, HistoryOutlined, PlusOutlined, SafetyCertificateOutlined } from "@ant-design/icons";
-import { COMPONENT_TYPES, COMPONENT_TYPE_LABEL, ITEM_CODE_PATTERN } from "@shared/constants/payrollSalary";
+import { COMPONENT_TYPES, COMPONENT_TYPE_LABEL, HEAD_KINDS, HEAD_KIND_LABEL, ITEM_CODE_PATTERN } from "@shared/constants/payrollSalary";
 import * as payrollApi from "../../../api/payroll";
 import type { ComponentValue, ComponentView } from "../../../api/payroll";
 import { ItemConfirmModal, ItemHistoryDrawer } from "../../../components/payroll/ItemDialogs";
@@ -19,7 +19,16 @@ import { space } from "../../../theme/tokens";
 // treatments apply. How much each line gets is the structure's job. A component is a Placeholder until a director confirms it; editing one adds
 // the next version and nobody's pay moves until a structure and a salary revision pick it up.
 
-const EMPTY: ComponentValue = { name: "", type: "EARNING", taxable: true, pfApplicable: false, esiApplicable: false, prorates: true, payslipLabel: "", payslipOrder: 1 };
+// Nothing is chosen for a new head: every yes/no starts empty and the form insists on an answer (taxable may be left "Not set").
+const EMPTY = { name: "", payslipLabel: "", payslipOrder: 1 } as unknown as ComponentValue;
+
+const YES_NO = [{ value: true, label: "Yes" }, { value: false, label: "No" }];
+const YES_NO_NOT_SET = [...YES_NO, { value: "NOT_SET", label: "Not set yet" }];
+
+/** Optional fields are sent only when chosen: an empty one means Not set, never a default. */
+function withoutBlanks(v: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(v).filter(([, x]) => x !== undefined && x !== ""));
+}
 
 export function ComponentsPage() {
   const { hasPermission } = useAuth();
@@ -160,15 +169,16 @@ export function ComponentsPage() {
 }
 
 function EditDrawer({ initial, onClose, onSaved }: { initial: { code: string | null; value: ComponentValue }; onClose: () => void; onSaved: () => void }) {
-  const [form] = Form.useForm<ComponentValue & { code: string }>();
+  const [form] = Form.useForm<Record<string, unknown> & { code: string }>();
   const [note, setNote] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
   const isNew = initial.code === null;
   const preview = useMutation({
     mutationFn: async () => {
       const v = await form.validateFields();
-      const { code, ...value } = v;
-      return { code: isNew ? code : initial.code!, value: value as ComponentValue, result: await payrollApi.previewComponentSave(isNew ? code : initial.code!, value as ComponentValue) };
+      const { code, ...rest } = v;
+      const value = withoutBlanks({ ...rest, taxable: rest.taxable === "NOT_SET" ? null : rest.taxable });
+      return { code: isNew ? code : initial.code!, value: value as unknown as ComponentValue, result: await payrollApi.previewComponentSave(isNew ? code : initial.code!, value as unknown as ComponentValue) };
     },
     onError: (err) => {
       // A field that fails its own check is shown on the field; anything else is the server's answer.
@@ -215,7 +225,7 @@ function EditDrawer({ initial, onClose, onSaved }: { initial: { code: string | n
     >
       {/* The form stays mounted while the preview is shown, so Back returns to exactly what was typed. */}
       <div hidden={!!p}>
-        <Form form={form} layout="vertical" initialValues={{ ...initial.value, code: initial.code ?? "" }} onValuesChange={() => setProblem(null)}>
+        <Form form={form} layout="vertical" initialValues={{ ...initial.value, taxable: initial.value.taxable === null ? "NOT_SET" : initial.value.taxable, code: initial.code ?? "" }} onValuesChange={() => setProblem(null)}>
           {isNew && (
             <Form.Item name="code" label="Code" extra="Capital letters, digits and underscores, for example BASIC. It cannot be changed later." rules={[{ required: true, pattern: ITEM_CODE_PATTERN, message: "Use capital letters, digits and underscores, starting with a letter" }]}>
               <Input placeholder="BASIC" maxLength={25} autoComplete="off" />
@@ -229,18 +239,35 @@ function EditDrawer({ initial, onClose, onSaved }: { initial: { code: string | n
           </Form.Item>
           <FormGroupTitle>Treatment</FormGroupTitle>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", columnGap: space[4] }}>
-            <Form.Item name="taxable" label="Taxable" valuePropName="checked">
-              <Switch />
+            <Form.Item name="taxable" label="Taxable" rules={[{ required: true, message: "Choose yes, no or not set yet" }]}>
+              <Select options={YES_NO_NOT_SET} placeholder="Choose" />
             </Form.Item>
-            <Form.Item name="pfApplicable" label="PF applies" valuePropName="checked">
-              <Switch />
+            <Form.Item name="pfApplicable" label="PF applies" rules={[{ required: true, message: "Choose yes or no" }]}>
+              <Select options={YES_NO} placeholder="Choose" />
             </Form.Item>
-            <Form.Item name="esiApplicable" label="ESI applies" valuePropName="checked">
-              <Switch />
+            <Form.Item name="esiApplicable" label="ESI applies" rules={[{ required: true, message: "Choose yes or no" }]}>
+              <Select options={YES_NO} placeholder="Choose" />
             </Form.Item>
-            <Form.Item name="prorates" label="Pro-rates with paid days" valuePropName="checked">
-              <Switch />
+            <Form.Item name="prorates" label="Pro-rates with paid days" rules={[{ required: true, message: "Choose yes or no" }]}>
+              <Select options={YES_NO} placeholder="Choose" />
             </Form.Item>
+          </div>
+          <FormGroupTitle>More options (leave empty to leave them not set)</FormGroupTitle>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", columnGap: space[4] }}>
+            <Form.Item name="headKind" label="What it is">
+              <Select allowClear placeholder="Choose" options={HEAD_KINDS.map((k) => ({ value: k, label: HEAD_KIND_LABEL[k] }))} />
+            </Form.Item>
+            <Form.Item name="oneTime" label="One-time"><Select allowClear placeholder="Choose" options={YES_NO} /></Form.Item>
+            <Form.Item name="carryForward" label="Carry forward"><Select allowClear placeholder="Choose" options={YES_NO} /></Form.Item>
+            <Form.Item name="reimbursement" label="Reimbursement"><Select allowClear placeholder="Choose" options={YES_NO} /></Form.Item>
+            <Form.Item name="ytd" label="Show year to date"><Select allowClear placeholder="Choose" options={YES_NO} /></Form.Item>
+            <Form.Item name="bankTransfer" label="Paid by bank transfer"><Select allowClear placeholder="Choose" options={YES_NO} /></Form.Item>
+            <Form.Item name="payslipVisible" label="Shown on the payslip"><Select allowClear placeholder="Choose" options={YES_NO} /></Form.Item>
+            <Form.Item name="ctcGroup" label="CTC group"><Input maxLength={40} autoComplete="off" /></Form.Item>
+            <Form.Item name="activeFrom" label="Active from" extra="Year-month-day"><Input maxLength={10} placeholder="YYYY-MM-DD" autoComplete="off" /></Form.Item>
+            <Form.Item name="activeTo" label="Active until" extra="Year-month-day"><Input maxLength={10} placeholder="YYYY-MM-DD" autoComplete="off" /></Form.Item>
+            <Form.Item name="arrearsHead" label="Arrears head" extra="Code of an ordinary head"><Input maxLength={25} autoComplete="off" /></Form.Item>
+            <Form.Item name="reversalHead" label="Reversal head" extra="Code of an ordinary head"><Input maxLength={25} autoComplete="off" /></Form.Item>
           </div>
           <FormGroupTitle>On the payslip</FormGroupTitle>
           <div style={{ display: "flex", gap: space[4], flexWrap: "wrap" }}>
@@ -268,7 +295,7 @@ function EditDrawer({ initial, onClose, onSaved }: { initial: { code: string | n
           <ApprovalBanner tone="info" title={p.impact} />
           <Form layout="vertical" component="div">
             <Form.Item label="Why this, and where it came from" htmlFor="component-note" extra="Optional, but the person who confirms it will want it." style={{ marginBottom: 0 }}>
-              <Input.TextArea id="component-note" value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={500} placeholder="For example: as agreed with the CA" />
+              <Input.TextArea id="component-note" value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={500} placeholder="For example: as agreed with the owners, in the offer letters" />
             </Form.Item>
           </Form>
           {problem && <ApprovalBanner tone="danger" title={problem} />}

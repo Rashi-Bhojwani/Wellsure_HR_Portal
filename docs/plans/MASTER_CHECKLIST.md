@@ -37,7 +37,7 @@ pause only at CHECKPOINT 1 (after Stage 2), CHECKPOINT 2 (after P7-3) and stop c
 - [ ] CHECKPOINT 1: report Stages 0–2, wait for go-ahead
 
 ## Stage 3 — payroll model (capabilities only, no values)
-- [ ] 3.0 report + `PAYROLL_MODEL_PLAN.md`
+- [x] 3.0 report + `PAYROLL_MODEL_PLAN.md`
 - [ ] 3.1 pay heads
 - [ ] 3.2 salary rules (all Not set)
 - [ ] 3.3 arrears, LOP reversal, hold salary

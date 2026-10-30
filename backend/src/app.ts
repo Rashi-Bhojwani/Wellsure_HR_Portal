@@ -41,6 +41,9 @@ import { devSimulatorRouter } from "./modules/dev/routes";
 import { reportsRouter } from "./modules/reports/routes";
 import { payrollRouter } from "./modules/payroll/routes";
 import { payslipRouter } from "./modules/payroll/payslipRoutes";
+// PEEPS-BEGIN assets
+import { assetsRouter } from "./modules/assets/routes";
+// PEEPS-END
 
 // Every API router and where it's mounted — one list, so the route
 // inventory test (modules/managers/__tests__/routeInventory.test.ts) can see
@@ -87,6 +90,9 @@ const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   { path: "/api/payslips", router: payslipRouter },
   { path: "/api/attendance", router: attendanceRouter },
   { path: "/api/biometric", router: biometricRouter },
+  // PEEPS-BEGIN assets
+  { path: "/api/assets", router: assetsRouter },
+  // PEEPS-END
 ];
 
 /** The mount list for an environment. The punch simulator's read-only helpers (P2-G) exist everywhere except production, where the path is a plain 404. */

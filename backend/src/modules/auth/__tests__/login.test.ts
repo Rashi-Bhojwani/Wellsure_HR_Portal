@@ -76,6 +76,26 @@ describe("POST /api/auth/login", () => {
     expect(dbUser?.lockedUntil).not.toBeNull();
   });
 
+  describe("two-step sign-in for directors is optional", () => {
+    const KEY = "auth.requireDirectorTwoFactor";
+    afterAll(async () => {
+      await prisma.systemSetting.deleteMany({ where: { key: KEY } });
+    });
+    it("a director signs in normally without it by default; once the owners make it compulsory the same director is asked to enrol; turned off again, they sign in normally", async () => {
+      const director = await createTestUser(org, { roleCode: "SUPER_ADMIN" });
+      employeeIds.push(director.employeeId);
+      await prisma.systemSetting.deleteMany({ where: { key: KEY } });
+      const normal = await request(app).post("/api/auth/login").send({ employeeCode: director.employeeCode, password: TEST_PASSWORD });
+      expect([normal.status, normal.body.status === "requires_totp_setup", typeof normal.body.accessToken]).toEqual([200, false, "string"]);
+      await prisma.systemSetting.upsert({ where: { key: KEY }, create: { key: KEY, value: true }, update: { value: true } });
+      const asked = await request(app).post("/api/auth/login").send({ employeeCode: director.employeeCode, password: TEST_PASSWORD });
+      expect([asked.status, asked.body.status, asked.body.accessToken]).toEqual([200, "requires_totp_setup", undefined]);
+      await prisma.systemSetting.update({ where: { key: KEY }, data: { value: false } });
+      const again = await request(app).post("/api/auth/login").send({ employeeCode: director.employeeCode, password: TEST_PASSWORD });
+      expect(typeof again.body.accessToken).toBe("string");
+    });
+  });
+
   describe("2FA-required roles", () => {
     // auth.require2faRoles is a global singleton (spec §7.8's System
     // Settings), not something this suite owns — snapshot whatever's

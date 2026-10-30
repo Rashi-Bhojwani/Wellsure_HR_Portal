@@ -3,7 +3,7 @@ import { z } from "zod";
 export const ruleKeyParamsSchema = z.object({ key: z.string().regex(/^[A-Z][A-Z0-9_]{2,60}$/) });
 
 export const ruleEditPreviewSchema = z.object({ value: z.unknown() });
-export const ruleEditSchema = z.object({ value: z.unknown(), note: z.string().trim().max(500).optional(), fingerprint: z.string().min(10).max(200) });
+export const ruleEditSchema = z.object({ value: z.unknown(), note: z.string().trim().max(500).optional(), sourceNote: z.string().trim().max(500).optional(), effectiveFrom: z.string().trim().max(10).optional(), fingerprint: z.string().min(10).max(200) });
 
 export const ruleConfirmSchema = z.object({
   version: z.number().int().min(1),

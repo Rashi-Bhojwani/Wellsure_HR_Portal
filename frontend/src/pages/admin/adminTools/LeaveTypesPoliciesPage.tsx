@@ -257,7 +257,7 @@ export function LeaveTypesPoliciesPage() {
       />
       <Stack>
         <HelpStrip storageKey="leave-types-policies-help">
-          Every leave type's policy is configurable here — accrual, eligibility, carry-forward, balance rules, comp-off, WFH and Restricted Holiday limits. Several defaults below are still pending HR/CA
+          Every leave type's policy is configurable here — accrual, eligibility, carry-forward, balance rules, comp-off, WFH and Restricted Holiday limits. Several defaults below are still pending the owners
           confirmation (see docs/PROGRESS.md's Open Questions) — change them here once confirmed.
         </HelpStrip>
 

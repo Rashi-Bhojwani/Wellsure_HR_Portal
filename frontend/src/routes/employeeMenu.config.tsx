@@ -29,6 +29,10 @@ import {
   WalletOutlined,
 } from "@ant-design/icons";
 import { lazyPage } from "./lazyPage";
+// PEEPS-BEGIN assets
+import { LaptopOutlined } from "@ant-design/icons";
+const MyAssetsPage = lazyPage(() => import("../features/assets/pages/MyAssetsPage"), "MyAssetsPage");
+// PEEPS-END
 
 const HomePage = lazyPage(() => import("../pages/employee/home/HomePage"), "HomePage");
 const EngagePage = lazyPage(() => import("../pages/employee/engage/EngagePage"), "EngagePage");
@@ -289,6 +293,16 @@ export const employeeMenu: EmployeeMenuEntry[] = [
     element: WorkflowDelegatesPage,
     description: "Hand your approvals to someone while you're away.",
   },
+  // PEEPS-BEGIN assets
+  {
+    key: "my-assets",
+    label: "My Assets",
+    path: "my-assets",
+    icon: LaptopOutlined,
+    element: MyAssetsPage,
+    description: "Equipment issued to you, and acknowledging receipt.",
+  },
+  // PEEPS-END
 ];
 
 // ── Mobile (Phase 5 commit G, docs/UI_REFERENCE.md Part 4) ──────────────

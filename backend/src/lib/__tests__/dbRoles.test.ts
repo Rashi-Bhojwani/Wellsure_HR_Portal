@@ -83,7 +83,11 @@ describe("the app role", () => {
   });
 
   it("keeps UPDATE (and only UPDATE) on the append-only tables whose rows change state: payroll approvals and bank batches", async () => {
-    expect(UPDATABLE_APPEND_ONLY_TABLES).toEqual(["payroll_approvals", "bank_transfer_batches"]);
+    expect(UPDATABLE_APPEND_ONLY_TABLES).toEqual(["payroll_approvals", "bank_transfer_batches",
+      // PEEPS-BEGIN assets
+      "asset_assignments", // closed once and acknowledged once; its trigger refuses every other change (assets.test.ts / assetsDbRoles.test.ts)
+      // PEEPS-END
+    ]);
     expect(await appendOnlyTables(prisma)).toContain("payroll_approvals");
     const priv = async (table: string) =>
       (await app.$queryRawUnsafe<Array<{ upd: boolean; del: boolean; trunc: boolean; ins: boolean }>>(
