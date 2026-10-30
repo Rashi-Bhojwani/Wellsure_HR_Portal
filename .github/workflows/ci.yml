@@ -17,6 +17,8 @@ concurrency:
 jobs:
   install-lint-typecheck-test:
     runs-on: ubuntu-latest
+    # Every job has a time limit (the longest, this one, takes about 15 minutes): a hung step fails the job and the logs are kept, instead of running for hours.
+    timeout-minutes: 25
     # Postgres/Redis as service containers — nothing needed on the runner
     # beyond Docker (which GitHub-hosted runners already have). Same
     # DATABASE_URL/REDIS_URL shape as local dev (see README.md), just
@@ -103,14 +105,17 @@ jobs:
         run: npm run db:seed
 
       - name: Test
+        timeout-minutes: 18
         run: npm run test
 
       # The demo company (made-up people, salaries and a fictional bank file) is built on the test database and the sensitive-data crawl is repeated on it as the developer.
       - name: Demo company tests
+        timeout-minutes: 5
         run: npm run test:demo --prefix backend
 
   docker-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -125,7 +130,7 @@ jobs:
   # reboot: restart on failure plus automatic start stand in for that.
   agent-windows:
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 25
     env:
       NSSM_VERSION: "2.24"
       # nssm.cc is the only official source and is sometimes unreliable: the
@@ -219,7 +224,7 @@ jobs:
   # backend/perf/baseline.json (fail if more than 2x), which this runner records.
   attendance-replay:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16-alpine
@@ -395,7 +400,7 @@ jobs:
   # made-up secret may be on any, and the DEMO COMPANY banner must be on all of them (docs/plans/PHASE_6.md §14J).
   sensitive-ui:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16-alpine
@@ -464,10 +469,14 @@ jobs:
           done
           echo "the stack did not come up"; tail -n 40 "$RUNNER_TEMP"/stack/*.log; exit 1
 
-      - name: Seed the demo company, then look for secrets on every page
-        run: |
-          npm run seed:demo-company --prefix backend
-          npm run check:sensitive-ui --prefix frontend
+      # Two steps with their own limits: a seed that fails or hangs is reported as that, within 3 minutes, and the scan (about 12 minutes) cannot take the job past its limit.
+      - name: Seed the demo company
+        timeout-minutes: 3
+        run: npm run seed:demo-company --prefix backend
+
+      - name: Look for secrets on every page
+        timeout-minutes: 16
+        run: npm run check:sensitive-ui --prefix frontend
 
       - uses: actions/upload-artifact@v4
         if: always()
