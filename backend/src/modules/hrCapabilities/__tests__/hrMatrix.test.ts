@@ -125,8 +125,8 @@ describe("the persona matrix", () => {
     expect(await statuses("hrNamed")).toEqual(base);
   });
 
-  it("every GET route under /api/payroll and /api/payslips, with ids filled in, answers 403 to both HR roles; the only exceptions are the three that return a person's OWN payslips", async () => {
-    const own = new Set(["GET /api/payslips/mine", "GET /api/payslips/mine/:id", "GET /api/payslips/mine/:id/pdf"]);
+  it("every GET route under /api/payroll and /api/payslips, with ids filled in, answers 403 to both HR roles; the only exceptions are the four that return a person's OWN payslips or the explanation of one", async () => {
+    const own = new Set(["GET /api/payslips/mine", "GET /api/payslips/mine/:id", "GET /api/payslips/mine/:id/why", "GET /api/payslips/mine/:id/pdf"]);
     const routes = Object.keys(ROUTE_CLASSIFICATION).filter((r) => /^GET \/api\/(payroll|payslips)(\/|$)/.test(r));
     expect(routes.length).toBeGreaterThanOrEqual(30);
     const wrong: string[] = [];
@@ -138,7 +138,7 @@ describe("the persona matrix", () => {
       }
     }
     expect(wrong).toEqual([]);
-    // And the list itself: the three own-payslip routes are the only such routes the code has.
+    // And the list itself: the four own-payslip routes are the only such routes the code has.
     expect(routes.filter((r) => !/^GET \/api\/payroll/.test(r)).sort()).toEqual([...own].sort());
   }, 240_000);
 

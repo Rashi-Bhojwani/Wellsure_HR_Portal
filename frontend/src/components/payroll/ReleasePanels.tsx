@@ -15,6 +15,7 @@ import { PayslipView } from "./PayslipView";
 import { fs } from "../../theme/tokens";
 import { ConfirmModal, DataTable, EmptyState, Panel, SideDrawer, SkeletonCard, Stack, StatusChip, toast, type ChipTone } from "../../ui";
 import { FileRow, Num } from "./payrollUi";
+import { PayslipWhyButton } from "./PayslipWhy";
 
 const { Text, Paragraph } = Typography;
 
@@ -135,7 +136,12 @@ function OnePayslip({ id }: { id: string }) {
   const { data, isLoading, error } = useQuery({ queryKey: ["payroll", "payslip", id], queryFn: () => payrollApi.getPayslip(id) });
   if (isLoading) return <SkeletonCard lines={8} />;
   if (error || !data) return <EmptyState kind="error" compact title="Could not load this payslip" description={apiErrorMessage(error, "Could not load this payslip.")} />;
-  return <PayslipView content={data.content} />;
+  return (
+    <>
+      <PayslipWhyButton queryKey={["payroll", "payslip", id, "why"]} load={() => payrollApi.getPayslipWhy(id)} />
+      <PayslipView content={data.content} />
+    </>
+  );
 }
 
 // ── The bank file ──

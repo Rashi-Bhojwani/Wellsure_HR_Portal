@@ -131,6 +131,7 @@ const readSlips = requirePermission("payroll.payslip.view");
 payrollRouter.get("/runs/:id/payslips", readSlips, validate({ params: rv.runIdParamsSchema }), rel.runSlips);
 payrollRouter.post("/runs/:id/payslips/prepare-again", make, validate({ params: rv.runIdParamsSchema }), rel.slipsPrepareAgain);
 payrollRouter.get("/payslips/:id", readSlips, validate({ params: rv.slipIdParamsSchema }), rel.slip);
+payrollRouter.get("/payslips/:id/why", readSlips, validate({ params: rv.slipIdParamsSchema }), rel.slipWhy);
 payrollRouter.get("/payslips/:id/pdf", readSlips, validate({ params: rv.slipIdParamsSchema }), rel.slipPdf);
 payrollRouter.get("/runs/:id/items/:employeeId/payslip-preview", view, validate({ params: rv.previewParamsSchema }), rel.preview);
 payrollRouter.get("/runs/:id/items/:employeeId/payslip-preview.pdf", view, validate({ params: rv.previewParamsSchema }), rel.previewPdf);

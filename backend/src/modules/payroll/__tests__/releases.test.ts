@@ -154,6 +154,39 @@ describe("payslips, the bank file and the statutory files from a final run", () 
     }
   });
 
+  it("'Why?' explains each line of a payslip with the rules behind it: value, source note, applies-from date and confirmer; only the owner or HR with payslip view reads it", async () => {
+    const a = await slipOf("a");
+    const b = await slipOf("b");
+    const own = await request(app).get(`/api/payslips/mine/${a.id}/why`).set(...authHeader(aToken));
+    expect(own.status, JSON.stringify(own.body)).toBe(200);
+    expect(own.body.payslipId).toBe(a.id);
+    const lines = own.body.lines as Array<{ code: string; source: string; explanation: string[]; rules: Array<{ key: string; status: string; sourceNote: string | null; effectiveFrom: string | null; confirmedBy: string | null; level: string; overridden: boolean; value: unknown }> }>;
+    expect(lines.length).toBeGreaterThan(0);
+    for (const l of lines) expect(l.explanation.length, l.code).toBeGreaterThan(0);
+    // Every salary line names the rounding rule it was worked out under, with where that number came from and who vouched for it.
+    const component = lines.find((l) => l.source === "COMPONENT")!;
+    const rounding = component.rules.find((r) => r.key === "LINE_ROUNDING")!;
+    expect(rounding).toMatchObject({ status: "CONFIRMED", level: "COMPANY", overridden: false });
+    expect(rounding.sourceNote).toMatch(/\S/);
+    expect(rounding.effectiveFrom).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(rounding.confirmedBy).toMatch(/\S/);
+    expect(component.rules.some((r) => r.key === "PAY_DAYS_BASIS")).toBe(true);
+    // A statutory line shows its rates and ceiling, each with a source note.
+    const pf = lines.find((l) => l.code === "PF_EMPLOYEE");
+    if (pf) {
+      expect(pf.rules.map((r) => r.key)).toEqual(expect.arrayContaining(["PF_EMPLOYEE_RATE", "PF_WAGE_CEILING"]));
+      for (const r of pf.rules) expect(r.sourceNote, r.key).toMatch(/\S/);
+    }
+    // Somebody else's slip is a 404 exactly like one that does not exist.
+    expect((await request(app).get(`/api/payslips/mine/${b.id}/why`).set(...authHeader(aToken))).status).toBe(404);
+    expect((await request(app).get("/api/payslips/mine/does-not-exist/why").set(...authHeader(aToken))).status).toBe(404);
+    expect((await request(app).get(`/api/payslips/mine/${a.id}/why`)).status).toBe(401);
+    // HR with payslip view reads any; an HR executive and an employee read none through the HR route.
+    expect((await api(world.tokens.checkerA, "get", `/payslips/${b.id}/why`)).status).toBe(200);
+    for (const token of [hrExecToken, aToken]) expect((await api(token, "get", `/payslips/${a.id}/why`)).status).toBe(403);
+    expect((await api(world.tokens.checkerA, "get", "/payslips/does-not-exist/why")).status).toBe(404);
+  });
+
   it("the PDF says it is being prepared until the worker has made it", async () => {
     const a = await slipOf("a");
     const r = await request(app).get(`/api/payslips/mine/${a.id}/pdf`).set(...authHeader(aToken));

@@ -4,7 +4,7 @@ import { attachResponse, batchForRun, downloadBatchFile, getBatch, markPaid } fr
 import { confirmLayout, getLayout, listLayouts, previewLayoutConfirm, previewLayoutSave, saveLayout, showsBankLayout, viewerOf } from "./layouts";
 import { writeAuditLog } from "../../../lib/audit";
 import { downloadOutput, generateOutput, listOutputs } from "./outputs";
-import { anyPayslip, anyPayslipPdf, draftPreview, draftPreviewPdf, myPayslip, myPayslipPdf, myPayslips, prepareAgain, runPayslips } from "./payslipAccess";
+import { anyPayslip, anyPayslipPdf, anyPayslipWhy, myPayslipWhy, draftPreview, draftPreviewPdf, myPayslip, myPayslipPdf, myPayslips, prepareAgain, runPayslips } from "./payslipAccess";
 import { generateBankFile, publishPayslips } from "./release";
 
 const actor = (req: Request) => ({ userId: req.user!.userId, ip: req.ip ?? null });
@@ -19,6 +19,7 @@ export const bankGenerate = async (req: Request, res: Response): Promise<void> =
 // Payslips: HR
 export const runSlips = async (req: Request, res: Response): Promise<void> => send(res, 200, await runPayslips(id(req)));
 export const slip = async (req: Request, res: Response): Promise<void> => send(res, 200, await anyPayslip(id(req)));
+export const slipWhy = async (req: Request, res: Response): Promise<void> => send(res, 200, await anyPayslipWhy(id(req)));
 export const slipPdf = async (req: Request, res: Response): Promise<void> => send(res, 200, await anyPayslipPdf(id(req)));
 export const slipsPrepareAgain = async (req: Request, res: Response): Promise<void> => send(res, 202, await prepareAgain(id(req)));
 export const preview = async (req: Request, res: Response): Promise<void> => send(res, 200, await draftPreview(id(req), req.params.employeeId as string));
@@ -32,6 +33,7 @@ export const previewPdf = async (req: Request, res: Response): Promise<void> => 
 // Payslips: the employee's own (SELF: the caller's employee id is the only one ever used)
 export const mine = async (req: Request, res: Response): Promise<void> => send(res, 200, await myPayslips(req.user!.employeeId));
 export const mineOne = async (req: Request, res: Response): Promise<void> => send(res, 200, await myPayslip(req.user!.employeeId, id(req)));
+export const mineWhy = async (req: Request, res: Response): Promise<void> => send(res, 200, await myPayslipWhy(req.user!.employeeId, id(req)));
 export const minePdf = async (req: Request, res: Response): Promise<void> => send(res, 200, await myPayslipPdf(req.user!.employeeId, id(req)));
 
 // The bank batch

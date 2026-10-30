@@ -993,6 +993,42 @@ export async function myPayslips(): Promise<{ payslips: PayslipSummary[] }> {
 export async function myPayslip(id: string): Promise<PayslipSummary & { content: PayslipContent }> {
   return (await apiClient.get(`/api/payslips/mine/${id}`)).data;
 }
+export interface WhyRule {
+  key: string;
+  label: string;
+  value: unknown;
+  version: number;
+  status: "CONFIRMED" | "PLACEHOLDER" | "NOT_SET";
+  sourceNote: string | null;
+  effectiveFrom: string | null;
+  enteredBy: string | null;
+  confirmedBy: string | null;
+  confirmedOn: string | null;
+  level: "COMPANY" | "DEPARTMENT" | "EMPLOYEE";
+  overridden: boolean;
+  registrationRef: string | null;
+}
+export interface WhyLine {
+  code: string;
+  label: string;
+  kind: string;
+  source: string;
+  amount: string;
+  explanation: string[];
+  working: Array<{ name: string; value: string }>;
+  rules: WhyRule[];
+}
+export interface PayslipWhy {
+  payslipId: string;
+  cycleLabel: string;
+  lines: WhyLine[];
+}
+export async function myPayslipWhy(id: string): Promise<PayslipWhy> {
+  return (await apiClient.get(`/api/payslips/mine/${id}/why`)).data;
+}
+export async function getPayslipWhy(id: string): Promise<PayslipWhy> {
+  return (await apiClient.get(`${base}/payslips/${id}/why`)).data;
+}
 export async function myPayslipPdf(id: string): Promise<PdfLink> {
   return (await apiClient.get(`/api/payslips/mine/${id}/pdf`)).data;
 }

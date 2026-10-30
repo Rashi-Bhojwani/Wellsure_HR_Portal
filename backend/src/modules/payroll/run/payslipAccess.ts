@@ -8,6 +8,7 @@ import { peopleWithoutPayslip } from "./held";
 import { buildPayslips, type PayslipContent } from "./payslip";
 import { payslipHtml } from "./payslipHtml";
 import { startDelivery } from "./release";
+import { whyForPayslip } from "./why";
 
 // Who reads a payslip, and how (docs/plans/PHASE_6.md §9, §14H). An employee reads only their own: the id of somebody else's payslip answers exactly as an id that does
 // not exist (404), on every route including the PDF. HR with payroll.payslip.view reads any. A manager, an HR executive and everyone else reads none.
@@ -30,6 +31,16 @@ async function ownPayslip(employeeId: string, id: string) {
   const row = await prisma.payslip.findFirst({ where: { id, employeeId }, include: { delivery: true } });
   if (!row) throw new HttpError(404, "There is no such payslip.", "NOT_FOUND");
   return row;
+}
+
+export async function myPayslipWhy(employeeId: string, id: string) {
+  return whyForPayslip(await ownPayslip(employeeId, id));
+}
+
+export async function anyPayslipWhy(id: string) {
+  const row = await prisma.payslip.findUnique({ where: { id } });
+  if (!row) throw new HttpError(404, "There is no such payslip.", "NOT_FOUND");
+  return whyForPayslip(row);
 }
 
 export async function myPayslip(employeeId: string, id: string) {
