@@ -136,6 +136,10 @@ export const STANDALONE_ROOT_MODELS: Record<string, string> = {
   WeekOffPattern: "attendance config master (Phase 2); deleteWithDependents(\"WeekOffPattern\", ids)",
   AttendancePolicy: "attendance config master (Phase 2); deleteWithDependents(\"AttendancePolicy\", ids)",
   AttendanceCycleRule: "attendance cycle rules (Phase 2); deleteWithDependents(\"AttendanceCycleRule\", ids)",
+  // PEEPS-BEGIN assets
+  Asset: "asset register entry (Peeps assets); no employee FK; deleteWithDependents(\"Asset\", ids) takes its assignments and events with it (purge-guarded)",
+  AssetSettingVersion: "append-only asset category/status/condition lists (Peeps assets); user columns are plain text; deleteWithDependents(\"AssetSettingVersion\", ids) takes its confirmation with it (purge-guarded)",
+  // PEEPS-END
 };
 
 // Columns holding a StorageService key. When the engine deletes a row it
@@ -343,6 +347,10 @@ function delegate(modelName: string): Delegate {
 // Tables a database trigger keeps immutable, deletable only through the
 // test-purge exception (app.audit_purge = 'test' in a dev-marked database).
 const PURGE_GUARDED_MODELS = new Set(["RawPunch", "ManualAttendanceEntry", "AttendanceOverride", "ShiftOverride", "LeaveDayRelease", "AttendancePeriodLock", "PayrollItemVersion", "PayrollItemConfirmation", "PayrollApproval", "PayrollEvent", "EmployeeSalary", "EmployeeSalaryLine", "PayrollSalaryRevision", "PayrollAdjustment", "PayrollRun", "PayrollRunItem", "PayrollRunLine", "PayrollPeriodLock", "PayrollRunRelease", "Payslip", "BankTransferBatch", "BankTransferRow", "PayrollOutput", "PayrollSetupSignoff", "DirectorActionNotice", "DirectorActionReceipt", "RolePermissionRemoval", "HrCapabilitySwitch"]);
+
+// PEEPS-BEGIN assets
+for (const m of ["Asset", "AssetAssignment", "AssetEvent", "AssetSettingVersion", "AssetSettingConfirmation"]) PURGE_GUARDED_MODELS.add(m);
+// PEEPS-END
 
 // Deletes the given rows of `model` and every row that depends on them,
 // transitively, in FK-safe order. Optional FKs follow OPTIONAL_FK_POLICY.

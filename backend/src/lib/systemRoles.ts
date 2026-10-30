@@ -61,6 +61,11 @@ const HR_EXECUTIVE_PERMS: string[] = [
   "attendance.regularization.approve",
   // Phase 3 commit 2 — the raw punch log.
   "attendance.swipes.view",
+  // PEEPS-BEGIN assets
+  // Peeps module 1 — HR keeps the asset register (owner's brief: HR manages it; directors see everything as Super Admins).
+  "assets.view",
+  "assets.manage",
+  // PEEPS-END
 ];
 const HR_ADMIN_PERMS: string[] = [
   ...HR_EXECUTIVE_PERMS,
@@ -92,6 +97,10 @@ const HR_ADMIN_PERMS: string[] = [
   // Phase 2 — attendance settings and biometric devices.
   "attendance.config.manage",
   "attendance.devices.manage",
+  // PEEPS-BEGIN assets
+  // Peeps module 1 — HR Admin prepares the asset categories, statuses and conditions; a director who did not prepare them confirms (no key: the service and a trigger check).
+  "assets.settings.manage",
+  // PEEPS-END
 ];
 // Phase 6: the maker set. Preparing and submitting; never approving (a different role holds payroll.approve).
 const PAYROLL_ADMIN_PERMS = [

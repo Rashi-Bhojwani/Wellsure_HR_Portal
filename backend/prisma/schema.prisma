@@ -517,6 +517,9 @@ model Employee {
   attendanceOverrides        AttendanceOverride[]
   shiftOverrides             ShiftOverride[]
   leaveDayReleases           LeaveDayRelease[]
+  // PEEPS-BEGIN assets
+  assetAssignments           AssetAssignment[]
+  // PEEPS-END
 
   @@index([status])
   @@index([dateOfJoining])
@@ -3112,3 +3115,130 @@ model HrCapabilitySwitch {
   @@index([subjectKind, subjectKey])
   @@map("hr_capability_switches")
 }
+
+// PEEPS-BEGIN assets
+// Asset register (docs/plans/PEEPS_PLAN.md §B.2, Peeps module 1). Categories, statuses and conditions are owner settings: nothing is preloaded, and
+// the register refuses to take an asset until each list has a version entered by one person and confirmed by a director who is not that person.
+// Assignment history and the event log are append-only (database triggers); an asset has at most one open assignment (a partial unique index,
+// asset_assignments_one_open, added in the migration because Prisma cannot express it). No money anywhere in this module: recovering the cost of a
+// lost or damaged asset is Session A's (payroll); this module only records the event.
+
+enum AssetSettingKind {
+  CATEGORIES
+  STATUSES
+  CONDITIONS
+}
+
+enum AssetAssignmentEndReason {
+  RETURNED
+  TRANSFERRED
+  LOST
+}
+
+enum AssetEventKind {
+  CREATED
+  EDITED
+  ISSUED
+  ACKNOWLEDGED
+  RETURNED
+  TRANSFERRED
+  LOST
+  DAMAGED
+}
+
+// One list (categories, statuses or conditions) as entered. Append-only; a change is a new version. `value` is an array of { code, label } (statuses
+// also carry `issuable`). In force = the highest version that has a confirmation.
+model AssetSettingVersion {
+  id              String           @id @default(cuid())
+  kind            AssetSettingKind
+  version         Int
+  value           Json
+  note            String           @default("")
+  enteredByUserId String           @map("entered_by_user_id")
+  enteredAt       DateTime         @default(now()) @map("entered_at") @db.Timestamptz(3)
+
+  confirmation AssetSettingConfirmation?
+
+  @@unique([kind, version])
+  @@map("asset_setting_versions")
+}
+
+// A director (not the person who entered the version) vouching for it. Append-only; the database refuses the enterer and a non-director.
+model AssetSettingConfirmation {
+  id                String              @id @default(cuid())
+  versionId         String              @unique @map("version_id")
+  version           AssetSettingVersion @relation(fields: [versionId], references: [id])
+  confirmedByUserId String              @map("confirmed_by_user_id")
+  confirmedAt       DateTime            @default(now()) @map("confirmed_at") @db.Timestamptz(3)
+  note              String              @default("")
+
+  @@map("asset_setting_confirmations")
+}
+
+// The register entry. `number` is the stable asset ID (shown as AST-000123), never reused. Category and status are codes from the confirmed lists.
+model Asset {
+  id              String   @id @default(cuid())
+  number          Int      @unique @default(autoincrement())
+  name            String
+  categoryCode    String   @map("category_code")
+  statusCode      String   @map("status_code")
+  serialNumber    String?  @map("serial_number")
+  model           String?
+  notes           String?
+  createdByUserId String   @map("created_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  assignments AssetAssignment[]
+  events      AssetEvent[]
+
+  @@index([categoryCode])
+  @@index([statusCode])
+  @@map("assets")
+}
+
+// Who holds an asset, from when to when. Rows are never deleted; the only changes allowed (by trigger) are closing an open row once and recording the
+// holder's acknowledgement once.
+model AssetAssignment {
+  id                  String                    @id @default(cuid())
+  assetId             String                    @map("asset_id")
+  asset               Asset                     @relation(fields: [assetId], references: [id])
+  employeeId          String                    @map("employee_id")
+  employee            Employee                  @relation(fields: [employeeId], references: [id])
+  issuedAt            DateTime                  @default(now()) @map("issued_at") @db.Timestamptz(3)
+  issuedByUserId      String                    @map("issued_by_user_id")
+  issueConditionCode  String                    @map("issue_condition_code")
+  issueNote           String?                   @map("issue_note")
+  acknowledgedAt      DateTime?                 @map("acknowledged_at") @db.Timestamptz(3)
+  endedAt             DateTime?                 @map("ended_at") @db.Timestamptz(3)
+  endedByUserId       String?                   @map("ended_by_user_id")
+  endReason           AssetAssignmentEndReason? @map("end_reason")
+  returnConditionCode String?                   @map("return_condition_code")
+  endNote             String?                   @map("end_note")
+
+  @@index([assetId])
+  @@index([employeeId])
+  @@map("asset_assignments")
+}
+
+// Every action on an asset, in order. Append-only. assignmentId/employeeId are plain references (the assignment row is the source of truth).
+model AssetEvent {
+  id            String         @id @default(cuid())
+  assetId       String         @map("asset_id")
+  asset         Asset          @relation(fields: [assetId], references: [id])
+  kind          AssetEventKind
+  assignmentId  String?        @map("assignment_id")
+  employeeId    String?        @map("employee_id")
+  conditionCode String?        @map("condition_code")
+  statusCode    String?        @map("status_code")
+  note          String?
+  details       Json?
+  actorUserId   String         @map("actor_user_id")
+  at            DateTime       @default(now()) @db.Timestamptz(3)
+
+  @@index([assetId, at])
+  @@index([employeeId])
+  @@map("asset_events")
+}
+
+// PEEPS-END

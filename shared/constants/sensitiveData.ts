@@ -165,6 +165,11 @@ export const REVIEWED_NOT_SENSITIVE: readonly PermissionKey[] = [
   "import.details.manage",
   "letters.issue.nopay",
   "payroll.rules.view",
+  // PEEPS-BEGIN assets
+  "assets.view", // what equipment exists and who holds it; no money, no personal data beyond the holder's name
+  "assets.manage",
+  "assets.settings.manage",
+  // PEEPS-END
 ];
 
 /** The keys nobody can hold together with the DEVELOPER role. */

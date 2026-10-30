@@ -28,7 +28,11 @@ export const REQUIRED_APPEND_ONLY_TABLES = ["audit_logs", "security_events"] as 
  * Tables with a truncate-blocking trigger whose rows legitimately change state, so the app role keeps UPDATE (never DELETE or TRUNCATE). The row's own
  * trigger is what limits WHICH changes are legal. Keep this list to the minimum: today payroll approvals (PENDING -> APPROVED -> CONSUMED) and bank batches (GENERATED -> PAID, the bank response).
  */
-export const UPDATABLE_APPEND_ONLY_TABLES: readonly string[] = ["payroll_approvals", "bank_transfer_batches"];
+export const UPDATABLE_APPEND_ONLY_TABLES: readonly string[] = ["payroll_approvals", "bank_transfer_batches",
+  // PEEPS-BEGIN assets
+  "asset_assignments", // an open assignment is closed once and acknowledged once (its trigger refuses every other change)
+  // PEEPS-END
+];
 
 export async function appendOnlyTables(db: SqlClient): Promise<string[]> {
   const rows = await db.$queryRawUnsafe<Array<{ relname: string }>>(

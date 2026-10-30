@@ -534,6 +534,26 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/reports": scoped("the report catalog — leave liability listed only with reports.liability.view"),
   "GET /api/reports/:key": scoped("every report is computed over the viewer's population (modules/reports/context.ts)"),
   "GET /api/reports/:key/export": scoped("the same rows as the report, as .xlsx — audited"),
+
+  // PEEPS-BEGIN assets
+  // The asset register (Peeps module 1). None of its keys is manager-grantable; holders are still narrowed to the caller's data scope in the service.
+  "GET /api/assets/mine": self,
+  "POST /api/assets/mine/:id/acknowledge": self,
+  "GET /api/assets/settings": admin,
+  "POST /api/assets/settings/:kind": admin,
+  "POST /api/assets/settings/:kind/confirm": adminInService("assets.settings.manage, and the confirmer must be a director who did not enter the version (service + database trigger)"),
+  "GET /api/assets/holders": admin,
+  "GET /api/assets/employees/:employeeId": admin,
+  "GET /api/assets": admin,
+  "POST /api/assets": admin,
+  "GET /api/assets/:id": admin,
+  "PATCH /api/assets/:id": admin,
+  "POST /api/assets/:id/issue": admin,
+  "POST /api/assets/:id/return": admin,
+  "POST /api/assets/:id/transfer": admin,
+  "POST /api/assets/:id/lost": admin,
+  "POST /api/assets/:id/damaged": admin,
+  // PEEPS-END
 };
 
 // Scoped routes a manager can reach with a manager-grantable key — each has
