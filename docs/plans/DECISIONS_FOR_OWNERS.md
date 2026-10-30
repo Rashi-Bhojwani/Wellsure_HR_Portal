@@ -23,3 +23,16 @@ Nothing here changes by itself. Each row is something the developer decided beca
 | 12 | **An import file holds at most 1,000 rows and a row at most 12 months.** | A larger file is refused with a message. | Say the real size. |
 
 **Still open (never guessed):** what *Slab Salary Bonus*, *Training Exp* and *Old Month Discrepancy* mean. They are not built in: they exist only if a director creates a pay head with that name and flags it, and a file column of that name with figures is refused until then.
+
+## Stage 5a (remote attendance): what the build decided
+
+The owner's earlier D-10 list was not available to this session; these are the choices made where the instruction was silent.
+
+| # | Decision | What it does today | If you want it the other way |
+|---|---|---|---|
+| 13 | **Absent and Loss of pay are the same outcome for attendance and payroll** (one day of loss of pay, through the engine's absent day); the record keeps which the director chose. | Both appear as Absent in the month view with a note saying which; payroll reads one loss-of-pay day either way. | Say what Loss of pay should do differently (for example a leave-without-pay entry in the leave ledger). |
+| 14 | **A half day names its half** (first or second); nothing is preselected. | The other half is absent: half a day of loss of pay. | Say if the half should come from the check-in and check-out times instead. |
+| 15 | **Bulk approve is full days only.** | A half day is decided one at a time. | Say if bulk approve should allow a half day. |
+| 16 | **Check-in works only on the day itself**; a forgotten check-out is fixed by a correction request that a director accepts. | A past day cannot be checked into. | Say if a person may check out the next morning. |
+| 17 | **Directors' routes use the existing Super-Admin-only permission `attendance.unlock`** plus a director check, instead of a new permission key. | HR, managers and the Developer role are refused; a Super Admin could in theory grant the key to a role, and the director check in the service still refuses anyone who is not a director. | A dedicated key (`attendance.remote.decide`) can be added with its catalogue entry and migration. |
+| 18 | **The reminder threshold is whole hours (1 to 200) and Not set; the suggested rejection outcome is Not set.** | With no threshold nothing is sent; with none suggested nothing is suggested. | Say the real threshold and whether a suggestion is wanted. |

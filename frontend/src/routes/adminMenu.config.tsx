@@ -22,6 +22,7 @@ import {
   HistoryOutlined,
   HomeOutlined,
   IdcardOutlined,
+  LaptopOutlined,
   NotificationOutlined,
   PartitionOutlined,
   PieChartOutlined,
@@ -94,6 +95,7 @@ const MusterPage = lazyPage(() => import("../pages/admin/attendance/muster/Muste
 const WhoIsInPage = lazyPage(() => import("../pages/admin/attendance/WhoIsInPage"), "WhoIsInPage");
 const AttendanceInfoAdminPage = lazyPage(() => import("../pages/admin/attendance/AttendanceInfoAdminPage"), "AttendanceInfoAdminPage");
 const RegularizationsPage = lazyPage(() => import("../pages/admin/attendance/RegularizationsPage"), "RegularizationsPage");
+const RemoteAttendancePage = lazyPage(() => import("../pages/admin/attendance/RemoteAttendancePage"), "RemoteAttendancePage");
 const ManualOverridePage = lazyPage(() => import("../pages/admin/attendance/ManualOverridePage"), "ManualOverridePage");
 const ShiftOverridePage = lazyPage(() => import("../pages/admin/attendance/ShiftOverridePage"), "ShiftOverridePage");
 const ShiftRosterPage = lazyPage(() => import("../pages/admin/attendance/ShiftRosterPage"), "ShiftRosterPage");
@@ -243,6 +245,7 @@ export const adminApps: AdminApp[] = [
           { key: "process-attendance", label: "Process Attendance", path: "workforce/attendance/process", icon: ToolOutlined, element: ProcessAttendancePage, needs: { any: ["attendance.process"] } },
           { key: "period-finalisation", label: "Attendance Period Finalisation", path: "workforce/attendance/finalisation", icon: SafetyOutlined, element: FinalisationPage, needs: { any: ["attendance.finalise", "attendance.process"] } },
           { key: "attendance-exception", label: "Attendance Exception", path: "workforce/attendance/exceptions", icon: AuditOutlined, element: ExceptionsPage, needs: { any: ["attendance.exceptions.view"] } },
+          { key: "remote-attendance", label: "Remote Attendance", path: "workforce/attendance/remote", icon: LaptopOutlined, element: RemoteAttendancePage, needs: { any: ["attendance.unlock"] } },
           { key: "manual-override", label: "Manual Override", path: "workforce/attendance/manual-override", icon: ToolOutlined, element: ManualOverridePage, needs: { any: ["attendance.override.manage"] } },
           { key: "shift-override", label: "Shift Override", path: "workforce/attendance/shift-override", icon: SwapOutlined, element: ShiftOverridePage, needs: { any: ["attendance.override.manage"] } },
           { key: "attendance-settings", label: "Attendance Settings", path: "workforce/attendance/settings", icon: SettingOutlined, element: AttendanceSettingsPage, needs: { any: ["attendance.config.manage", "attendance.view"] } },
