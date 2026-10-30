@@ -18,7 +18,7 @@ plan, decision b; the confirm step is D2), `letters.generate` (per-type grants a
 pay figures, until then), `settings.manage`, `audit.view`, `role.view`, `delegation.manage`, `user.security.manage`, `import.manage` (Admin Tools filter is H7, not
 built), `leave.yearend.manage` (open question Q12). Each is in the Stage 1 report as an unlocked gap.
 
-**B. Capability switches (what a director may turn on or off for HR).** Eleven capabilities, each a named set of permission keys:
+**B. Capability switches (what a director may turn on or off for HR).** Twelve capabilities (the twelfth, See leave counts, was added after Checkpoint 1), each a named set of permission keys:
 
 | Capability | Keys it controls |
 |---|---|

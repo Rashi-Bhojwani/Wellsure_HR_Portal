@@ -29,6 +29,7 @@ const DOORS: Door[] = [
   { cap: "VIEW_ATTENDANCE", method: "get", path: "/api/attendance/swipes" },
   { cap: "APPROVE_REGULARIZATIONS", method: "get", path: "/api/attendance/regularizations" },
   { cap: "APPROVE_LEAVE", method: "get", path: "/api/tasks/mine", seen: "LEAVE_APPROVAL" },
+  { cap: "SEE_LEAVE_COUNTS", method: "get", path: "/api/leave/dashboard" },
   { cap: "EDIT_MUSTER", method: "post", path: "/api/attendance/muster/mark-present", body: {} },
   { cap: "UPLOAD_MANUAL_MUSTER", also: ["EDIT_MUSTER"], method: "get", path: "/api/attendance/muster/template?locationId=x" },
   { cap: "FINALISE_MONTH", method: "get", path: "/api/attendance/finalisation/periods" },
@@ -137,6 +138,22 @@ describe("the persona matrix", () => {
     // And the list itself: the three own-payslip routes are the only such routes the code has.
     expect(routes.filter((r) => !/^GET \/api\/payroll/.test(r)).sort()).toEqual([...own].sort());
   }, 240_000);
+
+  it("See leave counts: off closes other people's balances, ledgers and the dashboard for the role, leaves the approval queue and a director alone, and a named person can be put back", async () => {
+    const others = [`/api/leave/balances?employeeId=${p.employee.employeeId}`, `/api/leave/ledger?employeeId=${p.employee.employeeId}`, "/api/leave/dashboard"];
+    const status = async (who: keyof typeof p, path: string) => (await request(app).get(path).set(...authHeader(tok[who]))).status;
+    for (const path of others) expect(await status("hrAdmin", path), `default ${path}`).not.toBe(403);
+    await roleSwitch("SEE_LEAVE_COUNTS", "OFF");
+    for (const path of others) expect(await status("hrAdmin", path), `off ${path}`).toBe(403);
+    for (const path of others) expect(await status("director", path), `director ${path}`).not.toBe(403);
+    expect(await call("hrAdmin", { cap: "APPROVE_LEAVE", method: "get", path: "/api/tasks/mine", seen: "LEAVE_APPROVAL" }), "the approval queue is its own switch").toBe(200);
+    expect(await status("employee", `/api/leave/balances`), "own balances are always their own").not.toBe(403);
+    await personSwitch("SEE_LEAVE_COUNTS", "ON");
+    expect(await status("hrNamed", "/api/leave/dashboard")).not.toBe(403);
+    await personSwitch("SEE_LEAVE_COUNTS", "DEFAULT");
+    await roleSwitch("SEE_LEAVE_COUNTS", "DEFAULT");
+    for (const path of others) expect(await status("hrAdmin", path), `back ${path}`).not.toBe(403);
+  });
 
   it("whatever the switches say, no payroll or payslip route ever answers an HR person: every duty on, every duty off, and as it is", async () => {
     const check = async (label: string) => {

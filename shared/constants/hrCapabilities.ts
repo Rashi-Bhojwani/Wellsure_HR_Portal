@@ -17,6 +17,7 @@ export const HR_CAPABILITY_IDS = [
   "EXCEPTIONS_QUEUE",
   "ATTENDANCE_REPORTS",
   "LEAVE_REPORTS",
+  "SEE_LEAVE_COUNTS",
 ] as const;
 export type HrCapabilityId = (typeof HR_CAPABILITY_IDS)[number];
 
@@ -40,6 +41,7 @@ export const HR_CAPABILITIES: readonly HrCapability[] = [
   { id: "EXCEPTIONS_QUEUE", label: "Exceptions queue", what: "Work the Attendance Exceptions queue.", keys: ["attendance.exceptions.view"] },
   { id: "ATTENDANCE_REPORTS", label: "Attendance reports", what: "Open and download the attendance reports.", keys: ["reports.attendance.view"] },
   { id: "LEAVE_REPORTS", label: "Leave reports", what: "Open and download the leave reports (balances, loss of pay).", keys: ["reports.leave.view"] },
+  { id: "SEE_LEAVE_COUNTS", label: "See leave counts", what: "See other people's leave balances and ledgers, the leave dashboard and the org-wide leave calendar. Approving leave is its own switch and is not affected.", keys: ["leave.view"] },
 ];
 
 export const hrCapability = (id: string): HrCapability | undefined => HR_CAPABILITIES.find((c) => c.id === id);

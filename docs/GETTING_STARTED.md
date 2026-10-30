@@ -261,7 +261,7 @@ A move shows up live on the managers' screens.
   confirming it is D2), `letters.generate` (per-type grants are not built), `user.security.manage`, `import.manage`,
   `leave.yearend.manage`. Existing databases lose the locked rows through a migration that first copies them into
   `role_permission_removals` (append-only).
-- **Switches.** Admin Tools → **What HR Can Do** (directors only; `/admin/admin-tools/hr-capabilities`). Eleven attendance and leave duties,
+- **Switches.** Admin Tools → **What HR Can Do** (directors only; `/admin/admin-tools/hr-capabilities`). Twelve attendance and leave duties,
   each *As today / On / Off*, for the HR Admin role, the HR Executive role, or one named person. A named person beats the role; Off beats On
   between two roles. A change needs a reason, may start now or later, is in force on the person's very next click (their menu, counts,
   inbox and live screen follow without a reload) and stays in the history. Work HR can no longer decide waits for the directors with a
