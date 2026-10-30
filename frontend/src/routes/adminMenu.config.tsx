@@ -105,6 +105,8 @@ const AdjustmentsPage = lazyPage(() => import("../pages/admin/payroll/Adjustment
 const PayrollRunsPage = lazyPage(() => import("../pages/admin/payroll/PayrollRunsPage"), "PayrollRunsPage");
 const LayoutsPage = lazyPage(() => import("../pages/admin/payroll/LayoutsPage"), "LayoutsPage");
 const SetupChecklistPage = lazyPage(() => import("../pages/admin/payroll/SetupChecklistPage"), "SetupChecklistPage");
+// Anyone holding any payroll key sees the Payroll group; HR holds none (the hard lock), so HR never sees it. The server still decides every request.
+const PAYROLL_NEEDS = { any: ["payroll.rules.view", "payroll.salary.view", "payroll.run", "payroll.approve"] };
 const ReadyPage = lazyPage(() => import("../pages/admin/payroll/ReadyPage"), "ReadyPage");
 const CompareRegistersPage = lazyPage(() => import("../pages/admin/payroll/CompareRegistersPage"), "CompareRegistersPage");
 const AttendanceSettingsPage = lazyPage(() => import("../pages/admin/attendance/AttendanceSettingsPage"), "AttendanceSettingsPage");
@@ -195,7 +197,7 @@ export const adminApps: AdminApp[] = [
         items: [
           { key: "all-employees", label: "All Employees", path: "employee/all", icon: TeamOutlined, element: AllEmployeesPage },
           { key: "add-employee", label: "Add Employee", path: "employee/add", icon: UserAddOutlined, element: AddEmployeePage },
-          { key: "bulk-import", label: "Bulk Import", path: "employee/import", icon: CloudUploadOutlined, element: ImportCenterPage },
+          { key: "bulk-import", label: "Bulk Import", path: "employee/import", icon: CloudUploadOutlined, element: ImportCenterPage, needs: { any: ["import.manage"] } },
           { key: "change-requests", label: "Change Requests", path: "employee/change-requests", icon: SolutionOutlined, element: ChangeRequestsPage },
           { key: "separations", label: "Separations", path: "employee/separations", icon: ExportOutlined, element: SeparationsPage },
           { key: "company-documents", label: "Company Documents", path: "employee/company-documents", icon: FolderOpenOutlined, element: CompanyDocumentsPage },
@@ -323,19 +325,19 @@ export const adminApps: AdminApp[] = [
         key: "payroll",
         label: "Payroll",
         items: [
-          { key: "payroll-setup", label: "Setup Checklist", path: "payroll/setup", icon: CheckSquareOutlined, element: SetupChecklistPage },
-          { key: "payroll-ready", label: "Ready for First Run", path: "payroll/ready", icon: SafetyOutlined, element: ReadyPage },
-          { key: "payroll-rules", label: "Rules and Setup", path: "payroll/rules", icon: SafetyCertificateOutlined, element: RulesPage },
-          { key: "salary-components", label: "Salary Components", path: "payroll/components", icon: SettingOutlined, element: ComponentsPage },
-          { key: "salary-structures", label: "Salary Structures", path: "payroll/structures", icon: PartitionOutlined, element: StructuresPage },
-          { key: "employee-salaries", label: "Employee Salaries", path: "payroll/salaries", icon: WalletOutlined, element: EmployeeSalariesPage },
-          { key: "salary-revisions", label: "Salary Revisions", path: "payroll/revisions", icon: AuditOutlined, element: SalaryRevisionsPage },
-          { key: "payroll-adjustments", label: "Adjustments", path: "payroll/adjustments", icon: DiffOutlined, element: AdjustmentsPage },
-          { key: "payroll-run", label: "Payroll Run", path: "payroll/run", icon: FundOutlined, element: PayrollRunsPage },
-          { key: "payroll-compare", label: "Compare Registers", path: "payroll/compare", icon: DiffOutlined, element: CompareRegistersPage },
-          { key: "payroll-audit", label: "Payroll Audit Trail", path: "payroll/audit", icon: AuditOutlined, element: PayrollAuditPage },
-          { key: "payroll-layouts", label: "Bank and Statutory Layouts", path: "payroll/layouts", icon: FileProtectOutlined, element: LayoutsPage },
-          { key: "loans-admin", label: "Loans & Advances", path: "payroll/loans", icon: BankOutlined, phase: "Phase 7" },
+          { key: "payroll-setup", label: "Setup Checklist", path: "payroll/setup", icon: CheckSquareOutlined, element: SetupChecklistPage, needs: PAYROLL_NEEDS },
+          { key: "payroll-ready", label: "Ready for First Run", path: "payroll/ready", icon: SafetyOutlined, element: ReadyPage, needs: PAYROLL_NEEDS },
+          { key: "payroll-rules", label: "Rules and Setup", path: "payroll/rules", icon: SafetyCertificateOutlined, element: RulesPage, needs: PAYROLL_NEEDS },
+          { key: "salary-components", label: "Salary Components", path: "payroll/components", icon: SettingOutlined, element: ComponentsPage, needs: PAYROLL_NEEDS },
+          { key: "salary-structures", label: "Salary Structures", path: "payroll/structures", icon: PartitionOutlined, element: StructuresPage, needs: PAYROLL_NEEDS },
+          { key: "employee-salaries", label: "Employee Salaries", path: "payroll/salaries", icon: WalletOutlined, element: EmployeeSalariesPage, needs: PAYROLL_NEEDS },
+          { key: "salary-revisions", label: "Salary Revisions", path: "payroll/revisions", icon: AuditOutlined, element: SalaryRevisionsPage, needs: PAYROLL_NEEDS },
+          { key: "payroll-adjustments", label: "Adjustments", path: "payroll/adjustments", icon: DiffOutlined, element: AdjustmentsPage, needs: PAYROLL_NEEDS },
+          { key: "payroll-run", label: "Payroll Run", path: "payroll/run", icon: FundOutlined, element: PayrollRunsPage, needs: PAYROLL_NEEDS },
+          { key: "payroll-compare", label: "Compare Registers", path: "payroll/compare", icon: DiffOutlined, element: CompareRegistersPage, needs: PAYROLL_NEEDS },
+          { key: "payroll-audit", label: "Payroll Audit Trail", path: "payroll/audit", icon: AuditOutlined, element: PayrollAuditPage, needs: PAYROLL_NEEDS },
+          { key: "payroll-layouts", label: "Bank and Statutory Layouts", path: "payroll/layouts", icon: FileProtectOutlined, element: LayoutsPage, needs: PAYROLL_NEEDS },
+          { key: "loans-admin", label: "Loans & Advances", path: "payroll/loans", icon: BankOutlined, phase: "Phase 7", needs: PAYROLL_NEEDS },
         ],
       },
     ],

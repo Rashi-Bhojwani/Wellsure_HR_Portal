@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
+import { RequireAccess } from "../../../components/common/RequireAccess";
 import { useQuery } from "@tanstack/react-query";
 import { Select } from "antd";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, LabelList } from "recharts";
@@ -52,7 +53,16 @@ const noData = (title: string) => <EmptyState compact illustration="chart" title
 // year drives both the month-strip donut and the two "Category: All"
 // filters client-side, since the whole year's (month, leaveTypeCode)
 // matrix is small enough to slice locally without extra round trips.
+// The overview is leave usage across the organisation: when a director has switched off "See leave counts" for the person, they see the forbidden state, not an error.
 export function WorkforceOverviewPage() {
+  return (
+    <RequireAccess needs={{ any: ["leave.view"] }}>
+      <WorkforceOverviewBody />
+    </RequireAccess>
+  );
+}
+
+function WorkforceOverviewBody() {
   const year = new Date().getFullYear();
   const phone = useIsPhone();
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());

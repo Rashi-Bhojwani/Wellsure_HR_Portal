@@ -17,3 +17,5 @@ try {
 } finally {
   await prisma.$disconnect();
 }
+// The seeding enqueues director notices, which leaves queue connections open: without this a FAILED seed printed its error and then hung until the CI job was cancelled (40 minutes).
+process.exit(process.exitCode ?? 0);

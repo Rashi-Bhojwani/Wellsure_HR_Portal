@@ -36,6 +36,17 @@ describe("the admin menu", () => {
     expect(leavesFor(keysOf("CORRECTIONS"))).toEqual(expect.arrayContaining(["manual-override", "shift-override"]));
   });
 
+  it("the Payroll group and the Admin Tools the directors keep are not in an HR person's menu, and are in a director's", async () => {
+    const { HR_FORBIDDEN_KEYS } = await import("@shared/constants/sensitiveData");
+    const hrKeys = new Set(PERMISSION_KEYS.filter((k) => !(HR_FORBIDDEN_KEYS as readonly string[]).includes(k)));
+    const hr = leavesFor(hrKeys);
+    for (const gone of ["payroll-setup", "payroll-ready", "payroll-rules", "salary-components", "salary-structures", "employee-salaries", "salary-revisions", "payroll-adjustments", "payroll-run", "payroll-compare", "payroll-audit", "payroll-layouts", "loans-admin", "bulk-import", "import-export", "users-roles", "system-settings", "hr-capabilities"]) expect(hr, gone).not.toContain(gone);
+    const director = leavesFor(new Set(), true);
+    for (const there of ["payroll-setup", "payroll-ready", "payroll-run"]) expect(director, there).toContain(there);
+    // Anyone holding a single payroll key sees the payroll group.
+    expect(leavesFor(new Set(["payroll.rules.view"]))).toContain("payroll-setup");
+  });
+
   it("a section or app left with nothing is not shown", () => {
     const nav = adminNav((k) => k === "employee.view", false);
     const reports = nav.find((e) => e.key === "reports");
