@@ -101,3 +101,13 @@ The plan exists (this file); every capability is configurable and *Not set* by d
 * Hold and LOP-reversal tables are new append-only tables rather than columns on the run, so a finalised run is never touched.
 * "Pay-days basis" options stay at the three that exist; adding others is the owners' decision.
 * The "monthly input" method is selectable now but reads from the Stage 4 grid; until then a run using it is blocked, not zero.
+
+## As built (Stage 3 close-out): where the build differs from the plan above
+
+* **Hierarchy keys.** An override is a governed item of its own kind (`RULE_OVERRIDE`), keyed `rule~level~target~from`, so two windows for the same person are two items and cannot overlap. It uses the same append-only tables and the same "different person confirms" database guard as rules. Judged on the cycle's last day.
+* **Registration reference.** Carried on each override. A company default has no field of its own: the company identifier rules (PF establishment code, ESI employer code, PT and LWF registration) already hold the company's. Statutory files are not yet split by registration (Stage 6).
+* **Counters and salary-master values** are not built as selectable names. The salary calculation only runs formulas when a salary is built from CTC, where a day count has no meaning. The loss-of-pay reversal uses the run's own day record. Nothing consumes a counter today.
+* **Monthly input method** became a flag on the head (`inputItem`), because Stage 4 builds its grid from flagged heads. Such a head cannot be a structure line.
+* **Hold release after the run is final** pays the held *net* pay as one line ("Held salary released for <month>"); the statutory deductions for that month stay in the held month's run. "Held pay appears in full-and-final" is a reader function (`outstandingHeldPay`) because there is no settlement module yet.
+* **Loss-of-pay correction** is entered by a director (month, person, reference, days) rather than raised automatically from an attendance correction: attendance has no correction event to hook yet. Its idempotency key is month + person + reference.
+* **A defect found by the property tests** (3.5): reversal amounts divided day by day, leaving a speck of rounding that a FLOOR rule turned into a rupee when days cancelled. Now the products are added first and divided once.

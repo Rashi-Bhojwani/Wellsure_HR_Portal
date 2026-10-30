@@ -38,11 +38,12 @@ pause only at CHECKPOINT 1 (after Stage 2), CHECKPOINT 2 (after P7-3) and stop c
 
 ## Stage 3 — payroll model (capabilities only, no values)
 - [x] 3.0 report + `PAYROLL_MODEL_PLAN.md`
-- [ ] 3.1 pay heads
-- [ ] 3.2 salary rules (all Not set)
-- [ ] 3.3 arrears, LOP reversal, hold salary
-- [ ] 3.4 statutory parameter rule hierarchy
-- [ ] 3.5 property/boundary/mutation tests
+- [x] 3.1 pay heads — `093de72` (options, links), `76b4da2` (table lookup, order, retire-not-delete)
+- [x] 3.2 salary rules (all Not set; shipped statutory placeholders removed) — `d875811`
+- [x] 3.3 arrears, LOP reversal, hold salary, payslip "Why?" — `5c938f0`, `4ad8958`, `662674f`, `94eebd9`
+- [x] 3.4 statutory parameter rule hierarchy — `0c2e346`
+- [x] 3.5 property/boundary/mutation tests — this commit
+- [ ] Stage 3 walkthrough (both directors, HR, employee; phone width and dark theme) — see STAGE_REPORTS.md
 
 ## Stage 4 — Monthly inputs
 - [ ] grid, history, Excel import (needs the sample template — not in repo, see WAITING)

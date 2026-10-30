@@ -184,3 +184,18 @@ Plan: `HR_CAPABILITIES.md`. 1.1 is the report above (no code).
 **Commit.** `c179e7c`. CI: `829e5dd` (Stage 1 close) green except `latency` (the known failing job; every other job incl. sensitive-ui, tests, bundle budget, drift, docker, Windows agent passed). CI for `c179e7c` was still running when this was written.
 
 **Waiting.** Whether a third Super Admin may approve payroll (until then, create none).
+
+
+## Stage 3 — payroll model, capabilities only (commits `1ac7998` … 3.5)
+
+**What was built, in order.** 3.0 the plan (`PAYROLL_MODEL_PLAN.md`). 3.1a pay-head options (kind, one-time, carry-forward, reimbursement, CTC group, YTD, bank transfer, payslip visibility, active dates, arrears and reversal links; taxable can be Not set; a head with a choice Not set cannot be used). 3.1b table-lookup lines, derived calculation order, input-item heads, heads retired not deleted. 3.2 no rule ships a value (the eleven PF/ESI figures are gone), new rules arrear-on-arrear, loss-of-pay look-back and override, per-head rounding. 3.3a arrear-on-arrear. 3.3b loss-of-pay reversal. 3.3c hold and release. 3.3d payslip "Why?". 3.4 rule hierarchy (company, department, person). 3.5 property, boundary and mutation tests.
+
+**Verification, every step.** Full backend suite alone; lint; typecheck; frontend tests, build and bundle budgets; schema drift on a fresh database; mutation checks (each new rule broken in the source, the tests had to fail; every survivor was either closed with a new test or is named below as equivalent).
+
+**Decided by me.** See "As built" in `PAYROLL_MODEL_PLAN.md`. In short: overrides are governed items of their own kind; judged on the cycle's last day; counters not built as names; monthly input is a head flag; holds pay the held net on release; the loss-of-pay correction is entered by a director.
+
+**Equivalent mutants (no test can tell the difference).** `if (arrearOnArrear === null) continue;` in the revision plan (the blocker already stops it); the second condition of the release check in `holds.ts` (the status check catches the same cases).
+
+**Found while testing.** The property tests found a real rounding defect in the reversal arithmetic (fixed in 3.5). CI failed twice for reasons outside this work: a Windows port range (`bind EACCES` on fixed test ports 55437–55452 in the agent driver test) and a timing guard on attendance recompute (46.9 s against a 46.1 s limit); both passed on the next run.
+
+**Unverified.** Held pay in full-and-final (no settlement module). Statutory files split by registration (Stage 6). Counters and salary-master names as formula inputs (not built). The payslip "Why?" for a department/person override is tested at the rule level and in the run, not end to end through a published payslip.

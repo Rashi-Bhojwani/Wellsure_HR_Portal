@@ -77,12 +77,15 @@ export function reversalAmounts(input: {
   const out: HeadAmount[] = [];
   for (const head of [...input.heads].sort((a, b) => a.code.localeCompare(b.code))) {
     if (!head.prorates) continue;
-    let exact = ZERO;
+    // The products are added first and divided once, so that days which cancel (a day given back and the same day taken again) come to exactly nothing, never to a
+    // speck of rounding that a mode such as FLOOR would turn into a rupee.
+    let product = ZERO;
     for (const d of input.days) {
       const part = head.parts.find((p) => p.from <= d.date && d.date <= p.to);
       if (!part) continue;
-      exact = exact.plus(dec(part.monthly).times(dec(d.restored)).dividedBy(input.divisor));
+      product = product.plus(dec(part.monthly).times(dec(d.restored)));
     }
+    const exact = product.dividedBy(input.divisor);
     const r = input.rounding(head.code);
     const amount = roundTo(exact, r.scale, r.mode);
     if (!amount.isZero()) out.push({ component: head.code, amount, exact });
