@@ -41,7 +41,8 @@ It is a **test-harness problem, not a product defect**, but it means that since 
 ## 6. CI (what I read; updated when the runs finish)
 - `829e5dd` (Stage 1 close): everything green except `latency` (5a).
 - `c179e7c` (D2): cancelled by the next push 21 seconds later. `69b4bfb` (same code): **red, and my fault**: (a) "Demo company tests" and (b) the `sensitive-ui` job both failed because the D2 change made the demo-company seed's two-person flow auto-approve ("This is not waiting for a decision"); (c) the failed seed then **hung** instead of exiting (open queue connections), so `sensitive-ui` sat for 40 minutes until cancelled. Fixed in `dd236f5` (the demo company ships DEMO-labelled choices) and in the seed script (it now exits with the error). `latency`: as 5a.
-- `828a06b`, `4180402`, `dd236f5`: see the final message of the session for the results I could read.
+- `828a06b`: cancelled by the next push. `4180402`: red (tests job; fixed by the next commits: the demo seed and one test needed the changes below). `dd236f5`: tests, demo tests, docker, Windows agent, replay green; `latency` red as 5a; `sensitive-ui` cancelled after 39 minutes (the seed script's failure-hang, see above, fixed in `171aab5`).
+- **`171aab5` (latest): every job green except `latency`.** `sensitive-ui` 12 min, tests 11 min, demo tests, bundle budget, schema drift, Docker, Windows agent, replay all pass.
 
 ## 7. Browser walkthrough (scratch database `wellsure_hr_lat`, development stack, headless Chromium)
 As both directors, as HR with duties on and off, and as an employee. Screenshots are in the session scratchpad, not in the repo.
