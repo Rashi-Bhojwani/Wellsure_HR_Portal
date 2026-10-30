@@ -6,13 +6,14 @@ import { deleteWithDependents } from "../../../lib/__tests__/cleanup";
 import { HELPDESK_SETTING_KEYS } from "../../../lib/helpdeskSettings";
 import { app, authHeader } from "../../employee/__tests__/employeeTestHelpers";
 
-export async function createTestHelpdeskCategory(opts: { isSensitive?: boolean; defaultAssigneeEmployeeId?: string | null; isActive?: boolean } = {}) {
+export async function createTestHelpdeskCategory(opts: { isSensitive?: boolean; directorsOnly?: boolean; defaultAssigneeEmployeeId?: string | null; isActive?: boolean } = {}) {
   const code = `TEST_HD_${randomUUID().slice(0, 8).toUpperCase()}`;
   return prisma.helpdeskCategory.create({
     data: {
       code,
       name: `Test ${code}`,
       isSensitive: opts.isSensitive ?? false,
+      directorsOnly: opts.directorsOnly ?? false,
       isActive: opts.isActive ?? true,
       defaultAssigneeEmployeeId: opts.defaultAssigneeEmployeeId ?? null,
     },

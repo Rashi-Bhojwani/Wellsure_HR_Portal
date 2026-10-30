@@ -13,6 +13,8 @@ export interface HelpdeskCategory {
   code: string;
   name: string;
   isSensitive: boolean;
+  /** Tickets in this category are the directors' alone (Payroll & Salary). */
+  directorsOnly?: boolean;
 }
 
 export interface HelpdeskCategoryAdmin extends HelpdeskCategory {
@@ -81,7 +83,7 @@ export async function createCategory(input: { code: string; name: string; isSens
   const { data } = await apiClient.post("/api/helpdesk/categories", input);
   return data;
 }
-export async function updateCategory(id: string, input: { name?: string; isSensitive?: boolean; isActive?: boolean; sortOrder?: number; defaultAssigneeEmployeeId?: string | null }) {
+export async function updateCategory(id: string, input: { name?: string; isSensitive?: boolean; directorsOnly?: boolean; isActive?: boolean; sortOrder?: number; defaultAssigneeEmployeeId?: string | null }) {
   const { data } = await apiClient.patch(`/api/helpdesk/categories/${id}`, input);
   return data;
 }

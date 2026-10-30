@@ -1548,6 +1548,8 @@ model HelpdeskCategory {
   code                      String    @unique
   name                      String
   isSensitive               Boolean   @default(false) @map("is_sensitive")
+  /// Owner decision: tickets in this category are the directors' alone. HR never sees them, whatever else it holds; only a director can change this flag.
+  directorsOnly             Boolean   @default(false) @map("directors_only")
   defaultAssigneeEmployeeId String?   @map("default_assignee_employee_id")
   defaultAssignee           Employee? @relation("HelpdeskCategoryDefaultAssignee", fields: [defaultAssigneeEmployeeId], references: [id])
   isActive                  Boolean   @default(true) @map("is_active")
