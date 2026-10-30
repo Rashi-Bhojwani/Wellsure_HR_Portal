@@ -9,10 +9,10 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 - [x] `PEEPS_PLAN.md` sections A–G, `PEEPS_CHECKLIST.md`, `PEEPS_STAGE_REPORTS.md` — commit: see stage report P0
 - [x] Owner reviewed the plan; answers recorded at the top of `PEEPS_PLAN.md` (2026-10-30)
 - [x] Plan updated with the answers; base merged again (`0621f82`)
-- [ ] **STOP: wait for the first build prompt**
+- [x] First build prompt received: Module 1, Assets only
 
 ## Waiting on (never guessed)
-- [ ] Q0 integration guide **pushed** → commit 2 (chapter mapping). Not on the remote as of 2026-10-30
+- [x] Q0 integration guide pushed (`ca6e485`) → chapter mapping `d7fa323`
 - [x] AS1 confirmed (relationship-based design stays)
 - [ ] AS2–AS4 stay settings, Not set (answered: build them as settings)
 - [x] Q-F2 answered: me, keys only, inside a PEEPS block
@@ -30,10 +30,13 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 - [ ] 6 `PersonAvatar`, directory filters (+ preferences if wanted)
 
 ## Assets
-- [ ] 7 schema, catalogue, items
-- [ ] 8 assignment/return, single active assignment (race test + mutation)
-- [ ] 9 requests, incidents, recovery intents (director-only)
-- [ ] 10 screens, sensitive-ui/popovers
+- [x] 7 schema, settings (Placeholder/Confirmed, Not set), register — `51de81a`
+- [x] 8 issue/return/transfer/lost/damaged/acknowledge, single open assignment (race test + mutation M1–M3) — `51de81a`
+- [x] 9 incidents recorded as events only; **no recovery, no payroll hook** (owner's brief); interface notes in PEEPS_STAGE_REPORTS — `51de81a`
+- [x] 10 screens, DEMO data, check:sensitive-ui / check:popovers extended — `1a244e2`
+- [ ] Asset requests by employees (plan §B.2) — not in this brief
+- [ ] Follow-ups from the guide: unacknowledged-asset HR task, IMEI/SIM, asset import, profile Assets tab, recovery (Session A + directors)
+- [ ] **STOP: wait for the next build prompt**
 
 ## Ticket desk
 - [ ] 11 category visibility (general categories), move between categories
