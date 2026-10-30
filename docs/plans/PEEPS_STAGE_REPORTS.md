@@ -55,7 +55,7 @@ small-group minimum); §B.0.4 (switch keys in a PEEPS block only); HR enters ban
 the existing writers; relieving/experience letters through `letters.issue.nopay` when pay-free; remote attendance
 added to Session A's list; §A, §C, §D, §F, §G updated to match.
 
-**Checkpoint run.** Full backend suite on `0621f82`: running at the time of this commit; result recorded in the next commit.
+**Checkpoint run.** Full backend suite run alone on `0621f82`: **175 files, 1,691 tests, all passed** (about 16 minutes). Docs-only change otherwise; frontend checks not run.
 
 **Decided by me.** (1) Existing helpdesk categories get no visibility row on migration, so today's behaviour holds
 until an owner sets one (no preset). (2) The team-calendar label for the new types defaults to a generic "Leave"
