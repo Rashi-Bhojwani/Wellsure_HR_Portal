@@ -116,7 +116,7 @@ Plan: `PEEPS_PLAN.md` §B.2 plus the answers table; guide chapter 14 / §12. Bui
   a non-director who did not enter the version tries; the first run of M8 passed for the wrong reason, which is why that case exists); M9 readiness
   gate removed → "refuses to take an asset" fails; M10 holder notification removed → three action tests fail; M11 assignment trigger removed →
   append-only test fails.
-- **Full backend suite, run alone**, after merging the latest base (`093de72`): running when this report was committed; the result is recorded in the next commit.
+- **Full backend suite, run alone**, after merging the latest base (`093de72`): **178 files, 1,737 tests, all passed** (about 18 minutes).
 - Frontend after the merge: lint + design tokens, typecheck, 56 tests, build, `check:bundle` (login 231.8 KB, shell + employee home 331.2 KB,
   shell + admin home 352.3 KB) — all pass.
 - Browser checks, locally against the dev stack + demo company (before the final merge): `check:popovers` passes (light/dark × 390/1280, including
@@ -127,7 +127,7 @@ Plan: `PEEPS_PLAN.md` §B.2 plus the answers table; guide chapter 14 / §12. Bui
   `payroll/__tests__/payrollGuards.test.ts` — the payroll guard forbids the word `TRANSFERRED` anywhere in `schema.prisma` (it would read as
   "money was sent"); my two asset enums used it. Fixed in `1a244e2` by renaming the stored value to `REASSIGNED` through a follow-up migration
   (no edit to an already-pushed migration; the screens still say "Transferred"). The guard test is Session A's and was not touched.
-- `1a244e2` and later: read after the push; recorded in the next commit.
+- `1a244e2`: run cancelled by the next push (same tree plus the merge and docs). `e929962` (everything in this module, merged with the latest base): **CI run 206 green on every job**, including tests, demo company tests, schema drift, sensitive-ui, popovers/latency, docker build, attendance replay and Windows agent.
 
 ### Shared files touched (all inside `PEEPS-BEGIN assets … PEEPS-END`)
 `backend/prisma/schema.prisma` (back-relation as the last field of `Employee`; models/enums at the end of the file — `prisma format` re-aligned
