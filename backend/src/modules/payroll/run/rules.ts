@@ -42,9 +42,17 @@ export interface RunRules {
   arrearsPfEsi: "FOLLOW_COMPONENT_FLAGS" | "EXCLUDE" | null;
   encashPfApplicable: boolean | null;
   encashPayoutRule: "FIRST_RUN_AFTER_COMMIT" | "SAME_MONTH_AS_COMMIT" | null;
+  /** Needed only when the run has arrears in it: whether an arrear on a base head feeds heads that are a percentage of it. */
+  arrearOnArrear: boolean | null;
+  /** Needed only when the run pays loss of pay back. */
+  lopReversal: { lookbackMonths: number; overrideAllowed: boolean } | null;
+  /** Heads rounded differently from the general rule; absent heads use `lineRounding`. */
+  headRounding: Record<string, RoundingRule>;
 }
 
 export interface RuleNeeds {
+  /** The run pays loss of pay back (Stage 3.3b). */
+  reversals?: boolean;
   arrears: boolean;
   encashment: boolean;
 }
@@ -129,6 +137,9 @@ export function loadRunRules(ctx: RuleContext, needs: RuleNeeds): RunRules {
     arrearsPfEsi: needs.arrears ? take<"FOLLOW_COMPONENT_FLAGS" | "EXCLUDE">("ARREARS_PF_ESI") : null,
     encashPfApplicable: needs.encashment ? take<boolean>("ENCASH_PF_APPLICABLE") : null,
     encashPayoutRule: needs.encashment ? take<"FIRST_RUN_AFTER_COMMIT" | "SAME_MONTH_AS_COMMIT">("ENCASH_PAYOUT_RULE") : null,
+    arrearOnArrear: needs.arrears ? take<boolean>("ARREAR_ON_ARREAR") : null,
+    lopReversal: needs.reversals ? { lookbackMonths: take<number>("LOP_REVERSAL_LOOKBACK_MONTHS") ?? 0, overrideAllowed: take<boolean>("LOP_REVERSAL_OVERRIDE_ALLOWED") ?? false } : null,
+    headRounding: ctx.ifSet<Record<string, RoundingRule>>("HEAD_ROUNDING") ?? {},
   };
   if (missing.length) throw new RulesMissingError(missing);
   return rules;

@@ -53,7 +53,11 @@ export class RuleContext {
   static async load(): Promise<RuleContext> {
     const rows = await prisma.payrollItemVersion.findMany({ where: { kind: "RULE" }, orderBy: [{ key: "asc" }, { version: "asc" }] });
     const latest = new Map<string, Current>();
-    for (const r of rows) latest.set(r.key, { version: r.version, valueHash: r.valueHash, value: r.value });
+    // A version authored by nobody is a figure an older build shipped "from memory". It is never used: that rule is Not set until a director enters it.
+    for (const r of rows) {
+      if (r.authorUserId === null) continue;
+      latest.set(r.key, { version: r.version, valueHash: r.valueHash, value: r.value });
+    }
     return new RuleContext(latest);
   }
 
@@ -61,6 +65,12 @@ export class RuleContext {
    * A rule that may legitimately have no value yet. Returns null (and pins it as "not set", which the gate and the watermark treat as a Placeholder)
    * rather than stopping the calculation; once it has a value, the run is stale until it is calculated again.
    */
+  /** A rule that is genuinely optional (nothing changes without it): its value if there is one, else null, and a missing value is NOT pinned as "not set", so it never turns a run into a test. */
+  ifSet<T = unknown>(key: string): T | null {
+    if (!RULE_BY_KEY[key]) throw new Error(`There is no payroll rule called ${key}`);
+    return this.current.has(key) ? this.rule<T>(key) : null;
+  }
+
   optional<T = unknown>(key: string): T | null {
     if (!RULE_BY_KEY[key]) throw new Error(`There is no payroll rule called ${key}`);
     if (!this.current.has(key)) {

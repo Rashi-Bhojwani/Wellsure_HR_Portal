@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ITEM_CODE_PATTERN } from "@shared/constants/payrollSalary";
 import { RULE_BY_KEY, type RuleDef } from "@shared/constants/payrollRules";
 import { parseFormula, FormulaError } from "../formula";
 import { ROUNDING_MODES, canonicalDecimal, dec } from "../money";
@@ -73,7 +74,11 @@ const lwfTable = z
 const stateNameMap = z.record(z.string().trim().min(1).max(60), stateKey);
 const payslipLayout = z.object({ showEmployerContributions: z.boolean(), showYearToDate: z.boolean() }).strict();
 
+// A head code and how that head is rounded, for a head that is not rounded by "Rounding of salary lines".
+const headRounding = z.record(z.string().regex(ITEM_CODE_PATTERN, "A head code is capital letters, digits and underscores"), roundingSchema.refine((r) => r.mode !== "NONE", "A head is rounded by a mode; leave it out to use the general rule"));
+
 const JSON_SCHEMAS: Record<string, z.ZodType> = {
+  HEAD_ROUNDING: headRounding,
   PT_SLABS: ptSlabs,
   LWF_TABLE: lwfTable,
   STATE_NAME_MAP: stateNameMap,

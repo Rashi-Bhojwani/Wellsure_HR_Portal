@@ -198,3 +198,16 @@ describe("annualView: the monthly figure and the yearly total side by side", () 
     expect(a.total).toBe("1200000"); // ...but not part of the CTC total
   });
 });
+
+describe("per-head rounding in a breakup", () => {
+  it("a head listed in 'Rounding of particular heads' is rounded by its own rule; the others, and monthly CTC, by the general one", () => {
+    // 1,000,000 a year: monthly 83,333 (half up). Basic 40% = 33,333.2; HRA 50% of the rounded basic = 16,666.5.
+    const general = computeBreakup({ annualCtc: dec("1000000"), structure: standard, components: stdComponents, rounding: whole });
+    const own = computeBreakup({ annualCtc: dec("1000000"), structure: standard, components: stdComponents, rounding: { ...whole, perHead: { HRA: { mode: "DOWN", scale: 0 } } } });
+    expect(amountsOf(general).HRA).toBe("16667");
+    expect(amountsOf(own).HRA).toBe("16666");
+    expect(own.monthlyCtc.toString()).toBe("83333");
+    expect(amountsOf(own).BASIC).toBe(amountsOf(general).BASIC);
+    expect(sum(own.lines.map((l) => l.amount)).equals(own.monthlyCtc)).toBe(true); // the balance absorbs the difference
+  });
+});

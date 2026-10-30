@@ -5,30 +5,28 @@ import { prisma } from "../../../lib/prisma";
 import { app, authHeader, cleanupEmployeeTestOrgMasters, cleanupFullTestEmployee, createEmployeeTestOrgMasters, createFullTestEmployee, loginAs, type TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
 import { ensurePayrollRules, getRule, listRules } from "../rules/governed";
 import { parseRuleValue } from "../rules/schemas";
+import { deleteWithDependents } from "../../../lib/__tests__/cleanup";
 import { cleanupPayrollRowsBy, useSecondDirectorChecks } from "./payrollTestHelpers";
 
-// Phase 6 P6-1: governed rules. A COMPANY rule ships empty; a STATUTORY figure ships as a Placeholder labelled "From memory, unverified"; an edit is an
+// Phase 6 P6-1: governed rules. Since Stage 3.2 NO rule ships a value, statutory ones included; an edit is an
 // unconfirmed new version; a different person confirms; a statutory figure is confirmed only by typing it again.
 
 describe("the rules catalog", () => {
-  it("describes every rule, and ships exactly the eleven statutory figures", () => {
+  it("describes every rule, and ships no figure at all", () => {
     for (const r of RULE_CATALOG) {
       expect(r.label.length, r.key).toBeGreaterThan(3);
       expect(r.description.length, r.key).toBeGreaterThan(10);
       expect(r.affects.length, r.key).toBeGreaterThan(3);
       expect(r.whoConfirms.length, r.key).toBeGreaterThan(1);
-      // A shipped value is only ever a statutory single figure; anything company-specific ships empty.
-      if (r.placeholder !== undefined) expect(r.origin, r.key).toBe("STATUTORY");
-      if (r.origin === "COMPANY") expect(r.placeholder, r.key).toBeUndefined();
+      // Nothing is shipped: no rule, statutory or company, carries a value.
+      expect(r.placeholder, r.key).toBeUndefined();
     }
-    expect([...SHIPPED_PLACEHOLDER_KEYS].sort()).toEqual(
-      ["ESI_EMPLOYEE_RATE", "ESI_EMPLOYER_RATE", "ESI_ROUNDING", "ESI_WAGE_CEILING", "PF_ADMIN_RATE", "PF_EDLI_RATE", "PF_EMPLOYEE_RATE", "PF_EPF_ER_RATE", "PF_EPS_RATE", "PF_ROUNDING", "PF_WAGE_CEILING"].sort(),
-    );
+    expect(SHIPPED_PLACEHOLDER_KEYS).toEqual([]);
     expect(new Set(RULE_CATALOG.map((r) => r.key)).size).toBe(RULE_CATALOG.length);
   });
 
-  it("every shipped placeholder passes its own validation, in canonical form", () => {
-    for (const key of SHIPPED_PLACEHOLDER_KEYS) expect(() => parseRuleValue(key, RULE_BY_KEY[key]!.placeholder), key).not.toThrow();
+  it("values still come out in canonical form", () => {
+    expect(RULE_BY_KEY.PF_EMPLOYEE_RATE).toBeDefined();
     expect(parseRuleValue("PF_EMPLOYEE_RATE", "12.00")).toBe("12");
     expect(parseRuleValue("PF_WAGE_CEILING", "15000.0")).toBe("15000");
   });
@@ -109,23 +107,32 @@ describe("governed rules in the database", () => {
     return api(token).post(`/rules/${key}/confirm`, { version: preview.body.version, typedValue: over.typedValue, note: over.note ?? "checked against the CA's letter dated 1 Oct", fingerprint: preview.body.fingerprint });
   }
 
-  it("ships the statutory figures as Placeholders labelled 'From memory, unverified', and everything company-specific as Not set", async () => {
+  it("ships nothing: every rule, statutory or company, is Not set, and a statutory one still needs a retype to confirm", async () => {
     const rules = await listRules();
     for (const r of rules) {
-      if (SHIPPED_PLACEHOLDER_KEYS.includes(r.key)) {
-        expect(r.status, r.key).toBe("PLACEHOLDER");
-        expect(r.sourceLabel, r.key).toBe(PLACEHOLDER_SOURCE_LABEL);
-        expect(r.current?.authorUserId, r.key).toBeNull();
-        expect(r.requiresRetype, r.key).toBe(true);
-      } else {
-        expect(r.status, r.key).toBe("NOT_SET");
-        expect(r.current, r.key).toBeNull();
-      }
+      expect(r.status, r.key).toBe("NOT_SET");
+      expect(r.current, r.key).toBeNull();
     }
-    expect((await getRule("PF_WAGE_CEILING")).rule.current?.value).toBe("15000");
-    expect((await getRule("ESI_ROUNDING")).rule.current?.value).toEqual({ mode: "UP", scale: 0 });
-    // Idempotent and additive: running it again creates nothing.
+    expect(rules.find((r) => r.key === "PF_EMPLOYEE_RATE")?.requiresRetype).toBe(true);
     expect((await ensurePayrollRules()).created).toEqual([]);
+  });
+
+  it("a figure an older build shipped 'from memory' (authored by nobody) is never a value: the rule is Not set, and a director's entry replaces it", async () => {
+    const key = "PF_EDLI_RATE";
+    await prisma.payrollItemVersion.create({ data: { kind: "RULE", key, version: 1, value: "0.5", valueHash: "payroll-hash-v1:legacy", note: PLACEHOLDER_SOURCE_LABEL, authorUserId: null } });
+    try {
+      expect((await getRule(key)).rule.status).toBe("NOT_SET");
+      const { RuleContext } = await import("../rules/context");
+      await expect(RuleContext.load().then((c) => c.rule(key))).rejects.toThrow();
+      expect((await setRule(makerToken, key, "0.5")).status).toBe(200);
+      const r = await getRule(key);
+      expect(r.rule.status).toBe("PLACEHOLDER");
+      expect(r.rule.current?.version).toBe(2);
+      expect((await RuleContext.load()).rule(key)).toBe("0.5");
+    } finally {
+      const legacy = await prisma.payrollItemVersion.findMany({ where: { kind: "RULE", key, authorUserId: null }, select: { id: true } });
+      await deleteWithDependents("PayrollItemVersion", legacy.map((l) => l.id));
+    }
   });
 
   it("a company-specific rule: Not set, then a Placeholder when somebody enters it, then Confirmed by a different person", async () => {
@@ -234,13 +241,16 @@ describe("governed rules in the database", () => {
   describe("a statutory figure is confirmed only by typing it again", () => {
     const key = "PF_EMPLOYEE_RATE";
 
+    beforeAll(async () => {
+      expect((await setRule(makerToken, key, "12")).status).toBe(200); // nothing is shipped: a director enters the figure first
+    });
+
     it("shows the source label before confirming, and refuses a confirm with no retype", async () => {
       const preview = await api(checkerToken).post(`/rules/${key}/confirm-preview`);
-      expect(preview.body).toMatchObject({ requiresRetype: true, sourceLabel: PLACEHOLDER_SOURCE_LABEL, value: "12", blocked: null });
+      expect(preview.body).toMatchObject({ requiresRetype: true, value: "12", blocked: null });
       const none = await api(checkerToken).post(`/rules/${key}/confirm`, { version: preview.body.version, note: "checked against the EPFO circular", fingerprint: preview.body.fingerprint });
       expect(none.status).toBe(400);
       expect(none.body.error.code).toBe("RETYPE_REQUIRED");
-      expect(none.body.error.message).toContain(PLACEHOLDER_SOURCE_LABEL);
       expect((await getRule(key)).rule.status).toBe("PLACEHOLDER");
     });
 
@@ -289,7 +299,7 @@ describe("governed rules in the database", () => {
     expect(edits[0]).toMatchObject({ entityType: "PayrollRule", before: null, after: { version: 1, value: "CALENDAR_DAYS", status: "PLACEHOLDER" } });
     expect(edits[1]).toMatchObject({ before: { version: 1, value: "CALENDAR_DAYS", status: "CONFIRMED" }, after: { version: 2, value: "FIXED_DAYS", status: "PLACEHOLDER", resetConfirmation: true } });
     const confirmed = await prisma.auditLog.findFirstOrThrow({ where: { actorUserId: checker.userId, action: "payroll.rule.confirmed", entityId: "PF_EMPLOYEE_RATE" } });
-    expect(confirmed).toMatchObject({ before: { status: "PLACEHOLDER", source: PLACEHOLDER_SOURCE_LABEL }, after: { status: "CONFIRMED", retyped: true } });
+    expect(confirmed).toMatchObject({ before: { status: "PLACEHOLDER", source: expect.any(String) }, after: { status: "CONFIRMED", retyped: true } });
     // And the maker-checker record exists for each confirmation.
     const approvals = await prisma.payrollApproval.findMany({ where: { subject: "RULE_CONFIRM", checkerUserId: checker.userId } });
     expect(approvals.length).toBeGreaterThanOrEqual(3);

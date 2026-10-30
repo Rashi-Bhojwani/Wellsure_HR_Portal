@@ -120,7 +120,8 @@ export function calculatePerson(input: PersonInput, ctx: CalcContext): ItemOut {
   const comps = [...acc.values()].sort((x, y) => x.order - y.order || x.code.localeCompare(y.code));
   for (const a of comps) {
     const raw = a.prorates ? a.numerator.dividedBy(commonDen) : (a.fixedAmount ?? ZERO);
-    const amount = roundByRule(raw, rules.lineRounding, a.label);
+    const lineRule = rules.headRounding[a.code] ?? rules.lineRounding;
+    const amount = roundByRule(raw, lineRule, a.label);
     const line: LineOut = {
       code: a.code,
       label: a.label,
@@ -128,7 +129,7 @@ export function calculatePerson(input: PersonInput, ctx: CalcContext): ItemOut {
       source: "COMPONENT",
       sourceRef: null,
       amount,
-      basis: { prorates: a.prorates, parts: a.parts, unrounded: c(raw), rounding: rules.lineRounding, pfApplicable: a.pf, esiApplicable: a.esi },
+      basis: { prorates: a.prorates, parts: a.parts, unrounded: c(raw), rounding: lineRule, pfApplicable: a.pf, esiApplicable: a.esi },
     };
     if (a.type === "EARNING") {
       earningLines.push(line);

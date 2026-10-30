@@ -27,7 +27,7 @@ export async function runMigrate(): Promise<void> {
   // A database that's never seeded (staging/production) still needs the
   // system roles and permission rows — additive only, never edits a role.
   await ensureAccessCatalog();
-  // The statutory figures payroll ships as Placeholders ("From memory, unverified"), additive and idempotent; company-specific rules ship empty.
+  // Payroll ships no rule value (Stage 3.2): this creates nothing today and is kept so an older database is brought forward the same way.
   await ensurePayrollRules();
   // Who may do what (lib/dbRoles.ts): the app role is created or refreshed, granted the data and denied every write to the append-only tables,
   // on every run, so a table a new migration made append-only is covered the same deploy. Required outside development.
