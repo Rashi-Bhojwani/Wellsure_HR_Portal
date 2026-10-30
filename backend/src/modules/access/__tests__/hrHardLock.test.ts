@@ -18,7 +18,7 @@ describe("the HR hard-locked set", () => {
   it("is every payroll key plus the salary-derived reports and PAY documents, and nothing HR needs for attendance, leave or people", () => {
     for (const k of PERMISSION_KEYS.filter((key) => key.startsWith("payroll."))) expect(locked(k), k).toBe(true);
     for (const k of ["reports.salary.view", "reports.liability.view", "documents.pay.view"]) expect(locked(k), k).toBe(true);
-    for (const k of PERMISSION_KEYS.filter((key) => key.startsWith("attendance.") || key.startsWith("leave.") || key === "reports.view" || key === "employee.view")) expect(locked(k), k).toBe(false);
+    for (const k of PERMISSION_KEYS.filter((key) => key.startsWith("attendance.") || (key.startsWith("leave.") && key !== "leave.yearend.manage") || key === "reports.view" || key === "employee.view")) expect(locked(k), k).toBe(false);
   });
 
   it("the default HR roles hold none of it", () => {

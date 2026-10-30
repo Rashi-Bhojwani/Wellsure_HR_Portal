@@ -224,7 +224,7 @@ subset for manual testing.
 | Employee Code | Name | Role | Useful for testing |
 |---|---|---|---|
 | `1000` | Aditi Sharma | Super Admin | Full admin access. 2FA enforcement is currently **off** in the seed (`auth.require2faRoles` = `[]`, chore 7f99cfd); re-enable it in System Settings and first login walks you through enrolment. Sees every helpdesk ticket, sensitive ones included |
-| `1001` | Rohan Mehta | HR Admin | Employee management, bank/statutory data (masked), HR-held documents (ID proofs and other non-pay categories; **since Stage 1 HR never opens pay documents, i.e. a letter's contents with CTC, or any salary figure**), Admin Tools → Import Center/Audit Log/System Settings; the helpdesk queue including sensitive categories. Admin Home and Employee Leave flag leave requests **no manager can approve** (e.g. teams of managers with no permissions). 2FA currently off (see above) |
+| `1001` | Rohan Mehta | HR Admin | Employee management, bank/statutory data (masked), HR-held documents (ID proofs and other non-pay categories; **since Stage 1 HR never opens pay documents, i.e. a letter's contents with CTC, or any salary figure**), the helpdesk queue including sensitive categories. Admin Home and Employee Leave flag leave requests **no manager can approve** (e.g. teams of managers with no permissions). 2FA currently off (see above) |
 | `1002`–`1005`, `1024` | Karan Kapoor, Priya Nair, Vikram Rao, Neha Verma, Rajesh Kumar | Manager | Team-scoped (`TEAM` data-scope) views on the All Employees grid, employee profiles, leave and dashboards — see only your own reports. Managers (and HR Admin `1001`) have **no** reporting manager: they sit under the synthetic Admin root (model A, spec §2.1). The seed enforces the hierarchy and refuses to run if it's broken. A manager can only ever hold the manager-grantable keys (spec §2.2), and **starts with none of them** — the Manager role grants nothing; each power is granted per manager in Admin Tools → Manager Management. Seeded grants: Karan `1002` has leave approval + View employees + Reports + his team's forgot-to-punch requests (view and approve); Priya `1003` has leave approval and marks attendance by hand for SPN-Panchsheel and Wellsure 2 only (Phase 2: neither branch has a biometric machine, so their people — `1003`, `1008`, `1030` at SPN and `1010` at Wellsure 2 — are manual capture with no Device User ID); Vikram `1004`, Neha `1005` and Rajesh `1024` have **no permissions** (shown as such in Manager Management) |
 | `1031` | Tara Bhandari | Super Admin (the second director) | D1 (docs/plans/DIRECTOR_AUTHORITY.md): the company has **two directors**, `1000` and `1031`. They hold every permission, payroll included; they check each other's work and each sets the other's pay. A director's action in director-authority mode takes effect at once and the other is told (bell, e-mail, Tasks inbox; a red banner after 3 days unacknowledged, or at once when a second-director check is switched). System Settings → Director authority shows the switches and what the other director did. Outside development two-step sign-in is required of every director |
 | `1025`, `1027` | Anjali Desai, Shreya Bhatt | Employee | Used to be the Payroll Admin and Payroll Approver. The payroll roles (`PAYROLL_ADMIN`, `PAYROLL_APPROVER`) are for directors only now, so these are ordinary employees; payroll is done by `1000` and `1031` |
@@ -252,7 +252,7 @@ Super Admin) appoints and removes managers, moves people between teams
 (effective-dated, never in the future) and edits a manager's permissions.
 A move shows up live on the managers' screens.
 
-**What HR can do (Stage 1).** Two things, both in `docs/plans/HR_CAPABILITIES.md`:
+**What HR can do (Stage 1).** *After Checkpoint 1 four more keys are hard-locked to directors: sign-in security actions for other people (reset 2FA, unlock, password link), the Import Center, issuing letters (a letter can carry the CTC; per-type grants are not built) and the leave year-end. HR keeps entering employees one by one and the masked bank/statutory entry that a director confirms.* Two things, both in `docs/plans/HR_CAPABILITIES.md`:
 
 - **A hard lock.** HR (HR Admin, HR Executive) can never hold salary, payroll, bank-file or tax data, leave liability in rupees,
   pay documents (a letter carrying CTC), or the Admin Tools keys for roles, the audit log, system settings and workflow
@@ -418,7 +418,7 @@ have made-up Gmail addresses that may belong to real strangers. With
 you created yourself with an address you own.
 
 **Imported employees are never emailed automatically.** After an Excel import
-HR opens **Import Center → Invitations**, chooses who to invite (up to 100 at
+A director (the Import Center is hard-locked to directors since Checkpoint 1) opens **Import Center → Invitations**, chooses who to invite (up to 100 at
 a time) and presses **Send invitations**; each person gets their own result,
 and a failure is shown against their name, never counted as sent.
 

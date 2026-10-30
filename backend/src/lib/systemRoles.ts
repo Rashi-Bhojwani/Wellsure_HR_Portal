@@ -31,7 +31,6 @@ const HR_EXECUTIVE_PERMS: string[] = [
   "employee.separate.view",
   "profile.changerequest.approve",
   "org.manage",
-  "import.manage",
   // Phase 4 — leave administration stays with HR_EXECUTIVE; config/
   // financial actions (policy.manage/recalculate/yearend.manage) are
   // HR_ADMIN+ only, same narrowing as settings.manage/import.manage.
@@ -48,7 +47,6 @@ const HR_EXECUTIVE_PERMS: string[] = [
   // (Payroll & Salary, Grievance): same bar as "no salary or bank data".
   "helpdesk.manage",
   // Phase 5 commit D2 — issuing letters (templates themselves are HR_ADMIN+).
-  "letters.generate",
   // Phase 5 commit F — the Reports app (leave liability is HR_ADMIN+ only).
   "reports.view",
   // Phase 2 — attendance operations (settings and devices are HR_ADMIN+).
@@ -69,7 +67,6 @@ const HR_ADMIN_PERMS: string[] = [
   "employee.statutory.edit",
   "employee.bank.view",
   "employee.bank.edit",
-  "user.security.manage",
   // Phase 3 commit 1 — bulk attendance corrections (HR Admin, not HR Executive).
   "attendance.regularization.bulk",
   // Phase 3 commit 2 — Manual Override and Shift Override (HR Admin, not HR Executive).
@@ -78,7 +75,6 @@ const HR_ADMIN_PERMS: string[] = [
   "attendance.finalise",
   "leave.policy.manage",
   "leave.recalculate",
-  "leave.yearend.manage",
   // Phase 5 — config/financial actions stay HR_ADMIN+, same narrowing as settings.manage/leave.policy.manage
   "announcements.manage",
   "engage.moderate",

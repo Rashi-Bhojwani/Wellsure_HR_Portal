@@ -32,7 +32,7 @@ data (the demo company), and so that a real company starts from an empty system 
 | Role | Salaries and payroll figures | Payroll rules, components and structures | Employees' bank accounts | Employees' PAN, Aadhaar, UAN and ESI numbers | The company's PF, ESI, PT, LWF, PAN and TAN identifiers | The bank file layout and the company's debit account | Employees' HR-held documents | Sensitive helpdesk tickets | Power over other people's access |
 |---|---|---|---|---|---|---|---|---|---|
 | Super Admin | SCK | CK | SC | SC | SCK | SCK | SC | S | C |
-| HR Admin | C | — | SC | SC | — | — | SC | S | C |
+| HR Admin | — | — | SC | SC | — | — | SC | S | C |
 | HR Executive | — | — | — | — | — | — | SC | — | — |
 | Payroll Admin | SC | C | S | S | SC | SC | — | — | — |
 | Payroll Approver | SK | K | — | — | K | SK | — | — | — |

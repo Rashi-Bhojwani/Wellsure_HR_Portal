@@ -220,7 +220,7 @@ describe("Roles & permissions (E1)", () => {
       expect(leaveApprove).toMatchObject({ effective: false, inheritedFrom: [], override: null });
       expect(res.body.can).toEqual({ editRoles: true, editOverrides: true, securityActions: true });
       const asHr = await api(tokens.hrAdmin).get(`/api/access/employees/${people.manager.employeeId}`);
-      expect(asHr.body.can).toEqual({ editRoles: false, editOverrides: true, securityActions: true }); // E2: HR holds manager.permissions.manage
+      expect(asHr.body.can).toEqual({ editRoles: false, editOverrides: true, securityActions: false }); // E2: HR holds manager.permissions.manage; the sign-in security actions are the directors' (hard lock)
       const ofSa = await api(tokens.hrAdmin).get(`/api/access/employees/${people.sa.employeeId}`);
       expect(ofSa.body.can.securityActions).toBe(false);
       expect((await api(tokens.employee).get(`/api/access/employees/${people.manager.employeeId}`)).status).toBe(403);
@@ -293,23 +293,24 @@ describe("Roles & permissions (E1)", () => {
       }
     });
 
-    it("security actions: HR (user.security.manage) on an employee yes, on a Super Admin no, on yourself no", async () => {
+    it("security actions: a director on an employee yes, HR never (hard lock), on a Super Admin only by another director, on yourself no", async () => {
       await prisma.user.update({ where: { id: people.employee.userId }, data: { failedLoginAttempts: 5, lockedUntil: new Date(Date.now() + 60_000) } });
-      const unlock = await api(tokens.hrAdmin).post(`/api/access/employees/${people.employee.employeeId}/unlock`, { reason: "locked out after typos" });
+      const unlock = await api(tokens.sa).post(`/api/access/employees/${people.employee.employeeId}/unlock`, { reason: "locked out after typos" });
       expect(unlock.status).toBe(200);
       expect(unlock.body.locked).toBe(false);
       expect(await auditCount("auth.unlocked_by_admin", people.employee.userId)).toBe(1);
 
       await prisma.user.update({ where: { id: people.employee.userId }, data: { totpEnabled: true } });
-      const reset = await api(tokens.hrAdmin).post(`/api/access/employees/${people.employee.employeeId}/reset-2fa`, { reason: "lost phone, verified in person" });
+      const reset = await api(tokens.sa).post(`/api/access/employees/${people.employee.employeeId}/reset-2fa`, { reason: "lost phone, verified in person" });
       expect(reset.status).toBe(200);
       expect(reset.body.totpEnabled).toBe(false);
       expect(await prisma.refreshToken.count({ where: { userId: people.employee.userId, revokedAt: null } })).toBe(0);
 
-      const pw = await api(tokens.hrAdmin).post(`/api/access/employees/${people.employee.employeeId}/password-reset`, { reason: "forgot it" });
+      const pw = await api(tokens.sa).post(`/api/access/employees/${people.employee.employeeId}/password-reset`, { reason: "forgot it" });
       expect(pw.status).toBe(200);
       expect(await prisma.passwordResetToken.count({ where: { userId: people.employee.userId } })).toBeGreaterThan(0);
 
+      for (const action of ["unlock", "reset-2fa", "password-reset"]) expect((await api(tokens.hrAdmin).post(`/api/access/employees/${people.employee.employeeId}/${action}`, { reason: "hr tries" })).status, action).toBe(403);
       expect((await api(tokens.hrAdmin).post(`/api/access/employees/${people.sa.employeeId}/reset-2fa`, { reason: "try on SA" })).status).toBe(403);
       expect((await api(tokens.sa).post(`/api/access/employees/${people.sa.employeeId}/reset-2fa`, { reason: "on myself" })).body.error.code).toBe("SELF");
       // Recovery step 1: another Super Admin can.

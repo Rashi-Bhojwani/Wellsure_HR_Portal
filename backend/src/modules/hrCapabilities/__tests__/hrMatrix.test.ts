@@ -6,6 +6,7 @@ import { purgeAppendOnly } from "../../../lib/__tests__/cleanup";
 import { prisma } from "../../../lib/prisma";
 import { app, authHeader, cleanupEmployeeTestOrgMasters, cleanupFullTestEmployee, createEmployeeTestOrgMasters, createFullTestEmployee, loginAs, type TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
 import { crawlGets } from "../../payroll/__tests__/sensitiveCrawl";
+import { ROUTE_CLASSIFICATION } from "../../managers/__tests__/routeInventory";
 import { setSwitch } from "../service";
 
 // Stage 1.6, the persona matrix: for each state of the switches, who can reach what. A capability that is off closes exactly its own doors and no others; whatever the switches say, no pay
@@ -42,6 +43,8 @@ const DOORS: Door[] = [
 ];
 // (Everybody, HR included, may read their OWN payslips: /payslips/mine answers with their own.)
 const PAY = /^GET \/api\/(payroll|payslips(?!\/mine))/;
+// The four keys locked after Checkpoint 1: the Import Center, letters, the leave year-end and the sign-in security actions.
+const LOCKED_FOUR = /^GET \/api\/(import|letters\/(employees|:id)|leave\/year-end)/;
 
 describe("the persona matrix", () => {
   let org: TestOrgMasters;
@@ -118,12 +121,31 @@ describe("the persona matrix", () => {
     expect(await statuses("hrNamed")).toEqual(base);
   });
 
+  it("every GET route under /api/payroll and /api/payslips, with ids filled in, answers 403 to both HR roles; the only exceptions are the three that return a person's OWN payslips", async () => {
+    const own = new Set(["GET /api/payslips/mine", "GET /api/payslips/mine/:id", "GET /api/payslips/mine/:id/pdf"]);
+    const routes = Object.keys(ROUTE_CLASSIFICATION).filter((r) => /^GET \/api\/(payroll|payslips)(\/|$)/.test(r));
+    expect(routes.length).toBeGreaterThanOrEqual(30);
+    const wrong: string[] = [];
+    for (const who of ["hrAdmin", "hrNamed"] as const) {
+      for (const r of routes) {
+        const path = r.replace("GET ", "").replace(/:[A-Za-z]+/g, "00000000-0000-4000-8000-000000000000");
+        const status = (await request(app).get(path).set(...authHeader(tok[who]))).status;
+        if (own.has(r) ? status === 403 : status !== 403) wrong.push(`${who} ${r} -> ${status}`);
+      }
+    }
+    expect(wrong).toEqual([]);
+    // And the list itself: the three own-payslip routes are the only such routes the code has.
+    expect(routes.filter((r) => !/^GET \/api\/payroll/.test(r)).sort()).toEqual([...own].sort());
+  }, 240_000);
+
   it("whatever the switches say, no payroll or payslip route ever answers an HR person: every duty on, every duty off, and as it is", async () => {
     const check = async (label: string) => {
       for (const who of ["hrAdmin", "hrNamed"] as const) {
         const crawled = await crawlGets(app, tok[who], {});
         const leaked = crawled.filter((c) => PAY.test(c.route) && c.status === 200).map((c) => c.route);
         expect(leaked, `${who} (${label})`).toEqual([]);
+        const four = crawled.filter((c) => LOCKED_FOUR.test(c.route) && c.status === 200).map((c) => c.route);
+        expect(four, `${who} (${label}), routes of the four keys locked after Checkpoint 1`).toEqual([]);
       }
     };
     await check("as it is");

@@ -71,3 +71,7 @@ open; run and export enforce the same check server-side.
 5. Pending-work routing (1.4).
 6. Reports gallery (1.5).
 7. `check:sensitive-ui` extended and the persona matrix test (1.6).
+
+
+## After Checkpoint 1: four more hard-locked keys
+`user.security.manage`, `import.manage`, `letters.generate`, `leave.yearend.manage` joined `HR_FORBIDDEN_KEYS` (migration `20261030090000`; what it removed is copied first to `role_permission_removals`, a personal grant as `USER_OVERRIDE:<id>`). Consequences the owners should know: HR cannot reset 2FA / unlock / send a password link; cannot use the Import Center (bulk employee import, invitations); cannot issue any letter; cannot run the leave year-end. Directors do these until narrower keys exist. Tests: `hrHardLockFourKeys.test.ts` (each key on each route, every HR switch on, role edit, personal grant, database triggers, resolver with triggers off) and the extended persona matrix.
