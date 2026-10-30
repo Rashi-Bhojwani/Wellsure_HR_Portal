@@ -140,6 +140,7 @@ export interface ComponentValue {
   activeTo?: string;
   arrearsHead?: string;
   reversalHead?: string;
+  inputItem?: boolean;
 }
 
 export interface ComponentView {
@@ -182,7 +183,14 @@ export type LineCalc =
   | { method: "FIXED_AMOUNT"; amount: string }
   | { method: "PER_PERSON" }
   | { method: "FORMULA"; formula: string }
-  | { method: "BALANCE" };
+  | { method: "BALANCE" }
+  | { method: "SLAB"; of: string; slabs: Array<{ from: string; to: string | null; amount: string }> };
+
+export interface CalculationStep {
+  component: string;
+  step: number;
+  dependsOn: string[];
+}
 
 export interface StructureLine {
   component: string;
@@ -225,6 +233,7 @@ export interface SampleResult {
 export interface StructureSavePreview extends ItemSavePreview<StructureValue> {
   sample: SampleResult;
   unconfirmedComponents: string[];
+  calculationOrder: CalculationStep[];
 }
 export type StructureConfirmPreview = ItemConfirmPreview<StructureValue> & { unconfirmedComponents: string[] };
 

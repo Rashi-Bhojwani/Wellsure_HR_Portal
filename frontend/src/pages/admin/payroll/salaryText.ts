@@ -21,6 +21,8 @@ export function describeCalc(calc: LineCalc, nameOf: (code: string) => string): 
       return `formula: ${calc.formula}`;
     case "BALANCE":
       return "whatever is left of CTC";
+    case "SLAB":
+      return `looked up in a table of ${calc.slabs.length} row${calc.slabs.length === 1 ? "" : "s"}, by ${calc.of === "CTC" ? "CTC" : nameOf(calc.of)}`;
   }
 }
 

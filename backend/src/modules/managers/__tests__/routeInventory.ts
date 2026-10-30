@@ -402,6 +402,7 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/payroll/components/:code": admin,
   "POST /api/payroll/components/:code/save-preview": admin,
   "PUT /api/payroll/components/:code": admin,
+  "DELETE /api/payroll/components/:code": admin,
   "POST /api/payroll/components/:code/confirm-preview": admin,
   "POST /api/payroll/components/:code/confirm": admin,
   "GET /api/payroll/structures": admin,

@@ -58,6 +58,7 @@ payrollRouter.get("/components", view, salary.components);
 payrollRouter.get("/components/:code", view, validate({ params: v.codeParamsSchema }), salary.component);
 payrollRouter.post("/components/:code/save-preview", edit, validate({ params: v.codeParamsSchema, body: v.itemSavePreviewSchema }), salary.componentSavePreview);
 payrollRouter.put("/components/:code", edit, validate({ params: v.codeParamsSchema, body: v.componentSaveSchema }), salary.componentSave);
+payrollRouter.delete("/components/:code", edit, validate({ params: v.codeParamsSchema }), salary.componentDelete);
 payrollRouter.post("/components/:code/confirm-preview", confirmItem, validate({ params: v.codeParamsSchema }), salary.componentConfirmPreview);
 payrollRouter.post("/components/:code/confirm", confirmItem, validate({ params: v.codeParamsSchema, body: v.itemConfirmSchema }), salary.componentConfirm);
 

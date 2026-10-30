@@ -49,7 +49,7 @@ export const RESERVED_COMPONENT_CODES = [
   "NET_ROUNDING",
 ] as const;
 
-export const LINE_CALC_METHODS = ["PERCENT", "FIXED_AMOUNT", "PER_PERSON", "FORMULA", "BALANCE"] as const;
+export const LINE_CALC_METHODS = ["PERCENT", "FIXED_AMOUNT", "PER_PERSON", "FORMULA", "BALANCE", "SLAB"] as const;
 export type LineCalcMethod = (typeof LINE_CALC_METHODS)[number];
 export const LINE_CALC_LABEL: Record<LineCalcMethod, string> = {
   PERCENT: "Percentage of CTC or of an earlier line",
@@ -57,6 +57,7 @@ export const LINE_CALC_LABEL: Record<LineCalcMethod, string> = {
   PER_PERSON: "Typed in for each person",
   FORMULA: "Formula",
   BALANCE: "Whatever is left of CTC",
+  SLAB: "Looked up in a table, by the value of CTC or of an earlier line",
 };
 
 export const SALARY_CHANGE_REASONS = ["JOINING", "REVISION", "CORRECTION"] as const;

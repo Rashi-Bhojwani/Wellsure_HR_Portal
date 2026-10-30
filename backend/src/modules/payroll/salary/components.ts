@@ -1,3 +1,4 @@
+import { prisma } from "../../../lib/prisma";
 import { HttpError } from "../../../middleware/errorHandler";
 import { type CheckerAvailability } from "../approvals";
 import { payrollHash } from "../hash";
@@ -198,3 +199,20 @@ export async function confirmComponent(code: string, input: { version: number; n
   return (await getComponent(code)).component;
 }
 
+
+/**
+ * Heads are never deleted. A head that a finalised run used is part of that run's explanation for good; any other head is part of the version history that
+ * structures pin. To stop using one, save a version with a last active day: that is retiring it, and everything already paid keeps explaining itself.
+ */
+export async function refuseDeleteComponent(code: string): Promise<never> {
+  const data = await loadItems(KIND, [code]);
+  if (data.versions.length === 0) throw new HttpError(404, "There is no such component.", "NOT_FOUND");
+  const used = await prisma.payrollRunLine.findFirst({ where: { code, run: { status: "FINALISED" } }, select: { run: { select: { cycleLabel: true } } } });
+  throw new HttpError(
+    409,
+    used
+      ? `${code} was used in the finalised run for ${used.run.cycleLabel}, so it cannot be deleted. Retire it instead: save a new version with a last active day.`
+      : `Pay heads are never deleted, because structures and history pin their versions. Retire ${code} instead: save a new version with a last active day.`,
+    "HEAD_DELETE_REFUSED",
+  );
+}

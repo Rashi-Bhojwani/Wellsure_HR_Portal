@@ -87,6 +87,12 @@ export function computeBreakup(input: BreakupInput): Breakup {
       const of = calc.of === "CTC" ? monthlyCtc : amounts.get(calc.of);
       if (!of) throw new BreakupError("STRUCTURE_INVALID", `${line.component} is a percentage of ${calc.of}, which comes later or is not in the structure.`);
       amount = roundWith(percentOf(of, dec(calc.percent)), rounding);
+    } else if (calc.method === "SLAB") {
+      const key = calc.of === "CTC" ? monthlyCtc : amounts.get(calc.of);
+      if (!key) throw new BreakupError("STRUCTURE_INVALID", `${line.component} is looked up by ${calc.of}, which comes later or is not in the structure.`);
+      const row = calc.slabs.find((s) => key.greaterThanOrEqualTo(dec(s.from)) && (s.to === null || key.lessThan(dec(s.to))));
+      if (!row) throw new BreakupError("SLAB_NO_MATCH", `${line.component} is looked up by ${calc.of}, and ${fixed(key, rounding.scale)} is in none of the table's rows.`, { component: line.component, value: canonicalDecimal(key) });
+      amount = dec(row.amount);
     } else if (calc.method === "FIXED_AMOUNT") {
       amount = dec(calc.amount);
     } else if (calc.method === "PER_PERSON") {

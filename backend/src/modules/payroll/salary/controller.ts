@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { addAdjustment, cancelAdjustment, listAdjustments, previewAdjustment } from "./adjustments";
-import { confirmComponent, getComponent, listComponents, previewComponentConfirm, previewComponentSave, saveComponent } from "./components";
+import { confirmComponent, getComponent, listComponents, previewComponentConfirm, previewComponentSave, refuseDeleteComponent, saveComponent } from "./components";
 import { getEmployeeSalary, listEmployeeSalaries, searchPeople } from "./employees";
 import { applyRevision, createCancel, createRevision, previewCancel, decideRevision, getRevision, listRevisions, previewRevision, submitRevision, withdrawRevision } from "./revisions";
 import { confirmStructure, getStructure, listStructures, previewBreakup, previewStructureConfirm, previewStructureSave, saveStructure } from "./structures";
@@ -14,6 +14,7 @@ export const components = async (_req: Request, res: Response): Promise<void> =>
 export const component = async (req: Request, res: Response): Promise<void> => void res.status(200).json(await getComponent(code(req)));
 export const componentSavePreview = async (req: Request, res: Response): Promise<void> => void res.status(200).json(await previewComponentSave(code(req), (req.body as { value: unknown }).value));
 export const componentSave = async (req: Request, res: Response): Promise<void> => void res.status(200).json(await saveComponent(code(req), req.body as { value: unknown; note?: string; fingerprint: string }, actor(req)));
+export const componentDelete = async (req: Request, res: Response): Promise<void> => void (await refuseDeleteComponent(code(req)), res.end());
 export const componentConfirmPreview = async (req: Request, res: Response): Promise<void> => void res.status(200).json(await previewComponentConfirm(code(req), req.user!.userId));
 export const componentConfirm = async (req: Request, res: Response): Promise<void> => void res.status(200).json(await confirmComponent(code(req), req.body as { version: number; note: string; fingerprint: string }, actor(req)));
 
