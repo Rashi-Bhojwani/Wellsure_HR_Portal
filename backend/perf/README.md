@@ -3,7 +3,7 @@
 `baseline.json` is the committed baseline for the 500-employee month replay
 (`npm run test:replay`, docs/plans/PHASE_2.md "P2-G build design", gate G2, D5):
 each run is compared with it and **fails if ingest or recompute takes more than
-twice the baseline**, even when still under the absolute limit (ingest ≤ 2 min,
+three times the baseline (it was twice until a shared runner took 2.03× on unrelated code)**, even when still under the absolute limit (ingest ≤ 2 min,
 recompute ≤ 5 min). It is a regression guard, not a target.
 
 It is recorded by the **CI runner** (the `attendance-replay` job), not a laptop:
