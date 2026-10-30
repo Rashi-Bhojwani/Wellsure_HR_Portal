@@ -137,6 +137,43 @@ Chapter numbers of the guide: **pending the guide** (§0.1). Rows are by topic.
 
 ---
 
+## A.1 The guide's 19 chapters (added 2026-10-30, after `docs/integration/Wellsure_Integration_Guide.md` arrived on this branch in `ca6e485`)
+
+Owner: **A** = Session A (payroll/attendance branch), **P** = this session (Peeps), **A+P** = both, split as stated. "Later decision" is the owner's
+prompt of 2026-10-29 or the answers table at the top of this file; where it differs from the guide, it wins (guide §1).
+
+| Ch. | Guide capability (guide §4) | Owner | This plan | Differences from later decisions / notes |
+|---|---|---|---|---|
+| 1 | Wellsure Today (headcount, presence, team health, workflow counts, birthdays, hiring funnel) | A+P | §B.10 (hiring/turnover tiles only); the rest is the existing Home/dashboards | Existing Admin Dashboard is outside both scopes; Peeps adds scoped hiring/exit numbers only, never confidential classes |
+| 2 | My Tasks (one inbox) | A+P | Task sources per module (§B, "Notifications"); `tasks/service.ts` registry lines in PEEPS blocks | Waiver and payroll approvals are Session A's sources |
+| 3 | My Attendance & Leave | A+P | §B.4 (new leave types, Annual Leave / PL label) | Attendance/lateness presentation is Session A's |
+| 4 | Ticket Desk | A+P | §B.3 | Guide: handler closes, requester reopens, review auto-close. Later decision: visibility by category; Payroll category is Session A's |
+| 5 | Directory | P | §B.1 | Guide's proposed defaults (corporate email only, no private mobile, birthday without year) are already how `fieldPolicy.ts` + settings work; birthday opt-out and photo moderation stay Not set |
+| 6 | Avatars | P | §B.1 | Approved avatar catalogue/artwork is a design input (guide §21); none invented |
+| 7 | Cheers & Badges (+ private corrective nudges) | P | §B.8 | Guide confirms award issuers (HR/Directors company-wide, managers team-only) and nudge visibility (employee, manager, HR). Who issues corrective nudges stays open (AS2). Nudges are hidden from directors under AS1 |
+| 8 | Unmute | P | §B.9 | Matches the answer: participant-only, scheduling/completion only, no topic/notes |
+| 9 | All Teams (team attendance/leave summaries) | A | — | Attendance/leave summaries are Session A's (attendance engine, reports) |
+| 10 | Hiring (vacancies, referrals, pipeline, interviews, offers, joining) | P | §B.6 | Guide adds **referrals** (employee sees basic status only) and **no public application form**: §B.6 gains a referral entry point when built. Offer compensation: director-only (later decision), not "salary-authorised staff" in general |
+| 11 | Autofill (resume, identity, bank) | P | §E | Guide includes it in the launch; provider still not chosen, so it is a launch dependency. Bank/identity review needs the respective sensitive keys; HR may enter but a director confirms (later decision) |
+| 12 | All Employees (lifecycle views, linked assets/recruitment/exits) | A+P | Profile "Assets" tab (§B.2), exits (§B.5), conversion (§B.6) | Employee module itself is outside both scopes; Peeps adds linked views through its own endpoints |
+| 13 | Attendlog (lateness policy, LOP) | A | — | Session A's (attendance engine). The guide's fixed cutoffs are initial values the owners gave; Peeps never reads or sets them |
+| 14 | Assets | P | §B.2 — **built (module 1)** | Guide §12: HR-only inventory, employee acknowledgement, HR return confirmation and condition, recovery proposed by HR / approved by a director / processed by payroll. Recovery is not built here (owner's brief); interface in the stage report |
+| 15 | Moving On (exits) | P (+A for F&F) | §B.5 | Guide: employee → manager → HR → director; company-initiated exits; access ends after the approved last day even with clearance open; F&F through Session A's Phase 7 service only |
+| 16 | Insights | P | §B.10 | Matches the answer; definitions Not set; small-group privacy |
+| 17 | Payroll Overview | A | — | Session A's |
+| 18 | Compliance (traceable approvals, documents, lifecycle controls) | A+P | Audit, append-only tables and maker-checker in every Peeps module | UI labels never claim legal compliance |
+| 19 | Mobile/PWA | A+P | Every Peeps screen: phone width, light/dark, keyboard | No offline caching of private Peeps data |
+
+**Guide statements a later decision overrides (recorded, not reopened):** (a) Gate A says Peeps starts only after core + Phase 7 acceptance; the
+owner chose to build Peeps in parallel on this branch. (b) Guide §5 says do not treat `SUPER_ADMIN` as Director; the owners decided the two
+directors *are* the Super Admins. (c) Guide §5 lets HR hold salary by explicit grant; the later decision is that HR has no pay data at all.
+(d) Guide §6 lists initial values (lateness cutoffs, allowance count); the standing rule is Not set until the owners choose — those values are
+in Session A's attendance area and Peeps does not use them.
+
+**Guide items for Assets not in module 1 (follow-ups, not built):** a missing or disputed acknowledgement creating an HR task (needs a task
+source in the shared `tasks/service.ts`); IMEI/SIM identifiers beyond the serial number; spreadsheet import of assets and current
+allocations (guide §18, with "pending acknowledgement" rather than a fabricated timestamp); the recovery workflow (Session A + directors).
+
 ## B. Modules, build order and design
 
 ### Build order and why
