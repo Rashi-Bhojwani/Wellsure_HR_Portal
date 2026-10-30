@@ -528,7 +528,7 @@ export async function getMyProfile(requestingEmployeeId: string) {
 
 // ── Audited reveal endpoints (spec §9) ──────────────────────────────────
 
-export async function revealStatutory(employeeId: string, viewerEmployeeId: string, scope: DataScope, meta: RequestMetaInput) {
+export async function revealStatutory(employeeId: string, viewerEmployeeId: string, scope: DataScope, meta: RequestMetaInput, reason: string) {
   await findScopedEmployee(employeeId, viewerEmployeeId, scope);
   const row = await prisma.employeeStatutory.findUnique({ where: { employeeId } });
   if (!row) throw new HttpError(404, "No statutory details on file.", "NOT_FOUND");
@@ -538,16 +538,16 @@ export async function revealStatutory(employeeId: string, viewerEmployeeId: stri
     uan: row.uanEncrypted ? decryptField(row.uanEncrypted) : null,
     esiNumber: row.esiEncrypted ? decryptField(row.esiEncrypted) : null,
   };
-  await writeAuditLog({ ...meta, action: "employee.statutory.revealed", entityType: "Employee", entityId: employeeId });
+  await writeAuditLog({ ...meta, action: "employee.statutory.revealed", entityType: "Employee", entityId: employeeId, after: { reason } });
   return result;
 }
 
-export async function revealBank(employeeId: string, viewerEmployeeId: string, scope: DataScope, meta: RequestMetaInput) {
+export async function revealBank(employeeId: string, viewerEmployeeId: string, scope: DataScope, meta: RequestMetaInput, reason: string) {
   await findScopedEmployee(employeeId, viewerEmployeeId, scope);
   const row = await prisma.employeeBankAccount.findFirst({ where: { employeeId, ...inForceOn() } });
   if (!row) throw new HttpError(404, "No active bank account on file.", "NOT_FOUND");
   const result = { accountHolderName: row.accountHolderName, accountNumber: decryptField(row.accountNumberEncrypted), ifsc: row.ifsc, bankName: row.bankName, branchName: row.branchName };
-  await writeAuditLog({ ...meta, action: "employee.bank.revealed", entityType: "Employee", entityId: employeeId });
+  await writeAuditLog({ ...meta, action: "employee.bank.revealed", entityType: "Employee", entityId: employeeId, after: { reason } });
   return result;
 }
 

@@ -253,3 +253,6 @@ export const savedViewCreateSchema = z.object({
 // Invitations HR sends by hand (never automatically on import): who is still waiting, and a batch of up to 100.
 export const pendingInvitationsQuerySchema = z.object({ page: z.coerce.number().int().min(1).default(1), pageSize: z.coerce.number().int().min(1).max(100).default(25) });
 export const sendInvitationsSchema = z.object({ employeeIds: z.array(z.string().min(1)).min(1).max(100) });
+
+// A Reveal says why (owner decision): a short reason, kept in the audit row beside who looked and when. Never the value.
+export const revealQuerySchema = z.object({ reason: z.string().trim().min(3, "Say why you need to see it (a few words)").max(200) });

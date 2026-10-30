@@ -79,10 +79,10 @@ export async function getMyProfile(req: Request, res: Response): Promise<void> {
 }
 
 export async function revealStatutory(req: Request, res: Response): Promise<void> {
-  res.status(200).json(await employeeService.revealStatutory(req.params.id as string, req.user!.employeeId, scope(req), actorMeta(req)));
+  res.status(200).json(await employeeService.revealStatutory(req.params.id as string, req.user!.employeeId, scope(req), actorMeta(req), (req.query as { reason: string }).reason));
 }
 export async function revealBank(req: Request, res: Response): Promise<void> {
-  res.status(200).json(await employeeService.revealBank(req.params.id as string, req.user!.employeeId, scope(req), actorMeta(req)));
+  res.status(200).json(await employeeService.revealBank(req.params.id as string, req.user!.employeeId, scope(req), actorMeta(req), (req.query as { reason: string }).reason));
 }
 
 export async function getJobHistory(req: Request, res: Response): Promise<void> {

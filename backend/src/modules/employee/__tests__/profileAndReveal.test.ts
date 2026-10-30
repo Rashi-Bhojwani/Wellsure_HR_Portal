@@ -156,11 +156,21 @@ describe("Employee profile, reveal + history — scope and permission IDOR", () 
     });
 
     it("allows HR_ADMIN to reveal bank and statutory details, and audit-logs each reveal", async () => {
-      const bankRes = await request(app).get(`/api/employees/${strangerId}/bank/reveal`).set(...authHeader(hrAdminToken));
+      const { prisma: db } = await import("../../../lib/prisma");
+      const countReveals = () => db.auditLog.count({ where: { entityId: strangerId, action: { in: ["employee.bank.revealed", "employee.statutory.revealed"] } } });
+      const before = await countReveals();
+      // A Reveal needs a reason: without one (or with a token one) nothing is shown and nothing is recorded.
+      for (const q of ["", "?reason=", "?reason=ab", "?reason=%20%20%20"]) {
+        const refused = await request(app).get(`/api/employees/${strangerId}/bank/reveal${q}`).set(...authHeader(hrAdminToken));
+        expect([refused.status, JSON.stringify(refused.body)]).toEqual([400, expect.not.stringContaining("accountNumber")]);
+        expect((await request(app).get(`/api/employees/${strangerId}/statutory/reveal${q}`).set(...authHeader(hrAdminToken))).status).toBe(400);
+      }
+      expect(await countReveals()).toBe(before);
+      const bankRes = await request(app).get(`/api/employees/${strangerId}/bank/reveal?reason=Checking%20against%20the%20passbook`).set(...authHeader(hrAdminToken));
       expect(bankRes.status).toBe(200);
       expect(bankRes.body.accountNumber).toBeTypeOf("string");
 
-      const statutoryRes = await request(app).get(`/api/employees/${strangerId}/statutory/reveal`).set(...authHeader(hrAdminToken));
+      const statutoryRes = await request(app).get(`/api/employees/${strangerId}/statutory/reveal?reason=Filling%20the%20UAN%20form`).set(...authHeader(hrAdminToken));
       expect(statutoryRes.status).toBe(200);
       expect(statutoryRes.body.pan).toBeTypeOf("string");
 
@@ -169,6 +179,10 @@ describe("Employee profile, reveal + history — scope and permission IDOR", () 
         where: { entityId: strangerId, action: { in: ["employee.bank.revealed", "employee.statutory.revealed"] } },
       });
       expect(revealedActions.length).toBeGreaterThanOrEqual(2);
+      // The reason is kept beside who looked; the number never is.
+      expect(revealedActions.some((r) => JSON.stringify(r.after).includes("Checking against the passbook"))).toBe(true);
+      expect(revealedActions.some((r) => JSON.stringify(r.after).includes("Filling the UAN form"))).toBe(true);
+      expect(JSON.stringify(revealedActions)).not.toMatch(/accountNumber|SENTINEL/);
     });
   });
 
@@ -191,7 +205,7 @@ describe("Employee profile, reveal + history — scope and permission IDOR", () 
       const profile = await request(app).get(`/api/employees/${strangerId}`).set(...authHeader(hrAdminToken));
       expect(profile.body.statutory).toMatchObject({ esiLast4: "4417", hasEsi: true });
       expect(JSON.stringify(profile.body)).not.toContain("SENTINEL");
-      const revealed = await request(app).get(`/api/employees/${strangerId}/statutory/reveal`).set(...authHeader(hrAdminToken));
+      const revealed = await request(app).get(`/api/employees/${strangerId}/statutory/reveal?reason=Checking%20the%20ESI%20card`).set(...authHeader(hrAdminToken));
       expect(revealed.body.esiNumber).toBe(ESI);
     });
   });
