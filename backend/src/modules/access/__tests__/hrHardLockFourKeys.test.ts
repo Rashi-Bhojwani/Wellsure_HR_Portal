@@ -30,21 +30,15 @@ describe("the four keys added to the HR hard lock", () => {
   const keyId = async (key: string) => (await prisma.permission.findUniqueOrThrow({ where: { key } })).id;
   // Every route behind each key. The director's call is made on made-up ids or harmless inputs: it must simply not be refused on permission.
   const ROUTES: Record<(typeof FOUR)[number], Array<{ method: "get" | "post"; path: () => string; body?: object; directorSkips?: boolean }>> = {
+    // Issuing a letter has a narrow key for HR (Issue letters without pay figures, narrowKeys / letters tests): what stays the directors' is reissuing and reproducing, which open the contents of an issued letter.
     "letters.generate": [
-      { method: "get", path: () => `/api/letters/employees/${p.employee.employeeId}` },
-      { method: "post", path: () => `/api/letters/employees/${p.employee.employeeId}`, body: {} },
-      { method: "get", path: () => `/api/letters/${ID}` },
       { method: "post", path: () => `/api/letters/${ID}/reissue`, body: {} },
       { method: "post", path: () => `/api/letters/${ID}/reproduce` },
     ],
+    // Importing has a narrow key for HR (non-pay datasets, no pay column); salary, bank and statutory stay the directors'.
     "import.manage": [
-      { method: "get", path: () => "/api/import/batches" },
-      { method: "get", path: () => "/api/import/reconciliation" },
-      { method: "get", path: () => "/api/import/employees/template" },
-      { method: "post", path: () => "/api/import/employees/upload" },
-      { method: "get", path: () => `/api/import/batches/${ID}` },
-      { method: "get", path: () => `/api/import/batches/${ID}/error-report` },
-      { method: "post", path: () => `/api/import/batches/${ID}/commit`, body: {} },
+      { method: "get", path: () => "/api/import/bank/template" },
+      { method: "get", path: () => "/api/import/statutory/template" },
     ],
     "leave.yearend.manage": [
       { method: "get", path: () => "/api/leave/year-end" },

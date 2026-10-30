@@ -25,8 +25,10 @@ lettersRouter.use(authenticate);
 
 const manage = requirePermission("letters.template.manage");
 const generate = requirePermission("letters.generate");
+// Issuing a letter needs Issue letters (any letter) or Issue letters without pay figures (only a template proven pay-free: the service checks that, whichever route reaches it).
+const issueAny = requireAnyPermission("letters.generate", "letters.issue.nopay");
 
-lettersRouter.get("/templates", requireAnyPermission("letters.template.manage", "letters.generate"), controller.listTemplates);
+lettersRouter.get("/templates", requireAnyPermission("letters.template.manage", "letters.generate", "letters.issue.nopay"), controller.listTemplates);
 lettersRouter.post("/templates", manage, validate({ body: createTemplateSchema }), controller.createTemplate);
 lettersRouter.post("/templates/preview", manage, validate({ body: previewSchema }), controller.previewTemplate);
 lettersRouter.get("/templates/:id", manage, validate({ params: idParamsSchema }), controller.getTemplate);
@@ -39,8 +41,8 @@ lettersRouter.get("/letterhead/logo", manage, controller.getLogo);
 lettersRouter.post("/letterhead/logo", manage, memoryUpload(2), controller.uploadLogo);
 lettersRouter.delete("/letterhead/logo", manage, controller.removeLogo);
 
-lettersRouter.get("/employees/:employeeId", generate, validate({ params: employeeIdParamsSchema }), controller.listEmployeeLetters);
-lettersRouter.post("/employees/:employeeId", generate, validate({ params: employeeIdParamsSchema, body: issueSchema }), controller.issueLetter);
-lettersRouter.get("/:id", generate, validate({ params: idParamsSchema }), controller.getLetter);
+lettersRouter.get("/employees/:employeeId", issueAny, validate({ params: employeeIdParamsSchema }), controller.listEmployeeLetters);
+lettersRouter.post("/employees/:employeeId", issueAny, validate({ params: employeeIdParamsSchema, body: issueSchema }), controller.issueLetter);
+lettersRouter.get("/:id", issueAny, validate({ params: idParamsSchema }), controller.getLetter);
 lettersRouter.post("/:id/reissue", generate, validate({ params: idParamsSchema, body: reissueSchema }), controller.reissueLetter);
 lettersRouter.post("/:id/reproduce", generate, validate({ params: idParamsSchema }), controller.reproduceLetter);

@@ -40,9 +40,13 @@ describe("the admin menu", () => {
     const { HR_FORBIDDEN_KEYS } = await import("@shared/constants/sensitiveData");
     const hrKeys = new Set(PERMISSION_KEYS.filter((k) => !(HR_FORBIDDEN_KEYS as readonly string[]).includes(k)));
     const hr = leavesFor(hrKeys);
-    for (const gone of ["payroll-setup", "payroll-ready", "payroll-rules", "salary-components", "salary-structures", "employee-salaries", "salary-revisions", "payroll-adjustments", "payroll-run", "payroll-compare", "payroll-audit", "payroll-layouts", "loans-admin", "bulk-import", "import-export", "users-roles", "system-settings", "hr-capabilities"]) expect(hr, gone).not.toContain(gone);
+    for (const gone of ["payroll-setup", "payroll-ready", "payroll-rules", "salary-components", "salary-structures", "employee-salaries", "salary-revisions", "payroll-adjustments", "payroll-run", "payroll-compare", "payroll-audit", "payroll-layouts", "loans-admin", "users-roles", "system-settings", "hr-capabilities"]) expect(hr, gone).not.toContain(gone);
     const director = leavesFor(new Set(), true);
     for (const there of ["payroll-setup", "payroll-ready", "payroll-run"]) expect(director, there).toContain(there);
+    // The Import Center is HR's only through the narrow key (a director-controlled switch); with nothing it is gone.
+    expect(hr).toContain("bulk-import");
+    expect(leavesFor(new Set(["employee.view"]))).not.toContain("bulk-import");
+    expect(leavesFor(new Set(["import.details.manage"]))).toContain("bulk-import");
     // Anyone holding a single payroll key sees the payroll group.
     expect(leavesFor(new Set(["payroll.rules.view"]))).toContain("payroll-setup");
   });

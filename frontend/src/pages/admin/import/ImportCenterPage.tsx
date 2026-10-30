@@ -302,17 +302,20 @@ function ReconciliationTab() {
 
 export function ImportCenterPage() {
   const { hasPermission } = useAuth();
+  const canImportAll = hasPermission("import.manage");
+  const canImportDetails = canImportAll || hasPermission("import.details.manage");
   return (
     <>
       <PageHeader title="Import Center" subtitle="Bring data in from spreadsheets: validate first, commit when it's clean" />
       <Panel>
         <Tabs
           items={[
-            { key: "org-masters", label: "Org Masters", children: <ImportDatasetTab dataset="org-masters" /> },
-            { key: "employees", label: "Employees", children: <ImportDatasetTab dataset="employees" /> },
-            { key: "statutory", label: "Statutory", children: <ImportDatasetTab dataset="statutory" /> },
-            { key: "bank", label: "Bank", children: <ImportDatasetTab dataset="bank" /> },
-            ...(hasPermission("employee.create") ? [{ key: "invitations", label: "Invitations", children: <InvitationsTab /> }] : []),
+            // Non-pay datasets need Import employee details (or the directors' Import Center); salary, bank and statutory are the directors' alone.
+            ...(canImportDetails ? [{ key: "org-masters", label: "Org Masters", children: <ImportDatasetTab dataset="org-masters" /> }] : []),
+            ...(canImportDetails ? [{ key: "employees", label: "Employees", children: <ImportDatasetTab dataset="employees" /> }] : []),
+            ...(canImportAll ? [{ key: "statutory", label: "Statutory", children: <ImportDatasetTab dataset="statutory" /> }] : []),
+            ...(canImportAll ? [{ key: "bank", label: "Bank", children: <ImportDatasetTab dataset="bank" /> }] : []),
+            ...(hasPermission("invitations.send") ? [{ key: "invitations", label: "Invitations", children: <InvitationsTab /> }] : []),
             { key: "reconciliation", label: "Reconciliation Report", children: <ReconciliationTab /> },
             // Phase 2 P2-B: the emergency punch upload (attendance.devices.manage).
             ...(hasPermission("attendance.devices.manage") ? [{ key: "punches", label: "Punches (ATTLOG)", children: <PunchImportTab /> }] : []),

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { authenticate } from "../../middleware/authenticate";
-import { requirePermission } from "../../middleware/rbac";
+import { requireAnyPermission } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
 import * as controller from "./controller";
 import { batchIdParamsSchema, commitBodySchema, datasetParamsSchema, listBatchesQuerySchema } from "./validators";
@@ -14,7 +14,9 @@ import { batchIdParamsSchema, commitBodySchema, datasetParamsSchema, listBatches
 export const importRouter = Router();
 importRouter.use(authenticate);
 
-const manage = requirePermission("import.manage");
+// import.manage: every dataset (the directors'). import.details.manage: org masters, employees and leave grants only, with no pay column; the service refuses the pay datasets
+// (statutory, bank) and any pay column for someone without import.manage (see service.ts assertDatasetAllowed / rejectPayColumns).
+const manage = requireAnyPermission("import.manage", "import.details.manage");
 
 // Memory storage only — files are parsed into staging rows immediately and
 // never written to disk; 10MB comfortably covers a multi-thousand-row

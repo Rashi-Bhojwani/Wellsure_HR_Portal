@@ -30,6 +30,9 @@ const DOORS: Door[] = [
   { cap: "APPROVE_REGULARIZATIONS", method: "get", path: "/api/attendance/regularizations" },
   { cap: "APPROVE_LEAVE", method: "get", path: "/api/tasks/mine", seen: "LEAVE_APPROVAL" },
   { cap: "SEE_LEAVE_COUNTS", method: "get", path: "/api/leave/dashboard" },
+  { cap: "SEND_INVITATIONS", method: "get", path: "/api/employees/invitations" },
+  { cap: "IMPORT_EMPLOYEE_DETAILS", method: "get", path: "/api/import/employees/template" },
+  { cap: "ISSUE_LETTERS_NO_PAY", method: "get", path: "/api/letters/employees/x" },
   { cap: "EDIT_MUSTER", method: "post", path: "/api/attendance/muster/mark-present", body: {} },
   { cap: "UPLOAD_MANUAL_MUSTER", also: ["EDIT_MUSTER"], method: "get", path: "/api/attendance/muster/template?locationId=x" },
   { cap: "FINALISE_MONTH", method: "get", path: "/api/attendance/finalisation/periods" },
@@ -45,7 +48,7 @@ const DOORS: Door[] = [
 // (Everybody, HR included, may read their OWN payslips: /payslips/mine answers with their own.)
 const PAY = /^GET \/api\/(payroll|payslips(?!\/mine))/;
 // The four keys locked after Checkpoint 1: the Import Center, letters, the leave year-end and the sign-in security actions.
-const LOCKED_FOUR = /^GET \/api\/(import|letters\/(employees|:id)|leave\/year-end)/;
+const LOCKED_FOUR = /^GET \/api\/(import\/(bank|statutory)|leave\/year-end)/;
 
 describe("the persona matrix", () => {
   let org: TestOrgMasters;

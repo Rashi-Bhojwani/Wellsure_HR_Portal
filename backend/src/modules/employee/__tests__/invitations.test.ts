@@ -32,7 +32,7 @@ describe("invitation emails: what really happened is what HR is told", () => {
 
   beforeAll(async () => {
     org = await createEmployeeTestOrgMasters();
-    await grantPermissions(roleCode, ["employee.create", "employee.view"]);
+    await grantPermissions(roleCode, ["employee.create", "invitations.send", "employee.view"]);
     await prisma.role.update({ where: { code: roleCode }, data: { dataScope: "ALL" } });
     const hr = await createFullTestEmployee(org, { roleCode });
     employeeIds.push(hr.employeeId);

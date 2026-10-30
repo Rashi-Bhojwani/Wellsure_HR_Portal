@@ -39,9 +39,42 @@ function toDisplayRow(dataset: ImportDatasetKey, data: Record<string, unknown>):
   return display;
 }
 
+// ── Who may touch which dataset ──────────────────────────────────────────
+// import.manage (the directors') may import anything. import.details.manage (HR's, a director-controlled switch) may import org masters, employees and leave grants, never the pay
+// datasets, and a file for those datasets that carries any salary, bank or statutory column is refused rather than quietly ignored.
+const PAY_DATASETS: readonly ImportDatasetKey[] = ["statutory", "bank"];
+const PAY_WORDS = new Set(["ctc", "salary", "salaries", "wage", "wages", "stipend", "basic", "gross", "net", "allowance", "allowances", "bonus", "incentive", "arrear", "arrears", "deduction", "deductions", "pay", "payroll", "pf", "provident", "esi", "esic", "pan", "aadhaar", "aadhar", "uan", "account", "ifsc", "bank", "micr", "swift", "tax", "tds", "hra", "lta", "da", "gratuity", "reimbursement", "loan", "advance"]);
+/** A header is a pay column when any WORD in it is a pay word (designationCode is not: "esi" inside a word does not count). */
+const isPayHeader = (header: string) => header.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase().split(/[^a-z0-9]+/).some((w) => PAY_WORDS.has(w));
+
+export function assertDatasetAllowed(dataset: ImportDatasetKey, permissions: ReadonlySet<string>): void {
+  if (permissions.has("import.manage")) return;
+  if (PAY_DATASETS.includes(dataset)) throw new HttpError(403, "Salary, bank and statutory imports are the directors' (Missing permission: import.manage).", "FORBIDDEN");
+  if (!permissions.has("import.details.manage")) throw new HttpError(403, "Missing permission: import.details.manage", "FORBIDDEN");
+}
+
+/** The header row of an upload, for someone without import.manage: any pay-looking column refuses the whole file. */
+export async function rejectPayColumns(dataset: ImportDatasetKey, buffer: Buffer, permissions: ReadonlySet<string>): Promise<void> {
+  if (permissions.has("import.manage")) return;
+  const workbook = new ExcelJS.Workbook();
+  try {
+    await workbook.xlsx.load(buffer as unknown as ExcelJS.Buffer);
+  } catch {
+    return; // parseUpload reports an unreadable file in its own words
+  }
+  const headers: string[] = [];
+  for (const sheet of workbook.worksheets) sheet.getRow(1).eachCell((cell) => headers.push(String(cell.value && typeof cell.value === "object" && "text" in cell.value ? (cell.value as { text: unknown }).text : (cell.value ?? "")).trim()));
+  const found = [...new Set(headers.filter((h) => h && isPayHeader(h)))];
+  if (found.length > 0) {
+    throw new HttpError(400, `This file has columns for pay, bank or statutory details (${found.slice(0, 5).join(", ")}). Take them out: only a director may import those. (${dataset})`, "PAY_COLUMNS_REFUSED");
+  }
+}
+
 // ── Upload + validate ────────────────────────────────────────────────────
 
 export async function uploadAndValidate(dataset: ImportDatasetKey, fileBuffer: Buffer, fileName: string, meta: ActorMeta, viewerPermissions: Set<string>) {
+  assertDatasetAllowed(dataset, viewerPermissions);
+  await rejectPayColumns(dataset, fileBuffer, viewerPermissions);
   if (dataset === "bank" && !viewerPermissions.has("employee.bank.edit")) {
     throw new HttpError(403, "Missing permission: employee.bank.edit", "FORBIDDEN");
   }
@@ -111,9 +144,11 @@ export async function uploadAndValidate(dataset: ImportDatasetKey, fileBuffer: B
 
 // ── Batches ──────────────────────────────────────────────────────────────
 
-export async function listBatches(dataset?: ImportDatasetKey) {
+export async function listBatches(dataset: ImportDatasetKey | undefined, viewerPermissions: ReadonlySet<string>) {
+  if (dataset) assertDatasetAllowed(dataset, viewerPermissions);
+  const hidden = viewerPermissions.has("import.manage") ? [] : PAY_DATASETS.map((d) => DATASET_TO_ENUM[d]);
   const batches = await prisma.importBatch.findMany({
-    where: dataset ? { dataset: DATASET_TO_ENUM[dataset] } : undefined,
+    where: { ...(dataset ? { dataset: DATASET_TO_ENUM[dataset] } : {}), ...(hidden.length ? { dataset: dataset ? DATASET_TO_ENUM[dataset] : { notIn: hidden } } : {}) },
     orderBy: { uploadedAt: "desc" },
     take: 50,
   });
@@ -169,8 +204,9 @@ async function requireBatch(id: string) {
   return batch;
 }
 
-export async function getBatch(id: string) {
+export async function getBatch(id: string, viewerPermissions: ReadonlySet<string>) {
   const batch = await requireBatch(id);
+  assertDatasetAllowed(ENUM_TO_DATASET[batch.dataset], viewerPermissions);
   const rows = await prisma.importStagingRow.findMany({ where: { batchId: id }, orderBy: { rowNumber: "asc" } });
   const dataset = ENUM_TO_DATASET[batch.dataset];
   return {
@@ -194,8 +230,9 @@ export async function getBatch(id: string) {
 
 // ── Error report (downloadable xlsx) ────────────────────────────────────
 
-export async function buildErrorReport(id: string): Promise<{ buffer: Buffer; fileName: string }> {
+export async function buildErrorReport(id: string, viewerPermissions: ReadonlySet<string>): Promise<{ buffer: Buffer; fileName: string }> {
   const batch = await requireBatch(id);
+  assertDatasetAllowed(ENUM_TO_DATASET[batch.dataset], viewerPermissions);
   const dataset = ENUM_TO_DATASET[batch.dataset];
   const rows = await prisma.importStagingRow.findMany({ where: { batchId: id }, orderBy: { rowNumber: "asc" } });
 
@@ -432,6 +469,7 @@ export async function commitBatch(
   options?: { confirmText?: string },
 ): Promise<{ committedRows: number }> {
   const batch = await requireBatch(id);
+  assertDatasetAllowed(ENUM_TO_DATASET[batch.dataset], viewerPermissions);
   if (batch.status === "COMMITTED") {
     throw new HttpError(400, "This batch has already been committed.", "ALREADY_COMMITTED");
   }

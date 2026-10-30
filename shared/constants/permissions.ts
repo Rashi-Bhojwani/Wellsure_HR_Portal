@@ -44,7 +44,10 @@ export const PERMISSION_KEYS = [
   "helpdesk.manage", // the HR ticket queue: assign, status, priority, replies, internal notes, categories
   "helpdesk.sensitive.view", // tickets in categories flagged sensitive (e.g. Payroll & Salary, Grievance)
   "letters.template.manage", // letter templates: edit (new version), activate, typed fields, letterhead & signatory
-  "letters.generate", // issue / reissue / reproduce letters for employees in scope
+  "letters.generate", // issue / reissue / reproduce letters for employees in scope (any letter, including ones that carry a pay figure)
+  "letters.issue.nopay", // issue letters the template engine proves contain no pay figure (HR's; the directors hold letters.generate)
+  "invitations.send", // send and resend sign-in invitations (no pay data; parent: employee.create)
+  "import.details.manage", // import non-pay details: org masters, employees, leave grants (never salary, bank or statutory; those are import.manage)
   // Phase 5 — Manager Management (commit E2)
   "manager.appoint", // promote an employee to manager / remove a manager (team must be empty)
   "manager.team.assign", // move employees into and out of a manager's team (effective-dated)
@@ -165,6 +168,9 @@ export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
   "documents.pay.view": { group: "Sensitive data", label: "View pay documents", description: "See and download documents in pay categories — issued letters, payslips — and a letter's typed values (e.g. CTC). Never manager-grantable." },
   "employee.documents.manage": { group: "Documents & letters", label: "Manage employee documents", description: "Upload, edit and archive employees' documents." },
   "letters.template.manage": { group: "Documents & letters", label: "Letter templates", description: "Edit letter templates, the letterhead and the signatory." },
+  "letters.issue.nopay": { group: "Documents & letters", label: "Issue letters without pay figures", description: "Issue letters from a template the system has checked contains no pay figure and no field that could carry one. Any other letter needs Issue letters." },
+  "invitations.send": { group: "Employees", label: "Send invitations", description: "Send and resend sign-in invitations. No pay data is involved." },
+  "import.details.manage": { group: "Organisation & system", label: "Import employee details", description: "Import org masters, employees and leave grants from a spreadsheet. A file with a salary, bank or statutory column is refused; those imports need Import Center." },
   "letters.generate": { group: "Documents & letters", label: "Issue letters", description: "Issue, reissue and reproduce letters for employees in their data scope.", managerGrantable: true },
   "manager.appoint": { group: "Managers", label: "Appoint and remove managers", description: "Promote an employee to manager, or remove a manager once their team has been reassigned." },
   "manager.team.assign": { group: "Managers", label: "Assign teams", description: "Move employees into and out of a manager's team (effective-dated), and work the Unassigned list." },

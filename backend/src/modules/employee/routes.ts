@@ -32,6 +32,8 @@ export const employeeRouter = Router();
 employeeRouter.use(authenticate);
 
 const canCreate = requirePermission("employee.create");
+// Sending and resending invitations is its own key (a director-controlled HR switch); it carries no pay data.
+const canInvite = requirePermission("invitations.send");
 const canView = requirePermission("employee.view");
 const canEdit = requirePermission("employee.edit");
 const canExport = requirePermission("employee.export");
@@ -83,13 +85,13 @@ employeeRouter.get("/separations", canViewSeparations, controller.listSeparation
 employeeRouter.post("/separations/:id/cancel", canSeparate, validate({ params: idParamsSchema }), controller.cancelSeparation);
 
 // Invitations: who is still waiting for their set-password email (and what happened to the last one), and sending it, one batch at a time, by hand.
-employeeRouter.get("/invitations", canCreate, validate({ query: pendingInvitationsQuerySchema }), controller.listPendingInvitations);
-employeeRouter.post("/invitations/send", canCreate, validate({ body: sendInvitationsSchema }), controller.sendInvitations);
+employeeRouter.get("/invitations", canInvite, validate({ query: pendingInvitationsQuerySchema }), controller.listPendingInvitations);
+employeeRouter.post("/invitations/send", canInvite, validate({ body: sendInvitationsSchema }), controller.sendInvitations);
 
 // ── :id routes ───────────────────────────────────────────────────────────
 
 employeeRouter.get("/:id", canView, validate({ params: idParamsSchema }), controller.getProfile);
-employeeRouter.post("/:id/resend-invite", canCreate, validate({ params: idParamsSchema }), controller.resendInvite);
+employeeRouter.post("/:id/resend-invite", canInvite, validate({ params: idParamsSchema }), controller.resendInvite);
 
 employeeRouter.get("/:id/statutory/reveal", canViewStatutory, validate({ params: idParamsSchema }), controller.revealStatutory);
 employeeRouter.get("/:id/bank/reveal", canViewBank, validate({ params: idParamsSchema }), controller.revealBank);
