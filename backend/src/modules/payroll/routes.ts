@@ -16,6 +16,8 @@ import * as mi from "./inputs/controller";
 import * as miSvc from "./inputs/service";
 import * as imp from "./inputs/importService";
 import * as rp from "./run/repaymentController";
+import * as pl from "./run/payslipLinkController";
+import * as plSvc from "./run/payslipLinks";
 import * as rpSvc from "./run/repayments";
 import { compareRegistersRoute, compareUpload } from "./compare/controller";
 import { overrideKeyParamsSchema, overridePreviewSchema, overrideSaveSchema, setupAreaParamsSchema, setupSignoffSchema, checkersQuerySchema, payrollAuditQuerySchema, ruleConfirmSchema, ruleEditPreviewSchema, ruleEditSchema, ruleKeyParamsSchema } from "./validators";
@@ -194,3 +196,8 @@ payrollRouter.post("/repayment-plans/:id/request", make, validate({ params: rp.i
 payrollRouter.post("/repayment-plans/:id/decision", approve, validate({ params: rp.idSchema, body: rpSvc.decisionSchema }), rp.decision);
 payrollRouter.post("/repayment-plans/:id/generate", make, validate({ params: rp.idSchema }), rp.generate);
 payrollRouter.get("/repayment-batches/:id/file", bankView, validate({ params: rp.idSchema }), rp.download);
+
+// ── Stage 5b, B4: the payslip link's lifetime (a director's setting, Not set until chosen) and revoking a run's links ──
+payrollRouter.get("/payslip-link-settings", requirePermission("payroll.rules.view"), pl.settings);
+payrollRouter.put("/payslip-link-settings", requirePermission("payroll.rules.manage"), validate({ body: plSvc.settingsSchema }), pl.putSettings);
+payrollRouter.post("/runs/:id/payslip-links/revoke", make, validate({ params: rv.runIdParamsSchema }), pl.revoke);

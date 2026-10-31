@@ -458,6 +458,7 @@ model CostCentre {
 // ── Employees ────────────────────────────────────────────────────────────
 
 model Employee {
+  payslipLinks    PayslipLink[]
   bankRepaymentRows BankRepaymentRow[]
   remoteRecords   RemoteAttendanceRecord[]
   id              String                   @id @default(cuid())
@@ -2895,6 +2896,7 @@ model PayrollRunRelease {
 // One payslip per payable person of a final run, written in the transaction that publishes them. The content is immutable and complete (see run/payslip.ts); the table is
 // append-only. What changes afterwards (the PDF, the notices) is in payslip_deliveries.
 model Payslip {
+  links             PayslipLink[]
   id                String         @id @default(cuid())
   runId             String         @map("run_id")
   run               PayrollRun     @relation(fields: [runId], references: [id], onDelete: Restrict)
@@ -3403,4 +3405,22 @@ model BankRepaymentRow {
 
   @@unique([batchId, serial])
   @@map("bank_repayment_rows")
+}
+
+// ── Stage 5b, B4 — the link in a payslip email ──
+model PayslipLink {
+  id              String    @id @default(cuid())
+  payslipId       String    @map("payslip_id")
+  payslip         Payslip   @relation(fields: [payslipId], references: [id], onDelete: Restrict)
+  employeeId      String    @map("employee_id")
+  employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  tokenHash       String    @unique @map("token_hash")
+  expiresAt       DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt       DateTime? @map("revoked_at") @db.Timestamptz(3)
+  revokedByUserId String?   @map("revoked_by_user_id")
+  openedAt        DateTime? @map("opened_at") @db.Timestamptz(3)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([payslipId])
+  @@map("payslip_links")
 }

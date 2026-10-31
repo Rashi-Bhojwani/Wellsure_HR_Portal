@@ -573,6 +573,8 @@ export interface RunDetail extends RunSummary {
   rules: RunRuleStatus[];
   stale: boolean;
   notices: string[];
+  /** People left out of this run because a director marked them as not on payroll (a different director confirmed it). */
+  skipped?: Array<{ employeeId: string; employeeCode: string; name: string; reason: string }>;
   events: Array<{ type: string; at: string }>;
 }
 export interface PersonProblem {
@@ -1394,3 +1396,35 @@ export const requestRepayment = (id: string, hash: string, note?: string) => pos
 export const decideRepayment = (id: string, decision: "APPROVE" | "REJECT", hash: string, note?: string) => post<{ status: string }>(`/repayment-plans/${id}/decision`, { decision, hash, ...(note ? { note } : {}) });
 export const generateRepayment = (id: string) => post<{ batchId: string; rows: number; total: string; fileName: string }>(`/repayment-plans/${id}/generate`);
 export const repaymentFileLink = (batchId: string) => get<{ url: string; fileName: string }>(`/repayment-batches/${batchId}/file`);
+
+// ── Stage 5b, B4/B5: payslip links, the link settings, and a query on a payslip ──
+export const openPayslipLink = async (token: string) => (await apiClient.post<{ payslipId: string }>("/api/payslips/mine/links/open", { token })).data;
+export const payslipLinkSettings = () => get<{ expiryDays: number | null; passwordProtectedPdf: { enabled: false; status: "NEEDS_OWNER_APPROVAL" } }>("/payslip-link-settings");
+export const savePayslipLinkSettings = async (expiryDays: number | null) => (await apiClient.put(`${base}/payslip-link-settings`, { expiryDays })).data as { expiryDays: number | null };
+export const revokePayslipLinks = (runId: string) => post<{ revoked: number }>(`/runs/${runId}/payslip-links/revoke`);
+export const raisePayslipQuery = async (payslipId: string, message: string) => (await apiClient.post<{ ticketId: string; number: number }>(`/api/payslips/mine/${payslipId}/query`, { message })).data;
+
+// ── Stage 5b, B6: not on payroll ──
+export interface ExclusionRow {
+  id: string;
+  employeeId: string;
+  employeeCode: string;
+  name: string;
+  kind: "EXCLUDE" | "INCLUDE";
+  fromDate: string;
+  toDate: string | null;
+  reason: string;
+  madeBy: string;
+  confirmed: boolean;
+  confirmedAt: string | null;
+  createdAt: string;
+}
+export interface SkippedPerson {
+  employeeId: string;
+  employeeCode: string;
+  name: string;
+  reason: string;
+}
+export const listExclusions = async () => (await get<{ exclusions: ExclusionRow[] }>("/exclusions")).exclusions;
+export const addExclusion = (body: { employeeId: string; kind: "EXCLUDE" | "INCLUDE"; fromDate: string; toDate?: string | null; reason: string }) => post<{ id: string }>("/exclusions", body);
+export const confirmExclusion = (id: string) => post<{ id: string }>(`/exclusions/${id}/confirm`);

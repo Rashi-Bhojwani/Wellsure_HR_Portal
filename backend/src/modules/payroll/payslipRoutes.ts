@@ -8,6 +8,8 @@ import * as rv from "./run/validators";
 // uses is the signed-in one. A stranger's payslip id answers 404, exactly like one that does not exist.
 export const payslipRouter = Router();
 payslipRouter.use(authenticate);
+import { openLinkRoute } from "./run/payslipLinkController";
+payslipRouter.post("/mine/links/open", openLinkRoute);
 payslipRouter.get("/mine", rel.mine);
 payslipRouter.get("/mine/:id", validate({ params: rv.slipIdParamsSchema }), rel.mineOne);
 payslipRouter.get("/mine/:id/why", validate({ params: rv.slipIdParamsSchema }), rel.mineWhy);

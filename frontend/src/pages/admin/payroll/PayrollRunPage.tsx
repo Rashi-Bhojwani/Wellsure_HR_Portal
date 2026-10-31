@@ -317,6 +317,7 @@ function UsedTab({ run }: { run: RunDetail }) {
     <Flex vertical gap={12}>
       <Text type="secondary">Everything this run actually read. A run is real only when every item below is Confirmed by somebody other than the person who entered it.</Text>
       {run.notices.map((n) => <ApprovalBanner key={n} tone="info" title={n} />)}
+      {(run.skipped?.length ?? 0) > 0 && <ApprovalBanner tone="warning" title={`${run.skipped!.length} ${run.skipped!.length === 1 ? "person is" : "people are"} not on payroll for this month and left out`} description={run.skipped!.map((p) => `${p.name} (${p.employeeCode}): ${p.reason}`).join("; ")} />}
       <DataTable
         density="compact"
         rowKey={(r) => `${r.kind}-${r.key}-${r.version}-${r.frozen}`}
