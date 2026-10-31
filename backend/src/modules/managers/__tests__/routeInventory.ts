@@ -385,6 +385,7 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/payslips/mine": self,
   "GET /api/payslips/mine/:id": self,
   "GET /api/payslips/mine/:id/why": self,
+  "POST /api/payslips/mine/:id/query": self,
   "GET /api/payslips/mine/:id/pdf": self,
   "GET /api/payroll/rules": admin,
   "GET /api/payroll/rule-overrides": admin,
