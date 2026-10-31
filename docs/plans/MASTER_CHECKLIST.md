@@ -12,7 +12,8 @@ pause only at CHECKPOINT 1 (after Stage 2), CHECKPOINT 2 (after P7-3) and stop c
 ## ALREADY EXISTS (verify, do not rebuild)
 - [x] UI pass (design system, `frontend/src/ui/`) — `docs/DESIGN_SYSTEM.md`
 - [x] Phase 6: engine, registers, payslips, bank/statutory file engines, compare tool, setup checklist — `docs/plans/PHASE_6.md`, `PHASE_6_REVIEW.md`
-- [x] P7-0, P7-1 — `docs/plans/PHASE_7.md`, `docs/PROGRESS.md`
+- [x] P7-0 — `docs/plans/PHASE_7.md`, `docs/PROGRESS.md`
+- [~] P7-1 — **was ticked here but is not fully built**: only the part P7-2/P7-3 stand on is (financial year, tax year as a governed item, tax engine, year-to-date reader); opening figures are not. See `docs/plans/STAGE_7_PLAN.md`
 - [x] D1 director authority core — `77cc7a7`
 
 ## Stage 0 — D1 close-out
@@ -60,7 +61,7 @@ pause only at CHECKPOINT 1 (after Stage 2), CHECKPOINT 2 (after P7-3) and stop c
 - [ ] reports per master prompt; no official-format files
 
 ## Stage 7 — Phase 7 P7-2..P7-7
-- [ ] P7-2 · [ ] P7-3 → CHECKPOINT 2 · [ ] P7-4 · [ ] P7-5 · [ ] P7-6 · [ ] P7-7
+- [x] P7-2 (windows, declarations, proofs, directors' verification, regime comparison, screens) · [x] P7-3 as far as TDS in the run and the IT Statement (the TDS line, its explanation, pins, stale on a changed declaration); **not built from P7-3's list:** YTD Reports, payslip YTD column, Salary Revision page, revision letters, offer-letter figures → **STOPPED AT THE TDS CHECKPOINT (CHECKPOINT 2)** · [ ] P7-4 · [ ] P7-5 · [ ] P7-6 · [ ] P7-7
 
 ## Stage 8 — parity tools
 - [ ] 8.1 statement parser/compare · [ ] 8.2 payslip layout · [ ] 8.3 statutory layout editor · [ ] 8.4 parallel-run kit
@@ -77,3 +78,6 @@ switch is off; whether Ops shares statutory registrations; purpose of Slab Salar
 who enters payroll data month to month; whether a third Super Admin may approve payroll.
 **Found while starting:** `docs/samples/` and the three template files named in the prompt (`Bulk_Salary_Overrides_template.xlsx`,
 `Salary_Statement_template.xls`, `Bank_Transfer_template.xls`) are not in the repo. They block Stage 4 import, 5.4, 6 (statement) and 8.1 only.
+
+## Closing the Stage 5b gaps (A1 to A8)
+- [x] A1 demo file named and marked DEMO · [x] A2 phone-width walkthrough (one defect fixed) · [x] A3 samples checked (only on `peeps/foundation`) · [x] A4 input heads' direction and negative choice · [x] A5 sensitive-ui split in two jobs · [x] A6 run 223 read · [x] A7 owner review sheet · [x] A8 bank payments manual, sent-to-bank note

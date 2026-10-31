@@ -11,6 +11,9 @@ import { confirmStructure, previewStructureConfirm, previewStructureSave, saveSt
 import { confirmRule, editRule, previewConfirm, previewEdit } from "../../src/modules/payroll/rules/governed";
 import { confirmLayout, previewLayoutConfirm, previewLayoutSave, saveLayout } from "../../src/modules/payroll/run/layouts";
 import { DEMO_SETTING } from "../../src/modules/payroll/setup/status";
+import { setWindow as setTaxWindow } from "../../src/modules/payroll/tax/declarations";
+import { confirmTaxYear, previewTaxYearConfirm, previewTaxYearSave, saveTaxYear } from "../../src/modules/payroll/tax/years";
+import { financialYearOf } from "@shared/utils/financialYear";
 import { giveSignoff, previewSignoff } from "../../src/modules/payroll/setup/signoffs";
 import { RULE_CATALOG } from "@shared/constants/payrollRules";
 import { DIRECTOR_AUTHORITY_SETTING_KEY, DIRECTOR_CHOICE_REQUIRED_STEPS } from "@shared/constants/directorAuthority";
@@ -229,6 +232,25 @@ export async function seedDemoCompany(): Promise<DemoResult> {
   await confirmLayout("BANK_TEMPLATE", { version: lc.version, note: "DEMO COMPANY", fingerprint: lc.fingerprint }, { userId: checker });
 
   lap("before: layout done");
+  // A made-up tax year for the demo, every figure labelled DEMO (nothing here is a tax rule), confirmed by the approver, and the declaration and proof windows open so the screens can be used.
+  const fyLabel = financialYearOf(iso(businessToday())).label;
+  const demoLeaf = <T,>(value: T) => ({ value, sourceNote: "DEMO COMPANY: a made-up figure, from no real notice", effectiveFrom: financialYearOf(iso(businessToday())).start });
+  const demoYear = {
+    NEW: { slabs: demoLeaf([{ from: "0", to: "400000", ratePercent: "0" }, { from: "400000", to: "800000", ratePercent: "5" }, { from: "800000", to: null, ratePercent: "10" }]), standardDeduction: demoLeaf("50000"), rebate: demoLeaf({ thresholdIncome: "800000", maximum: "20000" }) },
+    OLD: { slabs: demoLeaf([{ from: "0", to: "300000", ratePercent: "0" }, { from: "300000", to: "600000", ratePercent: "5" }, { from: "600000", to: null, ratePercent: "20" }]), standardDeduction: demoLeaf("50000"), rebate: demoLeaf({ thresholdIncome: "500000", maximum: "10000" }) },
+    surcharge: demoLeaf([]),
+    cessPercent: demoLeaf("4"),
+    defaultRegime: demoLeaf("NEW"),
+    rounding: demoLeaf({ mode: "HALF_UP", scale: 0 }),
+    minimumMonthlyTds: demoLeaf("0"),
+    oneOffs: demoLeaf("MONTH_PAID"),
+    sections: demoLeaf([{ code: "DEMO_SEC_1", label: "Demo section one (made up)", appliesTo: "OLD", cap: "100000", groupCap: null, proofRequired: true }, { code: "DEMO_SEC_2", label: "Demo section two (made up)", appliesTo: "BOTH", cap: null, groupCap: null, proofRequired: false }]),
+  };
+  const typ = await previewTaxYearSave(fyLabel, demoYear, { userId: maker });
+  await saveTaxYear(fyLabel, { value: demoYear, note: "DEMO COMPANY", fingerprint: typ.fingerprint }, { userId: maker });
+  const tyc = await previewTaxYearConfirm(fyLabel, { userId: checker });
+  await confirmTaxYear(fyLabel, { version: tyc.version, note: "DEMO COMPANY: made-up figures, confirmed for the demo only", fingerprint: tyc.fingerprint }, { userId: checker });
+  for (const kind of ["DECLARATION", "PROOF"] as const) await setTaxWindow({ fy: fyLabel, kind, opensOn: iso(addCalendarDays(businessToday(), -7)), closesOn: iso(addCalendarDays(businessToday(), 90)) }, { userId: maker });
   // Salaries: three pay levels, each a salary revision a different person approves. The directors are not on the demo payroll (see DEMO_DIRECTORS).
   const todayDate = businessToday();
   const active = await prisma.employee.findMany({ where: { status: "ACTIVE", dateOfJoining: { lte: todayDate } }, select: { id: true, employeeCode: true, dateOfJoining: true }, orderBy: { employeeCode: "asc" } });

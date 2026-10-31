@@ -26,6 +26,7 @@ export const STATUTORY_LINE_CODES = {
   LWF_EMPLOYEE: "LWF_EMPLOYEE",
   LWF_EMPLOYER: "LWF_EMPLOYER",
   LEAVE_ENCASHMENT: "LEAVE_ENCASHMENT",
+  TDS: "TDS",
   NET_ROUNDING: "NET_ROUNDING",
 } as const;
 
@@ -38,6 +39,7 @@ export const STATUTORY_LINE_LABEL: Record<string, string> = {
   ESI_EMPLOYEE: "ESI (employee)",
   ESI_EMPLOYER: "ESI (employer)",
   PT: "Professional tax",
+  TDS: "Income tax (TDS)",
   LWF_EMPLOYEE: "Labour welfare fund (employee)",
   LWF_EMPLOYER: "Labour welfare fund (employer)",
   LEAVE_ENCASHMENT: "Leave encashment",
@@ -72,6 +74,6 @@ export const HOLD_REASON_ACTION: Record<HoldReason, string> = {
 };
 
 /** Things a person is calculated with that someone must look at. BLOCKING ones stop the run being submitted (P6-4); WARNING ones are for the reader. */
-export const EXCEPTION_CODES = ["NEGATIVE_NET", "STATE_UNMAPPED", "LOP_EXCEEDS_DAYS", "NO_PLACEMENT"] as const;
+export const EXCEPTION_CODES = ["NEGATIVE_NET", "STATE_UNMAPPED", "LOP_EXCEEDS_DAYS", "NO_PLACEMENT", "TAX_NOT_SET"] as const;
 export type ExceptionCode = (typeof EXCEPTION_CODES)[number];
 export type ExceptionSeverity = "BLOCKING" | "WARNING";

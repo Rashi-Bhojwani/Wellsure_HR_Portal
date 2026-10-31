@@ -63,3 +63,20 @@ How to answer: reply with the row number and "keep" or the change you want.
 | 29 | A payslip question goes to a director chosen automatically (the Payroll category's default if that is a director, else the first available director who is not the person asking). | Tell us who should receive them. | Name one or two directors. |
 | 30 | A person is left out of a month's run if they are marked "not on payroll" and a second director confirmed it on the month's last day. | A part-month mark could pay the days outside it. | Keep for whole-month cases; tell us if part months matter. |
 | 31 | Marking a person not on payroll always needs a different director to confirm, whatever the second-director switches say, and cannot reach a month already closed. | It could follow the switches like other steps. | Keep. It takes someone off pay. |
+
+## Income tax (declarations, proofs and TDS)
+
+| # | What was chosen | If you answer differently | Recommendation |
+|---|---|---|---|
+| 37 | The first part of the tax groundwork (it had been ticked as done but was not built) was built here in its smallest form. Pay from before this system started is not counted in anyone's tax. | When greytHR's mid-year figures are ready, a further step adds them; until then a person's tax for the year is under-counted for the months before the first run here. | Do not switch income tax on for a real run mid-year until that step is built, or until you accept the under-count. |
+| 38 | A tax year is entered as a whole, each value with where it came from and its start date; a different director confirms the whole. | Confirming each value on its own is possible but slower. | Keep. |
+| 39 | Taxable pay is whatever each pay head says: taxable or not. A head that has not answered stops the run and is named. | Tax treatment could be decided somewhere else. | Keep; answer it on every earning head. |
+| 40 | A bonus, arrears or any one-off is taxed in the month it is paid; ordinary pay is taken at this month's amount for every month left. | Spreading one-offs over the months left is a later choice. | Keep until you tell us how your accountant treats them. |
+| 41 | Each person chooses their own regime; if they have not, the year's default applies (a value you enter); if neither exists the run stops. The system never chooses. | A change of regime after the proof window could be allowed or refused. | Set a default regime in the tax year. |
+| 42 | After the proof window closes, only what a director verified counts for lines that need proof. | A late proof could still be accepted. | Keep, and set the proof window's last day deliberately. |
+| 43 | Only directors verify proofs, never their own. HR sees no tax data at all and cannot reopen a declaration. | HR could be shown who has not declared, without amounts. | Keep. |
+| 44 | Monthly tax is what is still due for the year divided by the months left; never below zero; nothing is refunded through a run. | A refund through payroll is possible but needs your rule. | Keep. |
+| 45 | The small relief near the tax-free threshold (marginal relief) is not worked out. | Tell us the rule and it can be added. | Tell us if any employee is near the threshold. |
+| 46 | The sections people can declare under (with their limits) are entered by you inside the tax year. | They could be kept apart from the year. | Keep. |
+| 47 | The income tax switch matters to a run only when it is on. | You could be made to choose on or off before a first run. | Keep. |
+| 48 | The IT Statement shows paid months from finished runs and projects the rest, marked as a projection and as a draft until the year is confirmed. | | Keep. |

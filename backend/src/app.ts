@@ -40,6 +40,7 @@ import { admsRouter } from "./modules/biometric/admsRoutes";
 import { devSimulatorRouter } from "./modules/dev/routes";
 import { reportsRouter } from "./modules/reports/routes";
 import { payrollRouter } from "./modules/payroll/routes";
+import { taxRouter } from "./modules/payroll/tax/routes";
 import { payslipRouter } from "./modules/payroll/payslipRoutes";
 
 // Every API router and where it's mounted — one list, so the route
@@ -85,6 +86,7 @@ const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   { path: "/api/reports", router: reportsRouter },
   { path: "/api/payroll", router: payrollRouter },
   { path: "/api/payslips", router: payslipRouter },
+  { path: "/api/tax", router: taxRouter },
   { path: "/api/attendance", router: attendanceRouter },
   { path: "/api/biometric", router: biometricRouter },
 ];

@@ -90,6 +90,19 @@ describe("the demo company", () => {
     expect(leaks).toEqual([]);
   });
 
+  it("has a made-up tax year, every figure labelled DEMO and confirmed by the approver, with the declaration windows open; an employee sees both regimes, and HR sees nothing of it", async () => {
+    const years = await call("DEMO001", "get", "tax/years");
+    expect(years.body.years).toHaveLength(1);
+    expect(years.body.years[0]).toMatchObject({ status: "CONFIRMED", missing: [] });
+    expect(JSON.stringify(years.body.years[0].value)).toContain("DEMO COMPANY: a made-up figure");
+    const mine = await call("DEMO006", "get", "tax/me");
+    expect([mine.status, mine.body.windows.declaration.state, mine.body.sectionsConfirmed, mine.body.comparison.available, mine.body.comparison.chosen]).toEqual([200, "OPEN", true, true, null]);
+    expect(Object.keys(mine.body.comparison.results).sort()).toEqual(["NEW", "OLD"]);
+    expect((await call("DEMO004", "get", "tax/years")).status).toBe(403); // HR
+    expect((await call("DEMO004", "get", `tax/declarations?fy=${years.body.years[0].year}`)).status).toBe(403);
+    expect((await call("DEMO005", "get", "tax/years")).status).toBe(403); // the developer
+  });
+
   it("a whole payroll run goes through every step on the demo company, and it is a real run, not a test", async () => {
     const queued: string[] = [];
     setCalculationEnqueuer(async (id) => void queued.push(id));

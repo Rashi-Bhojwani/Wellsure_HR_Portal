@@ -47,6 +47,9 @@ const WorkflowDelegatesPage = lazyPage(() => import("../pages/employee/workflow-
 const MarkAttendancePage = lazyPage(() => import("../pages/employee/attendance/MarkAttendancePage"), "MarkAttendancePage");
 const AttendanceInfoPage = lazyPage(() => import("../pages/employee/attendance/AttendanceInfoPage"), "AttendanceInfoPage");
 const PayslipsPage = lazyPage(() => import("../pages/employee/salary/PayslipsPage"), "PayslipsPage");
+const ItDeclarationPage = lazyPage(() => import("../pages/employee/salary/ItDeclarationPage"), "ItDeclarationPage");
+const ProofOfInvestmentPage = lazyPage(() => import("../pages/employee/salary/ProofOfInvestmentPage"), "ProofOfInvestmentPage");
+const ItStatementPage = lazyPage(() => import("../pages/employee/salary/ItStatementPage"), "ItStatementPage");
 
 // Single source of truth for the Employee portal left sidebar
 // (docs/UI_REFERENCE.md §1.0). The sidebar, the route tree and the
@@ -144,14 +147,14 @@ export const employeeMenu: EmployeeMenuEntry[] = [
         label: "IT Statement",
         path: "salary/it-statement",
         icon: FileDoneOutlined,
-        phase: "Phase 7",
+        element: ItStatementPage,
       },
       {
         key: "it-declaration",
         label: "IT Declaration",
         path: "salary/it-declaration",
         icon: FormOutlined,
-        phase: "Phase 7",
+        element: ItDeclarationPage,
       },
       {
         key: "loans-advances",
@@ -172,7 +175,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
         label: "Proof Of Investment",
         path: "salary/proof-of-investment",
         icon: SafetyCertificateOutlined,
-        phase: "Phase 7",
+        element: ProofOfInvestmentPage,
       },
       {
         key: "salary-revision",

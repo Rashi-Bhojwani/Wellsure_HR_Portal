@@ -1,7 +1,9 @@
+import { computeAnnualTax, monthlyTds } from "../tax/engine";
+import { projectTaxablePay, splitTaxable } from "../tax/taxable";
 import { HOLD_REASON_LABEL, STATUTORY_LINE_CODES, STATUTORY_LINE_LABEL, type HoldReason } from "@shared/constants/payrollRun";
 import { ARREARS_CODE, HOLD_RELEASE_CODE, LOP_REVERSAL_CODE } from "@shared/constants/payrollSalary";
 import { payrollHash } from "../hash";
-import { ZERO, canonicalDecimal, intDec, sum, type Money } from "../money";
+import { ZERO, canonicalDecimal, dec, intDec, sum, type Money } from "../money";
 import { applyShare } from "../salary/arrears";
 import type { ComponentValue } from "../salary/schemas";
 import { applyRuleOverrides } from "./rules";
@@ -238,6 +240,27 @@ export function calculatePerson(input: PersonInput, ctx: CalcContext): ItemOut {
     else {
       if (lwf.employee.greaterThan(ZERO)) statutoryDeductions.push({ code: STATUTORY_LINE_CODES.LWF_EMPLOYEE, label: STATUTORY_LINE_LABEL.LWF_EMPLOYEE!, kind: "DEDUCTION", source: "LWF", sourceRef: null, amount: lwf.employee, basis: { state: stateKey, month: ctx.payrollMonth } });
       if (lwf.employer.greaterThan(ZERO)) employerLines.push({ code: STATUTORY_LINE_CODES.LWF_EMPLOYER, label: STATUTORY_LINE_LABEL.LWF_EMPLOYER!, kind: "EMPLOYER_CONTRIBUTION", source: "LWF", sourceRef: null, amount: lwf.employer, basis: { state: stateKey, month: ctx.payrollMonth } });
+    }
+  }
+
+  // ── Income tax (TDS), when the directors switched on PROJECTED: this year's tax worked out from the tax year they entered, less what was already deducted, spread over the months left ──
+  if (input.tax) {
+    const t = input.tax;
+    const split = splitTaxable([...earningLines, ...deductionLines], (code) => ctx.components.current.get(code)?.value);
+    const lacking: string[] = [];
+    if (t.missing.length > 0) lacking.push(`the tax year ${t.year} lacks ${t.missing.join(", ")}`);
+    if (split.notSet.length > 0) lacking.push(`whether ${split.notSet.join(", ")} is taxable has not been answered`);
+    if (!t.regime) lacking.push("neither the person nor the tax year has chosen a regime");
+    if (lacking.length > 0) {
+      exceptions.push({ code: "TAX_NOT_SET", severity: "BLOCKING", message: `Income tax cannot be worked out: ${lacking.join("; ")}.` });
+      inputsOut.tds = { state: "NOT_SET", lacking };
+    } else {
+      const projected = projectTaxablePay({ paidSoFar: t.taxableSoFar, recurring: split.recurring, oneOff: split.oneOff, monthsLeft: t.monthsLeft });
+      const annual = computeAnnualTax({ year: t.values!, regime: t.regime!, taxablePay: c(projected), deductions: t.deductions });
+      const month = monthlyTds({ year: t.values!, annualTax: annual.annualTax, deductedSoFar: c(t.tdsSoFar), monthsLeft: t.monthsLeft });
+      const tdsBasis = { kind: "TDS", year: t.year, regime: t.regime, regimeSource: t.regimeSource, declarationVersion: t.declarationVersion, deductionBasis: t.deductionBasis, taxablePaidSoFar: c(t.taxableSoFar), recurringThisMonth: c(split.recurring), oneOffThisMonth: c(split.oneOff), monthsLeft: t.monthsLeft, projectedTaxablePay: c(projected), annual, tdsSoFar: c(t.tdsSoFar), remaining: month.remaining, share: month.share, minimum: month.minimum };
+      inputsOut.tds = { state: "WORKED_OUT", regime: t.regime, annualTax: annual.annualTax, thisMonth: month.tds };
+      if (dec(month.tds).greaterThan(ZERO)) statutoryDeductions.push({ code: STATUTORY_LINE_CODES.TDS, label: STATUTORY_LINE_LABEL.TDS!, kind: "DEDUCTION", source: "TDS", sourceRef: null, amount: dec(month.tds), basis: tdsBasis });
     }
   }
 

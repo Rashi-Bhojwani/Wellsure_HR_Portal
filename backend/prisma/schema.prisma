@@ -2459,6 +2459,7 @@ enum PayrollItemKind {
   STRUCTURE
   BANK_TEMPLATE
   OUTPUT_TEMPLATE
+  TAX_YEAR
 }
 
 enum PayrollApprovalSubject {
@@ -2726,6 +2727,7 @@ enum PayrollLineSource {
   ESI
   PT
   LWF
+  TDS
   NET_ROUNDING
 }
 
@@ -3437,4 +3439,90 @@ model PayrollExclusion {
 
   @@index([employeeId, fromDate])
   @@map("payroll_exclusions")
+}
+
+// ── Stage 7, P7-2 — declarations and proof of investment (docs/plans/STAGE_7_PLAN.md) ──
+enum TaxRegime {
+  NEW
+  OLD
+}
+
+enum TaxWindowKind {
+  DECLARATION
+  PROOF
+}
+
+enum TaxProofDecisionKind {
+  ACCEPTED
+  REJECTED
+}
+
+// The days a financial year's declarations (or proofs) may be sent. A new row replaces the old; the newest for a (year, kind) counts. No row means closed.
+model TaxWindow {
+  id          String        @id @default(cuid())
+  fy          String        @map("financial_year")
+  kind        TaxWindowKind
+  opensOn     DateTime      @map("opens_on") @db.Date
+  closesOn    DateTime      @map("closes_on") @db.Date
+  setByUserId String        @map("set_by_user_id")
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([fy, kind, createdAt])
+  @@map("tax_windows")
+}
+
+// A person's declaration for a financial year. Each save is the next version; the latest counts. Append-only.
+model TaxDeclaration {
+  id          String               @id @default(cuid())
+  employeeId  String               @map("employee_id")
+  fy          String               @map("financial_year")
+  version     Int
+  regime      TaxRegime
+  submittedAt DateTime             @default(now()) @map("submitted_at") @db.Timestamptz(3)
+  lines       TaxDeclarationLine[]
+
+  @@unique([employeeId, fy, version])
+  @@map("tax_declarations")
+}
+
+model TaxDeclarationLine {
+  id            String         @id @default(cuid())
+  declarationId String         @map("declaration_id")
+  declaration   TaxDeclaration @relation(fields: [declarationId], references: [id], onDelete: Cascade)
+  section       String
+  amount        Decimal        @db.Decimal(20, 6)
+
+  @@unique([declarationId, section])
+  @@map("tax_declaration_lines")
+}
+
+// A proof a person uploaded for one section of a year. The file is stored through the storage service; only its key and hash are here. Append-only.
+model TaxProof {
+  id         String             @id @default(cuid())
+  employeeId String             @map("employee_id")
+  fy         String             @map("financial_year")
+  section    String
+  fileKey    String             @map("file_key")
+  fileName   String             @map("file_name")
+  fileSha256 String             @map("file_sha256")
+  createdAt  DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  decisions  TaxProofDecision[]
+
+  @@index([employeeId, fy])
+  @@map("tax_proofs")
+}
+
+// A director's decision on a proof: accepted with the amount verified (which may be lower than claimed) or rejected with a reason. Never by the person the proof belongs to. Append-only; the latest counts.
+model TaxProofDecision {
+  id               String               @id @default(cuid())
+  proofId          String               @map("proof_id")
+  proof            TaxProof             @relation(fields: [proofId], references: [id], onDelete: Cascade)
+  decision         TaxProofDecisionKind
+  amountVerified   Decimal?             @map("amount_verified") @db.Decimal(20, 6)
+  reason           String
+  decidedByUserId  String               @map("decided_by_user_id")
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([proofId, createdAt])
+  @@map("tax_proof_decisions")
 }

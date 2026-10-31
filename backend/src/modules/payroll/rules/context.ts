@@ -14,7 +14,7 @@ import { dec, type Money } from "../money";
 //   - Confirmed or Placeholder is whether a confirmation exists for that exact version and value;
 //   - stale is whether a newer version has since been written (the run must be recalculated before it can go any further).
 
-export type PinKind = "RULE" | "RULE_OVERRIDE" | "COMPONENT" | "STRUCTURE";
+export type PinKind = "RULE" | "RULE_OVERRIDE" | "COMPONENT" | "STRUCTURE" | "TAX_YEAR";
 
 // What a run read, and the exact version it read. Absent `kind` means a rule and absent `live` means true, so a pin written before these existed hashes the same.
 //   live: false   a figure that was FROZEN earlier and is not re-read: the structure, components and rounding a salary row was built under. A newer

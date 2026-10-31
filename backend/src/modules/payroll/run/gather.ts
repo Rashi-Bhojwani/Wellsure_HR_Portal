@@ -1,5 +1,6 @@
 import type { EmploymentType, PayrollItemKind } from "@prisma/client";
 import type { ComponentType } from "@shared/constants/payrollSalary";
+import { gatherTax, taxFingerprint } from "../tax/gather";
 import { addCalendarDays, businessDateOf } from "../../../lib/businessDate";
 import { bankAccountsOn, employedBetween, employmentSpan, finalisedAttendanceDays, payrollPlacementsOn, salariesOn, salarySegmentsMany, unfinalisedAttendanceDays, type PayrollPlacement, type SalaryWithLines } from "../../../lib/effectiveDating";
 import { prisma } from "../../../lib/prisma";
@@ -274,6 +275,9 @@ export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promi
   const usedOverrides = new Map<string, { itemKey: string; version: number; valueHash: string }>();
   for (const p of people) for (const o of p.ruleOverrides ?? []) usedOverrides.set(`${o.itemKey}|${o.version}`, o);
   for (const o of usedOverrides.values()) ctx.addLivePin({ kind: "RULE_OVERRIDE", key: o.itemKey, version: o.version, valueHash: o.valueHash });
+  // Income tax (TDS_MODE PROJECTED): each person's year so far, declarations and the tax year, gathered once for the whole run.
+  const taxByPerson = await gatherTax(ctx, cycle, ids, (code) => components.current.get(code)?.value);
+  if (taxByPerson) for (const p of people) p.tax = taxByPerson.get(p.employeeId);
   return { cycle, payrollMonth, payrollYear, paymentDate, skipped, people, components, needs: { arrears, encashment, reversals }, componentHashes, encashmentsNotThisCycle };
 }
 
@@ -293,6 +297,7 @@ export function inputsFingerprint(inputs: RunInputs): string {
       segments: p.segments.map((s) => [s.salaryId, iso(s.from), iso(s.to), s.structureHash]),
       placement: p.placement ? [p.placement.locationId, p.placement.locationState, p.placement.departmentId, p.placement.gradeId, p.placement.costCentreId] : null,
       bank: p.hasBankAccount,
+      tax: taxFingerprint(p.tax),
       ...(p.directorHold ? { held: true } : {}),
       ...(p.ruleOverrides && p.ruleOverrides.length > 0 ? { overrides: p.ruleOverrides.map((o) => [o.itemKey, o.version, o.valueHash]) } : {}),
       adjustments: p.adjustments.map((a) => [a.id, a.source, a.sourceRef, a.componentCode, a.direction, canonicalDecimal(a.amount)]),
