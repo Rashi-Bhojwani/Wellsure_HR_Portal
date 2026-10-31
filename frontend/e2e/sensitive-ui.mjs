@@ -57,6 +57,36 @@ async function sessionFor(user) {
   return page;
 }
 
+// PEEPS-BEGIN page-checks
+// The Peeps checks run on every page of every pass, inside visit(), so they add no page loads of their own (the scan has a time limit). The demo data:
+// backend/src/modules/assets/demoSeed.ts issues DEMO-ASSET-HELD-BY-007 to DEMO007; backend/src/modules/peeps/demoSeed.ts makes DEMO008 a Wellsure Office
+// member and Unmute host and has DEMO006 book a time with them; backend/src/modules/recognition/demoSeed.ts sends DEMO006 a nudge carrying DEMO-NUDGE-PRIVATE.
+const PRIVATE_NUDGE_SEERS = new Set(["DEMO006", "DEMO001"]); // the recipient and the director
+const ASSET_MARKER = "DEMO-ASSET-HELD-BY-007";
+const ASSET_MONEY = /₹|\bINR\b|\bRs\.?\s?\d/;
+async function peepsPageChecks(page, user, label, base, p, text) {
+  const where = `${label} on ${base}/${p}`;
+  // Private nudges (D-28, D-29): nobody but the recipient and the directors ever sees the text, on any page of either portal.
+  if (!PRIVATE_NUDGE_SEERS.has(user) && text.includes("DEMO-NUDGE-PRIVATE")) problems.push(`${where}: sees someone else's private nudge`);
+  // The asset register: no asset screen ever shows an amount (the module records events, never money), and who holds what is not shown to another
+  // employee or the developer.
+  if ((base === "/app" && p === "my-assets") || (base === "/admin" && p.startsWith("assets/"))) {
+    if (ASSET_MONEY.test(text)) problems.push(`${where}: an amount is shown on an asset screen`);
+    if ((user === "DEMO006" || user === "DEMO005" || user === "DEMO009") && text.includes(ASSET_MARKER)) problems.push(`${where}: sees an asset held by someone else`);
+  }
+  if (base !== "/app" || user === "DEMO001") return;
+  // Unmute (D-29, D-30): DEMO006's booking is never shown to anyone else on their Unmute page or on any Wellsure Office page, nor to DEMO006 on a
+  // workspace page other than their own booking's.
+  const officePage = p.startsWith("office/");
+  if (user !== "DEMO006" && (p === "unmute" || officePage) && /DEMO006/.test(text)) problems.push(`${where}: sees someone else's Unmute booking`);
+  if (user === "DEMO006" && officePage && p !== "office/unmute" && /DEMO006/.test(text)) problems.push(`${where}: sees an Unmute booking from a Wellsure Office page`);
+  // The workspace menu is offered to nobody but members and directors (none of the people crawled here is a member).
+  if (p === "home") {
+    const nav = await page.evaluate(() => [...document.querySelectorAll("nav, aside")].map((n) => n.textContent ?? "").join(" "));
+    if (/Wellsure Office/.test(nav)) problems.push(`${label}: the Wellsure Office workspace is offered in the menu`);
+  }
+}
+// PEEPS-END
 async function visit(user, label, base, paths) {
   const page = await sessionFor(user);
   for (const p of paths) {
@@ -77,6 +107,9 @@ async function visit(user, label, base, paths) {
     const text = await page.evaluate(() => document.body.innerText + "\n" + document.body.innerHTML);
     for (const s of SECRETS) if (s.re.test(text)) problems.push(`${label} on ${base}/${p}: the page shows ${s.label}`);
     if (!(await page.getByTestId("demo-company-banner").first().isVisible().catch(() => false))) problems.push(`${label} on ${base}/${p}: the DEMO COMPANY banner is not on the page`);
+    // PEEPS-BEGIN page-checks-call
+    await peepsPageChecks(page, user, label, base, p, text);
+    // PEEPS-END
   }
   await page.screenshot({ path: path.join(OUT, `sensitive-ui-${label.replace(/\W+/g, "-")}.png`) });
 }
@@ -117,14 +150,11 @@ try {
 }
 await visit("DEMO001", "a director", "/admin", adminPaths);
 await visit("DEMO001", "a director (own portal)", "/app", employeePaths);
-// PEEPS-BEGIN assets
-// The asset register (Peeps module 1). (1) No asset screen ever shows an amount: the module records events, never money. (2) Who holds what is the
-// register's business: the asset the demo issued to DEMO007 (named DEMO-ASSET-HELD-BY-007 by backend/src/modules/assets/demoSeed.ts) must never reach
-// another employee's or the developer's screens, while the HR Admin's register does show it (so the check is known to be looking at real data).
+// PEEPS-BEGIN peeps-pages
+// The Peeps checks themselves run inside visit() on every page above (see peepsPageChecks). Here: one more employee, who is in none of the demo's Peeps
+// data, through every employee page; then the pages where the right person must see the demo data, so each check is known to be looking at real data.
+await visit("DEMO009", "another employee", "/app", employeePaths);
 {
-  const MARKER = "DEMO-ASSET-HELD-BY-007";
-  const MONEY = /₹|\bINR\b|\bRs\.?\s?\d/;
-  const assetAdmin = adminPaths.filter((p) => p.startsWith("assets/"));
   const textOf = async (page, url) => {
     await page.goto(url);
     await page.waitForLoadState("networkidle").catch(() => undefined);
@@ -132,84 +162,20 @@ await visit("DEMO001", "a director (own portal)", "/app", employeePaths);
     pages += 1;
     return page.evaluate(() => document.body.innerText + "\n" + document.body.innerHTML);
   };
-  for (const [user, label] of [["DEMO006", "an ordinary employee"], ["DEMO005", "the developer"]]) {
-    const page = await sessionFor(user);
-    for (const url of [`${BASE}/app/my-assets`, ...assetAdmin.map((p) => `${BASE}/admin/${p}`)]) {
-      const text = await textOf(page, url);
-      if (text.includes(MARKER)) problems.push(`${label} on ${url}: sees an asset held by someone else`);
-      if (MONEY.test(text)) problems.push(`${label} on ${url}: an amount is shown on an asset screen`);
-    }
-  }
-  // Since D-29 the register is the directors' and the Wellsure Office's, not HR's: the director's register must show the demo's issued asset.
   const director = await sessionFor("DEMO001");
-  const register = await textOf(director, `${BASE}/admin/assets/register`);
-  if (!register.includes(MARKER)) problems.push("the director's asset register does not list the demo's issued asset (is the demo company seeded with assets?)");
-  for (const user of ["DEMO004", "DEMO001"]) {
-    const page = await sessionFor(user);
-    for (const p of assetAdmin) if (MONEY.test(await textOf(page, `${BASE}/admin/${p}`))) problems.push(`${user} on /admin/${p}: an amount is shown on an asset screen`);
-  }
-}
-// PEEPS-END
-// PEEPS-BEGIN office-unmute
-// Unmute and the Wellsure Office (D-29, D-30). The demo (backend/src/modules/peeps/demoSeed.ts) makes DEMO008 a member and host, and DEMO006 books a
-// time with them. (1) DEMO006 sees the host only as the Wellsure Office, never by name or code. (2) Another employee, HR and the developer never see
-// DEMO006's booking, on their own Unmute page or on any Wellsure Office page. (3) The director's Unmute page does show it (so the check is looking at
-// real data). (4) The workspace menu is not offered to anyone but members and directors.
-{
-  const textOf = async (page, url) => {
-    await page.goto(url);
-    await page.waitForLoadState("networkidle").catch(() => undefined);
-    await page.waitForTimeout(600);
-    pages += 1;
-    return page.evaluate(() => document.body.innerText + "\n" + document.body.innerHTML);
-  };
-  const officePaths = employeePaths.filter((p) => p.startsWith("office/"));
   const booker = await sessionFor("DEMO006");
+  // Since D-29 the register is the directors' and the Wellsure Office's, not HR's.
+  if (!(await textOf(director, `${BASE}/admin/assets/register`)).includes(ASSET_MARKER)) problems.push("the director's asset register does not list the demo's issued asset (is the demo company seeded with assets?)");
+  // DEMO006 sees the Unmute host only as the Wellsure Office, never by name or code; the director's Unmute page shows the booking.
   const own = await textOf(booker, `${BASE}/app/unmute`);
   if (/DEMO008|Demo Employee 008/.test(own)) problems.push("DEMO006 on /app/unmute: the host is shown by name instead of as the Wellsure Office");
   if (!/Wellsure Office/.test(own)) problems.push("DEMO006 on /app/unmute: the demo booking with the Wellsure Office is not shown (is the demo seeded?)");
-  for (const [user, label] of [["DEMO009", "another employee"], ["DEMO004", "an HR Admin"], ["DEMO005", "the developer"], ["DEMO006", "the booker"]]) {
-    const page = await sessionFor(user);
-    if (user !== "DEMO006" && /DEMO006/.test(await textOf(page, `${BASE}/app/unmute`))) problems.push(`${label} on /app/unmute: sees someone else's booking`);
-    for (const p of officePaths) {
-      const text = await textOf(page, `${BASE}/app/${p}`);
-      if (/DEMO006/.test(text) && !(user === "DEMO006" && p === "office/unmute")) problems.push(`${label} on /app/${p}: sees an Unmute booking from a Wellsure Office page`);
-    }
-    await textOf(page, `${BASE}/app/home`);
-    const nav = await page.evaluate(() => [...document.querySelectorAll("nav, aside")].map((n) => n.textContent ?? "").join(" "));
-    if (/Wellsure Office/.test(nav)) problems.push(`${label}: the Wellsure Office workspace is offered in the menu`);
-  }
-  const director = await sessionFor("DEMO001");
   if (!/DEMO006/.test(await textOf(director, `${BASE}/app/office/unmute-admin`))) problems.push("the director's Unmute page does not show the demo booking (is the demo seeded?)");
-}
-// PEEPS-END
-// PEEPS-BEGIN badges-nudges
-// Private nudges (D-28, D-29). The demo (backend/src/modules/recognition/demoSeed.ts) sends DEMO006 a nudge whose text carries DEMO-NUDGE-PRIVATE.
-// Nobody but DEMO006 and the directors may ever see that text, on any page of either portal; DEMO006 sees it on their Recognition page, from the
-// Wellsure Office (never the sender's name); the director's Recognition page shows it (so the check is looking at real data).
-{
-  const MARKER = "DEMO-NUDGE-PRIVATE";
-  const textOf = async (page, url) => {
-    await page.goto(url);
-    await page.waitForLoadState("networkidle").catch(() => undefined);
-    await page.waitForTimeout(600);
-    pages += 1;
-    return page.evaluate(() => document.body.innerText + "\n" + document.body.innerHTML);
-  };
-  for (const [user, label, base, paths] of [
-    ["DEMO009", "another employee", "/app", employeePaths],
-    ["DEMO004", "an HR Admin", "/app", employeePaths],
-    ["DEMO004", "an HR Admin", "/admin", adminPaths],
-    ["DEMO005", "the developer", "/app", employeePaths],
-    ["DEMO005", "the developer", "/admin", adminPaths],
-  ]) {
-    const page = await sessionFor(user);
-    for (const p of paths) if ((await textOf(page, `${BASE}${base}/${p}`)).includes(MARKER)) problems.push(`${label} on ${base}/${p}: sees someone else's private nudge`);
-  }
-  const recipient = await textOf(await sessionFor("DEMO006"), `${BASE}/app/recognition`);
-  if (!recipient.includes(MARKER)) problems.push("DEMO006 on /app/recognition: their demo nudge is not shown (is the demo seeded?)");
+  // DEMO006 sees their nudge, from the Wellsure Office (never the sender's name); the director's Recognition page shows it.
+  const recipient = await textOf(booker, `${BASE}/app/recognition`);
+  if (!recipient.includes("DEMO-NUDGE-PRIVATE")) problems.push("DEMO006 on /app/recognition: their demo nudge is not shown (is the demo seeded?)");
   if (/Demo Employee 008|DEMO008/.test(recipient)) problems.push("DEMO006 on /app/recognition: the sender is shown by name instead of as the Wellsure Office");
-  if (!(await textOf(await sessionFor("DEMO001"), `${BASE}/app/office/recognition`)).includes(MARKER)) problems.push("the director's Recognition page does not show the demo nudge (is the demo seeded?)");
+  if (!(await textOf(director, `${BASE}/app/office/recognition`)).includes("DEMO-NUDGE-PRIVATE")) problems.push("the director's Recognition page does not show the demo nudge (is the demo seeded?)");
 }
 // PEEPS-END
 for (const page of sessions.values()) await page.context().close();
