@@ -3,6 +3,7 @@ import { getDailyRunHour } from "../modules/engage/autoPostSettings";
 import { getSetting } from "../lib/settings";
 import { MANUAL_REMINDER_HOUR_KEY } from "../modules/attendance/manual/reminder";
 import { directorNoticeQueue } from "./directorNoticeQueue";
+import { remoteReminderQueue } from "./remoteQueue";
 import { attendanceDeviceHealthQueue, attendanceManualReminderQueue, attendanceNightlyQueue } from "./attendanceQueues";
 import { compOffExpiryQueue, employeeSeparationsQueue, historyRolloverQueue, engageAutoPostsQueue, helpdeskAutoCloseQueue, leavePlAccrualQueue } from "./queues";
 
@@ -63,6 +64,10 @@ export async function registerScheduledJobs(): Promise<void> {
     { name: "auto-close-resolved-tickets" },
   );
   logger.info("Registered repeatable job: helpdesk-auto-close (hourly at :05)");
+
+  // Remote attendance reminders: hourly; a no-op while the threshold is Not set.
+  await remoteReminderQueue().upsertJobScheduler("remote-attendance-reminder-hourly", { pattern: "40 * * * *", tz: "Asia/Kolkata" }, { name: "remind" });
+  logger.info("Registered repeatable job: remote attendance reminders (hourly at :40)");
 
   // Director-action notices (D1): hourly, retry what was not delivered and escalate what nobody acknowledged (default after 3 days, SystemSetting).
   await directorNoticeQueue().upsertJobScheduler("director-notice-sweep-hourly", { pattern: "20 * * * *", tz: "Asia/Kolkata" }, { name: "sweep" });

@@ -1353,3 +1353,44 @@ export async function downloadImportTemplate(format: "xlsx" | "csv"): Promise<vo
   a.remove();
   URL.revokeObjectURL(url);
 }
+
+// ── Stage 5b: rows the bank rejected, and paying them again ──
+export interface BankRejectionRow {
+  rowId: string;
+  serial: number;
+  employeeCode: string;
+  name: string;
+  accountLast4: string;
+  amount: string;
+  reason: string;
+  source: "ENTERED" | "RETURN_FILE";
+  at: string;
+  repaidInBatch: string | null;
+}
+export interface RepaymentPlanView {
+  id: string;
+  batchId: string;
+  cycle: string;
+  paymentDate: string;
+  rows: Array<{ serial: number; employeeCode: string; name: string; accountLast4: string; ifsc: string; amount: string }>;
+  excluded: Array<{ sourceRowId: string; employeeCode: string; reason: string }>;
+  total: string;
+  layoutReady: boolean;
+  hash: string;
+  generated: string | null;
+  approval: { status: string; authority: string } | null;
+  checkers: CheckerAvailability;
+}
+export const bankRejections = (batchId: string) => get<{ batchId: string; cycle: string; rows: BankRejectionRow[] }>(`/bank-batches/${batchId}/rejections`);
+export const recordBankRejections = (batchId: string, rows: Array<{ employeeCode: string; reason: string }>) => post<{ recorded: number; alreadyRecorded: number }>(`/bank-batches/${batchId}/rejections`, { rows });
+export async function importBankReturn(batchId: string, file: File): Promise<{ rows: number; rejected: number; alreadyRecorded: number }> {
+  const form = new FormData();
+  form.append("file", file);
+  return (await apiClient.post(`${base}/bank-batches/${batchId}/rejections/import`, form)).data;
+}
+export const planRepayment = (batchId: string, paymentDate: string, rowIds?: string[]) => post<RepaymentPlanView>(`/bank-batches/${batchId}/repayment-plans`, { paymentDate, ...(rowIds ? { rowIds } : {}) });
+export const getRepaymentPlan = (id: string) => get<RepaymentPlanView>(`/repayment-plans/${id}`);
+export const requestRepayment = (id: string, hash: string, note?: string) => post<{ status: string }>(`/repayment-plans/${id}/request`, { hash, ...(note ? { note } : {}) });
+export const decideRepayment = (id: string, decision: "APPROVE" | "REJECT", hash: string, note?: string) => post<{ status: string }>(`/repayment-plans/${id}/decision`, { decision, hash, ...(note ? { note } : {}) });
+export const generateRepayment = (id: string) => post<{ batchId: string; rows: number; total: string; fileName: string }>(`/repayment-plans/${id}/generate`);
+export const repaymentFileLink = (batchId: string) => get<{ url: string; fileName: string }>(`/repayment-batches/${batchId}/file`);

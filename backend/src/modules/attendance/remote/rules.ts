@@ -3,7 +3,7 @@
 export type Half = "FIRST" | "SECOND";
 export type RejectOutcome = "ABSENT" | "LOSS_OF_PAY";
 
-export type Decision = { kind: "FULL" } | { kind: "HALF"; half: Half } | { kind: "REJECT"; reason: string; outcome: RejectOutcome };
+export type Decision = { kind: "FULL"; note?: string } | { kind: "HALF"; half: Half; reason: string } | { kind: "REJECT"; reason: string; outcome: RejectOutcome };
 
 /** The status the engine's own override machinery is given for a decision (the engine turns it into days and into loss of pay). */
 export type OverrideStatus = "P" | "HD_FIRST" | "HD_SECOND" | "A";
@@ -67,4 +67,24 @@ export function minutesBetween(from: Date, to: Date): number {
 export function reminderDue(pendingSince: Date, now: Date, thresholdHours: number | null, alreadyRemindedAt: Date | null): boolean {
   if (thresholdHours === null || alreadyRemindedAt !== null) return false;
   return minutesBetween(pendingSince, now) >= thresholdHours * 60;
+}
+
+/** What the person sees as today's state. */
+export type DayState = "NOT_STARTED" | "CHECKED_IN" | "CHECKED_OUT" | "PENDING_APPROVAL" | "APPROVED" | "HALF_DAY" | "REJECTED";
+
+/** Today's state from the record (null: nothing yet). A record with a check-out is waiting for a decision; one without is checked in. */
+export function dayStateOf(r: { status: RecordStatus; checkIn: boolean; checkOut: boolean } | null): DayState {
+  if (!r || !r.checkIn) return "NOT_STARTED";
+  if (r.status === "APPROVED_FULL") return "APPROVED";
+  if (r.status === "APPROVED_HALF") return "HALF_DAY";
+  if (r.status === "REJECTED") return "REJECTED";
+  if (r.status === "PENDING") return "PENDING_APPROVAL";
+  return r.checkOut ? "CHECKED_OUT" : "CHECKED_IN";
+}
+
+/** Hours worked as H:MM, or null when either time is missing. */
+export function hoursText(inAt: Date | null, outAt: Date | null): string | null {
+  if (!inAt || !outAt) return null;
+  const m = Math.max(0, minutesBetween(inAt, outAt));
+  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
 }

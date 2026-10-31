@@ -17,7 +17,7 @@ const AFTER = "2026-10-01";
 
 describe("remote attendance", () => {
   let org: TestOrgMasters;
-  const p = {} as Record<"dirA" | "dirB" | "hr" | "dev" | "r1" | "r2" | "r3" | "r4" | "plain", Person>;
+  const p = {} as Record<"dirA" | "dirB" | "hr" | "dev" | "r1" | "r2" | "r3" | "r4" | "r5" | "plain", Person>;
   const tok = {} as Record<keyof typeof p, string>;
   const marksMade: string[] = [];
   const settingsBefore: Record<string, unknown> = {};
@@ -38,7 +38,7 @@ describe("remote attendance", () => {
     p.dirB = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
     p.hr = await createFullTestEmployee(org, { roleCode: "HR_ADMIN" });
     p.dev = await createFullTestEmployee(org, { roleCode: DEVELOPER_ROLE_CODE });
-    for (const k of ["r1", "r2", "r3", "r4", "plain"] as const) p[k] = await createFullTestEmployee(org);
+    for (const k of ["r1", "r2", "r3", "r4", "r5", "plain"] as const) p[k] = await createFullTestEmployee(org);
     for (const k of Object.keys(p) as Array<keyof typeof p>) tok[k] = await loginAs(p[k].employeeCode);
     for (const key of [REMINDER_HOURS_KEY, SUGGESTED_OUTCOME_KEY]) settingsBefore[key] = (await prisma.systemSetting.findUnique({ where: { key } }))?.value ?? null;
   }, 120_000);
@@ -91,7 +91,7 @@ describe("remote attendance", () => {
     expect(ci.status, JSON.stringify(ci.body)).toBe(201);
     expect(ci.body.checkIn).toMatch(/^\d{2}:\d{2}$/);
     expect(ci.body.checkOut).toBeNull();
-    expect(Object.keys(ci.body).sort()).toEqual(["checkIn", "checkOut", "date", "decidedAt", "decisionReason", "half", "id", "openRequests", "rejectOutcome", "reopenCount", "status"].sort()); // nothing about where
+    expect(Object.keys(ci.body).sort()).toEqual(["checkIn", "checkOut", "date", "decidedAt", "decisionReason", "half", "hours", "id", "openRequests", "rejectOutcome", "reopenCount", "reviewUsed", "status"].sort()); // nothing about where
     expect((await post("/me/remote/check-out", {}, "r2")).body.error.code).toBe("NOT_CHECKED_IN");
     expect((await post("/me/remote/check-in", {}, "r1")).body.error.code).toBe("ALREADY_CHECKED_IN");
     const body = { latitude: 1, longitude: 2, address: "x", photo: "y" };
@@ -162,7 +162,9 @@ describe("remote attendance", () => {
     const r2 = await rec(p.r2);
     expect((await post(`/remote/records/${r2.id}/decision`, { kind: "HALF" }, "dirB")).status).toBe(400);
     expect((await post(`/remote/records/${r2.id}/decision`, { kind: "HALF", half: "MIDDLE" }, "dirB")).status).toBe(400);
-    expect((await post(`/remote/records/${r2.id}/decision`, { kind: "HALF", half: "FIRST" }, "dirB")).status).toBe(200);
+    expect((await post(`/remote/records/${r2.id}/decision`, { kind: "HALF", half: "FIRST" }, "dirB")).status).toBe(400);
+    expect((await post(`/remote/records/${r2.id}/decision`, { kind: "HALF", half: "FIRST", reason: "x" }, "dirB")).status).toBe(400); // a half day needs its reason
+    expect((await post(`/remote/records/${r2.id}/decision`, { kind: "HALF", half: "FIRST", reason: "Worked the morning only" }, "dirB")).status).toBe(200);
     const row = await dayRow(p.r2);
     expect(Number(row.lopDays)).toBe(0.5);
     expect(row.firstHalfStatus).toBe("P");
@@ -185,7 +187,8 @@ describe("remote attendance", () => {
     // The employee is told why. The reason is not in the audit trail (HR can read that; it is held in the record, for directors and for the person).
     expect((await prisma.notification.findFirstOrThrow({ where: { userId: p.r3.userId, type: "attendance.remote.decided" } })).body).toContain("No work to show");
     const audit = await prisma.auditLog.findFirstOrThrow({ where: { action: "attendance.remote.decided", entityId: r3.id } });
-    expect(JSON.stringify(audit.after)).not.toContain("No work to show");
+    expect(audit.after).toMatchObject({ status: "REJECTED", outcome: "ABSENT", reason: "No work to show for the day" }); // who (the actor), when (the row), outcome and reason
+    expect(audit.actorUserId).toBe(p.dirB.userId);
     // The database refuses a rejection with no reason or outcome, whatever the code does.
     await expect(prisma.remoteAttendanceRecord.update({ where: { id: r3.id }, data: { decisionReason: null } })).rejects.toThrow(/decision_check/);
   });
@@ -248,16 +251,19 @@ describe("remote attendance", () => {
     expect((await post(`/me/remote/records/${r2.id}/requests`, { kind: "CORRECTION", note: "wrong time", checkOut: "18:00" }, "r2")).body.error.code).toBe("DECIDED"); // r2 is decided
     const review = await post(`/me/remote/records/${r4.id}/requests`, body, "r4");
     expect(review.status, JSON.stringify(review.body)).toBe(201);
-    expect((await post(`/me/remote/records/${r4.id}/requests`, body, "r4")).body.error.code).toBe("REQUEST_OPEN");
-    expect((await post(`/me/remote/records/${r4.id}/requests`, { ...body, checkIn: "09:00" }, "r4")).status).toBe(400); // a review carries no times
+    expect((await post(`/me/remote/records/${r4.id}/requests`, body, "r4")).body.error.code).toBe("REVIEW_USED");
+    expect((await post(`/me/remote/records/${r4.id}/requests`, { ...body, checkIn: "09:00" }, "r4")).status).toBe(409); // one review only (and a review carries no times)
     expect((await get("/remote/requests", "dirB")).body.requests.map((x: { id: string }) => x.id)).toContain(review.body.id);
-    const declined = await post(`/remote/requests/${review.body.id}/resolve`, { accept: false, note: "The decision stands" }, "dirB");
-    expect(declined.body.status).toBe("DECLINED");
-    expect((await rec(p.r4)).status).toBe("REJECTED");
-    const again = await post(`/me/remote/records/${r4.id}/requests`, { kind: "REVIEW", note: "More evidence of the work" }, "r4");
-    expect((await post(`/remote/requests/${again.body.id}/resolve`, { accept: true, note: "Seen the evidence" }, "dirB")).body.status).toBe("ACCEPTED");
+    // One review is allowed after a half day or a rejection: r2 (a half day) asks once, is declined, and cannot ask again.
+    const halfAsk = await post(`/me/remote/records/${r2.id}/requests`, { kind: "REVIEW", note: "I worked the whole day" }, "r2");
+    expect(halfAsk.status, JSON.stringify(halfAsk.body)).toBe(201);
+    expect((await post(`/remote/requests/${halfAsk.body.id}/resolve`, { accept: false, note: "The decision stands" }, "dirB")).body.status).toBe("DECLINED");
+    expect((await rec(p.r2)).status).toBe("APPROVED_HALF");
+    expect((await post(`/me/remote/records/${r2.id}/requests`, { kind: "REVIEW", note: "Asking a second time" }, "r2")).body.error.code).toBe("REVIEW_USED");
+    expect((await post(`/me/remote/records/${(await rec(p.r1)).id}/requests`, { kind: "REVIEW", note: "A full day needs none" }, "r1")).body.error.code).toBe("NOT_REVIEWABLE");
+    expect((await post(`/remote/requests/${review.body.id}/resolve`, { accept: true, note: "Seen the evidence" }, "dirB")).body.status).toBe("ACCEPTED");
     expect((await rec(p.r4)).status).toBe("PENDING"); // reopened
-    expect((await post(`/remote/requests/${again.body.id}/resolve`, { accept: true, note: "twice" }, "dirB")).body.error.code).toBe("NOT_OPEN");
+    expect((await post(`/remote/requests/${review.body.id}/resolve`, { accept: true, note: "twice" }, "dirB")).body.error.code).toBe("NOT_OPEN");
   });
 
   it("a correction of the times on a day not yet decided changes the record's times, and the history keeps what was said", async () => {
@@ -275,8 +281,7 @@ describe("remote attendance", () => {
     const mine = await post("/remote/requests/anything/resolve", { accept: true, note: "mine" }, "r4");
     expect(mine.status).toBe(403);
     // A director's own request is answered by the other director, never by them.
-    const own = await rec(p.dirA);
-    const ownAsk = await post(`/me/remote/records/${own.id}/requests`, { kind: "REVIEW", note: "Please look at my day again" }, "dirA");
+    const ownAsk = await post("/me/remote/missed-day", { date: "2026-09-16", note: "I forgot to check in that day", checkIn: "09:30", checkOut: "18:00" }, "dirA");
     expect(ownAsk.status, JSON.stringify(ownAsk.body)).toBe(201);
     const self = await post(`/remote/requests/${ownAsk.body.id}/resolve`, { accept: true, note: "I agree with myself" }, "dirA");
     expect([self.status, self.body.error.code]).toEqual([403, "OWN_RECORD"]);
@@ -286,7 +291,7 @@ describe("remote attendance", () => {
   it("the report counts days by outcome, for directors only", async () => {
     const r = await get(`/remote/report?from=2026-09-01&to=2026-09-30`, "dirB");
     expect(r.status).toBe(200);
-    expect(r.body.total.days).toBe(5);
+    expect(r.body.total.days).toBe(6); // five days worked, and a missed day a director has been asked about
     expect(r.body.people.length).toBe(5);
     expect((await get(`/remote/report?from=2026-09-30&to=2026-09-01x`, "dirB")).status).toBe(400);
   });
@@ -305,5 +310,86 @@ describe("remote attendance", () => {
     expect(await sendDueReminders(new Date("2026-12-31T00:00:00Z"))).toBe(pending);
     expect(await sendDueReminders(new Date("2026-12-31T00:00:00Z"))).toBe(0); // once each
     expect((await put("/remote/settings", { reminderAfterHours: null, suggestedRejectOutcome: null }, "dirA")).body).toEqual(before.body);
+  });
+
+  // ── The full list (A5): what was missing from the first build ──
+
+  it("the person's day: state and server time, hours, and the reason and outcome of a rejection; double presses never duplicate", async () => {
+    const mark = await post("/remote/marks", { employeeId: p.r5.employeeId, effectiveFrom: "2026-09-01", remote: true, reason: "Works from another city" }, "dirA");
+    marksMade.push(mark.body.id);
+    setBusinessTodayForTests(d("2026-10-02"));
+    const before = await get("/me/remote/today", "r5");
+    expect([before.body.state, before.body.serverTime]).toEqual(["NOT_STARTED", expect.stringMatching(/^\d{2}:\d{2}$/)]);
+    const presses = await Promise.all([post("/me/remote/check-in", {}, "r5"), post("/me/remote/check-in", {}, "r5"), post("/me/remote/check-in", {}, "r5")]);
+    expect(presses.map((r) => r.status).sort()).toEqual([201, 409, 409]);
+    expect(await prisma.remoteAttendanceRecord.count({ where: { employeeId: p.r5.employeeId } })).toBe(1);
+    expect((await get("/me/remote/today", "r5")).body.state).toBe("CHECKED_IN");
+    const outs = await Promise.all([post("/me/remote/check-out", {}, "r5"), post("/me/remote/check-out", {}, "r5")]);
+    expect(outs.map((r) => r.status).sort()).toEqual([200, 409]);
+    expect(await prisma.remoteAttendanceEvent.count({ where: { record: { employeeId: p.r5.employeeId }, type: { in: ["CHECK_IN", "CHECK_OUT"] } } })).toBe(2);
+    const today = await get("/me/remote/today", "r5");
+    expect([today.body.state, today.body.record.hours]).toEqual(["PENDING_APPROVAL", expect.stringMatching(/^\d+:\d{2}$/)]);
+    const id = (await prisma.remoteAttendanceRecord.findFirstOrThrow({ where: { employeeId: p.r5.employeeId } })).id;
+    expect((await post(`/remote/records/${id}/decision`, { kind: "REJECT", reason: "Nothing was delivered", outcome: "LOSS_OF_PAY" }, "dirB")).status).toBe(200);
+    const after = await get("/me/remote/today", "r5");
+    expect([after.body.state, after.body.record.decisionReason, after.body.record.rejectOutcome]).toEqual(["REJECTED", "Nothing was delivered", "LOSS_OF_PAY"]);
+    expect((await prisma.notification.findFirstOrThrow({ where: { userId: p.r5.userId, type: "attendance.remote.decided" } })).body).toMatch(/loss of pay/);
+    expect((await get("/me/remote/records", "r5")).body.records[0]).toMatchObject({ hours: expect.any(String), reviewUsed: false });
+  });
+
+  it("an approval may carry a note, and a note is optional there; the other director hears of every decision, the person who decided does not", async () => {
+    const r = await prisma.remoteAttendanceRecord.findFirstOrThrow({ where: { employeeId: p.r5.employeeId } });
+    await post(`/remote/records/${r.id}/reopen`, { reason: "Looked again at the delivery" }, "dirB");
+    const toA = () => prisma.notification.count({ where: { userId: p.dirA.userId, type: "attendance.remote.director_told" } });
+    const toB = () => prisma.notification.count({ where: { userId: p.dirB.userId, type: "attendance.remote.director_told" } });
+    const [a0, b0] = [await toA(), await toB()];
+    expect((await post(`/remote/records/${r.id}/decision`, { kind: "FULL", note: "Delivery was found" }, "dirB")).status).toBe(200);
+    expect([(await toA()) - a0, (await toB()) - b0]).toEqual([1, 0]);
+    expect((await prisma.remoteAttendanceRecord.findUniqueOrThrow({ where: { id: r.id } })).decisionReason).toBe("Delivery was found");
+    const reopened = await prisma.auditLog.findFirstOrThrow({ where: { action: "attendance.remote.reopened", entityId: r.id } });
+    expect(reopened.before).toMatchObject({ status: "REJECTED", outcome: "LOSS_OF_PAY", reason: "Nothing was delivered" }); // the version that was replaced ...
+    expect(reopened.after).toMatchObject({ status: "PENDING", reopenReason: "Looked again at the delivery" }); // ... and what it became
+    const versions = await prisma.remoteAttendanceEvent.findMany({ where: { recordId: r.id, type: { in: ["DECIDED", "REOPENED_VERSION"] } }, orderBy: { createdAt: "asc" } });
+    expect(versions.map((v) => v.type)).toEqual(["DECIDED", "REOPENED_VERSION", "DECIDED"]); // both decisions kept
+  });
+
+  it("a missed day: the person asks for the times to be recorded, with a reason, and a director answers", async () => {
+    const date = "2026-09-15";
+    const body = { date, note: "I forgot to check in that day", checkIn: "09:30", checkOut: "18:00" };
+    expect((await post("/me/remote/missed-day", { ...body, note: "x" }, "r1")).status).toBe(400); // a reason is required
+    expect((await post("/me/remote/missed-day", { ...body, date: "2026-10-02" }, "r1")).status).toBe(400); // today is not a missed day
+    expect((await post("/me/remote/missed-day", { ...body, date: "2026-08-15" }, "r1")).body.error.code).toBe("NOT_REMOTE"); // before they were marked
+    expect((await post("/me/remote/missed-day", { ...body, checkOut: "08:00" }, "r1")).status).toBe(400);
+    const ask = await post("/me/remote/missed-day", body, "r1");
+    expect(ask.status, JSON.stringify(ask.body)).toBe(201);
+    expect((await post("/me/remote/missed-day", body, "r1")).body.error.code).toBe("RECORD_EXISTS");
+    const ok = await post(`/remote/requests/${ask.body.id}/resolve`, { accept: true, note: "Agreed" }, "dirB");
+    expect(ok.body.status).toBe("ACCEPTED");
+    const rec1 = await prisma.remoteAttendanceRecord.findUniqueOrThrow({ where: { employeeId_date: { employeeId: p.r1.employeeId, date: d(date) } } });
+    expect([rec1.status, rec1.checkInAt?.toISOString(), rec1.checkOutAt?.toISOString()]).toEqual(["PENDING", "2026-09-15T04:00:00.000Z", "2026-09-15T12:30:00.000Z"]);
+  });
+
+  it("the director's queue filters by date, employee, department and status, and shows times, hours and a correction note", async () => {
+    const dept = (await prisma.employeeJobHistory.findFirstOrThrow({ where: { employeeId: p.r1.employeeId, effectiveTo: null } })).departmentId;
+    const byDept = await get(`/remote/records?departmentId=${dept}&pageSize=100`, "dirB");
+    expect(byDept.status, JSON.stringify(byDept.body)).toBe(200);
+    expect(byDept.body.rows.every((r: { departmentName: string | null }) => r.departmentName !== null)).toBe(true);
+    const other = await prisma.department.findFirstOrThrow({ where: { id: { not: dept } } });
+    expect((await get(`/remote/records?departmentId=${other.id}&employeeId=${p.r1.employeeId}`, "dirB")).body.rows).toEqual([]); // the two filters together
+    const one = await get(`/remote/records?employeeId=${p.r1.employeeId}&from=2026-09-15&to=2026-09-15&status=PENDING`, "dirB");
+    expect(one.body.rows).toHaveLength(1);
+    expect(one.body.rows[0]).toMatchObject({ checkIn: "09:30", checkOut: "18:00", hours: "8:30", correctionNote: "Agreed" });
+    expect((await get("/remote/records?departmentId=x", "hr")).status).toBe(403);
+  });
+
+  it("the report gives remote days per person per month, the pending count, every rejection with its reason, and every half day", async () => {
+    const r = await get("/remote/report?from=2026-09-01&to=2026-10-31", "dirB");
+    expect(r.status).toBe(200);
+    expect(r.body.pendingNow).toBeGreaterThan(0);
+    expect(r.body.perMonth.some((m: { month: string; name: string }) => m.month === "2026-09")).toBe(true);
+    expect(r.body.rejected.map((x: { reason: string }) => x.reason)).toEqual(expect.arrayContaining(["Still nothing to show"]));
+    expect(r.body.rejected.every((x: { outcome: string; date: string }) => ["ABSENT", "LOSS_OF_PAY"].includes(x.outcome) && /^\d{4}-\d{2}-\d{2}$/.test(x.date))).toBe(true);
+    expect(r.body.halfDays[0]).toMatchObject({ half: "FIRST", reason: "Worked the morning only" });
+    expect((await get("/remote/report?from=2026-09-01&to=2026-10-31", "hr")).status).toBe(403);
   });
 });

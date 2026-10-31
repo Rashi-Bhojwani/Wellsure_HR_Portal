@@ -36,3 +36,24 @@ The owner's earlier D-10 list was not available to this session; these are the c
 | 16 | **Check-in works only on the day itself**; a forgotten check-out is fixed by a correction request that a director accepts. | A past day cannot be checked into. | Say if a person may check out the next morning. |
 | 17 | **Directors' routes use the existing Super-Admin-only permission `attendance.unlock`** plus a director check, instead of a new permission key. | HR, managers and the Developer role are refused; a Super Admin could in theory grant the key to a role, and the director check in the service still refuses anyone who is not a director. | A dedicated key (`attendance.remote.decide`) can be added with its catalogue entry and migration. |
 | 18 | **The reminder threshold is whole hours (1 to 200) and Not set; the suggested rejection outcome is Not set.** | With no threshold nothing is sent; with none suggested nothing is suggested. | Say the real threshold and whether a suggestion is wanted. |
+
+## Closing the gaps (remote attendance, the full list)
+
+| # | Decision | What it does today | If you want it the other way |
+|---|---|---|---|
+| 19 | **A decision's reason is in the audit row** (who, when, outcome, reason), and a reopening keeps the replaced decision as well as the new state. | Only people who hold the audit-view key can read it; HR holds none. | Say if a reason should be kept out of the audit trail and only in the record. |
+| 20 | **One review per remote day, and only after a rejection or a half day.** A full day cannot be reviewed. | A second request is refused with "one is allowed". | Say if a person may ask again after a reopening. |
+| 21 | **A missed remote day may be recorded after the fact** on any past day the person was marked remote, with no limit on how far back; the day's attendance must not be finalised when a director decides it. | The request waits for a director like any correction. | Say how far back a person may ask. |
+| 22 | **Every decision and reopening tells the other director(s)** with the outcome only (no reason); the person who decided is not told. | One notification each. | Say if the reason should be included. |
+
+
+## Stage 5b (bank files, rejected rows, payslip links, queries, not-on-payroll)
+
+`docs/samples/Bank_Transfer_template.xls` is not in the repository or on `origin/main`; nothing was preset from any sample.
+
+| # | Decision | What it does today | If you want it the other way |
+|---|---|---|---|
+| 23 | **A bank file is never made for a test run** (a run on Placeholder rules cannot be finalised), so there is nothing to watermark TEST. | The bank file and its download exist only for a final, real run; a test is pinned. | Say if a masked TEST file should be producible from a calculated run for checking a layout. |
+| 24 | **The payment-mode code is a constant column the owners type** in the bank layout, not a built-in list. | Any text the bank wants can go in any column. | Say if payment modes (NEFT, RTGS, ...) should be a list with a code each. |
+| 25 | **The bank's return file is read with a governed layout of its own** (`BANK_RETURN_TEMPLATE`): the title of each column, and the status words that mean "rejected" in the bank's own words; Not set until a director enters it and a different director confirms. | A file is read only with a confirmed layout; one wrong row saves nothing; the same file is read once. | Say the real return format when you have it. |
+| 26 | **A repayment uses each person's bank account in force on the new payment date**, and the original amount to the paisa. | A corrected account is picked up automatically; a person with no account is left out and named. | Say if a repayment must go to the account of the original file. |

@@ -4,6 +4,7 @@ import { Button, Form, Input, InputNumber, Radio, Select, Tabs } from "antd";
 import * as api from "../../../api/remoteAttendance";
 import type { Decision, DirectorRecord, RemoteStatus } from "../../../api/remoteAttendance";
 import { searchPeople, type PersonHit } from "../../../api/payroll";
+import { departments } from "../../../api/org";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatDate, formatDateTime } from "../../../lib/dates";
 import { ApprovalBanner, ConfirmModal, DataTable, EmptyState, FilterBar, PageHeader, Panel, SideDrawer, Stack, StatCard, StatusChip, toast, type ChipTone } from "../../../ui";
@@ -50,12 +51,18 @@ export function RemoteAttendancePage() {
 
 function Records({ status, onChanged }: { status?: RemoteStatus; onChanged: () => void }) {
   const [filter, setFilter] = useState<RemoteStatus | undefined>(status);
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [employeeId, setEmployeeId] = useState<string>();
+  const [departmentId, setDepartmentId] = useState<string>();
+  const [hits, setHits] = useState<PersonHit[]>([]);
+  const depts = useQuery({ queryKey: ["org", "departments"], queryFn: () => departments.list(), staleTime: 300_000 });
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<string[]>([]);
   const [deciding, setDeciding] = useState<DirectorRecord | null>(null);
   const [reopening, setReopening] = useState<DirectorRecord | null>(null);
   const [rejecting, setRejecting] = useState(false);
-  const q = useQuery({ queryKey: ["remote-admin", "records", filter, page], queryFn: () => api.remoteRecords({ ...(filter ? { status: filter } : {}), page, pageSize: PAGE }) });
+  const q = useQuery({ queryKey: ["remote-admin", "records", filter, from, to, employeeId, departmentId, page], queryFn: () => api.remoteRecords({ ...(filter ? { status: filter } : {}), ...(/^\d{4}-\d{2}-\d{2}$/.test(from) ? { from } : {}), ...(/^\d{4}-\d{2}-\d{2}$/.test(to) ? { to } : {}), ...(employeeId ? { employeeId } : {}), ...(departmentId ? { departmentId } : {}), page, pageSize: PAGE }) });
   const done = () => { setSelected([]); onChanged(); void q.refetch(); };
   const approveAll = useMutation({
     mutationFn: () => api.bulkApproveRemote(selected),
@@ -66,9 +73,17 @@ function Records({ status, onChanged }: { status?: RemoteStatus; onChanged: () =
   return (
     <Panel>
       <FilterBar
-        activeCount={filter && !status ? 1 : 0}
-        onClear={() => setFilter(status)}
-        filters={!status ? <Select allowClear aria-label="Status" placeholder="Status" style={{ minWidth: 170 }} value={filter} onChange={(x) => { setFilter(x); setPage(1); }} options={(Object.keys(LABEL) as RemoteStatus[]).map((s) => ({ value: s, label: LABEL[s] }))} /> : undefined}
+        activeCount={[filter && !status, from, to, employeeId, departmentId].filter(Boolean).length}
+        onClear={() => { setFilter(status); setFrom(""); setTo(""); setEmployeeId(undefined); setDepartmentId(undefined); setPage(1); }}
+        filters={
+          <>
+            {!status && <Select allowClear aria-label="Status" placeholder="Status" style={{ minWidth: 150 }} value={filter} onChange={(x) => { setFilter(x); setPage(1); }} options={(Object.keys(LABEL) as RemoteStatus[]).map((s) => ({ value: s, label: LABEL[s] }))} />}
+            <Input aria-label="From date" placeholder="From YYYY-MM-DD" maxLength={10} value={from} onChange={(e) => { setFrom(e.target.value); setPage(1); }} style={{ maxWidth: 170 }} />
+            <Input aria-label="To date" placeholder="To YYYY-MM-DD" maxLength={10} value={to} onChange={(e) => { setTo(e.target.value); setPage(1); }} style={{ maxWidth: 170 }} />
+            <Select allowClear showSearch filterOption={false} aria-label="Employee" placeholder="Employee" style={{ minWidth: 170 }} notFoundContent={null} value={employeeId} options={hits.map((h) => ({ value: h.employeeId, label: `${h.name} (${h.employeeCode})` }))} onSearch={(t) => { if (t.trim().length >= 2) void searchPeople(t.trim()).then(setHits); }} onChange={(x) => { setEmployeeId(x); setPage(1); }} />
+            <Select allowClear aria-label="Department" placeholder="Department" style={{ minWidth: 160 }} value={departmentId} onChange={(x) => { setDepartmentId(x); setPage(1); }} options={(depts.data ?? []).map((d) => ({ value: d.id, label: d.name }))} />
+          </>
+        }
         actions={
           status === "PENDING" ? (
             <>
@@ -93,7 +108,7 @@ function Records({ status, onChanged }: { status?: RemoteStatus; onChanged: () =
           subtitle: (r) => `${r.employeeCode} · ${formatDate(r.date)}`,
           status: (r) => <StatusChip tone={TONE[r.status]}>{LABEL[r.status]}</StatusChip>,
           fields: [
-            { label: "In / out", render: (r) => `${r.checkIn ?? "—"} to ${r.checkOut ?? "—"}` },
+            { label: "In / out", render: (r) => `${r.checkIn ?? "—"} to ${r.checkOut ?? "—"}${r.hours ? ` (${r.hours} h)` : ""}` },
             { label: "Detail", render: (r) => detailOf(r) || "—" },
           ],
           actions: (r) => <RowButtons r={r} onDecide={() => setDeciding(r)} onReopen={() => setReopening(r)} block />,
@@ -101,7 +116,7 @@ function Records({ status, onChanged }: { status?: RemoteStatus; onChanged: () =
         columns={[
           { title: "Employee", key: "who", render: (_, r) => <PersonCell name={r.name} code={r.employeeCode} /> },
           { title: "Day", key: "day", render: (_, r) => formatDate(r.date) },
-          { title: "In / out", key: "times", render: (_, r) => `${r.checkIn ?? "—"} to ${r.checkOut ?? "—"}` },
+          { title: "In / out", key: "times", render: (_, r) => <div>{r.checkIn ?? "—"} to {r.checkOut ?? "—"}{r.hours && <Caption>{r.hours} h</Caption>}{r.correctionNote && <Caption>Correction: {r.correctionNote}</Caption>}</div> },
           { title: "Status", key: "status", render: (_, r) => <div><StatusChip tone={TONE[r.status]}>{LABEL[r.status]}{r.status === "APPROVED_HALF" && r.half ? ` (${r.half === "FIRST" ? "1st" : "2nd"} half)` : ""}</StatusChip>{r.status === "REJECTED" && <Caption>{r.rejectOutcome === "LOSS_OF_PAY" ? "Loss of pay" : "Absent"}: {r.decisionReason}</Caption>}{r.yours && <Caption>Your own day: the other director decides</Caption>}</div> },
           { title: "", key: "actions", align: "right", render: (_, r) => <RowButtons r={r} onDecide={() => setDeciding(r)} onReopen={() => setReopening(r)} /> },
         ]}
@@ -115,9 +130,9 @@ function Records({ status, onChanged }: { status?: RemoteStatus; onChanged: () =
 
 function detailOf(r: DirectorRecord): string {
   if (r.yours && r.status === "PENDING") return "Your own day: the other director decides";
-  if (r.status === "APPROVED_HALF" && r.half) return `Half day (${r.half === "FIRST" ? "first" : "second"} half)`;
+  if (r.status === "APPROVED_HALF" && r.half) return `Half day (${r.half === "FIRST" ? "first" : "second"} half): ${r.decisionReason ?? ""}`;
   if (r.status === "REJECTED") return `${r.rejectOutcome === "LOSS_OF_PAY" ? "Loss of pay" : "Absent"}: ${r.decisionReason ?? ""}`;
-  return "";
+  return r.correctionNote ? `Correction: ${r.correctionNote}` : "";
 }
 
 function RowButtons({ r, onDecide, onReopen, block }: { r: DirectorRecord; onDecide: () => void; onReopen: () => void; block?: boolean }) {
@@ -132,9 +147,10 @@ function DecideDrawer({ record, onClose, onDone }: { record: DirectorRecord; onC
   const [half, setHalf] = useState<"FIRST" | "SECOND" | null>(null);
   const [outcome, setOutcome] = useState<"ABSENT" | "LOSS_OF_PAY" | null>(null);
   const [reason, setReason] = useState("");
+  const [note, setNote] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
   const settings = useQuery({ queryKey: ["remote-admin", "settings"], queryFn: api.remoteSettings });
-  const decision: Decision | null = kind === "FULL" ? { kind } : kind === "HALF" && half ? { kind, half } : kind === "REJECT" && outcome && reason.trim().length >= 3 ? { kind, reason: reason.trim(), outcome } : null;
+  const decision: Decision | null = kind === "FULL" ? { kind, ...(note.trim() ? { note: note.trim() } : {}) } : kind === "HALF" && half && reason.trim().length >= 3 ? { kind, half, reason: reason.trim() } : kind === "REJECT" && outcome && reason.trim().length >= 3 ? { kind, reason: reason.trim(), outcome } : null;
   const save = useMutation({ mutationFn: () => api.decideRemote(record.id, decision!), onSuccess: () => { toast.success("Decided. The person has been told."); onDone(); onClose(); }, onError: (e) => setProblem(apiErrorMessage(e, "Could not save.")) });
   return (
     <SideDrawer
@@ -152,10 +168,14 @@ function DecideDrawer({ record, onClose, onDone }: { record: DirectorRecord; onC
             <Radio value="REJECT">Reject</Radio>
           </Radio.Group>
         </Form.Item>
+        {kind === "FULL" && <Form.Item label="Note (optional)" htmlFor="ap-note"><Input.TextArea id="ap-note" rows={2} maxLength={200} showCount value={note} onChange={(e) => setNote(e.target.value)} /></Form.Item>}
         {kind === "HALF" && (
-          <Form.Item label="Which half was worked" extra="Nothing is chosen for you.">
-            <Radio.Group value={half} onChange={(e) => setHalf(e.target.value)}><Radio value="FIRST">First half</Radio><Radio value="SECOND">Second half</Radio></Radio.Group>
-          </Form.Item>
+          <>
+            <Form.Item label="Which half was worked" extra="Nothing is chosen for you.">
+              <Radio.Group value={half} onChange={(e) => setHalf(e.target.value)}><Radio value="FIRST">First half</Radio><Radio value="SECOND">Second half</Radio></Radio.Group>
+            </Form.Item>
+            <Form.Item label="Why it is a half day" htmlFor="hd-reason" extra="Required. The person is told this reason."><Input.TextArea id="hd-reason" rows={2} maxLength={200} showCount value={reason} onChange={(e) => setReason(e.target.value)} /></Form.Item>
+          </>
         )}
         {kind === "REJECT" && (
           <>
@@ -289,27 +309,38 @@ function Report() {
       <FilterBar filters={<><Input aria-label="From" placeholder="From YYYY-MM-DD" maxLength={10} value={from} onChange={(e) => setFrom(e.target.value)} style={{ maxWidth: 190 }} /><Input aria-label="To" placeholder="To YYYY-MM-DD" maxLength={10} value={to} onChange={(e) => setTo(e.target.value)} style={{ maxWidth: 190 }} /></>} />
       {!ok ? <EmptyState compact title="Choose a period" description="Write the first and last day, for example 2026-10-01 and 2026-10-31." /> : (
         <>
-          {q.data && <Caption>{q.data.total.days} days: {q.data.total.full} full, {q.data.total.half} half, {q.data.total.absent} absent, {q.data.total.lossOfPay} loss of pay, {q.data.total.pending} waiting.</Caption>}
-          <DataTable<api.RemoteReport["people"][number]>
-            rowKey="name"
+          {q.data && <Caption>{q.data.total.days} days: {q.data.total.full} full, {q.data.total.half} half, {q.data.total.absent} absent, {q.data.total.lossOfPay} loss of pay, {q.data.total.pending} waiting in this period. {q.data.pendingNow} waiting in all.</Caption>}
+          <DataTable<api.RemoteReport["perMonth"][number]>
+            rowKey={(r) => `${r.name}${r.month}`}
             density="compact"
             loading={q.isLoading}
             error={q.error}
             onRetry={() => void q.refetch()}
-            dataSource={q.data?.people ?? []}
+            dataSource={q.data?.perMonth ?? []}
             pagination={false}
             empty={<EmptyState compact title="No remote days in this period" />}
             columns={[
               { title: "Employee", dataIndex: "name", key: "name" },
-              { title: "Days", dataIndex: "days", key: "days", align: "right" },
+              { title: "Month", dataIndex: "month", key: "month" },
+              { title: "Remote days", dataIndex: "days", key: "days", align: "right" },
               { title: "Full", dataIndex: "full", key: "full", align: "right" },
               { title: "Half", dataIndex: "half", key: "half", align: "right" },
-              { title: "Absent", dataIndex: "absent", key: "absent", align: "right" },
-              { title: "Loss of pay", dataIndex: "lossOfPay", key: "lop", align: "right" },
+              { title: "Rejected", dataIndex: "rejected", key: "rejected", align: "right" },
               { title: "Waiting", dataIndex: "pending", key: "pending", align: "right" },
-              { title: "Hours", dataIndex: "hours", key: "hours", align: "right" },
             ]}
           />
+          {(q.data?.rejected.length ?? 0) > 0 && (
+            <>
+              <h3 style={{ margin: `${space[4]}px 0 ${space[2]}px` }}>Rejected days and why</h3>
+              <ul style={{ margin: 0, paddingLeft: space[5] }}>{q.data!.rejected.map((r, i) => <li key={i}>{r.name}, {formatDate(r.date)}: {r.outcome === "LOSS_OF_PAY" ? "loss of pay" : "absent"}. {r.reason}</li>)}</ul>
+            </>
+          )}
+          {(q.data?.halfDays.length ?? 0) > 0 && (
+            <>
+              <h3 style={{ margin: `${space[4]}px 0 ${space[2]}px` }}>Half days</h3>
+              <ul style={{ margin: 0, paddingLeft: space[5] }}>{q.data!.halfDays.map((r, i) => <li key={i}>{r.name}, {formatDate(r.date)}: {r.half === "FIRST" ? "first" : "second"} half. {r.reason}</li>)}</ul>
+            </>
+          )}
         </>
       )}
     </Panel>

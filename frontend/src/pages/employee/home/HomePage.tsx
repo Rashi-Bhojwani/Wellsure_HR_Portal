@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Tooltip } from 'antd';
 import {
@@ -18,6 +18,7 @@ import { fs, fw, radius, space, v } from '../../../theme/tokens';
 // Direct ui/* imports, not the barrel: this page is on the "shell + employee home" bundle budget, and the barrel would drag DataTable (antd Table) along.
 import { ApprovalBanner } from '../../../ui/ApprovalBanner';
 import { CardGrid, Panel, Stack } from '../../../ui/Panel';
+const RemoteCheckCard = lazy(() => import('../../../components/attendance/RemoteCheckCard').then((m) => ({ default: m.RemoteCheckCard })));
 import { EmptyState } from '../../../ui/EmptyState';
 import { Illustration } from '../../../ui/Illustrations';
 import { InitialsAvatar } from '../../../ui/Avatar';
@@ -472,6 +473,10 @@ export function HomePage() {
       </section>
 
       <AnnouncementBanner />
+
+      <Suspense fallback={null}>
+        <RemoteCheckCard />
+      </Suspense>
 
       <CardGrid min={300}>
         <ReviewCard />
