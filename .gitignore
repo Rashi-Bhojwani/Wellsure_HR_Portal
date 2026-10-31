@@ -48,3 +48,6 @@ frontend/e2e/out/
 # UI design boards: originals are too big for the repo (they live on main as
 # "docs/design/Wellsure HR Portal *.png"); only the reduced JPEG slices are committed
 docs/design/Wellsure_HR_Portal_*.png
+
+# Redis writes dump.rdb into whatever folder it was started in (it once landed in biometric-agent/ and was committed by mistake). It is queue and session scratch, never source.
+*.rdb

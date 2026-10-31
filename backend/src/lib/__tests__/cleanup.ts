@@ -124,6 +124,11 @@ export const STANDALONE_ROOT_MODELS: Record<string, string> = {
   DocumentCategory: "document category master; deleteWithDependents(\"DocumentCategory\", ids) takes its documents with it",
   EngageAutoPostSetting: "id-less closed catalog keyed by `kind`; cleanupAutoPostSetting",
   AuditLog: "append-only (E1.1); no FKs — rows about a fixture go via deleteEmployeesAndDependents, through purgeAppendOnly",
+  PayrollSalaryHold: "a director's hold on one person's salary for one month (Stage 3.3c); append-only, employee_id and the actor are plain text; tests remove the holds their directors made by id, in cleanupPayrollRowsBy",
+  RemoteWorkMark: "a director's mark of who works remotely, from a date (Stage 5a); append-only, employee_id and the actor are plain text; tests remove the marks their directors made, by id",
+  PayrollMonthlyInput: "one entry of one monthly figure (Stage 4); append-only, employee_id and the actor are plain text; tests remove the rows their directors made, in cleanupPayrollRowsBy",
+  PayrollInputBatch: "an uploaded Monthly Inputs file after it was read (Stage 4); a plain-text actor; tests remove the batches their directors made, in cleanupPayrollRowsBy",
+  PayrollSalaryRelease: "the release of a salary hold (Stage 3.3c); append-only, a plain-text actor; removed with its hold in cleanupPayrollRowsBy",
   HrCapabilitySwitch: "the append-only record of what a director switched on or off for HR (Stage 1); subject_key is a role code or a user id as plain text, no FKs; tests remove their own rows by id through purgeAppendOnly",
   RolePermissionRemoval: "the append-only record of the pay keys the HR hard-lock migration removed from the HR roles (Stage 1); no FKs; only the one test that proves it is append-only writes to it, and the test database is rebuilt each run",
   DirectorActionNotice: "what a director's own-authority act tells the other director (D1); user columns are plain text, no FKs to users; its receipts go with it; removed by id through purgeAppendOnly",
@@ -346,7 +351,7 @@ function delegate(modelName: string): Delegate {
 
 // Tables a database trigger keeps immutable, deletable only through the
 // test-purge exception (app.audit_purge = 'test' in a dev-marked database).
-const PURGE_GUARDED_MODELS = new Set(["RawPunch", "ManualAttendanceEntry", "AttendanceOverride", "ShiftOverride", "LeaveDayRelease", "AttendancePeriodLock", "PayrollItemVersion", "PayrollItemConfirmation", "PayrollApproval", "PayrollEvent", "EmployeeSalary", "EmployeeSalaryLine", "PayrollSalaryRevision", "PayrollAdjustment", "PayrollRun", "PayrollRunItem", "PayrollRunLine", "PayrollPeriodLock", "PayrollRunRelease", "Payslip", "BankTransferBatch", "BankTransferRow", "PayrollOutput", "PayrollSetupSignoff", "DirectorActionNotice", "DirectorActionReceipt", "RolePermissionRemoval", "HrCapabilitySwitch"]);
+const PURGE_GUARDED_MODELS = new Set(["RawPunch", "ManualAttendanceEntry", "AttendanceOverride", "ShiftOverride", "LeaveDayRelease", "AttendancePeriodLock", "PayrollItemVersion", "PayrollItemConfirmation", "PayrollApproval", "PayrollEvent", "EmployeeSalary", "EmployeeSalaryLine", "PayrollSalaryRevision", "PayrollAdjustment", "PayrollRun", "PayrollRunItem", "PayrollRunLine", "PayrollPeriodLock", "PayrollRunRelease", "Payslip", "BankTransferBatch", "BankTransferRow", "PayrollOutput", "PayrollSetupSignoff", "DirectorActionNotice", "DirectorActionReceipt", "RolePermissionRemoval", "HrCapabilitySwitch", "PayrollSalaryHold", "PayrollSalaryRelease", "PayrollMonthlyInput", "PayrollInputBatch", "RemoteWorkMark", "RemoteAttendanceEvent"]);
 
 // PEEPS-BEGIN assets
 for (const m of ["Asset", "AssetAssignment", "AssetEvent", "AssetSettingVersion", "AssetSettingConfirmation"]) PURGE_GUARDED_MODELS.add(m);

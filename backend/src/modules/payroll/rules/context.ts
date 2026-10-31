@@ -14,7 +14,7 @@ import { dec, type Money } from "../money";
 //   - Confirmed or Placeholder is whether a confirmation exists for that exact version and value;
 //   - stale is whether a newer version has since been written (the run must be recalculated before it can go any further).
 
-export type PinKind = "RULE" | "COMPONENT" | "STRUCTURE";
+export type PinKind = "RULE" | "RULE_OVERRIDE" | "COMPONENT" | "STRUCTURE";
 
 // What a run read, and the exact version it read. Absent `kind` means a rule and absent `live` means true, so a pin written before these existed hashes the same.
 //   live: false   a figure that was FROZEN earlier and is not re-read: the structure, components and rounding a salary row was built under. A newer
@@ -53,7 +53,11 @@ export class RuleContext {
   static async load(): Promise<RuleContext> {
     const rows = await prisma.payrollItemVersion.findMany({ where: { kind: "RULE" }, orderBy: [{ key: "asc" }, { version: "asc" }] });
     const latest = new Map<string, Current>();
-    for (const r of rows) latest.set(r.key, { version: r.version, valueHash: r.valueHash, value: r.value });
+    // A version authored by nobody is a figure an older build shipped "from memory". It is never used: that rule is Not set until a director enters it.
+    for (const r of rows) {
+      if (r.authorUserId === null) continue;
+      latest.set(r.key, { version: r.version, valueHash: r.valueHash, value: r.value });
+    }
     return new RuleContext(latest);
   }
 
@@ -61,6 +65,12 @@ export class RuleContext {
    * A rule that may legitimately have no value yet. Returns null (and pins it as "not set", which the gate and the watermark treat as a Placeholder)
    * rather than stopping the calculation; once it has a value, the run is stale until it is calculated again.
    */
+  /** A rule that is genuinely optional (nothing changes without it): its value if there is one, else null, and a missing value is NOT pinned as "not set", so it never turns a run into a test. */
+  ifSet<T = unknown>(key: string): T | null {
+    if (!RULE_BY_KEY[key]) throw new Error(`There is no payroll rule called ${key}`);
+    return this.current.has(key) ? this.rule<T>(key) : null;
+  }
+
   optional<T = unknown>(key: string): T | null {
     if (!RULE_BY_KEY[key]) throw new Error(`There is no payroll rule called ${key}`);
     if (!this.current.has(key)) {
@@ -136,7 +146,7 @@ const pinKind = (p: RulePin): PinKind => p.kind ?? "RULE";
 
 function pinLabel(p: RulePin): string {
   const kind = pinKind(p);
-  const base = kind === "RULE" ? (RULE_BY_KEY[p.key]?.label ?? p.key) : kind === "COMPONENT" ? `Salary component ${p.key} (version ${p.version})` : `Salary structure ${p.key} (version ${p.version})`;
+  const base = kind === "RULE" ? (RULE_BY_KEY[p.key]?.label ?? p.key) : kind === "RULE_OVERRIDE" ? `Rule override ${p.key.split("~").slice(0, 3).join(" / ")} (version ${p.version})` : kind === "COMPONENT" ? `Salary component ${p.key} (version ${p.version})` : `Salary structure ${p.key} (version ${p.version})`;
   return p.unset ? `${base} (not set)` : base;
 }
 

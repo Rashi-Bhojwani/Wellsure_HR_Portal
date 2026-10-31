@@ -205,12 +205,12 @@ export async function getMyProfile(): Promise<EmployeeProfile> {
   return data;
 }
 
-export async function revealStatutory(id: string): Promise<{ pan: string | null; aadhaar: string | null; uan: string | null; esiNumber: string | null }> {
-  const { data } = await apiClient.get(`/api/employees/${id}/statutory/reveal`);
+export async function revealStatutory(id: string, reason: string): Promise<{ pan: string | null; aadhaar: string | null; uan: string | null; esiNumber: string | null }> {
+  const { data } = await apiClient.get(`/api/employees/${id}/statutory/reveal`, { params: { reason } });
   return data;
 }
-export async function revealBank(id: string): Promise<{ accountHolderName: string; accountNumber: string; ifsc: string; bankName: string; branchName: string }> {
-  const { data } = await apiClient.get(`/api/employees/${id}/bank/reveal`);
+export async function revealBank(id: string, reason: string): Promise<{ accountHolderName: string; accountNumber: string; ifsc: string; bankName: string; branchName: string }> {
+  const { data } = await apiClient.get(`/api/employees/${id}/bank/reveal`, { params: { reason } });
   return data;
 }
 

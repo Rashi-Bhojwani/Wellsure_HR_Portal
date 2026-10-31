@@ -16,6 +16,8 @@ import { notSetChoices, type ComponentValue, type StructureValue } from "./schem
 export interface RoundingRule {
   mode: RoundingMode | "NONE";
   scale: number;
+  /** Heads rounded differently from the general rule ("Rounding of particular heads"); a head not listed uses this rule. */
+  perHead?: Record<string, { mode: RoundingMode | "NONE"; scale: number }>;
 }
 
 export interface BreakupLine {
@@ -66,6 +68,10 @@ export function computeBreakup(input: BreakupInput): Breakup {
   const { structure } = input;
   const monthlyCtc = roundWith(input.annualCtc.dividedBy(MONTHS_IN_YEAR), rounding);
   const included = new Set<string>(structure.ctcIncludes);
+  const ruleFor = (code: string): RoundingRule & { mode: RoundingMode } => {
+    const own = rounding.perHead?.[code];
+    return own && own.mode !== "NONE" ? { mode: own.mode, scale: own.scale } : rounding;
+  };
 
   const amounts = new Map<string, Money>();
   const lines: BreakupLine[] = [];
@@ -86,7 +92,13 @@ export function computeBreakup(input: BreakupInput): Breakup {
     } else if (calc.method === "PERCENT") {
       const of = calc.of === "CTC" ? monthlyCtc : amounts.get(calc.of);
       if (!of) throw new BreakupError("STRUCTURE_INVALID", `${line.component} is a percentage of ${calc.of}, which comes later or is not in the structure.`);
-      amount = roundWith(percentOf(of, dec(calc.percent)), rounding);
+      amount = roundWith(percentOf(of, dec(calc.percent)), ruleFor(line.component));
+    } else if (calc.method === "SLAB") {
+      const key = calc.of === "CTC" ? monthlyCtc : amounts.get(calc.of);
+      if (!key) throw new BreakupError("STRUCTURE_INVALID", `${line.component} is looked up by ${calc.of}, which comes later or is not in the structure.`);
+      const row = calc.slabs.find((s) => key.greaterThanOrEqualTo(dec(s.from)) && (s.to === null || key.lessThan(dec(s.to))));
+      if (!row) throw new BreakupError("SLAB_NO_MATCH", `${line.component} is looked up by ${calc.of}, and ${fixed(key, rounding.scale)} is in none of the table's rows.`, { component: line.component, value: canonicalDecimal(key) });
+      amount = dec(row.amount);
     } else if (calc.method === "FIXED_AMOUNT") {
       amount = dec(calc.amount);
     } else if (calc.method === "PER_PERSON") {
@@ -97,7 +109,7 @@ export function computeBreakup(input: BreakupInput): Breakup {
     } else {
       const vars: Record<string, Money> = { CTC: monthlyCtc, ANNUAL_CTC: input.annualCtc };
       for (const [name, value] of amounts) vars[name] = value;
-      amount = roundWith(evaluateFormula(calc.formula, vars), rounding);
+      amount = roundWith(evaluateFormula(calc.formula, vars), ruleFor(line.component));
       if (amount.isNegative()) throw new BreakupError("AMOUNT_NEGATIVE", `The formula for ${line.component} gives a negative amount (${fixed(amount, rounding.scale)}).`);
     }
     if (amount !== null) amounts.set(line.component, amount);

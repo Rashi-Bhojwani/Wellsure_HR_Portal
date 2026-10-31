@@ -7,6 +7,8 @@ import * as config from "./configController";
 import * as processRuns from "./processController";
 import * as manual from "./manual/controller";
 import * as info from "./info/controller";
+import * as remote from "./remote/controller";
+import * as remoteSvc from "./remote/service";
 import * as overrides from "./override/controller";
 import * as swipes from "./swipes/controller";
 import * as exceptionsQueue from "./exceptions/controller";
@@ -193,3 +195,25 @@ attendanceRouter.get("/swipes/options", canSeeSwipes, swipes.options);
 attendanceRouter.get("/swipes/export", canSeeSwipes, validate({ query: swipesQuerySchema }), swipes.exportXlsx);
 attendanceRouter.post("/regularizations/:id/approve", canDecideRegularizations, validate({ params: idParamsSchema, body: regularizationDecisionSchema }), info.approve);
 attendanceRouter.post("/regularizations/:id/reject", canDecideRegularizations, validate({ params: idParamsSchema, body: regularizationDecisionSchema }), info.reject);
+
+// ── Stage 5a: remote attendance (docs/plans/STAGE_5A_PLAN.md) ──
+// The employee's own routes (SELF: the service reads the signed-in person's own record and nobody else's).
+attendanceRouter.get("/me/remote/today", remote.today);
+attendanceRouter.post("/me/remote/check-in", remote.checkIn);
+attendanceRouter.post("/me/remote/check-out", remote.checkOut);
+attendanceRouter.get("/me/remote/records", validate({ query: remote.myRecordsQuerySchema }), remote.mine);
+attendanceRouter.post("/me/remote/records/:id/requests", validate({ params: remote.idParamsSchema, body: remoteSvc.requestSchema }), remote.raise);
+// The directors' routes. The key is one only a Super Admin holds, and the service checks that the person is a director on every call: HR, managers and the Developer role are refused.
+const directors = requirePermission("attendance.unlock");
+attendanceRouter.get("/remote/marks", directors, remote.marks);
+attendanceRouter.post("/remote/marks", directors, validate({ body: remoteSvc.markSchema }), remote.mark);
+attendanceRouter.get("/remote/records", directors, validate({ query: remoteSvc.listSchema }), remote.records);
+attendanceRouter.post("/remote/records/:id/decision", directors, validate({ params: remote.idParamsSchema, body: remoteSvc.decisionSchema }), remote.decision);
+attendanceRouter.post("/remote/records/:id/reopen", directors, validate({ params: remote.idParamsSchema, body: remoteSvc.reopenSchema }), remote.reopen);
+attendanceRouter.post("/remote/bulk-approve", directors, validate({ body: remoteSvc.bulkApproveSchema }), remote.bulkApprove);
+attendanceRouter.post("/remote/bulk-reject", directors, validate({ body: remoteSvc.bulkRejectSchema }), remote.bulkReject);
+attendanceRouter.get("/remote/requests", directors, remote.requests);
+attendanceRouter.post("/remote/requests/:id/resolve", directors, validate({ params: remote.idParamsSchema, body: remoteSvc.resolveSchema }), remote.resolve);
+attendanceRouter.get("/remote/report", directors, validate({ query: remoteSvc.reportSchema }), remote.report);
+attendanceRouter.get("/remote/settings", directors, remote.settings);
+attendanceRouter.put("/remote/settings", directors, validate({ body: remoteSvc.settingsSchema }), remote.putSettings);

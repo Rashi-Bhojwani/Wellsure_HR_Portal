@@ -42,9 +42,17 @@ export interface RunRules {
   arrearsPfEsi: "FOLLOW_COMPONENT_FLAGS" | "EXCLUDE" | null;
   encashPfApplicable: boolean | null;
   encashPayoutRule: "FIRST_RUN_AFTER_COMMIT" | "SAME_MONTH_AS_COMMIT" | null;
+  /** Needed only when the run has arrears in it: whether an arrear on a base head feeds heads that are a percentage of it. */
+  arrearOnArrear: boolean | null;
+  /** Needed only when the run pays loss of pay back. */
+  lopReversal: { lookbackMonths: number; overrideAllowed: boolean } | null;
+  /** Heads rounded differently from the general rule; absent heads use `lineRounding`. */
+  headRounding: Record<string, RoundingRule>;
 }
 
 export interface RuleNeeds {
+  /** The run pays loss of pay back (Stage 3.3b). */
+  reversals?: boolean;
   arrears: boolean;
   encashment: boolean;
 }
@@ -129,6 +137,9 @@ export function loadRunRules(ctx: RuleContext, needs: RuleNeeds): RunRules {
     arrearsPfEsi: needs.arrears ? take<"FOLLOW_COMPONENT_FLAGS" | "EXCLUDE">("ARREARS_PF_ESI") : null,
     encashPfApplicable: needs.encashment ? take<boolean>("ENCASH_PF_APPLICABLE") : null,
     encashPayoutRule: needs.encashment ? take<"FIRST_RUN_AFTER_COMMIT" | "SAME_MONTH_AS_COMMIT">("ENCASH_PAYOUT_RULE") : null,
+    arrearOnArrear: needs.arrears ? take<boolean>("ARREAR_ON_ARREAR") : null,
+    lopReversal: needs.reversals ? { lookbackMonths: take<number>("LOP_REVERSAL_LOOKBACK_MONTHS") ?? 0, overrideAllowed: take<boolean>("LOP_REVERSAL_OVERRIDE_ALLOWED") ?? false } : null,
+    headRounding: ctx.ifSet<Record<string, RoundingRule>>("HEAD_ROUNDING") ?? {},
   };
   if (missing.length) throw new RulesMissingError(missing);
   return rules;
@@ -143,4 +154,35 @@ export function missingRulesFor(ctx: RuleContext, needs: RuleNeeds): MissingRule
     if (err instanceof RulesMissingError) return err.missing;
     throw err;
   }
+}
+
+/**
+ * The rules one person is calculated under: the company's, with any department or employee override laid over the parameter it names. Pure. The company's own values are
+ * never touched; an override that names no rule this function knows is ignored (the service only lets the overridable ones in).
+ */
+export function applyRuleOverrides(rules: RunRules, overrides: ReadonlyArray<{ ruleKey: string; value: unknown }> | undefined): RunRules {
+  if (!overrides || overrides.length === 0) return rules;
+  const out: RunRules = { ...rules, pf: { ...rules.pf }, esi: { ...rules.esi } };
+  for (const o of overrides) {
+    const v = o.value;
+    switch (o.ruleKey) {
+      case "PF_EMPLOYEE_RATE": out.pf.employeeRate = dec(v as string); break;
+      case "PF_EPS_RATE": out.pf.epsRate = dec(v as string); break;
+      case "PF_EPF_ER_RATE": out.pf.epfErRate = dec(v as string); break;
+      case "PF_EDLI_RATE": out.pf.edliRate = dec(v as string); break;
+      case "PF_ADMIN_RATE": out.pf.adminRate = dec(v as string); break;
+      case "PF_WAGE_CEILING": out.pf.ceiling = dec(v as string); break;
+      case "PF_CEILING_MODE": out.pf.ceilingMode = v as RunRules["pf"]["ceilingMode"]; break;
+      case "PF_ELIGIBLE_TYPES": out.pf.eligibleTypes = v as string[]; break;
+      case "ESI_EMPLOYEE_RATE": out.esi.employeeRate = dec(v as string); break;
+      case "ESI_EMPLOYER_RATE": out.esi.employerRate = dec(v as string); break;
+      case "ESI_WAGE_CEILING": out.esi.ceiling = dec(v as string); break;
+      case "ESI_PERIOD_RULE": out.esi.periodRule = v as RunRules["esi"]["periodRule"]; break;
+      case "ESI_ELIGIBLE_TYPES": out.esi.eligibleTypes = v as string[]; break;
+      case "PT_SLABS": out.ptSlabs = v as PtTable; break;
+      case "LWF_TABLE": out.lwfTable = v as LwfTable; break;
+      default: break;
+    }
+  }
+  return out;
 }

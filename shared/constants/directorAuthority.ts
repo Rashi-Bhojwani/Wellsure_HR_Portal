@@ -9,6 +9,7 @@ export const DIRECTOR_STEPS = [
   "PERIOD_FINALISE",
   "PERIOD_UNLOCK",
   "SALARY_REVISION",
+  "MONTHLY_INPUTS",
   "PAYSLIP_PUBLISH",
   "BANK_FILE",
   "SETUP_SIGNOFF",
@@ -18,7 +19,7 @@ export const DIRECTOR_STEPS = [
 export type DirectorStep = (typeof DIRECTOR_STEPS)[number];
 
 /** The steps whose choice is required (no default). Settings and a director's own identity entry stay "act alone, other is told" and may optionally be chosen too. */
-export const DIRECTOR_CHOICE_REQUIRED_STEPS = ["RULE_CONFIRM", "RUN_APPROVAL", "PERIOD_FINALISE", "PERIOD_UNLOCK", "SALARY_REVISION", "PAYSLIP_PUBLISH", "BANK_FILE", "SETUP_SIGNOFF"] as const satisfies readonly DirectorStep[];
+export const DIRECTOR_CHOICE_REQUIRED_STEPS = ["RULE_CONFIRM", "RUN_APPROVAL", "PERIOD_FINALISE", "PERIOD_UNLOCK", "SALARY_REVISION", "MONTHLY_INPUTS", "PAYSLIP_PUBLISH", "BANK_FILE", "SETUP_SIGNOFF"] as const satisfies readonly DirectorStep[];
 export const isChoiceRequired = (step: string): boolean => (DIRECTOR_CHOICE_REQUIRED_STEPS as readonly string[]).includes(step);
 /** The recommendation shown on the screen: switch the second-director check ON for these. */
 export const DIRECTOR_RECOMMENDED_SECOND_STEPS = ["RUN_APPROVAL", "BANK_FILE", "SALARY_REVISION", "RULE_CONFIRM"] as const satisfies readonly DirectorStep[];
@@ -39,7 +40,8 @@ export const DIRECTOR_STEP_INFO: Record<DirectorStep, DirectorStepInfo> = {
   RUN_APPROVAL: { label: "Approving a payroll run", covers: "Approving a calculated run." },
   PERIOD_FINALISE: { label: "Closing a payroll period", covers: "Closing (finalising) a period after its run is approved." },
   PERIOD_UNLOCK: { label: "Unlocking a closed period", covers: "Unlocking a closed period. Never possible once payslips are published or a bank file exists." },
-  SALARY_REVISION: { label: "Salary revisions", covers: "Making, cancelling and applying a salary revision. A director's own pay is always set by the other director, whatever this says." },
+  SALARY_REVISION: { label: "Salary revisions", covers: "Making, cancelling and applying a salary revision. A director may set their own pay; it is audited and the other director is told." },
+  MONTHLY_INPUTS: { label: "Confirming a month's Monthly Inputs", covers: "Confirming the figures entered for a month (one-off earnings and deductions such as incentives or advances) before payroll may use them. Any later change voids the confirmation." },
   PAYSLIP_PUBLISH: { label: "Publishing payslips", covers: "Publishing payslips to employees." },
   BANK_FILE: { label: "The bank file", covers: "Generating the bank transfer file. The system never moves money." },
   SETUP_SIGNOFF: { label: "Sign-off of people's pay details", covers: "Signing off salaries, bank accounts and PF numbers before the first real run." },

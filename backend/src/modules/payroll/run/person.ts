@@ -1,9 +1,10 @@
 import { HOLD_REASON_LABEL, STATUTORY_LINE_CODES, STATUTORY_LINE_LABEL, type HoldReason } from "@shared/constants/payrollRun";
-import { ARREARS_CODE } from "@shared/constants/payrollSalary";
+import { ARREARS_CODE, HOLD_RELEASE_CODE, LOP_REVERSAL_CODE } from "@shared/constants/payrollSalary";
 import { payrollHash } from "../hash";
 import { ZERO, canonicalDecimal, intDec, sum, type Money } from "../money";
 import { applyShare } from "../salary/arrears";
 import type { ComponentValue } from "../salary/schemas";
+import { applyRuleOverrides } from "./rules";
 import { computeDayFigures, countDays, iso, segmentFactor, type DayFigures } from "./days";
 import { computeEsi, computeLwf, computePf, computePt, resolveState, roundByRule } from "./statutory";
 import type { AdjustmentIn, CalcContext, ExceptionOut, ItemOut, LineOut, PersonInput } from "./types";
@@ -60,7 +61,8 @@ function excluded(input: PersonInput, reason: HoldReason, detail: string, inputs
 const listDates = (dates: readonly string[]) => (dates.length <= 5 ? dates.join(", ") : `${dates.slice(0, 5).join(", ")} and ${dates.length - 5} more`);
 
 export function calculatePerson(input: PersonInput, ctx: CalcContext): ItemOut {
-  const { rules } = ctx;
+  // The company's rules, with this person's department or employee overrides laid over the parameters they name.
+  const rules = applyRuleOverrides(ctx.rules, input.ruleOverrides);
   const digest = payrollHash(input.days.map((d) => [iso(d.date), d.status, c(d.lopDays)]));
   const baseInputs: Record<string, unknown> = {
     cycle: { start: iso(ctx.cycle.start), end: iso(ctx.cycle.end), label: ctx.cycle.label },
@@ -120,7 +122,8 @@ export function calculatePerson(input: PersonInput, ctx: CalcContext): ItemOut {
   const comps = [...acc.values()].sort((x, y) => x.order - y.order || x.code.localeCompare(y.code));
   for (const a of comps) {
     const raw = a.prorates ? a.numerator.dividedBy(commonDen) : (a.fixedAmount ?? ZERO);
-    const amount = roundByRule(raw, rules.lineRounding, a.label);
+    const lineRule = rules.headRounding[a.code] ?? rules.lineRounding;
+    const amount = roundByRule(raw, lineRule, a.label);
     const line: LineOut = {
       code: a.code,
       label: a.label,
@@ -128,7 +131,7 @@ export function calculatePerson(input: PersonInput, ctx: CalcContext): ItemOut {
       source: "COMPONENT",
       sourceRef: null,
       amount,
-      basis: { prorates: a.prorates, parts: a.parts, unrounded: c(raw), rounding: rules.lineRounding, pfApplicable: a.pf, esiApplicable: a.esi },
+      basis: { prorates: a.prorates, parts: a.parts, unrounded: c(raw), rounding: lineRule, pfApplicable: a.pf, esiApplicable: a.esi },
     };
     if (a.type === "EARNING") {
       earningLines.push(line);
@@ -141,6 +144,17 @@ export function calculatePerson(input: PersonInput, ctx: CalcContext): ItemOut {
   // ── Adjustments, arrears and year-end encashment: each a line of its own, carrying where it came from ──
   let adjustmentPf = ZERO;
   for (const adj of input.adjustments) {
+    if (adj.source === "LOP_REVERSAL") {
+      const rev = reversalLines(adj, ctx);
+      for (const l of rev.lines) (l.kind === "EARNING" ? earningLines : deductionLines).push(l);
+      if (adj.direction === "EARNING") {
+        pfWages = pfWages.plus(rev.pf);
+        esiWages = esiWages.plus(rev.esi);
+        adjustmentPf = adjustmentPf.plus(rev.pf);
+      }
+      notices.push(...rev.notices);
+      continue;
+    }
     const line = adjustmentLine(adj, ctx);
     if (adj.direction === "EARNING") earningLines.push(line.line);
     else deductionLines.push(line.line);
@@ -156,6 +170,7 @@ export function calculatePerson(input: PersonInput, ctx: CalcContext): ItemOut {
 
   // ── PF ──
   const inputsOut: Record<string, unknown> = { ...baseInputs };
+  if (input.ruleOverrides && input.ruleOverrides.length > 0) inputsOut.ruleOverrides = input.ruleOverrides.map((o) => ({ rule: o.ruleKey, level: o.level, item: o.itemKey, version: o.version, hash: o.valueHash, registrationRef: o.registrationRef }));
   const statutoryDeductions: LineOut[] = [];
   const pfCovered = rules.pf.eligibleTypes.includes(input.employmentType);
   if (!pfCovered) notices.push(`Provident fund does not apply to ${input.employmentType.toLowerCase()} staff under the rule "PF: employment types covered".`);
@@ -248,6 +263,7 @@ export function calculatePerson(input: PersonInput, ctx: CalcContext): ItemOut {
     else exceptions.push({ code: "NEGATIVE_NET", severity: "BLOCKING", message: `Deductions (${c(deductions)}) are more than earnings (${c(gross)}), so net pay is negative (${c(netPay)}). Resolve it before the run can be submitted.` });
   } else if (netPay.isZero()) holds.push("ZERO_NET");
   if (!input.hasBankAccount) holds.push("NO_BANK_ACCOUNT");
+  if (input.directorHold) holds.push("DIRECTOR_HOLD");
   const status = holds.length > 0 ? ("HELD" as const) : ("PAYABLE" as const);
 
   const last = input.segments.at(-1)!;
@@ -302,6 +318,34 @@ export function calculatePerson(input: PersonInput, ctx: CalcContext): ItemOut {
   };
 }
 
+// ── A loss-of-pay reversal: a line for each prorated head, linked to the month it belongs to ──
+
+function reversalLines(adj: AdjustmentIn, ctx: CalcContext): { lines: LineOut[]; pf: Money; esi: Money; notices: string[] } {
+  const notices: string[] = [];
+  const follow = ctx.rules.arrearsPfEsi === "FOLLOW_COMPONENT_FLAGS";
+  let pf = ZERO;
+  let esi = ZERO;
+  const lines: LineOut[] = [];
+  for (const part of adj.breakdown ?? []) {
+    const head = ctx.components.current.get(part.component)?.value;
+    const link = head?.reversalHead ? ctx.components.current.get(head.reversalHead)?.value : undefined;
+    if (head?.reversalHead && !link) notices.push(`The reversal head ${head.reversalHead} of ${part.component} has no version on record, so its line is carried under the general loss-of-pay reversal head.`);
+    if (follow && head?.pfApplicable) pf = pf.plus(part.amount);
+    if (follow && head?.esiApplicable) esi = esi.plus(part.amount);
+    const earning = part.amount.greaterThan(ZERO);
+    lines.push({
+      code: link && head?.reversalHead ? head.reversalHead : LOP_REVERSAL_CODE,
+      label: `${link?.payslipLabel ?? "Loss of pay reversal"}: ${head?.payslipLabel ?? part.component} for ${adj.periodLabel ?? "an earlier month"}`,
+      kind: earning ? "EARNING" : "DEDUCTION",
+      source: "LOP_REVERSAL",
+      sourceRef: adj.id,
+      amount: part.amount.abs(),
+      basis: { kind: "LOP_REVERSAL", head: part.component, sourceMonth: adj.periodLabel ?? null, correctionKey: adj.sourceRef, reason: adj.reason, signed: c(part.amount), reversalHead: head?.reversalHead ?? null },
+    });
+  }
+  return { lines, pf, esi, notices };
+}
+
 // ── An adjustment, an arrears row or a year-end encashment as a line ──
 
 function adjustmentLine(adj: AdjustmentIn, ctx: CalcContext): { line: LineOut; pf: Money; esi: Money; notices: string[] } {
@@ -323,6 +367,15 @@ function adjustmentLine(adj: AdjustmentIn, ctx: CalcContext): { line: LineOut; p
       notices,
     };
   }
+  if (adj.source === "HOLD_RELEASE") {
+    // Pays a month whose salary a director held and has now released. Its statutory deductions were worked out, and stay, in the held month's own run: this only moves the payment.
+    return {
+      line: { code: HOLD_RELEASE_CODE, label: `Held salary released for ${adj.periodLabel ?? "an earlier month"}`, kind: "EARNING", source: "HOLD_RELEASE", sourceRef: adj.id, amount: adj.amount, basis: { kind: "HOLD_RELEASE", holdId: adj.sourceRef, sourceMonth: adj.periodLabel ?? null, reason: adj.reason, netOfStatutory: true } },
+      pf: ZERO,
+      esi: ZERO,
+      notices,
+    };
+  }
   if (adj.source === "YEAR_END_ENCASHMENT") {
     const pf = ctx.rules.encashPfApplicable ? adj.amount : ZERO;
     return {
@@ -333,6 +386,15 @@ function adjustmentLine(adj: AdjustmentIn, ctx: CalcContext): { line: LineOut; p
     };
   }
   const current = ctx.components.current.get(adj.componentCode);
+  if (adj.source === "MONTHLY_INPUT") {
+    const flags = current?.value;
+    return {
+      line: { code: adj.componentCode, label: flags?.payslipLabel ?? adj.componentCode, kind: adj.direction, source: "MONTHLY_INPUT", sourceRef: adj.sourceRef, amount: adj.amount, basis: { kind: "MONTHLY_INPUT", month: adj.periodLabel ?? null, componentVersion: current?.version ?? null, pfApplicable: flags?.pfApplicable === true, esiApplicable: flags?.esiApplicable === true } },
+      pf: flags?.pfApplicable ? adj.amount : ZERO,
+      esi: flags?.esiApplicable ? adj.amount : ZERO,
+      notices: current ? notices : [...notices, `The pay head ${adj.componentCode} used by a Monthly Input has no version on record.`],
+    };
+  }
   if (!current) notices.push(`The component ${adj.componentCode} used by an adjustment has no version on record.`);
   const flags = current?.value;
   return {

@@ -32,6 +32,7 @@ import { ZERO, canonicalDecimal, dec, percentOf, roundTo, type Money } from "../
 import { namesOfUsers } from "../names";
 import { RuleContext, RuleNotSetError, type RulePin } from "../rules/context";
 import { decimalText } from "../rules/schemas";
+import { dependentHeads } from "./schemas";
 import { arrearsToJson, computeArrears, getArrearsBasisProvider, lockedCyclesFrom, type CycleArrears } from "./arrears";
 import { computeBreakup, type BreakupLine, type RoundingRule } from "./breakup";
 import { assertNotOwnPay, employeeIdOfUser, userIdsOfEmployees } from "./guards";
@@ -135,7 +136,7 @@ async function ruleOrBlocker<T>(ctx: RuleContext, key: string, blockers: string[
     return ctx.rule<T>(key);
   } catch (err) {
     if (err instanceof RuleNotSetError) {
-      blockers.push(err.message);
+      if (!blockers.includes(err.message)) blockers.push(err.message);
       return null;
     }
     throw err;
@@ -281,10 +282,13 @@ export async function computeRevisionPlan(rev: ResolvedRevision): Promise<Revisi
     }
     if (lockedCycles.length && provider) {
       try {
+        const arrearOnArrear = await ruleOrBlocker<boolean>(ctx, "ARREAR_ON_ARREAR", blockers);
+        if (arrearOnArrear === null) continue;
+        const structureForHeads = await structureOf(structureRef.key, structureRef.version);
         const prorates = new Map<string, boolean>();
         for (const l of plan.next.lines) prorates.set(l.component, await proratesOf(l.component, l.componentVersion));
         for (const l of previous?.lines ?? []) if (!prorates.has(l.component)) prorates.set(l.component, await proratesOf(l.component, l.version));
-        plan.arrears = await computeArrears({ employeeId, effectiveFrom: rev.effectiveFrom, old: oldBy, next: newBy, prorates, lockedCycles, rounding: typedRounding, provider });
+        plan.arrears = await computeArrears({ employeeId, effectiveFrom: rev.effectiveFrom, old: oldBy, next: newBy, prorates, lockedCycles, rounding: typedRounding, provider, ...(arrearOnArrear ? {} : { dependentHeads: dependentHeads(structureForHeads.value) }) });
       } catch (err) {
         if (!(err instanceof HttpError)) throw err;
         problem(err.message);
@@ -337,7 +341,7 @@ export async function resolveSelection(input: RevisionInput, actorUserId: string
     else ids = (await prisma.employee.findMany({ where: employedOn(day), select: { id: true } })).map((e) => e.id);
     const names = await namesOn(ids, day);
     if (own && ids.includes(own)) {
-      skipped.push({ employeeId: own, name: names.get(own) ?? "You", reason: "Your own pay: somebody else has to prepare a change to it." });
+      skipped.push({ employeeId: own, name: names.get(own) ?? "You", reason: "Your own pay is not part of a bulk change. Pick yourself by name to change it (it is recorded, and the other director is told)." });
       ids = ids.filter((i) => i !== own);
     }
     if (sel.kind !== "STRUCTURE") {

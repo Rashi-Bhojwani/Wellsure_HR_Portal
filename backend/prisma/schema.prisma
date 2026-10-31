@@ -458,19 +458,20 @@ model CostCentre {
 // ── Employees ────────────────────────────────────────────────────────────
 
 model Employee {
-  id              String         @id @default(cuid())
-  employeeCode    String         @unique @map("employee_code") // permanent login username — never reassigned, even after separation
-  officialEmail   String?        @unique @map("official_email")
-  dateOfJoining   DateTime       @map("date_of_joining") @db.Date
-  lastWorkingDate DateTime?      @map("last_working_date") @db.Date
+  remoteRecords   RemoteAttendanceRecord[]
+  id              String                   @id @default(cuid())
+  employeeCode    String                   @unique @map("employee_code") // permanent login username — never reassigned, even after separation
+  officialEmail   String?                  @unique @map("official_email")
+  dateOfJoining   DateTime                 @map("date_of_joining") @db.Date
+  lastWorkingDate DateTime?                @map("last_working_date") @db.Date
   // Why they left — set when a separation completes, or directly by the
   // Excel import for ex-employees migrated from greytHR, who have a last
   // working day and a reason but no Separation row here (Phase 5 G prep).
-  exitReason      String?        @map("exit_reason")
-  employmentType  EmploymentType @map("employment_type")
-  status          EmployeeStatus @default(ACTIVE)
-  createdAt       DateTime       @default(now()) @map("created_at")
-  updatedAt       DateTime       @updatedAt @map("updated_at")
+  exitReason      String?                  @map("exit_reason")
+  employmentType  EmploymentType           @map("employment_type")
+  status          EmployeeStatus           @default(ACTIVE)
+  createdAt       DateTime                 @default(now()) @map("created_at")
+  updatedAt       DateTime                 @updatedAt @map("updated_at")
 
   user            User?
   personal        EmployeePersonal?
@@ -1551,6 +1552,8 @@ model HelpdeskCategory {
   code                      String    @unique
   name                      String
   isSensitive               Boolean   @default(false) @map("is_sensitive")
+  /// Owner decision: tickets in this category are the directors' alone. HR never sees them, whatever else it holds; only a director can change this flag.
+  directorsOnly             Boolean   @default(false) @map("directors_only")
   defaultAssigneeEmployeeId String?   @map("default_assignee_employee_id")
   defaultAssignee           Employee? @relation("HelpdeskCategoryDefaultAssignee", fields: [defaultAssigneeEmployeeId], references: [id])
   isActive                  Boolean   @default(true) @map("is_active")
@@ -2452,6 +2455,7 @@ model LeaveDayRelease {
 // Actor columns are plain text, not foreign keys: nothing that happens to a user can alter these rows (as for audit_logs).
 enum PayrollItemKind {
   RULE
+  RULE_OVERRIDE
   COMPONENT
   STRUCTURE
   BANK_TEMPLATE
@@ -2466,6 +2470,7 @@ enum PayrollApprovalSubject {
   PERIOD_UNLOCK
   RULE_CONFIRM
   SALARY_REVISION
+  MONTHLY_INPUTS
 }
 
 enum PayrollApprovalStatus {
@@ -2477,18 +2482,18 @@ enum PayrollApprovalStatus {
 }
 
 model PayrollItemVersion {
-  id           String          @id @default(cuid())
-  kind         PayrollItemKind
-  key          String
-  version      Int
-  value        Json
-  valueHash    String          @map("value_hash")
-  note         String          @default("")
+  id            String          @id @default(cuid())
+  kind          PayrollItemKind
+  key           String
+  version       Int
+  value         Json
+  valueHash     String          @map("value_hash")
+  note          String          @default("")
   // Where the number came from (the notification, circular or letter), in the author's words, and the date it starts to apply. Required for a statutory rule; confirmed by a different director.
-  sourceNote   String          @default("") @map("source_note")
-  effectiveFrom DateTime?      @map("effective_from") @db.Date
-  authorUserId String?         @map("author_user_id") // null = the shipped placeholder
-  createdAt    DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  sourceNote    String          @default("") @map("source_note")
+  effectiveFrom DateTime?       @map("effective_from") @db.Date
+  authorUserId  String?         @map("author_user_id") // null = the shipped placeholder
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@unique([kind, key, version])
   @@map("payroll_item_versions")
@@ -2563,6 +2568,8 @@ enum SalaryChangeReason {
 
 enum AdjustmentSource {
   MANUAL
+  HOLD_RELEASE
+  LOP_REVERSAL
   SALARY_ARREARS
   IMPORT
   YEAR_END_ENCASHMENT
@@ -2710,6 +2717,9 @@ enum PayrollLineKind {
 enum PayrollLineSource {
   COMPONENT
   ADJUSTMENT
+  HOLD_RELEASE
+  LOP_REVERSAL
+  MONTHLY_INPUT
   ARREARS
   ENCASHMENT
   PF
@@ -3023,17 +3033,17 @@ enum PayrollSetupArea {
 }
 
 model PayrollSetupSignoff {
-  id             String           @id @default(cuid())
+  id             String            @id @default(cuid())
   area           PayrollSetupArea
-  contentHash    String           @map("content_hash")
+  contentHash    String            @map("content_hash")
   covered        Int
   total          Int
   note           String
-  authorUserIds  Json             @default("[]") @map("author_user_ids")
+  authorUserIds  Json              @default("[]") @map("author_user_ids")
   /// D2: DIRECTOR_AUTHORITY when the signer was allowed to sign what they entered themselves (the other director was told); SECOND_DIRECTOR otherwise.
   authority      ApprovalAuthority @default(SECOND_DIRECTOR)
-  signedByUserId String           @map("signed_by_user_id")
-  signedAt       DateTime         @default(now()) @map("signed_at") @db.Timestamptz(3)
+  signedByUserId String            @map("signed_by_user_id")
+  signedAt       DateTime          @default(now()) @map("signed_at") @db.Timestamptz(3)
 
   @@index([area, signedAt])
   @@map("payroll_setup_signoffs")
@@ -3117,6 +3127,189 @@ model HrCapabilitySwitch {
   @@unique([capability, subjectKind, subjectKey, effectiveFrom])
   @@index([subjectKind, subjectKey])
   @@map("hr_capability_switches")
+}
+
+// ── Stage 3.3c — a director's hold on one person's salary for one month, and its release (docs/plans/PAYROLL_MODEL_PLAN.md) ──
+// Append-only, written only by a Super Admin (a database trigger holds that whatever the code does). A hold with no release is "held". employee_id and the actor
+// columns are plain text: nothing that happens to an employee or a user can alter these records.
+model PayrollSalaryHold {
+  id           String   @id @default(cuid())
+  employeeId   String   @map("employee_id")
+  cycleStart   DateTime @map("cycle_start") @db.Date
+  reason       String
+  heldByUserId String   @map("held_by_user_id")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  release PayrollSalaryRelease?
+
+  @@unique([employeeId, cycleStart])
+  @@map("payroll_salary_holds")
+}
+
+model PayrollSalaryRelease {
+  id               String            @id @default(cuid())
+  holdId           String            @unique @map("hold_id")
+  hold             PayrollSalaryHold @relation(fields: [holdId], references: [id])
+  note             String
+  releasedByUserId String            @map("released_by_user_id")
+  /**
+   * The pending adjustment that pays the held amount, when the held month's run was already final; null when the hold was lifted before the run was final.
+   */
+  adjustmentId     String?           @map("adjustment_id")
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("payroll_salary_releases")
+}
+
+// ── Stage 4 — Monthly Inputs (docs/plans/STAGE_4_PLAN.md) ──
+// One row per entry of one figure: a pay head flagged "takes its value from Monthly Inputs", for one person, for one payroll month. Append-only; the current figure of
+// a cell is its newest row. `cleared` returns the cell to blank (nothing entered), which is not the same as zero. Only a Super Admin writes (a trigger holds that
+// whatever the code does). employee_id and the actor are plain text: nothing that happens to an employee or a user can alter this history.
+model PayrollMonthlyInput {
+  id              String   @id @default(cuid())
+  employeeId      String   @map("employee_id")
+  componentCode   String   @map("component_code")
+  cycleStart      DateTime @map("cycle_start") @db.Date
+  amount          Decimal? @db.Decimal(20, 6) // exact; always zero or more; the head says earning or deduction. Null when cleared.
+  cleared         Boolean  @default(false)
+  reason          String
+  enteredByUserId String   @map("entered_by_user_id")
+  batchId         String?  @map("batch_id")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([cycleStart, componentCode])
+  @@index([employeeId, cycleStart, componentCode, createdAt])
+  @@map("payroll_monthly_inputs")
+}
+
+enum MonthlyInputBatchStatus {
+  PREVIEW
+  APPLIED
+  DISCARDED
+}
+
+// An uploaded file after it has been read and checked, kept so a director can look at the preview and confirm it. Nothing in it is a figure of a month until it is
+// APPLIED. The same file (by hash) can be APPLIED once (a partial unique index). A batch is only ever changed while it is a PREVIEW.
+model PayrollInputBatch {
+  id               String                  @id @default(cuid())
+  fileName         String                  @map("file_name")
+  fileHash         String                  @map("file_hash")
+  status           MonthlyInputBatchStatus @default(PREVIEW)
+  parsed           Json // the rows as read: line number, employee number, months, figures as text, problems
+  summary          Json
+  skipInvalid      Boolean                 @default(false) @map("skip_invalid")
+  uploadedByUserId String                  @map("uploaded_by_user_id")
+  appliedByUserId  String?                 @map("applied_by_user_id")
+  appliedAt        DateTime?               @map("applied_at") @db.Timestamptz(3)
+  createdAt        DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([fileHash])
+  @@map("payroll_input_batches")
+}
+
+// ── Stage 5a — remote attendance (docs/plans/STAGE_5A_PLAN.md) ──
+// A director marks who works remotely, from a date. Nobody is remote by default. Marks are append-only (the latest mark effective on a day decides) and only a Super Admin
+// writes one (a trigger holds that). The employee's day is one record: a check-in and a check-out, each a time stamped by the server (no location, no address, no device).
+enum RemoteRecordStatus {
+  OPEN
+  PENDING
+  APPROVED_FULL
+  APPROVED_HALF
+  REJECTED
+}
+
+enum RemoteHalf {
+  FIRST
+  SECOND
+}
+
+enum RemoteRejectOutcome {
+  ABSENT
+  LOSS_OF_PAY
+}
+
+enum RemoteRequestKind {
+  CORRECTION
+  REVIEW
+}
+
+enum RemoteRequestStatus {
+  OPEN
+  ACCEPTED
+  DECLINED
+}
+
+model RemoteWorkMark {
+  id             String   @id @default(cuid())
+  employeeId     String   @map("employee_id")
+  effectiveFrom  DateTime @map("effective_from") @db.Date
+  remote         Boolean
+  reason         String
+  markedByUserId String   @map("marked_by_user_id")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([employeeId, effectiveFrom, createdAt])
+  @@map("remote_work_marks")
+}
+
+model RemoteAttendanceRecord {
+  id              String                    @id @default(cuid())
+  employeeId      String                    @map("employee_id")
+  employee        Employee                  @relation(fields: [employeeId], references: [id])
+  date            DateTime                  @db.Date
+  checkInAt       DateTime?                 @map("check_in_at") @db.Timestamptz(3)
+  checkOutAt      DateTime?                 @map("check_out_at") @db.Timestamptz(3)
+  status          RemoteRecordStatus        @default(OPEN)
+  half            RemoteHalf?
+  rejectOutcome   RemoteRejectOutcome?      @map("reject_outcome")
+  decisionReason  String?                   @map("decision_reason")
+  decidedByUserId String?                   @map("decided_by_user_id")
+  decidedAt       DateTime?                 @map("decided_at") @db.Timestamptz(3)
+  overrideId      String?                   @map("override_id")
+  reopenCount     Int                       @default(0) @map("reopen_count")
+  reminderSentAt  DateTime?                 @map("reminder_sent_at") @db.Timestamptz(3)
+  createdAt       DateTime                  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  events          RemoteAttendanceEvent[]
+  requests        RemoteAttendanceRequest[]
+
+  @@unique([employeeId, date])
+  @@index([status, date])
+  @@map("remote_attendance_records")
+}
+
+// What happened to a record, in order. Append-only.
+model RemoteAttendanceEvent {
+  id          String                 @id @default(cuid())
+  recordId    String                 @map("record_id")
+  record      RemoteAttendanceRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  type        String
+  actorUserId String?                @map("actor_user_id")
+  note        String                 @default("")
+  payload     Json                   @default("{}")
+  createdAt   DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([recordId, createdAt])
+  @@map("remote_attendance_events")
+}
+
+model RemoteAttendanceRequest {
+  id                String                 @id @default(cuid())
+  recordId          String                 @map("record_id")
+  record            RemoteAttendanceRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  kind              RemoteRequestKind
+  status            RemoteRequestStatus    @default(OPEN)
+  note              String
+  proposedCheckIn   DateTime?              @map("proposed_check_in") @db.Timestamptz(3)
+  proposedCheckOut  DateTime?              @map("proposed_check_out") @db.Timestamptz(3)
+  requestedByUserId String                 @map("requested_by_user_id")
+  resolvedByUserId  String?                @map("resolved_by_user_id")
+  resolvedAt        DateTime?              @map("resolved_at") @db.Timestamptz(3)
+  resolutionNote    String?                @map("resolution_note")
+  createdAt         DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([recordId, status])
+  @@map("remote_attendance_requests")
 }
 
 // PEEPS-BEGIN assets

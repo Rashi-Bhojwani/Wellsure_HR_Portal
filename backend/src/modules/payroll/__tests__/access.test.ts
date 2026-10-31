@@ -145,7 +145,7 @@ describe("who actually gets in", () => {
       for (const who of ["hrAdmin", "hrExec", "manager", "employee"]) expect((await get(who, `/api/payroll${path}`)).status, `${who} ${path}`).toBe(403);
     }
     const post = (who: string, path: string) => request(app).post(`/api/payroll${path}`).set(...authHeader(tokens[who]!)).send({}); // an empty body: 403 is the permission, 400 is "allowed in, but not a valid request"
-    for (const path of ["/salary/revisions/preview", "/adjustments/preview", "/structures/breakup-preview"]) {
+    for (const path of ["/salary/revisions/preview", "/adjustments/preview", "/lop-corrections/preview", "/lop-corrections", "/structures/breakup-preview"]) {
       for (const who of ["director"]) expect((await post(who, path)).status, `${who} ${path}`).toBe(400);
       for (const who of ["hrAdmin", "hrExec", "manager", "employee"]) expect((await post(who, path)).status, `${who} ${path}`).toBe(403);
     }

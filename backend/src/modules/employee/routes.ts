@@ -15,6 +15,7 @@ import {
   employeeListQuerySchema,
   exportQuerySchema,
   idParamsSchema,
+  revealQuerySchema,
   pendingInvitationsQuerySchema,
   sendInvitationsSchema,
   initiateSeparationSchema,
@@ -93,8 +94,8 @@ employeeRouter.post("/invitations/send", canInvite, validate({ body: sendInvitat
 employeeRouter.get("/:id", canView, validate({ params: idParamsSchema }), controller.getProfile);
 employeeRouter.post("/:id/resend-invite", canInvite, validate({ params: idParamsSchema }), controller.resendInvite);
 
-employeeRouter.get("/:id/statutory/reveal", canViewStatutory, validate({ params: idParamsSchema }), controller.revealStatutory);
-employeeRouter.get("/:id/bank/reveal", canViewBank, validate({ params: idParamsSchema }), controller.revealBank);
+employeeRouter.get("/:id/statutory/reveal", canViewStatutory, validate({ params: idParamsSchema, query: revealQuerySchema }), controller.revealStatutory);
+employeeRouter.get("/:id/bank/reveal", canViewBank, validate({ params: idParamsSchema, query: revealQuerySchema }), controller.revealBank);
 
 employeeRouter.get("/:id/history/job", canView, validate({ params: idParamsSchema }), controller.getJobHistory);
 employeeRouter.get("/:id/history/name", canView, validate({ params: idParamsSchema }), controller.getNameHistory);

@@ -97,7 +97,7 @@ export function HelpdeskCategoriesPage() {
                   <div>
                     <div style={{ display: "flex", alignItems: "center", gap: space[2], flexWrap: "wrap" }}>
                       <span style={{ fontWeight: fw.semibold, color: v.textPrimary }}>{name}</span>
-                      {c.isSensitive && <SensitiveChip />}
+                      {c.isSensitive && <SensitiveChip />}{c.directorsOnly && <StatusChip tone="info">Directors only</StatusChip>}
                       {!c.isActive && <StatusChip status="INACTIVE">Inactive</StatusChip>}
                     </div>
                     <div style={{ color: v.textSecondary, fontSize: fs.sm }}>{c.code}</div>

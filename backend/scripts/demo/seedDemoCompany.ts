@@ -75,6 +75,21 @@ const RULES: Record<string, unknown> = {
   LINE_ROUNDING: { mode: "HALF_UP", scale: 0 },
   REVISION_CTC_ROUNDING: { mode: "HALF_UP", scale: 0 },
   NET_PAY_ROUNDING: { mode: "NONE", scale: 0 },
+  // DEMO COMPANY ONLY: made-up figures, from no notification.
+  PF_ROUNDING: { mode: "HALF_UP", scale: 0 },
+  ESI_ROUNDING: { mode: "UP", scale: 0 },
+  PF_EMPLOYEE_RATE: "12",
+  PF_EPS_RATE: "8.33",
+  PF_EPF_ER_RATE: "3.67",
+  PF_EDLI_RATE: "0.5",
+  PF_ADMIN_RATE: "0.5",
+  PF_WAGE_CEILING: "15000",
+  ESI_EMPLOYEE_RATE: "0.75",
+  ESI_EMPLOYER_RATE: "3.25",
+  ESI_WAGE_CEILING: "21000",
+  ARREAR_ON_ARREAR: true,
+  LOP_REVERSAL_LOOKBACK_MONTHS: 3,
+  LOP_REVERSAL_OVERRIDE_ALLOWED: true,
   PF_CEILING_MODE: "CAP_AT_CEILING",
   ESI_PERIOD_RULE: "MONTHLY",
   PF_ELIGIBLE_TYPES: ["PERMANENT", "PROBATION"],
@@ -176,7 +191,7 @@ export async function seedDemoCompany(): Promise<DemoResult> {
   const rules: Record<string, unknown> = { ...RULES, STATE_NAME_MAP: Object.fromEntries([...new Set(states)].map((s) => [s, "DEMO_STATE"])), ...DEMO_IDENTIFIERS };
   for (const def of RULE_CATALOG) {
     const value = rules[def.key];
-    if (value === undefined && def.placeholder === undefined) continue; // nothing to enter and nothing shipped (for example the fixed number of days, unused on a calendar-days basis)
+    if (value === undefined) continue; // nothing to enter (for example the fixed number of days, unused on a calendar-days basis)
     if (value !== undefined) {
       const p = await previewEdit(def.key, value);
       await editRule(def.key, { value, note: "DEMO COMPANY: made-up value", sourceNote: "DEMO COMPANY: a made-up value, from no real notification", effectiveFrom: "2026-04-01", fingerprint: p.fingerprint }, { userId: maker });

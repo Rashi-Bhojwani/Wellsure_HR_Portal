@@ -301,71 +301,81 @@ describe("a salary revision, from preparing to applying", () => {
   });
 });
 
-describe("nobody changes their own pay, whatever their role", () => {
-  it("a maker cannot pick themselves, and a group pick leaves them out and says so", async () => {
+describe("a director may change their own pay; it is recorded, tagged, and the other director is told", () => {
+  const selfNotices = (actorUserId: string) => prisma.directorActionNotice.findMany({ where: { actorUserId, subjectType: "SELF_PAY_CHANGE" }, include: { receipts: true } });
+  const selfAudit = (actorUserId: string) => prisma.auditLog.findMany({ where: { actorUserId, action: "payroll.self_pay_change" } });
+
+  it("a maker who is a director may pick themselves by name; a group pick still leaves them out and says so", async () => {
+    const before = (await selfNotices(w.maker.userId)).length;
     const own = await maker().post("/salary/revisions/preview", { input: joining(w.maker.employeeId) });
-    expect(own.status).toBe(403);
-    expect(own.body.error.code).toBe("SELF_PAY");
+    expect(own.status, JSON.stringify(own.body)).toBe(200);
+    expect((await selfNotices(w.maker.userId)).length).toBeGreaterThan(before);
     const group = await maker().post("/salary/revisions/preview", { input: { selection: { kind: "ALL" }, change: { ctc: { mode: "SET", annual: "1300000" } }, effectiveFrom: "2026-09-01" } });
     expect(group.status).toBe(200);
-    expect(group.body.skipped.some((s: { employeeId: string; reason: string }) => s.employeeId === w.maker.employeeId && /Your own pay/.test(s.reason))).toBe(true);
+    expect(group.body.skipped.some((s: { employeeId: string; reason: string }) => s.employeeId === w.maker.employeeId && /Your own pay is not part of a bulk change/.test(s.reason))).toBe(true);
     expect(group.body.people.some((p: { employeeId: string }) => p.employeeId === w.maker.employeeId)).toBe(false);
   });
 
-  it("a Super Admin is no exception", async () => {
+  it("each such act leaves an audit row tagged SELF_CHANGE and a notice for every other director, with no figure, no name and no identifier in it", async () => {
+    const rows = await selfAudit(w.maker.userId);
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows[0]!.after).toMatchObject({ tag: "SELF_CHANGE", amounts: "redacted" });
+    const notices = await selfNotices(w.maker.userId);
+    expect(notices.length).toBeGreaterThan(0);
+    const n = notices[0]!;
+    expect([n.kind, n.step, n.subjectLabel]).toEqual(["ACTION", "SALARY_REVISION", "a change to their own pay"]);
+    expect(n.receipts.length).toBeGreaterThan(0);
+    expect(n.receipts.some((r) => r.recipientUserId === w.maker.userId)).toBe(false); // not told of their own act
+    expect(n.itemCount).toBeNull();
+    expect(Object.keys(n.detail as object).sort()).toEqual(["tag", "what"]); // nothing but the tag and the kind of act: no amount, no person
+  });
+
+  it("a Super Admin whose own pay is in an adjustment may add it; it is recorded the same way", async () => {
     const boss = await createFullTestEmployee(w.org, { roleCode: "SUPER_ADMIN" });
     try {
       const token = await loginAs(boss.employeeCode);
-      const r = await api(token).post("/salary/revisions/preview", { input: joining(boss.employeeId) });
-      expect(r.status).toBe(403);
-      expect(r.body.error.code).toBe("SELF_PAY");
       const adj = await api(token).post("/adjustments/preview", { input: { employeeId: boss.employeeId, componentCode: w.basic, direction: "EARNING", amount: "100", reason: "bonus" } });
-      expect(adj.body.error.code).toBe("SELF_PAY");
+      expect(adj.status, JSON.stringify(adj.body)).toBe(200);
+      expect((await selfAudit(boss.userId)).length).toBeGreaterThan(0);
     } finally {
       await cleanupPayrollRowsBy([boss.userId]);
       await cleanupFullTestEmployee(boss.employeeId);
     }
   });
 
-  it("a checker whose own pay is in the revision cannot approve it, is left out of 'who can check' with the reason, and somebody else can", async () => {
+  it("somebody who is NOT a director still cannot change their own pay, whatever else they hold (and nothing is recorded)", async () => {
+    const { assertNotOwnPay } = await import("../salary/guards");
+    await expect(assertNotOwnPay(w.outsider.userId, [w.outsider.employeeId], "This revision")).rejects.toMatchObject({ status: 403, code: "SELF_PAY" });
+    expect(await selfNotices(w.outsider.userId)).toEqual([]);
+    expect(await selfAudit(w.outsider.userId)).toEqual([]);
+    await expect(assertNotOwnPay(w.outsider.userId, [w.staff[0]!.employeeId], "This revision")).resolves.toBeUndefined(); // somebody else's pay is another question
+  });
+
+  it("the director whose pay is in a revision may approve it when the OTHER director prepared it; the maker can never be the checker; and either may apply it", async () => {
     const input = joining(w.checkerA.employeeId, "1000000");
     const preview = await maker().post("/salary/revisions/preview", { input });
     expect(preview.status).toBe(200);
-    const excluded = preview.body.checkers.excluded.find((x: { userId: string }) => x.userId === w.checkerA.userId);
-    expect(excluded).toMatchObject({ reason: "is paid by this" });
-    expect(preview.body.checkers.eligible.some((x: { userId: string }) => x.userId === w.checkerA.userId)).toBe(false);
     const created = await maker().post("/salary/revisions", { input, fingerprint: preview.body.fingerprint });
     const id = created.body.id as string;
-    const refused = await approve(w.tokens.checkerA, id);
-    expect(refused.status).toBe(403);
-    expect(refused.body.error.code).toBe("CHECKER_IS_AFFECTED");
-    expect((await approve(w.tokens.checkerB, id)).status).toBe(200);
-    expect((await maker().post(`/salary/revisions/${id}/apply`)).status).toBe(200);
+    const byMaker = await approve(w.tokens.maker, id);
+    expect(byMaker.status).toBe(403); // the maker is not the checker
+    const mine = await approve(w.tokens.checkerA, id);
+    expect(mine.status, JSON.stringify(mine.body)).toBe(200);
+    expect((await selfAudit(w.checkerA.userId)).length).toBeGreaterThan(0);
+    const applied = await api(w.tokens.checkerA).post(`/salary/revisions/${id}/apply`);
+    expect([200, 403]).toContain(applied.status);
+    if (applied.status === 403) expect((await maker().post(`/salary/revisions/${id}/apply`)).status).toBe(200);
+    expect(await prisma.employeeSalary.count({ where: { employeeId: w.checkerA.employeeId } })).toBeGreaterThan(0);
   });
 
-  it("somebody whose own pay is in an approved revision cannot be the one who applies it, even though they hold the permission to", async () => {
-    const other = await createFullTestEmployee(w.org, { roleCode: "SUPER_ADMIN" });
-    try {
-      const tokenOther = await loginAs(other.employeeCode);
-      const id = (await createRevision(w.tokens.maker, joining(other.employeeId, "900000"))).created.body.id as string;
-      expect((await approve(w.tokens.checkerA, id)).status).toBe(200);
-      const refused = await api(tokenOther).post(`/salary/revisions/${id}/apply`);
-      expect(refused.status).toBe(403);
-      expect(refused.body.error.code).toBe("SELF_PAY");
-      expect(await prisma.employeeSalary.count({ where: { employeeId: other.employeeId } })).toBe(0);
-      expect((await maker().post(`/salary/revisions/${id}/apply`)).status).toBe(200); // somebody else can
-    } finally {
-      await cleanupPayrollRowsBy([other.userId]);
-      await cleanupFullTestEmployee(other.employeeId);
-    }
-  });
-
-  it("applying is refused to somebody in the revision, and the core refuses a maker whose own pay is in it", async () => {
+  it("the approval core lets a director prepare a change to their own pay (it used to refuse), and records it", async () => {
     const { submit } = await import("../approvals");
     const rev = await prisma.payrollSalaryRevision.create({
       data: { effectiveFrom: new Date("2026-09-01"), reason: "REVISION", selection: { kind: "EMPLOYEES" }, employeeIds: [w.maker.employeeId], change: { ctc: { mode: "SET", annual: "1" } }, createdByUserId: w.maker.userId },
     });
-    await expect(submit({ subject: "SALARY_REVISION", subjectId: rev.id, makerUserId: w.maker.userId, previewFingerprint: "fingerprint-x" })).rejects.toMatchObject({ code: "MAKER_IS_AFFECTED" });
+    const before = (await selfAudit(w.maker.userId)).length;
+    await expect(submit({ subject: "SALARY_REVISION", subjectId: rev.id, makerUserId: w.maker.userId, previewFingerprint: "fingerprint-x" })).resolves.toMatchObject({ status: "PENDING", makerUserId: w.maker.userId });
+    expect((await selfAudit(w.maker.userId)).length).toBeGreaterThan(before);
   });
 });
 

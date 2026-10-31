@@ -22,6 +22,9 @@ export function rulesFor(over: Partial<RunRules> = {}): RunRules {
     netRounding: { mode: "NONE", scale: 0 },
     pf: { employeeRate: dec("12"), epsRate: dec("8.33"), epfErRate: dec("3.67"), edliRate: dec("0.5"), adminRate: dec("0.5"), ceiling: dec("15000"), ceilingMode: "CAP_AT_CEILING", eligibleTypes: ["PERMANENT"] },
     esi: { employeeRate: dec("0.75"), employerRate: dec("3.25"), ceiling: dec("21000"), periodRule: "MONTHLY", eligibleTypes: ["PERMANENT"] },
+    arrearOnArrear: null,
+    lopReversal: null,
+    headRounding: {},
     negativeNet: "BLOCK",
     leaverTiming: "PAY_WITH_RUN",
     paymentDate: { monthOffset: 0, day: "LAST" },
@@ -432,5 +435,22 @@ describe("a person who lost every day", () => {
     const r = calculatePerson(person({ from: "2026-08-27", lop, segments: [{ from: "2026-08-27", to: "2026-08-31", amounts: { BASIC: "20000", CONV: "1600" } }] }), ctxOf(rulesFor()));
     expect(amountsOf(r)).toMatchObject({ BASIC: "0", CONV: "0" });
     expect([r.gross.toString(), r.status, r.holdReason]).toEqual(["0", "HELD", "ZERO_NET"]);
+  });
+});
+
+describe("per-head rounding", () => {
+  const lop = { "2026-08-31": "1" }; // one day of loss of pay in a 31-day month: Basic 20,000 x 30/31 = 19,354.83...
+  const calc = (headRounding: RunRules["headRounding"]) => amountsOf(calculatePerson(person({ lop }), ctxOf(rulesFor({ headRounding }))));
+
+  it("a head not listed uses the general rule; a head listed uses its own", () => {
+    const general = calc({});
+    expect(general.BASIC).toBe("19355"); // half up
+    const own = calc({ BASIC: { mode: "DOWN", scale: 0 } });
+    expect(own.BASIC).toBe("19354");
+    expect(own.HRA).toBe(general.HRA); // untouched
+  });
+
+  it("the place is the head's own as well", () => {
+    expect(calc({ BASIC: { mode: "HALF_UP", scale: 2 } }).BASIC).toBe("19354.84");
   });
 });

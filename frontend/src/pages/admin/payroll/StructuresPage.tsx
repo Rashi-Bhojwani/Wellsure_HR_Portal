@@ -20,7 +20,28 @@ import { fw, radius, space, v } from "../../../theme/tokens";
 // new version only through a salary revision, which a second person approves.
 
 const defaultCalc = (m: LineCalcMethod): LineCalc =>
-  m === "PERCENT" ? { method: "PERCENT", of: "CTC", percent: "" } : m === "FIXED_AMOUNT" ? { method: "FIXED_AMOUNT", amount: "" } : m === "FORMULA" ? { method: "FORMULA", formula: "" } : m === "PER_PERSON" ? { method: "PER_PERSON" } : { method: "BALANCE" };
+  m === "PERCENT" ? { method: "PERCENT", of: "CTC", percent: "" } : m === "FIXED_AMOUNT" ? { method: "FIXED_AMOUNT", amount: "" } : m === "FORMULA" ? { method: "FORMULA", formula: "" } : m === "PER_PERSON" ? { method: "PER_PERSON" } : m === "SLAB" ? { method: "SLAB", of: "CTC", slabs: [{ from: "", to: null, amount: "" }] } : { method: "BALANCE" };
+
+type SlabCalc = Extract<LineCalc, { method: "SLAB" }>;
+
+/** A lookup table: for a value from "from" up to (not including) "to", the line is "amount". The last row may have no upper limit. */
+function SlabEditor({ label, calc, bases, onChange }: { label: string; calc: SlabCalc; bases: Array<{ value: string; label: string }>; onChange: (c: SlabCalc) => void }) {
+  const setRow = (k: number, patch: Partial<SlabCalc["slabs"][number]>) => onChange({ ...calc, slabs: calc.slabs.map((r, j) => (j === k ? { ...r, ...patch } : r)) });
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
+      <Select aria-label={`Looked up by, for ${label}`} value={calc.of} options={bases} onChange={(of) => onChange({ ...calc, of })} />
+      {calc.slabs.map((r, k) => (
+        <div key={k} style={{ display: "flex", gap: space[2], alignItems: "center", flexWrap: "wrap" }}>
+          <Input aria-label={`From, row ${k + 1}, ${label}`} style={{ width: 110 }} prefix="from" inputMode="decimal" value={r.from} onChange={(e) => setRow(k, { from: e.target.value })} />
+          <Input aria-label={`Up to, row ${k + 1}, ${label}`} style={{ width: 130 }} prefix="up to" placeholder="no limit" inputMode="decimal" value={r.to ?? ""} onChange={(e) => setRow(k, { to: e.target.value === "" ? null : e.target.value })} />
+          <Input aria-label={`Amount, row ${k + 1}, ${label}`} style={{ width: 130 }} prefix="₹" inputMode="decimal" value={r.amount} onChange={(e) => setRow(k, { amount: e.target.value })} />
+          <Button aria-label={`Remove row ${k + 1}, ${label}`} icon={<DeleteOutlined />} disabled={calc.slabs.length === 1} onClick={() => onChange({ ...calc, slabs: calc.slabs.filter((_, j) => j !== k) })} />
+        </div>
+      ))}
+      <Button size="small" icon={<PlusOutlined />} onClick={() => onChange({ ...calc, slabs: [...calc.slabs, { from: "", to: null, amount: "" }] })}>Add a row</Button>
+    </div>
+  );
+}
 
 export function StructuresPage() {
   const { hasPermission } = useAuth();
@@ -303,6 +324,14 @@ function StructureEditor({ initial, onClose, onSaved }: { initial: { code: strin
                     </div>
                   )}
                   {l.calc.method === "FIXED_AMOUNT" && <Input aria-label={`Amount for ${label}`} style={{ maxWidth: 220 }} prefix="₹" inputMode="decimal" value={l.calc.amount} onChange={(e) => patch(i, { calc: { method: "FIXED_AMOUNT", amount: e.target.value } })} suffix="a month" />}
+                  {l.calc.method === "SLAB" && (
+                    <SlabEditor
+                      label={label}
+                      calc={l.calc}
+                      bases={[{ value: "CTC", label: "CTC" }, ...lines.slice(0, i).filter((x) => x.component).map((x) => ({ value: x.component, label: nameOf(x.component) }))]}
+                      onChange={(calc) => patch(i, { calc })}
+                    />
+                  )}
                   {l.calc.method === "FORMULA" && <Input aria-label={`Formula for ${label}`} value={l.calc.formula} placeholder="MIN(BASIC * 0.5, 15000)" spellCheck={false} onChange={(e) => patch(i, { calc: { method: "FORMULA", formula: e.target.value } })} />}
                 </div>
                 <div style={{ display: "flex", gap: space[1], flex: "none" }}>
@@ -336,6 +365,11 @@ function StructureEditor({ initial, onClose, onSaved }: { initial: { code: strin
           <Stack gap={space[3]}>
             {p.unchanged && <ApprovalBanner tone="warning" title="That is the value it already has. There is nothing to save." />}
             {p.willResetConfirmation && <ApprovalBanner tone="warning" title="This structure is Confirmed now." description="Saving adds a new version that is a Placeholder until a director confirms it. The Confirmed version stays on record." />}
+            {p.calculationOrder.length > 0 && (
+              <Caption>
+                Worked out in this order: {p.calculationOrder.map((st) => `${st.step}. ${st.component}${st.dependsOn.length ? ` (reads ${st.dependsOn.join(", ")})` : ""}`).join("; ")}
+              </Caption>
+            )}
             {p.unconfirmedComponents.length > 0 && <ApprovalBanner tone="warning" title="Some components are not confirmed yet" description={`${p.unconfirmedComponents.join(", ")}. A salary built on this structure is a test until they are confirmed too.`} />}
             <SampleTable sample={p.sample} nameOf={nameOf} />
             <ApprovalBanner tone="info" title={p.impact} />

@@ -139,11 +139,16 @@ today, for the roles that already see them; the UI pass adds none.
 | `/admin/payroll/setup` | Setup checklist | `payroll.rules.view` | SA HA PA PP DEV | `checklist-03` | NOT IN BOARD | Progress rows |
 | `/admin/payroll/ready` | Ready for first run | `payroll.run` / view | SA PA PP | `checklist-09` | NOT IN BOARD | |
 | `/admin/payroll/rules` | Rules and setup (maker-checker) | `payroll.rules.view` (manage/confirm) | SA HA PA PP DEV | `payroll-04`/`05` | MAPPED-PARTIAL | Confirm never optimistic |
+| `/admin/payroll/overrides` | Rule overrides (department, person) | `payroll.rules.view` / manage / confirm | SA | none | NOT IN BOARD | Placeholder until a different director confirms by retyping; shows source note, dates and reason |
 | `/admin/payroll/components` | Salary components | `payroll.rules.view` | SA HA PA PP | `settings-05` | NOT IN BOARD | |
 | `/admin/payroll/structures` | Salary structures | `payroll.rules.view` | SA HA PA PP | `payroll-04` | NOT IN BOARD | |
 | `/admin/payroll/salaries` | Employee salaries | `payroll.salary.view` | SA HA PA PP | `payroll-01` | MAPPED-PARTIAL | Amounts stay masked/permissioned as today |
 | `/admin/payroll/revisions` | Salary revisions (maker-checker) | `payroll.salary.view` / edit / approve | SA HA PA PP | `payroll-01` | MAPPED-PARTIAL | |
 | `/admin/payroll/adjustments` | Adjustments | `payroll.adjust` | SA PA | `payroll-01` | NOT IN BOARD | |
+| `/admin/payroll/monthly-inputs` | Monthly Inputs (grid, history, confirm, import a file) | `payroll.salary.edit` | SA (directors only) | none | NOT IN BOARD | Opens when the month's attendance is final; one column per head flagged "takes its value from Monthly Inputs"; figures are exact, never overwritten, confirmed by a second director |
+| `/admin/workforce/attendance/remote` | Remote Attendance (waiting, all days, requests, who is remote, report, settings) | `attendance.unlock` | SA (directors only) | none | NOT IN BOARD | Decide a remote day: full, half (which half), or reject with reason and outcome; own days go to the other director |
+| `/app/attendance/info` (Remote work card) | Check in / Check out for people a director marked remote | self | all | SELF | NOT IN BOARD | Time of day only, no location |
+| `/admin/payroll/holds` | Held salaries (hold, release) | `payroll.salary.view` / edit | SA | none | NOT IN BOARD | Director-only act; shows reason and status, never an amount |
 | `/admin/payroll/run` | Payroll runs list | `payroll.run` / `payroll.approve` | SA PA PP | `payroll-01` | MAPPED-PARTIAL | |
 | `/admin/payroll/run/:id` | Payroll run (steps, preview, approval) | `payroll.run` / `payroll.approve` | SA PA PP | stepper `recruitment-09` + `payroll-02` | MAPPED-PARTIAL | Maker-checker states via ApprovalBanner; TEST watermark kept |
 | `/admin/payroll/run/:id/step/:slug` | Run step (register, variance, bank file, statutory files, payslips) | as above; bank file `payroll.bank.view` | SA PA PP | `payroll-02`/`03`, `documents-03` | MAPPED-PARTIAL | Downloads never cached by the service worker |

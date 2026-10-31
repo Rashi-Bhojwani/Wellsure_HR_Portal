@@ -79,6 +79,9 @@ interface Session {
   prepared: Buffer | null;
 }
 
+/** Bind failures that mean "that port number will not do here, take another", not "something is broken". */
+export const RETRYABLE_BIND_ERRORS: ReadonlySet<string> = new Set(["EADDRINUSE", "EACCES"]);
+
 export class FakeZkDevice {
   records: FakeRecord[];
   readonly opts: Required<Omit<FakeDeviceOptions, "records">>;
@@ -251,7 +254,8 @@ export class FakeZkDevice {
     const host = listen.host ?? "127.0.0.1";
     // TCP and UDP port numbers are separate spaces, and a real device answers both on 4370. When the TCP port is
     // chosen by the OS, the UDP socket wants the same number; if something else already holds that UDP number
-    // (another test file's fake, on a busy machine) take a fresh TCP port and try again, instead of hanging.
+    // (another test file's fake, on a busy machine) take a fresh TCP port and try again, instead of hanging. Windows also refuses UDP binds inside its reserved
+    // port ranges with EACCES (not EADDRINUSE), and a TCP port the OS picked can fall in one, so that is retried the same way.
     const explicit = listen.tcpPort !== undefined;
     for (let attempt = 1; ; attempt++) {
       this.tcp = net.createServer((socket) => this.serveTcp(socket));
@@ -272,7 +276,7 @@ export class FakeZkDevice {
         udp.close();
         await new Promise<void>((resolve) => this.tcp!.close(() => resolve()));
         this.tcp = null;
-        if ((err as NodeJS.ErrnoException).code === "EADDRINUSE" && !explicit && listen.udpPort === undefined && attempt < 20) continue;
+        if (RETRYABLE_BIND_ERRORS.has((err as NodeJS.ErrnoException).code ?? "") && !explicit && listen.udpPort === undefined && attempt < 20) continue;
         throw err;
       }
       udp.removeAllListeners("error");

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { COMPONENT_TYPES, HEAD_KINDS, HEAD_KINDS_NOT_IN_STRUCTURE, ITEM_CODE_PATTERN, RESERVED_COMPONENT_CODES, type ComponentType } from "@shared/constants/payrollSalary";
 import { FormulaError, parseFormula } from "../formula";
+import { dec } from "../money";
 import { decimalText, percent } from "../rules/schemas";
 
 // What a salary component and a salary structure look like as stored values (docs/plans/PHASE_6.md §14B). A value that passes comes out in canonical
@@ -46,6 +47,8 @@ export const componentValueSchema = z
     activeTo: isoDate.optional(),
     arrearsHead: code.optional(),
     reversalHead: code.optional(),
+    /** Takes its value from the Monthly Inputs grid each month (Stage 4 builds a column for it); it is not worked out from CTC, so it is never a structure line. */
+    inputItem: z.boolean().optional(),
   })
   .strict()
   .superRefine((v, ctx) => {
@@ -54,12 +57,15 @@ export const componentValueSchema = z
   });
 export type ComponentValue = z.infer<typeof componentValueSchema>;
 
+// A lookup table: the first slab whose from <= value < to applies (to = null is open-ended). Entered by the directors; nothing is shipped.
+const slabSchema = z.object({ from: decimalText, to: decimalText.nullable(), amount: decimalText }).strict();
 const calcSchema = z.discriminatedUnion("method", [
   z.object({ method: z.literal("PERCENT"), of: z.string().min(1), percent }).strict(),
   z.object({ method: z.literal("FIXED_AMOUNT"), amount: decimalText }).strict(),
   z.object({ method: z.literal("PER_PERSON") }).strict(),
   z.object({ method: z.literal("FORMULA"), formula: z.string().trim().min(1).max(200) }).strict(),
   z.object({ method: z.literal("BALANCE") }).strict(),
+  z.object({ method: z.literal("SLAB"), of: z.string().min(1), slabs: z.array(slabSchema).min(1).max(40) }).strict(),
 ]);
 export type LineCalc = z.infer<typeof calcSchema>;
 
@@ -96,6 +102,7 @@ export function unusableInStructure(code: string, v: ComponentValue, day: string
   if (v.headKind && HEAD_KINDS_NOT_IN_STRUCTURE.includes(v.headKind)) {
     return `${code} is a ${v.headKind === "COUNTER" ? "counter, which feeds formulas and is not a paid line" : "statutory head, which the calculator produces from rules"}, so it cannot be a line of a structure.`;
   }
+  if (v.inputItem) return `${code} takes its value from Monthly Inputs each month, so it is not worked out from CTC and cannot be a line of a structure.`;
   const missing = notSetChoices(v);
   if (missing.length) return `${code} has ${missing.join(" and ")} not set yet. Choose it (and have a different director confirm) before using the head.`;
   if (!isActiveOn(v, day)) return `${code} is not active on ${day} (it runs ${v.activeFrom ?? "from the start"} to ${v.activeTo ?? "no end date"}).`;
@@ -143,6 +150,17 @@ export function parseStructureValue(raw: unknown, typeOf: (componentCode: string
       const of = line.calc.of;
       if (of !== "CTC" && !seen.has(of)) problems.push(`${at}: a percentage can be of CTC or of a line above it, and "${of}" is neither`);
     }
+    if (line.calc.method === "SLAB") {
+      const of = line.calc.of;
+      if (of !== "CTC" && !seen.has(of)) problems.push(`${at}: a table is looked up by CTC or by a line above it, and "${of}" is neither`);
+      const slabs = line.calc.slabs;
+      for (const [k, sl] of slabs.entries()) {
+        if (sl.to !== null && !dec(sl.to).greaterThan(dec(sl.from))) problems.push(`${at}, row ${k + 1}: "up to" has to be more than "from"`);
+        if (sl.to === null && k !== slabs.length - 1) problems.push(`${at}, row ${k + 1}: only the last row can have no upper limit`);
+        const prev = slabs[k - 1];
+        if (prev && (prev.to === null || dec(sl.from).lessThan(dec(prev.to)))) problems.push(`${at}, row ${k + 1}: rows must not overlap and must be in order`);
+      }
+    }
     if (line.calc.method === "FORMULA") {
       try {
         const { identifiers } = parseFormula(line.calc.formula);
@@ -157,7 +175,7 @@ export function parseStructureValue(raw: unknown, typeOf: (componentCode: string
   }
   if (balance) {
     for (const [i, line] of v.lines.entries()) {
-      const refs = line.calc.method === "PERCENT" ? [line.calc.of] : line.calc.method === "FORMULA" ? safeIdentifiers(line.calc.formula) : [];
+      const refs = line.calc.method === "PERCENT" || line.calc.method === "SLAB" ? [line.calc.of] : line.calc.method === "FORMULA" ? safeIdentifiers(line.calc.formula) : [];
       if (refs.includes(balance)) problems.push(`line ${i + 1} (${line.component}): nothing can be worked out from the balance line, because the balance depends on every other line`);
     }
   }
@@ -171,4 +189,41 @@ function safeIdentifiers(formula: string): string[] {
   } catch {
     return [];
   }
+}
+
+/** The lines of a structure that are worked out from another line (a percentage, formula or table that reads one, or the balance). */
+export function dependentHeads(structure: StructureValue): Set<string> {
+  return new Set(calculationOrder(structure).filter((s) => s.dependsOn.some((d) => d !== "CTC" && d !== "ANNUAL_CTC")).map((s) => s.component));
+}
+
+export interface CalculationStep {
+  component: string;
+  /** Position in the order the lines are worked out (1 first). */
+  step: number;
+  /** The earlier lines (and CTC) this line reads. */
+  dependsOn: string[];
+}
+
+/**
+ * The order a structure's lines are worked out in, derived from what each reads (a percentage's base, a table's key, the names in a formula), not from how it was
+ * typed. A line can read only CTC or a line above it, so the typed order is always valid; this shows the dependencies and orders by them, ties by typed position.
+ */
+export function calculationOrder(structure: StructureValue): CalculationStep[] {
+  const codes = structure.lines.map((l) => l.component);
+  const deps = structure.lines.map((l) => {
+    const c = l.calc;
+    const names = c.method === "PERCENT" || c.method === "SLAB" ? [c.of] : c.method === "FORMULA" ? safeIdentifiers(c.formula) : c.method === "BALANCE" ? codes.filter((x) => x !== l.component) : [];
+    return [...new Set(names)].filter((n) => n === "CTC" || n === "ANNUAL_CTC" || codes.includes(n)).sort();
+  });
+  const done = new Set<string>();
+  const out: CalculationStep[] = [];
+  const remaining = structure.lines.map((l, i) => i);
+  while (remaining.length) {
+    const ready = remaining.find((i) => deps[i]!.every((d) => d === "CTC" || d === "ANNUAL_CTC" || done.has(d)));
+    const pick = ready ?? remaining[0]!; // cannot happen for a valid structure; keeps the function total
+    remaining.splice(remaining.indexOf(pick), 1);
+    done.add(codes[pick]!);
+    out.push({ component: codes[pick]!, step: out.length + 1, dependsOn: deps[pick]! });
+  }
+  return out;
 }

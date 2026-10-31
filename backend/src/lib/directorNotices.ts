@@ -82,7 +82,8 @@ export async function scheduleDelivery(noticeId: string | null): Promise<void> {
 
 const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
-function noticeTitle(n: { kind: string; step: string }): string {
+function noticeTitle(n: { kind: string; step: string; subjectType?: string }): string {
+  if (n.subjectType === "SELF_PAY_CHANGE") return "The other director changed their own pay";
   const label = DIRECTOR_STEP_INFO[n.step as DirectorStep]?.label ?? n.step;
   if (n.kind === "SWITCH_CHANGED") return "The other director changed a second-director check";
   if (n.kind === "SETTING_CHANGED") return "The other director changed a system setting";

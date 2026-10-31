@@ -2,7 +2,8 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "antd";
 import { AuditOutlined } from "@ant-design/icons";
 import { AttendanceInfoView } from "../../../components/attendance/AttendanceInfoView";
-import { PageHeader } from "../../../ui";
+import { RemoteCheckCard } from "../../../components/attendance/RemoteCheckCard";
+import { PageHeader, Stack } from "../../../ui";
 
 // Attendance → Attendance Info (Phase 2 P2-E, UI_REFERENCE §1.5): my month,
 // live, with the forgot-to-punch request on a one-punch day. ?date= opens a day
@@ -21,7 +22,10 @@ export function AttendanceInfoPage() {
           </Button>
         }
       />
-      <AttendanceInfoView key={params.get("date") ?? "today"} initialDate={params.get("date")} />
+      <Stack>
+        <RemoteCheckCard />
+        <AttendanceInfoView key={params.get("date") ?? "today"} initialDate={params.get("date")} />
+      </Stack>
     </>
   );
 }

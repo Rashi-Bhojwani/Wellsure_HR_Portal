@@ -9,8 +9,10 @@ import { ZERO, canonicalDecimal, dec, sum, type Money } from "../money";
 import type { RuleContext, RulePin } from "../rules/context";
 import type { ComponentValue } from "../salary/schemas";
 import { iso } from "./days";
+import { loadOverrideItems, resolveOverrides } from "../rules/overrides";
 import type { RuleNeeds } from "./rules";
 import { contributionPeriodStart } from "./statutory";
+import { figuresForRun } from "../inputs/service";
 import type { AdjustmentIn, ComponentLookup, CycleSpan, PersonInput, SegmentInput } from "./types";
 
 // Everything a payroll run reads, gathered through the readers and nothing else (docs/plans/PHASE_6.md §14D):
@@ -49,6 +51,12 @@ function clip(seg: { from: Date; to: Date }, span: { from: Date; to: Date }): { 
   return from > to ? null : { from, to };
 }
 
+/** The per-head amounts an adjustment carries: an arrears row stores an array; a loss-of-pay reversal stores them under `lines`, beside the days it covers. */
+function breakdownOf(a: { source: string; breakdown: unknown }): Array<{ component: string; amount: Money }> {
+  const raw = a.source === "LOP_REVERSAL" ? ((a.breakdown as { lines?: unknown } | null)?.lines ?? []) : (a.breakdown ?? []);
+  return (raw as Array<{ component: string; amount: string }>).map((p) => ({ component: p.component, amount: dec(p.amount) }));
+}
+
 export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promise<RunInputs> {
   const employees = await prisma.employee.findMany({
     where: employedBetween(cycle.start, cycle.end),
@@ -82,6 +90,9 @@ export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promi
     const k = iso(placementDayOf(spans.get(e.id)!));
     idsByDay.set(k, [...(idsByDay.get(k) ?? []), e.id]);
   }
+  const holdRows = await prisma.payrollSalaryHold.findMany({ where: { cycleStart: cycle.start, release: null, employeeId: { in: employees.map((e) => e.id) } }, select: { employeeId: true, reason: true } });
+  const holdBy = new Map(holdRows.map((h) => [h.employeeId, h.reason]));
+  const overrideItems = await loadOverrideItems();
   const placements = new Map<string, PayrollPlacement>();
   for (const [day, group] of idsByDay) for (const [id, p] of await payrollPlacementsOn(group, new Date(`${day}T00:00:00Z`))) placements.set(id, p);
 
@@ -117,16 +128,36 @@ export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promi
     for (const [day, group] of byDay) for (const [id, row] of await salariesOn(group, new Date(`${day}T00:00:00Z`))) periodRows.set(id, row);
   }
 
+  // The figures a director entered in Monthly Inputs for this month: each is a line of the run, by the same path as an adjustment. They are read, never consumed:
+  // a month's figures belong to the month, and a run for it that is unlocked reads them again.
+  const monthly = await figuresForRun(iso(cycle.start), ids);
+
   // Every component version any of this is built from, with its flags: the exact version each salary line was frozen under, and the newest for adjustments.
   const codes = new Set<string>();
   for (const segs of segmentsByEmployee.values()) for (const s of segs) for (const l of s.row.lines) codes.add(l.componentCode);
   for (const row of periodRows.values()) for (const l of row.lines) codes.add(l.componentCode);
   for (const a of pendingAdjustments) {
     codes.add(a.componentCode);
-    for (const part of (a.breakdown as Array<{ component: string }> | null) ?? []) codes.add(part.component);
+    for (const part of breakdownOf(a)) codes.add(part.component);
   }
+  for (const list of monthly.values()) for (const f of list) codes.add(f.head.code);
   if (codes.size > MAX_CODES) throw new Error("A run reads more salary components than any structure could hold");
-  const versionRows = codes.size ? await prisma.payrollItemVersion.findMany({ where: { kind: "COMPONENT" as PayrollItemKind, key: { in: [...codes] } }, orderBy: [{ key: "asc" }, { version: "asc" }] }) : [];
+  const loadVersions = (keys: Iterable<string>) => prisma.payrollItemVersion.findMany({ where: { kind: "COMPONENT" as PayrollItemKind, key: { in: [...keys] } }, orderBy: [{ key: "asc" }, { version: "asc" }] });
+  let versionRows = codes.size ? await loadVersions(codes) : [];
+  // A loss-of-pay reversal line is carried under its head's reversal head, so the heads a reversal names are read as well.
+  const reversalCodes = new Set<string>();
+  for (const a of pendingAdjustments) {
+    if (a.source !== "LOP_REVERSAL") continue;
+    for (const part of breakdownOf(a)) {
+      const latest = versionRows.filter((v) => v.key === part.component).at(-1);
+      const link = (latest?.value as { reversalHead?: string } | undefined)?.reversalHead;
+      if (link && !codes.has(link)) reversalCodes.add(link);
+    }
+  }
+  if (reversalCodes.size) {
+    for (const c of reversalCodes) codes.add(c);
+    versionRows = await loadVersions(codes);
+  }
   const byVersion = new Map<string, ComponentValue>();
   const componentHashes = new Map<string, string>();
   const current = new Map<string, { version: number; value: ComponentValue }>();
@@ -157,7 +188,7 @@ export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promi
       }
     }
   }
-  const usedByAdjustments = new Set(pendingAdjustments.map((a) => a.componentCode));
+  const usedByAdjustments = new Set([...pendingAdjustments.map((a) => a.componentCode), ...[...monthly.values()].flatMap((l) => l.map((f) => f.head.code))]);
   for (const code of usedByAdjustments) {
     const cur = current.get(code);
     const h = cur ? componentHashes.get(`${code}@${cur.version}`) : undefined;
@@ -167,6 +198,7 @@ export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promi
   const people: PersonInput[] = [];
   let arrears = false;
   let encashment = false;
+  let reversals = false;
   for (const e of employees) {
     const span = spans.get(e.id)!;
     const segments: SegmentInput[] = [];
@@ -197,10 +229,15 @@ export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promi
         amount: dec(a.amount.toString()),
         reason: a.reason,
         periodLabel: a.periodStart ? `${iso(a.periodStart)} to ${iso(a.periodEnd ?? a.periodStart)}` : undefined,
-        breakdown: ((a.breakdown as Array<{ component: string; amount: string }> | null) ?? []).map((p) => ({ component: p.component, amount: dec(p.amount) })),
+        breakdown: breakdownOf(a),
       }));
     adjustments.push(...(encashmentsByEmployee.get(e.id) ?? []));
-    if (adjustments.some((a) => a.source === "SALARY_ARREARS")) arrears = true;
+    for (const f of monthly.get(e.id) ?? []) {
+      if (dec(f.amount).isZero()) continue; // a zero was entered (so the run may go ahead), and pays or takes nothing: there is no line to print
+      adjustments.push({ id: null, source: "MONTHLY_INPUT", sourceRef: f.entryId, componentCode: f.head.code, direction: f.head.type, amount: dec(f.amount), reason: "Entered in Monthly Inputs", periodLabel: cycle.label });
+    }
+    if (adjustments.some((a) => a.source === "SALARY_ARREARS" || a.source === "LOP_REVERSAL")) arrears = true; // a reversal follows the same PF and ESI rule
+    if (adjustments.some((a) => a.source === "LOP_REVERSAL")) reversals = true;
     if (adjustments.some((a) => a.source === "YEAR_END_ENCASHMENT")) encashment = true;
 
     const pr = periodRows.get(e.id);
@@ -220,11 +257,17 @@ export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promi
       placement: placements.get(e.id) ?? null,
       placementDay: placementDayOf(span),
       hasBankAccount: paymentDate ? bank.has(e.id) : true,
+      ruleOverrides: [...resolveOverrides(overrideItems, { employeeId: e.id, departmentId: placements.get(e.id)?.departmentId ?? null }, iso(cycle.end)).values()].map((o) => ({ ruleKey: o.ruleKey, level: o.level, itemKey: o.itemKey, version: o.version, valueHash: o.valueHash, value: o.value, registrationRef: o.registrationRef })),
+      directorHold: holdBy.has(e.id) ? { reason: holdBy.get(e.id)! } : null,
       adjustments,
       esiPeriodStartEntitlement,
     });
   }
-  return { cycle, payrollMonth, payrollYear, paymentDate, people, components, needs: { arrears, encashment }, componentHashes, encashmentsNotThisCycle };
+  // Every override a person was calculated under is pinned live: a run that used a Placeholder override is a test run, and editing an override makes the run stale.
+  const usedOverrides = new Map<string, { itemKey: string; version: number; valueHash: string }>();
+  for (const p of people) for (const o of p.ruleOverrides ?? []) usedOverrides.set(`${o.itemKey}|${o.version}`, o);
+  for (const o of usedOverrides.values()) ctx.addLivePin({ kind: "RULE_OVERRIDE", key: o.itemKey, version: o.version, valueHash: o.valueHash });
+  return { cycle, payrollMonth, payrollYear, paymentDate, people, components, needs: { arrears, encashment, reversals }, componentHashes, encashmentsNotThisCycle };
 }
 
 /** A fingerprint of everything gathered, so a resumed or repeated calculation can tell whether the world moved, and a confirm can tell that what was previewed is still true. */
@@ -243,6 +286,8 @@ export function inputsFingerprint(inputs: RunInputs): string {
       segments: p.segments.map((s) => [s.salaryId, iso(s.from), iso(s.to), s.structureHash]),
       placement: p.placement ? [p.placement.locationId, p.placement.locationState, p.placement.departmentId, p.placement.gradeId, p.placement.costCentreId] : null,
       bank: p.hasBankAccount,
+      ...(p.directorHold ? { held: true } : {}),
+      ...(p.ruleOverrides && p.ruleOverrides.length > 0 ? { overrides: p.ruleOverrides.map((o) => [o.itemKey, o.version, o.valueHash]) } : {}),
       adjustments: p.adjustments.map((a) => [a.id, a.source, a.sourceRef, a.componentCode, a.direction, canonicalDecimal(a.amount)]),
       esi: p.esiPeriodStartEntitlement ? canonicalDecimal(p.esiPeriodStartEntitlement) : null,
     })),

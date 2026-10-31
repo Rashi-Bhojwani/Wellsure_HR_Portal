@@ -5,6 +5,7 @@ import { EyeInvisibleOutlined, EyeOutlined, FilePdfOutlined } from "@ant-design/
 import * as payrollApi from "../../../api/payroll";
 import type { PayslipSummary } from "../../../api/payroll";
 import { PayslipView } from "../../../components/payroll/PayslipView";
+import { PayslipWhyButton } from "../../../components/payroll/PayslipWhy";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatDate } from "../../../lib/dates";
 import { formatRupees } from "../../../lib/money";
@@ -106,5 +107,10 @@ function One({ id, masked }: { id: string; masked: boolean }) {
   const { data, isLoading, error } = useQuery({ queryKey: ["payslips", "mine", id], queryFn: () => payrollApi.myPayslip(id) });
   if (isLoading) return <SkeletonCard lines={8} />;
   if (error || !data) return <EmptyState kind="error" compact title="Could not load this payslip" description={apiErrorMessage(error, "Could not load this payslip.")} />;
-  return <PayslipView content={data.content} masked={masked} />;
+  return (
+    <>
+      <PayslipWhyButton queryKey={["payslips", "mine", id, "why"]} load={() => payrollApi.myPayslipWhy(id)} masked={masked} />
+      <PayslipView content={data.content} masked={masked} />
+    </>
+  );
 }

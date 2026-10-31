@@ -18,14 +18,17 @@ import {
   GiftOutlined,
   GroupOutlined,
   DiffOutlined,
+  PauseCircleOutlined,
   HistoryOutlined,
   HomeOutlined,
   IdcardOutlined,
+  LaptopOutlined,
   NotificationOutlined,
   PartitionOutlined,
   PieChartOutlined,
   RocketOutlined,
   SafetyOutlined,
+  TableOutlined,
   ScheduleOutlined,
   SettingOutlined,
   SolutionOutlined,
@@ -92,6 +95,7 @@ const MusterPage = lazyPage(() => import("../pages/admin/attendance/muster/Muste
 const WhoIsInPage = lazyPage(() => import("../pages/admin/attendance/WhoIsInPage"), "WhoIsInPage");
 const AttendanceInfoAdminPage = lazyPage(() => import("../pages/admin/attendance/AttendanceInfoAdminPage"), "AttendanceInfoAdminPage");
 const RegularizationsPage = lazyPage(() => import("../pages/admin/attendance/RegularizationsPage"), "RegularizationsPage");
+const RemoteAttendancePage = lazyPage(() => import("../pages/admin/attendance/RemoteAttendancePage"), "RemoteAttendancePage");
 const ManualOverridePage = lazyPage(() => import("../pages/admin/attendance/ManualOverridePage"), "ManualOverridePage");
 const ShiftOverridePage = lazyPage(() => import("../pages/admin/attendance/ShiftOverridePage"), "ShiftOverridePage");
 const ShiftRosterPage = lazyPage(() => import("../pages/admin/attendance/ShiftRosterPage"), "ShiftRosterPage");
@@ -101,6 +105,9 @@ const ComponentsPage = lazyPage(() => import("../pages/admin/payroll/ComponentsP
 const StructuresPage = lazyPage(() => import("../pages/admin/payroll/StructuresPage"), "StructuresPage");
 const EmployeeSalariesPage = lazyPage(() => import("../pages/admin/payroll/EmployeeSalariesPage"), "EmployeeSalariesPage");
 const SalaryRevisionsPage = lazyPage(() => import("../pages/admin/payroll/SalaryRevisionsPage"), "SalaryRevisionsPage");
+const RuleOverridesPage = lazyPage(() => import("../pages/admin/payroll/RuleOverridesPage"), "RuleOverridesPage");
+const MonthlyInputsPage = lazyPage(() => import("../pages/admin/payroll/MonthlyInputsPage"), "MonthlyInputsPage");
+const HeldSalariesPage = lazyPage(() => import("../pages/admin/payroll/HeldSalariesPage"), "HeldSalariesPage");
 const AdjustmentsPage = lazyPage(() => import("../pages/admin/payroll/AdjustmentsPage"), "AdjustmentsPage");
 const PayrollRunsPage = lazyPage(() => import("../pages/admin/payroll/PayrollRunsPage"), "PayrollRunsPage");
 const LayoutsPage = lazyPage(() => import("../pages/admin/payroll/LayoutsPage"), "LayoutsPage");
@@ -238,6 +245,7 @@ export const adminApps: AdminApp[] = [
           { key: "process-attendance", label: "Process Attendance", path: "workforce/attendance/process", icon: ToolOutlined, element: ProcessAttendancePage, needs: { any: ["attendance.process"] } },
           { key: "period-finalisation", label: "Attendance Period Finalisation", path: "workforce/attendance/finalisation", icon: SafetyOutlined, element: FinalisationPage, needs: { any: ["attendance.finalise", "attendance.process"] } },
           { key: "attendance-exception", label: "Attendance Exception", path: "workforce/attendance/exceptions", icon: AuditOutlined, element: ExceptionsPage, needs: { any: ["attendance.exceptions.view"] } },
+          { key: "remote-attendance", label: "Remote Attendance", path: "workforce/attendance/remote", icon: LaptopOutlined, element: RemoteAttendancePage, needs: { any: ["attendance.unlock"] } },
           { key: "manual-override", label: "Manual Override", path: "workforce/attendance/manual-override", icon: ToolOutlined, element: ManualOverridePage, needs: { any: ["attendance.override.manage"] } },
           { key: "shift-override", label: "Shift Override", path: "workforce/attendance/shift-override", icon: SwapOutlined, element: ShiftOverridePage, needs: { any: ["attendance.override.manage"] } },
           { key: "attendance-settings", label: "Attendance Settings", path: "workforce/attendance/settings", icon: SettingOutlined, element: AttendanceSettingsPage, needs: { any: ["attendance.config.manage", "attendance.view"] } },
@@ -328,11 +336,14 @@ export const adminApps: AdminApp[] = [
           { key: "payroll-setup", label: "Setup Checklist", path: "payroll/setup", icon: CheckSquareOutlined, element: SetupChecklistPage, needs: PAYROLL_NEEDS },
           { key: "payroll-ready", label: "Ready for First Run", path: "payroll/ready", icon: SafetyOutlined, element: ReadyPage, needs: PAYROLL_NEEDS },
           { key: "payroll-rules", label: "Rules and Setup", path: "payroll/rules", icon: SafetyCertificateOutlined, element: RulesPage, needs: PAYROLL_NEEDS },
+          { key: "payroll-overrides", label: "Rule Overrides", path: "payroll/overrides", icon: ApartmentOutlined, element: RuleOverridesPage, needs: PAYROLL_NEEDS },
           { key: "salary-components", label: "Salary Components", path: "payroll/components", icon: SettingOutlined, element: ComponentsPage, needs: PAYROLL_NEEDS },
           { key: "salary-structures", label: "Salary Structures", path: "payroll/structures", icon: PartitionOutlined, element: StructuresPage, needs: PAYROLL_NEEDS },
           { key: "employee-salaries", label: "Employee Salaries", path: "payroll/salaries", icon: WalletOutlined, element: EmployeeSalariesPage, needs: PAYROLL_NEEDS },
           { key: "salary-revisions", label: "Salary Revisions", path: "payroll/revisions", icon: AuditOutlined, element: SalaryRevisionsPage, needs: PAYROLL_NEEDS },
           { key: "payroll-adjustments", label: "Adjustments", path: "payroll/adjustments", icon: DiffOutlined, element: AdjustmentsPage, needs: PAYROLL_NEEDS },
+          { key: "payroll-monthly-inputs", label: "Monthly Inputs", path: "payroll/monthly-inputs", icon: TableOutlined, element: MonthlyInputsPage, needs: { any: ["payroll.salary.edit"] } },
+          { key: "payroll-holds", label: "Held Salaries", path: "payroll/holds", icon: PauseCircleOutlined, element: HeldSalariesPage, needs: PAYROLL_NEEDS },
           { key: "payroll-run", label: "Payroll Run", path: "payroll/run", icon: FundOutlined, element: PayrollRunsPage, needs: PAYROLL_NEEDS },
           { key: "payroll-compare", label: "Compare Registers", path: "payroll/compare", icon: DiffOutlined, element: CompareRegistersPage, needs: PAYROLL_NEEDS },
           { key: "payroll-audit", label: "Payroll Audit Trail", path: "payroll/audit", icon: AuditOutlined, element: PayrollAuditPage, needs: PAYROLL_NEEDS },

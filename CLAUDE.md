@@ -161,6 +161,8 @@ npm run test
 docker build -f backend/Dockerfile -t wellsure-hr-backend .   # from the repo root — CI/ECS image only
 ```
 
+**Database commands.** Use the npm scripts (`npm run db:migrate`, `prisma:migrate:deploy`, `db:drift`), never `npx prisma ...` by hand: they check first that the database is on this machine. A cloud shell can export a `DATABASE_URL` for a remote database that silently overrides `backend/.env`; the guard (`backend/src/config/databaseGuard.ts`, run by `backend/scripts/guard-prisma.ts`) refuses instead of connecting. Migrations are applied to a scratch database for drift checks, never to a shared one.
+
 Local storage and mail need no service to install either — both are
 file-based dev implementations behind the `StorageService`/`MailService`
 interfaces (`backend/src/integrations/{storage,mail}`): uploads land in

@@ -10,4 +10,5 @@ export const payslipRouter = Router();
 payslipRouter.use(authenticate);
 payslipRouter.get("/mine", rel.mine);
 payslipRouter.get("/mine/:id", validate({ params: rv.slipIdParamsSchema }), rel.mineOne);
+payslipRouter.get("/mine/:id/why", validate({ params: rv.slipIdParamsSchema }), rel.mineWhy);
 payslipRouter.get("/mine/:id/pdf", validate({ params: rv.slipIdParamsSchema }), rel.minePdf);

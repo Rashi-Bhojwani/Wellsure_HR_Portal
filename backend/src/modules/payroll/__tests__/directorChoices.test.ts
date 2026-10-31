@@ -39,7 +39,7 @@ describe("the choice for each payroll step: Not set, then either way", () => {
   it("the screen recommends a different director for the four steps that matter most, and those are all payroll steps with a required choice", () => {
     expect([...DIRECTOR_RECOMMENDED_SECOND_STEPS].sort()).toEqual(["BANK_FILE", "RULE_CONFIRM", "RUN_APPROVAL", "SALARY_REVISION"]);
     for (const s of DIRECTOR_RECOMMENDED_SECOND_STEPS) expect(DIRECTOR_CHOICE_REQUIRED_STEPS as readonly string[]).toContain(s);
-    expect([...DIRECTOR_CHOICE_REQUIRED_STEPS].sort()).toEqual(["BANK_FILE", "PAYSLIP_PUBLISH", "PERIOD_FINALISE", "PERIOD_UNLOCK", "RULE_CONFIRM", "RUN_APPROVAL", "SALARY_REVISION", "SETUP_SIGNOFF"]);
+    expect([...DIRECTOR_CHOICE_REQUIRED_STEPS].sort()).toEqual(["BANK_FILE", "MONTHLY_INPUTS", "PAYSLIP_PUBLISH", "PERIOD_FINALISE", "PERIOD_UNLOCK", "RULE_CONFIRM", "RUN_APPROVAL", "SALARY_REVISION", "SETUP_SIGNOFF"]);
   });
 
   it("Not set: Ready for first real run is red with one blocker per step, and the run cannot be asked for approval; nothing is written", async () => {

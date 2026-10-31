@@ -5,6 +5,7 @@ import { authorityFor, requireDirector, requireDirectorTwoFactor } from "../../l
 import { recordDirectorNotice, scheduleDelivery } from "../../lib/directorNotices";
 import { activeUsersHoldingPermission, resolveAccess } from "../../lib/permissions";
 import { prisma } from "../../lib/prisma";
+import { recordSelfPayChange } from "./salary/guards";
 import { HttpError } from "../../middleware/errorHandler";
 import { namesOfUsers } from "./names";
 import { figureEditorsSince, recordEvent, type Db } from "./events";
@@ -94,9 +95,8 @@ export async function submit(input: SubmitInput): Promise<PayrollApproval> {
   const adapter = adapterFor(input.subject);
   if (!(await holds(input.makerUserId, adapter.makerPermission))) throw new HttpError(403, `Missing permission: ${adapter.makerPermission}`, "FORBIDDEN");
   await requireDirector(input.makerUserId, "prepare payroll"); // D1: the payroll roles are held by directors only
-  if (adapter.affectedUserIds && (await adapter.affectedUserIds(input.subjectId)).includes(input.makerUserId)) {
-    throw new HttpError(403, "This changes your own pay, so somebody else has to prepare it. Nobody prepares or approves a change to their own pay.", "MAKER_IS_AFFECTED");
-  }
+  // Owner decision: a director may prepare a change to their own pay. It is audited, tagged and the other director is told (salary/guards.ts).
+  if (adapter.affectedUserIds && (await adapter.affectedUserIds(input.subjectId)).includes(input.makerUserId)) await recordSelfPayChange(input.makerUserId, "Preparing a change to their own pay");
   const contentHash = await adapter.hash(input.subjectId);
   let noticeId: string | null = null;
   try {
@@ -143,9 +143,8 @@ export async function decide(input: DecideInput): Promise<PayrollApproval> {
   if (!(await holds(input.checkerUserId, adapter.checkerPermission))) throw new HttpError(403, `Missing permission: ${adapter.checkerPermission}`, "FORBIDDEN");
   await requireDirector(input.checkerUserId, "approve payroll"); // D1: the second person is the other director
   if (input.checkerUserId === approval.makerUserId) throw new HttpError(403, "You prepared this, so you cannot be the one who approves it. A different person must.", "CHECKER_IS_MAKER");
-  if (adapter.affectedUserIds && (await adapter.affectedUserIds(approval.subjectId)).includes(input.checkerUserId)) {
-    throw new HttpError(403, "This changes your own pay, so you cannot be the one who approves it. Nobody approves a change to their own pay.", "CHECKER_IS_AFFECTED");
-  }
+  // The checker must still be somebody other than the maker (above). A director who is the one whose pay it is may approve a change the other director prepared: audited, tagged, told.
+  if (adapter.affectedUserIds && (await adapter.affectedUserIds(approval.subjectId)).includes(input.checkerUserId)) await recordSelfPayChange(input.checkerUserId, "Approving a change to their own pay");
   const editors = await figureEditorsSince(approval.subject, approval.subjectId, approval.submittedAt);
   if (editors.has(input.checkerUserId)) throw new HttpError(403, "You changed these figures after they were submitted, so you cannot be the one who approves them.", "CHECKER_EDITED_FIGURES");
 
@@ -274,10 +273,8 @@ export async function authorise(input: AuthoriseInput): Promise<PayrollApproval>
   if (!(await holds(input.actorUserId, adapter.makerPermission))) throw new HttpError(403, `Missing permission: ${adapter.makerPermission}`, "FORBIDDEN");
   await requireDirector(input.actorUserId, "act on director authority");
   await requireDirectorTwoFactor(input.actorUserId);
-  // Nobody prepares or approves a change to their own pay, on director authority or any other.
-  if (adapter.affectedUserIds && (await adapter.affectedUserIds(input.subjectId)).includes(input.actorUserId)) {
-    throw new HttpError(403, "This changes your own pay, so the other director has to do it. Nobody prepares or approves a change to their own pay.", "MAKER_IS_AFFECTED");
-  }
+  // A director acting on their own authority on a change to their own pay: allowed, and recorded as a self-change on top of the ordinary notice.
+  if (adapter.affectedUserIds && (await adapter.affectedUserIds(input.subjectId)).includes(input.actorUserId)) await recordSelfPayChange(input.actorUserId, "Acting on their own authority on a change to their own pay");
   const contentHash = await adapter.hash(input.subjectId);
   let noticeId = "";
   let approval: PayrollApproval;
@@ -338,7 +335,7 @@ export function availabilityFrom(
   for (const who of holders) {
     if (opts.makerUserId && who.userId === opts.makerUserId) excluded.push({ ...who, reason: "prepared this" });
     else if (opts.editors?.has(who.userId)) excluded.push({ ...who, reason: "changed these figures" });
-    else if (opts.affected?.has(who.userId)) excluded.push({ ...who, reason: "is paid by this" });
+    // A director whose own pay it is may check it (owner decision); the act is recorded and the other director told when they do, so they are not left out here.
     else eligible.push(who);
   }
   const state = eligible.length === 0 ? "NONE" : eligible.length === 1 ? "ONE" : "MANY";

@@ -31,7 +31,7 @@ export interface SegmentInput {
 export interface AdjustmentIn {
   /** Null for a year-end encashment that has not yet been turned into an adjustment row (a preview). */
   id: string | null;
-  source: "MANUAL" | "SALARY_ARREARS" | "YEAR_END_ENCASHMENT" | "IMPORT";
+  source: "MANUAL" | "SALARY_ARREARS" | "YEAR_END_ENCASHMENT" | "IMPORT" | "LOP_REVERSAL" | "HOLD_RELEASE" | "MONTHLY_INPUT";
   sourceRef: string | null;
   componentCode: string;
   direction: "EARNING" | "DEDUCTION";
@@ -67,6 +67,10 @@ export interface PersonInput {
   placement: PayrollPlacement | null;
   placementDay: Date;
   hasBankAccount: boolean;
+  /** A director has held this person's salary for this cycle and not released it: they are calculated but not payable. */
+  directorHold?: { reason: string } | null;
+  /** The department or employee overrides that apply to this person on the cycle's last day, by rule key (Stage 3.4). Absent or empty: the company's rules stand. */
+  ruleOverrides?: Array<{ ruleKey: string; level: "DEPARTMENT" | "EMPLOYEE"; itemKey: string; version: number; valueHash: string; value: unknown; registrationRef: string | null }>;
   adjustments: AdjustmentIn[];
   /** Under a half-year ESI rule: the full-month ESI-applicable entitlement at the start of the contribution period (or at joining, if later). Null otherwise. */
   esiPeriodStartEntitlement: Money | null;
@@ -90,7 +94,7 @@ export interface LineOut {
   code: string;
   label: string;
   kind: "EARNING" | "DEDUCTION" | "EMPLOYER_CONTRIBUTION" | "ROUNDING";
-  source: "COMPONENT" | "ADJUSTMENT" | "ARREARS" | "ENCASHMENT" | "PF" | "ESI" | "PT" | "LWF" | "NET_ROUNDING";
+  source: "COMPONENT" | "ADJUSTMENT" | "LOP_REVERSAL" | "HOLD_RELEASE" | "MONTHLY_INPUT" | "ARREARS" | "ENCASHMENT" | "PF" | "ESI" | "PT" | "LWF" | "NET_ROUNDING";
   sourceRef: string | null;
   amount: Money;
   basis: Record<string, unknown>;

@@ -2,11 +2,11 @@
 // Rules and setup screen (labels, grouping, who confirms, the shape of the value). A rule that is not in this list does not exist; a payroll
 // calculation can read a rule only through the backend's RuleContext, which looks it up here.
 //
-// What ships:
-//   origin "STATUTORY"  a figure set by law or by a statutory body (a rate, a ceiling, a prescribed rounding, a state's slabs). Where it is a single figure
-//                       I can recall, it ships as a PLACEHOLDER labelled "From memory, unverified". Confirming one requires typing the value again.
-//   origin "COMPANY"    a choice only the company can make (pay-days basis, payment date, company identifiers...). It ships EMPTY ("Not set"): an
-//                       administrator enters a value, which is a Placeholder until a different person confirms it.
+// What ships: NOTHING. Every rule starts "Not set", the statutory ones included (Stage 3.2: no figure is shipped from anybody's memory).
+//   origin "STATUTORY"  a figure set by law or by a statutory body (a rate, a ceiling, a prescribed rounding, a state's slabs). A director enters it with a
+//                       source note (where the number came from) and the date it applies from; confirming one requires typing the value again.
+//   origin "COMPANY"    a choice only the company can make (pay-days basis, payment date, company identifiers...). A director enters a value, which is a
+//                       Placeholder until a different director confirms it.
 // Nothing here is a claim that a number is correct; the claim is made by a Confirmation, by a named person, on a date.
 
 export const PLACEHOLDER_SOURCE_LABEL = "From memory, unverified";
@@ -23,6 +23,7 @@ export const RULE_GROUPS = [
   "Tax",
   "Leave encashment",
   "Arrears",
+  "Reversals and holds",
   "Variance",
   "Payslip",
   "Company identifiers",
@@ -55,8 +56,8 @@ export interface RuleDef {
   origin: "STATUTORY" | "COMPANY";
   /** Who should vouch for it. */
   whoConfirms: string;
-  /** Shipped placeholder value (STATUTORY single figures only). Absent means the rule ships empty. */
-  placeholder?: unknown;
+  /** Nothing is shipped any more; kept so that older code and tests that read it compile, and so a test can pin that it stays absent. */
+  placeholder?: undefined;
   /** Offered on the screen as a suggestion, never shipped as a value. */
   suggestion?: string;
   /**
@@ -90,21 +91,21 @@ export const RULE_CATALOG: readonly RuleDef[] = [
   // ── Rounding ──
   { key: "LINE_ROUNDING", group: "Rounding", label: "Rounding of salary lines", description: `How each earning and deduction line is rounded. ${ROUNDING_NOTE}`, affects: "Every salary component line.", shape: { kind: "rounding" }, origin: "COMPANY", whoConfirms: "A different director, against the source note" },
   { key: "REVISION_CTC_ROUNDING", group: "Rounding", label: "Rounding of a new CTC after a percentage increase", description: `How a CTC is rounded when a salary revision raises it by a percentage (for example 10% of 1,234,567). ${ROUNDING_NOTE} A revision that sets an exact CTC needs no rounding.`, affects: "Salary revisions by percentage.", shape: { kind: "rounding" }, origin: "COMPANY", whoConfirms: "A different director" },
-  { key: "PF_ROUNDING", group: "Rounding", label: "Rounding of PF contributions", description: `How PF contributions are rounded. ${ROUNDING_NOTE}`, affects: "Employee and employer PF lines and the ECR file.", shape: { kind: "rounding" }, origin: "STATUTORY", whoConfirms: STAT, placeholder: { mode: "HALF_UP", scale: 0 } },
-  { key: "ESI_ROUNDING", group: "Rounding", label: "Rounding of ESI contributions", description: `How ESI contributions are rounded. ${ROUNDING_NOTE}`, affects: "Employee and employer ESI lines and the ESI return.", shape: { kind: "rounding" }, origin: "STATUTORY", whoConfirms: STAT, placeholder: { mode: "UP", scale: 0 } },
+  { key: "PF_ROUNDING", group: "Rounding", label: "Rounding of PF contributions", description: `How PF contributions are rounded. ${ROUNDING_NOTE}`, affects: "Employee and employer PF lines and the ECR file.", shape: { kind: "rounding" }, origin: "STATUTORY", whoConfirms: STAT },
+  { key: "ESI_ROUNDING", group: "Rounding", label: "Rounding of ESI contributions", description: `How ESI contributions are rounded. ${ROUNDING_NOTE}`, affects: "Employee and employer ESI lines and the ESI return.", shape: { kind: "rounding" }, origin: "STATUTORY", whoConfirms: STAT },
   { key: "NET_PAY_ROUNDING", group: "Rounding", label: "Rounding of net pay", description: `Whether net pay is rounded after all lines are added. ${ROUNDING_NOTE} Choose NONE to pay the exact sum of the rounded lines.`, affects: "Net pay and the bank file.", shape: { kind: "rounding" }, origin: "COMPANY", whoConfirms: "A different director" },
   // ── Provident Fund ──
-  { key: "PF_EMPLOYEE_RATE", group: "Provident Fund", label: "PF: employee rate", description: "Employee's provident fund contribution, as a percentage of PF wages.", affects: "PF deducted from every covered employee.", shape: { kind: "percent" }, origin: "STATUTORY", whoConfirms: STAT, placeholder: "12" },
-  { key: "PF_EPS_RATE", group: "Provident Fund", label: "PF: employer pension (EPS) rate", description: "The part of the employer's contribution that goes to the pension scheme, as a percentage of PF wages.", affects: "Employer cost and the ECR file.", shape: { kind: "percent" }, origin: "STATUTORY", whoConfirms: STAT, placeholder: "8.33" },
-  { key: "PF_EPF_ER_RATE", group: "Provident Fund", label: "PF: employer share to the provident fund", description: "The rest of the employer's contribution, as a percentage of PF wages.", affects: "Employer cost and the ECR file.", shape: { kind: "percent" }, origin: "STATUTORY", whoConfirms: STAT, placeholder: "3.67" },
-  { key: "PF_EDLI_RATE", group: "Provident Fund", label: "PF: EDLI rate", description: "Employer's deposit-linked insurance charge, as a percentage of PF wages.", affects: "Employer cost.", shape: { kind: "percent" }, origin: "STATUTORY", whoConfirms: STAT, placeholder: "0.5" },
-  { key: "PF_ADMIN_RATE", group: "Provident Fund", label: "PF: administration charge rate", description: "Employer's PF administration charge, as a percentage of PF wages.", affects: "Employer cost.", shape: { kind: "percent" }, origin: "STATUTORY", whoConfirms: STAT, placeholder: "0.5" },
-  { key: "PF_WAGE_CEILING", group: "Provident Fund", label: "PF: monthly wage ceiling", description: "The monthly wage above which PF is not computed on the excess (if the ceiling mode caps it).", affects: "PF wages for everyone earning near or above it.", shape: { kind: "money" }, origin: "STATUTORY", whoConfirms: STAT, placeholder: "15000" },
+  { key: "PF_EMPLOYEE_RATE", group: "Provident Fund", label: "PF: employee rate", description: "Employee's provident fund contribution, as a percentage of PF wages.", affects: "PF deducted from every covered employee.", shape: { kind: "percent" }, origin: "STATUTORY", whoConfirms: STAT },
+  { key: "PF_EPS_RATE", group: "Provident Fund", label: "PF: employer pension (EPS) rate", description: "The part of the employer's contribution that goes to the pension scheme, as a percentage of PF wages.", affects: "Employer cost and the ECR file.", shape: { kind: "percent" }, origin: "STATUTORY", whoConfirms: STAT },
+  { key: "PF_EPF_ER_RATE", group: "Provident Fund", label: "PF: employer share to the provident fund", description: "The rest of the employer's contribution, as a percentage of PF wages.", affects: "Employer cost and the ECR file.", shape: { kind: "percent" }, origin: "STATUTORY", whoConfirms: STAT },
+  { key: "PF_EDLI_RATE", group: "Provident Fund", label: "PF: EDLI rate", description: "Employer's deposit-linked insurance charge, as a percentage of PF wages.", affects: "Employer cost.", shape: { kind: "percent" }, origin: "STATUTORY", whoConfirms: STAT },
+  { key: "PF_ADMIN_RATE", group: "Provident Fund", label: "PF: administration charge rate", description: "Employer's PF administration charge, as a percentage of PF wages.", affects: "Employer cost.", shape: { kind: "percent" }, origin: "STATUTORY", whoConfirms: STAT },
+  { key: "PF_WAGE_CEILING", group: "Provident Fund", label: "PF: monthly wage ceiling", description: "The monthly wage above which PF is not computed on the excess (if the ceiling mode caps it).", affects: "PF wages for everyone earning near or above it.", shape: { kind: "money" }, origin: "STATUTORY", whoConfirms: STAT },
   { key: "PF_CEILING_MODE", group: "Provident Fund", label: "PF: ceiling mode", description: "Whether PF is computed on wages capped at the ceiling, or on actual wages.", affects: "PF wages for everyone above the ceiling.", shape: { kind: "choice", choices: ["CAP_AT_CEILING", "ACTUAL_WAGE"] }, origin: "COMPANY", whoConfirms: "A different director, against the source note" },
   // ── ESI ──
-  { key: "ESI_EMPLOYEE_RATE", group: "Employees' State Insurance", label: "ESI: employee rate", description: "Employee's ESI contribution, as a percentage of gross wages.", affects: "ESI deducted from every covered employee.", shape: { kind: "percent" }, origin: "STATUTORY", whoConfirms: STAT, placeholder: "0.75" },
-  { key: "ESI_EMPLOYER_RATE", group: "Employees' State Insurance", label: "ESI: employer rate", description: "Employer's ESI contribution, as a percentage of gross wages.", affects: "Employer cost and the ESI return.", shape: { kind: "percent" }, origin: "STATUTORY", whoConfirms: STAT, placeholder: "3.25" },
-  { key: "ESI_WAGE_CEILING", group: "Employees' State Insurance", label: "ESI: monthly wage ceiling", description: "ESI applies only if monthly gross wages are within this amount.", affects: "Who is covered by ESI at all.", shape: { kind: "money" }, origin: "STATUTORY", whoConfirms: STAT, placeholder: "21000" },
+  { key: "ESI_EMPLOYEE_RATE", group: "Employees' State Insurance", label: "ESI: employee rate", description: "Employee's ESI contribution, as a percentage of gross wages.", affects: "ESI deducted from every covered employee.", shape: { kind: "percent" }, origin: "STATUTORY", whoConfirms: STAT },
+  { key: "ESI_EMPLOYER_RATE", group: "Employees' State Insurance", label: "ESI: employer rate", description: "Employer's ESI contribution, as a percentage of gross wages.", affects: "Employer cost and the ESI return.", shape: { kind: "percent" }, origin: "STATUTORY", whoConfirms: STAT },
+  { key: "ESI_WAGE_CEILING", group: "Employees' State Insurance", label: "ESI: monthly wage ceiling", description: "ESI applies only if monthly gross wages are within this amount.", affects: "Who is covered by ESI at all.", shape: { kind: "money" }, origin: "STATUTORY", whoConfirms: STAT },
   { key: "ESI_PERIOD_RULE", group: "Employees' State Insurance", label: "ESI: coverage period rule", description: "Whether eligibility is tested every month, or fixed for the half-year contribution period once it starts.", affects: "Whether someone who crosses the ceiling mid-period stays covered.", shape: { kind: "choice", choices: ["MONTHLY", "STICKY_HALF_YEAR"] }, origin: "COMPANY", whoConfirms: "A different director, against the source note", openQuestion: { id: "ESI-HALF-YEAR", whenValue: "STICKY_HALF_YEAR", question: "How the half-year ESI coverage rule works is the developer's reading of it, not something that has been checked. The owners need to settle exactly when coverage starts and stops for someone who crosses the wage ceiling part-way through a contribution period, and record where the answer came from. Until that is answered and recorded this value cannot be confirmed." } },
   // ── Who is covered ──
   { key: "PF_ELIGIBLE_TYPES", group: "Who is covered", label: "PF: employment types covered", description: "Which employment types have PF deducted.", affects: "Who has PF at all.", shape: { kind: "employmentTypes" }, origin: "COMPANY", whoConfirms: "A different director, against the source note" },
@@ -125,6 +126,11 @@ export const RULE_CATALOG: readonly RuleDef[] = [
   // ── Arrears ──
   { key: "ARREARS_PAYOUT", group: "Arrears", label: "Arrears: how they are paid", description: "How the difference for months already closed is paid after a back-dated revision.", affects: "Where arrears appear on a payslip.", shape: { kind: "choice", choices: ["SEPARATE_LINE_IN_NEXT_RUN"] }, origin: "COMPANY", whoConfirms: "A different director, against the source note" },
   { key: "ARREARS_PF_ESI", group: "Arrears", label: "Arrears: PF and ESI", description: "Whether PF and ESI are computed on arrears.", affects: "PF and ESI in the month arrears are paid.", shape: { kind: "choice", choices: ["FOLLOW_COMPONENT_FLAGS", "EXCLUDE"] }, origin: "COMPANY", whoConfirms: "A different director, against the source note" },
+  { key: "ARREAR_ON_ARREAR", group: "Arrears", label: "Arrears: arrear on arrear", description: "Whether an arrear amount on a base head is itself an input to heads defined as a percentage of that head (for example a head that is a percentage of basic). Yes: they get arrears too. No: they do not.", affects: "The arrears paid on dependent heads after a back-dated revision.", shape: { kind: "boolean" }, origin: "COMPANY", whoConfirms: "A different director, against the source note", notRequiredForFirstRun: "Needed only by a run that pays arrears." },
+  // ── Reversals and holds ──
+  { key: "LOP_REVERSAL_LOOKBACK_MONTHS", group: "Reversals and holds", label: "Loss-of-pay reversal: how far back (months)", description: "How many months back a loss-of-pay correction can reach. A correction for an older month is refused unless a director records an override reason (when that is allowed).", affects: "Whether a late attendance correction pays back loss of pay.", shape: { kind: "integer", min: 0, max: 36 }, origin: "COMPANY", whoConfirms: "A different director", notRequiredForFirstRun: "Needed only by a run that pays back loss of pay." },
+  { key: "LOP_REVERSAL_OVERRIDE_ALLOWED", group: "Reversals and holds", label: "Loss-of-pay reversal: director override allowed", description: "Whether a director may record a reason and reverse loss of pay older than the look-back.", affects: "Whether a correction older than the look-back can ever be paid.", shape: { kind: "boolean" }, origin: "COMPANY", whoConfirms: "A different director", notRequiredForFirstRun: "Needed only by a run that pays back loss of pay." },
+  { key: "HEAD_ROUNDING", group: "Rounding", label: "Rounding of particular heads", description: "For a head that should be rounded differently from the salary lines in general: its code, a mode and a number of decimal places. A head not listed uses \"Rounding of salary lines\".", affects: "Only the heads listed.", shape: { kind: "json", example: '{"EXAMPLE_HEAD":{"mode":"DOWN","scale":0}}' }, origin: "COMPANY", whoConfirms: "A different director", notRequiredForFirstRun: "Optional: with nothing set every head uses the general rule." },
   // ── Variance ──
   { key: "VARIANCE_FLAG_PERCENT", group: "Variance", label: "Variance: flag above (percent)", description: "A person's net pay that moves by more than this percentage from last month is highlighted in previews.", affects: "Only what the preview highlights.", shape: { kind: "percent" }, origin: "COMPANY", whoConfirms: "A different director" },
   { key: "VARIANCE_FLAG_MIN_AMOUNT", group: "Variance", label: "Variance: ignore below (rupees)", description: "Changes smaller than this amount are not highlighted however large the percentage.", affects: "Only what the preview highlights.", shape: { kind: "money" }, origin: "COMPANY", whoConfirms: "A different director" },
@@ -142,3 +148,27 @@ export const RULE_CATALOG: readonly RuleDef[] = [
 export const RULE_KEYS = RULE_CATALOG.map((r) => r.key);
 export const RULE_BY_KEY: Record<string, RuleDef> = Object.fromEntries(RULE_CATALOG.map((r) => [r.key, r]));
 export const SHIPPED_PLACEHOLDER_KEYS = RULE_CATALOG.filter((r) => r.placeholder !== undefined).map((r) => r.key);
+
+// ── Stage 3.4: the rule hierarchy. Company default (the rule itself) → department override → employee override; the most specific wins. ──
+// Only the parameters of PF, ESI, professional tax and labour welfare fund can be overridden. Coverage, voluntary contribution and the tax regime are ordinary
+// per-person choices, not overrides; rounding, state mapping and payment choices stay company-wide.
+export const OVERRIDABLE_RULE_KEYS = [
+  "PF_EMPLOYEE_RATE",
+  "PF_EPS_RATE",
+  "PF_EPF_ER_RATE",
+  "PF_EDLI_RATE",
+  "PF_ADMIN_RATE",
+  "PF_WAGE_CEILING",
+  "PF_CEILING_MODE",
+  "PF_ELIGIBLE_TYPES",
+  "ESI_EMPLOYEE_RATE",
+  "ESI_EMPLOYER_RATE",
+  "ESI_WAGE_CEILING",
+  "ESI_PERIOD_RULE",
+  "ESI_ELIGIBLE_TYPES",
+  "PT_SLABS",
+  "LWF_TABLE",
+] as const;
+export type OverridableRuleKey = (typeof OVERRIDABLE_RULE_KEYS)[number];
+export const OVERRIDE_LEVELS = ["DEPARTMENT", "EMPLOYEE"] as const;
+export type OverrideLevel = (typeof OVERRIDE_LEVELS)[number];

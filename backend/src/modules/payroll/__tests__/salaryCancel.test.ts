@@ -96,21 +96,23 @@ describe("cancelling a scheduled salary", () => {
     expect((await api(w.tokens.maker, "get", `/salary/revisions/${id}`)).body.status).toBe("VOIDED");
   });
 
-  it("cannot be prepared, decided or applied by the person whose pay it is, and a withdrawn request changes nothing", async () => {
-    // Your own pay: refused before anything is made, whatever your role.
+  it("a director may prepare, decide or apply the cancellation of their own scheduled raise (recorded, the other director told); a withdrawn request changes nothing", async () => {
+    // Your own pay is no longer refused to a director: it goes on to the ordinary checks (here: there is no such salary row) and leaves a self-change record.
     const own = await api(w.tokens.maker, "post", "/salary/revisions/cancel-preview", { input: { employeeId: w.maker.employeeId, salaryId: "any" } });
-    expect([own.status, own.body.error.code]).toEqual([403, "SELF_PAY"]);
-    // A checker whose own scheduled raise it is cannot approve its cancellation.
+    expect(own.body.error?.code).not.toBe("SELF_PAY");
+    expect((await prisma.auditLog.count({ where: { actorUserId: w.maker.userId, action: "payroll.self_pay_change" } }))).toBeGreaterThan(0);
+    // A checker whose own scheduled raise it is is no longer left out of "who can approve it".
     await giveSalary(w, w.checkerB.employeeId, "1200000", FIRST_SALARY_DAY);
     const rowId = await scheduleRaise(w.checkerB.employeeId);
     const input = { employeeId: w.checkerB.employeeId, salaryId: rowId, note: "cancel it" };
     const preview = await api(w.tokens.maker, "post", "/salary/revisions/cancel-preview", { input });
-    expect(preview.body.checkers.excluded.map((c: { userId: string }) => c.userId)).toContain(w.checkerB.userId); // left out of "who can approve", with the reason
-    expect(preview.body.checkers.eligible.map((c: { userId: string }) => c.userId)).not.toContain(w.checkerB.userId);
+    expect(preview.body.checkers.excluded.map((c: { userId: string }) => c.userId)).not.toContain(w.checkerB.userId);
+    expect(preview.body.checkers.eligible.map((c: { userId: string }) => c.userId)).toContain(w.checkerB.userId);
     const id = (await api(w.tokens.maker, "post", "/salary/revisions/cancel", { input, fingerprint: preview.body.fingerprint })).body.id as string;
     const detail = await api(w.tokens.checkerB, "get", `/salary/revisions/${id}`);
-    const self = await api(w.tokens.checkerB, "post", `/salary/revisions/${id}/decision`, { decision: "APPROVE", fingerprint: detail.body.fingerprint });
-    expect([self.status, self.body.error.code]).toEqual([403, "CHECKER_IS_AFFECTED"]);
+    const self = await api(w.tokens.checkerB, "post", `/salary/revisions/${id}/decision`, { decision: "REJECT", note: "not now", fingerprint: detail.body.fingerprint });
+    expect(self.status, JSON.stringify(self.body)).not.toBe(403); // the affected director may decide it: here a rejection, which changes nothing
+    expect((await prisma.auditLog.count({ where: { actorUserId: w.checkerB.userId, action: "payroll.self_pay_change" } }))).toBeGreaterThan(0);
     const withdrawn = await api(w.tokens.maker, "post", `/salary/revisions/${id}/withdraw`, { reason: "changed my mind" });
     expect(withdrawn.status).toBe(200);
     expect((await api(w.tokens.maker, "get", `/salary/revisions/${id}`)).body.status).toBe("WITHDRAWN");

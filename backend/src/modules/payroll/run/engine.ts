@@ -9,6 +9,8 @@ import { payrollHash } from "../hash";
 import { canonicalDecimal, sum, type Money } from "../money";
 import { RuleContext, pinStatuses, type RulePin } from "../rules/context";
 import { committedEncashments } from "../../leave/payrollReader";
+import { assertReadyForRun } from "../inputs/service";
+import { iso } from "./days";
 import { gatherRunInputs, inputsFingerprint, type RunInputs } from "./gather";
 import { calculatePerson } from "./person";
 import { loadRunRules, type RunRules } from "./rules";
@@ -74,6 +76,8 @@ export function totalsOf(items: readonly ItemOut[]): RunTotals {
 export async function computeRun(cycle: { start: Date; end: Date; label: string }): Promise<Computed> {
   const ctx = await RuleContext.load();
   const inputs = await gatherRunInputs(cycle, ctx);
+  // A month with a pay head that takes its value from Monthly Inputs is calculated only when every figure is entered and a director has confirmed them.
+  await assertReadyForRun(iso(cycle.start), inputs.people.map((p) => p.employeeId), cycle.label);
   const rules = loadRunRules(ctx, inputs.needs);
   if (rules.lineRounding.mode === "NONE") {
     throw new HttpError(409, 'The rule "Rounding of salary lines" is set to no rounding, so a pro-rated line cannot be worked out. Choose a rounding mode and a number of decimal places for it.', "ROUNDING_NONE");

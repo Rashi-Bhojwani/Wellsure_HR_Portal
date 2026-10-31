@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { formatTicketNumber, HELPDESK_STATUS_LABELS, helpdeskAdminPath, helpdeskEmployeePath } from "@shared/constants/helpdesk";
 import type { TaskItem, TaskType } from "@shared/types/inbox";
 import { DIRECTOR_STEP_INFO, type DirectorStep } from "@shared/constants/directorAuthority";
+import { isDirector } from "../../lib/directorAuthority";
 import { prisma } from "../../lib/prisma";
 import { approvalEmployeeIdFilter, resolveApprovalReach } from "../leave/scope";
 import { getTeamEmployeeIds } from "../../lib/dataScope";
@@ -99,7 +100,7 @@ const assignedTickets: TaskSource = {
         assigneeEmployeeId: viewer.employeeId,
         status: { in: ["OPEN", "IN_PROGRESS"] },
         raisedByEmployeeId: { not: viewer.employeeId },
-        ...(!viewer.permissions.has("helpdesk.sensitive.view") && { category: { isSensitive: false } }),
+        category: { ...(!viewer.permissions.has("helpdesk.sensitive.view") && { isSensitive: false }), ...(!(await isDirector(viewer.userId)) && { directorsOnly: false }) },
       },
       include: { category: true, raisedBy: currentName() },
       orderBy: { lastActivityAt: "asc" },

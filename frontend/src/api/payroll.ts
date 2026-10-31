@@ -59,7 +59,7 @@ export interface Checker {
 export interface CheckerAvailability {
   eligible: Checker[];
   excluded: Array<Checker & { reason: string }>;
-  state: "NONE" | "ONE" | "MANY";
+  state: "NONE" | "ONE" | "MANY" | "SELF";
   message: string;
 }
 
@@ -140,6 +140,7 @@ export interface ComponentValue {
   activeTo?: string;
   arrearsHead?: string;
   reversalHead?: string;
+  inputItem?: boolean;
 }
 
 export interface ComponentView {
@@ -182,7 +183,14 @@ export type LineCalc =
   | { method: "FIXED_AMOUNT"; amount: string }
   | { method: "PER_PERSON" }
   | { method: "FORMULA"; formula: string }
-  | { method: "BALANCE" };
+  | { method: "BALANCE" }
+  | { method: "SLAB"; of: string; slabs: Array<{ from: string; to: string | null; amount: string }> };
+
+export interface CalculationStep {
+  component: string;
+  step: number;
+  dependsOn: string[];
+}
 
 export interface StructureLine {
   component: string;
@@ -225,6 +233,7 @@ export interface SampleResult {
 export interface StructureSavePreview extends ItemSavePreview<StructureValue> {
   sample: SampleResult;
   unconfirmedComponents: string[];
+  calculationOrder: CalculationStep[];
 }
 export type StructureConfirmPreview = ItemConfirmPreview<StructureValue> & { unconfirmedComponents: string[] };
 
@@ -366,7 +375,7 @@ export interface AdjustmentRow {
   direction: "EARNING" | "DEDUCTION";
   amount: string;
   reason: string;
-  source: "MANUAL" | "SALARY_ARREARS" | "IMPORT" | "YEAR_END_ENCASHMENT";
+  source: "MANUAL" | "SALARY_ARREARS" | "IMPORT" | "YEAR_END_ENCASHMENT" | "LOP_REVERSAL";
   periodStart: string | null;
   periodEnd: string | null;
   breakdown: unknown;
@@ -431,6 +440,98 @@ export const applyRevision = (id: string) => post<{ id: string; applied: number 
 export const listAdjustments = (params: { employeeId?: string; status?: string; page: number; pageSize: number }) => get<{ total: number; items: AdjustmentRow[] }>("/adjustments", params);
 export const previewAdjustment = (input: AdjustmentInput) => post<AdjustmentPreview>("/adjustments/preview", { input });
 export const addAdjustment = (input: AdjustmentInput, fingerprint: string) => post<{ id: string }>("/adjustments", { input, fingerprint });
+export interface LopCorrectionInput {
+  employeeId: string;
+  cycleStart: string;
+  correctionRef: string;
+  days: Array<{ date: string; restored: string }>;
+  reason: string;
+  overrideReason?: string;
+}
+export interface LopCorrectionPreview {
+  employeeName: string;
+  cycleLabel: string;
+  correctionRef: string;
+  days: Array<{ date: string; restored: string; hadLop: string }>;
+  lines: Array<{ component: string; amount: string; exact: string }>;
+  net: string;
+  lookbackMonths: number;
+  monthsBack: number;
+  needsOverride: boolean;
+  overrideReason: string | null;
+  effect: string;
+  fingerprint: string;
+}
+export const previewLopCorrection = (input: LopCorrectionInput) => post<LopCorrectionPreview>("/lop-corrections/preview", { input });
+export const addLopCorrection = (input: LopCorrectionInput, fingerprint: string) => post<{ id: string }>("/lop-corrections", { input, fingerprint });
+export interface HoldRow {
+  id: string;
+  employeeId: string;
+  employeeCode: string;
+  employeeName: string;
+  cycleStart: string;
+  reason: string;
+  heldAt: string;
+  status: "HELD" | "RELEASED";
+  releasedAt: string | null;
+  releaseNote: string | null;
+  runFinal: boolean;
+}
+export const listHolds = async (status?: "HELD" | "RELEASED") => (await get<{ holds: HoldRow[] }>("/holds", status ? { status } : undefined)).holds;
+export const addHold = (input: { employeeId: string; cycleStart: string; reason: string }) => post<{ id: string }>("/holds", { input });
+export const releaseHold = (id: string, note: string) => post<{ id: string; adjustmentId: string | null }>(`/holds/${id}/release`, { input: { note } });
+export interface RuleOverrideView {
+  itemKey: string;
+  ruleKey: string;
+  ruleLabel: string;
+  level: "DEPARTMENT" | "EMPLOYEE";
+  targetId: string;
+  targetName: string;
+  value: unknown;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  version: number;
+  status: ItemStatus;
+  sourceLabel: string | null;
+  sourceNote: string;
+  reason: string;
+  registrationRef: string | null;
+}
+export interface RuleOverrideInput {
+  ruleKey: string;
+  level: "DEPARTMENT" | "EMPLOYEE";
+  targetId: string;
+  value: unknown;
+  effectiveFrom: string;
+  effectiveTo?: string | null;
+  reason: string;
+  sourceNote: string;
+  registrationRef?: string | null;
+}
+export interface RuleOverridePreview {
+  key: string;
+  isNew: boolean;
+  unchanged: boolean;
+  willResetConfirmation: boolean;
+  impact: string;
+  fingerprint: string;
+}
+export interface RuleOverrideConfirmPreview {
+  key: string;
+  version: number;
+  value: { ruleKey: string; level: string; targetId: string; value: unknown; effectiveFrom: string; effectiveTo: string | null; reason: string; registrationRef: string | null };
+  authorName: string;
+  sourceLabel: string | null;
+  sourceNote: string;
+  blocked: string | null;
+  checkers: CheckerAvailability;
+  fingerprint: string;
+}
+export const listRuleOverrides = async () => (await get<{ overrides: RuleOverrideView[] }>("/rule-overrides")).overrides;
+export const previewRuleOverride = (input: RuleOverrideInput) => post<RuleOverridePreview>("/rule-overrides/preview", { input });
+export const saveRuleOverride = (input: RuleOverrideInput, fingerprint: string) => put<RuleOverrideView>("/rule-overrides", { input, fingerprint });
+export const previewRuleOverrideConfirm = (key: string) => post<RuleOverrideConfirmPreview>(`/rule-overrides/${key}/confirm-preview`);
+export const confirmRuleOverride = (key: string, body: { version: number; typedValue: unknown; note: string; fingerprint: string }) => post<{ ok: true }>(`/rule-overrides/${key}/confirm`, body);
 export const cancelAdjustment = (id: string, reason: string) => post<{ ok: true }>(`/adjustments/${id}/cancel`, { reason });
 export const previewCancelScheduled = (input: { employeeId: string; salaryId: string; note?: string }) => post<CancelPreview>("/salary/revisions/cancel-preview", { input });
 export const createCancelScheduled = (input: { employeeId: string; salaryId: string; note?: string }, fingerprint: string) => post<{ id: string }>("/salary/revisions/cancel", { input, fingerprint });
@@ -944,6 +1045,42 @@ export async function myPayslips(): Promise<{ payslips: PayslipSummary[] }> {
 export async function myPayslip(id: string): Promise<PayslipSummary & { content: PayslipContent }> {
   return (await apiClient.get(`/api/payslips/mine/${id}`)).data;
 }
+export interface WhyRule {
+  key: string;
+  label: string;
+  value: unknown;
+  version: number;
+  status: "CONFIRMED" | "PLACEHOLDER" | "NOT_SET";
+  sourceNote: string | null;
+  effectiveFrom: string | null;
+  enteredBy: string | null;
+  confirmedBy: string | null;
+  confirmedOn: string | null;
+  level: "COMPANY" | "DEPARTMENT" | "EMPLOYEE";
+  overridden: boolean;
+  registrationRef: string | null;
+}
+export interface WhyLine {
+  code: string;
+  label: string;
+  kind: string;
+  source: string;
+  amount: string;
+  explanation: string[];
+  working: Array<{ name: string; value: string }>;
+  rules: WhyRule[];
+}
+export interface PayslipWhy {
+  payslipId: string;
+  cycleLabel: string;
+  lines: WhyLine[];
+}
+export async function myPayslipWhy(id: string): Promise<PayslipWhy> {
+  return (await apiClient.get(`/api/payslips/mine/${id}/why`)).data;
+}
+export async function getPayslipWhy(id: string): Promise<PayslipWhy> {
+  return (await apiClient.get(`${base}/payslips/${id}/why`)).data;
+}
 export async function myPayslipPdf(id: string): Promise<PdfLink> {
   return (await apiClient.get(`/api/payslips/mine/${id}/pdf`)).data;
 }
@@ -1080,4 +1217,139 @@ export async function compareRegisters(f: CompareForm): Promise<CompareResult> {
 }
 export async function downloadComparison(f: CompareForm): Promise<Blob> {
   return (await apiClient.post(`${base}/compare`, compareBody(f, "xlsx"), { responseType: "blob" })).data as Blob;
+}
+
+// ── Stage 4: Monthly Inputs (directors only) ──
+
+export type MonthState = "CLOSED" | "OPEN" | "CONFIRMED" | "LOCKED";
+export interface InputHead {
+  code: string;
+  name: string;
+  type: "EARNING" | "DEDUCTION";
+  version: number;
+}
+export interface MonthView {
+  cycleStart: string;
+  cycleEnd: string;
+  label: string;
+  state: MonthState;
+  reason: string | null;
+  heads: InputHead[];
+  people: number;
+  cells: number;
+  entered: number;
+  blank: number;
+  peopleWithBlanks: number;
+  confirmation: { status: "NONE" | "PENDING" | "CONFIRMED" | "OUT_OF_DATE"; approvalId: string | null; makerName: string | null; checkerName: string | null; at: string | null; authority: string | null };
+  hash: string;
+}
+export interface InputGridRow {
+  employeeId: string;
+  employeeCode: string;
+  name: string;
+  departmentId: string | null;
+  departmentName: string | null;
+  cells: Array<{ head: string; amount: string | null; entries: number; lastAt: string | null }>;
+}
+export interface InputGridQuery {
+  cycleStart: string;
+  departmentId?: string;
+  employeeId?: string;
+  head?: string;
+  status?: "NOT_ENTERED" | "ENTERED" | "CHANGED";
+  page: number;
+  pageSize: number;
+}
+export interface InputHistoryEntry {
+  id: string;
+  employeeId: string;
+  employeeCode: string;
+  name: string;
+  head: string;
+  amount: string | null;
+  cleared: boolean;
+  reason: string;
+  by: string;
+  at: string;
+  fromFile: boolean;
+}
+export interface InputConfirmPreview {
+  month: MonthView;
+  fingerprint: string;
+  mode: "SECOND_DIRECTOR" | "DIRECTOR_AUTHORITY" | "NOT_SET";
+  checkers: CheckerAvailability;
+  warnings: string[];
+}
+export interface ImportRow {
+  line: number;
+  employeeNumber: string;
+  employeeId: string | null;
+  name: string | null;
+  from: string | null;
+  till: string | null;
+  months: string[];
+  figures: Record<string, string>;
+  principal: string | null;
+  interest: string | null;
+  remarks: string;
+  problems: string[];
+}
+export interface ImportView {
+  id: string;
+  fileName: string;
+  fileHash: string;
+  status: "PREVIEW" | "APPLIED" | "DISCARDED";
+  analysis: {
+    columns: Array<{ header: string; kind: "FIXED" | "HEAD" | "IGNORED_EMPTY" | "UNKNOWN"; head?: string }>;
+    fileProblems: string[];
+    rows: ImportRow[];
+    valid: number;
+    invalid: number;
+    cells: number;
+    months: string[];
+    notices: string[];
+  };
+  alreadyApplied: { batchId: string; at: string } | null;
+  fingerprint: string;
+  canApply: boolean;
+  canApplySkippingInvalid: boolean;
+}
+export interface ImportListRow {
+  id: string;
+  fileName: string;
+  status: string;
+  summary: { rows?: number; valid?: number; invalid?: number; cells?: number };
+  createdAt: string;
+  appliedAt: string | null;
+}
+
+const mi = "/monthly-inputs";
+export const inputMonths = async () => (await get<{ months: Array<{ cycleStart: string; cycleEnd: string; label: string }> }>(`${mi}/months`)).months;
+export const inputMonth = (cycleStart: string) => get<MonthView>(`${mi}/month`, { cycleStart });
+export const inputGrid = (q: InputGridQuery) => get<{ month: MonthView; rows: InputGridRow[]; total: number; page: number; pageSize: number }>(mi, q);
+export const inputHistory = async (q: { cycleStart: string; employeeId?: string; head?: string }) => (await get<{ entries: InputHistoryEntry[] }>(`${mi}/history`, q)).entries;
+export const enterInputs = (body: { cycleStart: string; entries: Array<{ employeeId: string; head: string; amount: string | null }>; reason: string }) => post<{ written: number; voidedConfirmation: boolean }>(`${mi}/entries`, body);
+export const fillInputBlanks = (body: { cycleStart: string; head?: string; reason: string }) => post<{ written: number; voidedConfirmation: boolean }>(`${mi}/fill-blanks`, body);
+export const previewInputConfirmation = (cycleStart: string) => post<InputConfirmPreview>(`${mi}/confirm-preview`, { cycleStart });
+export const requestInputConfirmation = (body: { cycleStart: string; fingerprint: string; note?: string }) => post<{ status: string; authority: string }>(`${mi}/confirm`, body);
+export const decideInputConfirmation = (cycleStart: string, body: { decision: "APPROVE" | "REJECT"; fingerprint: string; note?: string }) => post<{ status: string }>(`${mi}/decision/${cycleStart}`, body);
+export const listImports = async () => (await get<{ batches: ImportListRow[] }>(`${mi}/import`)).batches;
+export const getImport = (id: string) => get<ImportView>(`${mi}/import/${id}`);
+export async function uploadImport(file: File): Promise<ImportView> {
+  const form = new FormData();
+  form.append("file", file);
+  return (await apiClient.post<ImportView>(`${base}${mi}/import`, form)).data;
+}
+export const applyImport = (id: string, body: { fingerprint: string; skipInvalid: boolean; reason: string }) => post<{ written: number; skippedRows: number; months: string[] }>(`${mi}/import/${id}/apply`, body);
+export const discardImport = (id: string) => post<{ ok: true }>(`${mi}/import/${id}/discard`, {});
+export async function downloadImportTemplate(format: "xlsx" | "csv"): Promise<void> {
+  const res = await apiClient.get<Blob>(`${base}${mi}/import/template`, { params: { format }, responseType: "blob" });
+  const url = URL.createObjectURL(res.data);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `monthly-inputs-template.${format}`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }

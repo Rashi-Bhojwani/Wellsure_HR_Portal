@@ -46,7 +46,7 @@ export const STATUTORY_LINE_LABEL: Record<string, string> = {
 };
 
 /** Why a calculated person is not payable. */
-export const HOLD_REASONS = ["ATTENDANCE_NOT_FINAL", "NO_SALARY", "WORKING_DAYS_PART_MONTH", "FINAL_SETTLEMENT", "NEGATIVE_NET", "ZERO_NET", "NO_BANK_ACCOUNT"] as const;
+export const HOLD_REASONS = ["ATTENDANCE_NOT_FINAL", "NO_SALARY", "WORKING_DAYS_PART_MONTH", "FINAL_SETTLEMENT", "NEGATIVE_NET", "ZERO_NET", "NO_BANK_ACCOUNT", "DIRECTOR_HOLD"] as const;
 export type HoldReason = (typeof HOLD_REASONS)[number];
 export const HOLD_REASON_LABEL: Record<HoldReason, string> = {
   ATTENDANCE_NOT_FINAL: "Attendance for some of their days is not finalised yet",
@@ -56,6 +56,7 @@ export const HOLD_REASON_LABEL: Record<HoldReason, string> = {
   NEGATIVE_NET: "Deductions are more than earnings",
   ZERO_NET: "Net pay is nil",
   NO_BANK_ACCOUNT: "No bank account on the payment date",
+  DIRECTOR_HOLD: "Salary held by a director",
 };
 
 /** What the person who sees a held name should do about it: shown beside the reason wherever people without a payslip are listed. */
@@ -67,6 +68,7 @@ export const HOLD_REASON_ACTION: Record<HoldReason, string> = {
   NEGATIVE_NET: "Reduce a deduction or add an adjustment, then calculate the run again.",
   ZERO_NET: "Nothing is owed to them this month, so there is nothing to pay.",
   NO_BANK_ACCOUNT: "Enter their bank account in force on the payment date (Employee profile), then calculate the run again.",
+  DIRECTOR_HOLD: "A director releases it (Payroll, Held salaries). Until then it is carried forward and not paid.",
 };
 
 /** Things a person is calculated with that someone must look at. BLOCKING ones stop the run being submitted (P6-4); WARNING ones are for the reader. */

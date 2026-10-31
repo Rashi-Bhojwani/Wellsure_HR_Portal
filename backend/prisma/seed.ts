@@ -879,12 +879,12 @@ async function main() {
   // ── Helpdesk (Phase 5 commit D) — categories (two sensitive, per the
   // user's decision) and a few tickets so the employee list, the HR queue
   // and the auto-close notice all have something to show on a fresh install.
-  const HELPDESK_CATEGORIES: Array<{ code: string; name: string; isSensitive: boolean; sortOrder: number }> = [
+  const HELPDESK_CATEGORIES: Array<{ code: string; name: string; isSensitive: boolean; directorsOnly?: boolean; sortOrder: number }> = [
     { code: "GENERAL", name: "General HR Query", isSensitive: false, sortOrder: 1 },
     { code: "LEAVE_ATTENDANCE", name: "Leave & Attendance", isSensitive: false, sortOrder: 2 },
     { code: "DOCUMENTS", name: "Documents & Letters", isSensitive: false, sortOrder: 3 },
     { code: "IT_ACCESS", name: "IT & Access", isSensitive: false, sortOrder: 4 },
-    { code: "PAYROLL_SALARY", name: "Payroll & Salary", isSensitive: true, sortOrder: 5 },
+    { code: "PAYROLL_SALARY", name: "Payroll & Salary", isSensitive: true, directorsOnly: true, sortOrder: 5 },
     { code: "GRIEVANCE", name: "Grievance", isSensitive: true, sortOrder: 6 },
   ];
   const helpdeskCategory: Record<string, { id: string }> = {};

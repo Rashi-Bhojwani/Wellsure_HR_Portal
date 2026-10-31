@@ -82,6 +82,8 @@ describe("Helpdesk tickets", () => {
     const seeded = await prisma.helpdeskCategory.findMany({ where: { code: { in: ["GENERAL", "LEAVE_ATTENDANCE", "DOCUMENTS", "IT_ACCESS", "PAYROLL_SALARY", "GRIEVANCE"] } } });
     expect(seeded).toHaveLength(6);
     expect(seeded.filter((c) => c.isSensitive).map((c) => c.code).sort()).toEqual(["GRIEVANCE", "PAYROLL_SALARY"]);
+    // Owner decision: Payroll tickets are the directors' alone, and nothing else is.
+    expect(seeded.filter((c) => c.directorsOnly).map((c) => c.code)).toEqual(["PAYROLL_SALARY"]);
   });
 
   it("an employee raises a ticket: HD- number, Open, audited, and in HR's queue", async () => {
@@ -200,6 +202,61 @@ describe("Helpdesk tickets", () => {
     // The raiser always sees their own, sensitive or not, and isn't audited for it.
     expect((await get(tokens.raiser, `/api/helpdesk/tickets/${ticketId}`)).status).toBe(200);
     expect(await prisma.auditLog.count({ where: { entityId: ticketId, action: "helpdesk.ticket.sensitive_viewed" } })).toBe(1);
+  });
+
+  it("a directors-only category (Payroll & Salary): HR_ADMIN, who sees sensitive tickets, still gets nothing; a director does; the raiser keeps their thread", async () => {
+    const payroll = await createTestHelpdeskCategory({ isSensitive: true, directorsOnly: true });
+    categoryIds.push(payroll.id);
+    const ticketId = await newTicket(payroll.id, tokens.raiser, "My PF figure looks wrong");
+    // HR: not in the queue, not by id, cannot answer or change it, and it is not in their Tasks inbox even when assigned to them before the rule.
+    expect((await get(tokens.hrAdmin, `/api/helpdesk/queue?categoryId=${payroll.id}`)).body.items).toHaveLength(0);
+    expect((await get(tokens.hrAdmin, `/api/helpdesk/tickets/${ticketId}`)).status).toBe(404);
+    expect((await reply(tokens.hrAdmin, ticketId, { body: "x" })).status).toBe(404);
+    expect((await patch(tokens.hrAdmin, `/api/helpdesk/tickets/${ticketId}`, { priority: "HIGH" })).status).toBe(404);
+    await prisma.helpdeskTicket.update({ where: { id: ticketId }, data: { assigneeEmployeeId: people.hrAdmin.employeeId } });
+    const inbox = await get(tokens.hrAdmin, "/api/tasks/mine");
+    expect(inbox.status).toBe(200);
+    expect(JSON.stringify(inbox.body)).not.toContain(ticketId);
+    // The control: the same assignment on an ordinary sensitive ticket DOES appear, so the line above proves something.
+    const ordinary = await newTicket(sensitive.id, tokens.raiser, "Control ticket");
+    await prisma.helpdeskTicket.update({ where: { id: ordinary }, data: { assigneeEmployeeId: people.hrAdmin.employeeId } });
+    expect(JSON.stringify((await get(tokens.hrAdmin, "/api/tasks/mine")).body)).toContain(ordinary);
+    await prisma.helpdeskTicket.update({ where: { id: ticketId }, data: { assigneeEmployeeId: null } });
+    // A director sees it, answers it, and can assign it to a director only.
+    expect((await get(tokens.director, `/api/helpdesk/queue?categoryId=${payroll.id}`)).body.items).toHaveLength(1);
+    expect((await get(tokens.director, `/api/helpdesk/tickets/${ticketId}`)).status).toBe(200);
+    expect((await reply(tokens.director, ticketId, { body: "We are looking at it." })).status).toBe(201);
+    const toHr = await patch(tokens.director, `/api/helpdesk/tickets/${ticketId}`, { assigneeEmployeeId: people.hrAdmin.employeeId });
+    expect([toHr.status, toHr.body.error?.code]).toEqual([400, "VALIDATION_ERROR"]);
+    expect((await patch(tokens.director, `/api/helpdesk/tickets/${ticketId}`, { assigneeEmployeeId: people.director.employeeId })).status).toBe(200);
+    // The raiser keeps the thread and sees the reply.
+    const mine = await get(tokens.raiser, `/api/helpdesk/tickets/${ticketId}`);
+    expect(mine.status).toBe(200);
+    expect(JSON.stringify(mine.body)).toContain("We are looking at it.");
+  });
+
+  it("HR keeps Helpdesk Categories but cannot move a category into or out of the directors-only queue; a director can; and a default assignee who is not a director is refused or dropped", async () => {
+    const own = await createTestHelpdeskCategory({ isSensitive: true });
+    categoryIds.push(own.id);
+    const hrTry = await patch(tokens.hrAdmin, `/api/helpdesk/categories/${own.id}`, { directorsOnly: true });
+    expect([hrTry.status, hrTry.body.error?.code]).toEqual([403, "FORBIDDEN"]);
+    const hrCreate = await post(tokens.hrAdmin, "/api/helpdesk/categories", { code: `X_${Date.now()}`.slice(0, 20), name: "Sneaky", directorsOnly: true });
+    expect(hrCreate.status).toBe(403);
+    const payroll = await prisma.helpdeskCategory.findFirstOrThrow({ where: { code: "PAYROLL_SALARY" } });
+    expect((await patch(tokens.hrAdmin, `/api/helpdesk/categories/${payroll.id}`, { directorsOnly: false })).status).toBe(403); // HR cannot take Payroll tickets back
+    expect((await prisma.helpdeskCategory.findUniqueOrThrow({ where: { id: payroll.id } })).directorsOnly).toBe(true);
+    // HR may still edit it in other ways (name, sort), as before.
+    expect((await patch(tokens.hrAdmin, `/api/helpdesk/categories/${own.id}`, { sortOrder: 9 })).status).toBe(200);
+    // A director can flag it; then a default assignee who is not a director is refused.
+    const flagged = await patch(tokens.director, `/api/helpdesk/categories/${own.id}`, { directorsOnly: true });
+    expect(flagged.status, JSON.stringify(flagged.body)).toBe(200);
+    const bad = await patch(tokens.director, `/api/helpdesk/categories/${own.id}`, { defaultAssigneeEmployeeId: people.hrAdmin.employeeId });
+    expect([bad.status, bad.body.error?.code]).toEqual([400, "VALIDATION_ERROR"]);
+    expect((await patch(tokens.director, `/api/helpdesk/categories/${own.id}`, { defaultAssigneeEmployeeId: people.director.employeeId })).status).toBe(200);
+    // A ticket raised in it is assigned to that director; if the default were somebody else it would be left unassigned.
+    await prisma.helpdeskCategory.update({ where: { id: own.id }, data: { defaultAssigneeEmployeeId: people.hrAdmin.employeeId } }); // as an older record might have it
+    const id = await newTicket(own.id, tokens.raiser, "Directors only, default is HR");
+    expect((await prisma.helpdeskTicket.findUniqueOrThrow({ where: { id } })).assigneeEmployeeId).toBeNull();
   });
 
   it("toggling a category's sensitive flag immediately changes who sees its existing tickets, and is audited", async () => {

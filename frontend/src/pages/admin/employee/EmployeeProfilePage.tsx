@@ -1,9 +1,10 @@
+import { RevealButton } from "../../../components/common/RevealButton";
 import { EffectiveDateHint, HistoryStatusCell, type HistoryStatus } from "../../../lib/effectiveDate";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, Button, DatePicker, Form, Input, Popconfirm, Select, type MenuProps } from "antd";
-import { EditOutlined, EyeOutlined, ExportOutlined as SeparateIcon } from "@ant-design/icons";
+import { EditOutlined, ExportOutlined as SeparateIcon } from "@ant-design/icons";
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import dayjs from "dayjs";
 import * as employeeApi from "../../../api/employee";
@@ -97,7 +98,7 @@ function StatutoryTab({ employeeId, profile, canEdit }: { employeeId: string; pr
   const [form] = Form.useForm();
 
   const revealMutation = useMutation({
-    mutationFn: () => employeeApi.revealStatutory(employeeId),
+    mutationFn: (reason: string) => employeeApi.revealStatutory(employeeId, reason),
     onSuccess: setRevealed,
     onError: (err) => toast.error(errorMessage(err, "Could not reveal statutory details.")),
   });
@@ -128,9 +129,7 @@ function StatutoryTab({ employeeId, profile, canEdit }: { employeeId: string; pr
         }
         editLabel="Edit statutory details"
         extra={
-          <Button icon={<EyeOutlined />} loading={revealMutation.isPending} onClick={() => revealMutation.mutate()}>
-            Reveal full details
-          </Button>
+          <RevealButton label="Reveal full details" loading={revealMutation.isPending} onReveal={(reason) => revealMutation.mutate(reason)} />
         }
       >
         <Grid items={statutoryItems(profile.statutory, revealed)} />
@@ -154,7 +153,7 @@ function BankTab({ employeeId, profile, canEdit }: { employeeId: string; profile
   const [form] = Form.useForm();
 
   const revealMutation = useMutation({
-    mutationFn: () => employeeApi.revealBank(employeeId),
+    mutationFn: (reason: string) => employeeApi.revealBank(employeeId, reason),
     onSuccess: setRevealed,
     onError: (err) => toast.error(errorMessage(err, "Could not reveal bank details.")),
   });
@@ -178,9 +177,7 @@ function BankTab({ employeeId, profile, canEdit }: { employeeId: string; profile
         title="Bank account"
         extra={
           <>
-            <Button icon={<EyeOutlined />} loading={revealMutation.isPending} onClick={() => revealMutation.mutate()}>
-              Reveal full account number
-            </Button>
+            <RevealButton label="Reveal full account number" loading={revealMutation.isPending} onReveal={(reason) => revealMutation.mutate(reason)} />
             {canEdit && (
               <Button
                 icon={<EditOutlined />}

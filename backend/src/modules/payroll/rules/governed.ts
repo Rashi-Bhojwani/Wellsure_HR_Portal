@@ -257,10 +257,11 @@ export async function revealRule(key: string, actor: { userId: string; ip?: stri
   return { key, version: cur.version, value: unseal(cur.value) };
 }
 
-// ── The shipped placeholders ──
+// ── The shipped placeholders (none, since Stage 3.2) ──
 
 /**
- * Makes sure every statutory figure the catalog ships exists as version 1, authored by nobody (the System), unconfirmed. Idempotent and additive:
+ * Makes sure every figure the catalog ships exists as version 1, authored by nobody (the System), unconfirmed. Since Stage 3.2 the catalog ships none, so this creates nothing;
+ * a version an older build created is ignored on read (the rule is Not set) and is never deleted. Idempotent and additive:
  * a rule that already has any version (someone's edit, or a confirmation) is never touched. Runs in the migrate task and `npm run db:migrate`.
  */
 export async function ensurePayrollRules(): Promise<{ created: string[] }> {

@@ -207,7 +207,7 @@ describe("director authority for a run: what stays", () => {
       }
     }
     for (const slug of Object.keys(STEP_OF) as Slug[]) for (const other of Object.keys(STEP_OF) as Slug[]) expect(results[`${slug}/${other}`], `${slug} on, asking about ${other}`).toBe(slug === other ? "SECOND_DIRECTOR" : "DIRECTOR_AUTHORITY");
-    expect(DIRECTOR_STEPS.length).toBe(10);
+    expect(DIRECTOR_STEPS.length).toBe(11);
   });
 
   it("with the check switched on for the step, nothing changes: the maker waits, the other director decides, the same person can never be both", async () => {

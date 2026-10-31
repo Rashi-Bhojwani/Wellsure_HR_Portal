@@ -21,6 +21,11 @@ describe("RuleContext, the gates and the watermark", () => {
     org = await createEmployeeTestOrgMasters();
     maker = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
     checker = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
+    // Nothing is shipped, so the figures these tests read are entered here (made-up values, for the test only).
+    for (const [key, value] of Object.entries({ PF_WAGE_CEILING: "15000", PF_EMPLOYEE_RATE: "12", ESI_ROUNDING: { mode: "UP", scale: 0 }, PF_ADMIN_RATE: "0.5", PF_EDLI_RATE: "0.5" })) {
+      const p = await previewEdit(key, value);
+      await editRule(key, { value, note: "test", sourceNote: "test fixture: a made-up source", effectiveFrom: "2026-04-01", fingerprint: p.fingerprint }, { userId: maker.userId });
+    }
   });
 
   afterAll(async () => {

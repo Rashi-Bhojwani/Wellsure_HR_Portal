@@ -10,6 +10,7 @@ import { prisma } from "../../lib/prisma";
 import { prepareDocumentUpload } from "../../lib/uploads";
 import { HttpError } from "../../middleware/errorHandler";
 import { emitHelpdeskQueue, emitHelpdeskTicket } from "../../realtime/emit";
+import { activeDirectors, isDirector } from "../../lib/directorAuthority";
 import { notifyEmployee } from "../notifications/notifyEmployee";
 import { inForceOn } from "../../lib/effectiveDating";
 
@@ -46,10 +47,11 @@ const canManage = (v: HelpdeskViewer) => v.permissions.has("helpdesk.manage");
 const canSeeSensitive = (v: HelpdeskViewer) => v.permissions.has("helpdesk.sensitive.view");
 
 // Prisma filter for the tickets an HR viewer may see in the queue.
-function hrVisibleWhere(viewer: HelpdeskViewer): Prisma.HelpdeskTicketWhereInput {
+// A directors-only category (Payroll & Salary) is visible to directors alone, whatever else the viewer holds.
+function hrVisibleWhere(viewer: HelpdeskViewer, director: boolean): Prisma.HelpdeskTicketWhereInput {
   return {
     raisedByEmployeeId: { not: viewer.employeeId },
-    ...(!canSeeSensitive(viewer) && { category: { isSensitive: false } }),
+    category: { ...(!canSeeSensitive(viewer) && { isSensitive: false }), ...(!director && { directorsOnly: false }) },
   };
 }
 
@@ -58,7 +60,7 @@ const personRef = (p: { id: string; employeeCode: string; nameHistory: { fullNam
   p ? { id: p.id, employeeCode: p.employeeCode, name: p.nameHistory[0]?.fullName ?? p.employeeCode } : null;
 
 const ticketInclude = () => ({
-  category: { select: { id: true, code: true, name: true, isSensitive: true } },
+  category: { select: { id: true, code: true, name: true, isSensitive: true, directorsOnly: true } },
   raisedBy: { select: nameSelect() },
   assignee: { select: nameSelect() },
 }) as const;
@@ -97,7 +99,7 @@ function formatTicket(row: TicketRow, settings: HelpdeskSettings) {
 export async function listActiveCategories() {
   return prisma.helpdeskCategory.findMany({
     where: { isActive: true },
-    select: { id: true, code: true, name: true, isSensitive: true },
+    select: { id: true, code: true, name: true, isSensitive: true, directorsOnly: true },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
   });
 }
@@ -112,6 +114,7 @@ export async function listAllCategories() {
     code: c.code,
     name: c.name,
     isSensitive: c.isSensitive,
+    directorsOnly: c.directorsOnly,
     isActive: c.isActive,
     sortOrder: c.sortOrder,
     defaultAssignee: personRef(c.defaultAssignee),
@@ -119,19 +122,29 @@ export async function listAllCategories() {
   }));
 }
 
-async function assertAssignable(employeeId: string | null | undefined) {
+async function assertAssignable(employeeId: string | null | undefined, directorsOnly = false) {
   if (!employeeId) return;
   const assignees = await listAssignees();
   if (!assignees.some((a) => a.id === employeeId)) {
     throw new HttpError(400, "That person can't be assigned helpdesk tickets.", "VALIDATION_ERROR");
   }
+  if (directorsOnly && !(await activeDirectors()).some((d) => d.employeeId === employeeId)) {
+    throw new HttpError(400, "Tickets in this category are the directors' alone, so only a director can be assigned to them.", "VALIDATION_ERROR");
+  }
+}
+
+/** HR keeps Helpdesk Categories, but cannot move a category into or out of the directors-only queue: that would let HR re-route Payroll tickets to itself. */
+async function assertOnlyDirectorSetsDirectorsOnly(wanted: boolean | undefined, meta: ActorMeta, current = false) {
+  if (wanted === undefined || wanted === current) return;
+  if (!(await isDirector(meta.actorUserId))) throw new HttpError(403, "Only a director can move a category into or out of the directors-only queue.", "FORBIDDEN");
 }
 
 export async function createCategory(
-  input: { code: string; name: string; isSensitive?: boolean; sortOrder?: number; defaultAssigneeEmployeeId?: string | null },
+  input: { code: string; name: string; isSensitive?: boolean; directorsOnly?: boolean; sortOrder?: number; defaultAssigneeEmployeeId?: string | null },
   meta: ActorMeta,
 ) {
-  await assertAssignable(input.defaultAssigneeEmployeeId);
+  await assertOnlyDirectorSetsDirectorsOnly(input.directorsOnly, meta);
+  await assertAssignable(input.defaultAssigneeEmployeeId, input.directorsOnly === true);
   try {
     const after = await prisma.helpdeskCategory.create({ data: input });
     await writeAuditLog({ ...meta, action: "helpdesk.category.created", entityType: "HelpdeskCategory", entityId: after.id, after });
@@ -148,12 +161,16 @@ export async function createCategory(
 // immediately changes who can see the category's existing tickets.
 export async function updateCategory(
   id: string,
-  input: { name?: string; isSensitive?: boolean; isActive?: boolean; sortOrder?: number; defaultAssigneeEmployeeId?: string | null },
+  input: { name?: string; isSensitive?: boolean; directorsOnly?: boolean; isActive?: boolean; sortOrder?: number; defaultAssigneeEmployeeId?: string | null },
   meta: ActorMeta,
 ) {
   const before = await prisma.helpdeskCategory.findUnique({ where: { id } });
   if (!before) throw new HttpError(404, "Category not found.", "NOT_FOUND");
-  await assertAssignable(input.defaultAssigneeEmployeeId);
+  await assertOnlyDirectorSetsDirectorsOnly(input.directorsOnly, meta, before.directorsOnly);
+  const becomesDirectorsOnly = input.directorsOnly ?? before.directorsOnly;
+  // A directors-only category cannot be left with a default assignee who is not a director, nor be given one.
+  if (becomesDirectorsOnly && input.defaultAssigneeEmployeeId === undefined && before.defaultAssigneeEmployeeId && !(await activeDirectors()).some((d) => d.employeeId === before.defaultAssigneeEmployeeId)) input.defaultAssigneeEmployeeId = null;
+  await assertAssignable(input.defaultAssigneeEmployeeId, becomesDirectorsOnly);
   const after = await prisma.helpdeskCategory.update({ where: { id }, data: input });
   await writeAuditLog({ ...meta, action: "helpdesk.category.updated", entityType: "HelpdeskCategory", entityId: id, before, after });
   return after;
@@ -217,7 +234,7 @@ export async function raiseTicket(
           categoryId: category.id,
           subject: input.subject,
           priority: input.priority ?? "NORMAL",
-          assigneeEmployeeId: category.defaultAssigneeEmployeeId,
+          assigneeEmployeeId: category.defaultAssigneeEmployeeId && category.directorsOnly && !(await activeDirectors(tx)).some((d) => d.employeeId === category.defaultAssigneeEmployeeId) ? null : category.defaultAssigneeEmployeeId,
           status: "OPEN",
         },
       });
@@ -265,8 +282,9 @@ export interface HelpdeskQueueQuery {
 }
 
 export async function listQueue(viewer: HelpdeskViewer, query: HelpdeskQueueQuery) {
+  const director = await isDirector(viewer.userId);
   const where: Prisma.HelpdeskTicketWhereInput = {
-    ...hrVisibleWhere(viewer),
+    ...hrVisibleWhere(viewer, director),
     ...(query.status ? { status: query.status } : { status: { not: "CLOSED" } }),
     ...(query.categoryId && { categoryId: query.categoryId }),
     ...(query.assignee === "me" && { assigneeEmployeeId: viewer.employeeId }),
@@ -294,7 +312,7 @@ async function resolveAccess(ticketId: string, viewer: HelpdeskViewer): Promise<
   const ticket = await prisma.helpdeskTicket.findUnique({ where: { id: ticketId }, include: ticketInclude() });
   if (!ticket) throw notFound();
   if (ticket.raisedByEmployeeId === viewer.employeeId) return { ticket, access: { mode: "raiser" } };
-  if (canManage(viewer) && (!ticket.category.isSensitive || canSeeSensitive(viewer))) return { ticket, access: { mode: "hr" } };
+  if (canManage(viewer) && (!ticket.category.isSensitive || canSeeSensitive(viewer)) && (!ticket.category.directorsOnly || (await isDirector(viewer.userId)))) return { ticket, access: { mode: "hr" } };
   throw notFound();
 }
 
@@ -399,7 +417,7 @@ export async function updateTicket(
 ) {
   const { ticket, access } = await resolveAccess(ticketId, viewer);
   if (access.mode !== "hr") throw notFound();
-  await assertAssignable(input.assigneeEmployeeId);
+  await assertAssignable(input.assigneeEmployeeId, ticket.category.directorsOnly);
 
   const data: Prisma.HelpdeskTicketUpdateInput = {};
   if (input.priority) data.priority = input.priority;

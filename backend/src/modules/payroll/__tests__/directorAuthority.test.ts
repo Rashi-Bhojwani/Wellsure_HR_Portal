@@ -270,16 +270,20 @@ describe("director authority", () => {
       expect((await prisma.payrollApproval.findFirstOrThrow({ where: { subjectId: id } })).status).toBe("VOIDED");
     });
 
-    it("never lets a director change their own pay, on director authority either", async () => {
+    it("lets a director act on their own pay on their own authority, tagged as a self-change, and the other director is told twice over (the act, and the self-change)", async () => {
       const id = newId();
       figures.set(id, "5");
       affected.add(p.a.userId);
-      await expect(act(p.a, id)).rejects.toMatchObject({ status: 403, code: "MAKER_IS_AFFECTED" });
-      const ok = await act(p.b, id); // the other director can
+      const ok = await act(p.a, id);
       expect(ok.authority).toBe("DIRECTOR_AUTHORITY");
       const note = await prisma.directorActionNotice.findFirstOrThrow({ where: { approvalId: ok.id }, include: { receipts: true } });
       noticeIds.push(note.id);
-      expect(note.receipts.map((r) => r.recipientUserId)).toContain(p.a.userId); // the affected director is the one who is told
+      expect(note.receipts.map((r) => r.recipientUserId)).toContain(p.b.userId); // the other director is told of the act
+      const self = await prisma.directorActionNotice.findMany({ where: { actorUserId: p.a.userId, subjectType: "SELF_PAY_CHANGE" }, include: { receipts: true } });
+      expect(self.length).toBeGreaterThan(0);
+      noticeIds.push(...self.map((n) => n.id));
+      expect(self.every((n) => n.receipts.some((r) => r.recipientUserId === p.b.userId))).toBe(true);
+      expect((await prisma.auditLog.count({ where: { actorUserId: p.a.userId, action: "payroll.self_pay_change" } }))).toBeGreaterThan(0);
     });
 
     it("a second act on the same thing waits for the first to be used", async () => {

@@ -9,7 +9,9 @@ import { InvalidSalaryValueError } from "./schemas";
 export async function loadLineRounding(): Promise<{ rule: RoundingRule; pin: RulePin }> {
   const ctx = await RuleContext.load();
   const rule = ctx.rule<RoundingRule>("LINE_ROUNDING");
-  return { rule, pin: ctx.pins()[0]! };
+  const pin = ctx.pins()[0]!;
+  const perHead = ctx.ifSet<NonNullable<RoundingRule["perHead"]>>("HEAD_ROUNDING");
+  return { rule: perHead ? { ...rule, perHead } : rule, pin };
 }
 
 /** An InvalidSalaryValueError as the 400 the screens show, with every problem listed. */

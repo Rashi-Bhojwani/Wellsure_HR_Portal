@@ -8,7 +8,7 @@ import { ZERO, dec } from "../money";
 import { annualView, computeBreakup, breakupToJson, type Breakup, type RoundingRule } from "./breakup";
 import { asValidationError, loadLineRounding } from "./common";
 import { businessToday } from "../../../lib/businessDate";
-import { InvalidSalaryValueError, parseItemCode, parseStructureValue, unusableInStructure, type ComponentValue, type StructureValue } from "./schemas";
+import { InvalidSalaryValueError, parseItemCode, calculationOrder, parseStructureValue, unusableInStructure, type CalculationStep, type ComponentValue, type StructureValue } from "./schemas";
 
 // Salary structures as governed items (docs/plans/PHASE_6.md §14B): how much each line gets. A structure pins a component version and hash on every line;
 // saving one proves it adds up to CTC for a sample CTC, using the rounding rule, so a structure that cannot produce a salary cannot be saved.
@@ -89,6 +89,8 @@ export interface StructureView {
   lastConfirmed: VersionView | null;
   /** The components this version pins, with their own Placeholder or Confirmed status and whether a newer component version exists. */
   components: Array<{ component: string; pinnedVersion: number; status: ItemStatus; newerVersion: number | null }>;
+  /** The order the lines are worked out in, derived from what each reads. */
+  calculationOrder: CalculationStep[];
 }
 
 async function componentStatusFor(value: StructureValue | null): Promise<StructureView["components"]> {
@@ -106,7 +108,7 @@ async function componentStatusFor(value: StructureValue | null): Promise<Structu
 async function toView(code: string, data: Awaited<ReturnType<typeof loadItems>>): Promise<StructureView> {
   const s = summarise(data, code);
   const value = (s.current?.value as StructureValue | undefined) ?? null;
-  return { code, value, status: s.status, sourceLabel: s.sourceLabel, current: s.current, lastConfirmed: s.lastConfirmed, components: await componentStatusFor(value) };
+  return { code, value, status: s.status, sourceLabel: s.sourceLabel, current: s.current, lastConfirmed: s.lastConfirmed, components: await componentStatusFor(value), calculationOrder: value ? calculationOrder(value) : [] };
 }
 
 export async function listStructures(): Promise<StructureView[]> {
@@ -143,6 +145,7 @@ export interface StructureSavePreview {
   /** Components this version uses that are not Confirmed yet. A salary built on them is a test until they are. */
   unconfirmedComponents: string[];
   impact: string;
+  calculationOrder: CalculationStep[];
   fingerprint: string;
 }
 
@@ -174,6 +177,7 @@ export async function previewStructureSave(codeRaw: string, valueRaw: unknown, s
     lastConfirmed: s.status === "CONFIRMED" ? s.current : s.lastConfirmed,
     sample: { annualCtc: annual.toString(), breakup: breakupToJson(breakup), annual: annualView(breakup, annual, value.ctcIncludes) },
     unconfirmedComponents: [...components].filter(([, c]) => c.status !== "CONFIRMED").map(([k]) => k),
+    calculationOrder: calculationOrder(value),
     impact: "Nobody's salary changes when a structure is saved. People move to a new version only through a salary revision, which a second person approves.",
     fingerprint: fingerprintOf(code, s.current?.version ?? 0, s.current?.valueHash ?? null, valueHash),
   };

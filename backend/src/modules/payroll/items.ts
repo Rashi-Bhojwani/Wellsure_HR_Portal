@@ -98,7 +98,8 @@ export function summarise(data: ItemData, key: string): ItemSummary {
   const current = currentRow ? history[history.length - 1]! : null;
   const lastConfirmedRow = [...versions].reverse().find((v) => confirmationOf.has(v.version));
   const lastConfirmed = lastConfirmedRow && lastConfirmedRow !== currentRow ? viewOf(lastConfirmedRow) : null;
-  const status: ItemStatus = !current ? "NOT_SET" : current.confirmation ? "CONFIRMED" : "PLACEHOLDER";
+  // A version authored by nobody was shipped by an older build "from memory" (rules only). It is not a value: the rule is Not set until a director enters one.
+  const status: ItemStatus = !current || current.authorUserId === null ? "NOT_SET" : current.confirmation ? "CONFIRMED" : "PLACEHOLDER";
   let sourceLabel: string | null = null;
   if (current?.confirmation) sourceLabel = `Confirmed by ${current.confirmation.confirmedByName} on ${day(new Date(current.confirmation.confirmedAt))}${current.confirmation.selfConfirmed ? " (on their own authority; the other director was told)" : ""}`;
   else if (current) sourceLabel = current.authorUserId === null ? PLACEHOLDER_SOURCE_LABEL : `Entered by ${current.authorName} on ${day(new Date(current.createdAt))}; not yet confirmed`;

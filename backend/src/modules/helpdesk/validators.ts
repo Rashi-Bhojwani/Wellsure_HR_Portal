@@ -11,6 +11,7 @@ export const createCategorySchema = z.object({
   code: z.string().trim().min(1).max(40).regex(/^[A-Z0-9_]+$/, "Use capital letters, digits and underscores."),
   name: z.string().trim().min(1).max(80),
   isSensitive: z.boolean().optional(),
+  directorsOnly: z.boolean().optional(),
   sortOrder: z.number().int().min(0).max(999).optional(),
   defaultAssigneeEmployeeId: z.string().min(1).nullable().optional(),
 });
@@ -18,6 +19,7 @@ export const createCategorySchema = z.object({
 export const updateCategorySchema = z.object({
   name: z.string().trim().min(1).max(80).optional(),
   isSensitive: z.boolean().optional(),
+  directorsOnly: z.boolean().optional(),
   isActive: z.boolean().optional(),
   sortOrder: z.number().int().min(0).max(999).optional(),
   defaultAssigneeEmployeeId: z.string().min(1).nullable().optional(),
