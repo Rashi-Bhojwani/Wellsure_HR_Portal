@@ -1,3 +1,4 @@
+import { BankRepaymentCard } from "./BankRepayment";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, Button, DatePicker, Flex, Input, Space, Tooltip, Typography, Upload } from "antd";
@@ -319,12 +320,20 @@ function OutputsCard({ run }: { run: RunDetail }) {
   );
 }
 
+function RepaymentOfRun({ run }: { run: RunDetail }) {
+  const { hasPermission } = useAuth();
+  const canView = hasPermission("payroll.bank.view");
+  const { data } = useQuery({ queryKey: ["payroll", "bank-batch", run.id], queryFn: () => payrollApi.getBankBatchForRun(run.id), enabled: canView });
+  return data?.batch ? <BankRepaymentCard batchId={data.batch.id} /> : null;
+}
+
 export function ReleasePanels({ run }: { run: RunDetail }) {
   if (run.status !== "FINALISED") return null;
   return (
     <Stack>
       <PayslipsCard run={run} />
       <BankCard run={run} />
+      <RepaymentOfRun run={run} />
       <OutputsCard run={run} />
     </Stack>
   );

@@ -15,6 +15,8 @@ import * as setup from "./setup/controller";
 import * as mi from "./inputs/controller";
 import * as miSvc from "./inputs/service";
 import * as imp from "./inputs/importService";
+import * as rp from "./run/repaymentController";
+import * as rpSvc from "./run/repayments";
 import { compareRegistersRoute, compareUpload } from "./compare/controller";
 import { overrideKeyParamsSchema, overridePreviewSchema, overrideSaveSchema, setupAreaParamsSchema, setupSignoffSchema, checkersQuerySchema, payrollAuditQuerySchema, ruleConfirmSchema, ruleEditPreviewSchema, ruleEditSchema, ruleKeyParamsSchema } from "./validators";
 
@@ -181,3 +183,14 @@ payrollRouter.get("/monthly-inputs/import/:id", view, dirs, validate({ params: m
 payrollRouter.post("/monthly-inputs/import/:id/apply", edit, dirs, validate({ params: mi.idParamsSchema, body: imp.applySchema }), mi.importApply);
 payrollRouter.post("/monthly-inputs/import/:id/discard", edit, dirs, validate({ params: mi.idParamsSchema }), mi.importDiscard);
 payrollRouter.get("/monthly-inputs", view, dirs, validate({ query: miSvc.gridQuerySchema }), mi.gridRoute);
+
+// ── Stage 5b: rows the bank rejected, and paying them again. Directors only (payroll.bank.view and payroll.run are held by no one else, and every service call checks for a director). ──
+payrollRouter.get("/bank-batches/:id/rejections", bankView, validate({ params: rp.idSchema }), rp.rejections);
+payrollRouter.post("/bank-batches/:id/rejections", make, validate({ params: rp.idSchema, body: rpSvc.rejectionsSchema }), rp.recordRejections);
+payrollRouter.post("/bank-batches/:id/rejections/import", make, validate({ params: rp.idSchema }), memoryUpload(5), rp.importReturn);
+payrollRouter.post("/bank-batches/:id/repayment-plans", make, validate({ params: rp.idSchema, body: rpSvc.planSchema }), rp.createPlan);
+payrollRouter.get("/repayment-plans/:id", bankView, validate({ params: rp.idSchema }), rp.plan);
+payrollRouter.post("/repayment-plans/:id/request", make, validate({ params: rp.idSchema, body: rpSvc.requestSchema }), rp.request);
+payrollRouter.post("/repayment-plans/:id/decision", approve, validate({ params: rp.idSchema, body: rpSvc.decisionSchema }), rp.decision);
+payrollRouter.post("/repayment-plans/:id/generate", make, validate({ params: rp.idSchema }), rp.generate);
+payrollRouter.get("/repayment-batches/:id/file", bankView, validate({ params: rp.idSchema }), rp.download);

@@ -458,6 +458,7 @@ model CostCentre {
 // ── Employees ────────────────────────────────────────────────────────────
 
 model Employee {
+  bankRepaymentRows BankRepaymentRow[]
   remoteRecords   RemoteAttendanceRecord[]
   id              String                   @id @default(cuid())
   employeeCode    String                   @unique @map("employee_code") // permanent login username — never reassigned, even after separation
@@ -2468,6 +2469,7 @@ enum PayrollApprovalSubject {
   RULE_CONFIRM
   SALARY_REVISION
   MONTHLY_INPUTS
+  BANK_REPAYMENT
 }
 
 enum PayrollApprovalStatus {
@@ -2970,6 +2972,10 @@ model BankTransferBatch {
   responseAttachedAt       DateTime?       @map("response_attached_at") @db.Timestamptz(3)
 
   rows BankTransferRow[]
+  rejections      BankRowRejection[]
+  returnImports   BankReturnImport[]
+  repaymentPlans  BankRepaymentPlan[]
+  repaymentBatches BankRepaymentBatch[]
 
   @@map("bank_transfer_batches")
 }
@@ -2988,6 +2994,9 @@ model BankTransferRow {
   amount        Decimal           @db.Decimal(20, 6)
   narration     String
   serial        Int
+
+  rejection BankRowRejection?
+  repayment BankRepaymentRow?
 
   @@unique([batchId, employeeId])
   @@map("bank_transfer_rows")
@@ -3307,4 +3316,91 @@ model RemoteAttendanceRequest {
 
   @@index([recordId, status])
   @@map("remote_attendance_requests")
+}
+
+// ── Stage 5b — rows the bank rejected, and paying them again (docs/plans/STAGE_5B_PLAN.md) ──
+model BankReturnImport {
+  id               String              @id @default(cuid())
+  batchId          String              @map("batch_id")
+  batch            BankTransferBatch   @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  fileSha256       String              @map("file_sha256")
+  fileName         String              @map("file_name")
+  rejectedCount    Int                 @map("rejected_count")
+  importedByUserId String              @map("imported_by_user_id")
+  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  rejections       BankRowRejection[]
+
+  @@unique([batchId, fileSha256])
+  @@map("bank_return_imports")
+}
+
+model BankRowRejection {
+  id               String            @id @default(cuid())
+  batchId          String            @map("batch_id")
+  batch            BankTransferBatch @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  rowId            String            @unique @map("row_id")
+  row              BankTransferRow   @relation(fields: [rowId], references: [id], onDelete: Restrict)
+  reason           String
+  source           String
+  importId         String?           @map("import_id")
+  import           BankReturnImport? @relation(fields: [importId], references: [id], onDelete: Restrict)
+  recordedByUserId String            @map("recorded_by_user_id")
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([batchId])
+  @@map("bank_row_rejections")
+}
+
+model BankRepaymentPlan {
+  id              String                @id @default(cuid())
+  originalBatchId String                @map("original_batch_id")
+  originalBatch   BankTransferBatch     @relation(fields: [originalBatchId], references: [id], onDelete: Restrict)
+  paymentDate     DateTime              @map("payment_date") @db.Date
+  rowIds          Json                  @map("row_ids")
+  createdByUserId String                @map("created_by_user_id")
+  createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  batch           BankRepaymentBatch?
+
+  @@map("bank_repayment_plans")
+}
+
+model BankRepaymentBatch {
+  id                String                @id @default(cuid())
+  planId            String                @unique @map("plan_id")
+  plan              BankRepaymentPlan     @relation(fields: [planId], references: [id], onDelete: Restrict)
+  originalBatchId   String                @map("original_batch_id")
+  originalBatch     BankTransferBatch     @relation(fields: [originalBatchId], references: [id], onDelete: Restrict)
+  paymentDate       DateTime              @map("payment_date") @db.Date
+  templateVersion   Int                   @map("template_version")
+  templateHash      String                @map("template_hash")
+  rowCount          Int                   @map("row_count")
+  total             Decimal               @db.Decimal(20, 6)
+  fileKey           String                @map("file_key")
+  fileName          String                @map("file_name")
+  fileSha256        String                @map("file_sha256")
+  generatedByUserId String                @map("generated_by_user_id")
+  generatedAt       DateTime              @default(now()) @map("generated_at") @db.Timestamptz(3)
+  rows              BankRepaymentRow[]
+
+  @@map("bank_repayment_batches")
+}
+
+model BankRepaymentRow {
+  id            String             @id @default(cuid())
+  batchId       String             @map("batch_id")
+  batch         BankRepaymentBatch @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  sourceRowId   String             @unique @map("source_row_id")
+  sourceRow     BankTransferRow    @relation(fields: [sourceRowId], references: [id], onDelete: Restrict)
+  employeeId    String             @map("employee_id")
+  employee      Employee           @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  bankAccountId String             @map("bank_account_id")
+  accountHash   String             @map("account_hash")
+  accountLast4  String             @map("account_last4")
+  ifsc          String
+  amount        Decimal            @db.Decimal(20, 6)
+  narration     String
+  serial        Int
+
+  @@unique([batchId, serial])
+  @@map("bank_repayment_rows")
 }

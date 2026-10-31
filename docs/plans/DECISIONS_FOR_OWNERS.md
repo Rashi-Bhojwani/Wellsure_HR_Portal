@@ -46,3 +46,14 @@ The owner's earlier D-10 list was not available to this session; these are the c
 | 21 | **A missed remote day may be recorded after the fact** on any past day the person was marked remote, with no limit on how far back; the day's attendance must not be finalised when a director decides it. | The request waits for a director like any correction. | Say how far back a person may ask. |
 | 22 | **Every decision and reopening tells the other director(s)** with the outcome only (no reason); the person who decided is not told. | One notification each. | Say if the reason should be included. |
 
+
+## Stage 5b (bank files, rejected rows, payslip links, queries, not-on-payroll)
+
+`docs/samples/Bank_Transfer_template.xls` is not in the repository or on `origin/main`; nothing was preset from any sample.
+
+| # | Decision | What it does today | If you want it the other way |
+|---|---|---|---|
+| 23 | **A bank file is never made for a test run** (a run on Placeholder rules cannot be finalised), so there is nothing to watermark TEST. | The bank file and its download exist only for a final, real run; a test is pinned. | Say if a masked TEST file should be producible from a calculated run for checking a layout. |
+| 24 | **The payment-mode code is a constant column the owners type** in the bank layout, not a built-in list. | Any text the bank wants can go in any column. | Say if payment modes (NEFT, RTGS, ...) should be a list with a code each. |
+| 25 | **The bank's return file is read with a governed layout of its own** (`BANK_RETURN_TEMPLATE`): the title of each column, and the status words that mean "rejected" in the bank's own words; Not set until a director enters it and a different director confirms. | A file is read only with a confirmed layout; one wrong row saves nothing; the same file is read once. | Say the real return format when you have it. |
+| 26 | **A repayment uses each person's bank account in force on the new payment date**, and the original amount to the paisa. | A corrected account is picked up automatically; a person with no account is left out and named. | Say if a repayment must go to the account of the original file. |

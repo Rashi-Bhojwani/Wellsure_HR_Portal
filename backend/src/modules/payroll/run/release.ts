@@ -161,3 +161,20 @@ export async function generateBankFile(runId: string, actor: Actor) {
   emit("payroll.bank.generated", { runId, cycle: run.cycleLabel, rows: plan.rows.length });
   return { batchId: batch.id, rows: plan.rows.length, total: plan.total, excluded: plan.excluded.length, fileName, sha256: hash };
 }
+
+/**
+ * The account numbers of a repayment plan, decrypted for the length of the file's writing and nowhere else (the one other place in payroll that reads an account number besides
+ * the bank file above). Each must still be the account that was approved (its blind-index hash) and the one in force on the payment date.
+ */
+export async function accountNumbersForRepayment(rows: Array<{ employeeId: string; bankAccountId: string; accountHash: string }>, paymentDate: Date): Promise<Map<string, string>> {
+  const inForce = await bankAccountsOn(rows.map((r) => r.employeeId), paymentDate);
+  const out = new Map<string, string>();
+  for (const r of rows) {
+    const account = inForce.get(r.employeeId);
+    if (!account || account.id !== r.bankAccountId) throw new HttpError(409, "A bank account changed while this was being prepared. Look again.", "PREVIEW_STALE");
+    const number = decryptField(account.accountNumberEncrypted);
+    if (blindIndex(normalizeAccountNumber(number)) !== r.accountHash) throw new HttpError(409, "A bank account changed while this was being prepared. Look again.", "PREVIEW_STALE");
+    out.set(r.employeeId, number);
+  }
+  return out;
+}
