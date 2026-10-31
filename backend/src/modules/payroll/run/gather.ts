@@ -13,6 +13,7 @@ import { loadOverrideItems, resolveOverrides } from "../rules/overrides";
 import type { RuleNeeds } from "./rules";
 import { contributionPeriodStart } from "./statutory";
 import { figuresForRun } from "../inputs/service";
+import { skippedOn } from "../exclusions/service";
 import type { AdjustmentIn, ComponentLookup, CycleSpan, PersonInput, SegmentInput } from "./types";
 
 // Everything a payroll run reads, gathered through the readers and nothing else (docs/plans/PHASE_6.md §14D):
@@ -28,6 +29,8 @@ export interface RunInputs {
   payrollMonth: number;
   payrollYear: number;
   paymentDate: Date | null;
+  /** People a director marked as not on payroll (confirmed by a different director) for this cycle: not calculated, named here. */
+  skipped: Array<{ employeeId: string; employeeCode: string; reason: string }>;
   people: PersonInput[];
   components: ComponentLookup;
   needs: RuleNeeds;
@@ -58,11 +61,15 @@ function breakdownOf(a: { source: string; breakdown: unknown }): Array<{ compone
 }
 
 export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promise<RunInputs> {
-  const employees = await prisma.employee.findMany({
+  const everyone = await prisma.employee.findMany({
     where: employedBetween(cycle.start, cycle.end),
     select: { id: true, employeeCode: true, employmentType: true, dateOfJoining: true, lastWorkingDate: true },
     orderBy: { employeeCode: "asc" },
   });
+  // A person a director has marked as not on payroll (and a different director confirmed) on the cycle's last day is not calculated; the run names them in its skipped list.
+  const notOnPayroll = await skippedOn(everyone.map((e) => e.id), cycle.end);
+  const employees = everyone.filter((e) => !notOnPayroll.has(e.id));
+  const skipped = everyone.filter((e) => notOnPayroll.has(e.id)).map((e) => ({ employeeId: e.id, employeeCode: e.employeeCode, reason: notOnPayroll.get(e.id)! }));
   const ids = employees.map((e) => e.id);
   const payrollMonth = cycle.end.getUTCMonth() + 1;
   const payrollYear = cycle.end.getUTCFullYear();
@@ -267,7 +274,7 @@ export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promi
   const usedOverrides = new Map<string, { itemKey: string; version: number; valueHash: string }>();
   for (const p of people) for (const o of p.ruleOverrides ?? []) usedOverrides.set(`${o.itemKey}|${o.version}`, o);
   for (const o of usedOverrides.values()) ctx.addLivePin({ kind: "RULE_OVERRIDE", key: o.itemKey, version: o.version, valueHash: o.valueHash });
-  return { cycle, payrollMonth, payrollYear, paymentDate, people, components, needs: { arrears, encashment, reversals }, componentHashes, encashmentsNotThisCycle };
+  return { cycle, payrollMonth, payrollYear, paymentDate, skipped, people, components, needs: { arrears, encashment, reversals }, componentHashes, encashmentsNotThisCycle };
 }
 
 /** A fingerprint of everything gathered, so a resumed or repeated calculation can tell whether the world moved, and a confirm can tell that what was previewed is still true. */
