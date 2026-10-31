@@ -398,9 +398,17 @@ jobs:
   # Its own job (Stage 0.2 of the master build): the secrets-on-every-page check used to be the last step of the latency job, so a latency failure skipped it
   # (which is what happened from the UI pass until now). It seeds the demo company, then the developer and an employee open every page of both portals; no
   # made-up secret may be on any, and the DEMO COMPANY banner must be on all of them (docs/plans/PHASE_6.md §14J).
+  # Split in two (A5): the single scan took about 15 of its 16 minutes. One job opens the admin portal's pages (the developer, an HR Admin in four states, a director), the other
+  # the employee portal's (the same people on their own pages). Each page is opened once by each person, as before, and every check is kept; each job has a limit of 35 minutes
+  # for a scan that should take about half of what the whole one did.
   sensitive-ui:
+    name: sensitive-ui (${{ matrix.scope }} portal)
+    strategy:
+      fail-fast: false
+      matrix:
+        scope: [admin, employee]
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     services:
       postgres:
         image: postgres:16-alpine
@@ -474,13 +482,15 @@ jobs:
         timeout-minutes: 3
         run: npm run seed:demo-company --prefix backend
 
-      - name: Look for secrets on every page
-        timeout-minutes: 16
+      - name: Look for secrets on every page of the ${{ matrix.scope }} portal
+        timeout-minutes: 28
+        env:
+          SENSITIVE_UI_SCOPE: ${{ matrix.scope }}
         run: npm run check:sensitive-ui --prefix frontend
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: sensitive-ui-stack-logs
+          name: sensitive-ui-stack-logs-${{ matrix.scope }}
           path: ${{ runner.temp }}/stack/*.log
           if-no-files-found: ignore

@@ -5,6 +5,9 @@
 // Run against a running stack that has had `npm run seed:demo-company` (backend/):
 //
 //   npm run check:sensitive-ui         (from frontend/; needs the API, the worker and `npm run dev` up, and Chrome)
+//
+// SENSITIVE_UI_SCOPE=admin | employee | all (the default) chooses which portal's pages are opened. CI runs the two as separate jobs, each with a limit that leaves a wide margin;
+// together they open exactly the pages the one scan used to, each page by each person once.
 import { createRequire } from "node:module";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -35,8 +38,13 @@ function pathsOf(file) {
   const src = readFileSync(path.resolve(here, "../src/routes", file), "utf8");
   return [...src.matchAll(/\{\s*key: "[^"]+",\s*label: "[^"]+",\s*path: "([^"]+)"/g)].map((m) => m[1]);
 }
-const adminPaths = pathsOf("adminMenu.config.tsx");
-const employeePaths = pathsOf("employeeMenu.config.tsx");
+const unique = (list) => [...new Set(list)]; // a path listed twice is opened once
+const adminPaths = unique(pathsOf("adminMenu.config.tsx"));
+const employeePaths = unique(pathsOf("employeeMenu.config.tsx"));
+const SCOPE = process.env.SENSITIVE_UI_SCOPE ?? "all";
+if (!["admin", "employee", "all"].includes(SCOPE)) throw new Error(`SENSITIVE_UI_SCOPE must be admin, employee or all, not "${SCOPE}"`);
+const doAdmin = SCOPE !== "employee";
+const doEmployee = SCOPE !== "admin";
 
 const browser = await chromium.launch({ ...(CHROME ? { executablePath: CHROME } : {}), args: ["--no-sandbox"] });
 const problems = [];
@@ -81,13 +89,13 @@ async function visit(user, label, base, paths) {
   await page.screenshot({ path: path.join(OUT, `sensitive-ui-${label.replace(/\W+/g, "-")}.png`) });
 }
 
-await visit("DEMO005", "the developer", "/admin", adminPaths);
-await visit("DEMO005", "the developer (own portal)", "/app", employeePaths);
-await visit("DEMO006", "an ordinary employee", "/app", employeePaths);
+if (doAdmin) await visit("DEMO005", "the developer", "/admin", adminPaths);
+if (doEmployee) await visit("DEMO005", "the developer (own portal)", "/app", employeePaths);
+if (doEmployee) await visit("DEMO006", "an ordinary employee", "/app", employeePaths);
 // Added with the master build (Stage 0.2): the people who are allowed to see most of the system must not see the demo's secrets on a page either: pay details are masked
 // by default and shown only through an audited Reveal, never printed on a page.
-await visit("DEMO004", "an HR Admin", "/admin", adminPaths);
-await visit("DEMO004", "an HR Admin (own portal)", "/app", employeePaths);
+if (doAdmin) await visit("DEMO004", "an HR Admin", "/admin", adminPaths);
+if (doEmployee) await visit("DEMO004", "an HR Admin (own portal)", "/app", employeePaths);
 // Stage 1.6: the same HR Admin with every switch the directors have turned all the way ON (the most HR can ever be given) and then all the way OFF (every duty closed), set through the
 // real API by the demo's director and put back as they were. No switch may show a secret, and every page must still say it is the demo.
 const API = process.env.API_URL ?? "http://localhost:4000";
@@ -108,20 +116,22 @@ async function setAllDuties(state) {
   }
 }
 try {
+  if (doAdmin) {
   await setAllDuties("ON");
   await visit("DEMO004", "an HR Admin (every duty on)", "/admin", adminPaths);
   await setAllDuties("OFF");
   await visit("DEMO004", "an HR Admin (every duty off)", "/admin", adminPaths);
+  }
 } finally {
-  await setAllDuties("DEFAULT");
+  if (doAdmin) await setAllDuties("DEFAULT");
 }
-await visit("DEMO001", "a director", "/admin", adminPaths);
-await visit("DEMO001", "a director (own portal)", "/app", employeePaths);
+if (doAdmin) await visit("DEMO001", "a director", "/admin", adminPaths);
+if (doEmployee) await visit("DEMO001", "a director (own portal)", "/app", employeePaths);
 for (const page of sessions.values()) await page.context().close();
 await browser.close();
 
 if (problems.length) {
-  console.log(`\n${problems.length} problem(s) in ${pages} pages:\n - ${problems.join("\n - ")}`);
+  console.log(`\n[${SCOPE}] ${problems.length} problem(s) in ${pages} pages:\n - ${problems.join("\n - ")}`);
   process.exit(1);
 }
-console.log(`\nNo secret on any of ${pages} pages, and the DEMO COMPANY banner on every one.`);
+console.log(`\n[${SCOPE}] No secret on any of ${pages} pages, and the DEMO COMPANY banner on every one.`);

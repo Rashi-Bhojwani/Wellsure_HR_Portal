@@ -16,13 +16,13 @@ Nothing here changes by itself. Each row is something the developer decided beca
 |---|---|---|---|
 | 6 | **"Override From / Override Till" are read as an inclusive range of payroll months** (the months that contain those two dates); the figures apply to each month in the range. **Unconfirmed by the owners.** | A row from 15 Jul to 20 Aug writes the same figures for July and for August. The screen and the file preview both say so. | Tell us the real meaning (for example "a single effective month"); it is one function (`monthsOf`). |
 | 7 | **Principal Part and Interest Part are read and shown but posted to no month.** | They belong to loans, which is a later stage; the preview says "not posted". | Say where they should go when loans are built. |
-| 8 | **A figure is zero or more**, never negative. The pay head says whether it is paid or taken off. | A negative figure in a file or on the screen is refused with a message. | Say if a correction may be negative; the head's direction would then not decide alone. |
+| 8 | **Superseded by decision 34 (D-31).** A figure was zero or more; now each pay head carries the directors' own choice whether negative figures are allowed, Not set until chosen. | See 34. | — |
 | 9 | **A confirmation may be requested while some figures are still blank**; the run, not the confirmation, insists that every figure is entered (even as 0). | The preview warns how many are blank. | Say if confirming should wait until nothing is blank. |
 | 10 | **A month is "open" only when attendance is final for everyone employed in it.** One person with a day not finalised keeps the whole month closed. | The screen says attendance is not finalised. | Say if a month may open for the people whose attendance is final. |
 | 11 | **A zero figure prints no line** on the payslip: it counts as entered, and pays or takes nothing. | No empty "Incentive 0" line. | Say if zero lines should print. |
 | 12 | **An import file holds at most 1,000 rows and a row at most 12 months.** | A larger file is refused with a message. | Say the real size. |
 
-**Still open (never guessed):** what *Slab Salary Bonus*, *Training Exp* and *Old Month Discrepancy* mean. They are not built in: they exist only if a director creates a pay head with that name and flags it, and a file column of that name with figures is refused until then.
+**Settled by D-31 (see 35):** *Slab Salary Bonus*, *Training Exp* and *Old Month Discrepancy* use their ordinary corporate meanings, and are still not built in: they exist only if a director creates a pay head with that name and flags it.
 
 ## Stage 5a (remote attendance): what the build decided
 
@@ -49,7 +49,7 @@ The owner's earlier D-10 list was not available to this session; these are the c
 
 ## Stage 5b (bank files, rejected rows, payslip links, queries, not-on-payroll)
 
-`docs/samples/Bank_Transfer_template.xls` is not in the repository or on `origin/main`; nothing was preset from any sample.
+`docs/samples/Bank_Transfer_template.xls` and `docs/samples/README.md` are not on this branch or on `origin/main`; they exist only on the `peeps/foundation` branch (commit `4f71f90`). They were not recreated or copied; nothing was preset from any sample.
 
 | # | Decision | What it does today | If you want it the other way |
 |---|---|---|---|
