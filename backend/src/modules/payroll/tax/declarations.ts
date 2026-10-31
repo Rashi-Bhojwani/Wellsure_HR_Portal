@@ -213,7 +213,7 @@ export async function compareRegimes(employeeId: string, fy: string): Promise<Re
   const recurringLines = (salary?.lines ?? []).map((l) => ({ code: l.componentCode, kind: "EARNING" as const, source: "COMPONENT", amount: dec(l.amount.toString()) }));
   const split = splitTaxable(recurringLines, head);
   if (split.notSet.length > 0) return { ...base, missing: [`whether ${split.notSet.join(", ")} is taxable`] };
-  const ytd = await yearToDate(employeeId, fy, iso(new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1, 1))), head);
+  const ytd = await yearToDate(employeeId, fy, `${today.slice(0, 7)}-01`, head); // the first day of this month: finalised months before it
   const taxablePay = projectTaxablePay({ paidSoFar: ytd.taxable, recurring: split.recurring, oneOff: ZERO, monthsLeft: monthsLeftInYear(today) });
   const results: Partial<Record<Regime, EngineResult>> = {};
   for (const regime of ["NEW", "OLD"] as const) results[regime] = computeAnnualTax({ year: value, regime, taxablePay: canonicalDecimal(taxablePay), deductions: counted.deductions });
