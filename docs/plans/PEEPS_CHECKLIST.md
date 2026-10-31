@@ -43,7 +43,10 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 - [x] Step 0.2: Assets under D-29/Q-14 (members + directors manage; HR keys removed; HR onboarding-only issue; director-sees-all test; audience setting) — `45626da`, `2c94b6f`
 - [x] Module 1: Wellsure Office membership (propose/confirm, grants, scheduled job, drift) + Peeps settings + Unmute — `45626da`, `2c94b6f`
 - [x] Module 2: badges and private nudges — `6de8b08`
-- [x] Final merge of the base — `1dc28af`; full suite alone and CI: see PEEPS_STAGE_REPORTS
+- [x] Final merge of the base — `1dc28af`, then `162f03f` (Session A's `832947f`); full suite alone and CI: see PEEPS_STAGE_REPORTS
+- [x] Full suite alone after `162f03f`: 195 files, 1,951 tests passed; frontend checks pass
+- [x] CI flake (Session A's bankRepayment hash assertion) fixed by the merge; scan made to run its Peeps checks inside `visit()` — `7d761a0` (845 → 570 loads)
+- [ ] **Open for the owner:** CI sensitive-ui step still over its 16-minute limit (16:12 on run 228); limit/parallelism are shared CI — options in PEEPS_STAGE_REPORTS
 - [x] Ticket desk changes: withdrawn by D-29 (no change)
 - [ ] Follow-ups: badge counts in the directory list; withdrawing a pending proposal/setting; manager-member menu entries (see deviations)
 - [ ] **STOP: wait for the next build prompt**

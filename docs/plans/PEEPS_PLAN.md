@@ -626,7 +626,7 @@ tax, loans, reimbursements, settlement, parity reports; report gallery code (`mo
 | `backend/src/modules/tasks/service.ts` | Register Peeps task sources (one line each, end of the registry) | End block; sources live in my modules |
 | `backend/prisma/seed.ts` and the demo seed | Peeps demo data labelled DEMO | Calls into `backend/src/modules/<name>/seed.ts`; one marked line each |
 | `frontend/src/routes/employeeMenu.config.tsx`, `adminMenu.config.tsx` | Menu entries with `lazyPage(...)` and `needs` | End-of-list blocks; new top-level apps appended last |
-| `frontend/e2e/sensitive-ui.mjs`, `popovers.mjs` | Peeps URLs and the candidate/compensation/confidential strings to look for | End-of-list blocks |
+| `frontend/e2e/sensitive-ui.mjs`, `popovers.mjs` | Peeps URLs and the candidate/compensation/confidential strings to look for | End-of-list blocks; in `sensitive-ui.mjs` also one PEEPS call inside `visit()` to `peepsPageChecks` (the Peeps checks add no page loads: the scan has a time limit) |
 | `docs/UI_SCREEN_MAP.md`, the docs index (there is no `docs/plans/README.md`; the index today is the file list in `CLAUDE.md` and each folder's README — I will add only links to the Peeps files there, in a marked block), `docs/GETTING_STARTED.md` | Rows/sections for Peeps | Appended sections only |
 
 ### C.3 Merge order for your two branches

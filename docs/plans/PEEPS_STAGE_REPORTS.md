@@ -298,12 +298,15 @@ Developer refused on every office route; badges/nudges matrix by sender, recipie
 leak tests across feed, directory search, tasks, counts, dashboard, notifications, request hub, employee export, audit rows and socket events; idempotent
 issue; a member holds no sensitive key and every route gated by a pay/bank/statutory key refuses them, as do the bank and statutory reveal routes.
 
-**Full backend suite run alone after the final merge:** running when this report was committed; recorded in the next commit.
+**Full backend suite run alone after the final merge** (`162f03f`, Session A's `832947f` merged; schema conflict at the end of the file resolved by
+keeping both: Session A's `PayslipLink`, then the Peeps blocks; migrations applied, `db:drift` clean): **195 files, 1,951 tests, all passed** (about
+20 minutes). Before that merge, on `1dc28af`: 194 files, 1,946 tests, all passed (about 21 minutes).
 
-Frontend after the merge: run after the backend suite; recorded in the next commit.
+Frontend after the merge: lint + design tokens, typecheck (all four projects), 67 tests, build, `check:bundle` (login 231.8 KB, shell + employee
+home 335.4 KB, shell + admin home 355.1 KB) — all pass.
 
 Browser checks (local dev stack + demo company, before the final merge): `check:popovers` passes (light/dark × 390/1280, now including the Members appoint
-drawer); `check:sensitive-ui` passes — **845 pages, no secret, DEMO banner on every one**, including: DEMO006 sees the Unmute host only as the Wellsure
+drawer); `check:sensitive-ui` passes — **570 page loads (845 before the change below), no secret, DEMO banner on every one**, including: DEMO006 sees the Unmute host only as the Wellsure
 Office; another employee, HR and the developer never see DEMO006's booking on any Unmute or workspace page; the workspace menu is offered to nobody but
 members and directors; the demo private nudge's text never appears on any page of either portal for another employee, HR or the developer; the director
 sees both. Screens were checked by screenshots in light, dark and at 390 px (Unmute, Recognition, Members, Peeps settings, Unmute hosting, Unmute bookings,
@@ -370,3 +373,22 @@ Office; never HR), Not set. Q-17 the Founder's Office person: a director appoint
 6. **Unmute sends no emails**, only the generic in-app notification.
 7. A pending (unconfirmed) membership proposal or setting version cannot be withdrawn; a newer one supersedes it. Follow-up if wanted.
 8. Asset demo data is still entered through the services as the demo HR Admin (the demo seed predates D-29); the register itself is now refused to HR.
+
+### CI (read per job)
+- Runs 222, 224 and 225 (`45626da`, `6de8b08`, `2580a4f`) failed on two jobs:
+  - **install-lint-typecheck-test** — one Session A test, `payroll/__tests__/bankRepayment.test.ts:168`, asserted `not.toMatch(/\d{9,}/)` on a
+    body that carries a hex SHA-256 hash; run 225's hash happened to contain `6194722185552`. A flake in Session A's file, not a product bug;
+    Session A had already replaced the assertion in `832947f`. Fixed here by merging that commit, not by touching their test.
+  - **sensitive-ui** — the scan step hit its 16-minute limit. My nudge check re-crawled every page for the developer and the HR Admin, which the
+    main passes already visit. `7d761a0`: the asset, Unmute/workspace and nudge checks now run in one per-page hook inside `visit()`, with no page
+    loads of their own (so they now also cover HR with every duty on and off). One more employee (DEMO009) goes through `visit()`, and five pages
+    confirm the right people do see the demo data. 845 page loads → 570. Mutation check: the director removed from the nudge's allowed set →
+    caught on `/app/office/recognition`. Clean local run: 570 pages, pass, 19 minutes on this container.
+- **Run 228 on `7d761a0` (the final code commit):** install-lint-typecheck-test (including tests and demo company tests), latency + popovers,
+  docker-build, attendance-replay and agent-windows **green**. **sensitive-ui still red: the step ran 16:12 against its 16-minute limit.**
+  The base scan alone was sized at "about 12 minutes" for 74 admin + 29 employee pages × 4–5 passes (486 loads). The Peeps menu entries add 8 admin
+  + 10 employee pages, which the design visits 4–5 times each (about 80 loads), and CI now takes at least 1.7 s per page. **Open, for the owner:** the
+  scan's runner, its per-page waits and the step and job limits in `.github/workflows/ci.yml` are shared, not Peeps files, so I did not change them.
+  Options: (a) raise the step limit (and the job's 20-minute limit) to fit about 20 minutes; (b) run the passes in parallel browser contexts
+  inside `sensitive-ui.mjs`, about 3× faster; (c) split the scan into two CI jobs (admin passes and employee passes). Locally the full scan passes.
+
