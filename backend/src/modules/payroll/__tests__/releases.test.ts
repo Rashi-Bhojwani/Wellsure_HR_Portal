@@ -14,6 +14,9 @@ import { crawlGets } from "./sensitiveCrawl";
 import { prisma } from "../../../lib/prisma";
 import { app, authHeader, createFullTestEmployee, cleanupFullTestEmployee, loginAs } from "../../employee/__tests__/employeeTestHelpers";
 import { markPaid } from "../run/bankBatches";
+import { DEMO_WATERMARK } from "../run/release";
+import { DEMO_SETTING } from "../setup/status";
+import { setSetting } from "../../../lib/settings";
 import { deliverPayslips } from "../run/payslipDelivery";
 import { REAL_RULES, approve, closeWorld, closingWorld, confirmAllPins, driveToFinal, requestStep, resetSeams, staffWith, step, stepOf, type Closing } from "./closeTestHelpers";
 import { CYCLE, api, calculateRun, day, setRules } from "./runTestHelpers";
@@ -329,8 +332,19 @@ describe("payslips, the bank file and the statutory files from a final run", () 
     expect([own.status, own.body.error.code]).toEqual([403, "CHECKER_IS_MAKER"]);
     await approve(world, world.supToken, runId, "bank-file");
     expect((await api(world.supToken, "post", `/runs/${runId}/bank-file/generate`)).body.error.code).toBe("CHECKER_IS_EXECUTOR");
+    // D-31/A1: in the demo company a layout that does not say DEMO makes no file; for the real company nothing is ever named or marked DEMO.
+    await setSetting(DEMO_SETTING, true, null);
+    try {
+      const notDemo = await api(world.tokens.maker, "post", `/runs/${runId}/bank-file/generate`);
+      expect([notDemo.status, notDemo.body.error.code]).toEqual([409, "DEMO_LAYOUT_NOT_LABELLED"]);
+    } finally {
+      await setSetting(DEMO_SETTING, false, null);
+    }
+    expect(await prisma.bankTransferBatch.count({ where: { runId } })).toBe(0);
     const done = await api(world.tokens.maker, "post", `/runs/${runId}/bank-file/generate`);
     expect([done.status, done.body.rows, done.body.excluded]).toEqual([201, 3, 0]);
+    expect(done.body.fileName).toMatch(/^bank-file-/);
+    expect(done.body.fileName).not.toMatch(/DEMO/i);
     const batch = await prisma.bankTransferBatch.findUniqueOrThrow({ where: { runId }, include: { rows: { orderBy: { serial: "asc" } } } });
     expect([batch.status, batch.rowCount, batch.rows.length]).toEqual(["GENERATED", 3, 3]);
     expect(await prisma.payrollRunRelease.count({ where: { runId, kind: "BANK_FILE_GENERATED" } })).toBe(1);
@@ -339,6 +353,7 @@ describe("payslips, the bank file and the statutory files from a final run", () 
     const net = batch.rows.reduce((a, r) => a + Math.round(Number(r.amount) * 100), 0);
     expect(file[0]).toBe(`ZZHDR9917,${DEBIT},3,${(net / 100).toFixed(2)}`);
     expect(file).toHaveLength(4);
+    expect(file.join("\n")).not.toContain(DEMO_WATERMARK);
     for (const r of batch.rows) {
       const acct = await prisma.employeeBankAccount.findFirstOrThrow({ where: { employeeId: r.employeeId } });
       expect(file[r.serial]).toBe(`${r.serial},Test Employee ${(await prisma.employeeNameHistory.findFirstOrThrow({ where: { employeeId: r.employeeId } })).fullName.split(" ").at(-1)},${decryptField(acct.accountNumberEncrypted)},${acct.ifsc},${Number(r.amount).toFixed(2)},Salary ${CYCLE.label}`);

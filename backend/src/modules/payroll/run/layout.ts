@@ -130,6 +130,8 @@ export interface LayoutContext {
   paymentDate?: string | undefined;
   period: string;
   debitAccount?: string | undefined;
+  /** A line written above everything else (the demo company's file says it is not real). Never set for the real company. */
+  watermark?: string | undefined;
 }
 
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
@@ -199,7 +201,7 @@ export async function renderLayout(kind: LayoutKind, layoutRaw: unknown, rows: L
   const layout = parseLayout(kind, layoutRaw);
   const nl = layout.lineEnding === "CRLF" ? "\r\n" : "\n";
   const lineOf = (cells: Column[], row: LayoutRow | null, where: string): string[] => cells.map((c, i) => fit(cellText(c, row, kind, layout, ctx, where), c, `${where}, column ${i + 1}`));
-  const headerLines = layout.header.map((cells, r) => lineOf(cells, null, `Header row ${r + 1}`));
+  const headerLines = [...(ctx.watermark ? [[ctx.watermark]] : []), ...layout.header.map((cells, r) => lineOf(cells, null, `Header row ${r + 1}`))];
   const trailerLines = layout.trailer.map((cells, r) => lineOf(cells, null, `Trailer row ${r + 1}`));
   const dataLines = rows.map((row, i) => lineOf(layout.columns, row, row.EMPLOYEE_CODE ? `Row ${i + 1} (${row.EMPLOYEE_CODE})` : `Row ${i + 1}`));
   const titles = layout.columnHeaders ? [layout.columns.map((c) => c.header ?? "")] : [];

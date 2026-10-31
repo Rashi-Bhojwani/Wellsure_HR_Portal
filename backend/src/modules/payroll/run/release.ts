@@ -13,6 +13,7 @@ import { logger } from "../../../lib/logger";
 import { adapterFor, consume, voidApproval } from "../approvals";
 import { recordEvent } from "../events";
 import { assertRunIsReal } from "../rules/context";
+import { isDemoCompany } from "../setup/status";
 import { planBank } from "./bank";
 import { requireHolds } from "./closing";
 import { formatDate, renderLayout, type LayoutRow } from "./layout";
@@ -98,6 +99,9 @@ export async function startDelivery(runId: string): Promise<{ queued: boolean }>
 
 const sha256 = (b: Buffer) => createHash("sha256").update(b).digest("hex");
 
+export const DEMO_WATERMARK = "DEMO COMPANY: FICTIONAL PEOPLE AND ACCOUNTS. NOT FOR ANY BANK.";
+const layoutSaysDemo = (layout: import("./layout").Layout): boolean => [...layout.header.flat(), ...layout.trailer.flat(), ...layout.columns].some((c) => c.source === "CONSTANT" && /\bDEMO\b/.test(c.value));
+
 export async function generateBankFile(runId: string, actor: Actor) {
   await requireHolds(actor.userId, "payroll.run");
   const run = await finalRun(runId);
@@ -123,9 +127,13 @@ export async function generateBankFile(runId: string, actor: Actor) {
     const narration = (layout.narrationPattern ?? "").replace(/\{([A-Z_]+)\}/g, (_, t: string) => ({ PERIOD: run.cycleLabel, EMPLOYEE_CODE: r.employeeCode, NAME: r.name, PAYMENT_DATE: formatDate(plan.paymentDate!, layout.dateFormat) })[t] ?? "");
     return { SERIAL: String(r.serial), EMPLOYEE_CODE: r.employeeCode, NAME: r.name, ACCOUNT_NUMBER: number, IFSC: r.ifsc, BANK_NAME: r.bankName, AMOUNT: r.amount, NARRATION: narration, PAYMENT_DATE: plan.paymentDate!, DEBIT_ACCOUNT: debitAccountOf(layout) ?? "" };
   });
-  const file = await renderLayout("BANK", layout, rows, { count: rows.length, total: plan.total, paymentDate: plan.paymentDate, period: run.cycleLabel, debitAccount: debitAccountOf(layout) });
+  // The demo company's file is named and marked DEMO, and only a layout the directors labelled DEMO (a cell that says so) may produce it: a real-looking layout never makes a demo file.
+  // The real company's file is never marked or named DEMO, and it can only come from a final run on confirmed rules (assertRunIsReal, and the approvals above).
+  const demo = await isDemoCompany();
+  if (demo && !layoutSaysDemo(layout)) throw new HttpError(409, "This is the demo company, and its bank layout does not say DEMO anywhere, so no file is made. Use the demo layout.", "DEMO_LAYOUT_NOT_LABELLED");
+  const file = await renderLayout("BANK", layout, rows, { count: rows.length, total: plan.total, paymentDate: plan.paymentDate, period: run.cycleLabel, debitAccount: debitAccountOf(layout), ...(demo ? { watermark: DEMO_WATERMARK } : {}) });
   const hash = sha256(file.bytes);
-  const fileName = `bank-file-${run.cycleLabel.replace(/[^A-Za-z0-9]+/g, "-")}.${file.extension}`;
+  const fileName = `${demo ? "DEMO-" : ""}bank-file-${run.cycleLabel.replace(/[^A-Za-z0-9]+/g, "-")}.${file.extension}`;
   const fileKey = `payroll/bank/${runId}/${hash.slice(0, 16)}.${file.extension}`;
   await storageService.putObject(fileKey, file.bytes, file.contentType);
 

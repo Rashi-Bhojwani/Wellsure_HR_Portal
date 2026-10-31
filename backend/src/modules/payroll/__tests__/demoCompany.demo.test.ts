@@ -10,6 +10,7 @@ import { prisma } from "../../../lib/prisma";
 import { clearRateLimits } from "../../auth/__tests__/authTestHelpers";
 import { app } from "../../employee/__tests__/employeeTestHelpers";
 import { executeCalculation, setCalculationEnqueuer } from "../run/engine";
+import { DEMO_WATERMARK } from "../run/release";
 import { registerPayrollSeams } from "../wiring";
 import type { RulePin } from "../rules/context";
 import { crawlGets } from "./sensitiveCrawl";
@@ -130,10 +131,12 @@ describe("the demo company", () => {
     // The bank file is the fictional one and holds only made-up accounts.
     const batch = await prisma.bankTransferBatch.findUniqueOrThrow({ where: { runId } });
     const file = (await storageService.getObject(batch.fileKey)).body.toString("utf8");
-    expect(file.split("\n")[0]).toContain("DEMO BANK BULK TRANSFER (FICTIONAL FORMAT)");
+    expect(file.split("\n")[0]).toBe(DEMO_WATERMARK); // the demo company's file says so on its first line
+    expect(file.split("\n")[1]).toContain("DEMO BANK BULK TRANSFER (FICTIONAL FORMAT)");
+    expect(batch.fileName).toMatch(/^DEMO-bank-file-/);
     expect(file).toContain(DEMO_DEBIT_ACCOUNT);
     // The accounts are the demo's (9999...) and the development seed's own made-up ones: all digits, none from anywhere else.
-    for (const line of file.trimEnd().split("\n").slice(1)) expect(line.split(",")[2]).toMatch(/^\d{9,18}$/);
+    for (const line of file.trimEnd().split("\n").slice(2)) expect(line.split(",")[2]).toMatch(/^\d{9,18}$/);
 
     // Every rule the run read is one the Ready screen requires; and every required rule is read, or is one that only a statutory file or a later phase uses.
     const pinned = new Set((run.pins as unknown as RulePin[]).filter((p) => (p.kind ?? "RULE") === "RULE").map((p) => p.key));

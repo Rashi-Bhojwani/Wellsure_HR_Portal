@@ -7,6 +7,7 @@ import { prisma } from "../../../lib/prisma";
 import { app, authHeader, cleanupFullTestEmployee, createFullTestEmployee, loginAs } from "../../employee/__tests__/employeeTestHelpers";
 import { REAL_RULES, approve, closeWorld, closingWorld, confirmAllPins, driveToFinal, requestStep, resetSeams, staffWith, type Closing } from "./closeTestHelpers";
 import { calculateRun, setRules } from "./runTestHelpers";
+import { setRule } from "./salaryTestHelpers";
 
 // Stage 5b, B3: rows the bank rejected are entered by hand by a director with a reason (decision D-34: bank payments are manual, no file comes back),
 // stay unpaid and visible to directors only, and are paid again in a repayment batch that needs the same approvals as a bank file. Nothing is paid twice.
@@ -222,5 +223,13 @@ describe("rejected bank rows and the repayment batch", () => {
     // The same for a repayment file.
     expect((await p(maker(), `/repayment-batches/${repaymentBatchId}/sent`)).status).toBe(201);
     expect(await prisma.auditLog.count({ where: { action: "payroll.bank.marked_sent", entityId: { in: [batchId, repaymentBatchId] } } })).toBe(2);
+  });
+
+  it("the real company's file needs every rule the run used to stay confirmed: with one changed (a Placeholder again), no bank file is released", async () => {
+    const run = await prisma.payrollRun.findUniqueOrThrow({ where: { id: runId } });
+    expect((run.pins as unknown as Array<{ key: string }>).some((x) => x.key === "PF_ADMIN_RATE")).toBe(true);
+    await setRule(world.maker.userId, "PF_ADMIN_RATE", "0.6"); // a proposed change: unconfirmed until another director confirms it
+    const refused = await p(maker(), `/runs/${runId}/bank-file/generate`);
+    expect([refused.status, refused.body.error.code]).toEqual([409, "RULES_CHANGED"]);
   });
 });
