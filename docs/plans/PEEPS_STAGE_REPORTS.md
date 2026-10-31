@@ -392,3 +392,163 @@ Office; never HR), Not set. Q-17 the Founder's Office person: a director appoint
   Options: (a) raise the step limit (and the job's 20-minute limit) to fit about 20 minutes; (b) run the passes in parallel browser contexts
   inside `sensitive-ui.mjs`, about 3× faster; (c) split the scan into two CI jobs (admin passes and employee passes). Locally the full scan passes.
 
+
+## Stage: Step 0 (asset audience, badge changes) and Pair 2 (avatars + directory, new leave types) — 2026-11-01
+
+Owner decisions in force: D-28, D-29, D-30, and Q-14 to Q-17 **decided** (the asset register is HR's and the directors'; the four new leave
+types are wanted; only the directors give badges and send nudges, badges show company-wide; any employee can be made a member by a director).
+The plan for this stage is in `PEEPS_PLAN.md` ("Final instructions (2026-11-01)"), committed before Module 2 was built.
+
+### Commits
+| Commit | What |
+|---|---|
+| `f5f0506` | Merge of `feat/hr-payroll-separation` (`435da5c`, `d883a13`). One conflict at the end of `schema.prisma`, resolved by keeping both (Session A's `PayrollExclusion`, then the Peeps blocks); migrations applied; drift clean |
+| `b9f0a90` | Step 0.2 — assets back to HR and the directors |
+| `e0cf2d3` | Step 0.3 — badges and nudges: directors only; badges company-wide |
+| `1743d6f` | Module 1 — avatars and directory |
+| `fdb69bf` | Plan: final instructions, the leave-types design, the autofill note (docs only) |
+| `00d9a2d` | Module 2 — the four new leave types |
+| `b6c3561` | Module 2 screen fixes found in the browser checks |
+| `03e96fa` | Workspace asset entries need membership (found by `check:sensitive-ui`: HR, holding the asset keys again, was offered the Wellsure Office) |
+
+### Step 0.2 — assets (Q-14)
+- Forward migration `peeps_20261101090000_assets_hr`: HR Executive and HR Admin get `assets.view` and `assets.manage` back, HR Admin also
+  `assets.settings.manage` (as the original module had), and the narrow `assets.onboarding.issue` grant is removed. Earlier migrations untouched.
+- Routes use `requireRoleOrOffice`: a director; a role that holds the key (as the access resolver sees it); or an active member with "Manage
+  the asset register" **only while** the directors' `audience.assets` lets the Wellsure Office manage it. Not set = HR and the directors.
+  A key given by hand still opens nothing.
+- A member's asset grants are written only while that setting allows (`grantKeysFor`); confirming the setting re-applies every member's grants
+  (audited `office.grants.resynced`); the drift check expects the same. The workspace menu offers the register only to such members (it needs
+  `office.workspace`), never to HR or the directors, who use the admin portal's register.
+- The HR onboarding-only issue path (two routes, its screen and menu entry, `assets.newJoinerWindowDays` and the onboarding required group)
+  is **retired**: HR issues from the register. The key stays in the catalogue, held by nobody (forward-only).
+- Tests: HR issues, returns and transfers; HR reaches no office route; HR Executive is refused the settings routes; members lose and regain
+  the grants with the setting; the register shows HR no pay, bank or statutory data; the director test (every asset, history, assignment) kept.
+
+### Step 0.3 — badges and nudges (Q-16)
+- Givers and senders: the directors only, to any employee. `audience.badges`/`audience.nudges` remain as a widening that is **Not set**
+  (members with the capability; managers to their own team; never HR) and are no longer required: badges need only the catalogue, nudges
+  nothing. The demo's director gives the badge and sends the nudge.
+- Badges show to signed-in staff on the profile and in the directory (active badges, never the message); `badges.display` is retired;
+  the Developer is refused colleagues' badges.
+- Tests: HR, a manager (even to their own report), a non-director employee, a member with the capability and the Developer cannot give or
+  send; the widening works only when set; signed-out 401s; a badge reaches only the recipient's room; nudges stay out of lists, counts,
+  dashboards, search, task previews, notification bodies, exports, **logs** (new: every log line of a send, read and director open captured)
+  and socket rooms.
+
+### Module 1 — avatars and directory
+- Photos reuse the People photo code (decoded, re-encoded WebP, metadata dropped, size from System Settings). **Only the owner** adds,
+  changes or removes their photo (`/api/employees/me/photo`). The by-id upload and reason-less removal now refuse anyone else's
+  (`ownPhotoOnly`, a PEEPS guard in `employee/routes.ts`). HR and the directors **remove** an inappropriate photo at
+  `POST /api/avatars/:employeeId/remove` (new key `avatars.moderate`, migration `peeps_20261101100000_avatars`) with a reason kept in the
+  audit log; the person gets a general notice. No photo → initials avatar (existing).
+- Directory: new director setting `directory.contactFields` (Not set = none) narrows the System Settings toggles for work email, phone and
+  birthday; personal email never shows (field policy); search also matches the department name. `GET /api/badges/counts` feeds a badge chip
+  on directory cards and org-chart nodes. Department is never a team scope (tested).
+- Admin profile: your own photo as before; someone else's shows **Remove photo** (reason required) to `avatars.moderate` holders only.
+
+### Module 2 — the four new leave types (Q-15)
+- Rows in `leave_types` with stable codes `MENSTRUAL`, `MEDICAL`, `WEDDING`, `BEREAVEMENT` (migration `peeps_20261101120000_leave_types`),
+  inactive until approved; the display name is a label; ledger and requests key on the type id. PL is untouched.
+- Rules: append-only `leave_rule_versions`, a version complete or refused (paid; cap per request / calendar year / employment, or a balance
+  HR grants; eligibility; units; working or calendar days; supporting document and threshold; who decides; optional year-end choice).
+  HR (or a director) prepares; a **different director** approves with a start date not in the past (service + trigger
+  `LEAVE_RULES_SAME_PERSON` / `LEAVE_RULES_DIRECTORS_ONLY`); approval switches the type on and sets its paid/half-day flags and policy row;
+  **any new version switches it off** until approved. The existing tool cannot switch a new type on, change those flags or edit its policy.
+- Applying/deciding (PEEPS hooks in `leave/requests.ts`): rules in force for the dates, eligibility, caps (pending + approved counted),
+  counting; a raw attachment key refused; approval re-checks, refuses a manager on an HR-only route and waits for a required document.
+- Confidentiality: a new type's reason is shown only to the employee, HR and the directors (manager lists, detail and decide responses
+  redact it). Supporting documents: own table `leave_request_documents` and storage prefix, no original file name, opened only by HR (new
+  sensitive key `leave.documents.view`, class `LEAVE_DOCUMENTS` in the registry, so the Developer can never hold it) and the directors,
+  **every open audited**; the employee sees a count. Calendars show "Leave" until `leave.calendarShowsType`. Year end handles PL only.
+- Screens: New leave types panel (prepare, approve, history) on Leave Types & Policies, whose cards for the new types point to it; Supporting
+  documents on Apply for Leave; a Documents column on HR's Employee Leave queue. Demo: DEMO medical rules and one request with a document.
+
+### Tests
+New: `avatars/__tests__/avatars.test.ts` (12), `leaveRules/__tests__/leaveTypes.test.ts` (18), frontend `officeMenu.test.ts` (3) and
+`rulesText.test.ts` (1). Rewritten: `assets.test.ts` (Q-14), `recognition.test.ts` (16, Q-16). Base tests that assumed the old rules gained
+PEEPS blocks: `people/photos.test.ts` (HR can no longer set someone's photo), `people/fieldPolicy.test.ts` and
+`settings/peopleDocuments.test.ts` (open the contact-field setting through two throwaway directors), `office.test.ts`.
+
+**Full backend suite run alone at the end** (on `03e96fa`, dev stack stopped): **199 files, 1,994 tests, all passed** (about 24 minutes).
+Frontend: lint + design tokens, typecheck (all four projects), 71 tests, build, `check:bundle` (login 231.8 KB, shell + employee home 335.9 KB,
+shell + admin home 355.6 KB, measured before the last two small screen fixes; CI re-checked the budgets on `03e96fa`) — all pass. Per commit: the changed tests, lint and typecheck. `npm run test:demo` (demo company tests) passes.
+
+### Mutation checks (each guard broken alone, the tests re-run, the files restored)
+| # | Guard removed | Caught by |
+|---|---|---|
+| Q1 | managers allowed to give without the widening setting | "a director gives and sends…; HR, a manager… cannot", widening test |
+| Q2 | the Developer refusal on colleagues' badges | company-wide visibility test |
+| A1 | owner-only photo guard (`ownPhotoOnly` lets anyone through) | 3 avatar tests and 2 base photo tests |
+| A2 | the directory contact-field gate | 3 directory tests |
+| L1 | preparer cannot approve (service; the trigger remains) | 4 tests (the trigger turns it into a 500, not a 403) |
+| L2a / L2b | the unset-rule refusal before the lock / both refusal points at apply | "rules approved for a later date… refused" |
+| L3 | a change voids the approval | "a rule change voids the approval…" (and a later test) |
+| L4 | HR-only route | 4 tests |
+| L5 | document required before approval | 2 tests |
+
+### Browser checks (local, on a freshly migrated and seeded scratch database with the demo company)
+- `check:popovers` passes, including the new **Remove photo** dialog and the **Prepare rules** drawer (light/dark × 390/1280).
+- `check:sensitive-ui`: **577 pages; no secret, DEMO banner everywhere**; the new checks (nobody but DEMO006, HR and the directors sees the
+  demo leave reason; no document storage key on any page; team calendars never name a new type; the directory shows no personal email or
+  phone; HR's register and HR's Employee Leave queue show the demo data). It found **one real problem**, fixed in `03e96fa` (HR was offered
+  the Wellsure Office workspace menu because it holds the asset keys again); after the fix a targeted check confirmed HR no longer sees it and
+  a director still does; the full 20-minute run was not repeated for that menu-only change.
+- Screens checked by screenshots in light, dark and at 390 px: directory with badge chips, org chart, admin profile with Remove photo and its
+  dialog, Leave Types & Policies with the new panel and the prepare drawer, HR's queue with the Documents drawer, Apply for Leave with
+  Supporting documents, the team calendar. Two fixes came out of this (`b6c3561`).
+
+### Shared files touched (all inside PEEPS-BEGIN/END blocks)
+`schema.prisma` (new models; back-relations on `LeaveType`, `LeaveRequest`), `permissions.ts`, `sensitiveData.ts` (class `LEAVE_DOCUMENTS`),
+`systemRoles.ts`, `app.ts`, `employee/routes.ts` (photo guard), `people/directory.ts`, `people/fieldPolicy.ts` (personal email never),
+`leave/requests.ts`, `leave/leaveTypes.ts`, `leave/calendar.ts`, `leave/controller.ts`, `cleanup.ts`, `routeInventory.ts`,
+`scripts/demo/seedDemoCompany.ts`, frontend `employeeMenu.config.tsx`, `adminMenu.config.tsx`, `PeoplePage.tsx`, `OrgChart.tsx`,
+`EmployeeProfilePage.tsx`, `LeaveTypesPoliciesPage.tsx`, `EmployeeLeavePage.tsx`, `LeaveApplyPage.tsx`, `e2e/sensitive-ui.mjs`,
+`e2e/popovers.mjs`, and the base tests listed above. `docs/SENSITIVE_DATA.md`: its **generated** block regenerated
+(`npm run docs:sensitive`) for the new class — a mechanical change, outside any PEEPS block because the block is generated.
+Not touched: `ci.yml`, payroll, the attendance engine, remote attendance, two-step sign-in, the HR switch framework and HR switch screens.
+
+### Interface notes for Session A (payroll)
+- **Paid/unpaid** of a new leave type is on `leave_types.is_paid`, set from the approved rules; approved leave reaches attendance through the
+  existing sink with the type code, as for PL/LOP, so unpaid days flow as they do today.
+- **Year end / encashment (not built):** an approved rule version may carry `yearEnd: { carryForward: "LAPSE" | "CARRY_FORWARD",
+  encashment: "NONE" | "ENCASH_UNUSED" }` (read `rulesInForce(leaveTypeId, date)` in `backend/src/modules/leaveRules/service.ts`, or the
+  `GET /api/leave-rules` listing). The year-end process handles PL only; to include a new type, Session A would read that rule, compute the
+  closing balance from `leave_ledger` (only a `GRANTED_BALANCE` type has one) and own every amount. Nothing here computes money.
+- **Granted balances** are credited only through the existing Leave Granter (`leave.grant`); no automatic credit exists.
+
+### Every setting left Not set (real company)
+`audience.assets` (Not set = HR and the directors), `audience.badges`, `audience.nudges` (Not set = the directors only), `badges.catalogue`,
+`badges.limits`, `badges.durationDays`, `badges.revocation`, `nudges.limits`, `nudges.revocation`, `directory.contactFields` (Not set = no
+contact fields), `leave.calendarShowsType` (Not set = "Leave"), the Unmute settings, `office.name`, and **every rule of all four new leave
+types** (none can be applied for). Photo limits reuse the existing System Settings values; no new limit was added.
+
+### Decided by me (please confirm or overrule)
+1. HR Admin also prepares the asset lists again (as originally); HR Executive views and manages only.
+2. Retired the HR onboarding-only issue path (HR now issues from the register).
+3. The Developer is refused colleagues' badges, the badge counts and the leave-rules routes (it holds `leave.policy.manage` to run the
+   system, but the rules are an owner decision).
+4. The directory's contact fields need the new director setting *and* the existing System Settings toggle; personal email never shows,
+   even if toggled on (the toggle in System Settings is now inert for personal email).
+5. Leave rules: no automatic quota or accrual (a cap, or a balance HR grants); overlap with another leave request stays refused (the
+   "overlap rule" is how holidays and week-offs inside the dates count); no gender-based eligibility (sensitive; not built unless asked).
+6. The free-text reason of a new-type request is hidden from managers (they see type and dates, as asked).
+7. The employee sees only that a supporting document is attached (they cannot open it again); HR and directors open it, each open audited
+   (HR's opens are audited too, not only the directors').
+8. Supporting documents keep no original file name (it can reveal a diagnosis).
+
+### Deviations
+- Base tests changed (PEEPS blocks) where the owners changed the rule they tested: HR setting someone's photo; contact fields shown from
+  the System Settings toggle alone.
+- `docs/SENSITIVE_DATA.md` generated block regenerated (see above).
+- The full sensitive-ui run was not repeated after the menu-only fix (targeted check instead).
+
+### CI (read per job on the final code commit `03e96fa`, run 235)
+- **Green:** install-lint-typecheck-test (lint, typecheck, tokens and bundle budgets, schema matches migrations, the full test suite, demo
+  company tests), latency (including **check:popovers** with the two new layers), docker-build, attendance-replay, agent-windows.
+- **Red: sensitive-ui — the step timed out at its 16-minute limit** (`##[error] … has timed out after 16 minutes`; no problem was reported
+  before the limit). Per the final instructions this time limit is Session A's to handle; `ci.yml` was not edited. Locally the full scan
+  covers 577 pages (see Browser checks).
+- Run 233 (`00d9a2d`) had the same picture; run 234 was cancelled by the next push. The docs-only commit after this one was not read.
+
+**Stopped here as instructed.** Recruitment, exits, insights and autofill code were not started.

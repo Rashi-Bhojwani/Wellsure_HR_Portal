@@ -46,10 +46,22 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 - [x] Final merge of the base — `1dc28af`, then `162f03f` (Session A's `832947f`); full suite alone and CI: see PEEPS_STAGE_REPORTS
 - [x] Full suite alone after `162f03f`: 195 files, 1,951 tests passed; frontend checks pass
 - [x] CI flake (Session A's bankRepayment hash assertion) fixed by the merge; scan made to run its Peeps checks inside `visit()` — `7d761a0` (845 → 570 loads)
-- [ ] **Open for the owner:** CI sensitive-ui step still over its 16-minute limit (16:12 on run 228); limit/parallelism are shared CI — options in PEEPS_STAGE_REPORTS
+- [x] CI sensitive-ui time limit: handed to Session A (final instructions); noted in each CI read
 - [x] Ticket desk changes: withdrawn by D-29 (no change)
 - [ ] Follow-ups: badge counts in the directory list; withdrawing a pending proposal/setting; manager-member menu entries (see deviations)
-- [ ] **STOP: wait for the next build prompt**
+- [x] Stopped after the workspace/Unmute/badges stage (superseded by the final instructions)
+
+## Final instructions (2026-11-01)
+- [x] 0.1 Merge `feat/hr-payroll-separation` — `f5f0506`
+- [x] 0.2 Assets back to HR and the directors (Q-14), audience setting, onboarding path retired — `b9f0a90`, `03e96fa`
+- [x] 0.3 Badges/nudges directors only, badges company-wide (Q-16) — `e0cf2d3`
+- [x] Module 1: avatars and directory — `1743d6f`
+- [x] Module 2: the four new leave types — `fdb69bf` (plan), `00d9a2d`, `b6c3561`
+- [x] Document autofill: planning note in PEEPS_PLAN.md only (no code) — `fdb69bf`
+- [x] Mutation checks, frontend checks, screens, full suite alone, CI read — see PEEPS_STAGE_REPORTS
+- [ ] Owner to confirm the "Decided by me" list in PEEPS_STAGE_REPORTS (stage of 2026-11-01)
+- [ ] Not started (by instruction): recruitment, exits, insights, autofill code
+- [ ] **STOP: wait for the owner**
 
 ## Ticket desk
 - [ ] 11 category visibility (general categories), move between categories
