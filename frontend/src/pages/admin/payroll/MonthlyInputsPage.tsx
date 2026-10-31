@@ -170,7 +170,7 @@ export function MonthlyInputsPage() {
                     }}
                     columns={[
                       { title: "Employee", key: "employee", fixed: isPhone ? undefined : "left", render: (_, r) => <PersonCell name={r.name} code={`${r.employeeCode}${r.departmentName ? ` · ${r.departmentName}` : ""}`} /> },
-                      ...heads.map((h) => ({ title: <span>{h.name}<Caption>{h.type === "DEDUCTION" ? "Deduction" : "Earning"}</Caption></span>, key: h.code, align: "right" as const, render: (_: unknown, r: InputGridRow) => cellView(r, h) })),
+                      ...heads.map((h) => ({ title: <span>{h.name}<Caption>{h.direction === null || h.allowNegative === null ? "Not set" : `${h.direction === "DEDUCTION" ? "Deduction" : "Earning"}${h.allowNegative ? ", negative allowed" : ""}`}</Caption></span>, key: h.code, align: "right" as const, render: (_: unknown, r: InputGridRow) => cellView(r, h) })),
                       { title: "", key: "actions", align: "right", render: (_, r) => <RowActions row={r} canEdit={canEdit && accepts} onEdit={() => setEditing(r)} onHistory={() => setHistoryOf({ employeeId: r.employeeId, name: r.name })} /> },
                     ]}
                   />
@@ -270,8 +270,8 @@ function EntryDrawer({ month, row, onClose, onDone }: { month: MonthView; row: I
     >
       <Form layout="vertical" component="div" requiredMark={false}>
         {month.heads.map((h) => (
-          <Form.Item key={h.code} label={`${h.name} (${h.type === "DEDUCTION" ? "deduction" : "earning"})`} htmlFor={`in-${h.code}`} extra="Leave blank for nothing entered. Write 0 to enter zero.">
-            <Input id={`in-${h.code}`} inputMode="decimal" autoComplete="off" value={values[h.code] ?? ""} onChange={(e) => { setValues({ ...values, [h.code]: e.target.value }); setProblem(null); }} style={{ maxWidth: 240 }} />
+          <Form.Item key={h.code} label={`${h.name} (${h.direction === null ? "direction Not set" : h.direction === "DEDUCTION" ? "deduction" : "earning"})`} htmlFor={`in-${h.code}`} extra={h.direction === null || h.allowNegative === null ? "Not set: a director chooses the direction and whether negative figures are allowed on the pay head first." : h.allowNegative ? "Leave blank for nothing entered. Write 0 to enter zero. A negative figure goes the other way." : "Leave blank for nothing entered. Write 0 to enter zero. Negative figures are not allowed."}>
+            <Input id={`in-${h.code}`} inputMode="decimal" autoComplete="off" disabled={h.direction === null || h.allowNegative === null} value={values[h.code] ?? ""} onChange={(e) => { setValues({ ...values, [h.code]: e.target.value }); setProblem(null); }} style={{ maxWidth: 240 }} />
           </Form.Item>
         ))}
         <Form.Item label="Why" htmlFor="in-reason" validateStatus={problem ? "error" : undefined} help={problem ?? "Kept with the entry in the history. At least 3 characters."}>

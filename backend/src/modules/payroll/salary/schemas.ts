@@ -49,9 +49,15 @@ export const componentValueSchema = z
     reversalHead: code.optional(),
     /** Takes its value from the Monthly Inputs grid each month (Stage 4 builds a column for it); it is not worked out from CTC, so it is never a structure line. */
     inputItem: z.boolean().optional(),
+    /** Monthly input heads only. Where a figure sits on the payslip: paid (EARNING) or taken off (DEDUCTION). Absent is Not set: no figure can be entered or used until a director chooses. */
+    inputDirection: z.enum(["EARNING", "DEDUCTION"]).optional(),
+    /** Monthly input heads only. Whether a figure may be negative (a negative earning takes off, a negative deduction gives back). Absent is Not set; true or false is the director's choice. */
+    inputAllowNegative: z.boolean().optional(),
   })
   .strict()
   .superRefine((v, ctx) => {
+    if (!v.inputItem && (v.inputDirection !== undefined || v.inputAllowNegative !== undefined)) ctx.addIssue({ code: "custom", path: ["inputDirection"], message: "The direction and the negative-figures choice are only for a pay head that takes its figure from Monthly Inputs" });
+    if (v.inputItem && v.inputDirection !== undefined && v.inputDirection !== v.type) ctx.addIssue({ code: "custom", path: ["inputDirection"], message: "The direction of a monthly input must match the head's own type (earning or deduction)" });
     if (v.activeFrom && v.activeTo && v.activeTo < v.activeFrom) ctx.addIssue({ code: "custom", path: ["activeTo"], message: "The last day cannot be before the first day" });
     if (v.reimbursement && v.headKind && v.headKind !== "REIMBURSEMENT" && v.headKind !== "EARNING") ctx.addIssue({ code: "custom", path: ["reimbursement"], message: "Only an earning or a reimbursement can be flagged as a reimbursement" });
   });

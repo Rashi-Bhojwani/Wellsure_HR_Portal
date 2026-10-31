@@ -63,7 +63,7 @@ export function MonthlyInputsImport({ canEdit, onApplied }: { canEdit: boolean; 
           <Button size="large" icon={<DownloadOutlined />} onClick={() => void payrollApi.downloadImportTemplate("xlsx")}>Template (Excel)</Button>
           <Button size="large" onClick={() => void payrollApi.downloadImportTemplate("csv")}>Template (CSV)</Button>
         </div>
-        <Caption>Columns: Employee Number, Override From, Override Till, Principal Part, Interest Part, Remarks, then one column per pay head that takes its value from Monthly Inputs. Nothing is saved until you confirm the preview.</Caption>
+        <Caption>Columns: Employee Number, Override From, Override Till, Principal Part, Interest Part, Remarks, then one column per pay head that takes its value from Monthly Inputs. Principal Part and Interest Part are the two parts of a loan or advance instalment: they are shown here and not posted to any month until loans are built. A negative figure is read only for a pay head a director allowed it on, and a pay head with its direction or negative choice Not set takes no figure. Nothing is saved until you confirm the preview.</Caption>
         {problem && !view && <ApprovalBanner tone="danger" title={problem} style={{ marginTop: space[3] }} />}
       </Panel>
 

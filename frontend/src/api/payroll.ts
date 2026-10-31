@@ -141,6 +141,8 @@ export interface ComponentValue {
   arrearsHead?: string;
   reversalHead?: string;
   inputItem?: boolean;
+  inputDirection?: "EARNING" | "DEDUCTION";
+  inputAllowNegative?: boolean;
 }
 
 export interface ComponentView {
@@ -1224,6 +1226,9 @@ export interface InputHead {
   name: string;
   type: "EARNING" | "DEDUCTION";
   version: number;
+  /** The directors' two choices for this head; null is Not set, and a head with either Not set takes no figure. */
+  direction: "EARNING" | "DEDUCTION" | null;
+  allowNegative: boolean | null;
 }
 export interface MonthView {
   cycleStart: string;

@@ -10,18 +10,22 @@ const MAX_FRACTION_DIGITS = 6;
 export type AmountResult = { ok: true; value: string } | { ok: false; message: string };
 
 /**
- * Reads a figure typed or uploaded as text. Exact: it is never a JavaScript number. Blank is not a figure (that is "nothing entered"); zero is. A figure is zero or more:
- * whether it is paid or taken off is the pay head's, not the sign's. Thousand separators and currency signs are refused rather than guessed at.
+ * Reads a figure typed or uploaded as text. Exact: it is never a JavaScript number. Blank is not a figure (that is "nothing entered"); zero is. A figure is zero or more
+ * unless the pay head allows negative figures (a director's choice per head, never assumed): whether it is paid or taken off is the head's direction, and a negative figure
+ * goes the other way. Thousand separators and currency signs are refused rather than guessed at.
  */
-export function parseAmountText(raw: string): AmountResult {
+export function parseAmountText(raw: string, allowNegative = false): AmountResult {
   const text = raw.trim();
   if (text === "") return { ok: false, message: "No figure. Leave the cell blank to enter nothing, or write 0." };
-  if (text.startsWith("-")) return { ok: false, message: `"${text}" is negative. A figure is zero or more; the pay head says whether it is paid or taken off.` };
-  if (!/^\d+(\.\d+)?$/.test(text)) return { ok: false, message: `"${text}" is not a figure. Write digits with an optional decimal point, with no commas or currency sign.` };
-  const [whole = "", fraction = ""] = text.split(".");
+  const negative = text.startsWith("-");
+  if (negative && !allowNegative) return { ok: false, message: `"${text}" is negative, and this pay head does not allow negative figures. A director can allow them on the pay head.` };
+  const digits = negative ? text.slice(1) : text;
+  if (!/^\d+(\.\d+)?$/.test(digits)) return { ok: false, message: `"${text}" is not a figure. Write digits with an optional decimal point, with no commas or currency sign.` };
+  const [whole = "", fraction = ""] = digits.split(".");
   if (whole.replace(/^0+(?=\d)/, "").length > MAX_WHOLE_DIGITS) return { ok: false, message: `"${text}" is too large.` };
   if (fraction.length > MAX_FRACTION_DIGITS) return { ok: false, message: `"${text}" has more than ${MAX_FRACTION_DIGITS} decimal places.` };
-  return { ok: true, value: canonicalDecimal(dec(text)) };
+  const value = dec(digits);
+  return { ok: true, value: canonicalDecimal(negative && !value.isZero() ? value.negated() : value) };
 }
 
 export type MonthState = "CLOSED" | "OPEN" | "CONFIRMED" | "LOCKED";

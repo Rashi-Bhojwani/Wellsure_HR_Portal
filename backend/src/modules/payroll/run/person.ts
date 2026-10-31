@@ -388,8 +388,11 @@ function adjustmentLine(adj: AdjustmentIn, ctx: CalcContext): { line: LineOut; p
   const current = ctx.components.current.get(adj.componentCode);
   if (adj.source === "MONTHLY_INPUT") {
     const flags = current?.value;
+    // A negative figure goes the other way: a negative earning takes off, a negative deduction gives back. The line carries the size; PF and ESI wages carry the sign.
+    const negative = adj.amount.isNegative();
+    const kind = negative ? (adj.direction === "EARNING" ? "DEDUCTION" : "EARNING") : adj.direction;
     return {
-      line: { code: adj.componentCode, label: flags?.payslipLabel ?? adj.componentCode, kind: adj.direction, source: "MONTHLY_INPUT", sourceRef: adj.sourceRef, amount: adj.amount, basis: { kind: "MONTHLY_INPUT", month: adj.periodLabel ?? null, componentVersion: current?.version ?? null, pfApplicable: flags?.pfApplicable === true, esiApplicable: flags?.esiApplicable === true } },
+      line: { code: adj.componentCode, label: flags?.payslipLabel ?? adj.componentCode, kind, source: "MONTHLY_INPUT", sourceRef: adj.sourceRef, amount: adj.amount.abs(), basis: { kind: "MONTHLY_INPUT", month: adj.periodLabel ?? null, componentVersion: current?.version ?? null, pfApplicable: flags?.pfApplicable === true, esiApplicable: flags?.esiApplicable === true, direction: adj.direction, signed: c(adj.amount) } },
       pf: flags?.pfApplicable ? adj.amount : ZERO,
       esi: flags?.esiApplicable ? adj.amount : ZERO,
       notices: current ? notices : [...notices, `The pay head ${adj.componentCode} used by a Monthly Input has no version on record.`],

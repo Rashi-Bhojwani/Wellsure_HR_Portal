@@ -262,6 +262,9 @@ function EditDrawer({ initial, onClose, onSaved }: { initial: { code: string | n
             <Form.Item name="reimbursement" label="Reimbursement"><Select allowClear placeholder="Choose" options={YES_NO} /></Form.Item>
             <Form.Item name="ytd" label="Show year to date"><Select allowClear placeholder="Choose" options={YES_NO} /></Form.Item>
             <Form.Item name="bankTransfer" label="Paid by bank transfer"><Select allowClear placeholder="Choose" options={YES_NO} /></Form.Item>
+            <Form.Item name="inputItem" label="Takes its figure from Monthly Inputs"><Select allowClear placeholder="Choose" options={YES_NO} /></Form.Item>
+            <Form.Item name="inputDirection" label="Monthly input: direction" extra="Must match the type above"><Select allowClear placeholder="Not set" options={[{ value: "EARNING", label: "Earning (paid)" }, { value: "DEDUCTION", label: "Deduction (taken off)" }]} /></Form.Item>
+            <Form.Item name="inputAllowNegative" label="Monthly input: negative figures allowed"><Select allowClear placeholder="Not set" options={YES_NO} /></Form.Item>
             <Form.Item name="payslipVisible" label="Shown on the payslip"><Select allowClear placeholder="Choose" options={YES_NO} /></Form.Item>
             <Form.Item name="ctcGroup" label="CTC group"><Input maxLength={40} autoComplete="off" /></Form.Item>
             <Form.Item name="activeFrom" label="Active from" extra="Year-month-day"><Input maxLength={10} placeholder="YYYY-MM-DD" autoComplete="off" /></Form.Item>

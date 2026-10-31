@@ -241,7 +241,7 @@ export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promi
     adjustments.push(...(encashmentsByEmployee.get(e.id) ?? []));
     for (const f of monthly.get(e.id) ?? []) {
       if (dec(f.amount).isZero()) continue; // a zero was entered (so the run may go ahead), and pays or takes nothing: there is no line to print
-      adjustments.push({ id: null, source: "MONTHLY_INPUT", sourceRef: f.entryId, componentCode: f.head.code, direction: f.head.type, amount: dec(f.amount), reason: "Entered in Monthly Inputs", periodLabel: cycle.label });
+      adjustments.push({ id: null, source: "MONTHLY_INPUT", sourceRef: f.entryId, componentCode: f.head.code, direction: f.head.direction ?? f.head.type, amount: dec(f.amount), reason: "Entered in Monthly Inputs", periodLabel: cycle.label });
     }
     if (adjustments.some((a) => a.source === "SALARY_ARREARS" || a.source === "LOP_REVERSAL")) arrears = true; // a reversal follows the same PF and ESI rule
     if (adjustments.some((a) => a.source === "LOP_REVERSAL")) reversals = true;

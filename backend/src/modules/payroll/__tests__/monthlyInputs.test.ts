@@ -49,8 +49,8 @@ describe("monthly inputs: entry, history, confirmation and the run", () => {
     for (const n of ["a", "b", "c"]) await giveSalary(w, id(n), "600000", FIRST_SALARY_DAY);
     incentive = `${w.prefix}_INC`;
     advance = `${w.prefix}_ADV`;
-    await makeComponent(w, incentive, { name: `Incentive ${w.prefix}`, payslipOrder: 20, inputItem: true, pfApplicable: false });
-    await makeComponent(w, advance, { name: `Advance ${w.prefix}`, type: "DEDUCTION", payslipOrder: 21, inputItem: true, taxable: false });
+    await makeComponent(w, incentive, { name: `Incentive ${w.prefix}`, payslipOrder: 20, inputItem: true, pfApplicable: false, inputDirection: "EARNING", inputAllowNegative: false });
+    await makeComponent(w, advance, { name: `Advance ${w.prefix}`, type: "DEDUCTION", payslipOrder: 21, inputItem: true, taxable: false, inputDirection: "DEDUCTION", inputAllowNegative: false });
   }, 300_000);
   afterAll(async () => {
     setPayrollLockCheck(null);

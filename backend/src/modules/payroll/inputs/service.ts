@@ -39,7 +39,13 @@ export interface Head {
   /** EARNING is paid; DEDUCTION is taken off. An employer contribution is never a monthly input. */
   type: "EARNING" | "DEDUCTION";
   version: number;
+  /** The director's two choices for this head, null until chosen (Not set). Direction: where a figure sits on the payslip. Negative: whether a figure may be below zero. */
+  direction: "EARNING" | "DEDUCTION" | null;
+  allowNegative: boolean | null;
 }
+
+/** A head takes figures only once both choices are made. */
+export const headReady = (h: Pick<Head, "direction" | "allowNegative">): boolean => h.direction !== null && h.allowNegative !== null;
 
 /** The heads flagged as taking their value from Monthly Inputs and active on the last day of the month. Never hard-coded: a director creates and flags them. */
 export async function inputHeads(cycleEnd: Date, db: Db = prisma): Promise<Head[]> {
@@ -50,7 +56,7 @@ export async function inputHeads(cycleEnd: Date, db: Db = prisma): Promise<Head[
   for (const r of latest.values()) {
     const v = r.value as unknown as ComponentValue;
     if (!v.inputItem || v.type === "EMPLOYER_CONTRIBUTION" || !isActiveOn(v, iso(cycleEnd))) continue;
-    out.push({ code: r.key, name: v.name, type: v.type, version: r.version });
+    out.push({ code: r.key, name: v.name, type: v.type, version: r.version, direction: v.inputDirection ?? null, allowNegative: v.inputAllowNegative ?? null });
   }
   return out.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }
@@ -273,6 +279,7 @@ export async function enter(raw: unknown, actor: Actor): Promise<{ written: numb
   const cycle = await cycleOfStart(input.cycleStart);
   const who = await peopleInMonth(cycle.start, cycle.end);
   const headCodes = new Set(month.heads.map((h) => h.code));
+  const headOf = new Map(month.heads.map((h) => [h.code, h]));
   const seen = new Set<string>();
   const problems: string[] = [];
   const rows: PlannedRow[] = [];
@@ -280,12 +287,14 @@ export async function enter(raw: unknown, actor: Actor): Promise<{ written: numb
     const where = `Entry ${i + 1}`;
     if (!who.ids.includes(e.employeeId)) problems.push(`${where}: that person was not employed in ${month.label}.`);
     if (!headCodes.has(e.head)) problems.push(`${where}: ${e.head} is not a pay head that takes its value from Monthly Inputs and is active in ${month.label}.`);
+    const head = headOf.get(e.head);
+    if (head && !headReady(head)) problems.push(`${where}: ${head.name} has no direction or no choice about negative figures yet (Not set). A director sets both on the pay head first.`);
     const key = `${e.employeeId}|${e.head}`;
     if (seen.has(key)) problems.push(`${where}: the same cell is in this request twice.`);
     seen.add(key);
     if (e.amount === null) rows.push({ employeeId: e.employeeId, head: e.head, amount: null });
     else {
-      const a = parseAmountText(e.amount);
+      const a = parseAmountText(e.amount, head?.allowNegative === true);
       if (!a.ok) problems.push(`${where}: ${a.message}`);
       else rows.push({ employeeId: e.employeeId, head: e.head, amount: a.value });
     }
@@ -310,7 +319,10 @@ export async function fillBlanks(raw: unknown, actor: Actor): Promise<{ written:
   if (input.head && !month.heads.some((h) => h.code === input.head)) throw new HttpError(400, `${input.head} is not a pay head that takes its value from Monthly Inputs and is active in ${month.label}.`, "VALIDATION_ERROR");
   const cycle = await cycleOfStart(input.cycleStart);
   const who = await peopleInMonth(cycle.start, cycle.end);
-  const heads = month.heads.filter((h) => !input.head || h.code === input.head).map((h) => h.code);
+  const chosen = month.heads.filter((h) => !input.head || h.code === input.head);
+  const notSet = chosen.filter((h) => !headReady(h));
+  if (input.head && notSet.length > 0) throw new HttpError(400, `${notSet[0]!.name} has no direction or no choice about negative figures yet (Not set), so no figure can be entered for it.`, "VALIDATION_ERROR");
+  const heads = chosen.filter(headReady).map((h) => h.code); // heads with a choice Not set are left blank, and the run names them
   const blanks = missingInputs(who.ids, heads, currentCells(await ledger(input.cycleStart)));
   if (blanks.length === 0) return { written: 0, voidedConfirmation: false };
   await assertNotOwnPay(actor.userId, [...new Set(blanks.map((b) => b.employeeId))], "These entries");
@@ -380,6 +392,8 @@ export async function decideConfirmation(cycleStart: string, raw: unknown, check
 export interface RunInputsCheck {
   missing: Array<MissingInput & { employeeCode: string; name: string; headName: string }>;
   notConfirmed: boolean;
+  /** Heads whose direction or negative-figures choice is still Not set: a run cannot use their figures. */
+  headsNotSet: Array<{ code: string; name: string }>;
   heads: Head[];
 }
 
@@ -387,7 +401,8 @@ export interface RunInputsCheck {
 export async function checkForRun(cycleStart: string, employeeIds: readonly string[]): Promise<RunInputsCheck> {
   const cycle = await cycleOfStart(cycleStart);
   const heads = await inputHeads(cycle.end);
-  if (heads.length === 0) return { missing: [], notConfirmed: false, heads };
+  if (heads.length === 0) return { missing: [], notConfirmed: false, headsNotSet: [], heads };
+  const headsNotSet = heads.filter((h) => !headReady(h)).map((h) => ({ code: h.code, name: h.name }));
   const cells = await currentFigures(cycleStart);
   const gaps = missingInputs(employeeIds, heads.map((h) => h.code), cells);
   const approval = await prisma.payrollApproval.findFirst({ where: { subject: "MONTHLY_INPUTS", subjectId: cycleStart, status: { in: ["APPROVED", "CONSUMED"] } }, orderBy: { submittedAt: "desc" } });
@@ -396,12 +411,13 @@ export async function checkForRun(cycleStart: string, employeeIds: readonly stri
   const code = new Map(emps.map((e) => [e.id, e.employeeCode]));
   const names = await namesOn([...code.keys()], cycle.end);
   const headName = new Map(heads.map((h) => [h.code, h.name]));
-  return { missing: gaps.map((g) => ({ ...g, employeeCode: code.get(g.employeeId) ?? g.employeeId, name: names.get(g.employeeId) ?? g.employeeId, headName: headName.get(g.head) ?? g.head })), notConfirmed, heads };
+  return { missing: gaps.map((g) => ({ ...g, employeeCode: code.get(g.employeeId) ?? g.employeeId, name: names.get(g.employeeId) ?? g.employeeId, headName: headName.get(g.head) ?? g.head })), notConfirmed, headsNotSet, heads };
 }
 
 /** The sentence a refused run shows. Names each missing figure (the first few in full, then a count). */
 export function refusalText(check: RunInputsCheck, label: string): string {
   const parts: string[] = [];
+  if (check.headsNotSet.length > 0) parts.push(`Monthly Inputs for ${label} cannot be used: ${check.headsNotSet.map((h) => h.name).join(", ")} ${check.headsNotSet.length === 1 ? "has" : "have"} no direction or no choice about negative figures yet (Not set).`);
   if (check.missing.length > 0) {
     const shown = check.missing.slice(0, 10).map((m) => `${m.name} (${m.employeeCode}): ${m.headName}`);
     parts.push(`Monthly Inputs for ${label} are missing ${check.missing.length} ${check.missing.length === 1 ? "figure" : "figures"}: ${shown.join("; ")}${check.missing.length > shown.length ? `; and ${check.missing.length - shown.length} more` : ""}.`);
@@ -412,8 +428,8 @@ export function refusalText(check: RunInputsCheck, label: string): string {
 
 export async function assertReadyForRun(cycleStart: string, employeeIds: readonly string[], label: string): Promise<void> {
   const check = await checkForRun(cycleStart, employeeIds);
-  if (check.missing.length === 0 && !check.notConfirmed) return;
-  throw new HttpError(409, refusalText(check, label), "MONTHLY_INPUTS_MISSING", { missing: check.missing.slice(0, PAGE_SIZE_MAX), missingCount: check.missing.length, notConfirmed: check.notConfirmed });
+  if (check.missing.length === 0 && !check.notConfirmed && check.headsNotSet.length === 0) return;
+  throw new HttpError(409, refusalText(check, label), "MONTHLY_INPUTS_MISSING", { missing: check.missing.slice(0, PAGE_SIZE_MAX), missingCount: check.missing.length, notConfirmed: check.notConfirmed, headsNotSet: check.headsNotSet });
 }
 
 /** One entry of the figures a run uses for the month (the run turns each into a line). */
