@@ -1,7 +1,7 @@
 import { BankRepaymentCard } from "./BankRepayment";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Button, DatePicker, Flex, Input, Space, Tooltip, Typography, Upload } from "antd";
+import { Alert, Button, DatePicker, Flex, Input, Space, Tooltip, Typography } from "antd";
 import { DownloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { Link } from "react-router-dom";
@@ -148,7 +148,8 @@ function OnePayslip({ id }: { id: string }) {
 // ── The bank file ──
 
 function BankCard({ run }: { run: RunDetail }) {
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
+  const isDirector = Boolean(user?.roleCodes.includes("SUPER_ADMIN"));
   const queryClient = useQueryClient();
   const canView = hasPermission("payroll.bank.view");
   const [paying, setPaying] = useState(false);
@@ -160,13 +161,10 @@ function BankCard({ run }: { run: RunDetail }) {
     onSuccess: (r) => open(r.url),
     onError: (e) => toast.error(apiErrorMessage(e, "Could not get the file.")),
   });
-  const upload = useMutation({
-    mutationFn: (file: File) => payrollApi.attachBatchResponse(batch!.id, file),
-    onSuccess: () => {
-      toast.success("The bank's response is stored. It is not read by this system.");
-      refresh();
-    },
-    onError: (e) => toast.error(apiErrorMessage(e, "Could not store that file.")),
+  const sent = useMutation({
+    mutationFn: () => payrollApi.markFileSent("bank-batches", batch!.id),
+    onSuccess: () => { toast.success("Noted as sent to the bank."); refresh(); },
+    onError: (e) => toast.error(apiErrorMessage(e, "Could not note that.")),
   });
   return (
     <div data-testid="bank-card">
@@ -202,13 +200,13 @@ function BankCard({ run }: { run: RunDetail }) {
                 Recorded as paid by the bank on {batch.paid.on ? formatDate(batch.paid.on) : ""}, reference <Text strong>{batch.paid.reference}</Text>. This is HR’s own record; the system does not check it with the bank.
               </Text>
             )}
-            {batch.response && <Text type="secondary">The bank’s response ({batch.response.fileName}) is stored, attached {batch.response.attachedAt ? formatDateTime(batch.response.attachedAt) : ""}. It has not been read.</Text>}
+            {batch.sentToBank && <Text type="secondary">Noted as sent to the bank {formatDateTime(batch.sentToBank.at)}. This is a director’s note; the system does not check it with the bank.</Text>}
             <Space wrap>
               {batch.status === "GENERATED" && hasPermission("payroll.run") && <Button type="primary" onClick={() => setPaying(true)}>Record that it was paid…</Button>}
-              {!batch.response && hasPermission("payroll.run") && (
-                <Upload showUploadList={false} beforeUpload={(f) => { upload.mutate(f); return false; }}>
-                  <Button loading={upload.isPending}>Attach the bank’s response…</Button>
-                </Upload>
+              {!batch.sentToBank && isDirector && (
+                <Tooltip title="Download the file first, then note here once you have sent it to the bank.">
+                  <Button loading={sent.isPending} onClick={() => sent.mutate()}>Note that it was sent to the bank</Button>
+                </Tooltip>
               )}
             </Space>
           </>

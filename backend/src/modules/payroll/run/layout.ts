@@ -8,8 +8,8 @@ import { dec, fixed } from "../money";
 // specification can say: which fields, in which order, delimited or fixed width or a workbook, with header and trailer rows, date and amount formats.
 // It refuses rather than guesses: a value too wide for its column, an amount that would be changed by the format, an unknown field.
 
-export type LayoutKind = "BANK" | "BANK_RETURN" | "PF_ECR" | "ESI" | "PT" | "LWF";
-export const LAYOUT_KINDS: readonly LayoutKind[] = ["BANK", "BANK_RETURN", "PF_ECR", "ESI", "PT", "LWF"];
+export type LayoutKind = "BANK" | "PF_ECR" | "ESI" | "PT" | "LWF";
+export const LAYOUT_KINDS: readonly LayoutKind[] = ["BANK", "PF_ECR", "ESI", "PT", "LWF"];
 
 /** The fields each kind of file can draw on, and which of them are amounts or dates (formatted by the layout's own formats). */
 export const LAYOUT_FIELDS: Record<LayoutKind, { fields: readonly string[]; amounts: readonly string[]; dates: readonly string[]; description: Record<string, string> }> = {
@@ -18,13 +18,6 @@ export const LAYOUT_FIELDS: Record<LayoutKind, { fields: readonly string[]; amou
     amounts: ["AMOUNT"],
     dates: ["PAYMENT_DATE"],
     description: { SERIAL: "Row number, from 1", EMPLOYEE_CODE: "Employee code", NAME: "Name as on the payslip", ACCOUNT_NUMBER: "Account number (full)", IFSC: "IFSC", BANK_NAME: "Bank name", AMOUNT: "Net pay", NARRATION: "Narration from the pattern below", PAYMENT_DATE: "Payment date", DEBIT_ACCOUNT: "The company's debit account" },
-  },
-  // The file the bank sends back (read, never written): which of its columns hold these, found by the column's title.
-  BANK_RETURN: {
-    fields: ["EMPLOYEE_CODE", "AMOUNT", "STATUS", "REASON"],
-    amounts: ["AMOUNT"],
-    dates: [],
-    description: { EMPLOYEE_CODE: "The employee code as the bank echoes it", AMOUNT: "The amount the bank reports (checked against the batch)", STATUS: "The bank's status for the row", REASON: "The bank's reason for a rejection" },
   },
   PF_ECR: {
     fields: ["UAN", "NAME", "GROSS_WAGES", "EPF_WAGES", "EPS_WAGES", "EDLI_WAGES", "EPF_CONTRIBUTION", "EPS_CONTRIBUTION", "EPF_EPS_DIFF", "NCP_DAYS", "REFUND"],
@@ -87,8 +80,6 @@ export const layoutSchema = z
     columnHeaders: z.boolean().default(false),
     columns: z.array(columnSchema).min(1).max(60),
     narrationPattern: z.string().max(200).optional(),
-    /** BANK_RETURN only: the status words that mean a row was rejected, in the bank's own words (entered by the owners, never guessed). */
-    rejectedStatuses: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
     // The company's debit account (BANK only): stored encrypted in the layout's version, so only the last four digits are ever shown.
     debitAccountEnc: z.string().max(500).optional(),
     debitAccountLast4: z.string().max(4).optional(),
@@ -125,16 +116,6 @@ export function parseLayout(kind: LayoutKind, raw: unknown): Layout {
   layout.header.forEach((row, r) => row.forEach((c, i) => checkCell(c, `header row ${r + 1}, cell ${i + 1}`, false)));
   layout.trailer.forEach((row, r) => row.forEach((c, i) => checkCell(c, `trailer row ${r + 1}, cell ${i + 1}`, false)));
   if (layout.narrationPattern) for (const t of tokensIn(layout.narrationPattern)) if (!tokens.has(t)) problems.push(`narration: {${t}} is not available`);
-  if (kind === "BANK_RETURN") {
-    if (layout.format === "FIXED_WIDTH") problems.push("a bank return file is read as a spreadsheet or a delimited text file, not as fixed-width text");
-    const fieldsUsed = new Set(layout.columns.flatMap((c) => (c.source === "FIELD" ? [c.value] : [])));
-    for (const need of ["EMPLOYEE_CODE", "STATUS"]) if (!fieldsUsed.has(need)) problems.push(`the return layout needs a column for ${need}`);
-    layout.columns.forEach((c, i) => {
-      if (c.source !== "FIELD") problems.push(`column ${i + 1}: a return layout only maps fields (the column's title says where the bank puts it)`);
-      else if (!c.header) problems.push(`column ${i + 1}: give the title the bank uses for this column`);
-    });
-    if (!layout.rejectedStatuses || layout.rejectedStatuses.length === 0) problems.push("say which status words mean a row was rejected (the bank's own words)");
-  } else if (layout.rejectedStatuses) problems.push("only a bank return layout lists rejected status words");
   if (kind !== "BANK" && layout.debitAccountEnc) problems.push("only a bank layout has a debit account");
   const usesDebit = [...layout.columns, ...layout.header.flat(), ...layout.trailer.flat()].some((c) => (c.source === "FIELD" && c.value === "DEBIT_ACCOUNT") || (c.source === "PATTERN" && tokensIn(c.value).includes("DEBIT_ACCOUNT")));
   if (usesDebit && !layout.debitAccountEnc) problems.push("the layout uses the debit account but none has been entered");

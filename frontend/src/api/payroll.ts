@@ -917,7 +917,7 @@ export interface BankBatchView {
   fileSha256: string;
   generatedAt: string;
   paid: { at: string | null; on: string | null; reference: string | null } | null;
-  response: { fileName: string | null; sha256: string | null; attachedAt: string | null } | null;
+  sentToBank: { at: string; byUserId: string; note: string | null } | null;
 }
 export interface BankBatchDetail extends BankBatchView {
   rows: Array<{ serial: number; employeeCode: string; name: string; accountLast4: string; ifsc: string; amount: string; narration: string }>;
@@ -933,11 +933,6 @@ export async function bankBatchFileLink(id: string): Promise<{ url: string; file
 }
 export async function markBatchPaid(id: string, body: { reference: string; paidOn: string; confirm: string }): Promise<BankBatchDetail> {
   return (await apiClient.post(`${base}/bank-batches/${id}/mark-paid`, body)).data;
-}
-export async function attachBatchResponse(id: string, file: File): Promise<BankBatchDetail> {
-  const form = new FormData();
-  form.append("file", file);
-  return (await apiClient.post(`${base}/bank-batches/${id}/response`, form)).data;
 }
 
 export type OutputKind = "PF_ECR" | "ESI" | "PT" | "LWF" | "SALARY_REGISTER";
@@ -1365,7 +1360,6 @@ export interface BankRejectionRow {
   accountLast4: string;
   amount: string;
   reason: string;
-  source: "ENTERED" | "RETURN_FILE";
   at: string;
   repaidInBatch: string | null;
 }
@@ -1385,11 +1379,7 @@ export interface RepaymentPlanView {
 }
 export const bankRejections = (batchId: string) => get<{ batchId: string; cycle: string; rows: BankRejectionRow[] }>(`/bank-batches/${batchId}/rejections`);
 export const recordBankRejections = (batchId: string, rows: Array<{ employeeCode: string; reason: string }>) => post<{ recorded: number; alreadyRecorded: number }>(`/bank-batches/${batchId}/rejections`, { rows });
-export async function importBankReturn(batchId: string, file: File): Promise<{ rows: number; rejected: number; alreadyRecorded: number }> {
-  const form = new FormData();
-  form.append("file", file);
-  return (await apiClient.post(`${base}/bank-batches/${batchId}/rejections/import`, form)).data;
-}
+export const markFileSent = (kind: "bank-batches" | "repayment-batches", id: string, note?: string) => post<{ sentAt: string; sentByUserId: string; note: string | null }>(`/${kind}/${id}/sent`, note ? { note } : {});
 export const planRepayment = (batchId: string, paymentDate: string, rowIds?: string[]) => post<RepaymentPlanView>(`/bank-batches/${batchId}/repayment-plans`, { paymentDate, ...(rowIds ? { rowIds } : {}) });
 export const getRepaymentPlan = (id: string) => get<RepaymentPlanView>(`/repayment-plans/${id}`);
 export const requestRepayment = (id: string, hash: string, note?: string) => post<{ status: string }>(`/repayment-plans/${id}/request`, { hash, ...(note ? { note } : {}) });

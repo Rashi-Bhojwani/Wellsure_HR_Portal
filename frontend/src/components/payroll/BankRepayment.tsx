@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Form, Input } from "antd";
 import * as payrollApi from "../../api/payroll";
@@ -13,17 +13,11 @@ import { space } from "../../theme/tokens";
 // Bank rejections and paying them again (Stage 5b). Directors only. A rejected row stays unpaid until a repayment file, approved like the bank file, is made for it.
 export function BankRepaymentCard({ batchId }: { batchId: string }) {
   const queryClient = useQueryClient();
-  const input = useRef<HTMLInputElement>(null);
   const [recording, setRecording] = useState(false);
   const [planDate, setPlanDate] = useState("");
   const [planId, setPlanId] = useState<string | null>(null);
   const q = useQuery({ queryKey: ["payroll", "bank-rejections", batchId], queryFn: () => payrollApi.bankRejections(batchId) });
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["payroll", "bank-rejections", batchId] });
-  const importFile = useMutation({
-    mutationFn: (f: File) => payrollApi.importBankReturn(batchId, f),
-    onSuccess: (r) => { toast.success(`Read ${r.rows} rows: ${r.rejected} newly rejected${r.alreadyRecorded ? `, ${r.alreadyRecorded} already recorded` : ""}.`); refresh(); },
-    onError: (e) => toast.error(apiErrorMessage(e, "Could not read that file.")),
-  });
   const plan = useMutation({
     mutationFn: () => payrollApi.planRepayment(batchId, planDate),
     onSuccess: (p) => { setPlanId(p.id); refresh(); },
@@ -36,9 +30,7 @@ export function BankRepaymentCard({ batchId }: { batchId: string }) {
       <Panel title="Rows the bank rejected" subtitle="They stay unpaid until a repayment file is made. Directors only.">
         <Stack>
           <div style={{ display: "flex", flexWrap: "wrap", gap: space[3] }}>
-            <Button onClick={() => setRecording(true)}>Record a rejection</Button>
-            <input ref={input} type="file" accept=".xlsx,.csv" hidden aria-label="Bank return file" onChange={(e) => { const f = e.target.files?.[0]; if (f) importFile.mutate(f); e.target.value = ""; }} />
-            <Button loading={importFile.isPending} onClick={() => input.current?.click()}>Read the bank's return file</Button>
+            <Button onClick={() => setRecording(true)}>Enter a rejection</Button>
           </div>
           <DataTable<BankRejectionRow>
             rowKey="rowId"
@@ -48,12 +40,12 @@ export function BankRepaymentCard({ batchId }: { batchId: string }) {
             onRetry={() => void q.refetch()}
             dataSource={rows}
             pagination={false}
-            empty={<EmptyState compact title="No rejected rows" description="Record one, or read the file the bank sends back." />}
+            empty={<EmptyState compact title="No rejected rows" description="When the bank rejects a payment, enter it here, one row per payment, with the reason." />}
             mobile={{ title: (r) => r.name, subtitle: (r) => `${r.employeeCode} · …${r.accountLast4}`, status: (r) => <StatusChip tone={r.repaidInBatch ? "success" : "warning"}>{r.repaidInBatch ? "Paid again" : "Unpaid"}</StatusChip>, fields: [{ label: "Amount", render: (r) => r.amount }, { label: "Why", render: (r) => r.reason }] }}
             columns={[
               { title: "Employee", key: "who", render: (_, r) => <PersonCell name={r.name} code={`${r.employeeCode} · …${r.accountLast4}`} /> },
               { title: "Amount", key: "amount", align: "right", render: (_, r) => <Num>{r.amount}</Num> },
-              { title: "Why", key: "why", render: (_, r) => <div>{r.reason}<Caption>{r.source === "RETURN_FILE" ? "From the bank's file" : "Entered"} · {formatDate(r.at)}</Caption></div> },
+              { title: "Why", key: "why", render: (_, r) => <div>{r.reason}<Caption>Entered {formatDate(r.at)}</Caption></div> },
               { title: "Status", key: "status", render: (_, r) => <StatusChip tone={r.repaidInBatch ? "success" : "warning"}>{r.repaidInBatch ? "Paid again" : "Unpaid"}</StatusChip> },
             ]}
           />
@@ -78,7 +70,7 @@ function RecordDialog({ batchId, onClose, onDone }: { batchId: string; onClose: 
   const ok = lines.length > 0 && lines.every((l) => l.employeeCode && l.reason.length >= 3);
   const save = useMutation({ mutationFn: () => payrollApi.recordBankRejections(batchId, lines), onSuccess: (r) => { toast.success(`Recorded ${r.recorded}.`); onDone(); onClose(); }, onError: (e) => setProblem(apiErrorMessage(e, "Could not save.")) });
   return (
-    <ConfirmModal open title="Record rejected rows" description="One per line: the employee code, a comma, and the bank's reason." confirmLabel="Record" cancelLabel="Cancel" confirmDisabled={!ok} loading={save.isPending} onCancel={onClose} onConfirm={() => save.mutate()}>
+    <ConfirmModal open title="Enter rejected payments" description="One per line: the employee code, a comma, and the bank's reason." confirmLabel="Record" cancelLabel="Cancel" confirmDisabled={!ok} loading={save.isPending} onCancel={onClose} onConfirm={() => save.mutate()}>
       <Form layout="vertical" component="div" requiredMark={false}>
         <Form.Item htmlFor="rr-text" validateStatus={problem ? "error" : undefined} help={problem ?? undefined} style={{ marginBottom: 0 }}><Input.TextArea id="rr-text" rows={5} value={text} onChange={(e) => { setText(e.target.value); setProblem(null); }} /></Form.Item>
       </Form>

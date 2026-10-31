@@ -1,6 +1,5 @@
 import type { Request, Response } from "express";
-import { requireFile } from "../../../lib/uploads";
-import { attachResponse, batchForRun, downloadBatchFile, getBatch, markPaid } from "./bankBatches";
+import { batchForRun, downloadBatchFile, getBatch, markPaid } from "./bankBatches";
 import { confirmLayout, getLayout, listLayouts, previewLayoutConfirm, previewLayoutSave, saveLayout, showsBankLayout, viewerOf } from "./layouts";
 import { writeAuditLog } from "../../../lib/audit";
 import { downloadOutput, generateOutput, listOutputs } from "./outputs";
@@ -41,10 +40,6 @@ export const batchOfRun = async (req: Request, res: Response): Promise<void> => 
 export const batch = async (req: Request, res: Response): Promise<void> => send(res, 200, await getBatch(id(req)));
 export const batchDownload = async (req: Request, res: Response): Promise<void> => send(res, 200, await downloadBatchFile(id(req), actor(req)));
 export const batchPaid = async (req: Request, res: Response): Promise<void> => send(res, 200, await markPaid(id(req), req.body as { reference: string; paidOn: string; confirm: string }, actor(req)));
-export const batchResponse = async (req: Request, res: Response): Promise<void> => {
-  const file = requireFile(req.file);
-  send(res, 200, await attachResponse(id(req), { buffer: file.buffer, originalName: file.originalname }, actor(req)));
-};
 
 // Statutory files and the register
 export const outputs = async (req: Request, res: Response): Promise<void> => send(res, 200, await listOutputs(id(req)));

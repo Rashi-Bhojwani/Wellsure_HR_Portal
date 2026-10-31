@@ -21,6 +21,7 @@ import * as ex from "./exclusions/controller";
 import * as exSvc from "./exclusions/service";
 import * as plSvc from "./run/payslipLinks";
 import * as rpSvc from "./run/repayments";
+import { sentSchema } from "./run/sentMarks";
 import { compareRegistersRoute, compareUpload } from "./compare/controller";
 import { overrideKeyParamsSchema, overridePreviewSchema, overrideSaveSchema, setupAreaParamsSchema, setupSignoffSchema, checkersQuerySchema, payrollAuditQuerySchema, ruleConfirmSchema, ruleEditPreviewSchema, ruleEditSchema, ruleKeyParamsSchema } from "./validators";
 
@@ -156,7 +157,6 @@ payrollRouter.get("/runs/:id/bank-batch", bankView, validate({ params: rv.runIdP
 payrollRouter.get("/bank-batches/:id", bankView, validate({ params: rv.slipIdParamsSchema }), rel.batch);
 payrollRouter.get("/bank-batches/:id/file", bankView, validate({ params: rv.slipIdParamsSchema }), rel.batchDownload);
 payrollRouter.post("/bank-batches/:id/mark-paid", make, validate({ params: rv.slipIdParamsSchema, body: rv.markPaidSchema }), rel.batchPaid);
-payrollRouter.post("/bank-batches/:id/response", make, validate({ params: rv.slipIdParamsSchema }), memoryUpload(5), rel.batchResponse);
 // Statutory files and the register: made by payroll.run, read by reports.salary.view.
 const reportView = requirePermission("reports.salary.view");
 payrollRouter.get("/runs/:id/outputs", reportView, validate({ params: rv.runIdParamsSchema }), rel.outputs);
@@ -191,13 +191,14 @@ payrollRouter.get("/monthly-inputs", view, dirs, validate({ query: miSvc.gridQue
 // ── Stage 5b: rows the bank rejected, and paying them again. Directors only (payroll.bank.view and payroll.run are held by no one else, and every service call checks for a director). ──
 payrollRouter.get("/bank-batches/:id/rejections", bankView, validate({ params: rp.idSchema }), rp.rejections);
 payrollRouter.post("/bank-batches/:id/rejections", make, validate({ params: rp.idSchema, body: rpSvc.rejectionsSchema }), rp.recordRejections);
-payrollRouter.post("/bank-batches/:id/rejections/import", make, validate({ params: rp.idSchema }), memoryUpload(5), rp.importReturn);
 payrollRouter.post("/bank-batches/:id/repayment-plans", make, validate({ params: rp.idSchema, body: rpSvc.planSchema }), rp.createPlan);
 payrollRouter.get("/repayment-plans/:id", bankView, validate({ params: rp.idSchema }), rp.plan);
 payrollRouter.post("/repayment-plans/:id/request", make, validate({ params: rp.idSchema, body: rpSvc.requestSchema }), rp.request);
 payrollRouter.post("/repayment-plans/:id/decision", approve, validate({ params: rp.idSchema, body: rpSvc.decisionSchema }), rp.decision);
 payrollRouter.post("/repayment-plans/:id/generate", make, validate({ params: rp.idSchema }), rp.generate);
 payrollRouter.get("/repayment-batches/:id/file", bankView, validate({ params: rp.idSchema }), rp.download);
+payrollRouter.post("/bank-batches/:id/sent", bankView, validate({ params: rp.idSchema, body: sentSchema }), rp.sentBatch);
+payrollRouter.post("/repayment-batches/:id/sent", bankView, validate({ params: rp.idSchema, body: sentSchema }), rp.sentRepayment);
 
 // ── Stage 5b, B4: the payslip link's lifetime (a director's setting, Not set until chosen) and revoking a run's links ──
 payrollRouter.get("/payslip-link-settings", requirePermission("payroll.rules.view"), pl.settings);

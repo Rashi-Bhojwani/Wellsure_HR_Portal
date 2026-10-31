@@ -29,6 +29,8 @@ type Policy = "delete" | "setNull";
 // Key: "<ChildModel>.<foreignKeyField>". Required FKs are never listed —
 // a required FK can't be nulled, so its child is always deleted.
 export const OPTIONAL_FK_POLICY: Record<string, Policy> = {
+  "BankFileSentMark.batchId": "delete",
+  "BankFileSentMark.repaymentBatchId": "delete",
   // An incident belongs to the device or agent it records trouble with (exactly one is set, by a CHECK):
   // it disappears with it, never loses its subject.
   "DeviceIncident.deviceId": "delete",
@@ -37,8 +39,6 @@ export const OPTIONAL_FK_POLICY: Record<string, Policy> = {
   "RefreshToken.replacedByTokenId": "setNull",
   // Seeded settings can be edited by a test user; the setting must survive.
   "SystemSetting.updatedByUserId": "setNull",
-  // A rejection recorded by a return file belongs to that read of the file.
-  "BankRowRejection.importId": "delete",
   // A branch's optional city grouping — deleting a city never deletes branches.
   "Location.cityId": "setNull",
   // Grade/cost centre/manager are attributes of someone else's job row.
@@ -128,7 +128,6 @@ export const STANDALONE_ROOT_MODELS: Record<string, string> = {
   AuditLog: "append-only (E1.1); no FKs — rows about a fixture go via deleteEmployeesAndDependents, through purgeAppendOnly",
   PayrollSalaryHold: "a director's hold on one person's salary for one month (Stage 3.3c); append-only, employee_id and the actor are plain text; tests remove the holds their directors made by id, in cleanupPayrollRowsBy",
   RemoteWorkMark: "a director's mark of who works remotely, from a date (Stage 5a); append-only, employee_id and the actor are plain text; tests remove the marks their directors made, by id",
-  BankReturnImport: "a bank return file read for a batch (Stage 5b); append-only, removed with its batch in tests by the batch id",
   PayrollExclusion: "a director's mark that a person is not on payroll for a period (Stage 5b); append-only, employee_id and the actors are plain text; tests remove the rows their directors made",
   PayrollMonthlyInput: "one entry of one monthly figure (Stage 4); append-only, employee_id and the actor are plain text; tests remove the rows their directors made, in cleanupPayrollRowsBy",
   PayrollInputBatch: "an uploaded Monthly Inputs file after it was read (Stage 4); a plain-text actor; tests remove the batches their directors made, in cleanupPayrollRowsBy",
@@ -161,7 +160,7 @@ export const STORAGE_KEY_COLUMNS: Record<string, string[]> = {
   Company: ["logoStorageKey"],
   // Phase 6 P6-5: the rendered payslip PDF, the bank file and the bank's response to it, and a generated statutory file.
   PayslipDelivery: ["fileKey"],
-  BankTransferBatch: ["fileKey", "responseKey"],
+  BankTransferBatch: ["fileKey"],
   BankRepaymentBatch: ["fileKey"],
   PayrollOutput: ["fileKey"],
 };
@@ -352,7 +351,7 @@ function delegate(modelName: string): Delegate {
 
 // Tables a database trigger keeps immutable, deletable only through the
 // test-purge exception (app.audit_purge = 'test' in a dev-marked database).
-const PURGE_GUARDED_MODELS = new Set(["RawPunch", "ManualAttendanceEntry", "AttendanceOverride", "ShiftOverride", "LeaveDayRelease", "AttendancePeriodLock", "PayrollItemVersion", "PayrollItemConfirmation", "PayrollApproval", "PayrollEvent", "EmployeeSalary", "EmployeeSalaryLine", "PayrollSalaryRevision", "PayrollAdjustment", "PayrollRun", "PayrollRunItem", "PayrollRunLine", "PayrollPeriodLock", "PayrollRunRelease", "Payslip", "BankTransferBatch", "BankTransferRow", "PayrollOutput", "PayrollSetupSignoff", "DirectorActionNotice", "DirectorActionReceipt", "RolePermissionRemoval", "HrCapabilitySwitch", "PayrollSalaryHold", "PayrollSalaryRelease", "PayrollMonthlyInput", "PayrollInputBatch", "RemoteWorkMark", "RemoteAttendanceEvent", "BankReturnImport", "BankRowRejection", "BankRepaymentPlan", "BankRepaymentBatch", "BankRepaymentRow", "PayslipLink", "PayrollExclusion"]);
+const PURGE_GUARDED_MODELS = new Set(["RawPunch", "ManualAttendanceEntry", "AttendanceOverride", "ShiftOverride", "LeaveDayRelease", "AttendancePeriodLock", "PayrollItemVersion", "PayrollItemConfirmation", "PayrollApproval", "PayrollEvent", "EmployeeSalary", "EmployeeSalaryLine", "PayrollSalaryRevision", "PayrollAdjustment", "PayrollRun", "PayrollRunItem", "PayrollRunLine", "PayrollPeriodLock", "PayrollRunRelease", "Payslip", "BankTransferBatch", "BankTransferRow", "PayrollOutput", "PayrollSetupSignoff", "DirectorActionNotice", "DirectorActionReceipt", "RolePermissionRemoval", "HrCapabilitySwitch", "PayrollSalaryHold", "PayrollSalaryRelease", "PayrollMonthlyInput", "PayrollInputBatch", "RemoteWorkMark", "RemoteAttendanceEvent", "BankRowRejection", "BankFileSentMark", "BankRepaymentPlan", "BankRepaymentBatch", "BankRepaymentRow", "PayslipLink", "PayrollExclusion"]);
 
 // Deletes the given rows of `model` and every row that depends on them,
 // transitively, in FK-safe order. Optional FKs follow OPTIONAL_FK_POLICY.

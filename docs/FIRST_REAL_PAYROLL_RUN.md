@@ -143,7 +143,7 @@ Payroll → Payroll Run → open the month.
 | 5 | **Publish payslips** | Preparer asks, checker approves, then someone else carries it out | **At the top of this screen: everyone who will get no payslip and why** (held for no bank account, zero net pay, and so on), with what to do. Read it before approving. After publishing, each person reads *only their own* payslip under Salary → Payslips; the email contains no figures, only a link to sign in. |
 | 6 | **Bank file** | Preparer asks, checker approves, then someone else generates | The preview names everyone in the file and, **by name**, anyone payable who has no bank account on the payment date. The file is made in the confirmed layout. The approval is tied to the rows, the accounts and the layout; a change voids it. |
 | 7 | **Upload the file to your bank** | You, on the bank's website | The system never talks to a bank. |
-| 8 | **Record that it was paid** | HR | Type the bank's reference. This is HR's own statement; the bank's response file can be stored but is not read by the system. |
+| 8 | **Record that it was paid** | HR | Type the bank's reference. This is HR's own statement. No file comes back from the bank; a rejected payment is entered by hand by a director (a reason for each), and a downloaded file can be noted as sent to the bank by a director. |
 | 9 | **Statutory files** | Preparer | PF, ESI, PT and LWF files need their own confirmed layouts; until a layout is entered and confirmed its button is disabled. Take each file to its government portal's validator before filing. |
 
 Once payslips are published or a bank file exists, **the period can no longer be unlocked.** Corrections after that go into the next month as adjustments.

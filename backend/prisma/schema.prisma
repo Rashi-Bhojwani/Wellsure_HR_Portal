@@ -2967,15 +2967,10 @@ model BankTransferBatch {
   paidOn                   DateTime?       @map("paid_on") @db.Date
   paidByUserId             String?         @map("paid_by_user_id")
   bankReference            String?         @map("bank_reference")
-  responseKey              String?         @map("response_key")
-  responseFileName         String?         @map("response_file_name")
-  responseSha256           String?         @map("response_sha256")
-  responseAttachedByUserId String?         @map("response_attached_by_user_id")
-  responseAttachedAt       DateTime?       @map("response_attached_at") @db.Timestamptz(3)
 
   rows BankTransferRow[]
   rejections      BankRowRejection[]
-  returnImports   BankReturnImport[]
+  sentMark        BankFileSentMark?
   repaymentPlans  BankRepaymentPlan[]
   repaymentBatches BankRepaymentBatch[]
 
@@ -3321,21 +3316,6 @@ model RemoteAttendanceRequest {
 }
 
 // ── Stage 5b — rows the bank rejected, and paying them again (docs/plans/STAGE_5B_PLAN.md) ──
-model BankReturnImport {
-  id               String              @id @default(cuid())
-  batchId          String              @map("batch_id")
-  batch            BankTransferBatch   @relation(fields: [batchId], references: [id], onDelete: Restrict)
-  fileSha256       String              @map("file_sha256")
-  fileName         String              @map("file_name")
-  rejectedCount    Int                 @map("rejected_count")
-  importedByUserId String              @map("imported_by_user_id")
-  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
-  rejections       BankRowRejection[]
-
-  @@unique([batchId, fileSha256])
-  @@map("bank_return_imports")
-}
-
 model BankRowRejection {
   id               String            @id @default(cuid())
   batchId          String            @map("batch_id")
@@ -3343,9 +3323,6 @@ model BankRowRejection {
   rowId            String            @unique @map("row_id")
   row              BankTransferRow   @relation(fields: [rowId], references: [id], onDelete: Restrict)
   reason           String
-  source           String
-  importId         String?           @map("import_id")
-  import           BankReturnImport? @relation(fields: [importId], references: [id], onDelete: Restrict)
   recordedByUserId String            @map("recorded_by_user_id")
   createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
 
@@ -3383,8 +3360,23 @@ model BankRepaymentBatch {
   generatedByUserId String                @map("generated_by_user_id")
   generatedAt       DateTime              @default(now()) @map("generated_at") @db.Timestamptz(3)
   rows              BankRepaymentRow[]
+  sentMark          BankFileSentMark?
 
   @@map("bank_repayment_batches")
+}
+
+// A director's note that a downloaded bank file was sent to the bank (by hand: the app never talks to a bank). One per file; never changed or removed.
+model BankFileSentMark {
+  id               String              @id @default(cuid())
+  batchId          String?             @unique @map("batch_id")
+  batch            BankTransferBatch?  @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  repaymentBatchId String?             @unique @map("repayment_batch_id")
+  repaymentBatch   BankRepaymentBatch? @relation(fields: [repaymentBatchId], references: [id], onDelete: Restrict)
+  sentByUserId     String              @map("sent_by_user_id")
+  sentAt           DateTime            @default(now()) @map("sent_at") @db.Timestamptz(3)
+  note             String?
+
+  @@map("bank_file_sent_marks")
 }
 
 model BankRepaymentRow {

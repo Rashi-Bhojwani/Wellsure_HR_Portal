@@ -8,7 +8,7 @@ import { app, authHeader, cleanupFullTestEmployee, createFullTestEmployee, login
 import { REAL_RULES, approve, closeWorld, closingWorld, confirmAllPins, driveToFinal, requestStep, resetSeams, staffWith, type Closing } from "./closeTestHelpers";
 import { calculateRun, setRules } from "./runTestHelpers";
 
-// Stage 5b, B3: rows the bank rejected are recorded (by hand or from the bank's return file, read with a layout the directors entered and a different director confirmed),
+// Stage 5b, B3: rows the bank rejected are entered by hand by a director with a reason (decision D-34: bank payments are manual, no file comes back),
 // stay unpaid and visible to directors only, and are paid again in a repayment batch that needs the same approvals as a bank file. Nothing is paid twice.
 
 const LAYOUT = {
@@ -22,18 +22,6 @@ const LAYOUT = {
   columns: [{ source: "FIELD", value: "SERIAL" }, { source: "FIELD", value: "NAME" }, { source: "FIELD", value: "ACCOUNT_NUMBER" }, { source: "FIELD", value: "IFSC" }, { source: "FIELD", value: "AMOUNT" }, { source: "FIELD", value: "NARRATION" }],
   narrationPattern: "Salary {PERIOD}",
 };
-const RETURN_LAYOUT = {
-  format: "DELIMITED",
-  extension: "csv",
-  columns: [
-    { source: "FIELD", value: "EMPLOYEE_CODE", header: "Ref" },
-    { source: "FIELD", value: "AMOUNT", header: "Amt" },
-    { source: "FIELD", value: "STATUS", header: "Result" },
-    { source: "FIELD", value: "REASON", header: "Why" },
-  ],
-  rejectedStatuses: ["FAILED"],
-};
-
 describe("rejected bank rows and the repayment batch", () => {
   let world: Closing;
   let runId = "";
@@ -47,7 +35,6 @@ describe("rejected bank rows and the repayment batch", () => {
   const p = (token: string, path: string, body: object = {}) => request(app).post(`/api/payroll${path}`).set(...authHeader(token)).send(body);
   const g = (token: string, path: string) => request(app).get(`/api/payroll${path}`).set(...authHeader(token));
   const rowOf = (n: string) => prisma.bankTransferRow.findFirstOrThrow({ where: { batchId, employeeId: who(n) } });
-  const uploadReturn = (content: string, token = maker()) => request(app).post(`/api/payroll/bank-batches/${batchId}/rejections/import`).set(...authHeader(token)).attach("file", Buffer.from(content), "return.csv");
   const putLayout = async (key: string, value: object, token = maker()) => {
     const pre = await p(token, `/layouts/${key}/save-preview`, { value });
     expect(pre.status, JSON.stringify(pre.body)).toBe(200);
@@ -89,7 +76,8 @@ describe("rejected bank rows and the repayment batch", () => {
       const routes: Array<[string, () => request.Test]> = [
         ["GET rejections", () => g(token, `/bank-batches/${batchId}/rejections`)],
         ["POST rejections", () => p(token, `/bank-batches/${batchId}/rejections`, { rows: [{ employeeCode: code("a"), reason: "Account closed" }] })],
-        ["POST import", () => uploadReturn("Ref,Result\n", token)],
+        ["POST sent (batch)", () => p(token, `/bank-batches/${batchId}/sent`)],
+        ["POST sent (repayment)", () => p(token, "/repayment-batches/x/sent")],
         ["POST plan", () => p(token, `/bank-batches/${batchId}/repayment-plans`, { paymentDate: "2026-09-10" })],
         ["GET plan", () => g(token, "/repayment-plans/x")],
         ["POST request", () => p(token, "/repayment-plans/x/request", { hash: "0123456789" })],
@@ -113,46 +101,27 @@ describe("rejected bank rows and the repayment batch", () => {
     const row = await prisma.bankRowRejection.findFirstOrThrow({ where: { batchId } });
     await expect(prisma.bankRowRejection.update({ where: { id: row.id }, data: { reason: "changed" } })).rejects.toThrow(/BANK_REJECTIONS_APPEND_ONLY/);
     await expect(prisma.bankRowRejection.delete({ where: { id: row.id } })).rejects.toThrow(/BANK_REJECTIONS_APPEND_ONLY/);
-    await expect(prisma.bankRowRejection.create({ data: { batchId, rowId: (await rowOf("c")).id, reason: "sneaky", source: "ENTERED", recordedByUserId: hr.userId } })).rejects.toThrow(/BANK_REJECTIONS_DIRECTORS_ONLY/);
+    await expect(prisma.bankRowRejection.create({ data: { batchId, rowId: (await rowOf("c")).id, reason: "sneaky", recordedByUserId: hr.userId } })).rejects.toThrow(/BANK_REJECTIONS_DIRECTORS_ONLY/);
     const list = await g(maker(), `/bank-batches/${batchId}/rejections`);
     expect(list.body.rows.map((r: { employeeCode: string }) => r.employeeCode)).toEqual([code("a")]);
-    expect(list.body.rows[0]).toMatchObject({ accountLast4: expect.stringMatching(/^\d{4}$/), source: "ENTERED", repaidInBatch: null });
+    expect(list.body.rows[0]).toMatchObject({ accountLast4: expect.stringMatching(/^\d{4}$/), repaidInBatch: null });
   });
 
-  it("the bank's return file is read with a layout set up like the bank layout: Not set until entered, confirmed by a different director, and a change voids it", async () => {
-    const before = await uploadReturn("Ref,Amt,Result,Why\n");
-    expect([before.status, before.body.error.code]).toEqual([409, "RETURN_LAYOUT_NOT_READY"]);
-    // The layout must name the columns and the words that mean "rejected"; nothing is guessed.
-    expect((await p(maker(), "/layouts/BANK_RETURN_TEMPLATE/save-preview", { value: { ...RETURN_LAYOUT, rejectedStatuses: undefined } })).status).toBe(400);
-    expect((await p(maker(), "/layouts/BANK_RETURN_TEMPLATE/save-preview", { value: { ...RETURN_LAYOUT, columns: RETURN_LAYOUT.columns.slice(1) } })).status).toBe(400);
-    expect((await p(maker(), "/layouts/BANK_RETURN_TEMPLATE/save-preview", { value: { ...RETURN_LAYOUT, extension: "xls" } })).status).toBe(400); // no legacy .xls
-    await putLayout("BANK_RETURN_TEMPLATE", RETURN_LAYOUT);
-    expect((await uploadReturn("Ref,Amt,Result,Why\n")).body.error.code).toBe("RETURN_LAYOUT_NOT_READY"); // entered, not confirmed
-    const own = await confirmLayout("BANK_RETURN_TEMPLATE", maker());
-    expect([own.status, own.body.error?.code]).toContain(403);
-    expect((await confirmLayout("BANK_RETURN_TEMPLATE", world.tokens.checkerA)).status).toBe(200);
+  it("there is no return file: no layout for one, no import route, no stored response file", async () => {
+    expect((await p(maker(), "/layouts/BANK_RETURN_TEMPLATE/save-preview", { value: {} })).status).toBe(400);
+    expect((await request(app).post(`/api/payroll/bank-batches/${batchId}/rejections/import`).set(...authHeader(maker())).attach("file", Buffer.from("x"), "return.csv")).status).toBe(404);
+    expect((await request(app).post(`/api/payroll/bank-batches/${batchId}/response`).set(...authHeader(maker())).attach("file", Buffer.from("x"), "r.csv")).status).toBe(404);
+    const layouts = await g(maker(), "/layouts");
+    expect(JSON.stringify(layouts.body)).not.toMatch(/BANK_RETURN|return file/i);
   });
 
-  it("a return file with any wrong row saves nothing; a good one records the rejected rows once, and the same file is never read twice", async () => {
-    const amt = (await rowOf("b")).amount.toString();
-    const bad = await uploadReturn(`Ref,Amt,Result,Why\n${code("b")},${amt},FAILED,Invalid IFSC\nNOBODY,1,FAILED,x\n`);
-    expect([bad.status, bad.body.error.code]).toEqual([400, "VALIDATION_ERROR"]);
-    const wrongAmount = await uploadReturn(`Ref,Amt,Result,Why\n${code("b")},1.00,FAILED,Invalid IFSC\n`);
-    expect(wrongAmount.status).toBe(400);
-    expect(await prisma.bankRowRejection.count({ where: { batchId } })).toBe(1);
-    const file = `Ref,Amt,Result,Why\n${code("a")},${(await rowOf("a")).amount.toString()},FAILED,Account closed\n${code("b")},${amt},FAILED,Invalid IFSC\n${code("c")},${(await rowOf("c")).amount.toString()},PROCESSED,\n`;
-    const ok = await uploadReturn(file);
-    expect([ok.status, ok.body], JSON.stringify(ok.body)).toEqual([201, { rows: 3, rejected: 1, alreadyRecorded: 1 }]); // a was already recorded by hand
+  it("a second payment is entered by hand, one row per payment, each with its own reason", async () => {
+    const two = await p(maker(), `/bank-batches/${batchId}/rejections`, { rows: [{ employeeCode: code("b"), reason: "Invalid IFSC" }] });
+    expect(two.body).toEqual({ recorded: 1, alreadyRecorded: 0 });
     const rej = await prisma.bankRowRejection.findMany({ where: { batchId }, orderBy: { createdAt: "asc" } });
-    expect(rej.map((r) => r.source)).toEqual(["ENTERED", "RETURN_FILE"]);
-    expect(rej[1]!.reason).toBe("Invalid IFSC");
-    const again = await uploadReturn(file);
-    expect([again.status, again.body.error.code]).toEqual([409, "ALREADY_IMPORTED"]);
+    expect(rej.map((r) => r.reason)).toEqual(["Account closed", "Invalid IFSC"]);
+    expect((await p(maker(), `/bank-batches/${batchId}/rejections`, { rows: [{ employeeCode: code("c"), reason: "" }] })).status).toBe(400);
     expect(await prisma.bankRowRejection.count({ where: { batchId } })).toBe(2);
-    // A change to the return layout voids its confirmation: the next file is refused until a different director confirms again.
-    await putLayout("BANK_RETURN_TEMPLATE", { ...RETURN_LAYOUT, rejectedStatuses: ["FAILED", "RETURNED"] });
-    expect((await uploadReturn(`${file}\n`)).body.error.code).toBe("RETURN_LAYOUT_NOT_READY");
-    expect((await confirmLayout("BANK_RETURN_TEMPLATE", world.tokens.checkerA)).status).toBe(200);
   });
 
   let planId = "";
@@ -234,5 +203,24 @@ describe("rejected bank rows and the repayment batch", () => {
     }
     expect(await prisma.bankRepaymentBatch.count({ where: { planId: plan.body.id } })).toBe(0);
     expect((await g(maker(), `/bank-batches/${batchId}/rejections`)).body.rows.find((r: { employeeCode: string }) => r.employeeCode === code("c")).repaidInBatch).toBeNull();
+  });
+  it("a downloaded bank file can be marked sent to the bank, once, by a director: who and when, and the database never lets it change", async () => {
+    const early = await p(maker(), `/bank-batches/${batchId}/sent`);
+    expect([early.status, early.body.error.code]).toEqual([409, "NOT_DOWNLOADED"]);
+    expect((await g(maker(), `/bank-batches/${batchId}/file`)).status).toBe(200);
+    const ok = await p(maker(), `/bank-batches/${batchId}/sent`, { note: "uploaded to the bank's portal" });
+    expect([ok.status, ok.body.sentByUserId], JSON.stringify(ok.body)).toEqual([201, world.maker.userId]);
+    expect(ok.body.sentAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    const twice = await p(maker(), `/bank-batches/${batchId}/sent`);
+    expect([twice.status, twice.body.error.code]).toEqual([409, "ALREADY_SENT"]);
+    expect((await g(maker(), `/bank-batches/${batchId}`)).body.sentToBank).toMatchObject({ byUserId: world.maker.userId, note: "uploaded to the bank's portal" });
+    const mark = await prisma.bankFileSentMark.findFirstOrThrow({ where: { batchId } });
+    await expect(prisma.bankFileSentMark.update({ where: { id: mark.id }, data: { note: "changed" } })).rejects.toThrow(/BANK_REJECTIONS_APPEND_ONLY/);
+    await expect(prisma.bankFileSentMark.delete({ where: { id: mark.id } })).rejects.toThrow(/BANK_REJECTIONS_APPEND_ONLY/);
+    await expect(prisma.bankFileSentMark.create({ data: { repaymentBatchId, sentByUserId: hr.userId } })).rejects.toThrow(/BANK_REJECTIONS_DIRECTORS_ONLY/);
+    await expect(prisma.bankFileSentMark.create({ data: { sentByUserId: world.maker.userId } })).rejects.toThrow(/bank_file_sent_marks_one_file/);
+    // The same for a repayment file.
+    expect((await p(maker(), `/repayment-batches/${repaymentBatchId}/sent`)).status).toBe(201);
+    expect(await prisma.auditLog.count({ where: { action: "payroll.bank.marked_sent", entityId: { in: [batchId, repaymentBatchId] } } })).toBe(2);
   });
 });

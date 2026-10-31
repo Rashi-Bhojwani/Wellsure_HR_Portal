@@ -372,7 +372,7 @@ describe("payslips, the bank file and the statutory files from a final run", () 
     }
   });
 
-  it("marking it paid needs the bank's reference and a typed PAID, happens once, and the bank's response is stored and never read", async () => {
+  it("marking it paid needs the bank's reference and a typed PAID, and happens once", async () => {
     const batch = await prisma.bankTransferBatch.findUniqueOrThrow({ where: { runId } });
     const bad = await api(world.tokens.maker, "post", `/bank-batches/${batch.id}/mark-paid`, { reference: "UTR123456", paidOn: "2026-08-31", confirm: "yes" });
     expect(bad.status).toBe(400);
@@ -382,9 +382,6 @@ describe("payslips, the bank file and the statutory files from a final run", () 
     expect([ok.status, ok.body.status, ok.body.paid.reference]).toEqual([200, "PAID", "UTR123456"]);
     expect((await api(world.tokens.maker, "post", `/bank-batches/${batch.id}/mark-paid`, { reference: "UTR999999", paidOn: "2026-08-31", confirm: "PAID" })).body.error.code).toBe("ALREADY_PAID");
     await expect(prisma.bankTransferBatch.update({ where: { id: batch.id }, data: { bankReference: "CHANGED" } })).rejects.toThrow(/BANK_BATCH_PAID_ONCE/);
-    const up = await request(app).post(`/api/payroll/bank-batches/${batch.id}/response`).set(...authHeader(world.tokens.maker)).attach("file", Buffer.from("OK|UTR123456|3 rows"), "response.txt");
-    expect([up.status, up.body.response?.fileName]).toEqual([200, "response.txt"]);
-    expect((await request(app).post(`/api/payroll/bank-batches/${batch.id}/response`).set(...authHeader(world.tokens.maker)).attach("file", Buffer.from("again"), "r2.txt")).status).toBe(409);
   });
 
   // ── Statutory files and the register ──
