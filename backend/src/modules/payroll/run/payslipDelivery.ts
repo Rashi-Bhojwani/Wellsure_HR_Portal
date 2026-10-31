@@ -10,6 +10,7 @@ import { emailLayout } from "../../auth/emails";
 import { notifyEmployee } from "../../notifications/notifyEmployee";
 import type { PayslipContent } from "./payslip";
 import { payslipHtml } from "./payslipHtml";
+import { createLink } from "./payslipLinks";
 
 // Getting published payslips to their owners: the PDF, the notice in the app and the email (docs/plans/PHASE_6.md §9, §14H). Run by the payroll-payslips job in small
 // batches, and safe to run again: each step is done only if it is not already done, so a stopped worker or a second press of Prepare again repeats nothing.
@@ -78,10 +79,12 @@ export async function deliverPayslips(runId: string): Promise<DeliverySummary> {
         } else {
           try {
             const name = slip.employee.nameHistory[0]?.fullName ?? content.employee.name;
+            // With a lifetime set by a director the link is for this payslip and this person and expires; without one, the email only points at the sign-in and Salary.
+            const link = await createLink({ id: slip.id, employeeId: slip.employeeId });
             const receipt = await mailService.send({
               to,
               subject: `Your payslip for ${content.period.label} is ready`,
-              html: emailLayout("Your payslip is ready", `<p>Hi ${name.replace(/[<>&"']/g, "")},</p><p>Your payslip for <strong>${content.period.label.replace(/[<>&"']/g, "")}</strong> is ready. Sign in to read it.</p><p><a href="${env.WEB_BASE_URL}/app/salary/payslips" style="display:inline-block;background:#2f6fed;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;">Open my payslips</a></p>`),
+              html: emailLayout("Your payslip is ready", `<p>Hi ${name.replace(/[<>&"']/g, "")},</p><p>Your payslip for <strong>${content.period.label.replace(/[<>&"']/g, "")}</strong> is ready. Sign in to read it.</p><p><a href="${link ?? `${env.WEB_BASE_URL}/app/salary/payslips`}" style="display:inline-block;background:#2f6fed;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;">Open my payslips</a></p>`),
             });
             await prisma.payslipDelivery.update({ where: { id: delivery.id }, data: { emailStatus: receipt.delivered ? "SENT" : "FILE_ONLY", emailTo: to, emailError: null, emailAttemptedAt: attemptedAt } });
             if (receipt.delivered) summary.emailSent += 1;

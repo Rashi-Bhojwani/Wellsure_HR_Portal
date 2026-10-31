@@ -2,6 +2,7 @@ import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { DEVELOPER_ROLE_CODE } from "@shared/constants/sensitiveData";
 import { storageService } from "../../../integrations/storage";
+import { decryptField } from "../../../lib/encryption";
 import { prisma } from "../../../lib/prisma";
 import { app, authHeader, cleanupFullTestEmployee, createFullTestEmployee, loginAs } from "../../employee/__tests__/employeeTestHelpers";
 import { REAL_RULES, approve, closeWorld, closingWorld, confirmAllPins, driveToFinal, requestStep, resetSeams, staffWith, type Closing } from "./closeTestHelpers";
@@ -165,7 +166,7 @@ describe("rejected bank rows and the repayment batch", () => {
     expect(plan.body.rows.map((r: { employeeCode: string }) => r.employeeCode).sort()).toEqual([code("a"), code("b")].sort());
     expect(plan.body.excluded).toEqual([expect.objectContaining({ employeeCode: code("c"), reason: "The bank did not reject this row" })]);
     expect(plan.body.rows.every((r: { amount: string }) => /^\d+(\.\d+)?$/.test(r.amount))).toBe(true);
-    expect(JSON.stringify(plan.body)).not.toMatch(/\d{9,}/); // last four digits only; no account number
+    for (const n of ["a", "b"]) expect(JSON.stringify(plan.body)).not.toContain(decryptField((await prisma.employeeBankAccount.findFirstOrThrow({ where: { employeeId: who(n) } })).accountNumberEncrypted)); // last four digits only; never an account number
     await expect(prisma.bankRepaymentPlan.delete({ where: { id: planId } })).rejects.toThrow(/BANK_REJECTIONS_APPEND_ONLY/);
   });
 

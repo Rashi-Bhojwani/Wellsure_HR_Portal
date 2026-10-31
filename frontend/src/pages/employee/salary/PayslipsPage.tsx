@@ -1,3 +1,4 @@
+import { useSearchParams } from "react-router-dom";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button, Select } from "antd";
@@ -6,6 +7,7 @@ import * as payrollApi from "../../../api/payroll";
 import type { PayslipSummary } from "../../../api/payroll";
 import { PayslipView } from "../../../components/payroll/PayslipView";
 import { PayslipWhyButton } from "../../../components/payroll/PayslipWhy";
+import { RaiseQueryButton } from "../../../components/payroll/RaiseQueryButton";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatDate } from "../../../lib/dates";
 import { formatRupees } from "../../../lib/money";
@@ -15,7 +17,8 @@ import { DataTable, EmptyState, PageHeader, Panel, QueryState, SkeletonCard, Ske
 // ever answers for the signed-in person. A payslip opens only when the person picks it (the month picker or a row); nothing is opened for them.
 
 export function PayslipsPage() {
-  const [open, setOpen] = useState<string | null>(null);
+  const [params] = useSearchParams();
+  const [open, setOpen] = useState<string | null>(params.get("open")); // a link in the email opens the payslip it is for
   const [busy, setBusy] = useState(false);
   // Amounts stay masked until the person asks to see them, here as on the Home payslip card (docs/UI_REFERENCE.md §1.1); it is not remembered.
   const [revealed, setRevealed] = useState(false);
@@ -109,6 +112,7 @@ function One({ id, masked }: { id: string; masked: boolean }) {
   if (error || !data) return <EmptyState kind="error" compact title="Could not load this payslip" description={apiErrorMessage(error, "Could not load this payslip.")} />;
   return (
     <>
+      <RaiseQueryButton payslipId={id} />
       <PayslipWhyButton queryKey={["payslips", "mine", id, "why"]} load={() => payrollApi.myPayslipWhy(id)} masked={masked} />
       <PayslipView content={data.content} masked={masked} />
     </>

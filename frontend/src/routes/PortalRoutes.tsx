@@ -38,6 +38,7 @@ const PayrollRunPage = lazyPage(
   () => import("../pages/admin/payroll/PayrollRunPage"),
   "PayrollRunPage",
 );
+const PayslipLinkPage = lazyPage(() => import("../pages/employee/salary/PayslipLinkPage"), "PayslipLinkPage");
 const RunStepPage = lazyPage(() => import("../pages/admin/payroll/RunStepPage"), "RunStepPage");
 const MobileActionPage = lazyPage(
   () => import("../pages/employee/mobile/MobileActionPage"),
@@ -93,6 +94,7 @@ export function PortalRoutes() {
             <Route path="profile" element={<ViewMyInfoPage />} />
             <Route path="security" element={<AccountSecurityPage />} />
             <Route path="helpdesk/:id" element={<HelpdeskTicketPage />} />
+            <Route path="salary/payslip-link/:token" element={<PayslipLinkPage />} />
             {/* The phone bottom bar's generated tabs (Phase 5 commit G); Home
               and Engage are ordinary menu routes. */}
             <Route path="action" element={<MobileActionPage />} />
