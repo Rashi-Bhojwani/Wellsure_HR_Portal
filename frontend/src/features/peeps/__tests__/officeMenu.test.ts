@@ -15,6 +15,11 @@ describe("Wellsure Office menu: the asset register", () => {
     expect(canSeeLeaf(leaf("office-assets"), holder(["office.workspace"]))).toBe(false);
   });
 
+  it("HR, which holds the asset keys through its role but is not a member, does not see it in the workspace", () => {
+    expect(canSeeLeaf(leaf("office-assets"), holder(["assets.view", "assets.manage"]))).toBe(false);
+    expect(canSeeLeaf(leaf("office-asset-settings"), holder(["assets.view", "assets.settings.manage"]))).toBe(false);
+  });
+
   it("a director (who holds every key) does not see it in the workspace", () => {
     const director = () => true;
     expect(canSeeLeaf(leaf("office-assets"), director)).toBe(false);

@@ -395,7 +395,9 @@ export const mobileTabs: MobileTab[] = [
 /** Whether this person sees the leaf (a permission-gated one only for its holders). */
 export function canSeeLeaf(leaf: EmployeeMenuLeaf, hasPermission: (key: string) => boolean): boolean {
   // PEEPS-BEGIN office-audience
-  if (leaf.officeMembersOnly && hasPermission("office.members.manage")) return false; // a director (that key is never a member's)
+  // Members only: a member holds office.workspace; a director also holds office.members.manage (never a member's key). HR holds the asset keys
+  // through its role but is not a member, so it does not see these either.
+  if (leaf.officeMembersOnly && (!hasPermission("office.workspace") || hasPermission("office.members.manage"))) return false;
   // PEEPS-END
   return !leaf.permission || hasPermission(leaf.permission);
 }
