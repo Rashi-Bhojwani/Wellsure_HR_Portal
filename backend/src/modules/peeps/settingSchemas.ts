@@ -28,7 +28,6 @@ export const PEEPS_SETTING_SCHEMAS: Record<PeepsSettingKey, z.ZodType> = {
   "badges.limits": z.object({ perGiverPerMonth: z.number().int().min(1).max(1000) }).strict(),
   "badges.durationDays": z.number().int().min(1).max(3650),
   "badges.revocation": z.object({ allowed: z.boolean() }).strict(),
-  "badges.display": z.object({ profile: z.boolean(), directory: z.boolean() }).strict(),
   "audience.nudges": z.object({ senders: givers }).strict(),
   "nudges.limits": z.object({ perSenderPerMonth: z.number().int().min(1).max(1000) }).strict(),
   "nudges.revocation": z.object({ allowed: z.boolean() }).strict(),

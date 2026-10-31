@@ -4,7 +4,7 @@ import { fs, fw, space, v } from "../../theme/tokens";
 import { StatusChip } from "../../ui";
 import * as api from "./api";
 
-/** A person's active badges on their directory profile — only while the directors' display setting shows them (the server decides; nothing renders otherwise). */
+/** A person's active badges on their directory profile (Q-16: company-wide to signed-in staff; the server decides, nothing renders without badges). */
 export function PersonBadges({ employeeId }: { employeeId: string }) {
   const { data } = useQuery({ queryKey: ["recognition", "person", employeeId], queryFn: () => api.personBadges(employeeId) });
   if (!data?.shown || data.badges.length === 0) return null;

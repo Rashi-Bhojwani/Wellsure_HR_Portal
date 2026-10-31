@@ -7,10 +7,12 @@ import { getSetting, missingSettings } from "../peeps/settings";
 import type { BadgeCatalogueItem } from "../peeps/settingSchemas";
 import type { ActorMeta, PeepsActor } from "../peeps/types";
 import { PEEPS_REQUIRED, PEEPS_SETTINGS } from "@shared/constants/peeps";
+import { DEVELOPER_ROLE_CODE } from "@shared/constants/sensitiveData";
 import { canGive, employeeRef, giverKindFor, giverLabels, monthStart, recipientsFor } from "./common";
 
-// Badges (D-29, Q-16): a persistent recognition record from a giver to a recipient. Catalogue, limits, duration, revocation and where badges show are
-// settings; the module refuses to work until the catalogue and the givers are set. Giving is idempotent on the giver's key.
+// Badges (D-29, Q-16): a persistent recognition record from a giver (the directors) to a recipient. Catalogue, limits, duration and revocation are
+// settings; the module refuses to work until the catalogue is set. Q-16: badges are visible company-wide to signed-in staff, on the profile and in the
+// directory (never the giver's message, never to the Developer). Giving is idempotent on the giver's key.
 
 type Row = Prisma.BadgeAwardGetPayload<{ include: { revocation: true } }>;
 
@@ -90,20 +92,19 @@ export async function given(actor: PeepsActor) {
   return Promise.all(out.map(async (b, i) => ({ ...b, recipient: await employeeRef(rows[i]!.recipientEmployeeId) })));
 }
 
-/** A person's badges as colleagues see them: only while the directors' display setting shows them on profiles (the person and the directors always see). */
+const isDeveloper = (actor: PeepsActor) => actor.roleCodes.includes(DEVELOPER_ROLE_CODE);
+
+/** A person's active badges as signed-in colleagues see them (Q-16: company-wide). The message stays between giver and recipient; the Developer sees none. */
 export async function forPerson(actor: PeepsActor, employeeId: string) {
-  const display = await getSetting<{ profile: boolean; directory: boolean }>("badges.display");
-  const self = employeeId === actor.employeeId;
-  if (!self && !actor.isDirector && !display?.profile) return { shown: false, badges: [] };
+  if (employeeId !== actor.employeeId && isDeveloper(actor)) throw new HttpError(403, "The Developer role does not see people's records.", "FORBIDDEN");
   const rows = await prisma.badgeAward.findMany({ where: { recipientEmployeeId: employeeId }, orderBy: { givenAt: "desc" }, include: { revocation: true } });
   const now = new Date(); // allow-clock: an instant
   return { shown: true, badges: (await present(rows.filter((r) => isActive(r, now)), { withGiver: true })).map(({ message: _m, ...b }) => b) };
 }
 
-/** Badge counts for the directory list, while the directors' display setting shows badges in the directory. */
-export async function directoryCounts(employeeIds: string[]) {
-  const display = await getSetting<{ profile: boolean; directory: boolean }>("badges.display");
-  if (!display?.directory) return { shown: false, counts: {} as Record<string, number> };
+/** Active badges per person for the directory (Q-16: company-wide to signed-in staff; the Developer sees none). */
+export async function directoryCounts(actor: PeepsActor, employeeIds: string[]) {
+  if (isDeveloper(actor)) throw new HttpError(403, "The Developer role does not see people's records.", "FORBIDDEN");
   const now = new Date(); // allow-clock: an instant
   const rows = await prisma.badgeAward.findMany({ where: { recipientEmployeeId: { in: employeeIds }, revocation: null, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] }, select: { recipientEmployeeId: true } });
   const counts: Record<string, number> = {};

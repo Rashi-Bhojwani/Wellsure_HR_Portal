@@ -8,9 +8,9 @@ import { HttpError } from "../../middleware/errorHandler";
 import { assertSettings, getSetting, officeName } from "../peeps/settings";
 import type { PeepsActor } from "../peeps/types";
 
-// Who may give a badge or send a private nudge (Q-16, a director setting): the directors always; Wellsure Office members with the matching capability,
-// while the setting lists the Wellsure Office; managers, to their own team, while the setting lists managers. HR never gives (D-29) — an HR person can
-// give only if the directors made them a member. Nobody gives to themselves.
+// Who may give a badge or send a private nudge (Q-16, decided): the directors, to any employee. The directors' audience setting can widen this later
+// (Wellsure Office members with the matching capability; managers, to their own team); it is Not set, so today only the directors give. HR never gives
+// (D-29) — an HR person could give only if the directors made them a member and widened the setting. Nobody gives to themselves.
 
 export type RecognitionModule = "badges" | "nudges";
 const CAPABILITY: Record<RecognitionModule, string> = { badges: "GIVE_BADGES", nudges: "SEND_NUDGES" };

@@ -53,7 +53,6 @@ export const PEEPS_SETTING_KEYS = [
   "badges.limits",
   "badges.durationDays",
   "badges.revocation",
-  "badges.display",
   "audience.nudges",
   "nudges.limits",
   "nudges.revocation",
@@ -76,21 +75,20 @@ export const PEEPS_SETTINGS: Record<PeepsSettingKey, PeepsSettingInfo> = {
   "unmute.bookingWindowDays": { module: "unmute", label: "Booking window", what: "How many days ahead an employee may book.", enteredBy: "OFFICE" },
   "unmute.minNoticeHours": { module: "unmute", label: "Booking notice", what: "How many hours before a slot it can still be booked.", enteredBy: "OFFICE" },
   "unmute.cancellationNoticeHours": { module: "unmute", label: "Cancellation notice", what: "Up to how many hours before a slot the employee may cancel or reschedule.", enteredBy: "OFFICE" },
-  "audience.badges": { module: "badges", label: "Who may give badges", what: "Managers (to their own team) and/or Wellsure Office members. Directors always may. HR never.", enteredBy: "DIRECTOR" },
+  "audience.badges": { module: "badges", label: "Who else may give badges", what: "Q-16: only the directors give badges, to any employee. Listing managers (to their own team) and/or Wellsure Office members widens this; HR never. Not set: the directors only.", enteredBy: "DIRECTOR" },
   "badges.catalogue": { module: "badges", label: "Badge catalogue", what: "The badges that can be given.", enteredBy: "OFFICE" },
   "badges.limits": { module: "badges", label: "Badge limits", what: "How many badges one giver may give in a calendar month. Until set, no limit applies.", enteredBy: "OFFICE" },
   "badges.durationDays": { module: "badges", label: "Badge duration", what: "How many days a badge stays on a profile. Until set, badges do not expire.", enteredBy: "OFFICE" },
   "badges.revocation": { module: "badges", label: "Badge revocation", what: "Whether a giver (or a director) may revoke a badge. Until set, nobody can.", enteredBy: "DIRECTOR" },
-  "badges.display": { module: "badges", label: "Where badges show", what: "Whether colleagues see a person's badges on their profile and in the directory. Until set, only the recipient sees them.", enteredBy: "DIRECTOR" },
-  "audience.nudges": { module: "nudges", label: "Who may send private nudges", what: "Managers (to their own team) and/or Wellsure Office members. Directors always may. HR never.", enteredBy: "DIRECTOR" },
+  "audience.nudges": { module: "nudges", label: "Who else may send private nudges", what: "Q-16: only the directors send private nudges, to any employee. Listing managers (to their own team) and/or Wellsure Office members widens this; HR never. Not set: the directors only.", enteredBy: "DIRECTOR" },
   "nudges.limits": { module: "nudges", label: "Nudge limits", what: "How many nudges one sender may send in a calendar month. Until set, no limit applies.", enteredBy: "DIRECTOR" },
   "nudges.revocation": { module: "nudges", label: "Nudge revocation", what: "Whether a sender (or a director) may withdraw a nudge. Until set, nobody can.", enteredBy: "DIRECTOR" },
 };
 
 export const PEEPS_REQUIRED: Record<"unmute" | "badges" | "nudges", readonly PeepsSettingKey[]> = {
   unmute: ["audience.unmute", "unmute.sessionMinutes", "unmute.availability", "unmute.bookingWindowDays", "unmute.minNoticeHours", "unmute.cancellationNoticeHours"],
-  badges: ["audience.badges", "badges.catalogue"],
-  nudges: ["audience.nudges"],
+  badges: ["badges.catalogue"], // Q-16: the givers are the directors unless widened, so only the catalogue is required
+  nudges: [], // Q-16: the directors send; nothing else has to be set first
 };
 
 export const GIVER_KINDS = ["MANAGERS", "OFFICE"] as const;

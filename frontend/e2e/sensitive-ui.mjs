@@ -60,7 +60,8 @@ async function sessionFor(user) {
 // PEEPS-BEGIN page-checks
 // The Peeps checks run on every page of every pass, inside visit(), so they add no page loads of their own (the scan has a time limit). The demo data:
 // backend/src/modules/assets/demoSeed.ts issues DEMO-ASSET-HELD-BY-007 to DEMO007; backend/src/modules/peeps/demoSeed.ts makes DEMO008 a Wellsure Office
-// member and Unmute host and has DEMO006 book a time with them; backend/src/modules/recognition/demoSeed.ts sends DEMO006 a nudge carrying DEMO-NUDGE-PRIVATE.
+// member and Unmute host and has DEMO006 book a time with them; backend/src/modules/recognition/demoSeed.ts has a director
+// (DEMO001) give DEMO006 a badge and send them a nudge carrying DEMO-NUDGE-PRIVATE (Q-16: only the directors give and send).
 const PRIVATE_NUDGE_SEERS = new Set(["DEMO006", "DEMO001"]); // the recipient and the director
 const ASSET_MARKER = "DEMO-ASSET-HELD-BY-007";
 const ASSET_MONEY = /₹|\bINR\b|\bRs\.?\s?\d/;
@@ -175,7 +176,7 @@ await visit("DEMO009", "another employee", "/app", employeePaths);
   // DEMO006 sees their nudge, from the Wellsure Office (never the sender's name); the director's Recognition page shows it.
   const recipient = await textOf(booker, `${BASE}/app/recognition`);
   if (!recipient.includes("DEMO-NUDGE-PRIVATE")) problems.push("DEMO006 on /app/recognition: their demo nudge is not shown (is the demo seeded?)");
-  if (/Demo Employee 008|DEMO008/.test(recipient)) problems.push("DEMO006 on /app/recognition: the sender is shown by name instead of as the Wellsure Office");
+  if (/Demo Owner|DEMO001/.test(recipient)) problems.push("DEMO006 on /app/recognition: the sending director is shown by name instead of as the Wellsure Office");
   if (!(await textOf(director, `${BASE}/app/office/recognition`)).includes("DEMO-NUDGE-PRIVATE")) problems.push("the director's Recognition page does not show the demo nudge (is the demo seeded?)");
 }
 // PEEPS-END

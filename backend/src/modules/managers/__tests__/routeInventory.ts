@@ -652,15 +652,15 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "POST /api/unmute/admin/bookings/:id/cancel": admin,
   // PEEPS-END
   // PEEPS-BEGIN badges-nudges
-  // Giving and sending are decided in the service from the directors' settings (directors; Wellsure Office members with the capability; managers for
-  // their own team, never HR); reading is the recipient's own, the giver's own, or a director's.
+  // Giving and sending (Q-16): the directors only, decided in the service; a widening setting (Not set) could add members with the capability and
+  // managers for their own team, never HR. Reading a nudge is the recipient's own, the sender's own, or a director's (audited).
   "GET /api/badges/status": self,
   "GET /api/badges/recipients": scoped("the people this caller may give a badge to: their own team for a manager, everyone for the Wellsure Office and the directors"),
   "GET /api/badges/mine": self,
   "GET /api/badges/given": self,
-  "GET /api/badges/directory": everyone("badge counts for the directory, only while the directors' display setting shows them"),
-  "GET /api/badges/people/:employeeId": everyone("a person's active badges, only while the directors' display setting shows them on profiles"),
-  "POST /api/badges": scoped("giving: directors, Wellsure Office members with the capability, managers to their own team (service); never HR"),
+  "GET /api/badges/directory": everyone("active badge counts for the directory, company-wide to signed-in staff (Q-16); the Developer is refused"),
+  "GET /api/badges/people/:employeeId": everyone("a person's active badges without the message, company-wide to signed-in staff (Q-16); the Developer is refused"),
+  "POST /api/badges": scoped("giving: the directors only (Q-16, service); a Not-set widening setting could add members and managers; never HR"),
   "POST /api/badges/:id/revoke": scoped("the giver or a director, only while the directors allow revocation"),
   "GET /api/badges/admin/all": admin,
   "GET /api/nudges/status": self,
@@ -669,7 +669,7 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/nudges/sent": self,
   "GET /api/nudges/admin/all": admin,
   "GET /api/nudges/:id": scoped("the sender, the recipient, or a director (audited)"),
-  "POST /api/nudges": scoped("sending: directors, Wellsure Office members with the capability, managers to their own team (service); never HR"),
+  "POST /api/nudges": scoped("sending: the directors only (Q-16, service); a Not-set widening setting could add members and managers; never HR"),
   "POST /api/nudges/:id/revoke": scoped("the sender or a director, only while the directors allow it"),
   // PEEPS-END
 };

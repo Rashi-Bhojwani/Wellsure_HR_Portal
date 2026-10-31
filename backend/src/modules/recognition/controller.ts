@@ -27,7 +27,7 @@ export async function personBadges(req: Request, res: Response): Promise<void> {
 }
 export async function directoryBadges(req: Request, res: Response): Promise<void> {
   const ids = (req.query as { ids: string }).ids.split(",").filter(Boolean).slice(0, 200);
-  res.status(200).json(await badges.directoryCounts(ids));
+  res.status(200).json(await badges.directoryCounts(await actorFor(req), ids));
 }
 export async function revokeBadge(req: Request, res: Response): Promise<void> {
   res.status(200).json(await badges.revoke(await actorFor(req), id(req), req.body, metaOf(req)));

@@ -16,10 +16,6 @@ export const BOOLEANS: Partial<Record<PeepsSettingKey, Array<{ field: string; la
   ],
   "audience.unmute": [{ field: "employeesMayBook", label: "Employees (HR included) may book Unmute conversations" }],
   "badges.revocation": [{ field: "allowed", label: "A giver (or a director) may revoke a badge" }],
-  "badges.display": [
-    { field: "profile", label: "Show badges on a person's profile" },
-    { field: "directory", label: "Show badges in the directory" },
-  ],
   "nudges.revocation": [{ field: "allowed", label: "A sender (or a director) may withdraw a nudge" }],
 };
 export const GIVERS: Partial<Record<PeepsSettingKey, string>> = { "audience.badges": "givers", "audience.nudges": "senders" };
