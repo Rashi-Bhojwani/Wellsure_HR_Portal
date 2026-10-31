@@ -12,8 +12,9 @@ import * as orgApi from "../../../api/org";
 import * as managersApi from "../../../api/managers";
 import { useAuth } from "../../../hooks/useAuth";
 import { InvitationStatus } from "../../../components/common/InvitationStatus";
-import { PhotoUploader } from "../../../components/common/PhotoUploader";
-import * as peopleApi from "../../../api/people";
+// PEEPS-BEGIN avatars
+import { ProfilePhoto } from "../../../features/avatars/ProfilePhoto";
+// PEEPS-END
 import { EmployeeDocumentsTab } from "./EmployeeDocumentsTab";
 import { EmployeeAccessTab } from "../../../components/access/EmployeeAccessTab";
 import { EmptyState, PageHeader, QueryState, SideDrawer, Skel, SkeletonCard, StatusChip, Timeline, toast, type TimelineItem } from "../../../ui";
@@ -439,17 +440,16 @@ export function EmployeeProfilePage() {
             actions={actions}
             onOpenManager={(mid) => navigate(`/admin/employee/profile/${mid}`)}
             avatar={
-              <PhotoUploader
-                stacked
-                size={84}
+              // PEEPS-BEGIN avatars
+              // Only the person adds or changes their photo; HR and the directors may remove someone else's, with a reason (features/avatars).
+              <ProfilePhoto
                 employeeId={id!}
                 name={profile.fullName}
                 photoVersion={profile.personal?.photoVersion ?? null}
-                upload={(file) => peopleApi.uploadEmployeePhoto(id!, file)}
-                remove={() => peopleApi.removeEmployeePhoto(id!)}
                 onChanged={() => void queryClient.invalidateQueries({ queryKey: ["employees", "profile", id] })}
-                disabled={!canEdit || !profile.personal}
+                disabled={!profile.personal}
               />
+              // PEEPS-END
             }
           />
         }

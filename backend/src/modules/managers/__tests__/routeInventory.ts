@@ -651,6 +651,10 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "POST /api/unmute/admin/bookings/:id/reassign": admin,
   "POST /api/unmute/admin/bookings/:id/cancel": admin,
   // PEEPS-END
+  // PEEPS-BEGIN avatars
+  // HR and the directors remove someone else's inappropriate photo with a reason (avatars.moderate); only the owner adds or changes a photo.
+  "POST /api/avatars/:employeeId/remove": admin,
+  // PEEPS-END
   // PEEPS-BEGIN badges-nudges
   // Giving and sending (Q-16): the directors only, decided in the service; a widening setting (Not set) could add members with the capability and
   // managers for their own team, never HR. Reading a nudge is the recipient's own, the sender's own, or a director's (audited).
@@ -659,6 +663,7 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/badges/mine": self,
   "GET /api/badges/given": self,
   "GET /api/badges/directory": everyone("active badge counts for the directory, company-wide to signed-in staff (Q-16); the Developer is refused"),
+  "GET /api/badges/counts": everyone("everyone's active badge count, for the directory and the org chart (Q-16: company-wide to signed-in staff); the Developer is refused"),
   "GET /api/badges/people/:employeeId": everyone("a person's active badges without the message, company-wide to signed-in staff (Q-16); the Developer is refused"),
   "POST /api/badges": scoped("giving: the directors only (Q-16, service); a Not-set widening setting could add members and managers; never HR"),
   "POST /api/badges/:id/revoke": scoped("the giver or a director, only while the directors allow revocation"),

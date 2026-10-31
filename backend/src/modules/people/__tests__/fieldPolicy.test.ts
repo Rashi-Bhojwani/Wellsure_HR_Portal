@@ -17,6 +17,9 @@ import {
 } from "../../employee/__tests__/employeeTestHelpers";
 import { DIRECTORY_FIELD_POLICY, DIRECTORY_POLICY_MODELS } from "../fieldPolicy";
 import { setSetting, snapshotPeopleDocumentsSettings } from "./peopleTestHelpers";
+// PEEPS-BEGIN directory-contact
+import { withDirectoryContactFields } from "../../peeps/__tests__/peepsTestKit";
+// PEEPS-END
 
 // Correction 5 of the approved commit C plan: a column added to
 // EmployeePersonal (or Employee) must be explicitly classified for the
@@ -57,11 +60,17 @@ describe("People directory field allowlist", () => {
     const viewerIds: string[] = [];
     const sentinels = new Map<string, string>(); // "Model.field" -> unique marker
     const SECRET_BIRTH_YEAR = "1937";
+    // PEEPS-BEGIN directory-contact
+    let closeContactFields: () => Promise<void>; // contact fields also need the directors' Peeps setting; this file opens all of them
+    // PEEPS-END
 
     beforeAll(async () => {
       restoreSettings = await snapshotPeopleDocumentsSettings();
       org = await createEmployeeTestOrgMasters();
       subject = await createFullTestEmployee(org);
+      // PEEPS-BEGIN directory-contact
+      closeContactFields = await withDirectoryContactFields(org);
+      // PEEPS-END
       const viewer = await createFullTestEmployee(org);
       viewerIds.push(viewer.employeeId);
       viewerToken = await loginAs(viewer.employeeCode);
@@ -86,6 +95,9 @@ describe("People directory field allowlist", () => {
     });
 
     afterAll(async () => {
+      // PEEPS-BEGIN directory-contact
+      await closeContactFields();
+      // PEEPS-END
       await cleanupFullTestEmployee(subject.employeeId);
       for (const id of viewerIds) await cleanupFullTestEmployee(id);
       await cleanupEmployeeTestOrgMasters(org);

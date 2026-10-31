@@ -16,6 +16,7 @@ badgesRouter.get("/recipients", validate({ query: recipientsQuery }), controller
 badgesRouter.get("/mine", controller.myBadges);
 badgesRouter.get("/given", controller.givenBadges);
 badgesRouter.get("/directory", validate({ query: directoryQuery }), controller.directoryBadges);
+badgesRouter.get("/counts", controller.badgeCounts);
 badgesRouter.get("/people/:employeeId", validate({ params: employeeParams }), controller.personBadges);
 badgesRouter.post("/", validate({ body: giveSchema }), controller.give);
 badgesRouter.post("/:id/revoke", validate({ params: idParams, body: reasonSchema }), controller.revokeBadge);

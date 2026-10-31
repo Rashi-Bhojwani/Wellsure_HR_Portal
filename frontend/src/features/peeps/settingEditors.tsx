@@ -1,7 +1,7 @@
 import { Button, Checkbox, Form, Input, InputNumber, Space, Switch, TimePicker } from "antd";
 import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
-import type { PeepsSettingKey } from "@shared/constants/peeps";
+import { DIRECTORY_CONTACT_FIELDS, DIRECTORY_CONTACT_LABELS, type PeepsSettingKey } from "@shared/constants/peeps";
 import { space } from "../../theme/tokens";
 import { BOOLEANS, DAYS, GIVERS, LIMITS, NUMBERS } from "./settingValues";
 
@@ -22,6 +22,12 @@ export function SettingFields({ settingKey }: { settingKey: PeepsSettingKey }) {
     );
   const l = LIMITS[settingKey];
   if (l) return <Form.Item name={["value", l]} label="At most this many per person in a calendar month" rules={[{ required: true }]}><InputNumber min={1} max={1000} style={{ width: "100%" }} /></Form.Item>;
+  if (settingKey === "directory.contactFields")
+    return (
+      <Form.Item name="value" label="Colleagues see" initialValue={[]} extra="Personal email, addresses, pay, bank, statutory and health details never show, whatever is chosen here.">
+        <Checkbox.Group options={DIRECTORY_CONTACT_FIELDS.map((f) => ({ value: f, label: DIRECTORY_CONTACT_LABELS[f] }))} />
+      </Form.Item>
+    );
   if (settingKey === "office.name") return <Form.Item name="value" label="Name" rules={[{ required: true, max: 60 }]}><Input /></Form.Item>;
   if (settingKey === "unmute.availability")
     return (

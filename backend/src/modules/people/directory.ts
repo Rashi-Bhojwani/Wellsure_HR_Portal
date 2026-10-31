@@ -5,6 +5,10 @@ import { isTopLevel, MANAGER_ROLE_CODE } from "../../lib/reportingHierarchy";
 import { HttpError } from "../../middleware/errorHandler";
 import { DIRECTORY_FIELD_POLICY } from "./fieldPolicy";
 import { inForceOn } from "../../lib/effectiveDating";
+// PEEPS-BEGIN directory-contact
+import { getSetting as getPeepsSetting } from "../peeps/settings";
+import type { DirectoryContactField } from "@shared/constants/peeps";
+// PEEPS-END
 
 // People directory + org chart (spec §6 "People", Phase 5 commit C).
 // Every signed-in employee can use both; only ACTIVE employees appear, and
@@ -93,7 +97,15 @@ function toEntry(row: DirectoryRow, visible: Set<DirectoryToggleableField>): Dir
 }
 
 async function visibleFields(): Promise<Set<DirectoryToggleableField>> {
-  return new Set((await getPeopleDocumentsSettings()).directoryVisibleFields);
+  // PEEPS-BEGIN directory-contact
+  // Peeps (avatars and directory): work email, phone and birthday also need the directors' "Contact fields in the directory" setting (Not set = none),
+  // and personal email never shows. Narrows the System Settings toggles; never widens them.
+  const set = new Set((await getPeopleDocumentsSettings()).directoryVisibleFields);
+  const contact = new Set((await getPeepsSetting<DirectoryContactField[]>("directory.contactFields")) ?? []);
+  for (const f of ["officialEmail", "mobile", "birthday"] as const) if (!contact.has(f)) set.delete(f);
+  set.delete("personalEmail");
+  return set;
+  // PEEPS-END
 }
 
 export interface ListDirectoryQuery {
@@ -111,6 +123,9 @@ export async function listDirectory(query: ListDirectoryQuery) {
       OR: [
         { employeeCode: { contains: search, mode: "insensitive" as const } },
         { nameHistory: { some: { ...inForceOn(), fullName: { contains: search, mode: "insensitive" as const } } } },
+        // PEEPS-BEGIN directory-search
+        { jobHistory: { some: { ...inForceOn(), department: { name: { contains: search, mode: "insensitive" as const } } } } }, // search by department too
+        // PEEPS-END
       ],
     }),
     ...((query.departmentId || query.locationId) && {

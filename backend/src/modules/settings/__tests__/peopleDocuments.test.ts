@@ -14,6 +14,9 @@ import {
   type TestOrgMasters,
 } from "../../employee/__tests__/employeeTestHelpers";
 import { snapshotPeopleDocumentsSettings } from "../../people/__tests__/peopleTestHelpers";
+// PEEPS-BEGIN directory-contact
+import { withDirectoryContactFields } from "../../peeps/__tests__/peepsTestKit";
+// PEEPS-END
 
 describe("System Settings → People & Documents (/api/settings/people-documents)", () => {
   const adminRole = `TEST_SETTINGS_PD_${Date.now()}`;
@@ -23,10 +26,16 @@ describe("System Settings → People & Documents (/api/settings/people-documents
   let adminToken: string;
   let plainToken: string;
   let plainId: string;
+  // PEEPS-BEGIN directory-contact
+  let closeContactFields: () => Promise<void>; // contact fields also need the directors' Peeps setting; this file opens all of them
+  // PEEPS-END
 
   beforeAll(async () => {
     restoreSettings = await snapshotPeopleDocumentsSettings();
     org = await createEmployeeTestOrgMasters();
+    // PEEPS-BEGIN directory-contact
+    closeContactFields = await withDirectoryContactFields(org);
+    // PEEPS-END
     await grantPermissions(adminRole, ["settings.manage"]);
     const admin = await createFullTestEmployee(org, { roleCode: adminRole });
     const plain = await createFullTestEmployee(org);
@@ -37,6 +46,9 @@ describe("System Settings → People & Documents (/api/settings/people-documents
   });
 
   afterAll(async () => {
+    // PEEPS-BEGIN directory-contact
+    await closeContactFields();
+    // PEEPS-END
     for (const id of employeeIds) await cleanupFullTestEmployee(id);
     await cleanupTestRole(adminRole);
     await cleanupEmployeeTestOrgMasters(org);

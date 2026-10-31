@@ -176,6 +176,7 @@ export const REVIEWED_NOT_SENSITIVE: readonly PermissionKey[] = [
   "unmute.manage", // booking times and participants only; no content exists to see
   "badges.give",
   "nudges.send", // sending, not reading other people's nudges
+  "avatars.moderate", // removing a photo; shows nothing new
   // PEEPS-END
 ];
 

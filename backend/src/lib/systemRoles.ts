@@ -65,6 +65,8 @@ const HR_EXECUTIVE_PERMS: string[] = [
   // Peeps (Q-14, decided 2026-11): the asset register is managed by HR and the directors.
   "assets.view",
   "assets.manage",
+  // Peeps avatars: HR removes an inappropriate profile photo, with a reason (never replaces it).
+  "avatars.moderate",
   // PEEPS-END
 ];
 const HR_ADMIN_PERMS: string[] = [

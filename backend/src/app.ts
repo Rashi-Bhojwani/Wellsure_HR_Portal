@@ -51,6 +51,9 @@ import { unmuteRouter } from "./modules/unmute/routes";
 // PEEPS-BEGIN badges-nudges
 import { badgesRouter, nudgesRouter } from "./modules/recognition/routes";
 // PEEPS-END
+// PEEPS-BEGIN avatars
+import { avatarsRouter } from "./modules/avatars/routes";
+// PEEPS-END
 
 // Every API router and where it's mounted — one list, so the route
 // inventory test (modules/managers/__tests__/routeInventory.test.ts) can see
@@ -107,6 +110,9 @@ const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   // PEEPS-BEGIN badges-nudges
   { path: "/api/badges", router: badgesRouter },
   { path: "/api/nudges", router: nudgesRouter },
+  // PEEPS-END
+  // PEEPS-BEGIN avatars
+  { path: "/api/avatars", router: avatarsRouter },
   // PEEPS-END
 ];
 

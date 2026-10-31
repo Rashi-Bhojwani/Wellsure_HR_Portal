@@ -75,6 +75,8 @@ async function peepsPageChecks(page, user, label, base, p, text) {
     if (ASSET_MONEY.test(text)) problems.push(`${where}: an amount is shown on an asset screen`);
     if ((user === "DEMO006" || user === "DEMO005" || user === "DEMO009") && text.includes(ASSET_MARKER)) problems.push(`${where}: sees an asset held by someone else`);
   }
+  // Avatars and directory: the directory never shows a personal email, and the demo leaves the directors' contact-field setting Not set, so no phone either.
+  if (base === "/app" && p === "people" && (text.includes("@demo.example.invalid") || text.includes("0000000000"))) problems.push(`${where}: the directory shows a personal email or a phone number`);
   if (base !== "/app" || user === "DEMO001") return;
   // Unmute (D-29, D-30): DEMO006's booking is never shown to anyone else on their Unmute page or on any Wellsure Office page, nor to DEMO006 on a
   // workspace page other than their own booking's.

@@ -35,6 +35,12 @@ export const OFFICE_GRANT_REASON = "Wellsure Office membership (managed on the O
 export const OFFICE_CHANGE_KINDS = ["APPOINT", "UPDATE", "REMOVE", "REPLACE"] as const;
 export type OfficeChangeKind = (typeof OFFICE_CHANGE_KINDS)[number];
 
+// ── Directory (Peeps module: avatars and directory) ─────────────────────────
+/** The contact fields a director may let colleagues see in the directory (Not set = none). Personal email is never one of them. */
+export const DIRECTORY_CONTACT_FIELDS = ["officialEmail", "mobile", "birthday"] as const;
+export type DirectoryContactField = (typeof DIRECTORY_CONTACT_FIELDS)[number];
+export const DIRECTORY_CONTACT_LABELS: Record<DirectoryContactField, string> = { officialEmail: "Work email", mobile: "Phone", birthday: "Birthday (day and month)" };
+
 // ── Settings ───────────────────────────────────────────────────────────────
 // Who may enter each setting: DIRECTOR = a director only; OFFICE = a director or a member with "Prepare Peeps settings". Every setting is confirmed by a
 // director who did not enter it. `required` lists the settings a module refuses to work without.
@@ -56,11 +62,12 @@ export const PEEPS_SETTING_KEYS = [
   "audience.nudges",
   "nudges.limits",
   "nudges.revocation",
+  "directory.contactFields",
 ] as const;
 export type PeepsSettingKey = (typeof PEEPS_SETTING_KEYS)[number];
 
 export interface PeepsSettingInfo {
-  module: "office" | "assets" | "unmute" | "badges" | "nudges";
+  module: "office" | "assets" | "unmute" | "badges" | "nudges" | "directory";
   label: string;
   what: string;
   enteredBy: "DIRECTOR" | "OFFICE";
@@ -82,6 +89,7 @@ export const PEEPS_SETTINGS: Record<PeepsSettingKey, PeepsSettingInfo> = {
   "badges.revocation": { module: "badges", label: "Badge revocation", what: "Whether a giver (or a director) may revoke a badge. Until set, nobody can.", enteredBy: "DIRECTOR" },
   "audience.nudges": { module: "nudges", label: "Who else may send private nudges", what: "Q-16: only the directors send private nudges, to any employee. Listing managers (to their own team) and/or Wellsure Office members widens this; HR never. Not set: the directors only.", enteredBy: "DIRECTOR" },
   "nudges.limits": { module: "nudges", label: "Nudge limits", what: "How many nudges one sender may send in a calendar month. Until set, no limit applies.", enteredBy: "DIRECTOR" },
+  "directory.contactFields": { module: "directory", label: "Contact fields in the directory", what: "Which of work email, phone and birthday (day and month) colleagues see in the directory, on top of System Settings → People & Documents. Not set: none. Personal email and every sensitive field never show.", enteredBy: "DIRECTOR" },
   "nudges.revocation": { module: "nudges", label: "Nudge revocation", what: "Whether a sender (or a director) may withdraw a nudge. Until set, nobody can.", enteredBy: "DIRECTOR" },
 };
 

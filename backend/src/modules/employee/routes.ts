@@ -6,6 +6,9 @@ import { validate } from "../../middleware/validate";
 import * as controller from "./controller";
 import { memoryUpload } from "../../lib/uploads";
 import { MAX_PHOTO_UPLOAD_MB_CEILING } from "@shared/constants/peopleDocuments";
+// PEEPS-BEGIN avatars
+import { ownPhotoOnly } from "../avatars/service";
+// PEEPS-END
 import {
   bankUpdateSchema,
   createChangeRequestSchema,
@@ -115,6 +118,10 @@ employeeRouter.patch(
   validate({ params: idParamsSchema, body: statutoryUpdateSchema }),
   controller.updateStatutory,
 );
+// PEEPS-BEGIN avatars
+// Only the owner adds or changes their photo; HR and the directors remove someone else's with a reason at /api/avatars/:employeeId/remove.
+employeeRouter.use("/:id/photo", ownPhotoOnly);
+// PEEPS-END
 employeeRouter.put("/:id/photo", canEdit, validate({ params: idParamsSchema }), photoUpload, controller.uploadPhoto);
 employeeRouter.delete("/:id/photo", canEdit, validate({ params: idParamsSchema }), controller.removePhoto);
 employeeRouter.patch("/:id/personal", canEdit, validate({ params: idParamsSchema, body: personalUpdateSchema }), controller.updatePersonal);

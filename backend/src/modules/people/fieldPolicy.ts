@@ -34,7 +34,9 @@ export const DIRECTORY_FIELD_POLICY: Record<string, DirectoryFieldPolicy> = {
   "EmployeePersonal.employeeId": { shown: "never", why: "same as Employee.id" },
   "EmployeePersonal.dateOfBirth": { shown: "setting", setting: "birthday" }, // day + month only, never the year
   "EmployeePersonal.gender": { shown: "never", why: "personal data, not needed to find a colleague" },
-  "EmployeePersonal.personalEmail": { shown: "setting", setting: "personalEmail" },
+  // PEEPS-BEGIN directory-contact
+  "EmployeePersonal.personalEmail": { shown: "never", why: "personal contact detail: never in the directory (owner decision, Peeps avatars and directory)" },
+  // PEEPS-END
   "EmployeePersonal.mobile": { shown: "setting", setting: "mobile" },
   "EmployeePersonal.currentAddress": { shown: "never", why: "home address" },
   "EmployeePersonal.permanentAddress": { shown: "never", why: "home address" },

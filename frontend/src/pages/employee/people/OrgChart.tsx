@@ -7,6 +7,9 @@ import { usePhotoToken } from "../../../hooks/usePhotoToken";
 import { useAuth } from "../../../hooks/useAuth";
 import { fs, fw, radius, space, v } from "../../../theme/tokens";
 import { EmptyState, InitialsAvatar, QueryState, Skel, StatusChip, toast, useIsPhone } from "../../../ui";
+// PEEPS-BEGIN avatars
+import { BadgeCount } from "../../../features/recognition/BadgeCount";
+// PEEPS-END
 
 // The company org chart: Admin (the Super Admins) → Managers and HR Admins →
 // teams (the three-level structure, hierarchy model A — E2). The whole company arrives
@@ -74,6 +77,9 @@ const OrgCard = memo(function OrgCard({
         <span style={{ display: "block", fontWeight: fw.semibold, fontSize: fs.md, ...ellipsis }}>{node.name}</span>
         <span style={{ display: "block", fontSize: fs.sm, color: v.textSecondary, ...ellipsis }}>{subtitle}</span>
       </span>
+      {/* PEEPS-BEGIN avatars */}
+      <BadgeCount employeeId={node.id} />
+      {/* PEEPS-END */}
       <KindBadge kind={node.kind} reportCount={reportCount} />
     </button>
   );

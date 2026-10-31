@@ -6,6 +6,9 @@ import { useSearchParams } from "react-router-dom";
 import * as orgApi from "../../../api/org";
 import { listDirectory, type DirectoryEntry } from "../../../api/people";
 import { EmployeeAvatar } from "../../../components/common/EmployeeAvatar";
+// PEEPS-BEGIN avatars
+import { BadgeCount } from "../../../features/recognition/BadgeCount";
+// PEEPS-END
 import { OrgChart } from "./OrgChart";
 import { PersonDrawer } from "./PersonDrawer";
 import { fs, fw, radius, space, v } from "../../../theme/tokens";
@@ -49,6 +52,9 @@ const PersonCard = memo(function PersonCard({ person, onOpen }: { person: Direct
       <span style={{ display: "block", maxWidth: "100%", fontSize: fs.sm, color: v.textSecondary, ...ellipsis }}>
         {person.location.name} · {person.employeeCode}
       </span>
+      {/* PEEPS-BEGIN avatars */}
+      <BadgeCount employeeId={person.id} />
+      {/* PEEPS-END */}
       {(person.officialEmail || person.mobile) && (
         <span style={{ display: "flex", flexDirection: "column", gap: space[1], alignItems: "center", width: "100%", marginTop: space[3], paddingTop: space[3], borderTop: `1px solid ${v.borderDefault}` }}>
           {person.officialEmail && (

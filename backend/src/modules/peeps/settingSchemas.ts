@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { GIVER_KINDS, type PeepsSettingKey } from "@shared/constants/peeps";
+import { DIRECTORY_CONTACT_FIELDS, GIVER_KINDS, type PeepsSettingKey } from "@shared/constants/peeps";
 
 // The shape of each Peeps setting's value. Typed and validated, so an inverted window, a negative limit or an unknown giver is refused when entered.
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:MM (24-hour).");
@@ -8,6 +8,7 @@ const givers = z.array(z.enum(GIVER_KINDS)).max(GIVER_KINDS.length).refine((a) =
 
 export const PEEPS_SETTING_SCHEMAS: Record<PeepsSettingKey, z.ZodType> = {
   "office.name": z.string().trim().min(1).max(60),
+  "directory.contactFields": z.array(z.enum(DIRECTORY_CONTACT_FIELDS)).max(DIRECTORY_CONTACT_FIELDS.length).refine((a) => new Set(a).size === a.length, "Listed twice."),
   "audience.assets": z.object({ officeManages: z.boolean(), hrOnboardingIssue: z.boolean().optional() }).strict(), // hrOnboardingIssue: only in versions entered before the onboarding route was retired; ignored
   "audience.unmute": z.object({ employeesMayBook: z.boolean() }).strict(),
   "unmute.sessionMinutes": z.number().int().min(5).max(240),

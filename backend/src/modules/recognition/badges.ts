@@ -112,6 +112,14 @@ export async function directoryCounts(actor: PeepsActor, employeeIds: string[]) 
   return { shown: true, counts };
 }
 
+/** Everyone's active badge count (only people who have one), for the directory cards and the org chart in one small request. Developer refused. */
+export async function allCounts(actor: PeepsActor) {
+  if (isDeveloper(actor)) throw new HttpError(403, "The Developer role does not see people's records.", "FORBIDDEN");
+  const now = new Date(); // allow-clock: an instant
+  const rows = await prisma.badgeAward.groupBy({ by: ["recipientEmployeeId"], where: { revocation: null, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }], recipient: { status: "ACTIVE" } }, _count: { _all: true } });
+  return { counts: Object.fromEntries(rows.map((r) => [r.recipientEmployeeId, r._count._all])) as Record<string, number> };
+}
+
 export async function revoke(actor: PeepsActor, id: string, input: { reason: string }, meta: ActorMeta) {
   const rule = await getSetting<{ allowed: boolean }>("badges.revocation");
   if (!rule?.allowed) throw new HttpError(409, "Badges cannot be revoked: the directors have not allowed it.", "REVOCATION_NOT_ALLOWED");

@@ -163,14 +163,20 @@ describe("Employee photos (upload, re-encode, serve)", () => {
     await prisma.employee.update({ where: { id: self.employeeId }, data: { status: "ACTIVE" } });
   });
 
-  it("only employee.edit holders can set someone else's photo; removing clears keys and files", async () => {
+  // PEEPS-BEGIN avatars
+  // Owner decision (Peeps avatars and directory): only the employee adds or changes their own photo. HR and the directors can only remove someone
+  // else's, with a reason (backend/src/modules/avatars, tested in avatars.test.ts). This test used to have HR set the photo.
+  it("nobody sets someone else's photo, not even employee.edit holders; the owner does; removing clears keys and files", async () => {
     const jpg = await jpegWithGps(300, 300);
     const denied = await request(app).put(`/api/employees/${self.employeeId}/photo`).set(...authHeader(colleagueToken)).attach("file", jpg, { filename: "x.jpg", contentType: "image/jpeg" });
     expect(denied.status).toBe(403);
 
     const byHr = await request(app).put(`/api/employees/${self.employeeId}/photo`).set(...authHeader(hrToken)).attach("file", jpg, { filename: "x.jpg", contentType: "image/jpeg" });
-    expect(byHr.status).toBe(200);
-    expect(await prisma.auditLog.findFirst({ where: { entityId: self.employeeId, action: "employee.photo.updated" } })).not.toBeNull();
+    expect(byHr.status).toBe(403);
+    expect(JSON.stringify(byHr.body)).toContain("PHOTO_OWNER_ONLY");
+    const bySelf = await request(app).put("/api/employees/me/photo").set(...authHeader(selfToken)).attach("file", jpg, { filename: "x.jpg", contentType: "image/jpeg" });
+    expect(bySelf.status).toBe(200);
+    // PEEPS-END
 
     const current = await prisma.employeePersonal.findUniqueOrThrow({ where: { employeeId: self.employeeId } });
     expect((await request(app).delete("/api/employees/me/photo").set(...authHeader(selfToken))).status).toBe(204);

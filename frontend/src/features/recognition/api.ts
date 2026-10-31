@@ -60,3 +60,4 @@ export const sentNudges = () => data<Nudge[]>(apiClient.get("/api/nudges/sent"))
 export const sendNudge = (input: { recipientEmployeeId: string; body: string; idempotencyKey: string }) => data<Nudge>(apiClient.post("/api/nudges", input));
 export const revokeNudge = (id: string, reason: string) => data<{ withdrawn: boolean }>(apiClient.post(`/api/nudges/${id}/revoke`, { reason }));
 export const allNudges = () => data<Nudge[]>(apiClient.get("/api/nudges/admin/all"));
+export const badgeCounts = () => data<{ counts: Record<string, number> }>(apiClient.get("/api/badges/counts"));

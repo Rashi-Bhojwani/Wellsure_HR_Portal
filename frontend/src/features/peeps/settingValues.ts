@@ -1,4 +1,4 @@
-import type { PeepsSettingKey } from "@shared/constants/peeps";
+import { DIRECTORY_CONTACT_LABELS, type DirectoryContactField, type PeepsSettingKey } from "@shared/constants/peeps";
 
 // The shapes behind each Peeps setting editor, and a setting's value in words.
 
@@ -38,6 +38,10 @@ export function describeValue(key: PeepsSettingKey, value: unknown): string {
   if (key === "unmute.availability") {
     const w = value as { days: number[]; from: string; to: string };
     return `${w.days.map((d) => DAYS[d]).join(", ")}, ${w.from}–${w.to}`;
+  }
+  if (key === "directory.contactFields") {
+    const list = value as DirectoryContactField[];
+    return list.length ? list.map((f) => DIRECTORY_CONTACT_LABELS[f]).join(", ") : "None";
   }
   if (key === "badges.catalogue") return (value as Array<{ label: string }>).map((x) => x.label).join(", ");
   return String(value);

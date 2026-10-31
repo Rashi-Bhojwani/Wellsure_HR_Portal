@@ -29,6 +29,9 @@ export async function directoryBadges(req: Request, res: Response): Promise<void
   const ids = (req.query as { ids: string }).ids.split(",").filter(Boolean).slice(0, 200);
   res.status(200).json(await badges.directoryCounts(await actorFor(req), ids));
 }
+export async function badgeCounts(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await badges.allCounts(await actorFor(req)));
+}
 export async function revokeBadge(req: Request, res: Response): Promise<void> {
   res.status(200).json(await badges.revoke(await actorFor(req), id(req), req.body, metaOf(req)));
 }
