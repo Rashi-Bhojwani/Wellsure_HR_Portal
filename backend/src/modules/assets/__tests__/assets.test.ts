@@ -382,8 +382,9 @@ describe("asset register", () => {
       const free = await newAsset("DEMO for a joiner");
       const list = await get("hrAdmin", "/api/assets/onboarding/available");
       expect(list.status).toBe(200);
-      expect(list.body.map((a: { id: string }) => a.id)).toContain(free);
-      expect(Object.keys(list.body[0]).sort()).toEqual(["assetId", "category", "id", "name", "serialNumber"]);
+      expect(list.body.assets.map((a: { id: string }) => a.id)).toContain(free);
+      expect(Object.keys(list.body.assets[0]).sort()).toEqual(["assetId", "category", "id", "name", "serialNumber"]);
+      expect(list.body.conditions).toEqual(CONDITIONS);
       expect((await post("hrAdmin", `/api/assets/${free}/issue-onboarding`, { employeeId: p.employee.employeeId, conditionCode: "DEMO_GOOD" })).status).toBe(403); // joined long ago
       const ok = await post("hrAdmin", `/api/assets/${free}/issue-onboarding`, { employeeId: p.joiner.employeeId, conditionCode: "DEMO_GOOD" });
       expect(ok.status, JSON.stringify(ok.body)).toBe(200);

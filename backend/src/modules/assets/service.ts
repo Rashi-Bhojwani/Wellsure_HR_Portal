@@ -269,14 +269,17 @@ async function assertOnboardingOpen(): Promise<number> {
   return (await getPeepsSetting<number>("assets.newJoinerWindowDays"))!;
 }
 
-/** What HR may hand to a new joiner: assets nobody holds whose status allows issuing. Name, ID and category only; no holders, no history. */
-export async function onboardingAvailable(): Promise<Array<{ id: string; assetId: string; name: string; category: string; serialNumber: string | null }>> {
+/** What HR may hand to a new joiner: assets nobody holds whose status allows issuing (name, ID and category only; no holders, no history), and the conditions to record. */
+export async function onboardingAvailable(): Promise<{ assets: Array<{ id: string; assetId: string; name: string; category: string; serialNumber: string | null }>; conditions: Array<{ code: string; label: string }> }> {
   await assertOnboardingOpen();
   const lists = await loadInForce();
   assertReady(lists);
   const issuable = lists.statuses.filter((s) => s.issuable).map((s) => s.code);
   const rows = await prisma.asset.findMany({ where: { statusCode: { in: issuable }, assignments: { none: OPEN } }, orderBy: { number: "asc" }, take: 500 });
-  return rows.map((a) => ({ id: a.id, assetId: formatAssetId(a.number), name: a.name, category: lists.label("CATEGORIES", a.categoryCode)!, serialNumber: a.serialNumber }));
+  return {
+    assets: rows.map((a) => ({ id: a.id, assetId: formatAssetId(a.number), name: a.name, category: lists.label("CATEGORIES", a.categoryCode)!, serialNumber: a.serialNumber })),
+    conditions: lists.conditions.map((c) => ({ code: c.code, label: c.label })),
+  };
 }
 
 export async function issueAtOnboarding(id: string, input: { employeeId: string; conditionCode: string; note?: string }, viewer: AssetViewer, meta: ActorMeta): Promise<{ assetId: string; issued: true }> {

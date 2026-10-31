@@ -191,6 +191,39 @@ for (const [width, height] of [
     }
   }
   // PEEPS-END
+  // PEEPS-BEGIN office-unmute
+  // The Wellsure Office members page (the dev seed's 1000 is a director): its "Appoint a member" drawer, measured like the asset settings drawer above.
+  {
+    await page.goto(`${BASE}/app/office/members`);
+    await page.locator("header.ws-topbar").waitFor({ timeout: 30000 });
+    await page.waitForTimeout(800);
+    const label = `${where} / office: appoint drawer`;
+    const open = () => page.getByRole("button", { name: /Appoint a member/ }).first().click();
+    const root = ".ant-drawer-content-wrapper";
+    const surface = ".ant-drawer-section";
+    console.log(label);
+    await open();
+    await page.waitForTimeout(700);
+    const m = await measure(page, root, surface);
+    if (!m) fail(label, "did not open (nothing visible)");
+    else {
+      if (m.alpha < 0.95) fail(label, `its surface is not opaque (background alpha ${m.alpha})`);
+      if (!m.hasEdge) fail(label, "it has neither a border nor a shadow, so it does not read as a layer above the page");
+      if (m.coveredPoints > 0) fail(label, `${m.coveredPoints} of ${m.checkedPoints} points inside it are covered by the page behind it`);
+      if (m.rect.left < -0.5 || m.rect.right > m.viewport.w + 0.5) fail(label, "it does not fit the screen");
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(1000);
+      if (await measure(page, root, surface)) fail(label, "it did not close on Escape");
+      if (!phone) {
+        await open();
+        await page.waitForTimeout(700);
+        await page.mouse.click(3, Math.round(m.viewport.h / 2));
+        await page.waitForTimeout(1000);
+        if (await measure(page, root, surface)) fail(label, "it did not close on a click outside it");
+      }
+    }
+  }
+  // PEEPS-END
   await ctx.close();
 }
 }

@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Select } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import { ASSET_SETTING_LABELS } from "@shared/constants/assets";
-import { useAuth } from "../../../hooks/useAuth";
+import { usePeepsMe } from "../../peeps/usePeepsMe";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { fs, fw, v } from "../../../theme/tokens";
 import { ApprovalBanner, DataTable, EmptyState, FilterBar, PageHeader, Panel, Stack, StatusChip, toast, useIsPhone } from "../../../ui";
@@ -21,9 +21,11 @@ const DONE: Record<AssetAction, string> = { create: "Asset added.", edit: "Detai
 // Assets → Asset Register (Peeps module 1). HR manages it (assets.manage); directors see everything. Until the categories, statuses and conditions are
 // entered and confirmed by a director, the page says so and offers no way to add or issue anything (the server refuses too).
 export function AssetRegisterPage() {
-  const { hasPermission } = useAuth();
-  const canManage = hasPermission("assets.manage");
-  const canSettings = hasPermission("assets.settings.manage");
+  // Who may act comes from the Wellsure Office membership (a member who is also a manager has the capability even though the resolver strips the grant).
+  const me = usePeepsMe();
+  const officeCan = (cap: string) => Boolean(me.data?.isDirector || (me.data?.isMember && me.data.capabilities.includes(cap as never)));
+  const canManage = officeCan("MANAGE_ASSETS");
+  const canSettings = officeCan("MANAGE_ASSETS");
   const phone = useIsPhone();
   const queryClient = useQueryClient();
   useAssetsRealtime();
@@ -94,7 +96,7 @@ export function AssetRegisterPage() {
             tone="warning"
             title="The asset register is not set up yet"
             description={`Not set: ${missingNames}. HR Admin enters each list and a director who did not enter it confirms it. Until then no asset can be added or issued.`}
-            actions={canSettings ? <Link to="/admin/assets/settings">Open asset settings</Link> : undefined}
+            actions={canSettings ? <Link to={me.data?.isMember ? "/app/office/asset-settings" : "/admin/assets/settings"}>Open asset settings</Link> : undefined}
           />
         )}
         <Panel title="Assets" subtitle={data ? `${data.total} asset${data.total === 1 ? "" : "s"}` : undefined}>
