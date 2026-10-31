@@ -3,7 +3,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Prisma } from "@prisma/client";
 import { deleteWithDependents, purgeAppendOnly } from "../../../lib/__tests__/cleanup";
 import { prisma } from "../../../lib/prisma";
-import { businessToday } from "../../../lib/businessDate";
 import { appoint, clearPeepsSettings, setSetting } from "../../peeps/__tests__/peepsTestKit";
 import {
   app,
@@ -19,15 +18,15 @@ import {
 // The asset register (Peeps module 1). One describe, sequential, sharing fixtures: the setting lists are global (one register per company), so the
 // file enters and confirms them once, through the API, and removes them at the end.
 
-type Who = "director" | "director2" | "member" | "member2" | "hrAdmin" | "hrExec" | "manager" | "employee" | "other" | "developer" | "stray" | "joiner";
+type Who = "director" | "director2" | "member" | "member2" | "hrAdmin" | "hrExec" | "manager" | "employee" | "other" | "developer" | "stray";
 type Person = { employeeId: string; employeeCode: string; userId: string };
 
 const CATEGORIES = [{ code: "DEMO_LAPTOP", label: "DEMO Laptop" }, { code: "DEMO_PHONE", label: "DEMO Phone" }];
 const STATUSES = [{ code: "DEMO_STOCK", label: "DEMO In stock", issuable: true }, { code: "DEMO_REPAIR", label: "DEMO Under repair", issuable: false }, { code: "DEMO_GONE", label: "DEMO Written off", issuable: false }];
 const CONDITIONS = [{ code: "DEMO_GOOD", label: "DEMO Good" }, { code: "DEMO_WORN", label: "DEMO Worn" }, { code: "DEMO_BROKEN", label: "DEMO Broken" }];
 
-// D-29 / Q-14: the register is managed by the directors and the Wellsure Office members they appoint with "Manage the asset register" (while the
-// directors' asset audience setting lets the Wellsure Office manage it). HR only issues to new joiners at onboarding. Employees see their own assets.
+// Q-14 (decided 2026-11): the register is managed by HR and the directors. The directors may also let Wellsure Office members with "Manage the asset
+// register" manage it, through their asset audience setting (Not set = HR and the directors only). Employees see only their own assets.
 describe("asset register", () => {
   let org: TestOrgMasters;
   const p = {} as Record<Who, Person>;
@@ -58,11 +57,9 @@ describe("asset register", () => {
     p.other = await createFullTestEmployee(org);
     p.developer = await createFullTestEmployee(org, { roleCode: "DEVELOPER" });
     p.stray = await createFullTestEmployee(org); // given the asset keys by hand, not a member
-    p.joiner = await createFullTestEmployee(org);
-    await prisma.employee.update({ where: { id: p.joiner.employeeId }, data: { dateOfJoining: businessToday() } });
     await appoint(p.member.employeeId, ["MANAGE_ASSETS"], p.director, p.director2);
     await appoint(p.member2.employeeId, ["MANAGE_ASSETS"], p.director, p.director2);
-    await setSetting("audience.assets", { officeManages: true, hrOnboardingIssue: true }, p.director, p.director2);
+    await setSetting("audience.assets", { officeManages: true }, p.director, p.director2);
     const perms = await prisma.permission.findMany({ where: { key: { in: ["assets.view", "assets.manage"] } } });
     for (const perm of perms) await prisma.userPermissionOverride.create({ data: { userId: p.stray.userId, permissionId: perm.id, effect: "GRANT", reason: "given by hand", createdByUserId: p.director.userId } });
     for (const k of Object.keys(p) as Who[]) tok[k] = await loginAs(p[k].employeeCode);
@@ -89,8 +86,8 @@ describe("asset register", () => {
       expect(create.body.code ?? create.body.error?.code).toBe("ASSETS_NOT_SET_UP");
     });
 
-    it("a Wellsure Office member enters a list; HR cannot; the list is not used until confirmed", async () => {
-      for (const who of ["hrAdmin", "hrExec"] as const) expect((await post(who, "/api/assets/settings/CATEGORIES", { items: CATEGORIES })).status, who).toBe(403);
+    it("a Wellsure Office member enters a list (while the directors let the office manage the register); HR Executive cannot; the list is not used until confirmed", async () => {
+      expect((await post("hrExec", "/api/assets/settings/CATEGORIES", { items: CATEGORIES })).status).toBe(403);
       const entered = await post("member2", "/api/assets/settings/CATEGORIES", { items: CATEGORIES, note: "DEMO" });
       expect(entered.status).toBe(201);
       expect(entered.body).toMatchObject({ kind: "CATEGORIES", inForce: null, pending: { version: 1 } });
@@ -126,7 +123,8 @@ describe("asset register", () => {
     });
 
     it("with all three confirmed the register is ready, and its readers see the confirmed lists (not the pending ones)", async () => {
-      expect((await post("member2", "/api/assets/settings/CONDITIONS", { items: CONDITIONS })).status).toBe(201);
+      expect((await post("hrAdmin", "/api/assets/settings/CONDITIONS", { items: CONDITIONS })).status).toBe(201); // HR Admin prepares a list too
+      expect((await post("hrAdmin", "/api/assets/settings/CONDITIONS/confirm", { version: 1 })).status).toBe(403); // not a director
       expect((await get("member", "/api/assets/lists")).body).toMatchObject({ ready: false, missing: ["CONDITIONS"], conditions: [] });
       expect((await post("director2", "/api/assets/settings/CONDITIONS/confirm", { version: 1 })).status).toBe(200);
       expect((await get("member2", "/api/assets/settings")).body).toMatchObject({ ready: true, missing: [] });
@@ -160,22 +158,36 @@ describe("asset register", () => {
       ["POST /api/assets/settings/:kind/confirm", () => (w) => post(w, "/api/assets/settings/CATEGORIES/confirm", {})],
     ];
 
-    it("HR, employees, managers, the Developer and a non-member given the keys by hand get 403 on every register and settings route", async () => {
+    it("employees, managers, the Developer and a non-member given the keys by hand get 403 on every register and settings route", async () => {
       const assetId = await newAsset();
-      for (const [id, door] of routes(assetId)) for (const who of ["hrAdmin", "hrExec", "employee", "manager", "developer", "stray"] as const) expect((await door()(who)).status, `${who} ${id}`).toBe(403);
+      for (const [id, door] of routes(assetId)) for (const who of ["employee", "manager", "developer", "stray"] as const) expect((await door()(who)).status, `${who} ${id}`).toBe(403);
     });
 
-    it("Wellsure Office members (including one who is also a manager) and the directors reach every register and settings route", async () => {
+    it("HR Admin, the directors and (while allowed) Wellsure Office members, including one who is also a manager, reach every register and settings route", async () => {
       const assetId = await newAsset();
-      for (const [id, door] of routes(assetId)) for (const who of ["member", "member2", "director"] as const) expect((await door()(who)).status, `${who} ${id}`).not.toBe(403);
+      for (const [id, door] of routes(assetId)) for (const who of ["hrAdmin", "member", "member2", "director"] as const) expect((await door()(who)).status, `${who} ${id}`).not.toBe(403);
     });
 
-    it("while the directors' audience setting does not let the Wellsure Office manage the register, members are refused and directors are not", async () => {
-      await setSetting("audience.assets", { officeManages: false, hrOnboardingIssue: true }, p.director, p.director2);
+    it("HR Executive reaches every register route but not the settings routes (HR Admin prepares the lists)", async () => {
+      const assetId = await newAsset();
+      for (const [id, door] of routes(assetId)) {
+        const status = (await door()("hrExec")).status;
+        if (id.includes("/settings")) expect(status, id).toBe(403);
+        else expect(status, id).not.toBe(403);
+      }
+    });
+
+    it("while the directors' audience setting does not let the Wellsure Office manage the register, members are refused and lose the grants; HR and directors are not", async () => {
+      const grants = () => prisma.userPermissionOverride.count({ where: { userId: p.member.userId, permission: { key: { in: ["assets.view", "assets.manage", "assets.settings.manage"] } } } });
+      expect(await grants()).toBe(3);
+      await setSetting("audience.assets", { officeManages: false }, p.director, p.director2);
       expect((await get("member", "/api/assets")).status).toBe(403);
+      expect(await grants()).toBe(0); // so the workspace menu no longer offers the register
       expect((await get("director", "/api/assets")).status).toBe(200);
-      await setSetting("audience.assets", { officeManages: true, hrOnboardingIssue: true }, p.director, p.director2);
+      expect((await get("hrExec", "/api/assets")).status).toBe(200);
+      await setSetting("audience.assets", { officeManages: true }, p.director, p.director2);
       expect((await get("member", "/api/assets")).status).toBe(200);
+      expect(await grants()).toBe(3);
     });
 
     it("unauthenticated requests are refused", async () => {
@@ -368,35 +380,38 @@ describe("asset register", () => {
     });
   });
 
-  describe("HR at onboarding (Q-14)", () => {
-    it("HR sees no register, and issuing at onboarding refuses while 'who counts as a new joiner' is Not set", async () => {
-      expect((await get("hrExec", "/api/assets")).status).toBe(403);
-      const res = await get("hrExec", "/api/assets/onboarding/available");
-      expect(res.status).toBe(409);
-      expect(JSON.stringify(res.body)).toContain("new joiner");
-      for (const who of ["employee", "manager", "member", "developer"] as const) expect((await get(who, "/api/assets/onboarding/available")).status, who).toBe(403);
+  describe("HR manages the register (Q-14, decided 2026-11)", () => {
+    it("an HR user issues, returns and transfers an asset; the people concerned see it as their own", async () => {
+      const assetId = await newAsset("DEMO issued by HR");
+      const issued = await post("hrExec", `/api/assets/${assetId}/issue`, { employeeId: p.employee.employeeId, conditionCode: "DEMO_GOOD" });
+      expect(issued.status, JSON.stringify(issued.body)).toBe(200);
+      const { id: assignmentId } = await prisma.assetAssignment.findFirstOrThrow({ where: { assetId, endedAt: null } });
+      expect((await post("hrExec", `/api/assets/${assetId}/return`, { assignmentId, conditionCode: "DEMO_GOOD" })).status).toBe(200);
+      expect((await post("hrAdmin", `/api/assets/${assetId}/issue`, { employeeId: p.employee.employeeId, conditionCode: "DEMO_GOOD" })).status).toBe(200);
+      const moved = await post("hrAdmin", `/api/assets/${assetId}/transfer`, { toEmployeeId: p.other.employeeId, conditionCode: "DEMO_GOOD" });
+      expect(moved.status).toBe(200);
+      expect(moved.body.holder).toMatchObject({ employeeId: p.other.employeeId });
+      expect((await get("other", "/api/assets/mine")).body.current.some((a: { name: string }) => a.name === "DEMO issued by HR")).toBe(true);
+      expect((await get("employee", "/api/assets/mine")).body.current.some((a: { name: string }) => a.name === "DEMO issued by HR")).toBe(false);
+      expect(await prisma.auditLog.count({ where: { entityId: assetId, actorUserId: { in: [p.hrExec.userId, p.hrAdmin.userId] } } })).toBeGreaterThanOrEqual(4);
     });
 
-    it("once set, HR lists only free issuable assets (no holders, no history) and issues only to a new joiner", async () => {
-      await setSetting("assets.newJoinerWindowDays", 30, p.director, p.director2);
-      const free = await newAsset("DEMO for a joiner");
-      const list = await get("hrAdmin", "/api/assets/onboarding/available");
-      expect(list.status).toBe(200);
-      expect(list.body.assets.map((a: { id: string }) => a.id)).toContain(free);
-      expect(Object.keys(list.body.assets[0]).sort()).toEqual(["assetId", "category", "id", "name", "serialNumber"]);
-      expect(list.body.conditions).toEqual(CONDITIONS);
-      expect((await post("hrAdmin", `/api/assets/${free}/issue-onboarding`, { employeeId: p.employee.employeeId, conditionCode: "DEMO_GOOD" })).status).toBe(403); // joined long ago
-      const ok = await post("hrAdmin", `/api/assets/${free}/issue-onboarding`, { employeeId: p.joiner.employeeId, conditionCode: "DEMO_GOOD" });
-      expect(ok.status, JSON.stringify(ok.body)).toBe(200);
-      expect(Object.keys(ok.body).sort()).toEqual(["assetId", "issued"]);
-      const mine = await get("joiner", "/api/assets/mine");
-      expect(mine.body.current.some((a: { name: string }) => a.name === "DEMO for a joiner")).toBe(true);
+    it("HR cannot reach any Wellsure Office route", async () => {
+      const office: Array<[string, string]> = [
+        ["GET", "/api/peeps/settings"], ["POST", "/api/peeps/settings/office.name"], ["POST", "/api/peeps/settings/office.name/confirm"],
+        ["GET", "/api/peeps/office/members"], ["GET", "/api/peeps/office/people"], ["GET", "/api/peeps/office/drift"], ["POST", "/api/peeps/office/changes"], ["POST", "/api/peeps/office/changes/x/confirm"],
+        ["GET", "/api/unmute/host/slots"], ["POST", "/api/unmute/host/slots"], ["GET", "/api/unmute/admin/hosts"], ["GET", "/api/unmute/admin/bookings"], ["GET", "/api/unmute/admin/affected"],
+        ["GET", "/api/badges/admin/all"], ["GET", "/api/nudges/admin/all"],
+      ];
+      for (const who of ["hrAdmin", "hrExec"] as const)
+        for (const [method, path] of office) expect((method === "GET" ? await get(who, path) : await post(who, path, {})).status, `${who} ${method} ${path}`).toBe(403);
     });
 
-    it("when the directors switch HR issuing off, HR is refused", async () => {
-      await setSetting("audience.assets", { officeManages: true, hrOnboardingIssue: false }, p.director, p.director2);
-      expect((await get("hrExec", "/api/assets/onboarding/available")).status).toBe(403);
-      await setSetting("audience.assets", { officeManages: true, hrOnboardingIssue: true }, p.director, p.director2);
+    it("the register shows HR no pay, bank or statutory data", async () => {
+      const assetId = await newAsset("DEMO plain");
+      await post("hrExec", `/api/assets/${assetId}/issue`, { employeeId: p.employee.employeeId, conditionCode: "DEMO_GOOD" });
+      const text = JSON.stringify([(await get("hrExec", `/api/assets/${assetId}`)).body, (await get("hrExec", `/api/assets/employees/${p.employee.employeeId}`)).body, (await get("hrExec", "/api/assets?pageSize=200")).body]);
+      expect(text).not.toMatch(/salary|ctc|ifsc|account|pan\b|aadhaar|uan|esi/i);
     });
   });
 });

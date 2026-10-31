@@ -157,9 +157,3 @@ export interface AssetLists {
 }
 export const getLists = () => data<AssetLists>(apiClient.get("/api/assets/lists"));
 
-export interface OnboardingAvailable {
-  assets: Array<{ id: string; assetId: string; name: string; category: string; serialNumber: string | null }>;
-  conditions: Array<{ code: string; label: string }>;
-}
-export const onboardingAvailable = () => data<OnboardingAvailable>(apiClient.get("/api/assets/onboarding/available"));
-export const issueAtOnboarding = (id: string, input: { employeeId: string; conditionCode: string; note?: string }) => data<{ assetId: string; issued: true }>(apiClient.post(`/api/assets/${id}/issue-onboarding`, input));

@@ -42,7 +42,6 @@ export type OfficeChangeKind = (typeof OFFICE_CHANGE_KINDS)[number];
 export const PEEPS_SETTING_KEYS = [
   "office.name",
   "audience.assets",
-  "assets.newJoinerWindowDays",
   "audience.unmute",
   "unmute.sessionMinutes",
   "unmute.availability",
@@ -70,8 +69,7 @@ export interface PeepsSettingInfo {
 
 export const PEEPS_SETTINGS: Record<PeepsSettingKey, PeepsSettingInfo> = {
   "office.name": { module: "office", label: "Workspace name", what: "What employees see instead of a person's name for the workspace. Until set, it is called Wellsure Office.", enteredBy: "DIRECTOR" },
-  "audience.assets": { module: "assets", label: "Asset register audience", what: "Whether Wellsure Office members manage the register, and whether HR may issue assets to new joiners during onboarding.", enteredBy: "DIRECTOR" },
-  "assets.newJoinerWindowDays": { module: "assets", label: "Who counts as a new joiner", what: "For HR issuing at onboarding: someone whose joining date is no more than this many days ago (or in the future).", enteredBy: "DIRECTOR" },
+  "audience.assets": { module: "assets", label: "Asset register audience", what: "HR and the directors manage the register. This decides whether Wellsure Office members (with \"Manage the asset register\") manage it too. Not set: HR and the directors only.", enteredBy: "DIRECTOR" },
   "audience.unmute": { module: "unmute", label: "Unmute audience", what: "Whether employees (HR included, as employees) may book Unmute conversations.", enteredBy: "DIRECTOR" },
   "unmute.sessionMinutes": { module: "unmute", label: "Session length", what: "How long one Unmute conversation lasts, in minutes.", enteredBy: "OFFICE" },
   "unmute.availability": { module: "unmute", label: "Availability window", what: "The days and hours within which hosts may offer slots.", enteredBy: "OFFICE" },
@@ -89,8 +87,7 @@ export const PEEPS_SETTINGS: Record<PeepsSettingKey, PeepsSettingInfo> = {
   "nudges.revocation": { module: "nudges", label: "Nudge revocation", what: "Whether a sender (or a director) may withdraw a nudge. Until set, nobody can.", enteredBy: "DIRECTOR" },
 };
 
-export const PEEPS_REQUIRED: Record<"assets.hrOnboarding" | "unmute" | "badges" | "nudges", readonly PeepsSettingKey[]> = {
-  "assets.hrOnboarding": ["audience.assets", "assets.newJoinerWindowDays"],
+export const PEEPS_REQUIRED: Record<"unmute" | "badges" | "nudges", readonly PeepsSettingKey[]> = {
   unmute: ["audience.unmute", "unmute.sessionMinutes", "unmute.availability", "unmute.bookingWindowDays", "unmute.minNoticeHours", "unmute.cancellationNoticeHours"],
   badges: ["audience.badges", "badges.catalogue"],
   nudges: ["audience.nudges"],

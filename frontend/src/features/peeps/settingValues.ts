@@ -4,7 +4,6 @@ import type { PeepsSettingKey } from "@shared/constants/peeps";
 
 export const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 export const NUMBERS: Partial<Record<PeepsSettingKey, { min: number; max: number; unit: string }>> = {
-  "assets.newJoinerWindowDays": { min: 1, max: 366, unit: "days" },
   "unmute.sessionMinutes": { min: 5, max: 240, unit: "minutes" },
   "unmute.bookingWindowDays": { min: 1, max: 365, unit: "days" },
   "unmute.minNoticeHours": { min: 0, max: 720, unit: "hours" },
@@ -14,7 +13,6 @@ export const NUMBERS: Partial<Record<PeepsSettingKey, { min: number; max: number
 export const BOOLEANS: Partial<Record<PeepsSettingKey, Array<{ field: string; label: string }>>> = {
   "audience.assets": [
     { field: "officeManages", label: "Wellsure Office members manage the register" },
-    { field: "hrOnboardingIssue", label: "HR may issue assets to new joiners during onboarding" },
   ],
   "audience.unmute": [{ field: "employeesMayBook", label: "Employees (HR included) may book Unmute conversations" }],
   "badges.revocation": [{ field: "allowed", label: "A giver (or a director) may revoke a badge" }],

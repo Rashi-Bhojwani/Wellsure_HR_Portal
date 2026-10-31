@@ -6,6 +6,7 @@ import { inForceOn } from "../../lib/effectiveDating";
 import { logger } from "../../lib/logger";
 import { prisma } from "../../lib/prisma";
 import { HttpError } from "../../middleware/errorHandler";
+import { getSetting } from "./settings";
 import type { ActorMeta, PeepsActor } from "./types";
 
 // Wellsure Office membership (owner decision D-30, option 1). Who is in the workspace is a series of append-only changes: a director proposes, a
@@ -64,6 +65,19 @@ export function keysFor(capabilities: readonly string[]): Set<string> {
 
 // ── Grants ─────────────────────────────────────────────────────────────────
 
+/** Q-14 (2026-11): the register is HR's and the directors'; a member's "Manage the asset register" writes the asset keys only while the directors' asset
+ * audience setting lets the Wellsure Office manage it (so the workspace menu shows the register to members only then). Not set = not open. */
+export const ASSET_KEYS: ReadonlySet<string> = new Set(OFFICE_CAPABILITIES.find((c) => c.id === "MANAGE_ASSETS")!.keys);
+export async function assetsOpenToOffice(client: Prisma.TransactionClient | typeof prisma = prisma): Promise<boolean> {
+  return (await getSetting<{ officeManages: boolean }>("audience.assets", client))?.officeManages === true;
+}
+/** The keys a member's labelled grants should hold: their capabilities' keys, less the asset keys while the register is not open to the Wellsure Office. */
+export function grantKeysFor(capabilities: readonly string[], assetsOpen: boolean): Set<string> {
+  const keys = keysFor(capabilities);
+  if (!assetsOpen) for (const k of ASSET_KEYS) keys.delete(k);
+  return keys;
+}
+
 /** Makes the labelled grants of these people match their membership. Never touches a grant somebody made by hand (different reason). */
 async function syncGrants(tx: Prisma.TransactionClient, employeeIds: string[], byUserId: string): Promise<{ added: number; removed: number; users: Array<{ id: string; employeeId: string }> }> {
   const members = await currentMembers(tx);
@@ -71,11 +85,12 @@ async function syncGrants(tx: Prisma.TransactionClient, employeeIds: string[], b
   const allKeys = [...keysFor(OFFICE_CAPABILITY_IDS)];
   const perms = await tx.permission.findMany({ where: { key: { in: allKeys } }, select: { id: true, key: true } });
   const permId = new Map(perms.map((p) => [p.key, p.id]));
+  const assetsOpen = await assetsOpenToOffice(tx);
   let added = 0;
   let removed = 0;
   for (const u of users) {
     const m = members.get(u.employeeId);
-    const expected = m ? keysFor(m.capabilities) : new Set<string>();
+    const expected = m ? grantKeysFor(m.capabilities, assetsOpen) : new Set<string>();
     const existing = await tx.userPermissionOverride.findMany({ where: { userId: u.id, permissionId: { in: perms.map((p) => p.id) } }, include: { permission: true } });
     for (const key of expected) {
       if (existing.some((o) => o.permission.key === key)) continue; // a hand-made grant or revoke stays as it is (the drift check reports a revoke)
@@ -112,6 +127,22 @@ async function applyChange(changeId: string, byUserId: string): Promise<boolean>
   if (!result) return false;
   await notifyAccessChanged(result);
   return true;
+}
+
+/** Re-applies every member's labelled grants (after the directors change the asset audience setting). Audited; tells the people whose access changed. */
+export async function resyncOfficeGrants(byUserId: string): Promise<{ added: number; removed: number }> {
+  const result = await prisma.$transaction(
+    async (tx) => {
+      const labelled = await tx.userPermissionOverride.findMany({ where: { reason: OFFICE_GRANT_REASON }, select: { user: { select: { employeeId: true } } } });
+      const ids = [...new Set([...(await currentMembers(tx)).keys(), ...labelled.map((l) => l.user.employeeId)])];
+      const sync = await syncGrants(tx, ids, byUserId);
+      await writeAuditLogs([{ actorUserId: byUserId, action: "office.grants.resynced", entityType: "OfficeMembership", entityId: "all", after: { grantsAdded: sync.added, grantsRemoved: sync.removed } }], tx);
+      return sync;
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
+  if (result.added + result.removed > 0) await notifyAccessChanged(result.users);
+  return { added: result.added, removed: result.removed };
 }
 
 /** The scheduled job: every confirmed change whose time has come and that has not been applied, oldest first. Safe to run twice (the application row is unique). */
@@ -238,17 +269,18 @@ export async function officeGrantDrift(): Promise<GrantDrift[]> {
   const members = await currentMembers();
   const allKeys = [...keysFor(OFFICE_CAPABILITY_IDS)];
   const rows = await prisma.userPermissionOverride.findMany({ where: { permission: { key: { in: allKeys } } }, include: { permission: true, user: { select: { employeeId: true } } } });
+  const assetsOpen = await assetsOpenToOffice();
   const drift: GrantDrift[] = [];
   for (const r of rows) {
     const m = members.get(r.user.employeeId);
-    const expected = m ? keysFor(m.capabilities) : new Set<string>();
+    const expected = m ? grantKeysFor(m.capabilities, assetsOpen) : new Set<string>();
     // Any grant of an office key to someone the membership does not give it to (labelled or made by hand): the routes ignore it, but it should not exist.
     if (r.effect === "GRANT" && !expected.has(r.permission.key)) drift.push({ employeeId: r.user.employeeId, key: r.permission.key, problem: "UNEXPECTED" });
     if (r.effect === "REVOKE" && expected.has(r.permission.key)) drift.push({ employeeId: r.user.employeeId, key: r.permission.key, problem: "REVOKED_BY_HAND" });
   }
   const users = await prisma.user.findMany({ where: { employeeId: { in: [...members.keys()] } }, select: { id: true, employeeId: true } });
   for (const u of users) {
-    for (const key of keysFor(members.get(u.employeeId)!.capabilities)) {
+    for (const key of grantKeysFor(members.get(u.employeeId)!.capabilities, assetsOpen)) {
       if (!rows.some((r) => r.userId === u.id && r.permission.key === key)) drift.push({ employeeId: u.employeeId, key, problem: "MISSING" });
     }
   }

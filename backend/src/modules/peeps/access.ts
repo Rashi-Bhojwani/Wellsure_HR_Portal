@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import type { PermissionKey } from "@shared/constants/permissions";
 import { writeAuditLogs } from "../../lib/audit";
 import { SUPER_ADMIN_ROLE_CODE } from "../../lib/permissions";
+import { prisma } from "../../lib/prisma";
 import { HttpError } from "../../middleware/errorHandler";
 import { tagGate } from "../../middleware/rbac";
 import { keysFor, memberStateFor } from "./office";
@@ -65,6 +66,31 @@ export function requireOffice(key: PermissionKey, audience?: AudienceCheck) {
     })().catch(next);
   };
   return tagGate(fn, [key]);
+}
+
+/**
+ * Q-14 (2026-11): a register managed by HR and the directors, which the directors may also open to Wellsure Office members (an audience setting).
+ * Lets in: a director; a person whose ROLE holds the key (HR), as the access resolver sees it; or an active member whose capabilities include the key while
+ * the audience lets the Wellsure Office work it (they work it company-wide, as the directors' delegates). A key given by hand opens nothing.
+ */
+export function requireRoleOrOffice(key: PermissionKey, audience: AudienceCheck) {
+  const fn = (req: Request, _res: Response, next: NextFunction): void => {
+    if (!req.user) return next(new HttpError(401, "Authentication required", "UNAUTHENTICATED"));
+    void (async () => {
+      if (isDirectorUser(req)) return next();
+      if (req.user!.permissions.has(key) && (await roleHolds(req.user!.roleCodes, key))) return next();
+      const actor = await actorFor(req);
+      if (actor.isMember && keysFor(actor.capabilities).has(key) && (await audience(actor))) return next();
+      delete req.peeps; // not let in as a member: the caller keeps their own scope
+      next(new HttpError(403, `Missing permission: ${key}`, "FORBIDDEN"));
+    })().catch(next);
+  };
+  return tagGate(fn, [key]);
+}
+
+async function roleHolds(roleCodes: readonly string[], key: string): Promise<boolean> {
+  if (roleCodes.length === 0) return false;
+  return (await prisma.rolePermission.count({ where: { role: { code: { in: [...roleCodes] } }, permission: { key } } })) > 0;
 }
 
 /**

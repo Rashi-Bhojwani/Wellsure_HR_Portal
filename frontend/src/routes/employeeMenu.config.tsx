@@ -87,6 +87,10 @@ export interface EmployeeMenuLeaf {
   // Shown only to holders of this permission (e.g. Mark Attendance, P2-D:
   // the manager who marks a branch by hand). The API enforces it regardless.
   permission?: string;
+  // PEEPS-BEGIN office-audience
+  // A Wellsure Office leaf for members only, never the directors (who hold every key and use the admin portal's screen instead). Q-14: the asset register.
+  officeMembersOnly?: boolean;
+  // PEEPS-END
 }
 
 export interface EmployeeMenuGroup {
@@ -339,8 +343,10 @@ export const employeeMenu: EmployeeMenuEntry[] = [
       { key: "office-settings", label: "Peeps settings", path: "office/settings", element: PeepsSettingsPage, permission: "office.workspace" },
       { key: "office-unmute", label: "Unmute hosting", path: "office/unmute", element: HostCalendarPage, permission: "office.workspace" },
       { key: "office-unmute-admin", label: "Unmute bookings", path: "office/unmute-admin", element: UnmuteAdminPage, permission: "unmute.manage" },
-      { key: "office-assets", label: "Asset Register", path: "office/assets", element: OfficeAssetRegisterPage, permission: "assets.view" },
-      { key: "office-asset-settings", label: "Asset Settings", path: "office/asset-settings", element: OfficeAssetSettingsPage, permission: "assets.settings.manage" },
+      // Q-14 (2026-11): the register is HR's and the directors' (admin portal). Members see these only while the directors' asset audience lets the
+      // Wellsure Office manage it: their asset keys are written only then (backend peeps/office.ts grantKeysFor).
+      { key: "office-assets", label: "Asset Register", path: "office/assets", element: OfficeAssetRegisterPage, permission: "assets.view", officeMembersOnly: true },
+      { key: "office-asset-settings", label: "Asset Settings", path: "office/asset-settings", element: OfficeAssetSettingsPage, permission: "assets.settings.manage", officeMembersOnly: true },
     ],
   },
   // PEEPS-END
@@ -388,6 +394,9 @@ export const mobileTabs: MobileTab[] = [
 // data exists — Phase 6 and Phase 3.)
 /** Whether this person sees the leaf (a permission-gated one only for its holders). */
 export function canSeeLeaf(leaf: EmployeeMenuLeaf, hasPermission: (key: string) => boolean): boolean {
+  // PEEPS-BEGIN office-audience
+  if (leaf.officeMembersOnly && hasPermission("office.members.manage")) return false; // a director (that key is never a member's)
+  // PEEPS-END
   return !leaf.permission || hasPermission(leaf.permission);
 }
 

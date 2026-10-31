@@ -41,11 +41,9 @@ const OFFICE_ROUTES: Array<[string, string, object?]> = [
   ["GET", "/api/unmute/admin/free-slots"],
   ["POST", "/api/unmute/admin/bookings/x/reassign", {}],
   ["POST", "/api/unmute/admin/bookings/x/cancel", {}],
-  ["GET", "/api/assets"],
-  ["GET", "/api/assets/lists"],
-  ["GET", "/api/assets/settings"],
-  ["POST", "/api/assets", {}],
-];
+  ["GET", "/api/badges/admin/all"],
+  ["GET", "/api/nudges/admin/all"],
+]; // The asset register is HR's and the directors' again (Q-14, 2026-11): assets.test.ts covers its audience.
 
 describe("Wellsure Office workspace", () => {
   let org: TestOrgMasters;
@@ -90,7 +88,8 @@ describe("Wellsure Office workspace", () => {
       expect((await call("director", "POST", `/api/peeps/office/changes/${proposed.body.id}/confirm`)).status).toBe(403);
       const confirmed = await call("director2", "POST", `/api/peeps/office/changes/${proposed.body.id}/confirm`);
       expect(confirmed.body).toEqual({ applied: true });
-      expect(await grants("member")).toEqual(["assets.manage", "assets.settings.manage", "assets.view", "office.workspace", "peeps.settings.manage"]);
+      // "Manage the asset register" writes no asset keys while the directors' asset audience is Not set (Q-14: HR and the directors only).
+      expect(await grants("member")).toEqual(["office.workspace", "peeps.settings.manage"]);
       expect((await resolveAccess(p.member.userId)).permissions.has("office.workspace")).toBe(true);
       expect((await call("member", "GET", "/api/peeps/me")).body).toMatchObject({ isMember: true, isDirector: false, officeName: "Wellsure Office" });
       expect((await call("employee", "GET", "/api/peeps/me")).body).toMatchObject({ isMember: false });

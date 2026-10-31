@@ -62,12 +62,17 @@ const HR_EXECUTIVE_PERMS: string[] = [
   // Phase 3 commit 2 — the raw punch log.
   "attendance.swipes.view",
   // PEEPS-BEGIN assets
-  // Peeps (D-29, Q-14): the register is the directors' and the Wellsure Office's; HR only issues to new joiners at onboarding, while the directors allow it.
-  "assets.onboarding.issue",
+  // Peeps (Q-14, decided 2026-11): the asset register is managed by HR and the directors.
+  "assets.view",
+  "assets.manage",
   // PEEPS-END
 ];
 const HR_ADMIN_PERMS: string[] = [
   ...HR_EXECUTIVE_PERMS,
+  // PEEPS-BEGIN assets-settings
+  // HR Admin prepares the asset lists; a director who did not enter them confirms them.
+  "assets.settings.manage",
+  // PEEPS-END
   "helpdesk.sensitive.view",
   "letters.template.manage",
   "employee.statutory.view",

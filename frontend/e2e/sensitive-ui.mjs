@@ -164,8 +164,9 @@ await visit("DEMO009", "another employee", "/app", employeePaths);
   };
   const director = await sessionFor("DEMO001");
   const booker = await sessionFor("DEMO006");
-  // Since D-29 the register is the directors' and the Wellsure Office's, not HR's.
+  // Q-14 (2026-11): the register is HR's and the directors'; both must list the demo's issued asset.
   if (!(await textOf(director, `${BASE}/admin/assets/register`)).includes(ASSET_MARKER)) problems.push("the director's asset register does not list the demo's issued asset (is the demo company seeded with assets?)");
+  if (!(await textOf(await sessionFor("DEMO004"), `${BASE}/admin/assets/register`)).includes(ASSET_MARKER)) problems.push("the HR Admin's asset register does not list the demo's issued asset");
   // DEMO006 sees the Unmute host only as the Wellsure Office, never by name or code; the director's Unmute page shows the booking.
   const own = await textOf(booker, `${BASE}/app/unmute`);
   if (/DEMO008|Demo Employee 008/.test(own)) problems.push("DEMO006 on /app/unmute: the host is shown by name instead of as the Wellsure Office");

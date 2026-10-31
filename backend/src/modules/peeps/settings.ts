@@ -110,5 +110,7 @@ export async function confirmSetting(key: PeepsSettingKey, input: { version: num
     const c = await tx.peepsSettingConfirmation.create({ data: { versionId: row.id, confirmedByUserId: actor.userId } });
     await writeAuditLogs([{ ...meta, action: "peeps.setting.confirmed", entityType: "PeepsSettingVersion", entityId: row.id, after: { key, version: row.version, confirmationId: c.id } }], tx);
   });
+  // The asset audience decides whether members' "Manage the asset register" grants exist (office.ts, grantKeysFor): re-apply them at once.
+  if (key === "audience.assets") await (await import("./office")).resyncOfficeGrants(actor.userId);
   return (await listSettings(actor)).find((s) => s.key === key)!;
 }

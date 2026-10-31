@@ -618,8 +618,6 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "POST /api/assets/:id/transfer": admin,
   "POST /api/assets/:id/lost": admin,
   "POST /api/assets/:id/damaged": admin,
-  "GET /api/assets/onboarding/available": admin,
-  "POST /api/assets/:id/issue-onboarding": admin,
   // PEEPS-END
   // PEEPS-BEGIN office-unmute
   // The Wellsure Office workspace and Unmute. Office routes are gated by membership (peeps/access.ts requireOffice/requireDirector, tagged with their key).

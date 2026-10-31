@@ -23,8 +23,6 @@ export async function seedDemoOffice(who: Who): Promise<void> {
     await confirmSetting(key, { version: v.pending!.version }, director("DEMO013"), meta("DEMO013"));
   };
 
-  await set("audience.assets", { officeManages: true, hrOnboardingIssue: true });
-  await set("assets.newJoinerWindowDays", 30);
   await set("audience.unmute", { employeesMayBook: true });
   await set("unmute.sessionMinutes", 30);
   await set("unmute.availability", { days: [0, 1, 2, 3, 4, 5, 6], from: "09:00", to: "18:00" });

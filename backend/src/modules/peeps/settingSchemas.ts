@@ -8,8 +8,7 @@ const givers = z.array(z.enum(GIVER_KINDS)).max(GIVER_KINDS.length).refine((a) =
 
 export const PEEPS_SETTING_SCHEMAS: Record<PeepsSettingKey, z.ZodType> = {
   "office.name": z.string().trim().min(1).max(60),
-  "audience.assets": z.object({ officeManages: z.boolean(), hrOnboardingIssue: z.boolean() }).strict(),
-  "assets.newJoinerWindowDays": z.number().int().min(1).max(366),
+  "audience.assets": z.object({ officeManages: z.boolean(), hrOnboardingIssue: z.boolean().optional() }).strict(), // hrOnboardingIssue: only in versions entered before the onboarding route was retired; ignored
   "audience.unmute": z.object({ employeesMayBook: z.boolean() }).strict(),
   "unmute.sessionMinutes": z.number().int().min(5).max(240),
   "unmute.availability": z

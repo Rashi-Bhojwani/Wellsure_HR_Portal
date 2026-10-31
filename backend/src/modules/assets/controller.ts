@@ -65,13 +65,6 @@ export async function markDamaged(req: Request, res: Response): Promise<void> {
   res.status(200).json(await service.markDamaged(id(req), req.body, viewer(req), meta(req)));
 }
 
-// HR at onboarding
-export async function onboardingAvailable(_req: Request, res: Response): Promise<void> {
-  res.status(200).json(await service.onboardingAvailable());
-}
-export async function issueAtOnboarding(req: Request, res: Response): Promise<void> {
-  res.status(200).json(await service.issueAtOnboarding(id(req), req.body, viewer(req), meta(req)));
-}
 
 // Self
 export async function listMine(req: Request, res: Response): Promise<void> {
