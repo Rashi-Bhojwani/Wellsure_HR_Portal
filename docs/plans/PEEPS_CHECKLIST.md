@@ -21,7 +21,7 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 - [ ] Every module's Not set settings (PEEPS_PLAN §F) — modules refuse to switch on until set and confirmed
 
 ## Foundation (checkpoint after 5)
-- [ ] 3 settings store with Placeholder/Confirmed, module readiness, module switches
+- [x] 3 settings store with Placeholder/Confirmed (Peeps settings) and module readiness — `45626da`
 - [ ] 4 confidential-access helper + confidentiality test harness
 - [ ] 5 Peeps settings screen
 - [ ] CHECKPOINT A: merge latest base, full backend suite alone, report
@@ -38,11 +38,15 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 - [ ] Follow-ups from the guide: unacknowledged-asset HR task, IMEI/SIM, asset import, profile Assets tab, recovery (Session A + directors)
 - [x] Next build prompt received (scope change D-28/D-29, Pair 1)
 - [x] Step 0 part 1: Assets full suite (1,737 passed) and CI run 206 green recorded — `923a0de`
-- [ ] **STOPPED:** the HR switch framework cannot take Founder's Office switches additively (PEEPS_STAGE_REPORTS, "Scope change D-28 / D-29"); owner to choose an option
-- [ ] Step 0 part 2: Assets adjusted to D-28/D-29 (Founder's Office + directors manage; HR onboarding-only issue; director-sees-all test; audience setting)
-- [ ] Pair 1 / Module 1: Founder's Office role + switches + Unmute
-- [ ] Pair 1 / Module 2: badges and private nudges
-- [ ] Ticket desk changes: withdrawn by D-29 (no change)
+- [x] Owner chose option 1 and the "Wellsure Office" workspace (D-30)
+- [x] Step 0.1: base merged — `9686c8e`, `75fb655`
+- [x] Step 0.2: Assets under D-29/Q-14 (members + directors manage; HR keys removed; HR onboarding-only issue; director-sees-all test; audience setting) — `45626da`, `2c94b6f`
+- [x] Module 1: Wellsure Office membership (propose/confirm, grants, scheduled job, drift) + Peeps settings + Unmute — `45626da`, `2c94b6f`
+- [x] Module 2: badges and private nudges — `6de8b08`
+- [x] Final merge of the base — `1dc28af`; full suite alone and CI: see PEEPS_STAGE_REPORTS
+- [x] Ticket desk changes: withdrawn by D-29 (no change)
+- [ ] Follow-ups: badge counts in the directory list; withdrawing a pending proposal/setting; manager-member menu entries (see deviations)
+- [ ] **STOP: wait for the next build prompt**
 
 ## Ticket desk
 - [ ] 11 category visibility (general categories), move between categories
@@ -69,9 +73,9 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 - [ ] CHECKPOINT D
 
 ## Badges, nudges, Unmute, Insights
-- [ ] 24 badges
-- [ ] 25 private nudges (confidential)
-- [ ] 26 Unmute: scheduling + completion only, participants only, no notes/topic (double-booking race test)
+- [x] 24 badges — `6de8b08`
+- [x] 25 private nudges (sender, recipient, directors audited) — `6de8b08`
+- [x] 26 Unmute: scheduling + completion only, booker/host/directors (audited), no notes/topic, race test — `45626da`
 - [ ] 27 Insights: turnover, tenure, exit reasons, hiring funnel (definitions Not set, small-group minimum)
 
 ## Close-out

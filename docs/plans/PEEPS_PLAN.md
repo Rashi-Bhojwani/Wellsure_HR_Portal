@@ -34,6 +34,17 @@ Also from the base since the first plan (merged at `0621f82`): HR now has narrow
 `letters.issue.nopay` (letters the engine proves carry no pay figure), `invitations.send`,
 `import.details.manage` (`2bdaaf2`). Used in §B.5 (relieving/experience letters) and §B.6 (invitations).
 
+## D-30 and what is built (2026-10-31) — wins over everything below
+
+- **D-30 Wellsure Office workspace**: replaces the "Founder's Office role". No role; directors add named people (each with their own login) as members;
+  membership is Peeps-owned (option 1), effective-dated, proposed by one director and confirmed by the other, applied as labelled per-person grants
+  (scheduled job for dated changes), with a drift check. Members never get pay, bank or statutory access. Employees see "Wellsure Office" (a setting).
+- **Built**: Peeps settings store (§B.0.1, generic for every module), the workspace, Unmute (§B.9 as answered), badges and private nudges (§B.8),
+  Assets under Q-14 (§B.2). §B.0.3's "directors refused" design is withdrawn by D-28: directors read everything, and opening an Unmute booking or a
+  private nudge that is not theirs is audited. §B.3 (ticket desk) is withdrawn by D-29. §B.4 (leave types) is not this round (Q-15).
+- Where it lives: backend `modules/peeps`, `modules/unmute`, `modules/recognition`, `modules/assets`; frontend `features/peeps`, `features/unmute`,
+  `features/recognition`, `features/assets`. Details, deviations and every Not set setting: `PEEPS_STAGE_REPORTS.md`.
+
 ## Owner scope change (2026-10-30, D-28 / D-29) — wins over everything below, including the answers table
 
 - **D-28.** The two directors can see everything any HR user, manager or employee can see, including Unmute bookings, private nudges, exit

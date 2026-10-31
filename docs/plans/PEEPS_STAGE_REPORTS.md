@@ -226,3 +226,147 @@ this round · Q-16 badge/nudge givers: managers, Founder's Office, directors; no
 ### What I need to continue
 A choice among options 1–4 (or another). With option 1, I can build Step 0 and Pair 1 without touching any file outside PEEPS blocks.
 With option 2, Pair 1 waits for Session A's framework change.
+
+---
+
+## Stage: Wellsure Office workspace + Unmute, then badges + private nudges (D-28, D-29, D-30) — 2026-10-31
+
+Built as the prompt asked, using option 1 (a Peeps-owned membership table applied as per-person grants). No change to Session A's HR switch framework,
+access resolver, HR switch table or HR screens. No other module started.
+
+### Commits
+| Commit | What |
+|---|---|
+| `9686c8e`, `75fb655` | Step 0.1: merged the latest `feat/hr-payroll-separation` (schema conflict at the end of the file: both sides' models kept, Session A's first, my PEEPS blocks last) and the owner's `docs/samples` commit on `peeps/foundation` |
+| `45626da` | Backend: workspace membership, Peeps settings, access gates, scheduled job; Unmute; Assets under D-29/Q-14 (Step 0.2); migrations `peeps_20261031120000_office_unmute`, `peeps_20261031121000_assets_office` |
+| `2c94b6f` | Module 1 screens (Unmute, Members, Peeps settings, Unmute hosting, Unmute bookings), HR's Issue to a New Joiner screen, DEMO workspace data, popovers check |
+| `6de8b08` | Module 2: badges and private nudges (backend, migration `peeps_20261031130000_badges_nudges`, screens, DEMO data, sensitive-ui check); every workspace screen gated; Unmute times in IST |
+| `1dc28af` | Merge of the latest `feat/hr-payroll-separation` (`1647597`), same schema resolution |
+| (this commit) | Report, checklist, plan |
+
+Step 0.2 (Assets) shipped in the same backend commit as Module 1, because the register's new gate *is* the workspace membership; one commit group per
+module otherwise. Shared files carrying both modules' blocks (menus, sensitive-ui, demo seed, app.ts, cleanup, route inventory, schema) went in with Module 2.
+
+### What was built
+**Peeps settings (D-29).** Append-only versions in `peeps_setting_versions`; a value is used only after a director who did not enter it confirms it
+(service + trigger `peeps_setting_confirmations_checker`). Audiences, the workspace name and revocation rules are entered by directors; working values
+(Unmute times, badge catalogue and limits) may also be prepared by a member with "Prepare Peeps settings". Typed and validated per key (inverted windows,
+negative limits, unknown givers refused). Screen: Wellsure Office → Peeps settings.
+
+**Wellsure Office workspace (D-30).** Membership is a series of append-only changes (APPOINT, UPDATE, REMOVE, REPLACE) in `office_membership_changes`:
+proposed by a director, confirmed by a different director (service + triggers), applied at once if due or by the scheduled job `peeps-office-apply`
+(every minute, registered from `modes/scheduler.ts`, worked from `modes/worker.ts`). Applying writes or removes ordinary per-person grants labelled
+"Wellsure Office membership (managed on the Office members screen; do not change here)" — that label is what the Roles & Permissions screen shows on each
+grant — and REPLACE moves a member's capabilities and grants to another person in one transaction. `officeGrantDrift()` reports grants that no longer match
+(removed by hand, revoked by hand, or an office key granted to a non-member); the Members screen shows a banner when there is drift. Capabilities a director
+toggles per member: Manage the asset register, Prepare Peeps settings, Give badges, Send private nudges. Every office route checks the membership itself on
+each request (`requireOffice` / `requireDirector`, tagged with their key for the route inventory), so a grant made by hand opens nothing. Every workspace
+screen shows only "You don't have access" to anyone else. Employees see the host or giver as "Wellsure Office" (the setting `office.name` may rename it);
+the named person is in the audit log only.
+
+**Unmute.** Hosts are members a director authorises (`unmute_host_authorisations`, append-only); nobody is a host by default. Hosts offer times inside
+the availability window; employees (HR included) book a free time; stored: booker, host, slot, the booker's timezone, booked/cancelled/rescheduled/
+completed timestamps and the status — no topic, notes, summary, transcript or recording (a schema test pins the columns). No double booking: one open slot
+per host and start time and one live booking per slot (partial unique indexes) plus a slot row lock. Cancel and reschedule are explicit (reschedule marks
+the old booking RESCHEDULED and books the new time in one transaction). Removing a host (or the host leaving the workspace) stops new bookings at once,
+withdraws their free times and lists their booked conversations under "Bookings to handle" for the directors to reassign to another host's free time or
+cancel. Visible to the booker, the host and the directors; each booking a director opens that is not theirs writes an audit entry. Notifications say only
+"Something is waiting for you"; no emails are sent; nothing in HR lists, manager tasks, counts, search, exports or socket rooms. Refuses to activate until
+session length, availability window, booking window, booking notice, cancellation notice and the audience are confirmed.
+
+**Assets (Step 0.2, Q-14).** Managed by the directors and members with "Manage the asset register" while `audience.assets.officeManages` is on; a forward
+migration removed `assets.view`, `assets.manage` and `assets.settings.manage` from the HR roles; HR keeps only `assets.onboarding.issue`: list free issuable
+assets (no holders, no history) and issue to a new joiner, refused until `audience.assets.hrOnboardingIssue` is on and `assets.newJoinerWindowDays` is
+set. Settings lists are prepared by a member or a director and confirmed by a different director. Employees see only their own assets. A test proves a
+director sees every asset, its history and every employee's assignments.
+
+**Badges.** `badge_awards` (append-only) with revocations as rows; catalogue, givers (Q-16), monthly limit, duration, revocation and display are settings.
+Givers: the directors; members with "Give badges" while the setting lists the Wellsure Office; managers, to their own team, while it lists managers; never
+HR. Idempotent on the giver's key (also under a race). Shown to the recipient; on the directory profile only while `badges.display.profile` is on.
+
+**Private nudges.** `private_nudges` with field-encrypted text (registered in `ENCRYPTED_COLUMNS`), reads and withdrawals as rows. Senders follow the
+same rules as badge givers (their own setting). Readable by the sender, the recipient and the directors (each director open audited). The audit row holds
+ids only; the notification is the generic one; nothing in feed, search, task lists, counts, dashboards, exports or socket rooms (tested, including a
+captured socket emitter).
+
+### Tests
+New or rewritten Peeps test files: `peeps/__tests__/office.test.ts` (9), `unmute/__tests__/unmute.test.ts` (16), `assets/__tests__/assets.test.ts` (26,
+rewritten for the new audiences), `recognition/__tests__/recognition.test.ts` (14), plus `assetsDbRoles.test.ts` (4, unchanged). Covered as asked:
+double-booking race (10 bookers, one wins) and the database alone refusing a second live booking; permission matrix for employee, HR, manager, non-member,
+member, host and director on every office route; host removal path; director-open audit entries; employee cannot see or act on others' bookings or nudges;
+Developer refused on every office route; badges/nudges matrix by sender, recipient, manager, HR (including an HR person with a team), member and director;
+leak tests across feed, directory search, tasks, counts, dashboard, notifications, request hub, employee export, audit rows and socket events; idempotent
+issue; a member holds no sensitive key and every route gated by a pay/bank/statutory key refuses them, as do the bank and statutory reveal routes.
+
+**Full backend suite run alone after the final merge:** running when this report was committed; recorded in the next commit.
+
+Frontend after the merge: run after the backend suite; recorded in the next commit.
+
+Browser checks (local dev stack + demo company, before the final merge): `check:popovers` passes (light/dark × 390/1280, now including the Members appoint
+drawer); `check:sensitive-ui` passes — **845 pages, no secret, DEMO banner on every one**, including: DEMO006 sees the Unmute host only as the Wellsure
+Office; another employee, HR and the developer never see DEMO006's booking on any Unmute or workspace page; the workspace menu is offered to nobody but
+members and directors; the demo private nudge's text never appears on any page of either portal for another employee, HR or the developer; the director
+sees both. Screens were checked by screenshots in light, dark and at 390 px (Unmute, Recognition, Members, Peeps settings, Unmute hosting, Unmute bookings,
+Recognition (all), Asset Register in the workspace, HR's onboarding screen, a non-member opening a workspace address).
+
+### Mutation checks (each guard broken alone, the tests re-run, the files restored)
+| # | Guard removed | Caught by |
+|---|---|---|
+| U1 | one-live-booking index (slot lock kept) | "the database alone refuses a second live booking…" |
+| U2 | that index **and** the slot lock | also "10 employees booking the same slot at once" |
+| M1 | membership refusal in `requireOffice` | refusal matrix, removed-member and drift tests |
+| M2 | director-open audit | "a director sees every booking, and each one opened is audited" |
+| M3 | host check | 11 Unmute tests |
+| M4 / M5 | same-director check in the service / in the trigger | membership tests / the database test |
+| M6 | Unmute settings gate | "with no settings Unmute is inactive…" |
+| M7 | grant removal on leaving | re-appointment, drift and removed-member tests |
+| R1 | manager team check | giver matrix |
+| R2 | HR refusal | giver matrix (first run survived because the HR person had no team; an HR person with a report was added, then caught) |
+| R3 | nudge reader check | "the sender and the recipient read it; …do not" |
+| R4 | director-open audit (nudges) | director-open test |
+| R5 | generic notification replaced by the text | leak test and socket test |
+| R6 / R6b | badge idempotency lookup alone (survives: the unique constraint still holds, by design) / lookup **and** the unique constraint | idempotent-issue test |
+| R7 | badges/nudges settings gate | 11 tests |
+
+### Shared files touched this stage (all inside PEEPS-BEGIN/END blocks)
+`backend/prisma/schema.prisma` (back-relations at the end of `Employee`; models at the end of the file), `shared/constants/permissions.ts` (7 keys,
+catalog entries, group "Wellsure Office"), `shared/constants/sensitiveData.ts` (`REVIEWED_NOT_SENSITIVE`), `backend/src/lib/systemRoles.ts` (my own block:
+HR now holds `assets.onboarding.issue` only), `backend/src/lib/fieldKeyRotation.ts` (`ENCRYPTED_COLUMNS`), `backend/src/app.ts` (imports + mounts),
+`backend/src/modes/worker.ts` and `backend/src/modes/scheduler.ts` (one line each), `backend/src/lib/__tests__/cleanup.ts`,
+`backend/src/modules/managers/__tests__/routeInventory.ts`, `backend/scripts/demo/seedDemoCompany.ts`, `frontend/src/routes/employeeMenu.config.tsx`,
+`frontend/src/routes/adminMenu.config.tsx` (my own block), `frontend/src/pages/employee/people/PersonDrawer.tsx` (badges on the profile),
+`frontend/e2e/sensitive-ui.mjs`, `frontend/e2e/popovers.mjs`. New migrations only; no table of Session A altered.
+
+### Interface notes for Session A
+None needed. For information: the membership writes ordinary `user_permission_overrides` rows labelled as above; a person who holds the MANAGER role has
+those grants stripped by the resolver's manager ceiling, which is why the Peeps routes read the membership directly (see deviations). If Session A ever
+wants the office capabilities on the "What HR Can Do" screen instead, that is their framework's change, not mine.
+
+### Every setting left Not set (real company)
+All 18 Peeps settings: `office.name` (display defaults to "Wellsure Office", the owners' chosen name), `audience.assets`, `assets.newJoinerWindowDays`,
+`audience.unmute`, `unmute.sessionMinutes`, `unmute.availability`, `unmute.bookingWindowDays`, `unmute.minNoticeHours`, `unmute.cancellationNoticeHours`,
+`audience.badges` (Q-16), `badges.catalogue`, `badges.limits` (Not set = no limit), `badges.durationDays` (Not set = no expiry), `badges.revocation`
+(Not set = nobody may revoke), `badges.display` (Not set = only the recipient sees), `audience.nudges` (Q-16), `nudges.limits` (Not set = no limit),
+`nudges.revocation` (Not set = nobody may withdraw). Also: the asset category/status/condition lists, Wellsure Office members (nobody; Q-17), Unmute hosts
+(nobody). The demo company carries DEMO values for all of these.
+
+### Owner questions (built as recommended, each a setting)
+Q-14 assets: members + directors manage (`audience.assets.officeManages`), HR issues to new joiners at onboarding only (`audience.assets.hrOnboardingIssue`
++ `assets.newJoinerWindowDays`). Q-15 new leave types: not this round. Q-16 givers/senders: `audience.badges` / `audience.nudges` (managers, Wellsure
+Office; never HR), Not set. Q-17 the Founder's Office person: a director appoints them as a member; nobody preselected.
+
+### Deviations from the prompt
+1. **Manager ceiling.** A member who also holds the MANAGER role has the office grants stripped by the resolver (not mine to change). The Peeps routes
+   check the membership directly, so such a member can still work (tested in assets), but the workspace menu entries (which follow grants) do not appear
+   for them; they reach the pages by address. A fix would be Session A's (an exemption in the resolver) or the owners' choice not to make managers members.
+2. **The workspace switcher** is the "Wellsure Office" group in the employee portal's menu (members and directors only), not a separate control: the admin
+   portal is role-gated and members are ordinary employees.
+3. **Route gates.** Office routes use the membership gates (tagged with their key) rather than `requirePermission`; self routes (booking, my badges,
+   my nudges) and give/send (decided by the directors' settings, not a key a role could hold) use sign-in plus the service rules. The Developer is refused
+   on every office route and sees only their own (empty) data on self routes.
+4. **Directors on host routes** get 403 (they are host actions on a host's own slots); directors see every slot and booking through the admin routes.
+5. **Badges in the directory list:** the counts endpoint exists (`GET /api/badges/directory`), but only the profile drawer shows badges; the list rows do not
+   yet (that would edit the People page further).
+6. **Unmute sends no emails**, only the generic in-app notification.
+7. A pending (unconfirmed) membership proposal or setting version cannot be withdrawn; a newer one supersedes it. Follow-up if wanted.
+8. Asset demo data is still entered through the services as the demo HR Admin (the demo seed predates D-29); the register itself is now refused to HR.
