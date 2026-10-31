@@ -1,20 +1,29 @@
 import { useState } from "react";
+import { OfficeGate } from "../../peeps/OfficeGate";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, DatePicker, Space } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import type { Dayjs } from "dayjs";
 import { apiErrorMessage } from "../../../lib/apiError";
-import { formatDateTime } from "../../../lib/dates";
 import { fs, fw, space, v } from "../../../theme/tokens";
 import { DataTable, EmptyState, PageHeader, Panel, QueryState, SideDrawer, SkeletonTable, Stack, StatusChip, toast } from "../../../ui";
 import * as unmuteApi from "../api";
+import { slotTime } from "../time";
 import type { HostSlot } from "../api";
 
-const when = (s: { startsAt: string; endsAt: string }) => `${formatDateTime(s.startsAt)} – ${new Date(s.endsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+const when = slotTime;
 
 // Wellsure Office → Unmute hosting (D-30): an authorised host offers times inside the availability window, sees who booked them, cancels if needed and
 // marks each conversation held or not held. Only times and attendance are recorded.
 export function HostCalendarPage() {
+  return (
+    <OfficeGate title="Unmute hosting" need="member">
+      <HostCalendarPageInner />
+    </OfficeGate>
+  );
+}
+
+function HostCalendarPageInner() {
   const queryClient = useQueryClient();
   const status = useQuery({ queryKey: ["unmute", "status"], queryFn: unmuteApi.status });
   const slots = useQuery({ queryKey: ["unmute", "host"], queryFn: unmuteApi.hostSlots, enabled: Boolean(status.data?.isHost) });

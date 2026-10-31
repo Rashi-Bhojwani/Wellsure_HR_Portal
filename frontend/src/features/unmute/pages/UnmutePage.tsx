@@ -2,15 +2,15 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Select, Space } from "antd";
 import { apiErrorMessage } from "../../../lib/apiError";
-import { formatDateTime } from "../../../lib/dates";
 import { fs, fw, space, v } from "../../../theme/tokens";
 import { ConfirmModal, DataTable, EmptyState, PageHeader, Panel, QueryState, SideDrawer, SkeletonTable, Stack, StatusChip, toast } from "../../../ui";
 import * as unmuteApi from "../api";
+import { slotTime } from "../time";
 import type { FreeSlot, MyBooking } from "../api";
 
 const STATUS_LABEL: Record<MyBooking["status"], string> = { BOOKED: "Booked", CANCELLED: "Cancelled", RESCHEDULED: "Moved", COMPLETED: "Held", NOT_HELD: "Not held" };
 const tone = (s: MyBooking["status"]) => (s === "BOOKED" ? "success" : s === "CANCELLED" ? "neutral" : s === "COMPLETED" ? "info" : "neutral");
-const when = (s: { startsAt: string; endsAt: string }) => `${formatDateTime(s.startsAt)} – ${new Date(s.endsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+const when = slotTime;
 
 // Employee portal → Unmute (D-29): book a conversation with the Wellsure Office to raise an issue or share an idea for the company. Nothing about the
 // conversation is stored: only the time and whether it happened. The host appears as the workspace's name.

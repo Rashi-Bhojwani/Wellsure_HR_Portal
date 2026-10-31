@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { OfficeGate } from "../OfficeGate";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Form, Input, Space } from "antd";
 import { EditOutlined } from "@ant-design/icons";
@@ -25,6 +26,14 @@ const MODULES: Array<{ id: string; title: string }> = [
 // Wellsure Office → Settings (D-29). Every Peeps setting starts Not set; a module whose required settings are missing refuses to activate. A director (or,
 // for working values, a member allowed to prepare settings) enters a value; a director who did not enter it confirms it before it is used.
 export function PeepsSettingsPage() {
+  return (
+    <OfficeGate title="Peeps settings" need="member">
+      <PeepsSettingsPageInner />
+    </OfficeGate>
+  );
+}
+
+function PeepsSettingsPageInner() {
   const queryClient = useQueryClient();
   const me = usePeepsMe();
   const { data, isLoading, error, refetch } = useQuery({ queryKey: ["peeps", "settings"], queryFn: peepsApi.listSettings });

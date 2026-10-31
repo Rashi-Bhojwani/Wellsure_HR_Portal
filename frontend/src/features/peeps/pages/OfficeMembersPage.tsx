@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { OfficeGate } from "../OfficeGate";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Checkbox, DatePicker, Form, Input, Select, Space } from "antd";
 import { UserAddOutlined } from "@ant-design/icons";
@@ -31,6 +32,14 @@ function PersonSelect({ value, onChange, id }: { value?: string; onChange?: (v: 
 // what each member may do. A change is proposed by one director and confirmed by the other; it takes effect at its time (now, or a later date applied by
 // the scheduled job) and writes ordinary per-person grants labelled "Wellsure Office membership".
 export function OfficeMembersPage() {
+  return (
+    <OfficeGate title="Wellsure Office members" need="director">
+      <OfficeMembersPageInner />
+    </OfficeGate>
+  );
+}
+
+function OfficeMembersPageInner() {
   const queryClient = useQueryClient();
   const me = usePeepsMe();
   const catalog = me.data?.capabilityCatalog ?? [];

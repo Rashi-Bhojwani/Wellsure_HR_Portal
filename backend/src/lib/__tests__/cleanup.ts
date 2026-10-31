@@ -362,6 +362,9 @@ for (const m of ["Asset", "AssetAssignment", "AssetEvent", "AssetSettingVersion"
 // PEEPS-BEGIN office-unmute
 for (const m of ["PeepsSettingVersion", "PeepsSettingConfirmation", "OfficeMembershipChange", "OfficeMembershipConfirmation", "OfficeMembershipApplication", "UnmuteHostAuthorisation", "UnmuteSlot", "UnmuteBooking"]) PURGE_GUARDED_MODELS.add(m);
 // PEEPS-END
+// PEEPS-BEGIN badges-nudges
+for (const m of ["BadgeAward", "BadgeRevocation", "PrivateNudge", "NudgeRead", "NudgeRevocation"]) PURGE_GUARDED_MODELS.add(m);
+// PEEPS-END
 
 // Deletes the given rows of `model` and every row that depends on them,
 // transitively, in FK-safe order. Optional FKs follow OPTIONAL_FK_POLICY.

@@ -5,6 +5,9 @@ import { getPerson } from "../../../api/people";
 import { EmployeeAvatar } from "../../../components/common/EmployeeAvatar";
 import { fs, fw, radius, space, v } from "../../../theme/tokens";
 import { InitialsAvatar, KeyValueGrid, QueryState, SideDrawer, Skel, useIsPhone, type KeyValueItem } from "../../../ui";
+// PEEPS-BEGIN badges-nudges
+import { PersonBadges } from "../../../features/recognition/PersonBadges";
+// PEEPS-END
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const formatBirthday = (mmdd: string) => `${Number(mmdd.slice(3, 5))} ${MONTHS[Number(mmdd.slice(0, 2)) - 1]}`;
@@ -94,6 +97,9 @@ export function PersonDrawer({ employeeId, onClose, onSelectPerson }: { employee
             </div>
             <div style={{ borderTop: `1px solid ${v.borderDefault}`, paddingTop: space[5] }}>
               <KeyValueGrid columns={1} items={items} />
+              {/* PEEPS-BEGIN badges-nudges */}
+              <PersonBadges employeeId={person.id} />
+              {/* PEEPS-END */}
             </div>
           </div>
         )}

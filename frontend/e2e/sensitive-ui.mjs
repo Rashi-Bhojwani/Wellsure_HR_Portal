@@ -140,13 +140,76 @@ await visit("DEMO001", "a director (own portal)", "/app", employeePaths);
       if (MONEY.test(text)) problems.push(`${label} on ${url}: an amount is shown on an asset screen`);
     }
   }
-  const hr = await sessionFor("DEMO004");
-  const register = await textOf(hr, `${BASE}/admin/assets/register`);
-  if (!register.includes(MARKER)) problems.push("the HR Admin's asset register does not list the demo's issued asset (is the demo company seeded with assets?)");
+  // Since D-29 the register is the directors' and the Wellsure Office's, not HR's: the director's register must show the demo's issued asset.
+  const director = await sessionFor("DEMO001");
+  const register = await textOf(director, `${BASE}/admin/assets/register`);
+  if (!register.includes(MARKER)) problems.push("the director's asset register does not list the demo's issued asset (is the demo company seeded with assets?)");
   for (const user of ["DEMO004", "DEMO001"]) {
     const page = await sessionFor(user);
     for (const p of assetAdmin) if (MONEY.test(await textOf(page, `${BASE}/admin/${p}`))) problems.push(`${user} on /admin/${p}: an amount is shown on an asset screen`);
   }
+}
+// PEEPS-END
+// PEEPS-BEGIN office-unmute
+// Unmute and the Wellsure Office (D-29, D-30). The demo (backend/src/modules/peeps/demoSeed.ts) makes DEMO008 a member and host, and DEMO006 books a
+// time with them. (1) DEMO006 sees the host only as the Wellsure Office, never by name or code. (2) Another employee, HR and the developer never see
+// DEMO006's booking, on their own Unmute page or on any Wellsure Office page. (3) The director's Unmute page does show it (so the check is looking at
+// real data). (4) The workspace menu is not offered to anyone but members and directors.
+{
+  const textOf = async (page, url) => {
+    await page.goto(url);
+    await page.waitForLoadState("networkidle").catch(() => undefined);
+    await page.waitForTimeout(600);
+    pages += 1;
+    return page.evaluate(() => document.body.innerText + "\n" + document.body.innerHTML);
+  };
+  const officePaths = employeePaths.filter((p) => p.startsWith("office/"));
+  const booker = await sessionFor("DEMO006");
+  const own = await textOf(booker, `${BASE}/app/unmute`);
+  if (/DEMO008|Demo Employee 008/.test(own)) problems.push("DEMO006 on /app/unmute: the host is shown by name instead of as the Wellsure Office");
+  if (!/Wellsure Office/.test(own)) problems.push("DEMO006 on /app/unmute: the demo booking with the Wellsure Office is not shown (is the demo seeded?)");
+  for (const [user, label] of [["DEMO009", "another employee"], ["DEMO004", "an HR Admin"], ["DEMO005", "the developer"], ["DEMO006", "the booker"]]) {
+    const page = await sessionFor(user);
+    if (user !== "DEMO006" && /DEMO006/.test(await textOf(page, `${BASE}/app/unmute`))) problems.push(`${label} on /app/unmute: sees someone else's booking`);
+    for (const p of officePaths) {
+      const text = await textOf(page, `${BASE}/app/${p}`);
+      if (/DEMO006/.test(text) && !(user === "DEMO006" && p === "office/unmute")) problems.push(`${label} on /app/${p}: sees an Unmute booking from a Wellsure Office page`);
+    }
+    await textOf(page, `${BASE}/app/home`);
+    const nav = await page.evaluate(() => [...document.querySelectorAll("nav, aside")].map((n) => n.textContent ?? "").join(" "));
+    if (/Wellsure Office/.test(nav)) problems.push(`${label}: the Wellsure Office workspace is offered in the menu`);
+  }
+  const director = await sessionFor("DEMO001");
+  if (!/DEMO006/.test(await textOf(director, `${BASE}/app/office/unmute-admin`))) problems.push("the director's Unmute page does not show the demo booking (is the demo seeded?)");
+}
+// PEEPS-END
+// PEEPS-BEGIN badges-nudges
+// Private nudges (D-28, D-29). The demo (backend/src/modules/recognition/demoSeed.ts) sends DEMO006 a nudge whose text carries DEMO-NUDGE-PRIVATE.
+// Nobody but DEMO006 and the directors may ever see that text, on any page of either portal; DEMO006 sees it on their Recognition page, from the
+// Wellsure Office (never the sender's name); the director's Recognition page shows it (so the check is looking at real data).
+{
+  const MARKER = "DEMO-NUDGE-PRIVATE";
+  const textOf = async (page, url) => {
+    await page.goto(url);
+    await page.waitForLoadState("networkidle").catch(() => undefined);
+    await page.waitForTimeout(600);
+    pages += 1;
+    return page.evaluate(() => document.body.innerText + "\n" + document.body.innerHTML);
+  };
+  for (const [user, label, base, paths] of [
+    ["DEMO009", "another employee", "/app", employeePaths],
+    ["DEMO004", "an HR Admin", "/app", employeePaths],
+    ["DEMO004", "an HR Admin", "/admin", adminPaths],
+    ["DEMO005", "the developer", "/app", employeePaths],
+    ["DEMO005", "the developer", "/admin", adminPaths],
+  ]) {
+    const page = await sessionFor(user);
+    for (const p of paths) if ((await textOf(page, `${BASE}${base}/${p}`)).includes(MARKER)) problems.push(`${label} on ${base}/${p}: sees someone else's private nudge`);
+  }
+  const recipient = await textOf(await sessionFor("DEMO006"), `${BASE}/app/recognition`);
+  if (!recipient.includes(MARKER)) problems.push("DEMO006 on /app/recognition: their demo nudge is not shown (is the demo seeded?)");
+  if (/Demo Employee 008|DEMO008/.test(recipient)) problems.push("DEMO006 on /app/recognition: the sender is shown by name instead of as the Wellsure Office");
+  if (!(await textOf(await sessionFor("DEMO001"), `${BASE}/app/office/recognition`)).includes(MARKER)) problems.push("the director's Recognition page does not show the demo nudge (is the demo seeded?)");
 }
 // PEEPS-END
 for (const page of sessions.values()) await page.context().close();

@@ -17,6 +17,9 @@ export const ENCRYPTED_COLUMNS: ReadonlyArray<EncryptedColumn> = [
   { model: "EmployeeStatutory", delegate: "employeeStatutory", field: "uanEncrypted" },
   { model: "EmployeeStatutory", delegate: "employeeStatutory", field: "esiEncrypted" },
   { model: "EmployeeBankAccount", delegate: "employeeBankAccount", field: "accountNumberEncrypted" },
+  // PEEPS-BEGIN badges-nudges
+  { model: "PrivateNudge", delegate: "privateNudge", field: "bodyEncrypted" }, // the text of a private nudge (D-29)
+  // PEEPS-END
 ];
 
 /** Bytes columns that are deliberately NOT field-encrypted (none today). Naming one here is the decision that it holds no personal data. */

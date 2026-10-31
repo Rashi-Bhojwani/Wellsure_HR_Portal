@@ -528,6 +528,10 @@ model Employee {
   unmuteBookingsAsHost       UnmuteBooking[]           @relation("UnmuteBookingHost")
   unmuteBookingsAsBooker     UnmuteBooking[]           @relation("UnmuteBookingBooker")
   // PEEPS-END
+  // PEEPS-BEGIN badges-nudges
+  badgesReceived             BadgeAward[]
+  nudgesReceived             PrivateNudge[]
+  // PEEPS-END
 
   @@index([status])
   @@index([dateOfJoining])
@@ -3600,5 +3604,86 @@ model UnmuteBooking {
   @@index([bookerEmployeeId])
   @@index([hostEmployeeId])
   @@map("unmute_bookings")
+}
+// PEEPS-END
+
+// PEEPS-BEGIN badges-nudges
+// Badges and private nudges (D-29, Q-16). Both append-only: a badge is revoked by a revocation row, a nudge is withdrawn the same way, a read is a row.
+// A private nudge's text is field-encrypted; only the sender, the recipient and the directors (audited) ever read it.
+
+enum RecognitionGiverKind {
+  DIRECTOR
+  OFFICE
+  MANAGER
+}
+
+model BadgeAward {
+  id                  String               @id @default(cuid())
+  badgeCode           String               @map("badge_code")
+  recipientEmployeeId String               @map("recipient_employee_id")
+  recipient           Employee             @relation(fields: [recipientEmployeeId], references: [id])
+  giverUserId         String               @map("giver_user_id")
+  giverKind           RecognitionGiverKind @map("giver_kind")
+  message             String?
+  idempotencyKey      String               @map("idempotency_key")
+  givenAt             DateTime             @default(now()) @map("given_at") @db.Timestamptz(3)
+  expiresAt           DateTime?            @map("expires_at") @db.Timestamptz(3)
+
+  revocation BadgeRevocation?
+
+  @@unique([giverUserId, idempotencyKey])
+  @@index([recipientEmployeeId])
+  @@index([giverUserId, givenAt])
+  @@map("badge_awards")
+}
+
+model BadgeRevocation {
+  id              String     @id @default(cuid())
+  awardId         String     @unique @map("award_id")
+  award           BadgeAward @relation(fields: [awardId], references: [id])
+  revokedByUserId String     @map("revoked_by_user_id")
+  reason          String
+  at              DateTime   @default(now()) @db.Timestamptz(3)
+
+  @@map("badge_revocations")
+}
+
+model PrivateNudge {
+  id                  String               @id @default(cuid())
+  recipientEmployeeId String               @map("recipient_employee_id")
+  recipient           Employee             @relation(fields: [recipientEmployeeId], references: [id])
+  senderUserId        String               @map("sender_user_id")
+  senderKind          RecognitionGiverKind @map("sender_kind")
+  bodyEncrypted       Bytes                @map("body_encrypted")
+  idempotencyKey      String               @map("idempotency_key")
+  sentAt              DateTime             @default(now()) @map("sent_at") @db.Timestamptz(3)
+
+  read       NudgeRead?
+  revocation NudgeRevocation?
+
+  @@unique([senderUserId, idempotencyKey])
+  @@index([recipientEmployeeId])
+  @@index([senderUserId, sentAt])
+  @@map("private_nudges")
+}
+
+model NudgeRead {
+  id      String       @id @default(cuid())
+  nudgeId String       @unique @map("nudge_id")
+  nudge   PrivateNudge @relation(fields: [nudgeId], references: [id])
+  readAt  DateTime     @default(now()) @map("read_at") @db.Timestamptz(3)
+
+  @@map("nudge_reads")
+}
+
+model NudgeRevocation {
+  id              String       @id @default(cuid())
+  nudgeId         String       @unique @map("nudge_id")
+  nudge           PrivateNudge @relation(fields: [nudgeId], references: [id])
+  revokedByUserId String       @map("revoked_by_user_id")
+  reason          String
+  at              DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@map("nudge_revocations")
 }
 // PEEPS-END

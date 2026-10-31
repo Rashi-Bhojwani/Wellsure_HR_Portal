@@ -33,6 +33,21 @@ import { lazyPage } from "./lazyPage";
 import { LaptopOutlined } from "@ant-design/icons";
 const MyAssetsPage = lazyPage(() => import("../features/assets/pages/MyAssetsPage"), "MyAssetsPage");
 // PEEPS-END
+// PEEPS-BEGIN office-unmute
+import { AudioOutlined, CrownOutlined } from "@ant-design/icons";
+const UnmutePage = lazyPage(() => import("../features/unmute/pages/UnmutePage"), "UnmutePage");
+const HostCalendarPage = lazyPage(() => import("../features/unmute/pages/HostCalendarPage"), "HostCalendarPage");
+const UnmuteAdminPage = lazyPage(() => import("../features/unmute/pages/UnmuteAdminPage"), "UnmuteAdminPage");
+const OfficeMembersPage = lazyPage(() => import("../features/peeps/pages/OfficeMembersPage"), "OfficeMembersPage");
+const PeepsSettingsPage = lazyPage(() => import("../features/peeps/pages/PeepsSettingsPage"), "PeepsSettingsPage");
+const OfficeAssetRegisterPage = lazyPage(() => import("../features/assets/pages/OfficeAssetPages"), "OfficeAssetRegisterPage");
+const OfficeAssetSettingsPage = lazyPage(() => import("../features/assets/pages/OfficeAssetPages"), "OfficeAssetSettingsPage");
+// PEEPS-END
+// PEEPS-BEGIN badges-nudges
+import { StarOutlined } from "@ant-design/icons";
+const RecognitionPage = lazyPage(() => import("../features/recognition/pages/RecognitionPage"), "RecognitionPage");
+const RecognitionAdminPage = lazyPage(() => import("../features/recognition/pages/RecognitionAdminPage"), "RecognitionAdminPage");
+// PEEPS-END
 
 const HomePage = lazyPage(() => import("../pages/employee/home/HomePage"), "HomePage");
 const EngagePage = lazyPage(() => import("../pages/employee/engage/EngagePage"), "EngagePage");
@@ -303,7 +318,51 @@ export const employeeMenu: EmployeeMenuEntry[] = [
     description: "Equipment issued to you, and acknowledging receipt.",
   },
   // PEEPS-END
+  // PEEPS-BEGIN office-unmute
+  {
+    key: "unmute",
+    label: "Unmute",
+    path: "unmute",
+    icon: AudioOutlined,
+    element: UnmutePage,
+    description: "Book a conversation with the Wellsure Office about an issue or an idea.",
+  },
+  // The Wellsure Office workspace (D-30): shown only to the directors and the members they appoint (each leaf needs a key only membership grants; the
+  // pages and the API check the membership again).
+  {
+    key: "wellsure-office",
+    label: "Wellsure Office",
+    icon: CrownOutlined,
+    description: "The workspace for the directors and the Wellsure Office.",
+    children: [
+      { key: "office-members", label: "Members", path: "office/members", element: OfficeMembersPage, permission: "office.members.manage" },
+      { key: "office-settings", label: "Peeps settings", path: "office/settings", element: PeepsSettingsPage, permission: "office.workspace" },
+      { key: "office-unmute", label: "Unmute hosting", path: "office/unmute", element: HostCalendarPage, permission: "office.workspace" },
+      { key: "office-unmute-admin", label: "Unmute bookings", path: "office/unmute-admin", element: UnmuteAdminPage, permission: "unmute.manage" },
+      { key: "office-assets", label: "Asset Register", path: "office/assets", element: OfficeAssetRegisterPage, permission: "assets.view" },
+      { key: "office-asset-settings", label: "Asset Settings", path: "office/asset-settings", element: OfficeAssetSettingsPage, permission: "assets.settings.manage" },
+    ],
+  },
+  // PEEPS-END
+  // PEEPS-BEGIN badges-nudges
+  {
+    key: "recognition",
+    label: "Recognition",
+    path: "recognition",
+    icon: StarOutlined,
+    element: RecognitionPage,
+    description: "Badges and private notes you have received.",
+  },
+  // PEEPS-END
 ];
+
+// PEEPS-BEGIN badges-nudges
+// The directors' Recognition page joins the Wellsure Office group (directors only: "badges.give" alone is not enough, the page needs the directors' list).
+{
+  const office = employeeMenu.find((e) => e.key === "wellsure-office");
+  if (office && "children" in office) office.children.push({ key: "office-recognition", label: "Recognition (all)", path: "office/recognition", element: RecognitionAdminPage, permission: "office.members.manage" });
+}
+// PEEPS-END
 
 // ── Mobile (Phase 5 commit G, docs/UI_REFERENCE.md Part 4) ──────────────
 // The four-tab bottom bar shown at phone widths instead of the sidebar.

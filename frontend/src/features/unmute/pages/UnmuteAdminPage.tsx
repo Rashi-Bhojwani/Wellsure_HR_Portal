@@ -1,19 +1,28 @@
 import { useState } from "react";
+import { OfficeGate } from "../../peeps/OfficeGate";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Input, Select, Space } from "antd";
 import { apiErrorMessage } from "../../../lib/apiError";
-import { formatDateTime } from "../../../lib/dates";
 import { fs, space, v } from "../../../theme/tokens";
 import { ApprovalBanner, DataTable, EmptyState, PageHeader, Panel, SideDrawer, Stack, StatusChip, toast } from "../../../ui";
 import * as unmuteApi from "../api";
+import { slotTime } from "../time";
 import type { AdminBooking, PersonRef } from "../api";
 
-const when = (s: { startsAt: string; endsAt: string }) => `${formatDateTime(s.startsAt)} – ${new Date(s.endsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+const when = slotTime;
 const person = (p: PersonRef) => `${p.name} (${p.employeeCode})`;
 
 // Wellsure Office → Unmute (directors, D-28): authorise and remove hosts, handle the bookings a removed host leaves behind (reassign or cancel), and see
 // every booking. Opening bookings here writes an audit entry for each one that is not the director's own.
 export function UnmuteAdminPage() {
+  return (
+    <OfficeGate title="Unmute" need="director">
+      <UnmuteAdminPageInner />
+    </OfficeGate>
+  );
+}
+
+function UnmuteAdminPageInner() {
   const queryClient = useQueryClient();
   const hosts = useQuery({ queryKey: ["unmute", "admin", "hosts"], queryFn: unmuteApi.hosts });
   const affected = useQuery({ queryKey: ["unmute", "admin", "affected"], queryFn: unmuteApi.affected });
