@@ -18,6 +18,7 @@ import { gatherRunInputs } from "./gather";
 import { RulesMissingError, loadRunRules, type MissingRule } from "./rules";
 import { iso } from "./days";
 import { checkForRun } from "../inputs/service";
+import { skippedForCycle } from "../exclusions/service";
 
 // Payroll runs, the part that is not arithmetic (docs/plans/PHASE_6.md §14D): readiness, making a run, previewing and requesting a calculation, discarding a
 // draft, reading a run. A run is made by the maker (payroll.run) and seen by anyone who can see salary (payroll.salary.view). Nothing here can make a run real.
@@ -68,6 +69,7 @@ export async function readiness(cycleStart: string) {
     attendance: { unfinalisedCount: unfinalised.length, unfinalised: unfinalised.slice(0, LIMIT).map((p) => ({ employeeId: p.employeeId, name: nameOf(p.employeeId), days: p.missingDays.length, firstDays: p.missingDays.slice(0, 5) })) },
     salary: { gapCount: gaps.length, gaps: gaps.slice(0, LIMIT).map((p) => ({ employeeId: p.employeeId, name: nameOf(p.employeeId), days: p.salaryGapDays.length, firstDays: p.salaryGapDays.slice(0, 5) })) },
     bank: { missingCount: noBank.length, missing: noBank.slice(0, LIMIT).map((p) => ({ employeeId: p.employeeId, name: nameOf(p.employeeId) })) },
+    skipped: await skippedForCycle(cycle.start, cycle.end),
     monthlyInputs: {
       heads: monthly.heads.length,
       missingCount: monthly.missing.length,
@@ -245,6 +247,7 @@ export async function getRun(runId: string) {
     rules: statuses.map((s) => ({ key: s.pin.key, kind: s.pin.kind ?? "RULE", version: s.pin.version, label: s.label, status: s.status, stale: s.stale, notSet: s.pin.unset === true, frozen: s.pin.live === false })),
     stale: statuses.some((s) => s.stale),
     notices: runNotices(statuses.some((s) => s.pin.key === "PT_SLABS" && s.pin.unset), statuses.some((s) => s.pin.key === "LWF_TABLE" && s.pin.unset)),
+    skipped: await skippedForCycle(run.cycleStart, run.cycleEnd),
     events: events.map((e) => ({ type: e.type, at: e.createdAt.toISOString() })),
   };
 }

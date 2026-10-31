@@ -3424,3 +3424,25 @@ model PayslipLink {
   @@index([payslipId])
   @@map("payslip_links")
 }
+
+// ── Stage 5b, B6 — a person not on payroll for a period ──
+enum PayrollExclusionKind {
+  EXCLUDE
+  INCLUDE
+}
+
+model PayrollExclusion {
+  id                String               @id @default(cuid())
+  employeeId        String               @map("employee_id")
+  kind              PayrollExclusionKind
+  fromDate          DateTime             @map("from_date") @db.Date
+  toDate            DateTime?            @map("to_date") @db.Date
+  reason            String
+  madeByUserId      String               @map("made_by_user_id")
+  confirmedByUserId String?              @map("confirmed_by_user_id")
+  confirmedAt       DateTime?            @map("confirmed_at") @db.Timestamptz(3)
+  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([employeeId, fromDate])
+  @@map("payroll_exclusions")
+}

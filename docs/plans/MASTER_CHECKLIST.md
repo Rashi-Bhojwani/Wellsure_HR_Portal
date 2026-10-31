@@ -54,7 +54,7 @@ pause only at CHECKPOINT 1 (after Stage 2), CHECKPOINT 2 (after P7-3) and stop c
 - [x] no money field writable via muster/attendance finalisation, tested (`attendance/__tests__/noMoney.test.ts`)
 
 ## Stage 5
-- [ ] 5.1 payslip delivery · [ ] 5.2 not-on-payroll flag · [x] 5.3 remote check-in/out and director decisions (Stage 5a, docs/plans/STAGE_5A_PLAN.md) · [ ] 5.4 bank layouts (.xls question) · [ ] 5.5 repayment batch · [ ] 5.6 loans (if missing)
+- [x] 5.1 payslip delivery (links) · [x] 5.2 not-on-payroll flag · [x] 5.3 remote check-in/out and director decisions (Stage 5a, docs/plans/STAGE_5A_PLAN.md) · [x] 5.4 bank layouts (.xlsx and .csv only; the .xls question stays open) · [x] 5.5 repayment batch · [ ] 5.6 loans (if missing)
 
 ## Stage 6 — internal payroll reports (director-only)
 - [ ] reports per master prompt; no official-format files

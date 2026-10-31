@@ -17,6 +17,8 @@ import * as miSvc from "./inputs/service";
 import * as imp from "./inputs/importService";
 import * as rp from "./run/repaymentController";
 import * as pl from "./run/payslipLinkController";
+import * as ex from "./exclusions/controller";
+import * as exSvc from "./exclusions/service";
 import * as plSvc from "./run/payslipLinks";
 import * as rpSvc from "./run/repayments";
 import { compareRegistersRoute, compareUpload } from "./compare/controller";
@@ -201,3 +203,8 @@ payrollRouter.get("/repayment-batches/:id/file", bankView, validate({ params: rp
 payrollRouter.get("/payslip-link-settings", requirePermission("payroll.rules.view"), pl.settings);
 payrollRouter.put("/payslip-link-settings", requirePermission("payroll.rules.manage"), validate({ body: plSvc.settingsSchema }), pl.putSettings);
 payrollRouter.post("/runs/:id/payslip-links/revoke", make, validate({ params: rv.runIdParamsSchema }), pl.revoke);
+
+// ── Stage 5b, B6: a person not on payroll for a period (directors only; a different director confirms) ──
+payrollRouter.get("/exclusions", view, ex.list);
+payrollRouter.post("/exclusions", edit, validate({ body: exSvc.addSchema }), ex.add);
+payrollRouter.post("/exclusions/:id/confirm", approve, validate({ params: v.idParamsSchema }), ex.confirm);
