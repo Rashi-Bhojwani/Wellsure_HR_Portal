@@ -133,6 +133,7 @@ describe("new leave types", () => {
     it("the existing Leave Types & Policies tool cannot switch a new type on, change its paid or half-day flags, or edit its policy", async () => {
       expect((await request(app).patch(`/api/leave/types/${typeId.MENSTRUAL}`).set(...authHeader(tok.hrAdmin)).send({ isActive: true })).status).toBe(409);
       expect((await request(app).patch(`/api/leave/types/${typeId.MEDICAL}`).set(...authHeader(tok.hrAdmin)).send({ isPaid: false })).status).toBe(409);
+      expect((await request(app).patch(`/api/leave/types/${typeId.MEDICAL}`).set(...authHeader(tok.hrAdmin)).send({ name: "Medical Leave", isPaid: true, allowHalfDay: false, isActive: true })).status).toBe(200); // unchanged flags with a name: fine
       expect((await request(app).put(`/api/leave/types/${typeId.MEDICAL}/policy`).set(...authHeader(tok.hrAdmin)).send({ skipBalanceCheck: false })).status).toBe(409);
     });
   });

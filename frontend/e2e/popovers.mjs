@@ -253,16 +253,21 @@ for (const [width, height] of [
   // The "Remove photo" dialog on someone else's admin profile (HR and the directors remove an inappropriate photo, with a reason). Seeded 1006 adds their
   // own photo first through the API (only the owner can), so the director (1000) has one to remove.
   {
+    // One sign-in for the whole run (the login endpoint is rate-limited per address, and later CI steps sign in too).
     const API = process.env.API_URL ?? "http://localhost:4000";
-    const login = await (await fetch(`${API}/api/auth/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ employeeCode: "1006", password: PASSWORD }) })).json();
-    const auth = { authorization: `Bearer ${login.accessToken}` };
-    const me = await (await fetch(`${API}/api/auth/me`, { headers: auth })).json();
-    const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
-    const form = new FormData();
-    form.append("file", new Blob([png], { type: "image/png" }), "photo.png");
-    const put = await fetch(`${API}/api/employees/me/photo`, { method: "PUT", headers: auth, body: form });
-    if (!put.ok) fail(`${where} / avatars`, `seeded 1006 could not add their own photo (${put.status})`);
-    await page.goto(`${BASE}/admin/employee/profile/${me.employeeId}`);
+    if (!globalThis.__photoSubject) {
+      const login = await (await fetch(`${API}/api/auth/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ employeeCode: "1006", password: PASSWORD }) })).json();
+      const auth = { authorization: `Bearer ${login.accessToken}` };
+      const me = await (await fetch(`${API}/api/auth/me`, { headers: auth })).json();
+      const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+      const form = new FormData();
+      form.append("file", new Blob([png], { type: "image/png" }), "photo.png");
+      const put = await fetch(`${API}/api/employees/me/photo`, { method: "PUT", headers: auth, body: form });
+      if (!put.ok) fail(`${where} / avatars`, `seeded 1006 could not add their own photo (${put.status})`);
+      globalThis.__photoSubject = me.employeeId;
+    }
+    // The dialog is only opened and closed here, never confirmed, so the photo stays for every theme and width.
+    await page.goto(`${BASE}/admin/employee/profile/${globalThis.__photoSubject}`);
     await page.locator("header.ws-topbar").waitFor({ timeout: 30000 });
     await page.waitForTimeout(800);
     await check(page, where, "avatars: remove photo dialog", { open: () => page.getByRole("button", { name: /Remove photo/ }).first().click(), root: ".ant-modal-wrap .ant-modal", surface: ".ant-modal-container" });

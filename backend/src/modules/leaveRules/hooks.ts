@@ -91,10 +91,13 @@ export async function assertPeepsApproval(tx: Client, request: { id: string; emp
 }
 
 /** The existing Leave Types & Policies tool: a new type is switched on, made paid or half-day only by its approved rules. */
-export async function assertLeaveTypeEditable(before: TypeLike, input: { isActive?: boolean; isPaid?: boolean; allowHalfDay?: boolean }): Promise<void> {
+export async function assertLeaveTypeEditable(before: TypeLike & { isActive: boolean; isPaid: boolean; allowHalfDay: boolean }, input: { isActive?: boolean; isPaid?: boolean; allowHalfDay?: boolean }): Promise<void> {
   if (!isPeepsLeaveTypeCode(before.code)) return;
-  if (input.isPaid !== undefined || input.allowHalfDay !== undefined) throw new HttpError(409, "Paid or unpaid and half days are set by this type's approved rules.", "SET_BY_LEAVE_RULES");
-  if (input.isActive === true && !(await rulesInForceOrLater(before.id))) throw new HttpError(409, "This type is switched on when a director approves its rules.", "SET_BY_LEAVE_RULES");
+  // The edit form may send the flags unchanged with a new name: only a change is refused.
+  if ((input.isPaid !== undefined && input.isPaid !== before.isPaid) || (input.allowHalfDay !== undefined && input.allowHalfDay !== before.allowHalfDay)) {
+    throw new HttpError(409, "Paid or unpaid and half days are set by this type's approved rules.", "SET_BY_LEAVE_RULES");
+  }
+  if (input.isActive === true && !before.isActive && !(await rulesInForceOrLater(before.id))) throw new HttpError(409, "This type is switched on when a director approves its rules.", "SET_BY_LEAVE_RULES");
 }
 
 async function rulesInForceOrLater(leaveTypeId: string): Promise<boolean> {

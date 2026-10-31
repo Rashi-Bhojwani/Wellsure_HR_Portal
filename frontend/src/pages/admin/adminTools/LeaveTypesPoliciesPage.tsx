@@ -11,6 +11,7 @@ import { space } from "../../../theme/tokens";
 import { ApprovalBanner, CardGrid, EmptyState, FormGroupTitle, KeyValueGrid, PageHeader, Panel, SideDrawer, SkeletonCard, Stack, StatusChip, toast, useIsPhone } from "../../../ui";
 // PEEPS-BEGIN leave-types
 import { NewLeaveTypesPanel } from "../../../features/leaveRules/NewLeaveTypesPanel";
+import { isPeepsLeaveTypeCode } from "@shared/constants/peepsLeave";
 // PEEPS-END
 
 const TYPE_FORM = "leave-type-form";
@@ -171,6 +172,24 @@ function policyItems(p: LeavePolicy) {
 }
 
 function TypePanel({ t, canManage, onEditType, onEditPolicy }: { t: LeaveTypeAdminRow; canManage: boolean; onEditType: () => void; onEditPolicy: () => void }) {
+  // PEEPS-BEGIN leave-types
+  // A new leave type's policy, paid flag and switch come from its approved rules ("New leave types" below), so its card only points there.
+  if (isPeepsLeaveTypeCode(t.code))
+    return (
+      <Panel
+        title={
+          <span style={{ display: "inline-flex", alignItems: "center", gap: space[2], flexWrap: "wrap" }}>
+            {t.name}
+            <StatusChip tone="neutral">{t.code}</StatusChip>
+          </span>
+        }
+        extra={<StatusChip status={t.isActive ? "ACTIVE" : "INACTIVE"}>{t.isActive ? "Active" : "Inactive"}</StatusChip>}
+        style={{ height: "100%" }}
+      >
+        <ApprovalBanner tone="info" title="Set by its approved rules" description="Prepare and approve this type's rules under New leave types, below. Only its name is edited here." actions={canManage ? <Button size="small" onClick={onEditType}>Edit name</Button> : undefined} />
+      </Panel>
+    );
+  // PEEPS-END
   return (
     <Panel
       title={

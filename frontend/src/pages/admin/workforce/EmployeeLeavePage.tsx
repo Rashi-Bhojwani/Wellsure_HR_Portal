@@ -292,11 +292,11 @@ export function EmployeeLeavePage() {
             { title: "Dates", key: "dates", render: (_, r) => <span className="ws-num">{fmtDates(r)}</span> },
             { title: "Days", dataIndex: "totalDays", align: "right", render: (d: number) => <span className="ws-num">{d}</span> },
             { title: "Status", dataIndex: "status", render: (s: string) => <StatusChip status={s} /> },
-            { title: "Reason", dataIndex: "reason", render: (val: string | null) => val ?? <span style={{ color: v.textSecondary }}>—</span> },
-            { title: "Decision Comments", dataIndex: "decisionComments", render: (val: string | null) => val ?? <span style={{ color: v.textSecondary }}>—</span> },
-            // PEEPS-BEGIN leave-types
+            // PEEPS-BEGIN leave-types (next to Status, so it is never behind the horizontal scroll)
             { title: "Documents", key: "documents", render: (_, r) => <LeaveDocumentsCell r={r} /> },
             // PEEPS-END
+            { title: "Reason", dataIndex: "reason", render: (val: string | null) => val ?? <span style={{ color: v.textSecondary }}>—</span> },
+            { title: "Decision Comments", dataIndex: "decisionComments", render: (val: string | null) => val ?? <span style={{ color: v.textSecondary }}>—</span> },
             // Pinned right so the decision buttons never sit behind the horizontal scroll on a laptop.
             { title: "Actions", key: "actions", align: "right", fixed: "right", render: (_, r) => rowActions(r) },
           ]}
