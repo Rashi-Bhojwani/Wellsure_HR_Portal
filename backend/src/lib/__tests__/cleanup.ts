@@ -171,6 +171,9 @@ export const STORAGE_KEY_COLUMNS: Record<string, string[]> = {
   BankTransferBatch: ["fileKey", "responseKey"],
   BankRepaymentBatch: ["fileKey"],
   PayrollOutput: ["fileKey"],
+  // PEEPS-BEGIN leave-types
+  LeaveRequestDocument: ["storageKey"], // a new leave type's supporting document
+  // PEEPS-END
 };
 const STORAGE_KEY_COLUMN_PATTERN = /(StorageKey|^fileKey|^storageKey)$/;
 
@@ -369,6 +372,9 @@ for (const m of ["PeepsSettingVersion", "PeepsSettingConfirmation", "OfficeMembe
 // PEEPS-END
 // PEEPS-BEGIN badges-nudges
 for (const m of ["BadgeAward", "BadgeRevocation", "PrivateNudge", "NudgeRead", "NudgeRevocation"]) PURGE_GUARDED_MODELS.add(m);
+// PEEPS-END
+// PEEPS-BEGIN leave-types
+for (const m of ["LeaveRuleVersion", "LeaveRuleApproval", "LeaveRequestDocument"]) PURGE_GUARDED_MODELS.add(m);
 // PEEPS-END
 
 // Deletes the given rows of `model` and every row that depends on them,

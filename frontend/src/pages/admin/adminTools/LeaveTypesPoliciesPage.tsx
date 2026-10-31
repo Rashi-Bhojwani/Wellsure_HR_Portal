@@ -9,6 +9,9 @@ import { HelpStrip } from "../../../components/common/HelpStrip";
 import { useAuth } from "../../../hooks/useAuth";
 import { space } from "../../../theme/tokens";
 import { ApprovalBanner, CardGrid, EmptyState, FormGroupTitle, KeyValueGrid, PageHeader, Panel, SideDrawer, SkeletonCard, Stack, StatusChip, toast, useIsPhone } from "../../../ui";
+// PEEPS-BEGIN leave-types
+import { NewLeaveTypesPanel } from "../../../features/leaveRules/NewLeaveTypesPanel";
+// PEEPS-END
 
 const TYPE_FORM = "leave-type-form";
 const POLICY_FORM = "leave-policy-form";
@@ -287,6 +290,9 @@ export function LeaveTypesPoliciesPage() {
             ))}
           </CardGrid>
         )}
+        {/* PEEPS-BEGIN leave-types */}
+        <NewLeaveTypesPanel />
+        {/* PEEPS-END */}
       </Stack>
 
       <TypeDrawer open={typeDrawerOpen} editing={editingType} onClose={() => setTypeDrawerOpen(false)} />

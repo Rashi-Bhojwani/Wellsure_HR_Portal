@@ -866,6 +866,10 @@ model LeaveType {
   leaveRequests LeaveRequest[]
   dayReleases   LeaveDayRelease[]
 
+  // PEEPS-BEGIN leave-types
+  ruleVersions LeaveRuleVersion[]
+
+  // PEEPS-END
   @@map("leave_types")
 }
 
@@ -1023,6 +1027,10 @@ model LeaveRequest {
   updatedAt               DateTime           @updatedAt @map("updated_at")
   dayReleases             LeaveDayRelease[]
 
+  // PEEPS-BEGIN leave-types
+  peepsDocuments LeaveRequestDocument[]
+
+  // PEEPS-END
   @@index([employeeId, status])
   @@index([fromDate, toDate])
   @@index([status])
@@ -3824,6 +3832,54 @@ model NudgeRevocation {
   at              DateTime     @default(now()) @db.Timestamptz(3)
 
   @@map("nudge_revocations")
+}
+
+// PEEPS-END
+
+// PEEPS-BEGIN leave-types
+// The four new leave types (docs/plans/PEEPS_PLAN.md, "Final instructions", Module 2). Rule versions and approvals are append-only; a different director
+// approves a version (trigger); a newer version voids the approval until it is approved itself. Supporting documents live here, never in
+// employee_documents: HR and the directors only (every open audited); no original file name is kept.
+
+model LeaveRuleVersion {
+  id               String             @id @default(cuid())
+  leaveTypeId      String             @map("leave_type_id")
+  leaveType        LeaveType          @relation(fields: [leaveTypeId], references: [id])
+  version          Int
+  rules            Json
+  note             String             @default("")
+  preparedByUserId String             @map("prepared_by_user_id")
+  preparedAt       DateTime           @default(now()) @map("prepared_at") @db.Timestamptz(3)
+  approval         LeaveRuleApproval?
+
+  @@unique([leaveTypeId, version])
+  @@map("leave_rule_versions")
+}
+
+model LeaveRuleApproval {
+  id               String           @id @default(cuid())
+  versionId        String           @unique @map("version_id")
+  version          LeaveRuleVersion @relation(fields: [versionId], references: [id])
+  approvedByUserId String           @map("approved_by_user_id")
+  approvedAt       DateTime         @default(now()) @map("approved_at") @db.Timestamptz(3)
+  effectiveFrom    DateTime         @map("effective_from") @db.Date
+  note             String           @default("")
+
+  @@map("leave_rule_approvals")
+}
+
+model LeaveRequestDocument {
+  id               String       @id @default(cuid())
+  leaveRequestId   String       @map("leave_request_id")
+  leaveRequest     LeaveRequest @relation(fields: [leaveRequestId], references: [id])
+  storageKey       String       @unique @map("storage_key")
+  contentType      String       @map("content_type")
+  sizeBytes        Int          @map("size_bytes")
+  uploadedByUserId String       @map("uploaded_by_user_id")
+  uploadedAt       DateTime     @default(now()) @map("uploaded_at") @db.Timestamptz(3)
+
+  @@index([leaveRequestId])
+  @@map("leave_request_documents")
 }
 
 // PEEPS-END

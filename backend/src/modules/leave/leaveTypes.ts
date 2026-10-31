@@ -3,6 +3,9 @@ import { prisma } from "../../lib/prisma";
 import { writeAuditLog } from "../../lib/audit";
 import { HttpError } from "../../middleware/errorHandler";
 import type { ActorMeta } from "./types";
+// PEEPS-BEGIN leave-types
+import { assertLeaveTypeEditable, assertPolicyEditable } from "../leaveRules/hooks";
+// PEEPS-END
 
 // Read-only for commit B (every role needs this for the Leave Apply
 // dropdown, same as org masters' reads); commit C adds the mutating admin
@@ -94,6 +97,9 @@ interface UpdateLeaveTypeInput {
 export async function updateLeaveType(id: string, input: UpdateLeaveTypeInput, meta: ActorMeta) {
   const before = await prisma.leaveType.findUnique({ where: { id } });
   if (!before) throw new HttpError(404, "Leave type not found.", "NOT_FOUND");
+  // PEEPS-BEGIN leave-types
+  await assertLeaveTypeEditable(before, input); // a new type is switched on, paid or half-day only by its approved rules
+  // PEEPS-END
   const after = await prisma.leaveType.update({ where: { id }, data: input });
   await writeAuditLog({ ...meta, action: "leave.type.update", entityType: "LeaveType", entityId: id, before, after });
   return after;
@@ -122,6 +128,9 @@ interface UpsertPolicyInput {
 export async function upsertLeavePolicy(leaveTypeId: string, input: UpsertPolicyInput, meta: ActorMeta) {
   const leaveType = await prisma.leaveType.findUnique({ where: { id: leaveTypeId }, include: { policy: true } });
   if (!leaveType) throw new HttpError(404, "Leave type not found.", "NOT_FOUND");
+  // PEEPS-BEGIN leave-types
+  assertPolicyEditable(leaveType); // a new type's policy comes from its approved rules
+  // PEEPS-END
 
   const before = leaveType.policy;
   const after = await prisma.leavePolicy.upsert({

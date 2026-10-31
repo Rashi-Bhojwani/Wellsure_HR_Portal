@@ -13,6 +13,9 @@ import { LeaveLedgerTable } from "../../../components/leave/LeaveLedgerTable";
 import { useAuth } from "../../../hooks/useAuth";
 import { fs, fw, space, v } from "../../../theme/tokens";
 import { ApprovalBanner, ConfirmModal, DataTable, EmptyState, FilterBar, InitialsAvatar, PageHeader, Panel, SideDrawer, StatusChip, toast, useIsPhone } from "../../../ui";
+// PEEPS-BEGIN leave-types
+import { LeaveDocumentsCell } from "../../../features/leaveRules/LeaveDocumentsCell";
+// PEEPS-END
 
 const { RangePicker } = DatePicker;
 
@@ -277,6 +280,9 @@ export function EmployeeLeavePage() {
               { label: "Days", render: (r) => r.totalDays },
               { label: "Reason", render: (r) => r.reason ?? "—" },
               { label: "Approver", render: (r) => (r.noTeamApprover ? <NoManagerChip r={r} /> : "—") },
+              // PEEPS-BEGIN leave-types
+              { label: "Documents", render: (r) => <LeaveDocumentsCell r={r} /> },
+              // PEEPS-END
             ],
             actions: rowActions,
           }}
@@ -288,6 +294,9 @@ export function EmployeeLeavePage() {
             { title: "Status", dataIndex: "status", render: (s: string) => <StatusChip status={s} /> },
             { title: "Reason", dataIndex: "reason", render: (val: string | null) => val ?? <span style={{ color: v.textSecondary }}>—</span> },
             { title: "Decision Comments", dataIndex: "decisionComments", render: (val: string | null) => val ?? <span style={{ color: v.textSecondary }}>—</span> },
+            // PEEPS-BEGIN leave-types
+            { title: "Documents", key: "documents", render: (_, r) => <LeaveDocumentsCell r={r} /> },
+            // PEEPS-END
             // Pinned right so the decision buttons never sit behind the horizontal scroll on a laptop.
             { title: "Actions", key: "actions", align: "right", fixed: "right", render: (_, r) => rowActions(r) },
           ]}

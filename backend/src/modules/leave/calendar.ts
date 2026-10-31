@@ -4,6 +4,9 @@ import { getTeamEmployeeIds } from "../../lib/dataScope";
 import type { LeaveViewer } from "./types";
 import { releasedDatesOf } from "./releases";
 import { inForceOn } from "../../lib/effectiveDating";
+// PEEPS-BEGIN leave-types
+import { calendarTypeLabeller } from "../leaveRules/hooks";
+// PEEPS-END
 
 export interface LeaveCalendarQuery {
   fromDate: string;
@@ -84,11 +87,16 @@ export async function getLeaveCalendar(query: LeaveCalendarQuery, viewer: LeaveV
   });
 
   const released = await releasedDatesOf(prisma, rows.map((r) => r.id));
+  // PEEPS-BEGIN leave-types
+  const typeLabel = await calendarTypeLabeller(); // the new types show as a generic "Leave" until the directors' setting says otherwise
+  // PEEPS-END
   return rows.map((r) => ({
     employeeId: r.employeeId,
     employeeCode: r.employee.employeeCode,
     employeeName: r.employee.nameHistory[0]?.fullName ?? r.employee.employeeCode,
-    leaveTypeCode: r.leaveType.code,
+    // PEEPS-BEGIN leave-types
+    leaveTypeCode: typeLabel(r.leaveType.code),
+    // PEEPS-END
     fromDate: r.fromDate.toISOString().slice(0, 10),
     toDate: r.toDate.toISOString().slice(0, 10),
     fromDayPart: r.fromDayPart,

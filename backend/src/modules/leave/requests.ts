@@ -20,6 +20,9 @@ import { activeDelegatesOf, type Delegator } from "../delegations/reach";
 import { companyWideApprovers, noTeamApproverReason, pendingWithNoTeamApprover } from "./noTeamApprover";
 import type { ActorMeta, LeaveViewer } from "./types";
 import { inForceOn } from "../../lib/effectiveDating";
+// PEEPS-BEGIN leave-types
+import { assertPeepsApplyLimit, assertPeepsApproval, peepsApplyDays } from "../leaveRules/hooks";
+// PEEPS-END
 
 interface ApplyLeaveInput {
   employeeId?: string; // target; defaults to the caller's own
@@ -104,7 +107,10 @@ export async function applyForLeave(input: ApplyLeaveInput, viewer: LeaveViewer,
   await assertNoLockedPeriod(targetEmployeeId, fromDate, toDate);
 
   const { holidayDates, weekOffDays } = await resolveDayCountContext(targetEmployeeId, fromDate, toDate);
-  const totalDays = computeTotalLeaveDays(fromDate, toDate, input.fromDayPart, input.toDayPart, holidayDates, weekOffDays);
+  // PEEPS-BEGIN leave-types
+  // The new leave types: rules approved and in force, eligibility, and their counting (working or calendar days). A no-op for the other types.
+  const totalDays = await peepsApplyDays(leaveType, { employeeId: targetEmployeeId, fromDate, toDate, fromDayPart: input.fromDayPart, toDayPart: input.toDayPart, attachmentStorageKey: input.attachmentStorageKey }, computeTotalLeaveDays(fromDate, toDate, input.fromDayPart, input.toDayPart, holidayDates, weekOffDays));
+  // PEEPS-END
   if (totalDays.lessThanOrEqualTo(0)) {
     throw new HttpError(400, "The selected range contains no working days to apply leave for.", "NO_WORKING_DAYS");
   }
@@ -116,6 +122,9 @@ export async function applyForLeave(input: ApplyLeaveInput, viewer: LeaveViewer,
     if (overlap) {
       throw new HttpError(409, "An existing request already covers part of this date range.", "OVERLAPPING_REQUEST");
     }
+    // PEEPS-BEGIN leave-types
+    await assertPeepsApplyLimit(tx, leaveType, targetEmployeeId, fromDate, totalDays);
+    // PEEPS-END
 
     if (!leaveType.policy?.skipBalanceCheck) {
       await assertSufficientBalance(tx, targetEmployeeId, leaveType.id, leaveType.policy ?? { skipBalanceCheck: false, negativeBalanceAllowed: false }, totalDays);
@@ -457,6 +466,9 @@ export async function approveLeaveRequest(requestId: string, viewer: LeaveViewer
       throw new HttpError(409, `Request is ${fresh.status.toLowerCase()}, not pending.`, "NOT_PENDING");
     }
     const leaveYear = fresh.fromDate.getUTCFullYear();
+    // PEEPS-BEGIN leave-types
+    await assertPeepsApproval(tx, { id: requestId, employeeId: existing.employeeId, fromDate: fresh.fromDate, totalDays: fresh.totalDays, leaveType: existing.leaveType }, viewer);
+    // PEEPS-END
 
     if (existing.leaveType.code === "COF") {
       await consumeCompOffFifo(tx, existing.employeeId, requestId, fresh.totalDays, leaveYear, fresh.fromDate);

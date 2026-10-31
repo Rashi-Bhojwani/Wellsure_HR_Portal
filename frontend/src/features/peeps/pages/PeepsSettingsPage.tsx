@@ -22,6 +22,7 @@ const MODULES: Array<{ id: string; title: string }> = [
   { id: "badges", title: "Badges" },
   { id: "nudges", title: "Private nudges" },
   { id: "directory", title: "Directory" },
+  { id: "leave", title: "Leave" },
 ];
 
 // Wellsure Office → Settings (D-29). Every Peeps setting starts Not set; a module whose required settings are missing refuses to activate. A director (or,

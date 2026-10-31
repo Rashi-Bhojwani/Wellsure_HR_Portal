@@ -67,6 +67,8 @@ const HR_EXECUTIVE_PERMS: string[] = [
   "assets.manage",
   // Peeps avatars: HR removes an inappropriate profile photo, with a reason (never replaces it).
   "avatars.moderate",
+  // Peeps new leave types: HR opens their supporting documents (every open audited).
+  "leave.documents.view",
   // PEEPS-END
 ];
 const HR_ADMIN_PERMS: string[] = [

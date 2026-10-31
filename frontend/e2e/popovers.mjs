@@ -224,6 +224,31 @@ for (const [width, height] of [
     }
   }
   // PEEPS-END
+  // PEEPS-BEGIN leave-types
+  // The new leave types' "Prepare rules" drawer on Leave Types & Policies (the dev seed's 1000 is a director, so the panel is there).
+  await page.goto(`${BASE}/admin/admin-tools/leave-policies`);
+  await page.locator("header.ws-topbar").waitFor({ timeout: 30000 });
+  await page.waitForTimeout(800);
+  {
+    const label = `${where} / leave types: prepare rules drawer`;
+    const root = ".ant-drawer-content-wrapper";
+    const surface = ".ant-drawer-section";
+    console.log(label);
+    await page.getByRole("button", { name: /^(Prepare|Change) rules$/ }).first().click();
+    await page.waitForTimeout(700);
+    const m = await measure(page, root, surface);
+    if (!m) fail(label, "did not open (nothing visible)");
+    else {
+      if (m.alpha < 0.95) fail(label, `its surface is not opaque (background alpha ${m.alpha})`);
+      if (!m.hasEdge) fail(label, "it has neither a border nor a shadow, so it does not read as a layer above the page");
+      if (m.coveredPoints > 0) fail(label, `${m.coveredPoints} of ${m.checkedPoints} points inside it are covered by the page behind it`);
+      if (m.rect.left < -0.5 || m.rect.right > m.viewport.w + 0.5) fail(label, "it does not fit the screen");
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(1000);
+      if (await measure(page, root, surface)) fail(label, "it did not close on Escape");
+    }
+  }
+  // PEEPS-END
   // PEEPS-BEGIN avatars
   // The "Remove photo" dialog on someone else's admin profile (HR and the directors remove an inappropriate photo, with a reason). Seeded 1006 adds their
   // own photo first through the API (only the owner can), so the director (1000) has one to remove.

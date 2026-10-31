@@ -11,6 +11,9 @@ import * as recalculatorService from "./recalculator";
 import * as requestsService from "./requests";
 import type { ActorMeta, LeaveViewer } from "./types";
 import * as yearEndService from "./yearEnd";
+// PEEPS-BEGIN leave-types
+import { redactLeaveRows } from "../leaveRules/hooks";
+// PEEPS-END
 
 function actorMeta(req: Request): ActorMeta {
   return { actorUserId: req.user!.userId, ipAddress: req.ip ?? null, userAgent: req.headers["user-agent"] ?? null };
@@ -33,21 +36,29 @@ export async function applyForLeave(req: Request, res: Response): Promise<void> 
 }
 
 export async function listLeaveRequests(req: Request, res: Response): Promise<void> {
-  res.status(200).json(await requestsService.listLeaveRequests(req.query as never, viewer(req)));
+  // PEEPS-BEGIN leave-types
+  res.status(200).json(redactLeaveRows(await requestsService.listLeaveRequests(req.query as never, viewer(req)), viewer(req))); // a new type's reason: employee, HR, directors
+  // PEEPS-END
 }
 
 export async function getLeaveRequest(req: Request, res: Response): Promise<void> {
-  res.status(200).json(await requestsService.getLeaveRequestById(req.params.id as string, viewer(req)));
+  // PEEPS-BEGIN leave-types
+  res.status(200).json(redactLeaveRows(await requestsService.getLeaveRequestById(req.params.id as string, viewer(req)), viewer(req)));
+  // PEEPS-END
 }
 
 export async function approveLeaveRequest(req: Request, res: Response): Promise<void> {
   const { comments } = req.body as { comments?: string };
-  res.status(200).json(await requestsService.approveLeaveRequest(req.params.id as string, viewer(req), comments, actorMeta(req)));
+  // PEEPS-BEGIN leave-types
+  res.status(200).json(redactLeaveRows(await requestsService.approveLeaveRequest(req.params.id as string, viewer(req), comments, actorMeta(req)), viewer(req)));
+  // PEEPS-END
 }
 
 export async function rejectLeaveRequest(req: Request, res: Response): Promise<void> {
   const { comments } = req.body as { comments: string };
-  res.status(200).json(await requestsService.rejectLeaveRequest(req.params.id as string, viewer(req), comments, actorMeta(req)));
+  // PEEPS-BEGIN leave-types
+  res.status(200).json(redactLeaveRows(await requestsService.rejectLeaveRequest(req.params.id as string, viewer(req), comments, actorMeta(req)), viewer(req)));
+  // PEEPS-END
 }
 
 export async function bulkApproveLeaveRequests(req: Request, res: Response): Promise<void> {
@@ -57,7 +68,9 @@ export async function bulkApproveLeaveRequests(req: Request, res: Response): Pro
 
 export async function cancelLeaveRequest(req: Request, res: Response): Promise<void> {
   const { reason } = req.body as { reason?: string };
-  res.status(200).json(await requestsService.cancelLeaveRequest(req.params.id as string, viewer(req), reason, actorMeta(req)));
+  // PEEPS-BEGIN leave-types
+  res.status(200).json(redactLeaveRows(await requestsService.cancelLeaveRequest(req.params.id as string, viewer(req), reason, actorMeta(req)), viewer(req)));
+  // PEEPS-END
 }
 
 // ── Balances ─────────────────────────────────────────────────────────────

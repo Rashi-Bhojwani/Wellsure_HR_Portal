@@ -6,6 +6,9 @@ import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as leaveApi from "../../../api/leave";
 import { fs, fw, radius, space, v } from "../../../theme/tokens";
 import { ApprovalBanner, EmptyState, InitialsAvatar, PageHeader, Panel, StatusChip, toast, useIsPhone } from "../../../ui";
+// PEEPS-BEGIN leave-types
+import { MyLeaveDocumentsPanel } from "../../../features/leaveRules/MyLeaveDocumentsPanel";
+// PEEPS-END
 
 const { RangePicker } = DatePicker;
 
@@ -157,6 +160,9 @@ export function LeaveApplyPage() {
             )}
           </Panel>
         )}
+        {/* PEEPS-BEGIN leave-types */}
+        <MyLeaveDocumentsPanel />
+        {/* PEEPS-END */}
       </div>
     </>
   );

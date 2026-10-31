@@ -26,20 +26,21 @@ data (the demo company), and so that a real company starts from an empty system 
 | Employees' HR-held documents | ID proofs, certificates and letters kept on file for each person. | View employee documents | Manage employee documents | nobody by permission |
 | Sensitive helpdesk tickets | Tickets in categories such as Payroll and Salary or Grievance, where people write private things. | Sensitive tickets | nobody by permission | nobody by permission |
 | Power over other people's access | Security policy, other people's sign-in and 2FA, individual permission exceptions, and unlocking attendance. Whoever holds these can weaken the protection of everything above. | nobody by permission | Manage others' sign-in security; System settings; Manager permission exceptions; Unlock attendance periods; Unlock payroll periods | nobody by permission |
+| Supporting documents of the new leave types | Medical certificates and similar papers attached to menstrual, medical, wedding or bereavement leave. HR and the directors only; every open is recorded. | Open leave supporting documents | nobody by permission | nobody by permission |
 
 #### What each default role can do with each kind (S = see, C = change, K = confirm; a role's permissions are the Super Admins' to edit, so this is the starting point)
 
-| Role | Salaries and payroll figures | Payroll rules, components and structures | Employees' bank accounts | Employees' PAN, Aadhaar, UAN and ESI numbers | The company's PF, ESI, PT, LWF, PAN and TAN identifiers | The bank file layout and the company's debit account | Employees' HR-held documents | Sensitive helpdesk tickets | Power over other people's access |
-|---|---|---|---|---|---|---|---|---|---|
-| Super Admin | SCK | CK | SC | SC | SCK | SCK | SC | S | C |
-| HR Admin | — | — | SC | SC | — | — | SC | S | C |
-| HR Executive | — | — | — | — | — | — | SC | — | — |
-| Payroll Admin | SC | C | S | S | SC | SC | — | — | — |
-| Payroll Approver | SK | K | — | — | K | SK | — | — | — |
-| Developer / operator | — | — | — | — | — | — | — | — | — |
-| Manager | — | — | — | — | — | — | — | — | — |
-| Approver | — | — | — | — | — | — | — | — | — |
-| Employee | — | — | — | — | — | — | — | — | — |
+| Role | Salaries and payroll figures | Payroll rules, components and structures | Employees' bank accounts | Employees' PAN, Aadhaar, UAN and ESI numbers | The company's PF, ESI, PT, LWF, PAN and TAN identifiers | The bank file layout and the company's debit account | Employees' HR-held documents | Sensitive helpdesk tickets | Power over other people's access | Supporting documents of the new leave types |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Super Admin | SCK | CK | SC | SC | SCK | SCK | SC | S | C | S |
+| HR Admin | — | — | SC | SC | — | — | SC | S | C | S |
+| HR Executive | — | — | — | — | — | — | SC | — | — | S |
+| Payroll Admin | SC | C | S | S | SC | SC | — | — | — | — |
+| Payroll Approver | SK | K | — | — | K | SK | — | — | — | — |
+| Developer / operator | — | — | — | — | — | — | — | — | — | — |
+| Manager | — | — | — | — | — | — | — | — | — | — |
+| Approver | — | — | — | — | — | — | — | — | — | — |
+| Employee | — | — | — | — | — | — | — | — | — | — |
 
 <!-- END GENERATED -->
 

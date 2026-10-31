@@ -16,7 +16,10 @@ export type SensitiveClassId =
   | "BANK_LAYOUT_AND_DEBIT_ACCOUNT"
   | "PERSONAL_DOCUMENTS"
   | "SENSITIVE_TICKETS"
-  | "ACCESS_CONTROL";
+  | "ACCESS_CONTROL"
+  // PEEPS-BEGIN leave-types
+  | "LEAVE_DOCUMENTS";
+  // PEEPS-END
 
 export interface SensitiveClass {
   id: SensitiveClassId;
@@ -104,6 +107,16 @@ export const SENSITIVE_CLASSES: readonly SensitiveClass[] = [
     edit: [...META_PERMISSION_KEYS],
     confirm: [],
   },
+  // PEEPS-BEGIN leave-types
+  {
+    id: "LEAVE_DOCUMENTS",
+    label: "Supporting documents of the new leave types",
+    what: "Medical certificates and similar papers attached to menstrual, medical, wedding or bereavement leave. HR and the directors only; every open is recorded.",
+    view: ["leave.documents.view"],
+    edit: [],
+    confirm: [],
+  },
+  // PEEPS-END
 ];
 
 export const SENSITIVE_PERMISSION_KEYS: readonly PermissionKey[] = [...new Set(SENSITIVE_CLASSES.flatMap((c) => [...c.view, ...c.edit, ...c.confirm]))];

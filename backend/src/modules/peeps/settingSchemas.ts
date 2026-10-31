@@ -8,6 +8,7 @@ const givers = z.array(z.enum(GIVER_KINDS)).max(GIVER_KINDS.length).refine((a) =
 
 export const PEEPS_SETTING_SCHEMAS: Record<PeepsSettingKey, z.ZodType> = {
   "office.name": z.string().trim().min(1).max(60),
+  "leave.calendarShowsType": z.object({ showType: z.boolean() }).strict(),
   "directory.contactFields": z.array(z.enum(DIRECTORY_CONTACT_FIELDS)).max(DIRECTORY_CONTACT_FIELDS.length).refine((a) => new Set(a).size === a.length, "Listed twice."),
   "audience.assets": z.object({ officeManages: z.boolean(), hrOnboardingIssue: z.boolean().optional() }).strict(), // hrOnboardingIssue: only in versions entered before the onboarding route was retired; ignored
   "audience.unmute": z.object({ employeesMayBook: z.boolean() }).strict(),

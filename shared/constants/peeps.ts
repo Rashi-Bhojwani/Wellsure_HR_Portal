@@ -63,11 +63,12 @@ export const PEEPS_SETTING_KEYS = [
   "nudges.limits",
   "nudges.revocation",
   "directory.contactFields",
+  "leave.calendarShowsType",
 ] as const;
 export type PeepsSettingKey = (typeof PEEPS_SETTING_KEYS)[number];
 
 export interface PeepsSettingInfo {
-  module: "office" | "assets" | "unmute" | "badges" | "nudges" | "directory";
+  module: "office" | "assets" | "unmute" | "badges" | "nudges" | "directory" | "leave";
   label: string;
   what: string;
   enteredBy: "DIRECTOR" | "OFFICE";
@@ -90,6 +91,7 @@ export const PEEPS_SETTINGS: Record<PeepsSettingKey, PeepsSettingInfo> = {
   "audience.nudges": { module: "nudges", label: "Who else may send private nudges", what: "Q-16: only the directors send private nudges, to any employee. Listing managers (to their own team) and/or Wellsure Office members widens this; HR never. Not set: the directors only.", enteredBy: "DIRECTOR" },
   "nudges.limits": { module: "nudges", label: "Nudge limits", what: "How many nudges one sender may send in a calendar month. Until set, no limit applies.", enteredBy: "DIRECTOR" },
   "directory.contactFields": { module: "directory", label: "Contact fields in the directory", what: "Which of work email, phone and birthday (day and month) colleagues see in the directory, on top of System Settings → People & Documents. Not set: none. Personal email and every sensitive field never show.", enteredBy: "DIRECTOR" },
+  "leave.calendarShowsType": { module: "leave", label: "New leave types on team calendars", what: "Whether team calendars name the new leave types (menstrual, medical, wedding, bereavement). Not set: they show as \"Leave\".", enteredBy: "DIRECTOR" },
   "nudges.revocation": { module: "nudges", label: "Nudge revocation", what: "Whether a sender (or a director) may withdraw a nudge. Until set, nobody can.", enteredBy: "DIRECTOR" },
 };
 

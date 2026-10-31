@@ -54,6 +54,9 @@ import { badgesRouter, nudgesRouter } from "./modules/recognition/routes";
 // PEEPS-BEGIN avatars
 import { avatarsRouter } from "./modules/avatars/routes";
 // PEEPS-END
+// PEEPS-BEGIN leave-types
+import { leaveDocumentsRouter, leaveRulesRouter } from "./modules/leaveRules/routes";
+// PEEPS-END
 
 // Every API router and where it's mounted — one list, so the route
 // inventory test (modules/managers/__tests__/routeInventory.test.ts) can see
@@ -113,6 +116,10 @@ const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   // PEEPS-END
   // PEEPS-BEGIN avatars
   { path: "/api/avatars", router: avatarsRouter },
+  // PEEPS-END
+  // PEEPS-BEGIN leave-types
+  { path: "/api/leave-rules", router: leaveRulesRouter },
+  { path: "/api/leave-documents", router: leaveDocumentsRouter },
   // PEEPS-END
 ];
 

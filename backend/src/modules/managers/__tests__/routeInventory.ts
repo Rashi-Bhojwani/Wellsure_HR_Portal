@@ -651,6 +651,16 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "POST /api/unmute/admin/bookings/:id/reassign": admin,
   "POST /api/unmute/admin/bookings/:id/cancel": admin,
   // PEEPS-END
+  // PEEPS-BEGIN leave-types
+  // The four new leave types: HR prepares rules (leave.policy.manage), a different director approves (requireDirector + service + trigger).
+  // Supporting documents: the employee attaches to their own request (service); HR (leave.documents.view) and the directors list and open them.
+  "GET /api/leave-rules": admin,
+  "POST /api/leave-rules/:code/versions": admin,
+  "POST /api/leave-rules/:code/versions/:version/approve": adminInService("a director who did not prepare the version (service + database trigger)"),
+  "POST /api/leave-documents/requests/:requestId": self,
+  "GET /api/leave-documents/requests/:requestId": scoped("the employee (a count only) or HR and the directors (the list)"),
+  "GET /api/leave-documents/:documentId": admin,
+  // PEEPS-END
   // PEEPS-BEGIN avatars
   // HR and the directors remove someone else's inappropriate photo with a reason (avatars.moderate); only the owner adds or changes a photo.
   "POST /api/avatars/:employeeId/remove": admin,

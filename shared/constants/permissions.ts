@@ -110,6 +110,7 @@ export const PERMISSION_KEYS = [
   "badges.give", // give a badge (who may is also decided by the badge settings)
   "nudges.send", // send a private nudge (who may is also decided by the nudge settings)
   "avatars.moderate", // remove someone else's inappropriate profile photo, with a reason (HR and the directors; never replace it)
+  "leave.documents.view", // open the supporting documents of the new leave types (HR and the directors; every open audited)
   // PEEPS-END
 ] as const;
 
@@ -269,6 +270,7 @@ export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
   "unmute.manage": { group: "Wellsure Office", label: "Look after Unmute", description: "Authorise hosts and handle bookings when a host is removed. Directors only." },
   "badges.give": { group: "Wellsure Office", label: "Give badges", description: "Give badges to employees, while the badge settings allow it." },
   "nudges.send": { group: "Wellsure Office", label: "Send private nudges", description: "Send a private note to an employee, while the nudge settings allow it." },
+  "leave.documents.view": { group: "Leave", label: "Open leave supporting documents", description: "Open the medical certificates and similar papers attached to the new leave types. Every open is recorded." },
   "avatars.moderate": { group: "Employees", label: "Remove a profile photo", description: "Remove someone else's inappropriate profile photo, with a reason (audited). Never replaces it: only the person changes their own photo." },
   // PEEPS-END
 };
