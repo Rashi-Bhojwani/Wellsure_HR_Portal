@@ -1,6 +1,6 @@
 # Peeps — plan for the second build session
 
-**Status: PLAN ONLY. Nothing in this document has been built.** Branch `peeps/foundation`, which holds
+**Status: see "Final instructions (2026-11-01)" below for what is built and what is planned.** Branch `peeps/foundation`, which holds
 `feat/hr-payroll-separation` up to `0fade2e` (merged in at `0621f82`; first merge `8979072`, see §0). The other session owns payroll and the files
 listed in §C.1. This document, `PEEPS_CHECKLIST.md` and `PEEPS_STAGE_REPORTS.md` are this session's only
 reporting files.
@@ -12,6 +12,75 @@ a feature whose required settings are missing refuses to switch on. The demo com
 values, each labelled DEMO.
 
 ---
+
+## Final instructions (2026-11-01) — win over everything below
+
+**Decisions in force:** D-28, D-29, D-30 as before; **Q-14 decided** (the asset register is managed by HR and the directors);
+**Q-15 decided** (the four new leave types are wanted); **Q-16 decided** (only the directors give badges and send private nudges,
+to any employee; a widening setting stays Not set; badges show company-wide to signed-in staff on the profile and in the directory);
+**Q-17 decided** (any employee can be made a Wellsure Office member by a director; no person's name in code, seed, docs or tests).
+
+**Step 0 (built).** Assets: forward migration gives HR `assets.view`/`assets.manage` back (HR Admin also `assets.settings.manage`);
+routes let in a director, a role holding the key, or a member while the directors' `audience.assets` lets the office manage it
+(Not set = HR and directors). A member's asset grants exist only while that setting allows (re-applied on confirm). The HR
+onboarding-only issue path is retired. Badges/nudges: givers are the directors; `audience.badges`/`audience.nudges` remain as a
+Not-set widening and are no longer required; `badges.display` is retired (company-wide).
+
+**Module 1 — avatars and directory (built).** Reuses the People photo code. Only the owner adds/changes/removes their photo;
+HR and the directors remove someone else's with a reason (`avatars.moderate`, `POST /api/avatars/:employeeId/remove`, audited);
+the by-id upload/removal refuses anyone but the owner. New director setting `directory.contactFields` (Not set = none) narrows
+the System Settings toggles for work email, phone, birthday; personal email never shows. Search matches department names.
+`GET /api/badges/counts` feeds badge chips on directory cards and org-chart nodes. Department is never a team scope.
+
+### Module 2 — the four new leave types (design, built in this order)
+
+- **Types.** Rows in `leave_types` with stable codes `MENSTRUAL`, `MEDICAL`, `WEDDING`, `BEREAVEMENT` (migration), `isActive =
+  false` until a rule version is approved. The display name is edited in the existing Leave Types & Policies tool; the ledger and
+  requests key on the type id, so a rename never creates a balance or an accrual. "Annual Leave" stays a label for the PL balance:
+  nothing about PL (eligibility, accrual, carry-forward, encashment) changes.
+- **Rules (owner-entered, every value Not set).** Append-only `leave_rule_versions` (type, version, rules JSON, prepared by/at,
+  note). A version is complete or refused (typed schema): `paid`; `entitlement` = a cap (`PER_REQUEST`, `PER_CALENDAR_YEAR` or
+  `PER_EMPLOYMENT`, days as an exact decimal) or a `GRANTED_BALANCE` (credited only by HR through the existing Leave Granter — no
+  automatic quota or accrual is built, none being authorised) with its year-end lapse/carry rule; `eligibility` (minimum service
+  days from joining, employment types); `units` (full days or half days); `counting` (working days, or calendar days including
+  holidays and week-offs; overlap with another leave request is always refused by the existing engine); `document` (required or
+  not, and above how many days); `approvalRoute` (manager or HR, or HR only); optional `yearEnd` (carry-forward and encashment
+  choice — an interface for Session A only). No gender-based eligibility is built (sensitive; owners would have to ask).
+- **Governance.** HR (`leave.policy.manage`) or a director prepares a version; a **different director** approves it (service +
+  database trigger), with an effective-from date not in the past. Approval activates the type and syncs `isPaid`/`allowHalfDay`
+  and a `leave_policies` row (balance check only for a granted balance). A newer version **voids** the approval: the type is
+  deactivated until the new version is approved. The existing tool cannot activate a new type, change its paid/half-day flags
+  or edit its policy directly (PEEPS hooks).
+- **Applying.** Refused while no approved version is in force for the leave's dates; eligibility, caps (counting pending and
+  approved requests), units and counting enforced; a raw attachment key is refused for these types. Approving re-checks the
+  rules, refuses a manager when the route is HR only, and refuses while a required document is missing.
+- **Visibility.** Managers see type and dates of their reports' leave; the free-text reason of a new-type request is shown only
+  to the employee, HR and the directors. Supporting documents: `leave_request_documents` (append-only, own storage prefix,
+  never `employee_documents`); uploaded by the employee; listed and opened only by HR (`leave.documents.view`) and the directors,
+  every open audited; the employee sees that a document is attached, nothing else is exposed. Never in manager views, emails,
+  exports, task previews, logs or sockets. Notifications to managers carry type and dates only (as today).
+- **Calendars.** Team calendars show a generic "Leave" for the new types until the director setting `leave.calendarShowsType`
+  says otherwise.
+- **Year-end.** The year-end process handles PL only; the new types stay out of it until a director approves their year-end
+  rule *and* Session A builds the processing. No encashment amount or pay calculation is built here.
+- **Screens.** A "New leave types" panel on the existing Leave Types & Policies page (prepare, approve, history); a document
+  cell on the employee's own requests and on HR's Employee Leave queue.
+
+### Document autofill (instruction §5) — planning note only, no code this round
+
+- **Design.** A pluggable `DocumentExtractionProvider` interface (input: a stored document reference and its declared kind;
+  output: a list of `{ field, value, confidence, sourceRegion }`), selected by environment like `StorageService`/`MailService`.
+  A **human review screen** shows each extracted field next to the document; HR confirms or corrects every field one by one.
+  **Nothing is saved automatically**: confirmed values go through the same validated, encrypted, audited write paths as typed
+  ones (sensitive values still need the existing keys and director confirmations).
+- **First provider runs inside our own system** (an on-server OCR worker in the existing worker image), so no document leaves
+  it. A cloud provider is optional later and needs owner approval (region, retention and training terms, a data-processing
+  agreement).
+- **Data-protection concerns.** Identity documents (PAN, Aadhaar — Aadhaar has its own legal rules; mask before any processing,
+  never send unmasked) and bank proofs (bank data is payroll-sensitive) — extracted values get the same field encryption and
+  masking as typed ones; retention of the uploaded document and of intermediate OCR output (Not set → keep nothing beyond the
+  stored document); access only for the reviewer's role, every extraction and review audited; candidates (not yet employees)
+  need consent and purpose limitation (DPDP Act); an extraction failure never blocks a joiner; no extracted text in logs.
 
 ## Owner's answers (2026-10-30, after the first review) — these win over anything below that disagrees
 
