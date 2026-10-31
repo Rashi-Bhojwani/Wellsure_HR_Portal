@@ -1,26 +1,26 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { minutesBetween, outcomeFor, reminderDue, remoteOn, timeOnly, whoMayDecide, type Decision } from "../remote/rules";
+import { dayStateOf, hoursText, minutesBetween, outcomeFor, reminderDue, remoteOn, timeOnly, whoMayDecide, type Decision } from "../remote/rules";
 
 // Stage 5a: the pure rules of remote attendance. No database.
 
 describe("the outcome mapping: a director's decision becomes what attendance records", () => {
   it("a full day is present; a half day is present for the half named; a rejection is absent", () => {
     expect(outcomeFor({ kind: "FULL" }).status).toBe("P");
-    expect(outcomeFor({ kind: "HALF", half: "FIRST" }).status).toBe("HD_FIRST");
-    expect(outcomeFor({ kind: "HALF", half: "SECOND" }).status).toBe("HD_SECOND");
+    expect(outcomeFor({ kind: "HALF", half: "FIRST", reason: "worked the first half" }).status).toBe("HD_FIRST");
+    expect(outcomeFor({ kind: "HALF", half: "SECOND", reason: "worked the second half" }).status).toBe("HD_SECOND");
     expect(outcomeFor({ kind: "REJECT", reason: "no work shown", outcome: "ABSENT" }).status).toBe("A");
     expect(outcomeFor({ kind: "REJECT", reason: "no work shown", outcome: "LOSS_OF_PAY" }).status).toBe("A");
   });
   it("the label says which was chosen, so the muster note and the audit never lose the choice", () => {
     expect(outcomeFor({ kind: "REJECT", reason: "x y z", outcome: "ABSENT" }).label).toMatch(/absent/);
     expect(outcomeFor({ kind: "REJECT", reason: "x y z", outcome: "LOSS_OF_PAY" }).label).toMatch(/loss of pay/);
-    expect(outcomeFor({ kind: "HALF", half: "SECOND" }).label).toMatch(/second half/);
+    expect(outcomeFor({ kind: "HALF", half: "SECOND", reason: "worked the second half" }).label).toMatch(/second half/);
   });
   it("every decision maps to one of the four engine statuses, and only an approval is ever present (property)", () => {
     const decision: fc.Arbitrary<Decision> = fc.oneof(
       fc.constant<Decision>({ kind: "FULL" }),
-      fc.constantFrom("FIRST" as const, "SECOND" as const).map((half): Decision => ({ kind: "HALF", half })),
+      fc.constantFrom("FIRST" as const, "SECOND" as const).map((half): Decision => ({ kind: "HALF", half, reason: "a reason" })),
       fc.tuple(fc.string({ minLength: 3 }), fc.constantFrom("ABSENT" as const, "LOSS_OF_PAY" as const)).map(([reason, outcome]): Decision => ({ kind: "REJECT", reason, outcome })),
     );
     fc.assert(fc.property(decision, (d) => {
@@ -71,5 +71,24 @@ describe("the reminder threshold", () => {
     expect(reminderDue(since, new Date("2026-09-30T11:59:00Z"), 2, null)).toBe(false);
     expect(reminderDue(since, new Date("2026-09-30T12:00:00Z"), 2, null)).toBe(true);
     expect(reminderDue(since, new Date("2026-09-30T12:00:00Z"), 2, new Date("2026-09-30T12:00:00Z"))).toBe(false);
+  });
+});
+
+describe("today's state, as the person sees it", () => {
+  const rec = (status: "OPEN" | "PENDING" | "APPROVED_FULL" | "APPROVED_HALF" | "REJECTED", checkOut = false) => ({ status, checkIn: true, checkOut });
+  it("walks from not started to a decision", () => {
+    expect(dayStateOf(null)).toBe("NOT_STARTED");
+    expect(dayStateOf({ status: "OPEN", checkIn: false, checkOut: false })).toBe("NOT_STARTED");
+    expect(dayStateOf(rec("OPEN"))).toBe("CHECKED_IN");
+    expect(dayStateOf(rec("OPEN", true))).toBe("CHECKED_OUT");
+    expect(dayStateOf(rec("PENDING", true))).toBe("PENDING_APPROVAL");
+    expect(dayStateOf(rec("APPROVED_FULL", true))).toBe("APPROVED");
+    expect(dayStateOf(rec("APPROVED_HALF", true))).toBe("HALF_DAY");
+    expect(dayStateOf(rec("REJECTED", true))).toBe("REJECTED");
+  });
+  it("hours are H:MM from the two times, and nothing without both", () => {
+    expect(hoursText(new Date("2026-09-30T04:00:00Z"), new Date("2026-09-30T12:45:30Z"))).toBe("8:45");
+    expect(hoursText(new Date("2026-09-30T04:00:00Z"), null)).toBeNull();
+    expect(hoursText(null, null)).toBeNull();
   });
 });

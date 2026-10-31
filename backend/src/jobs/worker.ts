@@ -12,6 +12,8 @@ import { processLetterJob } from "../modules/letters/service";
 import { LETTERS_QUEUE_NAME } from "./lettersQueue";
 import { SECURITY_ALERT_QUEUE_NAME } from "./securityAlertQueue";
 import { DIRECTOR_NOTICE_QUEUE } from "./directorNoticeQueue";
+import { REMOTE_REMINDER_QUEUE } from "./remoteQueue";
+import { sendDueReminders } from "../modules/attendance/remote/service";
 import { HR_CAPABILITY_QUEUE } from "./hrCapabilityQueue";
 import { notifySubjectAccessChanged } from "../modules/hrCapabilities/service";
 import { deliverDirectorNotice, sweepDirectorNotices } from "../lib/directorNotices";
@@ -149,6 +151,17 @@ export function startWorkers(): Worker[] {
     logger.error({ jobId: job?.id, err }, "helpdesk-auto-close job failed");
   });
 
+  const remoteReminderWorker = new Worker(
+    REMOTE_REMINDER_QUEUE,
+    async (job) => {
+      const sent = await sendDueReminders();
+      logger.info({ jobId: job.id, sent }, "remote attendance reminders processed");
+      return { sent };
+    },
+    { connection: createBullConnection() },
+  );
+  remoteReminderWorker.on("failed", (job, err) => logger.error({ jobId: job?.id, err }, "remote attendance reminder job failed"));
+
   const lettersWorker = new Worker(
     LETTERS_QUEUE_NAME,
     async (job) => {
@@ -204,5 +217,5 @@ export function startWorkers(): Worker[] {
   const payrollPayslipsWorker = new Worker(PAYROLL_PAYSLIPS_QUEUE, async (job) => deliverPayslips((job.data as { runId: string }).runId), { connection: createBullConnection(), concurrency: 1 });
   payrollPayslipsWorker.on("failed", (job, err) => logger.error({ jobId: job?.id, err }, "payroll-payslips job failed"));
 
-  return [pingWorker, rolloverWorker, separationsWorker, leavePlAccrualWorker, compOffExpiryWorker, engageAutoPostsWorker, helpdeskAutoCloseWorker, lettersWorker, securityAlertWorker, recomputeWorker, nightlyWorker, processWorker, reminderWorker, deviceHealthWorker, payrollCalculateWorker, payrollPayslipsWorker, directorNoticeWorker, hrCapabilityWorker];
+  return [pingWorker, rolloverWorker, separationsWorker, leavePlAccrualWorker, compOffExpiryWorker, engageAutoPostsWorker, helpdeskAutoCloseWorker, lettersWorker, securityAlertWorker, recomputeWorker, nightlyWorker, processWorker, reminderWorker, deviceHealthWorker, payrollCalculateWorker, payrollPayslipsWorker, directorNoticeWorker, hrCapabilityWorker, remoteReminderWorker];
 }

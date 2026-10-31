@@ -85,3 +85,23 @@ Decide (owners):
 2. Whether a director may approve a run they prepared — today the code refuses it; see the Stage 0 report. (Open, WAITING ON.)
 3. Who holds the server access used by `admin:recover`, and where its off-database record is reviewed.
 4. Where each director keeps their 2FA backup codes.
+
+## Running the tests without anyone else's session in the way
+
+The backend tests write to a test database and a Redis logical database, and refuse to start a second concurrent run against the same ones. Two people (or two cloud sessions) sharing one machine or one Redis can still collide. A session that wants to be sure uses its own:
+
+* **A Redis instance of its own:** `redis-server --port 6391 --daemonize yes --dir <a scratch folder> --save "" --appendonly no`.
+* **A development database of its own** (the test database is derived from `TEST_DATABASE_NAME`): `CREATE DATABASE wellsure_hr_s5;` then `npm run prisma:migrate:deploy` and, if the tests need the seed, `npx tsx prisma/seed.ts` (never `migrate reset`).
+* **An environment file for the shell, sourced before every command** (the guard in `backend/src/config/databaseGuard.ts` refuses a database that is not on this machine, and a shell that exports a remote `DATABASE_URL` overrides `backend/.env`):
+
+```
+unset DATABASE_URL PORT
+export PGPASSWORD=wellsure
+export DATABASE_URL=postgresql://wellsure:wellsure@localhost:5432/wellsure_hr_s5
+export REDIS_URL=redis://localhost:6391/0
+export TEST_DATABASE_NAME=wellsure_hr_s5_test
+export REDIS_TEST_DB=5
+```
+
+After a restart of the container, Postgres and Redis are not started for you: `pg_ctlcluster 16 main start`, then the Redis line above. The full suite takes about thirteen minutes; run it alone, in the background, and read its summary, not its progress.
+

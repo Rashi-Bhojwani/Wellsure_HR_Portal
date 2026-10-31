@@ -489,6 +489,7 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "POST /api/attendance/muster/upload/:id/commit": scoped("the uploader's own upload; branch and every day re-checked"),
   // Attendance Info, Who Is In? and the forgot-to-punch request (P2-E).
   "GET /api/attendance/me/remote/today": self,
+  "POST /api/attendance/me/remote/missed-day": self,
   "POST /api/attendance/me/remote/check-in": self,
   "POST /api/attendance/me/remote/check-out": self,
   "GET /api/attendance/me/remote/records": self,

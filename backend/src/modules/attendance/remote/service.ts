@@ -10,7 +10,8 @@ import { HttpError } from "../../../middleware/errorHandler";
 import { notifyEmployee } from "../../notifications/notifyEmployee";
 import { computeAttendance } from "../compute";
 import { appendOverrides } from "../overrides";
-import { DECIDED, minutesBetween, outcomeFor, reminderDue, remoteOn, timeOnly, whoMayDecide, type Decision } from "./rules";
+import { DECIDED, dayStateOf, hoursText, minutesBetween, outcomeFor, reminderDue, remoteOn, timeOnly, whoMayDecide, type Decision } from "./rules";
+import { payrollPlacementsOn } from "../../../lib/effectiveDating";
 
 // Remote attendance (docs/plans/STAGE_5A_PLAN.md). A director marks who works remotely; a remote employee checks in and out (a time stamped by the server, nothing about where
 // they are); the record goes to the directors, who alone approve a full day, approve a half day, or reject it with a reason and an outcome. A director never decides their own
@@ -119,9 +120,13 @@ export interface RecordView {
   rejectOutcome: string | null;
   reopenCount: number;
   openRequests: number;
+  /** H:MM between the check-in and the check-out, when both exist. */
+  hours: string | null;
+  /** Whether a review has already been asked for this day (one is allowed). */
+  reviewUsed: boolean;
 }
 
-const view = (r: RemoteAttendanceRecord & { requests?: Array<{ status: string }> }): RecordView => ({
+const view = (r: RemoteAttendanceRecord & { requests?: Array<{ status: string; kind?: string }> }): RecordView => ({
   id: r.id,
   date: iso(r.date),
   checkIn: r.checkInAt ? timeOnly(r.checkInAt) : null,
@@ -133,18 +138,30 @@ const view = (r: RemoteAttendanceRecord & { requests?: Array<{ status: string }>
   rejectOutcome: r.rejectOutcome,
   reopenCount: r.reopenCount,
   openRequests: (r.requests ?? []).filter((q) => q.status === "OPEN").length,
+  hours: hoursText(r.checkInAt, r.checkOutAt),
+  reviewUsed: (r.requests ?? []).some((q) => q.kind === "REVIEW"),
 });
 
 export async function myToday(userId: string) {
   const employeeId = await employeeOf(userId);
   const today = iso(businessToday());
   const remote = await isRemoteOn(employeeId, today);
-  const record = await prisma.remoteAttendanceRecord.findUnique({ where: { employeeId_date: { employeeId, date: day(today) } }, include: { requests: { select: { status: true } } } });
-  return { remote, today, record: record ? view(record) : null, canCheckIn: remote && !record?.checkInAt, canCheckOut: remote && !!record?.checkInAt && !record.checkOutAt };
+  const record = await prisma.remoteAttendanceRecord.findUnique({ where: { employeeId_date: { employeeId, date: day(today) } }, include: { requests: { select: { status: true, kind: true } } } });
+  const state = dayStateOf(record ? { status: record.status, checkIn: !!record.checkInAt, checkOut: !!record.checkOutAt } : null);
+  return { remote, today, serverTime: timeOnly(new Date()), state, record: record ? view(record) : null, canCheckIn: remote && !record?.checkInAt, canCheckOut: remote && !!record?.checkInAt && !record.checkOutAt }; // allow-clock: the server time the screen shows
 }
 
 async function directorsToTell(ownerEmployeeId: string): Promise<string[]> {
   return (await activeDirectors()).filter((d) => d.employeeId !== ownerEmployeeId).map((d) => d.employeeId);
+}
+
+/** Every director except the one who acted (and except the owner of the record, who is told separately) hears of a decision. No reason is in the message. */
+async function tellOtherDirectors(actorUserId: string, ownerEmployeeId: string, title: string, body: string): Promise<void> {
+  const me = await employeeOf(actorUserId);
+  for (const d of await activeDirectors()) {
+    if (d.employeeId === me || d.employeeId === ownerEmployeeId) continue;
+    await notifyEmployee(d.employeeId, { type: "attendance.remote.director_told", title, body, link: "/admin/workforce/attendance/remote", payload: {} });
+  }
 }
 
 export async function checkIn(userId: string): Promise<RecordView> {
@@ -154,9 +171,21 @@ export async function checkIn(userId: string): Promise<RecordView> {
   const existing = await prisma.remoteAttendanceRecord.findUnique({ where: { employeeId_date: { employeeId, date: day(today) } } });
   if (existing?.checkInAt) throw new HttpError(409, "You have already checked in today.", "ALREADY_CHECKED_IN");
   const now = new Date(); // allow-clock: the instant the server stamps; nothing else is recorded
-  const record = existing
-    ? await prisma.remoteAttendanceRecord.update({ where: { id: existing.id }, data: { checkInAt: now } })
-    : await prisma.remoteAttendanceRecord.create({ data: { employeeId, date: day(today), checkInAt: now } });
+  // Two presses at once (a double tap, two devices) make one check-in: the loser of the race sees the same refusal as a second press.
+  const already = new HttpError(409, "You have already checked in today.", "ALREADY_CHECKED_IN");
+  let record: RemoteAttendanceRecord;
+  try {
+    if (existing) {
+      const { count } = await prisma.remoteAttendanceRecord.updateMany({ where: { id: existing.id, checkInAt: null }, data: { checkInAt: now } });
+      if (count !== 1) throw already;
+      record = await prisma.remoteAttendanceRecord.findUniqueOrThrow({ where: { id: existing.id } });
+    } else {
+      record = await prisma.remoteAttendanceRecord.create({ data: { employeeId, date: day(today), checkInAt: now } });
+    }
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") throw already;
+    throw err;
+  }
   await event(record.id, "CHECK_IN", userId);
   return view(record);
 }
@@ -169,7 +198,9 @@ export async function checkOut(userId: string): Promise<RecordView> {
   if (!existing?.checkInAt) throw new HttpError(409, "Check in first.", "NOT_CHECKED_IN");
   if (existing.checkOutAt) throw new HttpError(409, "You have already checked out today.", "ALREADY_CHECKED_OUT");
   const now = new Date(); // allow-clock: the instant the server stamps
-  const record = await prisma.remoteAttendanceRecord.update({ where: { id: existing.id }, data: { checkOutAt: now, status: "PENDING" } });
+  const { count } = await prisma.remoteAttendanceRecord.updateMany({ where: { id: existing.id, checkOutAt: null }, data: { checkOutAt: now, status: "PENDING" } });
+  if (count !== 1) throw new HttpError(409, "You have already checked out today.", "ALREADY_CHECKED_OUT");
+  const record = await prisma.remoteAttendanceRecord.findUniqueOrThrow({ where: { id: existing.id } });
   await event(record.id, "CHECK_OUT", userId);
   for (const to of await directorsToTell(employeeId)) {
     await notifyEmployee(to, { type: "attendance.remote.pending", title: "Remote attendance to decide", body: "A remote day is waiting for your decision.", link: "/admin/workforce/attendance/remote", payload: {} });
@@ -183,7 +214,7 @@ export async function myRecords(userId: string, q: { from?: string; to?: string 
     where: { employeeId, ...(q.from || q.to ? { date: { ...(q.from ? { gte: day(q.from) } : {}), ...(q.to ? { lte: day(q.to) } : {}) } } : {}) },
     orderBy: { date: "desc" },
     take: PAGE_MAX,
-    include: { requests: { select: { status: true } } },
+    include: { requests: { select: { status: true, kind: true } } },
   });
   return rows.map(view);
 }
@@ -196,6 +227,7 @@ export const listSchema = z
     from: z.iso.date().optional(),
     to: z.iso.date().optional(),
     employeeId: z.string().min(1).max(64).optional(),
+    departmentId: z.string().min(1).max(64).optional(),
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(PAGE_MAX).default(40),
   })
@@ -207,27 +239,47 @@ export interface DirectorRow extends RecordView {
   name: string;
   /** True when the signed-in director owns it, so the other director decides. */
   yours: boolean;
+  departmentName: string | null;
+  /** What the person gave when a correction was accepted for this day. */
+  correctionNote: string | null;
+  decidedByName: string | null;
+}
+
+/** Who is in a department today, among the people who have remote records (read through the placement reader, never the history table). */
+async function employeesInDepartment(departmentId: string, only?: string): Promise<string[]> {
+  const people = (await prisma.remoteAttendanceRecord.findMany({ where: only ? { employeeId: only } : {}, select: { employeeId: true }, distinct: ["employeeId"] })).map((r) => r.employeeId);
+  const placed = await payrollPlacementsOn(people, businessToday());
+  return people.filter((id) => placed.get(id)?.departmentId === departmentId);
 }
 
 export async function listRecords(q: z.infer<typeof listSchema>, actor: Actor): Promise<{ rows: DirectorRow[]; total: number }> {
   await requireDirector(actor.userId, "see remote attendance");
   const where: Prisma.RemoteAttendanceRecordWhereInput = {
     ...(q.status ? { status: q.status } : {}),
-    ...(q.employeeId ? { employeeId: q.employeeId } : {}),
+    ...(q.departmentId ? { employeeId: { in: await employeesInDepartment(q.departmentId, q.employeeId) } } : q.employeeId ? { employeeId: q.employeeId } : {}),
     ...(q.from || q.to ? { date: { ...(q.from ? { gte: day(q.from) } : {}), ...(q.to ? { lte: day(q.to) } : {}) } } : {}),
   };
   const [total, rows] = await Promise.all([
     prisma.remoteAttendanceRecord.count({ where }),
-    prisma.remoteAttendanceRecord.findMany({ where, orderBy: [{ date: "desc" }, { createdAt: "desc" }], skip: (q.page - 1) * q.pageSize, take: q.pageSize, include: { requests: { select: { status: true } }, employee: { select: { employeeCode: true } } } }),
+    prisma.remoteAttendanceRecord.findMany({ where, orderBy: [{ date: "desc" }, { createdAt: "desc" }], skip: (q.page - 1) * q.pageSize, take: q.pageSize, include: { requests: { select: { status: true, kind: true } }, employee: { select: { employeeCode: true } } } }),
   ]);
-  const names = await namesOn([...new Set(rows.map((r) => r.employeeId))], businessToday());
+  const ids = [...new Set(rows.map((r) => r.employeeId))];
+  const names = await namesOn(ids, businessToday());
   const mine = await employeeOf(actor.userId);
-  return { total, rows: rows.map((r) => ({ ...view(r), employeeId: r.employeeId, employeeCode: r.employee.employeeCode, name: names.get(r.employeeId) ?? r.employee.employeeCode, yours: r.employeeId === mine })) };
+  const placed = await payrollPlacementsOn(ids, businessToday());
+  const deptNames = new Map((await prisma.department.findMany({ select: { id: true, name: true } })).map((d) => [d.id, d.name]));
+  const dept = new Map(ids.map((id) => [id, deptNames.get(placed.get(id)?.departmentId ?? "") ?? ""]));
+  const corrections = await prisma.remoteAttendanceEvent.findMany({ where: { recordId: { in: rows.map((r) => r.id) }, type: "CORRECTED" }, orderBy: { createdAt: "asc" }, select: { recordId: true, note: true } });
+  const note = new Map(corrections.map((c) => [c.recordId, c.note]));
+  const deciders = await prisma.user.findMany({ where: { id: { in: rows.flatMap((r) => (r.decidedByUserId ? [r.decidedByUserId] : [])) } }, select: { id: true, employeeId: true } });
+  const decNames = await namesOn(deciders.map((u) => u.employeeId), businessToday());
+  const decBy = new Map(deciders.map((u) => [u.id, decNames.get(u.employeeId) ?? "A director"]));
+  return { total, rows: rows.map((r) => ({ ...view(r), employeeId: r.employeeId, employeeCode: r.employee.employeeCode, name: names.get(r.employeeId) ?? r.employee.employeeCode, yours: r.employeeId === mine, departmentName: dept.get(r.employeeId) || null, correctionNote: note.get(r.id) ?? null, decidedByName: r.decidedByUserId ? (decBy.get(r.decidedByUserId) ?? null) : null })) };
 }
 
 export const decisionSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("FULL") }).strict(),
-  z.object({ kind: z.literal("HALF"), half: z.enum(["FIRST", "SECOND"]) }).strict(),
+  z.object({ kind: z.literal("FULL"), note: z.string().trim().max(200).optional() }).strict(),
+  z.object({ kind: z.literal("HALF"), half: z.enum(["FIRST", "SECOND"]), reason: z.string().trim().min(NOTE_MIN, "Say why it is a half day").max(200) }).strict(),
   z.object({ kind: z.literal("REJECT"), reason: z.string().trim().min(NOTE_MIN, "Say why it is rejected").max(200), outcome: z.enum(["ABSENT", "LOSS_OF_PAY"]) }).strict(),
 ]);
 
@@ -248,22 +300,26 @@ async function apply(record: RemoteAttendanceRecord, d: Decision, actor: Actor, 
   await assertDayNotFinal(record);
   const out = outcomeFor(d);
   const status = d.kind === "FULL" ? "APPROVED_FULL" : d.kind === "HALF" ? "APPROVED_HALF" : "REJECTED";
+  const reasonOf = d.kind === "FULL" ? (d.note?.trim() || null) : d.reason;
+  const version = { status, half: d.kind === "HALF" ? d.half : null, outcome: d.kind === "REJECT" ? d.outcome : null, reason: reasonOf, checkIn: record.checkInAt ? timeOnly(record.checkInAt) : null, checkOut: record.checkOutAt ? timeOnly(record.checkOutAt) : null };
   const updated = await prisma.$transaction(async (tx) => {
     const [o] = await appendOverrides(tx, [{ employeeId: record.employeeId, date: iso(record.date), origin: "MANUAL_OVERRIDE", kind: "STATUS", status: out.status, reasonCode: "OTHER", reason: out.label, createdByUserId: actor.userId }]);
-    const { count } = await tx.remoteAttendanceRecord.updateMany({ where: { id: record.id, status: "PENDING" }, data: { status, half: d.kind === "HALF" ? d.half : null, rejectOutcome: d.kind === "REJECT" ? d.outcome : null, decisionReason: d.kind === "REJECT" ? d.reason : null, decidedByUserId: actor.userId, decidedAt: new Date(), overrideId: o!.id } }); // allow-clock: an instant
+    const { count } = await tx.remoteAttendanceRecord.updateMany({ where: { id: record.id, status: "PENDING" }, data: { status, half: version.half, rejectOutcome: version.outcome, decisionReason: reasonOf, decidedByUserId: actor.userId, decidedAt: new Date(), overrideId: o!.id } }); // allow-clock: an instant
     if (count !== 1) throw new HttpError(409, "Somebody else decided this a moment ago.", "NOT_PENDING");
-    await event(record.id, type, actor.userId, d.kind === "REJECT" ? "Rejected" : out.label, { status, ...(d.kind === "REJECT" ? { outcome: d.outcome } : {}) }, tx);
-    await writeAuditLog({ actorUserId: actor.userId, action: "attendance.remote.decided", entityType: "RemoteAttendanceRecord", entityId: record.id, after: { employeeId: record.employeeId, date: iso(record.date), status, ...(d.kind === "REJECT" ? { outcome: d.outcome, reasonRecorded: true } : {}) }, ipAddress: actor.ip ?? null });
+    await event(record.id, type, actor.userId, reasonOf ?? "", version, tx);
+    // The audit row is the record of who decided what, when, and why. HR has no key to read the audit trail.
+    await writeAuditLog({ actorUserId: actor.userId, action: "attendance.remote.decided", entityType: "RemoteAttendanceRecord", entityId: record.id, before: { status: "PENDING" }, after: { employeeId: record.employeeId, date: iso(record.date), ...version }, ipAddress: actor.ip ?? null });
     return tx.remoteAttendanceRecord.findUniqueOrThrow({ where: { id: record.id } });
   });
   await computeAttendance([record.employeeId], iso(record.date), iso(record.date));
   await notifyEmployee(record.employeeId, {
     type: "attendance.remote.decided",
     title: d.kind === "REJECT" ? "Your remote day was not approved" : "Your remote day was approved",
-    body: d.kind === "REJECT" ? `${iso(record.date)}: ${d.reason}` : `${iso(record.date)}: ${out.label}.`,
+    body: d.kind === "REJECT" ? `${iso(record.date)}: ${d.reason}${d.outcome === "LOSS_OF_PAY" ? " (loss of pay)" : " (absent)"}` : d.kind === "HALF" ? `${iso(record.date)}: ${out.label}. ${d.reason}` : `${iso(record.date)}: ${out.label}.`,
     link: "/app/attendance/info",
     payload: {},
   });
+  await tellOtherDirectors(actor.userId, record.employeeId, "A remote day was decided", `${out.label}.`);
   return updated;
 }
 
@@ -274,7 +330,7 @@ export async function decide(recordId: string, raw: unknown, actor: Actor): Prom
   return view(await apply(record, d, actor, "DECIDED"));
 }
 
-export const bulkApproveSchema = z.object({ ids: z.array(z.string().min(1).max(64)).min(1).max(MAX_BULK) }).strict();
+export const bulkApproveSchema = z.object({ ids: z.array(z.string().min(1).max(64)).min(1).max(MAX_BULK), note: z.string().trim().max(200).optional() }).strict();
 export const bulkRejectSchema = z.object({ ids: z.array(z.string().min(1).max(64)).min(1).max(MAX_BULK), reason: z.string().trim().min(NOTE_MIN, "Say why they are rejected").max(200), outcome: z.enum(["ABSENT", "LOSS_OF_PAY"]) }).strict();
 
 export interface BulkResult {
@@ -302,7 +358,8 @@ async function bulk(ids: string[], d: Decision, actor: Actor): Promise<BulkResul
 
 /** Bulk approve is for a full day. A half day is decided one record at a time, because the director has to say which half. */
 export async function bulkApprove(raw: unknown, actor: Actor): Promise<BulkResult> {
-  return bulk(parse(bulkApproveSchema, raw).ids, { kind: "FULL" }, actor);
+  const i = parse(bulkApproveSchema, raw);
+  return bulk(i.ids, { kind: "FULL", ...(i.note ? { note: i.note } : {}) }, actor);
 }
 export async function bulkReject(raw: unknown, actor: Actor): Promise<BulkResult> {
   const i = parse(bulkRejectSchema, raw);
@@ -324,10 +381,13 @@ export async function reopen(recordId: string, raw: unknown, actor: Actor): Prom
     const { count } = await tx.remoteAttendanceRecord.updateMany({ where: { id: record.id, status: record.status }, data: { status: "PENDING", half: null, rejectOutcome: null, decisionReason: null, decidedByUserId: null, decidedAt: null, overrideId: null, reopenCount: { increment: 1 } } });
     if (count !== 1) throw new HttpError(409, "Somebody else changed this a moment ago.", "CONFLICT");
     await event(record.id, "REOPENED", actor.userId, reason, { from: record.status }, tx);
-    await writeAuditLog({ actorUserId: actor.userId, action: "attendance.remote.reopened", entityType: "RemoteAttendanceRecord", entityId: record.id, after: { employeeId: record.employeeId, date: iso(record.date), from: record.status, reasonRecorded: true }, ipAddress: actor.ip ?? null });
+    const before = { status: record.status, half: record.half, outcome: record.rejectOutcome, reason: record.decisionReason, decidedByUserId: record.decidedByUserId, decidedAt: record.decidedAt?.toISOString() ?? null };
+    await event(record.id, "REOPENED_VERSION", actor.userId, reason, before, tx); // the version that was replaced, kept in the history
+    await writeAuditLog({ actorUserId: actor.userId, action: "attendance.remote.reopened", entityType: "RemoteAttendanceRecord", entityId: record.id, before, after: { employeeId: record.employeeId, date: iso(record.date), status: "PENDING", reopenReason: reason }, ipAddress: actor.ip ?? null });
     return tx.remoteAttendanceRecord.findUniqueOrThrow({ where: { id: record.id } });
   });
   await computeAttendance([record.employeeId], iso(record.date), iso(record.date));
+  await tellOtherDirectors(actor.userId, record.employeeId, "A remote decision was reopened", `${iso(record.date)}.`);
   await notifyEmployee(record.employeeId, { type: "attendance.remote.reopened", title: "Your remote day is being looked at again", body: `${iso(record.date)}: a director reopened it.`, link: "/app/attendance/info", payload: {} });
   return view(updated);
 }
@@ -353,13 +413,31 @@ export async function requestChange(userId: string, recordId: string, raw: unkno
   if (!record || record.employeeId !== employeeId) throw new HttpError(404, "That record was not found.", "NOT_FOUND"); // not yours: it does not exist for you
   const decided = (DECIDED as readonly string[]).includes(record.status);
   if (input.kind === "CORRECTION" && decided) throw new HttpError(409, "This day has been decided. Ask for a review instead.", "DECIDED");
-  if (input.kind === "REVIEW" && !decided) throw new HttpError(409, "A review is for a day that has been decided.", "NOT_DECIDED");
+  if (input.kind === "REVIEW" && record.status !== "REJECTED" && record.status !== "APPROVED_HALF") throw new HttpError(409, "A review can be asked for after a rejection or a half day.", "NOT_REVIEWABLE");
+  if (input.kind === "REVIEW" && (await prisma.remoteAttendanceRequest.count({ where: { recordId, kind: "REVIEW" } })) > 0) throw new HttpError(409, "You have already asked for a review of this day. One is allowed.", "REVIEW_USED");
   if (input.kind === "CORRECTION" && !input.checkIn && !input.checkOut) throw new HttpError(400, "Give the time in, the time out, or both.", "VALIDATION_ERROR");
   if (input.kind === "REVIEW" && (input.checkIn || input.checkOut)) throw new HttpError(400, "A review carries no times.", "VALIDATION_ERROR");
   if (await prisma.remoteAttendanceRequest.count({ where: { recordId, status: "OPEN" } })) throw new HttpError(409, "There is already a request waiting on this day.", "REQUEST_OPEN");
   const date = iso(record.date);
   const req = await prisma.remoteAttendanceRequest.create({ data: { recordId, kind: input.kind, note: input.note, requestedByUserId: userId, proposedCheckIn: input.checkIn ? istInstant(date, input.checkIn) : null, proposedCheckOut: input.checkOut ? istInstant(date, input.checkOut) : null } });
   await event(recordId, input.kind === "CORRECTION" ? "CORRECTION_REQUESTED" : "REVIEW_REQUESTED", userId, input.note, {});
+  for (const to of await directorsToTell(employeeId)) await notifyEmployee(to, { type: "attendance.remote.request", title: "A remote-attendance request", body: "A request is waiting for you.", link: "/admin/workforce/attendance/remote", payload: {} });
+  return { id: req.id };
+}
+
+export const missedSchema = z.object({ date: z.iso.date(), note: z.string().trim().min(NOTE_MIN, "Say what happened").max(300), checkIn: hhmm, checkOut: hhmm }).strict();
+
+/** A remote day with no record at all (the person forgot to check in): they ask for the times to be recorded, with a reason. A director accepts or declines it like any correction. */
+export async function requestMissedDay(userId: string, raw: unknown): Promise<{ id: string }> {
+  const input = parse(missedSchema, raw);
+  const employeeId = await employeeOf(userId);
+  if (input.date >= iso(businessToday())) throw new HttpError(400, "A missed day is a day that has passed. Today you can still check in.", "VALIDATION_ERROR");
+  if (!(await isRemoteOn(employeeId, input.date))) throw new HttpError(403, "You were not marked as working remotely on that day.", "NOT_REMOTE");
+  if (istInstant(input.date, input.checkOut) < istInstant(input.date, input.checkIn)) throw new HttpError(400, "The time out is before the time in.", "VALIDATION_ERROR");
+  if (await prisma.remoteAttendanceRecord.findUnique({ where: { employeeId_date: { employeeId, date: day(input.date) } }, select: { id: true } })) throw new HttpError(409, "That day already has a record. Ask for a correction on it.", "RECORD_EXISTS");
+  const record = await prisma.remoteAttendanceRecord.create({ data: { employeeId, date: day(input.date) } });
+  const req = await prisma.remoteAttendanceRequest.create({ data: { recordId: record.id, kind: "CORRECTION", note: input.note, requestedByUserId: userId, proposedCheckIn: istInstant(input.date, input.checkIn), proposedCheckOut: istInstant(input.date, input.checkOut) } });
+  await event(record.id, "CORRECTION_REQUESTED", userId, input.note, { missedDay: true });
   for (const to of await directorsToTell(employeeId)) await notifyEmployee(to, { type: "attendance.remote.request", title: "A remote-attendance request", body: "A request is waiting for you.", link: "/admin/workforce/attendance/remote", payload: {} });
   return { id: req.id };
 }
@@ -397,25 +475,55 @@ export async function openRequests(actor: Actor) {
 
 export const reportSchema = z.object({ from: z.iso.date(), to: z.iso.date() }).strict();
 
+/** Remote days per person per month, the pending count, every rejected day with its reason and outcome, and every half day. Directors only. */
 export async function report(q: z.infer<typeof reportSchema>, actor: Actor) {
   await requireDirector(actor.userId, "see the remote attendance report");
-  const rows = await prisma.remoteAttendanceRecord.findMany({ where: { date: { gte: day(q.from), lte: day(q.to) } }, select: { employeeId: true, status: true, rejectOutcome: true, checkInAt: true, checkOutAt: true } });
+  const rows = await prisma.remoteAttendanceRecord.findMany({ where: { date: { gte: day(q.from), lte: day(q.to) } }, orderBy: { date: "asc" }, select: { employeeId: true, date: true, status: true, half: true, rejectOutcome: true, decisionReason: true, checkInAt: true, checkOutAt: true } });
   const names = await namesOn([...new Set(rows.map((r) => r.employeeId))], businessToday());
+  const nameOf = (id: string) => names.get(id) ?? id;
   const people = new Map<string, { name: string; days: number; full: number; half: number; absent: number; lossOfPay: number; pending: number; minutes: number }>();
+  const monthly = new Map<string, { name: string; month: string; days: number; full: number; half: number; rejected: number; pending: number }>();
+  const rejected: Array<{ name: string; date: string; outcome: string; reason: string }> = [];
+  const halfDays: Array<{ name: string; date: string; half: string; reason: string }> = [];
   for (const r of rows) {
-    const p = people.get(r.employeeId) ?? { name: names.get(r.employeeId) ?? r.employeeId, days: 0, full: 0, half: 0, absent: 0, lossOfPay: 0, pending: 0, minutes: 0 };
+    const p = people.get(r.employeeId) ?? { name: nameOf(r.employeeId), days: 0, full: 0, half: 0, absent: 0, lossOfPay: 0, pending: 0, minutes: 0 };
+    const month = iso(r.date).slice(0, 7);
+    const m = monthly.get(`${r.employeeId}|${month}`) ?? { name: nameOf(r.employeeId), month, days: 0, full: 0, half: 0, rejected: 0, pending: 0 };
     p.days += 1;
-    if (r.status === "APPROVED_FULL") p.full += 1;
-    else if (r.status === "APPROVED_HALF") p.half += 1;
-    else if (r.status === "REJECTED" && r.rejectOutcome === "LOSS_OF_PAY") p.lossOfPay += 1;
-    else if (r.status === "REJECTED") p.absent += 1;
-    else p.pending += 1;
+    m.days += 1;
+    if (r.status === "APPROVED_FULL") {
+      p.full += 1;
+      m.full += 1;
+    } else if (r.status === "APPROVED_HALF") {
+      p.half += 1;
+      m.half += 1;
+      halfDays.push({ name: nameOf(r.employeeId), date: iso(r.date), half: r.half ?? "", reason: r.decisionReason ?? "" });
+    } else if (r.status === "REJECTED") {
+      if (r.rejectOutcome === "LOSS_OF_PAY") p.lossOfPay += 1;
+      else p.absent += 1;
+      m.rejected += 1;
+      rejected.push({ name: nameOf(r.employeeId), date: iso(r.date), outcome: r.rejectOutcome ?? "", reason: r.decisionReason ?? "" });
+    } else {
+      p.pending += 1;
+      m.pending += 1;
+    }
     if (r.checkInAt && r.checkOutAt) p.minutes += minutesBetween(r.checkInAt, r.checkOutAt);
     people.set(r.employeeId, p);
+    monthly.set(`${r.employeeId}|${month}`, m);
   }
   const list = [...people.values()].sort((a, b) => (a.name < b.name ? -1 : 1));
   const total = list.reduce((t, p) => ({ days: t.days + p.days, full: t.full + p.full, half: t.half + p.half, absent: t.absent + p.absent, lossOfPay: t.lossOfPay + p.lossOfPay, pending: t.pending + p.pending }), { days: 0, full: 0, half: 0, absent: 0, lossOfPay: 0, pending: 0 });
-  return { from: q.from, to: q.to, total, people: list.map((p) => ({ ...p, hours: `${Math.floor(p.minutes / 60)}:${String(p.minutes % 60).padStart(2, "0")}` })) };
+  const pendingNow = await prisma.remoteAttendanceRecord.count({ where: { status: "PENDING" } });
+  return {
+    from: q.from,
+    to: q.to,
+    total,
+    pendingNow,
+    people: list.map((p) => ({ ...p, hours: `${Math.floor(p.minutes / 60)}:${String(p.minutes % 60).padStart(2, "0")}` })),
+    perMonth: [...monthly.values()].sort((a, b) => (a.month + a.name < b.month + b.name ? -1 : 1)),
+    rejected,
+    halfDays,
+  };
 }
 
 // ── Settings (Not set until a director sets them) and reminders ──

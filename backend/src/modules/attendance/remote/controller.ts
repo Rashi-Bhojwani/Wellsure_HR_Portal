@@ -12,6 +12,7 @@ export const checkOut = async (req: Request, res: Response): Promise<void> => vo
 export const mine = async (req: Request, res: Response): Promise<void> => void res.status(200).json({ records: await svc.myRecords(req.user!.userId, req.query as { from?: string; to?: string }) });
 export const raise = async (req: Request, res: Response): Promise<void> => void res.status(201).json(await svc.requestChange(req.user!.userId, (req.params as { id: string }).id, req.body));
 
+export const missed = async (req: Request, res: Response): Promise<void> => void res.status(201).json(await svc.requestMissedDay(req.user!.userId, req.body));
 export const marks = async (req: Request, res: Response): Promise<void> => {
   await svc.getSettings(actor(req)); // a director check, and nothing else, before listing
   res.status(200).json({ people: await svc.listRemote() });

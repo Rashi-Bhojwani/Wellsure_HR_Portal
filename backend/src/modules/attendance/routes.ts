@@ -203,6 +203,7 @@ attendanceRouter.post("/me/remote/check-in", remote.checkIn);
 attendanceRouter.post("/me/remote/check-out", remote.checkOut);
 attendanceRouter.get("/me/remote/records", validate({ query: remote.myRecordsQuerySchema }), remote.mine);
 attendanceRouter.post("/me/remote/records/:id/requests", validate({ params: remote.idParamsSchema, body: remoteSvc.requestSchema }), remote.raise);
+attendanceRouter.post("/me/remote/missed-day", validate({ body: remoteSvc.missedSchema }), remote.missed);
 // The directors' routes. The key is one only a Super Admin holds, and the service checks that the person is a director on every call: HR, managers and the Developer role are refused.
 const directors = requirePermission("attendance.unlock");
 attendanceRouter.get("/remote/marks", directors, remote.marks);

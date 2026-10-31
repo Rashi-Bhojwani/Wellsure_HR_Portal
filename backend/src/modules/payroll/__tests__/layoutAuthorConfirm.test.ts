@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "../../../lib/prisma";
 import { cleanupEmployeeTestOrgMasters, cleanupFullTestEmployee, createEmployeeTestOrgMasters, createFullTestEmployee, type TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
-import { confirmLayout, getLayout, LAYOUT_ITEMS, previewLayoutConfirm, previewLayoutSave, saveLayout } from "../run/layouts";
+import { confirmLayout, getLayout, LAYOUT_ITEMS, layoutReady, previewLayoutConfirm, previewLayoutSave, saveLayout } from "../run/layouts";
 import { cleanupPayrollRowsBy, useSecondDirectorChecks } from "./payrollTestHelpers";
 
 // The author of a bank-file or statutory-file layout cannot confirm it (with the second-director check on for rule confirmation, which covers layouts). Layouts share the confirmation core with
@@ -48,6 +48,24 @@ describe("a layout's author cannot confirm it", () => {
     expect((await getLayout(key)).layout.status).toBe("CONFIRMED");
     const conf = await prisma.payrollItemConfirmation.findFirstOrThrow({ where: { key }, orderBy: { version: "desc" } });
     expect([conf.confirmedByUserId, conf.selfConfirmed]).toEqual([b.userId, false]);
+  });
+
+  it("any change to a confirmed bank layout voids the confirmation: the new version is not confirmed and no file can be made from it", async () => {
+    const key = "BANK_TEMPLATE";
+    expect((await getLayout(key)).layout.status).toBe("CONFIRMED"); // from the test above
+    expect((await layoutReady(key)).ready).toBe(true);
+    const changed = { ...VALUE[key], delimiter: "|" };
+    const p = await previewLayoutSave(key, changed);
+    await saveLayout(key, { value: changed, fingerprint: p.fingerprint }, { userId: a.userId });
+    const after = await getLayout(key);
+    expect(after.layout.status).not.toBe("CONFIRMED"); // the new version waits for a different director
+    expect((await layoutReady(key)).ready).toBe(false);
+    expect(after.layout.lastConfirmed?.version).toBeLessThan(after.layout.current!.version); // the old confirmation stays on the old version, never carried over
+    const stillMaker = await previewLayoutConfirm(key, a.userId);
+    expect(stillMaker.blocked).toMatch(/You wrote this value/); // and the person who changed it still cannot confirm it
+    const again = await previewLayoutConfirm(key, b.userId);
+    await confirmLayout(key, { version: again.version, note: "checked the changed layout", fingerprint: again.fingerprint }, { userId: b.userId });
+    expect((await layoutReady(key)).ready).toBe(true);
   });
 
   it("every statutory file layout (PF, ESI, PT, LWF) is held to the same rule", async () => {
