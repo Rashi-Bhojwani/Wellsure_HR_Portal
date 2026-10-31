@@ -8,6 +8,9 @@ import { HttpError } from "../../middleware/errorHandler";
 import { getSocketServer, permissionRoom } from "../../realtime/emit";
 import { notifyEmployee } from "../notifications/notifyEmployee";
 import { assertReady, loadInForce, type InForceLists } from "./settings";
+import { PEEPS_REQUIRED } from "@shared/constants/peeps";
+import { businessToday } from "../../lib/businessDate";
+import { assertSettings, getSetting as getPeepsSetting } from "../peeps/settings";
 import type { ActorMeta, AssetDetail, AssetSummary, AssetViewer, AssignmentView, AssetEventView, HolderRef, MyAssetView, PersonRef } from "./types";
 
 // The asset register (docs/plans/PEEPS_PLAN.md §B.2, Peeps module 1).
@@ -253,6 +256,37 @@ export async function listMine(viewer: AssetViewer): Promise<{ current: MyAssetV
     endReason: r.endReason,
   });
   return { current: rows.filter((r) => r.endedAt === null).map(view), past: rows.filter((r) => r.endedAt !== null).map(view) };
+}
+
+// ── HR at onboarding (Q-14) ─────────────────────────────────────────────────
+// HR does not see the register. It may issue an asset only to a new joiner, only while the directors' asset audience setting says HR may, and only once
+// "who counts as a new joiner" is set: until both are confirmed, issuing refuses.
+
+async function assertOnboardingOpen(): Promise<number> {
+  await assertSettings(PEEPS_REQUIRED["assets.hrOnboarding"], "Issuing assets at onboarding");
+  const audience = await getPeepsSetting<{ hrOnboardingIssue: boolean }>("audience.assets");
+  if (!audience?.hrOnboardingIssue) throw new HttpError(403, "The directors have not allowed HR to issue assets at onboarding.", "FORBIDDEN");
+  return (await getPeepsSetting<number>("assets.newJoinerWindowDays"))!;
+}
+
+/** What HR may hand to a new joiner: assets nobody holds whose status allows issuing. Name, ID and category only; no holders, no history. */
+export async function onboardingAvailable(): Promise<Array<{ id: string; assetId: string; name: string; category: string; serialNumber: string | null }>> {
+  await assertOnboardingOpen();
+  const lists = await loadInForce();
+  assertReady(lists);
+  const issuable = lists.statuses.filter((s) => s.issuable).map((s) => s.code);
+  const rows = await prisma.asset.findMany({ where: { statusCode: { in: issuable }, assignments: { none: OPEN } }, orderBy: { number: "asc" }, take: 500 });
+  return rows.map((a) => ({ id: a.id, assetId: formatAssetId(a.number), name: a.name, category: lists.label("CATEGORIES", a.categoryCode)!, serialNumber: a.serialNumber }));
+}
+
+export async function issueAtOnboarding(id: string, input: { employeeId: string; conditionCode: string; note?: string }, viewer: AssetViewer, meta: ActorMeta): Promise<{ assetId: string; issued: true }> {
+  const windowDays = await assertOnboardingOpen();
+  const joiner = await prisma.employee.findUnique({ where: { id: input.employeeId }, select: { dateOfJoining: true, status: true } });
+  if (!joiner) throw new HttpError(404, "Employee not found.", "NOT_FOUND");
+  const earliest = new Date(businessToday().getTime() - windowDays * 86_400_000);
+  if (joiner.dateOfJoining < earliest) throw new HttpError(403, `Only a new joiner (joined within the last ${windowDays} days) can be issued an asset at onboarding.`, "NOT_A_NEW_JOINER");
+  const done = await issueAsset(id, input, { ...viewer, dataScope: "ALL" }, meta);
+  return { assetId: done.assetId, issued: true };
 }
 
 // ── Changing ───────────────────────────────────────────────────────────────

@@ -102,6 +102,13 @@ export const PERMISSION_KEYS = [
   "assets.view", // the asset register: every asset, its holder and its history (holders narrowed to the caller's data scope)
   "assets.manage", // add and edit assets; issue, return, transfer; record a loss or damage
   "assets.settings.manage", // prepare the asset categories, statuses and conditions (a director other than the preparer confirms them)
+  "assets.onboarding.issue", // HR: issue an asset to a new joiner during onboarding (only while the directors' asset settings allow it)
+  "office.workspace", // open the Wellsure Office workspace (every member; the directors)
+  "office.members.manage", // appoint and remove Wellsure Office members (directors only; a different director confirms)
+  "peeps.settings.manage", // prepare Peeps working settings (a director who did not enter them confirms)
+  "unmute.manage", // authorise Unmute hosts and look after every booking (directors only)
+  "badges.give", // give a badge (who may is also decided by the badge settings)
+  "nudges.send", // send a private nudge (who may is also decided by the nudge settings)
   // PEEPS-END
 ] as const;
 
@@ -138,6 +145,7 @@ export const PERMISSION_GROUPS = [
   "Payroll",
   // PEEPS-BEGIN assets
   "Assets",
+  "Wellsure Office",
   // PEEPS-END
 ] as const;
 
@@ -253,6 +261,13 @@ export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
   "assets.view": { group: "Assets", label: "View the asset register", description: "See every asset, who holds it and its full history. Holders outside the person's data scope are not shown." },
   "assets.manage": { group: "Assets", label: "Manage the asset register", description: "Add and edit assets, issue them to employees, take them back, transfer them, and record a loss or damage. No money is involved." },
   "assets.settings.manage": { group: "Assets", label: "Prepare asset settings", description: "Enter the lists of asset categories, statuses and conditions. A list is used only after a director who did not enter it confirms it." },
+  "assets.onboarding.issue": { group: "Assets", label: "Issue assets at onboarding", description: "Issue an asset to a new joiner during onboarding, only while the directors' asset settings allow HR to. Does not open the register." },
+  "office.workspace": { group: "Wellsure Office", label: "Open the Wellsure Office", description: "Given only by Wellsure Office membership, which the directors decide. A grant made here does nothing on its own." },
+  "office.members.manage": { group: "Wellsure Office", label: "Manage Wellsure Office members", description: "Appoint and remove members. Directors only; a different director confirms each change." },
+  "peeps.settings.manage": { group: "Wellsure Office", label: "Prepare Peeps settings", description: "Enter Peeps working settings. A director who did not enter a setting confirms it before it is used." },
+  "unmute.manage": { group: "Wellsure Office", label: "Look after Unmute", description: "Authorise hosts and handle bookings when a host is removed. Directors only." },
+  "badges.give": { group: "Wellsure Office", label: "Give badges", description: "Give badges to employees, while the badge settings allow it." },
+  "nudges.send": { group: "Wellsure Office", label: "Send private nudges", description: "Send a private note to an employee, while the nudge settings allow it." },
   // PEEPS-END
 };
 

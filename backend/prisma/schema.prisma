@@ -521,6 +521,13 @@ model Employee {
   // PEEPS-BEGIN assets
   assetAssignments           AssetAssignment[]
   // PEEPS-END
+  // PEEPS-BEGIN office-unmute
+  officeMembershipChanges    OfficeMembershipChange[]  @relation("OfficeMembershipChangeEmployee")
+  unmuteHostAuthorisations   UnmuteHostAuthorisation[]
+  unmuteSlots                UnmuteSlot[]
+  unmuteBookingsAsHost       UnmuteBooking[]           @relation("UnmuteBookingHost")
+  unmuteBookingsAsBooker     UnmuteBooking[]           @relation("UnmuteBookingBooker")
+  // PEEPS-END
 
   @@index([status])
   @@index([dateOfJoining])
@@ -3437,4 +3444,161 @@ model AssetEvent {
   @@map("asset_events")
 }
 
+// PEEPS-END
+
+// PEEPS-BEGIN office-unmute
+// Peeps core and Unmute (owner decisions D-28, D-29, D-30; docs/plans/PEEPS_PLAN.md). Settings: append-only versions, each confirmed by a director
+// who did not enter it. Wellsure Office membership: append-only proposals, confirmations and applications; an applied change writes ordinary per-person
+// permission grants. Unmute stores only participants, the slot, the booker's timezone, timestamps and completion status: no topic, notes or content.
+
+model PeepsSettingVersion {
+  id              String   @id @default(cuid())
+  key             String
+  version         Int
+  value           Json
+  note            String   @default("")
+  enteredByUserId String   @map("entered_by_user_id")
+  enteredAt       DateTime @default(now()) @map("entered_at") @db.Timestamptz(3)
+
+  confirmation PeepsSettingConfirmation?
+
+  @@unique([key, version])
+  @@map("peeps_setting_versions")
+}
+
+model PeepsSettingConfirmation {
+  id                String              @id @default(cuid())
+  versionId         String              @unique @map("version_id")
+  version           PeepsSettingVersion @relation(fields: [versionId], references: [id])
+  confirmedByUserId String              @map("confirmed_by_user_id")
+  confirmedAt       DateTime            @default(now()) @map("confirmed_at") @db.Timestamptz(3)
+
+  @@map("peeps_setting_confirmations")
+}
+
+enum OfficeChangeKind {
+  APPOINT
+  UPDATE
+  REMOVE
+  REPLACE
+}
+
+// A director's proposal to change who is in the Wellsure Office (or a member's capabilities). REPLACE moves a member's capabilities and grants to
+// another person in one step (fromEmployeeId leaves, employeeId joins).
+model OfficeMembershipChange {
+  id               String           @id @default(cuid())
+  kind             OfficeChangeKind
+  employeeId       String           @map("employee_id")
+  employee         Employee         @relation("OfficeMembershipChangeEmployee", fields: [employeeId], references: [id])
+  fromEmployeeId   String?          @map("from_employee_id")
+  capabilities     Json             @default("[]")
+  effectiveFrom    DateTime         @map("effective_from") @db.Timestamptz(3)
+  reason           String
+  proposedByUserId String           @map("proposed_by_user_id")
+  proposedAt       DateTime         @default(now()) @map("proposed_at") @db.Timestamptz(3)
+
+  confirmation OfficeMembershipConfirmation?
+  application  OfficeMembershipApplication?
+
+  @@index([employeeId])
+  @@index([effectiveFrom])
+  @@map("office_membership_changes")
+}
+
+model OfficeMembershipConfirmation {
+  id                String                 @id @default(cuid())
+  changeId          String                 @unique @map("change_id")
+  change            OfficeMembershipChange @relation(fields: [changeId], references: [id])
+  confirmedByUserId String                 @map("confirmed_by_user_id")
+  confirmedAt       DateTime               @default(now()) @map("confirmed_at") @db.Timestamptz(3)
+
+  @@map("office_membership_confirmations")
+}
+
+// The moment a confirmed change took effect (written by the confirmation itself when it is due, or by the scheduled job at its effective time).
+model OfficeMembershipApplication {
+  id            String                 @id @default(cuid())
+  changeId      String                 @unique @map("change_id")
+  change        OfficeMembershipChange @relation(fields: [changeId], references: [id])
+  appliedAt     DateTime               @default(now()) @map("applied_at") @db.Timestamptz(3)
+  grantsAdded   Int                    @map("grants_added")
+  grantsRemoved Int                    @map("grants_removed")
+
+  @@map("office_membership_applications")
+}
+
+enum UnmuteHostAction {
+  AUTHORISE
+  REVOKE
+}
+
+model UnmuteHostAuthorisation {
+  id         String           @id @default(cuid())
+  employeeId String           @map("employee_id")
+  employee   Employee         @relation(fields: [employeeId], references: [id])
+  action     UnmuteHostAction
+  reason     String
+  byUserId   String           @map("by_user_id")
+  at         DateTime         @default(now()) @db.Timestamptz(3)
+
+  @@index([employeeId, at])
+  @@map("unmute_host_authorisations")
+}
+
+enum UnmuteSlotStatus {
+  OPEN
+  WITHDRAWN
+}
+
+model UnmuteSlot {
+  id             String           @id @default(cuid())
+  hostEmployeeId String           @map("host_employee_id")
+  host           Employee         @relation(fields: [hostEmployeeId], references: [id])
+  startsAt       DateTime         @map("starts_at") @db.Timestamptz(3)
+  endsAt         DateTime         @map("ends_at") @db.Timestamptz(3)
+  status         UnmuteSlotStatus @default(OPEN)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  withdrawnAt    DateTime?        @map("withdrawn_at") @db.Timestamptz(3)
+
+  bookings UnmuteBooking[]
+
+  @@index([hostEmployeeId, startsAt])
+  @@map("unmute_slots")
+}
+
+enum UnmuteBookingStatus {
+  BOOKED
+  CANCELLED
+  RESCHEDULED
+  COMPLETED
+  NOT_HELD
+}
+
+enum UnmuteCancelledBy {
+  BOOKER
+  HOST
+  SYSTEM
+}
+
+model UnmuteBooking {
+  id                String              @id @default(cuid())
+  slotId            String              @map("slot_id")
+  slot              UnmuteSlot          @relation(fields: [slotId], references: [id])
+  hostEmployeeId    String              @map("host_employee_id")
+  host              Employee            @relation("UnmuteBookingHost", fields: [hostEmployeeId], references: [id])
+  bookerEmployeeId  String              @map("booker_employee_id")
+  booker            Employee            @relation("UnmuteBookingBooker", fields: [bookerEmployeeId], references: [id])
+  timezone          String
+  status            UnmuteBookingStatus @default(BOOKED)
+  bookedAt          DateTime            @default(now()) @map("booked_at") @db.Timestamptz(3)
+  cancelledAt       DateTime?           @map("cancelled_at") @db.Timestamptz(3)
+  cancelledBy       UnmuteCancelledBy?  @map("cancelled_by")
+  rescheduledAt     DateTime?           @map("rescheduled_at") @db.Timestamptz(3)
+  rescheduledToId   String?             @map("rescheduled_to_id")
+  completedAt       DateTime?           @map("completed_at") @db.Timestamptz(3)
+
+  @@index([bookerEmployeeId])
+  @@index([hostEmployeeId])
+  @@map("unmute_bookings")
+}
 // PEEPS-END

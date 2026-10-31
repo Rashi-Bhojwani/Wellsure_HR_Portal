@@ -44,6 +44,10 @@ import { payslipRouter } from "./modules/payroll/payslipRoutes";
 // PEEPS-BEGIN assets
 import { assetsRouter } from "./modules/assets/routes";
 // PEEPS-END
+// PEEPS-BEGIN office-unmute
+import { peepsRouter } from "./modules/peeps/routes";
+import { unmuteRouter } from "./modules/unmute/routes";
+// PEEPS-END
 
 // Every API router and where it's mounted — one list, so the route
 // inventory test (modules/managers/__tests__/routeInventory.test.ts) can see
@@ -92,6 +96,10 @@ const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   { path: "/api/biometric", router: biometricRouter },
   // PEEPS-BEGIN assets
   { path: "/api/assets", router: assetsRouter },
+  // PEEPS-END
+  // PEEPS-BEGIN office-unmute
+  { path: "/api/peeps", router: peepsRouter },
+  { path: "/api/unmute", router: unmuteRouter },
   // PEEPS-END
 ];
 

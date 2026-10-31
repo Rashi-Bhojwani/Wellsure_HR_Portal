@@ -145,6 +145,9 @@ export const STANDALONE_ROOT_MODELS: Record<string, string> = {
   Asset: "asset register entry (Peeps assets); no employee FK; deleteWithDependents(\"Asset\", ids) takes its assignments and events with it (purge-guarded)",
   AssetSettingVersion: "append-only asset category/status/condition lists (Peeps assets); user columns are plain text; deleteWithDependents(\"AssetSettingVersion\", ids) takes its confirmation with it (purge-guarded)",
   // PEEPS-END
+  // PEEPS-BEGIN office-unmute
+  PeepsSettingVersion: "append-only Peeps settings (D-29); user columns are plain text; deleteWithDependents(\"PeepsSettingVersion\", ids) takes its confirmation with it (purge-guarded)",
+  // PEEPS-END
 };
 
 // Columns holding a StorageService key. When the engine deletes a row it
@@ -355,6 +358,9 @@ const PURGE_GUARDED_MODELS = new Set(["RawPunch", "ManualAttendanceEntry", "Atte
 
 // PEEPS-BEGIN assets
 for (const m of ["Asset", "AssetAssignment", "AssetEvent", "AssetSettingVersion", "AssetSettingConfirmation"]) PURGE_GUARDED_MODELS.add(m);
+// PEEPS-END
+// PEEPS-BEGIN office-unmute
+for (const m of ["PeepsSettingVersion", "PeepsSettingConfirmation", "OfficeMembershipChange", "OfficeMembershipConfirmation", "OfficeMembershipApplication", "UnmuteHostAuthorisation", "UnmuteSlot", "UnmuteBooking"]) PURGE_GUARDED_MODELS.add(m);
 // PEEPS-END
 
 // Deletes the given rows of `model` and every row that depends on them,

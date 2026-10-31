@@ -169,6 +169,13 @@ export const REVIEWED_NOT_SENSITIVE: readonly PermissionKey[] = [
   "assets.view", // what equipment exists and who holds it; no money, no personal data beyond the holder's name
   "assets.manage",
   "assets.settings.manage",
+  "assets.onboarding.issue",
+  "office.workspace", // the workspace holds no pay, bank or statutory data
+  "office.members.manage",
+  "peeps.settings.manage",
+  "unmute.manage", // booking times and participants only; no content exists to see
+  "badges.give",
+  "nudges.send", // sending, not reading other people's nudges
   // PEEPS-END
 ];
 

@@ -4,8 +4,10 @@ import * as service from "./service";
 import * as settings from "./settings";
 import type { ActorMeta, AssetViewer } from "./types";
 
+// The register is company-wide work for the directors and the Wellsure Office members they chose (requireOffice let the caller in), so it is read with
+// ALL scope whatever the caller's role scope is. Self routes keep the caller's own scope.
 function viewer(req: Request): AssetViewer {
-  return { userId: req.user!.userId, employeeId: req.user!.employeeId, dataScope: req.user!.dataScope, permissions: req.user!.permissions };
+  return { userId: req.user!.userId, employeeId: req.user!.employeeId, dataScope: req.peeps ? "ALL" : req.user!.dataScope, permissions: req.user!.permissions };
 }
 function meta(req: Request): ActorMeta {
   return { actorUserId: req.user!.userId, ipAddress: req.ip ?? null, userAgent: req.headers["user-agent"] ?? null };
@@ -61,6 +63,14 @@ export async function markLost(req: Request, res: Response): Promise<void> {
 }
 export async function markDamaged(req: Request, res: Response): Promise<void> {
   res.status(200).json(await service.markDamaged(id(req), req.body, viewer(req), meta(req)));
+}
+
+// HR at onboarding
+export async function onboardingAvailable(_req: Request, res: Response): Promise<void> {
+  res.status(200).json(await service.onboardingAvailable());
+}
+export async function issueAtOnboarding(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await service.issueAtOnboarding(id(req), req.body, viewer(req), meta(req)));
 }
 
 // Self

@@ -25,6 +25,9 @@ export async function runWorker(): Promise<void> {
   registerAttendanceEngine(); // jobs that change data (e.g. separations) ask for recompute too
   registerPayrollSeams();
   const workers = startWorkers();
+  // PEEPS-BEGIN office-unmute
+  workers.push(...(await import("../modules/peeps/jobs")).startPeepsWorkers()); // Wellsure Office membership changes at their effective time
+  // PEEPS-END
   logger.info({ count: workers.length }, "worker started");
   // Backlog, failed-job counts and a heartbeat for the alarms (nothing is published locally).
   const queueCounts = bullCountsFn();

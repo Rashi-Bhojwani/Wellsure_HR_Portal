@@ -17,6 +17,9 @@ export async function runScheduler(): Promise<void> {
   await initFieldEncryption();
   await redis.connect();
   await registerScheduledJobs();
+  // PEEPS-BEGIN office-unmute
+  await (await import("../modules/peeps/jobs")).registerPeepsScheduledJobs();
+  // PEEPS-END
   logger.info("scheduler ready");
 
   // Nothing to poll yet — BullMQ's repeatable-job scheduling runs inside
