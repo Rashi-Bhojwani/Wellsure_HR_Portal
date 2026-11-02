@@ -691,6 +691,8 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/badges/mine": self,
   "GET /api/badges/given": self,
   "GET /api/badges/directory": everyone("active badge counts for the directory, company-wide to signed-in staff (Q-16); the Developer is refused"),
+  "GET /api/badges/recent": everyone("the latest active badges for the home page (D-36: public to signed-in staff; giver and message by setting); the Developer is refused"),
+  "POST /api/badges/catalogue/starter": admin,
   "GET /api/badges/counts": everyone("everyone's active badge count, for the directory and the org chart (Q-16: company-wide to signed-in staff); the Developer is refused"),
   "GET /api/badges/people/:employeeId": everyone("a person's active badges without the message, company-wide to signed-in staff (Q-16); the Developer is refused"),
   "POST /api/badges": scoped("giving: the directors only (Q-16, service); a Not-set widening setting could add members and managers; never HR"),

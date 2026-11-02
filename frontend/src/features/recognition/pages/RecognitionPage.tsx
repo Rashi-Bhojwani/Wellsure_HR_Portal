@@ -9,12 +9,13 @@ import { DataTable, EmptyState, PageHeader, Panel, SideDrawer, Stack, StatusChip
 import * as api from "../api";
 import type { Badge, Nudge } from "../api";
 import { RecipientSelect } from "../RecipientSelect";
+import { BADGE_DURATION_LABELS } from "@shared/constants/peeps";
 
 const BADGE_FORM = "give-badge-form";
 const NUDGE_FORM = "send-nudge-form";
 
-// Employee portal → Recognition (D-29): the badges I received, my private nudges (only I, the sender and the directors can read them), and — when the
-// directors' settings let me — giving a badge or sending a private nudge. A badge or nudge from the Wellsure Office shows as the workspace, not the person.
+// Employee portal → Recognition: the badges and cheers I received (D-36: given along the reporting line, public to staff), my corrective notes (D-37:
+// only I, the sender and the directors read them), giving a badge to someone along my line, and — for a director — sending a corrective note.
 export function RecognitionPage() {
   const queryClient = useQueryClient();
   const bStatus = useQuery({ queryKey: ["recognition", "badge-status"], queryFn: api.badgeStatus });
@@ -43,7 +44,7 @@ export function RecognitionPage() {
   const actions = (
     <Space wrap size={space[2]}>
       {bStatus.data?.canGive && <Button type="primary" icon={<TrophyOutlined />} onClick={() => setGiving(api.newKey())}>Give a badge</Button>}
-      {nStatus.data?.canSend && <Button icon={<SendOutlined />} onClick={() => setSending(api.newKey())}>Send a private nudge</Button>}
+      {nStatus.data?.canSend && <Button icon={<SendOutlined />} onClick={() => setSending(api.newKey())}>Send a corrective note</Button>}
     </Space>
   );
   const badgeTitle = (b: Badge) => (
@@ -56,7 +57,7 @@ export function RecognitionPage() {
 
   return (
     <>
-      <PageHeader title="Recognition" subtitle="Badges and private notes you have received" actions={actions} />
+      <PageHeader title="Recognition" subtitle="Badges and cheers you have received, and private notes" actions={actions} />
       <Stack>
         <Panel title="My badges">
           <DataTable<Badge>
@@ -76,7 +77,7 @@ export function RecognitionPage() {
             mobile={{ title: (b) => b.badge, subtitle: (b) => `${b.from ?? ""} · ${formatDate(b.givenAt)}`, status: badgeState }}
           />
         </Panel>
-        <Panel title="Private nudges" subtitle="Only you, the sender and the directors can read these">
+        <Panel title="Corrective notes" subtitle="Private: only you, the sender and the directors can read these">
           <DataTable<Nudge>
             rowKey="id"
             loading={nudges.isLoading}
@@ -135,14 +136,14 @@ export function RecognitionPage() {
             <RecipientSelect fetcher={api.badgeRecipients} queryKey="badge-recipients" />
           </Form.Item>
           <Form.Item name="badgeCode" label="Badge" rules={[{ required: true }]}>
-            <Select options={(bStatus.data?.catalogue ?? []).map((c) => ({ value: c.code, label: c.label }))} />
+            <Select options={(bStatus.data?.catalogue ?? []).map((c) => ({ value: c.code, label: `${c.label} · ${BADGE_DURATION_LABELS[c.duration].toLowerCase()}` }))} />
           </Form.Item>
           <Form.Item name="message" label="Message (optional)" rules={[{ max: 280 }]}>
             <Input.TextArea rows={2} />
           </Form.Item>
         </Form>
       </SideDrawer>
-      <SideDrawer open={sending !== null} onClose={() => setSending(null)} title="Send a private nudge" subtitle="Only they, you and the directors can read it. They are told only that something is waiting." formId={NUDGE_FORM} primaryLabel="Send" primaryLoading={send.isPending}>
+      <SideDrawer open={sending !== null} onClose={() => setSending(null)} title="Send a corrective note" subtitle="Private: only they, you and the directors can read it. They are told only that something is waiting." formId={NUDGE_FORM} primaryLabel="Send" primaryLoading={send.isPending}>
         <Form id={NUDGE_FORM} form={nudgeForm} layout="vertical" requiredMark onFinish={(values) => send.mutate(values)}>
           <Form.Item name="recipientEmployeeId" label="To" rules={[{ required: true }]}>
             <RecipientSelect fetcher={api.nudgeRecipients} queryKey="nudge-recipients" />

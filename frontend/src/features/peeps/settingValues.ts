@@ -1,4 +1,4 @@
-import { DIRECTORY_CONTACT_LABELS, type DirectoryContactField, type PeepsSettingKey } from "@shared/constants/peeps";
+import { BADGE_DURATION_LABELS, DIRECTORY_CONTACT_LABELS, type BadgeDuration, type DirectoryContactField, type PeepsSettingKey } from "@shared/constants/peeps";
 
 // The shapes behind each Peeps setting editor, and a setting's value in words.
 
@@ -8,7 +8,6 @@ export const NUMBERS: Partial<Record<PeepsSettingKey, { min: number; max: number
   "unmute.bookingWindowDays": { min: 1, max: 365, unit: "days" },
   "unmute.minNoticeHours": { min: 0, max: 720, unit: "hours" },
   "unmute.cancellationNoticeHours": { min: 0, max: 720, unit: "hours" },
-  "badges.durationDays": { min: 1, max: 3650, unit: "days" },
 };
 export const BOOLEANS: Partial<Record<PeepsSettingKey, Array<{ field: string; label: string }>>> = {
   "audience.assets": [
@@ -17,10 +16,15 @@ export const BOOLEANS: Partial<Record<PeepsSettingKey, Array<{ field: string; la
   "audience.unmute": [{ field: "employeesMayBook", label: "Employees (HR included) may book Unmute conversations" }],
   "leave.calendarShowsType": [{ field: "showType", label: "Team calendars name wedding and bereavement leave" }],
   "leave.showSensitiveTypes": [{ field: "show", label: "Managers, team calendars and managers' notifications name menstrual and medical leave" }],
-  "badges.revocation": [{ field: "allowed", label: "A giver (or a director) may revoke a badge" }],
-  "nudges.revocation": [{ field: "allowed", label: "A sender (or a director) may withdraw a nudge" }],
+  "audience.badges": [{ field: "officeGivesToAnyone", label: "Wellsure Office members (with Give badges) may give to anyone" }],
+  "badges.repeat": [{ field: "allowed", label: "One giver may give the same badge again to someone who still holds it" }],
+  "badges.publicDetails": [
+    { field: "giver", label: "Show who gave it on profiles, the directory and the home page" },
+    { field: "reason", label: "Show the giver's message there too" },
+  ],
+  "nudges.enabled": [{ field: "enabled", label: "Directors may send private corrective notes" }],
+  "nudges.revocation": [{ field: "allowed", label: "A sender (a director) may withdraw a corrective note" }],
 };
-export const GIVERS: Partial<Record<PeepsSettingKey, string>> = { "audience.badges": "givers", "audience.nudges": "senders" };
 export const LIMITS: Partial<Record<PeepsSettingKey, string>> = { "badges.limits": "perGiverPerMonth", "nudges.limits": "perSenderPerMonth" };
 
 /** A setting's value in words, for the lists. */
@@ -30,11 +34,6 @@ export function describeValue(key: PeepsSettingKey, value: unknown): string {
   if (n) return `${String(value)} ${n.unit}`;
   const b = BOOLEANS[key];
   if (b) return b.map((f) => `${f.label}: ${(value as Record<string, boolean>)[f.field] ? "yes" : "no"}`).join(" · ");
-  const g = GIVERS[key];
-  if (g) {
-    const list = (value as Record<string, string[]>)[g] ?? [];
-    return list.length ? `Directors, ${list.map((x) => (x === "MANAGERS" ? "managers (own team)" : "Wellsure Office members")).join(", ")}` : "Directors only";
-  }
   const l = LIMITS[key];
   if (l) return `${(value as Record<string, number>)[l]} per month`;
   if (key === "unmute.availability") {
@@ -45,6 +44,7 @@ export function describeValue(key: PeepsSettingKey, value: unknown): string {
     const list = value as DirectoryContactField[];
     return list.length ? list.map((f) => DIRECTORY_CONTACT_LABELS[f]).join(", ") : "None";
   }
-  if (key === "badges.catalogue") return (value as Array<{ label: string }>).map((x) => x.label).join(", ");
+  if (key === "badges.catalogue") return (value as Array<{ label: string; duration?: BadgeDuration }>).map((x) => (x.duration ? `${x.label} (${BADGE_DURATION_LABELS[x.duration].toLowerCase()})` : x.label)).join(", ");
+  if (key === "badges.noManagerFallback") return (value as { upTo: string }).upTo === "DIRECTORS" ? "May give up to the directors" : "Nobody above them";
   return String(value);
 }

@@ -3842,6 +3842,8 @@ enum RecognitionGiverKind {
   DIRECTOR
   OFFICE
   MANAGER
+  DOWNWARD // D-36: to someone under the giver in their reporting line
+  UPWARD // D-36: to the giver's manager, on up their chain to a director
 }
 
 model BadgeAward {

@@ -18,6 +18,13 @@ import { clearPeepsSettings, setSetting } from "../../peeps/__tests__/peepsTestK
 type Who = "director" | "director2" | "hrAdmin" | "hrExec" | "manager" | "report" | "employee" | "colleague" | "developer";
 type Person = { employeeId: string; employeeCode: string; userId: string };
 
+/** Every object key in a JSON value (field names, not values: random ids can contain any letters). */
+const keysOf = (v: unknown, out: string[] = []): string[] => {
+  if (Array.isArray(v)) for (const x of v) keysOf(x, out);
+  else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) { out.push(k); keysOf(x, out); }
+  return out;
+};
+
 describe("avatars and directory", () => {
   let org: TestOrgMasters;
   let restoreSystemSettings: () => Promise<void>;
@@ -158,8 +165,9 @@ describe("avatars and directory", () => {
 
     it("never carries pay, bank, statutory, health, address or private Peeps data, for anyone looking (a director included)", async () => {
       for (const who of ["colleague", "manager", "hrAdmin", "director"] as const) {
-        const { text } = await everything(who);
-        expect(text, who).not.toMatch(/salary|ctc|ifsc|accountNumber|bank|\bpan\b|aadhaar|\buan\b|\besi\b|bloodGroup|gender|address|emergency|nudge|booking|unmute|asset/i);
+        const { text, list, one } = await everything(who);
+        const chart = (await get(who, "/api/people/org-chart")).body;
+        expect(keysOf([list, one, chart]).filter((k) => /salary|ctc|ifsc|account|bank|^pan|aadhaar|^uan|^esi|blood|gender|address|emergency|nudge|booking|unmute|asset|personalEmail/i.test(k)), who).toEqual([]);
         expect(text, who).not.toContain("Test address");
       }
     });
@@ -173,7 +181,7 @@ describe("avatars and directory", () => {
     });
 
     it("badges show company-wide: everyone's count in one request for the directory and the org chart; the Developer is refused", async () => {
-      await setSetting("badges.catalogue", [{ code: "DEMO_THANKS", label: "DEMO Thank you" }], p.director, p.director2);
+      await setSetting("badges.catalogue", [{ code: "DEMO_THANKS", label: "DEMO Thank you", duration: "PERMANENT" }], p.director, p.director2);
       expect((await request(app).post("/api/badges").set(...authHeader(tok.director)).send({ recipientEmployeeId: p.employee.employeeId, badgeCode: "DEMO_THANKS", idempotencyKey: `avatars-${Date.now()}` })).status).toBe(201);
       for (const who of ["colleague", "manager", "hrExec"] as const) expect((await get(who, "/api/badges/counts")).body.counts[p.employee.employeeId], who).toBe(1);
       expect((await get("developer", "/api/badges/counts")).status).toBe(403);

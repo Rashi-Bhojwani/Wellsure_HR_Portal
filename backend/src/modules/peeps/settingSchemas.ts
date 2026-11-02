@@ -1,10 +1,9 @@
 import { z } from "zod";
-import { DIRECTORY_CONTACT_FIELDS, GIVER_KINDS, type PeepsSettingKey } from "@shared/constants/peeps";
+import { BADGE_DURATIONS, DIRECTORY_CONTACT_FIELDS, type PeepsSettingKey } from "@shared/constants/peeps";
 
 // The shape of each Peeps setting's value. Typed and validated, so an inverted window, a negative limit or an unknown giver is refused when entered.
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:MM (24-hour).");
 const code = z.string().trim().regex(/^[A-Z0-9_]{1,40}$/, "Use 1 to 40 capital letters, digits and underscores.");
-const givers = z.array(z.enum(GIVER_KINDS)).max(GIVER_KINDS.length).refine((a) => new Set(a).size === a.length, "Listed twice.");
 
 export const PEEPS_SETTING_SCHEMAS: Record<PeepsSettingKey, z.ZodType> = {
   "office.name": z.string().trim().min(1).max(60),
@@ -22,19 +21,20 @@ export const PEEPS_SETTING_SCHEMAS: Record<PeepsSettingKey, z.ZodType> = {
   "unmute.bookingWindowDays": z.number().int().min(1).max(365),
   "unmute.minNoticeHours": z.number().int().min(0).max(720),
   "unmute.cancellationNoticeHours": z.number().int().min(0).max(720),
-  "audience.badges": z.object({ givers }).strict(),
+  "audience.badges": z.object({ officeGivesToAnyone: z.boolean() }).strict(),
   "badges.catalogue": z
-    .array(z.object({ code, label: z.string().trim().min(1).max(60), description: z.string().trim().max(200).optional() }).strict())
+    .array(z.object({ code, label: z.string().trim().min(1).max(60), description: z.string().trim().max(200).optional(), duration: z.enum(BADGE_DURATIONS) }).strict())
     .min(1)
     .max(100)
     .refine((a) => new Set(a.map((b) => b.code)).size === a.length, "A badge code is listed twice."),
   "badges.limits": z.object({ perGiverPerMonth: z.number().int().min(1).max(1000) }).strict(),
-  "badges.durationDays": z.number().int().min(1).max(3650),
-  "badges.revocation": z.object({ allowed: z.boolean() }).strict(),
-  "audience.nudges": z.object({ senders: givers }).strict(),
+  "badges.repeat": z.object({ allowed: z.boolean() }).strict(),
+  "badges.noManagerFallback": z.object({ upTo: z.enum(["DIRECTORS", "NOBODY"]) }).strict(),
+  "badges.publicDetails": z.object({ giver: z.boolean(), reason: z.boolean() }).strict(),
+  "nudges.enabled": z.object({ enabled: z.boolean() }).strict(),
   "nudges.limits": z.object({ perSenderPerMonth: z.number().int().min(1).max(1000) }).strict(),
   "nudges.revocation": z.object({ allowed: z.boolean() }).strict(),
 };
 
 export type AvailabilityWindow = { days: number[]; from: string; to: string };
-export type BadgeCatalogueItem = { code: string; label: string; description?: string };
+export type BadgeCatalogueItem = { code: string; label: string; description?: string; duration: "WEEK" | "MONTH" | "PERMANENT" };

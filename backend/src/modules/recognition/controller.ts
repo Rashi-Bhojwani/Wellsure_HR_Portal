@@ -32,6 +32,12 @@ export async function directoryBadges(req: Request, res: Response): Promise<void
 export async function badgeCounts(req: Request, res: Response): Promise<void> {
   res.status(200).json(await badges.allCounts(await actorFor(req)));
 }
+export async function recentBadges(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await badges.recent(await actorFor(req)));
+}
+export async function loadStarter(req: Request, res: Response): Promise<void> {
+  res.status(201).json(await badges.loadStarterCatalogue(await actorFor(req), metaOf(req)));
+}
 export async function revokeBadge(req: Request, res: Response): Promise<void> {
   res.status(200).json(await badges.revoke(await actorFor(req), id(req), req.body, metaOf(req)));
 }

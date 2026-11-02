@@ -27,6 +27,13 @@ const CONDITIONS = [{ code: "DEMO_GOOD", label: "DEMO Good" }, { code: "DEMO_WOR
 
 // Q-14 (decided 2026-11): the register is managed by HR and the directors. The directors may also let Wellsure Office members with "Manage the asset
 // register" manage it, through their asset audience setting (Not set = HR and the directors only). Employees see only their own assets.
+/** Every object key in a JSON value (field names, not values: random ids can contain any letters). */
+const keysOf = (v: unknown, out: string[] = []): string[] => {
+  if (Array.isArray(v)) for (const x of v) keysOf(x, out);
+  else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) { out.push(k); keysOf(x, out); }
+  return out;
+};
+
 describe("asset register", () => {
   let org: TestOrgMasters;
   const p = {} as Record<Who, Person>;
@@ -410,8 +417,8 @@ describe("asset register", () => {
     it("the register shows HR no pay, bank or statutory data", async () => {
       const assetId = await newAsset("DEMO plain");
       await post("hrExec", `/api/assets/${assetId}/issue`, { employeeId: p.employee.employeeId, conditionCode: "DEMO_GOOD" });
-      const text = JSON.stringify([(await get("hrExec", `/api/assets/${assetId}`)).body, (await get("hrExec", `/api/assets/employees/${p.employee.employeeId}`)).body, (await get("hrExec", "/api/assets?pageSize=200")).body]);
-      expect(text).not.toMatch(/salary|ctc|ifsc|account|pan\b|aadhaar|uan|esi/i);
+      const bodies = [(await get("hrExec", `/api/assets/${assetId}`)).body, (await get("hrExec", `/api/assets/employees/${p.employee.employeeId}`)).body, (await get("hrExec", "/api/assets?pageSize=200")).body];
+      expect(keysOf(bodies).filter((k) => /salary|ctc|ifsc|account|^pan|aadhaar|^uan|^esi|bank|statutory/i.test(k))).toEqual([]);
     });
   });
 });

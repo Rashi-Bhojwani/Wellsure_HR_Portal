@@ -1,6 +1,6 @@
 import { apiClient } from "../../api/client";
 
-// Badges and private nudges API (backend/src/modules/recognition).
+// Badges and cheers (D-36, public, along the reporting line) and corrective notes (D-37, private, directors only) API (backend/src/modules/recognition).
 
 export interface PersonRef {
   employeeId: string;
@@ -11,7 +11,8 @@ export interface Badge {
   id: string;
   badgeCode: string;
   badge: string;
-  message: string | null;
+  message?: string | null; // public views show it only when the directors' setting says so
+  duration?: "WEEK" | "MONTH" | "PERMANENT" | null;
   givenAt: string;
   expiresAt: string | null;
   revoked: boolean;
@@ -33,7 +34,7 @@ export interface BadgeStatus {
   active: boolean;
   missing: string[];
   canGive: boolean;
-  catalogue: Array<{ code: string; label: string; description?: string }>;
+  catalogue: Array<{ code: string; label: string; description?: string; duration: "WEEK" | "MONTH" | "PERMANENT" }>;
 }
 export interface NudgeStatus {
   active: boolean;
@@ -61,3 +62,5 @@ export const sendNudge = (input: { recipientEmployeeId: string; body: string; id
 export const revokeNudge = (id: string, reason: string) => data<{ withdrawn: boolean }>(apiClient.post(`/api/nudges/${id}/revoke`, { reason }));
 export const allNudges = () => data<Nudge[]>(apiClient.get("/api/nudges/admin/all"));
 export const badgeCounts = () => data<{ counts: Record<string, number> }>(apiClient.get("/api/badges/counts"));
+export const recentBadges = () => data<Badge[]>(apiClient.get("/api/badges/recent"));
+export const loadStarterCatalogue = () => data<unknown>(apiClient.post("/api/badges/catalogue/starter"));

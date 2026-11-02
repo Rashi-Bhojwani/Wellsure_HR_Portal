@@ -57,9 +57,10 @@ export const PEEPS_SETTING_KEYS = [
   "audience.badges",
   "badges.catalogue",
   "badges.limits",
-  "badges.durationDays",
-  "badges.revocation",
-  "audience.nudges",
+  "badges.repeat",
+  "badges.noManagerFallback",
+  "badges.publicDetails",
+  "nudges.enabled",
   "nudges.limits",
   "nudges.revocation",
   "directory.contactFields",
@@ -84,12 +85,13 @@ export const PEEPS_SETTINGS: Record<PeepsSettingKey, PeepsSettingInfo> = {
   "unmute.bookingWindowDays": { module: "unmute", label: "Booking window", what: "How many days ahead an employee may book.", enteredBy: "OFFICE" },
   "unmute.minNoticeHours": { module: "unmute", label: "Booking notice", what: "How many hours before a slot it can still be booked.", enteredBy: "OFFICE" },
   "unmute.cancellationNoticeHours": { module: "unmute", label: "Cancellation notice", what: "Up to how many hours before a slot the employee may cancel or reschedule.", enteredBy: "OFFICE" },
-  "audience.badges": { module: "badges", label: "Who else may give badges", what: "Q-16: only the directors give badges, to any employee. Listing managers (to their own team) and/or Wellsure Office members widens this; HR never. Not set: the directors only.", enteredBy: "DIRECTOR" },
+  "audience.badges": { module: "badges", label: "Wellsure Office members may give to anyone", what: "D-36: everyone gives along their reporting line (to the people under them, and up to their manager and on to the directors); directors give to anyone. This lets Wellsure Office members with \"Give badges\" give to anyone too. Not set: they follow their reporting line like everyone else.", enteredBy: "DIRECTOR" },
   "badges.catalogue": { module: "badges", label: "Badge catalogue", what: "The badges that can be given.", enteredBy: "OFFICE" },
+  "badges.repeat": { module: "badges", label: "Repeat to the same person", what: "Whether one giver may give the same badge again to someone who still holds it from them. Not set: no such limit.", enteredBy: "DIRECTOR" },
+  "badges.noManagerFallback": { module: "badges", label: "No manager on record", what: "For someone who has no manager (and is not a manager or HR Admin, who report to the directors): whether they may give up to the directors. Not set: nobody above them.", enteredBy: "DIRECTOR" },
+  "badges.publicDetails": { module: "badges", label: "Who gave it and why, in public", what: "Whether profiles, the directory and the home page show who gave a badge and their message. Not set: neither is shown (the recipient and the directors still see both).", enteredBy: "DIRECTOR" },
   "badges.limits": { module: "badges", label: "Badge limits", what: "How many badges one giver may give in a calendar month. Until set, no limit applies.", enteredBy: "OFFICE" },
-  "badges.durationDays": { module: "badges", label: "Badge duration", what: "How many days a badge stays on a profile. Until set, badges do not expire.", enteredBy: "OFFICE" },
-  "badges.revocation": { module: "badges", label: "Badge revocation", what: "Whether a giver (or a director) may revoke a badge. Until set, nobody can.", enteredBy: "DIRECTOR" },
-  "audience.nudges": { module: "nudges", label: "Who else may send private nudges", what: "Q-16: only the directors send private nudges, to any employee. Listing managers (to their own team) and/or Wellsure Office members widens this; HR never. Not set: the directors only.", enteredBy: "DIRECTOR" },
+  "nudges.enabled": { module: "nudges", label: "Corrective notes", what: "D-37: private corrective notes from the directors, seen only by the sender, the recipient and the directors. Not set: they cannot be sent.", enteredBy: "DIRECTOR" },
   "nudges.limits": { module: "nudges", label: "Nudge limits", what: "How many nudges one sender may send in a calendar month. Until set, no limit applies.", enteredBy: "DIRECTOR" },
   "directory.contactFields": { module: "directory", label: "Contact fields in the directory", what: "Which of work email, phone and birthday (day and month) colleagues see in the directory, on top of System Settings → People & Documents. Not set: none. Personal email and every sensitive field never show.", enteredBy: "DIRECTOR" },
   "leave.calendarShowsType": { module: "leave", label: "Wedding and bereavement leave on team calendars", what: "Whether team calendars name wedding and bereavement leave. Not set: they show as \"Leave\". (Menstrual and medical leave follow their own setting.)", enteredBy: "DIRECTOR" },
@@ -99,12 +101,14 @@ export const PEEPS_SETTINGS: Record<PeepsSettingKey, PeepsSettingInfo> = {
 
 export const PEEPS_REQUIRED: Record<"unmute" | "badges" | "nudges", readonly PeepsSettingKey[]> = {
   unmute: ["audience.unmute", "unmute.sessionMinutes", "unmute.availability", "unmute.bookingWindowDays", "unmute.minNoticeHours", "unmute.cancellationNoticeHours"],
-  badges: ["badges.catalogue"], // Q-16: the givers are the directors unless widened, so only the catalogue is required
-  nudges: [], // Q-16: the directors send; nothing else has to be set first
+  badges: ["badges.catalogue"], // D-36: givers follow the reporting line; only the catalogue is required
+  nudges: ["nudges.enabled"], // D-37: the directors send corrective notes only once they switch them on
 };
 
-export const GIVER_KINDS = ["MANAGERS", "OFFICE"] as const;
-export type GiverKind = (typeof GIVER_KINDS)[number];
+/** D-36: each catalogue item lasts a calendar week, a calendar month (India time) or until a director revokes it. */
+export const BADGE_DURATIONS = ["WEEK", "MONTH", "PERMANENT"] as const;
+export type BadgeDuration = (typeof BADGE_DURATIONS)[number];
+export const BADGE_DURATION_LABELS: Record<BadgeDuration, string> = { WEEK: "This week", MONTH: "This month", PERMANENT: "Permanent (until revoked)" };
 
 export const UNMUTE_BOOKING_STATUSES = ["BOOKED", "CANCELLED", "RESCHEDULED", "COMPLETED", "NOT_HELD"] as const;
 export type UnmuteBookingStatus = (typeof UNMUTE_BOOKING_STATUSES)[number];

@@ -19,6 +19,9 @@ import { fs, fw, radius, space, v } from '../../../theme/tokens';
 import { ApprovalBanner } from '../../../ui/ApprovalBanner';
 import { CardGrid, Panel, Stack } from '../../../ui/Panel';
 const RemoteCheckCard = lazy(() => import('../../../components/attendance/RemoteCheckCard').then((m) => ({ default: m.RemoteCheckCard })));
+// PEEPS-BEGIN badges-nudges
+const RecentCheersPanel = lazy(() => import('../../../features/recognition/RecentCheersPanel').then((m) => ({ default: m.RecentCheersPanel })));
+// PEEPS-END
 import { EmptyState } from '../../../ui/EmptyState';
 import { Illustration } from '../../../ui/Illustrations';
 import { InitialsAvatar } from '../../../ui/Avatar';
@@ -477,6 +480,12 @@ export function HomePage() {
       <Suspense fallback={null}>
         <RemoteCheckCard />
       </Suspense>
+
+      {/* PEEPS-BEGIN badges-nudges */}
+      <Suspense fallback={null}>
+        <RecentCheersPanel />
+      </Suspense>
+      {/* PEEPS-END */}
 
       <CardGrid min={300}>
         <ReviewCard />
