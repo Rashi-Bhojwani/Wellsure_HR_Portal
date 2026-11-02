@@ -9,10 +9,10 @@ import { prepareDocumentUpload } from "../../lib/uploads";
 import { HttpError } from "../../middleware/errorHandler";
 import type { ActorMeta } from "../peeps/types";
 
-// Supporting documents of the new leave types (medical certificates and the like). The employee attaches one to their own request; only HR
-// (leave.documents.view) and the directors list or open them, and every open is audited (D-28: a director's open too). They are kept in their own
-// table and storage prefix, never with the employee's ordinary documents, carry no original file name, and never appear in manager views, emails,
-// exports, task previews, logs or socket events. The employee sees only that a document is attached.
+// Supporting documents of the new leave types (medical certificates and the like). The employee attaches one to their own request and may open
+// their own (owner answer, B-1); HR (leave.documents.view) and the directors list and open anyone's. Every open is audited (D-28: a director's and the
+// employee's too). They are kept in their own table and storage prefix, never with the employee's ordinary documents, carry no original file name,
+// and never appear in manager views, emails, exports, task previews, logs or socket events.
 
 export interface DocViewer {
   userId: string;
@@ -41,20 +41,18 @@ export async function attachDocument(requestId: string, file: Express.Multer.Fil
   return { id: doc.id, uploadedAt: doc.uploadedAt.toISOString() };
 }
 
-/** HR and the directors: the documents on a request (opening one is a separate, audited call). The employee: how many are attached, nothing more. */
+/** HR, the directors and the employee themselves: the documents on a request (opening one is a separate, audited call). Anyone else: not found. */
 export async function listDocuments(requestId: string, viewer: DocViewer) {
   const r = await newTypeRequest(requestId);
   const docs = await prisma.leaveRequestDocument.findMany({ where: { leaveRequestId: requestId }, orderBy: { uploadedAt: "asc" } });
-  if (viewer.canOpen) return { attached: docs.length, documents: docs.map((d, i) => ({ id: d.id, label: `Document ${i + 1}`, contentType: d.contentType, sizeBytes: d.sizeBytes, uploadedAt: d.uploadedAt.toISOString() })) };
-  if (r.employeeId === viewer.employeeId) return { attached: docs.length, documents: [] };
+  if (viewer.canOpen || r.employeeId === viewer.employeeId) return { attached: docs.length, documents: docs.map((d, i) => ({ id: d.id, label: `Document ${i + 1}`, contentType: d.contentType, sizeBytes: d.sizeBytes, uploadedAt: d.uploadedAt.toISOString() })) };
   throw NOT_FOUND();
 }
 
-/** HR and the directors open a document; every open is written to the audit log (who, which document, when). */
+/** HR, the directors or the employee whose request it is opens a document; every open is written to the audit log (who, which document, when). */
 export async function openDocument(documentId: string, viewer: DocViewer, meta: ActorMeta): Promise<{ body: Buffer; contentType: DocumentMimeType; fileName: string }> {
-  if (!viewer.canOpen) throw new HttpError(404, "Document not found.", "NOT_FOUND");
-  const doc = await prisma.leaveRequestDocument.findUnique({ where: { id: documentId } });
-  if (!doc) throw new HttpError(404, "Document not found.", "NOT_FOUND");
+  const doc = await prisma.leaveRequestDocument.findUnique({ where: { id: documentId }, include: { leaveRequest: { select: { employeeId: true } } } });
+  if (!doc || (!viewer.canOpen && doc.leaveRequest.employeeId !== viewer.employeeId)) throw new HttpError(404, "Document not found.", "NOT_FOUND");
   const object = await storageService.getObject(doc.storageKey);
   await writeAuditLog({ ...meta, action: "leave.document.opened", entityType: "LeaveRequestDocument", entityId: doc.id, after: { leaveRequestId: doc.leaveRequestId } });
   const contentType = doc.contentType as DocumentMimeType;

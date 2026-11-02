@@ -5,7 +5,7 @@ import { MAX_DOCUMENT_UPLOAD_MB_CEILING } from "@shared/constants/peopleDocument
 import { SUPER_ADMIN_ROLE_CODE } from "../../lib/permissions";
 import { memoryUpload, requireFile } from "../../lib/uploads";
 import { authenticate } from "../../middleware/authenticate";
-import { requireAnyPermission, requireAuth, requirePermission } from "../../middleware/rbac";
+import { requireAuth, requirePermission } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
 import { requireDirector } from "../peeps/access";
 import { attachDocument, listDocuments, openDocument } from "./documents";
@@ -37,14 +37,14 @@ leaveRulesRouter.post("/:code/versions/:version/approve", requireDirector("leave
 const upload = memoryUpload(MAX_DOCUMENT_UPLOAD_MB_CEILING);
 export const leaveDocumentsRouter = Router();
 leaveDocumentsRouter.use(authenticate, requireAuth);
-// Attaching is the employee's own (checked in the service: their own new-type request); listing is the employee (a count) or HR/a director.
+// Attaching is the employee's own (checked in the service: their own new-type request); listing and opening: the employee's own, or HR/a director.
 leaveDocumentsRouter.post("/requests/:requestId", validate({ params: requestParams }), upload, async (req: Request, res: Response) => {
   res.status(201).json(await attachDocument(req.params.requestId as string, requireFile(req.file), docViewer(req), meta(req)));
 });
 leaveDocumentsRouter.get("/requests/:requestId", validate({ params: requestParams }), async (req: Request, res: Response) => {
   res.status(200).json(await listDocuments(req.params.requestId as string, docViewer(req)));
 });
-leaveDocumentsRouter.get("/:documentId", requireAnyPermission("leave.documents.view"), validate({ params: documentParams }), async (req: Request, res: Response) => {
+leaveDocumentsRouter.get("/:documentId", validate({ params: documentParams }), async (req: Request, res: Response) => {
   const doc = await openDocument(req.params.documentId as string, docViewer(req), meta(req));
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("Content-Type", doc.contentType);

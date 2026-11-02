@@ -37,27 +37,27 @@ export async function applyForLeave(req: Request, res: Response): Promise<void> 
 
 export async function listLeaveRequests(req: Request, res: Response): Promise<void> {
   // PEEPS-BEGIN leave-types
-  res.status(200).json(redactLeaveRows(await requestsService.listLeaveRequests(req.query as never, viewer(req)), viewer(req))); // a new type's reason: employee, HR, directors
+  res.status(200).json(await redactLeaveRows(await requestsService.listLeaveRequests(req.query as never, viewer(req)), viewer(req))); // a new type's reason: employee, HR, directors
   // PEEPS-END
 }
 
 export async function getLeaveRequest(req: Request, res: Response): Promise<void> {
   // PEEPS-BEGIN leave-types
-  res.status(200).json(redactLeaveRows(await requestsService.getLeaveRequestById(req.params.id as string, viewer(req)), viewer(req)));
+  res.status(200).json(await redactLeaveRows(await requestsService.getLeaveRequestById(req.params.id as string, viewer(req)), viewer(req)));
   // PEEPS-END
 }
 
 export async function approveLeaveRequest(req: Request, res: Response): Promise<void> {
   const { comments } = req.body as { comments?: string };
   // PEEPS-BEGIN leave-types
-  res.status(200).json(redactLeaveRows(await requestsService.approveLeaveRequest(req.params.id as string, viewer(req), comments, actorMeta(req)), viewer(req)));
+  res.status(200).json(await redactLeaveRows(await requestsService.approveLeaveRequest(req.params.id as string, viewer(req), comments, actorMeta(req)), viewer(req)));
   // PEEPS-END
 }
 
 export async function rejectLeaveRequest(req: Request, res: Response): Promise<void> {
   const { comments } = req.body as { comments: string };
   // PEEPS-BEGIN leave-types
-  res.status(200).json(redactLeaveRows(await requestsService.rejectLeaveRequest(req.params.id as string, viewer(req), comments, actorMeta(req)), viewer(req)));
+  res.status(200).json(await redactLeaveRows(await requestsService.rejectLeaveRequest(req.params.id as string, viewer(req), comments, actorMeta(req)), viewer(req)));
   // PEEPS-END
 }
 
@@ -69,7 +69,7 @@ export async function bulkApproveLeaveRequests(req: Request, res: Response): Pro
 export async function cancelLeaveRequest(req: Request, res: Response): Promise<void> {
   const { reason } = req.body as { reason?: string };
   // PEEPS-BEGIN leave-types
-  res.status(200).json(redactLeaveRows(await requestsService.cancelLeaveRequest(req.params.id as string, viewer(req), reason, actorMeta(req)), viewer(req)));
+  res.status(200).json(await redactLeaveRows(await requestsService.cancelLeaveRequest(req.params.id as string, viewer(req), reason, actorMeta(req)), viewer(req)));
   // PEEPS-END
 }
 

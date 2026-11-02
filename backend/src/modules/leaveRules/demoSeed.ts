@@ -16,7 +16,7 @@ const DEMO_PDF = Buffer.from("%PDF-1.4\n% DEMO COMPANY: a made-up supporting doc
 export async function seedDemoLeaveTypes(who: Who): Promise<void> {
   if ((await prisma.leaveRuleVersion.count()) > 0) return;
   const meta = (code: string) => ({ actorUserId: who[code]!.userId, ipAddress: null, userAgent: null });
-  const rules = { paid: true, entitlement: { kind: "CAP", period: "PER_CALENDAR_YEAR", days: "6" }, eligibility: { minServiceDays: 0, employmentTypes: ["PERMANENT", "CONTRACT", "PROBATION"] }, units: "FULL_DAY", counting: "WORKING_DAYS", document: { required: true, whenMoreThanDays: 0 }, approvalRoute: "HR_ONLY", yearEnd: null };
+  const rules = { paid: true, entitlement: { kind: "CAP", period: "PER_CALENDAR_YEAR", days: "6" }, eligibility: { minServiceDays: 0, employmentTypes: ["PERMANENT", "CONTRACT", "PROBATION"], gender: { kind: "ANY" } }, units: "FULL_DAY", counting: "WORKING_DAYS", document: { required: true, whenMoreThanDays: 0 }, approvalRoute: "HR_ONLY", yearEnd: null };
   const v = await prepareRules("MEDICAL", { rules, note: "DEMO COMPANY: made-up rules" }, { userId: who.DEMO004!.userId, isDirector: false, canPrepare: true }, meta("DEMO004"));
   await approveRules("MEDICAL", v.version, { effectiveFrom: businessToday().toISOString().slice(0, 10), note: "DEMO COMPANY" }, { userId: who.DEMO001!.userId, isDirector: true, canPrepare: true }, meta("DEMO001"));
 

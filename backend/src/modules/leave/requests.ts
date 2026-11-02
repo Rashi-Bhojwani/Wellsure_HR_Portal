@@ -21,7 +21,7 @@ import { companyWideApprovers, noTeamApproverReason, pendingWithNoTeamApprover }
 import type { ActorMeta, LeaveViewer } from "./types";
 import { inForceOn } from "../../lib/effectiveDating";
 // PEEPS-BEGIN leave-types
-import { assertPeepsApplyLimit, assertPeepsApproval, peepsApplyDays } from "../leaveRules/hooks";
+import { assertPeepsApplyLimit, assertPeepsApproval, managerFacingTypeCode, peepsApplyDays } from "../leaveRules/hooks";
 // PEEPS-END
 
 interface ApplyLeaveInput {
@@ -149,6 +149,11 @@ export async function applyForLeave(input: ApplyLeaveInput, viewer: LeaveViewer,
 
   await writeAuditLog({ ...meta, action: "leave.request.apply", entityType: "LeaveRequest", entityId: request.id, after: toAuditJson(request) });
   const formatted = await reloadFormatted(request.id);
+  // PEEPS-BEGIN leave-types
+  // Everything below tells managers, delegates and approvers (notifications, socket payloads): menstrual and medical leave are named "LEAVE" there
+  // until the directors' setting says otherwise.
+  formatted.leaveTypeCode = await managerFacingTypeCode(formatted.leaveTypeCode);
+  // PEEPS-END
 
   const jobHistory = await prisma.employeeJobHistory.findFirst({ where: { employeeId: targetEmployeeId, ...inForceOn() }, select: { reportingManagerId: true } });
   const reportingManagerId = jobHistory?.reportingManagerId ?? null;
@@ -506,6 +511,9 @@ export async function approveLeaveRequest(requestId: string, viewer: LeaveViewer
     link: "/app/leave/balances",
     payload: { leaveRequestId: formatted.id, status: "APPROVED" },
   });
+  // PEEPS-BEGIN leave-types
+  formatted.leaveTypeCode = await managerFacingTypeCode(formatted.leaveTypeCode); // the delegator and the socket payload below are manager-facing
+  // PEEPS-END
   await notifyDelegatorOfDecision(onBehalfOf, viewer.employeeId, formatted, "approved");
   emitLeaveDecided({
     leaveRequestId: formatted.id,
@@ -549,6 +557,9 @@ export async function rejectLeaveRequest(requestId: string, viewer: LeaveViewer,
     link: "/app/leave/balances",
     payload: { leaveRequestId: formatted.id, status: "REJECTED" },
   });
+  // PEEPS-BEGIN leave-types
+  formatted.leaveTypeCode = await managerFacingTypeCode(formatted.leaveTypeCode); // the delegator and the socket payload below are manager-facing
+  // PEEPS-END
   await notifyDelegatorOfDecision(onBehalfOf, viewer.employeeId, formatted, "rejected");
   emitLeaveDecided({
     leaveRequestId: formatted.id,

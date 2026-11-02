@@ -13,6 +13,12 @@ export const LEAVE_ROUTES = ["MANAGER_OR_HR", "HR_ONLY"] as const;
 export const LEAVE_YEAR_END_BALANCE = ["LAPSE", "CARRY_FORWARD"] as const;
 export const LEAVE_ENCASHMENT = ["NONE", "ENCASH_UNUSED"] as const;
 export const LEAVE_EMPLOYMENT_TYPES = ["PERMANENT", "CONTRACT", "INTERN", "CONSULTANT", "PROBATION"] as const;
+/** The values the employee record already holds (EmployeePersonal.gender). A rule may limit a type to some of them; nothing is preset. */
+export const LEAVE_GENDERS = ["FEMALE", "MALE", "OTHER"] as const;
+export const LEAVE_GENDER_LABELS: Record<(typeof LEAVE_GENDERS)[number], string> = { FEMALE: "Women", MALE: "Men", OTHER: "Recorded as other" };
+/** Types whose name a manager, a team calendar and a manager's notification never see until the directors' setting allows it (HR and the directors always do). */
+export const SENSITIVE_LEAVE_TYPE_CODES = ["MENSTRUAL", "MEDICAL"] as const;
+export const isSensitiveLeaveTypeCode = (code: string): boolean => (SENSITIVE_LEAVE_TYPE_CODES as readonly string[]).includes(code);
 
 export const LEAVE_RULE_LABELS = {
   PER_REQUEST: "At most this many days in one request",

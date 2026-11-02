@@ -12,8 +12,8 @@ import { fs, fw, space, v } from "../../theme/tokens";
 import { Panel, StatusChip, toast } from "../../ui";
 import * as api from "./api";
 
-// The employee's own requests of the new leave types, where a supporting document is attached. Only HR and the directors ever open it; the employee
-// sees that it is attached. Nothing shows when the employee has no such request.
+// The employee's own requests of the new leave types, where a supporting document is attached. The employee opens their own (each open is recorded);
+// HR and the directors open anyone's. Nothing shows when the employee has no such request.
 
 function Row({ r }: { r: LeaveRequestRow }) {
   const queryClient = useQueryClient();
@@ -23,7 +23,7 @@ function Row({ r }: { r: LeaveRequestRow }) {
     mutationFn: (file: File) => api.attachDocument(r.id, file),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["leave-documents", r.id] });
-      toast.success("Document attached. Only HR and the directors can open it.");
+      toast.success("Document attached. Only you, HR and the directors can open it.");
     },
     onError: (err) => toast.error(apiErrorMessage(err, "Couldn't attach the document.")),
   });
@@ -38,6 +38,11 @@ function Row({ r }: { r: LeaveRequestRow }) {
       </span>
       <span style={{ display: "flex", alignItems: "center", gap: space[2] }}>
         {attached > 0 ? <StatusChip tone="success">{attached === 1 ? "Document attached" : `${attached} documents attached`}</StatusChip> : <StatusChip tone="neutral">No document</StatusChip>}
+        {docs.data?.documents.map((d) => (
+          <Button key={d.id} onClick={() => void api.openDocument(d.id).catch((err) => toast.error(apiErrorMessage(err, "Couldn't open the document.")))}>
+            Open {d.label.toLowerCase()}
+          </Button>
+        ))}
         <input ref={input} type="file" hidden accept=".pdf,.png,.jpg,.jpeg" onChange={(e) => { const f = e.target.files?.[0]; if (f) attach.mutate(f); e.target.value = ""; }} />
         <Button icon={<PaperClipOutlined />} loading={attach.isPending} onClick={() => input.current?.click()}>
           Attach
@@ -53,7 +58,7 @@ export function MyLeaveDocumentsPanel() {
   const rows = (data?.rows ?? []).filter((r) => isPeepsLeaveTypeCode(r.leaveTypeCode) && (r.status === "PENDING" || r.status === "APPROVED"));
   if (rows.length === 0) return null;
   return (
-    <Panel title="Supporting documents" subtitle="For medical, menstrual, wedding or bereavement leave. Only HR and the directors can open them." style={{ flex: "1 1 520px", maxWidth: 720 }}>
+    <Panel title="Supporting documents" subtitle="For medical, menstrual, wedding or bereavement leave. Only you, HR and the directors can open them; each open is recorded." style={{ flex: "1 1 520px", maxWidth: 720 }}>
       <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: space[4] }}>
         {rows.map((r) => (
           <Row key={r.id} r={r} />

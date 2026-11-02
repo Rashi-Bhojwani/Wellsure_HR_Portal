@@ -1,4 +1,4 @@
-import { LEAVE_RULE_LABELS } from "@shared/constants/peepsLeave";
+import { LEAVE_GENDER_LABELS, LEAVE_RULE_LABELS } from "@shared/constants/peepsLeave";
 import type { LeaveRules } from "./api";
 
 const EMPLOYMENT: Record<string, string> = { PERMANENT: "Permanent", CONTRACT: "Contract", INTERN: "Intern", CONSULTANT: "Consultant", PROBATION: "Probation" };
@@ -9,6 +9,7 @@ export function describeRules(r: LeaveRules): Array<{ label: string; value: stri
     { label: "Paid", value: r.paid ? "Paid" : "Unpaid" },
     { label: "Entitlement", value: r.entitlement.kind === "CAP" ? `${LEAVE_RULE_LABELS[r.entitlement.period].replace("this many", r.entitlement.days)}` : LEAVE_RULE_LABELS.GRANTED_BALANCE },
     { label: "Eligibility", value: `${r.eligibility.minServiceDays} days after joining; ${r.eligibility.employmentTypes.map((t) => EMPLOYMENT[t] ?? t).join(", ")}` },
+    { label: "Recorded gender", value: r.eligibility.gender.kind === "ANY" ? "Any" : r.eligibility.gender.values.map((g) => LEAVE_GENDER_LABELS[g as keyof typeof LEAVE_GENDER_LABELS] ?? g).join(", ") + " only" },
     { label: "Units", value: LEAVE_RULE_LABELS[r.units] },
     { label: "Counting", value: LEAVE_RULE_LABELS[r.counting] },
     { label: "Supporting document", value: r.document.required ? (r.document.whenMoreThanDays === 0 ? "Always required" : `Required for more than ${r.document.whenMoreThanDays} day(s)`) : "Not required" },

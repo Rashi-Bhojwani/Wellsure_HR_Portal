@@ -6,7 +6,7 @@ import type { PeepsLeaveTypeCode } from "@shared/constants/peepsLeave";
 export interface LeaveRules {
   paid: boolean;
   entitlement: { kind: "CAP"; period: "PER_REQUEST" | "PER_CALENDAR_YEAR" | "PER_EMPLOYMENT"; days: string } | { kind: "GRANTED_BALANCE" };
-  eligibility: { minServiceDays: number; employmentTypes: string[] };
+  eligibility: { minServiceDays: number; employmentTypes: string[]; gender: { kind: "ANY" } | { kind: "ONLY"; values: string[] } };
   units: "FULL_DAY" | "HALF_DAY";
   counting: "WORKING_DAYS" | "CALENDAR_DAYS";
   document: { required: boolean; whenMoreThanDays: number };

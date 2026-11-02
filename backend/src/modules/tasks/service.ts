@@ -9,6 +9,9 @@ import { prisma } from "../../lib/prisma";
 import { approvalEmployeeIdFilter, resolveApprovalReach } from "../leave/scope";
 import { getTeamEmployeeIds } from "../../lib/dataScope";
 import { inForceOn } from "../../lib/effectiveDating";
+// PEEPS-BEGIN leave-types
+import { leaveTypeNamer } from "../leaveRules/hooks";
+// PEEPS-END
 
 // Tasks inbox (spec §7.1 "My Tasks", To do → Tasks — Phase 5 commit D, user
 // decision 1): things waiting on ME, with no task schema of its own. Each
@@ -48,10 +51,15 @@ const leaveApprovals: TaskSource = {
       AND: [{ employeeId: { not: viewer.employeeId } }, ...(scopeFilter ? [{ employeeId: scopeFilter }] : [])],
     };
     const rows = await prisma.leaveRequest.findMany({ where, include: { leaveType: true, employee: currentName() }, orderBy: { createdAt: "asc" }, take: limit });
+    // PEEPS-BEGIN leave-types
+    const typeName = await leaveTypeNamer(viewer); // menstrual and medical leave show as "Leave" to a manager until the directors' setting says otherwise
+    // PEEPS-END
     return rows.map((r) => ({
       type: "LEAVE_APPROVAL" as const,
       id: r.id,
-      title: `${r.leaveType.name} request`,
+      // PEEPS-BEGIN leave-types
+      title: `${typeName(r.leaveType)} request`,
+      // PEEPS-END
       detail: `${dateOnly(r.fromDate)} to ${dateOnly(r.toDate)} · ${r.totalDays.toNumber()} day(s)`,
       employeeName: nameOf(r.employee),
       waitingSince: r.createdAt.toISOString(),

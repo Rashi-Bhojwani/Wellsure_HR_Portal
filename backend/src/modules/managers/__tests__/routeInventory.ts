@@ -676,8 +676,8 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "POST /api/leave-rules/:code/versions": admin,
   "POST /api/leave-rules/:code/versions/:version/approve": adminInService("a director who did not prepare the version (service + database trigger)"),
   "POST /api/leave-documents/requests/:requestId": self,
-  "GET /api/leave-documents/requests/:requestId": scoped("the employee (a count only) or HR and the directors (the list)"),
-  "GET /api/leave-documents/:documentId": admin,
+  "GET /api/leave-documents/requests/:requestId": scoped("the employee's own request, or HR and the directors"),
+  "GET /api/leave-documents/:documentId": scoped("the employee's own document, or HR and the directors; every open audited"),
   // PEEPS-END
   // PEEPS-BEGIN avatars
   // HR and the directors remove someone else's inappropriate photo with a reason (avatars.moderate); only the owner adds or changes a photo.

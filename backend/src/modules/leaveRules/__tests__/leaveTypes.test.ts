@@ -21,9 +21,10 @@ type Who = "director" | "director2" | "hrAdmin" | "hrExec" | "manager" | "report
 type Person = { employeeId: string; employeeCode: string; userId: string };
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
-const MEDICAL_RULES = { paid: true, entitlement: { kind: "CAP", period: "PER_CALENDAR_YEAR", days: "5" }, eligibility: { minServiceDays: 0, employmentTypes: ["PERMANENT"] }, units: "FULL_DAY", counting: "CALENDAR_DAYS", document: { required: true, whenMoreThanDays: 1 }, approvalRoute: "HR_ONLY", yearEnd: null };
-const BEREAVEMENT_RULES = { paid: true, entitlement: { kind: "CAP", period: "PER_REQUEST", days: "3" }, eligibility: { minServiceDays: 0, employmentTypes: ["PERMANENT", "CONTRACT"] }, units: "HALF_DAY", counting: "WORKING_DAYS", document: { required: false, whenMoreThanDays: 0 }, approvalRoute: "MANAGER_OR_HR", yearEnd: null };
-const WEDDING_RULES = { paid: false, entitlement: { kind: "GRANTED_BALANCE" }, eligibility: { minServiceDays: 0, employmentTypes: ["PERMANENT"] }, units: "FULL_DAY", counting: "WORKING_DAYS", document: { required: false, whenMoreThanDays: 0 }, approvalRoute: "MANAGER_OR_HR", yearEnd: { carryForward: "LAPSE", encashment: "NONE" } };
+const MEDICAL_RULES = { paid: true, entitlement: { kind: "CAP", period: "PER_CALENDAR_YEAR", days: "5" }, eligibility: { minServiceDays: 0, employmentTypes: ["PERMANENT"], gender: { kind: "ANY" } }, units: "FULL_DAY", counting: "CALENDAR_DAYS", document: { required: true, whenMoreThanDays: 1 }, approvalRoute: "HR_ONLY", yearEnd: null };
+const BEREAVEMENT_RULES = { paid: true, entitlement: { kind: "CAP", period: "PER_REQUEST", days: "3" }, eligibility: { minServiceDays: 0, employmentTypes: ["PERMANENT", "CONTRACT"], gender: { kind: "ANY" } }, units: "HALF_DAY", counting: "WORKING_DAYS", document: { required: false, whenMoreThanDays: 0 }, approvalRoute: "MANAGER_OR_HR", yearEnd: null };
+const WEDDING_RULES = { paid: false, entitlement: { kind: "GRANTED_BALANCE" }, eligibility: { minServiceDays: 0, employmentTypes: ["PERMANENT"], gender: { kind: "ANY" } }, units: "FULL_DAY", counting: "WORKING_DAYS", document: { required: false, whenMoreThanDays: 0 }, approvalRoute: "MANAGER_OR_HR", yearEnd: { carryForward: "LAPSE", encashment: "NONE" } };
+const MENSTRUAL_RULES = { paid: true, entitlement: { kind: "CAP", period: "PER_CALENDAR_YEAR", days: "12" }, eligibility: { minServiceDays: 0, employmentTypes: ["PERMANENT"], gender: { kind: "ONLY", values: ["FEMALE"] } }, units: "FULL_DAY", counting: "WORKING_DAYS", document: { required: false, whenMoreThanDays: 0 }, approvalRoute: "MANAGER_OR_HR", yearEnd: null };
 const PDF = Buffer.from("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n");
 const REASON = `private-reason-${Date.now()}`;
 
@@ -100,6 +101,7 @@ describe("new leave types", () => {
         expect((await prepare("hrAdmin", "MEDICAL", partial)).status, missing).toBe(400);
       }
       expect((await prepare("hrAdmin", "WEDDING", { ...WEDDING_RULES, yearEnd: null })).status).toBe(400); // a granted balance needs its year-end rule
+      expect((await prepare("hrAdmin", "MEDICAL", { ...MEDICAL_RULES, eligibility: { minServiceDays: 0, employmentTypes: ["PERMANENT"] } })).status).toBe(400); // the gender criterion is a rule too (ANY or ONLY), never assumed
       expect((await prepare("hrAdmin", "MEDICAL", { ...MEDICAL_RULES, entitlement: { kind: "CAP", period: "PER_CALENDAR_YEAR", days: "0" } })).status).toBe(400);
     });
 
@@ -198,6 +200,44 @@ describe("new leave types", () => {
     });
   });
 
+  describe("the gender criterion (owner decision B-1)", () => {
+    it("menstrual leave limited by the rule to women: an ineligible person is refused with the neutral message, a woman is accepted, no recorded gender is refused", async () => {
+      expect((await prepare("hrAdmin", "MENSTRUAL", MENSTRUAL_RULES)).status).toBe(201);
+      expect((await apply("colleague", "MENSTRUAL", friday, friday)).status).toBe(400); // not approved yet: switched off
+      expect((await approve("director", "MENSTRUAL", 1)).status).toBe(200);
+      await prisma.employeePersonal.update({ where: { employeeId: p.colleague.employeeId }, data: { gender: "MALE" } });
+      await prisma.employeePersonal.update({ where: { employeeId: p.employee.employeeId }, data: { gender: "FEMALE" } });
+      const refused = await apply("colleague", "MENSTRUAL", addCalendarDays(friday, 56), addCalendarDays(friday, 56));
+      expect(refused.status).toBe(409);
+      expect(refused.body.error.code).toBe("NOT_ELIGIBLE");
+      expect(refused.body.error.message).toBe("This employee is not eligible for this leave type under its rules.");
+      expect(JSON.stringify(refused.body)).not.toMatch(/gender|female|male|women/i);
+      const accepted = await apply("employee", "MENSTRUAL", addCalendarDays(friday, 56), addCalendarDays(friday, 56));
+      expect(accepted.status, JSON.stringify(accepted.body)).toBe(201);
+      await prisma.employeePersonal.delete({ where: { employeeId: p.contractor.employeeId } }); // no record at all
+      await prisma.employee.update({ where: { id: p.contractor.employeeId }, data: { employmentType: "PERMANENT" } });
+      const none = await apply("contractor", "MENSTRUAL", addCalendarDays(friday, 56), addCalendarDays(friday, 56));
+      expect(none.status).toBe(409);
+      expect(none.body.error.code).toBe("NOT_ELIGIBLE");
+    });
+
+    it("the criterion never shows anyone's gender: not to the manager, the calendar, notifications or the audit of the request", async () => {
+      const r = await prisma.leaveRequest.findFirstOrThrow({ where: { employeeId: p.employee.employeeId, leaveTypeId: typeId.MENSTRUAL } });
+      for (const [who, path] of [["colleague", `/api/leave/calendar?fromDate=${iso(addCalendarDays(friday, 56))}&toDate=${iso(addCalendarDays(friday, 56))}`], ["colleague", "/api/people?pageSize=100"], ["manager", "/api/tasks/mine"], ["manager", "/api/notifications"]] as const) {
+        expect(JSON.stringify((await get(who, path)).body), `${who} ${path}`).not.toMatch(/"gender"|FEMALE|MENSTRUAL|Menstrual/);
+      }
+      const audits = await prisma.auditLog.findMany({ where: { entityId: r.id } });
+      expect(JSON.stringify(audits)).not.toMatch(/FEMALE|"gender"/);
+    });
+
+    it("a change to the rule voids the approval: the type is off again until a different director approves", async () => {
+      expect((await prepare("hrAdmin", "MENSTRUAL", { ...MENSTRUAL_RULES, eligibility: { ...MENSTRUAL_RULES.eligibility, gender: { kind: "ONLY", values: ["FEMALE", "OTHER"] } } })).status).toBe(201);
+      expect((await prisma.leaveType.findUniqueOrThrow({ where: { code: "MENSTRUAL" } })).isActive).toBe(false);
+      expect((await approve("hrAdmin", "MENSTRUAL", 2)).status).toBe(403);
+      expect((await approve("director2", "MENSTRUAL", 2)).status).toBe(200);
+    });
+  });
+
   describe("who sees what", () => {
     it("permission matrix for the rules routes: HR prepares, directors approve; managers, employees and the Developer are refused", async () => {
       for (const who of ["manager", "employee", "developer"] as const) {
@@ -210,30 +250,40 @@ describe("new leave types", () => {
       expect((await request(app).get("/api/leave-rules")).status).toBe(401);
     });
 
-    it("supporting documents: HR and the directors list and open (each open audited); the employee sees a count; nobody else sees anything", async () => {
+    it("supporting documents: HR, the directors and the employee themselves list and open them (each open audited); nobody else sees anything", async () => {
       const r = await prisma.leaveRequest.findFirstOrThrow({ where: { employeeId: p.report.employeeId, leaveTypeId: typeId.MEDICAL } });
       const own = await get("report", `/api/leave-documents/requests/${r.id}`);
-      expect(own.body).toEqual({ attached: 1, documents: [] });
+      expect(own.body.attached).toBe(1);
+      expect(own.body.documents).toHaveLength(1);
       for (const who of ["manager", "colleague", "employee"] as const) expect((await get(who, `/api/leave-documents/requests/${r.id}`)).status, who).toBe(404);
       const list = await get("hrExec", `/api/leave-documents/requests/${r.id}`);
       expect(list.body.documents).toHaveLength(1);
       expect(JSON.stringify(list.body)).not.toMatch(/certificate|leave-documents\//);
       const docId = list.body.documents[0].id as string;
-      for (const who of ["manager", "report", "colleague", "developer"] as const) expect((await get(who, `/api/leave-documents/${docId}`)).status, who).toBe(403);
+      for (const who of ["manager", "colleague", "employee", "developer"] as const) expect((await get(who, `/api/leave-documents/${docId}`)).status, who).toBe(404);
+      const mine = await get("report", `/api/leave-documents/${docId}`); // owner answer (B-1): the employee opens their own
+      expect(mine.status).toBe(200);
       const opened = await get("hrExec", `/api/leave-documents/${docId}`);
       expect(opened.status).toBe(200);
       expect(opened.headers["cache-control"]).toBe("no-store");
       expect((await get("director", `/api/leave-documents/${docId}`)).status).toBe(200);
       const audits = await prisma.auditLog.findMany({ where: { entityId: docId, action: "leave.document.opened" } });
-      expect(audits.map((a) => a.actorUserId).sort()).toEqual([p.director.userId, p.hrExec.userId].sort());
+      expect(audits.map((a) => a.actorUserId).sort()).toEqual([p.director.userId, p.hrExec.userId, p.report.userId].sort());
     });
 
-    it("the manager sees the type and dates of their report's leave, never the reason or the document, in lists, notifications and task previews", async () => {
+    it("the manager sees only \"Leave\" and the dates for a medical leave (setting Not set), never the reason or the document, in lists, notifications and task previews", async () => {
+      const pending = await apply("report", "MEDICAL", addCalendarDays(friday, 49), addCalendarDays(friday, 49)); // a pending one, for the tasks inbox
+      expect(pending.status, JSON.stringify(pending.body)).toBe(201);
       const list = await get("manager", `/api/leave/requests?employeeId=${p.report.employeeId}`);
       expect(list.status).toBe(200);
-      const medical = list.body.rows.find((x: { leaveTypeCode: string }) => x.leaveTypeCode === "MEDICAL");
-      expect(medical).toMatchObject({ leaveTypeCode: "MEDICAL", reason: null });
+      expect(JSON.stringify(list.body)).not.toMatch(/MEDICAL|Medical Leave|DEMO Health Leave/);
+      const medical = list.body.rows.find((x: { id: string }) => x.id === pending.body.id);
+      expect(medical).toMatchObject({ leaveTypeCode: "LEAVE", leaveTypeName: "Leave", leaveTypeId: "", reason: null });
       expect(medical.fromDate).toBeDefined();
+      const tasks = JSON.stringify((await get("manager", "/api/tasks/mine")).body);
+      expect(tasks).toContain("Leave request");
+      expect(tasks).not.toMatch(/MEDICAL|Medical Leave/);
+      expect(JSON.stringify((await get("hrAdmin", `/api/leave/requests?employeeId=${p.report.employeeId}`)).body)).toMatch(/MEDICAL/); // HR sees the type
       const hr = await get("hrAdmin", `/api/leave/requests?employeeId=${p.report.employeeId}`);
       expect(JSON.stringify(hr.body)).toContain(REASON);
       for (const path of ["/api/tasks/mine", "/api/notifications", `/api/leave/requests/${medical.id}`]) {
@@ -243,7 +293,10 @@ describe("new leave types", () => {
       }
       const notes = await prisma.notification.findMany({ where: { userId: p.manager.userId } });
       expect(notes.length).toBeGreaterThan(0);
-      for (const n of notes) expect(`${n.title} ${n.body} ${JSON.stringify(n.payload)}`).not.toContain(REASON);
+      for (const n of notes) {
+        expect(`${n.title} ${n.body} ${JSON.stringify(n.payload)}`).not.toContain(REASON);
+        expect(`${n.title} ${n.body}`).not.toMatch(/MEDICAL|Medical Leave/);
+      }
     });
 
     it("no log line carries a document's storage key or contents, or the reason", async () => {
@@ -274,14 +327,20 @@ describe("new leave types", () => {
       expect(text).not.toContain(REASON);
     });
 
-    it("team calendars show a generic Leave for the new types until the directors' setting names them", async () => {
+    it("team calendars show a generic Leave for the new types until the directors' settings name them; HR sees the type", async () => {
       const cal = async () => (await get("colleague", `/api/leave/calendar?fromDate=${iso(friday)}&toDate=${iso(addCalendarDays(friday, 3))}`)).body.entries as Array<{ employeeId: string; leaveTypeCode: string }>;
       // Calendars show approved leave: the report's approved medical leave (HR approved it above).
       const before = (await cal()).filter((e) => e.employeeId === p.report.employeeId).map((e) => e.leaveTypeCode);
       expect(before).toContain("LEAVE");
       expect(before).not.toContain("MEDICAL");
-      await setSetting("leave.calendarShowsType", { showType: true }, p.director, p.director2);
+      const hrCal = (await get("hrAdmin", `/api/leave/calendar?fromDate=${iso(friday)}&toDate=${iso(addCalendarDays(friday, 3))}`)).body.entries as Array<{ employeeId: string; leaveTypeCode: string }>;
+      expect(hrCal.filter((e) => e.employeeId === p.report.employeeId).map((e) => e.leaveTypeCode)).toContain("MEDICAL");
+      await setSetting("leave.calendarShowsType", { showType: true }, p.director, p.director2); // wedding and bereavement only
+      expect((await cal()).filter((e) => e.employeeId === p.report.employeeId).map((e) => e.leaveTypeCode)).not.toContain("MEDICAL");
+      await setSetting("leave.showSensitiveTypes", { show: true }, p.director, p.director2);
       expect((await cal()).filter((e) => e.employeeId === p.report.employeeId).map((e) => e.leaveTypeCode)).toContain("MEDICAL");
+      const managerView = (await get("manager", `/api/leave/requests?employeeId=${p.report.employeeId}`)).body.rows as Array<{ leaveTypeCode: string }>;
+      expect(managerView.map((r) => r.leaveTypeCode)).toContain("MEDICAL"); // once the directors allow it
     });
   });
 

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Checkbox, DatePicker, Form, Input, InputNumber, Radio, Select, Space } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
-import { LEAVE_EMPLOYMENT_TYPES, LEAVE_RULE_LABELS } from "@shared/constants/peepsLeave";
+import { LEAVE_EMPLOYMENT_TYPES, LEAVE_GENDER_LABELS, LEAVE_GENDERS, LEAVE_RULE_LABELS } from "@shared/constants/peepsLeave";
 import { useAuth } from "../../hooks/useAuth";
 import { apiErrorMessage } from "../../lib/apiError";
 import { formatDate } from "../../lib/dates";
@@ -47,6 +47,8 @@ interface FormValues {
   days?: string;
   minServiceDays?: number;
   employmentTypes?: string[];
+  genderKind?: "ANY" | "ONLY";
+  genders?: string[];
   units?: LeaveRules["units"];
   counting?: LeaveRules["counting"];
   documentRequired?: boolean;
@@ -61,7 +63,7 @@ function toRules(f: FormValues): LeaveRules {
   return {
     paid: f.paid!,
     entitlement: f.kind === "CAP" ? { kind: "CAP", period: f.period!, days: String(f.days).trim() } : { kind: "GRANTED_BALANCE" },
-    eligibility: { minServiceDays: f.minServiceDays!, employmentTypes: f.employmentTypes ?? [] },
+    eligibility: { minServiceDays: f.minServiceDays!, employmentTypes: f.employmentTypes ?? [], gender: f.genderKind === "ONLY" ? { kind: "ONLY", values: f.genders ?? [] } : { kind: "ANY" } },
     units: f.units!,
     counting: f.counting!,
     document: { required: f.documentRequired!, whenMoreThanDays: f.documentRequired ? (f.whenMoreThanDays ?? 0) : 0 },
@@ -77,6 +79,7 @@ function PrepareDrawer({ type, onClose }: { type: LeaveTypeRules | null; onClose
   const [form] = Form.useForm<FormValues>();
   const kind = Form.useWatch("kind", form);
   const documentRequired = Form.useWatch("documentRequired", form);
+  const genderKind = Form.useWatch("genderKind", form);
   const save = useMutation({
     mutationFn: (values: FormValues) => api.prepareRules(type!.code, toRules(values), values.note),
     onSuccess: () => {
@@ -134,6 +137,14 @@ function PrepareDrawer({ type, onClose }: { type: LeaveTypeRules | null; onClose
             <Checkbox.Group options={LEAVE_EMPLOYMENT_TYPES.map((t) => ({ value: t, label: EMPLOYMENT_LABEL[t] }))} />
           </Form.Item>
         </Space>
+        <Form.Item name="genderKind" label="Recorded gender" rules={required} extra="Uses the gender already on the employee record. Someone with none recorded is not eligible. Nobody else is ever shown a person's gender.">
+          {radio([{ value: "ANY", label: "Any" }, { value: "ONLY", label: "Only some recorded genders" }])}
+        </Form.Item>
+        {genderKind === "ONLY" && (
+          <Form.Item name="genders" label="Eligible recorded genders" rules={[{ required: true, type: "array", min: 1, message: "Choose at least one." }]}>
+            <Checkbox.Group options={LEAVE_GENDERS.map((g) => ({ value: g, label: LEAVE_GENDER_LABELS[g] }))} />
+          </Form.Item>
+        )}
         <Form.Item name="units" label="Units" rules={required}>
           {radio([{ value: "FULL_DAY", label: LEAVE_RULE_LABELS.FULL_DAY }, { value: "HALF_DAY", label: LEAVE_RULE_LABELS.HALF_DAY }])}
         </Form.Item>

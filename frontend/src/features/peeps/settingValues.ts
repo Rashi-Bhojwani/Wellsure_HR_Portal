@@ -15,7 +15,8 @@ export const BOOLEANS: Partial<Record<PeepsSettingKey, Array<{ field: string; la
     { field: "officeManages", label: "Wellsure Office members manage the register" },
   ],
   "audience.unmute": [{ field: "employeesMayBook", label: "Employees (HR included) may book Unmute conversations" }],
-  "leave.calendarShowsType": [{ field: "showType", label: "Team calendars name the new leave types" }],
+  "leave.calendarShowsType": [{ field: "showType", label: "Team calendars name wedding and bereavement leave" }],
+  "leave.showSensitiveTypes": [{ field: "show", label: "Managers, team calendars and managers' notifications name menstrual and medical leave" }],
   "badges.revocation": [{ field: "allowed", label: "A giver (or a director) may revoke a badge" }],
   "nudges.revocation": [{ field: "allowed", label: "A sender (or a director) may withdraw a nudge" }],
 };

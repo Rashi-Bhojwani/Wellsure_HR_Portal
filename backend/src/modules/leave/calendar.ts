@@ -88,7 +88,7 @@ export async function getLeaveCalendar(query: LeaveCalendarQuery, viewer: LeaveV
 
   const released = await releasedDatesOf(prisma, rows.map((r) => r.id));
   // PEEPS-BEGIN leave-types
-  const typeLabel = await calendarTypeLabeller(); // the new types show as a generic "Leave" until the directors' setting says otherwise
+  const typeLabel = await calendarTypeLabeller(viewer); // the new types show as a generic "Leave" until the directors' settings say otherwise (HR and directors see them)
   // PEEPS-END
   return rows.map((r) => ({
     employeeId: r.employeeId,

@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import { isPeepsLeaveTypeCode } from "@shared/constants/peepsLeave";
+import { isPeepsLeaveTypeCode, isSensitiveLeaveTypeCode } from "@shared/constants/peepsLeave";
 import { HR_ROLE_CODES } from "@shared/constants/sensitiveData";
 import { SUPER_ADMIN_ROLE_CODE } from "../../lib/permissions";
 import { prisma } from "../../lib/prisma";
@@ -41,9 +41,13 @@ export async function peepsApplyDays(
   if (!inForce) throw new HttpError(409, NOT_IN_FORCE, "LEAVE_RULES_NOT_SET");
   if (input.attachmentStorageKey) throw new HttpError(400, "Attach a supporting document after applying; it is kept apart from other files.", "VALIDATION_ERROR");
   const { rules } = inForce;
-  const employee = await prisma.employee.findUniqueOrThrow({ where: { id: input.employeeId }, select: { dateOfJoining: true, employmentType: true } });
+  const employee = await prisma.employee.findUniqueOrThrow({ where: { id: input.employeeId }, select: { dateOfJoining: true, employmentType: true, personal: { select: { gender: true } } } });
   const served = Math.floor((input.fromDate.getTime() - employee.dateOfJoining.getTime()) / 86_400_000);
-  if (served < rules.eligibility.minServiceDays || !(rules.eligibility.employmentTypes as readonly string[]).includes(employee.employmentType)) {
+  // The gender criterion reads the value already on the record; no record, or a value outside the rule's list, is "not eligible" with the same
+  // message as any other criterion, so a refusal never says which one failed.
+  const g = rules.eligibility.gender;
+  const genderOk = g.kind === "ANY" || (employee.personal !== null && (g.values as readonly string[]).includes(employee.personal.gender));
+  if (!genderOk || served < rules.eligibility.minServiceDays || !(rules.eligibility.employmentTypes as readonly string[]).includes(employee.employmentType)) {
     throw new HttpError(409, "This employee is not eligible for this leave type under its rules.", "NOT_ELIGIBLE");
   }
   return rules.counting === "CALENDAR_DAYS" ? calendarDays(input.fromDate, input.toDate, input.fromDayPart, input.toDayPart) : workingDays;
@@ -110,20 +114,45 @@ export function assertPolicyEditable(leaveType: TypeLike): void {
   if (isPeepsLeaveTypeCode(leaveType.code)) throw new HttpError(409, "This type's policy comes from its approved rules (prepare a new version).", "SET_BY_LEAVE_RULES");
 }
 
-/** Team calendars: a generic "Leave" for the new types until the directors' setting says to show the type. */
-export async function calendarTypeLabeller(): Promise<(code: string) => string> {
-  const show = (await getSetting<{ showType: boolean }>("leave.calendarShowsType"))?.showType === true;
-  return (code) => (!show && isPeepsLeaveTypeCode(code) ? "LEAVE" : code);
+async function sensitiveTypesShown(): Promise<boolean> {
+  return (await getSetting<{ show: boolean }>("leave.showSensitiveTypes"))?.show === true;
 }
 
-/** Leave request responses: the free-text reason of a new-type request is the employee's, HR's and the directors' only. */
-export function redactLeaveRows<T>(body: T, viewer: ViewerLike): T {
+/** Team calendars: a generic "Leave" for the new types until the directors' settings name them (menstrual and medical: their own setting). HR and
+ * the directors see the type. */
+export async function calendarTypeLabeller(viewer?: ViewerLike): Promise<(code: string) => string> {
+  if (viewer && isHrOrDirector(viewer)) return (code) => code;
+  const showOthers = (await getSetting<{ showType: boolean }>("leave.calendarShowsType"))?.showType === true;
+  const showSensitive = await sensitiveTypesShown();
+  return (code) => (!isPeepsLeaveTypeCode(code) ? code : isSensitiveLeaveTypeCode(code) ? (showSensitive ? code : "LEAVE") : showOthers ? code : "LEAVE");
+}
+
+/** What a manager-facing notification or socket payload names: "LEAVE" for menstrual and medical leave until the directors' setting says otherwise. */
+export async function managerFacingTypeCode(code: string): Promise<string> {
+  return isSensitiveLeaveTypeCode(code) && !(await sensitiveTypesShown()) ? "LEAVE" : code;
+}
+
+/** The tasks inbox: the leave type's name as this viewer may see it. */
+export async function leaveTypeNamer(viewer: ViewerLike): Promise<(t: { code: string; name: string }) => string> {
+  const hide = !isHrOrDirector(viewer) && !(await sensitiveTypesShown());
+  return (t) => (hide && isSensitiveLeaveTypeCode(t.code) ? "Leave" : t.name);
+}
+
+/**
+ * Leave request responses, for anyone but the employee, HR and the directors: a new type's free-text reason is removed, and menstrual or medical
+ * leave is shown as "Leave" (type code, name and id) until the directors' setting names it.
+ */
+export async function redactLeaveRows<T>(body: T, viewer: ViewerLike): Promise<T> {
   if (isHrOrDirector(viewer)) return body;
+  const hideSensitive = !(await sensitiveTypesShown());
   const fix = (row: unknown): unknown => {
     if (!row || typeof row !== "object") return row;
     const r = row as Record<string, unknown>;
-    if (typeof r.leaveTypeCode === "string" && isPeepsLeaveTypeCode(r.leaveTypeCode) && r.employeeId !== viewer.employeeId && "reason" in r) return { ...r, reason: null };
-    return row;
+    if (typeof r.leaveTypeCode !== "string" || !isPeepsLeaveTypeCode(r.leaveTypeCode) || r.employeeId === viewer.employeeId) return row;
+    const out: Record<string, unknown> = { ...r };
+    if ("reason" in out) out.reason = null;
+    if (hideSensitive && isSensitiveLeaveTypeCode(r.leaveTypeCode)) Object.assign(out, { leaveTypeCode: "LEAVE", leaveTypeName: "Leave", leaveTypeId: "" });
+    return out;
   };
   if (Array.isArray(body)) return body.map(fix) as T;
   if (body && typeof body === "object") {

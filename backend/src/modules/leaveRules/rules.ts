@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { LEAVE_CAP_PERIODS, LEAVE_COUNTING, LEAVE_EMPLOYMENT_TYPES, LEAVE_ENCASHMENT, LEAVE_ROUTES, LEAVE_UNITS, LEAVE_YEAR_END_BALANCE } from "@shared/constants/peepsLeave";
+import { LEAVE_CAP_PERIODS, LEAVE_COUNTING, LEAVE_EMPLOYMENT_TYPES, LEAVE_ENCASHMENT, LEAVE_GENDERS, LEAVE_ROUTES, LEAVE_UNITS, LEAVE_YEAR_END_BALANCE } from "@shared/constants/peepsLeave";
 
 // The owner-entered rules of one new leave type (docs/plans/PEEPS_PLAN.md, "Final instructions", Module 2). A version is complete or refused: every
 // required rule is chosen by a person, nothing here has a default. Days are exact decimals, kept as strings ("2" or "1.5").
@@ -23,6 +23,12 @@ export const leaveRulesSchema = z
       .object({
         minServiceDays: z.number().int().min(0).max(3650),
         employmentTypes: z.array(z.enum(LEAVE_EMPLOYMENT_TYPES)).min(1, "Choose at least one employment type.").refine(unique, "Listed twice."),
+        // Owner decision (B-1): a type may be limited by the gender already on the employee record. Chosen in the rule (never preset); a person whose
+        // record has no gender, or one outside the list, is simply not eligible.
+        gender: z.discriminatedUnion("kind", [
+          z.object({ kind: z.literal("ANY") }).strict(),
+          z.object({ kind: z.literal("ONLY"), values: z.array(z.enum(LEAVE_GENDERS)).min(1, "Choose at least one.").refine(unique, "Listed twice.") }).strict(),
+        ]),
       })
       .strict(),
     units: z.enum(LEAVE_UNITS),
