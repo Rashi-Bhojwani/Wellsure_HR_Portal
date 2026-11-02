@@ -6,7 +6,7 @@ import { currentCells, inputsHash, missingInputs, monthState, monthsBetween, par
 
 // Stage 4: the pure rules of Monthly Inputs and the reading of a file. No database.
 
-describe("a figure is exact text, zero or more", () => {
+describe("a figure is exact text, zero or more unless the head allows negative figures", () => {
   it("reads whole and decimal figures exactly and canonically", () => {
     expect(parseAmountText("1500")).toEqual({ ok: true, value: "1500" });
     expect(parseAmountText("0")).toEqual({ ok: true, value: "0" });
@@ -17,6 +17,17 @@ describe("a figure is exact text, zero or more", () => {
   it("refuses blank (that is 'nothing entered'), negative, separators, signs, words and a seventh decimal", () => {
     for (const bad of ["", "   ", "-1", "-0", "1,500", "₹500", "1e3", "abc", "1.", ".5", "0.0000001", "1000000000000"]) expect(parseAmountText(bad).ok, bad).toBe(false);
     expect(parseAmountText("999999999999").ok).toBe(true);
+  });
+  it("a negative figure is read only when the head allows it, exactly, and negative zero is zero", () => {
+    expect(parseAmountText("-250.50", true)).toEqual({ ok: true, value: "-250.5" });
+    expect(parseAmountText("-0", true)).toEqual({ ok: true, value: "0" });
+    expect(parseAmountText("-0.000001", true)).toEqual({ ok: true, value: "-0.000001" });
+    for (const bad of ["-", "--1", "-1,5", "- 1", "-1e3", "-1000000000000", "-0.0000001"]) expect(parseAmountText(bad, true).ok, bad).toBe(false);
+    for (const text of ["-1", "-250.50", "-0.5"]) {
+      const refused = parseAmountText(text);
+      expect(refused.ok).toBe(false);
+      expect(!refused.ok && refused.message).toMatch(/does not allow negative figures/);
+    }
   });
   it("any decimal figure of up to six places round-trips with no loss (property)", () => {
     fc.assert(fc.property(fc.bigInt({ min: 0n, max: 999_999_999_999_999_999n }), (n) => {

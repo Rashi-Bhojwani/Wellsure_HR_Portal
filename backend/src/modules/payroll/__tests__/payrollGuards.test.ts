@@ -83,6 +83,10 @@ const EXTRA_ALLOWED: Record<string, number[]> = {
   "validators.ts": [25, 60],
   // Salary: lengths of form fields (a name, a reason), how many rows a page or a search shows, and the highest payslip position. None is a payroll figure.
   "salary/schemas.ts": [60, 999],
+  // Tax: lengths of labels, notes, codes and a year label (2026-27 is 7 characters), a link's lifetime in seconds, and how many sections a year lists. None is a tax figure: every tax value is entered by the owners.
+  "tax/declarations.ts": [20, 60, 120, 300],
+  "tax/routes.ts": [20],
+  "tax/schema.ts": [19, 20, 60, 80, 300],
   "salary/validators.ts": [20, 25, 60, 300],
   "salary/adjustments.ts": [300],
   "salary/employees.ts": [20, 25, 60],

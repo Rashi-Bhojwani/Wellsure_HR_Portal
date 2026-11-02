@@ -1,7 +1,9 @@
+import { computeAnnualTax, monthlyTds } from "../tax/engine";
+import { projectTaxablePay, splitTaxable } from "../tax/taxable";
 import { HOLD_REASON_LABEL, STATUTORY_LINE_CODES, STATUTORY_LINE_LABEL, type HoldReason } from "@shared/constants/payrollRun";
 import { ARREARS_CODE, HOLD_RELEASE_CODE, LOP_REVERSAL_CODE } from "@shared/constants/payrollSalary";
 import { payrollHash } from "../hash";
-import { ZERO, canonicalDecimal, intDec, sum, type Money } from "../money";
+import { ZERO, canonicalDecimal, dec, intDec, sum, type Money } from "../money";
 import { applyShare } from "../salary/arrears";
 import type { ComponentValue } from "../salary/schemas";
 import { applyRuleOverrides } from "./rules";
@@ -241,6 +243,27 @@ export function calculatePerson(input: PersonInput, ctx: CalcContext): ItemOut {
     }
   }
 
+  // ── Income tax (TDS), when the directors switched on PROJECTED: this year's tax worked out from the tax year they entered, less what was already deducted, spread over the months left ──
+  if (input.tax) {
+    const t = input.tax;
+    const split = splitTaxable([...earningLines, ...deductionLines], (code) => ctx.components.current.get(code)?.value);
+    const lacking: string[] = [];
+    if (t.missing.length > 0) lacking.push(`the tax year ${t.year} lacks ${t.missing.join(", ")}`);
+    if (split.notSet.length > 0) lacking.push(`whether ${split.notSet.join(", ")} is taxable has not been answered`);
+    if (!t.regime) lacking.push("neither the person nor the tax year has chosen a regime");
+    if (lacking.length > 0) {
+      exceptions.push({ code: "TAX_NOT_SET", severity: "BLOCKING", message: `Income tax cannot be worked out: ${lacking.join("; ")}.` });
+      inputsOut.tds = { state: "NOT_SET", lacking };
+    } else {
+      const projected = projectTaxablePay({ paidSoFar: t.taxableSoFar, recurring: split.recurring, oneOff: split.oneOff, monthsLeft: t.monthsLeft });
+      const annual = computeAnnualTax({ year: t.values!, regime: t.regime!, taxablePay: c(projected), deductions: t.deductions });
+      const month = monthlyTds({ year: t.values!, annualTax: annual.annualTax, deductedSoFar: c(t.tdsSoFar), monthsLeft: t.monthsLeft });
+      const tdsBasis = { kind: "TDS", year: t.year, regime: t.regime, regimeSource: t.regimeSource, declarationVersion: t.declarationVersion, deductionBasis: t.deductionBasis, taxablePaidSoFar: c(t.taxableSoFar), recurringThisMonth: c(split.recurring), oneOffThisMonth: c(split.oneOff), monthsLeft: t.monthsLeft, projectedTaxablePay: c(projected), annual, tdsSoFar: c(t.tdsSoFar), remaining: month.remaining, share: month.share, minimum: month.minimum };
+      inputsOut.tds = { state: "WORKED_OUT", regime: t.regime, annualTax: annual.annualTax, thisMonth: month.tds };
+      if (dec(month.tds).greaterThan(ZERO)) statutoryDeductions.push({ code: STATUTORY_LINE_CODES.TDS, label: STATUTORY_LINE_LABEL.TDS!, kind: "DEDUCTION", source: "TDS", sourceRef: null, amount: dec(month.tds), basis: tdsBasis });
+    }
+  }
+
   // ── Totals, net, rounding ──
   const lines: LineOut[] = [...earningLines, ...deductionLines, ...statutoryDeductions, ...employerLines];
   const gross = sum(earningLines.map((l) => l.amount));
@@ -388,8 +411,11 @@ function adjustmentLine(adj: AdjustmentIn, ctx: CalcContext): { line: LineOut; p
   const current = ctx.components.current.get(adj.componentCode);
   if (adj.source === "MONTHLY_INPUT") {
     const flags = current?.value;
+    // A negative figure goes the other way: a negative earning takes off, a negative deduction gives back. The line carries the size; PF and ESI wages carry the sign.
+    const negative = adj.amount.isNegative();
+    const kind = negative ? (adj.direction === "EARNING" ? "DEDUCTION" : "EARNING") : adj.direction;
     return {
-      line: { code: adj.componentCode, label: flags?.payslipLabel ?? adj.componentCode, kind: adj.direction, source: "MONTHLY_INPUT", sourceRef: adj.sourceRef, amount: adj.amount, basis: { kind: "MONTHLY_INPUT", month: adj.periodLabel ?? null, componentVersion: current?.version ?? null, pfApplicable: flags?.pfApplicable === true, esiApplicable: flags?.esiApplicable === true } },
+      line: { code: adj.componentCode, label: flags?.payslipLabel ?? adj.componentCode, kind, source: "MONTHLY_INPUT", sourceRef: adj.sourceRef, amount: adj.amount.abs(), basis: { kind: "MONTHLY_INPUT", month: adj.periodLabel ?? null, componentVersion: current?.version ?? null, pfApplicable: flags?.pfApplicable === true, esiApplicable: flags?.esiApplicable === true, direction: adj.direction, signed: c(adj.amount) } },
       pf: flags?.pfApplicable ? adj.amount : ZERO,
       esi: flags?.esiApplicable ? adj.amount : ZERO,
       notices: current ? notices : [...notices, `The pay head ${adj.componentCode} used by a Monthly Input has no version on record.`],

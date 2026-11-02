@@ -12,15 +12,14 @@ import { payrollHash } from "../hash";
 import { canonicalDecimal, dec, sum, ZERO } from "../money";
 import { activeUsersHoldingPermission } from "../../../lib/permissions";
 import { namesOfUsers } from "../names";
-import { readTable } from "../inputs/importParse";
 import { requireHolds } from "./closing";
 import { accountNumbersForRepayment } from "./release";
 import { formatDate, renderLayout, type LayoutRow } from "./layout";
 import { currentLayout, debitAccountOf, layoutReady } from "./layouts";
 import type { Layout } from "./layout";
 
-// Rows the bank rejected, and paying them again (docs/plans/STAGE_5B_PLAN.md, B3). A director records which rows of a bank batch the bank rejected, by hand or from the bank's return
-// file (read with a layout the directors set up and a different director confirmed). A rejected row stays unpaid. A repayment plan collects rejected rows, takes each person's bank
+// Rows the bank rejected, and paying them again (docs/plans/STAGE_5B_PLAN.md, B3, changed by decision D-34: bank payments are manual, no file comes back). A director enters by hand which rows of a
+// bank batch the bank rejected, one row per payment with a reason. A rejected row stays unpaid. A repayment plan collects rejected rows, takes each person's bank
 // account in force on the new payment date, and needs the same approvals as a bank file (the BANK_REPAYMENT subject, the BANK_FILE director step) before a file is written.
 // Nothing is paid twice: a rejected row can be in one repayment batch only, which the database holds whatever this code does.
 
@@ -50,54 +49,9 @@ export async function recordRejections(batchId: string, raw: unknown, actor: Act
   if (unknown.length > 0) throw new HttpError(400, `Nothing was saved: ${unknown.slice(0, 5).join(", ")} ${unknown.length === 1 ? "is" : "are"} not in this bank batch.`, "VALIDATION_ERROR", { unknown });
   const already = new Set((await prisma.bankRowRejection.findMany({ where: { batchId }, select: { rowId: true } })).map((r) => r.rowId));
   const fresh = [...new Map(parsed.data.rows.map((r) => [r.employeeCode.toLowerCase(), r])).values()].filter((r) => !already.has(byCode.get(r.employeeCode.toLowerCase())!.id));
-  await prisma.bankRowRejection.createMany({ data: fresh.map((r) => ({ batchId, rowId: byCode.get(r.employeeCode.toLowerCase())!.id, reason: r.reason, source: "ENTERED", recordedByUserId: actor.userId })) });
-  await writeAuditLog({ actorUserId: actor.userId, action: "payroll.bank.rejections_recorded", entityType: "BankTransferBatch", entityId: batchId, after: { rows: fresh.length, alreadyRecorded: parsed.data.rows.length - fresh.length, source: "ENTERED" }, ipAddress: actor.ip ?? null });
+  await prisma.bankRowRejection.createMany({ data: fresh.map((r) => ({ batchId, rowId: byCode.get(r.employeeCode.toLowerCase())!.id, reason: r.reason, recordedByUserId: actor.userId })) });
+  await writeAuditLog({ actorUserId: actor.userId, action: "payroll.bank.rejections_recorded", entityType: "BankTransferBatch", entityId: batchId, after: { rows: fresh.length, alreadyRecorded: parsed.data.rows.length - fresh.length }, ipAddress: actor.ip ?? null });
   return { recorded: fresh.length, alreadyRecorded: parsed.data.rows.length - fresh.length };
-}
-
-/** The bank's return file, read with the confirmed return layout. Nothing is saved if any row is wrong; the same file is read once. */
-export async function importReturnFile(batchId: string, file: { buffer: Buffer; originalname: string }, actor: Actor) {
-  await requireDirector(actor.userId, "record a bank rejection");
-  const ready = await layoutReady("BANK_RETURN_TEMPLATE");
-  if (!ready.ready) throw new HttpError(409, "The bank return file layout has not been entered and confirmed by a second director, so the file cannot be read.", "RETURN_LAYOUT_NOT_READY");
-  const stored = await currentLayout("BANK_RETURN_TEMPLATE");
-  const layout = stored!.value as Layout;
-  const sha = createHash("sha256").update(file.buffer).digest("hex");
-  if (await prisma.bankReturnImport.findUnique({ where: { batchId_fileSha256: { batchId, fileSha256: sha } } })) throw new HttpError(409, "This exact file has already been read for this batch.", "ALREADY_IMPORTED");
-  const batch = await batchOf(batchId);
-  const table = await readTable(file.buffer, file.originalname);
-  const titleIndex = (field: string) => {
-    const title = layout.columns.find((c) => c.source === "FIELD" && c.value === field)?.header;
-    return title === undefined ? -1 : table.headers.findIndex((h) => h.trim().toLowerCase() === title.trim().toLowerCase());
-  };
-  const [iCode, iStatus, iReason, iAmount] = [titleIndex("EMPLOYEE_CODE"), titleIndex("STATUS"), titleIndex("REASON"), titleIndex("AMOUNT")];
-  if (iCode < 0 || iStatus < 0) throw new HttpError(400, "The file does not have the columns the return layout names (employee code and status).", "VALIDATION_ERROR");
-  const rejectedWords = new Set((layout.rejectedStatuses ?? []).map((w) => w.trim().toLowerCase()));
-  const byCode = new Map(batch.rows.map((r) => [r.employee.employeeCode.toLowerCase(), r]));
-  const problems: string[] = [];
-  const rejected: Array<{ rowId: string; reason: string }> = [];
-  for (const r of table.rows) {
-    const code = (r.cells[iCode] ?? "").trim().toLowerCase();
-    const row = byCode.get(code);
-    if (!row) {
-      problems.push(`Line ${r.line}: ${r.cells[iCode] ?? ""} is not in this bank batch.`);
-      continue;
-    }
-    if (iAmount >= 0) {
-      const text = (r.cells[iAmount] ?? "").trim();
-      if (text !== "" && (!/^\d+(\.\d+)?$/.test(text) || !dec(text).equals(dec(row.amount.toString())))) problems.push(`Line ${r.line}: the amount ${text} is not the amount in the batch.`);
-    }
-    if (rejectedWords.has((r.cells[iStatus] ?? "").trim().toLowerCase())) rejected.push({ rowId: row.id, reason: ((iReason >= 0 ? r.cells[iReason] : "") ?? "").trim() || `Rejected by the bank (${(r.cells[iStatus] ?? "").trim()})` });
-  }
-  if (problems.length > 0) throw new HttpError(400, `Nothing was saved. ${problems.slice(0, 5).join(" ")}`, "VALIDATION_ERROR", { problems });
-  const already = new Set((await prisma.bankRowRejection.findMany({ where: { batchId }, select: { rowId: true } })).map((r) => r.rowId));
-  const fresh = rejected.filter((r) => !already.has(r.rowId));
-  await prisma.$transaction(async (tx) => {
-    const imp = await tx.bankReturnImport.create({ data: { batchId, fileSha256: sha, fileName: file.originalname.slice(0, 200), rejectedCount: fresh.length, importedByUserId: actor.userId } });
-    await tx.bankRowRejection.createMany({ data: fresh.map((r) => ({ batchId, rowId: r.rowId, reason: r.reason.slice(0, 200), source: "RETURN_FILE", importId: imp.id, recordedByUserId: actor.userId })) });
-  });
-  await writeAuditLog({ actorUserId: actor.userId, action: "payroll.bank.return_file_read", entityType: "BankTransferBatch", entityId: batchId, after: { sha256: sha, rows: table.rows.length, rejected: fresh.length, layoutVersion: ready.version }, ipAddress: actor.ip ?? null });
-  return { rows: table.rows.length, rejected: fresh.length, alreadyRecorded: rejected.length - fresh.length };
 }
 
 export async function listRejections(batchId: string, actor: Actor) {
@@ -108,7 +62,7 @@ export async function listRejections(batchId: string, actor: Actor) {
   return {
     batchId,
     cycle: batch.run.cycleLabel,
-    rows: rejections.map((r) => ({ rowId: r.rowId, serial: r.row.serial, employeeCode: r.row.employee.employeeCode, name: names.get(r.row.employeeId) ?? r.row.employee.employeeCode, accountLast4: r.row.accountLast4, amount: canonicalDecimal(dec(r.row.amount.toString())), reason: r.reason, source: r.source, at: r.createdAt.toISOString(), repaidInBatch: r.row.repayment?.batchId ?? null })),
+    rows: rejections.map((r) => ({ rowId: r.rowId, serial: r.row.serial, employeeCode: r.row.employee.employeeCode, name: names.get(r.row.employeeId) ?? r.row.employee.employeeCode, accountLast4: r.row.accountLast4, amount: canonicalDecimal(dec(r.row.amount.toString())), reason: r.reason, at: r.createdAt.toISOString(), repaidInBatch: r.row.repayment?.batchId ?? null })),
   };
 }
 

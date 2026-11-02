@@ -2481,6 +2481,7 @@ enum PayrollItemKind {
   STRUCTURE
   BANK_TEMPLATE
   OUTPUT_TEMPLATE
+  TAX_YEAR
 }
 
 enum PayrollApprovalSubject {
@@ -2748,6 +2749,7 @@ enum PayrollLineSource {
   ESI
   PT
   LWF
+  TDS
   NET_ROUNDING
 }
 
@@ -2969,35 +2971,30 @@ enum BankBatchStatus {
 // The bank file made from a final run: one per run. The app never talks to a bank; PAID is HR's own statement, with the bank's reference. The batch can only move
 // GENERATED to PAID and attach the bank's response; everything else about it is fixed by a trigger.
 model BankTransferBatch {
-  id                       String          @id @default(cuid())
-  runId                    String          @unique @map("run_id")
-  run                      PayrollRun      @relation(fields: [runId], references: [id], onDelete: Restrict)
-  runHash                  String          @map("run_hash")
-  status                   BankBatchStatus @default(GENERATED)
-  paymentDate              DateTime        @map("payment_date") @db.Date
-  templateVersion          Int             @map("template_version")
-  templateHash             String          @map("template_hash")
-  rowCount                 Int             @map("row_count")
-  total                    Decimal         @db.Decimal(20, 6)
-  excluded                 Json            @default("[]") // people payable but not in the file, with the reason
-  fileKey                  String          @map("file_key")
-  fileName                 String          @map("file_name")
-  fileSha256               String          @map("file_sha256")
-  generatedByUserId        String          @map("generated_by_user_id")
-  generatedAt              DateTime        @default(now()) @map("generated_at") @db.Timestamptz(3)
-  paidAt                   DateTime?       @map("paid_at") @db.Timestamptz(3)
-  paidOn                   DateTime?       @map("paid_on") @db.Date
-  paidByUserId             String?         @map("paid_by_user_id")
-  bankReference            String?         @map("bank_reference")
-  responseKey              String?         @map("response_key")
-  responseFileName         String?         @map("response_file_name")
-  responseSha256           String?         @map("response_sha256")
-  responseAttachedByUserId String?         @map("response_attached_by_user_id")
-  responseAttachedAt       DateTime?       @map("response_attached_at") @db.Timestamptz(3)
+  id                String          @id @default(cuid())
+  runId             String          @unique @map("run_id")
+  run               PayrollRun      @relation(fields: [runId], references: [id], onDelete: Restrict)
+  runHash           String          @map("run_hash")
+  status            BankBatchStatus @default(GENERATED)
+  paymentDate       DateTime        @map("payment_date") @db.Date
+  templateVersion   Int             @map("template_version")
+  templateHash      String          @map("template_hash")
+  rowCount          Int             @map("row_count")
+  total             Decimal         @db.Decimal(20, 6)
+  excluded          Json            @default("[]") // people payable but not in the file, with the reason
+  fileKey           String          @map("file_key")
+  fileName          String          @map("file_name")
+  fileSha256        String          @map("file_sha256")
+  generatedByUserId String          @map("generated_by_user_id")
+  generatedAt       DateTime        @default(now()) @map("generated_at") @db.Timestamptz(3)
+  paidAt            DateTime?       @map("paid_at") @db.Timestamptz(3)
+  paidOn            DateTime?       @map("paid_on") @db.Date
+  paidByUserId      String?         @map("paid_by_user_id")
+  bankReference     String?         @map("bank_reference")
 
   rows             BankTransferRow[]
   rejections       BankRowRejection[]
-  returnImports    BankReturnImport[]
+  sentMark         BankFileSentMark?
   repaymentPlans   BankRepaymentPlan[]
   repaymentBatches BankRepaymentBatch[]
 
@@ -3343,21 +3340,6 @@ model RemoteAttendanceRequest {
 }
 
 // ── Stage 5b — rows the bank rejected, and paying them again (docs/plans/STAGE_5B_PLAN.md) ──
-model BankReturnImport {
-  id               String             @id @default(cuid())
-  batchId          String             @map("batch_id")
-  batch            BankTransferBatch  @relation(fields: [batchId], references: [id], onDelete: Restrict)
-  fileSha256       String             @map("file_sha256")
-  fileName         String             @map("file_name")
-  rejectedCount    Int                @map("rejected_count")
-  importedByUserId String             @map("imported_by_user_id")
-  createdAt        DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
-  rejections       BankRowRejection[]
-
-  @@unique([batchId, fileSha256])
-  @@map("bank_return_imports")
-}
-
 model BankRowRejection {
   id               String            @id @default(cuid())
   batchId          String            @map("batch_id")
@@ -3365,9 +3347,6 @@ model BankRowRejection {
   rowId            String            @unique @map("row_id")
   row              BankTransferRow   @relation(fields: [rowId], references: [id], onDelete: Restrict)
   reason           String
-  source           String
-  importId         String?           @map("import_id")
-  import           BankReturnImport? @relation(fields: [importId], references: [id], onDelete: Restrict)
   recordedByUserId String            @map("recorded_by_user_id")
   createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
 
@@ -3405,8 +3384,23 @@ model BankRepaymentBatch {
   generatedByUserId String             @map("generated_by_user_id")
   generatedAt       DateTime           @default(now()) @map("generated_at") @db.Timestamptz(3)
   rows              BankRepaymentRow[]
+  sentMark          BankFileSentMark?
 
   @@map("bank_repayment_batches")
+}
+
+// A director's note that a downloaded bank file was sent to the bank (by hand: the app never talks to a bank). One per file; never changed or removed.
+model BankFileSentMark {
+  id               String              @id @default(cuid())
+  batchId          String?             @unique @map("batch_id")
+  batch            BankTransferBatch?  @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  repaymentBatchId String?             @unique @map("repayment_batch_id")
+  repaymentBatch   BankRepaymentBatch? @relation(fields: [repaymentBatchId], references: [id], onDelete: Restrict)
+  sentByUserId     String              @map("sent_by_user_id")
+  sentAt           DateTime            @default(now()) @map("sent_at") @db.Timestamptz(3)
+  note             String?
+
+  @@map("bank_file_sent_marks")
 }
 
 model BankRepaymentRow {
@@ -3467,6 +3461,92 @@ model PayrollExclusion {
 
   @@index([employeeId, fromDate])
   @@map("payroll_exclusions")
+}
+
+// ── Stage 7, P7-2 — declarations and proof of investment (docs/plans/STAGE_7_PLAN.md) ──
+enum TaxRegime {
+  NEW
+  OLD
+}
+
+enum TaxWindowKind {
+  DECLARATION
+  PROOF
+}
+
+enum TaxProofDecisionKind {
+  ACCEPTED
+  REJECTED
+}
+
+// The days a financial year's declarations (or proofs) may be sent. A new row replaces the old; the newest for a (year, kind) counts. No row means closed.
+model TaxWindow {
+  id          String        @id @default(cuid())
+  fy          String        @map("financial_year")
+  kind        TaxWindowKind
+  opensOn     DateTime      @map("opens_on") @db.Date
+  closesOn    DateTime      @map("closes_on") @db.Date
+  setByUserId String        @map("set_by_user_id")
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([fy, kind, createdAt])
+  @@map("tax_windows")
+}
+
+// A person's declaration for a financial year. Each save is the next version; the latest counts. Append-only.
+model TaxDeclaration {
+  id          String               @id @default(cuid())
+  employeeId  String               @map("employee_id")
+  fy          String               @map("financial_year")
+  version     Int
+  regime      TaxRegime
+  submittedAt DateTime             @default(now()) @map("submitted_at") @db.Timestamptz(3)
+  lines       TaxDeclarationLine[]
+
+  @@unique([employeeId, fy, version])
+  @@map("tax_declarations")
+}
+
+model TaxDeclarationLine {
+  id            String         @id @default(cuid())
+  declarationId String         @map("declaration_id")
+  declaration   TaxDeclaration @relation(fields: [declarationId], references: [id], onDelete: Cascade)
+  section       String
+  amount        Decimal        @db.Decimal(20, 6)
+
+  @@unique([declarationId, section])
+  @@map("tax_declaration_lines")
+}
+
+// A proof a person uploaded for one section of a year. The file is stored through the storage service; only its key and hash are here. Append-only.
+model TaxProof {
+  id         String             @id @default(cuid())
+  employeeId String             @map("employee_id")
+  fy         String             @map("financial_year")
+  section    String
+  fileKey    String             @map("file_key")
+  fileName   String             @map("file_name")
+  fileSha256 String             @map("file_sha256")
+  createdAt  DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  decisions  TaxProofDecision[]
+
+  @@index([employeeId, fy])
+  @@map("tax_proofs")
+}
+
+// A director's decision on a proof: accepted with the amount verified (which may be lower than claimed) or rejected with a reason. Never by the person the proof belongs to. Append-only; the latest counts.
+model TaxProofDecision {
+  id              String               @id @default(cuid())
+  proofId         String               @map("proof_id")
+  proof           TaxProof             @relation(fields: [proofId], references: [id], onDelete: Cascade)
+  decision        TaxProofDecisionKind
+  amountVerified  Decimal?             @map("amount_verified") @db.Decimal(20, 6)
+  reason          String
+  decidedByUserId String               @map("decided_by_user_id")
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([proofId, createdAt])
+  @@map("tax_proof_decisions")
 }
 
 // PEEPS-BEGIN assets

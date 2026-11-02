@@ -1,5 +1,6 @@
 import type { EmploymentType } from "@prisma/client";
 import type { ComponentType } from "@shared/constants/payrollSalary";
+import type { TaxYearValue } from "../tax/schema";
 import type { ExceptionCode, ExceptionSeverity, HoldReason } from "@shared/constants/payrollRun";
 import type { PayrollPlacement } from "../../../lib/effectiveDating";
 import type { Money } from "../money";
@@ -72,8 +73,29 @@ export interface PersonInput {
   /** The department or employee overrides that apply to this person on the cycle's last day, by rule key (Stage 3.4). Absent or empty: the company's rules stand. */
   ruleOverrides?: Array<{ ruleKey: string; level: "DEPARTMENT" | "EMPLOYEE"; itemKey: string; version: number; valueHash: string; value: unknown; registrationRef: string | null }>;
   adjustments: AdjustmentIn[];
+  /** Income tax inputs when the TDS rule is PROJECTED (docs/plans/STAGE_7_PLAN.md, P7-3); absent when it is NONE. */
+  tax?: TaxIn | undefined;
   /** Under a half-year ESI rule: the full-month ESI-applicable entitlement at the start of the contribution period (or at joining, if later). Null otherwise. */
   esiPeriodStartEntitlement: Money | null;
+}
+
+export interface TaxIn {
+  year: string;
+  /** What the tax year lacks before tax can be worked out, in words; empty when it has everything. */
+  missing: string[];
+  /** The year's values (a Placeholder one makes the run a test through its pin). Null when nobody entered the year. */
+  values: TaxYearValue | null;
+  /** The regime the person chose, or the year's default when they have not; null when neither exists. */
+  regime: "NEW" | "OLD" | null;
+  regimeSource: "CHOSEN" | "DEFAULT" | null;
+  /** What counts under each section (declared, or verified once the proof window has closed). */
+  deductions: Array<{ section: string; amount: string }>;
+  deductionBasis: "DECLARED" | "VERIFIED";
+  declarationVersion: number | null;
+  taxableSoFar: Money;
+  tdsSoFar: Money;
+  /** Pay months left in the year including this one. */
+  monthsLeft: number;
 }
 
 export interface ComponentLookup {
@@ -94,7 +116,7 @@ export interface LineOut {
   code: string;
   label: string;
   kind: "EARNING" | "DEDUCTION" | "EMPLOYER_CONTRIBUTION" | "ROUNDING";
-  source: "COMPONENT" | "ADJUSTMENT" | "LOP_REVERSAL" | "HOLD_RELEASE" | "MONTHLY_INPUT" | "ARREARS" | "ENCASHMENT" | "PF" | "ESI" | "PT" | "LWF" | "NET_ROUNDING";
+  source: "COMPONENT" | "ADJUSTMENT" | "LOP_REVERSAL" | "HOLD_RELEASE" | "MONTHLY_INPUT" | "ARREARS" | "ENCASHMENT" | "PF" | "ESI" | "PT" | "LWF" | "TDS" | "NET_ROUNDING";
   sourceRef: string | null;
   amount: Money;
   basis: Record<string, unknown>;

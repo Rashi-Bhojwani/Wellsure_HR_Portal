@@ -10,6 +10,7 @@ import { prisma } from "../../../lib/prisma";
 import { clearRateLimits } from "../../auth/__tests__/authTestHelpers";
 import { app } from "../../employee/__tests__/employeeTestHelpers";
 import { executeCalculation, setCalculationEnqueuer } from "../run/engine";
+import { DEMO_WATERMARK } from "../run/release";
 import { registerPayrollSeams } from "../wiring";
 import type { RulePin } from "../rules/context";
 import { crawlGets } from "./sensitiveCrawl";
@@ -89,6 +90,19 @@ describe("the demo company", () => {
     expect(leaks).toEqual([]);
   });
 
+  it("has a made-up tax year, every figure labelled DEMO and confirmed by the approver, with the declaration windows open; an employee sees both regimes, and HR sees nothing of it", async () => {
+    const years = await call("DEMO001", "get", "tax/years");
+    expect(years.body.years).toHaveLength(1);
+    expect(years.body.years[0]).toMatchObject({ status: "CONFIRMED", missing: [] });
+    expect(JSON.stringify(years.body.years[0].value)).toContain("DEMO COMPANY: a made-up figure");
+    const mine = await call("DEMO006", "get", "tax/me");
+    expect([mine.status, mine.body.windows.declaration.state, mine.body.sectionsConfirmed, mine.body.comparison.available, mine.body.comparison.chosen]).toEqual([200, "OPEN", true, true, null]);
+    expect(Object.keys(mine.body.comparison.results).sort()).toEqual(["NEW", "OLD"]);
+    expect((await call("DEMO004", "get", "tax/years")).status).toBe(403); // HR
+    expect((await call("DEMO004", "get", `tax/declarations?fy=${years.body.years[0].year}`)).status).toBe(403);
+    expect((await call("DEMO005", "get", "tax/years")).status).toBe(403); // the developer
+  });
+
   it("a whole payroll run goes through every step on the demo company, and it is a real run, not a test", async () => {
     const queued: string[] = [];
     setCalculationEnqueuer(async (id) => void queued.push(id));
@@ -130,10 +144,12 @@ describe("the demo company", () => {
     // The bank file is the fictional one and holds only made-up accounts.
     const batch = await prisma.bankTransferBatch.findUniqueOrThrow({ where: { runId } });
     const file = (await storageService.getObject(batch.fileKey)).body.toString("utf8");
-    expect(file.split("\n")[0]).toContain("DEMO BANK BULK TRANSFER (FICTIONAL FORMAT)");
+    expect(file.split("\n")[0]).toBe(DEMO_WATERMARK); // the demo company's file says so on its first line
+    expect(file.split("\n")[1]).toContain("DEMO BANK BULK TRANSFER (FICTIONAL FORMAT)");
+    expect(batch.fileName).toMatch(/^DEMO-bank-file-/);
     expect(file).toContain(DEMO_DEBIT_ACCOUNT);
     // The accounts are the demo's (9999...) and the development seed's own made-up ones: all digits, none from anywhere else.
-    for (const line of file.trimEnd().split("\n").slice(1)) expect(line.split(",")[2]).toMatch(/^\d{9,18}$/);
+    for (const line of file.trimEnd().split("\n").slice(2)) expect(line.split(",")[2]).toMatch(/^\d{9,18}$/);
 
     // Every rule the run read is one the Ready screen requires; and every required rule is read, or is one that only a statutory file or a later phase uses.
     const pinned = new Set((run.pins as unknown as RulePin[]).filter((p) => (p.kind ?? "RULE") === "RULE").map((p) => p.key));

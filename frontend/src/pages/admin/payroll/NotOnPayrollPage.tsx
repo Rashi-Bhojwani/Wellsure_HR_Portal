@@ -22,7 +22,7 @@ export function NotOnPayrollPage() {
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["payroll", "exclusions"] });
   const confirm = useMutation({ mutationFn: (id: string) => payrollApi.confirmExclusion(id), onSuccess: () => { toast.success("Confirmed."); refresh(); }, onError: (e) => toast.error(apiErrorMessage(e, "Could not confirm it.")) });
   const label = (r: ExclusionRow) => (r.kind === "EXCLUDE" ? "Not on payroll" : "Back on payroll");
-  const buttons = (r: ExclusionRow, block?: boolean) => (!r.confirmed && canConfirm ? <Button type="primary" size={block ? "large" : "small"} block={block} loading={confirm.isPending} onClick={() => confirm.mutate(r.id)}>Confirm (a different director from {r.madeBy})</Button> : null);
+  const buttons = (r: ExclusionRow, block?: boolean) => (!r.confirmed && canConfirm ? <div><Button type="primary" size={block ? "large" : "small"} block={block} loading={confirm.isPending} onClick={() => confirm.mutate(r.id)}>Confirm</Button><Caption>A different director from {r.madeBy} confirms it.</Caption></div> : null);
   return (
     <>
       <PageHeader title="Not on payroll" subtitle="People a payroll run leaves out for a period" actions={canEdit ? <Button type="primary" onClick={() => setAdding(true)}>Mark a person</Button> : undefined} />

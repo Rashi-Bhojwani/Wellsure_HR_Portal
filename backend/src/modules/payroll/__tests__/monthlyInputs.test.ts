@@ -49,8 +49,8 @@ describe("monthly inputs: entry, history, confirmation and the run", () => {
     for (const n of ["a", "b", "c"]) await giveSalary(w, id(n), "600000", FIRST_SALARY_DAY);
     incentive = `${w.prefix}_INC`;
     advance = `${w.prefix}_ADV`;
-    await makeComponent(w, incentive, { name: `Incentive ${w.prefix}`, payslipOrder: 20, inputItem: true, pfApplicable: false });
-    await makeComponent(w, advance, { name: `Advance ${w.prefix}`, type: "DEDUCTION", payslipOrder: 21, inputItem: true, taxable: false });
+    await makeComponent(w, incentive, { name: `Incentive ${w.prefix}`, payslipOrder: 20, inputItem: true, pfApplicable: false, inputDirection: "EARNING", inputAllowNegative: false });
+    await makeComponent(w, advance, { name: `Advance ${w.prefix}`, type: "DEDUCTION", payslipOrder: 21, inputItem: true, taxable: false, inputDirection: "DEDUCTION", inputAllowNegative: false });
   }, 300_000);
   afterAll(async () => {
     setPayrollLockCheck(null);
@@ -135,7 +135,7 @@ describe("monthly inputs: entry, history, confirmation and the run", () => {
     await expect(prisma.payrollMonthlyInput.delete({ where: { id: row.id } })).rejects.toThrow(/MONTHLY_INPUTS_APPEND_ONLY/);
     const data = { employeeId: id("a"), componentCode: incentive, cycleStart: new Date(`${month}T00:00:00Z`), amount: "1", reason: "sneaky" };
     await expect(prisma.payrollMonthlyInput.create({ data: { ...data, enteredByUserId: w.outsider.userId } })).rejects.toThrow(/MONTHLY_INPUTS_DIRECTORS_ONLY/);
-    await expect(prisma.payrollMonthlyInput.create({ data: { ...data, enteredByUserId: w.maker.userId, amount: "-1" } })).rejects.toThrow(/amount_check/);
+    await expect(prisma.payrollMonthlyInput.create({ data: { ...data, enteredByUserId: w.maker.userId, amount: "1", cleared: true } })).rejects.toThrow(/amount_check/); // a clear carries no amount (the sign of a figure is the pay head's choice now, held by the service: D-31)
     await expect(prisma.payrollMonthlyInput.create({ data: { ...data, enteredByUserId: w.maker.userId, amount: null, cleared: false } })).rejects.toThrow(/amount_check/);
   });
 

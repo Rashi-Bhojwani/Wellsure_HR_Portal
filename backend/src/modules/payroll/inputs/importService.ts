@@ -16,7 +16,7 @@ import { iso } from "../run/days";
 import { assertNotOwnPay } from "../salary/guards";
 import { FIXED_COLUMNS, fixedColumnOf, normaliseHeader, parseDateText, readTable, type RawTable } from "./importParse";
 import { parseAmountText, type MonthState } from "./rules";
-import { inputHeads, monthView, peopleInMonth, type Actor, type Head } from "./service";
+import { headReady, inputHeads, monthView, peopleInMonth, type Actor, type Head } from "./service";
 
 // Importing Monthly Inputs from a file (docs/plans/STAGE_4_PLAN.md): upload → preview → a director confirms. Nothing is a figure of any month until the confirm; the
 // same file (by hash) is applied once; one invalid row refuses the whole file unless the director chooses to skip the invalid rows, and that choice is recorded.
@@ -171,7 +171,8 @@ export async function analyse(raw: RawTable): Promise<Analysis> {
     for (const [i, head] of headColumns) {
       const text = get(i);
       if (text === "") continue;
-      const a = parseAmountText(text);
+      if (!headReady(head)) { problems.push(`${head.name}: this pay head has no direction or no choice about negative figures yet (Not set). A director sets both on the pay head first.`); continue; }
+      const a = parseAmountText(text, head.allowNegative === true);
       if (a.ok) figures[head.code] = a.value;
       else problems.push(`${head.name}: ${a.message}`);
     }

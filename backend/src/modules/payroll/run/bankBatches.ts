@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { writeAuditLog } from "../../../lib/audit";
 import { prisma } from "../../../lib/prisma";
 import { HttpError } from "../../../middleware/errorHandler";
@@ -12,12 +11,11 @@ import { canonicalDecimal, dec } from "../money";
 // bank's reference is. There is no state that means "sent". The batch holds no account number, only the last four digits.
 
 const SIGNED_SECONDS = 300;
-const MAX_RESPONSE_BYTES = 5000000;
 
 type Actor = { userId: string; ip?: string | null };
 
 async function batchOf(id: string) {
-  const b = await prisma.bankTransferBatch.findUnique({ where: { id }, include: { run: { select: { cycleLabel: true } } } });
+  const b = await prisma.bankTransferBatch.findUnique({ where: { id }, include: { run: { select: { cycleLabel: true } }, sentMark: true } });
   if (!b) throw new HttpError(404, "There is no such bank batch.", "NOT_FOUND");
   return b;
 }
@@ -35,11 +33,11 @@ const view = (b: Awaited<ReturnType<typeof batchOf>>) => ({
   fileSha256: b.fileSha256,
   generatedAt: b.generatedAt.toISOString(),
   paid: b.status === "PAID" ? { at: b.paidAt?.toISOString() ?? null, on: b.paidOn?.toISOString().slice(0, 10) ?? null, reference: b.bankReference } : null,
-  response: b.responseKey ? { fileName: b.responseFileName, sha256: b.responseSha256, attachedAt: b.responseAttachedAt?.toISOString() ?? null } : null,
+  sentToBank: b.sentMark ? { at: b.sentMark.sentAt.toISOString(), byUserId: b.sentMark.sentByUserId, note: b.sentMark.note } : null,
 });
 
 export async function batchForRun(runId: string) {
-  const b = await prisma.bankTransferBatch.findUnique({ where: { runId }, include: { run: { select: { cycleLabel: true } } } });
+  const b = await prisma.bankTransferBatch.findUnique({ where: { runId }, include: { run: { select: { cycleLabel: true } }, sentMark: true } });
   return { batch: b ? view(b) : null };
 }
 
@@ -70,21 +68,5 @@ export async function markPaid(id: string, input: { reference: string; paidOn: s
   await recordEvent({ subjectType: "PAYROLL_RUN", subjectId: b.runId, type: "BANK_BATCH_MARKED_PAID", actorUserId: actor.userId, payload: { batchId: id, reference, paidOn: input.paidOn } });
   await writeAuditLog({ actorUserId: actor.userId, action: "payroll.bank.marked_paid", entityType: "BankTransferBatch", entityId: id, after: { cycle: b.run.cycleLabel, reference, paidOn: input.paidOn }, ipAddress: actor.ip ?? null });
   getSocketServer()?.to(["payroll.run", "payroll.approve"].map(permissionRoom)).emit("payroll.bank.paid", { runId: b.runId, cycle: b.run.cycleLabel });
-  return getBatch(id);
-}
-
-/** The bank's response file, stored with its hash and never read: its format is not known yet. Attached once. */
-export async function attachResponse(id: string, file: { buffer: Buffer; originalName: string }, actor: Actor) {
-  const b = await batchOf(id);
-  if (b.responseKey) throw new HttpError(409, "A response file is already attached to this batch.", "ALREADY_ATTACHED");
-  if (file.buffer.length === 0) throw new HttpError(400, "That file is empty.", "VALIDATION_ERROR");
-  if (file.buffer.length > MAX_RESPONSE_BYTES) throw new HttpError(400, "That file is too large (5 MB at most).", "VALIDATION_ERROR");
-  const sha = createHash("sha256").update(file.buffer).digest("hex");
-  const safe = file.originalName.replace(/[^A-Za-z0-9._-]+/g, "_").slice(0, 80);
-  const key = `payroll/bank/${b.runId}/response-${sha.slice(0, 16)}-${safe}`;
-  await storageService.putObject(key, file.buffer, "application/octet-stream");
-  const { count } = await prisma.bankTransferBatch.updateMany({ where: { id, responseKey: null }, data: { responseKey: key, responseFileName: safe, responseSha256: sha, responseAttachedByUserId: actor.userId, responseAttachedAt: new Date() } }); // allow-clock: an instant
-  if (count !== 1) throw new HttpError(409, "A response file was just attached by somebody else.", "ALREADY_ATTACHED");
-  await writeAuditLog({ actorUserId: actor.userId, action: "payroll.bank.response_attached", entityType: "BankTransferBatch", entityId: id, after: { cycle: b.run.cycleLabel, fileName: safe, sha256: sha }, ipAddress: actor.ip ?? null });
   return getBatch(id);
 }

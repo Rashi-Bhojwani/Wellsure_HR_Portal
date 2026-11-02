@@ -45,8 +45,8 @@ describe("monthly inputs import", () => {
     advance = `${w.prefix}_ADV`;
     nameInc = `Incentive ${w.prefix}`;
     nameAdv = `Advance ${w.prefix}`;
-    await makeComponent(w, incentive, { name: nameInc, payslipOrder: 20, inputItem: true });
-    await makeComponent(w, advance, { name: nameAdv, type: "DEDUCTION", payslipOrder: 21, inputItem: true, taxable: false });
+    await makeComponent(w, incentive, { name: nameInc, payslipOrder: 20, inputItem: true, inputDirection: "EARNING", inputAllowNegative: false });
+    await makeComponent(w, advance, { name: nameAdv, type: "DEDUCTION", payslipOrder: 21, inputItem: true, inputDirection: "DEDUCTION", inputAllowNegative: false, taxable: false });
   }, 300_000);
   afterAll(async () => {
     setPayrollLockCheck(null);

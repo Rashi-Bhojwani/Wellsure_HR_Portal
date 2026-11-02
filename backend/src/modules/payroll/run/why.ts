@@ -52,6 +52,7 @@ const RULES_FOR_SOURCE: Record<string, string[]> = {
   ESI: ["ESI_EMPLOYEE_RATE", "ESI_EMPLOYER_RATE", "ESI_WAGE_CEILING", "ESI_PERIOD_RULE", "ESI_ELIGIBLE_TYPES", "ESI_ROUNDING"],
   PT: ["PT_SLABS", "PT_STATE_OF_PLACEMENT", "STATE_NAME_MAP"],
   LWF: ["LWF_TABLE", "STATE_NAME_MAP"],
+  TDS: ["TDS_MODE"],
   NET_ROUNDING: ["NET_PAY_ROUNDING"],
 };
 
@@ -71,6 +72,7 @@ const SENTENCE: Record<string, (l: { label: string; amount: string; basis: Recor
   ESI: (l) => [`${l.label} is worked out from the ESI wages and the rates and ceiling below.`],
   PT: (l) => [`${l.label} is the professional tax slab for your state and gross pay, from the table below.`],
   LWF: (l) => [`${l.label} is the labour welfare fund amount for your state and this month, from the table below.`],
+  TDS: (l) => [`${l.label} is your income tax for the financial year, worked out from the tax year the directors entered and a second director confirmed: your projected taxable pay, less what counts under your regime, by the slabs, then rebate, surcharge and cess. What you have already paid this year is taken off, and the rest is spread over the months left. Your IT Statement shows both regimes.`],
   NET_ROUNDING: () => ["The rounding that took your net pay to its final figure, by the rule below."],
 };
 
