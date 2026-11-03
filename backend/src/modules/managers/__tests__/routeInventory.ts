@@ -616,6 +616,20 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/reports": scoped("the report catalog — leave liability listed only with reports.liability.view"),
   "GET /api/reports/:key": scoped("every report is computed over the viewer's population (modules/reports/context.ts)"),
   "GET /api/reports/:key/export": scoped("the same rows as the report, as .xlsx — audited"),
+
+  // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin. Every A-9 router also refuses the Developer role.
+  // Segments: employee.segments.manage (never manager-grantable); each resolves inside the viewer's own scope (modules/parity/segments.ts).
+  "GET /api/employee-segments": admin,
+  "POST /api/employee-segments": admin,
+  "GET /api/employee-segments/:id": admin,
+  "PATCH /api/employee-segments/:id": admin,
+  "POST /api/employee-segments/:id/archive": admin,
+  "GET /api/employee-segments/:id/members": admin,
+  "GET /api/employee-extras/grid-columns/:gridKey": self,
+  "PUT /api/employee-extras/grid-columns/:gridKey": self,
+  "GET /api/employee-extras/:id/contact": admin, // employee.contact.reveal + findScopedEmployee, audited
+  "GET /api/employee-extras/:id/pay": admin, // payroll.salary.view (HR-locked) + findScopedEmployee, audited
+  // A-9 — end
 };
 
 // Scoped routes a manager can reach with a manager-grantable key — each has

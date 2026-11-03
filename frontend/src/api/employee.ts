@@ -122,6 +122,7 @@ export interface EmployeeListQuery {
   cityId?: string;
   status?: string;
   employmentType?: string;
+  population?: "current" | "past" | "all"; // A-9
   page?: number;
   pageSize?: number;
   sortBy?: string;
@@ -157,6 +158,8 @@ export async function deleteSavedView(id: string): Promise<void> {
 // ── Profile / reveal / history ──────────────────────────────────────────
 
 export interface EmployeeProfile {
+  /** A-9: another person's contact numbers arrive masked (last 4); the full numbers are behind the audited reveal. */
+  contactMasked?: boolean;
   id: string;
   employeeCode: string;
   fullName: string;

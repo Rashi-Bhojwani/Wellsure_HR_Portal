@@ -98,6 +98,10 @@ export const PERMISSION_KEYS = [
   "payroll.identifiers.confirm", // confirm one by typing it again from the owner's own document (a different person from who entered it)
   "payroll.banklayout.manage", // enter and change the bank file layout and the company's debit account, and see them
   "payroll.banklayout.confirm", // check a bank layout against the bank's specification and confirm it (a different person)
+  // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
+  "employee.segments.manage", // save employee filters and segments (resolved inside the viewer's own scope; never widens it)
+  "employee.contact.reveal", // reveal a person's full contact number (masked to the last 4 everywhere else); audited with a reason
+  // A-9 — end
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
@@ -240,6 +244,10 @@ export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
   "reports.salary.view": { group: "Reports", label: "Salary and statutory reports", description: "Salary register, variance report and the PF, ESI, PT and LWF statements, with Excel export." },
   "attendance.unlock": { group: "Attendance", label: "Unlock attendance periods", description: "Open a finalised attendance cycle again, with a written reason (and a warning if payroll has used it). Super Admin only.", meta: true },
   "helpdesk.manage": { group: "Helpdesk", label: "Helpdesk queue", description: "Work the ticket queue: assign, status, replies, internal notes, categories." },
+  // A-9 — begin
+  "employee.segments.manage": { group: "Employees", label: "Saved filters and segments", description: "Save a filter of employees or a named group of people, optionally shared with other admins. It always resolves inside each viewer's own data scope." },
+  "employee.contact.reveal": { group: "Employees", label: "Reveal contact numbers", description: "See a person's full mobile number (shown as the last 4 digits elsewhere). Each reveal is audited with a reason." },
+  // A-9 — end
   "helpdesk.sensitive.view": { group: "Helpdesk", label: "Sensitive tickets", description: "See tickets in categories marked sensitive (e.g. Payroll & Salary, Grievance)." },
 };
 

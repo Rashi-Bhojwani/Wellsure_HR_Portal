@@ -61,6 +61,10 @@ const HR_EXECUTIVE_PERMS: string[] = [
   "attendance.regularization.approve",
   // Phase 3 commit 2 — the raw punch log.
   "attendance.swipes.view",
+  // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin: no pay data in either
+  "employee.segments.manage",
+  "employee.contact.reveal",
+  // A-9 — end
 ];
 const HR_ADMIN_PERMS: string[] = [
   ...HR_EXECUTIVE_PERMS,

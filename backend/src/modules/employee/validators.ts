@@ -225,6 +225,7 @@ export const employeeListQuerySchema = z.object({
   cityId: z.string().optional(),
   status: z.enum(["ACTIVE", "INACTIVE", "SEPARATED"]).optional(),
   employmentType: z.enum(["PERMANENT", "CONTRACT", "INTERN", "CONSULTANT", "PROBATION"]).optional(),
+  population: z.enum(["current", "past", "all"]).optional(), // A-9
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(25),
   sortBy: z.enum(["employeeCode", "fullName", "dateOfJoining", "status"]).default("employeeCode"),

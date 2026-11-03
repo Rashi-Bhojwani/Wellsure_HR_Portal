@@ -165,6 +165,10 @@ export const REVIEWED_NOT_SENSITIVE: readonly PermissionKey[] = [
   "import.details.manage",
   "letters.issue.nopay",
   "payroll.rules.view",
+  // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin: a saved list of people, and a contact number (not one of the sensitive classes; masked and audited anyway)
+  "employee.segments.manage",
+  "employee.contact.reveal",
+  // A-9 — end
 ];
 
 /** The keys nobody can hold together with the DEVELOPER role. */

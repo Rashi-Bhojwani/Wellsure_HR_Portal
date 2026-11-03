@@ -116,6 +116,10 @@ model User {
   delegationsGiven         WorkflowDelegate[]       @relation("DelegationDelegator")
   delegationsReceived      WorkflowDelegate[]       @relation("DelegationDelegate")
   attendanceManualBranches AttendanceManualBranch[] @relation("AttendanceManualBranchUser")
+  // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
+  employeeSegments         EmployeeSegment[]        @relation("EmployeeSegmentOwner")
+  gridPreferences          UserGridPreference[]     @relation("UserGridPreferences")
+  // A-9 — end
 
   @@map("users")
 }
@@ -520,6 +524,9 @@ model Employee {
   attendanceOverrides        AttendanceOverride[]
   shiftOverrides             ShiftOverride[]
   leaveDayReleases           LeaveDayRelease[]
+  // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
+  segmentMemberships         EmployeeSegmentMember[]  @relation("EmployeeSegmentMembership")
+  // A-9 — end
 
   @@index([status])
   @@index([dateOfJoining])
@@ -3526,3 +3533,55 @@ model TaxProofDecision {
   @@index([proofId, createdAt])
   @@map("tax_proof_decisions")
 }
+
+// ── A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin ──────────────────────────────────────────────────────────────────
+// G1: a saved employee filter (criteria) or a named group of people (list). Shared means other holders of the key may USE it; it is always resolved inside the
+// viewer's own data scope, so sharing never shows anyone a person they could not already see. Archived, never deleted.
+enum EmployeeSegmentKind {
+  FILTER
+  LIST
+}
+
+model EmployeeSegment {
+  id          String                  @id @default(cuid())
+  name        String
+  kind        EmployeeSegmentKind
+  criteria    Json                    @default("{}")
+  ownerUserId String                  @map("owner_user_id")
+  owner       User                    @relation("EmployeeSegmentOwner", fields: [ownerUserId], references: [id])
+  shared      Boolean                 @default(false)
+  archivedAt  DateTime?               @map("archived_at") @db.Timestamptz(3)
+  createdAt   DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+  members     EmployeeSegmentMember[]
+
+  @@index([ownerUserId])
+  @@map("employee_segments")
+}
+
+model EmployeeSegmentMember {
+  id         String          @id @default(cuid())
+  segmentId  String          @map("segment_id")
+  segment    EmployeeSegment @relation(fields: [segmentId], references: [id])
+  employeeId String          @map("employee_id")
+  employee   Employee        @relation("EmployeeSegmentMembership", fields: [employeeId], references: [id])
+
+  @@unique([segmentId, employeeId])
+  @@index([employeeId])
+  @@map("employee_segment_members")
+}
+
+// G1: the columns a person chose on a grid (UI convenience, per user, never shared, not audited).
+model UserGridPreference {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  user      User     @relation("UserGridPreferences", fields: [userId], references: [id])
+  gridKey   String   @map("grid_key")
+  columns   Json
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([userId, gridKey])
+  @@map("user_grid_preferences")
+}
+
+// ── A-9 — end ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
