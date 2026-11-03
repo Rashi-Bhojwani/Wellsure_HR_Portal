@@ -1,5 +1,6 @@
 import request from "supertest";
 import pino from "pino";
+import { Prisma } from "@prisma/client";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { PRIVATE_NOTICE } from "@shared/constants/peeps";
 import { purgeAppendOnly } from "../../../lib/__tests__/cleanup";
@@ -26,6 +27,40 @@ const CATALOGUE = [
   { code: "DEMO_MONTH", label: "DEMO Star of the month", duration: "MONTH" },
   { code: "DEMO_FOREVER", label: "DEMO Milestone", duration: "PERMANENT" },
 ];
+
+// Make both real HTTP calls reach their transactions before committing the winner.
+// The loser then receives the selected Prisma conflict, independent of PostgreSQL's
+// scheduler. The separate unmocked races exercise real concurrent transactions too.
+async function withRaceConflict<T>(code: 'P2002' | 'P2034', run: () => Promise<T>): Promise<T> {
+  const original = prisma.$transaction.bind(prisma);
+  let release!: () => void;
+  const ready = new Promise<void>((resolve) => { release = resolve; });
+  let winner: Promise<unknown>;
+  let calls = 0;
+  const spy = vi.spyOn(prisma, '$transaction');
+  spy.mockImplementation(((...args: Parameters<typeof prisma.$transaction>) => {
+    calls += 1;
+    if (calls === 1) {
+      winner = ready.then(() => original(...args));
+      return winner;
+    }
+    if (calls === 2) {
+      release();
+      return winner.then(() => {
+        throw new Prisma.PrismaClientKnownRequestError('DEMO concurrent request conflict', { code, clientVersion: Prisma.prismaVersion.client });
+      });
+    }
+    return original(...args);
+  }) as typeof prisma.$transaction);
+  try {
+    const out = await run();
+    expect(calls).toBe(2);
+    return out;
+  } finally {
+    release();
+    spy.mockRestore();
+  }
+}
 
 describe("badges, cheers and corrective notes", () => {
   let org: TestOrgMasters;
@@ -194,7 +229,21 @@ describe("badges, cheers and corrective notes", () => {
       const [x, y] = await Promise.all([give("managerA", "a2", { idempotencyKey: k }), give("managerA", "a2", { idempotencyKey: k })]);
       expect([x.status, y.status].sort()).toEqual([200, 201]);
       expect(x.body.id).toBe(y.body.id);
+      const { repeated: _first, ...first } = x.body;
+      const { repeated: _second, ...second } = y.body;
+      expect(first).toEqual(second);
       expect(await prisma.badgeAward.count({ where: { giverUserId: p.managerA.userId, idempotencyKey: k } })).toBe(1);
+    });
+
+    it.each(['P2002', 'P2034'] as const)('badge same-key race returns the winner for %s', async (code) => {
+      const k = key();
+      const [x, y] = await withRaceConflict(code, () => Promise.all([give('managerA', 'a2', { idempotencyKey: k }), give('managerA', 'a2', { idempotencyKey: k })]));
+      expect([x.status, y.status].sort()).toEqual([200, 201]);
+      const { repeated: _first, ...first } = x.body;
+      const { repeated: _second, ...second } = y.body;
+      expect(first).toEqual(second);
+      expect(await prisma.badgeAward.count({ where: { giverUserId: p.managerA.userId, idempotencyKey: k } })).toBe(1);
+      expect(await prisma.auditLog.count({ where: { entityId: x.body.id, action: 'badges.given' } })).toBe(1);
     });
   });
 
@@ -242,6 +291,29 @@ describe("badges, cheers and corrective notes", () => {
       await setSetting("audience.badges", { officeGivesToAnyone: true }, p.director, p.director2); // widening badges never widens notes
       expect((await note("member", "a1")).status).toBe(403);
       await setSetting("audience.badges", { officeGivesToAnyone: false }, p.director, p.director2);
+    });
+
+    it('two identical corrective-note requests racing create one record and return the same note', async () => {
+      const k = key();
+      const body = { recipientEmployeeId: p.a2.employeeId, body: `${MARKER} DEMO note`, idempotencyKey: k };
+      const [x, y] = await Promise.all([post('director', '/api/nudges', body), post('director', '/api/nudges', body)]);
+      expect([x.status, y.status].sort()).toEqual([200, 201]);
+      const { repeated: _first, ...first } = x.body;
+      const { repeated: _second, ...second } = y.body;
+      expect(first).toEqual(second);
+      expect(await prisma.privateNudge.count({ where: { senderUserId: p.director.userId, idempotencyKey: k } })).toBe(1);
+    });
+
+    it.each(['P2002', 'P2034'] as const)('corrective-note same-key race returns the winner for %s', async (code) => {
+      const k = key();
+      const body = { recipientEmployeeId: p.a2.employeeId, body: `${MARKER} DEMO note`, idempotencyKey: k };
+      const [x, y] = await withRaceConflict(code, () => Promise.all([post('director', '/api/nudges', body), post('director', '/api/nudges', body)]));
+      expect([x.status, y.status].sort()).toEqual([200, 201]);
+      const { repeated: _first, ...first } = x.body;
+      const { repeated: _second, ...second } = y.body;
+      expect(first).toEqual(second);
+      expect(await prisma.privateNudge.count({ where: { senderUserId: p.director.userId, idempotencyKey: k } })).toBe(1);
+      expect(await prisma.auditLog.count({ where: { entityId: x.body.id, action: 'nudges.sent' } })).toBe(1);
     });
 
     it("read by the sender, the recipient and the directors only (a director opening someone else's is audited)", async () => {

@@ -4,6 +4,9 @@ import type { Viewer } from "../manual/scope";
 import * as bulk from "../regularization/bulk";
 import * as reg from "../regularization/service";
 import * as info from "./info";
+// PEEPS-BEGIN attendance leave privacy
+import { attendanceBoardDisplay, attendanceDayDisplay, attendanceMonthDisplay } from "../../leaveRules/attendancePrivacy";
+// PEEPS-END attendance leave privacy
 
 const viewer = (req: Request): Viewer => ({ userId: req.user!.userId, employeeId: req.user!.employeeId, permissions: req.user!.permissions, dataScope: req.user!.dataScope });
 const meta = (req: Request): Meta => ({ actorUserId: req.user!.userId, ipAddress: req.ip ?? null, userAgent: req.get("user-agent") ?? null });
@@ -19,14 +22,20 @@ export async function myDay(req: Request, res: Response): Promise<void> {
 // Anyone's, in attendance.view scope
 export async function employeeMonth(req: Request, res: Response): Promise<void> {
   await info.assertCanView(viewer(req), req.params.employeeId as string);
-  res.status(200).json(await info.monthView(req.params.employeeId as string, month(req)));
+  // PEEPS-BEGIN attendance leave privacy
+  res.status(200).json(await attendanceMonthDisplay(await info.monthView(req.params.employeeId as string, month(req)), req.user!, req.params.employeeId as string));
+  // PEEPS-END attendance leave privacy
 }
 export async function employeeDay(req: Request, res: Response): Promise<void> {
   await info.assertCanView(viewer(req), req.params.employeeId as string);
-  res.status(200).json(await info.dayDetail(req.params.employeeId as string, req.params.date as string, { self: false }));
+  // PEEPS-BEGIN attendance leave privacy
+  res.status(200).json(await attendanceDayDisplay(await info.dayDetail(req.params.employeeId as string, req.params.date as string, { self: false }), req.user!, req.params.employeeId as string));
+  // PEEPS-END attendance leave privacy
 }
 export async function whoIsIn(req: Request, res: Response): Promise<void> {
-  res.status(200).json(await info.whoIsIn(viewer(req), req.query as { locationId?: string; departmentId?: string }));
+  // PEEPS-BEGIN attendance leave privacy
+  res.status(200).json(await attendanceBoardDisplay(await info.whoIsIn(viewer(req), req.query as { locationId?: string; departmentId?: string }), req.user!));
+  // PEEPS-END attendance leave privacy
 }
 // The forgot-to-punch request
 export async function raise(req: Request, res: Response): Promise<void> {

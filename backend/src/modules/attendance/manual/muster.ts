@@ -16,6 +16,10 @@ import { FOLLOW_DEVICE_TEXT } from "../override/manualOverride";
 import { describeCorrection, REASON_LABEL, type Correction } from "../regularization/correction";
 import { appendEntries, entryInput, entryKey, latestEntries, type NewEntry } from "./entries";
 import { hasAnyBranch, inBranches, markableBranches, viewableEmployeeIds, type Branches, type Viewer } from "./scope";
+// PEEPS-BEGIN attendance leave privacy
+import { resolveUserRoleCodes } from "../../../lib/permissions";
+import { attendanceLeaveText, attendanceMusterDisplay } from "../../leaveRules/attendancePrivacy";
+// PEEPS-END attendance leave privacy
 
 // The Attendance Muster (Phase 2 P2-D, docs/plans/PHASE_2.md §5.1, §5.3 and
 // "P2-D build design"): employees × the days of a cycle, directly editable
@@ -283,13 +287,18 @@ export async function getMuster(viewer: Viewer, q: MusterQuery) {
     const loc = refLocation(id);
     return { employeeId: id, employeeCode: e.employeeCode, name: names.get(id) ?? e.employeeCode, branch: loc ? (locationName.get(loc) ?? null) : null, cells, totals: totalsFor(cells) };
   });
+  // PEEPS-BEGIN attendance leave privacy: totals use stored statuses; display and export use the leave module's labels.
+  const displayed = await attendanceMusterDisplay({ rows: musterRows }, { employeeId: viewer.employeeId, roleCodes: await resolveUserRoleCodes(viewer.userId) });
+  // PEEPS-END attendance leave privacy
   return {
     cycle: { start: iso(cycle.start), end: iso(cycle.end), label: cycle.label },
     today: s.today,
     days: s.days.map((d) => ({ date: d, weekday: day(d).getUTCDay(), notMarked: musterRows.filter((r) => r.cells.find((c) => c.date === d)?.status?.includes("NM")).length })),
     canMark: s.canMark,
     filters: { locations, departments, employees: everyone },
-    rows: musterRows,
+    // PEEPS-BEGIN attendance leave privacy
+    rows: displayed.rows,
+    // PEEPS-END attendance leave privacy
     legend: MUSTER_LEGEND,
     inputHelp: MUSTER_INPUT_HELP,
   };
@@ -471,6 +480,9 @@ const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export async function exportMuster(viewer: Viewer, q: MusterQuery) {
   const m = await getMuster(viewer, q);
+  // PEEPS-BEGIN attendance leave privacy: the supplemental corrected-days sheet also names released leave.
+  const leaveText = await attendanceLeaveText({ employeeId: viewer.employeeId, roleCodes: await resolveUserRoleCodes(viewer.userId) });
+  // PEEPS-END attendance leave privacy
   const dayCols: XlsxColumn[] = m.days.map((d) => ({ key: d.date, header: `${Number(d.date.slice(8))} ${WEEKDAYS[d.weekday]}`, width: 7 }));
   const totalCols: XlsxColumn[] = [
     { key: "paidDays", header: "Paid days", type: "number", width: 10 },
@@ -511,7 +523,9 @@ export async function exportMuster(viewer: Viewer, q: MusterQuery) {
     const out: Array<Record<string, unknown>> = [];
     const o = cell.overrideRef ? overrideOf.get(cell.overrideRef) : undefined;
     if (o) {
-      const released = releaseRows.filter((x) => x.employeeId === row.employeeId && iso(x.date) === cell.date).map((x) => `${x.leaveType.code} ${Number(x.days)} day returned`).join("; ");
+      // PEEPS-BEGIN attendance leave privacy
+      const released = releaseRows.filter((x) => x.employeeId === row.employeeId && iso(x.date) === cell.date).map((x) => `${row.employeeId === viewer.employeeId ? x.leaveType.code : leaveText(x.leaveType.code)} ${Number(x.days)} day returned`).join("; ");
+      // PEEPS-END attendance leave privacy
       out.push({
         code: row.employeeCode,
         name: row.name,
