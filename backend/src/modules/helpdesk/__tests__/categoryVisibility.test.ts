@@ -3,7 +3,8 @@ import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "../../../lib/prisma";
 import { app, authHeader, cleanupEmployeeTestOrgMasters, cleanupFullTestEmployee, createEmployeeTestOrgMasters, createFullTestEmployee, loginAs, type TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
-import { cleanupTestHelpdeskCategories } from "./helpdeskTestHelpers";
+import { getSocketServer, setSocketServer } from "../../../realtime/emit";
+import { cleanupTestHelpdeskCategories, createTestHelpdeskCategory, pngWithExif, raise, reply } from "./helpdeskTestHelpers";
 import { resolveAccess } from "../../../lib/permissions";
 import { setVisibility } from "../categoryVisibility";
 
@@ -61,4 +62,81 @@ describe("general category visibility", () => {
     expect((await put("director", `/categories/${payroll.id}/visibility`, setting())).status).toBe(404);
     expect(await prisma.helpdeskCategoryVisibility.count({ where: { categoryId: payroll.id } })).toBe(0);
   });
+  async function configuredCategory(employeeIds: string[], extra: object = {}) {
+    const res = await request(app).post("/api/helpdesk/categories").set(...authHeader(tokens.director)).send({ code: `TEST_C2_${randomUUID().slice(0, 8).toUpperCase()}`, name: "DEMO general category", ...extra });
+    expect(res.status).toBe(201);
+    ids.push(res.body.id);
+    expect((await put("director", `/categories/${res.body.id}/visibility`, setting({ employeeIds }))).status).toBe(200);
+    return res.body.id as string;
+  }
+  const apiGet = (who: keyof typeof people, path: string) => request(app).get(path).set(...authHeader(tokens[who]));
+  const apiPost = (who: keyof typeof people, path: string) => request(app).post(path).set(...authHeader(tokens[who])).send({});
+  it("new categories refuse raising until a director chooses; legacy categories keep their queue behaviour", async () => {
+    const fresh = await prisma.helpdeskCategory.create({ data: { code: `TEST_C2_${randomUUID().slice(0, 8)}`, name: "DEMO Not set" } });
+    ids.push(fresh.id);
+    const denied = await raise(tokens.employee, { categoryId: fresh.id, subject: "DEMO not active", body: "DEMO" });
+    expect(denied.status).toBe(409);
+    expect(denied.body.error.message).toBe("This category is not set up yet");
+    expect(await prisma.helpdeskTicket.count({ where: { categoryId: fresh.id } })).toBe(0);
+    const legacy = await createTestHelpdeskCategory();
+    ids.push(legacy.id);
+    expect(await prisma.helpdeskCategoryVisibility.count({ where: { categoryId: legacy.id } })).toBe(0);
+    const raised = await raise(tokens.employee, { categoryId: legacy.id, subject: "DEMO legacy", body: "DEMO" });
+    expect(raised.status).toBe(201);
+    expect((await get("outsider", `/tickets/${raised.body.id}`)).status).toBe(200);
+  });
+  it("named audience controls queue, totals, Tasks, detail, attachments, persisted notifications and socket rooms", async () => {
+    const categoryId = await configuredCategory([people.hr.employeeId]);
+    const events: Array<{ rooms: string[]; event: string; args: unknown[] }> = [];
+    const previous = getSocketServer();
+    setSocketServer({ to: (room) => ({ emit: (event, ...args) => { events.push({ rooms: Array.isArray(room) ? room : [room], event, args }); } }) });
+    let raised;
+    try {
+      raised = await raise(tokens.employee, { categoryId, subject: "DEMO-C2-PRIVATE", body: "DEMO private thread" }, [{ buffer: await pngWithExif(), filename: "demo.png", contentType: "image/png" }]);
+    } finally { setSocketServer(previous); }
+    expect(raised.status).toBe(201);
+    const ticketId = raised.body.id as string;
+    const attachmentId = raised.body.messages[0].attachments[0].id as string;
+    const queueEvents = events.filter((e) => e.event === "helpdesk.queue");
+    expect(queueEvents.length).toBeGreaterThan(0);
+    expect(events.every((e) => !e.rooms.includes("perm:helpdesk.manage") && !e.rooms.includes(`user:${people.outsider.employeeId}`))).toBe(true);
+    expect(queueEvents[0]!.rooms).toContain(`user:${people.hr.employeeId}`);
+    expect(queueEvents[0]!.rooms).toContain(`user:${people.director.employeeId}`);
+    const notifications = await prisma.notification.findMany({ where: { userId: people.hr.userId, type: "helpdesk.assigned" } });
+    const notification = notifications.find((n) => (n.payload as { ticketId?: string })?.ticketId === ticketId)!;
+    expect(notification).toBeDefined();
+    expect(await prisma.notification.count({ where: { userId: people.outsider.userId, body: { contains: "DEMO-C2-PRIVATE" } } })).toBe(0);
+    await prisma.helpdeskTicket.update({ where: { id: ticketId }, data: { assigneeEmployeeId: people.hr.employeeId } });
+    expect(JSON.stringify((await apiGet("hr", "/api/tasks/mine")).body)).toContain(ticketId);
+    const descriptor = await apiPost("hr", `/api/helpdesk/attachments/${attachmentId}/download`);
+    expect(descriptor.status).toBe(200);
+    expect(descriptor.body.guarded).toBe(true);
+    expect((await apiPost("hr", descriptor.body.url)).status).toBe(200);
+    expect((await apiPost("employee", descriptor.body.url)).status).toBe(200);
+    expect((await apiPost("other", descriptor.body.url)).status).toBe(404);
+    expect((await apiPost("developer", descriptor.body.url)).status).toBe(403);
+    expect((await request(app).post(descriptor.body.url).send({})).status).toBe(401);
+    expect((await put("director", `/categories/${categoryId}/visibility`, setting({ version: 1 }))).status).toBe(200);
+    for (const who of ["hr", "outsider", "other"] as const) {
+      expect((await get(who, `/tickets/${ticketId}`)).status).toBe(404);
+      expect((await apiPost(who, descriptor.body.url)).status).toBe(404);
+      expect((await apiPost(who, `/api/helpdesk/attachments/${attachmentId}/download`)).status).toBe(404);
+    }
+    expect((await reply(tokens.hr, ticketId, { body: "DEMO denied" })).status).toBe(404);
+    const queue = await get("hr", `/queue?categoryId=${categoryId}`);
+    expect(queue.status).toBe(200);
+    expect(queue.body).toMatchObject({ items: [], total: 0 });
+    expect(JSON.stringify((await apiGet("hr", "/api/tasks/mine")).body)).not.toContain(ticketId);
+    const categories = await get("hr", "/categories/all");
+    expect(categories.body.find((c: { id: string }) => c.id === categoryId).ticketCount).toBe(0);
+    const bell = await apiGet("hr", "/api/notifications?page=1&pageSize=100");
+    expect(JSON.stringify(bell.body)).not.toContain(ticketId);
+    expect(bell.body.total).toBe(0);
+    expect((await apiGet("hr", "/api/notifications/unread-count")).body.count).toBe(0);
+    expect((await apiPost("hr", `/api/notifications/${notification.id}/read`)).status).toBe(404);
+    expect((await get("employee", `/tickets/${ticketId}`)).status).toBe(200);
+    expect((await get("director", `/tickets/${ticketId}`)).status).toBe(200);
+    expect(await prisma.auditLog.count({ where: { entityId: ticketId, action: "helpdesk.ticket.director_opened", actorUserId: people.director.userId } })).toBeGreaterThan(0);
+  });
+
 });

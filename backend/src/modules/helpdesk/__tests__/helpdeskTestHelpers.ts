@@ -8,7 +8,8 @@ import { app, authHeader } from "../../employee/__tests__/employeeTestHelpers";
 
 export async function createTestHelpdeskCategory(opts: { isSensitive?: boolean; directorsOnly?: boolean; defaultAssigneeEmployeeId?: string | null; isActive?: boolean } = {}) {
   const code = `TEST_HD_${randomUUID().slice(0, 8).toUpperCase()}`;
-  return prisma.helpdeskCategory.create({
+  // PEEPS-BEGIN helpdesk-visibility
+  const category = await prisma.helpdeskCategory.create({
     data: {
       code,
       name: `Test ${code}`,
@@ -18,6 +19,11 @@ export async function createTestHelpdeskCategory(opts: { isSensitive?: boolean; 
       defaultAssigneeEmployeeId: opts.defaultAssigneeEmployeeId ?? null,
     },
   });
+  // This helper deliberately represents pre-migration categories. New-category
+  // activation is exercised separately through the real category API.
+  await prisma.helpdeskCategoryVisibility.delete({ where: { categoryId: category.id } });
+  return category;
+  // PEEPS-END helpdesk-visibility
 }
 
 // Deletes the categories and — through the schema-driven engine — every

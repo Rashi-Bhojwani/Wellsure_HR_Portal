@@ -1,3 +1,6 @@
+// PEEPS-BEGIN helpdesk-visibility
+import { notificationAudienceWhere } from "../helpdesk/categoryVisibility";
+// PEEPS-END helpdesk-visibility
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { HttpError } from "../../middleware/errorHandler";
@@ -53,11 +56,20 @@ export interface ListNotificationsQuery {
 // Unread-first (explicit NULLS FIRST — never rely on a DB engine's ASC/
 // DESC null-ordering default), newest-first within each group.
 export async function listNotifications(userId: string, query: ListNotificationsQuery) {
+  // PEEPS-BEGIN helpdesk-visibility
+  const audience = await notificationAudienceWhere(userId);
+  // PEEPS-END helpdesk-visibility
   const [total, unreadCount, rows] = await Promise.all([
-    prisma.notification.count({ where: { userId } }),
-    prisma.notification.count({ where: { userId, readAt: null } }),
+    // PEEPS-BEGIN helpdesk-visibility
+    prisma.notification.count({ where: { userId, AND: [audience] } }),
+    // PEEPS-END helpdesk-visibility
+    // PEEPS-BEGIN helpdesk-visibility
+    prisma.notification.count({ where: { userId, readAt: null, AND: [audience] } }),
+    // PEEPS-END helpdesk-visibility
     prisma.notification.findMany({
-      where: { userId },
+      // PEEPS-BEGIN helpdesk-visibility
+      where: { userId, AND: [audience] },
+      // PEEPS-END helpdesk-visibility
       orderBy: [{ readAt: { sort: "asc", nulls: "first" } }, { createdAt: "desc" }],
       skip: (query.page - 1) * query.pageSize,
       take: query.pageSize,
@@ -67,15 +79,25 @@ export async function listNotifications(userId: string, query: ListNotifications
 }
 
 export async function getUnreadCount(userId: string): Promise<number> {
-  return prisma.notification.count({ where: { userId, readAt: null } });
+  // PEEPS-BEGIN helpdesk-visibility
+  const audience = await notificationAudienceWhere(userId);
+  // PEEPS-END helpdesk-visibility
+  // PEEPS-BEGIN helpdesk-visibility
+  return prisma.notification.count({ where: { userId, readAt: null, AND: [audience] } });
+  // PEEPS-END helpdesk-visibility
 }
 
 // A notification only ever belongs to its target user — 404, not 403, on
 // someone else's id or a non-existent one, same "don't confirm existence"
 // convention every other self-only lookup in this codebase follows.
 export async function markAsRead(notificationId: string, userId: string): Promise<void> {
+  // PEEPS-BEGIN helpdesk-visibility
+  const audience = await notificationAudienceWhere(userId);
+  // PEEPS-END helpdesk-visibility
   const result = await prisma.notification.updateMany({
-    where: { id: notificationId, userId },
+    // PEEPS-BEGIN helpdesk-visibility
+    where: { id: notificationId, userId, AND: [audience] },
+    // PEEPS-END helpdesk-visibility
     data: { readAt: new Date() },
   });
   if (result.count === 0) {
@@ -84,5 +106,10 @@ export async function markAsRead(notificationId: string, userId: string): Promis
 }
 
 export async function markAllAsRead(userId: string): Promise<void> {
-  await prisma.notification.updateMany({ where: { userId, readAt: null }, data: { readAt: new Date() } });
+  // PEEPS-BEGIN helpdesk-visibility
+  const audience = await notificationAudienceWhere(userId);
+  // PEEPS-END helpdesk-visibility
+  // PEEPS-BEGIN helpdesk-visibility
+  await prisma.notification.updateMany({ where: { userId, readAt: null, AND: [audience] }, data: { readAt: new Date() } });
+  // PEEPS-END helpdesk-visibility
 }

@@ -1,6 +1,9 @@
 // PEEPS-BEGIN helpdesk-visibility
 import * as categoryVisibility from "./categoryVisibility";
+import { attachmentContentDisposition } from "../../integrations/storage/StorageService";
 // PEEPS-END helpdesk-visibility
+
+
 import { Router } from "express";
 import { MAX_DOCUMENT_UPLOAD_MB_CEILING } from "@shared/constants/peopleDocuments";
 import { memoryUploadMany } from "../../lib/uploads";
@@ -52,5 +55,14 @@ helpdeskRouter.get("/categories/:id/visibility", requirePermission("helpdesk.vis
 });
 helpdeskRouter.put("/categories/:id/visibility", requirePermission("helpdesk.visibility.manage"), validate({ params: idParamsSchema, body: categoryVisibility.visibilitySchema }), async (req, res) => {
   res.json(await categoryVisibility.setVisibility(req.params.id as string, req.body, req.user!, { actorUserId: req.user!.userId, ipAddress: req.ip, userAgent: req.headers["user-agent"] }));
+});
+// PEEPS-END helpdesk-visibility
+
+// PEEPS-BEGIN helpdesk-visibility
+helpdeskRouter.post("/attachments/:id/content", validate({ params: idParamsSchema, body: categoryVisibility.downloadBodySchema }), async (req, res) => {
+  const file = await categoryVisibility.configuredDownload(req.params.id as string, req.user!, { actorUserId: req.user!.userId, ipAddress: req.ip, userAgent: req.headers["user-agent"] });
+  res.setHeader("Content-Type", file.contentType);
+  res.setHeader("Content-Disposition", attachmentContentDisposition(file.fileName));
+  res.send(file.body);
 });
 // PEEPS-END helpdesk-visibility

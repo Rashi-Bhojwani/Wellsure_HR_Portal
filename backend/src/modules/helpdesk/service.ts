@@ -1,3 +1,6 @@
+// PEEPS-BEGIN helpdesk-visibility
+import * as categoryVisibility from "./categoryVisibility";
+// PEEPS-END helpdesk-visibility
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { Prisma, type HelpdeskPriority, type HelpdeskTicketStatus } from "@prisma/client";
@@ -104,12 +107,15 @@ export async function listActiveCategories() {
   });
 }
 
-export async function listAllCategories() {
+// PEEPS-BEGIN helpdesk-visibility
+export async function listAllCategories(viewer?: HelpdeskViewer) {
+// PEEPS-END helpdesk-visibility
   const rows = await prisma.helpdeskCategory.findMany({
     include: { defaultAssignee: { select: nameSelect() }, _count: { select: { tickets: true } } },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
   });
-  return rows.map((c) => ({
+  // PEEPS-BEGIN helpdesk-visibility
+  return categoryVisibility.categoryAdminVisibility(rows.map((c) => ({
     id: c.id,
     code: c.code,
     name: c.name,
@@ -119,7 +125,8 @@ export async function listAllCategories() {
     sortOrder: c.sortOrder,
     defaultAssignee: personRef(c.defaultAssignee),
     ticketCount: c._count.tickets,
-  }));
+  })), viewer);
+  // PEEPS-END helpdesk-visibility
 }
 
 async function assertAssignable(employeeId: string | null | undefined, directorsOnly = false) {
@@ -222,6 +229,11 @@ export async function raiseTicket(
   const category = await prisma.helpdeskCategory.findUnique({ where: { id: input.categoryId } });
   if (!category || !category.isActive) throw new HttpError(400, "Choose an active category.", "VALIDATION_ERROR");
 
+  // PEEPS-BEGIN helpdesk-visibility
+  await categoryVisibility.requireCategoryReady(category);
+  await categoryVisibility.requireVisibleAssignee(category, category.defaultAssigneeEmployeeId);
+  // PEEPS-END helpdesk-visibility
+
   const ticketId = randomUUID().replace(/-/g, "").slice(0, 25);
   const stored = await storeAttachments(files, ticketId);
   let ticket: { id: string; number: number };
@@ -248,16 +260,20 @@ export async function raiseTicket(
     throw err;
   }
   await writeAuditLog({ ...meta, action: "helpdesk.ticket.raised", entityType: "HelpdeskTicket", entityId: ticket.id, after: { number: ticket.number, categoryId: category.id } });
-  if (category.defaultAssigneeEmployeeId) {
-    await notifyEmployee(category.defaultAssigneeEmployeeId, {
-      type: "helpdesk.assigned",
-      title: "New helpdesk ticket",
-      body: `${formatTicketNumber(ticket.number)}: ${input.subject}`,
-      link: helpdeskAdminPath(ticket.id),
-      payload: { ticketId: ticket.id },
-    });
+  // PEEPS-BEGIN helpdesk-visibility
+  if (!(await categoryVisibility.deliverConfigured(ticket.id, { notification: { type: "helpdesk.assigned", title: "New helpdesk ticket", body: `${formatTicketNumber(ticket.number)}: ${input.subject}`, link: helpdeskAdminPath(ticket.id), payload: { ticketId: ticket.id } } }))) {
+    if (category.defaultAssigneeEmployeeId) {
+      await notifyEmployee(category.defaultAssigneeEmployeeId, {
+        type: "helpdesk.assigned",
+        title: "New helpdesk ticket",
+        body: `${formatTicketNumber(ticket.number)}: ${input.subject}`,
+        link: helpdeskAdminPath(ticket.id),
+        payload: { ticketId: ticket.id },
+      });
+    }
+    emitHelpdeskQueue();
   }
-  emitHelpdeskQueue();
+  // PEEPS-END helpdesk-visibility
   return getTicket(ticket.id, viewer);
 }
 
@@ -285,6 +301,9 @@ export async function listQueue(viewer: HelpdeskViewer, query: HelpdeskQueueQuer
   const director = await isDirector(viewer.userId);
   const where: Prisma.HelpdeskTicketWhereInput = {
     ...hrVisibleWhere(viewer, director),
+    // PEEPS-BEGIN helpdesk-visibility
+    AND: [await categoryVisibility.ticketAudienceWhere(viewer)],
+    // PEEPS-END helpdesk-visibility
     ...(query.status ? { status: query.status } : { status: { not: "CLOSED" } }),
     ...(query.categoryId && { categoryId: query.categoryId }),
     ...(query.assignee === "me" && { assigneeEmployeeId: viewer.employeeId }),
@@ -312,12 +331,18 @@ async function resolveAccess(ticketId: string, viewer: HelpdeskViewer): Promise<
   const ticket = await prisma.helpdeskTicket.findUnique({ where: { id: ticketId }, include: ticketInclude() });
   if (!ticket) throw notFound();
   if (ticket.raisedByEmployeeId === viewer.employeeId) return { ticket, access: { mode: "raiser" } };
+  // PEEPS-BEGIN helpdesk-visibility
+  if (ticket.category.code !== categoryVisibility.PAYROLL_CATEGORY && !(await categoryVisibility.permitsCategory(ticket.category, viewer))) throw notFound();
+  // PEEPS-END helpdesk-visibility
   if (canManage(viewer) && (!ticket.category.isSensitive || canSeeSensitive(viewer)) && (!ticket.category.directorsOnly || (await isDirector(viewer.userId)))) return { ticket, access: { mode: "hr" } };
   throw notFound();
 }
 
 export async function getTicket(ticketId: string, viewer: HelpdeskViewer, meta?: ActorMeta) {
   const { ticket, access } = await resolveAccess(ticketId, viewer);
+  // PEEPS-BEGIN helpdesk-visibility
+  await categoryVisibility.auditDirectorOpen(ticket, viewer, meta);
+  // PEEPS-END helpdesk-visibility
   const [messages, settings] = await Promise.all([
     prisma.helpdeskMessage.findMany({
       where: { ticketId, ...(access.mode === "raiser" && { isInternalNote: false }) },
@@ -398,14 +423,21 @@ export async function addMessage(
     await writeAuditLog({ ...meta, action: "helpdesk.ticket.status_changed", entityType: "HelpdeskTicket", entityId: ticketId, before: { status: ticket.status }, after: { status: nextStatus, reason: "reply" } });
   }
   const number = formatTicketNumber(ticket.number);
+  // PEEPS-BEGIN helpdesk-visibility
   if (access.mode === "hr" && !internal) {
     await notifyEmployee(ticket.raisedByEmployeeId, { type: "helpdesk.reply", title: `HR replied on ${number}`, body: ticket.subject, link: helpdeskEmployeePath(ticketId), payload: { ticketId } });
-  } else if (access.mode === "raiser" && ticket.assigneeEmployeeId) {
-    await notifyEmployee(ticket.assigneeEmployeeId, { type: "helpdesk.reply", title: `New reply on ${number}`, body: ticket.subject, link: helpdeskAdminPath(ticketId), payload: { ticketId } });
   }
-  // Internal notes refresh only HR's screens — never the raiser's room.
-  emitHelpdeskTicket(ticketId, internal ? [ticket.assigneeEmployeeId] : [ticket.raisedByEmployeeId, ticket.assigneeEmployeeId]);
-  emitHelpdeskQueue();
+  const configured = await categoryVisibility.deliverConfigured(ticketId, {
+    internal,
+    ...(access.mode === "raiser" && { notification: { type: "helpdesk.reply", title: `New reply on ${number}`, body: ticket.subject, link: helpdeskAdminPath(ticketId), payload: { ticketId } } }),
+  });
+  if (!configured) {
+    if (access.mode === "raiser" && ticket.assigneeEmployeeId) await notifyEmployee(ticket.assigneeEmployeeId, { type: "helpdesk.reply", title: `New reply on ${number}`, body: ticket.subject, link: helpdeskAdminPath(ticketId), payload: { ticketId } });
+    // Internal notes refresh only HR's screens, never the raiser.
+    emitHelpdeskTicket(ticketId, internal ? [ticket.assigneeEmployeeId] : [ticket.raisedByEmployeeId, ticket.assigneeEmployeeId]);
+    emitHelpdeskQueue();
+  }
+  // PEEPS-END helpdesk-visibility
   return getTicket(ticketId, viewer);
 }
 
@@ -418,6 +450,9 @@ export async function updateTicket(
   const { ticket, access } = await resolveAccess(ticketId, viewer);
   if (access.mode !== "hr") throw notFound();
   await assertAssignable(input.assigneeEmployeeId, ticket.category.directorsOnly);
+  // PEEPS-BEGIN helpdesk-visibility
+  await categoryVisibility.requireVisibleAssignee(ticket.category, input.assigneeEmployeeId);
+  // PEEPS-END helpdesk-visibility
 
   const data: Prisma.HelpdeskTicketUpdateInput = {};
   if (input.priority) data.priority = input.priority;
@@ -454,10 +489,18 @@ export async function updateTicket(
     });
   }
   if (input.assigneeEmployeeId && input.assigneeEmployeeId !== ticket.assigneeEmployeeId && input.assigneeEmployeeId !== viewer.employeeId) {
-    await notifyEmployee(input.assigneeEmployeeId, { type: "helpdesk.assigned", title: `${number} assigned to you`, body: ticket.subject, link: helpdeskAdminPath(ticketId), payload: { ticketId } });
+    // PEEPS-BEGIN helpdesk-visibility
+    if (!(await categoryVisibility.deliverConfigured(ticketId, { onlyEmployeeId: input.assigneeEmployeeId, notification: { type: "helpdesk.assigned", title: `${number} assigned to you`, body: ticket.subject, link: helpdeskAdminPath(ticketId), payload: { ticketId } } }))) {
+        await notifyEmployee(input.assigneeEmployeeId, { type: "helpdesk.assigned", title: `${number} assigned to you`, body: ticket.subject, link: helpdeskAdminPath(ticketId), payload: { ticketId } });
+    }
+    // PEEPS-END helpdesk-visibility
   }
-  emitHelpdeskTicket(ticketId, [ticket.raisedByEmployeeId, ticket.assigneeEmployeeId, after.assigneeEmployeeId]);
-  emitHelpdeskQueue();
+  // PEEPS-BEGIN helpdesk-visibility
+  if (!(await categoryVisibility.deliverConfigured(ticketId))) {
+    emitHelpdeskTicket(ticketId, [ticket.raisedByEmployeeId, ticket.assigneeEmployeeId, after.assigneeEmployeeId]);
+    emitHelpdeskQueue();
+  }
+  // PEEPS-END helpdesk-visibility
   return getTicket(ticketId, viewer);
 }
 
@@ -474,25 +517,41 @@ export async function reopenTicket(ticketId: string, viewer: HelpdeskViewer, met
   const status: HelpdeskTicketStatus = ticket.assigneeEmployeeId ? "IN_PROGRESS" : "OPEN";
   await prisma.helpdeskTicket.update({ where: { id: ticketId }, data: { status, resolvedAt: null, closedAt: null, lastActivityAt: new Date() } });
   await writeAuditLog({ ...meta, action: "helpdesk.ticket.reopened", entityType: "HelpdeskTicket", entityId: ticketId, before: { status: ticket.status }, after: { status } });
-  if (ticket.assigneeEmployeeId) {
-    await notifyEmployee(ticket.assigneeEmployeeId, { type: "helpdesk.reopened", title: `${formatTicketNumber(ticket.number)} was reopened`, body: ticket.subject, link: helpdeskAdminPath(ticketId), payload: { ticketId } });
+  // PEEPS-BEGIN helpdesk-visibility
+  if (!(await categoryVisibility.deliverConfigured(ticketId, { notification: { type: "helpdesk.reopened", title: `${formatTicketNumber(ticket.number)} was reopened`, body: ticket.subject, link: helpdeskAdminPath(ticketId), payload: { ticketId } } }))) {
+    if (ticket.assigneeEmployeeId) {
+      await notifyEmployee(ticket.assigneeEmployeeId, { type: "helpdesk.reopened", title: `${formatTicketNumber(ticket.number)} was reopened`, body: ticket.subject, link: helpdeskAdminPath(ticketId), payload: { ticketId } });
+    }
+    emitHelpdeskTicket(ticketId, [ticket.raisedByEmployeeId, ticket.assigneeEmployeeId]);
+    emitHelpdeskQueue();
   }
-  emitHelpdeskTicket(ticketId, [ticket.raisedByEmployeeId, ticket.assigneeEmployeeId]);
-  emitHelpdeskQueue();
+  // PEEPS-END helpdesk-visibility
   return getTicket(ticketId, viewer);
 }
 
-export async function downloadAttachment(attachmentId: string, viewer: HelpdeskViewer) {
+// PEEPS-BEGIN helpdesk-visibility
+export async function downloadAttachment(attachmentId: string, viewer: HelpdeskViewer, meta?: ActorMeta) {
+// PEEPS-END helpdesk-visibility
   const attachment = await prisma.helpdeskAttachment.findUnique({ where: { id: attachmentId }, include: { message: true } });
   if (!attachment) throw new HttpError(404, "Attachment not found.", "NOT_FOUND");
   let access: Access;
+  // PEEPS-BEGIN helpdesk-visibility
+  let ticket: TicketRow;
+  // PEEPS-END helpdesk-visibility
   try {
-    ({ access } = await resolveAccess(attachment.message.ticketId, viewer));
+    // PEEPS-BEGIN helpdesk-visibility
+    ({ access, ticket } = await resolveAccess(attachment.message.ticketId, viewer));
+    // PEEPS-END helpdesk-visibility
   } catch {
     throw new HttpError(404, "Attachment not found.", "NOT_FOUND");
   }
   // An internal note's attachments are as invisible to the raiser as the note.
   if (access.mode === "raiser" && attachment.message.isInternalNote) throw new HttpError(404, "Attachment not found.", "NOT_FOUND");
+  // PEEPS-BEGIN helpdesk-visibility
+  await categoryVisibility.auditDirectorOpen(ticket!, viewer, meta);
+  const guarded = await categoryVisibility.downloadDescriptor(attachment.id, ticket!.category);
+  if (guarded) return { ...guarded, fileName: attachment.fileName, expiresInSeconds: DOWNLOAD_URL_TTL_SECONDS };
+  // PEEPS-END helpdesk-visibility
   const url = await storageService.getObjectSignedUrl(attachment.fileKey, DOWNLOAD_URL_TTL_SECONDS, { downloadFileName: attachment.fileName });
   return { url, fileName: attachment.fileName, expiresInSeconds: DOWNLOAD_URL_TTL_SECONDS };
 }
@@ -507,6 +566,9 @@ export async function autoCloseResolvedTickets(now = new Date()): Promise<{ clos
   const candidates = await prisma.helpdeskTicket.findMany({ where: { status: "RESOLVED", resolvedAt: { not: null } } });
   const due = candidates.filter((t) => autoCloseAt(t.resolvedAt!, settings).getTime() <= now.getTime());
   let closed = 0;
+  // PEEPS-BEGIN helpdesk-visibility
+  let legacyClosed = false;
+  // PEEPS-END helpdesk-visibility
   for (const ticket of due) {
     const updated = await prisma.helpdeskTicket.updateMany({ where: { id: ticket.id, status: "RESOLVED" }, data: { status: "CLOSED", closedAt: now } });
     if (updated.count === 0) continue; // raced with a reply — leave it
@@ -519,8 +581,15 @@ export async function autoCloseResolvedTickets(now = new Date()): Promise<{ clos
       link: helpdeskEmployeePath(ticket.id),
       payload: { ticketId: ticket.id },
     });
-    emitHelpdeskTicket(ticket.id, [ticket.raisedByEmployeeId, ticket.assigneeEmployeeId]);
+    // PEEPS-BEGIN helpdesk-visibility
+    if (!(await categoryVisibility.deliverConfigured(ticket.id))) {
+      legacyClosed = true;
+      emitHelpdeskTicket(ticket.id, [ticket.raisedByEmployeeId, ticket.assigneeEmployeeId]);
+    }
+    // PEEPS-END helpdesk-visibility
   }
-  if (closed > 0) emitHelpdeskQueue();
+  // PEEPS-BEGIN helpdesk-visibility
+  if (legacyClosed) emitHelpdeskQueue();
+  // PEEPS-END helpdesk-visibility
   return { closed };
 }

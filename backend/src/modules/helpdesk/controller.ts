@@ -14,9 +14,11 @@ const files = (req: Request) => (Array.isArray(req.files) ? req.files : []);
 export async function listActiveCategories(_req: Request, res: Response): Promise<void> {
   res.status(200).json(await service.listActiveCategories());
 }
-export async function listAllCategories(_req: Request, res: Response): Promise<void> {
-  res.status(200).json(await service.listAllCategories());
+// PEEPS-BEGIN helpdesk-visibility
+export async function listAllCategories(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await service.listAllCategories(viewer(req)));
 }
+// PEEPS-END helpdesk-visibility
 export async function createCategory(req: Request, res: Response): Promise<void> {
   res.status(201).json(await service.createCategory(req.body, actorMeta(req)));
 }
@@ -50,5 +52,7 @@ export async function reopenTicket(req: Request, res: Response): Promise<void> {
   res.status(200).json(await service.reopenTicket(id(req), viewer(req), actorMeta(req)));
 }
 export async function downloadAttachment(req: Request, res: Response): Promise<void> {
-  res.status(200).json(await service.downloadAttachment(id(req), viewer(req)));
+  // PEEPS-BEGIN helpdesk-visibility
+  res.status(200).json(await service.downloadAttachment(id(req), viewer(req), actorMeta(req)));
+  // PEEPS-END helpdesk-visibility
 }

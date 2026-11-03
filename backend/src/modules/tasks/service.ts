@@ -1,3 +1,6 @@
+// PEEPS-BEGIN helpdesk-visibility
+import { ticketAudienceWhere } from "../helpdesk/categoryVisibility";
+// PEEPS-END helpdesk-visibility
 import { describeCorrection, REASON_LABEL, type Correction } from "../attendance/regularization/correction";
 import type { DataScope } from "@shared/constants/roles";
 import type { Prisma } from "@prisma/client";
@@ -106,6 +109,9 @@ const assignedTickets: TaskSource = {
     const rows = await prisma.helpdeskTicket.findMany({
       where: {
         assigneeEmployeeId: viewer.employeeId,
+        // PEEPS-BEGIN helpdesk-visibility
+        AND: [await ticketAudienceWhere(viewer)],
+        // PEEPS-END helpdesk-visibility
         status: { in: ["OPEN", "IN_PROGRESS"] },
         raisedByEmployeeId: { not: viewer.employeeId },
         category: { ...(!viewer.permissions.has("helpdesk.sensitive.view") && { isSensitive: false }), ...(!(await isDirector(viewer.userId)) && { directorsOnly: false }) },
