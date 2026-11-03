@@ -107,4 +107,18 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 - [x] D-37 corrective notes directors only, private, behind nudges.enabled (Not set) — `376e900`
 - [x] D-35 avatar dialog (upload, initials, Surprise me, 24 characters, 26 fun picks), one shared avatar, My profile — `eb1154a`
 - [x] Idempotent give/note race under serializable isolation (found by CI run 240) — `2fa8886`
-- [ ] Full backend suite alone and CI on `2fa8886` — skipped at the owner's instruction ("skip the test for now")
+- [x] B-1 full backend suite alone and CI reverified in C-1 on `e5826d2` (the original `2fa8886` checks had been skipped at the owner's instruction); see the C-1 report
+
+## C-1 (2026-11-03): verification and attendance leave-label privacy
+- [x] Clean start; fetched and switched to `peeps/foundation` at `3e6e4ce`; one coding agent
+- [x] Root agent rules and required document links — `cb361fc` (`WORKING_RULES.md` absent, optional)
+- [x] Lint, typecheck, frontend 77 tests, build and bundle budgets — see C-1 stage report
+- [x] Verify badge and corrective-note P2002/P2034 handling; real same-key races and deterministic conflict coverage (23 recognition tests) — `082bcc0`
+- [x] Attendance labels reuse `leaveTypeNamer`; 11 privacy tests; exact shared-file handoff in the stage report — `082bcc0`
+- [x] Preserve manager/Developer attendance access rules; no access resolver or payroll application change — `082bcc0`
+- [x] Fix the named failing monthly-input audit test's hash substring flake, with deterministic regression fixture — `e5826d2` (step 2.4 exception, test file only)
+- [x] 11 mutation checks caught and restored — see C-1 stage report
+- [x] Four new leave types inactive on scratch database; no activation or settings changes outside fixtures
+- [x] Final full backend suite alone on `e5826d2` — 203 files / 2,057 tests passed; zero skipped/todo
+- [x] CI per job on `e5826d2` — all seven jobs passed, including admin and employee sensitive-ui halves (run `41607364573`)
+- [x] Final report and Unverified list; STOP after C-1

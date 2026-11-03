@@ -616,3 +616,130 @@ No files were in `docs/design/avatars/`. An ORIGINAL placeholder set was generat
 
 ### For Session A
 Attendance surfaces (Who's In, muster, day panel) still show the leave code to managers. That is the attendance module, which Peeps does not touch.
+
+## C-1 — verify B-1 and close the attendance leave-label gap (2026-11-03)
+
+### Scope and commits
+- Started with a clean working tree. The environment checkout was on `work` at `c787e92`; fetched only
+  `peeps/foundation` and switched to its published tip `3e6e4ce`. All work stays on that branch, one agent.
+- `cb361fc`: root `AGENTS.md`, the requested one-page agent rules and document links. `AGENTS.md` and
+  `docs/plans/WORKING_RULES.md` were absent at the start; the latter remains an optional reference.
+- `082bcc0`: reuse the existing leave privacy rule in attendance display responses and exports; verify badge
+  and corrective-note idempotency under both Prisma conflict codes. No new module, route or setting.
+- `e5826d2`: fix the audit-hash substring flake in the exact test file named by the failed suite, under
+  C-1 step 2.4's exception. Payroll application code is unchanged.
+- This report/checklist commit records the final results below. No force-push, PR, database reset/drop,
+  staging/production action or environment publication.
+
+### What was verified and changed
+- `2fa8886` already handles **P2002 and P2034** in both `recognition/badges.ts` and `recognition/nudges.ts`;
+  no further handler change was needed. The recognition file now has **23 tests**: unmocked simultaneous
+  identical badge and note requests, plus deterministic two-request races for each error code on each handler.
+  They prove exactly one record, one audit row in the deterministic cases, and the same resource payload
+  (the existing 201/200 status and `repeated` flag distinguish first creation from replay).
+- Attendance previously returned the sensitive leave code in the board explanation, calendar/status fields,
+  day panel, muster cell/tooltip and released-leave export text. A Peeps-owned presentation adapter calls
+  **`leaveTypeNamer` from `leaveRules/hooks.ts`**; it does not copy the HR/director/setting decision. It also
+  handles split statuses and released leave. Stored attendance and the totals computed from it are untouched.
+- **11 privacy tests** cover menstrual and medical labels on all three displays, HR Admin/HR Executive/director
+  visibility, the connected month response, full/half/split codes, own data, existing PL, scope refusals,
+  the confirmed director setting, the muster workbook and its Corrected days sheet, and stored rows unchanged.
+- **Existing access restrictions preserved:** MANAGER holders cannot receive `attendance.view`, so Who's In
+  and another person's day/month endpoints still return 403 to them. Manager display projections are tested
+  directly; the HTTP tests use a permitted TEAM-scoped role and a real manager branch marker for the muster.
+  Existing Developer attendance reads remain permitted and have the same masked labels; changing that access
+  policy is outside the one authorized edit. Existing Peeps Developer refusals are exercised by the full suite.
+- The four new leave types were verified **inactive on the scratch database**, without activating any rules.
+  No director/HR settings were changed outside test fixtures. This change does not activate the types even after checks pass.
+
+### Local checks and setup failures
+- Native **PostgreSQL 16.15 / Redis 7.4.11**, loopback only, with new scratch databases. The repository service
+  check passed. With no native packages or sudo available, extracted binaries from the environment's existing
+  images and ran them directly under `/tmp`; no service containers were needed (the owner also permitted them).
+- Each backend invocation uses a fresh database name. An untracked harness under `backend/node_modules/.c1`
+  retains the normal setup/lock/migrations/seed and omits its `DROP DATABASE` statement. No tracked test setup,
+  test selection, assertion, timeout or application configuration was changed for this adaptation.
+- First baseline attempt was interrupted after Chromium's unusable sandbox helper prevented PDF rendering.
+  A local launcher outside the repo supplies writable XDG directories and container-compatible launch flags;
+  PDF rendering keeps the application's no-JavaScript/no-network controls. No TLS/checksum verification disabled.
+- The completed baseline on the previous code: **202 files; 201 passed, 1 failed; 2,040 tests passed,
+  1 failed (2,041 total)**. The failure was `dbRoles.test.ts` →
+  `is idempotent, and a new password takes effect while the old one stops working`: initial local trust
+  authentication accepted the old password. Corrected local authentication for the test-created roles;
+  that file then passed **10/10**. No repository change was needed for either environment problem.
+- New privacy test fixtures were corrected before final validation (branch-assignment actor, manual-capture
+  membership, binary workbook parsing). The focused privacy rerun passed **11/11**, including released leave.
+- `npm run lint` (backend, frontend/tokens, agent): **passed** on restored code. One overlapping lint run saw
+  a deliberately removed export guard's unused variable; rerun after restoration passed.
+- `npm run typecheck` (backend, frontend, agent, infra): **passed**.
+- Frontend: **16 files / 77 tests passed**; production build **passed**; bundle budget **passed**:
+  login **231.3 KB**, shell + employee home **336.1 KB**, shell + admin home **355.6 KB** gzip.
+- Full backend suite alone on `082bcc0`: **203 files; 202 passed, 1 failed; 2,056 tests passed,
+  1 failed (2,057 total)**. The failure was `payroll/__tests__/monthlyInputsImport.test.ts` →
+  `confirming writes the figures once, for each month of an inclusive range, void any confirmation, and the same file is never applied twice`.
+  It searched the entire audit JSON for `700`; the file hash happened to contain those digits even though
+  `amounts` was `redacted`. Replaced it with an exact assertion of the allowed metadata fields, counts,
+  content hash and redacted amount marker. The fixture now deliberately produces a harmless hash containing
+  `700`, so the regression is deterministic. That file passed **9/9**; reinstating the old assertion fails
+  the named test. No pay calculation, write path or access change.
+- Final full backend suite alone on `e5826d2`: **203 files / 2,057 tests, all passed**, zero skipped/todo
+  (483.11 seconds). JSON runner report confirms success and zero failed/pending tests. Read-only SQL after
+  the run confirms all four new leave types are still inactive.
+
+### Mutation checks (each run alone on a fresh scratch database; all files restored)
+| Mutation | Named test that failed |
+|---|---|
+| Badge P2002 handling removed | `badge same-key race returns the winner for P2002` |
+| Badge P2034 handling removed | `badge same-key race returns the winner for P2034` |
+| Corrective-note P2002 handling removed | `corrective-note same-key race returns the winner for P2002` |
+| Corrective-note P2034 handling removed | `corrective-note same-key race returns the winner for P2034` |
+| Board adapter bypassed | `HTTP: masks the board, month and day for a permitted TEAM viewer and the muster for a manager branch marker` |
+| Day adapter bypassed | Same HTTP masking test |
+| Month adapter bypassed | Same HTTP masking test |
+| Muster adapter bypassed | Same HTTP masking test; muster export test |
+| Shared namer result bypassed | Both `manager sees Leave for ...` cases; HTTP masking and export tests |
+| Corrected-days export masking bypassed | `muster export uses the same labels; employee, outside-team and Developer access stays as before` |
+| Old whole-JSON audit substring assertion reinstated | The monthly-input import confirmation test named above |
+
+**11/11 caught.** The real races remain unmocked; deterministic cases coordinate arrival at the transaction
+and inject the selected native Prisma error only into the losing call after the winning real transaction commits.
+The final full-suite run uses restored production code without those mutations.
+
+### Exact shared-file handoff to the attendance/payroll session
+Only these two attendance files changed, in marked `PEEPS-BEGIN/END attendance leave privacy` blocks:
+- `backend/src/modules/attendance/info/controller.ts`: lines **7–9** (adapter imports), **25–27** (month
+  projection), **31–33** (day projection), **36–38** (Who's In projection). Existing auth/permission/scope calls stay intact.
+- `backend/src/modules/attendance/manual/muster.ts`: lines **19–22** (read-only role resolver + adapter imports),
+  **290–292** (projection after totals), **299–301** (returned display rows), **483–485** (export labeller),
+  **526–528** (released leave in Corrected days). No attendance engine, write path, payroll application or access resolver edit.
+Peeps files: `leaveRules/attendancePrivacy.ts` lines **1–70** (new),
+`leaveRules/__tests__/attendancePrivacy.test.ts` lines **1–166** (new),
+`recognition/__tests__/recognition.test.ts` (new race helper and assertions). Root `AGENTS.md` is documentation only.
+The failing-test-file exception adds one separate handoff: `backend/src/modules/payroll/__tests__/monthlyInputsImport.test.ts`,
+lines **2** (hash import), **91–99** (collision fixture), **113–114** (exact audit metadata assertion).
+This is the only payroll file touched; it contains tests only.
+
+### CI read per job
+Latest pre-C-1 published commit `3e6e4ce`, run **41584320248**: every job completed **success**:
+`install-lint-typecheck-test`, `latency` (including popovers), `attendance-replay`, `docker-build`,
+`agent-windows`, **`sensitive-ui (admin portal)`**, **`sensitive-ui (employee portal)`**. No red job.
+C-1 final code/test commit `e5826d2`, run **41607364573**: all seven jobs completed **success**:
+| Job | Result |
+|---|---|
+| `install-lint-typecheck-test` (including demo-company tests and schema drift) | success |
+| `latency` (including popovers) | success |
+| `attendance-replay` | success |
+| `docker-build` | success |
+| `agent-windows` | success |
+| `sensitive-ui (admin portal)` | success |
+| `sensitive-ui (employee portal)` | success |
+
+No red job on the final code/test revision. The earlier `082bcc0` run was superseded by the test-only fix;
+the final report/checklist follow-up contains documentation only.
+
+### Unverified
+- No new local browser crawl, sensitive-ui/popover scan, replay, demo-company suite or Windows run; the
+  final-code CI results above are remote evidence for those checks. The privacy tests verify actual response/workbook
+  contents and manager presentation projections, not browser screenshots.
+
+**C-1 complete. Stop here.** No general ticket desk, exits, recruitment, insights, autofill or payroll application work started.
