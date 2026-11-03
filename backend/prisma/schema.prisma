@@ -526,6 +526,8 @@ model Employee {
   leaveDayReleases           LeaveDayRelease[]
   // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
   segmentMemberships         EmployeeSegmentMember[]  @relation("EmployeeSegmentMembership")
+  letterRequests             LetterRequest[]          @relation("LetterRequestEmployee")
+  letterSignatures           LetterRequestSignatory[] @relation("LetterRequestSignatory")
   // A-9 — end
 
   @@index([status])
@@ -1650,6 +1652,10 @@ model LetterTemplate {
   createdAt                DateTime                @default(now()) @map("created_at")
   updatedAt                DateTime                @updatedAt @map("updated_at")
   versions                 LetterTemplateVersion[]
+  // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
+  requests                 LetterRequest[]
+  grants                   LetterTemplateGrant[]
+  // A-9 — end
 
   @@map("letter_templates")
 }
@@ -1699,6 +1705,9 @@ model GeneratedLetter {
   reissueOf          GeneratedLetter?      @relation("LetterReissue", fields: [reissueOfId], references: [id], onDelete: SetNull)
   reissues           GeneratedLetter[]     @relation("LetterReissue")
   createdAt          DateTime              @default(now()) @map("created_at")
+  // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
+  letterRequest      LetterRequest?
+  // A-9 — end
 
   @@index([employeeId])
   @@map("generated_letters")
@@ -3584,4 +3593,86 @@ model UserGridPreference {
   @@map("user_grid_preferences")
 }
 
+// G3: a letter prepared for one person (a batch prepares many at once, sharing a batch id), signed by up to two signatories, then issued through the existing
+// issue path (which files it to the person's documents). Never deleted: a mistake is VOID with a reason. The serial comes from a sequence the directors set
+// (Not set until they do).
+enum LetterRequestStatus {
+  IN_PROGRESS
+  ISSUED
+  VOID
+}
+
+enum LetterSignatoryStatus {
+  PENDING
+  SIGNED
+}
+
+model LetterRequest {
+  id                String                   @id @default(cuid())
+  batchId           String                   @map("batch_id")
+  clientKey         String                   @map("client_key") // the submit's own key: the same submit twice never prepares twice
+  templateId        String                   @map("template_id")
+  template          LetterTemplate           @relation(fields: [templateId], references: [id])
+  employeeId        String                   @map("employee_id")
+  employee          Employee                 @relation("LetterRequestEmployee", fields: [employeeId], references: [id])
+  extraValues       Json                     @default("{}") @map("extra_values")
+  remarks           String?
+  status            LetterRequestStatus      @default(IN_PROGRESS)
+  serial            String?
+  preparedByUserId  String                   @map("prepared_by_user_id")
+  preparedAt        DateTime                 @default(now()) @map("prepared_at") @db.Timestamptz(3)
+  issuedByUserId    String?                  @map("issued_by_user_id")
+  issuedAt          DateTime?                @map("issued_at") @db.Timestamptz(3)
+  generatedLetterId String?                  @unique @map("generated_letter_id")
+  generatedLetter   GeneratedLetter?         @relation(fields: [generatedLetterId], references: [id])
+  voidedByUserId    String?                  @map("voided_by_user_id")
+  voidedAt          DateTime?                @map("voided_at") @db.Timestamptz(3)
+  voidReason        String?                  @map("void_reason")
+  updatedAt         DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+  signatories       LetterRequestSignatory[]
+
+  @@unique([preparedByUserId, clientKey, employeeId])
+  @@index([status, preparedAt])
+  @@index([batchId])
+  @@index([employeeId])
+  @@map("letter_requests")
+}
+
+model LetterRequestSignatory {
+  id                  String                @id @default(cuid())
+  requestId           String                @map("request_id")
+  request             LetterRequest         @relation(fields: [requestId], references: [id])
+  position            Int
+  signatoryEmployeeId String                @map("signatory_employee_id")
+  signatory           Employee              @relation("LetterRequestSignatory", fields: [signatoryEmployeeId], references: [id])
+  status              LetterSignatoryStatus @default(PENDING)
+  signedAt            DateTime?             @map("signed_at") @db.Timestamptz(3)
+  markedByUserId      String?               @map("marked_by_user_id")
+
+  @@unique([requestId, position])
+  @@map("letter_request_signatories")
+}
+
+// G3: who besides the directors may PREPARE or ISSUE letters from one template — a role or a named person. Set and withdrawn only by a director; never on a
+// template that could carry a pay figure. Withdrawn, never deleted.
+enum LetterGrantAction {
+  PREPARE
+  ISSUE
+}
+
+model LetterTemplateGrant {
+  id              String            @id @default(cuid())
+  templateId      String            @map("template_id")
+  template        LetterTemplate    @relation(fields: [templateId], references: [id])
+  action          LetterGrantAction
+  roleCode        String?           @map("role_code")
+  userId          String?           @map("user_id")
+  grantedByUserId String            @map("granted_by_user_id")
+  grantedAt       DateTime          @default(now()) @map("granted_at") @db.Timestamptz(3)
+  revokedByUserId String?           @map("revoked_by_user_id")
+  revokedAt       DateTime?         @map("revoked_at") @db.Timestamptz(3)
+
+  @@index([templateId, action])
+  @@map("letter_template_grants")
+}
 // ── A-9 — end ───────────────────────────────────────────────────────────────────────────────────────────────────────────────

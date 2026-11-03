@@ -62,6 +62,8 @@ export const OPTIONAL_FK_POLICY: Record<string, Policy> = {
   "GeneratedLetter.employeeDocumentId": "delete",
   // A reissue stands on its own; losing the link to the original is fine.
   "GeneratedLetter.reissueOfId": "setNull",
+  // A-9 G3: a request that was issued belongs to its letter (tests only: neither is ever deleted in real use).
+  "LetterRequest.generatedLetterId": "delete",
   // Phase 2 ingestion. A test punch belongs to its test employee (deleted
   // through the raw_punches purge exception — see PURGE_GUARDED_MODELS).
   "RawPunch.employeeId": "delete",

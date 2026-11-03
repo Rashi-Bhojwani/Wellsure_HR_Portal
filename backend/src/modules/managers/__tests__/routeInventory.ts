@@ -631,6 +631,25 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/employee-extras/:id/pay": admin, // payroll.salary.view (HR-locked) + findScopedEmployee, audited
   "GET /api/employee-extras/:id/position": admin, // employee.edit / attendance.config.manage (neither grantable) + findScopedEmployee
   "POST /api/employee-extras/:id/position": admin, // the same, and the existing writers (updateJob / changeAssignment) audit the change
+  // G3 letters workflow: starters, grants and the serial are director-only in the service; requests need letters.issue.nopay (never manager-grantable) AND the
+  // template's own grant (or a director), the person in scope (modules/letters/workflow.ts).
+  "GET /api/letters/starters": adminInService("director only (assertDirector)"),
+  "POST /api/letters/starters/:code/load": adminInService("director only (assertDirector), audited"),
+  "GET /api/letters/grants": adminInService("director only (assertDirector)"),
+  "POST /api/letters/grants": adminInService("director only (assertDirector), audited"),
+  "POST /api/letters/grants/:id/revoke": adminInService("director only (assertDirector), audited"),
+  "GET /api/letters/serial": adminInService("director only (assertDirector)"),
+  "PUT /api/letters/serial": adminInService("director only (assertDirector), audited"),
+  "GET /api/letters/requests/templates": admin,
+  "GET /api/letters/requests/to-sign": everyone("the caller's own pending signatures: template and the person's name only"),
+  "GET /api/letters/requests": admin,
+  "POST /api/letters/requests": admin,
+  "GET /api/letters/requests/:id": admin,
+  "PATCH /api/letters/requests/:id": admin,
+  "POST /api/letters/requests/:id/sign": adminInService("only the named signatory, or a director recording it (workflow.sign)"),
+  "POST /api/letters/requests/:id/issue": admin,
+  "POST /api/letters/requests/:id/void": admin,
+  "GET /api/letters/requests/:id/preview": admin,
   // A-9 — end
 };
 

@@ -59,3 +59,35 @@ export const letterheadSchema = z.object({
   signatoryName: z.string().trim().max(120).optional(),
   signatoryDesignation: z.string().trim().max(120).optional(),
 });
+
+// ── A-9 G3 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin ──
+export const starterParamsSchema = z.object({ code: z.string().regex(/^STARTER_[A-Z_]+$/) });
+const signatories = z.array(z.string().min(1)).max(2, "At most two signatories.");
+export const prepareSchema = z
+  .object({
+    clientKey: z.string().uuid(),
+    templateId: z.string().min(1),
+    employeeIds: z.array(z.string().min(1)).min(1).max(200).optional(),
+    segmentId: z.string().min(1).optional(),
+    extraValues,
+    remarks: z.string().trim().max(500).nullable().optional(),
+    signatoryEmployeeIds: signatories.default([]),
+  })
+  .refine((b) => Boolean(b.employeeIds) !== Boolean(b.segmentId), { message: "Choose people or a segment (one of the two)." });
+export const updateRequestSchema = z
+  .object({ extraValues: z.record(z.string(), z.string().max(2000)).optional(), remarks: z.string().trim().max(500).nullable().optional(), signatoryEmployeeIds: signatories.optional() })
+  .refine((b) => Object.keys(b).length > 0, { message: "Nothing to change." });
+export const requestListQuerySchema = z.object({
+  status: z.enum(["IN_PROGRESS", "ISSUED", "VOID"]).default("IN_PROGRESS"),
+  batchId: z.string().uuid().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(200).default(25),
+});
+export const signSchema = z.object({ position: z.union([z.literal(1), z.literal(2)]) });
+export const voidSchema = z.object({ reason: z.string().trim().min(3, "Say why (a few words)").max(300) });
+export const grantSchema = z
+  .object({ templateId: z.string().min(1), action: z.enum(["PREPARE", "ISSUE"]), roleCode: z.string().min(1).max(60).optional(), userId: z.string().min(1).optional() })
+  .refine((b) => Boolean(b.roleCode) !== Boolean(b.userId), { message: "Grant to a role or to one person." })
+  .refine((b) => b.roleCode !== "SUPER_ADMIN", { message: "Directors can already do this." });
+export const serialSchema = z.object({ prefix: z.string().trim().max(20).regex(/^[A-Za-z0-9/_-]*$/, "Letters, digits, / _ - only"), nextNumber: z.number().int().min(1).max(999_999_999) });
+// ── A-9 — end ──

@@ -120,6 +120,8 @@ const PayrollRunsPage = lazyPage(() => import("../pages/admin/payroll/PayrollRun
 const LayoutsPage = lazyPage(() => import("../pages/admin/payroll/LayoutsPage"), "LayoutsPage");
 // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
 const SegmentsPage = lazyPage(() => import("../pages/admin/employee/parity/SegmentsPage"), "SegmentsPage");
+const LetterRequestsPage = lazyPage(() => import("../pages/admin/letters/parity/LetterRequestsPage"), "LetterRequestsPage");
+const LetterSettingsPage = lazyPage(() => import("../pages/admin/letters/parity/LetterSettingsPage"), "LetterSettingsPage");
 // A-9 — end
 const SetupChecklistPage = lazyPage(() => import("../pages/admin/payroll/SetupChecklistPage"), "SetupChecklistPage");
 // Anyone holding any payroll key sees the Payroll group; HR holds none (the hard lock), so HR never sees it. The server still decides every request.
@@ -217,6 +219,7 @@ export const adminApps: AdminApp[] = [
           { key: "bulk-import", label: "Bulk Import", path: "employee/import", icon: CloudUploadOutlined, element: ImportCenterPage, needs: { any: ["import.manage", "import.details.manage", "invitations.send"] } },
           // A-9 — begin
           { key: "segments", label: "Filters & Segments", path: "employee/segments", icon: GroupOutlined, element: SegmentsPage, needs: { any: ["employee.segments.manage"] } },
+          { key: "letters", label: "Letters", path: "employee/letters", icon: FileTextOutlined, element: LetterRequestsPage, needs: { any: ["letters.issue.nopay"] } },
           // A-9 — end
           { key: "change-requests", label: "Change Requests", path: "employee/change-requests", icon: SolutionOutlined, element: ChangeRequestsPage },
           { key: "separations", label: "Separations", path: "employee/separations", icon: ExportOutlined, element: SeparationsPage },
@@ -393,6 +396,9 @@ export const adminApps: AdminApp[] = [
           { key: "hr-capabilities", label: "What HR Can Do", path: "admin-tools/hr-capabilities", icon: SafetyOutlined, element: HrCapabilitiesPage, needs: { director: true } },
           { key: "managers", label: "Manager Management", path: "admin-tools/managers", icon: ApartmentOutlined, element: ManagerManagementPage, needs: { any: ["manager.appoint", "manager.team.assign", "manager.permissions.manage"] } },
           { key: "helpdesk-categories", label: "Helpdesk Categories", path: "admin-tools/helpdesk-categories", icon: CustomerServiceOutlined, element: HelpdeskCategoriesPage, needs: { any: ["helpdesk.manage"] } },
+          // A-9 — begin
+          { key: "letter-settings", label: "Letter Settings", path: "admin-tools/letter-settings", icon: FileProtectOutlined, element: LetterSettingsPage, needs: { director: true } },
+          // A-9 — end
           { key: "templates", label: "Email & Letter Templates", path: "admin-tools/templates", icon: FileTextOutlined, element: LetterTemplatesPage, needs: { any: ["letters.template.manage"] } },
           { key: "devices", label: "Devices", path: "admin-tools/devices", icon: UsbOutlined, element: DevicesPage, needs: { any: ["attendance.devices.manage"] } },
           { key: "import-export", label: "Data Import/Export", path: "admin-tools/import-export", icon: CloudUploadOutlined, element: ImportCenterPage, needs: { any: ["import.manage", "import.details.manage", "invitations.send"] } },

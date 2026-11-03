@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Checkbox, Form, Input, Select, Space } from "antd";
+import { Button, Checkbox, Form, Input, Space } from "antd";
 import { DeleteOutlined, EditOutlined, PlusOutlined, TeamOutlined } from "@ant-design/icons";
-import * as employeeApi from "../../../../api/employee";
 import * as parityApi from "../../../../api/parity";
 import { apiErrorMessage as errorMessage } from "../../../../lib/apiError";
-import { ConfirmModal, DataTable, EmptyState, PageHeader, Panel, SideDrawer, StatusChip, toast, useDebouncedValue, useIsPhone } from "../../../../ui";
+import { ConfirmModal, DataTable, EmptyState, PageHeader, Panel, SideDrawer, StatusChip, toast, useIsPhone } from "../../../../ui";
 import { fs, space, v } from "../../../../theme/tokens";
+import { PeoplePicker } from "./PeoplePicker";
 
 // A-9 G1 (item 7): saved employee filters and named groups (segments). A filter keeps the All Employees criteria; a named group keeps chosen people. Either may be
 // shared with the other admins. Whatever is shared, each person sees only the people inside their own data scope — the count and the list are theirs.
@@ -40,31 +40,6 @@ function MembersDrawer({ segment, onClose }: { segment: parityApi.Segment; onClo
         mobile={{ title: (r) => r.fullName, subtitle: (r) => r.employeeCode, status: (r) => <StatusChip status={r.status} />, fields: [{ label: "Department", render: (r) => r.department }] }}
       />
     </SideDrawer>
-  );
-}
-
-function PeoplePicker({ value = [], onChange = () => undefined }: { value?: string[]; onChange?: (ids: string[]) => void }) {
-  const [search, setSearch] = useState("");
-  const q = useDebouncedValue(search, 250);
-  const found = useQuery({ queryKey: ["segments", "people", q], queryFn: () => employeeApi.listEmployees({ search: q || undefined, page: 1, pageSize: 20, sortBy: "employeeCode", sortDir: "asc" }), enabled: q.trim().length >= 2 });
-  const [labels, setLabels] = useState<Record<string, string>>({});
-  const options = (found.data?.rows ?? []).map((r) => ({ value: r.id, label: `${r.fullName} (${r.employeeCode})` }));
-  return (
-    <Select
-      mode="multiple"
-      aria-label="People"
-      placeholder="Type at least two letters of a name or code"
-      showSearch={{ filterOption: false, onSearch: setSearch }}
-      value={value}
-      onChange={(ids: string[]) => {
-        setLabels((prev) => ({ ...prev, ...Object.fromEntries(options.map((o) => [o.value, o.label])) }));
-        onChange(ids);
-      }}
-      options={[...options, ...value.filter((id) => !options.some((o) => o.value === id)).map((id) => ({ value: id, label: labels[id] ?? id }))]}
-      loading={found.isFetching}
-      notFoundContent={q.trim().length >= 2 ? "Nobody found" : "Type to search"}
-      style={{ width: "100%" }}
-    />
   );
 }
 

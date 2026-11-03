@@ -385,6 +385,27 @@ export async function previewTemplate(
   return (await renderStored(bodyHtml, merge, now)).pdf;
 }
 
+// A-9 G3 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
+/** A prepared (not yet issued) letter rendered from the template's current version, marked DRAFT, stored nowhere. The caller has already checked who may see it. */
+export async function renderDraftLetter(templateId: string, employeeId: string, extraValues: Record<string, string>): Promise<Buffer> {
+  const template = await prisma.letterTemplate.findUnique({ where: { id: templateId } });
+  const version = template ? await currentVersion(templateId) : null;
+  if (!template || !version) throw new HttpError(404, "Template not found.", "NOT_FOUND");
+  const now = new Date();
+  const merge = await resolveMergeValues(version, template, employeeId, extraValues, now, "DRAFT");
+  return (await renderStored(version.bodyHtml, merge, now)).pdf;
+}
+
+/** The pay-free proof of a template's current version (what decides whether anyone but a director may prepare or issue it). */
+export async function templatePayFree(templateId: string): Promise<{ ok: boolean; reasons: string[]; isActive: boolean; name: string; code: string } | null> {
+  const template = await prisma.letterTemplate.findUnique({ where: { id: templateId } });
+  if (!template) return null;
+  const version = await currentVersion(templateId);
+  const proof = version ? payFreeProof(version.bodyHtml, extraFieldsOf(version.extraFields)) : { ok: false, reasons: ["The template has no content yet."] };
+  return { ...proof, isActive: template.isActive, name: template.name, code: template.code };
+}
+// A-9 — end
+
 // ── Issuing ────────────────────────────────────────────────────────────
 
 const letterInclude = {

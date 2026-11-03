@@ -4,10 +4,22 @@ import { authenticate } from "../../middleware/authenticate";
 import { requireAnyPermission, requirePermission } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
 import * as controller from "./controller";
+// A-9 — begin
+import { refuseDeveloper } from "../../middleware/refuseDeveloper";
+import * as workflow from "./workflowController";
+// A-9 — end
 import {
   createTemplateSchema,
   employeeIdParamsSchema,
+  grantSchema,
   idParamsSchema,
+  prepareSchema,
+  requestListQuerySchema,
+  serialSchema,
+  signSchema,
+  starterParamsSchema,
+  updateRequestSchema,
+  voidSchema,
   issueSchema,
   letterheadSchema,
   newVersionSchema,
@@ -40,6 +52,29 @@ lettersRouter.put("/letterhead", manage, validate({ body: letterheadSchema }), c
 lettersRouter.get("/letterhead/logo", manage, controller.getLogo);
 lettersRouter.post("/letterhead/logo", manage, memoryUpload(2), controller.uploadLogo);
 lettersRouter.delete("/letterhead/logo", manage, controller.removeLogo);
+
+// ── A-9 G3 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin. Before "/:id" so the literal paths win. Starters, grants and the serial are the directors'
+// (checked in the service); preparing and issuing need the template's own permission (assertMayAct). Every route refuses the Developer role. The gate is
+// letters.issue.nopay (the directors hold every key; HR holds it through its switch; a manager never can), so switching HR off closes all of it at once. ──
+const nopayGate = requirePermission("letters.issue.nopay");
+lettersRouter.get("/starters", refuseDeveloper, workflow.listStartersRoute);
+lettersRouter.post("/starters/:code/load", refuseDeveloper, validate({ params: starterParamsSchema }), workflow.loadStarterRoute);
+lettersRouter.get("/grants", refuseDeveloper, workflow.listGrantsRoute);
+lettersRouter.post("/grants", refuseDeveloper, validate({ body: grantSchema }), workflow.createGrantRoute);
+lettersRouter.post("/grants/:id/revoke", refuseDeveloper, validate({ params: idParamsSchema }), workflow.revokeGrantRoute);
+lettersRouter.get("/serial", refuseDeveloper, workflow.getSerialRoute);
+lettersRouter.put("/serial", refuseDeveloper, validate({ body: serialSchema }), workflow.setSerialRoute);
+lettersRouter.get("/requests/templates", refuseDeveloper, nopayGate, workflow.preparableTemplatesRoute);
+lettersRouter.get("/requests/to-sign", refuseDeveloper, workflow.toSignRoute);
+lettersRouter.get("/requests", refuseDeveloper, nopayGate, validate({ query: requestListQuerySchema }), workflow.listRequestsRoute);
+lettersRouter.post("/requests", refuseDeveloper, nopayGate, validate({ body: prepareSchema }), workflow.prepareRoute);
+lettersRouter.get("/requests/:id", refuseDeveloper, nopayGate, validate({ params: idParamsSchema }), workflow.getRequestRoute);
+lettersRouter.patch("/requests/:id", refuseDeveloper, nopayGate, validate({ params: idParamsSchema, body: updateRequestSchema }), workflow.updateRequestRoute);
+lettersRouter.post("/requests/:id/sign", refuseDeveloper, validate({ params: idParamsSchema, body: signSchema }), workflow.signRoute);
+lettersRouter.post("/requests/:id/issue", refuseDeveloper, nopayGate, validate({ params: idParamsSchema }), workflow.issueRoute);
+lettersRouter.post("/requests/:id/void", refuseDeveloper, nopayGate, validate({ params: idParamsSchema, body: voidSchema }), workflow.voidRoute);
+lettersRouter.get("/requests/:id/preview", refuseDeveloper, nopayGate, validate({ params: idParamsSchema }), workflow.previewRoute);
+// ── A-9 — end ──
 
 lettersRouter.get("/employees/:employeeId", issueAny, validate({ params: employeeIdParamsSchema }), controller.listEmployeeLetters);
 lettersRouter.post("/employees/:employeeId", issueAny, validate({ params: employeeIdParamsSchema, body: issueSchema }), controller.issueLetter);
