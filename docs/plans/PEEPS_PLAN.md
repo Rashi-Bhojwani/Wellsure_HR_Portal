@@ -406,8 +406,8 @@ service checks. Its existing routing remains Session A's.
 
 Implementation sequence: schema/history and cleanup; director-only permission and visibility service;
 visibility on every read/delivery path; idempotent moves; existing-screen additions; confidentiality and
-mutation checks, then checkpoint B. All policy decisions live in `categoryVisibility.ts`. Integration hook
-count is awaiting clarification: queue filters, access checks, Tasks and delivery have separate existing paths.
+mutation checks, then checkpoint B. All policy decisions live in `categoryVisibility.ts`. The owner explicitly approved small marked hooks at each boundary (2026-11-03), superseding the
+single-call-site limit: queue filters, access checks, Tasks and delivery have separate existing paths.
 Keep all approved shared-file changes in marked PEEPS blocks. Use fresh scratch databases without dropping
 or resetting any database. Retain the C-1 test harness adaptation outside tracked files.
 

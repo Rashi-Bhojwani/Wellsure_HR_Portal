@@ -35,6 +35,10 @@ const admin: RouteClass = { kind: "admin" };
 const adminInService = (why: string): RouteClass => ({ kind: "admin", why });
 
 export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
+  // PEEPS-BEGIN helpdesk-visibility
+  "GET /api/helpdesk/categories/:id/visibility": adminInService("effective Super Admin only; Payroll excluded"),
+  "PUT /api/helpdesk/categories/:id/visibility": adminInService("effective Super Admin only; Payroll excluded"),
+  // PEEPS-END helpdesk-visibility
   "GET /api/people/photos/:employeeId/:size": scoped("active people: directory photo for everyone; former employees: employee.view + data scope (E1.1)"),
 
   "POST /api/auth/login": pub,

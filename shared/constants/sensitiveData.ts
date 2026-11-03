@@ -151,6 +151,9 @@ export const REVIEWED_NOT_SENSITIVE: readonly PermissionKey[] = [
   "engage.groups.manage",
   "engage.autopost.manage",
   "documents.manage",
+  // PEEPS-BEGIN helpdesk-visibility
+  "helpdesk.visibility.manage", // controls access; director-only guard plus HR hard lock
+  // PEEPS-END helpdesk-visibility
   "helpdesk.manage",
   "letters.template.manage",
   "letters.generate",
@@ -204,6 +207,9 @@ export const DEVELOPER_FORBIDDEN_KEYS: readonly PermissionKey[] = SENSITIVE_PERM
  */
 export const HR_ROLE_CODES = ["HR_ADMIN", "HR_EXECUTIVE"] as const;
 export const HR_FORBIDDEN_KEYS: readonly PermissionKey[] = [
+  // PEEPS-BEGIN helpdesk-visibility
+  "helpdesk.visibility.manage",
+  // PEEPS-END helpdesk-visibility
   ...PERMISSION_KEYS.filter((k) => k.startsWith("payroll.")),
   "reports.salary.view",
   "reports.liability.view",

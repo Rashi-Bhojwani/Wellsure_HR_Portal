@@ -98,6 +98,9 @@ export const PERMISSION_KEYS = [
   "payroll.identifiers.confirm", // confirm one by typing it again from the owner's own document (a different person from who entered it)
   "payroll.banklayout.manage", // enter and change the bank file layout and the company's debit account, and see them
   "payroll.banklayout.confirm", // check a bank layout against the bank's specification and confirm it (a different person)
+  // PEEPS-BEGIN helpdesk-visibility
+  "helpdesk.visibility.manage", // director-only general category audiences
+  // PEEPS-END helpdesk-visibility
   // PEEPS-BEGIN assets
   "assets.view", // the asset register: every asset, its holder and its history (holders narrowed to the caller's data scope)
   "assets.manage", // add and edit assets; issue, return, transfer; record a loss or damage
@@ -257,6 +260,9 @@ export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
   "payroll.banklayout.confirm": { group: "Sensitive data", label: "Bank file layout and debit account: confirm", description: "Check the bank file layout against the bank's own specification and confirm it. Never the person who entered it. Sees the layout, to check it." },
   "reports.salary.view": { group: "Reports", label: "Salary and statutory reports", description: "Salary register, variance report and the PF, ESI, PT and LWF statements, with Excel export." },
   "attendance.unlock": { group: "Attendance", label: "Unlock attendance periods", description: "Open a finalised attendance cycle again, with a written reason (and a warning if payroll has used it). Super Admin only.", meta: true },
+  // PEEPS-BEGIN helpdesk-visibility
+  "helpdesk.visibility.manage": { group: "Helpdesk", label: "Set category visibility", description: "Directors choose who may handle general helpdesk categories." },
+  // PEEPS-END helpdesk-visibility
   "helpdesk.manage": { group: "Helpdesk", label: "Helpdesk queue", description: "Work the ticket queue: assign, status, replies, internal notes, categories." },
   "helpdesk.sensitive.view": { group: "Helpdesk", label: "Sensitive tickets", description: "See tickets in categories marked sensitive (e.g. Payroll & Salary, Grievance)." },
   // PEEPS-BEGIN assets

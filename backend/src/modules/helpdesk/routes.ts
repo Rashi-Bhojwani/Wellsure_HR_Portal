@@ -1,3 +1,6 @@
+// PEEPS-BEGIN helpdesk-visibility
+import * as categoryVisibility from "./categoryVisibility";
+// PEEPS-END helpdesk-visibility
 import { Router } from "express";
 import { MAX_DOCUMENT_UPLOAD_MB_CEILING } from "@shared/constants/peopleDocuments";
 import { memoryUploadMany } from "../../lib/uploads";
@@ -42,3 +45,12 @@ helpdeskRouter.post("/tickets/:id/messages", validate({ params: idParamsSchema }
 helpdeskRouter.patch("/tickets/:id", manage, validate({ params: idParamsSchema, body: updateTicketSchema }), controller.updateTicket);
 helpdeskRouter.post("/tickets/:id/reopen", validate({ params: idParamsSchema }), controller.reopenTicket);
 helpdeskRouter.post("/attachments/:id/download", validate({ params: idParamsSchema }), controller.downloadAttachment);
+
+// PEEPS-BEGIN helpdesk-visibility
+helpdeskRouter.get("/categories/:id/visibility", requirePermission("helpdesk.visibility.manage"), validate({ params: idParamsSchema }), async (req, res) => {
+  res.json(await categoryVisibility.readVisibility(req.params.id as string, req.user!));
+});
+helpdeskRouter.put("/categories/:id/visibility", requirePermission("helpdesk.visibility.manage"), validate({ params: idParamsSchema, body: categoryVisibility.visibilitySchema }), async (req, res) => {
+  res.json(await categoryVisibility.setVisibility(req.params.id as string, req.body, req.user!, { actorUserId: req.user!.userId, ipAddress: req.ip, userAgent: req.headers["user-agent"] }));
+});
+// PEEPS-END helpdesk-visibility
