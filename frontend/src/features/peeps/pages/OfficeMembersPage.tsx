@@ -12,6 +12,7 @@ import { ApprovalBanner, DataTable, EmptyState, PageHeader, Panel, SideDrawer, S
 import * as peepsApi from "../api";
 import type { Membership, PersonRef } from "../api";
 import { usePeepsMe } from "../usePeepsMe";
+import { EmployeeAvatar } from "../../../components/common/EmployeeAvatar";
 
 const FORM_ID = "office-change-form";
 const KIND_LABEL: Record<OfficeChangeKind, string> = { APPOINT: "Appoint", UPDATE: "Change what they can do", REMOVE: "Remove", REPLACE: "Hand over to someone else" };
@@ -128,7 +129,7 @@ function OfficeMembersPageInner() {
             pagination={false}
             empty={<EmptyState illustration="inbox" title="Nobody yet" description="Appoint the first member. The other director confirms it." action={appointButton} compact />}
             columns={[
-              { title: "Member", key: "who", render: (_: unknown, m) => person(m) },
+              { title: "Member", key: "who", render: (_: unknown, m) => <span style={{ display: "inline-flex", alignItems: "center", gap: space[2] }}><EmployeeAvatar employeeId={m.employeeId} name={m.name} size={28} />{person(m)}</span> },
               { title: "May", key: "caps", render: (_: unknown, m) => (m.capabilities.length ? <Space wrap size={space[1]}>{m.capabilities.map((c) => <StatusChip key={c} tone="info">{capLabel(c)}</StatusChip>)}</Space> : "Open the workspace only") },
               { title: "Since", dataIndex: "since", render: (d: string) => formatDateTime(d) },
               { title: "", key: "act", align: "right", render: (_: unknown, m) => memberActions(m) },

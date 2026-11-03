@@ -5,7 +5,10 @@ import { WarningOutlined } from "@ant-design/icons";
 import dayjs, { type Dayjs } from "dayjs";
 import type { DelegateOption, DelegationPerson, DelegationRow, DelegationStatus } from "../../api/delegations";
 import { fs, fw, space, v } from "../../theme/tokens";
-import { ConfirmModal, DataTable, EmptyState, InitialsAvatar, SideDrawer, StatusChip, useIsPhone, type ChipTone } from "../../ui";
+import { ConfirmModal, DataTable, EmptyState, SideDrawer, StatusChip, useIsPhone, type ChipTone } from "../../ui";
+// PEEPS-BEGIN avatar-choices
+import { EmployeeAvatar } from "../common/EmployeeAvatar";
+// PEEPS-END
 
 // Shared by Workflow Delegates (employee portal: a manager's own) and
 // Admin Tools → Workflow Delegates (HR: anyone's) — Phase 5 commit E3.
@@ -24,7 +27,7 @@ const meta = (p: DelegationPerson) => [p.designation, p.department].filter(Boole
 function Who({ p }: { p: DelegationPerson }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: space[3], minWidth: 0 }}>
-      <InitialsAvatar name={p.name} size={36} />
+      <EmployeeAvatar employeeId={p.employeeId} name={p.name} size={36} />
       <div style={{ minWidth: 0 }}>
         <div style={{ fontWeight: fw.semibold, color: v.textPrimary }}>
           {p.name} <span style={{ fontWeight: fw.regular, color: v.textSecondary }}>({p.employeeCode})</span>
@@ -92,7 +95,7 @@ export function DelegationsTable({ rows, loading, showDelegator, showDelegate = 
       pagination={rows.length > 20 ? { pageSize: 20 } : false}
       empty={emptyText ? <EmptyState compact illustration="people" title={emptyText} description={null} /> : <span />}
       mobile={{
-        avatar: (r) => <InitialsAvatar name={primary(r).name} size={40} />,
+        avatar: (r) => <EmployeeAvatar employeeId={primary(r).employeeId} name={primary(r).name} size={40} />,
         title: (r) => `${primary(r).name} (${primary(r).employeeCode})`,
         subtitle: (r) => (showDelegator && showDelegate ? `Covered by ${r.delegate.name}` : meta(primary(r)) || undefined),
         status: (r) => <StatusChip tone={STATUS_CHIP[r.status].tone}>{STATUS_CHIP[r.status].label}</StatusChip>,

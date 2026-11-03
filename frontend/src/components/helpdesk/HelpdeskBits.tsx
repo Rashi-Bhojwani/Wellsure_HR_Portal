@@ -10,7 +10,10 @@ import { apiErrorMessage } from "../../lib/apiError";
 import { formatDate, formatDateTime } from "../../lib/dates";
 import { toFiles } from "./helpdeskUtils";
 import { fs, fw, layout, radius, space, v } from "../../theme/tokens";
-import { ApprovalBanner, InitialsAvatar, Panel, Skel, Stack, StatusChip, toast, useIsPhone, usePrefersReducedMotion, type ChipTone } from "../../ui";
+import { ApprovalBanner, Panel, Skel, Stack, StatusChip, toast, useIsPhone, usePrefersReducedMotion, type ChipTone } from "../../ui";
+// PEEPS-BEGIN avatar-choices
+import { EmployeeAvatar } from "../common/EmployeeAvatar";
+// PEEPS-END
 
 // The same 3-file cap the server enforces (modules/helpdesk/service.ts).
 export const MAX_ATTACHMENTS = 3;
@@ -139,7 +142,7 @@ export function Thread({ messages, viewer }: { messages: HelpdeskMessage[]; view
           <Fragment key={m.id}>
             {newDay && <DaySeparator label={dayLabel(m.createdAt)} />}
             <div style={{ display: "flex", gap: space[2], justifyContent: mine ? "flex-end" : "flex-start", alignItems: "flex-end" }}>
-              {!mine && !phone && <InitialsAvatar name={m.author.name} size={32} />}
+              {!mine && !phone && <EmployeeAvatar employeeId={m.author.id} name={m.author.name} size={32} />}
               <div style={{ display: "flex", flexDirection: "column", alignItems: mine ? "flex-end" : "flex-start", maxWidth: phone ? "88%" : "min(560px, 80%)", minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: space[2], flexWrap: "wrap", marginBottom: space[1], fontSize: fs.sm, color: v.textSecondary }}>
                   <span style={{ fontWeight: fw.semibold, color: v.textPrimary }}>{name}</span>

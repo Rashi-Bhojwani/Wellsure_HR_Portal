@@ -379,6 +379,9 @@ for (const m of ["BadgeAward", "BadgeRevocation", "PrivateNudge", "NudgeRead", "
 // PEEPS-BEGIN leave-types
 for (const m of ["LeaveRuleVersion", "LeaveRuleApproval", "LeaveRequestDocument"]) PURGE_GUARDED_MODELS.add(m);
 // PEEPS-END
+// PEEPS-BEGIN avatar-choices
+PURGE_GUARDED_MODELS.add("EmployeeAvatarChoice");
+// PEEPS-END
 
 // Deletes the given rows of `model` and every row that depends on them,
 // transitively, in FK-safe order. Optional FKs follow OPTIONAL_FK_POLICY.

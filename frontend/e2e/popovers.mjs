@@ -224,6 +224,31 @@ for (const [width, height] of [
     }
   }
   // PEEPS-END
+  // PEEPS-BEGIN avatar-choices
+  // D-35: the Change avatar dialog on My profile, measured like the other right-hand drawers.
+  {
+    await page.goto(`${BASE}/app/my-profile`);
+    await page.locator("header.ws-topbar").waitFor({ timeout: 30000 });
+    await page.waitForTimeout(800);
+    const label = `${where} / avatars: change avatar dialog`;
+    const root = ".ant-drawer-content-wrapper";
+    const surface = ".ant-drawer-section";
+    console.log(label);
+    await page.getByRole("button", { name: /Change avatar/ }).first().click();
+    await page.waitForTimeout(800);
+    const m = await measure(page, root, surface);
+    if (!m) fail(label, "did not open (nothing visible)");
+    else {
+      if (m.alpha < 0.95) fail(label, `its surface is not opaque (background alpha ${m.alpha})`);
+      if (!m.hasEdge) fail(label, "it has neither a border nor a shadow, so it does not read as a layer above the page");
+      if (m.coveredPoints > 0) fail(label, `${m.coveredPoints} of ${m.checkedPoints} points inside it are covered by the page behind it`);
+      if (m.rect.left < -0.5 || m.rect.right > m.viewport.w + 0.5) fail(label, "it does not fit the screen");
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(1000);
+      if (await measure(page, root, surface)) fail(label, "it did not close on Escape");
+    }
+  }
+  // PEEPS-END
   // PEEPS-BEGIN leave-types
   // The new leave types' "Prepare rules" drawer on Leave Types & Policies (the dev seed's 1000 is a director, so the panel is there).
   await page.goto(`${BASE}/admin/admin-tools/leave-policies`);

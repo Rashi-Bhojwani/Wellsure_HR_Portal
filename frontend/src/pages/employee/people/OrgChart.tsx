@@ -2,13 +2,16 @@ import { memo, useMemo, useRef, useState, useTransition, type CSSProperties, typ
 import { useQuery } from "@tanstack/react-query";
 import { Button, Input, Tooltip } from "antd";
 import { MinusSquareOutlined, PlusSquareOutlined } from "@ant-design/icons";
-import { getOrgChart, photoUrl, type OrgChart as OrgChartData, type OrgChartNode } from "../../../api/people";
+import { getOrgChart, type OrgChart as OrgChartData, type OrgChartNode } from "../../../api/people";
 import { usePhotoToken } from "../../../hooks/usePhotoToken";
 import { useAuth } from "../../../hooks/useAuth";
 import { fs, fw, radius, space, v } from "../../../theme/tokens";
-import { EmptyState, InitialsAvatar, QueryState, Skel, StatusChip, toast, useIsPhone } from "../../../ui";
+import { EmptyState, QueryState, Skel, StatusChip, toast, useIsPhone } from "../../../ui";
 // PEEPS-BEGIN avatars
 import { BadgeCount } from "../../../features/recognition/BadgeCount";
+// PEEPS-BEGIN avatar-choices
+import { EmployeeAvatar } from "../../../components/common/EmployeeAvatar";
+// PEEPS-END
 // PEEPS-END
 
 // The company org chart: Admin (the Super Admins) → Managers and HR Admins →
@@ -30,7 +33,7 @@ const LINE = `2px solid ${v.borderControl}`;
 const OrgCard = memo(function OrgCard({
   node,
   subtitle,
-  photoToken,
+  photoToken: _photoToken, // PEEPS: the shared avatar fetches its own token
   onOpen,
   highlighted,
   reportCount,
@@ -42,7 +45,6 @@ const OrgCard = memo(function OrgCard({
   highlighted: boolean;
   reportCount: number;
 }) {
-  const src = node.photoVersion && photoToken ? photoUrl(node.id, node.photoVersion, "thumb", photoToken) : null;
   return (
     <button
       type="button"
@@ -68,11 +70,9 @@ const OrgCard = memo(function OrgCard({
         transition: "border-color 0.15s, background 0.15s",
       }}
     >
-      {src ? (
-        <img src={src} alt="" loading="lazy" decoding="async" width={40} height={40} style={{ borderRadius: radius.pill, flexShrink: 0, objectFit: "cover" }} />
-      ) : (
-        <InitialsAvatar name={node.name} size={40} />
-      )}
+      {/* PEEPS-BEGIN avatar-choices: the shared avatar (their choice, photo or initials) */}
+      <EmployeeAvatar employeeId={node.id} name={node.name} photoVersion={node.photoVersion} size={40} />
+      {/* PEEPS-END */}
       <span style={{ minWidth: 0, flex: 1 }}>
         <span style={{ display: "block", fontWeight: fw.semibold, fontSize: fs.md, ...ellipsis }}>{node.name}</span>
         <span style={{ display: "block", fontSize: fs.sm, color: v.textSecondary, ...ellipsis }}>{subtitle}</span>
@@ -350,7 +350,7 @@ export function OrgChart({ onOpenPerson }: { onOpenPerson: (id: string) => void 
             const a = byId.get(id);
             return a ? (
               <Button key={id} size="small" onClick={() => onOpenPerson(id)} style={{ display: "inline-flex", alignItems: "center", gap: space[2] }}>
-                <InitialsAvatar name={a.name} size={20} />
+                <EmployeeAvatar employeeId={id} name={a.name} size={20} />
                 {a.name}
               </Button>
             ) : null;

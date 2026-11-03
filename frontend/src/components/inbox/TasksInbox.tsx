@@ -12,7 +12,10 @@ import { TASK_TYPE_LABELS, type TaskItem, type TaskType } from '@shared/types/in
 import * as inboxApi from '../../api/inbox';
 import { formatDateTime } from '../../lib/dates';
 import { fs, fw, radius, space, v } from '../../theme/tokens';
-import { DataTable, EmptyState, InitialsAvatar, Panel, StatusChip, type ChipTone } from '../../ui';
+import { DataTable, EmptyState, Panel, StatusChip, type ChipTone } from '../../ui';
+// PEEPS-BEGIN avatar-choices
+import { EmployeeAvatar } from "../common/EmployeeAvatar";
+// PEEPS-END
 
 const TYPE_META: Record<TaskType, { icon: ReactNode; tone: ChipTone; bg: string; fg: string }> = {
   LEAVE_APPROVAL: {
@@ -74,7 +77,7 @@ function Requester({ name }: { name: string | null }) {
   if (!name) return <span style={{ color: v.textSecondary }}>—</span>;
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: space[2] }}>
-      <InitialsAvatar name={name} size={28} />
+      <EmployeeAvatar name={name} size={28} />
       {name}
     </span>
   );

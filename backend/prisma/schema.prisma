@@ -535,6 +535,10 @@ model Employee {
   nudgesReceived             PrivateNudge[]
   // PEEPS-END
 
+  // PEEPS-BEGIN avatar-choices
+  avatarChoices EmployeeAvatarChoice[]
+
+  // PEEPS-END
   @@index([status])
   @@index([dateOfJoining])
   @@map("employees")
@@ -3962,6 +3966,34 @@ model LeaveRequestDocument {
 
   @@index([leaveRequestId])
   @@map("leave_request_documents")
+}
+
+// PEEPS-END
+
+// PEEPS-BEGIN avatar-choices
+// D-35: what each person shows as their avatar — their photo (EmployeePersonal), their initials, or a character or fun pick from the catalogue data
+// file (shared/avatars/catalogue.json). Only the person chooses their own; append-only (the latest row is in force). "Surprise me" carries the click's
+// idempotency key so one click stores one choice.
+enum AvatarKind {
+  PHOTO
+  INITIALS
+  CHARACTER
+  FUN
+}
+
+model EmployeeAvatarChoice {
+  id             String     @id @default(cuid())
+  employeeId     String     @map("employee_id")
+  employee       Employee   @relation(fields: [employeeId], references: [id])
+  kind           AvatarKind
+  catalogueId    String?    @map("catalogue_id")
+  idempotencyKey String?    @map("idempotency_key")
+  chosenByUserId String     @map("chosen_by_user_id")
+  chosenAt       DateTime   @default(now()) @map("chosen_at") @db.Timestamptz(3)
+
+  @@unique([employeeId, idempotencyKey])
+  @@index([employeeId, chosenAt])
+  @@map("employee_avatar_choices")
 }
 
 // PEEPS-END

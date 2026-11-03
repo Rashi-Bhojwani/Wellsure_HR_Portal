@@ -53,7 +53,7 @@ import { unmuteRouter } from "./modules/unmute/routes";
 import { badgesRouter, nudgesRouter } from "./modules/recognition/routes";
 // PEEPS-END
 // PEEPS-BEGIN avatars
-import { avatarsRouter } from "./modules/avatars/routes";
+import { avatarsRouter, profileRouter } from "./modules/avatars/routes";
 // PEEPS-END
 // PEEPS-BEGIN leave-types
 import { leaveDocumentsRouter, leaveRulesRouter } from "./modules/leaveRules/routes";
@@ -118,6 +118,7 @@ const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   // PEEPS-END
   // PEEPS-BEGIN avatars
   { path: "/api/avatars", router: avatarsRouter },
+  { path: "/api/profile", router: profileRouter },
   // PEEPS-END
   // PEEPS-BEGIN leave-types
   { path: "/api/leave-rules", router: leaveRulesRouter },

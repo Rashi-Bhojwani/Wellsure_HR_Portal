@@ -196,4 +196,73 @@ describe("avatars and directory", () => {
       expect(team).not.toContain(p.employee.employeeId);
     });
   });
+
+  describe("avatar choices and My profile (D-35)", () => {
+    const put = (who: Who, body: object) => request(app).put("/api/avatars/me").set(...authHeader(tok[who])).send(body);
+    const surprise = (who: Who, key: string) => request(app).post("/api/avatars/me/surprise").set(...authHeader(tok[who])).send({ idempotencyKey: key });
+
+    it("an employee chooses their own character, fun pick or initials; the map every screen uses shows it", async () => {
+      const cat = (await get("employee", "/api/avatars/catalogue")).body;
+      expect(cat.characters).toHaveLength(24);
+      expect(cat.fun).toHaveLength(26);
+      expect(cat.placeholder).toBe(true);
+      const chosen = await put("employee", { kind: "CHARACTER", catalogueId: cat.characters[2].id });
+      expect(chosen.status).toBe(200);
+      expect(chosen.body).toMatchObject({ kind: "CHARACTER", catalogueId: cat.characters[2].id, file: cat.characters[2].file });
+      expect((await get("employee", "/api/avatars/me")).body.kind).toBe("CHARACTER");
+      expect((await get("colleague", "/api/avatars/map")).body[p.employee.employeeId]).toMatchObject({ kind: "CHARACTER", file: cat.characters[2].file });
+      expect((await put("employee", { kind: "FUN", catalogueId: cat.fun[0].id })).body.kind).toBe("FUN");
+      expect((await put("employee", { kind: "INITIALS" })).body).toMatchObject({ kind: "INITIALS", file: null });
+    });
+
+    it("the catalogue refuses an unknown id, a character id as a fun pick, and an id on a photo or initials", async () => {
+      expect((await put("employee", { kind: "CHARACTER", catalogueId: "person-99" })).status).toBe(400);
+      expect((await put("employee", { kind: "FUN", catalogueId: "person-01" })).status).toBe(400);
+      expect((await put("employee", { kind: "INITIALS", catalogueId: "fun-01" })).status).toBe(400);
+      expect((await put("employee", { kind: "CHARACTER" })).status).toBe(400);
+    });
+
+    it("only your own: no route or body chooses for someone else, HR and the directors included; the database refuses it too", async () => {
+      for (const who of ["hrAdmin", "director"] as const) {
+        expect((await put(who, { kind: "CHARACTER", catalogueId: "person-01", employeeId: p.colleague.employeeId })).status, who).toBe(400);
+        expect((await request(app).put(`/api/avatars/${p.colleague.employeeId}`).set(...authHeader(tok[who])).send({ kind: "CHARACTER", catalogueId: "person-01" })).status, who).toBe(404);
+      }
+      expect(await prisma.employeeAvatarChoice.count({ where: { employeeId: p.colleague.employeeId } })).toBe(0);
+      await expect(prisma.employeeAvatarChoice.create({ data: { employeeId: p.colleague.employeeId, kind: "CHARACTER", catalogueId: "person-01", chosenByUserId: p.hrAdmin.userId } })).rejects.toThrow(/AVATAR_OWN_ONLY/);
+      const own = await prisma.employeeAvatarChoice.findFirstOrThrow({ where: { employeeId: p.employee.employeeId } });
+      await expect(prisma.employeeAvatarChoice.update({ where: { id: own.id }, data: { kind: "PHOTO" } })).rejects.toThrow(/PEEPS_APPEND_ONLY/);
+      expect((await request(app).put("/api/avatars/me").send({ kind: "INITIALS" })).status).toBe(401);
+    });
+
+    it("Surprise me: one click stores one choice (the same key twice changes nothing); another click may pick again", async () => {
+      const before = await prisma.employeeAvatarChoice.count({ where: { employeeId: p.colleague.employeeId } });
+      const k = `surprise-${Date.now()}`;
+      const [a, b] = await Promise.all([surprise("colleague", k), surprise("colleague", k)]);
+      expect([a.status, b.status]).toEqual([200, 200]);
+      expect(a.body).toEqual(b.body);
+      expect(a.body.kind).toBe("CHARACTER");
+      expect(await prisma.employeeAvatarChoice.count({ where: { employeeId: p.colleague.employeeId } })).toBe(before + 1);
+      expect((await surprise("colleague", `${k}-2`)).status).toBe(200);
+      expect(await prisma.employeeAvatarChoice.count({ where: { employeeId: p.colleague.employeeId } })).toBe(before + 2);
+    });
+
+    it("My profile is your own: role, department, code, joining date, tenure, manager, reports, badges, assets and your own contact details; never pay, bank or statutory data", async () => {
+      const mine = await get("report", "/api/profile/me");
+      expect(mine.status).toBe(200);
+      expect(mine.body).toMatchObject({ employeeId: p.report.employeeId, employeeCode: p.report.employeeCode, reportsTo: { employeeId: p.manager.employeeId } });
+      expect(mine.body.tenure).toEqual(expect.objectContaining({ years: expect.any(Number), months: expect.any(Number) }));
+      for (const k of ["role", "department", "grade", "dateOfJoining", "directReports", "badges", "assets", "personal", "avatar"]) expect(mine.body, k).toHaveProperty(k);
+      expect(mine.body.personal).toMatchObject({ phone: expect.any(String), birthday: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) });
+      const managerView = await get("manager", "/api/profile/me");
+      expect(managerView.body.directReports.map((r: { employeeId: string }) => r.employeeId)).toContain(p.report.employeeId);
+      expect(keysOf(mine.body).filter((k) => /salary|ctc|ifsc|account|bank|^pan|aadhaar|^uan|^esi|blood|gender|address|emergency|nudge|booking|personalEmail/i.test(k))).toEqual([]);
+    });
+
+    it("another person's profile shows only what the directory setting allows: no route opens someone else's My profile", async () => {
+      expect((await get("colleague", `/api/profile/${p.report.employeeId}`)).status).toBe(404);
+      await setSetting("directory.contactFields", [], p.director, p.director2);
+      const other = (await get("colleague", `/api/people/${p.report.employeeId}`)).body;
+      for (const field of ["officialEmail", "mobile", "birthday", "personalEmail"]) expect(other, field).not.toHaveProperty(field);
+    });
+  });
 });

@@ -10,6 +10,7 @@ import { DataTable, EmptyState, PageHeader, Panel, QueryState, SideDrawer, Skele
 import * as unmuteApi from "../api";
 import { slotTime } from "../time";
 import type { HostSlot } from "../api";
+import { EmployeeAvatar } from "../../../components/common/EmployeeAvatar";
 
 const when = slotTime;
 
@@ -94,7 +95,7 @@ function HostCalendarPageInner() {
                 empty={<EmptyState title="No times offered" description="Offer a time inside the availability window." compact illustration={false} action={offerButton || undefined} />}
                 columns={[
                   { title: "When", key: "when", render: (_: unknown, s) => <span style={{ fontWeight: fw.medium, color: v.textPrimary }}>{when(s)}</span> },
-                  { title: "Booked by", key: "who", render: (_: unknown, s) => who(s) },
+                  { title: "Booked by", key: "who", render: (_: unknown, s) => { const b = live(s) ?? s.bookings.find((x) => x.status === "COMPLETED" || x.status === "NOT_HELD"); return b ? <span style={{ display: "inline-flex", alignItems: "center", gap: space[2] }}><EmployeeAvatar employeeId={b.booker.employeeId} name={b.booker.name} size={28} />{who(s)}</span> : who(s); } },
                   { title: "Status", key: "state", render: (_: unknown, s) => state(s) },
                   { title: "", key: "act", align: "right", render: (_: unknown, s) => actions(s) },
                 ]}

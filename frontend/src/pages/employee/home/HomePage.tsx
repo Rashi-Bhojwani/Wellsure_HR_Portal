@@ -24,11 +24,13 @@ const RecentCheersPanel = lazy(() => import('../../../features/recognition/Recen
 // PEEPS-END
 import { EmptyState } from '../../../ui/EmptyState';
 import { Illustration } from '../../../ui/Illustrations';
-import { InitialsAvatar } from '../../../ui/Avatar';
 import { QueryState } from '../../../ui/QueryState';
 import { Skel } from '../../../ui/Skeletons';
 import { StatusChip } from '../../../ui/StatusChip';
 import { useIsPhone } from '../../../ui/hooks';
+// PEEPS-BEGIN avatar-choices
+import { EmployeeAvatar } from "../../../components/common/EmployeeAvatar";
+// PEEPS-END
 
 const QUOTES = [
   { text: 'Small daily improvements lead to stunning results.', author: 'Robin Sharma' },
@@ -238,7 +240,7 @@ function ReviewCard() {
           <RowList>
             {rows.map((r, i) => (
               <li key={r.id} style={rowStyle(i === 0)}>
-                <InitialsAvatar name={r.employeeName} size={36} />
+                <EmployeeAvatar employeeId={r.employeeId} name={r.employeeName} size={36} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <Primary>{r.employeeName}</Primary>
                   <Secondary>

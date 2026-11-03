@@ -43,6 +43,10 @@ const PeepsSettingsPage = lazyPage(() => import("../features/peeps/pages/PeepsSe
 const OfficeAssetRegisterPage = lazyPage(() => import("../features/assets/pages/OfficeAssetPages"), "OfficeAssetRegisterPage");
 const OfficeAssetSettingsPage = lazyPage(() => import("../features/assets/pages/OfficeAssetPages"), "OfficeAssetSettingsPage");
 // PEEPS-END
+// PEEPS-BEGIN avatar-choices
+import { IdcardOutlined } from "@ant-design/icons";
+const MyProfilePage = lazyPage(() => import("../features/avatars/MyProfilePage"), "MyProfilePage");
+// PEEPS-END
 // PEEPS-BEGIN badges-nudges
 import { StarOutlined } from "@ant-design/icons";
 const RecognitionPage = lazyPage(() => import("../features/recognition/pages/RecognitionPage"), "RecognitionPage");
@@ -351,6 +355,16 @@ export const employeeMenu: EmployeeMenuEntry[] = [
       { key: "office-assets", label: "Asset Register", path: "office/assets", element: OfficeAssetRegisterPage, permission: "assets.view", officeMembersOnly: true },
       { key: "office-asset-settings", label: "Asset Settings", path: "office/asset-settings", element: OfficeAssetSettingsPage, permission: "assets.settings.manage", officeMembersOnly: true },
     ],
+  },
+  // PEEPS-END
+  // PEEPS-BEGIN avatar-choices
+  {
+    key: "my-profile",
+    label: "My profile",
+    path: "my-profile",
+    icon: IdcardOutlined,
+    element: MyProfilePage,
+    description: "Your avatar, your work details, your badges and your assets.",
   },
   // PEEPS-END
   // PEEPS-BEGIN badges-nudges

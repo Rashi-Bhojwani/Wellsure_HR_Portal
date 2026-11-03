@@ -4,7 +4,7 @@ import { MailOutlined, PhoneOutlined } from "@ant-design/icons";
 import { getPerson } from "../../../api/people";
 import { EmployeeAvatar } from "../../../components/common/EmployeeAvatar";
 import { fs, fw, radius, space, v } from "../../../theme/tokens";
-import { InitialsAvatar, KeyValueGrid, QueryState, SideDrawer, Skel, useIsPhone, type KeyValueItem } from "../../../ui";
+import { KeyValueGrid, QueryState, SideDrawer, Skel, useIsPhone, type KeyValueItem } from "../../../ui";
 // PEEPS-BEGIN badges-nudges
 import { PersonBadges } from "../../../features/recognition/PersonBadges";
 // PEEPS-END
@@ -52,7 +52,7 @@ export function PersonDrawer({ employeeId, onClose, onSelectPerson }: { employee
                     onClick={() => onSelectPerson(person.reportingManager!.id)}
                     style={{ padding: 0, height: "auto", minHeight: phone ? 44 : undefined, display: "inline-flex", alignItems: "center", gap: space[2], fontWeight: fw.medium }}
                   >
-                    <InitialsAvatar name={person.reportingManager.name} size={24} />
+                    <EmployeeAvatar employeeId={person.reportingManager.id} name={person.reportingManager.name} size={24} />
                     {person.reportingManager.name}
                   </Button>
                 ) : (

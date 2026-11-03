@@ -192,6 +192,20 @@ if (doEmployee) await visit("DEMO009", "another employee", "/app", employeePaths
   }
   // The employee-portal half.
   if (doEmployee) {
+  // D-35: My profile and its Change avatar dialog show only the person's own details (no secret, nobody else's contact details or private data).
+  {
+    const me = await sessionFor("DEMO009");
+    await me.goto(`${BASE}/app/my-profile`);
+    await me.waitForLoadState("networkidle").catch(() => undefined);
+    await me.getByRole("button", { name: /Change avatar/ }).first().click();
+    await me.waitForTimeout(900);
+    pages += 1;
+    const text = await me.evaluate(() => document.body.innerText + "\n" + document.body.innerHTML);
+    for (const s of SECRETS) if (s.re.test(text)) problems.push(`DEMO009 on /app/my-profile (Change avatar open): the page shows ${s.label}`);
+    if (/demo0(0[1-8]|1[0-3])@demo\.example\.invalid|DEMO-NUDGE-PRIVATE|DEMO-LEAVE-REASON-PRIVATE/.test(text)) problems.push("DEMO009 on /app/my-profile: someone else's details or private data are on the page");
+    if (!/Characters/.test(text) || !/Fun picks/.test(text)) problems.push("DEMO009 on /app/my-profile: the Change avatar dialog did not open with its two grids");
+    await me.keyboard.press("Escape");
+  }
   // DEMO006 sees the Unmute host only as the Wellsure Office, never by name or code; the director's Unmute page shows the booking.
   const own = await textOf(booker, `${BASE}/app/unmute`);
   if (/DEMO008|Demo Employee 008/.test(own)) problems.push("DEMO006 on /app/unmute: the host is shown by name instead of as the Wellsure Office");

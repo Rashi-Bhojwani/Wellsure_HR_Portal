@@ -682,6 +682,12 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   // PEEPS-BEGIN avatars
   // HR and the directors remove someone else's inappropriate photo with a reason (avatars.moderate); only the owner adds or changes a photo.
   "POST /api/avatars/:employeeId/remove": admin,
+  "GET /api/avatars/catalogue": everyone("the avatar catalogue (ids, names, art files)"),
+  "GET /api/avatars/map": everyone("each active person's avatar choice and photo version, already public to signed-in staff"),
+  "GET /api/avatars/me": self,
+  "PUT /api/avatars/me": self,
+  "POST /api/avatars/me/surprise": self,
+  "GET /api/profile/me": self,
   // PEEPS-END
   // PEEPS-BEGIN badges-nudges
   // Giving and sending (Q-16): the directors only, decided in the service; a widening setting (Not set) could add members with the capability and

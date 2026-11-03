@@ -11,7 +11,6 @@ import {
   ConfirmModal,
   DataTable,
   EmptyState,
-  InitialsAvatar,
   PageHeader,
   Panel,
   Stack,
@@ -21,6 +20,9 @@ import {
 import { fs, fw, space, v } from '../../../theme/tokens';
 import { useAuth } from '../../../hooks/useAuth';
 import { RegularizationQueue } from '../../../components/attendance/RegularizationQueue';
+// PEEPS-BEGIN avatar-choices
+import { EmployeeAvatar } from "../../../components/common/EmployeeAvatar";
+// PEEPS-END
 
 const { Text } = Typography;
 
@@ -166,7 +168,7 @@ function LeaveReview() {
                 <span
                   style={{ display: 'flex', alignItems: 'center', gap: space[3], minWidth: 200 }}
                 >
-                  <InitialsAvatar name={r.employeeName} size={36} />
+                  <EmployeeAvatar employeeId={r.employeeId} name={r.employeeName} size={36} />
                   <span style={{ minWidth: 0 }}>
                     <span
                       style={{ display: 'block', fontWeight: fw.semibold, color: v.textPrimary }}
@@ -217,7 +219,7 @@ function LeaveReview() {
             { title: 'Actions', key: 'actions', fixed: 'right', render: (_, r) => <Space>{actions(r)}</Space> },
           ]}
           mobile={{
-            avatar: (r) => <InitialsAvatar name={r.employeeName} size={36} />,
+            avatar: (r) => <EmployeeAvatar employeeId={r.employeeId} name={r.employeeName} size={36} />,
             title: (r) => r.employeeName,
             subtitle: (r) =>
               r.onBehalfOf

@@ -5,9 +5,12 @@ import type { Dayjs } from "dayjs";
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as leaveApi from "../../../api/leave";
 import { fs, fw, radius, space, v } from "../../../theme/tokens";
-import { ApprovalBanner, EmptyState, InitialsAvatar, PageHeader, Panel, StatusChip, toast, useIsPhone } from "../../../ui";
+import { ApprovalBanner, EmptyState, PageHeader, Panel, StatusChip, toast, useIsPhone } from "../../../ui";
 // PEEPS-BEGIN leave-types
 import { MyLeaveDocumentsPanel } from "../../../features/leaveRules/MyLeaveDocumentsPanel";
+// PEEPS-BEGIN avatar-choices
+import { EmployeeAvatar } from "../../../components/common/EmployeeAvatar";
+// PEEPS-END
 // PEEPS-END
 
 const { RangePicker } = DatePicker;
@@ -146,7 +149,7 @@ export function LeaveApplyPage() {
               <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: space[3] }}>
                 {teamOnLeave.map((entry, i) => (
                   <li key={`${entry.employeeId}-${i}`} style={{ display: "flex", alignItems: "center", gap: space[3] }}>
-                    <InitialsAvatar name={entry.employeeName} size={36} />
+                    <EmployeeAvatar employeeId={entry.employeeId} name={entry.employeeName} size={36} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: fw.semibold, color: v.textPrimary }}>{entry.employeeName}</div>
                       <div style={{ fontSize: fs.sm, color: v.textSecondary }}>

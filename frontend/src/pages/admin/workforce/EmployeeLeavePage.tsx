@@ -12,9 +12,12 @@ import { EmployeePicker } from "../../../components/letters/LetterFields";
 import { LeaveLedgerTable } from "../../../components/leave/LeaveLedgerTable";
 import { useAuth } from "../../../hooks/useAuth";
 import { fs, fw, space, v } from "../../../theme/tokens";
-import { ApprovalBanner, ConfirmModal, DataTable, EmptyState, FilterBar, InitialsAvatar, PageHeader, Panel, SideDrawer, StatusChip, toast, useIsPhone } from "../../../ui";
+import { ApprovalBanner, ConfirmModal, DataTable, EmptyState, FilterBar, PageHeader, Panel, SideDrawer, StatusChip, toast, useIsPhone } from "../../../ui";
 // PEEPS-BEGIN leave-types
 import { LeaveDocumentsCell } from "../../../features/leaveRules/LeaveDocumentsCell";
+// PEEPS-BEGIN avatar-choices
+import { EmployeeAvatar } from "../../../components/common/EmployeeAvatar";
+// PEEPS-END
 // PEEPS-END
 
 const { RangePicker } = DatePicker;
@@ -202,7 +205,7 @@ export function EmployeeLeavePage() {
 
   const person = (r: LeaveRequestRow) => (
     <div style={{ display: "flex", alignItems: "center", gap: space[3], minWidth: 0 }}>
-      <InitialsAvatar name={r.employeeName} size={36} />
+      <EmployeeAvatar employeeId={r.employeeId} name={r.employeeName} size={36} />
       <div style={{ minWidth: 0 }}>
         <div style={{ fontWeight: fw.semibold, color: v.textPrimary }}>{r.employeeName}</div>
         <div style={{ fontSize: fs.sm, color: v.textSecondary }}>{r.employeeCode}</div>
@@ -271,7 +274,7 @@ export function EmployeeLeavePage() {
           pagination={{ pageSize: 20 }}
           empty={<EmptyState compact kind={search || status || onlyNoTeamApprover ? "no-results" : "empty"} illustration="inbox" title="No leave requests found" description={null} />}
           mobile={{
-            avatar: (r) => <InitialsAvatar name={r.employeeName} size={40} />,
+            avatar: (r) => <EmployeeAvatar employeeId={r.employeeId} name={r.employeeName} size={40} />,
             title: (r) => r.employeeName,
             subtitle: (r) => `${r.employeeCode} · ${r.leaveTypeName}`,
             status: (r) => <StatusChip status={r.status} />,

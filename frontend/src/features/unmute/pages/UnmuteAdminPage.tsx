@@ -8,6 +8,7 @@ import { ApprovalBanner, DataTable, EmptyState, PageHeader, Panel, SideDrawer, S
 import * as unmuteApi from "../api";
 import { slotTime } from "../time";
 import type { AdminBooking, PersonRef } from "../api";
+import { EmployeeAvatar } from "../../../components/common/EmployeeAvatar";
 
 const when = slotTime;
 const person = (p: PersonRef) => `${p.name} (${p.employeeCode})`;
@@ -51,7 +52,7 @@ function UnmuteAdminPageInner() {
 
   const bookingColumns = (withActions: boolean) => [
     { title: "When", key: "when", render: (_: unknown, b: AdminBooking) => when(b) },
-    { title: "Employee", key: "booker", render: (_: unknown, b: AdminBooking) => person(b.booker) },
+    { title: "Employee", key: "booker", render: (_: unknown, b: AdminBooking) => <span style={{ display: "inline-flex", alignItems: "center", gap: space[2] }}><EmployeeAvatar employeeId={b.booker.employeeId} name={b.booker.name} size={28} />{person(b.booker)}</span> },
     { title: "Host", key: "host", render: (_: unknown, b: AdminBooking) => person(b.host) },
     { title: "Status", key: "status", render: (_: unknown, b: AdminBooking) => <StatusChip tone={b.status === "BOOKED" ? "success" : "neutral"}>{b.status.replace("_", " ").toLowerCase()}</StatusChip> },
     ...(withActions
