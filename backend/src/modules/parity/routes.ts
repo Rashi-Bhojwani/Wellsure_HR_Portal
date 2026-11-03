@@ -7,13 +7,14 @@ import { MAX_DOCUMENT_UPLOAD_MB_CEILING, MAX_PHOTO_UPLOAD_MB_CEILING } from "@sh
 import { memoryUploadMany } from "../../lib/uploads";
 import { commitBulk, previewBulk } from "./bulk";
 import * as mass from "./massEmail";
+import * as modes from "./separationModes";
 import { revealContact } from "./contact";
 import { getGridColumns, saveGridColumns } from "./gridColumns";
 import { openPay } from "./pay";
 import { changePosition, getPosition } from "./position";
 import * as segments from "./segments";
 import type { ParityMeta, ParityViewer } from "./types";
-import { bulkDocumentsSchema, createMassEmailSchema, massEmailListQuerySchema, sendMassEmailSchema, updateMassEmailSchema, createSegmentSchema, gridColumnsSchema, gridKeyParamsSchema, idParamsSchema, membersQuerySchema, positionChangeSchema, reasonQuerySchema, updateSegmentSchema } from "./validators";
+import { bulkDocumentsSchema, createModeSchema, modesQuerySchema, setModeSchema, updateModeSchema, createMassEmailSchema, massEmailListQuerySchema, sendMassEmailSchema, updateMassEmailSchema, createSegmentSchema, gridColumnsSchema, gridKeyParamsSchema, idParamsSchema, membersQuerySchema, positionChangeSchema, reasonQuerySchema, updateSegmentSchema } from "./validators";
 
 // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md). Every router: signed in, never the Developer role, a permission per action, the employee in the caller's
 // scope (in the service), validated input, an audit row for every change and every reveal.
@@ -81,3 +82,12 @@ massEmailRouter.post("/:id/discard", send, validate({ params: idParamsSchema }),
 });
 massEmailRouter.get("/:id/count", send, validate({ params: idParamsSchema }), async (req, res) => void res.json(await mass.countAudience(p(req), viewerOf(req))));
 massEmailRouter.post("/:id/send", send, validate({ params: idParamsSchema, body: sendMassEmailSchema }), async (req, res) => void res.json(await mass.sendMassEmail(p(req), req.body.expectedCount, viewerOf(req), metaOf(req))));
+
+// ── /api/separation-modes (G7): the list is the company's own data (org.manage to change it; anyone who may separate or see separations reads it). ──
+export const separationModesRouter = Router();
+separationModesRouter.use(authenticate, refuseDeveloper);
+separationModesRouter.get("/", requireAnyPermission("org.manage", "employee.separate", "employee.separate.view"), validate({ query: modesQuerySchema }), async (req, res) => void res.json({ modes: await modes.listModes((req.query as unknown as { includeInactive: boolean }).includeInactive) }));
+separationModesRouter.post("/", requirePermission("org.manage"), validate({ body: createModeSchema }), async (req, res) => void res.status(201).json(await modes.createMode(req.body, viewerOf(req), metaOf(req))));
+separationModesRouter.patch("/:id", requirePermission("org.manage"), validate({ params: idParamsSchema, body: updateModeSchema }), async (req, res) => void res.json(await modes.updateMode(p(req), req.body, metaOf(req))));
+separationModesRouter.get("/by-separation", requireAnyPermission("employee.separate", "employee.separate.view"), async (req, res) => void res.json({ modes: await modes.separationModesFor() }));
+separationModesRouter.post("/separations/:id", requirePermission("employee.separate"), validate({ params: idParamsSchema, body: setModeSchema }), async (req, res) => void res.json(await modes.setSeparationMode(p(req), req.body.modeId, req.body.reason, viewerOf(req), metaOf(req))));

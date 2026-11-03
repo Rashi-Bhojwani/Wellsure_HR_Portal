@@ -644,6 +644,14 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "POST /api/mass-email/:id/discard": admin,
   "GET /api/mass-email/:id/count": admin,
   "POST /api/mass-email/:id/send": admin,
+  // G7 portal access: the unlock guard (assertMaySecure: user.security.manage, which HR can never hold, or a director).
+  "POST /api/access/employees/:employeeId/portal-access": adminInService("assertMaySecure: user.security.manage or a Super Admin; a Super Admin's only by another"),
+  // G7 separation modes: company data (org.manage), read by whoever separates or sees separations (neither key grantable).
+  "GET /api/separation-modes": admin,
+  "POST /api/separation-modes": admin,
+  "PATCH /api/separation-modes/:id": admin,
+  "GET /api/separation-modes/by-separation": admin,
+  "POST /api/separation-modes/separations/:id": admin, // employee.separate + findScopedEmployee, audited
   // G3 letters workflow: starters, grants and the serial are director-only in the service; requests need letters.issue.nopay (never manager-grantable) AND the
   // template's own grant (or a director), the person in scope (modules/letters/workflow.ts).
   "GET /api/letters/starters": adminInService("director only (assertDirector)"),

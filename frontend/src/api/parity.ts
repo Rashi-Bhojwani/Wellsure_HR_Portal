@@ -177,3 +177,17 @@ export const updateMassEmail = async (id: string, input: Partial<{ subject: stri
 export const discardMassEmail = async (id: string) => void (await apiClient.post(`/api/mass-email/${id}/discard`));
 export const countMassEmail = async (id: string) => (await apiClient.get<{ count: number; withoutAddress: number }>(`/api/mass-email/${id}/count`)).data;
 export const sendMassEmail = async (id: string, expectedCount: number) => (await apiClient.post<MassEmail>(`/api/mass-email/${id}/send`, { expectedCount })).data;
+
+// ── G7: separation modes and portal access ──
+export interface SeparationMode {
+  id: string;
+  code: string;
+  label: string;
+  isActive: boolean;
+}
+export const listSeparationModes = async (includeInactive = false) => (await apiClient.get<{ modes: SeparationMode[] }>("/api/separation-modes", { params: { includeInactive } })).data.modes;
+export const createSeparationMode = async (input: { code: string; label: string }) => (await apiClient.post<SeparationMode>("/api/separation-modes", input)).data;
+export const updateSeparationMode = async (id: string, input: { label?: string; isActive?: boolean }) => (await apiClient.patch<SeparationMode>(`/api/separation-modes/${id}`, input)).data;
+export const separationModesById = async () => (await apiClient.get<{ modes: Record<string, { id: string; label: string } | null> }>("/api/separation-modes/by-separation")).data.modes;
+export const setSeparationMode = async (separationId: string, modeId: string | null, reason: string) => (await apiClient.post<{ id: string; modeId: string | null }>(`/api/separation-modes/separations/${separationId}`, { modeId, reason })).data;
+export const setPortalAccess = async (employeeId: string, enabled: boolean, reason: string) => (await apiClient.post(`/api/access/employees/${employeeId}/portal-access`, { enabled, reason })).data;

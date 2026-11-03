@@ -43,7 +43,7 @@ import { payrollRouter } from "./modules/payroll/routes";
 import { taxRouter } from "./modules/payroll/tax/routes";
 import { payslipRouter } from "./modules/payroll/payslipRoutes";
 // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
-import { employeeExtrasRouter, massEmailRouter, segmentsRouter } from "./modules/parity/routes";
+import { employeeExtrasRouter, massEmailRouter, segmentsRouter, separationModesRouter } from "./modules/parity/routes";
 // A-9 — end
 
 // Every API router and where it's mounted — one list, so the route
@@ -96,6 +96,7 @@ const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   { path: "/api/employee-segments", router: segmentsRouter },
   { path: "/api/employee-extras", router: employeeExtrasRouter },
   { path: "/api/mass-email", router: massEmailRouter },
+  { path: "/api/separation-modes", router: separationModesRouter },
   // A-9 — end
 ];
 

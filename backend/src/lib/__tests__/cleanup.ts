@@ -64,6 +64,8 @@ export const OPTIONAL_FK_POLICY: Record<string, Policy> = {
   "GeneratedLetter.reissueOfId": "setNull",
   // A-9 G3: a request that was issued belongs to its letter (tests only: neither is ever deleted in real use).
   "LetterRequest.generatedLetterId": "delete",
+  // A-9 G7: a separation's mode is a pointer into the company's list; removing a test mode keeps the separation.
+  "Separation.modeId": "setNull",
   // Phase 2 ingestion. A test punch belongs to its test employee (deleted
   // through the raw_punches purge exception — see PURGE_GUARDED_MODELS).
   "RawPunch.employeeId": "delete",
@@ -98,6 +100,7 @@ export const OPTIONAL_FK_POLICY: Record<string, Policy> = {
 export const FIXTURE_ROOT_MODELS = ["Employee", "User"] as const;
 export const STANDALONE_ROOT_MODELS: Record<string, string> = {
   Role: "shared role catalog; cleanupTestRole",
+  SeparationMode: "A-9 G7: company data; deleteWithDependents(\"SeparationMode\", ids)",
   MassEmail: "A-9 G5: a mass email is the sender's, by user id (no FK); deleteWithDependents(\"MassEmail\", ids)",
   Permission: "shared permission catalog; cleanupTestData({ permissionIds })",
   Company: "single seeded company row; never created by tests",

@@ -48,3 +48,9 @@ export async function acknowledgeSecurityEvent(req: Request, res: Response): Pro
   await service.acknowledgeSecurityEvent(req.params.id as string, req.body.note, actor(req), actorMeta(req));
   res.status(204).send();
 }
+
+// A-9 G7 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
+export async function setPortalAccess(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await service.setPortalAccess(emp(req), req.body.enabled, req.body.reason, actor(req), actorMeta(req)));
+}
+// A-9 — end

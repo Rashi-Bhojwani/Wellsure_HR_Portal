@@ -767,6 +767,10 @@ model Separation {
   initiatedAt       DateTime         @default(now()) @map("initiated_at")
   cancelledAt       DateTime?        @map("cancelled_at")
   completedAt       DateTime?        @map("completed_at")
+  // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin: the mode (Not set until someone chooses one from the configured list)
+  modeId            String?          @map("mode_id")
+  mode              SeparationMode?  @relation(fields: [modeId], references: [id])
+  // A-9 — end
 
   @@index([employeeId])
   @@map("separations")
@@ -3732,5 +3736,19 @@ model MassEmailRecipient {
 
   @@unique([massEmailId, employeeId])
   @@map("mass_email_recipients")
+}
+// G7: how a person left (resignation, termination, retirement and so on) — data the company configures; nothing is seeded, so a mode is Not set until the
+// company has made its list. Switched off, never deleted.
+model SeparationMode {
+  id              String       @id @default(cuid())
+  code            String       @unique
+  label           String
+  isActive        Boolean      @default(true) @map("is_active")
+  createdByUserId String       @map("created_by_user_id")
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  separations     Separation[]
+
+  @@map("separation_modes")
 }
 // ── A-9 — end ───────────────────────────────────────────────────────────────────────────────────────────────────────────────

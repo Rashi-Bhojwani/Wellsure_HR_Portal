@@ -62,3 +62,9 @@ export const updateMassEmailSchema = z
   .refine((b) => Object.keys(b).length > 0, { message: "Nothing to change." });
 export const massEmailListQuerySchema = z.object({ status: z.enum(["DRAFT", "SENT"]).optional(), page: z.coerce.number().int().min(1).default(1), pageSize: z.coerce.number().int().min(1).max(100).default(25) });
 export const sendMassEmailSchema = z.object({ expectedCount: z.number().int().min(1) });
+
+// G7: separation modes (company data) and the mode of one separation.
+export const createModeSchema = z.object({ code: z.string().trim().min(1).max(40).regex(/^[A-Z0-9_]+$/, "Use capital letters, digits and underscores."), label: z.string().trim().min(1).max(80) });
+export const updateModeSchema = z.object({ label: z.string().trim().min(1).max(80).optional(), isActive: z.boolean().optional() }).refine((b) => Object.keys(b).length > 0, { message: "Nothing to change." });
+export const modesQuerySchema = z.object({ includeInactive: z.stringbool().default(false) });
+export const setModeSchema = z.object({ modeId: z.string().min(1).nullable(), reason: z.string().trim().min(3, "Say why (a few words)").max(300) });

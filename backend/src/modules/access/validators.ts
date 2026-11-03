@@ -22,3 +22,6 @@ export const assignRoleSchema = z.object({ code: z.string().min(1).max(40) });
 export const idParamsSchema = z.object({ id: z.string().min(1) });
 export const securityEventsQuerySchema = z.object({ status: z.enum(["open", "all"]).optional() });
 export const acknowledgeSchema = z.object({ note: z.string().trim().min(3, "Say what you checked (at least a few words).").max(500) });
+
+// A-9 G7 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md): turn a person's portal access off or back on, with a reason.
+export const portalAccessSchema = z.object({ enabled: z.boolean(), reason: z.string().trim().min(3, "Say why (a few words)").max(300) });
