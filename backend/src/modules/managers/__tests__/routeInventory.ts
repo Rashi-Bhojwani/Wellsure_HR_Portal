@@ -629,6 +629,8 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "PUT /api/employee-extras/grid-columns/:gridKey": self,
   "GET /api/employee-extras/:id/contact": admin, // employee.contact.reveal + findScopedEmployee, audited
   "GET /api/employee-extras/:id/pay": admin, // payroll.salary.view (HR-locked) + findScopedEmployee, audited
+  "GET /api/employee-extras/:id/position": admin, // employee.edit / attendance.config.manage (neither grantable) + findScopedEmployee
+  "POST /api/employee-extras/:id/position": admin, // the same, and the existing writers (updateJob / changeAssignment) audit the change
   // A-9 — end
 };
 

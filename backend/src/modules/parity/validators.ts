@@ -33,3 +33,11 @@ export const membersQuerySchema = z.object({ page: z.coerce.number().int().min(1
 export const GRID_KEYS = ["employees"] as const;
 export const gridKeyParamsSchema = z.object({ gridKey: z.enum(GRID_KEYS) });
 export const gridColumnsSchema = z.object({ columns: z.array(z.string().trim().min(1).max(40)).max(40) });
+
+// G2: one attribute changed from the Position screen, through the existing writers. A reason is required here.
+export const positionChangeSchema = z.object({
+  attribute: z.enum(["department", "designation", "location", "grade", "costCentre", "shift"]),
+  valueId: z.string().min(1).nullable(),
+  effectiveFrom: z.iso.date(),
+  reason: z.string().trim().min(3, "Say why (a few words)").max(300),
+});

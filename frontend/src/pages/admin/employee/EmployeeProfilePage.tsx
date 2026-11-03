@@ -23,6 +23,7 @@ import { personalSections, statutoryItems } from "./profileItems";
 // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
 import { useContactReveal } from "./parity/ContactReveal";
 import { PayTab } from "./parity/PayTab";
+import { PositionTab } from "./parity/PositionTab";
 // A-9 — end
 
 const REFERENCE_STALE = 30_000;
@@ -473,6 +474,7 @@ export function EmployeeProfilePage() {
               : []),
             // A-9: the Pay tab is the directors' (payroll.salary.view, which HR can never hold); each opening is audited by the server.
             ...(hasPermission("payroll.salary.view") ? [{ key: "pay", label: "Pay", children: <PayTab employeeId={id!} /> }] : []),
+            ...(hasPermission("employee.edit") || hasPermission("attendance.config.manage") ? [{ key: "position", label: "Position", children: <PositionTab employeeId={id!} /> }] : []),
             { key: "history", label: "History", children: <HistoryTab employeeId={id!} canViewBank={canViewBank} /> },
             ...(hasRole("SUPER_ADMIN") || hasPermission("role.view") || hasPermission("user.security.manage")
               ? [{ key: "access", label: "Access", children: <EmployeeAccessTab employeeId={id!} /> }]

@@ -59,3 +59,22 @@ export interface EmployeePay {
   pendingAdjustments: Array<{ id: string; componentCode: string; direction: string; amount: string; reason: string; source: string; periodStart: string | null; periodEnd: string | null }>;
 }
 export const openPay = async (employeeId: string) => (await apiClient.get<EmployeePay>(`/api/employee-extras/${employeeId}/pay`)).data;
+
+// ── G2: position history ──
+export type PositionAttribute = "department" | "designation" | "location" | "grade" | "costCentre" | "shift";
+export interface PositionEntry {
+  valueId: string | null;
+  value: string;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  reason: string | null;
+  status: "past" | "current" | "scheduled";
+}
+export interface PositionHistory {
+  employeeId: string;
+  attributes: Array<{ key: PositionAttribute; label: string; current: PositionEntry | null; entries: PositionEntry[] }>;
+  division: { built: boolean; note: string };
+}
+export const getPosition = async (employeeId: string) => (await apiClient.get<PositionHistory>(`/api/employee-extras/${employeeId}/position`)).data;
+export const changePosition = async (employeeId: string, input: { attribute: PositionAttribute; valueId: string | null; effectiveFrom: string; reason: string }) =>
+  (await apiClient.post<PositionHistory>(`/api/employee-extras/${employeeId}/position`, input)).data;

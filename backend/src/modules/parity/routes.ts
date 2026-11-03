@@ -1,14 +1,15 @@
 import { Router, type Request, type Response } from "express";
 import { authenticate } from "../../middleware/authenticate";
 import { refuseDeveloper } from "../../middleware/refuseDeveloper";
-import { requirePermission } from "../../middleware/rbac";
+import { requireAnyPermission, requirePermission } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
 import { revealContact } from "./contact";
 import { getGridColumns, saveGridColumns } from "./gridColumns";
 import { openPay } from "./pay";
+import { changePosition, getPosition } from "./position";
 import * as segments from "./segments";
 import type { ParityMeta, ParityViewer } from "./types";
-import { createSegmentSchema, gridColumnsSchema, gridKeyParamsSchema, idParamsSchema, membersQuerySchema, reasonQuerySchema, updateSegmentSchema } from "./validators";
+import { createSegmentSchema, gridColumnsSchema, gridKeyParamsSchema, idParamsSchema, membersQuerySchema, positionChangeSchema, reasonQuerySchema, updateSegmentSchema } from "./validators";
 
 // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md). Every router: signed in, never the Developer role, a permission per action, the employee in the caller's
 // scope (in the service), validated input, an audit row for every change and every reveal.
@@ -42,3 +43,9 @@ employeeExtrasRouter.get("/:id/contact", requirePermission("employee.contact.rev
   res.json(await revealContact(p(req), (req.query as { reason: string }).reason, viewerOf(req), metaOf(req)));
 });
 employeeExtrasRouter.get("/:id/pay", requirePermission("payroll.salary.view"), validate({ params: idParamsSchema }), async (req, res) => void res.json(await openPay(p(req), viewerOf(req), metaOf(req))));
+
+// G2: position history. Read and change need a key a manager can never hold (employee.edit for the job attributes, attendance.config.manage for the shift — the
+// service checks which one the change needs); the person in the caller's scope; the change goes through the existing writers, which audit it.
+const positionKeys = requireAnyPermission("employee.edit", "attendance.config.manage");
+employeeExtrasRouter.get("/:id/position", positionKeys, validate({ params: idParamsSchema }), async (req, res) => void res.json(await getPosition(p(req), viewerOf(req))));
+employeeExtrasRouter.post("/:id/position", positionKeys, validate({ params: idParamsSchema, body: positionChangeSchema }), async (req, res) => void res.json(await changePosition(p(req), req.body, viewerOf(req), metaOf(req))));
