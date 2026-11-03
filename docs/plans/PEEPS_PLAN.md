@@ -837,3 +837,16 @@ extraction failure must never block a joiner.
 
 Checkpoints (merge the latest `feat/hr-payroll-separation`, full suite alone, report): after 5
 (foundation), after 11, after 16, after 23, after 28.
+
+## H. B-1 changes to this plan (2026-11-03)
+- **Q-16 replaced by D-36:** badges and cheers follow the reporting line. Downward to anyone under the giver, upward along the
+  manager chain to the directors, directors to anyone, Wellsure Office members to anyone only if `audience.badges.officeGivesToAnyone`
+  is set, never to peers or another line. No manager → `badges.noManagerFallback` (Not set = nobody). Catalogue items carry a
+  duration (WEEK / MONTH / PERMANENT); weekly and monthly expire at the end of the IST calendar week or month. Directors revoke with a
+  reason. `badges.durationDays`, `badges.revocation` and `audience.nudges` are retired.
+- **D-37:** no public nudge tags; corrective notes are director-only, private, behind `nudges.enabled` (Not set).
+- **D-35:** avatar choices (append-only, own only, DB trigger) with artwork as data (`shared/avatars/catalogue.json`,
+  `frontend/public/avatars/`); placeholder art until the owner supplies files in `docs/design/avatars/`. My profile at
+  `/app/my-profile`, self only.
+- **Leave (owner answers):** a recorded-gender eligibility criterion in the rule model (ANY or ONLY values), chosen per rule; menstrual
+  and medical types show as "Leave" to managers until `leave.showSensitiveTypes` is set; the employee can open their own document.

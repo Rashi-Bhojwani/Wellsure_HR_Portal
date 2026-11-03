@@ -99,3 +99,12 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 
 ## Document autofill
 - [ ] Nothing until PEEPS_PLAN §E is answered
+
+## B-1 (2026-11-02/03): sync, reporting-line badges (D-36/D-37), avatar dialog and My profile (D-35)
+- [x] Step 0.1 merge latest Session A branch — `179533d`; split sensitive-data scan passes both halves (CI runs 239 and 240)
+- [x] Step 0.3 recorded-gender eligibility; menstrual/medical shown as "Leave" to managers; own document open (audited) — `a89b750`
+- [x] D-36 badges/cheers follow the reporting line; starter catalogue one click, never preloaded; revoke with reason — `376e900`
+- [x] D-37 corrective notes directors only, private, behind nudges.enabled (Not set) — `376e900`
+- [x] D-35 avatar dialog (upload, initials, Surprise me, 24 characters, 26 fun picks), one shared avatar, My profile — `eb1154a`
+- [x] Idempotent give/note race under serializable isolation (found by CI run 240) — `2fa8886`
+- [ ] Full backend suite alone and CI on `2fa8886` — skipped at the owner's instruction ("skip the test for now")
