@@ -382,6 +382,11 @@ for (const m of ["LeaveRuleVersion", "LeaveRuleApproval", "LeaveRequestDocument"
 // PEEPS-BEGIN avatar-choices
 PURGE_GUARDED_MODELS.add("EmployeeAvatarChoice");
 // PEEPS-END
+// PEEPS-BEGIN helpdesk-visibility
+PURGE_GUARDED_MODELS.add("HelpdeskCategoryVisibilityHistory");
+// Required category FKs make both new models reachable from the existing
+// HelpdeskCategory cleanup root; no optional-FK or standalone exception needed.
+// PEEPS-END helpdesk-visibility
 
 // Deletes the given rows of `model` and every row that depends on them,
 // transitively, in FK-safe order. Optional FKs follow OPTIONAL_FK_POLICY.

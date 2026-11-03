@@ -392,7 +392,30 @@ and proves no route reads it without `assertRelationship`.
 - **Risks.** Concurrent issue of the same asset (index + lock + race test); returning an asset during an
   exit after the separation completed (allowed; clearance records it late).
 
-### B.3 General ticket desk (answered: visibility by category)
+### B.3 General ticket desk (C-2 authorized, 2026-11-03; overrides the earlier withdrawal)
+
+The owner has explicitly authorized this build. Earlier headers calling B.3 withdrawn are historical:
+employee ticket screens keep their existing flow; category visibility and general-category moves are wanted.
+Session A's latest tip `f613992` is already an ancestor of the C-2 start `9f8a2cf`; check again at checkpoint B.
+
+**Decided by me (owner-directed clarification):** categories present when the migration runs retain legacy
+behaviour with no visibility row. Every later general category receives a Not set marker; raising a ticket
+refuses until a director explicitly chooses visibility. No grievance category or handler list is preloaded.
+Payroll (`PAYROLL_SALARY`) is excluded from Peeps visibility and moves by database constraints as well as
+service checks. Its existing routing remains Session A's.
+
+Implementation sequence: schema/history and cleanup; director-only permission and visibility service;
+visibility on every read/delivery path; idempotent moves; existing-screen additions; confidentiality and
+mutation checks, then checkpoint B. All policy decisions live in `categoryVisibility.ts`. Integration hook
+count is awaiting clarification: queue filters, access checks, Tasks and delivery have separate existing paths.
+Keep all approved shared-file changes in marked PEEPS blocks. Use fresh scratch databases without dropping
+or resetting any database. Retain the C-1 test harness adaptation outside tracked files.
+
+Moves will use an actor-scoped idempotency key and a ticket row lock, return a neutral receipt (the mover
+may immediately lose access), and write history, an audit row and a neutral system message atomically.
+The raiser retains their thread. Director reads outside their own/assigned tickets are audited.
+Employee/handler fields and sensitive-category permissions remain bounded by the existing access rules;
+directors retain D-28 access. New rules must cover attachments, queue totals, Tasks, notifications and sockets.
 
 - **Split (answered).** Session A owns the **Payroll** ticket category and its director-only routing. I own
   the general desk: every other category. No queue enum. Who can see a ticket follows from its category.

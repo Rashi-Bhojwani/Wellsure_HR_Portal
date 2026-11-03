@@ -1588,6 +1588,11 @@ model HelpdeskCategory {
 
   tickets HelpdeskTicket[]
 
+  // PEEPS-BEGIN helpdesk-visibility
+  visibility        HelpdeskCategoryVisibility?
+  visibilityHistory HelpdeskCategoryVisibilityHistory[]
+  // PEEPS-END helpdesk-visibility
+
   @@map("helpdesk_categories")
 }
 
@@ -3997,3 +4002,38 @@ model EmployeeAvatarChoice {
 }
 
 // PEEPS-END
+
+// PEEPS-BEGIN helpdesk-visibility
+// No row means legacy behaviour. New general categories receive an unconfigured
+// row from the migration's insert trigger; nobody is selected by default.
+model HelpdeskCategoryVisibility {
+  id              String          @id @default(cuid())
+  categoryId      String          @unique @map("category_id")
+  category        HelpdeskCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  categoryCode    String          @map("category_code")
+  configured      Boolean         @default(false)
+  hrRoleCodes     String[]        @default([]) @map("hr_role_codes")
+  employeeIds     String[]        @default([]) @map("employee_ids")
+  version         Int             @default(0)
+  changedByUserId String?          @map("changed_by_user_id")
+  changedAt       DateTime         @default(now()) @map("changed_at") @db.Timestamptz(3)
+
+  @@map("helpdesk_category_visibility")
+}
+
+model HelpdeskCategoryVisibilityHistory {
+  id              String          @id @default(cuid())
+  categoryId      String          @map("category_id")
+  category        HelpdeskCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  categoryCode    String          @map("category_code")
+  version         Int
+  hrRoleCodes     String[]         @map("hr_role_codes")
+  employeeIds     String[]         @map("employee_ids")
+  reason          String
+  changedByUserId String           @map("changed_by_user_id")
+  changedAt       DateTime         @default(now()) @map("changed_at") @db.Timestamptz(3)
+
+  @@unique([categoryId, version])
+  @@map("helpdesk_category_visibility_history")
+}
+// PEEPS-END helpdesk-visibility
