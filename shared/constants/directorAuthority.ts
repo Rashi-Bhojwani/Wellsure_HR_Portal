@@ -15,6 +15,9 @@ export const DIRECTOR_STEPS = [
   "SETUP_SIGNOFF",
   "IDENTITY_DIRECTOR_ENTRY",
   "SETTINGS",
+  // PEEPS-BEGIN exits
+  "EXIT_APPROVAL",
+  // PEEPS-END exits
 ] as const;
 export type DirectorStep = (typeof DIRECTOR_STEPS)[number];
 
@@ -36,6 +39,9 @@ export interface DirectorStepInfo {
 }
 
 export const DIRECTOR_STEP_INFO: Record<DirectorStep, DirectorStepInfo> = {
+  // PEEPS-BEGIN exits
+  EXIT_APPROVAL: { label: "Exit acceptance (optional check)", covers: "Resignation acceptance. Not set: one authorized person accepts; a director act tells the other director. A second director is required only when the optional check is explicitly chosen." },
+  // PEEPS-END exits
   RULE_CONFIRM: { label: "Payroll rules", covers: "Confirming a rule, a salary component or structure, a file layout, and the company's registration numbers, bank layout and debit account." },
   RUN_APPROVAL: { label: "Approving a payroll run", covers: "Approving a calculated run." },
   PERIOD_FINALISE: { label: "Closing a payroll period", covers: "Closing (finalising) a period after its run is approved." },

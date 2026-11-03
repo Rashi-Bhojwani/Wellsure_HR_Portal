@@ -1,3 +1,4 @@
+import * as flow from "./resignations";
 import { Router } from "express";
 import { z } from "zod";
 import { authenticate } from "../../middleware/authenticate";
@@ -27,3 +28,12 @@ exitsRouter.get("/checklist-templates", requirePermission("exits.settings.manage
 exitsRouter.post("/checklist-templates", requirePermission("exits.settings.manage"), validate({ body: settings.templateSchema }), async (req, res) => {
   res.status(201).json(await settings.createTemplate(req.body, metaOf(req)));
 });
+
+exitsRouter.post("/resignations", validate({ body: flow.submitSchema }), async (req,res)=>{res.status(201).json(await flow.submit(req.user!,req.body,metaOf(req)));});
+exitsRouter.get("/resignations/mine",validate({query:empty}),async(req,res)=>{res.json(await flow.mine(req.user!));});
+exitsRouter.get("/resignations",validate({query:flow.listSchema}),async(req,res)=>{res.json(await flow.list(req.user!,req.query as never));});
+exitsRouter.get("/resignations/:id",validate({params:idSchema}),async(req,res)=>{res.json(await flow.getResignation(req.params.id as string,req.user!));});
+exitsRouter.post("/resignations/:id/accept",validate({params:idSchema,body:flow.acceptSchema}),async(req,res)=>{res.json(await flow.accept(req.params.id as string,req.user!,req.body,metaOf(req)));});
+exitsRouter.post("/resignations/:id/reject",validate({params:idSchema,body:flow.decisionSchema}),async(req,res)=>{res.json(await flow.decide(req.params.id as string,req.user!,"REJECTED",req.body.note,metaOf(req)));});
+exitsRouter.post("/resignations/:id/withdraw",validate({params:idSchema,body:flow.decisionSchema}),async(req,res)=>{res.json(await flow.decide(req.params.id as string,req.user!,"WITHDRAWN",req.body.note,metaOf(req)));});
+exitsRouter.get("/cases/:id",validate({params:idSchema}),async(req,res)=>{res.json(await flow.getCase(req.params.id as string,req.user!));});

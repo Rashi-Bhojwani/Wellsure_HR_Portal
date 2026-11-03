@@ -15,7 +15,7 @@ export const templateSchema = z.object({
 });
 export const SETTING_SCHEMAS = {
   officeAudience: z.object({ officeManages: z.boolean() }),
-  noticeRules: z.array(z.object({ employmentType: z.enum(["PERMANENT", "CONTRACT", "INTERN", "CONSULTANT", "PROBATION"]), gradeId: z.string().min(1).nullable(), days: z.number().int().min(0).max(2147483647), basis: z.literal("CALENDAR_DAYS"), sourceNote: z.string().trim().min(1).max(2000) })).refine((a) => new Set(a.map((r) => `${r.employmentType}/${r.gradeId}`)).size === a.length, "A notice rule is listed twice."),
+  noticeRules: z.array(z.object({ employmentType: z.enum(["PERMANENT", "CONTRACT", "INTERN", "CONSULTANT", "PROBATION"]), gradeId: z.string().min(1).nullable(), days: z.number().int().min(0).max(2147483647), basis: z.literal("CALENDAR_DAYS"), countFrom: z.enum(["SUBMISSION_DAY", "NEXT_DAY"]), sourceNote: z.string().trim().min(1).max(2000) })).refine((a) => new Set(a.map((r) => `${r.employmentType}/${r.gradeId}`)).size === a.length, "A notice rule is listed twice."),
   rejectAllowed: z.object({ allowed: z.boolean() }),
   interviewQuestions: z.array(z.object({ id: code, label: z.string().trim().min(1).max(500), required: z.boolean() })).min(1).refine((a) => new Set(a.map((q) => q.id)).size === a.length, "A question is listed twice."),
   overdueThresholds: z.object({ clearanceDays: z.number().int().min(0).max(2147483647) }),

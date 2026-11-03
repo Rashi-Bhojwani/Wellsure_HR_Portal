@@ -36,6 +36,14 @@ const adminInService = (why: string): RouteClass => ({ kind: "admin", why });
 
 export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   // PEEPS-BEGIN exits
+  "POST /api/exits/resignations": self,
+  "GET /api/exits/resignations/mine": self,
+  "GET /api/exits/resignations": scoped("current team or director/Office/HR-switch audience; scope checked before counts"),
+  "GET /api/exits/resignations/:id": scoped("own resignation, current team, or authorized scoped management"),
+  "POST /api/exits/resignations/:id/accept": scoped("exits.accept for current team, or authorized scoped management"),
+  "POST /api/exits/resignations/:id/reject": scoped("authorized acceptor and explicit reject-allowed setting"),
+  "POST /api/exits/resignations/:id/withdraw": self,
+  "GET /api/exits/cases/:id": scoped("own case, current team, or authorized scoped management; interviews separately scoped"),
   "GET /api/exits/status": everyone("exit submission readiness and reason catalogue; Developer denied"),
   "GET /api/exits/settings": admin,
   "PUT /api/exits/settings/:key": admin,
