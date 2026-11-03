@@ -404,9 +404,10 @@ refuses until a director explicitly chooses visibility. No grievance category or
 Payroll (`PAYROLL_SALARY`) is excluded from Peeps visibility and moves by database constraints as well as
 service checks. Its existing routing remains Session A's.
 
-Implementation sequence: schema/history and cleanup; director-only permission and visibility service;
+Implementation sequence (completed through `40f0390`): schema/history and cleanup; director-only permission and visibility service;
 visibility on every read/delivery path; idempotent moves; existing-screen additions; confidentiality and
-mutation checks, then checkpoint B. All policy decisions live in `categoryVisibility.ts`. The owner explicitly approved small marked hooks at each boundary (2026-11-03), superseding the
+mutation checks, then checkpoint B. All policy decisions live in `categoryVisibility.ts`. The owner
+explicitly approved small marked hooks at each boundary (2026-11-03), superseding the
 single-call-site limit: queue filters, access checks, Tasks and delivery have separate existing paths.
 Keep all approved shared-file changes in marked PEEPS blocks. Use fresh scratch databases without dropping
 or resetting any database. Retain the C-1 test harness adaptation outside tracked files.
@@ -448,7 +449,14 @@ directors retain D-28 access. New rules must cover attachments, queue totals, Ta
   adds a mechanism I should reuse. Whoever lands second merges the other's work before touching
   `modules/helpdesk/*` (§C.3).
 - **Risks.** Both sessions edit `modules/helpdesk/service.ts` → keep my changes in a separate
-  `categoryVisibility.ts` with one call site in a marked block.
+  `categoryVisibility.ts` with the small marked boundary hooks explicitly approved for C-2.
+
+**C-2 checkpoint record:** implementation commits `0845d17`, `5a00bff`, `54b30ab`, `34b9e5c`,
+`cc18d0d`, `40f0390`; final verification and shared-file handoff are in `PEEPS_STAGE_REPORTS.md`.
+Checkpoint B: full backend **205 files / 2,072 tests**, frontend **80 tests**, agent **166 tests**,
+lint/typecheck/build/budgets passed; **4/4 mutations** caught; **16 browser cases** passed; all seven CI
+jobs succeeded on `40f0390` (run `41621430072`). Four new leave types verified inactive after the full run.
+The payroll branch is still `f613992`, already included. Stop after C-2; no next module is authorized.
 
 ### B.4 Leave extension (answered)
 

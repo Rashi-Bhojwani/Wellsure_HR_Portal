@@ -5212,3 +5212,22 @@ Carried from spec §14 — configurable, not guessed, until answered:
       - back-dated changes can invert or overlap history;
       - separations close history on the last working day itself, so a
         leaver has no placement on that day.
+
+
+<!-- PEEPS-BEGIN helpdesk-visibility -->
+## 2026-11-03 — Peeps C-2 general ticket desk
+
+General-category visibility and category moves are built on `peeps/foundation` (`0845d17` through
+`40f0390`). Directors choose audiences; new categories refuse activation while Not set. Existing
+categories keep their legacy rules. Payroll remains excluded. Moves have immutable, idempotent
+receipts, audit/system notes and scoped notifications; the raiser keeps the thread. Existing screens
+have the audience and Move drawers. Small marked shared-file hooks were explicitly approved.
+
+Checkpoint B: full backend **205 files / 2,072 tests**, frontend **80 tests**, agent **166 tests**,
+lint/typecheck/build/budgets passed; **4/4 mutations** caught; **16 browser cases** passed; all seven CI
+jobs succeeded on `40f0390` (run `41621430072`). Four new leave types verified inactive after the full run.
+The payroll branch is still `f613992`, already included. Stop after C-2; no next module is authorized.
+See `plans/PEEPS_STAGE_REPORTS.md` for counts, mutations, browser evidence, CI per job, the shared-file
+handoff and the legacy download-capability limit. Exits, recruitment, insights and autofill remain
+unstarted; stop at C-2.
+<!-- PEEPS-END helpdesk-visibility -->

@@ -743,3 +743,172 @@ the final report/checklist follow-up contains documentation only.
   contents and manager presentation projections, not browser screenshots.
 
 **C-1 complete. Stop here.** No general ticket desk, exits, recruitment, insights, autofill or payroll application work started.
+
+## C-2 — General ticket desk and checkpoint B (2026-11-03)
+
+### Scope and commits
+Started on `peeps/foundation` at `9f8a2cf`, with a clean working tree. One coding agent throughout.
+The owner explicitly authorized B.3 despite its historical withdrawal header, and then authorized
+small marked hooks at each boundary, superseding the original single-call-site limit.
+
+| Build step | Commit | Result |
+|---|---|---|
+| 1 — schema and cleanup | `0845d17` | New-category Not set marker, current visibility, immutable history, Payroll CHECKs |
+| 2 — director controls | `5a00bff` | `helpdesk.visibility.manage`, HR hard lock, validated director-only read/write routes |
+| 3 — confidentiality | `54b30ab` | Queue/counts, detail, attachments, Tasks, stored notifications and scoped delivery |
+| 4 — moves | `34b9e5c` | Actor/key idempotency, row lock, immutable receipt, atomic audit/system note/notifications |
+| 5 — existing screens | `cc18d0d` | Audience drawer, Move drawer, neutral notes, protected downloads, DEMO scan fixtures |
+| 6 — regression/checkpoint tests | `40f0390` | Role/sensitive intersection, handover regression, browser walkthrough and mutation evidence |
+
+Latest `origin/feat/hr-payroll-separation` was fetched at the start and checkpoint: still `f613992`,
+already an ancestor of `9f8a2cf` and this branch. No merge was needed. No payroll or attendance file,
+access resolver, CI workflow, PR, staging or production changed. No environment publication.
+
+### What shipped
+- Existing general categories receive no migration backfill and retain their prior permission rules.
+  Later general categories get an unconfigured marker automatically, including when inserted outside
+  the category API. Raising or moving into an unconfigured category refuses with exactly
+  `This category is not set up yet`.
+- A director chooses HR roles and/or named active handlers, with a reason and expected version.
+  Existing helpdesk/sensitive/directors-only gates still apply. D-28 directors retain access;
+  opening a general ticket outside their own/assigned work is audited.
+- The shared policy is in `modules/helpdesk/categoryVisibility.ts`. Queries filter before pagination,
+  totals and Tasks limits. Attachment metadata and bytes, notification lists/unread counts/read actions,
+  queue results and thread writes use the current policy. Configured and moved tickets emit to current
+  handlers' user rooms, never the helpdesk permission room. Former handlers get only an empty
+  `helpdesk.access.changed` signal, so clients discard stale caches without receiving a ticket ID/content.
+- A move requires a reason and a UUID idempotency key. The same actor/key/request returns the same
+  neutral receipt even after access is lost; reuse for different input conflicts. It clears assignment,
+  preserves status, records one immutable receipt/audit/system note and commits notifications atomically.
+  New handlers receive the ticket; the raiser gets only `Your ticket was moved to another team.`
+  in the move notification and public system note. The private reason stays in the audit/receipt.
+- Payroll exclusion uses the stable `PAYROLL_SALARY` code. SQL derives checked codes from actual
+  category FKs, so a forged general code cannot bypass either visibility-table CHECK or the move CHECK.
+  Source and target are guarded; a protected category cannot be renamed into Payroll. The existing
+  Session A Payroll paths remain responsible for Payroll tickets.
+- The queue already had a category filter; it is reused. Existing category/ticket pages gain drawers;
+  no employee screen, menu or navigation route was added. Shared conversation rendering labels the
+  neutral move note as a system note. All four new API routes are in the access inventory.
+- Search is the menu-only command palette (`CommandPalette.tsx`); it has no ticket-payload search.
+  Request Hub reads the raiser's own tickets only and continues to retain that thread.
+
+### Verification actually run
+Each build commit had its changed tests, root lint and root typecheck run and passed before commit.
+
+| Check | Observed result |
+|---|---|
+| Step 1 schema + cleanup | 2 files / 6 tests passed |
+| Step 2 director routes + access inventory | 2 files / 9 tests passed |
+| Step 3 helpdesk/notification/access regression | 7 files / 50 tests passed |
+| Step 4 moves/schema/access regression | 7 files / 47 tests passed |
+| Step 5 frontend | 17 files / 80 tests passed |
+| Step 5 backend after cache refresh changes | 1 file / 9 tests passed |
+| Final focused restored regression, including Tasks, notifications, cleanup and route inventory | 9 files / 65 tests passed |
+| Final root lint | Passed (backend, frontend + design tokens, biometric agent) |
+| Final root typecheck | Passed (backend, frontend, agent, infra) |
+| Final frontend suite | 17 files / 80 tests passed |
+| Biometric-agent suite after full backend completion | 17 files / 166 tests passed |
+| Production frontend build | Passed |
+| Bundle budget | Passed: login 231.3 KB, shell + employee home 336.1 KB, shell + admin home 355.7 KB gzip |
+| Full backend suite alone | **205 files / 2,072 tests passed**, zero failed/pending/todo; 832.28 seconds; JSON report confirms success |
+| Four new leave types after full suite | SQL: MENSTRUAL, MEDICAL, WEDDING and BEREAVEMENT all `is_active = false` in the full-run scratch database |
+
+Scratch services follow C-1: PostgreSQL 16 and Redis 7 binaries extracted from isolated local Docker
+images, running only on loopback, with fresh task-owned data. Every backend run used a unique newly
+created database, Redis test db 15 and unique storage/mail folders. An untracked copy of the existing
+Vitest setup removes its DROP, retaining migrations, seed, tests and locking. No local database reset/drop
+command was run. The separate DEMO stack was stopped for the full backend run. Chromium uses the same local
+launcher adaptation as C-1; application PDF network/JavaScript restrictions remain intact.
+
+### Failures found and fixed
+- A new regression proved that a move into a legacy sensitive category hid detail but left the former
+  handler's stored notification visible. The restored final regression now also checks its counts,
+  subsequent socket delivery and attachments: moved tickets keep guarded delivery/downloads even in a
+  legacy target, and the raiser can still download. Untouched legacy tickets keep their original path.
+- The strengthened frontend forbidden-state test exposed its own invalid mock error: the shared UI
+  recognizes Axios errors, while the fixture was a plain object. The fixture now represents an Axios
+  403 and waits for the actual forbidden state; the rerun passed. No production error guard weakened.
+- The first browser matrix hit the existing ten-login rate limit. The walkthrough now reuses each
+  authenticated role session across themes/widths; only its scratch login counters were cleared before
+  rerunning. Application limits were unchanged. One initial lint unused import was removed.
+
+### Mutation checks (fresh scratch databases, each restored)
+| Deliberately broken guard | Named test observed failing |
+|---|---|
+| Queue audience WHERE removed | `named audience controls queue, totals, Tasks, detail, attachments, persisted notifications and socket rooms` |
+| Director-only service guard removed | `the service guard rejects HR even if passed a forged director permission` |
+| Visibility Payroll CHECKs disabled | `both tables derive the actual Payroll code and reject a forged general code` |
+| Move Payroll CHECK disabled | `Payroll exclusion blocks moving in or out in service and database, even with forged general codes` |
+
+**4/4 caught**, with nonzero exits and the named assertions failing. All code mutations were restored;
+the isolated mutant databases were not reused. The full run
+uses restored production code, not filtered mutation selections.
+
+### Browser walkthrough
+`frontend/e2e/helpdesk.mjs` passed **16 role/theme/width cases**: director, HR with an allowed category
+and a denied category, raiser and another employee; light/dark at 1280 and 390 px. It opens both new
+drawers, checks forbidden/empty detail, raiser retention, absence of the private ticket/panel for HR,
+Escape closing and horizontal overflow. Twenty screenshots plus results are in
+`/tmp/c2-helpdesk-walkthrough`; phone/dark visibility and desktop/light Move screenshots were inspected.
+The existing `check:sensitive-ui` now checks DEMO audience isolation, a director opening the new panel,
+and secret patterns in that panel. DEMO fixtures make the positive/negative checks substantive.
+
+### Shared-file handoff (all changes inside PEEPS blocks)
+Line numbers refer to implementation commit `40f0390`; new module/test/migration files are Peeps-owned.
+- `backend/prisma/schema.prisma`: blocks at 1591, 1620, 1642, 4014, 4049 (relations, system-note flag, tables).
+- `backend/src/lib/__tests__/cleanup.ts`: 385 (new guarded descendants of existing category/ticket roots).
+- `shared/constants/permissions.ts`: 101, 263; `shared/constants/sensitiveData.ts`: 154, 210 (catalogue/classification/hard lock).
+- `backend/src/modules/helpdesk/service.ts`: 1, 110, 117, 232, 263, 304, 334, 343, 365, 429,
+  456, 495, 501, 523, 535, 541, 545, 553, 572, 587, 594 (small policy/delivery/projection hooks).
+- `backend/src/modules/helpdesk/controller.ts`: 17, 55 (viewer/actor forwarding);
+  `routes.ts`: 1, 52, 61, 70 (four validated routes); `__tests__/helpdeskTestHelpers.ts`: 11 (legacy fixtures).
+- `backend/src/modules/tasks/service.ts`: 1, 112; `backend/src/modules/notifications/service.ts`:
+  1, 16, 61, 65, 68, 72, 84, 87, 96, 100, 111, 114 (policy WHERE and transactional notification writer).
+- `backend/src/modules/managers/__tests__/routeInventory.ts`: 38;
+  `backend/scripts/demo/seedDemoCompany.ts`: 319 (inventory and DEMO-only seed hook).
+- `frontend/src/api/helpdesk.ts`: 21, 60, 137, 145;
+  `frontend/src/components/helpdesk/HelpdeskBits.tsx`: 103, 141 (protected download and system-note rendering).
+- `frontend/src/pages/admin/helpdesk/HelpdeskCategoriesPage.tsx`: 1, 26, 117, 129, 141;
+  `AdminHelpdeskTicketPage.tsx`: 1, 26, 82, 96 (drawers in existing screens).
+- `frontend/src/sockets/useHelpdeskRealtime.ts`: 37, 49;
+  `frontend/e2e/sensitive-ui.mjs`: 78, 224 (cache refresh and scan coverage).
+
+### Settings left Not set / Decided by me / deviations
+- No real-company audience, category, HR-concerns category, quota, workflow duration or leave rule was
+  preloaded or activated. Every new general category needs its director's explicit audience choice.
+  Only the fictional DEMO seed makes its two labelled demo visibility choices.
+- **Decided by me, owner-directed clarification:** migration-time existing categories keep no-row legacy
+  behaviour; later general categories get Not set markers. No preset grievance category.
+- **Implementation choices:** actor-scoped UUID keys persist with immutable receipts; moves clear the old
+  assignee and preserve status; note/notification text is neutral and the reason is private; reuse the
+  existing category filter and design-system drawers rather than add a screen.
+- **Approved deviation:** several narrow PEEPS hooks replace the original one-call-site limit, explicitly
+  approved in chat. Policy logic stays in the new module. Moved legacy tickets retain protected download
+  and delivery paths to close the handover regression; untouched legacy tickets retain their old behaviour.
+- **Existing capability limit:** legacy bearer URLs issued before a category/ticket transitions retain
+  their original 60-second expiry. Configured and moved tickets issue authenticated content descriptors
+  instead; current access is checked on every byte request. This does not revoke files already downloaded.
+
+### CI read per job
+Implementation commit `40f0390`, run **41621430072**:
+
+| Job | Result |
+|---|---|
+| `install-lint-typecheck-test` (including demo-company tests and schema drift) | success |
+| `latency` (including popovers) | success |
+| `attendance-replay` | success |
+| `docker-build` | success |
+| `agent-windows` | success |
+| `sensitive-ui (admin portal)` | success |
+| `sensitive-ui (employee portal)` | success |
+
+All seven completed successfully, with no red job. This report/checklist follow-up changes documentation
+only; its own push's CI is read separately before the final reply.
+
+### Unverified
+- No separate local full sensitive-ui/popover crawl, Windows run, replay or demo-company suite;
+  the seven completed CI jobs above provide remote evidence for those checks.
+- No staging/production walkthrough or migration; none was requested or performed.
+- No retroactive revocation test of pre-transition legacy bearer URLs (existing expiry described above).
+
+**Checkpoint B complete. Stop here.** No exits, recruitment, insights or autofill code started.

@@ -47,7 +47,7 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 - [x] Full suite alone after `162f03f`: 195 files, 1,951 tests passed; frontend checks pass
 - [x] CI flake (Session A's bankRepayment hash assertion) fixed by the merge; scan made to run its Peeps checks inside `visit()` — `7d761a0` (845 → 570 loads)
 - [x] CI sensitive-ui time limit: handed to Session A (final instructions); noted in each CI read
-- [x] Ticket desk changes: withdrawn by D-29 (no change)
+- [x] Earlier ticket-desk withdrawal superseded by C-2 authorization (2026-11-03; see Ticket desk below)
 - [ ] Follow-ups: badge counts in the directory list; withdrawing a pending proposal/setting; manager-member menu entries (see deviations)
 - [x] Stopped after the workspace/Unmute/badges stage (superseded by the final instructions)
 
@@ -64,8 +64,8 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 - [ ] **STOP: wait for the owner**
 
 ## Ticket desk
-- [ ] 11 category visibility (general categories), move between categories
-- [ ] CHECKPOINT B
+- [x] 11 category visibility (general categories), move between categories — `0845d17` through `40f0390`
+- [x] CHECKPOINT B — full backend 205 files / 2,072 tests; frontend 80; agent 166; lint/typecheck/build/budgets; 4/4 mutations; 16 browser cases; CI all seven jobs green on `40f0390` (run `41621430072`)
 
 ## Leave extension
 - [ ] 12 four new leave types: rules prepared by HR, approved by a director; requests
