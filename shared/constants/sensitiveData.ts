@@ -168,6 +168,7 @@ export const REVIEWED_NOT_SENSITIVE: readonly PermissionKey[] = [
   // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin: a saved list of people, and a contact number (not one of the sensitive classes; masked and audited anyway)
   "employee.segments.manage",
   "employee.contact.reveal",
+  "communication.mass.send",
   // A-9 — end
 ];
 

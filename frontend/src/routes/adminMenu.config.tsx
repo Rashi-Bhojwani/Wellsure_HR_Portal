@@ -25,6 +25,7 @@ import {
   IdcardOutlined,
   LaptopOutlined,
   LinkOutlined,
+  MailOutlined, // A-9
   UserDeleteOutlined,
   NotificationOutlined,
   PartitionOutlined,
@@ -122,6 +123,7 @@ const LayoutsPage = lazyPage(() => import("../pages/admin/payroll/LayoutsPage"),
 const SegmentsPage = lazyPage(() => import("../pages/admin/employee/parity/SegmentsPage"), "SegmentsPage");
 const LetterRequestsPage = lazyPage(() => import("../pages/admin/letters/parity/LetterRequestsPage"), "LetterRequestsPage");
 const BulkUploadPage = lazyPage(() => import("../pages/admin/employee/parity/BulkUploadPage"), "BulkUploadPage");
+const MassEmailPage = lazyPage(() => import("../pages/admin/engage/parity/MassEmailPage"), "MassEmailPage");
 const LetterSettingsPage = lazyPage(() => import("../pages/admin/letters/parity/LetterSettingsPage"), "LetterSettingsPage");
 // A-9 — end
 const SetupChecklistPage = lazyPage(() => import("../pages/admin/payroll/SetupChecklistPage"), "SetupChecklistPage");
@@ -337,6 +339,9 @@ export const adminApps: AdminApp[] = [
           { key: "moderation", label: "Moderation", path: "engage/moderation", icon: SafetyOutlined, element: ModerationPage },
           { key: "groups", label: "Groups", path: "engage/groups", icon: GroupOutlined, element: GroupsAdminPage },
           { key: "auto-post-settings", label: "Auto-Post Settings", path: "engage/auto-posts", icon: TrophyOutlined, element: AutoPostSettingsPage },
+          // A-9 — begin
+          { key: "mass-email", label: "Mass Email", path: "engage/mass-email", icon: MailOutlined, element: MassEmailPage, needs: { any: ["communication.mass.send"] } },
+          // A-9 — end
         ],
       },
     ],

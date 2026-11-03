@@ -528,6 +528,7 @@ model Employee {
   segmentMemberships         EmployeeSegmentMember[]  @relation("EmployeeSegmentMembership")
   letterRequests             LetterRequest[]          @relation("LetterRequestEmployee")
   letterSignatures           LetterRequestSignatory[] @relation("LetterRequestSignatory")
+  massEmailsReceived         MassEmailRecipient[]     @relation("MassEmailRecipient")
   // A-9 — end
 
   @@index([status])
@@ -3674,5 +3675,62 @@ model LetterTemplateGrant {
 
   @@index([templateId, action])
   @@map("letter_template_grants")
+}
+// G5: an email to many people at once. A draft can be changed or discarded (never deleted) before it is sent; the audience is resolved on the server at send
+// time, inside the sender's own scope, and the number the sender confirmed must match what is sent. One recipient row per person (no address is stored).
+enum MassEmailStatus {
+  DRAFT
+  SENDING
+  SENT
+  DISCARDED
+}
+
+enum MassEmailAudience {
+  ALL
+  SEGMENT
+  PEOPLE
+}
+
+enum MassEmailOutcome {
+  SENT
+  FAILED
+  NO_ADDRESS
+}
+
+model MassEmail {
+  id              String               @id @default(cuid())
+  subject         String
+  body            String // plain text; escaped when sent
+  category        String?
+  audience        MassEmailAudience
+  segmentId       String?              @map("segment_id")
+  employeeIds     Json                 @default("[]") @map("employee_ids")
+  status          MassEmailStatus      @default(DRAFT)
+  createdByUserId String               @map("created_by_user_id")
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  sentByUserId    String?              @map("sent_by_user_id")
+  sentAt          DateTime?            @map("sent_at") @db.Timestamptz(3)
+  recipientCount  Int?                 @map("recipient_count")
+  deliveredCount  Int?                 @map("delivered_count")
+  failedCount     Int?                 @map("failed_count")
+  discardedAt     DateTime?            @map("discarded_at") @db.Timestamptz(3)
+  recipients      MassEmailRecipient[]
+
+  @@index([status, createdAt])
+  @@map("mass_emails")
+}
+
+model MassEmailRecipient {
+  id          String           @id @default(cuid())
+  massEmailId String           @map("mass_email_id")
+  massEmail   MassEmail        @relation(fields: [massEmailId], references: [id])
+  employeeId  String           @map("employee_id")
+  employee    Employee         @relation("MassEmailRecipient", fields: [employeeId], references: [id])
+  outcome     MassEmailOutcome
+  detail      String?
+
+  @@unique([massEmailId, employeeId])
+  @@map("mass_email_recipients")
 }
 // ── A-9 — end ───────────────────────────────────────────────────────────────────────────────────────────────────────────────

@@ -48,3 +48,17 @@ export const bulkDocumentsSchema = z.object({
   title: z.string().trim().max(200).optional(),
   visibleToEmployee: z.stringbool().default(false),
 });
+
+// G5: mass email. Plain text only.
+const audience = z.discriminatedUnion("audience", [
+  z.object({ audience: z.literal("ALL") }),
+  z.object({ audience: z.literal("SEGMENT"), segmentId: z.string().min(1) }),
+  z.object({ audience: z.literal("PEOPLE"), employeeIds: z.array(z.string().min(1)).min(1).max(2000) }),
+]);
+const draft = { subject: z.string().trim().min(1).max(200), body: z.string().trim().min(1).max(20_000), category: z.string().trim().max(60).nullable().optional() };
+export const createMassEmailSchema = z.object(draft).and(audience);
+export const updateMassEmailSchema = z
+  .object({ subject: draft.subject.optional(), body: draft.body.optional(), category: draft.category, audience: z.enum(["ALL", "SEGMENT", "PEOPLE"]).optional(), segmentId: z.string().min(1).optional(), employeeIds: z.array(z.string().min(1)).min(1).max(2000).optional() })
+  .refine((b) => Object.keys(b).length > 0, { message: "Nothing to change." });
+export const massEmailListQuerySchema = z.object({ status: z.enum(["DRAFT", "SENT"]).optional(), page: z.coerce.number().int().min(1).default(1), pageSize: z.coerce.number().int().min(1).max(100).default(25) });
+export const sendMassEmailSchema = z.object({ expectedCount: z.number().int().min(1) });

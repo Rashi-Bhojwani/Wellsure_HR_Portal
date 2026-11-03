@@ -153,3 +153,27 @@ export async function bulkUpload(kind: "documents" | "photos", step: "preview" |
   for (const f of files) form.append("files", f);
   return (await apiClient.post<BulkResult>(`/api/employee-extras/bulk/${kind}${step === "preview" ? "/preview" : ""}`, form)).data;
 }
+
+// ── G5: mass email ──
+export interface MassEmail {
+  id: string;
+  subject: string;
+  body: string;
+  category: string | null;
+  audience: "ALL" | "SEGMENT" | "PEOPLE";
+  segmentId: string | null;
+  employeeIds: string[];
+  status: "DRAFT" | "SENDING" | "SENT" | "DISCARDED";
+  createdAt: string;
+  sentAt: string | null;
+  recipientCount: number | null;
+  deliveredCount: number | null;
+  failedCount: number | null;
+}
+export type MassEmailInput = { subject: string; body: string; category?: string | null } & ({ audience: "ALL" } | { audience: "SEGMENT"; segmentId: string } | { audience: "PEOPLE"; employeeIds: string[] });
+export const listMassEmails = async (status: "DRAFT" | "SENT", page: number) => (await apiClient.get<{ total: number; rows: MassEmail[] }>("/api/mass-email", { params: { status, page, pageSize: 25 } })).data;
+export const createMassEmail = async (input: MassEmailInput) => (await apiClient.post<MassEmail>("/api/mass-email", input)).data;
+export const updateMassEmail = async (id: string, input: Partial<{ subject: string; body: string; category: string | null; audience: MassEmail["audience"]; segmentId: string; employeeIds: string[] }>) => (await apiClient.patch<MassEmail>(`/api/mass-email/${id}`, input)).data;
+export const discardMassEmail = async (id: string) => void (await apiClient.post(`/api/mass-email/${id}/discard`));
+export const countMassEmail = async (id: string) => (await apiClient.get<{ count: number; withoutAddress: number }>(`/api/mass-email/${id}/count`)).data;
+export const sendMassEmail = async (id: string, expectedCount: number) => (await apiClient.post<MassEmail>(`/api/mass-email/${id}/send`, { expectedCount })).data;

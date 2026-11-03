@@ -98,6 +98,7 @@ export const OPTIONAL_FK_POLICY: Record<string, Policy> = {
 export const FIXTURE_ROOT_MODELS = ["Employee", "User"] as const;
 export const STANDALONE_ROOT_MODELS: Record<string, string> = {
   Role: "shared role catalog; cleanupTestRole",
+  MassEmail: "A-9 G5: a mass email is the sender's, by user id (no FK); deleteWithDependents(\"MassEmail\", ids)",
   Permission: "shared permission catalog; cleanupTestData({ permissionIds })",
   Company: "single seeded company row; never created by tests",
   City: "org master; cleanupEmployeeTestOrgMasters",

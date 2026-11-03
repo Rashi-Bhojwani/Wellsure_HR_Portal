@@ -636,6 +636,14 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "POST /api/employee-extras/bulk/documents": admin,
   "POST /api/employee-extras/bulk/photos/preview": admin,
   "POST /api/employee-extras/bulk/photos": admin,
+  // G5 mass email: communication.mass.send (not grantable); the audience is resolved inside the sender's scope (modules/parity/massEmail.ts).
+  "GET /api/mass-email": admin,
+  "POST /api/mass-email": admin,
+  "GET /api/mass-email/:id": admin,
+  "PATCH /api/mass-email/:id": admin,
+  "POST /api/mass-email/:id/discard": admin,
+  "GET /api/mass-email/:id/count": admin,
+  "POST /api/mass-email/:id/send": admin,
   // G3 letters workflow: starters, grants and the serial are director-only in the service; requests need letters.issue.nopay (never manager-grantable) AND the
   // template's own grant (or a director), the person in scope (modules/letters/workflow.ts).
   "GET /api/letters/starters": adminInService("director only (assertDirector)"),

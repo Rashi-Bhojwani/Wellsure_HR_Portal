@@ -6,13 +6,14 @@ import { validate } from "../../middleware/validate";
 import { MAX_DOCUMENT_UPLOAD_MB_CEILING, MAX_PHOTO_UPLOAD_MB_CEILING } from "@shared/constants/peopleDocuments";
 import { memoryUploadMany } from "../../lib/uploads";
 import { commitBulk, previewBulk } from "./bulk";
+import * as mass from "./massEmail";
 import { revealContact } from "./contact";
 import { getGridColumns, saveGridColumns } from "./gridColumns";
 import { openPay } from "./pay";
 import { changePosition, getPosition } from "./position";
 import * as segments from "./segments";
 import type { ParityMeta, ParityViewer } from "./types";
-import { bulkDocumentsSchema, createSegmentSchema, gridColumnsSchema, gridKeyParamsSchema, idParamsSchema, membersQuerySchema, positionChangeSchema, reasonQuerySchema, updateSegmentSchema } from "./validators";
+import { bulkDocumentsSchema, createMassEmailSchema, massEmailListQuerySchema, sendMassEmailSchema, updateMassEmailSchema, createSegmentSchema, gridColumnsSchema, gridKeyParamsSchema, idParamsSchema, membersQuerySchema, positionChangeSchema, reasonQuerySchema, updateSegmentSchema } from "./validators";
 
 // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md). Every router: signed in, never the Developer role, a permission per action, the employee in the caller's
 // scope (in the service), validated input, an audit row for every change and every reveal.
@@ -65,3 +66,18 @@ employeeExtrasRouter.post("/bulk/documents/preview", manageDocs, docsUpload, val
 employeeExtrasRouter.post("/bulk/documents", manageDocs, docsUpload, validate({ body: bulkDocumentsSchema }), async (req, res) => void res.json(await commitBulk("documents", files(req), req.body, viewerOf(req), metaOf(req))));
 employeeExtrasRouter.post("/bulk/photos/preview", editEmployees, photosUpload, async (req, res) => void res.json(await previewBulk("photos", files(req), {}, viewerOf(req))));
 employeeExtrasRouter.post("/bulk/photos", editEmployees, photosUpload, async (req, res) => void res.json(await commitBulk("photos", files(req), {}, viewerOf(req), metaOf(req))));
+
+// ── /api/mass-email (G5): communication.mass.send (the directors'; an owner may grant it). Email only; the audience is resolved here, never by the screen. ──
+export const massEmailRouter = Router();
+massEmailRouter.use(authenticate, refuseDeveloper);
+const send = requirePermission("communication.mass.send");
+massEmailRouter.get("/", send, validate({ query: massEmailListQuerySchema }), async (req, res) => void res.json(await mass.listMassEmails(req.query as unknown as Parameters<typeof mass.listMassEmails>[0])));
+massEmailRouter.post("/", send, validate({ body: createMassEmailSchema }), async (req, res) => void res.status(201).json(await mass.createDraft(req.body, viewerOf(req), metaOf(req))));
+massEmailRouter.get("/:id", send, validate({ params: idParamsSchema }), async (req, res) => void res.json(await mass.getMassEmail(p(req))));
+massEmailRouter.patch("/:id", send, validate({ params: idParamsSchema, body: updateMassEmailSchema }), async (req, res) => void res.json(await mass.updateDraft(p(req), req.body, viewerOf(req), metaOf(req))));
+massEmailRouter.post("/:id/discard", send, validate({ params: idParamsSchema }), async (req, res) => {
+  await mass.discardDraft(p(req), metaOf(req));
+  res.status(204).send();
+});
+massEmailRouter.get("/:id/count", send, validate({ params: idParamsSchema }), async (req, res) => void res.json(await mass.countAudience(p(req), viewerOf(req))));
+massEmailRouter.post("/:id/send", send, validate({ params: idParamsSchema, body: sendMassEmailSchema }), async (req, res) => void res.json(await mass.sendMassEmail(p(req), req.body.expectedCount, viewerOf(req), metaOf(req))));
