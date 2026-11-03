@@ -3,13 +3,16 @@ import { authenticate } from "../../middleware/authenticate";
 import { refuseDeveloper } from "../../middleware/refuseDeveloper";
 import { requireAnyPermission, requirePermission } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
+import { MAX_DOCUMENT_UPLOAD_MB_CEILING, MAX_PHOTO_UPLOAD_MB_CEILING } from "@shared/constants/peopleDocuments";
+import { memoryUploadMany } from "../../lib/uploads";
+import { commitBulk, previewBulk } from "./bulk";
 import { revealContact } from "./contact";
 import { getGridColumns, saveGridColumns } from "./gridColumns";
 import { openPay } from "./pay";
 import { changePosition, getPosition } from "./position";
 import * as segments from "./segments";
 import type { ParityMeta, ParityViewer } from "./types";
-import { createSegmentSchema, gridColumnsSchema, gridKeyParamsSchema, idParamsSchema, membersQuerySchema, positionChangeSchema, reasonQuerySchema, updateSegmentSchema } from "./validators";
+import { bulkDocumentsSchema, createSegmentSchema, gridColumnsSchema, gridKeyParamsSchema, idParamsSchema, membersQuerySchema, positionChangeSchema, reasonQuerySchema, updateSegmentSchema } from "./validators";
 
 // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md). Every router: signed in, never the Developer role, a permission per action, the employee in the caller's
 // scope (in the service), validated input, an audit row for every change and every reveal.
@@ -49,3 +52,16 @@ employeeExtrasRouter.get("/:id/pay", requirePermission("payroll.salary.view"), v
 const positionKeys = requireAnyPermission("employee.edit", "attendance.config.manage");
 employeeExtrasRouter.get("/:id/position", positionKeys, validate({ params: idParamsSchema }), async (req, res) => void res.json(await getPosition(p(req), viewerOf(req))));
 employeeExtrasRouter.post("/:id/position", positionKeys, validate({ params: idParamsSchema, body: positionChangeSchema }), async (req, res) => void res.json(await changePosition(p(req), req.body, viewerOf(req), metaOf(req))));
+
+// G4: bulk documents (employee.documents.manage) and photos (employee.edit) — neither key is manager-grantable; each file goes through the single-file path,
+// which checks scope, type, size and category again.
+const MAX_BULK_FILES = 100;
+const docsUpload = memoryUploadMany(MAX_DOCUMENT_UPLOAD_MB_CEILING, MAX_BULK_FILES);
+const photosUpload = memoryUploadMany(MAX_PHOTO_UPLOAD_MB_CEILING, MAX_BULK_FILES);
+const files = (req: Request) => (req.files as Express.Multer.File[] | undefined) ?? [];
+const manageDocs = requirePermission("employee.documents.manage");
+const editEmployees = requirePermission("employee.edit");
+employeeExtrasRouter.post("/bulk/documents/preview", manageDocs, docsUpload, validate({ body: bulkDocumentsSchema }), async (req, res) => void res.json(await previewBulk("documents", files(req), req.body, viewerOf(req))));
+employeeExtrasRouter.post("/bulk/documents", manageDocs, docsUpload, validate({ body: bulkDocumentsSchema }), async (req, res) => void res.json(await commitBulk("documents", files(req), req.body, viewerOf(req), metaOf(req))));
+employeeExtrasRouter.post("/bulk/photos/preview", editEmployees, photosUpload, async (req, res) => void res.json(await previewBulk("photos", files(req), {}, viewerOf(req))));
+employeeExtrasRouter.post("/bulk/photos", editEmployees, photosUpload, async (req, res) => void res.json(await commitBulk("photos", files(req), {}, viewerOf(req), metaOf(req))));

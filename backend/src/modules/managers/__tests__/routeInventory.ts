@@ -631,6 +631,11 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/employee-extras/:id/pay": admin, // payroll.salary.view (HR-locked) + findScopedEmployee, audited
   "GET /api/employee-extras/:id/position": admin, // employee.edit / attendance.config.manage (neither grantable) + findScopedEmployee
   "POST /api/employee-extras/:id/position": admin, // the same, and the existing writers (updateJob / changeAssignment) audit the change
+  // G4 bulk uploads: employee.documents.manage / employee.edit (neither grantable); each file through the single-file path (scope, type, size, category).
+  "POST /api/employee-extras/bulk/documents/preview": admin,
+  "POST /api/employee-extras/bulk/documents": admin,
+  "POST /api/employee-extras/bulk/photos/preview": admin,
+  "POST /api/employee-extras/bulk/photos": admin,
   // G3 letters workflow: starters, grants and the serial are director-only in the service; requests need letters.issue.nopay (never manager-grantable) AND the
   // template's own grant (or a director), the person in scope (modules/letters/workflow.ts).
   "GET /api/letters/starters": adminInService("director only (assertDirector)"),

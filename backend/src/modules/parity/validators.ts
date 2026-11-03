@@ -41,3 +41,10 @@ export const positionChangeSchema = z.object({
   effectiveFrom: z.iso.date(),
   reason: z.string().trim().min(3, "Say why (a few words)").max(300),
 });
+
+// G4: the form fields that come with a bulk upload (multipart, so booleans arrive as text).
+export const bulkDocumentsSchema = z.object({
+  categoryId: z.string().trim().min(1),
+  title: z.string().trim().max(200).optional(),
+  visibleToEmployee: z.stringbool().default(false),
+});

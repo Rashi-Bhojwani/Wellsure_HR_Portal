@@ -138,3 +138,18 @@ export const createLetterGrant = async (input: { templateId: string; action: "PR
 export const revokeLetterGrant = async (id: string) => void (await apiClient.post(`/api/letters/grants/${id}/revoke`));
 export const getLetterSerial = async () => (await apiClient.get<{ serial: { prefix: string; nextNumber: number } | null }>("/api/letters/serial")).data.serial;
 export const setLetterSerial = async (input: { prefix: string; nextNumber: number }) => (await apiClient.put<{ serial: { prefix: string; nextNumber: number } }>("/api/letters/serial", input)).data.serial;
+
+// ── G4: bulk documents and photos ──
+export interface BulkResult {
+  rows: Array<{ fileName: string; employeeCode: string | null; employeeId: string | null; outcome: "READY" | "UPLOADED" | "UNMATCHED" | "BAD_NAME" | "DUPLICATE" | "WRONG_TYPE" | "ALREADY_UPLOADED" | "FAILED"; reason: string | null }>;
+  ready: number;
+  uploaded: number;
+  skipped: number;
+  total: number;
+}
+export async function bulkUpload(kind: "documents" | "photos", step: "preview" | "commit", files: File[], fields: Record<string, string> = {}): Promise<BulkResult> {
+  const form = new FormData();
+  for (const [k, val] of Object.entries(fields)) form.append(k, val);
+  for (const f of files) form.append("files", f);
+  return (await apiClient.post<BulkResult>(`/api/employee-extras/bulk/${kind}${step === "preview" ? "/preview" : ""}`, form)).data;
+}

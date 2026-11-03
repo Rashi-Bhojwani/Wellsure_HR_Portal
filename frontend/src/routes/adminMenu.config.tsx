@@ -121,6 +121,7 @@ const LayoutsPage = lazyPage(() => import("../pages/admin/payroll/LayoutsPage"),
 // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
 const SegmentsPage = lazyPage(() => import("../pages/admin/employee/parity/SegmentsPage"), "SegmentsPage");
 const LetterRequestsPage = lazyPage(() => import("../pages/admin/letters/parity/LetterRequestsPage"), "LetterRequestsPage");
+const BulkUploadPage = lazyPage(() => import("../pages/admin/employee/parity/BulkUploadPage"), "BulkUploadPage");
 const LetterSettingsPage = lazyPage(() => import("../pages/admin/letters/parity/LetterSettingsPage"), "LetterSettingsPage");
 // A-9 — end
 const SetupChecklistPage = lazyPage(() => import("../pages/admin/payroll/SetupChecklistPage"), "SetupChecklistPage");
@@ -219,6 +220,7 @@ export const adminApps: AdminApp[] = [
           { key: "bulk-import", label: "Bulk Import", path: "employee/import", icon: CloudUploadOutlined, element: ImportCenterPage, needs: { any: ["import.manage", "import.details.manage", "invitations.send"] } },
           // A-9 — begin
           { key: "segments", label: "Filters & Segments", path: "employee/segments", icon: GroupOutlined, element: SegmentsPage, needs: { any: ["employee.segments.manage"] } },
+          { key: "bulk-upload", label: "Bulk Upload", path: "employee/bulk-upload", icon: CloudUploadOutlined, element: BulkUploadPage, needs: { any: ["employee.documents.manage", "employee.edit"] } },
           { key: "letters", label: "Letters", path: "employee/letters", icon: FileTextOutlined, element: LetterRequestsPage, needs: { any: ["letters.issue.nopay"] } },
           // A-9 — end
           { key: "change-requests", label: "Change Requests", path: "employee/change-requests", icon: SolutionOutlined, element: ChangeRequestsPage },
