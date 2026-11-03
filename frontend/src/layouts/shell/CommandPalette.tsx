@@ -2,6 +2,15 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button, Input, Modal, type InputRef } from "antd";
 import { EnterOutlined, FileTextOutlined, SearchOutlined } from "@ant-design/icons";
+// A-9 G6 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md, item 3) — begin
+import { StarFilled, StarOutlined, UserOutlined } from "@ant-design/icons";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import * as adminHomeApi from "../../api/adminHome";
+import * as employeeApi from "../../api/employee";
+import { useAuth } from "../../hooks/useAuth";
+import { useDebouncedValue } from "../../ui/hooks";
+import { CATEGORY_LABEL, categoryOfPath, type PaletteCategory } from "./paletteCategory";
+// A-9 — end
 import { fs, space, v } from "../../theme/tokens";
 import { preloadElement } from "../../routes/lazyPage";
 import { useIsPhone } from "../../ui/hooks";
@@ -33,6 +42,9 @@ function score(text: string, q: string): number {
   return i === q.length ? 1 : 0;
 }
 
+// A-9 G6: on the admin portal, category chips (All, My Favourites, Employee, Payroll, Leave, Other), a star on each page to add it to or remove it from My
+// Favourites, and employees found by name, number or email — the All Employees search, so the server decides whom the person may see. Which pages appear is
+// still the menu's own decision (payroll pages are only in a director's menu).
 // "Search anything…" (board top bar, with a Ctrl/⌘ K hint): jumps to any page the person can open, or runs a shell action (theme, sign out). Client-side only —
 // it searches the menu, never data. Arrow keys move, Enter opens, Esc closes; focus returns to where it was.
 export function CommandPalette({ open, onClose, nav, actions = [] }: Props) {
@@ -41,15 +53,38 @@ export function CommandPalette({ open, onClose, nav, actions = [] }: Props) {
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(0);
   const input = useRef<InputRef>(null);
+  // A-9 G6 — begin
+  const { hasPermission } = useAuth();
+  const queryClient = useQueryClient();
+  const admin = useMemo(() => flattenLeaves(nav).some((l) => l.path.startsWith("/admin")), [nav]);
+  const [cat, setCat] = useState<PaletteCategory>("all");
+  const favourites = useQuery({ queryKey: ["admin", "favourites"], queryFn: adminHomeApi.listFavourites, enabled: open && admin });
+  const favByPath = useMemo(() => new Map((favourites.data ?? []).map((f) => [f.path, f.id])), [favourites.data]);
+  const debounced = useDebouncedValue(q.trim(), 250);
+  const findPeople = admin && hasPermission("employee.view") && debounced.length >= 2 && (cat === "all" || cat === "employee");
+  const people = useQuery({ queryKey: ["palette", "people", debounced], queryFn: () => employeeApi.listEmployees({ search: debounced, page: 1, pageSize: 6, sortBy: "employeeCode", sortDir: "asc" }), enabled: open && findPeople });
+  const toggleFav = useMutation({
+    mutationFn: async (leaf: { label: string; path: string }) => {
+      const id = favByPath.get(leaf.path);
+      if (id) await adminHomeApi.deleteFavourite(id);
+      else await adminHomeApi.createFavourite({ label: leaf.label.slice(0, 60), icon: "file", path: leaf.path });
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["admin", "favourites"] }),
+  });
+  // A-9 — end
 
   const items = useMemo(() => {
     const query = q.trim().toLowerCase();
     const pages = flattenLeaves(nav)
       .filter((l) => !l.soon)
-      .map((l) => ({ key: l.key, label: l.label, hint: l.group, icon: l.icon ? <l.icon /> : <FileTextOutlined />, s: Math.max(score(l.label, query), score(`${l.group ?? ""} ${l.label}`, query) - 0.5), run: () => navigate(l.path), element: l.element }));
-    const acts = actions.map((a) => ({ ...a, icon: a.icon ?? <EnterOutlined />, s: score(a.label, query), element: undefined }));
-    return [...pages, ...acts].filter((i) => i.s > 0).sort((a, b) => b.s - a.s).slice(0, 12);
-  }, [q, nav, actions, navigate]);
+      .filter((l) => !admin || cat === "all" || (cat === "fav" ? favByPath.has(l.path) : categoryOfPath(l.path) === cat))
+      .map((l) => ({ key: l.key, label: l.label, hint: l.group, icon: l.icon ? <l.icon /> : <FileTextOutlined />, s: Math.max(score(l.label, query), score(`${l.group ?? ""} ${l.label}`, query) - 0.5), run: () => navigate(l.path), element: l.element, fav: admin ? { label: l.label, path: l.path } : undefined }));
+    const acts = cat === "all" ? actions.map((a) => ({ ...a, icon: a.icon ?? <EnterOutlined />, s: score(a.label, query), element: undefined, fav: undefined })) : [];
+    const found = findPeople
+      ? (people.data?.rows ?? []).map((r) => ({ key: `person-${r.id}`, label: r.fullName, hint: `${r.employeeCode} · ${r.designation}`, icon: <UserOutlined />, s: 2.5, run: () => navigate(`/admin/employee/profile/${r.id}`), element: undefined, fav: undefined }))
+      : [];
+    return [...pages, ...acts].filter((i) => i.s > 0).sort((a, b) => b.s - a.s).slice(0, 12).concat(found);
+  }, [q, nav, actions, navigate, admin, cat, favByPath, findPeople, people.data]);
 
   // Each time it opens: an empty query and the first result selected (adjusted during render), then focus the box.
   const [wasOpen, setWasOpen] = useState(open);
@@ -58,6 +93,7 @@ export function CommandPalette({ open, onClose, nav, actions = [] }: Props) {
     if (open) {
       setQ("");
       setSel(0);
+      setCat("all");
     }
   }
   useEffect(() => {
@@ -86,7 +122,7 @@ export function CommandPalette({ open, onClose, nav, actions = [] }: Props) {
       style={{ top: phone ? space[3] : 96, maxWidth: phone ? `calc(100vw - ${space[6]}px)` : undefined, paddingBottom: 0 }}
       styles={{ container: { padding: space[3] } }}
       destroyOnHidden
-      aria-label="Search pages"
+      aria-label="Search pages, actions and people"
     >
       <div style={{ display: "flex", gap: space[2], alignItems: "center" }}>
       <Input
@@ -94,7 +130,7 @@ export function CommandPalette({ open, onClose, nav, actions = [] }: Props) {
         size="large"
         variant="filled"
         prefix={<SearchOutlined aria-hidden style={{ color: v.textSecondary }} />}
-        placeholder="Search pages and actions…"
+        placeholder={admin ? "Search pages, actions and people…" : "Search pages and actions…"}
         value={q}
         onChange={(e) => {
           setQ(e.target.value);
@@ -124,8 +160,28 @@ export function CommandPalette({ open, onClose, nav, actions = [] }: Props) {
         </Button>
       )}
       </div>
+      {admin && (
+        <div role="group" aria-label="Show" style={{ display: "flex", flexWrap: "wrap", gap: space[2], marginTop: space[3] }}>
+          {(Object.keys(CATEGORY_LABEL) as PaletteCategory[]).map((c) => (
+            <Button
+              key={c}
+              size="small"
+              shape="round"
+              type={cat === c ? "primary" : "default"}
+              aria-pressed={cat === c}
+              onClick={() => {
+                setCat(c);
+                setSel(0);
+                input.current?.focus();
+              }}
+            >
+              {CATEGORY_LABEL[c]}
+            </Button>
+          ))}
+        </div>
+      )}
       <ul id="ws-palette-list" role="listbox" aria-label="Results" style={{ listStyle: "none", margin: `${space[3]}px 0 0`, padding: 0, maxHeight: phone ? "calc(100vh - 140px)" : 420, overflowY: "auto" }}>
-        {items.length === 0 && <li style={{ padding: space[6], textAlign: "center", color: v.textSecondary }}>No page called “{q}”.</li>}
+        {items.length === 0 && <li style={{ padding: space[6], textAlign: "center", color: v.textSecondary }}>{cat === "fav" && !q ? "No favourites yet: press the star on a page to add it." : `Nothing called “${q}”.`}</li>}
         {items.map((it, i) => (
           <li
             key={it.key}
@@ -143,6 +199,18 @@ export function CommandPalette({ open, onClose, nav, actions = [] }: Props) {
               <span style={{ display: "block", fontWeight: 600, fontSize: fs.md }}>{it.label}</span>
               {it.hint && <span style={{ display: "block", fontSize: fs.sm, color: v.textSecondary }}>{it.hint}</span>}
             </span>
+            {it.fav && (
+              <Button
+                type="text"
+                size="small"
+                aria-label={favByPath.has(it.fav.path) ? `Remove ${it.label} from My Favourites` : `Add ${it.label} to My Favourites`}
+                icon={favByPath.has(it.fav.path) ? <StarFilled style={{ color: v.warning }} /> : <StarOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleFav.mutate(it.fav!);
+                }}
+              />
+            )}
             {i === sel && <EnterOutlined aria-hidden style={{ color: v.textSecondary }} />}
           </li>
         ))}
