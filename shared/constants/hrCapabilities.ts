@@ -21,6 +21,9 @@ export const HR_CAPABILITY_IDS = [
   "SEND_INVITATIONS",
   "IMPORT_EMPLOYEE_DETAILS",
   "ISSUE_LETTERS_NO_PAY",
+  // PEEPS-BEGIN exits
+  "MANAGE_EXITS",
+  // PEEPS-END exits
 ] as const;
 export type HrCapabilityId = (typeof HR_CAPABILITY_IDS)[number];
 
@@ -48,6 +51,9 @@ export const HR_CAPABILITIES: readonly HrCapability[] = [
   { id: "SEND_INVITATIONS", label: "Send invitations", what: "Send and resend sign-in invitations to employees. No pay data is involved.", keys: ["invitations.send"] },
   { id: "IMPORT_EMPLOYEE_DETAILS", label: "Import employee details", what: "Import org masters, employees and leave grants from a spreadsheet. A file with a salary, bank or statutory column is refused; those imports are the directors'.", keys: ["import.details.manage"] },
   { id: "ISSUE_LETTERS_NO_PAY", label: "Issue letters without pay figures", what: "Issue a letter only from a template the system has checked contains no pay figure (and no field that could carry one). Letters that carry a CTC or any pay figure are the directors'.", keys: ["letters.issue.nopay"] },
+  // PEEPS-BEGIN exits
+  { id: "MANAGE_EXITS", label: "Run exits and clearance", what: "Read and accept resignations and run non-pay clearance. Not set/Default: off. Interview answers need the interviewer relationship and are never opened by this switch.", keys: ["exits.view", "exits.manage", "exits.accept", "exits.checklist.complete"] },
+  // PEEPS-END exits
 ];
 
 export const hrCapability = (id: string): HrCapability | undefined => HR_CAPABILITIES.find((c) => c.id === id);

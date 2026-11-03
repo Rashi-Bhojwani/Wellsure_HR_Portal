@@ -458,6 +458,10 @@ model CostCentre {
 // ── Employees ────────────────────────────────────────────────────────────
 
 model Employee {
+  // PEEPS-BEGIN exits
+  resignations Resignation[]
+  exitInterviewsAsInterviewer ExitInterview[] @relation("ExitInterviewer")
+  // PEEPS-END exits
   payslipLinks      PayslipLink[]
   bankRepaymentRows BankRepaymentRow[]
   remoteRecords     RemoteAttendanceRecord[]
@@ -764,6 +768,9 @@ model ProfileChangeRequest {
 }
 
 model Separation {
+  // PEEPS-BEGIN exits
+  exitCase ExitCase?
+  // PEEPS-END exits
   id                String           @id @default(cuid())
   employeeId        String           @map("employee_id")
   employee          Employee         @relation(fields: [employeeId], references: [id])
@@ -4066,3 +4073,148 @@ model HelpdeskCategoryMove {
   @@map("helpdesk_category_moves")
 }
 // PEEPS-END helpdesk-moves
+
+// PEEPS-BEGIN exits
+model ExitSettingVersion {
+  id String @id @default(cuid())
+  key String
+  version Int
+  value Json
+  reason String
+  changedByUserId String @map("changed_by_user_id")
+  changedAt DateTime @default(now()) @map("changed_at") @db.Timestamptz(3)
+  @@unique([key, version])
+  @@map("exit_setting_versions")
+}
+
+model Resignation {
+  id String @id @default(cuid())
+  employeeId String @map("employee_id")
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  requestedLastDay DateTime @map("requested_last_day") @db.Date
+  reasonCategory String @map("reason_category")
+  reason String
+  status String @default("SUBMITTED")
+  active Boolean @default(true)
+  idempotencyKey String @map("idempotency_key")
+  requestHash String @map("request_hash")
+  submittedAt DateTime @default(now()) @map("submitted_at") @db.Timestamptz(3)
+  acceptedAt DateTime? @map("accepted_at") @db.Timestamptz(3)
+  acceptedByUserId String? @map("accepted_by_user_id")
+  approvalByUserId String? @map("approval_by_user_id")
+  approvalLastDay DateTime? @map("approval_last_day") @db.Date
+  noticeRule Json? @map("notice_rule")
+  noticeRuleVersionId String? @map("notice_rule_version_id")
+  decisionNote String? @map("decision_note")
+  changedByUserId String? @map("changed_by_user_id")
+  exitCase ExitCase?
+  history ExitHistory[]
+  @@unique([employeeId, idempotencyKey])
+  @@index([employeeId, status])
+  @@map("resignations")
+}
+
+model ExitCase {
+  id String @id @default(cuid())
+  resignationId String @unique @map("resignation_id")
+  resignation Resignation @relation(fields: [resignationId], references: [id], onDelete: Restrict)
+  separationId String @unique @map("separation_id")
+  separation Separation @relation(fields: [separationId], references: [id], onDelete: Restrict)
+  status String @default("OPEN")
+  templateId String? @map("template_id") // immutable template reference; items keep their own snapshot
+  observedLastDay DateTime @map("observed_last_day") @db.Date
+  overrideReason String? @map("override_reason")
+  overrideByUserId String? @map("override_by_user_id")
+  overrideAt DateTime? @map("override_at") @db.Timestamptz(3)
+  overrideFingerprint String? @map("override_fingerprint")
+  closedAt DateTime? @map("closed_at") @db.Timestamptz(3)
+  closeNote String? @map("close_note")
+  closureSource String? @map("closure_source")
+  changedByUserId String? @map("changed_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  items ExitChecklistItem[]
+  interview ExitInterview?
+  letterRequests ExitLetterRequest[]
+  @@index([status])
+  @@map("exit_cases")
+}
+
+model ExitChecklistTemplate {
+  id String @id @default(cuid())
+  version Int @unique
+  name String
+  items Json
+  assetOwner Json @map("asset_owner")
+  reason String
+  changedByUserId String @map("changed_by_user_id")
+  changedAt DateTime @default(now()) @map("changed_at") @db.Timestamptz(3)
+  @@map("exit_checklist_templates")
+}
+
+model ExitChecklistItem {
+  id String @id @default(cuid())
+  caseId String @map("case_id")
+  exitCase ExitCase @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  code String
+  label String
+  ownerTeam String @map("owner_team")
+  ownerEmployeeIds String[] @map("owner_employee_ids")
+  required Boolean
+  assetAssignmentId String? @map("asset_assignment_id") // assets owns its immutable assignment; no reverse ownership
+  doneAt DateTime? @map("done_at") @db.Timestamptz(3)
+  doneByUserId String? @map("done_by_user_id")
+  note String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  @@unique([caseId, code])
+  @@index([caseId])
+  @@map("exit_checklist_items")
+}
+
+model ExitInterview {
+  id String @id @default(cuid())
+  caseId String @unique @map("case_id")
+  exitCase ExitCase @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  interviewerEmployeeId String @map("interviewer_employee_id")
+  interviewer Employee @relation("ExitInterviewer", fields: [interviewerEmployeeId], references: [id], onDelete: Restrict)
+  scheduledAt DateTime @map("scheduled_at") @db.Timestamptz(3)
+  questions Json
+  questionsVersionId String @map("questions_version_id")
+  answersEncrypted Bytes? @map("answers_encrypted")
+  status String @default("SCHEDULED")
+  answeredAt DateTime? @map("answered_at") @db.Timestamptz(3)
+  purgeAfter DateTime? @map("purge_after") @db.Timestamptz(3)
+  retentionVersionId String? @map("retention_version_id")
+  changedByUserId String? @map("changed_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  @@index([interviewerEmployeeId, status])
+  @@map("exit_interviews")
+}
+
+model ExitHistory {
+  id String @id @default(cuid())
+  resignationId String @map("resignation_id")
+  resignation Resignation @relation(fields: [resignationId], references: [id], onDelete: Restrict)
+  entityType String @map("entity_type")
+  entityId String @map("entity_id")
+  event String
+  fromStatus String? @map("from_status")
+  toStatus String? @map("to_status")
+  confidential Boolean @default(false)
+  actorUserId String? @map("actor_user_id")
+  detail Json?
+  at DateTime @default(now()) @db.Timestamptz(3)
+  @@index([resignationId, at])
+  @@map("exit_history")
+}
+
+model ExitLetterRequest {
+  id String @id @default(cuid())
+  caseId String @map("case_id")
+  exitCase ExitCase @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  kind String
+  requestedByUserId String @map("requested_by_user_id")
+  requestedAt DateTime @default(now()) @map("requested_at") @db.Timestamptz(3)
+  @@unique([caseId, kind])
+  @@map("exit_letter_requests")
+}
+// PEEPS-END exits

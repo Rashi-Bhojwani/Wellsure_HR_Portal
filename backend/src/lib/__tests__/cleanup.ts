@@ -95,6 +95,10 @@ export const OPTIONAL_FK_POLICY: Record<string, Policy> = {
 // plain deleteMany on their natural key.
 export const FIXTURE_ROOT_MODELS = ["Employee", "User"] as const;
 export const STANDALONE_ROOT_MODELS: Record<string, string> = {
+  // PEEPS-BEGIN exits
+  ExitSettingVersion: "Exits director settings, explicitly cleaned by each fixture",
+  ExitChecklistTemplate: "Director-owned versioned checklist templates",
+  // PEEPS-END exits
   Role: "shared role catalog; cleanupTestRole",
   Permission: "shared permission catalog; cleanupTestData({ permissionIds })",
   Company: "single seeded company row; never created by tests",
@@ -382,6 +386,9 @@ for (const m of ["LeaveRuleVersion", "LeaveRuleApproval", "LeaveRequestDocument"
 // PEEPS-BEGIN avatar-choices
 PURGE_GUARDED_MODELS.add("EmployeeAvatarChoice");
 // PEEPS-END
+// PEEPS-BEGIN exits
+for (const model of ["ExitSettingVersion", "ExitChecklistTemplate", "ExitHistory"]) PURGE_GUARDED_MODELS.add(model);
+// PEEPS-END exits
 // PEEPS-BEGIN helpdesk-visibility
 PURGE_GUARDED_MODELS.add("HelpdeskCategoryVisibilityHistory");
 PURGE_GUARDED_MODELS.add("HelpdeskCategoryMove");

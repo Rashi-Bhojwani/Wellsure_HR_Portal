@@ -35,6 +35,13 @@ const admin: RouteClass = { kind: "admin" };
 const adminInService = (why: string): RouteClass => ({ kind: "admin", why });
 
 export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
+  // PEEPS-BEGIN exits
+  "GET /api/exits/status": everyone("exit submission readiness and reason catalogue; Developer denied"),
+  "GET /api/exits/settings": admin,
+  "PUT /api/exits/settings/:key": admin,
+  "GET /api/exits/checklist-templates": admin,
+  "POST /api/exits/checklist-templates": admin,
+  // PEEPS-END exits
   // PEEPS-BEGIN helpdesk-visibility
   "POST /api/helpdesk/tickets/:id/move": adminInService("current handler only; Developer and Payroll denied"),
   "POST /api/helpdesk/attachments/:id/content": scoped("own public attachment or live category handler; Developer denied; no storage bearer URL"),

@@ -10,7 +10,9 @@ export const DEFAULT_OFFICE_NAME = "Wellsure Office";
 export const OFFICE_WORKSPACE_KEY = "office.workspace" satisfies PermissionKey;
 
 /** What a director can switch on or off for each member. Each capability is a set of ordinary permission keys, written as per-person grants. */
-export const OFFICE_CAPABILITY_IDS = ["MANAGE_ASSETS", "PREPARE_SETTINGS", "GIVE_BADGES", "SEND_NUDGES"] as const;
+// PEEPS-BEGIN exits
+export const OFFICE_CAPABILITY_IDS = ["MANAGE_EXITS", "MANAGE_ASSETS", "PREPARE_SETTINGS", "GIVE_BADGES", "SEND_NUDGES"] as const;
+// PEEPS-END exits
 export type OfficeCapabilityId = (typeof OFFICE_CAPABILITY_IDS)[number];
 
 export interface OfficeCapability {
@@ -21,6 +23,9 @@ export interface OfficeCapability {
 }
 
 export const OFFICE_CAPABILITIES: readonly OfficeCapability[] = [
+  // PEEPS-BEGIN exits
+  { id: "MANAGE_EXITS", label: "Run exits", what: "Work non-pay exits while a director opens the exits audience to the Office. Interview answers remain relationship-scoped.", keys: ["exits.view", "exits.manage", "exits.accept", "exits.checklist.complete"] },
+  // PEEPS-END exits
   { id: "MANAGE_ASSETS", label: "Manage the asset register", what: "Add, issue, take back and transfer assets, and prepare the asset lists (a director confirms them).", keys: ["assets.view", "assets.manage", "assets.settings.manage"] },
   { id: "PREPARE_SETTINGS", label: "Prepare Peeps settings", what: "Enter the working settings (Unmute times, the badge catalogue and limits). A director confirms each one.", keys: ["peeps.settings.manage"] },
   { id: "GIVE_BADGES", label: "Give badges", what: "Give badges to any employee, while the badge settings allow the Wellsure Office to give them.", keys: ["badges.give"] },

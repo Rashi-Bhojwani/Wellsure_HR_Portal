@@ -519,6 +519,58 @@ The payroll branch is still `f613992`, already included. Stop after C-2; no next
 
 ### B.5 Exits
 
+#### C-3 authorization and implementation record (2026-11-03)
+
+The C-3 owner prompt supersedes the older audience, interview and letter text below.
+Start: clean `peeps/foundation` at `1c18350`; one coding agent. Build exits only,
+then stop at checkpoint C. No attendance/payroll/access-resolver/CI-workflow changes.
+
+**Decided by me — owner-directed overrides:** directors may read every exit interview;
+every open outside their own interview relationship is audited. HR's case-management
+access uses an additive HR capability, absent/off by default, checked on every request.
+Office members need both their explicit capability and a director's audience setting.
+Managers read only their current team's resignations; employees retain their own records.
+Interview answers are relationship-scoped to employee/interviewer/directors independently
+of the general exits audience. `EXIT_APPROVAL` is optional: Not set means no second-director
+wait. No new step is added to the required-director-choice list. Exits creates letter
+requests only; issuing and every money calculation remain outside this module.
+
+**Implementation choices:** new exit settings use append-only, director-confirmed
+versions without requiring a different director. This avoids inheriting the older
+Peeps settings store's mandatory second confirmer. Required settings gate their own
+steps: reason categories for submission, a template for clearance, questions and a
+retention choice for answers, a chosen threshold for overdue processing; notice rules
+may remain Not set without blocking acceptance. Notice output is calendar-day counts
+only, from an explicitly confirmed rule, with its source note and version recorded.
+No business catalogue, duration, route or template is seeded outside labelled DEMO data.
+
+Acceptance serializes by resignation and calls `initiateSeparation` unchanged. A stable,
+non-confidential correlation marker permits recovery if the existing separation commits
+before the Peeps link; retries adopt only that exact operation, never an unrelated exit.
+The separation is the live last-day/status source. A cancellation closes the case and
+releases the active-resignation slot with history; a moved last day recomputes the day
+count from the recorded rule. Clearance never postpones existing account deactivation.
+
+Templates explicitly choose owner teams and named owners (a manager item follows the
+current reporting line). Item owners receive only their assigned items, with no general
+case or interview access. Required asset items come from real assignments; the ready
+gate rechecks all current open assignments, including assets issued after checklist start.
+A director may override with a recorded reason; no second director is needed for that.
+Interview appointments/questions/answers use a separate projection and user rooms only;
+answers use field encryption and registered key rotation, with chosen retention enforced.
+
+The read-only hand-off exposes exact leave-ledger day totals and identifiers only.
+There is currently no asset-recovery-intent model; its id list stays empty rather than
+invent a recovery or read a money table. `onSettlementCompleted` is an internal, tested
+Peeps callback, not connected to payroll. A director may close a case with an audited note.
+
+Seven build commits: schema/settings; resignation/separation flow; clearance/assets/Tasks;
+confidential interviews; read-only hand-off; design-system screens/DEMO/scans; regression
+and mutation checks. Changed tests, lint and typecheck precede every build commit.
+Checkpoint C: merge the latest payroll branch if needed; full local checks, full backend
+alone on a fresh scratch database, browser role/theme/phone matrix, four leave types still
+off. CI is left Unverified until the owner pastes the run's job results, as requested.
+
 - **Data.**
   - `resignations`: employee, submitted at, requested last day, reason (free text + category; categories
     Not set), status, accepted by, agreed last day, notice shortfall days (computed from the confirmed

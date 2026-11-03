@@ -111,7 +111,10 @@ describe("the switches, end to end", () => {
 
   it("today's behaviour is the default: HR holds every switchable capability its role always held", async () => {
     const admin = await resolveAccess(p.hrAdmin.userId);
-    for (const c of HR_CAPABILITIES) for (const k of c.keys) expect(admin.permissions.has(k), `${c.id} ${k}`).toBe(true);
+    // PEEPS-BEGIN exits
+    // Existing capabilities keep their prior defaults; C-3 expressly starts exits OFF.
+    for (const c of HR_CAPABILITIES) for (const k of c.keys) expect(admin.permissions.has(k), `${c.id} ${k}`).toBe(c.id !== "MANAGE_EXITS");
+    // PEEPS-END exits
     const exec = await resolveAccess(p.hrExec.userId);
     expect(exec.permissions.has("attendance.view")).toBe(true);
     expect(exec.permissions.has("attendance.finalise")).toBe(false); // an HR Executive never held it

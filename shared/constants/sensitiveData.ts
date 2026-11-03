@@ -17,6 +17,9 @@ export type SensitiveClassId =
   | "PERSONAL_DOCUMENTS"
   | "SENSITIVE_TICKETS"
   | "ACCESS_CONTROL"
+  // PEEPS-BEGIN exits
+  | "EXIT_INTERVIEWS"
+  // PEEPS-END exits
   // PEEPS-BEGIN leave-types
   | "LEAVE_DOCUMENTS";
   // PEEPS-END
@@ -35,6 +38,10 @@ export interface SensitiveClass {
 }
 
 export const SENSITIVE_CLASSES: readonly SensitiveClass[] = [
+  // PEEPS-BEGIN exits
+  { id: "EXIT_INTERVIEWS", label: "Exit interviews", what: "Encrypted answers: the employee, the interviewer of record, and directors (each director open audited). HR case access never opens answers.", view: ["exits.interviews.view"], edit: [], confirm: [] },
+  // PEEPS-END exits
+
   {
     id: "SALARY_AND_PAYROLL",
     label: "Salaries and payroll figures",
@@ -128,6 +135,9 @@ export const isSensitivePermission = (key: string): boolean => SENSITIVE_SET.has
  * means saying here which it is.
  */
 export const REVIEWED_NOT_SENSITIVE: readonly PermissionKey[] = [
+  // PEEPS-BEGIN exits
+  "exits.view", "exits.manage", "exits.accept", "exits.checklist.complete", "exits.settlement.view",
+  // PEEPS-END exits
   "profile.changerequest.approve", // decides personal-details requests; a bank or statutory request also needs employee.bank.edit / employee.statutory.edit (checked in approveChangeRequest)
   "employee.view",
   "employee.create",
@@ -207,6 +217,9 @@ export const DEVELOPER_FORBIDDEN_KEYS: readonly PermissionKey[] = SENSITIVE_PERM
  */
 export const HR_ROLE_CODES = ["HR_ADMIN", "HR_EXECUTIVE"] as const;
 export const HR_FORBIDDEN_KEYS: readonly PermissionKey[] = [
+  // PEEPS-BEGIN exits
+  "exits.settings.manage", "exits.interviews.view", "exits.settlement.view",
+  // PEEPS-END exits
   // PEEPS-BEGIN helpdesk-visibility
   "helpdesk.visibility.manage",
   // PEEPS-END helpdesk-visibility

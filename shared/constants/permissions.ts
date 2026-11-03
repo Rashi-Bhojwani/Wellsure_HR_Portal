@@ -115,6 +115,10 @@ export const PERMISSION_KEYS = [
   "avatars.moderate", // remove someone else's inappropriate profile photo, with a reason (HR and the directors; never replace it)
   "leave.documents.view", // open the supporting documents of the new leave types (HR and the directors; every open audited)
   // PEEPS-END
+  // PEEPS-BEGIN exits
+  "exits.view", "exits.manage", "exits.accept", "exits.checklist.complete",
+  "exits.settings.manage", "exits.interviews.view", "exits.settlement.view",
+  // PEEPS-END exits
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
@@ -151,10 +155,23 @@ export const PERMISSION_GROUPS = [
   // PEEPS-BEGIN assets
   "Assets",
   "Wellsure Office",
+  // PEEPS-BEGIN exits
+  "Exits",
+  // PEEPS-END exits
   // PEEPS-END
 ] as const;
 
 export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
+  // PEEPS-BEGIN exits
+  "exits.view": { group: "Exits", label: "View exit cases", description: "Read non-pay exit cases within the authorized exits audience." },
+  "exits.manage": { group: "Exits", label: "Run exit clearance", description: "Run non-pay clearance. HR needs its director-controlled switch; Office members need the audience setting." },
+  "exits.accept": { group: "Exits", label: "Accept resignations", description: "Accept a resignation within scope; managers only for their own team.", managerGrantable: true },
+  "exits.checklist.complete": { group: "Exits", label: "Complete exit checklist items", description: "Complete an assigned clearance item; no interview or money access." },
+  "exits.settings.manage": { group: "Exits", label: "Set exit rules", description: "Directors choose exit audiences, notice rules, templates, questions and retention.", meta: true },
+  "exits.interviews.view": { group: "Exits", label: "Read exit interviews", description: "Directors may read every interview with an audit. Other readers must be the employee or named interviewer." },
+  "exits.settlement.view": { group: "Exits", label: "Read the exit hand-off", description: "Directors read day counts and clearance identifiers only; no money." },
+  // PEEPS-END exits
+
   "employee.view": { group: "Employees", label: "View employees", description: "See employees in their data scope: grid, profiles, history.", managerGrantable: true },
   "employee.create": { group: "Employees", label: "Add employees", description: "Run the Add Employee wizard and send invitations." },
   "employee.edit": { group: "Employees", label: "Edit employees", description: "Edit official and personal details, job and name history." },
