@@ -34,10 +34,21 @@ export function useHelpdeskRealtime(): void {
       void queryClient.invalidateQueries({ queryKey: ["documents", "employee", payload.employeeId] });
     }
 
+    // PEEPS-BEGIN helpdesk-visibility
+    function onAudienceChanged(): void {
+      void queryClient.resetQueries({ queryKey: ["helpdesk"] });
+      void queryClient.resetQueries({ queryKey: ["tasks"] });
+      void queryClient.resetQueries({ queryKey: ["notifications"] });
+    }
+    socket.on("helpdesk.access.changed", onAudienceChanged);
+    // PEEPS-END helpdesk-visibility
     socket.on("helpdesk.queue", onQueue);
     socket.on("helpdesk.ticket", onTicket);
     socket.on("letter.updated", onLetter);
     return () => {
+      // PEEPS-BEGIN helpdesk-visibility
+      socket.off("helpdesk.access.changed", onAudienceChanged);
+      // PEEPS-END helpdesk-visibility
       socket.off("helpdesk.queue", onQueue);
       socket.off("helpdesk.ticket", onTicket);
       socket.off("letter.updated", onLetter);

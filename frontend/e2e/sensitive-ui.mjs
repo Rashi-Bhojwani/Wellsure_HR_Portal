@@ -75,6 +75,10 @@ const ASSET_MARKER = "DEMO-ASSET-HELD-BY-007";
 const ASSET_MONEY = /₹|\bINR\b|\bRs\.?\s?\d/;
 async function peepsPageChecks(page, user, label, base, p, text) {
   const where = `${label} on ${base}/${p}`;
+  // PEEPS-BEGIN helpdesk-visibility
+  if (!["DEMO001", "DEMO013", "DEMO006"].includes(user) && text.includes("DEMO-C2-PRIVATE")) problems.push(`${where}: sees a ticket outside the category audience`);
+  if (user !== "DEMO001" && user !== "DEMO013" && text.includes('data-testid="helpdesk-category-visibility"')) problems.push(`${where}: the director-only visibility panel is rendered`);
+  // PEEPS-END helpdesk-visibility
   // Private nudges (D-28, D-29): nobody but the recipient and the directors ever sees the text, on any page of either portal.
   if (!PRIVATE_NUDGE_SEERS.has(user) && text.includes("DEMO-NUDGE-PRIVATE")) problems.push(`${where}: sees someone else's private nudge`);
   // The asset register: no asset screen ever shows an amount (the module records events, never money), and who holds what is not shown to another
@@ -217,6 +221,19 @@ if (doEmployee) await visit("DEMO009", "another employee", "/app", employeePaths
   if (/Demo Owner|DEMO001/.test(recipient)) problems.push("DEMO006 on /app/recognition: the sending director is shown by name instead of as the Wellsure Office");
   if (!(await textOf(director, `${BASE}/app/office/recognition`)).includes("DEMO-NUDGE-PRIVATE")) problems.push("the director's Recognition page does not show the demo nudge (is the demo seeded?)");
   }
+  // PEEPS-BEGIN helpdesk-visibility
+  if (doAdmin) {
+    const hrQueue = await textOf(await sessionFor("DEMO004"), `${BASE}/admin/employee/helpdesk`);
+    if (!hrQueue.includes("DEMO-C2-HR-VISIBLE") || hrQueue.includes("DEMO-C2-PRIVATE")) problems.push("HR's helpdesk queue does not respect the demo category audiences");
+    const directorQueue = await textOf(director, `${BASE}/admin/employee/helpdesk`);
+    if (!directorQueue.includes("DEMO-C2-PRIVATE")) problems.push("the director cannot see the private demo ticket");
+    await textOf(director, `${BASE}/admin/admin-tools/helpdesk-categories`);
+    await director.getByRole("button", { name: "Who can see this", exact: true }).first().click();
+    await director.getByTestId("helpdesk-category-visibility").waitFor();
+    pages += 1;
+    await director.keyboard.press("Escape");
+  }
+  // PEEPS-END helpdesk-visibility
 }
 // PEEPS-END
 for (const page of sessions.values()) await page.context().close();

@@ -316,5 +316,8 @@ export async function seedDemoCompany(): Promise<DemoResult> {
   // PEEPS-BEGIN leave-types
   await (await import("../../src/modules/leaveRules/demoSeed")).seedDemoLeaveTypes(who);
   // PEEPS-END
+  // PEEPS-BEGIN helpdesk-visibility
+  await (await import("../../src/modules/helpdesk/demoSeed")).seedDemoHelpdesk(who);
+  // PEEPS-END helpdesk-visibility
   return { people: active.length, paid: active.length, password: DEMO_PASSWORD, logins: DEMO_PEOPLE.map((p) => ({ code: p.code, name: p.name, role: p.role })), cycle: { start: iso(first), end: iso(last) } };
 }

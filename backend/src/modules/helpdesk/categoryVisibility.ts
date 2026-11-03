@@ -6,6 +6,7 @@ import { createHash } from "node:crypto";
 import { createNotification } from "../notifications/service";
 import { emitNotificationNew } from "../../realtime/emit";
 import { helpdeskAdminPath, helpdeskEmployeePath } from "@shared/constants/helpdesk";
+import { inForceOn } from "../../lib/effectiveDating";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { resolveAccess } from "../../lib/permissions";
@@ -35,11 +36,11 @@ export async function requireVisibilityDirector(userId: string) {
 export async function visibilityPeople() {
   const rows = await prisma.user.findMany({
     where: { status: "ACTIVE", employee: { status: "ACTIVE" } },
-    select: { id: true, employeeId: true, employee: { select: { employeeCode: true } } },
+    select: { id: true, employeeId: true, employee: { select: { employeeCode: true, nameHistory: { where: inForceOn(), select: { fullName: true } } } } },
   });
   const eligible = await Promise.all(rows.map(async (u) => ({ ...u, access: await resolveAccess(u.id) })));
   return eligible.filter((u) => u.access.permissions.has("helpdesk.manage") && !u.access.roleCodes.includes("DEVELOPER"))
-    .map((u) => ({ id: u.employeeId, employeeCode: u.employee.employeeCode, director: u.access.isSuperAdmin }));
+    .map((u) => ({ id: u.employeeId, employeeCode: u.employee.employeeCode, name: u.employee.nameHistory[0]?.fullName ?? u.employee.employeeCode, director: u.access.isSuperAdmin }));
 }
 
 export async function readVisibility(categoryId: string, viewer: HelpdeskViewer) {
@@ -59,10 +60,12 @@ export async function setVisibility(categoryId: string, input: VisibilityInput, 
   const parsed = visibilitySchema.parse(input);
   const eligible = new Set((await visibilityPeople()).map((p) => p.id));
   if (parsed.employeeIds.some((id) => !eligible.has(id))) throw new HttpError(400, "Choose active helpdesk handlers or directors.", "VALIDATION_ERROR");
-  await prisma.$transaction(async (tx) => {
+  const changed = await prisma.$transaction(async (tx) => {
     const categories = await tx.$queryRaw<Array<{ id: string; code: string }>>`SELECT id, code FROM helpdesk_categories WHERE id = ${categoryId} AND code <> ${PAYROLL_CATEGORY} FOR UPDATE`;
     const category = categories[0];
     if (!category) throw missing();
+    const policyCategory = await tx.helpdeskCategory.findUniqueOrThrow({ where: { id: categoryId }, select: { id: true, code: true, isSensitive: true, directorsOnly: true } });
+    const previousHandlers = await categoryHandlers(policyCategory);
     const before = await tx.helpdeskCategoryVisibility.findUnique({ where: { categoryId } });
     if ((before?.version ?? 0) !== parsed.version) throw new HttpError(409, "Visibility changed. Reload it before saving.", "CONFLICT");
     const data = { categoryId, categoryCode: category.code, hrRoleCodes: [...new Set(parsed.hrRoleCodes)], employeeIds: [...new Set(parsed.employeeIds)], configured: true, version: parsed.version + 1, changedByUserId: viewer.userId, changedAt: new Date() };
@@ -70,7 +73,9 @@ export async function setVisibility(categoryId: string, input: VisibilityInput, 
     const { configured: _configured, ...history } = data;
     await tx.helpdeskCategoryVisibilityHistory.create({ data: { ...history, reason: parsed.reason } });
     await writeAuditLogs([{ ...meta, action: "helpdesk.visibility.changed", entityType: "HelpdeskCategory", entityId: categoryId, before, after: { ...data, reason: parsed.reason } }], tx);
+    return { category: policyCategory, previousHandlers };
   });
+  emitAudienceRefresh([...changed.previousHandlers, ...await categoryHandlers(changed.category)]);
   return readVisibility(categoryId, viewer);
 }
 
@@ -197,7 +202,7 @@ export async function moveTicket(ticketId: string, input: z.infer<typeof moveSch
     const prior = await tx.helpdeskCategoryMove.findUnique({ where: { actorUserId_idempotencyKey: { actorUserId: viewer.userId, idempotencyKey: parsed.idempotencyKey } } });
     if (prior) {
       if (prior.requestHash !== requestHash) throw new HttpError(409, "This move key was already used for a different request.", "CONFLICT");
-      return { receipt: { id: prior.id, ticketId: prior.ticketId, moved: true }, notices: [], category: null, raiser: null };
+      return { receipt: { id: prior.id, ticketId: prior.ticketId, moved: true }, notices: [], category: null, raiser: null, previousHandlers: [] as string[] };
     }
     const locked = await tx.$queryRaw<Array<{ id: string }>>`SELECT t.id FROM helpdesk_tickets t JOIN helpdesk_categories c ON c.id = t.category_id WHERE t.id = ${ticketId} AND c.code <> ${PAYROLL_CATEGORY} FOR UPDATE OF t`;
     if (!locked.length) throw ticketMissing();
@@ -207,6 +212,7 @@ export async function moveTicket(ticketId: string, input: z.infer<typeof moveSch
     if (!target) throw missing();
     if (target.id === ticket.categoryId) throw new HttpError(409, "Choose another category.", "CONFLICT");
     await requireCategoryReady(target);
+    const previousHandlers = await categoryHandlers(ticket.category, ticket.raisedByEmployeeId);
     const move = await tx.helpdeskCategoryMove.create({ data: { ticketId, sourceCategoryId: ticket.categoryId, targetCategoryId: target.id, sourceCategoryCode: ticket.category.code, targetCategoryCode: target.code, actorUserId: viewer.userId, idempotencyKey: parsed.idempotencyKey, requestHash, reason: parsed.reason } });
     await tx.helpdeskMessage.create({ data: { ticketId, authorEmployeeId: viewer.employeeId, body: "Your ticket was moved to another team.", isSystem: true } });
     await tx.helpdeskTicket.update({ where: { id: ticketId }, data: { categoryId: target.id, assigneeEmployeeId: null, lastActivityAt: new Date() } });
@@ -219,12 +225,20 @@ export async function moveTicket(ticketId: string, input: z.infer<typeof moveSch
       const notification = await createNotification({ userId: user.id, type: "helpdesk.moved", title: raiser ? "Ticket moved" : "A ticket moved to your team", body: raiser ? "Your ticket was moved to another team." : ticket.subject, link: raiser ? helpdeskEmployeePath(ticketId) : helpdeskAdminPath(ticketId), payload: { ticketId } }, tx);
       notices.push({ employeeId: user.employeeId, notification });
     }
-    return { receipt: { id: move.id, ticketId, moved: true }, notices, category: target, raiser: ticket.raisedByEmployeeId };
+    return { receipt: { id: move.id, ticketId, moved: true }, notices, category: target, raiser: ticket.raisedByEmployeeId, previousHandlers };
   }, { timeout: 30_000 });
   if (result.category) {
+    emitAudienceRefresh(result.previousHandlers);
     const visible = new Set([...await categoryHandlers(result.category, result.raiser!), result.raiser!]);
     for (const { employeeId, notification: n } of result.notices) if (visible.has(employeeId)) emitNotificationNew(employeeId, { id: n.id, type: n.type, title: n.title, body: n.body, link: n.link, createdAt: n.createdAt.toISOString() });
     await deliverConfigured(ticketId, { includeLegacy: true });
   }
   return result.receipt;
+}
+
+// No ticket/category identifiers, counts or content. Formerly authorized
+// screens discard cached data, then refetch through the current policy.
+function emitAudienceRefresh(employeeIds: string[]) {
+  const rooms = [...new Set(employeeIds)].map((id) => `user:${id}`);
+  if (rooms.length) getSocketServer()?.to(rooms).emit("helpdesk.access.changed", {});
 }

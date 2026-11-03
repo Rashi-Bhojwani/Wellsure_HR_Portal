@@ -1,3 +1,7 @@
+// PEEPS-BEGIN helpdesk-visibility
+import { CategoryVisibilityPanel } from "../../../features/helpdesk/CategoryVisibilityPanel";
+import { useAuth } from "../../../hooks/useAuth";
+// PEEPS-END helpdesk-visibility
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Form, Input, InputNumber, Select, Switch } from "antd";
@@ -19,6 +23,12 @@ type CategoryInput = Parameters<typeof helpdeskApi.updateCategory>[1];
 // deactivated, never deleted. Every change is audit-logged.
 export function HelpdeskCategoriesPage() {
   const queryClient = useQueryClient();
+  // PEEPS-BEGIN helpdesk-visibility
+  const { hasRole, hasPermission } = useAuth();
+  const visibilityAllowed = hasRole("SUPER_ADMIN") && !hasRole("DEVELOPER") && hasPermission("helpdesk.visibility.manage");
+  const [visibilityCategory, setVisibilityCategory] = useState<HelpdeskCategoryAdmin | null>(null);
+  const visibilityButton = (c: HelpdeskCategoryAdmin) => visibilityAllowed && c.code !== "PAYROLL_SALARY" ? <Button onClick={() => setVisibilityCategory(c)}>Who can see this</Button> : null;
+  // PEEPS-END helpdesk-visibility
   const [creating, setCreating] = useState(false);
   const [form] = Form.useForm<{ code: string; name: string; isSensitive: boolean; sortOrder?: number; defaultAssigneeEmployeeId?: string }>();
   const { data = [], isLoading, error, refetch } = useQuery({ queryKey: ["helpdesk", "categories", "all"], queryFn: helpdeskApi.listAllCategories });
@@ -104,6 +114,9 @@ export function HelpdeskCategoriesPage() {
                   </div>
                 ),
               },
+              // PEEPS-BEGIN helpdesk-visibility
+              ...(visibilityAllowed ? [{ title: "Visibility", key: "visibility", render: (_: unknown, c: HelpdeskCategoryAdmin) => visibilityButton(c) }] : []),
+              // PEEPS-END helpdesk-visibility
               { title: "Sensitive", dataIndex: "isSensitive", render: (_: boolean, c) => sensitiveSwitch(c) },
               { title: "Default assignee", key: "defaultAssignee", render: (_: unknown, c) => assigneeSelect(c) },
               { title: "Tickets", dataIndex: "ticketCount", align: "right", render: (n: number) => <span style={{ fontVariantNumeric: "tabular-nums" }}>{n}</span> },
@@ -113,6 +126,9 @@ export function HelpdeskCategoriesPage() {
               title: (c) => c.name,
               subtitle: (c) => `${c.code} · ${c.ticketCount} ticket${c.ticketCount === 1 ? "" : "s"}`,
               status: (c) => (c.isActive ? (c.isSensitive ? <SensitiveChip /> : undefined) : <StatusChip status="INACTIVE">Inactive</StatusChip>),
+              // PEEPS-BEGIN helpdesk-visibility
+              actions: visibilityButton,
+              // PEEPS-END helpdesk-visibility
               fields: [
                 { label: "Sensitive", render: sensitiveSwitch },
                 { label: "Active", render: activeSwitch },
@@ -122,6 +138,9 @@ export function HelpdeskCategoriesPage() {
           />
         </Panel>
       </Stack>
+      {/* PEEPS-BEGIN helpdesk-visibility */}
+      {visibilityCategory && visibilityAllowed && <CategoryVisibilityPanel category={visibilityCategory} onClose={() => setVisibilityCategory(null)} />}
+      {/* PEEPS-END helpdesk-visibility */}
       <SideDrawer open={creating} onClose={() => setCreating(false)} title="Add category" formId={FORM_ID} primaryLabel="Create" primaryLoading={create.isPending}>
         <Form id={FORM_ID} form={form} layout="vertical" requiredMark initialValues={{ isSensitive: false }} onFinish={(values) => create.mutate(values)}>
           <Form.Item name="name" label="Name" rules={[{ required: true, max: 80 }]}>

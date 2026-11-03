@@ -18,6 +18,9 @@ export interface HelpdeskCategory {
 }
 
 export interface HelpdeskCategoryAdmin extends HelpdeskCategory {
+  // PEEPS-BEGIN helpdesk-visibility
+  visibilityState?: "NOT_SET" | "LEGACY" | "CONFIGURED";
+  // PEEPS-END helpdesk-visibility
   isActive: boolean;
   sortOrder: number;
   defaultAssignee: PersonRef | null;
@@ -54,6 +57,9 @@ export interface HelpdeskMessage {
   fromRaiser: boolean;
   body: string;
   isInternalNote?: boolean; // only present in HR's view
+  // PEEPS-BEGIN helpdesk-moves
+  isSystem?: boolean;
+  // PEEPS-END helpdesk-moves
   createdAt: string;
   attachments: HelpdeskAttachment[];
 }
@@ -128,7 +134,42 @@ export async function reopenTicket(id: string): Promise<HelpdeskTicket> {
   const { data } = await apiClient.post<HelpdeskTicket>(`/api/helpdesk/tickets/${id}/reopen`);
   return data;
 }
-export async function downloadAttachment(id: string): Promise<SignedDownload> {
-  const { data } = await apiClient.post<SignedDownload>(`/api/helpdesk/attachments/${id}/download`);
+// PEEPS-BEGIN helpdesk-visibility
+export async function downloadAttachment(id: string): Promise<SignedDownload & { guarded?: boolean }> {
+  const { data } = await apiClient.post<SignedDownload & { guarded?: boolean }>(`/api/helpdesk/attachments/${id}/download`);
   return data;
 }
+
+// PEEPS-END helpdesk-visibility
+
+// PEEPS-BEGIN helpdesk-visibility
+export interface CategoryVisibility {
+  state: "NOT_SET" | "LEGACY" | "CONFIGURED";
+  version: number;
+  hrRoleCodes: string[];
+  employeeIds: string[];
+  history: Array<{ id: string; version: number; changedAt: string; changedByUserId: string; reason: string }>;
+  people: Array<{ id: string; employeeCode: string; name?: string; director: boolean }>;
+}
+export async function readVisibility(id: string): Promise<CategoryVisibility> {
+  return (await apiClient.get<CategoryVisibility>(`/api/helpdesk/categories/${id}/visibility`)).data;
+}
+export async function setVisibility(id: string, input: { hrRoleCodes: string[]; employeeIds: string[]; reason: string; version: number }): Promise<CategoryVisibility> {
+  return (await apiClient.put<CategoryVisibility>(`/api/helpdesk/categories/${id}/visibility`, input)).data;
+}
+export async function moveTicket(id: string, input: { targetCategoryId: string; reason: string; idempotencyKey: string }) {
+  return (await apiClient.post(`/api/helpdesk/tickets/${id}/move`, input)).data;
+}
+export async function downloadGuardedAttachment(id: string, fileName: string): Promise<void> {
+  const { data } = await apiClient.post<Blob>(`/api/helpdesk/attachments/${id}/content`, {}, { responseType: "blob" });
+  const url = URL.createObjectURL(data);
+  try {
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = fileName;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+  } finally { URL.revokeObjectURL(url); }
+}
+// PEEPS-END helpdesk-visibility

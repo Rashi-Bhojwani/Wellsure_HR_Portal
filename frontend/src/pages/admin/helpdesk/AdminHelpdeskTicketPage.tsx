@@ -1,3 +1,8 @@
+// PEEPS-BEGIN helpdesk-moves
+import { useState } from "react";
+import { useAuth } from "../../../hooks/useAuth";
+import { MoveTicketDrawer } from "../../../features/helpdesk/MoveTicketDrawer";
+// PEEPS-END helpdesk-moves
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Col, Form, Row, Select } from "antd";
@@ -18,6 +23,10 @@ export function AdminHelpdeskTicketPage() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  // PEEPS-BEGIN helpdesk-moves
+  const [moving, setMoving] = useState(false);
+  const { hasRole } = useAuth();
+  // PEEPS-END helpdesk-moves
   const { data: ticket, isLoading, error, refetch } = useQuery({ queryKey: ["helpdesk", "ticket", id], queryFn: () => helpdeskApi.getTicket(id), retry: false });
   const { data: assignees = [], isLoading: loadingAssignees } = useQuery({ queryKey: ["helpdesk", "assignees"], queryFn: helpdeskApi.listAssignees });
 
@@ -70,6 +79,9 @@ export function AdminHelpdeskTicketPage() {
   return (
     <>
       <PageHeader
+        // PEEPS-BEGIN helpdesk-moves
+        actions={ticket.category.code !== "PAYROLL_SALARY" && !hasRole("DEVELOPER") ? <Button onClick={() => setMoving(true)}>Move</Button> : undefined}
+        // PEEPS-END helpdesk-moves
         back="/admin/employee/helpdesk"
         title={ticket.subject}
         subtitle={`${ticket.number} · raised by ${ticket.raisedBy.name}`}
@@ -81,6 +93,9 @@ export function AdminHelpdeskTicketPage() {
           </>
         }
       />
+      {/* PEEPS-BEGIN helpdesk-moves */}
+      {moving && <MoveTicketDrawer ticket={ticket} onClose={() => setMoving(false)} />}
+      {/* PEEPS-END helpdesk-moves */}
       <Row gutter={[space[6], space[6]]}>
         <Col xs={24} lg={16}>
           <Stack>

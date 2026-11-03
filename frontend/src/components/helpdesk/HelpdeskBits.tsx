@@ -100,7 +100,11 @@ function formatSize(bytes: number): string {
 
 async function download(id: string) {
   try {
-    startDownload(await helpdeskApi.downloadAttachment(id));
+    // PEEPS-BEGIN helpdesk-visibility
+    const descriptor = await helpdeskApi.downloadAttachment(id);
+    if (descriptor.guarded) await helpdeskApi.downloadGuardedAttachment(id, descriptor.fileName);
+    else startDownload(descriptor);
+    // PEEPS-END helpdesk-visibility
   } catch (err) {
     toast.error(apiErrorMessage(err, "Couldn't download that file."));
   }
@@ -134,6 +138,9 @@ export function Thread({ messages, viewer }: { messages: HelpdeskMessage[]; view
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: space[4] }}>
       {messages.map((m, i) => {
+        // PEEPS-BEGIN helpdesk-moves
+        if (m.isSystem) return <div key={m.id} role="note" style={{ color: v.textSecondary, textAlign: "center", fontSize: fs.sm }}>{m.body} · {formatDateTime(m.createdAt)}</div>;
+        // PEEPS-END helpdesk-moves
         const mine = viewer === "raiser" ? m.fromRaiser : !m.fromRaiser;
         const name = m.fromRaiser ? m.author.name : viewer === "raiser" ? `${m.author.name} (HR)` : m.author.name;
         const newDay = i === 0 || dayKey(messages[i - 1]!.createdAt) !== dayKey(m.createdAt);

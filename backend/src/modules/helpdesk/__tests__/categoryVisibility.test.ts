@@ -148,7 +148,16 @@ describe("general category visibility", () => {
     expect(raised.status).toBe(201);
     const ticketId = raised.body.id as string;
     const body = { targetCategoryId: target, reason: "DEMO confidential reason", idempotencyKey: randomUUID() };
-    const [a, b] = await Promise.all([move("hr", ticketId, body), move("hr", ticketId, body)]);
+    const events: Array<{ rooms: string[]; event: string; args: unknown[] }> = [];
+    const previous = getSocketServer();
+    setSocketServer({ to: (room) => ({ emit: (event, ...args) => { events.push({ rooms: Array.isArray(room) ? room : [room], event, args }); } }) });
+    let a, b;
+    try { [a, b] = await Promise.all([move("hr", ticketId, body), move("hr", ticketId, body)]); }
+    finally { setSocketServer(previous); }
+    const removed = events.filter((e) => e.rooms.includes(`user:${people.hr.employeeId}`));
+    expect(removed.length).toBeGreaterThan(0);
+    expect(removed.every((e) => e.event === "helpdesk.access.changed" && JSON.stringify(e.args) === "[{}]")).toBe(true);
+    expect(events.filter((e) => e.event === "helpdesk.ticket").every((e) => !e.rooms.includes("perm:helpdesk.manage"))).toBe(true);
     expect([a.status, b.status]).toEqual([200, 200]);
     expect(a.body).toEqual(b.body);
     expect(await prisma.helpdeskCategoryMove.count({ where: { ticketId } })).toBe(1);
