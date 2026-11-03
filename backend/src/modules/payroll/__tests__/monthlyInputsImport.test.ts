@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { createHash } from "node:crypto";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "../../../lib/prisma";
@@ -87,7 +88,15 @@ describe("monthly inputs import", () => {
   });
 
   it("confirming writes the figures once, for each month of an inclusive range, void any confirmation, and the same file is never applied twice", async () => {
-    const file = `${header()}\n${row("a", "15-Jul-2026", "20-Aug-2026", "700", "", "two months")}\n`;
+    // A harmless file hash can contain the amount's digits: cover that case deliberately.
+    let file = "";
+    let fileHash = "";
+    for (let salt = 0; salt < 10_000; salt += 1) {
+      file = `${header()}\n${row("a", "15-Jul-2026", "20-Aug-2026", "700", "", `DEMO two months ${salt}`)}\n`;
+      fileHash = createHash("sha256").update(file).digest("hex");
+      if (fileHash.includes("700")) break;
+    }
+    expect(fileHash).toContain("700");
     const r = await upload(file);
     expect(r.body.analysis.rows[0].months).toEqual(["2026-07-01", "2026-08-01"]); // the months containing From and Till, inclusive
     const stale = await apply(r.body.id, "not-the-fingerprint-you-saw");
@@ -101,8 +110,8 @@ describe("monthly inputs import", () => {
     const batch = await prisma.payrollInputBatch.findUniqueOrThrow({ where: { id: r.body.id } });
     expect([batch.status, batch.appliedByUserId]).toEqual(["APPLIED", w.maker.userId]);
     const audit = await prisma.auditLog.findFirstOrThrow({ where: { action: "payroll.monthly_inputs.import_applied", entityId: r.body.id } });
-    expect(JSON.stringify(audit.after)).not.toContain("700"); // the audit row has counts, never a figure
-    expect(JSON.stringify(audit.after)).toContain("redacted");
+    // Exact allowed fields: counts and a content hash are fine; figures and extra fields are not.
+    expect(audit.after).toEqual({ cells: 2, months: ["2026-07-01", "2026-08-01"], rows: 1, skippedInvalidRows: 0, skipInvalid: false, fileHash, amounts: "redacted" });
     // Again: the same bytes. It is recognised, and cannot be applied.
     const again = await upload(file);
     expect(again.body.id).toBe(r.body.id);
