@@ -552,7 +552,7 @@ export async function downloadAttachment(attachmentId: string, viewer: HelpdeskV
   if (access.mode === "raiser" && attachment.message.isInternalNote) throw new HttpError(404, "Attachment not found.", "NOT_FOUND");
   // PEEPS-BEGIN helpdesk-visibility
   await categoryVisibility.auditDirectorOpen(ticket!, viewer, meta);
-  const guarded = await categoryVisibility.downloadDescriptor(attachment.id, ticket!.category);
+  const guarded = await categoryVisibility.downloadDescriptor(attachment.id, ticket!.category, ticket!.id);
   if (guarded) return { ...guarded, fileName: attachment.fileName, expiresInSeconds: DOWNLOAD_URL_TTL_SECONDS };
   // PEEPS-END helpdesk-visibility
   const url = await storageService.getObjectSignedUrl(attachment.fileKey, DOWNLOAD_URL_TTL_SECONDS, { downloadFileName: attachment.fileName });

@@ -230,6 +230,8 @@ if (doEmployee) await visit("DEMO009", "another employee", "/app", employeePaths
     await textOf(director, `${BASE}/admin/admin-tools/helpdesk-categories`);
     await director.getByRole("button", { name: "Who can see this", exact: true }).first().click();
     await director.getByTestId("helpdesk-category-visibility").waitFor();
+    const visibilityText = await director.evaluate(() => document.body.innerText + "\n" + document.body.innerHTML);
+    for (const secret of SECRETS) if (secret.re.test(visibilityText)) problems.push(`the category visibility panel shows ${secret.label}`);
     pages += 1;
     await director.keyboard.press("Escape");
   }

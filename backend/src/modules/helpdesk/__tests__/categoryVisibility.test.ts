@@ -7,12 +7,12 @@ import { app, authHeader, cleanupEmployeeTestOrgMasters, cleanupFullTestEmployee
 import { getSocketServer, setSocketServer } from "../../../realtime/emit";
 import { cleanupTestHelpdeskCategories, createTestHelpdeskCategory, pngWithExif, raise, reply } from "./helpdeskTestHelpers";
 import { resolveAccess } from "../../../lib/permissions";
-import { setVisibility } from "../categoryVisibility";
+import { readVisibility, setVisibility } from "../categoryVisibility";
 
 describe("general category visibility", () => {
   let org: TestOrgMasters;
   type Person = { userId: string; employeeId: string; employeeCode: string };
-  const people = {} as Record<"director" | "hr" | "outsider" | "employee" | "other" | "developer", Person>;
+  const people = {} as Record<"director" | "hr" | "outsider" | "employee" | "other" | "developer" | "hrExec", Person>;
   const tokens = {} as Record<keyof typeof people, string>;
   const ids: string[] = [];
   let categoryId: string;
@@ -21,7 +21,7 @@ describe("general category visibility", () => {
   const setting = (extra: object = {}) => ({ version: 0, hrRoleCodes: [], employeeIds: [people.director.employeeId], reason: "DEMO audience decision", ...extra });
   beforeAll(async () => {
     org = await createEmployeeTestOrgMasters();
-    for (const [who, roleCode] of Object.entries({ director: "SUPER_ADMIN", hr: "HR_ADMIN", outsider: "HR_ADMIN", employee: "EMPLOYEE", other: "EMPLOYEE", developer: "DEVELOPER" })) {
+    for (const [who, roleCode] of Object.entries({ director: "SUPER_ADMIN", hr: "HR_ADMIN", outsider: "HR_ADMIN", employee: "EMPLOYEE", other: "EMPLOYEE", developer: "DEVELOPER", hrExec: "HR_EXECUTIVE" })) {
       const key = who as keyof typeof people;
       people[key] = await createFullTestEmployee(org, { roleCode });
       tokens[key] = await loginAs(people[key].employeeCode);
@@ -45,6 +45,7 @@ describe("general category visibility", () => {
   });
   it("the service guard rejects HR even if passed a forged director permission", async () => {
     await expect(setVisibility(categoryId, setting(), { ...people.hr, permissions: new Set(["helpdesk.visibility.manage"]) }, { actorUserId: people.hr.userId })).rejects.toMatchObject({ status: 403 });
+    await expect(readVisibility(categoryId, { ...people.hr, permissions: new Set(["helpdesk.visibility.manage"]) })).rejects.toMatchObject({ status: 403 });
     expect((await resolveAccess(people.hr.userId)).permissions.has("helpdesk.visibility.manage")).toBe(false);
   });
   it("a director chooses an audience with a reason, version check and immutable history", async () => {
@@ -144,9 +145,12 @@ describe("general category visibility", () => {
   it("concurrent identical moves commit one receipt, audit, system note and notification; the former handler immediately loses access", async () => {
     const source = await configuredCategory([people.hr.employeeId]);
     const target = await configuredCategory([people.director.employeeId]);
-    const raised = await raise(tokens.employee, { categoryId: source, subject: "DEMO moving", body: "DEMO thread survives" });
+    const raised = await raise(tokens.employee, { categoryId: source, subject: "DEMO moving", body: "DEMO thread survives" }, [{ buffer: await pngWithExif(), filename: "demo.png", contentType: "image/png" }]);
     expect(raised.status).toBe(201);
     const ticketId = raised.body.id as string;
+    const attachmentId = raised.body.messages[0].attachments[0].id as string;
+    const descriptor = await apiPost("hr", `/api/helpdesk/attachments/${attachmentId}/download`);
+    expect((await apiPost("hr", descriptor.body.url)).status).toBe(200);
     const body = { targetCategoryId: target, reason: "DEMO confidential reason", idempotencyKey: randomUUID() };
     const events: Array<{ rooms: string[]; event: string; args: unknown[] }> = [];
     const previous = getSocketServer();
@@ -165,6 +169,9 @@ describe("general category visibility", () => {
     expect(await prisma.auditLog.count({ where: { entityId: ticketId, action: "helpdesk.ticket.moved" } })).toBe(1);
     expect((await get("hr", `/tickets/${ticketId}`)).status).toBe(404);
     expect((await get("hr", `/queue?categoryId=${target}`)).body).toMatchObject({ items: [], total: 0 });
+    expect((await apiPost("hr", descriptor.body.url)).status).toBe(404);
+    expect((await apiPost("employee", descriptor.body.url)).status).toBe(200);
+    expect(JSON.stringify((await apiGet("hr", "/api/notifications?page=1&pageSize=100")).body)).not.toContain(ticketId);
     expect((await move("hr", ticketId, body)).body).toEqual(a.body);
     expect((await move("hr", ticketId, { ...body, reason: "DEMO different" })).status).toBe(409);
     const thread = await get("employee", `/tickets/${ticketId}`);
@@ -205,6 +212,60 @@ describe("general category visibility", () => {
     // This fixture used the pre-existing Payroll API, so its cleanup must
     // remove that test ticket without deleting the seeded category itself.
     await deleteWithDependents("HelpdeskTicket", [payrollTicket.body.id]);
+  });
+
+  it("chosen HR roles intersect the sensitive permission, while directors retain audited access", async () => {
+    const categoryId = await configuredCategory([people.director.employeeId], { isSensitive: true });
+    expect((await put("director", `/categories/${categoryId}/visibility`, setting({ version: 1, employeeIds: [], hrRoleCodes: ["HR_EXECUTIVE"] }))).status).toBe(200);
+    const raised = await raise(tokens.employee, { categoryId, subject: "DEMO sensitive intersection", body: "DEMO" });
+    expect(raised.status).toBe(201);
+    expect((await get("hrExec", `/queue?categoryId=${categoryId}`)).body).toMatchObject({ items: [], total: 0 });
+    expect((await get("hrExec", `/tickets/${raised.body.id}`)).status).toBe(404);
+    expect((await get("hr", `/tickets/${raised.body.id}`)).status).toBe(404);
+    expect((await get("director", `/tickets/${raised.body.id}`)).status).toBe(200);
+    // The selected role now has a non-sensitive category it may work.
+    await prisma.helpdeskCategory.update({ where: { id: categoryId }, data: { isSensitive: false } });
+    expect((await get("hrExec", `/tickets/${raised.body.id}`)).status).toBe(200);
+    expect((await get("hr", `/tickets/${raised.body.id}`)).status).toBe(404);
+  });
+  it("a Not set target refuses a move without a receipt, note, audit or category change", async () => {
+    const source = await configuredCategory([people.hr.employeeId]);
+    const target = await prisma.helpdeskCategory.create({ data: { code: `TEST_C2_${randomUUID().slice(0, 8)}`, name: "DEMO Not set target" } });
+    ids.push(target.id);
+    const raised = await raise(tokens.employee, { categoryId: source, subject: "DEMO no activation", body: "DEMO" });
+    const result = await move("hr", raised.body.id, { targetCategoryId: target.id, reason: "DEMO", idempotencyKey: randomUUID() });
+    expect(result.status).toBe(409);
+    expect(result.body.error.message).toBe("This category is not set up yet");
+    expect(await prisma.helpdeskCategoryMove.count({ where: { ticketId: raised.body.id } })).toBe(0);
+    expect(await prisma.helpdeskMessage.count({ where: { ticketId: raised.body.id, isSystem: true } })).toBe(0);
+    expect(await prisma.auditLog.count({ where: { entityId: raised.body.id, action: "helpdesk.ticket.moved" } })).toBe(0);
+    expect((await get("hr", `/tickets/${raised.body.id}`)).body.category.id).toBe(source);
+  });
+
+  it("moving into a legacy sensitive category removes the former handler's stored notifications too", async () => {
+    const source = await configuredCategory([people.hrExec.employeeId]);
+    const target = await createTestHelpdeskCategory({ isSensitive: true });
+    ids.push(target.id);
+    const raised = await raise(tokens.employee, { categoryId: source, subject: "DEMO legacy target", body: "DEMO" }, [{ buffer: await pngWithExif(), filename: "demo.png", contentType: "image/png" }]);
+    const ticketId = raised.body.id as string;
+    const attachmentId = raised.body.messages[0].attachments[0].id as string;
+    const descriptor = await apiPost("hrExec", `/api/helpdesk/attachments/${attachmentId}/download`);
+    expect(JSON.stringify((await apiGet("hrExec", "/api/notifications?page=1&pageSize=100")).body)).toContain(ticketId);
+    const result = await move("hrExec", ticketId, { targetCategoryId: target.id, reason: "DEMO handover", idempotencyKey: randomUUID() });
+    expect(result.status).toBe(200);
+    expect((await get("hrExec", `/tickets/${ticketId}`)).status).toBe(404);
+    expect(JSON.stringify((await apiGet("hrExec", "/api/notifications?page=1&pageSize=100")).body)).not.toContain(ticketId);
+    expect((await apiPost("hrExec", descriptor.body.url)).status).toBe(404);
+    expect((await apiPost("employee", descriptor.body.url)).status).toBe(200);
+    expect((await apiPost("employee", `/api/helpdesk/attachments/${attachmentId}/download`)).body.guarded).toBe(true);
+    const categories = await get("hrExec", "/categories/all");
+    expect(categories.body.find((c: { id: string }) => c.id === target.id).ticketCount).toBe(0);
+    const events: Array<{ rooms: string[]; event: string }> = [];
+    const previous = getSocketServer();
+    setSocketServer({ to: (room) => ({ emit: (event) => { events.push({ rooms: Array.isArray(room) ? room : [room], event }); } }) });
+    try { expect((await reply(tokens.employee, ticketId, { body: "DEMO follow-up" })).status).toBe(201); }
+    finally { setSocketServer(previous); }
+    expect(events.every((e) => !e.rooms.includes("perm:helpdesk.manage") && !e.rooms.includes(`user:${people.hrExec.employeeId}`))).toBe(true);
   });
 
 });

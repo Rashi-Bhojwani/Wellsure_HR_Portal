@@ -39,10 +39,10 @@ describe("category visibility controls", () => {
     await waitFor(() => expect(api.setVisibility).toHaveBeenCalledWith(category.id, { version: 0, hrRoleCodes: [], employeeIds: ["demo-director"], reason: "DEMO chosen audience" }));
   });
   it("a denied server response renders the forbidden state without the audience", async () => {
-    vi.mocked(api.readVisibility).mockRejectedValue({ response: { status: 403 } });
+    vi.mocked(api.readVisibility).mockRejectedValue({ isAxiosError: true, response: { status: 403 } });
     draw();
-    await waitFor(() => expect(screen.queryByRole("combobox")).toBeNull());
-    await waitFor(() => expect(api.readVisibility).toHaveBeenCalled());
+    await screen.findByText("You don't have access");
+    expect(screen.queryByRole("combobox")).toBeNull();
     expect(screen.queryByTestId("helpdesk-category-visibility")).toBeNull();
   });
 });

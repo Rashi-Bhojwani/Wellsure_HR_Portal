@@ -118,10 +118,13 @@ export async function requireVisibleAssignee(category: Category, employeeId?: st
   if (!(await categoryHandlers(category)).includes(employeeId)) throw new HttpError(400, "Choose a handler who can see this category.", "VALIDATION_ERROR");
 }
 
-// Returns false for legacy/Payroll so callers run the existing delivery path.
+// Returns false for untouched legacy/Payroll so callers use the existing path.
 // Configured-category events never enter a permission room or a stale assignee's room.
 export async function deliverConfigured(ticketId: string, opts: { internal?: boolean; includeLegacy?: boolean; notification?: { type: string; title: string; body: string; link: string; payload: Record<string, unknown> }; onlyEmployeeId?: string } = {}): Promise<boolean> {
-  const ticket = await prisma.helpdeskTicket.findFirst({ where: { id: ticketId, category: { code: { not: PAYROLL_CATEGORY }, ...(!opts.includeLegacy && { visibility: { isNot: null } }) } }, select: { raisedByEmployeeId: true, category: { select: { id: true, code: true, isSensitive: true, directorsOnly: true } } } });
+  const ticket = await prisma.helpdeskTicket.findFirst({ where: {
+    id: ticketId, category: { code: { not: PAYROLL_CATEGORY } },
+    ...(!opts.includeLegacy && { OR: [{ category: { visibility: { isNot: null } } }, { categoryMoves: { some: {} } }] }),
+  }, select: { raisedByEmployeeId: true, category: { select: { id: true, code: true, isSensitive: true, directorsOnly: true } } } });
   if (!ticket) return false;
   const handlers = await categoryHandlers(ticket.category, ticket.raisedByEmployeeId);
   if (opts.notification) for (const id of handlers) {
@@ -144,7 +147,11 @@ export async function categoryAdminVisibility<T extends Category & { ticketCount
   return Promise.all(rows.map(async (c) => {
     if (c.code === PAYROLL_CATEGORY) return c;
     const visibility = await prisma.helpdeskCategoryVisibility.findUnique({ where: { categoryId: c.id } });
-    if (!visibility) return { ...c, visibilityState: "LEGACY" };
+    if (!visibility) {
+      const denied = !viewer.permissions.has("helpdesk.manage") || (c.isSensitive && !viewer.permissions.has("helpdesk.sensitive.view")) || (c.directorsOnly && !access.isSuperAdmin);
+      const hiddenMoves = denied ? await prisma.helpdeskTicket.count({ where: { categoryId: c.id, raisedByEmployeeId: { not: viewer.employeeId }, categoryMoves: { some: {} } } }) : 0;
+      return { ...c, ticketCount: c.ticketCount - hiddenMoves, visibilityState: "LEGACY" };
+    }
     const ticketCount = await prisma.helpdeskTicket.count({ where: { categoryId: c.id, OR: [ { raisedByEmployeeId: viewer.employeeId }, { AND: [audience, ...(!viewer.permissions.has("helpdesk.manage") || (c.isSensitive && !viewer.permissions.has("helpdesk.sensitive.view")) || (c.directorsOnly && !access.isSuperAdmin) ? [{ id: { in: [] as string[] } }] : [])] } ] } });
     return { ...c, ticketCount, visibilityState: visibility.configured ? "CONFIGURED" : "NOT_SET" };
   }));
@@ -157,11 +164,16 @@ export async function notificationAudienceWhere(userId: string): Promise<Prisma.
   if (!user) return {};
   const access = await resolveAccess(userId);
   const viewer = { userId, employeeId: user.employeeId, permissions: access.permissions };
-  const categories = await prisma.helpdeskCategory.findMany({ where: { code: { not: PAYROLL_CATEGORY }, visibility: { isNot: null } }, select: { id: true, code: true, isSensitive: true, directorsOnly: true } });
+  const categories = await prisma.helpdeskCategory.findMany({ where: { code: { not: PAYROLL_CATEGORY } }, select: { id: true, code: true, isSensitive: true, directorsOnly: true } });
   const hidden: string[] = [];
   for (const c of categories) if (!access.permissions.has("helpdesk.manage") || (c.isSensitive && !access.permissions.has("helpdesk.sensitive.view")) || (c.directorsOnly && !access.isSuperAdmin) || !(await permitsCategory(c, viewer))) hidden.push(c.id);
   if (!hidden.length) return {};
-  const tickets = await prisma.helpdeskTicket.findMany({ where: { categoryId: { in: hidden }, raisedByEmployeeId: { not: user.employeeId } }, select: { id: true } });
+  const tickets = await prisma.helpdeskTicket.findMany({ where: {
+    categoryId: { in: hidden }, raisedByEmployeeId: { not: user.employeeId },
+    // Also cover moves into legacy sensitive/director-only categories. Leave
+    // untouched legacy tickets on their original notification behaviour.
+    OR: [{ category: { visibility: { isNot: null } } }, { categoryMoves: { some: {} } }],
+  }, select: { id: true } });
   if (!tickets.length) return {};
   return { NOT: { type: { startsWith: "helpdesk." }, OR: tickets.map((t) => ({ payload: { path: ["ticketId"], equals: t.id } })) } };
 }
@@ -171,7 +183,10 @@ export async function notificationAudienceWhere(userId: string): Promise<Prisma.
 export async function configuredDownload(attachmentId: string, viewer: HelpdeskViewer, meta?: ActorMeta) {
   const access = await resolveAccess(viewer.userId);
   if (access.roleCodes.includes("DEVELOPER")) throw new HttpError(403, "Helpdesk downloads are unavailable to Developer.", "FORBIDDEN");
-  const a = await prisma.helpdeskAttachment.findFirst({ where: { id: attachmentId, message: { ticket: { category: { code: { not: PAYROLL_CATEGORY }, visibility: { isNot: null } } } } }, include: { message: { include: { ticket: { include: { category: true } } } } } });
+  const a = await prisma.helpdeskAttachment.findFirst({ where: { id: attachmentId, message: { ticket: {
+    category: { code: { not: PAYROLL_CATEGORY } },
+    OR: [{ category: { visibility: { isNot: null } } }, { categoryMoves: { some: {} } }],
+  } } }, include: { message: { include: { ticket: { include: { category: true } } } } } });
   if (!a) throw new HttpError(404, "Attachment not found.", "NOT_FOUND");
   const t = a.message.ticket;
   const raiser = t.raisedByEmployeeId === viewer.employeeId;
@@ -179,8 +194,10 @@ export async function configuredDownload(attachmentId: string, viewer: HelpdeskV
   await auditDirectorOpen(t, viewer, meta);
   return { ...(await storageService.getObject(a.fileKey)), fileName: a.fileName };
 }
-export async function downloadDescriptor(attachmentId: string, category: Category) {
-  if (category.code === PAYROLL_CATEGORY || !(await prisma.helpdeskCategoryVisibility.count({ where: { categoryId: category.id } }))) return null;
+export async function downloadDescriptor(attachmentId: string, category: Category, ticketId: string) {
+  if (category.code === PAYROLL_CATEGORY) return null;
+  const guarded = await prisma.helpdeskTicket.count({ where: { id: ticketId, OR: [{ category: { visibility: { isNot: null } } }, { categoryMoves: { some: {} } }] } });
+  if (!guarded) return null;
   return { url: `/api/helpdesk/attachments/${encodeURIComponent(attachmentId)}/content`, guarded: true };
 }
 
