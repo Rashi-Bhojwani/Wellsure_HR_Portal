@@ -1591,6 +1591,8 @@ model HelpdeskCategory {
   // PEEPS-BEGIN helpdesk-visibility
   visibility        HelpdeskCategoryVisibility?
   visibilityHistory HelpdeskCategoryVisibilityHistory[]
+  movesFrom HelpdeskCategoryMove[] @relation("HelpdeskMoveSource")
+  movesTo HelpdeskCategoryMove[] @relation("HelpdeskMoveTarget")
   // PEEPS-END helpdesk-visibility
 
   @@map("helpdesk_categories")
@@ -1615,6 +1617,9 @@ model HelpdeskTicket {
   updatedAt          DateTime             @updatedAt @map("updated_at")
 
   messages HelpdeskMessage[]
+  // PEEPS-BEGIN helpdesk-moves
+  categoryMoves HelpdeskCategoryMove[]
+  // PEEPS-END helpdesk-moves
 
   @@index([raisedByEmployeeId])
   @@index([assigneeEmployeeId])
@@ -1634,6 +1639,9 @@ model HelpdeskMessage {
   isInternalNote   Boolean        @default(false) @map("is_internal_note")
   createdAt        DateTime       @default(now()) @map("created_at")
 
+  // PEEPS-BEGIN helpdesk-moves
+  isSystem Boolean @default(false) @map("is_system")
+  // PEEPS-END helpdesk-moves
   attachments HelpdeskAttachment[]
 
   @@index([ticketId, createdAt])
@@ -4037,3 +4045,24 @@ model HelpdeskCategoryVisibilityHistory {
   @@map("helpdesk_category_visibility_history")
 }
 // PEEPS-END helpdesk-visibility
+
+// PEEPS-BEGIN helpdesk-moves
+model HelpdeskCategoryMove {
+  id String @id @default(cuid())
+  ticketId String @map("ticket_id")
+  ticket HelpdeskTicket @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  sourceCategoryId String @map("source_category_id")
+  sourceCategory HelpdeskCategory @relation("HelpdeskMoveSource", fields: [sourceCategoryId], references: [id], onDelete: Restrict)
+  targetCategoryId String @map("target_category_id")
+  targetCategory HelpdeskCategory @relation("HelpdeskMoveTarget", fields: [targetCategoryId], references: [id], onDelete: Restrict)
+  sourceCategoryCode String @map("source_category_code")
+  targetCategoryCode String @map("target_category_code")
+  actorUserId String @map("actor_user_id")
+  idempotencyKey String @map("idempotency_key")
+  requestHash String @map("request_hash")
+  reason String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  @@unique([actorUserId, idempotencyKey])
+  @@map("helpdesk_category_moves")
+}
+// PEEPS-END helpdesk-moves

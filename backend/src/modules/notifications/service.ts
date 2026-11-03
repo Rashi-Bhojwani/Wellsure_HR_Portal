@@ -13,8 +13,10 @@ import type { CreateNotificationInput } from "./types";
 // on whether anyone is connected to receive the socket event, so callers
 // invoke this directly, as its own step, before they emit, never through
 // the emit helper.
-export async function createNotification(input: CreateNotificationInput) {
-  return prisma.notification.create({
+// PEEPS-BEGIN helpdesk-moves
+export async function createNotification(input: CreateNotificationInput, client: Pick<Prisma.TransactionClient, "notification"> = prisma) {
+  return client.notification.create({
+// PEEPS-END helpdesk-moves
     data: {
       userId: input.userId,
       type: input.type,

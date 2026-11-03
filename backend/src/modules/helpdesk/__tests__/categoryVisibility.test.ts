@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { deleteWithDependents } from "../../../lib/__tests__/cleanup";
 import { prisma } from "../../../lib/prisma";
 import { app, authHeader, cleanupEmployeeTestOrgMasters, cleanupFullTestEmployee, createEmployeeTestOrgMasters, createFullTestEmployee, loginAs, type TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
 import { getSocketServer, setSocketServer } from "../../../realtime/emit";
@@ -137,6 +138,64 @@ describe("general category visibility", () => {
     expect((await get("employee", `/tickets/${ticketId}`)).status).toBe(200);
     expect((await get("director", `/tickets/${ticketId}`)).status).toBe(200);
     expect(await prisma.auditLog.count({ where: { entityId: ticketId, action: "helpdesk.ticket.director_opened", actorUserId: people.director.userId } })).toBeGreaterThan(0);
+  });
+
+  const move = (who: keyof typeof people, ticketId: string, body: object) => request(app).post(`/api/helpdesk/tickets/${ticketId}/move`).set(...authHeader(tokens[who])).send(body);
+  it("concurrent identical moves commit one receipt, audit, system note and notification; the former handler immediately loses access", async () => {
+    const source = await configuredCategory([people.hr.employeeId]);
+    const target = await configuredCategory([people.director.employeeId]);
+    const raised = await raise(tokens.employee, { categoryId: source, subject: "DEMO moving", body: "DEMO thread survives" });
+    expect(raised.status).toBe(201);
+    const ticketId = raised.body.id as string;
+    const body = { targetCategoryId: target, reason: "DEMO confidential reason", idempotencyKey: randomUUID() };
+    const [a, b] = await Promise.all([move("hr", ticketId, body), move("hr", ticketId, body)]);
+    expect([a.status, b.status]).toEqual([200, 200]);
+    expect(a.body).toEqual(b.body);
+    expect(await prisma.helpdeskCategoryMove.count({ where: { ticketId } })).toBe(1);
+    expect(await prisma.helpdeskMessage.count({ where: { ticketId, isSystem: true } })).toBe(1);
+    expect(await prisma.auditLog.count({ where: { entityId: ticketId, action: "helpdesk.ticket.moved" } })).toBe(1);
+    expect((await get("hr", `/tickets/${ticketId}`)).status).toBe(404);
+    expect((await get("hr", `/queue?categoryId=${target}`)).body).toMatchObject({ items: [], total: 0 });
+    expect((await move("hr", ticketId, body)).body).toEqual(a.body);
+    expect((await move("hr", ticketId, { ...body, reason: "DEMO different" })).status).toBe(409);
+    const thread = await get("employee", `/tickets/${ticketId}`);
+    expect(thread.status).toBe(200);
+    expect(thread.body.messages.map((m: { body: string }) => m.body)).toEqual(["DEMO thread survives", "Your ticket was moved to another team."]);
+    expect(thread.body.messages[1].isSystem).toBe(true);
+    expect(thread.body.assignee).toBeNull();
+    const notices = await prisma.notification.findMany({ where: { type: "helpdesk.moved", userId: people.employee.userId } });
+    const own = notices.filter((n) => (n.payload as { ticketId?: string })?.ticketId === ticketId);
+    expect(own).toHaveLength(1);
+    expect(own[0]!.body).toBe("Your ticket was moved to another team.");
+    expect(JSON.stringify(own)).not.toContain(body.reason);
+    await expect(prisma.helpdeskCategoryMove.update({ where: { id: a.body.id }, data: { reason: "changed" } })).rejects.toThrow();
+  });
+  it("move route enforces auth, validation, employee isolation, Developer 403 and source visibility", async () => {
+    const source = await configuredCategory([people.hr.employeeId]);
+    const target = await configuredCategory([people.director.employeeId]);
+    const raised = await raise(tokens.employee, { categoryId: source, subject: "DEMO route guard", body: "DEMO" });
+    const input = { targetCategoryId: target, reason: "DEMO", idempotencyKey: randomUUID() };
+    expect((await request(app).post(`/api/helpdesk/tickets/${raised.body.id}/move`).send(input)).status).toBe(401);
+    for (const who of ["employee", "other", "developer"] as const) expect((await move(who, raised.body.id, input)).status, who).toBe(403);
+    expect((await move("outsider", raised.body.id, input)).status).toBe(404);
+    expect((await move("hr", raised.body.id, { ...input, reason: " " })).status).toBe(400);
+    expect(await prisma.helpdeskCategoryMove.count({ where: { ticketId: raised.body.id } })).toBe(0);
+  });
+  it("Payroll exclusion blocks moving in or out in service and database, even with forged general codes", async () => {
+    const source = await configuredCategory([people.hr.employeeId]);
+    const payroll = await prisma.helpdeskCategory.findUniqueOrThrow({ where: { code: "PAYROLL_SALARY" }, select: { id: true } });
+    const generalTicket = await raise(tokens.employee, { categoryId: source, subject: "DEMO general", body: "DEMO" });
+    const payrollTicket = await raise(tokens.employee, { categoryId: payroll.id, subject: "DEMO Payroll boundary", body: "DEMO" });
+    expect(payrollTicket.status).toBe(201); // existing Session A path only
+    const input = { reason: "DEMO", idempotencyKey: randomUUID() };
+    expect((await move("director", generalTicket.body.id, { ...input, targetCategoryId: payroll.id })).status).toBe(404);
+    expect((await move("director", payrollTicket.body.id, { ...input, targetCategoryId: source })).status).toBe(404);
+    for (const [ticketId, sourceCategoryId, targetCategoryId] of [[generalTicket.body.id, source, payroll.id], [payrollTicket.body.id, payroll.id, source]]) {
+      await expect(prisma.helpdeskCategoryMove.create({ data: { ticketId, sourceCategoryId, targetCategoryId, sourceCategoryCode: "FORGED", targetCategoryCode: "FORGED", actorUserId: people.director.userId, idempotencyKey: randomUUID(), requestHash: "DEMO", reason: "DEMO" } })).rejects.toThrow("peeps_move_no_payroll");
+    }
+    // This fixture used the pre-existing Payroll API, so its cleanup must
+    // remove that test ticket without deleting the seeded category itself.
+    await deleteWithDependents("HelpdeskTicket", [payrollTicket.body.id]);
   });
 
 });

@@ -384,6 +384,7 @@ PURGE_GUARDED_MODELS.add("EmployeeAvatarChoice");
 // PEEPS-END
 // PEEPS-BEGIN helpdesk-visibility
 PURGE_GUARDED_MODELS.add("HelpdeskCategoryVisibilityHistory");
+PURGE_GUARDED_MODELS.add("HelpdeskCategoryMove");
 // Required category FKs make both new models reachable from the existing
 // HelpdeskCategory cleanup root; no optional-FK or standalone exception needed.
 // PEEPS-END helpdesk-visibility

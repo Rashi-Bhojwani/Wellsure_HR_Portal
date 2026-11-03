@@ -36,6 +36,7 @@ const adminInService = (why: string): RouteClass => ({ kind: "admin", why });
 
 export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   // PEEPS-BEGIN helpdesk-visibility
+  "POST /api/helpdesk/tickets/:id/move": adminInService("current handler only; Developer and Payroll denied"),
   "POST /api/helpdesk/attachments/:id/content": scoped("own public attachment or live category handler; Developer denied; no storage bearer URL"),
   "GET /api/helpdesk/categories/:id/visibility": adminInService("effective Super Admin only; Payroll excluded"),
   "PUT /api/helpdesk/categories/:id/visibility": adminInService("effective Super Admin only; Payroll excluded"),

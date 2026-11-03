@@ -2,6 +2,10 @@ import type { Prisma } from "@prisma/client";
 import { getSocketServer } from "../../realtime/emit";
 import { notifyEmployee } from "../notifications/notifyEmployee";
 import { storageService } from "../../integrations/storage";
+import { createHash } from "node:crypto";
+import { createNotification } from "../notifications/service";
+import { emitNotificationNew } from "../../realtime/emit";
+import { helpdeskAdminPath, helpdeskEmployeePath } from "@shared/constants/helpdesk";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { resolveAccess } from "../../lib/permissions";
@@ -111,8 +115,8 @@ export async function requireVisibleAssignee(category: Category, employeeId?: st
 
 // Returns false for legacy/Payroll so callers run the existing delivery path.
 // Configured-category events never enter a permission room or a stale assignee's room.
-export async function deliverConfigured(ticketId: string, opts: { internal?: boolean; notification?: { type: string; title: string; body: string; link: string; payload: Record<string, unknown> }; onlyEmployeeId?: string } = {}): Promise<boolean> {
-  const ticket = await prisma.helpdeskTicket.findFirst({ where: { id: ticketId, category: { code: { not: PAYROLL_CATEGORY }, visibility: { isNot: null } } }, select: { raisedByEmployeeId: true, category: { select: { id: true, code: true, isSensitive: true, directorsOnly: true } } } });
+export async function deliverConfigured(ticketId: string, opts: { internal?: boolean; includeLegacy?: boolean; notification?: { type: string; title: string; body: string; link: string; payload: Record<string, unknown> }; onlyEmployeeId?: string } = {}): Promise<boolean> {
+  const ticket = await prisma.helpdeskTicket.findFirst({ where: { id: ticketId, category: { code: { not: PAYROLL_CATEGORY }, ...(!opts.includeLegacy && { visibility: { isNot: null } }) } }, select: { raisedByEmployeeId: true, category: { select: { id: true, code: true, isSensitive: true, directorsOnly: true } } } });
   if (!ticket) return false;
   const handlers = await categoryHandlers(ticket.category, ticket.raisedByEmployeeId);
   if (opts.notification) for (const id of handlers) {
@@ -173,4 +177,54 @@ export async function configuredDownload(attachmentId: string, viewer: HelpdeskV
 export async function downloadDescriptor(attachmentId: string, category: Category) {
   if (category.code === PAYROLL_CATEGORY || !(await prisma.helpdeskCategoryVisibility.count({ where: { categoryId: category.id } }))) return null;
   return { url: `/api/helpdesk/attachments/${encodeURIComponent(attachmentId)}/content`, guarded: true };
+}
+
+export const moveSchema = z.object({
+  targetCategoryId: z.string().min(1),
+  reason: z.string().trim().min(1).max(2000),
+  idempotencyKey: z.string().uuid(),
+});
+const ticketMissing = () => new HttpError(404, "Ticket not found.", "NOT_FOUND");
+export async function moveTicket(ticketId: string, input: z.infer<typeof moveSchema>, viewer: HelpdeskViewer, meta: ActorMeta) {
+  const access = await resolveAccess(viewer.userId);
+  if (access.roleCodes.includes("DEVELOPER") || !access.permissions.has("helpdesk.manage")) throw new HttpError(403, "Only helpdesk handlers can move tickets.", "FORBIDDEN");
+  const parsed = moveSchema.parse(input);
+  const requestHash = createHash("sha256").update(JSON.stringify({ ticketId, targetCategoryId: parsed.targetCategoryId, reason: parsed.reason })).digest("hex");
+  const result = await prisma.$transaction(async (tx) => {
+    // Serializes retries even when the same actor/key is sent for different
+    // tickets. The unique index remains a database-level backstop.
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${viewer.userId}), hashtext(${parsed.idempotencyKey}))::text`;
+    const prior = await tx.helpdeskCategoryMove.findUnique({ where: { actorUserId_idempotencyKey: { actorUserId: viewer.userId, idempotencyKey: parsed.idempotencyKey } } });
+    if (prior) {
+      if (prior.requestHash !== requestHash) throw new HttpError(409, "This move key was already used for a different request.", "CONFLICT");
+      return { receipt: { id: prior.id, ticketId: prior.ticketId, moved: true }, notices: [], category: null, raiser: null };
+    }
+    const locked = await tx.$queryRaw<Array<{ id: string }>>`SELECT t.id FROM helpdesk_tickets t JOIN helpdesk_categories c ON c.id = t.category_id WHERE t.id = ${ticketId} AND c.code <> ${PAYROLL_CATEGORY} FOR UPDATE OF t`;
+    if (!locked.length) throw ticketMissing();
+    const ticket = await tx.helpdeskTicket.findUniqueOrThrow({ where: { id: ticketId }, include: { category: true } });
+    if (ticket.raisedByEmployeeId === viewer.employeeId || (ticket.category.isSensitive && !access.permissions.has("helpdesk.sensitive.view")) || (ticket.category.directorsOnly && !access.isSuperAdmin) || !(await permitsCategory(ticket.category, viewer))) throw ticketMissing();
+    const target = await tx.helpdeskCategory.findFirst({ where: { id: parsed.targetCategoryId, code: { not: PAYROLL_CATEGORY }, isActive: true } });
+    if (!target) throw missing();
+    if (target.id === ticket.categoryId) throw new HttpError(409, "Choose another category.", "CONFLICT");
+    await requireCategoryReady(target);
+    const move = await tx.helpdeskCategoryMove.create({ data: { ticketId, sourceCategoryId: ticket.categoryId, targetCategoryId: target.id, sourceCategoryCode: ticket.category.code, targetCategoryCode: target.code, actorUserId: viewer.userId, idempotencyKey: parsed.idempotencyKey, requestHash, reason: parsed.reason } });
+    await tx.helpdeskMessage.create({ data: { ticketId, authorEmployeeId: viewer.employeeId, body: "Your ticket was moved to another team.", isSystem: true } });
+    await tx.helpdeskTicket.update({ where: { id: ticketId }, data: { categoryId: target.id, assigneeEmployeeId: null, lastActivityAt: new Date() } });
+    await writeAuditLogs([{ ...meta, actorUserId: viewer.userId, action: "helpdesk.ticket.moved", entityType: "HelpdeskTicket", entityId: ticketId, before: { categoryId: ticket.categoryId, assigneeEmployeeId: ticket.assigneeEmployeeId }, after: { categoryId: target.id, reason: parsed.reason, moveId: move.id } }], tx);
+    const handlers = await categoryHandlers(target, ticket.raisedByEmployeeId);
+    const users = await tx.user.findMany({ where: { employeeId: { in: [...handlers, ticket.raisedByEmployeeId] }, status: "ACTIVE" }, select: { id: true, employeeId: true } });
+    const notices = [];
+    for (const user of users) {
+      const raiser = user.employeeId === ticket.raisedByEmployeeId;
+      const notification = await createNotification({ userId: user.id, type: "helpdesk.moved", title: raiser ? "Ticket moved" : "A ticket moved to your team", body: raiser ? "Your ticket was moved to another team." : ticket.subject, link: raiser ? helpdeskEmployeePath(ticketId) : helpdeskAdminPath(ticketId), payload: { ticketId } }, tx);
+      notices.push({ employeeId: user.employeeId, notification });
+    }
+    return { receipt: { id: move.id, ticketId, moved: true }, notices, category: target, raiser: ticket.raisedByEmployeeId };
+  }, { timeout: 30_000 });
+  if (result.category) {
+    const visible = new Set([...await categoryHandlers(result.category, result.raiser!), result.raiser!]);
+    for (const { employeeId, notification: n } of result.notices) if (visible.has(employeeId)) emitNotificationNew(employeeId, { id: n.id, type: n.type, title: n.title, body: n.body, link: n.link, createdAt: n.createdAt.toISOString() });
+    await deliverConfigured(ticketId, { includeLegacy: true });
+  }
+  return result.receipt;
 }

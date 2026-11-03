@@ -66,3 +66,9 @@ helpdeskRouter.post("/attachments/:id/content", validate({ params: idParamsSchem
   res.send(file.body);
 });
 // PEEPS-END helpdesk-visibility
+
+// PEEPS-BEGIN helpdesk-moves
+helpdeskRouter.post("/tickets/:id/move", manage, validate({ params: idParamsSchema, body: categoryVisibility.moveSchema }), async (req, res) => {
+  res.json(await categoryVisibility.moveTicket(req.params.id as string, req.body, req.user!, { actorUserId: req.user!.userId, ipAddress: req.ip, userAgent: req.headers["user-agent"] }));
+});
+// PEEPS-END helpdesk-moves

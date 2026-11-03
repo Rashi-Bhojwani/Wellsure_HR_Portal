@@ -362,6 +362,9 @@ export async function getTicket(ticketId: string, viewer: HelpdeskViewer, meta?:
       author: personRef(m.author),
       fromRaiser: m.author.id === ticket.raisedByEmployeeId,
       body: m.body,
+      // PEEPS-BEGIN helpdesk-moves
+      isSystem: m.isSystem,
+      // PEEPS-END helpdesk-moves
       ...(access.mode === "hr" && { isInternalNote: m.isInternalNote }),
       createdAt: m.createdAt.toISOString(),
       attachments: m.attachments,
