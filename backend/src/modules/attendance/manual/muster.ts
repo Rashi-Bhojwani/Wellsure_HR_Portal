@@ -1,3 +1,5 @@
+import { markersFor, STATUS_CATALOGUE } from "@shared/attendance/statusCatalogue"; // A-10
+import { getWorkforceSetting } from "../../workforce/settings"; // A-10
 import type { DailyAttendance, ManualAttendanceEntry } from "@prisma/client";
 import { instantToLocalTime } from "@shared/attendance/attlog";
 import { MUSTER_INPUT_HELP, MUSTER_LEGEND, formatMusterInput, musterCode, parseMusterCell, sameMusterInput, type MusterInput } from "@shared/attendance/muster";
@@ -64,6 +66,8 @@ export interface MusterCell {
   overrideRef: string | null; // the attendance_overrides row the day was computed with (the export lists them)
   shiftOverridden: boolean; // the shift on this day came from a Shift Override
   shiftOverrideRef: string | null;
+  /** A-10 G1: markers from the status catalogue (DED, WFH, GRACE, REG, OVR) — days and flags only, never an amount. */
+  markers: string[];
   workedOnOffDay: boolean;
   provisional: boolean;
   locked: boolean;
@@ -81,6 +85,8 @@ export interface MusterTotals {
   off: number;
   notMarked: number;
   missingPunch: number;
+  /** A-10: days whose status is still unknown — not marked (in halves) plus days with no shift. */
+  unresolved: number;
 }
 
 const round = (n: number) => Math.round(n * 100) / 100;
@@ -88,7 +94,7 @@ const OTHER = new Set(["P", "A", "H", "O", "NM", "NS", "HD"]);
 
 /** Paid days = Σ (1 − LOP) over computed days, NM halves and NS days counting 0 until resolved. */
 export function totalsFor(cells: MusterCell[]): MusterTotals {
-  const t: MusterTotals = { paidDays: 0, present: 0, absent: 0, halfDays: 0, lop: 0, leave: 0, holidays: 0, off: 0, notMarked: 0, missingPunch: 0 };
+  const t: MusterTotals = { paidDays: 0, present: 0, absent: 0, halfDays: 0, lop: 0, leave: 0, holidays: 0, off: 0, notMarked: 0, missingPunch: 0, unresolved: 0 };
   for (const c of cells) {
     if (!c.status) continue;
     const halves = c.status === "HD" ? ["P", "A"] : c.status.includes(":") ? c.status.split(":") : [c.status, c.status];
@@ -109,7 +115,9 @@ export function totalsFor(cells: MusterCell[]): MusterTotals {
     if (c.status === "H") t.holidays += 1;
     if (c.status === "O") t.off += 1;
     if (c.missingPunch) t.missingPunch += 1;
+    if (c.status === "NS") t.unresolved += 1; // A-10
   }
+  t.unresolved += t.notMarked; // A-10: not-marked halves count as unresolved too
   for (const k of Object.keys(t) as Array<keyof MusterTotals>) t[k] = round(t[k]);
   return t;
 }
@@ -124,7 +132,7 @@ async function cycleFromStart(cycleStart: string | undefined): Promise<Cycle> {
 export async function musterCycles() {
   const today = businessToday();
   const view = (c: Cycle) => ({ start: iso(c.start), end: iso(c.end), label: c.label });
-  return { current: view(await cycleFor(today)), cycles: recentCycles(await loadCycleRules(), today, 13).map(view) };
+  return { current: view(await cycleFor(today)), cycles: recentCycles(await loadCycleRules(), today, 26) /* A-10: two years */.map(view) };
 }
 
 export interface MusterQuery {
@@ -132,6 +140,7 @@ export interface MusterQuery {
   locationId?: string;
   departmentId?: string;
   employeeId?: string;
+  employmentType?: string; // A-10
 }
 
 interface Scoped {
@@ -142,7 +151,7 @@ interface Scoped {
   today: string;
   branches: Branches;
   ids: string[];
-  employees: Map<string, { id: string; employeeCode: string; dateOfJoining: Date; lastWorkingDate: Date | null }>;
+  employees: Map<string, { id: string; employeeCode: string; dateOfJoining: Date; lastWorkingDate: Date | null; employmentType?: string }>;
   placements: Map<string, Array<{ locationId: string; departmentId: string; from: Date; to: Date }>>;
   mappings: Map<string, Array<{ from: Date; to: Date | null }>>;
   canMark: boolean;
@@ -159,7 +168,7 @@ async function scope(viewer: Viewer, cycle: Cycle): Promise<Scoped> {
   const [placements, mappings, rows] = await Promise.all([
     placementPeriods(all, cycle.start, cycle.end),
     deviceMappingPeriods(all, cycle.start, cycle.end),
-    prisma.employee.findMany({ where: { id: { in: all } }, select: { id: true, employeeCode: true, dateOfJoining: true, lastWorkingDate: true }, orderBy: { employeeCode: "asc" } }),
+    prisma.employee.findMany({ where: { id: { in: all } }, select: { id: true, employeeCode: true, dateOfJoining: true, lastWorkingDate: true, employmentType: true }, orderBy: { employeeCode: "asc" } }),
   ]);
   const days = daysOf(start, end);
   const ids = rows
@@ -201,7 +210,7 @@ function editRule(s: Scoped, employeeId: string, date: string, row: DailyAttenda
   return { reason: null, offDayOnly: row?.status === "H" || row?.status === "O" };
 }
 
-function cellFor(s: Scoped, employeeId: string, date: string, row: DailyAttendance | undefined, entry: ManualAttendanceEntry | undefined): MusterCell {
+function cellFor(s: Scoped, employeeId: string, date: string, row: DailyAttendance | undefined, entry: ManualAttendanceEntry | undefined, remoteApproved = false): MusterCell {
   const rule = editRule(s, employeeId, date, row);
   const e = s.employees.get(employeeId)!;
   const shown = row && employedOn(e, date) && date <= s.today;
@@ -230,6 +239,7 @@ function cellFor(s: Scoped, employeeId: string, date: string, row: DailyAttendan
     overrideRef: shown ? row.overrideRef : null,
     shiftOverridden: !!shown && row.shiftOverrideRef !== null,
     shiftOverrideRef: shown ? row.shiftOverrideRef : null,
+    markers: shown ? markersFor({ lopDays: Number(row.lopDays), overrideKind: row.overrideKind, firstIn: hhmm(row.firstIn), shiftStart: row.shiftStart, lateInMinutes: row.lateInMinutes, remoteApproved }) : [],
     workedOnOffDay: !!shown && row.workedOnOffDay,
     provisional: !!shown && row.provisional,
     locked: !!row?.isLocked,
@@ -267,7 +277,8 @@ export async function getMuster(viewer: Viewer, q: MusterQuery) {
     (id) =>
       (!q.employeeId || id === q.employeeId) &&
       (!q.locationId || (s.placements.get(id) ?? []).some((p) => p.locationId === q.locationId)) &&
-      (!q.departmentId || (s.placements.get(id) ?? []).some((p) => p.departmentId === q.departmentId)),
+      (!q.departmentId || (s.placements.get(id) ?? []).some((p) => p.departmentId === q.departmentId)) &&
+      (!q.employmentType || s.employees.get(id)!.employmentType === q.employmentType), // A-10: category filter
   );
   await fillGaps(s, ids);
   const [rows, entries] = await Promise.all([
@@ -275,10 +286,14 @@ export async function getMuster(viewer: Viewer, q: MusterQuery) {
     latestEntries(ids, s.days[0]!, s.days.at(-1)!),
   ]);
   const rowBy = new Map(rows.map((r) => [entryKey(r.employeeId, iso(r.date)), r]));
+  // A-10 G1: an approved remote day shows the WFH marker.
+  const remote = await prisma.remoteAttendanceRecord.findMany({ where: { employeeId: { in: ids }, date: { gte: cycle.start, lte: cycle.end }, status: { in: ["APPROVED_FULL", "APPROVED_HALF"] } }, select: { employeeId: true, date: true } });
+  const remoteDays = new Set(remote.map((r) => entryKey(r.employeeId, iso(r.date))));
+  const labels = (await getWorkforceSetting("attendance.statusLabels")) ?? {};
   const locationName = new Map(locations.map((l) => [l.id, l.name]));
 
   const musterRows = ids.map((id) => {
-    const cells = s.days.map((d) => cellFor(s, id, d, rowBy.get(entryKey(id, d)), entries.get(entryKey(id, d))));
+    const cells = s.days.map((d) => cellFor(s, id, d, rowBy.get(entryKey(id, d)), entries.get(entryKey(id, d)), remoteDays.has(entryKey(id, d))));
     const e = s.employees.get(id)!;
     const loc = refLocation(id);
     return { employeeId: id, employeeCode: e.employeeCode, name: names.get(id) ?? e.employeeCode, branch: loc ? (locationName.get(loc) ?? null) : null, cells, totals: totalsFor(cells) };
@@ -291,6 +306,8 @@ export async function getMuster(viewer: Viewer, q: MusterQuery) {
     filters: { locations, departments, employees: everyone },
     rows: musterRows,
     legend: MUSTER_LEGEND,
+    // A-10 G1: every status and marker, with the directors' labels where set (Not set = our own wording).
+    statusLegend: STATUS_CATALOGUE.map((c) => ({ code: c.code, label: labels[c.code] ?? c.meaning, kind: c.kind })),
     inputHelp: MUSTER_INPUT_HELP,
   };
 }
@@ -317,7 +334,7 @@ async function scopeForDays(viewer: Viewer, refs: Array<{ employeeId: string; da
     markableBranches(viewer),
     placementPeriods(ids, day(from), day(to)),
     deviceMappingPeriods(ids, day(from), day(to)),
-    prisma.employee.findMany({ where: { id: { in: ids } }, select: { id: true, employeeCode: true, dateOfJoining: true, lastWorkingDate: true } }),
+    prisma.employee.findMany({ where: { id: { in: ids } }, select: { id: true, employeeCode: true, dateOfJoining: true, lastWorkingDate: true, employmentType: true } }),
   ]);
   // Never confirm that someone outside the viewer's branches exists (404 for the whole batch).
   for (const r of refs) {
@@ -483,6 +500,7 @@ export async function exportMuster(viewer: Viewer, q: MusterQuery) {
     { key: "off", header: "OFF", type: "number", width: 6 },
     { key: "notMarked", header: "NM", type: "number", width: 6 },
     { key: "missingPunch", header: "Missing punch", type: "number", width: 9 },
+    { key: "unresolved", header: "Unresolved", type: "number", width: 9 }, // A-10
   ];
   // How a corrected day is told apart in the file, in the cell and in a list of its own: ~ a correction request that was
   // approved, # HR's Manual Override, ^ a shift set for that day (a Shift Override). Device-derived days carry none.

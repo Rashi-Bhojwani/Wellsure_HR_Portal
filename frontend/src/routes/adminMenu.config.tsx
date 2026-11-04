@@ -126,6 +126,9 @@ const BulkUploadPage = lazyPage(() => import("../pages/admin/employee/parity/Bul
 const MassEmailPage = lazyPage(() => import("../pages/admin/engage/parity/MassEmailPage"), "MassEmailPage");
 const LetterSettingsPage = lazyPage(() => import("../pages/admin/letters/parity/LetterSettingsPage"), "LetterSettingsPage");
 // A-9 — end
+// A-10 (docs/plans/GREYTHR_PARITY_WORKFORCE.md) — begin
+const WorkforceSettingsPage = lazyPage(() => import("../pages/admin/workforce/parity/WorkforceSettingsPage"), "WorkforceSettingsPage");
+// A-10 — end
 const SetupChecklistPage = lazyPage(() => import("../pages/admin/payroll/SetupChecklistPage"), "SetupChecklistPage");
 // Anyone holding any payroll key sees the Payroll group; HR holds none (the hard lock), so HR never sees it. The server still decides every request.
 const PAYROLL_NEEDS = { any: ["payroll.rules.view", "payroll.salary.view", "payroll.run", "payroll.approve"] };
@@ -404,6 +407,9 @@ export const adminApps: AdminApp[] = [
           { key: "managers", label: "Manager Management", path: "admin-tools/managers", icon: ApartmentOutlined, element: ManagerManagementPage, needs: { any: ["manager.appoint", "manager.team.assign", "manager.permissions.manage"] } },
           { key: "helpdesk-categories", label: "Helpdesk Categories", path: "admin-tools/helpdesk-categories", icon: CustomerServiceOutlined, element: HelpdeskCategoriesPage, needs: { any: ["helpdesk.manage"] } },
           // A-9 — begin
+          // A-10 — begin
+          { key: "workforce-settings", label: "Workforce Settings", path: "admin-tools/workforce-settings", icon: SettingOutlined, element: WorkforceSettingsPage, needs: { director: true } },
+          // A-10 — end
           { key: "letter-settings", label: "Letter Settings", path: "admin-tools/letter-settings", icon: FileProtectOutlined, element: LetterSettingsPage, needs: { director: true } },
           // A-9 — end
           { key: "templates", label: "Email & Letter Templates", path: "admin-tools/templates", icon: FileTextOutlined, element: LetterTemplatesPage, needs: { any: ["letters.template.manage"] } },

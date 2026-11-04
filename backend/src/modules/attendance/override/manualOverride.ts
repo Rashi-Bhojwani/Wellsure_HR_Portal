@@ -1,3 +1,4 @@
+import { getWorkforceSetting } from "../../workforce/settings"; // A-10
 import { createHash, randomUUID } from "node:crypto";
 import { Prisma, type DailyAttendance, type RegularizationReasonCode } from "@prisma/client";
 import { writeAuditLogs } from "../../../lib/audit";
@@ -110,6 +111,12 @@ function requireHr(viewer: Viewer): void {
 
 async function plan(viewer: Viewer, input: OverrideInput) {
   requireHr(viewer);
+  // A-10 G1 (docs/plans/GREYTHR_PARITY_WORKFORCE.md, item 3) — begin: the statuses the directors allow (Not set = every status the engine supports).
+  if (input.status) {
+    const allowed = await getWorkforceSetting("attendance.overrideAllowedStatuses");
+    if (allowed && !(allowed as readonly string[]).includes(input.status)) throw new HttpError(400, "The directors have not allowed Manual Override to set that status.", "STATUS_NOT_ALLOWED");
+  }
+  // A-10 — end
   const settings = await getRegularizationSettings();
   const span = spanDays(input.from, input.to);
   if (span > settings.bulkMaxRangeDays) {

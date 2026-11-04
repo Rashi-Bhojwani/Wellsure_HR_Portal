@@ -25,6 +25,7 @@ const TOTALS: Array<{ key: keyof MusterRow["totals"]; label: string; title: stri
   { key: "off", label: "OFF", title: "Week-offs" },
   { key: "notMarked", label: "NM", title: "Not marked yet" },
   { key: "missingPunch", label: "1×", title: "Days with one time only (forgot to punch out?)" },
+  { key: "unresolved", label: "?", title: "Unresolved: not marked yet, or no shift assigned" }, // A-10
 ];
 
 function describe(row: MusterRow, cell: MusterCell): string {
@@ -40,6 +41,7 @@ function describe(row: MusterRow, cell: MusterCell): string {
   if (cell.shiftOverridden) parts.push("shift set for this day by HR");
   if (cell.workedOnOffDay) parts.push("worked on an off day");
   if (cell.provisional) parts.push("provisional (the day isn't over)");
+  if (cell.markers?.length) parts.push(`markers: ${cell.markers.join(", ")}`); // A-10
   if (cell.entry) parts.push(`entered as "${cell.entry.text}"${cell.entry.via === "MUSTER_UPLOAD" ? " (upload)" : cell.entry.via === "BULK" ? " (mark all present)" : ""}${cell.entry.remark ? `: ${cell.entry.remark}` : ""}`);
   if (cell.capture === "DEVICE") parts.push("biometric device");
   if (!cell.editable && cell.reason) parts.push(cell.reason);

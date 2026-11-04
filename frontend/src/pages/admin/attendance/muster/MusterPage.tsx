@@ -173,7 +173,7 @@ export function MusterPage({ title = "Attendance Muster" }: { title?: string }) 
     );
   }
 
-  const filterCount = [query.locationId, query.departmentId, query.employeeId].filter(Boolean).length;
+  const filterCount = [query.locationId, query.departmentId, query.employeeId, query.employmentType].filter(Boolean).length;
   return (
     <>
       {header}
@@ -199,7 +199,7 @@ export function MusterPage({ title = "Attendance Muster" }: { title?: string }) 
         >
           <FilterBar
             activeCount={filterCount}
-            onClear={() => setFilter({ locationId: undefined, departmentId: undefined, employeeId: undefined })}
+            onClear={() => setFilter({ locationId: undefined, departmentId: undefined, employeeId: undefined, employmentType: undefined })}
             filters={
               <>
                 <Select
@@ -212,6 +212,8 @@ export function MusterPage({ title = "Attendance Muster" }: { title?: string }) 
                 />
                 <Select allowClear placeholder="All branches" aria-label="Branch" style={{ width: 200 }} value={query.locationId} onChange={(val) => setFilter({ locationId: val })} options={(data?.filters.locations ?? []).map((l) => ({ value: l.id, label: l.name }))} />
                 <Select allowClear placeholder="All departments" aria-label="Department" style={{ width: 200 }} value={query.departmentId} onChange={(val) => setFilter({ departmentId: val })} options={(data?.filters.departments ?? []).map((l) => ({ value: l.id, label: l.name }))} />
+                {/* A-10: category (employment type) */}
+                <Select allowClear placeholder="All categories" aria-label="Category" style={{ width: 170 }} value={query.employmentType} onChange={(val) => setFilter({ employmentType: val })} options={["PERMANENT", "PROBATION", "CONTRACT", "INTERN", "CONSULTANT"].map((t) => ({ value: t, label: t.charAt(0) + t.slice(1).toLowerCase() }))} />
                 <Select
                   allowClear
                   showSearch
@@ -295,6 +297,16 @@ export function MusterPage({ title = "Attendance Muster" }: { title?: string }) 
                   <span><b style={{ color: v.accentText }}>#</b> Set by HR (Manual Override)</span>
                   <span><b style={{ color: v.accentText }}>^</b> Shift set for that day by HR</span>
                 </div>
+                {/* A-10: every status and marker, in the directors' own words where they have set them */}
+                {data.statusLegend && (
+                  <div style={{ display: "flex", gap: `${space[2]}px ${space[4]}px`, flexWrap: "wrap", marginTop: space[3], fontSize: fs.sm }}>
+                    {data.statusLegend.map((s2) => (
+                      <span key={s2.code}>
+                        <Text code>{s2.code}</Text> {s2.label}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               {data.canMark && (
                 <div>

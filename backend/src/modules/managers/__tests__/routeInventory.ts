@@ -672,6 +672,12 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "POST /api/letters/requests/:id/void": admin,
   "GET /api/letters/requests/:id/preview": admin,
   // A-9 — end
+  // A-10 (docs/plans/GREYTHR_PARITY_WORKFORCE.md) — begin. Every A-10 router also refuses the Developer role.
+  "GET /api/workforce/statuses": everyone("the status catalogue and the company's labels — no person's data"),
+  "GET /api/workforce/settings/:key": everyone("a company setting's current value — no person's data"),
+  "GET /api/workforce/settings/:key/history": adminInService("director only (route)"),
+  "PUT /api/workforce/settings/:key": adminInService("director only (saveWorkforceSetting), audited"),
+  // A-10 — end
 };
 
 // Scoped routes a manager can reach with a manager-grantable key — each has
