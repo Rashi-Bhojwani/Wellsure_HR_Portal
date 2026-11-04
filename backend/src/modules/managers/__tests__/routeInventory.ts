@@ -36,6 +36,12 @@ const adminInService = (why: string): RouteClass => ({ kind: "admin", why });
 
 export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   // PEEPS-BEGIN exits
+  "GET /api/exits/clearance/mine": self,
+  "GET /api/exits/clearance/overdue": scoped("live management audience before overdue results"),
+  "GET /api/exits/cases/:id/checklist": scoped("own or current team or live management audience"),
+  "POST /api/exits/cases/:id/checklist/start": scoped("live management capability and employee scope"),
+  "POST /api/exits/checklist-items/:id/complete": scoped("named item owner, current manager owner, or live management audience"),
+  "POST /api/exits/cases/:id/ready": scoped("live management capability; only a director may override blockers"),
   "POST /api/exits/resignations": self,
   "GET /api/exits/resignations/mine": self,
   "GET /api/exits/resignations": scoped("current team or director/Office/HR-switch audience; scope checked before counts"),

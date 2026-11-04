@@ -32,10 +32,16 @@ export interface RequestHubItem {
   link: string; // employee-portal path
 }
 
-export const TASK_TYPES = ["LEAVE_APPROVAL", "PROFILE_CHANGE_APPROVAL", "HELPDESK_ASSIGNED", "REGULARIZATION_APPROVAL", "DIRECTOR_NOTICE"] as const;
+// PEEPS-BEGIN exits
+export const TASK_TYPES = ["LEAVE_APPROVAL", "PROFILE_CHANGE_APPROVAL", "HELPDESK_ASSIGNED", "REGULARIZATION_APPROVAL", "DIRECTOR_NOTICE", "EXIT_RESIGNATION", "EXIT_CLEARANCE"] as const;
+// PEEPS-END exits
 export type TaskType = (typeof TASK_TYPES)[number];
 
 export const TASK_TYPE_LABELS: Record<TaskType, string> = {
+  // PEEPS-BEGIN exits
+  EXIT_RESIGNATION: "Resignation decision",
+  EXIT_CLEARANCE: "Exit clearance",
+  // PEEPS-END exits
   LEAVE_APPROVAL: "Leave approval",
   PROFILE_CHANGE_APPROVAL: "Profile change approval",
   HELPDESK_ASSIGNED: "Helpdesk ticket",

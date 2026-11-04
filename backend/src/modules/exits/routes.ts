@@ -1,3 +1,4 @@
+import * as clearance from "./clearance";
 import * as flow from "./resignations";
 import { Router } from "express";
 import { z } from "zod";
@@ -37,3 +38,10 @@ exitsRouter.post("/resignations/:id/accept",validate({params:idSchema,body:flow.
 exitsRouter.post("/resignations/:id/reject",validate({params:idSchema,body:flow.decisionSchema}),async(req,res)=>{res.json(await flow.decide(req.params.id as string,req.user!,"REJECTED",req.body.note,metaOf(req)));});
 exitsRouter.post("/resignations/:id/withdraw",validate({params:idSchema,body:flow.decisionSchema}),async(req,res)=>{res.json(await flow.decide(req.params.id as string,req.user!,"WITHDRAWN",req.body.note,metaOf(req)));});
 exitsRouter.get("/cases/:id",validate({params:idSchema}),async(req,res)=>{res.json(await flow.getCase(req.params.id as string,req.user!));});
+
+exitsRouter.get("/clearance/mine",validate({query:empty}),async(req,res)=>{res.json(await clearance.myItems(req.user!));});
+exitsRouter.get("/clearance/overdue",validate({query:empty}),async(req,res)=>{res.json(await clearance.overdue(req.user!));});
+exitsRouter.get("/cases/:id/checklist",validate({params:idSchema,query:empty}),async(req,res)=>{res.json(await clearance.board(req.params.id as string,req.user!));});
+exitsRouter.post("/cases/:id/checklist/start",validate({params:idSchema,body:empty}),async(req,res)=>{res.json(await clearance.start(req.params.id as string,req.user!,metaOf(req)));});
+exitsRouter.post("/checklist-items/:id/complete",validate({params:idSchema,body:clearance.completeSchema}),async(req,res)=>{res.json(await clearance.complete(req.params.id as string,req.user!,req.body.note,metaOf(req)));});
+exitsRouter.post("/cases/:id/ready",validate({params:idSchema,body:clearance.readySchema}),async(req,res)=>{res.json(await clearance.ready(req.params.id as string,req.user!,req.body,metaOf(req)));});

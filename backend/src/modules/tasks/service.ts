@@ -1,3 +1,6 @@
+// PEEPS-BEGIN exits
+import { exitResignationTasks, exitClearanceTasks } from "../exits/tasks";
+// PEEPS-END exits
 // PEEPS-BEGIN helpdesk-visibility
 import { ticketAudienceWhere } from "../helpdesk/categoryVisibility";
 // PEEPS-END helpdesk-visibility
@@ -173,7 +176,9 @@ const directorNotices: TaskSource = {
   },
 };
 
-export const TASK_SOURCES: TaskSource[] = [leaveApprovals, profileChangeApprovals, assignedTickets, regularizationApprovals, directorNotices];
+// PEEPS-BEGIN exits
+export const TASK_SOURCES: TaskSource[] = [leaveApprovals, profileChangeApprovals, assignedTickets, regularizationApprovals, directorNotices, exitResignationTasks, exitClearanceTasks];
+// PEEPS-END exits
 
 // Oldest-waiting first: the inbox is a queue, not a feed.
 export async function listMyTasks(viewer: TaskViewer, limit = 100): Promise<TaskItem[]> {

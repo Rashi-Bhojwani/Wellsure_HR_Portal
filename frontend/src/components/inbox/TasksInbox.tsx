@@ -18,6 +18,10 @@ import { EmployeeAvatar } from "../common/EmployeeAvatar";
 // PEEPS-END
 
 const TYPE_META: Record<TaskType, { icon: ReactNode; tone: ChipTone; bg: string; fg: string }> = {
+  // PEEPS-BEGIN exits
+  EXIT_RESIGNATION: { icon: <UserSwitchOutlined />, tone: 'warning', bg: v.chipWarningBg, fg: v.chipWarningText },
+  EXIT_CLEARANCE: { icon: <SafetyCertificateOutlined />, tone: 'info', bg: v.chipInfoBg, fg: v.chipInfoText },
+  // PEEPS-END exits
   LEAVE_APPROVAL: {
     icon: <CalendarOutlined />,
     tone: 'info',
