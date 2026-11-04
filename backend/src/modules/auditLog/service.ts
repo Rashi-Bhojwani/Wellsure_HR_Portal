@@ -1,3 +1,6 @@
+// PEEPS-BEGIN exits
+import { exitAuditAudienceWhere } from "../exits/audience";
+// PEEPS-END exits
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { inForceOn } from "../../lib/effectiveDating";
@@ -33,8 +36,12 @@ function withoutMoney<T>(value: T): T {
   return value;
 }
 
-export async function listAuditLogs(query: ListAuditLogQuery, viewer: { canSeePayroll: boolean; onlyPayroll?: boolean } = { canSeePayroll: false }) {
-  const where: Prisma.AuditLogWhereInput = {};
+// PEEPS-BEGIN exits
+export async function listAuditLogs(query: ListAuditLogQuery, viewer: { canSeePayroll: boolean; onlyPayroll?: boolean; userId?: string } = { canSeePayroll: false }) {
+// PEEPS-END exits
+  // PEEPS-BEGIN exits
+  const where: Prisma.AuditLogWhereInput = { AND: [await exitAuditAudienceWhere(viewer.userId)] };
+  // PEEPS-END exits
   const payrollRows = { OR: [{ action: { startsWith: PAYROLL_AUDIT_ACTION_PREFIX } }, { entityType: { startsWith: PAYROLL_AUDIT_ENTITY_PREFIX } }] };
   if (!viewer.canSeePayroll) where.NOT = payrollRows;
   else if (viewer.onlyPayroll) Object.assign(where, payrollRows);

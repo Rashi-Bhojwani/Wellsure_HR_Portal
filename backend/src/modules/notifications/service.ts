@@ -1,3 +1,6 @@
+// PEEPS-BEGIN exits
+import { exitNotificationAudienceWhere } from "../exits/audience";
+// PEEPS-END exits
 // PEEPS-BEGIN helpdesk-visibility
 import { notificationAudienceWhere } from "../helpdesk/categoryVisibility";
 // PEEPS-END helpdesk-visibility
@@ -59,7 +62,9 @@ export interface ListNotificationsQuery {
 // DESC null-ordering default), newest-first within each group.
 export async function listNotifications(userId: string, query: ListNotificationsQuery) {
   // PEEPS-BEGIN helpdesk-visibility
-  const audience = await notificationAudienceWhere(userId);
+  // PEEPS-BEGIN exits
+  const audience = { AND: [await notificationAudienceWhere(userId), await exitNotificationAudienceWhere(userId)] };
+  // PEEPS-END exits
   // PEEPS-END helpdesk-visibility
   const [total, unreadCount, rows] = await Promise.all([
     // PEEPS-BEGIN helpdesk-visibility
@@ -82,7 +87,9 @@ export async function listNotifications(userId: string, query: ListNotifications
 
 export async function getUnreadCount(userId: string): Promise<number> {
   // PEEPS-BEGIN helpdesk-visibility
-  const audience = await notificationAudienceWhere(userId);
+  // PEEPS-BEGIN exits
+  const audience = { AND: [await notificationAudienceWhere(userId), await exitNotificationAudienceWhere(userId)] };
+  // PEEPS-END exits
   // PEEPS-END helpdesk-visibility
   // PEEPS-BEGIN helpdesk-visibility
   return prisma.notification.count({ where: { userId, readAt: null, AND: [audience] } });
@@ -94,7 +101,9 @@ export async function getUnreadCount(userId: string): Promise<number> {
 // convention every other self-only lookup in this codebase follows.
 export async function markAsRead(notificationId: string, userId: string): Promise<void> {
   // PEEPS-BEGIN helpdesk-visibility
-  const audience = await notificationAudienceWhere(userId);
+  // PEEPS-BEGIN exits
+  const audience = { AND: [await notificationAudienceWhere(userId), await exitNotificationAudienceWhere(userId)] };
+  // PEEPS-END exits
   // PEEPS-END helpdesk-visibility
   const result = await prisma.notification.updateMany({
     // PEEPS-BEGIN helpdesk-visibility
@@ -109,7 +118,9 @@ export async function markAsRead(notificationId: string, userId: string): Promis
 
 export async function markAllAsRead(userId: string): Promise<void> {
   // PEEPS-BEGIN helpdesk-visibility
-  const audience = await notificationAudienceWhere(userId);
+  // PEEPS-BEGIN exits
+  const audience = { AND: [await notificationAudienceWhere(userId), await exitNotificationAudienceWhere(userId)] };
+  // PEEPS-END exits
   // PEEPS-END helpdesk-visibility
   // PEEPS-BEGIN helpdesk-visibility
   await prisma.notification.updateMany({ where: { userId, readAt: null, AND: [audience] }, data: { readAt: new Date() } });

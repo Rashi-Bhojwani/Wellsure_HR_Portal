@@ -1,3 +1,6 @@
+// PEEPS-BEGIN exits
+import { purgeExpiredInterviews } from "../modules/exits/interviews";
+// PEEPS-END exits
 import { processHistoryRollover } from "../modules/employee/scheduledChanges";
 import { Worker } from "bullmq";
 import { createBullConnection } from "../lib/redis";
@@ -84,6 +87,9 @@ export function startWorkers(): Worker[] {
   const separationsWorker = new Worker(
     "employee-separations",
     async (job) => {
+      // PEEPS-BEGIN exits
+      await purgeExpiredInterviews();
+      // PEEPS-END exits
       const result = await processScheduledSeparations();
       logger.info({ jobId: job.id, ...result }, "employee-separations processed");
       return result;

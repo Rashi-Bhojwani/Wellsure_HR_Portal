@@ -36,6 +36,11 @@ const adminInService = (why: string): RouteClass => ({ kind: "admin", why });
 
 export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   // PEEPS-BEGIN exits
+  "GET /api/exits/interviews": scoped("only employee/interviewer relationship or audited director; before counts"),
+  "POST /api/exits/cases/:id/interview": adminInService("actual director only; explicit interviewer and configured questions"),
+  "GET /api/exits/interviews/:id": scoped("employee/interviewer relationship or audited director; never team/HR permission"),
+  "PUT /api/exits/interviews/:id/answers": self,
+  "POST /api/exits/interviews/:id/complete": scoped("interviewer of record or actual director"),
   "GET /api/exits/clearance/mine": self,
   "GET /api/exits/clearance/overdue": scoped("live management audience before overdue results"),
   "GET /api/exits/cases/:id/checklist": scoped("own or current team or live management audience"),

@@ -1,3 +1,4 @@
+import * as interviews from "./interviews";
 import * as clearance from "./clearance";
 import * as flow from "./resignations";
 import { Router } from "express";
@@ -45,3 +46,9 @@ exitsRouter.get("/cases/:id/checklist",validate({params:idSchema,query:empty}),a
 exitsRouter.post("/cases/:id/checklist/start",validate({params:idSchema,body:empty}),async(req,res)=>{res.json(await clearance.start(req.params.id as string,req.user!,metaOf(req)));});
 exitsRouter.post("/checklist-items/:id/complete",validate({params:idSchema,body:clearance.completeSchema}),async(req,res)=>{res.json(await clearance.complete(req.params.id as string,req.user!,req.body.note,metaOf(req)));});
 exitsRouter.post("/cases/:id/ready",validate({params:idSchema,body:clearance.readySchema}),async(req,res)=>{res.json(await clearance.ready(req.params.id as string,req.user!,req.body,metaOf(req)));});
+
+exitsRouter.get("/interviews",validate({query:empty}),async(req,res)=>{res.json(await interviews.list(req.user!,metaOf(req)));});
+exitsRouter.post("/cases/:id/interview",validate({params:idSchema,body:interviews.scheduleSchema}),async(req,res)=>{res.status(201).json(await interviews.schedule(req.params.id as string,req.user!,req.body,metaOf(req)));});
+exitsRouter.get("/interviews/:id",validate({params:idSchema,query:empty}),async(req,res)=>{res.json(await interviews.get(req.params.id as string,req.user!,metaOf(req)));});
+exitsRouter.put("/interviews/:id/answers",validate({params:idSchema,body:interviews.answersSchema}),async(req,res)=>{res.json(await interviews.answer(req.params.id as string,req.user!,req.body.answers,metaOf(req)));});
+exitsRouter.post("/interviews/:id/complete",validate({params:idSchema,body:empty}),async(req,res)=>{res.json(await interviews.complete(req.params.id as string,req.user!,metaOf(req)));});
