@@ -36,6 +36,7 @@ const adminInService = (why: string): RouteClass => ({ kind: "admin", why });
 
 export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   // PEEPS-BEGIN exits
+  "GET /api/exits/owners": adminInService("actual director only; active non-Developer names/codes for explicit owner choices"),
   "GET /api/exits/cases/:id/settlement-inputs": adminInService("actual director only; read-only days and identifiers"),
   "POST /api/exits/cases/:id/close": adminInService("actual director only; required note and live clearance gate"),
   "GET /api/exits/cases/:id/letter-requests": scoped("own/current team/authorized management case scope; requests only"),

@@ -319,5 +319,8 @@ export async function seedDemoCompany(): Promise<DemoResult> {
   // PEEPS-BEGIN helpdesk-visibility
   await (await import("../../src/modules/helpdesk/demoSeed")).seedDemoHelpdesk(who);
   // PEEPS-END helpdesk-visibility
+  // PEEPS-BEGIN exits
+  await (await import("../../src/modules/exits/demoSeed")).seedDemoExits(who);
+  // PEEPS-END exits
   return { people: active.length, paid: active.length, password: DEMO_PASSWORD, logins: DEMO_PEOPLE.map((p) => ({ code: p.code, name: p.name, role: p.role })), cycle: { start: iso(first), end: iso(last) } };
 }

@@ -58,9 +58,13 @@ export async function schedule(caseId:string,actor:ExitActor,input:z.infer<typeo
     const made=prior?await tx.exitInterview.update({where:{id:prior.id},data}):await tx.exitInterview.create({data:{caseId,questions:parsed,questionsVersionId:questions.id,...data}});
     await tx.exitHistory.create({data:{resignationId:c.resignationId,entityType:"exit_interviews",entityId:made.id,event:prior?"INTERVIEW_RESCHEDULED":"INTERVIEW_SCHEDULED",actorUserId:actor.userId,confidential:true}});
     await writeAuditLogs([{...meta,action:prior?"exits.interview.rescheduled":"exits.interview.scheduled",entityType:"ExitInterview",entityId:made.id,after:{reason:input.reason}}],tx);
-    return made;
+    return {made,previousInterviewer:prior?.interviewerEmployeeId};
   });
-  await changed(row.id,"scheduled");return get(row.id,actor,meta);
+  if(row.previousInterviewer&&row.previousInterviewer!==input.interviewerEmployeeId){
+    // Empty access refresh only, to discard a formerly authorized screen's cache.
+    getSocketServer()?.to(`user:${row.previousInterviewer}`).emit("exits.access.changed",{});
+  }
+  await changed(row.made.id,"scheduled");return get(row.made.id,actor,meta);
 }
 export async function list(actor:ExitActor,meta:ExitMeta){
   const c=await exitContext(actor);await purgeExpiredInterviews();

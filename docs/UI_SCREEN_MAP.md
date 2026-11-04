@@ -211,3 +211,15 @@ Not built in this pass, no nav items, no fake data. Built later with this design
 
 Every URL above keeps working: this pass changes no route path. Route-level code
 splitting (step 3) changes how pages load, not their addresses.
+
+<!-- PEEPS-BEGIN exits -->
+### C-3 exits
+
+| URL | Screen | Access | Board | Mapping |
+|---|---|---|---|---|
+| `/app/exits` | Moving on: own resignation/status, assigned checklist tasks, own interviews; current-team queue for managers | Signed in; Developer forbidden by API | `checklist-01` | MAPPED-PARTIAL: task list, status, owner; no invented due dates |
+| `/admin/exits` | Authorized resignation queue | Directors; explicitly enabled HR; enabled Office | `checklist-03` | MAPPED-PARTIAL |
+| `/app/exits/cases/:id`, `/admin/exits/cases/:id` | Exit case and clearance board; letter requests; director hand-off | Own/current team/authorized scoped management | `checklist-04`..`10` | MAPPED-PARTIAL: template, tasks and completion; no payroll figures |
+| `/app/exits/interviews/:id`, `/admin/exits/interviews/:id` | Private interview | Employee, interviewer of record, audited directors only | NOT IN BOARD | Shared form/detail components |
+| `/admin/exits/settings` | Director settings and versioned clearance templates | Directors only | `checklist-07`..`10` | MAPPED-PARTIAL: template editor; business values Not set |
+<!-- PEEPS-END exits -->

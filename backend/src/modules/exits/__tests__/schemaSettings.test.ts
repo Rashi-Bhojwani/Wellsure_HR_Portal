@@ -35,7 +35,7 @@ describe("exit schema and director settings", () => {
     expect(result.body).toHaveLength(Object.keys(SETTING_SCHEMAS).length);
     expect(result.body.every((s:{state:string;value:unknown})=>s.state==="NOT_SET"&&s.value===null)).toBe(true);
     for(const key of Object.keys(SETTING_SCHEMAS) as Array<keyof typeof SETTING_SCHEMAS>) await expect(requiredSetting(key)).rejects.toMatchObject({status:409,code:"EXITS_NOT_SET"});
-    expect((await get("employee","/status")).body).toEqual({submitReady:false,reasonCategories:null});
+    expect((await get("employee","/status")).body).toMatchObject({submitReady:false,reasonCategories:null});
   });
   it("auth, director permission, employee isolation and Developer 403 cover all foundation routes",async()=>{
     const body={value:{allowed:true},version:0,reason:"DEMO"};
@@ -43,6 +43,7 @@ describe("exit schema and director settings", () => {
     expect((await request(app).get("/api/exits/settings")).status).toBe(401);
     for(const who of ["hr","employee","other","developer"] as const){
       expect((await get(who,"/settings")).status).toBe(403);
+      expect((await get(who,"/owners")).status).toBe(403);
       expect((await put(who,"rejectAllowed",body)).status).toBe(403);
       expect((await get(who,"/checklist-templates")).status).toBe(403);
       expect((await request(app).post("/api/exits/checklist-templates").set(...authHeader(tokens[who])).send(template)).status).toBe(403);

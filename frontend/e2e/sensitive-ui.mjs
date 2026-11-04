@@ -75,6 +75,10 @@ const ASSET_MARKER = "DEMO-ASSET-HELD-BY-007";
 const ASSET_MONEY = /₹|\bINR\b|\bRs\.?\s?\d/;
 async function peepsPageChecks(page, user, label, base, p, text) {
   const where = `${label} on ${base}/${p}`;
+  // PEEPS-BEGIN exits
+  if (!["DEMO001", "DEMO013", "DEMO006", "DEMO004"].includes(user) && text.includes("DEMO-C3-PRIVATE-INTERVIEW")) problems.push(`${where}: sees a private exit interview outside the relationship`);
+  if ((p === "exits" || p.startsWith("exits/")) && /₹|\bINR\b|\bRs\.?\s?\d/.test(text)) problems.push(`${where}: exit screen contains a money value`);
+  // PEEPS-END exits
   // PEEPS-BEGIN helpdesk-visibility
   if (!["DEMO001", "DEMO013", "DEMO006"].includes(user) && text.includes("DEMO-C2-PRIVATE")) problems.push(`${where}: sees a ticket outside the category audience`);
   if (user !== "DEMO001" && user !== "DEMO013" && text.includes('data-testid="helpdesk-category-visibility"')) problems.push(`${where}: the director-only visibility panel is rendered`);
@@ -144,7 +148,9 @@ if (doEmployee) await visit("DEMO004", "an HR Admin (own portal)", "/app", emplo
 // Stage 1.6: the same HR Admin with every switch the directors have turned all the way ON (the most HR can ever be given) and then all the way OFF (every duty closed), set through the
 // real API by the demo's director and put back as they were. No switch may show a secret, and every page must still say it is the demo.
 const API = process.env.API_URL ?? "http://localhost:4000";
-const CAPABILITIES = ["VIEW_ATTENDANCE", "APPROVE_REGULARIZATIONS", "APPROVE_LEAVE", "EDIT_MUSTER", "UPLOAD_MANUAL_MUSTER", "FINALISE_MONTH", "CORRECTIONS", "SHIFT_ROSTER", "EXCEPTIONS_QUEUE", "ATTENDANCE_REPORTS", "LEAVE_REPORTS"];
+// PEEPS-BEGIN exits
+const CAPABILITIES = ["VIEW_ATTENDANCE", "APPROVE_REGULARIZATIONS", "APPROVE_LEAVE", "EDIT_MUSTER", "UPLOAD_MANUAL_MUSTER", "FINALISE_MONTH", "CORRECTIONS", "SHIFT_ROSTER", "EXCEPTIONS_QUEUE", "ATTENDANCE_REPORTS", "LEAVE_REPORTS", "MANAGE_EXITS"];
+// PEEPS-END exits
 let directorToken;
 async function setAllDuties(state) {
   if (!directorToken) {
@@ -238,6 +244,29 @@ if (doEmployee) await visit("DEMO009", "another employee", "/app", employeePaths
   // PEEPS-END helpdesk-visibility
 }
 // PEEPS-END
+// PEEPS-BEGIN exits
+// Dynamic case/interview paths supplement the menu scan in both portals.
+{
+  const API = process.env.API_URL ?? "http://localhost:4000";
+  const login=await fetch(`${API}/api/auth/login`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({employeeCode:"DEMO001",password:PASSWORD})});
+  const token=(await login.json()).accessToken;if(!token)throw new Error("could not sign in for exit scan");
+  const headers={authorization:`Bearer ${token}`};
+  const cases=await (await fetch(`${API}/api/exits/resignations`,{headers})).json();
+  const exitCase=cases.items?.find(r=>r.reason.includes("DEMO-C3-RESIGNATION"));
+  const interviews=await (await fetch(`${API}/api/exits/interviews`,{headers})).json();
+  const interview=interviews.items?.find(i=>i.caseId===exitCase?.caseId);
+  if(!exitCase?.caseId||!interview?.id)throw new Error("C-3 DEMO exit/interview missing");
+  if(doAdmin)for(const user of ["DEMO005","DEMO004","DEMO001"]){
+    await visit(user,`${user} exit case`,"/admin",[`exits/cases/${exitCase.caseId}`,`exits/interviews/${interview.id}`]);
+  }
+  if(doEmployee)for(const user of ["DEMO005","DEMO006","DEMO007","DEMO009","DEMO004","DEMO001"]){
+    await visit(user,`${user} exit relationship`,"/app",[`exits/cases/${exitCase.caseId}`,`exits/interviews/${interview.id}`]);
+    const page=await sessionFor(user);const text=await page.locator("body").innerText();
+    const allowed=["DEMO006","DEMO004","DEMO001"].includes(user);
+    if(allowed!==text.includes("DEMO-C3-PRIVATE-INTERVIEW"))problems.push(`${user}: private interview presence differs from its relationship`);
+  }
+}
+// PEEPS-END exits
 for (const page of sessions.values()) await page.context().close();
 await browser.close();
 

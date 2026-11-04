@@ -1,3 +1,5 @@
+import { activeUsersHoldingPermission } from "../../lib/permissions";
+import { getSocketServer } from "../../realtime/emit";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma";
@@ -54,6 +56,8 @@ export async function setExitSetting(key: ExitSettingKey, input: z.infer<typeof 
     const row = await tx.exitSettingVersion.create({ data: { key, version: input.version + 1, value: value === null ? Prisma.JsonNull : value, reason: input.reason, changedByUserId: meta.actorUserId } });
     await writeAuditLogs([{ ...meta, action: "exits.setting.confirmed", entityType: "ExitSettingVersion", entityId: row.id, after: { key, version: row.version, reason: input.reason } }], tx);
   });
+  const affected=await activeUsersHoldingPermission("exits.view");
+  if(affected.length)getSocketServer()?.to(affected.map(u=>`user:${u.employeeId}`)).emit("exits.access.changed",{});
   return settingsView(meta.actorUserId);
 }
 export async function createTemplate(input: z.infer<typeof templateSchema>, meta: ExitMeta) {

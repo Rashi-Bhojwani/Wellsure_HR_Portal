@@ -122,7 +122,8 @@ export async function submit(actor:ExitActor,input:z.infer<typeof submitSchema>,
 export async function getResignation(id:string,actor:ExitActor) {
   const c=await exitContext(actor);const row=await load(id,c);
   if(row.exitCase)await syncCase(row.exitCase.id);
-  return projection(await load(id,c));
+  const fresh=await load(id,c);
+  return {...projection(fresh),canAccept:fresh.status==="SUBMITTED"&&await mayAccept(c,fresh.employeeId),canWithdraw:fresh.status==="SUBMITTED"&&fresh.employeeId===c.employeeId};
 }
 export async function mine(actor:ExitActor) {
   await exitContext(actor);
@@ -198,5 +199,5 @@ export async function getCase(id:string,actor:ExitActor) {
   if(!exitCase)throw new HttpError(404,"Exit case not found.","NOT_FOUND");
   await syncCase(id);
   exitCase=await prisma.exitCase.findUniqueOrThrow({where:{id},include:{resignation:{include},separation:true}});
-  return {id:exitCase.id,status:exitCase.status,resignation:projection(exitCase.resignation),lastWorkingDay:dateOnly(exitCase.separation.lastWorkingDate),separationStatus:exitCase.separation.status,canManage:await managesEmployee(c,exitCase.resignation.employeeId),canAccept:await mayAccept(c,exitCase.resignation.employeeId),isOwn:exitCase.resignation.employeeId===c.employeeId,isDirector:c.director};
+  return {id:exitCase.id,status:exitCase.status,closedAt:exitCase.closedAt?.toISOString()??null,closeNote:exitCase.closeNote,resignation:projection(exitCase.resignation),lastWorkingDay:dateOnly(exitCase.separation.lastWorkingDate),separationStatus:exitCase.separation.status,canManage:await managesEmployee(c,exitCase.resignation.employeeId),canAccept:await mayAccept(c,exitCase.resignation.employeeId),isOwn:exitCase.resignation.employeeId===c.employeeId,isDirector:c.director};
 }

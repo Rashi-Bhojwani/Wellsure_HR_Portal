@@ -29,6 +29,9 @@ import {
   WalletOutlined,
 } from "@ant-design/icons";
 import { lazyPage } from "./lazyPage";
+// PEEPS-BEGIN exits
+const ExitsPage = lazyPage(() => import("../features/exits/ExitsPage"), "ExitsPage");
+// PEEPS-END exits
 // PEEPS-BEGIN assets
 import { LaptopOutlined } from "@ant-design/icons";
 const MyAssetsPage = lazyPage(() => import("../features/assets/pages/MyAssetsPage"), "MyAssetsPage");
@@ -377,6 +380,9 @@ export const employeeMenu: EmployeeMenuEntry[] = [
     description: "Badges and private notes you have received.",
   },
   // PEEPS-END
+  // PEEPS-BEGIN exits
+  { key: "moving-on", label: "Moving on", path: "exits", icon: CheckSquareOutlined, element: ExitsPage, description: "Your resignation, clearance and private interview." },
+  // PEEPS-END exits
 ];
 
 // PEEPS-BEGIN badges-nudges

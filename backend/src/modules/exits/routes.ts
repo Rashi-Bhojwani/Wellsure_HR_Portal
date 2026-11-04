@@ -1,3 +1,5 @@
+import { prisma } from "../../lib/prisma";
+import { inForceOn } from "../../lib/effectiveDating";
 import * as settlement from "./settlement";
 import * as interviews from "./interviews";
 import * as clearance from "./clearance";
@@ -7,16 +9,17 @@ import { z } from "zod";
 import { authenticate } from "../../middleware/authenticate";
 import { requirePermission } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
-import { metaOf, requireExitDirector, requireExitUser } from "./access";
+import { exitContext, metaOf, requireExitDirector, requireExitUser } from "./access";
 import * as settings from "./settings";
 
 export const exitsRouter = Router();
 exitsRouter.use(authenticate, requireExitUser);
 const empty = z.object({}).strict();
 export const idSchema = z.object({ id: z.string().min(1) });
-exitsRouter.get("/status", validate({ query: empty }), async (_req, res) => {
+exitsRouter.get("/status", validate({ query: empty }), async (req, res) => {
+  const c=await exitContext(req.user!);
   const categories = await settings.getExitSetting("reasonCategories");
-  res.json({ submitReady: categories !== null, reasonCategories: categories });
+  res.json({ submitReady: categories !== null, reasonCategories: categories, canManage:c.manage, canReadTeam:c.manager, isDirector:c.director });
 });
 exitsRouter.get("/settings", requirePermission("exits.settings.manage"), validate({ query: empty }), async (req, res) => {
   res.json(await settings.settingsView(req.user!.userId));
@@ -58,3 +61,10 @@ exitsRouter.get("/cases/:id/settlement-inputs",validate({params:idSchema,query:e
 exitsRouter.post("/cases/:id/close",validate({params:idSchema,body:settlement.closeSchema}),async(req,res)=>{res.json(await settlement.close(req.params.id as string,req.user!,req.body.note,metaOf(req)));});
 exitsRouter.get("/cases/:id/letter-requests",validate({params:idSchema,query:empty}),async(req,res)=>{res.json(await settlement.letterRequests(req.params.id as string,req.user!));});
 exitsRouter.post("/cases/:id/letter-requests",validate({params:idSchema,body:settlement.letterSchema}),async(req,res)=>{res.status(201).json(await settlement.requestLetter(req.params.id as string,req.user!,req.body.kind,metaOf(req)));});
+
+exitsRouter.get("/owners",validate({query:z.object({q:z.string().trim().max(100).default("")}).strict()}),async(req,res)=>{
+  await requireExitDirector(req.user!.userId);
+  const q=req.query.q as string;
+  const rows=await prisma.employee.findMany({where:{status:"ACTIVE",user:{status:"ACTIVE",roles:{none:{role:{code:"DEVELOPER"}}}},OR:[{employeeCode:{contains:q,mode:"insensitive"}},{nameHistory:{some:{...inForceOn(),fullName:{contains:q,mode:"insensitive"}}}}]},select:{id:true,employeeCode:true,nameHistory:{where:inForceOn(),select:{fullName:true}}},orderBy:{employeeCode:"asc"},take:50});
+  res.json(rows.map(r=>({id:r.id,employeeCode:r.employeeCode,name:r.nameHistory[0]?.fullName??r.employeeCode})));
+});

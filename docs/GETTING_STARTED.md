@@ -979,3 +979,22 @@ chat message.
 
 The database triggers still apply on this path: no SQL can leave the
 system with zero active Super Admins.
+
+<!-- PEEPS-BEGIN exits -->
+### Exits (C-3)
+
+Moving on is at `/app/exits`; authorized case management is at `/admin/exits`.
+A director chooses reason categories before submission, a template and owners
+before clearance, questions before scheduling, and retention before answers.
+Notice rules may remain Not set; acceptance still uses the existing separation
+flow. HR management starts off in **What HR Can Do → Manage exits**. Named
+interviewers can read their interviews independently of that switch. Office
+management needs its capability and the exit audience setting.
+
+The DEMO company explicitly chooses fictional exit rules: DEMO006 has an accepted
+exit with open clearance; DEMO009 is their manager, DEMO008 owns an administrative
+item, and DEMO004 is the interviewer while general HR exit management stays off.
+The private answer marker is visible only to that relationship and directors.
+These choices never seed a regular environment. Letter buttons create requests;
+issuing stays in the existing letters flow. No setup command or service changed.
+<!-- PEEPS-END exits -->

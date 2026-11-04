@@ -2,6 +2,10 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { RequireAuth } from "./RequireAuth";
 import { resolveAdminRoutes, resolveEmployeeRoutes } from "./resolveMenuRoutes";
 import { lazyPage } from "./lazyPage";
+// PEEPS-BEGIN exits
+const ExitCasePage = lazyPage(() => import("../features/exits/ExitCasePage"), "ExitCasePage");
+const ExitInterviewPage = lazyPage(() => import("../features/exits/ExitInterviewPage"), "ExitInterviewPage");
+// PEEPS-END exits
 
 // The signed-in half of the router (router.tsx mounts it, lazily, at /app/* and /admin/*). Kept out of the entry chunk so the login screen never downloads the
 // shells, the menu configs or their icons (bundle budget, DESIGN_SYSTEM.md §7). Paths below are relative to /app or /admin.
@@ -84,6 +88,10 @@ export function PortalRoutes() {
             <Route path="admin-tools/templates/:id" element={<LetterTemplateEditorPage />} />
             <Route path="payroll/run/:id" element={<PayrollRunPage />} />
             <Route path="payroll/run/:id/step/:slug" element={<RunStepPage />} />
+            {/* PEEPS-BEGIN exits */}
+            <Route path="exits/cases/:id" element={<ExitCasePage />} />
+            <Route path="exits/interviews/:id" element={<ExitInterviewPage />} />
+            {/* PEEPS-END exits */}
             {adminRoutes()}
             {/* A stale or mistyped portal URL for a signed-in person goes to that portal's home, not back to the sign-in form. */}
             <Route path="*" element={<Navigate to="/admin" replace />} />
@@ -99,6 +107,10 @@ export function PortalRoutes() {
               and Engage are ordinary menu routes. */}
             <Route path="action" element={<MobileActionPage />} />
             <Route path="explore" element={<MobileExplorePage />} />
+            {/* PEEPS-BEGIN exits */}
+            <Route path="exits/cases/:id" element={<ExitCasePage />} />
+            <Route path="exits/interviews/:id" element={<ExitInterviewPage />} />
+            {/* PEEPS-END exits */}
             {employeeRoutes()}
             <Route path="*" element={<Navigate to="/app/home" replace />} />
           </Route>

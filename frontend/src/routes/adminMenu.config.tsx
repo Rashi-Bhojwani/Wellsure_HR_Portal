@@ -418,3 +418,12 @@ if (assetsApp) {
   ];
 }
 // PEEPS-END
+
+// PEEPS-BEGIN exits
+const ExitsAdminPage = lazyPage(() => import("../features/exits/ExitsPage"), "ExitsAdminPage");
+const ExitSettingsPage = lazyPage(() => import("../features/exits/ExitSettingsPage"), "ExitSettingsPage");
+adminApps.find(a=>a.key==="employee")?.menus?.[0]?.items.push(
+  { key: "exits", label: "Exits", path: "exits", icon: UserDeleteOutlined, element: ExitsAdminPage, needs: { any: ["exits.view"] } },
+  { key: "exit-settings", label: "Exit settings", path: "exits/settings", icon: SettingOutlined, element: ExitSettingsPage, needs: { any: ["exits.settings.manage"] } },
+);
+// PEEPS-END exits
