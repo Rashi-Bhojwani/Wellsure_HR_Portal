@@ -1,8 +1,10 @@
+import { ExitActorBoundary } from "./ExitActorBoundary";
+import { useExitQuery as useQuery } from "./useExitQuery";
 import { useExitsRealtime } from "./useExitsRealtime";
 import { human } from "./helpers";
 import { useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button, DatePicker, Form, Input, Select, Space } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
 import { useAuth } from "../../hooks/useAuth";
@@ -27,7 +29,7 @@ function ResignationTable({rows,loading,error,onRetry,onOpen}:{rows:api.Resignat
 }
 export function ExitQueue(){
   const [page,setPage]=useState(1),[filter,setFilter]=useState<string>();const [params,setParams]=useSearchParams();
-  const query=useQuery({queryKey:["exits","queue",page,filter],queryFn:()=>api.queue(page,filter),placeholderData:keepPreviousData});
+  const query=useQuery({queryKey:["exits","queue",page,filter],queryFn:()=>api.queue(page,filter)});
   return <><Panel title="Resignations" subtitle="Only the cases you are authorized to see"><FilterBar filters={<Select aria-label="Resignation status" placeholder="All statuses" allowClear value={filter} onChange={v=>{setFilter(v);setPage(1);}} options={["SUBMITTED","ACCEPTED","REJECTED","WITHDRAWN"].map(value=>({value,label:human(value)}))}/>}/><QueryState isLoading={query.isLoading} error={query.error} onRetry={()=>void query.refetch()}><ResignationTable rows={query.data?.items??[]} loading={query.isFetching} error={query.error} onRetry={()=>void query.refetch()} onOpen={r=>setParams({resignation:r.id})}/><Space wrap><Button disabled={page<=1} onClick={()=>setPage(page-1)}>Previous</Button><span>Page {page} · {query.data?.total??0} resignation(s)</span><Button disabled={!query.data||page*query.data.pageSize>=query.data.total} onClick={()=>setPage(page+1)}>Next</Button></Space></QueryState></Panel><ResignationDrawer id={params.get("resignation")} onClose={()=>setParams({})}/></>;
 }
 export function AssignedItems(){
@@ -40,11 +42,15 @@ export function InterviewList(){
   const q=useQuery({queryKey:["exits","interviews"],queryFn:api.interviews,refetchOnWindowFocus:true});
   return <Panel title="My private exit interviews"><DataTable rowKey="id" dataSource={q.data?.items??[]} loading={q.isLoading} error={q.error} onRetry={()=>void q.refetch()} pagination={false} empty={<EmptyState title="No interviews" description="Interviews in which you participate appear here." compact/>} columns={[{title:"Scheduled",dataIndex:"scheduledAt",render:(d:string)=>formatDateTime(d)},{title:"Status",dataIndex:"status",render:(s:string)=><StatusChip>{human(s)}</StatusChip>},{title:"Open",key:"link",render:(_,r)=><Link to={`/app/exits/interviews/${r.id}`}>Open private interview</Link>}]} mobile={{title:r=>formatDateTime(r.scheduledAt),status:r=><StatusChip>{human(r.status)}</StatusChip>,actions:r=><Link to={`/app/exits/interviews/${r.id}`}>Open private interview</Link>}}/></Panel>;
 }
-export function ExitsPage(){
+function ExitsPageContent(){
   useExitsRealtime();const client=useQueryClient();const navigate=useNavigate();const status=useQuery({queryKey:["exits","status"],queryFn:api.status});
   const mine=useQuery({queryKey:["exits","mine"],queryFn:api.mine,enabled:!!status.data});
   const [open,setOpen]=useState(false),[selected,setSelected]=useState<string|null>(null),[key,setKey]=useState(()=>crypto.randomUUID());const [form]=Form.useForm();
   const submit=useMutation({mutationFn:(v:{day:Dayjs;reasonCategory:string;reason:string})=>api.submit({requestedLastDay:v.day.format("YYYY-MM-DD"),reasonCategory:v.reasonCategory,reason:v.reason,idempotencyKey:key}),onSuccess:()=>{setOpen(false);form.resetFields();setKey(crypto.randomUUID());void client.invalidateQueries({queryKey:["exits"]});toast.success("Resignation submitted.");},onError:e=>toast.error(apiErrorMessage(e,"Could not submit the resignation."))});
   return <><PageHeader title="Moving on" subtitle="Your resignation, clearance and private interview" actions={<Button type="primary" disabled={!status.data?.submitReady||mine.data?.some(r=>r.active)} onClick={()=>setOpen(true)}>Submit resignation</Button>}/><QueryState isLoading={status.isLoading} error={status.error} onRetry={()=>void status.refetch()}><Stack>{!status.data?.submitReady&&<Panel title="Submission is not set up"><p>A director must choose resignation reason categories before you can submit.</p></Panel>}<Panel title="My resignations"><ResignationTable rows={mine.data??[]} loading={mine.isLoading} error={mine.error} onRetry={()=>void mine.refetch()} onOpen={r=>r.caseId?navigate(`/app/exits/cases/${r.caseId}`):setSelected(r.id)}/></Panel>{(status.data?.canReadTeam||status.data?.canManage)&&<ExitQueue/>}<AssignedItems/><InterviewList/></Stack></QueryState><ResignationDrawer id={selected} onClose={()=>setSelected(null)}/><SideDrawer open={open} onClose={()=>setOpen(false)} title="Submit resignation" primaryLabel="Submit resignation" primaryLoading={submit.isPending} onPrimary={()=>form.submit()}><Form form={form} layout="vertical" onFinish={v=>submit.mutate(v)}><Form.Item name="day" label="Requested last working day" rules={[{required:true}]}><DatePicker style={{width:"100%"}}/></Form.Item><Form.Item name="reasonCategory" label="Reason category" rules={[{required:true}]}><Select placeholder="Choose a configured category" options={status.data?.reasonCategories?.map(c=>({value:c.code,label:c.label}))}/></Form.Item><Form.Item name="reason" label="Reason" rules={[{required:true,whitespace:true}]}><Input.TextArea rows={4} maxLength={5000}/></Form.Item></Form></SideDrawer></>;
 }
-export function ExitsAdminPage(){useExitsRealtime();const {hasRole}=useAuth();return <><PageHeader title="Exits" subtitle="Resignations and offboarding clearance" actions={hasRole("SUPER_ADMIN")?<Link to="/admin/exits/settings">Exit settings</Link>:undefined}/><Stack><ExitQueue/></Stack></>;}
+function ExitsAdminPageContent(){useExitsRealtime();const {hasRole}=useAuth();return <><PageHeader title="Exits" subtitle="Resignations and offboarding clearance" actions={hasRole("SUPER_ADMIN")?<Link to="/admin/exits/settings">Exit settings</Link>:undefined}/><Stack><ExitQueue/></Stack></>;}
+
+export function ExitsPage(){return <ExitActorBoundary><ExitsPageContent/></ExitActorBoundary>;}
+
+export function ExitsAdminPage(){return <ExitActorBoundary><ExitsAdminPageContent/></ExitActorBoundary>;}

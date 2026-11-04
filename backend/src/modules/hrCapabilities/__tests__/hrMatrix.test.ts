@@ -22,9 +22,15 @@ interface Door {
   method: "get" | "post";
   path: string;
   body?: object;
+  // PEEPS C3 START: exits is an explicit opt-in capability.
+  offByDefault?: boolean;
+  // PEEPS C3 END
 }
 // One door per capability at least; each is a request that is refused on permission (403) or let in and then refused on its own input or missing record (anything else).
 const DOORS: Door[] = [
+  // PEEPS C3 START
+  { cap: "MANAGE_EXITS", method: "get", path: "/api/exits/clearance/overdue", offByDefault: true },
+  // PEEPS C3 END
   { cap: "VIEW_ATTENDANCE", method: "get", path: "/api/attendance/who-is-in" },
   { cap: "VIEW_ATTENDANCE", method: "get", path: "/api/attendance/swipes" },
   { cap: "APPROVE_REGULARIZATIONS", method: "get", path: "/api/attendance/regularizations" },
@@ -90,8 +96,15 @@ describe("the persona matrix", () => {
     expect([...new Set(DOORS.map((d) => d.cap))].sort()).toEqual(HR_CAPABILITIES.map((c) => c.id).sort());
   });
 
-  it("with nothing switched, HR Admin is let through every door and a director too; an employee and a manager through none", async () => {
-    for (const [door, status] of Object.entries(await statuses("hrAdmin"))) expect(status, `HR Admin ${door}`).not.toBe(403);
+  // PEEPS C3 START: preserve existing defaults and require explicit exits ON.
+  it("with nothing switched, HR Admin has the existing doors and exits stays off; directors have all, employees and managers none", async () => {
+    const hr = await statuses("hrAdmin");
+    for (const door of DOORS) {
+      const key = `${door.method} ${door.path}`;
+      if (door.offByDefault) expect(hr[key], `HR Admin ${key}`).toBe(403);
+      else expect(hr[key], `HR Admin ${key}`).not.toBe(403);
+    }
+    // PEEPS C3 END
     for (const [door, status] of Object.entries(await statuses("director"))) expect(status, `director ${door}`).not.toBe(403);
     for (const who of ["employee", "manager"] as const) for (const [door, status] of Object.entries(await statuses(who))) expect(status, `${who} ${door}`).toBe(403);
   });

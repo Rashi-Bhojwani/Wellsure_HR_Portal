@@ -1,5 +1,6 @@
+import { useExitQuery as useQuery } from "./useExitQuery";
 import { useState, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
+
 import { Form, Input, Select } from "antd";
 import { SideDrawer, useDebouncedValue } from "../../ui";
 import * as api from "./api";

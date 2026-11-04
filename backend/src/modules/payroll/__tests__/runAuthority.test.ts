@@ -207,7 +207,10 @@ describe("director authority for a run: what stays", () => {
       }
     }
     for (const slug of Object.keys(STEP_OF) as Slug[]) for (const other of Object.keys(STEP_OF) as Slug[]) expect(results[`${slug}/${other}`], `${slug} on, asking about ${other}`).toBe(slug === other ? "SECOND_DIRECTOR" : "DIRECTOR_AUTHORITY");
-    expect(DIRECTOR_STEPS.length).toBe(11);
+    // PEEPS C3 START: the original eleven steps plus optional exit approval.
+    expect(DIRECTOR_STEPS.filter(step => step !== "EXIT_APPROVAL")).toHaveLength(11);
+    expect(DIRECTOR_STEPS.some(step => step === "EXIT_APPROVAL")).toBe(true);
+    // PEEPS C3 END
   });
 
   it("with the check switched on for the step, nothing changes: the maker waits, the other director decides, the same person can never be both", async () => {

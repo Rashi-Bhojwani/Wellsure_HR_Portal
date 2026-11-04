@@ -1,7 +1,9 @@
+import { ExitActorBoundary } from "./ExitActorBoundary";
+import { useExitQuery as useQuery } from "./useExitQuery";
 import { human } from "./helpers";
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button, Form, Input, InputNumber, Radio, Select, Space } from "antd";
 import { grades } from "../../api/org";
 import { apiErrorMessage } from "../../lib/apiError";
@@ -32,8 +34,10 @@ function TemplateEditor(){
   const save=useMutation({mutationFn:(v:Omit<api.Template,"id"|"version">)=>api.saveTemplate({...v,items:(v.items??[]).map(i=>({...i,ownerEmployeeIds:i.ownerTeam==="MANAGER"?[]:i.ownerEmployeeIds})),assetOwner:{...v.assetOwner,ownerEmployeeIds:v.assetOwner.ownerTeam==="MANAGER"?[]:v.assetOwner.ownerEmployeeIds}}),onSuccess:()=>{void client.invalidateQueries({queryKey:["exits"]});form.resetFields();toast.success("New template version saved.");},onError:e=>toast.error(apiErrorMessage(e,"Could not save the template."))});
   return <Panel title="Clearance template" subtitle={q.data?`Current: ${q.data.name} · version ${q.data.version}`:"Not set"}><QueryState isLoading={q.isLoading} error={q.error} onRetry={()=>void q.refetch()}>{q.data&&<Stack><DataTable rowKey="code" dataSource={q.data.items} pagination={false} columns={[{title:"Current task",dataIndex:"label"},{title:"Owner team",dataIndex:"ownerTeam",render:(s:string)=>human(s)},{title:"Required",dataIndex:"required",render:(b:boolean)=>b?"Yes":"No"}]} mobile={{title:i=>i.label,subtitle:i=>human(i.ownerTeam)}}/><Button onClick={()=>form.setFieldsValue({...q.data,reason:undefined})}>Edit as a new version</Button></Stack>}<Form form={form} layout="vertical" onFinish={v=>save.mutate(v)}><Form.Item name="name" label="New template name" rules={required}><Input maxLength={120}/></Form.Item><Form.List name="items">{(fields,{add,remove})=><Stack>{fields.map(field=><Panel key={field.key} title={`Checklist item ${field.name+1}`} extra={<Button danger onClick={()=>remove(field.name)}>Remove item</Button>}><Form.Item name={[field.name,"code"]} label="Item code" rules={[{required:true,pattern:/^[A-Z0-9_]+$/}]}><Input maxLength={60}/></Form.Item><Form.Item name={[field.name,"label"]} label="Task" rules={required}><Input maxLength={240}/></Form.Item><Choice name={[field.name,"required"]} label="Required before clearance"/><OwnerFields name={[field.name]} full={["items",field.name]}/></Panel>)}<Button onClick={()=>add()}>Add checklist item</Button></Stack>}</Form.List><Panel title="Generated asset-return items"><p>Every active assignment creates a required return item. Readiness also checks assignments added later.</p><OwnerFields name={["assetOwner"]} full={["assetOwner"]}/></Panel><Form.Item name="reason" label="Reason for this template version" rules={required}><Input.TextArea maxLength={2000}/></Form.Item><Button type="primary" htmlType="submit" loading={save.isPending}>Confirm new template</Button></Form></QueryState></Panel>;
 }
-export function ExitSettingsPage(){
+function ExitSettingsPageContent(){
   const q=useQuery({queryKey:["exits","settings"],queryFn:api.settings});const [key,setKey]=useState<string>();
   const selected=q.data?.find(s=>s.key===(key??q.data[0]?.key));
   return <><PageHeader title="Exit settings" subtitle="Director choices; required choices start Not set" actions={<Link to="/admin/exits">Back to exits</Link>}/><QueryState isLoading={q.isLoading} error={q.error} onRetry={()=>void q.refetch()}><Stack><Panel title="Settings"><DataTable rowKey="key" dataSource={q.data??[]} pagination={false} onRowOpen={s=>setKey(s.key)} columns={[{title:"Setting",dataIndex:"key",render:(s:string)=>labels[s]??human(s)},{title:"State",dataIndex:"state",render:(s:string)=><StatusChip>{human(s)}</StatusChip>},{title:"Choose",key:"choose",render:(_,s)=><Button onClick={()=>setKey(s.key)}>Edit</Button>}]} mobile={{title:s=>labels[s.key],status:s=><StatusChip>{human(s.state)}</StatusChip>,actions:s=><Button onClick={()=>setKey(s.key)}>Edit</Button>}}/></Panel>{selected&&<Panel title={labels[selected.key]} subtitle={human(selected.state)}><SettingEditor key={`${selected.key}-${selected.version}`} setting={selected}/></Panel>}<TemplateEditor/></Stack></QueryState></>;
 }
+
+export function ExitSettingsPage(){return <ExitActorBoundary><ExitSettingsPageContent/></ExitActorBoundary>;}

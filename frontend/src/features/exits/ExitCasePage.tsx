@@ -1,8 +1,10 @@
+import { ExitActorBoundary } from "./ExitActorBoundary";
+import { useExitQuery as useQuery } from "./useExitQuery";
 import { useExitsRealtime } from "./useExitsRealtime";
 import { human } from "./helpers";
 import { useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button, DatePicker, Form, Input, Space } from "antd";
 import type { Dayjs } from "dayjs";
 import { listAllLeaveTypes } from "../../api/leave";
@@ -16,7 +18,7 @@ function SettlementPanel({id}:{id:string}){
   const q=useQuery({queryKey:["exits","settlement",id],queryFn:()=>api.settlementInputs(id)});
   return <Panel title="Settlement hand-off" subtitle="Read-only day counts and clearance facts"><QueryState isLoading={q.isLoading} error={q.error} onRetry={()=>void q.refetch()}>{q.data&&<Stack><KeyValueGrid items={[{label:"Employee",value:q.data.employee.employeeCode},{label:"Last working day",value:formatDate(q.data.lastWorkingDay)},{label:"Notice shortfall",value:q.data.noticeShortfallDays===null?"Not set":`${q.data.noticeShortfallDays} day(s)`},{label:"Clearance complete",value:q.data.clearanceComplete?"Yes":"No"},{label:"Override reason",value:q.data.clearanceOverrideReason??"—"},{label:"Open recovery intents",value:q.data.openAssetRecoveryIntentIds.length}]} /><DataTable rowKey="leaveTypeId" dataSource={[...q.data.leaveBalanceDays]} pagination={false} columns={[{title:"Leave type",dataIndex:"leaveTypeId",render:(typeId:string)=>types.data?.find(t=>t.id===typeId)?.name??"Leave"},{title:"Balance days",dataIndex:"days"}]} mobile={{title:r=>types.data?.find(t=>t.id===r.leaveTypeId)?.name??"Leave",fields:[{label:"Balance days",render:r=>r.days}]}}/></Stack>}</QueryState></Panel>;
 }
-export function ExitCasePage(){
+function ExitCasePageContent(){
   useExitsRealtime();const {id=""}=useParams();const admin=useLocation().pathname.startsWith("/admin");const client=useQueryClient();
   const query=useQuery({queryKey:["exits","case",id],queryFn:()=>api.getCase(id)});
   const board=useQuery({queryKey:["exits","checklist",id],queryFn:()=>api.checklist(id),enabled:!!query.data});
@@ -32,3 +34,5 @@ export function ExitCasePage(){
   <NoteDrawer required={action!=="item"} open={!!action} title={action==="override"?"Director clearance override":action==="close"?"Close exit case":"Complete checklist item"} label={action==="close"?"Closure note":"Reason"} busy={mutate.isPending} onClose={()=>setAction(null)} onSubmit={note=>mutate.mutate(()=>action==="override"?api.ready(id,note):action==="close"?api.close(id,note):api.completeItem(itemId!,note))}/>
   {row?.isDirector&&<SideDrawer open={schedule} onClose={()=>setSchedule(false)} title="Schedule private interview" primaryLoading={mutate.isPending} onPrimary={()=>form.submit()}><Form form={form} layout="vertical" onFinish={(v:{interviewerEmployeeId:string;scheduledAt:Dayjs;reason:string})=>mutate.mutate(()=>api.schedule(id,{...v,scheduledAt:v.scheduledAt.toISOString()}))}><Form.Item name="interviewerEmployeeId" label="Interviewer of record" rules={[{required:true}]}><OwnerSelect/></Form.Item><Form.Item name="scheduledAt" label="Scheduled date and time" rules={[{required:true}]}><DatePicker showTime style={{width:"100%"}}/></Form.Item><Form.Item name="reason" label="Assignment reason" rules={[{required:true,whitespace:true}]}><Input.TextArea maxLength={2000}/></Form.Item></Form></SideDrawer>}</>;
 }
+
+export function ExitCasePage(){return <ExitActorBoundary><ExitCasePageContent/></ExitActorBoundary>;}
