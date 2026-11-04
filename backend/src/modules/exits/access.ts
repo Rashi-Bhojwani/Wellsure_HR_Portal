@@ -32,8 +32,8 @@ export async function exitContext(actor: ExitActor) {
   const hr = access.roleCodes.some((r) => (HR_ROLE_CODES as readonly string[]).includes(r));
   const hrOn = hr && capabilityState(await switchRowsFor(actor.userId, access.roleCodes), "MANAGE_EXITS", actor.userId, access.roleCodes, new Date()) === "ON";
   const member = await memberStateFor(actor.employeeId);
-  const office = Boolean(member?.capabilities.includes("MANAGE_EXITS") && (await getExitSetting("officeAudience"))?.officeManages);
-  const manager = access.roleCodes.includes("MANAGER");
+  const office = Boolean((!hr || hrOn) && member?.capabilities.includes("MANAGE_EXITS") && (await getExitSetting("officeAudience"))?.officeManages);
+  const manager = access.roleCodes.includes("MANAGER") && (!hr || hrOn || director);
   const teamIds = manager ? await getTeamEmployeeIds(actor.employeeId) : [];
   const manage = director || office || (hrOn && access.permissions.has("exits.manage"));
   const employeeScope = director || office ? {} : await buildEmployeeScopeWhere(actor.employeeId, access.dataScope);

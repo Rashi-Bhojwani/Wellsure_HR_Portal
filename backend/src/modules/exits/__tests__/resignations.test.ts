@@ -12,6 +12,7 @@ describe("resignations: current audience, core separation and retry safety",()=>
   it("submission refuses missing reason categories; Developer is forbidden",async()=>{
     expect((await f.submit()).status).toBe(409);
     expect((await f.submit("developer")).status).toBe(403);
+    expect((await f.submit("employee",{employeeId:f.people.other.employeeId})).status).toBe(400);
     await f.setting("reasonCategories",[{code:"DEMO",label:"DEMO reason"}]);
   });
   it("two identical concurrent submissions return the same single active record",async()=>{
@@ -27,6 +28,7 @@ describe("resignations: current audience, core separation and retry safety",()=>
   it("employees only see their own; manager sees current team but needs an explicit grant to accept",async()=>{
     expect((await f.get("employee",`/resignations/${id}`)).status).toBe(200);
     expect((await f.get("other",`/resignations/${id}`)).status).toBe(404);
+    for(const action of ["accept","reject","withdraw"])expect((await f.post("other",`/resignations/${id}/${action}`,action==="accept"?{lastWorkingDay:"2098-04-30"}:{note:"DEMO"})).status).toBe(404);
     expect((await f.get("employee","/resignations")).status).toBe(403);
     expect((await f.get("other","/resignations/mine")).body).toEqual([]);
     expect((await f.get("manager","/resignations")).body.items.map((r:{id:string})=>r.id)).toEqual([id]);

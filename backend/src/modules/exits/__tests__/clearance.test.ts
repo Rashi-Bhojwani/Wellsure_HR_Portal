@@ -62,6 +62,17 @@ describe("exit clearance: explicit owners and live asset gate",()=>{
     const r=await f.post("director",`/cases/${caseId}/ready`);expect(r.status).toBe(200);expect(r.body).toMatchObject({status:"READY_FOR_SETTLEMENT",overrideReason:null,blockers:{assignmentIds:[],requiredItemIds:[]}});
     expect(await prisma.assetAssignment.findUniqueOrThrow({where:{id:assignmentId}})).toMatchObject({endReason:"RETURNED"});
   });
+  it("an asset issued after every required item was completed still blocks readiness",async()=>{
+    await newAsset();
+    expect((await f.get("director",`/cases/${caseId}/checklist`)).body.blockers.requiredItemIds).toEqual([]);
+    expect((await f.post("director",`/cases/${caseId}/ready`)).status).toBe(409);
+    await expect(prisma.exitCase.update({where:{id:caseId},data:{status:"READY_FOR_SETTLEMENT"}})).rejects.toThrow("EXIT_CLEARANCE_BLOCKED");
+  });
+  it("an employee cannot read or change another person's clearance, including after receiving a single item",async()=>{
+    expect((await f.get("other",`/cases/${caseId}/checklist`)).status).toBe(404);
+    for(const action of ["checklist/start","ready"])expect((await f.post("other",`/cases/${caseId}/${action}`)).status).toBe(404);
+    expect((await f.get("other","/clearance/overdue")).status).toBe(403);
+  });
   it("Developer is forbidden on every checklist route",async()=>{
     for(const path of ["/clearance/mine","/clearance/overdue",`/cases/${caseId}/checklist`])expect((await f.get("developer",path)).status).toBe(403);
     for(const path of [`/cases/${caseId}/checklist/start`,`/cases/${caseId}/ready`,`/checklist-items/${itemId}/complete`])expect((await f.post("developer",path)).status).toBe(403);

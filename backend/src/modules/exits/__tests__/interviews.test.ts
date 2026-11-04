@@ -23,6 +23,9 @@ describe("exit interviews: relationship confidentiality on every boundary",()=>{
     await f.setting("interviewQuestions",[{id:"DEMO_QUESTION",label:"DEMO question",required:true}]);
     for(const who of ["hr","manager","employee","other"] as const)expect((await schedule(who)).status).toBe(403);
     const r=await schedule("director");expect(r.status).toBe(201);interviewId=r.body.id;
+    expect((await f.get("other",`/interviews/${interviewId}`)).status).toBe(404);
+    expect((await answer("other",{DEMO_QUESTION:marker})).status).toBe(404);
+    expect((await f.post("other",`/interviews/${interviewId}/complete`)).status).toBe(404);
   });
   it("HR is allowed only as the named interviewer, even while its exit-management switch is off",async()=>{
     expect((await f.get("hr",`/interviews/${interviewId}`)).status).toBe(200);

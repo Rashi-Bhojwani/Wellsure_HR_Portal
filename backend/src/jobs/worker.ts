@@ -87,10 +87,11 @@ export function startWorkers(): Worker[] {
   const separationsWorker = new Worker(
     "employee-separations",
     async (job) => {
+      const result = await processScheduledSeparations();
       // PEEPS-BEGIN exits
+      // Account deactivation finishes first: a retention failure must never delay it.
       await purgeExpiredInterviews();
       // PEEPS-END exits
-      const result = await processScheduledSeparations();
       logger.info({ jobId: job.id, ...result }, "employee-separations processed");
       return result;
     },

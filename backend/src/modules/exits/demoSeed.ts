@@ -1,3 +1,5 @@
+import { PEEPS_LEAVE_TYPE_CODES } from "@shared/constants/peepsLeave";
+import { updateLeaveType } from "../leave/leaveTypes";
 import { randomUUID } from "node:crypto";
 import { addCalendarDays, businessToday } from "../../lib/businessDate";
 import { prisma } from "../../lib/prisma";
@@ -11,6 +13,9 @@ import { schedule, answer } from "./interviews";
 export const DEMO_EXIT_ANSWER="DEMO-C3-PRIVATE-INTERVIEW";
 export async function seedDemoExits(who:Record<string,{employeeId:string;userId:string}>){
   if((await prisma.systemSetting.findUnique({where:{key:"demo.company"}}))?.value!==true)throw new Error("Exit demo requires the labelled DEMO company.");
+  // The earlier leave demo creates a historical request. The checkpoint
+  // explicitly leaves all four prepared types off, including in the DEMO stack.
+  for(const type of await prisma.leaveType.findMany({where:{code:{in:[...PEEPS_LEAVE_TYPE_CODES]},isActive:true},select:{id:true}}))await updateLeaveType(type.id,{isActive:false},{actorUserId:who.DEMO001!.userId});
   if(await prisma.exitSettingVersion.count()||await prisma.resignation.count())return;
   const director=who.DEMO001!,employee=who.DEMO006!,manager=who.DEMO009!;
   const meta={actorUserId:director.userId};
