@@ -750,6 +750,61 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "POST /api/nudges": scoped("sending: the directors only (Q-16, service); a Not-set widening setting could add members and managers; never HR"),
   "POST /api/nudges/:id/revoke": scoped("the sender or a director, only while the directors allow it"),
   // PEEPS-END
+  // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin. Every A-9 router also refuses the Developer role.
+  // Segments: employee.segments.manage (never manager-grantable); each resolves inside the viewer's own scope (modules/parity/segments.ts).
+  "GET /api/employee-segments": admin,
+  "POST /api/employee-segments": admin,
+  "GET /api/employee-segments/:id": admin,
+  "PATCH /api/employee-segments/:id": admin,
+  "POST /api/employee-segments/:id/archive": admin,
+  "GET /api/employee-segments/:id/members": admin,
+  "GET /api/employee-extras/grid-columns/:gridKey": self,
+  "PUT /api/employee-extras/grid-columns/:gridKey": self,
+  "GET /api/employee-extras/:id/contact": admin, // employee.contact.reveal + findScopedEmployee, audited
+  "GET /api/employee-extras/:id/pay": admin, // payroll.salary.view (HR-locked) + findScopedEmployee, audited
+  "GET /api/employee-extras/:id/position": admin, // employee.edit / attendance.config.manage (neither grantable) + findScopedEmployee
+  "POST /api/employee-extras/:id/position": admin, // the same, and the existing writers (updateJob / changeAssignment) audit the change
+  // G4 bulk uploads: employee.documents.manage / employee.edit (neither grantable); each file through the single-file path (scope, type, size, category).
+  "POST /api/employee-extras/bulk/documents/preview": admin,
+  "POST /api/employee-extras/bulk/documents": admin,
+  "POST /api/employee-extras/bulk/photos/preview": admin,
+  "POST /api/employee-extras/bulk/photos": admin,
+  // G5 mass email: communication.mass.send (not grantable); the audience is resolved inside the sender's scope (modules/parity/massEmail.ts).
+  "GET /api/mass-email": admin,
+  "POST /api/mass-email": admin,
+  "GET /api/mass-email/:id": admin,
+  "PATCH /api/mass-email/:id": admin,
+  "POST /api/mass-email/:id/discard": admin,
+  "GET /api/mass-email/:id/count": admin,
+  "POST /api/mass-email/:id/send": admin,
+  // G7 portal access: the unlock guard (assertMaySecure: user.security.manage, which HR can never hold, or a director).
+  "POST /api/access/employees/:employeeId/portal-access": adminInService("assertMaySecure: user.security.manage or a Super Admin; a Super Admin's only by another"),
+  // G7 separation modes: company data (org.manage), read by whoever separates or sees separations (neither key grantable).
+  "GET /api/separation-modes": admin,
+  "POST /api/separation-modes": admin,
+  "PATCH /api/separation-modes/:id": admin,
+  "GET /api/separation-modes/by-separation": admin,
+  "POST /api/separation-modes/separations/:id": admin, // employee.separate + findScopedEmployee, audited
+  // G3 letters workflow: starters, grants and the serial are director-only in the service; requests need letters.issue.nopay (never manager-grantable) AND the
+  // template's own grant (or a director), the person in scope (modules/letters/workflow.ts).
+  "GET /api/letters/starters": adminInService("director only (assertDirector)"),
+  "POST /api/letters/starters/:code/load": adminInService("director only (assertDirector), audited"),
+  "GET /api/letters/grants": adminInService("director only (assertDirector)"),
+  "POST /api/letters/grants": adminInService("director only (assertDirector), audited"),
+  "POST /api/letters/grants/:id/revoke": adminInService("director only (assertDirector), audited"),
+  "GET /api/letters/serial": adminInService("director only (assertDirector)"),
+  "PUT /api/letters/serial": adminInService("director only (assertDirector), audited"),
+  "GET /api/letters/requests/templates": admin,
+  "GET /api/letters/requests/to-sign": everyone("the caller's own pending signatures: template and the person's name only"),
+  "GET /api/letters/requests": admin,
+  "POST /api/letters/requests": admin,
+  "GET /api/letters/requests/:id": admin,
+  "PATCH /api/letters/requests/:id": admin,
+  "POST /api/letters/requests/:id/sign": adminInService("only the named signatory, or a director recording it (workflow.sign)"),
+  "POST /api/letters/requests/:id/issue": admin,
+  "POST /api/letters/requests/:id/void": admin,
+  "GET /api/letters/requests/:id/preview": admin,
+  // A-9 — end
 };
 
 // Scoped routes a manager can reach with a manager-grantable key — each has

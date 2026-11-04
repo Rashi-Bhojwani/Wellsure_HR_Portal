@@ -61,6 +61,9 @@ import { avatarsRouter, profileRouter } from "./modules/avatars/routes";
 // PEEPS-BEGIN leave-types
 import { leaveDocumentsRouter, leaveRulesRouter } from "./modules/leaveRules/routes";
 // PEEPS-END
+// A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
+import { employeeExtrasRouter, massEmailRouter, segmentsRouter, separationModesRouter } from "./modules/parity/routes";
+// A-9 — end
 
 // Every API router and where it's mounted — one list, so the route
 // inventory test (modules/managers/__tests__/routeInventory.test.ts) can see
@@ -130,6 +133,12 @@ const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   { path: "/api/leave-rules", router: leaveRulesRouter },
   { path: "/api/leave-documents", router: leaveDocumentsRouter },
   // PEEPS-END
+  // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
+  { path: "/api/employee-segments", router: segmentsRouter },
+  { path: "/api/employee-extras", router: employeeExtrasRouter },
+  { path: "/api/mass-email", router: massEmailRouter },
+  { path: "/api/separation-modes", router: separationModesRouter },
+  // A-9 — end
 ];
 
 /** The mount list for an environment. The punch simulator's read-only helpers (P2-G) exist everywhere except production, where the path is a plain 404. */

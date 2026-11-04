@@ -70,6 +70,10 @@ const HR_EXECUTIVE_PERMS: string[] = [
   // Peeps new leave types: HR opens their supporting documents (every open audited).
   "leave.documents.view",
   // PEEPS-END
+  // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin: no pay data in either
+  "employee.segments.manage",
+  "employee.contact.reveal",
+  // A-9 — end
 ];
 const HR_ADMIN_PERMS: string[] = [
   ...HR_EXECUTIVE_PERMS,

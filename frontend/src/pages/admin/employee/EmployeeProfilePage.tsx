@@ -21,6 +21,11 @@ import { EmptyState, PageHeader, QueryState, SideDrawer, Skel, SkeletonCard, Sta
 import { fs, space, v } from "../../../theme/tokens";
 import { Grid, ProfileCard, ProfileSection, ProfileShell, ProfileTabs, SectionStack } from "./ProfileLayout";
 import { personalSections, statutoryItems } from "./profileItems";
+// A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
+import { useContactReveal } from "./parity/ContactReveal";
+import { PayTab } from "./parity/PayTab";
+import { PositionTab } from "./parity/PositionTab";
+// A-9 — end
 
 const REFERENCE_STALE = 30_000;
 
@@ -75,11 +80,15 @@ function OfficialTab({ profile, onEditJob }: { profile: employeeApi.EmployeeProf
 }
 
 function PersonalTab({ profile }: { profile: employeeApi.EmployeeProfile }) {
+  const { hasPermission } = useAuth();
+  // A-9: masked contact numbers, shown in full only through the audited reveal.
+  const contact = useContactReveal(profile.id);
   if (!profile.personal) return <EmptyState compact title="No personal details on file." description={null} />;
-  const s = personalSections(profile.personal);
+  const personal = contact.revealed ? { ...profile.personal, mobile: contact.revealed.mobile, emergencyContactPhone: contact.revealed.emergencyContactPhone } : profile.personal;
+  const s = personalSections(personal);
   return (
     <SectionStack>
-      <ProfileSection title="Personal info">
+      <ProfileSection title="Personal info" extra={profile.contactMasked && !contact.revealed && hasPermission("employee.contact.reveal") ? contact.button : undefined}>
         <Grid items={[{ label: "Full Name", value: profile.fullName }, ...s.info]} />
       </ProfileSection>
       <ProfileSection title="Address">
@@ -463,6 +472,9 @@ export function EmployeeProfilePage() {
             ...(hasPermission("employee.documents.view")
               ? [{ key: "documents", label: "Documents", children: <EmployeeDocumentsTab employeeId={id!} canManage={hasPermission("employee.documents.manage")} /> }]
               : []),
+            // A-9: the Pay tab is the directors' (payroll.salary.view, which HR can never hold); each opening is audited by the server.
+            ...(hasPermission("payroll.salary.view") ? [{ key: "pay", label: "Pay", children: <PayTab employeeId={id!} /> }] : []),
+            ...(hasPermission("employee.edit") || hasPermission("attendance.config.manage") ? [{ key: "position", label: "Position", children: <PositionTab employeeId={id!} /> }] : []),
             { key: "history", label: "History", children: <HistoryTab employeeId={id!} canViewBank={canViewBank} /> },
             ...(hasRole("SUPER_ADMIN") || hasPermission("role.view") || hasPermission("user.security.manage")
               ? [{ key: "access", label: "Access", children: <EmployeeAccessTab employeeId={id!} /> }]

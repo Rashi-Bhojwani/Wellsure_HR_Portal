@@ -7,6 +7,12 @@ import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as employeeApi from "../../../api/employee";
 import { fs, fw, space, v } from "../../../theme/tokens";
 import { ConfirmModal, DataTable, EmptyState, FilterBar, InitialsAvatar, PageHeader, Panel, StatusChip, toast, useIsPhone } from "../../../ui";
+// A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
+import { TagOutlined, UnorderedListOutlined } from "@ant-design/icons";
+import { useAuth } from "../../../hooks/useAuth";
+import * as parityApi from "../../../api/parity";
+import { ModesDrawer, SetModeModal } from "./parity/SeparationModes";
+// A-9 — end
 
 type Row = employeeApi.SeparationSummary;
 
@@ -22,6 +28,12 @@ export function SeparationsPage() {
   const [status, setStatus] = useState<Row["status"] | undefined>();
   const [cancelling, setCancelling] = useState<Row | null>(null);
   const { data: separations, isLoading, isFetching, error, refetch } = useQuery({ queryKey: ["employees", "separations"], queryFn: employeeApi.listSeparations });
+  // A-9: the mode of leaving (Not set until chosen from the company's list).
+  const { hasPermission } = useAuth();
+  const modesById = useQuery({ queryKey: ["separation-modes", "by-separation"], queryFn: parityApi.separationModesById });
+  const [modesOpen, setModesOpen] = useState(false);
+  const [settingMode, setSettingMode] = useState<Row | null>(null);
+  const modeOf = (r: Row) => modesById.data?.[r.id]?.label ?? "Not set";
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -41,18 +53,30 @@ export function SeparationsPage() {
   });
 
   const chip = (s: Row["status"]) => <StatusChip tone={STATUS_TONE[s] ?? "neutral"}>{STATUS_LABEL[s] ?? s}</StatusChip>;
-  const rowActions = (r: Row) =>
-    r.status === "INITIATED" ? (
-      <Button danger icon={<StopOutlined />} block={phone} onClick={(e) => { e.stopPropagation(); setCancelling(r); }}>
-        Cancel
-      </Button>
-    ) : null;
+  const rowActions = (r: Row) => (
+    <>
+      {r.status !== "CANCELLED" && hasPermission("employee.separate") && (
+        <Button icon={<TagOutlined />} block={phone} onClick={(e) => { e.stopPropagation(); setSettingMode(r); }} style={{ marginRight: phone ? 0 : space[2] }}>
+          Mode
+        </Button>
+      )}
+      {r.status === "INITIATED" ? (
+        <Button danger icon={<StopOutlined />} block={phone} onClick={(e) => { e.stopPropagation(); setCancelling(r); }}>
+          Cancel
+        </Button>
+      ) : null}
+    </>
+  );
 
   const filtered = Boolean(search || status);
 
   return (
     <>
-      <PageHeader title="Separations" subtitle="Employees leaving the company — start a separation from the employee's profile" />
+      <PageHeader
+        title="Separations"
+        subtitle="Employees leaving the company — start a separation from the employee's profile"
+        actions={hasPermission("org.manage") ? <Button size="large" icon={<UnorderedListOutlined />} onClick={() => setModesOpen(true)} style={phone ? { flex: 1 } : undefined}>Modes of leaving</Button> : undefined}
+      />
 
       <Panel title="Separations" subtitle={separations ? `${rows.length} on record` : undefined}>
         <FilterBar
@@ -98,6 +122,7 @@ export function SeparationsPage() {
             fields: [
               { label: "Last working date", render: (r) => fmtDate(r.lastWorkingDate) },
               { label: "Reason", render: (r) => r.reason },
+              { label: "Mode", render: modeOf },
               { label: "Initiated", render: (r) => fmtDate(r.initiatedAt) },
             ],
             actions: rowActions,
@@ -118,6 +143,7 @@ export function SeparationsPage() {
             },
             { title: "Last Working Date", dataIndex: "lastWorkingDate", render: (d: string) => <span className="ws-num">{fmtDate(d)}</span> },
             { title: "Reason", dataIndex: "reason" },
+            { title: "Mode", key: "mode", render: (_, r) => modeOf(r) },
             { title: "Status", dataIndex: "status", render: chip },
             { title: "Initiated", dataIndex: "initiatedAt", render: (d: string) => <span className="ws-num">{fmtDate(d)}</span> },
             { title: "Actions", key: "actions", align: "right", render: (_, r) => rowActions(r) },
@@ -136,6 +162,9 @@ export function SeparationsPage() {
         danger
         loading={cancelMutation.isPending}
       />
+      {/* A-9 */}
+      <ModesDrawer open={modesOpen} onClose={() => setModesOpen(false)} />
+      <SetModeModal separation={settingMode} current={settingMode ? (modesById.data?.[settingMode.id]?.id ?? null) : null} onClose={() => setSettingMode(null)} />
     </>
   );
 }

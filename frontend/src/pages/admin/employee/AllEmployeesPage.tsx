@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { Button, Checkbox, Dropdown, Input, Modal, Select, type MenuProps } from "antd";
-import { DownloadOutlined, PlusOutlined, SaveOutlined, SettingOutlined } from "@ant-design/icons";
+import { DownloadOutlined, GroupOutlined, PlusOutlined, SaveOutlined, SettingOutlined } from "@ant-design/icons";
+import * as parityApi from "../../../api/parity";
 import * as employeeApi from "../../../api/employee";
 import * as orgApi from "../../../api/org";
 import { useAuth } from "../../../hooks/useAuth";
@@ -21,7 +22,7 @@ const ALL_COLUMNS = [
   { key: "dateOfJoining", title: "DOJ" },
   { key: "status", title: "Status" },
   { key: "employmentType", title: "Type" },
-  { key: "mobile", title: "Mobile" },
+  { key: "mobile", title: "Mobile (last 4)" },
   { key: "personalEmail", title: "Personal Email" },
 ] as const;
 type ColumnKey = (typeof ALL_COLUMNS)[number]["key"];
@@ -57,6 +58,12 @@ export function AllEmployeesPage() {
   const [departmentId, setDepartmentId] = useState<string>();
   const [locationId, setLocationId] = useState<string>();
   const [status, setStatus] = useState<string>();
+  // A-9: current staff, former staff or everyone (absent = everyone, as before).
+  const [population, setPopulation] = useState<"current" | "past" | undefined>();
+  const [segmentOpen, setSegmentOpen] = useState(false);
+  const [segmentName, setSegmentName] = useState("");
+  const [segmentShared, setSegmentShared] = useState(false);
+  const canSaveSegment = hasPermission("employee.segments.manage");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [visibleColumns, setVisibleColumns] = useState<ColumnKey[]>(DEFAULT_COLUMNS);
@@ -65,7 +72,31 @@ export function AllEmployeesPage() {
   const [saveViewOpen, setSaveViewOpen] = useState(false);
   const [viewName, setViewName] = useState("");
 
-  const query = { search: search || undefined, departmentId, locationId, status, page, pageSize, sortBy: "employeeCode" as const, sortDir: "asc" as const };
+  const query = { search: search || undefined, departmentId, locationId, status, population, page, pageSize, sortBy: "employeeCode" as const, sortDir: "asc" as const };
+
+  // A-9: the columns this person chose are remembered for them (server-side, per user).
+  const { data: savedColumns } = useQuery({ queryKey: ["employees", "grid-columns"], queryFn: () => parityApi.getGridColumns("employees"), staleTime: Infinity });
+  // Applied once when it arrives (adjusted during render, not in an effect).
+  const [appliedSaved, setAppliedSaved] = useState<string[] | null | undefined>(undefined);
+  if (savedColumns !== undefined && appliedSaved !== savedColumns) {
+    setAppliedSaved(savedColumns);
+    if (savedColumns) setVisibleColumns(savedColumns.filter((k): k is ColumnKey => ALL_COLUMNS.some((c) => c.key === k)));
+  }
+  const saveColumns = useMutation({ mutationFn: (cols: ColumnKey[]) => parityApi.saveGridColumns("employees", cols) });
+  const chooseColumns = (next: ColumnKey[]) => {
+    setVisibleColumns(next);
+    saveColumns.mutate(next);
+  };
+  const saveSegment = useMutation({
+    mutationFn: () => parityApi.createSegment({ kind: "FILTER", name: segmentName.trim(), shared: segmentShared, criteria: { search: search || undefined, departmentId, locationId, status: status as parityApi.SegmentCriteria["status"], population } }),
+    onSuccess: () => {
+      toast.success("Saved. Find it under Filters & Segments.");
+      setSegmentOpen(false);
+      setSegmentName("");
+      setSegmentShared(false);
+    },
+    onError: () => toast.error("Could not save it (is the name already used?)."),
+  });
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["employees", "grid", query],
@@ -99,7 +130,7 @@ export function AllEmployeesPage() {
     label: (
       <Checkbox
         checked={visibleColumns.includes(c.key)}
-        onChange={(e) => setVisibleColumns((prev) => (e.target.checked ? [...prev, c.key] : prev.filter((k) => k !== c.key)))}
+        onChange={(e) => chooseColumns(e.target.checked ? [...visibleColumns, c.key] : visibleColumns.filter((k) => k !== c.key))}
       >
         {c.title}
       </Checkbox>
@@ -147,7 +178,7 @@ export function AllEmployeesPage() {
     set(val);
     setPage(1);
   };
-  const activeCount = [departmentId, locationId, status].filter(Boolean).length;
+  const activeCount = [departmentId, locationId, status, population].filter(Boolean).length;
   const selectWidth = phone ? "100%" : 180;
 
   return (
@@ -187,6 +218,7 @@ export function AllEmployeesPage() {
             setDepartmentId(undefined);
             setLocationId(undefined);
             setStatus(undefined);
+            setPopulation(undefined);
             setPage(1);
           }}
           filters={
@@ -224,6 +256,18 @@ export function AllEmployeesPage() {
                   { value: "SEPARATED", label: "Separated" },
                 ]}
               />
+              <Select
+                placeholder="Current and former"
+                aria-label="Who"
+                allowClear
+                style={{ width: phone ? "100%" : 170 }}
+                value={population}
+                onChange={resetPage(setPopulation)}
+                options={[
+                  { value: "current", label: "Current staff" },
+                  { value: "past", label: "Former staff" },
+                ]}
+              />
               {savedViews.length > 0 && (
                 <Select
                   placeholder="Saved views"
@@ -248,6 +292,11 @@ export function AllEmployeesPage() {
               <Button icon={<SaveOutlined />} onClick={() => setSaveViewOpen(true)}>
                 Save view
               </Button>
+              {canSaveSegment && (
+                <Button icon={<GroupOutlined />} onClick={() => setSegmentOpen(true)}>
+                  Save as segment
+                </Button>
+              )}
             </>
           }
         />
@@ -298,6 +347,23 @@ export function AllEmployeesPage() {
           </Button>
         </div>
       </ConfirmModal>
+
+      <Modal
+        title="Save these filters as a segment"
+        open={segmentOpen}
+        onCancel={() => setSegmentOpen(false)}
+        onOk={() => saveSegment.mutate()}
+        okText="Save segment"
+        okButtonProps={{ disabled: !segmentName.trim(), loading: saveSegment.isPending }}
+        destroyOnHidden
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
+          <Input autoFocus placeholder="Segment name" aria-label="Segment name" maxLength={100} value={segmentName} onChange={(e) => setSegmentName(e.target.value)} />
+          <Checkbox checked={segmentShared} onChange={(e) => setSegmentShared(e.target.checked)}>
+            Share with other admins (each sees only the people in their own scope)
+          </Checkbox>
+        </div>
+      </Modal>
 
       <Modal title="Save current view" open={saveViewOpen} onCancel={() => setSaveViewOpen(false)} onOk={() => void saveCurrentView()} okText="Save view" okButtonProps={{ disabled: !viewName.trim() }} destroyOnHidden>
         <Input autoFocus placeholder="View name" aria-label="View name" value={viewName} onChange={(e) => setViewName(e.target.value)} onPressEnter={() => void saveCurrentView()} />

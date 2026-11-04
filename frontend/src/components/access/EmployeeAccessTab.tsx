@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Collapse, Form, Input, Select, Tooltip } from "antd";
-import { CheckOutlined, CloseOutlined, KeyOutlined, LockOutlined, MailOutlined, SafetyOutlined, UnlockOutlined } from "@ant-design/icons";
+import { CheckOutlined, CloseOutlined, KeyOutlined, LockOutlined, MailOutlined, SafetyOutlined, StopOutlined, UnlockOutlined } from "@ant-design/icons";
+import * as parityApi from "../../api/parity"; // A-9
 import { PERMISSION_CATALOG, PERMISSION_GROUPS, type PermissionKey } from "@shared/constants/permissions";
 import * as accessApi from "../../api/access";
 import type { EmployeeAccess, EmployeePermission } from "../../api/access";
@@ -241,6 +242,21 @@ export function EmployeeAccessTab({ employeeId }: { employeeId: string }) {
             >
               Send password reset
             </Button>
+            {/* A-9 G7 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md): turn portal access off or back on (the same guard as unlock; the person is emailed). */}
+            {(access.status === "ACTIVE" || access.status === "SUSPENDED") && (
+              <Button
+                icon={<StopOutlined />}
+                danger={access.status === "ACTIVE"}
+                block={phone}
+                onClick={() =>
+                  access.status === "ACTIVE"
+                    ? openPrompt({ title: "Turn off portal access", okText: "Turn off", danger: true, description: "They are signed out everywhere and cannot sign in until access is turned back on. Nothing else about them changes. They'll be emailed that you did this.", run: (reason) => parityApi.setPortalAccess(employeeId, false, reason), success: "Portal access turned off." })
+                    : openPrompt({ title: "Turn portal access back on", okText: "Turn on", description: "They can sign in again with their existing password. They'll be emailed that you did this.", run: (reason) => parityApi.setPortalAccess(employeeId, true, reason), success: "Portal access turned back on." })
+                }
+              >
+                {access.status === "ACTIVE" ? "Turn off portal access" : "Turn portal access back on"}
+              </Button>
+            )}
           </div>
         </Panel>
       )}

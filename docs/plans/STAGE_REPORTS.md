@@ -92,3 +92,64 @@ reported the rest; `sensitive-ui` job timeout 40 min; retry for aborted navigati
 * **Walkthrough** (desktop light and phone 390 dark, scratch database with the demo company): declaration (regime not chosen until clicked, saved as a version), proof upload, directors' decision, the person sees "verified", IT Statement, Tax Years with each value's source note, HR sees neither page nor menu entry. Two defects found on the phone and fixed: the amount boxes and the actions were missing from the phone cards (a person could not type an amount or a director decide), and the window row overflowed sideways. **Not fixed:** on a phone the two-regime table scrolls sideways inside its own box.
 * **Not verified:** tax correctness against any law (every figure is the owners'); real proof documents; behaviour with 500 people (not measured); Form 16 (not started).
 * **Not built:** YTD Reports, payslip YTD, Salary Revision page, revision letters, offer-letter figures, HRA/LTA/perquisites, opening figures, marginal relief, Form 16 and the quarterly return, loans, reimbursements, off-cycle runs.
+
+## A-9: function parity for the Employee and Admin areas (commits `e7d095f` … this one)
+
+**Audit first:** `docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md` (status, evidence, who, group for each of items 1–17 and section I), committed before any code.
+
+**Built, one commit per group:** G1 `d81f0ba` saved filters and segments (resolved inside each viewer's scope; owner-only change and archive), masked contact numbers with an
+audited reveal, the directors' Pay tab (each opening audited), current / past / all, official-email search, remembered columns · G2 `c9bc156` position history, a card
+per attribute, changed only through `updateJob` / `changeAssignment` with a reason · G3 `0829a3a` 11 starter letters (original wording, loaded by a director, arrive
+switched off), per-template prepare / issue grants, batches, two signatories, serial (Not set), void, all through the existing `issueLetter` · G4 `6397ad1` bulk
+documents and photos by employee number through the single-file paths · G5 `6ee5f12` mass email (server-side audience, confirmed count = sent count, no pay or identity
+data) · G6 `7aa4520` search chips, scoped employee results, favourite star · G7 `8fa2777` separation modes (company data, none seeded) and portal access off / on.
+Already built (marked so, nothing added): My Favourites, My Tasks, celebrations (Engage auto-posts), bulletin board (announcements), password reset, unlock, 2FA reset.
+
+**Tests.** Full backend suite run alone: **201 files, 1,961 tests, all passed** (stack stopped, no other test process). New: `parity/__tests__/` segments 8, position 4, bulk 5,
+massEmail 6, accountAndSeparation 3; `letters/__tests__/letterWorkflow.test.ts` 7; frontend `paletteCategory.test.ts` 2 (frontend 14 files, 72 tests). Every new route:
+Developer 403, employee 403, unsigned 401, an access-scan entry (`routeInventory.ts`), Zod validation, scope in the service. Backend and frontend lint and typecheck clean;
+design tokens OK; `db:drift` no difference; build and bundle: login 231.9 KB, shell + employee home 336.7 KB, shell + admin home 356.4 KB (gzip, within budget).
+
+**Mutation checks (25 run).** Caught: segment scope (list and filter), Developer refusal, pay-opening audit, reveal scope, owner-only change, out-of-scope list member;
+position shift key, position change scope (survived at first: the trailing read returned 404 after the write had happened; the test now checks nothing was written,
+then caught), reason required; letters figure-letter lock, grant check, signatures before issue, HR voiding an issued letter, prepare scope; bulk scope, duplicates,
+re-upload; mass email sender scope, count comparison, send-time private-data check (survived at first; test added, then caught); portal access guard, sign-out
+everywhere (survived at first; test added, then caught), inactive mode. **Survived as equivalent (two layers, each covers the other):** the letters service's own
+`letters.issue.nopay` check (the route gate checks it first); mass email "send twice" early return (the DRAFT→SENDING claim also stops it).
+
+**Browser walkthrough** (scratch database `wellsure_hr_a9` with the demo company; desktop light and phone 390 dark). Director: Filters & Segments, All Employees (Who
+filter, Save as segment), profile with Pay (salary history), Position (cards) and Personal (Show contact numbers), Letter Settings (starters, serial Not set), Letters,
+Bulk Upload (both tabs), Mass Email, Separations (Modes of leaving), search dialog (chips, people found). HR Admin: profile tabs without Pay; Letter Settings refused;
+Letters reachable; with the letters switch OFF the menu entry disappears and the page shows "This is not switched on for you"; switch back. Employee: A-9 pages refused.
+Phone dark: every A-9 page, no horizontal scroll, dark background. **One defect found and fixed:** the mass-email message counter overlapped its help text at 390 px
+(counter removed; the limit stays). The fixed drawer was not walked again. A manager was not walked (the demo company has none); manager reach is covered by the tests
+(every A-9 route is gated on keys a manager can never hold).
+
+**Shared-file edits** (additive, inside `A-9 — begin/end` markers; line numbers at this commit): `backend/prisma/schema.prisma` 119–122, 527–532, 770–773, 1660–1663,
+1713–1715, 3551–end · `backend/src/app.ts` 45–47, 95–100 · `backend/src/lib/systemRoles.ts` 64–67 · `backend/src/lib/__tests__/cleanup.ts` 65–67, 103–104 ·
+`backend/src/modules/managers/__tests__/routeInventory.ts` 620–674 · `shared/constants/permissions.ts` 101–105, 248–252 · `shared/constants/sensitiveData.ts` 168–172 ·
+`frontend/src/routes/adminMenu.config.tsx` 28, 122–128, 223–227, 342–344, 406–408 · `backend/src/modules/letters/{routes 7–10, 56–77; service 388–407; validators 63–93}` ·
+`backend/src/modules/access/{service 21, 426–442; routes 7–8, 49–51; controller 52–56; validators 26}` · employee module additions: `grid.ts`, `service.ts` 1 and 510,
+`validators.ts` 228, `EmployeeProfilePage.tsx`, `AllEmployeesPage.tsx`, `SeparationsPage.tsx`, `api/employee.ts` · `CommandPalette.tsx`, `EmployeeAccessTab.tsx`.
+New migrations: `20261103100000_a9_segments`, `…110000_a9_letter_workflow`, `…120000_a9_mass_email`, `…130000_a9_separation_modes`.
+
+**Settings left Not set:** letter serial; separation modes (none seeded); every letter grant; mass-email categories (free text). **New keys:** `employee.segments.manage`,
+`employee.contact.reveal` (HR roles by default), `communication.mass.send` (directors only until granted).
+
+**Decided by me:** see "Decided by me" in the plan file (mass email by Roles & Permissions, not an HR switch; starters loaded switched off; voiding an issued letter is the
+directors'; one company serial; file-name rule; contact keys for both HR roles).
+
+**PEEPS-OWNED, left alone:** asset tracker, avatars and photo rules (bulk photos use this branch's existing photo path), badges, nudges, Unmute, helpdesk, exits,
+recruitment. **Hooks:** A-3 `letterFigureFields()` (`letters/starters.ts`); A-2: no importer added, who may import unchanged (item 14 audit only).
+
+**CI, read per job (run 251, on `8fa2777`):** install-lint-typecheck-test success (backend tests, demo tests, drift, bundle budgets); sensitive-ui admin portal
+success; sensitive-ui employee portal success; docker-build success; attendance-replay success; **latency failed** at "Popovers and dropdowns": on a 390 px phone
+the search dialog no longer fitted the screen (858 px tall in an 844 px screen), **caused by A-9 G6** (the chips row added height; the results list's cap was not
+reduced). Fixed in the last commit (the list's cap is 60 px lower on the admin portal on a phone); `check:popovers` then passed locally against the scratch
+stack (every popover inside the screen, opaque, closes on Escape). **agent-windows failed** at "Install the release and exercise the service": the Windows runner
+refused event-log registration ("Access is denied"); nothing in A-9 touches `biometric-agent/`, so not caused by this work, and not changed.
+
+**Not built:** division (does not exist in the system; open question); NOT SHOWN YET items (policies with acknowledgment, identity verification, contract details,
+document drive). **Unverified:** the mass email against a real mail server (console driver and a replaced `mailService` only); 500-person performance of segments and
+mass email; the letter void on a letter still rendering (refused by design, not exercised in the browser); a manager in the browser; `check:sensitive-ui` was not run locally
+(it passed in CI).

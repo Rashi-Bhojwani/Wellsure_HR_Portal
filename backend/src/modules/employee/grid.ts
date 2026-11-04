@@ -15,6 +15,8 @@ export interface EmployeeListQuery {
   cityId?: string;
   status?: "ACTIVE" | "INACTIVE" | "SEPARATED";
   employmentType?: "PERMANENT" | "CONTRACT" | "INTERN" | "CONSULTANT" | "PROBATION";
+  // A-9: current (not separated), past (separated) or all; absent = all, as before.
+  population?: "current" | "past" | "all";
   sortBy: "employeeCode" | "fullName" | "dateOfJoining" | "status";
   sortDir: "asc" | "desc";
 }
@@ -40,7 +42,14 @@ interface GridRow {
   aadhaarLast4?: string | null;
 }
 
-async function buildWhere(query: EmployeeListQuery, viewerEmployeeId: string, scope: DataScope): Promise<Prisma.EmployeeWhereInput> {
+/** A-9: a mobile number as the grid and the export show it — the last 4 only. The full number is behind an audited reveal (modules/parity/contact.ts). */
+export function maskMobile(mobile: string | null | undefined): string {
+  const digits = (mobile ?? "").replace(/\D/g, "");
+  if (!digits) return "";
+  return `••••${digits.slice(-4)}`;
+}
+
+export async function buildWhere(query: EmployeeListQuery, viewerEmployeeId: string, scope: DataScope): Promise<Prisma.EmployeeWhereInput> {
   const scopeWhere = await buildEmployeeScopeWhere(viewerEmployeeId, scope);
   const filters: Prisma.EmployeeWhereInput[] = [scopeWhere];
 
@@ -50,11 +59,14 @@ async function buildWhere(query: EmployeeListQuery, viewerEmployeeId: string, sc
         { employeeCode: { contains: query.search, mode: "insensitive" } },
         { nameHistory: { some: { ...inForceOn(), fullName: { contains: query.search, mode: "insensitive" } } } },
         { personal: { personalEmail: { contains: query.search, mode: "insensitive" } } },
+        { officialEmail: { contains: query.search, mode: "insensitive" } }, // A-9
         { personal: { mobile: { contains: query.search } } },
       ],
     });
   }
   if (query.status) filters.push({ status: query.status });
+  if (query.population === "current") filters.push({ status: { not: "SEPARATED" } }); // A-9
+  if (query.population === "past") filters.push({ status: "SEPARATED" }); // A-9
   if (query.employmentType) filters.push({ employmentType: query.employmentType });
   if (query.departmentId || query.designationId || query.locationId || query.cityId) {
     filters.push({
@@ -105,7 +117,7 @@ async function loadRows(where: Prisma.EmployeeWhereInput, includeSensitive: { ba
       dateOfJoining: employee.dateOfJoining.toISOString().slice(0, 10),
       status: employee.status,
       employmentType: employee.employmentType,
-      mobile: employee.personal?.mobile ?? "",
+      mobile: maskMobile(employee.personal?.mobile), // A-9: masked; full number only through the audited reveal
       officialEmail: employee.officialEmail,
       personalEmail: employee.personal?.personalEmail ?? "",
       ...(includeSensitive.bank ? { bankLast4: bank?.accountNumberLast4 ?? null } : {}),
@@ -146,7 +158,7 @@ const EXPORT_COLUMNS: { header: string; key: keyof GridRow; sensitive?: boolean 
   { header: "Date of Joining", key: "dateOfJoining" },
   { header: "Status", key: "status" },
   { header: "Employment Type", key: "employmentType" },
-  { header: "Mobile", key: "mobile" },
+  { header: "Mobile (last 4)", key: "mobile" }, // A-9: masked
   { header: "Official Email", key: "officialEmail" },
   { header: "Personal Email", key: "personalEmail" },
   { header: "Bank Account (last 4)", key: "bankLast4", sensitive: true },

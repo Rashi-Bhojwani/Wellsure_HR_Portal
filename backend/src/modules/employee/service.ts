@@ -1,3 +1,4 @@
+import { maskMobile } from "./grid"; // A-9
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { writeAuditLog } from "../../lib/audit";
@@ -505,7 +506,11 @@ export async function getEmployeeProfile(
   scope: DataScope,
 ) {
   await findScopedEmployee(employeeId, viewer.employeeId, scope);
-  const core = await loadProfileCore(employeeId);
+  const loaded = await loadProfileCore(employeeId);
+  // A-9: another person's contact numbers are masked to the last 4; the full number is behind the audited reveal (modules/parity/contact.ts).
+  const core = loaded.personal && employeeId !== viewer.employeeId
+    ? { ...loaded, personal: { ...loaded.personal, mobile: maskMobile(loaded.personal.mobile), emergencyContactPhone: maskMobile(loaded.personal.emergencyContactPhone) }, contactMasked: true }
+    : { ...loaded, contactMasked: false };
   return {
     ...core,
     statutory: viewer.permissions.has("employee.statutory.view") ? await loadMaskedStatutory(employeeId) : undefined,

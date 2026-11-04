@@ -4,6 +4,8 @@ import { HttpError } from "../../middleware/errorHandler";
 import { tagGate } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
 import * as controller from "./controller";
+import { refuseDeveloper } from "../../middleware/refuseDeveloper"; // A-9
+import { portalAccessSchema } from "./validators"; // A-9
 import {
   assignRoleSchema,
   employeeKeyParamsSchema,
@@ -44,6 +46,9 @@ accessRouter.delete("/employees/:employeeId/overrides/:key", validate({ params: 
 accessRouter.post("/employees/:employeeId/reset-2fa", validate({ params: employeeParamsSchema, body: reasonSchema }), controller.resetTwoFactor);
 accessRouter.post("/employees/:employeeId/unlock", validate({ params: employeeParamsSchema, body: reasonSchema }), controller.unlockAccount);
 accessRouter.post("/employees/:employeeId/password-reset", validate({ params: employeeParamsSchema, body: reasonSchema }), controller.sendPasswordReset);
+// A-9 G7 — begin: disable / enable portal access (the same guard as unlock: user.security.manage or a director, checked in the service). Developer refused.
+accessRouter.post("/employees/:employeeId/portal-access", refuseDeveloper, validate({ params: employeeParamsSchema, body: portalAccessSchema }), controller.setPortalAccess);
+// A-9 — end
 
 // Security events (E1.1) — Super Admin only (checked in the service).
 accessRouter.get("/security-events", validate({ query: securityEventsQuerySchema }), controller.listSecurityEvents);

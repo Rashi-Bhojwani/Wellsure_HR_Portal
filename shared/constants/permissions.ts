@@ -119,6 +119,11 @@ export const PERMISSION_KEYS = [
   "exits.view", "exits.manage", "exits.accept", "exits.checklist.complete",
   "exits.settings.manage", "exits.interviews.view", "exits.settlement.view",
   // PEEPS-END exits
+  // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
+  "employee.segments.manage", // save employee filters and segments (resolved inside the viewer's own scope; never widens it)
+  "employee.contact.reveal", // reveal a person's full contact number (masked to the last 4 everywhere else); audited with a reason
+  "communication.mass.send", // compose and send an email to many employees at once (never pay or identity data); the directors', until an owner grants it
+  // A-9 — end
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
@@ -281,6 +286,11 @@ export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
   "helpdesk.visibility.manage": { group: "Helpdesk", label: "Set category visibility", description: "Directors choose who may handle general helpdesk categories." },
   // PEEPS-END helpdesk-visibility
   "helpdesk.manage": { group: "Helpdesk", label: "Helpdesk queue", description: "Work the ticket queue: assign, status, replies, internal notes, categories." },
+  // A-9 — begin
+  "employee.segments.manage": { group: "Employees", label: "Saved filters and segments", description: "Save a filter of employees or a named group of people, optionally shared with other admins. It always resolves inside each viewer's own data scope." },
+  "communication.mass.send": { group: "Home & Engage", label: "Mass email", description: "Write an email to everyone, a saved segment or chosen people, and send it. The text may not carry pay figures or identity numbers. Every send is recorded." },
+  "employee.contact.reveal": { group: "Employees", label: "Reveal contact numbers", description: "See a person's full mobile number (shown as the last 4 digits elsewhere). Each reveal is audited with a reason." },
+  // A-9 — end
   "helpdesk.sensitive.view": { group: "Helpdesk", label: "Sensitive tickets", description: "See tickets in categories marked sensitive (e.g. Payroll & Salary, Grievance)." },
   // PEEPS-BEGIN assets
   "assets.view": { group: "Assets", label: "View the asset register", description: "See every asset, who holds it and its full history. Holders outside the person's data scope are not shown." },

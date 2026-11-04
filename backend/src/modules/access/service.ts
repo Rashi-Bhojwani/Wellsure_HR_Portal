@@ -18,6 +18,7 @@ import { logger } from "../../lib/logger";
 import { sendSecurityChangeNoticeEmail } from "../auth/emails";
 import { adminIssuePasswordReset, adminResetTotp, adminUnlock } from "../auth/service";
 import { inForceOn } from "../../lib/effectiveDating";
+import { revokeAllUserRefreshTokens } from "../auth/tokens"; // A-9
 
 // Roles & permissions (spec §2, Phase 5 commit E1). The rules, numbered as in
 // docs/plans/PHASE_5.md §E1, are enforced HERE (the routes only check that
@@ -421,6 +422,24 @@ export async function sendPasswordReset(employeeId: string, reason: string, acto
   await tellTarget(user.id, "A password-reset link was sent to you", reason, actor);
   return { emailed: true };
 }
+
+// ── A-9 G7 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md, item 17) — begin ──
+// Disable or enable a person's portal access: the same guard as unlock and 2FA reset (another person's, user.security.manage — which HR can never hold — or a
+// director; a director's own account only by another director), a reason, an audit row, and the person is emailed. Disabling sets the account SUSPENDED (refused
+// at sign-in and on every request: middleware/authenticate.ts) and signs them out everywhere; enabling puts it back to ACTIVE. Nothing else about them changes.
+export async function setPortalAccess(employeeId: string, enabled: boolean, reason: string, actor: AccessActor, meta: ActorMeta) {
+  const user = await assertMaySecure(employeeId, actor);
+  if (enabled ? user.status !== "SUSPENDED" : user.status !== "ACTIVE") {
+    throw new HttpError(409, enabled ? "Only a disabled account can be enabled." : "Only an active account can be disabled (an invited one has not signed in yet; a leaver's is already closed).", "WRONG_STATUS");
+  }
+  if (!enabled) await assertSuperAdminRemains(user.id); // never the last active director
+  await prisma.user.update({ where: { id: user.id }, data: { status: enabled ? "ACTIVE" : "SUSPENDED" } });
+  if (!enabled) await revokeAllUserRefreshTokens(user.id);
+  await writeAuditLog({ ...meta, action: enabled ? "user.portal_access.enabled" : "user.portal_access.disabled", entityType: "User", entityId: user.id, before: { status: user.status }, after: { status: enabled ? "ACTIVE" : "SUSPENDED", reason } });
+  await tellTarget(user.id, enabled ? "Your access to the portal was turned back on" : "Your access to the portal was turned off", reason, actor);
+  return getEmployeeAccess(employeeId, actor);
+}
+// ── A-9 — end ──
 
 // ── Security events (E1.1) ─────────────────────────────────────────────
 // Raised by the break-glass CLIs (lib/securityAlerts.ts). Super Admins only.

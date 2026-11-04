@@ -116,6 +116,10 @@ model User {
   delegationsGiven         WorkflowDelegate[]       @relation("DelegationDelegator")
   delegationsReceived      WorkflowDelegate[]       @relation("DelegationDelegate")
   attendanceManualBranches AttendanceManualBranch[] @relation("AttendanceManualBranchUser")
+  // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
+  employeeSegments         EmployeeSegment[]        @relation("EmployeeSegmentOwner")
+  gridPreferences          UserGridPreference[]     @relation("UserGridPreferences")
+  // A-9 — end
 
   @@map("users")
 }
@@ -538,6 +542,12 @@ model Employee {
   badgesReceived             BadgeAward[]
   nudgesReceived             PrivateNudge[]
   // PEEPS-END
+  // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
+  segmentMemberships         EmployeeSegmentMember[]  @relation("EmployeeSegmentMembership")
+  letterRequests             LetterRequest[]          @relation("LetterRequestEmployee")
+  letterSignatures           LetterRequestSignatory[] @relation("LetterRequestSignatory")
+  massEmailsReceived         MassEmailRecipient[]     @relation("MassEmailRecipient")
+  // A-9 — end
 
   // PEEPS-BEGIN avatar-choices
   avatarChoices EmployeeAvatarChoice[]
@@ -782,6 +792,10 @@ model Separation {
   initiatedAt       DateTime         @default(now()) @map("initiated_at")
   cancelledAt       DateTime?        @map("cancelled_at")
   completedAt       DateTime?        @map("completed_at")
+  // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin: the mode (Not set until someone chooses one from the configured list)
+  modeId            String?          @map("mode_id")
+  mode              SeparationMode?  @relation(fields: [modeId], references: [id])
+  // A-9 — end
 
   @@index([employeeId])
   @@map("separations")
@@ -1689,6 +1703,10 @@ model LetterTemplate {
   createdAt                DateTime                @default(now()) @map("created_at")
   updatedAt                DateTime                @updatedAt @map("updated_at")
   versions                 LetterTemplateVersion[]
+  // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
+  requests                 LetterRequest[]
+  grants                   LetterTemplateGrant[]
+  // A-9 — end
 
   @@map("letter_templates")
 }
@@ -1738,6 +1756,9 @@ model GeneratedLetter {
   reissueOf          GeneratedLetter?      @relation("LetterReissue", fields: [reissueOfId], references: [id], onDelete: SetNull)
   reissues           GeneratedLetter[]     @relation("LetterReissue")
   createdAt          DateTime              @default(now()) @map("created_at")
+  // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
+  letterRequest      LetterRequest?
+  // A-9 — end
 
   @@index([employeeId])
   @@map("generated_letters")
@@ -4218,3 +4239,207 @@ model ExitLetterRequest {
   @@map("exit_letter_requests")
 }
 // PEEPS-END exits
+// ── A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin ──────────────────────────────────────────────────────────────────
+// G1: a saved employee filter (criteria) or a named group of people (list). Shared means other holders of the key may USE it; it is always resolved inside the
+// viewer's own data scope, so sharing never shows anyone a person they could not already see. Archived, never deleted.
+enum EmployeeSegmentKind {
+  FILTER
+  LIST
+}
+
+model EmployeeSegment {
+  id          String                  @id @default(cuid())
+  name        String
+  kind        EmployeeSegmentKind
+  criteria    Json                    @default("{}")
+  ownerUserId String                  @map("owner_user_id")
+  owner       User                    @relation("EmployeeSegmentOwner", fields: [ownerUserId], references: [id])
+  shared      Boolean                 @default(false)
+  archivedAt  DateTime?               @map("archived_at") @db.Timestamptz(3)
+  createdAt   DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+  members     EmployeeSegmentMember[]
+
+  @@index([ownerUserId])
+  @@map("employee_segments")
+}
+
+model EmployeeSegmentMember {
+  id         String          @id @default(cuid())
+  segmentId  String          @map("segment_id")
+  segment    EmployeeSegment @relation(fields: [segmentId], references: [id])
+  employeeId String          @map("employee_id")
+  employee   Employee        @relation("EmployeeSegmentMembership", fields: [employeeId], references: [id])
+
+  @@unique([segmentId, employeeId])
+  @@index([employeeId])
+  @@map("employee_segment_members")
+}
+
+// G1: the columns a person chose on a grid (UI convenience, per user, never shared, not audited).
+model UserGridPreference {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  user      User     @relation("UserGridPreferences", fields: [userId], references: [id])
+  gridKey   String   @map("grid_key")
+  columns   Json
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([userId, gridKey])
+  @@map("user_grid_preferences")
+}
+
+// G3: a letter prepared for one person (a batch prepares many at once, sharing a batch id), signed by up to two signatories, then issued through the existing
+// issue path (which files it to the person's documents). Never deleted: a mistake is VOID with a reason. The serial comes from a sequence the directors set
+// (Not set until they do).
+enum LetterRequestStatus {
+  IN_PROGRESS
+  ISSUED
+  VOID
+}
+
+enum LetterSignatoryStatus {
+  PENDING
+  SIGNED
+}
+
+model LetterRequest {
+  id                String                   @id @default(cuid())
+  batchId           String                   @map("batch_id")
+  clientKey         String                   @map("client_key") // the submit's own key: the same submit twice never prepares twice
+  templateId        String                   @map("template_id")
+  template          LetterTemplate           @relation(fields: [templateId], references: [id])
+  employeeId        String                   @map("employee_id")
+  employee          Employee                 @relation("LetterRequestEmployee", fields: [employeeId], references: [id])
+  extraValues       Json                     @default("{}") @map("extra_values")
+  remarks           String?
+  status            LetterRequestStatus      @default(IN_PROGRESS)
+  serial            String?
+  preparedByUserId  String                   @map("prepared_by_user_id")
+  preparedAt        DateTime                 @default(now()) @map("prepared_at") @db.Timestamptz(3)
+  issuedByUserId    String?                  @map("issued_by_user_id")
+  issuedAt          DateTime?                @map("issued_at") @db.Timestamptz(3)
+  generatedLetterId String?                  @unique @map("generated_letter_id")
+  generatedLetter   GeneratedLetter?         @relation(fields: [generatedLetterId], references: [id])
+  voidedByUserId    String?                  @map("voided_by_user_id")
+  voidedAt          DateTime?                @map("voided_at") @db.Timestamptz(3)
+  voidReason        String?                  @map("void_reason")
+  updatedAt         DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+  signatories       LetterRequestSignatory[]
+
+  @@unique([preparedByUserId, clientKey, employeeId])
+  @@index([status, preparedAt])
+  @@index([batchId])
+  @@index([employeeId])
+  @@map("letter_requests")
+}
+
+model LetterRequestSignatory {
+  id                  String                @id @default(cuid())
+  requestId           String                @map("request_id")
+  request             LetterRequest         @relation(fields: [requestId], references: [id])
+  position            Int
+  signatoryEmployeeId String                @map("signatory_employee_id")
+  signatory           Employee              @relation("LetterRequestSignatory", fields: [signatoryEmployeeId], references: [id])
+  status              LetterSignatoryStatus @default(PENDING)
+  signedAt            DateTime?             @map("signed_at") @db.Timestamptz(3)
+  markedByUserId      String?               @map("marked_by_user_id")
+
+  @@unique([requestId, position])
+  @@map("letter_request_signatories")
+}
+
+// G3: who besides the directors may PREPARE or ISSUE letters from one template — a role or a named person. Set and withdrawn only by a director; never on a
+// template that could carry a pay figure. Withdrawn, never deleted.
+enum LetterGrantAction {
+  PREPARE
+  ISSUE
+}
+
+model LetterTemplateGrant {
+  id              String            @id @default(cuid())
+  templateId      String            @map("template_id")
+  template        LetterTemplate    @relation(fields: [templateId], references: [id])
+  action          LetterGrantAction
+  roleCode        String?           @map("role_code")
+  userId          String?           @map("user_id")
+  grantedByUserId String            @map("granted_by_user_id")
+  grantedAt       DateTime          @default(now()) @map("granted_at") @db.Timestamptz(3)
+  revokedByUserId String?           @map("revoked_by_user_id")
+  revokedAt       DateTime?         @map("revoked_at") @db.Timestamptz(3)
+
+  @@index([templateId, action])
+  @@map("letter_template_grants")
+}
+// G5: an email to many people at once. A draft can be changed or discarded (never deleted) before it is sent; the audience is resolved on the server at send
+// time, inside the sender's own scope, and the number the sender confirmed must match what is sent. One recipient row per person (no address is stored).
+enum MassEmailStatus {
+  DRAFT
+  SENDING
+  SENT
+  DISCARDED
+}
+
+enum MassEmailAudience {
+  ALL
+  SEGMENT
+  PEOPLE
+}
+
+enum MassEmailOutcome {
+  SENT
+  FAILED
+  NO_ADDRESS
+}
+
+model MassEmail {
+  id              String               @id @default(cuid())
+  subject         String
+  body            String // plain text; escaped when sent
+  category        String?
+  audience        MassEmailAudience
+  segmentId       String?              @map("segment_id")
+  employeeIds     Json                 @default("[]") @map("employee_ids")
+  status          MassEmailStatus      @default(DRAFT)
+  createdByUserId String               @map("created_by_user_id")
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  sentByUserId    String?              @map("sent_by_user_id")
+  sentAt          DateTime?            @map("sent_at") @db.Timestamptz(3)
+  recipientCount  Int?                 @map("recipient_count")
+  deliveredCount  Int?                 @map("delivered_count")
+  failedCount     Int?                 @map("failed_count")
+  discardedAt     DateTime?            @map("discarded_at") @db.Timestamptz(3)
+  recipients      MassEmailRecipient[]
+
+  @@index([status, createdAt])
+  @@map("mass_emails")
+}
+
+model MassEmailRecipient {
+  id          String           @id @default(cuid())
+  massEmailId String           @map("mass_email_id")
+  massEmail   MassEmail        @relation(fields: [massEmailId], references: [id])
+  employeeId  String           @map("employee_id")
+  employee    Employee         @relation("MassEmailRecipient", fields: [employeeId], references: [id])
+  outcome     MassEmailOutcome
+  detail      String?
+
+  @@unique([massEmailId, employeeId])
+  @@map("mass_email_recipients")
+}
+// G7: how a person left (resignation, termination, retirement and so on) — data the company configures; nothing is seeded, so a mode is Not set until the
+// company has made its list. Switched off, never deleted.
+model SeparationMode {
+  id              String       @id @default(cuid())
+  code            String       @unique
+  label           String
+  isActive        Boolean      @default(true) @map("is_active")
+  createdByUserId String       @map("created_by_user_id")
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  separations     Separation[]
+
+  @@map("separation_modes")
+}
+// ── A-9 — end ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
