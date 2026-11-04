@@ -122,3 +122,24 @@ Letter serial sequence; separation modes (none seeded); mass-email categories (f
 ## Open questions (not guessed)
 * Does the company use divisions? (no master exists; not built)
 * Should the letter serial be per letter type or one company sequence? (built as one company sequence, Not set)
+
+## What was built (after the audit above)
+
+| Group | Commit | Items | Where |
+|---|---|---|---|
+| G1 | `d81f0ba` | 5, 6, 7 | `backend/src/modules/parity/{segments,contact,pay,gridColumns}.ts`; `/api/employee-segments`, `/api/employee-extras/*`; Filters & Segments page, Pay tab, contact reveal, Who filter, remembered columns |
+| G2 | `c9bc156` | 9 | `parity/position.ts`; Position tab (one card per attribute) |
+| G3 | `0829a3a` | 11, 12 | `letters/{starters,workflow,workflowController}.ts`, `shared/constants/letterStarters.ts`; Letters page, Letter Settings (directors) |
+| G4 | `6397ad1` | 13 (14 audit only) | `parity/bulk.ts`; Bulk Upload page |
+| G5 | `6ee5f12` | 15 (16 built already) | `parity/massEmail.ts`; `/api/mass-email`; Mass Email page |
+| G6 | `7aa4520` | 3 (1, 2, 4 built already) | `layouts/shell/CommandPalette.tsx`, `paletteCategory.ts` |
+| G7 | `8fa2777` | 10, 17 | `parity/separationModes.ts`, `access/service.ts setPortalAccess`; Separations page modes, Access tab button |
+
+**Decided by me (owners may change):** mass email is granted through Roles & Permissions (a new key, `communication.mass.send`), not through a new HR switch;
+the two G1 keys (`employee.segments.manage`, `employee.contact.reveal`) are held by both HR roles by default (no pay data); a loaded starter arrives switched off;
+voiding an issued letter is the directors' only (its copy is filed under the PAY letters category, which HR cannot read); a mass email goes to the official
+address, else the personal one, current staff only, plain text; the letter serial is one company-wide sequence; the Position tab and changes need `employee.edit`
+(job) or `attendance.config.manage` (shift), never a manager key; bulk file names are `<code>.<ext>` or `<code>__anything.<ext>`.
+
+**Hooks left:** A-3 — `letterFigureFields()` in `backend/src/modules/letters/starters.ts` returns nothing until letter figures come from the salary structure.
+A-2 — no importer was added and who may import is unchanged (item 14 is audit only).

@@ -50,7 +50,7 @@ function ComposeDrawer({ editing, onClose }: { editing: parityApi.MassEmail | nu
           <Input maxLength={60} />
         </Form.Item>
         <Form.Item name="body" label="Message" rules={[{ required: true, whitespace: true, message: "Write the message." }]} extra="Plain text. Never pay figures, account or identity numbers: the message is refused if it has any.">
-          <Input.TextArea rows={8} maxLength={20000} showCount />
+          <Input.TextArea rows={8} maxLength={20000} />
         </Form.Item>
         <Form.Item name="audience" label="To">
           <Radio.Group options={(Object.keys(AUDIENCE) as Array<keyof typeof AUDIENCE>).filter((k) => k !== "SEGMENT" || hasPermission("employee.segments.manage")).map((k) => ({ value: k, label: AUDIENCE[k] }))} />

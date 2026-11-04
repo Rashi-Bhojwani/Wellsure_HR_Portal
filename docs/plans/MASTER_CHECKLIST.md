@@ -81,3 +81,9 @@ who enters payroll data month to month; whether a third Super Admin may approve 
 
 ## Closing the Stage 5b gaps (A1 to A8)
 - [x] A1 demo file named and marked DEMO · [x] A2 phone-width walkthrough (one defect fixed) · [x] A3 samples checked (only on `peeps/foundation`) · [x] A4 input heads' direction and negative choice · [x] A5 sensitive-ui split in two jobs · [x] A6 run 223 read · [x] A7 owner review sheet · [x] A8 bank payments manual, sent-to-bank note
+
+## A-9 — function parity, Employee and Admin areas (`docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md`)
+- [x] Audit — `e7d095f` · [x] G1 filters, segments, directory, Pay tab — `d81f0ba` · [x] G2 position history — `c9bc156` · [x] G3 letters — `0829a3a`
+- [x] G4 bulk documents and photos (importers audit only) — `6397ad1` · [x] G5 mass email — `6ee5f12` · [x] G6 search — `7aa4520` · [x] G7 separation modes, portal access — `8fa2777`
+- [x] Full backend suite alone 201 files / 1,961 tests green; walkthrough director / HR (switch on, off) / employee, light, dark, phone; report in STAGE_REPORTS.md
+- [ ] Open: division (owners); A-3 letter figures (hook left); A-2 import rules (not on this branch)
