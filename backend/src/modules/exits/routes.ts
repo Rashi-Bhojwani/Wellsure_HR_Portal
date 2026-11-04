@@ -1,3 +1,4 @@
+import * as settlement from "./settlement";
 import * as interviews from "./interviews";
 import * as clearance from "./clearance";
 import * as flow from "./resignations";
@@ -52,3 +53,8 @@ exitsRouter.post("/cases/:id/interview",validate({params:idSchema,body:interview
 exitsRouter.get("/interviews/:id",validate({params:idSchema,query:empty}),async(req,res)=>{res.json(await interviews.get(req.params.id as string,req.user!,metaOf(req)));});
 exitsRouter.put("/interviews/:id/answers",validate({params:idSchema,body:interviews.answersSchema}),async(req,res)=>{res.json(await interviews.answer(req.params.id as string,req.user!,req.body.answers,metaOf(req)));});
 exitsRouter.post("/interviews/:id/complete",validate({params:idSchema,body:empty}),async(req,res)=>{res.json(await interviews.complete(req.params.id as string,req.user!,metaOf(req)));});
+
+exitsRouter.get("/cases/:id/settlement-inputs",validate({params:idSchema,query:empty}),async(req,res)=>{res.json(await settlement.settlementInputs(req.params.id as string,req.user!));});
+exitsRouter.post("/cases/:id/close",validate({params:idSchema,body:settlement.closeSchema}),async(req,res)=>{res.json(await settlement.close(req.params.id as string,req.user!,req.body.note,metaOf(req)));});
+exitsRouter.get("/cases/:id/letter-requests",validate({params:idSchema,query:empty}),async(req,res)=>{res.json(await settlement.letterRequests(req.params.id as string,req.user!));});
+exitsRouter.post("/cases/:id/letter-requests",validate({params:idSchema,body:settlement.letterSchema}),async(req,res)=>{res.status(201).json(await settlement.requestLetter(req.params.id as string,req.user!,req.body.kind,metaOf(req)));});

@@ -36,6 +36,10 @@ const adminInService = (why: string): RouteClass => ({ kind: "admin", why });
 
 export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   // PEEPS-BEGIN exits
+  "GET /api/exits/cases/:id/settlement-inputs": adminInService("actual director only; read-only days and identifiers"),
+  "POST /api/exits/cases/:id/close": adminInService("actual director only; required note and live clearance gate"),
+  "GET /api/exits/cases/:id/letter-requests": scoped("own/current team/authorized management case scope; requests only"),
+  "POST /api/exits/cases/:id/letter-requests": scoped("own or authorized case management; never issues a letter"),
   "GET /api/exits/interviews": scoped("only employee/interviewer relationship or audited director; before counts"),
   "POST /api/exits/cases/:id/interview": adminInService("actual director only; explicit interviewer and configured questions"),
   "GET /api/exits/interviews/:id": scoped("employee/interviewer relationship or audited director; never team/HR permission"),
