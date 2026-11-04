@@ -104,6 +104,7 @@ export const STANDALONE_ROOT_MODELS: Record<string, string> = {
   ExitChecklistTemplate: "Director-owned versioned checklist templates",
   // PEEPS-END exits
   Role: "shared role catalog; cleanupTestRole",
+  WorkforceSetting: "A-10: a company setting, append-only (UPDATE refused); tests delete their own rows by setByUserId",
   SeparationMode: "A-9 G7: company data; deleteWithDependents(\"SeparationMode\", ids)",
   MassEmail: "A-9 G5: a mass email is the sender's, by user id (no FK); deleteWithDependents(\"MassEmail\", ids)",
   Permission: "shared permission catalog; cleanupTestData({ permissionIds })",

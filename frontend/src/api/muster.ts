@@ -20,6 +20,7 @@ export interface MusterCell {
   flags: string[];
   statusOnly: boolean;
   missingPunch: boolean;
+  markers?: string[]; // A-10: DED, WFH, GRACE, REG, OVR
   corrected: boolean;
   /** REGULARIZATION | MANUAL_OVERRIDE when corrected by hand. */
   overrideKind?: string | null;
@@ -42,6 +43,7 @@ export interface MusterTotals {
   off: number;
   notMarked: number;
   missingPunch: number;
+  unresolved: number; // A-10: not marked (halves) + no shift
 }
 
 export interface MusterRow {
@@ -61,6 +63,7 @@ export interface Muster {
   filters: { locations: Array<{ id: string; name: string }>; departments: Array<{ id: string; name: string }>; employees: Array<{ id: string; employeeCode: string; name: string }> };
   rows: MusterRow[];
   legend: Array<{ code: string; label: string }>;
+  statusLegend?: Array<{ code: string; label: string; kind: "day" | "half" | "marker" }>; // A-10
   inputHelp: Array<{ code: string; label: string }>;
 }
 
@@ -69,6 +72,7 @@ export interface MusterQuery {
   locationId?: string;
   departmentId?: string;
   employeeId?: string;
+  employmentType?: string; // A-10: category
 }
 
 export interface MusterCycle {

@@ -107,6 +107,7 @@ export const musterQuerySchema = z.object({
   locationId: z.string().min(1).optional(),
   departmentId: z.string().min(1).optional(),
   employeeId: z.string().min(1).optional(),
+  employmentType: z.enum(["PERMANENT", "CONTRACT", "INTERN", "CONSULTANT", "PROBATION"]).optional(), // A-10: category filter
 });
 export const musterEntriesSchema = z.object({
   entries: z

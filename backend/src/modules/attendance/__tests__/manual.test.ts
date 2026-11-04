@@ -251,7 +251,7 @@ describe("manual entry and the attendance muster (P2-D)", () => {
       expect(m.rows).toHaveLength(1);
       const row = m.rows[0];
       expect(row.cells.filter((c: { code: string | null }) => c.code).map((c: { code: string }) => c.code)).toEqual(["P", "A", "P:A", "NM", "A", "P", "OFF"]);
-      expect(row.totals).toEqual({ paidDays: 3.5, present: 2.5, absent: 2.5, halfDays: 1, lop: 2.5, leave: 0, holidays: 0, off: 1, notMarked: 1, missingPunch: 1 });
+      expect(row.totals).toEqual({ paidDays: 3.5, present: 2.5, absent: 2.5, halfDays: 1, lop: 2.5, leave: 0, holidays: 0, off: 1, notMarked: 1, missingPunch: 1, unresolved: 1 }); // A-10: unresolved = not marked (1) + no shift (0)
       expect(m.days.find((x: { date: string }) => x.date === "2026-09-17").notMarked).toBeGreaterThanOrEqual(1);
       expect(m.legend.map((l: { code: string }) => l.code)).toContain("OFF");
       expect(m.filters.employees.map((e: { id: string }) => e.id)).toContain(p.mA.employeeId); // the picker lists everyone, not just the filtered row

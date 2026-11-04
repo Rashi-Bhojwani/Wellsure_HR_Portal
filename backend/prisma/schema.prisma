@@ -4443,3 +4443,20 @@ model SeparationMode {
   @@map("separation_modes")
 }
 // ── A-9 — end ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+// ── A-10 (docs/plans/GREYTHR_PARITY_WORKFORCE.md) — begin ───────────────────────────────────────────────────────────────────────
+// A Workforce setting (status labels, the statuses Manual Override may set, ...): append-only; the latest row for a key is in force; no row = Not set.
+// A database trigger refuses UPDATE. Set by a director, with a reason.
+model WorkforceSetting {
+  id          String   @id @default(cuid())
+  key         String
+  value       Json
+  reason      String
+  setByUserId String   @map("set_by_user_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([key, createdAt])
+  @@map("workforce_settings")
+}
+// ── A-10 — end ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
