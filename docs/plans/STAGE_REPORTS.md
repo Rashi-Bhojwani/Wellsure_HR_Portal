@@ -142,7 +142,14 @@ directors'; one company serial; file-name rule; contact keys for both HR roles).
 **PEEPS-OWNED, left alone:** asset tracker, avatars and photo rules (bulk photos use this branch's existing photo path), badges, nudges, Unmute, helpdesk, exits,
 recruitment. **Hooks:** A-3 `letterFigureFields()` (`letters/starters.ts`); A-2: no importer added, who may import unchanged (item 14 audit only).
 
+**CI, read per job (run 251, on `8fa2777`):** install-lint-typecheck-test success (backend tests, demo tests, drift, bundle budgets); sensitive-ui admin portal
+success; sensitive-ui employee portal success; docker-build success; attendance-replay success; **latency failed** at "Popovers and dropdowns": on a 390 px phone
+the search dialog no longer fitted the screen (858 px tall in an 844 px screen), **caused by A-9 G6** (the chips row added height; the results list's cap was not
+reduced). Fixed in the last commit (the list's cap is 60 px lower on the admin portal on a phone); `check:popovers` then passed locally against the scratch
+stack (every popover inside the screen, opaque, closes on Escape). **agent-windows failed** at "Install the release and exercise the service": the Windows runner
+refused event-log registration ("Access is denied"); nothing in A-9 touches `biometric-agent/`, so not caused by this work, and not changed.
+
 **Not built:** division (does not exist in the system; open question); NOT SHOWN YET items (policies with acknowledgment, identity verification, contract details,
 document drive). **Unverified:** the mass email against a real mail server (console driver and a replaced `mailService` only); 500-person performance of segments and
-mass email; the letter void on a letter still rendering (refused by design, not exercised in the browser); a manager in the browser; `check:sensitive-ui` and
-`check:popovers` were not run locally (CI runs sensitive-ui).
+mass email; the letter void on a letter still rendering (refused by design, not exercised in the browser); a manager in the browser; `check:sensitive-ui` was not run locally
+(it passed in CI).

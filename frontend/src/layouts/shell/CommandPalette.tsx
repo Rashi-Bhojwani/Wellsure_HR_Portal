@@ -180,7 +180,7 @@ export function CommandPalette({ open, onClose, nav, actions = [] }: Props) {
           ))}
         </div>
       )}
-      <ul id="ws-palette-list" role="listbox" aria-label="Results" style={{ listStyle: "none", margin: `${space[3]}px 0 0`, padding: 0, maxHeight: phone ? "calc(100vh - 140px)" : 420, overflowY: "auto" }}>
+      <ul id="ws-palette-list" role="listbox" aria-label="Results" style={{ listStyle: "none", margin: `${space[3]}px 0 0`, padding: 0, maxHeight: phone ? (admin ? "calc(100vh - 200px)" : "calc(100vh - 140px)") : 420, overflowY: "auto" }}>
         {items.length === 0 && <li style={{ padding: space[6], textAlign: "center", color: v.textSecondary }}>{cat === "fav" && !q ? "No favourites yet: press the star on a page to add it." : `Nothing called “${q}”.`}</li>}
         {items.map((it, i) => (
           <li
