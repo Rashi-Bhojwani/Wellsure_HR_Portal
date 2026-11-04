@@ -5231,3 +5231,24 @@ See `plans/PEEPS_STAGE_REPORTS.md` for counts, mutations, browser evidence, CI p
 handoff and the legacy download-capability limit. Exits, recruitment, insights and autofill remain
 unstarted; stop at C-2.
 <!-- PEEPS-END helpdesk-visibility -->
+
+<!-- PEEPS-BEGIN exits -->
+## 2026-11-04 — Peeps C-3 exits, local checkpoint C
+
+Built resignations linked to unchanged core separations, explicit clearance/asset-return
+gates, encrypted relationship-scoped interviews, director-only day-count hand-off and
+internal completion callback, letter requests, settings and screens. HR management is
+off by default; named interviewers retain only their relationship access. Private exit
+caches/forms follow the current employee and expire on sign-out or screen closure.
+No money calculation, issuing letters or payroll wiring was added.
+
+Seven build commits `d232308`–`d149341`, merge commits `85bba5d`/`bc22a1a` preserving
+payroll through `bbd14e6`, and regression fix `bb27005`. Final local checks: backend
+**218 files / 2,154 tests** alone on a fresh database; frontend **89 tests**, agent
+**166 tests**, lint/typecheck/build/budgets passed; **5/5 mutations** caught/restored.
+Both sensitive UI scan halves, role/theme/phone walkthroughs, nine form actions,
+post-merge delta and account switching passed. All four new leave types remain off.
+See `plans/PEEPS_STAGE_REPORTS.md` for failures/fixes, counts, shared-file line starts,
+Not set choices and deviations. **CI remains unverified until the owner pastes jobs.**
+Stop at C-3; recruitment, insights and document autofill remain unstarted.
+<!-- PEEPS-END exits -->

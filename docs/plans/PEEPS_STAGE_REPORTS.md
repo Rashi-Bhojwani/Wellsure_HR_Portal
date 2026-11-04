@@ -912,3 +912,266 @@ only; its own push's CI is read separately before the final reply.
 - No retroactive revocation test of pre-transition legacy bearer URLs (existing expiry described above).
 
 **Checkpoint B complete. Stop here.** No exits, recruitment, insights or autofill code started.
+
+
+## C-3 — Exits and checkpoint C (2026-11-04)
+
+Started clean on `peeps/foundation` at `1c18350`, one coding agent. The owner's C-3
+prompt overrides the older B.5/AS1 audience and second-director text. C-2 and the
+newer payroll-branch work were preserved. No PR, force-push, database reset/drop,
+staging, production or environment publication.
+
+### Commits and delivered behavior
+
+| Commit | Build step |
+|---|---|
+| `d232308` | Schema, append-only settings/history, encryption registry, default-off HR capability |
+| `e729aed` | Scoped resignation submission/decisions, notice snapshots, idempotent core separation link |
+| `e8480bf` | Explicit clearance owners, live asset gate, reasoned director override, Tasks sources |
+| `0cecf4e` | Encrypted, relationship-scoped interviews; user-room events; notification/audit filters; retention |
+| `6001b6c` | Director-only exact day-count hand-off, internal completion callback, letter requests only |
+| `b0c98bb` | Employee/admin screens, structured director forms, DEMO setup, browser scan coverage |
+| `d149341` | Route/role/race regressions, HR-plus-Office switch bypass closed, retention after deactivation, DEMO leave types off |
+| `85bba5d` | Merge `9dff126` from the payroll branch, retaining both branches' additive registry entries |
+| `bc22a1a` | Merge the newer `bbd14e6` A-10 checkpoint found during final verification |
+| `bb27005` | Audited DEMO appointment, catalog regressions, actor-scoped private UI caches/forms |
+
+Resignations keep one active record per employee, snapshot only confirmed notice
+rules and show **Not set** without a matching rule. Acceptance calls the original
+`initiateSeparation` unchanged. Two simultaneous accepts return one linked case;
+a stable neutral marker recovers a core write interrupted before the Peeps link.
+Cancellation releases the active slot; moved last days are observed once with
+history and recompute the day count. Missing-manager requests wait with directors.
+The core separation receives a neutral reason, never the private resignation text.
+
+Clearance snapshots the selected template and real active asset assignments. Both
+the service and database transition guard use one live-blocker query, including
+assets issued after checklist creation. A new assignment reopens readiness and
+clears an earlier waiver. Directors override with a reason and audit, without a
+second director. Item owners get only their tasks. The approved last day still
+ends access with clearance open; interview retention runs after core deactivation
+so a retention error cannot postpone it.
+
+Interview answers are encrypted and registered for key rotation. Employee,
+interviewer of record and directors are the only readers; director opens outside
+their relationship are audited. Managers and Office membership never grant
+interview access. Named HR interviewers can participate while general HR exit
+management is off. Lists/counts, notifications, audit lists, Tasks and events
+respect the current relationship. Events use user rooms; former interviewers get
+an empty access refresh to discard cached screens. No answer text enters audit,
+notifications or socket payloads. Directory `Employee.exitReason` remains `never`.
+
+The hand-off reuses the leave ledger's exact balances across years as of the
+agreed last day. It contains identifiers and day counts, no amounts. The recovery
+intent provider does not exist, so its ID list is empty. `onSettlementCompleted`
+is tested and internal, with no HTTP route and no payroll wiring. Director closure
+requires ready clearance and a note. Letter buttons create idempotent requests
+and notify directors; they do not issue a letter.
+
+### Verification
+
+All commands ran locally on isolated PostgreSQL 16 and Redis 7, using fresh test
+databases. Each backend invocation used a new database; no reset/drop was used.
+Only one backend suite ran at a time. The full run was alone, after stopping the
+demo API/worker/frontend and browsers.
+
+| Check | Observed result |
+|---|---|
+| Step 1 focused checks | 6 files / 48 tests passed; root lint/typecheck passed |
+| Step 2 | 3 files / 19 tests passed; root lint/typecheck passed |
+| Step 3 | 3 files / 19 tests passed; root lint/typecheck passed |
+| Step 4 | 4 files / 26 tests passed; root lint/typecheck passed |
+| Step 5 | 2 files / 9 tests passed; root lint/typecheck passed |
+| Step 6 | Backend 5 files / 31 tests; frontend 2 files / 7 tests; root lint/typecheck passed |
+| Step 7 | Restored guard suite: 6 files / 44 tests; additional DEMO regression: 9-test edge file passed; root lint/typecheck passed |
+| A-9 merge | 4 files / 27 tests passed; root lint/typecheck passed |
+| A-10 merge | 4 files / 22 tests passed, including attendance leave privacy; root lint/typecheck passed |
+| Final lint/typecheck | Root lint/typecheck passed; latest frontend lint and build typecheck also passed after the cache change |
+| Final frontend | 20 files / 89 tests passed, one worker; build passed |
+| Final bundle budgets | Login 231.4 KB; employee shell/home 338.8 KB; admin shell/home 358.3 KB gzip, all within budgets |
+| Biometric agent | 17 files / 166 tests passed; unchanged by A-10 |
+| Full backend alone | **218 files / 2,154 tests passed**, zero failures/skips, 867.98 s; `bb27005`, fresh `c3_test_1793775663_10223` |
+| Admin sensitive UI | 433 pages passed at A-9 checkpoint |
+| Employee sensitive UI | 212 pages passed at A-9 checkpoint |
+| Browser role matrix | 76 post-A-9 visits: director, HR off/on, manager, raiser, other employee; light/dark, 1280/390; no overflow or privacy failures |
+| Browser writes | Nine actions completed through phone forms: submit, accept, complete item, ready, schedule, answer, named-HR complete while management off, letter request, director closure |
+| A-10 production frontend delta | 120 visits passed over changed workforce settings/muster/manual-override and exit case/interview routes; six personas, light/dark, 1280/390 |
+| Browser account switching | Two switches in the same production SPA document passed: no previous answer during pending authorization, unrelated reader denied, participant still authorized, no page errors |
+| Final targeted regressions | 9 backend files / 83 tests passed |
+| Fresh DEMO seed | Passed on `c3_demo_20261104_c`; manager appointment and permission exception use audited services |
+| Four new leave types | All four inactive on the final scratch demo; audited deactivation regression passed; all four also inactive after the final full backend run |
+
+Commands: root `npm run lint` and `npm run typecheck`; frontend `npm run test --
+--maxWorkers=1`, `npm run build`, `npm run check:bundle`; biometric-agent `npm test`.
+Full backend: `/tmp/c3-backend-tests.sh --reporter=verbose`, invoking Vitest with
+`node_modules/.c3/config.ts`. This ignored local harness extends the normal config
+and replaces destructive database setup with CREATE-only fresh scratch setup;
+repository test selection and tests are retained. It ran alone, 07:01:03–07:15:32 UTC.
+The test-time `docs/SENSITIVE_DATA.md` generated-table check also passed.
+
+The standard full backend configuration excludes the separately configured
+attendance-replay and demo suites, as it does in the repository's normal `test`
+command. CI results remain unverified until the owner supplies them.
+
+### Failures found and fixed
+
+- The first schema/settings pass caught capability ordering and an older test
+  assuming every HR capability is on by default. Existing defaults stayed the same;
+  the new exits capability is explicitly tested off.
+- The HR capability's database allow-list needed its additive migration. The
+  director/ALL scope query needed an explicit unrestricted branch rather than an
+  empty relation inside Prisma's OR. Focused tests then passed.
+- Interview writes initially used a status outside the migration's allowed set;
+  they now consistently use `SUBMITTED`. Fixture field/enum names and the expected
+  deactivated-user status were corrected to the actual schema.
+- The new overlap regression observed HR with Office membership reading a case
+  while its exit switch was off (200 instead of 404). HR's switch now narrows both
+  Office and manager paths. ON/OFF and membership/team changes are checked on the
+  next request.
+- A full frontend attempt under concurrent load timed out in the existing C-2
+  visibility test (5 seconds). The full suite passed with one worker; timeouts were
+  not increased and no tests were skipped.
+- Setup initially rejected `MAIL_DRIVER=dev`; console mail was used. A seed invoked
+  from the root missed the backend alias configuration and was rerun from backend.
+  The demo manager's attempted reporting manager was refused by the existing
+  hierarchy; the demo was corrected and seeded on a fresh database. No core rule
+  changed. The account-switch browser initially expected a 403 message; the unrelated-record
+  API correctly returns 404, so the assertion was corrected and rerun on the final
+  production build. Browser automation selectors/loading waits were corrected for Ant
+  Design 6 and the development toolbar; the production delta passed.
+- The older medical DEMO fixture left its type active. The exits demo hand-off now
+  uses the existing audited leave-type service to leave all four prepared types
+  off. It preserves the historical fixture and makes no attendance/payroll edit.
+- The first complete backend run finished **218 files / 2,154 tests: 215 files and
+  2,151 tests passed, three failed** (881.25 seconds). The HR persona matrix omitted
+  the new capability; it now explicitly tests the default-off exits door. A payroll
+  test hardcoded eleven director steps; its marked test-only assertion now preserves
+  the original eleven and verifies the optional exit step. The DEMO module directly
+  assigned a role; it now reuses the audited manager appointment and access-exception
+  services. The seed security fence and its allow-list were left unchanged. The
+  targeted rerun passed **9 files / 83 tests**, and the fresh DEMO seed succeeded.
+- Two new account-switch regressions failed on the original frontend: cached private
+  answers and an unfinished resignation form survived a viewer change. All exit
+  queries now include the employee identity, private responses are never used as
+  placeholder pages, previous exit caches are cancelled/removed at sign-out or
+  account change, and an actor boundary remounts forms. The tests now pass, including
+  cancellation of a late private response while preserving unrelated queries. Private
+  exit caches are also collected when their last screen closes; reopening after a
+  relationship revocation waits for a fresh authorized response.
+  The first generic placeholder wrapper failed typecheck; it was simplified before
+  the final passing checks. No global authentication or access resolver was changed.
+
+### Mutation checks
+
+Each guard was broken on a fresh scratch run, its named test was observed to fail,
+then the exact original file was restored. All five were killed; the restored exit
+suite passed. No mutant remains in the branch.
+
+| Guard broken | Named failure observed |
+|---|---|
+| Interview relationship filter | `manager sees team resignation but no interview, counts, audit, Tasks or general-case fields` |
+| HR exit switch | `HR is off by default even with an explicit grant; ON and OFF take effect on the next request` |
+| Live asset query (shared service/DB gate) | `an asset issued after every required item was completed still blocks readiness` |
+| Partial unique-active index | `unique active resignation is a database rule even for concurrent direct writers; status history is append-only` |
+| Director-only hand-off | `hand-off is directors-only even when HR's switch is on; unrelated employee is absent from letter requests` |
+
+### Shared-file hand-off
+
+The following are the C-3 edits in shared files, each inside a marked PEEPS block.
+Line numbers refer to the final merged source. New `modules/exits` and
+`features/exits` files are Peeps-owned. Incoming A-9/A-10 changes are separate,
+retained upstream work; their attendance edits were not rewritten by C-3.
+
+| Shared file | Final line(s) where the C-3 PEEPS blocks begin |
+|---|---|
+| `backend/prisma/schema.prisma` | 465, 781, 4098 |
+| `backend/src/app.ts` | 1, 117 |
+| `backend/src/lib/__tests__/cleanup.ts` | 102, 396 |
+| `backend/src/lib/fieldKeyRotation.ts` | 14 |
+| `shared/constants/permissions.ts` | 118, 163, 170 |
+| `shared/constants/hrCapabilities.ts` | 24, 54 |
+| `shared/constants/peeps.ts` | 13, 26 |
+| `shared/constants/sensitiveData.ts` | 20, 41, 138, 225 |
+| `shared/constants/directorAuthority.ts` | 18, 42 |
+| `shared/constants/peepsPayrollContract.ts` | 1 |
+| `shared/types/inbox.ts` | 35, 41 |
+| `backend/src/modules/hrCapabilities/__tests__/hrCapabilities.test.ts` | 114 |
+| `backend/src/modules/managers/__tests__/routeInventory.ts` | 38 |
+| `backend/src/modules/tasks/service.ts` | 1, 179 |
+| `frontend/src/components/inbox/TasksInbox.tsx` | 21 |
+| `backend/src/modules/notifications/service.ts` | 1, 65, 90, 104, 121 |
+| `backend/src/modules/auditLog/service.ts` | 1, 39, 42 |
+| `backend/src/modules/auditLog/controller.ts` | 5 |
+| `backend/src/jobs/worker.ts` | 1, 91 |
+| `backend/scripts/demo/seedDemoCompany.ts` | 322 |
+| `frontend/src/routes/employeeMenu.config.tsx` | 32, 383 |
+| `frontend/src/routes/adminMenu.config.tsx` | 447 |
+| `frontend/src/routes/PortalRoutes.tsx` | 5, 91, 110 |
+| `frontend/e2e/sensitive-ui.mjs` | 78, 151, 247 |
+| `docs/SENSITIVE_DATA.md` | 14 |
+| `docs/GETTING_STARTED.md` | 983 |
+| `docs/UI_SCREEN_MAP.md` | 215 |
+| `backend/src/modules/hrCapabilities/__tests__/hrMatrix.test.ts` | 25, 31, 99 |
+| `backend/src/modules/payroll/__tests__/runAuthority.test.ts` | 210 |
+| `frontend/src/App.tsx` | 9, 26 |
+| `docs/PROGRESS.md` | 5235 |
+
+The six A-9 registry conflicts were additive: schema, app mounts, system roles,
+route inventory, permissions and sensitive-data catalog. Both sides were retained;
+no competing business rule was selected. A-10 merged automatically and kept the
+existing leave privacy hooks. Core `employee/separations.ts`, the access resolver,
+payroll application code and `.github/workflows/ci.yml` were not edited by C-3.
+The only authored payroll-file edit is the marked catalogue assertion in the named
+failing `runAuthority.test.ts`; it preserves all existing authority behavior checks.
+The root App hook only expires exits caches; global authentication was not edited.
+Three upstream A-9 files contained trailing blank EOF lines, flagged by the merge
+diff check; those incoming lines were preserved. Final working-tree diff checks
+passed at delivery (working-tree and staged changes).
+
+### Settings left Not set / Decided by me
+
+Outside labelled DEMO fixtures, no exit value is seeded: notice rules (including
+counting basis and source), rejection, reason categories, checklist/owners,
+questions, retention, overdue thresholds and Office audience remain Not set.
+`MANAGE_EXITS` is off by default. `EXIT_APPROVAL` stays optional/Not set, without
+being added to the required payroll-director choices. The four new leave types
+stay off. No legal notice minimum, recovery rule or pay calculation was guessed.
+
+Owner overrides applied: directors read interviews with audit; HR management is a
+switch; interview relationships are independent; no mandatory second director;
+letter requests only. Implementation choices: a director appoints interviewers,
+preventing a handler from naming themselves to widen access; notice rules snapshot
+at submission with exact-grade then employment-type fallback and an explicit
+submission-day/next-day basis; clearance overrides are tied to their blocker
+snapshot; existing separation dates/status remain authoritative; HR's switch
+wins over an overlapping Office/manager capability; private frontend caches and forms
+follow the current signed-in employee; retention removal keeps
+metadata and append-only history.
+
+### Deviations / Unverified
+
+- Recovery-intent IDs are empty because that model is not built; no recovery or
+  payroll adapter was invented. The internal completion hook is deliberately not
+  wired to payroll. Issuing letters remains the existing flow.
+- All business example values are labelled DEMO only. Native service binaries
+  extracted from the approved isolated images ran in scratch directories/ports.
+- CI for the delivery commit is **Unverified**. Per the C-3 prompt, the run ID and
+  exact `gh run view` command are supplied in the reply; the owner will paste jobs.
+  No CI job is claimed passed, including Docker, Windows, attendance replay,
+  latency and either sensitive-ui half. Local browser results above are separate.
+- No staging/production run or live legal/business value validation was requested
+  or performed. Recruitment, insights and document autofill remain unstarted.
+
+CI jobs for the delivery commit remain individually **Unverified**, awaiting the owner's paste:
+
+| CI job | Result |
+|---|---|
+| `install-lint-typecheck-test` | Unverified |
+| `docker-build` | Unverified |
+| `agent-windows` | Unverified |
+| `attendance-replay` | Unverified |
+| `latency` | Unverified |
+| `sensitive-ui (admin portal)` | Unverified |
+| `sensitive-ui (employee portal)` | Unverified |
+
+STOP at checkpoint C. Await the owner's CI results or next prompt.

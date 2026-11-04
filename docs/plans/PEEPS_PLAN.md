@@ -523,7 +523,9 @@ The payroll branch is still `f613992`, already included. Stop after C-2; no next
 
 The C-3 owner prompt supersedes the older audience, interview and letter text below.
 Start: clean `peeps/foundation` at `1c18350`; one coding agent. Build exits only,
-then stop at checkpoint C. No attendance/payroll/access-resolver/CI-workflow changes.
+then stop at checkpoint C. No authored attendance/payroll application, core-separation,
+access-resolver or CI-workflow changes; incoming payroll merges are preserved. A named
+failing payroll catalogue test receives only a marked additive assertion update.
 
 **Decided by me — owner-directed overrides:** directors may read every exit interview;
 every open outside their own interview relationship is audited. HR's case-management
@@ -558,6 +560,11 @@ gate rechecks all current open assignments, including assets issued after checkl
 A director may override with a recorded reason; no second director is needed for that.
 Interview appointments/questions/answers use a separate projection and user rooms only;
 answers use field encryption and registered key rotation, with chosen retention enforced.
+HR's OFF switch also narrows overlapping Office/manager paths. Private frontend query
+keys include the current employee; sign-out cancels/removes exit caches and changing
+accounts remounts forms, including unfinished answers/reasons. Private responses are
+never used as placeholder pages and expire when their screen closes. Other modules'
+caches and authentication stay unchanged.
 
 The read-only hand-off exposes exact leave-ledger day totals and identifiers only.
 There is currently no asset-recovery-intent model; its id list stays empty rather than
@@ -567,9 +574,16 @@ Peeps callback, not connected to payroll. A director may close a case with an au
 Seven build commits: schema/settings; resignation/separation flow; clearance/assets/Tasks;
 confidential interviews; read-only hand-off; design-system screens/DEMO/scans; regression
 and mutation checks. Changed tests, lint and typecheck precede every build commit.
-Checkpoint C: merge the latest payroll branch if needed; full local checks, full backend
-alone on a fresh scratch database, browser role/theme/phone matrix, four leave types still
-off. CI is left Unverified until the owner pastes the run's job results, as requested.
+Checkpoint C local verification completed on `bb27005` (2026-11-04), after merging
+`9dff126` and then the newer `bbd14e6` payroll checkpoint. Full backend alone: **218
+files / 2,154 tests passed**, frontend **20 files / 89 tests**, agent **17 files / 166
+tests**; lint/typecheck/build/budgets passed, all five mutations were detected/restored.
+Browser evidence: both sensitive-scan halves (433/212 pages), 76 role/theme/phone
+visits, nine form actions, 120 post-A-10 delta visits and two same-document account
+switches. All four prepared leave types remain off in both final scratch databases.
+The stage report records the initial full-run failures, minimal fixes, exact shared-file
+lines, settings left Not set and deviations. CI is **Unverified / awaiting the owner's
+pasted job results**. Stop here; recruitment, insights and autofill remain unstarted.
 
 - **Data.**
   - `resignations`: employee, submitted at, requested last day, reason (free text + category; categories

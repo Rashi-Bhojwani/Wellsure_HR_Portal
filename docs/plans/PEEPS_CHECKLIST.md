@@ -60,7 +60,7 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 - [x] Document autofill: planning note in PEEPS_PLAN.md only (no code) — `fdb69bf`
 - [x] Mutation checks, frontend checks, screens, full suite alone, CI read — see PEEPS_STAGE_REPORTS
 - [ ] Owner to confirm the "Decided by me" list in PEEPS_STAGE_REPORTS (stage of 2026-11-01)
-- [ ] Not started (by instruction): recruitment, exits, insights, autofill code
+- [ ] Still not started: recruitment, insights, autofill code. Exits was authorized separately in C-3.
 - [ ] **STOP: wait for the owner**
 
 ## Ticket desk
@@ -72,10 +72,10 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 - [ ] 13 HR-only supporting documents; year-end exclusion until rules approved
 
 ## Exits
-- [ ] 14 resignations → `initiateSeparation`
-- [ ] 15 checklist + asset return gate
-- [ ] 16 exit interviews (confidential), `ExitSettlementInputs`
-- [ ] CHECKPOINT C
+- [x] 14 resignations → unchanged `initiateSeparation`; notice snapshots, concurrency/recovery and cancellation/date-move tests
+- [x] 15 checklist + live asset return gate; audited director override; assigned-owner Tasks
+- [x] 16 encrypted relationship-scoped interviews, default-off HR management, director-only `ExitSettlementInputs`, internal callback and letter requests
+- [ ] CHECKPOINT C — implementation `d232308` through `bb27005`; payroll merged through `bbd14e6`. Local checks passed: backend **218 files / 2,154 tests** alone, frontend **89**, agent **166**, lint/typecheck/build/budgets, **5/5 mutations**, sensitive scans and browser walkthroughs. Four leave types off. **CI pending owner paste**; see the C-3 stage report. No next module authorized.
 
 ## Recruitment and joining
 - [ ] 17 requisitions, jobs, pipelines
