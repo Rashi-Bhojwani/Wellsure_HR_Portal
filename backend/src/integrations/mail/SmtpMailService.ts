@@ -43,7 +43,14 @@ export class SmtpMailService implements MailService {
       const rejected = (info.rejected as unknown[]).map(String);
       throw new MailNotAcceptedError(`The mail server did not accept ${message.to}${rejected.length ? ` (it rejected ${rejected.join(", ")})` : ""}.`);
     }
+    // PEEPS-BEGIN recruitment
+    if (message.sensitive) logger.info({ privateMail: true }, "private mail handed to the SMTP server");
+    else {
+    // PEEPS-END recruitment
     logger.info({ to: message.to, subject: message.subject, messageId: info.messageId }, "mail handed to the SMTP server");
+    // PEEPS-BEGIN recruitment
+    }
+    // PEEPS-END recruitment
     return { driver: "smtp", delivered: true, to: message.to, detail: String(info.messageId ?? "") };
   }
 }

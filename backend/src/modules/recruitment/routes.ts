@@ -1,3 +1,4 @@
+import * as mail from "./mail";
 import * as interviews from "./interviews";
 import { inForceOn } from "../../lib/effectiveDating";
 import * as candidates from "./candidates";
@@ -31,7 +32,7 @@ recruitmentRouter.get("/jobs",validate({query:jobs.listInput}),async(req,res)=>{
 recruitmentRouter.post("/jobs",validate({body:jobs.jobInput}),async(req,res)=>{res.status(201).json(await jobs.createJob(req.user!,req.body,metaOf(req)));});
 recruitmentRouter.get("/jobs/:id",validate({params:idSchema,query:empty}),async(req,res)=>{res.json(await jobs.getJob(req.params.id as string,req.user!));});
 recruitmentRouter.post("/jobs/:id/state",validate({params:idSchema,body:jobs.jobStateInput}),async(req,res)=>{res.json(await jobs.changeJob(req.params.id as string,req.user!,req.body,metaOf(req)));});
-recruitmentRouter.get("/options",validate({query:empty}),async(req,res)=>{const c=await context(req.user!);if(!c.manage&&!c.manager)throw new HttpError(403,"Recruitment options are unavailable.","FORBIDDEN");const [departments,locations]=await Promise.all([prisma.department.findMany({select:{id:true,name:true},orderBy:{name:"asc"}}),prisma.location.findMany({select:{id:true,name:true},orderBy:{name:"asc"}})]);res.json({departments,locations});});
+recruitmentRouter.get("/options",validate({query:empty}),async(req,res)=>{const c=await context(req.user!);if(!c.manage&&!c.manager)throw new HttpError(403,"Recruitment options are unavailable.","FORBIDDEN");const [departments,locations]=await Promise.all([prisma.department.findMany({select:{id:true,name:true},orderBy:{name:"asc"}}),prisma.location.findMany({select:{id:true,name:true},orderBy:{name:"asc"}})]);const operational=c.manage?{sources:await settings.getSetting("sources"),rejectionReasons:await settings.getSetting("rejectionReasons"),cvUploads:await settings.getSetting("cvUploads"),emailTemplates:await settings.getSetting("emailTemplates"),scorecardSet:(await settings.getSetting("scorecard"))!==null}:{};res.json({departments,locations,...operational});});
 
 recruitmentRouter.get("/candidates",validate({query:candidates.candidateListInput}),async(req,res)=>{res.json(await candidates.listCandidates(req.user!,req.query as never));});
 recruitmentRouter.post("/candidates",validate({body:candidates.candidateInput}),async(req,res)=>{res.status(201).json(await candidates.createCandidate(req.user!,req.body,metaOf(req)));});
@@ -50,3 +51,6 @@ recruitmentRouter.put("/interviews/:id/schedule",validate({params:idSchema,body:
 recruitmentRouter.get("/interviews/:id/feedback",validate({params:idSchema,query:empty}),async(req,res)=>{res.json(await interviews.getFeedback(req.params.id as string,req.user!,metaOf(req)));});
 recruitmentRouter.post("/interviews/:id/feedback",validate({params:idSchema,body:interviews.feedbackInput}),async(req,res)=>{res.status(201).json(await interviews.submitFeedback(req.params.id as string,req.user!,req.body,metaOf(req)));});
 recruitmentRouter.get("/panel-options",validate({query:z.object({q:z.string().trim().max(100).default("")}).strict()}),async(req,res)=>{await requireManagement(req.user!);const q=req.query.q as string;const rows=await prisma.employee.findMany({where:{status:"ACTIVE",user:{status:"ACTIVE",roles:{none:{role:{code:"DEVELOPER"}}}},OR:[{employeeCode:{contains:q,mode:"insensitive"}},{nameHistory:{some:{...inForceOn(),fullName:{contains:q,mode:"insensitive"}}}}]},select:{id:true,employeeCode:true,nameHistory:{where:inForceOn(),select:{fullName:true}}},take:50,orderBy:{employeeCode:"asc"}});res.json(rows.map(r=>({id:r.id,employeeCode:r.employeeCode,name:r.nameHistory[0]?.fullName??r.employeeCode})));});
+
+recruitmentRouter.get("/candidates/:id/mails",validate({params:idSchema,query:empty}),async(req,res)=>{res.json(await mail.listMail(req.params.id as string,req.user!));});
+recruitmentRouter.post("/candidates/:id/mail",validate({params:idSchema,body:mail.mailInput}),async(req,res)=>{res.status(201).json(await mail.sendMail(req.params.id as string,req.user!,req.body,metaOf(req)));});

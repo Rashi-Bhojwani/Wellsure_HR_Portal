@@ -1,4 +1,7 @@
 export interface MailMessage {
+  // PEEPS-BEGIN recruitment
+  sensitive?: boolean; // Suppress recipient/content logs; transport still delivers normally.
+  // PEEPS-END recruitment
   to: string;
   subject: string;
   html: string;

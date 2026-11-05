@@ -26,10 +26,18 @@ function toEml(message: MailMessage): string {
 
 export class ConsoleMailService implements MailService {
   async send(message: MailMessage): Promise<MailReceipt> {
+    // PEEPS-BEGIN recruitment
+    if (message.sensitive) {
+      logger.info({ privateMail: true }, "private dev mail prepared in .eml");
+    } else {
+    // PEEPS-END recruitment
     logger.info({ to: message.to, subject: message.subject }, "dev mail sent (console + .eml)");
     console.log(
       `\n----- MAIL -----\nTo: ${message.to}\nSubject: ${message.subject}\n\n${message.text ?? message.html}\n----------------\n`,
     );
+    // PEEPS-BEGIN recruitment
+    }
+    // PEEPS-END recruitment
 
     await mkdir(DIR, { recursive: true });
     const filename = `${Date.now()}-${randomUUID().slice(0, 8)}.eml`;

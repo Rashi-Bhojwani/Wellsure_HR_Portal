@@ -4673,6 +4673,7 @@ model RecruitmentHistory {
 }
 
 model RecruitmentCandidateMail {
+  applicationId String? @map("application_id")
   id String @id @default(cuid())
   candidateId String @map("candidate_id")
   candidate Candidate @relation(fields: [candidateId], references: [id])
