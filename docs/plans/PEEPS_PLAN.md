@@ -664,6 +664,18 @@ cleanup registries, five requested mutations. D1 merges latest payroll, runs all
 local checks/full backend alone and browser persona/theme/390px walkthrough, fresh
 labelled DEMO seed and four leave types off. CI stays Unverified pending owner paste.
 
+D1 local gate completed 2026-11-05: eight build commits `d6b91c3` through
+`7d54727`; backend 227 files / 2,201 tests alone on a fresh database; frontend
+23 files / 97 tests; biometric agent 17 files / 166 tests; lint/typecheck/build and
+bundle budgets passed. Five requested mutations caught and restored. Browser
+76 role/theme/width visits, phone form actions and same-SPA account switching
+passed. Sensitive UI: admin 454 pages and employee 228 pages passed sequentially.
+Fresh fictional DEMO seed passed; all four prepared leave types remain off.
+Latest payroll fetched again at delivery: `bbd14e6`, already included; no new merge
+was needed. See the C-4A stage report for failures/fixes and exact shared-file lines.
+CI remains Unverified until the owner pastes jobs. D1 is delivered for acceptance;
+C-4B, offers, joining, insights and document autofill remain unstarted.
+
 - **Data.**
   - `job_requisitions` (headcount ask; approval route Not set; second-director step
     `RECRUITMENT_REQUISITION`), `jobs` (title, department, location, employment type, description; **no

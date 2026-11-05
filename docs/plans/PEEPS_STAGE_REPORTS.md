@@ -1175,3 +1175,217 @@ CI jobs for the delivery commit remain individually **Unverified**, awaiting the
 | `sensitive-ui (employee portal)` | Unverified |
 
 STOP at checkpoint C. Await the owner's CI results or next prompt.
+
+## C-4A — Recruitment, checkpoint D1 (2026-11-05)
+
+Scope: recruitment only. Clean start `e2b6e04`, one agent on
+`peeps/foundation`. C-4B remains unstarted until D1 acceptance. No PR, force push,
+production/staging change, database reset/drop or CI workflow edit. Local scratch
+PostgreSQL 16 / Redis 7 binaries came from the previously approved isolated images;
+every backend invocation created its own new database. Scratch databases retained.
+
+### Commits and delivered behavior
+
+| Build step | Commit | Result |
+|---|---|---|
+| 1 schema/settings | `d6b91c3` | Encrypted identity/feedback, blind indexes, append-only settings/pipelines/history, encryption/cleanup catalogs |
+| 2 requisitions/jobs | `620937a` | Scoped manager requests, chosen approval route, direct or requisition jobs; no money |
+| 3 candidates/applications/CV | `a092e25` | Consent/retention gates, neutral duplicates, stage races, private validated CV bytes and open audit |
+| 4 interviews/feedback | `0a13016` | Active panel and own-submission rules, director read audit, encrypted immutable answers, notification/audit/socket predicates |
+| 5 candidate email | `2f8c082` | Director-written templates, private transport logging, idempotent receipts without body/recipient; console honestly PREPARED |
+| 6 retention/erase | `31d7807` | Director confirmed-request erasure, scheduled anonymization, storage-failure retry and immediate expiry redaction |
+| 7 screens/DEMO | `fad242e` | Jobs stepper, stage board/table, candidate drawer/activity/CV/email, scheduling/evaluation, settings, private caches and fictional DEMO |
+| 8 regressions/mutations | `7d54727` | Every-route access tests, late-response lifetime guards, test-only authority-card teardown fix |
+
+Latest `origin/feat/hr-payroll-separation` fetched: `bbd14e6`. Merge reports
+**Already up to date**: payroll has not moved beyond the C-3 merge. No competing
+rule or conflict was chosen. Eight build commits are followed only by verification
+and report updates. `.github/workflows/ci.yml`, access resolver, employee separation
+writer, attendance and payroll application code remain unchanged by C-4A.
+
+### Verification and observed failures
+
+Changed tests, root lint and root typecheck ran before each build commit.
+
+- Step 1: initial permission-catalog insertion used the wrong array shape; corrected.
+  First selected run 66/67 passed: HR catalog order assertion needed its new key in
+  catalog order. Corrected file 18 passed; other six files 49 passed. Documented
+  rotation-test filename was stale; actual `fieldEncryption.test.ts` ran, 16 passed.
+- Step 2: 16/17 passed initially. Empty nested OR was ignored by Prisma, allowing
+  HR OFF to see a job. Explicit impossible-id scope fixed it; jobs 6 passed, other
+  two files 11 passed.
+- Step 3: three CV tests failed because option names did not match the shared upload
+  helper. Corrected mapping. New contact-search regression exposed a private-email
+  confirmation oracle for summary users; summary search now uses name only. Final
+  three files / 17 passed.
+- Step 4: first privacy run three files / 22 passed. Genuine feedback key rotation
+  then exposed immutable-row rejection. Added only an InterviewFeedback maintenance
+  branch after shared plaintext equality verification, transaction-local flag and
+  cipher-only row guard; old model writers preserved. Extended run 48/49 passed;
+  marked DB-role catalog/privilege test updated, its 10 tests passed. Other four
+  files / 39 passed, including rotation/back-rotation and normal-edit refusal.
+- Step 5: three files / 12 passed. One typecheck overlapped Prisma generation and
+  saw the old client; sequential rerun after generation passed.
+- Step 6: five files / 30 passed. Retention three-test rerun also passed after making
+  expired-awaiting-cleanup versus physically anonymized states explicit.
+- Step 7: UI component API/import mistakes and metadata signal `userId` typo caught
+  by lint/typecheck and corrected. Initial board fixture omitted required nullable
+  phone: two board assertions failed, fixed fixture and both passed; other two
+  files / 11 passed. Frontend two files / 6 passed. Build/budgets passed.
+- Step 8: restored recruitment suite **9 files / 46 tests passed**. Its source-derived
+  inventory covers all **36 routes**: anonymous 401, Developer 403, unrelated employee
+  denials or empty scoped lists. Frontend private guard suite **3 files / 8 passed**.
+  Late CV responses cannot start a download after the actor view unmounts.
+- First full frontend run had 97 assertions pass but exit 1: React work from the
+  static Ant toast outlived jsdom in `DirectorAuthorityCard.test.tsx`. Marked test-only
+  toast stub and awaited mutation completion fixed it. Full rerun **23 files / 97
+  tests passed, exit 0**. No production payroll component changed.
+
+Final checks passed (all exit 0): root lint and typecheck; full frontend **23
+files / 97 tests**; frontend build and bundle budgets (login 231.5/250 KB gzip,
+employee shell/home 339.4/400, admin shell/home 358.9/400); biometric agent **17
+files / 166 tests**; **FULL backend 227 files / 2,201 tests**, alone, fresh database
+`c4a_test_1793867257_13035`, 1,022.36 seconds. API, worker and preview were stopped
+before the run. No test failure or unhandled error in that final backend run.
+The standard suite excludes replay/demo files per its existing config; fresh DEMO
+seeding and the browser scans ran separately. CI-only jobs remain Unverified.
+Final added whitespace outside shared PEEPS blocks was removed; lint passed again.
+Latest payroll was fetched again at delivery and remains `bbd14e6`, already included.
+
+Browser: **76** role/theme/width screen visits passed: director, HR recruitment OFF
+and ON, requesting manager, submitted interviewer, unrelated employee and Developer;
+light/dark at 1280/390 px. Checked list/board/interview/settings as applicable, no page
+overflow or page errors. Same-SPA account switch test: two switches, zero old-answer
+leaks during pending authorization, unrelated denied, returning panel authorized.
+Extra action walkthrough on 390 px passed across successive runs: create/open a
+job through the stepper, create a consented candidate, upload a private CV, apply
+and move stages with activity, schedule a panel (SCHEDULED row verified by SQL),
+and send a chosen invitation with a PREPARED-local receipt. Automation retries
+corrected closing-dropdown, phone tab-overflow and ambiguous nested-drawer
+selectors; no application page errors were observed. Final mail run exit 0.
+
+Fresh database `c4a_demo_20261105`: migrate, `tsx prisma/seed.ts`, then guarded
+`seed:demo-company` passed. The destructive convenience reset script was never run.
+Only labelled DEMO choices/candidate/contact/PDF/panel answers added. Normal seed
+chooses no recruitment rules. All four prepared leave types remain off: all four rows have `is_active=false`, verified by SQL.
+
+Sensitive scan attempts run alongside other browser logins hit the scratch API's
+shared login rate limit (director API sign-in / employee navigation timeout). Those
+attempts are failed, not claimed passed. Reran the two halves sequentially with
+scratch authentication counters cleared between halves: admin **454 pages passed**, employee **228 pages passed**, both exit 0.
+
+### Mutation checks
+
+Each mutation used a fresh database; each guard was restored in `finally`, followed
+by the complete 9-file / 46-test recruitment rerun passing. The runner initially
+missed the own-submission source string, stopped after restoring the first mutation;
+corrected target and completed the remaining four. No mutant remains.
+
+| Broken guard | Named failing test observed |
+|---|---|
+| Feedback director filter broadened to management | `HR management ON exposes scheduling metadata but never feedback; OFF takes effect next request` (also Office/former-panel checks) |
+| Own submission condition removed | `an interviewer sees only own feedback until submitting, then the rest of the current panel; before-submission audit counts also hide others` |
+| HR explicit-ON condition bypassed | `HR is off even with a grant, ON opens only recruiting duties and OFF takes effect on the next request` |
+| CV access widened to all retained records | `requesting manager cannot read a CV; assigned interviewer can and every outside-team open is audited` |
+| Stable duplicate HMAC randomized | `racing duplicate identities create one encrypted candidate; warnings reveal no other candidate data` (201/201 versus required 201/409) |
+
+### Shared-file hand-off
+
+All authored shared edits are marked PEEPS blocks; new recruitment module/feature
+files and migrations are Peeps-owned. Final line spans follow (nested parent spans
+are included where an existing Peeps block was extended).
+
+| Shared file | Final marked line span(s) |
+|---|---|
+| `backend/prisma/schema.prisma` | 398–401, 426–429, 566–570, 4476–4688 |
+| `backend/scripts/demo/seedDemoCompany.ts` | 325–327 |
+| `backend/src/app.ts` | 1–3, 120–122 |
+| `backend/src/integrations/mail/ConsoleMailService.ts` | 29–33, 38–40 |
+| `backend/src/integrations/mail/MailService.ts` | 2–4 |
+| `backend/src/integrations/mail/SmtpMailService.ts` | 46–49, 51–53 |
+| `backend/src/jobs/worker.ts` | 1–3, 94–100, 97–99 |
+| `backend/src/lib/__tests__/cleanup.ts` | 32–35, 106–111, 185–187, 510–512 |
+| `backend/src/lib/__tests__/dbRoles.test.ts` | 87–89, 103–105 |
+| `backend/src/lib/dbRoles.ts` | 32–34 |
+| `backend/src/lib/fieldKeyRotation.ts` | 14–17, 163–175 |
+| `backend/src/modules/auditLog/service.ts` | 1–3, 45–49, 46–48 |
+| `backend/src/modules/hrCapabilities/__tests__/hrCapabilities.test.ts` | 114–119, 115–118 |
+| `backend/src/modules/hrCapabilities/__tests__/hrMatrix.test.ts` | 31–33 |
+| `backend/src/modules/managers/__tests__/routeInventory.ts` | 38–75 |
+| `backend/src/modules/notifications/service.ts` | 1–3, 67–73, 68–72, 69–71, 94–100, 95–99, 96–98, 110–116, 111–115, 112–114, 129–135, 130–134, 131–133 |
+| `backend/src/modules/payroll/__tests__/runAuthority.test.ts` | 211–214 |
+| `docs/GETTING_STARTED.md` | 1002–1007 |
+| `docs/PROGRESS.md` | 5257–5280 |
+| `docs/SENSITIVE_DATA.md` | 14–52, 15–51 |
+| `docs/UI_SCREEN_MAP.md` | 227–235 |
+| `frontend/e2e/sensitive-ui.mjs` | 68–117, 78–81, 155–161, 157–159, 278–293 |
+| `frontend/src/App.tsx` | 1–3, 33–36 |
+| `frontend/src/components/payroll/__tests__/DirectorAuthorityCard.test.tsx` | 12–16, 127–129 |
+| `frontend/src/routes/PortalRoutes.tsx` | 1–4, 95–98, 118–121 |
+| `frontend/src/routes/adminMenu.config.tsx` | 455–462 |
+| `frontend/src/routes/employeeMenu.config.tsx` | 32–35, 387–390 |
+| `shared/constants/directorAuthority.ts` | 7–9, 45–47 |
+| `shared/constants/hrCapabilities.ts` | 27–29, 60–62 |
+| `shared/constants/peeps.ts` | 13–19, 15–17, 30–32 |
+| `shared/constants/permissions.ts` | 118–125, 178–185 |
+| `shared/constants/sensitiveData.ts` | 20–23, 45–48, 146–148, 236–238 |
+
+
+The payroll test edits are test-only: `runAuthority.test.ts` includes the new
+optional step in its catalog assertion without weakening authority checks;
+`DirectorAuthorityCard.test.tsx` stubs only toast side effects and awaits success.
+HR matrix/catalog and DB-role test changes describe the additional key/column
+maintenance permission. Generic Tasks was deliberately not extended with feedback.
+Notification list/count/mark-read and audit predicates filter before counts, using
+one recruitment policy module; socket data is empty and user-room-only.
+
+### Settings left Not set / Decided by me
+
+Outside labelled DEMO, pipelines/stages, scorecard questions/recommendations,
+sources, rejection categories, requisition route, retention, email templates, CV
+size/type choices and Office audience remain **Not set**. HR recruitment management
+requires explicit ON; DEFAULT/OFF refuses even with a raw grant. Required missing
+choices block only their affected step with a clear message. No quota/window,
+retention duration, rubric, approval route or file policy was silently preset.
+
+Owner overrides applied: director access with outside-panel read audit; HR duties
+controlled separately from named-panel relationships; Office needs capability and
+audience; managers get own-request summaries only; no mandatory second director;
+no public form or job money. Approval route Not set means no approval, per the
+owner's explicit exception. Optional RECRUITMENT_REQUISITION is Not set/OFF.
+
+Implementation choices: immutable pipeline and scorecard snapshots; optimistic
+application versions plus row locks; normalized HMAC duplicate indexes; management
+contact search and summary name-only search; no provider errors/private content in
+mail receipts; PREPARED for console; retention hides expired values immediately
+and keeps storage references on failure for retry. Explicit confirmed candidate
+request is the erase reason; free text containing candidate data is not retained.
+Private queries/forms and delayed callbacks follow actor/access lifetime. No
+recruitment data is placed in generic Tasks.
+
+### Deviations, hooks for later, Unverified
+
+- D1 frames reuse existing design components; offer/compensation/joining/referral
+  portions are deliberately partial until C-4B. No public application or link exists.
+- Non-personal application/job/candidate identifiers and history, immutable pipeline
+  versions and mail interface are hooks for C-4B. No offer/conversion/letters writer
+  or compensation hook was prematurely implemented. Onboarding's separate default-ON
+  switch remains C-4B scope. Insights and document autofill remain unstarted.
+- Actual SMTP/SES delivery is **Unverified**; local/fake providers exercise private
+  logging, template/state validation, idempotency and unknown delivery status.
+- No staging/production or real legal/business values were used or verified.
+- CI for delivery HEAD is **Unverified**, awaiting the owner's pasted per-job
+  result. Local passing checks are separate. Run ID and exact `gh run view` command
+  are supplied in the delivery reply. No CI job is claimed green.
+
+| CI job | Result |
+|---|---|
+| `install-lint-typecheck-test` | Unverified |
+| `docker-build` | Unverified |
+| `agent-windows` | Unverified |
+| `attendance-replay` | Unverified |
+| `latency` | Unverified |
+| `sensitive-ui (admin portal)` | Unverified |
+| `sensitive-ui (employee portal)` | Unverified |
+
+STOP at checkpoint D1. Await the owner's CI paste/acceptance. C-4B is not started.

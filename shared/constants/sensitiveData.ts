@@ -21,7 +21,6 @@ export type SensitiveClassId =
   | "CANDIDATE_PERSONAL_DATA"
   | "RECRUITMENT_FEEDBACK"
   // PEEPS-END recruitment
-
   // PEEPS-BEGIN exits
   | "EXIT_INTERVIEWS"
   // PEEPS-END exits

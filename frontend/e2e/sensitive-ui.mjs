@@ -153,7 +153,11 @@ if (doEmployee) await visit("DEMO004", "an HR Admin (own portal)", "/app", emplo
 // real API by the demo's director and put back as they were. No switch may show a secret, and every page must still say it is the demo.
 const API = process.env.API_URL ?? "http://localhost:4000";
 // PEEPS-BEGIN exits
-const CAPABILITIES = ["VIEW_ATTENDANCE", "APPROVE_REGULARIZATIONS", "APPROVE_LEAVE", "EDIT_MUSTER", "UPLOAD_MANUAL_MUSTER", "FINALISE_MONTH", "CORRECTIONS", "SHIFT_ROSTER", "EXCEPTIONS_QUEUE", "ATTENDANCE_REPORTS", "LEAVE_REPORTS", "MANAGE_EXITS"];
+const CAPABILITIES = ["VIEW_ATTENDANCE", "APPROVE_REGULARIZATIONS", "APPROVE_LEAVE", "EDIT_MUSTER", "UPLOAD_MANUAL_MUSTER", "FINALISE_MONTH", "CORRECTIONS", "SHIFT_ROSTER", "EXCEPTIONS_QUEUE", "ATTENDANCE_REPORTS", "LEAVE_REPORTS", "MANAGE_EXITS",
+  // PEEPS-BEGIN recruitment
+  "MANAGE_RECRUITMENT",
+  // PEEPS-END recruitment
+];
 // PEEPS-END exits
 let directorToken;
 async function setAllDuties(state) {

@@ -78,9 +78,10 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 - [ ] CHECKPOINT C — implementation `d232308` through `bb27005`; payroll merged through `bbd14e6`. Local checks passed: backend **218 files / 2,154 tests** alone, frontend **89**, agent **166**, lint/typecheck/build/budgets, **5/5 mutations**, sensitive scans and browser walkthroughs. Four leave types off. **CI pending owner paste**; see the C-3 stage report. No next module authorized.
 
 ## Recruitment and joining
-- [ ] 17 requisitions, jobs, pipelines
-- [ ] 18 candidates, applications, CVs
-- [ ] 19 interviews, feedback (confidential)
+- [x] 17 requisitions, jobs, pipelines (C-4A)
+- [x] 18 candidates, applications, CVs (C-4A)
+- [x] 19 interviews, feedback (confidential; C-4A)
+- [x] CHECKPOINT D1 — local checks passed; 227 backend files / 2,201 tests; 5 mutations; 454 admin + 228 employee scan pages. CI and owner acceptance pending. Stop; C-4B waits.
 - [ ] 20 offers + director-only compensation
 - [ ] 21 expiring private links, joining documents, exceptions
 - [ ] 22 idempotent conversion

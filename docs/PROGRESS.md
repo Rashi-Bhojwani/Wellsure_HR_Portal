@@ -5252,3 +5252,29 @@ See `plans/PEEPS_STAGE_REPORTS.md` for failures/fixes, counts, shared-file line 
 Not set choices and deviations. **CI remains unverified until the owner pastes jobs.**
 Stop at C-3; recruitment, insights and document autofill remain unstarted.
 <!-- PEEPS-END exits -->
+
+
+<!-- PEEPS-BEGIN recruitment -->
+## C-4A — Recruitment through D1 (2026-11-05)
+
+Requisitions, pay-free jobs and pipeline versions, encrypted candidates and
+confidential interview feedback, authenticated CVs, application stages, chosen
+candidate email templates, retention/erase, recruitment screens and fictional DEMO
+are implemented. HR management requires explicit ON; panel access is independent.
+Directors read feedback with audit outside their panel. Requesting managers see
+only their own requests and related summaries. Private caches/forms/downloads
+follow the signed-in employee and current access. No public form or money added.
+
+Eight build commits `d6b91c3`–`7d54727`. Latest payroll `bbd14e6` is already included.
+Final local checks passed: backend **227 files / 2,201 tests** alone on a fresh
+scratch database; frontend **23 files / 97 tests**; agent **17 files / 166 tests**;
+lint/typecheck/build/bundle budgets; **5/5 mutations** caught and restored; **454
+admin + 228 employee** sensitive UI pages; **76** role/theme/width visits, phone
+form actions and same-SPA account switching. Fresh labelled DEMO seed passed and
+all four prepared leave types remain off. No database reset/drop or production run.
+
+See `plans/PEEPS_STAGE_REPORTS.md` for failures/fixes, exact shared-file lines,
+settings Not set, decisions, later hooks and Unverified items. **CI is Unverified
+until the owner pastes the delivery run's jobs.** Stop at D1 for acceptance; C-4B,
+offers, joining, insights and document autofill remain unstarted.
+<!-- PEEPS-END recruitment -->

@@ -399,7 +399,6 @@ model Location {
   recruitmentRequisitions JobRequisition[]
   recruitmentJobs RecruitmentJob[]
   // PEEPS-END recruitment
-
   @@map("locations")
 }
 
@@ -428,7 +427,6 @@ model Department {
   recruitmentRequisitions JobRequisition[]
   recruitmentJobs RecruitmentJob[]
   // PEEPS-END recruitment
-
   @@map("departments")
 }
 
@@ -570,7 +568,6 @@ model Employee {
   recruitmentPanels RecruitmentInterviewPanel[]
   recruitmentFeedback InterviewFeedback[]
   // PEEPS-END recruitment
-
   @@map("employees")
 }
 
@@ -4475,7 +4472,6 @@ model WorkforceSetting {
   @@map("workforce_settings")
 }
 // ── A-10 — end ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-
 
 // PEEPS-BEGIN recruitment
 model RecruitmentSettingVersion {
