@@ -223,3 +223,13 @@ splitting (step 3) changes how pages load, not their addresses.
 | `/app/exits/interviews/:id`, `/admin/exits/interviews/:id` | Private interview | Employee, interviewer of record, audited directors only | NOT IN BOARD | Shared form/detail components |
 | `/admin/exits/settings` | Director settings and versioned clearance templates | Directors only | `checklist-07`..`10` | MAPPED-PARTIAL: template editor; business values Not set |
 <!-- PEEPS-END exits -->
+
+<!-- PEEPS-BEGIN recruitment -->
+Recruitment D1 (`features/recruitment`), light/dark/390 px: recruitment-01 jobs
+list; 02–05 create-job stepper; 06–08 job stage board and table; 09–11 candidate
+table and candidate drawer with evaluation/activity; 12 schedule drawer; 13–15
+new candidate/CV; 16–19 structured settings/pipeline editors. PARTIAL mappings:
+frames' offers, joining, referral and compensation controls await C-4B. The shipped
+screens use existing DataTable, SideDrawer, Panel, StepperLayout and theme tokens;
+phone tables use cards, with a horizontally scrollable stage board.
+<!-- PEEPS-END recruitment -->

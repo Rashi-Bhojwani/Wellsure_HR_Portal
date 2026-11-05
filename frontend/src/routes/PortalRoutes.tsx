@@ -1,3 +1,7 @@
+// PEEPS-BEGIN recruitment
+const RecruitmentJobPage = lazyPage(() => import("../features/recruitment/RecruitmentJobPage"), "RecruitmentJobPage");
+const RecruitmentInterviewPage = lazyPage(() => import("../features/recruitment/RecruitmentInterviewPage"), "RecruitmentInterviewPage");
+// PEEPS-END recruitment
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { RequireAuth } from "./RequireAuth";
 import { resolveAdminRoutes, resolveEmployeeRoutes } from "./resolveMenuRoutes";
@@ -88,6 +92,10 @@ export function PortalRoutes() {
             <Route path="admin-tools/templates/:id" element={<LetterTemplateEditorPage />} />
             <Route path="payroll/run/:id" element={<PayrollRunPage />} />
             <Route path="payroll/run/:id/step/:slug" element={<RunStepPage />} />
+            {/* PEEPS-BEGIN recruitment */}
+            <Route path="recruitment/jobs/:id" element={<RecruitmentJobPage />} />
+            <Route path="recruitment/interviews/:id" element={<RecruitmentInterviewPage />} />
+            {/* PEEPS-END recruitment */}
             {/* PEEPS-BEGIN exits */}
             <Route path="exits/cases/:id" element={<ExitCasePage />} />
             <Route path="exits/interviews/:id" element={<ExitInterviewPage />} />
@@ -107,6 +115,10 @@ export function PortalRoutes() {
               and Engage are ordinary menu routes. */}
             <Route path="action" element={<MobileActionPage />} />
             <Route path="explore" element={<MobileExplorePage />} />
+            {/* PEEPS-BEGIN recruitment */}
+            <Route path="recruitment/jobs/:id" element={<RecruitmentJobPage />} />
+            <Route path="recruitment/interviews/:id" element={<RecruitmentInterviewPage />} />
+            {/* PEEPS-END recruitment */}
             {/* PEEPS-BEGIN exits */}
             <Route path="exits/cases/:id" element={<ExitCasePage />} />
             <Route path="exits/interviews/:id" element={<ExitInterviewPage />} />

@@ -14,7 +14,7 @@ describe("DEMO recruitment foundation",()=>{
  it("all foundation routes require sign-in, directors own settings, unrelated employees are refused and Developer always 403",async()=>{
  const cases=[['get','/settings',{}],['put','/settings/retention',{value:{days:30},version:0,reason:"DEMO"}],['get','/pipelines',{}],['post','/pipelines',{name:"DEMO",stages:[{code:"DEMO",label:"DEMO"}],reason:"DEMO"}]] as const;
  for(const [method,path,body] of cases){expect((await request(app)[method]('/api/recruitment'+path).send(body)).status).toBe(401);for(const who of ['employee','otherManager','hr','developer'] as const)expect((await f.call(who,method,path,body)).status,who+path).toBe(403);}
- expect((await request(app).get('/api/recruitment/status')).status).toBe(401);expect((await f.call('developer','get','/status')).status).toBe(403);expect((await f.call('employee','get','/status')).body).toEqual({canManage:false,canRaise:false,isDirector:false});
+ expect((await request(app).get('/api/recruitment/status')).status).toBe(401);expect((await f.call('developer','get','/status')).status).toBe(403);expect((await f.call('employee','get','/status')).body).toEqual({canManage:false,canRaise:false,canReadRequisitions:false,isDirector:false});
  });
  it("HR is off even with a grant, ON opens only recruiting duties and OFF takes effect on the next request",async()=>{
  await f.grant('hr','recruitment.manage');expect((await f.call('hr','get','/pipelines')).status).toBe(403);await f.hrSwitch('ON');expect((await f.call('hr','get','/pipelines')).status).toBe(200);expect((await f.call('hr','get','/settings')).status).toBe(403);await f.hrSwitch('OFF');expect((await f.call('hr','get','/pipelines')).status).toBe(403);

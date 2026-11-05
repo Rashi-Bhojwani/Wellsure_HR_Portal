@@ -1,3 +1,4 @@
+import { candidateName } from "./candidates";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma";
@@ -12,7 +13,7 @@ export const requisitionInput=z.object({...fields,headcount:z.number().int().min
 export const jobInput=z.object({...fields,description:z.string().trim().min(1).max(20000),requisitionId:z.string().min(1).optional(),pipelineId:z.string().min(1).optional()}).strict();
 export const decisionInput=z.object({decision:z.enum(["APPROVE","REJECT"]),reason:z.string().trim().min(1).max(2000)}).strict();
 export const jobStateInput=z.object({status:z.enum(["OPEN","ON_HOLD","CLOSED"]),pipelineId:z.string().min(1).optional(),reason:z.string().trim().min(1).max(2000)}).strict();
-export const listInput=z.object({page:z.coerce.number().int().min(1).default(1),q:z.string().trim().max(200).default("")}).strict();
+export const listInput=z.object({status:z.enum(["DRAFT","OPEN","ON_HOLD","CLOSED"]).optional(),page:z.coerce.number().int().min(1).default(1),q:z.string().trim().max(200).default("")}).strict();
 const PAGE_SIZE=20;
 async function masters(input:{departmentId:string;locationId:string}){const [d,l]=await Promise.all([prisma.department.count({where:{id:input.departmentId}}),prisma.location.count({where:{id:input.locationId}})]);if(!d||!l)throw new HttpError(400,"Choose an existing department and location.","VALIDATION_ERROR");}
 export function requisitionWhere(c:Context):Prisma.JobRequisitionWhereInput{if(c.manage)return c.isDirector||c.office?{}:{requester:c.employeeScope};return {requesterEmployeeId:c.manager?c.employeeId:"__unavailable__"};}
@@ -46,6 +47,8 @@ export async function changeJob(id:string,actor:Actor,input:z.infer<typeof jobSt
  if(input.status==="OPEN"){
  if(!pipelineId||!await tx.recruitmentPipeline.count({where:{id:pipelineId,stages:{some:{}}}}))throw new HttpError(409,"Recruitment pipeline is Not set. Choose a director's pipeline before opening.","RECRUITMENT_NOT_SET");
  if(row.pipelineId!==pipelineId&&await tx.recruitmentApplication.count({where:{jobId:id}}))throw new HttpError(409,"A job with applications keeps its selected pipeline.","CONFLICT");}
- const changed=await tx.recruitmentJob.update({where:{id},data:{status:input.status,...(input.status==="OPEN"?{pipelineId}:{}),changedByUserId:c.userId}});await writeAuditLogs([{...meta,action:"recruitment.job.state",entityType:"RecruitmentJob",entityId:id,after:{status:changed.status}}],tx);return changed;});}
-export async function listJobs(actor:Actor,input:z.infer<typeof listInput>){const c=await context(actor);if(!c.manage&&!c.manager)throw new HttpError(403,"Jobs are unavailable.","FORBIDDEN");const where={AND:[jobWhere(c),{title:{contains:input.q,mode:"insensitive" as const}}]};const [items,total]=await Promise.all([prisma.recruitmentJob.findMany({where,orderBy:{createdAt:"desc"},skip:(input.page-1)*PAGE_SIZE,take:PAGE_SIZE,include:{_count:{select:{applications:true}}}}),prisma.recruitmentJob.count({where})]);return {items,total,page:input.page,pageSize:PAGE_SIZE};}
+ const changed=await tx.recruitmentJob.update({where:{id},data:{status:input.status,...(input.status==="OPEN"?{pipelineId}:{}),changedByUserId:c.userId}});await writeAuditLogs([{...meta,action:"recruitment.job.state",entityType:"RecruitmentJob",entityId:id,after:{status:changed.status,reason:input.reason}}],tx);return changed;});}
+export async function listJobs(actor:Actor,input:z.infer<typeof listInput>){const c=await context(actor);if(!c.manage&&!c.manager)throw new HttpError(403,"Jobs are unavailable.","FORBIDDEN");const where={AND:[jobWhere(c),...(input.status?[{status:input.status}]:[]),{title:{contains:input.q,mode:"insensitive" as const}}]};const [items,total]=await Promise.all([prisma.recruitmentJob.findMany({where,orderBy:{createdAt:"desc"},skip:(input.page-1)*PAGE_SIZE,take:PAGE_SIZE,include:{_count:{select:{applications:true}}}}),prisma.recruitmentJob.count({where})]);return {items,total,page:input.page,pageSize:PAGE_SIZE};}
 export async function getJob(id:string,actor:Actor){const c=await context(actor);const job=await requireJob(id,c);return {...job,canManage:c.manage};}
+
+export async function board(id:string,actor:Actor){const c=await context(actor),job=await requireJob(id,c);const [stages,rows]=await Promise.all([prisma.recruitmentPipelineStage.findMany({where:{pipelineId:job.pipelineId??"__unavailable__"},orderBy:{position:"asc"}}),prisma.recruitmentApplication.findMany({where:{jobId:id},include:{candidate:true},orderBy:{createdAt:"desc"}})]);return {job,stages,canManage:c.manage,items:rows.map(row=>({id:row.id,candidateId:row.candidateId,name:candidateName(row.candidate),stageId:row.stageId,status:row.status,version:row.version}))};}

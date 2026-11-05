@@ -42,5 +42,5 @@ export async function createPipeline(input:z.infer<typeof pipelineInput>,meta:Me
  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('peeps.recruitment.pipeline'))::text`;
  const last=await tx.recruitmentPipeline.findFirst({orderBy:{version:"desc"}});
  const row=await tx.recruitmentPipeline.create({data:{name:input.name,version:(last?.version??0)+1,changedByUserId:meta.actorUserId,stages:{create:input.stages.map((s,position)=>({...s,position}))}},include:{stages:{orderBy:{position:"asc"}}}});
- await writeAuditLogs([{...meta,action:"recruitment.pipeline.created",entityType:"RecruitmentPipeline",entityId:row.id,after:{version:row.version}}],tx);return row;
+ await writeAuditLogs([{...meta,action:"recruitment.pipeline.created",entityType:"RecruitmentPipeline",entityId:row.id,after:{version:row.version,reason:input.reason}}],tx);return row;
  });}

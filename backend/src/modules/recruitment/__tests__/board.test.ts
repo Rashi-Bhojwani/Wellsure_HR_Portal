@@ -1,0 +1,15 @@
+import { beforeAll,afterAll,expect,it,describe } from "vitest";
+import { randomUUID } from "node:crypto";
+import { fixture } from "./fixtures";
+describe('DEMO recruitment UI summaries remain scoped before pagination',()=>{
+ let f:Awaited<ReturnType<typeof fixture>>,jobId:string,candidateId:string,applicationId:string;
+ beforeAll(async()=>{f=await fixture();await f.grant('manager','recruitment.requisition.raise');await f.setting('sources',[{code:'DEMO',label:'DEMO'}]);await f.setting('retention',{days:30});
+ const r=await f.call('manager','post','/requisitions',{title:'DEMO role',departmentId:f.org.departmentId,locationId:f.org.locationId,employmentType:'PERMANENT',headcount:1,reason:'DEMO'});await f.call('manager','post',`/requisitions/${r.body.id}/submit`);
+ const p=await f.call('director','post','/pipelines',{name:'DEMO',stages:[{code:'DEMO_ONE',label:'DEMO applied'},{code:'DEMO_TWO',label:'DEMO interview'}],reason:'DEMO'});
+ const j=await f.call('director','post','/jobs',{title:'DEMO role',departmentId:f.org.departmentId,locationId:f.org.locationId,employmentType:'PERMANENT',description:'DEMO',requisitionId:r.body.id,pipelineId:p.body.id});jobId=j.body.id;await f.call('director','post',`/jobs/${jobId}/state`,{status:'OPEN',reason:'DEMO'});
+ const c=await f.call('director','post','/candidates',{name:'DEMO board name',email:`demo.${randomUUID()}@example.invalid`,phone:null,source:'DEMO',consentConfirmed:true,consentRecordedAt:new Date().toISOString()});expect(c.status).toBe(201);candidateId=c.body.id;
+ const a=await f.call('director','post',`/candidates/${candidateId}/applications`,{jobId});expect(a.status).toBe(201);applicationId=a.body.id;await f.call('director','post',`/applications/${applicationId}/stage`,{stageId:p.body.stages[1].id,version:a.body.version,reason:'DEMO_PRIVATE_STAGE_NOTE'});
+ });afterAll(async()=>{await f.cleanup();});
+ it('board names are visible only in own job scope; contacts and private notes stay out',async()=>{for(const who of ['director','manager'] as const){const r=await f.call(who,'get',`/jobs/${jobId}/board`);expect(r.status).toBe(200);expect(r.body.items).toHaveLength(1);expect(JSON.stringify(r.body)).not.toContain('@example.invalid');expect(JSON.stringify(r.body)).not.toContain('DEMO_PRIVATE_STAGE_NOTE');}for(const who of ['employee','otherManager','hr'] as const)expect((await f.call(who,'get',`/jobs/${jobId}/board`)).status).toBe(404);expect((await f.call('developer','get',`/jobs/${jobId}/board`)).status).toBe(403);});
+ it('application activity is management-only and open-job filter runs before count',async()=>{expect((await f.call('manager','get',`/applications/${applicationId}`)).body.moves).toBeUndefined();expect(JSON.stringify((await f.call('director','get',`/applications/${applicationId}`)).body)).toContain('DEMO_PRIVATE_STAGE_NOTE');expect((await f.call('director','get','/jobs?status=CLOSED')).body.total).toBe(0);expect((await f.call('manager','get','/jobs?status=OPEN')).body.items.some((r:{id:string})=>r.id===jobId)).toBe(true);});
+});

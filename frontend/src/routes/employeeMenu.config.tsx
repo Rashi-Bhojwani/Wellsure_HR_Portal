@@ -29,6 +29,10 @@ import {
   WalletOutlined,
 } from "@ant-design/icons";
 import { lazyPage } from "./lazyPage";
+// PEEPS-BEGIN recruitment
+const RecruitmentPage = lazyPage(() => import("../features/recruitment/RecruitmentPage"), "RecruitmentPage");
+const MyInterviewsPage = lazyPage(() => import("../features/recruitment/RecruitmentPage"), "MyInterviewsPage");
+// PEEPS-END recruitment
 // PEEPS-BEGIN exits
 const ExitsPage = lazyPage(() => import("../features/exits/ExitsPage"), "ExitsPage");
 // PEEPS-END exits
@@ -380,6 +384,10 @@ export const employeeMenu: EmployeeMenuEntry[] = [
     description: "Badges and private notes you have received.",
   },
   // PEEPS-END
+  // PEEPS-BEGIN recruitment
+  { key: "recruitment-requests", label: "Hiring requests", path: "recruitment", icon: TeamOutlined, element: RecruitmentPage, permission: "recruitment.requisition.raise", description: "Your hiring requisitions and candidate summaries." },
+  { key: "my-interviews", label: "My interviews", path: "recruitment/interviews", icon: CommentOutlined, element: MyInterviewsPage, description: "Your assigned interviews and private feedback." },
+  // PEEPS-END recruitment
   // PEEPS-BEGIN exits
   { key: "moving-on", label: "Moving on", path: "exits", icon: CheckSquareOutlined, element: ExitsPage, description: "Your resignation, clearance and private interview." },
   // PEEPS-END exits

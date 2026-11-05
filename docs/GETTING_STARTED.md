@@ -998,3 +998,10 @@ The private answer marker is visible only to that relationship and directors.
 These choices never seed a regular environment. Letter buttons create requests;
 issuing stays in the existing letters flow. No setup command or service changed.
 <!-- PEEPS-END exits -->
+
+<!-- PEEPS-BEGIN recruitment -->
+Recruitment D1 usage and DEMO personas are in
+[`backend/src/modules/recruitment/README.md`](../backend/src/modules/recruitment/README.md).
+Choose settings as a director before opening a job or adding a candidate. HR's
+recruitment switch starts off; named-panel access is independent of that switch.
+<!-- PEEPS-END recruitment -->

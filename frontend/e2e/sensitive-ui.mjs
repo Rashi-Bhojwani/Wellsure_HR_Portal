@@ -75,6 +75,10 @@ const ASSET_MARKER = "DEMO-ASSET-HELD-BY-007";
 const ASSET_MONEY = /₹|\bINR\b|\bRs\.?\s?\d/;
 async function peepsPageChecks(page, user, label, base, p, text) {
   const where = `${label} on ${base}/${p}`;
+  // PEEPS-BEGIN recruitment
+  if (!["DEMO001", "DEMO013", "DEMO011"].includes(user) && text.includes("DEMO-C4-PRIVATE-FEEDBACK")) problems.push(`${where}: recruitment feedback outside the submitted panel`);
+  if ((p === "recruitment" || p.startsWith("recruitment/")) && user === "DEMO005" && text.includes("DEMO-C4-CANDIDATE")) problems.push(`${where}: Developer sees candidate data`);
+  // PEEPS-END recruitment
   // PEEPS-BEGIN exits
   if (!["DEMO001", "DEMO013", "DEMO006", "DEMO004"].includes(user) && text.includes("DEMO-C3-PRIVATE-INTERVIEW")) problems.push(`${where}: sees a private exit interview outside the relationship`);
   if ((p === "exits" || p.startsWith("exits/")) && /₹|\bINR\b|\bRs\.?\s?\d/.test(text)) problems.push(`${where}: exit screen contains a money value`);
@@ -267,6 +271,22 @@ if (doEmployee) await visit("DEMO009", "another employee", "/app", employeePaths
   }
 }
 // PEEPS-END exits
+// PEEPS-BEGIN recruitment
+{
+ const API=process.env.API_URL??"http://localhost:4000";
+ const login=await fetch(`${API}/api/auth/login`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({employeeCode:"DEMO001",password:PASSWORD})});
+ const token=(await login.json()).accessToken;if(!token)throw new Error("could not sign in for recruitment scan");
+ const headers={authorization:`Bearer ${token}`};
+ const list=await(await fetch(`${API}/api/recruitment/interviews`,{headers})).json();
+ const interview=list.items?.find(i=>i.candidate.name==="DEMO-C4-CANDIDATE");if(!interview)throw new Error("C-4 DEMO interview missing");
+ if(doAdmin)for(const user of ["DEMO005","DEMO004","DEMO001"])await visit(user,`${user} recruitment`,"/admin",[`recruitment/jobs/${interview.job.id}`,`recruitment/interviews/${interview.id}`]);
+ if(doEmployee)for(const user of ["DEMO005","DEMO004","DEMO009","DEMO011","DEMO007","DEMO001"]){
+  await visit(user,`${user} recruitment relationship`,"/app",[`recruitment/interviews/${interview.id}`]);
+  const page=await sessionFor(user),text=await page.locator("body").innerText();
+  if(["DEMO001","DEMO011"].includes(user)!==text.includes("DEMO-C4-PRIVATE-FEEDBACK"))problems.push(`${user}: recruitment feedback differs from its relationship`);
+ }
+}
+// PEEPS-END recruitment
 for (const page of sessions.values()) await page.context().close();
 await browser.close();
 

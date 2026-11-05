@@ -452,3 +452,12 @@ adminApps.find(a=>a.key==="employee")?.menus?.[0]?.items.push(
   { key: "exit-settings", label: "Exit settings", path: "exits/settings", icon: SettingOutlined, element: ExitSettingsPage, needs: { any: ["exits.settings.manage"] } },
 );
 // PEEPS-END exits
+
+// PEEPS-BEGIN recruitment
+const RecruitmentAdminPage = lazyPage(() => import("../features/recruitment/RecruitmentPage"), "RecruitmentAdminPage");
+const RecruitmentSettingsPage = lazyPage(() => import("../features/recruitment/RecruitmentSettingsPage"), "RecruitmentSettingsPage");
+adminApps.find(a=>a.key==="employee")?.menus?.[0]?.items.push(
+  { key: "recruitment", label: "Recruitment", path: "recruitment", icon: TeamOutlined, element: RecruitmentAdminPage, needs: { any: ["recruitment.view"] } },
+  { key: "recruitment-settings", label: "Recruitment settings", path: "recruitment/settings", icon: SettingOutlined, element: RecruitmentSettingsPage, needs: { any: ["recruitment.settings.manage"] } },
+);
+// PEEPS-END recruitment

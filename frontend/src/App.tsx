@@ -1,3 +1,6 @@
+// PEEPS-BEGIN recruitment
+import { useRecruitmentCacheBoundary } from "./features/recruitment/useRecruitmentCacheBoundary";
+// PEEPS-END recruitment
 import { lazy, Suspense, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
@@ -27,6 +30,10 @@ function AuthenticatedSocketProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   useExitCacheBoundary(user?.employeeId ?? null);
   // PEEPS C3 END
+  // PEEPS-BEGIN recruitment
+  const recruitmentUser = useAuth().user;
+  useRecruitmentCacheBoundary(recruitmentUser?.employeeId ?? null);
+  // PEEPS-END recruitment
   return <SocketProvider enabled={isAuthenticated}>{children}</SocketProvider>;
 }
 
