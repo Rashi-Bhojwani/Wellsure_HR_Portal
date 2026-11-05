@@ -1,3 +1,5 @@
+import * as jobs from "./jobs";
+import { HttpError } from "../../middleware/errorHandler";
 import { Router } from "express";
 import { z } from "zod";
 import { authenticate } from "../../middleware/authenticate";
@@ -14,3 +16,15 @@ recruitmentRouter.get("/settings",validate({query:empty}),async(req,res)=>{res.j
 recruitmentRouter.put("/settings/:key",validate({params:z.object({key:settings.keySchema}),body:settings.settingInput}),async(req,res)=>{res.json(await settings.set(req.params.key as settings.SettingKey,req.body,metaOf(req)));});
 recruitmentRouter.get("/pipelines",validate({query:empty}),async(req,res)=>{await requireManagement(req.user!);res.json(await prisma.recruitmentPipeline.findMany({include:{stages:{orderBy:{position:"asc"}}},orderBy:{version:"desc"}}));});
 recruitmentRouter.post("/pipelines",validate({body:settings.pipelineInput}),async(req,res)=>{res.status(201).json(await settings.createPipeline(req.body,metaOf(req)));});
+
+recruitmentRouter.get("/requisitions",validate({query:empty}),async(req,res)=>{res.json(await jobs.listRequisitions(req.user!));});
+recruitmentRouter.post("/requisitions",validate({body:jobs.requisitionInput}),async(req,res)=>{res.status(201).json(await jobs.createRequisition(req.user!,req.body,metaOf(req)));});
+recruitmentRouter.get("/requisitions/:id",validate({params:idSchema,query:empty}),async(req,res)=>{res.json(await jobs.getRequisition(req.params.id as string,req.user!));});
+recruitmentRouter.post("/requisitions/:id/submit",validate({params:idSchema,body:empty}),async(req,res)=>{res.json(await jobs.submitRequisition(req.params.id as string,req.user!,metaOf(req)));});
+recruitmentRouter.post("/requisitions/:id/decision",validate({params:idSchema,body:jobs.decisionInput}),async(req,res)=>{res.json(await jobs.decideRequisition(req.params.id as string,req.user!,req.body,metaOf(req)));});
+recruitmentRouter.post("/requisitions/:id/close",validate({params:idSchema,body:z.object({reason:z.string().trim().min(1).max(2000)}).strict()}),async(req,res)=>{res.json(await jobs.closeRequisition(req.params.id as string,req.user!,req.body.reason,metaOf(req)));});
+recruitmentRouter.get("/jobs",validate({query:jobs.listInput}),async(req,res)=>{res.json(await jobs.listJobs(req.user!,req.query as never));});
+recruitmentRouter.post("/jobs",validate({body:jobs.jobInput}),async(req,res)=>{res.status(201).json(await jobs.createJob(req.user!,req.body,metaOf(req)));});
+recruitmentRouter.get("/jobs/:id",validate({params:idSchema,query:empty}),async(req,res)=>{res.json(await jobs.getJob(req.params.id as string,req.user!));});
+recruitmentRouter.post("/jobs/:id/state",validate({params:idSchema,body:jobs.jobStateInput}),async(req,res)=>{res.json(await jobs.changeJob(req.params.id as string,req.user!,req.body,metaOf(req)));});
+recruitmentRouter.get("/options",validate({query:empty}),async(req,res)=>{const c=await context(req.user!);if(!c.manage&&!c.manager)throw new HttpError(403,"Recruitment options are unavailable.","FORBIDDEN");const [departments,locations]=await Promise.all([prisma.department.findMany({select:{id:true,name:true},orderBy:{name:"asc"}}),prisma.location.findMany({select:{id:true,name:true},orderBy:{name:"asc"}})]);res.json({departments,locations});});

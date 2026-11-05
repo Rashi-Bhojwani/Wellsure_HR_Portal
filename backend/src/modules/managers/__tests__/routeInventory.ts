@@ -41,6 +41,17 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "PUT /api/recruitment/settings/:key": adminInService("Actual director only; append-only setting version"),
   "GET /api/recruitment/pipelines": scoped("Current recruitment management audience"),
   "POST /api/recruitment/pipelines": adminInService("Actual director only; immutable pipeline version"),
+  "GET /api/recruitment/requisitions": scoped("Requesting manager owns record; recruiting team current scope"),
+  "POST /api/recruitment/requisitions": scoped("Manager-grantable raise checked in service; own requester only"),
+  "GET /api/recruitment/requisitions/:id": scoped("Own requesting manager or current scoped management"),
+  "POST /api/recruitment/requisitions/:id/submit": scoped("Only requester with current explicit raise grant"),
+  "POST /api/recruitment/requisitions/:id/decision": adminInService("Actual director only; optional check is snapshotted"),
+  "POST /api/recruitment/requisitions/:id/close": scoped("Current scoped recruitment management only"),
+  "GET /api/recruitment/jobs": scoped("Requesting manager own requisition jobs or scoped management"),
+  "POST /api/recruitment/jobs": scoped("Current recruitment management and approved linked requisition"),
+  "GET /api/recruitment/jobs/:id": scoped("Own requesting manager or scoped management"),
+  "POST /api/recruitment/jobs/:id/state": scoped("Management; pipeline required before open"),
+  "GET /api/recruitment/options": scoped("Manager or recruiting team; department/location labels only"),
   // PEEPS-END recruitment
   // PEEPS-BEGIN exits
   "GET /api/exits/owners": adminInService("actual director only; active non-Developer names/codes for explicit owner choices"),

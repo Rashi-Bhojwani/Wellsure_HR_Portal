@@ -29,6 +29,7 @@ export async function context(actor:Actor){
 export type Context=Awaited<ReturnType<typeof context>>;
 export function jobWhere(c:Context):Prisma.RecruitmentJobWhereInput{
  if(c.manage&&Object.keys(c.employeeScope).length===0)return {};
+ if(!c.manage&&!c.manager)return {id:{in:[]}};
  return {OR:[...(c.manage?[{requisition:null},{requisition:{requester:c.employeeScope}}]:[]),...(c.manager?[{requisition:{requesterEmployeeId:c.employeeId}}]:[])]};
 }
 export async function requireManagement(actor:Actor){const c=await context(actor);if(!c.manage)throw new HttpError(403,"Recruitment management is unavailable.","FORBIDDEN");return c;}
