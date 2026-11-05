@@ -29,6 +29,10 @@ type Policy = "delete" | "setNull";
 // Key: "<ChildModel>.<foreignKeyField>". Required FKs are never listed —
 // a required FK can't be nulled, so its child is always deleted.
 export const OPTIONAL_FK_POLICY: Record<string, Policy> = {
+  // PEEPS-BEGIN recruitment
+  "RecruitmentJob.requisitionId": "delete",
+  "RecruitmentJob.pipelineId": "delete",
+  // PEEPS-END recruitment
   "BankFileSentMark.batchId": "delete",
   "BankFileSentMark.repaymentBatchId": "delete",
   // An incident belongs to the device or agent it records trouble with (exactly one is set, by a CHECK):
@@ -99,6 +103,12 @@ export const OPTIONAL_FK_POLICY: Record<string, Policy> = {
 // plain deleteMany on their natural key.
 export const FIXTURE_ROOT_MODELS = ["Employee", "User"] as const;
 export const STANDALONE_ROOT_MODELS: Record<string, string> = {
+  // PEEPS-BEGIN recruitment
+  RecruitmentSettingVersion: "Director recruitment settings",
+  RecruitmentPipeline: "Immutable director pipeline versions",
+  Candidate: "Fictional candidate fixture root",
+  RecruitmentHistory: "Non-personal append-only recruitment history",
+  // PEEPS-END recruitment
   // PEEPS-BEGIN exits
   ExitSettingVersion: "Exits director settings, explicitly cleaned by each fixture",
   ExitChecklistTemplate: "Director-owned versioned checklist templates",
@@ -172,6 +182,9 @@ export const STANDALONE_ROOT_MODELS: Record<string, string> = {
 // them behind in .storage/. The guard fails on any column that looks like a
 // storage key (…StorageKey / fileKey) but isn't listed here.
 export const STORAGE_KEY_COLUMNS: Record<string, string[]> = {
+  // PEEPS-BEGIN recruitment
+  Candidate: ["cvStorageKey"],
+  // PEEPS-END recruitment
   EmployeePersonal: ["photoStorageKey", "photoThumbStorageKey"],
   EmployeeDocument: ["fileKey"],
   CompanyDocument: ["fileKey"],
@@ -494,3 +507,7 @@ export async function deleteEmployeesAndDependents(employeeIds: string[]): Promi
   await purgeAppendOnly("AuditLog", { OR: [{ entityId: { in: ids } }, { actorUserId: { in: users.map((u) => u.id) } }] });
   await deleteWithDependents("Employee", employeeIds);
 }
+
+// PEEPS-BEGIN recruitment
+for (const model of ["RecruitmentSettingVersion", "RecruitmentPipeline", "RecruitmentPipelineStage", "ApplicationStageMove", "InterviewFeedback", "RecruitmentHistory"]) PURGE_GUARDED_MODELS.add(model);
+// PEEPS-END recruitment

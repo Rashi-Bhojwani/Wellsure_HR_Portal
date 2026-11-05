@@ -1,3 +1,6 @@
+// PEEPS-BEGIN recruitment
+import { recruitmentRouter } from "./modules/recruitment/routes";
+// PEEPS-END recruitment
 // PEEPS-BEGIN exits
 import { exitsRouter } from "./modules/exits/routes";
 // PEEPS-END exits
@@ -114,6 +117,9 @@ const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   { path: "/api/tax", router: taxRouter },
   { path: "/api/attendance", router: attendanceRouter },
   { path: "/api/biometric", router: biometricRouter },
+  // PEEPS-BEGIN recruitment
+  { path: "/api/recruitment", router: recruitmentRouter },
+  // PEEPS-END recruitment
   // PEEPS-BEGIN exits
   { path: "/api/exits", router: exitsRouter },
   // PEEPS-END exits

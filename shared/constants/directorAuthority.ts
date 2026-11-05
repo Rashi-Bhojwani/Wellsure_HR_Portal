@@ -4,6 +4,9 @@
 // payroll refuses to run that step. The choices live in SystemSetting `payroll.secondDirector`. Both modes tell the other director.
 
 export const DIRECTOR_STEPS = [
+  // PEEPS-BEGIN recruitment
+  "RECRUITMENT_REQUISITION",
+  // PEEPS-END recruitment
   "RULE_CONFIRM",
   "RUN_APPROVAL",
   "PERIOD_FINALISE",
@@ -39,6 +42,9 @@ export interface DirectorStepInfo {
 }
 
 export const DIRECTOR_STEP_INFO: Record<DirectorStep, DirectorStepInfo> = {
+  // PEEPS-BEGIN recruitment
+  RECRUITMENT_REQUISITION: { label: "Recruitment requisition (optional check)", covers: "Optional second-director decision for a chosen approval route. Not set adds no wait." },
+  // PEEPS-END recruitment
   // PEEPS-BEGIN exits
   EXIT_APPROVAL: { label: "Exit acceptance (optional check)", covers: "Resignation acceptance. Not set: one authorized person accepts; a director act tells the other director. A second director is required only when the optional check is explicitly chosen." },
   // PEEPS-END exits

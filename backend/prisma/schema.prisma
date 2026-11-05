@@ -395,6 +395,11 @@ model Location {
   companyDocuments    CompanyDocument[]
 
   @@index([cityId])
+  // PEEPS-BEGIN recruitment
+  recruitmentRequisitions JobRequisition[]
+  recruitmentJobs RecruitmentJob[]
+  // PEEPS-END recruitment
+
   @@map("locations")
 }
 
@@ -418,6 +423,11 @@ model Department {
   jobHistory       EmployeeJobHistory[]
   announcements    Announcement[]
   companyDocuments CompanyDocument[]
+
+  // PEEPS-BEGIN recruitment
+  recruitmentRequisitions JobRequisition[]
+  recruitmentJobs RecruitmentJob[]
+  // PEEPS-END recruitment
 
   @@map("departments")
 }
@@ -555,6 +565,12 @@ model Employee {
   // PEEPS-END
   @@index([status])
   @@index([dateOfJoining])
+  // PEEPS-BEGIN recruitment
+  recruitmentRequisitions JobRequisition[]
+  recruitmentPanels RecruitmentInterviewPanel[]
+  recruitmentFeedback InterviewFeedback[]
+  // PEEPS-END recruitment
+
   @@map("employees")
 }
 
@@ -4460,3 +4476,212 @@ model WorkforceSetting {
 }
 // ── A-10 — end ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
+
+// PEEPS-BEGIN recruitment
+model RecruitmentSettingVersion {
+  id String @id @default(cuid())
+  key String
+  version Int
+  value Json
+  reason String
+  changedByUserId String @map("changed_by_user_id")
+  changedAt DateTime @default(now()) @map("changed_at") @db.Timestamptz(3)
+  @@unique([key, version])
+  @@map("recruitment_setting_versions")
+}
+
+model RecruitmentPipeline {
+  id String @id @default(cuid())
+  name String
+  version Int @unique
+  changedByUserId String @map("changed_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  stages RecruitmentPipelineStage[]
+  jobs RecruitmentJob[]
+  @@map("pipelines")
+}
+
+model RecruitmentPipelineStage {
+  id String @id @default(cuid())
+  pipelineId String @map("pipeline_id")
+  pipeline RecruitmentPipeline @relation(fields: [pipelineId], references: [id])
+  code String
+  label String
+  position Int
+  applications RecruitmentApplication[]
+  @@unique([pipelineId, code])
+  @@unique([pipelineId, position])
+  @@map("pipeline_stages")
+}
+
+model JobRequisition {
+  id String @id @default(cuid())
+  requesterEmployeeId String @map("requester_employee_id")
+  requester Employee @relation(fields: [requesterEmployeeId], references: [id])
+  title String
+  departmentId String @map("department_id")
+  department Department @relation(fields: [departmentId], references: [id])
+  locationId String @map("location_id")
+  location Location @relation(fields: [locationId], references: [id])
+  employmentType String @map("employment_type")
+  headcount Int
+  reason String
+  status String @default("DRAFT")
+  approvalRoute Json? @map("approval_route")
+  approvalByUserId String? @map("approval_by_user_id")
+  decisionReason String? @map("decision_reason")
+  changedByUserId String @map("changed_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  job RecruitmentJob?
+  @@index([requesterEmployeeId, status])
+  @@map("job_requisitions")
+}
+
+model RecruitmentJob {
+  id String @id @default(cuid())
+  requisitionId String? @unique @map("requisition_id")
+  requisition JobRequisition? @relation(fields: [requisitionId], references: [id])
+  title String
+  departmentId String @map("department_id")
+  department Department @relation(fields: [departmentId], references: [id])
+  locationId String @map("location_id")
+  location Location @relation(fields: [locationId], references: [id])
+  employmentType String @map("employment_type")
+  description String
+  pipelineId String? @map("pipeline_id")
+  pipeline RecruitmentPipeline? @relation(fields: [pipelineId], references: [id])
+  status String @default("DRAFT")
+  changedByUserId String @map("changed_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  applications RecruitmentApplication[]
+  @@index([status])
+  @@map("jobs")
+}
+
+model Candidate {
+  id String @id @default(cuid())
+  nameEncrypted Bytes? @map("name_encrypted")
+  emailEncrypted Bytes? @map("email_encrypted")
+  phoneEncrypted Bytes? @map("phone_encrypted")
+  nameHash String? @map("name_hash")
+  emailHash String? @unique @map("email_hash")
+  phoneHash String? @unique @map("phone_hash")
+  source String
+  consentRecordedAt DateTime @map("consent_recorded_at") @db.Timestamptz(3)
+  retentionUntil DateTime @map("retention_until") @db.Timestamptz(3)
+  retentionVersionId String @map("retention_version_id")
+  cvStorageKey String? @map("cv_storage_key")
+  cvMimeType String? @map("cv_mime_type")
+  anonymizedAt DateTime? @map("anonymized_at") @db.Timestamptz(3)
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  applications RecruitmentApplication[]
+  mails RecruitmentCandidateMail[]
+  @@index([retentionUntil, anonymizedAt])
+  @@map("candidates")
+}
+
+model RecruitmentApplication {
+  id String @id @default(cuid())
+  candidateId String @map("candidate_id")
+  candidate Candidate @relation(fields: [candidateId], references: [id])
+  jobId String @map("job_id")
+  job RecruitmentJob @relation(fields: [jobId], references: [id])
+  stageId String @map("stage_id")
+  stage RecruitmentPipelineStage @relation(fields: [stageId], references: [id])
+  status String @default("ACTIVE")
+  version Int @default(0)
+  reasonCategory String? @map("reason_category")
+  changedByUserId String @map("changed_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  moves ApplicationStageMove[]
+  interviews RecruitmentInterview[]
+  @@unique([candidateId, jobId])
+  @@map("applications")
+}
+
+model ApplicationStageMove {
+  id String @id @default(cuid())
+  applicationId String @map("application_id")
+  application RecruitmentApplication @relation(fields: [applicationId], references: [id])
+  fromStageId String? @map("from_stage_id")
+  toStageId String @map("to_stage_id")
+  version Int
+  reason String?
+  actorUserId String @map("actor_user_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  @@unique([applicationId, version])
+  @@map("application_stage_moves")
+}
+
+model RecruitmentInterview {
+  id String @id @default(cuid())
+  applicationId String @map("application_id")
+  application RecruitmentApplication @relation(fields: [applicationId], references: [id])
+  round String
+  scheduledAt DateTime @map("scheduled_at") @db.Timestamptz(3)
+  scorecard Json
+  status String @default("SCHEDULED")
+  changedByUserId String @map("changed_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  panel RecruitmentInterviewPanel[]
+  feedback InterviewFeedback[]
+  @@map("recruitment_interviews")
+}
+
+model RecruitmentInterviewPanel {
+  id String @id @default(cuid())
+  interviewId String @map("interview_id")
+  interview RecruitmentInterview @relation(fields: [interviewId], references: [id])
+  employeeId String @map("employee_id")
+  employee Employee @relation(fields: [employeeId], references: [id])
+  active Boolean
+  assignedByUserId String @map("assigned_by_user_id")
+  assignedAt DateTime @default(now()) @map("assigned_at") @db.Timestamptz(3)
+  @@unique([interviewId, employeeId])
+  @@map("recruitment_interview_panel")
+}
+
+model InterviewFeedback {
+  id String @id @default(cuid())
+  interviewId String @map("interview_id")
+  interview RecruitmentInterview @relation(fields: [interviewId], references: [id])
+  employeeId String @map("employee_id")
+  employee Employee @relation(fields: [employeeId], references: [id])
+  answersEncrypted Bytes? @map("answers_encrypted")
+  recommendationEncrypted Bytes? @map("recommendation_encrypted")
+  submittedAt DateTime @default(now()) @map("submitted_at") @db.Timestamptz(3)
+  @@unique([interviewId, employeeId])
+  @@map("interview_feedback")
+}
+
+model RecruitmentHistory {
+  id String @id @default(cuid())
+  entityType String @map("entity_type")
+  entityId String @map("entity_id")
+  event String
+  fromStatus String? @map("from_status")
+  toStatus String? @map("to_status")
+  actorUserId String? @map("actor_user_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  @@index([entityType, entityId])
+  @@map("recruitment_history")
+}
+
+model RecruitmentCandidateMail {
+  id String @id @default(cuid())
+  candidateId String @map("candidate_id")
+  candidate Candidate @relation(fields: [candidateId], references: [id])
+  interviewId String? @map("interview_id")
+  templateId String @map("template_id")
+  templateVersionId String @map("template_version_id")
+  kind String
+  status String
+  idempotencyKey String @unique @map("idempotency_key")
+  sentByUserId String @map("sent_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  @@index([candidateId])
+  @@map("recruitment_candidate_mail")
+}
+
+// PEEPS-END recruitment

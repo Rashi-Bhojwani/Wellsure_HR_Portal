@@ -21,9 +21,13 @@ export const HR_CAPABILITY_IDS = [
   "SEND_INVITATIONS",
   "IMPORT_EMPLOYEE_DETAILS",
   "ISSUE_LETTERS_NO_PAY",
+
   // PEEPS-BEGIN exits
   "MANAGE_EXITS",
   // PEEPS-END exits
+  // PEEPS-BEGIN recruitment
+  "MANAGE_RECRUITMENT",
+  // PEEPS-END recruitment
 ] as const;
 export type HrCapabilityId = (typeof HR_CAPABILITY_IDS)[number];
 
@@ -54,6 +58,9 @@ export const HR_CAPABILITIES: readonly HrCapability[] = [
   // PEEPS-BEGIN exits
   { id: "MANAGE_EXITS", label: "Run exits and clearance", what: "Read and accept resignations and run non-pay clearance. Not set/Default: off. Interview answers need the interviewer relationship and are never opened by this switch.", keys: ["exits.view", "exits.manage", "exits.accept", "exits.checklist.complete"] },
   // PEEPS-END exits
+  // PEEPS-BEGIN recruitment
+  { id: "MANAGE_RECRUITMENT", label: "Manage recruitment", what: "Jobs, candidates, stages and scheduling. Default/Not set: off. Feedback remains panel-scoped.", keys: ["recruitment.view", "recruitment.manage", "recruitment.personal.view"] },
+  // PEEPS-END recruitment
 ];
 
 export const hrCapability = (id: string): HrCapability | undefined => HR_CAPABILITIES.find((c) => c.id === id);

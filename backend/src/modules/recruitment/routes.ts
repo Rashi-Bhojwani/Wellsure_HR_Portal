@@ -1,0 +1,16 @@
+import { Router } from "express";
+import { z } from "zod";
+import { authenticate } from "../../middleware/authenticate";
+import { validate } from "../../middleware/validate";
+import { prisma } from "../../lib/prisma";
+import { context, metaOf, requireManagement, requireUser } from "./access";
+import * as settings from "./settings";
+export const recruitmentRouter=Router();
+recruitmentRouter.use(authenticate,requireUser);
+export const empty=z.object({}).strict();
+export const idSchema=z.object({id:z.string().min(1).max(100)}).strict();
+recruitmentRouter.get("/status",validate({query:empty}),async(req,res)=>{const c=await context(req.user!);res.json({canManage:c.manage,canRaise:c.canRaise,isDirector:c.isDirector});});
+recruitmentRouter.get("/settings",validate({query:empty}),async(req,res)=>{res.json(await settings.view(req.user!.userId));});
+recruitmentRouter.put("/settings/:key",validate({params:z.object({key:settings.keySchema}),body:settings.settingInput}),async(req,res)=>{res.json(await settings.set(req.params.key as settings.SettingKey,req.body,metaOf(req)));});
+recruitmentRouter.get("/pipelines",validate({query:empty}),async(req,res)=>{await requireManagement(req.user!);res.json(await prisma.recruitmentPipeline.findMany({include:{stages:{orderBy:{position:"asc"}}},orderBy:{version:"desc"}}));});
+recruitmentRouter.post("/pipelines",validate({body:settings.pipelineInput}),async(req,res)=>{res.status(201).json(await settings.createPipeline(req.body,metaOf(req)));});

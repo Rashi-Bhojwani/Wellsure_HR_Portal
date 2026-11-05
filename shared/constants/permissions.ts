@@ -115,6 +115,15 @@ export const PERMISSION_KEYS = [
   "avatars.moderate", // remove someone else's inappropriate profile photo, with a reason (HR and the directors; never replace it)
   "leave.documents.view", // open the supporting documents of the new leave types (HR and the directors; every open audited)
   // PEEPS-END
+  // PEEPS-BEGIN recruitment
+  "recruitment.view",
+  "recruitment.manage",
+  "recruitment.requisition.raise",
+  "recruitment.settings.manage",
+  "recruitment.personal.view",
+  "recruitment.feedback.view",
+  // PEEPS-END recruitment
+
   // PEEPS-BEGIN exits
   "exits.view", "exits.manage", "exits.accept", "exits.checklist.complete",
   "exits.settings.manage", "exits.interviews.view", "exits.settlement.view",
@@ -167,6 +176,15 @@ export const PERMISSION_GROUPS = [
 ] as const;
 
 export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
+  // PEEPS-BEGIN recruitment
+  "recruitment.view": { group: "Recruitment", label: "View recruitment", description: "Read authorized recruitment records." },
+  "recruitment.manage": { group: "Recruitment", label: "Manage recruitment", description: "Jobs, candidates, stages and scheduling." },
+  "recruitment.requisition.raise": { group: "Recruitment", label: "Raise a requisition", description: "Request hiring for your own requisition.", managerGrantable: true },
+  "recruitment.settings.manage": { group: "Recruitment", label: "Set recruitment rules", description: "Directors choose recruitment rules.", meta: true },
+  "recruitment.personal.view": { group: "Recruitment", label: "Read candidate personal data", description: "Recruiting team only; relationships get summaries." },
+  "recruitment.feedback.view": { group: "Recruitment", label: "Read interview feedback", description: "Audited directors or the panel relationship." },
+  // PEEPS-END recruitment
+
   // PEEPS-BEGIN exits
   "exits.view": { group: "Exits", label: "View exit cases", description: "Read non-pay exit cases within the authorized exits audience." },
   "exits.manage": { group: "Exits", label: "Run exit clearance", description: "Run non-pay clearance. HR needs its director-controlled switch; Office members need the audience setting." },

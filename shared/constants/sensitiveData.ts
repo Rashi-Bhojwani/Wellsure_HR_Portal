@@ -17,6 +17,11 @@ export type SensitiveClassId =
   | "PERSONAL_DOCUMENTS"
   | "SENSITIVE_TICKETS"
   | "ACCESS_CONTROL"
+  // PEEPS-BEGIN recruitment
+  | "CANDIDATE_PERSONAL_DATA"
+  | "RECRUITMENT_FEEDBACK"
+  // PEEPS-END recruitment
+
   // PEEPS-BEGIN exits
   | "EXIT_INTERVIEWS"
   // PEEPS-END exits
@@ -38,6 +43,10 @@ export interface SensitiveClass {
 }
 
 export const SENSITIVE_CLASSES: readonly SensitiveClass[] = [
+  // PEEPS-BEGIN recruitment
+  { id: "CANDIDATE_PERSONAL_DATA", label: "Candidate personal data", what: "Encrypted identity and private CV; recruiting team or explicitly assigned summaries/CV, never Developer.", view: ["recruitment.personal.view"], edit: ["recruitment.manage"], confirm: [] },
+  { id: "RECRUITMENT_FEEDBACK", label: "Recruitment feedback", what: "Own before submission, panel after own submission, or audited directors. HR and Office status never opens answers.", view: ["recruitment.feedback.view"], edit: [], confirm: [] },
+  // PEEPS-END recruitment
   // PEEPS-BEGIN exits
   { id: "EXIT_INTERVIEWS", label: "Exit interviews", what: "Encrypted answers: the employee, the interviewer of record, and directors (each director open audited). HR case access never opens answers.", view: ["exits.interviews.view"], edit: [], confirm: [] },
   // PEEPS-END exits
@@ -135,6 +144,9 @@ export const isSensitivePermission = (key: string): boolean => SENSITIVE_SET.has
  * means saying here which it is.
  */
 export const REVIEWED_NOT_SENSITIVE: readonly PermissionKey[] = [
+  // PEEPS-BEGIN recruitment
+  "recruitment.view", "recruitment.requisition.raise",
+  // PEEPS-END recruitment
   // PEEPS-BEGIN exits
   "exits.view", "exits.manage", "exits.accept", "exits.checklist.complete", "exits.settlement.view",
   // PEEPS-END exits
@@ -222,6 +234,9 @@ export const DEVELOPER_FORBIDDEN_KEYS: readonly PermissionKey[] = SENSITIVE_PERM
  */
 export const HR_ROLE_CODES = ["HR_ADMIN", "HR_EXECUTIVE"] as const;
 export const HR_FORBIDDEN_KEYS: readonly PermissionKey[] = [
+  // PEEPS-BEGIN recruitment
+  "recruitment.settings.manage", "recruitment.feedback.view",
+  // PEEPS-END recruitment
   // PEEPS-BEGIN exits
   "exits.settings.manage", "exits.interviews.view", "exits.settlement.view",
   // PEEPS-END exits

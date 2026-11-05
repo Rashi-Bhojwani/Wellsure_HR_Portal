@@ -28,6 +28,9 @@ interface Door {
 }
 // One door per capability at least; each is a request that is refused on permission (403) or let in and then refused on its own input or missing record (anything else).
 const DOORS: Door[] = [
+  // PEEPS-BEGIN recruitment
+  { cap: "MANAGE_RECRUITMENT", method: "get", path: "/api/recruitment/pipelines", offByDefault: true },
+  // PEEPS-END recruitment
   // PEEPS C3 START
   { cap: "MANAGE_EXITS", method: "get", path: "/api/exits/clearance/overdue", offByDefault: true },
   // PEEPS C3 END

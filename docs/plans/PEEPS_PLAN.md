@@ -623,6 +623,44 @@ pasted job results**. Stop here; recruitment, insights and autofill remain unsta
 
 ### B.6 Recruitment and joining
 
+#### C-4A authorization and implementation record (2026-11-05)
+
+Owner-authorized scope: recruitment only through checkpoint D1, starting clean at
+`e2b6e04` on `peeps/foundation`. C-4B is deferred until D1 is accepted. One agent.
+Eight build commits: schema/settings; requisitions/jobs; candidates/applications/CV;
+interviews/confidential feedback; candidate mail; retention/erase; screens/DEMO;
+regressions/mutations. Changed tests, lint and typecheck precede each commit.
+
+**Decided by me — owner-directed overrides:** directors read all feedback with
+an audit outside their own panel. HR recruitment management is an explicit ON
+capability, OFF by default. Office management requires its capability and an
+explicit audience. Requesting managers see their own requisitions, related jobs
+and candidate summaries; assigned interviewers get summaries, CV and their own
+interviews. Feedback is independent: only own feedback before submission, then
+active panel feedback; HR/Office/manager status never opens it. No mandatory
+second director: approval route Not set auto-approves submission; a chosen director
+route needs one director unless optional RECRUITMENT_REQUISITION is explicitly ON.
+No pay bands, offers, joining, referrals, public application or links in C-4A.
+
+**Implementation choices:** director-confirmed append-only setting versions and
+immutable pipeline versions, optimistic versions plus per-application locks for
+stage moves, one feedback per interview/employee, normalized keyed blind indexes
+for duplicate warnings without identities. Candidate values/feedback encrypted;
+CV keys use a separate private prefix and authenticated bytes only. CV size/type
+limits are chosen settings below the upload library's technical hard ceiling.
+Retained analytics contain only non-personal identifiers/status; erasure removes
+name/contact/CV and feedback values. Private UI caches/forms follow C-3's actor
+boundaries, expire on closure and reset on access changes. Candidate mail uses the
+existing interface with a small marked sensitive-log suppression hook; no private
+body or recipient is copied to audit/delivery records. Required settings refuse
+only the affected step. Onboarding's separate default-ON switch belongs to C-4B.
+
+Plan verification: new audience/IDOR/Developer cases on every route, missing-setting
+refusals, races, side-channel scans, CV validation/audit, purge/erase, encryption/
+cleanup registries, five requested mutations. D1 merges latest payroll, runs all
+local checks/full backend alone and browser persona/theme/390px walkthrough, fresh
+labelled DEMO seed and four leave types off. CI stays Unverified pending owner paste.
+
 - **Data.**
   - `job_requisitions` (headcount ask; approval route Not set; second-director step
     `RECRUITMENT_REQUISITION`), `jobs` (title, department, location, employment type, description; **no

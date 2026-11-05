@@ -11,6 +11,10 @@ import { prisma } from "./prisma";
 export type EncryptedColumn = { model: string; delegate: string; field: string };
 
 export const ENCRYPTED_COLUMNS: ReadonlyArray<EncryptedColumn> = [
+  // PEEPS-BEGIN recruitment
+  ...["nameEncrypted", "emailEncrypted", "phoneEncrypted"].map(field => ({model:"Candidate", delegate:"candidate", field})),
+  ...["answersEncrypted", "recommendationEncrypted"].map(field => ({model:"InterviewFeedback", delegate:"interviewFeedback", field})),
+  // PEEPS-END recruitment
   // PEEPS-BEGIN exits
   { model: "ExitInterview", delegate: "exitInterview", field: "answersEncrypted" },
   // PEEPS-END exits

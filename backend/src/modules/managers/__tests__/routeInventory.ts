@@ -35,6 +35,13 @@ const admin: RouteClass = { kind: "admin" };
 const adminInService = (why: string): RouteClass => ({ kind: "admin", why });
 
 export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
+  // PEEPS-BEGIN recruitment
+  "GET /api/recruitment/status": self,
+  "GET /api/recruitment/settings": adminInService("Actual director only"),
+  "PUT /api/recruitment/settings/:key": adminInService("Actual director only; append-only setting version"),
+  "GET /api/recruitment/pipelines": scoped("Current recruitment management audience"),
+  "POST /api/recruitment/pipelines": adminInService("Actual director only; immutable pipeline version"),
+  // PEEPS-END recruitment
   // PEEPS-BEGIN exits
   "GET /api/exits/owners": adminInService("actual director only; active non-Developer names/codes for explicit owner choices"),
   "GET /api/exits/cases/:id/settlement-inputs": adminInService("actual director only; read-only days and identifiers"),
