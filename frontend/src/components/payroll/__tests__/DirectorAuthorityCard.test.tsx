@@ -9,6 +9,11 @@ import type { DirectorNoticeView, DirectorSwitchView } from "../../../api/direct
 const api = vi.hoisted(() => ({ listSwitches: vi.fn(), setSwitch: vi.fn(), confirmSwitch: vi.fn(), listNotices: vi.fn(), acknowledgeNotice: vi.fn() }));
 vi.mock("../../../api/director", () => api);
 
+// PEEPS-BEGIN recruitment TEST-ONLY: keep the static Ant message root from
+// scheduling React work after jsdom teardown; assert mutation completion below.
+const feedback=vi.hoisted(()=>({success:vi.fn(),error:vi.fn()}));
+vi.mock("../../../ui",async()=>({...await vi.importActual<typeof import("../../../ui")>("../../../ui"),toast:feedback}));
+// PEEPS-END recruitment TEST-ONLY
 import { DirectorAuthorityCard } from "../DirectorAuthorityCard";
 
 afterEach(() => {
@@ -119,6 +124,9 @@ describe("Director authority card", () => {
     expect((confirm as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(confirm);
     await waitFor(() => expect(api.acknowledgeNotice).toHaveBeenCalledWith("n1", "checked the file"));
+    // PEEPS-BEGIN recruitment TEST-ONLY
+    await waitFor(() => expect(feedback.success).toHaveBeenCalledWith("Acknowledged. It is recorded in the audit log."));
+    // PEEPS-END recruitment TEST-ONLY
   });
 
   it("marks one that has waited too long", async () => {

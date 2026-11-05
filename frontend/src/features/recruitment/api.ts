@@ -36,7 +36,7 @@ export const candidates=(page=1,q='')=>data<{items:Candidate[];total:number;page
 export const candidate=(id:string)=>data<Candidate>(apiClient.get(root+'/candidates/'+id));
 export const createCandidate=(input:unknown)=>data<Candidate>(apiClient.post(root+'/candidates',input));
 export const uploadCv=(id:string,file:File)=>{const form=new FormData();form.append('file',file);return data<Candidate>(apiClient.post(`${root}/candidates/${id}/cv`,form));};
-export const downloadCv=async(id:string)=>{const response=await apiClient.get<Blob>(`${root}/candidates/${id}/cv`,{responseType:'blob'});const url=URL.createObjectURL(response.data);const link=document.createElement('a');link.href=url;const ext=({'application/pdf':'.pdf','image/png':'.png','image/jpeg':'.jpg','application/vnd.openxmlformats-officedocument.wordprocessingml.document':'.docx'} as Record<string,string>)[response.data.type]??'';link.download='candidate-cv'+ext;link.click();URL.revokeObjectURL(url);};
+export const downloadCv=(id:string)=>data<Blob>(apiClient.get(`${root}/candidates/${id}/cv`,{responseType:'blob'}));
 export const apply=(id:string,jobId:string)=>data<Application>(apiClient.post(`${root}/candidates/${id}/applications`,{jobId}));
 export const application=(id:string)=>data<Application>(apiClient.get(root+'/applications/'+id));
 export const move=(id:string,stageId:string,version:number,reason?:string)=>data<Application>(apiClient.post(`${root}/applications/${id}/stage`,{stageId,version,reason}));
