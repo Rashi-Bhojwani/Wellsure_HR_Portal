@@ -1,3 +1,5 @@
+import * as interviews from "./interviews";
+import { inForceOn } from "../../lib/effectiveDating";
 import * as candidates from "./candidates";
 import { memoryUpload } from "../../lib/uploads";
 import * as jobs from "./jobs";
@@ -40,3 +42,11 @@ recruitmentRouter.post("/candidates/:id/applications",validate({params:idSchema,
 recruitmentRouter.get("/applications/:id",validate({params:idSchema,query:empty}),async(req,res)=>{res.json(await candidates.getApplication(req.params.id as string,req.user!));});
 recruitmentRouter.post("/applications/:id/stage",validate({params:idSchema,body:candidates.moveInput}),async(req,res)=>{res.json(await candidates.move(req.params.id as string,req.user!,req.body,metaOf(req)));});
 recruitmentRouter.post("/applications/:id/decision",validate({params:idSchema,body:candidates.endInput}),async(req,res)=>{res.json(await candidates.endApplication(req.params.id as string,req.user!,req.body,metaOf(req)));});
+
+recruitmentRouter.get("/interviews",validate({query:interviews.interviewListInput}),async(req,res)=>{res.json(await interviews.listInterviews(req.user!,req.query as never));});
+recruitmentRouter.post("/applications/:id/interviews",validate({params:idSchema,body:interviews.scheduleInput}),async(req,res)=>{res.status(201).json(await interviews.schedule(req.params.id as string,req.user!,req.body,metaOf(req)));});
+recruitmentRouter.get("/interviews/:id",validate({params:idSchema,query:empty}),async(req,res)=>{res.json(await interviews.getInterview(req.params.id as string,req.user!));});
+recruitmentRouter.put("/interviews/:id/schedule",validate({params:idSchema,body:interviews.scheduleInput}),async(req,res)=>{res.json(await interviews.reschedule(req.params.id as string,req.user!,req.body,metaOf(req)));});
+recruitmentRouter.get("/interviews/:id/feedback",validate({params:idSchema,query:empty}),async(req,res)=>{res.json(await interviews.getFeedback(req.params.id as string,req.user!,metaOf(req)));});
+recruitmentRouter.post("/interviews/:id/feedback",validate({params:idSchema,body:interviews.feedbackInput}),async(req,res)=>{res.status(201).json(await interviews.submitFeedback(req.params.id as string,req.user!,req.body,metaOf(req)));});
+recruitmentRouter.get("/panel-options",validate({query:z.object({q:z.string().trim().max(100).default("")}).strict()}),async(req,res)=>{await requireManagement(req.user!);const q=req.query.q as string;const rows=await prisma.employee.findMany({where:{status:"ACTIVE",user:{status:"ACTIVE",roles:{none:{role:{code:"DEVELOPER"}}}},OR:[{employeeCode:{contains:q,mode:"insensitive"}},{nameHistory:{some:{...inForceOn(),fullName:{contains:q,mode:"insensitive"}}}}]},select:{id:true,employeeCode:true,nameHistory:{where:inForceOn(),select:{fullName:true}}},take:50,orderBy:{employeeCode:"asc"}});res.json(rows.map(r=>({id:r.id,employeeCode:r.employeeCode,name:r.nameHistory[0]?.fullName??r.employeeCode})));});

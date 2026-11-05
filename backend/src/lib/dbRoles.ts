@@ -29,6 +29,9 @@ export const REQUIRED_APPEND_ONLY_TABLES = ["audit_logs", "security_events"] as 
  * trigger is what limits WHICH changes are legal. Keep this list to the minimum: today payroll approvals (PENDING -> APPROVED -> CONSUMED) and bank batches (GENERATED -> PAID, the bank response).
  */
 export const UPDATABLE_APPEND_ONLY_TABLES: readonly string[] = ["payroll_approvals", "bank_transfer_batches",
+  // PEEPS-BEGIN recruitment
+  "interview_feedback", // SQL guard permits verified re-encryption and retention removal only.
+  // PEEPS-END recruitment
   // PEEPS-BEGIN assets
   "asset_assignments", // an open assignment is closed once and acknowledged once (its trigger refuses every other change)
   // PEEPS-END

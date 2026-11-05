@@ -61,6 +61,13 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/recruitment/applications/:id": scoped("Current job audience or active assigned interviewer"),
   "POST /api/recruitment/applications/:id/stage": scoped("Management scope, optimistic version and serialized append-only move"),
   "POST /api/recruitment/applications/:id/decision": scoped("Management scope and director-chosen rejection/withdrawal reason"),
+  "GET /api/recruitment/interviews": scoped("Current recruiting management metadata or active assigned panel; no feedback in lists"),
+  "POST /api/recruitment/applications/:id/interviews": scoped("Management scope, active application and chosen scorecard"),
+  "GET /api/recruitment/interviews/:id": scoped("Management scheduling metadata or active assigned panel; no answers"),
+  "PUT /api/recruitment/interviews/:id/schedule": scoped("Current management; panel changes revoke former relationships"),
+  "GET /api/recruitment/interviews/:id/feedback": scoped("Only own before submission, active panel after own submission, audited directors"),
+  "POST /api/recruitment/interviews/:id/feedback": scoped("Active assigned interviewer only, immutable one per interview/user"),
+  "GET /api/recruitment/panel-options": scoped("Management only; active non-Developer directory labels for explicit assignment"),
   // PEEPS-END recruitment
   // PEEPS-BEGIN exits
   "GET /api/exits/owners": adminInService("actual director only; active non-Developer names/codes for explicit owner choices"),

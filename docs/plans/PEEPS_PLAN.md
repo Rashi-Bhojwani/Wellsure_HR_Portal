@@ -650,7 +650,10 @@ CV keys use a separate private prefix and authenticated bytes only. CV size/type
 limits are chosen settings below the upload library's technical hard ceiling.
 Retained analytics contain only non-personal identifiers/status; erasure removes
 name/contact/CV and feedback values. Private UI caches/forms follow C-3's actor
-boundaries, expire on closure and reset on access changes. Candidate mail uses the
+boundaries, expire on closure and reset on access changes. Submitted feedback is
+immutable; only candidate erasure and the shared plaintext-verifying key-rotation
+path may maintain its ciphertext. A narrow transaction-local flag and row guard
+cover only InterviewFeedback; old model writers keep their existing path. Candidate mail uses the
 existing interface with a small marked sensitive-log suppression hook; no private
 body or recipient is copied to audit/delivery records. Required settings refuse
 only the affected step. Onboarding's separate default-ON switch belongs to C-4B.

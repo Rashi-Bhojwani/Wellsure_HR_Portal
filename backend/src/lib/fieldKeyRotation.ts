@@ -160,6 +160,19 @@ export async function reencryptAll(opts: { apply: boolean; filter?: RowFilter; b
         if (decryptField(next) !== plaintext) throw new Error("re-encrypted value did not read back the same");
         if (opts.apply) {
           await opts.beforeWriteForTests?.(`${column.model}.${column.field}`, id);
+          // PEEPS-BEGIN recruitment
+          // Submitted feedback is immutable; only this verified re-encryption
+          // path receives the transaction-local ciphertext-maintenance flag.
+          if (column.model === "InterviewFeedback") {
+            const { count } = await prisma.$transaction(async tx => {
+              await tx.$executeRaw`SET LOCAL app.recruitment_reencrypt = 'on'`;
+              return tx.interviewFeedback.updateMany({ where: { id, [column.field]: Buffer.from(value) }, data: { [column.field]: next } });
+            });
+            if (count === 1) result.reencrypted += 1;
+            else result.skippedChangedMeanwhile += 1;
+            continue;
+          }
+          // PEEPS-END recruitment
           const { count } = await delegateOf(column).updateMany({ where: { id, [column.field]: Buffer.from(value) }, data: { [column.field]: next } });
           if (count === 1) result.reencrypted += 1;
           else result.skippedChangedMeanwhile += 1;

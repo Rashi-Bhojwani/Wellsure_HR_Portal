@@ -1,3 +1,6 @@
+// PEEPS-BEGIN recruitment
+import { recruitmentNotificationWhere } from "../recruitment/audience";
+// PEEPS-END recruitment
 // PEEPS-BEGIN exits
 import { exitNotificationAudienceWhere } from "../exits/audience";
 // PEEPS-END exits
@@ -63,7 +66,9 @@ export interface ListNotificationsQuery {
 export async function listNotifications(userId: string, query: ListNotificationsQuery) {
   // PEEPS-BEGIN helpdesk-visibility
   // PEEPS-BEGIN exits
-  const audience = { AND: [await notificationAudienceWhere(userId), await exitNotificationAudienceWhere(userId)] };
+  // PEEPS-BEGIN recruitment
+  const audience = { AND: [await notificationAudienceWhere(userId), await exitNotificationAudienceWhere(userId), await recruitmentNotificationWhere(userId)] };
+  // PEEPS-END recruitment
   // PEEPS-END exits
   // PEEPS-END helpdesk-visibility
   const [total, unreadCount, rows] = await Promise.all([
@@ -88,7 +93,9 @@ export async function listNotifications(userId: string, query: ListNotifications
 export async function getUnreadCount(userId: string): Promise<number> {
   // PEEPS-BEGIN helpdesk-visibility
   // PEEPS-BEGIN exits
-  const audience = { AND: [await notificationAudienceWhere(userId), await exitNotificationAudienceWhere(userId)] };
+  // PEEPS-BEGIN recruitment
+  const audience = { AND: [await notificationAudienceWhere(userId), await exitNotificationAudienceWhere(userId), await recruitmentNotificationWhere(userId)] };
+  // PEEPS-END recruitment
   // PEEPS-END exits
   // PEEPS-END helpdesk-visibility
   // PEEPS-BEGIN helpdesk-visibility
@@ -102,7 +109,9 @@ export async function getUnreadCount(userId: string): Promise<number> {
 export async function markAsRead(notificationId: string, userId: string): Promise<void> {
   // PEEPS-BEGIN helpdesk-visibility
   // PEEPS-BEGIN exits
-  const audience = { AND: [await notificationAudienceWhere(userId), await exitNotificationAudienceWhere(userId)] };
+  // PEEPS-BEGIN recruitment
+  const audience = { AND: [await notificationAudienceWhere(userId), await exitNotificationAudienceWhere(userId), await recruitmentNotificationWhere(userId)] };
+  // PEEPS-END recruitment
   // PEEPS-END exits
   // PEEPS-END helpdesk-visibility
   const result = await prisma.notification.updateMany({
@@ -119,7 +128,9 @@ export async function markAsRead(notificationId: string, userId: string): Promis
 export async function markAllAsRead(userId: string): Promise<void> {
   // PEEPS-BEGIN helpdesk-visibility
   // PEEPS-BEGIN exits
-  const audience = { AND: [await notificationAudienceWhere(userId), await exitNotificationAudienceWhere(userId)] };
+  // PEEPS-BEGIN recruitment
+  const audience = { AND: [await notificationAudienceWhere(userId), await exitNotificationAudienceWhere(userId), await recruitmentNotificationWhere(userId)] };
+  // PEEPS-END recruitment
   // PEEPS-END exits
   // PEEPS-END helpdesk-visibility
   // PEEPS-BEGIN helpdesk-visibility

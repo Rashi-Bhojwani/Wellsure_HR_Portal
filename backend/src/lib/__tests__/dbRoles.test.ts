@@ -84,6 +84,9 @@ describe("the app role", () => {
 
   it("keeps UPDATE (and only UPDATE) on the append-only tables whose rows change state: payroll approvals and bank batches", async () => {
     expect(UPDATABLE_APPEND_ONLY_TABLES).toEqual(["payroll_approvals", "bank_transfer_batches",
+      // PEEPS-BEGIN recruitment
+      "interview_feedback", // ciphertext maintenance only; row trigger keeps submitted content immutable.
+      // PEEPS-END recruitment
       // PEEPS-BEGIN assets
       "asset_assignments", // closed once and acknowledged once; its trigger refuses every other change (assets.test.ts / assetsDbRoles.test.ts)
       // PEEPS-END
@@ -97,6 +100,9 @@ describe("the app role", () => {
       ))[0];
     expect(await priv("payroll_approvals")).toEqual({ upd: true, del: false, trunc: false, ins: true });
     expect(await priv("bank_transfer_batches")).toEqual({ upd: true, del: false, trunc: false, ins: true });
+    // PEEPS-BEGIN recruitment
+    expect(await priv("interview_feedback")).toEqual({ upd: true, del: false, trunc: false, ins: true });
+    // PEEPS-END recruitment
     for (const t of ["payslips", "bank_transfer_rows", "payroll_outputs"]) expect(await priv(t), t).toEqual({ upd: false, del: false, trunc: false, ins: true });
     expect(await priv("audit_logs")).toEqual({ upd: false, del: false, trunc: false, ins: true });
     expect(await priv("payroll_item_versions")).toEqual({ upd: false, del: false, trunc: false, ins: true });

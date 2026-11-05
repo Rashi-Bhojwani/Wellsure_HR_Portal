@@ -4623,6 +4623,7 @@ model RecruitmentInterview {
   round String
   scheduledAt DateTime @map("scheduled_at") @db.Timestamptz(3)
   scorecard Json
+  scorecardVersionId String? @map("scorecard_version_id")
   status String @default("SCHEDULED")
   changedByUserId String @map("changed_by_user_id")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)

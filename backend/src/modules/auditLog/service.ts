@@ -1,3 +1,6 @@
+// PEEPS-BEGIN recruitment
+import { recruitmentAuditWhere } from "../recruitment/audience";
+// PEEPS-END recruitment
 // PEEPS-BEGIN exits
 import { exitAuditAudienceWhere } from "../exits/audience";
 // PEEPS-END exits
@@ -40,7 +43,9 @@ function withoutMoney<T>(value: T): T {
 export async function listAuditLogs(query: ListAuditLogQuery, viewer: { canSeePayroll: boolean; onlyPayroll?: boolean; userId?: string } = { canSeePayroll: false }) {
 // PEEPS-END exits
   // PEEPS-BEGIN exits
-  const where: Prisma.AuditLogWhereInput = { AND: [await exitAuditAudienceWhere(viewer.userId)] };
+  // PEEPS-BEGIN recruitment
+  const where: Prisma.AuditLogWhereInput = { AND: [await exitAuditAudienceWhere(viewer.userId), await recruitmentAuditWhere(viewer.userId)] };
+  // PEEPS-END recruitment
   // PEEPS-END exits
   const payrollRows = { OR: [{ action: { startsWith: PAYROLL_AUDIT_ACTION_PREFIX } }, { entityType: { startsWith: PAYROLL_AUDIT_ENTITY_PREFIX } }] };
   if (!viewer.canSeePayroll) where.NOT = payrollRows;

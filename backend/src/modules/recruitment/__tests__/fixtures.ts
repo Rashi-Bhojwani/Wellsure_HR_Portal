@@ -14,7 +14,8 @@ export async function fixture(){
  const interviewer=await createFullTestEmployee(org,{roleCode:"EMPLOYEE"});
  const employee=await createFullTestEmployee(org,{roleCode:"EMPLOYEE",managerId:manager.employeeId});
  const developer=await createFullTestEmployee(org,{roleCode:"DEVELOPER"});
- const people={director,second,manager,otherManager,hr,interviewer,employee,developer};type Who=keyof typeof people;
+ const office=await createFullTestEmployee(org,{roleCode:"EMPLOYEE"});
+ const people={director,second,manager,otherManager,hr,interviewer,employee,developer,office};type Who=keyof typeof people;
  const tokens={} as Record<Who,string>;for(const who of Object.keys(people) as Who[])tokens[who]=await loginAs(people[who].employeeCode);
  const meta={actorUserId:director.userId};
  const call=(who:Who,method:"get"|"post"|"put",path:string,body:object={})=>request(app)[method]('/api/recruitment'+path).set(...authHeader(tokens[who])).send(body);
