@@ -52,6 +52,15 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/recruitment/jobs/:id": scoped("Own requesting manager or scoped management"),
   "POST /api/recruitment/jobs/:id/state": scoped("Management; pipeline required before open"),
   "GET /api/recruitment/options": scoped("Manager or recruiting team; department/location labels only"),
+  "GET /api/recruitment/candidates": scoped("Current recruiting team or own requisition/assigned summary before counts/search"),
+  "POST /api/recruitment/candidates": scoped("Current management, recorded consent and chosen retention/source"),
+  "GET /api/recruitment/candidates/:id": scoped("Recruiting team full record; own requisition or assigned interviewer summary"),
+  "POST /api/recruitment/candidates/:id/cv": scoped("Management and live candidate, configured upload validation"),
+  "GET /api/recruitment/candidates/:id/cv": scoped("Current recruiting team or active assigned interviewer, outside team audited"),
+  "POST /api/recruitment/candidates/:id/applications": scoped("Management, scoped open job and live candidate"),
+  "GET /api/recruitment/applications/:id": scoped("Current job audience or active assigned interviewer"),
+  "POST /api/recruitment/applications/:id/stage": scoped("Management scope, optimistic version and serialized append-only move"),
+  "POST /api/recruitment/applications/:id/decision": scoped("Management scope and director-chosen rejection/withdrawal reason"),
   // PEEPS-END recruitment
   // PEEPS-BEGIN exits
   "GET /api/exits/owners": adminInService("actual director only; active non-Developer names/codes for explicit owner choices"),

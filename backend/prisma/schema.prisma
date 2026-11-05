@@ -4578,6 +4578,7 @@ model Candidate {
   applications RecruitmentApplication[]
   mails RecruitmentCandidateMail[]
   @@index([retentionUntil, anonymizedAt])
+  @@index([nameHash])
   @@map("candidates")
 }
 
@@ -4597,6 +4598,7 @@ model RecruitmentApplication {
   moves ApplicationStageMove[]
   interviews RecruitmentInterview[]
   @@unique([candidateId, jobId])
+  @@index([jobId, status])
   @@map("applications")
 }
 
@@ -4639,6 +4641,7 @@ model RecruitmentInterviewPanel {
   assignedByUserId String @map("assigned_by_user_id")
   assignedAt DateTime @default(now()) @map("assigned_at") @db.Timestamptz(3)
   @@unique([interviewId, employeeId])
+  @@index([employeeId, active])
   @@map("recruitment_interview_panel")
 }
 

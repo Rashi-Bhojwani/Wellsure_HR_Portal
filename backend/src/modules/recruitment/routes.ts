@@ -1,3 +1,5 @@
+import * as candidates from "./candidates";
+import { memoryUpload } from "../../lib/uploads";
 import * as jobs from "./jobs";
 import { HttpError } from "../../middleware/errorHandler";
 import { Router } from "express";
@@ -28,3 +30,13 @@ recruitmentRouter.post("/jobs",validate({body:jobs.jobInput}),async(req,res)=>{r
 recruitmentRouter.get("/jobs/:id",validate({params:idSchema,query:empty}),async(req,res)=>{res.json(await jobs.getJob(req.params.id as string,req.user!));});
 recruitmentRouter.post("/jobs/:id/state",validate({params:idSchema,body:jobs.jobStateInput}),async(req,res)=>{res.json(await jobs.changeJob(req.params.id as string,req.user!,req.body,metaOf(req)));});
 recruitmentRouter.get("/options",validate({query:empty}),async(req,res)=>{const c=await context(req.user!);if(!c.manage&&!c.manager)throw new HttpError(403,"Recruitment options are unavailable.","FORBIDDEN");const [departments,locations]=await Promise.all([prisma.department.findMany({select:{id:true,name:true},orderBy:{name:"asc"}}),prisma.location.findMany({select:{id:true,name:true},orderBy:{name:"asc"}})]);res.json({departments,locations});});
+
+recruitmentRouter.get("/candidates",validate({query:candidates.candidateListInput}),async(req,res)=>{res.json(await candidates.listCandidates(req.user!,req.query as never));});
+recruitmentRouter.post("/candidates",validate({body:candidates.candidateInput}),async(req,res)=>{res.status(201).json(await candidates.createCandidate(req.user!,req.body,metaOf(req)));});
+recruitmentRouter.get("/candidates/:id",validate({params:idSchema,query:empty}),async(req,res)=>{res.json(await candidates.getCandidate(req.params.id as string,req.user!));});
+recruitmentRouter.post("/candidates/:id/cv",async(req,_res,next)=>{await requireManagement(req.user!);next();},validate({params:idSchema}),memoryUpload(25),async(req,res)=>{res.json(await candidates.uploadCv(req.params.id as string,req.user!,req.file,metaOf(req)));});
+recruitmentRouter.get("/candidates/:id/cv",validate({params:idSchema,query:empty}),async(req,res)=>{const object=await candidates.downloadCv(req.params.id as string,req.user!,metaOf(req));res.setHeader("Content-Type",object.contentType);const extension=({"application/pdf":".pdf","image/jpeg":".jpg","image/png":".png","application/vnd.openxmlformats-officedocument.wordprocessingml.document":".docx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":".xlsx"} as Record<string,string>)[object.contentType]??"";res.setHeader("Content-Disposition",`attachment; filename="candidate-cv${extension}"`);res.setHeader("X-Content-Type-Options","nosniff");res.send(object.body);});
+recruitmentRouter.post("/candidates/:id/applications",validate({params:idSchema,body:candidates.applyInput}),async(req,res)=>{res.status(201).json(await candidates.apply(req.params.id as string,req.user!,req.body,metaOf(req)));});
+recruitmentRouter.get("/applications/:id",validate({params:idSchema,query:empty}),async(req,res)=>{res.json(await candidates.getApplication(req.params.id as string,req.user!));});
+recruitmentRouter.post("/applications/:id/stage",validate({params:idSchema,body:candidates.moveInput}),async(req,res)=>{res.json(await candidates.move(req.params.id as string,req.user!,req.body,metaOf(req)));});
+recruitmentRouter.post("/applications/:id/decision",validate({params:idSchema,body:candidates.endInput}),async(req,res)=>{res.json(await candidates.endApplication(req.params.id as string,req.user!,req.body,metaOf(req)));});
