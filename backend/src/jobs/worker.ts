@@ -1,3 +1,6 @@
+// PEEPS-BEGIN recruitment
+import { purgeExpiredCandidates } from "../modules/recruitment/retention";
+// PEEPS-END recruitment
 // PEEPS-BEGIN exits
 import { purgeExpiredInterviews } from "../modules/exits/interviews";
 // PEEPS-END exits
@@ -91,6 +94,9 @@ export function startWorkers(): Worker[] {
       // PEEPS-BEGIN exits
       // Account deactivation finishes first: a retention failure must never delay it.
       await purgeExpiredInterviews();
+      // PEEPS-BEGIN recruitment
+      await purgeExpiredCandidates();
+      // PEEPS-END recruitment
       // PEEPS-END exits
       logger.info({ jobId: job.id, ...result }, "employee-separations processed");
       return result;

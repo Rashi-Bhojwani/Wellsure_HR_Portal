@@ -70,6 +70,7 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/recruitment/panel-options": scoped("Management only; active non-Developer directory labels for explicit assignment"),
   "GET /api/recruitment/candidates/:id/mails": scoped("Current management only; non-personal receipt metadata"),
   "POST /api/recruitment/candidates/:id/mail": scoped("Current management, live consent, chosen template and scoped application"),
+  "POST /api/recruitment/candidates/:id/erase": adminInService("Actual director only; confirmed request, audited anonymization"),
   // PEEPS-END recruitment
   // PEEPS-BEGIN exits
   "GET /api/exits/owners": adminInService("actual director only; active non-Developer names/codes for explicit owner choices"),

@@ -1,3 +1,4 @@
+import * as retention from "./retention";
 import * as mail from "./mail";
 import * as interviews from "./interviews";
 import { inForceOn } from "../../lib/effectiveDating";
@@ -54,3 +55,5 @@ recruitmentRouter.get("/panel-options",validate({query:z.object({q:z.string().tr
 
 recruitmentRouter.get("/candidates/:id/mails",validate({params:idSchema,query:empty}),async(req,res)=>{res.json(await mail.listMail(req.params.id as string,req.user!));});
 recruitmentRouter.post("/candidates/:id/mail",validate({params:idSchema,body:mail.mailInput}),async(req,res)=>{res.status(201).json(await mail.sendMail(req.params.id as string,req.user!,req.body,metaOf(req)));});
+
+recruitmentRouter.post("/candidates/:id/erase",validate({params:idSchema,body:retention.eraseInput}),async(req,res)=>{res.json(await retention.eraseCandidate(req.params.id as string,req.user!,metaOf(req)));});

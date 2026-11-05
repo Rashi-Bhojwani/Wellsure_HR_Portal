@@ -25,7 +25,8 @@ export async function fixture(){
  const cleanup=async()=>{
  const ids=Object.values(people).map(p=>p.userId);
  await purgeAppendOnly("HrCapabilitySwitch",{createdByUserId:{in:ids}});
- const histories=await prisma.recruitmentHistory.findMany({where:{actorUserId:{in:ids}},select:{id:true}});await deleteWithDependents("RecruitmentHistory",histories.map(r=>r.id));
+ const candidateIds=(await prisma.candidate.findMany({where:{createdByUserId:{in:ids}},select:{id:true}})).map(r=>r.id);
+ const histories=await prisma.recruitmentHistory.findMany({where:{OR:[{actorUserId:{in:ids}},{entityId:{in:candidateIds}}]},select:{id:true}});await deleteWithDependents("RecruitmentHistory",histories.map(r=>r.id));
  for(const [model,rows] of [
  ["Candidate",await prisma.candidate.findMany({where:{createdByUserId:{in:ids}},select:{id:true}})],
  ["RecruitmentPipeline",await prisma.recruitmentPipeline.findMany({where:{changedByUserId:{in:ids}},select:{id:true}})],
