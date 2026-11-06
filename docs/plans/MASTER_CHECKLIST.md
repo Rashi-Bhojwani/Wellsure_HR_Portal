@@ -17,15 +17,15 @@ Read first. Status: DONE / OPEN / PARTIAL / **UNDEFINED** (no plan file on any b
 | A-10 G7 | workflow Review / Monitor, bulk decisions, `displayLeaveForViewer` | DONE `78394c0` (3 mutants caught; manager reach case added) | — |
 | A-1 | **UNDEFINED** in every plan file and on every branch | not started | owners to define |
 | A-2 | HR's import rules (named in `GREYTHR_PARITY_EMPLOYEE_ADMIN.md`; no plan text beyond the name) | **UNDEFINED in detail** | owners to define |
-| A-3 | opening figures (owner's message: screens + director-entered import of opening balances and tax already deducted this year, nothing preloaded) + letter figures from the structure (`letterFigureFields()` hook) | OPEN | P7-2/P7-3 (built), tax year |
+| A-3 | opening figures (owner's message: screens + director-entered import of opening balances and tax already deducted this year, nothing preloaded) + letter figures from the structure (`letterFigureFields()` hook) | DONE `0280f85` (openings; 5 mutants caught; PROJECTED runs blocked until confirmed) + `7ec1d5a` (letter figures) | P7-2/P7-3 (built), tax year |
 | A-4 | **UNDEFINED** | not started | owners to define |
 | A-5 | regularization rules and module (named in `GREYTHR_PARITY_WORKFORCE.md`; no plan text) | **UNDEFINED in detail** | owners to define |
 | A-6 | **UNDEFINED** | not started | owners to define |
 | A-7 | **UNDEFINED** | not started | owners to define |
 | A-8 | **UNDEFINED** (the Stage 5b "A8 bank payments are manual" is DONE; it is not this item) | not started | owners to define |
 | P7-2 | declarations with proofs | DONE (Stage 7 report) | — |
-| P7-3 | TDS projection, regimes side by side | PARTIAL: TDS in the run + IT Statement done; YTD reports, payslip YTD column, Salary Revision page, revision letters, offer-letter figures open | P7-2 |
-| P7-4 | loans and advances (incl. Principal / Interest parts) | OPEN | input heads D-31 |
+| P7-3 | TDS projection, regimes side by side | DONE: TDS in the run + IT Statement (earlier); checkpoint report `0e3a1bf` in STAGE_REPORTS; YTD reports, payslip YTD (new payslips only), Salary Revision page, revision and offer letter figures `7ec1d5a` | P7-2 |
+| P7-4 | loans and advances (incl. Principal / Interest parts) | DONE (core) `7ec1d5a`: types, request, two-director sanction, exact schedule, pay/recover through runs, immutable records, statements, changes (API only); NOT built: perquisite, the shortfall rule, change screens | input heads D-31 |
 | P7-5 | reimbursements | OPEN | — |
 | P7-6 | off-cycle runs, full and final settlement (incl. held pay) | OPEN | P7-4, P7-5 |
 | P7-7 | Form 16 data (DRAFT), quarterly return data | OPEN | P7-3, A-3 |

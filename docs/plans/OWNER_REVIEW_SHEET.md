@@ -96,3 +96,16 @@ How to answer: reply with the row number and "keep" or the change you want.
 | 57 | Leavers: no leave accrues for a month that starts after the last working day; the leaving month is untouched. | Tell us the rule for the leaving month. | **Needs your answer** for the leaving month. |
 | 58 | Only company-wide viewers see "Waiting on others". | Managers could monitor their teams. | Keep. |
 | 59 | Leave type and reason are shown as entered; one function is ready for a privacy rule. | Name the leave types to hide. | Tell us when the privacy rule is decided. |
+
+## Opening figures, payslip year to date, letters with pay, loans
+
+| # | What was chosen | If you answer differently | Recommendation |
+|---|---|---|---|
+| 60 | Opening figures always need the other director; an empty year is confirmed on purpose; income tax waits until then. | A run could go ahead without them. | Keep. |
+| 61 | Openings are two totals per person (pay, tax). | Line-by-line openings need greytHR's layout. | Keep until the layout is sent. |
+| 62 | New payslips show year to date from this system only. | Openings could be added in. | Keep. |
+| 63 | Revision/offer letters print the salary's own figures; directors only. | Deductions could be listed. | Keep. |
+| 64 | A different director sanctions every loan; never one's own. | A director could act alone. | Keep. |
+| 65 | Reducing-balance instalments, exact to the paisa. | Another method. | Keep. |
+| 66 | A loan is paid and recovered only through payroll runs; a shortfall stops the run. | **Needs your answer:** skip and extend, or recover part. | Decide before the first loan. |
+| 67 | No perquisite on cheap loans yet. | Give the rule. | Ask your accountant. |
