@@ -701,6 +701,22 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/workforce/workflow/monitor": adminInService("company-wide viewers only (monitor)"),
   "POST /api/workforce/workflow/decide": scoped("each item through approveLeaveRequest / rejectLeaveRequest / decideRequest, which check scope"),
   // A-10 — end
+  // P7-4 (docs/plans/P7_4_LOANS.md): own loans (no id from the request but the signed-in person's), and the directors' (director check in the service)
+  "GET /api/loans/mine": self,
+  "GET /api/loans/mine/:id": self,
+  "POST /api/loans/mine": self,
+  "GET /api/loans/types": adminInService("director only (listTypes)"),
+  "PUT /api/loans/types": adminInService("director only (saveType), audited"),
+  "GET /api/loans": adminInService("director only (listAll)"),
+  "POST /api/loans": adminInService("director only (createForPerson), audited"),
+  "GET /api/loans/:id": adminInService("director only (directorsLoan)"),
+  "POST /api/loans/:id/sanction": adminInService("director only, maker-checker LOAN_SANCTION"),
+  "POST /api/loans/:id/sanction/decision": adminInService("a different director (decideSanction)"),
+  "POST /api/loans/:id/changes": adminInService("director only, maker-checker LOAN_CHANGE"),
+  "POST /api/loans/:id/changes/:changeId/decision": adminInService("a different director (decideChange)"),
+  // P7-3: the person's own
+  "GET /api/tax/me/ytd": self,
+  "GET /api/tax/me/salary-revisions": self,
   // A-3 (docs/plans/A3_OPENING_FIGURES.md): directors only, the Developer refused
   "GET /api/tax/openings": adminInService("director only (yearView)"),
   "POST /api/tax/openings": adminInService("director only (enter), audited"),

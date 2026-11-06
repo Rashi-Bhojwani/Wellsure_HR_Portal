@@ -2,7 +2,9 @@ import type { DataScope } from "@shared/constants/roles";
 import { createHash, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import sharp from "sharp";
-import { formatLetterNumber, LETTER_PLACEHOLDERS, type LetterExtraField } from "@shared/constants/letters";
+import { formatLetterNumber, isPayPlaceholder, LETTER_PAY_PLACEHOLDERS, LETTER_PLACEHOLDERS, type LetterExtraField } from "@shared/constants/letters";
+import { salaryHistory } from "../../lib/effectiveDating";
+import { dec } from "../payroll/money";
 import { canReadSensitivity } from "@shared/constants/peopleDocuments";
 import { storageService } from "../../integrations/storage";
 import { writeAuditLog } from "../../lib/audit";
@@ -322,6 +324,49 @@ async function employeeValues(employeeId: string, asOf: Date, needed: Set<string
   };
 }
 
+/** Indian digit grouping of a fixed decimal string ("1234567.50" → "12,34,567.50"), on the text: no figure becomes a JavaScript number. */
+export function formatIndianAmount(fixedText: string): string {
+  const [whole = "0", fraction] = fixedText.split(".");
+  const last3 = whole.slice(-3);
+  const rest = whole.slice(0, -3).replace(/\B(?=(\d{2})+(?!\d))/g, ",");
+  return `${rest ? `${rest},` : ""}${last3}${fraction !== undefined ? `.${fraction}` : ""}`;
+}
+
+/**
+ * P7-3: the pay figures a letter prints, from the applied salary rows (never typed): the revision is the row in force on the letter date and the row before it; the
+ * offer is the row in force on the date of joining. Read only when the template uses them; such a template is never pay-free, so only a director issues it.
+ */
+export async function payFigureValues(employeeId: string, letterDay: Date, needed: Set<string>): Promise<Record<string, string>> {
+  const used = [...needed].filter(isPayPlaceholder);
+  if (used.length === 0) return {};
+  const history = (await salaryHistory(employeeId)).sort((a, b) => a.effectiveFrom.getTime() - b.effectiveFrom.getTime());
+  const inForce = (d: Date) => history.find((h) => h.effectiveFrom.getTime() <= d.getTime() && (!h.effectiveTo || h.effectiveTo.getTime() >= d.getTime())) ?? null;
+  const rupees = (v: { toString(): string }) => `₹ ${formatIndianAmount(dec(v.toString()).toFixed(2))}`;
+  const names = async (row: NonNullable<ReturnType<typeof inForce>>) => {
+    const versions = await prisma.payrollItemVersion.findMany({ where: { kind: "COMPONENT", OR: row.lines.map((l) => ({ key: l.componentCode, version: l.componentVersion })) }, select: { key: true, version: true, value: true } });
+    const nameOf = new Map(versions.map((v) => [`${v.key}@${v.version}`, (v.value as { name?: string }).name ?? v.key]));
+    return [...row.lines].sort((a, b) => a.sortOrder - b.sortOrder).filter((l) => l.componentType === "EARNING").map((l) => `${nameOf.get(`${l.componentCode}@${l.componentVersion}`) ?? l.componentCode}: ${rupees(l.amount)} a month`).join("\n");
+  };
+  const out: Record<string, string> = {};
+  if (used.some((k) => k.startsWith("revision."))) {
+    const now = inForce(letterDay);
+    if (!now) throw new HttpError(409, "This letter prints the salary revision, but no salary is set for this person on the letter date.", "NO_SALARY");
+    const before = history[history.indexOf(now) - 1] ?? null;
+    out["revision.effectiveDate"] = dateOnlyLong(now.effectiveFrom);
+    out["revision.newCtc"] = rupees(now.annualCtc);
+    out["revision.previousCtc"] = before ? rupees(before.annualCtc) : "";
+    out["revision.breakup"] = await names(now);
+  }
+  if (used.some((k) => k.startsWith("offer."))) {
+    const emp = await prisma.employee.findUniqueOrThrow({ where: { id: employeeId }, select: { dateOfJoining: true } });
+    const atJoining = inForce(emp.dateOfJoining);
+    if (!atJoining) throw new HttpError(409, "This letter prints the offer's pay, but no salary is set for this person from the date of joining.", "NO_SALARY");
+    out["offer.ctc"] = rupees(atJoining.annualCtc);
+    out["offer.breakup"] = await names(atJoining);
+  }
+  return out;
+}
+
 function placeholdersIn(bodyHtml: string): Set<string> {
   return new Set([...bodyHtml.matchAll(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g)].map((m) => m[1]!));
 }
@@ -344,6 +389,7 @@ async function resolveMergeValues(
   const { letterhead, signatoryName, signatoryDesignation } = await snapshotLetterhead();
   const values: Record<string, string> = {
     ...(await employeeValues(employeeId, generatedAt, placeholdersIn(version.bodyHtml))),
+    ...(await payFigureValues(employeeId, istDateOnly(generatedAt), placeholdersIn(version.bodyHtml))), // P7-3: only when the template uses them
     "company.legalName": letterhead.legalName,
     "company.address": letterhead.address,
     "letter.date": longDate(generatedAt),
@@ -355,6 +401,7 @@ async function resolveMergeValues(
   // Defensive: every key the catalog defines is present, so a stored letter
   // is complete even if a later template version uses more of them.
   for (const key of Object.keys(LETTER_PLACEHOLDERS)) values[key] ??= "";
+  for (const key of Object.keys(LETTER_PAY_PLACEHOLDERS)) values[key] ??= "";
   return { values, letterhead, templateName: template.name, templateCode: template.code };
 }
 

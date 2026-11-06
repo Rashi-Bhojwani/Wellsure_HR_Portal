@@ -86,7 +86,11 @@ export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promi
     unfinalisedAttendanceDays(employees, cycle.start, cycle.end),
     salarySegmentsMany(ids, cycle.start, cycle.end),
     paymentDate ? bankAccountsOn(ids, paymentDate) : Promise.resolve(new Map()),
-    prisma.payrollAdjustment.findMany({ where: { employeeId: { in: ids }, status: "PENDING", source: { not: "YEAR_END_ENCASHMENT" } }, orderBy: [{ employeeId: "asc" }, { createdAt: "asc" }, { id: "asc" }] }),
+    // P7-4: a loan instalment is read only by a run for its month or a later one (it is due in its month); everything else pending is read as before.
+    prisma.payrollAdjustment.findMany({
+      where: { employeeId: { in: ids }, status: "PENDING", source: { not: "YEAR_END_ENCASHMENT" }, NOT: { source: { in: ["LOAN_PRINCIPAL", "LOAN_INTEREST"] }, periodStart: { gt: cycle.end } } },
+      orderBy: [{ employeeId: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+    }),
     committedEncashments(ids),
   ]);
 

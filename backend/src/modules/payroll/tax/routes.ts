@@ -11,6 +11,8 @@ import * as decl from "./declarations";
 import { statementFor } from "./statement";
 import * as years from "./years";
 import * as openings from "./openings"; // A-3
+import { myYtdReport } from "../run/ytd";
+import { mySalaryRevisions } from "../salary/mine";
 import { refuseDeveloper } from "../../../middleware/refuseDeveloper";
 import { requireDirector } from "../../../lib/directorAuthority";
 
@@ -36,6 +38,9 @@ taxRouter.get("/me", validate({ query: yearQuery }), async (req, res) => send(re
 taxRouter.put("/me/declaration", validate({ body: decl.saveDeclarationSchema }), async (req, res) => send(res, 200, await decl.saveMyDeclaration(req.body, self(req))));
 taxRouter.post("/me/proofs", memoryUpload(MAX_DOCUMENT_UPLOAD_MB_CEILING), validate({ body: uploadBody }), async (req, res) => send(res, 201, await decl.uploadMyProof((req.body as { fy: string }).fy, (req.body as { section: string }).section, req.file, self(req))));
 taxRouter.get("/me/proofs/:id/file", validate({ params: idParams }), async (req, res) => send(res, 200, await decl.myProofFile((req.params as { id: string }).id, self(req))));
+// P7-3: the person's own year-to-date report and salary revisions (theirs only: the signed-in person's id, never a parameter).
+taxRouter.get("/me/ytd", refuseDeveloper, validate({ query: yearQuery }), async (req, res) => send(res, 200, await myYtdReport(req.user!.employeeId, (req.query as { fy?: string }).fy)));
+taxRouter.get("/me/salary-revisions", refuseDeveloper, async (req, res) => send(res, 200, await mySalaryRevisions(req.user!.employeeId)));
 taxRouter.get("/me/statement", validate({ query: yearQuery }), async (req, res) => send(res, 200, await statementFor(req.user!.employeeId, (req.query as { fy?: string }).fy)));
 
 // Directors: windows, declarations, proofs

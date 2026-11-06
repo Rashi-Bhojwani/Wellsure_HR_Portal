@@ -163,3 +163,25 @@ export async function applyOpeningsImport(fy: string, file: File, fingerprint: s
 export const openingsTemplate = async () => (await apiClient.get(`${base}/openings/template`, { responseType: "blob" })).data as Blob;
 export const requestOpeningsConfirmation = (year: string, fingerprint: string) => post("/openings/confirm", { year, fingerprint });
 export const decideOpenings = (year: string, fingerprint: string, decision: "APPROVE" | "REJECT", note?: string) => post(`/openings/${year}/decision`, { fingerprint, decision, ...(note ? { note } : {}) });
+
+// P7-3: the person's own year-to-date report and salary revisions.
+export interface YtdReport {
+  year: string;
+  months: Array<{ end: string; label: string }>;
+  earnings: Array<{ code: string; label: string; kind: string; byMonth: Record<string, string>; total: string }>;
+  deductions: Array<{ code: string; label: string; kind: string; byMonth: Record<string, string>; total: string }>;
+  totals: { earnings: string; deductions: string };
+  note: string;
+}
+export const myYtd = (fy?: string) => get<YtdReport>("/me/ytd", fy ? { fy } : undefined);
+export interface MyRevision {
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  reason: string;
+  annualCtc: string;
+  monthlyCtc: string;
+  previousAnnualCtc: string | null;
+  change: string | null;
+  breakup: Array<{ code: string; name: string; type: string; monthly: string }>;
+}
+export const mySalaryRevisions = () => get<{ revisions: MyRevision[] }>("/me/salary-revisions");

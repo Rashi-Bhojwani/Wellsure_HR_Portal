@@ -79,6 +79,13 @@ export function codeOnly(src: string): string {
 const ALLOWED_INTEGERS = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 16, 32, 40, 64, 100, 200, 201, 202, 204, 400, 401, 403, 404, 409, 422, 500, 1000]);
 // Value-shape bounds that belong to a rule's own validation (a payment day is 1 to 28, a month is 1 to 12, a state key is short).
 const EXTRA_ALLOWED: Record<string, number[]> = {
+  // A-3 opening figures: the largest import file (rows), form field lengths (a figure's text, a note, a reason), the length of a sha256 fingerprint and the
+  // short batch id cut from it. None is a payroll figure.
+  "tax/openings.ts": [2000, 20, 300, 64, 24],
+  // P7-4 loans: 1200 = 12 months × 100 (a yearly percentage to a monthly fraction), form field lengths and limits (a key, a name, a note, at most 600 instalments,
+  // a 64-character fingerprint, a 1-to-3-digit rate). None is a payroll figure.
+  "loans/schedule.ts": [1200],
+  "loans/service.ts": [31, 60, 600, 40, 300, 64, 32],
   "rules/schemas.ts": [28, 31, 39, 60],
   "validators.ts": [25, 60],
   // Salary: lengths of form fields (a name, a reason), how many rows a page or a search shows, and the highest payslip position. None is a payroll figure.

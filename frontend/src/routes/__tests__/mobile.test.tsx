@@ -46,7 +46,9 @@ describe("mobile tabs and their contents come from the employee menu", () => {
     // Attendance Info is built on real data (Phase 2 P2-E).
     expect(leaf("attendance-info").phase).toBeUndefined();
     expect(isComingSoon(leaf("attendance-info"))).toBe(false);
-    expect(isComingSoon(leaf("ytd-reports"))).toBe(true); // phase-marked
+    expect(isComingSoon(leaf("reimbursement"))).toBe(true); // phase-marked (YTD Reports and Loans, the earlier examples, were built in P7-3 and P7-4)
+    expect(isComingSoon(leaf("loans-advances"))).toBe(false);
+    expect(isComingSoon(leaf("ytd-reports"))).toBe(false);
     expect(isComingSoon(leaf("leave-apply"))).toBe(false);
     expect(quickActions().map((a) => a.key)).not.toContain("payslips");
   });

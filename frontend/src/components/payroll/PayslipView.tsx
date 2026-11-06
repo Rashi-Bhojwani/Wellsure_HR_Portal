@@ -12,7 +12,9 @@ const box = { border: `1px solid ${v.borderDefault}`, borderRadius: radius.lg, b
 // The employee's own screen opens a payslip with every amount masked until they choose "Show salary" (docs/UI_REFERENCE.md §1.1); HR screens pass nothing and see figures.
 const MASK = "₹ *****";
 
-function Lines({ title, lines, total, totalLabel, masked }: { title: string; lines: PayslipLine[]; total: string; totalLabel: string; masked?: boolean }) {
+function Lines({ title, lines, total, totalLabel, masked, ytd, kind, ytdTotal }: { title: string; lines: PayslipLine[]; total: string; totalLabel: string; masked?: boolean; ytd?: PayslipContent["ytd"]; kind: string; ytdTotal?: string }) {
+  // P7-3: a payslip with a year-to-date part shows it under each figure; older payslips have none and show as they always did.
+  const ytdOf = (code: string) => (ytd ? (ytd.byLine[`${kind}|${code}`] ?? "0.00") : null);
   return (
     <section style={{ ...box, flex: "1 1 280px" }} aria-label={title}>
       <h3 style={{ margin: 0, fontSize: fs.lg, fontWeight: fw.semibold, color: v.textPrimary }}>{title}</h3>
@@ -21,12 +23,18 @@ function Lines({ title, lines, total, totalLabel, masked }: { title: string; lin
         {lines.map((r) => (
           <div key={r.code} style={{ display: "flex", justifyContent: "space-between", gap: space[3], padding: `${space[2]}px 0`, borderBottom: `1px solid ${v.borderDefault}` }}>
             <dt style={{ color: v.textBody }}>{r.label}</dt>
-            <dd className="ws-num" style={{ margin: 0, color: v.textPrimary, whiteSpace: "nowrap" }}>{masked ? MASK : formatRupees(r.amount, 2)}</dd>
+            <dd className="ws-num" style={{ margin: 0, color: v.textPrimary, whiteSpace: "nowrap", textAlign: "right" }}>
+              {masked ? MASK : formatRupees(r.amount, 2)}
+              {ytdOf(r.code) !== null && r.code !== "ROUNDING" && <div style={{ fontSize: fs.xs, color: v.textSecondary }}>Year to date {masked ? MASK : formatRupees(ytdOf(r.code)!, 2)}</div>}
+            </dd>
           </div>
         ))}
         <div style={{ display: "flex", justifyContent: "space-between", gap: space[3], paddingTop: space[3] }}>
           <dt style={{ fontWeight: fw.bold, color: v.textPrimary }}>{totalLabel}</dt>
-          <dd className="ws-num" style={{ margin: 0, fontWeight: fw.bold, color: v.textPrimary, whiteSpace: "nowrap" }}>{masked ? MASK : formatRupees(total, 2)}</dd>
+          <dd className="ws-num" style={{ margin: 0, fontWeight: fw.bold, color: v.textPrimary, whiteSpace: "nowrap", textAlign: "right" }}>
+            {masked ? MASK : formatRupees(total, 2)}
+            {ytdTotal && <div style={{ fontSize: fs.xs, fontWeight: fw.regular, color: v.textSecondary }}>Year to date {masked ? MASK : formatRupees(ytdTotal, 2)}</div>}
+          </dd>
         </div>
       </dl>
     </section>
@@ -59,8 +67,8 @@ export function PayslipView({ content: c, watermark, masked }: { content: Paysli
         />
       </section>
       <div style={{ display: "flex", gap: space[4], flexWrap: "wrap" }}>
-        <Lines title="Earnings" lines={c.earnings} total={c.totals.gross} totalLabel="Gross" masked={masked} />
-        <Lines title="Deductions" lines={c.rounding ? [...c.deductions, { code: "ROUNDING", label: "Rounding", amount: c.rounding }] : c.deductions} total={c.totals.deductions} totalLabel="Total deductions" masked={masked} />
+        <Lines title="Earnings" kind="EARNING" ytd={c.ytd} ytdTotal={c.ytd?.gross} lines={c.earnings} total={c.totals.gross} totalLabel="Gross" masked={masked} />
+        <Lines title="Deductions" kind="DEDUCTION" ytd={c.ytd} ytdTotal={c.ytd?.deductions} lines={c.rounding ? [...c.deductions, { code: "ROUNDING", label: "Rounding", amount: c.rounding }] : c.deductions} total={c.totals.deductions} totalLabel="Total deductions" masked={masked} />
       </div>
       <section style={{ ...box, background: v.accentSubtle, borderColor: v.accent }} aria-label="Net pay">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: space[3], flexWrap: "wrap" }}>
@@ -69,6 +77,7 @@ export function PayslipView({ content: c, watermark, masked }: { content: Paysli
         </div>
         {!masked && <div style={{ color: v.textBody, marginTop: space[1] }}>{c.netInWords}</div>}
       </section>
+      {c.ytd && <div style={{ color: v.textSecondary, fontSize: fs.sm }}>Year to date: financial year {c.ytd.financialYear}, from payroll runs in this system only.</div>}
       {c.employerContributions.length > 0 && !masked && (
         <div style={{ color: v.textSecondary, fontSize: fs.md }}>
           Employer contributions, for information and not part of your pay: {c.employerContributions.map((l) => `${l.label} ${formatRupees(l.amount, 2)}`).join(" · ")}

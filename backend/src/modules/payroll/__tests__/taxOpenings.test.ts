@@ -50,6 +50,13 @@ describe("A-3 — opening figures", () => {
       expect((await call(who, "post", "/api/tax/openings/confirm", { year: FY, fingerprint: "x".repeat(64) })).status, who).toBe(403);
     }
     expect((await request(app).get(`/api/tax/openings?fy=${FY}`)).status).toBe(401);
+    // P7-3's own pages: the Developer role is refused; no sign-in is refused; an employee with no pay sees an empty year and no revisions.
+    for (const path of ["/api/tax/me/ytd", "/api/tax/me/salary-revisions"]) {
+      expect((await call("dev", "get", path)).status, path).toBe(403);
+      expect((await request(app).get(path)).status, path).toBe(401);
+    }
+    expect((await call("emp", "get", "/api/tax/me/ytd")).body.months).toEqual([]);
+    expect((await call("emp", "get", "/api/tax/me/salary-revisions")).body.revisions).toEqual([]);
   });
 
   it("nothing is preloaded; entering needs a source note and exact figures; the database refuses a change or a delete", async () => {

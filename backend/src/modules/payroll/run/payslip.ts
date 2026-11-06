@@ -6,6 +6,8 @@ import { getLetterhead } from "../../letters/service";
 import { payrollHash } from "../hash";
 import { canonicalDecimal, dec, fixed, sum, ZERO } from "../money";
 import { paymentDateOf } from "./bank";
+import { ytdLines, type YtdLine } from "./ytd";
+import { financialYearOf } from "@shared/utils/financialYear";
 
 // What a payslip says (docs/plans/PHASE_6.md §9 and §14H). The content is built once, from a FINAL run's stored items and lines, at the moment payslips are published,
 // and stored whole: after that nothing about a payslip is looked up again, so it can never differ from what was approved. Every amount is a fixed two-place string; no
@@ -33,12 +35,23 @@ export interface PayslipContent {
   bank: { bankName: string; accountLast4: string } | null;
   statutory: { panLast4: string | null; uanLast4: string | null; esiLast4: string | null };
   runHash: string;
+  /**
+   * P7-3: year to date for each line, from runs in this system (finalised runs of the financial year up to and including this one). Absent on payslips published
+   * before it was added: a published payslip never changes.
+   */
+  ytd?: { financialYear: string; byLine: Record<string, string>; gross: string; deductions: string };
 }
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 const money = (v: { toString(): string }) => fixed(dec(v.toString()), 2);
 
 export const payslipHash = (content: PayslipContent) => payrollHash(content);
+
+function ytdOf(lines: Map<string, YtdLine> | undefined, cycleEnd: Date): PayslipContent["ytd"] {
+  const all = [...(lines ?? new Map<string, YtdLine>()).values()];
+  const total = (kind: string) => fixed(all.filter((l) => l.kind === kind).reduce((s, l) => s.plus(l.amount), ZERO), 2);
+  return { financialYear: financialYearOf(iso(cycleEnd)).label, byLine: Object.fromEntries(all.map((l) => [`${l.kind}|${l.code}`, fixed(l.amount, 2)])), gross: total("EARNING"), deductions: total("DEDUCTION") };
+}
 
 /** Builds the content of every PAYABLE person's payslip for a run, keyed by employee id. */
 export async function buildPayslips(run: PayrollRun): Promise<Map<string, { runItemId: string; content: PayslipContent; contentHash: string }>> {
@@ -51,6 +64,7 @@ export async function buildPayslips(run: PayrollRun): Promise<Map<string, { runI
   // The account the salary goes to: the one in force on the payment date (the cycle end if the run read no payment date), the same account the bank file uses.
   const paidOn = (await paymentDateOf(run)) ?? run.cycleEnd;
   const banks = await bankAccountsOn(ids, paidOn);
+  const ytd = await ytdLines(ids, run.cycleEnd, run.id);
 
   const out = new Map<string, { runItemId: string; content: PayslipContent; contentHash: string }>();
   for (const item of items) {
@@ -83,6 +97,7 @@ export async function buildPayslips(run: PayrollRun): Promise<Map<string, { runI
       bank: bank ? { bankName: bank.bankName, accountLast4: bank.accountNumberLast4 } : null,
       statutory: { panLast4: stat?.panLast4 ?? null, uanLast4: stat?.uanLast4 ?? null, esiLast4: stat?.esiLast4 ?? null },
       runHash: run.runHash ?? "",
+      ytd: ytdOf(ytd.get(item.employeeId), run.cycleEnd),
     };
     out.set(item.employeeId, { runItemId: item.id, content, contentHash: payslipHash(content) });
   }

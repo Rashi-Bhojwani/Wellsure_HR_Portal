@@ -49,6 +49,9 @@ const AttendanceInfoPage = lazyPage(() => import("../pages/employee/attendance/A
 const PayslipsPage = lazyPage(() => import("../pages/employee/salary/PayslipsPage"), "PayslipsPage");
 const ItDeclarationPage = lazyPage(() => import("../pages/employee/salary/ItDeclarationPage"), "ItDeclarationPage");
 const ProofOfInvestmentPage = lazyPage(() => import("../pages/employee/salary/ProofOfInvestmentPage"), "ProofOfInvestmentPage");
+const LoansPage = lazyPage(() => import("../pages/employee/salary/LoansPage"), "LoansPage"); // P7-4
+const YtdReportsPage = lazyPage(() => import("../pages/employee/salary/YtdReportsPage"), "YtdReportsPage"); // P7-3
+const SalaryRevisionPage = lazyPage(() => import("../pages/employee/salary/SalaryRevisionPage"), "SalaryRevisionPage"); // P7-3
 const ItStatementPage = lazyPage(() => import("../pages/employee/salary/ItStatementPage"), "ItStatementPage");
 
 // Single source of truth for the Employee portal left sidebar
@@ -140,7 +143,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
         label: "YTD Reports",
         path: "salary/ytd-reports",
         icon: RiseOutlined,
-        phase: "Phase 7",
+        element: YtdReportsPage,
       },
       {
         key: "it-statement",
@@ -161,7 +164,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
         label: "Loans and Advances",
         path: "salary/loans-advances",
         icon: BankOutlined,
-        phase: "Phase 7",
+        element: LoansPage,
       },
       {
         key: "reimbursement",
@@ -182,7 +185,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
         label: "Salary Revision",
         path: "salary/salary-revision",
         icon: RiseOutlined,
-        phase: "Phase 7",
+        element: SalaryRevisionPage,
       },
     ],
   },

@@ -466,6 +466,7 @@ model Employee {
   leaveTypeReviews LeaveTypeReviewer[] @relation("LeaveTypeReviewerPerson") // A-10 G4
   leaverRecalcs   LeaverLeaveRecalc[] @relation("LeaverRecalcEmployee") // A-10 G6
   taxOpenings     TaxOpening[]        @relation("TaxOpeningEmployee") // A-3
+  loans           Loan[]              @relation("LoanEmployee") // P7-4
   bankRepaymentRows BankRepaymentRow[]
   remoteRecords   RemoteAttendanceRecord[]
   id              String                   @id @default(cuid())
@@ -2502,6 +2503,8 @@ enum PayrollApprovalSubject {
   MONTHLY_INPUTS
   BANK_REPAYMENT
   TAX_OPENING // A-3
+  LOAN_SANCTION // P7-4
+  LOAN_CHANGE // P7-4
 }
 
 enum PayrollApprovalStatus {
@@ -2604,6 +2607,9 @@ enum AdjustmentSource {
   SALARY_ARREARS
   IMPORT
   YEAR_END_ENCASHMENT
+  LOAN_DISBURSEMENT // P7-4
+  LOAN_PRINCIPAL // P7-4
+  LOAN_INTEREST // P7-4
 }
 
 enum AdjustmentStatus {
@@ -3929,4 +3935,67 @@ model TaxOpening {
 
   @@index([financialYear, employeeId, kind, seq])
   @@map("tax_openings")
+}
+
+// ── P7-4 (docs/plans/P7_4_LOANS.md): loans and advances, directors only, immutable rows ─────────────────────────────────────────
+model LoanTypeVersion {
+  id                  String   @id @default(cuid())
+  typeKey             String   @map("type_key")
+  version             Int
+  name                String
+  maxAmount           Decimal? @map("max_amount") @db.Decimal(14, 2)
+  maxInstalments      Int?     @map("max_instalments")
+  ratePercent         Decimal? @map("rate_percent") @db.Decimal(7, 4)
+  employeesMayRequest Boolean? @map("employees_may_request")
+  disbursementHead    String?  @map("disbursement_head")
+  principalHead       String?  @map("principal_head")
+  interestHead        String?  @map("interest_head")
+  retired             Boolean  @default(false)
+  reason              String
+  setByUserId         String   @map("set_by_user_id")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([typeKey, version])
+  @@map("loan_type_versions")
+}
+
+model Loan {
+  id                  String       @id @default(cuid())
+  employeeId          String       @map("employee_id")
+  employee            Employee     @relation("LoanEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  typeKey             String       @map("type_key")
+  typeVersion         Int          @map("type_version")
+  principal           Decimal      @db.Decimal(14, 2)
+  ratePercent         Decimal      @map("rate_percent") @db.Decimal(7, 4)
+  instalments         Int
+  firstMonth          DateTime     @map("first_month") @db.Date
+  schedule            Json
+  purpose             String
+  requestedByEmployee Boolean      @map("requested_by_employee")
+  createdByUserId     String       @map("created_by_user_id")
+  createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  changes             LoanChange[]
+
+  @@index([employeeId])
+  @@map("loans")
+}
+
+enum LoanChangeKind {
+  PREPAID
+  WAIVED
+  CANCEL_PENDING
+}
+
+model LoanChange {
+  id              String         @id @default(cuid())
+  loanId          String         @map("loan_id")
+  loan            Loan           @relation(fields: [loanId], references: [id], onDelete: Restrict)
+  kind            LoanChangeKind
+  amount          Decimal?       @db.Decimal(14, 2)
+  reference       String
+  createdByUserId String         @map("created_by_user_id")
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([loanId])
+  @@map("loan_changes")
 }
