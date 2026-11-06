@@ -465,6 +465,7 @@ model Employee {
   payslipLinks    PayslipLink[]
   leaveTypeReviews LeaveTypeReviewer[] @relation("LeaveTypeReviewerPerson") // A-10 G4
   leaverRecalcs   LeaverLeaveRecalc[] @relation("LeaverRecalcEmployee") // A-10 G6
+  taxOpenings     TaxOpening[]        @relation("TaxOpeningEmployee") // A-3
   bankRepaymentRows BankRepaymentRow[]
   remoteRecords   RemoteAttendanceRecord[]
   id              String                   @id @default(cuid())
@@ -2500,6 +2501,7 @@ enum PayrollApprovalSubject {
   SALARY_REVISION
   MONTHLY_INPUTS
   BANK_REPAYMENT
+  TAX_OPENING // A-3
 }
 
 enum PayrollApprovalStatus {
@@ -3903,3 +3905,28 @@ model LeaverLeaveRecalc {
 }
 // ── A-10 — end ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
+
+// ── A-3 (docs/plans/A3_OPENING_FIGURES.md): opening figures, directors only, append-only ──────────────────────────────────────
+enum TaxOpeningKind {
+  GO_LIVE
+  PREVIOUS_EMPLOYER
+}
+
+model TaxOpening {
+  id              String         @id @default(cuid())
+  seq             Int            @unique @default(autoincrement())
+  employeeId      String         @map("employee_id")
+  employee        Employee       @relation("TaxOpeningEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  financialYear   String         @map("financial_year")
+  kind            TaxOpeningKind
+  taxable         Decimal?       @db.Decimal(14, 2)
+  tds             Decimal?       @db.Decimal(14, 2)
+  cleared         Boolean        @default(false)
+  sourceNote      String         @map("source_note")
+  batchId         String?        @map("batch_id")
+  enteredByUserId String         @map("entered_by_user_id")
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([financialYear, employeeId, kind, seq])
+  @@map("tax_openings")
+}

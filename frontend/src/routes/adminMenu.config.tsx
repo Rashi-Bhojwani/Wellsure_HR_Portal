@@ -113,6 +113,7 @@ const RuleOverridesPage = lazyPage(() => import("../pages/admin/payroll/RuleOver
 const MonthlyInputsPage = lazyPage(() => import("../pages/admin/payroll/MonthlyInputsPage"), "MonthlyInputsPage");
 const PayslipLinksPage = lazyPage(() => import("../pages/admin/payroll/PayslipLinksPage"), "PayslipLinksPage");
 const NotOnPayrollPage = lazyPage(() => import("../pages/admin/payroll/NotOnPayrollPage"), "NotOnPayrollPage");
+const OpeningFiguresPage = lazyPage(() => import("../pages/admin/payroll/OpeningFiguresPage"), "OpeningFiguresPage"); // A-3
 const TaxYearsPage = lazyPage(() => import("../pages/admin/payroll/TaxYearsPage"), "TaxYearsPage");
 const TaxDeclarationsPage = lazyPage(() => import("../pages/admin/payroll/TaxDeclarationsPage"), "TaxDeclarationsPage");
 const HeldSalariesPage = lazyPage(() => import("../pages/admin/payroll/HeldSalariesPage"), "HeldSalariesPage");
@@ -378,6 +379,7 @@ export const adminApps: AdminApp[] = [
           { key: "payroll-payslip-links", label: "Payslip Links", path: "payroll/payslip-links", icon: LinkOutlined, element: PayslipLinksPage, needs: PAYROLL_NEEDS },
           { key: "payroll-not-on-payroll", label: "Not on Payroll", path: "payroll/not-on-payroll", icon: UserDeleteOutlined, element: NotOnPayrollPage, needs: PAYROLL_NEEDS },
           { key: "payroll-tax-years", label: "Tax Years", path: "payroll/tax-years", icon: FileProtectOutlined, element: TaxYearsPage, needs: PAYROLL_NEEDS },
+          { key: "payroll-opening-figures", label: "Opening Figures", path: "payroll/opening-figures", icon: FileProtectOutlined, element: OpeningFiguresPage, needs: { director: true } }, // A-3
           { key: "payroll-tax-declarations", label: "Tax Declarations", path: "payroll/tax-declarations", icon: FormOutlined, element: TaxDeclarationsPage, needs: PAYROLL_NEEDS },
           { key: "payroll-holds", label: "Held Salaries", path: "payroll/holds", icon: PauseCircleOutlined, element: HeldSalariesPage, needs: PAYROLL_NEEDS },
           { key: "payroll-run", label: "Payroll Run", path: "payroll/run", icon: FundOutlined, element: PayrollRunsPage, needs: PAYROLL_NEEDS },

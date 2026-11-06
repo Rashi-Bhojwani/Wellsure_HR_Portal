@@ -115,3 +115,51 @@ export interface QueueProof { id: string; employeeCode: string; name: string; se
 export const proofQueue = (fy: string) => get<{ year: string; proofs: QueueProof[] }>("/proofs", { fy });
 export const decideProof = (id: string, body: { decision: "ACCEPTED" | "REJECTED"; amountVerified?: string; reason?: string }) => post<{ id: string; decision: string }>(`/proofs/${id}/decision`, body);
 export const proofLink = (id: string) => get<{ url: string; fileName: string }>(`/proofs/${id}/file`);
+
+// A-3: opening figures (directors only).
+export type OpeningKind = "GO_LIVE" | "PREVIOUS_EMPLOYER";
+export interface OpeningRow {
+  employeeId: string;
+  employeeCode: string;
+  name: string;
+  kind: OpeningKind;
+  kindLabel: string;
+  taxable: string;
+  tds: string;
+  sourceNote: string;
+  enteredAt: string;
+}
+export interface OpeningsView {
+  year: string;
+  state: "NOT_CONFIRMED" | "WAITING" | "CONFIRMED";
+  waiting: { makerUserId: string; mine: boolean } | null;
+  fingerprint: string;
+  totals: { people: number; taxable: string; tds: string };
+  rows: OpeningRow[];
+}
+export interface OpeningsImportPreview {
+  year: string;
+  fileName: string;
+  fingerprint: string;
+  valid: number;
+  rows: Array<{ line: number; employeeCode: string; kind: string; taxable: string; tds: string; note: string; problem: string | null }>;
+}
+export const openings = (fy: string) => get<OpeningsView>("/openings", { fy });
+export const enterOpening = (body: { year: string; employeeId: string; kind: OpeningKind; clear?: boolean; taxable?: string; tds?: string; sourceNote: string }) => post<{ written: number; voidedConfirmation: boolean }>("/openings", body);
+export async function previewOpeningsImport(fy: string, file: File): Promise<OpeningsImportPreview> {
+  const form = new FormData();
+  form.append("fy", fy);
+  form.append("file", file);
+  return (await apiClient.post(`${base}/openings/import/preview`, form)).data;
+}
+export async function applyOpeningsImport(fy: string, file: File, fingerprint: string, reason: string): Promise<{ written: number }> {
+  const form = new FormData();
+  form.append("fy", fy);
+  form.append("fingerprint", fingerprint);
+  form.append("reason", reason);
+  form.append("file", file);
+  return (await apiClient.post(`${base}/openings/import/apply`, form)).data;
+}
+export const openingsTemplate = async () => (await apiClient.get(`${base}/openings/template`, { responseType: "blob" })).data as Blob;
+export const requestOpeningsConfirmation = (year: string, fingerprint: string) => post("/openings/confirm", { year, fingerprint });
+export const decideOpenings = (year: string, fingerprint: string, decision: "APPROVE" | "REJECT", note?: string) => post(`/openings/${year}/decision`, { fingerprint, decision, ...(note ? { note } : {}) });

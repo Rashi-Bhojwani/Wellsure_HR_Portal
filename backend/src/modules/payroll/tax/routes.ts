@@ -10,6 +10,9 @@ import { itemConfirmSchema, itemSavePreviewSchema } from "../salary/validators";
 import * as decl from "./declarations";
 import { statementFor } from "./statement";
 import * as years from "./years";
+import * as openings from "./openings"; // A-3
+import { refuseDeveloper } from "../../../middleware/refuseDeveloper";
+import { requireDirector } from "../../../lib/directorAuthority";
 
 // Tax: declarations, proofs, the tax years and the IT statement (docs/plans/STAGE_7_PLAN.md). The person's own routes need only a sign-in and are scoped to the signed-in person; every other
 // route needs a pay permission AND is refused by the service unless the caller is a director. HR, managers and the Developer role hold neither, so they see nothing here, not even a count.
@@ -50,3 +53,25 @@ taxRouter.post("/years/:fy/save-preview", rulesEdit, validate({ params: yearPara
 taxRouter.put("/years/:fy", rulesEdit, validate({ params: yearParams, body: z.object({ value: z.unknown(), note: z.string().max(500).optional(), fingerprint: z.string().min(1).max(200) }).strict() }), async (req, res) => send(res, 200, await years.saveTaxYear((req.params as { fy: string }).fy, req.body as { value: unknown; note?: string; fingerprint: string }, actor(req))));
 taxRouter.post("/years/:fy/confirm-preview", rulesConfirm, validate({ params: yearParams }), async (req, res) => send(res, 200, await years.previewTaxYearConfirm((req.params as { fy: string }).fy, actor(req))));
 taxRouter.post("/years/:fy/confirm", rulesConfirm, validate({ params: yearParams, body: itemConfirmSchema }), async (req, res) => send(res, 200, await years.confirmTaxYear((req.params as { fy: string }).fy, req.body as { version: number; note: string; fingerprint: string }, actor(req))));
+
+// A-3: opening figures (directors only, in the service too; the Developer role is refused outright).
+const openingYear = z.object({ fy: z.string().min(7).max(7) }).strict();
+taxRouter.get("/openings", refuseDeveloper, directors, validate({ query: openingYear }), async (req, res) => send(res, 200, await openings.yearView((req.query as { fy: string }).fy, req.user!.userId)));
+taxRouter.post("/openings", refuseDeveloper, directors, validate({ body: openings.enterSchema }), async (req, res) => send(res, 200, await openings.enter(req.body, actor(req))));
+taxRouter.get("/openings/template", refuseDeveloper, directors, async (req, res) => {
+  await requireDirector(req.user!.userId, "download the opening figures template");
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", 'attachment; filename="opening-figures-template.csv"');
+  res.status(200).send(openings.importTemplateCsv());
+});
+taxRouter.post("/openings/import/preview", refuseDeveloper, directors, memoryUpload(5), validate({ body: openingYear }), async (req, res) => {
+  if (!req.file) return send(res, 400, { error: { message: "Choose a file.", code: "VALIDATION_ERROR" } });
+  send(res, 200, await openings.previewImport((req.body as { fy: string }).fy, req.file, actor(req)));
+});
+taxRouter.post("/openings/import/apply", refuseDeveloper, directors, memoryUpload(5), async (req, res) => {
+  if (!req.file) return send(res, 400, { error: { message: "Choose the same file again.", code: "VALIDATION_ERROR" } });
+  const b = req.body as { fy?: string; fingerprint?: string; reason?: string };
+  send(res, 200, await openings.applyImport({ year: b.fy, fingerprint: b.fingerprint, reason: b.reason }, req.file, actor(req)));
+});
+taxRouter.post("/openings/confirm", refuseDeveloper, directors, validate({ body: openings.requestSchema }), async (req, res) => send(res, 200, await openings.requestConfirmation(req.body, actor(req))));
+taxRouter.post("/openings/:fy/decision", refuseDeveloper, directors, validate({ params: yearParams, body: openings.decisionSchema }), async (req, res) => send(res, 200, await openings.decideConfirmation((req.params as { fy: string }).fy, req.body, actor(req))));

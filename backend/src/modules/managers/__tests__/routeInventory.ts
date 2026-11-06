@@ -701,6 +701,14 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/workforce/workflow/monitor": adminInService("company-wide viewers only (monitor)"),
   "POST /api/workforce/workflow/decide": scoped("each item through approveLeaveRequest / rejectLeaveRequest / decideRequest, which check scope"),
   // A-10 — end
+  // A-3 (docs/plans/A3_OPENING_FIGURES.md): directors only, the Developer refused
+  "GET /api/tax/openings": adminInService("director only (yearView)"),
+  "POST /api/tax/openings": adminInService("director only (enter), audited"),
+  "GET /api/tax/openings/template": adminInService("director only (route)"),
+  "POST /api/tax/openings/import/preview": adminInService("director only (previewImport)"),
+  "POST /api/tax/openings/import/apply": adminInService("director only (applyImport), audited"),
+  "POST /api/tax/openings/confirm": adminInService("director only (requestConfirmation), maker-checker TAX_OPENING"),
+  "POST /api/tax/openings/:fy/decision": adminInService("director only (decideConfirmation), a different director"),
 };
 
 // Scoped routes a manager can reach with a manager-grantable key — each has
