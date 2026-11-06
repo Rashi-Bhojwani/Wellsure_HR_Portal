@@ -1,3 +1,4 @@
+import { assertNotLocked } from "../../workforce/locks"; // A-10 G3
 import { createHash, randomUUID } from "node:crypto";
 import { writeAuditLogs } from "../../../lib/audit";
 import { businessToday } from "../../../lib/businessDate";
@@ -146,6 +147,7 @@ export async function confirmShiftOverride(viewer: Viewer, input: ShiftOverrideI
   if (p.fingerprint !== input.fingerprint) {
     throw new HttpError(409, "The set changed since you looked at it (a request was raised, a day was finalised, or an assignment changed). Review it again before confirming.", "SELECTION_CHANGED");
   }
+  await assertNotLocked("SHIFT_OVERRIDE", meta.actorUserId, p.planned.map((x) => ({ employeeId: x.employeeId, from: x.date, to: x.date }))); // A-10 G3
   const rows = p.planned.map((x) => ({ ...x, id: randomUUID() }));
   await prisma.$transaction(
     async (tx) => {
@@ -188,6 +190,7 @@ export async function confirmShiftOverride(viewer: Viewer, input: ShiftOverrideI
 export async function clearShiftOverride(viewer: Viewer, input: { employeeId: string; date: string; note: string }, meta: Meta) {
   requireHr(viewer);
   if (input.employeeId === viewer.employeeId) throw new HttpError(403, "You can't change your own shift. Another administrator does it.", "OWN_ATTENDANCE");
+  await assertNotLocked("SHIFT_OVERRIDE", meta.actorUserId, [{ employeeId: input.employeeId, from: input.date, to: input.date }]); // A-10 G3
   const settings = await getRegularizationSettings();
   const [active, row, earliest] = await Promise.all([
     prisma.shiftOverride.findFirst({ where: { employeeId: input.employeeId, date: day(input.date) }, orderBy: { seq: "desc" } }),

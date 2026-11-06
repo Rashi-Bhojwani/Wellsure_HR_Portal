@@ -31,3 +31,24 @@ export interface RosterMonth {
 export const rosterMonth = async (q: { cycleStart?: string; locationId?: string; departmentId?: string }) => (await apiClient.get<RosterMonth>("/api/workforce/roster/grid", { params: q })).data;
 export const exportRosterMonth = async (q: { cycleStart?: string; locationId?: string; departmentId?: string }) =>
   (await apiClient.get("/api/workforce/roster/grid/export", { params: q, responseType: "blob" })).data as Blob;
+
+// G3: attendance activity locks (directors).
+export interface AttendanceLockView {
+  id: string;
+  effectiveFrom: string;
+  fromDate: string;
+  toDate: string;
+  categories: string[];
+  people: number;
+  everyone: boolean;
+  segmentName: string | null;
+  reason: string;
+  createdAt: string;
+  voidedAt: string | null;
+  voidReason: string | null;
+  state: "IN_FORCE" | "SCHEDULED" | "VOID";
+}
+export const listLocks = async () => (await apiClient.get<{ locks: AttendanceLockView[]; categories: Array<{ code: string; label: string }> }>("/api/workforce/locks")).data;
+export const createLock = async (body: { effectiveFrom: string; fromDate: string; toDate: string; categories: string[]; segmentId: string | null; reason: string }) =>
+  (await apiClient.post<AttendanceLockView>("/api/workforce/locks", body)).data;
+export const voidLock = async (id: string, reason: string) => (await apiClient.post<AttendanceLockView>(`/api/workforce/locks/${id}/void`, { reason })).data;

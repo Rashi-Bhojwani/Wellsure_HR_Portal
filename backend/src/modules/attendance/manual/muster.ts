@@ -1,3 +1,4 @@
+import { assertNotLocked } from "../../workforce/locks"; // A-10 G3
 import { markersFor, STATUS_CATALOGUE } from "@shared/attendance/statusCatalogue"; // A-10
 import { getWorkforceSetting } from "../../workforce/settings"; // A-10
 import type { DailyAttendance, ManualAttendanceEntry } from "@prisma/client";
@@ -401,6 +402,7 @@ export async function applyEdits(viewer: Viewer, edits: CellEdit[], how: { via: 
     else if (e.date < earliest) errors.push({ employeeId: e.employeeId, date: e.date, error: "That's too far back to mark here." });
     return { ...e, input: p.ok ? p.value : null };
   });
+  await assertNotLocked("MUSTER", meta.actorUserId, edits.map((e) => ({ employeeId: e.employeeId, from: e.date, to: e.date }))); // A-10 G3
   const { s, rowBy } = await scopeForDays(viewer, edits);
   const current = await latestEntries(s.ids, s.days[0]!, s.days.at(-1)!);
 
@@ -463,6 +465,7 @@ export async function markAllPresent(viewer: Viewer, input: { date: string; loca
   // Nobody marks their own attendance (plan §5.1, the same rule as a single cell): the viewer is left out.
   const ids = all.filter((id) => id !== viewer.employeeId && locationOn(placements.get(id), input.date) === input.locationId && !deviceOn(mappings.get(id), input.date));
   if (ids.length === 0) return { marked: 0, skipped: 0 };
+  await assertNotLocked("MUSTER", meta.actorUserId, ids.map((employeeId) => ({ employeeId, from: input.date, to: input.date }))); // A-10 G3
   await computeAttendance(ids, input.date, input.date);
   const [rows, assignments] = await Promise.all([
     prisma.dailyAttendance.findMany({ where: { employeeId: { in: ids }, date: day(input.date) } }),

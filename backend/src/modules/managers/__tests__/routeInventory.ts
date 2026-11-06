@@ -679,6 +679,9 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "PUT /api/workforce/settings/:key": adminInService("director only (saveWorkforceSetting), audited"),
   "GET /api/workforce/roster/grid": admin,
   "GET /api/workforce/roster/grid/export": admin,
+  "GET /api/workforce/locks": adminInService("director only (listLocks)"),
+  "POST /api/workforce/locks": adminInService("director only (createLock), audited"),
+  "POST /api/workforce/locks/:id/void": adminInService("director only (voidLock), audited"),
   // A-10 — end
 };
 

@@ -3767,5 +3767,24 @@ model WorkforceSetting {
   @@index([key, createdAt])
   @@map("workforce_settings")
 }
+// G3: attendance activity locks (append-only; voided once, never deleted — a database trigger holds it).
+model AttendanceLock {
+  id              String    @id @default(cuid())
+  effectiveFrom   DateTime  @map("effective_from") @db.Date
+  fromDate        DateTime  @map("from_date") @db.Date
+  toDate          DateTime  @map("to_date") @db.Date
+  categories      String[]
+  employeeIds     String[]  @default([]) @map("employee_ids")
+  segmentName     String?   @map("segment_name")
+  reason          String
+  createdByUserId String    @map("created_by_user_id")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  voidedAt        DateTime? @map("voided_at") @db.Timestamptz(3)
+  voidedByUserId  String?   @map("voided_by_user_id")
+  voidReason      String?   @map("void_reason")
+
+  @@index([toDate])
+  @@map("attendance_locks")
+}
 // ── A-10 — end ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 

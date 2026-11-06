@@ -1,3 +1,4 @@
+import { assertNotLocked } from "../../workforce/locks"; // A-10 G3
 import { getWorkforceSetting } from "../../workforce/settings"; // A-10
 import { createHash, randomUUID } from "node:crypto";
 import { Prisma, type DailyAttendance, type RegularizationReasonCode } from "@prisma/client";
@@ -250,6 +251,7 @@ export async function confirmOverride(viewer: Viewer, input: OverrideInput & { f
   if (p.fingerprint !== input.fingerprint) {
     throw new HttpError(409, "The set changed since you looked at it (a request was raised, a day was finalised, leave was cancelled or punches arrived). Review it again before confirming.", "SELECTION_CHANGED");
   }
+  await assertNotLocked("MANUAL_OVERRIDE", meta.actorUserId, p.planned.map((x) => ({ employeeId: x.employeeId, from: x.date, to: x.date }))); // A-10 G3
   const text = input.followDevice ? FOLLOW_DEVICE_TEXT : describeCorrection(input);
   const rows = p.planned.map((x) => ({ ...x, overrideId: randomUUID() }));
   const releasedFor = new Map<string, Array<{ employeeId: string; date: string; leaveType: string; part: string; daysReturned: number }>>();
@@ -338,6 +340,7 @@ export async function confirmOverride(viewer: Viewer, input: OverrideInput & { f
 export async function clearOverride(viewer: Viewer, input: { employeeId: string; date: string; note: string }, meta: Meta) {
   requireHr(viewer);
   if (input.employeeId === viewer.employeeId) throw new HttpError(403, "You can't change your own attendance. Another administrator does it.", "OWN_ATTENDANCE");
+  await assertNotLocked("MANUAL_OVERRIDE", meta.actorUserId, [{ employeeId: input.employeeId, from: input.date, to: input.date }]); // A-10 G3
   const [row, released, pending, earliest] = await Promise.all([
     prisma.dailyAttendance.findUnique({ where: { employeeId_date: { employeeId: input.employeeId, date: day(input.date) } } }),
     prisma.leaveDayRelease.count({ where: { employeeId: input.employeeId, date: day(input.date) } }),

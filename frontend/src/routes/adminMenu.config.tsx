@@ -128,6 +128,7 @@ const LetterSettingsPage = lazyPage(() => import("../pages/admin/letters/parity/
 // A-9 — end
 // A-10 (docs/plans/GREYTHR_PARITY_WORKFORCE.md) — begin
 const WorkforceSettingsPage = lazyPage(() => import("../pages/admin/workforce/parity/WorkforceSettingsPage"), "WorkforceSettingsPage");
+const AttendanceLocksPage = lazyPage(() => import("../pages/admin/workforce/parity/AttendanceLocksPage"), "AttendanceLocksPage");
 // A-10 — end
 const SetupChecklistPage = lazyPage(() => import("../pages/admin/payroll/SetupChecklistPage"), "SetupChecklistPage");
 // Anyone holding any payroll key sees the Payroll group; HR holds none (the hard lock), so HR never sees it. The server still decides every request.
@@ -409,6 +410,7 @@ export const adminApps: AdminApp[] = [
           // A-9 — begin
           // A-10 — begin
           { key: "workforce-settings", label: "Workforce Settings", path: "admin-tools/workforce-settings", icon: SettingOutlined, element: WorkforceSettingsPage, needs: { director: true } },
+          { key: "attendance-locks", label: "Attendance Locks", path: "admin-tools/attendance-locks", icon: SettingOutlined, element: AttendanceLocksPage, needs: { director: true } },
           // A-10 — end
           { key: "letter-settings", label: "Letter Settings", path: "admin-tools/letter-settings", icon: FileProtectOutlined, element: LetterSettingsPage, needs: { director: true } },
           // A-9 — end

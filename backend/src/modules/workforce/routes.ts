@@ -5,6 +5,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { refuseDeveloper } from "../../middleware/refuseDeveloper";
 import { requireAnyPermission } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
+import { createLock, listLocks, LOCK_CATEGORIES, voidLock, type NewLock } from "./locks";
 import { exportRosterGrid, rosterGrid, type RosterGridQuery } from "../attendance/roster/grid";
 import { getWorkforceSetting, saveWorkforceSetting, settingHistory, settingView, WORKFORCE_SETTING_KEYS, type WorkforceSettingKey } from "./settings";
 
@@ -49,3 +50,19 @@ workforceRouter.get("/roster/grid/export", rosterReaders, validate({ query: grid
   res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
   res.status(200).send(buffer);
 });
+
+// G3: attendance activity locks (item 7). Directors only (in the service); every lock and void audited.
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "A date as YYYY-MM-DD");
+const lockBody = z.object({
+  effectiveFrom: isoDate,
+  fromDate: isoDate,
+  toDate: isoDate,
+  categories: z.array(z.enum(LOCK_CATEGORIES)).min(1, "Choose at least one activity"),
+  segmentId: z.string().min(1).max(64).nullable().optional(),
+  reason: z.string().trim().min(3, "Say why (a few words)").max(300),
+});
+const voidBody = z.object({ reason: z.string().trim().min(3, "Say why (a few words)").max(300) });
+const idParams = z.object({ id: z.string().min(1).max(64) });
+workforceRouter.get("/locks", async (req, res) => void res.json(await listLocks(viewerOf(req))));
+workforceRouter.post("/locks", validate({ body: lockBody }), async (req, res) => void res.status(201).json(await createLock(viewerOf(req), req.body as NewLock, metaOf(req))));
+workforceRouter.post("/locks/:id/void", validate({ params: idParams, body: voidBody }), async (req, res) => void res.json(await voidLock(viewerOf(req), req.params.id as string, req.body.reason as string, metaOf(req))));

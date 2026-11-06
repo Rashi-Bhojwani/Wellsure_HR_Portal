@@ -1,3 +1,4 @@
+import { assertNotLocked } from "../workforce/locks"; // A-10 G3
 import { notifyEmployee } from "../notifications/notifyEmployee";
 import type { LeaveDayPart, LeaveRequestStatus, Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
@@ -94,6 +95,7 @@ export async function applyForLeave(input: ApplyLeaveInput, viewer: LeaveViewer,
   if (fromDate.getTime() > toDate.getTime()) {
     throw new HttpError(400, "fromDate must not be after toDate.", "INVALID_RANGE");
   }
+  await assertNotLocked("LEAVE", meta.actorUserId, [{ employeeId: targetEmployeeId, from: String(input.fromDate).slice(0, 10), to: String(input.toDate).slice(0, 10) }]); // A-10 G3
   if (fromDate.getTime() === toDate.getTime() && input.fromDayPart !== input.toDayPart) {
     throw new HttpError(400, "A single-day request must use the same day part for from and to.", "INVALID_DAY_PART");
   }

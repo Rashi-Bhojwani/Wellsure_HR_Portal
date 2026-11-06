@@ -1,3 +1,4 @@
+import { assertNotLocked } from "../../workforce/locks"; // A-10 G3
 import type { Prisma, RegularizationReasonCode, RegularizationStatus } from "@prisma/client";
 import { instantToLocalTime } from "@shared/attendance/attlog";
 import { cycleFor } from "../../../lib/attendanceCycle";
@@ -73,6 +74,7 @@ export async function raiseRequest(viewer: Viewer, input: RaiseInput, meta: Meta
   const employeeId = viewer.employeeId;
   const eligible = await requestEligibility(employeeId, input.date);
   if (!eligible.ok) throw new HttpError(409, eligible.reason, "NOT_ELIGIBLE");
+  await assertNotLocked("REGULARIZATION", meta.actorUserId, [{ employeeId, from: input.date, to: input.date }]); // A-10 G3
   const row = await prisma.dailyAttendance.findUniqueOrThrow({ where: { employeeId_date: { employeeId, date: day(input.date) } } });
   const assignment = await assignmentOn(employeeId, day(input.date));
   const misfit = correctionProblem(input, row, input.date, assignment ? shiftDef(assignment) : null, assignment?.policy.nearDuplicateSeconds ?? 120);
