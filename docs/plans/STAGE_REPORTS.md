@@ -153,3 +153,42 @@ refused event-log registration ("Access is denied"); nothing in A-9 touches `bio
 document drive). **Unverified:** the mass email against a real mail server (console driver and a replaced `mailService` only); 500-person performance of segments and
 mass email; the letter void on a letter still rendering (refused by design, not exercised in the browser); a manager in the browser; `check:sensitive-ui` was not run locally
 (it passed in CI).
+
+## A-10: function parity for Workforce Management, G2 to G7 (commits `f0c32c5` … `123181a`)
+
+Plan: `docs/plans/GREYTHR_PARITY_WORKFORCE.md` (G1 `bbd14e6` was done by the earlier session).
+
+**Built, one commit per group:**
+* **G2** `f0c32c5` the roster as a read-only month grid (shift per day, week-offs, holidays, Shift Overrides marked `*`) and its download, from the same sources as the engine.
+* **G3** `ad5ece4` attendance activity locks: a director locks leave apply, corrections, muster entries, Manual Override, Shift Override or the roster for a range of days, from an effective date, for everyone or a segment's people (taken when made). One guard in the six writers; directors not stopped; voided once, never edited or deleted (database).
+* **G4** `540fb58` holidays for some locations only; weekend overrides for chosen people; leave type reviewers (directors name an extra decider for one leave type). One calendar loader feeds the engine, the roster grid and leave day counting.
+* **G5** `15b676d` reject / reinstate swipes with a reason (the engine ignores a rejected one), the day's shift on each swipe, bulk; device sync requests carried to the agent on its heartbeat (server, protocol and agent).
+* **G6** `4d77d02` leavers and leave recalculated to the last working day (no accrual for a month that starts after it; the leaving month untouched; days only).
+* **G7** `78394c0` one Workflow screen (waiting on me / decided by me / waiting on others) with bulk decisions through the existing functions, and `displayLeaveForViewer`.
+* `123181a` a defect found in the browser: the Developer role was offered swipe selection (it holds the device key; the server refuses it). Fixed.
+
+**Tests.** New: `workforce/__tests__/` rosterGrid 6, locks 6, calendar 4, swipesSync 3, leavers 2, workflow 3; agent `sync/__tests__/agent.test.ts` +1; manager reach +1. Every new route:
+Zod, a permission, scope or a director check in the service, Developer and employee refused, an access-scan entry. Area suites run on each commit (attendance + leave 412;
++ tasks, delegations, managers, workforce 525; attendance, biometric, workforce, ingestion 406; leave, workforce, employee 199). Changed assertions: one exact-match
+heartbeat assertion gained the new `resync: null` field (`CHANGED_TESTS.md`).
+
+**Mutation checks (20 run, all caught):** override wins in the grid; lock: leave guard, director exemption, person, effective date; calendar: weekend override, holiday
+location, reviewer decide, reviewer location; swipes: engine ignores rejection, sync done, own-swipe guard (caught after a test was added), agent range end; leavers:
+leaving date ignored, leaving month reversed; workflow: own request in Review, Monitor for team scope, reject without reason.
+
+**Browser walkthrough** (local stack, demo company; desktop light and phone 390 dark; director DEMO001, HR Admin DEMO004, Developer DEMO005, employee DEMO010).
+Director: all nine A-10 pages shown, no sideways scroll, dark background on the phone. HR: the director pages refused (Workforce Settings, Locks, Leave Reviewers);
+Calendar Adjustments, Device Sync, Leavers, Workflow, Roster, Swipes shown. Developer: every A-10 page refused except Employee Swipes (which it reached before A-10);
+after the fix it gets no selection there. Employee: all refused. **Not walked:** a manager (the demo company has none; manager reach is covered by tests).
+
+**CI (run 264 on `78394c0`), per job:** install-lint-typecheck-test success (tests, demo, drift, bundle), sensitive-ui admin success, sensitive-ui employee success,
+latency success (popovers included), attendance-replay success, docker-build success, agent-windows success.
+
+**Decided by me:** decisions 49 to 59 in `DECISIONS_FOR_OWNERS.md` (and the owner review sheet). The one needing an answer: what accrues in the leaving month (57).
+
+**Not verified:** a TEAM-scope viewer of the roster grid; the five non-leave lock writers over their routes (wired, mutation-checked only for leave); weekend overrides
+in leave day counting (not built, decision 53); a real device for the sync request (fake device and fake API only); 500-person timing of the reviewer reach.
+
+**Environment notes for the next session:** the shell exports `DATABASE_URL` (a remote database) and `PORT=3000`; every command here unsets both. `npm run db:seed`
+runs `prisma migrate reset` and is refused by Prisma's AI guard; on an empty local database use `npm run prisma:migrate:deploy` and `npx tsx prisma/seed.ts` instead.
+`pkill -f vite` also kills a running `vitest`: stop the dev stack by its exact process names.
