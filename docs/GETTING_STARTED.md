@@ -649,6 +649,17 @@ It creates `DEMO001` Demo Owner (Super Admin), `DEMO004` Demo HR Admin, `DEMO005
 
 ## 10. Troubleshooting
 
+**Commands go to the wrong database or port in a cloud shell (found 2026-11-06).** Some cloud shells export `DATABASE_URL` (a remote database) and
+`PORT` (another port) that override `backend/.env`. Run `unset DATABASE_URL DATABASE_SSL PORT` first; the Prisma guard refuses a remote database either
+way. The API then listens on 4000, which the frontend expects.
+
+**`npm run db:seed` stops with "Prisma Migrate detected that it was invoked by Claude Code".** The seed script runs `prisma migrate reset`, which drops
+the database, and Prisma refuses that when an AI agent runs it. On a new, empty local database do the same thing without the reset:
+`npm run prisma:migrate:deploy --prefix backend`, then `npx tsx prisma/seed.ts` from `backend/`, then `npm run seed:demo-company --prefix backend`.
+
+**A test run fails all over after you changed the schema.** Never run `prisma generate` (or change backend code) while a test run is going: the running
+tests pick up the new client half-way. Stopping the dev stack with `pkill -f vite` also stops a running `vitest`; stop the stack by its exact process names.
+
 **`REFUSING TO START: another test run is already using this test environment`**
 Two test runs cannot share a test database (and Redis database): the second would drop and rebuild it under the first. The second run refuses
 before touching anything. Wait for the first to finish; the lock is released the moment that run ends or is killed, so there is nothing to clean up.
@@ -753,6 +764,12 @@ reset`, which `npm run db:seed` wraps. It's not a bug; it means the
 action needs a human's explicit go-ahead first.
 
 ---
+
+### New screens since 2026-11-06 (for a walkthrough)
+
+Directors: Admin Tools → Attendance Locks, Leave Reviewers, Workforce Settings; Payroll → Opening Figures, Loans. HR (with the matching switches or keys):
+Admin Tools → Calendar Adjustments, Device Sync Requests, Leavers, Workflow; Shift Roster shows the month grid; Employee Swipes has Reject / Reinstate.
+Employees: Salary → YTD Reports, Salary Revision, Loans and Advances. Nothing on these screens is preset: every setting starts Not set.
 
 ## 11. How the project is laid out
 
