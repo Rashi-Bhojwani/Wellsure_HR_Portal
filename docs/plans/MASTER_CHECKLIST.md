@@ -1,5 +1,45 @@
 # Master build checklist (Stages 0–8 + close-out)
 
+## REMAINING WORK (written 2026-11-06 by the session continuing Session A, before any further code)
+
+Read first. Status: DONE / OPEN / PARTIAL / **UNDEFINED** (no plan file on any branch defines it: it is not guessed, see note).
+"Deps" = what must exist first. Order of work = the owner's message of 2026-11-06.
+
+| Item | What it is | Status | Deps |
+|---|---|---|---|
+| Step 0.2 checks | DEMO bank rehearsal, sensitive-ui split + planted leak, D-31, D-34, owner review sheet, CI per job, 390 dark walkthrough | DONE as "Closing the Stage 5b gaps A1–A8" below (`1647597`…`d883a13` and the A1–A8 commits); re-verified in this session, see the Step 0.2 note | — |
+| A-10 G1 | status catalogue, override allowed statuses, muster totals | DONE `bbd14e6` | — |
+| A-10 G2 | roster month grid + export | OPEN | G1 |
+| A-10 G3 | attendance activity locks (directors) | OPEN | G1 |
+| A-10 G4 | weekend overrides, location-limited holidays, leave type reviewers | OPEN | engine `compute.ts` |
+| A-10 G5 | swipe reject/reinstate, shift column, bulk; agent sync requests | OPEN | — |
+| A-10 G6 | leavers list, leave recalculated to the leaving date | OPEN | — |
+| A-10 G7 | workflow Review / Monitor, bulk decisions, `displayLeaveForViewer` | OPEN | — |
+| A-1 | **UNDEFINED** in every plan file and on every branch | not started | owners to define |
+| A-2 | HR's import rules (named in `GREYTHR_PARITY_EMPLOYEE_ADMIN.md`; no plan text beyond the name) | **UNDEFINED in detail** | owners to define |
+| A-3 | opening figures (owner's message: screens + director-entered import of opening balances and tax already deducted this year, nothing preloaded) + letter figures from the structure (`letterFigureFields()` hook) | OPEN | P7-2/P7-3 (built), tax year |
+| A-4 | **UNDEFINED** | not started | owners to define |
+| A-5 | regularization rules and module (named in `GREYTHR_PARITY_WORKFORCE.md`; no plan text) | **UNDEFINED in detail** | owners to define |
+| A-6 | **UNDEFINED** | not started | owners to define |
+| A-7 | **UNDEFINED** | not started | owners to define |
+| A-8 | **UNDEFINED** (the Stage 5b "A8 bank payments are manual" is DONE; it is not this item) | not started | owners to define |
+| P7-2 | declarations with proofs | DONE (Stage 7 report) | — |
+| P7-3 | TDS projection, regimes side by side | PARTIAL: TDS in the run + IT Statement done; YTD reports, payslip YTD column, Salary Revision page, revision letters, offer-letter figures open | P7-2 |
+| P7-4 | loans and advances (incl. Principal / Interest parts) | OPEN | input heads D-31 |
+| P7-5 | reimbursements | OPEN | — |
+| P7-6 | off-cycle runs, full and final settlement (incl. held pay) | OPEN | P7-4, P7-5 |
+| P7-7 | Form 16 data (DRAFT), quarterly return data | OPEN | P7-3, A-3 |
+| Stage 5.6 | loans if missing | = P7-4 | — |
+| Stage 6 | internal reports + directors-only query builder "using the layouts in `docs/plans/PARITY_COVERAGE.md`" | **BLOCKED: `PARITY_COVERAGE.md` does not exist on any branch** | owners / a session that wrote it |
+| Stage 8 | attendance and salary file readers from `docs/samples`, layout setup, parallel-run kit | **BLOCKED in part: `docs/samples/` is not on this branch** (only on `peeps/foundation`, which this work may not touch) | samples on this branch |
+| Stage 9 parity | Tier 1 MISSING items of `PARITY_COVERAGE.md` | **BLOCKED (file missing)** | as Stage 6 |
+| Close-out | `PORTAL_READY_REPORT.md`, `GETTING_STARTED.md`, `FIRST_REAL_PAYROLL_RUN.md` | OPEN | everything above |
+
+**Note on the undefined items.** The owner's message says "A-4, then A-7, then A-2, then A-3 …, then A-1, A-5, A-6 and A-8, each exactly as your plan
+files define them". Searched: every file under `docs/` on this branch and on every remote branch (`git grep`). Only A-2, A-3 and A-5 are named, and only by name.
+Defining them here would be guessing an owner decision, so they are left UNDEFINED and the work carries on with the next defined item.
+
+
 Branch `feat/hr-payroll-separation`. Tick an item only when it is **done and verified**, with the commit hash. A new
 session reads this file and `STAGE_REPORTS.md`, then continues at the first unticked item. No real data in this file.
 
