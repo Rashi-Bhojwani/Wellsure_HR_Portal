@@ -10,8 +10,8 @@ Read first. Status: DONE / OPEN / PARTIAL / **UNDEFINED** (no plan file on any b
 | Step 0.2 checks | DEMO bank rehearsal, sensitive-ui split + planted leak, D-31, D-34, owner review sheet, CI per job, 390 dark walkthrough | DONE as "Closing the Stage 5b gaps A1–A8" below (`1647597`…`d883a13` and the A1–A8 commits); re-verified in this session, see the Step 0.2 note | — |
 | A-10 G1 | status catalogue, override allowed statuses, muster totals | DONE `bbd14e6` | — |
 | A-10 G2 | roster month grid + export | DONE `f0c32c5` (6 tests, override mutant caught; not verified: a TEAM-scope viewer, browser walk pending at A-10 end) | G1 |
-| A-10 G3 | attendance activity locks (directors) | OPEN | G1 |
-| A-10 G4 | weekend overrides, location-limited holidays, leave type reviewers | OPEN | engine `compute.ts` |
+| A-10 G3 | attendance activity locks (directors) | DONE `ad5ece4` (4 mutants caught; the six writers wired, only leave apply exercised over a route) | G1 |
+| A-10 G4 | weekend overrides, location-limited holidays, leave type reviewers | DONE `540fb58` (4 mutants caught; leave day counting does not read weekend overrides) | engine `compute.ts` |
 | A-10 G5 | swipe reject/reinstate, shift column, bulk; agent sync requests | OPEN | — |
 | A-10 G6 | leavers list, leave recalculated to the leaving date | OPEN | — |
 | A-10 G7 | workflow Review / Monitor, bulk decisions, `displayLeaveForViewer` | OPEN | — |
