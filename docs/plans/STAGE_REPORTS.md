@@ -208,3 +208,25 @@ confirmed; the declaration and proof windows set; `TDS_MODE` switched to PROJECT
 
 **Still open from P7-3, built next in this order:** YTD Reports, the payslip YTD column (new payslips only), the employee's Salary Revision page, revision letters and
 offer-letter figures (issued by directors only). **Not modelled (owners' answer needed):** marginal relief (decision 45), HRA, LTA and perquisites.
+
+## A-3 (opening figures), the rest of P7-3, and P7-4 (loans) — commits `0280f85`, `7ec1d5a`
+
+**A-3** (plan `docs/plans/A3_OPENING_FIGURES.md`, `0280f85`): opening figures (before this system; previous employer this year) entered or imported by a director,
+append-only, confirmed as a whole per year by a different director (`TAX_OPENING`, bound to a hash); the year-to-date reader adds confirmed figures only; a PROJECTED
+run names the gap and works out no TDS until confirmed. Screen: Payroll → Opening Figures (directors). 5 mutants caught (one after a test was added for the hash binding).
+
+**P7-3 rest** (`7ec1d5a`): payslips published from now carry year to date per line; employee YTD Reports and Salary Revision pages (own only; Developer refused);
+revision and offer letters print the salary's own figures (directors only; the pay-free check refuses them for anyone else).
+
+**P7-4** (plan `docs/plans/P7_4_LOANS.md`, `7ec1d5a`): loan types (Not set until every value is chosen), a person's own request or a director's entry, a two-director
+sanction (never one's own), an exact schedule, money only through payroll runs (disbursement next run, instalments due in their month), immutable records, statements
+read from what happened, maker-checker changes (API). Screens: employee Loans and Advances; directors' Payroll → Loans.
+
+**Tests:** `taxOpenings` 5, `loans` 5 (schedule vs an independent BigInt model over 300 loans; a loan through a real run and finalise), `letterPayFigures` 4, publish test
+extended (YTD line by line), `taxDeclarations` extended (the opening-figures gate). Mutants: 5 (A-3) + 4 (loans) + 1 (letters) + area checks, all caught.
+Changed assertions: `CHANGED_TESTS.md` (none weakened).
+
+**Not built:** loan perquisite (needs the owners' rule), the loan shortfall rule (decision 66), screens for loan changes and loan types (API only; the directors' page
+lists what each type lacks), line-by-line opening figures (needs greytHR's layout). **Not walked in a browser:** the YTD Reports, Salary Revision and the two Loans
+pages (built after the last walk; typecheck, lint, route tests and bundle passed). **Process note:** one full-suite run was spoiled by regenerating the Prisma client
+while it ran; it was run again with no edits (see the next entry).
