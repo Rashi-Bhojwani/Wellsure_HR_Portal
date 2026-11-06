@@ -80,3 +80,19 @@ How to answer: reply with the row number and "keep" or the change you want.
 | 46 | The sections people can declare under (with their limits) are entered by you inside the tax year. | They could be kept apart from the year. | Keep. |
 | 47 | The income tax switch matters to a run only when it is on. | You could be made to choose on or off before a first run. | Keep. |
 | 48 | The IT Statement shows paid months from finished runs and projects the rest, marked as a projection and as a draft until the year is confirmed. | | Keep. |
+
+## A-10 (attendance and leave tools)
+
+| # | What was chosen | If you answer differently | Recommendation |
+|---|---|---|---|
+| 49 | Directors are not stopped by an attendance lock. | Locks could stop directors too. | Keep. |
+| 50 | A lock for a segment takes its people at the moment the lock is made. | It could follow the segment as it changes. | Keep (what was locked stays clear). |
+| 51 | A roster change that starts before a locked range ends is refused. | Only rosters starting inside the range could be refused. | Keep. |
+| 52 | A holiday for some locations goes to whoever works at one of them that day. | It could follow a home branch. | Keep. |
+| 53 | Weekend overrides change attendance only; leave counting is unchanged. | Leave counting could follow each person's week-offs. | Keep for now. |
+| 54 | A leave reviewer is an extra decider for one leave type; they need the Approve leave key. | A reviewer could replace the manager. | Keep. |
+| 55 | Rejecting a swipe needs the Biometric devices key and a reason; the swipe is kept, never used. | HR's correction key could be the one. | Keep. |
+| 56 | A device sync request is done when the agent has re-queued the punches. | It could wait for the server to store them. | Keep. |
+| 57 | Leavers: no leave accrues for a month that starts after the last working day; the leaving month is untouched. | Tell us the rule for the leaving month. | **Needs your answer** for the leaving month. |
+| 58 | Only company-wide viewers see "Waiting on others". | Managers could monitor their teams. | Keep. |
+| 59 | Leave type and reason are shown as entered; one function is ready for a privacy rule. | Name the leave types to hide. | Tell us when the privacy rule is decided. |

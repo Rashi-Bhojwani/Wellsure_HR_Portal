@@ -21,6 +21,7 @@ import {
 import { useAuth } from '../../../hooks/useAuth';
 import { apiErrorMessage } from '../../../lib/apiError';
 import { space } from '../../../theme/tokens';
+import { DEVELOPER_ROLE_CODE } from '@shared/constants/sensitiveData';
 
 const { Text } = Typography;
 const REASON_MIN = 3;
@@ -58,7 +59,8 @@ export function EmployeeSwipesPage() {
     placeholderData: keepPreviousData,
   });
   // A-10 G5: reject / reinstate chosen swipes with a reason (Biometric devices key). Never one's own; the days are worked out again.
-  const canDecide = hasPermission('attendance.devices.manage');
+  // The Developer role holds the device key to operate devices, but the server refuses it any decision on a person's punches: offer none.
+  const canDecide = hasPermission('attendance.devices.manage') && !(user?.roleCodes ?? []).includes(DEVELOPER_ROLE_CODE);
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<string[]>([]);
   const [deciding, setDeciding] = useState<'REJECT' | 'REINSTATE' | null>(null);

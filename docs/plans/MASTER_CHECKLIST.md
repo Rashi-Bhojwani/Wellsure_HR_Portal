@@ -12,9 +12,9 @@ Read first. Status: DONE / OPEN / PARTIAL / **UNDEFINED** (no plan file on any b
 | A-10 G2 | roster month grid + export | DONE `f0c32c5` (6 tests, override mutant caught; not verified: a TEAM-scope viewer, browser walk pending at A-10 end) | G1 |
 | A-10 G3 | attendance activity locks (directors) | DONE `ad5ece4` (4 mutants caught; the six writers wired, only leave apply exercised over a route) | G1 |
 | A-10 G4 | weekend overrides, location-limited holidays, leave type reviewers | DONE `540fb58` (4 mutants caught; leave day counting does not read weekend overrides) | engine `compute.ts` |
-| A-10 G5 | swipe reject/reinstate, shift column, bulk; agent sync requests | OPEN | — |
-| A-10 G6 | leavers list, leave recalculated to the leaving date | OPEN | — |
-| A-10 G7 | workflow Review / Monitor, bulk decisions, `displayLeaveForViewer` | OPEN | — |
+| A-10 G5 | swipe reject/reinstate, shift column, bulk; agent sync requests | DONE `15b676d` (4 mutants caught; agent re-read tested with the fake device) | — |
+| A-10 G6 | leavers list, leave recalculated to the leaving date | DONE `4d77d02` (+ routes in `78394c0`; 2 mutants caught; leaving-month rule open, D-57) | — |
+| A-10 G7 | workflow Review / Monitor, bulk decisions, `displayLeaveForViewer` | DONE `78394c0` (3 mutants caught; manager reach case added) | — |
 | A-1 | **UNDEFINED** in every plan file and on every branch | not started | owners to define |
 | A-2 | HR's import rules (named in `GREYTHR_PARITY_EMPLOYEE_ADMIN.md`; no plan text beyond the name) | **UNDEFINED in detail** | owners to define |
 | A-3 | opening figures (owner's message: screens + director-entered import of opening balances and tax already deducted this year, nothing preloaded) + letter figures from the structure (`letterFigureFields()` hook) | OPEN | P7-2/P7-3 (built), tax year |
