@@ -192,3 +192,19 @@ in leave day counting (not built, decision 53); a real device for the sync reque
 **Environment notes for the next session:** the shell exports `DATABASE_URL` (a remote database) and `PORT=3000`; every command here unsets both. `npm run db:seed`
 runs `prisma migrate reset` and is refused by Prisma's AI guard; on an empty local database use `npm run prisma:migrate:deploy` and `npx tsx prisma/seed.ts` instead.
 `pkill -f vite` also kills a running `vitest`: stop the dev stack by its exact process names.
+
+## CHECKPOINT 2 (the TDS checkpoint), written 2026-11-06, then continued as the owners asked
+
+**Where income tax stands.** The tax year is owner-entered (every value with a source note and an effective-from date, confirmed by a different director); the
+engine is exact and proved against an independent fraction model; declarations, proofs and directors' verification work; a run with `TDS_MODE = PROJECTED` works out
+each person's TDS with its full working and pins the year (a Placeholder year keeps the run a test). **New since the Stage 7 report (A-3, `0280f85`):** opening
+figures (pay and tax before this system, and from a previous employer) are entered or imported by a director and confirmed by a different director; the
+year-to-date reader adds them; and **a PROJECTED run now names the gap and works out no TDS until the year's opening figures are confirmed** (a company that starts on
+the first day of the year confirms an empty year on purpose).
+
+**What blocks real income tax today (all owner actions, nothing for the build):** the tax year's values (slabs, standard deduction, rebate, surcharge, cess, default
+regime, rounding, minimum monthly TDS, how one-offs are taxed, the section catalogue) entered and confirmed; each earning head's "taxable" answer; the opening figures
+confirmed; the declaration and proof windows set; `TDS_MODE` switched to PROJECTED by a director. Form 16 and the quarterly return are not built (P7-7, DRAFT only).
+
+**Still open from P7-3, built next in this order:** YTD Reports, the payslip YTD column (new payslips only), the employee's Salary Revision page, revision letters and
+offer-letter figures (issued by directors only). **Not modelled (owners' answer needed):** marginal relief (decision 45), HRA, LTA and perquisites.
