@@ -13,6 +13,7 @@ import { ApprovalBanner, CardGrid, DataTable, FormGroupTitle, PageHeader, Panel,
 import { fs, radius, space, v } from "../../../theme/tokens";
 import { ConfirmBar, LeftOutList } from "./previewParts";
 import { RosterGrid } from "./RosterGrid";
+import { RosterMonthPanel } from "./RosterMonthPanel";
 
 interface Values extends TargetValues {
   start?: dayjs.Dayjs;
@@ -72,6 +73,7 @@ export function ShiftRosterPage() {
     <>
       <PageHeader title="Shift Roster" subtitle="Give many people a shift from a future date, or a rotation that repeats" />
       <Stack>
+        <RosterMonthPanel />
         <Panel title="Build a roster" subtitle="Preview first; nothing is written until you confirm.">
           <Form
             form={form}

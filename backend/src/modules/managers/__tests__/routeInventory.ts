@@ -677,6 +677,8 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/workforce/settings/:key": everyone("a company setting's current value — no person's data"),
   "GET /api/workforce/settings/:key/history": adminInService("director only (route)"),
   "PUT /api/workforce/settings/:key": adminInService("director only (saveWorkforceSetting), audited"),
+  "GET /api/workforce/roster/grid": admin,
+  "GET /api/workforce/roster/grid/export": admin,
   // A-10 — end
 };
 

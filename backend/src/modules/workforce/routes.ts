@@ -5,6 +5,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { refuseDeveloper } from "../../middleware/refuseDeveloper";
 import { requireAnyPermission } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
+import { exportRosterGrid, rosterGrid, type RosterGridQuery } from "../attendance/roster/grid";
 import { getWorkforceSetting, saveWorkforceSetting, settingHistory, settingView, WORKFORCE_SETTING_KEYS, type WorkforceSettingKey } from "./settings";
 
 // A-10 (docs/plans/GREYTHR_PARITY_WORKFORCE.md). Every route: signed in, never the Developer role, validated, a permission, scope in the service where a person's
@@ -33,3 +34,18 @@ workforceRouter.get("/settings/:key/history", validate({ params: keyParams }), a
   res.json({ history: await settingHistory(req.params.key as WorkforceSettingKey) });
 });
 workforceRouter.put("/settings/:key", validate({ params: keyParams, body: saveBody }), async (req, res) => void res.json(await saveWorkforceSetting(req.params.key as WorkforceSettingKey, req.body.value, req.body.reason, viewerOf(req), metaOf(req))));
+
+// G2: the roster month grid (item 4) and its export. Scope in the service (rosterGrid → visibleIds).
+const rosterReaders = requireAnyPermission("attendance.view", "attendance.roster.manage");
+const gridQuery = z.object({
+  cycleStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  locationId: z.string().min(1).max(64).optional(),
+  departmentId: z.string().min(1).max(64).optional(),
+});
+workforceRouter.get("/roster/grid", rosterReaders, validate({ query: gridQuery }), async (req, res) => void res.json(await rosterGrid(viewerOf(req), req.query as RosterGridQuery)));
+workforceRouter.get("/roster/grid/export", rosterReaders, validate({ query: gridQuery }), async (req, res) => {
+  const { filename, buffer } = await exportRosterGrid(viewerOf(req), req.query as RosterGridQuery);
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.status(200).send(buffer);
+});
