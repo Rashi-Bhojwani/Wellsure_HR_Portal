@@ -1,4 +1,5 @@
 import { loadCalendar } from "../workforce/calendar"; // A-10 G4
+import { rejectedPunchIds } from "../workforce/swipes"; // A-10 G5
 import { Prisma, type DailyAttendance } from "@prisma/client";
 import { isWeekOff, type WeekOffRule } from "@shared/utils/attendance";
 import { businessToday } from "../../lib/businessDate";
@@ -180,6 +181,10 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
   const punches = await prisma.rawPunch.findMany({
     where: { employeeId: { in: employeeIds }, punchedAt: { gte: new Date(dayStartMs(addDays(from, -1))), lt: new Date(dayStartMs(addDays(last, 2))) } },
     select: { id: true, employeeId: true, punchedAt: true, flag: true, flagResolution: { select: { decision: true } } },
+  }).then(async (rows) => {
+    // A-10 G5: a swipe rejected by HR (its latest decision is REJECT) is never used.
+    const rejected = await rejectedPunchIds(rows.map((r) => r.id));
+    return rejected.size ? rows.filter((r) => !rejected.has(r.id)) : rows;
   });
 
   // A finalised cycle is frozen: no day inside it is written, whether or not the day exists yet. (Days that do exist are

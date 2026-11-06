@@ -1,3 +1,4 @@
+import { latestDecisions, shiftCodesFor } from "../../workforce/swipes"; // A-10 G5
 import { Prisma } from "@prisma/client";
 import { instantToLocalTime } from "@shared/attendance/attlog";
 import { businessToday } from "../../../lib/businessDate";
@@ -102,6 +103,11 @@ async function decorate(rows: Row[]) {
     prisma.device.findMany({ where: { id: { in: deviceIds } }, select: { id: true, name: true, serialNumber: true, location: { select: { name: true } } } }),
   ]);
   const code = new Map(employees.map((e) => [e.id, e.employeeCode]));
+  // A-10 G5: the day's shift and the latest reject/reinstate decision.
+  const [shifts, decisions] = await Promise.all([
+    shiftCodesFor(rows.filter((r) => r.employee_id).map((r) => ({ employeeId: r.employee_id!, date: iso(r.business_date) }))),
+    latestDecisions(rows.map((r) => r.id)),
+  ]);
   const device = new Map(devices.map((d) => [d.id, d]));
   return rows.map((r) => ({
     id: r.id,
@@ -127,6 +133,9 @@ async function decorate(rows: Row[]) {
     decisionReason: r.reason,
     /** Whether a computed day used this punch (it can be unused: a duplicate, discarded, flagged, outside every window). */
     used: r.used,
+    shift: r.employee_id ? (shifts.get(`${r.employee_id}|${iso(r.business_date)}`) ?? null) : null,
+    rejected: decisions.get(r.id)?.action === "REJECT",
+    rejectReason: decisions.get(r.id)?.action === "REJECT" ? decisions.get(r.id)!.reason : null,
   }));
 }
 
@@ -165,6 +174,8 @@ export async function exportSwipes(viewer: Viewer, q: SwipeQuery) {
     { key: "flag", header: "Flag", width: 24 },
     { key: "decision", header: "Decision on the flag", width: 14 },
     { key: "used", header: "Used in a computed day", width: 12 },
+    { key: "shift", header: "Shift that day", width: 12 }, // A-10 G5
+    { key: "rejectedText", header: "Rejected (reason)", width: 28 },
   ];
   const filters = [
     `${from} to ${to}`,
@@ -180,7 +191,7 @@ export async function exportSwipes(viewer: Viewer, q: SwipeQuery) {
     {
       name: "Employee Swipes",
       columns,
-      rows: entries.map((e) => ({ ...e, flag: e.flagLabel ?? "", decision: e.decision ?? "", used: e.employeeId ? (e.used ? "Yes" : "No") : "n/a (no employee)" })),
+      rows: entries.map((e) => ({ ...e, flag: e.flagLabel ?? "", decision: e.decision ?? "", used: e.employeeId ? (e.used ? "Yes" : "No") : "n/a (no employee)", shift: e.shift ?? "", rejectedText: e.rejected ? `Rejected: ${e.rejectReason ?? ""}` : "" })),
       footer: [
         `Raw punches exactly as received, ${entries.length} row${entries.length === 1 ? "" : "s"}. Filters: ${filters.join("; ")}.`,
         viewer.dataScope === "ALL" ? "Company-wide, including punches that match no employee." : "Your team only.",

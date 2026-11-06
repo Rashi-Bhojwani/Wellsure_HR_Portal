@@ -145,6 +145,22 @@ describe("reading and sending", () => {
     expect(api.accepted.at(-1)!.lines).toHaveLength(2); // both sent; one was a duplicate
   });
 
+  it("A-10 G5: a sync request makes the agent read the device again for those days only, once, and report it done", async () => {
+    const records = [rec("8", "2026-10-02 18:00:00"), rec("9", "2026-10-03 18:00:00"), rec("10", "2026-10-05 18:00:00")];
+    const { api, serial, make } = await setup({ devices: [{ serial: "AEXY225060969", records }] });
+    const agent = make();
+    await turn(agent, [serial]);
+    const before = api.accepted.length;
+    api.devices = [serverDevice(serial, { resync: { requestId: "req1", from: "2026-10-03", to: "2026-10-04" } })];
+    await turn(agent, [serial]);
+    expect(api.accepted.length).toBe(before + 1);
+    expect(api.accepted.at(-1)!.lines.map((l) => (parseAttlogLine(l) as { deviceUserId: string }).deviceUserId)).toEqual(["9"]); // only the asked days
+    expect(agent.report().devices[0]!.resyncDone).toBe("req1");
+    await turn(agent, [serial]); // the server has not yet cleared it: not read again
+    expect(api.accepted.length).toBe(before + 1);
+    expect(api.storedFor(serial)).toHaveLength(3);
+  });
+
   it("2,500 new punches go as batches of at most 1,000, in order", async () => {
     const records = Array.from({ length: 2_500 }, (_, i) => rec(String((i % 120) + 2), `2026-10-0${1 + Math.floor(i / 400)} ${String(8 + Math.floor((i % 400) / 60)).padStart(2, "0")}:${String(i % 60).padStart(2, "0")}:00`));
     const { api, serial, make } = await setup({ devices: [{ serial: "AEXY225060969", records }] });

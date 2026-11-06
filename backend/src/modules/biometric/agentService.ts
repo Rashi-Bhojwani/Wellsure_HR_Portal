@@ -1,3 +1,4 @@
+import { markSyncDone, pendingSyncFor } from "../workforce/swipes"; // A-10 G5
 import type { BiometricAgent, Prisma } from "@prisma/client";
 import type { AgentHeartbeatResponse } from "@shared/attendance/agentProtocol";
 import { getDeviceHealthThresholds } from "../../lib/deviceHealthSettings";
@@ -61,6 +62,12 @@ export async function heartbeat(agent: BiometricAgent, body: AgentHeartbeatBody,
       }),
     ];
   });
+  // A-10 G5: a sync request the agent reports finished is marked done (only a pending one of that same device).
+  for (const report of body.devices) {
+    const device = bySerial.get(report.device);
+    if (device && typeof report.resyncDone === "string") await markSyncDone(device.id, report.resyncDone);
+  }
+  const pendingSync = await pendingSyncFor(assigned.map((d) => d.id));
   await prisma.$transaction([
     prisma.biometricAgent.update({ where: { id: agent.id }, data: { version: body.version, host: body.host, lastHeartbeatAt: now, lastHeartbeat: body as unknown as Prisma.InputJsonValue } }),
     ...deviceUpdates,
@@ -77,6 +84,7 @@ export async function heartbeat(agent: BiometricAgent, body: AgentHeartbeatBody,
       retentionDays: d.retentionDays,
       retentionRecords: d.retentionRecords,
       isSimulated: d.isSimulated,
+      resync: pendingSync.get(d.id) ?? null,
     })),
     thresholds,
   };

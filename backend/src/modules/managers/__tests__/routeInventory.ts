@@ -690,6 +690,10 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/workforce/leave-reviewers": adminInService("director only (listReviewers)"),
   "POST /api/workforce/leave-reviewers": adminInService("director only (createReviewer), audited"),
   "POST /api/workforce/leave-reviewers/:id/void": adminInService("director only (voidReviewer), audited"),
+  "POST /api/workforce/swipes/decide": admin,
+  "GET /api/workforce/sync-requests": admin,
+  "POST /api/workforce/sync-requests": admin,
+  "POST /api/workforce/sync-requests/:id/cancel": admin,
   // A-10 — end
 };
 

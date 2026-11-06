@@ -88,3 +88,19 @@ export const listReviewers = async () => (await apiClient.get<{ reviewers: Revie
 export const createReviewer = async (body: { leaveTypeId: string; reviewerEmployeeId: string; locationId?: string | null; departmentId?: string | null; reason: string }) =>
   (await apiClient.post("/api/workforce/leave-reviewers", body)).data;
 export const voidReviewer = async (id: string, reason: string) => (await apiClient.post(`/api/workforce/leave-reviewers/${id}/void`, { reason })).data;
+
+// G5: swipe decisions and device sync requests.
+export const decideSwipes = async (body: { punchIds: string[]; action: "REJECT" | "REINSTATE"; reason: string }) => (await apiClient.post<{ decided: number }>("/api/workforce/swipes/decide", body)).data;
+export interface SyncRequestView {
+  id: string;
+  device: string;
+  fromDate: string;
+  toDate: string;
+  reason: string;
+  status: "PENDING" | "DONE" | "CANCELLED";
+  requestedAt: string;
+  finishedAt: string | null;
+}
+export const listSyncRequests = async () => (await apiClient.get<{ requests: SyncRequestView[] }>("/api/workforce/sync-requests")).data.requests;
+export const requestSync = async (body: { deviceId: string; fromDate: string; toDate: string; reason: string }) => (await apiClient.post<SyncRequestView>("/api/workforce/sync-requests", body)).data;
+export const cancelSync = async (id: string) => (await apiClient.post<SyncRequestView>(`/api/workforce/sync-requests/${id}/cancel`)).data;

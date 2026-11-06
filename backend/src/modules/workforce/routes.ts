@@ -8,6 +8,7 @@ import { validate } from "../../middleware/validate";
 import { prisma } from "../../lib/prisma";
 import { createWeekendOverride, holidayLocations, listWeekendOverrides, setHolidayLocations, voidWeekendOverride, type NewWeekendOverride } from "./calendar";
 import { createReviewer, listReviewers, voidReviewer } from "./reviewers";
+import { cancelSync, decideSwipes, listSync, MAX_SWIPE_BATCH, requestSync } from "./swipes";
 import { createLock, listLocks, LOCK_CATEGORIES, voidLock, type NewLock } from "./locks";
 import { exportRosterGrid, rosterGrid, type RosterGridQuery } from "../attendance/roster/grid";
 import { getWorkforceSetting, saveWorkforceSetting, settingHistory, settingView, WORKFORCE_SETTING_KEYS, type WorkforceSettingKey } from "./settings";
@@ -103,3 +104,16 @@ const reviewerBody = z.object({
 workforceRouter.get("/leave-reviewers", async (req, res) => void res.json(await listReviewers(viewerOf(req))));
 workforceRouter.post("/leave-reviewers", validate({ body: reviewerBody }), async (req, res) => void res.status(201).json(await createReviewer(viewerOf(req), req.body, metaOf(req))));
 workforceRouter.post("/leave-reviewers/:id/void", validate({ params: idParams, body: voidBody }), async (req, res) => void res.json(await voidReviewer(viewerOf(req), req.params.id as string, req.body.reason as string, metaOf(req))));
+
+// G5: reject / reinstate swipes (attendance.devices.manage, scope in the service) and device sync requests.
+const swipeDecideBody = z.object({
+  punchIds: z.array(z.string().min(1).max(64)).min(1).max(MAX_SWIPE_BATCH),
+  action: z.enum(["REJECT", "REINSTATE"]),
+  reason: z.string().trim().min(3, "Say why (a few words)").max(300),
+});
+const canDevices = requireAnyPermission("attendance.devices.manage");
+workforceRouter.post("/swipes/decide", canDevices, validate({ body: swipeDecideBody }), async (req, res) => void res.json(await decideSwipes(viewerOf(req), req.body, metaOf(req))));
+const syncBody = z.object({ deviceId: z.string().min(1).max(64), fromDate: isoDate, toDate: isoDate, reason: z.string().trim().min(3, "Say why (a few words)").max(300) });
+workforceRouter.get("/sync-requests", canDevices, async (req, res) => void res.json(await listSync(viewerOf(req))));
+workforceRouter.post("/sync-requests", canDevices, validate({ body: syncBody }), async (req, res) => void res.status(201).json(await requestSync(viewerOf(req), req.body, metaOf(req))));
+workforceRouter.post("/sync-requests/:id/cancel", canDevices, validate({ params: idParams }), async (req, res) => void res.json(await cancelSync(viewerOf(req), req.params.id as string, metaOf(req))));

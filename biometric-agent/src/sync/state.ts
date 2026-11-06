@@ -27,6 +27,8 @@ export interface DeviceState {
   retentionLogged: RetentionState | null;
   logNearlyFullLogged: boolean;
   driftLogged: boolean;
+  /** A-10 G5: the last server sync request finished for this device. */
+  resyncDone?: string | null;
 }
 
 export interface AgentState {

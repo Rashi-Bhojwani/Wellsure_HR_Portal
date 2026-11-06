@@ -2011,6 +2011,7 @@ model Device {
   batches   IngestionBatch[]
   incidents DeviceIncident[]
 
+  syncRequests DeviceSyncRequest[] // A-10 G5
   @@index([agentId])
   @@map("devices")
 }
@@ -2112,6 +2113,7 @@ model RawPunch {
   flag         PunchFlag?
 
   flagResolution PunchFlagResolution?
+  swipeDecisions SwipeDecision[] // A-10 G5
 
   @@unique([deviceId, deviceUserId, punchedAt])
   @@index([employeeId, punchedAt])
@@ -3839,6 +3841,48 @@ model LeaveTypeReviewer {
 
   @@index([reviewerEmployeeId])
   @@map("leave_type_reviewers")
+}
+// G5: swipe decisions (append-only; the latest per punch is in force) and device sync requests.
+enum SwipeDecisionAction {
+  REJECT
+  REINSTATE
+}
+
+model SwipeDecision {
+  id              String              @id @default(cuid())
+  seq             Int                 @unique @default(autoincrement())
+  punchId         String              @map("punch_id")
+  punch           RawPunch            @relation(fields: [punchId], references: [id], onDelete: Restrict)
+  action          SwipeDecisionAction
+  reason          String
+  decidedByUserId String              @map("decided_by_user_id")
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([punchId, seq])
+  @@map("swipe_decisions")
+}
+
+enum DeviceSyncStatus {
+  PENDING
+  DONE
+  CANCELLED
+}
+
+model DeviceSyncRequest {
+  id                String           @id @default(cuid())
+  deviceId          String           @map("device_id")
+  device            Device           @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  fromDate          DateTime         @map("from_date") @db.Date
+  toDate            DateTime         @map("to_date") @db.Date
+  reason            String
+  status            DeviceSyncStatus @default(PENDING)
+  requestedByUserId String           @map("requested_by_user_id")
+  requestedAt       DateTime         @default(now()) @map("requested_at") @db.Timestamptz(3)
+  finishedAt        DateTime?        @map("finished_at") @db.Timestamptz(3)
+  cancelledByUserId String?          @map("cancelled_by_user_id")
+
+  @@index([deviceId, status])
+  @@map("device_sync_requests")
 }
 // ── A-10 — end ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
