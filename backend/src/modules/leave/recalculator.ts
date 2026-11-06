@@ -45,7 +45,7 @@ async function accrualEnabledTypes() {
 }
 
 async function diffForEmployee(
-  employee: { id: string; dateOfJoining: Date },
+  employee: { id: string; dateOfJoining: Date; lastWorkingDate?: Date | null },
   types: Awaited<ReturnType<typeof accrualEnabledTypes>>,
   fromMonth: Date,
   throughMonth: Date,
@@ -75,7 +75,9 @@ async function diffForEmployee(
 
     for (let month = fromMonth; month.getTime() <= throughMonth.getTime(); month = addCalendarMonths(month, 1)) {
       const monthKey = month.toISOString().slice(0, 10);
-      const shouldBeCredited = isEligibleForAccrualMonth(employee.dateOfJoining, type.policy, month);
+      // A-10 G6: nothing accrues for a month that starts after the last working day (the leaving month itself is not changed here).
+      const afterLeaving = !!employee.lastWorkingDate && month.getTime() > employee.lastWorkingDate.getTime();
+      const shouldBeCredited = !afterLeaving && isEligibleForAccrualMonth(employee.dateOfJoining, type.policy, month);
       const existing = existingByMonth.get(monthKey);
 
       if (shouldBeCredited && !existing) {
@@ -91,7 +93,7 @@ async function diffForEmployee(
 async function resolveEmployees(employeeIds: string[]) {
   const employees = await prisma.employee.findMany({
     where: { id: { in: employeeIds } },
-    select: { id: true, employeeCode: true, dateOfJoining: true, nameHistory: { where: inForceOn(), select: { fullName: true } } },
+    select: { id: true, employeeCode: true, dateOfJoining: true, lastWorkingDate: true, nameHistory: { where: inForceOn(), select: { fullName: true } } },
   });
   if (employees.length !== employeeIds.length) {
     throw new HttpError(404, "One or more employees were not found.", "NOT_FOUND");
@@ -99,8 +101,12 @@ async function resolveEmployees(employeeIds: string[]) {
   return employees;
 }
 
-export async function previewRecalculation(employeeIds: string[], fromDate: string, _meta: ActorMeta): Promise<RecalcEmployeeResult[]> {
-  const employees = await resolveEmployees(employeeIds);
+/** A-10 G6: a separation's last working day can stand in for the employee's (not set on the employee until the separation completes). */
+type LeavingDates = Map<string, Date>;
+const withLeaving = <T extends { id: string; lastWorkingDate: Date | null }>(rows: T[], leaving?: LeavingDates) => rows.map((e) => ({ ...e, lastWorkingDate: leaving?.get(e.id) ?? e.lastWorkingDate }));
+
+export async function previewRecalculation(employeeIds: string[], fromDate: string, _meta: ActorMeta, leaving?: LeavingDates): Promise<RecalcEmployeeResult[]> {
+  const employees = withLeaving(await resolveEmployees(employeeIds), leaving);
   const types = await accrualEnabledTypes();
   const fromMonth = startOfMonthUTC(new Date(fromDate));
   const throughMonth = startOfMonthUTC(businessToday());
@@ -113,11 +119,11 @@ export async function previewRecalculation(employeeIds: string[], fromDate: stri
   return results;
 }
 
-export async function commitRecalculation(employeeIds: string[], fromDate: string, meta: ActorMeta, options: { confirmText?: string }): Promise<RecalcEmployeeResult[]> {
+export async function commitRecalculation(employeeIds: string[], fromDate: string, meta: ActorMeta, options: { confirmText?: string; leaving?: LeavingDates }): Promise<RecalcEmployeeResult[]> {
   if (options.confirmText !== "APPLY RECALCULATION") {
     throw new HttpError(400, 'Type "APPLY RECALCULATION" to confirm — this writes ledger corrections for every selected employee.', "CONFIRMATION_REQUIRED");
   }
-  const employees = await resolveEmployees(employeeIds);
+  const employees = withLeaving(await resolveEmployees(employeeIds), options.leaving);
   const types = await accrualEnabledTypes();
   const fromMonth = startOfMonthUTC(new Date(fromDate));
   const throughMonth = startOfMonthUTC(businessToday());
