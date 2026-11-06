@@ -52,3 +52,39 @@ export const listLocks = async () => (await apiClient.get<{ locks: AttendanceLoc
 export const createLock = async (body: { effectiveFrom: string; fromDate: string; toDate: string; categories: string[]; segmentId: string | null; reason: string }) =>
   (await apiClient.post<AttendanceLockView>("/api/workforce/locks", body)).data;
 export const voidLock = async (id: string, reason: string) => (await apiClient.post<AttendanceLockView>(`/api/workforce/locks/${id}/void`, { reason })).data;
+
+// G4: holiday locations, weekend overrides, leave type reviewers.
+export const holidayLocations = async () => (await apiClient.get<{ locations: Record<string, string[]> }>("/api/workforce/holidays/locations")).data.locations;
+export const setHolidayLocations = async (id: string, locationIds: string[], reason: string) => (await apiClient.put(`/api/workforce/holidays/${id}/locations`, { locationIds, reason })).data;
+export interface WeekendOverrideView {
+  id: string;
+  fromDate: string;
+  toDate: string;
+  pattern: string;
+  people: number;
+  segmentName: string | null;
+  reason: string;
+  createdAt: string;
+  voidedAt: string | null;
+  voidReason: string | null;
+}
+export const listWeekendOverrides = async () => (await apiClient.get<{ overrides: WeekendOverrideView[] }>("/api/workforce/weekend-overrides")).data.overrides;
+export const createWeekendOverride = async (body: { fromDate: string; toDate: string; weekOffPatternId: string; employeeIds?: string[]; segmentId?: string | null; reason: string }) =>
+  (await apiClient.post<WeekendOverrideView>("/api/workforce/weekend-overrides", body)).data;
+export const voidWeekendOverride = async (id: string, reason: string) => (await apiClient.post(`/api/workforce/weekend-overrides/${id}/void`, { reason })).data;
+export interface ReviewerView {
+  id: string;
+  leaveType: string;
+  reviewerCode: string;
+  reviewerEmployeeId: string;
+  location: string | null;
+  department: string | null;
+  reason: string;
+  createdAt: string;
+  voidedAt: string | null;
+  voidReason: string | null;
+}
+export const listReviewers = async () => (await apiClient.get<{ reviewers: ReviewerView[] }>("/api/workforce/leave-reviewers")).data.reviewers;
+export const createReviewer = async (body: { leaveTypeId: string; reviewerEmployeeId: string; locationId?: string | null; departmentId?: string | null; reason: string }) =>
+  (await apiClient.post("/api/workforce/leave-reviewers", body)).data;
+export const voidReviewer = async (id: string, reason: string) => (await apiClient.post(`/api/workforce/leave-reviewers/${id}/void`, { reason })).data;

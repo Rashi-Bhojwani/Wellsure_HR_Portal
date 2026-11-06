@@ -463,6 +463,7 @@ model CostCentre {
 
 model Employee {
   payslipLinks    PayslipLink[]
+  leaveTypeReviews LeaveTypeReviewer[] @relation("LeaveTypeReviewerPerson") // A-10 G4
   bankRepaymentRows BankRepaymentRow[]
   remoteRecords   RemoteAttendanceRecord[]
   id              String                   @id @default(cuid())
@@ -865,6 +866,7 @@ model LeaveType {
   ledgerEntries LeaveLedger[]
   leaveRequests LeaveRequest[]
   dayReleases   LeaveDayRelease[]
+  reviewers     LeaveTypeReviewer[] // A-10 G4
 
   @@map("leave_types")
 }
@@ -1839,6 +1841,7 @@ model WeekOffPattern {
   createdAt   DateTime               @default(now()) @map("created_at")
   updatedAt   DateTime               @updatedAt @map("updated_at")
   assignments AttendanceAssignment[]
+  weekendOverrides WeekendOverride[] // A-10 G4
 
   @@map("week_off_patterns")
 }
@@ -3785,6 +3788,57 @@ model AttendanceLock {
 
   @@index([toDate])
   @@map("attendance_locks")
+}
+// G4: a holiday's locations (latest row wins; none or empty = company-wide). Append-only. No FK: a deleted holiday's rows are simply never read.
+model HolidayLocationScope {
+  id          String   @id @default(cuid())
+  holidayId   String   @map("holiday_id")
+  locationIds String[] @map("location_ids")
+  reason      String
+  setByUserId String   @map("set_by_user_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([holidayId, createdAt])
+  @@map("holiday_location_scopes")
+}
+
+// G4: a different week-off pattern for chosen people over a date range (voided once, never deleted).
+model WeekendOverride {
+  id               String         @id @default(cuid())
+  fromDate         DateTime       @map("from_date") @db.Date
+  toDate           DateTime       @map("to_date") @db.Date
+  weekOffPatternId String         @map("week_off_pattern_id")
+  weekOffPattern   WeekOffPattern @relation(fields: [weekOffPatternId], references: [id], onDelete: Restrict)
+  employeeIds      String[]       @map("employee_ids")
+  segmentName      String?        @map("segment_name")
+  reason           String
+  createdByUserId  String         @map("created_by_user_id")
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  voidedAt         DateTime?      @map("voided_at") @db.Timestamptz(3)
+  voidedByUserId   String?        @map("voided_by_user_id")
+  voidReason       String?        @map("void_reason")
+
+  @@index([toDate])
+  @@map("weekend_overrides")
+}
+// G4: a leave type reviewer (an extra decider for one leave type; voided once, never deleted).
+model LeaveTypeReviewer {
+  id                 String    @id @default(cuid())
+  leaveTypeId        String    @map("leave_type_id")
+  leaveType          LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+  reviewerEmployeeId String    @map("reviewer_employee_id")
+  reviewer           Employee  @relation("LeaveTypeReviewerPerson", fields: [reviewerEmployeeId], references: [id], onDelete: Restrict)
+  locationId         String?   @map("location_id")
+  departmentId       String?   @map("department_id")
+  reason             String
+  createdByUserId    String    @map("created_by_user_id")
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  voidedAt           DateTime? @map("voided_at") @db.Timestamptz(3)
+  voidedByUserId     String?   @map("voided_by_user_id")
+  voidReason         String?   @map("void_reason")
+
+  @@index([reviewerEmployeeId])
+  @@map("leave_type_reviewers")
 }
 // ── A-10 — end ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 

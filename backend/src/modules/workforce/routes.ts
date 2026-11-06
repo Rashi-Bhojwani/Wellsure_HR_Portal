@@ -5,6 +5,9 @@ import { authenticate } from "../../middleware/authenticate";
 import { refuseDeveloper } from "../../middleware/refuseDeveloper";
 import { requireAnyPermission } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
+import { prisma } from "../../lib/prisma";
+import { createWeekendOverride, holidayLocations, listWeekendOverrides, setHolidayLocations, voidWeekendOverride, type NewWeekendOverride } from "./calendar";
+import { createReviewer, listReviewers, voidReviewer } from "./reviewers";
 import { createLock, listLocks, LOCK_CATEGORIES, voidLock, type NewLock } from "./locks";
 import { exportRosterGrid, rosterGrid, type RosterGridQuery } from "../attendance/roster/grid";
 import { getWorkforceSetting, saveWorkforceSetting, settingHistory, settingView, WORKFORCE_SETTING_KEYS, type WorkforceSettingKey } from "./settings";
@@ -66,3 +69,37 @@ const idParams = z.object({ id: z.string().min(1).max(64) });
 workforceRouter.get("/locks", async (req, res) => void res.json(await listLocks(viewerOf(req))));
 workforceRouter.post("/locks", validate({ body: lockBody }), async (req, res) => void res.status(201).json(await createLock(viewerOf(req), req.body as NewLock, metaOf(req))));
 workforceRouter.post("/locks/:id/void", validate({ params: idParams, body: voidBody }), async (req, res) => void res.json(await voidLock(viewerOf(req), req.params.id as string, req.body.reason as string, metaOf(req))));
+
+// G4: location-limited holidays (leave.policy.manage), weekend overrides (attendance.config.manage, scope in the service), leave type reviewers (directors).
+const holidayLocBody = z.object({ locationIds: z.array(z.string().min(1).max(64)).max(200), reason: z.string().trim().min(3, "Say why (a few words)").max(300) });
+workforceRouter.get("/holidays/locations", requireAnyPermission("leave.policy.manage"), async (_req, res) => {
+  const ids = (await prisma.holiday.findMany({ select: { id: true } })).map((h) => h.id);
+  res.json({ locations: Object.fromEntries(await holidayLocations(ids)) });
+});
+workforceRouter.put("/holidays/:id/locations", requireAnyPermission("leave.policy.manage"), validate({ params: idParams, body: holidayLocBody }), async (req, res) =>
+  void res.json(await setHolidayLocations(viewerOf(req), req.params.id as string, req.body.locationIds as string[], req.body.reason as string, metaOf(req))),
+);
+const weekendBody = z
+  .object({
+    fromDate: isoDate,
+    toDate: isoDate,
+    weekOffPatternId: z.string().min(1).max(64),
+    employeeIds: z.array(z.string().min(1).max(64)).max(2000).optional(),
+    segmentId: z.string().min(1).max(64).nullable().optional(),
+    reason: z.string().trim().min(3, "Say why (a few words)").max(300),
+  })
+  .refine((b) => (b.employeeIds?.length ?? 0) > 0 || !!b.segmentId, { message: "Choose the people (a list or a saved segment)." });
+const canConfigure = requireAnyPermission("attendance.config.manage");
+workforceRouter.get("/weekend-overrides", canConfigure, async (req, res) => void res.json(await listWeekendOverrides(viewerOf(req))));
+workforceRouter.post("/weekend-overrides", canConfigure, validate({ body: weekendBody }), async (req, res) => void res.status(201).json(await createWeekendOverride(viewerOf(req), req.body as NewWeekendOverride, metaOf(req))));
+workforceRouter.post("/weekend-overrides/:id/void", canConfigure, validate({ params: idParams, body: voidBody }), async (req, res) => void res.json(await voidWeekendOverride(viewerOf(req), req.params.id as string, req.body.reason as string, metaOf(req))));
+const reviewerBody = z.object({
+  leaveTypeId: z.string().min(1).max(64),
+  reviewerEmployeeId: z.string().min(1).max(64),
+  locationId: z.string().min(1).max(64).nullable().optional(),
+  departmentId: z.string().min(1).max(64).nullable().optional(),
+  reason: z.string().trim().min(3, "Say why (a few words)").max(300),
+});
+workforceRouter.get("/leave-reviewers", async (req, res) => void res.json(await listReviewers(viewerOf(req))));
+workforceRouter.post("/leave-reviewers", validate({ body: reviewerBody }), async (req, res) => void res.status(201).json(await createReviewer(viewerOf(req), req.body, metaOf(req))));
+workforceRouter.post("/leave-reviewers/:id/void", validate({ params: idParams, body: voidBody }), async (req, res) => void res.json(await voidReviewer(viewerOf(req), req.params.id as string, req.body.reason as string, metaOf(req))));

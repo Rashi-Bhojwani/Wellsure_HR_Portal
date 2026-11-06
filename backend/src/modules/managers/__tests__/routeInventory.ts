@@ -682,6 +682,14 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/workforce/locks": adminInService("director only (listLocks)"),
   "POST /api/workforce/locks": adminInService("director only (createLock), audited"),
   "POST /api/workforce/locks/:id/void": adminInService("director only (voidLock), audited"),
+  "GET /api/workforce/holidays/locations": admin,
+  "PUT /api/workforce/holidays/:id/locations": admin,
+  "GET /api/workforce/weekend-overrides": admin,
+  "POST /api/workforce/weekend-overrides": admin,
+  "POST /api/workforce/weekend-overrides/:id/void": admin,
+  "GET /api/workforce/leave-reviewers": adminInService("director only (listReviewers)"),
+  "POST /api/workforce/leave-reviewers": adminInService("director only (createReviewer), audited"),
+  "POST /api/workforce/leave-reviewers/:id/void": adminInService("director only (voidReviewer), audited"),
   // A-10 — end
 };
 

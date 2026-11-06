@@ -10,6 +10,7 @@ import { addDays } from "../engine/time";
 import { employeesInRange } from "../jobs";
 import type { Viewer } from "../manual/scope";
 import { loadShiftOverrides } from "../shiftOverrides";
+import { loadCalendar } from "../../workforce/calendar";
 
 // A-10 G2 (docs/plans/GREYTHR_PARITY_WORKFORCE.md item 4): the roster as a read-only month grid. For each person in the viewer's scope and each day of the
 // attendance cycle: the shift code that applies (a Shift Override for the day, else the effective-dated assignment's shift), and whether the day is a working
@@ -89,14 +90,13 @@ export async function rosterGrid(viewer: Viewer, q: RosterGridQuery) {
     const placements = await placementPeriods(ids, cycle.start, cycle.end);
     ids = ids.filter((id) => (placements.get(id) ?? []).some((p) => (!q.locationId || p.locationId === q.locationId) && (!q.departmentId || p.departmentId === q.departmentId)));
   }
-  const [employees, assignments, holidays, overrides, names] = await Promise.all([
+  const [employees, assignments, calendar, overrides, names] = await Promise.all([
     prisma.employee.findMany({ where: { id: { in: ids } }, select: { id: true, employeeCode: true, dateOfJoining: true, lastWorkingDate: true }, orderBy: { employeeCode: "asc" } }),
     assignmentsBetween(ids, cycle.start, cycle.end),
-    prisma.holiday.findMany({ where: { date: { gte: cycle.start, lte: cycle.end } }, select: { date: true } }),
+    loadCalendar(ids, start, end),
     loadShiftOverrides(ids, start, end),
     namesOn(ids, cycle.end),
   ]);
-  const holidayDays = new Set(holidays.map((h) => iso(h.date)));
   const shiftCodes = new Map((await prisma.shift.findMany({ select: { id: true, code: true, name: true, startTime: true, endTime: true } })).map((s) => [s.id, s]));
 
   const rows: RosterGridRow[] = employees.map((e) => {
@@ -107,8 +107,8 @@ export async function rosterGrid(viewer: Viewer, q: RosterGridQuery) {
       return cellOf({
         date,
         employed: iso(e.dateOfJoining) <= date && (!e.lastWorkingDate || iso(e.lastWorkingDate) >= date),
-        holiday: holidayDays.has(date),
-        assignment: a ? { shiftCode: shiftCodes.get(a.shiftId)?.code ?? a.shift.code, weekOffRules: a.weekOffPattern.rules as unknown as WeekOffRule[] } : null,
+        holiday: calendar.holidayFor(e.id, date) !== null,
+        assignment: a ? { shiftCode: shiftCodes.get(a.shiftId)?.code ?? a.shift.code, weekOffRules: calendar.weekOffOverrideFor(e.id, date) ?? (a.weekOffPattern.rules as unknown as WeekOffRule[]) } : null,
         overrideShiftCode: o ? o.shift.code : null,
       });
     });

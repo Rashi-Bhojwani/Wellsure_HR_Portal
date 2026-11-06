@@ -129,6 +129,8 @@ const LetterSettingsPage = lazyPage(() => import("../pages/admin/letters/parity/
 // A-10 (docs/plans/GREYTHR_PARITY_WORKFORCE.md) — begin
 const WorkforceSettingsPage = lazyPage(() => import("../pages/admin/workforce/parity/WorkforceSettingsPage"), "WorkforceSettingsPage");
 const AttendanceLocksPage = lazyPage(() => import("../pages/admin/workforce/parity/AttendanceLocksPage"), "AttendanceLocksPage");
+const CalendarAdjustmentsPage = lazyPage(() => import("../pages/admin/workforce/parity/CalendarAdjustmentsPage"), "CalendarAdjustmentsPage");
+const LeaveReviewersPage = lazyPage(() => import("../pages/admin/workforce/parity/LeaveReviewersPage"), "LeaveReviewersPage");
 // A-10 — end
 const SetupChecklistPage = lazyPage(() => import("../pages/admin/payroll/SetupChecklistPage"), "SetupChecklistPage");
 // Anyone holding any payroll key sees the Payroll group; HR holds none (the hard lock), so HR never sees it. The server still decides every request.
@@ -411,6 +413,8 @@ export const adminApps: AdminApp[] = [
           // A-10 — begin
           { key: "workforce-settings", label: "Workforce Settings", path: "admin-tools/workforce-settings", icon: SettingOutlined, element: WorkforceSettingsPage, needs: { director: true } },
           { key: "attendance-locks", label: "Attendance Locks", path: "admin-tools/attendance-locks", icon: SettingOutlined, element: AttendanceLocksPage, needs: { director: true } },
+          { key: "leave-reviewers", label: "Leave Reviewers", path: "admin-tools/leave-reviewers", icon: SettingOutlined, element: LeaveReviewersPage, needs: { director: true } },
+          { key: "calendar-adjustments", label: "Calendar Adjustments", path: "admin-tools/calendar-adjustments", icon: SettingOutlined, element: CalendarAdjustmentsPage, needs: { any: ["leave.policy.manage", "attendance.config.manage"] } },
           // A-10 — end
           { key: "letter-settings", label: "Letter Settings", path: "admin-tools/letter-settings", icon: FileProtectOutlined, element: LetterSettingsPage, needs: { director: true } },
           // A-9 — end
