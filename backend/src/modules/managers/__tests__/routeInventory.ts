@@ -694,12 +694,20 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/workforce/sync-requests": admin,
   "POST /api/workforce/sync-requests": admin,
   "POST /api/workforce/sync-requests/:id/cancel": admin,
+  "GET /api/workforce/leavers": admin,
+  "GET /api/workforce/leavers/:id/preview": admin,
+  "POST /api/workforce/leavers/:id/apply": admin,
+  "GET /api/workforce/workflow/review": scoped("the caller's own approval queue: the existing leave and regularization scope (listLeaveRequests, listQueue)"),
+  "GET /api/workforce/workflow/monitor": adminInService("company-wide viewers only (monitor)"),
+  "POST /api/workforce/workflow/decide": scoped("each item through approveLeaveRequest / rejectLeaveRequest / decideRequest, which check scope"),
   // A-10 — end
 };
 
 // Scoped routes a manager can reach with a manager-grantable key — each has
 // an IDOR case in managerReach.test.ts. The test fails if one is missing.
 export const MANAGER_REACHABLE_SCOPED = [
+  "GET /api/workforce/workflow/review", // A-10 G7
+  "POST /api/workforce/workflow/decide", // A-10 G7
   "GET /api/reports",
   "GET /api/reports/:key",
   "GET /api/reports/:key/export",

@@ -104,3 +104,46 @@ export interface SyncRequestView {
 export const listSyncRequests = async () => (await apiClient.get<{ requests: SyncRequestView[] }>("/api/workforce/sync-requests")).data.requests;
 export const requestSync = async (body: { deviceId: string; fromDate: string; toDate: string; reason: string }) => (await apiClient.post<SyncRequestView>("/api/workforce/sync-requests", body)).data;
 export const cancelSync = async (id: string) => (await apiClient.post<SyncRequestView>(`/api/workforce/sync-requests/${id}/cancel`)).data;
+
+// G6: leavers.
+export interface LeaverRow {
+  separationId: string;
+  employeeId: string;
+  employeeCode: string;
+  name: string;
+  lastWorkingDate: string;
+  separationStatus: string;
+  status: "PENDING" | "DONE";
+  doneAt: string | null;
+  actions: number | null;
+}
+export interface RecalcAction {
+  type: "CREDIT" | "REVERSE";
+  accrualMonth: string;
+  leaveTypeCode: string;
+  days: number;
+}
+export const listLeavers = async (q: { status?: "PENDING" | "DONE" }) => (await apiClient.get<{ from: string; to: string; leavers: LeaverRow[] }>("/api/workforce/leavers", { params: q })).data;
+export const previewLeaver = async (id: string) => (await apiClient.get<{ lastWorkingDate: string; actions: RecalcAction[] }>(`/api/workforce/leavers/${id}/preview`)).data;
+export const applyLeaver = async (id: string) => (await apiClient.post<{ lastWorkingDate: string; actions: RecalcAction[] }>(`/api/workforce/leavers/${id}/apply`)).data;
+
+// G7: workflow.
+export type WorkflowType = "LEAVE" | "REGULARIZATION";
+export interface WorkflowItem {
+  id: string;
+  type: WorkflowType;
+  employeeId: string;
+  employeeCode: string;
+  name: string;
+  what: string;
+  when: string;
+  reason: string | null;
+  status: string;
+  createdAt: string;
+  decidedAt: string | null;
+  waitingOn?: string | null;
+}
+export const workflowReview = async (q: { type: WorkflowType; state: "PENDING" | "COMPLETED"; search?: string }) => (await apiClient.get<{ items: WorkflowItem[] }>("/api/workforce/workflow/review", { params: q })).data.items;
+export const workflowMonitor = async (q: { type: WorkflowType; search?: string }) => (await apiClient.get<{ items: WorkflowItem[] }>("/api/workforce/workflow/monitor", { params: q })).data.items;
+export const workflowDecide = async (body: { type: WorkflowType; ids: string[]; approve: boolean; note?: string | null }) =>
+  (await apiClient.post<{ decided: number; failed: number; results: Array<{ id: string; ok: boolean; error?: string }> }>("/api/workforce/workflow/decide", body)).data;

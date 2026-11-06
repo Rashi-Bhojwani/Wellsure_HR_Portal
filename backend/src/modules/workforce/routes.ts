@@ -8,6 +8,8 @@ import { validate } from "../../middleware/validate";
 import { prisma } from "../../lib/prisma";
 import { createWeekendOverride, holidayLocations, listWeekendOverrides, setHolidayLocations, voidWeekendOverride, type NewWeekendOverride } from "./calendar";
 import { createReviewer, listReviewers, voidReviewer } from "./reviewers";
+import { applyLeaver, listLeavers, previewLeaver } from "./leavers";
+import { decideMany, MAX_BULK, monitor, review, type WorkflowType } from "./workflow";
 import { cancelSync, decideSwipes, listSync, MAX_SWIPE_BATCH, requestSync } from "./swipes";
 import { createLock, listLocks, LOCK_CATEGORIES, voidLock, type NewLock } from "./locks";
 import { exportRosterGrid, rosterGrid, type RosterGridQuery } from "../attendance/roster/grid";
@@ -117,3 +119,19 @@ const syncBody = z.object({ deviceId: z.string().min(1).max(64), fromDate: isoDa
 workforceRouter.get("/sync-requests", canDevices, async (req, res) => void res.json(await listSync(viewerOf(req))));
 workforceRouter.post("/sync-requests", canDevices, validate({ body: syncBody }), async (req, res) => void res.status(201).json(await requestSync(viewerOf(req), req.body, metaOf(req))));
 workforceRouter.post("/sync-requests/:id/cancel", canDevices, validate({ params: idParams }), async (req, res) => void res.json(await cancelSync(viewerOf(req), req.params.id as string, metaOf(req))));
+
+// G6: leavers and leave recalculated to the last working day (leave.recalculate; scope in the service; days only).
+const canRecalc = requireAnyPermission("leave.recalculate");
+const leaversQuery = z.object({ from: isoDate.optional(), to: isoDate.optional(), status: z.enum(["PENDING", "DONE"]).optional() });
+workforceRouter.get("/leavers", canRecalc, validate({ query: leaversQuery }), async (req, res) => void res.json(await listLeavers(viewerOf(req), req.query as { from?: string; to?: string; status?: "PENDING" | "DONE" })));
+workforceRouter.get("/leavers/:id/preview", canRecalc, validate({ params: idParams }), async (req, res) => void res.json(await previewLeaver(viewerOf(req), req.params.id as string, metaOf(req))));
+workforceRouter.post("/leavers/:id/apply", canRecalc, validate({ params: idParams }), async (req, res) => void res.json(await applyLeaver(viewerOf(req), req.params.id as string, metaOf(req))));
+
+// G7: Workflow Review / Monitor and bulk decisions (the permission checks are the existing ones, inside review/monitor/decideMany).
+const wfType = z.enum(["LEAVE", "REGULARIZATION"]);
+const reviewQuery = z.object({ type: wfType, state: z.enum(["PENDING", "COMPLETED"]).default("PENDING"), search: z.string().trim().max(100).optional() });
+const monitorQuery = z.object({ type: wfType, search: z.string().trim().max(100).optional() });
+const decideBody = z.object({ type: wfType, ids: z.array(z.string().min(1).max(64)).min(1).max(MAX_BULK), approve: z.boolean(), note: z.string().trim().max(1000).nullable().optional() });
+workforceRouter.get("/workflow/review", validate({ query: reviewQuery }), async (req, res) => void res.json(await review(viewerOf(req), req.query as unknown as { type: WorkflowType; state: "PENDING" | "COMPLETED"; search?: string })));
+workforceRouter.get("/workflow/monitor", validate({ query: monitorQuery }), async (req, res) => void res.json(await monitor(viewerOf(req), req.query as unknown as { type: WorkflowType; search?: string })));
+workforceRouter.post("/workflow/decide", validate({ body: decideBody }), async (req, res) => void res.json(await decideMany(viewerOf(req), req.body, metaOf(req))));

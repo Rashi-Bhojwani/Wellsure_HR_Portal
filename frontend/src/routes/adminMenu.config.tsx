@@ -130,6 +130,8 @@ const LetterSettingsPage = lazyPage(() => import("../pages/admin/letters/parity/
 const WorkforceSettingsPage = lazyPage(() => import("../pages/admin/workforce/parity/WorkforceSettingsPage"), "WorkforceSettingsPage");
 const AttendanceLocksPage = lazyPage(() => import("../pages/admin/workforce/parity/AttendanceLocksPage"), "AttendanceLocksPage");
 const CalendarAdjustmentsPage = lazyPage(() => import("../pages/admin/workforce/parity/CalendarAdjustmentsPage"), "CalendarAdjustmentsPage");
+const WorkflowPage = lazyPage(() => import("../pages/admin/workforce/parity/WorkflowPage"), "WorkflowPage");
+const LeaversPage = lazyPage(() => import("../pages/admin/workforce/parity/LeaversPage"), "LeaversPage");
 const DeviceSyncPage = lazyPage(() => import("../pages/admin/workforce/parity/DeviceSyncPage"), "DeviceSyncPage");
 const LeaveReviewersPage = lazyPage(() => import("../pages/admin/workforce/parity/LeaveReviewersPage"), "LeaveReviewersPage");
 // A-10 — end
@@ -417,6 +419,8 @@ export const adminApps: AdminApp[] = [
           { key: "leave-reviewers", label: "Leave Reviewers", path: "admin-tools/leave-reviewers", icon: SettingOutlined, element: LeaveReviewersPage, needs: { director: true } },
           { key: "calendar-adjustments", label: "Calendar Adjustments", path: "admin-tools/calendar-adjustments", icon: SettingOutlined, element: CalendarAdjustmentsPage, needs: { any: ["leave.policy.manage", "attendance.config.manage"] } },
           { key: "device-sync", label: "Device Sync Requests", path: "admin-tools/device-sync", icon: SettingOutlined, element: DeviceSyncPage, needs: { any: ["attendance.devices.manage"] } },
+          { key: "leavers", label: "Leavers", path: "admin-tools/leavers", icon: SettingOutlined, element: LeaversPage, needs: { any: ["leave.recalculate"] } },
+          { key: "workflow", label: "Workflow", path: "admin-tools/workflow", icon: SettingOutlined, element: WorkflowPage, needs: { any: ["leave.approve", "leave.view", "attendance.regularization.approve", "attendance.regularization.view"] } },
           // A-10 — end
           { key: "letter-settings", label: "Letter Settings", path: "admin-tools/letter-settings", icon: FileProtectOutlined, element: LetterSettingsPage, needs: { director: true } },
           // A-9 — end
