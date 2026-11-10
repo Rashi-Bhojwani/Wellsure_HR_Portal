@@ -234,3 +234,6 @@ while it ran; it was run again with no edits (see the next entry).
 **Gate after `7ec1d5a` (written 2026-11-10).** Full backend suite run alone, no edits during it: **211 files, 2,003 tests, all passed.** CI per job: run 267 on the A-3
 commit `0e3a1bf` failed in install-lint-typecheck-test → Test (the payroll literal guard flagged form-length constants in `tax/openings.ts`; every other job green);
 fixed in `7ec1d5a` (allowlist with reasons). Run 271 on `00ac198` (all code through `7ec1d5a`): success on all seven jobs.
+
+**Gate after P7-5, P7-6 (settlement side) and P7-7 (written 2026-11-10).** Full backend suite run alone on `5b36109`, no edits during it: **214 files, 2,016 tests, all passed.**
+Commits: `7f90f94` (P7-5), `cb8de84` (P7-6 settlements), `5b36109` (P7-7). Not walked in a browser: the screens of these three items. Final status: `PORTAL_READY_REPORT.md`.

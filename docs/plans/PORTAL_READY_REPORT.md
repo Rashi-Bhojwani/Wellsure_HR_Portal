@@ -55,6 +55,7 @@ Directors are the only Super Admins. "Confirm" always means the **other** direct
 ## 3. What is not verified
 
 - Tax correctness against any law (every figure is the owners'); real bank files, real devices (agent sync tested with the fake device), real mail.
+- Full backend suite on `5b36109`: 214 files, 2,016 tests, all passed (run alone).
 - Browser walks: A-10 screens, Opening Figures and the swipes fix were walked (desktop light, 390 px dark) as director, HR, Developer and employee. **Not
   walked:** YTD Reports, Salary Revision, Loans (both), Reimbursements (both), Settlements, TDS and Form 16, the employee Form 16 page — built after the
   last walk; typecheck, lint, route tests and bundle budgets pass. A manager was not walked (the demo company has none; covered by tests).
