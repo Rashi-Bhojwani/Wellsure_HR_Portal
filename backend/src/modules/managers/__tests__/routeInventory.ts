@@ -722,6 +722,15 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "PUT /api/reimbursements/types": adminInService("director only (saveType), audited"),
   "GET /api/reimbursements": adminInService("director only (queue)"),
   "POST /api/reimbursements/:id/decision": adminInService("director only, never one's own claim (decide), audited"),
+  // P7-7 (docs/plans/P7_7_FORM16.md)
+  "GET /api/tax/me/form16": self,
+  "GET /api/tax/challans": adminInService("director only (register)"),
+  "POST /api/tax/challans": adminInService("director only (enterChallan), audited"),
+  "POST /api/tax/challans/:id/confirm": adminInService("a different director, by retyping (confirmChallan)"),
+  "GET /api/tax/quarterly": adminInService("director only (quarterly)"),
+  "GET /api/tax/form16": adminInService("director only (yearForm16)"),
+  "POST /api/tax/form16/:fy/confirm": adminInService("director only, maker-checker FORM16_CONFIRM"),
+  "POST /api/tax/form16/:fy/decision": adminInService("a different director (decideConfirmation)"),
   // P7-6 (docs/plans/P7_6_SETTLEMENTS.md): directors only
   "GET /api/settlements": adminInService("router gate payroll.salary.view and a director check in the service; never one's own"),
   "POST /api/settlements": adminInService("router gate payroll.salary.view and a director check in the service; never one's own"),

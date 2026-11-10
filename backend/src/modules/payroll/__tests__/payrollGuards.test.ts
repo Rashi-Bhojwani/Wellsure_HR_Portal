@@ -91,6 +91,8 @@ const EXTRA_ALLOWED: Record<string, number[]> = {
   // P7-6: form field lengths (a label, a note), the most director lines, a 64-character fingerprint. None is a payroll figure.
   "settlements/service.ts": [120, 300, 50, 64],
   "settlements/routes.ts": [64],
+  // P7-7: the shape of a challan's numbers (a BSR code is 7 digits, a serial up to 10), a year label's 7 characters, a note's length, a fingerprint's 64.
+  "tax/form16.ts": [11, 300, 64],
   "loans/service.ts": [31, 60, 600, 40, 300, 64, 32],
   "rules/schemas.ts": [28, 31, 39, 60],
   "validators.ts": [25, 60],
@@ -98,7 +100,7 @@ const EXTRA_ALLOWED: Record<string, number[]> = {
   "salary/schemas.ts": [60, 999],
   // Tax: lengths of labels, notes, codes and a year label (2026-27 is 7 characters), a link's lifetime in seconds, and how many sections a year lists. None is a tax figure: every tax value is entered by the owners.
   "tax/declarations.ts": [20, 60, 120, 300],
-  "tax/routes.ts": [20],
+  "tax/routes.ts": [20, 64], // 64: a fingerprint's length (P7-7)
   "tax/schema.ts": [19, 20, 60, 80, 300],
   "salary/validators.ts": [20, 25, 60, 300],
   "salary/adjustments.ts": [300],

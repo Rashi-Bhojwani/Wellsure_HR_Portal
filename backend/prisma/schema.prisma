@@ -2509,6 +2509,7 @@ enum PayrollApprovalSubject {
   LOAN_SANCTION // P7-4
   LOAN_CHANGE // P7-4
   FNF_SETTLEMENT // P7-6
+  FORM16_CONFIRM // P7-7
 }
 
 enum PayrollApprovalStatus {
@@ -4077,4 +4078,34 @@ model FnfSettlement {
 
   @@index([separationId])
   @@map("fnf_settlements")
+}
+
+// ── P7-7 (docs/plans/P7_7_FORM16.md): TDS challans (immutable; sealed BSR code and serial), confirmed by a different director ──────
+model TdsChallan {
+  id              String                 @id @default(cuid())
+  financialYear   String                 @map("financial_year")
+  month           String
+  depositedOn     DateTime               @map("deposited_on") @db.Date
+  amount          Decimal                @db.Decimal(14, 2)
+  bsrCode         Json                   @map("bsr_code")
+  serial          Json
+  serialHash      String                 @map("serial_hash")
+  bsrLast         String                 @map("bsr_last")
+  serialLast      String                 @map("serial_last")
+  enteredByUserId String                 @map("entered_by_user_id")
+  createdAt       DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  confirmation    TdsChallanConfirmation?
+
+  @@index([financialYear])
+  @@map("tds_challans")
+}
+
+model TdsChallanConfirmation {
+  id                String     @id @default(cuid())
+  challanId         String     @unique @map("challan_id")
+  challan           TdsChallan @relation(fields: [challanId], references: [id], onDelete: Restrict)
+  confirmedByUserId String     @map("confirmed_by_user_id")
+  createdAt         DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("tds_challan_confirmations")
 }

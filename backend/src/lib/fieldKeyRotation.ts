@@ -67,6 +67,7 @@ export const JSON_HELD_COLUMNS = {
   sealed: "PayrollItemVersion.value (a sealed rule or layout, the version in force or the latest)",
   changeRequests: "ProfileChangeRequest.changesJson (a request still waiting for a decision)",
   imports: "ImportStagingRow.data (an upload not yet committed)",
+  challans: "TdsChallan.bsrCode and TdsChallan.serial (P7-7: sealed, immutable history the directors may need to read)",
 } as const;
 
 async function jsonHeldUsage(opts: { filter?: RowFilter }): Promise<KeyUsage[]> {
@@ -96,6 +97,11 @@ async function jsonHeldUsage(opts: { filter?: RowFilter }): Promise<KeyUsage[]> 
   }
   for (const r of await prisma.$queryRaw<Array<{ id: string; data: unknown }>>`SELECT r.id, r.data FROM import_staging_rows r JOIN import_batches b ON b.id = r.batch_id WHERE b.committed_at IS NULL`) {
     if (keep(r.id)) for (const id of packedKeyIds(r.data)) add(JSON_HELD_COLUMNS.imports, id);
+  }
+  // P7-7: a challan's BSR code and serial are sealed and kept for good (a deposit record), so every one counts.
+  for (const r of await prisma.$queryRaw<Array<{ id: string; bsr: string | null; serial: string | null }>>`SELECT id, bsr_code->>'sealed' AS bsr, serial->>'sealed' AS serial FROM tds_challans`) {
+    if (!keep(r.id)) continue;
+    for (const v of [r.bsr, r.serial]) if (v) add(JSON_HELD_COLUMNS.challans, ciphertextKeyId(unpackBytes(v)));
   }
   return [...counts].flatMap(([column, m]) => [...m].sort((a, b) => a[0] - b[0]).map(([keyId, count]) => ({ column, keyId, count })));
 }

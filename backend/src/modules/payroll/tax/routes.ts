@@ -11,6 +11,7 @@ import * as decl from "./declarations";
 import { statementFor } from "./statement";
 import * as years from "./years";
 import * as openings from "./openings"; // A-3
+import * as form16 from "./form16"; // P7-7
 import { myYtdReport } from "../run/ytd";
 import { mySalaryRevisions } from "../salary/mine";
 import { refuseDeveloper } from "../../../middleware/refuseDeveloper";
@@ -80,3 +81,15 @@ taxRouter.post("/openings/import/apply", refuseDeveloper, directors, memoryUploa
 });
 taxRouter.post("/openings/confirm", refuseDeveloper, directors, validate({ body: openings.requestSchema }), async (req, res) => send(res, 200, await openings.requestConfirmation(req.body, actor(req))));
 taxRouter.post("/openings/:fy/decision", refuseDeveloper, directors, validate({ params: yearParams, body: openings.decisionSchema }), async (req, res) => send(res, 200, await openings.decideConfirmation((req.params as { fy: string }).fy, req.body, actor(req))));
+
+// P7-7 (docs/plans/P7_7_FORM16.md): the challan register, quarterly data, Form 16 Part B data. Directors only (a pay key AND a director in the service), except a
+// person's own Form 16 (their own only). The Developer role is refused.
+const quarterQuery = z.object({ fy: z.string().min(7).max(7), quarter: z.coerce.number().int().min(1).max(4) }).strict();
+taxRouter.get("/me/form16", refuseDeveloper, validate({ query: requiredYearQuery }), async (req, res) => send(res, 200, await form16.myForm16(req.user!.employeeId, (req.query as { fy: string }).fy)));
+taxRouter.get("/challans", refuseDeveloper, directors, validate({ query: requiredYearQuery }), async (req, res) => send(res, 200, await form16.register((req.query as { fy: string }).fy, actor(req))));
+taxRouter.post("/challans", refuseDeveloper, directors, validate({ body: form16.challanSchema }), async (req, res) => send(res, 201, await form16.enterChallan(req.body, actor(req))));
+taxRouter.post("/challans/:id/confirm", refuseDeveloper, directors, validate({ params: idParams, body: form16.confirmChallanSchema }), async (req, res) => send(res, 200, await form16.confirmChallan((req.params as { id: string }).id, req.body, actor(req))));
+taxRouter.get("/quarterly", refuseDeveloper, directors, validate({ query: quarterQuery }), async (req, res) => send(res, 200, await form16.quarterly((req.query as { fy: string }).fy, Number((req.query as { quarter: string }).quarter), actor(req)))); // allow-number: a quarter 1 to 4
+taxRouter.get("/form16", refuseDeveloper, directors, validate({ query: requiredYearQuery }), async (req, res) => send(res, 200, await form16.yearForm16((req.query as { fy: string }).fy, actor(req))));
+taxRouter.post("/form16/:fy/confirm", refuseDeveloper, directors, validate({ params: yearParams, body: form16.confirmSchema }), async (req, res) => send(res, 200, await form16.requestConfirmation((req.params as { fy: string }).fy, req.body, actor(req))));
+taxRouter.post("/form16/:fy/decision", refuseDeveloper, directors, validate({ params: yearParams, body: form16.decisionSchema }), async (req, res) => send(res, 200, await form16.decideConfirmation((req.params as { fy: string }).fy, req.body, actor(req))));

@@ -49,6 +49,7 @@ const AttendanceInfoPage = lazyPage(() => import("../pages/employee/attendance/A
 const PayslipsPage = lazyPage(() => import("../pages/employee/salary/PayslipsPage"), "PayslipsPage");
 const ItDeclarationPage = lazyPage(() => import("../pages/employee/salary/ItDeclarationPage"), "ItDeclarationPage");
 const ProofOfInvestmentPage = lazyPage(() => import("../pages/employee/salary/ProofOfInvestmentPage"), "ProofOfInvestmentPage");
+const Form16Page = lazyPage(() => import("../pages/employee/salary/Form16Page"), "Form16Page"); // P7-7
 const ReimbursementPage = lazyPage(() => import("../pages/employee/salary/ReimbursementPage"), "ReimbursementPage"); // P7-5
 const LoansPage = lazyPage(() => import("../pages/employee/salary/LoansPage"), "LoansPage"); // P7-4
 const YtdReportsPage = lazyPage(() => import("../pages/employee/salary/YtdReportsPage"), "YtdReportsPage"); // P7-3
@@ -181,6 +182,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
         icon: SafetyCertificateOutlined,
         element: ProofOfInvestmentPage,
       },
+      { key: "form-16", label: "Form 16", path: "salary/form-16", icon: FileDoneOutlined, element: Form16Page },
       {
         key: "salary-revision",
         label: "Salary Revision",

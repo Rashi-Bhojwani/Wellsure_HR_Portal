@@ -185,3 +185,15 @@ export interface MyRevision {
   breakup: Array<{ code: string; name: string; type: string; monthly: string }>;
 }
 export const mySalaryRevisions = () => get<{ revisions: MyRevision[] }>("/me/salary-revisions");
+
+// P7-7: challans, quarterly data, Form 16 data.
+export interface ChallanView { id: string; month: string; depositedOn: string; amount: string; bsr: string; serial: string; confirmed: boolean; enteredByMe: boolean }
+export interface ChallanRegister { year: string; challans: ChallanView[]; reconciliation: Array<{ month: string; deducted: string; deposited: string; difference: string }> }
+export const challanRegister = (fy: string) => get<ChallanRegister>("/challans", { fy });
+export const enterChallan = (body: { fy: string; month: string; depositedOn: string; amount: string; bsrCode: string; serial: string }) => post<{ id: string }>("/challans", body);
+export const confirmChallan = (id: string, body: { amount: string; serial: string }) => post(`/challans/${id}/confirm`, body);
+export interface Form16Row { employeeId?: string; name?: string; year: string; employeeCode: string; regime: Regime | null; taxablePay: string; tdsDeducted: string; computation: { annualTax?: string } | null; missing: string[]; taxYearConfirmed: boolean }
+export const form16Year = (fy: string) => get<{ year: string; state: "DRAFT" | "WAITING" | "CONFIRMED"; waitingMine: boolean | null; fingerprint: string; rows: Form16Row[] }>("/form16", { fy });
+export const askForm16 = (fy: string, fingerprint: string) => post(`/form16/${fy}/confirm`, { fingerprint });
+export const decideForm16 = (fy: string, fingerprint: string, decision: "APPROVE" | "REJECT") => post(`/form16/${fy}/decision`, { fingerprint, decision });
+export const myForm16 = (fy: string) => get<Form16Row & { draft: boolean; watermark: string | null; partA: string }>("/me/form16", { fy });
