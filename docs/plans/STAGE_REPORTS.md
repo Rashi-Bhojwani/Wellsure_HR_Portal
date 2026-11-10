@@ -230,3 +230,7 @@ Changed assertions: `CHANGED_TESTS.md` (none weakened).
 lists what each type lacks), line-by-line opening figures (needs greytHR's layout). **Not walked in a browser:** the YTD Reports, Salary Revision and the two Loans
 pages (built after the last walk; typecheck, lint, route tests and bundle passed). **Process note:** one full-suite run was spoiled by regenerating the Prisma client
 while it ran; it was run again with no edits (see the next entry).
+
+**Gate after `7ec1d5a` (written 2026-11-10).** Full backend suite run alone, no edits during it: **211 files, 2,003 tests, all passed.** CI per job: run 267 on the A-3
+commit `0e3a1bf` failed in install-lint-typecheck-test → Test (the payroll literal guard flagged form-length constants in `tax/openings.ts`; every other job green);
+fixed in `7ec1d5a` (allowlist with reasons). Run 271 on `00ac198` (all code through `7ec1d5a`): success on all seven jobs.
