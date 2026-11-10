@@ -714,6 +714,14 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "POST /api/loans/:id/sanction/decision": adminInService("a different director (decideSanction)"),
   "POST /api/loans/:id/changes": adminInService("director only, maker-checker LOAN_CHANGE"),
   "POST /api/loans/:id/changes/:changeId/decision": adminInService("a different director (decideChange)"),
+  // P7-5 (docs/plans/P7_5_REIMBURSEMENTS.md)
+  "GET /api/reimbursements/mine": self,
+  "POST /api/reimbursements/mine": self,
+  "POST /api/reimbursements/mine/:id/withdraw": self,
+  "GET /api/reimbursements/types": adminInService("director only (listTypes)"),
+  "PUT /api/reimbursements/types": adminInService("director only (saveType), audited"),
+  "GET /api/reimbursements": adminInService("director only (queue)"),
+  "POST /api/reimbursements/:id/decision": adminInService("director only, never one's own claim (decide), audited"),
   // P7-3: the person's own
   "GET /api/tax/me/ytd": self,
   "GET /api/tax/me/salary-revisions": self,

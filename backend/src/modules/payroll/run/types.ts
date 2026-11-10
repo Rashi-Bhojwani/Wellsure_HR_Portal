@@ -32,7 +32,7 @@ export interface SegmentInput {
 export interface AdjustmentIn {
   /** Null for a year-end encashment that has not yet been turned into an adjustment row (a preview). */
   id: string | null;
-  source: "MANUAL" | "SALARY_ARREARS" | "YEAR_END_ENCASHMENT" | "IMPORT" | "LOP_REVERSAL" | "HOLD_RELEASE" | "MONTHLY_INPUT" | "LOAN_DISBURSEMENT" | "LOAN_PRINCIPAL" | "LOAN_INTEREST"; // P7-4: loans
+  source: "MANUAL" | "SALARY_ARREARS" | "YEAR_END_ENCASHMENT" | "IMPORT" | "LOP_REVERSAL" | "HOLD_RELEASE" | "MONTHLY_INPUT" | "LOAN_DISBURSEMENT" | "LOAN_PRINCIPAL" | "LOAN_INTEREST" | "REIMBURSEMENT"; // P7-4: loans; P7-5: reimbursements
   sourceRef: string | null;
   componentCode: string;
   direction: "EARNING" | "DEDUCTION";

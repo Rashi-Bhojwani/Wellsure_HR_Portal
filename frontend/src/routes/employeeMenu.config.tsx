@@ -49,6 +49,7 @@ const AttendanceInfoPage = lazyPage(() => import("../pages/employee/attendance/A
 const PayslipsPage = lazyPage(() => import("../pages/employee/salary/PayslipsPage"), "PayslipsPage");
 const ItDeclarationPage = lazyPage(() => import("../pages/employee/salary/ItDeclarationPage"), "ItDeclarationPage");
 const ProofOfInvestmentPage = lazyPage(() => import("../pages/employee/salary/ProofOfInvestmentPage"), "ProofOfInvestmentPage");
+const ReimbursementPage = lazyPage(() => import("../pages/employee/salary/ReimbursementPage"), "ReimbursementPage"); // P7-5
 const LoansPage = lazyPage(() => import("../pages/employee/salary/LoansPage"), "LoansPage"); // P7-4
 const YtdReportsPage = lazyPage(() => import("../pages/employee/salary/YtdReportsPage"), "YtdReportsPage"); // P7-3
 const SalaryRevisionPage = lazyPage(() => import("../pages/employee/salary/SalaryRevisionPage"), "SalaryRevisionPage"); // P7-3
@@ -171,7 +172,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
         label: "Reimbursement",
         path: "salary/reimbursement",
         icon: WalletOutlined,
-        phase: "Phase 7",
+        element: ReimbursementPage,
       },
       {
         key: "proof-of-investment",

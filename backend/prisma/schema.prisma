@@ -467,6 +467,7 @@ model Employee {
   leaverRecalcs   LeaverLeaveRecalc[] @relation("LeaverRecalcEmployee") // A-10 G6
   taxOpenings     TaxOpening[]        @relation("TaxOpeningEmployee") // A-3
   loans           Loan[]              @relation("LoanEmployee") // P7-4
+  claims          ReimbursementClaim[] @relation("ReimbursementClaimEmployee") // P7-5
   bankRepaymentRows BankRepaymentRow[]
   remoteRecords   RemoteAttendanceRecord[]
   id              String                   @id @default(cuid())
@@ -2610,6 +2611,7 @@ enum AdjustmentSource {
   LOAN_DISBURSEMENT // P7-4
   LOAN_PRINCIPAL // P7-4
   LOAN_INTEREST // P7-4
+  REIMBURSEMENT // P7-5
 }
 
 enum AdjustmentStatus {
@@ -3998,4 +4000,62 @@ model LoanChange {
 
   @@index([loanId])
   @@map("loan_changes")
+}
+
+// ── P7-5 (docs/plans/P7_5_REIMBURSEMENTS.md): reimbursements, immutable rows, one decision per claim ─────────────────────────────
+model ClaimTypeVersion {
+  id                String   @id @default(cuid())
+  typeKey           String   @map("type_key")
+  version           Int
+  name              String
+  employeesMayClaim Boolean? @map("employees_may_claim")
+  billsRequired     Boolean? @map("bills_required")
+  monthlyCapSet     Boolean  @default(false) @map("monthly_cap_set")
+  monthlyCap        Decimal? @map("monthly_cap") @db.Decimal(14, 2)
+  yearlyCapSet      Boolean  @default(false) @map("yearly_cap_set")
+  yearlyCap         Decimal? @map("yearly_cap") @db.Decimal(14, 2)
+  payHead           String?  @map("pay_head")
+  retired           Boolean  @default(false)
+  reason            String
+  setByUserId       String   @map("set_by_user_id")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([typeKey, version])
+  @@map("claim_type_versions")
+}
+
+model ReimbursementClaim {
+  id          String          @id @default(cuid())
+  employeeId  String          @map("employee_id")
+  employee    Employee        @relation("ReimbursementClaimEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  typeKey     String          @map("type_key")
+  typeVersion Int             @map("type_version")
+  spentOn     DateTime        @map("spent_on") @db.Date
+  amount      Decimal         @db.Decimal(14, 2)
+  description String
+  bills       Json            @default("[]")
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  decision    ClaimDecision?
+
+  @@index([employeeId])
+  @@map("reimbursement_claims")
+}
+
+enum ClaimDecisionKind {
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+model ClaimDecision {
+  id              String             @id @default(cuid())
+  claimId         String             @unique @map("claim_id")
+  claim           ReimbursementClaim @relation(fields: [claimId], references: [id], onDelete: Restrict)
+  kind            ClaimDecisionKind
+  approvedAmount  Decimal?           @map("approved_amount") @db.Decimal(14, 2)
+  reason          String             @default("")
+  decidedByUserId String             @map("decided_by_user_id")
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("claim_decisions")
 }

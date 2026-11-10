@@ -85,6 +85,9 @@ const EXTRA_ALLOWED: Record<string, number[]> = {
   // P7-4 loans: 1200 = 12 months × 100 (a yearly percentage to a monthly fraction), form field lengths and limits (a key, a name, a note, at most 600 instalments,
   // a 64-character fingerprint, a 1-to-3-digit rate). None is a payroll figure.
   "loans/schedule.ts": [1200],
+  // P7-5: form field lengths (a key, a name, a note) and the most bills on one claim. None is a payroll figure.
+  "reimbursements/service.ts": [31, 60, 40, 300, 120],
+  "reimbursements/routes.ts": [64],
   "loans/service.ts": [31, 60, 600, 40, 300, 64, 32],
   "rules/schemas.ts": [28, 31, 39, 60],
   "validators.ts": [25, 60],
