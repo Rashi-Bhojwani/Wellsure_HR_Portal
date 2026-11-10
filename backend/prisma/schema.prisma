@@ -468,6 +468,7 @@ model Employee {
   taxOpenings     TaxOpening[]        @relation("TaxOpeningEmployee") // A-3
   loans           Loan[]              @relation("LoanEmployee") // P7-4
   claims          ReimbursementClaim[] @relation("ReimbursementClaimEmployee") // P7-5
+  fnfSettlements  FnfSettlement[]      @relation("FnfSettlementEmployee") // P7-6
   bankRepaymentRows BankRepaymentRow[]
   remoteRecords   RemoteAttendanceRecord[]
   id              String                   @id @default(cuid())
@@ -778,6 +779,7 @@ model Separation {
   // A-9 — end
 
   leaverRecalcs     LeaverLeaveRecalc[] // A-10 G6
+  fnfSettlements    FnfSettlement[] // P7-6
   @@index([employeeId])
   @@map("separations")
 }
@@ -2506,6 +2508,7 @@ enum PayrollApprovalSubject {
   TAX_OPENING // A-3
   LOAN_SANCTION // P7-4
   LOAN_CHANGE // P7-4
+  FNF_SETTLEMENT // P7-6
 }
 
 enum PayrollApprovalStatus {
@@ -4058,4 +4061,20 @@ model ClaimDecision {
   createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@map("claim_decisions")
+}
+
+// ── P7-6 (docs/plans/P7_6_SETTLEMENTS.md): full and final settlements, immutable, latest per separation counts ─────────────────
+model FnfSettlement {
+  id              String     @id @default(cuid())
+  separationId    String     @map("separation_id")
+  separation      Separation @relation(fields: [separationId], references: [id], onDelete: Restrict)
+  employeeId      String     @map("employee_id")
+  employee        Employee   @relation("FnfSettlementEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  lines           Json
+  total           Decimal    @db.Decimal(14, 2)
+  createdByUserId String     @map("created_by_user_id")
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([separationId])
+  @@map("fnf_settlements")
 }

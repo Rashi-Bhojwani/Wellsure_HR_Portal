@@ -722,6 +722,11 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "PUT /api/reimbursements/types": adminInService("director only (saveType), audited"),
   "GET /api/reimbursements": adminInService("director only (queue)"),
   "POST /api/reimbursements/:id/decision": adminInService("director only, never one's own claim (decide), audited"),
+  // P7-6 (docs/plans/P7_6_SETTLEMENTS.md): directors only
+  "GET /api/settlements": adminInService("router gate payroll.salary.view and a director check in the service; never one's own"),
+  "POST /api/settlements": adminInService("router gate payroll.salary.view and a director check in the service; never one's own"),
+  "POST /api/settlements/:id/confirm": adminInService("router gate payroll.salary.view and a director check in the service; never one's own"),
+  "POST /api/settlements/:id/decision": adminInService("router gate payroll.salary.view and a director check in the service; never one's own"),
   // P7-3: the person's own
   "GET /api/tax/me/ytd": self,
   "GET /api/tax/me/salary-revisions": self,

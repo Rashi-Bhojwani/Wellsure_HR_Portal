@@ -372,3 +372,16 @@ registerSubject({
 });
 
 export { addMonths, isDirector };
+
+/** P7-6: for a settlement, each sanctioned loan's balance and the principal already pending as adjustments (so a settlement does not count it twice). */
+export async function outstandingLoans(employeeId: string): Promise<Array<{ loanId: string; typeKey: string; balance: Money; pendingPrincipal: Money }>> {
+  const loans = await prisma.loan.findMany({ where: { employeeId } });
+  const out: Array<{ loanId: string; typeKey: string; balance: Money; pendingPrincipal: Money }> = [];
+  for (const l of loans) {
+    const s = await stateOf(l);
+    if (s.status !== "SANCTIONED") continue;
+    const pendingPrincipal = sum(s.adjustments.filter((a) => a.source === "LOAN_PRINCIPAL" && a.status === "PENDING").map((a) => dec(a.amount.toString())));
+    out.push({ loanId: l.id, typeKey: l.typeKey, balance: s.balance, pendingPrincipal });
+  }
+  return out;
+}

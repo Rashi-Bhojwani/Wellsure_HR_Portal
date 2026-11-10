@@ -43,6 +43,7 @@ import { payrollRouter } from "./modules/payroll/routes";
 import { taxRouter } from "./modules/payroll/tax/routes";
 import { loansRouter } from "./modules/payroll/loans/routes"; // P7-4
 import { reimbursementsRouter } from "./modules/payroll/reimbursements/routes"; // P7-5
+import { settlementsRouter } from "./modules/payroll/settlements/routes"; // P7-6
 import { payslipRouter } from "./modules/payroll/payslipRoutes";
 // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
 import { employeeExtrasRouter, massEmailRouter, segmentsRouter, separationModesRouter } from "./modules/parity/routes";
@@ -97,6 +98,7 @@ const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   { path: "/api/tax", router: taxRouter },
   { path: "/api/loans", router: loansRouter }, // P7-4
   { path: "/api/reimbursements", router: reimbursementsRouter }, // P7-5
+  { path: "/api/settlements", router: settlementsRouter }, // P7-6
   { path: "/api/attendance", router: attendanceRouter },
   { path: "/api/biometric", router: biometricRouter },
   // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
