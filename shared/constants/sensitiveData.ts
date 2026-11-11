@@ -192,8 +192,8 @@ export const HR_FORBIDDEN_KEYS: readonly PermissionKey[] = [
   "audit.view",
   "settings.manage",
   "delegation.manage",
-  // Locked after Checkpoint 1: sign-in security of other people (reset, unlock, sessions), the Import Center (it carries pay and bank sheets), letters (a letter can carry the CTC; per-type grants
-  // are not built, so the whole key is the directors' for now) and the leave year-end (encashment amounts).
+  // Locked after Checkpoint 1: sign-in security of other people (reset, unlock, sessions), the Import Center (it carries pay and bank sheets), letters (a letter can carry the CTC; HR issues only
+  // through the per-template grants and `letters.issue.nopay`, on templates proven free of pay figures, A-9 G3) and the leave year-end (encashment amounts).
   "user.security.manage",
   "import.manage",
   "letters.generate",

@@ -14,8 +14,8 @@ every `payroll.*` key, plus `reports.salary.view`, `reports.liability.view`, `do
    append-only `role_permission_removals`, so it can be put back by a forward migration; the app database role has no UPDATE/DELETE on it).
 
 Not in this set, on purpose, and listed as open: `employee.bank.*` / `employee.statutory.*` (HR **enters** a masked change; a director confirms — approved
-plan, decision b; the confirm step is D2), `letters.generate` (per-type grants are H4, not built, so HR can still issue letters, including ones with
-pay figures, until then), `settings.manage`, `audit.view`, `role.view`, `delegation.manage`, `user.security.manage`, `import.manage` (Admin Tools filter is H7, not
+plan, decision b; the director's confirmation step was built in the M session, task 1, `identity_change_requests`), `letters.generate` (per-type grants were built later, in A-9 G3: `letter_template_grants`, with HR limited to templates proven free of pay
+figures through `letters.issue.nopay`; `letters.generate` itself is now in `HR_FORBIDDEN_KEYS`), `settings.manage`, `audit.view`, `role.view`, `delegation.manage`, `user.security.manage`, `import.manage` (Admin Tools filter is H7, not
 built), `leave.yearend.manage` (open question Q12). Each is in the Stage 1 report as an unlocked gap.
 
 **B. Capability switches (what a director may turn on or off for HR).** Twelve capabilities (the twelfth, See leave counts, was added after Checkpoint 1), each a named set of permission keys:

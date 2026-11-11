@@ -32,7 +32,7 @@ Plan (written before the code):
 - [x] mutation checks, lint, typecheck, changed tests (see M_STAGE_REPORTS.md)
 
 ## Task 2 — stale text (docs and one code comment)
-- [ ] spec §7.5 and `STAGE_5B_PLAN.md` (no bank response import); `CLAUDE.md` (HR sees no salary; HR Executive enters bank/identity masked);
+- [x] spec §7.5 and `STAGE_5B_PLAN.md` (no bank response import); `CLAUDE.md` (HR sees no salary; HR Executive enters bank/identity masked);
       `sensitiveData.ts` comment and `HR_CAPABILITIES.md` (per-template letter grants are built); spec "until the CA confirms" wording
 
 ## Task 3 — work list (non-payroll, no owner decision, not Peeps)

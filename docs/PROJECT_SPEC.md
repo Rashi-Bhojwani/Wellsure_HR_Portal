@@ -515,7 +515,7 @@ the only one.
 - **Accrual:** 1.0 day credited **every month**.
 - **Eligibility:** accrual starts only after the employee completes **3 months** from date of joining. Make the exact rule configurable: `ACCRUE_FROM_NEXT_MONTH_AFTER_ELIGIBILITY` (default) vs `PRORATE`.
 - **Carry forward:** unused balance rolls over month to month with no cap (cap configurable).
-- **Year-end (31 Dec):** remaining PL balance is **encashed** — paid as money in the next payroll — and the balance resets for the new year. Encashment per-day rate formula is configurable (default: monthly Basic ÷ 30) and must be confirmed by our CA.
+- **Year-end (31 Dec):** remaining PL balance is **encashed** — paid as money in the next payroll — and the balance resets for the new year. Encashment per-day rate formula is configurable (default: monthly Basic ÷ 30) and must be confirmed by the owners (there is no CA: the owners enter and verify it, with a source note).
 - Negative balance not allowed by default (configurable).
 - Half-day leave allowed.
 
@@ -595,7 +595,7 @@ Leave Overview dashboard, Leave Calendar, Employee Leave, Leave Granter, Year En
 ### 7.5 Payroll app (Phase 6+)
 Salary components (earning/deduction, taxable, PF/ESI applicability), salary structure templates with formulas (e.g. Basic = 40% of CTC), employee salary assignment and revisions (effective-dated, arrears), **Payroll Run** for the selected month (reads finalised attendance: paid days, LOP; leave encashment; arrears; reimbursements; loan EMIs), variance report vs previous month, **maker-checker approval**, publish payslips (PDF + real-time notification), statutory outputs (PF ECR file, ESI, PT, LWF, TDS), IT declaration and proof-of-investment review, Form 16 / quarterly TDS return data, loans & advances, reimbursements, full & final settlement.
 
-**Salary disbursement:** after checker approval, generate the **bank bulk-transfer file** in our bank's exact format (configurable template: CSV/XLSX/fixed-width) + summary PDF. HR uploads it to corporate net banking where the authorised signatory releases payment. HR then marks the batch paid or imports the bank response. Every step audited. **No direct money transfer from the app.**
+**Salary disbursement:** after checker approval, generate the **bank bulk-transfer file** in our bank's exact format (configurable template: CSV/XLSX/fixed-width) + summary PDF. A director uploads it to corporate net banking, where the authorised signatory releases payment, and may then note in the app that the file was sent to the bank. **Bank payments are manual** (owner decision D-34): there is no bank API and no return file; nothing is read back from the bank, and a rejected payment is entered by hand by a director with its reason. Every step audited. **No direct money transfer from the app.** (Amended 2026-11-11: payroll, including the bank file, is the two directors' alone; HR has no part in it.)
 
 ### 7.6 Reports
 Headcount, joiners, leavers/attrition, birthdays & anniversaries, attendance muster, late-coming, overtime, exceptions, leave balance & leave liability, LOP, salary register, PF/ESI/PT, bank statement, exit report. Plus a **custom report builder** (choose fields, filters, grouping; save; export; schedule by email).
@@ -616,9 +616,10 @@ Each report:
 - has a list view and an Excel export through `lib/xlsx.ts`, with each
   export audited.
 
-Leave liability also needs `reports.liability.view` (HR_ADMIN and
-PAYROLL_ADMIN) because it becomes salary-derived in Phase 6. The UI
-flags its rate as provisional until the CA confirms it.
+Leave liability also needs `reports.liability.view` (the directors only, since
+the HR/payroll separation: HR sees no pay figure) because it becomes salary-derived
+in Phase 6. The UI flags its rate as provisional until the owners confirm it (there
+is no CA: the owners enter and verify every such value, with a source note).
 
 The attendance reports come with Phase 3, the salary and statutory
 reports with Phase 6, and the custom builder with Phase 8.
@@ -894,7 +895,7 @@ Assets management, performance/review cycles, custom report builder, scheduled r
 - Working hours and working days for the "no punches" alert (§4.7): configurable defaults until HR confirms.
 - **Employee Code vs Device User ID default (§3):** §3 pre-fills Employee Code from the Device User ID, but our device's IDs (2–126) differ from our 1000-series Employee Codes. Should Add Employee stop pre-filling, or is the 1000-series only for existing staff? Punch mapping is unaffected: it always goes through `device_user_mappings`.
 - Exact PL eligibility boundary (credit on completing 3 months vs from next month) and pro-rating.
-- Leave encashment formula and its tax treatment (to be confirmed by CA).
+- Leave encashment formula and its tax treatment (to be confirmed by the owners, who enter and verify it with a source note; there is no CA).
 - Bank bulk-transfer file format (from bank).
 - PT/LWF applicability per location's state.
 - Actual headcount and full location list.

@@ -67,3 +67,14 @@ refusals, setting off = as before, two directors at once). Mutation checks (each
 removed → **survived** (the second decision is refused by the database trigger instead, which the "database refuses" case pins; the claim is defence
 in depth). Suites run: employee (8 files), access, hrCapabilities, behaviours, lib, documents, managers (route inventory), payroll setupChecklist,
 directorAuthority, releases (the sensitive scan, which signs in as an HR Executive) — all green. Frontend: typecheck, lint + tokens, 75 tests.
+
+### Task 2 — stale text
+
+Docs and one comment only: spec §7.5 (a director uploads the bank file; bank payments are manual, no return file, rejections by hand), spec §7.6
+(leave liability: directors only; "until the owners confirm it"), spec §5.2 and §14 ("confirmed by the owners … there is no CA"),
+`STAGE_5B_PLAN.md` (the `BANK_RETURN_TEMPLATE` passage marked superseded by D-33/D-34), `CLAUDE.md` (HR sees no salary or pay figure; both HR
+roles enter bank and identity details masked; the bank file is for a director to upload), `HR_CAPABILITIES.md` and the comment above
+`HR_FORBIDDEN_KEYS` in `shared/constants/sensitiveData.ts` (per-template letter grants are built; the director's confirmation of HR's bank and
+statutory entries is built). Mismatches M3, M5, M6 and M7 of the audit are closed; M4 (`PORTAL_READY_REPORT.md`) is Session A's report and is left
+as a request: **Request 3 to Session A:** `PORTAL_READY_REPORT.md` §6 item 3 still says the Developer reaches Employee Swipes; since D-37 default 3 it
+does not unless a director switches it on.
