@@ -168,3 +168,25 @@ the link. Built-in wording is the default ("Default, change in settings"; "go ba
 (`settings.email_template.updated`). The security-change notice is deliberately not editable. Stored in `system_settings` (`email.templates`), no
 migration. Test `auth/__tests__/emailTemplates.test.ts`. Mutation checks: wording not escaped → caught; an unknown placeholder accepted → caught.
 **Not built (why Partial):** the payslip email (payroll, Session A's), the device alert and director-notice emails keep fixed wording.
+
+### RP-13 — scheduled reports by email: **Missing → Built ("email me this report")**
+
+A person schedules a report **for themselves** (Report screen → "Email me this report": weekly on Mondays or monthly on the 1st), only one they
+may open now (`reports.view` plus the report's own key). A daily job (`report-subscriptions`, 07:41 IST) runs each due report **with the person's
+access as it is then** (data scope included) and emails the title, the row count and a link to open it in the portal. **The rows are never in the
+email**, so no personal data or pay figure travels by email. Someone who lost the access, or whose account is no longer active, is stopped with the
+reason shown. At most once a day per schedule. Table `report_subscriptions` (migration `20261112130000_m_report_subscriptions`). Test
+`reports/__tests__/subscriptions.test.ts` (who may schedule; Monday weekly sent once with a count and a link and no rows; monthly covers the last
+calendar month; stopped for lost access and for a suspended account). Mutation checks: `reports.view` not required → caught (this found a real bug
+while writing it: the report catalogue assumes the route checked `reports.view`, so the scheduled send now checks it itself); sent more than once a
+day → caught; a suspended account still sent → caught; rows in the email → caught.
+
+Decided here: the email carries a link and a count, not an attachment (an attachment would put personal data in mailboxes); only one's own schedule
+(nobody schedules a report to someone else). The owners may want attachments for some reports.
+
+### NT-10 — phone push notifications: **skipped (needs real values)**
+
+Web push needs a VAPID key pair (a secret, generated and kept in the environment's secrets) and outbound access to the browsers' push services
+(their hosts must be allowed by the network policy). Neither can be chosen or tested here, and a push that cannot be delivered would only look built.
+The PWA already shows in-app notices in real time while open. To build: keys as secrets (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`), a
+`push_subscriptions` table, the service worker's `push` handler, and the same category choices as NT-09.

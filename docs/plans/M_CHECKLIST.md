@@ -44,7 +44,7 @@ Tier 1 first, then smallest first. Status per row is kept in M_STAGE_REPORTS.md.
 - [x] LT-08 Employee asks for a letter — small
 - [x] NT-09 Notification preferences — small
 - [x] NT-08 Editable email templates — medium
-- [ ] RP-13 Scheduled reports by email — medium
-- [ ] NT-10 Phone push notifications — medium
+- [x] RP-13 Scheduled reports by email — medium
+- [-] NT-10 Phone push notifications — medium (needs a VAPID key pair and the push services' hosts: real values, see report)
 - [ ] full backend suite alone; CI per job on the final code commit; browser walk (director, HR, manager, employee, Developer; desktop + 390 dark)
 - [ ] M_STAGE_REPORTS.md final report

@@ -145,6 +145,9 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "PUT /api/notifications/preferences": self, // NT-09
   "GET /api/settings/email-templates": admin, // NT-08: settings.manage (non-grantable)
   "PUT /api/settings/email-templates": admin, // NT-08
+  "GET /api/reports/subscriptions/mine": everyone("RP-13: the caller's own report schedules, no one else's record; each report is run within the caller's own data scope when it is sent (a manager: their team)"),
+  "POST /api/reports/subscriptions/mine": everyone("RP-13: the caller's own report schedules, no one else's record; each report is run within the caller's own data scope when it is sent (a manager: their team)"),
+  "DELETE /api/reports/subscriptions/mine/:id": everyone("RP-13: the caller's own report schedules, no one else's record"),
   "GET /api/audit-logs/export": admin, // AU-04: audit.view (non-grantable), Developer refused
   "GET /api/settings/security": admin,
   "PUT /api/settings/security": admin,

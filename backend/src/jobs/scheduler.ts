@@ -5,7 +5,7 @@ import { MANUAL_REMINDER_HOUR_KEY } from "../modules/attendance/manual/reminder"
 import { directorNoticeQueue } from "./directorNoticeQueue";
 import { remoteReminderQueue } from "./remoteQueue";
 import { attendanceDeviceHealthQueue, attendanceManualReminderQueue, attendanceNightlyQueue } from "./attendanceQueues";
-import { compOffExpiryQueue, employeeSeparationsQueue, historyRolloverQueue, engageAutoPostsQueue, helpdeskAutoCloseQueue, leavePlAccrualQueue } from "./queues";
+import { compOffExpiryQueue, employeeSeparationsQueue, historyRolloverQueue, engageAutoPostsQueue, helpdeskAutoCloseQueue, leavePlAccrualQueue, reportSubscriptionsQueue } from "./queues";
 
 // Registers BullMQ repeatable jobs. Idempotent registration matters here —
 // see docs/PROJECT_SPEC.md §15.2.3 (the scheduler service always runs
@@ -64,6 +64,10 @@ export async function registerScheduledJobs(): Promise<void> {
     { name: "auto-close-resolved-tickets" },
   );
   logger.info("Registered repeatable job: helpdesk-auto-close (hourly at :05)");
+
+  // RP-13 (M session): scheduled reports, 07:41 IST daily (WEEKLY ones go on Mondays, MONTHLY on the 1st).
+  await reportSubscriptionsQueue.upsertJobScheduler("report-subscriptions-daily", { pattern: "41 7 * * *", tz: "Asia/Kolkata" }, { name: "send-due-reports" });
+  logger.info("Registered repeatable job: report-subscriptions (07:41 IST daily)");
 
   // Remote attendance reminders: hourly; a no-op while the threshold is Not set.
   await remoteReminderQueue().upsertJobScheduler("remote-attendance-reminder-hourly", { pattern: "40 * * * *", tz: "Asia/Kolkata" }, { name: "remind" });

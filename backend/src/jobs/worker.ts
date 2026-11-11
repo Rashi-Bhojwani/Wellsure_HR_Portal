@@ -24,6 +24,7 @@ import { processRecomputeJob, runNightly } from "../modules/attendance/jobs";
 import { executeProcessRun } from "../modules/attendance/processService";
 import { runDeviceHealthChecks } from "../modules/biometric/health/runner";
 import { PAYROLL_CALCULATE_QUEUE, PAYROLL_PAYSLIPS_QUEUE } from "./payrollQueues";
+import { sendDueReports } from "../modules/reports/subscriptions";
 import { deliverPayslips } from "../modules/payroll/run/payslipDelivery";
 import { executeCalculation } from "../modules/payroll/run/engine";
 
@@ -151,6 +152,20 @@ export function startWorkers(): Worker[] {
     logger.error({ jobId: job?.id, err }, "helpdesk-auto-close job failed");
   });
 
+  // RP-13 (M session): scheduled reports (a link and a row count by email, never the rows).
+  const reportSubscriptionsWorker = new Worker(
+    "report-subscriptions",
+    async (job) => {
+      const result = await sendDueReports();
+      logger.info({ jobId: job.id, ...result }, "report-subscriptions processed");
+      return result;
+    },
+    { connection: createBullConnection() },
+  );
+  reportSubscriptionsWorker.on("failed", (job, err) => {
+    logger.error({ jobId: job?.id, err }, "report-subscriptions job failed");
+  });
+
   const remoteReminderWorker = new Worker(
     REMOTE_REMINDER_QUEUE,
     async (job) => {
@@ -217,5 +232,5 @@ export function startWorkers(): Worker[] {
   const payrollPayslipsWorker = new Worker(PAYROLL_PAYSLIPS_QUEUE, async (job) => deliverPayslips((job.data as { runId: string }).runId), { connection: createBullConnection(), concurrency: 1 });
   payrollPayslipsWorker.on("failed", (job, err) => logger.error({ jobId: job?.id, err }, "payroll-payslips job failed"));
 
-  return [pingWorker, rolloverWorker, separationsWorker, leavePlAccrualWorker, compOffExpiryWorker, engageAutoPostsWorker, helpdeskAutoCloseWorker, lettersWorker, securityAlertWorker, recomputeWorker, nightlyWorker, processWorker, reminderWorker, deviceHealthWorker, payrollCalculateWorker, payrollPayslipsWorker, directorNoticeWorker, hrCapabilityWorker, remoteReminderWorker];
+  return [pingWorker, rolloverWorker, separationsWorker, leavePlAccrualWorker, compOffExpiryWorker, engageAutoPostsWorker, helpdeskAutoCloseWorker, lettersWorker, securityAlertWorker, recomputeWorker, nightlyWorker, processWorker, reminderWorker, deviceHealthWorker, payrollCalculateWorker, payrollPayslipsWorker, directorNoticeWorker, hrCapabilityWorker, remoteReminderWorker, reportSubscriptionsWorker];
 }

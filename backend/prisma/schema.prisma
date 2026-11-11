@@ -123,6 +123,7 @@ model User {
 
   // M-BEGIN (second session, NT-09)
   notificationPreferences NotificationPreference[]
+  reportSubscriptions     ReportSubscription[]
   // M-END
   @@map("users")
 }
@@ -4322,5 +4323,25 @@ model NotificationPreference {
 
   @@id([userId, category])
   @@map("notification_preferences")
+}
+// M-END
+
+// M-BEGIN (second session, RP-13): "email me this report". A person subscribes themselves to a report they may open; at send time the report is run
+// with their access as it is THEN (a person who lost access is stopped, with the reason). The email carries the row count and a link, never the data.
+model ReportSubscription {
+  id          String    @id @default(cuid())
+  userId      String    @map("user_id")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reportKey   String    @map("report_key")
+  frequency   String // WEEKLY (Mondays, the last 7 days) | MONTHLY (the 1st, the last calendar month)
+  filters     Json      @default("{}") // org filters only; dates are worked out at send time
+  active      Boolean   @default(true)
+  stoppedWhy  String?   @map("stopped_why")
+  lastSentOn  DateTime? @map("last_sent_on") @db.Date
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@unique([userId, reportKey])
+  @@index([active])
+  @@map("report_subscriptions")
 }
 // M-END
