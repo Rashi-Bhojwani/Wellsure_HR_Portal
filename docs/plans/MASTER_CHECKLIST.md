@@ -25,11 +25,16 @@ Read first. Status: DONE / OPEN / PARTIAL / **UNDEFINED** (no plan file on any b
 | A-8 | **UNDEFINED** (the Stage 5b "A8 bank payments are manual" is DONE; it is not this item) | not started | owners to define |
 | P7-2 | declarations with proofs | DONE (Stage 7 report) | — |
 | P7-3 | TDS projection, regimes side by side | DONE: TDS in the run + IT Statement (earlier); checkpoint report `0e3a1bf` in STAGE_REPORTS; YTD reports, payslip YTD (new payslips only), Salary Revision page, revision and offer letter figures `7ec1d5a` | P7-2 |
-| P7-4 | loans and advances (incl. Principal / Interest parts) | DONE (core) `7ec1d5a`: types, request, two-director sanction, exact schedule, pay/recover through runs, immutable records, statements, changes (API only); NOT built: perquisite, the shortfall rule, change screens | input heads D-31 |
+| P7-4 | loans and advances (incl. Principal / Interest parts) | DONE (core) `7ec1d5a`: types, request, two-director sanction, exact schedule, pay/recover through runs, immutable records, statements, changes (API only); type screen `742cb4a`; shortfall rule `df8306f` (D-37); NOT built: perquisite, change screens | input heads D-31 |
 | P7-5 | reimbursements | DONE `7f90f94` (4 mutants caught; not built: Tasks inbox source, manager step, per-run statement layout) | — |
-| P7-6 | off-cycle runs, full and final settlement (incl. held pay) | DONE: settlement prepared and confirmed `cb8de84`; **P7-6b off-cycle runs** (pay a confirmed settlement or held pay; same approvals, bank file and DEMO rules; nothing paid twice) — see STAGE_REPORTS | P7-4, P7-5 |
-| P7-7 | Form 16 data (DRAFT), quarterly return data | DONE `5b36109` (challans, reconciliation, quarterly data API, Form 16 Part B data DRAFT until confirmed; NOT built: Form 16 PDF, the official return format, a quarterly screen, Part A pairing) | P7-3, A-3 |
+| P7-6 | off-cycle runs, full and final settlement (incl. held pay) | DONE: settlement `cb8de84`; **P7-6b off-cycle runs `64b6e16`** (8 mutants caught; full suite 2,026 passed) | P7-4, P7-5 |
+| P7-7 | Form 16 data (DRAFT), quarterly return data | DONE `5b36109` (challans, reconciliation, quarterly data API, Form 16 Part B data DRAFT until confirmed; NOT built: Form 16 PDF, the official return format, Part A pairing); quarterly screen `742cb4a` | P7-3, A-3 |
 | Stage 5.6 | loans if missing | = P7-4 | — |
+| Walk | never-opened screens, 5 roles × desktop light / 390 dark | DONE `28a4e25` (120 visits; duplicate menu entry removed) | — |
+| Item 3 | loan and claim type settings, quarterly TDS screen | DONE `742cb4a` | — |
+| D-37 (4) | loan shortfall per type (default skip and carry), max deduction % (Not set) | DONE `df8306f` (9 mutants caught; suite 2,034 passed; CI 285 green) | — |
+| D-37 (5) | leaving-month accrual (default pro-rata), pro-rata rounding (Not set) | DONE `534aa71` (7 mutants caught, 1 equivalent removed; suite 2,038 passed) | — |
+| D-37 (6) | Developer does not see Employee Swipes by default; director switch | DONE (3 mutants caught) — see STAGE_REPORTS | — |
 | Stage 6 | internal reports + directors-only query builder "using the layouts in `docs/plans/PARITY_COVERAGE.md`" | **BLOCKED: `PARITY_COVERAGE.md` does not exist on any branch** | owners / a session that wrote it |
 | Stage 8 | attendance and salary file readers from `docs/samples`, layout setup, parallel-run kit | **BLOCKED in part: `docs/samples/` is not on this branch** (only on `peeps/foundation`, which this work may not touch) | samples on this branch |
 | Stage 9 parity | Tier 1 MISSING items of `PARITY_COVERAGE.md` | **BLOCKED (file missing)** | as Stage 6 |

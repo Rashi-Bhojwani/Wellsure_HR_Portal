@@ -320,3 +320,14 @@ days, rounding when set, days worked from the 1st or the joining date, leap Febr
 correction entry and is idempotent; NONE, FULL_MONTH, FULL_IF_MIN_DAYS under and exactly at N each move it to its own figure, each change confirmed by a different
 director. A-10's leavers test updated (`CHANGED_TESTS.md`). **Mutants (8):** 7 caught (NONE giving full, N boundary, never waiting for rounding, days off by one,
 joining date ignored, wrong default, earlier corrections ignored); 1 equivalent (the zero-days guard: zero is already exact), so the redundant line was removed.
+
+**Gate after item 5 (`534aa71`).** Full backend suite alone: **217 files, 2,038 tests, all passed.**
+
+## Item 6 (D-37): the Developer role and Employee Swipes (written 2026-11-11)
+
+`access.developerSeesSwipes` (default off, "Default, change in settings"). Applied where access is resolved (`lib/permissions.ts`, the one place): a Developer's
+`attendance.swipes.view` is removed unless the latest **confirmed** value of the switch is on; the menu, routes (list, options, export) and socket rooms follow.
+Previously the Developer reached Employee Swipes (flagged in the last report). **Tests** (`behaviours/__tests__/developerSwipes.test.ts`, 3): Developer-403 by default
+on the list and the export, resolved access without the key, HR unaffected; the Developer and HR cannot propose; a proposal alone changes nothing; on after a
+different director confirms (200), off again (403). Developer-ceiling test updated (`CHANGED_TESTS.md`). **Mutants (3, all caught):** never stripped; an unconfirmed
+proposal counting; any confirmed value turning it on.

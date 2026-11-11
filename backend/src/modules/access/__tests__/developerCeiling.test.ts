@@ -76,7 +76,8 @@ describe("the developer ceiling", () => {
   it("a developer holds what the role defines and no key in the registry", async () => {
     const a = await resolveAccess(dev.userId);
     expect(a.isSuperAdmin).toBe(false);
-    expect([...a.permissions].sort()).toEqual([...DEVELOPER_ROLE_PERMISSIONS].sort());
+    // D-37 item 6: Employee Swipes is off for the Developer by default (the directors' switch turns it on; tested in developerSwipes.test.ts).
+    expect([...a.permissions].sort()).toEqual([...DEVELOPER_ROLE_PERMISSIONS].filter((k) => k !== "attendance.swipes.view").sort());
     expect([...a.permissions].filter((k) => (SENSITIVE_PERMISSION_KEYS as readonly string[]).includes(k))).toEqual([]);
   });
 

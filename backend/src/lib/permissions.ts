@@ -36,6 +36,13 @@ const MANAGER_GRANTABLE = new Set<string>(MANAGER_GRANTABLE_KEYS);
 const DEVELOPER_FORBIDDEN = new Set<string>(DEVELOPER_FORBIDDEN_KEYS);
 const HR_FORBIDDEN = new Set<string>(HR_FORBIDDEN_KEYS);
 
+const SWIPES_KEY = "attendance.swipes.view";
+/** D-37 item 6: the latest confirmed value of the "Developer sees Employee Swipes" switch; off by default. Read directly so this module depends on nothing above it. */
+async function developerSeesSwipes(): Promise<boolean> {
+  const row = await prisma.behaviourProposal.findFirst({ where: { key: "access.developerSeesSwipes", confirmation: { isNot: null } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { value: true } });
+  return row?.value === true;
+}
+
 export async function resolveAccess(userId: string): Promise<ResolvedAccess> {
   const [allRoles, overrides] = await Promise.all([
     prisma.userRole.findMany({ where: { userId }, include: { role: { include: { permissions: { include: { permission: true } } } } } }),
@@ -55,6 +62,8 @@ export async function resolveAccess(userId: string): Promise<ResolvedAccess> {
     for (const o of overrides) if (o.effect === "GRANT") permissions.add(o.permission.key);
     for (const o of overrides) if (o.effect === "REVOKE") permissions.delete(o.permission.key);
     for (const key of [...permissions]) if (DEVELOPER_FORBIDDEN.has(key)) permissions.delete(key);
+    // D-37 item 6 (docs/plans/D37_DEFAULTS.md): the Developer role does not see Employee Swipes unless the directors switched it on (a confirmed behaviour setting).
+    if (permissions.has(SWIPES_KEY) && !(await developerSeesSwipes())) permissions.delete(SWIPES_KEY);
     return { roleCodes: roleCodes.filter((c) => c !== SUPER_ADMIN_ROLE_CODE), permissions, dataScope: widestScope(userRoles.map((ur) => ur.role.dataScope)), isSuperAdmin: false };
   }
   if (roleCodes.includes(SUPER_ADMIN_ROLE_CODE)) {
