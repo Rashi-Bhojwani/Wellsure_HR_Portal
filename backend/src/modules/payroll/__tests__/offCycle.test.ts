@@ -169,9 +169,12 @@ describe("P7-6b — off-cycle runs over the routes", () => {
     expect((await oc(world.tokens.maker, "post", `/${offId}/decision`, { fingerprint: view.fingerprint, decision: "APPROVE" })).body.error.code).toBe("CHECKER_IS_MAKER");
     expect((await oc(world.tokens.checkerA, "post", `/${offId}/decision`, { fingerprint: view.fingerprint, decision: "APPROVE" })).status).toBe(200);
     expect((await oc(world.tokens.checkerA, "post", `/${offId}/finalise`)).body.error.code).toBe("CHECKER_IS_EXECUTOR");
-    // A second run for the same held pay may be prepared while the first is not final, but only one of them can ever be finalised.
-    const twin = await oc(world.tokens.checkerB, "post", "", { kind: "HELD_PAY", sourceRef: heldItemId, paymentDate });
-    expect(twin.status).toBe(201);
+    // A second run for the same held pay is refused while the first is open (a double click on Prepare, or another director); two at once, one gets through.
+    const [t1, t2] = await Promise.all([1, 2].map(() => oc(world.tokens.checkerB, "post", "", { kind: "HELD_PAY", sourceRef: heldItemId, paymentDate })));
+    expect([t1!.body.error?.code, t2!.body.error?.code]).toEqual(["ALREADY_PREPARED", "ALREADY_PREPARED"]);
+    // A twin written straight into the database (as if the guard were bypassed) can still never be finalised: the finalisation keys decide that (below and the next test).
+    const source = await prisma.offCycleRun.findUniqueOrThrow({ where: { id: offId } });
+    const twin = { body: { id: (await prisma.offCycleRun.create({ data: { kind: source.kind, sourceRef: source.sourceRef, employeeId: source.employeeId, paymentDate: source.paymentDate, lines: source.lines as object, net: source.net, createdByUserId: world.checkerB.userId } })).id } };
     const done = await oc(world.tokens.maker, "post", `/${offId}/finalise`);
     expect(done.status, JSON.stringify(done.body)).toBe(200);
     expect(done.body.state).toBe("FINALISED");

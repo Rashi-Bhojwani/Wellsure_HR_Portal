@@ -369,3 +369,23 @@ inside it, Escape closes it, focus returns to the button — **21 of 21**.
    next run (`recoveryOf` in `loans/service.ts`, unit-tested; asserted on the demo loans).
 
 **Still seen, accepted:** at 768 the Reimbursements queue's state chip sits under the pinned action column and is reached by scrolling inside the table.
+
+## Step 4: end to end — a settlement recovers a loan through an off-cycle run (written 2026-11-11)
+
+`offCycleLoanE2E.test.ts` (4 tests), real API and database: a loan of 30,000 (three instalments) paid out and its first instalment recovered by the August run;
+recovery stopped by a two-director change (balance 20,000, state "Recovery stopped"); a settlement lists `LOAN_OWED −20,000` from the loan (plus a 30,000 notice line);
+a second director's double click on the confirmation decides once (200 + 409); a double click on Prepare makes one run (201 + 409 `ALREADY_PREPARED`); approval asked twice
+→ 409; a double click on Approve and on Finalise each act once; a later retry → 409; exactly one finalisation and one exit recovery of 20,000; the loan reads balance 0,
+"Recovered at exit", payroll-recovered 10,000; the instalment ledger is one CONSUMED and two CANCELLED, nothing pending; preparing the same settlement again →
+`ALREADY_PAID`; the bank file is written once on a double click (201 + 409) for 10,000, downloaded, and marked sent once on a double click (200 + 409); the September run
+recalculated afterwards gives the other employee **exactly** the same gross, deductions, net, status and every line, and the leaver no loan line.
+
+**Found and fixed:** (1) two simultaneous "Mark sent to the bank" clicks gave a 500 (the database kept one mark, the second error was not caught) — now 409 for every
+kind of bank file; (2) a double click on Prepare made two off-cycle runs for the same source (only one could ever be paid, but the other stayed as a stray draft) —
+prepare now refuses while a run for that source is open, serialised by an advisory lock. The P7-6b test that prepared a twin through the API now proves the guard and
+writes its twin straight into the database to keep proving that the finalisation keys refuse a second payment. **Mutants (3, all caught):** open-run guard dropped; lock
+dropped (race); sent-mark race not caught.
+
+**Browser check** (walk database, every button double-clicked, as DEMO001 and DEMO013): held pay for DEMO009 and for DEMO012 each prepared, approved, finalised, bank
+file approved, written, downloaded and marked sent through the Off-cycle runs screen; read back: one run (after the fix), one finalisation, one release, one bank batch,
+one sent mark each; DEMO008's loan shows "Recovered at exit" ₹0 and its settlement PAID.

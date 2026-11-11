@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { writeAuditLog } from "../../../lib/audit";
 import { requireDirector } from "../../../lib/directorAuthority";
@@ -25,7 +26,14 @@ export async function markSentToBank(kind: SentFile, id: string, raw: unknown, a
   if (!downloaded) throw new HttpError(409, "The file has not been downloaded yet, so it cannot be marked as sent.", "NOT_DOWNLOADED");
   const where = kind === "batch" ? { batchId: id } : kind === "repayment" ? { repaymentBatchId: id } : { offCycleBatchId: id };
   if (await prisma.bankFileSentMark.findFirst({ where, select: { id: true } })) throw new HttpError(409, "This file was already marked as sent to the bank.", "ALREADY_SENT");
-  const mark = await prisma.bankFileSentMark.create({ data: { ...where, sentByUserId: actor.userId, note: parsed.data.note ?? null } });
+  let mark;
+  try {
+    mark = await prisma.bankFileSentMark.create({ data: { ...where, sentByUserId: actor.userId, note: parsed.data.note ?? null } });
+  } catch (err) {
+    // Two clicks at the same moment both pass the check above; the database keeps one mark per file and the second is told so (2026-11-11 end-to-end test: it was a 500).
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") throw new HttpError(409, "This file was already marked as sent to the bank.", "ALREADY_SENT");
+    throw err;
+  }
   await writeAuditLog({ actorUserId: actor.userId, action: "payroll.bank.marked_sent", entityType: ENTITY[kind], entityId: id, after: { sentAt: mark.sentAt.toISOString() }, ipAddress: actor.ip ?? null });
   return { sentAt: mark.sentAt.toISOString(), sentByUserId: mark.sentByUserId, note: mark.note };
 }
