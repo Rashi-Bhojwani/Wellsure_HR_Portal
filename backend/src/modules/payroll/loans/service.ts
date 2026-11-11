@@ -99,7 +99,7 @@ export const loanSchema = z
   })
   .strict();
 
-function scheduleJson(rows: Instalment[]) {
+export function scheduleJson(rows: Instalment[]) {
   return rows.map((r) => ({ n: r.n, month: r.month, principal: fixed(r.principal, 2), interest: fixed(r.interest, 2), balanceAfter: fixed(r.balanceAfter, 2) }));
 }
 

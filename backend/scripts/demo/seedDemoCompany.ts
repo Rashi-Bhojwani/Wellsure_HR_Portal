@@ -138,14 +138,17 @@ export async function createPerson(spec: { code: string; name: string; role: str
   return { employeeId: employee.id, userId: user.id };
 }
 
-/** Pay details for everyone active who lacks them: made-up numbers in a pattern that cannot be real (accounts begin 9999, PANs begin DEMO). */
-export async function fillPayDetails(by: string): Promise<void> {
+/**
+ * Pay details for everyone active who lacks them: made-up numbers in a pattern that cannot be real (accounts begin 9999, PANs begin DEMO). `accountFrom` gives a person's account
+ * a later start (the demo's missing-bank-account case: DEMO012 has no account in force for the history months, so those runs hold their pay).
+ */
+export async function fillPayDetails(by: string, accountFrom: Record<string, Date> = {}): Promise<void> {
   const people = await prisma.employee.findMany({ where: { status: "ACTIVE" }, select: { id: true, employeeCode: true, bankAccounts: { select: { id: true } }, statutory: { select: { uanEncrypted: true, panEncrypted: true } } }, orderBy: { employeeCode: "asc" } });
   let n = 0;
   for (const p of people) {
     n += 1;
     if (p.bankAccounts.length === 0) {
-      await prisma.employeeBankAccount.create({ data: { employeeId: p.id, ...encryptBankFields({ accountHolderName: `Demo account ${p.employeeCode}`, accountNumber: `9999${String(100000 + n).padStart(8, "0")}`, ifsc: FAKE_IFSC, bankName: "Demo Bank (fictional)", branchName: "Demo branch" }), effectiveFrom: new Date("2024-04-01T00:00:00Z"), createdByUserId: by } });
+      await prisma.employeeBankAccount.create({ data: { employeeId: p.id, ...encryptBankFields({ accountHolderName: `Demo account ${p.employeeCode}`, accountNumber: `9999${String(100000 + n).padStart(8, "0")}`, ifsc: FAKE_IFSC, bankName: "Demo Bank (fictional)", branchName: "Demo branch" }), effectiveFrom: accountFrom[p.employeeCode] ?? new Date("2024-04-01T00:00:00Z"), createdByUserId: by } });
     }
     const fields = encryptStatutoryFields({ ...(p.statutory?.panEncrypted ? {} : { pan: `DEMOX${String(1000 + n).padStart(4, "0")}Z` }), ...(p.statutory?.uanEncrypted ? {} : { uan: `99990000${String(1000 + n).padStart(4, "0")}` }) });
     if (!p.statutory?.uanEncrypted || !p.statutory?.panEncrypted) await prisma.employeeStatutory.upsert({ where: { employeeId: p.id }, create: { employeeId: p.id, ...fields, updatedByUserId: by }, update: { ...fields, updatedByUserId: by } });
@@ -187,7 +190,8 @@ export async function seedDemoCompany(): Promise<DemoResult> {
   );
 
   lap("before: pay details");
-  await fillPayDetails(who.DEMO004!.userId);
+  const lastMonth = new Date(Date.UTC(businessToday().getUTCFullYear(), businessToday().getUTCMonth() - 1, 1));
+  await fillPayDetails(who.DEMO004!.userId, { DEMO012: lastMonth });
 
   // Rules: written by the payroll admin, confirmed by the approver, retyping where the screen asks for it.
   const states = (await prisma.location.findMany({ select: { state: true } })).map((l) => l.state);
