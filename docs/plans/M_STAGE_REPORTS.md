@@ -106,3 +106,16 @@ caught; a PAN change not seen → caught; history editable → caught.
 past month cannot show the ID that was in force then. That needs payroll to read a dated value (and the history to hold ciphertext): payroll is
 Session A's area and storing more ciphertext is a choice for the owners. **Request 4 to Session A** if payslips or statutory files must show the ID in
 force on their own date. Known limit: a new UAN or ESI number with the same last four digits as the old one is not recorded (they have no keyed hash).
+
+### SS-15 — download my own data (DPDP): **Missing → Built**
+
+`GET /api/employees/me/data-export` (self only: the record is the signed-in person's, a query naming anyone else is ignored), built in
+`employee/selfExport.ts`: employment, personal details, names and jobs over time, bank accounts and statutory numbers **masked to the last four**,
+leave requests and ledger, daily attendance, attendance corrections, documents shared with the person (titles, not files), helpdesk tickets, kudos
+given and received, own posts, and payslips listed by month (their content stays under Salary → Payslips). Sent as a JSON file, `no-store`, audited
+(`employee.self_export.downloaded`). Button "Download my data" on My Info. Test `employee/__tests__/selfExport.test.ts` (own data only, masked, no
+ciphertext or hash, audited; someone else's id in the query ignored; HR and the Developer get only their own; signed out 401). Mutation checks: no
+audit → caught; the raw bank row in the file → caught.
+
+Decided here: identifiers stay masked in the file (the full numbers are on the person's own documents; a file on a home computer should not carry them);
+payslip figures are not in the file (the payslip itself is the record and is downloadable). Owners may want either changed.

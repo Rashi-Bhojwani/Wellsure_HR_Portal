@@ -291,6 +291,11 @@ export async function updateStatutory(id: string, input: { pan?: string; aadhaar
   return data ?? {};
 }
 
+// SS-15 (M session): the signed-in person's own data, as a JSON file (identifiers masked).
+export async function downloadMyData(): Promise<Blob> {
+  return (await apiClient.get("/api/employees/me/data-export", { responseType: "blob" })).data as Blob;
+}
+
 // ER-11 (M session): the masked history of a person's statutory numbers (last four digits only).
 export interface StatutoryHistoryEntry {
   id: string;

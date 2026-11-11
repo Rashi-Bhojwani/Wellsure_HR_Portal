@@ -39,7 +39,7 @@ Plan (written before the code):
 Tier 1 first, then smallest first. Status per row is kept in M_STAGE_REPORTS.md.
 - [x] LC-14 Claims in the Tasks inbox (directors) — small (+ held identity changes as a director source)
 - [x] ER-11 Statutory ID history — medium (masked change history; see report)
-- [ ] SS-15 Download my own data (DPDP) — medium
+- [x] SS-15 Download my own data (DPDP) — medium
 - [ ] AU-04 Audit log export — small
 - [ ] LT-08 Employee asks for a letter — small
 - [ ] NT-09 Notification preferences — small

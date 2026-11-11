@@ -61,6 +61,8 @@ employeeRouter.post("/saved-views", validate({ body: savedViewCreateSchema }), c
 employeeRouter.delete("/saved-views/:id", validate({ params: idParamsSchema }), controller.deleteSavedView);
 
 employeeRouter.get("/me", controller.getMyProfile);
+// SS-15 (M session): download my own data (DPDP). Self only: the record is the signed-in person's, never a parameter.
+employeeRouter.get("/me/data-export", controller.exportMyData);
 employeeRouter.patch("/me", validate({ body: selfServiceUpdateSchema }), controller.updateSelfService);
 // Photos — multipart "file"; re-encoded server-side (modules/people/photos.ts).
 // Multer's cap is the hard ceiling; the admin-set limit is checked per request.

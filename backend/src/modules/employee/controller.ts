@@ -8,6 +8,7 @@ import * as gridService from "./grid";
 import * as changeRequestService from "./changeRequests";
 import * as separationService from "./separations";
 import * as identity from "./identityChanges";
+import { exportMyData as buildMyDataExport } from "./selfExport";
 
 function actorMeta(req: Request) {
   return { actorUserId: req.user!.userId, ipAddress: req.ip ?? null, userAgent: req.headers["user-agent"] ?? null };
@@ -126,6 +127,13 @@ export const cancelScheduledNameChange = cancelOf("name");
 export const cancelScheduledBankChange = cancelOf("bank");
 
 // ── Effective-dated + direct updates ────────────────────────────────────
+
+export async function exportMyData(req: Request, res: Response): Promise<void> {
+  const data = await buildMyDataExport(req.user!.employeeId, actorMeta(req));
+  res.setHeader("Content-Disposition", `attachment; filename="my-data-${data.employee.employeeCode}-${data.generatedAt.slice(0, 10)}.json"`);
+  res.setHeader("Cache-Control", "no-store");
+  res.status(200).json(data);
+}
 
 export async function getStatutoryHistory(req: Request, res: Response): Promise<void> {
   res.status(200).json({ history: await employeeService.getStatutoryHistory(req.params.id as string, req.user!.employeeId, scope(req), req.user!.permissions) });
