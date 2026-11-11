@@ -24,6 +24,7 @@ import { personalSections, statutoryItems } from "./profileItems";
 import { useContactReveal } from "./parity/ContactReveal";
 import { PayTab } from "./parity/PayTab";
 import { PositionTab } from "./parity/PositionTab";
+import { PendingIdentityNotice } from "./IdentityChanges";
 // A-9 — end
 
 const REFERENCE_STALE = 30_000;
@@ -113,19 +114,22 @@ function StatutoryTab({ employeeId, profile, canEdit }: { employeeId: string; pr
   });
   const saveMutation = useMutation({
     mutationFn: (values: { pan?: string; aadhaar?: string; uan?: string; esiNumber?: string }) => employeeApi.updateStatutory(employeeId, values),
-    onSuccess: () => {
+    onSuccess: (r) => {
       void queryClient.invalidateQueries({ queryKey: ["employees", "profile", employeeId] });
+      void queryClient.invalidateQueries({ queryKey: ["employees", "identity-changes"] });
       setEditOpen(false);
-      toast.success("Statutory details updated.");
+      toast.success(r.pending ? "Saved. It waits for a director's confirmation before it takes effect." : "Statutory details updated.");
     },
     onError: (err) => toast.error(errorMessage(err, "Could not update.")),
   });
 
   if (profile.statutory === undefined) return <EmptyState kind="forbidden" compact title="You don't have permission to view statutory details." description={null} />;
-  if (profile.statutory === null) return <EmptyState compact title="No statutory details on file." description={null} />;
+  const pending = <PendingIdentityNotice employeeId={employeeId} kind="STATUTORY" />;
+  if (profile.statutory === null) return (<>{pending}<EmptyState compact title="No statutory details on file." description={null} /></>);
 
   return (
     <SectionStack>
+      {pending}
       <ProfileSection
         title="Statutory details"
         onEdit={
@@ -169,19 +173,22 @@ function BankTab({ employeeId, profile, canEdit }: { employeeId: string; profile
   const saveMutation = useMutation({
     mutationFn: (values: { accountHolderName: string; accountNumber: string; accountNumberConfirm: string; ifsc: string; bankName: string; branchName: string }) =>
       employeeApi.updateBank(employeeId, values),
-    onSuccess: () => {
+    onSuccess: (r) => {
       void queryClient.invalidateQueries({ queryKey: ["employees", "profile", employeeId] });
+      void queryClient.invalidateQueries({ queryKey: ["employees", "identity-changes"] });
       setEditOpen(false);
-      toast.success("Bank details updated — the previous account is closed as of today, this one is now active.");
+      toast.success(r.pending ? "Saved. It waits for a director's confirmation; the current account stays in force until then." : "Bank details updated — the previous account is closed as of today, this one is now active.");
     },
     onError: (err) => toast.error(errorMessage(err, "Could not update.")),
   });
 
   if (profile.bank === undefined) return <EmptyState kind="forbidden" compact title="You don't have permission to view bank details." description={null} />;
-  if (profile.bank === null) return <EmptyState compact title="No bank account on file." description={null} />;
+  const pending = <PendingIdentityNotice employeeId={employeeId} kind="BANK" />;
+  if (profile.bank === null) return (<>{pending}<EmptyState compact title="No bank account on file." description={null} /></>);
 
   return (
     <SectionStack>
+      {pending}
       <ProfileSection
         title="Bank account"
         extra={

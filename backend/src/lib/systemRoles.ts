@@ -16,13 +16,16 @@ export interface SystemRoleDefinition {
   dataScope: DataScope;
 }
 
-// HR_EXECUTIVE deliberately excludes employee.statutory.* and
-// employee.bank.* — spec §2 says "no salary or bank data"; PAN/Aadhaar/
-// UAN are held to the same bar as bank data here, so HR_EXECUTIVE is
-// blocked from both reveal endpoints, not just bank (commit C IDOR test
-// covers this explicitly).
+// HR_EXECUTIVE enters bank and statutory details as HR_ADMIN does (decision b, docs/plans/HR_PAYROLL_SEPARATION.md §1, confirmed by the owners for the
+// M session): masked to the last four, every reveal audited, and every entry waits for a director while the director setting
+// `identity.directorConfirmsHrChanges` is on (modules/employee/identityChanges.ts). Existing databases get the four keys from the migration
+// 20261112090000_m_identity_change_requests. Salary and pay stay out of reach (HR_FORBIDDEN_KEYS).
 const HR_EXECUTIVE_PERMS: string[] = [
   "employee.view",
+  "employee.bank.view",
+  "employee.bank.edit",
+  "employee.statutory.view",
+  "employee.statutory.edit",
   "employee.create",
   "employee.edit",
   "employee.export",
@@ -70,10 +73,7 @@ const HR_ADMIN_PERMS: string[] = [
   ...HR_EXECUTIVE_PERMS,
   "helpdesk.sensitive.view",
   "letters.template.manage",
-  "employee.statutory.view",
-  "employee.statutory.edit",
-  "employee.bank.view",
-  "employee.bank.edit",
+  // employee.bank.* and employee.statutory.* come from HR_EXECUTIVE_PERMS (M session task 1).
   // Phase 3 commit 1 — bulk attendance corrections (HR Admin, not HR Executive).
   "attendance.regularization.bulk",
   // Phase 3 commit 2 — Manual Override and Shift Override (HR Admin, not HR Executive).

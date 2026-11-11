@@ -96,6 +96,11 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/employees/change-requests": scoped("own requests; all only with profile.changerequest.approve (non-grantable)"),
   "POST /api/employees/change-requests/:id/approve": admin,
   "POST /api/employees/change-requests/:id/reject": admin,
+  // M task 1: held bank and statutory changes (masked); confirm / reject are a director's in the service (different person, not their own record).
+  "GET /api/employees/identity-changes": scoped("bank or statutory view key (non-grantable); non-directors see only people in their data scope, masked"),
+  "POST /api/employees/identity-changes/:id/confirm": adminInService("a director other than the person who entered it, never on their own record"),
+  "POST /api/employees/identity-changes/:id/reject": adminInService("a director other than the person who entered it, never on their own record"),
+  "POST /api/employees/identity-changes/:id/withdraw": adminInService("the person who entered it (bank or statutory edit key, non-grantable)"),
   "GET /api/employees/separations": admin,
   "POST /api/employees/separations/:id/cancel": admin,
   "GET /api/employees/:id": scoped("profile: findScopedEmployee"),

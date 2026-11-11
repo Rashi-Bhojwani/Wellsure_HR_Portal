@@ -81,11 +81,12 @@ describe("Document category sensitivity", () => {
     expect((await as("manager").post(`/api/documents/employee-documents/${doc.statutory}/download`)).status).toBe(404);
   });
 
-  it("an HR Executive (no salary, bank or statutory data — spec §2) sees GENERAL only; HR Admin sees GENERAL and STATUTORY but, since Stage 1, never PAY; a director sees all three", async () => {
+  // Changed in the M session (docs/plans/M_STAGE_REPORTS.md, "Changed tests"): decision b gives the HR Executive the statutory key HR Admin holds, so it now reads
+  // STATUTORY documents as HR Admin does. PAY stays closed to both; the manager keeps the refusal of STATUTORY (the test above).
+  it("an HR Executive and an HR Admin see GENERAL and STATUTORY but never PAY (no salary data); a director sees all three", async () => {
     const exec = await listed("hrExec");
-    expect(exec).toContain(doc.general);
+    expect(exec).toEqual(expect.arrayContaining([doc.general, doc.statutory]));
     expect(exec).not.toContain(doc.pay);
-    expect(exec).not.toContain(doc.statutory);
     const admin = await listed("hrAdmin");
     expect(admin).toEqual(expect.arrayContaining([doc.general, doc.statutory]));
     expect(admin).not.toContain(doc.pay);
@@ -99,12 +100,12 @@ describe("Document category sensitivity", () => {
 
   it("nobody files a document where they couldn't read it back", async () => {
     expect((await upload("hrExec", cat.pay)).status).toBe(403);
-    expect((await upload("hrExec", cat.statutory)).status).toBe(403);
     const ok = await upload("hrExec", cat.general);
     expect(ok.status).toBe(201);
     const cats = (await as("hrExec").get("/api/documents/categories?appliesTo=EMPLOYEE")).body as Array<{ id: string; readable: boolean }>;
     expect(cats.find((c) => c.id === cat.pay)?.readable).toBe(false);
     expect(cats.find((c) => c.id === cat.general)?.readable).toBe(true);
+    expect(cats.find((c) => c.id === cat.statutory)?.readable).toBe(true);
   });
 
   it("a document can't move to a less sensitive category", async () => {

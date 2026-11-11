@@ -27,9 +27,9 @@ Plan (written before the code):
   `m_` migration for existing databases. The test that pinned the refusal is changed and recorded in M_STAGE_REPORTS.md.
 - Screens: Change Requests page gains "Waiting for a director"; the profile's Bank and Statutory tabs show a pending entry; Default behaviours renders the key.
 - Mutation checks: the hold condition, the different-person check (service and database).
-- [ ] backend + migration + tests
-- [ ] screens
-- [ ] mutation checks, lint, typecheck, changed tests
+- [x] backend + migration + tests
+- [x] screens (browser walk at the end, with the other rows)
+- [x] mutation checks, lint, typecheck, changed tests (see M_STAGE_REPORTS.md)
 
 ## Task 2 — stale text (docs and one code comment)
 - [ ] spec §7.5 and `STAGE_5B_PLAN.md` (no bank response import); `CLAUDE.md` (HR sees no salary; HR Executive enters bank/identity masked);

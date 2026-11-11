@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { CSSProperties, ReactNode } from "react";
 import { Alert, Button, DatePicker, Form, Input, Radio, Select, Space, Typography } from "antd";
 import { ArrowLeftOutlined, ArrowRightOutlined, SendOutlined } from "@ant-design/icons";
-import { FormGroupTitle, Illustration, PageHeader, Panel, Stack, StepperLayout, useIsPhone } from "../../../ui";
+import { ApprovalBanner, FormGroupTitle, Illustration, PageHeader, Panel, Stack, StepperLayout, useIsPhone } from "../../../ui";
 import { fs, fw, radius, space, v } from "../../../theme/tokens";
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import { InvitationStatus } from "../../../components/common/InvitationStatus";
@@ -158,6 +158,13 @@ export function AddEmployeePage() {
               <h2 style={{ margin: 0, fontSize: fs.h1, fontWeight: fw.bold, color: v.textPrimary }}>Employee {created.employeeCode} created</h2>
             </div>
             <InvitationStatus employeeId={created.id} invitation={created.invitation} />
+            {(created.identityPending?.length ?? 0) > 0 && (
+              <ApprovalBanner
+                tone="warning"
+                title="The bank and statutory details wait for a director"
+                description={`${created.identityPending!.map((p) => (p.kind === "BANK" ? "Bank account" : "Statutory numbers")).join(" and ")} will take effect when a director other than you confirms them (Employee → Change Requests).`}
+              />
+            )}
             <div style={{ display: "flex", gap: space[3], flexWrap: "wrap" }}>
               <Button size="large" type="primary" onClick={() => navigate(`/admin/employee/profile/${created.id}`)} style={phone ? { flex: 1 } : undefined}>
                 Open profile

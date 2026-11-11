@@ -66,6 +66,7 @@ const packedKeyIds = (json: unknown): number[] => {
 export const JSON_HELD_COLUMNS = {
   sealed: "PayrollItemVersion.value (a sealed rule or layout, the version in force or the latest)",
   changeRequests: "ProfileChangeRequest.changesJson (a request still waiting for a decision)",
+  identityChanges: "IdentityChangeRequest.payload (a bank or statutory entry still waiting for a director, M task 1)",
   imports: "ImportStagingRow.data (an upload not yet committed)",
   challans: "TdsChallan.bsrCode and TdsChallan.serial (P7-7: sealed, immutable history the directors may need to read)",
 } as const;
@@ -94,6 +95,9 @@ async function jsonHeldUsage(opts: { filter?: RowFilter }): Promise<KeyUsage[]> 
 
   for (const r of await prisma.$queryRaw<Array<{ id: string; changes_json: unknown }>>`SELECT id, changes_json FROM profile_change_requests WHERE status = 'PENDING'`) {
     if (keep(r.id)) for (const id of packedKeyIds(r.changes_json)) add(JSON_HELD_COLUMNS.changeRequests, id);
+  }
+  for (const r of await prisma.$queryRaw<Array<{ id: string; payload: unknown }>>`SELECT id, payload FROM identity_change_requests WHERE status = 'PENDING'`) {
+    if (keep(r.id)) for (const id of packedKeyIds(r.payload)) add(JSON_HELD_COLUMNS.identityChanges, id);
   }
   for (const r of await prisma.$queryRaw<Array<{ id: string; data: unknown }>>`SELECT r.id, r.data FROM import_staging_rows r JOIN import_batches b ON b.id = r.batch_id WHERE b.committed_at IS NULL`) {
     if (keep(r.id)) for (const id of packedKeyIds(r.data)) add(JSON_HELD_COLUMNS.imports, id);

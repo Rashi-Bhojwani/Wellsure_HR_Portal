@@ -82,6 +82,24 @@ employeeRouter.post(
   controller.rejectChangeRequest,
 );
 
+// M task 1: bank and statutory changes waiting for a director. Listing needs a bank or statutory view key (directors hold every key) and is scoped in the
+// service; confirming and rejecting are a director's (checked in the service, with the different-person rule); withdrawing is the person who entered it.
+const identityIdParams = z.object({ id: z.string().min(1).max(60) });
+employeeRouter.get(
+  "/identity-changes",
+  requireAnyPermission("employee.bank.view", "employee.statutory.view"),
+  validate({ query: z.object({ status: z.enum(["PENDING", "CONFIRMED", "REJECTED", "WITHDRAWN"]).optional(), employeeId: z.string().min(1).max(60).optional() }).strict() }),
+  controller.listIdentityChanges,
+);
+employeeRouter.post("/identity-changes/:id/confirm", requireAnyPermission("employee.bank.edit", "employee.statutory.edit"), validate({ params: identityIdParams, body: z.object({}).strict() }), controller.confirmIdentityChange);
+employeeRouter.post(
+  "/identity-changes/:id/reject",
+  requireAnyPermission("employee.bank.edit", "employee.statutory.edit"),
+  validate({ params: identityIdParams, body: z.object({ reason: z.string().trim().min(3).max(300) }).strict() }),
+  controller.rejectIdentityChange,
+);
+employeeRouter.post("/identity-changes/:id/withdraw", requireAnyPermission("employee.bank.edit", "employee.statutory.edit"), validate({ params: identityIdParams, body: z.object({}).strict() }), controller.withdrawIdentityChange);
+
 employeeRouter.get("/separations", canViewSeparations, controller.listSeparations);
 employeeRouter.post("/separations/:id/cancel", canSeparate, validate({ params: idParamsSchema }), controller.cancelSeparation);
 

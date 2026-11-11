@@ -57,6 +57,15 @@ export const BEHAVIOURS = {
     d37: true,
     defaultText: "Off: the Developer role does not see Employee Swipes",
   },
+  // M session, task 1 (docs/plans/M_CHECKLIST.md): decision b. Off = HR's entries are written at once, as before this setting existed.
+  "identity.directorConfirmsHrChanges": {
+    title: "A director confirms HR's bank and statutory changes before they take effect",
+    what: "When on, a bank account or a PAN, Aadhaar, UAN or ESI number entered by HR waits, masked, until a director other than the person who entered it confirms it. A director's change to their own record always waits for the other director.",
+    schema: z.boolean(),
+    defaultValue: true as boolean,
+    d37: true,
+    defaultText: "On: a director confirms HR's bank and statutory changes before they take effect",
+  },
   "loan.maxTotalDeductionPercent": {
     title: "Most a month's deductions may take (percentage of gross)",
     what: "When set, loan instalments are limited so total deductions stay within this percentage of gross earnings; the shortfall rule applies to what does not fit. Owner-entered with a source note.",

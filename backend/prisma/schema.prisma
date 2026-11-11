@@ -537,6 +537,9 @@ model Employee {
   letterSignatures           LetterRequestSignatory[] @relation("LetterRequestSignatory")
   massEmailsReceived         MassEmailRecipient[]     @relation("MassEmailRecipient")
   // A-9 — end
+  // M-BEGIN (second session): HR's bank and statutory entries waiting for a director (docs/plans/M_CHECKLIST.md, task 1)
+  identityChangeRequests     IdentityChangeRequest[]
+  // M-END
 
   @@index([status])
   @@index([dateOfJoining])
@@ -4231,3 +4234,28 @@ model BehaviourConfirmation {
 
   @@map("behaviour_confirmations")
 }
+
+// M-BEGIN (second session, docs/plans/M_CHECKLIST.md task 1): a bank or statutory entry made by HR (or by a director on their own record) held until a
+// different director confirms it. The entry is already encrypted (the packed shape of ProfileChangeRequest.changesJson); nothing here is a raw number.
+// The database refuses: a decider who entered it, a change to a decided row, and a delete outside the test purge.
+model IdentityChangeRequest {
+  id              String    @id @default(cuid())
+  employeeId      String    @map("employee_id")
+  employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  kind            String // "BANK" | "STATUTORY"
+  payload         Json // encrypted, packed (lib/bytesJson); counted by lib/fieldKeyRotation.ts while PENDING
+  effectiveFrom   DateTime? @map("effective_from") @db.Date // BANK only
+  source          String // "HR_EDIT" | "ADD_EMPLOYEE" | "EMPLOYEE_REQUEST" | "DIRECTOR_EDIT"
+  sourceRequestId String?   @map("source_request_id") // the ProfileChangeRequest it came from, when source = EMPLOYEE_REQUEST
+  enteredByUserId String    @map("entered_by_user_id")
+  status          String    @default("PENDING") // PENDING | CONFIRMED | REJECTED | WITHDRAWN
+  decidedByUserId String?   @map("decided_by_user_id")
+  decidedAt       DateTime? @map("decided_at")
+  reason          String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@index([status, createdAt])
+  @@index([employeeId, status])
+  @@map("identity_change_requests")
+}
+// M-END

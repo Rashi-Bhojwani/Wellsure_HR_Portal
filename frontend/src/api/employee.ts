@@ -58,6 +58,8 @@ export interface CreatedEmployee {
   id: string;
   employeeCode: string;
   invitation: InvitationDelivery;
+  /** M task 1: bank / statutory details held for a director instead of written. */
+  identityPending?: Array<{ id: string; kind: "BANK" | "STATUTORY" }>;
 }
 export async function createEmployee(input: CreateEmployeeInput): Promise<CreatedEmployee> {
   const { data } = await apiClient.post<CreatedEmployee>("/api/employees", input);
@@ -272,15 +274,51 @@ export async function cancelScheduledChange(id: string, kind: "job" | "name" | "
 export async function updateJob(id: string, input: { departmentId?: string; designationId?: string; locationId?: string; gradeId?: string | null; costCentreId?: string | null; reportingManagerId?: string | null; effectiveFrom: string; changeReason?: string }): Promise<void> {
   await apiClient.patch(`/api/employees/${id}/job`, input);
 }
-export async function updateBank(id: string, input: { accountHolderName: string; accountNumber: string; accountNumberConfirm: string; ifsc: string; bankName: string; branchName: string; effectiveFrom?: string }): Promise<void> {
-  await apiClient.patch(`/api/employees/${id}/bank`, input);
+/** 200 = written at once; 202 = held for a director (M task 1), `pending: true`. */
+export interface IdentitySaveResult {
+  pending?: boolean;
+  id?: string;
+}
+export async function updateBank(id: string, input: { accountHolderName: string; accountNumber: string; accountNumberConfirm: string; ifsc: string; bankName: string; branchName: string; effectiveFrom?: string }): Promise<IdentitySaveResult> {
+  const { data } = await apiClient.patch<IdentitySaveResult>(`/api/employees/${id}/bank`, input);
+  return data ?? {};
 }
 export async function updateName(id: string, input: { fullName: string; effectiveFrom: string; changeReason?: string }): Promise<void> {
   await apiClient.patch(`/api/employees/${id}/name`, input);
 }
-export async function updateStatutory(id: string, input: { pan?: string; aadhaar?: string; uan?: string; esiNumber?: string | null }): Promise<void> {
-  await apiClient.patch(`/api/employees/${id}/statutory`, input);
+export async function updateStatutory(id: string, input: { pan?: string; aadhaar?: string; uan?: string; esiNumber?: string | null }): Promise<IdentitySaveResult> {
+  const { data } = await apiClient.patch<IdentitySaveResult>(`/api/employees/${id}/statutory`, input);
+  return data ?? {};
 }
+
+// ── Bank and statutory changes waiting for a director (M task 1). Masked: last four digits and the bank's own details only. ──
+export type IdentityChangeStatus = "PENDING" | "CONFIRMED" | "REJECTED" | "WITHDRAWN";
+export interface IdentityChange {
+  id: string;
+  employeeId: string;
+  employeeCode: string;
+  employeeName: string;
+  kind: "BANK" | "STATUTORY";
+  source: "HR_EDIT" | "ADD_EMPLOYEE" | "EMPLOYEE_REQUEST" | "DIRECTOR_EDIT";
+  status: IdentityChangeStatus;
+  effectiveFrom: string | null;
+  masked: Record<string, string | null | undefined>;
+  enteredBy: string;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  reason: string | null;
+  createdAt: string;
+  mine: boolean;
+  canDecide: boolean;
+  canWithdraw: boolean;
+}
+export async function listIdentityChanges(params: { status?: IdentityChangeStatus; employeeId?: string } = {}): Promise<IdentityChange[]> {
+  const { data } = await apiClient.get<{ changes: IdentityChange[] }>("/api/employees/identity-changes", { params });
+  return data.changes;
+}
+export const confirmIdentityChange = async (id: string) => (await apiClient.post(`/api/employees/identity-changes/${id}/confirm`, {})).data;
+export const rejectIdentityChange = async (id: string, reason: string) => (await apiClient.post(`/api/employees/identity-changes/${id}/reject`, { reason })).data;
+export const withdrawIdentityChange = async (id: string) => (await apiClient.post(`/api/employees/identity-changes/${id}/withdraw`, {})).data;
 export async function updatePersonal(id: string, input: Record<string, unknown>): Promise<void> {
   await apiClient.patch(`/api/employees/${id}/personal`, input);
 }
