@@ -85,7 +85,7 @@ export function PayTypesPage() {
             { title: "Instalments", key: "i", render: (_, t) => notSet(t.maxInstalments) ?? t.maxInstalments },
             { title: "Rate", key: "r", render: (_, t) => notSet(t.ratePercent) ?? `${t.ratePercent}% a year` },
             { title: "Complete", key: "g", render: (_, t) => gapsChip(t.gaps) },
-            { title: "", key: "act", render: (_, t) => <Button onClick={() => openLoan(t)}>Change</Button> },
+            { title: "", key: "act", fixed: "right" as const, render: (_, t) => <Button onClick={() => openLoan(t)}>Change</Button> },
           ]}
         />
       </Panel>
@@ -105,7 +105,7 @@ export function PayTypesPage() {
             { title: "Yearly cap", key: "y", align: "right", render: (_, t) => (!t.yearlyCapSet ? <StatusChip tone="warning">Not set</StatusChip> : t.yearlyCap ? formatRupees(t.yearlyCap, 2) : "No cap") },
             { title: "Bills", key: "b", render: (_, t) => notSet(t.billsRequired) ?? (t.billsRequired ? "Required" : "Not required") },
             { title: "Complete", key: "g", render: (_, t) => gapsChip(t.gaps) },
-            { title: "", key: "act", render: (_, t) => <Button onClick={() => openClaim(t)}>Change</Button> },
+            { title: "", key: "act", fixed: "right" as const, render: (_, t) => <Button onClick={() => openClaim(t)}>Change</Button> },
           ]}
         />
       </Panel>

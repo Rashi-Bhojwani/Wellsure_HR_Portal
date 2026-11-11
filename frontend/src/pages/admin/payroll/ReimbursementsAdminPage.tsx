@@ -8,6 +8,7 @@ import { apiErrorMessage } from "../../../lib/apiError";
 import { formatRupees } from "../../../lib/money";
 import { ConfirmModal, DataTable, PageHeader, StatusChip, toast } from "../../../ui";
 import { space } from "../../../theme/tokens";
+import { WRAP_TEXT as WRAP } from "../../../ui/textStyles";
 
 // Payroll > Reimbursements (P7-5), directors only: approve the amount or a lower one (with a reason), or reject with a reason; never one's own claim. Caps are checked
 // on approval. Claim types are set through the API in this release.
@@ -48,12 +49,13 @@ export function ReimbursementsAdminPage() {
           { title: "Kind", dataIndex: "typeKey" },
           { title: "Spent on", dataIndex: "spentOn", render: (x: string) => dayjs(x).format("D MMM YYYY") },
           { title: "Amount", dataIndex: "amount", align: "right", render: (x: string) => formatRupees(x, 2) },
-          { title: "What for", dataIndex: "description" },
+          { title: "What for", dataIndex: "description", width: 320, render: (t: string) => <span style={WRAP}>{t}</span> },
           { title: "Bills", dataIndex: "bills", render: (b: string[]) => (b.length ? b.join(", ") : "—") },
           { title: "State", dataIndex: "status", render: (x: string) => <StatusChip status={x} /> },
           {
             title: "",
             key: "act",
+            fixed: "right" as const,
             render: (_, c) =>
               c.status === "SUBMITTED" ? (
                 <div style={{ display: "flex", gap: space[2], flexWrap: "wrap" }}>

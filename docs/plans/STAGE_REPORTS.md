@@ -337,3 +337,35 @@ the next push; run 285 (`df8306f`): all seven green; run 286 (`534aa71`): succes
 docker-build, sensitive-ui admin, sensitive-ui employee, latency (incl. popovers), attendance-replay, agent-windows — **all green**.
 Items 7: not started (A-1, A-2, A-4–A-8, Stages 6, 8, 9). `PARITY_COVERAGE.md` exists on no branch; `docs/samples/` exists on `origin/main` and
 `origin/peeps/foundation`, not on this branch. STOPPED here as instructed.
+
+## Demo pay history and the walk with real content (written 2026-11-11, session continuing Session A)
+
+**Samples (step 1):** skipped on the owner's instruction — the files on `origin/main` look like real exports; nothing was brought to this branch, and the scratch
+copies made while checking were deleted. Stage 8 stays blocked until the owner replaces them with synthetic files on `main`.
+
+**Demo pay history (`64d3246`):** see `DEMO_PAY_ACTIVITY.md`. Demo tests: 7 passed (incl. the demo's own run, unchanged counts).
+
+**Walk with content:** a scratch local database (`wellsure_walk`, created new; nothing reset) seeded with the dev seed, the demo company and its pay history.
+15 screens (the 12 from the first walk plus Default behaviours, Leavers and Ready for First Run) × 5 people (director DEMO001, HR Admin DEMO004, manager DEMO003 — given
+the role in the scratch database only —, employee DEMO006 with a loan and a claim, Developer DEMO005) × desktop 1280 light, phone 390 dark, tablet 768 light =
+**225 visits**, each with a fresh sign-in. Filled tables seen: loans 6, off-cycle 5 (candidates and the finished run), settlements 2, challans/reconciliation 12, loan and
+claim types 3, quarterly data 41, leavers 2; the employee's YTD 8, salary revision 3, loans 6. No crash, no server error, no page-level sideways scroll, no bank, PAN,
+UAN or debit-account text on any page. HR, the manager, the employee and the Developer see "not switched on" on every directors' screen (HR's Leavers and the
+Developer's Ready for First Run are by design).
+
+**Keyboard only:** 10 primary actions at 1280 and 390, plus the phone menu: each reached by Tab, focus ring visible, Enter opens the dialog, Tab and Shift+Tab stay
+inside it, Escape closes it, focus returns to the button — **21 of 21**.
+
+**Fixed (changed tests, none weakened):**
+1. Focus left an open drawer, modal or the phone menu after its last control (reached the skip link and logo behind the overlay): `ui/focusTrap.ts` (Tab wraps
+   inside), used by SideDrawer, ConfirmModal and the phone menu; the menu returns focus to its button on close. Unit tests added (and a mutant that disables the trap
+   fails two of them).
+2. A long claim description widened the table and pushed Approve / Reject off-screen: free-text columns get a width and wrap (`ui/textStyles.ts`); action columns
+   (Reimbursements, Off-cycle runs, Loan and claim types, the employee's Withdraw) are pinned to the right edge; Quarterly data pins the employee column.
+3. A long state chip pushed a phone card sideways: chips wrap on phones (`theme/global.css`).
+4. The employee's Reimbursement table hid the state behind the description at tablet width: State moved before "What for".
+5. Quarterly TDS data opened on last year's first quarter (always empty): it opens on the last quarter that has ended (`lib/quarter.ts`, unit-tested).
+6. Every sanctioned loan read "SANCTIONED": loans now show where recovery stands — recovering, recovery stopped, fully recovered, recovered at exit, or paid with the
+   next run (`recoveryOf` in `loans/service.ts`, unit-tested; asserted on the demo loans).
+
+**Still seen, accepted:** at 768 the Reimbursements queue's state chip sits under the pinned action column and is reached by scrolling inside the table.

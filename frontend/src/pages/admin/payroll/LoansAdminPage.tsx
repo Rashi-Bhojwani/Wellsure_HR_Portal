@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "antd";
 import * as loansApi from "../../../api/loans";
 import type { LoanType, LoanView } from "../../../api/loans";
+import { RECOVERY_LABEL } from "../../../lib/loanRecovery";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatRupees } from "../../../lib/money";
 import { DataTable, PageHeader, Panel, Stack, StatusChip, toast } from "../../../ui";
@@ -45,7 +46,7 @@ export function LoansAdminPage() {
               { title: "Amount", dataIndex: "principal", align: "right", render: (x: string) => formatRupees(x, 2) },
               { title: "Balance", dataIndex: "balance", align: "right", render: (x: string) => formatRupees(x, 2) },
               { title: "From", dataIndex: "firstMonth", render: (x: string) => dayjs(x).format("MMM YYYY") },
-              { title: "State", dataIndex: "status", render: (x: string) => <StatusChip status={x} /> },
+              { title: "State", key: "state", render: (_: unknown, l: LoanView) => (l.recovery && RECOVERY_LABEL[l.recovery] ? <StatusChip tone={RECOVERY_LABEL[l.recovery]!.tone}>{RECOVERY_LABEL[l.recovery]!.text}</StatusChip> : <StatusChip status={l.status} />) },
               {
                 title: "",
                 key: "act",

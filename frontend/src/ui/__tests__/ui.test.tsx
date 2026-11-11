@@ -145,6 +145,32 @@ describe("SideDrawer and ConfirmModal", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(onClose).toHaveBeenCalledTimes(2);
   });
+  it("Tab and Shift+Tab stay inside an open drawer and an open modal (2026-11-11 walk: focus used to reach the page behind)", () => {
+    wrap(
+      <SideDrawer open onClose={() => undefined} title="Add new profile" onPrimary={() => undefined} primaryLabel="Create">
+        <input aria-label="Name" />
+      </SideDrawer>,
+    );
+    const close = screen.getByRole("button", { name: "Close" });
+    const create = screen.getByRole("button", { name: "Create" });
+    create.focus();
+    fireEvent.keyDown(document, { key: "Tab" });
+    expect(document.activeElement).toBe(close);
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(create);
+    // From outside the drawer, Tab comes back in.
+    (document.activeElement as HTMLElement).blur();
+    fireEvent.keyDown(document, { key: "Tab" });
+    expect(document.activeElement).toBe(close);
+  });
+  it("Tab wraps inside an open modal", () => {
+    wrap(<ConfirmModal open title="Clock out?" onCancel={() => undefined} onConfirm={() => undefined} confirmLabel="Clock out" />);
+    const confirm = screen.getByRole("button", { name: "Clock out" });
+    confirm.focus();
+    fireEvent.keyDown(document, { key: "Tab" });
+    expect(document.activeElement).not.toBe(confirm);
+    expect((document.activeElement as HTMLElement).closest(".ant-modal-wrap, .ant-modal-root, .ant-modal")).not.toBeNull();
+  });
   it("modal confirms", () => {
     const onConfirm = vi.fn();
     wrap(<ConfirmModal open title="Clock out?" onCancel={() => undefined} onConfirm={onConfirm} confirmLabel="Clock out" />);

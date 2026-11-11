@@ -9,6 +9,7 @@ import { apiErrorMessage } from "../../../lib/apiError";
 import { formatRupees } from "../../../lib/money";
 import { ApprovalBanner, DataTable, PageHeader, SideDrawer, StatusChip, toast } from "../../../ui";
 import { space } from "../../../theme/tokens";
+import { WRAP_TEXT as WRAP } from "../../../ui/textStyles";
 
 // Payroll > Settlements (P7-6), directors only: the full and final settlement of each leaver, with every line and where it comes from. One director prepares, a
 // different director confirms; never one's own. Paying it is an off-cycle run (P7-6b, Payroll > Off-cycle runs); nothing is paid from here.
@@ -45,7 +46,7 @@ export function SettlementsPage() {
               columns={[
                 { title: "Line", dataIndex: "label" },
                 { title: "Amount", key: "a", align: "right", render: (_, l) => (l.amount === null ? `${l.days ?? ""} days (no amount)` : formatRupees(l.amount, 2)) },
-                { title: "Source", dataIndex: "source" },
+                { title: "Source", dataIndex: "source", width: 280, render: (t: string) => <span style={WRAP}>{t}</span> },
               ]}
             />
           ),

@@ -1,5 +1,6 @@
-import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode, useRef } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useTabTrap } from "../../ui/focusTrap";
 import { useQuery } from "@tanstack/react-query";
 import { Drawer, Dropdown, type MenuProps } from "antd";
 import { DownOutlined, LogoutOutlined, MenuOutlined, MoonOutlined, SearchOutlined, SunOutlined } from "@ant-design/icons";
@@ -64,6 +65,8 @@ export function AppShell({ nav, homeKey, homePath, pinned, topLinks = [], topExt
   const { mode, toggleMode } = useThemeMode();
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [drawer, setDrawer] = useState(false);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const menuTrap = useTabTrap(drawer, ".ant-drawer-section, .ant-drawer-content"); // the phone menu keeps Tab inside while open (2026-11-11 walk)
   const [palette, setPalette] = useState(false);
   // The palette (an antd Modal) loads on first use, or when the browser is idle, never in the shell's first download.
   const [paletteUsed, setPaletteUsed] = useState(false);
@@ -182,7 +185,7 @@ export function AppShell({ nav, homeKey, homePath, pinned, topLinks = [], topExt
       </a>
       {!compact && sidebar(false)}
       {compact && (
-        <Drawer open={drawer} onClose={() => setDrawer(false)} placement="left" size={300} closable={false} styles={{ body: { padding: 0 } }} title={null} aria-label="Menu">
+        <Drawer open={drawer} onClose={() => setDrawer(false)} rootClassName={menuTrap} afterOpenChange={(isOpen) => { if (!isOpen) menuButton.current?.focus(); }} placement="left" size={300} closable={false} styles={{ body: { padding: 0 } }} title={null} aria-label="Menu">
           {sidebar(true)}
         </Drawer>
       )}
@@ -191,7 +194,7 @@ export function AppShell({ nav, homeKey, homePath, pinned, topLinks = [], topExt
           <DemoCompanyBanner />
           <header className="ws-topbar">
             {showMenuButton && (
-              <button type="button" className="ws-icon-btn" aria-label="Open the menu" onClick={() => setDrawer(true)}>
+              <button ref={menuButton} type="button" className="ws-icon-btn" aria-label="Open the menu" onClick={() => setDrawer(true)}>
                 <MenuOutlined />
               </button>
             )}

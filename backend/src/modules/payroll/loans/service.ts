@@ -171,6 +171,14 @@ async function stateOf(loan: LoanRow) {
   return { status, approval, adjustments, changes, effective, disbursed, recovered, interestPaid, prepaid, waived, recoveredAtExit, balance };
 }
 
+/** Where recovery stands, read from what happened (2026-11-11 walk: every sanctioned loan looked the same). */
+export function recoveryOf(s: { status: string; disbursed: boolean; balance: Money; recoveredAtExit: Money; effective: Array<{ kind: string }> }): "NOT_SANCTIONED" | "NOT_PAID_OUT" | "RECOVERING" | "STOPPED" | "FULLY_RECOVERED" | "RECOVERED_AT_EXIT" {
+  if (s.status !== "SANCTIONED") return "NOT_SANCTIONED";
+  if (!s.disbursed) return "NOT_PAID_OUT";
+  if (!s.balance.gt(ZERO)) return s.recoveredAtExit.gt(ZERO) ? "RECOVERED_AT_EXIT" : "FULLY_RECOVERED";
+  return s.effective.some((c) => c.kind === "CANCEL_PENDING") ? "STOPPED" : "RECOVERING";
+}
+
 async function view(loan: LoanRow, viewerUserId: string | null = null) {
   const s = await stateOf(loan);
   const byRef = new Map(s.adjustments.map((a) => [a.sourceRef, a]));
@@ -184,6 +192,7 @@ async function view(loan: LoanRow, viewerUserId: string | null = null) {
     firstMonth: iso(loan.firstMonth),
     purpose: loan.purpose,
     status: s.status,
+    recovery: recoveryOf(s),
     disbursed: s.disbursed,
     balance: fixed(s.balance, 2),
     recovered: fixed(s.recovered, 2),

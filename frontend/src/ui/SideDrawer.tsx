@@ -3,6 +3,7 @@ import { Button, Drawer } from "antd";
 import { CloseOutlined } from "@ant-design/icons";
 import { fs, fw, layout, space, v } from "../theme/tokens";
 import { useIsPhone } from "./hooks";
+import { useTabTrap } from "./focusTrap";
 
 export interface SideDrawerProps {
   open: boolean;
@@ -30,7 +31,7 @@ export interface SideDrawerProps {
 }
 
 // The board's right drawer for "Add" and detail forms (employees-03, time-off-02/13): title row, scrolling body, sticky footer with equal buttons.
-// antd's Drawer traps focus while open, returns it on close, and closes on Esc and on the overlay.
+// antd's Drawer moves focus in on open, returns it on close, and closes on Esc and on the overlay; useTabTrap keeps Tab inside while it is open.
 export function SideDrawer({
   open,
   onClose,
@@ -51,6 +52,7 @@ export function SideDrawer({
   destroyOnHidden = true,
 }: SideDrawerProps) {
   const phone = useIsPhone();
+  const trap = useTabTrap(open, ".ant-drawer-section, .ant-drawer-content");
   const defaultFooter =
     onPrimary || formId ? (
       <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
@@ -79,6 +81,7 @@ export function SideDrawer({
     <Drawer
       open={open}
       onClose={onClose}
+      rootClassName={trap}
       placement={phone ? "bottom" : "right"}
       size={phone ? "100%" : size === "xwide" ? `min(${layout.drawerXWide}px, calc(100vw - ${space[12]}px))` : size === "wide" ? layout.drawerWide : layout.drawer}
       destroyOnHidden={destroyOnHidden}

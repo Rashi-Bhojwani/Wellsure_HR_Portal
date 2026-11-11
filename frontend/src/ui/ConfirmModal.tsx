@@ -3,6 +3,7 @@ import { Button, Modal } from "antd";
 import { InfoCircleOutlined } from "@ant-design/icons";
 import { fs, fw, space, v } from "../theme/tokens";
 import { useIsPhone } from "./hooks";
+import { useTabTrap } from "./focusTrap";
 import { Illustration, type IllustrationName } from "./Illustrations";
 
 export interface ConfirmModalProps {
@@ -27,11 +28,13 @@ export interface ConfirmModalProps {
 // Never used for an optimistic action: the confirm button waits for the server (loading) before closing.
 export function ConfirmModal({ open, onCancel, onConfirm, title, description, info, illustration, confirmLabel = "Confirm", cancelLabel = "Cancel", danger, loading, confirmDisabled, children, width = 480 }: ConfirmModalProps) {
   const phone = useIsPhone();
+  const trap = useTabTrap(open, ".ant-modal-container, .ant-modal-content");
   const centred = Boolean(illustration);
   return (
     <Modal
       open={open}
       onCancel={onCancel}
+      wrapClassName={trap}
       width={phone ? "100%" : width}
       centered={!phone}
       footer={null}
