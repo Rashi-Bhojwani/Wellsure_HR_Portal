@@ -21,6 +21,7 @@
     "db:seed": "tsx scripts/reset-db.ts",
     "seed:demo-company": "tsx scripts/seed-demo-company.ts",
     "measure:payroll": "tsx scripts/measure-payroll.ts",
+    "measure:new-readers": "tsx scripts/measure-new-readers.ts",
     "docs:sensitive": "tsx scripts/sensitive-docs.ts",
     "admin:bootstrap": "tsx scripts/admin-bootstrap.ts",
     "admin:recover": "tsx scripts/admin-recover.ts",

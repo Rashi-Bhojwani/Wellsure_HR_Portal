@@ -389,3 +389,29 @@ dropped (race); sent-mark race not caught.
 **Browser check** (walk database, every button double-clicked, as DEMO001 and DEMO013): held pay for DEMO009 and for DEMO012 each prepared, approved, finalised, bank
 file approved, written, downloaded and marked sent through the Off-cycle runs screen; read back: one run (after the fix), one finalisation, one release, one bank batch,
 one sent mark each; DEMO008's loan shows "Recovered at exit" ₹0 and its settlement PAID.
+
+## Step 5: the new readers and the off-cycle road at 500 people (written 2026-11-11)
+
+A fresh scratch database (`wellsure_scale`: migrations, dev seed, demo company with its pay history), then `npm run measure:payroll -- 500` and the new
+`npm run measure:new-readers` (adds, all made up: 150 loans sanctioned by two directors, 200 claims with 100 approved, 30 leavers with confirmed settlements; then
+the 500-person run recalculated and finalised through the API so the quarterly reader reads a real quarter).
+
+**Budgets.** The project's recorded figures at 500 (`PHASE_6_REVIEW.md` §6) are 0.8 s for one full screen read and 0.7 s for the approval re-check, and its only stated
+rule is "inside 2× the committed baseline" (Phase 2 Gate 2). So a reader's budget is **1.6 s** and each off-cycle step's **1.4 s**.
+
+| Measured (development machine) | Time | Budget |
+|---|---|---|
+| Payroll: calculation job, 500 people (existing measure, today) | 3.6 s | (recorded 6.5 s) |
+| Payroll: approval re-check / one full screen read | 0.4 s / 0.4 s | (recorded 0.7 / 0.8 s) |
+| Full calculation in memory with 150 loan instalments due (D-37 shortfall rule per person) | 0.58 s | 1.6 s |
+| Loans: directors' list (155 loans) | 0.30 s | 1.6 s |
+| Reimbursements queue (206 claims) / Settlements list / Off-cycle candidates / Off-cycle runs | 0.02 / 0.04 / 0.05 / 0.02 s | 1.6 s |
+| Quarterly TDS data (a finalised quarter, 498 people) / challan register | 0.04 / 0.01 s | 1.6 s |
+| Leavers (HR) / Default behaviours / Ready for First Run (with behaviour rows) | 0.01 / 0.01 / 0.36 s | 1.6 s |
+| Access resolution for the Developer (with the swipes switch), 100 calls | 0.33 s | 1.6 s |
+| Off-cycle road for one settlement: prepare, ask, approve, finalise, ask bank, approve bank, write file | 0.02–0.05 s each | 1.4 s each |
+
+**Nothing over budget; nothing changed for speed.** The loans list is the slowest reader (it reads each loan's state, a few queries per loan); at about 0.002 s a loan
+it would reach its budget near 800 loans — noted, not changed. **Found:** `measure-new-readers` (like the demo seed before it) did not exit after printing, because
+notices leave queue connections open; it now exits. The existing `measure:payroll` hung at its final payslip-PDF step in this container (no Chromium process started);
+its timings above were printed before that step. That step was not investigated (outside this work).
