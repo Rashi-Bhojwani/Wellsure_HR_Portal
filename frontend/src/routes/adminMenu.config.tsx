@@ -488,3 +488,10 @@ adminApps.find(a=>a.key==="employee")?.menus?.[0]?.items.push(
   { key: "recruitment-settings", label: "Recruitment settings", path: "recruitment/settings", icon: SettingOutlined, element: RecruitmentSettingsPage, needs: { any: ["recruitment.settings.manage"] } },
 );
 // PEEPS-END recruitment
+// PEEPS-BEGIN recruitment-offers
+const OffersPage = lazyPage(() => import("../features/recruitment/OffersPage"), "OffersPage");
+adminApps.find(a=>a.key==="employee")?.menus?.[0]?.items.push(
+  // HR onboarding (default ON) holds employee.create; Office members hold recruitment.view. The page asks the server what each may do.
+  { key: "recruitment-offers", label: "Offers and joining", path: "recruitment/offers", icon: SolutionOutlined, element: OffersPage, needs: { any: ["recruitment.view", "employee.create"] } },
+);
+// PEEPS-END recruitment-offers

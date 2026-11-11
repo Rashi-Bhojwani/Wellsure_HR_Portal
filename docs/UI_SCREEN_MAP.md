@@ -233,3 +233,9 @@ frames' offers, joining, referral and compensation controls await C-4B. The ship
 screens use existing DataTable, SideDrawer, Panel, StepperLayout and theme tokens;
 phone tables use cards, with a horizontally scrollable stage board.
 <!-- PEEPS-END recruitment -->
+<!-- PEEPS-BEGIN recruitment-offers -->
+Recruitment C-4B: `/admin/recruitment/offers` (OffersPage: offers list + drawer with Offer and Joining sections, Referrals
+tab when on), candidate drawer *Offer* tab (OfferPanel: terms, states, director-only pay and expected pay behind *Show*),
+JoiningPanel (documents, link create/revoke, exceptions, conversion drawer), `/app/recruitment/referrals` (ReferralsPage)
+and the public `/joining/:token` (JoinerUploadPage, AuthShell, no sign-in). Light/dark, 1280 and 390 px checked.
+<!-- PEEPS-END recruitment-offers -->

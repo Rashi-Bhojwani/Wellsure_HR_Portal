@@ -26,6 +26,11 @@ a fictional PDF and a two-person panel (DEMO011 submitted; DEMO004 unsubmitted).
 DEMO009 is the requesting manager. DEMO007 is unrelated. All four prepared leave
 types remain off. No normal seed values change.
 
-No offers, compensation, public applications, joining or conversion exist here.
-Immutable pipeline/scorecard versions, application IDs and retained non-personal
-history are extension points for the later authorized checkpoint.
+C-4B (offers, pay, joining, conversion, referrals): `offers.ts`, `joining.ts`,
+`conversion.ts`, `referrals.ts`, routes in `offerRoutes.ts`, audiences in
+`offerAccess.ts`. Office/directors manage offers; only directors see pay (offer
+compensation and candidate expected pay, encrypted, every open audited). HR
+onboarding (RUN_ONBOARDING, default on) runs joining and conversion. Joiner links
+are token-only, hashed, expiring, revocable and rate-limited. Payroll interface:
+`readAcceptedOfferForPayroll(directorUserId, employeeId)` — director-only, audited,
+read-only; no payroll code here. There is still no public application form.

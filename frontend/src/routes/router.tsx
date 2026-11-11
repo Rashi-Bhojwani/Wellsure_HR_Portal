@@ -23,6 +23,9 @@ const TotpChallengePage = lazyPage(
   () => import("../pages/auth/totp/TotpChallengePage"),
   "TotpChallengePage",
 );
+// PEEPS-BEGIN recruitment-offers
+const JoinerUploadPage = lazyPage(() => import("../features/recruitment/JoinerUploadPage"), "JoinerUploadPage");
+// PEEPS-END recruitment-offers
 const TotpSetupPage = lazyPage(() => import("../pages/auth/totp/TotpSetupPage"), "TotpSetupPage");
 // Development builds only: the screen index for reviewing the UI pass (docs/UI_SCREEN_MAP.md). Behind import.meta.env.DEV so production bundles never contain it.
 const ScreensIndexPage = import.meta.env.DEV
@@ -43,6 +46,9 @@ export function AppRouter() {
         <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
         <Route path="/totp-challenge" element={<TotpChallengePage />} />
         <Route path="/totp-setup" element={<TotpSetupPage />} />
+        {/* PEEPS-BEGIN recruitment-offers */}
+        <Route path="/joining/:token" element={<JoinerUploadPage />} />
+        {/* PEEPS-END recruitment-offers */}
         {ScreensIndexPage && <Route path="/dev/screens" element={<ScreensIndexPage />} />}
 
         <Route path="/app/*" element={<PortalRoutes />} />

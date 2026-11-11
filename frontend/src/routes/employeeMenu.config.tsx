@@ -24,6 +24,7 @@ import {
   SafetyCertificateOutlined,
   SwapOutlined,
   TeamOutlined,
+  UserAddOutlined,
   TrophyOutlined,
   UnorderedListOutlined,
   WalletOutlined,
@@ -32,6 +33,7 @@ import { lazyPage } from "./lazyPage";
 // PEEPS-BEGIN recruitment
 const RecruitmentPage = lazyPage(() => import("../features/recruitment/RecruitmentPage"), "RecruitmentPage");
 const MyInterviewsPage = lazyPage(() => import("../features/recruitment/RecruitmentPage"), "MyInterviewsPage");
+const ReferralsPage = lazyPage(() => import("../features/recruitment/ReferralsPage"), "ReferralsPage");
 // PEEPS-END recruitment
 // PEEPS-BEGIN exits
 const ExitsPage = lazyPage(() => import("../features/exits/ExitsPage"), "ExitsPage");
@@ -393,6 +395,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
   // PEEPS-BEGIN recruitment
   { key: "recruitment-requests", label: "Hiring requests", path: "recruitment", icon: TeamOutlined, element: RecruitmentPage, permission: "recruitment.requisition.raise", description: "Your hiring requisitions and candidate summaries." },
   { key: "my-interviews", label: "My interviews", path: "recruitment/interviews", icon: CommentOutlined, element: MyInterviewsPage, description: "Your assigned interviews and private feedback." },
+  { key: "referrals", label: "Referrals", path: "recruitment/referrals", icon: UserAddOutlined, element: ReferralsPage, description: "Refer someone for an open job (when switched on)." },
   // PEEPS-END recruitment
   // PEEPS-BEGIN exits
   { key: "moving-on", label: "Moving on", path: "exits", icon: CheckSquareOutlined, element: ExitsPage, description: "Your resignation, clearance and private interview." },

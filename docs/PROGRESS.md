@@ -5278,3 +5278,12 @@ settings Not set, decisions, later hooks and Unverified items. **CI is Unverifie
 until the owner pastes the delivery run's jobs.** Stop at D1 for acceptance; C-4B,
 offers, joining, insights and document autofill remain unstarted.
 <!-- PEEPS-END recruitment -->
+<!-- PEEPS-BEGIN recruitment-offers -->
+### Peeps C-4B — offers, pay, joining, conversion, referrals (2026-11-11, branch `peeps/foundation`)
+Offers with non-pay terms for the Wellsure Office and directors; offer pay and candidate expected pay encrypted and
+director-only (every open audited); optional offer approval (default off); append-only offer events; joiner links
+(token hashed, expiring, revocable, rate-limited, no login) for director-listed documents; HR onboarding (default on)
+reviews documents and converts accepted candidates through the unchanged employee creation service, idempotently;
+referrals off by default. Migration `peeps_20261111090000_recruitment_offers`. Not set until a director chooses: link
+lifetime, required joining documents, exception approver. Details: `docs/plans/PEEPS_STAGE_REPORTS.md` (C-4B).
+<!-- PEEPS-END recruitment-offers -->

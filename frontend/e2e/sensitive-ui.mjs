@@ -79,6 +79,13 @@ async function peepsPageChecks(page, user, label, base, p, text) {
   if (!["DEMO001", "DEMO013", "DEMO011"].includes(user) && text.includes("DEMO-C4-PRIVATE-FEEDBACK")) problems.push(`${where}: recruitment feedback outside the submitted panel`);
   if ((p === "recruitment" || p.startsWith("recruitment/")) && user === "DEMO005" && text.includes("DEMO-C4-CANDIDATE")) problems.push(`${where}: Developer sees candidate data`);
   // PEEPS-END recruitment
+  // PEEPS-BEGIN recruitment-offers
+  // C-4B (backend/src/modules/recruitment/offersDemoSeed.ts): DEMO offer pay 7777123.45 and DEMO expected pay 6666123.45 are directors-only and load
+  // only on an explicit "Show pay"; no other person's page may ever contain them, and no recruitment page may show a joiner-link token or storage key.
+  if (!["DEMO001", "DEMO013"].includes(user) && /7777123|6666123|7,777,123|66,66,123|77,77,123|6,666,123/.test(text)) problems.push(`${where}: offer pay or expected pay outside the directors`);
+  if (text.includes("recruitment/joining/")) problems.push(`${where}: a joining document's storage key is on the page`);
+  if ((p === "recruitment" || p.startsWith("recruitment/")) && user === "DEMO005" && text.includes("DEMO-C4B-JOINER")) problems.push(`${where}: Developer sees joiner data`);
+  // PEEPS-END recruitment-offers
   // PEEPS-BEGIN exits
   if (!["DEMO001", "DEMO013", "DEMO006", "DEMO004"].includes(user) && text.includes("DEMO-C3-PRIVATE-INTERVIEW")) problems.push(`${where}: sees a private exit interview outside the relationship`);
   if ((p === "exits" || p.startsWith("exits/")) && /₹|\bINR\b|\bRs\.?\s?\d/.test(text)) problems.push(`${where}: exit screen contains a money value`);
@@ -289,6 +296,14 @@ if (doEmployee) await visit("DEMO009", "another employee", "/app", employeePaths
   const page=await sessionFor(user),text=await page.locator("body").innerText();
   if(["DEMO001","DEMO011"].includes(user)!==text.includes("DEMO-C4-PRIVATE-FEEDBACK"))problems.push(`${user}: recruitment feedback differs from its relationship`);
  }
+ // PEEPS-BEGIN recruitment-offers
+ // Offers and joining: the director and HR onboarding (default on) see the accepted DEMO offer's non-pay terms; the Developer sees nothing.
+ if(doAdmin)for(const user of ["DEMO001","DEMO004","DEMO005"]){
+  await visit(user,`${user} offers`,"/admin",["recruitment/offers"]);
+  const page=await sessionFor(user),text=await page.locator("body").innerText();
+  if(["DEMO001","DEMO004"].includes(user)!==text.includes("DEMO-C4B-JOINER"))problems.push(`${user}: the accepted DEMO offer's visibility differs from the onboarding audience`);
+ }
+ // PEEPS-END recruitment-offers
 }
 // PEEPS-END recruitment
 for (const page of sessions.values()) await page.context().close();

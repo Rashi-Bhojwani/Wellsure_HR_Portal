@@ -1022,3 +1022,14 @@ Recruitment D1 usage and DEMO personas are in
 Choose settings as a director before opening a job or adding a candidate. HR's
 recruitment switch starts off; named-panel access is independent of that switch.
 <!-- PEEPS-END recruitment -->
+<!-- PEEPS-BEGIN recruitment-offers -->
+**Offers and joining (C-4B).** Admin portal → Employee → *Offers and joining*. The Wellsure Office (with the recruitment
+capability and the Office audience on) and the directors draft offers and record states; only a director sees or records
+pay (*Show pay* / *Show expected pay*, each opening audited) and marks an offer issued after sending the letter through
+Letters. HR onboarding (switch `RUN_ONBOARDING`, default on) sees accepted offers, creates the joiner link, reviews the
+documents and converts the candidate. The joiner opens `/joining/<token>` with no sign-in. Settings (Recruitment
+settings): *Required joining documents*, *Joining link lifetime* and *Joining exception approver* are Not set until a
+director chooses them (links and exceptions refuse until then); *Offer approval* and *Referrals* are Default: off.
+The DEMO company adds DEMO-C4B-JOINER with an accepted offer and DEMO pay (seen only by DEMO001/DEMO013 after *Show pay*).
+Employees refer people from the employee portal's *Referrals* page once a director switches referrals on.
+<!-- PEEPS-END recruitment-offers -->

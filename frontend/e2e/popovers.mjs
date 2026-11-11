@@ -298,6 +298,13 @@ for (const [width, height] of [
     await check(page, where, "avatars: remove photo dialog", { open: () => page.getByRole("button", { name: /Remove photo/ }).first().click(), root: ".ant-modal-wrap .ant-modal", surface: ".ant-modal-container" });
   }
   // PEEPS-END
+  // PEEPS-BEGIN recruitment-offers
+  // Offers and joining (director): the offer state filter's dropdown.
+  await page.goto(`${BASE}/admin/recruitment/offers`);
+  await page.locator("header.ws-topbar").waitFor({ timeout: 30000 });
+  await page.waitForTimeout(800);
+  await check(page, where, "offers: state filter", { open: () => page.locator(".ant-select").filter({ has: page.locator("[aria-label='Filter by state']") }).first().click(), root: ".ant-select-dropdown", surface: null });
+  // PEEPS-END recruitment-offers
   await ctx.close();
 }
 }

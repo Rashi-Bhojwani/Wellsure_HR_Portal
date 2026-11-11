@@ -676,6 +676,29 @@ was needed. See the C-4A stage report for failures/fixes and exact shared-file l
 CI remains Unverified until the owner pastes jobs. D1 is delivered for acceptance;
 C-4B, offers, joining, insights and document autofill remain unstarted.
 
+#### C-4B authorization and implementation record (2026-11-11)
+
+Owner prompt "Peeps stage 1 of 4": sync, clean-up, C-4B. Built in `peeps_20261111090000_recruitment_offers` and new
+recruitment files (`offers.ts`, `offerAccess.ts`, `offerText.ts`, `joining.ts`, `conversion.ts`, `referrals.ts`,
+`offerRoutes.ts`, `offersDemoSeed.ts`; screens `OffersPage`, `OfferPanel`, `JoiningPanel`, `JoinerUploadPage`,
+`ReferralsPage`). Differences from the data sketch below, decided in this stage:
+- Offer states follow the owner's list (DRAFT, PROPOSED, APPROVED optional, ISSUED, ACCEPTED, DECLINED, EXPIRED,
+  WITHDRAWN). Non-pay terms are fixed at creation (withdraw and redraft to change); one live offer per application.
+- Offer pay is one encrypted row per offer (`recruitment_offer_compensation`, director trigger), editable in DRAFT and
+  PROPOSED; its history is the append-only `recruitment_offer_events` (kind COMPENSATION, never the figure). Not an
+  append-only table, so key rotation and erasure need no new exception (the feedback exception is unchanged).
+- No `job_compensation_bands` (no pay band was asked for). `getOfferCompensation` became
+  `readAcceptedOfferForPayroll(directorUserId, employeeId)`: director-only, audited, read-only, no route.
+- Expected pay did not exist in C-4A; it is added as a director-only encrypted candidate column with its own
+  director-only routes, never in candidate lists, detail, search or exports.
+- Joining documents stay in Peeps (`recruitment_joiner_documents`, private storage prefix) instead of being copied into
+  employee documents; HR onboarding and directors open them (audited). Copying into the employee's documents on
+  conversion is a follow-up.
+- Conversion: HR enters the employee code and the Add Employee personal fields the candidate record does not hold; the
+  invitation is not sent automatically (HR sends it from the existing pending-invitations list).
+- HR onboarding is the `RUN_ONBOARDING` switch over the new key `recruitment.onboarding`, which both HR roles hold by
+  default (the switch takes it away). Offer pay key `recruitment.pay.view` is HR-forbidden and Developer-forbidden.
+
 - **Data.**
   - `job_requisitions` (headcount ask; approval route Not set; second-director step
     `RECRUITMENT_REQUISITION`), `jobs` (title, department, location, employment type, description; **no

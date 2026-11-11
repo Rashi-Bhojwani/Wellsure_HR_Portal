@@ -329,5 +329,8 @@ export async function seedDemoCompany(): Promise<DemoResult> {
   // PEEPS-BEGIN recruitment
   await (await import("../../src/modules/recruitment/demoSeed")).seedDemoRecruitment(who);
   // PEEPS-END recruitment
+  // PEEPS-BEGIN recruitment-offers
+  await (await import("../../src/modules/recruitment/offersDemoSeed")).seedDemoOffers(who);
+  // PEEPS-END recruitment-offers
   return { people: active.length, paid: active.length, password: DEMO_PASSWORD, logins: DEMO_PEOPLE.map((p) => ({ code: p.code, name: p.name, role: p.role })), cycle: { start: iso(first), end: iso(last) } };
 }
