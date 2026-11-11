@@ -124,8 +124,16 @@ export function IdentityChangesPanel() {
               </div>
             ),
           },
-          { title: "Change", key: "change", render: (_, r) => (<><StatusChip tone="neutral">{KIND_LABEL[r.kind]}</StatusChip> <span>{maskedText(r)}</span></>) },
-          { title: "From", key: "source", render: (_, r) => <span>{SOURCE_LABEL[r.source]}<br /><span style={{ fontSize: fs.sm, color: v.textSecondary }}>{r.enteredBy}, {fmt(r.createdAt)}</span></span> },
+          {
+            title: "Change",
+            key: "change",
+            render: (_, r) => (
+              <div style={{ minWidth: 0 }}>
+                <div><StatusChip tone="neutral">{KIND_LABEL[r.kind]}</StatusChip> {maskedText(r)}</div>
+                <div style={{ fontSize: fs.sm, color: v.textSecondary }}>{SOURCE_LABEL[r.source]}: {r.enteredBy}, {fmt(r.createdAt)}</div>
+              </div>
+            ),
+          },
           { title: "Status", dataIndex: "status", render: (s: string, r) => <span><StatusChip status={s} />{r.decidedBy && <span style={{ display: "block", fontSize: fs.sm, color: v.textSecondary }}>{r.decidedBy}{r.reason ? `: ${r.reason}` : ""}</span>}</span> },
           { title: "Actions", key: "actions", align: "right", render: (_, r) => actions(r) },
         ]}

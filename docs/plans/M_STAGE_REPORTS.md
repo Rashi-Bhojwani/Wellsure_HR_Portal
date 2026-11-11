@@ -190,3 +190,13 @@ Web push needs a VAPID key pair (a secret, generated and kept in the environment
 (their hosts must be allowed by the network policy). Neither can be chosen or tested here, and a push that cannot be delivered would only look built.
 The PWA already shows in-app notices in real time while open. To build: keys as secrets (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`), a
 `push_subscriptions` table, the service worker's `push` handler, and the same category choices as NT-09.
+
+### Browser walk (dev stack, made-up seed data)
+
+Five roles (director `1000`, HR Admin `1001`, manager `1002`, employee `1006`, Developer `DEMO005`) × desktop light (1280) and phone dark (390): 56
+visits of every new or changed screen (Change Requests, a profile, Default behaviours, System Settings → Sign-in emails, Audit Log, Letters, a
+report, Tasks, Document Center → Ask for a letter, My Info, Account & security), with content made first through the API (an HR bank change waiting
+for a director, a listed letter and an employee's ask, a report schedule). Checked on each: no error boundary, no console error, no horizontal scroll,
+the whole account number never on screen. Seen in the screenshots: the director has Export to Excel on Audit Log and the Developer has not; HR sees
+only Withdraw on its own held change. **One defect found and fixed:** the desktop "waiting for a director" table pushed the Confirm/Reject column off
+the right edge; the "From" column is now a second line under the change. Not walked: keyboard-only paths and tablet width.
