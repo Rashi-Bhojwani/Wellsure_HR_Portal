@@ -197,3 +197,12 @@ export const form16Year = (fy: string) => get<{ year: string; state: "DRAFT" | "
 export const askForm16 = (fy: string, fingerprint: string) => post(`/form16/${fy}/confirm`, { fingerprint });
 export const decideForm16 = (fy: string, fingerprint: string, decision: "APPROVE" | "REJECT") => post(`/form16/${fy}/decision`, { fingerprint, decision });
 export const myForm16 = (fy: string) => get<Form16Row & { draft: boolean; watermark: string | null; partA: string }>("/me/form16", { fy });
+export interface QuarterlyData {
+  year: string;
+  quarter: number;
+  months: string[];
+  rows: Array<{ employeeCode: string; name: string; panLast4: string | null; byMonth: Record<string, { paid: string; tds: string }> }>;
+  challans: Array<{ month: string; serial: string; depositedOn: string }>;
+  note: string;
+}
+export const quarterlyData = (fy: string, quarter: number) => get<QuarterlyData>("/quarterly", { fy, quarter });

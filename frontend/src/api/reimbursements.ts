@@ -27,3 +27,21 @@ export async function makeClaim(body: { typeKey: string; spentOn: string; amount
 export const withdrawClaim = async (id: string) => (await apiClient.post(`${base}/mine/${id}/withdraw`)).data;
 export const claimQueue = async (status: "SUBMITTED" | "ALL") => (await apiClient.get<{ claims: ClaimView[] }>(base, { params: { status } })).data.claims;
 export const decideClaim = async (id: string, body: { decision: "APPROVE" | "REJECT"; amount?: string; reason?: string }) => (await apiClient.post(`${base}/${id}/decision`, body)).data;
+
+// Item 3 (2026-11-11): the claim types screen (directors only). Every value starts Not set.
+export interface ClaimType {
+  typeKey: string;
+  version: number;
+  name: string;
+  employeesMayClaim: boolean | null;
+  billsRequired: boolean | null;
+  monthlyCapSet: boolean;
+  monthlyCap: string | null;
+  yearlyCapSet: boolean;
+  yearlyCap: string | null;
+  payHead: string | null;
+  retired: boolean;
+  gaps: string[];
+}
+export const claimTypes = async () => (await apiClient.get<{ types: ClaimType[] }>(`${base}/types`)).data.types;
+export const saveClaimType = async (body: Omit<ClaimType, "version" | "gaps"> & { reason: string }) => (await apiClient.put(`${base}/types`, body)).data;

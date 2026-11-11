@@ -10,7 +10,7 @@ import { DataTable, PageHeader, Panel, Stack, StatusChip, toast } from "../../..
 import { space } from "../../../theme/tokens";
 
 // Payroll > Loans (P7-4), directors only: each loan's state and the sanction (one director asks, a different director decides; nobody on their own loan), and the
-// loan types with what each still lacks. Types and changes are set through the API in this release; the screen shows what is Not set.
+// loan types with what each still lacks. Types are set on Payroll > Loan and claim types; loan changes are API-only in this release.
 export function LoansAdminPage() {
   const queryClient = useQueryClient();
   const loans = useQuery({ queryKey: ["loans", "all"], queryFn: loansApi.allLoans });

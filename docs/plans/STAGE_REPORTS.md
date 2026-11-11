@@ -259,3 +259,12 @@ Screen: Payroll → Off-cycle runs (directors). Settlements show PAID and refuse
 finalised; hold release and unlock refused after; unique keys refuse a duplicate and a rolled-back mutant that drops them lets it in; the regular run's figures are
 unchanged; bank file rules; the settlement road with DEMO; own pay refused at prepare, ask and decide. **Mutants (8, all caught):** held reader ignoring off-cycle
 releases; approver executing; zero total payable; DEMO layout check dropped; readiness ignored; net dropping a line; adjustments not marked paid; demo file not DEMO.
+
+**Gate after P7-6b (`64b6e16`).** Full backend suite run alone, no edits during it: **215 files, 2,026 tests, all passed.**
+
+## Item 3: loan and claim type settings, quarterly TDS data screen (written 2026-11-11)
+
+Frontend only (the API, its director-only gates and its tests existed from P7-4, P7-5 and P7-7). Payroll → **Loan and claim types** (directors): every value of
+a new type starts Not set (tri-state choices "Not set / Yes / No"; caps "Not set / No cap (chosen) / A cap"); each save needs a reason and is a new version; the
+"Complete" column shows how many values are still Not set. Payroll → **Quarterly TDS data** (directors): per person per month paid and TDS from finished runs, PAN
+by its last four, confirmed challans by their last digits; says the official format is not built. Typecheck, lint (tokens), build and bundle budgets pass.
