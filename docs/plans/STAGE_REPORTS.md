@@ -331,3 +331,9 @@ Previously the Developer reached Employee Swipes (flagged in the last report). *
 on the list and the export, resolved access without the key, HR unaffected; the Developer and HR cannot propose; a proposal alone changes nothing; on after a
 different director confirms (200), off again (403). Developer-ceiling test updated (`CHANGED_TESTS.md`). **Mutants (3, all caught):** never stripped; an unconfirmed
 proposal counting; any confirmed value turning it on.
+
+**Final gate (`9ec926e`, 2026-11-11).** Full backend suite alone: **218 files, 2,041 tests, all passed.** CI per job — run 282 (`64b6e16`): six green, Test cancelled by
+the next push; run 285 (`df8306f`): all seven green; run 286 (`534aa71`): success; run 287 (`9ec926e`): install-lint-typecheck-test (incl. Demo company tests),
+docker-build, sensitive-ui admin, sensitive-ui employee, latency (incl. popovers), attendance-replay, agent-windows — **all green**.
+Items 7: not started (A-1, A-2, A-4–A-8, Stages 6, 8, 9). `PARITY_COVERAGE.md` exists on no branch; `docs/samples/` exists on `origin/main` and
+`origin/peeps/foundation`, not on this branch. STOPPED here as instructed.

@@ -34,11 +34,11 @@ Read first. Status: DONE / OPEN / PARTIAL / **UNDEFINED** (no plan file on any b
 | Item 3 | loan and claim type settings, quarterly TDS screen | DONE `742cb4a` | — |
 | D-37 (4) | loan shortfall per type (default skip and carry), max deduction % (Not set) | DONE `df8306f` (9 mutants caught; suite 2,034 passed; CI 285 green) | — |
 | D-37 (5) | leaving-month accrual (default pro-rata), pro-rata rounding (Not set) | DONE `534aa71` (7 mutants caught, 1 equivalent removed; suite 2,038 passed) | — |
-| D-37 (6) | Developer does not see Employee Swipes by default; director switch | DONE (3 mutants caught) — see STAGE_REPORTS | — |
+| D-37 (6) | Developer does not see Employee Swipes by default; director switch | DONE `9ec926e` (3 mutants caught; final suite 2,041 passed; CI 287 green) | — |
 | Stage 6 | internal reports + directors-only query builder "using the layouts in `docs/plans/PARITY_COVERAGE.md`" | **BLOCKED: `PARITY_COVERAGE.md` does not exist on any branch** | owners / a session that wrote it |
 | Stage 8 | attendance and salary file readers from `docs/samples`, layout setup, parallel-run kit | **BLOCKED in part: `docs/samples/` is not on this branch** (only on `peeps/foundation`, which this work may not touch) | samples on this branch |
 | Stage 9 parity | Tier 1 MISSING items of `PARITY_COVERAGE.md` | **BLOCKED (file missing)** | as Stage 6 |
-| Close-out | `PORTAL_READY_REPORT.md`, `GETTING_STARTED.md`, `FIRST_REAL_PAYROLL_RUN.md` | OPEN | everything above |
+| Close-out | `PORTAL_READY_REPORT.md`, `GETTING_STARTED.md`, `FIRST_REAL_PAYROLL_RUN.md` | PORTAL_READY_REPORT and OWNER_REVIEW_SHEET updated 2026-11-11; open items are the undefined A-items and the blocked stages | everything above |
 
 **Note on the undefined items.** The owner's message says "A-4, then A-7, then A-2, then A-3 …, then A-1, A-5, A-6 and A-8, each exactly as your plan
 files define them". Searched: every file under `docs/` on this branch and on every remote branch (`git grep`). Only A-2, A-3 and A-5 are named, and only by name.
