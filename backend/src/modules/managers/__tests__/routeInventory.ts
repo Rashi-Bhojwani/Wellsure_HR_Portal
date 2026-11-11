@@ -35,6 +35,33 @@ const admin: RouteClass = { kind: "admin" };
 const adminInService = (why: string): RouteClass => ({ kind: "admin", why });
 
 export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
+  // PEEPS-BEGIN recruitment-offers
+  "GET /api/recruitment/offer-status": self,
+  "GET /api/recruitment/offers": scoped("Office/directors all offers' non-pay terms; HR onboarding accepted offers only; no pay in lists"),
+  "POST /api/recruitment/offers": adminInService("Wellsure Office recruitment capability or director; active application, one live offer"),
+  "GET /api/recruitment/offers/:id": scoped("Office/directors; HR onboarding accepted only; pay metadata directors only"),
+  "POST /api/recruitment/offers/:id/state": adminInService("Office/directors record non-pay states; approve and issue are director-only"),
+  "GET /api/recruitment/offers/:id/compensation": adminInService("Actual director only; every opening audited"),
+  "PUT /api/recruitment/offers/:id/compensation": adminInService("Actual director only (service and database trigger); encrypted"),
+  "GET /api/recruitment/candidates/:id/expected-pay": adminInService("Actual director only; every opening audited"),
+  "PUT /api/recruitment/candidates/:id/expected-pay": adminInService("Actual director only; encrypted"),
+  "GET /api/recruitment/candidates/:id/joining": adminInService("HR onboarding (default on), directors, or the chosen exception approver"),
+  "POST /api/recruitment/candidates/:id/joiner-links": adminInService("HR onboarding or director; lifetime and document types must be chosen"),
+  "POST /api/recruitment/joiner-links/:id/revoke": adminInService("HR onboarding or director"),
+  "POST /api/recruitment/candidates/:id/joining-exceptions": adminInService("Only the director-chosen exception approver"),
+  "GET /api/recruitment/joining-documents/:id/file": adminInService("HR onboarding or director; every opening audited"),
+  "GET /api/recruitment/offers/:id/conversion": adminInService("HR onboarding or director; accepted offer; non-pay contact prefill"),
+  "POST /api/recruitment/offers/:id/conversion": adminInService("HR onboarding or director; idempotent, race-safe, non-pay data only"),
+  "GET /api/recruitment/referrals/status": self,
+  "GET /api/recruitment/referrals/jobs": everyone("Open job titles while a director has switched referrals on"),
+  "GET /api/recruitment/referrals/mine": self,
+  "POST /api/recruitment/referrals": everyone("Any non-Developer employee while referrals are on; consent recorded"),
+  "GET /api/recruitment/referrals": scoped("Current recruitment management only"),
+  "POST /api/recruitment/referrals/:id/accept": scoped("Current recruitment management only"),
+  "POST /api/recruitment/referrals/:id/close": scoped("Current recruitment management only"),
+  "GET /api/joining/:token": machine("Public joiner link: unguessable token, hashed at rest, expiring, revocable, rate-limited; document types and expiry only"),
+  "POST /api/joining/:token/documents/:typeCode": machine("Public joiner link upload: listed types only, platform file checks, rate-limited"),
+  // PEEPS-END recruitment-offers
   // PEEPS-BEGIN recruitment
   "GET /api/recruitment/status": self,
   "GET /api/recruitment/settings": adminInService("Actual director only"),

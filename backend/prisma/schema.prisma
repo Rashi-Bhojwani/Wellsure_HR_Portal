@@ -5013,6 +5013,9 @@ model RecruitmentJob {
   changedByUserId String @map("changed_by_user_id")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   applications RecruitmentApplication[]
+  // PEEPS-BEGIN recruitment-offers
+  referrals RecruitmentReferral[]
+  // PEEPS-END recruitment-offers
   @@index([status])
   @@map("jobs")
 }
@@ -5036,6 +5039,16 @@ model Candidate {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   applications RecruitmentApplication[]
   mails RecruitmentCandidateMail[]
+  // PEEPS-BEGIN recruitment-offers
+  expectedPayEncrypted Bytes? @map("expected_pay_encrypted")
+  expectedPayChangedByUserId String? @map("expected_pay_changed_by_user_id")
+  offers RecruitmentOffer[]
+  joinerLinks RecruitmentJoinerLink[]
+  joinerDocuments RecruitmentJoinerDocument[]
+  joiningExceptions RecruitmentJoiningException[]
+  conversion RecruitmentConversion?
+  referral RecruitmentReferral?
+  // PEEPS-END recruitment-offers
   @@index([retentionUntil, anonymizedAt])
   @@index([nameHash])
   @@map("candidates")
@@ -5056,6 +5069,9 @@ model RecruitmentApplication {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   moves ApplicationStageMove[]
   interviews RecruitmentInterview[]
+  // PEEPS-BEGIN recruitment-offers
+  offers RecruitmentOffer[]
+  // PEEPS-END recruitment-offers
   @@unique([candidateId, jobId])
   @@index([jobId, status])
   @@map("applications")
@@ -5149,3 +5165,151 @@ model RecruitmentCandidateMail {
 }
 
 // PEEPS-END recruitment
+// PEEPS-BEGIN recruitment-offers
+// C-4B: offers (non-pay terms; compensation in a director-only encrypted side table), joiner links and documents,
+// joining exceptions, conversion and referrals. Plain id columns (no relation) for org masters and employees so the shared
+// Department/Location/Employee models are not edited; services validate them.
+model RecruitmentOffer {
+  id                 String                        @id @default(cuid())
+  applicationId      String                        @map("application_id")
+  application        RecruitmentApplication        @relation(fields: [applicationId], references: [id])
+  candidateId        String                        @map("candidate_id")
+  candidate          Candidate                     @relation(fields: [candidateId], references: [id])
+  title              String
+  departmentId       String                        @map("department_id")
+  locationId         String                        @map("location_id")
+  reportingManagerId String?                       @map("reporting_manager_id")
+  employmentType     String                        @map("employment_type")
+  joiningDate        DateTime                      @map("joining_date") @db.Date
+  state              String                        @default("DRAFT")
+  version            Int                           @default(0)
+  approvalRequired   Boolean?                      @map("approval_required")
+  createdByUserId    String                        @map("created_by_user_id")
+  changedByUserId    String                        @map("changed_by_user_id")
+  createdAt          DateTime                      @default(now()) @map("created_at") @db.Timestamptz(3)
+  compensation       RecruitmentOfferCompensation?
+  events             RecruitmentOfferEvent[]
+  joinerLinks        RecruitmentJoinerLink[]
+  conversion         RecruitmentConversion?
+
+  @@index([candidateId])
+  @@index([applicationId])
+  @@index([state])
+  @@map("recruitment_offers")
+}
+
+model RecruitmentOfferCompensation {
+  id              String           @id @default(cuid())
+  offerId         String           @unique @map("offer_id")
+  offer           RecruitmentOffer @relation(fields: [offerId], references: [id])
+  valueEncrypted  Bytes?           @map("value_encrypted")
+  version         Int              @default(1)
+  changedByUserId String           @map("changed_by_user_id")
+  changedAt       DateTime         @default(now()) @map("changed_at") @db.Timestamptz(3)
+
+  @@map("recruitment_offer_compensation")
+}
+
+model RecruitmentOfferEvent {
+  id              String           @id @default(cuid())
+  offerId         String           @map("offer_id")
+  offer           RecruitmentOffer @relation(fields: [offerId], references: [id])
+  version         Int
+  kind            String
+  fromState       String?          @map("from_state")
+  toState         String           @map("to_state")
+  reason          String?
+  letterReference String?          @map("letter_reference")
+  actorUserId     String           @map("actor_user_id")
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([offerId, version])
+  @@map("recruitment_offer_events")
+}
+
+model RecruitmentJoinerLink {
+  id              String                      @id @default(cuid())
+  candidateId     String                      @map("candidate_id")
+  candidate       Candidate                   @relation(fields: [candidateId], references: [id])
+  offerId         String                      @map("offer_id")
+  offer           RecruitmentOffer            @relation(fields: [offerId], references: [id])
+  tokenHash       String                      @unique @map("token_hash")
+  expiresAt       DateTime                    @map("expires_at") @db.Timestamptz(3)
+  revokedAt       DateTime?                   @map("revoked_at") @db.Timestamptz(3)
+  revokedByUserId String?                     @map("revoked_by_user_id")
+  completedAt     DateTime?                   @map("completed_at") @db.Timestamptz(3)
+  createdByUserId String                      @map("created_by_user_id")
+  createdAt       DateTime                    @default(now()) @map("created_at") @db.Timestamptz(3)
+  documents       RecruitmentJoinerDocument[]
+
+  @@index([candidateId])
+  @@map("recruitment_joiner_links")
+}
+
+model RecruitmentJoinerDocument {
+  id               String                @id @default(cuid())
+  candidateId      String                @map("candidate_id")
+  candidate        Candidate             @relation(fields: [candidateId], references: [id])
+  linkId           String                @map("link_id")
+  link             RecruitmentJoinerLink @relation(fields: [linkId], references: [id])
+  typeCode         String                @map("type_code")
+  storageKey       String?               @map("storage_key")
+  mimeType         String                @map("mime_type")
+  sizeBytes        Int                   @map("size_bytes")
+  uploadedAt       DateTime              @default(now()) @map("uploaded_at") @db.Timestamptz(3)
+  reviewedAt       DateTime?             @map("reviewed_at") @db.Timestamptz(3)
+  reviewedByUserId String?               @map("reviewed_by_user_id")
+
+  @@unique([linkId, typeCode])
+  @@index([candidateId])
+  @@map("recruitment_joiner_documents")
+}
+
+model RecruitmentJoiningException {
+  id               String    @id @default(cuid())
+  candidateId      String    @map("candidate_id")
+  candidate        Candidate @relation(fields: [candidateId], references: [id])
+  typeCode         String    @map("type_code")
+  reason           String
+  approvedByUserId String    @map("approved_by_user_id")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([candidateId, typeCode])
+  @@map("recruitment_joining_exceptions")
+}
+
+model RecruitmentConversion {
+  id                String           @id @default(cuid())
+  candidateId       String           @unique @map("candidate_id")
+  candidate         Candidate        @relation(fields: [candidateId], references: [id])
+  offerId           String           @unique @map("offer_id")
+  offer             RecruitmentOffer @relation(fields: [offerId], references: [id])
+  applicationId     String           @unique @map("application_id")
+  employeeId        String           @unique @map("employee_id")
+  convertedByUserId String           @map("converted_by_user_id")
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("recruitment_conversions")
+}
+
+model RecruitmentReferral {
+  id                 String          @id @default(cuid())
+  referrerEmployeeId String          @map("referrer_employee_id")
+  jobId              String          @map("job_id")
+  job                RecruitmentJob  @relation(fields: [jobId], references: [id])
+  nameEncrypted      Bytes?          @map("name_encrypted")
+  emailEncrypted     Bytes?          @map("email_encrypted")
+  phoneEncrypted     Bytes?          @map("phone_encrypted")
+  consentRecordedAt  DateTime        @map("consent_recorded_at") @db.Timestamptz(3)
+  retentionUntil     DateTime        @map("retention_until") @db.Timestamptz(3)
+  candidateId        String?         @unique @map("candidate_id")
+  candidate          Candidate?      @relation(fields: [candidateId], references: [id])
+  status             String          @default("SUBMITTED")
+  changedByUserId    String          @map("changed_by_user_id")
+  createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([referrerEmployeeId])
+  @@index([status])
+  @@map("recruitment_referrals")
+}
+// PEEPS-END recruitment-offers

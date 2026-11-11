@@ -21,6 +21,10 @@ export type SensitiveClassId =
   | "CANDIDATE_PERSONAL_DATA"
   | "RECRUITMENT_FEEDBACK"
   // PEEPS-END recruitment
+  // PEEPS-BEGIN recruitment-offers
+  | "RECRUITMENT_PAY"
+  | "JOINING_DOCUMENTS"
+  // PEEPS-END recruitment-offers
   // PEEPS-BEGIN exits
   | "EXIT_INTERVIEWS"
   // PEEPS-END exits
@@ -46,6 +50,10 @@ export const SENSITIVE_CLASSES: readonly SensitiveClass[] = [
   { id: "CANDIDATE_PERSONAL_DATA", label: "Candidate personal data", what: "Encrypted identity and private CV; recruiting team or explicitly assigned summaries/CV, never Developer.", view: ["recruitment.personal.view"], edit: ["recruitment.manage"], confirm: [] },
   { id: "RECRUITMENT_FEEDBACK", label: "Recruitment feedback", what: "Own before submission, panel after own submission, or audited directors. HR and Office status never opens answers.", view: ["recruitment.feedback.view"], edit: [], confirm: [] },
   // PEEPS-END recruitment
+  // PEEPS-BEGIN recruitment-offers
+  { id: "RECRUITMENT_PAY", label: "Offer pay and candidate expected pay", what: "Encrypted; directors only (every opening audited). HR, Wellsure Office members, hiring panels, managers and Developer never see it.", view: ["recruitment.pay.view"], edit: ["recruitment.pay.view"], confirm: [] },
+  { id: "JOINING_DOCUMENTS", label: "Joining documents", what: "Identity and bank documents a joiner uploads through a private link; HR onboarding and directors, every opening audited; never Developer.", view: ["recruitment.onboarding"], edit: [], confirm: [] },
+  // PEEPS-END recruitment-offers
   // PEEPS-BEGIN exits
   { id: "EXIT_INTERVIEWS", label: "Exit interviews", what: "Encrypted answers: the employee, the interviewer of record, and directors (each director open audited). HR case access never opens answers.", view: ["exits.interviews.view"], edit: [], confirm: [] },
   // PEEPS-END exits
@@ -236,6 +244,9 @@ export const HR_FORBIDDEN_KEYS: readonly PermissionKey[] = [
   // PEEPS-BEGIN recruitment
   "recruitment.settings.manage", "recruitment.feedback.view",
   // PEEPS-END recruitment
+  // PEEPS-BEGIN recruitment-offers
+  "recruitment.pay.view",
+  // PEEPS-END recruitment-offers
   // PEEPS-BEGIN exits
   "exits.settings.manage", "exits.interviews.view", "exits.settlement.view",
   // PEEPS-END exits

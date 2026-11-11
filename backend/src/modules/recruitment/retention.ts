@@ -9,6 +9,7 @@ import { getSocketServer } from "../../realtime/emit";
 import { HttpError } from "../../middleware/errorHandler";
 import { context, director, type Actor, type Meta } from "./access";
 import { retained } from "./candidates";
+import { purgeExpiredReferrals } from "./referrals";
 export const eraseInput=z.object({requestConfirmed:z.literal(true)}).strict();
 async function refresh(candidateId:string){
  const [panels,requests,managers,directors,candidate]=await Promise.all([
@@ -25,6 +26,14 @@ async function anonymize(id:string,now:Date,onRequest:boolean,meta?:Meta){
  // retaining the key for the next cleanup attempt. APIs already hide expired values.
  if(row.cvStorageKey)await storageService.deleteObject(row.cvStorageKey);
  await tx.candidate.update({where:{id},data:{nameEncrypted:null,emailEncrypted:null,phoneEncrypted:null,nameHash:null,emailHash:null,phoneHash:null,cvStorageKey:null,cvMimeType:null,anonymizedAt:now}});
+ // PEEPS C-4B: expected pay, offer pay and joining documents go with the identity.
+ const joinDocs=await tx.recruitmentJoinerDocument.findMany({where:{candidateId:id,storageKey:{not:null}},select:{id:true,storageKey:true}});
+ for(const d of joinDocs)await storageService.deleteObject(d.storageKey!);
+ await tx.recruitmentJoinerDocument.updateMany({where:{candidateId:id},data:{storageKey:null}});
+ await tx.recruitmentJoinerLink.updateMany({where:{candidateId:id,revokedAt:null},data:{revokedAt:now}});
+ await tx.candidate.update({where:{id},data:{expectedPayEncrypted:null}});
+ const offerIds=(await tx.recruitmentOffer.findMany({where:{candidateId:id},select:{id:true}})).map(o=>o.id);
+ if(offerIds.length)await tx.$executeRaw`UPDATE recruitment_offer_compensation SET value_encrypted=NULL WHERE offer_id = ANY(${offerIds})`;
  await tx.interviewFeedback.updateMany({where:{interview:{application:{candidateId:id}}},data:{answersEncrypted:null,recommendationEncrypted:null}});
  await tx.notification.updateMany({where:{type:{startsWith:'recruitment.'},payload:{path:['candidateId'],equals:id}},data:{body:'Candidate details removed.'}});
  await tx.recruitmentCandidateMail.updateMany({where:{candidateId:id,status:'PENDING'},data:{status:'CANCELLED'}});
@@ -35,6 +44,7 @@ async function anonymize(id:string,now:Date,onRequest:boolean,meta?:Meta){
 }
 export async function eraseCandidate(id:string,actor:Actor,meta:Meta){await context(actor);await director(actor.userId);try{return await anonymize(id,new Date(),true,meta);}catch(error){if(error instanceof HttpError)throw error;logger.warn({candidateId:id,event:'recruitment.erasure.awaiting_retry'},'Candidate erasure awaits retry');throw new HttpError(503,"Candidate erasure could not complete. Retry after storage is available.","ERASURE_INCOMPLETE");}}
 export async function purgeExpiredCandidates(now=new Date()){
+ await purgeExpiredReferrals(now);
  let after='',anonymized=0,failed=0;
  for(;;){const rows=await prisma.candidate.findMany({where:{id:{gt:after},anonymizedAt:null,retentionUntil:{lte:now}},orderBy:{id:'asc'},take:100,select:{id:true}});if(!rows.length)break;
  for(const row of rows){try{if((await anonymize(row.id,now,false)).changed)anonymized++;}catch{failed++;logger.warn({candidateId:row.id,event:'recruitment.retention.awaiting_retry'},'Candidate retention cleanup awaits retry');}}

@@ -27,6 +27,9 @@ export const HR_CAPABILITY_IDS = [
   // PEEPS-BEGIN recruitment
   "MANAGE_RECRUITMENT",
   // PEEPS-END recruitment
+  // PEEPS-BEGIN recruitment-offers
+  "RUN_ONBOARDING",
+  // PEEPS-END recruitment-offers
 ] as const;
 export type HrCapabilityId = (typeof HR_CAPABILITY_IDS)[number];
 
@@ -60,6 +63,9 @@ export const HR_CAPABILITIES: readonly HrCapability[] = [
   // PEEPS-BEGIN recruitment
   { id: "MANAGE_RECRUITMENT", label: "Manage recruitment", what: "Jobs, candidates, stages and scheduling. Default/Not set: off. Feedback remains panel-scoped.", keys: ["recruitment.view", "recruitment.manage", "recruitment.personal.view"] },
   // PEEPS-END recruitment
+  // PEEPS-BEGIN recruitment-offers
+  { id: "RUN_ONBOARDING", label: "Run onboarding", what: "Joining checks, joining documents (identity and bank documents included, every opening audited) and converting an accepted candidate into an employee. Default: on. Never offer pay or expected pay.", keys: ["recruitment.onboarding"] },
+  // PEEPS-END recruitment-offers
 ];
 
 export const hrCapability = (id: string): HrCapability | undefined => HR_CAPABILITIES.find((c) => c.id === id);

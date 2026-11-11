@@ -22,6 +22,9 @@ export interface SystemRoleDefinition {
 // blocked from both reveal endpoints, not just bank (commit C IDOR test
 // covers this explicitly).
 const HR_EXECUTIVE_PERMS: string[] = [
+  // PEEPS-BEGIN recruitment-offers
+  "recruitment.onboarding", // D-29/D-30: HR's part of hiring is onboarding, on by default (RUN_ONBOARDING switch); never pay
+  // PEEPS-END recruitment-offers
   "employee.view",
   "employee.create",
   "employee.edit",

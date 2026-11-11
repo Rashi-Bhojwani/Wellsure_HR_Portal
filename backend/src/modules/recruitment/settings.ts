@@ -18,6 +18,12 @@ export const SETTING_SCHEMAS={
  retention:z.object({days:z.number().int().min(1).max(365000)}).strict(),
  scorecard:z.object({questions:z.array(question).min(1).refine(a=>new Set(a.map(q=>q.id)).size===a.length,"Question codes must be unique."),recommendations:catalogue}).strict(),
  cvUploads:z.object({maxMb:z.number().positive().max(25),allowedMimeTypes:z.array(z.enum(Object.keys(DOCUMENT_MIME_TYPES) as [keyof typeof DOCUMENT_MIME_TYPES,...(keyof typeof DOCUMENT_MIME_TYPES)[]])).min(1)}).strict(),
+ // C-4B. offerApproval and referrals: Default off (Not set = off). The other three stay Not set and refuse their step until chosen.
+ offerApproval:z.object({required:z.boolean()}).strict(),
+ joinerLinkLifetime:z.object({hours:z.number().int().min(1).max(2160)}).strict(),
+ joinerDocumentTypes:z.array(z.object({code,label:z.string().trim().min(1).max(200),kind:z.enum(["IDENTITY","BANK","OTHER"]),allowedMimeTypes:z.array(z.enum(Object.keys(DOCUMENT_MIME_TYPES) as [keyof typeof DOCUMENT_MIME_TYPES,...(keyof typeof DOCUMENT_MIME_TYPES)[]])).min(1),maxMb:z.number().positive().max(25)}).strict()).min(1).refine(a=>new Set(a.map(t=>t.code)).size===a.length,"Codes must be unique."),
+ joiningExceptionApprover:z.object({employeeId:z.string().min(1).max(100)}).strict(),
+ referrals:z.object({enabled:z.boolean()}).strict(),
  emailTemplates:z.array(z.object({id:code,kind:z.enum(["INVITATION","REJECTION"]),subject:z.string().trim().min(1).max(200).regex(/^[^\r\n]+$/,"Use one line for the subject."),body:z.string().trim().min(1).max(10000)}).strict()).min(1).refine(a=>new Set(a.map(t=>t.id)).size===a.length,"Template ids must be unique.").refine(a=>a.every(t=>![...`${t.subject} ${t.body}`.matchAll(/\{\{(.*?)\}\}/g)].some(m=>!["jobTitle","scheduledAt","round"].includes(m[1]!))),"Use only jobTitle, scheduledAt and round placeholders.").refine(a=>a.every(t=>!/(salary|compensation|\bctc\b|\binr\b|₹|\bbank\b|\baadhaar\b|feedback|recommendation)/i.test(t.subject+' '+t.body)),"Candidate templates cannot carry pay, identity or feedback content."),
 } as const;
 export type SettingKey=keyof typeof SETTING_SCHEMAS;

@@ -33,6 +33,9 @@ export const OPTIONAL_FK_POLICY: Record<string, Policy> = {
   "RecruitmentJob.requisitionId": "delete",
   "RecruitmentJob.pipelineId": "delete",
   // PEEPS-END recruitment
+  // PEEPS-BEGIN recruitment-offers
+  "RecruitmentReferral.candidateId": "delete",
+  // PEEPS-END recruitment-offers
   "BankFileSentMark.batchId": "delete",
   "BankFileSentMark.repaymentBatchId": "delete",
   "BankFileSentMark.offCycleBatchId": "delete",
@@ -194,6 +197,9 @@ export const STORAGE_KEY_COLUMNS: Record<string, string[]> = {
   // PEEPS-BEGIN recruitment
   Candidate: ["cvStorageKey"],
   // PEEPS-END recruitment
+  // PEEPS-BEGIN recruitment-offers
+  RecruitmentJoinerDocument: ["storageKey"],
+  // PEEPS-END recruitment-offers
   EmployeePersonal: ["photoStorageKey", "photoThumbStorageKey"],
   EmployeeDocument: ["fileKey"],
   CompanyDocument: ["fileKey"],
@@ -520,3 +526,6 @@ export async function deleteEmployeesAndDependents(employeeIds: string[]): Promi
 // PEEPS-BEGIN recruitment
 for (const model of ["RecruitmentSettingVersion", "RecruitmentPipeline", "RecruitmentPipelineStage", "ApplicationStageMove", "InterviewFeedback", "RecruitmentHistory"]) PURGE_GUARDED_MODELS.add(model);
 // PEEPS-END recruitment
+// PEEPS-BEGIN recruitment-offers
+for (const model of ["RecruitmentOfferEvent", "RecruitmentJoiningException", "RecruitmentConversion"]) PURGE_GUARDED_MODELS.add(model);
+// PEEPS-END recruitment-offers

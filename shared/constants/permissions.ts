@@ -123,6 +123,10 @@ export const PERMISSION_KEYS = [
   "recruitment.personal.view",
   "recruitment.feedback.view",
   // PEEPS-END recruitment
+  // PEEPS-BEGIN recruitment-offers
+  "recruitment.onboarding",
+  "recruitment.pay.view",
+  // PEEPS-END recruitment-offers
   // PEEPS-BEGIN exits
   "exits.view", "exits.manage", "exits.accept", "exits.checklist.complete",
   "exits.settings.manage", "exits.interviews.view", "exits.settlement.view",
@@ -183,6 +187,10 @@ export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
   "recruitment.personal.view": { group: "Recruitment", label: "Read candidate personal data", description: "Recruiting team only; relationships get summaries." },
   "recruitment.feedback.view": { group: "Recruitment", label: "Read interview feedback", description: "Audited directors or the panel relationship." },
   // PEEPS-END recruitment
+  // PEEPS-BEGIN recruitment-offers
+  "recruitment.onboarding": { group: "Recruitment", label: "Run onboarding", description: "Joining checks, joining documents and conversion of accepted candidates. Never pay." },
+  "recruitment.pay.view": { group: "Recruitment", label: "Offer pay and expected pay", description: "Directors only; every opening audited.", meta: true },
+  // PEEPS-END recruitment-offers
   // PEEPS-BEGIN exits
   "exits.view": { group: "Exits", label: "View exit cases", description: "Read non-pay exit cases within the authorized exits audience." },
   "exits.manage": { group: "Exits", label: "Run exit clearance", description: "Run non-pay clearance. HR needs its director-controlled switch; Office members need the audience setting." },

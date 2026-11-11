@@ -1,6 +1,9 @@
 // PEEPS-BEGIN recruitment
 import { recruitmentRouter } from "./modules/recruitment/routes";
 // PEEPS-END recruitment
+// PEEPS-BEGIN recruitment-offers
+import { joiningPublicRouter, offerRouter } from "./modules/recruitment/offerRoutes";
+// PEEPS-END recruitment-offers
 // PEEPS-BEGIN exits
 import { exitsRouter } from "./modules/exits/routes";
 // PEEPS-END exits
@@ -94,6 +97,10 @@ const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   { path: "/api/biometric/agent", router: biometricAgentRouter },
   { path: "/iclock", router: admsRouter },
   { path: "/api/auth", router: authRouter },
+  // PEEPS-BEGIN recruitment-offers
+  // Public joiner link (token only, rate-limited, no sign-in) — before the bare /api router's `authenticate`.
+  { path: "/api/joining", router: joiningPublicRouter },
+  // PEEPS-END recruitment-offers
   { path: "/api/org", router: orgRouter },
   { path: "/api/employees", router: employeeRouter },
   { path: "/api/import", router: importRouter },
@@ -130,6 +137,9 @@ const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   // PEEPS-BEGIN recruitment
   { path: "/api/recruitment", router: recruitmentRouter },
   // PEEPS-END recruitment
+  // PEEPS-BEGIN recruitment-offers
+  { path: "/api/recruitment", router: offerRouter },
+  // PEEPS-END recruitment-offers
   // PEEPS-BEGIN exits
   { path: "/api/exits", router: exitsRouter },
   // PEEPS-END exits

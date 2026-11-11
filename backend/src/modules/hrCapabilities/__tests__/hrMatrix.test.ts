@@ -31,6 +31,9 @@ const DOORS: Door[] = [
   // PEEPS-BEGIN recruitment
   { cap: "MANAGE_RECRUITMENT", method: "get", path: "/api/recruitment/pipelines", offByDefault: true },
   // PEEPS-END recruitment
+  // PEEPS-BEGIN recruitment-offers
+  { cap: "RUN_ONBOARDING", method: "get", path: "/api/recruitment/offers" },
+  // PEEPS-END recruitment-offers
   // PEEPS C3 START
   { cap: "MANAGE_EXITS", method: "get", path: "/api/exits/clearance/overdue", offByDefault: true },
   // PEEPS C3 END

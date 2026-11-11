@@ -21,6 +21,8 @@ data (the demo company), and so that a real company starts from an empty system 
 |---|---|---|---|---|
 | Candidate personal data | Encrypted identity and private CV; recruiting team or explicitly assigned summaries/CV, never Developer. | Read candidate personal data | Manage recruitment | nobody by permission |
 | Recruitment feedback | Own before submission, panel after own submission, or audited directors. HR and Office status never opens answers. | Read interview feedback | nobody by permission | nobody by permission |
+| Offer pay and candidate expected pay | Encrypted; directors only (every opening audited). HR, Wellsure Office members, hiring panels, managers and Developer never see it. | Offer pay and expected pay | Offer pay and expected pay | nobody by permission |
+| Joining documents | Identity and bank documents a joiner uploads through a private link; HR onboarding and directors, every opening audited; never Developer. | Run onboarding | nobody by permission | nobody by permission |
 | Exit interviews | Encrypted answers: the employee, the interviewer of record, and directors (each director open audited). HR case access never opens answers. | Read exit interviews | nobody by permission | nobody by permission |
 | Salaries and payroll figures | What each person earns, payroll runs, payslips, the bank transfer batches and the salary and statutory reports. | View salary and payroll; View any payslip; View bank transfer batches; Salary and statutory reports; Leave liability report; View pay documents | Prepare salary revisions; Add payroll adjustments; Prepare payroll runs (maker); Unlock payroll periods; Year End Process | Approve payroll actions (checker) |
 | Payroll rules, components and structures | The rates, ceilings and choices that decide how pay is worked out. Not secret, but whoever changes or confirms them decides what people are paid. | nobody by permission | Edit payroll rules | Confirm payroll rules |
@@ -30,22 +32,22 @@ data (the demo company), and so that a real company starts from an empty system 
 | The bank file layout and the company's debit account | How the bank wants its transfer file laid out, and the company account the salaries are paid from. | Bank file layout and debit account: enter; Bank file layout and debit account: confirm | Bank file layout and debit account: enter | Bank file layout and debit account: confirm |
 | Employees' HR-held documents | ID proofs, certificates and letters kept on file for each person. | View employee documents | Manage employee documents | nobody by permission |
 | Sensitive helpdesk tickets | Tickets in categories such as Payroll and Salary or Grievance, where people write private things. | Sensitive tickets | nobody by permission | nobody by permission |
-| Power over other people's access | Security policy, other people's sign-in and 2FA, individual permission exceptions, and unlocking attendance. Whoever holds these can weaken the protection of everything above. | nobody by permission | Manage others' sign-in security; System settings; Manager permission exceptions; Unlock attendance periods; Unlock payroll periods; Set recruitment rules; Set exit rules | nobody by permission |
+| Power over other people's access | Security policy, other people's sign-in and 2FA, individual permission exceptions, and unlocking attendance. Whoever holds these can weaken the protection of everything above. | nobody by permission | Manage others' sign-in security; System settings; Manager permission exceptions; Unlock attendance periods; Unlock payroll periods; Set recruitment rules; Offer pay and expected pay; Set exit rules | nobody by permission |
 | Supporting documents of the new leave types | Medical certificates and similar papers attached to menstrual, medical, wedding or bereavement leave. HR and the directors only; every open is recorded. | Open leave supporting documents | nobody by permission | nobody by permission |
 
 #### What each default role can do with each kind (S = see, C = change, K = confirm; a role's permissions are the Super Admins' to edit, so this is the starting point)
 
-| Role | Candidate personal data | Recruitment feedback | Exit interviews | Salaries and payroll figures | Payroll rules, components and structures | Employees' bank accounts | Employees' PAN, Aadhaar, UAN and ESI numbers | The company's PF, ESI, PT, LWF, PAN and TAN identifiers | The bank file layout and the company's debit account | Employees' HR-held documents | Sensitive helpdesk tickets | Power over other people's access | Supporting documents of the new leave types |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Super Admin | SC | S | S | SCK | CK | SC | SC | SCK | SCK | SC | S | C | S |
-| HR Admin | — | — | — | — | — | SC | SC | — | — | SC | S | C | S |
-| HR Executive | — | — | — | — | — | — | — | — | — | SC | — | — | S |
-| Payroll Admin | — | — | — | SC | C | S | S | SC | SC | — | — | — | — |
-| Payroll Approver | — | — | — | SK | K | — | — | K | SK | — | — | — | — |
-| Developer / operator | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| Manager | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| Approver | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| Employee | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| Role | Candidate personal data | Recruitment feedback | Offer pay and candidate expected pay | Joining documents | Exit interviews | Salaries and payroll figures | Payroll rules, components and structures | Employees' bank accounts | Employees' PAN, Aadhaar, UAN and ESI numbers | The company's PF, ESI, PT, LWF, PAN and TAN identifiers | The bank file layout and the company's debit account | Employees' HR-held documents | Sensitive helpdesk tickets | Power over other people's access | Supporting documents of the new leave types |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Super Admin | SC | S | SC | S | S | SCK | CK | SC | SC | SCK | SCK | SC | S | C | S |
+| HR Admin | — | — | — | S | — | — | — | SC | SC | — | — | SC | S | C | S |
+| HR Executive | — | — | — | S | — | — | — | — | — | — | — | SC | — | — | S |
+| Payroll Admin | — | — | — | — | — | SC | C | S | S | SC | SC | — | — | — | — |
+| Payroll Approver | — | — | — | — | — | SK | K | — | — | K | SK | — | — | — | — |
+| Developer / operator | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| Manager | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| Approver | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| Employee | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
 
 <!-- END GENERATED -->
 <!-- PEEPS-END recruitment -->
