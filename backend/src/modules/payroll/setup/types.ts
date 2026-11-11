@@ -37,6 +37,8 @@ export interface SetupItem {
   signoffArea?: "SALARIES" | "BANK_ACCOUNTS" | "STATUTORY_IDS";
   /** An open question that stops this being confirmed. */
   question?: string;
+  /** D-37: a behaviour setting, shown as an informational row on Ready for first real run, never blocking. */
+  behaviour?: { state: "DEFAULT" | "CONFIRMED" | "NOT_SET"; label: string | null };
 }
 
 export interface SetupSection {
@@ -76,4 +78,6 @@ export interface Readiness {
   warnings: Array<{ itemId: string; title: string; warning: string; where: { label: string; path: string } }>;
   /** Shown, not blocking. */
   notRequiredYet: Array<{ itemId: string; title: string; status: SetupStatus; reason: string }>;
+  /** D-37: the behaviour settings (three with a common default, labelled "Default, change in settings"), informational only. */
+  behaviours: Array<{ itemId: string; title: string; state: "DEFAULT" | "CONFIRMED" | "NOT_SET"; label: string | null; detail: string; where: { label: string; path: string } }>;
 }

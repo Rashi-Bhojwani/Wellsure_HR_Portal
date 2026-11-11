@@ -747,6 +747,9 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "POST /api/offcycle/:id/bank/file": adminInService("router gate payroll.salary.view and a director check in the service; never one's own (P7-6b)"),
   "GET /api/offcycle/bank/:id/download": adminInService("router gate payroll.salary.view and a director check in the service; never one's own (P7-6b)"),
   "POST /api/offcycle/bank/:id/sent": adminInService("router gate payroll.salary.view and a director check in the service; never one's own (P7-6b)"),
+  "GET /api/behaviours": adminInService("router gate settings.manage (never HR) and a director check in the service; a different director confirms (D-37)"),
+  "POST /api/behaviours/:key/proposals": adminInService("router gate settings.manage (never HR) and a director check in the service; a different director confirms (D-37)"),
+  "POST /api/behaviours/proposals/:id/confirm": adminInService("router gate settings.manage (never HR) and a director check in the service; a different director confirms (D-37)"),
   // P7-3: the person's own
   "GET /api/tax/me/ytd": self,
   "GET /api/tax/me/salary-revisions": self,

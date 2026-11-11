@@ -41,6 +41,8 @@ export interface AdjustmentIn {
   /** Arrears: the closed cycle they belong to, and the breakdown by component (signed). */
   periodLabel?: string | undefined;
   breakdown?: Array<{ component: string; amount: Money }> | undefined;
+  /** D-37 item 4: a loan instalment's loan, type and the directors' rule for when net pay is too low. */
+  loan?: { loanId: string; typeKey: string; rule: "STOP_RUN" | "SKIP_AND_CARRY" | "PARTIAL_AND_CARRY" } | undefined;
 }
 
 export interface DayIn {
@@ -75,6 +77,8 @@ export interface PersonInput {
   adjustments: AdjustmentIn[];
   /** Income tax inputs when the TDS rule is PROJECTED (docs/plans/STAGE_7_PLAN.md, P7-3); absent when it is NONE. */
   tax?: TaxIn | undefined;
+  /** D-37 item 4: the directors' limit on a month's deductions as a percentage of gross (null: Not set, no limit). Only gathered for someone with a loan instalment. */
+  maxDeductionPercent?: Money | null | undefined;
   /** Under a half-year ESI rule: the full-month ESI-applicable entitlement at the start of the contribution period (or at joining, if later). Null otherwise. */
   esiPeriodStartEntitlement: Money | null;
 }

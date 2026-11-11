@@ -63,6 +63,7 @@ const ImportCenterPage = lazyPage(() => import("../pages/admin/import/ImportCent
 const AuditLogPage = lazyPage(() => import("../pages/admin/auditLog/AuditLogPage"), "AuditLogPage");
 const PayrollAuditPage = lazyPage(() => import("../pages/admin/auditLog/AuditLogPage"), "PayrollAuditPage");
 const SystemSettingsPage = lazyPage(() => import("../pages/admin/settings/SystemSettingsPage"), "SystemSettingsPage");
+const DefaultBehavioursPage = lazyPage(() => import("../pages/admin/settings/DefaultBehavioursPage"), "DefaultBehavioursPage"); // D-37
 const CompanyDocumentsPage = lazyPage(() => import("../pages/admin/documents/CompanyDocumentsPage"), "CompanyDocumentsPage");
 const LeaveTypesPoliciesPage = lazyPage(() => import("../pages/admin/adminTools/LeaveTypesPoliciesPage"), "LeaveTypesPoliciesPage");
 const HolidayCalendarsAdminPage = lazyPage(() => import("../pages/admin/adminTools/HolidayCalendarsAdminPage"), "HolidayCalendarsAdminPage");
@@ -443,6 +444,7 @@ export const adminApps: AdminApp[] = [
           { key: "import-export", label: "Data Import/Export", path: "admin-tools/import-export", icon: CloudUploadOutlined, element: ImportCenterPage, needs: { any: ["import.manage", "import.details.manage", "invitations.send"] } },
           { key: "audit-log", label: "Audit Log", path: "admin-tools/audit-log", icon: AuditOutlined, element: AuditLogPage, needs: { any: ["audit.view"] } },
           { key: "system-settings", label: "System Settings", path: "admin-tools/settings", icon: SettingOutlined, element: SystemSettingsPage, needs: { any: ["settings.manage"] } },
+          { key: "default-behaviours", label: "Default behaviours", path: "settings/behaviours", icon: SettingOutlined, element: DefaultBehavioursPage, needs: { director: true } }, // D-37
         ],
       },
     ],

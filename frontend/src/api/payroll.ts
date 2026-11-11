@@ -1125,6 +1125,8 @@ export interface Readiness {
   /** Prominent, non-blocking: they never turn Ready red. */
   warnings?: Array<{ itemId: string; title: string; warning: string; where: { label: string; path: string } }>;
   notRequiredYet: Array<{ itemId: string; title: string; status: SetupStatus; reason: string }>;
+  /** D-37: behaviour settings, informational rows only. */
+  behaviours?: Array<{ itemId: string; title: string; state: "DEFAULT" | "CONFIRMED" | "NOT_SET"; label: string | null; detail: string; where: { label: string; path: string } }>;
 }
 export interface SetupReport {
   generatedAt: string;

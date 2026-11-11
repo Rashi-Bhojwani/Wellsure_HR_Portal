@@ -1,3 +1,4 @@
+import { BEHAVIOURS, BEHAVIOUR_KEYS, DEFAULT_LABEL, behaviourValue } from "../../behaviours/service";
 import { RULE_CATALOG, type RuleDef } from "@shared/constants/payrollRules";
 import { DEVELOPER_ROLE_CODE, SENSITIVE_PERMISSION_KEYS } from "@shared/constants/sensitiveData";
 import { env } from "../../../config/env";
@@ -245,12 +246,26 @@ async function safetyItems(_demo: boolean): Promise<SetupItem[]> {
   return out;
 }
 
+/** D-37: the behaviour settings, informational rows only (never required, never blocking). */
+async function behaviourItems(): Promise<SetupItem[]> {
+  const where = { label: "System Settings, Default behaviours", path: "/admin/settings/behaviours" };
+  const out: SetupItem[] = [];
+  for (const key of BEHAVIOUR_KEYS) {
+    const def = BEHAVIOURS[key];
+    const v = await behaviourValue(key);
+    const state = !v.isDefault ? "CONFIRMED" : def.d37 ? "DEFAULT" : "NOT_SET";
+    const label = state === "CONFIRMED" ? null : state === "DEFAULT" ? DEFAULT_LABEL : "Not set";
+    out.push({ id: `behaviour:${key}`, section: "company", category: "Default behaviours", title: def.title, why: def.what, required: false, notRequiredReason: label ?? "Changed by the directors and confirmed by a different director.", status: state === "CONFIRMED" ? "CONFIRMED" : state === "DEFAULT" ? "PLACEHOLDER" : "NOT_SET", enteredBy: null, confirmedBy: null, detail: state === "CONFIRMED" ? "Changed by the directors, confirmed by a different director." : def.defaultText, where, behaviour: { state, label } });
+  }
+  return out;
+}
+
 export async function buildSetupReport(): Promise<SetupReport> {
   const demo = await isDemoCompany();
   const ruleData = await loadItems("RULE");
   const summaries = RULE_CATALOG.map((d) => summarise(ruleData, d.key));
   const plain = new Map<string, unknown>(RULE_CATALOG.map((d, i) => [d.key, d.sensitiveClass ? undefined : summaries[i]!.current?.value]));
-  const items: SetupItem[] = [...ruleItems(summaries, plain), ...(await salaryItems()), ...(await layoutItems()), ...(await peopleItems()), ...(await safetyItems(demo))];
+  const items: SetupItem[] = [...ruleItems(summaries, plain), ...(await salaryItems()), ...(await layoutItems()), ...(await peopleItems()), ...(await safetyItems(demo)), ...(await behaviourItems())];
   const sections: SetupSection[] = SECTION_ORDER.map((id) => ({ id, ...SECTION_TEXT[id], items: items.filter((i) => i.section === id) }));
   return { generatedAt: new Date().toISOString() /* allow-clock: the instant the report was made */, environment: env.APP_ENV, demo, sections };
 }
@@ -262,8 +277,13 @@ export function readinessOf(report: SetupReport): Readiness {
   let confirmed = 0;
   const notRequiredYet: Readiness["notRequiredYet"] = [];
   const warnings: Readiness["warnings"] = [];
+  const behaviours: Readiness["behaviours"] = [];
   for (const section of report.sections) {
     for (const item of section.items) {
+      if (item.behaviour) {
+        behaviours.push({ itemId: item.id, title: item.title, state: item.behaviour.state, label: item.behaviour.label, detail: item.detail, where: item.where });
+        continue;
+      }
       if (item.warning) warnings.push({ itemId: item.id, title: item.title, warning: item.warning, where: item.where });
       if (!item.required) {
         if (item.status !== "CONFIRMED") notRequiredYet.push({ itemId: item.id, title: item.title, status: item.status, reason: item.notRequiredReason ?? "Not needed for the first run." });
@@ -285,5 +305,5 @@ export function readinessOf(report: SetupReport): Readiness {
       });
     }
   }
-  return { ready: blockers.length === 0, demo: report.demo, generatedAt: report.generatedAt, required, confirmed, blockers, warnings, notRequiredYet };
+  return { ready: blockers.length === 0, demo: report.demo, generatedAt: report.generatedAt, required, confirmed, blockers, warnings, notRequiredYet, behaviours };
 }

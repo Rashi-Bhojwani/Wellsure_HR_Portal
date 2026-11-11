@@ -281,3 +281,24 @@ only their own figures (Form 16 marked DRAFT).
 **Fixed:** a stale "Loans & Advances — Phase 7" placeholder menu entry duplicated the Loans path (removed); the Quarterly TDS banner repeated its own title.
 **Not walked:** keyboard-only paths and tablet width on these screens (the shared SideDrawer/DataTable components carry Esc and focus); filled-in states (the demo
 company has no loans, claims, settlements or finished runs in a closed year), so tables were seen in their empty states only.
+
+## Item 4 (D-37): loan instalment when net pay is too low; max deduction percentage (written 2026-11-11)
+
+Plan: `D37_DEFAULTS.md` (written before the code). A shared **behaviour settings** store (`backend/src/modules/behaviours/`, tables `behaviour_proposals` and
+`behaviour_confirmations`, both append-only; the database refuses a proposer confirming their own proposal); routes `/api/behaviours` (settings.manage, which HR
+never holds, plus a director check; Developer refused). Screen: System Settings → **Default behaviours** (directors). The Ready for first real run screen lists the
+behaviours as an informational block ("Default, change in settings" / "Not set" / "Changed and confirmed"), never blocking.
+
+**Loan shortfall** (`loan.shortfall`, per loan type; default `SKIP_AND_CARRY`): applied in the person calculation after every other line (`run/loanShortfall.ts`, pure).
+`STOP_RUN` → BLOCKING `LOAN_SHORTFALL` exception naming the loan; `SKIP_AND_CARRY` → no line, the instalment stays pending, WARNING naming the loan; `PARTIAL_AND_CARRY`
+→ the line is what is left (whole paise, rounded down), WARNING; the finaliser cancels the original instalment and writes a consumed part and a pending carried part
+due from the next run (the loan balance reads them). A loan never pushes net pay below zero. **Max total deduction percentage** (`loan.maxTotalDeductionPercent`):
+Not set (no limit); when set (owner-entered with a source note, confirmed by a different director) the room for instalments is at most that share of gross less every
+other deduction. Ordinary runs are unchanged when instalments fit (existing run and loan suites pass unchanged); the decisions are in the run's inputs fingerprint.
+
+**Tests** (`loanShortfall.test.ts`, 8): property test (500 cases) against an exact-fraction model (order, each rule, zero floor, percentage, paise rounding); per-option
+and zero-floor examples; routes refuse HR, Developer, employee; defaults labelled and informational on Ready; two real runs (August pays the loan out; September:
+default skip with a warning naming the loan; STOP blocks submission; PARTIAL within a 90% limit recovers exactly the independent figure and finalising splits the
+instalment, carry due 1 October, balance = principal − recovered); self-confirmation refused by the service and the database; history append-only.
+**Mutants (9, all caught):** partial as skip; skip as partial; zero floor dropped; percentage ignored; room rounded up; STOP not blocking; wrong default; finaliser
+consuming shortfall instalments whole; proposer confirming.

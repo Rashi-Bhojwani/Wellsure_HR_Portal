@@ -4206,3 +4206,28 @@ model OffCycleBankBatch {
 
   @@map("off_cycle_bank_batches")
 }
+
+/// D-37 (docs/plans/D37_DEFAULTS.md): a proposed value for a behaviour setting. Append-only.
+model BehaviourProposal {
+  id               String                  @id @default(cuid())
+  key              String
+  value            Json
+  reason           String
+  proposedByUserId String                  @map("proposed_by_user_id")
+  createdAt        DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  confirmation     BehaviourConfirmation?
+
+  @@index([key, createdAt])
+  @@map("behaviour_proposals")
+}
+
+/// D-37: a different director confirms a proposal (the database refuses the proposer). Append-only.
+model BehaviourConfirmation {
+  id                String            @id @default(cuid())
+  proposalId        String            @unique @map("proposal_id")
+  proposal          BehaviourProposal @relation(fields: [proposalId], references: [id], onDelete: Restrict)
+  confirmedByUserId String            @map("confirmed_by_user_id")
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("behaviour_confirmations")
+}
