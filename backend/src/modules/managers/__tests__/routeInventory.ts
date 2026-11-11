@@ -134,6 +134,18 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/import/batches/:id/error-report": admin,
   "POST /api/import/batches/:id/commit": admin,
   "GET /api/audit-logs": admin,
+  "GET /api/letters/asks/options": everyone("the letter templates employees may ask for (names only; a director's list)"),
+  "GET /api/letters/asks/mine": self,
+  "POST /api/letters/asks/mine": self,
+  "POST /api/letters/asks/mine/:id/withdraw": self,
+  "GET /api/letters/asks": adminInService("letters.issue.nopay (non-grantable) + the template's PREPARE right + data scope"),
+  "POST /api/letters/asks/:id/done": adminInService("letters.issue.nopay (non-grantable) + the template's PREPARE right + data scope"),
+  "POST /api/letters/asks/:id/decline": adminInService("letters.issue.nopay (non-grantable) + the template's PREPARE right + data scope"),
+  "GET /api/notifications/preferences": self, // NT-09
+  "PUT /api/notifications/preferences": self, // NT-09
+  "GET /api/settings/email-templates": admin, // NT-08: settings.manage (non-grantable)
+  "PUT /api/settings/email-templates": admin, // NT-08
+  "GET /api/audit-logs/export": admin, // AU-04: audit.view (non-grantable), Developer refused
   "GET /api/settings/security": admin,
   "PUT /api/settings/security": admin,
   "GET /api/settings/leave": admin,

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Form, Input, InputNumber, Select } from "antd";
 import * as api from "../../../api/behaviours";
 import * as loansApi from "../../../api/loans";
+import * as lettersApi from "../../../api/letters";
 import type { Behaviour, BehaviourKey } from "../../../api/behaviours";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { PageHeader, Panel, QueryState, SideDrawer, StatusChip, toast } from "../../../ui";
@@ -16,6 +17,7 @@ const MODE_LABEL: Record<string, string> = { NONE: "None", FULL_MONTH: "A full m
 function describe(b: Pick<Behaviour, "key" | "value">): string {
   const v = b.value as Record<string, unknown> | boolean | null;
   if (b.key === "access.developerSeesSwipes") return v === true ? "On: the Developer role sees Employee Swipes" : "Off: the Developer role does not see Employee Swipes";
+  if (b.key === "letters.employeeMayAsk") return Array.isArray(v) && v.length ? `Employees may ask for: ${v.join(", ")}` : "None: employees cannot ask for a letter";
   if (b.key === "identity.directorConfirmsHrChanges") return v === true ? "On: a director confirms HR's bank and statutory changes before they take effect" : "Off: HR's bank and statutory changes take effect at once";
   if (b.key === "loan.maxTotalDeductionPercent") return v && typeof v === "object" ? `${String(v.percent)}% of gross (source: ${String(v.sourceNote)})` : "Not set: no percentage limit";
   if (b.key === "leave.proRataRounding") return v && typeof v === "object" ? `${ROUND_LABEL[String(v.mode)] ?? String(v.mode)} to ${String(v.scale)} decimal place(s)` : "Not set: a pro-rata result that needs rounding waits for this";
@@ -30,7 +32,7 @@ function describe(b: Pick<Behaviour, "key" | "value">): string {
 
 const ROUND_LABEL: Record<string, string> = { HALF_UP: "Half up", HALF_EVEN: "Half even", UP: "Up", DOWN: "Down", CEIL: "Ceiling", FLOOR: "Floor" };
 
-type FormValues = { reason: string; roundMode?: string; scale?: number; on?: string; mode?: string; minDays?: number; percent?: string; sourceNote?: string; rules?: Array<{ typeKey: string; rule: string }> };
+type FormValues = { reason: string; codes?: string[]; roundMode?: string; scale?: number; on?: string; mode?: string; minDays?: number; percent?: string; sourceNote?: string; rules?: Array<{ typeKey: string; rule: string }> };
 
 export function DefaultBehavioursPage() {
   const queryClient = useQueryClient();
@@ -38,12 +40,14 @@ export function DefaultBehavioursPage() {
   const [form] = Form.useForm<FormValues>();
   const q = useQuery({ queryKey: ["behaviours"], queryFn: api.listBehaviours });
   const types = useQuery({ queryKey: ["loans", "types"], queryFn: loansApi.loanTypes });
+  const letterTemplates = useQuery({ queryKey: ["letters", "templates"], queryFn: lettersApi.listTemplates });
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["behaviours"] });
   const propose = useMutation({
     mutationFn: (v: FormValues) => {
       const key = editing!.key as BehaviourKey;
       const value =
         key === "access.developerSeesSwipes" || key === "identity.directorConfirmsHrChanges" ? v.on === "on"
+        : key === "letters.employeeMayAsk" ? (v.codes ?? [])
         : key === "leave.leavingMonthAccrual" ? (v.mode === "FULL_IF_MIN_DAYS" ? { mode: v.mode, minDays: v.minDays } : { mode: v.mode })
         : key === "loan.maxTotalDeductionPercent" ? { percent: v.percent, sourceNote: v.sourceNote }
         : key === "leave.proRataRounding" ? { mode: v.roundMode, scale: v.scale }
@@ -59,6 +63,7 @@ export function DefaultBehavioursPage() {
     form.resetFields();
     const v = b.value as Record<string, unknown> | boolean | null;
     if (b.key === "access.developerSeesSwipes" || b.key === "identity.directorConfirmsHrChanges") form.setFieldsValue({ on: v === true ? "on" : "off" });
+    if (b.key === "letters.employeeMayAsk") form.setFieldsValue({ codes: Array.isArray(v) ? (v as string[]) : [] });
     if (b.key === "leave.leavingMonthAccrual") form.setFieldsValue({ mode: (v as { mode: string }).mode, minDays: (v as { minDays?: number }).minDays });
     if (b.key === "loan.shortfall") form.setFieldsValue({ rules: Object.entries((v ?? {}) as Record<string, string>).map(([typeKey, rule]) => ({ typeKey, rule })) });
   };
@@ -91,6 +96,11 @@ export function DefaultBehavioursPage() {
           {editing?.key === "access.developerSeesSwipes" && (
             <Form.Item name="on" label="The Developer role sees Employee Swipes" rules={[{ required: true }]}>
               <Select options={[{ value: "off", label: "Off" }, { value: "on", label: "On" }]} />
+            </Form.Item>
+          )}
+          {editing?.key === "letters.employeeMayAsk" && (
+            <Form.Item name="codes" label="Letters an employee may ask for (none = nobody can ask)">
+              <Select mode="multiple" allowClear options={(letterTemplates.data ?? []).filter((t) => t.isActive).map((t) => ({ value: t.code, label: `${t.name} (${t.code})` }))} />
             </Form.Item>
           )}
           {editing?.key === "identity.directorConfirmsHrChanges" && (

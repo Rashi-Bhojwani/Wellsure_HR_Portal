@@ -9,6 +9,7 @@ import { apiErrorMessage } from "../../../lib/apiError";
 import { space } from "../../../theme/tokens";
 import { DataTable, EmptyState, PageHeader, Panel, StatusChip, toast, useIsPhone, type Crumb } from "../../../ui";
 import { FileName, FolderName, SquareAction } from "./docBits";
+import { LetterAsks } from "./LetterAsks";
 
 async function download(get: () => Promise<SignedDownload>) {
   try {
@@ -184,6 +185,7 @@ export function DocumentCenterPage() {
           items={[
             { key: "company", label: "Policies & Forms", children: <CompanyDocuments folderId={folderId} openFolder={openFolder} /> },
             { key: "mine", label: "My Documents", children: <MyDocuments /> },
+            { key: "ask", label: "Ask for a letter", children: <LetterAsks /> },
             { key: "payslips", label: "Payslips", children: <ComingSoon what="Payslips" phase="Phase 6" /> },
             { key: "form16", label: "Form 16", children: <ComingSoon what="Form 16" phase="Phase 7" /> },
           ]}

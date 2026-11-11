@@ -5,6 +5,7 @@ import { prisma } from "../../lib/prisma";
 import { requireFile } from "../../lib/uploads";
 import { HttpError } from "../../middleware/errorHandler";
 import * as service from "./service";
+import * as asks from "./asks";
 
 function viewer(req: Request): service.LetterViewer {
   return { userId: req.user!.userId, employeeId: req.user!.employeeId, roleCodes: req.user!.roleCodes, dataScope: req.user!.dataScope, permissions: req.user!.permissions };
@@ -83,4 +84,27 @@ export async function reissueLetter(req: Request, res: Response): Promise<void> 
 export async function reproduceLetter(req: Request, res: Response): Promise<void> {
   const r = await service.reproduceLetter(id(req), viewer(req), actorMeta(req));
   sendPdf(res, r.pdf, r.fileName, { "X-Letter-Reproduction": r.matches ? "match" : "mismatch", "Access-Control-Expose-Headers": "X-Letter-Reproduction" });
+}
+
+// ── LT-08 (M session): letter asks ──
+export async function askOptions(_req: Request, res: Response): Promise<void> {
+  res.status(200).json({ templates: await asks.askOptions() });
+}
+export async function myAsks(req: Request, res: Response): Promise<void> {
+  res.status(200).json({ asks: await asks.myAsks(req.user!.employeeId) });
+}
+export async function ask(req: Request, res: Response): Promise<void> {
+  res.status(201).json(await asks.ask(req.user!.employeeId, req.body, actorMeta(req)));
+}
+export async function withdrawAsk(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await asks.withdraw(id(req), req.user!.employeeId, actorMeta(req)));
+}
+export async function listAsks(req: Request, res: Response): Promise<void> {
+  res.status(200).json({ asks: await asks.listForPreparer(viewer(req), (req.query as { status: "ASKED" | "DONE" | "DECLINED" | "WITHDRAWN" }).status) });
+}
+export async function markAskDone(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await asks.markDone(id(req), (req.body as { letterRequestId: string }).letterRequestId, viewer(req), actorMeta(req)));
+}
+export async function declineAsk(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await asks.decline(id(req), (req.body as { reason: string }).reason, viewer(req), actorMeta(req)));
 }

@@ -3,6 +3,7 @@ import { memoryUpload } from "../../lib/uploads";
 import { authenticate } from "../../middleware/authenticate";
 import { requireAnyPermission, requirePermission } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
+import { z } from "zod";
 import * as controller from "./controller";
 // A-9 — begin
 import { refuseDeveloper } from "../../middleware/refuseDeveloper";
@@ -75,6 +76,18 @@ lettersRouter.post("/requests/:id/issue", refuseDeveloper, nopayGate, validate({
 lettersRouter.post("/requests/:id/void", refuseDeveloper, nopayGate, validate({ params: idParamsSchema, body: voidSchema }), workflow.voidRoute);
 lettersRouter.get("/requests/:id/preview", refuseDeveloper, nopayGate, validate({ params: idParamsSchema }), workflow.previewRoute);
 // ── A-9 — end ──
+
+// ── LT-08 (M session): an employee asks for a letter. The self routes are the caller's own (any signed-in person); the preparer routes need
+// letters.issue.nopay plus the template's own PREPARE right (assertMayAct) and the employee in scope, checked in the service. ──
+const askBody = z.object({ templateCode: z.string().trim().min(1).max(60), purpose: z.string().trim().min(3).max(300) }).strict();
+const askStatus = z.object({ status: z.enum(["ASKED", "DONE", "DECLINED", "WITHDRAWN"]).default("ASKED") }).strict();
+lettersRouter.get("/asks/options", controller.askOptions);
+lettersRouter.get("/asks/mine", controller.myAsks);
+lettersRouter.post("/asks/mine", validate({ body: askBody }), controller.ask);
+lettersRouter.post("/asks/mine/:id/withdraw", validate({ params: idParamsSchema, body: z.object({}).strict() }), controller.withdrawAsk);
+lettersRouter.get("/asks", refuseDeveloper, nopayGate, validate({ query: askStatus }), controller.listAsks);
+lettersRouter.post("/asks/:id/done", refuseDeveloper, nopayGate, validate({ params: idParamsSchema, body: z.object({ letterRequestId: z.string().min(1).max(60) }).strict() }), controller.markAskDone);
+lettersRouter.post("/asks/:id/decline", refuseDeveloper, nopayGate, validate({ params: idParamsSchema, body: z.object({ reason: z.string().trim().min(3).max(300) }).strict() }), controller.declineAsk);
 
 lettersRouter.get("/employees/:employeeId", issueAny, validate({ params: employeeIdParamsSchema }), controller.listEmployeeLetters);
 lettersRouter.post("/employees/:employeeId", issueAny, validate({ params: employeeIdParamsSchema, body: issueSchema }), controller.issueLetter);

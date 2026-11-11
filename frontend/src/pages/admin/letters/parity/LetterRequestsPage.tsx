@@ -11,6 +11,7 @@ import { apiErrorMessage as errorMessage } from "../../../../lib/apiError";
 import { ConfirmModal, DataTable, EmptyState, PageHeader, Panel, SideDrawer, StatusChip, toast, useIsPhone } from "../../../../ui";
 import { fs, space, v } from "../../../../theme/tokens";
 import { PeoplePicker } from "../../employee/parity/PeoplePicker";
+import { LetterAsksPanel } from "./LetterAsksPanel";
 
 // A-9 G3 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md, item 12): prepare letters for one person or many at once, collect up to two signatures, issue them (the
 // existing issue path files each one to the person's documents), or void one with a reason. Which templates appear is the server's decision: everything for a
@@ -226,6 +227,7 @@ export function LetterRequestsPage() {
           <p style={{ margin: 0, color: v.textSecondary, fontSize: fs.sm }}>{toSign.data!.length} letter{toSign.data!.length === 1 ? "" : "s"} — open In progress and press Sign on each.</p>
         </Panel>
       )}
+      <LetterAsksPanel />
       <Panel>
         <Tabs
           activeKey={tab}

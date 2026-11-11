@@ -119,3 +119,52 @@ audit → caught; the raw bank row in the file → caught.
 
 Decided here: identifiers stay masked in the file (the full numbers are on the person's own documents; a file on a home computer should not carry them);
 payslip figures are not in the file (the payslip itself is the record and is downloadable). Owners may want either changed.
+
+### Full backend suite, run alone (after LC-14, ER-11, SS-15)
+
+223 files, 2,067 tests: 2,064 passed, 3 failed. Causes, all fixed and re-run green (36 files, 260 tests):
+* `access.test.ts` "the Manager role is locked empty": **my** new tests (`identityChanges`, `statutoryHistory`) granted `employee.view` to the shared
+  MANAGER role and left it there. They did not need it; the grant was removed. (No product change: the role itself was never changed by code.)
+* `preflight.test.ts` and `routeInventory.test.ts`: new migration files and routes were added to the working tree while the suite was running
+  (the next rows were being written). Both pass on the finished tree.
+Lesson kept: nothing is edited in the working tree while the suite runs.
+
+### AU-04 — audit log export: **Missing → Built**
+
+`GET /api/audit-logs/export` (same filters as the screen, strict query) → Excel, newest 10,000 rows, the footer says how many matched and which
+filters were used; the payroll rows and money fields stay hidden from anyone without the salary key, exactly as on the screen. **Directors only:** the
+route also refuses the Developer role, which holds `audit.view` to read the screen but must not take a file of other people's before/after values.
+The export is itself audited (`audit.exported`). Button "Export to Excel" on Audit Log (directors). Test `auditLog/__tests__/auditExport.test.ts`.
+Mutation checks: Developer not refused → caught; export not audited → caught.
+
+Noted, not changed (not pay data, and not this row): the Developer role can read the audit **screen**, whose before/after values include personal
+details such as a changed mobile number (identity numbers are redacted at write time). Owners may want the screen limited the same way.
+
+### LT-08 — an employee asks for a letter: **Missing → Built**
+
+A director setting `letters.employeeMayAsk` (behaviours store, a list of template codes, **empty by default**: nobody can ask until a director lists a
+template; changed by one director, confirmed by another). An employee asks from Document Center → "Ask for a letter" with a purpose (one open ask per
+template); the directors and holders of the template's PREPARE grant are told. Whoever may prepare the template (the existing `assertMayAct` rule,
+data scope, never their own ask) sees it on Letters → "Asked for by employees", prepares the letter through the existing workflow, then marks the ask
+done naming that letter (same person, same template, not void) or declines with a reason; the employee is told either way; withdraw while it waits.
+Table `letter_asks` (migration `20261112110000_m_letter_asks`): one open ask per person and template (partial unique index), a decline needs a
+reason, a decided ask never changes (trigger). Test `letters/__tests__/letterAsks.test.ts` (6 cases). Mutation checks: own ask offered → caught;
+any letter accepted as "done" → caught; an unlisted template askable → caught.
+
+### NT-09 — notification preferences: **Missing → Built**
+
+A person may switch off three categories for themselves (Account & security → Notifications): documents shared with me, changes to my reporting line
+or team, someone asks for a letter I can prepare (`shared/constants/notificationPreferences.ts`). Approvals, decisions, security, payroll and helpdesk
+notices cannot be switched off (the API refuses any other category). A switched-off notice is not stored (`notifyEmployee`). Table
+`notification_preferences` (migration `20261112120000_m_notification_preferences`). Test `notifications/__tests__/preferences.test.ts`. Mutation
+check: the mute ignored → caught. Decided here: which categories are switchable (owners may add or remove any).
+
+### NT-08 — editable email templates: **Missing → Partial (sign-in emails editable; the other emails keep fixed wording)**
+
+Directors edit the subject, heading and paragraphs of the invitation, password-reset and welcome emails (System Settings → Sign-in emails;
+`settings.manage`, which HR and the Developer do not hold). Plain text only (escaped; a blank line = a new paragraph); placeholders `{{fullName}}`,
+`{{employeeCode}}` checked per email; the greeting, the link button and its validity are always added by the code, so an edit cannot remove or replace
+the link. Built-in wording is the default ("Default, change in settings"; "go back to the built-in wording" restores it). Audited
+(`settings.email_template.updated`). The security-change notice is deliberately not editable. Stored in `system_settings` (`email.templates`), no
+migration. Test `auth/__tests__/emailTemplates.test.ts`. Mutation checks: wording not escaped → caught; an unknown placeholder accepted → caught.
+**Not built (why Partial):** the payslip email (payroll, Session A's), the device alert and director-notice emails keep fixed wording.

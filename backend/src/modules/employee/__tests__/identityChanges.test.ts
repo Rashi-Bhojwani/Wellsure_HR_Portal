@@ -42,7 +42,6 @@ describe("HR's bank and statutory changes wait for a director", () => {
 
   beforeAll(async () => {
     org = await createEmployeeTestOrgMasters();
-    await grantPermissions("MANAGER", ["employee.view"]);
     for (const [k, roleCode] of [
       ["d1", "SUPER_ADMIN"],
       ["d2", "SUPER_ADMIN"],

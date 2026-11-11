@@ -10,7 +10,6 @@ import {
   cleanupFullTestEmployee,
   createEmployeeTestOrgMasters,
   createFullTestEmployee,
-  grantPermissions,
   loginAs,
   type TestOrgMasters,
 } from "./employeeTestHelpers";
@@ -25,7 +24,6 @@ describe("statutory history", () => {
 
   beforeAll(async () => {
     org = await createEmployeeTestOrgMasters();
-    await grantPermissions("MANAGER", ["employee.view"]);
     for (const [k, roleCode] of [
       ["d1", "SUPER_ADMIN"],
       ["hrExec", "HR_EXECUTIVE"],

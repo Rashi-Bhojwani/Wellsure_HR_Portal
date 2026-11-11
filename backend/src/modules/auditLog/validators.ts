@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+export const exportAuditLogQuerySchema = z.object({
+  actorSearch: z.string().trim().max(100).optional(),
+  entityType: z.string().trim().max(100).optional(),
+  action: z.string().trim().max(100).optional(),
+  dateFrom: z.iso.date().optional(),
+  dateTo: z.iso.date().optional(),
+}).strict();
+
 export const listAuditLogQuerySchema = z.object({
   actorSearch: z.string().trim().max(100).optional(),
   entityType: z.string().trim().max(100).optional(),

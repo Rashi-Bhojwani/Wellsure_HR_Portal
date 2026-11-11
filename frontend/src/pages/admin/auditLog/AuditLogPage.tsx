@@ -1,12 +1,15 @@
 import { useState } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { Button, DatePicker, Input } from "antd";
-import { ArrowRightOutlined } from "@ant-design/icons";
+import { ArrowRightOutlined, DownloadOutlined } from "@ant-design/icons";
+import { useAuth } from "../../../hooks/useAuth";
+import { saveBlob } from "../../../api/muster";
+import { apiErrorMessage } from "../../../lib/apiError";
 import dayjs, { type Dayjs } from "dayjs";
 import * as auditLogApi from "../../../api/auditLog";
 import type { AuditLogRow } from "../../../api/auditLog";
 import { fs, fw, radius, space, v } from "../../../theme/tokens";
-import { DataTable, EmptyState, FilterBar, InitialsAvatar, KeyValueGrid, PageHeader, Panel, SideDrawer, Stack, StatusChip, Timeline, useDebouncedValue, useIsPhone } from "../../../ui";
+import { DataTable, EmptyState, FilterBar, InitialsAvatar, KeyValueGrid, PageHeader, Panel, SideDrawer, Stack, StatusChip, Timeline, toast, useDebouncedValue, useIsPhone } from "../../../ui";
 
 const { RangePicker } = DatePicker;
 
@@ -66,6 +69,18 @@ export function AuditLogPage({ payroll = false }: { payroll?: boolean } = {}) {
     placeholderData: keepPreviousData,
   });
 
+  // AU-04: directors only (the server refuses everyone else, the Developer role included); the button follows the director check, never widens it.
+  const { hasRole } = useAuth();
+  const canExport = !payroll && hasRole("SUPER_ADMIN");
+  const exportMutation = useMutation({
+    mutationFn: () => auditLogApi.exportAuditLogs({ actorSearch: query.actorSearch, entityType: query.entityType, action: query.action, dateFrom: query.dateFrom, dateTo: query.dateTo }),
+    onSuccess: (blob) => {
+      saveBlob(blob, `audit-log-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      toast.success("Downloaded. The export is itself recorded in the audit log.");
+    },
+    onError: (err) => toast.error(apiErrorMessage(err, "Could not prepare the file.")),
+  });
+
   const activeCount = [entityTypeText, actionText].filter(Boolean).length + (dateRange ? 1 : 0);
   const clear = () => {
     setEntityTypeText("");
@@ -83,6 +98,13 @@ export function AuditLogPage({ payroll = false }: { payroll?: boolean } = {}) {
           payroll
             ? "Who prepared, confirmed, approved and carried out each payroll step, and when. It records that something changed, never a secret value."
             : "Every recorded change: who did it, to what, and when. Open an entry to see what it looked like before and after."
+        }
+        actions={
+          canExport ? (
+            <Button icon={<DownloadOutlined />} loading={exportMutation.isPending} onClick={() => exportMutation.mutate()}>
+              Export to Excel
+            </Button>
+          ) : undefined
         }
       />
       <Stack>
