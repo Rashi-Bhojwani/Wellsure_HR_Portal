@@ -88,3 +88,21 @@ statutory change the director may decide: not entered by them, not on their own 
 `tasks/__tests__/directorSources.test.ts` (director sees others' claims, not their own, and no amount; held change offered to a director who may
 decide it, not on their own record; HR, manager, employee and Developer see neither). Mutation checks: own claim offered → caught; claims to everyone
 → caught; held change on own record offered → caught; held changes to everyone → caught.
+
+### ER-11 — statutory ID history: **Missing → Partial (masked change history built; payroll reading a past ID is not)**
+
+Table `employee_statutory_history` (migration `20261112100000_m_statutory_history`), written by a database trigger on `employee_statutory` (insert or
+a change of a number), so every path is covered: HR edits, a director's confirmation of a held entry, an employee's request, Add Employee, the Import
+Center, the seed. Each row: which numbers changed (PAN, Aadhaar by keyed hash; UAN, ESI by last four), the last four digits after the change, who wrote
+the row (`updated_by_user_id`), when. **No ciphertext and no hash** are copied: the history cannot reveal a number. Existing rows were recorded once as
+"on file when the history began". Append-only (trigger; delete only through the test purge). Route `GET /api/employees/:id/history/statutory`
+(statutory view key, data scope in the service); the profile's History tab shows "Statutory numbers history". Test
+`employee/__tests__/statutoryHistory.test.ts` (4 cases: what changed, last four, who; nothing for a write that changes no number; a held entry is
+recorded only when a director confirms it; manager / employee (own record too) / Developer refused; history cannot be changed or removed).
+Mutation checks (temporary edits to the migration; the test database is rebuilt from migrations each run): writes that change nothing recorded →
+caught; a PAN change not seen → caught; history editable → caught.
+
+**Not built (why Partial):** "effective-dated, like bank" in the payroll sense: payroll still reads the one current row (`employee_statutory`), so a
+past month cannot show the ID that was in force then. That needs payroll to read a dated value (and the history to hold ciphertext): payroll is
+Session A's area and storing more ciphertext is a choice for the owners. **Request 4 to Session A** if payslips or statutory files must show the ID in
+force on their own date. Known limit: a new UAN or ESI number with the same last four digits as the old one is not recorded (they have no keyed hash).

@@ -282,12 +282,16 @@ function JobEditDrawer({ employeeId, open, onClose }: { employeeId: string; open
 
 const TONE: Record<HistoryStatus, TimelineItem["tone"]> = { current: "accent", scheduled: "warning", past: "neutral" };
 
+const STATUTORY_FIELD_LABEL: Record<employeeApi.StatutoryHistoryEntry["changedFields"][number], string> = { PAN: "PAN", AADHAAR: "Aadhaar", UAN: "UAN", ESI: "ESI number" };
+
 function HistoryTab({ employeeId, canViewBank }: { employeeId: string; canViewBank: boolean }) {
   const queryClient = useQueryClient();
   const { hasPermission } = useAuth();
   const job = useQuery({ queryKey: ["employees", "history", employeeId, "job"], queryFn: () => employeeApi.getJobHistory(employeeId) });
   const name = useQuery({ queryKey: ["employees", "history", employeeId, "name"], queryFn: () => employeeApi.getNameHistory(employeeId) });
   const bank = useQuery({ queryKey: ["employees", "history", employeeId, "bank"], queryFn: () => employeeApi.getBankHistory(employeeId), enabled: canViewBank });
+  const canViewStatutory = hasPermission("employee.statutory.view");
+  const statutory = useQuery({ queryKey: ["employees", "history", employeeId, "statutory"], queryFn: () => employeeApi.getStatutoryHistory(employeeId), enabled: canViewStatutory });
   // EF3: a scheduled change can be cancelled until its day (the previous row reopens).
   const cancel = useMutation({
     mutationFn: ({ kind, rowId }: { kind: "job" | "name" | "bank"; rowId: string }) => employeeApi.cancelScheduledChange(employeeId, kind, rowId),
@@ -350,6 +354,31 @@ function HistoryTab({ employeeId, canViewBank }: { employeeId: string; canViewBa
           />
         </QueryState>
       </ProfileSection>
+      {canViewStatutory && (
+        <ProfileSection title="Statutory numbers history">
+          <QueryState isLoading={statutory.isLoading} error={statutory.error} onRetry={() => void statutory.refetch()} skeleton={<SkeletonCard lines={2} />}>
+            <Timeline
+              empty={empty}
+              items={(statutory.data ?? []).map((r) => ({
+                key: r.id,
+                tone: r.kind === "CHANGED" ? "accent" : "neutral",
+                content: (
+                  <>
+                    <strong>{r.kind === "RECORDED_BEFORE" ? "On file when the history began" : r.kind === "CREATED" ? "First recorded" : `Changed: ${r.changedFields.map((f) => STATUTORY_FIELD_LABEL[f]).join(", ")}`}</strong>
+                  </>
+                ),
+                time: <span>{new Date(r.changedAt).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}{r.changedBy ? ` · ${r.changedBy}` : ""}</span>,
+                detail: caption([
+                  r.panLast4 ? `PAN ending ${r.panLast4}` : null,
+                  r.aadhaarLast4 ? `Aadhaar ending ${r.aadhaarLast4}` : null,
+                  r.uanLast4 ? `UAN ending ${r.uanLast4}` : null,
+                  r.esiLast4 ? `ESI ending ${r.esiLast4}` : null,
+                ]),
+              }))}
+            />
+          </QueryState>
+        </ProfileSection>
+      )}
       {canViewBank && (
         <ProfileSection title="Bank history">
           <QueryState isLoading={bank.isLoading} error={bank.error} onRetry={() => void bank.refetch()} skeleton={<SkeletonCard lines={2} />}>

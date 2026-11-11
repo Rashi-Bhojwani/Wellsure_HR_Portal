@@ -127,6 +127,10 @@ export const cancelScheduledBankChange = cancelOf("bank");
 
 // ── Effective-dated + direct updates ────────────────────────────────────
 
+export async function getStatutoryHistory(req: Request, res: Response): Promise<void> {
+  res.status(200).json({ history: await employeeService.getStatutoryHistory(req.params.id as string, req.user!.employeeId, scope(req), req.user!.permissions) });
+}
+
 export async function updateJob(req: Request, res: Response): Promise<void> {
   res.status(200).json(await employeeService.updateJob(req.params.id as string, req.body, actorMeta(req)));
 }

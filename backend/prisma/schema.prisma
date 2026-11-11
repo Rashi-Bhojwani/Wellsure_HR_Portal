@@ -539,6 +539,7 @@ model Employee {
   // A-9 — end
   // M-BEGIN (second session): HR's bank and statutory entries waiting for a director (docs/plans/M_CHECKLIST.md, task 1)
   identityChangeRequests     IdentityChangeRequest[]
+  statutoryHistory           EmployeeStatutoryHistory[]
   // M-END
 
   @@index([status])
@@ -4257,5 +4258,26 @@ model IdentityChangeRequest {
   @@index([status, createdAt])
   @@index([employeeId, status])
   @@map("identity_change_requests")
+}
+// M-END
+
+// M-BEGIN (second session, ER-11): a masked history of each person's statutory numbers. One row per change to employee_statutory, written by a
+// database trigger (so every path that writes the row is covered): which numbers changed, the last four digits after the change, who wrote it, when.
+// No ciphertext and no hash: the current numbers stay in employee_statutory only. Append-only (no update; delete only through the test purge).
+model EmployeeStatutoryHistory {
+  id              String   @id @default(cuid())
+  employeeId      String   @map("employee_id")
+  employee        Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  kind            String // "RECORDED_BEFORE" (backfill) | "CREATED" | "CHANGED"
+  changedFields   String[] @map("changed_fields") // of PAN, AADHAAR, UAN, ESI
+  panLast4        String?  @map("pan_last4")
+  aadhaarLast4    String?  @map("aadhaar_last4")
+  uanLast4        String?  @map("uan_last4")
+  esiLast4        String?  @map("esi_last4")
+  changedByUserId String?  @map("changed_by_user_id")
+  changedAt       DateTime @default(now()) @map("changed_at")
+
+  @@index([employeeId, changedAt])
+  @@map("employee_statutory_history")
 }
 // M-END

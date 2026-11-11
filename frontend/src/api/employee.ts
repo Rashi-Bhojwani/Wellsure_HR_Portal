@@ -291,6 +291,23 @@ export async function updateStatutory(id: string, input: { pan?: string; aadhaar
   return data ?? {};
 }
 
+// ER-11 (M session): the masked history of a person's statutory numbers (last four digits only).
+export interface StatutoryHistoryEntry {
+  id: string;
+  kind: "RECORDED_BEFORE" | "CREATED" | "CHANGED";
+  changedFields: Array<"PAN" | "AADHAAR" | "UAN" | "ESI">;
+  panLast4: string | null;
+  aadhaarLast4: string | null;
+  uanLast4: string | null;
+  esiLast4: string | null;
+  changedBy: string | null;
+  changedAt: string;
+}
+export async function getStatutoryHistory(id: string): Promise<StatutoryHistoryEntry[]> {
+  const { data } = await apiClient.get<{ history: StatutoryHistoryEntry[] }>(`/api/employees/${id}/history/statutory`);
+  return data.history;
+}
+
 // ── Bank and statutory changes waiting for a director (M task 1). Masked: last four digits and the bank's own details only. ──
 export type IdentityChangeStatus = "PENDING" | "CONFIRMED" | "REJECTED" | "WITHDRAWN";
 export interface IdentityChange {

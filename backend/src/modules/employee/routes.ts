@@ -118,6 +118,8 @@ employeeRouter.get("/:id/bank/reveal", canViewBank, validate({ params: idParamsS
 employeeRouter.get("/:id/history/job", canView, validate({ params: idParamsSchema }), controller.getJobHistory);
 employeeRouter.get("/:id/history/name", canView, validate({ params: idParamsSchema }), controller.getNameHistory);
 employeeRouter.get("/:id/history/bank", canViewBank, validate({ params: idParamsSchema }), controller.getBankHistory);
+// ER-11 (M session): masked statutory history, scoped in the service.
+employeeRouter.get("/:id/history/statutory", canViewStatutory, validate({ params: idParamsSchema }), controller.getStatutoryHistory);
 // EF3: cancel a scheduled change — same permission as making it (a team
 // move can also be made in Manager Management, hence manager.team.assign).
 employeeRouter.post("/:id/history/job/:rowId/cancel", requireAnyPermission("employee.edit", "manager.team.assign"), validate({ params: historyRowParamsSchema }), controller.cancelScheduledJobChange);
