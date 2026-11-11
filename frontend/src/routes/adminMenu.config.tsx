@@ -1,7 +1,6 @@
 import type { ComponentType } from "react";
 import {
   AuditOutlined,
-  BankOutlined,
   CalculatorOutlined,
   CalendarOutlined,
   CheckSquareOutlined,
@@ -400,7 +399,6 @@ export const adminApps: AdminApp[] = [
           { key: "payroll-compare", label: "Compare Registers", path: "payroll/compare", icon: DiffOutlined, element: CompareRegistersPage, needs: PAYROLL_NEEDS },
           { key: "payroll-audit", label: "Payroll Audit Trail", path: "payroll/audit", icon: AuditOutlined, element: PayrollAuditPage, needs: PAYROLL_NEEDS },
           { key: "payroll-layouts", label: "Bank and Statutory Layouts", path: "payroll/layouts", icon: FileProtectOutlined, element: LayoutsPage, needs: PAYROLL_NEEDS },
-          { key: "loans-admin", label: "Loans & Advances", path: "payroll/loans", icon: BankOutlined, phase: "Phase 7", needs: PAYROLL_NEEDS },
         ],
       },
     ],

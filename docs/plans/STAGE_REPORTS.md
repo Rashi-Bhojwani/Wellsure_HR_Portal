@@ -268,3 +268,16 @@ Frontend only (the API, its director-only gates and its tests existed from P7-4,
 a new type starts Not set (tri-state choices "Not set / Yes / No"; caps "Not set / No cap (chosen) / A cap"); each save needs a reason and is a new version; the
 "Complete" column shows how many values are still Not set. Payroll → **Quarterly TDS data** (directors): per person per month paid and TDS from finished runs, PAN
 by its last four, confirmed challans by their last digits; says the official format is not built. Typecheck, lint (tokens), build and bundle budgets pass.
+
+## Item 2: the never-opened screens, walked (written 2026-11-11)
+
+Local stack on the demo company. 12 screens (directors': Loans, Reimbursements, Settlements, Off-cycle runs, TDS and Form 16, Loan and claim types, Quarterly
+TDS data; employee: YTD Reports, Salary Revision, Loans and Advances, Reimbursement, Form 16) × 5 people (director DEMO001, HR Admin DEMO004, a manager — DEMO003
+given the MANAGER role for the walk and returned afterwards —, an employee DEMO002, the Developer DEMO005) × desktop 1280 light and 390 px dark = **120 visits**.
+Result: no crash, no server error, no horizontal scroll at 390, no demo bank account or PAN text on any page. HR, the manager, the employee and the Developer see
+"This is not switched on for you" on every directors' screen; the Developer's own-pay pages show the refusal ("The Developer role cannot use this"); employees see
+only their own figures (Form 16 marked DRAFT).
+
+**Fixed:** a stale "Loans & Advances — Phase 7" placeholder menu entry duplicated the Loans path (removed); the Quarterly TDS banner repeated its own title.
+**Not walked:** keyboard-only paths and tablet width on these screens (the shared SideDrawer/DataTable components carry Esc and focus); filled-in states (the demo
+company has no loans, claims, settlements or finished runs in a closed year), so tables were seen in their empty states only.

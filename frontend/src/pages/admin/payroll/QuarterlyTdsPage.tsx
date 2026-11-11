@@ -33,7 +33,7 @@ export function QuarterlyTdsPage() {
           </div>
         }
       />
-      <ApprovalBanner tone="info" title="Our own layout" description={q.data?.note ?? "The government utility's input format is not built: its format has not been confirmed."} style={{ marginBottom: space[4] }} />
+      <ApprovalBanner tone="info" title="Not the official return format" description={q.data?.note ?? "The government utility's input format is not built: its format has not been confirmed."} style={{ marginBottom: space[4] }} />
       <Panel title="People" style={{ marginBottom: space[4] }}>
         <DataTable<Row>
           rowKey="employeeCode"
