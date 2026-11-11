@@ -237,3 +237,25 @@ fixed in `7ec1d5a` (allowlist with reasons). Run 271 on `00ac198` (all code thro
 
 **Gate after P7-5, P7-6 (settlement side) and P7-7 (written 2026-11-10).** Full backend suite run alone on `5b36109`, no edits during it: **214 files, 2,016 tests, all passed.**
 Commits: `7f90f94` (P7-5), `cb8de84` (P7-6 settlements), `5b36109` (P7-7). Not walked in a browser: the screens of these three items. Final status: `PORTAL_READY_REPORT.md`.
+
+## P7-6b off-cycle runs (written 2026-11-11)
+
+Plan: `P7_6_SETTLEMENTS.md` § P7-6b (written before the code). A separate, immutable pipeline (`backend/src/modules/payroll/offcycle/`) pays a confirmed settlement
+or held pay; the regular run engine (`engine`, `gather`, `person`, the finaliser's calculation) is not changed. Road: a director prepares (never their own pay;
+the real company refused while the Ready-for-first-run list has a blocker; the demo may rehearse) → `OFF_CYCLE_RUN` approval under the owners' `RUN_APPROVAL` choice
+→ finalised by someone other than the approver, in one transaction (approval consumed; finalisation unique per source; held-item release unique per item; the
+settlement's pending adjustments marked paid by the off-cycle run, a new `consumed_by_off_cycle_run_id` with exactly one consumer per CHECK; loan exit recoveries
+recorded and read by the loan balance; statement stored) → `OFF_CYCLE_BANK` approval under the `BANK_FILE` choice, written by a non-approver from the confirmed
+layout, account checked by blind index, DEMO name/watermark only for the demo and only from a layout that says DEMO → download → marked sent once.
+
+**Found and fixed on the way (a double-pay gap):** a director's hold release points its adjustment at the hold, not the run item, so the settlement's "already
+released" check never matched; a held month released by a director could also appear on the settlement. One reader (`offcycle/held.ts`) now decides unpaid held
+pay for the settlement, the off-cycle run and the release; a hold release and a period unlock are refused once an off-cycle run paid the item.
+
+Screen: Payroll → Off-cycle runs (directors). Settlements show PAID and refuse a new settlement once paid.
+
+**Tests** (`offCycle.test.ts`, 10): exact-fraction property test (400 cases) for the settlement total and the off-cycle net; HR, Developer and employee refused on all
+11 routes; real company refused while readiness red; unchosen step refuses; maker cannot decide, approver cannot finalise; a twin run for the same source cannot be
+finalised; hold release and unlock refused after; unique keys refuse a duplicate and a rolled-back mutant that drops them lets it in; the regular run's figures are
+unchanged; bank file rules; the settlement road with DEMO; own pay refused at prepare, ask and decide. **Mutants (8, all caught):** held reader ignoring off-cycle
+releases; approver executing; zero total payable; DEMO layout check dropped; readiness ignored; net dropping a line; adjustments not marked paid; demo file not DEMO.

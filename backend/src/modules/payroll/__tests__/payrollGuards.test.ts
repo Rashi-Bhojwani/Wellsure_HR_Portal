@@ -91,6 +91,9 @@ const EXTRA_ALLOWED: Record<string, number[]> = {
   // P7-6: form field lengths (a label, a note), the most director lines, a 64-character fingerprint. None is a payroll figure.
   "settlements/service.ts": [120, 300, 50, 64],
   "settlements/routes.ts": [64],
+  // P7-6b: form field lengths (a note), a 64-character fingerprint, a source id's length.
+  "offcycle/service.ts": [300, 64, 5],
+  "offcycle/routes.ts": [64],
   // P7-7: the shape of a challan's numbers (a BSR code is 7 digits, a serial up to 10), a year label's 7 characters, a note's length, a fingerprint's 64.
   "tax/form16.ts": [11, 300, 64],
   "loans/service.ts": [31, 60, 600, 40, 300, 64, 32],
@@ -212,7 +215,8 @@ describe("modules/payroll", () => {
   it("only the finaliser can make a run final or unlock one: no other code sets the switches or writes the FINALISED status", () => {
     // The database refuses FINALISED unless the transaction sets `payroll.finalising`, and refuses to take a run out of it unless it sets `payroll.unlocking`. The one file
     // that does either is the finaliser (P6-4); this keeps it to that one file.
-    const ALLOWED_FINALISERS: string[] = ["src/modules/payroll/run/finaliser.ts"];
+    // P7-6b: the off-cycle finaliser sets `payroll.finalising` only to mark the adjustments it pays CONSUMED (it never writes a run's FINALISED status).
+    const ALLOWED_FINALISERS: string[] = ["src/modules/payroll/offcycle/service.ts", "src/modules/payroll/run/finaliser.ts"];
     const backend = path.resolve(ROOT, "../../..");
     const hits: string[] = [];
     const scan = (dir: string) => {
@@ -251,7 +255,8 @@ describe("modules/payroll", () => {
     scan(path.join(backend, "src/modules/payroll"));
     expect(creators.sort()).toEqual(["src/modules/payroll/run/release.ts"]);
     // The employee module's own audited reveal is outside payroll; inside payroll the bank file's generation is the only place an account number is read.
-    expect(decrypters.sort()).toEqual(["src/modules/payroll/run/release.ts"]);
+    // P7-6b: the off-cycle bank file reads the one account it pays, under the same audit row ("payroll.bank.account_read").
+    expect(decrypters.sort()).toEqual(["src/modules/payroll/offcycle/service.ts", "src/modules/payroll/run/release.ts"]);
   });
 
   it("an owner's secret is opened in only three places: the rule Reveal, the layout module, and the sealing module itself", () => {

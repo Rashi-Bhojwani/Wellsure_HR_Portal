@@ -31,6 +31,7 @@ type Policy = "delete" | "setNull";
 export const OPTIONAL_FK_POLICY: Record<string, Policy> = {
   "BankFileSentMark.batchId": "delete",
   "BankFileSentMark.repaymentBatchId": "delete",
+  "BankFileSentMark.offCycleBatchId": "delete",
   // An incident belongs to the device or agent it records trouble with (exactly one is set, by a CHECK):
   // it disappears with it, never loses its subject.
   "DeviceIncident.deviceId": "delete",
@@ -89,6 +90,7 @@ export const OPTIONAL_FK_POLICY: Record<string, Policy> = {
   "EmployeeSalary.revisionId": "delete",
   // An adjustment only references the run that consumed it; it stays when a test removes the run.
   "PayrollAdjustment.consumedByRunId": "setNull",
+  "PayrollAdjustment.consumedByOffCycleRunId": "delete", // P7-6b: test-only; an adjustment an off-cycle run paid goes with that run
 };
 
 // Every model must be cleanable from somewhere. Most are reached as a
@@ -178,6 +180,7 @@ export const STORAGE_KEY_COLUMNS: Record<string, string[]> = {
   PayslipDelivery: ["fileKey"],
   BankTransferBatch: ["fileKey"],
   BankRepaymentBatch: ["fileKey"],
+  OffCycleBankBatch: ["fileKey"],
   TaxProof: ["fileKey"],
   PayrollOutput: ["fileKey"],
 };
@@ -368,7 +371,7 @@ function delegate(modelName: string): Delegate {
 
 // Tables a database trigger keeps immutable, deletable only through the
 // test-purge exception (app.audit_purge = 'test' in a dev-marked database).
-const PURGE_GUARDED_MODELS = new Set(["RawPunch", "ManualAttendanceEntry", "AttendanceOverride", "ShiftOverride", "LeaveDayRelease", "AttendancePeriodLock", "PayrollItemVersion", "PayrollItemConfirmation", "PayrollApproval", "PayrollEvent", "EmployeeSalary", "EmployeeSalaryLine", "PayrollSalaryRevision", "PayrollAdjustment", "PayrollRun", "PayrollRunItem", "PayrollRunLine", "PayrollPeriodLock", "PayrollRunRelease", "Payslip", "BankTransferBatch", "BankTransferRow", "PayrollOutput", "PayrollSetupSignoff", "DirectorActionNotice", "DirectorActionReceipt", "RolePermissionRemoval", "HrCapabilitySwitch", "PayrollSalaryHold", "PayrollSalaryRelease", "PayrollMonthlyInput", "PayrollInputBatch", "RemoteWorkMark", "RemoteAttendanceEvent", "BankRowRejection", "BankFileSentMark", "BankRepaymentPlan", "BankRepaymentBatch", "BankRepaymentRow", "PayslipLink", "PayrollExclusion", "TaxWindow", "TaxDeclaration", "TaxDeclarationLine", "TaxProof", "TaxProofDecision", "AttendanceLock", "HolidayLocationScope", "WeekendOverride", "LeaveTypeReviewer", "SwipeDecision", "DeviceSyncRequest", "LeaverLeaveRecalc", "TaxOpening", "Loan", "LoanChange", "LoanTypeVersion", "ClaimTypeVersion", "ReimbursementClaim", "ClaimDecision", "FnfSettlement", "TdsChallan", "TdsChallanConfirmation"]);
+const PURGE_GUARDED_MODELS = new Set(["RawPunch", "ManualAttendanceEntry", "AttendanceOverride", "ShiftOverride", "LeaveDayRelease", "AttendancePeriodLock", "PayrollItemVersion", "PayrollItemConfirmation", "PayrollApproval", "PayrollEvent", "EmployeeSalary", "EmployeeSalaryLine", "PayrollSalaryRevision", "PayrollAdjustment", "PayrollRun", "PayrollRunItem", "PayrollRunLine", "PayrollPeriodLock", "PayrollRunRelease", "Payslip", "BankTransferBatch", "BankTransferRow", "PayrollOutput", "PayrollSetupSignoff", "DirectorActionNotice", "DirectorActionReceipt", "RolePermissionRemoval", "HrCapabilitySwitch", "PayrollSalaryHold", "PayrollSalaryRelease", "PayrollMonthlyInput", "PayrollInputBatch", "RemoteWorkMark", "RemoteAttendanceEvent", "BankRowRejection", "BankFileSentMark", "BankRepaymentPlan", "BankRepaymentBatch", "BankRepaymentRow", "PayslipLink", "PayrollExclusion", "TaxWindow", "TaxDeclaration", "TaxDeclarationLine", "TaxProof", "TaxProofDecision", "AttendanceLock", "HolidayLocationScope", "WeekendOverride", "LeaveTypeReviewer", "SwipeDecision", "DeviceSyncRequest", "LeaverLeaveRecalc", "TaxOpening", "Loan", "LoanChange", "LoanTypeVersion", "ClaimTypeVersion", "ReimbursementClaim", "ClaimDecision", "FnfSettlement", "TdsChallan", "TdsChallanConfirmation", "OffCycleRun", "OffCycleFinalisation", "OffCycleHeldRelease", "OffCycleLoanRecovery", "OffCycleBankBatch"]);
 
 // Deletes the given rows of `model` and every row that depends on them,
 // transitively, in FK-safe order. Optional FKs follow OPTIONAL_FK_POLICY.

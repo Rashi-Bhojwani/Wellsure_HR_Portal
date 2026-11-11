@@ -82,6 +82,11 @@ export async function unlockRun(runId: string, actor: Actor) {
     throw new HttpError(409, "Payslips have been published or a bank file generated for this period, so it cannot be unlocked. Put corrections through an adjustment in the next run.", "RUN_RELEASED");
   }
 
+  // P7-6b: held pay from this run already paid by an off-cycle run would be calculated and paid again after an unlock.
+  if (await prisma.offCycleHeldRelease.findFirst({ where: { item: { runId } }, select: { id: true } })) {
+    throw new HttpError(409, "Held pay from this period has been paid by an off-cycle run, so it cannot be unlocked. Put corrections through an adjustment in the next run.", "RUN_RELEASED");
+  }
+
   const returned = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT set_config('payroll.unlocking', 'yes', true)`;
     await consume("PERIOD_UNLOCK", runId, actor.userId, actor.ip ?? null, tx);

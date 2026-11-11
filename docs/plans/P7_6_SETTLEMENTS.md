@@ -29,3 +29,32 @@ partial unique index, gather, finalise, closing, the bank file) and is planned a
 ## Tests
 Routes refuse HR, managers, employees and the Developer role; a different director confirms, never one's own; automatic lines match their sources
 (an independent sum); a negative total is never payable; immutability; mutation checks.
+
+## P7-6b: off-cycle runs (design, written 2026-11-11 before the code)
+
+**Ordinary runs are not touched.** The regular run engine (one run per cycle, its calculation, its finaliser) is unchanged; an off-cycle run is its own
+pipeline over figures that are already exact and confirmed (a confirmed settlement, or the net pay of a HELD item of a final run). Regression: the whole
+existing payroll suite must pass unchanged, and a test proves a regular run's figures are identical with an off-cycle run present for the same person.
+
+**What it pays.** `SETTLEMENT` (a confirmed settlement with a positive total) or `HELD_PAY` (one HELD item of a FINALISED run, not released). Lines are
+copied from the source; the net is never negative.
+
+**The road, the same rules as a regular run:**
+1. A director prepares it (never for their own pay), with a payment date. The real company is refused while the Ready-for-first-run list has any
+   blocker; the demo company may rehearse.
+2. Approval: `OFF_CYCLE_RUN` through the approvals core, under the **same second-director choice as a regular run** (`RUN_APPROVAL`: a different director
+   decides, or the acting director alone if the owners chose that; an unchosen step refuses).
+3. Finalise: by someone other than the approver (unless the director-authority choice), after checking every source is still unpaid. In one transaction:
+   the approval is consumed, a finalisation row is written (**unique per source: nothing is paid twice**), held items get a release row (unique per item,
+   shared by both kinds), the settlement's pending adjustments are marked paid (so no regular run pays them again), each loan's exit recovery is recorded
+   (the loan's balance reads it), and the statement (payslip-like, stored whole) is kept.
+4. Bank file: `OFF_CYCLE_BANK` approval under the **same choice as a regular bank file** (`BANK_FILE`), carried out by a non-approver; the confirmed bank
+   layout; the account in force on the payment date (checked against its blind index); the demo company's file is named and marked DEMO and only from a
+   layout that says DEMO; the real company's never is. Downloaded files can be marked sent to the bank, once.
+
+**Tables (immutable, test-only purge):** `off_cycle_runs`, `off_cycle_finalisations` (unique run; unique kind+source), `off_cycle_held_releases` (unique
+item), `off_cycle_loan_recoveries`, `off_cycle_bank_batches` (unique run); `bank_file_sent_marks` gains an off-cycle file column.
+
+**Tests:** routes refuse HR, managers, employees and the Developer role; the second-director choice; finalising twice and paying the same source twice
+are refused (and a mutation that drops the unique key is caught); a regular run's figures are unchanged; the settlement arithmetic against an
+exact-fraction model; the demo file is named DEMO; the real company is refused while readiness is red.

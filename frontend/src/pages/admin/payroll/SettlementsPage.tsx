@@ -11,7 +11,7 @@ import { ApprovalBanner, DataTable, PageHeader, SideDrawer, StatusChip, toast } 
 import { space } from "../../../theme/tokens";
 
 // Payroll > Settlements (P7-6), directors only: the full and final settlement of each leaver, with every line and where it comes from. One director prepares, a
-// different director confirms; never one's own. Paying it needs an off-cycle run, which is not built yet: a confirmed settlement says so and nothing is paid.
+// different director confirms; never one's own. Paying it is an off-cycle run (P7-6b, Payroll > Off-cycle runs); nothing is paid from here.
 export function SettlementsPage() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState<SeparationRow | null>(null);
@@ -25,7 +25,7 @@ export function SettlementsPage() {
   return (
     <>
       <PageHeader title="Settlements" subtitle="Full and final settlement for each leaver: every line with its source, confirmed by a different director." />
-      <ApprovalBanner tone="warning" title="Paying a settlement is not built yet" description="It needs an off-cycle payroll run. A confirmed settlement waits for it; nothing is paid from this screen." style={{ marginBottom: space[4] }} />
+      <ApprovalBanner tone="info" title="Paying a settlement" description="A confirmed settlement with a positive total is paid by an off-cycle run (Payroll, Off-cycle runs). Nothing is paid from this screen." style={{ marginBottom: space[4] }} />
       <DataTable<SeparationRow>
         rowKey="separationId"
         loading={q.isLoading}
@@ -60,7 +60,7 @@ export function SettlementsPage() {
             key: "act",
             render: (_, r) => (
               <div style={{ display: "flex", gap: space[2], flexWrap: "wrap" }}>
-                <Button onClick={() => setOpen(r)}>{r.settlement ? "Prepare again" : "Prepare"}</Button>
+                {r.settlement?.state !== "PAID" && <Button onClick={() => setOpen(r)}>{r.settlement ? "Prepare again" : "Prepare"}</Button>}
                 {r.settlement?.state === "PREPARED" && <Button loading={ask.isPending} onClick={() => ask.mutate(r)}>Ask to confirm</Button>}
                 {r.settlement?.state === "WAITING" && (
                   <>

@@ -68,7 +68,8 @@ export async function releaseHold(holdId: string, raw: unknown, actor: { userId:
   const run = await prisma.payrollRun.findFirst({ where: { cycleStart: hold.cycleStart, status: "FINALISED" }, select: { id: true, cycleStart: true, cycleEnd: true, cycleLabel: true } });
   let amount = null as ReturnType<typeof dec> | null;
   if (run) {
-    const item = await prisma.payrollRunItem.findFirst({ where: { runId: run.id, employeeId: hold.employeeId }, select: { status: true, holdReason: true, netPay: true } });
+    const item = await prisma.payrollRunItem.findFirst({ where: { runId: run.id, employeeId: hold.employeeId }, select: { id: true, status: true, holdReason: true, netPay: true } });
+    if (item && (await prisma.offCycleHeldRelease.findUnique({ where: { itemId: item.id } }))) throw new HttpError(409, `The pay held in ${run.cycleLabel} has already been paid by an off-cycle run, so it is not released again.`, "ALREADY_PAID");
     if (!item || item.status !== "HELD" || item.holdReason !== "DIRECTOR_HOLD") {
       throw new HttpError(409, `The final run for ${run.cycleLabel} did not hold this person's pay for this reason (it was ${item ? "paid or held for another reason" : "not calculated for them"}), so there is nothing to release.`, "NOTHING_TO_RELEASE");
     }
@@ -152,7 +153,7 @@ export async function outstandingHeldPay(employeeId: string): Promise<Array<{ ho
   const holds = await prisma.payrollSalaryHold.findMany({ where: { employeeId, release: null }, orderBy: { cycleStart: "asc" } });
   const out: Array<{ holdId: string; cycleStart: string; netPay: string | null }> = [];
   for (const h of holds) {
-    const item = await prisma.payrollRunItem.findFirst({ where: { employeeId, status: "HELD", holdReason: "DIRECTOR_HOLD", run: { status: "FINALISED", cycleStart: h.cycleStart } }, select: { netPay: true } });
+    const item = await prisma.payrollRunItem.findFirst({ where: { employeeId, status: "HELD", holdReason: "DIRECTOR_HOLD", run: { status: "FINALISED", cycleStart: h.cycleStart }, offCycleReleases: { none: {} } }, select: { netPay: true } });
     out.push({ holdId: h.id, cycleStart: h.cycleStart.toISOString().slice(0, 10), netPay: item ? canonicalDecimal(dec(item.netPay.toString())) : null });
   }
   return out;

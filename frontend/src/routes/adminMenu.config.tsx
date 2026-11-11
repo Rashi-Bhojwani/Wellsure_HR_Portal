@@ -115,6 +115,7 @@ const PayslipLinksPage = lazyPage(() => import("../pages/admin/payroll/PayslipLi
 const NotOnPayrollPage = lazyPage(() => import("../pages/admin/payroll/NotOnPayrollPage"), "NotOnPayrollPage");
 const TdsForm16Page = lazyPage(() => import("../pages/admin/payroll/TdsForm16Page"), "TdsForm16Page"); // P7-7
 const SettlementsPage = lazyPage(() => import("../pages/admin/payroll/SettlementsPage"), "SettlementsPage"); // P7-6
+const OffCyclePage = lazyPage(() => import("../pages/admin/payroll/OffCyclePage"), "OffCyclePage"); // P7-6b
 const ReimbursementsAdminPage = lazyPage(() => import("../pages/admin/payroll/ReimbursementsAdminPage"), "ReimbursementsAdminPage"); // P7-5
 const LoansAdminPage = lazyPage(() => import("../pages/admin/payroll/LoansAdminPage"), "LoansAdminPage"); // P7-4
 const OpeningFiguresPage = lazyPage(() => import("../pages/admin/payroll/OpeningFiguresPage"), "OpeningFiguresPage"); // A-3
@@ -387,6 +388,7 @@ export const adminApps: AdminApp[] = [
           { key: "payroll-loans", label: "Loans", path: "payroll/loans", icon: FileProtectOutlined, element: LoansAdminPage, needs: { director: true } }, // P7-4
           { key: "payroll-reimbursements", label: "Reimbursements", path: "payroll/reimbursements", icon: FileProtectOutlined, element: ReimbursementsAdminPage, needs: { director: true } }, // P7-5
           { key: "payroll-settlements", label: "Settlements", path: "payroll/settlements", icon: FileProtectOutlined, element: SettlementsPage, needs: { director: true } }, // P7-6
+          { key: "payroll-offcycle", label: "Off-cycle runs", path: "payroll/off-cycle", icon: FileProtectOutlined, element: OffCyclePage, needs: { director: true } }, // P7-6b
           { key: "payroll-tds-form16", label: "TDS and Form 16", path: "payroll/tds-form16", icon: FileProtectOutlined, element: TdsForm16Page, needs: { director: true } }, // P7-7
           { key: "payroll-tax-declarations", label: "Tax Declarations", path: "payroll/tax-declarations", icon: FormOutlined, element: TaxDeclarationsPage, needs: PAYROLL_NEEDS },
           { key: "payroll-holds", label: "Held Salaries", path: "payroll/holds", icon: PauseCircleOutlined, element: HeldSalariesPage, needs: PAYROLL_NEEDS },

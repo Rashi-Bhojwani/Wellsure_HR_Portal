@@ -148,11 +148,12 @@ export async function requestOwn(raw: unknown, actor: Actor & { employeeId: stri
 // State, read from what happened.
 type LoanRow = Awaited<ReturnType<typeof prisma.loan.findUniqueOrThrow>>;
 async function stateOf(loan: LoanRow) {
-  const [approval, adjustments, changes, changeApprovals] = await Promise.all([
+  const [approval, adjustments, changes, changeApprovals, exitRecoveries] = await Promise.all([
     liveApproval("LOAN_SANCTION", loan.id),
     prisma.payrollAdjustment.findMany({ where: { source: { in: ["LOAN_DISBURSEMENT", "LOAN_PRINCIPAL", "LOAN_INTEREST"] }, sourceRef: { startsWith: loan.id } } }),
     prisma.loanChange.findMany({ where: { loanId: loan.id }, orderBy: { createdAt: "asc" } }),
     prisma.payrollApproval.findMany({ where: { subject: "LOAN_CHANGE", subjectId: { startsWith: loan.id } } }),
+    prisma.offCycleLoanRecovery.findMany({ where: { loanId: loan.id }, select: { amount: true } }),
   ]);
   const sanctioned = adjustments.length > 0;
   const status = sanctioned ? "SANCTIONED" : approval?.status === "PENDING" ? "WAITING" : approval?.status === "REJECTED" ? "REJECTED" : "DRAFT";
@@ -164,8 +165,10 @@ async function stateOf(loan: LoanRow) {
   const prepaid = sum(effective.filter((c) => c.kind === "PREPAID").map((c) => dec(c.amount!.toString())));
   const waived = sum(effective.filter((c) => c.kind === "WAIVED").map((c) => dec(c.amount!.toString())));
   const principal = dec(loan.principal.toString());
-  const balance: Money = disbursed ? principal.minus(recovered).minus(prepaid).minus(waived) : ZERO;
-  return { status, approval, adjustments, changes, effective, disbursed, recovered, interestPaid, prepaid, waived, balance };
+  // P7-6b: what a final settlement recovered through an off-cycle run.
+  const recoveredAtExit = sum(exitRecoveries.map((r) => dec(r.amount.toString())));
+  const balance: Money = disbursed ? principal.minus(recovered).minus(prepaid).minus(waived).minus(recoveredAtExit) : ZERO;
+  return { status, approval, adjustments, changes, effective, disbursed, recovered, interestPaid, prepaid, waived, recoveredAtExit, balance };
 }
 
 async function view(loan: LoanRow, viewerUserId: string | null = null) {

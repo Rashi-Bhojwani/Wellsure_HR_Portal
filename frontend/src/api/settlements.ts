@@ -15,7 +15,8 @@ export interface Settlement {
   total: string;
   payable: boolean;
   recoverOutsidePayroll: string | null;
-  state: "PREPARED" | "WAITING" | "CONFIRMED" | "REJECTED" | "REPLACED";
+  state: "PREPARED" | "WAITING" | "CONFIRMED" | "REJECTED" | "REPLACED" | "PAID";
+  offCycleRunId: string | null;
   payment: string | null;
   fingerprint: string;
   createdAt: string;

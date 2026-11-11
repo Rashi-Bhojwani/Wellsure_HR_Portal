@@ -8,6 +8,7 @@ import { prisma } from "../../../lib/prisma";
 import { HttpError } from "../../../middleware/errorHandler";
 import { decide, liveApproval, registerSubject, submit } from "../approvals";
 import { payrollHash } from "../hash";
+import { unpaidHeldItems } from "../offcycle/held";
 import { outstandingLoans } from "../loans/service";
 import { canonicalDecimal, dec, fixed, sum, ZERO, type Money } from "../money";
 
@@ -32,10 +33,8 @@ export interface SettlementLine {
 /** The automatic lines, read from their sources. Exported so the tests can check each against its source. */
 export async function automaticLines(employeeId: string, lastWorkingDate: Date): Promise<SettlementLine[]> {
   const lines: SettlementLine[] = [];
-  // Pay held in a final run and not yet released (a release is a HOLD_RELEASE adjustment referencing the item).
-  const held = await prisma.payrollRunItem.findMany({ where: { employeeId, status: "HELD", run: { status: "FINALISED" } }, include: { run: { select: { cycleLabel: true } } } });
-  const released = new Set((await prisma.payrollAdjustment.findMany({ where: { employeeId, source: "HOLD_RELEASE", status: { not: "CANCELLED" } }, select: { sourceRef: true } })).map((a) => a.sourceRef));
-  for (const h of held) if (!released.has(h.id)) lines.push({ kind: "HELD_PAY", label: `Pay held in ${h.run.cycleLabel}`, amount: fixed(dec(h.netPay.toString()), 2), source: `run item ${h.id}` });
+  // Pay held in a final run and not yet paid (by a director's release or an off-cycle run): one reader shared with the off-cycle run (P7-6b).
+  for (const h of await unpaidHeldItems({ employeeId })) lines.push({ kind: "HELD_PAY", label: `Pay held in ${h.run.cycleLabel}`, amount: fixed(dec(h.netPay.toString()), 2), source: `run item ${h.id}` });
   // Everything pending for the person (approved reimbursements, arrears, loan instalments not yet recovered, other adjustments).
   const pending = await prisma.payrollAdjustment.findMany({ where: { employeeId, status: "PENDING" }, orderBy: { createdAt: "asc" } });
   for (const a of pending) {
@@ -57,6 +56,12 @@ export async function automaticLines(employeeId: string, lastWorkingDate: Date):
   return lines;
 }
 
+/** Pure: a settlement's total, exact, and what it means (paid only when positive; a negative total is recovered outside payroll). Exported for the independent-model test. */
+export function settlementTotals(lines: readonly Pick<SettlementLine, "amount">[]): { total: Money; payable: boolean; recoverOutsidePayroll: Money | null } {
+  const total = sum(lines.filter((l) => l.amount !== null).map((l) => dec(l.amount!)));
+  return { total, payable: total.gt(ZERO), recoverOutsidePayroll: total.lt(ZERO) ? total.negated() : null };
+}
+
 export const prepareSchema = z
   .object({
     separationId: z.string().min(1).max(64),
@@ -73,8 +78,10 @@ export async function prepare(raw: unknown, actor: Actor) {
   await refuseOwn(sep.employeeId, actor.userId);
   const pendingApproval = await latestFor(sep.id).then((s) => (s ? liveApproval("FNF_SETTLEMENT", s.id) : null));
   if (pendingApproval?.status === "PENDING") throw new HttpError(409, "A settlement for this person is waiting for the other director. Ask them to decide it first.", "WAITING_FOR_DECISION");
+  const latestId = (await latestFor(sep.id))?.id;
+  if (latestId && (await prisma.offCycleFinalisation.findUnique({ where: { kind_sourceRef: { kind: "SETTLEMENT", sourceRef: latestId } } }))) throw new HttpError(409, "This person's settlement has been paid. Anything more goes through an adjustment.", "ALREADY_PAID");
   const lines: SettlementLine[] = [...(await automaticLines(sep.employeeId, sep.lastWorkingDate)), ...parsed.data.directorLines.map((l) => ({ kind: "DIRECTOR" as const, label: l.label, amount: fixed(dec(l.amount), 2), source: l.source }))];
-  const total = sum(lines.filter((l) => l.amount !== null).map((l) => dec(l.amount!)));
+  const { total } = settlementTotals(lines);
   const row = await prisma.fnfSettlement.create({ data: { separationId: sep.id, employeeId: sep.employeeId, lines: lines as unknown as object, total: total.toFixed(2), createdByUserId: actor.userId } });
   await writeAuditLog({ actorUserId: actor.userId, ipAddress: actor.ip ?? null, action: "payroll.settlement.prepared", entityType: "FnfSettlement", entityId: row.id, after: { separationId: sep.id, lines: lines.length } });
   return view(row);
@@ -97,9 +104,9 @@ const fingerprintOf = (id: string, hash: string) => createHash("sha256").update(
 
 type Row = Awaited<ReturnType<typeof prisma.fnfSettlement.findFirstOrThrow>>;
 async function view(s: Row) {
-  const [approval, latest] = await Promise.all([liveApproval("FNF_SETTLEMENT", s.id), latestFor(s.separationId)]);
+  const [approval, latest, paid] = await Promise.all([liveApproval("FNF_SETTLEMENT", s.id), latestFor(s.separationId), prisma.offCycleFinalisation.findUnique({ where: { kind_sourceRef: { kind: "SETTLEMENT", sourceRef: s.id } }, select: { runId: true } })]);
   const total: Money = dec(s.total.toString());
-  const state = latest?.id !== s.id ? "REPLACED" : approval?.status === "APPROVED" ? "CONFIRMED" : approval?.status === "PENDING" ? "WAITING" : approval?.status === "REJECTED" ? "REJECTED" : "PREPARED";
+  const state = paid ? "PAID" : latest?.id !== s.id ? "REPLACED" : approval?.status === "APPROVED" ? "CONFIRMED" : approval?.status === "PENDING" ? "WAITING" : approval?.status === "REJECTED" ? "REJECTED" : "PREPARED";
   return {
     id: s.id,
     separationId: s.separationId,
@@ -109,7 +116,8 @@ async function view(s: Row) {
     payable: total.gt(ZERO),
     recoverOutsidePayroll: total.lt(ZERO) ? fixed(total.negated(), 2) : null,
     state,
-    payment: state === "CONFIRMED" ? "Waiting for an off-cycle run (not built yet): nothing has been paid." : null,
+    payment: state === "PAID" ? "Paid by an off-cycle run." : state === "CONFIRMED" ? (total.gt(ZERO) ? "Waiting for an off-cycle run: nothing has been paid yet." : "Nothing is paid: the total is not positive.") : null,
+    offCycleRunId: paid?.runId ?? null,
     fingerprint: fingerprintOf(s.id, await hashOf(s.id)),
     createdAt: s.createdAt.toISOString(),
   };
