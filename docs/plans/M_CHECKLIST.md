@@ -46,5 +46,5 @@ Tier 1 first, then smallest first. Status per row is kept in M_STAGE_REPORTS.md.
 - [x] NT-08 Editable email templates — medium
 - [x] RP-13 Scheduled reports by email — medium
 - [-] NT-10 Phone push notifications — medium (needs a VAPID key pair and the push services' hosts: real values, see report)
-- [ ] full backend suite alone; CI per job on the final code commit; browser walk (director, HR, manager, employee, Developer; desktop + 390 dark)
-- [ ] M_STAGE_REPORTS.md final report
+- [x] full backend suite alone (228 files, 2,085 tests, all passed); CI run 305 on `0a7b4fc` all seven jobs green; browser walk 56 visits, one defect fixed (`cfe5c07`)
+- [x] M_STAGE_REPORTS.md final report

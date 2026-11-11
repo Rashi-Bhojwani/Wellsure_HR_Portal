@@ -200,3 +200,31 @@ for a director, a listed letter and an employee's ask, a report schedule). Check
 the whole account number never on screen. Seen in the screenshots: the director has Export to Excel on Audit Log and the Developer has not; HR sees
 only Withdraw on its own held change. **One defect found and fixed:** the desktop "waiting for a director" table pushed the Confirm/Reject column off
 the right edge; the "From" column is now a second line under the change. Not walked: keyboard-only paths and tablet width.
+
+## Final (2026-11-11)
+
+**Gates.** Full backend suite run alone on the finished tree: 228 files, 2,085 tests, all passed. Frontend: typecheck, lint + design tokens, 75
+tests, build, bundle budgets (login 231.9 KB, shell + employee home 339.3 KB, shell + admin home 359.0 KB, all within budget). CI run 305 on
+`0a7b4fc` (the last backend code commit): all seven jobs green (install-lint-typecheck-test incl. drift and the demo tests, sensitive-ui employee
+portal, sensitive-ui admin portal, latency, attendance-replay, agent-windows, docker-build). Run 306 on `cfe5c07` (frontend-only walk fix): see the
+session's final message. Every migration was applied to a fresh test database by each test run (the suite rebuilds it from migrations).
+
+**Rows and commits.**
+
+| Row | Was | Now | Commit |
+|---|---|---|---|
+| ER-12 HR's bank/statutory changes wait for a director | Missing | Built | `0e288f1` (+ walk fix `cfe5c07`) |
+| Stale text (M3, M5, M6, M7) | — | Fixed (M4 is a request to Session A) | `af2c394` |
+| LC-14 claims (and held identity changes) in the directors' Tasks inbox | Missing | Built | `9659cda` |
+| ER-11 statutory ID history | Missing | Partial: masked change history; payroll reading a past ID not built | `adc4605` |
+| SS-15 download my own data | Missing | Built | `039060a` |
+| AU-04 audit log export | Missing | Built | `06d2350` |
+| LT-08 employee asks for a letter | Missing | Built | `06d2350` |
+| NT-09 notification preferences | Missing | Built | `06d2350` |
+| NT-08 editable email templates | Missing | Partial: sign-in emails only | `06d2350` |
+| RP-13 scheduled reports by email | Missing | Built (a link and a count, never the rows) | `0a7b4fc` |
+| NT-10 phone push | Missing | Skipped: needs a VAPID key pair and network hosts | — |
+
+**Pay-data check.** No path found for HR, a manager or the Developer to see pay data. New routes that could carry a figure keep it out: the claims inbox
+item has no amount; scheduled report emails carry no rows (leave liability stays directors-only through `reports.liability.view`); the audit export
+keeps payroll rows and money fields from anyone without the salary key and refuses the Developer; the data export lists payslips by month only.
