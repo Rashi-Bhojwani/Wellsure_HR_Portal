@@ -2,8 +2,8 @@
 
 Branch `feat/hr-payroll-separation`, written 2026-11-10 and updated 2026-11-11 by the session continuing Session A. Public repository: no real data, no real
 person's name. **Every buildable item is now built**, including P7-6b off-cycle runs and the three D-37 defaults. Still open: eight A-items undefined in every plan
-file, and Stages 6, 8 and 9 blocked on files that are not on this branch (`PARITY_COVERAGE.md` exists on no branch; `docs/samples/` exists on `origin/main` and
-`origin/peeps/foundation` but not here, and this work may not touch those branches).
+file; Stage 8 blocked until the owner replaces the files on `origin/main` (they look like real exports; not brought here); Stages 6 and 9 not started on the
+owner's instruction (`PARITY_COVERAGE.md` was brought onto this branch by the parallel M session on 2026-11-11).
 
 ## 1. Every planned item and its status
 
@@ -61,20 +61,25 @@ Directors are the only Super Admins. "Confirm" always means the **other** direct
 **Go-live conditions**
 13. Two-step sign-in for directors (optional now, a go-live condition). AWS and deployment are outside this work.
 
-## 3. What is not verified
+## 3. What is verified, and what is not
 
+**Verified on 2026-11-11 (second pass):** the demo company has a made-up pay history (two finished runs, loans in four real states, claims of two types in five
+states, a director hold and a missing bank account, two settlements, a finished off-cycle run), and every new screen was opened with that content as director, HR,
+manager, employee and Developer at 1280 light, 390 dark and 768 — 225 visits: no crash, no server error, no sideways page scroll, no bank, PAN, UAN or debit-account
+text, every directors' screen refused to the others. Keyboard only: 21 of 21 primary actions reached by Tab with a visible focus ring, opened by Enter, Tab kept inside
+the dialog, Escape closes, focus returns. End to end: a settlement recovers a loan through an off-cycle run (balance, ledger, paid once, bank file and sent mark once,
+double clicks and retries with no double effect, the regular run identical for everyone else), as a test and through the screens. At 500 people every new reader
+and off-cycle step is inside its budget (largest: 0.58 s against 1.6 s).
+
+**Not verified:**
 - Tax correctness against any law (every figure is the owners'); real bank files, real devices (agent sync tested with the fake device), real mail.
-- Test gates: full backend suite run alone after each item (P7-6b 2,026; item 4 2,034; item 5 2,038); final run on `9ec926e`: 218 files, 2,041 tests, all
-  passed. CI run 287 on `9ec926e`: all seven jobs green (per job in STAGE_REPORTS).
-- Browser walk (2026-11-11): the 12 never-opened screens, 5 roles, desktop light and 390 px dark, all in **empty states** (the demo company has no loans, claims,
-  settlements, off-cycle runs or closed-year runs). **Not walked:** filled-in states, tablet width, keyboard-only paths on these screens; the Default behaviours screen
-  and the D-37 rows on Ready for First Run (built after the walk; typecheck, lint, bundle budgets and the backend tests cover them).
-- Off-cycle runs end to end in the demo company in a browser (covered by the route test with the demo switch; no demo seed of a settlement).
-- Loan exit recovery through a settlement (the code path is exercised only by review and the loan balance reader; the off-cycle test uses held pay and a
-  settlement without a loan line).
+- Test gates: see STAGE_REPORTS for the final full-suite run and CI per job on the final code commit.
+- Real screen readers (only keyboard paths and focus were checked); colour contrast was not measured; a real phone and a real tablet (emulated widths only).
+- Payslip PDF timing at 500 in this container (the existing measure's PDF step hung here; earlier figure 0.25 s each stands unverified today).
+- A loaded database, RDS Proxy and two people on different machines at once (the double-click checks are from one browser and one test process).
+- The loan "pause" the owners may want: there is no such feature (row 75).
 - A TEAM-scope viewer of the roster grid; the five non-leave attendance-lock writers over their routes (wired; only leave apply exercised).
-- 500-person timing of the new readers (reviewer reach, Form 16 year hash, settlements list, off-cycle candidates, the behaviour reads in runs and access resolution).
-- `check:sensitive-ui` and `check:popovers` run in CI only (they open every menu page, so the new pages are included).
+- Stage 8 readers (no synthetic samples on this branch yet).
 
 ## 4. What I decided myself
 
@@ -84,7 +89,10 @@ by a director, for final settlement or for a missing bank account, with a positi
 carried instalment at finalise; the carried part is due from the next run; the max-deduction percentage and the pro-rata rounding live in the behaviour store (Not
 set) rather than as payroll rules; an exact pro-rata leave figure needs no rounding; the leave correction for the month of leaving is a separate entry (reversal or
 grant), never an edit. Also: claim caps are per month spent and per financial year (P7-5 plan); a challan is confirmed by retyping amount and
-serial (P7-7); Form 16 stays DRAFT while either the year's Form 16 data or the tax year is unconfirmed.
+serial (P7-7); Form 16 stays DRAFT while either the year's Form 16 data or the tax year is unconfirmed. Second pass (rows 75–78): no loan pause is invented
+(the seeded "stopped" loan is a cancel-pending one); one open off-cycle run per source; Quarterly TDS opens on the last ended quarter; the demo writes its loan
+requests dated in its past; free-text columns wrap at a set width and action columns are pinned right; status chips wrap on phones; Tab is kept inside every
+dialog by a shared trap; the scale budgets are the project's recorded 500-person figures doubled (1.6 s per screen read, 1.4 s per off-cycle step).
 
 ## 5. Updated documents
 
