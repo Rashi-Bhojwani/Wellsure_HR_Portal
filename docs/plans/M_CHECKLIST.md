@@ -37,7 +37,7 @@ Plan (written before the code):
 
 ## Task 3 — work list (non-payroll, no owner decision, not Peeps)
 Tier 1 first, then smallest first. Status per row is kept in M_STAGE_REPORTS.md.
-- [ ] LC-14 Claims in the Tasks inbox (directors) — small
+- [x] LC-14 Claims in the Tasks inbox (directors) — small (+ held identity changes as a director source)
 - [ ] ER-11 Statutory ID history — medium
 - [ ] SS-15 Download my own data (DPDP) — medium
 - [ ] AU-04 Audit log export — small

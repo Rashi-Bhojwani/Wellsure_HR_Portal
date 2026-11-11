@@ -78,3 +78,13 @@ roles enter bank and identity details masked; the bank file is for a director to
 statutory entries is built). Mismatches M3, M5, M6 and M7 of the audit are closed; M4 (`PORTAL_READY_REPORT.md`) is Session A's report and is left
 as a request: **Request 3 to Session A:** `PORTAL_READY_REPORT.md` §6 item 3 still says the Developer reaches Employee Swipes; since D-37 default 3 it
 does not unless a director switches it on.
+
+### LC-14 — claims in the Tasks inbox: **Missing → Built**
+
+Two inbox sources in `modules/tasks/service.ts`, both directors only: `CLAIM_DECISION` (a reimbursement claim with no decision, never the director's
+own, as `reimbursements/service.ts decide` enforces; title, claim type and date only, no amount) and `IDENTITY_CONFIRMATION` (task 1: a held bank or
+statutory change the director may decide: not entered by them, not on their own record; masked, the kind only). Types and labels in
+`shared/types/inbox.ts`; icons in `components/inbox/TasksInbox.tsx`. The inbox route is self-only (it lists what waits on the caller). Test
+`tasks/__tests__/directorSources.test.ts` (director sees others' claims, not their own, and no amount; held change offered to a director who may
+decide it, not on their own record; HR, manager, employee and Developer see neither). Mutation checks: own claim offered → caught; claims to everyone
+→ caught; held change on own record offered → caught; held changes to everyone → caught.
