@@ -76,6 +76,8 @@ export interface AgentDeviceReport {
   outboxRecords: number;
   oldestUnsentLocalTime: string | null;
   retention: RetentionAssessment;
+  /** A-10 G5: the id of the last sync request this agent finished for the device (its records read again and queued to send). */
+  resyncDone?: string | null;
 }
 
 export interface AgentHeartbeatRequest {
@@ -102,6 +104,8 @@ export interface AgentDeviceConfig {
   retentionDays: number;
   retentionRecords: number;
   isSimulated: boolean;
+  /** A-10 G5: a director's or HR's request to read this device again for a date range (inclusive, device dates); null/absent = none pending. */
+  resync?: { requestId: string; from: string; to: string } | null;
 }
 
 export interface DeviceHealthThresholds {

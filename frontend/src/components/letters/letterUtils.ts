@@ -1,11 +1,13 @@
-import { LETTER_PLACEHOLDERS, type LetterExtraField } from "@shared/constants/letters";
+import { LETTER_PAY_PLACEHOLDERS, LETTER_PLACEHOLDERS, type LetterExtraField } from "@shared/constants/letters";
 import dayjs from "dayjs";
 import type { PlaceholderOption } from "./LetterEditor";
 
-// The menu: the fixed catalog, then this version's own typed fields.
-export function placeholderOptions(extraFields: LetterExtraField[]): PlaceholderOption[] {
+// The menu: the fixed catalog, then (for a director only) the salary's own pay figures, then this version's own typed fields. A template that uses a pay figure
+// can only ever be issued by a director (the server's pay-free check refuses it for anyone else).
+export function placeholderOptions(extraFields: LetterExtraField[], isDirector = false): PlaceholderOption[] {
   return [
     ...Object.entries(LETTER_PLACEHOLDERS).map(([key, label]) => ({ key, label })),
+    ...(isDirector ? Object.entries(LETTER_PAY_PLACEHOLDERS).map(([key, label]) => ({ key, label: `Pay (directors only): ${label}` })) : []),
     ...extraFields.filter((f) => f.key).map((f) => ({ key: `extra.${f.key}`, label: `Typed in: ${f.label || f.key}` })),
   ];
 }

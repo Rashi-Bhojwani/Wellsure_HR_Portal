@@ -1,3 +1,4 @@
+import { assertNotLocked } from "../../workforce/locks"; // A-10 G3
 import { createHash, randomUUID } from "node:crypto";
 import { Prisma, type RegularizationReasonCode } from "@prisma/client";
 import { writeAuditLogs } from "../../../lib/audit";
@@ -157,6 +158,7 @@ export async function confirmBulk(viewer: Viewer, input: BulkInput & { fingerpri
   if (p.fingerprint !== input.fingerprint) {
     throw new HttpError(409, "The set changed since you looked at it (a request was raised, a day was finalised or punches arrived). Review it again before confirming.", "SELECTION_CHANGED");
   }
+  await assertNotLocked("REGULARIZATION", meta.actorUserId, p.planned.map((x) => ({ employeeId: x.employeeId, from: x.date, to: x.date }))); // A-10 G3
   const approve = input.action === "RAISE_AND_APPROVE";
   const text = describeCorrection(input);
   const batchId = randomUUID();

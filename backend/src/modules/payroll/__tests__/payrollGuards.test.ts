@@ -79,13 +79,31 @@ export function codeOnly(src: string): string {
 const ALLOWED_INTEGERS = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 16, 32, 40, 64, 100, 200, 201, 202, 204, 400, 401, 403, 404, 409, 422, 500, 1000]);
 // Value-shape bounds that belong to a rule's own validation (a payment day is 1 to 28, a month is 1 to 12, a state key is short).
 const EXTRA_ALLOWED: Record<string, number[]> = {
+  // A-3 opening figures: the largest import file (rows), form field lengths (a figure's text, a note, a reason), the length of a sha256 fingerprint and the
+  // short batch id cut from it. None is a payroll figure.
+  "tax/openings.ts": [2000, 20, 300, 64, 24],
+  // P7-4 loans: 1200 = 12 months × 100 (a yearly percentage to a monthly fraction), form field lengths and limits (a key, a name, a note, at most 600 instalments,
+  // a 64-character fingerprint, a 1-to-3-digit rate). None is a payroll figure.
+  "loans/schedule.ts": [1200],
+  // P7-5: form field lengths (a key, a name, a note) and the most bills on one claim. None is a payroll figure.
+  "reimbursements/service.ts": [31, 60, 40, 300, 120],
+  "reimbursements/routes.ts": [64],
+  // P7-6: form field lengths (a label, a note), the most director lines, a 64-character fingerprint. None is a payroll figure.
+  "settlements/service.ts": [120, 300, 50, 64],
+  "settlements/routes.ts": [64],
+  // P7-6b: form field lengths (a note), a 64-character fingerprint, a source id's length.
+  "offcycle/service.ts": [300, 64, 5],
+  "offcycle/routes.ts": [64],
+  // P7-7: the shape of a challan's numbers (a BSR code is 7 digits, a serial up to 10), a year label's 7 characters, a note's length, a fingerprint's 64.
+  "tax/form16.ts": [11, 300, 64],
+  "loans/service.ts": [31, 60, 600, 40, 300, 64, 32],
   "rules/schemas.ts": [28, 31, 39, 60],
   "validators.ts": [25, 60],
   // Salary: lengths of form fields (a name, a reason), how many rows a page or a search shows, and the highest payslip position. None is a payroll figure.
   "salary/schemas.ts": [60, 999],
   // Tax: lengths of labels, notes, codes and a year label (2026-27 is 7 characters), a link's lifetime in seconds, and how many sections a year lists. None is a tax figure: every tax value is entered by the owners.
   "tax/declarations.ts": [20, 60, 120, 300],
-  "tax/routes.ts": [20],
+  "tax/routes.ts": [20, 64], // 64: a fingerprint's length (P7-7)
   "tax/schema.ts": [19, 20, 60, 80, 300],
   "salary/validators.ts": [20, 25, 60, 300],
   "salary/adjustments.ts": [300],
@@ -197,7 +215,8 @@ describe("modules/payroll", () => {
   it("only the finaliser can make a run final or unlock one: no other code sets the switches or writes the FINALISED status", () => {
     // The database refuses FINALISED unless the transaction sets `payroll.finalising`, and refuses to take a run out of it unless it sets `payroll.unlocking`. The one file
     // that does either is the finaliser (P6-4); this keeps it to that one file.
-    const ALLOWED_FINALISERS: string[] = ["src/modules/payroll/run/finaliser.ts"];
+    // P7-6b: the off-cycle finaliser sets `payroll.finalising` only to mark the adjustments it pays CONSUMED (it never writes a run's FINALISED status).
+    const ALLOWED_FINALISERS: string[] = ["src/modules/payroll/offcycle/service.ts", "src/modules/payroll/run/finaliser.ts"];
     const backend = path.resolve(ROOT, "../../..");
     const hits: string[] = [];
     const scan = (dir: string) => {
@@ -236,7 +255,8 @@ describe("modules/payroll", () => {
     scan(path.join(backend, "src/modules/payroll"));
     expect(creators.sort()).toEqual(["src/modules/payroll/run/release.ts"]);
     // The employee module's own audited reveal is outside payroll; inside payroll the bank file's generation is the only place an account number is read.
-    expect(decrypters.sort()).toEqual(["src/modules/payroll/run/release.ts"]);
+    // P7-6b: the off-cycle bank file reads the one account it pays, under the same audit row ("payroll.bank.account_read").
+    expect(decrypters.sort()).toEqual(["src/modules/payroll/offcycle/service.ts", "src/modules/payroll/run/release.ts"]);
   });
 
   it("an owner's secret is opened in only three places: the rule Reveal, the layout module, and the sealing module itself", () => {

@@ -3,6 +3,7 @@ import {
   LETTER_EXTRA_FIELD_KEY_PATTERN,
   LETTER_PLACEHOLDER_PATTERN,
   LETTER_PLACEHOLDERS,
+  isPayPlaceholder,
   type LetterExtraField,
 } from "@shared/constants/letters";
 import { embeddedFontCss } from "../../lib/pdf/renderer";
@@ -33,7 +34,7 @@ export function validatePlaceholders(html: string, extraFields: LetterExtraField
   const extras = new Set(extraFields.map((f) => `extra.${f.key}`));
   const inHtml = [...html.matchAll(LETTER_PLACEHOLDER_PATTERN)].map((m) => m[1]!);
   const inText = [...textOnly(html).matchAll(LETTER_PLACEHOLDER_PATTERN)].map((m) => m[1]!);
-  const unknown = [...new Set(inHtml.filter((k) => !(k in LETTER_PLACEHOLDERS) && !extras.has(k)))];
+  const unknown = [...new Set(inHtml.filter((k) => !(k in LETTER_PLACEHOLDERS) && !isPayPlaceholder(k) && !extras.has(k)))];
   if (unknown.length > 0) {
     throw new HttpError(400, `Unknown placeholder${unknown.length > 1 ? "s" : ""}: ${unknown.map((k) => `{{${k}}}`).join(", ")}.`, "VALIDATION_ERROR");
   }
@@ -76,7 +77,9 @@ export function payFreeProof(bodyHtml: string, extraFields: LetterExtraField[]):
   if (word) reasons.push(`The letter's own text mentions pay ("${word[0].trim()}").`);
   if (GROUPED_AMOUNT.test(text)) reasons.push("The letter's own text contains an amount.");
   const used = [...bodyHtml.matchAll(LETTER_PLACEHOLDER_PATTERN)].map((m) => m[1]!);
-  const unknown = used.filter((k) => !(k in LETTER_PLACEHOLDERS) && !k.startsWith("extra."));
+  const pay = [...new Set(used.filter(isPayPlaceholder))];
+  if (pay.length > 0) reasons.push(`It prints pay figures from the salary (${pay.join(", ")}).`);
+  const unknown = used.filter((k) => !(k in LETTER_PLACEHOLDERS) && !isPayPlaceholder(k) && !k.startsWith("extra."));
   if (unknown.length > 0) reasons.push(`It uses a placeholder that is not in the closed list (${[...new Set(unknown)].join(", ")}).`);
   return { ok: reasons.length === 0, reasons };
 }

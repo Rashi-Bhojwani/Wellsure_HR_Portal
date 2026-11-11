@@ -203,6 +203,15 @@ describe("tax years, declarations, proofs and TDS in a run", () => {
     expect(itemA.body.lines.some((l: { source: string }) => l.source === "TDS")).toBe(false);
     // Entered, but not yet confirmed: the line is there and the run cannot be made real.
     expect((await saveYear(YEAR)).status).toBe(200);
+    // A-3: until the year's opening figures are confirmed by a different director, the run still names that gap and works out no TDS.
+    await calculateAgain(w, run);
+    const noOpenings = await api(maker(), "get", `/runs/${run}/items/${id("a")}`);
+    expect(noOpenings.body.exceptions.find((e: { code: string }) => e.code === "TAX_NOT_SET").message).toMatch(/confirmed opening figures/);
+    expect(noOpenings.body.lines.some((l: { source: string }) => l.source === "TDS")).toBe(false);
+    const openingsView = await t(maker(), "get", `/openings?fy=${FY}`);
+    expect(openingsView.body.rows).toEqual([]); // nothing preloaded: the company confirms, on purpose, that there are none
+    expect((await t(maker(), "post", "/openings/confirm", { year: FY, fingerprint: openingsView.body.fingerprint })).status).toBe(200);
+    expect((await t(w.tokens.checkerA, "post", `/openings/${FY}/decision`, { fingerprint: openingsView.body.fingerprint, decision: "APPROVE" })).status).toBe(200);
     await calculateAgain(w, run);
     const placeholder = await api(maker(), "get", `/runs/${run}/items/${id("a")}`);
     const tdsA = placeholder.body.lines.find((l: { source: string }) => l.source === "TDS");

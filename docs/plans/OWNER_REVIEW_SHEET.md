@@ -80,3 +80,47 @@ How to answer: reply with the row number and "keep" or the change you want.
 | 46 | The sections people can declare under (with their limits) are entered by you inside the tax year. | They could be kept apart from the year. | Keep. |
 | 47 | The income tax switch matters to a run only when it is on. | You could be made to choose on or off before a first run. | Keep. |
 | 48 | The IT Statement shows paid months from finished runs and projects the rest, marked as a projection and as a draft until the year is confirmed. | | Keep. |
+
+## A-10 (attendance and leave tools)
+
+| # | What was chosen | If you answer differently | Recommendation |
+|---|---|---|---|
+| 49 | Directors are not stopped by an attendance lock. | Locks could stop directors too. | Keep. |
+| 50 | A lock for a segment takes its people at the moment the lock is made. | It could follow the segment as it changes. | Keep (what was locked stays clear). |
+| 51 | A roster change that starts before a locked range ends is refused. | Only rosters starting inside the range could be refused. | Keep. |
+| 52 | A holiday for some locations goes to whoever works at one of them that day. | It could follow a home branch. | Keep. |
+| 53 | Weekend overrides change attendance only; leave counting is unchanged. | Leave counting could follow each person's week-offs. | Keep for now. |
+| 54 | A leave reviewer is an extra decider for one leave type; they need the Approve leave key. | A reviewer could replace the manager. | Keep. |
+| 55 | Rejecting a swipe needs the Biometric devices key and a reason; the swipe is kept, never used. | HR's correction key could be the one. | Keep. |
+| 56 | A device sync request is done when the agent has re-queued the punches. | It could wait for the server to store them. | Keep. |
+| 57 | Leavers: no leave accrues for a month that starts after the last working day. The leaving month now follows the D-37 setting (row 70). | — | Answered by D-37 (row 70). |
+| 58 | Only company-wide viewers see "Waiting on others". | Managers could monitor their teams. | Keep. |
+| 59 | Leave type and reason are shown as entered; one function is ready for a privacy rule. | Name the leave types to hide. | Tell us when the privacy rule is decided. |
+
+## Opening figures, payslip year to date, letters with pay, loans
+
+| # | What was chosen | If you answer differently | Recommendation |
+|---|---|---|---|
+| 60 | Opening figures always need the other director; an empty year is confirmed on purpose; income tax waits until then. | A run could go ahead without them. | Keep. |
+| 61 | Openings are two totals per person (pay, tax). | Line-by-line openings need greytHR's layout. | Keep until the layout is sent. |
+| 62 | New payslips show year to date from this system only. | Openings could be added in. | Keep. |
+| 63 | Revision/offer letters print the salary's own figures; directors only. | Deductions could be listed. | Keep. |
+| 64 | A different director sanctions every loan; never one's own. | A director could act alone. | Keep. |
+| 65 | Reducing-balance instalments, exact to the paisa. | Another method. | Keep. |
+| 66 | A loan is paid and recovered only through payroll runs; what happens when net pay is too low now follows the D-37 setting (row 69). | — | Answered by D-37 (row 69). |
+| 67 | No perquisite on cheap loans yet. | Give the rule. | Ask your accountant. |
+
+## Off-cycle runs, new screens and the three D-37 defaults (2026-11-11)
+
+The three defaults below are the owners' D-37 exception to "no preset values": each shows as "Default, change in settings" (System Settings → Default behaviours),
+appears as an information row on Ready for First Run (never blocking), and any change is audited and confirmed by the other director.
+
+| # | What was chosen | If you answer differently | Recommendation |
+|---|---|---|---|
+| 68 | Off-cycle runs pay a confirmed settlement or held pay on the same road as a monthly run (your run-approval and bank-file choices, the approver never carries it out, the real company only when Ready is green, DEMO files for the demo). Each settlement or held month can be paid once. A director's hold release and a period unlock are refused once an off-cycle run paid that month. | — | Keep. |
+| 69 | **D-37 default 1 — loan instalment when net pay is too low:** skip the instalment and carry it forward, with a warning naming the loan. Per loan type you can instead stop the run, or recover what is possible and carry the rest. A loan never pushes net pay below zero. | Choose per loan type on Default behaviours. | Keep the default unless a loan type should stop the run. |
+| 70 | **D-37 default 2 — leave in the month of leaving:** pro-rata by days worked. Alternatives: none, a full month, or a full month only if at least N days were worked (you choose N). | Choose on Default behaviours. | Keep. |
+| 71 | **D-37 default 3 — the Developer role does not see Employee Swipes.** A switch turns it on. | Turn it on if the developer needs the punch log to diagnose devices. | Keep off. |
+| 72 | Most a month's deductions may take (percentage of gross): **Not set** (no limit). | Enter a percentage with its source. | Decide before the first loan. |
+| 73 | Rounding of a pro-rata leave figure: **Not set** (the leave policy has none). An exact figure (15 of 30 days = 0.5) is applied; others wait. | Choose a mode and decimals. | Decide before the first leaver whose figure is not exact. |
+| 74 | Loan and claim types are set on their own screen (Payroll → Loan and claim types); every value starts Not set. | — | Enter your types. |

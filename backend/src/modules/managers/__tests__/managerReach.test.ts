@@ -250,6 +250,29 @@ describe("manager reach — TEAM scope at every endpoint a manager can call (E2)
     });
   });
 
+  describe("A-10 G7 workflow: the manager's team only", () => {
+    it("Review lists the member's pending leave, never the outsider's; a bulk decision on the outsider's fails, on the member's succeeds", async () => {
+      cover("GET /api/workforce/workflow/review");
+      cover("POST /api/workforce/workflow/decide");
+      const mk = (who: "member" | "outsider") => prisma.leaveRequest.create({ data: { employeeId: p[who].employeeId, leaveTypeId, fromDate: new Date(Date.UTC(2031, 4, 20)), toDate: new Date(Date.UTC(2031, 4, 20)), totalDays: 1, status: "PENDING", appliedByUserId: p[who].userId } });
+      const mine = await mk("member");
+      const theirs = await mk("outsider");
+      const list = await m().get("/api/workforce/workflow/review?type=LEAVE&state=PENDING");
+      expect(list.status).toBe(200);
+      const listed = list.body.items.map((i: { id: string }) => i.id);
+      expect(listed).toContain(mine.id);
+      expect(listed).not.toContain(theirs.id);
+      const outsider = await m().post("/api/workforce/workflow/decide", { type: "LEAVE", ids: [theirs.id], approve: false, note: "no" });
+      expect(outsider.body.results[0]).toMatchObject({ ok: false, code: "NOT_FOUND" });
+      expect((await prisma.leaveRequest.findUniqueOrThrow({ where: { id: theirs.id } })).status).toBe("PENDING");
+      const member = await m().post("/api/workforce/workflow/decide", { type: "LEAVE", ids: [mine.id], approve: false, note: "team busy that day" });
+      expect(member.body).toMatchObject({ decided: 1, failed: 0 });
+      expect((await prisma.leaveRequest.findUniqueOrThrow({ where: { id: mine.id } })).status).toBe("REJECTED");
+      expect((await m().get("/api/workforce/workflow/monitor?type=LEAVE")).status).toBe(403); // TEAM scope never monitors the company
+      await prisma.leaveRequest.deleteMany({ where: { id: { in: [mine.id, theirs.id] } } });
+    });
+  });
+
   describe("documents and letters", () => {
     it("employee documents — team member yes, outsider 404 (list and download)", async () => {
       cover("GET /api/documents/employees/:employeeId");

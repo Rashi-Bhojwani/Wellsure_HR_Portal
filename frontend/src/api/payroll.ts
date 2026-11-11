@@ -884,6 +884,8 @@ export interface PayslipContent {
   // esiNumber: payslips published before P7-0 stored the whole ESI number; they are immutable, so the screen shows only its last four.
   statutory: { panLast4: string | null; uanLast4: string | null; esiLast4?: string | null; esiNumber?: string | null };
   runHash: string;
+  /** P7-3: year to date per line ("EARNING|CODE"), on payslips published from P7-3 on; absent on older ones (a published payslip never changes). */
+  ytd?: { financialYear: string; byLine: Record<string, string>; gross: string; deductions: string };
 }
 export interface PayslipSummary {
   id: string;
@@ -1123,6 +1125,8 @@ export interface Readiness {
   /** Prominent, non-blocking: they never turn Ready red. */
   warnings?: Array<{ itemId: string; title: string; warning: string; where: { label: string; path: string } }>;
   notRequiredYet: Array<{ itemId: string; title: string; status: SetupStatus; reason: string }>;
+  /** D-37: behaviour settings, informational rows only. */
+  behaviours?: Array<{ itemId: string; title: string; state: "DEFAULT" | "CONFIRMED" | "NOT_SET"; label: string | null; detail: string; where: { label: string; path: string } }>;
 }
 export interface SetupReport {
   generatedAt: string;

@@ -470,11 +470,18 @@ model CostCentre {
 // ── Employees ────────────────────────────────────────────────────────────
 
 model Employee {
+  payslipLinks    PayslipLink[]
+  leaveTypeReviews LeaveTypeReviewer[] @relation("LeaveTypeReviewerPerson") // A-10 G4
+  leaverRecalcs   LeaverLeaveRecalc[] @relation("LeaverRecalcEmployee") // A-10 G6
+  taxOpenings     TaxOpening[]        @relation("TaxOpeningEmployee") // A-3
+  loans           Loan[]              @relation("LoanEmployee") // P7-4
+  claims          ReimbursementClaim[] @relation("ReimbursementClaimEmployee") // P7-5
+  fnfSettlements  FnfSettlement[]      @relation("FnfSettlementEmployee") // P7-6
+  offCycleRuns    OffCycleRun[]        @relation("OffCycleRunEmployee") // P7-6b
   // PEEPS-BEGIN exits
   resignations Resignation[]
   exitInterviewsAsInterviewer ExitInterview[] @relation("ExitInterviewer")
   // PEEPS-END exits
-  payslipLinks      PayslipLink[]
   bankRepaymentRows BankRepaymentRow[]
   remoteRecords     RemoteAttendanceRecord[]
   id                String                   @id @default(cuid())
@@ -810,6 +817,8 @@ model Separation {
   mode              SeparationMode?  @relation(fields: [modeId], references: [id])
   // A-9 — end
 
+  leaverRecalcs     LeaverLeaveRecalc[] // A-10 G6
+  fnfSettlements    FnfSettlement[] // P7-6
   @@index([employeeId])
   @@map("separations")
 }
@@ -903,6 +912,7 @@ model LeaveType {
   ledgerEntries LeaveLedger[]
   leaveRequests LeaveRequest[]
   dayReleases   LeaveDayRelease[]
+  reviewers     LeaveTypeReviewer[] // A-10 G4
 
   // PEEPS-BEGIN leave-types
   ruleVersions LeaveRuleVersion[]
@@ -1898,6 +1908,7 @@ model WeekOffPattern {
   createdAt   DateTime               @default(now()) @map("created_at")
   updatedAt   DateTime               @updatedAt @map("updated_at")
   assignments AttendanceAssignment[]
+  weekendOverrides WeekendOverride[] // A-10 G4
 
   @@map("week_off_patterns")
 }
@@ -2067,6 +2078,7 @@ model Device {
   batches   IngestionBatch[]
   incidents DeviceIncident[]
 
+  syncRequests DeviceSyncRequest[] // A-10 G5
   @@index([agentId])
   @@map("devices")
 }
@@ -2168,6 +2180,7 @@ model RawPunch {
   flag         PunchFlag?
 
   flagResolution PunchFlagResolution?
+  swipeDecisions SwipeDecision[] // A-10 G5
 
   @@unique([deviceId, deviceUserId, punchedAt])
   @@index([employeeId, punchedAt])
@@ -2552,6 +2565,13 @@ enum PayrollApprovalSubject {
   SALARY_REVISION
   MONTHLY_INPUTS
   BANK_REPAYMENT
+  TAX_OPENING // A-3
+  LOAN_SANCTION // P7-4
+  LOAN_CHANGE // P7-4
+  FNF_SETTLEMENT // P7-6
+  FORM16_CONFIRM // P7-7
+  OFF_CYCLE_RUN // P7-6b
+  OFF_CYCLE_BANK // P7-6b
 }
 
 enum PayrollApprovalStatus {
@@ -2654,6 +2674,10 @@ enum AdjustmentSource {
   SALARY_ARREARS
   IMPORT
   YEAR_END_ENCASHMENT
+  LOAN_DISBURSEMENT // P7-4
+  LOAN_PRINCIPAL // P7-4
+  LOAN_INTEREST // P7-4
+  REIMBURSEMENT // P7-5
 }
 
 enum AdjustmentStatus {
@@ -2754,6 +2778,8 @@ model PayrollAdjustment {
   status            AdjustmentStatus    @default(PENDING)
   consumedByRunId   String?             @map("consumed_by_run_id") // set when a run is finalised (P6-4); until then a run only reads it
   consumedByRun     PayrollRun?         @relation(fields: [consumedByRunId], references: [id], onDelete: Restrict)
+  consumedByOffCycleRunId String?       @map("consumed_by_off_cycle_run_id") // P7-6b: set when an off-cycle run pays it
+  consumedByOffCycleRun   OffCycleRun?  @relation(fields: [consumedByOffCycleRunId], references: [id], onDelete: Restrict)
   createdByUserId   String              @map("created_by_user_id")
   createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
   cancelledAt       DateTime?           @map("cancelled_at") @db.Timestamptz(3)
@@ -2761,6 +2787,7 @@ model PayrollAdjustment {
   cancelReason      String?             @map("cancel_reason")
 
   @@unique([source, sourceRef])
+  @@index([consumedByOffCycleRunId])
   @@index([employeeId, status])
   @@map("payroll_adjustments")
 }
@@ -2899,6 +2926,7 @@ model PayrollRunItem {
   lines   PayrollRunLine[]
   payslip Payslip?
 
+  offCycleReleases      OffCycleHeldRelease[] @relation("OffCycleHeldReleaseItem") // P7-6b
   @@unique([runId, employeeId])
   @@index([runId, status])
   @@map("payroll_run_items")
@@ -3454,6 +3482,8 @@ model BankFileSentMark {
   batch            BankTransferBatch?  @relation(fields: [batchId], references: [id], onDelete: Restrict)
   repaymentBatchId String?             @unique @map("repayment_batch_id")
   repaymentBatch   BankRepaymentBatch? @relation(fields: [repaymentBatchId], references: [id], onDelete: Restrict)
+  offCycleBatchId  String?             @unique @map("off_cycle_batch_id") // P7-6b
+  offCycleBatch    OffCycleBankBatch?  @relation(fields: [offCycleBatchId], references: [id], onDelete: Restrict)
   sentByUserId     String              @map("sent_by_user_id")
   sentAt           DateTime            @default(now()) @map("sent_at") @db.Timestamptz(3)
   note             String?
@@ -4471,7 +4501,440 @@ model WorkforceSetting {
   @@index([key, createdAt])
   @@map("workforce_settings")
 }
+// G3: attendance activity locks (append-only; voided once, never deleted — a database trigger holds it).
+model AttendanceLock {
+  id              String    @id @default(cuid())
+  effectiveFrom   DateTime  @map("effective_from") @db.Date
+  fromDate        DateTime  @map("from_date") @db.Date
+  toDate          DateTime  @map("to_date") @db.Date
+  categories      String[]
+  employeeIds     String[]  @default([]) @map("employee_ids")
+  segmentName     String?   @map("segment_name")
+  reason          String
+  createdByUserId String    @map("created_by_user_id")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  voidedAt        DateTime? @map("voided_at") @db.Timestamptz(3)
+  voidedByUserId  String?   @map("voided_by_user_id")
+  voidReason      String?   @map("void_reason")
+
+  @@index([toDate])
+  @@map("attendance_locks")
+}
+// G4: a holiday's locations (latest row wins; none or empty = company-wide). Append-only. No FK: a deleted holiday's rows are simply never read.
+model HolidayLocationScope {
+  id          String   @id @default(cuid())
+  holidayId   String   @map("holiday_id")
+  locationIds String[] @map("location_ids")
+  reason      String
+  setByUserId String   @map("set_by_user_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([holidayId, createdAt])
+  @@map("holiday_location_scopes")
+}
+
+// G4: a different week-off pattern for chosen people over a date range (voided once, never deleted).
+model WeekendOverride {
+  id               String         @id @default(cuid())
+  fromDate         DateTime       @map("from_date") @db.Date
+  toDate           DateTime       @map("to_date") @db.Date
+  weekOffPatternId String         @map("week_off_pattern_id")
+  weekOffPattern   WeekOffPattern @relation(fields: [weekOffPatternId], references: [id], onDelete: Restrict)
+  employeeIds      String[]       @map("employee_ids")
+  segmentName      String?        @map("segment_name")
+  reason           String
+  createdByUserId  String         @map("created_by_user_id")
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  voidedAt         DateTime?      @map("voided_at") @db.Timestamptz(3)
+  voidedByUserId   String?        @map("voided_by_user_id")
+  voidReason       String?        @map("void_reason")
+
+  @@index([toDate])
+  @@map("weekend_overrides")
+}
+// G4: a leave type reviewer (an extra decider for one leave type; voided once, never deleted).
+model LeaveTypeReviewer {
+  id                 String    @id @default(cuid())
+  leaveTypeId        String    @map("leave_type_id")
+  leaveType          LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+  reviewerEmployeeId String    @map("reviewer_employee_id")
+  reviewer           Employee  @relation("LeaveTypeReviewerPerson", fields: [reviewerEmployeeId], references: [id], onDelete: Restrict)
+  locationId         String?   @map("location_id")
+  departmentId       String?   @map("department_id")
+  reason             String
+  createdByUserId    String    @map("created_by_user_id")
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  voidedAt           DateTime? @map("voided_at") @db.Timestamptz(3)
+  voidedByUserId     String?   @map("voided_by_user_id")
+  voidReason         String?   @map("void_reason")
+
+  @@index([reviewerEmployeeId])
+  @@map("leave_type_reviewers")
+}
+// G5: swipe decisions (append-only; the latest per punch is in force) and device sync requests.
+enum SwipeDecisionAction {
+  REJECT
+  REINSTATE
+}
+
+model SwipeDecision {
+  id              String              @id @default(cuid())
+  seq             Int                 @unique @default(autoincrement())
+  punchId         String              @map("punch_id")
+  punch           RawPunch            @relation(fields: [punchId], references: [id], onDelete: Restrict)
+  action          SwipeDecisionAction
+  reason          String
+  decidedByUserId String              @map("decided_by_user_id")
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([punchId, seq])
+  @@map("swipe_decisions")
+}
+
+enum DeviceSyncStatus {
+  PENDING
+  DONE
+  CANCELLED
+}
+
+model DeviceSyncRequest {
+  id                String           @id @default(cuid())
+  deviceId          String           @map("device_id")
+  device            Device           @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  fromDate          DateTime         @map("from_date") @db.Date
+  toDate            DateTime         @map("to_date") @db.Date
+  reason            String
+  status            DeviceSyncStatus @default(PENDING)
+  requestedByUserId String           @map("requested_by_user_id")
+  requestedAt       DateTime         @default(now()) @map("requested_at") @db.Timestamptz(3)
+  finishedAt        DateTime?        @map("finished_at") @db.Timestamptz(3)
+  cancelledByUserId String?          @map("cancelled_by_user_id")
+
+  @@index([deviceId, status])
+  @@map("device_sync_requests")
+}
+// G6: a leaver's leave recalculated to their last working day (append-only; a later row for a changed date supersedes).
+model LeaverLeaveRecalc {
+  id              String     @id @default(cuid())
+  employeeId      String     @map("employee_id")
+  employee        Employee   @relation("LeaverRecalcEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  separationId    String     @map("separation_id")
+  separation      Separation @relation(fields: [separationId], references: [id], onDelete: Restrict)
+  lastWorkingDate DateTime   @map("last_working_date") @db.Date
+  actions         Int
+  doneByUserId    String     @map("done_by_user_id")
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([employeeId])
+  @@map("leaver_leave_recalcs")
+}
 // ── A-10 — end ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+// ── A-3 (docs/plans/A3_OPENING_FIGURES.md): opening figures, directors only, append-only ──────────────────────────────────────
+enum TaxOpeningKind {
+  GO_LIVE
+  PREVIOUS_EMPLOYER
+}
+
+model TaxOpening {
+  id              String         @id @default(cuid())
+  seq             Int            @unique @default(autoincrement())
+  employeeId      String         @map("employee_id")
+  employee        Employee       @relation("TaxOpeningEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  financialYear   String         @map("financial_year")
+  kind            TaxOpeningKind
+  taxable         Decimal?       @db.Decimal(14, 2)
+  tds             Decimal?       @db.Decimal(14, 2)
+  cleared         Boolean        @default(false)
+  sourceNote      String         @map("source_note")
+  batchId         String?        @map("batch_id")
+  enteredByUserId String         @map("entered_by_user_id")
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([financialYear, employeeId, kind, seq])
+  @@map("tax_openings")
+}
+
+// ── P7-4 (docs/plans/P7_4_LOANS.md): loans and advances, directors only, immutable rows ─────────────────────────────────────────
+model LoanTypeVersion {
+  id                  String   @id @default(cuid())
+  typeKey             String   @map("type_key")
+  version             Int
+  name                String
+  maxAmount           Decimal? @map("max_amount") @db.Decimal(14, 2)
+  maxInstalments      Int?     @map("max_instalments")
+  ratePercent         Decimal? @map("rate_percent") @db.Decimal(7, 4)
+  employeesMayRequest Boolean? @map("employees_may_request")
+  disbursementHead    String?  @map("disbursement_head")
+  principalHead       String?  @map("principal_head")
+  interestHead        String?  @map("interest_head")
+  retired             Boolean  @default(false)
+  reason              String
+  setByUserId         String   @map("set_by_user_id")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([typeKey, version])
+  @@map("loan_type_versions")
+}
+
+model Loan {
+  id                  String       @id @default(cuid())
+  employeeId          String       @map("employee_id")
+  employee            Employee     @relation("LoanEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  typeKey             String       @map("type_key")
+  typeVersion         Int          @map("type_version")
+  principal           Decimal      @db.Decimal(14, 2)
+  ratePercent         Decimal      @map("rate_percent") @db.Decimal(7, 4)
+  instalments         Int
+  firstMonth          DateTime     @map("first_month") @db.Date
+  schedule            Json
+  purpose             String
+  requestedByEmployee Boolean      @map("requested_by_employee")
+  createdByUserId     String       @map("created_by_user_id")
+  createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  offCycleRecoveries  OffCycleLoanRecovery[] @relation("OffCycleLoanRecoveryLoan") // P7-6b
+  changes             LoanChange[]
+
+  @@index([employeeId])
+  @@map("loans")
+}
+
+enum LoanChangeKind {
+  PREPAID
+  WAIVED
+  CANCEL_PENDING
+}
+
+model LoanChange {
+  id              String         @id @default(cuid())
+  loanId          String         @map("loan_id")
+  loan            Loan           @relation(fields: [loanId], references: [id], onDelete: Restrict)
+  kind            LoanChangeKind
+  amount          Decimal?       @db.Decimal(14, 2)
+  reference       String
+  createdByUserId String         @map("created_by_user_id")
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([loanId])
+  @@map("loan_changes")
+}
+
+// ── P7-5 (docs/plans/P7_5_REIMBURSEMENTS.md): reimbursements, immutable rows, one decision per claim ─────────────────────────────
+model ClaimTypeVersion {
+  id                String   @id @default(cuid())
+  typeKey           String   @map("type_key")
+  version           Int
+  name              String
+  employeesMayClaim Boolean? @map("employees_may_claim")
+  billsRequired     Boolean? @map("bills_required")
+  monthlyCapSet     Boolean  @default(false) @map("monthly_cap_set")
+  monthlyCap        Decimal? @map("monthly_cap") @db.Decimal(14, 2)
+  yearlyCapSet      Boolean  @default(false) @map("yearly_cap_set")
+  yearlyCap         Decimal? @map("yearly_cap") @db.Decimal(14, 2)
+  payHead           String?  @map("pay_head")
+  retired           Boolean  @default(false)
+  reason            String
+  setByUserId       String   @map("set_by_user_id")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([typeKey, version])
+  @@map("claim_type_versions")
+}
+
+model ReimbursementClaim {
+  id          String          @id @default(cuid())
+  employeeId  String          @map("employee_id")
+  employee    Employee        @relation("ReimbursementClaimEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  typeKey     String          @map("type_key")
+  typeVersion Int             @map("type_version")
+  spentOn     DateTime        @map("spent_on") @db.Date
+  amount      Decimal         @db.Decimal(14, 2)
+  description String
+  bills       Json            @default("[]")
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  decision    ClaimDecision?
+
+  @@index([employeeId])
+  @@map("reimbursement_claims")
+}
+
+enum ClaimDecisionKind {
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+model ClaimDecision {
+  id              String             @id @default(cuid())
+  claimId         String             @unique @map("claim_id")
+  claim           ReimbursementClaim @relation(fields: [claimId], references: [id], onDelete: Restrict)
+  kind            ClaimDecisionKind
+  approvedAmount  Decimal?           @map("approved_amount") @db.Decimal(14, 2)
+  reason          String             @default("")
+  decidedByUserId String             @map("decided_by_user_id")
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("claim_decisions")
+}
+
+// ── P7-6 (docs/plans/P7_6_SETTLEMENTS.md): full and final settlements, immutable, latest per separation counts ─────────────────
+model FnfSettlement {
+  id              String     @id @default(cuid())
+  separationId    String     @map("separation_id")
+  separation      Separation @relation(fields: [separationId], references: [id], onDelete: Restrict)
+  employeeId      String     @map("employee_id")
+  employee        Employee   @relation("FnfSettlementEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  lines           Json
+  total           Decimal    @db.Decimal(14, 2)
+  createdByUserId String     @map("created_by_user_id")
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([separationId])
+  @@map("fnf_settlements")
+}
+
+// ── P7-7 (docs/plans/P7_7_FORM16.md): TDS challans (immutable; sealed BSR code and serial), confirmed by a different director ──────
+model TdsChallan {
+  id              String                 @id @default(cuid())
+  financialYear   String                 @map("financial_year")
+  month           String
+  depositedOn     DateTime               @map("deposited_on") @db.Date
+  amount          Decimal                @db.Decimal(14, 2)
+  bsrCode         Json                   @map("bsr_code")
+  serial          Json
+  serialHash      String                 @map("serial_hash")
+  bsrLast         String                 @map("bsr_last")
+  serialLast      String                 @map("serial_last")
+  enteredByUserId String                 @map("entered_by_user_id")
+  createdAt       DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  confirmation    TdsChallanConfirmation?
+
+  @@index([financialYear])
+  @@map("tds_challans")
+}
+
+model TdsChallanConfirmation {
+  id                String     @id @default(cuid())
+  challanId         String     @unique @map("challan_id")
+  challan           TdsChallan @relation(fields: [challanId], references: [id], onDelete: Restrict)
+  confirmedByUserId String     @map("confirmed_by_user_id")
+  createdAt         DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("tds_challan_confirmations")
+}
+
+// ── P7-6b (docs/plans/P7_6_SETTLEMENTS.md): off-cycle runs, their own pipeline; ordinary runs untouched ──────────────────────────
+enum OffCycleKind {
+  SETTLEMENT
+  HELD_PAY
+}
+
+model OffCycleRun {
+  id              String                   @id @default(cuid())
+  kind            OffCycleKind
+  sourceRef       String                   @map("source_ref")
+  employeeId      String                   @map("employee_id")
+  employee        Employee                 @relation("OffCycleRunEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  paymentDate     DateTime                 @map("payment_date") @db.Date
+  lines           Json
+  net             Decimal                  @db.Decimal(14, 2)
+  createdByUserId String                   @map("created_by_user_id")
+  createdAt       DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  finalisation    OffCycleFinalisation?
+  heldReleases    OffCycleHeldRelease[]
+  loanRecoveries  OffCycleLoanRecovery[]
+  bankBatch       OffCycleBankBatch?
+  paidAdjustments PayrollAdjustment[]
+
+  @@index([employeeId])
+  @@map("off_cycle_runs")
+}
+
+model OffCycleFinalisation {
+  id                String       @id @default(cuid())
+  runId             String       @unique @map("run_id")
+  run               OffCycleRun  @relation(fields: [runId], references: [id], onDelete: Restrict)
+  kind              OffCycleKind
+  sourceRef         String       @map("source_ref")
+  statement         Json
+  finalisedByUserId String       @map("finalised_by_user_id")
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([kind, sourceRef])
+  @@map("off_cycle_finalisations")
+}
+
+model OffCycleHeldRelease {
+  id        String         @id @default(cuid())
+  itemId    String         @unique @map("item_id")
+  item      PayrollRunItem @relation("OffCycleHeldReleaseItem", fields: [itemId], references: [id], onDelete: Restrict)
+  runId     String         @map("run_id")
+  run       OffCycleRun    @relation(fields: [runId], references: [id], onDelete: Restrict)
+  createdAt DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("off_cycle_held_releases")
+}
+
+model OffCycleLoanRecovery {
+  id        String      @id @default(cuid())
+  loanId    String      @map("loan_id")
+  loan      Loan        @relation("OffCycleLoanRecoveryLoan", fields: [loanId], references: [id], onDelete: Restrict)
+  runId     String      @map("run_id")
+  run       OffCycleRun @relation(fields: [runId], references: [id], onDelete: Restrict)
+  amount    Decimal     @db.Decimal(14, 2)
+  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([loanId, runId])
+  @@map("off_cycle_loan_recoveries")
+}
+
+model OffCycleBankBatch {
+  id                String            @id @default(cuid())
+  runId             String            @unique @map("run_id")
+  run               OffCycleRun       @relation(fields: [runId], references: [id], onDelete: Restrict)
+  paymentDate       DateTime          @map("payment_date") @db.Date
+  templateVersion   Int               @map("template_version")
+  templateHash      String            @map("template_hash")
+  amount            Decimal           @db.Decimal(14, 2)
+  bankAccountId     String            @map("bank_account_id")
+  accountHash       String            @map("account_hash")
+  accountLast4      String            @map("account_last4")
+  ifsc              String
+  fileKey           String            @map("file_key")
+  fileName          String            @map("file_name")
+  fileSha256        String            @map("file_sha256")
+  generatedByUserId String            @map("generated_by_user_id")
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  sentMark          BankFileSentMark?
+
+  @@map("off_cycle_bank_batches")
+}
+
+/// D-37 (docs/plans/D37_DEFAULTS.md): a proposed value for a behaviour setting. Append-only.
+model BehaviourProposal {
+  id               String                  @id @default(cuid())
+  key              String
+  value            Json
+  reason           String
+  proposedByUserId String                  @map("proposed_by_user_id")
+  createdAt        DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  confirmation     BehaviourConfirmation?
+
+  @@index([key, createdAt])
+  @@map("behaviour_proposals")
+}
+
+/// D-37: a different director confirms a proposal (the database refuses the proposer). Append-only.
+model BehaviourConfirmation {
+  id                String            @id @default(cuid())
+  proposalId        String            @unique @map("proposal_id")
+  proposal          BehaviourProposal @relation(fields: [proposalId], references: [id], onDelete: Restrict)
+  confirmedByUserId String            @map("confirmed_by_user_id")
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("behaviour_confirmations")
+}
 
 // PEEPS-BEGIN recruitment
 model RecruitmentSettingVersion {

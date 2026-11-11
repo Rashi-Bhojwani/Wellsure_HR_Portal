@@ -35,6 +35,7 @@ export const OPTIONAL_FK_POLICY: Record<string, Policy> = {
   // PEEPS-END recruitment
   "BankFileSentMark.batchId": "delete",
   "BankFileSentMark.repaymentBatchId": "delete",
+  "BankFileSentMark.offCycleBatchId": "delete",
   // An incident belongs to the device or agent it records trouble with (exactly one is set, by a CHECK):
   // it disappears with it, never loses its subject.
   "DeviceIncident.deviceId": "delete",
@@ -93,6 +94,7 @@ export const OPTIONAL_FK_POLICY: Record<string, Policy> = {
   "EmployeeSalary.revisionId": "delete",
   // An adjustment only references the run that consumed it; it stays when a test removes the run.
   "PayrollAdjustment.consumedByRunId": "setNull",
+  "PayrollAdjustment.consumedByOffCycleRunId": "delete", // P7-6b: test-only; an adjustment an off-cycle run paid goes with that run
 };
 
 // Every model must be cleanable from somewhere. Most are reached as a
@@ -114,6 +116,13 @@ export const STANDALONE_ROOT_MODELS: Record<string, string> = {
   ExitChecklistTemplate: "Director-owned versioned checklist templates",
   // PEEPS-END exits
   Role: "shared role catalog; cleanupTestRole",
+  BehaviourProposal: "D-37: a behaviour setting proposal (no FK; append-only); deleteWithDependents(\"BehaviourProposal\", ids) also removes its confirmation",
+  TdsChallan: "P7-7: a company deposit record (no FK; immutable); deleteWithDependents(\"TdsChallan\", ids)",
+  ClaimTypeVersion: "P7-5: a claim type's versions (no FK; immutable); purge by typeKey in tests",
+  LoanTypeVersion: "P7-4: a loan type's versions (no FK; immutable); deleteWithDependents(\"LoanTypeVersion\", ids)",
+  AttendanceLock: "A-10 G3: a company lock (no FK; append-only, void-only); deleteWithDependents(\"AttendanceLock\", ids)",
+  HolidayLocationScope: "A-10 G4: a holiday's locations (no FK; append-only); deleteWithDependents(\"HolidayLocationScope\", ids)",
+  WeekendOverride: "A-10 G4: people listed by id (no FK); deleteWithDependents(\"WeekendOverride\", ids)",
   WorkforceSetting: "A-10: a company setting, append-only (UPDATE refused); tests delete their own rows by setByUserId",
   SeparationMode: "A-9 G7: company data; deleteWithDependents(\"SeparationMode\", ids)",
   MassEmail: "A-9 G5: a mass email is the sender's, by user id (no FK); deleteWithDependents(\"MassEmail\", ids)",
@@ -196,6 +205,7 @@ export const STORAGE_KEY_COLUMNS: Record<string, string[]> = {
   PayslipDelivery: ["fileKey"],
   BankTransferBatch: ["fileKey"],
   BankRepaymentBatch: ["fileKey"],
+  OffCycleBankBatch: ["fileKey"],
   TaxProof: ["fileKey"],
   PayrollOutput: ["fileKey"],
   // PEEPS-BEGIN leave-types
@@ -389,7 +399,7 @@ function delegate(modelName: string): Delegate {
 
 // Tables a database trigger keeps immutable, deletable only through the
 // test-purge exception (app.audit_purge = 'test' in a dev-marked database).
-const PURGE_GUARDED_MODELS = new Set(["RawPunch", "ManualAttendanceEntry", "AttendanceOverride", "ShiftOverride", "LeaveDayRelease", "AttendancePeriodLock", "PayrollItemVersion", "PayrollItemConfirmation", "PayrollApproval", "PayrollEvent", "EmployeeSalary", "EmployeeSalaryLine", "PayrollSalaryRevision", "PayrollAdjustment", "PayrollRun", "PayrollRunItem", "PayrollRunLine", "PayrollPeriodLock", "PayrollRunRelease", "Payslip", "BankTransferBatch", "BankTransferRow", "PayrollOutput", "PayrollSetupSignoff", "DirectorActionNotice", "DirectorActionReceipt", "RolePermissionRemoval", "HrCapabilitySwitch", "PayrollSalaryHold", "PayrollSalaryRelease", "PayrollMonthlyInput", "PayrollInputBatch", "RemoteWorkMark", "RemoteAttendanceEvent", "BankRowRejection", "BankFileSentMark", "BankRepaymentPlan", "BankRepaymentBatch", "BankRepaymentRow", "PayslipLink", "PayrollExclusion", "TaxWindow", "TaxDeclaration", "TaxDeclarationLine", "TaxProof", "TaxProofDecision"]);
+const PURGE_GUARDED_MODELS = new Set(["RawPunch", "ManualAttendanceEntry", "AttendanceOverride", "ShiftOverride", "LeaveDayRelease", "AttendancePeriodLock", "PayrollItemVersion", "PayrollItemConfirmation", "PayrollApproval", "PayrollEvent", "EmployeeSalary", "EmployeeSalaryLine", "PayrollSalaryRevision", "PayrollAdjustment", "PayrollRun", "PayrollRunItem", "PayrollRunLine", "PayrollPeriodLock", "PayrollRunRelease", "Payslip", "BankTransferBatch", "BankTransferRow", "PayrollOutput", "PayrollSetupSignoff", "DirectorActionNotice", "DirectorActionReceipt", "RolePermissionRemoval", "HrCapabilitySwitch", "PayrollSalaryHold", "PayrollSalaryRelease", "PayrollMonthlyInput", "PayrollInputBatch", "RemoteWorkMark", "RemoteAttendanceEvent", "BankRowRejection", "BankFileSentMark", "BankRepaymentPlan", "BankRepaymentBatch", "BankRepaymentRow", "PayslipLink", "PayrollExclusion", "TaxWindow", "TaxDeclaration", "TaxDeclarationLine", "TaxProof", "TaxProofDecision", "AttendanceLock", "HolidayLocationScope", "WeekendOverride", "LeaveTypeReviewer", "SwipeDecision", "DeviceSyncRequest", "LeaverLeaveRecalc", "TaxOpening", "Loan", "LoanChange", "LoanTypeVersion", "ClaimTypeVersion", "ReimbursementClaim", "ClaimDecision", "FnfSettlement", "TdsChallan", "TdsChallanConfirmation", "OffCycleRun", "OffCycleFinalisation", "OffCycleHeldRelease", "OffCycleLoanRecovery", "OffCycleBankBatch", "BehaviourProposal", "BehaviourConfirmation"]);
 
 // PEEPS-BEGIN assets
 for (const m of ["Asset", "AssetAssignment", "AssetEvent", "AssetSettingVersion", "AssetSettingConfirmation"]) PURGE_GUARDED_MODELS.add(m);

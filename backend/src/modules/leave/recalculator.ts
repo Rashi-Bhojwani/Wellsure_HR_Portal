@@ -8,6 +8,8 @@ import { withEmployeeLeaveLock } from "./concurrency";
 import { writeLedgerEntry } from "./ledger";
 import type { ActorMeta } from "./types";
 import { inForceOn } from "../../lib/effectiveDating";
+import { behaviourValue } from "../behaviours/service";
+import { daysWorkedInLeavingMonth, leavingMonthTarget } from "./leavingMonth";
 
 // Leave Recalculator (spec §5.4) — replays PL-style accrual after a
 // policy change, a corrected DOJ, or a backdated approval that shifted
@@ -25,7 +27,9 @@ import { inForceOn } from "../../lib/effectiveDating";
 // stale snapshot.
 
 interface RecalcAction {
-  type: "CREDIT" | "REVERSE";
+  /** D-37 item 5: LEAVING_MONTH brings the month of leaving to the directors' rule (signed days); WAITING changes nothing and says why. */
+  type: "CREDIT" | "REVERSE" | "LEAVING_MONTH" | "WAITING";
+  note?: string;
   accrualMonth: string; // YYYY-MM-01
   leaveTypeId: string;
   leaveTypeCode: string;
@@ -45,12 +49,15 @@ async function accrualEnabledTypes() {
 }
 
 async function diffForEmployee(
-  employee: { id: string; dateOfJoining: Date },
+  employee: { id: string; dateOfJoining: Date; lastWorkingDate?: Date | null },
   types: Awaited<ReturnType<typeof accrualEnabledTypes>>,
   fromMonth: Date,
   throughMonth: Date,
 ): Promise<RecalcAction[]> {
   const actions: RecalcAction[] = [];
+  // D-37 item 5: the directors' rule for the month of leaving (default pro-rata by days worked) and the pro-rata rounding (Not set until chosen).
+  const leavingMonth = employee.lastWorkingDate ? daysWorkedInLeavingMonth(employee.dateOfJoining, employee.lastWorkingDate) : null;
+  const [leavingRule, rounding] = leavingMonth ? await Promise.all([behaviourValue("leave.leavingMonthAccrual"), behaviourValue("leave.proRataRounding")]) : [null, null];
   for (const type of types) {
     if (!type.policy) continue;
     const existingRows = await prisma.leaveLedger.findMany({
@@ -75,8 +82,26 @@ async function diffForEmployee(
 
     for (let month = fromMonth; month.getTime() <= throughMonth.getTime(); month = addCalendarMonths(month, 1)) {
       const monthKey = month.toISOString().slice(0, 10);
-      const shouldBeCredited = isEligibleForAccrualMonth(employee.dateOfJoining, type.policy, month);
+      // A-10 G6: nothing accrues for a month that starts after the last working day; the month of leaving follows the directors' rule (D-37 item 5, below).
+      const afterLeaving = !!employee.lastWorkingDate && month.getTime() > employee.lastWorkingDate.getTime();
+      const shouldBeCredited = !afterLeaving && isEligibleForAccrualMonth(employee.dateOfJoining, type.policy, month);
       const existing = existingByMonth.get(monthKey);
+
+      if (leavingMonth && leavingRule && shouldBeCredited && month.getTime() === leavingMonth.monthStart.getTime()) {
+        const full = type.policy.accrualDaysPerMonth ?? new Prisma.Decimal(1);
+        const target = leavingMonthTarget({ rule: leavingRule.value, full, daysWorked: leavingMonth.daysWorked, daysInMonth: leavingMonth.daysInMonth, rounding: rounding?.value ?? null });
+        if (target.days === null) {
+          actions.push({ type: "WAITING", accrualMonth: monthKey, leaveTypeId: type.id, leaveTypeCode: type.code, days: 0, note: target.waiting });
+          continue;
+        }
+        // What the month holds now: the accrual (if credited) and any earlier correction for leaving.
+        const corrections = existing ? await prisma.leaveLedger.aggregate({ where: { employeeId: employee.id, leaveTypeId: type.id, referenceType: "LEAVING_MONTH", referenceId: existing.id }, _sum: { days: true } }) : null;
+        const current = existing ? existing.days.plus(corrections?._sum.days ?? 0) : new Prisma.Decimal(0);
+        const delta = target.days.minus(current);
+        if (!existing && target.days.greaterThan(0)) actions.push({ type: "CREDIT", accrualMonth: monthKey, leaveTypeId: type.id, leaveTypeCode: type.code, days: target.days.toNumber(), note: `month of leaving: ${leavingRule.value.mode}` });
+        else if (existing && !delta.isZero()) actions.push({ type: "LEAVING_MONTH", accrualMonth: monthKey, leaveTypeId: type.id, leaveTypeCode: type.code, days: delta.toNumber(), existingLedgerId: existing.id, note: `month of leaving: ${leavingRule.value.mode}, ${leavingMonth.daysWorked} of ${leavingMonth.daysInMonth} days worked` });
+        continue;
+      }
 
       if (shouldBeCredited && !existing) {
         actions.push({ type: "CREDIT", accrualMonth: monthKey, leaveTypeId: type.id, leaveTypeCode: type.code, days: (type.policy.accrualDaysPerMonth ?? new Prisma.Decimal(1)).toNumber() });
@@ -91,7 +116,7 @@ async function diffForEmployee(
 async function resolveEmployees(employeeIds: string[]) {
   const employees = await prisma.employee.findMany({
     where: { id: { in: employeeIds } },
-    select: { id: true, employeeCode: true, dateOfJoining: true, nameHistory: { where: inForceOn(), select: { fullName: true } } },
+    select: { id: true, employeeCode: true, dateOfJoining: true, lastWorkingDate: true, nameHistory: { where: inForceOn(), select: { fullName: true } } },
   });
   if (employees.length !== employeeIds.length) {
     throw new HttpError(404, "One or more employees were not found.", "NOT_FOUND");
@@ -99,8 +124,12 @@ async function resolveEmployees(employeeIds: string[]) {
   return employees;
 }
 
-export async function previewRecalculation(employeeIds: string[], fromDate: string, _meta: ActorMeta): Promise<RecalcEmployeeResult[]> {
-  const employees = await resolveEmployees(employeeIds);
+/** A-10 G6: a separation's last working day can stand in for the employee's (not set on the employee until the separation completes). */
+type LeavingDates = Map<string, Date>;
+const withLeaving = <T extends { id: string; lastWorkingDate: Date | null }>(rows: T[], leaving?: LeavingDates) => rows.map((e) => ({ ...e, lastWorkingDate: leaving?.get(e.id) ?? e.lastWorkingDate }));
+
+export async function previewRecalculation(employeeIds: string[], fromDate: string, _meta: ActorMeta, leaving?: LeavingDates): Promise<RecalcEmployeeResult[]> {
+  const employees = withLeaving(await resolveEmployees(employeeIds), leaving);
   const types = await accrualEnabledTypes();
   const fromMonth = startOfMonthUTC(new Date(fromDate));
   const throughMonth = startOfMonthUTC(businessToday());
@@ -113,11 +142,11 @@ export async function previewRecalculation(employeeIds: string[], fromDate: stri
   return results;
 }
 
-export async function commitRecalculation(employeeIds: string[], fromDate: string, meta: ActorMeta, options: { confirmText?: string }): Promise<RecalcEmployeeResult[]> {
+export async function commitRecalculation(employeeIds: string[], fromDate: string, meta: ActorMeta, options: { confirmText?: string; leaving?: LeavingDates }): Promise<RecalcEmployeeResult[]> {
   if (options.confirmText !== "APPLY RECALCULATION") {
     throw new HttpError(400, 'Type "APPLY RECALCULATION" to confirm — this writes ledger corrections for every selected employee.', "CONFIRMATION_REQUIRED");
   }
-  const employees = await resolveEmployees(employeeIds);
+  const employees = withLeaving(await resolveEmployees(employeeIds), options.leaving);
   const types = await accrualEnabledTypes();
   const fromMonth = startOfMonthUTC(new Date(fromDate));
   const throughMonth = startOfMonthUTC(businessToday());
@@ -130,6 +159,22 @@ export async function commitRecalculation(employeeIds: string[], fromDate: strin
       const fresh = await diffForEmployee(employee, types, fromMonth, throughMonth);
       for (const action of fresh) {
         const accrualMonth = new Date(`${action.accrualMonth}T00:00:00.000Z`);
+        if (action.type === "WAITING") continue;
+        if (action.type === "LEAVING_MONTH") {
+          await writeLedgerEntry(tx, {
+            employeeId: employee.id,
+            leaveTypeId: action.leaveTypeId,
+            leaveYear: accrualMonth.getUTCFullYear(),
+            entryDate: businessToday(),
+            entryType: action.days < 0 ? "REVERSAL" : "GRANT",
+            days: action.days,
+            referenceType: "LEAVING_MONTH",
+            referenceId: action.existingLedgerId,
+            createdByUserId: meta.actorUserId,
+            remarks: `Leaver recalculation: ${action.leaveTypeCode} for ${action.accrualMonth.slice(0, 7)} (${action.note ?? "month of leaving"})`,
+          });
+          continue;
+        }
         if (action.type === "CREDIT") {
           await writeLedgerEntry(tx, {
             employeeId: employee.id,

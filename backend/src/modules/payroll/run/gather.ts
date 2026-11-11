@@ -1,3 +1,4 @@
+import { behaviourValue } from "../../behaviours/service";
 import type { EmploymentType, PayrollItemKind } from "@prisma/client";
 import type { ComponentType } from "@shared/constants/payrollSalary";
 import { gatherTax, taxFingerprint } from "../tax/gather";
@@ -86,7 +87,11 @@ export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promi
     unfinalisedAttendanceDays(employees, cycle.start, cycle.end),
     salarySegmentsMany(ids, cycle.start, cycle.end),
     paymentDate ? bankAccountsOn(ids, paymentDate) : Promise.resolve(new Map()),
-    prisma.payrollAdjustment.findMany({ where: { employeeId: { in: ids }, status: "PENDING", source: { not: "YEAR_END_ENCASHMENT" } }, orderBy: [{ employeeId: "asc" }, { createdAt: "asc" }, { id: "asc" }] }),
+    // P7-4: a loan instalment is read only by a run for its month or a later one (it is due in its month); everything else pending is read as before.
+    prisma.payrollAdjustment.findMany({
+      where: { employeeId: { in: ids }, status: "PENDING", source: { not: "YEAR_END_ENCASHMENT" }, NOT: { source: { in: ["LOAN_PRINCIPAL", "LOAN_INTEREST"] }, periodStart: { gt: cycle.end } } },
+      orderBy: [{ employeeId: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+    }),
     committedEncashments(ids),
   ]);
 
@@ -98,6 +103,11 @@ export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promi
     const k = iso(placementDayOf(spans.get(e.id)!));
     idsByDay.set(k, [...(idsByDay.get(k) ?? []), e.id]);
   }
+  // D-37 item 4: the loan types behind the instalments due, the shortfall rule per type and the max-deduction percentage (read once for the run).
+  const loanIds = [...new Set(pendingAdjustments.filter((a) => (a.source === "LOAN_PRINCIPAL" || a.source === "LOAN_INTEREST") && a.sourceRef).map((a) => a.sourceRef!.split("#")[0]!))];
+  const loanTypeOf = new Map((loanIds.length ? await prisma.loan.findMany({ where: { id: { in: loanIds } }, select: { id: true, typeKey: true } }) : []).map((l) => [l.id, l.typeKey]));
+  const shortfall = loanIds.length ? (await behaviourValue("loan.shortfall")).value : {};
+  const maxPercentSetting = loanIds.length ? (await behaviourValue("loan.maxTotalDeductionPercent")).value : null;
   const holdRows = await prisma.payrollSalaryHold.findMany({ where: { cycleStart: cycle.start, release: null, employeeId: { in: employees.map((e) => e.id) } }, select: { employeeId: true, reason: true } });
   const holdBy = new Map(holdRows.map((h) => [h.employeeId, h.reason]));
   const overrideItems = await loadOverrideItems();
@@ -239,6 +249,13 @@ export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promi
         periodLabel: a.periodStart ? `${iso(a.periodStart)} to ${iso(a.periodEnd ?? a.periodStart)}` : undefined,
         breakdown: breakdownOf(a),
       }));
+    // D-37 item 4: each loan instalment carries its loan's type and the directors' rule for when net pay is too low.
+    for (const a of adjustments) {
+      if ((a.source !== "LOAN_PRINCIPAL" && a.source !== "LOAN_INTEREST") || !a.sourceRef) continue;
+      const loanId = a.sourceRef.split("#")[0]!;
+      const typeKey = loanTypeOf.get(loanId);
+      if (typeKey) a.loan = { loanId, typeKey, rule: shortfall[typeKey] ?? "SKIP_AND_CARRY" };
+    }
     adjustments.push(...(encashmentsByEmployee.get(e.id) ?? []));
     for (const f of monthly.get(e.id) ?? []) {
       if (dec(f.amount).isZero()) continue; // a zero was entered (so the run may go ahead), and pays or takes nothing: there is no line to print
@@ -268,6 +285,7 @@ export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promi
       ruleOverrides: [...resolveOverrides(overrideItems, { employeeId: e.id, departmentId: placements.get(e.id)?.departmentId ?? null }, iso(cycle.end)).values()].map((o) => ({ ruleKey: o.ruleKey, level: o.level, itemKey: o.itemKey, version: o.version, valueHash: o.valueHash, value: o.value, registrationRef: o.registrationRef })),
       directorHold: holdBy.has(e.id) ? { reason: holdBy.get(e.id)! } : null,
       adjustments,
+      ...(adjustments.some((a) => a.loan) ? { maxDeductionPercent: maxPercentSetting ? dec(maxPercentSetting.percent) : null } : {}),
       esiPeriodStartEntitlement,
     });
   }
@@ -300,7 +318,8 @@ export function inputsFingerprint(inputs: RunInputs): string {
       tax: taxFingerprint(p.tax),
       ...(p.directorHold ? { held: true } : {}),
       ...(p.ruleOverrides && p.ruleOverrides.length > 0 ? { overrides: p.ruleOverrides.map((o) => [o.itemKey, o.version, o.valueHash]) } : {}),
-      adjustments: p.adjustments.map((a) => [a.id, a.source, a.sourceRef, a.componentCode, a.direction, canonicalDecimal(a.amount)]),
+      adjustments: p.adjustments.map((a) => [a.id, a.source, a.sourceRef, a.componentCode, a.direction, canonicalDecimal(a.amount), ...(a.loan ? [a.loan.typeKey, a.loan.rule] : [])]),
+      ...(p.maxDeductionPercent !== undefined ? { maxDeduction: p.maxDeductionPercent ? canonicalDecimal(p.maxDeductionPercent) : null } : {}),
       esi: p.esiPeriodStartEntitlement ? canonicalDecimal(p.esiPeriodStartEntitlement) : null,
     })),
   });

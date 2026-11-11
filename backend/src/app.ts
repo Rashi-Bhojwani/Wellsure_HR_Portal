@@ -47,6 +47,11 @@ import { devSimulatorRouter } from "./modules/dev/routes";
 import { reportsRouter } from "./modules/reports/routes";
 import { payrollRouter } from "./modules/payroll/routes";
 import { taxRouter } from "./modules/payroll/tax/routes";
+import { loansRouter } from "./modules/payroll/loans/routes"; // P7-4
+import { reimbursementsRouter } from "./modules/payroll/reimbursements/routes"; // P7-5
+import { settlementsRouter } from "./modules/payroll/settlements/routes"; // P7-6
+import { offCycleRouter } from "./modules/payroll/offcycle/routes"; // P7-6b
+import { behavioursRouter } from "./modules/behaviours/routes"; // D-37
 import { payslipRouter } from "./modules/payroll/payslipRoutes";
 // PEEPS-BEGIN assets
 import { assetsRouter } from "./modules/assets/routes";
@@ -115,6 +120,11 @@ const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   { path: "/api/payroll", router: payrollRouter },
   { path: "/api/payslips", router: payslipRouter },
   { path: "/api/tax", router: taxRouter },
+  { path: "/api/loans", router: loansRouter }, // P7-4
+  { path: "/api/reimbursements", router: reimbursementsRouter }, // P7-5
+  { path: "/api/settlements", router: settlementsRouter }, // P7-6
+  { path: "/api/offcycle", router: offCycleRouter }, // P7-6b
+  { path: "/api/behaviours", router: behavioursRouter }, // D-37
   { path: "/api/attendance", router: attendanceRouter },
   { path: "/api/biometric", router: biometricRouter },
   // PEEPS-BEGIN recruitment

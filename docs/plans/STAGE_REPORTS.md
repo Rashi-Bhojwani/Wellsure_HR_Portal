@@ -153,3 +153,187 @@ refused event-log registration ("Access is denied"); nothing in A-9 touches `bio
 document drive). **Unverified:** the mass email against a real mail server (console driver and a replaced `mailService` only); 500-person performance of segments and
 mass email; the letter void on a letter still rendering (refused by design, not exercised in the browser); a manager in the browser; `check:sensitive-ui` was not run locally
 (it passed in CI).
+
+## A-10: function parity for Workforce Management, G2 to G7 (commits `f0c32c5` … `123181a`)
+
+Plan: `docs/plans/GREYTHR_PARITY_WORKFORCE.md` (G1 `bbd14e6` was done by the earlier session).
+
+**Built, one commit per group:**
+* **G2** `f0c32c5` the roster as a read-only month grid (shift per day, week-offs, holidays, Shift Overrides marked `*`) and its download, from the same sources as the engine.
+* **G3** `ad5ece4` attendance activity locks: a director locks leave apply, corrections, muster entries, Manual Override, Shift Override or the roster for a range of days, from an effective date, for everyone or a segment's people (taken when made). One guard in the six writers; directors not stopped; voided once, never edited or deleted (database).
+* **G4** `540fb58` holidays for some locations only; weekend overrides for chosen people; leave type reviewers (directors name an extra decider for one leave type). One calendar loader feeds the engine, the roster grid and leave day counting.
+* **G5** `15b676d` reject / reinstate swipes with a reason (the engine ignores a rejected one), the day's shift on each swipe, bulk; device sync requests carried to the agent on its heartbeat (server, protocol and agent).
+* **G6** `4d77d02` leavers and leave recalculated to the last working day (no accrual for a month that starts after it; the leaving month untouched; days only).
+* **G7** `78394c0` one Workflow screen (waiting on me / decided by me / waiting on others) with bulk decisions through the existing functions, and `displayLeaveForViewer`.
+* `123181a` a defect found in the browser: the Developer role was offered swipe selection (it holds the device key; the server refuses it). Fixed.
+
+**Tests.** New: `workforce/__tests__/` rosterGrid 6, locks 6, calendar 4, swipesSync 3, leavers 2, workflow 3; agent `sync/__tests__/agent.test.ts` +1; manager reach +1. Every new route:
+Zod, a permission, scope or a director check in the service, Developer and employee refused, an access-scan entry. Area suites run on each commit (attendance + leave 412;
++ tasks, delegations, managers, workforce 525; attendance, biometric, workforce, ingestion 406; leave, workforce, employee 199). Changed assertions: one exact-match
+heartbeat assertion gained the new `resync: null` field (`CHANGED_TESTS.md`).
+
+**Mutation checks (20 run, all caught):** override wins in the grid; lock: leave guard, director exemption, person, effective date; calendar: weekend override, holiday
+location, reviewer decide, reviewer location; swipes: engine ignores rejection, sync done, own-swipe guard (caught after a test was added), agent range end; leavers:
+leaving date ignored, leaving month reversed; workflow: own request in Review, Monitor for team scope, reject without reason.
+
+**Browser walkthrough** (local stack, demo company; desktop light and phone 390 dark; director DEMO001, HR Admin DEMO004, Developer DEMO005, employee DEMO010).
+Director: all nine A-10 pages shown, no sideways scroll, dark background on the phone. HR: the director pages refused (Workforce Settings, Locks, Leave Reviewers);
+Calendar Adjustments, Device Sync, Leavers, Workflow, Roster, Swipes shown. Developer: every A-10 page refused except Employee Swipes (which it reached before A-10);
+after the fix it gets no selection there. Employee: all refused. **Not walked:** a manager (the demo company has none; manager reach is covered by tests).
+
+**CI (run 264 on `78394c0`), per job:** install-lint-typecheck-test success (tests, demo, drift, bundle), sensitive-ui admin success, sensitive-ui employee success,
+latency success (popovers included), attendance-replay success, docker-build success, agent-windows success.
+
+**Decided by me:** decisions 49 to 59 in `DECISIONS_FOR_OWNERS.md` (and the owner review sheet). The one needing an answer: what accrues in the leaving month (57).
+
+**Not verified:** a TEAM-scope viewer of the roster grid; the five non-leave lock writers over their routes (wired, mutation-checked only for leave); weekend overrides
+in leave day counting (not built, decision 53); a real device for the sync request (fake device and fake API only); 500-person timing of the reviewer reach.
+
+**Environment notes for the next session:** the shell exports `DATABASE_URL` (a remote database) and `PORT=3000`; every command here unsets both. `npm run db:seed`
+runs `prisma migrate reset` and is refused by Prisma's AI guard; on an empty local database use `npm run prisma:migrate:deploy` and `npx tsx prisma/seed.ts` instead.
+`pkill -f vite` also kills a running `vitest`: stop the dev stack by its exact process names.
+
+## CHECKPOINT 2 (the TDS checkpoint), written 2026-11-06, then continued as the owners asked
+
+**Where income tax stands.** The tax year is owner-entered (every value with a source note and an effective-from date, confirmed by a different director); the
+engine is exact and proved against an independent fraction model; declarations, proofs and directors' verification work; a run with `TDS_MODE = PROJECTED` works out
+each person's TDS with its full working and pins the year (a Placeholder year keeps the run a test). **New since the Stage 7 report (A-3, `0280f85`):** opening
+figures (pay and tax before this system, and from a previous employer) are entered or imported by a director and confirmed by a different director; the
+year-to-date reader adds them; and **a PROJECTED run now names the gap and works out no TDS until the year's opening figures are confirmed** (a company that starts on
+the first day of the year confirms an empty year on purpose).
+
+**What blocks real income tax today (all owner actions, nothing for the build):** the tax year's values (slabs, standard deduction, rebate, surcharge, cess, default
+regime, rounding, minimum monthly TDS, how one-offs are taxed, the section catalogue) entered and confirmed; each earning head's "taxable" answer; the opening figures
+confirmed; the declaration and proof windows set; `TDS_MODE` switched to PROJECTED by a director. Form 16 and the quarterly return are not built (P7-7, DRAFT only).
+
+**Still open from P7-3, built next in this order:** YTD Reports, the payslip YTD column (new payslips only), the employee's Salary Revision page, revision letters and
+offer-letter figures (issued by directors only). **Not modelled (owners' answer needed):** marginal relief (decision 45), HRA, LTA and perquisites.
+
+## A-3 (opening figures), the rest of P7-3, and P7-4 (loans) — commits `0280f85`, `7ec1d5a`
+
+**A-3** (plan `docs/plans/A3_OPENING_FIGURES.md`, `0280f85`): opening figures (before this system; previous employer this year) entered or imported by a director,
+append-only, confirmed as a whole per year by a different director (`TAX_OPENING`, bound to a hash); the year-to-date reader adds confirmed figures only; a PROJECTED
+run names the gap and works out no TDS until confirmed. Screen: Payroll → Opening Figures (directors). 5 mutants caught (one after a test was added for the hash binding).
+
+**P7-3 rest** (`7ec1d5a`): payslips published from now carry year to date per line; employee YTD Reports and Salary Revision pages (own only; Developer refused);
+revision and offer letters print the salary's own figures (directors only; the pay-free check refuses them for anyone else).
+
+**P7-4** (plan `docs/plans/P7_4_LOANS.md`, `7ec1d5a`): loan types (Not set until every value is chosen), a person's own request or a director's entry, a two-director
+sanction (never one's own), an exact schedule, money only through payroll runs (disbursement next run, instalments due in their month), immutable records, statements
+read from what happened, maker-checker changes (API). Screens: employee Loans and Advances; directors' Payroll → Loans.
+
+**Tests:** `taxOpenings` 5, `loans` 5 (schedule vs an independent BigInt model over 300 loans; a loan through a real run and finalise), `letterPayFigures` 4, publish test
+extended (YTD line by line), `taxDeclarations` extended (the opening-figures gate). Mutants: 5 (A-3) + 4 (loans) + 1 (letters) + area checks, all caught.
+Changed assertions: `CHANGED_TESTS.md` (none weakened).
+
+**Not built:** loan perquisite (needs the owners' rule), the loan shortfall rule (decision 66), screens for loan changes and loan types (API only; the directors' page
+lists what each type lacks), line-by-line opening figures (needs greytHR's layout). **Not walked in a browser:** the YTD Reports, Salary Revision and the two Loans
+pages (built after the last walk; typecheck, lint, route tests and bundle passed). **Process note:** one full-suite run was spoiled by regenerating the Prisma client
+while it ran; it was run again with no edits (see the next entry).
+
+**Gate after `7ec1d5a` (written 2026-11-10).** Full backend suite run alone, no edits during it: **211 files, 2,003 tests, all passed.** CI per job: run 267 on the A-3
+commit `0e3a1bf` failed in install-lint-typecheck-test → Test (the payroll literal guard flagged form-length constants in `tax/openings.ts`; every other job green);
+fixed in `7ec1d5a` (allowlist with reasons). Run 271 on `00ac198` (all code through `7ec1d5a`): success on all seven jobs.
+
+**Gate after P7-5, P7-6 (settlement side) and P7-7 (written 2026-11-10).** Full backend suite run alone on `5b36109`, no edits during it: **214 files, 2,016 tests, all passed.**
+Commits: `7f90f94` (P7-5), `cb8de84` (P7-6 settlements), `5b36109` (P7-7). Not walked in a browser: the screens of these three items. Final status: `PORTAL_READY_REPORT.md`.
+
+## P7-6b off-cycle runs (written 2026-11-11)
+
+Plan: `P7_6_SETTLEMENTS.md` § P7-6b (written before the code). A separate, immutable pipeline (`backend/src/modules/payroll/offcycle/`) pays a confirmed settlement
+or held pay; the regular run engine (`engine`, `gather`, `person`, the finaliser's calculation) is not changed. Road: a director prepares (never their own pay;
+the real company refused while the Ready-for-first-run list has a blocker; the demo may rehearse) → `OFF_CYCLE_RUN` approval under the owners' `RUN_APPROVAL` choice
+→ finalised by someone other than the approver, in one transaction (approval consumed; finalisation unique per source; held-item release unique per item; the
+settlement's pending adjustments marked paid by the off-cycle run, a new `consumed_by_off_cycle_run_id` with exactly one consumer per CHECK; loan exit recoveries
+recorded and read by the loan balance; statement stored) → `OFF_CYCLE_BANK` approval under the `BANK_FILE` choice, written by a non-approver from the confirmed
+layout, account checked by blind index, DEMO name/watermark only for the demo and only from a layout that says DEMO → download → marked sent once.
+
+**Found and fixed on the way (a double-pay gap):** a director's hold release points its adjustment at the hold, not the run item, so the settlement's "already
+released" check never matched; a held month released by a director could also appear on the settlement. One reader (`offcycle/held.ts`) now decides unpaid held
+pay for the settlement, the off-cycle run and the release; a hold release and a period unlock are refused once an off-cycle run paid the item.
+
+Screen: Payroll → Off-cycle runs (directors). Settlements show PAID and refuse a new settlement once paid.
+
+**Tests** (`offCycle.test.ts`, 10): exact-fraction property test (400 cases) for the settlement total and the off-cycle net; HR, Developer and employee refused on all
+11 routes; real company refused while readiness red; unchosen step refuses; maker cannot decide, approver cannot finalise; a twin run for the same source cannot be
+finalised; hold release and unlock refused after; unique keys refuse a duplicate and a rolled-back mutant that drops them lets it in; the regular run's figures are
+unchanged; bank file rules; the settlement road with DEMO; own pay refused at prepare, ask and decide. **Mutants (8, all caught):** held reader ignoring off-cycle
+releases; approver executing; zero total payable; DEMO layout check dropped; readiness ignored; net dropping a line; adjustments not marked paid; demo file not DEMO.
+
+**Gate after P7-6b (`64b6e16`).** Full backend suite run alone, no edits during it: **215 files, 2,026 tests, all passed.**
+
+## Item 3: loan and claim type settings, quarterly TDS data screen (written 2026-11-11)
+
+Frontend only (the API, its director-only gates and its tests existed from P7-4, P7-5 and P7-7). Payroll → **Loan and claim types** (directors): every value of
+a new type starts Not set (tri-state choices "Not set / Yes / No"; caps "Not set / No cap (chosen) / A cap"); each save needs a reason and is a new version; the
+"Complete" column shows how many values are still Not set. Payroll → **Quarterly TDS data** (directors): per person per month paid and TDS from finished runs, PAN
+by its last four, confirmed challans by their last digits; says the official format is not built. Typecheck, lint (tokens), build and bundle budgets pass.
+
+## Item 2: the never-opened screens, walked (written 2026-11-11)
+
+Local stack on the demo company. 12 screens (directors': Loans, Reimbursements, Settlements, Off-cycle runs, TDS and Form 16, Loan and claim types, Quarterly
+TDS data; employee: YTD Reports, Salary Revision, Loans and Advances, Reimbursement, Form 16) × 5 people (director DEMO001, HR Admin DEMO004, a manager — DEMO003
+given the MANAGER role for the walk and returned afterwards —, an employee DEMO002, the Developer DEMO005) × desktop 1280 light and 390 px dark = **120 visits**.
+Result: no crash, no server error, no horizontal scroll at 390, no demo bank account or PAN text on any page. HR, the manager, the employee and the Developer see
+"This is not switched on for you" on every directors' screen; the Developer's own-pay pages show the refusal ("The Developer role cannot use this"); employees see
+only their own figures (Form 16 marked DRAFT).
+
+**Fixed:** a stale "Loans & Advances — Phase 7" placeholder menu entry duplicated the Loans path (removed); the Quarterly TDS banner repeated its own title.
+**Not walked:** keyboard-only paths and tablet width on these screens (the shared SideDrawer/DataTable components carry Esc and focus); filled-in states (the demo
+company has no loans, claims, settlements or finished runs in a closed year), so tables were seen in their empty states only.
+
+## Item 4 (D-37): loan instalment when net pay is too low; max deduction percentage (written 2026-11-11)
+
+Plan: `D37_DEFAULTS.md` (written before the code). A shared **behaviour settings** store (`backend/src/modules/behaviours/`, tables `behaviour_proposals` and
+`behaviour_confirmations`, both append-only; the database refuses a proposer confirming their own proposal); routes `/api/behaviours` (settings.manage, which HR
+never holds, plus a director check; Developer refused). Screen: System Settings → **Default behaviours** (directors). The Ready for first real run screen lists the
+behaviours as an informational block ("Default, change in settings" / "Not set" / "Changed and confirmed"), never blocking.
+
+**Loan shortfall** (`loan.shortfall`, per loan type; default `SKIP_AND_CARRY`): applied in the person calculation after every other line (`run/loanShortfall.ts`, pure).
+`STOP_RUN` → BLOCKING `LOAN_SHORTFALL` exception naming the loan; `SKIP_AND_CARRY` → no line, the instalment stays pending, WARNING naming the loan; `PARTIAL_AND_CARRY`
+→ the line is what is left (whole paise, rounded down), WARNING; the finaliser cancels the original instalment and writes a consumed part and a pending carried part
+due from the next run (the loan balance reads them). A loan never pushes net pay below zero. **Max total deduction percentage** (`loan.maxTotalDeductionPercent`):
+Not set (no limit); when set (owner-entered with a source note, confirmed by a different director) the room for instalments is at most that share of gross less every
+other deduction. Ordinary runs are unchanged when instalments fit (existing run and loan suites pass unchanged); the decisions are in the run's inputs fingerprint.
+
+**Tests** (`loanShortfall.test.ts`, 8): property test (500 cases) against an exact-fraction model (order, each rule, zero floor, percentage, paise rounding); per-option
+and zero-floor examples; routes refuse HR, Developer, employee; defaults labelled and informational on Ready; two real runs (August pays the loan out; September:
+default skip with a warning naming the loan; STOP blocks submission; PARTIAL within a 90% limit recovers exactly the independent figure and finalising splits the
+instalment, carry due 1 October, balance = principal − recovered); self-confirmation refused by the service and the database; history append-only.
+**Mutants (9, all caught):** partial as skip; skip as partial; zero floor dropped; percentage ignored; room rounded up; STOP not blocking; wrong default; finaliser
+consuming shortfall instalments whole; proposer confirming.
+
+**Gate after item 4 (`df8306f`).** Full backend suite alone: **216 files, 2,034 tests, all passed.** CI run 285: all seven jobs green.
+
+## Item 5 (D-37): leave accrual in the month of leaving (written 2026-11-11)
+
+`leave.leavingMonthAccrual` (default `PRO_RATA_DAYS_WORKED`, "Default, change in settings"): NONE / FULL_MONTH / PRO_RATA_DAYS_WORKED / FULL_IF_MIN_DAYS with N (no
+default N; a proposal without N is refused). Applied by the leave recalculation for the month containing the last working day (Workforce → Leavers): the monthly job
+has usually credited the month in full on the 1st, so a correction entry (`LEAVING_MONTH`, a reversal or a grant referencing the accrual) brings it to the target; the
+accrual row is never edited; earlier corrections are counted, so applying again changes nothing. Pure rule in `leave/leavingMonth.ts`.
+**Found and left Not set:** the leave policy has no rounding, so "the policy's rounding" cannot be read. Added `leave.proRataRounding` (Not set, a different director
+confirms): an exact pro-rata (e.g. 15 of 30 days = 0.5) is applied; one that needs rounding (20 of 30) is listed as WAITING and nothing changes for that month.
+The Leavers screen shows both new kinds of line.
+
+**Tests** (`leave/__tests__/leavingMonth.test.ts`, 4): property test (600 cases) against exact fractions for every option and any days worked (incl. zero); zero
+days, rounding when set, days worked from the 1st or the joining date, leap February; through the real leaver route: the default takes September from 1 to 0.5 with a
+correction entry and is idempotent; NONE, FULL_MONTH, FULL_IF_MIN_DAYS under and exactly at N each move it to its own figure, each change confirmed by a different
+director. A-10's leavers test updated (`CHANGED_TESTS.md`). **Mutants (8):** 7 caught (NONE giving full, N boundary, never waiting for rounding, days off by one,
+joining date ignored, wrong default, earlier corrections ignored); 1 equivalent (the zero-days guard: zero is already exact), so the redundant line was removed.
+
+**Gate after item 5 (`534aa71`).** Full backend suite alone: **217 files, 2,038 tests, all passed.**
+
+## Item 6 (D-37): the Developer role and Employee Swipes (written 2026-11-11)
+
+`access.developerSeesSwipes` (default off, "Default, change in settings"). Applied where access is resolved (`lib/permissions.ts`, the one place): a Developer's
+`attendance.swipes.view` is removed unless the latest **confirmed** value of the switch is on; the menu, routes (list, options, export) and socket rooms follow.
+Previously the Developer reached Employee Swipes (flagged in the last report). **Tests** (`behaviours/__tests__/developerSwipes.test.ts`, 3): Developer-403 by default
+on the list and the export, resolved access without the key, HR unaffected; the Developer and HR cannot propose; a proposal alone changes nothing; on after a
+different director confirms (200), off again (403). Developer-ceiling test updated (`CHANGED_TESTS.md`). **Mutants (3, all caught):** never stripped; an unconfirmed
+proposal counting; any confirmed value turning it on.
+
+**Final gate (`9ec926e`, 2026-11-11).** Full backend suite alone: **218 files, 2,041 tests, all passed.** CI per job — run 282 (`64b6e16`): six green, Test cancelled by
+the next push; run 285 (`df8306f`): all seven green; run 286 (`534aa71`): success; run 287 (`9ec926e`): install-lint-typecheck-test (incl. Demo company tests),
+docker-build, sensitive-ui admin, sensitive-ui employee, latency (incl. popovers), attendance-replay, agent-windows — **all green**.
+Items 7: not started (A-1, A-2, A-4–A-8, Stages 6, 8, 9). `PARITY_COVERAGE.md` exists on no branch; `docs/samples/` exists on `origin/main` and
+`origin/peeps/foundation`, not on this branch. STOPPED here as instructed.

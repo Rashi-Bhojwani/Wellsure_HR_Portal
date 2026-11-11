@@ -7,6 +7,9 @@ import { recordEvent } from "../events";
 import { assertRunIsReal } from "../rules/context";
 import { reverifyRun, requireHolds } from "./closing";
 import { computeRun } from "./engine";
+import { decisionsOf } from "./loanShortfall";
+import { addCalendarDays } from "../../../lib/businessDate";
+import { ZERO, dec } from "../money";
 
 // The two acts that change what is final, and the only code allowed to (docs/plans/PHASE_6.md §14F; payrollGuards.test.ts keeps it to this file).
 //
@@ -45,7 +48,14 @@ export async function finaliseRun(runId: string, actor: Actor) {
 
   // The adjustments this run paid: every adjustment behind a line of a person who is in it. One without a row yet (an encashment committed since) is a change.
   const statusOf = new Map(computed.items.map((i) => [i.employeeId, i.status]));
-  const paid = computed.inputs.people.filter((p) => statusOf.get(p.employeeId) !== "EXCLUDED").flatMap((p) => p.adjustments).filter((a) => a.source !== "MONTHLY_INPUT"); // a month's Monthly Inputs belong to the month: there is no row to consume
+  // D-37 item 4: a loan instalment net pay could not cover is not consumed whole: nothing recovered → it stays owed; part recovered → split below into a paid part and a carried part.
+  const shortfalls = new Map(computed.items.filter((i) => i.status !== "EXCLUDED").flatMap((i) => decisionsOf(i.inputs)).map((d) => [d.adjustmentId, d]));
+  const paid = computed.inputs.people
+    .filter((p) => statusOf.get(p.employeeId) !== "EXCLUDED")
+    .flatMap((p) => p.adjustments)
+    .filter((a) => a.source !== "MONTHLY_INPUT") // a month's Monthly Inputs belong to the month: there is no row to consume
+    .filter((a) => !(a.id && shortfalls.has(a.id)));
+  const partials = [...shortfalls.values()].filter((d) => dec(d.recovered).greaterThan(ZERO));
   const ids = paid.flatMap((a) => (a.id ? [a.id] : []));
   if (ids.length !== paid.length) throw new HttpError(409, "An adjustment was added since this run was calculated. Reopen it and calculate it again.", "RUN_STALE");
 
@@ -56,6 +66,16 @@ export async function finaliseRun(runId: string, actor: Actor) {
     if (ids.length > 0) {
       const { count } = await tx.payrollAdjustment.updateMany({ where: { id: { in: ids }, status: "PENDING" }, data: { status: "CONSUMED", consumedByRunId: runId } });
       if (count !== ids.length) throw new HttpError(409, "An adjustment this run paid was cancelled or already paid by something else. Reopen the run and calculate it again.", "RUN_STALE");
+    }
+    for (const d of partials) {
+      const orig = await tx.payrollAdjustment.findUniqueOrThrow({ where: { id: d.adjustmentId } });
+      const cancelled = await tx.payrollAdjustment.updateMany({ where: { id: orig.id, status: "PENDING" }, data: { status: "CANCELLED", cancelledAt: new Date(), cancelledByUserId: actor.userId, cancelReason: `Split by the loan shortfall rule in ${run.cycleLabel}: ${d.recovered} recovered, ${d.carried} carried` } }); // allow-clock: an instant
+      if (cancelled.count !== 1) throw new HttpError(409, "A loan instalment this run recovers in part was changed by something else. Reopen the run and calculate it again.", "RUN_STALE");
+      const base = { employeeId: orig.employeeId, componentCode: orig.componentCode, direction: orig.direction, source: orig.source, reason: orig.reason, createdByUserId: actor.userId };
+      const part = await tx.payrollAdjustment.create({ data: { ...base, amount: d.recovered, sourceRef: `${orig.sourceRef}~r-${runId}`, periodStart: orig.periodStart, periodEnd: orig.periodEnd } });
+      await tx.payrollAdjustment.update({ where: { id: part.id }, data: { status: "CONSUMED", consumedByRunId: runId } });
+      const next = addCalendarDays(run.cycleEnd, 1); // the day after the cycle: the carried part is due from the next run
+      await tx.payrollAdjustment.create({ data: { ...base, amount: d.carried, sourceRef: `${orig.sourceRef}~c-${runId}`, periodStart: next, periodEnd: next, reason: `${orig.reason} (carried from ${run.cycleLabel})` } });
     }
     const { count } = await tx.payrollRun.updateMany({ where: { id: runId, status: "APPROVED" }, data: { status: "FINALISED", finalisedAt: new Date(), finalisedByUserId: actor.userId } }); // allow-clock: an instant
     if (count !== 1) throw new HttpError(409, "This run was just changed by somebody else.", "CONFLICT");
@@ -80,6 +100,11 @@ export async function unlockRun(runId: string, actor: Actor) {
   const released = await prisma.payrollRunRelease.findMany({ where: { runId } });
   if (released.length > 0) {
     throw new HttpError(409, "Payslips have been published or a bank file generated for this period, so it cannot be unlocked. Put corrections through an adjustment in the next run.", "RUN_RELEASED");
+  }
+
+  // P7-6b: held pay from this run already paid by an off-cycle run would be calculated and paid again after an unlock.
+  if (await prisma.offCycleHeldRelease.findFirst({ where: { item: { runId } }, select: { id: true } })) {
+    throw new HttpError(409, "Held pay from this period has been paid by an off-cycle run, so it cannot be unlocked. Put corrections through an adjustment in the next run.", "RUN_RELEASED");
   }
 
   const returned = await prisma.$transaction(async (tx) => {

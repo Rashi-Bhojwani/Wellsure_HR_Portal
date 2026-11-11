@@ -13,6 +13,7 @@ import { DIRECTOR_STEP_INFO, type DirectorStep } from "@shared/constants/directo
 import { isDirector } from "../../lib/directorAuthority";
 import { prisma } from "../../lib/prisma";
 import { approvalEmployeeIdFilter, resolveApprovalReach } from "../leave/scope";
+import { reviewerReach, reviewerWhere } from "../workforce/reviewers"; // A-10 G4
 import { getTeamEmployeeIds } from "../../lib/dataScope";
 import { inForceOn } from "../../lib/effectiveDating";
 // PEEPS-BEGIN leave-types
@@ -52,9 +53,10 @@ const leaveApprovals: TaskSource = {
   async list(viewer, limit) {
     if (!viewer.permissions.has("leave.approve")) return [];
     const scopeFilter = approvalEmployeeIdFilter(await resolveApprovalReach(viewer));
+    const asReviewer = scopeFilter ? reviewerWhere(await reviewerReach(viewer.employeeId)) : []; // A-10 G4
     const where: Prisma.LeaveRequestWhereInput = {
       status: "PENDING",
-      AND: [{ employeeId: { not: viewer.employeeId } }, ...(scopeFilter ? [{ employeeId: scopeFilter }] : [])],
+      AND: [{ employeeId: { not: viewer.employeeId } }, ...(scopeFilter ? [asReviewer.length ? { OR: [{ employeeId: scopeFilter }, ...asReviewer] } : { employeeId: scopeFilter }] : [])],
     };
     const rows = await prisma.leaveRequest.findMany({ where, include: { leaveType: true, employee: currentName() }, orderBy: { createdAt: "asc" }, take: limit });
     // PEEPS-BEGIN leave-types

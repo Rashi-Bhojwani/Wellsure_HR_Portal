@@ -1,3 +1,5 @@
+import { reviewerCovers, reviewerReach, reviewerWhere } from "../workforce/reviewers"; // A-10 G4
+import { assertNotLocked } from "../workforce/locks"; // A-10 G3
 import { notifyEmployee } from "../notifications/notifyEmployee";
 import type { LeaveDayPart, LeaveRequestStatus, Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
@@ -97,6 +99,7 @@ export async function applyForLeave(input: ApplyLeaveInput, viewer: LeaveViewer,
   if (fromDate.getTime() > toDate.getTime()) {
     throw new HttpError(400, "fromDate must not be after toDate.", "INVALID_RANGE");
   }
+  await assertNotLocked("LEAVE", meta.actorUserId, [{ employeeId: targetEmployeeId, from: String(input.fromDate).slice(0, 10), to: String(input.toDate).slice(0, 10) }]); // A-10 G3
   if (fromDate.getTime() === toDate.getTime() && input.fromDayPart !== input.toDayPart) {
     throw new HttpError(400, "A single-day request must use the same day part for from and to.", "INVALID_DAY_PART");
   }
@@ -354,6 +357,15 @@ export async function listLeaveRequests(query: ListLeaveRequestsQuery, viewer: L
     const filter = approvalEmployeeIdFilter(reach);
     if (filter) where.employeeId = filter;
   }
+  // A-10 G4: a leave type reviewer also sees the requests of their type for the people they review (only with leave.approve, only the queue view).
+  if (!query.employeeId && where.employeeId !== undefined && viewer.permissions.has("leave.approve")) {
+    const extra = reviewerWhere(await reviewerReach(viewer.employeeId));
+    if (extra.length) {
+      const base = where.employeeId;
+      delete where.employeeId;
+      where.OR = [{ employeeId: base }, ...extra];
+    }
+  }
 
   if (query.status) where.status = query.status;
   if (query.leaveTypeId) where.leaveTypeId = query.leaveTypeId;
@@ -405,6 +417,7 @@ export async function getLeaveRequestById(requestId: string, viewer: LeaveViewer
   if (inOwnScope) return { ...formatLeaveRequestRow(row), onBehalfOf: null };
   const reach = await resolveApprovalReach(viewer);
   const via = reach.delegated.get(row.employeeId);
+  if (!via && viewer.permissions.has("leave.approve") && reviewerCovers(await reviewerReach(viewer.employeeId), row.leaveTypeId, row.employeeId)) return { ...formatLeaveRequestRow(row), onBehalfOf: null }; // A-10 G4
   if (!via) throw new HttpError(404, "Leave request not found.", "NOT_FOUND");
   return { ...formatLeaveRequestRow(row), onBehalfOf: { userId: via.userId, name: (await delegatorNames(reach)).get(via.userId) ?? "" } };
 }
@@ -412,7 +425,7 @@ export async function getLeaveRequestById(requestId: string, viewer: LeaveViewer
 // Returns the delegator when the viewer can decide only through a workflow
 // delegation (E3) — recorded as "on behalf of" on the request and in the
 // audit log — or null when it's within their own scope.
-async function assertCanDecide(existing: { employeeId: string }, viewer: LeaveViewer): Promise<Delegator | null> {
+async function assertCanDecide(existing: { employeeId: string; leaveTypeId: string }, viewer: LeaveViewer): Promise<Delegator | null> {
   if (!viewer.permissions.has("leave.approve")) {
     throw new HttpError(403, "Missing permission: leave.approve", "FORBIDDEN");
   }
@@ -421,6 +434,8 @@ async function assertCanDecide(existing: { employeeId: string }, viewer: LeaveVi
   }
   const { reachable, onBehalfOf } = reachFor(await resolveApprovalReach(viewer), existing.employeeId);
   if (!reachable) {
+    // A-10 G4: a leave type reviewer may decide that type for the people the directors named them for.
+    if (reviewerCovers(await reviewerReach(viewer.employeeId), existing.leaveTypeId, existing.employeeId)) return null;
     throw new HttpError(404, "Leave request not found.", "NOT_FOUND");
   }
   return onBehalfOf;

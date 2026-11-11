@@ -1,5 +1,50 @@
 # Master build checklist (Stages 0–8 + close-out)
 
+## REMAINING WORK (written 2026-11-06 by the session continuing Session A, before any further code)
+
+Read first. Status: DONE / OPEN / PARTIAL / **UNDEFINED** (no plan file on any branch defines it: it is not guessed, see note).
+"Deps" = what must exist first. Order of work = the owner's message of 2026-11-06.
+
+| Item | What it is | Status | Deps |
+|---|---|---|---|
+| Step 0.2 checks | DEMO bank rehearsal, sensitive-ui split + planted leak, D-31, D-34, owner review sheet, CI per job, 390 dark walkthrough | DONE as "Closing the Stage 5b gaps A1–A8" below (`1647597`…`d883a13` and the A1–A8 commits); re-verified in this session, see the Step 0.2 note | — |
+| A-10 G1 | status catalogue, override allowed statuses, muster totals | DONE `bbd14e6` | — |
+| A-10 G2 | roster month grid + export | DONE `f0c32c5` (6 tests, override mutant caught; not verified: a TEAM-scope viewer, browser walk pending at A-10 end) | G1 |
+| A-10 G3 | attendance activity locks (directors) | DONE `ad5ece4` (4 mutants caught; the six writers wired, only leave apply exercised over a route) | G1 |
+| A-10 G4 | weekend overrides, location-limited holidays, leave type reviewers | DONE `540fb58` (4 mutants caught; leave day counting does not read weekend overrides) | engine `compute.ts` |
+| A-10 G5 | swipe reject/reinstate, shift column, bulk; agent sync requests | DONE `15b676d` (4 mutants caught; agent re-read tested with the fake device) | — |
+| A-10 G6 | leavers list, leave recalculated to the leaving date | DONE `4d77d02` (+ routes in `78394c0`; 2 mutants caught; leaving-month rule open, D-57) | — |
+| A-10 G7 | workflow Review / Monitor, bulk decisions, `displayLeaveForViewer` | DONE `78394c0` (3 mutants caught; manager reach case added) | — |
+| A-1 | **UNDEFINED** in every plan file and on every branch | not started | owners to define |
+| A-2 | HR's import rules (named in `GREYTHR_PARITY_EMPLOYEE_ADMIN.md`; no plan text beyond the name) | **UNDEFINED in detail** | owners to define |
+| A-3 | opening figures (owner's message: screens + director-entered import of opening balances and tax already deducted this year, nothing preloaded) + letter figures from the structure (`letterFigureFields()` hook) | DONE `0280f85` (openings; 5 mutants caught; PROJECTED runs blocked until confirmed) + `7ec1d5a` (letter figures) | P7-2/P7-3 (built), tax year |
+| A-4 | **UNDEFINED** | not started | owners to define |
+| A-5 | regularization rules and module (named in `GREYTHR_PARITY_WORKFORCE.md`; no plan text) | **UNDEFINED in detail** | owners to define |
+| A-6 | **UNDEFINED** | not started | owners to define |
+| A-7 | **UNDEFINED** | not started | owners to define |
+| A-8 | **UNDEFINED** (the Stage 5b "A8 bank payments are manual" is DONE; it is not this item) | not started | owners to define |
+| P7-2 | declarations with proofs | DONE (Stage 7 report) | — |
+| P7-3 | TDS projection, regimes side by side | DONE: TDS in the run + IT Statement (earlier); checkpoint report `0e3a1bf` in STAGE_REPORTS; YTD reports, payslip YTD (new payslips only), Salary Revision page, revision and offer letter figures `7ec1d5a` | P7-2 |
+| P7-4 | loans and advances (incl. Principal / Interest parts) | DONE (core) `7ec1d5a`: types, request, two-director sanction, exact schedule, pay/recover through runs, immutable records, statements, changes (API only); type screen `742cb4a`; shortfall rule `df8306f` (D-37); NOT built: perquisite, change screens | input heads D-31 |
+| P7-5 | reimbursements | DONE `7f90f94` (4 mutants caught; not built: Tasks inbox source, manager step, per-run statement layout) | — |
+| P7-6 | off-cycle runs, full and final settlement (incl. held pay) | DONE: settlement `cb8de84`; **P7-6b off-cycle runs `64b6e16`** (8 mutants caught; full suite 2,026 passed) | P7-4, P7-5 |
+| P7-7 | Form 16 data (DRAFT), quarterly return data | DONE `5b36109` (challans, reconciliation, quarterly data API, Form 16 Part B data DRAFT until confirmed; NOT built: Form 16 PDF, the official return format, Part A pairing); quarterly screen `742cb4a` | P7-3, A-3 |
+| Stage 5.6 | loans if missing | = P7-4 | — |
+| Walk | never-opened screens, 5 roles × desktop light / 390 dark | DONE `28a4e25` (120 visits; duplicate menu entry removed) | — |
+| Item 3 | loan and claim type settings, quarterly TDS screen | DONE `742cb4a` | — |
+| D-37 (4) | loan shortfall per type (default skip and carry), max deduction % (Not set) | DONE `df8306f` (9 mutants caught; suite 2,034 passed; CI 285 green) | — |
+| D-37 (5) | leaving-month accrual (default pro-rata), pro-rata rounding (Not set) | DONE `534aa71` (7 mutants caught, 1 equivalent removed; suite 2,038 passed) | — |
+| D-37 (6) | Developer does not see Employee Swipes by default; director switch | DONE `9ec926e` (3 mutants caught; final suite 2,041 passed; CI 287 green) | — |
+| Stage 6 | internal reports + directors-only query builder "using the layouts in `docs/plans/PARITY_COVERAGE.md`" | **BLOCKED: `PARITY_COVERAGE.md` does not exist on any branch** | owners / a session that wrote it |
+| Stage 8 | attendance and salary file readers from `docs/samples`, layout setup, parallel-run kit | **BLOCKED in part: `docs/samples/` is not on this branch** (only on `peeps/foundation`, which this work may not touch) | samples on this branch |
+| Stage 9 parity | Tier 1 MISSING items of `PARITY_COVERAGE.md` | **BLOCKED (file missing)** | as Stage 6 |
+| Close-out | `PORTAL_READY_REPORT.md`, `GETTING_STARTED.md`, `FIRST_REAL_PAYROLL_RUN.md` | PORTAL_READY_REPORT and OWNER_REVIEW_SHEET updated 2026-11-11; open items are the undefined A-items and the blocked stages | everything above |
+
+**Note on the undefined items.** The owner's message says "A-4, then A-7, then A-2, then A-3 …, then A-1, A-5, A-6 and A-8, each exactly as your plan
+files define them". Searched: every file under `docs/` on this branch and on every remote branch (`git grep`). Only A-2, A-3 and A-5 are named, and only by name.
+Defining them here would be guessing an owner decision, so they are left UNDEFINED and the work carries on with the next defined item.
+
+
 Branch `feat/hr-payroll-separation`. Tick an item only when it is **done and verified**, with the commit hash. A new
 session reads this file and `STAGE_REPORTS.md`, then continues at the first unticked item. No real data in this file.
 

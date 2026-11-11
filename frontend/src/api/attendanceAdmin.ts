@@ -182,6 +182,10 @@ export interface Swipe {
   decision: "ACCEPTED" | "DISCARDED" | null;
   decisionReason: string | null;
   used: boolean;
+  /** A-10 G5 */
+  shift: string | null;
+  rejected: boolean;
+  rejectReason: string | null;
 }
 export async function listSwipes(q: SwipeQuery): Promise<{ from: string; to: string; total: number; page: number; pageSize: number; entries: Swipe[] }> {
   return (await apiClient.get("/api/attendance/swipes", { params: q })).data;

@@ -151,7 +151,7 @@ describe("sync agent: the server side (P2-F)", () => {
       expect(serials).not.toContain(dev.inactive.serialNumber); // inactive: not polled
       expect(serials).not.toContain(dev.other.serialNumber); // another agent's
       const b = res.body.devices.find((d: { serial: string }) => d.serial === dev.b.serialNumber);
-      expect(b).toEqual({ serial: dev.b.serialNumber, name: `Device ${dev.b.serialNumber}`, timezone: "Asia/Kolkata", syncFrom: "2026-08-15", retentionDays: 10, retentionRecords: 50000, isSimulated: false });
+      expect(b).toEqual({ serial: dev.b.serialNumber, name: `Device ${dev.b.serialNumber}`, timezone: "Asia/Kolkata", syncFrom: "2026-08-15", retentionDays: 10, retentionRecords: 50000, isSimulated: false, resync: null });
       expect(res.body.devices.find((d: { serial: string }) => d.serial === dev.a.serialNumber).isSimulated).toBe(true);
       expect(res.body.thresholds).toEqual(DEFAULT_DEVICE_HEALTH_THRESHOLDS);
     });

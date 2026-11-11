@@ -74,6 +74,6 @@ export const HOLD_REASON_ACTION: Record<HoldReason, string> = {
 };
 
 /** Things a person is calculated with that someone must look at. BLOCKING ones stop the run being submitted (P6-4); WARNING ones are for the reader. */
-export const EXCEPTION_CODES = ["NEGATIVE_NET", "STATE_UNMAPPED", "LOP_EXCEEDS_DAYS", "NO_PLACEMENT", "TAX_NOT_SET"] as const;
+export const EXCEPTION_CODES = ["NEGATIVE_NET", "STATE_UNMAPPED", "LOP_EXCEEDS_DAYS", "NO_PLACEMENT", "TAX_NOT_SET", "LOAN_SHORTFALL"] as const;
 export type ExceptionCode = (typeof EXCEPTION_CODES)[number];
 export type ExceptionSeverity = "BLOCKING" | "WARNING";

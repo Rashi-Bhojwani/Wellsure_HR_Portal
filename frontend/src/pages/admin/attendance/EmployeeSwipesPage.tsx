@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import dayjs from 'dayjs';
-import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query';
-import { Button, Checkbox, DatePicker, Select, Tooltip, Typography } from 'antd';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Button, Checkbox, DatePicker, Input, Select, Tooltip, Typography } from 'antd';
 import { DownloadOutlined } from '@ant-design/icons';
 import * as adminApi from '../../../api/attendanceAdmin';
 import type { Swipe, SwipeQuery } from '../../../api/attendanceAdmin';
 import * as employeeApi from '../../../api/employee';
 import * as musterApi from '../../../api/muster';
+import * as workforceApi from '../../../api/workforce';
 import {
+  ConfirmModal,
   DataTable,
   EmptyState,
   FilterBar,
@@ -18,8 +20,11 @@ import {
 } from '../../../ui';
 import { useAuth } from '../../../hooks/useAuth';
 import { apiErrorMessage } from '../../../lib/apiError';
+import { space } from '../../../theme/tokens';
+import { DEVELOPER_ROLE_CODE } from '@shared/constants/sensitiveData';
 
 const { Text } = Typography;
+const REASON_MIN = 3;
 
 // Workforce → Attendance → Employee Swipes (Phase 3 commit 2): the raw punch log exactly as the device sent it, for
 // finding out what happened on a day. Read-only. Company-wide for HR (including punches that match nobody); a manager
@@ -52,6 +57,24 @@ export function EmployeeSwipesPage() {
     queryFn: () => adminApi.listSwipes({ ...query, page, pageSize: 50 }),
     retry: false,
     placeholderData: keepPreviousData,
+  });
+  // A-10 G5: reject / reinstate chosen swipes with a reason (Biometric devices key). Never one's own; the days are worked out again.
+  // The Developer role holds the device key to operate devices, but the server refuses it any decision on a person's punches: offer none.
+  const canDecide = hasPermission('attendance.devices.manage') && !(user?.roleCodes ?? []).includes(DEVELOPER_ROLE_CODE);
+  const queryClient = useQueryClient();
+  const [selected, setSelected] = useState<string[]>([]);
+  const [deciding, setDeciding] = useState<'REJECT' | 'REINSTATE' | null>(null);
+  const [reason, setReason] = useState('');
+  const decide = useMutation({
+    mutationFn: () => workforceApi.decideSwipes({ punchIds: selected, action: deciding!, reason: reason.trim() }),
+    onSuccess: (r) => {
+      toast.success(`${r.decided} swipe${r.decided === 1 ? '' : 's'} ${deciding === 'REJECT' ? 'rejected' : 'reinstated'}. The days are being worked out again.`);
+      setDeciding(null);
+      setReason('');
+      setSelected([]);
+      void queryClient.invalidateQueries({ queryKey: ['attendance', 'swipes'] });
+    },
+    onError: (err) => toast.error(apiErrorMessage(err, 'Could not save the decision.')),
   });
   const exportMutation = useMutation({
     mutationFn: () => adminApi.exportSwipes(query),
@@ -226,8 +249,29 @@ export function EmployeeSwipesPage() {
             </>
           }
         />
+        {canDecide && selected.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: space[2], marginBottom: space[3], alignItems: 'center' }}>
+            <Text>{selected.length} chosen</Text>
+            <Button danger onClick={() => setDeciding('REJECT')}>Reject</Button>
+            <Button onClick={() => setDeciding('REINSTATE')}>Reinstate</Button>
+            <Button type="link" onClick={() => setSelected([])}>Clear</Button>
+          </div>
+        )}
+        <ConfirmModal
+          open={!!deciding}
+          title={deciding === 'REJECT' ? `Reject ${selected.length} swipe${selected.length === 1 ? '' : 's'}?` : `Reinstate ${selected.length} swipe${selected.length === 1 ? '' : 's'}?`}
+          description={deciding === 'REJECT' ? 'A rejected swipe is kept but never used to work out attendance. The days are worked out again at once.' : 'The swipes are used again. The days are worked out again at once.'}
+          confirmLabel={deciding === 'REJECT' ? 'Reject' : 'Reinstate'}
+          confirmDisabled={reason.trim().length < REASON_MIN}
+          loading={decide.isPending}
+          onCancel={() => setDeciding(null)}
+          onConfirm={() => decide.mutate()}
+        >
+          <Input.TextArea aria-label="Reason" placeholder="Why (a few words)" rows={2} maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} style={{ marginTop: space[2] }} />
+        </ConfirmModal>
         <DataTable<Swipe>
           density="compact"
+          rowSelection={canDecide ? { selectedRowKeys: selected, onChange: (keys) => setSelected(keys as string[]), getCheckboxProps: (r) => ({ disabled: !r.employeeId || r.employeeId === user?.employeeId }) } : undefined}
           rowKey="id"
           loading={isLoading}
           error={error}
@@ -258,6 +302,8 @@ export function EmployeeSwipesPage() {
               { label: 'Device user ID', render: (r) => r.deviceUserId },
               { label: 'Arrived by', render: (r) => r.route },
               { label: 'Flag', render: flagChip },
+              { label: 'Shift', render: (r) => r.shift ?? '—' },
+              { label: 'Rejected', render: (r) => (r.rejected ? `Yes: ${r.rejectReason ?? ''}` : 'No') },
             ],
           }}
           columns={[
@@ -282,8 +328,10 @@ export function EmployeeSwipesPage() {
               dataIndex: 'route',
               render: (v: string) => <StatusChip tone="neutral">{v}</StatusChip>,
             },
+            { title: 'Shift', dataIndex: 'shift', render: (v: string | null) => v ?? '—' },
             { title: 'Flag', key: 'f', render: (_, r) => flagChip(r) },
             { title: 'Used', dataIndex: 'used', render: (_: boolean, r) => usedChip(r) },
+            { title: 'Rejected', key: 'rj', render: (_, r) => (r.rejected ? <Tooltip title={r.rejectReason ?? ''}><StatusChip tone="danger">Rejected</StatusChip></Tooltip> : null) },
           ]}
         />
       </Panel>

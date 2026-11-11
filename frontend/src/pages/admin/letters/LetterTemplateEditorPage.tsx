@@ -10,6 +10,7 @@ import { LetterEditor, type PlaceholderOption } from "../../../components/letter
 import { EmployeePicker, ExtraFieldInputs } from "../../../components/letters/LetterFields";
 import { placeholderOptions, stringifyExtras } from "../../../components/letters/letterUtils";
 import { apiErrorMessage } from "../../../lib/apiError";
+import { useAuth } from "../../../hooks/useAuth";
 import { formatDateTime } from "../../../lib/dates";
 import { fs, fw, layout, radius, space, v } from "../../../theme/tokens";
 import { ApprovalBanner, EmptyState, PageHeader, Panel, SideDrawer, Skel, Stack, StatusChip, Timeline, errorStatus, isForbidden, toast, useIsPhone } from "../../../ui";
@@ -57,6 +58,7 @@ export function LetterTemplateEditorPage() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
   const phone = useIsPhone();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const { data: template, isLoading, error, refetch } = useQuery({ queryKey: ["letters", "template", id], queryFn: () => lettersApi.getTemplate(id), retry: false });
   const current = template?.versions[0];
@@ -78,7 +80,8 @@ export function LetterTemplateEditorPage() {
     if (template) settingsForm.setFieldsValue({ name: template.name, description: template.description, visibleToEmployeeDefault: template.visibleToEmployeeDefault });
   }, [template, settingsForm]);
 
-  const placeholders = useMemo(() => placeholderOptions(fields), [fields]);
+  const isDirector = Boolean(user?.roleCodes.includes("SUPER_ADMIN"));
+  const placeholders = useMemo(() => placeholderOptions(fields, isDirector), [fields, isDirector]);
   const preview = useMemo(() => readableHtml(body, placeholders), [body, placeholders]);
   const dirty = Boolean(current) && (body !== current!.bodyHtml || JSON.stringify(fields) !== JSON.stringify(current!.extraFields));
 

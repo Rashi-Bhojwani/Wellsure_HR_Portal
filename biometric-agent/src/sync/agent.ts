@@ -153,6 +153,21 @@ export class Agent {
         if (move === "lost") this.log.warn("the device's log no longer holds the last record sent; sending every record again (the server drops the ones it has)", { serial });
         if (fresh.length) this.wakeSender();
       }
+      // A-10 G5: the server asked for this device to be read again for a date range. Every record of those days is queued again (the server's
+      // exact-duplicate key drops the ones it has); the request is reported done on the next heartbeat. Never before the sync-from date.
+      if (server.resync && ds.resyncDone !== server.resync.requestId) {
+        const { from, to, requestId } = server.resync;
+        const { records } = await driver.readAll(info.logCount);
+        const again = records.filter((r) => r.localTime.slice(0, 10) >= from && r.localTime.slice(0, 10) <= to && r.localTime.slice(0, 10) >= server.syncFrom);
+        if (again.length) {
+          this.outbox.append(serial, again.map((r) => ({ line: formatAttlogLine(r), localTime: r.localTime })));
+          await this.opts.hooks?.afterOutboxWrite?.(serial);
+          this.wakeSender();
+        }
+        ds.resyncDone = requestId;
+        await this.store.save();
+        this.log.info("device read again on request", { serial, requestId, from, to, records: again.length });
+      }
       const deviceLocal = await driver.deviceTime();
       const readAt = this.now();
       ds.clockOffsetSeconds = deviceMinusPcSeconds(deviceLocal, server.timezone, readAt) + (this.store.state.pcClockOffsetSeconds ?? 0);
@@ -326,6 +341,7 @@ export class Agent {
         outboxRecords: waiting.lines,
         oldestUnsentLocalTime: waiting.oldest,
         retention: this.retentionFor(ds, this.serverDevice(cfg.serial)),
+        resyncDone: ds.resyncDone ?? null,
       };
     });
     return {

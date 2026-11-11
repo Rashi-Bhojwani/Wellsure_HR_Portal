@@ -100,7 +100,7 @@ export async function startDelivery(runId: string): Promise<{ queued: boolean }>
 const sha256 = (b: Buffer) => createHash("sha256").update(b).digest("hex");
 
 export const DEMO_WATERMARK = "DEMO COMPANY: FICTIONAL PEOPLE AND ACCOUNTS. NOT FOR ANY BANK.";
-const layoutSaysDemo = (layout: import("./layout").Layout): boolean => [...layout.header.flat(), ...layout.trailer.flat(), ...layout.columns].some((c) => c.source === "CONSTANT" && /\bDEMO\b/.test(c.value));
+export const layoutSaysDemo = (layout: import("./layout").Layout): boolean => [...layout.header.flat(), ...layout.trailer.flat(), ...layout.columns].some((c) => c.source === "CONSTANT" && /\bDEMO\b/.test(c.value));
 
 export async function generateBankFile(runId: string, actor: Actor) {
   await requireHolds(actor.userId, "payroll.run");

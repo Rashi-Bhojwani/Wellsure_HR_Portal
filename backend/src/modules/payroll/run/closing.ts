@@ -319,8 +319,11 @@ export async function previewStep(slug: Slug, runId: string, actor: Actor): Prom
       const what = [...new Set(releases.map((r) => (r.kind === "PAYSLIPS_PUBLISHED" ? "payslips have been published" : "a bank file has been generated")))].join(" and ");
       blockers.push({ code: "RUN_RELEASED", title: "This period can no longer be unlocked", message: `${what[0]!.toUpperCase()}${what.slice(1)} for this period, so it cannot be unlocked. Put corrections through an adjustment in the next run.` });
     }
+    // P7-6b: held pay from this period already paid by an off-cycle run would be paid again by a new run for the period.
+    const paidOffCycle = await prisma.offCycleHeldRelease.count({ where: { item: { runId: run.id } } });
+    if (paidOffCycle > 0) blockers.push({ code: "RUN_RELEASED", title: "This period can no longer be unlocked", message: "Held pay from this period has been paid by an off-cycle run, so it cannot be unlocked. Put corrections through an adjustment in the next run." });
     const consumed = await prisma.payrollAdjustment.count({ where: { consumedByRunId: run.id } });
-    return envelope(slug, run, actor, blockers, payrollHash({ run: run.id, status: run.status, releases: releases.map((r) => r.kind) }), {
+    return envelope(slug, run, actor, blockers, payrollHash({ run: run.id, status: run.status, releases: releases.map((r) => r.kind), paidOffCycle }), {
       allows: [
         "History changes, cancellations and separations dated inside the period are allowed again.",
         "This final run is set aside as a record of what was once final. A new run can be calculated for the period.",

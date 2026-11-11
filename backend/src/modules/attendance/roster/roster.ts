@@ -1,3 +1,4 @@
+import { assertNotLocked } from "../../workforce/locks"; // A-10 G3
 import { createHash } from "node:crypto";
 import { writeAuditLogs } from "../../../lib/audit";
 import { businessToday } from "../../../lib/businessDate";
@@ -134,6 +135,7 @@ export async function confirmRoster(viewer: Viewer, input: RosterInput & { finge
   const p = await plan(viewer, input);
   if (p.ok.length === 0) throw new HttpError(409, "Nobody in that selection can be rostered any more. Review it again.", "SELECTION_CHANGED");
   if (p.fingerprint !== input.fingerprint) throw new HttpError(409, "The set changed since you looked at it (someone's schedule changed). Review it again before confirming.", "SELECTION_CHANGED");
+  await assertNotLocked("ROSTER", meta.actorUserId, p.ok.map((o) => ({ employeeId: o.employeeId, from: input.start, to: null }))); // A-10 G3
   const codes = new Map((await prisma.employee.findMany({ where: { id: { in: p.ok.map((o) => o.employeeId) } }, select: { id: true, employeeCode: true } })).map((e) => [e.id, e.employeeCode]));
   await prisma.$transaction(
     async (tx) => {

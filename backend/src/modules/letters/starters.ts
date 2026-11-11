@@ -1,3 +1,4 @@
+import { LETTER_PAY_PLACEHOLDERS } from "@shared/constants/letters";
 import { LETTER_STARTERS, letterStarter } from "@shared/constants/letterStarters";
 import { writeAuditLog } from "../../lib/audit";
 import { prisma } from "../../lib/prisma";
@@ -19,8 +20,11 @@ export function assertDirector(v: { roleCodes: string[] }, what: string) {
  * The A-3 hook. Once A-3 (Session A: letter figures from the salary structure) lands, this returns the figure fields a pay-carrying letter takes from the
  * person's salary structure (read by the directors only). Until then it returns none, and a pay-carrying starter states no figure at all.
  */
-export function letterFigureFields(_starterCode: string): ReadonlyArray<{ key: string; label: string }> {
-  return [];
+export function letterFigureFields(starterCode: string): ReadonlyArray<{ key: string; label: string }> {
+  // P7-3: a starter that carries pay may use the salary's own figures (directors only). Which ones fit is the template author's choice; all are offered.
+  const starter = LETTER_STARTERS.find((s) => s.code === starterCode);
+  if (!starter?.carriesPay) return [];
+  return Object.entries(LETTER_PAY_PLACEHOLDERS).map(([key, label]) => ({ key, label }));
 }
 
 export async function listStarters(viewer: { roleCodes: string[] }) {

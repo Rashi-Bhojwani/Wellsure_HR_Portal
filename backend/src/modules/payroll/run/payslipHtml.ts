@@ -8,9 +8,13 @@ import type { PayslipContent, PayslipLine } from "./payslip";
 const esc = escapeHtml;
 const rupees = (v: string) => `₹ ${v}`;
 
-function lineRows(lines: PayslipLine[]): string {
-  return lines.length === 0 ? `<tr><td class="none" colspan="2">None</td></tr>` : lines.map((l) => `<tr><td>${esc(l.label)}</td><td class="amt">${rupees(l.amount)}</td></tr>`).join("");
+// P7-3: a payslip with a year-to-date part gets a third column (the line's total for the financial year in this system); an older payslip has two, as it always had.
+function lineRows(lines: PayslipLine[], kind: string, ytd: PayslipContent["ytd"]): string {
+  const cols = ytd ? 3 : 2;
+  if (lines.length === 0) return `<tr><td class="none" colspan="${cols}">None</td></tr>`;
+  return lines.map((l) => `<tr><td>${esc(l.label)}</td><td class="amt">${rupees(l.amount)}</td>${ytd ? `<td class="amt">${ytd.byLine[`${kind}|${l.code}`] ? rupees(ytd.byLine[`${kind}|${l.code}`]!) : "—"}</td>` : ""}</tr>`).join("");
 }
+const head = (ytd: PayslipContent["ytd"]) => (ytd ? `<tr class="tot"><td></td><td class="amt">This month</td><td class="amt">Year to date</td></tr>` : "");
 
 export function payslipHtml(c: PayslipContent, opts: { watermark?: string | null } = {}): string {
   const wm = opts.watermark ? `<div class="wm">${esc(opts.watermark)}</div><div class="banner">${esc(opts.watermark)}</div>` : "";
@@ -53,11 +57,11 @@ table { width: 100%; border-collapse: collapse; }
 <tr><td class="k">Bank</td><td>${c.bank ? `${esc(c.bank.bankName)}, account ending ${esc(c.bank.accountLast4)}` : "—"}</td><td class="k">Identifiers</td><td>${ids || "—"}</td></tr>
 </table>
 <div class="cols">
-<div><h2>Earnings</h2><table>${lineRows(c.earnings)}<tr class="tot"><td>Gross</td><td class="amt">${rupees(c.totals.gross)}</td></tr></table></div>
-<div><h2>Deductions</h2><table>${lineRows(c.deductions)}${c.rounding ? `<tr><td>Rounding</td><td class="amt">${rupees(c.rounding)}</td></tr>` : ""}<tr class="tot"><td>Total deductions</td><td class="amt">${rupees(c.totals.deductions)}</td></tr></table></div>
+<div><h2>Earnings</h2><table>${head(c.ytd)}${lineRows(c.earnings, "EARNING", c.ytd)}<tr class="tot"><td>Gross</td><td class="amt">${rupees(c.totals.gross)}</td>${c.ytd ? `<td class="amt">${rupees(c.ytd.gross)}</td>` : ""}</tr></table></div>
+<div><h2>Deductions</h2><table>${head(c.ytd)}${lineRows(c.deductions, "DEDUCTION", c.ytd)}${c.rounding ? `<tr><td>Rounding</td><td class="amt">${rupees(c.rounding)}</td>${c.ytd ? "<td></td>" : ""}</tr>` : ""}<tr class="tot"><td>Total deductions</td><td class="amt">${rupees(c.totals.deductions)}</td>${c.ytd ? `<td class="amt">${rupees(c.ytd.deductions)}</td>` : ""}</tr></table></div>
 </div>
 <div class="net"><div class="n">Net pay ${rupees(c.totals.net)}</div><div class="w">${esc(c.netInWords)}</div></div>
 ${c.employerContributions.length ? `<div class="info"><b>Employer contributions (for information, not part of your pay):</b> ${c.employerContributions.map((l) => `${esc(l.label)} ${rupees(l.amount)}`).join(" · ")}</div>` : ""}
-<div class="foot">This is a computer-generated payslip. Year-to-date figures will be added in a later release.</div>
+<div class="foot">This is a computer-generated payslip.${c.ytd ? ` Year to date: financial year ${esc(c.ytd.financialYear)}, from payroll runs in this system only.` : ""}</div>
 </body></html>`;
 }

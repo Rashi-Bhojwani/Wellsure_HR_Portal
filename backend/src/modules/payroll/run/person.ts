@@ -9,6 +9,7 @@ import type { ComponentValue } from "../salary/schemas";
 import { applyRuleOverrides } from "./rules";
 import { computeDayFigures, countDays, iso, segmentFactor, type DayFigures } from "./days";
 import { computeEsi, computeLwf, computePf, computePt, resolveState, roundByRule } from "./statutory";
+import { applyLoanShortfall } from "./loanShortfall";
 import type { AdjustmentIn, CalcContext, ExceptionOut, ItemOut, LineOut, PersonInput } from "./types";
 
 // One person's pay for one cycle (docs/plans/PHASE_6.md §14D). A pure function of what was gathered and the rules: the same inputs always give the same lines and
@@ -262,6 +263,29 @@ export function calculatePerson(input: PersonInput, ctx: CalcContext): ItemOut {
       inputsOut.tds = { state: "WORKED_OUT", regime: t.regime, annualTax: annual.annualTax, thisMonth: month.tds };
       if (dec(month.tds).greaterThan(ZERO)) statutoryDeductions.push({ code: STATUTORY_LINE_CODES.TDS, label: STATUTORY_LINE_LABEL.TDS!, kind: "DEDUCTION", source: "TDS", sourceRef: null, amount: dec(month.tds), basis: tdsBasis });
     }
+  }
+
+  // ── D-37 item 4: loan instalments against what is left of net pay (the directors' rule per loan type; never below zero) ──
+  const loanAdjustments = input.adjustments.filter((a): a is AdjustmentIn & { id: string; loan: NonNullable<AdjustmentIn["loan"]> } => !!a.loan && !!a.id && a.direction === "DEDUCTION");
+  if (loanAdjustments.length > 0) {
+    const loanIds = new Set(loanAdjustments.map((a) => a.id));
+    const isLoanLine = (l: LineOut) => l.source === "ADJUSTMENT" && l.sourceRef !== null && loanIds.has(l.sourceRef);
+    const grossNow = sum(earningLines.map((l) => l.amount));
+    const others = sum([...deductionLines.filter((l) => !isLoanLine(l)), ...statutoryDeductions].map((l) => l.amount));
+    const result = applyLoanShortfall({ gross: grossNow, otherDeductions: others, instalments: loanAdjustments.map((a) => ({ adjustmentId: a.id, amount: a.amount, loanId: a.loan.loanId, typeKey: a.loan.typeKey, rule: a.loan.rule })), maxPercent: input.maxDeductionPercent ?? null });
+    for (let i = deductionLines.length - 1; i >= 0; i -= 1) {
+      const l = deductionLines[i]!;
+      if (!isLoanLine(l)) continue;
+      const take = result.recovered.get(l.sourceRef!)!;
+      if (take.isZero()) deductionLines.splice(i, 1);
+      else if (!take.equals(l.amount)) deductionLines[i] = { ...l, amount: take, basis: { ...l.basis, due: c(l.amount), carried: c(l.amount.minus(take)), shortfallRule: "PARTIAL_AND_CARRY" } };
+    }
+    for (const d of result.decisions) {
+      const what = d.rule === "STOP_RUN" ? "the directors' rule for this loan type stops the run until it is resolved" : d.rule === "SKIP_AND_CARRY" ? `nothing is recovered this month; ${d.due} stays owed for the next run` : `${d.recovered} is recovered and ${d.carried} is carried to the next run`;
+      exceptions.push({ code: "LOAN_SHORTFALL", severity: d.rule === "STOP_RUN" ? "BLOCKING" : "WARNING", message: `Net pay is too low for the instalment of ${d.due} on loan ${d.loanId} (${d.typeKey}): ${what}.` });
+    }
+    inputsOut.loanShortfall = result.decisions;
+    if (input.maxDeductionPercent) inputsOut.maxDeductionPercent = c(input.maxDeductionPercent);
   }
 
   // ── Totals, net, rounding ──

@@ -112,7 +112,22 @@ describe("payslips, the bank file and the statutory files from a final run", () 
       const acct = await prisma.employeeBankAccount.findFirstOrThrow({ where: { employeeId: who(n) } });
       expect(c.bank?.accountLast4).toBe(acct.accountNumberLast4);
       expect(JSON.stringify(slip.content)).not.toContain(decryptField(acct.accountNumberEncrypted)); // only the last four ever appear
+      // P7-3: the year-to-date part. This is these people's only finished run of the year, so each line's year to date is its own amount (independent sum in paise).
+      const ytd = (slip.content as { ytd?: { financialYear: string; byLine: Record<string, string>; gross: string; deductions: string } }).ytd!;
+      expect(ytd.financialYear).toBe("2026-27");
+      for (const l of item.lines.filter((x) => x.kind === "EARNING" || x.kind === "DEDUCTION")) expect(ytd.byLine[`${l.kind}|${l.code}`], l.code).toBe(l.amount.toFixed(2));
+      expect(ytd.gross).toBe(c.totals.gross);
+      expect(ytd.deductions).toBe(c.totals.deductions);
     }
+    // The person's own year-to-date report and salary revisions: theirs only (no id is ever taken from the request).
+    const report = await request(app).get("/api/tax/me/ytd?fy=2026-27").set(...authHeader(aToken));
+    expect(report.status).toBe(200);
+    const slipA = (await slipOf("a")).content as { totals: { gross: string; deductions: string } };
+    expect([report.body.totals.earnings, report.body.totals.deductions]).toEqual([slipA.totals.gross, slipA.totals.deductions]);
+    const revisions = await request(app).get("/api/tax/me/salary-revisions").set(...authHeader(aToken));
+    expect(revisions.status).toBe(200);
+    expect(revisions.body.revisions.length).toBeGreaterThan(0);
+    expect(revisions.body.revisions[0].breakup.length).toBeGreaterThan(0);
   });
 
   it("cannot be published twice, and the database itself refuses a second set, a change and a removal", async () => {

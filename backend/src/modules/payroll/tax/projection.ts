@@ -2,13 +2,17 @@ import { parseFinancialYearLabel } from "@shared/utils/financialYear";
 import { prisma } from "../../../lib/prisma";
 import { ZERO, dec, sum, type Money } from "../money";
 import { splitTaxable, type HeadLookup, type TaxableLine } from "./taxable";
+import { confirmedOpeningFor } from "./openings";
 
 // What a person has earned this financial year so far (finalised runs only; a draft run never counts) and how a month's lines add up to taxable pay. Pure where it can be.
 // Taxable is the pay head's own flag. A head whose flag is Not set cannot be counted, and the caller must stop and say so.
 
 export interface YearToDate {
+  /** Finalised runs plus the year's confirmed opening figures (A-3). */
   taxable: Money;
   tds: Money;
+  /** A-3: the confirmed opening figures included above (zero when none or not confirmed). */
+  opening: { taxable: Money; tds: Money; confirmed: boolean };
   /** The months (cycle end dates) that were counted. */
   months: Array<{ cycleEnd: string; taxable: Money; tds: Money }>;
 }
@@ -34,6 +38,7 @@ export async function yearToDate(employeeId: string, year: string, before: strin
     const split = splitTaxable(byMonth.get(cycleEnd) ?? [], head);
     return { cycleEnd, taxable: split.recurring.plus(split.oneOff), tds: tdsBy.get(cycleEnd) ?? ZERO };
   });
-  return { taxable: sum(months.map((m) => m.taxable)), tds: sum(months.map((m) => m.tds)), months };
+  const opening = await confirmedOpeningFor(employeeId, year);
+  return { taxable: sum(months.map((m) => m.taxable)).plus(opening.taxable), tds: sum(months.map((m) => m.tds)).plus(opening.tds), months, opening };
 }
 

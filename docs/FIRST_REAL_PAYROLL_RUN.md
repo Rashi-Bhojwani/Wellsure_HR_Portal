@@ -100,6 +100,21 @@ When all are entered, a **payroll approver who is allowed to see salaries and ba
 
 Two different people for payroll (see Section 0), two-step sign-in for all of them (strongly recommended, optional), real email switched on (payslip notices go out by email; with no mail driver they are only written to a file) and no developer account with access to any of the above. These are checked from the live system, not by a tick box.
 
+### 1.8 Opening figures and income tax (added 2026-11-06)
+
+If this system starts in the middle of a financial year, each person's pay and tax for the months before it must be entered under **Payroll → Opening
+Figures** (one by one, or a file in the template's layout), each with where it came from, and confirmed by the **other director**. A person who joined
+this year from another employer: their previous employer's pay and tax, as they declare it, the same way. If the company starts here on the first day of
+the year, confirm that there are none. **Until the year's opening figures are confirmed, a run with income tax switched on works out no TDS and says why.**
+The tax year's values (Payroll → Tax Years) must also be entered and confirmed, and each earning head must say whether it is taxable.
+
+### 1.9 Loans (added 2026-11-06)
+
+A loan type is Not set until a director chooses its limits, its yearly rate (zero is a choice) and the three pay heads it uses (money paid out under an
+earning head; Principal Part and Interest Part under deduction heads you create). A different director sanctions each loan. The money is paid and
+recovered **only through payroll runs**. Decide, before the first loan, what should happen when someone's net pay cannot cover an instalment (today the
+run stops).
+
 ---
 
 ## 2. "Ready for first real run"

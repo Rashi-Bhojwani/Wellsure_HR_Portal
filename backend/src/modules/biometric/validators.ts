@@ -44,6 +44,7 @@ const deviceReportSchema = z
     outboxRecords: z.number().int().min(0).optional(),
     oldestUnsentLocalTime: z.string().max(25).nullable().optional(),
     retention: retentionReportSchema.optional(),
+    resyncDone: z.string().min(1).max(64).nullable().optional(), // A-10 G5
   })
   .passthrough();
 export const agentHeartbeatSchema = z

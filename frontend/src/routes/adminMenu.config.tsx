@@ -1,7 +1,6 @@
 import type { ComponentType } from "react";
 import {
   AuditOutlined,
-  BankOutlined,
   CalculatorOutlined,
   CalendarOutlined,
   CheckSquareOutlined,
@@ -64,6 +63,7 @@ const ImportCenterPage = lazyPage(() => import("../pages/admin/import/ImportCent
 const AuditLogPage = lazyPage(() => import("../pages/admin/auditLog/AuditLogPage"), "AuditLogPage");
 const PayrollAuditPage = lazyPage(() => import("../pages/admin/auditLog/AuditLogPage"), "PayrollAuditPage");
 const SystemSettingsPage = lazyPage(() => import("../pages/admin/settings/SystemSettingsPage"), "SystemSettingsPage");
+const DefaultBehavioursPage = lazyPage(() => import("../pages/admin/settings/DefaultBehavioursPage"), "DefaultBehavioursPage"); // D-37
 const CompanyDocumentsPage = lazyPage(() => import("../pages/admin/documents/CompanyDocumentsPage"), "CompanyDocumentsPage");
 const LeaveTypesPoliciesPage = lazyPage(() => import("../pages/admin/adminTools/LeaveTypesPoliciesPage"), "LeaveTypesPoliciesPage");
 const HolidayCalendarsAdminPage = lazyPage(() => import("../pages/admin/adminTools/HolidayCalendarsAdminPage"), "HolidayCalendarsAdminPage");
@@ -113,6 +113,14 @@ const RuleOverridesPage = lazyPage(() => import("../pages/admin/payroll/RuleOver
 const MonthlyInputsPage = lazyPage(() => import("../pages/admin/payroll/MonthlyInputsPage"), "MonthlyInputsPage");
 const PayslipLinksPage = lazyPage(() => import("../pages/admin/payroll/PayslipLinksPage"), "PayslipLinksPage");
 const NotOnPayrollPage = lazyPage(() => import("../pages/admin/payroll/NotOnPayrollPage"), "NotOnPayrollPage");
+const TdsForm16Page = lazyPage(() => import("../pages/admin/payroll/TdsForm16Page"), "TdsForm16Page"); // P7-7
+const SettlementsPage = lazyPage(() => import("../pages/admin/payroll/SettlementsPage"), "SettlementsPage"); // P7-6
+const OffCyclePage = lazyPage(() => import("../pages/admin/payroll/OffCyclePage"), "OffCyclePage"); // P7-6b
+const PayTypesPage = lazyPage(() => import("../pages/admin/payroll/PayTypesPage"), "PayTypesPage"); // item 3
+const QuarterlyTdsPage = lazyPage(() => import("../pages/admin/payroll/QuarterlyTdsPage"), "QuarterlyTdsPage"); // item 3
+const ReimbursementsAdminPage = lazyPage(() => import("../pages/admin/payroll/ReimbursementsAdminPage"), "ReimbursementsAdminPage"); // P7-5
+const LoansAdminPage = lazyPage(() => import("../pages/admin/payroll/LoansAdminPage"), "LoansAdminPage"); // P7-4
+const OpeningFiguresPage = lazyPage(() => import("../pages/admin/payroll/OpeningFiguresPage"), "OpeningFiguresPage"); // A-3
 const TaxYearsPage = lazyPage(() => import("../pages/admin/payroll/TaxYearsPage"), "TaxYearsPage");
 const TaxDeclarationsPage = lazyPage(() => import("../pages/admin/payroll/TaxDeclarationsPage"), "TaxDeclarationsPage");
 const HeldSalariesPage = lazyPage(() => import("../pages/admin/payroll/HeldSalariesPage"), "HeldSalariesPage");
@@ -128,6 +136,12 @@ const LetterSettingsPage = lazyPage(() => import("../pages/admin/letters/parity/
 // A-9 — end
 // A-10 (docs/plans/GREYTHR_PARITY_WORKFORCE.md) — begin
 const WorkforceSettingsPage = lazyPage(() => import("../pages/admin/workforce/parity/WorkforceSettingsPage"), "WorkforceSettingsPage");
+const AttendanceLocksPage = lazyPage(() => import("../pages/admin/workforce/parity/AttendanceLocksPage"), "AttendanceLocksPage");
+const CalendarAdjustmentsPage = lazyPage(() => import("../pages/admin/workforce/parity/CalendarAdjustmentsPage"), "CalendarAdjustmentsPage");
+const WorkflowPage = lazyPage(() => import("../pages/admin/workforce/parity/WorkflowPage"), "WorkflowPage");
+const LeaversPage = lazyPage(() => import("../pages/admin/workforce/parity/LeaversPage"), "LeaversPage");
+const DeviceSyncPage = lazyPage(() => import("../pages/admin/workforce/parity/DeviceSyncPage"), "DeviceSyncPage");
+const LeaveReviewersPage = lazyPage(() => import("../pages/admin/workforce/parity/LeaveReviewersPage"), "LeaveReviewersPage");
 // A-10 — end
 const SetupChecklistPage = lazyPage(() => import("../pages/admin/payroll/SetupChecklistPage"), "SetupChecklistPage");
 // Anyone holding any payroll key sees the Payroll group; HR holds none (the hard lock), so HR never sees it. The server still decides every request.
@@ -372,13 +386,20 @@ export const adminApps: AdminApp[] = [
           { key: "payroll-payslip-links", label: "Payslip Links", path: "payroll/payslip-links", icon: LinkOutlined, element: PayslipLinksPage, needs: PAYROLL_NEEDS },
           { key: "payroll-not-on-payroll", label: "Not on Payroll", path: "payroll/not-on-payroll", icon: UserDeleteOutlined, element: NotOnPayrollPage, needs: PAYROLL_NEEDS },
           { key: "payroll-tax-years", label: "Tax Years", path: "payroll/tax-years", icon: FileProtectOutlined, element: TaxYearsPage, needs: PAYROLL_NEEDS },
+          { key: "payroll-opening-figures", label: "Opening Figures", path: "payroll/opening-figures", icon: FileProtectOutlined, element: OpeningFiguresPage, needs: { director: true } }, // A-3
+          { key: "payroll-loans", label: "Loans", path: "payroll/loans", icon: FileProtectOutlined, element: LoansAdminPage, needs: { director: true } }, // P7-4
+          { key: "payroll-reimbursements", label: "Reimbursements", path: "payroll/reimbursements", icon: FileProtectOutlined, element: ReimbursementsAdminPage, needs: { director: true } }, // P7-5
+          { key: "payroll-settlements", label: "Settlements", path: "payroll/settlements", icon: FileProtectOutlined, element: SettlementsPage, needs: { director: true } }, // P7-6
+          { key: "payroll-offcycle", label: "Off-cycle runs", path: "payroll/off-cycle", icon: FileProtectOutlined, element: OffCyclePage, needs: { director: true } }, // P7-6b
+          { key: "payroll-pay-types", label: "Loan and claim types", path: "payroll/pay-types", icon: FileProtectOutlined, element: PayTypesPage, needs: { director: true } }, // item 3
+          { key: "payroll-quarterly-tds", label: "Quarterly TDS data", path: "payroll/quarterly-tds", icon: FileProtectOutlined, element: QuarterlyTdsPage, needs: { director: true } }, // item 3
+          { key: "payroll-tds-form16", label: "TDS and Form 16", path: "payroll/tds-form16", icon: FileProtectOutlined, element: TdsForm16Page, needs: { director: true } }, // P7-7
           { key: "payroll-tax-declarations", label: "Tax Declarations", path: "payroll/tax-declarations", icon: FormOutlined, element: TaxDeclarationsPage, needs: PAYROLL_NEEDS },
           { key: "payroll-holds", label: "Held Salaries", path: "payroll/holds", icon: PauseCircleOutlined, element: HeldSalariesPage, needs: PAYROLL_NEEDS },
           { key: "payroll-run", label: "Payroll Run", path: "payroll/run", icon: FundOutlined, element: PayrollRunsPage, needs: PAYROLL_NEEDS },
           { key: "payroll-compare", label: "Compare Registers", path: "payroll/compare", icon: DiffOutlined, element: CompareRegistersPage, needs: PAYROLL_NEEDS },
           { key: "payroll-audit", label: "Payroll Audit Trail", path: "payroll/audit", icon: AuditOutlined, element: PayrollAuditPage, needs: PAYROLL_NEEDS },
           { key: "payroll-layouts", label: "Bank and Statutory Layouts", path: "payroll/layouts", icon: FileProtectOutlined, element: LayoutsPage, needs: PAYROLL_NEEDS },
-          { key: "loans-admin", label: "Loans & Advances", path: "payroll/loans", icon: BankOutlined, phase: "Phase 7", needs: PAYROLL_NEEDS },
         ],
       },
     ],
@@ -409,6 +430,12 @@ export const adminApps: AdminApp[] = [
           // A-9 — begin
           // A-10 — begin
           { key: "workforce-settings", label: "Workforce Settings", path: "admin-tools/workforce-settings", icon: SettingOutlined, element: WorkforceSettingsPage, needs: { director: true } },
+          { key: "attendance-locks", label: "Attendance Locks", path: "admin-tools/attendance-locks", icon: SettingOutlined, element: AttendanceLocksPage, needs: { director: true } },
+          { key: "leave-reviewers", label: "Leave Reviewers", path: "admin-tools/leave-reviewers", icon: SettingOutlined, element: LeaveReviewersPage, needs: { director: true } },
+          { key: "calendar-adjustments", label: "Calendar Adjustments", path: "admin-tools/calendar-adjustments", icon: SettingOutlined, element: CalendarAdjustmentsPage, needs: { any: ["leave.policy.manage", "attendance.config.manage"] } },
+          { key: "device-sync", label: "Device Sync Requests", path: "admin-tools/device-sync", icon: SettingOutlined, element: DeviceSyncPage, needs: { any: ["attendance.devices.manage"] } },
+          { key: "leavers", label: "Leavers", path: "admin-tools/leavers", icon: SettingOutlined, element: LeaversPage, needs: { any: ["leave.recalculate"] } },
+          { key: "workflow", label: "Workflow", path: "admin-tools/workflow", icon: SettingOutlined, element: WorkflowPage, needs: { any: ["leave.approve", "leave.view", "attendance.regularization.approve", "attendance.regularization.view"] } },
           // A-10 — end
           { key: "letter-settings", label: "Letter Settings", path: "admin-tools/letter-settings", icon: FileProtectOutlined, element: LetterSettingsPage, needs: { director: true } },
           // A-9 — end
@@ -417,6 +444,7 @@ export const adminApps: AdminApp[] = [
           { key: "import-export", label: "Data Import/Export", path: "admin-tools/import-export", icon: CloudUploadOutlined, element: ImportCenterPage, needs: { any: ["import.manage", "import.details.manage", "invitations.send"] } },
           { key: "audit-log", label: "Audit Log", path: "admin-tools/audit-log", icon: AuditOutlined, element: AuditLogPage, needs: { any: ["audit.view"] } },
           { key: "system-settings", label: "System Settings", path: "admin-tools/settings", icon: SettingOutlined, element: SystemSettingsPage, needs: { any: ["settings.manage"] } },
+          { key: "default-behaviours", label: "Default behaviours", path: "settings/behaviours", icon: SettingOutlined, element: DefaultBehavioursPage, needs: { director: true } }, // D-37
         ],
       },
     ],

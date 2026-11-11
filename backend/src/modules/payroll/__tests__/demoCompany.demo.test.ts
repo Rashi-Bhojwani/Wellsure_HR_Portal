@@ -14,6 +14,7 @@ import { DEMO_WATERMARK } from "../run/release";
 import { registerPayrollSeams } from "../wiring";
 import type { RulePin } from "../rules/context";
 import { crawlGets } from "./sensitiveCrawl";
+import { seedDemoPayActivity, type DemoActivityResult } from "../../../../scripts/demo/seedDemoPayActivity";
 
 interface SetupItemShape {
   id: string;
@@ -101,6 +102,45 @@ describe("the demo company", () => {
     expect((await call("DEMO004", "get", "tax/years")).status).toBe(403); // HR
     expect((await call("DEMO004", "get", `tax/declarations?fy=${years.body.years[0].year}`)).status).toBe(403);
     expect((await call("DEMO005", "get", "tax/years")).status).toBe(403); // the developer
+  });
+
+  let history: DemoActivityResult;
+  it("has a made-up pay history: two finished runs, loans in four states, claims in five states, two holds, two settlements and a finished off-cycle run", async () => {
+    history = await seedDemoPayActivity();
+    const runs = await prisma.payrollRun.findMany({ where: { id: { in: history.runs } }, orderBy: { cycleStart: "asc" } });
+    expect(runs.map((r) => r.status)).toEqual(["FINALISED", "FINALISED"]);
+    const code = async (employeeId: string) => (await prisma.employee.findUniqueOrThrow({ where: { id: employeeId } })).employeeCode;
+    const heldIn = async (runId: string) => Promise.all((await prisma.payrollRunItem.findMany({ where: { runId, status: "HELD" } })).map(async (i) => `${await code(i.employeeId)} ${i.holdReason}`));
+    expect((await heldIn(runs[0]!.id)).sort()).toEqual(["DEMO012 NO_BANK_ACCOUNT"]);
+    expect((await heldIn(runs[1]!.id)).sort()).toEqual(["DEMO009 DIRECTOR_HOLD", "DEMO012 NO_BANK_ACCOUNT"]);
+    // Loans: active (one instalment recovered), closed (fully recovered), stopped (recovered at exit by the off-cycle run), a shortfall month (skipped with a warning).
+    const loan = async (id: string) => call("DEMO001", "get", `loans/${id}`);
+    const active = await loan(history.loans.active);
+    expect(active.body.schedule.map((r: { state: string }) => r.state).slice(0, 2)).toEqual(["CONSUMED", "PENDING"]);
+    expect((await loan(history.loans.closed)).body.balance).toBe("0.00");
+    expect((await loan(history.loans.stopped)).body.balance).toBe("0.00");
+    expect(await prisma.offCycleLoanRecovery.count({ where: { loanId: history.loans.stopped } })).toBe(1);
+    const shortfallItem = await prisma.payrollRunItem.findFirstOrThrow({ where: { runId: runs[1]!.id, employee: { employeeCode: "DEMO002" } } });
+    expect((shortfallItem.exceptions as Array<{ code: string; severity: string }>).find((e) => e.code === "LOAN_SHORTFALL")).toMatchObject({ severity: "WARNING" });
+    expect((await loan(history.loans.shortfall)).body.schedule[0].state).toBe("PENDING");
+    // Claims of two types in five states.
+    const claims = (await call("DEMO001", "get", "reimbursements?status=ALL")).body.claims as Array<{ id: string; status: string; typeKey: string }>;
+    const stateOf = (id: string) => claims.find((c) => c.id === id)!.status;
+    expect([stateOf(history.claims.paid!), stateOf(history.claims.approved!), stateOf(history.claims.submitted!), stateOf(history.claims.rejected!), stateOf(history.claims.withdrawn!)]).toEqual(["PAID", "APPROVED", "SUBMITTED", "REJECTED", "WITHDRAWN"]);
+    expect(new Set(claims.map((c) => c.typeKey))).toEqual(new Set(["DEMO_TRAVEL", "DEMO_MEALS"]));
+    // Settlements: one paid by the off-cycle run, one confirmed and unpaid. The off-cycle run is finished: its file is the DEMO one and was marked sent.
+    const seps = (await call("DEMO001", "get", "settlements")).body.separations as Array<{ settlement: { id: string; state: string } | null }>;
+    const sState = (id: string) => seps.find((x) => x.settlement?.id === id)!.settlement!.state;
+    expect([sState(history.settlements.paid), sState(history.settlements.unpaid)]).toEqual(["PAID", "CONFIRMED"]);
+    const off = (await call("DEMO001", "get", "offcycle")).body.runs.find((r: { id: string }) => r.id === history.offCycleRunId);
+    expect(off).toMatchObject({ state: "FILE_WRITTEN", file: { sentToBank: true } });
+    expect(off.file.fileName).toMatch(/^DEMO-/);
+    // Held pay still owed is offered for an off-cycle run.
+    const candidates = (await call("DEMO001", "get", "offcycle/candidates")).body.candidates as Array<{ kind: string; employeeCode: string }>;
+    expect(candidates.filter((c) => c.kind === "HELD_PAY").map((c) => c.employeeCode).sort()).toEqual(["DEMO009", "DEMO012", "DEMO012"]);
+    // Every name in the history is a DEMO one.
+    const names = await prisma.employeeNameHistory.findMany({ where: { employee: { employeeCode: { startsWith: "DEMO" } } } });
+    for (const n of names) expect(n.fullName).toMatch(/^Demo /);
   });
 
   it("a whole payroll run goes through every step on the demo company, and it is a real run, not a test", async () => {

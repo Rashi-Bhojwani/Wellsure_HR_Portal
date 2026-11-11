@@ -55,6 +55,6 @@ export async function statementFor(employeeId: string, fyRaw?: string) {
     regimes: comparison.results,
     paidSoFar: { taxable: canonicalDecimal(paid.taxable), tds: canonicalDecimal(paid.tds), months },
     toCome,
-    note: "Pay from before this system, and marginal relief, are not counted. Months left are a projection at this month's recurring pay.",
+    note: "Pay from before this system counts once its opening figures are confirmed by a second director (Payroll → Opening Figures). Marginal relief is not counted. Months left are a projection at this month's recurring pay.",
   };
 }

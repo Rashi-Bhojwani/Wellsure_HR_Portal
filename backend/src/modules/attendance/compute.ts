@@ -1,3 +1,5 @@
+import { loadCalendar } from "../workforce/calendar"; // A-10 G4
+import { rejectedPunchIds } from "../workforce/swipes"; // A-10 G5
 import { Prisma, type DailyAttendance } from "@prisma/client";
 import { isWeekOff, type WeekOffRule } from "@shared/utils/attendance";
 import { businessToday } from "../../lib/businessDate";
@@ -159,11 +161,10 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
 
   const fromD = utcDate(from);
   const lastD = utcDate(last);
-  const [employees, assignments, mappings, holidays, leaves, existing, manual, overrides, shiftOverrides, released] = await Promise.all([
+  const [employees, assignments, mappings, leaves, existing, manual, overrides, shiftOverrides, released] = await Promise.all([
     prisma.employee.findMany({ where: { id: { in: employeeIds } }, select: { id: true, dateOfJoining: true, lastWorkingDate: true } }),
     assignmentsBetween(employeeIds, utcDate(addDays(from, -1)), utcDate(addDays(last, 1))),
     deviceMappingPeriods(employeeIds, fromD, lastD),
-    prisma.holiday.findMany({ where: { date: { gte: fromD, lte: lastD } }, select: { date: true, name: true } }),
     prisma.leaveRequest.findMany({
       where: { employeeId: { in: employeeIds }, status: "APPROVED", fromDate: { lte: lastD }, toDate: { gte: fromD } },
       select: { id: true, employeeId: true, fromDate: true, toDate: true, fromDayPart: true, toDayPart: true, leaveType: { select: { code: true, isPaid: true } } },
@@ -180,6 +181,10 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
   const punches = await prisma.rawPunch.findMany({
     where: { employeeId: { in: employeeIds }, punchedAt: { gte: new Date(dayStartMs(addDays(from, -1))), lt: new Date(dayStartMs(addDays(last, 2))) } },
     select: { id: true, employeeId: true, punchedAt: true, flag: true, flagResolution: { select: { decision: true } } },
+  }).then(async (rows) => {
+    // A-10 G5: a swipe rejected by HR (its latest decision is REJECT) is never used.
+    const rejected = await rejectedPunchIds(rows.map((r) => r.id));
+    return rejected.size ? rows.filter((r) => !rejected.has(r.id)) : rows;
   });
 
   // A finalised cycle is frozen: no day inside it is written, whether or not the day exists yet. (Days that do exist are
@@ -188,7 +193,8 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
   const finalised = await finalisedPeriodsOverlapping(from, last);
   // The cut-over guard: nothing before the engine start date is computed, written or deleted (lib/attendanceSettings.ts getEngineStartDate).
   const engineStart = await getEngineStartDate();
-  const holidayOn = new Map(holidays.map((h) => [iso(h.date), h.name]));
+  // A-10 G4: holidays and week-offs are read through one calendar (location-limited holidays, weekend overrides).
+  const calendar = await loadCalendar(employees.map((e) => e.id), from, last);
   const existingBy = new Map(existing.map((e) => [`${e.employeeId}|${iso(e.date)}`, e]));
   const changedByEmployee = new Map<string, string[]>();
 
@@ -266,9 +272,9 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
       const input: DayInput = {
         date,
         employed,
-        holiday: holidayOn.get(date) ?? null,
+        holiday: calendar.holidayFor(emp.id, date),
         shift: shiftOn(date, a),
-        weekOff: a ? isWeekOff(a.weekOffPattern.rules as unknown as WeekOffRule[], utcDate(date)) : false,
+        weekOff: a ? isWeekOff(calendar.weekOffOverrideFor(emp.id, date) ?? (a.weekOffPattern.rules as unknown as WeekOffRule[]), utcDate(date)) : false,
         leave: leaveOn.get(date) ?? { first: null, second: null },
         capture: captured(date) ? "DEVICE" : "MANUAL",
         manual: manual.get(key) ?? null,

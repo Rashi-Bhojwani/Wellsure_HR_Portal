@@ -8,7 +8,7 @@ import { AccordionItem } from "../../../components/payroll/AccordionItem";
 import { ProgressRow } from "../../../components/payroll/payrollUi";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatDateTime } from "../../../lib/dates";
-import { EmptyState, PageHeader, Panel, SkeletonCard, Stack } from "../../../ui";
+import { EmptyState, PageHeader, Panel, SkeletonCard, Stack, StatusChip } from "../../../ui";
 
 const { Text } = Typography;
 
@@ -82,6 +82,15 @@ export function ReadyPage() {
             <Flex vertical gap={12}>
               {data.notRequiredYet.map((n) => (
                 <AccordionItem key={n.itemId} title={n.title} chips={<SetupStatusTag status={n.status} />} summary={<>Why it can wait: {n.reason}</>} />
+              ))}
+            </Flex>
+          </Panel>
+        )}
+        {(data.behaviours ?? []).length > 0 && (
+          <Panel title="Default behaviours (for information; never blocking)">
+            <Flex vertical gap={12}>
+              {(data.behaviours ?? []).map((b) => (
+                <AccordionItem key={b.itemId} title={b.title} chips={<StatusChip tone={b.state === "CONFIRMED" ? "success" : b.state === "DEFAULT" ? "info" : "warning"}>{b.label ?? "Changed and confirmed"}</StatusChip>} summary={<>{b.detail} <Link to={b.where.path}>Change in settings</Link></>} />
               ))}
             </Flex>
           </Panel>

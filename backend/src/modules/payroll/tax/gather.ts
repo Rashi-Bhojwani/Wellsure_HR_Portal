@@ -5,6 +5,7 @@ import type { TaxIn } from "../run/types";
 import { countedDeductions } from "./declarations";
 import { missingForTds } from "./schema";
 import { yearToDate } from "./projection";
+import { openingsConfirmed } from "./openings";
 import type { HeadLookup } from "./taxable";
 import { taxYearForEngine } from "./years";
 
@@ -23,6 +24,8 @@ export async function gatherTax(ctx: RuleContext, cycle: { start: Date; end: Dat
   if (year) ctx.addLivePin({ kind: "TAX_YEAR", key: fy, version: year.version, valueHash: year.valueHash });
   const values = year?.value ?? null;
   const missing = missingForTds(values);
+  // A-3: real income tax waits until the year's opening figures are confirmed by a different director (an empty year is confirmed too, on purpose).
+  if (!(await openingsConfirmed(fy))) missing.push("confirmed opening figures (Payroll → Opening Figures: enter them, or confirm there are none, and a different director confirms)");
   const sections = values?.sections?.value ?? [];
   const out = new Map<string, TaxIn>();
   for (const id of employeeIds) {

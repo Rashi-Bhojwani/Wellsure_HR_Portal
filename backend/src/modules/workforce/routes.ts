@@ -5,6 +5,14 @@ import { authenticate } from "../../middleware/authenticate";
 import { refuseDeveloper } from "../../middleware/refuseDeveloper";
 import { requireAnyPermission } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
+import { prisma } from "../../lib/prisma";
+import { createWeekendOverride, holidayLocations, listWeekendOverrides, setHolidayLocations, voidWeekendOverride, type NewWeekendOverride } from "./calendar";
+import { createReviewer, listReviewers, voidReviewer } from "./reviewers";
+import { applyLeaver, listLeavers, previewLeaver } from "./leavers";
+import { decideMany, MAX_BULK, monitor, review, type WorkflowType } from "./workflow";
+import { cancelSync, decideSwipes, listSync, MAX_SWIPE_BATCH, requestSync } from "./swipes";
+import { createLock, listLocks, LOCK_CATEGORIES, voidLock, type NewLock } from "./locks";
+import { exportRosterGrid, rosterGrid, type RosterGridQuery } from "../attendance/roster/grid";
 import { getWorkforceSetting, saveWorkforceSetting, settingHistory, settingView, WORKFORCE_SETTING_KEYS, type WorkforceSettingKey } from "./settings";
 
 // A-10 (docs/plans/GREYTHR_PARITY_WORKFORCE.md). Every route: signed in, never the Developer role, validated, a permission, scope in the service where a person's
@@ -33,3 +41,97 @@ workforceRouter.get("/settings/:key/history", validate({ params: keyParams }), a
   res.json({ history: await settingHistory(req.params.key as WorkforceSettingKey) });
 });
 workforceRouter.put("/settings/:key", validate({ params: keyParams, body: saveBody }), async (req, res) => void res.json(await saveWorkforceSetting(req.params.key as WorkforceSettingKey, req.body.value, req.body.reason, viewerOf(req), metaOf(req))));
+
+// G2: the roster month grid (item 4) and its export. Scope in the service (rosterGrid → visibleIds).
+const rosterReaders = requireAnyPermission("attendance.view", "attendance.roster.manage");
+const gridQuery = z.object({
+  cycleStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  locationId: z.string().min(1).max(64).optional(),
+  departmentId: z.string().min(1).max(64).optional(),
+});
+workforceRouter.get("/roster/grid", rosterReaders, validate({ query: gridQuery }), async (req, res) => void res.json(await rosterGrid(viewerOf(req), req.query as RosterGridQuery)));
+workforceRouter.get("/roster/grid/export", rosterReaders, validate({ query: gridQuery }), async (req, res) => {
+  const { filename, buffer } = await exportRosterGrid(viewerOf(req), req.query as RosterGridQuery);
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.status(200).send(buffer);
+});
+
+// G3: attendance activity locks (item 7). Directors only (in the service); every lock and void audited.
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "A date as YYYY-MM-DD");
+const lockBody = z.object({
+  effectiveFrom: isoDate,
+  fromDate: isoDate,
+  toDate: isoDate,
+  categories: z.array(z.enum(LOCK_CATEGORIES)).min(1, "Choose at least one activity"),
+  segmentId: z.string().min(1).max(64).nullable().optional(),
+  reason: z.string().trim().min(3, "Say why (a few words)").max(300),
+});
+const voidBody = z.object({ reason: z.string().trim().min(3, "Say why (a few words)").max(300) });
+const idParams = z.object({ id: z.string().min(1).max(64) });
+workforceRouter.get("/locks", async (req, res) => void res.json(await listLocks(viewerOf(req))));
+workforceRouter.post("/locks", validate({ body: lockBody }), async (req, res) => void res.status(201).json(await createLock(viewerOf(req), req.body as NewLock, metaOf(req))));
+workforceRouter.post("/locks/:id/void", validate({ params: idParams, body: voidBody }), async (req, res) => void res.json(await voidLock(viewerOf(req), req.params.id as string, req.body.reason as string, metaOf(req))));
+
+// G4: location-limited holidays (leave.policy.manage), weekend overrides (attendance.config.manage, scope in the service), leave type reviewers (directors).
+const holidayLocBody = z.object({ locationIds: z.array(z.string().min(1).max(64)).max(200), reason: z.string().trim().min(3, "Say why (a few words)").max(300) });
+workforceRouter.get("/holidays/locations", requireAnyPermission("leave.policy.manage"), async (_req, res) => {
+  const ids = (await prisma.holiday.findMany({ select: { id: true } })).map((h) => h.id);
+  res.json({ locations: Object.fromEntries(await holidayLocations(ids)) });
+});
+workforceRouter.put("/holidays/:id/locations", requireAnyPermission("leave.policy.manage"), validate({ params: idParams, body: holidayLocBody }), async (req, res) =>
+  void res.json(await setHolidayLocations(viewerOf(req), req.params.id as string, req.body.locationIds as string[], req.body.reason as string, metaOf(req))),
+);
+const weekendBody = z
+  .object({
+    fromDate: isoDate,
+    toDate: isoDate,
+    weekOffPatternId: z.string().min(1).max(64),
+    employeeIds: z.array(z.string().min(1).max(64)).max(2000).optional(),
+    segmentId: z.string().min(1).max(64).nullable().optional(),
+    reason: z.string().trim().min(3, "Say why (a few words)").max(300),
+  })
+  .refine((b) => (b.employeeIds?.length ?? 0) > 0 || !!b.segmentId, { message: "Choose the people (a list or a saved segment)." });
+const canConfigure = requireAnyPermission("attendance.config.manage");
+workforceRouter.get("/weekend-overrides", canConfigure, async (req, res) => void res.json(await listWeekendOverrides(viewerOf(req))));
+workforceRouter.post("/weekend-overrides", canConfigure, validate({ body: weekendBody }), async (req, res) => void res.status(201).json(await createWeekendOverride(viewerOf(req), req.body as NewWeekendOverride, metaOf(req))));
+workforceRouter.post("/weekend-overrides/:id/void", canConfigure, validate({ params: idParams, body: voidBody }), async (req, res) => void res.json(await voidWeekendOverride(viewerOf(req), req.params.id as string, req.body.reason as string, metaOf(req))));
+const reviewerBody = z.object({
+  leaveTypeId: z.string().min(1).max(64),
+  reviewerEmployeeId: z.string().min(1).max(64),
+  locationId: z.string().min(1).max(64).nullable().optional(),
+  departmentId: z.string().min(1).max(64).nullable().optional(),
+  reason: z.string().trim().min(3, "Say why (a few words)").max(300),
+});
+workforceRouter.get("/leave-reviewers", async (req, res) => void res.json(await listReviewers(viewerOf(req))));
+workforceRouter.post("/leave-reviewers", validate({ body: reviewerBody }), async (req, res) => void res.status(201).json(await createReviewer(viewerOf(req), req.body, metaOf(req))));
+workforceRouter.post("/leave-reviewers/:id/void", validate({ params: idParams, body: voidBody }), async (req, res) => void res.json(await voidReviewer(viewerOf(req), req.params.id as string, req.body.reason as string, metaOf(req))));
+
+// G5: reject / reinstate swipes (attendance.devices.manage, scope in the service) and device sync requests.
+const swipeDecideBody = z.object({
+  punchIds: z.array(z.string().min(1).max(64)).min(1).max(MAX_SWIPE_BATCH),
+  action: z.enum(["REJECT", "REINSTATE"]),
+  reason: z.string().trim().min(3, "Say why (a few words)").max(300),
+});
+const canDevices = requireAnyPermission("attendance.devices.manage");
+workforceRouter.post("/swipes/decide", canDevices, validate({ body: swipeDecideBody }), async (req, res) => void res.json(await decideSwipes(viewerOf(req), req.body, metaOf(req))));
+const syncBody = z.object({ deviceId: z.string().min(1).max(64), fromDate: isoDate, toDate: isoDate, reason: z.string().trim().min(3, "Say why (a few words)").max(300) });
+workforceRouter.get("/sync-requests", canDevices, async (req, res) => void res.json(await listSync(viewerOf(req))));
+workforceRouter.post("/sync-requests", canDevices, validate({ body: syncBody }), async (req, res) => void res.status(201).json(await requestSync(viewerOf(req), req.body, metaOf(req))));
+workforceRouter.post("/sync-requests/:id/cancel", canDevices, validate({ params: idParams }), async (req, res) => void res.json(await cancelSync(viewerOf(req), req.params.id as string, metaOf(req))));
+
+// G6: leavers and leave recalculated to the last working day (leave.recalculate; scope in the service; days only).
+const canRecalc = requireAnyPermission("leave.recalculate");
+const leaversQuery = z.object({ from: isoDate.optional(), to: isoDate.optional(), status: z.enum(["PENDING", "DONE"]).optional() });
+workforceRouter.get("/leavers", canRecalc, validate({ query: leaversQuery }), async (req, res) => void res.json(await listLeavers(viewerOf(req), req.query as { from?: string; to?: string; status?: "PENDING" | "DONE" })));
+workforceRouter.get("/leavers/:id/preview", canRecalc, validate({ params: idParams }), async (req, res) => void res.json(await previewLeaver(viewerOf(req), req.params.id as string, metaOf(req))));
+workforceRouter.post("/leavers/:id/apply", canRecalc, validate({ params: idParams }), async (req, res) => void res.json(await applyLeaver(viewerOf(req), req.params.id as string, metaOf(req))));
+
+// G7: Workflow Review / Monitor and bulk decisions (the permission checks are the existing ones, inside review/monitor/decideMany).
+const wfType = z.enum(["LEAVE", "REGULARIZATION"]);
+const reviewQuery = z.object({ type: wfType, state: z.enum(["PENDING", "COMPLETED"]).default("PENDING"), search: z.string().trim().max(100).optional() });
+const monitorQuery = z.object({ type: wfType, search: z.string().trim().max(100).optional() });
+const decideBody = z.object({ type: wfType, ids: z.array(z.string().min(1).max(64)).min(1).max(MAX_BULK), approve: z.boolean(), note: z.string().trim().max(1000).nullable().optional() });
+workforceRouter.get("/workflow/review", validate({ query: reviewQuery }), async (req, res) => void res.json(await review(viewerOf(req), req.query as unknown as { type: WorkflowType; state: "PENDING" | "COMPLETED"; search?: string })));
+workforceRouter.get("/workflow/monitor", validate({ query: monitorQuery }), async (req, res) => void res.json(await monitor(viewerOf(req), req.query as unknown as { type: WorkflowType; search?: string })));
+workforceRouter.post("/workflow/decide", validate({ body: decideBody }), async (req, res) => void res.json(await decideMany(viewerOf(req), req.body, metaOf(req))));
