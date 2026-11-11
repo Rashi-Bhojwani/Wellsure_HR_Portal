@@ -118,7 +118,8 @@ export interface LeaverRow {
   actions: number | null;
 }
 export interface RecalcAction {
-  type: "CREDIT" | "REVERSE";
+  type: "CREDIT" | "REVERSE" | "LEAVING_MONTH" | "WAITING";
+  note?: string;
   accrualMonth: string;
   leaveTypeCode: string;
   days: number;

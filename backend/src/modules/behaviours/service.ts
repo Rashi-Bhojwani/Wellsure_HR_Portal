@@ -41,6 +41,14 @@ export const BEHAVIOURS = {
     d37: true,
     defaultText: "Pro-rata by days worked, using the leave policy's rounding",
   },
+  "leave.proRataRounding": {
+    title: "Rounding of a pro-rata leave figure",
+    what: "How a pro-rata leave accrual that is not exact to two decimals is rounded (a mode and 0 to 2 decimals). The leave policy has no rounding of its own.",
+    schema: z.object({ mode: z.enum(["HALF_UP", "HALF_EVEN", "UP", "DOWN", "CEIL", "FLOOR"]), scale: z.number().int().min(0).max(2) }).strict(), // allow-number: decimals of a day
+    defaultValue: null as { mode: "HALF_UP" | "HALF_EVEN" | "UP" | "DOWN" | "CEIL" | "FLOOR"; scale: number } | null,
+    d37: false,
+    defaultText: "Not set: a pro-rata figure that needs rounding waits for this; an exact one is applied",
+  },
   "access.developerSeesSwipes": {
     title: "The Developer role sees Employee Swipes",
     what: "Whether the person who builds and runs the system can open the raw punch log.",

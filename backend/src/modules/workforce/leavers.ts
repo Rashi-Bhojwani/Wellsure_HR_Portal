@@ -10,7 +10,7 @@ import type { ParityMeta, ParityViewer } from "../parity/types";
 // A-10 G6 (docs/plans/GREYTHR_PARITY_WORKFORCE.md item 15): the leavers list and leave recalculated to the last working day. Days only (no money: the
 // encashment of what is left is a payroll question, open in spec §14). A leaver is a person with a separation that is not cancelled; "done" means the
 // recalculation was applied for the separation's current last working day. Recalculation reverses accruals for months that start after that day and never
-// credits them; the leaving month itself is not changed (whether a part month accrues is the policy's question, not this screen's).
+// credits them; the month of leaving follows the directors' rule (D-37 item 5: default pro-rata by days worked; Default behaviours screen).
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 const day = (s: string) => new Date(`${s}T00:00:00Z`);

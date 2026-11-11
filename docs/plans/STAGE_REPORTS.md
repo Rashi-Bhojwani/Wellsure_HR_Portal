@@ -302,3 +302,21 @@ default skip with a warning naming the loan; STOP blocks submission; PARTIAL wit
 instalment, carry due 1 October, balance = principal − recovered); self-confirmation refused by the service and the database; history append-only.
 **Mutants (9, all caught):** partial as skip; skip as partial; zero floor dropped; percentage ignored; room rounded up; STOP not blocking; wrong default; finaliser
 consuming shortfall instalments whole; proposer confirming.
+
+**Gate after item 4 (`df8306f`).** Full backend suite alone: **216 files, 2,034 tests, all passed.** CI run 285: all seven jobs green.
+
+## Item 5 (D-37): leave accrual in the month of leaving (written 2026-11-11)
+
+`leave.leavingMonthAccrual` (default `PRO_RATA_DAYS_WORKED`, "Default, change in settings"): NONE / FULL_MONTH / PRO_RATA_DAYS_WORKED / FULL_IF_MIN_DAYS with N (no
+default N; a proposal without N is refused). Applied by the leave recalculation for the month containing the last working day (Workforce → Leavers): the monthly job
+has usually credited the month in full on the 1st, so a correction entry (`LEAVING_MONTH`, a reversal or a grant referencing the accrual) brings it to the target; the
+accrual row is never edited; earlier corrections are counted, so applying again changes nothing. Pure rule in `leave/leavingMonth.ts`.
+**Found and left Not set:** the leave policy has no rounding, so "the policy's rounding" cannot be read. Added `leave.proRataRounding` (Not set, a different director
+confirms): an exact pro-rata (e.g. 15 of 30 days = 0.5) is applied; one that needs rounding (20 of 30) is listed as WAITING and nothing changes for that month.
+The Leavers screen shows both new kinds of line.
+
+**Tests** (`leave/__tests__/leavingMonth.test.ts`, 4): property test (600 cases) against exact fractions for every option and any days worked (incl. zero); zero
+days, rounding when set, days worked from the 1st or the joining date, leap February; through the real leaver route: the default takes September from 1 to 0.5 with a
+correction entry and is idempotent; NONE, FULL_MONTH, FULL_IF_MIN_DAYS under and exactly at N each move it to its own figure, each change confirmed by a different
+director. A-10's leavers test updated (`CHANGED_TESTS.md`). **Mutants (8):** 7 caught (NONE giving full, N boundary, never waiting for rounding, days off by one,
+joining date ignored, wrong default, earlier corrections ignored); 1 equivalent (the zero-days guard: zero is already exact), so the redundant line was removed.

@@ -17,6 +17,7 @@ function describe(b: Pick<Behaviour, "key" | "value">): string {
   const v = b.value as Record<string, unknown> | boolean | null;
   if (b.key === "access.developerSeesSwipes") return v === true ? "On: the Developer role sees Employee Swipes" : "Off: the Developer role does not see Employee Swipes";
   if (b.key === "loan.maxTotalDeductionPercent") return v && typeof v === "object" ? `${String(v.percent)}% of gross (source: ${String(v.sourceNote)})` : "Not set: no percentage limit";
+  if (b.key === "leave.proRataRounding") return v && typeof v === "object" ? `${ROUND_LABEL[String(v.mode)] ?? String(v.mode)} to ${String(v.scale)} decimal place(s)` : "Not set: a pro-rata result that needs rounding waits for this";
   if (b.key === "leave.leavingMonthAccrual") {
     const m = v as { mode: string; minDays?: number };
     return m.mode === "FULL_IF_MIN_DAYS" ? `A full month only if at least ${m.minDays} days were worked` : MODE_LABEL[m.mode] ?? m.mode;
@@ -26,7 +27,9 @@ function describe(b: Pick<Behaviour, "key" | "value">): string {
   return named.length ? `${named.join("; ")}. Every other loan type: skip and carry forward.` : "Every loan type: skip the instalment and carry it forward, with a warning naming the loan.";
 }
 
-type FormValues = { reason: string; on?: string; mode?: string; minDays?: number; percent?: string; sourceNote?: string; rules?: Array<{ typeKey: string; rule: string }> };
+const ROUND_LABEL: Record<string, string> = { HALF_UP: "Half up", HALF_EVEN: "Half even", UP: "Up", DOWN: "Down", CEIL: "Ceiling", FLOOR: "Floor" };
+
+type FormValues = { reason: string; roundMode?: string; scale?: number; on?: string; mode?: string; minDays?: number; percent?: string; sourceNote?: string; rules?: Array<{ typeKey: string; rule: string }> };
 
 export function DefaultBehavioursPage() {
   const queryClient = useQueryClient();
@@ -42,6 +45,7 @@ export function DefaultBehavioursPage() {
         key === "access.developerSeesSwipes" ? v.on === "on"
         : key === "leave.leavingMonthAccrual" ? (v.mode === "FULL_IF_MIN_DAYS" ? { mode: v.mode, minDays: v.minDays } : { mode: v.mode })
         : key === "loan.maxTotalDeductionPercent" ? { percent: v.percent, sourceNote: v.sourceNote }
+        : key === "leave.proRataRounding" ? { mode: v.roundMode, scale: v.scale }
         : Object.fromEntries((v.rules ?? []).filter((r) => r?.typeKey && r?.rule).map((r) => [r.typeKey, r.rule]));
       return api.proposeBehaviour(key, value, v.reason);
     },
@@ -98,6 +102,16 @@ export function DefaultBehavioursPage() {
                   <InputNumber min={1} max={31} style={{ width: "100%" }} />
                 </Form.Item>
               )}
+            </>
+          )}
+          {editing?.key === "leave.proRataRounding" && (
+            <>
+              <Form.Item name="roundMode" label="How a pro-rata leave figure is rounded" rules={[{ required: true }]}>
+                <Select options={Object.entries(ROUND_LABEL).map(([value, label]) => ({ value, label }))} />
+              </Form.Item>
+              <Form.Item name="scale" label="Decimal places (0 to 2)" rules={[{ required: true }]}>
+                <InputNumber min={0} max={2} style={{ width: "100%" }} />
+              </Form.Item>
             </>
           )}
           {editing?.key === "loan.maxTotalDeductionPercent" && (

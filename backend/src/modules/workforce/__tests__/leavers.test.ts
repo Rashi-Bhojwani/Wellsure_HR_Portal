@@ -49,18 +49,18 @@ describe("A-10 G6 — leavers", () => {
     expect((await request(app).get("/api/workforce/leavers")).status).toBe(401);
   });
 
-  it("lists the leaver as pending; the preview reverses only the months that start after the last working day; applying marks it done, once", async () => {
+  it("lists the leaver as pending; the preview reverses the months that start after the last working day and, for the month of leaving, follows the D-37 default (pro-rata: 20 of 30 days needs rounding, which is Not set, so it waits); applying marks it done, once", async () => {
     const list = await call("hr", "get", "/api/workforce/leavers");
     expect(JSON.stringify(list.body)).not.toMatch(MONEY);
     expect(list.body.leavers.find((r: { separationId: string }) => r.separationId === separationId)).toMatchObject({ status: "PENDING", lastWorkingDate: "2026-09-20" });
     const preview = await call("hr", "get", `/api/workforce/leavers/${separationId}/preview`);
-    expect(preview.body.actions.map((a: { type: string; accrualMonth: string }) => `${a.type} ${a.accrualMonth}`).sort()).toEqual(["REVERSE 2026-10-01", "REVERSE 2026-11-01"]);
+    expect(preview.body.actions.map((a: { type: string; accrualMonth: string }) => `${a.type} ${a.accrualMonth}`).sort()).toEqual(["REVERSE 2026-10-01", "REVERSE 2026-11-01", "WAITING 2026-09-01"]);
     expect(await balance()).toBe(3);
     const applied = await call("hr", "post", `/api/workforce/leavers/${separationId}/apply`);
     expect(applied.status).toBe(200);
-    expect(await balance()).toBe(1); // September stays: the leaving month is not changed
+    expect(await balance()).toBe(1); // September stays as credited: its pro-rata figure waits for the Not-set rounding (D-37 item 5)
     const again = await call("hr", "get", `/api/workforce/leavers/${separationId}/preview`);
-    expect(again.body.actions).toEqual([]); // nothing double-reversed
+    expect(again.body.actions.map((a: { type: string }) => a.type)).toEqual(["WAITING"]); // nothing double-reversed; September still waits
     const listed = await call("hr", "get", "/api/workforce/leavers?status=DONE");
     expect(listed.body.leavers.map((r: { separationId: string }) => r.separationId)).toContain(separationId);
     await expect(prisma.leaverLeaveRecalc.updateMany({ where: { separationId }, data: { actions: 9 } })).rejects.toThrow(/LEAVER_RECALC_APPEND_ONLY/);

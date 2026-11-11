@@ -76,7 +76,11 @@ export function LeaversPage() {
             <ul style={{ paddingLeft: space[5], margin: 0 }}>
               {actions.map((a) => (
                 <li key={`${a.type}-${a.leaveTypeCode}-${a.accrualMonth}`}>
-                  {a.type === "REVERSE" ? "Take back" : "Add"} {a.days} day{a.days === 1 ? "" : "s"} of {a.leaveTypeCode} for {monthOf(a.accrualMonth)}
+                  {a.type === "WAITING"
+                    ? `${a.leaveTypeCode} for ${monthOf(a.accrualMonth)} (month of leaving): not changed yet: ${a.note ?? "waiting for a setting"}`
+                    : a.type === "LEAVING_MONTH"
+                      ? `${a.days < 0 ? "Take back" : "Add"} ${Math.abs(a.days)} day${Math.abs(a.days) === 1 ? "" : "s"} of ${a.leaveTypeCode} for ${monthOf(a.accrualMonth)} (month of leaving: ${a.note ?? "the directors' rule"})`
+                      : `${a.type === "REVERSE" ? "Take back" : "Add"} ${a.days} day${a.days === 1 ? "" : "s"} of ${a.leaveTypeCode} for ${monthOf(a.accrualMonth)}`}
                 </li>
               ))}
             </ul>
