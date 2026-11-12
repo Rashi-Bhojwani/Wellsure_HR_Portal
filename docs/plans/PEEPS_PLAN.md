@@ -13,6 +13,17 @@ values, each labelled DEMO.
 
 ---
 
+## Speed rule (owner, 2026-11-12) — how checks run from now on
+
+Do **not** run tests, lint or typecheck after each commit. Commit as you go and write each new test together with its feature. At the
+end of each phase (a group of rows or a stage) run the changed tests, lint and typecheck **once** with `scripts/peeps-check.sh --since
+<phase start commit>` and fix what fails. Run the full backend suite alone once at the end of the whole stage and before any merge
+(`scripts/peeps-check.sh --since <stage start> --full`). Read CI once per stage, on the final code commit, to the end of each job; skip
+it after docs-only pushes. The check script uses `set -euo pipefail`, unsets `DATABASE_URL`/`DATABASE_SSL`/`PORT`, and stops at the
+first failed step with a non-zero exit.
+
+---
+
 ## Final instructions (2026-11-01) — win over everything below
 
 **Decisions in force:** D-28, D-29, D-30 as before; **Q-14 decided** (the asset register is managed by HR and the directors);

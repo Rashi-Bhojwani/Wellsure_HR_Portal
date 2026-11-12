@@ -4,6 +4,11 @@ Branch `peeps/foundation`. Plan: `PEEPS_PLAN.md`. Reports: `PEEPS_STAGE_REPORTS.
 is **done and verified**, with the commit hash. A new session reads these three files and continues at the
 first unticked item. No real data in this file. Commit numbers are the rows of `PEEPS_PLAN.md` §G.
 
+## Speed rule (2026-11-12)
+- [x] Recorded in `PEEPS_PLAN.md` ("Speed rule"); `scripts/peeps-check.sh` runs lint, typecheck, changed tests (and `--full` backend
+      suite) once per phase and stops on the first failed step
+- No per-commit checks; full backend suite alone at stage end and before any merge; CI read once per stage on the final code commit
+
 ## P0 — Planning (this stage)
 - [x] Git clean; fetched; base `feat/hr-payroll-separation` at `8979072` merged into `peeps/foundation` (`2a4fad1`, no force-push)
 - [x] `PEEPS_PLAN.md` sections A–G, `PEEPS_CHECKLIST.md`, `PEEPS_STAGE_REPORTS.md` — commit: see stage report P0
