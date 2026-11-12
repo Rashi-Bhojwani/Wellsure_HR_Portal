@@ -554,6 +554,7 @@ model Employee {
   customValues               EmployeeCustomValue[] // block 2, ER-28
   feedbackGiven              EmployeeFeedback[] // block 2, SS-13
   overtimeClaims             OvertimeClaim[] // block 2, AT-19
+  wfhRequests                WfhRequest[] // block 2, AT-36
   // M-END
 
   @@index([status])
@@ -4575,5 +4576,25 @@ model OvertimeClaim {
   @@index([employeeId, date])
   @@index([status])
   @@map("overtime_claims")
+}
+// M-END
+
+// M-BEGIN (second session block 2, AT-36): work-from-home requests; approval writes remote marks through the director path.
+model WfhRequest {
+  id              String    @id @default(cuid())
+  employeeId      String    @map("employee_id")
+  employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  fromDate        DateTime  @map("from_date") @db.Date
+  toDate          DateTime  @map("to_date") @db.Date
+  reason          String
+  status          String    @default("PENDING")
+  decidedByUserId String?   @map("decided_by_user_id")
+  decidedAt       DateTime? @map("decided_at") @db.Timestamptz(3)
+  decisionNote    String?   @map("decision_note")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([employeeId, fromDate])
+  @@index([status])
+  @@map("wfh_requests")
 }
 // M-END

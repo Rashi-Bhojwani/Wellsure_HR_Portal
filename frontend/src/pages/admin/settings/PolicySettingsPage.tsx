@@ -61,7 +61,7 @@ export function PolicySettingsPage() {
       if (s.kind === "activation") value.active = vals.active === true;
       for (const f of s.fields) {
         const raw = vals[f.name];
-        value[f.name] = f.type === "lines" ? String(raw ?? "").split("\n").map((l) => l.trim()).filter(Boolean) : f.type === "codes" ? ((raw as string[] | undefined) ?? []).map((c) => c.trim().toUpperCase()) : f.type === "int" && f.optional && (raw === undefined || raw === "") ? null : raw;
+        value[f.name] = f.type === "lines" ? String(raw ?? "").split("\n").map((l) => l.trim()).filter(Boolean) : f.type === "codes" ? ((raw as string[] | undefined) ?? []).map((c) => c.trim()) : f.type === "int" && f.optional && (raw === undefined || raw === "") ? null : raw;
       }
       return api.proposePolicy(s.key, value, String(vals.reason ?? ""));
     },

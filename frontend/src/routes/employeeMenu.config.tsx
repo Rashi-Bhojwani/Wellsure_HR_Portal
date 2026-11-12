@@ -46,6 +46,7 @@ const TasksPage = lazyPage(() => import("../pages/employee/todo/TasksPage"), "Ta
 const FeedbackPage = lazyPage(() => import("../pages/employee/worklife/FeedbackPage"), "FeedbackPage"); // M block 2, SS-13
 const MyOnboardingPage = lazyPage(() => import("../pages/employee/todo/MyOnboardingPage"), "MyOnboardingPage"); // M block 2, OE-04
 const WorkflowDelegatesPage = lazyPage(() => import("../pages/employee/workflow-delegates/WorkflowDelegatesPage"), "WorkflowDelegatesPage");
+const WfhPage = lazyPage(() => import("../pages/employee/attendance/WfhPage"), "WfhPage"); // M block 2, AT-36
 const OvertimePage = lazyPage(() => import("../pages/employee/attendance/OvertimePage"), "OvertimePage"); // M block 2, AT-19
 const MarkAttendancePage = lazyPage(() => import("../pages/employee/attendance/MarkAttendancePage"), "MarkAttendancePage");
 const AttendanceInfoPage = lazyPage(() => import("../pages/employee/attendance/AttendanceInfoPage"), "AttendanceInfoPage");
@@ -258,6 +259,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
         permission: "attendance.manual.enter",
         description: "Mark the attendance of the branches you're assigned to.",
       },
+      { key: "wfh", label: "Work From Home", path: "attendance/wfh", icon: FormOutlined, element: WfhPage, description: "Ask to work from home on some days, when the company allows it." }, // M block 2, AT-36
       { key: "overtime", label: "Overtime", path: "attendance/overtime", icon: FormOutlined, element: OvertimePage, description: "Claim time worked beyond your shift, when the company uses overtime." }, // M block 2, AT-19
     ],
   },

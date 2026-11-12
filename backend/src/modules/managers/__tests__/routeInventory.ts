@@ -839,6 +839,13 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "POST /api/overtime/:id/approve": scoped("as GET /api/overtime"),
   "POST /api/overtime/:id/reject": scoped("as GET /api/overtime"),
   "GET /api/overtime/totals": adminInService("directors only, checked in the service; minutes only, no amount; Developer refused"),
+  // AT-36 work-from-home requests
+  "GET /api/wfh-requests/mine": self,
+  "POST /api/wfh-requests/mine": self,
+  "POST /api/wfh-requests/mine/:id/withdraw": self,
+  "GET /api/wfh-requests": adminInService("directors only, checked in the service; never their own; Developer refused"),
+  "POST /api/wfh-requests/:id/approve": adminInService("directors only, checked in the service (and again by markRemote); never their own; Developer refused"),
+  "POST /api/wfh-requests/:id/reject": adminInService("directors only, checked in the service; never their own; Developer refused"),
   // P7-3: the person's own
   "GET /api/tax/me/ytd": self,
   "GET /api/tax/me/salary-revisions": self,

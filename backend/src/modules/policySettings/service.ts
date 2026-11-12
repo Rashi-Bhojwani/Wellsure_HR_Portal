@@ -22,7 +22,7 @@ function fieldSchema(f: PolicyField): ZodTypeAny {
     case "choice":
       return z.enum(f.options.map((o) => o.value) as [string, ...string[]]);
     case "codes":
-      return z.array(z.string().trim().regex(/^[A-Z0-9_-]{1,40}$/, "Codes in capitals, for example PL")).max(f.max);
+      return z.array(z.string().trim().regex(/^[A-Za-z0-9_-]{1,40}$/, "Codes as they appear in the masters, for example PL")).max(f.max);
     case "lines":
       return z.array(z.string().trim().min(1).max(200)).max(f.max);
   }
