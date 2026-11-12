@@ -7,7 +7,10 @@ export interface AuditLogRow {
   onBehalfOfName: string | null; // E3: acted while covering this manager's approvals
   action: string;
   entityType: string;
-  entityId: string;
+  /** Null for the Developer role (values hidden). */
+  entityId: string | null;
+  /** Names of the top-level fields that changed; the only change detail the Developer role gets. */
+  changedFields?: string[];
   before: unknown;
   after: unknown;
   ipAddress: string | null;
@@ -29,6 +32,8 @@ export interface AuditLogPage {
   total: number;
   page: number;
   pageSize: number;
+  /** True for the Developer role: who, what, when and the record type only; every value withheld by the server. */
+  valuesHidden?: boolean;
   rows: AuditLogRow[];
 }
 
