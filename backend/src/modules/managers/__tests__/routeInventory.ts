@@ -821,6 +821,13 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/custom-fields/employees/:employeeId": scoped("employee.view + the caller's data scope in the service; sensitive values masked; Developer refused"),
   "PUT /api/custom-fields/employees/:employeeId": scoped("employee.edit (never manager-grantable) + data scope in the service; never one's own; Developer refused"),
   "POST /api/custom-fields/employees/:employeeId/:fieldId/reveal": scoped("employee.view at the gate, then a director only in the service, audited; Developer refused"),
+  // SS-13 feedback
+  "GET /api/feedback/options": everyone("whether feedback without a name is allowed, and the categories: no person's data"),
+  "POST /api/feedback": self,
+  "GET /api/feedback/mine": self,
+  "GET /api/feedback": scoped("helpdesk.manage (never manager-grantable); named feedback narrowed to the caller's data scope; Developer refused"),
+  "POST /api/feedback/:id/replies": scoped("helpdesk.manage; data scope in the service; never one's own; Developer refused"),
+  "POST /api/feedback/:id/close": scoped("helpdesk.manage; data scope in the service; never one's own; Developer refused"),
   // P7-3: the person's own
   "GET /api/tax/me/ytd": self,
   "GET /api/tax/me/salary-revisions": self,

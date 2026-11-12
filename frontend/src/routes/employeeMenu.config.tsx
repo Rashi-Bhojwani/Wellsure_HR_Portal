@@ -43,6 +43,7 @@ const PeoplePage = lazyPage(() => import("../pages/employee/people/PeoplePage"),
 const HelpdeskPage = lazyPage(() => import("../pages/employee/helpdesk/HelpdeskPage"), "HelpdeskPage");
 const RequestHubPage = lazyPage(() => import("../pages/employee/request-hub/RequestHubPage"), "RequestHubPage");
 const TasksPage = lazyPage(() => import("../pages/employee/todo/TasksPage"), "TasksPage");
+const FeedbackPage = lazyPage(() => import("../pages/employee/worklife/FeedbackPage"), "FeedbackPage"); // M block 2, SS-13
 const MyOnboardingPage = lazyPage(() => import("../pages/employee/todo/MyOnboardingPage"), "MyOnboardingPage"); // M block 2, OE-04
 const WorkflowDelegatesPage = lazyPage(() => import("../pages/employee/workflow-delegates/WorkflowDelegatesPage"), "WorkflowDelegatesPage");
 const MarkAttendancePage = lazyPage(() => import("../pages/employee/attendance/MarkAttendancePage"), "MarkAttendancePage");
@@ -120,7 +121,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
         label: "Feedback",
         path: "my-worklife/feedback",
         icon: CommentOutlined,
-        phase: "Phase 8", // with performance reviews (user decision, Phase 5 commit D)
+        element: FeedbackPage, // M block 2, SS-13: feedback and suggestions to HR (performance feedback stays with Phase 8)
       },
     ],
   },

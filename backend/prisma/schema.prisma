@@ -552,6 +552,7 @@ model Employee {
   probationDecisions         EmployeeProbationDecision[] // block 2, ER-26
   onboardingTasks            OnboardingTask[] // block 2, OE-04
   customValues               EmployeeCustomValue[] // block 2, ER-28
+  feedbackGiven              EmployeeFeedback[] // block 2, SS-13
   // M-END
 
   @@index([status])
@@ -4522,5 +4523,35 @@ model EmployeeCustomValue {
   @@unique([employeeId, fieldId])
   @@index([fieldId])
   @@map("employee_custom_values")
+}
+// M-END
+
+// M-BEGIN (second session block 2, SS-13): employee feedback to HR; anonymous feedback has no author at all.
+model EmployeeFeedback {
+  id               String                  @id @default(cuid())
+  authorEmployeeId String?                 @map("author_employee_id")
+  author           Employee?               @relation(fields: [authorEmployeeId], references: [id], onDelete: Restrict)
+  category         String
+  message          String
+  status           String                  @default("OPEN")
+  closedByUserId   String?                 @map("closed_by_user_id")
+  createdAt        DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  replies          EmployeeFeedbackReply[]
+
+  @@index([authorEmployeeId])
+  @@index([status, createdAt])
+  @@map("employee_feedback")
+}
+
+model EmployeeFeedbackReply {
+  id           String           @id @default(cuid())
+  feedbackId   String           @map("feedback_id")
+  feedback     EmployeeFeedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  authorUserId String           @map("author_user_id")
+  message      String
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([feedbackId])
+  @@map("employee_feedback_replies")
 }
 // M-END

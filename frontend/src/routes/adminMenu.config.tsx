@@ -60,6 +60,7 @@ const AddEmployeePage = lazyPage(() => import("../pages/admin/employee/AddEmploy
 const SeparationsPage = lazyPage(() => import("../pages/admin/employee/SeparationsPage"), "SeparationsPage");
 const ChangeRequestsPage = lazyPage(() => import("../pages/admin/employee/ChangeRequestsPage"), "ChangeRequestsPage");
 const ProbationPage = lazyPage(() => import("../pages/admin/employee/m/ProbationPage"), "ProbationPage"); // M session block 2, ER-26
+const FeedbackInboxPage = lazyPage(() => import("../pages/admin/employee/m/FeedbackInboxPage"), "FeedbackInboxPage"); // M block 2, SS-13
 const OnboardingPage = lazyPage(() => import("../pages/admin/employee/m/OnboardingPage"), "OnboardingPage"); // M session block 2, OE-04
 const ImportCenterPage = lazyPage(() => import("../pages/admin/import/ImportCenterPage"), "ImportCenterPage");
 const AuditLogPage = lazyPage(() => import("../pages/admin/auditLog/AuditLogPage"), "AuditLogPage");
@@ -253,6 +254,7 @@ export const adminApps: AdminApp[] = [
           { key: "probation", label: "Probation", path: "employee/probation", icon: SolutionOutlined, element: ProbationPage, needs: { any: ["employee.edit"] } }, // M block 2, ER-26
           { key: "separations", label: "Separations", path: "employee/separations", icon: ExportOutlined, element: SeparationsPage },
           { key: "company-documents", label: "Company Documents", path: "employee/company-documents", icon: FolderOpenOutlined, element: CompanyDocumentsPage },
+          { key: "feedback", label: "Employee Feedback", path: "employee/feedback", icon: CustomerServiceOutlined, element: FeedbackInboxPage, needs: { any: ["helpdesk.manage"] } }, // M block 2, SS-13
           { key: "helpdesk", label: "Helpdesk", path: "employee/helpdesk", icon: CustomerServiceOutlined, element: HelpdeskQueuePage },
         ],
       },

@@ -29,6 +29,8 @@ type Policy = "delete" | "setNull";
 // Key: "<ChildModel>.<foreignKeyField>". Required FKs are never listed —
 // a required FK can't be nulled, so its child is always deleted.
 export const OPTIONAL_FK_POLICY: Record<string, Policy> = {
+  // M block 2, SS-13: named feedback belongs to its sender; anonymous feedback has no author (tests remove it by id).
+  "EmployeeFeedback.authorEmployeeId": "delete",
   "BankFileSentMark.batchId": "delete",
   "BankFileSentMark.repaymentBatchId": "delete",
   "BankFileSentMark.offCycleBatchId": "delete",
