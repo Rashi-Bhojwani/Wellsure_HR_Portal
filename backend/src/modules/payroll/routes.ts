@@ -24,6 +24,7 @@ import * as plSvc from "./run/payslipLinks";
 import * as rpSvc from "./run/repayments";
 import { sentSchema } from "./run/sentMarks";
 import { bankSummaryPdf } from "./run/bankSummary"; // PY-37
+import * as assignmentImport from "./salary/assignmentImport"; // IE-09
 import { compareRegistersRoute, compareUpload } from "./compare/controller";
 import { overrideKeyParamsSchema, overridePreviewSchema, overrideSaveSchema, setupAreaParamsSchema, setupSignoffSchema, checkersQuerySchema, payrollAuditQuerySchema, ruleConfirmSchema, ruleEditPreviewSchema, ruleEditSchema, ruleKeyParamsSchema } from "./validators";
 
@@ -95,6 +96,20 @@ payrollRouter.get("/salary/employees/:employeeId", view, validate({ params: v.em
 payrollRouter.get("/salary/revisions", view, validate({ query: v.revisionListSchema }), salary.revisions);
 payrollRouter.post("/salary/revisions/cancel-preview", edit, validate({ body: v.cancelPreviewSchema }), salary.cancelPreview);
 payrollRouter.post("/salary/revisions/cancel", edit, validate({ body: v.cancelCreateSchema }), salary.cancelCreate);
+// IE-09: salary assignments from our own template, previewed, then created as ordinary revisions for a different director.
+payrollRouter.get("/salary/import/template", refuseDeveloper, edit, (_req, res) => {
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", 'attachment; filename="salary-assignments-template.csv"');
+  res.status(200).send(assignmentImport.templateCsv());
+});
+payrollRouter.post("/salary/import/preview", refuseDeveloper, edit, memoryUpload(5), async (req, res) => {
+  if (!req.file) return void res.status(400).json({ error: { message: "Choose a file.", code: "VALIDATION_ERROR" } });
+  res.status(200).json(await assignmentImport.previewAssignments(req.file, { userId: req.user!.userId, ip: req.ip ?? null }));
+});
+payrollRouter.post("/salary/import/commit", refuseDeveloper, edit, memoryUpload(5), async (req, res) => {
+  if (!req.file) return void res.status(400).json({ error: { message: "Choose the same file again.", code: "VALIDATION_ERROR" } });
+  res.status(201).json(await assignmentImport.commitAssignments(req.body, req.file, { userId: req.user!.userId, ip: req.ip ?? null }));
+});
 payrollRouter.post("/salary/revisions/preview", edit, validate({ body: v.revisionPreviewSchema }), salary.revisionPreview);
 payrollRouter.post("/salary/revisions", edit, validate({ body: v.revisionCreateSchema }), salary.revisionCreate);
 payrollRouter.get("/salary/revisions/:id", view, validate({ params: v.idParamsSchema }), salary.revision);

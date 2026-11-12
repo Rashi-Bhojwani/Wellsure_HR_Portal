@@ -1430,3 +1430,25 @@ export const confirmExclusion = (id: string) => post<{ id: string }>(`/exclusion
 
 // PY-37: the bank summary PDF of a written bank file (no account number). Directors only.
 export const bankSummaryPdf = async (batchId: string) => (await apiClient.get(`${base}/bank-batches/${batchId}/summary.pdf`, { responseType: "blob" })).data as Blob;
+
+// IE-09: salary assignments from our own template, previewed, then created as ordinary revisions (each waits for a different director).
+export interface AssignmentPreview {
+  fileName: string;
+  fingerprint: string;
+  valid: number;
+  rows: Array<{ line: number; employeeCode: string; structure: string; version: string; annualCtc: string; effectiveFrom: string; problem: string | null }>;
+  groups: Array<{ structureKey: string; structureVersion: number; annualCtc: string; effectiveFrom: string; people: number; blockers: string[] }>;
+}
+export const salaryImportTemplate = async () => (await apiClient.get(`${base}/salary/import/template`, { responseType: "blob" })).data as Blob;
+export async function previewSalaryImport(file: File): Promise<AssignmentPreview> {
+  const form = new FormData();
+  form.append("file", file);
+  return (await apiClient.post(`${base}/salary/import/preview`, form)).data;
+}
+export async function commitSalaryImport(file: File, fingerprint: string, note: string): Promise<{ revisions: string[]; people: number }> {
+  const form = new FormData();
+  form.append("fingerprint", fingerprint);
+  form.append("note", note);
+  form.append("file", file);
+  return (await apiClient.post(`${base}/salary/import/commit`, form)).data;
+}

@@ -17,6 +17,7 @@ import { formatDate, formatDateTime } from "../../../lib/dates";
 import { ApprovalBanner, ConfirmModal, DataTable, EmptyState, FormGroupTitle, KeyValueGrid, PageHeader, Panel, QueryState, SideDrawer, SkeletonCard, Stack, StatusChip, toast, type ChipTone } from "../../../ui";
 import { Caption, Num } from "../../../components/payroll/payrollUi";
 import { fs, fw, space, v } from "../../../theme/tokens";
+import { SalaryImportDrawer } from "./SalaryImportDrawer";
 
 // Payroll → Salary revisions (Phase 6 P6-2). The only way a salary is written. Prepare with a preview, a different person approves exactly what the preview
 // showed (the approval is void if anything it depends on moves), then the preparer applies it. Nobody prepares or approves a change to their own pay.
@@ -57,15 +58,20 @@ export function SalaryRevisionsPage() {
     setWizard(false);
     if (params.has("new")) setParams({}, { replace: true });
   };
+  const [importing, setImporting] = useState(false); // IE-09
   const prepareButton = canEdit && (
-    <Button type="primary" icon={<PlusOutlined />} onClick={() => setWizard(true)}>
-      Prepare a revision
-    </Button>
+    <div style={{ display: "flex", gap: space[2], flexWrap: "wrap" }}>
+      <Button onClick={() => setImporting(true)}>Import from a file</Button>
+      <Button type="primary" icon={<PlusOutlined />} onClick={() => setWizard(true)}>
+        Prepare a revision
+      </Button>
+    </div>
   );
 
   return (
     <>
       <PageHeader title="Salary revisions" subtitle="The only way a salary is written: prepared, approved by someone else, then applied" actions={prepareButton} />
+      <SalaryImportDrawer open={importing} onClose={() => setImporting(false)} />
       <Stack>
         <ApprovalBanner
           tone="info"

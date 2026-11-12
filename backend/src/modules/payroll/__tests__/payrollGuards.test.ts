@@ -82,6 +82,8 @@ const EXTRA_ALLOWED: Record<string, number[]> = {
   // Session A parity rows: milliseconds in a calendar day (service length, never money); the longest challan reference a director may type (a form limit).
   "settlements/guide.ts": [86400000],
   "tax/statutoryChallans.ts": [30],
+  // IE-09: form limits (the note a director types, the file name kept on a revision); 500 (rows in one file) carries its own allow-number comment.
+  "salary/assignmentImport.ts": [300, 80],
   // A-3 opening figures: the largest import file (rows), form field lengths (a figure's text, a note, a reason), the length of a sha256 fingerprint and the
   // short batch id cut from it. None is a payroll figure.
   "tax/openings.ts": [2000, 20, 300, 64, 24],
