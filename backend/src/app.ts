@@ -52,6 +52,7 @@ import { divisionsRouter } from "./modules/divisions/routes"; // M session block
 import { documentAcksRouter } from "./modules/documents/ackRoutes"; // M session block 2, ER-18
 import { probationRouter } from "./modules/probation/routes"; // M session block 2, ER-26
 import { onboardingRouter } from "./modules/onboarding/routes"; // M session block 2, OE-04
+import { customFieldsRouter } from "./modules/customFields/routes"; // M session block 2, ER-28
 import { payslipRouter } from "./modules/payroll/payslipRoutes";
 // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
 import { employeeExtrasRouter, massEmailRouter, segmentsRouter, separationModesRouter } from "./modules/parity/routes";
@@ -115,6 +116,7 @@ const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   { path: "/api/document-acks", router: documentAcksRouter }, // M session block 2, ER-18
   { path: "/api/probation", router: probationRouter }, // M session block 2, ER-26
   { path: "/api/onboarding", router: onboardingRouter }, // M session block 2, OE-04
+  { path: "/api/custom-fields", router: customFieldsRouter }, // M session block 2, ER-28
   { path: "/api/attendance", router: attendanceRouter },
   { path: "/api/biometric", router: biometricRouter },
   // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin

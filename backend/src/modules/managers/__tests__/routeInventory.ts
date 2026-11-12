@@ -803,6 +803,14 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "POST /api/onboarding/:employeeId/start": scoped("employee.edit (never manager-grantable); data scope in the service; Developer refused"),
   "GET /api/onboarding/:employeeId/steps": scoped("the person themself, their reporting manager (steps only), or HR (employee.edit) in data scope; Developer refused"),
   "PUT /api/onboarding/tasks/:taskId/done": scoped("the step's owner: HR in scope (never their own), the reporting manager for MANAGER steps, the employee for their EMPLOYEE steps; Developer refused"),
+  // ER-28 custom fields
+  "GET /api/custom-fields/mine": self,
+  "GET /api/custom-fields/definitions": scoped("employee.view; field labels and types only (no values, no person); Developer refused"),
+  "POST /api/custom-fields/definitions": adminInService("settings.manage (never HR's to grant to a manager) and a director check in the service"),
+  "PATCH /api/custom-fields/definitions/:id": adminInService("settings.manage and a director check in the service"),
+  "GET /api/custom-fields/employees/:employeeId": scoped("employee.view + the caller's data scope in the service; sensitive values masked; Developer refused"),
+  "PUT /api/custom-fields/employees/:employeeId": scoped("employee.edit (never manager-grantable) + data scope in the service; never one's own; Developer refused"),
+  "POST /api/custom-fields/employees/:employeeId/:fieldId/reveal": scoped("employee.view at the gate, then a director only in the service, audited; Developer refused"),
   // P7-3: the person's own
   "GET /api/tax/me/ytd": self,
   "GET /api/tax/me/salary-revisions": self,
@@ -819,6 +827,9 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
 // Scoped routes a manager can reach with a manager-grantable key — each has
 // an IDOR case in managerReach.test.ts. The test fails if one is missing.
 export const MANAGER_REACHABLE_SCOPED = [
+  "GET /api/custom-fields/definitions", // M block 2, ER-28
+  "GET /api/custom-fields/employees/:employeeId", // M block 2, ER-28
+  "POST /api/custom-fields/employees/:employeeId/:fieldId/reveal", // M block 2, ER-28 (directors only in the service)
   "GET /api/workforce/workflow/review", // A-10 G7
   "POST /api/workforce/workflow/decide", // A-10 G7
   "GET /api/reports",

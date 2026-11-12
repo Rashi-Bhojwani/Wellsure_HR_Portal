@@ -588,6 +588,42 @@ describe("manager reach — TEAM scope at every endpoint a manager can call (E2)
     });
   });
 
+  // M session block 2, ER-28: custom fields. A manager with employee.view reads a team member's values (sensitive ones masked), never an
+  // outsider's, and never reveals one (directors only).
+  describe("custom fields (ER-28): the team's values only, masked, never revealed by a manager", () => {
+    let fieldId = "";
+    beforeAll(async () => {
+      const { encryptField } = await import("../../../lib/encryption");
+      const f = await prisma.customFieldDefinition.create({ data: { key: `reach_${randomUUID().slice(0, 8).replace(/-/g, "")}`, label: "Locker number", type: "TEXT", sensitive: true, createdByUserId: p.director.userId } });
+      fieldId = f.id;
+      for (const who of ["member", "outsider"] as const) await prisma.employeeCustomValue.create({ data: { employeeId: p[who].employeeId, fieldId, valueEncrypted: encryptField(`LOCK-${who}-7781`), valueLast4: "7781", updatedByUserId: p.director.userId } });
+    });
+    afterAll(async () => {
+      await deleteWithDependents("CustomFieldDefinition", [fieldId]);
+    });
+
+    it("GET /api/custom-fields/definitions — labels only", async () => {
+      const res = await m().get("/api/custom-fields/definitions");
+      expect(res.status).toBe(200);
+      expect(JSON.stringify(res.body)).not.toContain("LOCK-");
+      cover("GET /api/custom-fields/definitions");
+    });
+
+    it("GET /api/custom-fields/employees/:employeeId — the member's, masked; never the outsider's", async () => {
+      const mine = await m().get(`/api/custom-fields/employees/${p.member.employeeId}`);
+      expect(mine.status).toBe(200);
+      expect(mine.body.fields.find((x: { id: string }) => x.id === fieldId).value).toBe("••••7781");
+      expect(JSON.stringify(mine.body)).not.toContain("LOCK-");
+      expect((await m().get(`/api/custom-fields/employees/${p.outsider.employeeId}`)).status).toBe(404);
+      cover("GET /api/custom-fields/employees/:employeeId");
+    });
+
+    it("POST /api/custom-fields/employees/:employeeId/:fieldId/reveal — not a manager's, even for the team", async () => {
+      expect((await m().post(`/api/custom-fields/employees/${p.member.employeeId}/${fieldId}/reveal`)).status).toBe(403);
+      cover("POST /api/custom-fields/employees/:employeeId/:fieldId/reveal");
+    });
+  });
+
   it("every manager-reachable scoped route has a case above", () => {
     expect(MANAGER_REACHABLE_SCOPED.filter((r) => !covered.has(r))).toEqual([]);
   });

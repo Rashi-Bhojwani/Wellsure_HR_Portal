@@ -17,6 +17,7 @@ export const ENCRYPTED_COLUMNS: ReadonlyArray<EncryptedColumn> = [
   { model: "EmployeeStatutory", delegate: "employeeStatutory", field: "uanEncrypted" },
   { model: "EmployeeStatutory", delegate: "employeeStatutory", field: "esiEncrypted" },
   { model: "EmployeeBankAccount", delegate: "employeeBankAccount", field: "accountNumberEncrypted" },
+  { model: "EmployeeCustomValue", delegate: "employeeCustomValue", field: "valueEncrypted" }, // M block 2, ER-28: a sensitive custom field
 ];
 
 /** Bytes columns that are deliberately NOT field-encrypted (none today). Naming one here is the decision that it holds no personal data. */

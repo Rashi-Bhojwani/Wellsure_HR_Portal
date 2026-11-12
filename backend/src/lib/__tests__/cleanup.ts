@@ -101,6 +101,7 @@ export const OPTIONAL_FK_POLICY: Record<string, Policy> = {
 // plain deleteMany on their natural key.
 export const FIXTURE_ROOT_MODELS = ["Employee", "User"] as const;
 export const STANDALONE_ROOT_MODELS: Record<string, string> = {
+  CustomFieldDefinition: "M block 2 (ER-28): tests remove their own with deleteWithDependents(\"CustomFieldDefinition\", ids), which also removes the values",
   Division: "M block 2 (ER-27): divisions.test.ts creates its own and removes them with deleteWithDependents(\"Division\", ...)",
   Role: "shared role catalog; cleanupTestRole",
   PayrollReportLayout: "Stage 6: a saved payroll report layout (no FK; append-only); deleteWithDependents(\"PayrollReportLayout\", ids)",

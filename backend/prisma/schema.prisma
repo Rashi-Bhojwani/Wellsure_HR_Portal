@@ -551,6 +551,7 @@ model Employee {
   documentAcknowledgements   CompanyDocumentAcknowledgement[] // block 2, ER-18
   probationDecisions         EmployeeProbationDecision[] // block 2, ER-26
   onboardingTasks            OnboardingTask[] // block 2, OE-04
+  customValues               EmployeeCustomValue[] // block 2, ER-28
   // M-END
 
   @@index([status])
@@ -4456,5 +4457,42 @@ model OnboardingTask {
 
   @@unique([employeeId, position])
   @@map("onboarding_tasks")
+}
+// M-END
+
+// M-BEGIN (second session block 2, ER-28): custom fields on the employee record (directors define, HR fills; a sensitive value is encrypted).
+model CustomFieldDefinition {
+  id                String                @id @default(cuid())
+  key               String                @unique
+  label             String
+  type              String
+  options           String[]              @default([])
+  visibleToEmployee Boolean               @default(false) @map("visible_to_employee")
+  sensitive         Boolean               @default(false)
+  active            Boolean               @default(true)
+  position          Int                   @default(0)
+  createdByUserId   String                @map("created_by_user_id")
+  createdAt         DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+  values            EmployeeCustomValue[]
+
+  @@map("custom_field_definitions")
+}
+
+model EmployeeCustomValue {
+  id              String                @id @default(cuid())
+  employeeId      String                @map("employee_id")
+  employee        Employee              @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  fieldId         String                @map("field_id")
+  field           CustomFieldDefinition @relation(fields: [fieldId], references: [id], onDelete: Restrict)
+  valueText       String?               @map("value_text")
+  valueEncrypted  Bytes?                @map("value_encrypted")
+  valueLast4      String?               @map("value_last4")
+  updatedByUserId String                @map("updated_by_user_id")
+  updatedAt       DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([employeeId, fieldId])
+  @@index([fieldId])
+  @@map("employee_custom_values")
 }
 // M-END
