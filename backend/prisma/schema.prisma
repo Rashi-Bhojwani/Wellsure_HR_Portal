@@ -548,6 +548,7 @@ model Employee {
   identityChangeRequests     IdentityChangeRequest[]
   statutoryHistory           EmployeeStatutoryHistory[]
   letterAsks                 LetterAsk[]
+  documentAcknowledgements   CompanyDocumentAcknowledgement[] // block 2, ER-18
   // M-END
 
   @@index([status])
@@ -1540,6 +1541,10 @@ model CompanyDocument {
   archivedByUserId  String?          @map("archived_by_user_id")
 
   downloads CompanyDocumentDownload[]
+  // M-BEGIN (second session block 2, ER-18)
+  ackRequirements CompanyDocumentAckRequirement[]
+  acknowledgements CompanyDocumentAcknowledgement[]
+  // M-END
 
   @@index([categoryId])
   @@map("company_documents")
@@ -4386,5 +4391,33 @@ model DepartmentDivision {
 
   @@index([divisionId])
   @@map("department_divisions")
+}
+// M-END
+
+// M-BEGIN (second session block 2, ER-18): a company document may require acknowledgement (the latest requirement row is in force); people in its
+// audience acknowledge once. Both append-only (database triggers).
+model CompanyDocumentAckRequirement {
+  id          String          @id @default(cuid())
+  documentId  String          @map("document_id")
+  document    CompanyDocument @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  required    Boolean
+  setByUserId String          @map("set_by_user_id")
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([documentId, createdAt])
+  @@map("company_document_ack_requirements")
+}
+
+model CompanyDocumentAcknowledgement {
+  id         String          @id @default(cuid())
+  documentId String          @map("document_id")
+  document   CompanyDocument @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  employeeId String          @map("employee_id")
+  employee   Employee        @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  createdAt  DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([documentId, employeeId])
+  @@index([employeeId])
+  @@map("company_document_acknowledgements")
 }
 // M-END

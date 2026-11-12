@@ -786,6 +786,12 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "PATCH /api/divisions/:id": admin,
   "DELETE /api/divisions/:id": admin,
   "PUT /api/divisions/:id/departments": admin,
+  // ER-18 policy acknowledgement
+  "GET /api/document-acks/mine": self,
+  "POST /api/document-acks/:id/acknowledge": self,
+  "GET /api/document-acks/required": admin,
+  "PUT /api/document-acks/:id/required": admin,
+  "GET /api/document-acks/:id/status": scoped("documents.manage (never manager-grantable); the audience narrowed to the caller's data scope; Developer refused"),
   // P7-3: the person's own
   "GET /api/tax/me/ytd": self,
   "GET /api/tax/me/salary-revisions": self,

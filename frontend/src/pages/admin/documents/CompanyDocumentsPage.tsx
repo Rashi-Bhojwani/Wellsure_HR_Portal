@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Form, Input, InputNumber, Radio, Select, Switch, Tabs, Typography, Upload } from "antd";
-import { ContainerOutlined, DownloadOutlined, PlusOutlined, TeamOutlined, UndoOutlined, UploadOutlined } from "@ant-design/icons";
+import { ContainerOutlined, DownloadOutlined, PlusOutlined, SafetyCertificateOutlined, TeamOutlined, UndoOutlined, UploadOutlined } from "@ant-design/icons";
+import { AckDrawer } from "./AckDrawer";
 import { DOCUMENT_MIME_TYPES, SENSITIVITY_LABELS, sensitivityChangeAllowed, type DocumentSensitivity } from "@shared/constants/peopleDocuments";
 import * as docsApi from "../../../api/documents";
 import type { CategoryScope, CompanyDocument, DocumentCategory } from "../../../api/documents";
@@ -182,6 +183,7 @@ function DocumentsTab() {
   const [search, setSearch] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
   const [statsDoc, setStatsDoc] = useState<CompanyDocument | null>(null);
+  const [ackDoc, setAckDoc] = useState<CompanyDocument | null>(null); // ER-18 (M session block 2)
   const [archiving, setArchiving] = useState<CompanyDocument | null>(null);
   const { data = [], isLoading, error, refetch } = useQuery({
     queryKey: ["documents", "company", "manage", includeArchived],
@@ -214,6 +216,7 @@ function DocumentsTab() {
   const actions = (d: CompanyDocument) => (
     <div style={{ display: "flex", gap: space[2], justifyContent: "flex-end" }}>
       <SquareAction tone="view" icon={<TeamOutlined />} label={`Who downloaded ${d.title}`} onClick={() => setStatsDoc(d)} />
+      {!d.archivedAt && <SquareAction tone="view" icon={<SafetyCertificateOutlined />} label={`Acknowledgement of ${d.title}`} onClick={() => setAckDoc(d)} />}
       <SquareAction tone="edit" icon={<DownloadOutlined />} label={`Download ${d.title}`} onClick={() => void downloadDoc(d)} />
       {d.archivedAt ? (
         <SquareAction tone="view" icon={<UndoOutlined />} label={`Restore ${d.title}`} loading={archive.isPending && archive.variables?.id === d.id} onClick={() => archive.mutate({ id: d.id, archived: false })} />
@@ -301,6 +304,7 @@ function DocumentsTab() {
       />
       <UploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} />
       <DownloadsModal doc={statsDoc} onClose={() => setStatsDoc(null)} />
+      <AckDrawer doc={ackDoc} onClose={() => setAckDoc(null)} />
       <ConfirmModal
         open={archiving !== null}
         onCancel={() => setArchiving(null)}
