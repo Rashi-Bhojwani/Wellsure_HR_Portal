@@ -82,11 +82,12 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 - [x] 18 candidates, applications, CVs (C-4A)
 - [x] 19 interviews, feedback (confidential; C-4A)
 - [x] CHECKPOINT D1 — local checks passed; 227 backend files / 2,201 tests; 5 mutations; 454 admin + 228 employee scan pages. CI and owner acceptance pending. Stop; C-4B waits.
-- [ ] 20 offers + director-only compensation
-- [ ] 21 expiring private links, joining documents, exceptions
-- [ ] 22 idempotent conversion
-- [ ] 23 screens (`recruitment-01..19`)
-- [ ] CHECKPOINT D
+- [x] 20 offers + director-only compensation; director-only expected pay — `c1bcae4`
+- [x] 21 expiring private links, joining documents, exceptions — `c1bcae4`
+- [x] 22 idempotent conversion (race test) — `c1bcae4`
+- [x] 23 screens: Offers and joining, candidate Offer tab, public upload page, Referrals, settings — `eeb7b8e`
+- [x] Referrals (optional, off by default) — `c1bcae4`, `eeb7b8e`
+- [ ] CHECKPOINT D — local checks and CI recorded in the C-4B stage report; owner acceptance pending
 
 ## Badges, nudges, Unmute, Insights
 - [x] 24 badges — `6de8b08`
@@ -123,3 +124,14 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 - [x] Final full backend suite alone on `e5826d2` — 203 files / 2,057 tests passed; zero skipped/todo
 - [x] CI per job on `e5826d2` — all seven jobs passed, including admin and employee sensitive-ui halves (run `41607364573`)
 - [x] Final report and Unverified list; STOP after C-1
+
+## Stage 1 of 4 (2026-11-11): sync, clean-up, C-4B
+- [x] 0.1 `docs/samples/` removed unread — `63dc34e`; no code, test or doc depended on it (only older plan notes name it)
+- [x] 0.2 merged `feat/hr-payroll-separation` `64d3246` — `c6dda07`; payroll catalogue test edit kept; full suite alone 243 files / 2,278 tests; CI run 290 all seven jobs green
+- [x] 0.3 CI per job: C-3 run 255 and C-4A run 256 all seven green; C-4A reviewed (findings in the C-4B report)
+- [x] 0.4 guide mapping already in PEEPS_PLAN §A.1 (`d7fa323`); no new commit needed
+- [x] C-4B backend `c1bcae4`, screens/scans/docs `eeb7b8e`; mutations 3/3 caught
+- [x] Final full backend suite alone on `eeb7b8e`: 244 files / 2,288 tests passed
+- [ ] CI run 301 on `eeb7b8e`: six jobs green; install-lint-typecheck-test red twice by its 18-minute step limit (slow runners, no failing test) — owner/Session A to raise the limit in ci.yml
+- [ ] Owner: choose link lifetime, required joining documents, exception approver; decide the C-4A defaults finding
+- [ ] **STOP: wait for the owner (stage 2 not started)**

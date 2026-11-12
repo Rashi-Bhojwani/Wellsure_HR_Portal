@@ -1389,3 +1389,172 @@ recruitment data is placed in generic Tasks.
 | `sensitive-ui (employee portal)` | Unverified |
 
 STOP at checkpoint D1. Await the owner's CI paste/acceptance. C-4B is not started.
+
+## C-4B — Stage 1 of 4: sync, clean-up, recruitment part B (2026-11-11/12)
+
+One agent on `peeps/foundation`, clean start at `1a1ef46`. No PR, force-push, staging/production change, database drop
+or CI workflow edit. Commands ran with `DATABASE_URL`/`PORT` unset (the shell exported a remote database); local
+PostgreSQL 16 / Redis 7, every scratch database new. The real-data folder was never opened.
+
+### Commits
+
+| Step | Commit | Result |
+|---|---|---|
+| 0.1 | `63dc34e` | `docs/samples/` removed unread ("remove sample folder pending clean synthetic files"); history untouched. No code, test or doc depended on it; only older plan notes name the folder, so nothing was skipped. |
+| 0.2 | `c6dda07` | Merged `feat/hr-payroll-separation` `64d3246` (35 commits). Two schema conflicts, both sides kept (Session A first, PEEPS blocks after); no `prisma format` churn. Payroll catalogue test's PEEPS block (eleven original steps + optional exit/requisition) unchanged; Session A's tests intact. |
+| 0.4 | — | Guide mapping already in PEEPS_PLAN §A.1 (`d7fa323`); nothing to add. |
+| C-4B backend | `c1bcae4` | Offers, director-only pay, expected pay, joiner links/documents/exceptions, conversion, referrals; migration `peeps_20261111090000_recruitment_offers`; registries; 9 tests. |
+| C-4B screens | `eeb7b8e` | Offers and joining page, candidate Offer tab, settings editors, public upload page, Referrals page, DEMO offer, scans, docs. |
+
+### What shipped
+
+- **Offers** (`offers.ts`, `offerAccess.ts`): non-pay terms (role, department, manager, joining date, location, type) for
+  Wellsure Office members (recruitment capability + Office audience) and directors; HR onboarding reads accepted offers
+  only. States DRAFT → PROPOSED → APPROVED (only if `offerApproval` is on; Default off) → ISSUED → ACCEPTED / DECLINED /
+  EXPIRED, and WITHDRAWN (reason required). Approve and issue are director-only; issue needs pay and the confirmation that
+  the letter went through Letters (optional reference code). Peeps never builds the letter. One live offer per
+  application (partial unique index). Optimistic version + row locks; retries idempotent. `recruitment_offer_events` is
+  append-only (trigger + app role loses UPDATE/DELETE). Free text refuses pay-like content.
+- **Pay**: `recruitment_offer_compensation` (encrypted exact decimal as text, INR, annual/monthly) is written only by a
+  director (service + DB trigger), editable in DRAFT/PROPOSED, every open audited, audit rows carry a version not the
+  figure. Candidate expected pay (did not exist in C-4A; added) is an encrypted candidate column behind director-only
+  routes. Both registered in `ENCRYPTED_COLUMNS`; new sensitive classes RECRUITMENT_PAY (`recruitment.pay.view`,
+  HR- and Developer-forbidden) and JOINING_DOCUMENTS. Erasure clears expected pay, offer pay and joining documents.
+- **Payroll interface (Session A)**: `readAcceptedOfferForPayroll(directorUserId, employeeId)` — director-only, audited,
+  read-only, no route; returns offer id, joining date, type and pay of the accepted offer behind a converted employee.
+  No payroll, deduction or salary-setting code.
+- **Joiner links** (`joining.ts`): 32 random bytes (base64url), SHA-256 at rest, token shown once; lifetime from
+  `joinerLinkLifetime` (Not set → refuse); only `joinerDocumentTypes` (Not set → refuse) with per-type MIME/size and the
+  platform's `prepareDocumentUpload` (extension, magic bytes, image re-encode); new link revokes the old; link spent when
+  every type is uploaded; one upload per type per link; rate limits per address (60) and per link (20) per 10 min
+  (technical abuse limits, not business values); public page returns only document types and expiry. Documents in a
+  private storage prefix; HR onboarding and directors download (audited). Exceptions only by the director-chosen
+  `joiningExceptionApprover` (Not set → refuse); append-only.
+- **Conversion** (`conversion.ts`): existing `createEmployeeInTx` unchanged; HR enters the employee code and the Add
+  Employee personal fields; non-pay data copied from the candidate (name) and offer; offer row lock + unique conversion
+  (candidate, offer, application, employee) → retries, double clicks and simultaneous requests return one employee;
+  application → HIRED; links revoked. No bank, identity or pay copied (HR adds bank/identity later via existing writers).
+- **HR onboarding switch**: `RUN_ONBOARDING` over new key `recruitment.onboarding`, held by both HR roles by default
+  (migration + role default); a director switch OFF removes it on the next request.
+- **Referrals** (`referrals.ts`): `referrals` setting Default off; employees refer to open jobs with recorded consent;
+  recruiting team accepts (creates the candidate, identity moves) or closes; referrer sees SUBMITTED / IN_REVIEW /
+  CLOSED only; unaccepted referral identity purged at retention.
+
+### Verification actually run
+
+- Full backend suite alone on merge `c6dda07`: **243 files / 2,278 tests passed** (1,095 s).
+- Final full backend suite alone on `eeb7b8e`: **244 files / 2,288 tests passed** (1,164 s), exit 0.
+- Changed tests before each commit: C-4B 9 tests, route inventory, HR capability matrix/catalog, recruitment folder,
+  `src/lib`, access, sensitive-docs — all passed after the fixes below.
+- Frontend: 24 files / 99 tests (new `offerPrivacy.test.tsx`); lint + `check:tokens`; typecheck; build; bundle budgets
+  login 232.0/250 KB, employee shell 340.7/400, admin shell 360.2/400.
+- `test:demo` 1 file / 7 tests passed.
+- Migration: fresh database migrates with `db:drift`-style diff "No difference detected"; a copy at the pre-C-4B
+  migrations holding an existing candidate row migrated cleanly, row unchanged, new columns null.
+- `check:sensitive-ui` on a fresh normal + DEMO seed, halves run sequentially: **admin 532 pages, employee 238 pages
+  passed**. New rules: DEMO offer pay 7777123.45 / expected pay 6666123.45 never on a non-director page; no joining
+  storage key; director and HR onboarding see the accepted DEMO offer, the Developer does not.
+- `check:popovers` on a fresh normal seed: passed, incl. the new offer state filter at 390/1280, light/dark.
+- Browser walkthrough (Playwright): director, HR, Office member (capability + audience set on the scratch DB only),
+  employee (portal and admin URL) × 1280/390 × light/dark = 20 visits; public page 4 visits + invalid-token state;
+  loading, error and empty states. No pay before "Show pay", director sees pay after it, Office/HR never see pay UI,
+  no horizontal overflow, no page errors. Screenshots kept in the session scratchpad only (none committed).
+- Four prepared leave types remain inactive (SQL).
+
+### Failures found and fixed
+
+- Prisma `migrate diff` output carried a CLI warning line into the migration; first scratch apply failed; stripped.
+- Public route returned 401: the bare `/api` router's `authenticate` ran first; mount moved into `BASE_MOUNTS`.
+- HR capability tests required every capability key to be a role default and a matrix door: switched onboarding to a
+  real default key (`recruitment.onboarding`) and added the door.
+- Route inventory listed 25 unclassified routes; classified. `SENSITIVE_DATA.md` generated tables regenerated.
+- Lint: synchronous setState in an effect on the public page; rewritten with React Query.
+- Walkthrough script bugs (session reuse with rotating refresh tokens, "Open the menu" matched "Open"); fixed in the
+  script, not the app. A broad `kill` pattern once matched its own shell (nothing was running; no effect).
+
+### Mutation checks (each restored; C-4B test file rerun)
+
+| Broken rule | Named failing tests |
+|---|---|
+| Pay visible to Office (`payDirector` widened) | route matrix; "offer pay and expected pay reach directors only…"; states test |
+| Idempotent conversion replay | "conversion: two simultaneous requests and a retry create exactly one employee…" |
+| Link expiry ignored | "joiner links refuse until lifetime and document types are chosen; then reuse, expiry…" |
+
+### Tests added (backend `offers.test.ts`)
+
+Every C-4B route anonymous 401 and Developer 403 with a source-derived enumeration; matrix for employee, manager, HR
+(onboarding on and switched off), Office member, non-member and director; pay never in lists/detail/search/counts/audit
+rows/notifications for anyone but a director, ciphertext at rest, pay-like free text refused; states, approval
+optional, append-only events (DB), director-only pay trigger; links (Not set refusals, hash only at rest, reveals
+nothing, wrong type, content mismatch, oversize, unlisted type, duplicate, spent/reuse, revocation, new link revokes,
+expiry, audited HR download, others refused); per-link rate limit; exceptions approver Not set/wrong person/right
+person, append-only; conversion race + retry → one employee, HIRED, no bank/statutory/salary rows, payroll interface;
+referrals off then basic status only.
+
+### Settings left Not set (refuse their step until a director chooses)
+
+`joinerLinkLifetime`, `joinerDocumentTypes`, `joiningExceptionApprover`. Shipped **Default: off, change in settings**:
+`offerApproval`, `referrals`. HR onboarding Default on (`RUN_ONBOARDING`). Unchanged from C-4A: sources, retention,
+pipelines, scorecard, rejection reasons, email templates, CV rules, Office audience, requisition route. The DEMO company
+chooses fictional link lifetime and document types only.
+
+### C-4A review against this prompt's rules
+
+- Pay: no job pay bands, offers or expected pay existed in C-4A; nothing visible to non-directors. OK.
+- HR recruitment explicit ON, Office capability + audience, panel-only feedback, no second director, no public form,
+  key-rotation exception limited to InterviewFeedback (not widened here). OK.
+- **Finding (not changed):** the DEFAULTS RULE says hiring stages and interview rounds ship with conventional values
+  marked "Default, change in settings". C-4A leaves pipelines/stages Not set and the interview round is free text.
+  Fixing it changes C-4A's pinned Not-set behaviour and its tests, so I left it for an owner decision (proposal: a
+  default pipeline row and a default round list, both director-changeable and audited). Badge list, nudge list,
+  notice period (30 days) and exit checklist defaults belong to earlier modules and are not touched in this stage.
+
+### Decided by me
+
+Expected pay added as a new director-only field (none existed); offer pay as a mutable encrypted side table with an
+append-only event ledger (keeps key rotation/erasure without a new trigger exception); non-pay terms fixed at creation;
+joining documents stay in Peeps (not copied to employee documents); conversion does not auto-send the invitation; HR
+enters the employee code (no code series exists in the employee service); exception approver chosen as an employee;
+technical rate limits 60/20 per 10 min; a new link revokes the previous one; link spent when complete; Office member
+reads offers only under C-4A's Office audience; HR with MANAGE_RECRUITMENT gets no offer access.
+
+### Shared-file hand-off (all inside `PEEPS-BEGIN/END recruitment-offers` blocks unless noted)
+
+`backend/prisma/schema.prisma` (new models; Candidate/Application/Job back-relations), `backend/src/app.ts`,
+`backend/src/lib/fieldKeyRotation.ts`, `backend/src/lib/systemRoles.ts`, `backend/src/lib/__tests__/cleanup.ts`,
+`backend/src/modules/managers/__tests__/routeInventory.ts`, `backend/src/modules/hrCapabilities/__tests__/hrMatrix.test.ts`,
+`backend/scripts/demo/seedDemoCompany.ts`, `shared/constants/{permissions,hrCapabilities,sensitiveData}.ts`,
+`docs/SENSITIVE_DATA.md` (generated section regenerated), `docs/{GETTING_STARTED,PROGRESS,UI_SCREEN_MAP}.md`,
+`frontend/src/routes/{router,adminMenu.config,employeeMenu.config}.tsx`, `frontend/e2e/{sensitive-ui,popovers}.mjs`.
+No payroll application code, HR switch framework code, access resolver, attendance or CI workflow changed.
+
+### CI read per job
+
+| Job | Run 290 (`c6dda07` merge) | Run 301 (`eeb7b8e`, final code) |
+|---|---|---|
+| install-lint-typecheck-test | success | **failure (attempts 1 and 2): Test step hit its fixed 18-minute limit**; no failing assertion, no hang (attempt 2: 173 of 244 backend files done, tests still completing at the timeout) |
+| docker-build | success | success |
+| agent-windows | success | success |
+| attendance-replay | success | success |
+| latency (incl. popovers) | success | success |
+| sensitive-ui (admin portal) | success | success |
+| sensitive-ui (employee portal) | success | success |
+
+C-3 run 255 and C-4A run 256: all seven jobs success.
+
+**Why the test job is red.** `npm run test` (backend + frontend + agent) has `timeout-minutes: 18`. The merge run did it in
+13.7 min. On run 301 both attempts' runners were ~40–60% slower in every step (install 71/59 s vs 43 s, lint 43/55 s vs
+33 s, typecheck 64/72 s vs 44 s); the suite itself grew ~6% locally (1,095 → 1,164 s, 10 new tests). One fix attempt
+(re-running the failed job, no empty commit) timed out the same way. The limit is in `.github/workflows/ci.yml`, which
+this stage may not edit. **Owner/Session A decision:** raise that step's limit (e.g. to 25 min, like the job's own
+limit) or split the backend suite. Every other job and the local full suite are green.
+
+### Unverified
+
+- **CI `install-lint-typecheck-test` on `eeb7b8e`: red by step timeout (above); the backend/frontend/agent tests did
+  not complete in CI.** Local full suite alone passed.
+- Real SMTP/SES delivery of anything; no email carries offer content in C-4B.
+- `check:sensitive-ui` was not mutation-tested for the new pay rule (a 20-minute crawl); the backend pay tests were.
+- No dedicated log-capture test for pay; request logs are a no-body allowlist and C-4B code logs no values.
+- HR switch toggle for `RUN_ONBOARDING` is not added to the scan's CAPABILITIES loop (scan time limit).
+- Office member offer screens checked in the browser only with a scratch-DB capability change, not in the DEMO seed.
