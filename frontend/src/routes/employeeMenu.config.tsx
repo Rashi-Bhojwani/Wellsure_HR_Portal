@@ -43,6 +43,7 @@ const PeoplePage = lazyPage(() => import("../pages/employee/people/PeoplePage"),
 const HelpdeskPage = lazyPage(() => import("../pages/employee/helpdesk/HelpdeskPage"), "HelpdeskPage");
 const RequestHubPage = lazyPage(() => import("../pages/employee/request-hub/RequestHubPage"), "RequestHubPage");
 const TasksPage = lazyPage(() => import("../pages/employee/todo/TasksPage"), "TasksPage");
+const MyOnboardingPage = lazyPage(() => import("../pages/employee/todo/MyOnboardingPage"), "MyOnboardingPage"); // M block 2, OE-04
 const WorkflowDelegatesPage = lazyPage(() => import("../pages/employee/workflow-delegates/WorkflowDelegatesPage"), "WorkflowDelegatesPage");
 const MarkAttendancePage = lazyPage(() => import("../pages/employee/attendance/MarkAttendancePage"), "MarkAttendancePage");
 const AttendanceInfoPage = lazyPage(() => import("../pages/employee/attendance/AttendanceInfoPage"), "AttendanceInfoPage");
@@ -131,6 +132,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
     children: [
       { key: "tasks", label: "Tasks", path: "todo/tasks", icon: UnorderedListOutlined, element: TasksPage, quickAction: true },
       { key: "review", label: "Review", path: "todo/review", icon: AuditOutlined, element: ReviewPage, quickAction: true },
+      { key: "onboarding", label: "Onboarding", path: "todo/onboarding", icon: UnorderedListOutlined, element: MyOnboardingPage }, // M block 2, OE-04
     ],
   },
   {

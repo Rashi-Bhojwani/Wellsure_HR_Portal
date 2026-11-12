@@ -550,6 +550,7 @@ model Employee {
   letterAsks                 LetterAsk[]
   documentAcknowledgements   CompanyDocumentAcknowledgement[] // block 2, ER-18
   probationDecisions         EmployeeProbationDecision[] // block 2, ER-26
+  onboardingTasks            OnboardingTask[] // block 2, OE-04
   // M-END
 
   @@index([status])
@@ -4436,5 +4437,24 @@ model EmployeeProbationDecision {
 
   @@index([employeeId, createdAt])
   @@map("employee_probation_decisions")
+}
+// M-END
+
+// M-BEGIN (second session block 2, OE-04): a new joiner's onboarding steps, copied from the checklist when onboarding starts.
+model OnboardingTask {
+  id              String    @id @default(cuid())
+  employeeId      String    @map("employee_id")
+  employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  position        Int
+  owner           String
+  step            String
+  dueDate         DateTime  @map("due_date") @db.Date
+  doneAt          DateTime? @map("done_at") @db.Timestamptz(3)
+  doneByUserId    String?   @map("done_by_user_id")
+  startedByUserId String    @map("started_by_user_id")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([employeeId, position])
+  @@map("onboarding_tasks")
 }
 // M-END

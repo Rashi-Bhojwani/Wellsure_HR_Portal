@@ -797,6 +797,12 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/probation": scoped("employee.edit (never manager-grantable); the caller's data scope in the service; Developer refused; never one's own"),
   "POST /api/probation/:employeeId/confirm": scoped("employee.edit (never manager-grantable); data scope in the service; Developer refused; never one's own"),
   "POST /api/probation/:employeeId/extend": scoped("employee.edit (never manager-grantable); data scope in the service; Developer refused; never one's own"),
+  // OE-04 onboarding
+  "GET /api/onboarding/mine": self,
+  "GET /api/onboarding": scoped("employee.edit (never manager-grantable); data scope in the service; Developer refused"),
+  "POST /api/onboarding/:employeeId/start": scoped("employee.edit (never manager-grantable); data scope in the service; Developer refused"),
+  "GET /api/onboarding/:employeeId/steps": scoped("the person themself, their reporting manager (steps only), or HR (employee.edit) in data scope; Developer refused"),
+  "PUT /api/onboarding/tasks/:taskId/done": scoped("the step's owner: HR in scope (never their own), the reporting manager for MANAGER steps, the employee for their EMPLOYEE steps; Developer refused"),
   // P7-3: the person's own
   "GET /api/tax/me/ytd": self,
   "GET /api/tax/me/salary-revisions": self,
