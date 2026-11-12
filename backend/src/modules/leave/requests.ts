@@ -13,7 +13,7 @@ import { roleCodesOf } from "../managers/hierarchy";
 import { getAttendanceLeaveSink, type ApprovedLeaveDay } from "./attendanceIntegration";
 import { consumeCompOffFifo, reverseCompOffConsumption } from "./compOff";
 import { withEmployeeLeaveLock } from "./concurrency";
-import { computeTotalLeaveDays } from "./dayCount";
+import { assertLeaveLimits, leaveDaysFor } from "./policyLimits";
 import { resolveDayCountContext } from "./dayCountContext";
 import { assertSufficientBalance, writeLedgerEntry } from "./ledger";
 import { releasedDaysOf } from "./releases";
@@ -107,10 +107,12 @@ export async function applyForLeave(input: ApplyLeaveInput, viewer: LeaveViewer,
   await assertNoLockedPeriod(targetEmployeeId, fromDate, toDate);
 
   const { holidayDates, weekOffDays } = await resolveDayCountContext(targetEmployeeId, fromDate, toDate);
-  const totalDays = computeTotalLeaveDays(fromDate, toDate, input.fromDayPart, input.toDayPart, holidayDates, weekOffDays);
+  // LV-20 (M session block 2): the sandwich rule, off until two directors turn it on; off, this is exactly computeTotalLeaveDays.
+  const totalDays = await leaveDaysFor(leaveType.code, fromDate, toDate, input.fromDayPart, input.toDayPart, holidayDates, weekOffDays);
   if (totalDays.lessThanOrEqualTo(0)) {
     throw new HttpError(400, "The selected range contains no working days to apply leave for.", "NO_WORKING_DAYS");
   }
+  await assertLeaveLimits(leaveType.code, totalDays, fromDate, targetEmployeeId === viewer.employeeId); // LV-19 (M session block 2), off until turned on
 
   const request = await withEmployeeLeaveLock(targetEmployeeId, async (tx) => {
     const overlap = await tx.leaveRequest.findFirst({
