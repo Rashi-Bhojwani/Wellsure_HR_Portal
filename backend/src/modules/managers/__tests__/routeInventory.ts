@@ -776,6 +776,16 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/payroll-reports/:key": adminInService("router gate payroll.salary.view (never HR) and a director check in the service (Stage 6 payroll reports)"),
   "PUT /api/payroll-reports/:key/layout": adminInService("router gate payroll.salary.view (never HR) and a director check in the service (Stage 6 payroll reports)"),
   "GET /api/payroll-reports/:key/export": adminInService("router gate payroll.salary.view (never HR) and a director check in the service (Stage 6 payroll reports)"),
+  // M session block 2: policy settings (the decision rows), the same two-director store
+  "GET /api/policy-settings": adminInService("router gate settings.manage (never HR), Developer refused, and a director check in the service"),
+  "POST /api/policy-settings/:key/proposals": adminInService("router gate settings.manage (never HR), Developer refused, and a director check in the service"),
+  "POST /api/policy-settings/proposals/:id/confirm": adminInService("router gate settings.manage (never HR), Developer refused; a different director confirms"),
+  // ER-27 divisions: a catalogue like the other org masters; changes org.manage (never grantable to a manager), Developer refused
+  "GET /api/divisions": everyone("the division catalogue (names and their departments), as the other org masters"),
+  "POST /api/divisions": admin,
+  "PATCH /api/divisions/:id": admin,
+  "DELETE /api/divisions/:id": admin,
+  "PUT /api/divisions/:id/departments": admin,
   // P7-3: the person's own
   "GET /api/tax/me/ytd": self,
   "GET /api/tax/me/salary-revisions": self,

@@ -25,11 +25,15 @@ import { useContactReveal } from "./parity/ContactReveal";
 import { PayTab } from "./parity/PayTab";
 import { PositionTab } from "./parity/PositionTab";
 import { PendingIdentityNotice } from "./IdentityChanges";
+import { divisionOfDepartment, listDivisions } from "../../../api/divisions";
 // A-9 — end
 
 const REFERENCE_STALE = 30_000;
 
 function OfficialTab({ profile, onEditJob }: { profile: employeeApi.EmployeeProfile; onEditJob?: () => void }) {
+  // ER-27 (M session block 2): shown only once the company has divisions; it is the department's.
+  const divisions = useQuery({ queryKey: ["divisions"], queryFn: listDivisions, staleTime: REFERENCE_STALE });
+  const division = divisionOfDepartment(divisions.data, profile.job?.department.id);
   return (
     <SectionStack>
       <ProfileSection title="Employment information">
@@ -47,6 +51,7 @@ function OfficialTab({ profile, onEditJob }: { profile: employeeApi.EmployeeProf
       <ProfileSection title="Job" onEdit={onEditJob} editLabel="Change job details">
         <Grid
           items={[
+            ...(divisions.data?.length ? [{ label: "Division", value: division?.name ?? "—" }] : []),
             { label: "Department", value: profile.job?.department.name ?? "—" },
             { label: "Designation", value: profile.job?.designation.name ?? "—" },
             { label: "Location", value: profile.job?.location.name ?? "—" },

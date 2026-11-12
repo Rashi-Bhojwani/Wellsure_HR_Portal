@@ -64,6 +64,7 @@ const AuditLogPage = lazyPage(() => import("../pages/admin/auditLog/AuditLogPage
 const PayrollAuditPage = lazyPage(() => import("../pages/admin/auditLog/AuditLogPage"), "PayrollAuditPage");
 const SystemSettingsPage = lazyPage(() => import("../pages/admin/settings/SystemSettingsPage"), "SystemSettingsPage");
 const DefaultBehavioursPage = lazyPage(() => import("../pages/admin/settings/DefaultBehavioursPage"), "DefaultBehavioursPage"); // D-37
+const PolicySettingsPage = lazyPage(() => import("../pages/admin/settings/PolicySettingsPage"), "PolicySettingsPage"); // M session block 2
 const CompanyDocumentsPage = lazyPage(() => import("../pages/admin/documents/CompanyDocumentsPage"), "CompanyDocumentsPage");
 const LeaveTypesPoliciesPage = lazyPage(() => import("../pages/admin/adminTools/LeaveTypesPoliciesPage"), "LeaveTypesPoliciesPage");
 const HolidayCalendarsAdminPage = lazyPage(() => import("../pages/admin/adminTools/HolidayCalendarsAdminPage"), "HolidayCalendarsAdminPage");
@@ -447,6 +448,7 @@ export const adminApps: AdminApp[] = [
           { key: "audit-log", label: "Audit Log", path: "admin-tools/audit-log", icon: AuditOutlined, element: AuditLogPage, needs: { any: ["audit.view"] } },
           { key: "system-settings", label: "System Settings", path: "admin-tools/settings", icon: SettingOutlined, element: SystemSettingsPage, needs: { any: ["settings.manage"] } },
           { key: "default-behaviours", label: "Default behaviours", path: "settings/behaviours", icon: SettingOutlined, element: DefaultBehavioursPage, needs: { director: true } }, // D-37
+          { key: "policy-settings", label: "Policy settings", path: "settings/policies", icon: SettingOutlined, element: PolicySettingsPage, needs: { director: true } }, // M session block 2
         ],
       },
     ],

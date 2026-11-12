@@ -21,9 +21,11 @@ import type { City, Location, SimpleMaster } from "../../../api/org";
 import { HelpStrip } from "../../../components/common/HelpStrip";
 import { RowActionButton } from "../../../components/leave/RowActionButton";
 import { useAuth } from "../../../hooks/useAuth";
+import { DEVELOPER_ROLE_CODE } from "@shared/constants/sensitiveData";
 import { ApprovalBanner, CardGrid, ConfirmModal, DataTable, EmptyState, KeyValueGrid, PageHeader, Panel, QueryState, SideDrawer, SkeletonCard, StatusChip, toast, useIsPhone } from "../../../ui";
 import { fs, fw, radius, space, v } from "../../../theme/tokens";
 import { SectionNav, SettingsLayout, ToggleRow } from "../settings/SettingsNav";
+import { DivisionsTab } from "./DivisionsTab";
 
 // Reference data barely changes; don't refetch it on every visit.
 const REF_STALE = 30_000;
@@ -518,13 +520,15 @@ function SimpleMasterTab({ queryKey, api, canManage, hasRank, title, singular }:
 }
 
 export function OrganisationSetupPage() {
-  const { hasPermission } = useAuth();
+  const { hasPermission, hasRole } = useAuth();
   const canManage = hasPermission("org.manage");
   const [params, setParams] = useSearchParams();
 
   const sections = [
     { key: "cities", label: "Cities", icon: <EnvironmentOutlined />, render: () => <CitiesTab canManage={canManage} /> },
     { key: "locations", label: "Branches", icon: <BankOutlined />, render: () => <LocationsTab canManage={canManage} /> },
+    // ER-27 (M session block 2): the Developer role holds org.manage but the server refuses it division changes.
+    { key: "divisions", label: "Divisions", icon: <ApartmentOutlined />, render: () => <DivisionsTab canManage={canManage && !hasRole(DEVELOPER_ROLE_CODE)} /> },
     { key: "departments", label: "Departments", icon: <ApartmentOutlined />, render: () => <SimpleMasterTab title="Departments" singular="Department" queryKey="departments" api={orgApi.departments} canManage={canManage} /> },
     { key: "designations", label: "Designations", icon: <IdcardOutlined />, render: () => <SimpleMasterTab title="Designations" singular="Designation" queryKey="designations" api={orgApi.designations} canManage={canManage} /> },
     { key: "grades", label: "Grades", icon: <RiseOutlined />, render: () => <SimpleMasterTab title="Grades" singular="Grade" queryKey="grades" api={orgApi.grades} canManage={canManage} hasRank /> },
@@ -534,7 +538,7 @@ export function OrganisationSetupPage() {
 
   return (
     <>
-      <PageHeader title="Organisation Setup" subtitle="Cities, branches, departments, designations, grades and cost centres." />
+      <PageHeader title="Organisation Setup" subtitle="Cities, branches, divisions, departments, designations, grades and cost centres." />
       <SettingsLayout
         nav={
           <SectionNav

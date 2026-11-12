@@ -148,7 +148,8 @@ export async function propose(key: string, raw: unknown, actor: Actor) {
 export async function confirm(proposalId: string, actor: Actor) {
   await requireDirector(actor.userId, "confirm a change to a default behaviour");
   const p = await prisma.behaviourProposal.findUnique({ where: { id: proposalId }, include: { confirmation: true } });
-  if (!p) throw new HttpError(404, "There is no such proposal.", "NOT_FOUND");
+  // M session block 2: the policy settings share these tables; they are confirmed through /api/policy-settings only.
+  if (!p || !(BEHAVIOUR_KEYS as string[]).includes(p.key)) throw new HttpError(404, "There is no such proposal.", "NOT_FOUND");
   if (p.confirmation) throw new HttpError(409, "This proposal is already confirmed.", "ALREADY_CONFIRMED");
   if (p.proposedByUserId === actor.userId) throw new HttpError(403, "You proposed this, so a different director confirms it.", "CHECKER_IS_MAKER");
   // A newer proposal for the same key replaces an older one waiting: only the newest waiting one can be confirmed.

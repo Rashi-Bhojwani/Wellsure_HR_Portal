@@ -422,6 +422,9 @@ model Department {
   jobHistory       EmployeeJobHistory[]
   announcements    Announcement[]
   companyDocuments CompanyDocument[]
+  // M-BEGIN (second session block 2, ER-27)
+  division         DepartmentDivision?
+  // M-END
 
   @@map("departments")
 }
@@ -4360,3 +4363,28 @@ model PayrollReportLayout {
   @@map("payroll_report_layouts")
 }
 // A-END
+// M-BEGIN (second session block 2, ER-27): divisions, an optional grouping of departments (an employee's division is their department's).
+model Division {
+  id          String               @id @default(cuid())
+  code        String               @unique
+  name        String               @unique
+  createdAt   DateTime             @default(now()) @map("created_at")
+  updatedAt   DateTime             @updatedAt @map("updated_at")
+  departments DepartmentDivision[]
+
+  @@map("divisions")
+}
+
+model DepartmentDivision {
+  id           String     @id @default(cuid())
+  departmentId String     @unique @map("department_id")
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  divisionId   String     @map("division_id")
+  division     Division   @relation(fields: [divisionId], references: [id], onDelete: Restrict)
+  setByUserId  String     @map("set_by_user_id")
+  setAt        DateTime   @default(now()) @map("set_at")
+
+  @@index([divisionId])
+  @@map("department_divisions")
+}
+// M-END
