@@ -104,14 +104,142 @@ jobs:
       - name: Seed
         run: npm run db:seed
 
-      - name: Test
+      # The backend suite runs in the backend-tests shards below (it took 17 of its 18 minutes as one step); this job keeps the frontend and agent suites.
+      - name: Test (frontend and agent)
         timeout-minutes: 18
-        run: npm run test
+        run: |
+          npm run test --prefix frontend
+          npm run test --prefix biometric-agent
 
       # The demo company (made-up people, salaries and a fictional bank file) is built on the test database and the sensitive-data crawl is repeated on it as the developer.
       - name: Demo company tests
         timeout-minutes: 5
         run: npm run test:demo --prefix backend
+
+  # The backend suite in parallel shards (2026-11-12: as one step it took 17 of its 18 minutes, and one run timed out with no test failing). Vitest splits it by file:
+  # every test file runs in exactly one shard, each shard on its own Postgres and Redis, each step with the same 18-minute limit. backend-tests-complete then checks
+  # that the shards together are the whole suite.
+  backend-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: wellsure
+          POSTGRES_PASSWORD: wellsure
+          POSTGRES_DB: wellsure_hr
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wellsure -d wellsure_hr"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://wellsure:wellsure@localhost:5432/wellsure_hr
+      REDIS_URL: redis://localhost:6379
+      CHROMIUM_PATH: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install
+        run: npm install --prefix backend
+
+      - name: Test (backend, shard ${{ matrix.shard }} of 4)
+        timeout-minutes: 18
+        working-directory: backend
+        run: npx vitest run --shard=${{ matrix.shard }}/4 --reporter=default --reporter=json --outputFile.json=shard-${{ matrix.shard }}.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-shard-${{ matrix.shard }}
+          path: backend/shard-${{ matrix.shard }}.json
+          if-no-files-found: error
+
+  # Fails if any shard failed or did not report, or if the shards' files and test counts do not add up to the full suite as `vitest list` counts it.
+  backend-tests-complete:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: backend-tests
+    if: always()
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: wellsure
+          POSTGRES_PASSWORD: wellsure
+          POSTGRES_DB: wellsure_hr
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wellsure -d wellsure_hr"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://wellsure:wellsure@localhost:5432/wellsure_hr
+      REDIS_URL: redis://localhost:6379
+      CHROMIUM_PATH: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install
+        run: npm install --prefix backend
+
+      - name: Every shard succeeded
+        run: |
+          echo "backend-tests: ${{ needs.backend-tests.result }}"
+          test "${{ needs.backend-tests.result }}" = "success"
+
+      - name: List the whole suite
+        working-directory: backend
+        run: npx vitest list --json=suite-list.json > /dev/null
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: backend-shard-*
+          path: backend/shards
+          merge-multiple: true
+
+      - name: The shards add up to the suite, each test exactly once
+        working-directory: backend
+        run: node scripts/check-test-shards.mjs suite-list.json shards/shard-1.json shards/shard-2.json shards/shard-3.json shards/shard-4.json
 
   docker-build:
     runs-on: ubuntu-latest
