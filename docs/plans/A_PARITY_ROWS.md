@@ -45,7 +45,7 @@ the field-encryption registry; an audit row on every state change and every down
 7. **PY-37: bank summary PDF.** For a written bank file (monthly run): company, run, payment date, rows, total, per bank name the count and total, who prepared
    and who approved it, and a line to sign. No account number, no person's name. Audited.
 8. **PY-24: reimbursement statement per run.** For a finalised run, each claim it paid (the consumed reimbursement adjustments): the person sees their own,
-   directors see everyone's. Shown on the employee's claims page and on Payroll → Reimbursements.
+   directors see everyone's for a month. Shown on the employee's claims page and on Payroll → Reimbursements. (As built: monthly runs only; a claim paid by an off-cycle run is not listed in this statement — it shows on the off-cycle run.)
 
 ## Skipped (owner decision or real value; listed in the report)
 
