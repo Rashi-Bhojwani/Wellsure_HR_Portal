@@ -831,6 +831,14 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/feedback": scoped("helpdesk.manage (never manager-grantable); named feedback narrowed to the caller's data scope; Developer refused"),
   "POST /api/feedback/:id/replies": scoped("helpdesk.manage; data scope in the service; never one's own; Developer refused"),
   "POST /api/feedback/:id/close": scoped("helpdesk.manage; data scope in the service; never one's own; Developer refused"),
+  // AT-19 overtime
+  "GET /api/overtime/mine": self,
+  "POST /api/overtime/mine": self,
+  "POST /api/overtime/mine/:id/withdraw": self,
+  "GET /api/overtime": scoped("attendance.regularization.approve; a director, or the key with the person in the caller's data scope when the setting allows; never one's own; Developer refused"),
+  "POST /api/overtime/:id/approve": scoped("as GET /api/overtime"),
+  "POST /api/overtime/:id/reject": scoped("as GET /api/overtime"),
+  "GET /api/overtime/totals": adminInService("directors only, checked in the service; minutes only, no amount; Developer refused"),
   // P7-3: the person's own
   "GET /api/tax/me/ytd": self,
   "GET /api/tax/me/salary-revisions": self,
@@ -847,6 +855,9 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
 // Scoped routes a manager can reach with a manager-grantable key — each has
 // an IDOR case in managerReach.test.ts. The test fails if one is missing.
 export const MANAGER_REACHABLE_SCOPED = [
+  "GET /api/overtime", // M block 2, AT-19
+  "POST /api/overtime/:id/approve", // M block 2, AT-19
+  "POST /api/overtime/:id/reject", // M block 2, AT-19
   "GET /api/custom-fields/definitions", // M block 2, ER-28
   "GET /api/custom-fields/employees/:employeeId", // M block 2, ER-28
   "POST /api/custom-fields/employees/:employeeId/:fieldId/reveal", // M block 2, ER-28 (directors only in the service)

@@ -60,6 +60,7 @@ const AddEmployeePage = lazyPage(() => import("../pages/admin/employee/AddEmploy
 const SeparationsPage = lazyPage(() => import("../pages/admin/employee/SeparationsPage"), "SeparationsPage");
 const ChangeRequestsPage = lazyPage(() => import("../pages/admin/employee/ChangeRequestsPage"), "ChangeRequestsPage");
 const ProbationPage = lazyPage(() => import("../pages/admin/employee/m/ProbationPage"), "ProbationPage"); // M session block 2, ER-26
+const OvertimeClaimsPage = lazyPage(() => import("../pages/admin/workforce/OvertimeClaimsPage"), "OvertimeClaimsPage"); // M block 2, AT-19
 const FeedbackInboxPage = lazyPage(() => import("../pages/admin/employee/m/FeedbackInboxPage"), "FeedbackInboxPage"); // M block 2, SS-13
 const OnboardingPage = lazyPage(() => import("../pages/admin/employee/m/OnboardingPage"), "OnboardingPage"); // M session block 2, OE-04
 const ImportCenterPage = lazyPage(() => import("../pages/admin/import/ImportCenterPage"), "ImportCenterPage");
@@ -288,6 +289,7 @@ export const adminApps: AdminApp[] = [
           { key: "employee-swipes", label: "Employee Swipes", path: "workforce/attendance/swipes", icon: DesktopOutlined, element: EmployeeSwipesPage, needs: { any: ["attendance.swipes.view"] } },
           { key: "attendance-muster", label: "Attendance Muster", path: "workforce/attendance/muster", icon: FileTextOutlined, element: MusterPage, needs: { any: ["attendance.view", "attendance.manual.enter"] } },
           { key: "attendance-info", label: "Attendance Info", path: "workforce/attendance/info", icon: CalendarOutlined, element: AttendanceInfoAdminPage, needs: { any: ["attendance.view"] } },
+          { key: "overtime", label: "Overtime", path: "workforce/attendance/overtime", icon: AuditOutlined, element: OvertimeClaimsPage, needs: { any: ["attendance.regularization.approve"] } }, // M block 2, AT-19
           { key: "regularizations", label: "Regularizations", path: "workforce/attendance/regularizations", icon: AuditOutlined, element: RegularizationsPage, needs: { any: ["attendance.regularization.view", "attendance.regularization.approve"] } },
           { key: "process-attendance", label: "Process Attendance", path: "workforce/attendance/process", icon: ToolOutlined, element: ProcessAttendancePage, needs: { any: ["attendance.process"] } },
           { key: "period-finalisation", label: "Attendance Period Finalisation", path: "workforce/attendance/finalisation", icon: SafetyOutlined, element: FinalisationPage, needs: { any: ["attendance.finalise", "attendance.process"] } },

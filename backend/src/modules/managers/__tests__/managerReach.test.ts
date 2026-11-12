@@ -624,6 +624,38 @@ describe("manager reach — TEAM scope at every endpoint a manager can call (E2)
     });
   });
 
+  // M session block 2, AT-19: overtime. With attendance.regularization.approve, a manager decides the team's claims only.
+  describe("overtime (AT-19): the team's claims only", () => {
+    const claim = {} as Record<"member" | "outsider", string>;
+    beforeAll(async () => {
+      const { overtimePolicy, settledDay } = await import("../../overtime/__tests__/overtimeTestHelpers");
+      await overtimePolicy({ active: true, minimumMinutes: 60, roundToMinutes: 30, approver: "MANAGER_OR_DIRECTOR" }, p.director.userId, p.hrAdmin.userId);
+      for (const who of ["member", "outsider"] as const) {
+        await settledDay(p[who].employeeId, "2026-10-12", 90);
+        claim[who] = (await prisma.overtimeClaim.create({ data: { employeeId: p[who].employeeId, date: new Date("2026-10-12T00:00:00Z"), minutes: 90 } })).id;
+      }
+    });
+    afterAll(async () => {
+      const { overtimePolicy } = await import("../../overtime/__tests__/overtimeTestHelpers");
+      await overtimePolicy({ active: false, minimumMinutes: 60, roundToMinutes: 30, approver: "MANAGER_OR_DIRECTOR" }, p.director.userId, p.hrAdmin.userId);
+    });
+
+    it("GET /api/overtime — the member's claim, never the outsider's", async () => {
+      const ids = (await m().get("/api/overtime")).body.claims.map((c: { id: string }) => c.id);
+      expect(ids).toContain(claim.member);
+      expect(ids).not.toContain(claim.outsider);
+      cover("GET /api/overtime");
+    });
+
+    it("POST /api/overtime/:id/reject and /approve — the member's only", async () => {
+      expect((await m().post(`/api/overtime/${claim.outsider}/reject`, { note: "Not mine to decide" })).status).toBe(404);
+      expect((await m().post(`/api/overtime/${claim.outsider}/approve`)).status).toBe(404);
+      expect((await m().post(`/api/overtime/${claim.member}/approve`)).status).toBe(200);
+      cover("POST /api/overtime/:id/approve");
+      cover("POST /api/overtime/:id/reject");
+    });
+  });
+
   it("every manager-reachable scoped route has a case above", () => {
     expect(MANAGER_REACHABLE_SCOPED.filter((r) => !covered.has(r))).toEqual([]);
   });
