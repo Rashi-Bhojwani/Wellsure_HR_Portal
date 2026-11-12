@@ -4624,3 +4624,16 @@ model LeaveEncashmentRequest {
   @@map("leave_encashment_requests")
 }
 // M-END
+
+// M-BEGIN (second session block 2, IE-07 / IE-08): HR's update import, checked into a batch before it is applied.
+model UpdateImportBatch {
+  id               String   @id @default(cuid())
+  uploadedByUserId String   @map("uploaded_by_user_id")
+  fileName         String   @map("file_name")
+  rows             Json
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([uploadedByUserId, createdAt])
+  @@map("update_import_batches")
+}
+// M-END

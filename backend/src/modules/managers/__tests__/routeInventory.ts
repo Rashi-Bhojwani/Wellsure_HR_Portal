@@ -853,6 +853,12 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/encashment-requests": adminInService("directors only, checked in the service; never their own; days only, no amount; Developer refused"),
   "POST /api/encashment-requests/:id/approve": adminInService("directors only, checked in the service; never their own; Developer refused"),
   "POST /api/encashment-requests/:id/reject": adminInService("directors only, checked in the service; never their own; Developer refused"),
+  // IE-07 / IE-08 update import
+  "GET /api/update-import/template": adminInService("router gate employee.edit (never manager-grantable); an empty template, no one's data; Developer refused"),
+  "POST /api/update-import/preview": scoped("employee.edit (never manager-grantable); each row must be in the caller's data scope and not their own; Developer refused"),
+  "GET /api/update-import/waiting": adminInService("employee.edit at the gate, directors only in the service"),
+  "GET /api/update-import/:id": scoped("employee.edit; the uploader's own batch, or a director"),
+  "POST /api/update-import/:id/apply": scoped("employee.edit; the uploader or a director; rows checked at preview; job rows by a director when the setting says so"),
   // P7-3: the person's own
   "GET /api/tax/me/ytd": self,
   "GET /api/tax/me/salary-revisions": self,

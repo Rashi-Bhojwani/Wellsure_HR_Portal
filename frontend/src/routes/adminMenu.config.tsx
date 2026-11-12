@@ -64,6 +64,7 @@ const EncashmentRequestsPage = lazyPage(() => import("../pages/admin/leave/Encas
 const WfhRequestsPage = lazyPage(() => import("../pages/admin/workforce/WfhRequestsPage"), "WfhRequestsPage"); // M block 2, AT-36
 const OvertimeClaimsPage = lazyPage(() => import("../pages/admin/workforce/OvertimeClaimsPage"), "OvertimeClaimsPage"); // M block 2, AT-19
 const FeedbackInboxPage = lazyPage(() => import("../pages/admin/employee/m/FeedbackInboxPage"), "FeedbackInboxPage"); // M block 2, SS-13
+const UpdateImportPage = lazyPage(() => import("../pages/admin/employee/m/UpdateImportPage"), "UpdateImportPage"); // M block 2, IE-07/08
 const OnboardingPage = lazyPage(() => import("../pages/admin/employee/m/OnboardingPage"), "OnboardingPage"); // M session block 2, OE-04
 const ImportCenterPage = lazyPage(() => import("../pages/admin/import/ImportCenterPage"), "ImportCenterPage");
 const AuditLogPage = lazyPage(() => import("../pages/admin/auditLog/AuditLogPage"), "AuditLogPage");
@@ -253,6 +254,7 @@ export const adminApps: AdminApp[] = [
           { key: "letters", label: "Letters", path: "employee/letters", icon: FileTextOutlined, element: LetterRequestsPage, needs: { any: ["letters.issue.nopay"] } },
           // A-9 — end
           { key: "change-requests", label: "Change Requests", path: "employee/change-requests", icon: SolutionOutlined, element: ChangeRequestsPage },
+          { key: "update-import", label: "Update From File", path: "employee/update-import", icon: CloudUploadOutlined, element: UpdateImportPage, needs: { any: ["employee.edit"] } }, // M block 2, IE-07/08
           { key: "onboarding", label: "Onboarding", path: "employee/onboarding", icon: SolutionOutlined, element: OnboardingPage, needs: { any: ["employee.edit"] } }, // M block 2, OE-04
           { key: "probation", label: "Probation", path: "employee/probation", icon: SolutionOutlined, element: ProbationPage, needs: { any: ["employee.edit"] } }, // M block 2, ER-26
           { key: "separations", label: "Separations", path: "employee/separations", icon: ExportOutlined, element: SeparationsPage },
