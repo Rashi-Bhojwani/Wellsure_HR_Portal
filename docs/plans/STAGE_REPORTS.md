@@ -415,3 +415,11 @@ rule is "inside 2× the committed baseline" (Phase 2 Gate 2). So a reader's budg
 it would reach its budget near 800 loans — noted, not changed. **Found:** `measure-new-readers` (like the demo seed before it) did not exit after printing, because
 notices leave queue connections open; it now exits. The existing `measure:payroll` hung at its final payslip-PDF step in this container (no Chromium process started);
 its timings above were printed before that step. That step was not investigated (outside this work).
+
+**Final gate of the second pass (2026-11-12).** Full backend suite run alone on `31472a0` (all of this pass's code, with the M session's commits up to LC-14):
+**221 files, 2,061 tests, all passed.** CI per job: my own runs 292, 293, 299 and 300 were cancelled by later pushes (two sessions pushed to this branch at once);
+run 295 (`e31819d`, containing this pass's code to `c6af1ce`) succeeded; **run 307 on the branch head `b432395` (all of this pass's code and the M session's):
+install-lint-typecheck-test (incl. Demo company tests), docker-build, sensitive-ui admin, sensitive-ui employee, latency (incl. popovers), attendance-replay,
+agent-windows — all green.** Earlier run 288 (`7fbe89c`, docs only, same code as green run 287) failed only because its Test step hit the job's **18-minute limit**
+(no test failed). **Risk:** in run 307 the Test step took 17 minutes against that 18-minute limit; as the suite grows, CI will start timing out. Not changed here
+(a CI setting for the owners or the next session: raise the step limit or split the suite).

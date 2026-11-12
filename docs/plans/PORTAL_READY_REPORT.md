@@ -73,7 +73,8 @@ and off-cycle step is inside its budget (largest: 0.58 s against 1.6 s).
 
 **Not verified:**
 - Tax correctness against any law (every figure is the owners'); real bank files, real devices (agent sync tested with the fake device), real mail.
-- Test gates: see STAGE_REPORTS for the final full-suite run and CI per job on the final code commit.
+- Test gates: final full suite alone 221 files, 2,061 tests, all passed; CI run 307 on the branch head green on all seven jobs. Risk: the CI Test step now takes
+  about 17 of its 18 allowed minutes (run 288 timed out with no failing test).
 - Real screen readers (only keyboard paths and focus were checked); colour contrast was not measured; a real phone and a real tablet (emulated widths only).
 - Payslip PDF timing at 500 in this container (the existing measure's PDF step hung here; earlier figure 0.25 s each stands unverified today).
 - A loaded database, RDS Proxy and two people on different machines at once (the double-click checks are from one browser and one test process).
