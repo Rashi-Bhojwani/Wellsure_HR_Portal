@@ -200,7 +200,13 @@ async function view(loan: LoanRow, viewerUserId: string | null = null) {
     prepaid: fixed(s.prepaid, 2),
     waived: fixed(s.waived, 2),
     schedule: (loan.schedule as Array<{ n: number; month: string; principal: string; interest: string; balanceAfter: string }>).map((r) => ({ ...r, state: byRef.get(`${loan.id}#${r.n}`)?.status ?? (s.status === "SANCTIONED" ? "CANCELLED" : "NOT_SANCTIONED") })),
-    changes: s.changes.map((c) => ({ id: c.id, kind: c.kind, amount: c.amount ? canonicalDecimal(dec(c.amount.toString())) : null, reference: c.reference, effective: s.effective.some((e) => e.id === c.id), createdAt: c.createdAt.toISOString() })),
+    changes: await Promise.all(
+      s.changes.map(async (c) => {
+        // LC-07: each change's own decision, for the screen (waiting, approved, rejected; whether the viewer prepared it).
+        const ap = await liveApproval("LOAN_CHANGE", `${loan.id}:${c.id}`);
+        return { id: c.id, kind: c.kind, amount: c.amount ? canonicalDecimal(dec(c.amount.toString())) : null, reference: c.reference, effective: s.effective.some((e) => e.id === c.id), createdAt: c.createdAt.toISOString(), state: (ap?.status ?? "NOT_ASKED") as string, preparedByMe: c.createdByUserId === viewerUserId };
+      }),
+    ),
     waiting: s.approval?.status === "PENDING" ? { mine: s.approval.makerUserId === viewerUserId } : null,
     fingerprint: fingerprintOf(loan.id, await hashOfLoan(loan.id)),
     createdAt: loan.createdAt.toISOString(),

@@ -9,14 +9,17 @@ import { apiErrorMessage } from "../../../lib/apiError";
 import { formatRupees } from "../../../lib/money";
 import { DataTable, PageHeader, Panel, Stack, StatusChip, toast } from "../../../ui";
 import { space } from "../../../theme/tokens";
+import { LoanChangesDrawer } from "./LoanChangesDrawer";
 
 // Payroll > Loans (P7-4), directors only: each loan's state and the sanction (one director asks, a different director decides; nobody on their own loan), and the
-// loan types with what each still lacks. Types are set on Payroll > Loan and claim types; loan changes are API-only in this release.
+// loan types with what each still lacks. Types are set on Payroll > Loan and claim types. Changes to a sanctioned loan (LC-07): the Changes drawer.
 export function LoansAdminPage() {
   const queryClient = useQueryClient();
   const loans = useQuery({ queryKey: ["loans", "all"], queryFn: loansApi.allLoans });
   const types = useQuery({ queryKey: ["loans", "types"], queryFn: loansApi.loanTypes });
   const [busy, setBusy] = useState<string | null>(null);
+  const [changing, setChanging] = useState<string | null>(null);
+  const changingLoan = loans.data?.find((l) => l.id === changing) ?? null;
   const act = useMutation({
     mutationFn: async ({ l, what }: { l: LoanView; what: "ASK" | "APPROVE" | "REJECT" }) => (what === "ASK" ? loansApi.requestSanction(l.id, l.fingerprint) : loansApi.decideSanction(l.id, l.fingerprint, what)),
     onMutate: ({ l }) => setBusy(l.id),
@@ -58,6 +61,10 @@ export function LoansAdminPage() {
                       <Button type="primary" loading={busy === l.id} onClick={() => act.mutate({ l, what: "APPROVE" })}>Sanction</Button>
                       <Button danger loading={busy === l.id} onClick={() => act.mutate({ l, what: "REJECT" })}>Reject</Button>
                     </div>
+                  ) : l.status === "SANCTIONED" ? (
+                    <Button onClick={() => setChanging(l.id)}>
+                      Changes{l.changes.some((c) => c.state === "PENDING") ? " (waiting)" : ""}
+                    </Button>
                   ) : null,
               },
             ]}
@@ -80,6 +87,7 @@ export function LoansAdminPage() {
           />
         </Panel>
       </Stack>
+      <LoanChangesDrawer loan={changingLoan} onClose={() => setChanging(null)} />
     </>
   );
 }

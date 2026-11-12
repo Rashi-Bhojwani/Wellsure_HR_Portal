@@ -392,6 +392,7 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/payroll/runs/:id/bank-batch": admin,
   "GET /api/payroll/bank-batches/:id": admin,
   "GET /api/payroll/bank-batches/:id/file": admin,
+  "GET /api/payroll/bank-batches/:id/summary.pdf": adminInService("payroll.bank.view and a director check in bankSummaryPdf"), // PY-37
   "POST /api/payroll/bank-batches/:id/mark-paid": admin,
   "POST /api/payroll/bank-batches/:id/sent": admin,
   "POST /api/payroll/repayment-batches/:id/sent": admin,
@@ -738,23 +739,32 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "POST /api/loans/:id/changes/:changeId/decision": adminInService("a different director (decideChange)"),
   // P7-5 (docs/plans/P7_5_REIMBURSEMENTS.md)
   "GET /api/reimbursements/mine": self,
+  "GET /api/reimbursements/mine/statement": self, // PY-24
   "POST /api/reimbursements/mine": self,
   "POST /api/reimbursements/mine/:id/withdraw": self,
   "GET /api/reimbursements/types": adminInService("director only (listTypes)"),
+  "GET /api/reimbursements/statement": adminInService("director only (monthStatement)"), // PY-24
   "PUT /api/reimbursements/types": adminInService("director only (saveType), audited"),
   "GET /api/reimbursements": adminInService("director only (queue)"),
   "POST /api/reimbursements/:id/decision": adminInService("director only, never one's own claim (decide), audited"),
   // P7-7 (docs/plans/P7_7_FORM16.md)
   "GET /api/tax/me/form16": self,
+  "GET /api/tax/me/form16/pdf": self, // ST-24 / SS-05
   "GET /api/tax/challans": adminInService("director only (register)"),
   "POST /api/tax/challans": adminInService("director only (enterChallan), audited"),
   "POST /api/tax/challans/:id/confirm": adminInService("a different director, by retyping (confirmChallan)"),
   "GET /api/tax/quarterly": adminInService("director only (quarterly)"),
   "GET /api/tax/form16": adminInService("director only (yearForm16)"),
+  "GET /api/tax/statutory-challans": adminInService("director only (statutoryChallans.register)"), // ST-03 / ST-06
+  "POST /api/tax/statutory-challans": adminInService("director only (statutoryChallans.enter)"),
+  "POST /api/tax/statutory-challans/:id/confirm": adminInService("a different director (statutoryChallans.confirm; the database refuses the same person too)"),
+  "GET /api/tax/quarterly/export": adminInService("director only (exportQuarterly calls quarterly)"), // ST-21
+  "GET /api/tax/form16/:fy/people/:employeeId/pdf": adminInService("director only (directorForm16Pdf)"), // ST-24
   "POST /api/tax/form16/:fy/confirm": adminInService("director only, maker-checker FORM16_CONFIRM"),
   "POST /api/tax/form16/:fy/decision": adminInService("a different director (decideConfirmation)"),
   // P7-6 (docs/plans/P7_6_SETTLEMENTS.md): directors only
   "GET /api/settlements": adminInService("router gate payroll.salary.view and a director check in the service; never one's own"),
+  "GET /api/settlements/guide": adminInService("router gate payroll.salary.view and a director check in guide()"), // PY-27/28/29
   "POST /api/settlements": adminInService("router gate payroll.salary.view and a director check in the service; never one's own"),
   "POST /api/settlements/:id/confirm": adminInService("router gate payroll.salary.view and a director check in the service; never one's own"),
   "POST /api/settlements/:id/decision": adminInService("router gate payroll.salary.view and a director check in the service; never one's own"),

@@ -12,6 +12,12 @@ import { payrollHash } from "../hash";
 import { canonicalDecimal, dec, fixed, sum, ZERO, type Money } from "../money";
 import { keyedHash, seal } from "../sealed";
 import { statementFor } from "./statement";
+import { renderPdf } from "../../../lib/pdf/renderer";
+import { getLetterhead } from "../../letters/service";
+import type { EngineResult } from "./engine";
+import { form16Html } from "./form16Html";
+import { buildXlsx } from "../../../lib/xlsx";
+import { csvOf } from "../reports/service";
 
 // P7-7 (docs/plans/P7_7_FORM16.md): the challan register, quarterly data and Form 16 Part B data. Directors only, except a person's own Form 16. Nothing talks to a
 // bank or the tax portal; no official file format is built. Form 16 data stays DRAFT until a different director confirms the year as a whole.
@@ -250,3 +256,69 @@ registerSubject({
   },
   hash: (fy) => hashOfYear(fy),
 });
+
+// ── ST-24 / SS-05 (docs/plans/A_PARITY_ROWS.md): the Form 16 Part B PDF, DRAFT until confirmed; Part A never made here ─────────────────────────────────
+
+async function form16Pdf(employeeId: string, fyLabel: string): Promise<{ pdf: Buffer; draft: boolean }> {
+  const [b, confirmedYear, names, stat, letterhead] = await Promise.all([partB(employeeId, fyLabel), confirmed(fyLabel), namesOn([employeeId], businessToday()), prisma.employeeStatutory.findUnique({ where: { employeeId }, select: { panLast4: true } }), getLetterhead()]);
+  const draft = !(confirmedYear && b.taxYearConfirmed);
+  const html = form16Html({
+    company: { legalName: letterhead.legalName, address: letterhead.registeredAddress },
+    employee: { name: names.get(employeeId) ?? "", code: b.employeeCode, panLast4: stat?.panLast4 ?? null },
+    year: fyLabel,
+    regime: b.regime,
+    taxablePay: b.taxablePay,
+    tdsDeducted: b.tdsDeducted,
+    computation: (b.computation as EngineResult | null) ?? null,
+    missing: b.missing,
+    watermark: draft ? "DRAFT: not yet confirmed by a second director" : null,
+    partA: "Part A is issued from the tax department's portal; it is not made here.",
+  });
+  const { pdf } = await renderPdf(html, new Date(0)); // allow-clock: a fixed PDF date, not a business date
+  return { pdf, draft };
+}
+
+/** The person's own Form 16 PDF (their own only). */
+export async function myForm16Pdf(employeeId: string, fyRaw: string, actor: Actor) {
+  const fy = closedYear(fyRaw);
+  if (!(await peopleOfYear(fy.label)).includes(employeeId)) throw new HttpError(404, "No finalised payroll run paid you in this year, so there is no Form 16 here.", "NOT_FOUND");
+  const out = await form16Pdf(employeeId, fy.label);
+  await writeAuditLog({ actorUserId: actor.userId, ipAddress: actor.ip ?? null, action: "payroll.form16.pdf_downloaded", entityType: "Employee", entityId: employeeId, after: { year: fy.label, draft: out.draft, own: true } });
+  return { ...out, fileName: `form16-part-b-${fy.label}${out.draft ? "-DRAFT" : ""}.pdf` };
+}
+
+/** A director's copy of anyone's Form 16 PDF for a closed year. */
+export async function directorForm16Pdf(fyRaw: string, employeeId: string, actor: Actor) {
+  await requireDirector(actor.userId, "download a Form 16");
+  const fy = closedYear(fyRaw);
+  if (!(await peopleOfYear(fy.label)).includes(employeeId)) throw new HttpError(404, "That person was not paid by a finalised run in this year.", "NOT_FOUND");
+  const out = await form16Pdf(employeeId, fy.label);
+  await writeAuditLog({ actorUserId: actor.userId, ipAddress: actor.ip ?? null, action: "payroll.form16.pdf_downloaded", entityType: "Employee", entityId: employeeId, after: { year: fy.label, draft: out.draft, own: false } });
+  return { ...out, fileName: `form16-part-b-${fy.label}-${employeeId.slice(-6)}${out.draft ? "-DRAFT" : ""}.pdf` };
+}
+
+// ── ST-21 (docs/plans/A_PARITY_ROWS.md): the quarterly data as .xlsx or .csv, our own layout; audited, never a figure in the audit ─────────────────────
+
+export const quarterlyExportSchema = z.object({ fy: z.string().min(7).max(7), quarter: z.coerce.number().int().min(1).max(4), format: z.enum(["xlsx", "csv"]) }).strict();
+
+export async function exportQuarterly(raw: unknown, actor: Actor): Promise<{ buffer: Buffer; fileName: string; contentType: string }> {
+  const parsed = quarterlyExportSchema.safeParse(raw);
+  if (!parsed.success) throw new HttpError(400, parsed.error.issues.map((i) => i.message).join("; "), "VALIDATION_ERROR");
+  const { fy, quarter, format } = parsed.data;
+  const q = await quarterly(fy, quarter, actor);
+  const columns = [
+    { key: "employeeCode", header: "Employee code", type: "text" as const },
+    { key: "name", header: "Name", type: "text" as const },
+    { key: "pan", header: "PAN (last four)", type: "text" as const },
+    ...q.months.flatMap((m) => [
+      { key: `${m}|paid`, header: `${m} paid`, type: "money" as const },
+      { key: `${m}|tds`, header: `${m} TDS`, type: "money" as const },
+    ]),
+  ];
+  const rows = q.rows.map((r) => ({ employeeCode: r.employeeCode, name: r.name, pan: r.panLast4 ? `…${r.panLast4}` : "Not on record", ...Object.fromEntries(q.months.flatMap((m) => [[`${m}|paid`, r.byMonth[m]!.paid], [`${m}|tds`, r.byMonth[m]!.tds]])) }));
+  const preamble = [`Quarterly TDS data, ${q.year}, quarter ${quarter}`, q.note, `Confirmed challans: ${q.challans.map((c) => `${c.month} ${c.serial} on ${c.depositedOn}`).join("; ") || "none"}`];
+  const fileName = `quarterly-tds-${q.year}-q${quarter}.${format}`;
+  const buffer = format === "csv" ? Buffer.from(csvOf(columns, rows, preamble), "utf8") : await buildXlsx([{ name: `Q${quarter} ${q.year}`, columns, rows, footer: preamble }]);
+  await writeAuditLog({ actorUserId: actor.userId, ipAddress: actor.ip ?? null, action: "payroll.tax.quarterly_exported", entityType: "TaxYear", entityId: q.year, after: { quarter, format, rows: rows.length } });
+  return { buffer, fileName, contentType: format === "csv" ? "text/csv; charset=utf-8" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
+}

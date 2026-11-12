@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Select } from "antd";
+import { Button, Select } from "antd";
+import { DownloadOutlined } from "@ant-design/icons";
+import { saveBlob } from "../../../api/muster";
+import { apiErrorMessage } from "../../../lib/apiError";
 import { financialYearOf } from "@shared/utils/financialYear";
 import * as taxApi from "../../../api/tax";
 import { lastFinishedQuarter } from "../../../lib/quarter";
 import type { QuarterlyData } from "../../../api/tax";
 import { formatRupees } from "../../../lib/money";
-import { ApprovalBanner, DataTable, PageHeader, Panel } from "../../../ui";
+import { ApprovalBanner, DataTable, PageHeader, Panel, toast } from "../../../ui";
 import { space } from "../../../theme/tokens";
 
 // Payroll > Quarterly TDS data (item 3, 2026-11-11), directors only: what finished runs paid and deducted per person per month of a quarter, with the confirmed challans
@@ -24,6 +27,14 @@ export function QuarterlyTdsPage() {
   const [quarter, setQuarter] = useState(start.quarter);
   const q = useQuery({ queryKey: ["tax", "quarterly", fy, quarter], queryFn: () => taxApi.quarterlyData(fy, quarter) });
   const months = q.data?.months ?? [];
+  // ST-21: the same data as a file, in our own layout; every export is recorded.
+  const doExport = async (format: "xlsx" | "csv") => {
+    try {
+      saveBlob(await taxApi.quarterlyExport(fy, quarter, format), `quarterly-tds-${fy}-q${quarter}.${format}`);
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Could not export."));
+    }
+  };
   return (
     <>
       <PageHeader
@@ -33,6 +44,8 @@ export function QuarterlyTdsPage() {
           <div style={{ display: "flex", gap: space[2], flexWrap: "wrap" }}>
             <Select aria-label="Financial year" value={fy} onChange={setFy} options={years().map((y) => ({ value: y, label: y }))} style={{ minWidth: 120 }} />
             <Select aria-label="Quarter" value={quarter} onChange={setQuarter} options={[1, 2, 3, 4].map((n) => ({ value: n, label: `Quarter ${n}` }))} style={{ minWidth: 120 }} />
+            <Button icon={<DownloadOutlined />} disabled={!q.data} onClick={() => void doExport("xlsx")}>Export .xlsx</Button>
+            <Button icon={<DownloadOutlined />} disabled={!q.data} onClick={() => void doExport("csv")}>Export .csv</Button>
           </div>
         }
       />

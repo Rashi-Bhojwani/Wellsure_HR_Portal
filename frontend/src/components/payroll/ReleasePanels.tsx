@@ -1,3 +1,4 @@
+import { saveBlob } from "../../api/muster";
 import { BankRepaymentCard } from "./BankRepayment";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -161,6 +162,12 @@ function BankCard({ run }: { run: RunDetail }) {
     onSuccess: (r) => open(r.url),
     onError: (e) => toast.error(apiErrorMessage(e, "Could not get the file.")),
   });
+  // PY-37: the one-page summary for the uploader and the signatory (no account number); directors only, recorded.
+  const summary = useMutation({
+    mutationFn: () => payrollApi.bankSummaryPdf(batch!.id),
+    onSuccess: (blob) => saveBlob(blob, `bank-summary-${run.id.slice(-6)}.pdf`),
+    onError: (e) => toast.error(apiErrorMessage(e, "Could not make the summary.")),
+  });
   const sent = useMutation({
     mutationFn: () => payrollApi.markFileSent("bank-batches", batch!.id),
     onSuccess: () => { toast.success("Noted as sent to the bank."); refresh(); },
@@ -190,9 +197,16 @@ function BankCard({ run }: { run: RunDetail }) {
               name={batch.fileName}
               meta={`SHA-256 ${batch.fileSha256.slice(0, 16)}… · made ${formatDateTime(batch.generatedAt)}`}
               actions={
-                <Button icon={<DownloadOutlined />} loading={download.isPending} onClick={() => download.mutate()}>
-                  Download the file
-                </Button>
+                <Space wrap>
+                  <Button icon={<DownloadOutlined />} loading={download.isPending} onClick={() => download.mutate()}>
+                    Download the file
+                  </Button>
+                  {isDirector && (
+                    <Button icon={<DownloadOutlined />} loading={summary.isPending} onClick={() => summary.mutate()}>
+                      Summary PDF
+                    </Button>
+                  )}
+                </Space>
               }
             />
             {batch.paid && (

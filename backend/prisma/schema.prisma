@@ -4370,6 +4370,34 @@ model PayrollReportLayout {
   @@index([reportKey, createdAt])
   @@map("payroll_report_layouts")
 }
+/// ST-03 / ST-06: a PF or ESI challan record. The reference is sealed; immutable; a different director confirms it.
+model StatutoryChallan {
+  id              String                        @id @default(cuid())
+  kind            String
+  month           String
+  depositedOn     DateTime                      @map("deposited_on") @db.Date
+  amount          Decimal                       @db.Decimal(14, 2)
+  reference       Json
+  referenceHash   String                        @map("reference_hash")
+  referenceLast   String                        @map("reference_last")
+  enteredByUserId String                        @map("entered_by_user_id")
+  createdAt       DateTime                      @default(now()) @map("created_at") @db.Timestamptz(3)
+  confirmation    StatutoryChallanConfirmation?
+
+  @@unique([kind, referenceHash])
+  @@index([kind, month])
+  @@map("statutory_challans")
+}
+
+model StatutoryChallanConfirmation {
+  id                String           @id @default(cuid())
+  challanId         String           @unique @map("challan_id")
+  challan           StatutoryChallan @relation(fields: [challanId], references: [id], onDelete: Restrict)
+  confirmedByUserId String           @map("confirmed_by_user_id")
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("statutory_challan_confirmations")
+}
 // A-END
 // M-BEGIN (second session block 2, ER-27): divisions, an optional grouping of departments (an employee's division is their department's).
 model Division {

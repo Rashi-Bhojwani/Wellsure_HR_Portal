@@ -10,6 +10,7 @@ import { formatRupees } from "../../../lib/money";
 import { ApprovalBanner, DataTable, PageHeader, SideDrawer, StatusChip, toast } from "../../../ui";
 import { space } from "../../../theme/tokens";
 import { WRAP_TEXT as WRAP } from "../../../ui/textStyles";
+import { SettlementGuide } from "./SettlementGuide";
 
 // Payroll > Settlements (P7-6), directors only: the full and final settlement of each leaver, with every line and where it comes from. One director prepares, a
 // different director confirms; never one's own. Paying it is an off-cycle run (P7-6b, Payroll > Off-cycle runs); nothing is paid from here.
@@ -75,6 +76,7 @@ export function SettlementsPage() {
         ]}
       />
       <SideDrawer open={!!open} title={`Settlement for ${open?.name ?? ""}`} subtitle="Automatic lines are read from their sources. Add the lines only you can give (notice pay or recovery, gratuity, final TDS, leave encashment), each with its source." onClose={() => setOpen(null)} formId="fnf-form" primaryLabel="Prepare" primaryLoading={prepare.isPending}>
+        {open && <SettlementGuide separationId={open.separationId} />}
         <Form id="fnf-form" form={form} layout="vertical" requiredMark={false} onFinish={(v) => prepare.mutate(v)}>
           <Form.List name="lines">
             {(fields, { add, remove }) => (

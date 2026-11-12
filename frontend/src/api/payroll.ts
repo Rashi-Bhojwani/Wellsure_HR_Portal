@@ -1427,3 +1427,6 @@ export interface SkippedPerson {
 export const listExclusions = async () => (await get<{ exclusions: ExclusionRow[] }>("/exclusions")).exclusions;
 export const addExclusion = (body: { employeeId: string; kind: "EXCLUDE" | "INCLUDE"; fromDate: string; toDate?: string | null; reason: string }) => post<{ id: string }>("/exclusions", body);
 export const confirmExclusion = (id: string) => post<{ id: string }>(`/exclusions/${id}/confirm`);
+
+// PY-37: the bank summary PDF of a written bank file (no account number). Directors only.
+export const bankSummaryPdf = async (batchId: string) => (await apiClient.get(`${base}/bank-batches/${batchId}/summary.pdf`, { responseType: "blob" })).data as Blob;

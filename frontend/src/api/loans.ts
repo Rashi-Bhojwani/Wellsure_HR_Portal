@@ -22,7 +22,7 @@ export interface LoanView {
   prepaid: string;
   waived: string;
   schedule: Array<{ n: number; month: string; principal: string; interest: string; balanceAfter: string; state: string }>;
-  changes: Array<{ id: string; kind: string; amount: string | null; reference: string; effective: boolean; createdAt: string }>;
+  changes: Array<{ id: string; kind: string; amount: string | null; reference: string; effective: boolean; createdAt: string; state?: "NOT_ASKED" | "PENDING" | "APPROVED" | "REJECTED" | "VOIDED" | "CONSUMED"; preparedByMe?: boolean }>;
   waiting: { mine: boolean } | null;
   fingerprint: string;
   createdAt: string;
@@ -49,3 +49,8 @@ export const saveLoanType = async (body: Omit<LoanType, "version" | "gaps"> & { 
 export const enterLoan = async (body: { employeeId: string; typeKey: string; principal: string; instalments: number; firstMonth: string; purpose: string }) => (await apiClient.post<{ id: string }>(base, body)).data;
 export const requestSanction = async (id: string, fingerprint: string) => (await apiClient.post(`${base}/${id}/sanction`, { fingerprint })).data;
 export const decideSanction = async (id: string, fingerprint: string, decision: "APPROVE" | "REJECT") => (await apiClient.post(`${base}/${id}/sanction/decision`, { fingerprint, decision })).data;
+
+// LC-07: loan changes on a screen (prepared by one director, decided by a different one).
+export type LoanChangeKind = "PREPAID" | "WAIVED" | "CANCEL_PENDING";
+export const requestLoanChange = async (id: string, body: { kind: LoanChangeKind; amount?: string; reference: string }) => (await apiClient.post<{ id: string }>(`${base}/${id}/changes`, body)).data;
+export const decideLoanChange = async (id: string, changeId: string, decision: "APPROVE" | "REJECT", note?: string) => (await apiClient.post(`${base}/${id}/changes/${changeId}/decision`, { decision, ...(note ? { note } : {}) })).data;
