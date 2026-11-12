@@ -1,7 +1,7 @@
 import { PAYROLL_REPORTS, type PayrollReportKey } from "@shared/constants/payrollReports";
 import { STATUTORY_LINE_LABEL } from "@shared/constants/payrollRun";
 import { businessToday } from "../../../lib/businessDate";
-import { inForceOn, namesOn } from "../../../lib/effectiveDating";
+import { employedOn, namesOn, placementsOn as placementsInForce, salariesOn } from "../../../lib/effectiveDating";
 import { prisma } from "../../../lib/prisma";
 import { HttpError } from "../../../middleware/errorHandler";
 import { listAll as listLoans } from "../loans/service";
@@ -53,8 +53,8 @@ const passesOrg = (p: Placement, f: Filters) => (!f.department || p.departmentId
 
 /** Where each employee is placed on a day (department, branch), from the job history in force. */
 async function placementsOn(employeeIds: string[], on: Date): Promise<Map<string, Placement>> {
-  const rows = await prisma.employeeJobHistory.findMany({ where: { employeeId: { in: employeeIds }, ...inForceOn(on) }, select: { employeeId: true, departmentId: true, locationId: true } });
-  return new Map(rows.map((r) => [r.employeeId, { departmentId: r.departmentId, locationId: r.locationId }]));
+  const rows = await placementsInForce(employeeIds, on); // the shared reader (lib/effectiveDating.ts)
+  return new Map([...rows].map(([id, r]) => [id, { departmentId: r.departmentId, locationId: r.locationId }]));
 }
 
 function orgApplied(f: Filters, names: Awaited<ReturnType<typeof orgNames>>): string[] {
@@ -226,7 +226,8 @@ export async function build(key: PayrollReportKey, f: Filters, actor: { userId: 
     }
     case "ctc": {
       const asOf = f.asOf ? day(f.asOf) : businessToday();
-      const salaries = await prisma.employeeSalary.findMany({ where: inForceOn(asOf), select: { employeeId: true, annualCtc: true, monthlyCtc: true, structureKey: true, structureVersion: true, effectiveFrom: true } });
+      const employed = (await prisma.employee.findMany({ where: employedOn(asOf), select: { id: true } })).map((e) => e.id);
+      const salaries = [...(await salariesOn(employed, asOf)).values()]; // the shared reader (lib/effectiveDating.ts)
       const ids = salaries.map((s) => s.employeeId);
       const placement = await placementsOn(ids, asOf);
       const person = await personColumns(ids, placement, asOf);
