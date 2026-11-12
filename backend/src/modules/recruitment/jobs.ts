@@ -7,7 +7,7 @@ import { choiceMode } from "../../lib/directorAuthority";
 import { recordDirectorNotice, scheduleDelivery } from "../../lib/directorNotices";
 import { HttpError } from "../../middleware/errorHandler";
 import { absent, context, director, jobWhere, requireJob, requireManagement, type Actor, type Context, type Meta } from "./access";
-import { getSetting } from "./settings";
+import { getSetting ,DEFAULT_PIPELINE_USER} from "./settings";
 const fields={title:z.string().trim().min(1).max(200),departmentId:z.string().min(1),locationId:z.string().min(1),employmentType:z.enum(["PERMANENT","CONTRACT","INTERN","CONSULTANT","PROBATION"])};
 export const requisitionInput=z.object({...fields,headcount:z.number().int().min(1).max(2147483647),reason:z.string().trim().min(1).max(5000)}).strict();
 export const jobInput=z.object({...fields,description:z.string().trim().min(1).max(20000),requisitionId:z.string().min(1).optional(),pipelineId:z.string().min(1).optional()}).strict();
@@ -43,7 +43,8 @@ export async function createJob(actor:Actor,input:z.infer<typeof jobInput>,meta:
 export async function changeJob(id:string,actor:Actor,input:z.infer<typeof jobStateInput>,meta:Meta){const c=await requireManagement(actor);await requireJob(id,c);
  return prisma.$transaction(async tx=>{await tx.$queryRaw`SELECT id FROM jobs WHERE id=${id} FOR UPDATE`;const row=await tx.recruitmentJob.findUniqueOrThrow({where:{id}});if(row.status===input.status)return row;
  if(row.status==="CLOSED"||(input.status==="ON_HOLD"&&row.status!=="OPEN"))throw new HttpError(409,"This job cannot make that state change.","CONFLICT");
- const pipelineId=input.pipelineId??row.pipelineId;
+ // Stage 2: with no pipeline chosen, the shipped default stages (version 0, "Default, change in settings") apply.
+ const pipelineId=input.pipelineId??row.pipelineId??(await tx.recruitmentPipeline.findFirst({where:{version:0,changedByUserId:DEFAULT_PIPELINE_USER},select:{id:true}}))?.id;
  if(input.status==="OPEN"){
  if(!pipelineId||!await tx.recruitmentPipeline.count({where:{id:pipelineId,stages:{some:{}}}}))throw new HttpError(409,"Recruitment pipeline is Not set. Choose a director's pipeline before opening.","RECRUITMENT_NOT_SET");
  if(row.pipelineId!==pipelineId&&await tx.recruitmentApplication.count({where:{jobId:id}}))throw new HttpError(409,"A job with applications keeps its selected pipeline.","CONFLICT");}

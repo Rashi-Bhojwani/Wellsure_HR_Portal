@@ -3,6 +3,8 @@ import { resolveAccess } from "../../lib/permissions";
 import { set, type SettingKey } from "./settings";
 import { createCandidate, apply } from "./candidates";
 import { createOffer, setCompensation, setExpectedPay, transition } from "./offers";
+import { confirmChange, proposeChange, memberStateFor } from "../peeps/office";
+import { DEMO_OFFICE_MEMBER } from "../peeps/demoSeed";
 
 // C-4B DEMO (fictional, labelled, demo company only): an accepted offer for DEMO-C4B-JOINER with DEMO pay, DEMO expected pay on
 // the first DEMO candidate, and DEMO joining choices. The joining exception approver and referrals stay as shipped (Not set / off).
@@ -27,4 +29,12 @@ export async function seedDemoOffers(who: Record<string, { employeeId: string; u
   await transition(o.id, d, { to: "PROPOSED", version: 1 }, meta);
   await transition(o.id, d, { to: "ISSUED", version: 2, letterSentThroughLetters: true, letterReference: "DEMO-LETTER-1" }, meta);
   await transition(o.id, d, { to: "ACCEPTED", version: 3 }, meta);
+  // Stage 2 (1.4): the DEMO Wellsure Office member (DEMO008) also gets the recruitment and Insights capabilities, and the DEMO
+  // directors open the Office audience, so the offer screens can be checked as a member. Members still never see pay.
+  const member = who[DEMO_OFFICE_MEMBER]!;
+  const current = (await memberStateFor(member.employeeId))?.capabilities ?? [];
+  const asDirector = (code: string) => ({ userId: who[code]!.userId, employeeId: who[code]!.employeeId, isDirector: true, isMember: false, capabilities: [], roleCodes: ["SUPER_ADMIN"] });
+  const change = await proposeChange({ kind: "UPDATE", employeeId: member.employeeId, capabilities: [...new Set([...current, "MANAGE_RECRUITMENT", "VIEW_INSIGHTS"])] as never, reason: "DEMO COMPANY" }, asDirector("DEMO001") as never, { actorUserId: who.DEMO001!.userId, ipAddress: null, userAgent: null });
+  await confirmChange(change.id, asDirector("DEMO013") as never, { actorUserId: who.DEMO013!.userId, ipAddress: null, userAgent: null });
+  await choose("officeAudience", { officeManages: true });
 }

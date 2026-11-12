@@ -18,6 +18,8 @@ export const SETTING_SCHEMAS={
  retention:z.object({days:z.number().int().min(1).max(365000)}).strict(),
  scorecard:z.object({questions:z.array(question).min(1).refine(a=>new Set(a.map(q=>q.id)).size===a.length,"Question codes must be unique."),recommendations:catalogue}).strict(),
  cvUploads:z.object({maxMb:z.number().positive().max(25),allowedMimeTypes:z.array(z.enum(Object.keys(DOCUMENT_MIME_TYPES) as [keyof typeof DOCUMENT_MIME_TYPES,...(keyof typeof DOCUMENT_MIME_TYPES)[]])).min(1)}).strict(),
+ // Stage 2 (DEFAULTS RULE): interview rounds ship with conventional defaults, "Default, change in settings".
+ interviewRounds:catalogue,
  // C-4B. offerApproval and referrals: Default off (Not set = off). The other three stay Not set and refuse their step until chosen.
  offerApproval:z.object({required:z.boolean()}).strict(),
  joinerLinkLifetime:z.object({hours:z.number().int().min(1).max(2160)}).strict(),
@@ -27,13 +29,19 @@ export const SETTING_SCHEMAS={
  emailTemplates:z.array(z.object({id:code,kind:z.enum(["INVITATION","REJECTION"]),subject:z.string().trim().min(1).max(200).regex(/^[^\r\n]+$/,"Use one line for the subject."),body:z.string().trim().min(1).max(10000)}).strict()).min(1).refine(a=>new Set(a.map(t=>t.id)).size===a.length,"Template ids must be unique.").refine(a=>a.every(t=>![...`${t.subject} ${t.body}`.matchAll(/\{\{(.*?)\}\}/g)].some(m=>!["jobTitle","scheduledAt","round"].includes(m[1]!))),"Use only jobTitle, scheduledAt and round placeholders.").refine(a=>a.every(t=>!/(salary|compensation|\bctc\b|\binr\b|₹|\bbank\b|\baadhaar\b|feedback|recommendation)/i.test(t.subject+' '+t.body)),"Candidate templates cannot carry pay, identity or feedback content."),
 } as const;
 export type SettingKey=keyof typeof SETTING_SCHEMAS;
+/** Conventional starting values a director can change at any time (each change audited). Keys absent here are Not set until chosen. */
+export const SETTING_DEFAULTS:Partial<{[K in SettingKey]:z.infer<(typeof SETTING_SCHEMAS)[K]>}>={
+ interviewRounds:[{code:'SCREENING_CALL',label:'Screening call'},{code:'TECHNICAL',label:'Technical interview'},{code:'HIRING_MANAGER',label:'Hiring manager interview'},{code:'FINAL',label:'Final interview'}],
+};
+/** The hiring stages a migration ships as pipeline version 0 (Default, change in settings); a director confirms new versions. */
+export const DEFAULT_PIPELINE_USER='SYSTEM_DEFAULT';
 export const keySchema=z.enum(Object.keys(SETTING_SCHEMAS) as [SettingKey,...SettingKey[]]);
 export const settingInput=z.object({value:z.unknown(),version:z.number().int().min(0),reason:z.string().trim().min(1).max(2000)}).strict();
 export const pipelineInput=z.object({name:z.string().trim().min(1).max(150),stages:catalogue,reason:z.string().trim().min(1).max(2000)}).strict();
 export const version=(key:SettingKey)=>prisma.recruitmentSettingVersion.findFirst({where:{key},orderBy:{version:"desc"}});
-export async function getSetting<K extends SettingKey>(key:K):Promise<z.infer<(typeof SETTING_SCHEMAS)[K]>|null>{const row=await version(key);return row?.value==null?null:SETTING_SCHEMAS[key].parse(row.value) as z.infer<(typeof SETTING_SCHEMAS)[K]>;}
+export async function getSetting<K extends SettingKey>(key:K):Promise<z.infer<(typeof SETTING_SCHEMAS)[K]>|null>{const row=await version(key);if(!row)return (SETTING_DEFAULTS[key] as z.infer<(typeof SETTING_SCHEMAS)[K]>|undefined)??null;return row.value==null?null:SETTING_SCHEMAS[key].parse(row.value) as z.infer<(typeof SETTING_SCHEMAS)[K]>;}
 export async function required<K extends SettingKey>(key:K){const value=await getSetting(key);if(value===null)throw new HttpError(409,`Recruitment: ${key} is Not set. A director must choose it first.`,"RECRUITMENT_NOT_SET");return value;}
-export async function view(userId:string){await director(userId);return Promise.all(Object.keys(SETTING_SCHEMAS).map(async key=>{const r=await version(key as SettingKey);return {key,state:r?.value==null?"NOT_SET":"CONFIRMED",version:r?.version??0,value:r?.value??null};}));}
+export async function view(userId:string){await director(userId);return Promise.all(Object.keys(SETTING_SCHEMAS).map(async key=>{const r=await version(key as SettingKey);const d=SETTING_DEFAULTS[key as SettingKey];if(!r&&d)return {key,state:"DEFAULT",version:0,value:d};return {key,state:r?.value==null?"NOT_SET":"CONFIRMED",version:r?.version??0,value:r?.value??null};}));}
 export async function set(key:SettingKey,input:z.infer<typeof settingInput>,meta:Meta){
  await director(meta.actorUserId);const value=input.value===null?null:SETTING_SCHEMAS[key].parse(input.value);
  await prisma.$transaction(async tx=>{await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('peeps.recruitment.setting'),hashtext(${key}))::text`;

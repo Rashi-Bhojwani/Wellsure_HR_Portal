@@ -15,6 +15,9 @@ export const OFFICE_CAPABILITY_IDS = [
   // PEEPS-BEGIN recruitment
   "MANAGE_RECRUITMENT",
   // PEEPS-END recruitment
+  // PEEPS-BEGIN insights
+  "VIEW_INSIGHTS",
+  // PEEPS-END insights
 "MANAGE_EXITS", "MANAGE_ASSETS", "PREPARE_SETTINGS", "GIVE_BADGES", "SEND_NUDGES"] as const;
 // PEEPS-END exits
 export type OfficeCapabilityId = (typeof OFFICE_CAPABILITY_IDS)[number];
@@ -30,6 +33,9 @@ export const OFFICE_CAPABILITIES: readonly OfficeCapability[] = [
   // PEEPS-BEGIN recruitment
   { id: "MANAGE_RECRUITMENT", label: "Manage recruitment", what: "Recruiting duties while a director explicitly opens the Office audience. Feedback stays panel-scoped.", keys: ["recruitment.view", "recruitment.manage", "recruitment.personal.view"] },
   // PEEPS-END recruitment
+  // PEEPS-BEGIN insights
+  { id: "VIEW_INSIGHTS", label: "View Insights", what: "Aggregate turnover, tenure, exit-reason and hiring-funnel figures with small groups hidden. Never an individual, an exit interview or pay.", keys: ["insights.view"] },
+  // PEEPS-END insights
   // PEEPS-BEGIN exits
   { id: "MANAGE_EXITS", label: "Run exits", what: "Work non-pay exits while a director opens the exits audience to the Office. Interview answers remain relationship-scoped.", keys: ["exits.view", "exits.manage", "exits.accept", "exits.checklist.complete"] },
   // PEEPS-END exits

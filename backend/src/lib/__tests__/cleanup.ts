@@ -527,5 +527,5 @@ export async function deleteEmployeesAndDependents(employeeIds: string[]): Promi
 for (const model of ["RecruitmentSettingVersion", "RecruitmentPipeline", "RecruitmentPipelineStage", "ApplicationStageMove", "InterviewFeedback", "RecruitmentHistory"]) PURGE_GUARDED_MODELS.add(model);
 // PEEPS-END recruitment
 // PEEPS-BEGIN recruitment-offers
-for (const model of ["RecruitmentOfferEvent", "RecruitmentJoiningException", "RecruitmentConversion"]) PURGE_GUARDED_MODELS.add(model);
+for (const model of ["RecruitmentOfferEvent", "RecruitmentJoiningException", "RecruitmentConversion", "RecruitmentConversionDocument"]) PURGE_GUARDED_MODELS.add(model);
 // PEEPS-END recruitment-offers

@@ -127,6 +127,9 @@ export const PERMISSION_KEYS = [
   "recruitment.onboarding",
   "recruitment.pay.view",
   // PEEPS-END recruitment-offers
+  // PEEPS-BEGIN insights
+  "insights.view",
+  // PEEPS-END insights
   // PEEPS-BEGIN exits
   "exits.view", "exits.manage", "exits.accept", "exits.checklist.complete",
   "exits.settings.manage", "exits.interviews.view", "exits.settlement.view",
@@ -190,6 +193,9 @@ export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
   // PEEPS-BEGIN recruitment-offers
   "recruitment.onboarding": { group: "Recruitment", label: "Run onboarding", description: "Joining checks, joining documents and conversion of accepted candidates. Never pay." },
   "recruitment.pay.view": { group: "Recruitment", label: "Offer pay and expected pay", description: "Directors only; every opening audited.", meta: true },
+  // PEEPS-BEGIN insights
+  "insights.view": { group: "Insights", label: "View Insights", description: "Aggregate figures only (small groups hidden); Wellsure Office members with the capability and the directors.", meta: true },
+  // PEEPS-END insights
   // PEEPS-END recruitment-offers
   // PEEPS-BEGIN exits
   "exits.view": { group: "Exits", label: "View exit cases", description: "Read non-pay exit cases within the authorized exits audience." },

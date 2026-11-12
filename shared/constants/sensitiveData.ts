@@ -154,6 +154,9 @@ export const REVIEWED_NOT_SENSITIVE: readonly PermissionKey[] = [
   // PEEPS-BEGIN recruitment
   "recruitment.view", "recruitment.requisition.raise",
   // PEEPS-END recruitment
+  // PEEPS-BEGIN insights
+  "insights.view", // aggregates with small groups suppressed; no individual, exit interview or pay; the service refuses the Developer
+  // PEEPS-END insights
   // PEEPS-BEGIN exits
   "exits.view", "exits.manage", "exits.accept", "exits.checklist.complete", "exits.settlement.view",
   // PEEPS-END exits

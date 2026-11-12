@@ -1,15 +1,29 @@
 import request from "supertest";
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
 import { ENCRYPTED_COLUMNS } from "../../../lib/fieldKeyRotation";
-import { SETTING_SCHEMAS, required } from "../settings";
+import { SETTING_DEFAULTS, SETTING_SCHEMAS, required } from "../settings";
 import { fixture, prisma, app } from "./fixtures";
 describe("DEMO recruitment foundation",()=>{
  let f:Awaited<ReturnType<typeof fixture>>,pipelineId:string;
  beforeAll(async()=>{f=await fixture();});afterAll(async()=>{await f.cleanup();});
- it("all business settings and pipelines start Not set, and every required setting refuses",async()=>{
- const r=await f.call("director","get","/settings");expect(r.status).toBe(200);expect(r.body).toHaveLength(Object.keys(SETTING_SCHEMAS).length);expect(r.body.every((s:{value:unknown;state:string})=>s.value===null&&s.state==="NOT_SET")).toBe(true);
- expect((await f.call("director","get","/pipelines")).body).toEqual([]);
- for(const key of Object.keys(SETTING_SCHEMAS) as Array<keyof typeof SETTING_SCHEMAS>)await expect(required(key)).rejects.toMatchObject({status:409,code:"RECRUITMENT_NOT_SET"});
+ // Stage 2 (changed test): interview rounds and hiring stages now ship as "Default, change in settings"; every other business
+ // setting still starts Not set and refuses, exactly as before.
+ it("business settings start Not set (rounds and stages ship as defaults), and every required setting without a default refuses",async()=>{
+ const r=await f.call("director","get","/settings");expect(r.status).toBe(200);expect(r.body).toHaveLength(Object.keys(SETTING_SCHEMAS).length);
+ for(const s of r.body as Array<{key:string;value:unknown;state:string}>){if(s.key in SETTING_DEFAULTS)expect(s,s.key).toMatchObject({state:"DEFAULT",value:SETTING_DEFAULTS[s.key as keyof typeof SETTING_DEFAULTS]});else expect(s,s.key).toMatchObject({state:"NOT_SET",value:null});}
+ const pipelines=(await f.call("director","get","/pipelines")).body as Array<{version:number;isDefault:boolean;changedByUserId:string;stages:Array<{label:string}>}>;
+ const def=pipelines.find(p=>p.isDefault)!;expect(def.version).toBe(0);expect(def.stages.map(s=>s.label)).toEqual(["Screening","Interview","Offer","Hired","Not moving forward"]);
+ expect(pipelines.filter(p=>p.isDefault)).toHaveLength(1);
+ for(const key of Object.keys(SETTING_SCHEMAS) as Array<keyof typeof SETTING_SCHEMAS>){if(key in SETTING_DEFAULTS)await expect(required(key)).resolves.toEqual(SETTING_DEFAULTS[key]);else await expect(required(key)).rejects.toMatchObject({status:409,code:"RECRUITMENT_NOT_SET"});}
+ });
+ it("a director's choice replaces a default and is audited; clearing it returns to the default",async()=>{
+ const chosen=[{code:'DEMO_ROUND',label:'DEMO round'}];
+ const v=(await f.call("director","get","/settings")).body.find((s:{key:string})=>s.key==='interviewRounds').version;
+ const r=await f.call("director","put","/settings/interviewRounds",{value:chosen,version:v,reason:"DEMO choice"});expect(r.status).toBe(200);
+ expect(r.body.find((s:{key:string})=>s.key==='interviewRounds')).toMatchObject({state:"CONFIRMED",value:chosen});
+ expect(await prisma.auditLog.count({where:{action:"recruitment.setting.confirmed",actorUserId:f.people.director.userId}})).toBeGreaterThan(0);
+ const v2=r.body.find((s:{key:string})=>s.key==='interviewRounds').version;
+ expect((await f.call("hr","put","/settings/interviewRounds",{value:chosen,version:v2,reason:"DEMO"})).status).toBe(403);
  });
  it("all foundation routes require sign-in, directors own settings, unrelated employees are refused and Developer always 403",async()=>{
  const cases=[['get','/settings',{}],['put','/settings/retention',{value:{days:30},version:0,reason:"DEMO"}],['get','/pipelines',{}],['post','/pipelines',{name:"DEMO",stages:[{code:"DEMO",label:"DEMO"}],reason:"DEMO"}]] as const;

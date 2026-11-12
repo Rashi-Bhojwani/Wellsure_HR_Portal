@@ -27,12 +27,14 @@ describe("DEMO requisitions and jobs",()=>{
  expect((await f.call('otherManager','get',`/jobs/${jobId}`)).status).toBe(404);expect((await f.call('otherManager','get','/jobs')).body.total).toBe(0);
  expect((await f.call('manager','post','/jobs',jobInput())).status).toBe(403);await f.hrSwitch('OFF');expect((await f.call('hr','get',`/jobs/${jobId}`)).status).toBe(404);
  });
- it("draft jobs cannot open without a director-chosen pipeline, and state changes keep history",async()=>{
- expect((await f.call('director','post',`/jobs/${jobId}/state`,{status:'OPEN',reason:'DEMO opening'})).status).toBe(409);
- const p=await f.call('director','post','/pipelines',{name:'DEMO pipeline',stages:[{code:'DEMO_APPLIED',label:'DEMO applied'},{code:'DEMO_REVIEW',label:'DEMO review'}],reason:'DEMO chosen'});pipelineId=p.body.id;
- expect((await f.call('director','post',`/jobs/${jobId}/state`,{status:'OPEN',pipelineId,reason:'DEMO opening'})).body.status).toBe('OPEN');
+ // Stage 2 (changed test): with no pipeline chosen, a job now opens on the shipped default stages (version 0) instead of being
+ // refused; a director's own pipeline still replaces it, and history is kept exactly as before.
+ it("draft jobs open on the default stages unless a director-chosen pipeline is selected, and state changes keep history",async()=>{
+ const opened=await f.call('director','post',`/jobs/${jobId}/state`,{status:'OPEN',reason:'DEMO opening'});expect(opened.body.status).toBe('OPEN');
+ expect((await prisma.recruitmentPipeline.findUniqueOrThrow({where:{id:opened.body.pipelineId}})).version).toBe(0);
  expect((await f.call('director','post',`/jobs/${jobId}/state`,{status:'ON_HOLD',reason:'DEMO hold'})).body.status).toBe('ON_HOLD');
- expect((await f.call('director','post',`/jobs/${jobId}/state`,{status:'OPEN',reason:'DEMO reopen'})).body.status).toBe('OPEN');
+ const p=await f.call('director','post','/pipelines',{name:'DEMO pipeline',stages:[{code:'DEMO_APPLIED',label:'DEMO applied'},{code:'DEMO_REVIEW',label:'DEMO review'}],reason:'DEMO chosen'});pipelineId=p.body.id;
+ const reopened=await f.call('director','post',`/jobs/${jobId}/state`,{status:'OPEN',pipelineId,reason:'DEMO reopen'});expect(reopened.body.status).toBe('OPEN');expect(reopened.body.pipelineId).toBe(pipelineId);
  expect(await prisma.recruitmentHistory.count({where:{entityId:jobId,event:'STATUS_CHANGED'}})).toBe(4);
  });
  it("a chosen director route needs one director unless its optional second-director check is explicitly on",async()=>{

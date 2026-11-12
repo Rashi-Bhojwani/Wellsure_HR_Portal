@@ -5373,6 +5373,7 @@ model RecruitmentJoinerDocument {
   uploadedAt       DateTime              @default(now()) @map("uploaded_at") @db.Timestamptz(3)
   reviewedAt       DateTime?             @map("reviewed_at") @db.Timestamptz(3)
   reviewedByUserId String?               @map("reviewed_by_user_id")
+  conversionCopy   RecruitmentConversionDocument?
 
   @@unique([linkId, typeCode])
   @@index([candidateId])
@@ -5425,5 +5426,17 @@ model RecruitmentReferral {
   @@index([referrerEmployeeId])
   @@index([status])
   @@map("recruitment_referrals")
+}
+// Stage 2 (1.2): which joining document was copied into which employee document at conversion; once per joining document.
+model RecruitmentConversionDocument {
+  id                 String                    @id @default(cuid())
+  joinerDocumentId   String                    @unique @map("joiner_document_id")
+  joinerDocument     RecruitmentJoinerDocument @relation(fields: [joinerDocumentId], references: [id])
+  employeeDocumentId String                    @unique @map("employee_document_id")
+  employeeId         String                    @map("employee_id")
+  createdAt          DateTime                  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([employeeId])
+  @@map("recruitment_conversion_documents")
 }
 // PEEPS-END recruitment-offers

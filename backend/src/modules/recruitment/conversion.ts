@@ -12,6 +12,8 @@ import { reResolveUnmapped } from "../biometric/adminService";
 import { absent, type Actor, type Meta } from "./access";
 import { retained } from "./candidates";
 import { required } from "./settings";
+import { randomUUID } from "node:crypto";
+import { storageService } from "../../integrations/storage";
 import { requireOnboarding } from "./offerAccess";
 
 // C-4B conversion: an accepted candidate becomes an employee through the existing employee creation service
@@ -93,7 +95,13 @@ export async function convert(offerId: string, actor: Actor, body: z.infer<typeo
   if (!parsed.success) throw new HttpError(400, parsed.error.issues.map(i => i.message).join(" "), "VALIDATION_ERROR");
   const input = parsed.data;
   await assertReportingLine({ code: input.official.employeeCode, roleCodes: ["EMPLOYEE"] }, input.official.reportingManagerId ?? null);
-  let created: { employeeId: string; employeeCode: string } | null = null;
+  // Stage 2 (1.3): HR still types the code; an existing code is refused clearly before anything is written (the database unique
+  // index on employees.employee_code still decides a race, mapped to the same refusal below).
+  if (await prisma.employee.findUnique({ where: { employeeCode: input.official.employeeCode }, select: { id: true } })) throw codeTaken(input.official.employeeCode);
+  // Stage 2 (1.2): copy the joining documents into the restricted category before the transaction (storage cannot roll back);
+  // the copies are discarded if this request does not create the employee. Never offer pay or expected pay.
+  const copies = await prepareDocumentCopies(offer.candidateId);
+  let created: { employeeId: string; employeeCode: string; documentsCopied: number } | null = null;
   try {
     created = await prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT id FROM recruitment_offers WHERE id=${offerId} FOR UPDATE`;
@@ -101,28 +109,68 @@ export async function convert(offerId: string, actor: Actor, body: z.infer<typeo
       if (prior) return null; // the other request won; return its employee below
       const fresh = await tx.recruitmentOffer.findUniqueOrThrow({ where: { id: offerId } });
       if (fresh.state !== "ACCEPTED") throw new HttpError(409, "Only an accepted offer can be converted.", "CONFLICT");
-      if (await tx.employee.findUnique({ where: { employeeCode: input.official.employeeCode } })) throw new HttpError(409, `Employee Code "${input.official.employeeCode}" is already in use.`, "EMPLOYEE_CODE_TAKEN");
+      if (await tx.employee.findUnique({ where: { employeeCode: input.official.employeeCode } })) throw codeTaken(input.official.employeeCode);
       const { employee } = await createEmployeeInTx(tx, input, meta);
       await tx.recruitmentConversion.create({ data: { candidateId: fresh.candidateId, offerId, applicationId: fresh.applicationId, employeeId: employee.id, convertedByUserId: c.userId } });
       await tx.recruitmentApplication.update({ where: { id: fresh.applicationId }, data: { status: "HIRED", version: { increment: 1 }, changedByUserId: c.userId } });
       await tx.recruitmentJoinerLink.updateMany({ where: { candidateId: fresh.candidateId, revokedAt: null, completedAt: null }, data: { revokedAt: new Date(), revokedByUserId: c.userId } });
+      let documentsCopied = 0;
+      if (copies.categoryId) for (const d of copies.items) {
+        const doc = await tx.employeeDocument.create({ data: { employeeId: employee.id, categoryId: copies.categoryId, title: d.title, fileKey: d.fileKey, fileName: d.fileName, mimeType: d.mimeType, sizeBytes: d.sizeBytes, visibleToEmployee: false, uploadedByUserId: c.userId } });
+        // Unique on the joiner document: a document is copied once, whatever retries happen.
+        await tx.recruitmentConversionDocument.create({ data: { joinerDocumentId: d.joinerDocumentId, employeeDocumentId: doc.id, employeeId: employee.id } });
+        documentsCopied++;
+      }
       await writeAuditLogs([
         { ...meta, action: "employee.created", entityType: "Employee", entityId: employee.id, after: { official: input.official, source: "RECRUITMENT_CONVERSION" } },
         { ...meta, action: "recruitment.candidate.converted", entityType: "RecruitmentOffer", entityId: offerId, after: { candidateId: fresh.candidateId, employeeId: employee.id } },
       ], tx);
-      return { employeeId: employee.id, employeeCode: input.official.employeeCode };
+      return { employeeId: employee.id, employeeCode: input.official.employeeCode, documentsCopied };
     }, { timeout: 30000 });
   } catch (error) {
+    await discard(copies);
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       const again = await existing(offerId);
       if (again) return again;
-      throw new HttpError(409, "A record with these details already exists (employee code, official email or device ID).", "CONFLICT");
+      const target = Array.isArray(error.meta?.target) ? error.meta.target.join(",") : String(error.meta?.target ?? "");
+      if (target.includes("employee_code")) throw codeTaken(input.official.employeeCode);
+      throw new HttpError(409, "A record with these details already exists (official email or device ID).", "CONFLICT");
     }
     throw error;
   }
-  if (!created) return (await existing(offerId))!;
+  if (!created) { await discard(copies); return (await existing(offerId))!; }
   if (input.official.attendanceCapture === "DEVICE" && input.official.deviceUserId) {
     await reResolveUnmapped(input.official.deviceUserId).catch((err: unknown) => logger.warn({ err, employeeId: created.employeeId }, "Could not attach earlier punches to the converted employee; map them from the Unmapped queue"));
   }
   return { ...created, created: true };
+}
+
+const codeTaken = (code: string) => new HttpError(409, `Employee Code "${code}" is already in use. Choose another code.`, "EMPLOYEE_CODE_TAKEN");
+
+type Copies = { categoryId: string | null; items: Array<{ joinerDocumentId: string; title: string; fileKey: string; fileName: string; mimeType: string; sizeBytes: number }> };
+/** The restricted category: the first active employee category with STATUTORY sensitivity (identity and bank proofs). */
+async function prepareDocumentCopies(candidateId: string): Promise<Copies> {
+  const category = await prisma.documentCategory.findFirst({ where: { appliesTo: "EMPLOYEE", sensitivity: "STATUTORY", isActive: true }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }], select: { id: true } });
+  if (!category) return { categoryId: null, items: [] };
+  const [docs, types] = await Promise.all([
+    prisma.recruitmentJoinerDocument.findMany({ where: { candidateId, storageKey: { not: null }, conversionCopy: null }, orderBy: { uploadedAt: "asc" } }),
+    required("joinerDocumentTypes"),
+  ]);
+  const items: Copies["items"] = [];
+  try {
+    for (const d of docs) {
+      const object = await storageService.getObject(d.storageKey!);
+      const ext = d.mimeType === "application/pdf" ? ".pdf" : d.mimeType === "image/png" ? ".png" : d.mimeType === "image/jpeg" ? ".jpg" : "";
+      const fileKey = `employees/converted/${randomUUID()}${ext}`;
+      await storageService.putObject(fileKey, object.body, d.mimeType);
+      items.push({ joinerDocumentId: d.id, title: types.find((t) => t.code === d.typeCode)?.label ?? "Joining document", fileKey, fileName: `joining-${d.typeCode.toLowerCase()}${ext}`, mimeType: d.mimeType, sizeBytes: d.sizeBytes });
+    }
+  } catch (error) {
+    await discard({ categoryId: category.id, items });
+    throw error;
+  }
+  return { categoryId: category.id, items };
+}
+async function discard(copies: Copies) {
+  for (const i of copies.items) await storageService.deleteObject(i.fileKey).catch((err: unknown) => logger.warn({ err }, "A discarded joining-document copy could not be deleted"));
 }

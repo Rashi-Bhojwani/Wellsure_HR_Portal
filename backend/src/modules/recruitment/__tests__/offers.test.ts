@@ -2,7 +2,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import request from "supertest";
+import pino from "pino";
 import { redis } from "../../../lib/redis";
+import { logger } from "../../../lib/logger";
 import { deleteWithDependents } from "../../../lib/__tests__/cleanup";
 import { cleanupFullTestEmployee } from "../../employee/__tests__/employeeTestHelpers";
 import { appoint, removeMember } from "../../peeps/__tests__/peepsTestKit";
@@ -154,6 +156,30 @@ describe("DEMO C-4B offers, pay, joining links, conversion and referrals", () =>
     await expect(readAcceptedOfferForPayroll(f.people.hr.userId, "none")).rejects.toMatchObject({ status: 403 });
   });
 
+  it("stage 2: no log line written during offer-pay and expected-pay requests carries a pay figure", async () => {
+    const { candidateId, offerId } = await acceptedOffer("DEMO log probe");
+    const stream = (logger as unknown as Record<symbol, { write: (line: string) => unknown }>)[pino.symbols.streamSym]!;
+    const lines: string[] = [];
+    const original = stream.write.bind(stream);
+    stream.write = (line: string) => { lines.push(String(line)); return original(line); };
+    try {
+      expect((await f.call("director", "put", `/candidates/${candidateId}/expected-pay`, { value: { amount: EXPECTED, period: "MONTHLY" } })).status).toBe(200);
+      expect((await f.call("director", "get", `/candidates/${candidateId}/expected-pay`)).body.value.amount).toBe(EXPECTED);
+      expect((await f.call("director", "get", `/offers/${offerId}/compensation`)).body.value.amount).toBe(PAY);
+      for (const who of ["office", "hr", "employee", "developer"] as Who[]) {
+        await f.call(who, "get", `/offers/${offerId}/compensation`);
+        await f.call(who, "put", `/candidates/${candidateId}/expected-pay`, { value: { amount: EXPECTED, period: "ANNUAL" } });
+      }
+      const draft = await candidate("DEMO log probe two");
+      const o = await f.call("office", "post", "/offers", terms(draft.applicationId));
+      expect((await f.call("director", "put", `/offers/${o.body.id}/compensation`, { amount: PAY, period: "ANNUAL", version: 0 })).status).toBe(200);
+    } finally {
+      stream.write = original;
+    }
+    expect(lines.length).toBeGreaterThan(5); // the request log really was captured
+    for (const p of [PAY, EXPECTED, "4321987", "3999111", PAY.replace(".", ""), EXPECTED.replace(".", "")]) expect(lines.filter((l) => l.includes(p)), `log lines carrying ${p}`).toEqual([]);
+  });
+
   it("states: approval optional (default off), only directors approve/issue, issue needs pay and the letters confirmation, events append-only", async () => {
     const { applicationId } = await candidate();
     const o = await f.call("office", "post", "/offers", terms(applicationId));
@@ -273,6 +299,40 @@ describe("DEMO C-4B offers, pay, joining links, conversion and referrals", () =>
     const read = await readAcceptedOfferForPayroll(f.people.director.userId, a.body.employeeId);
     expect(read?.compensation).toEqual({ amount: PAY, period: "ANNUAL", currency: "INR" });
     expect(await prisma.auditLog.count({ where: { entityId: offerId, action: "recruitment.offer.compensation.opened", actorUserId: f.people.director.userId } })).toBeGreaterThan(0);
+  });
+
+  it("stage 2: conversion copies each accepted joining document once into the restricted category, never pay", async () => {
+    const { candidateId, offerId } = await acceptedOffer("DEMO Document Joiner");
+    const l = await link(candidateId);
+    expect((await upload(l.token, "DEMO_ID", PDF.subarray(0, 1000), "id.pdf", "application/pdf")).status).toBe(201);
+    expect((await upload(l.token, "DEMO_BANK", PDF, "bank.pdf", "application/pdf")).status).toBe(201);
+    const code = `DEMOD${Date.now() % 1e7}`;
+    const [a, b] = await Promise.all([f.call("hr", "post", `/offers/${offerId}/conversion`, conversionBody(code)), f.call("hr", "post", `/offers/${offerId}/conversion`, conversionBody(code))]);
+    expect([a.status, b.status].sort()).toEqual([200, 201]);
+    converted.push(a.body.employeeId);
+    expect((await f.call("hr", "post", `/offers/${offerId}/conversion`, conversionBody(code))).status).toBe(200); // a later retry
+    const docs = await prisma.employeeDocument.findMany({ where: { employeeId: a.body.employeeId }, include: { category: true } });
+    expect(docs.map((d) => d.title).sort()).toEqual(["DEMO bank proof", "DEMO identity proof"]);
+    expect(docs.every((d) => d.category.sensitivity === "STATUTORY" && !d.visibleToEmployee)).toBe(true);
+    expect(await prisma.recruitmentConversionDocument.count({ where: { employeeId: a.body.employeeId } })).toBe(2);
+    for (const p of [PAY, "4321987"]) expect(JSON.stringify(docs).includes(p)).toBe(false);
+    await expect(prisma.$executeRaw`DELETE FROM recruitment_conversion_documents WHERE employee_id=${a.body.employeeId}`).rejects.toThrow();
+  });
+
+  it("stage 2: an existing employee code is refused clearly, and two conversions racing for one new code create one employee", async () => {
+    const one = await acceptedOffer(), two = await acceptedOffer();
+    for (const c of [one, two]) for (const t of ["DEMO_ID", "DEMO_BANK"]) await f.call("second", "post", `/candidates/${c.candidateId}/joining-exceptions`, { typeCode: t, reason: "DEMO arrives later" });
+    const taken = await f.call("hr", "post", `/offers/${one.offerId}/conversion`, conversionBody(f.people.employee.employeeCode));
+    expect([taken.status, taken.body.error.code]).toEqual([409, "EMPLOYEE_CODE_TAKEN"]);
+    expect(taken.body.error.message).toContain("already in use");
+    const code = `DEMOR${Date.now() % 1e7}`;
+    const before = await prisma.employee.count();
+    const results = await Promise.all([f.call("hr", "post", `/offers/${one.offerId}/conversion`, conversionBody(code)), f.call("hr", "post", `/offers/${two.offerId}/conversion`, conversionBody(code))]);
+    const won = results.find((r) => r.status === 201)!, lost = results.find((r) => r.status !== 201)!;
+    converted.push(won.body.employeeId);
+    expect([lost.status, lost.body.error.code]).toEqual([409, "EMPLOYEE_CODE_TAKEN"]);
+    expect(await prisma.employee.count()).toBe(before + 1);
+    expect(await prisma.employee.count({ where: { employeeCode: code } })).toBe(1);
   });
 
   it("referrals: off by default, then the referrer sees basic status only", async () => {

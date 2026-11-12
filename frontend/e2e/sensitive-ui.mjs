@@ -164,6 +164,9 @@ const CAPABILITIES = ["VIEW_ATTENDANCE", "APPROVE_REGULARIZATIONS", "APPROVE_LEA
   // PEEPS-BEGIN recruitment
   "MANAGE_RECRUITMENT",
   // PEEPS-END recruitment
+  // PEEPS-BEGIN recruitment-offers
+  "RUN_ONBOARDING",
+  // PEEPS-END recruitment-offers
 ];
 // PEEPS-END exits
 let directorToken;
