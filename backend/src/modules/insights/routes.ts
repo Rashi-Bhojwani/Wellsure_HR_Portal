@@ -2,12 +2,13 @@ import { Router } from "express";
 import { z } from "zod";
 import { authenticate } from "../../middleware/authenticate";
 import { validate } from "../../middleware/validate";
+import { HttpError } from "../../middleware/errorHandler";
 import * as insights from "./service";
 
 // Insights routes. Every route signs in, validates, and checks the viewer in the service (directors, or Wellsure Office members with
 // VIEW_INSIGHTS; the Developer is refused before anything is read). Responses and exports are aggregate and suppressed.
 export const insightsRouter = Router();
-insightsRouter.use(authenticate);
+insightsRouter.use(authenticate, (req, _res, next) => (req.user!.roleCodes.includes("DEVELOPER") ? next(new HttpError(403, "This is unavailable to Developer.", "FORBIDDEN")) : next()));
 const empty = z.object({}).strict();
 const metaOf = (req: { user?: { userId: string }; ip?: string; headers: Record<string, unknown> }) => ({ actorUserId: req.user!.userId, ipAddress: req.ip ?? null, userAgent: (req.headers["user-agent"] as string | undefined) ?? null });
 

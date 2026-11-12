@@ -111,6 +111,10 @@ export const STANDALONE_ROOT_MODELS: Record<string, string> = {
   // PEEPS-BEGIN insights
   InsightsSettingVersion: "Director Insights settings (append-only, purge-guarded)",
   // PEEPS-END insights
+  // PEEPS-BEGIN autofill
+  AutofillSettingVersion: "Director autofill settings (append-only, purge-guarded)",
+  AutofillDocument: "Autofill upload (no FK to its subject); deleteWithDependents takes its extraction and reviews (purge-guarded)",
+  // PEEPS-END autofill
   // PEEPS-BEGIN recruitment
   RecruitmentSettingVersion: "Director recruitment settings",
   RecruitmentPipeline: "Immutable director pipeline versions",
@@ -202,6 +206,7 @@ export const STORAGE_KEY_COLUMNS: Record<string, string[]> = {
   // PEEPS-END recruitment
   // PEEPS-BEGIN recruitment-offers
   RecruitmentJoinerDocument: ["storageKey"],
+  AutofillDocument: ["storageKey"],
   // PEEPS-END recruitment-offers
   EmployeePersonal: ["photoStorageKey", "photoThumbStorageKey"],
   EmployeeDocument: ["fileKey"],
@@ -533,5 +538,6 @@ for (const model of ["RecruitmentSettingVersion", "RecruitmentPipeline", "Recrui
 for (const model of ["RecruitmentOfferEvent", "RecruitmentJoiningException", "RecruitmentConversion", "RecruitmentConversionDocument"]) PURGE_GUARDED_MODELS.add(model);
 // PEEPS-BEGIN insights
 PURGE_GUARDED_MODELS.add("InsightsSettingVersion");
+for (const model of ["AutofillSettingVersion", "AutofillDocument", "AutofillExtraction", "AutofillFieldReview"]) PURGE_GUARDED_MODELS.add(model);
 // PEEPS-END insights
 // PEEPS-END recruitment-offers

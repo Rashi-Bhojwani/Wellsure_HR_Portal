@@ -5457,3 +5457,79 @@ model InsightsSettingVersion {
   @@map("insights_setting_versions")
 }
 // PEEPS-END insights
+
+// PEEPS-BEGIN autofill
+// Stage 2: document autofill. Private uploads, one extraction result per document (encrypted), per-field reviews (encrypted value;
+// the only change ever allowed is clearing the value at retention), and settings (append-only, director-written).
+model AutofillSettingVersion {
+  id              String   @id @default(cuid())
+  key             String
+  version         Int
+  value           Json?
+  reason          String
+  changedByUserId String   @map("changed_by_user_id")
+  changedAt       DateTime @default(now()) @map("changed_at") @db.Timestamptz(3)
+
+  @@unique([key, version])
+  @@map("autofill_setting_versions")
+}
+
+model AutofillDocument {
+  id               String               @id @default(cuid())
+  subjectKind      String               @map("subject_kind")
+  subjectId        String               @map("subject_id")
+  docKind          String               @map("doc_kind")
+  storageKey       String?              @map("storage_key")
+  mimeType         String               @map("mime_type")
+  sizeBytes        Int                  @map("size_bytes")
+  sha256           String
+  uploadedByUserId String               @map("uploaded_by_user_id")
+  retentionUntil   DateTime             @map("retention_until") @db.Timestamptz(3)
+  purgedAt         DateTime?            @map("purged_at") @db.Timestamptz(3)
+  appliedAt        DateTime?            @map("applied_at") @db.Timestamptz(3)
+  appliedByUserId  String?              @map("applied_by_user_id")
+  appliedVia       String?              @map("applied_via")
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  extraction       AutofillExtraction?
+  reviews          AutofillFieldReview[]
+
+  @@index([subjectKind, subjectId])
+  @@index([retentionUntil, purgedAt])
+  @@map("autofill_documents")
+}
+
+model AutofillExtraction {
+  id              String           @id @default(cuid())
+  documentId      String           @unique @map("document_id")
+  document        AutofillDocument @relation(fields: [documentId], references: [id])
+  status          String           @default("QUEUED")
+  provider        String
+  providerVersion String           @map("provider_version")
+  engine          String?
+  attempts        Int              @default(0)
+  runs            Int              @default(0)
+  idempotencyKey  String?          @map("idempotency_key")
+  resultEncrypted Bytes?           @map("result_encrypted")
+  failureCode     String?          @map("failure_code")
+  durationMs      Int?             @map("duration_ms")
+  startedAt       DateTime?        @map("started_at") @db.Timestamptz(3)
+  finishedAt      DateTime?        @map("finished_at") @db.Timestamptz(3)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("autofill_extractions")
+}
+
+model AutofillFieldReview {
+  id             String           @id @default(cuid())
+  documentId     String           @map("document_id")
+  document       AutofillDocument @relation(fields: [documentId], references: [id])
+  field          String
+  decision       String
+  valueEncrypted Bytes?           @map("value_encrypted")
+  reviewerUserId String           @map("reviewer_user_id")
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([documentId, field])
+  @@map("autofill_field_reviews")
+}
+// PEEPS-END autofill

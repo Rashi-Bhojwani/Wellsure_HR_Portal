@@ -6,6 +6,9 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { RequireAuth } from "./RequireAuth";
 import { resolveAdminRoutes, resolveEmployeeRoutes } from "./resolveMenuRoutes";
 import { lazyPage } from "./lazyPage";
+// PEEPS-BEGIN autofill
+const AutofillReviewPage = lazyPage(() => import("../features/autofill/AutofillReviewPage"), "AutofillReviewPage");
+// PEEPS-END autofill
 // PEEPS-BEGIN exits
 const ExitCasePage = lazyPage(() => import("../features/exits/ExitCasePage"), "ExitCasePage");
 const ExitInterviewPage = lazyPage(() => import("../features/exits/ExitInterviewPage"), "ExitInterviewPage");
@@ -100,6 +103,9 @@ export function PortalRoutes() {
             <Route path="exits/cases/:id" element={<ExitCasePage />} />
             <Route path="exits/interviews/:id" element={<ExitInterviewPage />} />
             {/* PEEPS-END exits */}
+            {/* PEEPS-BEGIN autofill */}
+            <Route path="autofill/:id" element={<AutofillReviewPage />} />
+            {/* PEEPS-END autofill */}
             {adminRoutes()}
             {/* A stale or mistyped portal URL for a signed-in person goes to that portal's home, not back to the sign-in form. */}
             <Route path="*" element={<Navigate to="/admin" replace />} />

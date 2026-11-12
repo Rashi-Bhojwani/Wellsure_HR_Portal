@@ -1,0 +1,21 @@
+import { apiClient } from "../../api/client";
+
+export type DocKind = "RESUME" | "IDENTITY" | "BANK";
+export type Status = { canResume: boolean; canIdentity: boolean; canBank: boolean; isDirector: boolean; retentionSet: boolean; uploads: { allowedMimeTypes: string[]; maxMb: number } | null };
+export type Setting = { key: string; state: "NOT_SET" | "CONFIRMED" | "DEFAULT"; version: number; value: unknown };
+export type Suggestion = { value: string | null; confidence: number; missing: boolean; error: string | null };
+export type Field = { field: string; label: string; authorized: boolean; suggestion: Suggestion | null; review: { decision: string; value: string | null; at: string } | null };
+export type Doc = { id: string; subjectKind: string; subjectId: string; docKind: DocKind; mimeType: string; sizeBytes: number; createdAt: string; appliedAt: string | null; appliedVia: string | null; provenance: { provider: string | null; engine: string | null; runs: number; durationMs: number | null; sha256: string }; extraction: { status: string; failureCode: string | null }; notice: string; fields: Field[] };
+export type Row = { id: string; subjectKind: string; subjectId: string; docKind: DocKind; createdAt: string; status: string; failureCode: string | null; applied: boolean };
+const root = "/api/autofill";
+const data = <T,>(p: Promise<{ data: T }>) => p.then((r) => r.data);
+export const status = () => data<Status>(apiClient.get(root + "/status"));
+export const settings = () => data<{ canEdit: boolean; settings: Setting[] }>(apiClient.get(root + "/settings"));
+export const saveSetting = (s: Setting, value: unknown, reason: string) => data<{ canEdit: boolean; settings: Setting[] }>(apiClient.put(`${root}/settings/${s.key}`, { value, version: s.version, reason }));
+export const list = () => data<{ items: Row[] }>(apiClient.get(root + "/documents"));
+export const upload = (subjectKind: string, subjectId: string, docKind: DocKind, file: File) => { const f = new FormData(); f.append("subjectKind", subjectKind); f.append("subjectId", subjectId); f.append("docKind", docKind); f.append("file", file); return data<{ id: string; extractionStatus: string }>(apiClient.post(root + "/documents", f)); };
+export const document = (id: string) => data<Doc>(apiClient.get(`${root}/documents/${id}`));
+export const sourceFile = (id: string) => apiClient.get<Blob>(`${root}/documents/${id}/file`, { responseType: "blob" }).then((r) => r.data);
+export const rerun = (id: string, idempotencyKey: string) => data<{ id: string; extractionStatus: string }>(apiClient.post(`${root}/documents/${id}/extract`, { idempotencyKey }));
+export const review = (id: string, field: string, decision: "ACCEPTED" | "CORRECTED" | "REJECTED", value?: string) => data<Doc>(apiClient.post(`${root}/documents/${id}/fields/${field}/review`, { decision, ...(value !== undefined ? { value } : {}) }));
+export const apply = (id: string) => data<{ id: string; appliedVia: string; alreadyApplied: boolean }>(apiClient.post(`${root}/documents/${id}/apply`, {}));

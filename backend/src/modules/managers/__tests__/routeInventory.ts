@@ -35,6 +35,18 @@ const admin: RouteClass = { kind: "admin" };
 const adminInService = (why: string): RouteClass => ({ kind: "admin", why });
 
 export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
+  // PEEPS-BEGIN autofill
+  "GET /api/autofill/status": self,
+  "GET /api/autofill/settings": adminInService("Directors, or a reviewer of any autofill field (read); setting state only"),
+  "PUT /api/autofill/settings/:key": adminInService("Actual director only (service and database trigger); append-only, audited"),
+  "GET /api/autofill/documents": scoped("Documents whose subject the viewer may see and whose fields they may review"),
+  "POST /api/autofill/documents": scoped("Recruitment management for resumes; bank/statutory edit and employee scope for employee documents"),
+  "GET /api/autofill/documents/:id": scoped("Same audience; values only for fields the viewer may review"),
+  "GET /api/autofill/documents/:id/file": scoped("Same audience; every opening audited"),
+  "POST /api/autofill/documents/:id/extract": scoped("Same audience; idempotency key, run limit, rate limit"),
+  "POST /api/autofill/documents/:id/fields/:field/review": scoped("Only the field's own authority (recruitment, statutory edit or bank edit)"),
+  "POST /api/autofill/documents/:id/apply": scoped("Every reviewed field's authority; saves through the existing held-change workflow"),
+  // PEEPS-END autofill
   // PEEPS-BEGIN insights
   "GET /api/insights/status": self,
   "GET /api/insights/settings": adminInService("Directors, or Office members with VIEW_INSIGHTS (read); setting state only"),

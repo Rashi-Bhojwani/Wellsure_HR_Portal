@@ -1,6 +1,10 @@
 // PEEPS-BEGIN recruitment
 import { purgeExpiredCandidates } from "../modules/recruitment/retention";
 // PEEPS-END recruitment
+// PEEPS-BEGIN autofill
+import { runExtraction as runAutofillExtraction, purgeExpired as purgeExpiredAutofill } from "../modules/autofill/service";
+import { AUTOFILL_QUEUE_NAME } from "../modules/autofill/queue";
+// PEEPS-END autofill
 // PEEPS-BEGIN exits
 import { purgeExpiredInterviews } from "../modules/exits/interviews";
 // PEEPS-END exits
@@ -98,6 +102,9 @@ export function startWorkers(): Worker[] {
       // PEEPS-BEGIN recruitment
       await purgeExpiredCandidates();
       // PEEPS-END recruitment
+      // PEEPS-BEGIN autofill
+      await purgeExpiredAutofill();
+      // PEEPS-END autofill
       // PEEPS-END exits
       logger.info({ jobId: job.id, ...result }, "employee-separations processed");
       return result;
@@ -245,5 +252,10 @@ export function startWorkers(): Worker[] {
   const payrollPayslipsWorker = new Worker(PAYROLL_PAYSLIPS_QUEUE, async (job) => deliverPayslips((job.data as { runId: string }).runId), { connection: createBullConnection(), concurrency: 1 });
   payrollPayslipsWorker.on("failed", (job, err) => logger.error({ jobId: job?.id, err }, "payroll-payslips job failed"));
 
-  return [pingWorker, rolloverWorker, separationsWorker, leavePlAccrualWorker, compOffExpiryWorker, engageAutoPostsWorker, helpdeskAutoCloseWorker, lettersWorker, securityAlertWorker, recomputeWorker, nightlyWorker, processWorker, reminderWorker, deviceHealthWorker, payrollCalculateWorker, payrollPayslipsWorker, directorNoticeWorker, hrCapabilityWorker, remoteReminderWorker, reportSubscriptionsWorker];
+  // PEEPS-BEGIN autofill
+  // One document at a time per worker (cost control); the job carries the extraction id only. Errors are logged without values.
+  const autofillWorker = new Worker(AUTOFILL_QUEUE_NAME, async (job) => runAutofillExtraction((job.data as { extractionId: string }).extractionId), { connection: createBullConnection(), concurrency: 1 });
+  autofillWorker.on("failed", (job, err) => logger.error({ jobId: job?.id, err: { message: err.message } }, "autofill-extract job failed"));
+  // PEEPS-END autofill
+  return [/* PEEPS-BEGIN autofill */ autofillWorker, /* PEEPS-END autofill */ pingWorker, rolloverWorker, separationsWorker, leavePlAccrualWorker, compOffExpiryWorker, engageAutoPostsWorker, helpdeskAutoCloseWorker, lettersWorker, securityAlertWorker, recomputeWorker, nightlyWorker, processWorker, reminderWorker, deviceHealthWorker, payrollCalculateWorker, payrollPayslipsWorker, directorNoticeWorker, hrCapabilityWorker, remoteReminderWorker, reportSubscriptionsWorker];
 }

@@ -90,6 +90,10 @@ async function peepsPageChecks(page, user, label, base, p, text) {
   // Insights are aggregate: no money, no exit-interview text and no person's code on the page.
   if (p === "insights" && (/₹|\bINR\b|\bRs\.?\s?\d/.test(text) || text.includes("DEMO-C3-PRIVATE-INTERVIEW") || /\bDEMO0\d\d\b/.test(text.replace(/DEMO COMPANY/g, "")))) problems.push(`${where}: Insights shows money, an exit interview or a person's code`);
   // PEEPS-END insights
+  // PEEPS-BEGIN autofill
+  // Document autofill screens never show a full account or Aadhaar-length number unless a reviewer opened a document (none in the demo).
+  if (p.startsWith("autofill") && /\b\d{11,}\b/.test(text)) problems.push(`${where}: an autofill screen shows a long identifier`);
+  // PEEPS-END autofill
   // PEEPS-BEGIN exits
   if (!["DEMO001", "DEMO013", "DEMO006", "DEMO004"].includes(user) && text.includes("DEMO-C3-PRIVATE-INTERVIEW")) problems.push(`${where}: sees a private exit interview outside the relationship`);
   if ((p === "exits" || p.startsWith("exits/")) && /₹|\bINR\b|\bRs\.?\s?\d/.test(text)) problems.push(`${where}: exit screen contains a money value`);

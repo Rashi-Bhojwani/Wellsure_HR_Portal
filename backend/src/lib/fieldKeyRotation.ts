@@ -20,6 +20,10 @@ export const ENCRYPTED_COLUMNS: ReadonlyArray<EncryptedColumn> = [
   { model: "RecruitmentOfferCompensation", delegate: "recruitmentOfferCompensation", field: "valueEncrypted" }, // director-only offer pay
   ...["nameEncrypted", "emailEncrypted", "phoneEncrypted"].map(field => ({ model: "RecruitmentReferral", delegate: "recruitmentReferral", field })),
   // PEEPS-END recruitment-offers
+  // PEEPS-BEGIN autofill
+  { model: "AutofillExtraction", delegate: "autofillExtraction", field: "resultEncrypted" }, // suggested values read from a document
+  { model: "AutofillFieldReview", delegate: "autofillFieldReview", field: "valueEncrypted" }, // a reviewer's accepted or corrected value
+  // PEEPS-END autofill
   // PEEPS-BEGIN exits
   { model: "ExitInterview", delegate: "exitInterview", field: "answersEncrypted" },
   // PEEPS-END exits

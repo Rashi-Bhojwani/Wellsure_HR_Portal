@@ -1,6 +1,9 @@
 // PEEPS-BEGIN recruitment
 import { recruitmentRouter } from "./modules/recruitment/routes";
 // PEEPS-END recruitment
+// PEEPS-BEGIN autofill
+import { autofillRouter } from "./modules/autofill/routes";
+// PEEPS-END autofill
 // PEEPS-BEGIN insights
 import { insightsRouter } from "./modules/insights/routes";
 // PEEPS-END insights
@@ -144,6 +147,11 @@ const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   { path: "/api/recruitment", router: offerRouter },
   // PEEPS-BEGIN insights
   { path: "/api/insights", router: insightsRouter },
+  // PEEPS-END insights
+  // PEEPS-BEGIN autofill
+  { path: "/api/autofill", router: autofillRouter },
+  // PEEPS-END autofill
+  // PEEPS-BEGIN insights
   // PEEPS-END insights
   // PEEPS-END recruitment-offers
   // PEEPS-BEGIN exits

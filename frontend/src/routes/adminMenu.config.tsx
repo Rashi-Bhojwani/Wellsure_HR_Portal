@@ -34,6 +34,7 @@ import {
   TableOutlined,
   ScheduleOutlined,
   SettingOutlined,
+  FileSearchOutlined,
   LineChartOutlined,
   SolutionOutlined,
   SwapOutlined,
@@ -503,3 +504,10 @@ adminApps.find(a=>a.key==="employee")?.menus?.[0]?.items.push(
   { key: "insights", label: "Insights", path: "insights", icon: LineChartOutlined, element: InsightsPage, needs: { any: ["insights.view"] } },
 );
 // PEEPS-END insights
+// PEEPS-BEGIN autofill
+const AutofillPage = lazyPage(() => import("../features/autofill/AutofillPage"), "AutofillPage");
+adminApps.find(a=>a.key==="employee")?.menus?.[0]?.items.push(
+  // Reviewers of any field kind: recruitment (resumes), statutory or bank edit (employee documents). The server decides per field.
+  { key: "autofill", label: "Document autofill", path: "autofill", icon: FileSearchOutlined, element: AutofillPage, needs: { any: ["recruitment.manage", "employee.statutory.edit", "employee.bank.edit"] } },
+);
+// PEEPS-END autofill
