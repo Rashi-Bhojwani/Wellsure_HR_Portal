@@ -46,6 +46,7 @@ const TasksPage = lazyPage(() => import("../pages/employee/todo/TasksPage"), "Ta
 const FeedbackPage = lazyPage(() => import("../pages/employee/worklife/FeedbackPage"), "FeedbackPage"); // M block 2, SS-13
 const MyOnboardingPage = lazyPage(() => import("../pages/employee/todo/MyOnboardingPage"), "MyOnboardingPage"); // M block 2, OE-04
 const WorkflowDelegatesPage = lazyPage(() => import("../pages/employee/workflow-delegates/WorkflowDelegatesPage"), "WorkflowDelegatesPage");
+const EncashmentPage = lazyPage(() => import("../pages/employee/leave/EncashmentPage"), "EncashmentPage"); // M block 2, LV-23
 const WfhPage = lazyPage(() => import("../pages/employee/attendance/WfhPage"), "WfhPage"); // M block 2, AT-36
 const OvertimePage = lazyPage(() => import("../pages/employee/attendance/OvertimePage"), "OvertimePage"); // M block 2, AT-19
 const MarkAttendancePage = lazyPage(() => import("../pages/employee/attendance/MarkAttendancePage"), "MarkAttendancePage");
@@ -234,6 +235,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
         element: HolidayCalendarPage,
         quickAction: true,
       },
+      { key: "encashment", label: "Encashment", path: "leave/encashment", icon: GiftOutlined, element: EncashmentPage, description: "Ask to encash leave during the year, when the company allows it." }, // M block 2, LV-23
     ],
   },
   {

@@ -60,6 +60,7 @@ const AddEmployeePage = lazyPage(() => import("../pages/admin/employee/AddEmploy
 const SeparationsPage = lazyPage(() => import("../pages/admin/employee/SeparationsPage"), "SeparationsPage");
 const ChangeRequestsPage = lazyPage(() => import("../pages/admin/employee/ChangeRequestsPage"), "ChangeRequestsPage");
 const ProbationPage = lazyPage(() => import("../pages/admin/employee/m/ProbationPage"), "ProbationPage"); // M session block 2, ER-26
+const EncashmentRequestsPage = lazyPage(() => import("../pages/admin/leave/EncashmentRequestsPage"), "EncashmentRequestsPage"); // M block 2, LV-23
 const WfhRequestsPage = lazyPage(() => import("../pages/admin/workforce/WfhRequestsPage"), "WfhRequestsPage"); // M block 2, AT-36
 const OvertimeClaimsPage = lazyPage(() => import("../pages/admin/workforce/OvertimeClaimsPage"), "OvertimeClaimsPage"); // M block 2, AT-19
 const FeedbackInboxPage = lazyPage(() => import("../pages/admin/employee/m/FeedbackInboxPage"), "FeedbackInboxPage"); // M block 2, SS-13
@@ -277,6 +278,7 @@ export const adminApps: AdminApp[] = [
           { key: "leave-calendar", label: "Leave Calendar", path: "workforce/leave/calendar", icon: CalendarOutlined, element: AdminLeaveCalendarPage },
           { key: "employee-leave", label: "Employee Leave", path: "workforce/leave/employee-leave", icon: SolutionOutlined, element: EmployeeLeavePage, needs: { any: ["leave.view", "leave.approve"] } },
           { key: "leave-granter", label: "Leave Granter", path: "workforce/leave/granter", icon: GiftOutlined, element: LeaveGranterPage, needs: { any: ["leave.grant"] } },
+          { key: "encashment-requests", label: "Encashment Requests", path: "workforce/leave/encashment-requests", icon: GiftOutlined, element: EncashmentRequestsPage, needs: { director: true } }, // M block 2, LV-23
           { key: "year-end-process", label: "Year End Process", path: "workforce/leave/year-end", icon: HistoryOutlined, element: YearEndProcessPage, needs: { any: ["leave.yearend.manage"] } },
           { key: "leave-recalculator", label: "Leave Recalculator", path: "workforce/leave/recalculator", icon: CalculatorOutlined, element: LeaveRecalculatorPage, needs: { any: ["leave.recalculate"] } },
         ],

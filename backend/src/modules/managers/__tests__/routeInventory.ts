@@ -846,6 +846,13 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/wfh-requests": adminInService("directors only, checked in the service; never their own; Developer refused"),
   "POST /api/wfh-requests/:id/approve": adminInService("directors only, checked in the service (and again by markRemote); never their own; Developer refused"),
   "POST /api/wfh-requests/:id/reject": adminInService("directors only, checked in the service; never their own; Developer refused"),
+  // LV-23 encashment requests
+  "GET /api/encashment-requests/mine": self,
+  "POST /api/encashment-requests/mine": self,
+  "POST /api/encashment-requests/mine/:id/withdraw": self,
+  "GET /api/encashment-requests": adminInService("directors only, checked in the service; never their own; days only, no amount; Developer refused"),
+  "POST /api/encashment-requests/:id/approve": adminInService("directors only, checked in the service; never their own; Developer refused"),
+  "POST /api/encashment-requests/:id/reject": adminInService("directors only, checked in the service; never their own; Developer refused"),
   // P7-3: the person's own
   "GET /api/tax/me/ytd": self,
   "GET /api/tax/me/salary-revisions": self,
