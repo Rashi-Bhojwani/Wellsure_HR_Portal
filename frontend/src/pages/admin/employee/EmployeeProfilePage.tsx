@@ -25,6 +25,7 @@ import { personalSections, statutoryItems } from "./profileItems";
 import { useContactReveal } from "./parity/ContactReveal";
 import { PayTab } from "./parity/PayTab";
 import { PositionTab } from "./parity/PositionTab";
+import { PendingIdentityNotice } from "./IdentityChanges";
 // A-9 — end
 
 const REFERENCE_STALE = 30_000;
@@ -114,19 +115,22 @@ function StatutoryTab({ employeeId, profile, canEdit }: { employeeId: string; pr
   });
   const saveMutation = useMutation({
     mutationFn: (values: { pan?: string; aadhaar?: string; uan?: string; esiNumber?: string }) => employeeApi.updateStatutory(employeeId, values),
-    onSuccess: () => {
+    onSuccess: (r) => {
       void queryClient.invalidateQueries({ queryKey: ["employees", "profile", employeeId] });
+      void queryClient.invalidateQueries({ queryKey: ["employees", "identity-changes"] });
       setEditOpen(false);
-      toast.success("Statutory details updated.");
+      toast.success(r.pending ? "Saved. It waits for a director's confirmation before it takes effect." : "Statutory details updated.");
     },
     onError: (err) => toast.error(errorMessage(err, "Could not update.")),
   });
 
   if (profile.statutory === undefined) return <EmptyState kind="forbidden" compact title="You don't have permission to view statutory details." description={null} />;
-  if (profile.statutory === null) return <EmptyState compact title="No statutory details on file." description={null} />;
+  const pending = <PendingIdentityNotice employeeId={employeeId} kind="STATUTORY" />;
+  if (profile.statutory === null) return (<>{pending}<EmptyState compact title="No statutory details on file." description={null} /></>);
 
   return (
     <SectionStack>
+      {pending}
       <ProfileSection
         title="Statutory details"
         onEdit={
@@ -170,19 +174,22 @@ function BankTab({ employeeId, profile, canEdit }: { employeeId: string; profile
   const saveMutation = useMutation({
     mutationFn: (values: { accountHolderName: string; accountNumber: string; accountNumberConfirm: string; ifsc: string; bankName: string; branchName: string }) =>
       employeeApi.updateBank(employeeId, values),
-    onSuccess: () => {
+    onSuccess: (r) => {
       void queryClient.invalidateQueries({ queryKey: ["employees", "profile", employeeId] });
+      void queryClient.invalidateQueries({ queryKey: ["employees", "identity-changes"] });
       setEditOpen(false);
-      toast.success("Bank details updated — the previous account is closed as of today, this one is now active.");
+      toast.success(r.pending ? "Saved. It waits for a director's confirmation; the current account stays in force until then." : "Bank details updated — the previous account is closed as of today, this one is now active.");
     },
     onError: (err) => toast.error(errorMessage(err, "Could not update.")),
   });
 
   if (profile.bank === undefined) return <EmptyState kind="forbidden" compact title="You don't have permission to view bank details." description={null} />;
-  if (profile.bank === null) return <EmptyState compact title="No bank account on file." description={null} />;
+  const pending = <PendingIdentityNotice employeeId={employeeId} kind="BANK" />;
+  if (profile.bank === null) return (<>{pending}<EmptyState compact title="No bank account on file." description={null} /></>);
 
   return (
     <SectionStack>
+      {pending}
       <ProfileSection
         title="Bank account"
         extra={
@@ -276,12 +283,16 @@ function JobEditDrawer({ employeeId, open, onClose }: { employeeId: string; open
 
 const TONE: Record<HistoryStatus, TimelineItem["tone"]> = { current: "accent", scheduled: "warning", past: "neutral" };
 
+const STATUTORY_FIELD_LABEL: Record<employeeApi.StatutoryHistoryEntry["changedFields"][number], string> = { PAN: "PAN", AADHAAR: "Aadhaar", UAN: "UAN", ESI: "ESI number" };
+
 function HistoryTab({ employeeId, canViewBank }: { employeeId: string; canViewBank: boolean }) {
   const queryClient = useQueryClient();
   const { hasPermission } = useAuth();
   const job = useQuery({ queryKey: ["employees", "history", employeeId, "job"], queryFn: () => employeeApi.getJobHistory(employeeId) });
   const name = useQuery({ queryKey: ["employees", "history", employeeId, "name"], queryFn: () => employeeApi.getNameHistory(employeeId) });
   const bank = useQuery({ queryKey: ["employees", "history", employeeId, "bank"], queryFn: () => employeeApi.getBankHistory(employeeId), enabled: canViewBank });
+  const canViewStatutory = hasPermission("employee.statutory.view");
+  const statutory = useQuery({ queryKey: ["employees", "history", employeeId, "statutory"], queryFn: () => employeeApi.getStatutoryHistory(employeeId), enabled: canViewStatutory });
   // EF3: a scheduled change can be cancelled until its day (the previous row reopens).
   const cancel = useMutation({
     mutationFn: ({ kind, rowId }: { kind: "job" | "name" | "bank"; rowId: string }) => employeeApi.cancelScheduledChange(employeeId, kind, rowId),
@@ -344,6 +355,31 @@ function HistoryTab({ employeeId, canViewBank }: { employeeId: string; canViewBa
           />
         </QueryState>
       </ProfileSection>
+      {canViewStatutory && (
+        <ProfileSection title="Statutory numbers history">
+          <QueryState isLoading={statutory.isLoading} error={statutory.error} onRetry={() => void statutory.refetch()} skeleton={<SkeletonCard lines={2} />}>
+            <Timeline
+              empty={empty}
+              items={(statutory.data ?? []).map((r) => ({
+                key: r.id,
+                tone: r.kind === "CHANGED" ? "accent" : "neutral",
+                content: (
+                  <>
+                    <strong>{r.kind === "RECORDED_BEFORE" ? "On file when the history began" : r.kind === "CREATED" ? "First recorded" : `Changed: ${r.changedFields.map((f) => STATUTORY_FIELD_LABEL[f]).join(", ")}`}</strong>
+                  </>
+                ),
+                time: <span>{new Date(r.changedAt).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}{r.changedBy ? ` · ${r.changedBy}` : ""}</span>,
+                detail: caption([
+                  r.panLast4 ? `PAN ending ${r.panLast4}` : null,
+                  r.aadhaarLast4 ? `Aadhaar ending ${r.aadhaarLast4}` : null,
+                  r.uanLast4 ? `UAN ending ${r.uanLast4}` : null,
+                  r.esiLast4 ? `ESI ending ${r.esiLast4}` : null,
+                ]),
+              }))}
+            />
+          </QueryState>
+        </ProfileSection>
+      )}
       {canViewBank && (
         <ProfileSection title="Bank history">
           <QueryState isLoading={bank.isLoading} error={bank.error} onRetry={() => void bank.refetch()} skeleton={<SkeletonCard lines={2} />}>

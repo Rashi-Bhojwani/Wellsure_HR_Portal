@@ -2,11 +2,13 @@ import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
+  BankOutlined,
   CalendarOutlined,
   ClockCircleOutlined,
   CustomerServiceOutlined,
   SafetyCertificateOutlined,
   UserSwitchOutlined,
+  WalletOutlined,
 } from '@ant-design/icons';
 import { TASK_TYPE_LABELS, type TaskItem, type TaskType } from '@shared/types/inbox';
 import * as inboxApi from '../../api/inbox';
@@ -51,6 +53,18 @@ const TYPE_META: Record<TaskType, { icon: ReactNode; tone: ChipTone; bg: string;
     tone: 'danger',
     bg: v.chipDangerBg,
     fg: v.chipDangerText,
+  },
+  CLAIM_DECISION: {
+    icon: <WalletOutlined />,
+    tone: 'info',
+    bg: v.chipInfoBg,
+    fg: v.chipInfoText,
+  },
+  IDENTITY_CONFIRMATION: {
+    icon: <BankOutlined />,
+    tone: 'purple',
+    bg: v.chipPurpleBg,
+    fg: v.chipPurpleText,
   },
 };
 

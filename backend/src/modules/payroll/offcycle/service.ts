@@ -106,7 +106,17 @@ export async function prepare(raw: unknown, actor: Actor) {
   if (await prisma.offCycleFinalisation.findUnique({ where: { kind_sourceRef: { kind: v.kind, sourceRef: v.sourceRef } } })) throw new HttpError(409, "This has already been paid by an off-cycle run.", "ALREADY_PAID");
   const net = netOf(lines);
   if (net.lte(ZERO)) throw new HttpError(409, "Nothing is payable: the total is zero or less (a negative total is recovered outside payroll).", "NOTHING_PAYABLE");
-  const run = await prisma.offCycleRun.create({ data: { kind: v.kind, sourceRef: v.sourceRef, employeeId, paymentDate: day(v.paymentDate), lines: lines as unknown as object, net: net.toFixed(2), createdByUserId: actor.userId } });
+  // One open run per source (2026-11-11 browser check: a double click on Prepare made two). The lock serialises two requests for the same source; a run is open until it
+  // is finalised or its approval is rejected or voided. Paying once is still the database's (the finalisation keys); this keeps stray drafts from appearing.
+  const run = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`offcycle:${v.kind}:${v.sourceRef}`}))`;
+    const open = await tx.offCycleRun.findMany({ where: { kind: v.kind, sourceRef: v.sourceRef, finalisation: null }, select: { id: true } });
+    for (const o of open) {
+      const last = await tx.payrollApproval.findFirst({ where: { subject: "OFF_CYCLE_RUN", subjectId: o.id }, orderBy: { submittedAt: "desc" }, select: { status: true } });
+      if (!last || last.status === "PENDING" || last.status === "APPROVED") throw new HttpError(409, "An off-cycle run for this is already prepared. Open it below.", "ALREADY_PREPARED");
+    }
+    return tx.offCycleRun.create({ data: { kind: v.kind, sourceRef: v.sourceRef, employeeId, paymentDate: day(v.paymentDate), lines: lines as unknown as object, net: net.toFixed(2), createdByUserId: actor.userId } });
+  });
   await writeAuditLog({ actorUserId: actor.userId, ipAddress: actor.ip ?? null, action: "payroll.off_cycle.prepared", entityType: "OffCycleRun", entityId: run.id, after: { kind: v.kind, lines: lines.length } }); // no figure in the audit row
   return view(run.id, actor.userId);
 }

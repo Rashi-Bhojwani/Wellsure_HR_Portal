@@ -337,3 +337,89 @@ the next push; run 285 (`df8306f`): all seven green; run 286 (`534aa71`): succes
 docker-build, sensitive-ui admin, sensitive-ui employee, latency (incl. popovers), attendance-replay, agent-windows — **all green**.
 Items 7: not started (A-1, A-2, A-4–A-8, Stages 6, 8, 9). `PARITY_COVERAGE.md` exists on no branch; `docs/samples/` exists on `origin/main` and
 `origin/peeps/foundation`, not on this branch. STOPPED here as instructed.
+
+## Demo pay history and the walk with real content (written 2026-11-11, session continuing Session A)
+
+**Samples (step 1):** skipped on the owner's instruction — the files on `origin/main` look like real exports; nothing was brought to this branch, and the scratch
+copies made while checking were deleted. Stage 8 stays blocked until the owner replaces them with synthetic files on `main`.
+
+**Demo pay history (`64d3246`):** see `DEMO_PAY_ACTIVITY.md`. Demo tests: 7 passed (incl. the demo's own run, unchanged counts).
+
+**Walk with content:** a scratch local database (`wellsure_walk`, created new; nothing reset) seeded with the dev seed, the demo company and its pay history.
+15 screens (the 12 from the first walk plus Default behaviours, Leavers and Ready for First Run) × 5 people (director DEMO001, HR Admin DEMO004, manager DEMO003 — given
+the role in the scratch database only —, employee DEMO006 with a loan and a claim, Developer DEMO005) × desktop 1280 light, phone 390 dark, tablet 768 light =
+**225 visits**, each with a fresh sign-in. Filled tables seen: loans 6, off-cycle 5 (candidates and the finished run), settlements 2, challans/reconciliation 12, loan and
+claim types 3, quarterly data 41, leavers 2; the employee's YTD 8, salary revision 3, loans 6. No crash, no server error, no page-level sideways scroll, no bank, PAN,
+UAN or debit-account text on any page. HR, the manager, the employee and the Developer see "not switched on" on every directors' screen (HR's Leavers and the
+Developer's Ready for First Run are by design).
+
+**Keyboard only:** 10 primary actions at 1280 and 390, plus the phone menu: each reached by Tab, focus ring visible, Enter opens the dialog, Tab and Shift+Tab stay
+inside it, Escape closes it, focus returns to the button — **21 of 21**.
+
+**Fixed (changed tests, none weakened):**
+1. Focus left an open drawer, modal or the phone menu after its last control (reached the skip link and logo behind the overlay): `ui/focusTrap.ts` (Tab wraps
+   inside), used by SideDrawer, ConfirmModal and the phone menu; the menu returns focus to its button on close. Unit tests added (and a mutant that disables the trap
+   fails two of them).
+2. A long claim description widened the table and pushed Approve / Reject off-screen: free-text columns get a width and wrap (`ui/textStyles.ts`); action columns
+   (Reimbursements, Off-cycle runs, Loan and claim types, the employee's Withdraw) are pinned to the right edge; Quarterly data pins the employee column.
+3. A long state chip pushed a phone card sideways: chips wrap on phones (`theme/global.css`).
+4. The employee's Reimbursement table hid the state behind the description at tablet width: State moved before "What for".
+5. Quarterly TDS data opened on last year's first quarter (always empty): it opens on the last quarter that has ended (`lib/quarter.ts`, unit-tested).
+6. Every sanctioned loan read "SANCTIONED": loans now show where recovery stands — recovering, recovery stopped, fully recovered, recovered at exit, or paid with the
+   next run (`recoveryOf` in `loans/service.ts`, unit-tested; asserted on the demo loans).
+
+**Still seen, accepted:** at 768 the Reimbursements queue's state chip sits under the pinned action column and is reached by scrolling inside the table.
+
+## Step 4: end to end — a settlement recovers a loan through an off-cycle run (written 2026-11-11)
+
+`offCycleLoanE2E.test.ts` (4 tests), real API and database: a loan of 30,000 (three instalments) paid out and its first instalment recovered by the August run;
+recovery stopped by a two-director change (balance 20,000, state "Recovery stopped"); a settlement lists `LOAN_OWED −20,000` from the loan (plus a 30,000 notice line);
+a second director's double click on the confirmation decides once (200 + 409); a double click on Prepare makes one run (201 + 409 `ALREADY_PREPARED`); approval asked twice
+→ 409; a double click on Approve and on Finalise each act once; a later retry → 409; exactly one finalisation and one exit recovery of 20,000; the loan reads balance 0,
+"Recovered at exit", payroll-recovered 10,000; the instalment ledger is one CONSUMED and two CANCELLED, nothing pending; preparing the same settlement again →
+`ALREADY_PAID`; the bank file is written once on a double click (201 + 409) for 10,000, downloaded, and marked sent once on a double click (200 + 409); the September run
+recalculated afterwards gives the other employee **exactly** the same gross, deductions, net, status and every line, and the leaver no loan line.
+
+**Found and fixed:** (1) two simultaneous "Mark sent to the bank" clicks gave a 500 (the database kept one mark, the second error was not caught) — now 409 for every
+kind of bank file; (2) a double click on Prepare made two off-cycle runs for the same source (only one could ever be paid, but the other stayed as a stray draft) —
+prepare now refuses while a run for that source is open, serialised by an advisory lock. The P7-6b test that prepared a twin through the API now proves the guard and
+writes its twin straight into the database to keep proving that the finalisation keys refuse a second payment. **Mutants (3, all caught):** open-run guard dropped; lock
+dropped (race); sent-mark race not caught.
+
+**Browser check** (walk database, every button double-clicked, as DEMO001 and DEMO013): held pay for DEMO009 and for DEMO012 each prepared, approved, finalised, bank
+file approved, written, downloaded and marked sent through the Off-cycle runs screen; read back: one run (after the fix), one finalisation, one release, one bank batch,
+one sent mark each; DEMO008's loan shows "Recovered at exit" ₹0 and its settlement PAID.
+
+## Step 5: the new readers and the off-cycle road at 500 people (written 2026-11-11)
+
+A fresh scratch database (`wellsure_scale`: migrations, dev seed, demo company with its pay history), then `npm run measure:payroll -- 500` and the new
+`npm run measure:new-readers` (adds, all made up: 150 loans sanctioned by two directors, 200 claims with 100 approved, 30 leavers with confirmed settlements; then
+the 500-person run recalculated and finalised through the API so the quarterly reader reads a real quarter).
+
+**Budgets.** The project's recorded figures at 500 (`PHASE_6_REVIEW.md` §6) are 0.8 s for one full screen read and 0.7 s for the approval re-check, and its only stated
+rule is "inside 2× the committed baseline" (Phase 2 Gate 2). So a reader's budget is **1.6 s** and each off-cycle step's **1.4 s**.
+
+| Measured (development machine) | Time | Budget |
+|---|---|---|
+| Payroll: calculation job, 500 people (existing measure, today) | 3.6 s | (recorded 6.5 s) |
+| Payroll: approval re-check / one full screen read | 0.4 s / 0.4 s | (recorded 0.7 / 0.8 s) |
+| Full calculation in memory with 150 loan instalments due (D-37 shortfall rule per person) | 0.58 s | 1.6 s |
+| Loans: directors' list (155 loans) | 0.30 s | 1.6 s |
+| Reimbursements queue (206 claims) / Settlements list / Off-cycle candidates / Off-cycle runs | 0.02 / 0.04 / 0.05 / 0.02 s | 1.6 s |
+| Quarterly TDS data (a finalised quarter, 498 people) / challan register | 0.04 / 0.01 s | 1.6 s |
+| Leavers (HR) / Default behaviours / Ready for First Run (with behaviour rows) | 0.01 / 0.01 / 0.36 s | 1.6 s |
+| Access resolution for the Developer (with the swipes switch), 100 calls | 0.33 s | 1.6 s |
+| Off-cycle road for one settlement: prepare, ask, approve, finalise, ask bank, approve bank, write file | 0.02–0.05 s each | 1.4 s each |
+
+**Nothing over budget; nothing changed for speed.** The loans list is the slowest reader (it reads each loan's state, a few queries per loan); at about 0.002 s a loan
+it would reach its budget near 800 loans — noted, not changed. **Found:** `measure-new-readers` (like the demo seed before it) did not exit after printing, because
+notices leave queue connections open; it now exits. The existing `measure:payroll` hung at its final payslip-PDF step in this container (no Chromium process started);
+its timings above were printed before that step. That step was not investigated (outside this work).
+
+**Final gate of the second pass (2026-11-12).** Full backend suite run alone on `31472a0` (all of this pass's code, with the M session's commits up to LC-14):
+**221 files, 2,061 tests, all passed.** CI per job: my own runs 292, 293, 299 and 300 were cancelled by later pushes (two sessions pushed to this branch at once);
+run 295 (`e31819d`, containing this pass's code to `c6af1ce`) succeeded; **run 307 on the branch head `b432395` (all of this pass's code and the M session's):
+install-lint-typecheck-test (incl. Demo company tests), docker-build, sensitive-ui admin, sensitive-ui employee, latency (incl. popovers), attendance-replay,
+agent-windows — all green.** Earlier run 288 (`7fbe89c`, docs only, same code as green run 287) failed only because its Test step hit the job's **18-minute limit**
+(no test failed). **Risk:** in run 307 the Test step took 17 minutes against that 18-minute limit; as the suite grows, CI will start timing out. Not changed here
+(a CI setting for the owners or the next session: raise the step limit or split the suite).

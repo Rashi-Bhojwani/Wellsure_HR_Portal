@@ -178,8 +178,58 @@ const directorNotices: TaskSource = {
   },
 };
 
+// LC-14 (M session): reimbursement claims waiting for a decision. Directors only (the only people who decide claims), never their own claim, as
+// `payroll/reimbursements/service.ts decide` enforces. No amount in the inbox: the claims screen shows it.
+const claimDecisions: TaskSource = {
+  type: "CLAIM_DECISION",
+  async list(viewer, limit) {
+    if (!(await isDirector(viewer.userId))) return [];
+    const rows = await prisma.reimbursementClaim.findMany({
+      where: { decision: null, employeeId: { not: viewer.employeeId } },
+      include: { employee: currentName() },
+      orderBy: { createdAt: "asc" },
+      take: limit,
+    });
+    return rows.map((r) => ({
+      type: "CLAIM_DECISION" as const,
+      id: r.id,
+      title: "Reimbursement claim to decide",
+      detail: `${r.typeKey} · spent on ${dateOnly(r.spentOn)}`,
+      employeeName: nameOf(r.employee),
+      waitingSince: r.createdAt.toISOString(),
+      link: "/admin/payroll/reimbursements",
+      adminLink: "/admin/payroll/reimbursements",
+    }));
+  },
+};
+
+// M task 1: bank and statutory changes HR entered, waiting for a director — one I may decide: not entered by me, not on my own record. Masked:
+// the kind only, never a number.
+const identityConfirmations: TaskSource = {
+  type: "IDENTITY_CONFIRMATION",
+  async list(viewer, limit) {
+    if (!(await isDirector(viewer.userId))) return [];
+    const rows = await prisma.identityChangeRequest.findMany({
+      where: { status: "PENDING", enteredByUserId: { not: viewer.userId }, employeeId: { not: viewer.employeeId } },
+      include: { employee: currentName() },
+      orderBy: { createdAt: "asc" },
+      take: limit,
+    });
+    return rows.map((r) => ({
+      type: "IDENTITY_CONFIRMATION" as const,
+      id: r.id,
+      title: r.kind === "BANK" ? "Bank account change to confirm" : "Statutory number change to confirm",
+      detail: null,
+      employeeName: nameOf(r.employee),
+      waitingSince: r.createdAt.toISOString(),
+      link: "/admin/employee/change-requests",
+      adminLink: "/admin/employee/change-requests",
+    }));
+  },
+};
+
 // PEEPS-BEGIN exits
-export const TASK_SOURCES: TaskSource[] = [leaveApprovals, profileChangeApprovals, assignedTickets, regularizationApprovals, directorNotices, exitResignationTasks, exitClearanceTasks];
+export const TASK_SOURCES: TaskSource[] = [leaveApprovals, profileChangeApprovals, assignedTickets, regularizationApprovals, directorNotices, claimDecisions, identityConfirmations, exitResignationTasks, exitClearanceTasks];
 // PEEPS-END exits
 
 // Oldest-waiting first: the inbox is a queue, not a feed.

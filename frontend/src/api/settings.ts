@@ -136,3 +136,22 @@ export async function getExcessHoursSettings(): Promise<ExcessHoursSettings> {
 export async function updateExcessHoursSettings(input: Partial<ExcessHoursSettings>): Promise<ExcessHoursSettings> {
   return (await apiClient.put<ExcessHoursSettings>("/api/settings/excess-hours", input)).data;
 }
+
+// NT-08 (M session): the wording of the sign-in emails (directors).
+export type EmailTemplateKey = "INVITATION" | "PASSWORD_RESET" | "WELCOME";
+export interface EmailText {
+  subject: string;
+  heading: string;
+  body: string;
+}
+export interface EmailTemplate {
+  key: EmailTemplateKey;
+  label: string;
+  placeholders: string[];
+  text: EmailText;
+  isDefault: boolean;
+  defaultText: EmailText;
+}
+export const listEmailTemplates = async () => (await apiClient.get<{ templates: EmailTemplate[] }>("/api/settings/email-templates")).data.templates;
+export const updateEmailTemplate = async (key: EmailTemplateKey, text: EmailText | null) =>
+  (await apiClient.put<{ templates: EmailTemplate[] }>("/api/settings/email-templates", { key, text })).data.templates;

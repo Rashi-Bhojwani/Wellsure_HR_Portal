@@ -36,5 +36,8 @@ export const engageAutoPostsQueue = new Queue("engage-auto-posts", { connection:
 // the employee was shown, not up to a day later.
 export const helpdeskAutoCloseQueue = new Queue("helpdesk-auto-close", { connection: createBullConnection() });
 
+// RP-13 (M session): daily, sends the "email me this report" subscriptions that are due — see modules/reports/subscriptions.ts.
+export const reportSubscriptionsQueue = new Queue("report-subscriptions", { connection: createBullConnection() });
+
 // letters-generate lives in ./lettersQueue.ts (created lazily) — the API
 // enqueues to it, and importing this module would build every queue above.

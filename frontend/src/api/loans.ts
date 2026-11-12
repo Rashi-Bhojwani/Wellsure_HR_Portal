@@ -3,6 +3,8 @@ import { apiClient } from "./client";
 // P7-4 (docs/plans/P7_4_LOANS.md): loans and advances.
 const base = "/api/loans";
 export interface LoanView {
+  /** Where recovery stands (NOT_SANCTIONED, NOT_PAID_OUT, RECOVERING, STOPPED, FULLY_RECOVERED, RECOVERED_AT_EXIT). */
+  recovery?: "NOT_SANCTIONED" | "NOT_PAID_OUT" | "RECOVERING" | "STOPPED" | "FULLY_RECOVERED" | "RECOVERED_AT_EXIT";
   id: string;
   employeeId: string;
   name?: string;

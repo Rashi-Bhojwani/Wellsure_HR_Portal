@@ -41,7 +41,7 @@ data (the demo company), and so that a real company starts from an empty system 
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Super Admin | SC | S | SC | S | S | SCK | CK | SC | SC | SCK | SCK | SC | S | C | S |
 | HR Admin | — | — | — | S | — | — | — | SC | SC | — | — | SC | S | C | S |
-| HR Executive | — | — | — | S | — | — | — | — | — | — | — | SC | — | — | S |
+| HR Executive | — | — | — | S | — | — | — | SC | SC | — | — | SC | — | — | S |
 | Payroll Admin | — | — | — | — | — | SC | C | S | S | SC | SC | — | — | — | — |
 | Payroll Approver | — | — | — | — | — | SK | K | — | — | K | SK | — | — | — | — |
 | Developer / operator | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |

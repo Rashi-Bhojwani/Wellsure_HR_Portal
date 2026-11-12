@@ -1,6 +1,7 @@
 import { prisma } from "../../lib/prisma";
 import { emitNotificationNew } from "../../realtime/emit";
 import { createNotification } from "./service";
+import { wantsNotification } from "./preferences";
 
 // Persist-then-deliver, for any module that notifies one employee: the
 // Notification row is written first (the durable record the bell reads),
@@ -13,6 +14,8 @@ export async function notifyEmployee(
 ): Promise<void> {
   const user = await prisma.user.findUnique({ where: { employeeId: targetEmployeeId } });
   if (!user) return;
+  // NT-09: a category the person switched off is not stored or sent (never an approval, a decision or a security notice: those cannot be switched off).
+  if (!(await wantsNotification(user.id, input.type))) return;
   const notification = await createNotification({ userId: user.id, ...input });
   emitNotificationNew(targetEmployeeId, {
     id: notification.id,

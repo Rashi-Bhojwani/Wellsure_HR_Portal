@@ -16,6 +16,7 @@ import { ApprovalBanner, CardGrid, DataTable, EmptyState, FilterBar, InitialsAva
 import { fs, fw, radius, space, v } from "../../../theme/tokens";
 import { BreakdownChart } from "./ReportCharts";
 import { CHART_HEIGHT, chartKindOf } from "./reportChartKinds";
+import { EmailMeReport } from "./EmailMeReport";
 
 const { Text } = Typography;
 
@@ -250,9 +251,12 @@ export function ReportPage({ reportKey }: { reportKey: ReportKey }) {
           )
         }
         actions={
-          <Button type="primary" size="large" icon={<DownloadOutlined />} onClick={() => void doExport()} loading={exporting} disabled={!data} block={phone}>
-            Export to Excel
-          </Button>
+          <div style={{ display: "flex", gap: space[2], flexWrap: "wrap", width: phone ? "100%" : undefined }}>
+            <EmailMeReport reportKey={reportKey} query={query} />
+            <Button type="primary" size="large" icon={<DownloadOutlined />} onClick={() => void doExport()} loading={exporting} disabled={!data} block={phone}>
+              Export to Excel
+            </Button>
+          </div>
         }
       />
       <Stack>

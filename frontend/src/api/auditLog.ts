@@ -32,6 +32,11 @@ export interface AuditLogPage {
   rows: AuditLogRow[];
 }
 
+/** AU-04 (M session): the filtered general log as Excel (directors; the Developer role is refused). The export is itself audited. */
+export async function exportAuditLogs(query: Omit<AuditLogQuery, "page" | "pageSize">): Promise<Blob> {
+  return (await apiClient.get("/api/audit-logs/export", { params: query, responseType: "blob" })).data as Blob;
+}
+
 /** `payroll` reads the Payroll audit trail (payroll's own rows, behind the salary permission) instead of the general log. */
 export async function listAuditLogs(query: AuditLogQuery, scope: "all" | "payroll" = "all"): Promise<AuditLogPage> {
   const { data } = await apiClient.get<AuditLogPage>(scope === "payroll" ? "/api/payroll/audit" : "/api/audit-logs", { params: query });

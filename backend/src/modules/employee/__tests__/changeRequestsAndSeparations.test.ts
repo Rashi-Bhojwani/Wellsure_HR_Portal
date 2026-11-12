@@ -22,10 +22,15 @@ describe("Profile change requests", () => {
   let hrToken: string;
   let employeeId: string;
   let employeeToken: string;
+  let directorToken: string;
   const employeeIds: string[] = [];
 
   beforeAll(async () => {
     org = await createEmployeeTestOrgMasters();
+    // M task 1: a director (Super Admin) confirms what HR approved before a bank change takes effect.
+    const director = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
+    employeeIds.push(director.employeeId);
+    directorToken = await loginAs(director.employeeCode);
     // Approving a bank change request also needs employee.bank.edit (P6-6: it writes bank data, so it needs what editing it directly needs).
     await grantPermissions(hrRoleCode, ["profile.changerequest.approve", "employee.view", "employee.bank.edit"]);
     await grantPermissions(employeeRoleCode, []);
@@ -79,6 +84,15 @@ describe("Profile change requests", () => {
       .set(...authHeader(hrToken))
       .send({ remarks: "Verified with employee" });
     expect(approve.status).toBe(204);
+
+    // M task 1 (changed test, see docs/plans/M_STAGE_REPORTS.md): HR's approval holds the change for a director; nothing is written yet.
+    const notYet = await prisma.employeeBankAccount.findFirst({ where: { employeeId, effectiveTo: null } });
+    expect(notYet?.accountNumberLast4).not.toBe("2233");
+    const held = await prisma.identityChangeRequest.findFirst({ where: { employeeId, sourceRequestId: submit.body.id } });
+    expect(held?.status).toBe("PENDING");
+    expect(JSON.stringify(held?.payload)).not.toContain("70011122233");
+    const confirm = await request(app).post(`/api/employees/identity-changes/${held!.id}/confirm`).set(...authHeader(directorToken)).send({});
+    expect(confirm.status).toBe(200);
 
     const openBank = await prisma.employeeBankAccount.findFirst({ where: { employeeId, effectiveTo: null } });
     expect(openBank?.accountNumberLast4).toBe("2233");

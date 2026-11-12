@@ -8,6 +8,7 @@ import type { ClaimView } from "../../../api/reimbursements";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatRupees } from "../../../lib/money";
 import { DataTable, PageHeader, SideDrawer, StatusChip, toast } from "../../../ui";
+import { WRAP_TEXT as WRAP } from "../../../ui/textStyles";
 
 // Salary > Reimbursement (P7-5): the person's own claims. A director decides; an approved claim is paid by the next payroll run.
 const STATUS: Record<ClaimView["status"], { text: string; tone: "info" | "success" | "neutral" | "danger" }> = {
@@ -53,10 +54,10 @@ export function ReimbursementPage() {
           { title: "Kind", dataIndex: "typeKey" },
           { title: "Spent on", dataIndex: "spentOn", render: (x: string) => dayjs(x).format("D MMM YYYY") },
           { title: "Amount", dataIndex: "amount", align: "right", render: (x: string, r) => <span className="ws-num">{formatRupees(r.approvedAmount ?? x, 2)}</span> },
-          { title: "What for", dataIndex: "description" },
           { title: "State", key: "s", render: (_, r) => <StatusChip tone={STATUS[r.status].tone}>{r.status === "PAID" && r.paidIn ? `Paid in ${r.paidIn}` : STATUS[r.status].text}</StatusChip> },
+          { title: "What for", dataIndex: "description", width: 280, render: (t: string) => <span style={WRAP}>{t}</span> },
           { title: "Note", dataIndex: "reason", render: (x: string | null) => x || "—" },
-          { title: "", key: "act", render: (_, r) => (r.status === "SUBMITTED" ? <Button loading={withdraw.isPending && withdraw.variables === r.id} onClick={() => withdraw.mutate(r.id)}>Withdraw</Button> : null) },
+          { title: "", key: "act", fixed: "right" as const, render: (_, r) => (r.status === "SUBMITTED" ? <Button loading={withdraw.isPending && withdraw.variables === r.id} onClick={() => withdraw.mutate(r.id)}>Withdraw</Button> : null) },
         ]}
       />
       <SideDrawer open={open} title="New claim" subtitle="A director decides; you see the decision here." onClose={() => setOpen(false)} formId="claim-form" primaryLabel="Send" primaryLoading={make.isPending}>

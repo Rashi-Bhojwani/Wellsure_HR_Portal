@@ -1,0 +1,5 @@
+
+# CI shard reports (backend-tests / backend-tests-complete)
+shard-*.json
+suite-list.json
+shards/

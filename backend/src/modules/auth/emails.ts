@@ -1,5 +1,6 @@
 import { env } from "../../config/env";
 import { mailService, type MailReceipt } from "../../integrations/mail";
+import { emailText, render } from "./emailTemplates";
 
 export function emailLayout(title: string, bodyHtml: string): string {
   return `<!doctype html>
@@ -20,43 +21,31 @@ function button(url: string, label: string): string {
 
 export async function sendInvitationEmail(to: string, fullName: string, employeeCode: string, token: string): Promise<MailReceipt> {
   const url = `${env.WEB_BASE_URL}/set-password/${token}`;
+  // NT-08: the wording is a director's setting; the greeting, the link and its 48-hour validity are always added here.
+  const t = render(await emailText("INVITATION"), { fullName, employeeCode });
   return mailService.send({
     to,
-    subject: "Welcome to Wellsure HR Portal — set your password",
-    html: emailLayout(
-      "Set your password",
-      `<p>Hi ${fullName},</p>
-       <p>Your Wellsure HR Portal account has been created. Your Employee Code is <strong>${employeeCode}</strong>.</p>
-       <p>Set your password to activate your account. This link is valid for 48 hours.</p>
-       ${button(url, "Set my password")}`,
-    ),
+    subject: t.subject,
+    html: emailLayout(t.heading, `<p>Hi ${escapeHtml(fullName)},</p>\n${t.paragraphsHtml}\n<p>This link is valid for 48 hours.</p>\n${button(url, "Set my password")}`),
   });
 }
 
 export async function sendPasswordResetEmail(to: string, fullName: string, token: string): Promise<void> {
   const url = `${env.WEB_BASE_URL}/reset-password/${token}`;
+  const t = render(await emailText("PASSWORD_RESET"), { fullName });
   await mailService.send({
     to,
-    subject: "Reset your Wellsure HR Portal password",
-    html: emailLayout(
-      "Reset your password",
-      `<p>Hi ${fullName},</p>
-       <p>We received a request to reset your password. This link is valid for 1 hour. If you didn't request this, you can ignore this email.</p>
-       ${button(url, "Reset my password")}`,
-    ),
+    subject: t.subject,
+    html: emailLayout(t.heading, `<p>Hi ${escapeHtml(fullName)},</p>\n${t.paragraphsHtml}\n<p>This link is valid for 1 hour.</p>\n${button(url, "Reset my password")}`),
   });
 }
 
 export async function sendWelcomeEmail(to: string, fullName: string): Promise<void> {
+  const t = render(await emailText("WELCOME"), { fullName });
   await mailService.send({
     to,
-    subject: "Welcome to Wellsure HR Portal",
-    html: emailLayout(
-      "You're all set",
-      `<p>Hi ${fullName},</p>
-       <p>Your password is set and your account is active. You can now sign in with your Employee Code and password.</p>
-       ${button(env.WEB_BASE_URL, "Go to Wellsure HR Portal")}`,
-    ),
+    subject: t.subject,
+    html: emailLayout(t.heading, `<p>Hi ${escapeHtml(fullName)},</p>\n${t.paragraphsHtml}\n${button(env.WEB_BASE_URL, "Go to Wellsure HR Portal")}`),
   });
 }
 

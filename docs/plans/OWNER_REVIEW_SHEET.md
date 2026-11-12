@@ -124,3 +124,12 @@ appears as an information row on Ready for First Run (never blocking), and any c
 | 72 | Most a month's deductions may take (percentage of gross): **Not set** (no limit). | Enter a percentage with its source. | Decide before the first loan. |
 | 73 | Rounding of a pro-rata leave figure: **Not set** (the leave policy has none). An exact figure (15 of 30 days = 0.5) is applied; others wait. | Choose a mode and decimals. | Decide before the first leaver whose figure is not exact. |
 | 74 | Loan and claim types are set on their own screen (Payroll → Loan and claim types); every value starts Not set. | — | Enter your types. |
+
+## Demo history, the content walk and the end-to-end check (2026-11-11)
+
+| # | What was chosen | If you answer differently | Recommendation |
+|---|---|---|---|
+| 75 | There is no "paused" loan. A loan's remaining instalments can be cancelled (two directors); its balance then stays owed and is recovered at exit. Loans now show "Recovering", "Recovery stopped", "Fully recovered" or "Recovered at exit". | Ask for a real pause (stop now, resume later with the schedule moved on). | Tell us if you need a pause. |
+| 76 | Only one off-cycle run can be open for the same settlement or held month; a second one (a double click, or the other director) is refused until the first is finalised or rejected. | Several drafts could be allowed (only one can ever be paid either way). | Keep. |
+| 77 | Quarterly TDS data opens on the last quarter that has ended. | It could open on the current quarter. | Keep. |
+| 78 | The demo company now has a made-up pay history. Its loan requests are written as if made months ago (the one step not done through the screens); everything after that goes through the screens' rules. | — | Keep (demo only). |

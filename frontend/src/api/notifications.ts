@@ -28,3 +28,13 @@ export async function markAsRead(id: string): Promise<void> {
 export async function markAllAsRead(): Promise<void> {
   await apiClient.post("/api/notifications/read-all");
 }
+
+// NT-09 (M session): the signed-in person's own notification choices.
+export interface NotificationCategoryPref {
+  key: "DOCUMENTS" | "TEAM_CHANGES" | "LETTER_ASKS";
+  label: string;
+  on: boolean;
+}
+export const notificationPreferences = async () => (await apiClient.get<{ categories: NotificationCategoryPref[] }>("/api/notifications/preferences")).data.categories;
+export const setNotificationPreference = async (category: NotificationCategoryPref["key"], on: boolean) =>
+  (await apiClient.put<{ categories: NotificationCategoryPref[] }>("/api/notifications/preferences", { category, on })).data.categories;

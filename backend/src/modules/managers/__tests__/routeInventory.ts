@@ -198,6 +198,11 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/employees/change-requests": scoped("own requests; all only with profile.changerequest.approve (non-grantable)"),
   "POST /api/employees/change-requests/:id/approve": admin,
   "POST /api/employees/change-requests/:id/reject": admin,
+  // M task 1: held bank and statutory changes (masked); confirm / reject are a director's in the service (different person, not their own record).
+  "GET /api/employees/identity-changes": scoped("bank or statutory view key (non-grantable); non-directors see only people in their data scope, masked"),
+  "POST /api/employees/identity-changes/:id/confirm": adminInService("a director other than the person who entered it, never on their own record"),
+  "POST /api/employees/identity-changes/:id/reject": adminInService("a director other than the person who entered it, never on their own record"),
+  "POST /api/employees/identity-changes/:id/withdraw": adminInService("the person who entered it (bank or statutory edit key, non-grantable)"),
   "GET /api/employees/separations": admin,
   "POST /api/employees/separations/:id/cancel": admin,
   "GET /api/employees/:id": scoped("profile: findScopedEmployee"),
@@ -209,6 +214,8 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/employees/:id/history/job": scoped("findScopedEmployee"),
   "GET /api/employees/:id/history/name": scoped("findScopedEmployee"),
   "GET /api/employees/:id/history/bank": admin,
+  "GET /api/employees/me/data-export": self, // SS-15: the caller's own data only
+  "GET /api/employees/:id/history/statutory": admin, // ER-11: employee.statutory.view (non-grantable) + data scope, masked
   "POST /api/employees/:id/history/job/:rowId/cancel": admin, // EF3 — employee.edit / manager.team.assign, neither grantable
   "POST /api/employees/:id/history/name/:rowId/cancel": admin,
   "POST /api/employees/:id/history/bank/:rowId/cancel": admin,
@@ -229,6 +236,21 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/import/batches/:id/error-report": admin,
   "POST /api/import/batches/:id/commit": admin,
   "GET /api/audit-logs": admin,
+  "GET /api/letters/asks/options": everyone("the letter templates employees may ask for (names only; a director's list)"),
+  "GET /api/letters/asks/mine": self,
+  "POST /api/letters/asks/mine": self,
+  "POST /api/letters/asks/mine/:id/withdraw": self,
+  "GET /api/letters/asks": adminInService("letters.issue.nopay (non-grantable) + the template's PREPARE right + data scope"),
+  "POST /api/letters/asks/:id/done": adminInService("letters.issue.nopay (non-grantable) + the template's PREPARE right + data scope"),
+  "POST /api/letters/asks/:id/decline": adminInService("letters.issue.nopay (non-grantable) + the template's PREPARE right + data scope"),
+  "GET /api/notifications/preferences": self, // NT-09
+  "PUT /api/notifications/preferences": self, // NT-09
+  "GET /api/settings/email-templates": admin, // NT-08: settings.manage (non-grantable)
+  "PUT /api/settings/email-templates": admin, // NT-08
+  "GET /api/reports/subscriptions/mine": everyone("RP-13: the caller's own report schedules, no one else's record; each report is run within the caller's own data scope when it is sent (a manager: their team)"),
+  "POST /api/reports/subscriptions/mine": everyone("RP-13: the caller's own report schedules, no one else's record; each report is run within the caller's own data scope when it is sent (a manager: their team)"),
+  "DELETE /api/reports/subscriptions/mine/:id": everyone("RP-13: the caller's own report schedules, no one else's record"),
+  "GET /api/audit-logs/export": admin, // AU-04: audit.view (non-grantable), Developer refused
   "GET /api/settings/security": admin,
   "PUT /api/settings/security": admin,
   "GET /api/settings/leave": admin,

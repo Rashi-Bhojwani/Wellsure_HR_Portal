@@ -7,6 +7,8 @@ import * as employeeService from "./service";
 import * as gridService from "./grid";
 import * as changeRequestService from "./changeRequests";
 import * as separationService from "./separations";
+import * as identity from "./identityChanges";
+import { exportMyData as buildMyDataExport } from "./selfExport";
 
 function actorMeta(req: Request) {
   return { actorUserId: req.user!.userId, ipAddress: req.ip ?? null, userAgent: req.headers["user-agent"] ?? null };
@@ -26,7 +28,26 @@ export async function checkDeviceCode(req: Request, res: Response): Promise<void
 }
 
 export async function createEmployee(req: Request, res: Response): Promise<void> {
-  const result = await employeeService.createEmployee(req.body, actorMeta(req));
+  // M task 1: HR's bank and statutory details for a new employee wait for a director (when the setting says so); the rest of the record is created now.
+  const body = req.body as { statutory?: Record<string, unknown>; bank?: Record<string, unknown> };
+  const hasIdentity = !!body.bank || (!!body.statutory && Object.values(body.statutory).some((v) => v !== undefined && v !== null && v !== ""));
+  const reason = hasIdentity ? await identity.holdReasonFor(req.user!.userId, null) : null;
+  const held: Array<{ row: { id: string; employeeId: string; kind: string; source: string; enteredByUserId: string } }> = [];
+  const result = await employeeService.createEmployee(req.body, actorMeta(req), {
+    ...(reason && {
+      holdIdentity: async (tx, employeeId, bankFrom) => {
+        const meta = actorMeta(req);
+        if (body.statutory && Object.values(body.statutory).some((v) => v !== undefined && v !== null && v !== "")) {
+          held.push({ row: await identity.holdInTx(tx, { employeeId, kind: "STATUTORY", payload: identity.packStatutory(body.statutory), effectiveFrom: null, source: "ADD_EMPLOYEE", enteredByUserId: meta.actorUserId }) });
+        }
+        if (body.bank) {
+          held.push({ row: await identity.holdInTx(tx, { employeeId, kind: "BANK", payload: identity.packBank(body.bank as unknown as Parameters<typeof identity.packBank>[0]), effectiveFrom: bankFrom, source: "ADD_EMPLOYEE", enteredByUserId: meta.actorUserId }) });
+        }
+      },
+    }),
+  });
+  for (const h of held) await identity.afterHold(h.row, reason!, actorMeta(req));
+  if (held.length) (result as Record<string, unknown>).identityPending = held.map((h) => ({ id: h.row.id, kind: h.row.kind }));
   res.status(201).json(result);
 }
 
@@ -107,17 +128,60 @@ export const cancelScheduledBankChange = cancelOf("bank");
 
 // ── Effective-dated + direct updates ────────────────────────────────────
 
+export async function exportMyData(req: Request, res: Response): Promise<void> {
+  const data = await buildMyDataExport(req.user!.employeeId, actorMeta(req));
+  res.setHeader("Content-Disposition", `attachment; filename="my-data-${data.employee.employeeCode}-${data.generatedAt.slice(0, 10)}.json"`);
+  res.setHeader("Cache-Control", "no-store");
+  res.status(200).json(data);
+}
+
+export async function getStatutoryHistory(req: Request, res: Response): Promise<void> {
+  res.status(200).json({ history: await employeeService.getStatutoryHistory(req.params.id as string, req.user!.employeeId, scope(req), req.user!.permissions) });
+}
+
 export async function updateJob(req: Request, res: Response): Promise<void> {
   res.status(200).json(await employeeService.updateJob(req.params.id as string, req.body, actorMeta(req)));
 }
+// M task 1: an entry that must wait for a director is held (202, masked) instead of written; otherwise it is written at once, as before.
 export async function updateBank(req: Request, res: Response): Promise<void> {
-  res.status(200).json(await employeeService.updateBank(req.params.id as string, req.body, actorMeta(req)));
+  const id = req.params.id as string;
+  const reason = await identity.holdReasonFor(req.user!.userId, id);
+  if (reason) {
+    await employeeService.findScopedEmployee(id, req.user!.employeeId, scope(req));
+    const { effectiveFrom } = req.body as { effectiveFrom?: string };
+    res.status(202).json(await identity.hold({ employeeId: id, kind: "BANK", payload: identity.packBank(req.body), effectiveFrom: effectiveFrom ? new Date(effectiveFrom) : null, source: reason === "HR_ENTRY" ? "HR_EDIT" : "DIRECTOR_EDIT" }, reason, actorMeta(req)));
+    return;
+  }
+  res.status(200).json(await employeeService.updateBank(id, req.body, actorMeta(req)));
 }
 export async function updateName(req: Request, res: Response): Promise<void> {
   res.status(200).json(await employeeService.updateName(req.params.id as string, req.body, actorMeta(req)));
 }
 export async function updateStatutory(req: Request, res: Response): Promise<void> {
-  res.status(200).json(await employeeService.updateStatutory(req.params.id as string, req.body, actorMeta(req)));
+  const id = req.params.id as string;
+  const reason = await identity.holdReasonFor(req.user!.userId, id);
+  if (reason) {
+    await employeeService.findScopedEmployee(id, req.user!.employeeId, scope(req));
+    res.status(202).json(await identity.hold({ employeeId: id, kind: "STATUTORY", payload: identity.packStatutory(req.body), effectiveFrom: null, source: reason === "HR_ENTRY" ? "HR_EDIT" : "DIRECTOR_EDIT" }, reason, actorMeta(req)));
+    return;
+  }
+  res.status(200).json(await employeeService.updateStatutory(id, req.body, actorMeta(req)));
+}
+
+// ── Held bank and statutory changes (M task 1) ──────────────────────────
+
+export async function listIdentityChanges(req: Request, res: Response): Promise<void> {
+  const q = req.query as { status?: "PENDING" | "CONFIRMED" | "REJECTED" | "WITHDRAWN"; employeeId?: string };
+  res.status(200).json({ changes: await identity.list({ userId: req.user!.userId, employeeId: req.user!.employeeId, dataScope: scope(req), permissions: req.user!.permissions }, q) });
+}
+export async function confirmIdentityChange(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await identity.confirm(req.params.id as string, actorMeta(req)));
+}
+export async function rejectIdentityChange(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await identity.reject(req.params.id as string, (req.body as { reason: string }).reason, actorMeta(req)));
+}
+export async function withdrawIdentityChange(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await identity.withdraw(req.params.id as string, actorMeta(req)));
 }
 export async function updatePersonal(req: Request, res: Response): Promise<void> {
   await employeeService.updatePersonal(req.params.id as string, req.body, actorMeta(req));

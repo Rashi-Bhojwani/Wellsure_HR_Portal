@@ -64,6 +64,8 @@ employeeRouter.post("/saved-views", validate({ body: savedViewCreateSchema }), c
 employeeRouter.delete("/saved-views/:id", validate({ params: idParamsSchema }), controller.deleteSavedView);
 
 employeeRouter.get("/me", controller.getMyProfile);
+// SS-15 (M session): download my own data (DPDP). Self only: the record is the signed-in person's, never a parameter.
+employeeRouter.get("/me/data-export", controller.exportMyData);
 employeeRouter.patch("/me", validate({ body: selfServiceUpdateSchema }), controller.updateSelfService);
 // Photos — multipart "file"; re-encoded server-side (modules/people/photos.ts).
 // Multer's cap is the hard ceiling; the admin-set limit is checked per request.
@@ -85,6 +87,24 @@ employeeRouter.post(
   controller.rejectChangeRequest,
 );
 
+// M task 1: bank and statutory changes waiting for a director. Listing needs a bank or statutory view key (directors hold every key) and is scoped in the
+// service; confirming and rejecting are a director's (checked in the service, with the different-person rule); withdrawing is the person who entered it.
+const identityIdParams = z.object({ id: z.string().min(1).max(60) });
+employeeRouter.get(
+  "/identity-changes",
+  requireAnyPermission("employee.bank.view", "employee.statutory.view"),
+  validate({ query: z.object({ status: z.enum(["PENDING", "CONFIRMED", "REJECTED", "WITHDRAWN"]).optional(), employeeId: z.string().min(1).max(60).optional() }).strict() }),
+  controller.listIdentityChanges,
+);
+employeeRouter.post("/identity-changes/:id/confirm", requireAnyPermission("employee.bank.edit", "employee.statutory.edit"), validate({ params: identityIdParams, body: z.object({}).strict() }), controller.confirmIdentityChange);
+employeeRouter.post(
+  "/identity-changes/:id/reject",
+  requireAnyPermission("employee.bank.edit", "employee.statutory.edit"),
+  validate({ params: identityIdParams, body: z.object({ reason: z.string().trim().min(3).max(300) }).strict() }),
+  controller.rejectIdentityChange,
+);
+employeeRouter.post("/identity-changes/:id/withdraw", requireAnyPermission("employee.bank.edit", "employee.statutory.edit"), validate({ params: identityIdParams, body: z.object({}).strict() }), controller.withdrawIdentityChange);
+
 employeeRouter.get("/separations", canViewSeparations, controller.listSeparations);
 employeeRouter.post("/separations/:id/cancel", canSeparate, validate({ params: idParamsSchema }), controller.cancelSeparation);
 
@@ -103,6 +123,8 @@ employeeRouter.get("/:id/bank/reveal", canViewBank, validate({ params: idParamsS
 employeeRouter.get("/:id/history/job", canView, validate({ params: idParamsSchema }), controller.getJobHistory);
 employeeRouter.get("/:id/history/name", canView, validate({ params: idParamsSchema }), controller.getNameHistory);
 employeeRouter.get("/:id/history/bank", canViewBank, validate({ params: idParamsSchema }), controller.getBankHistory);
+// ER-11 (M session): masked statutory history, scoped in the service.
+employeeRouter.get("/:id/history/statutory", canViewStatutory, validate({ params: idParamsSchema }), controller.getStatutoryHistory);
 // EF3: cancel a scheduled change — same permission as making it (a team
 // move can also be made in Manager Management, hence manager.team.assign).
 employeeRouter.post("/:id/history/job/:rowId/cancel", requireAnyPermission("employee.edit", "manager.team.assign"), validate({ params: historyRowParamsSchema }), controller.cancelScheduledJobChange);

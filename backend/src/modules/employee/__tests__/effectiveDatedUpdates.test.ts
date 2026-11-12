@@ -23,6 +23,7 @@ describe("Effective-dated updates + partial unique indexes", () => {
   const roleCode = "HR_ADMIN";
   let org: TestOrgMasters;
   let hrToken: string;
+  let directorToken: string;
   const employeeIds: string[] = [];
 
   beforeAll(async () => {
@@ -31,6 +32,10 @@ describe("Effective-dated updates + partial unique indexes", () => {
     const hr = await createFullTestEmployee(org, { roleCode });
     employeeIds.push(hr.employeeId);
     hrToken = await loginAs(hr.employeeCode);
+    // M task 1: HR's bank change waits for a director, who confirms it.
+    const director = await createFullTestEmployee(org, { roleCode: "SUPER_ADMIN" });
+    employeeIds.push(director.employeeId);
+    directorToken = await loginAs(director.employeeCode);
   });
 
   afterAll(async () => {
@@ -76,9 +81,15 @@ describe("Effective-dated updates + partial unique indexes", () => {
           bankName: "HDFC Bank",
           branchName: "New Branch",
         });
-      expect(res.status).toBe(200);
+      // M task 1 (changed test, see docs/plans/M_STAGE_REPORTS.md): HR's change is held (202), masked, and nothing is written until a director confirms it.
+      expect(res.status).toBe(202);
+      expect(res.body.pending).toBe(true);
       expect(res.body.accountNumberLast4).toBe("7766");
       expect(JSON.stringify(res.body)).not.toContain("99988877766");
+      expect((await prisma.employeeBankAccount.findUnique({ where: { id: before!.id } }))?.effectiveTo).toBeNull();
+      const confirm = await request(app).post(`/api/employees/identity-changes/${res.body.id}/confirm`).set(...authHeader(directorToken)).send({});
+      expect(confirm.status).toBe(200);
+      expect(JSON.stringify(confirm.body)).not.toContain("99988877766");
 
       const closedRow = await prisma.employeeBankAccount.findUnique({ where: { id: before!.id } });
       expect(closedRow?.effectiveTo).not.toBeNull();

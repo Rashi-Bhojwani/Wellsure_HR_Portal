@@ -8,6 +8,7 @@ import { apiErrorMessage } from "../../../lib/apiError";
 import { formatRupees } from "../../../lib/money";
 import { DataTable, PageHeader, Panel, SideDrawer, StatusChip, toast } from "../../../ui";
 import { space } from "../../../theme/tokens";
+import { WRAP_TEXT as WRAP } from "../../../ui/textStyles";
 
 const KIND_LABEL: Record<api.OffCycleKind, string> = { SETTLEMENT: "Final settlement", HELD_PAY: "Held pay" };
 
@@ -73,7 +74,7 @@ export function OffCyclePage() {
             { title: "Employee", dataIndex: "employeeCode" },
             { title: "What", key: "k", render: (_, c) => `${KIND_LABEL[c.kind]}: ${c.label}` },
             { title: "Amount", key: "a", align: "right", render: (_, c) => formatRupees(c.amount, 2) },
-            { title: "", key: "act", render: (_, c) => <Button onClick={() => setPreparing(c)}>Prepare</Button> },
+            { title: "", key: "act", fixed: "right" as const, render: (_, c) => <Button onClick={() => setPreparing(c)}>Prepare</Button> },
           ]}
         />
       </Panel>
@@ -97,7 +98,7 @@ export function OffCyclePage() {
                 columns={[
                   { title: "Line", dataIndex: "label" },
                   { title: "Amount", key: "a", align: "right", render: (_, l) => formatRupees(l.amount, 2) },
-                  { title: "Source", dataIndex: "source" },
+                  { title: "Source", dataIndex: "source", width: 280, render: (t: string) => <span style={WRAP}>{t}</span> },
                 ]}
               />
             ),
@@ -108,7 +109,7 @@ export function OffCyclePage() {
             { title: "Payment date", dataIndex: "paymentDate", render: (x: string) => dayjs(x).format("D MMM YYYY") },
             { title: "Net", key: "n", align: "right", render: (_, r) => formatRupees(r.net, 2) },
             { title: "State", key: "s", render: (_, r) => <StatusChip status={r.state} /> },
-            { title: "", key: "act", render: (_, r) => actions(r) },
+            { title: "", key: "act", fixed: "right" as const, render: (_, r) => actions(r) },
           ]}
         />
       </Panel>

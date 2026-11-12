@@ -10,6 +10,7 @@ import { apiErrorMessage } from "../../lib/apiError";
 import { BackupCodeGrid } from "../auth/totp/BackupCodeGrid";
 import { ConfirmModal, EmptyState, KeyValueGrid, PageHeader, Panel, Skel, Stack, StatusChip, toast, useIsPhone } from "../../ui";
 import { fs, fw, radius, space, v } from "../../theme/tokens";
+import { NotificationChoices } from "./NotificationChoices";
 
 interface DisableTotpForm {
   password: string;
@@ -221,6 +222,7 @@ export function AccountSecurityPage() {
             </ul>
           )}
         </Panel>
+        <NotificationChoices />
       </Stack>
 
       <ConfirmModal

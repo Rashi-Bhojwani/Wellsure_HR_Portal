@@ -78,8 +78,13 @@ assuming:
   are **never** a mutable number — always an append-only `leave_ledger`
   (§5.3), balance = sum of entries.
 - **RBAC + data scope** (§2): every query is scoped `SELF` / `TEAM` / `ALL`
-  in addition to role/permission checks. `HR_EXECUTIVE` never sees salary or
-  bank data; only `HR_ADMIN`/`PAYROLL_ADMIN`/`SUPER_ADMIN` do.
+  in addition to role/permission checks. HR (`HR_ADMIN` and `HR_EXECUTIVE`)
+  never sees salary or any pay figure (`HR_FORBIDDEN_KEYS`); the two directors
+  (`SUPER_ADMIN`) are the only payroll team. Both HR roles may see and enter
+  bank and identity details masked to the last four digits, every reveal
+  audited; their entries wait for a director (setting
+  `identity.directorConfirmsHrChanges`, on by default). Managers start with no
+  permissions; the Developer role never sees a value.
 - **Realtime** (§8): Socket.IO + Redis adapter, room-scoped events
   (`user:{id}`, `manager:{id}`, `dept:{id}`, `location:{id}`, `role:{role}`,
   `org`). A punch, leave decision, or engage action should reach the
@@ -88,8 +93,9 @@ assuming:
   encrypted (KMS envelope encryption in AWS) and masked by default in the
   UI and in exports.
 - **No direct money movement**: payroll disbursement (§7.5) generates a
-  bank transfer file for HR to upload to net banking; the app never moves
-  money itself.
+  bank transfer file for a director to upload to net banking; the app never
+  moves money itself, and bank payments are manual (no bank API, no return
+  file).
 - **Timezone/currency**: Asia/Kolkata, INR, leave year is calendar year
   (Jan–Dec).
 

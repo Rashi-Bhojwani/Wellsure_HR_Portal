@@ -5,6 +5,7 @@ import { Button, DatePicker, Form, Input, InputNumber, Select } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import * as loansApi from "../../../api/loans";
 import type { LoanView } from "../../../api/loans";
+import { RECOVERY_LABEL } from "../../../lib/loanRecovery";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatRupees } from "../../../lib/money";
 import { DataTable, EmptyState, PageHeader, Panel, SideDrawer, SkeletonCard, Stack, StatusChip, toast } from "../../../ui";
@@ -42,7 +43,7 @@ export function LoansPage() {
         {q.isLoading && <SkeletonCard lines={4} />}
         {q.data && q.data.loans.length === 0 && <EmptyState title="No loans" description={requestable.length ? "You can ask for one." : "There is no kind of loan you can ask for yet."} />}
         {(q.data?.loans ?? []).map((l) => (
-          <Panel key={l.id} title={`${l.typeKey} · ${formatRupees(l.principal, 2)}`} subtitle={`${l.instalments} instalments from ${dayjs(l.firstMonth).format("MMM YYYY")} · balance ${formatRupees(l.balance, 2)}`} extra={<StatusChip tone={STATUS[l.status].tone}>{STATUS[l.status].text}</StatusChip>}>
+          <Panel key={l.id} title={`${l.typeKey} · ${formatRupees(l.principal, 2)}`} subtitle={`${l.instalments} instalments from ${dayjs(l.firstMonth).format("MMM YYYY")} · balance ${formatRupees(l.balance, 2)}`} extra={l.recovery && RECOVERY_LABEL[l.recovery] ? <StatusChip tone={RECOVERY_LABEL[l.recovery]!.tone}>{RECOVERY_LABEL[l.recovery]!.text}</StatusChip> : <StatusChip tone={STATUS[l.status].tone}>{STATUS[l.status].text}</StatusChip>}>
             <DataTable<LoanView["schedule"][number]>
               rowKey="n"
               density="compact"

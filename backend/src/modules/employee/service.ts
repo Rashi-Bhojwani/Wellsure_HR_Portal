@@ -256,14 +256,27 @@ export async function createEmployeeInTx(
 // dataset commit (spec §10: "invitations are sent in batches, HR-triggered,
 // never automatically on import") — the wizard's own call site never passes
 // it, so a bulk import can't silently email hundreds of new hires.
-export async function createEmployee(input: CreateEmployeeInput, meta: RequestMetaInput, options?: { sendInvitation?: boolean }) {
+export async function createEmployee(
+  input: CreateEmployeeInput,
+  meta: RequestMetaInput,
+  // M session task 1: when the bank and statutory details must wait for a director, the caller passes `holdIdentity`; they are then left out of the new
+  // record and held, in the same transaction, by the callback (modules/employee/identityChanges.ts).
+  options?: { sendInvitation?: boolean; holdIdentity?: (tx: Prisma.TransactionClient, employeeId: string, bankFrom: Date) => Promise<void> },
+) {
   const { official, personal, statutory, bank } = input;
   await assertEmployeeCodeAvailable(official.employeeCode);
   // E2 (model A): a new hire is a plain employee, so their reporting manager
   // must be an active Manager (or none — they then show as Unassigned).
   await assertReportingLine({ code: official.employeeCode, roleCodes: ["EMPLOYEE"] }, official.reportingManagerId ?? null);
 
-  const { employee, userId } = await runConflictSafe(() => prisma.$transaction((tx) => createEmployeeInTx(tx, input, meta)));
+  const hold = options?.holdIdentity;
+  const { employee, userId } = await runConflictSafe(() =>
+    prisma.$transaction(async (tx) => {
+      const created = await createEmployeeInTx(tx, hold ? { ...input, statutory: undefined, bank: undefined } : input, meta);
+      if (hold) await hold(tx, created.employee.id, firstHistoryDay(new Date(official.dateOfJoining)));
+      return created;
+    }),
+  );
 
   // Punches this ID made before the record existed (day one, before HR added them) sit unmapped
   // until someone gives them an owner; the new mapping is that owner (docs/plans/PHASE_2.md §4.3).
@@ -624,6 +637,28 @@ interface JobUpdateInput {
   reportingManagerId?: string | null;
   effectiveFrom: string;
   changeReason?: string;
+}
+
+// ER-11 (M session): the masked history of a person's statutory numbers, newest first: which changed, the last four digits after the change, who
+// wrote it and when. Rows come from a database trigger on employee_statutory; nothing here decrypts.
+export async function getStatutoryHistory(employeeId: string, viewerEmployeeId: string, scope: DataScope, viewerPermissions: Set<string>) {
+  if (!viewerPermissions.has("employee.statutory.view")) throw new HttpError(403, "Missing permission: employee.statutory.view", "FORBIDDEN");
+  await findScopedEmployee(employeeId, viewerEmployeeId, scope);
+  const rows = await prisma.employeeStatutoryHistory.findMany({ where: { employeeId }, orderBy: [{ changedAt: "desc" }, { id: "desc" }], take: 200 });
+  const userIds = [...new Set(rows.map((r) => r.changedByUserId).filter((x): x is string => !!x))];
+  const users = await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, employee: { select: { employeeCode: true, nameHistory: { where: inForceOn(), select: { fullName: true } } } } } });
+  const nameOf = new Map(users.map((u) => [u.id, u.employee.nameHistory[0]?.fullName ?? u.employee.employeeCode]));
+  return rows.map((r) => ({
+    id: r.id,
+    kind: r.kind,
+    changedFields: r.changedFields,
+    panLast4: r.panLast4,
+    aadhaarLast4: r.aadhaarLast4,
+    uanLast4: r.uanLast4,
+    esiLast4: r.esiLast4,
+    changedBy: r.changedByUserId ? (nameOf.get(r.changedByUserId) ?? "Someone") : null,
+    changedAt: r.changedAt.toISOString(),
+  }));
 }
 
 export async function updateJob(employeeId: string, input: JobUpdateInput, meta: RequestMetaInput) {

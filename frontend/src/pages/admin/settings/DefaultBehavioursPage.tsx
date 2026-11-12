@@ -3,12 +3,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Form, Input, InputNumber, Select } from "antd";
 import * as api from "../../../api/behaviours";
 import * as loansApi from "../../../api/loans";
+import * as lettersApi from "../../../api/letters";
 import type { Behaviour, BehaviourKey } from "../../../api/behaviours";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { PageHeader, Panel, QueryState, SideDrawer, StatusChip, toast } from "../../../ui";
 import { space } from "../../../theme/tokens";
 
-// System Settings > Default behaviours (D-37, docs/plans/D37_DEFAULTS.md), directors only. Three behaviours have a common default, labelled "Default, change in settings";
+// System Settings > Default behaviours (D-37, docs/plans/D37_DEFAULTS.md; M task 1 adds the identity confirmation), directors only. Four behaviours have a common default, labelled "Default, change in settings";
 // the max-deduction percentage has none (Not set). A change is proposed by one director with a reason and takes effect only when a different director confirms it.
 const RULE_LABEL: Record<string, string> = { STOP_RUN: "Stop the run", SKIP_AND_CARRY: "Skip the instalment and carry it forward", PARTIAL_AND_CARRY: "Recover what is possible, carry the rest" };
 const MODE_LABEL: Record<string, string> = { NONE: "None", FULL_MONTH: "A full month", PRO_RATA_DAYS_WORKED: "Pro-rata by days worked", FULL_IF_MIN_DAYS: "A full month only if at least N days were worked" };
@@ -16,6 +17,8 @@ const MODE_LABEL: Record<string, string> = { NONE: "None", FULL_MONTH: "A full m
 function describe(b: Pick<Behaviour, "key" | "value">): string {
   const v = b.value as Record<string, unknown> | boolean | null;
   if (b.key === "access.developerSeesSwipes") return v === true ? "On: the Developer role sees Employee Swipes" : "Off: the Developer role does not see Employee Swipes";
+  if (b.key === "letters.employeeMayAsk") return Array.isArray(v) && v.length ? `Employees may ask for: ${v.join(", ")}` : "None: employees cannot ask for a letter";
+  if (b.key === "identity.directorConfirmsHrChanges") return v === true ? "On: a director confirms HR's bank and statutory changes before they take effect" : "Off: HR's bank and statutory changes take effect at once";
   if (b.key === "loan.maxTotalDeductionPercent") return v && typeof v === "object" ? `${String(v.percent)}% of gross (source: ${String(v.sourceNote)})` : "Not set: no percentage limit";
   if (b.key === "leave.proRataRounding") return v && typeof v === "object" ? `${ROUND_LABEL[String(v.mode)] ?? String(v.mode)} to ${String(v.scale)} decimal place(s)` : "Not set: a pro-rata result that needs rounding waits for this";
   if (b.key === "leave.leavingMonthAccrual") {
@@ -29,7 +32,7 @@ function describe(b: Pick<Behaviour, "key" | "value">): string {
 
 const ROUND_LABEL: Record<string, string> = { HALF_UP: "Half up", HALF_EVEN: "Half even", UP: "Up", DOWN: "Down", CEIL: "Ceiling", FLOOR: "Floor" };
 
-type FormValues = { reason: string; roundMode?: string; scale?: number; on?: string; mode?: string; minDays?: number; percent?: string; sourceNote?: string; rules?: Array<{ typeKey: string; rule: string }> };
+type FormValues = { reason: string; codes?: string[]; roundMode?: string; scale?: number; on?: string; mode?: string; minDays?: number; percent?: string; sourceNote?: string; rules?: Array<{ typeKey: string; rule: string }> };
 
 export function DefaultBehavioursPage() {
   const queryClient = useQueryClient();
@@ -37,12 +40,14 @@ export function DefaultBehavioursPage() {
   const [form] = Form.useForm<FormValues>();
   const q = useQuery({ queryKey: ["behaviours"], queryFn: api.listBehaviours });
   const types = useQuery({ queryKey: ["loans", "types"], queryFn: loansApi.loanTypes });
+  const letterTemplates = useQuery({ queryKey: ["letters", "templates"], queryFn: lettersApi.listTemplates });
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["behaviours"] });
   const propose = useMutation({
     mutationFn: (v: FormValues) => {
       const key = editing!.key as BehaviourKey;
       const value =
-        key === "access.developerSeesSwipes" ? v.on === "on"
+        key === "access.developerSeesSwipes" || key === "identity.directorConfirmsHrChanges" ? v.on === "on"
+        : key === "letters.employeeMayAsk" ? (v.codes ?? [])
         : key === "leave.leavingMonthAccrual" ? (v.mode === "FULL_IF_MIN_DAYS" ? { mode: v.mode, minDays: v.minDays } : { mode: v.mode })
         : key === "loan.maxTotalDeductionPercent" ? { percent: v.percent, sourceNote: v.sourceNote }
         : key === "leave.proRataRounding" ? { mode: v.roundMode, scale: v.scale }
@@ -57,14 +62,15 @@ export function DefaultBehavioursPage() {
     setEditing(b);
     form.resetFields();
     const v = b.value as Record<string, unknown> | boolean | null;
-    if (b.key === "access.developerSeesSwipes") form.setFieldsValue({ on: v === true ? "on" : "off" });
+    if (b.key === "access.developerSeesSwipes" || b.key === "identity.directorConfirmsHrChanges") form.setFieldsValue({ on: v === true ? "on" : "off" });
+    if (b.key === "letters.employeeMayAsk") form.setFieldsValue({ codes: Array.isArray(v) ? (v as string[]) : [] });
     if (b.key === "leave.leavingMonthAccrual") form.setFieldsValue({ mode: (v as { mode: string }).mode, minDays: (v as { minDays?: number }).minDays });
     if (b.key === "loan.shortfall") form.setFieldsValue({ rules: Object.entries((v ?? {}) as Record<string, string>).map(([typeKey, rule]) => ({ typeKey, rule })) });
   };
   const mode = Form.useWatch("mode", form);
   return (
     <>
-      <PageHeader title="Default behaviours" subtitle="Three behaviours start from a common default; the rest start Not set. A change is proposed by one director and confirmed by a different one." />
+      <PageHeader title="Default behaviours" subtitle="Some behaviours start from a common default; the rest start Not set. A change is proposed by one director and confirmed by a different one." />
       <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
         {(
           <div style={{ display: "flex", flexDirection: "column", gap: space[4] }}>
@@ -90,6 +96,16 @@ export function DefaultBehavioursPage() {
           {editing?.key === "access.developerSeesSwipes" && (
             <Form.Item name="on" label="The Developer role sees Employee Swipes" rules={[{ required: true }]}>
               <Select options={[{ value: "off", label: "Off" }, { value: "on", label: "On" }]} />
+            </Form.Item>
+          )}
+          {editing?.key === "letters.employeeMayAsk" && (
+            <Form.Item name="codes" label="Letters an employee may ask for (none = nobody can ask)">
+              <Select mode="multiple" allowClear options={(letterTemplates.data ?? []).filter((t) => t.isActive).map((t) => ({ value: t.code, label: `${t.name} (${t.code})` }))} />
+            </Form.Item>
+          )}
+          {editing?.key === "identity.directorConfirmsHrChanges" && (
+            <Form.Item name="on" label="A director confirms HR's bank and statutory changes before they take effect" rules={[{ required: true }]}>
+              <Select options={[{ value: "on", label: "On" }, { value: "off", label: "Off" }]} />
             </Form.Item>
           )}
           {editing?.key === "leave.leavingMonthAccrual" && (

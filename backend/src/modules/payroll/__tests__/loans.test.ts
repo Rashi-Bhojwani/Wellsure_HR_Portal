@@ -5,6 +5,8 @@ import { setBusinessTodayForTests } from "../../../lib/businessDate";
 import { prisma } from "../../../lib/prisma";
 import { app, authHeader, cleanupFullTestEmployee, createFullTestEmployee, loginAs } from "../../employee/__tests__/employeeTestHelpers";
 import { loanSchedule } from "../loans/schedule";
+import { recoveryOf } from "../loans/service";
+import { dec } from "../money";
 import { REAL_RULES, closeWorld, closingWorld, confirmAllPins, driveToFinal, staffWith, type Closing } from "./closeTestHelpers";
 import { calculateRun, setRules } from "./runTestHelpers";
 import { makeComponent } from "./salaryTestHelpers";
@@ -51,6 +53,19 @@ describe("P7-4 — the schedule against an independent model", () => {
       }
       expect(rows.map((r) => r.month).slice(0, 2)).toEqual(n > 1 ? ["2027-01-01", "2027-02-01"] : ["2027-01-01"]);
     }
+  });
+});
+
+describe("loan recovery state (2026-11-11 walk)", () => {
+  it("is read from what happened: not paid out, recovering, stopped, fully recovered, recovered at exit", () => {
+    const base = { status: "SANCTIONED", disbursed: true, balance: dec("100"), recoveredAtExit: dec("0"), effective: [] as Array<{ kind: string }> };
+    expect(recoveryOf({ ...base, status: "WAITING" })).toBe("NOT_SANCTIONED");
+    expect(recoveryOf({ ...base, disbursed: false })).toBe("NOT_PAID_OUT");
+    expect(recoveryOf(base)).toBe("RECOVERING");
+    expect(recoveryOf({ ...base, effective: [{ kind: "CANCEL_PENDING" }] })).toBe("STOPPED");
+    expect(recoveryOf({ ...base, effective: [{ kind: "PREPAID" }] })).toBe("RECOVERING");
+    expect(recoveryOf({ ...base, balance: dec("0") })).toBe("FULLY_RECOVERED");
+    expect(recoveryOf({ ...base, balance: dec("0"), recoveredAtExit: dec("100") })).toBe("RECOVERED_AT_EXIT");
   });
 });
 

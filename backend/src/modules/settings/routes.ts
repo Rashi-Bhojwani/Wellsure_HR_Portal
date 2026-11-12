@@ -3,6 +3,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { requirePermission } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
 import * as controller from "./controller";
+import * as emailTemplates from "../auth/emailTemplates";
 import { updateRegularizationSettingsSchema, updateExcessHoursSettingsSchema, updateDeviceAlertSettingsSchema, updateDeviceHealthSettingsSchema, updateHelpdeskSettingsSchema, updateLeaveSettingsSchema, updatePeopleDocumentsSettingsSchema, updateSettingsSchema } from "./validators";
 
 // System Settings (spec §7.8) — security policy (Phase 1: lockout,
@@ -13,6 +14,12 @@ export const settingsRouter = Router();
 settingsRouter.use(authenticate);
 
 const manage = requirePermission("settings.manage");
+
+// NT-08 (M session): the wording of the sign-in emails (directors: settings.manage is HR-locked and the Developer role does not hold it).
+settingsRouter.get("/email-templates", manage, async (_req, res) => void res.json({ templates: await emailTemplates.listEmailTemplates() }));
+settingsRouter.put("/email-templates", manage, validate({ body: emailTemplates.updateEmailTemplateSchema }), async (req, res) =>
+  void res.json({ templates: await emailTemplates.updateEmailTemplate(req.body, { actorUserId: req.user!.userId, ipAddress: req.ip ?? null, userAgent: req.headers["user-agent"] ?? null }) }),
+);
 
 settingsRouter.get("/security", manage, controller.getSettings);
 settingsRouter.put("/security", manage, validate({ body: updateSettingsSchema }), controller.updateSettings);

@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Select } from "antd";
 import { financialYearOf } from "@shared/utils/financialYear";
 import * as taxApi from "../../../api/tax";
+import { lastFinishedQuarter } from "../../../lib/quarter";
 import type { QuarterlyData } from "../../../api/tax";
 import { formatRupees } from "../../../lib/money";
 import { ApprovalBanner, DataTable, PageHeader, Panel } from "../../../ui";
@@ -16,9 +17,11 @@ function years(): string[] {
 }
 type Row = QuarterlyData["rows"][number];
 
+
 export function QuarterlyTdsPage() {
-  const [fy, setFy] = useState(years()[1]!);
-  const [quarter, setQuarter] = useState(1);
+  const start = lastFinishedQuarter(new Date().toISOString().slice(0, 10));
+  const [fy, setFy] = useState(start.fy);
+  const [quarter, setQuarter] = useState(start.quarter);
   const q = useQuery({ queryKey: ["tax", "quarterly", fy, quarter], queryFn: () => taxApi.quarterlyData(fy, quarter) });
   const months = q.data?.months ?? [];
   return (
@@ -45,7 +48,7 @@ export function QuarterlyTdsPage() {
           pagination={{ pageSize: 50 }}
           mobile={{ title: (r) => r.name, subtitle: (r) => `${r.employeeCode} · PAN ${r.panLast4 ? `…${r.panLast4}` : "not on record"}`, fields: months.map((m) => ({ label: m, render: (r: Row) => `${formatRupees(r.byMonth[m]?.paid ?? "0", 2)} paid · ${formatRupees(r.byMonth[m]?.tds ?? "0", 2)} TDS` })) }}
           columns={[
-            { title: "Employee", key: "e", render: (_, r) => `${r.name} (${r.employeeCode})` },
+            { title: "Employee", key: "e", fixed: "left" as const, render: (_, r) => `${r.name} (${r.employeeCode})` },
             { title: "PAN", key: "p", render: (_, r) => (r.panLast4 ? `…${r.panLast4}` : "Not on record") },
             ...months.flatMap((m) => [
               { title: `${m} paid`, key: `${m}p`, align: "right" as const, render: (_: unknown, r: Row) => formatRupees(r.byMonth[m]?.paid ?? "0", 2) },

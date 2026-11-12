@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Col, Form, Input, InputNumber, Row, Select, Switch } from "antd";
 import {
+  MailOutlined,
   AlertOutlined,
   CalendarOutlined,
   ClockCircleOutlined,
@@ -26,6 +27,7 @@ import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as settingsApi from "../../../api/settings";
 import type { DeviceAlertSettings, DeviceHealthThresholds, HelpdeskSettings, LeaveSettings, PeopleDocumentsSettings, RegularizationSettings, SecuritySettings } from "../../../api/settings";
 import { LettersSettingsCard } from "../../../components/letters/LettersSettingsCard";
+import { EmailTemplatesCard } from "./EmailTemplatesCard";
 import { DirectorAuthorityCard } from "../../../components/payroll/DirectorAuthorityCard";
 import { useAuth } from "../../../hooks/useAuth";
 import { FormGroupTitle, PageHeader, Panel, QueryState, Skel, toast } from "../../../ui";
@@ -577,6 +579,7 @@ export function SystemSettingsPage() {
     { key: "leave", label: "Leave encashment", icon: <CalendarOutlined />, group: "Leave & people", render: () => <LeaveSettingsCard /> },
     { key: "people", label: "People & documents", icon: <TeamOutlined />, group: "Leave & people", render: () => <PeopleDocumentsSettingsCard /> },
     { key: "helpdesk", label: "Helpdesk", icon: <CustomerServiceOutlined />, group: "Leave & people", render: () => <HelpdeskSettingsCard /> },
+    ...(isDirector ? [{ key: "emails", label: "Sign-in emails", icon: <MailOutlined />, group: "General", render: () => <EmailTemplatesCard /> }] : []),
     ...(canLetters ? [{ key: "letters", label: "Letters", icon: <FileTextOutlined />, group: "Leave & people", render: () => <LettersSection /> }] : []),
     { key: "device-health", label: "Device health", icon: <HeartOutlined />, group: "Attendance", render: () => <DeviceHealthSettingsCard /> },
     { key: "device-alerts", label: "Device alerts", icon: <AlertOutlined />, group: "Attendance", render: () => <DeviceAlertSettingsCard /> },

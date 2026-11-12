@@ -9,7 +9,6 @@ import {
   createEmployeeTestOrgMasters,
   createFullTestEmployee,
   grantPermissions,
-  revokePermissions,
   loginAs,
   type TestOrgMasters,
 } from "./employeeTestHelpers";
@@ -55,14 +54,9 @@ describe("Employee profile, reveal + history — scope and permission IDOR", () 
       // they use /me (covered separately below).
       grantPermissions(employeeRoleCode, ["employee.view"]),
       grantPermissions(hrAdminRoleCode, ["employee.view", "employee.bank.view", "employee.statutory.view"]),
-      // Mirrors the seed's HR_EXECUTIVE: explicitly NOT given bank.view or statutory.view.
-      grantPermissions(hrExecRoleCode, ["employee.view"]),
+      // M task 1 (decision b): HR_EXECUTIVE holds the masked bank and statutory keys, as HR_ADMIN does (seed + migration 20261112090000_m_identity_change_requests).
+      grantPermissions(hrExecRoleCode, ["employee.view", "employee.bank.view", "employee.statutory.view"]),
     ]);
-    // Deterministic starting point regardless of what this shared literal
-    // role already carried (e.g. a stale grant from an earlier local seed
-    // run, before HR_EXECUTIVE's permissions were tightened) — see
-    // revokePermissions' own comment.
-    await revokePermissions(hrExecRoleCode, ["employee.bank.view", "employee.bank.edit", "employee.statutory.view", "employee.statutory.edit"]);
 
     const manager = await createFullTestEmployee(org, { roleCode: managerRoleCode });
     managerId = manager.employeeId;
@@ -124,12 +118,23 @@ describe("Employee profile, reveal + history — scope and permission IDOR", () 
     });
   });
 
-  describe("HR_EXECUTIVE is blocked from bank and statutory endpoints", () => {
-    it("omits bank and statutory sections from the profile response for HR_EXECUTIVE", async () => {
-      const res = await request(app).get(`/api/employees/${strangerId}`).set(...authHeader(hrExecToken));
+  // Changed in the M session (docs/plans/M_STAGE_REPORTS.md, "Changed tests"): HR_EXECUTIVE used to be the role without bank and statutory keys; the owners'
+  // decision b gives it the same masked entry as HR_ADMIN. The refusal is still pinned, now on a role that really lacks the keys (a manager, on their own report).
+  describe("a role without the bank and statutory keys is blocked from bank and statutory endpoints", () => {
+    it("omits bank and statutory sections from the profile response for a manager (no bank or statutory key)", async () => {
+      const res = await request(app).get(`/api/employees/${reportId}`).set(...authHeader(managerToken));
       expect(res.status).toBe(200);
       expect(res.body.bank).toBeUndefined();
       expect(res.body.statutory).toBeUndefined();
+    });
+
+    it("includes masked bank and statutory sections for HR_EXECUTIVE, never a whole number", async () => {
+      const res = await request(app).get(`/api/employees/${strangerId}`).set(...authHeader(hrExecToken));
+      expect(res.status).toBe(200);
+      expect(res.body.bank.accountNumberLast4).toBeTypeOf("string");
+      expect(res.body.statutory.panLast4).toBeTypeOf("string");
+      expect(res.body.bank.accountNumber).toBeUndefined();
+      expect(res.body.statutory.pan).toBeUndefined();
     });
 
     it("includes masked bank and statutory sections for HR_ADMIN", async () => {
@@ -140,18 +145,18 @@ describe("Employee profile, reveal + history — scope and permission IDOR", () 
       expect(res.body.statutory.panLast4).toBeTypeOf("string");
     });
 
-    it("403s HR_EXECUTIVE calling the bank reveal endpoint directly", async () => {
-      const res = await request(app).get(`/api/employees/${strangerId}/bank/reveal`).set(...authHeader(hrExecToken));
+    it("403s a manager calling the bank reveal endpoint directly", async () => {
+      const res = await request(app).get(`/api/employees/${reportId}/bank/reveal?reason=Checking%20it`).set(...authHeader(managerToken));
       expect(res.status).toBe(403);
     });
 
-    it("403s HR_EXECUTIVE calling the statutory reveal endpoint directly", async () => {
-      const res = await request(app).get(`/api/employees/${strangerId}/statutory/reveal`).set(...authHeader(hrExecToken));
+    it("403s a manager calling the statutory reveal endpoint directly", async () => {
+      const res = await request(app).get(`/api/employees/${reportId}/statutory/reveal?reason=Checking%20it`).set(...authHeader(managerToken));
       expect(res.status).toBe(403);
     });
 
-    it("403s HR_EXECUTIVE calling the bank history endpoint directly", async () => {
-      const res = await request(app).get(`/api/employees/${strangerId}/history/bank`).set(...authHeader(hrExecToken));
+    it("403s a manager calling the bank history endpoint directly", async () => {
+      const res = await request(app).get(`/api/employees/${reportId}/history/bank`).set(...authHeader(managerToken));
       expect(res.status).toBe(403);
     });
 

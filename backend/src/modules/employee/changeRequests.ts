@@ -8,6 +8,7 @@ import { packBytes, unpackBytes } from "../../lib/bytesJson";
 import { HttpError } from "../../middleware/errorHandler";
 import { encryptBankFields, encryptStatutoryFields, type BankFieldsInput, type StatutoryFieldsInput } from "./service";
 import type { RequestMetaInput } from "./types";
+import { afterHold, holdInTx, holdReasonFor } from "./identityChanges";
 
 // changesJson never stores a raw "accountNumber"/"pan"/"aadhaar" key —
 // sensitive fields are transformed into their encrypted/last4/hash shape
@@ -151,6 +152,29 @@ export async function approveChangeRequest(id: string, remarks: string | undefin
   if (row.fieldGroup === "statutory" && !viewerPermissions.has("employee.statutory.edit")) throw new HttpError(403, "Missing permission: employee.statutory.edit", "FORBIDDEN");
 
   const changesJson = row.changesJson as Record<string, unknown>;
+  // M task 1: a bank or statutory change approved by someone whose entries must wait for a director is held (masked), not written; the employee's request
+  // is marked approved by HR and the held entry names it.
+  if (row.fieldGroup === "bank" || row.fieldGroup === "statutory") {
+    const reason = await holdReasonFor(meta.actorUserId, row.employeeId);
+    if (reason) {
+      const held = await prisma.$transaction(async (tx) => {
+        const h = await holdInTx(tx, {
+          employeeId: row.employeeId,
+          kind: row.fieldGroup === "bank" ? "BANK" : "STATUTORY",
+          payload: changesJson,
+          effectiveFrom: row.fieldGroup === "bank" ? businessToday() : null,
+          source: "EMPLOYEE_REQUEST",
+          sourceRequestId: row.id,
+          enteredByUserId: meta.actorUserId,
+        });
+        await tx.profileChangeRequest.update({ where: { id }, data: { status: "APPROVED", remarks, decidedByUserId: meta.actorUserId, decidedAt: new Date() } });
+        return h;
+      });
+      await writeAuditLog({ ...meta, action: "profile.change_request.approved", entityType: "ProfileChangeRequest", entityId: id, after: { heldForDirector: held.id } });
+      await afterHold(held, reason, meta);
+      return;
+    }
+  }
   if (row.fieldGroup === "bank") await applyBankChange(row.employeeId, changesJson, meta);
   else if (row.fieldGroup === "statutory") await applyStatutoryChange(row.employeeId, changesJson, meta.actorUserId);
   else await applyPersonalChange(row.employeeId, changesJson);

@@ -123,6 +123,9 @@ describe("the demo company", () => {
     const shortfallItem = await prisma.payrollRunItem.findFirstOrThrow({ where: { runId: runs[1]!.id, employee: { employeeCode: "DEMO002" } } });
     expect((shortfallItem.exceptions as Array<{ code: string; severity: string }>).find((e) => e.code === "LOAN_SHORTFALL")).toMatchObject({ severity: "WARNING" });
     expect((await loan(history.loans.shortfall)).body.schedule[0].state).toBe("PENDING");
+    // Where each loan's recovery stands, as the loan screens show it.
+    const recovery = await Promise.all([history.loans.active, history.loans.closed, history.loans.stopped, history.loans.shortfall].map(async (id) => (await loan(id)).body.recovery));
+    expect(recovery).toEqual(["RECOVERING", "FULLY_RECOVERED", "RECOVERED_AT_EXIT", "RECOVERING"]);
     // Claims of two types in five states.
     const claims = (await call("DEMO001", "get", "reimbursements?status=ALL")).body.claims as Array<{ id: string; status: string; typeKey: string }>;
     const stateOf = (id: string) => claims.find((c) => c.id === id)!.status;

@@ -7,6 +7,8 @@ import { exitAuditAudienceWhere } from "../exits/audience";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { inForceOn } from "../../lib/effectiveDating";
+import { writeAuditLog } from "../../lib/audit";
+import { buildXlsx } from "../../lib/xlsx";
 
 export interface ListAuditLogQuery {
   actorSearch?: string;
@@ -111,4 +113,37 @@ export async function listAuditLogs(query: ListAuditLogQuery, viewer: { canSeePa
       createdAt: r.createdAt.toISOString(),
     })),
   };
+}
+
+// AU-04 (M session): the same filtered list as an Excel file, for the directors (the route refuses the Developer role). At most EXPORT_LIMIT rows,
+// newest first; the file says so when the filter matched more. The same payroll and money rules as the screen apply. The export is itself audited.
+export const AUDIT_EXPORT_LIMIT = 10_000;
+export async function exportAuditLogs(query: Omit<ListAuditLogQuery, "page" | "pageSize">, viewer: { canSeePayroll: boolean }, meta: { actorUserId: string; ipAddress?: string | null; userAgent?: string | null }) {
+  const page = await listAuditLogs({ ...query, page: 1, pageSize: AUDIT_EXPORT_LIMIT }, viewer);
+  const filters = Object.entries(query).filter(([, v]) => v !== undefined && v !== "").map(([k, v]) => `${k}: ${String(v)}`);
+  const buffer = await buildXlsx([
+    {
+      name: "Audit log",
+      columns: [
+        { key: "createdAt", header: "When (UTC)", width: 22 },
+        { key: "actorEmployeeCode", header: "Actor code", width: 12 },
+        { key: "actorName", header: "Actor", width: 24 },
+        { key: "onBehalfOfName", header: "On behalf of", width: 20 },
+        { key: "action", header: "Action", width: 34 },
+        { key: "entityType", header: "Entity", width: 20 },
+        { key: "entityId", header: "Entity id", width: 28 },
+        { key: "before", header: "Before (redacted)", width: 50 },
+        { key: "after", header: "After (redacted)", width: 50 },
+        { key: "ipAddress", header: "IP address", width: 16 },
+      ],
+      rows: page.rows.map((r) => ({ ...r, before: r.before == null ? "" : JSON.stringify(r.before), after: r.after == null ? "" : JSON.stringify(r.after) })),
+      footer: [
+        `${page.rows.length} of ${page.total} matching entries${page.total > page.rows.length ? ` (the newest ${AUDIT_EXPORT_LIMIT}; narrow the dates for the rest)` : ""}.`,
+        filters.length ? `Filters: ${filters.join("; ")}` : "No filters.",
+        "Identity numbers were redacted to their last four digits when each entry was written.",
+      ],
+    },
+  ]);
+  await writeAuditLog({ actorUserId: meta.actorUserId, ipAddress: meta.ipAddress ?? null, userAgent: meta.userAgent ?? null, action: "audit.exported", entityType: "AuditLog", entityId: "export", after: { rows: page.rows.length, total: page.total, filters: query } });
+  return { buffer, rows: page.rows.length };
 }

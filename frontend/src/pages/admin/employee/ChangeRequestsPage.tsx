@@ -5,6 +5,8 @@ import { Button, Input, Select } from "antd";
 import { CheckOutlined, CloseOutlined } from "@ant-design/icons";
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as employeeApi from "../../../api/employee";
+import { useAuth } from "../../../hooks/useAuth";
+import { IdentityChangesPanel } from "./IdentityChanges";
 import { fs, fw, space, v } from "../../../theme/tokens";
 import { ConfirmModal, DataTable, EmptyState, FilterBar, InitialsAvatar, PageHeader, Panel, StatusChip, toast, useIsPhone } from "../../../ui";
 
@@ -25,6 +27,8 @@ export function ChangeRequestsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const phone = useIsPhone();
+  const { hasPermission } = useAuth();
+  const seesIdentity = hasPermission("employee.bank.view") || hasPermission("employee.statutory.view");
   const [statusFilter, setStatusFilter] = useState<string | undefined>("PENDING");
   const [search, setSearch] = useState("");
   const [decision, setDecision] = useState<{ row: Row; action: "approve" | "reject" } | null>(null);
@@ -49,7 +53,8 @@ export function ChangeRequestsPage() {
       decision!.action === "approve" ? employeeApi.approveChangeRequest(decision!.row.id, remarks) : employeeApi.rejectChangeRequest(decision!.row.id, remarks),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["employees", "change-requests"] });
-      toast.success(decision?.action === "approve" ? "Change approved and applied." : "Change rejected.");
+      toast.success(decision?.action === "approve" ? (decision.row.fieldGroup === "personal" ? "Change approved and applied." : "Change approved. If a director must confirm it, it now waits for them.") : "Change rejected.");
+      void queryClient.invalidateQueries({ queryKey: ["employees", "identity-changes"] });
       setDecision(null);
       setRemarks("");
     },
@@ -82,7 +87,12 @@ export function ChangeRequestsPage() {
 
   return (
     <>
-      <PageHeader title="Profile Change Requests" subtitle="Bank, statutory and personal detail changes employees asked for — approving applies the change" />
+      <PageHeader title="Profile Change Requests" subtitle="Bank, statutory and personal detail changes employees asked for. Approving a personal change applies it; a bank or statutory change may then wait for a director." />
+      {seesIdentity && (
+        <div style={{ marginBottom: space[4] }}>
+          <IdentityChangesPanel />
+        </div>
+      )}
 
       <Panel title="Requests" subtitle={requests ? `${rows.length}${statusLabel ? ` ${statusLabel}` : ""} request${rows.length === 1 ? "" : "s"}` : undefined}>
         <FilterBar

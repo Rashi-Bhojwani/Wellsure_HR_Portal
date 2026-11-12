@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Form, Input } from "antd";
-import { SendOutlined } from "@ant-design/icons";
+import { DownloadOutlined, SendOutlined } from "@ant-design/icons";
+import { saveBlob } from "../../../api/muster";
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as employeeApi from "../../../api/employee";
 import { PhotoUploader } from "../../../components/common/PhotoUploader";
@@ -149,8 +150,27 @@ export function ViewMyInfoPage() {
   const { data: profile, isLoading, error, refetch } = useQuery({ queryKey: ["employees", "me"], queryFn: employeeApi.getMyProfile });
   const [editOpen, setEditOpen] = useState(false);
   const [requestGroup, setRequestGroup] = useState<ChangeRequestFieldGroup | null>(null);
+  // SS-15: your own data as a file; the download is recorded in the audit log.
+  const exportMutation = useMutation({
+    mutationFn: employeeApi.downloadMyData,
+    onSuccess: (blob) => {
+      saveBlob(blob, `my-data-${new Date().toISOString().slice(0, 10)}.json`);
+      toast.success("Downloaded. Identity numbers show their last four digits only.");
+    },
+    onError: (err) => toast.error(errorMessage(err, "Could not prepare your data.")),
+  });
 
-  const header = <PageHeader title="My Info" subtitle="Your official, personal, statutory and bank details" />;
+  const header = (
+    <PageHeader
+      title="My Info"
+      subtitle="Your official, personal, statutory and bank details"
+      actions={
+        <Button icon={<DownloadOutlined />} loading={exportMutation.isPending} onClick={() => exportMutation.mutate()}>
+          Download my data
+        </Button>
+      }
+    />
+  );
   if (isLoading || error || !profile) {
     return (
       <>
