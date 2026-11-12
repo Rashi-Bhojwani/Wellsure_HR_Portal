@@ -804,6 +804,16 @@ recruitment files (`offers.ts`, `offerAccess.ts`, `offerText.ts`, `joining.ts`, 
 
 ### B.10 Insights (answered)
 
+#### Stage 2 implementation record (2026-11-12)
+Built in `backend/src/modules/insights/` and `peeps_20261112100000_insights`. Audience: directors and Wellsure Office members
+with the new VIEW_INSIGHTS capability (key `insights.view`); the Developer and everyone else are refused. Settings (append-only,
+director-only trigger, audited), all Not set: `window` (months ending today), `minimumGroupSize`, `earlyAttrition`, `turnover`
+(denominator), `tenure` (basis), `exitReasons` (separation mode or resignation reason category; never free text, never exit
+interviews), `hiringFunnel` (furthest stage reached, so cells are disjoint). One grouping per metric (department; reasons;
+stages), so the only overlapping group is the total. Suppression (`suppression.ts`): cells with 0 < n < k hidden; then the next
+smallest cells are hidden until the people recoverable by subtracting from the total are 0 or ≥ k; otherwise the total is
+hidden too. Views and exports audited. No pay table is read.
+
 - **Metrics (answered).** **Turnover, tenure, exit reasons, hiring funnel.** Nothing else.
 - **Definitions Not set.** Each metric has a definition setting (Placeholder → Confirmed, B.0.1), e.g. how
   turnover is computed (leavers ÷ average headcount over which period, voluntary vs all), tenure buckets,
@@ -920,6 +930,16 @@ test must fail); full backend suite run **alone**; frontend lint, typecheck, tes
 ---
 
 ## E. Document autofill — options and questions only
+
+### Stage 2 implementation record (2026-11-12)
+Built in `backend/src/modules/autofill/` and `peeps_20261112110000_autofill`, per the stage 2 prompt. Provider adapter with one
+provider, LOCAL (pdf.js text layer + tesseract.js with the bundled English model): no document leaves the system; a cloud
+provider is not chosen or built. Scope: resumes (candidate: name, email, phone — recruitment authority), identity documents
+(employee: PAN and Aadhaar — statutory edit; the name on the document is for comparison only and never saved) and bank
+documents (employee: holder, account number, IFSC, bank, branch — bank edit). Workflow: private upload → queued extraction (job
+data = id) → encrypted suggestions → per-field confirm/correct/reject → apply through the existing writers (bank/statutory via
+the held-change controls; resume fields update the candidate). Settings: file types and size ship as defaults; retention Not set
+(uploads refuse). Technical controls: 60 s timeout, 5 reads per document, 30 requests per person per 10 minutes.
 
 No provider is chosen and no document leaves the system until you decide. Options:
 

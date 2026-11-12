@@ -143,6 +143,6 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 - [x] 1.3 employee code refusal, race-safe (DB unique) — `5d1f4ec`
 - [x] 1.4a DEMO Office member with offer + Insights capability; 1.4b log-capture test; 1.4c scan toggles RUN_ONBOARDING — `5d1f4ec`
 - [ ] 1.4d prove the scan pay rule fires by a temporary break (run at the end with the full scan)
-- [ ] Step 2 Insights (suppression core + property test written, uncommitted: `backend/src/modules/insights/`)
-- [ ] Step 3 document autofill (local OCR proven: tesseract.js 7 + bundled English data, offline)
+- [x] Step 2 Insights — `44c3aef` (property test, matrix, Not-set refusal, leak test, 2/2 mutations)
+- [x] Step 3 document autofill — `c4872ca` (local OCR, synthetic documents, field authority, 3/3 mutations)
 - [ ] Finish: browser check, migrations fresh/no drift, full suite alone, CI per job, report

@@ -1034,3 +1034,13 @@ director chooses them (links and exceptions refuse until then); *Offer approval*
 The DEMO company adds DEMO-C4B-JOINER with an accepted offer and DEMO pay (seen only by DEMO001/DEMO013 after *Show pay*).
 Employees refer people from the employee portal's *Referrals* page once a director switches referrals on.
 <!-- PEEPS-END recruitment-offers -->
+<!-- PEEPS-BEGIN stage-2 -->
+**Stage 2 (Insights, document autofill, recruitment defaults).** Hiring stages ship as a default pipeline (Screening, Interview,
+Offer, Hired, Not moving forward) and interview rounds as a default list, both "Default, change in settings". *Insights*
+(admin portal → Employee → Insights) is for the directors and Wellsure Office members with the VIEW_INSIGHTS capability; every
+Insights setting is Not set until a director chooses it (the DEMO company chooses fictional values). *Document autofill*
+(Employee → Document autofill) reads resumes, identity and bank documents with a local reader (tesseract.js with the
+bundled English model and pdf.js, installed by `npm run install:all`; nothing is sent outside). Retention is Not set and
+uploads refuse until a director chooses it; file types and size ship as defaults. Extraction runs on the worker queue
+`autofill-extract` (`npm run dev` starts the worker). DEMO008 (the DEMO Office member) can now manage offers and view Insights.
+<!-- PEEPS-END stage-2 -->

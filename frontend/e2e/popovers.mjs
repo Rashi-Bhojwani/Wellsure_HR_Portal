@@ -310,14 +310,14 @@ for (const [width, height] of [
   await page.goto(`${BASE}/admin/insights`);
   await page.locator("header.ws-topbar").waitFor({ timeout: 30000 });
   await page.waitForTimeout(800);
-  await check(page, where, "insights: definition select", { open: async () => { const row = page.locator("tr, .ant-card, [class*=card]").filter({ hasText: "Turnover definition" }).first(); await row.getByRole("button", { name: "Choose" }).click(); await page.waitForTimeout(300); await page.locator(".ant-select").last().click(); }, root: ".ant-select-dropdown", surface: null });
+  await check(page, where, "insights: definition select", { open: async () => { await page.getByText("Turnover definition", { exact: true }).first().locator("xpath=ancestor::*[.//button[normalize-space()='Choose']][1]").getByRole("button", { name: "Choose" }).first().click(); await page.waitForTimeout(300); await page.locator(".ant-select").last().click(); }, root: ".ant-select-dropdown", surface: null });
   // PEEPS-END insights
   // PEEPS-BEGIN autofill
   // Autofill settings (director): the allowed file types dropdown.
   await page.goto(`${BASE}/admin/autofill`);
   await page.locator("header.ws-topbar").waitFor({ timeout: 30000 });
   await page.waitForTimeout(800);
-  await check(page, where, "autofill: file types select", { open: async () => { const row = page.locator("tr, .ant-card, [class*=card]").filter({ hasText: "File types and size" }).first(); await row.getByRole("button", { name: "Choose" }).click(); await page.waitForTimeout(300); await page.locator(".ant-select").last().click(); }, root: ".ant-select-dropdown", surface: null });
+  await check(page, where, "autofill: file types select", { open: async () => { await page.getByText("File types and size", { exact: true }).first().locator("xpath=ancestor::*[.//button[normalize-space()='Choose']][1]").getByRole("button", { name: "Choose" }).first().click(); await page.waitForTimeout(300); await page.locator(".ant-select").last().click(); }, root: ".ant-select-dropdown", surface: null });
   // PEEPS-END autofill
   await ctx.close();
 }

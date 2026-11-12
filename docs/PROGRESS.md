@@ -5287,3 +5287,13 @@ reviews documents and converts accepted candidates through the unchanged employe
 referrals off by default. Migration `peeps_20261111090000_recruitment_offers`. Not set until a director chooses: link
 lifetime, required joining documents, exception approver. Details: `docs/plans/PEEPS_STAGE_REPORTS.md` (C-4B).
 <!-- PEEPS-END recruitment-offers -->
+<!-- PEEPS-BEGIN stage-2 -->
+### Peeps stage 2 — carry-overs, Insights, document autofill (2026-11-12, branch `peeps/foundation`)
+Default hiring stages and interview rounds (Default, change in settings); joining documents copied once into the restricted
+employee-document category at conversion; clear, race-safe employee-code refusal. Insights: turnover, tenure, exit reasons,
+hiring funnel; all definitions, window, early-attrition threshold and minimum group size Not set until a director chooses;
+small-group and complementary suppression. Document autofill with a local OCR provider: review per field with field-level
+authority; saves only through the existing workflows (held bank/statutory changes). Migrations
+`peeps_20261112090000_recruitment_carryovers`, `peeps_20261112100000_insights`, `peeps_20261112110000_autofill`. Details:
+`docs/plans/PEEPS_STAGE_REPORTS.md` (stage 2).
+<!-- PEEPS-END stage-2 -->

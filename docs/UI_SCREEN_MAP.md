@@ -239,3 +239,9 @@ tab when on), candidate drawer *Offer* tab (OfferPanel: terms, states, director-
 JoiningPanel (documents, link create/revoke, exceptions, conversion drawer), `/app/recruitment/referrals` (ReferralsPage)
 and the public `/joining/:token` (JoinerUploadPage, AuthShell, no sign-in). Light/dark, 1280 and 390 px checked.
 <!-- PEEPS-END recruitment-offers -->
+<!-- PEEPS-BEGIN stage-2 -->
+Stage 2: `/admin/insights` (InsightsPage: four metric tabs, suppressed cells shown as "Hidden (small group)", CSV export,
+settings panel), `/admin/autofill` (AutofillPage: upload, documents, settings) and `/admin/autofill/:id` (AutofillReviewPage:
+source document beside per-field suggestions, confidence, errors, confirm/correct/reject, save, provenance). Interview round
+is now a dropdown of the director's rounds. Light/dark, 1280 and 390 px checked.
+<!-- PEEPS-END stage-2 -->
