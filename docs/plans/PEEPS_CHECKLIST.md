@@ -142,7 +142,10 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 - [x] 1.2 joining documents copied once into the restricted category at conversion — `5d1f4ec`
 - [x] 1.3 employee code refusal, race-safe (DB unique) — `5d1f4ec`
 - [x] 1.4a DEMO Office member with offer + Insights capability; 1.4b log-capture test; 1.4c scan toggles RUN_ONBOARDING — `5d1f4ec`
-- [ ] 1.4d prove the scan pay rule fires by a temporary break (run at the end with the full scan)
+- [x] 1.4d scan pay rule proven by a temporary break (fired 3 times, nothing else; restored)
 - [x] Step 2 Insights — `44c3aef` (property test, matrix, Not-set refusal, leak test, 2/2 mutations)
 - [x] Step 3 document autofill — `c4872ca` (local OCR, synthetic documents, field authority, 3/3 mutations)
-- [ ] Finish: browser check, migrations fresh/no drift, full suite alone, CI per job, report
+- [x] Fix CI run 323/327 findings — `4861610`
+- [x] Finish: browser walkthrough (56 visits + states), fresh DB no drift, full suite alone on `4861610` 257 files / 2,355 tests, CI run 330 all 12 jobs green, stage report
+- [ ] Owner: choose Insights settings, autofill retention, joining settings; review "Decided by me" in the stage 2 report
+- [ ] **STOP: wait for the owner (stage 3 not started)**

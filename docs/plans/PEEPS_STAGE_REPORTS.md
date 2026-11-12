@@ -1558,3 +1558,167 @@ limit) or split the backend suite. Every other job and the local full suite are 
 - No dedicated log-capture test for pay; request logs are a no-body allowlist and C-4B code logs no values.
 - HR switch toggle for `RUN_ONBOARDING` is not added to the scan's CAPABILITIES loop (scan time limit).
 - Office member offer screens checked in the browser only with a scratch-DB capability change, not in the DEMO seed.
+
+## Stage 2 of 4 — sync, carry-overs, Insights, document autofill (2026-11-12)
+
+One agent on `peeps/foundation`, same session as stage 1 (checklist current). No PR, force-push, staging/production change,
+database drop or CI-file change; `DATABASE_URL`/`PORT` unset on every command (the shell exports a remote database);
+scratch databases only. `docs/samples/` stays removed and unread.
+
+### Commits
+
+| Step | Commit | Result |
+|---|---|---|
+| 0 | `92d28d6` | Merged `feat/hr-payroll-separation` `f915ba3` (Session A's CI sharding and the HR bank/statutory confirmation work, unchanged). Conflicts kept both sides: schema (Session A first), the Tasks sources and task types (their claim/identity sources + Peeps exit sources), `SENSITIVE_DATA.md` regenerated inside the Peeps markers. Payroll test edit kept. |
+| 1 | `5d1f4ec` | Default stages and rounds; joining-document copy at conversion; employee-code refusal; DEMO Office member capabilities; log-capture test; scan toggles `RUN_ONBOARDING`. |
+| 2 | `44c3aef` | Insights. |
+| 3 | `c4872ca` | Document autofill. |
+| fix | `4861610` | CI run 323 findings (see below) + docs. |
+| docs | `63c20e5`, this commit | Checklist and this report. |
+
+### Step 1 carry-overs
+
+- **1.1** Hiring stages ship as pipeline version 0 "Default hiring stages" (Screening, Interview, Offer, Hired, Not moving forward),
+  inserted by migration with the director-only insert trigger paused for that one statement; interview rounds ship as
+  `SETTING_DEFAULTS.interviewRounds` (Screening call, Technical interview, Hiring manager interview, Final interview). Both show
+  "Default, change in settings"; a director's choice replaces them (audited). A job opened with no pipeline uses the default.
+  **Changed tests (none weakened):** `schemaSettings.test.ts` "start Not set" now expects exactly those two defaults (state
+  DEFAULT, the default stages as version 0) and still requires every other setting to start Not set and refuse; plus a new test
+  that a director's choice replaces the default and HR cannot. `jobs.test.ts` "cannot open without a pipeline" now opens on the
+  default (asserting version 0), then reopens on a director's pipeline, and still checks the four history rows.
+- **1.2** Conversion copies each uploaded joining document into the first active employee category with STATUTORY sensitivity
+  (restricted: HR identity/bank view; employees cannot see them; pay categories never used), via the append-only
+  `recruitment_conversion_documents` ledger, unique per joining document. Copies are made before the transaction (storage cannot
+  roll back) and discarded if the request does not create the employee. Test: two simultaneous conversions + a retry → exactly
+  two employee documents, STATUTORY, hidden from the employee, no pay figure.
+- **1.3** HR still types the employee code; an existing code is refused (409 `EMPLOYEE_CODE_TAKEN`, "already in use") before any
+  write, and a race for one code is decided by the database unique index and mapped to the same refusal. Test: two different
+  offers racing for one new code → one employee, one 409.
+- **1.4** DEMO008 (DEMO Office member) gains MANAGE_RECRUITMENT and VIEW_INSIGHTS and the DEMO Office audience opens; checked in
+  the browser as that member (offers visible, no pay UI). Log-capture test: no offer-pay or expected-pay figure in any log line
+  during director and non-director pay requests. The scan switches `RUN_ONBOARDING` with the other HR duties. The deliberate
+  break of the scan's pay rule: see "Scan pay-rule proof" below.
+
+### Step 2 Insights
+
+See PEEPS_PLAN §B.10 stage 2 record. Tests (`insights.test.ts`, `suppression.test.ts`): route enumeration with anonymous 401
+and Developer 403; matrix (director and Office member allowed; employee, manager, HR, non-member refused; only a director sets;
+the database refuses a non-director setting); Not-set refusal naming every missing setting for each metric and export; on real
+output for k = 3, 5 and 1000, no visible cell below k and the people recoverable by subtraction are 0 or ≥ k; audit of views and
+exports; leak test over responses, exports and log lines (no free-text reason, no person's name, no salary/interview/employeeId,
+and the module source reads no exit interview or pay table). Property test: 5,000 random populations (k 2–10, 1–8 cells, zero
+cells included) checked by an independent attacker that only reads the published table; also the classic one-small-cell attack
+and the whole-table-below-k case. **Mutations:** k rule disabled → property test, classic attack and real-output test fail;
+Not-set refusal removed → the refusal test fails.
+
+### Step 3 document autofill
+
+See PEEPS_PLAN §E stage 2 record. Synthetic documents are generated by `__tests__/synthetic.ts` (pdf-lib text PDFs, an SVG-text
+image rendered by sharp, random noise, a drawn-only PDF, and a hand-built password-protected PDF using the standard security
+handler R2); every value is DEMO or a reserved pattern. Tests (`autofill.test.ts`, 10): route enumeration, anonymous 401,
+Developer 403 (before validation); uploads refuse while retention is Not set, defaults shown for file types/size; matrix
+(employee/manager/non-member refused; Office: resumes only; HR: employee documents only while HR recruitment is off; director
+all; wrong subject kind 400); extraction suggests correct values and saves nothing (no held change, bank rows unchanged);
+per-field authority (HR with statutory edit revoked can open an identity document and confirm the name, but sees no PAN/Aadhaar
+values and is refused 403 on both, even sent directly); re-run never overwrites an accepted correction and is idempotent by key;
+two simultaneous extractions → one claim, one result row; apply needs every bank field (never a guessed value), HR's bank entry
+is held for a director (no bank row written), a second apply is a no-op, reviews lock after saving, a resume updates the
+candidate; no extracted value in log lines, queue payloads (id only), notifications, audit rows or candidate search, and
+ciphertext only at rest; password-protected → PASSWORD_PROTECTED, noise and no-text PDF → POOR_QUALITY, oversize, wrong type
+and mislabelled → 400, with manual entry still working; a clear image is read by the local OCR. **Mutations:** extraction writes
+the bank account → the never-auto-save test fails; review-level authority removed → the per-field test fails;
+document-level authority removed → matrix and authority tests fail. The first review-level mutation survived because every
+document kind had a single authority; the identity document's comparison-only name field was added so the rule is testable.
+
+### Verification actually run
+
+- Full backend suite alone on the merge `92d28d6`: **254 files / 2,332 tests passed**. CI run 313: all 12 jobs green to the end.
+- Full backend suite alone on `c4872ca`: 257 files, 2,354 passed, **1 failed** (`developerCeiling` registry, fixed in `4861610`).
+- Final full backend suite alone on `4861610`: see "Final checks" below.
+- Frontend: 25 files / 102 tests; lint, typecheck, build; budgets login 232.0/250, employee shell 342.4/400, admin 361.4/400.
+- Migrations: each new migration applied on a fresh scratch database with `migrate diff` "no difference"; see "Final checks".
+- Changed tests, lint and typecheck before every code commit.
+
+### Failures found and fixed
+
+- Container restarts twice stopped Postgres/Redis (restarted; nothing lost).
+- `businessToday()` returns a Date, not a string (Insights 500s in the first run); fixed.
+- Zero totals are published as 0 (reveal nobody); two test assertions were too strict and were corrected, not the rule.
+- A schema model first landed inside another model's PEEPS block; moved.
+- Lockfile: an `npm install` bumped unrelated transitive packages; the lockfile was rebuilt from HEAD so only the new packages
+  (tesseract.js 7.0.0, @tesseract.js-data/eng 1.0.0) are added and `pdfjs-dist` (same 6.3.289) moves to runtime dependencies.
+- Validation ran before the Developer refusal on autofill routes (400 instead of 403); both new routers now refuse the
+  Developer first.
+- CI run 323 (`44c3aef`): `developerCeiling` (insights.view in two classes via `meta: true`) and `check:popovers` at 390 px
+  (settings rows are cards on phones). Both fixed in `4861610`.
+
+### Final checks
+
+- **Final full backend suite alone on `4861610`: 257 files / 2,355 tests passed** (1,454 s), exit 0.
+- Fresh database `wellsure_s2scan`: all migrations applied, `migrate diff` against the schema: no difference; normal seed +
+  guarded DEMO seed passed; all four prepared leave types inactive (SQL).
+- **Scan pay-rule proof (1.4d):** with a deliberate temporary break (the offer view appended the DEMO pay figure to the role
+  title for everyone), the admin half of `check:sensitive-ui` failed exactly three times — "an HR Admin", "an HR Admin (every
+  duty on)" and the dedicated offers visit, all "offer pay or expected pay outside the directors" — and reported nothing else.
+  HR with every duty off (onboarding switched off) did not reach the page. Source restored with `git checkout` (clean).
+- Browser walkthrough (Playwright, 56 visits + 4 states): director, HR, Wellsure Office member (DEMO008, from the DEMO seed)
+  and employee × 1280/390 × light/dark over Insights, Document autofill (list and review of a synthetic bank PDF uploaded by
+  HR and read by the worker), and Offers. Director and Office member see Insights figures with no person codes; HR and the
+  employee are refused by the shell ("This is not switched on for you"); the employee is refused Document autofill; HR's review
+  page shows the bank suggestions; the Office member sees the accepted DEMO offer and no pay UI; no horizontal overflow, no
+  page errors. Loading, error and empty states checked on Insights and autofill (phone, dark). Screenshots kept in the session
+  scratchpad only; none committed.
+- `check:popovers` (incl. the Insights and autofill dropdowns at 390/1280, light/dark) and both `check:sensitive-ui` halves
+  (incl. the Insights, autofill and onboarding-toggle rules) passed in CI run 330.
+
+### CI read per job (to the end of each job, including cleanup)
+
+| Job | Run 313 (`92d28d6` merge) | Run 323 (`44c3aef`) | Run 327 (`c4872ca`) | Run 330 (`4861610`, final code) |
+|---|---|---|---|---|
+| install-lint-typecheck-test | success | success | success | success |
+| backend-tests (1) | success | failure (developerCeiling) | failure (same) | success |
+| backend-tests (2)/(3)/(4) | success | success | success | success |
+| backend-tests-complete | success | failure (shard 1) | failure (shard 1) | success |
+| docker-build | success | success | success | success |
+| agent-windows | success | success | success | success |
+| attendance-replay | success | success | success | success |
+| latency (incl. popovers) | success | failure (390 px locator) | failure (same) | success |
+| sensitive-ui (admin portal) | success | success | success | success |
+| sensitive-ui (employee portal) | success | success | success | success |
+
+Runs 321/322 were cancelled by the next push. Both red runs had the two causes fixed in `4861610` (one fix attempt each).
+
+### Settings left Not set (refuse until a director chooses)
+
+Insights: `window`, `minimumGroupSize`, `earlyAttrition`, `turnover`, `tenure`, `exitReasons`, `hiringFunnel` (the DEMO company
+chooses fictional values). Autofill: `retention`. Still Not set from stage 1: joiner link lifetime, required joining documents,
+exception approver; and C-4A's sources, retention, scorecard, rejection reasons, email templates, CV rules, requisition route.
+**Default, change in settings:** hiring stages (pipeline v0), interview rounds, autofill file types and size (PDF, PNG, JPEG;
+10 MB); from stage 1, offer approval and referrals (off). HR onboarding stays on by default.
+
+### Changed tests (none weakened)
+
+`recruitment/__tests__/schemaSettings.test.ts` (start-Not-set test now expects the two defaults; every other key still Not set
+and refusing; new director-replaces-default test) and `recruitment/__tests__/jobs.test.ts` (opens on the default pipeline,
+then on a director's, same history assertion). Additive edits only to `hrCapabilities` matrix earlier; no other existing test
+changed.
+
+### Decided by me
+
+Default stage codes/labels and the four default round names; a job with no pipeline uses the default (not the latest version);
+the restricted category for copied joining documents = first active STATUTORY employee category (none → nothing copied);
+Insights audience via a new Office capability VIEW_INSIGHTS; one grouping per metric (department; reasons; furthest stage) to
+avoid overlapping groups; zero cells and zero totals are shown (reveal nobody); median for tenure; exit reasons only from the
+separation mode or resignation reason category; the Insights DEMO choices; autofill scope fields as listed in the plan record;
+identity name is comparison-only and never saved; technical controls (60 s timeout, 5 reads/document, 30 requests/person/10
+min, OCR confidence floor 60); raw text never stored; one review per field (changeable until saved); apply needs every bank
+field; `pdfjs-dist` moved to runtime dependencies at the same version; tesseract.js 7.0.0 with the bundled English model.
+
+### Unverified
+
+- The source-document PDF preview inside the review page: headless Chromium has no PDF viewer, so the frame rendered blank in
+  the walkthrough (the file loads; images render). Check in a desktop browser.
+- OCR accuracy on real photographs and scans (only synthetic documents were used, as instructed); OCR of images depends on the
+  system fonts used to render the synthetic image in tests.
+- A cloud provider (not built; needs owner approval). Real email delivery (none added).
+- `check:sensitive-ui` full local re-run after restoring the break (CI run 330 ran both halves on the restored code and passed).
