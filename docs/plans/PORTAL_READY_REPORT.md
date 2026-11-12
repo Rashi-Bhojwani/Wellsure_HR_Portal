@@ -26,9 +26,11 @@ owner's instruction (`PARITY_COVERAGE.md` was brought onto this branch by the pa
 | D-37 default 1: loan shortfall per type (+ max deduction %, Not set) | DONE (9 mutants caught) | `df8306f` |
 | D-37 default 2: leave in the month of leaving (+ pro-rata rounding, Not set) | DONE (7 caught, 1 equivalent removed) | `534aa71` |
 | D-37 default 3: Developer does not see Employee Swipes by default | DONE (3 mutants caught) | `9ec926e` |
-| Stage 6 internal reports and query builder | **BLOCKED**: `docs/plans/PARITY_COVERAGE.md` does not exist on any branch | — |
+| Stage 6 internal payroll reports | DONE (ten reports, layouts, audited exports; 7 mutants caught, 1 equivalent) | `e90c471`, `247096d` |
+| CI backend shards with a count check | DONE (longest shard 6.5 min vs 17 min before; limit unchanged) | `f915ba3` |
+| Payroll rows of the parity audit (ST-24/SS-05, PY-27/28/29 guide, ST-21, ST-03/06, LC-07, PY-37, PY-24, IE-09) | DONE; LC-09 and ST-23 were already covered; the rest skipped (owner values) — see `A_PARITY_ROWS.md` | `9bbcc05`, `c62a451` |
 | Stage 8 file readers and parallel-run kit | **BLOCKED in part**: `docs/samples/` exists only on `peeps/foundation` (not touched); the Phase 6 compare tool exists | — |
-| Stage 9 Tier 1 parity | **BLOCKED** (same file missing) | — |
+| Stage 9 Tier 1 parity (payroll rows) | DONE where no owner value is needed (above); owner-value rows listed as skipped | — |
 
 Plans written before code: `GREYTHR_PARITY_WORKFORCE.md`, `A3_OPENING_FIGURES.md`, `P7_4_LOANS.md`, `P7_5_REIMBURSEMENTS.md`, `P7_6_SETTLEMENTS.md` (with the
 P7-6b section), `P7_7_FORM16.md`, `D37_DEFAULTS.md`.
@@ -81,6 +83,11 @@ and off-cycle step is inside its budget (largest: 0.58 s against 1.6 s).
 - The loan "pause" the owners may want: there is no such feature (row 75).
 - A TEAM-scope viewer of the roster grid; the five non-leave attendance-lock writers over their routes (wired; only leave apply exercised).
 - Stage 8 readers (no synthetic samples on this branch yet).
+
+**Verified on 2026-11-12 (Session A block):** see STAGE_REPORTS.md "Session A block". Full suite alone 239 files / 2,139 tests with 3 failures: one mine (fixed in
+`247096d`), two in the other session's files (`customFields` passes alone; `yearEndMoney` audit-viewer test broken since `ad5b3ca`). Not verified: the Form 16 PDF and
+the bank summary against any official or bank format (both are our own layouts); a real upload of the salary import by a director and its decision by the other
+director through the screens (tested over the API only).
 
 ## 4. What I decided myself
 

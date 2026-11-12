@@ -39,7 +39,7 @@ Read first. Status: DONE / OPEN / PARTIAL / **UNDEFINED** (no plan file on any b
 | Walk 2 | every new screen with content: 5 roles × 1280 light / 390 dark / 768; keyboard-only primary actions | DONE `f1060a3` (225 visits, 21/21 keyboard checks; 6 fixes) | — |
 | E2E | a settlement recovers a loan through an off-cycle run; double clicks; regular run identical | DONE `c6af1ce` (2 bugs fixed, 3 mutants caught) | — |
 | Scale | new readers and the off-cycle road at 500 people | DONE `6b1ba3d` (all within budget) | — |
-| Stage 6 | internal reports + directors-only query builder "using the layouts in `docs/plans/PARITY_COVERAGE.md`" | **BLOCKED: `PARITY_COVERAGE.md` does not exist on any branch** | owners / a session that wrote it |
+| Stage 6 | internal payroll reports (directors only) | **DONE 2026-11-12** (`e90c471`, `247096d`); the query builder RP-12 is the other session's row | — |
 | Stage 8 | attendance and salary file readers from `docs/samples`, layout setup, parallel-run kit | **BLOCKED: the files on `origin/main` look like real exports; the owner will replace them with synthetic files and say when (2026-11-11). Not brought here.** Earlier note: **BLOCKED in part: `docs/samples/` is not on this branch** (only on `peeps/foundation`, which this work may not touch) | samples on this branch |
 | Stage 9 parity | Tier 1 MISSING items of `PARITY_COVERAGE.md` | not started (the file was brought onto this branch by the M session on 2026-11-11, `9f5dd5f`; not started on the owner's instruction) | as Stage 6 |
 | Close-out | `PORTAL_READY_REPORT.md`, `GETTING_STARTED.md`, `FIRST_REAL_PAYROLL_RUN.md` | PORTAL_READY_REPORT and OWNER_REVIEW_SHEET updated 2026-11-11; open items are the undefined A-items and the blocked stages | everything above |
@@ -107,7 +107,16 @@ pause only at CHECKPOINT 1 (after Stage 2), CHECKPOINT 2 (after P7-3) and stop c
 - [x] 5.1 payslip delivery (links) · [x] 5.2 not-on-payroll flag · [x] 5.3 remote check-in/out and director decisions (Stage 5a, docs/plans/STAGE_5A_PLAN.md) · [x] 5.4 bank layouts (.xlsx and .csv only; the .xls question stays open) · [x] 5.5 repayment batch · [ ] 5.6 loans (if missing)
 
 ## Stage 6 — internal payroll reports (director-only)
-- [ ] reports per master prompt; no official-format files
+- [x] Ten reports (payroll summary, department cost, head-wise, bank-transfer summary, loans, claims, statutory summary, statutory by person, variance, CTC), column choice,
+  saved company layouts ("Default, change in settings"), audited .xlsx/.csv exports — `e90c471`, `247096d` (plan `STAGE_6_PAYROLL_REPORTS.md`; 7 mutants caught, 1 equivalent)
+
+## Session A block, 2026-11-12 (CI shards, Stage 6, the payroll rows of the parity audit; plan `A_PARITY_ROWS.md`)
+- [x] CI: backend suite in four shards with a final count check — `f915ba3`
+- [x] Already done, verified: LC-09 (loan recovery in F&F, `offCycleLoanE2E`), ST-23 (Part B draft until confirmed)
+- [x] ST-24 / SS-05 Form 16 PDF (DRAFT) · PY-27/28/29 settlement guide (rules Not set) · ST-21 quarterly export · ST-03 / ST-06 PF and ESI challans · LC-07 loan changes screen ·
+  PY-37 bank summary PDF · PY-24 reimbursement statement — `9bbcc05` (9 mutants caught) · IE-09 salary assignment import (our template, ordinary revisions) — `c62a451` (3 caught, 1 equivalent)
+- [ ] Skipped (owner decision or real value): LV-14, PY-30, LC-16, ST-30, LC-13, LC-15, ST-07, ST-09, PY-43, ST-02, ST-05, PY-23, PY-41, ST-29, ST-15, ST-08, ST-16, ST-17,
+  ST-18, ST-22, ST-25, ST-19, and the amounts of PY-27/28/29; IE-12 and PY-32 by instruction
 
 ## Stage 7 — Phase 7 P7-2..P7-7
 - [x] P7-2 (windows, declarations, proofs, directors' verification, regime comparison, screens) · [x] P7-3 as far as TDS in the run and the IT Statement (the TDS line, its explanation, pins, stale on a changed declaration); **not built from P7-3's list:** YTD Reports, payslip YTD column, Salary Revision page, revision letters, offer-letter figures → **STOPPED AT THE TDS CHECKPOINT (CHECKPOINT 2)** · [ ] P7-4 · [ ] P7-5 · [ ] P7-6 · [ ] P7-7
