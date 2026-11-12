@@ -1,4 +1,4 @@
-import type { DataScope } from "@prisma/client";
+import type { DataScope } from "../../lib/dataScope";
 import { writeAuditLog } from "../../lib/audit";
 import { audienceWhere, getCurrentPlacement, isInAudience } from "../../lib/audience";
 import { buildEmployeeScopeWhere } from "../../lib/dataScope";
