@@ -772,6 +772,10 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/behaviours": adminInService("router gate settings.manage (never HR) and a director check in the service; a different director confirms (D-37)"),
   "POST /api/behaviours/:key/proposals": adminInService("router gate settings.manage (never HR) and a director check in the service; a different director confirms (D-37)"),
   "POST /api/behaviours/proposals/:id/confirm": adminInService("router gate settings.manage (never HR) and a director check in the service; a different director confirms (D-37)"),
+  "GET /api/payroll-reports": adminInService("router gate payroll.salary.view (never HR) and a director check in the service (Stage 6 payroll reports)"),
+  "GET /api/payroll-reports/:key": adminInService("router gate payroll.salary.view (never HR) and a director check in the service (Stage 6 payroll reports)"),
+  "PUT /api/payroll-reports/:key/layout": adminInService("router gate payroll.salary.view (never HR) and a director check in the service (Stage 6 payroll reports)"),
+  "GET /api/payroll-reports/:key/export": adminInService("router gate payroll.salary.view (never HR) and a director check in the service (Stage 6 payroll reports)"),
   // P7-3: the person's own
   "GET /api/tax/me/ytd": self,
   "GET /api/tax/me/salary-revisions": self,

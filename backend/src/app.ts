@@ -46,6 +46,7 @@ import { reimbursementsRouter } from "./modules/payroll/reimbursements/routes"; 
 import { settlementsRouter } from "./modules/payroll/settlements/routes"; // P7-6
 import { offCycleRouter } from "./modules/payroll/offcycle/routes"; // P7-6b
 import { behavioursRouter } from "./modules/behaviours/routes"; // D-37
+import { payrollReportsRouter } from "./modules/payroll/reports/routes"; // Stage 6
 import { payslipRouter } from "./modules/payroll/payslipRoutes";
 // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
 import { employeeExtrasRouter, massEmailRouter, segmentsRouter, separationModesRouter } from "./modules/parity/routes";
@@ -103,6 +104,7 @@ const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   { path: "/api/settlements", router: settlementsRouter }, // P7-6
   { path: "/api/offcycle", router: offCycleRouter }, // P7-6b
   { path: "/api/behaviours", router: behavioursRouter }, // D-37
+  { path: "/api/payroll-reports", router: payrollReportsRouter }, // Stage 6
   { path: "/api/attendance", router: attendanceRouter },
   { path: "/api/biometric", router: biometricRouter },
   // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin

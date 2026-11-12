@@ -118,6 +118,7 @@ const SettlementsPage = lazyPage(() => import("../pages/admin/payroll/Settlement
 const OffCyclePage = lazyPage(() => import("../pages/admin/payroll/OffCyclePage"), "OffCyclePage"); // P7-6b
 const PayTypesPage = lazyPage(() => import("../pages/admin/payroll/PayTypesPage"), "PayTypesPage"); // item 3
 const QuarterlyTdsPage = lazyPage(() => import("../pages/admin/payroll/QuarterlyTdsPage"), "QuarterlyTdsPage"); // item 3
+const PayrollReportsPage = lazyPage(() => import("../pages/admin/payroll/PayrollReportsPage"), "PayrollReportsPage"); // Stage 6
 const ReimbursementsAdminPage = lazyPage(() => import("../pages/admin/payroll/ReimbursementsAdminPage"), "ReimbursementsAdminPage"); // P7-5
 const LoansAdminPage = lazyPage(() => import("../pages/admin/payroll/LoansAdminPage"), "LoansAdminPage"); // P7-4
 const OpeningFiguresPage = lazyPage(() => import("../pages/admin/payroll/OpeningFiguresPage"), "OpeningFiguresPage"); // A-3
@@ -394,6 +395,7 @@ export const adminApps: AdminApp[] = [
           { key: "payroll-pay-types", label: "Loan and claim types", path: "payroll/pay-types", icon: FileProtectOutlined, element: PayTypesPage, needs: { director: true } }, // item 3
           { key: "payroll-quarterly-tds", label: "Quarterly TDS data", path: "payroll/quarterly-tds", icon: FileProtectOutlined, element: QuarterlyTdsPage, needs: { director: true } }, // item 3
           { key: "payroll-tds-form16", label: "TDS and Form 16", path: "payroll/tds-form16", icon: FileProtectOutlined, element: TdsForm16Page, needs: { director: true } }, // P7-7
+          { key: "payroll-reports", label: "Payroll reports", path: "payroll/reports", icon: FileProtectOutlined, element: PayrollReportsPage, needs: { director: true } }, // Stage 6
           { key: "payroll-tax-declarations", label: "Tax Declarations", path: "payroll/tax-declarations", icon: FormOutlined, element: TaxDeclarationsPage, needs: PAYROLL_NEEDS },
           { key: "payroll-holds", label: "Held Salaries", path: "payroll/holds", icon: PauseCircleOutlined, element: HeldSalariesPage, needs: PAYROLL_NEEDS },
           { key: "payroll-run", label: "Payroll Run", path: "payroll/run", icon: FundOutlined, element: PayrollRunsPage, needs: PAYROLL_NEEDS },

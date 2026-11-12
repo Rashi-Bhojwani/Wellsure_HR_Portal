@@ -4345,3 +4345,18 @@ model ReportSubscription {
   @@map("report_subscriptions")
 }
 // M-END
+
+// A-BEGIN: Session A additions (2026-11-12 block). Additive only.
+/// Stage 6: a director's saved column choice for a payroll report. Append-only; the newest is in force.
+model PayrollReportLayout {
+  id           String   @id @default(cuid())
+  reportKey    String   @map("report_key")
+  columns      String[]
+  reason       String
+  setByUserId  String   @map("set_by_user_id")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([reportKey, createdAt])
+  @@map("payroll_report_layouts")
+}
+// A-END
