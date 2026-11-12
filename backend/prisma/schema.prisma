@@ -549,6 +549,7 @@ model Employee {
   statutoryHistory           EmployeeStatutoryHistory[]
   letterAsks                 LetterAsk[]
   documentAcknowledgements   CompanyDocumentAcknowledgement[] // block 2, ER-18
+  probationDecisions         EmployeeProbationDecision[] // block 2, ER-26
   // M-END
 
   @@index([status])
@@ -4419,5 +4420,21 @@ model CompanyDocumentAcknowledgement {
   @@unique([documentId, employeeId])
   @@index([employeeId])
   @@map("company_document_acknowledgements")
+}
+// M-END
+
+// M-BEGIN (second session block 2, ER-26): probation decisions (confirm, or extend to a date), append-only.
+model EmployeeProbationDecision {
+  id              String    @id @default(cuid())
+  employeeId      String    @map("employee_id")
+  employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  kind            String
+  extendedTo      DateTime? @map("extended_to") @db.Date
+  reason          String
+  decidedByUserId String    @map("decided_by_user_id")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([employeeId, createdAt])
+  @@map("employee_probation_decisions")
 }
 // M-END

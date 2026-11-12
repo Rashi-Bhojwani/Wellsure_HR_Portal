@@ -792,6 +792,11 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/document-acks/required": admin,
   "PUT /api/document-acks/:id/required": admin,
   "GET /api/document-acks/:id/status": scoped("documents.manage (never manager-grantable); the audience narrowed to the caller's data scope; Developer refused"),
+  // ER-26 probation
+  "GET /api/probation/mine": self,
+  "GET /api/probation": scoped("employee.edit (never manager-grantable); the caller's data scope in the service; Developer refused; never one's own"),
+  "POST /api/probation/:employeeId/confirm": scoped("employee.edit (never manager-grantable); data scope in the service; Developer refused; never one's own"),
+  "POST /api/probation/:employeeId/extend": scoped("employee.edit (never manager-grantable); data scope in the service; Developer refused; never one's own"),
   // P7-3: the person's own
   "GET /api/tax/me/ytd": self,
   "GET /api/tax/me/salary-revisions": self,
