@@ -35,6 +35,13 @@ const admin: RouteClass = { kind: "admin" };
 const adminInService = (why: string): RouteClass => ({ kind: "admin", why });
 
 export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
+  // PEEPS-BEGIN insights
+  "GET /api/insights/status": self,
+  "GET /api/insights/settings": adminInService("Directors, or Office members with VIEW_INSIGHTS (read); setting state only"),
+  "PUT /api/insights/settings/:key": adminInService("Actual director only (service and database trigger); append-only, audited"),
+  "GET /api/insights/metrics/:metric": adminInService("Directors or Office members with VIEW_INSIGHTS; aggregate, small groups suppressed, audited"),
+  "GET /api/insights/metrics/:metric/export": adminInService("Same audience; the same suppressed aggregate as CSV, audited"),
+  // PEEPS-END insights
   // PEEPS-BEGIN recruitment-offers
   "GET /api/recruitment/offer-status": self,
   "GET /api/recruitment/offers": scoped("Office/directors all offers' non-pay terms; HR onboarding accepted offers only; no pay in lists"),

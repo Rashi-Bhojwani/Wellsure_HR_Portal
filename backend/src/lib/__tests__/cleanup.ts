@@ -108,6 +108,9 @@ export const OPTIONAL_FK_POLICY: Record<string, Policy> = {
 // plain deleteMany on their natural key.
 export const FIXTURE_ROOT_MODELS = ["Employee", "User"] as const;
 export const STANDALONE_ROOT_MODELS: Record<string, string> = {
+  // PEEPS-BEGIN insights
+  InsightsSettingVersion: "Director Insights settings (append-only, purge-guarded)",
+  // PEEPS-END insights
   // PEEPS-BEGIN recruitment
   RecruitmentSettingVersion: "Director recruitment settings",
   RecruitmentPipeline: "Immutable director pipeline versions",
@@ -528,4 +531,7 @@ for (const model of ["RecruitmentSettingVersion", "RecruitmentPipeline", "Recrui
 // PEEPS-END recruitment
 // PEEPS-BEGIN recruitment-offers
 for (const model of ["RecruitmentOfferEvent", "RecruitmentJoiningException", "RecruitmentConversion", "RecruitmentConversionDocument"]) PURGE_GUARDED_MODELS.add(model);
+// PEEPS-BEGIN insights
+PURGE_GUARDED_MODELS.add("InsightsSettingVersion");
+// PEEPS-END insights
 // PEEPS-END recruitment-offers

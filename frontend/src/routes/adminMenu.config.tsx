@@ -34,6 +34,7 @@ import {
   TableOutlined,
   ScheduleOutlined,
   SettingOutlined,
+  LineChartOutlined,
   SolutionOutlined,
   SwapOutlined,
   TeamOutlined,
@@ -495,3 +496,10 @@ adminApps.find(a=>a.key==="employee")?.menus?.[0]?.items.push(
   { key: "recruitment-offers", label: "Offers and joining", path: "recruitment/offers", icon: SolutionOutlined, element: OffersPage, needs: { any: ["recruitment.view", "employee.create"] } },
 );
 // PEEPS-END recruitment-offers
+// PEEPS-BEGIN insights
+const InsightsPage = lazyPage(() => import("../features/insights/InsightsPage"), "InsightsPage");
+adminApps.find(a=>a.key==="employee")?.menus?.[0]?.items.push(
+  // Directors hold every key; Wellsure Office members get insights.view from the VIEW_INSIGHTS capability. The page asks the server.
+  { key: "insights", label: "Insights", path: "insights", icon: LineChartOutlined, element: InsightsPage, needs: { any: ["insights.view"] } },
+);
+// PEEPS-END insights

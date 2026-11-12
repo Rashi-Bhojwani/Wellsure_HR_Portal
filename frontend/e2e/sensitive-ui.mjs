@@ -86,6 +86,10 @@ async function peepsPageChecks(page, user, label, base, p, text) {
   if (text.includes("recruitment/joining/")) problems.push(`${where}: a joining document's storage key is on the page`);
   if ((p === "recruitment" || p.startsWith("recruitment/")) && user === "DEMO005" && text.includes("DEMO-C4B-JOINER")) problems.push(`${where}: Developer sees joiner data`);
   // PEEPS-END recruitment-offers
+  // PEEPS-BEGIN insights
+  // Insights are aggregate: no money, no exit-interview text and no person's code on the page.
+  if (p === "insights" && (/₹|\bINR\b|\bRs\.?\s?\d/.test(text) || text.includes("DEMO-C3-PRIVATE-INTERVIEW") || /\bDEMO0\d\d\b/.test(text.replace(/DEMO COMPANY/g, "")))) problems.push(`${where}: Insights shows money, an exit interview or a person's code`);
+  // PEEPS-END insights
   // PEEPS-BEGIN exits
   if (!["DEMO001", "DEMO013", "DEMO006", "DEMO004"].includes(user) && text.includes("DEMO-C3-PRIVATE-INTERVIEW")) problems.push(`${where}: sees a private exit interview outside the relationship`);
   if ((p === "exits" || p.startsWith("exits/")) && /₹|\bINR\b|\bRs\.?\s?\d/.test(text)) problems.push(`${where}: exit screen contains a money value`);

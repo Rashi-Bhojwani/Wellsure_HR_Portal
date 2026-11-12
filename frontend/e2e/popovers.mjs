@@ -305,6 +305,13 @@ for (const [width, height] of [
   await page.waitForTimeout(800);
   await check(page, where, "offers: state filter", { open: () => page.locator(".ant-select").filter({ has: page.locator("[aria-label='Filter by state']") }).first().click(), root: ".ant-select-dropdown", surface: null });
   // PEEPS-END recruitment-offers
+  // PEEPS-BEGIN insights
+  // Insights settings (director): the turnover definition's dropdown.
+  await page.goto(`${BASE}/admin/insights`);
+  await page.locator("header.ws-topbar").waitFor({ timeout: 30000 });
+  await page.waitForTimeout(800);
+  await check(page, where, "insights: definition select", { open: async () => { const row = page.locator("tr, .ant-card, [class*=card]").filter({ hasText: "Turnover definition" }).first(); await row.getByRole("button", { name: "Choose" }).click(); await page.waitForTimeout(300); await page.locator(".ant-select").last().click(); }, root: ".ant-select-dropdown", surface: null });
+  // PEEPS-END insights
   await ctx.close();
 }
 }

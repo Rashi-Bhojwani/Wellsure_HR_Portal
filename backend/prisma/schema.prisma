@@ -5440,3 +5440,20 @@ model RecruitmentConversionDocument {
   @@map("recruitment_conversion_documents")
 }
 // PEEPS-END recruitment-offers
+
+// PEEPS-BEGIN insights
+// Stage 2: Insights settings (definitions, window, early-attrition threshold, minimum group size). Append-only versions, a director
+// writes them (database trigger), every change audited. Not set until chosen.
+model InsightsSettingVersion {
+  id              String   @id @default(cuid())
+  key             String
+  version         Int
+  value           Json?
+  reason          String
+  changedByUserId String   @map("changed_by_user_id")
+  changedAt       DateTime @default(now()) @map("changed_at") @db.Timestamptz(3)
+
+  @@unique([key, version])
+  @@map("insights_setting_versions")
+}
+// PEEPS-END insights
