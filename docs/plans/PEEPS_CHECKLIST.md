@@ -135,3 +135,14 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 - [ ] CI run 301 on `eeb7b8e`: six jobs green; install-lint-typecheck-test red twice by its 18-minute step limit (slow runners, no failing test) — owner/Session A to raise the limit in ci.yml
 - [ ] Owner: choose link lifetime, required joining documents, exception approver; decide the C-4A defaults finding
 - [ ] **STOP: wait for the owner (stage 2 not started)**
+
+## Stage 2 of 4 (2026-11-12): sync, carry-overs, Insights, document autofill
+- [x] Step 0: merged `feat/hr-payroll-separation` `f915ba3` (CI sharding present) — `92d28d6`; full suite alone 254 files / 2,332 tests; CI run 313 all 12 jobs green to the end
+- [x] 1.1 default stages (pipeline v0) and interview rounds, Default, change in settings; changed tests recorded — `5d1f4ec`
+- [x] 1.2 joining documents copied once into the restricted category at conversion — `5d1f4ec`
+- [x] 1.3 employee code refusal, race-safe (DB unique) — `5d1f4ec`
+- [x] 1.4a DEMO Office member with offer + Insights capability; 1.4b log-capture test; 1.4c scan toggles RUN_ONBOARDING — `5d1f4ec`
+- [ ] 1.4d prove the scan pay rule fires by a temporary break (run at the end with the full scan)
+- [ ] Step 2 Insights (suppression core + property test written, uncommitted: `backend/src/modules/insights/`)
+- [ ] Step 3 document autofill (local OCR proven: tesseract.js 7 + bundled English data, offline)
+- [ ] Finish: browser check, migrations fresh/no drift, full suite alone, CI per job, report
