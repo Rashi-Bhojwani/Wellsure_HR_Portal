@@ -450,3 +450,9 @@ rules). Browser walk on a scratch copy of the demo company: the eight changed ad
 Developer at 1280 light and 390 dark — 100 visits, no crash, no server error, no sideways scroll, no secret text; every directors' screen refused to the other four roles
 (the Developer sees the existing Salary revisions frame with "You don't have access" and no data). Keyboard only: 10 of 10 primary actions (Columns, Enter a challan,
 Import from a file, loan Changes, Prepare) reached by Tab with visible focus, opened by Enter, Tab kept inside, Escape closes, focus returns.
+
+**CI per job (final).** The other session pushed about every ten minutes, so most runs were cancelled by the next push. Run 333 (`cbaee81`, which contains all of
+this block's code, the `247096d` fix and the other session's `yearEndMoney` fix): backend-tests 1–4 green (test steps 4:40–7:00), backend-tests-complete green (the shards
+add up to the suite, each test once), install-lint-typecheck-test, docker-build, latency, attendance-replay, agent-windows and sensitive-ui (employee) green;
+sensitive-ui (admin) was cancelled by the next push at 15 minutes — it was green on run 326 (`c62a451`, every new screen; the one later code change, `247096d`, is a
+backend read). Run 326 itself failed only on the two tests named above (one mine, fixed; one the other session's, fixed by them in `c536707`).
