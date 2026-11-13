@@ -83,6 +83,42 @@ export const BEHAVIOURS = {
     d37: false,
     defaultText: "Not set: no percentage limit (net pay still never goes below zero because of a loan)",
   },
+  // Part 3 (docs/plans/A_PART3.md), owner decisions 2026-11-13: pay mechanisms with every value Not set until two directors confirm them.
+  "payroll.overtimePay": {
+    title: "Overtime pay",
+    what: "How approved overtime is paid: the pay head, and a flat rate per hour or a multiplier of an hourly rate (chosen heads of the salary in force divided by hours a month), with the rounding. Nothing is paid until this is confirmed AND overtime is turned on.",
+    schema: z
+      .object({
+        payHead: z.string().regex(/^[A-Z][A-Z0-9_]{1,31}$/),
+        rate: z.discriminatedUnion("mode", [
+          z.object({ mode: z.literal("FLAT_PER_HOUR"), perHour: z.string().regex(/^\d{1,9}(\.\d{1,2})?$/) }).strict(),
+          z.object({ mode: z.literal("MULTIPLIER"), multiplier: z.string().regex(/^\d{1,2}(\.\d{1,4})?$/), basisHeads: z.array(z.string().regex(/^[A-Z][A-Z0-9_]{1,31}$/)).min(1).max(20), hoursPerMonth: z.string().regex(/^\d{1,3}(\.\d{1,2})?$/) }).strict(), // allow-number: field lengths
+        ]),
+        rounding: z.object({ mode: z.enum(["HALF_UP", "UP", "DOWN"]), scale: z.number().int().min(0).max(2) }).strict(), // allow-number: decimals of a rupee
+        sourceNote: z.string().trim().min(3).max(300),
+      })
+      .strict(),
+    defaultValue: null as null | { payHead: string; rate: { mode: "FLAT_PER_HOUR"; perHour: string } | { mode: "MULTIPLIER"; multiplier: string; basisHeads: string[]; hoursPerMonth: string }; rounding: { mode: "HALF_UP" | "UP" | "DOWN"; scale: number }; sourceNote: string },
+    d37: false,
+    defaultText: "Not set: approved overtime is not paid",
+  },
+  "payroll.leaveEncashment": {
+    title: "Leave encashment amount (in the year and at exit)",
+    what: "The pay head, the leave types encashed at exit, the heads of the salary in force that make the per-day basis, the divisor (a fixed number of days or the month's calendar days) and the rounding. Until confirmed, encashment requests are not paid and a settlement shows leave in days only.",
+    schema: z
+      .object({
+        payHead: z.string().regex(/^[A-Z][A-Z0-9_]{1,31}$/),
+        exitLeaveTypes: z.array(z.string().regex(/^[A-Z0-9_]{1,20}$/)).max(20), // allow-number: field lengths
+        basisHeads: z.array(z.string().regex(/^[A-Z][A-Z0-9_]{1,31}$/)).min(1).max(20), // allow-number: field lengths
+        divisor: z.discriminatedUnion("kind", [z.object({ kind: z.literal("FIXED_DAYS"), days: z.string().regex(/^\d{1,2}(\.\d{1,2})?$/) }).strict(), z.object({ kind: z.literal("CALENDAR_DAYS") }).strict()]),
+        rounding: z.object({ mode: z.enum(["HALF_UP", "UP", "DOWN"]), scale: z.number().int().min(0).max(2) }).strict(), // allow-number: decimals of a rupee
+        sourceNote: z.string().trim().min(3).max(300),
+      })
+      .strict(),
+    defaultValue: null as null | { payHead: string; exitLeaveTypes: string[]; basisHeads: string[]; divisor: { kind: "FIXED_DAYS"; days: string } | { kind: "CALENDAR_DAYS" }; rounding: { mode: "HALF_UP" | "UP" | "DOWN"; scale: number }; sourceNote: string },
+    d37: false,
+    defaultText: "Not set: encashment requests are not paid; a settlement shows leave in days only",
+  },
 } as const;
 export type BehaviourKey = keyof typeof BEHAVIOURS;
 export const BEHAVIOUR_KEYS = Object.keys(BEHAVIOURS) as BehaviourKey[];

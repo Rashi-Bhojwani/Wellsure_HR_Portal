@@ -50,6 +50,7 @@ import { payrollReportsRouter } from "./modules/payroll/reports/routes"; // Stag
 import { complianceRouter } from "./modules/payroll/compliance/routes"; // ST-30
 import { minimumWagesRouter } from "./modules/payroll/minimumWages/routes"; // ST-29
 import { journalRouter } from "./modules/payroll/journal/routes"; // PY-41
+import { payPoliciesRouter } from "./modules/payroll/payPolicies/routes"; // part 3 A2/A3
 import { policySettingsRouter } from "./modules/policySettings/routes"; // M session block 2
 import { divisionsRouter } from "./modules/divisions/routes"; // M session block 2, ER-27
 import { documentAcksRouter } from "./modules/documents/ackRoutes"; // M session block 2, ER-18
@@ -127,6 +128,7 @@ const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   { path: "/api/payroll-compliance", router: complianceRouter }, // ST-30
   { path: "/api/payroll-minimum-wages", router: minimumWagesRouter }, // ST-29
   { path: "/api/payroll-journal", router: journalRouter }, // PY-41
+  { path: "/api/payroll-pay-policies", router: payPoliciesRouter }, // part 3 A2/A3
   { path: "/api/policy-settings", router: policySettingsRouter }, // M session block 2
   { path: "/api/divisions", router: divisionsRouter }, // M session block 2, ER-27
   { path: "/api/document-acks", router: documentAcksRouter }, // M session block 2, ER-18

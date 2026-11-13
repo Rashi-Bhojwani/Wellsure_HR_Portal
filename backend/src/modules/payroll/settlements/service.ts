@@ -10,6 +10,7 @@ import { decide, liveApproval, registerSubject, submit } from "../approvals";
 import { payrollHash } from "../hash";
 import { unpaidHeldItems } from "../offcycle/held";
 import { outstandingLoans } from "../loans/service";
+import { exitEncashment } from "../payPolicies/service";
 import { canonicalDecimal, dec, fixed, sum, ZERO, type Money } from "../money";
 
 // P7-6 (docs/plans/P7_6_SETTLEMENTS.md): full and final settlement, prepared and confirmed. Paying it needs an off-cycle run (P7-6b, not built): nothing here moves money.
@@ -51,7 +52,11 @@ export async function automaticLines(employeeId: string, lastWorkingDate: Date):
   const types = new Map((await prisma.leaveType.findMany({ where: { id: { in: ledger.map((l) => l.leaveTypeId) } }, select: { id: true, code: true } })).map((t) => [t.id, t.code]));
   for (const l of ledger) {
     const days = dec((l._sum.days ?? 0).toString());
-    if (!days.isZero()) lines.push({ kind: "LEAVE_BALANCE", label: `Leave balance (${types.get(l.leaveTypeId) ?? "leave"}), days only`, amount: null, days: canonicalDecimal(days), source: "leave ledger" });
+    if (days.isZero()) continue;
+    // Part 3 A3: an amount only once the leave encashment setting is confirmed and names this type for exit; until then days only, exactly as before.
+    const code = types.get(l.leaveTypeId) ?? "leave";
+    const enc = days.gt(ZERO) ? await exitEncashment(employeeId, code, canonicalDecimal(days), lastWorkingDate) : null;
+    lines.push(enc ? { kind: "LEAVE_BALANCE", label: `Leave encashment (${code})`, amount: enc.amount, days: canonicalDecimal(days), source: `leave ledger; ${enc.source}` } : { kind: "LEAVE_BALANCE", label: `Leave balance (${code}), days only`, amount: null, days: canonicalDecimal(days), source: "leave ledger" });
   }
   return lines;
 }

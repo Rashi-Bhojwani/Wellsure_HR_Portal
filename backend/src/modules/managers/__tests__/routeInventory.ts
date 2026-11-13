@@ -392,6 +392,10 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/payroll/runs/:id/bank-batch": admin,
   "GET /api/payroll/bank-batches/:id": admin,
   "GET /api/payroll/bank-batches/:id/file": admin,
+  "GET /api/payroll-pay-policies/overtime": adminInService("payroll.salary.view and a director check (overtimePreview)"), // part 3 A2
+  "POST /api/payroll-pay-policies/overtime/post": adminInService("director check (overtimePost)"),
+  "GET /api/payroll-pay-policies/encashment": adminInService("director check (encashmentList)"), // part 3 A3
+  "POST /api/payroll-pay-policies/encashment/pay": adminInService("director check (encashmentPay)"),
   "PUT /api/payroll-journal/mappings": adminInService("payroll.salary.view and a director check (setMappings)"), // PY-41
   "GET /api/payroll-journal/runs/:runId": adminInService("director check (journal)"),
   "GET /api/payroll-journal/runs/:runId/export": adminInService("director check (exportJournal calls journal)"),
