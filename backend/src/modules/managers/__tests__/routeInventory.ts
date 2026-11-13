@@ -762,6 +762,10 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   // P7-7 (docs/plans/P7_7_FORM16.md)
   "GET /api/tax/me/form16": self,
   "GET /api/tax/me/form16/pdf": self, // ST-24 / SS-05
+  "GET /api/tax/me/form16/part-a": self, // ST-25
+  "GET /api/tax/form16/:fy/part-a": adminInService("director only (form16PartA.listYear)"),
+  "POST /api/tax/form16/:fy/people/:employeeId/part-a": adminInService("director only (form16PartA.upload)"),
+  "GET /api/tax/form16/:fy/people/:employeeId/part-a": adminInService("director only (form16PartA.directorPartA)"),
   "GET /api/tax/challans": adminInService("director only (register)"),
   "POST /api/tax/challans": adminInService("director only (enterChallan), audited"),
   "POST /api/tax/challans/:id/confirm": adminInService("a different director, by retyping (confirmChallan)"),

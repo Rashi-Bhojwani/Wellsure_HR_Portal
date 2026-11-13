@@ -225,3 +225,13 @@ export interface StatutoryChallanRegister {
 export const statutoryChallans = (fy: string, kind: StatutoryKind) => get<StatutoryChallanRegister>("/statutory-challans", { fy, kind });
 export const enterStatutoryChallan = (body: { kind: StatutoryKind; month: string; depositedOn: string; amount: string; reference: string }) => post<{ id: string }>("/statutory-challans", body);
 export const confirmStatutoryChallan = (id: string, body: { amount: string; reference: string }) => post<{ id: string; confirmed: boolean }>(`/statutory-challans/${id}/confirm`, body);
+
+// ST-25: Form 16 Part A as the tax portal issued it, uploaded by a director; the person downloads their own.
+export const myForm16PartA = (fy: string) => blob("/me/form16/part-a", { fy });
+export const form16PartAFor = (fy: string, employeeId: string) => blob(`/form16/${fy}/people/${employeeId}/part-a`);
+export const form16PartAList = (fy: string) => get<{ year: string; files: Array<{ employeeId: string; name: string; fileName: string; uploadedAt: string }> }>(`/form16/${fy}/part-a`);
+export async function uploadForm16PartA(fy: string, employeeId: string, file: File): Promise<{ id: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  return (await apiClient.post(`${base}/form16/${fy}/people/${employeeId}/part-a`, form)).data;
+}

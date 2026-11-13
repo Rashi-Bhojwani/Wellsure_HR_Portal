@@ -4474,6 +4474,20 @@ model MinimumWageBasis {
 
   @@map("minimum_wage_bases")
 }
+/// ST-25: a person's Form 16 Part A for a closed year, uploaded by a director (nothing read from it). Append-only; the newest is served.
+model Form16PartAFile {
+  id               String   @id @default(cuid())
+  financialYear    String   @map("financial_year")
+  employeeId       String   @map("employee_id")
+  fileKey          String   @map("file_key")
+  fileName         String   @map("file_name")
+  sha256           String
+  uploadedByUserId String   @map("uploaded_by_user_id")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([financialYear, employeeId, createdAt], map: "form16_part_a_files_year_employee_idx")
+  @@map("form16_part_a_files")
+}
 // A-END
 // M-BEGIN (second session block 2, ER-27): divisions, an optional grouping of departments (an employee's division is their department's).
 model Division {
