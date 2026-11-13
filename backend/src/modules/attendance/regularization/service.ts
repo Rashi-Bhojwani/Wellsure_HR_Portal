@@ -12,6 +12,7 @@ import { prisma } from "../../../lib/prisma";
 import { HttpError } from "../../../middleware/errorHandler";
 import { emitRegularizationDecided, emitRegularizationSubmitted } from "../../../realtime/emit";
 import { notifyEmployee } from "../../notifications/notifyEmployee";
+import { policyInForce } from "../../policySettings/service";
 import { computeAttendance, shiftDef } from "../compute";
 import { addDays } from "../engine/time";
 import { appendOverrides } from "../overrides";
@@ -64,6 +65,20 @@ export async function requestEligibility(employeeId: string, date: string): Prom
   return { ok: true, earliest, day: { status: r.status, punchCount: r.punchCount, firstIn: r.firstIn ? instantToLocalTime(r.firstIn, TZ).slice(11, 16) : null, lastOut: r.lastOut ? instantToLocalTime(r.lastOut, TZ).slice(11, 16) : null, shift: r.shiftCode ? `${r.shiftCode} ${r.shiftStart}–${r.shiftEnd}` : null } };
 }
 
+/**
+ * AT-22 (M session block 2): at most N correction requests a person raises for days of one calendar month (waiting or approved; rejected and
+ * cancelled ones do not count; HR's bulk corrections are not the person's requests). No effect until two directors turn it on (policy setting).
+ */
+export async function assertWithinMonthlyLimit(employeeId: string, date: string): Promise<void> {
+  const limits = await policyInForce<{ perMonth: number }>("policy.regularizationLimits");
+  if (!limits) return;
+  const [y, m] = date.split("-").map(Number) as [number, number];
+  const from = new Date(Date.UTC(y, m - 1, 1));
+  const to = new Date(Date.UTC(y, m, 1));
+  const used = await prisma.regularizationRequest.count({ where: { employeeId, date: { gte: from, lt: to }, status: { in: ["PENDING", "APPROVED"] }, batchId: null } });
+  if (used >= limits.perMonth) throw new HttpError(409, `You have raised ${used} correction request(s) for this month, the most allowed (${limits.perMonth}). Ask HR if another day needs correcting.`, "MONTHLY_LIMIT");
+}
+
 export interface RaiseInput extends Correction {
   date: string;
   reasonCode: ReasonCode;
@@ -75,6 +90,7 @@ export async function raiseRequest(viewer: Viewer, input: RaiseInput, meta: Meta
   const eligible = await requestEligibility(employeeId, input.date);
   if (!eligible.ok) throw new HttpError(409, eligible.reason, "NOT_ELIGIBLE");
   await assertNotLocked("REGULARIZATION", meta.actorUserId, [{ employeeId, from: input.date, to: input.date }]); // A-10 G3
+  await assertWithinMonthlyLimit(employeeId, input.date); // AT-22 (M session block 2)
   const row = await prisma.dailyAttendance.findUniqueOrThrow({ where: { employeeId_date: { employeeId, date: day(input.date) } } });
   const assignment = await assignmentOn(employeeId, day(input.date));
   const misfit = correctionProblem(input, row, input.date, assignment ? shiftDef(assignment) : null, assignment?.policy.nearDuplicateSeconds ?? 120);

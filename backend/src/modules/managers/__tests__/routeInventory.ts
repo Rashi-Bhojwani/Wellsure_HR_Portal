@@ -513,6 +513,10 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/payroll/runs/:id/bank-batch": admin,
   "GET /api/payroll/bank-batches/:id": admin,
   "GET /api/payroll/bank-batches/:id/file": admin,
+  "GET /api/payroll/salary/import/template": adminInService("payroll.salary.edit (directors only)"), // IE-09
+  "POST /api/payroll/salary/import/preview": adminInService("payroll.salary.edit and a director check in previewAssignments"),
+  "POST /api/payroll/salary/import/commit": adminInService("payroll.salary.edit and a director check in commitAssignments; each revision waits for a different director"),
+  "GET /api/payroll/bank-batches/:id/summary.pdf": adminInService("payroll.bank.view and a director check in bankSummaryPdf"), // PY-37
   "POST /api/payroll/bank-batches/:id/mark-paid": admin,
   "POST /api/payroll/bank-batches/:id/sent": admin,
   "POST /api/payroll/repayment-batches/:id/sent": admin,
@@ -955,23 +959,32 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "POST /api/loans/:id/changes/:changeId/decision": adminInService("a different director (decideChange)"),
   // P7-5 (docs/plans/P7_5_REIMBURSEMENTS.md)
   "GET /api/reimbursements/mine": self,
+  "GET /api/reimbursements/mine/statement": self, // PY-24
   "POST /api/reimbursements/mine": self,
   "POST /api/reimbursements/mine/:id/withdraw": self,
   "GET /api/reimbursements/types": adminInService("director only (listTypes)"),
+  "GET /api/reimbursements/statement": adminInService("director only (monthStatement)"), // PY-24
   "PUT /api/reimbursements/types": adminInService("director only (saveType), audited"),
   "GET /api/reimbursements": adminInService("director only (queue)"),
   "POST /api/reimbursements/:id/decision": adminInService("director only, never one's own claim (decide), audited"),
   // P7-7 (docs/plans/P7_7_FORM16.md)
   "GET /api/tax/me/form16": self,
+  "GET /api/tax/me/form16/pdf": self, // ST-24 / SS-05
   "GET /api/tax/challans": adminInService("director only (register)"),
   "POST /api/tax/challans": adminInService("director only (enterChallan), audited"),
   "POST /api/tax/challans/:id/confirm": adminInService("a different director, by retyping (confirmChallan)"),
   "GET /api/tax/quarterly": adminInService("director only (quarterly)"),
   "GET /api/tax/form16": adminInService("director only (yearForm16)"),
+  "GET /api/tax/statutory-challans": adminInService("director only (statutoryChallans.register)"), // ST-03 / ST-06
+  "POST /api/tax/statutory-challans": adminInService("director only (statutoryChallans.enter)"),
+  "POST /api/tax/statutory-challans/:id/confirm": adminInService("a different director (statutoryChallans.confirm; the database refuses the same person too)"),
+  "GET /api/tax/quarterly/export": adminInService("director only (exportQuarterly calls quarterly)"), // ST-21
+  "GET /api/tax/form16/:fy/people/:employeeId/pdf": adminInService("director only (directorForm16Pdf)"), // ST-24
   "POST /api/tax/form16/:fy/confirm": adminInService("director only, maker-checker FORM16_CONFIRM"),
   "POST /api/tax/form16/:fy/decision": adminInService("a different director (decideConfirmation)"),
   // P7-6 (docs/plans/P7_6_SETTLEMENTS.md): directors only
   "GET /api/settlements": adminInService("router gate payroll.salary.view and a director check in the service; never one's own"),
+  "GET /api/settlements/guide": adminInService("router gate payroll.salary.view and a director check in guide()"), // PY-27/28/29
   "POST /api/settlements": adminInService("router gate payroll.salary.view and a director check in the service; never one's own"),
   "POST /api/settlements/:id/confirm": adminInService("router gate payroll.salary.view and a director check in the service; never one's own"),
   "POST /api/settlements/:id/decision": adminInService("router gate payroll.salary.view and a director check in the service; never one's own"),
@@ -989,6 +1002,80 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/behaviours": adminInService("router gate settings.manage (never HR) and a director check in the service; a different director confirms (D-37)"),
   "POST /api/behaviours/:key/proposals": adminInService("router gate settings.manage (never HR) and a director check in the service; a different director confirms (D-37)"),
   "POST /api/behaviours/proposals/:id/confirm": adminInService("router gate settings.manage (never HR) and a director check in the service; a different director confirms (D-37)"),
+  "GET /api/payroll-reports": adminInService("router gate payroll.salary.view (never HR) and a director check in the service (Stage 6 payroll reports)"),
+  "GET /api/payroll-reports/:key": adminInService("router gate payroll.salary.view (never HR) and a director check in the service (Stage 6 payroll reports)"),
+  "PUT /api/payroll-reports/:key/layout": adminInService("router gate payroll.salary.view (never HR) and a director check in the service (Stage 6 payroll reports)"),
+  "GET /api/payroll-reports/:key/export": adminInService("router gate payroll.salary.view (never HR) and a director check in the service (Stage 6 payroll reports)"),
+  // M session block 2: policy settings (the decision rows), the same two-director store
+  "GET /api/policy-settings": adminInService("router gate settings.manage (never HR), Developer refused, and a director check in the service"),
+  "POST /api/policy-settings/:key/proposals": adminInService("router gate settings.manage (never HR), Developer refused, and a director check in the service"),
+  "POST /api/policy-settings/proposals/:id/confirm": adminInService("router gate settings.manage (never HR), Developer refused; a different director confirms"),
+  // ER-27 divisions: a catalogue like the other org masters; changes org.manage (never grantable to a manager), Developer refused
+  "GET /api/divisions": everyone("the division catalogue (names and their departments), as the other org masters"),
+  "POST /api/divisions": admin,
+  "PATCH /api/divisions/:id": admin,
+  "DELETE /api/divisions/:id": admin,
+  "PUT /api/divisions/:id/departments": admin,
+  // ER-18 policy acknowledgement
+  "GET /api/document-acks/mine": self,
+  "POST /api/document-acks/:id/acknowledge": self,
+  "GET /api/document-acks/required": admin,
+  "PUT /api/document-acks/:id/required": admin,
+  "GET /api/document-acks/:id/status": scoped("documents.manage (never manager-grantable); the audience narrowed to the caller's data scope; Developer refused"),
+  // ER-26 probation
+  "GET /api/probation/mine": self,
+  "GET /api/probation": scoped("employee.edit (never manager-grantable); the caller's data scope in the service; Developer refused; never one's own"),
+  "POST /api/probation/:employeeId/confirm": scoped("employee.edit (never manager-grantable); data scope in the service; Developer refused; never one's own"),
+  "POST /api/probation/:employeeId/extend": scoped("employee.edit (never manager-grantable); data scope in the service; Developer refused; never one's own"),
+  // OE-04 onboarding
+  "GET /api/onboarding/mine": self,
+  "GET /api/onboarding": scoped("employee.edit (never manager-grantable); data scope in the service; Developer refused"),
+  "POST /api/onboarding/:employeeId/start": scoped("employee.edit (never manager-grantable); data scope in the service; Developer refused"),
+  "GET /api/onboarding/:employeeId/steps": scoped("the person themself, their reporting manager (steps only), or HR (employee.edit) in data scope; Developer refused"),
+  "PUT /api/onboarding/tasks/:taskId/done": scoped("the step's owner: HR in scope (never their own), the reporting manager for MANAGER steps, the employee for their EMPLOYEE steps; Developer refused"),
+  // ER-28 custom fields
+  "GET /api/custom-fields/mine": self,
+  "GET /api/custom-fields/definitions": scoped("employee.view; field labels and types only (no values, no person); Developer refused"),
+  "POST /api/custom-fields/definitions": adminInService("settings.manage (never HR's to grant to a manager) and a director check in the service"),
+  "PATCH /api/custom-fields/definitions/:id": adminInService("settings.manage and a director check in the service"),
+  "GET /api/custom-fields/employees/:employeeId": scoped("employee.view + the caller's data scope in the service; sensitive values masked; Developer refused"),
+  "PUT /api/custom-fields/employees/:employeeId": scoped("employee.edit (never manager-grantable) + data scope in the service; never one's own; Developer refused"),
+  "POST /api/custom-fields/employees/:employeeId/:fieldId/reveal": scoped("employee.view at the gate, then a director only in the service, audited; Developer refused"),
+  // SS-13 feedback
+  "GET /api/feedback/options": everyone("whether feedback without a name is allowed, and the categories: no person's data"),
+  "POST /api/feedback": self,
+  "GET /api/feedback/mine": self,
+  "GET /api/feedback": scoped("helpdesk.manage (never manager-grantable); named feedback narrowed to the caller's data scope; Developer refused"),
+  "POST /api/feedback/:id/replies": scoped("helpdesk.manage; data scope in the service; never one's own; Developer refused"),
+  "POST /api/feedback/:id/close": scoped("helpdesk.manage; data scope in the service; never one's own; Developer refused"),
+  // AT-19 overtime
+  "GET /api/overtime/mine": self,
+  "POST /api/overtime/mine": self,
+  "POST /api/overtime/mine/:id/withdraw": self,
+  "GET /api/overtime": scoped("attendance.regularization.approve; a director, or the key with the person in the caller's data scope when the setting allows; never one's own; Developer refused"),
+  "POST /api/overtime/:id/approve": scoped("as GET /api/overtime"),
+  "POST /api/overtime/:id/reject": scoped("as GET /api/overtime"),
+  "GET /api/overtime/totals": adminInService("directors only, checked in the service; minutes only, no amount; Developer refused"),
+  // AT-36 work-from-home requests
+  "GET /api/wfh-requests/mine": self,
+  "POST /api/wfh-requests/mine": self,
+  "POST /api/wfh-requests/mine/:id/withdraw": self,
+  "GET /api/wfh-requests": adminInService("directors only, checked in the service; never their own; Developer refused"),
+  "POST /api/wfh-requests/:id/approve": adminInService("directors only, checked in the service (and again by markRemote); never their own; Developer refused"),
+  "POST /api/wfh-requests/:id/reject": adminInService("directors only, checked in the service; never their own; Developer refused"),
+  // LV-23 encashment requests
+  "GET /api/encashment-requests/mine": self,
+  "POST /api/encashment-requests/mine": self,
+  "POST /api/encashment-requests/mine/:id/withdraw": self,
+  "GET /api/encashment-requests": adminInService("directors only, checked in the service; never their own; days only, no amount; Developer refused"),
+  "POST /api/encashment-requests/:id/approve": adminInService("directors only, checked in the service; never their own; Developer refused"),
+  "POST /api/encashment-requests/:id/reject": adminInService("directors only, checked in the service; never their own; Developer refused"),
+  // IE-07 / IE-08 update import
+  "GET /api/update-import/template": adminInService("router gate employee.edit (never manager-grantable); an empty template, no one's data; Developer refused"),
+  "POST /api/update-import/preview": scoped("employee.edit (never manager-grantable); each row must be in the caller's data scope and not their own; Developer refused"),
+  "GET /api/update-import/waiting": adminInService("employee.edit at the gate, directors only in the service"),
+  "GET /api/update-import/:id": scoped("employee.edit; the uploader's own batch, or a director"),
+  "POST /api/update-import/:id/apply": scoped("employee.edit; the uploader or a director; rows checked at preview; job rows by a director when the setting says so"),
   // P7-3: the person's own
   "GET /api/tax/me/ytd": self,
   "GET /api/tax/me/salary-revisions": self,
@@ -1005,6 +1092,12 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
 // Scoped routes a manager can reach with a manager-grantable key — each has
 // an IDOR case in managerReach.test.ts. The test fails if one is missing.
 export const MANAGER_REACHABLE_SCOPED = [
+  "GET /api/overtime", // M block 2, AT-19
+  "POST /api/overtime/:id/approve", // M block 2, AT-19
+  "POST /api/overtime/:id/reject", // M block 2, AT-19
+  "GET /api/custom-fields/definitions", // M block 2, ER-28
+  "GET /api/custom-fields/employees/:employeeId", // M block 2, ER-28
+  "POST /api/custom-fields/employees/:employeeId/:fieldId/reveal", // M block 2, ER-28 (directors only in the service)
   "GET /api/workforce/workflow/review", // A-10 G7
   "POST /api/workforce/workflow/decide", // A-10 G7
   "GET /api/reports",

@@ -423,3 +423,36 @@ install-lint-typecheck-test (incl. Demo company tests), docker-build, sensitive-
 agent-windows — all green.** Earlier run 288 (`7fbe89c`, docs only, same code as green run 287) failed only because its Test step hit the job's **18-minute limit**
 (no test failed). **Risk:** in run 307 the Test step took 17 minutes against that 18-minute limit; as the suite grows, CI will start timing out. Not changed here
 (a CI setting for the owners or the next session: raise the step limit or split the suite).
+
+## Session A block, 2026-11-12 — CI shards, Stage 6 payroll reports, payroll rows of the parity audit
+
+**CI time limit.** The backend suite now runs as four parallel shards (`backend-tests`, matrix 1–4, same 18-minute step limit — not raised); `backend-tests-complete`
+fails if any shard failed, or if the shards' files and test counts do not add up to `vitest list` (`backend/scripts/check-test-shards.mjs`; checked locally that a missing
+shard fails). Wall time: shard test steps 3:37, 4:16, 4:17 and 6:25 (run 309), 3:49–6:35 (run 326), against 17 minutes for the single step before; all shards done about
+8 minutes after the run starts; the count check about 5 minutes more (listing the suite takes about 4).
+
+**Stage 6 payroll reports** (`STAGE_6_PAYROLL_REPORTS.md`): ten reports for directors, finalised runs only, exact decimals; column choice; company layouts saved with
+a reason (append-only, audited) and shown as "Default, change in settings" until then; .xlsx and .csv exports audited with format, filters, columns and row count only.
+Tests: refusals for HR, manager, employee, Developer and no sign-in on every route; totals against independent sums in paise; variance % against exact fractions (500
+runs); CSV formula guard; layout append-only. Mutants: cost, held people, department filter, variance base, CSV guard, export audit, chosen columns — caught; the
+service's director check — equivalent (the database refuses payroll grants to non-directors).
+
+**Parity rows** (`A_PARITY_ROWS.md`): ST-24/SS-05, PY-27/28/29 guide, ST-21, ST-03/ST-06, LC-07, PY-37, PY-24 (`9bbcc05`) and IE-09 (`c62a451`). Already covered:
+LC-09, ST-23. Mutants: service length (+1 day), bank code grouping, unconfirmed deposits counted, maker confirming, employer share, unpaid person's Form 16, draft mark,
+statement scoped to the person, export audit — 9 of 9 caught; import duplicate person, file with problems, grouping key — caught; the import's up-front group check —
+survives (equivalent under the current ordering: the blocked group sorts first and fails before anything is written; the all-or-nothing test stays).
+
+**Verification.** Changed tests, lint and typecheck on each commit; migrations applied to a fresh scratch database and matching the schema ("No difference detected").
+Full backend suite run alone on `c62a451`: 239 files, 2,139 tests — 3 failed: (1) the current-row guard (Stage 6 read two history tables directly — fixed in `247096d`,
+re-run green); (2) `customFields.test.ts` (the other session's) — passes run alone, order-dependent in the full run, not in my files; (3) `yearEndMoney.test.ts` "the audit
+viewer" — fails alone too; it began after the other session's "Developer audit view" change (`ad5b3ca`) to the audit viewer; not in my files and not touched (sharing
+rules). Browser walk on a scratch copy of the demo company: the eight changed admin payroll screens and two employee screens as director, HR, manager, employee and
+Developer at 1280 light and 390 dark — 100 visits, no crash, no server error, no sideways scroll, no secret text; every directors' screen refused to the other four roles
+(the Developer sees the existing Salary revisions frame with "You don't have access" and no data). Keyboard only: 10 of 10 primary actions (Columns, Enter a challan,
+Import from a file, loan Changes, Prepare) reached by Tab with visible focus, opened by Enter, Tab kept inside, Escape closes, focus returns.
+
+**CI per job (final).** The other session pushed about every ten minutes, so most runs were cancelled by the next push. Run 333 (`cbaee81`, which contains all of
+this block's code, the `247096d` fix and the other session's `yearEndMoney` fix): backend-tests 1–4 green (test steps 4:40–7:00), backend-tests-complete green (the shards
+add up to the suite, each test once), install-lint-typecheck-test, docker-build, latency, attendance-replay, agent-windows and sensitive-ui (employee) green;
+sensitive-ui (admin) was cancelled by the next push at 15 minutes — it was green on run 326 (`c62a451`, every new screen; the one later code change, `247096d`, is a
+backend read). Run 326 itself failed only on the two tests named above (one mine, fixed; one the other session's, fixed by them in `c536707`).

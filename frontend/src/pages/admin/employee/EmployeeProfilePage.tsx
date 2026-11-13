@@ -26,11 +26,17 @@ import { useContactReveal } from "./parity/ContactReveal";
 import { PayTab } from "./parity/PayTab";
 import { PositionTab } from "./parity/PositionTab";
 import { PendingIdentityNotice } from "./IdentityChanges";
+import { divisionOfDepartment, listDivisions } from "../../../api/divisions";
+import { CustomFieldsTab } from "./m/CustomFieldsTab";
+import { DEVELOPER_ROLE_CODE } from "@shared/constants/sensitiveData";
 // A-9 — end
 
 const REFERENCE_STALE = 30_000;
 
 function OfficialTab({ profile, onEditJob }: { profile: employeeApi.EmployeeProfile; onEditJob?: () => void }) {
+  // ER-27 (M session block 2): shown only once the company has divisions; it is the department's.
+  const divisions = useQuery({ queryKey: ["divisions"], queryFn: listDivisions, staleTime: REFERENCE_STALE });
+  const division = divisionOfDepartment(divisions.data, profile.job?.department.id);
   return (
     <SectionStack>
       <ProfileSection title="Employment information">
@@ -48,6 +54,7 @@ function OfficialTab({ profile, onEditJob }: { profile: employeeApi.EmployeeProf
       <ProfileSection title="Job" onEdit={onEditJob} editLabel="Change job details">
         <Grid
           items={[
+            ...(divisions.data?.length ? [{ label: "Division", value: division?.name ?? "—" }] : []),
             { label: "Department", value: profile.job?.department.name ?? "—" },
             { label: "Designation", value: profile.job?.designation.name ?? "—" },
             { label: "Location", value: profile.job?.location.name ?? "—" },
@@ -511,6 +518,8 @@ export function EmployeeProfilePage() {
             // A-9: the Pay tab is the directors' (payroll.salary.view, which HR can never hold); each opening is audited by the server.
             ...(hasPermission("payroll.salary.view") ? [{ key: "pay", label: "Pay", children: <PayTab employeeId={id!} /> }] : []),
             ...(hasPermission("employee.edit") || hasPermission("attendance.config.manage") ? [{ key: "position", label: "Position", children: <PositionTab employeeId={id!} /> }] : []),
+            // ER-28 (M session block 2): custom fields; the server refuses the Developer role and decides every value.
+            ...(!hasRole(DEVELOPER_ROLE_CODE) || hasRole("SUPER_ADMIN") ? [{ key: "more", label: "More details", children: <CustomFieldsTab employeeId={id!} canEdit={hasPermission("employee.edit")} /> }] : []),
             { key: "history", label: "History", children: <HistoryTab employeeId={id!} canViewBank={canViewBank} /> },
             ...(hasRole("SUPER_ADMIN") || hasPermission("role.view") || hasPermission("user.security.manage")
               ? [{ key: "access", label: "Access", children: <EmployeeAccessTab employeeId={id!} /> }]

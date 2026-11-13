@@ -38,6 +38,8 @@ export const helpdeskAutoCloseQueue = new Queue("helpdesk-auto-close", { connect
 
 // RP-13 (M session): daily, sends the "email me this report" subscriptions that are due — see modules/reports/subscriptions.ts.
 export const reportSubscriptionsQueue = new Queue("report-subscriptions", { connection: createBullConnection() });
+// M session block 2: the people rows' daily job (probation reminders and the others).
+export const peopleDailyQueue = new Queue("m-people-daily", { connection: createBullConnection() });
 
 // letters-generate lives in ./lettersQueue.ts (created lazily) — the API
 // enqueues to it, and importing this module would build every queue above.

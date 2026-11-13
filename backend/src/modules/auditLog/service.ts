@@ -41,9 +41,28 @@ function withoutMoney<T>(value: T): T {
   return value;
 }
 
-// PEEPS-BEGIN exits
-export async function listAuditLogs(query: ListAuditLogQuery, viewer: { canSeePayroll: boolean; onlyPayroll?: boolean; userId?: string } = { canSeePayroll: false }) {
-// PEEPS-END exits
+// M session, block 2 task 1: the Developer role never sees a value. For that viewer every entry keeps who, what (the action), when and the record
+// type; the record's id, the old and new values (all fields, not only personal ones), the IP address and the browser are withheld, and only the names
+// of the top-level fields that changed are given (a name that does not look like a field name, such as a code or an id used as a key, is left out).
+const FIELD_NAME = /^[a-z][A-Za-z0-9_]{0,63}$/;
+export function changedFieldNames(before: unknown, after: unknown): string[] {
+  const keys = new Set<string>();
+  for (const side of [before, after]) if (side && typeof side === "object" && !Array.isArray(side)) for (const k of Object.keys(side)) if (FIELD_NAME.test(k)) keys.add(k);
+  return [...keys].sort();
+}
+
+export interface AuditViewer {
+  canSeePayroll: boolean;
+  onlyPayroll?: boolean;
+  /** The Developer role (not also a director): values withheld. */
+  valuesHidden?: boolean;
+  // PEEPS-BEGIN exits
+  /** The viewer's user id: exit and recruitment audit rows are limited to their audience. */
+  userId?: string;
+  // PEEPS-END exits
+}
+
+export async function listAuditLogs(query: ListAuditLogQuery, viewer: AuditViewer = { canSeePayroll: false }) {
   // PEEPS-BEGIN exits
   // PEEPS-BEGIN recruitment
   const where: Prisma.AuditLogWhereInput = { AND: [await exitAuditAudienceWhere(viewer.userId), await recruitmentAuditWhere(viewer.userId)] };
@@ -97,7 +116,22 @@ export async function listAuditLogs(query: ListAuditLogQuery, viewer: { canSeePa
     total,
     page: query.page,
     pageSize: query.pageSize,
-    rows: rows.map((r) => ({
+    valuesHidden: !!viewer.valuesHidden,
+    rows: rows.map((r) => viewer.valuesHidden ? ({
+      id: r.id,
+      actorEmployeeCode: (r.actorUserId && actorById.get(r.actorUserId)?.employeeCode) ?? null,
+      actorName: (r.actorUserId && actorById.get(r.actorUserId)?.nameHistory[0]?.fullName) ?? null,
+      onBehalfOfName: (r.onBehalfOfUserId && (actorById.get(r.onBehalfOfUserId)?.nameHistory[0]?.fullName ?? actorById.get(r.onBehalfOfUserId)?.employeeCode)) ?? null,
+      action: r.action,
+      entityType: r.entityType,
+      entityId: null,
+      before: null,
+      after: null,
+      changedFields: changedFieldNames(r.before, r.after),
+      ipAddress: null,
+      userAgent: null,
+      createdAt: r.createdAt.toISOString(),
+    }) : ({
       id: r.id,
       actorEmployeeCode: (r.actorUserId && actorById.get(r.actorUserId)?.employeeCode) ?? null,
       actorName: (r.actorUserId && actorById.get(r.actorUserId)?.nameHistory[0]?.fullName) ?? null,
@@ -110,6 +144,7 @@ export async function listAuditLogs(query: ListAuditLogQuery, viewer: { canSeePa
       after: viewer.canSeePayroll ? r.after : withoutMoney(r.after),
       ipAddress: r.ipAddress,
       userAgent: r.userAgent,
+      changedFields: changedFieldNames(r.before, r.after),
       createdAt: r.createdAt.toISOString(),
     })),
   };

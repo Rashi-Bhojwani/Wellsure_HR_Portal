@@ -92,10 +92,18 @@ describe("year-end encashment amounts are not HR's", () => {
   it("the audit viewer: HR does not open it at all (Stage 1); someone who may open it but not see salary does not get the year-end total; a director does", async () => {
     const read = (who: keyof typeof p) => as(who).get("/api/audit-logs?pageSize=100&action=leave.yearend.preview");
     expect((await read("hr")).status).toBe(403);
-    const devRow = (await read("dev")).body.rows.find((r: { entityId: string }) => r.entityId === runId);
-    expect(devRow).toBeDefined();
-    expect(JSON.stringify(devRow.after)).not.toContain("totalEncashedAmount");
-    expect(devRow.after.totalEmployees).toBeGreaterThan(0); // the rest of the row is intact
+    // M block 2 task 1 (owner rule): the Developer sees who, what and when, and no value at all, so not the total either.
+    const devBody = (await read("dev")).body;
+    expect(devBody.valuesHidden).toBe(true);
+    expect(devBody.rows.length).toBeGreaterThan(0);
+    for (const r of devBody.rows) expect(r).toMatchObject({ entityId: null, before: null, after: null });
+    expect(JSON.stringify(devBody)).not.toContain(runId);
+    // The money rule itself, for any viewer who may open the log but not see salary and is shown values: no total, the rest intact.
+    const { listAuditLogs } = await import("../../auditLog/service");
+    const plain = (await listAuditLogs({ action: "leave.yearend.preview", page: 1, pageSize: 100 }, { canSeePayroll: false })).rows.find((r) => r.entityId === runId);
+    expect(plain).toBeDefined();
+    expect(JSON.stringify(plain!.after)).not.toContain("totalEncashedAmount");
+    expect((plain!.after as { totalEmployees: number }).totalEmployees).toBeGreaterThan(0); // the rest of the row is intact
     const dirRow = (await read("director")).body.rows.find((r: { entityId: string }) => r.entityId === runId);
     expect(dirRow.after.totalEncashedAmount).toBeDefined();
   });

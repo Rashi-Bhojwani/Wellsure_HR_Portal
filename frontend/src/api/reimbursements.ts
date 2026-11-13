@@ -45,3 +45,8 @@ export interface ClaimType {
 }
 export const claimTypes = async () => (await apiClient.get<{ types: ClaimType[] }>(`${base}/types`)).data.types;
 export const saveClaimType = async (body: Omit<ClaimType, "version" | "gaps"> & { reason: string }) => (await apiClient.put(`${base}/types`, body)).data;
+
+// PY-24: the reimbursement statement per run (the person's own; directors by month).
+export interface StatementRun { runId: string; cycle: string; start: string; total: string; lines: Array<{ employeeCode?: string; name?: string; claimId: string; type: string; spentOn: string; amount: string }> }
+export const myClaimStatement = async () => (await apiClient.get<{ runs: StatementRun[] }>(`${base}/mine/statement`)).data.runs;
+export const monthClaimStatement = async (month: string) => (await apiClient.get<{ month: string; runs: StatementRun[] }>(`${base}/statement`, { params: { month } })).data.runs;

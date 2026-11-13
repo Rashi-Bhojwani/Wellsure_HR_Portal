@@ -46,7 +46,16 @@ describe("mobile tabs and their contents come from the employee menu", () => {
     // Attendance Info is built on real data (Phase 2 P2-E).
     expect(leaf("attendance-info").phase).toBeUndefined();
     expect(isComingSoon(leaf("attendance-info"))).toBe(false);
-    expect(isComingSoon(leaf("feedback"))).toBe(true); // phase-marked (YTD Reports, Loans and Reimbursement, the earlier examples, were built in P7-3 to P7-5)
+    // Feedback, the last phase-marked page, was built in the M session (SS-13); the rule itself is checked on a temporary phase-marked entry.
+    expect(isComingSoon(leaf("feedback"))).toBe(false);
+    const pending: EmployeeMenuLeaf = { key: "test-pending", label: "Test Pending", path: "test-pending", phase: "Phase 9", quickAction: true };
+    employeeMenu.push(pending);
+    try {
+      expect(isComingSoon(leaf("test-pending"))).toBe(true);
+      expect(quickActions().map((a) => a.key)).not.toContain("test-pending");
+    } finally {
+      employeeMenu.pop();
+    }
     expect(isComingSoon(leaf("reimbursement"))).toBe(false);
     expect(isComingSoon(leaf("loans-advances"))).toBe(false);
     expect(isComingSoon(leaf("ytd-reports"))).toBe(false);

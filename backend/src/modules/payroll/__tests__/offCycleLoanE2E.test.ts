@@ -76,7 +76,12 @@ describe("end to end: a settlement recovers a loan through an off-cycle run", ()
     await driveToFinal(world, aug);
     // The directors stop recovery (the rest of the balance is now recovered only at exit).
     const change = await api(maker(), "post", `/loans/${loanId}/changes`, { kind: "CANCEL_PENDING", reference: "test: recovery stopped" });
+    // LC-07: the screen reads each change's own state: waiting (prepared by this director, so another decides), then approved.
+    const stateOf = async (token: string) => (await api(token, "get", `/loans/${loanId}`)).body.changes.find((c: { id: string }) => c.id === change.body.id);
+    expect(await stateOf(maker())).toMatchObject({ state: "PENDING", preparedByMe: true });
+    expect(await stateOf(world.tokens.checkerA)).toMatchObject({ state: "PENDING", preparedByMe: false });
     expect((await api(world.tokens.checkerA, "post", `/loans/${loanId}/changes/${change.body.id}/decision`, { decision: "APPROVE" })).status).toBe(200);
+    expect(await stateOf(maker())).toMatchObject({ state: "APPROVED" });
     // September for everyone, calculated before anything off-cycle happens: b's figures are the baseline.
     septRun = await calculateRun(world, "2026-09-01");
     snapshotB = await itemOf(septRun, who("b"));

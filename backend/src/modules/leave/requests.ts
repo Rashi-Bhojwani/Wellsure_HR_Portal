@@ -13,7 +13,7 @@ import { roleCodesOf } from "../managers/hierarchy";
 import { getAttendanceLeaveSink, type ApprovedLeaveDay } from "./attendanceIntegration";
 import { consumeCompOffFifo, reverseCompOffConsumption } from "./compOff";
 import { withEmployeeLeaveLock } from "./concurrency";
-import { computeTotalLeaveDays } from "./dayCount";
+import { assertLeaveLimits, leaveDaysFor } from "./policyLimits";
 import { resolveDayCountContext } from "./dayCountContext";
 import { assertSufficientBalance, writeLedgerEntry } from "./ledger";
 import { releasedDaysOf } from "./releases";
@@ -111,12 +111,14 @@ export async function applyForLeave(input: ApplyLeaveInput, viewer: LeaveViewer,
 
   const { holidayDates, weekOffDays } = await resolveDayCountContext(targetEmployeeId, fromDate, toDate);
   // PEEPS-BEGIN leave-types
-  // The new leave types: rules approved and in force, eligibility, and their counting (working or calendar days). A no-op for the other types.
-  const totalDays = await peepsApplyDays(leaveType, { employeeId: targetEmployeeId, fromDate, toDate, fromDayPart: input.fromDayPart, toDayPart: input.toDayPart, attachmentStorageKey: input.attachmentStorageKey }, computeTotalLeaveDays(fromDate, toDate, input.fromDayPart, input.toDayPart, holidayDates, weekOffDays));
+  // The new leave types: rules approved and in force, eligibility, and their counting (working or calendar days). A no-op for the other types,
+  // which keep LV-20's count (the sandwich rule, off until two directors turn it on; off, exactly computeTotalLeaveDays).
+  const totalDays = await peepsApplyDays(leaveType, { employeeId: targetEmployeeId, fromDate, toDate, fromDayPart: input.fromDayPart, toDayPart: input.toDayPart, attachmentStorageKey: input.attachmentStorageKey }, await leaveDaysFor(leaveType.code, fromDate, toDate, input.fromDayPart, input.toDayPart, holidayDates, weekOffDays));
   // PEEPS-END
   if (totalDays.lessThanOrEqualTo(0)) {
     throw new HttpError(400, "The selected range contains no working days to apply leave for.", "NO_WORKING_DAYS");
   }
+  await assertLeaveLimits(leaveType.code, totalDays, fromDate, targetEmployeeId === viewer.employeeId); // LV-19 (M session block 2), off until turned on
 
   const request = await withEmployeeLeaveLock(targetEmployeeId, async (tx) => {
     const overlap = await tx.leaveRequest.findFirst({

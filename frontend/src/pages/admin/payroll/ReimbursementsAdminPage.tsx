@@ -5,6 +5,7 @@ import { Button, Input, Segmented } from "antd";
 import * as api from "../../../api/reimbursements";
 import type { ClaimView } from "../../../api/reimbursements";
 import { apiErrorMessage } from "../../../lib/apiError";
+import { ClaimStatement } from "../../../components/payroll/ClaimStatement";
 import { formatRupees } from "../../../lib/money";
 import { ConfirmModal, DataTable, PageHeader, StatusChip, toast } from "../../../ui";
 import { space } from "../../../theme/tokens";
@@ -79,6 +80,7 @@ export function ReimbursementsAdminPage() {
         {deciding?.decision === "APPROVE" && <Input aria-label="Amount" inputMode="decimal" placeholder={`Amount (claimed ${deciding.c.amount})`} value={amount} onChange={(e) => setAmount(e.target.value)} style={{ marginTop: space[2] }} />}
         <Input.TextArea aria-label="Reason" placeholder="Reason" rows={2} maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} style={{ marginTop: space[2] }} />
       </ConfirmModal>
+      <ClaimStatement scope="month" />
     </>
   );
 }

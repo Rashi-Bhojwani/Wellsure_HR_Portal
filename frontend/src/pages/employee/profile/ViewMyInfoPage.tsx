@@ -1,3 +1,4 @@
+import * as customFieldsApi from "../../../api/customFields";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Form, Input } from "antd";
@@ -148,6 +149,7 @@ function MaskedNote() {
 export function ViewMyInfoPage() {
   const queryClient = useQueryClient();
   const { data: profile, isLoading, error, refetch } = useQuery({ queryKey: ["employees", "me"], queryFn: employeeApi.getMyProfile });
+  const myFields = useQuery({ queryKey: ["custom-fields", "mine"], queryFn: customFieldsApi.myFields });
   const [editOpen, setEditOpen] = useState(false);
   const [requestGroup, setRequestGroup] = useState<ChangeRequestFieldGroup | null>(null);
   // SS-15: your own data as a file; the download is recorded in the audit log.
@@ -304,6 +306,8 @@ export function ViewMyInfoPage() {
                 <EmptyState compact title="No bank account on file." description="Ask HR to add the account your salary should be paid into." />
               ),
             },
+            // ER-28 (M session block 2): the custom fields the directors show to employees, when there are any.
+            ...(myFields.data?.length ? [{ key: "more", label: "More details", children: <ProfileSection title="More details"><Grid items={myFields.data.map((f) => ({ label: f.label, value: f.value ?? "—" }))} /></ProfileSection> }] : []),
           ]}
         />
       </ProfileShell>

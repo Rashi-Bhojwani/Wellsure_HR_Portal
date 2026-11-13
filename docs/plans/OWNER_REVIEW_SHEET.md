@@ -133,3 +133,19 @@ appears as an information row on Ready for First Run (never blocking), and any c
 | 76 | Only one off-cycle run can be open for the same settlement or held month; a second one (a double click, or the other director) is refused until the first is finalised or rejected. | Several drafts could be allowed (only one can ever be paid either way). | Keep. |
 | 77 | Quarterly TDS data opens on the last quarter that has ended. | It could open on the current quarter. | Keep. |
 | 78 | The demo company now has a made-up pay history. Its loan requests are written as if made months ago (the one step not done through the screens); everything after that goes through the screens' rules. | — | Keep (demo only). |
+
+## Payroll reports and the payroll rows of the parity audit (2026-11-12)
+
+Report layouts are the D-37 kind of default ("Default, change in settings"); nothing below sets a tax figure, a statutory rate or anything that changes pay.
+
+| # | What was chosen | If you answer differently | Recommendation |
+|---|---|---|---|
+| 79 | Payroll reports read **finalised** runs only (people paid and people held); a draft run never appears on a report. | Drafts could be shown, marked. | Keep. |
+| 80 | Each report starts with a conventional set of columns marked **"Default, change in settings"**. A director can save the company's own layout (with a reason; recorded; the history is kept). | — | Save your layouts once you have used them. |
+| 81 | Variance between months: change % = change × 100 ÷ the compared month, rounded half up to two places; no % when the compared month is zero. | Another base or rounding. | Keep. |
+| 82 | The bank-transfer summary report and the bank summary PDF group rows by the IFSC's bank code (its first four letters) and never show an account number or a person. | — | Keep. |
+| 83 | Form 16: a PDF of Part B in our own layout, marked **DRAFT** until a second director confirms the year (and the tax year is confirmed). Part A is not made here (it comes from the tax portal); pairing them is not built. | — | Confirm the format with your accountant before issuing. |
+| 84 | Settlement guide: service counts both the joining day and the last working day; months are calendar months (31 Jan + 1 month = end of February). The gratuity rule, notice period and encashment rate stay **Not set**; the guide proposes no amount. | — | Give the three rules (spec §14). |
+| 85 | PF and ESI challans: "worked out" is the statute's own lines in finalised runs (employee and employer); administration charges are not added. A different director confirms each challan by retyping it. | Add the charges as their own line once you give the rule. | Keep. |
+| 86 | Salary import uses **our own template** (employee number, structure, version, annual CTC, effective from). One revision per structure, CTC and date; each waits for the other director; one bad row or blocked group stops the whole file. greytHR's file is not read. | — | Keep. |
+| 87 | The reimbursement statement lists claims paid by monthly runs; a claim paid by an off-cycle run shows on that run, not in the statement. Loan "reschedule" is not built (prepaid, waived and stop-the-instalments are). | Ask for either. | Keep for now. |

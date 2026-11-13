@@ -61,11 +61,20 @@ const AllEmployeesPage = lazyPage(() => import("../pages/admin/employee/AllEmplo
 const AddEmployeePage = lazyPage(() => import("../pages/admin/employee/AddEmployeePage"), "AddEmployeePage");
 const SeparationsPage = lazyPage(() => import("../pages/admin/employee/SeparationsPage"), "SeparationsPage");
 const ChangeRequestsPage = lazyPage(() => import("../pages/admin/employee/ChangeRequestsPage"), "ChangeRequestsPage");
+const ProbationPage = lazyPage(() => import("../pages/admin/employee/m/ProbationPage"), "ProbationPage"); // M session block 2, ER-26
+const EncashmentRequestsPage = lazyPage(() => import("../pages/admin/leave/EncashmentRequestsPage"), "EncashmentRequestsPage"); // M block 2, LV-23
+const WfhRequestsPage = lazyPage(() => import("../pages/admin/workforce/WfhRequestsPage"), "WfhRequestsPage"); // M block 2, AT-36
+const OvertimeClaimsPage = lazyPage(() => import("../pages/admin/workforce/OvertimeClaimsPage"), "OvertimeClaimsPage"); // M block 2, AT-19
+const FeedbackInboxPage = lazyPage(() => import("../pages/admin/employee/m/FeedbackInboxPage"), "FeedbackInboxPage"); // M block 2, SS-13
+const UpdateImportPage = lazyPage(() => import("../pages/admin/employee/m/UpdateImportPage"), "UpdateImportPage"); // M block 2, IE-07/08
+const OnboardingPage = lazyPage(() => import("../pages/admin/employee/m/OnboardingPage"), "OnboardingPage"); // M session block 2, OE-04
 const ImportCenterPage = lazyPage(() => import("../pages/admin/import/ImportCenterPage"), "ImportCenterPage");
 const AuditLogPage = lazyPage(() => import("../pages/admin/auditLog/AuditLogPage"), "AuditLogPage");
 const PayrollAuditPage = lazyPage(() => import("../pages/admin/auditLog/AuditLogPage"), "PayrollAuditPage");
 const SystemSettingsPage = lazyPage(() => import("../pages/admin/settings/SystemSettingsPage"), "SystemSettingsPage");
 const DefaultBehavioursPage = lazyPage(() => import("../pages/admin/settings/DefaultBehavioursPage"), "DefaultBehavioursPage"); // D-37
+const PolicySettingsPage = lazyPage(() => import("../pages/admin/settings/PolicySettingsPage"), "PolicySettingsPage"); // M session block 2
+const CustomFieldsPage = lazyPage(() => import("../pages/admin/settings/CustomFieldsPage"), "CustomFieldsPage"); // M session block 2, ER-28
 const CompanyDocumentsPage = lazyPage(() => import("../pages/admin/documents/CompanyDocumentsPage"), "CompanyDocumentsPage");
 const LeaveTypesPoliciesPage = lazyPage(() => import("../pages/admin/adminTools/LeaveTypesPoliciesPage"), "LeaveTypesPoliciesPage");
 const HolidayCalendarsAdminPage = lazyPage(() => import("../pages/admin/adminTools/HolidayCalendarsAdminPage"), "HolidayCalendarsAdminPage");
@@ -120,6 +129,8 @@ const SettlementsPage = lazyPage(() => import("../pages/admin/payroll/Settlement
 const OffCyclePage = lazyPage(() => import("../pages/admin/payroll/OffCyclePage"), "OffCyclePage"); // P7-6b
 const PayTypesPage = lazyPage(() => import("../pages/admin/payroll/PayTypesPage"), "PayTypesPage"); // item 3
 const QuarterlyTdsPage = lazyPage(() => import("../pages/admin/payroll/QuarterlyTdsPage"), "QuarterlyTdsPage"); // item 3
+const PayrollReportsPage = lazyPage(() => import("../pages/admin/payroll/PayrollReportsPage"), "PayrollReportsPage"); // Stage 6
+const StatutoryChallansPage = lazyPage(() => import("../pages/admin/payroll/StatutoryChallansPage"), "StatutoryChallansPage"); // ST-03 / ST-06
 const ReimbursementsAdminPage = lazyPage(() => import("../pages/admin/payroll/ReimbursementsAdminPage"), "ReimbursementsAdminPage"); // P7-5
 const LoansAdminPage = lazyPage(() => import("../pages/admin/payroll/LoansAdminPage"), "LoansAdminPage"); // P7-4
 const OpeningFiguresPage = lazyPage(() => import("../pages/admin/payroll/OpeningFiguresPage"), "OpeningFiguresPage"); // A-3
@@ -245,8 +256,12 @@ export const adminApps: AdminApp[] = [
           { key: "letters", label: "Letters", path: "employee/letters", icon: FileTextOutlined, element: LetterRequestsPage, needs: { any: ["letters.issue.nopay"] } },
           // A-9 — end
           { key: "change-requests", label: "Change Requests", path: "employee/change-requests", icon: SolutionOutlined, element: ChangeRequestsPage },
+          { key: "update-import", label: "Update From File", path: "employee/update-import", icon: CloudUploadOutlined, element: UpdateImportPage, needs: { any: ["employee.edit"] } }, // M block 2, IE-07/08
+          { key: "onboarding", label: "Onboarding", path: "employee/onboarding", icon: SolutionOutlined, element: OnboardingPage, needs: { any: ["employee.edit"] } }, // M block 2, OE-04
+          { key: "probation", label: "Probation", path: "employee/probation", icon: SolutionOutlined, element: ProbationPage, needs: { any: ["employee.edit"] } }, // M block 2, ER-26
           { key: "separations", label: "Separations", path: "employee/separations", icon: ExportOutlined, element: SeparationsPage },
           { key: "company-documents", label: "Company Documents", path: "employee/company-documents", icon: FolderOpenOutlined, element: CompanyDocumentsPage },
+          { key: "feedback", label: "Employee Feedback", path: "employee/feedback", icon: CustomerServiceOutlined, element: FeedbackInboxPage, needs: { any: ["helpdesk.manage"] } }, // M block 2, SS-13
           { key: "helpdesk", label: "Helpdesk", path: "employee/helpdesk", icon: CustomerServiceOutlined, element: HelpdeskQueuePage },
         ],
       },
@@ -267,6 +282,7 @@ export const adminApps: AdminApp[] = [
           { key: "leave-calendar", label: "Leave Calendar", path: "workforce/leave/calendar", icon: CalendarOutlined, element: AdminLeaveCalendarPage },
           { key: "employee-leave", label: "Employee Leave", path: "workforce/leave/employee-leave", icon: SolutionOutlined, element: EmployeeLeavePage, needs: { any: ["leave.view", "leave.approve"] } },
           { key: "leave-granter", label: "Leave Granter", path: "workforce/leave/granter", icon: GiftOutlined, element: LeaveGranterPage, needs: { any: ["leave.grant"] } },
+          { key: "encashment-requests", label: "Encashment Requests", path: "workforce/leave/encashment-requests", icon: GiftOutlined, element: EncashmentRequestsPage, needs: { director: true } }, // M block 2, LV-23
           { key: "year-end-process", label: "Year End Process", path: "workforce/leave/year-end", icon: HistoryOutlined, element: YearEndProcessPage, needs: { any: ["leave.yearend.manage"] } },
           { key: "leave-recalculator", label: "Leave Recalculator", path: "workforce/leave/recalculator", icon: CalculatorOutlined, element: LeaveRecalculatorPage, needs: { any: ["leave.recalculate"] } },
         ],
@@ -280,6 +296,8 @@ export const adminApps: AdminApp[] = [
           { key: "employee-swipes", label: "Employee Swipes", path: "workforce/attendance/swipes", icon: DesktopOutlined, element: EmployeeSwipesPage, needs: { any: ["attendance.swipes.view"] } },
           { key: "attendance-muster", label: "Attendance Muster", path: "workforce/attendance/muster", icon: FileTextOutlined, element: MusterPage, needs: { any: ["attendance.view", "attendance.manual.enter"] } },
           { key: "attendance-info", label: "Attendance Info", path: "workforce/attendance/info", icon: CalendarOutlined, element: AttendanceInfoAdminPage, needs: { any: ["attendance.view"] } },
+          { key: "wfh-requests", label: "Work From Home", path: "workforce/attendance/wfh-requests", icon: AuditOutlined, element: WfhRequestsPage, needs: { director: true } }, // M block 2, AT-36
+          { key: "overtime", label: "Overtime", path: "workforce/attendance/overtime", icon: AuditOutlined, element: OvertimeClaimsPage, needs: { any: ["attendance.regularization.approve"] } }, // M block 2, AT-19
           { key: "regularizations", label: "Regularizations", path: "workforce/attendance/regularizations", icon: AuditOutlined, element: RegularizationsPage, needs: { any: ["attendance.regularization.view", "attendance.regularization.approve"] } },
           { key: "process-attendance", label: "Process Attendance", path: "workforce/attendance/process", icon: ToolOutlined, element: ProcessAttendancePage, needs: { any: ["attendance.process"] } },
           { key: "period-finalisation", label: "Attendance Period Finalisation", path: "workforce/attendance/finalisation", icon: SafetyOutlined, element: FinalisationPage, needs: { any: ["attendance.finalise", "attendance.process"] } },
@@ -396,6 +414,8 @@ export const adminApps: AdminApp[] = [
           { key: "payroll-pay-types", label: "Loan and claim types", path: "payroll/pay-types", icon: FileProtectOutlined, element: PayTypesPage, needs: { director: true } }, // item 3
           { key: "payroll-quarterly-tds", label: "Quarterly TDS data", path: "payroll/quarterly-tds", icon: FileProtectOutlined, element: QuarterlyTdsPage, needs: { director: true } }, // item 3
           { key: "payroll-tds-form16", label: "TDS and Form 16", path: "payroll/tds-form16", icon: FileProtectOutlined, element: TdsForm16Page, needs: { director: true } }, // P7-7
+          { key: "payroll-statutory-challans", label: "PF and ESI challans", path: "payroll/statutory-challans", icon: FileProtectOutlined, element: StatutoryChallansPage, needs: { director: true } }, // ST-03 / ST-06
+          { key: "payroll-reports", label: "Payroll reports", path: "payroll/reports", icon: FileProtectOutlined, element: PayrollReportsPage, needs: { director: true } }, // Stage 6
           { key: "payroll-tax-declarations", label: "Tax Declarations", path: "payroll/tax-declarations", icon: FormOutlined, element: TaxDeclarationsPage, needs: PAYROLL_NEEDS },
           { key: "payroll-holds", label: "Held Salaries", path: "payroll/holds", icon: PauseCircleOutlined, element: HeldSalariesPage, needs: PAYROLL_NEEDS },
           { key: "payroll-run", label: "Payroll Run", path: "payroll/run", icon: FundOutlined, element: PayrollRunsPage, needs: PAYROLL_NEEDS },
@@ -447,6 +467,8 @@ export const adminApps: AdminApp[] = [
           { key: "audit-log", label: "Audit Log", path: "admin-tools/audit-log", icon: AuditOutlined, element: AuditLogPage, needs: { any: ["audit.view"] } },
           { key: "system-settings", label: "System Settings", path: "admin-tools/settings", icon: SettingOutlined, element: SystemSettingsPage, needs: { any: ["settings.manage"] } },
           { key: "default-behaviours", label: "Default behaviours", path: "settings/behaviours", icon: SettingOutlined, element: DefaultBehavioursPage, needs: { director: true } }, // D-37
+          { key: "policy-settings", label: "Policy settings", path: "settings/policies", icon: SettingOutlined, element: PolicySettingsPage, needs: { director: true } }, // M session block 2
+          { key: "custom-fields", label: "Custom fields", path: "settings/custom-fields", icon: SettingOutlined, element: CustomFieldsPage, needs: { director: true } }, // M block 2, ER-28
         ],
       },
     ],

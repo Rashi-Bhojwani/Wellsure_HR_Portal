@@ -6,6 +6,7 @@ import { PlusOutlined, UploadOutlined } from "@ant-design/icons";
 import * as api from "../../../api/reimbursements";
 import type { ClaimView } from "../../../api/reimbursements";
 import { apiErrorMessage } from "../../../lib/apiError";
+import { ClaimStatement } from "../../../components/payroll/ClaimStatement";
 import { formatRupees } from "../../../lib/money";
 import { DataTable, PageHeader, SideDrawer, StatusChip, toast } from "../../../ui";
 import { WRAP_TEXT as WRAP } from "../../../ui/textStyles";
@@ -81,6 +82,7 @@ export function ReimbursementPage() {
           </Form.Item>
         </Form>
       </SideDrawer>
+      <ClaimStatement scope="mine" />
     </>
   );
 }

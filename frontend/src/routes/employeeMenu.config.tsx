@@ -75,7 +75,12 @@ const PeoplePage = lazyPage(() => import("../pages/employee/people/PeoplePage"),
 const HelpdeskPage = lazyPage(() => import("../pages/employee/helpdesk/HelpdeskPage"), "HelpdeskPage");
 const RequestHubPage = lazyPage(() => import("../pages/employee/request-hub/RequestHubPage"), "RequestHubPage");
 const TasksPage = lazyPage(() => import("../pages/employee/todo/TasksPage"), "TasksPage");
+const FeedbackPage = lazyPage(() => import("../pages/employee/worklife/FeedbackPage"), "FeedbackPage"); // M block 2, SS-13
+const MyOnboardingPage = lazyPage(() => import("../pages/employee/todo/MyOnboardingPage"), "MyOnboardingPage"); // M block 2, OE-04
 const WorkflowDelegatesPage = lazyPage(() => import("../pages/employee/workflow-delegates/WorkflowDelegatesPage"), "WorkflowDelegatesPage");
+const EncashmentPage = lazyPage(() => import("../pages/employee/leave/EncashmentPage"), "EncashmentPage"); // M block 2, LV-23
+const WfhPage = lazyPage(() => import("../pages/employee/attendance/WfhPage"), "WfhPage"); // M block 2, AT-36
+const OvertimePage = lazyPage(() => import("../pages/employee/attendance/OvertimePage"), "OvertimePage"); // M block 2, AT-19
 const MarkAttendancePage = lazyPage(() => import("../pages/employee/attendance/MarkAttendancePage"), "MarkAttendancePage");
 const AttendanceInfoPage = lazyPage(() => import("../pages/employee/attendance/AttendanceInfoPage"), "AttendanceInfoPage");
 const PayslipsPage = lazyPage(() => import("../pages/employee/salary/PayslipsPage"), "PayslipsPage");
@@ -155,7 +160,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
         label: "Feedback",
         path: "my-worklife/feedback",
         icon: CommentOutlined,
-        phase: "Phase 8", // with performance reviews (user decision, Phase 5 commit D)
+        element: FeedbackPage, // M block 2, SS-13: feedback and suggestions to HR (performance feedback stays with Phase 8)
       },
     ],
   },
@@ -167,6 +172,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
     children: [
       { key: "tasks", label: "Tasks", path: "todo/tasks", icon: UnorderedListOutlined, element: TasksPage, quickAction: true },
       { key: "review", label: "Review", path: "todo/review", icon: AuditOutlined, element: ReviewPage, quickAction: true },
+      { key: "onboarding", label: "Onboarding", path: "todo/onboarding", icon: UnorderedListOutlined, element: MyOnboardingPage }, // M block 2, OE-04
     ],
   },
   {
@@ -265,6 +271,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
         element: HolidayCalendarPage,
         quickAction: true,
       },
+      { key: "encashment", label: "Encashment", path: "leave/encashment", icon: GiftOutlined, element: EncashmentPage, description: "Ask to encash leave during the year, when the company allows it." }, // M block 2, LV-23
     ],
   },
   {
@@ -290,6 +297,8 @@ export const employeeMenu: EmployeeMenuEntry[] = [
         permission: "attendance.manual.enter",
         description: "Mark the attendance of the branches you're assigned to.",
       },
+      { key: "wfh", label: "Work From Home", path: "attendance/wfh", icon: FormOutlined, element: WfhPage, description: "Ask to work from home on some days, when the company allows it." }, // M block 2, AT-36
+      { key: "overtime", label: "Overtime", path: "attendance/overtime", icon: FormOutlined, element: OvertimePage, description: "Claim time worked beyond your shift, when the company uses overtime." }, // M block 2, AT-19
     ],
   },
   {

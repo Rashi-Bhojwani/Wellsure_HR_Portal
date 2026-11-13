@@ -79,6 +79,11 @@ export function codeOnly(src: string): string {
 const ALLOWED_INTEGERS = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 16, 32, 40, 64, 100, 200, 201, 202, 204, 400, 401, 403, 404, 409, 422, 500, 1000]);
 // Value-shape bounds that belong to a rule's own validation (a payment day is 1 to 28, a month is 1 to 12, a state key is short).
 const EXTRA_ALLOWED: Record<string, number[]> = {
+  // Session A parity rows: milliseconds in a calendar day (service length, never money); the longest challan reference a director may type (a form limit).
+  "settlements/guide.ts": [86400000],
+  "tax/statutoryChallans.ts": [30],
+  // IE-09: form limits (the note a director types, the file name kept on a revision); 500 (rows in one file) carries its own allow-number comment.
+  "salary/assignmentImport.ts": [300, 80],
   // A-3 opening figures: the largest import file (rows), form field lengths (a figure's text, a note, a reason), the length of a sha256 fingerprint and the
   // short batch id cut from it. None is a payroll figure.
   "tax/openings.ts": [2000, 20, 300, 64, 24],
@@ -94,6 +99,9 @@ const EXTRA_ALLOWED: Record<string, number[]> = {
   // P7-6b: form field lengths (a note), a 64-character fingerprint, a source id's length.
   "offcycle/service.ts": [300, 64, 5],
   "offcycle/routes.ts": [64],
+  // Stage 6 reports: the most runs one summary reads (ten years of months), a reason's length, the longest column list a query may carry.
+  "reports/definitions.ts": [120],
+  "reports/service.ts": [300, 800],
   // P7-7: the shape of a challan's numbers (a BSR code is 7 digits, a serial up to 10), a year label's 7 characters, a note's length, a fingerprint's 64.
   "tax/form16.ts": [11, 300, 64],
   "loans/service.ts": [31, 60, 600, 40, 300, 64, 32],

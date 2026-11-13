@@ -10,6 +10,7 @@ import { space } from "../../../theme/tokens";
 import { DataTable, EmptyState, PageHeader, Panel, StatusChip, toast, useIsPhone, type Crumb } from "../../../ui";
 import { FileName, FolderName, SquareAction } from "./docBits";
 import { LetterAsks } from "./LetterAsks";
+import { PolicyAcks } from "./PolicyAcks";
 
 async function download(get: () => Promise<SignedDownload>) {
   try {
@@ -178,6 +179,7 @@ export function DocumentCenterPage() {
         breadcrumb={breadcrumb}
         back={folder ? "/app/document-center" : undefined}
       />
+      {!folder && <PolicyAcks onOpen={(id) => void download(() => docsApi.downloadCompanyDocument(id))} />}
       <Panel bodyStyle={{ paddingTop: phone ? space[1] : space[2] }}>
         <Tabs
           activeKey={tab}

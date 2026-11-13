@@ -61,6 +61,18 @@ import { reimbursementsRouter } from "./modules/payroll/reimbursements/routes"; 
 import { settlementsRouter } from "./modules/payroll/settlements/routes"; // P7-6
 import { offCycleRouter } from "./modules/payroll/offcycle/routes"; // P7-6b
 import { behavioursRouter } from "./modules/behaviours/routes"; // D-37
+import { payrollReportsRouter } from "./modules/payroll/reports/routes"; // Stage 6
+import { policySettingsRouter } from "./modules/policySettings/routes"; // M session block 2
+import { divisionsRouter } from "./modules/divisions/routes"; // M session block 2, ER-27
+import { documentAcksRouter } from "./modules/documents/ackRoutes"; // M session block 2, ER-18
+import { probationRouter } from "./modules/probation/routes"; // M session block 2, ER-26
+import { onboardingRouter } from "./modules/onboarding/routes"; // M session block 2, OE-04
+import { customFieldsRouter } from "./modules/customFields/routes"; // M session block 2, ER-28
+import { feedbackRouter } from "./modules/feedback/routes"; // M session block 2, SS-13
+import { overtimeRouter } from "./modules/overtime/routes"; // M session block 2, AT-19
+import { wfhRequestsRouter } from "./modules/wfhRequests/routes"; // M session block 2, AT-36
+import { encashmentRequestsRouter } from "./modules/encashmentRequests/routes"; // M session block 2, LV-23
+import { updateImportRouter } from "./modules/updateImport/routes"; // M session block 2, IE-07/08
 import { payslipRouter } from "./modules/payroll/payslipRoutes";
 // PEEPS-BEGIN assets
 import { assetsRouter } from "./modules/assets/routes";
@@ -138,6 +150,18 @@ const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   { path: "/api/settlements", router: settlementsRouter }, // P7-6
   { path: "/api/offcycle", router: offCycleRouter }, // P7-6b
   { path: "/api/behaviours", router: behavioursRouter }, // D-37
+  { path: "/api/payroll-reports", router: payrollReportsRouter }, // Stage 6
+  { path: "/api/policy-settings", router: policySettingsRouter }, // M session block 2
+  { path: "/api/divisions", router: divisionsRouter }, // M session block 2, ER-27
+  { path: "/api/document-acks", router: documentAcksRouter }, // M session block 2, ER-18
+  { path: "/api/probation", router: probationRouter }, // M session block 2, ER-26
+  { path: "/api/onboarding", router: onboardingRouter }, // M session block 2, OE-04
+  { path: "/api/custom-fields", router: customFieldsRouter }, // M session block 2, ER-28
+  { path: "/api/feedback", router: feedbackRouter }, // M session block 2, SS-13
+  { path: "/api/overtime", router: overtimeRouter }, // M session block 2, AT-19
+  { path: "/api/wfh-requests", router: wfhRequestsRouter }, // M session block 2, AT-36
+  { path: "/api/encashment-requests", router: encashmentRequestsRouter }, // M session block 2, LV-23
+  { path: "/api/update-import", router: updateImportRouter }, // M session block 2, IE-07/08
   { path: "/api/attendance", router: attendanceRouter },
   { path: "/api/biometric", router: biometricRouter },
   // PEEPS-BEGIN recruitment

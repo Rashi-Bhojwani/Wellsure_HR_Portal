@@ -2,7 +2,8 @@ import { useState } from "react";
 import dayjs, { type Dayjs } from "dayjs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, DatePicker, Form, Input, Select } from "antd";
-import { PlusOutlined } from "@ant-design/icons";
+import { DownloadOutlined, PlusOutlined } from "@ant-design/icons";
+import { saveBlob } from "../../../api/muster";
 import { financialYearOf } from "@shared/utils/financialYear";
 import * as taxApi from "../../../api/tax";
 import type { ChallanView } from "../../../api/tax";
@@ -27,6 +28,14 @@ export function TdsForm16Page() {
   const [form] = Form.useForm<{ month: Dayjs; depositedOn: Dayjs; amount: string; bsrCode: string; serial: string }>();
   const reg = useQuery({ queryKey: ["challans", fy], queryFn: () => taxApi.challanRegister(fy) });
   const f16 = useQuery({ queryKey: ["form16", fy], queryFn: () => taxApi.form16Year(fy), retry: false });
+  // ST-24: a director's copy of anyone's Form 16 Part B PDF (DRAFT until confirmed); every download is recorded.
+  const downloadPdf = async (employeeId: string, code: string) => {
+    try {
+      saveBlob(await taxApi.form16PdfFor(fy, employeeId), `form16-part-b-${fy}-${code}.pdf`);
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Could not make the PDF."));
+    }
+  };
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["challans"] }).then(() => queryClient.invalidateQueries({ queryKey: ["form16"] }));
   const fail = (what: string) => (err: unknown) => toast.error(apiErrorMessage(err, what));
   const enter = useMutation({ mutationFn: (v: { month: Dayjs; depositedOn: Dayjs; amount: string; bsrCode: string; serial: string }) => taxApi.enterChallan({ fy, month: v.month.format("YYYY-MM"), depositedOn: v.depositedOn.format("YYYY-MM-DD"), amount: v.amount, bsrCode: v.bsrCode, serial: v.serial }), onSuccess: () => { toast.success("Entered. A different director confirms it."); setAdding(false); form.resetFields(); refresh(); }, onError: fail("Could not enter it.") });
@@ -104,6 +113,16 @@ export function TdsForm16Page() {
                   { title: "Taxable pay", dataIndex: "taxablePay", align: "right", render: (x: string) => formatRupees(x, 2) },
                   { title: "Tax for the year", key: "t", align: "right", render: (_, r) => (r.computation?.annualTax ? formatRupees(r.computation.annualTax, 2) : "—") },
                   { title: "TDS deducted", dataIndex: "tdsDeducted", align: "right", render: (x: string) => formatRupees(x, 2) },
+                  {
+                    title: "PDF",
+                    key: "pdf",
+                    render: (_, r) =>
+                      r.employeeId ? (
+                        <Button size="small" icon={<DownloadOutlined />} aria-label={`Form 16 PDF for ${r.name ?? r.employeeCode}`} onClick={() => void downloadPdf(r.employeeId!, r.employeeCode)}>
+                          {f16.data?.state === "CONFIRMED" ? "PDF" : "Draft PDF"}
+                        </Button>
+                      ) : null,
+                  },
                 ]}
               />
             </>

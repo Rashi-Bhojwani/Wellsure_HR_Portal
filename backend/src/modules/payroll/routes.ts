@@ -2,6 +2,7 @@ import { Router } from "express";
 import { authenticate } from "../../middleware/authenticate";
 import { requireAnyPermission, requirePermission } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
+import { refuseDeveloper } from "../../middleware/refuseDeveloper";
 import * as controller from "./controller";
 import * as salary from "./salary/controller";
 import * as v from "./salary/validators";
@@ -22,6 +23,8 @@ import * as exSvc from "./exclusions/service";
 import * as plSvc from "./run/payslipLinks";
 import * as rpSvc from "./run/repayments";
 import { sentSchema } from "./run/sentMarks";
+import { bankSummaryPdf } from "./run/bankSummary"; // PY-37
+import * as assignmentImport from "./salary/assignmentImport"; // IE-09
 import { compareRegistersRoute, compareUpload } from "./compare/controller";
 import { overrideKeyParamsSchema, overridePreviewSchema, overrideSaveSchema, setupAreaParamsSchema, setupSignoffSchema, checkersQuerySchema, payrollAuditQuerySchema, ruleConfirmSchema, ruleEditPreviewSchema, ruleEditSchema, ruleKeyParamsSchema } from "./validators";
 
@@ -93,6 +96,20 @@ payrollRouter.get("/salary/employees/:employeeId", view, validate({ params: v.em
 payrollRouter.get("/salary/revisions", view, validate({ query: v.revisionListSchema }), salary.revisions);
 payrollRouter.post("/salary/revisions/cancel-preview", edit, validate({ body: v.cancelPreviewSchema }), salary.cancelPreview);
 payrollRouter.post("/salary/revisions/cancel", edit, validate({ body: v.cancelCreateSchema }), salary.cancelCreate);
+// IE-09: salary assignments from our own template, previewed, then created as ordinary revisions for a different director.
+payrollRouter.get("/salary/import/template", refuseDeveloper, edit, (_req, res) => {
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", 'attachment; filename="salary-assignments-template.csv"');
+  res.status(200).send(assignmentImport.templateCsv());
+});
+payrollRouter.post("/salary/import/preview", refuseDeveloper, edit, memoryUpload(5), async (req, res) => {
+  if (!req.file) return void res.status(400).json({ error: { message: "Choose a file.", code: "VALIDATION_ERROR" } });
+  res.status(200).json(await assignmentImport.previewAssignments(req.file, { userId: req.user!.userId, ip: req.ip ?? null }));
+});
+payrollRouter.post("/salary/import/commit", refuseDeveloper, edit, memoryUpload(5), async (req, res) => {
+  if (!req.file) return void res.status(400).json({ error: { message: "Choose the same file again.", code: "VALIDATION_ERROR" } });
+  res.status(201).json(await assignmentImport.commitAssignments(req.body, req.file, { userId: req.user!.userId, ip: req.ip ?? null }));
+});
 payrollRouter.post("/salary/revisions/preview", edit, validate({ body: v.revisionPreviewSchema }), salary.revisionPreview);
 payrollRouter.post("/salary/revisions", edit, validate({ body: v.revisionCreateSchema }), salary.revisionCreate);
 payrollRouter.get("/salary/revisions/:id", view, validate({ params: v.idParamsSchema }), salary.revision);
@@ -156,6 +173,13 @@ const bankView = requirePermission("payroll.bank.view");
 payrollRouter.get("/runs/:id/bank-batch", bankView, validate({ params: rv.runIdParamsSchema }), rel.batchOfRun);
 payrollRouter.get("/bank-batches/:id", bankView, validate({ params: rv.slipIdParamsSchema }), rel.batch);
 payrollRouter.get("/bank-batches/:id/file", bankView, validate({ params: rv.slipIdParamsSchema }), rel.batchDownload);
+payrollRouter.get("/bank-batches/:id/summary.pdf", refuseDeveloper, bankView, validate({ params: rv.slipIdParamsSchema }), async (req, res) => { // PY-37
+  const out = await bankSummaryPdf(req.params.id as string, { userId: req.user!.userId, ip: req.ip ?? null });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="${out.fileName}"`);
+  res.setHeader("Cache-Control", "no-store");
+  res.status(200).send(out.pdf);
+});
 payrollRouter.post("/bank-batches/:id/mark-paid", make, validate({ params: rv.slipIdParamsSchema, body: rv.markPaidSchema }), rel.batchPaid);
 // Statutory files and the register: made by payroll.run, read by reports.salary.view.
 const reportView = requirePermission("reports.salary.view");

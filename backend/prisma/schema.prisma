@@ -124,6 +124,7 @@ model User {
   // M-BEGIN (second session, NT-09)
   notificationPreferences NotificationPreference[]
   reportSubscriptions     ReportSubscription[]
+
   // M-END
   @@map("users")
 }
@@ -391,17 +392,17 @@ model Location {
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
 
-  jobHistory          EmployeeJobHistory[]
-  manualBranchUsers   AttendanceManualBranch[]
-  manualMusterUploads ManualMusterUpload[]
-  devices             Device[]
-  announcements       Announcement[]
-  companyDocuments    CompanyDocument[]
-
-  @@index([cityId])
+  jobHistory              EmployeeJobHistory[]
+  manualBranchUsers       AttendanceManualBranch[]
+  manualMusterUploads     ManualMusterUpload[]
+  devices                 Device[]
+  announcements           Announcement[]
+  companyDocuments        CompanyDocument[]
   // PEEPS-BEGIN recruitment
   recruitmentRequisitions JobRequisition[]
-  recruitmentJobs RecruitmentJob[]
+  recruitmentJobs         RecruitmentJob[]
+
+  @@index([cityId])
   // PEEPS-END recruitment
   @@map("locations")
 }
@@ -426,10 +427,14 @@ model Department {
   jobHistory       EmployeeJobHistory[]
   announcements    Announcement[]
   companyDocuments CompanyDocument[]
+  // M-BEGIN (second session block 2, ER-27)
+  division         DepartmentDivision?
+  // M-END
 
   // PEEPS-BEGIN recruitment
   recruitmentRequisitions JobRequisition[]
-  recruitmentJobs RecruitmentJob[]
+  recruitmentJobs         RecruitmentJob[]
+
   // PEEPS-END recruitment
   @@map("departments")
 }
@@ -474,33 +479,33 @@ model CostCentre {
 // ── Employees ────────────────────────────────────────────────────────────
 
 model Employee {
-  payslipLinks    PayslipLink[]
-  leaveTypeReviews LeaveTypeReviewer[] @relation("LeaveTypeReviewerPerson") // A-10 G4
-  leaverRecalcs   LeaverLeaveRecalc[] @relation("LeaverRecalcEmployee") // A-10 G6
-  taxOpenings     TaxOpening[]        @relation("TaxOpeningEmployee") // A-3
-  loans           Loan[]              @relation("LoanEmployee") // P7-4
-  claims          ReimbursementClaim[] @relation("ReimbursementClaimEmployee") // P7-5
-  fnfSettlements  FnfSettlement[]      @relation("FnfSettlementEmployee") // P7-6
-  offCycleRuns    OffCycleRun[]        @relation("OffCycleRunEmployee") // P7-6b
+  payslipLinks                PayslipLink[]
+  leaveTypeReviews            LeaveTypeReviewer[]      @relation("LeaveTypeReviewerPerson") // A-10 G4
+  leaverRecalcs               LeaverLeaveRecalc[]      @relation("LeaverRecalcEmployee") // A-10 G6
+  taxOpenings                 TaxOpening[]             @relation("TaxOpeningEmployee") // A-3
+  loans                       Loan[]                   @relation("LoanEmployee") // P7-4
+  claims                      ReimbursementClaim[]     @relation("ReimbursementClaimEmployee") // P7-5
+  fnfSettlements              FnfSettlement[]          @relation("FnfSettlementEmployee") // P7-6
+  offCycleRuns                OffCycleRun[]            @relation("OffCycleRunEmployee") // P7-6b
   // PEEPS-BEGIN exits
-  resignations Resignation[]
-  exitInterviewsAsInterviewer ExitInterview[] @relation("ExitInterviewer")
+  resignations                Resignation[]
+  exitInterviewsAsInterviewer ExitInterview[]          @relation("ExitInterviewer")
   // PEEPS-END exits
-  bankRepaymentRows BankRepaymentRow[]
-  remoteRecords     RemoteAttendanceRecord[]
-  id                String                   @id @default(cuid())
-  employeeCode      String                   @unique @map("employee_code") // permanent login username — never reassigned, even after separation
-  officialEmail     String?                  @unique @map("official_email")
-  dateOfJoining     DateTime                 @map("date_of_joining") @db.Date
-  lastWorkingDate   DateTime?                @map("last_working_date") @db.Date
+  bankRepaymentRows           BankRepaymentRow[]
+  remoteRecords               RemoteAttendanceRecord[]
+  id                          String                   @id @default(cuid())
+  employeeCode                String                   @unique @map("employee_code") // permanent login username — never reassigned, even after separation
+  officialEmail               String?                  @unique @map("official_email")
+  dateOfJoining               DateTime                 @map("date_of_joining") @db.Date
+  lastWorkingDate             DateTime?                @map("last_working_date") @db.Date
   // Why they left — set when a separation completes, or directly by the
   // Excel import for ex-employees migrated from greytHR, who have a last
   // working day and a reason but no Separation row here (Phase 5 G prep).
-  exitReason        String?                  @map("exit_reason")
-  employmentType    EmploymentType           @map("employment_type")
-  status            EmployeeStatus           @default(ACTIVE)
-  createdAt         DateTime                 @default(now()) @map("created_at")
-  updatedAt         DateTime                 @updatedAt @map("updated_at")
+  exitReason                  String?                  @map("exit_reason")
+  employmentType              EmploymentType           @map("employment_type")
+  status                      EmployeeStatus           @default(ACTIVE)
+  createdAt                   DateTime                 @default(now()) @map("created_at")
+  updatedAt                   DateTime                 @updatedAt @map("updated_at")
 
   user            User?
   personal        EmployeePersonal?
@@ -529,10 +534,10 @@ model Employee {
 
   companyDocumentDownloads CompanyDocumentDownload[]
 
-  helpdeskTicketsRaised      HelpdeskTicket[]          @relation("HelpdeskTicketRaisedBy")
-  helpdeskTicketsAssigned    HelpdeskTicket[]          @relation("HelpdeskTicketAssignee")
+  helpdeskTicketsRaised      HelpdeskTicket[]                 @relation("HelpdeskTicketRaisedBy")
+  helpdeskTicketsAssigned    HelpdeskTicket[]                 @relation("HelpdeskTicketAssignee")
   helpdeskMessages           HelpdeskMessage[]
-  helpdeskCategoriesAssigned HelpdeskCategory[]        @relation("HelpdeskCategoryDefaultAssignee")
+  helpdeskCategoriesAssigned HelpdeskCategory[]               @relation("HelpdeskCategoryDefaultAssignee")
   generatedLetters           GeneratedLetter[]
   attendanceAssignments      AttendanceAssignment[]
   salaries                   EmployeeSalary[]
@@ -551,38 +556,46 @@ model Employee {
   assetAssignments           AssetAssignment[]
   // PEEPS-END
   // PEEPS-BEGIN office-unmute
-  officeMembershipChanges    OfficeMembershipChange[]  @relation("OfficeMembershipChangeEmployee")
+  officeMembershipChanges    OfficeMembershipChange[]         @relation("OfficeMembershipChangeEmployee")
   unmuteHostAuthorisations   UnmuteHostAuthorisation[]
   unmuteSlots                UnmuteSlot[]
-  unmuteBookingsAsHost       UnmuteBooking[]           @relation("UnmuteBookingHost")
-  unmuteBookingsAsBooker     UnmuteBooking[]           @relation("UnmuteBookingBooker")
+  unmuteBookingsAsHost       UnmuteBooking[]                  @relation("UnmuteBookingHost")
+  unmuteBookingsAsBooker     UnmuteBooking[]                  @relation("UnmuteBookingBooker")
   // PEEPS-END
   // PEEPS-BEGIN badges-nudges
   badgesReceived             BadgeAward[]
   nudgesReceived             PrivateNudge[]
   // PEEPS-END
   // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
-  segmentMemberships         EmployeeSegmentMember[]  @relation("EmployeeSegmentMembership")
-  letterRequests             LetterRequest[]          @relation("LetterRequestEmployee")
-  letterSignatures           LetterRequestSignatory[] @relation("LetterRequestSignatory")
-  massEmailsReceived         MassEmailRecipient[]     @relation("MassEmailRecipient")
+  segmentMemberships         EmployeeSegmentMember[]          @relation("EmployeeSegmentMembership")
+  letterRequests             LetterRequest[]                  @relation("LetterRequestEmployee")
+  letterSignatures           LetterRequestSignatory[]         @relation("LetterRequestSignatory")
+  massEmailsReceived         MassEmailRecipient[]             @relation("MassEmailRecipient")
   // A-9 — end
   // M-BEGIN (second session): HR's bank and statutory entries waiting for a director (docs/plans/M_CHECKLIST.md, task 1)
   identityChangeRequests     IdentityChangeRequest[]
   statutoryHistory           EmployeeStatutoryHistory[]
   letterAsks                 LetterAsk[]
+  documentAcknowledgements   CompanyDocumentAcknowledgement[] // block 2, ER-18
+  probationDecisions         EmployeeProbationDecision[] // block 2, ER-26
+  onboardingTasks            OnboardingTask[] // block 2, OE-04
+  customValues               EmployeeCustomValue[] // block 2, ER-28
+  feedbackGiven              EmployeeFeedback[] // block 2, SS-13
+  overtimeClaims             OvertimeClaim[] // block 2, AT-19
+  wfhRequests                WfhRequest[] // block 2, AT-36
+  encashmentRequests         LeaveEncashmentRequest[] // block 2, LV-23
   // M-END
 
   // PEEPS-BEGIN avatar-choices
-  avatarChoices EmployeeAvatarChoice[]
+  avatarChoices           EmployeeAvatarChoice[]
+  // PEEPS-BEGIN recruitment
+  recruitmentRequisitions JobRequisition[]
+  recruitmentPanels       RecruitmentInterviewPanel[]
+  recruitmentFeedback     InterviewFeedback[]
 
   // PEEPS-END
   @@index([status])
   @@index([dateOfJoining])
-  // PEEPS-BEGIN recruitment
-  recruitmentRequisitions JobRequisition[]
-  recruitmentPanels RecruitmentInterviewPanel[]
-  recruitmentFeedback InterviewFeedback[]
   // PEEPS-END recruitment
   @@map("employees")
 }
@@ -808,7 +821,7 @@ model ProfileChangeRequest {
 
 model Separation {
   // PEEPS-BEGIN exits
-  exitCase ExitCase?
+  exitCase          ExitCase?
   // PEEPS-END exits
   id                String           @id @default(cuid())
   employeeId        String           @map("employee_id")
@@ -826,8 +839,9 @@ model Separation {
   mode              SeparationMode?  @relation(fields: [modeId], references: [id])
   // A-9 — end
 
-  leaverRecalcs     LeaverLeaveRecalc[] // A-10 G6
-  fnfSettlements    FnfSettlement[] // P7-6
+  leaverRecalcs  LeaverLeaveRecalc[] // A-10 G6
+  fnfSettlements FnfSettlement[] // P7-6
+
   @@index([employeeId])
   @@map("separations")
 }
@@ -917,11 +931,14 @@ model LeaveType {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  policy        LeavePolicy?
-  ledgerEntries LeaveLedger[]
-  leaveRequests LeaveRequest[]
-  dayReleases   LeaveDayRelease[]
-  reviewers     LeaveTypeReviewer[] // A-10 G4
+  policy             LeavePolicy?
+  ledgerEntries      LeaveLedger[]
+  leaveRequests      LeaveRequest[]
+  dayReleases        LeaveDayRelease[]
+  reviewers          LeaveTypeReviewer[] // A-10 G4
+  // M-BEGIN (second session block 2, LV-23)
+  encashmentRequests LeaveEncashmentRequest[]
+  // M-END
 
   // PEEPS-BEGIN leave-types
   ruleVersions LeaveRuleVersion[]
@@ -1582,7 +1599,11 @@ model CompanyDocument {
   archivedAt        DateTime?        @map("archived_at")
   archivedByUserId  String?          @map("archived_by_user_id")
 
-  downloads CompanyDocumentDownload[]
+  downloads        CompanyDocumentDownload[]
+  // M-BEGIN (second session block 2, ER-18)
+  ackRequirements  CompanyDocumentAckRequirement[]
+  acknowledgements CompanyDocumentAcknowledgement[]
+  // M-END
 
   @@index([categoryId])
   @@map("company_documents")
@@ -1644,8 +1665,8 @@ model HelpdeskCategory {
   // PEEPS-BEGIN helpdesk-visibility
   visibility        HelpdeskCategoryVisibility?
   visibilityHistory HelpdeskCategoryVisibilityHistory[]
-  movesFrom HelpdeskCategoryMove[] @relation("HelpdeskMoveSource")
-  movesTo HelpdeskCategoryMove[] @relation("HelpdeskMoveTarget")
+  movesFrom         HelpdeskCategoryMove[]              @relation("HelpdeskMoveSource")
+  movesTo           HelpdeskCategoryMove[]              @relation("HelpdeskMoveTarget")
   // PEEPS-END helpdesk-visibility
 
   @@map("helpdesk_categories")
@@ -1669,7 +1690,7 @@ model HelpdeskTicket {
   createdAt          DateTime             @default(now()) @map("created_at")
   updatedAt          DateTime             @updatedAt @map("updated_at")
 
-  messages HelpdeskMessage[]
+  messages      HelpdeskMessage[]
   // PEEPS-BEGIN helpdesk-moves
   categoryMoves HelpdeskCategoryMove[]
   // PEEPS-END helpdesk-moves
@@ -1693,7 +1714,7 @@ model HelpdeskMessage {
   createdAt        DateTime       @default(now()) @map("created_at")
 
   // PEEPS-BEGIN helpdesk-moves
-  isSystem Boolean @default(false) @map("is_system")
+  isSystem    Boolean              @default(false) @map("is_system")
   // PEEPS-END helpdesk-moves
   attachments HelpdeskAttachment[]
 
@@ -1912,14 +1933,14 @@ model ShiftSession {
 // — no `weeks` = every week; weeks = which occurrences in the month (e.g. 2nd
 // and 4th Saturday). HR 2026-10-08: Sunday off, Monday–Saturday working.
 model WeekOffPattern {
-  id          String                 @id @default(cuid())
-  code        String                 @unique
-  name        String
-  rules       Json
-  isActive    Boolean                @default(true) @map("is_active")
-  createdAt   DateTime               @default(now()) @map("created_at")
-  updatedAt   DateTime               @updatedAt @map("updated_at")
-  assignments AttendanceAssignment[]
+  id               String                 @id @default(cuid())
+  code             String                 @unique
+  name             String
+  rules            Json
+  isActive         Boolean                @default(true) @map("is_active")
+  createdAt        DateTime               @default(now()) @map("created_at")
+  updatedAt        DateTime               @updatedAt @map("updated_at")
+  assignments      AttendanceAssignment[]
   weekendOverrides WeekendOverride[] // A-10 G4
 
   @@map("week_off_patterns")
@@ -2091,6 +2112,7 @@ model Device {
   incidents DeviceIncident[]
 
   syncRequests DeviceSyncRequest[] // A-10 G5
+
   @@index([agentId])
   @@map("devices")
 }
@@ -2775,28 +2797,28 @@ model PayrollSalaryRevision {
 // A one-off earning or deduction HR adds before a run, or arrears a back-dated revision created. The same (source, source_ref) can exist once, so the
 // same arrears or encashment can never be added twice. A run consumes it; amounts and reasons never change after creation.
 model PayrollAdjustment {
-  id                String              @id @default(cuid())
-  employeeId        String              @map("employee_id")
-  employee          Employee            @relation(fields: [employeeId], references: [id])
-  componentCode     String              @map("component_code")
-  direction         AdjustmentDirection
-  amount            Decimal             @db.Decimal(20, 6) // always positive; direction says which way
-  reason            String
-  source            AdjustmentSource
-  sourceRef         String?             @map("source_ref")
-  periodStart       DateTime?           @map("period_start") @db.Date // the cycle arrears belong to; null for a plain adjustment
-  periodEnd         DateTime?           @map("period_end") @db.Date
-  breakdown         Json? // arrears: [{ component, amount (signed) }]
-  status            AdjustmentStatus    @default(PENDING)
-  consumedByRunId   String?             @map("consumed_by_run_id") // set when a run is finalised (P6-4); until then a run only reads it
-  consumedByRun     PayrollRun?         @relation(fields: [consumedByRunId], references: [id], onDelete: Restrict)
-  consumedByOffCycleRunId String?       @map("consumed_by_off_cycle_run_id") // P7-6b: set when an off-cycle run pays it
-  consumedByOffCycleRun   OffCycleRun?  @relation(fields: [consumedByOffCycleRunId], references: [id], onDelete: Restrict)
-  createdByUserId   String              @map("created_by_user_id")
-  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
-  cancelledAt       DateTime?           @map("cancelled_at") @db.Timestamptz(3)
-  cancelledByUserId String?             @map("cancelled_by_user_id")
-  cancelReason      String?             @map("cancel_reason")
+  id                      String              @id @default(cuid())
+  employeeId              String              @map("employee_id")
+  employee                Employee            @relation(fields: [employeeId], references: [id])
+  componentCode           String              @map("component_code")
+  direction               AdjustmentDirection
+  amount                  Decimal             @db.Decimal(20, 6) // always positive; direction says which way
+  reason                  String
+  source                  AdjustmentSource
+  sourceRef               String?             @map("source_ref")
+  periodStart             DateTime?           @map("period_start") @db.Date // the cycle arrears belong to; null for a plain adjustment
+  periodEnd               DateTime?           @map("period_end") @db.Date
+  breakdown               Json? // arrears: [{ component, amount (signed) }]
+  status                  AdjustmentStatus    @default(PENDING)
+  consumedByRunId         String?             @map("consumed_by_run_id") // set when a run is finalised (P6-4); until then a run only reads it
+  consumedByRun           PayrollRun?         @relation(fields: [consumedByRunId], references: [id], onDelete: Restrict)
+  consumedByOffCycleRunId String?             @map("consumed_by_off_cycle_run_id") // P7-6b: set when an off-cycle run pays it
+  consumedByOffCycleRun   OffCycleRun?        @relation(fields: [consumedByOffCycleRunId], references: [id], onDelete: Restrict)
+  createdByUserId         String              @map("created_by_user_id")
+  createdAt               DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  cancelledAt             DateTime?           @map("cancelled_at") @db.Timestamptz(3)
+  cancelledByUserId       String?             @map("cancelled_by_user_id")
+  cancelReason            String?             @map("cancel_reason")
 
   @@unique([source, sourceRef])
   @@index([consumedByOffCycleRunId])
@@ -2938,7 +2960,8 @@ model PayrollRunItem {
   lines   PayrollRunLine[]
   payslip Payslip?
 
-  offCycleReleases      OffCycleHeldRelease[] @relation("OffCycleHeldReleaseItem") // P7-6b
+  offCycleReleases OffCycleHeldRelease[] @relation("OffCycleHeldReleaseItem") // P7-6b
+
   @@unique([runId, employeeId])
   @@index([runId, status])
   @@map("payroll_run_items")
@@ -4098,14 +4121,14 @@ model EmployeeAvatarChoice {
 // No row means legacy behaviour. New general categories receive an unconfigured
 // row from the migration's insert trigger; nobody is selected by default.
 model HelpdeskCategoryVisibility {
-  id              String          @id @default(cuid())
-  categoryId      String          @unique @map("category_id")
+  id              String           @id @default(cuid())
+  categoryId      String           @unique @map("category_id")
   category        HelpdeskCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  categoryCode    String          @map("category_code")
-  configured      Boolean         @default(false)
-  hrRoleCodes     String[]        @default([]) @map("hr_role_codes")
-  employeeIds     String[]        @default([]) @map("employee_ids")
-  version         Int             @default(0)
+  categoryCode    String           @map("category_code")
+  configured      Boolean          @default(false)
+  hrRoleCodes     String[]         @default([]) @map("hr_role_codes")
+  employeeIds     String[]         @default([]) @map("employee_ids")
+  version         Int              @default(0)
   changedByUserId String?          @map("changed_by_user_id")
   changedAt       DateTime         @default(now()) @map("changed_at") @db.Timestamptz(3)
 
@@ -4113,10 +4136,10 @@ model HelpdeskCategoryVisibility {
 }
 
 model HelpdeskCategoryVisibilityHistory {
-  id              String          @id @default(cuid())
-  categoryId      String          @map("category_id")
+  id              String           @id @default(cuid())
+  categoryId      String           @map("category_id")
   category        HelpdeskCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  categoryCode    String          @map("category_code")
+  categoryCode    String           @map("category_code")
   version         Int
   hrRoleCodes     String[]         @map("hr_role_codes")
   employeeIds     String[]         @map("employee_ids")
@@ -4127,172 +4150,184 @@ model HelpdeskCategoryVisibilityHistory {
   @@unique([categoryId, version])
   @@map("helpdesk_category_visibility_history")
 }
+
 // PEEPS-END helpdesk-visibility
 
 // PEEPS-BEGIN helpdesk-moves
 model HelpdeskCategoryMove {
-  id String @id @default(cuid())
-  ticketId String @map("ticket_id")
-  ticket HelpdeskTicket @relation(fields: [ticketId], references: [id], onDelete: Restrict)
-  sourceCategoryId String @map("source_category_id")
-  sourceCategory HelpdeskCategory @relation("HelpdeskMoveSource", fields: [sourceCategoryId], references: [id], onDelete: Restrict)
-  targetCategoryId String @map("target_category_id")
-  targetCategory HelpdeskCategory @relation("HelpdeskMoveTarget", fields: [targetCategoryId], references: [id], onDelete: Restrict)
-  sourceCategoryCode String @map("source_category_code")
-  targetCategoryCode String @map("target_category_code")
-  actorUserId String @map("actor_user_id")
-  idempotencyKey String @map("idempotency_key")
-  requestHash String @map("request_hash")
-  reason String
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  id                 String           @id @default(cuid())
+  ticketId           String           @map("ticket_id")
+  ticket             HelpdeskTicket   @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  sourceCategoryId   String           @map("source_category_id")
+  sourceCategory     HelpdeskCategory @relation("HelpdeskMoveSource", fields: [sourceCategoryId], references: [id], onDelete: Restrict)
+  targetCategoryId   String           @map("target_category_id")
+  targetCategory     HelpdeskCategory @relation("HelpdeskMoveTarget", fields: [targetCategoryId], references: [id], onDelete: Restrict)
+  sourceCategoryCode String           @map("source_category_code")
+  targetCategoryCode String           @map("target_category_code")
+  actorUserId        String           @map("actor_user_id")
+  idempotencyKey     String           @map("idempotency_key")
+  requestHash        String           @map("request_hash")
+  reason             String
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
   @@unique([actorUserId, idempotencyKey])
   @@map("helpdesk_category_moves")
 }
+
 // PEEPS-END helpdesk-moves
 
 // PEEPS-BEGIN exits
 model ExitSettingVersion {
-  id String @id @default(cuid())
-  key String
-  version Int
-  value Json
-  reason String
-  changedByUserId String @map("changed_by_user_id")
-  changedAt DateTime @default(now()) @map("changed_at") @db.Timestamptz(3)
+  id              String   @id @default(cuid())
+  key             String
+  version         Int
+  value           Json
+  reason          String
+  changedByUserId String   @map("changed_by_user_id")
+  changedAt       DateTime @default(now()) @map("changed_at") @db.Timestamptz(3)
+
   @@unique([key, version])
   @@map("exit_setting_versions")
 }
 
 model Resignation {
-  id String @id @default(cuid())
-  employeeId String @map("employee_id")
-  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
-  requestedLastDay DateTime @map("requested_last_day") @db.Date
-  reasonCategory String @map("reason_category")
-  reason String
-  status String @default("SUBMITTED")
-  active Boolean @default(true)
-  idempotencyKey String @map("idempotency_key")
-  requestHash String @map("request_hash")
-  submittedAt DateTime @default(now()) @map("submitted_at") @db.Timestamptz(3)
-  acceptedAt DateTime? @map("accepted_at") @db.Timestamptz(3)
-  acceptedByUserId String? @map("accepted_by_user_id")
-  approvalByUserId String? @map("approval_by_user_id")
-  approvalLastDay DateTime? @map("approval_last_day") @db.Date
-  noticeRule Json? @map("notice_rule")
-  noticeRuleVersionId String? @map("notice_rule_version_id")
-  decisionNote String? @map("decision_note")
-  changedByUserId String? @map("changed_by_user_id")
-  exitCase ExitCase?
-  history ExitHistory[]
+  id                  String        @id @default(cuid())
+  employeeId          String        @map("employee_id")
+  employee            Employee      @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  requestedLastDay    DateTime      @map("requested_last_day") @db.Date
+  reasonCategory      String        @map("reason_category")
+  reason              String
+  status              String        @default("SUBMITTED")
+  active              Boolean       @default(true)
+  idempotencyKey      String        @map("idempotency_key")
+  requestHash         String        @map("request_hash")
+  submittedAt         DateTime      @default(now()) @map("submitted_at") @db.Timestamptz(3)
+  acceptedAt          DateTime?     @map("accepted_at") @db.Timestamptz(3)
+  acceptedByUserId    String?       @map("accepted_by_user_id")
+  approvalByUserId    String?       @map("approval_by_user_id")
+  approvalLastDay     DateTime?     @map("approval_last_day") @db.Date
+  noticeRule          Json?         @map("notice_rule")
+  noticeRuleVersionId String?       @map("notice_rule_version_id")
+  decisionNote        String?       @map("decision_note")
+  changedByUserId     String?       @map("changed_by_user_id")
+  exitCase            ExitCase?
+  history             ExitHistory[]
+
   @@unique([employeeId, idempotencyKey])
   @@index([employeeId, status])
   @@map("resignations")
 }
 
 model ExitCase {
-  id String @id @default(cuid())
-  resignationId String @unique @map("resignation_id")
-  resignation Resignation @relation(fields: [resignationId], references: [id], onDelete: Restrict)
-  separationId String @unique @map("separation_id")
-  separation Separation @relation(fields: [separationId], references: [id], onDelete: Restrict)
-  status String @default("OPEN")
-  templateId String? @map("template_id") // immutable template reference; items keep their own snapshot
-  observedLastDay DateTime @map("observed_last_day") @db.Date
-  overrideReason String? @map("override_reason")
-  overrideByUserId String? @map("override_by_user_id")
-  overrideAt DateTime? @map("override_at") @db.Timestamptz(3)
-  overrideFingerprint String? @map("override_fingerprint")
-  closedAt DateTime? @map("closed_at") @db.Timestamptz(3)
-  closeNote String? @map("close_note")
-  closureSource String? @map("closure_source")
-  changedByUserId String? @map("changed_by_user_id")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  items ExitChecklistItem[]
-  interview ExitInterview?
-  letterRequests ExitLetterRequest[]
+  id                  String              @id @default(cuid())
+  resignationId       String              @unique @map("resignation_id")
+  resignation         Resignation         @relation(fields: [resignationId], references: [id], onDelete: Restrict)
+  separationId        String              @unique @map("separation_id")
+  separation          Separation          @relation(fields: [separationId], references: [id], onDelete: Restrict)
+  status              String              @default("OPEN")
+  templateId          String?             @map("template_id") // immutable template reference; items keep their own snapshot
+  observedLastDay     DateTime            @map("observed_last_day") @db.Date
+  overrideReason      String?             @map("override_reason")
+  overrideByUserId    String?             @map("override_by_user_id")
+  overrideAt          DateTime?           @map("override_at") @db.Timestamptz(3)
+  overrideFingerprint String?             @map("override_fingerprint")
+  closedAt            DateTime?           @map("closed_at") @db.Timestamptz(3)
+  closeNote           String?             @map("close_note")
+  closureSource       String?             @map("closure_source")
+  changedByUserId     String?             @map("changed_by_user_id")
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  items               ExitChecklistItem[]
+  interview           ExitInterview?
+  letterRequests      ExitLetterRequest[]
+
   @@index([status])
   @@map("exit_cases")
 }
 
 model ExitChecklistTemplate {
-  id String @id @default(cuid())
-  version Int @unique
-  name String
-  items Json
-  assetOwner Json @map("asset_owner")
-  reason String
-  changedByUserId String @map("changed_by_user_id")
-  changedAt DateTime @default(now()) @map("changed_at") @db.Timestamptz(3)
+  id              String   @id @default(cuid())
+  version         Int      @unique
+  name            String
+  items           Json
+  assetOwner      Json     @map("asset_owner")
+  reason          String
+  changedByUserId String   @map("changed_by_user_id")
+  changedAt       DateTime @default(now()) @map("changed_at") @db.Timestamptz(3)
+
   @@map("exit_checklist_templates")
 }
 
 model ExitChecklistItem {
-  id String @id @default(cuid())
-  caseId String @map("case_id")
-  exitCase ExitCase @relation(fields: [caseId], references: [id], onDelete: Restrict)
-  code String
-  label String
-  ownerTeam String @map("owner_team")
-  ownerEmployeeIds String[] @map("owner_employee_ids")
-  required Boolean
-  assetAssignmentId String? @map("asset_assignment_id") // assets owns its immutable assignment; no reverse ownership
-  doneAt DateTime? @map("done_at") @db.Timestamptz(3)
-  doneByUserId String? @map("done_by_user_id")
-  note String?
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  id                String    @id @default(cuid())
+  caseId            String    @map("case_id")
+  exitCase          ExitCase  @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  code              String
+  label             String
+  ownerTeam         String    @map("owner_team")
+  ownerEmployeeIds  String[]  @map("owner_employee_ids")
+  required          Boolean
+  assetAssignmentId String?   @map("asset_assignment_id") // assets owns its immutable assignment; no reverse ownership
+  doneAt            DateTime? @map("done_at") @db.Timestamptz(3)
+  doneByUserId      String?   @map("done_by_user_id")
+  note              String?
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
   @@unique([caseId, code])
   @@index([caseId])
   @@map("exit_checklist_items")
 }
 
 model ExitInterview {
-  id String @id @default(cuid())
-  caseId String @unique @map("case_id")
-  exitCase ExitCase @relation(fields: [caseId], references: [id], onDelete: Restrict)
-  interviewerEmployeeId String @map("interviewer_employee_id")
-  interviewer Employee @relation("ExitInterviewer", fields: [interviewerEmployeeId], references: [id], onDelete: Restrict)
-  scheduledAt DateTime @map("scheduled_at") @db.Timestamptz(3)
-  questions Json
-  questionsVersionId String @map("questions_version_id")
-  answersEncrypted Bytes? @map("answers_encrypted")
-  status String @default("SCHEDULED")
-  answeredAt DateTime? @map("answered_at") @db.Timestamptz(3)
-  purgeAfter DateTime? @map("purge_after") @db.Timestamptz(3)
-  retentionVersionId String? @map("retention_version_id")
-  changedByUserId String? @map("changed_by_user_id")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  id                    String    @id @default(cuid())
+  caseId                String    @unique @map("case_id")
+  exitCase              ExitCase  @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  interviewerEmployeeId String    @map("interviewer_employee_id")
+  interviewer           Employee  @relation("ExitInterviewer", fields: [interviewerEmployeeId], references: [id], onDelete: Restrict)
+  scheduledAt           DateTime  @map("scheduled_at") @db.Timestamptz(3)
+  questions             Json
+  questionsVersionId    String    @map("questions_version_id")
+  answersEncrypted      Bytes?    @map("answers_encrypted")
+  status                String    @default("SCHEDULED")
+  answeredAt            DateTime? @map("answered_at") @db.Timestamptz(3)
+  purgeAfter            DateTime? @map("purge_after") @db.Timestamptz(3)
+  retentionVersionId    String?   @map("retention_version_id")
+  changedByUserId       String?   @map("changed_by_user_id")
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
   @@index([interviewerEmployeeId, status])
   @@map("exit_interviews")
 }
 
 model ExitHistory {
-  id String @id @default(cuid())
-  resignationId String @map("resignation_id")
-  resignation Resignation @relation(fields: [resignationId], references: [id], onDelete: Restrict)
-  entityType String @map("entity_type")
-  entityId String @map("entity_id")
-  event String
-  fromStatus String? @map("from_status")
-  toStatus String? @map("to_status")
-  confidential Boolean @default(false)
-  actorUserId String? @map("actor_user_id")
-  detail Json?
-  at DateTime @default(now()) @db.Timestamptz(3)
+  id            String      @id @default(cuid())
+  resignationId String      @map("resignation_id")
+  resignation   Resignation @relation(fields: [resignationId], references: [id], onDelete: Restrict)
+  entityType    String      @map("entity_type")
+  entityId      String      @map("entity_id")
+  event         String
+  fromStatus    String?     @map("from_status")
+  toStatus      String?     @map("to_status")
+  confidential  Boolean     @default(false)
+  actorUserId   String?     @map("actor_user_id")
+  detail        Json?
+  at            DateTime    @default(now()) @db.Timestamptz(3)
+
   @@index([resignationId, at])
   @@map("exit_history")
 }
 
 model ExitLetterRequest {
-  id String @id @default(cuid())
-  caseId String @map("case_id")
-  exitCase ExitCase @relation(fields: [caseId], references: [id], onDelete: Restrict)
-  kind String
-  requestedByUserId String @map("requested_by_user_id")
-  requestedAt DateTime @default(now()) @map("requested_at") @db.Timestamptz(3)
+  id                String   @id @default(cuid())
+  caseId            String   @map("case_id")
+  exitCase          ExitCase @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  kind              String
+  requestedByUserId String   @map("requested_by_user_id")
+  requestedAt       DateTime @default(now()) @map("requested_at") @db.Timestamptz(3)
+
   @@unique([caseId, kind])
   @@map("exit_letter_requests")
 }
+
 // PEEPS-END exits
 // ── A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin ──────────────────────────────────────────────────────────────────
 // G1: a saved employee filter (criteria) or a named group of people (list). Shared means other holders of the key may USE it; it is always resolved inside the
@@ -4426,6 +4461,7 @@ model LetterTemplateGrant {
   @@index([templateId, action])
   @@map("letter_template_grants")
 }
+
 // G5: an email to many people at once. A draft can be changed or discarded (never deleted) before it is sent; the audience is resolved on the server at send
 // time, inside the sender's own scope, and the number the sender confirmed must match what is sent. One recipient row per person (no address is stored).
 enum MassEmailStatus {
@@ -4483,6 +4519,7 @@ model MassEmailRecipient {
   @@unique([massEmailId, employeeId])
   @@map("mass_email_recipients")
 }
+
 // G7: how a person left (resignation, termination, retirement and so on) — data the company configures; nothing is seeded, so a mode is Not set until the
 // company has made its list. Switched off, never deleted.
 model SeparationMode {
@@ -4497,6 +4534,7 @@ model SeparationMode {
 
   @@map("separation_modes")
 }
+
 // ── A-9 — end ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 // ── A-10 (docs/plans/GREYTHR_PARITY_WORKFORCE.md) — begin ───────────────────────────────────────────────────────────────────────
@@ -4513,6 +4551,7 @@ model WorkforceSetting {
   @@index([key, createdAt])
   @@map("workforce_settings")
 }
+
 // G3: attendance activity locks (append-only; voided once, never deleted — a database trigger holds it).
 model AttendanceLock {
   id              String    @id @default(cuid())
@@ -4532,6 +4571,7 @@ model AttendanceLock {
   @@index([toDate])
   @@map("attendance_locks")
 }
+
 // G4: a holiday's locations (latest row wins; none or empty = company-wide). Append-only. No FK: a deleted holiday's rows are simply never read.
 model HolidayLocationScope {
   id          String   @id @default(cuid())
@@ -4564,6 +4604,7 @@ model WeekendOverride {
   @@index([toDate])
   @@map("weekend_overrides")
 }
+
 // G4: a leave type reviewer (an extra decider for one leave type; voided once, never deleted).
 model LeaveTypeReviewer {
   id                 String    @id @default(cuid())
@@ -4583,6 +4624,7 @@ model LeaveTypeReviewer {
   @@index([reviewerEmployeeId])
   @@map("leave_type_reviewers")
 }
+
 // G5: swipe decisions (append-only; the latest per punch is in force) and device sync requests.
 enum SwipeDecisionAction {
   REJECT
@@ -4625,6 +4667,7 @@ model DeviceSyncRequest {
   @@index([deviceId, status])
   @@map("device_sync_requests")
 }
+
 // G6: a leaver's leave recalculated to their last working day (append-only; a later row for a changed date supersedes).
 model LeaverLeaveRecalc {
   id              String     @id @default(cuid())
@@ -4640,8 +4683,8 @@ model LeaverLeaveRecalc {
   @@index([employeeId])
   @@map("leaver_leave_recalcs")
 }
-// ── A-10 — end ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
+// ── A-10 — end ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 // ── A-3 (docs/plans/A3_OPENING_FIGURES.md): opening figures, directors only, append-only ──────────────────────────────────────
 enum TaxOpeningKind {
@@ -4691,20 +4734,20 @@ model LoanTypeVersion {
 }
 
 model Loan {
-  id                  String       @id @default(cuid())
-  employeeId          String       @map("employee_id")
-  employee            Employee     @relation("LoanEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
-  typeKey             String       @map("type_key")
-  typeVersion         Int          @map("type_version")
-  principal           Decimal      @db.Decimal(14, 2)
-  ratePercent         Decimal      @map("rate_percent") @db.Decimal(7, 4)
+  id                  String                 @id @default(cuid())
+  employeeId          String                 @map("employee_id")
+  employee            Employee               @relation("LoanEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  typeKey             String                 @map("type_key")
+  typeVersion         Int                    @map("type_version")
+  principal           Decimal                @db.Decimal(14, 2)
+  ratePercent         Decimal                @map("rate_percent") @db.Decimal(7, 4)
   instalments         Int
-  firstMonth          DateTime     @map("first_month") @db.Date
+  firstMonth          DateTime               @map("first_month") @db.Date
   schedule            Json
   purpose             String
-  requestedByEmployee Boolean      @map("requested_by_employee")
-  createdByUserId     String       @map("created_by_user_id")
-  createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  requestedByEmployee Boolean                @map("requested_by_employee")
+  createdByUserId     String                 @map("created_by_user_id")
+  createdAt           DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
   offCycleRecoveries  OffCycleLoanRecovery[] @relation("OffCycleLoanRecoveryLoan") // P7-6b
   changes             LoanChange[]
 
@@ -4755,16 +4798,16 @@ model ClaimTypeVersion {
 }
 
 model ReimbursementClaim {
-  id          String          @id @default(cuid())
-  employeeId  String          @map("employee_id")
-  employee    Employee        @relation("ReimbursementClaimEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
-  typeKey     String          @map("type_key")
-  typeVersion Int             @map("type_version")
-  spentOn     DateTime        @map("spent_on") @db.Date
-  amount      Decimal         @db.Decimal(14, 2)
+  id          String         @id @default(cuid())
+  employeeId  String         @map("employee_id")
+  employee    Employee       @relation("ReimbursementClaimEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  typeKey     String         @map("type_key")
+  typeVersion Int            @map("type_version")
+  spentOn     DateTime       @map("spent_on") @db.Date
+  amount      Decimal        @db.Decimal(14, 2)
   description String
-  bills       Json            @default("[]")
-  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  bills       Json           @default("[]")
+  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
   decision    ClaimDecision?
 
   @@index([employeeId])
@@ -4808,18 +4851,18 @@ model FnfSettlement {
 
 // ── P7-7 (docs/plans/P7_7_FORM16.md): TDS challans (immutable; sealed BSR code and serial), confirmed by a different director ──────
 model TdsChallan {
-  id              String                 @id @default(cuid())
-  financialYear   String                 @map("financial_year")
+  id              String                  @id @default(cuid())
+  financialYear   String                  @map("financial_year")
   month           String
-  depositedOn     DateTime               @map("deposited_on") @db.Date
-  amount          Decimal                @db.Decimal(14, 2)
-  bsrCode         Json                   @map("bsr_code")
+  depositedOn     DateTime                @map("deposited_on") @db.Date
+  amount          Decimal                 @db.Decimal(14, 2)
+  bsrCode         Json                    @map("bsr_code")
   serial          Json
-  serialHash      String                 @map("serial_hash")
-  bsrLast         String                 @map("bsr_last")
-  serialLast      String                 @map("serial_last")
-  enteredByUserId String                 @map("entered_by_user_id")
-  createdAt       DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  serialHash      String                  @map("serial_hash")
+  bsrLast         String                  @map("bsr_last")
+  serialLast      String                  @map("serial_last")
+  enteredByUserId String                  @map("entered_by_user_id")
+  createdAt       DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
   confirmation    TdsChallanConfirmation?
 
   @@index([financialYear])
@@ -4843,16 +4886,16 @@ enum OffCycleKind {
 }
 
 model OffCycleRun {
-  id              String                   @id @default(cuid())
+  id              String                 @id @default(cuid())
   kind            OffCycleKind
-  sourceRef       String                   @map("source_ref")
-  employeeId      String                   @map("employee_id")
-  employee        Employee                 @relation("OffCycleRunEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
-  paymentDate     DateTime                 @map("payment_date") @db.Date
+  sourceRef       String                 @map("source_ref")
+  employeeId      String                 @map("employee_id")
+  employee        Employee               @relation("OffCycleRunEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  paymentDate     DateTime               @map("payment_date") @db.Date
   lines           Json
-  net             Decimal                  @db.Decimal(14, 2)
-  createdByUserId String                   @map("created_by_user_id")
-  createdAt       DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  net             Decimal                @db.Decimal(14, 2)
+  createdByUserId String                 @map("created_by_user_id")
+  createdAt       DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
   finalisation    OffCycleFinalisation?
   heldReleases    OffCycleHeldRelease[]
   loanRecoveries  OffCycleLoanRecovery[]
@@ -4925,12 +4968,12 @@ model OffCycleBankBatch {
 
 /// D-37 (docs/plans/D37_DEFAULTS.md): a proposed value for a behaviour setting. Append-only.
 model BehaviourProposal {
-  id               String                  @id @default(cuid())
+  id               String                 @id @default(cuid())
   key              String
   value            Json
   reason           String
-  proposedByUserId String                  @map("proposed_by_user_id")
-  createdAt        DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  proposedByUserId String                 @map("proposed_by_user_id")
+  createdAt        DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
   confirmation     BehaviourConfirmation?
 
   @@index([key, createdAt])
@@ -4971,6 +5014,7 @@ model IdentityChangeRequest {
   @@index([employeeId, status])
   @@map("identity_change_requests")
 }
+
 // M-END
 
 // M-BEGIN (second session, ER-11): a masked history of each person's statutory numbers. One row per change to employee_statutory, written by a
@@ -4992,6 +5036,7 @@ model EmployeeStatutoryHistory {
   @@index([employeeId, changedAt])
   @@map("employee_statutory_history")
 }
+
 // M-END
 
 // M-BEGIN (second session, LT-08): an employee asks for a letter from a template the directors listed as askable (behaviour
@@ -5014,6 +5059,7 @@ model LetterAsk {
   @@index([employeeId, status])
   @@map("letter_asks")
 }
+
 // M-END
 
 // M-BEGIN (second session, NT-09): a person's own choice to switch off a notification category (shared/constants/notificationPreferences.ts).
@@ -5028,140 +5074,148 @@ model NotificationPreference {
   @@id([userId, category])
   @@map("notification_preferences")
 }
+
 // M-END
 
 // M-BEGIN (second session, RP-13): "email me this report". A person subscribes themselves to a report they may open; at send time the report is run
 // with their access as it is THEN (a person who lost access is stopped, with the reason). The email carries the row count and a link, never the data.
 model ReportSubscription {
-  id          String    @id @default(cuid())
-  userId      String    @map("user_id")
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  reportKey   String    @map("report_key")
-  frequency   String // WEEKLY (Mondays, the last 7 days) | MONTHLY (the 1st, the last calendar month)
-  filters     Json      @default("{}") // org filters only; dates are worked out at send time
-  active      Boolean   @default(true)
-  stoppedWhy  String?   @map("stopped_why")
-  lastSentOn  DateTime? @map("last_sent_on") @db.Date
-  createdAt   DateTime  @default(now()) @map("created_at")
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reportKey  String    @map("report_key")
+  frequency  String // WEEKLY (Mondays, the last 7 days) | MONTHLY (the 1st, the last calendar month)
+  filters    Json      @default("{}") // org filters only; dates are worked out at send time
+  active     Boolean   @default(true)
+  stoppedWhy String?   @map("stopped_why")
+  lastSentOn DateTime? @map("last_sent_on") @db.Date
+  createdAt  DateTime  @default(now()) @map("created_at")
 
   @@unique([userId, reportKey])
   @@index([active])
   @@map("report_subscriptions")
 }
+
 // M-END
 
 // PEEPS-BEGIN recruitment
 model RecruitmentSettingVersion {
-  id String @id @default(cuid())
-  key String
-  version Int
-  value Json
-  reason String
-  changedByUserId String @map("changed_by_user_id")
-  changedAt DateTime @default(now()) @map("changed_at") @db.Timestamptz(3)
+  id              String   @id @default(cuid())
+  key             String
+  version         Int
+  value           Json
+  reason          String
+  changedByUserId String   @map("changed_by_user_id")
+  changedAt       DateTime @default(now()) @map("changed_at") @db.Timestamptz(3)
+
   @@unique([key, version])
   @@map("recruitment_setting_versions")
 }
 
 model RecruitmentPipeline {
-  id String @id @default(cuid())
-  name String
-  version Int @unique
-  changedByUserId String @map("changed_by_user_id")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  stages RecruitmentPipelineStage[]
-  jobs RecruitmentJob[]
+  id              String                     @id @default(cuid())
+  name            String
+  version         Int                        @unique
+  changedByUserId String                     @map("changed_by_user_id")
+  createdAt       DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  stages          RecruitmentPipelineStage[]
+  jobs            RecruitmentJob[]
+
   @@map("pipelines")
 }
 
 model RecruitmentPipelineStage {
-  id String @id @default(cuid())
-  pipelineId String @map("pipeline_id")
-  pipeline RecruitmentPipeline @relation(fields: [pipelineId], references: [id])
-  code String
-  label String
-  position Int
+  id           String                   @id @default(cuid())
+  pipelineId   String                   @map("pipeline_id")
+  pipeline     RecruitmentPipeline      @relation(fields: [pipelineId], references: [id])
+  code         String
+  label        String
+  position     Int
   applications RecruitmentApplication[]
+
   @@unique([pipelineId, code])
   @@unique([pipelineId, position])
   @@map("pipeline_stages")
 }
 
 model JobRequisition {
-  id String @id @default(cuid())
-  requesterEmployeeId String @map("requester_employee_id")
-  requester Employee @relation(fields: [requesterEmployeeId], references: [id])
-  title String
-  departmentId String @map("department_id")
-  department Department @relation(fields: [departmentId], references: [id])
-  locationId String @map("location_id")
-  location Location @relation(fields: [locationId], references: [id])
-  employmentType String @map("employment_type")
-  headcount Int
-  reason String
-  status String @default("DRAFT")
-  approvalRoute Json? @map("approval_route")
-  approvalByUserId String? @map("approval_by_user_id")
-  decisionReason String? @map("decision_reason")
-  changedByUserId String @map("changed_by_user_id")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  job RecruitmentJob?
+  id                  String          @id @default(cuid())
+  requesterEmployeeId String          @map("requester_employee_id")
+  requester           Employee        @relation(fields: [requesterEmployeeId], references: [id])
+  title               String
+  departmentId        String          @map("department_id")
+  department          Department      @relation(fields: [departmentId], references: [id])
+  locationId          String          @map("location_id")
+  location            Location        @relation(fields: [locationId], references: [id])
+  employmentType      String          @map("employment_type")
+  headcount           Int
+  reason              String
+  status              String          @default("DRAFT")
+  approvalRoute       Json?           @map("approval_route")
+  approvalByUserId    String?         @map("approval_by_user_id")
+  decisionReason      String?         @map("decision_reason")
+  changedByUserId     String          @map("changed_by_user_id")
+  createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  job                 RecruitmentJob?
+
   @@index([requesterEmployeeId, status])
   @@map("job_requisitions")
 }
 
 model RecruitmentJob {
-  id String @id @default(cuid())
-  requisitionId String? @unique @map("requisition_id")
-  requisition JobRequisition? @relation(fields: [requisitionId], references: [id])
-  title String
-  departmentId String @map("department_id")
-  department Department @relation(fields: [departmentId], references: [id])
-  locationId String @map("location_id")
-  location Location @relation(fields: [locationId], references: [id])
-  employmentType String @map("employment_type")
-  description String
-  pipelineId String? @map("pipeline_id")
-  pipeline RecruitmentPipeline? @relation(fields: [pipelineId], references: [id])
-  status String @default("DRAFT")
-  changedByUserId String @map("changed_by_user_id")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  applications RecruitmentApplication[]
+  id              String                   @id @default(cuid())
+  requisitionId   String?                  @unique @map("requisition_id")
+  requisition     JobRequisition?          @relation(fields: [requisitionId], references: [id])
+  title           String
+  departmentId    String                   @map("department_id")
+  department      Department               @relation(fields: [departmentId], references: [id])
+  locationId      String                   @map("location_id")
+  location        Location                 @relation(fields: [locationId], references: [id])
+  employmentType  String                   @map("employment_type")
+  description     String
+  pipelineId      String?                  @map("pipeline_id")
+  pipeline        RecruitmentPipeline?     @relation(fields: [pipelineId], references: [id])
+  status          String                   @default("DRAFT")
+  changedByUserId String                   @map("changed_by_user_id")
+  createdAt       DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  applications    RecruitmentApplication[]
   // PEEPS-BEGIN recruitment-offers
-  referrals RecruitmentReferral[]
+  referrals       RecruitmentReferral[]
+
   // PEEPS-END recruitment-offers
   @@index([status])
   @@map("jobs")
 }
 
 model Candidate {
-  id String @id @default(cuid())
-  nameEncrypted Bytes? @map("name_encrypted")
-  emailEncrypted Bytes? @map("email_encrypted")
-  phoneEncrypted Bytes? @map("phone_encrypted")
-  nameHash String? @map("name_hash")
-  emailHash String? @unique @map("email_hash")
-  phoneHash String? @unique @map("phone_hash")
-  source String
-  consentRecordedAt DateTime @map("consent_recorded_at") @db.Timestamptz(3)
-  retentionUntil DateTime @map("retention_until") @db.Timestamptz(3)
-  retentionVersionId String @map("retention_version_id")
-  cvStorageKey String? @map("cv_storage_key")
-  cvMimeType String? @map("cv_mime_type")
-  anonymizedAt DateTime? @map("anonymized_at") @db.Timestamptz(3)
-  createdByUserId String @map("created_by_user_id")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  applications RecruitmentApplication[]
-  mails RecruitmentCandidateMail[]
+  id                         String                        @id @default(cuid())
+  nameEncrypted              Bytes?                        @map("name_encrypted")
+  emailEncrypted             Bytes?                        @map("email_encrypted")
+  phoneEncrypted             Bytes?                        @map("phone_encrypted")
+  nameHash                   String?                       @map("name_hash")
+  emailHash                  String?                       @unique @map("email_hash")
+  phoneHash                  String?                       @unique @map("phone_hash")
+  source                     String
+  consentRecordedAt          DateTime                      @map("consent_recorded_at") @db.Timestamptz(3)
+  retentionUntil             DateTime                      @map("retention_until") @db.Timestamptz(3)
+  retentionVersionId         String                        @map("retention_version_id")
+  cvStorageKey               String?                       @map("cv_storage_key")
+  cvMimeType                 String?                       @map("cv_mime_type")
+  anonymizedAt               DateTime?                     @map("anonymized_at") @db.Timestamptz(3)
+  createdByUserId            String                        @map("created_by_user_id")
+  createdAt                  DateTime                      @default(now()) @map("created_at") @db.Timestamptz(3)
+  applications               RecruitmentApplication[]
+  mails                      RecruitmentCandidateMail[]
   // PEEPS-BEGIN recruitment-offers
-  expectedPayEncrypted Bytes? @map("expected_pay_encrypted")
-  expectedPayChangedByUserId String? @map("expected_pay_changed_by_user_id")
-  offers RecruitmentOffer[]
-  joinerLinks RecruitmentJoinerLink[]
-  joinerDocuments RecruitmentJoinerDocument[]
-  joiningExceptions RecruitmentJoiningException[]
-  conversion RecruitmentConversion?
-  referral RecruitmentReferral?
+  expectedPayEncrypted       Bytes?                        @map("expected_pay_encrypted")
+  expectedPayChangedByUserId String?                       @map("expected_pay_changed_by_user_id")
+  offers                     RecruitmentOffer[]
+  joinerLinks                RecruitmentJoinerLink[]
+  joinerDocuments            RecruitmentJoinerDocument[]
+  joiningExceptions          RecruitmentJoiningException[]
+  conversion                 RecruitmentConversion?
+  referral                   RecruitmentReferral?
+
   // PEEPS-END recruitment-offers
   @@index([retentionUntil, anonymizedAt])
   @@index([nameHash])
@@ -5169,22 +5223,23 @@ model Candidate {
 }
 
 model RecruitmentApplication {
-  id String @id @default(cuid())
-  candidateId String @map("candidate_id")
-  candidate Candidate @relation(fields: [candidateId], references: [id])
-  jobId String @map("job_id")
-  job RecruitmentJob @relation(fields: [jobId], references: [id])
-  stageId String @map("stage_id")
-  stage RecruitmentPipelineStage @relation(fields: [stageId], references: [id])
-  status String @default("ACTIVE")
-  version Int @default(0)
-  reasonCategory String? @map("reason_category")
-  changedByUserId String @map("changed_by_user_id")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  moves ApplicationStageMove[]
-  interviews RecruitmentInterview[]
+  id              String                   @id @default(cuid())
+  candidateId     String                   @map("candidate_id")
+  candidate       Candidate                @relation(fields: [candidateId], references: [id])
+  jobId           String                   @map("job_id")
+  job             RecruitmentJob           @relation(fields: [jobId], references: [id])
+  stageId         String                   @map("stage_id")
+  stage           RecruitmentPipelineStage @relation(fields: [stageId], references: [id])
+  status          String                   @default("ACTIVE")
+  version         Int                      @default(0)
+  reasonCategory  String?                  @map("reason_category")
+  changedByUserId String                   @map("changed_by_user_id")
+  createdAt       DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  moves           ApplicationStageMove[]
+  interviews      RecruitmentInterview[]
   // PEEPS-BEGIN recruitment-offers
-  offers RecruitmentOffer[]
+  offers          RecruitmentOffer[]
+
   // PEEPS-END recruitment-offers
   @@unique([candidateId, jobId])
   @@index([jobId, status])
@@ -5192,88 +5247,94 @@ model RecruitmentApplication {
 }
 
 model ApplicationStageMove {
-  id String @id @default(cuid())
-  applicationId String @map("application_id")
-  application RecruitmentApplication @relation(fields: [applicationId], references: [id])
-  fromStageId String? @map("from_stage_id")
-  toStageId String @map("to_stage_id")
-  version Int
-  reason String?
-  actorUserId String @map("actor_user_id")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  id            String                 @id @default(cuid())
+  applicationId String                 @map("application_id")
+  application   RecruitmentApplication @relation(fields: [applicationId], references: [id])
+  fromStageId   String?                @map("from_stage_id")
+  toStageId     String                 @map("to_stage_id")
+  version       Int
+  reason        String?
+  actorUserId   String                 @map("actor_user_id")
+  createdAt     DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+
   @@unique([applicationId, version])
   @@map("application_stage_moves")
 }
 
 model RecruitmentInterview {
-  id String @id @default(cuid())
-  applicationId String @map("application_id")
-  application RecruitmentApplication @relation(fields: [applicationId], references: [id])
-  round String
-  scheduledAt DateTime @map("scheduled_at") @db.Timestamptz(3)
-  scorecard Json
-  scorecardVersionId String? @map("scorecard_version_id")
-  status String @default("SCHEDULED")
-  changedByUserId String @map("changed_by_user_id")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  panel RecruitmentInterviewPanel[]
-  feedback InterviewFeedback[]
+  id                 String                      @id @default(cuid())
+  applicationId      String                      @map("application_id")
+  application        RecruitmentApplication      @relation(fields: [applicationId], references: [id])
+  round              String
+  scheduledAt        DateTime                    @map("scheduled_at") @db.Timestamptz(3)
+  scorecard          Json
+  scorecardVersionId String?                     @map("scorecard_version_id")
+  status             String                      @default("SCHEDULED")
+  changedByUserId    String                      @map("changed_by_user_id")
+  createdAt          DateTime                    @default(now()) @map("created_at") @db.Timestamptz(3)
+  panel              RecruitmentInterviewPanel[]
+  feedback           InterviewFeedback[]
+
   @@map("recruitment_interviews")
 }
 
 model RecruitmentInterviewPanel {
-  id String @id @default(cuid())
-  interviewId String @map("interview_id")
-  interview RecruitmentInterview @relation(fields: [interviewId], references: [id])
-  employeeId String @map("employee_id")
-  employee Employee @relation(fields: [employeeId], references: [id])
-  active Boolean
-  assignedByUserId String @map("assigned_by_user_id")
-  assignedAt DateTime @default(now()) @map("assigned_at") @db.Timestamptz(3)
+  id               String               @id @default(cuid())
+  interviewId      String               @map("interview_id")
+  interview        RecruitmentInterview @relation(fields: [interviewId], references: [id])
+  employeeId       String               @map("employee_id")
+  employee         Employee             @relation(fields: [employeeId], references: [id])
+  active           Boolean
+  assignedByUserId String               @map("assigned_by_user_id")
+  assignedAt       DateTime             @default(now()) @map("assigned_at") @db.Timestamptz(3)
+
   @@unique([interviewId, employeeId])
   @@index([employeeId, active])
   @@map("recruitment_interview_panel")
 }
 
 model InterviewFeedback {
-  id String @id @default(cuid())
-  interviewId String @map("interview_id")
-  interview RecruitmentInterview @relation(fields: [interviewId], references: [id])
-  employeeId String @map("employee_id")
-  employee Employee @relation(fields: [employeeId], references: [id])
-  answersEncrypted Bytes? @map("answers_encrypted")
-  recommendationEncrypted Bytes? @map("recommendation_encrypted")
-  submittedAt DateTime @default(now()) @map("submitted_at") @db.Timestamptz(3)
+  id                      String               @id @default(cuid())
+  interviewId             String               @map("interview_id")
+  interview               RecruitmentInterview @relation(fields: [interviewId], references: [id])
+  employeeId              String               @map("employee_id")
+  employee                Employee             @relation(fields: [employeeId], references: [id])
+  answersEncrypted        Bytes?               @map("answers_encrypted")
+  recommendationEncrypted Bytes?               @map("recommendation_encrypted")
+  submittedAt             DateTime             @default(now()) @map("submitted_at") @db.Timestamptz(3)
+
   @@unique([interviewId, employeeId])
   @@map("interview_feedback")
 }
 
 model RecruitmentHistory {
-  id String @id @default(cuid())
-  entityType String @map("entity_type")
-  entityId String @map("entity_id")
-  event String
-  fromStatus String? @map("from_status")
-  toStatus String? @map("to_status")
-  actorUserId String? @map("actor_user_id")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  id          String   @id @default(cuid())
+  entityType  String   @map("entity_type")
+  entityId    String   @map("entity_id")
+  event       String
+  fromStatus  String?  @map("from_status")
+  toStatus    String?  @map("to_status")
+  actorUserId String?  @map("actor_user_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
   @@index([entityType, entityId])
   @@map("recruitment_history")
 }
 
 model RecruitmentCandidateMail {
-  applicationId String? @map("application_id")
-  id String @id @default(cuid())
-  candidateId String @map("candidate_id")
-  candidate Candidate @relation(fields: [candidateId], references: [id])
-  interviewId String? @map("interview_id")
-  templateId String @map("template_id")
-  templateVersionId String @map("template_version_id")
-  kind String
-  status String
-  idempotencyKey String @unique @map("idempotency_key")
-  sentByUserId String @map("sent_by_user_id")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  applicationId     String?   @map("application_id")
+  id                String    @id @default(cuid())
+  candidateId       String    @map("candidate_id")
+  candidate         Candidate @relation(fields: [candidateId], references: [id])
+  interviewId       String?   @map("interview_id")
+  templateId        String    @map("template_id")
+  templateVersionId String    @map("template_version_id")
+  kind              String
+  status            String
+  idempotencyKey    String    @unique @map("idempotency_key")
+  sentByUserId      String    @map("sent_by_user_id")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
   @@index([candidateId])
   @@map("recruitment_candidate_mail")
 }
@@ -5361,18 +5422,18 @@ model RecruitmentJoinerLink {
 }
 
 model RecruitmentJoinerDocument {
-  id               String                @id @default(cuid())
-  candidateId      String                @map("candidate_id")
-  candidate        Candidate             @relation(fields: [candidateId], references: [id])
-  linkId           String                @map("link_id")
-  link             RecruitmentJoinerLink @relation(fields: [linkId], references: [id])
-  typeCode         String                @map("type_code")
-  storageKey       String?               @map("storage_key")
-  mimeType         String                @map("mime_type")
-  sizeBytes        Int                   @map("size_bytes")
-  uploadedAt       DateTime              @default(now()) @map("uploaded_at") @db.Timestamptz(3)
-  reviewedAt       DateTime?             @map("reviewed_at") @db.Timestamptz(3)
-  reviewedByUserId String?               @map("reviewed_by_user_id")
+  id               String                         @id @default(cuid())
+  candidateId      String                         @map("candidate_id")
+  candidate        Candidate                      @relation(fields: [candidateId], references: [id])
+  linkId           String                         @map("link_id")
+  link             RecruitmentJoinerLink          @relation(fields: [linkId], references: [id])
+  typeCode         String                         @map("type_code")
+  storageKey       String?                        @map("storage_key")
+  mimeType         String                         @map("mime_type")
+  sizeBytes        Int                            @map("size_bytes")
+  uploadedAt       DateTime                       @default(now()) @map("uploaded_at") @db.Timestamptz(3)
+  reviewedAt       DateTime?                      @map("reviewed_at") @db.Timestamptz(3)
+  reviewedByUserId String?                        @map("reviewed_by_user_id")
   conversionCopy   RecruitmentConversionDocument?
 
   @@unique([linkId, typeCode])
@@ -5408,25 +5469,26 @@ model RecruitmentConversion {
 }
 
 model RecruitmentReferral {
-  id                 String          @id @default(cuid())
-  referrerEmployeeId String          @map("referrer_employee_id")
-  jobId              String          @map("job_id")
-  job                RecruitmentJob  @relation(fields: [jobId], references: [id])
-  nameEncrypted      Bytes?          @map("name_encrypted")
-  emailEncrypted     Bytes?          @map("email_encrypted")
-  phoneEncrypted     Bytes?          @map("phone_encrypted")
-  consentRecordedAt  DateTime        @map("consent_recorded_at") @db.Timestamptz(3)
-  retentionUntil     DateTime        @map("retention_until") @db.Timestamptz(3)
-  candidateId        String?         @unique @map("candidate_id")
-  candidate          Candidate?      @relation(fields: [candidateId], references: [id])
-  status             String          @default("SUBMITTED")
-  changedByUserId    String          @map("changed_by_user_id")
-  createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  id                 String         @id @default(cuid())
+  referrerEmployeeId String         @map("referrer_employee_id")
+  jobId              String         @map("job_id")
+  job                RecruitmentJob @relation(fields: [jobId], references: [id])
+  nameEncrypted      Bytes?         @map("name_encrypted")
+  emailEncrypted     Bytes?         @map("email_encrypted")
+  phoneEncrypted     Bytes?         @map("phone_encrypted")
+  consentRecordedAt  DateTime       @map("consent_recorded_at") @db.Timestamptz(3)
+  retentionUntil     DateTime       @map("retention_until") @db.Timestamptz(3)
+  candidateId        String?        @unique @map("candidate_id")
+  candidate          Candidate?     @relation(fields: [candidateId], references: [id])
+  status             String         @default("SUBMITTED")
+  changedByUserId    String         @map("changed_by_user_id")
+  createdAt          DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@index([referrerEmployeeId])
   @@index([status])
   @@map("recruitment_referrals")
 }
+
 // Stage 2 (1.2): which joining document was copied into which employee document at conversion; once per joining document.
 model RecruitmentConversionDocument {
   id                 String                    @id @default(cuid())
@@ -5439,6 +5501,7 @@ model RecruitmentConversionDocument {
   @@index([employeeId])
   @@map("recruitment_conversion_documents")
 }
+
 // PEEPS-END recruitment-offers
 
 // PEEPS-BEGIN insights
@@ -5456,6 +5519,7 @@ model InsightsSettingVersion {
   @@unique([key, version])
   @@map("insights_setting_versions")
 }
+
 // PEEPS-END insights
 
 // PEEPS-BEGIN autofill
@@ -5475,21 +5539,21 @@ model AutofillSettingVersion {
 }
 
 model AutofillDocument {
-  id               String               @id @default(cuid())
-  subjectKind      String               @map("subject_kind")
-  subjectId        String               @map("subject_id")
-  docKind          String               @map("doc_kind")
-  storageKey       String?              @map("storage_key")
-  mimeType         String               @map("mime_type")
-  sizeBytes        Int                  @map("size_bytes")
+  id               String                @id @default(cuid())
+  subjectKind      String                @map("subject_kind")
+  subjectId        String                @map("subject_id")
+  docKind          String                @map("doc_kind")
+  storageKey       String?               @map("storage_key")
+  mimeType         String                @map("mime_type")
+  sizeBytes        Int                   @map("size_bytes")
   sha256           String
-  uploadedByUserId String               @map("uploaded_by_user_id")
-  retentionUntil   DateTime             @map("retention_until") @db.Timestamptz(3)
-  purgedAt         DateTime?            @map("purged_at") @db.Timestamptz(3)
-  appliedAt        DateTime?            @map("applied_at") @db.Timestamptz(3)
-  appliedByUserId  String?              @map("applied_by_user_id")
-  appliedVia       String?              @map("applied_via")
-  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  uploadedByUserId String                @map("uploaded_by_user_id")
+  retentionUntil   DateTime              @map("retention_until") @db.Timestamptz(3)
+  purgedAt         DateTime?             @map("purged_at") @db.Timestamptz(3)
+  appliedAt        DateTime?             @map("applied_at") @db.Timestamptz(3)
+  appliedByUserId  String?               @map("applied_by_user_id")
+  appliedVia       String?               @map("applied_via")
+  createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
   extraction       AutofillExtraction?
   reviews          AutofillFieldReview[]
 
@@ -5532,4 +5596,291 @@ model AutofillFieldReview {
   @@unique([documentId, field])
   @@map("autofill_field_reviews")
 }
+
 // PEEPS-END autofill
+
+// A-BEGIN: Session A additions (2026-11-12 block). Additive only.
+/// Stage 6: a director's saved column choice for a payroll report. Append-only; the newest is in force.
+model PayrollReportLayout {
+  id          String   @id @default(cuid())
+  reportKey   String   @map("report_key")
+  columns     String[]
+  reason      String
+  setByUserId String   @map("set_by_user_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([reportKey, createdAt])
+  @@map("payroll_report_layouts")
+}
+
+/// ST-03 / ST-06: a PF or ESI challan record. The reference is sealed; immutable; a different director confirms it.
+model StatutoryChallan {
+  id              String                        @id @default(cuid())
+  kind            String
+  month           String
+  depositedOn     DateTime                      @map("deposited_on") @db.Date
+  amount          Decimal                       @db.Decimal(14, 2)
+  reference       Json
+  referenceHash   String                        @map("reference_hash")
+  referenceLast   String                        @map("reference_last")
+  enteredByUserId String                        @map("entered_by_user_id")
+  createdAt       DateTime                      @default(now()) @map("created_at") @db.Timestamptz(3)
+  confirmation    StatutoryChallanConfirmation?
+
+  @@unique([kind, referenceHash])
+  @@index([kind, month])
+  @@map("statutory_challans")
+}
+
+model StatutoryChallanConfirmation {
+  id                String           @id @default(cuid())
+  challanId         String           @unique @map("challan_id")
+  challan           StatutoryChallan @relation(fields: [challanId], references: [id], onDelete: Restrict)
+  confirmedByUserId String           @map("confirmed_by_user_id")
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("statutory_challan_confirmations")
+}
+
+// A-END
+// M-BEGIN (second session block 2, ER-27): divisions, an optional grouping of departments (an employee's division is their department's).
+model Division {
+  id          String               @id @default(cuid())
+  code        String               @unique
+  name        String               @unique
+  createdAt   DateTime             @default(now()) @map("created_at")
+  updatedAt   DateTime             @updatedAt @map("updated_at")
+  departments DepartmentDivision[]
+
+  @@map("divisions")
+}
+
+model DepartmentDivision {
+  id           String     @id @default(cuid())
+  departmentId String     @unique @map("department_id")
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  divisionId   String     @map("division_id")
+  division     Division   @relation(fields: [divisionId], references: [id], onDelete: Restrict)
+  setByUserId  String     @map("set_by_user_id")
+  setAt        DateTime   @default(now()) @map("set_at")
+
+  @@index([divisionId])
+  @@map("department_divisions")
+}
+
+// M-END
+
+// M-BEGIN (second session block 2, ER-18): a company document may require acknowledgement (the latest requirement row is in force); people in its
+// audience acknowledge once. Both append-only (database triggers).
+model CompanyDocumentAckRequirement {
+  id          String          @id @default(cuid())
+  documentId  String          @map("document_id")
+  document    CompanyDocument @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  required    Boolean
+  setByUserId String          @map("set_by_user_id")
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([documentId, createdAt])
+  @@map("company_document_ack_requirements")
+}
+
+model CompanyDocumentAcknowledgement {
+  id         String          @id @default(cuid())
+  documentId String          @map("document_id")
+  document   CompanyDocument @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  employeeId String          @map("employee_id")
+  employee   Employee        @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  createdAt  DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([documentId, employeeId])
+  @@index([employeeId])
+  @@map("company_document_acknowledgements")
+}
+
+// M-END
+
+// M-BEGIN (second session block 2, ER-26): probation decisions (confirm, or extend to a date), append-only.
+model EmployeeProbationDecision {
+  id              String    @id @default(cuid())
+  employeeId      String    @map("employee_id")
+  employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  kind            String
+  extendedTo      DateTime? @map("extended_to") @db.Date
+  reason          String
+  decidedByUserId String    @map("decided_by_user_id")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([employeeId, createdAt])
+  @@map("employee_probation_decisions")
+}
+
+// M-END
+
+// M-BEGIN (second session block 2, OE-04): a new joiner's onboarding steps, copied from the checklist when onboarding starts.
+model OnboardingTask {
+  id              String    @id @default(cuid())
+  employeeId      String    @map("employee_id")
+  employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  position        Int
+  owner           String
+  step            String
+  dueDate         DateTime  @map("due_date") @db.Date
+  doneAt          DateTime? @map("done_at") @db.Timestamptz(3)
+  doneByUserId    String?   @map("done_by_user_id")
+  startedByUserId String    @map("started_by_user_id")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([employeeId, position])
+  @@map("onboarding_tasks")
+}
+
+// M-END
+
+// M-BEGIN (second session block 2, ER-28): custom fields on the employee record (directors define, HR fills; a sensitive value is encrypted).
+model CustomFieldDefinition {
+  id                String                @id @default(cuid())
+  key               String                @unique
+  label             String
+  type              String
+  options           String[]              @default([])
+  visibleToEmployee Boolean               @default(false) @map("visible_to_employee")
+  sensitive         Boolean               @default(false)
+  active            Boolean               @default(true)
+  position          Int                   @default(0)
+  createdByUserId   String                @map("created_by_user_id")
+  createdAt         DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+  values            EmployeeCustomValue[]
+
+  @@map("custom_field_definitions")
+}
+
+model EmployeeCustomValue {
+  id              String                @id @default(cuid())
+  employeeId      String                @map("employee_id")
+  employee        Employee              @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  fieldId         String                @map("field_id")
+  field           CustomFieldDefinition @relation(fields: [fieldId], references: [id], onDelete: Restrict)
+  valueText       String?               @map("value_text")
+  valueEncrypted  Bytes?                @map("value_encrypted")
+  valueLast4      String?               @map("value_last4")
+  updatedByUserId String                @map("updated_by_user_id")
+  updatedAt       DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([employeeId, fieldId])
+  @@index([fieldId])
+  @@map("employee_custom_values")
+}
+
+// M-END
+
+// M-BEGIN (second session block 2, SS-13): employee feedback to HR; anonymous feedback has no author at all.
+model EmployeeFeedback {
+  id               String                  @id @default(cuid())
+  authorEmployeeId String?                 @map("author_employee_id")
+  author           Employee?               @relation(fields: [authorEmployeeId], references: [id], onDelete: Restrict)
+  category         String
+  message          String
+  status           String                  @default("OPEN")
+  closedByUserId   String?                 @map("closed_by_user_id")
+  createdAt        DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  replies          EmployeeFeedbackReply[]
+
+  @@index([authorEmployeeId])
+  @@index([status, createdAt])
+  @@map("employee_feedback")
+}
+
+model EmployeeFeedbackReply {
+  id           String           @id @default(cuid())
+  feedbackId   String           @map("feedback_id")
+  feedback     EmployeeFeedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  authorUserId String           @map("author_user_id")
+  message      String
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([feedbackId])
+  @@map("employee_feedback_replies")
+}
+
+// M-END
+
+// M-BEGIN (second session block 2, AT-19): overtime claims, read from the engine's excess minutes; paying them is payroll's.
+model OvertimeClaim {
+  id              String    @id @default(cuid())
+  employeeId      String    @map("employee_id")
+  employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  date            DateTime  @db.Date
+  minutes         Int
+  approvedMinutes Int?      @map("approved_minutes")
+  note            String    @default("")
+  status          String    @default("PENDING")
+  decidedByUserId String?   @map("decided_by_user_id")
+  decidedAt       DateTime? @map("decided_at") @db.Timestamptz(3)
+  decisionNote    String?   @map("decision_note")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([employeeId, date])
+  @@index([status])
+  @@map("overtime_claims")
+}
+
+// M-END
+
+// M-BEGIN (second session block 2, AT-36): work-from-home requests; approval writes remote marks through the director path.
+model WfhRequest {
+  id              String    @id @default(cuid())
+  employeeId      String    @map("employee_id")
+  employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  fromDate        DateTime  @map("from_date") @db.Date
+  toDate          DateTime  @map("to_date") @db.Date
+  reason          String
+  status          String    @default("PENDING")
+  decidedByUserId String?   @map("decided_by_user_id")
+  decidedAt       DateTime? @map("decided_at") @db.Timestamptz(3)
+  decisionNote    String?   @map("decision_note")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([employeeId, fromDate])
+  @@index([status])
+  @@map("wfh_requests")
+}
+
+// M-END
+
+// M-BEGIN (second session block 2, LV-23): an employee's request to encash leave; approved days wait for payroll.
+model LeaveEncashmentRequest {
+  id              String    @id @default(cuid())
+  employeeId      String    @map("employee_id")
+  employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  leaveTypeId     String    @map("leave_type_id")
+  leaveType       LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+  leaveYear       Int       @map("leave_year")
+  days            Decimal   @db.Decimal(5, 1)
+  reason          String    @default("")
+  status          String    @default("PENDING")
+  decidedByUserId String?   @map("decided_by_user_id")
+  decidedAt       DateTime? @map("decided_at") @db.Timestamptz(3)
+  decisionNote    String?   @map("decision_note")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([employeeId, leaveYear])
+  @@index([status])
+  @@map("leave_encashment_requests")
+}
+
+// M-END
+
+// M-BEGIN (second session block 2, IE-07 / IE-08): HR's update import, checked into a batch before it is applied.
+model UpdateImportBatch {
+  id               String   @id @default(cuid())
+  uploadedByUserId String   @map("uploaded_by_user_id")
+  fileName         String   @map("file_name")
+  rows             Json
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([uploadedByUserId, createdAt])
+  @@map("update_import_batches")
+}
+
+// M-END

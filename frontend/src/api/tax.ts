@@ -206,3 +206,22 @@ export interface QuarterlyData {
   note: string;
 }
 export const quarterlyData = (fy: string, quarter: number) => get<QuarterlyData>("/quarterly", { fy, quarter });
+
+// ST-24 / SS-05: the Form 16 Part B PDF (DRAFT until confirmed). ST-21: the quarterly data as a file. Blobs; the caller saves them.
+const blob = async (path: string, params?: object) => (await apiClient.get(`${base}${path}`, { params, responseType: "blob" })).data as Blob;
+export const myForm16Pdf = (fy: string) => blob("/me/form16/pdf", { fy });
+export const form16PdfFor = (fy: string, employeeId: string) => blob(`/form16/${fy}/people/${employeeId}/pdf`);
+export const quarterlyExport = (fy: string, quarter: number, format: "xlsx" | "csv") => blob("/quarterly/export", { fy, quarter, format });
+
+// ST-03 / ST-06: PF and ESI challan records. References are shown by their last four only.
+export type StatutoryKind = "PF" | "ESI";
+export interface StatutoryChallanRegister {
+  year: string;
+  kind: StatutoryKind;
+  challans: Array<{ id: string; month: string; depositedOn: string; amount: string; reference: string; confirmed: boolean; enteredByMe: boolean }>;
+  months: Array<{ month: string; employee: string; employer: string; workedOut: string; deposited: string; difference: string }>;
+  note: string;
+}
+export const statutoryChallans = (fy: string, kind: StatutoryKind) => get<StatutoryChallanRegister>("/statutory-challans", { fy, kind });
+export const enterStatutoryChallan = (body: { kind: StatutoryKind; month: string; depositedOn: string; amount: string; reference: string }) => post<{ id: string }>("/statutory-challans", body);
+export const confirmStatutoryChallan = (id: string, body: { amount: string; reference: string }) => post<{ id: string; confirmed: boolean }>(`/statutory-challans/${id}/confirm`, body);

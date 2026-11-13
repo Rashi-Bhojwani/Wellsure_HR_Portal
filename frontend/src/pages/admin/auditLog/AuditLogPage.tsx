@@ -81,6 +81,11 @@ export function AuditLogPage({ payroll = false }: { payroll?: boolean } = {}) {
     onError: (err) => toast.error(apiErrorMessage(err, "Could not prepare the file.")),
   });
 
+  // Block 2 task 1: the server withholds every value from the Developer role; the screen says so instead of showing empty blocks.
+  const hidden = !!data?.valuesHidden;
+  const entityText = (r: AuditLogRow) => (r.entityId ? `${r.entityType} · ${r.entityId}` : r.entityType);
+  const fieldsText = (r: AuditLogRow) => (r.changedFields?.length ? r.changedFields.join(", ") : "—");
+
   const activeCount = [entityTypeText, actionText].filter(Boolean).length + (dateRange ? 1 : 0);
   const clear = () => {
     setEntityTypeText("");
@@ -97,7 +102,9 @@ export function AuditLogPage({ payroll = false }: { payroll?: boolean } = {}) {
         subtitle={
           payroll
             ? "Who prepared, confirmed, approved and carried out each payroll step, and when. It records that something changed, never a secret value."
-            : "Every recorded change: who did it, to what, and when. Open an entry to see what it looked like before and after."
+            : hidden
+              ? "Every recorded change: who did it, to what kind of record, and when. Values are not shown to your role."
+              : "Every recorded change: who did it, to what, and when. Open an entry to see what it looked like before and after."
         }
         actions={
           canExport ? (
@@ -191,8 +198,8 @@ export function AuditLogPage({ payroll = false }: { payroll?: boolean } = {}) {
                 ),
               },
               { title: "Action", dataIndex: "action", render: (val: string) => <code style={{ fontSize: fs.sm, color: v.textPrimary }}>{val}</code> },
-              { title: "Entity", key: "entity", render: (_: unknown, r) => `${r.entityType} · ${r.entityId}` },
-              { title: "IP", dataIndex: "ipAddress", render: (val: string | null) => val ?? "—" },
+              { title: "Entity", key: "entity", render: (_: unknown, r) => entityText(r) },
+              hidden ? { title: "Fields changed", key: "fields", render: (_: unknown, r) => fieldsText(r) } : { title: "IP", dataIndex: "ipAddress", render: (val: string | null) => val ?? "—" },
               {
                 title: "",
                 key: "actions",
@@ -208,10 +215,12 @@ export function AuditLogPage({ payroll = false }: { payroll?: boolean } = {}) {
               avatar: (r) => <InitialsAvatar name={r.actorName ?? "System"} size={36} />,
               title: (r) => <Sentence r={r} />,
               subtitle: (r) => dayjs(r.createdAt).format("DD-MMM-YYYY HH:mm"),
-              fields: [
-                { label: "Entity ID", render: (r) => r.entityId },
-                { label: "IP", render: (r) => r.ipAddress ?? "—" },
-              ],
+              fields: hidden
+                ? [{ label: "Fields changed", render: (r) => fieldsText(r) }]
+                : [
+                    { label: "Entity ID", render: (r) => r.entityId ?? "—" },
+                    { label: "IP", render: (r) => r.ipAddress ?? "—" },
+                  ],
               actions: (r) => (
                 <Button block onClick={() => setDetail(r)}>
                   Details
@@ -240,11 +249,13 @@ export function AuditLogPage({ payroll = false }: { payroll?: boolean } = {}) {
               items={[
                 { label: "Actor", value: actorText(detail) },
                 { label: "Action", value: detail.action },
-                { label: "Entity", value: `${detail.entityType} (${detail.entityId})` },
+                { label: "Entity", value: detail.entityId ? `${detail.entityType} (${detail.entityId})` : detail.entityType },
+                ...(detail.changedFields?.length ? [{ label: "Fields changed", value: detail.changedFields.join(", ") }] : []),
                 { label: "When", value: dayjs(detail.createdAt).format("DD-MMM-YYYY HH:mm:ss") },
                 ...(detail.ipAddress ? [{ label: "IP address", value: detail.ipAddress }] : []),
               ]}
             />
+            {hidden && <p style={{ margin: 0, color: v.textSecondary, fontSize: fs.sm }}>The old and new values are not shown to your role.</p>}
             {detail.before !== null && <JsonBlock label="Before" value={detail.before} />}
             {detail.after !== null && <JsonBlock label="After" value={detail.after} />}
             <Button onClick={() => setDetail(null)} style={{ alignSelf: "flex-start" }}>

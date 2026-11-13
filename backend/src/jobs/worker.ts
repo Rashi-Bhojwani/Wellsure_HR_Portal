@@ -35,6 +35,7 @@ import { executeProcessRun } from "../modules/attendance/processService";
 import { runDeviceHealthChecks } from "../modules/biometric/health/runner";
 import { PAYROLL_CALCULATE_QUEUE, PAYROLL_PAYSLIPS_QUEUE } from "./payrollQueues";
 import { sendDueReports } from "../modules/reports/subscriptions";
+import { runPeopleDaily } from "../modules/peopleDaily/run";
 import { deliverPayslips } from "../modules/payroll/run/payslipDelivery";
 import { executeCalculation } from "../modules/payroll/run/engine";
 
@@ -184,6 +185,20 @@ export function startWorkers(): Worker[] {
   );
   reportSubscriptionsWorker.on("failed", (job, err) => {
     logger.error({ jobId: job?.id, err }, "report-subscriptions job failed");
+  });
+
+  // M session block 2: the people rows' daily job.
+  const peopleDailyWorker = new Worker(
+    "m-people-daily",
+    async (job) => {
+      const result = await runPeopleDaily();
+      logger.info({ jobId: job.id, ...result }, "m-people-daily processed");
+      return result;
+    },
+    { connection: createBullConnection() },
+  );
+  peopleDailyWorker.on("failed", (job, err) => {
+    logger.error({ jobId: job?.id, err }, "m-people-daily job failed");
   });
 
   const remoteReminderWorker = new Worker(
