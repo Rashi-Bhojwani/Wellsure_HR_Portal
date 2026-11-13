@@ -19,7 +19,7 @@ export interface Actor {
 const month = z.string().regex(/^\d{4}-\d{2}(-01)?$/, "A month, YYYY-MM");
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "A date, YYYY-MM-DD");
 export const filtersSchema = z
-  .object({ month: month.optional(), compareMonth: month.optional(), fromMonth: month.optional(), toMonth: month.optional(), fromDate: date.optional(), toDate: date.optional(), asOf: date.optional(), department: z.string().min(1).max(64).optional(), location: z.string().min(1).max(64).optional() })
+  .object({ month: month.optional(), compareMonth: month.optional(), fromMonth: month.optional(), toMonth: month.optional(), fromDate: date.optional(), toDate: date.optional(), asOf: date.optional(), department: z.string().min(1).max(64).optional(), location: z.string().min(1).max(64).optional(), company: z.string().min(1).max(64).optional() })
   .strict();
 
 function keyOf(raw: string): PayrollReportKey {

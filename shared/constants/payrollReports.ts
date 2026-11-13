@@ -1,7 +1,7 @@
 // Stage 6 payroll reports (docs/plans/STAGE_6_PAYROLL_REPORTS.md): the catalog shared by the backend (modules/payroll/reports) and the Payroll Reports screen.
 // Directors only. Each report declares its filters and its columns; `on: true` marks the conventional starting layout ("Default, change in settings").
 
-export type PayrollReportFilter = "month" | "compareMonth" | "fromMonth" | "toMonth" | "fromDate" | "toDate" | "asOf" | "department" | "location";
+export type PayrollReportFilter = "month" | "compareMonth" | "fromMonth" | "toMonth" | "fromDate" | "toDate" | "asOf" | "department" | "location" | "company";
 export type PayrollReportColumnType = "text" | "number" | "money" | "percent" | "date";
 
 export interface PayrollReportColumnDef {
@@ -24,7 +24,7 @@ export const PAYROLL_REPORT_KEYS = ["payroll-summary", "department-cost", "head-
 export type PayrollReportKey = (typeof PAYROLL_REPORT_KEYS)[number];
 
 const c = (key: string, header: string, type: PayrollReportColumnType, on = true): PayrollReportColumnDef => ({ key, header, type, on });
-const ORG = ["department", "location"] as const;
+const ORG = ["department", "location", "company"] as const; // company: part 3 B1 (no company row = the main company, "MAIN")
 const PERSON = [c("employeeCode", "Employee code", "text"), c("name", "Name", "text"), c("department", "Department", "text"), c("location", "Branch", "text", false)];
 
 export const PAYROLL_REPORTS: Record<PayrollReportKey, PayrollReportDef> = {

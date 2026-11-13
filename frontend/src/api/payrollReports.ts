@@ -11,7 +11,7 @@ export interface ReportLayout {
   savedAt: string | null;
   reason: string | null;
 }
-export type ReportFilters = Partial<Record<"month" | "compareMonth" | "fromMonth" | "toMonth" | "fromDate" | "toDate" | "asOf" | "department" | "location", string>>;
+export type ReportFilters = Partial<Record<"month" | "compareMonth" | "fromMonth" | "toMonth" | "fromDate" | "toDate" | "asOf" | "department" | "location" | "company", string>>;
 export type CatalogEntry = PayrollReportDef & { layout: ReportLayout };
 export type ReportResult = PayrollReportResult & { layout: ReportLayout };
 

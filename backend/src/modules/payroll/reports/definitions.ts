@@ -20,6 +20,7 @@ export interface Filters {
   asOf?: string;
   department?: string;
   location?: string;
+  company?: string; // part 3 B1: a legal entity id, or "MAIN"
 }
 type Row = Record<string, string | number | null>;
 export interface Built {
@@ -34,8 +35,9 @@ const m2 = (v: Money) => fixed(v, 2);
 const monthStart = (m: string) => day(`${m.slice(0, 7)}-01`);
 
 async function orgNames() {
-  const [deps, locs] = await Promise.all([prisma.department.findMany({ select: { id: true, name: true } }), prisma.location.findMany({ select: { id: true, name: true } })]);
-  return { dep: new Map(deps.map((d) => [d.id, d.name])), loc: new Map(locs.map((l) => [l.id, l.name])) };
+  const [deps, locs, companies, members] = await Promise.all([prisma.department.findMany({ select: { id: true, name: true } }), prisma.location.findMany({ select: { id: true, name: true } }), prisma.legalEntity.findMany({ select: { id: true, name: true } }), prisma.employeeLegalEntity.findMany({ select: { employeeId: true, legalEntityId: true } })]);
+  // Part 3 B1: each person's company (the other session's employee_legal_entities; no row = the main company, "MAIN").
+  return { dep: new Map(deps.map((d) => [d.id, d.name])), loc: new Map(locs.map((l) => [l.id, l.name])), company: new Map(companies.map((c) => [c.id, c.name])), companyOf: new Map(members.map((m) => [m.employeeId, m.legalEntityId])) };
 }
 
 /** A finalised run for a month (YYYY-MM), or the latest finalised one. */
@@ -61,6 +63,7 @@ function orgApplied(f: Filters, names: Awaited<ReturnType<typeof orgNames>>): st
   const out: string[] = [];
   if (f.department) out.push(`Department: ${names.dep.get(f.department) ?? "unknown"}`);
   if (f.location) out.push(`Branch: ${names.loc.get(f.location) ?? "unknown"}`);
+  if (f.company) out.push(`Company: ${f.company === "MAIN" ? "the main company" : names.company.get(f.company) ?? "unknown"}`);
   return out;
 }
 
@@ -78,6 +81,7 @@ export function varianceOf(before: Money, now: Money): { change: Money; percent:
 
 export async function build(key: PayrollReportKey, f: Filters, actor: { userId: string }): Promise<Built> {
   const names = await orgNames();
+  const passes = (p: Placement, employeeId: string) => passesOrg(p, f) && (!f.company || (names.companyOf.get(employeeId) ?? "MAIN") === f.company);
   switch (key) {
     case "payroll-summary": {
       const where = { status: "FINALISED" as const, ...(f.fromMonth || f.toMonth ? { cycleStart: { ...(f.fromMonth ? { gte: monthStart(f.fromMonth) } : {}), ...(f.toMonth ? { lte: monthStart(f.toMonth) } : {}) } } : {}) };
@@ -98,7 +102,7 @@ export async function build(key: PayrollReportKey, f: Filters, actor: { userId: 
     case "statutory-summary":
     case "statutory-by-person": {
       const run = await finalisedRun(f.month, "");
-      const items = (await prisma.payrollRunItem.findMany({ where: { runId: run.id, status: { in: ["PAYABLE", "HELD"] } }, select: { id: true, employeeId: true, placement: true, gross: true, deductions: true, employerContributions: true, netPay: true } })).filter((i) => key === "statutory-summary" || passesOrg(placed(i.placement), f));
+      const items = (await prisma.payrollRunItem.findMany({ where: { runId: run.id, status: { in: ["PAYABLE", "HELD"] } }, select: { id: true, employeeId: true, placement: true, gross: true, deductions: true, employerContributions: true, netPay: true } })).filter((i) => key === "statutory-summary" || passes(placed(i.placement), i.employeeId));
       const applied = [`Month: ${run.cycleLabel}`, ...(key === "statutory-summary" ? [] : orgApplied(f, names))];
       if (key === "department-cost") {
         const groups = new Map<string, typeof items>();
@@ -166,7 +170,7 @@ export async function build(key: PayrollReportKey, f: Filters, actor: { userId: 
       if (!before) throw new HttpError(404, "There is no earlier finalised run to compare with.", "NO_FINAL_RUN");
       const load = async (runId: string) => new Map((await prisma.payrollRunItem.findMany({ where: { runId, status: { in: ["PAYABLE", "HELD"] } }, select: { employeeId: true, placement: true, gross: true, netPay: true } })).map((i) => [i.employeeId, i]));
       const [a, b] = await Promise.all([load(before.id), load(run.id)]);
-      const ids = [...new Set([...a.keys(), ...b.keys()])].filter((id) => passesOrg(placed((b.get(id) ?? a.get(id))!.placement), f));
+      const ids = [...new Set([...a.keys(), ...b.keys()])].filter((id) => passes(placed((b.get(id) ?? a.get(id))!.placement), id));
       const placement = new Map(ids.map((id) => [id, placed((b.get(id) ?? a.get(id))!.placement)]));
       const person = await personColumns(ids, placement, run.cycleEnd);
       const rows = ids
@@ -199,7 +203,7 @@ export async function build(key: PayrollReportKey, f: Filters, actor: { userId: 
       const loans = (await listLoans(actor)).loans.filter((l) => l.status === "SANCTIONED");
       const ids = [...new Set(loans.map((l) => l.employeeId))];
       const placement = await placementsOn(ids, asOf);
-      const keep = loans.filter((l) => passesOrg(placement.get(l.employeeId) ?? {}, f));
+      const keep = loans.filter((l) => passes(placement.get(l.employeeId) ?? {}, l.employeeId));
       const person = await personColumns(ids, placement, asOf);
       const LABEL: Record<string, string> = { NOT_PAID_OUT: "Paid with the next run", RECOVERING: "Recovering", STOPPED: "Recovery stopped", FULLY_RECOVERED: "Fully recovered", RECOVERED_AT_EXIT: "Recovered at exit" };
       const rows: Row[] = keep.map((l) => ({ ...person(l.employeeId), type: l.typeKey, principal: m2(dec(l.principal)), rate: l.ratePercent, instalments: l.instalments, recovered: l.recovered, balance: l.balance, recovery: LABEL[l.recovery ?? ""] ?? l.recovery ?? "" }));
@@ -232,7 +236,7 @@ export async function build(key: PayrollReportKey, f: Filters, actor: { userId: 
       const placement = await placementsOn(ids, asOf);
       const person = await personColumns(ids, placement, asOf);
       const rows = salaries
-        .filter((s) => passesOrg(placement.get(s.employeeId) ?? {}, f))
+        .filter((s) => passes(placement.get(s.employeeId) ?? {}, s.employeeId))
         .map((s): Row => ({ ...person(s.employeeId), annualCtc: m2(dec(s.annualCtc.toString())), monthlyCtc: m2(dec(s.monthlyCtc.toString())), structure: `${s.structureKey} v${s.structureVersion}`, from: iso(s.effectiveFrom) }));
       rows.sort((a, b) => String(a.employeeCode).localeCompare(String(b.employeeCode)));
       return { rows, filtersApplied: [`As of: ${iso(asOf)}`, ...orgApplied(f, names)], notes: ["The salary in force on the date, as approved through salary revisions."] };

@@ -148,6 +148,26 @@ describe("Stage 6 — payroll reports over a finalised run", () => {
     }
   });
 
+  it("B1: the company filter splits people by company (no row = the main company); with no filter the report is exactly as before", async () => {
+    const all = await r(world.tokens.maker, "get", `/statutory-by-person?month=${month}`);
+    const entity = await prisma.legalEntity.create({ data: { code: `ZZ${world.prefix}`, name: "ZZ Test Company Two", createdByUserId: world.maker.userId } });
+    await prisma.employeeLegalEntity.create({ data: { employeeId: world.named.b!.employeeId, legalEntityId: entity.id, setByUserId: world.maker.userId } });
+    try {
+      const codes = (res: { body: { rows: Array<{ employeeCode: string }> } }) => res.body.rows.map((x) => x.employeeCode).sort();
+      const main = await r(world.tokens.maker, "get", `/statutory-by-person?month=${month}&company=MAIN`);
+      const two = await r(world.tokens.maker, "get", `/statutory-by-person?month=${month}&company=${entity.id}`);
+      expect(codes(two)).toEqual([world.named.b!.employeeCode]);
+      expect(codes(main)).not.toContain(world.named.b!.employeeCode);
+      expect([...codes(main), ...codes(two)].sort()).toEqual(codes(all));
+      expect(two.body.filtersApplied).toContain("Company: ZZ Test Company Two");
+      const again = await r(world.tokens.maker, "get", `/statutory-by-person?month=${month}`);
+      expect(again.body.rows).toEqual(all.body.rows);
+      expect(again.body.totals).toEqual(all.body.totals);
+    } finally {
+      await deleteWithDependents("LegalEntity", [entity.id]);
+    }
+  });
+
   it("exports carry only the chosen columns, as .csv and .xlsx, and every export is audited (never a figure in the audit row)", async () => {
     const csv = await r(world.tokens.maker, "get", `/department-cost/export?format=csv&month=${month}&columns=department,cost`);
     expect(csv.status).toBe(200);

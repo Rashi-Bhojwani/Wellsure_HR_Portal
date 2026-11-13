@@ -7,6 +7,7 @@ import { PAYROLL_REPORT_KEYS, PAYROLL_REPORTS, type PayrollReportColumnDef, type
 import * as reportsApi from "../../../api/payrollReports";
 import type { ReportFilters } from "../../../api/payrollReports";
 import { departments, listLocations } from "../../../api/org";
+import { listEntities } from "../../../api/legalEntities";
 import { saveBlob } from "../../../api/muster";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatRupees } from "../../../lib/money";
@@ -58,6 +59,7 @@ export function PayrollReportsPage() {
   const report = useQuery({ queryKey: ["payroll-reports", key, applied], queryFn: () => reportsApi.runReport(key, applied) });
   const deps = useQuery({ queryKey: ["org", "departments"], queryFn: departments.list, enabled: def.filters.includes("department") });
   const locs = useQuery({ queryKey: ["org", "locations"], queryFn: () => listLocations(), enabled: def.filters.includes("location") });
+  const companies = useQuery({ queryKey: ["legal-entities"], queryFn: listEntities, enabled: def.filters.includes("company") }); // part 3 B1
 
   const layout = report.data?.layout ?? cat.data?.find((r) => r.key === key)?.layout;
   const chosen = chosenByReport[key] ?? layout?.columns ?? def.columns.filter((c) => c.on).map((c) => c.key);
@@ -98,13 +100,17 @@ export function PayrollReportsPage() {
       );
     if (DATE_FILTERS[f])
       return <DatePicker key={f} aria-label={DATE_FILTERS[f]} placeholder={DATE_FILTERS[f]} allowClear={false} format="D MMM YYYY" value={filters[f] ? dayjs(filters[f]) : null} onChange={(d: Dayjs | null) => setFilter(f, d?.format("YYYY-MM-DD"))} style={{ minWidth: 150 }} />;
+    if (f === "company")
+      return (
+        <Select key={f} aria-label="Company" placeholder="All companies" allowClear value={filters.company} onChange={(val?: string) => setFilter(f, val)} loading={companies.isLoading} style={{ minWidth: 170 }} options={[{ value: "MAIN", label: companies.data?.main.name ? `${companies.data.main.name} (main)` : "Main company" }, ...(companies.data?.entities ?? []).map((e) => ({ value: e.id, label: e.name }))]} />
+      );
     const isDep = f === "department";
     const items = isDep ? (deps.data ?? []).map((d) => ({ value: d.id, label: d.name })) : (locs.data ?? []).map((l) => ({ value: l.id, label: l.name }));
     return (
       <Select key={f} aria-label={isDep ? "Department" : "Branch"} placeholder={isDep ? "All departments" : "All branches"} allowClear showSearch optionFilterProp="label" value={filters[f]} onChange={(val?: string) => setFilter(f, val)} options={items} loading={isDep ? deps.isLoading : locs.isLoading} style={{ minWidth: 170 }} />
     );
   });
-  const activeOrg = (def.filters.includes("department") && filters.department ? 1 : 0) + (def.filters.includes("location") && filters.location ? 1 : 0);
+  const activeOrg = (def.filters.includes("department") && filters.department ? 1 : 0) + (def.filters.includes("location") && filters.location ? 1 : 0) + (def.filters.includes("company") && filters.company ? 1 : 0);
 
   return (
     <>
@@ -127,7 +133,7 @@ export function PayrollReportsPage() {
         <FilterBar
           filters={<>{filterControls}</>}
           activeCount={activeOrg}
-          onClear={activeOrg ? () => setFilters((s) => ({ ...s, department: undefined, location: undefined })) : undefined}
+          onClear={activeOrg ? () => setFilters((s) => ({ ...s, department: undefined, location: undefined, company: undefined })) : undefined}
           actions={
             <div style={{ display: "flex", gap: space[2], flexWrap: "wrap" }}>
               <Button icon={<SettingOutlined />} onClick={() => { setDraft(chosen); setDrawer(true); }}>Columns</Button>
