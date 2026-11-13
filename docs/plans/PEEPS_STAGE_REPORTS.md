@@ -1761,3 +1761,24 @@ realtime timing test. The code was unchanged from `4861610` (run 330 green) and 
 
 **Note on the speed rule.** The re-sent prompt's speed rule (checks on each commit) is older than the owner's 2026-11-12 message
 (checks once per phase). I followed the newer one (recorded in `PEEPS_PLAN.md`). This sync was one phase, checked once.
+
+### Follow-up (2026-11-13, owner-requested): two Session A tests fixed (test-only)
+
+The owner asked for both fixes directly, so the "don't change Session A's tests" rule was set aside for these two files only.
+Changed tests (none weakened; every assertion kept):
+1. `backend/src/modules/employee/__tests__/profileAndReveal.test.ts`: `beforeAll` now records which of the keys it grants each shared
+   role (MANAGER, HR_ADMIN, HR_EXECUTIVE) already held; `afterAll` removes only the keys it added (`revokePermissions`), so the shared
+   roles end as they started. This was the cause of `customFields.test.ts` getting 404 for 403. Proof: the two files alone with
+   `--sequence.shuffle.files`, seed 1 (customFields first) and seed 3 (profileAndReveal first): 21/21 both ways. Seed 3 failed before
+   the fix.
+2. `backend/src/modules/hrCapabilities/__tests__/immediacy.test.ts` ("the live rooms"). Cause of the run-340 failure: with the Redis
+   adapter, `socketsLeave`/`socketsJoin` take effect only when the request comes back from Redis, but `permissions.changed` is sent at
+   once. So the test could punch before HR's socket had left `perm:attendance.view`. New helper `roomSettled(key, member)` waits for the
+   adapter's own `leave-room` / `join-room` event for this socket (resolving at once if it's already settled), with a 4 s timeout that
+   fails the test. It's used after each switch in the punch test, and replaces both 300 ms sleeps in the regularization test, which also
+   now waits for `permissions.changed`. The silence windows and every expectation are unchanged. Proof: 5 runs in a row 8/8. Mutation:
+   waiting for "joined" after the switch goes OFF times out ("socket did not join perm:attendance.view within 1500 ms"), so the wait
+   follows the real room state; file restored.
+   Product note (no code change): the same window exists in production. A browser told "permissions changed" may still get one event
+   for a room it is leaving, for the length of a Redis round trip.
+

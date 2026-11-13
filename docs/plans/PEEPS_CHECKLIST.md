@@ -160,5 +160,5 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 - [x] Typecheck, lint, drift clean; frontend 102/102; CI run 341 all 12 jobs green to the end (sharding present)
 - [x] Full backend suite alone: 2,435/2,436. The one failure is a Session A order interaction (profileAndReveal leaves `employee.view` on the
       MANAGER role; customFields expects 403). Reproduced with the two files alone; both identical to Session A's branch; left for Session A
-- [ ] Session A: remove the MANAGER grant in `profileAndReveal.test.ts` afterAll (not mine to change)
+- [x] Owner asked me to fix it: `profileAndReveal.test.ts` restores the shared roles; `immediacy.test.ts` waits for the adapter's room event (changed tests, see stage report)
 
