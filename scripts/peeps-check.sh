@@ -10,7 +10,8 @@
 # database and Redis database (backend/vitest.globalSetup.ts) and refuses if another test run holds them.
 set -euo pipefail
 unset DATABASE_URL DATABASE_SSL PORT
-export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=8192}"
+# Keep whatever NODE_OPTIONS the environment sets (for example its CA settings) and add a heap size unless one is already there.
+case " ${NODE_OPTIONS:-} " in *"--max-old-space-size"*) ;; *) export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--max-old-space-size=8192" ;; esac
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
