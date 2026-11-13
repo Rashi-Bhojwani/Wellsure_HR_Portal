@@ -4405,6 +4405,38 @@ model StatutoryChallanConfirmation {
 
   @@map("statutory_challan_confirmations")
 }
+/// ST-30: a compliance due date a director entered (none preset). Retired, never edited.
+model ComplianceDueDate {
+  id               String              @id @default(cuid())
+  statute          String
+  item             String
+  dueDay           Int                 @map("due_day")
+  remindDaysBefore Int                 @map("remind_days_before")
+  source           String
+  createdByUserId  String              @map("created_by_user_id")
+  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  retiredAt        DateTime?           @map("retired_at") @db.Timestamptz(3)
+  retiredByUserId  String?             @map("retired_by_user_id")
+  retireReason     String?             @map("retire_reason")
+  marks            ComplianceDueMark[]
+
+  @@map("compliance_due_dates")
+}
+
+/// ST-30: a due date's month marked done by a director, or reminded by the job. Append-only.
+model ComplianceDueMark {
+  id        String            @id @default(cuid())
+  dueDateId String            @map("due_date_id")
+  dueDate   ComplianceDueDate @relation(fields: [dueDateId], references: [id], onDelete: Restrict)
+  month     String
+  kind      String
+  byUserId  String?           @map("by_user_id")
+  note      String?
+  createdAt DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([dueDateId, month, kind])
+  @@map("compliance_due_marks")
+}
 // A-END
 // M-BEGIN (second session block 2, ER-27): divisions, an optional grouping of departments (an employee's division is their department's).
 model Division {

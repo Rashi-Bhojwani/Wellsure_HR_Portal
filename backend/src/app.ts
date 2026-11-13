@@ -47,6 +47,7 @@ import { settlementsRouter } from "./modules/payroll/settlements/routes"; // P7-
 import { offCycleRouter } from "./modules/payroll/offcycle/routes"; // P7-6b
 import { behavioursRouter } from "./modules/behaviours/routes"; // D-37
 import { payrollReportsRouter } from "./modules/payroll/reports/routes"; // Stage 6
+import { complianceRouter } from "./modules/payroll/compliance/routes"; // ST-30
 import { policySettingsRouter } from "./modules/policySettings/routes"; // M session block 2
 import { divisionsRouter } from "./modules/divisions/routes"; // M session block 2, ER-27
 import { documentAcksRouter } from "./modules/documents/ackRoutes"; // M session block 2, ER-18
@@ -116,6 +117,7 @@ const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   { path: "/api/offcycle", router: offCycleRouter }, // P7-6b
   { path: "/api/behaviours", router: behavioursRouter }, // D-37
   { path: "/api/payroll-reports", router: payrollReportsRouter }, // Stage 6
+  { path: "/api/payroll-compliance", router: complianceRouter }, // ST-30
   { path: "/api/policy-settings", router: policySettingsRouter }, // M session block 2
   { path: "/api/divisions", router: divisionsRouter }, // M session block 2, ER-27
   { path: "/api/document-acks", router: documentAcksRouter }, // M session block 2, ER-18
