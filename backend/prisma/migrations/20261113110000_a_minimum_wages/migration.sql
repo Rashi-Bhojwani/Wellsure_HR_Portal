@@ -13,7 +13,7 @@ CREATE TABLE "minimum_wage_rates" (
     CONSTRAINT "minimum_wage_rates_amount" CHECK ("monthly_amount" > 0),
     CONSTRAINT "minimum_wage_rates_texts" CHECK (length("state") >= 1 AND length("category") >= 1 AND length("source") >= 3)
 );
-CREATE INDEX "minimum_wage_rates_state_category_idx" ON "minimum_wage_rates"("state", "category", "effective_from");
+CREATE INDEX "minimum_wage_rates_state_category_effective_from_idx" ON "minimum_wage_rates"("state", "category", "effective_from");
 CREATE TABLE "minimum_wage_categories" (
     "id" TEXT NOT NULL,
     "employee_id" TEXT NOT NULL,
@@ -22,7 +22,7 @@ CREATE TABLE "minimum_wage_categories" (
     "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "minimum_wage_categories_pkey" PRIMARY KEY ("id")
 );
-CREATE INDEX "minimum_wage_categories_employee_id_idx" ON "minimum_wage_categories"("employee_id", "created_at");
+CREATE INDEX "minimum_wage_categories_employee_id_created_at_idx" ON "minimum_wage_categories"("employee_id", "created_at");
 CREATE TABLE "minimum_wage_bases" (
     "id" TEXT NOT NULL,
     "head_codes" TEXT[] NOT NULL,

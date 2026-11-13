@@ -9,7 +9,7 @@ CREATE TABLE "ledger_account_mappings" (
     CONSTRAINT "ledger_account_mappings_pkey" PRIMARY KEY ("id"),
     CONSTRAINT "ledger_account_mappings_texts" CHECK (length("key") >= 3 AND length("account") >= 1 AND length("reason") >= 3)
 );
-CREATE INDEX "ledger_account_mappings_key_idx" ON "ledger_account_mappings"("key", "created_at");
+CREATE INDEX "ledger_account_mappings_key_created_at_idx" ON "ledger_account_mappings"("key", "created_at");
 CREATE FUNCTION ledger_account_mappings_append_only() RETURNS trigger AS $$
 BEGIN
   IF TG_OP = 'DELETE' AND wellsure_test_purge_allowed() THEN RETURN OLD; END IF;

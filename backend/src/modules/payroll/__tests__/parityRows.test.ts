@@ -365,7 +365,7 @@ describe("Session A parity rows over a finalised run", () => {
       expect(dec(j.body.totalDebit).equals(dec(j.body.totalCredit))).toBe(true);
       // Independent: the run's earning lines and net pay, exact.
       const items = await prisma.payrollRunItem.findMany({ where: { runId, status: { in: ["PAYABLE", "HELD"] } }, include: { lines: true } });
-      const exact = (xs: Array<{ toString(): string }>) => xs.reduce((s, x) => s.plus(dec(x.toString())), dec("0"));
+      const exact = (xs: Array<{ toString(): string }>) => xs.map((x) => dec(x.toString())).reduce((s, x) => s.plus(x), dec("0"));
       const salaries = j.body.accounts.find((a: { account: string }) => a.account === "ZZ Salaries");
       expect(dec(salaries.debit).equals(exact(items.flatMap((i) => i.lines.filter((l) => l.kind === "EARNING").map((l) => l.amount))))).toBe(true);
       const net = j.body.accounts.find((a: { account: string }) => a.account === "ZZ Net pay payable");

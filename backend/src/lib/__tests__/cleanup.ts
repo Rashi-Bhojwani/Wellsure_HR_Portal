@@ -186,6 +186,7 @@ export const STORAGE_KEY_COLUMNS: Record<string, string[]> = {
   EmployeePersonal: ["photoStorageKey", "photoThumbStorageKey"],
   EmployeeDocument: ["fileKey"],
   CompanyDocument: ["fileKey"],
+  Form16PartAFile: ["fileKey"], // ST-25
   HelpdeskAttachment: ["fileKey"],
   YearEndRun: ["reportStorageKey"],
   LeaveRequest: ["attachmentStorageKey"],

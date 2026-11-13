@@ -15,8 +15,8 @@ const iso = (d: Date) => d.toISOString().slice(0, 10);
 
 /** The day a due date falls on in a month (`YYYY-MM`), clamped to the month's last day (31 in a 30-day month is the 30th). Pure; exported for the test. */
 export function dueOn(month: string, dueDay: number): string {
-  const y = Number(month.slice(0, 4));
-  const m = Number(month.slice(5, 7));
+  const y = Number(month.slice(0, 4)); // allow-number: a calendar year
+  const m = Number(month.slice(5, 7)); // allow-number: a calendar month
   const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
   return `${month}-${String(Math.min(dueDay, last)).padStart(2, "0")}`;
 }
