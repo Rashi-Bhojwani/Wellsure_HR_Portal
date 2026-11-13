@@ -214,7 +214,7 @@ export const form16PdfFor = (fy: string, employeeId: string) => blob(`/form16/${
 export const quarterlyExport = (fy: string, quarter: number, format: "xlsx" | "csv") => blob("/quarterly/export", { fy, quarter, format });
 
 // ST-03 / ST-06: PF and ESI challan records. References are shown by their last four only.
-export type StatutoryKind = "PF" | "ESI";
+export type StatutoryKind = "PF" | "ESI" | "PT" | "LWF";
 export interface StatutoryChallanRegister {
   year: string;
   kind: StatutoryKind;

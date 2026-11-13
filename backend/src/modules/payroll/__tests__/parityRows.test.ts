@@ -265,6 +265,19 @@ describe("Session A parity rows over a finalised run", () => {
     expect(JSON.stringify(audits.map((x) => x.after))).not.toMatch(/12345678|100\.5/);
   });
 
+  it("ST-08: a PT challan is recorded the same way; its month compares the run's own PT lines; an unknown kind is refused", async () => {
+    const c = await call(world.tokens.maker, "post", "/api/tax/statutory-challans", { kind: "PT", month: "2026-08", depositedOn: "2026-09-15", amount: "400", reference: "ZZPT0000001" });
+    expect(c.status, JSON.stringify(c.body)).toBe(201);
+    challanIds.push(c.body.id);
+    expect((await call(world.tokens.maker, "post", "/api/tax/statutory-challans", { kind: "TDS", month: "2026-08", depositedOn: "2026-09-15", amount: "1", reference: "ZZPT0000002" })).status).toBe(400);
+    const reg = await call(world.tokens.maker, "get", `/api/tax/statutory-challans?fy=${FY}&kind=PT`);
+    const aug = reg.body.months.find((m: { month: string }) => m.month === "2026-08");
+    const lines = await prisma.payrollRunLine.findMany({ where: { source: "PT", runItem: { status: { in: ["PAYABLE", "HELD"] } }, run: { status: "FINALISED", cycleEnd: { gte: utc("2026-08-01"), lte: utc("2026-08-31") } } } });
+    expect(paise(aug.workedOut)).toBe(lines.reduce((s, l) => s + paise(Number(l.amount.toString()).toFixed(2)), 0n));
+    expect(paise(aug.deposited)).toBe(0n); // not confirmed yet
+    expect((await call(tok.hr!, "get", `/api/tax/statutory-challans?fy=${FY}&kind=LWF`)).status).toBe(403);
+  });
+
   it("PY-37: the bank summary is a PDF for directors, audited; its page has the file's rows and total by bank code and no account number, name or person's pay", async () => {
     const r = await binary(world.tokens.maker, `/api/payroll/bank-batches/${batchId}/summary.pdf`);
     expect(r.status).toBe(200);

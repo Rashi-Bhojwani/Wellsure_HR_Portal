@@ -13,7 +13,7 @@ import { monthsOf, type Actor } from "./form16";
 // its last four), a different director confirms it by typing the amount and the reference again. Beside each month: what finalised runs worked out on the statute's
 // own lines (employee and employer) against the confirmed deposits — shown, never computed here. No official file format; nothing talks to the PF or ESI portals.
 
-export const STATUTORY_CHALLAN_KINDS = ["PF", "ESI"] as const;
+export const STATUTORY_CHALLAN_KINDS = ["PF", "ESI", "PT", "LWF"] as const; // PT and LWF: ST-08 (part 2)
 type Kind = (typeof STATUTORY_CHALLAN_KINDS)[number];
 const MONEY = /^\d+(\.\d{1,2})?$/;
 const REFERENCE = /^[A-Za-z0-9]{4,30}$/;

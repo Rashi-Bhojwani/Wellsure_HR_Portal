@@ -412,7 +412,7 @@ export const adminApps: AdminApp[] = [
           { key: "payroll-pay-types", label: "Loan and claim types", path: "payroll/pay-types", icon: FileProtectOutlined, element: PayTypesPage, needs: { director: true } }, // item 3
           { key: "payroll-quarterly-tds", label: "Quarterly TDS data", path: "payroll/quarterly-tds", icon: FileProtectOutlined, element: QuarterlyTdsPage, needs: { director: true } }, // item 3
           { key: "payroll-tds-form16", label: "TDS and Form 16", path: "payroll/tds-form16", icon: FileProtectOutlined, element: TdsForm16Page, needs: { director: true } }, // P7-7
-          { key: "payroll-statutory-challans", label: "PF and ESI challans", path: "payroll/statutory-challans", icon: FileProtectOutlined, element: StatutoryChallansPage, needs: { director: true } }, // ST-03 / ST-06
+          { key: "payroll-statutory-challans", label: "Statutory challans", path: "payroll/statutory-challans", icon: FileProtectOutlined, element: StatutoryChallansPage, needs: { director: true } }, // ST-03 / ST-06
           { key: "payroll-reports", label: "Payroll reports", path: "payroll/reports", icon: FileProtectOutlined, element: PayrollReportsPage, needs: { director: true } }, // Stage 6
           { key: "payroll-tax-declarations", label: "Tax Declarations", path: "payroll/tax-declarations", icon: FormOutlined, element: TaxDeclarationsPage, needs: PAYROLL_NEEDS },
           { key: "payroll-holds", label: "Held Salaries", path: "payroll/holds", icon: PauseCircleOutlined, element: HeldSalariesPage, needs: PAYROLL_NEEDS },

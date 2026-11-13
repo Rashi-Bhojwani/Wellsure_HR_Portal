@@ -11,7 +11,7 @@ import { formatRupees } from "../../../lib/money";
 import { ApprovalBanner, ConfirmModal, DataTable, PageHeader, Panel, SideDrawer, Stack, StatusChip, toast } from "../../../ui";
 import { space } from "../../../theme/tokens";
 
-// Payroll > PF and ESI challans (ST-03 / ST-06, docs/plans/A_PARITY_ROWS.md), directors only. Each deposit is entered by one director (the challan reference sealed,
+// Payroll > Statutory challans (ST-03 / ST-06; PT and LWF: ST-08, docs/plans/A_PARITY_ROWS.md), directors only. Each deposit is entered by one director (the challan reference sealed,
 // shown by its last four) and confirmed by a different one typing the amount and reference again. Month by month: what finalised runs worked out on the statute's own
 // lines against confirmed deposits — shown, never computed here. Nothing talks to the PF or ESI portals; no official file format.
 function years(): string[] {
@@ -46,11 +46,11 @@ export function StatutoryChallansPage() {
   return (
     <>
       <PageHeader
-        title="PF and ESI challans"
+        title="Statutory challans"
         subtitle="Deposits the company made, confirmed by a second director, against what finalised runs worked out. Nothing here is sent anywhere."
         actions={
           <div style={{ display: "flex", gap: space[2], flexWrap: "wrap" }}>
-            <Segmented<StatutoryKind> aria-label="Statute" value={kind} onChange={setKind} options={[{ value: "PF", label: "PF" }, { value: "ESI", label: "ESI" }]} />
+            <Segmented<StatutoryKind> aria-label="Statute" value={kind} onChange={setKind} options={["PF", "ESI", "PT", "LWF"].map((k) => ({ value: k as StatutoryKind, label: k }))} />
             <Select aria-label="Financial year" value={fy} onChange={setFy} options={years().map((y) => ({ value: y, label: y }))} style={{ minWidth: 120 }} />
           </div>
         }
@@ -93,14 +93,14 @@ export function StatutoryChallansPage() {
             ]}
           />
         </Panel>
-        <ApprovalBanner tone="info" title="Not a portal filing" description="The PF ECR and ESI files are made from the run (Payroll, Run). This register only records deposits and compares them." />
+        <ApprovalBanner tone="info" title="Not a portal filing" description="The PF ECR, ESI, PT and LWF files are made from the run (Payroll, Run); the state PT return format is not built. This register only records deposits and compares them." />
       </Stack>
       <SideDrawer open={adding} title={`Enter a ${kind} challan`} subtitle="A different director confirms it." onClose={() => setAdding(false)} formId="stat-challan-form" primaryLabel="Enter" primaryLoading={enter.isPending}>
         <Form id="stat-challan-form" form={form} layout="vertical" requiredMark={false} onFinish={(val) => enter.mutate(val)}>
           <Form.Item name="month" label="Month it covers" rules={[{ required: true, message: "Choose the month" }]}><DatePicker picker="month" format="MMM YYYY" style={{ width: "100%" }} /></Form.Item>
           <Form.Item name="depositedOn" label="Deposited on" rules={[{ required: true, message: "Choose the day" }]}><DatePicker format="D MMM YYYY" disabledDate={(x) => x.isAfter(dayjs(), "day")} style={{ width: "100%" }} /></Form.Item>
           <Form.Item name="amount" label="Amount (₹)" rules={[{ required: true, pattern: /^\d+(\.\d{1,2})?$/, message: "Digits, up to two decimals" }]}><Input inputMode="decimal" /></Form.Item>
-          <Form.Item name="reference" label={kind === "PF" ? "Challan reference (TRRN)" : "Challan number"} rules={[{ required: true, pattern: /^[A-Za-z0-9]{4,30}$/, message: "4 to 30 letters and digits" }]}><Input autoComplete="off" /></Form.Item>
+          <Form.Item name="reference" label={kind === "PF" ? "Challan reference (TRRN)" : "Challan or receipt number"} rules={[{ required: true, pattern: /^[A-Za-z0-9]{4,30}$/, message: "4 to 30 letters and digits" }]}><Input autoComplete="off" /></Form.Item>
         </Form>
       </SideDrawer>
       <ConfirmModal open={!!confirming} title="Confirm this challan" description="Type the amount and the reference from the challan itself." confirmLabel="Confirm" confirmDisabled={!retype.amount || !retype.reference} loading={confirm.isPending} onCancel={() => setConfirming(null)} onConfirm={() => confirm.mutate()}>
