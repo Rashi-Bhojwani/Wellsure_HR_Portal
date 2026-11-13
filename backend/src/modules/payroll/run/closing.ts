@@ -53,7 +53,7 @@ async function loadRun(runId: string): Promise<PayrollRun> {
 /** The hash of the figures a run would have if it were calculated this moment. If it cannot be worked out at all (a rule has no value), that is a hash nothing else equals. */
 export async function liveHashOf(run: PayrollRun): Promise<string> {
   try {
-    return (await computeRun(cycleOf(run))).runHash;
+    return (await computeRun({ ...cycleOf(run), runId: run.id })).runHash;
   } catch (err) {
     if (err instanceof HttpError) return `unavailable:${err.code ?? err.status}`;
     throw err;

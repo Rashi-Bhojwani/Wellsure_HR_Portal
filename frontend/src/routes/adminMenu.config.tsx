@@ -135,6 +135,7 @@ const CompliancePage = lazyPage(() => import("../pages/admin/payroll/ComplianceP
 const MinimumWagesPage = lazyPage(() => import("../pages/admin/payroll/MinimumWagesPage"), "MinimumWagesPage"); // ST-29
 const JournalPage = lazyPage(() => import("../pages/admin/payroll/JournalPage"), "JournalPage"); // PY-41
 const OvertimeEncashmentPage = lazyPage(() => import("../pages/admin/payroll/OvertimeEncashmentPage"), "OvertimeEncashmentPage"); // part 3 A2/A3
+const CompanySettingsPage = lazyPage(() => import("../pages/admin/payroll/CompanySettingsPage"), "CompanySettingsPage"); // part 3 B2a
 const ReimbursementsAdminPage = lazyPage(() => import("../pages/admin/payroll/ReimbursementsAdminPage"), "ReimbursementsAdminPage"); // P7-5
 const LoansAdminPage = lazyPage(() => import("../pages/admin/payroll/LoansAdminPage"), "LoansAdminPage"); // P7-4
 const OpeningFiguresPage = lazyPage(() => import("../pages/admin/payroll/OpeningFiguresPage"), "OpeningFiguresPage"); // A-3
@@ -423,6 +424,7 @@ export const adminApps: AdminApp[] = [
           { key: "payroll-minimum-wages", label: "Minimum wages", path: "payroll/minimum-wages", icon: FileProtectOutlined, element: MinimumWagesPage, needs: { director: true } }, // ST-29
           { key: "payroll-journal", label: "Accounting journal", path: "payroll/journal", icon: FileProtectOutlined, element: JournalPage, needs: { director: true } }, // PY-41
           { key: "payroll-overtime-encashment", label: "Overtime and encashment pay", path: "payroll/overtime-encashment", icon: FileProtectOutlined, element: OvertimeEncashmentPage, needs: { director: true } }, // part 3 A2/A3
+          { key: "payroll-company-settings", label: "Company settings", path: "payroll/company-settings", icon: FileProtectOutlined, element: CompanySettingsPage, needs: { director: true } }, // part 3 B2a
           { key: "payroll-reports", label: "Payroll reports", path: "payroll/reports", icon: FileProtectOutlined, element: PayrollReportsPage, needs: { director: true } }, // Stage 6
           { key: "payroll-tax-declarations", label: "Tax Declarations", path: "payroll/tax-declarations", icon: FormOutlined, element: TaxDeclarationsPage, needs: PAYROLL_NEEDS },
           { key: "payroll-holds", label: "Held Salaries", path: "payroll/holds", icon: PauseCircleOutlined, element: HeldSalariesPage, needs: PAYROLL_NEEDS },

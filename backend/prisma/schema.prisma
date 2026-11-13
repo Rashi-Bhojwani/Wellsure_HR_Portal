@@ -4518,6 +4518,41 @@ model EmployeeStatutoryDated {
   @@index([employeeId, effectiveFrom])
   @@map("employee_statutory_dated")
 }
+/// B2 (part 3): the company a payroll run is for (no row = the main company). Never changed.
+model PayrollRunCompany {
+  runId         String   @id @map("run_id")
+  legalEntityId String   @map("legal_entity_id")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([legalEntityId])
+  @@map("payroll_run_companies")
+}
+
+/// B2 (part 3): a company's statutory registrations and bank details for payroll (company key "MAIN" or a legal entity id). Not set until entered and confirmed.
+model PayrollCompanySetting {
+  id                String                             @id @default(cuid())
+  companyKey        String                             @map("company_key")
+  registrations     Json
+  debitAccount      Json?                              @map("debit_account")
+  debitAccountLast4 String?                            @map("debit_account_last4")
+  reason            String
+  enteredByUserId   String                             @map("entered_by_user_id")
+  createdAt         DateTime                           @default(now()) @map("created_at") @db.Timestamptz(3)
+  confirmation      PayrollCompanySettingConfirmation?
+
+  @@index([companyKey, createdAt])
+  @@map("payroll_company_settings")
+}
+
+model PayrollCompanySettingConfirmation {
+  id                String                @id @default(cuid())
+  settingId         String                @unique @map("setting_id")
+  setting           PayrollCompanySetting @relation(fields: [settingId], references: [id], onDelete: Restrict)
+  confirmedByUserId String                @map("confirmed_by_user_id")
+  createdAt         DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("payroll_company_setting_confirmations")
+}
 // A-END
 // M-BEGIN (second session block 2, ER-27): divisions, an optional grouping of departments (an employee's division is their department's).
 model Division {

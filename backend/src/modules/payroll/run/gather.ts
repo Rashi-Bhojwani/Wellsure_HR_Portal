@@ -3,6 +3,7 @@ import type { EmploymentType, PayrollItemKind } from "@prisma/client";
 import type { ComponentType } from "@shared/constants/payrollSalary";
 import { gatherTax, taxFingerprint } from "../tax/gather";
 import { addCalendarDays, businessDateOf } from "../../../lib/businessDate";
+import { companyWhere } from "./company";
 import { bankAccountsOn, employedBetween, employmentSpan, finalisedAttendanceDays, payrollPlacementsOn, salariesOn, salarySegmentsMany, unfinalisedAttendanceDays, type PayrollPlacement, type SalaryWithLines } from "../../../lib/effectiveDating";
 import { prisma } from "../../../lib/prisma";
 import { committedEncashments } from "../../leave/payrollReader";
@@ -62,9 +63,9 @@ function breakdownOf(a: { source: string; breakdown: unknown }): Array<{ compone
   return (raw as Array<{ component: string; amount: string }>).map((p) => ({ component: p.component, amount: dec(p.amount) }));
 }
 
-export async function gatherRunInputs(cycle: CycleSpan, ctx: RuleContext): Promise<RunInputs> {
+export async function gatherRunInputs(cycle: CycleSpan & { company?: string }, ctx: RuleContext): Promise<RunInputs> {
   const everyone = await prisma.employee.findMany({
-    where: employedBetween(cycle.start, cycle.end),
+    where: { ...employedBetween(cycle.start, cycle.end), ...companyWhere(cycle.company ?? "MAIN") }, // part 3 B2: only the run's company (no company row = the main company)
     select: { id: true, employeeCode: true, employmentType: true, dateOfJoining: true, lastWorkingDate: true },
     orderBy: { employeeCode: "asc" },
   });

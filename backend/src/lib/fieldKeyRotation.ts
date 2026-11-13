@@ -73,6 +73,7 @@ export const JSON_HELD_COLUMNS = {
   imports: "ImportStagingRow.data (an upload not yet committed)",
   challans: "TdsChallan.bsrCode and TdsChallan.serial (P7-7: sealed, immutable history the directors may need to read)",
   statutoryChallans: "StatutoryChallan.reference (ST-03 / ST-06: a PF or ESI challan reference, sealed, immutable)",
+  companyDebitAccounts: "PayrollCompanySetting.debitAccount (part 3 B2a: a company's debit account, sealed, immutable)",
 } as const;
 
 async function jsonHeldUsage(opts: { filter?: RowFilter }): Promise<KeyUsage[]> {
@@ -110,6 +111,10 @@ async function jsonHeldUsage(opts: { filter?: RowFilter }): Promise<KeyUsage[]> 
   for (const r of await prisma.$queryRaw<Array<{ id: string; bsr: string | null; serial: string | null }>>`SELECT id, bsr_code->>'sealed' AS bsr, serial->>'sealed' AS serial FROM tds_challans`) {
     if (!keep(r.id)) continue;
     for (const v of [r.bsr, r.serial]) if (v) add(JSON_HELD_COLUMNS.challans, ciphertextKeyId(unpackBytes(v)));
+  }
+  // Part 3 B2a: a company's debit account is sealed and kept for good, so every one counts.
+  for (const r of await prisma.$queryRaw<Array<{ id: string; acct: string | null }>>`SELECT id, debit_account->>'sealed' AS acct FROM payroll_company_settings WHERE debit_account IS NOT NULL`) {
+    if (keep(r.id) && r.acct) add(JSON_HELD_COLUMNS.companyDebitAccounts, ciphertextKeyId(unpackBytes(r.acct)));
   }
   // ST-03 / ST-06: a PF or ESI challan reference is sealed and kept for good, so every one counts.
   for (const r of await prisma.$queryRaw<Array<{ id: string; ref: string | null }>>`SELECT id, reference->>'sealed' AS ref FROM statutory_challans`) {

@@ -5,6 +5,7 @@ import { decryptField } from "../../../lib/encryption";
 import { blindIndex, normalizeAccountNumber } from "../../../lib/fieldHash";
 import { writeAuditLog, writeAuditLogs } from "../../../lib/audit";
 import { prisma } from "../../../lib/prisma";
+import { refuseFilesForOtherCompany } from "./company";
 import { HttpError } from "../../../middleware/errorHandler";
 import { storageService } from "../../../integrations/storage";
 import { getSocketServer, permissionRoom } from "../../../realtime/emit";
@@ -40,7 +41,7 @@ async function finalRun(runId: string): Promise<PayrollRun> {
   const run = await prisma.payrollRun.findUnique({ where: { id: runId } });
   if (!run) throw new HttpError(404, "No such payroll run.", "NOT_FOUND");
   if (run.status !== "FINALISED") throw new HttpError(409, "This run is not final, so nothing can be released from it.", "RUN_STATE");
-  const computed = await computeRun({ start: run.cycleStart, end: run.cycleEnd, label: run.cycleLabel });
+  const computed = await computeRun({ start: run.cycleStart, end: run.cycleEnd, label: run.cycleLabel, runId: run.id });
   void computed; // a final run never changes; the approval's own hash (below) is what is checked
   await assertRunIsReal(((run.pins as unknown as Parameters<typeof assertRunIsReal>[0]) ?? []), "released");
   return run;
@@ -103,6 +104,7 @@ export const DEMO_WATERMARK = "DEMO COMPANY: FICTIONAL PEOPLE AND ACCOUNTS. NOT 
 export const layoutSaysDemo = (layout: import("./layout").Layout): boolean => [...layout.header.flat(), ...layout.trailer.flat(), ...layout.columns].some((c) => c.source === "CONSTANT" && /\bDEMO\b/.test(c.value));
 
 export async function generateBankFile(runId: string, actor: Actor) {
+  await refuseFilesForOtherCompany(runId, "bank file"); // part 3 B2
   await requireHolds(actor.userId, "payroll.run");
   const run = await finalRun(runId);
   if (await prisma.payrollRunRelease.findFirst({ where: { runId, kind: "BANK_FILE_GENERATED" } })) throw new HttpError(409, "A bank file has already been generated for this period.", "ALREADY_RELEASED");

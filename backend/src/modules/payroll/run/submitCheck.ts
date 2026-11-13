@@ -40,7 +40,7 @@ export interface Assessment {
 const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
 
 export async function assessForSubmission(run: PayrollRun): Promise<Assessment> {
-  const computed = await computeRun({ start: run.cycleStart, end: run.cycleEnd, label: run.cycleLabel });
+  const computed = await computeRun({ start: run.cycleStart, end: run.cycleEnd, label: run.cycleLabel, runId: run.id });
   const stale = computed.runHash !== run.runHash;
   const items = await prisma.payrollRunItem.findMany({ where: { runId: run.id }, include: { employee: { select: { employeeCode: true } } }, orderBy: { employee: { employeeCode: "asc" } } });
   const names = await namesOn(items.map((i) => i.employeeId), run.cycleEnd);

@@ -5,6 +5,7 @@ import { namesOn } from "../../../lib/effectiveDating";
 import { decryptField } from "../../../lib/encryption";
 import { prisma } from "../../../lib/prisma";
 import { statutoryOn } from "../statutoryOn";
+import { refuseFilesForOtherCompany } from "./company";
 import { HttpError } from "../../../middleware/errorHandler";
 import { storageService } from "../../../integrations/storage";
 import { recordEvent } from "../events";
@@ -88,6 +89,7 @@ function build(kind: Exclude<PayrollOutputKind, "SALARY_REGISTER">, items: Item[
 }
 
 export async function generateOutput(runId: string, kind: PayrollOutputKind, actor: Actor) {
+  await refuseFilesForOtherCompany(runId, "statutory file"); // part 3 B2
   const run: PayrollRun | null = await prisma.payrollRun.findUnique({ where: { id: runId } });
   if (!run) throw new HttpError(404, "No such payroll run.", "NOT_FOUND");
   if (run.status !== "FINALISED") throw new HttpError(409, "Statutory files and the register come only from a final run.", "RUN_STATE");
