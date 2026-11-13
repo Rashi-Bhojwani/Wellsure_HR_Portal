@@ -23,6 +23,7 @@ const TotpChallengePage = lazyPage(
   () => import("../pages/auth/totp/TotpChallengePage"),
   "TotpChallengePage",
 );
+const LetterCheckPage = lazyPage(() => import("../pages/auth/letter-check/LetterCheckPage"), "LetterCheckPage"); // M block 2, LT-09
 const TotpSetupPage = lazyPage(() => import("../pages/auth/totp/TotpSetupPage"), "TotpSetupPage");
 // Development builds only: the screen index for reviewing the UI pass (docs/UI_SCREEN_MAP.md). Behind import.meta.env.DEV so production bundles never contain it.
 const ScreensIndexPage = import.meta.env.DEV
@@ -43,6 +44,7 @@ export function AppRouter() {
         <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
         <Route path="/totp-challenge" element={<TotpChallengePage />} />
         <Route path="/totp-setup" element={<TotpSetupPage />} />
+        <Route path="/check-letter" element={<LetterCheckPage />} />
         {ScreensIndexPage && <Route path="/dev/screens" element={<ScreensIndexPage />} />}
 
         <Route path="/app/*" element={<PortalRoutes />} />

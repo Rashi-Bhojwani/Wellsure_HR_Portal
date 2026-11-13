@@ -61,6 +61,7 @@ import { overtimeRouter } from "./modules/overtime/routes"; // M session block 2
 import { wfhRequestsRouter } from "./modules/wfhRequests/routes"; // M session block 2, AT-36
 import { encashmentRequestsRouter } from "./modules/encashmentRequests/routes"; // M session block 2, LV-23
 import { updateImportRouter } from "./modules/updateImport/routes"; // M session block 2, IE-07/08
+import { letterCheckRouter } from "./modules/letterCheck/routes"; // M session block 2, LT-09
 import { payslipRouter } from "./modules/payroll/payslipRoutes";
 // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
 import { employeeExtrasRouter, massEmailRouter, segmentsRouter, separationModesRouter } from "./modules/parity/routes";
@@ -87,6 +88,8 @@ const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   { path: "/api/biometric/agent", router: biometricAgentRouter },
   { path: "/iclock", router: admsRouter },
   { path: "/api/auth", router: authRouter },
+  // M session block 2, LT-09: no sign-in by design; before the bare /api router, whose `authenticate` would otherwise run first.
+  { path: "/api/public/letter-check", router: letterCheckRouter },
   { path: "/api/org", router: orgRouter },
   { path: "/api/employees", router: employeeRouter },
   { path: "/api/import", router: importRouter },
