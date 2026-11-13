@@ -5,7 +5,7 @@ import { requireDirector } from "../../../lib/directorAuthority";
 import { buildXlsx } from "../../../lib/xlsx";
 import { prisma } from "../../../lib/prisma";
 import { HttpError } from "../../../middleware/errorHandler";
-import { build, totalsOf, type Filters } from "./definitions";
+import { build, totalsOf, type Built, type Filters } from "./definitions";
 
 // Stage 6 (docs/plans/STAGE_6_PAYROLL_REPORTS.md): the payroll reports. Directors only (the router gate plus requireDirector here). Column layouts start from the
 // conventional set ("Default, change in settings"); a director may save the company's layout for a report (append-only, audited). Every export is audited.
@@ -42,6 +42,14 @@ async function layoutOf(key: PayrollReportKey) {
   return { columns: PAYROLL_REPORTS[key].columns.filter((c) => c.on).map((c) => c.key), isDefault: true, label: DEFAULT_LABEL as string | null, savedAt: null as string | null, reason: null as string | null };
 }
 
+/** Part 3 B3: the report's own columns with the columns its data decides (one per pay head) placed after the named column. */
+function merged<T extends { key: string }>(base: readonly T[], built: Built): Array<T | NonNullable<Built["extraColumns"]>["columns"][number]> {
+  const extra = built.extraColumns;
+  if (!extra) return [...base];
+  const at = base.findIndex((c) => c.key === extra.after);
+  return [...base.slice(0, at + 1), ...extra.columns, ...base.slice(at + 1)];
+}
+
 export async function catalog(actor: Actor) {
   await requireDirector(actor.userId, "see the payroll reports");
   return { reports: await Promise.all(PAYROLL_REPORT_KEYS.map(async (k) => ({ ...PAYROLL_REPORTS[k], layout: await layoutOf(k) }))) };
@@ -52,7 +60,7 @@ export async function run(rawKey: string, rawFilters: unknown, actor: Actor): Pr
   const key = keyOf(rawKey);
   const f = parseFilters(key, rawFilters);
   const built = await build(key, f, actor);
-  return { key, title: PAYROLL_REPORTS[key].title, generatedAt: new Date().toISOString() /* allow-clock: when the report was made */, filtersApplied: built.filtersApplied, columns: [...PAYROLL_REPORTS[key].columns], rows: built.rows, totals: totalsOf(key, built.rows), notes: built.notes, layout: await layoutOf(key) };
+  return { key, title: PAYROLL_REPORTS[key].title, generatedAt: new Date().toISOString() /* allow-clock: when the report was made */, filtersApplied: built.filtersApplied, columns: merged(PAYROLL_REPORTS[key].columns, built), rows: built.rows, totals: totalsOf(key, built.rows, built.extraColumns?.columns ?? []), notes: built.notes, layout: await layoutOf(key) };
 }
 
 export const layoutSchema = z.object({ columns: z.array(z.string().min(1).max(40)).min(1).max(40), reason: z.string().trim().min(3).max(300) }).strict();
@@ -96,10 +104,11 @@ export async function exportReport(rawKey: string, rawQuery: Record<string, unkn
   const built = await build(key, f, actor);
   const def = PAYROLL_REPORTS[key];
   const chosen = colList ? colList.split(",").filter(Boolean) : (await layoutOf(key)).columns;
-  const unknown = chosen.filter((c) => !def.columns.some((d) => d.key === c));
+  const extraKeys = new Set((built.extraColumns?.columns ?? []).map((c) => c.key));
+  const unknown = chosen.filter((c) => !def.columns.some((d) => d.key === c) && !extraKeys.has(c));
   if (unknown.length || chosen.length === 0) throw new HttpError(400, `Not a column of this report: ${unknown.join(", ") || "(none chosen)"}.`, "VALIDATION_ERROR");
-  const columns = def.columns.filter((c) => chosen.includes(c.key));
-  const totals = totalsOf(key, built.rows);
+  const columns = merged(def.columns, built).filter((c) => chosen.includes(c.key) || extraKeys.has(c.key)); // the data's own head columns are always exported
+  const totals = totalsOf(key, built.rows, built.extraColumns?.columns ?? []);
   const stamp = new Date().toISOString().slice(0, 10); // allow-clock: the file's date
   const fileName = `${key}-${stamp}.${format}`;
   const preamble = [def.title, ...built.filtersApplied];

@@ -63,7 +63,8 @@ export function PayrollReportsPage() {
 
   const layout = report.data?.layout ?? cat.data?.find((r) => r.key === key)?.layout;
   const chosen = chosenByReport[key] ?? layout?.columns ?? def.columns.filter((c) => c.on).map((c) => c.key);
-  const columns = def.columns.filter((c) => chosen.includes(c.key));
+  // Part 3 B3: a register's head columns come from the data (one per pay head) and are always shown.
+  const columns = (report.data?.key === key ? report.data.columns : def.columns).filter((c) => chosen.includes(c.key) || !def.columns.some((d) => d.key === c.key));
   const totals = report.data?.totals ?? {};
   const hasTotals = columns.some((c) => totals[c.key] !== undefined);
 

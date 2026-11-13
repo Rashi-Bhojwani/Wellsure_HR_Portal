@@ -20,7 +20,7 @@ export interface PayrollReportDef {
   columns: readonly PayrollReportColumnDef[];
 }
 
-export const PAYROLL_REPORT_KEYS = ["payroll-summary", "department-cost", "head-wise", "bank-transfer", "loans", "claims", "statutory-summary", "statutory-by-person", "variance", "ctc"] as const;
+export const PAYROLL_REPORT_KEYS = ["payroll-summary", "department-cost", "head-wise", "bank-transfer", "loans", "claims", "statutory-summary", "statutory-by-person", "variance", "ctc", "register-wages", "register-deductions", "register-overtime"] as const; // registers: part 3 B3
 export type PayrollReportKey = (typeof PAYROLL_REPORT_KEYS)[number];
 
 const c = (key: string, header: string, type: PayrollReportColumnType, on = true): PayrollReportColumnDef => ({ key, header, type, on });
@@ -97,6 +97,28 @@ export const PAYROLL_REPORTS: Record<PayrollReportKey, PayrollReportDef> = {
     description: "Everyone with a salary in force on a date: annual and monthly CTC, the structure, and since when.",
     filters: ["asOf", ...ORG],
     columns: [...PERSON, c("annualCtc", "Annual CTC", "money"), c("monthlyCtc", "Monthly CTC", "money"), c("structure", "Structure", "text", false), c("from", "Since", "date")],
+  },
+  // Part 3 B3: statutory registers from finalised runs, in conventional layouts ("Default, change in settings"); no official form is claimed, no figure is worked out here.
+  "register-wages": {
+    key: "register-wages",
+    title: "Register of wages",
+    description: "For one finalised month, each person paid or held: days, every earning and deduction head the run worked out (one column each), gross, deductions and net.",
+    filters: ["month", ...ORG],
+    columns: [...PERSON, c("paidDays", "Days paid", "number"), c("lopDays", "Loss of pay days", "number"), c("gross", "Gross", "money"), c("deductions", "Deductions", "money"), c("net", "Net", "money")],
+  },
+  "register-deductions": {
+    key: "register-deductions",
+    title: "Register of deductions",
+    description: "For one finalised month, every deduction the run made from each person, one row per deduction.",
+    filters: ["month", ...ORG],
+    columns: [...PERSON, c("head", "Deduction", "text"), c("headCode", "Head code", "text", false), c("source", "Worked out by", "text", false), c("amount", "Amount", "money")],
+  },
+  "register-overtime": {
+    key: "register-overtime",
+    title: "Register of overtime",
+    description: "Approved overtime in a month, one row per day: minutes claimed and approved, who decided, and what payroll has been asked to pay for the month.",
+    filters: ["month", ...ORG],
+    columns: [...PERSON, c("date", "Day", "date"), c("minutes", "Minutes claimed", "number"), c("approvedMinutes", "Minutes approved", "number"), c("decidedOn", "Decided on", "date", false), c("paidForMonth", "Paid for the month", "money")],
   },
 };
 
