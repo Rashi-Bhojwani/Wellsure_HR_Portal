@@ -10,6 +10,7 @@ import {
   createFullTestEmployee,
   grantPermissions,
   loginAs,
+  revokePermissions,
   type TestOrgMasters,
 } from "./employeeTestHelpers";
 import { prisma } from "../../../lib/prisma";
@@ -24,7 +25,8 @@ describe("Employee profile, reveal + history — scope and permission IDOR", () 
   // ones). grantPermissions() finds-or-creates, so this is safe to run
   // against a DB that already has these roles seeded — it only adds
   // permissions/role rows, and afterAll never deletes the shared role
-  // itself, only this test's own user-role links and fixture employees.
+  // itself, only this test's own user-role links and fixture employees,
+  // and the permissions it added to a shared role (see sharedGrants).
   const managerRoleCode = "MANAGER";
   const employeeRoleCode = `TEST_EMPLOYEE_${Date.now()}`; // no literal match needed — unmatched code correctly defaults to SELF
   const hrAdminRoleCode = "HR_ADMIN";
@@ -40,10 +42,25 @@ describe("Employee profile, reveal + history — scope and permission IDOR", () 
   let hrAdminToken: string;
   let hrExecToken: string;
 
+  // The shared roles (MANAGER, HR_ADMIN, HR_EXECUTIVE) are restored in afterAll: only the keys this file added (those a role did not
+  // already hold) are removed again. Leaving employee.view on MANAGER made later files see a manager pass that gate (customFields.test.ts
+  // got 404 for 403 whenever this file ran first).
+  const sharedGrants: Record<string, string[]> = {
+    [managerRoleCode]: ["employee.view"],
+    [hrAdminRoleCode]: ["employee.view", "employee.bank.view", "employee.statutory.view"],
+    [hrExecRoleCode]: ["employee.view", "employee.bank.view", "employee.statutory.view"],
+  };
+  const addedToShared: Record<string, string[]> = {};
+
   beforeAll(async () => {
     org = await createEmployeeTestOrgMasters();
+    for (const [code, keys] of Object.entries(sharedGrants)) {
+      const held = await prisma.rolePermission.findMany({ where: { role: { code }, permission: { key: { in: keys } } }, select: { permission: { select: { key: true } } } });
+      const heldKeys = new Set(held.map((h) => h.permission.key));
+      addedToShared[code] = keys.filter((k) => !heldKeys.has(k));
+    }
     await Promise.all([
-      grantPermissions(managerRoleCode, ["employee.view"]),
+      grantPermissions(managerRoleCode, sharedGrants[managerRoleCode]!),
       // employee.view here is deliberate: /:id is permission-gated (matches
       // rbac.ts's "may this endpoint be called at all" vs. "which rows can
       // it see" split), so a SELF-scoped role still needs the permission to
@@ -53,9 +70,9 @@ describe("Employee profile, reveal + history — scope and permission IDOR", () 
       // accounts hold neither this permission nor call /:id in practice —
       // they use /me (covered separately below).
       grantPermissions(employeeRoleCode, ["employee.view"]),
-      grantPermissions(hrAdminRoleCode, ["employee.view", "employee.bank.view", "employee.statutory.view"]),
+      grantPermissions(hrAdminRoleCode, sharedGrants[hrAdminRoleCode]!),
       // M task 1 (decision b): HR_EXECUTIVE holds the masked bank and statutory keys, as HR_ADMIN does (seed + migration 20261112090000_m_identity_change_requests).
-      grantPermissions(hrExecRoleCode, ["employee.view", "employee.bank.view", "employee.statutory.view"]),
+      grantPermissions(hrExecRoleCode, sharedGrants[hrExecRoleCode]!),
     ]);
 
     const manager = await createFullTestEmployee(org, { roleCode: managerRoleCode });
@@ -88,6 +105,7 @@ describe("Employee profile, reveal + history — scope and permission IDOR", () 
     // possibly-seeded roles this test only ever added permissions to.
     for (const id of employeeIds) await cleanupFullTestEmployee(id);
     await cleanupTestRole(employeeRoleCode);
+    for (const [code, keys] of Object.entries(addedToShared)) if (keys.length) await revokePermissions(code, keys);
     await cleanupEmployeeTestOrgMasters(org);
   });
 

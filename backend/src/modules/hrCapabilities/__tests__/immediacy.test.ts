@@ -7,7 +7,7 @@ import { closeHrCapabilityQueue } from "../../../jobs/hrCapabilityQueue";
 import { purgeAppendOnly } from "../../../lib/__tests__/cleanup";
 import { signAccessToken } from "../../../lib/jwt";
 import { prisma } from "../../../lib/prisma";
-import { emitPunchesReceived, emitRegularizationSubmitted, getSocketServer, setSocketServer } from "../../../realtime/emit";
+import { emitPunchesReceived, emitRegularizationSubmitted, getSocketServer, permissionRoom, setSocketServer } from "../../../realtime/emit";
 import { createSocketServer } from "../../../realtime/socket";
 import { app, authHeader, cleanupEmployeeTestOrgMasters, cleanupFullTestEmployee, createEmployeeTestOrgMasters, createFullTestEmployee, grantPermissions, loginAs, revokePermissions, type TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
 import { getRegularizationRequestSink, setRegularizationRequestSink } from "../../admin/regularizationIntegration";
@@ -175,6 +175,28 @@ describe("a switch is felt everywhere at once", () => {
           resolve(true);
         }, ms);
       });
+    // With the Redis adapter a socket's room change (emitPermissionsChanged's socketsLeave/socketsJoin) is applied when the request comes
+    // back from Redis, while "permissions.changed" is sent at once. So the browser can be told before the server has moved its socket. Before
+    // an emit that the test expects to reach (or not reach) HR, wait for the adapter's own join-room / leave-room event for this socket,
+    // not a fixed delay.
+    const roomSettled = (key: string, member: boolean, ms = 4000) =>
+      new Promise<void>((resolve, reject) => {
+        const adapter = ioServer.of("/").adapter;
+        const room = permissionRoom(key);
+        if ((adapter.rooms.get(room)?.has(client.id!) ?? false) === member) return resolve();
+        const event = member ? "join-room" : "leave-room";
+        const timer = setTimeout(() => {
+          adapter.off(event, handler);
+          reject(new Error(`socket did not ${member ? "join" : "leave"} ${room} within ${ms} ms`));
+        }, ms);
+        const handler = (r: string, id: string) => {
+          if (r !== room || id !== client.id) return;
+          clearTimeout(timer);
+          adapter.off(event, handler);
+          resolve();
+        };
+        adapter.on(event, handler);
+      });
     const punch = () => emitPunchesReceived([{ employeeId: p.employee.employeeId, punchedAt: new Date().toISOString(), deviceId: "d", locationId: org.locationId }]); // allow-clock: an instant
 
     beforeAll(async () => {
@@ -203,25 +225,31 @@ describe("a switch is felt everywhere at once", () => {
       const told = next("permissions.changed");
       await roleSwitch("VIEW_ATTENDANCE", "HR_ADMIN", "OFF");
       await told; // the browser is told to refetch its menu
+      await roomSettled("attendance.view", false); // and the server has taken its socket out of the room
       const quiet = silence("punch.received.batch");
       punch();
       expect(await quiet).toBe(true); // off: no punch reaches them
       const again = next("permissions.changed");
       await roleSwitch("VIEW_ATTENDANCE", "HR_ADMIN", "DEFAULT");
       await again;
+      await roomSettled("attendance.view", true);
       const back = next("punch.received.batch");
       punch();
       await back;
     });
 
     it("the same for regularizations on their own room", async () => {
+      const told = next("permissions.changed");
       await roleSwitch("APPROVE_REGULARIZATIONS", "HR_ADMIN", "OFF");
-      await new Promise((r) => setTimeout(r, 300));
+      await told;
+      await roomSettled("attendance.regularization.view", false);
       const quiet = silence("regularization.submitted");
       emitRegularizationSubmitted({ id: "r1", employeeId: p.employee.employeeId }, null);
       expect(await quiet).toBe(true);
+      const again = next("permissions.changed");
       await roleSwitch("APPROVE_REGULARIZATIONS", "HR_ADMIN", "DEFAULT");
-      await new Promise((r) => setTimeout(r, 300));
+      await again;
+      await roomSettled("attendance.regularization.view", true);
       const heard = next("regularization.submitted");
       emitRegularizationSubmitted({ id: "r2", employeeId: p.employee.employeeId }, null);
       expect(await heard).toMatchObject({ id: "r2" });
