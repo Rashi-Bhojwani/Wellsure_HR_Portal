@@ -3,6 +3,7 @@ import { rupeesInWords } from "@shared/utils/inWords";
 import { bankAccountsOn, namesOn, placementsOn } from "../../../lib/effectiveDating";
 import { prisma } from "../../../lib/prisma";
 import { getLetterhead } from "../../letters/service";
+import { statutoryOn } from "../statutoryOn";
 import { payrollHash } from "../hash";
 import { canonicalDecimal, dec, fixed, sum, ZERO } from "../money";
 import { paymentDateOf } from "./bank";
@@ -60,7 +61,7 @@ export async function buildPayslips(run: PayrollRun): Promise<Map<string, { runI
   const names = await namesOn(ids, run.cycleEnd);
   const letterhead = await getLetterhead();
   const placements = await placementsOn(ids, run.cycleEnd); // where each person was at the end of the period (the nearest placement for someone who left earlier)
-  const statutory = new Map((await prisma.employeeStatutory.findMany({ where: { employeeId: { in: ids } }, select: { employeeId: true, panLast4: true, uanLast4: true, esiLast4: true } })).map((s) => [s.employeeId, s]));
+  const statutory = await statutoryOn(ids, run.cycleEnd); // A1: the identifiers in force at the end of the period (older months keep the ones they had)
   // The account the salary goes to: the one in force on the payment date (the cycle end if the run read no payment date), the same account the bank file uses.
   const paidOn = (await paymentDateOf(run)) ?? run.cycleEnd;
   const banks = await bankAccountsOn(ids, paidOn);

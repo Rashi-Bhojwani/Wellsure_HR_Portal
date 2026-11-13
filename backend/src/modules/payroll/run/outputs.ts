@@ -4,6 +4,7 @@ import { writeAuditLog, writeAuditLogs } from "../../../lib/audit";
 import { namesOn } from "../../../lib/effectiveDating";
 import { decryptField } from "../../../lib/encryption";
 import { prisma } from "../../../lib/prisma";
+import { statutoryOn } from "../statutoryOn";
 import { HttpError } from "../../../middleware/errorHandler";
 import { storageService } from "../../../integrations/storage";
 import { recordEvent } from "../events";
@@ -25,7 +26,14 @@ const LAYOUT_OF: Record<Exclude<PayrollOutputKind, "SALARY_REGISTER">, LayoutKin
 
 type Item = Awaited<ReturnType<typeof loadItems>>[number];
 async function loadItems(runId: string) {
-  return prisma.payrollRunItem.findMany({ where: { runId, status: { in: ["PAYABLE", "HELD"] } }, include: { lines: true, employee: { select: { employeeCode: true, statutory: { select: { uanEncrypted: true, esiEncrypted: true } } } } }, orderBy: { employee: { employeeCode: "asc" } } });
+  const items = await prisma.payrollRunItem.findMany({ where: { runId, status: { in: ["PAYABLE", "HELD"] } }, include: { lines: true, employee: { select: { employeeCode: true } } }, orderBy: { employee: { employeeCode: "asc" } } });
+  // A1: the UAN and ESI number in force at the end of the run's period (a later change does not rewrite an older month's file).
+  const { cycleEnd } = await prisma.payrollRun.findUniqueOrThrow({ where: { id: runId }, select: { cycleEnd: true } });
+  const st = await statutoryOn(items.map((i) => i.employeeId), cycleEnd);
+  return items.map((i) => {
+    const s = st.get(i.employeeId);
+    return { ...i, employee: { ...i.employee, statutory: s ? { uanEncrypted: s.uanEncrypted, esiEncrypted: s.esiEncrypted } : null } };
+  });
 }
 
 const amountOf = (item: Item, code: string): string => canonicalDecimal(item.lines.filter((l) => l.code === code).reduce((a, l) => a.plus(dec(l.amount.toString())), ZERO));

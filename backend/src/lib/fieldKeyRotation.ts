@@ -16,6 +16,8 @@ export const ENCRYPTED_COLUMNS: ReadonlyArray<EncryptedColumn> = [
   { model: "EmployeeStatutory", delegate: "employeeStatutory", field: "aadhaarEncrypted" },
   { model: "EmployeeStatutory", delegate: "employeeStatutory", field: "uanEncrypted" },
   { model: "EmployeeStatutory", delegate: "employeeStatutory", field: "esiEncrypted" },
+  { model: "EmployeeStatutoryDated", delegate: "employeeStatutoryDated", field: "uanEncrypted" }, // A1 (part 3): dated copies payroll reads; the guard allows re-encryption only
+  { model: "EmployeeStatutoryDated", delegate: "employeeStatutoryDated", field: "esiEncrypted" },
   { model: "EmployeeBankAccount", delegate: "employeeBankAccount", field: "accountNumberEncrypted" },
   { model: "EmployeeCustomValue", delegate: "employeeCustomValue", field: "valueEncrypted" }, // M block 2, ER-28: a sensitive custom field
 ];

@@ -8,6 +8,7 @@ import { setBusinessTodayForTests } from "../../../lib/businessDate";
 import { prisma } from "../../../lib/prisma";
 import { app, authHeader, cleanupFullTestEmployee, createFullTestEmployee, loginAs } from "../../employee/__tests__/employeeTestHelpers";
 import { byBank, bankSummaryHtml } from "../run/bankSummary";
+import { buildPayslips } from "../run/payslip";
 import { addMonthsClamped, serviceLength } from "../settlements/guide";
 import { form16Html } from "../tax/form16Html";
 import { ratesInForce } from "../minimumWages/service";
@@ -379,6 +380,22 @@ describe("Session A parity rows over a finalised run", () => {
       await expect(prisma.ledgerAccountMapping.updateMany({ where: { setByUserId: world.maker.userId }, data: { account: "x" } })).rejects.toThrow(/LEDGER_MAPPING_APPEND_ONLY/);
     } finally {
       await deleteWithDependents("LedgerAccountMapping", (await prisma.ledgerAccountMapping.findMany({ where: { setByUserId: world.maker.userId }, select: { id: true } })).map((x) => x.id));
+    }
+  });
+
+  it("A1: a payslip shows the identifiers in force at the end of its own month; a later change shows from its own date", async () => {
+    const st = await prisma.employeeStatutory.findUniqueOrThrow({ where: { employeeId: who("a") } });
+    // A realistic history: the identifiers held since January, then a change on 1 September.
+    const first = await prisma.employeeStatutoryDated.create({ data: { id: `esd_first_${who("a")}`, employeeId: who("a"), effectiveFrom: utc("2026-01-01"), panLast4: st.panLast4, uanLast4: st.uanLast4, esiLast4: st.esiLast4 } });
+    const later = await prisma.employeeStatutoryDated.create({ data: { id: `esd_later_${who("a")}`, employeeId: who("a"), effectiveFrom: utc("2026-09-01"), panLast4: st.panLast4, uanLast4: "9393", esiLast4: st.esiLast4 } });
+    try {
+      const run = await prisma.payrollRun.findUniqueOrThrow({ where: { id: runId } });
+      const slip = (await buildPayslips(run)).get(who("a"))!;
+      expect((slip.content as unknown as { statutory: { uanLast4: string | null } }).statutory.uanLast4).toBe(st.uanLast4); // August keeps its own
+      const { statutoryOn } = await import("../statutoryOn");
+      expect((await statutoryOn([who("a")], utc("2026-09-30"))).get(who("a"))!.uanLast4).toBe("9393");
+    } finally {
+      await deleteWithDependents("EmployeeStatutoryDated", [first.id, later.id]);
     }
   });
 

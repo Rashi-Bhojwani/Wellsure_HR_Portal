@@ -12,6 +12,7 @@ import { payrollHash } from "../hash";
 import { canonicalDecimal, dec, fixed, sum, ZERO, type Money } from "../money";
 import { keyedHash, seal } from "../sealed";
 import { statementFor } from "./statement";
+import { statutoryOn } from "../statutoryOn";
 import { renderPdf } from "../../../lib/pdf/renderer";
 import { getLetterhead } from "../../letters/service";
 import type { EngineResult } from "./engine";
@@ -137,7 +138,7 @@ export async function quarterly(fyRaw: string, quarter: number, actor: Actor) {
   const [names, emps, stat, challans] = await Promise.all([
     namesOn(ids, businessToday()),
     prisma.employee.findMany({ where: { id: { in: ids } }, select: { id: true, employeeCode: true } }),
-    prisma.employeeStatutory.findMany({ where: { employeeId: { in: ids } }, select: { employeeId: true, panLast4: true } }),
+    statutoryOn(ids, new Date(Date.UTC(Number(months[2]!.slice(0, 4)), Number(months[2]!.slice(5, 7)), 0))).then((m) => [...m].map(([employeeId, v]) => ({ employeeId, panLast4: v.panLast4 }))), // A1: the PAN in force at the quarter's end; allow-number: calendar arithmetic
     prisma.tdsChallan.findMany({ where: { financialYear: fy.label, month: { in: months }, confirmation: { isNot: null } }, select: { month: true, serialLast: true, depositedOn: true } }),
   ]);
   const code = new Map(emps.map((e) => [e.id, e.employeeCode]));
@@ -260,7 +261,7 @@ registerSubject({
 // ── ST-24 / SS-05 (docs/plans/A_PARITY_ROWS.md): the Form 16 Part B PDF, DRAFT until confirmed; Part A never made here ─────────────────────────────────
 
 async function form16Pdf(employeeId: string, fyLabel: string): Promise<{ pdf: Buffer; draft: boolean }> {
-  const [b, confirmedYear, names, stat, letterhead] = await Promise.all([partB(employeeId, fyLabel), confirmed(fyLabel), namesOn([employeeId], businessToday()), prisma.employeeStatutory.findUnique({ where: { employeeId }, select: { panLast4: true } }), getLetterhead()]);
+  const [b, confirmedYear, names, stat, letterhead] = await Promise.all([partB(employeeId, fyLabel), confirmed(fyLabel), namesOn([employeeId], businessToday()), statutoryOn([employeeId], new Date(`${parseFinancialYearLabel(fyLabel).end}T00:00:00Z`)).then((m) => m.get(employeeId) ?? null), getLetterhead()]);
   const draft = !(confirmedYear && b.taxYearConfirmed);
   const html = form16Html({
     company: { legalName: letterhead.legalName, address: letterhead.registeredAddress },

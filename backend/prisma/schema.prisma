@@ -4502,6 +4502,22 @@ model LedgerAccountMapping {
   @@index([key, createdAt])
   @@map("ledger_account_mappings")
 }
+/// A1 (part 3): what payroll reads of a person's statutory identifiers, effective-dated; written by a trigger on employee_statutory. Immutable except re-encryption.
+model EmployeeStatutoryDated {
+  id            String   @id
+  employeeId    String   @map("employee_id")
+  effectiveFrom DateTime @map("effective_from") @db.Date
+  panHash       String?  @map("pan_hash")
+  panLast4      String?  @map("pan_last4")
+  uanEncrypted  Bytes?   @map("uan_encrypted")
+  uanLast4      String?  @map("uan_last4")
+  esiEncrypted  Bytes?   @map("esi_encrypted")
+  esiLast4      String?  @map("esi_last4")
+  recordedAt    DateTime @default(dbgenerated("clock_timestamp()")) @map("recorded_at") @db.Timestamptz(3)
+
+  @@index([employeeId, effectiveFrom])
+  @@map("employee_statutory_dated")
+}
 // A-END
 // M-BEGIN (second session block 2, ER-27): divisions, an optional grouping of departments (an employee's division is their department's).
 model Division {
