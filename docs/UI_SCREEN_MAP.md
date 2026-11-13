@@ -245,3 +245,14 @@ settings panel), `/admin/autofill` (AutofillPage: upload, documents, settings) a
 source document beside per-field suggestions, confidence, errors, confirm/correct/reject, save, provenance). Interview round
 is now a dropdown of the director's rounds. Light/dark, 1280 and 390 px checked.
 <!-- PEEPS-END stage-2 -->
+<!-- PEEPS-BEGIN stage-3 -->
+Stage 3: `/app/recognition` (RecognitionPage: my badges with who gave each and why, give a badge along the line with a required
+reason, my nudge tags with the giver and "Ask for a review", earlier private notes read-only, badges I gave; a director also
+gives nudges here), `/app/office/recognition` (RecognitionAdminPage, directors: reviews asked for, every badge with revoke,
+every nudge with remove, earlier notes read-only and audited), `/app/office/settings` (PeepsSettingsPage: "Default, change in
+settings" state, badge/nudge catalogue editors with retire, limits, off-limits words, withdraw a pending value),
+`/app/office/members` (withdraw a pending change), `/app/my-assets` (MyAssetsPage gains "My requests" and "Ask for an asset"),
+`/admin/assets/requests` and `/app/office/asset-requests` (AssetRequestsPage: approve, decline, mark fulfilled). The directory
+cards show badge and nudge counts; profiles and the home page show active nudge tags beside badges. Tasks inbox gains
+"Nudge review" (directors) and "Asset request" (HR and directors).
+<!-- PEEPS-END stage-3 -->
