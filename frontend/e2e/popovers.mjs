@@ -329,9 +329,10 @@ for (const [width, height] of [
   await page.locator("header.ws-topbar").waitFor({ timeout: 30000 });
   await page.waitForTimeout(800);
   await check(page, where, "recognition: badge picker", { open: async () => { await page.getByRole("button", { name: "Give a badge" }).click(); await page.waitForTimeout(400); await page.locator(".ant-drawer .ant-select").nth(1).click(); }, root: ".ant-select-dropdown", surface: null });
-  await page.keyboard.press("Escape");
-  await page.keyboard.press("Escape");
-  await page.waitForTimeout(400);
+  // A fresh page, so the badge drawer cannot cover the next button on a phone.
+  await page.goto(`${BASE}/app/recognition`);
+  await page.locator("header.ws-topbar").waitFor({ timeout: 30000 });
+  await page.waitForTimeout(800);
   await check(page, where, "recognition: nudge picker", { open: async () => { await page.getByRole("button", { name: "Give a nudge" }).click(); await page.waitForTimeout(400); await page.locator(".ant-drawer-open .ant-select").nth(1).click(); }, root: ".ant-select-dropdown", surface: null });
   // PEEPS-END stage3
   await ctx.close();
