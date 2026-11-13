@@ -56,6 +56,48 @@ Every value has a light and a dark entry. "Board" is what was sampled; "Ours" is
 token. **Where they differ it is only to reach WCAG AA** (text 4.5:1, large text and
 non-text UI 3:1) — marked ⚑ and listed in §10 for the user to veto.
 
+### 1.0 Wellsure brand theme (2026-11) — supersedes the board colours below
+
+The portal now wears the Wellsure brand: a bright yellow disc with a black "W" on a white
+ring. **The values in `frontend/src/theme/tokens.ts` are the source of truth**; the board
+tables in §1.1–1.5 are kept as the history of where the token names came from. Every
+token name is unchanged; only values moved, plus a few new tokens.
+
+| Role | Light | Dark |
+|---|---|---|
+| Primary action (`primary` / `primaryText`) | yellow `#FFF605`, ink `#0B0B0B` text; hover `#F2E900`, pressed `#DBD000` (`primaryActive`) | same yellow, ink text |
+| Secondary button | ink outline + ink text, yellow tint on hover | light outline |
+| Tertiary | text / link buttons | same |
+| Text `textPrimary` / `textSecondary` / `textPlaceholder` | `#0B0B0B` / `#4B4B45` / `#75756C` | `#F5F3E4` / `#BDBBA8` / `#9A9886` |
+| Page / card / subtle / table header / borders | `#FFFDF0` / `#FFFFFF` / `#FFFDF0` / `#FFF8DC` / `#ECE8C8` | `#0E0E0C` / `#181815` / `#22221E` / `#22221E` / `#34342D` |
+| Yellow tint (`accentSubtle`: selection, selected menu item, icon tiles) | `#FFFBC2` | `#2E2C10` |
+| Links, active labels, yellow-toned icons (`accentText`) | gold `#8A6D00` — never pure yellow as text on white | `#FFF35C` |
+| Controls (`accent`: checkbox, radio, switch, steps, progress) with `accentOn` marks | ink with a yellow mark | yellow with an ink mark |
+| Control outline (`borderControl`) | `#8F8C78` (3:1) | `#75746A` (3:1) |
+| Status success / warning / danger / info | `#1F9D55` / `#E5A100` (fill; text `#7A5F00`) / `#D14040` / `#2F6FED` | brightened |
+| Chart slots | teal `#0E9F8E`, blue `#2F6FED`, coral `#F0605D`, violet `#6C5CE7`, orange `#C96A0E`, gold `#8A6D00` | `#2CC7B3`, `#6B9BFF`, `#FF7A77`, `#9C8FFF`, `#FFA552`, `#FFF35C` |
+| Focus ring | 2 px ink ring with a 2 px yellow inner ring | yellow ring on a page-coloured gap |
+
+Sidebar: the active Home item is a yellow pill with ink text; any other selected item has
+the yellow tint and a yellow marker bar (ink-edged in light, so it holds 3:1). Sign-in:
+an ink brand panel with yellow accents. Yellow is an accent and a button fill, never the
+background of a large text area.
+
+Two brief values were adjusted for contrast: danger `#D64545` → `#D14040` (white text and
+danger text need 4.5:1; `#D64545` gives 4.38) and the light chart orange `#F28C28` →
+`#C96A0E` (a chart mark needs 3:1 on white; `#F28C28` gives 2.45).
+
+**Checked automatically** (`src/theme/__tests__/theme.test.ts`): every pair in
+`AA_TEXT_PAIRS` ≥ 4.5:1, every pair in `AA_UI_PAIRS` ≥ 3:1, Ant Design's own text tokens ≥
+4.5:1 on its backgrounds, the primary button label in all three states, and chart marks
+≥ 3:1 (chart text 4.5:1), in both themes. `npm run check:tokens` also fails on a
+`var(--ws-…)` that names no token and on manifest colours that differ from the tokens.
+
+**Logo:** `frontend/public/logo.png` (and the favicon at `frontend/public/favicon.png`) are
+supplied by the repo owner and never drawn in code. `ui/BrandLogo` shows the file in the
+sidebar, on the sign-in pages and in the install banner, and the manifest and Apple touch
+icon point at it; until the file exists the plain text "Wellsure" shows instead.
+
 ### 1.1 Surfaces and lines
 
 | Token | Light board | Light ours | Dark board | Dark ours | Where (frame) |
