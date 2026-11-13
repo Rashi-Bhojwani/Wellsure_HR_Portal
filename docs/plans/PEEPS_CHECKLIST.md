@@ -161,4 +161,4 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 - [x] Full backend suite alone: 2,435/2,436. The one failure is a Session A order interaction (profileAndReveal leaves `employee.view` on the
       MANAGER role; customFields expects 403). Reproduced with the two files alone; both identical to Session A's branch; left for Session A
 - [x] Owner asked me to fix it: `profileAndReveal.test.ts` restores the shared roles; `immediacy.test.ts` waits for the adapter's room event (changed tests, see stage report)
-
+- [ ] Standing rule: never edit customFields / profileAndReveal / immediacy tests again; on the next merge of `feat/hr-payroll-separation` keep that branch's version of those three files (see `PEEPS_PLAN.md`, "Hands-off test files")

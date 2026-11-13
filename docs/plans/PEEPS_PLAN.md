@@ -22,6 +22,14 @@ end of each phase (a group of rows or a stage) run the changed tests, lint and t
 it after docs-only pushes. The check script uses `set -euo pipefail`, unsets `DATABASE_URL`/`DATABASE_SSL`/`PORT`, and stops at the
 first failed step with a non-zero exit.
 
+## Hands-off test files (owner, 2026-11-13)
+
+Do not edit `backend/src/modules/customFields/__tests__/customFields.test.ts`,
+`backend/src/modules/employee/__tests__/profileAndReveal.test.ts` or
+`backend/src/modules/hrCapabilities/__tests__/immediacy.test.ts` again. The other session puts the same fix on
+`feat/hr-payroll-separation`. When merging that branch, if these files differ, keep that branch's version (`git checkout --theirs`
+on a conflict, or take theirs where the merge auto-resolved to ours).
+
 ---
 
 ## Final instructions (2026-11-01) — win over everything below
