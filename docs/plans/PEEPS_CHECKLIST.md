@@ -171,6 +171,7 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 - [x] Phase 5 DEMO data, `docs/PEEPS_SETUP_GUIDE.md`, UI_SCREEN_MAP (`06a47a0`, `ce36041`)
 - [x] Mutation checks: reporting line, pair limit, receiver sees giver (each caught, restored)
 - [x] Phase-end check passed; browser walk 84 visits + states, no problems
+- [x] Full backend suite alone: 279 files / 2,468 tests passed; CI run 364 on `df88a79`: all 12 jobs green to the end
 - [ ] Owner: review the Stage 3 "Decided by me" list and the defaults in PEEPS_SETUP_GUIDE
 - [ ] **STOP: wait for the owner (stage 4 not started)**
 

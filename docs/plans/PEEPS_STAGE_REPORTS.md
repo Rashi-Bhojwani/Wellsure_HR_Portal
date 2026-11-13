@@ -1787,7 +1787,8 @@ Changed tests (none weakened; every assertion kept):
 
 **Commits:** `07c7b6c` (backend), `e78b3e3` (recognition screens, settings defaults and withdraw, nudge-trigger fix), `4588f02`
 (asset request screens, membership withdraw), `497b527` (notifications review), `06a47a0` (scan rules, popovers, DEMO asset
-requests), `ce36041` (setup guide, screen map, checklist corrections), `058b221` (check script keeps the environment's NODE_OPTIONS).
+requests), `ce36041` (setup guide, screen map, checklist corrections), `058b221` (check script keeps the environment's NODE_OPTIONS),
+`43f31f3` (report), `68b8b93` (avatars test), `8f27f83` and `df88a79` (popover check fixes).
 No sync this stage (not asked). Speed rule followed: no per-commit checks; one phase-end check; full suite once at the end.
 
 ### Phase 1: badges
@@ -1866,7 +1867,16 @@ approved, DEMO006 waiting). `docs/PEEPS_SETUP_GUIDE.md` lists every Not-set sett
   desktop and 390 phone, light and dark: 84 page visits, no crash, no horizontal scroll, dark backgrounds correct. States: empty
   (an employee with nothing), loading (skeleton while badges load), error (failed asset requests → retry), forbidden (an employee on
   the directors' pages sees none of their content).
-- Full backend suite alone and CI: see the closing lines below.
+- **Full backend suite alone** (final code): 279 files / **2,468 tests passed**. (The first full run found 1 failure, the avatars badge
+  test below; fixed in `68b8b93`, then the whole suite was run again.)
+- **CI run 364 on `df88a79` (final code): all 12 jobs green to the end of each job, cleanup included**: install-lint-typecheck-test
+  (lint, typecheck, tokens and bundle budgets, migrate, schema matches migrations, seed, frontend and agent tests, demo company tests),
+  the four backend shards and backend-tests-complete (each test exactly once), both sensitive-ui halves (admin and employee portals,
+  with the Stage 3 rules), latency (popovers, with the Stage 3 checks, then punch-to-screen latency), attendance-replay,
+  docker-build, agent-windows.
+- CI on the way there: run 360 failed in three jobs: backend shard 2 (Session A's `letters.test.ts` timed out starting its PDF
+  browser, an infrastructure flake that passed locally and in later runs), the shard-completeness job that depends on it, and my new
+  popover check. Run 361: my popover check failed again (the drawer covered the button it reopens after Escape); fixed in `df88a79`.
 
 ### Changed tests (none weakened)
 - `recognition/__tests__/recognition.test.ts`: rewritten for the Stage 3 rules. The Not-set catalogue test became the defaults test;
@@ -1910,5 +1920,6 @@ public giver and reason shown, nudge tags (8), off-limits words (35). Nudge life
 
 ### Not verified
 - Real documents or data for any of this (all fixtures are synthetic).
-- The scans (`check:sensitive-ui`, `check:popovers`) were extended but run only in CI (read below); not run locally.
+- The scans (`check:sensitive-ui`, `check:popovers`) ran in CI only (green in run 364); a local popover run is not comparable
+  (the local demo database has more notifications).
 - E-mail delivery: Peeps Stage 3 events send no e-mail.
