@@ -112,22 +112,38 @@
 .ws-nav__item[aria-expanded="true"] .ws-nav__chevron {
   transform: rotate(180deg);
 }
-/* The board's solid green pill: the active top-level Home item. */
+/* The active top-level Home item: a brand-yellow pill with ink text (like the primary button). */
 .ws-nav__item[data-variant="pill"][aria-current="page"] {
-  background: var(--ws-nav-active);
-  color: var(--ws-nav-active-text);
+  background: var(--ws-primary);
+  color: var(--ws-primary-text);
   box-shadow: 0 8px 20px var(--ws-nav-glow);
 }
 .ws-nav__item[data-variant="pill"][aria-current="page"] .ws-nav__icon {
-  color: var(--ws-nav-active-text);
+  color: var(--ws-primary-text);
 }
-/* Any other active item: a subtle pill, icon in green. */
+/* Any other active item: the yellow tint and a yellow marker bar (edged in ink on light, so it holds 3:1 on white). */
+.ws-nav__item {
+  position: relative;
+}
 .ws-nav__item[aria-current="page"]:not([data-variant="pill"]) {
-  background: var(--ws-bg-subtle);
+  background: var(--ws-accent-subtle);
+  color: var(--ws-text-primary);
+  font-weight: 700;
 }
-.ws-nav__item[aria-current="page"] .ws-nav__icon,
+.ws-nav__item[aria-current="page"]:not([data-variant="pill"])::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 4px;
+  border-radius: 0 4px 4px 0;
+  background: var(--ws-nav-marker);
+  box-shadow: 0 0 0 1px var(--ws-nav-marker-edge);
+}
+.ws-nav__item[aria-current="page"]:not([data-variant="pill"]) .ws-nav__icon,
 .ws-nav__item[data-active-group="true"] .ws-nav__icon {
-  color: var(--ws-accent-text);
+  color: var(--ws-text-primary);
 }
 .ws-nav__item[data-soon="true"] {
   color: var(--ws-text-secondary);
@@ -224,7 +240,7 @@ html[data-theme="dark"] .ws-nav__badge {
   width: min(360px, 100%);
   height: 48px;
   padding: 0 8px 0 16px;
-  border: 1px solid transparent;
+  border: 1px solid var(--ws-border-default);
   border-radius: 10px;
   background: var(--ws-bg-subtle);
   color: var(--ws-text-placeholder);
@@ -261,6 +277,8 @@ html[data-theme="dark"] .ws-nav__badge {
 }
 .ws-toplink:hover {
   color: var(--ws-accent-text);
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 .ws-icon-btn {
   position: relative;
@@ -368,7 +386,8 @@ html[data-theme="dark"] .ws-nav__badge {
   right: 30%;
   height: 3px;
   border-radius: 0 0 3px 3px;
-  background: var(--ws-accent);
+  background: var(--ws-nav-marker);
+  box-shadow: 0 0 0 1px var(--ws-nav-marker-edge);
 }
 .ws-tabbar__icon {
   font-size: 22px;

@@ -1,28 +1,15 @@
-import { fs, fw, radius, v } from "../../theme/tokens";
+import { BrandLogo } from "../../ui/BrandLogo";
+import { fs, fw, v } from "../../theme/tokens";
 
-// Our plain text logo mark (DESIGN_SYSTEM.md §0): a "W" tile and the name. No template logo. Replace the tile with the real Wellsure logo when it exists.
+// The sidebar's brand: the Wellsure logo (public/logo.png) and the name. Without the logo file the name alone shows — in the collapsed sidebar, the plain word
+// "Wellsure".
 export function BrandMark({ compact = false }: { compact?: boolean }) {
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-      <span
-        aria-hidden
-        style={{
-          width: 34,
-          height: 34,
-          flex: "none",
-          borderRadius: radius.sm + 2,
-          background: v.primary,
-          color: v.accent,
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontWeight: 800,
-          fontSize: fs.xl,
-          letterSpacing: "-0.02em",
-        }}
-      >
-        W
-      </span>
+      <BrandLogo
+        size={36}
+        fallback={compact ? <span style={{ fontWeight: fw.bold, fontSize: fs.xs, color: v.textPrimary, whiteSpace: "nowrap" }}>Wellsure</span> : null}
+      />
       {!compact && (
         <span style={{ display: "flex", flexDirection: "column", lineHeight: 1.1, minWidth: 0 }}>
           <span style={{ fontWeight: fw.bold, fontSize: fs.lg, color: v.textPrimary, whiteSpace: "nowrap" }}>Wellsure</span>

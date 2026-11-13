@@ -7,7 +7,7 @@
 
 export type ThemeMode = "light" | "dark";
 
-/** Every semantic colour. Both themes must define every key (theme.test.ts). Values sampled from the boards; ⚑ = darkened for AA (DESIGN_SYSTEM.md §10). */
+/** Every semantic colour. Both themes must define every key (theme.test.ts). Wellsure brand palette (DESIGN_SYSTEM.md §1); every pair the UI draws is checked for WCAG AA in theme.test.ts. */
 export interface Palette {
   bgPage: string;
   bgSurface: string;
@@ -33,13 +33,23 @@ export interface Palette {
   primary: string;
   primaryText: string;
   primaryHover: string;
+  /** Pressed primary button. */
+  primaryActive: string;
   accent: string;
+  /** Text or a mark drawn on an `accent` fill (today's date, a checked box). */
+  accentOn: string;
   accentText: string;
   accentSubtle: string;
   accentSelected: string;
   navActive: string;
   navActiveText: string;
   navGlow: string;
+  /** The selected menu item's marker bar, and its edge (keeps 3:1 on a light sidebar). */
+  navMarker: string;
+  navMarkerEdge: string;
+  /** The sign-in page's brand panel. */
+  brandPanel: string;
+  brandPanelText: string;
   edit: string;
   view: string;
   danger: string;
@@ -64,6 +74,8 @@ export interface Palette {
   chipInfoBg: string;
   chipInfoText: string;
   focusRing: string;
+  /** The inner ring between the element and focusRing (yellow in light; a page-coloured gap in dark). */
+  focusRingInner: string;
   skeleton: string;
   skeletonShine: string;
   shadowColor: string;
@@ -92,178 +104,211 @@ export interface Palette {
 }
 
 export const light: Palette = {
-  bgPage: "#FAFAFA",
+  // Wellsure brand (2026-11 theme): brand yellow #FFF605 + ink, on a warm cream page. Yellow is a fill (buttons, markers, tints), never text on white.
+  bgPage: "#FFFDF0",
   bgSurface: "#FFFFFF",
-  bgSubtle: "#F8F8F8",
-  bgTableHeader: "#FAFAFA",
-  bgReadonly: "#F3F4F6",
-  bgOverlay: "rgba(0, 0, 0, 0.5)",
-  bgHover: "#F5F6F7",
+  bgSubtle: "#FFFDF0", // cream, not the yellow tint: muted text must keep 4.5:1 on it
+  bgTableHeader: "#FFF8DC", // cream header row
+  bgReadonly: "#F7F5E8",
+  bgOverlay: "rgba(11, 11, 11, 0.5)",
+  bgHover: "#FFFCE0",
   bgSegmentSelected: "#FFFFFF",
-  bgDisabled: "#F3F4F6",
-  borderDisabled: "#E2E4E8",
-  textDisabled: "#9CA1AA",
-  borderDefault: "#EAEAEA",
-  borderControl: "#DADDE2", // ⚑ board #F0F0F0
-  textPrimary: "#121828",
-  textBody: "#2C2B31",
-  textSecondary: "#6B7079", // ⚑ board #8A8C91
-  textPlaceholder: "#70757D", // ⚑ board #C1C3C7
-  textOnRaised: "#6B7079",
+  bgDisabled: "#F3F1E4",
+  borderDisabled: "#E3E0CC",
+  textDisabled: "#A3A196",
+  borderDefault: "#ECE8C8",
+  borderControl: "#8F8C78", // 3:1 on white (input outlines are UI components)
+  textPrimary: "#0B0B0B",
+  textBody: "#1C1C18",
+  textSecondary: "#4B4B45",
+  textPlaceholder: "#75756C",
+  textOnRaised: "#4B4B45",
   textInverse: "#FFFFFF",
-  primary: "#121828",
-  primaryText: "#FFFFFF",
-  primaryHover: "#252D40",
-  accent: "#28A174",
-  accentText: "#1A7F5A", // ⚑ board #28A174
-  accentSubtle: "#EAF6F2",
-  accentSelected: "#1A7F5A",
-  navActive: "#0A8048", // ⚑ board #0CAD5D
+  primary: "#FFF605",
+  primaryText: "#0B0B0B",
+  primaryHover: "#F2E900",
+  primaryActive: "#DBD000",
+  accent: "#0B0B0B", // non-text fills and borders (checkbox, switch, radio, progress, steps, selected outlines): ink on light
+  accentOn: "#FFF605", // text/marks on an accent fill
+  accentText: "#8A6D00", // gold: links, active labels and icons on white
+  accentSubtle: "#FFFBC2", // the yellow tint: selection, range bands, icon tiles
+  accentSelected: "#0B0B0B",
+  navActive: "#0B0B0B",
   navActiveText: "#FFFFFF",
-  navGlow: "rgba(12, 173, 93, 0.25)",
-  edit: "#1F66D1", // ⚑ board #2D7AEF
-  view: "#1E8A62", // ⚑ board #24A676
-  danger: "#D12E2E", // ⚑ board #ED3838
-  dangerSubtle: "#FCEDEC",
-  warning: "#FFCF25",
-  warningText: "#8A6D00",
-  warningSubtle: "#FFF5D0",
-  info: "#2D7AEF",
-  infoText: "#1F5FC4", // ⚑ board #2D7AEF
-  infoSubtle: "#ECF3FD",
-  success: "#28A174",
-  chipSuccessBg: "#EAF6F2",
-  chipSuccessText: "#1B7A56",
-  chipWarningBg: "#FFF5D0",
-  chipWarningText: "#8A6D00",
-  chipPurpleBg: "#F1EDFF",
-  chipPurpleText: "#6A3FD9",
-  chipDangerBg: "#FCEDEC",
-  chipDangerText: "#C0262D",
-  chipNeutralBg: "#F1F2F4",
-  chipNeutralText: "#4B5059",
-  chipInfoBg: "#ECF3FD",
-  chipInfoText: "#1F5FC4",
-  focusRing: "#28A174",
-  skeleton: "#F1F2F4",
-  skeletonShine: "#F8F8F9",
-  shadowColor: "rgba(18, 24, 40, 0.08)",
-  attPBg: "#EAF6F2",
-  attPFg: "#1B7A56",
-  attABg: "#FCEDEC",
-  attAFg: "#C0262D",
-  attHdBg: "#FFF5D0",
-  attHdFg: "#8A6D00",
-  attHBg: "#ECF3FD",
-  attHFg: "#1F5FC4",
-  attOBg: "#F3F4F6",
-  attOFg: "#4B5059",
-  attLBg: "#F1EDFF",
-  attLFg: "#6A3FD9",
-  illoLine: "#C3C7CD",
-  illoFill: "#F3F4F6",
-  illoAccent: "#28A174",
-  illoAccentSoft: "#CDEBDF",
-  demoBg: "#FFF5D0",
+  navGlow: "rgba(219, 208, 0, 0.35)",
+  navMarker: "#FFF605",
+  navMarkerEdge: "#0B0B0B",
+  brandPanel: "#0B0B0B",
+  brandPanelText: "#FFFFFF",
+  edit: "#2F6FED",
+  view: "#0E8A7C",
+  danger: "#D14040", // brief #D64545 darkened just enough for 4.5:1 (white text on it, and as text on cream)
+  dangerSubtle: "#FCEBEA",
+  warning: "#E5A100",
+  warningText: "#7A5F00",
+  warningSubtle: "#FFF4CC",
+  info: "#2F6FED",
+  infoText: "#1F55C0",
+  infoSubtle: "#EAF1FE",
+  success: "#1F9D55",
+  chipSuccessBg: "#E6F5EC",
+  chipSuccessText: "#16723E",
+  chipWarningBg: "#FFF4CC",
+  chipWarningText: "#7A5F00",
+  chipPurpleBg: "#EFEDFD",
+  chipPurpleText: "#5443C9",
+  chipDangerBg: "#FCEBEA",
+  chipDangerText: "#B3302F",
+  chipNeutralBg: "#F1EFE3",
+  chipNeutralText: "#4B4B45",
+  chipInfoBg: "#EAF1FE",
+  chipInfoText: "#1F55C0",
+  focusRing: "#0B0B0B",
+  focusRingInner: "#FFF605",
+  skeleton: "#F3F0DE",
+  skeletonShine: "#FAF8EC",
+  shadowColor: "rgba(11, 11, 11, 0.08)",
+  attPBg: "#E6F5EC",
+  attPFg: "#16723E",
+  attABg: "#FCEBEA",
+  attAFg: "#B3302F",
+  attHdBg: "#FFF4CC",
+  attHdFg: "#7A5F00",
+  attHBg: "#EAF1FE",
+  attHFg: "#1F55C0",
+  attOBg: "#F1EFE3",
+  attOFg: "#4B4B45",
+  attLBg: "#EFEDFD",
+  attLFg: "#5443C9",
+  illoLine: "#B9B59A",
+  illoFill: "#FFFDF0",
+  illoAccent: "#F2E900",
+  illoAccentSoft: "#FFFBC2",
+  demoBg: "#FFF4CC",
   demoText: "#5C4A00",
-  demoBorder: "#F0DC8C",
+  demoBorder: "#EAD889",
 };
 
 export const dark: Palette = {
-  bgPage: "#121828",
-  bgSurface: "#202938",
-  bgSubtle: "#303948",
-  bgTableHeader: "#303948",
-  bgReadonly: "#303948",
-  bgOverlay: "rgba(0, 0, 0, 0.6)",
-  bgHover: "#283142",
-  bgSegmentSelected: "#4A5466",
-  bgDisabled: "#262F3E",
-  borderDisabled: "#323B4B",
-  textDisabled: "#6B7484",
-  borderDefault: "#2C3545",
-  borderControl: "#4A5363", // ⚑ board #3C4554
-  textPrimary: "#FFFFFF",
-  textBody: "#E1E8F0",
-  textSecondary: "#8C95A4", // ⚑ board #5E6776
-  textPlaceholder: "#8C95A4",
-  textOnRaised: "#C6CFDE",
-  textInverse: "#121828",
-  primary: "#FFFFFF",
-  primaryText: "#121828",
-  primaryHover: "#E6E9EE",
-  accent: "#28A174",
-  accentText: "#34C08E", // ⚑ board #28A174
-  accentSubtle: "#1E3B33",
-  accentSelected: "#1A7F5A",
-  navActive: "#0A8048",
+  bgPage: "#0E0E0C",
+  bgSurface: "#181815",
+  bgSubtle: "#22221E", // raised
+  bgTableHeader: "#22221E",
+  bgReadonly: "#22221E",
+  bgOverlay: "rgba(0, 0, 0, 0.65)",
+  bgHover: "#1F1F1B",
+  bgSegmentSelected: "#3E3E36",
+  bgDisabled: "#1D1D1A",
+  borderDisabled: "#2A2A25",
+  textDisabled: "#6E6D62",
+  borderDefault: "#34342D",
+  borderControl: "#75746A", // 3:1 on the card
+  textPrimary: "#F5F3E4",
+  textBody: "#E6E4D4",
+  textSecondary: "#BDBBA8",
+  textPlaceholder: "#9A9886",
+  textOnRaised: "#BDBBA8",
+  textInverse: "#0B0B0B",
+  primary: "#FFF605",
+  primaryText: "#0B0B0B",
+  primaryHover: "#F2E900",
+  primaryActive: "#DBD000",
+  accent: "#FFF605",
+  accentOn: "#0B0B0B",
+  accentText: "#FFF35C",
+  accentSubtle: "#2E2C10",
+  accentSelected: "#FFF605",
+  navActive: "#34342D",
   navActiveText: "#FFFFFF",
-  navGlow: "rgba(12, 173, 93, 0.22)",
-  edit: "#4D8FF5",
-  view: "#28A174",
+  navGlow: "rgba(255, 246, 5, 0.16)",
+  navMarker: "#FFF605",
+  navMarkerEdge: "#FFF605",
+  brandPanel: "#181815",
+  brandPanelText: "#F5F3E4",
+  edit: "#2F6FED",
+  view: "#0E8A7C",
   danger: "#F06A6A",
-  dangerSubtle: "#3A2228",
-  warning: "#E0B300",
-  warningText: "#E0B300",
-  warningSubtle: "#3A3320",
-  info: "#4D8FF5",
-  infoText: "#8DB6F7",
-  infoSubtle: "#1B2A45",
-  success: "#34C08E",
-  // The board keeps light chips on the dark surface (DESIGN_SYSTEM.md §1.4).
-  chipSuccessBg: "#EAF6F2",
-  chipSuccessText: "#1B7A56",
-  chipWarningBg: "#FFF5D0",
-  chipWarningText: "#8A6D00",
-  chipPurpleBg: "#F1EDFF",
-  chipPurpleText: "#6A3FD9",
-  chipDangerBg: "#FCEDEC",
-  chipDangerText: "#C0262D",
-  chipNeutralBg: "#E4E7EC",
-  chipNeutralText: "#363B45",
-  chipInfoBg: "#ECF3FD",
-  chipInfoText: "#1F5FC4",
-  focusRing: "#34C08E",
-  skeleton: "#2A3343",
-  skeletonShine: "#343E50",
-  shadowColor: "rgba(0, 0, 0, 0.4)",
-  attPBg: "#1E3B33",
-  attPFg: "#5FD3A8",
-  attABg: "#3A2228",
-  attAFg: "#F58C8C",
-  attHdBg: "#3A3320",
-  attHdFg: "#F0C94A",
-  attHBg: "#1B2A45",
-  attHFg: "#8DB6F7",
-  attOBg: "#283142",
-  attOFg: "#A7AEB7",
-  attLBg: "#2C2647",
-  attLFg: "#B9A3FF",
-  illoLine: "#5B6577",
-  illoFill: "#283142",
-  illoAccent: "#34C08E",
-  illoAccentSoft: "#1E3B33",
-  demoBg: "#3A3320",
+  dangerSubtle: "#3A1D1C",
+  warning: "#F2B92E",
+  warningText: "#F5C84C",
+  warningSubtle: "#332A0E",
+  info: "#5B8DF6",
+  infoText: "#9BBBFA",
+  infoSubtle: "#172440",
+  success: "#3CC37A",
+  chipSuccessBg: "#15301F",
+  chipSuccessText: "#6EDC9C",
+  chipWarningBg: "#332A0E",
+  chipWarningText: "#F5C84C",
+  chipPurpleBg: "#25213F",
+  chipPurpleText: "#B4A9FF",
+  chipDangerBg: "#3A1D1C",
+  chipDangerText: "#FF8F8C",
+  chipNeutralBg: "#2A2A25",
+  chipNeutralText: "#CFCDBA",
+  chipInfoBg: "#172440",
+  chipInfoText: "#9BBBFA",
+  focusRing: "#FFF605",
+  focusRingInner: "#0E0E0C",
+  skeleton: "#22221E",
+  skeletonShine: "#2C2C27",
+  shadowColor: "rgba(0, 0, 0, 0.5)",
+  attPBg: "#15301F",
+  attPFg: "#6EDC9C",
+  attABg: "#3A1D1C",
+  attAFg: "#FF8F8C",
+  attHdBg: "#332A0E",
+  attHdFg: "#F5C84C",
+  attHBg: "#172440",
+  attHFg: "#9BBBFA",
+  attOBg: "#2A2A25",
+  attOFg: "#CFCDBA",
+  attLBg: "#25213F",
+  attLFg: "#B4A9FF",
+  illoLine: "#5A594F",
+  illoFill: "#22221E",
+  illoAccent: "#FFF605",
+  illoAccentSoft: "#2E2C10",
+  demoBg: "#332A0E",
   demoText: "#F6E3A1",
   demoBorder: "#5C4F23",
 };
 
 export const palettes: Record<ThemeMode, Palette> = { light, dark };
 
-/** Text-on-surface pairs that must meet WCAG AA (4.5:1) in both themes; checked by src/theme/__tests__/theme.test.ts. */
+/** Text (and small-icon) pairs that must meet WCAG AA 4.5:1 in both themes; checked by src/theme/__tests__/theme.test.ts. */
 export const AA_TEXT_PAIRS: [keyof Palette, keyof Palette][] = [
   ["textPrimary", "bgSurface"],
   ["textPrimary", "bgPage"],
+  ["textPrimary", "bgSubtle"],
+  ["textPrimary", "accentSubtle"],
   ["textBody", "bgSurface"],
+  ["textBody", "bgPage"],
+  ["textBody", "bgHover"],
   ["textSecondary", "bgSurface"],
   ["textSecondary", "bgPage"],
+  ["textSecondary", "bgSubtle"],
+  ["textSecondary", "bgTableHeader"],
   ["textPlaceholder", "bgSurface"],
+  ["textPlaceholder", "bgSubtle"],
   ["textOnRaised", "bgTableHeader"],
   ["primaryText", "primary"],
+  ["primaryText", "primaryHover"],
+  ["primaryText", "primaryActive"],
+  ["accentOn", "accent"],
   ["accentText", "bgSurface"],
+  ["accentText", "bgPage"],
+  ["accentText", "accentSubtle"],
+  ["accentText", "bgHover"],
   ["navActiveText", "navActive"],
+  ["brandPanelText", "brandPanel"],
+  ["textInverse", "danger"],
+  ["danger", "bgSurface"],
+  ["danger", "bgPage"],
   ["infoText", "infoSubtle"],
+  ["infoText", "bgSurface"],
   ["warningText", "warningSubtle"],
+  ["warningText", "bgSurface"],
   ["chipSuccessText", "chipSuccessBg"],
   ["chipWarningText", "chipWarningBg"],
   ["chipPurpleText", "chipPurpleBg"],
@@ -277,6 +322,22 @@ export const AA_TEXT_PAIRS: [keyof Palette, keyof Palette][] = [
   ["attOFg", "attOBg"],
   ["attLFg", "attLBg"],
   ["demoText", "demoBg"],
+];
+
+/** Non-text UI pairs that must meet WCAG AA 3:1 (control outlines, checked/selected fills, focus ring, white icons on the square row actions). */
+export const AA_UI_PAIRS: [keyof Palette, keyof Palette][] = [
+  ["borderControl", "bgSurface"],
+  ["accent", "bgSurface"],
+  ["accent", "bgPage"],
+  ["accentSelected", "bgSurface"],
+  ["focusRing", "bgSurface"],
+  ["focusRing", "bgPage"],
+  ["navMarkerEdge", "bgSurface"],
+  ["navActiveText", "edit"],
+  ["navActiveText", "view"],
+  ["navActiveText", "danger"],
+  ["success", "bgSurface"],
+  ["info", "bgSurface"],
 ];
 
 const cssName = (key: string) => `--ws-${key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`;
@@ -342,22 +403,24 @@ export const shadow = {
 
 // ── Charts (DESIGN_SYSTEM.md §1.5): fixed slot order, never cycled ────────
 export const chart: Record<ThemeMode, { categorical: string[]; track: string; grid: string; ink: string; muted: string; positive: string; negative: string }> = {
+  // Brand accents in a fixed slot order: teal, blue, coral, violet, orange, gold. Every mark keeps 3:1 on the card (theme.test.ts); light orange is the brief's
+  // #F28C28 darkened to #C96A0E for that, and slot 6 is the gold text colour (pure yellow is invisible on white).
   light: {
-    categorical: ["#28A174", "#FFCF25", "#2B7BFA", "#8D61FC", "#2CD5BE", "#FC964B"],
-    track: "#F3F4F6",
-    grid: "#EAEAEA",
-    ink: "#121828",
-    muted: "#6B7079",
-    positive: "#28A174",
-    negative: "#D12E2E",
+    categorical: ["#0E9F8E", "#2F6FED", "#F0605D", "#6C5CE7", "#C96A0E", "#8A6D00"],
+    track: "#F5F3E6",
+    grid: "#ECE8C8",
+    ink: "#0B0B0B",
+    muted: "#4B4B45",
+    positive: "#1F9D55",
+    negative: "#D14040",
   },
   dark: {
-    categorical: ["#34C08E", "#F0C94A", "#4D8FF5", "#A585FF", "#2CD5BE", "#FC964B"],
-    track: "#303948",
-    grid: "#2C3545",
-    ink: "#FFFFFF",
-    muted: "#8C95A4",
-    positive: "#34C08E",
+    categorical: ["#2CC7B3", "#6B9BFF", "#FF7A77", "#9C8FFF", "#FFA552", "#FFF35C"],
+    track: "#22221E",
+    grid: "#34342D",
+    ink: "#F5F3E4",
+    muted: "#BDBBA8",
+    positive: "#3CC37A",
     negative: "#F06A6A",
   },
 };

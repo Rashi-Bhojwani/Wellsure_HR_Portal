@@ -1,4 +1,5 @@
 import manifestRaw from "../../../public/manifest.webmanifest?raw";
+import { LOGO_SRC } from "../../ui/BrandLogo";
 import swSource from "../../../public/sw.js?raw";
 import indexHtml from "../../../index.html?raw";
 import { describe, expect, it } from "vitest";
@@ -78,18 +79,17 @@ describe("PWA installability", () => {
   const manifest = JSON.parse(manifestRaw) as { display: string; start_url: string; icons: Array<{ src: string; sizes: string; purpose: string }> };
   const publicIcons = Object.keys(import.meta.glob("../../../public/icons/*.png")).map((k) => k.replace("../../../public", ""));
 
-  it("the manifest is installable: standalone, a start URL inside the app, 192 and 512 icons plus a maskable one — all present", () => {
+  it("the manifest is installable: standalone, a start URL inside the app, 192 and 512 icons — the Wellsure logo (public/logo.png, supplied by the repo owner)", () => {
     expect(manifest.display).toBe("standalone");
     expect(manifest.start_url).toBe("/app/home");
     expect(manifest.icons.map((i) => i.sizes)).toEqual(expect.arrayContaining(["192x192", "512x512"]));
-    expect(manifest.icons.some((i) => i.purpose === "maskable")).toBe(true);
-    for (const icon of manifest.icons) expect(publicIcons).toContain(icon.src);
+    for (const icon of manifest.icons) expect([LOGO_SRC, ...publicIcons]).toContain(icon.src);
+    expect(manifest.icons.some((i) => i.src === LOGO_SRC)).toBe(true);
   });
 
   it("index.html links the manifest and the Apple touch icon; the service worker never touches the API", () => {
     expect(indexHtml).toContain('rel="manifest" href="/manifest.webmanifest"');
-    expect(indexHtml).toContain('rel="apple-touch-icon" href="/icons/apple-touch-icon.png"');
-    expect(publicIcons).toContain("/icons/apple-touch-icon.png");
+    expect(indexHtml).toContain(`rel="apple-touch-icon" href="${LOGO_SRC}"`);
     expect(swSource).toContain("url.origin !== self.location.origin"); // the API is cross-origin: passed straight through
     expect(swSource).toContain('request.method !== "GET"');
   });

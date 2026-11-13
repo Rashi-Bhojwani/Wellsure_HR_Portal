@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { fs, fw, radius, space, v } from "../../theme/tokens";
 import { useThemeMode } from "../../theme/ThemeProvider";
+import { BrandLogo } from "../../ui/BrandLogo";
 
 interface AuthShellProps {
   title: ReactNode;
@@ -31,28 +32,11 @@ function useNarrow(): boolean {
   return narrow;
 }
 
-/** Our text mark (no template logo): a small accent tile with "W" and the product name. */
+/** The Wellsure logo (public/logo.png; plain text only until that file exists) and the product name. */
 export function BrandMark({ inverse = false, size = "md" }: { inverse?: boolean; size?: "md" | "lg" }) {
-  const tile = size === "lg" ? 36 : 30;
   return (
     <div style={{ display: "inline-flex", alignItems: "center", gap: space[3] }}>
-      <span
-        aria-hidden
-        style={{
-          width: tile,
-          height: tile,
-          borderRadius: radius.sm,
-          background: v.accent,
-          color: v.textInverse,
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontWeight: fw.bold,
-          fontSize: size === "lg" ? fs.xl : fs.lg,
-        }}
-      >
-        W
-      </span>
+      <BrandLogo size={size === "lg" ? 48 : 40} />
       <span style={{ fontSize: size === "lg" ? fs.xl : fs.lg, fontWeight: fw.bold, color: inverse ? "inherit" : v.textPrimary, letterSpacing: "-0.01em" }}>
         Wellsure HR Portal
       </span>
@@ -76,7 +60,7 @@ const WAVES = Array.from({ length: 34 }, (_, i) => {
 function WavyBackground() {
   return (
     <svg aria-hidden viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}>
-      <g fill="none" stroke={v.accent} strokeOpacity={0.09} strokeWidth={1.2}>
+      <g fill="none" stroke={v.accentText} strokeOpacity={0.12} strokeWidth={1.2}>
         {WAVES.map((d, i) => (
           <path key={i} d={d} />
         ))}
@@ -91,13 +75,13 @@ function BrandPattern() {
     <svg aria-hidden viewBox="0 0 600 900" preserveAspectRatio="xMidYMid slice" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}>
       <defs>
         <pattern id="ws-auth-dots" width="28" height="28" patternUnits="userSpaceOnUse">
-          <circle cx="2" cy="2" r="1.4" fill={v.accent} fillOpacity={0.22} />
+          <circle cx="2" cy="2" r="1.4" fill={v.primary} fillOpacity={0.3} />
         </pattern>
       </defs>
       <rect x="0" y="0" width="600" height="380" fill="url(#ws-auth-dots)" />
-      <g fill="none" stroke={v.accent} strokeWidth={1.5}>
+      <g fill="none" stroke={v.primary} strokeWidth={1.5}>
         {[120, 190, 260, 330, 400, 470].map((r, i) => (
-          <circle key={r} cx="560" cy="120" r={r} strokeOpacity={0.28 - i * 0.04} />
+          <circle key={r} cx="560" cy="120" r={r} strokeOpacity={0.4 - i * 0.06} />
         ))}
       </g>
     </svg>
@@ -127,8 +111,9 @@ export function AuthShell({ title, subtitle, width = 420, layout = "centred", he
   const narrow = useNarrow();
 
   if (layout === "split" && !narrow) {
-    const panelBg = mode === "dark" ? v.bgSurface : v.primary;
-    const panelText = mode === "dark" ? v.textPrimary : v.primaryText;
+    // The brand panel is ink (light) / the dark card (dark) with yellow accents: yellow stays an accent, never the background of the big headline.
+    const panelBg = v.brandPanel;
+    const panelText = v.brandPanelText;
     return (
       <div style={{ minHeight: "100vh", display: "grid", gridTemplateColumns: "minmax(380px, 1fr) minmax(480px, 1fr)", background: mode === "dark" ? v.bgPage : v.bgSurface }}>
         <aside
@@ -139,7 +124,7 @@ export function AuthShell({ title, subtitle, width = 420, layout = "centred", he
             <BrandMark inverse size="lg" />
           </div>
           <div style={{ position: "relative", maxWidth: 460 }}>
-            <div style={{ width: 48, height: 4, borderRadius: radius.pill, background: v.accent, marginBottom: space[6] }} />
+            <div style={{ width: 48, height: 4, borderRadius: radius.pill, background: v.primary, marginBottom: space[6] }} />
             <p style={{ margin: 0, fontSize: fs.display, lineHeight: 1.2, fontWeight: fw.bold, letterSpacing: "-0.01em" }}>Your workday, in one place.</p>
             <p style={{ margin: `${space[4]}px 0 0`, fontSize: fs.lg, lineHeight: 1.6, opacity: 0.8 }}>
               Attendance as it happens, leave in a few taps, and your team's news — for everyone at Wellsure.
