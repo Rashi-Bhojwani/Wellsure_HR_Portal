@@ -456,3 +456,22 @@ this block's code, the `247096d` fix and the other session's `yearEndMoney` fix)
 add up to the suite, each test once), install-lint-typecheck-test, docker-build, latency, attendance-replay, agent-windows and sensitive-ui (employee) green;
 sensitive-ui (admin) was cancelled by the next push at 15 minutes — it was green on run 326 (`c62a451`, every new screen; the one later code change, `247096d`, is a
 backend read). Run 326 itself failed only on the two tests named above (one mine, fixed; one the other session's, fixed by them in `c536707`).
+
+## Session A part 2, 2026-11-13 — mechanisms with every value Not set (ST-08, ST-30, ST-29, ST-25, PY-41)
+
+Built under the new speed rule (commit as I go; checks once per group). Plan: `A_PARITY_ROWS.md` part 2. Commits `bd192ee`, `af76eb0`, `26d2f88`, `debd4ae`, `f6ea21c`,
+group fixes `9c49d57`, `cdcba37`.
+
+**Group check** (one script, stops at the first failed step): backend and frontend typecheck, lint and design tokens, migrations on a fresh database matching the
+schema, the changed backend tests (9 files, 121 tests) and the frontend tests — all passed after fixing what the first pass found (guard allowlist entries for form
+limits, the Part A file key in the cleanup storage list, three index names, one test's types). Frontend build within budget.
+**Mutation checks:** day clamp, reminder window, reminder once a month, future rate ignored, below-minimum comparison, employer liability, Part A PDF check — caught;
+the rounding sign survived at first and exposed a real gap: a negative net pay posted as a negative credit. Fixed (`cdcba37`: it posts as a debit) and the property
+test now requires every side to be non-negative.
+**Full backend suite alone** (once, end of stage): 246 files, 2,178 tests, 3 failed — all because I pulled the other session's AD-07/AD-08 commits (new migrations)
+while the suite ran; the two files re-run on the current code: 66 of 66 passed.
+**CI** (run 349, `2b084c6`, all of part 2's code): every job green except backend shard 3, which failed on the other session's `customFields.test.ts` ("mgr: expected
+404 to be 403"), order-dependent (passes alone; also failed on its own commit's run 320); `backend-tests-complete` fails because of that shard.
+**Requests from the other session:** 3 done (`PORTAL_READY_REPORT.md` §6); 4 (payslips showing the ID in force on their date), 5 (overtime pay), 6 (encashment during
+the year) need owner values (rates, the formula, whether to store dated ciphertext); 7 (payroll per company) and 8 (statutory registers in official formats) are not
+started.
