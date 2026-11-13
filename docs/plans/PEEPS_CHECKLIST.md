@@ -162,3 +162,15 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
       MANAGER role; customFields expects 403). Reproduced with the two files alone; both identical to Session A's branch; left for Session A
 - [x] Owner asked me to fix it: `profileAndReveal.test.ts` restores the shared roles; `immediacy.test.ts` waits for the adapter's room event (changed tests, see stage report)
 - [ ] Standing rule: never edit customFields / profileAndReveal / immediacy tests again; on the next merge of `feat/hr-payroll-separation` keep that branch's version of those three files (see `PEEPS_PLAN.md`, "Hands-off test files")
+
+## Stage 3 of 4 (2026-11-13): badges, nudges, follow-ups, notifications, demo data, setup guide
+- [x] Phase 1 badges: defaults, reason required, retire, pair limit, concurrency, IST expiry, Office widening retired (`07c7b6c`, `e78b3e3`)
+- [x] Phase 2 nudge tags (directors only, 7 days, safeguards); private notes inspected (1 DEMO note) and made read-only, nothing deleted (`07c7b6c`, `e78b3e3`)
+- [x] Phase 3 withdraw pending proposals; asset requests; stale checklist boxes corrected (`07c7b6c`, `4588f02`, `ce36041`)
+- [x] Phase 4 notifications review: inventory test, `peepsNotify` (dedupe, retries, ids-only), proposal notices (`497b527`)
+- [x] Phase 5 DEMO data, `docs/PEEPS_SETUP_GUIDE.md`, UI_SCREEN_MAP (`06a47a0`, `ce36041`)
+- [x] Mutation checks: reporting line, pair limit, receiver sees giver (each caught, restored)
+- [x] Phase-end check passed; browser walk 84 visits + states, no problems
+- [ ] Owner: review the Stage 3 "Decided by me" list and the defaults in PEEPS_SETUP_GUIDE
+- [ ] **STOP: wait for the owner (stage 4 not started)**
+

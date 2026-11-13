@@ -1782,3 +1782,130 @@ Changed tests (none weakened; every assertion kept):
    Product note (no code change): the same window exists in production. A browser told "permissions changed" may still get one event
    for a room it is leaving, for the length of a Redis round trip.
 
+
+## Stage 3 of 4 — badges, nudges, follow-ups, notifications, demo data and setup guide (2026-11-13)
+
+**Commits:** `07c7b6c` (backend), `e78b3e3` (recognition screens, settings defaults and withdraw, nudge-trigger fix), `4588f02`
+(asset request screens, membership withdraw), `497b527` (notifications review), `06a47a0` (scan rules, popovers, DEMO asset
+requests), `ce36041` (setup guide, screen map, checklist corrections), `058b221` (check script keeps the environment's NODE_OPTIONS).
+No sync this stage (not asked). Speed rule followed: no per-commit checks; one phase-end check; full suite once at the end.
+
+### Phase 1: badges
+- Reporting line (unchanged rule, now with no exceptions): down to anyone below the giver, up the giver's chain to the directors,
+  directors to anyone; never sideways, never another line, never oneself; the Developer never gives. The Wellsure Office
+  "Give badges" widening is **retired** (setting `audience.badges` removed; the capability now adds no reach).
+- A reason is required (3–280 characters). Shown to the recipient always; publicly by default (`badges.publicDetails`).
+- Defaults ("Default, change in settings"): 12-badge catalogue, limits 5 a month per giver and 1 a month per giver-receiver pair,
+  repeats allowed, no-manager fallback "up to the directors", public details shown. Settings now have a `DEFAULT` state
+  (`PEEPS_SETTING_DEFAULTS`); a director replaces a default through the normal two-director setting.
+- Directors add, rename and retire badges; a retired badge cannot be given and keeps its name on past awards; a badge that was
+  ever given cannot be deleted (RETIRE_INSTEAD). Each added, renamed, retired or restored badge gets its own audit entry.
+- Recipients see who gave each badge by name (directors included) and why. Directory cards show badge and nudge counts.
+- Limits hold under concurrency (serializable transaction): two simultaneous gives against the pair cap → exactly one wins;
+  four simultaneous gives against the monthly cap → exactly one wins.
+- The starter-catalogue route is removed (the defaults replace it).
+
+### Phase 2: nudges, and what existed of the private corrective notes
+**What existed (inspected before any change):** the D-37 private corrective notes: tables `private_nudges` (text field-encrypted),
+`nudge_reads`, `nudge_revocations`, all append-only; senders were the directors only, behind `nudges.enabled`; readable by sender,
+recipient and directors (audited). Data: the real company has none that we can see; the local development database held **1** note,
+the DEMO company's (`DEMO-NUDGE-PRIVATE` to DEMO006). **What I did:** deleted nothing. The notes are now **read-only**: no route writes
+one (send, revoke and the read mark are gone; reading records nothing); a database trigger refuses inserts into all three tables
+(`PEEPS_NOTES_READ_ONLY`), except in a development/test database inside a transaction that sets `app.legacy_note_fixture` (the
+DEMO note and the tests). Existing notes stay visible to the person they concern and the directors (each director open audited);
+the sender label is unchanged (the workspace name). The settings `nudges.enabled`, `nudges.limits`, `nudges.revocation` were retired.
+- **Nudge tags (new):** public light-hearted tags, given by a director only (service + database trigger), 7 days each, visible to
+  everyone signed in on profiles, the directory and home, with the giver named; the receiver always sees who gave it. No free text
+  (the request carries only the tag code, the person and an idempotency key). Default tags: Chai Break Champ, Scroll Master, Snooze
+  Mode, Meeting Marathoner, Coffee Refill Crew, Playlist DJ, Emoji Enthusiast, Desk Plant Parent. Default off-limits words: 35
+  (attendance, time, leave, missed work, performance, discipline). Safeguards: a director removes a tag at once with a reason; the
+  receiver asks for a review → a directors' task ("Nudge review", names nobody) until a director keeps or removes it; tag names with
+  an off-limits word are refused, and a tag that later matches a new word can no longer be given. All append-only and audited.
+- Never created by a system job: the database refuses any giver who is not a director, and a test pins that the only writer is the
+  director's give, reached only from the route and the demo seed.
+
+### Phase 3: follow-ups
+- Withdraw a pending proposal: a Peeps setting version (its author or a director) and an Office membership change (a director),
+  with a reason, audited; refused once confirmed, and a withdrawn one cannot be confirmed (service + triggers).
+- Employees' asset requests: an employee asks for an asset type (the confirmed asset categories; Not set → refused and explained),
+  sees only their own requests and status, cancels while waiting; HR and the directors (and Office members while the asset audience
+  allows) approve, decline, mark fulfilled; task "Asset request"; the employee is told generically.
+- Stale checklist boxes corrected (13 lines, marked "Stage 3 correction").
+
+### Phase 4: notifications and tasks review
+Inventory (pinned by a test that fails on any new unreviewed file): badges, nudge tags and reviews, asset requests, setting and
+membership "waiting for your confirmation" (new), asset issue/return, avatars, exits (resignation, clearance, interviews, letters),
+Unmute (PRIVATE_NOTICE), recruitment (interview assignment to the panel; candidate e-mail; empty-payload refresh signals), helpdesk.
+Offers, joining links, conversions, joining documents and Insights send no notification (signals with empty payloads only);
+autofill queues the extraction id only. New helper `peepsNotify`: durable (Notification row first), deduplicated by key, retried
+(3 attempts), final failure logged with the type only, payload ids only (refused otherwise), generic words, links to screens whose
+APIs recheck access. Tests cover each new event (one notification even when repeated; recipient's room only; no reason, note or tag
+in any notification, socket event, log or task preview; the link's API refuses someone else) and the helper (dedupe, retries,
+refusal of a non-id payload, no text in the failure log).
+
+### Phase 5: demo data, setup guide, screen map
+DEMO: badges (TEAM_PLAYER to DEMO006, MENTOR to DEMO007), a nudge tag to DEMO006, the read-only DEMO note, asset requests (DEMO007
+approved, DEMO006 waiting). `docs/PEEPS_SETUP_GUIDE.md` lists every Not-set setting (who, what, order) and every default.
+`docs/UI_SCREEN_MAP.md` updated. GETTING_STARTED unchanged (no setup, env or account change).
+
+### Tests and verification
+- New test files: `recognitionLine.test.ts` (reference model over 3 random org charts, every ordered pair), `nudgeTags.test.ts`,
+  `assetRequests.test.ts`, `peeps/withdraw.test.ts`, `peeps/notifications.test.ts`; `recognition.test.ts` rewritten (see changed tests).
+- Permission matrices: unauthenticated, employee, the employee's manager, an unrelated manager, HR (Admin and Executive), Office member,
+  non-member, director, Developer, former employee (deactivated account → 401) on the asset-request, nudge, note and withdraw routes.
+- Expiry with a fake clock across the week reset, the month reset and the India-time boundary (Sunday 20:00 UTC = Monday IST;
+  31 Jan 19:00 UTC = 1 Feb IST). Nudge tags end after 7 days (fake clock).
+- **Mutation checks** (break, see named tests fail, restore): reporting line (allow peers) → 3 random-chart tests + 2 line tests
+  failed; pair limit off by one → "default limits" and "pair limit under two simultaneous gives" failed; receiver-sees-giver (hide
+  the giver) → "the recipient sees a director's badge with the director's name" and "the receiver always sees who gave it" failed.
+- Phase-end check `scripts/peeps-check.sh --since faa9487`: lint, typecheck, 6 changed backend test files (55 tests) passed. The first
+  two runs stopped at typecheck (out of memory: the environment's own NODE_OPTIONS hid the script's heap default); fixed in `058b221`.
+- Neighbouring suites (peeps, recognition, assets, tasks, notifications, unmute, cleanup, route inventory): 16 files / 140 tests passed.
+  Demo company test (`npm run test:demo`): 7 passed.
+- Browser walk (local scratch database seeded with the demo company): director, HR, employee, Office member and a second employee,
+  desktop and 390 phone, light and dark: 84 page visits, no crash, no horizontal scroll, dark backgrounds correct. States: empty
+  (an employee with nothing), loading (skeleton while badges load), error (failed asset requests → retry), forbidden (an employee on
+  the directors' pages sees none of their content).
+- Full backend suite alone and CI: see the closing lines below.
+
+### Changed tests (none weakened)
+- `recognition/__tests__/recognition.test.ts`: rewritten for the Stage 3 rules. The Not-set catalogue test became the defaults test;
+  the monthly-limit test sets its own cap (defaults now apply); "Office member gives to anyone" became "no extra reach"; the
+  no-manager test now starts from the default (up to the directors) and checks Nobody; the visibility test now expects giver and
+  reason shown by default and checks the directors can hide them; every give carries a reason. The corrective-note tests moved to
+  `nudgeTags.test.ts` as read-only tests (send, race and revoke tests removed with the routes they tested). New: reason required,
+  catalogue rename/retire/delete-refused, pair limit, two concurrency tests, IST boundary expiry, director named to the recipient,
+  reason never in audit or logs.
+- `managers/__tests__/routeInventory.ts`: starter route removed; nudge routes replaced; asset-request and withdraw routes added.
+- `lib/__tests__/cleanup.ts`: the 8 new append-only models registered.
+
+### Settings left Not set
+Unchanged from earlier stages and now listed in `docs/PEEPS_SETUP_GUIDE.md`: asset lists; asset and Unmute audiences and Unmute
+times and hosts; directory contact fields; the two leave-naming settings and every new-leave-type rule; recruitment sources,
+retention, scorecard, rejection reasons, e-mail templates, CV rules, requisition route, Office audience, joiner link lifetime,
+joiner document types, exception approver; offer pay and all pay/bank/statutory/tax values; exits' notice rules, reasons,
+checklist, questions, retention, thresholds, audience and approval; Insights' window, minimum group size, early-attrition threshold
+and definitions; autofill retention; helpdesk category audiences. No new Not-set setting this stage.
+
+### Defaults shipped this stage
+Badge catalogue (12), badge limits (5/month per giver, 1/month per pair), repeats allowed, no-manager fallback up to the directors,
+public giver and reason shown, nudge tags (8), off-limits words (35). Nudge lifetime 7 days is fixed, not a setting.
+
+### Decided by me (please confirm or overrule)
+1. A nudge lasts **7 days from when it is given** (badges reset with the calendar week; "lasts a week" read as seven days).
+2. The giver of a nudge is named **publicly** too, not only to the receiver.
+3. Badge recipients see the giver by **name, directors included**; public surfaces keep showing a director's badge as from the
+   workspace name (as before). Old notes keep the workspace name as sender (unchanged).
+4. Public giver and reason default to **shown** (conventional for kudos); directors can hide them.
+5. No-manager fallback defaults to **up to the directors** (the owner's "up their own line to the director").
+6. The Office "Give badges" widening is retired outright, since the brief says nobody gives sideways or across lines.
+7. Removing a tag that has an open review also decides that review as "removed".
+8. Asset requests: one optional note (300 characters) from the employee, one optional note from the decider; states
+   waiting → approved → fulfilled, or declined, or cancelled by the employee; "fulfilled" can be set straight from waiting.
+9. "Waiting for your confirmation" notifications go to the other directors when a setting or membership change is entered.
+10. Asset categories and the other earlier Not-set lists were not given defaults (not asked this stage); flagged in the guide.
+
+### Not verified
+- Real documents or data for any of this (all fixtures are synthetic).
+- The scans (`check:sensitive-ui`, `check:popovers`) were extended but run only in CI (read below); not run locally.
+- E-mail delivery: Peeps Stage 3 events send no e-mail.
