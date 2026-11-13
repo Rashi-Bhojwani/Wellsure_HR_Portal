@@ -154,3 +154,11 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 - [x] Finish: browser walkthrough (56 visits + states), fresh DB no drift, full suite alone on `4861610` 257 files / 2,355 tests, CI run 330 all 12 jobs green, stage report
 - [ ] Owner: choose Insights settings, autofill retention, joining settings; review "Decided by me" in the stage 2 report
 - [ ] **STOP: wait for the owner (stage 3 not started)**
+
+## Stage 2 prompt received again (2026-11-13): re-sync only
+- [x] Steps 1–3 already done (not redone); Step 0 repeated: `feat/hr-payroll-separation` `1aedbb0` merged (`caf368b`), both sides kept
+- [x] Typecheck, lint, drift clean; frontend 102/102; CI run 341 all 12 jobs green to the end (sharding present)
+- [x] Full backend suite alone: 2,435/2,436. The one failure is a Session A order interaction (profileAndReveal leaves `employee.view` on the
+      MANAGER role; customFields expects 403). Reproduced with the two files alone; both identical to Session A's branch; left for Session A
+- [ ] Session A: remove the MANAGER grant in `profileAndReveal.test.ts` afterAll (not mine to change)
+

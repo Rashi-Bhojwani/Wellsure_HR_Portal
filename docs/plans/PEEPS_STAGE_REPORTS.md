@@ -1722,3 +1722,42 @@ field; `pdfjs-dist` moved to runtime dependencies at the same version; tesseract
   system fonts used to render the synthetic image in tests.
 - A cloud provider (not built; needs owner approval). Real email delivery (none added).
 - `check:sensitive-ui` full local re-run after restoring the break (CI run 330 ran both halves on the restored code and passed).
+
+## Stage 2 prompt received again (2026-11-13): re-sync only
+
+The Stage 2 prompt arrived a second time. Steps 1–3 and the finish were already done and ticked (commits `c1bcae4`…`556b0f3`), so
+nothing was redone. Step 0 was repeated because `feat/hr-payroll-separation` had moved on 22 commits (to `1aedbb0`: IE-07/08,
+LV-19/20/23, AT-19/22/36, ER-18/26/27/28, OE-04, SS-13, Stage 6 reports, payroll parity rows, the Developer audit value-hiding, and
+Session A's CI sharding docs).
+
+**Merge `caf368b`.** Conflicts resolved keeping both sides, with no change to Session A's code:
+- `schema.prisma`: Session A's new models (M block 2) and the Peeps recruitment/insights/autofill models, both kept as they were.
+- `lib/__tests__/cleanup.ts`, `lib/fieldKeyRotation.ts`: both sessions' registry entries kept.
+- `auditLog/controller.ts` and `service.ts`: Session A's `AuditViewer` (Developer `valuesHidden`) kept; the Peeps `userId` field and the
+  exit/recruitment audience filter (`where.AND`) added inside PEEPS blocks. Session A's `where.NOT` / payroll-only filters sit alongside it.
+- `leave/requests.ts`: the Peeps leave-type hook now gets LV-20's `leaveDaysFor(...)` count (the sandwich rule, which equals
+  `computeTotalLeaveDays` while it's off) in place of the plain count. The hook changes nothing for other leave types.
+
+**Verified.** `prisma validate`; migrations applied to the local database; `db:drift`: no difference; `npm run typecheck` and
+`npm run lint` clean; frontend tests 25 files / 102 tests passed. CI run 341 on `caf368b`: all 12 jobs green to the end of each job,
+including the four backend shards (sharding is on the branch) and `backend-tests-complete` ("each test exactly once").
+
+**Full backend suite alone on `caf368b`: 274 files / 2,436 tests, 1 failed.** The failure is a test-order interaction between two
+of Session A's files, not caused by the merge:
+- `employee/__tests__/profileAndReveal.test.ts` grants `employee.view` to the shared `MANAGER` role in `beforeAll` and (by its own
+  comment) never removes it.
+- `customFields/__tests__/customFields.test.ts` (new, ER-28) expects a fresh MANAGER holder to get 403 and gets 404 when
+  `profileAndReveal` ran earlier in the same process.
+- Reproduced with only those two files: `--sequence.shuffle.files --sequence.seed=3` (profileAndReveal first) fails the same way.
+  Seeds 1 and 2 (customFields first) pass, and the file passes alone.
+- Both files, the test helper and `lib/permissions.ts` are byte-identical to `origin/feat/hr-payroll-separation`. In CI the two
+  files land in different shards, so CI stays green.
+- Not changed (Session A's tests). Proposed fix for Session A: remove the grant in `profileAndReveal`'s `afterAll`, or use a per-user
+  manager grant in place of the role row. This is a fixture leak in tests only: no route or resolver change gives managers this key.
+
+**Earlier CI run 340** (`0fb4868`, the check-script commit): `backend-tests (2)` failed in Session A's
+`hrCapabilities/__tests__/immediacy.test.ts` ("an HR person's open screen stops hearing punches…", expected false to be true), a
+realtime timing test. The code was unchanged from `4861610` (run 330 green) and it passes in run 341, so I read it as a flake.
+
+**Note on the speed rule.** The re-sent prompt's speed rule (checks on each commit) is older than the owner's 2026-11-12 message
+(checks once per phase). I followed the newer one (recorded in `PEEPS_PLAN.md`). This sync was one phase, checked once.
