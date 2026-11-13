@@ -1,7 +1,8 @@
 import { prisma } from "../../lib/prisma";
 
 // A1 (docs/plans/A_PART3.md; owner decision 2026-11-13): the statutory identifiers payroll uses for a date — the latest dated copy that took effect on or before the
-// day; before a person's first copy, that first copy (the first value known applies backwards, so a person with one record reads exactly what they hold).
+// day; before a person's first copy, that first copy; and an identifier missing on that day is taken from the first copy that has it (the first value known applies
+// backwards, so a person with one record reads exactly what they hold, and an ID entered late counts for older months).
 export interface StatutoryOnDay {
   panLast4: string | null;
   uanEncrypted: Uint8Array | null;
@@ -25,8 +26,16 @@ export async function statutoryOn(employeeIds: readonly string[], day: Date): Pr
   const iso = day.toISOString().slice(0, 10);
   const out = new Map<string, StatutoryOnDay>();
   for (const [id, list] of by) {
-    const c = copyInForce(list.map((r) => ({ r, effectiveFrom: r.effectiveFrom.toISOString().slice(0, 10), recordedAt: r.recordedAt.toISOString() })), iso);
-    if (c) out.set(id, { panLast4: c.r.panLast4, uanEncrypted: c.r.uanEncrypted, uanLast4: c.r.uanLast4, esiEncrypted: c.r.esiEncrypted, esiLast4: c.r.esiLast4 });
+    const copies = list.map((r) => ({ r, effectiveFrom: r.effectiveFrom.toISOString().slice(0, 10), recordedAt: r.recordedAt.toISOString() }));
+    const c = copyInForce(copies, iso);
+    if (!c) continue;
+    // A missing identifier is not a value: when the copy in force has none, the first copy that has it applies backwards (an ID entered late counts for older months).
+    const ordered = [...copies].sort((x, y) => (x.effectiveFrom === y.effectiveFrom ? x.recordedAt.localeCompare(y.recordedAt) : x.effectiveFrom.localeCompare(y.effectiveFrom)));
+    const firstWith = (has: (r: (typeof rows)[number]) => boolean) => ordered.find((x) => has(x.r))?.r ?? null;
+    const pan = c.r.panLast4 !== null ? c.r : firstWith((r) => r.panLast4 !== null);
+    const uan = c.r.uanEncrypted !== null || c.r.uanLast4 !== null ? c.r : firstWith((r) => r.uanEncrypted !== null || r.uanLast4 !== null);
+    const esi = c.r.esiEncrypted !== null || c.r.esiLast4 !== null ? c.r : firstWith((r) => r.esiEncrypted !== null || r.esiLast4 !== null);
+    out.set(id, { panLast4: pan?.panLast4 ?? null, uanEncrypted: uan?.uanEncrypted ?? null, uanLast4: uan?.uanLast4 ?? null, esiEncrypted: esi?.esiEncrypted ?? null, esiLast4: esi?.esiLast4 ?? null });
   }
   return out;
 }

@@ -90,6 +90,7 @@ const EXTRA_ALLOWED: Record<string, number[]> = {
   "journal/service.ts": [80, 120, 300],
   "minimumWages/service.ts": [60, 300, 20],
   "tax/form16PartA.ts": [1024, 120],
+  "payPolicies/arith.ts": [60], // minutes in an hour (part 3 A2)
   // A-3 opening figures: the largest import file (rows), form field lengths (a figure's text, a note, a reason), the length of a sha256 fingerprint and the
   // short batch id cut from it. None is a payroll figure.
   "tax/openings.ts": [2000, 20, 300, 64, 24],

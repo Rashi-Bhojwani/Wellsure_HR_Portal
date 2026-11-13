@@ -383,17 +383,19 @@ describe("Session A parity rows over a finalised run", () => {
     }
   });
 
-  it("A1: a payslip shows the identifiers in force at the end of its own month; a later change shows from its own date", async () => {
+  it("A1: a payslip shows the identifiers in force at the end of its own month; a later change shows from its own date; a missing one is filled by the first later value", async () => {
     const st = await prisma.employeeStatutory.findUniqueOrThrow({ where: { employeeId: who("a") } });
-    // A realistic history: the identifiers held since January, then a change on 1 September.
-    const first = await prisma.employeeStatutoryDated.create({ data: { id: `esd_first_${who("a")}`, employeeId: who("a"), effectiveFrom: utc("2026-01-01"), panLast4: st.panLast4, uanLast4: st.uanLast4, esiLast4: st.esiLast4 } });
-    const later = await prisma.employeeStatutoryDated.create({ data: { id: `esd_later_${who("a")}`, employeeId: who("a"), effectiveFrom: utc("2026-09-01"), panLast4: st.panLast4, uanLast4: "9393", esiLast4: st.esiLast4 } });
+    expect(st.panLast4).not.toBeNull();
+    // A realistic history: the PAN held since January (and no UAN), then on 1 September a corrected PAN and a UAN entered for the first time.
+    const first = await prisma.employeeStatutoryDated.create({ data: { id: `esd_first_${who("a")}`, employeeId: who("a"), effectiveFrom: utc("2026-01-01"), panLast4: st.panLast4, uanLast4: null, esiLast4: null } });
+    const later = await prisma.employeeStatutoryDated.create({ data: { id: `esd_later_${who("a")}`, employeeId: who("a"), effectiveFrom: utc("2026-09-01"), panLast4: "9393", uanLast4: "4242", esiLast4: null } });
     try {
       const run = await prisma.payrollRun.findUniqueOrThrow({ where: { id: runId } });
-      const slip = (await buildPayslips(run)).get(who("a"))!;
-      expect((slip.content as unknown as { statutory: { uanLast4: string | null } }).statutory.uanLast4).toBe(st.uanLast4); // August keeps its own
+      const s = (await buildPayslips(run)).get(who("a"))!.content as unknown as { statutory: { panLast4: string | null; uanLast4: string | null } };
+      expect(s.statutory.panLast4).toBe(st.panLast4); // August keeps the PAN it had
+      expect(s.statutory.uanLast4).toBe("4242"); // August had no UAN on record: the first UAN known applies backwards
       const { statutoryOn } = await import("../statutoryOn");
-      expect((await statutoryOn([who("a")], utc("2026-09-30"))).get(who("a"))!.uanLast4).toBe("9393");
+      expect((await statutoryOn([who("a")], utc("2026-09-30"))).get(who("a"))!.panLast4).toBe("9393");
     } finally {
       await deleteWithDependents("EmployeeStatutoryDated", [first.id, later.id]);
     }

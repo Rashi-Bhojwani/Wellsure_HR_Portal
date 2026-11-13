@@ -12,9 +12,10 @@ export function basisOf(lines: ReadonlyArray<{ componentCode: string; amount: st
 
 /** Overtime pay for `minutes` of approved overtime in a month. */
 export function overtimeAmount(minutes: number, rate: OvertimeRate, lines: ReadonlyArray<{ componentCode: string; amount: string }>, rounding: Rounding): Money {
-  const hours = dec(String(minutes)).div(60); // allow-number: minutes in an hour
-  const perHour = rate.mode === "FLAT_PER_HOUR" ? dec(rate.perHour) : dec(rate.multiplier).times(basisOf(lines, rate.basisHeads)).div(dec(rate.hoursPerMonth));
-  return roundTo(hours.times(perHour), rounding.scale, rounding.mode);
+  // One division, last: minutes × rate ÷ 60 (or minutes × multiplier × basis ÷ (60 × hours a month)), so a recurring fraction is never cut before the rounding.
+  const mins = dec(String(minutes));
+  const exact = rate.mode === "FLAT_PER_HOUR" ? mins.times(dec(rate.perHour)).div(60) : mins.times(dec(rate.multiplier)).times(basisOf(lines, rate.basisHeads)).div(dec(rate.hoursPerMonth).times(60)); // allow-number: minutes in an hour
+  return roundTo(exact, rounding.scale, rounding.mode);
 }
 
 /** Leave encashment for `days` days: days × (the chosen heads ÷ the divisor). */
