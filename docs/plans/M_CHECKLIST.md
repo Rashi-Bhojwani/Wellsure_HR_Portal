@@ -108,3 +108,11 @@ migration applied to a fresh database; no existing test weakened; a golden test 
 
 ## B5 — verify and finish
 - [x] M_STAGE_REPORTS.md block 2 report · CI: see the report
+
+# Verification block (2026-11-13)
+- [x] Flaky tests: cherry-picked `74ee229` from peeps/foundation as `20ce0125` (profileAndReveal restores shared roles; immediacy waits on the event); both file orders proven
+- [x] Own order failures fixed: AT-36 test leaves no remote marks `1b51172a`; policy reset returns a fresh state `8c8522dc`
+- [x] Tests + mutation checks for AD-07 (now with helpdesk tickets), NT-11, AD-08 — `03462da8` (9 of 9 mutants caught; AD-08 golden narrowed in `8c8522dc`)
+- [x] Golden "off" regressions for AT-22, LV-19, LV-20, AT-19, AT-36, LV-23: present since block 2 (no change needed)
+- [x] Browser walk of both blocks' screens (AD-08 Companies skipped by the owner): fix `24e3af31`
+- [x] Check script, full backend suite alone (2,205 of 2,205), CI run 368 read per job

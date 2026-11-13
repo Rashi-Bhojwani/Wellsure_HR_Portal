@@ -322,3 +322,63 @@ All are in `shared/constants/policySettings.ts` with the reason beside each, and
 * Lint, design tokens and typecheck (both projects) pass on the final tree. The backend typecheck needs about 2.5 GB of Node heap
   (default here is 2 GB; CI passes as is).
 * **Not done:** keyboard-only, tablet (768), desktop light and 390 dark walks of block 2's screens; a browser walk of any block 2 screen.
+
+---
+
+# Verification block (2026-11-13): no new features
+
+## Commits
+`20ce0125` (cherry-pick of `74ee229`), `1b51172a`, `03462da8`, `24e3af31`, `8c8522dc`, and this report.
+
+## What was verified
+* **Flaky tests (cherry-picked, not redone):** `profileAndReveal` + `customFields` in one run, both orders (seeds showing each order): 21 of 21
+  each time; `immediacy.test.ts` 8 of 8.
+* **Order failures of my own, found by the full suite and fixed:** `wfhRequests.test.ts` left remote-work marks (no foreign key), which broke
+  `remoteAttendance.test.ts`'s "nobody is remote by default" (both orders now pass, 25 of 25); `resetPolicy` left a confirmed "cleared"
+  row, so a Not set setting read as confirmed in a later file (it now removes the test's proposals). 13 related files pass under three
+  shuffle seeds (96 of 96 each).
+* **AD-07 data retention** (helpdesk tickets added; migration `m_data_erasures_helpdesk`): every period Not set and nothing can be proposed;
+  signed out 401; HR, manager, employee, Developer 403 on every route; not past the period refused; one director proposes, a different one
+  confirms (service and database); a proposal alone erases nothing; contact replaced, general documents erased, pay documents kept, helpdesk
+  subject and messages replaced; audited (6 rows); records fixed. Mutants caught: 4 of 4.
+* **NT-11 SMS/WhatsApp:** Not set sends nothing (the in-app notice is still stored); only directors choose, an unknown notice refused; the
+  text read from the file driver is the title only, never the body (a confidential reason and figure asserted absent); other notices and
+  provider NONE send nothing. Mutants caught: 3 of 3.
+* **AD-08 more than one company:** signed out 401; HR, manager, employee, Developer cannot change it; employee and Developer cannot read
+  it; a manager reads the team member's company, never an outsider's (manager-reach). GOLDEN: the main company's payroll run is byte-for-byte
+  the same with one company and with extra companies defined. Mutants caught: 2 of 2.
+* **Golden "off" regressions** for AT-22, LV-19, LV-20, AT-19, AT-36, LV-23: present since block 2 (each passes in the full suite).
+* **Migrations on a fresh database:** every backend test run drops, recreates and migrates the test database; no schema drift locally or in CI.
+* **Browser walk** (dev stack, seed data; AD-08 Companies skipped by the owner): 387 page visits, 5 roles (director, HR Admin, manager,
+  employee, Developer) × desktop 1280 light, tablet 768 light, phone 390 dark, every screen of both blocks: no horizontal scroll, no console
+  error, no crash. Error state (every data call failing, 29 screens): none crashed; 27 show "Try again"; **Update From File's directors' panel
+  hid itself (fixed `24e3af31`)**; Account & security reads only sign-in and notification calls, which the check leaves working. Keyboard
+  (desktop, 5 roles, 129 page visits): focus visible on all 1,548 tab stops; 21 dialogs opened by Enter, focus stayed inside all 21, Escape
+  closed all 21.
+* **Check script** (stops at the first failed step; 4 GB heap; Prisma client regenerated): lint, typecheck, migrate and drift, frontend lint
+  + tokens + typecheck + 75 tests: all pass.
+* **Full backend suite alone:** 254 files, 2,205 tests, all passed.
+* **CI run 368 on `8c8522dc`, read to the end of every job:** 11 of 12 green (install-lint-typecheck-test with every step; backend-tests
+  shards 1 to 4; backend-tests-complete; sensitive-ui admin and employee portals; latency; attendance-replay; docker-build). **agent-windows
+  failed** at "Unit tests on Windows": 4 biometric-agent tests could not bind local UDP ports (`bind EACCES 127.0.0.1:609xx`, a refusal by
+  the Windows runner). Neither M block touched `biometric-agent/`, and the same job was green on `cbaee81` (run 333). Not changed here (not
+  this session's area); re-running that job, or making the agent tests pick ports outside Windows' reserved ranges, is for the agent's owner.
+
+## Changed tests (verification block)
+| Test | Before | After | Why |
+|---|---|---|---|
+| `employee/__tests__/profileAndReveal.test.ts` (cherry-pick `74ee229`) | left a grant on the shared Manager role | restores the shared roles at the end; every assertion kept | `customFields.test.ts` got 404 instead of 403 when it ran after it |
+| `hrCapabilities/__tests__/immediacy.test.ts` (cherry-pick `74ee229`) | waited a fixed delay for the live update | waits for the room change itself; same checks | failed once in CI on timing |
+| `wfhRequests/__tests__/wfhRequests.test.ts` | left remote-work marks | removes them | broke `remoteAttendance.test.ts` |
+| `policySettings/__tests__/policyTestHelpers.ts` `resetPolicy` (+ overtime and manager-reach resets) | wrote a "cleared" confirmed proposal | removes the test's proposals (fresh state) | a Not set setting read as confirmed in a later file |
+| `legalEntities/__tests__/legalEntities.test.ts` golden | "with extra companies and a person moved" | "with extra companies defined"; the move is checked in the access case | Session A's payroll per company (`6ebb4db6`) now pays a moved person in that company's run, by design |
+
+## Still not verified
+* agent-windows on the final commit (runner refused UDP ports; see above).
+* AD-08 Companies screens in the browser (owner: skipped; the feature stays off).
+* Payroll per company itself is Session A's (their tests).
+
+## Decisions made here
+* AD-07 helpdesk erasure replaces the subject and every message of the tickets the person raised and removes their attachment files; the
+  ticket rows and numbers stay (counts and history keep adding up).
+* The AD-08 golden follows Session A's payroll per company (see changed tests) rather than pinning a moved person in the main run.
