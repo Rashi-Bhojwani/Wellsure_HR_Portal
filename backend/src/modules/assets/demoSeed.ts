@@ -34,4 +34,9 @@ export async function seedDemoAssets(who: Who): Promise<void> {
   await issueAsset(phone.id, { employeeId: who.DEMO007!.employeeId, conditionCode: "DEMO_GOOD", note: "DEMO COMPANY" }, hr, meta("DEMO004"));
   const mine = await prisma.assetAssignment.findFirstOrThrow({ where: { assetId: laptop.id, endedAt: null } });
   await acknowledge(mine.id, viewer("DEMO006"), meta("DEMO006"));
+  // PEEPS Stage 3: an employee's asset request (DEMO007 asks for an access card; HR approves it) and one still waiting (DEMO006 asks for a phone).
+  const { create: createRequest, decide: decideRequest } = await import("./requests");
+  const asked = await createRequest({ userId: who.DEMO007!.userId, employeeId: who.DEMO007!.employeeId }, { categoryCode: "DEMO_ID_CARD", note: "DEMO-ASSET-REQUEST-NOTE: my card stopped working", idempotencyKey: "demo-asset-request-0001" }, meta("DEMO007"));
+  await decideRequest({ userId: who.DEMO004!.userId, employeeId: who.DEMO004!.employeeId }, asked.id, { outcome: "APPROVED", note: "DEMO COMPANY" }, meta("DEMO004"));
+  await createRequest({ userId: who.DEMO006!.userId, employeeId: who.DEMO006!.employeeId }, { categoryCode: "DEMO_PHONE", idempotencyKey: "demo-asset-request-0002" }, meta("DEMO006"));
 }

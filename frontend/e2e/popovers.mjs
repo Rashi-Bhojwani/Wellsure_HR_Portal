@@ -319,6 +319,21 @@ for (const [width, height] of [
   await page.waitForTimeout(800);
   await check(page, where, "autofill: file types select", { open: async () => { await page.getByText("File types and size", { exact: true }).first().locator("xpath=ancestor::*[.//button[normalize-space()='Choose']][1]").getByRole("button", { name: "Choose" }).first().click(); await page.waitForTimeout(300); await page.locator(".ant-select").last().click(); }, root: ".ant-select-dropdown", surface: null });
   // PEEPS-END autofill
+  // PEEPS-BEGIN stage3
+  // Asset requests (director): the status filter; Recognition (director): the badge picker in "Give a badge" and the tag picker in "Give a nudge".
+  await page.goto(`${BASE}/admin/assets/requests`);
+  await page.locator("header.ws-topbar").waitFor({ timeout: 30000 });
+  await page.waitForTimeout(800);
+  await check(page, where, "asset requests: status filter", { open: () => page.locator(".ant-select").filter({ has: page.locator("[aria-label=Show]") }).first().click(), root: ".ant-select-dropdown", surface: null });
+  await page.goto(`${BASE}/app/recognition`);
+  await page.locator("header.ws-topbar").waitFor({ timeout: 30000 });
+  await page.waitForTimeout(800);
+  await check(page, where, "recognition: badge picker", { open: async () => { await page.getByRole("button", { name: "Give a badge" }).click(); await page.waitForTimeout(400); await page.locator(".ant-drawer .ant-select").nth(1).click(); }, root: ".ant-select-dropdown", surface: null });
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(400);
+  await check(page, where, "recognition: nudge picker", { open: async () => { await page.getByRole("button", { name: "Give a nudge" }).click(); await page.waitForTimeout(400); await page.locator(".ant-drawer-open .ant-select").nth(1).click(); }, root: ".ant-select-dropdown", surface: null });
+  // PEEPS-END stage3
   await ctx.close();
 }
 }

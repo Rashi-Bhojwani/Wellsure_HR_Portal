@@ -104,6 +104,9 @@ async function peepsPageChecks(page, user, label, base, p, text) {
   // PEEPS-END helpdesk-visibility
   // Private nudges (D-28, D-29): nobody but the recipient and the directors ever sees the text, on any page of either portal.
   if (!PRIVATE_NUDGE_SEERS.has(user) && text.includes("DEMO-NUDGE-PRIVATE")) problems.push(`${where}: sees someone else's private nudge`);
+  // PEEPS-BEGIN stage3 (asset requests): an employee's request note is seen by that employee, HR and the directors only.
+  if (!["DEMO007", "DEMO004", "DEMO001", "DEMO013"].includes(user) && text.includes("DEMO-ASSET-REQUEST-NOTE")) problems.push(`${where}: sees another employee's asset request`);
+  // PEEPS-END stage3
   // The asset register: no asset screen ever shows an amount (the module records events, never money), and who holds what is not shown to another
   // employee or the developer.
   if ((base === "/app" && p === "my-assets") || (base === "/admin" && p.startsWith("assets/"))) {
@@ -247,11 +250,16 @@ if (doEmployee) await visit("DEMO009", "another employee", "/app", employeePaths
   if (/DEMO008|Demo Employee 008/.test(own)) problems.push("DEMO006 on /app/unmute: the host is shown by name instead of as the Wellsure Office");
   if (!/Wellsure Office/.test(own)) problems.push("DEMO006 on /app/unmute: the demo booking with the Wellsure Office is not shown (is the demo seeded?)");
   if (!/DEMO006/.test(await textOf(director, `${BASE}/app/office/unmute-admin`))) problems.push("the director's Unmute page does not show the demo booking (is the demo seeded?)");
-  // DEMO006 sees their nudge, from the Wellsure Office (never the sender's name); the director's Recognition page shows it.
+  // Peeps Stage 3: DEMO006 still reads their earlier private note (read-only, shown from the Wellsure Office as before), and sees their nudge tag
+  // with the giving director named (the receiver always sees who gave it); the director's Recognition page shows the note and the tag.
   const recipient = await textOf(booker, `${BASE}/app/recognition`);
-  if (!recipient.includes("DEMO-NUDGE-PRIVATE")) problems.push("DEMO006 on /app/recognition: their demo nudge is not shown (is the demo seeded?)");
-  if (/Demo Owner|DEMO001/.test(recipient)) problems.push("DEMO006 on /app/recognition: the sending director is shown by name instead of as the Wellsure Office");
-  if (!(await textOf(director, `${BASE}/app/office/recognition`)).includes("DEMO-NUDGE-PRIVATE")) problems.push("the director's Recognition page does not show the demo nudge (is the demo seeded?)");
+  if (!recipient.includes("DEMO-NUDGE-PRIVATE")) problems.push("DEMO006 on /app/recognition: their earlier private note is not shown (is the demo seeded?)");
+  if (!/Chai Break Champ/.test(recipient) || !/Demo Owner/.test(recipient)) problems.push("DEMO006 on /app/recognition: their nudge tag, with the giving director's name, is not shown");
+  if (/Send a corrective note|Give a nudge/.test(recipient)) problems.push("DEMO006 on /app/recognition: a way to send a note or give a nudge is offered to an employee");
+  const directorRecognition = await textOf(director, `${BASE}/app/office/recognition`);
+  if (!directorRecognition.includes("DEMO-NUDGE-PRIVATE") || !/Chai Break Champ/.test(directorRecognition)) problems.push("the director's Recognition page does not show the earlier note and the demo nudge (is the demo seeded?)");
+  // An employee's asset request is theirs, HR's and the directors' only: DEMO007's DEMO request note never reaches DEMO006.
+  if ((await textOf(booker, `${BASE}/app/my-assets`)).includes("DEMO-ASSET-REQUEST-NOTE")) problems.push("DEMO006 on /app/my-assets: another employee's asset request is shown");
   }
   // PEEPS-BEGIN helpdesk-visibility
   if (doAdmin) {
