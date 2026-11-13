@@ -480,6 +480,7 @@ export const adminApps: AdminApp[] = [
 // above stay as they were (shared file: additive edits only, PEEPS_PLAN.md §C.2).
 const AssetRegisterPage = lazyPage(() => import("../features/assets/pages/AssetRegisterPage"), "AssetRegisterPage");
 const AssetSettingsPage = lazyPage(() => import("../features/assets/pages/AssetSettingsPage"), "AssetSettingsPage");
+const AssetRequestsPage = lazyPage(() => import("../features/assets/pages/AssetRequestsPage"), "AssetRequestsPage"); // PEEPS Stage 3
 const assetsApp = adminApps.find((a) => a.key === "assets");
 if (assetsApp) {
   delete assetsApp.phase;
@@ -490,6 +491,7 @@ if (assetsApp) {
       items: [
         { key: "asset-register", label: "Asset Register", path: "assets/register", icon: DesktopOutlined, element: AssetRegisterPage, needs: { any: ["assets.view"] } },
         { key: "asset-settings", label: "Asset Settings", path: "assets/settings", icon: SettingOutlined, element: AssetSettingsPage, needs: { any: ["assets.settings.manage"] } },
+        { key: "asset-requests", label: "Asset Requests", path: "assets/requests", icon: DesktopOutlined, element: AssetRequestsPage, needs: { any: ["assets.manage"] } }, // PEEPS Stage 3
       ],
     },
   ];

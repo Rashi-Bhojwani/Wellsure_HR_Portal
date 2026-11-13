@@ -8,7 +8,7 @@ import type { OfficeCapabilityId, OfficeChangeKind } from "@shared/constants/pee
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatDateTime } from "../../../lib/dates";
 import { fs, space, v } from "../../../theme/tokens";
-import { ApprovalBanner, DataTable, EmptyState, PageHeader, Panel, SideDrawer, Stack, StatusChip, toast, useDebouncedValue } from "../../../ui";
+import { ApprovalBanner, ConfirmModal, DataTable, EmptyState, PageHeader, Panel, SideDrawer, Stack, StatusChip, toast, useDebouncedValue } from "../../../ui";
 import * as peepsApi from "../api";
 import type { Membership, PersonRef } from "../api";
 import { usePeepsMe } from "../usePeepsMe";
@@ -79,6 +79,20 @@ function OfficeMembersPageInner() {
     onError: (err) => toast.error(apiErrorMessage(err, "Couldn't confirm the change.")),
   });
 
+  // PEEPS Stage 3: a pending change can be withdrawn by a director before it is confirmed.
+  const [withdrawing, setWithdrawing] = useState<Change | null>(null);
+  const [withdrawReason, setWithdrawReason] = useState("");
+  const withdraw = useMutation({
+    mutationFn: (c: Change) => peepsApi.withdrawChange(c.id, withdrawReason.trim()),
+    onSuccess: () => {
+      setWithdrawing(null);
+      setWithdrawReason("");
+      refresh();
+      toast.success("Withdrawn. Nothing changes.");
+    },
+    onError: (err) => toast.error(apiErrorMessage(err, "Couldn't withdraw the change.")),
+  });
+
   const capLabel = (id: string) => catalog.find((c) => c.id === id)?.label ?? id;
   const open = (kind: OfficeChangeKind, member?: Member) => {
     form.setFieldsValue({ employeeId: undefined, capabilities: member?.capabilities ?? [], effectiveFrom: null, reason: "" });
@@ -96,16 +110,19 @@ function OfficeMembersPageInner() {
       <Button danger onClick={() => open("REMOVE", m)}>Remove</Button>
     </Space>
   );
-  const changeState = (c: Change) => (c.appliedAt ? <StatusChip tone="success">In effect</StatusChip> : c.confirmedAt ? <StatusChip tone="info">Confirmed, from {formatDateTime(c.effectiveFrom)}</StatusChip> : <StatusChip tone="warning">Waiting for the other director</StatusChip>);
+  const changeState = (c: Change) => (c.withdrawnAt ? <StatusChip tone="neutral">Withdrawn</StatusChip> : c.appliedAt ? <StatusChip tone="success">In effect</StatusChip> : c.confirmedAt ? <StatusChip tone="info">Confirmed, from {formatDateTime(c.effectiveFrom)}</StatusChip> : <StatusChip tone="warning">Waiting for the other director</StatusChip>);
   const changeAction = (c: Change) =>
-    !c.confirmedAt ? (
-      c.proposedByMe ? (
-        <span style={{ color: v.textSecondary, fontSize: fs.sm }}>The other director confirms</span>
-      ) : (
-        <Button type="primary" loading={confirm.isPending && confirm.variables === c.id} onClick={() => confirm.mutate(c.id)}>
-          Confirm
-        </Button>
-      )
+    !c.confirmedAt && !c.withdrawnAt ? (
+      <Space wrap size={space[2]}>
+        {c.proposedByMe ? (
+          <span style={{ color: v.textSecondary, fontSize: fs.sm }}>The other director confirms</span>
+        ) : (
+          <Button type="primary" loading={confirm.isPending && confirm.variables === c.id} onClick={() => confirm.mutate(c.id)}>
+            Confirm
+          </Button>
+        )}
+        <Button onClick={() => setWithdrawing(c)}>Withdraw</Button>
+      </Space>
     ) : null;
 
   return (
@@ -185,6 +202,21 @@ function OfficeMembersPageInner() {
           </Form>
         )}
       </SideDrawer>
+      <ConfirmModal
+        open={withdrawing !== null}
+        onCancel={() => setWithdrawing(null)}
+        onConfirm={() => withdrawing && withdraw.mutate(withdrawing)}
+        title="Withdraw this proposed change?"
+        info="It will not take effect, and it cannot be confirmed afterwards. Your reason is kept in the audit log."
+        confirmLabel="Withdraw"
+        loading={withdraw.isPending}
+        confirmDisabled={withdrawReason.trim().length < 3}
+      >
+        <label htmlFor="office-withdraw-reason" style={{ display: "block", marginBottom: space[2], color: v.textBody }}>
+          Why?
+        </label>
+        <Input.TextArea id="office-withdraw-reason" rows={2} maxLength={500} showCount value={withdrawReason} onChange={(e) => setWithdrawReason(e.target.value)} />
+      </ConfirmModal>
     </>
   );
 }

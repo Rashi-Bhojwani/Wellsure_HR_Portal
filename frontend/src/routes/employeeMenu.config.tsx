@@ -51,6 +51,7 @@ const OfficeMembersPage = lazyPage(() => import("../features/peeps/pages/OfficeM
 const PeepsSettingsPage = lazyPage(() => import("../features/peeps/pages/PeepsSettingsPage"), "PeepsSettingsPage");
 const OfficeAssetRegisterPage = lazyPage(() => import("../features/assets/pages/OfficeAssetPages"), "OfficeAssetRegisterPage");
 const OfficeAssetSettingsPage = lazyPage(() => import("../features/assets/pages/OfficeAssetPages"), "OfficeAssetSettingsPage");
+const OfficeAssetRequestsPage = lazyPage(() => import("../features/assets/pages/AssetRequestsPage"), "OfficeAssetRequestsPage"); // PEEPS Stage 3
 // PEEPS-END
 // PEEPS-BEGIN avatar-choices
 import { IdcardOutlined } from "@ant-design/icons";
@@ -378,6 +379,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
       // Wellsure Office manage it: their asset keys are written only then (backend peeps/office.ts grantKeysFor).
       { key: "office-assets", label: "Asset Register", path: "office/assets", element: OfficeAssetRegisterPage, permission: "assets.view", officeMembersOnly: true },
       { key: "office-asset-settings", label: "Asset Settings", path: "office/asset-settings", element: OfficeAssetSettingsPage, permission: "assets.settings.manage", officeMembersOnly: true },
+      { key: "office-asset-requests", label: "Asset Requests", path: "office/asset-requests", element: OfficeAssetRequestsPage, permission: "assets.manage", officeMembersOnly: true }, // PEEPS Stage 3
     ],
   },
   // PEEPS-END

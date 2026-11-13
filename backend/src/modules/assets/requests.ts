@@ -135,7 +135,7 @@ export const assetRequestTasks: TaskSource = {
       detail: r.category,
       employeeName: r.employee?.name ?? null,
       waitingSince: r.updatedAt,
-      link: "/app/office/assets",
+      link: "/app/office/asset-requests",
       adminLink: "/admin/assets/requests",
     }));
   },

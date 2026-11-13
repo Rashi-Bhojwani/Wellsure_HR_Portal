@@ -8,6 +8,7 @@ import { DataTable, EmptyState, PageHeader, Panel, Stack, StatusChip, toast } fr
 import * as assetsApi from "../api";
 import type { MyAsset } from "../api";
 import { useAssetsRealtime } from "../useAssetsRealtime";
+import { MyAssetRequests } from "../components/MyAssetRequests"; // PEEPS Stage 3
 
 const END_LABEL: Record<NonNullable<MyAsset["endReason"]>, string> = { RETURNED: "Returned", REASSIGNED: "Transferred", LOST: "Reported lost" };
 
@@ -47,7 +48,7 @@ export function MyAssetsPage() {
 
   return (
     <>
-      <PageHeader title="My Assets" subtitle="Equipment the company has issued to you" />
+      <PageHeader title="My Assets" subtitle="Equipment the company has issued to you, and asking for more" />
       <Stack>
         {pending > 0 && (
           <div role="status" style={{ color: v.textSecondary, fontSize: fs.sm, marginBottom: space[1] }}>
@@ -108,6 +109,7 @@ export function MyAssetsPage() {
             }}
           />
         </Panel>
+        <MyAssetRequests />
       </Stack>
     </>
   );
