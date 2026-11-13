@@ -12,7 +12,7 @@ import { csvOf } from "../reports/service";
 //   DEDUCTION:<head>               credit (owed to whoever the deduction is for)
 //   ROUNDING:<head>                debit when positive, credit when negative
 //   EMPLOYER:<head>:EXPENSE        debit, and EMPLOYER:<head>:LIABILITY credit (the employer's contribution)
-//   NET_PAY                        credit (net pay owed to the people)
+//   NET_PAY                        credit (net pay owed to the people; a debit if negative)
 // People paid and people held both count. Amounts are exact; the journal balances exactly or it is not given. No accounting package's format is built.
 
 type Actor = { userId: string; ip?: string | null };
@@ -37,7 +37,7 @@ export function journalOf(lines: readonly Line[], netPay: Money): JournalEntry[]
       add(`EMPLOYER:${l.code}:LIABILITY`, ZERO, l.amount);
     }
   }
-  add("NET_PAY", ZERO, netPay);
+  add("NET_PAY", netPay.lt(ZERO) ? netPay.negated() : ZERO, netPay.gt(ZERO) ? netPay : ZERO); // a negative net (deductions above earnings) is owed by the people: a debit
   return [...m.values()].sort((a, b) => a.key.localeCompare(b.key));
 }
 

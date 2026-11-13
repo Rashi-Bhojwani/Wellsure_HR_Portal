@@ -105,6 +105,7 @@ describe("PY-41 — the journal balances", () => {
         const entries = journalOf(lines.map((l) => ({ code: l.code, kind: l.kind, amount: dec(txt(l.p)) })), dec(txt(net)));
         const P = (d: { toFixed: (n: number) => string }) => paise(d.toFixed(2));
         expect(entries.reduce((s, e) => s + P(e.debit), 0n)).toBe(entries.reduce((s, e) => s + P(e.credit), 0n));
+        for (const e of entries) expect(P(e.debit) >= 0n && P(e.credit) >= 0n, e.key).toBe(true); // a negative rounding is a credit, never a negative debit
         for (const e of entries.filter((x) => x.key.startsWith("EARNING:"))) expect(P(e.debit)).toBe(lines.filter((l) => l.kind === "EARNING" && `EARNING:${l.code}` === e.key).reduce((s, l) => s + l.p, 0n));
       }),
       { numRuns: 400 },
