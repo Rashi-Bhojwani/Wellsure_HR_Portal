@@ -2,6 +2,7 @@ import { prisma } from "../../lib/prisma";
 import { emitNotificationNew } from "../../realtime/emit";
 import { createNotification } from "./service";
 import { wantsNotification } from "./preferences";
+import { maybeTextMessage } from "./textMessages";
 
 // Persist-then-deliver, for any module that notifies one employee: the
 // Notification row is written first (the durable record the bell reads),
@@ -25,4 +26,5 @@ export async function notifyEmployee(
     link: notification.link,
     createdAt: notification.createdAt.toISOString(),
   });
+  await maybeTextMessage(targetEmployeeId, input.type, input.title); // NT-11 (M session block 2): Not set, so nothing is sent until the directors choose
 }

@@ -199,7 +199,7 @@ export const POLICY_SETTINGS: readonly PolicySettingDef[] = [
     kind: "notSet",
     fields: [
       { name: "provider", label: "Provider", type: "choice", options: [{ value: "NONE", label: "None" }, { value: "SMS", label: "An SMS provider (configured at deployment)" }, { value: "WHATSAPP", label: "A WhatsApp provider (configured at deployment)" }] },
-      { name: "categories", label: "Notices sent this way (codes)", type: "codes", max: 10 },
+      { name: "categories", label: "Notices sent this way (LEAVE_DECISION, REQUEST_DECISION, DOCUMENT_ADDED)", type: "codes", max: 10 },
     ],
     defaultValue: null,
     why: "Choosing a provider needs an account and a secret key: the owners' choice at deployment.",
@@ -209,9 +209,9 @@ export const POLICY_SETTINGS: readonly PolicySettingDef[] = [
 export const POLICY_KEYS = POLICY_SETTINGS.map((s) => s.key);
 export const policyDef = (key: string) => POLICY_SETTINGS.find((s) => s.key === key);
 
-/** Text-message categories a director may choose for NT-11 (the server refuses others). */
+/** Text-message categories a director may choose for NT-11 (the server refuses others), and the notification types each covers. */
 export const TEXT_MESSAGE_CATEGORIES = [
-  { code: "LEAVE_DECISION", label: "A decision on my leave" },
-  { code: "PASSWORD_RESET", label: "A password reset link was asked for" },
-  { code: "ATTENDANCE_MISSING", label: "No punch recorded today" },
+  { code: "LEAVE_DECISION", label: "A decision on my leave", types: ["leave.decided"] },
+  { code: "REQUEST_DECISION", label: "A decision on my overtime, work-from-home or encashment request", types: ["overtime.approved", "overtime.rejected", "wfh.rejected", "encashment.approved", "encashment.rejected"] },
+  { code: "DOCUMENT_ADDED", label: "A letter or document issued to me", types: ["document.added"] },
 ] as const;
