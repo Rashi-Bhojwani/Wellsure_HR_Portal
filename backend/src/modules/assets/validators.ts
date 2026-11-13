@@ -62,3 +62,10 @@ export const returnSchema = z.object({ assignmentId: z.string().min(1).max(64), 
 export const transferSchema = z.object({ toEmployeeId: z.string().min(1).max(64), conditionCode: code, note: note.optional() }).strict();
 export const lostSchema = z.object({ statusCode: code, note: z.string().trim().min(3).max(1000) }).strict();
 export const damagedSchema = z.object({ conditionCode: code, statusCode: code.optional(), note: z.string().trim().min(3).max(1000) }).strict();
+
+// PEEPS-BEGIN asset-requests
+export const createRequestSchema = z.object({ categoryCode: z.string().trim().min(1).max(40), note: z.string().trim().max(300).optional(), idempotencyKey: z.string().trim().min(8).max(64) }).strict();
+export const decideRequestSchema = z.object({ outcome: z.enum(["APPROVED", "DECLINED", "FULFILLED"]), note: z.string().trim().max(300).optional() }).strict();
+export const requestsQuerySchema = z.object({ status: z.enum(["SUBMITTED", "APPROVED", "DECLINED", "FULFILLED", "CANCELLED"]).optional() }).strict();
+export const emptySchema = z.object({}).strict();
+// PEEPS-END asset-requests

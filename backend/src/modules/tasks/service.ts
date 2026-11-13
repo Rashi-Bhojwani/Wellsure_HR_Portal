@@ -1,5 +1,7 @@
 // PEEPS-BEGIN exits
 import { exitResignationTasks, exitClearanceTasks } from "../exits/tasks";
+import { nudgeReviewTasks } from "../recognition/tasks";
+import { assetRequestTasks } from "../assets/requests";
 // PEEPS-END exits
 // PEEPS-BEGIN helpdesk-visibility
 import { ticketAudienceWhere } from "../helpdesk/categoryVisibility";
@@ -229,7 +231,7 @@ const identityConfirmations: TaskSource = {
 };
 
 // PEEPS-BEGIN exits
-export const TASK_SOURCES: TaskSource[] = [leaveApprovals, profileChangeApprovals, assignedTickets, regularizationApprovals, directorNotices, claimDecisions, identityConfirmations, exitResignationTasks, exitClearanceTasks];
+export const TASK_SOURCES: TaskSource[] = [leaveApprovals, profileChangeApprovals, assignedTickets, regularizationApprovals, directorNotices, claimDecisions, identityConfirmations, exitResignationTasks, exitClearanceTasks, nudgeReviewTasks, assetRequestTasks];
 // PEEPS-END exits
 
 // Oldest-waiting first: the inbox is a queue, not a feed.

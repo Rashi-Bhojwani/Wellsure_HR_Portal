@@ -6,7 +6,9 @@ import {
   CalendarOutlined,
   ClockCircleOutlined,
   CustomerServiceOutlined,
+  LaptopOutlined,
   SafetyCertificateOutlined,
+  SmileOutlined,
   UserSwitchOutlined,
   WalletOutlined,
 } from '@ant-design/icons';
@@ -23,6 +25,8 @@ const TYPE_META: Record<TaskType, { icon: ReactNode; tone: ChipTone; bg: string;
   // PEEPS-BEGIN exits
   EXIT_RESIGNATION: { icon: <UserSwitchOutlined />, tone: 'warning', bg: v.chipWarningBg, fg: v.chipWarningText },
   EXIT_CLEARANCE: { icon: <SafetyCertificateOutlined />, tone: 'info', bg: v.chipInfoBg, fg: v.chipInfoText },
+  NUDGE_REVIEW: { icon: <SmileOutlined />, tone: 'purple', bg: v.chipPurpleBg, fg: v.chipPurpleText },
+  ASSET_REQUEST: { icon: <LaptopOutlined />, tone: 'info', bg: v.chipInfoBg, fg: v.chipInfoText },
   // PEEPS-END exits
   LEAVE_APPROVAL: {
     icon: <CalendarOutlined />,

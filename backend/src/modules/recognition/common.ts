@@ -15,24 +15,18 @@ import type { PeepsActor } from "../peeps/types";
 //     - upward: to their manager and on up the chain. Managers and HR Admins report to the directors by design (they have no manager), so the
 //       top of a chain reaches the directors; someone with no manager who is not one of them follows the "no manager on record" setting (Not
 //       set: nobody above them);
-//     - directors give to anyone; Wellsure Office members with "Give badges" give to anyone only while the directors' setting allows it;
+//     - directors give to anyone (Stage 3: nobody else does; the Wellsure Office "Give badges" widening is retired);
 //     - never to peers or to another reporting line; the Developer never gives. An HR role adds no reach and takes none away.
-//   Corrective notes (nudges): the directors only, and only once the directors switch them on.
+//   Nudge tags (Stage 3): the directors only, to anyone (nudgeTags.ts). Corrective notes are no longer created (read-only).
 
 export type RecognitionModule = "badges" | "nudges";
-const LABEL: Record<RecognitionModule, string> = { badges: "Badges", nudges: "Corrective notes" };
+const LABEL: Record<RecognitionModule, string> = { badges: "Badges", nudges: "Nudges" };
 
 export const isDeveloper = (actor: PeepsActor) => actor.roleCodes.includes(DEVELOPER_ROLE_CODE);
 
 export async function assertModuleActive(module: RecognitionModule): Promise<void> {
   await assertSettings(PEEPS_REQUIRED[module], LABEL[module]);
-  if (module === "nudges" && (await getSetting<{ enabled: boolean }>("nudges.enabled"))?.enabled !== true) {
-    throw new HttpError(409, "Corrective notes are switched off by the directors.", "NOT_SET_UP");
-  }
 }
-
-const officeWidened = async (actor: PeepsActor) =>
-  actor.isMember && actor.capabilities.includes("GIVE_BADGES") && (await getSetting<{ officeGivesToAnyone: boolean }>("audience.badges"))?.officeGivesToAnyone === true;
 
 async function managerOf(employeeId: string): Promise<string | null> {
   const row = await prisma.employeeJobHistory.findFirst({ where: { employeeId, ...inForceOn() }, select: { reportingManagerId: true } });
@@ -70,11 +64,10 @@ export async function giverKindFor(actor: PeepsActor, recipientEmployeeId: strin
   if (recipientEmployeeId === actor.employeeId) throw new HttpError(409, "You cannot do this for yourself.", "SELF");
   const recipient = await prisma.employee.findUnique({ where: { id: recipientEmployeeId }, select: { status: true } });
   if (!recipient || recipient.status !== "ACTIVE") throw new HttpError(404, "Employee not found.", "NOT_FOUND");
-  const refuse = () => new HttpError(403, module === "badges" ? "You can give only along your reporting line." : "Only a director sends a corrective note.", "FORBIDDEN");
+  const refuse = () => new HttpError(403, module === "badges" ? "You can give only along your reporting line." : "Only a director gives a nudge.", "FORBIDDEN");
   if (isDeveloper(actor)) throw refuse();
   if (actor.isDirector) return "DIRECTOR";
   if (module === "nudges") throw refuse();
-  if (await officeWidened(actor)) return "OFFICE";
   if ((await getTeamEmployeeIds(actor.employeeId)).includes(recipientEmployeeId)) return "DOWNWARD";
   if ((await upwardOf(actor.employeeId)).includes(recipientEmployeeId)) return "UPWARD";
   throw refuse();
@@ -85,7 +78,6 @@ export async function canGive(actor: PeepsActor, module: RecognitionModule): Pro
   if (isDeveloper(actor)) return { any: false, scope: "NONE" };
   if (actor.isDirector) return { any: true, scope: "ALL" };
   if (module === "nudges") return { any: false, scope: "NONE" };
-  if (await officeWidened(actor)) return { any: true, scope: "ALL" };
   const line = (await getTeamEmployeeIds(actor.employeeId)).length + (await upwardOf(actor.employeeId)).length;
   return line > 0 ? { any: true, scope: "LINE" } : { any: false, scope: "NONE" };
 }
@@ -125,13 +117,15 @@ export function expiryFor(duration: "WEEK" | "MONTH" | "PERMANENT", at: Date): D
   return new Date(endIst - 330 * 60_000 - 1);
 }
 
-/** The giver as a reader sees them: a director or the Wellsure Office as the workspace's name; anyone else (manager, colleague along the line) by name. */
-export async function giverLabels(rows: Array<{ giverUserId: string; giverKind: RecognitionGiverKind }>): Promise<(r: { giverUserId: string; giverKind: RecognitionGiverKind }) => string> {
+/** The giver as a reader sees them: on public surfaces a director or the Wellsure Office shows as the workspace's name and anyone else (manager,
+ *  colleague along the line) by name; with `realNames` (the recipient's own view, and nudge tags) everyone by name, directors included. */
+export async function giverLabels(rows: Array<{ giverUserId: string; giverKind: RecognitionGiverKind }>, opts: { realNames?: boolean } = {}): Promise<(r: { giverUserId: string; giverKind: RecognitionGiverKind }) => string> {
   const office = await officeName();
-  const named = rows.filter((r) => r.giverKind !== "DIRECTOR" && r.giverKind !== "OFFICE").map((r) => r.giverUserId);
+  const masked = (r: { giverKind: RecognitionGiverKind }) => !opts.realNames && (r.giverKind === "DIRECTOR" || r.giverKind === "OFFICE");
+  const named = rows.filter((r) => !masked(r)).map((r) => r.giverUserId);
   const users = await prisma.user.findMany({ where: { id: { in: [...new Set(named)] } }, select: { id: true, employee: { select: { employeeCode: true, nameHistory: { where: inForceOn(), select: { fullName: true } } } } } });
   const name = new Map(users.map((u) => [u.id, u.employee.nameHistory[0]?.fullName ?? u.employee.employeeCode]));
-  return (r) => (r.giverKind === "DIRECTOR" || r.giverKind === "OFFICE" ? office : (name.get(r.giverUserId) ?? "A colleague"));
+  return (r) => (masked(r) ? office : (name.get(r.giverUserId) ?? "A colleague"));
 }
 
 export async function employeeRef(employeeId: string) {

@@ -7,6 +7,10 @@ import * as controller from "./controller";
 import {
   confirmSettingSchema,
   createAssetSchema,
+  createRequestSchema,
+  decideRequestSchema,
+  emptySchema,
+  requestsQuerySchema,
   damagedSchema,
   employeeParamsSchema,
   holdersQuerySchema,
@@ -35,6 +39,15 @@ const settings = requireRoleOrOffice("assets.settings.manage", officeAudience.as
 
 assetsRouter.get("/mine", controller.listMine);
 assetsRouter.post("/mine/:id/acknowledge", validate({ params: idParamsSchema }), controller.acknowledge);
+
+// PEEPS-BEGIN asset-requests (Stage 3): an employee asks for an asset type and sees only their own requests; the register's managers decide.
+assetsRouter.get("/requests/options", controller.requestOptions);
+assetsRouter.get("/requests/mine", controller.myRequests);
+assetsRouter.post("/requests", validate({ body: createRequestSchema }), controller.createRequest);
+assetsRouter.post("/requests/:id/cancel", validate({ params: idParamsSchema, body: emptySchema }), controller.cancelRequest);
+assetsRouter.get("/requests", manage, validate({ query: requestsQuerySchema }), controller.allRequests);
+assetsRouter.post("/requests/:id/decide", manage, validate({ params: idParamsSchema, body: decideRequestSchema }), controller.decideRequest);
+// PEEPS-END asset-requests
 
 assetsRouter.get("/settings", settings, controller.getSettings);
 assetsRouter.post("/settings/:kind", settings, validate({ params: kindParamsSchema, body: proposeSettingSchema }), controller.proposeSetting);

@@ -212,9 +212,10 @@ export async function proposeChange(input: ProposeInput, actor: PeepsActor, meta
 export async function confirmChange(changeId: string, actor: PeepsActor, meta: ActorMeta): Promise<{ applied: boolean }> {
   if (!actor.isDirector) throw new HttpError(403, "Only a director confirms a membership change.", "DIRECTORS_ONLY");
   await prisma.$transaction(async (tx) => {
-    const change = await tx.officeMembershipChange.findUnique({ where: { id: changeId }, include: { confirmation: true } });
+    const change = await tx.officeMembershipChange.findUnique({ where: { id: changeId }, include: { confirmation: true, withdrawal: true } });
     if (!change) throw new HttpError(404, "That change does not exist.", "NOT_FOUND");
     if (change.confirmation) throw new HttpError(409, "That change is already confirmed.", "ALREADY_CONFIRMED");
+    if (change.withdrawal) throw new HttpError(409, "That change was withdrawn.", "WITHDRAWN");
     if (change.proposedByUserId === actor.userId) throw new HttpError(403, "A different director confirms a membership change.", "SAME_DIRECTOR");
     const c = await tx.officeMembershipConfirmation.create({ data: { changeId, confirmedByUserId: actor.userId } });
     await writeAuditLogs([{ ...meta, action: "office.membership.confirmed", entityType: "OfficeMembershipChange", entityId: changeId, after: { confirmationId: c.id } }], tx);
@@ -224,6 +225,21 @@ export async function confirmChange(changeId: string, actor: PeepsActor, meta: A
   return { applied };
 }
 
+/** Stage 3: withdraw a pending (unconfirmed) membership change, by the director who proposed it or another director, with a reason (audited). A
+ *  confirmed change cannot be withdrawn (service + trigger); withdrawing twice changes nothing. */
+export async function withdrawChange(changeId: string, input: { reason: string }, actor: PeepsActor, meta: ActorMeta): Promise<{ withdrawn: true; repeated: boolean }> {
+  if (!actor.isDirector) throw new HttpError(403, "Only a director withdraws a membership change.", "DIRECTORS_ONLY");
+  return prisma.$transaction(async (tx) => {
+    const change = await tx.officeMembershipChange.findUnique({ where: { id: changeId }, include: { confirmation: true, withdrawal: true } });
+    if (!change) throw new HttpError(404, "That change does not exist.", "NOT_FOUND");
+    if (change.confirmation) throw new HttpError(409, "That change is already confirmed and cannot be withdrawn.", "ALREADY_DECIDED");
+    if (change.withdrawal) return { withdrawn: true as const, repeated: true };
+    const w = await tx.officeMembershipWithdrawal.create({ data: { changeId, withdrawnByUserId: actor.userId, reason: input.reason } });
+    await writeAuditLogs([{ ...meta, action: "office.membership.withdrawn", entityType: "OfficeMembershipChange", entityId: changeId, after: { withdrawalId: w.id, reason: input.reason } }], tx);
+    return { withdrawn: true as const, repeated: false };
+  });
+}
+
 // ── Reading ────────────────────────────────────────────────────────────────
 
 const personSelect = { select: { id: true, employeeCode: true, nameHistory: { where: inForceOn(), select: { fullName: true } } } } as const;
@@ -231,7 +247,7 @@ const personSelect = { select: { id: true, employeeCode: true, nameHistory: { wh
 export async function membershipOverview(actor: PeepsActor) {
   const [members, changes] = await Promise.all([
     currentMembers(),
-    prisma.officeMembershipChange.findMany({ orderBy: { proposedAt: "desc" }, take: 200, include: { confirmation: true, application: true, employee: personSelect } }),
+    prisma.officeMembershipChange.findMany({ orderBy: { proposedAt: "desc" }, take: 200, include: { confirmation: true, application: true, withdrawal: true, employee: personSelect } }),
   ]);
   const people = await prisma.employee.findMany({ where: { id: { in: [...members.keys(), ...changes.flatMap((c) => (c.fromEmployeeId ? [c.fromEmployeeId] : []))] } }, ...personSelect });
   const nameOf = (id: string) => {
@@ -252,6 +268,7 @@ export async function membershipOverview(actor: PeepsActor) {
       proposedAt: c.proposedAt.toISOString(),
       confirmedAt: c.confirmation?.confirmedAt.toISOString() ?? null,
       appliedAt: c.application?.appliedAt.toISOString() ?? null,
+      withdrawnAt: c.withdrawal?.at.toISOString() ?? null,
     })),
   };
 }

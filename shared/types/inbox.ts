@@ -34,7 +34,7 @@ export interface RequestHubItem {
 
 // CLAIM_DECISION and IDENTITY_CONFIRMATION: M session (LC-14 and task 1), directors only.
 // PEEPS-BEGIN exits
-export const TASK_TYPES = ["LEAVE_APPROVAL", "PROFILE_CHANGE_APPROVAL", "HELPDESK_ASSIGNED", "REGULARIZATION_APPROVAL", "DIRECTOR_NOTICE", "CLAIM_DECISION", "IDENTITY_CONFIRMATION", "EXIT_RESIGNATION", "EXIT_CLEARANCE"] as const;
+export const TASK_TYPES = ["LEAVE_APPROVAL", "PROFILE_CHANGE_APPROVAL", "HELPDESK_ASSIGNED", "REGULARIZATION_APPROVAL", "DIRECTOR_NOTICE", "CLAIM_DECISION", "IDENTITY_CONFIRMATION", "EXIT_RESIGNATION", "EXIT_CLEARANCE", "NUDGE_REVIEW", "ASSET_REQUEST"] as const;
 // PEEPS-END exits
 export type TaskType = (typeof TASK_TYPES)[number];
 
@@ -42,6 +42,8 @@ export const TASK_TYPE_LABELS: Record<TaskType, string> = {
   // PEEPS-BEGIN exits
   EXIT_RESIGNATION: "Resignation decision",
   EXIT_CLEARANCE: "Exit clearance",
+  NUDGE_REVIEW: "Nudge review",
+  ASSET_REQUEST: "Asset request",
   // PEEPS-END exits
   LEAVE_APPROVAL: "Leave approval",
   PROFILE_CHANGE_APPROVAL: "Profile change approval",

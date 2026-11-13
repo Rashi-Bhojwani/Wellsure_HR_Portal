@@ -40,9 +40,9 @@ export const OFFICE_CAPABILITIES: readonly OfficeCapability[] = [
   { id: "MANAGE_EXITS", label: "Run exits", what: "Work non-pay exits while a director opens the exits audience to the Office. Interview answers remain relationship-scoped.", keys: ["exits.view", "exits.manage", "exits.accept", "exits.checklist.complete"] },
   // PEEPS-END exits
   { id: "MANAGE_ASSETS", label: "Manage the asset register", what: "Add, issue, take back and transfer assets, and prepare the asset lists (a director confirms them).", keys: ["assets.view", "assets.manage", "assets.settings.manage"] },
-  { id: "PREPARE_SETTINGS", label: "Prepare Peeps settings", what: "Enter the working settings (Unmute times, the badge catalogue and limits). A director confirms each one.", keys: ["peeps.settings.manage"] },
-  { id: "GIVE_BADGES", label: "Give badges", what: "Give badges to any employee, while the badge settings allow the Wellsure Office to give them.", keys: ["badges.give"] },
-  { id: "SEND_NUDGES", label: "Send private nudges", what: "Send a private note to any employee, while the nudge settings allow the Wellsure Office to send them.", keys: ["nudges.send"] },
+  { id: "PREPARE_SETTINGS", label: "Prepare Peeps settings", what: "Enter the working settings (Unmute times and the like). A director confirms each one. Badge and nudge settings are the directors' own.", keys: ["peeps.settings.manage"] },
+  { id: "GIVE_BADGES", label: "Give badges", what: "No extra reach (Peeps Stage 3): badges follow the reporting line for everyone, members included; only the directors give to anyone.", keys: ["badges.give"] },
+  { id: "SEND_NUDGES", label: "Send private nudges", what: "No effect (Peeps Stage 3): private notes are no longer created, and nudge tags are given by the directors only.", keys: ["nudges.send"] },
 ];
 
 export const officeCapability = (id: string): OfficeCapability | undefined => OFFICE_CAPABILITIES.find((c) => c.id === id);
@@ -72,15 +72,13 @@ export const PEEPS_SETTING_KEYS = [
   "unmute.bookingWindowDays",
   "unmute.minNoticeHours",
   "unmute.cancellationNoticeHours",
-  "audience.badges",
   "badges.catalogue",
   "badges.limits",
   "badges.repeat",
   "badges.noManagerFallback",
   "badges.publicDetails",
-  "nudges.enabled",
-  "nudges.limits",
-  "nudges.revocation",
+  "nudges.catalogue",
+  "nudges.offLimitsWords",
   "directory.contactFields",
   "leave.calendarShowsType",
   "leave.showSensitiveTypes",
@@ -103,25 +101,76 @@ export const PEEPS_SETTINGS: Record<PeepsSettingKey, PeepsSettingInfo> = {
   "unmute.bookingWindowDays": { module: "unmute", label: "Booking window", what: "How many days ahead an employee may book.", enteredBy: "OFFICE" },
   "unmute.minNoticeHours": { module: "unmute", label: "Booking notice", what: "How many hours before a slot it can still be booked.", enteredBy: "OFFICE" },
   "unmute.cancellationNoticeHours": { module: "unmute", label: "Cancellation notice", what: "Up to how many hours before a slot the employee may cancel or reschedule.", enteredBy: "OFFICE" },
-  "audience.badges": { module: "badges", label: "Wellsure Office members may give to anyone", what: "D-36: everyone gives along their reporting line (to the people under them, and up to their manager and on to the directors); directors give to anyone. This lets Wellsure Office members with \"Give badges\" give to anyone too. Not set: they follow their reporting line like everyone else.", enteredBy: "DIRECTOR" },
-  "badges.catalogue": { module: "badges", label: "Badge catalogue", what: "The badges that can be given.", enteredBy: "OFFICE" },
-  "badges.repeat": { module: "badges", label: "Repeat to the same person", what: "Whether one giver may give the same badge again to someone who still holds it from them. Not set: no such limit.", enteredBy: "DIRECTOR" },
-  "badges.noManagerFallback": { module: "badges", label: "No manager on record", what: "For someone who has no manager (and is not a manager or HR Admin, who report to the directors): whether they may give up to the directors. Not set: nobody above them.", enteredBy: "DIRECTOR" },
-  "badges.publicDetails": { module: "badges", label: "Who gave it and why, in public", what: "Whether profiles, the directory and the home page show who gave a badge and their message. Not set: neither is shown (the recipient and the directors still see both).", enteredBy: "DIRECTOR" },
-  "badges.limits": { module: "badges", label: "Badge limits", what: "How many badges one giver may give in a calendar month. Until set, no limit applies.", enteredBy: "OFFICE" },
-  "nudges.enabled": { module: "nudges", label: "Corrective notes", what: "D-37: private corrective notes from the directors, seen only by the sender, the recipient and the directors. Not set: they cannot be sent.", enteredBy: "DIRECTOR" },
-  "nudges.limits": { module: "nudges", label: "Nudge limits", what: "How many nudges one sender may send in a calendar month. Until set, no limit applies.", enteredBy: "DIRECTOR" },
+  "badges.catalogue": { module: "badges", label: "Badge catalogue", what: "The badges that can be given, each lasting this week, this month or permanently. Directors add, rename and retire badges (a retired badge stays on past awards; a badge already given cannot be deleted, only retired).", enteredBy: "DIRECTOR" },
+  "badges.repeat": { module: "badges", label: "Repeat to the same person", what: "Whether one giver may give the same badge again to someone who still holds it from them (the monthly pair limit applies either way).", enteredBy: "DIRECTOR" },
+  "badges.noManagerFallback": { module: "badges", label: "No manager on record", what: "For someone who has no manager (and is not a manager or HR Admin, who report to the directors): whether they may give up to the directors.", enteredBy: "DIRECTOR" },
+  "badges.publicDetails": { module: "badges", label: "Who gave it and why, in public", what: "Whether profiles, the directory and the home page show who gave a badge and their reason. The recipient and the directors always see both.", enteredBy: "DIRECTOR" },
+  "badges.limits": { module: "badges", label: "Badge limits", what: "How many badges one person may give in a calendar month (India time), and how many one giver may give the same person in a month, to stop farming.", enteredBy: "DIRECTOR" },
   "directory.contactFields": { module: "directory", label: "Contact fields in the directory", what: "Which of work email, phone and birthday (day and month) colleagues see in the directory, on top of System Settings → People & Documents. Not set: none. Personal email and every sensitive field never show.", enteredBy: "DIRECTOR" },
   "leave.calendarShowsType": { module: "leave", label: "Wedding and bereavement leave on team calendars", what: "Whether team calendars name wedding and bereavement leave. Not set: they show as \"Leave\". (Menstrual and medical leave follow their own setting.)", enteredBy: "DIRECTOR" },
   "leave.showSensitiveTypes": { module: "leave", label: "Menstrual and medical leave named to managers", what: "Whether managers, team calendars and managers' notifications name menstrual and medical leave. Not set: they see \"Leave\" and the dates. HR and the directors always see the type.", enteredBy: "DIRECTOR" },
-  "nudges.revocation": { module: "nudges", label: "Nudge revocation", what: "Whether a sender (or a director) may withdraw a nudge. Until set, nobody can.", enteredBy: "DIRECTOR" },
+  "nudges.catalogue": { module: "nudges", label: "Nudge tags", what: "The light-hearted tags directors may give (each shows for a week). Neutral and good-natured only: a tag name containing an off-limits word is refused. Directors add, rename and retire tags.", enteredBy: "DIRECTOR" },
+  "nudges.offLimitsWords": { module: "nudges", label: "Off-limits words for nudge tags", what: "Words no nudge tag name may contain (whole words, any case). A tag that later matches a newly added word can no longer be given.", enteredBy: "DIRECTOR" },
 };
 
 export const PEEPS_REQUIRED: Record<"unmute" | "badges" | "nudges", readonly PeepsSettingKey[]> = {
   unmute: ["audience.unmute", "unmute.sessionMinutes", "unmute.availability", "unmute.bookingWindowDays", "unmute.minNoticeHours", "unmute.cancellationNoticeHours"],
-  badges: ["badges.catalogue"], // D-36: givers follow the reporting line; only the catalogue is required
-  nudges: ["nudges.enabled"], // D-37: the directors send corrective notes only once they switch them on
+  badges: ["badges.catalogue"], // D-36: givers follow the reporting line; the catalogue ships with a default (Stage 3)
+  nudges: ["nudges.catalogue"], // Stage 3: public light-hearted tags from the directors; the catalogue ships with a default
 };
+
+// ── Shipped defaults (Peeps Stage 3, owner's defaults rule) ──────────────────
+// Lists and workflow settings start from conventional values, shown "Default, change in settings"; a director changes them through the normal
+// two-director setting (every change audited). Anything about pay, bank, statutory or tax values, retention, link lifetime and the like has no default.
+
+export type BadgeCatalogueEntry = { code: string; label: string; description?: string; duration: BadgeDuration; retired?: boolean };
+export type NudgeTagEntry = { code: string; label: string; retired?: boolean };
+
+export const DEFAULT_BADGE_CATALOGUE: BadgeCatalogueEntry[] = [
+  { code: "LAUNCH_STAR", label: "Launch Star", description: "Shipped something that mattered.", duration: "MONTH" },
+  { code: "TARGET_CRUSHER", label: "Target Crusher", description: "Beat a goal.", duration: "MONTH" },
+  { code: "ON_FIRE", label: "On Fire", description: "A week of great work.", duration: "WEEK" },
+  { code: "TEAM_PLAYER", label: "Team Player", description: "Made the team better.", duration: "MONTH" },
+  { code: "QUICK_LEARNER", label: "Quick Learner", description: "Picked up something new fast.", duration: "MONTH" },
+  { code: "MENTOR", label: "Mentor", description: "Helped others grow.", duration: "PERMANENT" },
+  { code: "LIFESAVER", label: "Lifesaver", description: "Came to the rescue.", duration: "WEEK" },
+  { code: "IDEA_SPARK", label: "Idea Spark", description: "A bright idea.", duration: "MONTH" },
+  { code: "STAR_OF_THE_MONTH", label: "Star of the Month", description: "This month's star.", duration: "MONTH" },
+  { code: "CULTURE_CHAMP", label: "Culture Champ", description: "Lives our values.", duration: "PERMANENT" },
+  { code: "CUSTOMER_HERO", label: "Customer Hero", description: "Went the extra mile for a customer.", duration: "MONTH" },
+  { code: "PROBLEM_SOLVER", label: "Problem Solver", description: "Cracked a tough one.", duration: "WEEK" },
+];
+
+export const DEFAULT_NUDGE_TAGS: NudgeTagEntry[] = [
+  { code: "CHAI_BREAK_CHAMP", label: "Chai Break Champ" },
+  { code: "SCROLL_MASTER", label: "Scroll Master" },
+  { code: "SNOOZE_MODE", label: "Snooze Mode" },
+  { code: "MEETING_MARATHONER", label: "Meeting Marathoner" },
+  { code: "COFFEE_REFILL_CREW", label: "Coffee Refill Crew" },
+  { code: "PLAYLIST_DJ", label: "Playlist DJ" },
+  { code: "EMOJI_ENTHUSIAST", label: "Emoji Enthusiast" },
+  { code: "DESK_PLANT_PARENT", label: "Desk Plant Parent" },
+];
+
+/** Words no nudge tag may contain: anything about attendance, time, leave, missed work, performance or discipline. Directors extend it. */
+export const DEFAULT_NUDGE_OFF_LIMITS_WORDS: string[] = [
+  "late", "lateness", "latecomer", "tardy", "absent", "absence", "absentee", "leave", "early", "attendance", "punch", "missed", "miss", "skip",
+  "bunk", "lazy", "slow", "slacker", "idle", "performance", "underperformer", "poor", "fail", "failure", "warning", "mistake", "careless",
+  "useless", "worst", "loser", "fired", "penalty", "lop", "overtime", "sick",
+];
+
+export const PEEPS_SETTING_DEFAULTS: Partial<Record<PeepsSettingKey, unknown>> = {
+  "badges.catalogue": DEFAULT_BADGE_CATALOGUE,
+  "badges.limits": { perGiverPerMonth: 5, perPairPerMonth: 1 },
+  "badges.repeat": { allowed: true },
+  "badges.noManagerFallback": { upTo: "DIRECTORS" },
+  "badges.publicDetails": { giver: true, reason: true },
+  "nudges.catalogue": DEFAULT_NUDGE_TAGS,
+  "nudges.offLimitsWords": DEFAULT_NUDGE_OFF_LIMITS_WORDS,
+};
+
+/** How long a nudge tag shows: a week from when it was given. */
+export const NUDGE_LIFETIME_DAYS = 7;
 
 /** D-36: each catalogue item lasts a calendar week, a calendar month (India time) or until a director revokes it. */
 export const BADGE_DURATIONS = ["WEEK", "MONTH", "PERMANENT"] as const;

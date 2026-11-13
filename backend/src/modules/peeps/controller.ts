@@ -47,3 +47,10 @@ export async function people(req: Request, res: Response): Promise<void> {
   });
   res.status(200).json(rows.map((e) => ({ employeeId: e.id, employeeCode: e.employeeCode, name: e.nameHistory[0]?.fullName ?? e.employeeCode })));
 }
+// PEEPS Stage 3: withdrawing a pending proposal.
+export async function withdrawSetting(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await settings.withdrawSetting(key(req), req.body, await actorFor(req), metaOf(req)));
+}
+export async function withdrawChange(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await office.withdrawChange(req.params.id as string, req.body, await actorFor(req), metaOf(req)));
+}

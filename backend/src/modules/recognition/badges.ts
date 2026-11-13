@@ -1,10 +1,10 @@
 import { Prisma } from '@prisma/client';
-import { PEEPS_REQUIRED, PEEPS_SETTINGS } from '@shared/constants/peeps';
+import { PEEPS_REQUIRED, PEEPS_SETTING_DEFAULTS, PEEPS_SETTINGS } from '@shared/constants/peeps';
 import { writeAuditLogs } from '../../lib/audit';
 import { prisma } from '../../lib/prisma';
 import { HttpError } from '../../middleware/errorHandler';
 import { notifyEmployee } from '../notifications/notifyEmployee';
-import { enterSetting, getSetting, missingSettings } from '../peeps/settings';
+import { getSetting, missingSettings } from '../peeps/settings';
 import type { BadgeCatalogueItem } from '../peeps/settingSchemas';
 import type { ActorMeta, PeepsActor } from '../peeps/types';
 import {
@@ -18,13 +18,17 @@ import {
   recipientsFor,
 } from './common';
 
-// Badges and cheers (D-29, D-36): a public recognition record from a giver to a recipient, given along the reporting line (common.ts). Catalogue (each
-// item with its duration: this week, this month or permanent), the monthly limit, repeats and whether the giver and message show in public are director
-// settings, all Not set; only the catalogue is required. Visible to every signed-in member of staff on profiles, the directory and the home page (never
-// to the Developer, never signed out). Weekly and monthly items expire when their period ends; directors revoke any badge with a reason. Every give and
-// revoke is append-only and audited; giving is idempotent on the giver's key.
+// Badges and cheers (D-29, D-36, Peeps Stage 3): a public recognition record from a giver to a recipient, given along the reporting line (common.ts),
+// always with a reason. The catalogue (12 conventional badges, each lasting this week, this month or permanently), the monthly limit per giver (5), the
+// limit per giver-receiver pair per month (1), repeats and whether the giver and reason show in public ship as defaults ("Default, change in
+// settings"); directors change them (two-director confirmation, audited). A retired badge cannot be given and stays on past awards. Visible to every
+// signed-in member of staff on profiles, the directory and the home page (never to the Developer, never signed out). Weekly and monthly items expire when
+// their period ends (India time); directors revoke any badge with a reason. Every give and revoke is append-only and audited; giving is idempotent on the
+// giver's key, and the limits hold under concurrent gives (serializable transaction).
 
 type Row = Prisma.BadgeAwardGetPayload<{ include: { revocation: true } }>;
+/** Used when a limits version entered before Stage 3 has no pair limit: the shipped default. */
+const DEFAULT_PAIR_LIMIT = (PEEPS_SETTING_DEFAULTS['badges.limits'] as { perPairPerMonth: number }).perPairPerMonth;
 
 async function catalogue(): Promise<BadgeCatalogueItem[]> {
   return (await getSetting<BadgeCatalogueItem[]>('badges.catalogue')) ?? [];
@@ -42,9 +46,9 @@ const refuseDeveloper = (actor: PeepsActor) => {
 };
 
 /** What a row shows. `withGiver`/`withMessage` decide whether the giver and the message are included. */
-async function present(rows: Row[], opts: { withGiver: boolean; withMessage: boolean }) {
+async function present(rows: Row[], opts: { withGiver: boolean; withMessage: boolean; realNames?: boolean }) {
   const cat = await catalogue();
-  const label = await giverLabels(rows);
+  const label = await giverLabels(rows, { realNames: opts.realNames === true });
   const now = new Date(); // allow-clock: an instant
   return rows.map((r) => {
     const item = cat.find((c) => c.code === r.badgeCode);
@@ -53,6 +57,7 @@ async function present(rows: Row[], opts: { withGiver: boolean; withMessage: boo
       badgeCode: r.badgeCode,
       badge: item?.label ?? r.badgeCode,
       duration: item?.duration ?? null,
+      retiredBadge: item?.retired === true,
       givenAt: r.givenAt.toISOString(),
       expiresAt: r.expiresAt?.toISOString() ?? null,
       revoked: Boolean(r.revocation),
@@ -63,7 +68,7 @@ async function present(rows: Row[], opts: { withGiver: boolean; withMessage: boo
   });
 }
 
-/** The directors' choice of what public surfaces show (Not set: neither the giver nor the message). */
+/** The directors' choice of what public surfaces show (default: both the giver and the reason). */
 async function publicDetails(): Promise<{ giver: boolean; reason: boolean }> {
   const v = await getSetting<{ giver: boolean; reason: boolean }>('badges.publicDetails');
   return { giver: v?.giver === true, reason: v?.reason === true };
@@ -75,7 +80,7 @@ export async function status(actor: PeepsActor) {
     active: missing.length === 0,
     missing: missing.map((k) => PEEPS_SETTINGS[k].label),
     canGive: missing.length === 0 ? (await canGive(actor, 'badges')).any : false,
-    catalogue: await catalogue(),
+    catalogue: (await catalogue()).filter((c) => !c.retired),
   };
 }
 
@@ -86,7 +91,7 @@ export async function give(
   input: {
     recipientEmployeeId: string;
     badgeCode: string;
-    message?: string;
+    message: string;
     idempotencyKey: string;
   },
   meta: ActorMeta,
@@ -108,7 +113,9 @@ export async function give(
     };
   const item = (await catalogue()).find((c) => c.code === input.badgeCode);
   if (!item) throw new HttpError(400, 'That badge is not in the catalogue.', 'VALIDATION_ERROR');
-  const limit = await getSetting<{ perGiverPerMonth: number }>('badges.limits');
+  if (item.retired) throw new HttpError(409, 'That badge has been retired and can no longer be given.', 'RETIRED');
+  const limits = await getSetting<{ perGiverPerMonth: number; perPairPerMonth?: number }>('badges.limits');
+  const limit = limits ? { perGiverPerMonth: limits.perGiverPerMonth, perPairPerMonth: limits.perPairPerMonth ?? DEFAULT_PAIR_LIMIT } : null;
   const repeat = await getSetting<{ allowed: boolean }>('badges.repeat');
   let repeated = false;
   const attempt = () =>
@@ -126,6 +133,18 @@ export async function give(
               409,
               `You have given the most badges allowed this month (${limit.perGiverPerMonth}).`,
               'LIMIT_REACHED',
+            );
+          }
+          if (
+            limit &&
+            (await tx.badgeAward.count({
+              where: { giverUserId: actor.userId, recipientEmployeeId: input.recipientEmployeeId, givenAt: { gte: monthStart(now) } },
+            })) >= limit.perPairPerMonth
+          ) {
+            throw new HttpError(
+              409,
+              `You have given this person the most badges allowed in a month (${limit.perPairPerMonth}).`,
+              'PAIR_LIMIT_REACHED',
             );
           }
           if (
@@ -151,7 +170,7 @@ export async function give(
               recipientEmployeeId: input.recipientEmployeeId,
               giverUserId: actor.userId,
               giverKind: kind,
-              message: input.message ?? null,
+              message: input.message,
               idempotencyKey: input.idempotencyKey,
               givenAt: now,
               expiresAt: expiryFor(item.duration, now),
@@ -217,17 +236,17 @@ export async function give(
       body: 'Open Recognition to see it.',
       link: '/app/recognition',
     });
-  return { ...(await present([row], { withGiver: true, withMessage: true }))[0]!, repeated };
+  return { ...(await present([row], { withGiver: true, withMessage: true, realNames: true }))[0]!, repeated };
 }
 
-/** The recipient's own badges: who gave each and their message are theirs to see. */
+/** The recipient's own badges: who gave each (by name, directors included) and why are theirs to see. */
 export async function mine(actor: PeepsActor) {
   const rows = await prisma.badgeAward.findMany({
     where: { recipientEmployeeId: actor.employeeId },
     orderBy: { givenAt: 'desc' },
     include: { revocation: true },
   });
-  return present(rows, { withGiver: true, withMessage: true });
+  return present(rows, { withGiver: true, withMessage: true, realNames: true });
 }
 
 export async function given(actor: PeepsActor) {
@@ -351,68 +370,4 @@ export async function adminAll() {
       giverKind: rows[i]!.giverKind,
     })),
   );
-}
-
-/** A starter set the directors may load in one click (never preloaded): entered as a catalogue version that a different director still confirms. */
-export const STARTER_CATALOGUE: BadgeCatalogueItem[] = [
-  {
-    code: 'STARTER_THANK_YOU',
-    label: 'Thank you',
-    description: 'Starter catalogue: edit before confirming.',
-    duration: 'WEEK',
-  },
-  {
-    code: 'STARTER_TEAM_PLAYER',
-    label: 'Team player',
-    description: 'Starter catalogue: edit before confirming.',
-    duration: 'MONTH',
-  },
-  {
-    code: 'STARTER_ABOVE_AND_BEYOND',
-    label: 'Above and beyond',
-    description: 'Starter catalogue: edit before confirming.',
-    duration: 'MONTH',
-  },
-  {
-    code: 'STARTER_PROBLEM_SOLVER',
-    label: 'Problem solver',
-    description: 'Starter catalogue: edit before confirming.',
-    duration: 'MONTH',
-  },
-  {
-    code: 'STARTER_MENTOR',
-    label: 'Mentor',
-    description: 'Starter catalogue: edit before confirming.',
-    duration: 'PERMANENT',
-  },
-  {
-    code: 'STARTER_MILESTONE',
-    label: 'Milestone',
-    description: 'Starter catalogue: edit before confirming.',
-    duration: 'PERMANENT',
-  },
-];
-
-export async function loadStarterCatalogue(actor: PeepsActor, meta: ActorMeta) {
-  if (!actor.isDirector)
-    throw new HttpError(403, 'Only a director loads the starter catalogue.', 'FORBIDDEN');
-  const view = await enterSetting(
-    'badges.catalogue',
-    {
-      value: STARTER_CATALOGUE,
-      note: 'Starter catalogue (loaded by a director): edit it, then a different director confirms',
-    },
-    actor,
-    meta,
-  );
-  await writeAuditLogs([
-    {
-      ...meta,
-      action: 'badges.catalogue.starter_loaded',
-      entityType: 'PeepsSetting',
-      entityId: 'badges.catalogue',
-      after: { version: view.pending?.version ?? null, items: STARTER_CATALOGUE.length },
-    },
-  ]);
-  return view;
 }

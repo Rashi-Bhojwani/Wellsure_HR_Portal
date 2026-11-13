@@ -1,7 +1,8 @@
 import type { Request, Response } from "express";
 import { actorFor, metaOf } from "../peeps/access";
 import * as badges from "./badges";
-import * as nudges from "./nudges";
+import * as tags from "./nudgeTags";
+import * as notes from "./nudges";
 
 const id = (req: Request) => req.params.id as string;
 const q = (req: Request) => (req.query as { q: string }).q;
@@ -35,9 +36,6 @@ export async function badgeCounts(req: Request, res: Response): Promise<void> {
 export async function recentBadges(req: Request, res: Response): Promise<void> {
   res.status(200).json(await badges.recent(await actorFor(req)));
 }
-export async function loadStarter(req: Request, res: Response): Promise<void> {
-  res.status(201).json(await badges.loadStarterCatalogue(await actorFor(req), metaOf(req)));
-}
 export async function revokeBadge(req: Request, res: Response): Promise<void> {
   res.status(200).json(await badges.revoke(await actorFor(req), id(req), req.body, metaOf(req)));
 }
@@ -46,27 +44,45 @@ export async function allBadges(_req: Request, res: Response): Promise<void> {
 }
 
 export async function nudgeStatus(req: Request, res: Response): Promise<void> {
-  res.status(200).json(await nudges.status(await actorFor(req)));
+  res.status(200).json(await tags.status(await actorFor(req)));
 }
 export async function nudgeRecipients(req: Request, res: Response): Promise<void> {
-  res.status(200).json(await nudges.recipients(await actorFor(req), q(req)));
+  res.status(200).json(await tags.recipients(await actorFor(req), q(req)));
 }
-export async function send(req: Request, res: Response): Promise<void> {
-  const out = await nudges.send(await actorFor(req), req.body, metaOf(req));
+export async function giveNudge(req: Request, res: Response): Promise<void> {
+  const out = await tags.give(await actorFor(req), req.body, metaOf(req));
   res.status(out.repeated ? 200 : 201).json(out);
 }
 export async function myNudges(req: Request, res: Response): Promise<void> {
-  res.status(200).json(await nudges.mine(await actorFor(req)));
+  res.status(200).json(await tags.mine(await actorFor(req)));
 }
-export async function sentNudges(req: Request, res: Response): Promise<void> {
-  res.status(200).json(await nudges.sent(await actorFor(req)));
+export async function personNudges(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await tags.forPerson(await actorFor(req), req.params.employeeId as string));
 }
-export async function getNudge(req: Request, res: Response): Promise<void> {
-  res.status(200).json(await nudges.getOne(await actorFor(req), id(req), metaOf(req)));
+export async function nudgeCounts(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await tags.counts(await actorFor(req)));
 }
-export async function revokeNudge(req: Request, res: Response): Promise<void> {
-  res.status(200).json(await nudges.revoke(await actorFor(req), id(req), req.body, metaOf(req)));
+export async function recentNudges(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await tags.recent(await actorFor(req)));
+}
+export async function removeNudge(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await tags.remove(await actorFor(req), id(req), req.body, metaOf(req)));
+}
+export async function requestNudgeReview(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await tags.requestReview(await actorFor(req), id(req), metaOf(req)));
+}
+export async function decideNudgeReview(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await tags.decideReview(await actorFor(req), id(req), req.body, metaOf(req)));
 }
 export async function allNudges(req: Request, res: Response): Promise<void> {
-  res.status(200).json(await nudges.adminAll(await actorFor(req), metaOf(req)));
+  res.status(200).json(await tags.adminAll(await actorFor(req)));
+}
+export async function myNotes(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await notes.mine(await actorFor(req)));
+}
+export async function getNote(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await notes.getOne(await actorFor(req), id(req), metaOf(req)));
+}
+export async function allNotes(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await notes.adminAll(await actorFor(req), metaOf(req)));
 }

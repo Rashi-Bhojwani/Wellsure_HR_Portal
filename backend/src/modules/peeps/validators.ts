@@ -17,3 +17,6 @@ export const proposeChangeSchema = z
   })
   .strict();
 export const peopleQuery = z.object({ q: z.string().trim().max(100).default("") }).strict();
+// PEEPS Stage 3: withdrawing a pending proposal.
+export const withdrawSettingSchema = z.object({ version: z.number().int().min(1), reason: z.string().trim().min(3).max(500) }).strict();
+export const reasonOnlySchema = z.object({ reason: z.string().trim().min(3).max(500) }).strict();

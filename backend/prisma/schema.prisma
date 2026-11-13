@@ -554,6 +554,7 @@ model Employee {
   leaveDayReleases           LeaveDayRelease[]
   // PEEPS-BEGIN assets
   assetAssignments           AssetAssignment[]
+  assetRequests              AssetRequest[]
   // PEEPS-END
   // PEEPS-BEGIN office-unmute
   officeMembershipChanges    OfficeMembershipChange[]         @relation("OfficeMembershipChangeEmployee")
@@ -565,6 +566,7 @@ model Employee {
   // PEEPS-BEGIN badges-nudges
   badgesReceived             BadgeAward[]
   nudgesReceived             PrivateNudge[]
+  nudgeTagsReceived          NudgeTagAward[]
   // PEEPS-END
   // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
   segmentMemberships         EmployeeSegmentMember[]          @relation("EmployeeSegmentMembership")
@@ -3814,6 +3816,7 @@ model PeepsSettingVersion {
   enteredAt       DateTime @default(now()) @map("entered_at") @db.Timestamptz(3)
 
   confirmation PeepsSettingConfirmation?
+  withdrawal   PeepsSettingWithdrawal?
 
   @@unique([key, version])
   @@map("peeps_setting_versions")
@@ -3852,6 +3855,7 @@ model OfficeMembershipChange {
 
   confirmation OfficeMembershipConfirmation?
   application  OfficeMembershipApplication?
+  withdrawal   OfficeMembershipWithdrawal?
 
   @@index([employeeId])
   @@index([effectiveFrom])
@@ -5884,3 +5888,132 @@ model UpdateImportBatch {
 }
 
 // M-END
+
+// PEEPS-BEGIN nudge-tags
+// Public light-hearted nudge tags (Peeps Stage 3). Given by a director only (service + database trigger), never by a system job; each shows for a week.
+// No free text anywhere. A director removes one at once with a reason; the receiver may ask for a review, which waits as a directors' task until a
+// director keeps or removes it. All append-only.
+enum NudgeReviewOutcome {
+  KEPT
+  REMOVED
+}
+
+model NudgeTagAward {
+  id                  String   @id @default(cuid())
+  tagCode             String   @map("tag_code")
+  recipientEmployeeId String   @map("recipient_employee_id")
+  recipient           Employee @relation(fields: [recipientEmployeeId], references: [id])
+  giverUserId         String   @map("giver_user_id")
+  idempotencyKey      String   @map("idempotency_key")
+  givenAt             DateTime @default(now()) @map("given_at") @db.Timestamptz(3)
+  expiresAt           DateTime @map("expires_at") @db.Timestamptz(3)
+
+  removal NudgeTagRemoval?
+  reviews NudgeTagReviewRequest[]
+
+  @@unique([giverUserId, idempotencyKey])
+  @@index([recipientEmployeeId])
+  @@index([expiresAt])
+  @@map("nudge_tag_awards")
+}
+
+model NudgeTagRemoval {
+  id              String        @id @default(cuid())
+  awardId         String        @unique @map("award_id")
+  award           NudgeTagAward @relation(fields: [awardId], references: [id])
+  removedByUserId String        @map("removed_by_user_id")
+  reason          String
+  at              DateTime      @default(now()) @db.Timestamptz(3)
+
+  @@map("nudge_tag_removals")
+}
+
+model NudgeTagReviewRequest {
+  id                    String        @id @default(cuid())
+  awardId               String        @unique @map("award_id")
+  award                 NudgeTagAward @relation(fields: [awardId], references: [id])
+  requestedByEmployeeId String        @map("requested_by_employee_id")
+  at                    DateTime      @default(now()) @db.Timestamptz(3)
+
+  decision NudgeTagReviewDecision?
+
+  @@map("nudge_tag_review_requests")
+}
+
+model NudgeTagReviewDecision {
+  id              String                @id @default(cuid())
+  requestId       String                @unique @map("request_id")
+  request         NudgeTagReviewRequest @relation(fields: [requestId], references: [id])
+  decidedByUserId String                @map("decided_by_user_id")
+  outcome         NudgeReviewOutcome
+  at              DateTime              @default(now()) @db.Timestamptz(3)
+
+  @@map("nudge_tag_review_decisions")
+}
+
+// PEEPS-END nudge-tags
+
+// PEEPS-BEGIN followups
+// Peeps Stage 3 follow-ups. Withdrawing a pending proposal (a Peeps setting version or a Wellsure Office membership change) before it is confirmed:
+// by its author or a director, audited, and refused once it is decided (service + trigger). Employees' asset requests: the employee asks for an asset
+// type; HR and the directors (who run the register) decide; every step is an append-only event.
+model PeepsSettingWithdrawal {
+  id                String              @id @default(cuid())
+  versionId         String              @unique @map("version_id")
+  version           PeepsSettingVersion @relation(fields: [versionId], references: [id])
+  withdrawnByUserId String              @map("withdrawn_by_user_id")
+  reason            String
+  at                DateTime            @default(now()) @db.Timestamptz(3)
+
+  @@map("peeps_setting_withdrawals")
+}
+
+model OfficeMembershipWithdrawal {
+  id                String                 @id @default(cuid())
+  changeId          String                 @unique @map("change_id")
+  change            OfficeMembershipChange @relation(fields: [changeId], references: [id])
+  withdrawnByUserId String                 @map("withdrawn_by_user_id")
+  reason            String
+  at                DateTime               @default(now()) @db.Timestamptz(3)
+
+  @@map("office_membership_withdrawals")
+}
+
+enum AssetRequestEventKind {
+  APPROVED
+  DECLINED
+  FULFILLED
+  CANCELLED
+}
+
+model AssetRequest {
+  id             String   @id @default(cuid())
+  employeeId     String   @map("employee_id")
+  employee       Employee @relation(fields: [employeeId], references: [id])
+  categoryCode   String   @map("category_code")
+  note           String?
+  idempotencyKey String   @map("idempotency_key")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  events AssetRequestEvent[]
+
+  @@unique([employeeId, idempotencyKey])
+  @@index([employeeId])
+  @@map("asset_requests")
+}
+
+model AssetRequestEvent {
+  id        String                @id @default(cuid())
+  requestId String                @map("request_id")
+  request   AssetRequest          @relation(fields: [requestId], references: [id])
+  kind      AssetRequestEventKind
+  byUserId  String                @map("by_user_id")
+  note      String?
+  at        DateTime              @default(now()) @db.Timestamptz(3)
+
+  @@unique([requestId, kind])
+  @@index([requestId])
+  @@map("asset_request_events")
+}
+
+// PEEPS-END followups

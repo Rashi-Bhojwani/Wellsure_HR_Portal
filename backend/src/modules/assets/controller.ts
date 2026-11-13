@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import type { AssetSettingKind } from "@shared/constants/assets";
 import * as service from "./service";
 import * as settings from "./settings";
+import * as requests from "./requests"; // PEEPS asset-requests
 import type { ActorMeta, AssetViewer } from "./types";
 
 // The register is company-wide work for the directors and the Wellsure Office members they chose (requireOffice let the caller in), so it is read with
@@ -73,3 +74,26 @@ export async function listMine(req: Request, res: Response): Promise<void> {
 export async function acknowledge(req: Request, res: Response): Promise<void> {
   res.status(200).json(await service.acknowledge(id(req), viewer(req), meta(req)));
 }
+
+// PEEPS-BEGIN asset-requests
+const self = (req: Request) => ({ userId: req.user!.userId, employeeId: req.user!.employeeId });
+export async function requestOptions(_req: Request, res: Response): Promise<void> {
+  res.status(200).json(await requests.options());
+}
+export async function myRequests(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await requests.mine(req.user!.employeeId));
+}
+export async function createRequest(req: Request, res: Response): Promise<void> {
+  const out = await requests.create(self(req), req.body, meta(req));
+  res.status(out.repeated ? 200 : 201).json(out);
+}
+export async function cancelRequest(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await requests.cancel(self(req), id(req), meta(req)));
+}
+export async function allRequests(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await requests.all(req.query as { status?: requests.AssetRequestStatus }));
+}
+export async function decideRequest(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await requests.decide(self(req), id(req), req.body, meta(req)));
+}
+// PEEPS-END asset-requests
