@@ -62,6 +62,7 @@ describe("A2/A3 — over a real run", () => {
   let runId = "";
   let plId = "";
   let encReqId = "";
+  let otherCode = "";
   const people: Record<string, { employeeId: string; userId: string; employeeCode: string }> = {};
   const tok: Record<string, string> = {};
   const proposalIds: string[] = [];
@@ -84,6 +85,9 @@ describe("A2/A3 — over a real run", () => {
     await prisma.overtimeClaim.create({ data: { employeeId: who("a"), date: new Date("2026-08-10T00:00:00Z"), minutes: 150, approvedMinutes: 150, status: "APPROVED", decidedByUserId: world.maker.userId, decidedAt: new Date() } });
     encReqId = (await prisma.leaveEncashmentRequest.create({ data: { employeeId: who("b"), leaveTypeId: plId, leaveYear: 2026, days: "2.5", status: "APPROVED", decidedByUserId: world.maker.userId, decidedAt: new Date() } })).id;
     await prisma.leaveLedger.create({ data: { employeeId: who("c"), leaveTypeId: plId, leaveYear: 2026, entryDate: new Date("2026-01-01T00:00:00Z"), entryType: "GRANT", days: "3", referenceType: "MANUAL_GRANT" } });
+    const otherType = await prisma.leaveType.findFirstOrThrow({ where: { code: { not: "PL" } }, orderBy: { code: "asc" } });
+    otherCode = otherType.code;
+    await prisma.leaveLedger.create({ data: { employeeId: who("c"), leaveTypeId: otherType.id, leaveYear: 2026, entryDate: new Date("2026-01-01T00:00:00Z"), entryType: "GRANT", days: "2", referenceType: "MANUAL_GRANT" } });
     const hold = await call(world.tokens.maker, "post", "/api/payroll/holds", { input: { employeeId: who("c"), cycleStart: CYCLE.start, reason: "Documents pending" } });
     expect(hold.status).toBe(201);
     runId = await calculateRun(world);
@@ -151,9 +155,13 @@ describe("A2/A3 — over a real run", () => {
     expect((await call(world.tokens.checkerA, "post", "/api/payroll-pay-policies/encashment/pay", { requestId: encReqId })).body.error.code).toBe("ALREADY_PAID");
     const ledger = await prisma.leaveLedger.findMany({ where: { referenceType: "ENCASHMENT_REQUEST", referenceId: encReqId } });
     expect(ledger.map((l) => [l.entryType, l.days.toString()])).toEqual([["ENCASHMENT", "-2.5"]]);
-    const leave = (await automaticLines(who("c"), new Date("2026-09-30T00:00:00Z"))).find((l) => l.kind === "LEAVE_BALANCE")!;
+    const exitLines = (await automaticLines(who("c"), new Date("2026-09-30T00:00:00Z"))).filter((l) => l.kind === "LEAVE_BALANCE");
+    const leave = exitLines.find((l) => l.label.includes("(PL)"))!;
     expect(leave.amount).not.toBeNull();
     expect(leave.label).toBe("Leave encashment (PL)");
+    // A type not named for exit stays in days only.
+    const other = exitLines.find((l) => l.label.includes(`(${otherCode})`))!;
+    expect(other).toMatchObject({ amount: null, label: `Leave balance (${otherCode}), days only` });
     // The finalised August run is untouched by all of this.
     expect(await goldenSnapshot(world, runId)).toEqual(goldenFixture());
   });
