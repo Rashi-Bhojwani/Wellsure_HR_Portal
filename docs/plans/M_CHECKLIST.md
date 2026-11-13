@@ -97,16 +97,14 @@ Per row: Zod + authenticate + requirePermission + data scope on every route; rou
 tests; sensitive columns in the field-encryption registry; audit; design system, light / dark / phone; a mutation check on each new rule; the
 migration applied to a fresh database; no existing test weakened; a golden test where attendance or pay could change.
 
-- [ ] Policy settings mechanism
-- [ ] ER-27 · [ ] ER-18 · [ ] ER-26 · [ ] OE-04 · [ ] ER-28 · [ ] SS-13
-- [ ] AT-22 · [ ] LV-19 · [ ] LV-20 · [ ] AT-19 · [ ] AT-36 · [ ] LV-23
-- [ ] IE-07/08 · [ ] LT-09 · [ ] AD-07 · [ ] NT-11 · [ ] AD-08
-- [ ] full backend suite alone (after every few rows and at the end)
+- [x] Policy settings mechanism + ER-27 — `de0cfed`
+- [x] ER-18 `9741815` (+`fbf26e8`) · [x] ER-26 `371fd55` · [x] OE-04 `f9b1842` · [x] ER-28 `c4f4b7b` · [x] SS-13 `3bea7cb`
+- [x] AT-22, LV-19, LV-20 `cbaee81` · [x] AT-19 `f503dd7` · [x] AT-36 `fc14ed4` · [x] LV-23 `c87fb08`
+- [x] IE-07/08 `1aedbb0` · [x] LT-09 `96c908d` · [x] AD-07 `048aed2` · [x] NT-11 `b9ec63c` · [x] AD-08 `c7f01a2`
+- [~] full backend suite alone: run once after SS-13 (2,133 of 2,135; the 2 failures explained and fixed, see report); not run again at the end (owner: skip tests)
 
 ## B3 — walks
-- [ ] Keyboard-only paths (Tab, Enter, Escape, visible focus, dialogs trap focus) for the primary actions of every screen built in both blocks
-- [ ] Tablet (768) as director, HR, manager, employee, Developer
-- [ ] Desktop light and 390 dark for every new or changed screen, five roles
+- [-] Keyboard-only paths, tablet (768), desktop light and 390 dark walks of block 2's screens: not done (owner: skip tests to save tokens)
 
 ## B5 — verify and finish
-- [ ] CI per job on the final code commit · [ ] M_STAGE_REPORTS.md block 2 report
+- [x] M_STAGE_REPORTS.md block 2 report · CI: see the report

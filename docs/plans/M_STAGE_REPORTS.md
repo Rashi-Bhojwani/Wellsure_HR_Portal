@@ -228,3 +228,97 @@ session's final message. Every migration was applied to a fresh test database by
 **Pay-data check.** No path found for HR, a manager or the Developer to see pay data. New routes that could carry a figure keep it out: the claims inbox
 item has no amount; scheduled report emails carry no rows (leave liability stays directors-only through `reports.liability.view`); the audit export
 keeps payroll rows and money fields from anyone without the salary key and refuses the Developer; the data export lists payslips by month only.
+
+---
+
+# Block 2 (2026-11-12 to 13): Developer audit view, the decision rows
+
+## Rows and commits
+
+| Row | Now | Commit | Default or state |
+|---|---|---|---|
+| B1 Developer audit view | Built | `ad5b3ca`, test `c536707` | — |
+| Policy settings (shared two-director store, System Settings → Policy settings) | Built | `de0cfed` | — |
+| ER-27 Divisions | Built | `de0cfed` | none defined (optional grouping of departments) |
+| ER-18 Policy acknowledgement | Built | `9741815`, `fbf26e8` | off for every document unless asked |
+| ER-26 Probation | Built | `371fd55` | 3 months; reminder 15 days before (Default, change in settings) |
+| OE-04 Onboarding checklist | Built | `f9b1842` | six conventional steps (Default) |
+| ER-28 Custom fields | Built | `c4f4b7b` | none defined |
+| SS-13 Feedback | Built | `3bea7cb` | anonymous allowed (Default) |
+| AT-22 Correction limits | Built, off | `cbaee81` | off; suggested 3 a month |
+| LV-19 Leave request limits | Built, off (not "document after N days": Peeps LV-18) | `cbaee81` | off; suggested PL 15 days, 7 days' notice |
+| LV-20 Sandwich rule | Built, off | `cbaee81` | off; no type listed |
+| AT-19 Overtime | Built, off (paying it: Session A) | `f503dd7` | off; suggested 60 min minimum, 30 min steps, manager-with-key or director |
+| AT-36 Work from home | Built, off | `fc14ed4` | off; suggested all departments, 5 days a request, a director approves |
+| LV-23 Encashment requests | Built, off (paying it: Session A) | `c87fb08` | off; suggested PL, keep 15, at most 10 a year |
+| IE-07 / IE-08 Update import and HR's import rules | Built | `1aedbb0` | HR updates contact/personal; job changes need a director; 500 rows (Default) |
+| LT-09 Electronic signature | Built (check a letter; signing existed) | `96c908d` | — |
+| AD-07 Data retention | Built, every period Not set | `048aed2` | Not set (nothing is ever due) |
+| NT-11 SMS / WhatsApp | Built, provider Not set | `b9ec63c` | Not set (nothing is sent) |
+| AD-08 More than one company | Built (payroll per company: Session A) | `c7f01a2` | one company |
+
+Skipped: AT-18 late-mark penalty (Peeps owns the lateness rule); ST-28 statutory registers (built from payroll results: Session A);
+NT-10 phone push (deferred to deployment by the owner).
+
+## Defaults chosen, and why (for the owners' review)
+
+All are in `shared/constants/policySettings.ts` with the reason beside each, and are changed by one director and confirmed by another.
+* Probation 3 months, reminder 15 days before: the most common probation in Indian offer letters at this size; time for the manager's review.
+* Onboarding: six first-month steps (offer letter and documents; invitation and first sign-in; team introduction; My Info complete; policies
+  acknowledged; first-month check-in). No asset or payroll step (assets are Peeps'; payroll set-up is the directors').
+* Feedback without a name allowed: a suggestion box is normally anonymous.
+* Update import: HR may update contact and personal details; job changes need a director (they change who approves what); 500 rows.
+* Suggested values offered on the form for the settings that change pay or leave (never in force until turned on): corrections 3 a month;
+  overtime from 60 minutes in 30-minute steps; WFH up to 5 days a request for every department; PL at most 15 days a request with 7 days'
+  notice; encashment of PL keeping 15 and at most 10 a year. Sandwich rule: no type suggested (many companies have none).
+* Not set (owners' values): retention periods; the SMS/WhatsApp provider and its notices.
+
+## Decisions made here (owners may overrule)
+
+* Developer audit view: the record id, IP address and browser are withheld too, not only the old and new values; the names of the fields
+  that changed are shown (a key that looks like a code or an id is left out).
+* Settings that change pay or leave are proposed "on" by one director and confirmed by another; off again the same way.
+* Sandwich rule counts only days between two leave days of the same request (not across two requests); it changes the balance taken,
+  not attendance (the engine still shows a week-off).
+* Leave notice applies to one's own request; HR applying on someone's behalf is not held to it.
+* Overtime is read from the engine's excess minutes on a non-provisional day and re-read at approval (never more than claimed).
+* WFH approval writes remote marks through the existing director path; the leave policy's WFH monthly/yearly limits are not applied here.
+* Encashment requests reserve days (asked or approved count against the minimum) but write nothing to the ledger; payroll does.
+* Feedback without a name writes no audit row (it would carry the sender's account and address).
+* Custom field values: the audit records which fields changed, never the values; only a director reveals a sensitive one.
+* Retention erasure: contact details are replaced by a marker and the photo removed; only GENERAL documents' files are removed; helpdesk
+  tickets are not covered yet.
+* SMS/WhatsApp texts carry the notice's title only, never its body.
+* More than one company: kept in new tables beside the main company, so nothing payroll reads changes.
+
+## Requests to Session A (block 2)
+
+5. **Overtime pay.** Approved minutes per person per month: `overtime_claims` (status APPROVED, `approved_minutes`), or
+   `GET /api/overtime/totals?month=` (directors). A pay head and rate are needed (owners' values).
+6. **Encashment during the year.** `leave_encashment_requests` with status APPROVED wait for payroll to pay them and write the leave
+   ledger entry (the rate is spec §14's open question).
+7. **Payroll per company.** `legal_entities` and `employee_legal_entities` (no row = the main company): registrations, statutory files
+   and the bank file per entity.
+8. **Statutory registers (ST-28)**: built from payroll results; not started here.
+9. Session A's `payroll/reports/definitions.ts` read history tables directly (current-row guard); already fixed by Session A in `247096d`.
+
+## Changed tests (block 2)
+
+| Test | Before | After | Why |
+|---|---|---|---|
+| `leave/__tests__/yearEndMoney.test.ts` audit viewer case | The Developer sees the year-end row without the total, the rest intact | The Developer sees no value at all; the money rule for a non-salary viewer is kept by calling the audit service directly (mutation still caught) | Owner rule: the Developer never sees a value |
+| `frontend/src/routes/__tests__/mobile.test.tsx` coming-soon case | Feedback was the example of a page still to come | Feedback is real; the rule is checked on a temporary phase-marked entry | SS-13 built the last placeholder |
+| `managers/__tests__/managerReach.test.ts` | — | cases added for custom fields, overtime and companies (manager-grantable keys) | new routes |
+
+## Verification
+
+* Per row (until the owner asked to skip tests): the row's own test file, route inventory, cleanup engine; mutation checks on each new rule
+  (all caught; two first survived and were closed by new cases: an approver deciding their own overtime claim, and a team-scoped importer).
+  Rows built after that request (LT-09 check page only partly, AD-07, NT-11, AD-08) have **no test of their own run** beyond lint and
+  typecheck: LT-09's test file was written and passed; AD-07, NT-11 and AD-08 have no test file.
+* Full backend suite alone once (after SS-13): 2,135 tests, 2 failures: Session A's reports reading history tables (fixed by them) and the
+  year-end audit test changed above. Not run again at the end.
+* Every migration applied to the local database with no schema drift; each test run rebuilt the test database from migrations.
+* Lint, design tokens and typecheck (both projects) pass on the final tree. The backend typecheck needs about 2.5 GB of Node heap
+  (default here is 2 GB; CI passes as is).
+* **Not done:** keyboard-only, tablet (768), desktop light and 390 dark walks of block 2's screens; a browser walk of any block 2 screen.
