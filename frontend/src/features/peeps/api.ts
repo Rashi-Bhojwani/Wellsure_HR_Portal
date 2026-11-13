@@ -17,6 +17,9 @@ export interface SettingView {
   label: string;
   what: string;
   enteredBy: "DIRECTOR" | "OFFICE";
+  /** CONFIRMED: a director-confirmed version; DEFAULT: the shipped default ("Default, change in settings"); NOT_SET: neither. */
+  state: "CONFIRMED" | "DEFAULT" | "NOT_SET";
+  defaultValue: unknown;
   inForce: { version: number; value: unknown; enteredByName: string | null; confirmedByName: string | null; confirmedAt: string } | null;
   pending: { version: number; value: unknown; note: string; enteredByName: string | null; enteredByMe: boolean; enteredAt: string } | null;
 }
@@ -41,6 +44,7 @@ export interface Membership {
     proposedAt: string;
     confirmedAt: string | null;
     appliedAt: string | null;
+    withdrawnAt: string | null;
   }>;
 }
 
@@ -62,3 +66,6 @@ export const drift = () => data<GrantDrift[]>(apiClient.get("/api/peeps/office/d
 export const proposeChange = (input: { kind: OfficeChangeKind; employeeId: string; fromEmployeeId?: string; capabilities?: OfficeCapabilityId[]; effectiveFrom?: string; reason: string }) =>
   data<{ id: string }>(apiClient.post("/api/peeps/office/changes", input));
 export const confirmChange = (id: string) => data<{ applied: boolean }>(apiClient.post(`/api/peeps/office/changes/${id}/confirm`));
+// PEEPS Stage 3: withdrawing a pending proposal.
+export const withdrawSetting = (key: PeepsSettingKey, version: number, reason: string) => data<SettingView>(apiClient.post(`/api/peeps/settings/${key}/withdraw`, { version, reason }));
+export const withdrawChange = (id: string, reason: string) => data<{ withdrawn: boolean }>(apiClient.post(`/api/peeps/office/changes/${id}/withdraw`, { reason }));

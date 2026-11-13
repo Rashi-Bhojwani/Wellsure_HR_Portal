@@ -430,6 +430,9 @@ for (const m of ["PeepsSettingVersion", "PeepsSettingConfirmation", "OfficeMembe
 // PEEPS-END
 // PEEPS-BEGIN badges-nudges
 for (const m of ["BadgeAward", "BadgeRevocation", "PrivateNudge", "NudgeRead", "NudgeRevocation"]) PURGE_GUARDED_MODELS.add(m);
+// PEEPS-BEGIN stage3 (nudge tags, withdrawals, asset requests: append-only)
+for (const m of ["NudgeTagAward", "NudgeTagRemoval", "NudgeTagReviewRequest", "NudgeTagReviewDecision", "PeepsSettingWithdrawal", "OfficeMembershipWithdrawal", "AssetRequest", "AssetRequestEvent"]) PURGE_GUARDED_MODELS.add(m);
+// PEEPS-END stage3
 // PEEPS-END
 // PEEPS-BEGIN leave-types
 for (const m of ["LeaveRuleVersion", "LeaveRuleApproval", "LeaveRequestDocument"]) PURGE_GUARDED_MODELS.add(m);

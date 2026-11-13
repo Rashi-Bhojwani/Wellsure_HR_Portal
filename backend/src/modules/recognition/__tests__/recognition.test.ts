@@ -128,9 +128,9 @@ describe("badges and cheers", () => {
 
     it("a reason is required", async () => {
       await roomy();
-      expect((await give("managerB", "b1", { message: undefined })).status).toBe(400);
-      expect((await give("managerB", "b1", { message: "  " })).status).toBe(400);
-      expect((await give("managerB", "b1", { message: "DEMO well done" })).status).toBe(201);
+      expect((await give("managerB", "b1", { badgeCode: "TEAM_PLAYER", message: undefined })).status).toBe(400);
+      expect((await give("managerB", "b1", { badgeCode: "TEAM_PLAYER", message: "  " })).status).toBe(400);
+      expect((await give("managerB", "b1", { badgeCode: "TEAM_PLAYER", message: "DEMO well done" })).status).toBe(201);
     });
 
     it("directors change the catalogue: rename, retire, add; a retired badge cannot be given and stays on past awards; a given badge cannot be deleted", async () => {

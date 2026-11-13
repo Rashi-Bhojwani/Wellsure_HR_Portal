@@ -53,7 +53,7 @@ const PersonCard = memo(function PersonCard({ person, onOpen }: { person: Direct
         {person.location.name} · {person.employeeCode}
       </span>
       {/* PEEPS-BEGIN avatars */}
-      <BadgeCount employeeId={person.id} />
+      <BadgeCount employeeId={person.id} withNudges />
       {/* PEEPS-END */}
       {(person.officialEmail || person.mobile) && (
         <span style={{ display: "flex", flexDirection: "column", gap: space[1], alignItems: "center", width: "100%", marginTop: space[3], paddingTop: space[3], borderTop: `1px solid ${v.borderDefault}` }}>

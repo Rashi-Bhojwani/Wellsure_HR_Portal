@@ -87,8 +87,8 @@ describe("nudge tags and read-only corrective notes", () => {
       const given = await tag("director", "emp");
       expect(given.status).toBe(201);
       expect(new Date(given.body.expiresAt).getTime() - new Date(given.body.givenAt).getTime()).toBe(NUDGE_LIFETIME_DAYS * 86_400_000);
-      for (const who of ["manager", "emp", "other", "hr", "member", "developer"] as const) expect((await tag(who, "other")).status, who).toBe(403);
-      expect((await tag("former", "other")).status).toBe(401);
+      for (const who of ["manager", "emp", "other", "hr", "member", "developer"] as const) expect((await tag(who, "director2")).status, who).toBe(403);
+      expect((await tag("former", "director2")).status).toBe(401);
       expect((await request(app).post("/api/nudges").send({})).status).toBe(401);
       expect((await tag("director", "director")).status).toBe(409);
       expect((await tag("director", "emp", { message: "free text" })).status).toBe(400);
@@ -257,7 +257,7 @@ describe("nudge tags and read-only corrective notes", () => {
         return original(line);
       };
       try {
-        for (const [who, url] of [["other", `/api/nudges/people/${p.emp.employeeId}`], ["other", "/api/nudges/recent"], ["other", "/api/nudges/counts"], ["other", `/api/badges/people/${p.emp.employeeId}`], ["emp", "/api/nudges/mine"], ["director", "/api/nudges/admin/all"], ["director", "/api/tasks/mine"], ["manager", "/api/tasks/mine"], ["other", `/api/people?search=${NOTE_MARKER}`]] as const) {
+        for (const [who, url] of [["other", `/api/nudges/people/${p.emp.employeeId}`], ["other", "/api/nudges/recent"], ["other", "/api/nudges/counts"], ["other", `/api/badges/people/${p.emp.employeeId}`], ["emp", "/api/nudges/mine"], ["director", "/api/nudges/admin/all"], ["director", "/api/tasks/mine"], ["manager", "/api/tasks/mine"]] as const) {
           const text = JSON.stringify((await get(who, url)).body);
           expect(text.includes(NOTE_MARKER), `${who} ${url}`).toBe(false);
         }
@@ -268,6 +268,8 @@ describe("nudge tags and read-only corrective notes", () => {
       }
       expect(lines.join("\n")).toContain("note-log-check");
       expect(lines.join("\n")).not.toContain(NOTE_MARKER);
+      // Search (outside the log capture: the request log records the query string the test itself typed).
+      expect(JSON.stringify((await get("other", `/api/people?search=${NOTE_MARKER}`)).body)).not.toContain(noteId);
     });
   });
 });

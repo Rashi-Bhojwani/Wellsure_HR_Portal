@@ -59,6 +59,7 @@ export async function create(actor: { userId: string; employeeId: string }, inpu
   const key = { employeeId_idempotencyKey: { employeeId: actor.employeeId, idempotencyKey: input.idempotencyKey } };
   const existing = await prisma.assetRequest.findUnique({ where: key, include: { events: true } });
   if (existing) return { ...(await present([existing], false))[0]!, repeated: true };
+  let repeated = false;
   const row = await prisma
     .$transaction(async (tx) => {
       const r = await tx.assetRequest.create({ data: { employeeId: actor.employeeId, categoryCode: input.categoryCode, note: input.note?.trim() || null, idempotencyKey: input.idempotencyKey }, include: { events: true } });
@@ -66,10 +67,13 @@ export async function create(actor: { userId: string; employeeId: string }, inpu
       return r;
     })
     .catch(async (err) => {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") return prisma.assetRequest.findUniqueOrThrow({ where: key, include: { events: true } });
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        repeated = true; // the same key raced a moment ago: answer with the one that won
+        return prisma.assetRequest.findUniqueOrThrow({ where: key, include: { events: true } });
+      }
       throw err;
     });
-  return { ...(await present([row], false))[0]!, repeated: false };
+  return { ...(await present([row], false))[0]!, repeated };
 }
 
 async function addEvent(id: string, kind: "APPROVED" | "DECLINED" | "FULFILLED" | "CANCELLED", userId: string, note: string | null, meta: ActorMeta) {

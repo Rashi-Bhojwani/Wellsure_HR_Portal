@@ -27,6 +27,37 @@ export function SettingFields({ settingKey }: { settingKey: PeepsSettingKey }) {
         <Radio.Group options={[{ value: "DIRECTORS", label: "May give up to the directors" }, { value: "NOBODY", label: "Nobody above them" }]} />
       </Form.Item>
     );
+  if (settingKey === "badges.limits")
+    return (
+      <>
+        <Form.Item name={["value", "perGiverPerMonth"]} label="Badges one person may give in a calendar month" rules={[{ required: true }]}><InputNumber min={1} max={1000} style={{ width: "100%" }} /></Form.Item>
+        <Form.Item name={["value", "perPairPerMonth"]} label="Badges one giver may give the same person in a month" rules={[{ required: true }]}><InputNumber min={1} max={100} style={{ width: "100%" }} /></Form.Item>
+      </>
+    );
+  if (settingKey === "nudges.offLimitsWords")
+    return (
+      <Form.Item name="value" label="Words no nudge tag may contain" initialValue={[]} extra="Whole words, any case. Type a word and press Enter.">
+        <Select mode="tags" tokenSeparators={[","]} aria-label="Off-limits words" />
+      </Form.Item>
+    );
+  if (settingKey === "nudges.catalogue")
+    return (
+      <Form.List name="value" initialValue={[{ code: "", label: "" }]}>
+        {(fields, { add, remove }) => (
+          <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
+            {fields.map((f, i) => (
+              <Space key={f.key} align="start" wrap>
+                <Form.Item name={[f.name, "label"]} label={i === 0 ? "Tag" : undefined} rules={[{ required: true, max: 40 }]}><Input aria-label={`Tag ${i + 1}`} /></Form.Item>
+                <Form.Item name={[f.name, "code"]} label={i === 0 ? "Code" : undefined} rules={[{ required: true, pattern: /^[A-Z0-9_]{1,40}$/, message: "Capital letters, digits, underscores." }]}><Input aria-label={`Tag code ${i + 1}`} /></Form.Item>
+                <Form.Item name={[f.name, "retired"]} label={i === 0 ? "Retired" : undefined} valuePropName="checked"><Switch aria-label={`Retire tag ${i + 1}`} /></Form.Item>
+                <Form.Item label={i === 0 ? " " : undefined}><Button icon={<DeleteOutlined />} aria-label={`Remove tag ${i + 1}`} disabled={fields.length === 1} onClick={() => remove(f.name)} /></Form.Item>
+              </Space>
+            ))}
+            <Button icon={<PlusOutlined />} onClick={() => add({ code: "", label: "" })}>Add a tag</Button>
+          </div>
+        )}
+      </Form.List>
+    );
   if (settingKey === "office.name") return <Form.Item name="value" label="Name" rules={[{ required: true, max: 60 }]}><Input /></Form.Item>;
   if (settingKey === "unmute.availability")
     return (
@@ -55,6 +86,7 @@ export function SettingFields({ settingKey }: { settingKey: PeepsSettingKey }) {
                 <Form.Item name={[f.name, "code"]} label={i === 0 ? "Code" : undefined} rules={[{ required: true, pattern: /^[A-Z0-9_]{1,40}$/, message: "Capital letters, digits, underscores." }]}><Input aria-label={`Code ${i + 1}`} /></Form.Item>
                 <Form.Item name={[f.name, "description"]} label={i === 0 ? "Description" : undefined} rules={[{ max: 200 }]}><Input aria-label={`Description ${i + 1}`} /></Form.Item>
                 <Form.Item name={[f.name, "duration"]} label={i === 0 ? "Lasts" : undefined} rules={[{ required: true, message: "Choose how long it lasts." }]}><Select aria-label={`Lasts ${i + 1}`} style={{ minWidth: 200 }} options={BADGE_DURATIONS.map((d) => ({ value: d, label: BADGE_DURATION_LABELS[d] }))} /></Form.Item>
+                <Form.Item name={[f.name, "retired"]} label={i === 0 ? "Retired" : undefined} valuePropName="checked"><Switch aria-label={`Retire badge ${i + 1}`} /></Form.Item>
                 <Form.Item label={i === 0 ? " " : undefined}><Button icon={<DeleteOutlined />} aria-label={`Remove badge ${i + 1}`} disabled={fields.length === 1} onClick={() => remove(f.name)} /></Form.Item>
               </Space>
             ))}
