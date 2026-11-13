@@ -12,10 +12,11 @@ import { policyInForce } from "../policySettings/service";
 // due). Once a period is set, the due list shows former employees whose leaving date is older than it. Erasing needs one director to propose it and
 // a different director to confirm it (the database refuses the same person). CONTACT replaces contact and personal details with a marker and
 // removes the photo; DOCUMENTS removes the files of GENERAL documents shared with the person (pay and statutory documents are kept: their periods
-// follow the law and payroll). Payroll and tax records are never touched here.
+// follow the law and payroll); HELPDESK replaces the subject and every message of the tickets the person raised with a marker and removes their
+// attachment files. Payroll and tax records are never touched here.
 
-type Retention = { contactMonths?: number | null; documentsMonths?: number | null };
-export const CATEGORIES = ["CONTACT", "DOCUMENTS"] as const;
+type Retention = { contactMonths?: number | null; documentsMonths?: number | null; helpdeskMonths?: number | null };
+export const CATEGORIES = ["CONTACT", "DOCUMENTS", "HELPDESK"] as const;
 export type Category = (typeof CATEGORIES)[number];
 export const proposeBody = z.object({ employeeId: z.string().min(1).max(64), category: z.enum(CATEGORIES) }).strict();
 export interface ActorMeta {
@@ -25,6 +26,7 @@ export interface ActorMeta {
 }
 const ERASED = "Erased";
 const iso = (d: Date) => d.toISOString().slice(0, 10);
+const monthsFor = (r: Retention, c: Category) => (c === "CONTACT" ? r.contactMonths : c === "DOCUMENTS" ? r.documentsMonths : r.helpdeskMonths);
 
 function cutoff(months: number): Date {
   const t = businessToday();
@@ -35,7 +37,8 @@ export async function due(actorUserId: string) {
   await requireDirector(actorUserId, "see data due for erasure");
   const r = (await policyInForce<Retention>("policy.retention")) ?? {};
   const out: Array<{ employeeId: string; employeeCode: string; fullName: string; lastWorkingDate: string; category: Category; proposal: { id: string; mine: boolean } | null }> = [];
-  for (const [category, months] of [["CONTACT", r.contactMonths], ["DOCUMENTS", r.documentsMonths]] as Array<[Category, number | null | undefined]>) {
+  for (const category of CATEGORIES) {
+    const months = monthsFor(r, category);
     if (!months) continue;
     const people = await prisma.employee.findMany({
       where: { status: { not: "ACTIVE" }, lastWorkingDate: { lt: cutoff(months) }, dataErasures: { none: { category, status: "DONE" } } },
@@ -45,12 +48,12 @@ export async function due(actorUserId: string) {
     });
     for (const p of people) out.push({ employeeId: p.id, employeeCode: p.employeeCode, fullName: p.nameHistory[0]?.fullName ?? p.employeeCode, lastWorkingDate: iso(p.lastWorkingDate!), category, proposal: p.dataErasures[0] ? { id: p.dataErasures[0].id, mine: p.dataErasures[0].proposedByUserId === actorUserId } : null });
   }
-  return { periods: { contactMonths: r.contactMonths ?? null, documentsMonths: r.documentsMonths ?? null }, due: out };
+  return { periods: { contactMonths: r.contactMonths ?? null, documentsMonths: r.documentsMonths ?? null, helpdeskMonths: r.helpdeskMonths ?? null }, due: out };
 }
 
 async function assertDue(employeeId: string, category: Category) {
   const r = (await policyInForce<Retention>("policy.retention")) ?? {};
-  const months = category === "CONTACT" ? r.contactMonths : r.documentsMonths;
+  const months = monthsFor(r, category);
   if (!months) throw new HttpError(409, "No retention period is set for this kind of record.", "NOT_SET");
   const e = await prisma.employee.findUnique({ where: { id: employeeId }, select: { status: true, lastWorkingDate: true } });
   if (!e || e.status === "ACTIVE" || !e.lastWorkingDate || e.lastWorkingDate >= cutoff(months)) throw new HttpError(409, "This person's records are not past the retention period.", "NOT_DUE");
@@ -83,6 +86,19 @@ export async function confirm(id: string, meta: ActorMeta) {
       await prisma.employeePersonal.update({ where: { employeeId: row.employeeId }, data: { personalEmail: ERASED, mobile: ERASED, currentAddress: ERASED, permanentAddress: ERASED, emergencyContactName: ERASED, emergencyContactPhone: ERASED, emergencyContactRelation: ERASED, bloodGroup: null, photoStorageKey: null, photoThumbStorageKey: null, photoVersion: null } });
       items = 1;
     }
+  } else if (row.category === "HELPDESK") {
+    const tickets = await prisma.helpdeskTicket.findMany({ where: { raisedByEmployeeId: row.employeeId }, select: { id: true, messages: { select: { id: true, attachments: { select: { id: true, fileKey: true } } } } } });
+    for (const t of tickets) {
+      for (const m of t.messages) {
+        for (const a of m.attachments) {
+          await storageService.deleteObject(a.fileKey);
+          await prisma.helpdeskAttachment.update({ where: { id: a.id }, data: { fileName: "erased" } });
+        }
+        await prisma.helpdeskMessage.update({ where: { id: m.id }, data: { body: ERASED } });
+      }
+      await prisma.helpdeskTicket.update({ where: { id: t.id }, data: { subject: ERASED } });
+    }
+    items = tickets.length;
   } else {
     const docs = await prisma.employeeDocument.findMany({ where: { employeeId: row.employeeId, category: { sensitivity: "GENERAL" } }, select: { id: true, fileKey: true } });
     for (const d of docs) {

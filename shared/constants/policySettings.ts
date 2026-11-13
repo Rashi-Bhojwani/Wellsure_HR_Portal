@@ -186,6 +186,7 @@ export const POLICY_SETTINGS: readonly PolicySettingDef[] = [
     fields: [
       { name: "contactMonths", label: "Contact and personal details", type: "int", min: 1, max: 240, unit: "months after leaving", optional: true },
       { name: "documentsMonths", label: "Documents shared with the person", type: "int", min: 1, max: 240, unit: "months after leaving", optional: true },
+      { name: "helpdeskMonths", label: "Helpdesk tickets they raised", type: "int", min: 1, max: 240, unit: "months after leaving", optional: true },
     ],
     defaultValue: null,
     why: "Retention periods are the owners' (DPDP and labour law); nothing is erased until they choose.",

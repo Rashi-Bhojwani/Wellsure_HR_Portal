@@ -28,11 +28,11 @@ export function DataRetentionPage() {
       <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
         <Stack>
           <Panel title="Periods" extra={<Link to="/admin/settings/policies">Change in Policy settings</Link>}>
-            <KeyValueGrid columns={2} items={[{ label: api.CATEGORY_LABEL.CONTACT, value: periods?.contactMonths ? `${periods.contactMonths} months after leaving` : "Not set (kept)" }, { label: api.CATEGORY_LABEL.DOCUMENTS, value: periods?.documentsMonths ? `${periods.documentsMonths} months after leaving` : "Not set (kept)" }]} />
+            <KeyValueGrid columns={2} items={[{ label: api.CATEGORY_LABEL.CONTACT, value: periods?.contactMonths ? `${periods.contactMonths} months after leaving` : "Not set (kept)" }, { label: api.CATEGORY_LABEL.DOCUMENTS, value: periods?.documentsMonths ? `${periods.documentsMonths} months after leaving` : "Not set (kept)" }, { label: api.CATEGORY_LABEL.HELPDESK, value: periods?.helpdeskMonths ? `${periods.helpdeskMonths} months after leaving` : "Not set (kept)" }]} />
           </Panel>
           <Panel title="Due for erasure">
             <DataTable<api.DueRow> rowKey={(r) => `${r.employeeId}-${r.category}`} dataSource={q.data?.due ?? []} pagination={(q.data?.due.length ?? 0) > 25 ? { pageSize: 25 } : false}
-              empty={<EmptyState compact title="Nothing is due" description={periods?.contactMonths || periods?.documentsMonths ? null : "No period is set, so nothing is ever due."} />}
+              empty={<EmptyState compact title="Nothing is due" description={periods?.contactMonths || periods?.documentsMonths || periods?.helpdeskMonths ? null : "No period is set, so nothing is ever due."} />}
               columns={[
                 { title: "Former employee", key: "e", render: (_, r) => `${r.fullName} (${r.employeeCode})` },
                 { title: "Left on", dataIndex: "lastWorkingDate", render: (x: string) => formatDate(x) },
