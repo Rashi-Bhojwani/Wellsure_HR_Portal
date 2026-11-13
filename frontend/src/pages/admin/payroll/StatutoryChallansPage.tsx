@@ -65,7 +65,7 @@ export function StatutoryChallansPage() {
             dataSource={reg.data?.challans ?? []}
             empty={`No ${kind} challans for this year.`}
             pagination={false}
-            mobile={{ title: (c) => `${c.month} · ${formatRupees(c.amount, 2)}`, subtitle: (c) => `Reference ${c.reference} · deposited ${dayjs(c.depositedOn).format("D MMM YYYY")}`, fields: [{ label: "State", render: (c: Challan) => (c.confirmed ? "Confirmed" : "Waiting") }] }}
+            mobile={{ title: (c) => `${c.month} · ${formatRupees(c.amount, 2)}`, subtitle: (c) => `Reference ${c.reference} · deposited ${dayjs(c.depositedOn).format("D MMM YYYY")}`, fields: [{ label: "State", render: (c: Challan) => (c.confirmed ? "Confirmed" : "Waiting") }], actions: (c) => (!c.confirmed && !c.enteredByMe ? <Button onClick={() => setConfirming(c)}>Confirm</Button> : null) }}
             columns={[
               { title: "Month", dataIndex: "month" },
               { title: "Deposited", dataIndex: "depositedOn", render: (x: string) => dayjs(x).format("D MMM YYYY") },

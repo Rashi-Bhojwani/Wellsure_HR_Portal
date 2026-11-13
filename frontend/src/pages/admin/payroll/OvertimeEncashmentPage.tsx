@@ -66,7 +66,7 @@ export function OvertimeEncashmentPage() {
             dataSource={enc.data?.requests ?? []}
             empty="No approved encashment requests."
             pagination={{ pageSize: 25 }}
-            mobile={{ title: (r) => `${r.name} · ${r.leaveType}`, subtitle: (r) => `${r.days} days · ${r.amount ? formatRupees(r.amount, 2) : "Not set"}` }}
+            mobile={{ title: (r) => `${r.name} · ${r.leaveType}`, subtitle: (r) => `${r.days} days · ${r.amount ? formatRupees(r.amount, 2) : "Not set"}`, actions: (r) => (r.paid ? null : <Button disabled={(enc.data?.notSet.length ?? 1) > 0 || !r.amount} loading={pay.isPending && pay.variables === r.id} onClick={() => pay.mutate(r.id)}>Pay</Button>) }}
             columns={[
               { title: "Employee", key: "e", render: (_, r) => `${r.name} (${r.employeeCode})` },
               { title: "Leave", key: "l", render: (_, r) => `${r.leaveType} ${r.leaveYear}` },

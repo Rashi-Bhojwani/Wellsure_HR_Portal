@@ -44,7 +44,7 @@ export function CompliancePage() {
           dataSource={q.data?.dates ?? []}
           empty="No due dates yet. Add the first one."
           pagination={false}
-          mobile={{ title: (d) => `${d.statute}: ${d.item}`, subtitle: (d) => `Due ${dayjs(d.dueThisMonth).format("D MMM")} · ${STATE[d.state].text}` }}
+          mobile={{ title: (d) => `${d.statute}: ${d.item}`, subtitle: (d) => `Due ${dayjs(d.dueThisMonth).format("D MMM")} · ${STATE[d.state].text}`, actions: (d) => (<>{d.state !== "DONE" && <Button loading={done.isPending} onClick={() => done.mutate(d)}>Mark done</Button>}<Button onClick={() => setRetiring(d)}>Retire</Button></>) }}
           columns={[
             { title: "Statute", dataIndex: "statute" },
             { title: "What is due", dataIndex: "item" },

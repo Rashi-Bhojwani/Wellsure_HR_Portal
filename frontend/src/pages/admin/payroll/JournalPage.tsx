@@ -54,7 +54,7 @@ export function JournalPage() {
               onRetry={() => void j.refetch()}
               dataSource={j.data?.keys ?? []}
               pagination={false}
-              mobile={{ title: (k) => k.key, subtitle: (k) => k.account ?? "Not set" }}
+              mobile={{ title: (k) => k.key, subtitle: (k) => `${k.account ?? "Not set"} · Dr ${formatRupees(k.debit, 2)} · Cr ${formatRupees(k.credit, 2)}`, actions: (k) => <Input aria-label={`Account for ${k.key}`} placeholder={k.account ?? "Ledger account"} value={edits[k.key] ?? ""} onChange={(e) => setEdits((s) => ({ ...s, [k.key]: e.target.value }))} /> }}
               columns={[
                 { title: "Key", dataIndex: "key" },
                 { title: "Debit", dataIndex: "debit", align: "right", render: (x: string) => formatRupees(x, 2) },

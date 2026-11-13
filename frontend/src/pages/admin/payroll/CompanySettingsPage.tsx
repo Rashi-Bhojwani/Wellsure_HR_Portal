@@ -26,6 +26,12 @@ export function CompanySettingsPage() {
   });
   const confirm = useMutation({ mutationFn: (id: string) => api.confirmCompanySettings(id), onSuccess: () => { toast.success("Confirmed."); refresh(); }, onError: (e) => toast.error(apiErrorMessage(e, "Could not confirm.")) });
   const show = (r: Record<string, string | undefined> | undefined, k: string) => r?.[k] || "Not set";
+  const actionsOf = (c: Company) => (
+    <div style={{ display: "flex", gap: space[2], flexWrap: "wrap" }}>
+      {c.waiting && !c.waiting.enteredByMe && <Button type="primary" loading={confirm.isPending} onClick={() => confirm.mutate(c.waiting!.id)}>Confirm</Button>}
+      <Button onClick={() => setEditing(c)}>Enter</Button>
+    </div>
+  );
   return (
     <>
       <PageHeader title="Company settings" subtitle="Each company's registrations and bank account for payroll. Nothing is preset." />
@@ -38,7 +44,8 @@ export function CompanySettingsPage() {
           onRetry={() => void q.refetch()}
           dataSource={q.data?.companies ?? []}
           pagination={false}
-          mobile={{ title: (c) => c.name, subtitle: (c) => (c.inForce ? "Confirmed" : "Not set") }}
+          scroll={{ x: "max-content" }}
+          mobile={{ title: (c) => c.name, subtitle: (c) => (c.waiting ? "Waiting for the other director" : c.inForce ? "Confirmed" : "Not set"), actions: (c) => actionsOf(c) }}
           columns={[
             { title: "Company", dataIndex: "name" },
             ...FIELDS.map(([k, label]) => ({ title: label, key: k, render: (_: unknown, c: Company) => show(c.inForce?.registrations, k) })),
@@ -47,12 +54,8 @@ export function CompanySettingsPage() {
             {
               title: "",
               key: "a",
-              render: (_, c) => (
-                <div style={{ display: "flex", gap: space[2], flexWrap: "wrap" }}>
-                  {c.waiting && !c.waiting.enteredByMe && <Button type="primary" loading={confirm.isPending} onClick={() => confirm.mutate(c.waiting!.id)}>Confirm</Button>}
-                  <Button onClick={() => setEditing(c)}>Enter</Button>
-                </div>
-              ),
+              fixed: "right" as const,
+              render: (_, c) => actionsOf(c),
             },
           ]}
         />
