@@ -119,6 +119,9 @@ pause only at CHECKPOINT 1 (after Stage 2), CHECKPOINT 2 (after P7-3) and stop c
   ST-18, ST-22, ST-25, ST-19, and the amounts of PY-27/28/29; IE-12 and PY-32 by instruction
 - [x] Part 2 (2026-11-13), mechanisms with every value Not set: ST-08 PT/LWF challans `bd192ee` · ST-30 compliance calendar `af76eb0` · ST-29 minimum wages check `26d2f88` ·
   ST-25 Form 16 Part A pairing `debd4ae` · PY-41 accounting journal `f6ea21c`, `cdcba37` · group checks `9c49d57` (8 mutants caught; one found a real gap: negative net pay)
+- [x] Part 3 (2026-11-13, plan `A_PART3.md`): golden baseline; A1 dated statutory IDs `edaf4f6` · A2/A3 overtime and encashment pay (Not set) `b2f0b32` · B1 company filter
+  `7f885c0` · B2 payroll per company, first steps `6ebb4db` · B3 registers `0d6eb71` · fixes `163bdfc`, `ff5bd98`, `19ea770`, `bf9429b`
+- [ ] Payroll per company, next: each company's bank and statutory files; a period lock per company (owner question row 98)
 
 ## Stage 7 — Phase 7 P7-2..P7-7
 - [x] P7-2 (windows, declarations, proofs, directors' verification, regime comparison, screens) · [x] P7-3 as far as TDS in the run and the IT Statement (the TDS line, its explanation, pins, stale on a changed declaration); **not built from P7-3's list:** YTD Reports, payslip YTD column, Salary Revision page, revision letters, offer-letter figures → **STOPPED AT THE TDS CHECKPOINT (CHECKPOINT 2)** · [ ] P7-4 · [ ] P7-5 · [ ] P7-6 · [ ] P7-7

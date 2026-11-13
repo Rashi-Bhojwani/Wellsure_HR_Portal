@@ -475,3 +475,23 @@ while the suite ran; the two files re-run on the current code: 66 of 66 passed.
 **Requests from the other session:** 3 done (`PORTAL_READY_REPORT.md` §6); 4 (payslips showing the ID in force on their date), 5 (overtime pay), 6 (encashment during
 the year) need owner values (rates, the formula, whether to store dated ciphertext); 7 (payroll per company) and 8 (statutory registers in official formats) are not
 started.
+
+## Session A part 3, 2026-11-13 — dated statutory IDs, overtime and encashment pay, payroll per company, statutory registers
+
+Plan `A_PART3.md`. Commits: golden baseline (goldenRun.test.ts), A1 `edaf4f6`, A2/A3 `b2f0b32`, fixes `163bdfc`, `ff5bd98`; B1 `7f885c0`, B2 `6ebb4db`, B3 `0d6eb71`, `19ea770`;
+walk fixes `bf9429b`.
+
+**Golden regression.** A finalised run's figures and payslips were captured from the code before part 3 (`fixtures/golden-run.json`) and compared after every phase:
+identical with the settings Not set, with approved overtime and an approved encashment request present, and with one company.
+**Phase checks** (one script each, stopping at the first failure). Phase A found: an identifier missing on a date must be taken from the first later value (otherwise a
+UAN entered late stops an older month's PF file — `releases.test.ts` caught it; no test changed); an exact-fraction test found overtime cut a recurring fraction before
+rounding (now one division, last). Phase B found two guard allowlist entries (form limits). **Mutation checks:** dated copy choice, flat rate, divisor, exit leave types
+(survived first: a test added), overtime switch, main-company filter, report company filter, register head prefix — all caught in the end.
+**Full backend suite alone** (once, after the last pull, no pull while it ran): **251 files, 2,196 tests, all passed** (the other session's `customFields` fix included).
+**CI** run 359 (`19ea770`, all part-3 backend code): all 12 jobs green, including `backend-tests-complete`. The walk fixes (`bf9429b`, frontend only) are read below.
+**Browser walk** (scratch copy of the demo company): ten changed admin screens and Form 16 as director, HR, manager, employee and Developer at 1280 light and 390 dark —
+110 visits, no crash, no server error, no secret text, every directors' screen refused to the other four. Found and fixed: phone cards did not carry their row actions on six
+screens (the buttons could not be reached on a phone), and Company settings' buttons sat past the edge at 1280. Keyboard: 10 of 10 primary actions reached, opened, trapped,
+closed by Escape, focus returned.
+**Not built (next steps for payroll per company):** each company's own bank file and statutory files (refused for now), a period lock per company (finalising one company's
+run locks the month's attendance for all, as before).
