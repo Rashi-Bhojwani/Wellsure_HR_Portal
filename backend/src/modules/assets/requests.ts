@@ -3,7 +3,7 @@ import { writeAuditLogs } from "../../lib/audit";
 import { inForceOn } from "../../lib/effectiveDating";
 import { prisma } from "../../lib/prisma";
 import { HttpError } from "../../middleware/errorHandler";
-import { notifyEmployee } from "../notifications/notifyEmployee";
+import { peepsNotify } from "../peeps/notify";
 import type { TaskSource } from "../tasks/service";
 import { loadInForce } from "./settings";
 import type { ActorMeta } from "./types";
@@ -111,7 +111,7 @@ export async function decide(actor: { userId: string; employeeId: string }, id: 
   if (r.employeeId === actor.employeeId) throw new HttpError(403, "Your own request is decided by someone else.", "OWN_REQUEST");
   if (!ALLOWED[statusOf(r)].includes(input.outcome)) throw new HttpError(409, "That request cannot move to that state now.", "ALREADY_DECIDED");
   await addEvent(id, input.outcome, actor.userId, input.note?.trim() || null, meta);
-  await notifyEmployee(r.employeeId, { type: "assets.request.updated", title: "Your asset request was updated", body: "Open My assets to see it.", link: "/app/assets" });
+  await peepsNotify(r.employeeId, { type: "assets.request.updated", title: "Your asset request was updated", body: "Open My Assets to see it.", link: "/app/my-assets", payload: { assetRequestId: id } }, { dedupeKey: `asset-request:${id}:${input.outcome}` });
   return (await present([await prisma.assetRequest.findUniqueOrThrow({ where: { id }, include: { events: true } })], true))[0]!;
 }
 

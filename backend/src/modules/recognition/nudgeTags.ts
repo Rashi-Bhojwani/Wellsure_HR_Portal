@@ -3,7 +3,7 @@ import { NUDGE_LIFETIME_DAYS, PEEPS_REQUIRED, PEEPS_SETTINGS } from '@shared/con
 import { writeAuditLogs } from '../../lib/audit';
 import { prisma } from '../../lib/prisma';
 import { HttpError } from '../../middleware/errorHandler';
-import { notifyEmployee } from '../notifications/notifyEmployee';
+import { peepsNotify } from '../peeps/notify';
 import { offLimitsWordIn } from '../peeps/settingChecks';
 import { getSetting, missingSettings } from '../peeps/settings';
 import type { NudgeTagItem } from '../peeps/settingSchemas';
@@ -104,7 +104,7 @@ export async function give(actor: PeepsActor, input: { recipientEmployeeId: stri
       }
       throw err;
     });
-  if (!repeated) await notifyEmployee(input.recipientEmployeeId, { type: 'nudges.received', title: 'You received a nudge', body: 'Open Recognition to see it.', link: '/app/recognition' });
+  if (!repeated) await peepsNotify(input.recipientEmployeeId, { type: 'nudges.received', title: 'You received a nudge', body: 'Open Recognition to see it.', link: '/app/recognition', payload: { nudgeId: row.id } }, { dedupeKey: `nudge:${row.id}` });
   return { ...(await present([row]))[0]!, repeated };
 }
 
@@ -196,7 +196,7 @@ export async function decideReview(actor: PeepsActor, id: string, input: { outco
       await writeAuditLogs([{ ...meta, action: 'nudges.review.decided', entityType: 'NudgeTagAward', entityId: award.id, after: { decisionId: d.id, outcome: 'KEPT' } }], tx);
     });
   }
-  await notifyEmployee(award.recipientEmployeeId, { type: 'nudges.reviewed', title: 'Your nudge review is decided', body: 'Open Recognition to see it.', link: '/app/recognition' });
+  await peepsNotify(award.recipientEmployeeId, { type: 'nudges.reviewed', title: 'Your nudge review is decided', body: 'Open Recognition to see it.', link: '/app/recognition', payload: { nudgeId: award.id } }, { dedupeKey: `nudge-review:${open.id}` });
   return { decided: input.outcome };
 }
 

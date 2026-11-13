@@ -3,7 +3,7 @@ import { PEEPS_REQUIRED, PEEPS_SETTING_DEFAULTS, PEEPS_SETTINGS } from '@shared/
 import { writeAuditLogs } from '../../lib/audit';
 import { prisma } from '../../lib/prisma';
 import { HttpError } from '../../middleware/errorHandler';
-import { notifyEmployee } from '../notifications/notifyEmployee';
+import { peepsNotify } from '../peeps/notify';
 import { getSetting, missingSettings } from '../peeps/settings';
 import type { BadgeCatalogueItem } from '../peeps/settingSchemas';
 import type { ActorMeta, PeepsActor } from '../peeps/types';
@@ -230,12 +230,11 @@ export async function give(
       'CONFLICT',
     );
   if (!repeated)
-    await notifyEmployee(input.recipientEmployeeId, {
-      type: 'badges.received',
-      title: 'You received a badge',
-      body: 'Open Recognition to see it.',
-      link: '/app/recognition',
-    });
+    await peepsNotify(
+      input.recipientEmployeeId,
+      { type: 'badges.received', title: 'You received a badge', body: 'Open Recognition to see it.', link: '/app/recognition', payload: { badgeAwardId: row.id } },
+      { dedupeKey: `badge:${row.id}` },
+    );
   return { ...(await present([row], { withGiver: true, withMessage: true, realNames: true }))[0]!, repeated };
 }
 

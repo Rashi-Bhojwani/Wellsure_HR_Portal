@@ -206,6 +206,9 @@ export async function proposeChange(input: ProposeInput, actor: PeepsActor, meta
     await writeAuditLogs([{ ...meta, action: "office.membership.proposed", entityType: "OfficeMembershipChange", entityId: r.id, after: { kind: r.kind, employeeId: r.employeeId, fromEmployeeId: r.fromEmployeeId, capabilities, effectiveFrom } }], tx);
     return r;
   });
+  // Stage 3: the other directors are told a change waits for their confirmation (generic words; the change is on the members page).
+  const { otherDirectorEmployeeIds, peepsNotify } = await import("./notify");
+  for (const id of await otherDirectorEmployeeIds(actor.userId)) await peepsNotify(id, { type: "office.membership.waiting", title: "A Wellsure Office change waits for your confirmation", body: "Open Office members to confirm or withdraw it.", link: "/app/office/members", payload: { membershipChangeId: row.id } }, { dedupeKey: `office:${row.id}` });
   return row;
 }
 

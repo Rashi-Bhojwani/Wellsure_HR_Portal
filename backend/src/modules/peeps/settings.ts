@@ -97,14 +97,18 @@ export async function enterSetting(key: PeepsSettingKey, input: { value: unknown
   const parsed = PEEPS_SETTING_SCHEMAS[key].safeParse(input.value);
   if (!parsed.success) throw new HttpError(400, parsed.error.issues.map((i) => i.message).join("; "), "VALIDATION_ERROR");
   await (await import("./settingChecks")).checkSettingChange(key, parsed.data);
-  await prisma.$transaction(
+  const created = await prisma.$transaction(
     async (tx) => {
       const last = await tx.peepsSettingVersion.findFirst({ where: { key }, orderBy: { version: "desc" }, select: { version: true } });
       const row = await tx.peepsSettingVersion.create({ data: { key, version: (last?.version ?? 0) + 1, value: parsed.data as Prisma.InputJsonValue, note: input.note ?? "", enteredByUserId: actor.userId } });
       await writeAuditLogs([{ ...meta, action: "peeps.setting.entered", entityType: "PeepsSettingVersion", entityId: row.id, after: { key, version: row.version, value: parsed.data } }], tx);
+      return row;
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
   );
+  // Stage 3: the other directors are told a value waits for their confirmation (generic words; the setting itself is on the settings page).
+  const { otherDirectorEmployeeIds, peepsNotify } = await import("./notify");
+  for (const id of await otherDirectorEmployeeIds(actor.userId)) await peepsNotify(id, { type: "peeps.setting.waiting", title: "A Peeps setting waits for your confirmation", body: "Open Peeps settings to confirm or withdraw it.", link: "/app/office/settings", payload: { settingVersionId: created.id } }, { dedupeKey: `setting:${created.id}` });
   return (await listSettings(actor)).find((s) => s.key === key)!;
 }
 
