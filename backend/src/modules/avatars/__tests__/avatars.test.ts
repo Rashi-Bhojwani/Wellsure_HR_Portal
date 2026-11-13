@@ -181,8 +181,8 @@ describe("avatars and directory", () => {
     });
 
     it("badges show company-wide: everyone's count in one request for the directory and the org chart; the Developer is refused", async () => {
-      await setSetting("badges.catalogue", [{ code: "DEMO_THANKS", label: "DEMO Thank you", duration: "PERMANENT" }], p.director, p.director2);
-      expect((await request(app).post("/api/badges").set(...authHeader(tok.director)).send({ recipientEmployeeId: p.employee.employeeId, badgeCode: "DEMO_THANKS", idempotencyKey: `avatars-${Date.now()}` })).status).toBe(201);
+      // Peeps Stage 3: the default catalogue is in force and a badge needs a reason.
+      expect((await request(app).post("/api/badges").set(...authHeader(tok.director)).send({ recipientEmployeeId: p.employee.employeeId, badgeCode: "MENTOR", message: "DEMO thanks", idempotencyKey: `avatars-${Date.now()}` })).status).toBe(201);
       for (const who of ["colleague", "manager", "hrExec"] as const) expect((await get(who, "/api/badges/counts")).body.counts[p.employee.employeeId], who).toBe(1);
       expect((await get("developer", "/api/badges/counts")).status).toBe(403);
       expect((await request(app).get("/api/badges/counts")).status).toBe(401);

@@ -1878,6 +1878,9 @@ approved, DEMO006 waiting). `docs/PEEPS_SETUP_GUIDE.md` lists every Not-set sett
   reason never in audit or logs.
 - `managers/__tests__/routeInventory.ts`: starter route removed; nudge routes replaced; asset-request and withdraw routes added.
 - `lib/__tests__/cleanup.ts`: the 8 new append-only models registered.
+- `avatars/__tests__/avatars.test.ts` ("badges show company-wide"): gives a default badge (MENTOR) with a reason instead of replacing
+  the catalogue with a DEMO-only one (a reason is now required, and a catalogue cannot drop a badge already given elsewhere in the run).
+  Same assertions (counts for colleague, manager, HR; Developer 403; signed out 401). Found by the full suite.
 
 ### Settings left Not set
 Unchanged from earlier stages and now listed in `docs/PEEPS_SETUP_GUIDE.md`: asset lists; asset and Unmute audiences and Unmute
