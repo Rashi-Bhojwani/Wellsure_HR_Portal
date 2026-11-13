@@ -8,7 +8,7 @@ import { useAuth } from "../../../../hooks/useAuth";
 import { apiErrorMessage } from "../../../../lib/apiError";
 import { formatDate } from "../../../../lib/dates";
 import { fs, space, v } from "../../../../theme/tokens";
-import { DataTable, EmptyState, PageHeader, Panel, Stack, StatusChip, toast } from "../../../../ui";
+import { DataTable, EmptyState, PageHeader, Panel, QueryState, Stack, StatusChip, toast } from "../../../../ui";
 
 // M session block 2, IE-07 / IE-08: update existing employees from a file. Each row is checked first; applying writes through the usual edits.
 // Contact and personal details are applied by HR; job changes wait for a director when the setting says so. No bank or statutory column.
@@ -37,6 +37,11 @@ export function UpdateImportPage() {
           </Upload>
           <p style={{ margin: `${space[2]}px 0 0`, color: v.textSecondary, fontSize: fs.sm }}>Nothing changes until you apply. Rows with a problem are never applied.</p>
         </Panel>
+        {director && waiting.isError && (
+          <Panel title="Job changes waiting for a director">
+            <QueryState isLoading={false} error={waiting.error} onRetry={() => void waiting.refetch()}>{null}</QueryState>
+          </Panel>
+        )}
         {director && (waiting.data?.length ?? 0) > 0 && (
           <Panel title="Job changes waiting for a director">
             <DataTable rowKey="id" dataSource={waiting.data ?? []} pagination={false} columns={[{ title: "File", dataIndex: "fileName" }, { title: "Uploaded", dataIndex: "createdAt", render: (x: string) => formatDate(x) }, { title: "Job rows", dataIndex: "jobRows" }, { title: "", key: "a", align: "right", render: (_, b) => <Button onClick={() => open.mutate(b.id)}>Open</Button> }]} mobile={{ title: (b) => b.fileName, subtitle: (b) => `${b.jobRows} job row(s)`, actions: (b) => <Button block onClick={() => open.mutate(b.id)}>Open</Button> }} />
