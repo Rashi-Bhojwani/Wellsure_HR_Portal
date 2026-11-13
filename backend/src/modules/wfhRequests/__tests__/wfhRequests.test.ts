@@ -4,6 +4,7 @@ import { prisma } from "../../../lib/prisma";
 import { setBusinessTodayForTests } from "../../../lib/businessDate";
 import { DEVELOPER_ROLE_CODE } from "@shared/constants/sensitiveData";
 import { isRemoteOn } from "../../attendance/remote/service";
+import { deleteWithDependents } from "../../../lib/__tests__/cleanup";
 import { resetPolicy, setPolicy } from "../../policySettings/__tests__/policyTestHelpers";
 import {
   app,
@@ -45,6 +46,10 @@ describe("work-from-home requests", () => {
   afterAll(async () => {
     await resetPolicy("policy.wfh", t.d1!, t.d2!);
     setBusinessTodayForTests(null);
+    // Remote marks name the person by id only (no foreign key), so they are not removed with the employee: removed here, or the next file's
+    // "nobody is remote by default" sees them.
+    const marks = await prisma.remoteWorkMark.findMany({ where: { employeeId: { in: ids } }, select: { id: true } });
+    await deleteWithDependents("RemoteWorkMark", marks.map((m) => m.id));
     for (const id of ids) await cleanupFullTestEmployee(id);
     await cleanupEmployeeTestOrgMasters(orgA);
     await cleanupEmployeeTestOrgMasters(orgB);
