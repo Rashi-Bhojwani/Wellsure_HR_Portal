@@ -4,6 +4,7 @@ import { prisma } from "../../../lib/prisma";
 import { DEVELOPER_ROLE_CODE } from "@shared/constants/sensitiveData";
 import { eligibleMinutes } from "../service";
 import { overtimePolicy, settledDay } from "./overtimeTestHelpers";
+import { resetPolicy } from "../../policySettings/__tests__/policyTestHelpers";
 import {
   app,
   authHeader,
@@ -52,7 +53,7 @@ describe("overtime claims", () => {
     await settledDay(e.emp!, "2026-10-08", 75);
   });
   afterAll(async () => {
-    await overtimePolicy({ active: false, minimumMinutes: 60, roundToMinutes: 30, approver: "MANAGER_OR_DIRECTOR" }, u.d1!, u.d2!);
+    await resetPolicy("policy.overtime");
     for (const id of ids) await cleanupFullTestEmployee(id);
     await cleanupEmployeeTestOrgMasters(org);
   });

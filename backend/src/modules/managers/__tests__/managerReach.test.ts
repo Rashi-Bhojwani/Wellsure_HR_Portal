@@ -636,8 +636,8 @@ describe("manager reach — TEAM scope at every endpoint a manager can call (E2)
       }
     });
     afterAll(async () => {
-      const { overtimePolicy } = await import("../../overtime/__tests__/overtimeTestHelpers");
-      await overtimePolicy({ active: false, minimumMinutes: 60, roundToMinutes: 30, approver: "MANAGER_OR_DIRECTOR" }, p.director.userId, p.hrAdmin.userId);
+      const { resetPolicy } = await import("../../policySettings/__tests__/policyTestHelpers");
+      await resetPolicy("policy.overtime");
     });
 
     it("GET /api/overtime — the member's claim, never the outsider's", async () => {

@@ -1,7 +1,7 @@
 import request from "supertest";
 import { expect } from "vitest";
 import { prisma } from "../../../lib/prisma";
-import { policyDef } from "@shared/constants/policySettings";
+import { deleteWithDependents } from "../../../lib/__tests__/cleanup";
 import { app, authHeader } from "../../employee/__tests__/employeeTestHelpers";
 
 /** One director proposes, the other confirms: the setting is then in force. */
@@ -12,11 +12,11 @@ export async function setPolicy(key: string, value: Record<string, unknown>, pro
   expect(c.status, JSON.stringify(c.body)).toBe(200);
 }
 
-/** Back to the starting state for later test files: plain = its default, activation = off, notSet = cleared fields. */
-export async function resetPolicy(key: string, proposerToken: string, confirmerToken: string) {
-  const def = policyDef(key)!;
-  const any = await prisma.behaviourProposal.count({ where: { key } });
-  if (!any) return;
-  const base = def.kind === "notSet" ? Object.fromEntries(def.fields.map((f) => [f.name, f.type === "codes" ? [] : f.type === "choice" ? f.options[0]!.value : null])) : { ...(def.defaultValue ?? {}) };
-  await setPolicy(key, def.kind === "activation" ? { ...base, active: false } : base, proposerToken, confirmerToken);
+/**
+ * Back to the starting state for later test files: every proposal for the key is removed (through the test purge), so the setting reads exactly
+ * as on a fresh database (plain = its default, activation = off, notSet = Not set). Test databases only.
+ */
+export async function resetPolicy(key: string, _proposerToken?: string, _confirmerToken?: string) {
+  const rows = await prisma.behaviourProposal.findMany({ where: { key }, select: { id: true } });
+  if (rows.length) await deleteWithDependents("BehaviourProposal", rows.map((r) => r.id));
 }

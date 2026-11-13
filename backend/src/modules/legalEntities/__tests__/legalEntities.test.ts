@@ -55,7 +55,9 @@ describe("more than one company", () => {
     expect((await as("hr").get("")).status).toBe(200);
   });
 
-  it("GOLDEN: a payroll run's results are the same, byte for byte, with one company and with extra companies and a person moved", async () => {
+  // Since Session A's part 3 B2, payroll reads a person's company (a moved person is paid in that company's run, by design), so the golden covers
+  // exactly the owner's case: extra companies defined, nobody moved.
+  it("GOLDEN: the main company's payroll run is the same, byte for byte, with one company and with extra companies defined", async () => {
     const snapshot = async (runId: string) => {
       const items = await Promise.all(["a", "b"].map(async (n) => (await api(world.tokens.maker, "get", `/runs/${runId}/items/${world.named[n]!.employeeId}`)).body));
       return JSON.stringify(items.map((i) => ({ status: i.status, totals: i.totals, days: i.days, lines: i.lines.map((l: { code: string; amount: string }) => [l.code, l.amount]) })));
@@ -68,16 +70,16 @@ describe("more than one company", () => {
       expect(r.status).toBe(201);
       entityIds.push(r.body.id);
     }
-    const aCode = (await prisma.employee.findUniqueOrThrow({ where: { id: world.named.a!.employeeId } })).employeeCode;
-    expect((await as("d1").put("/assignments", { employeeCodes: [aCode], legalEntityId: entityIds[0] })).body.moved).toBe(1);
     await calculateAgain(world, runId);
     expect(await snapshot(runId)).toBe(oneCompany);
-    expect(await prisma.auditLog.count({ where: { action: { startsWith: "org.legal_entity." }, entityId: { in: [...entityIds] } } })).toBe(3);
+    expect(await prisma.auditLog.count({ where: { action: { startsWith: "org.legal_entity." }, entityId: { in: [...entityIds] } } })).toBe(2);
   }, 300_000);
 
-  it("HR reads one person's company within its scope; moving back to the main company works", async () => {
-    expect((await as("hr").get(`/employees/${world.named.a!.employeeId}`)).body).toMatchObject({ main: false, name: expect.stringContaining("Test company") });
+  it("a director moves a person (audited); HR reads one person's company within its scope; moving back to the main company works", async () => {
     const aCode = (await prisma.employee.findUniqueOrThrow({ where: { id: world.named.a!.employeeId } })).employeeCode;
+    expect((await as("d1").put("/assignments", { employeeCodes: [aCode], legalEntityId: entityIds[0] })).body.moved).toBe(1);
+    expect(await prisma.auditLog.count({ where: { action: "org.legal_entity.assigned", entityId: entityIds[0] } })).toBe(1);
+    expect((await as("hr").get(`/employees/${world.named.a!.employeeId}`)).body).toMatchObject({ main: false, name: expect.stringContaining("Test company") });
     expect((await as("d2").put("/assignments", { employeeCodes: [aCode], legalEntityId: null })).body.moved).toBe(1);
     expect((await as("hr").get(`/employees/${world.named.a!.employeeId}`)).body).toEqual({ main: true, code: null, name: null });
   });
