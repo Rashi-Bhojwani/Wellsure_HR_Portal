@@ -149,3 +149,13 @@ Report layouts are the D-37 kind of default ("Default, change in settings"); not
 | 85 | PF and ESI challans: "worked out" is the statute's own lines in finalised runs (employee and employer); administration charges are not added. A different director confirms each challan by retyping it. | Add the charges as their own line once you give the rule. | Keep. |
 | 86 | Salary import uses **our own template** (employee number, structure, version, annual CTC, effective from). One revision per structure, CTC and date; each waits for the other director; one bad row or blocked group stops the whole file. greytHR's file is not read. | — | Keep. |
 | 87 | The reimbursement statement lists claims paid by monthly runs; a claim paid by an off-cycle run shows on that run, not in the statement. Loan "reschedule" is not built (prepaid, waived and stop-the-instalments are). | Ask for either. | Keep for now. |
+
+## Part 2: mechanisms with every value Not set (2026-11-13)
+
+| # | What was built | What you give | Recommendation |
+|---|---|---|---|
+| 88 | PT and LWF deposits go in the same challan register as PF and ESI (Payroll → Statutory challans). The state PT return is not built. | The return format, if you want it. | Use it from the first month. |
+| 89 | Compliance calendar: you enter each due date (statute, what, day of month, days before to remind, source). None is preset. The directors are reminded once a month inside the window; a date is marked done per month. | Every due date. | Enter them before go-live. |
+| 90 | Minimum wages check: you enter each rate (state as written on your branches, category, monthly amount, from, source), each person's category and which pay heads are compared. Until then the check says Not set. It never changes pay. | Rates, categories, the compared heads. | Ask your accountant which heads count. |
+| 91 | Form 16 Part A: you upload each person's Part A as the tax portal issued it; they download it beside Part B. Nothing is read from the file. | The files, each year. | — |
+| 92 | Accounting journal: you map each journal key (a head's earning, deduction, rounding, employer expense and liability, and net pay) to a ledger account; none is preset. A negative net pay posts as a debit. No accounting package's format is built. | The chart of accounts. | Ask your accountant for the account names. |

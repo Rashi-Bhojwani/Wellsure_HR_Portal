@@ -30,6 +30,7 @@ owner's instruction (`PARITY_COVERAGE.md` was brought onto this branch by the pa
 | CI backend shards with a count check | DONE (longest shard 6.5 min vs 17 min before; limit unchanged) | `f915ba3` |
 | Payroll rows of the parity audit (ST-24/SS-05, PY-27/28/29 guide, ST-21, ST-03/06, LC-07, PY-37, PY-24, IE-09) | DONE; LC-09 and ST-23 were already covered; the rest skipped (owner values) — see `A_PARITY_ROWS.md` | `9bbcc05`, `c62a451` |
 | Stage 8 file readers and parallel-run kit | **BLOCKED in part**: `docs/samples/` exists only on `peeps/foundation` (not touched); the Phase 6 compare tool exists | — |
+| Part 2: ST-08, ST-30, ST-29, ST-25, PY-41 (mechanisms, every value Not set) | DONE | `bd192ee`…`cdcba37` |
 | Stage 9 Tier 1 parity (payroll rows) | DONE where no owner value is needed (above); owner-value rows listed as skipped | — |
 
 Plans written before code: `GREYTHR_PARITY_WORKFORCE.md`, `A3_OPENING_FIGURES.md`, `P7_4_LOANS.md`, `P7_5_REIMBURSEMENTS.md`, `P7_6_SETTLEMENTS.md` (with the
