@@ -880,6 +880,12 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/retention/due": adminInService("router gate settings.manage (never HR), Developer refused, and a director check in the service"),
   "POST /api/retention/erasures": adminInService("router gate settings.manage, Developer refused, a director check in the service"),
   "POST /api/retention/erasures/:id/confirm": adminInService("router gate settings.manage, Developer refused; a different director confirms (service and database)"),
+  // AD-08 more than one company
+  "GET /api/legal-entities": scoped("employee.view; company names and head counts only, no person; Developer refused"),
+  "GET /api/legal-entities/employees/:employeeId": scoped("employee.view + findScopedEmployee; Developer refused"),
+  "POST /api/legal-entities": adminInService("settings.manage (never HR) and a director check in the service"),
+  "PATCH /api/legal-entities/:id": adminInService("settings.manage and a director check in the service"),
+  "PUT /api/legal-entities/assignments": adminInService("settings.manage and a director check in the service"),
   "POST /api/public/letter-check": machine("no sign-in by design (banks, landlords); rate-limited per address; answers genuine or not with the reference, date and signature count, no personal data"),
   // P7-3: the person's own
   "GET /api/tax/me/ytd": self,
@@ -897,6 +903,8 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
 // Scoped routes a manager can reach with a manager-grantable key — each has
 // an IDOR case in managerReach.test.ts. The test fails if one is missing.
 export const MANAGER_REACHABLE_SCOPED = [
+  "GET /api/legal-entities", // M block 2, AD-08
+  "GET /api/legal-entities/employees/:employeeId", // M block 2, AD-08
   "GET /api/overtime", // M block 2, AT-19
   "POST /api/overtime/:id/approve", // M block 2, AT-19
   "POST /api/overtime/:id/reject", // M block 2, AT-19

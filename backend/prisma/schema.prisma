@@ -557,6 +557,7 @@ model Employee {
   wfhRequests                WfhRequest[] // block 2, AT-36
   encashmentRequests         LeaveEncashmentRequest[] // block 2, LV-23
   dataErasures               DataErasure[] // block 2, AD-07
+  legalEntity                EmployeeLegalEntity? // block 2, AD-08
   // M-END
 
   @@index([status])
@@ -4749,5 +4750,33 @@ model DataErasure {
 
   @@index([employeeId])
   @@map("data_erasures")
+}
+// M-END
+
+// M-BEGIN (second session block 2, AD-08): further legal entities beside the main company, and an employee's entity (no row = the main company).
+model LegalEntity {
+  id                String                @id @default(cuid())
+  code              String                @unique
+  name              String
+  registeredAddress String?               @map("registered_address")
+  createdByUserId   String                @map("created_by_user_id")
+  createdAt         DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+  employees         EmployeeLegalEntity[]
+
+  @@map("legal_entities")
+}
+
+model EmployeeLegalEntity {
+  id            String      @id @default(cuid())
+  employeeId    String      @unique @map("employee_id")
+  employee      Employee    @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  legalEntityId String      @map("legal_entity_id")
+  legalEntity   LegalEntity @relation(fields: [legalEntityId], references: [id], onDelete: Restrict)
+  setByUserId   String      @map("set_by_user_id")
+  setAt         DateTime    @default(now()) @map("set_at") @db.Timestamptz(3)
+
+  @@index([legalEntityId])
+  @@map("employee_legal_entities")
 }
 // M-END

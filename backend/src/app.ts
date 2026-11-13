@@ -63,6 +63,7 @@ import { encashmentRequestsRouter } from "./modules/encashmentRequests/routes"; 
 import { updateImportRouter } from "./modules/updateImport/routes"; // M session block 2, IE-07/08
 import { letterCheckRouter } from "./modules/letterCheck/routes"; // M session block 2, LT-09
 import { retentionRouter } from "./modules/retention/routes"; // M session block 2, AD-07
+import { legalEntitiesRouter } from "./modules/legalEntities/routes"; // M session block 2, AD-08
 import { payslipRouter } from "./modules/payroll/payslipRoutes";
 // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
 import { employeeExtrasRouter, massEmailRouter, segmentsRouter, separationModesRouter } from "./modules/parity/routes";
@@ -138,6 +139,7 @@ const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   { path: "/api/encashment-requests", router: encashmentRequestsRouter }, // M session block 2, LV-23
   { path: "/api/update-import", router: updateImportRouter }, // M session block 2, IE-07/08
   { path: "/api/retention", router: retentionRouter }, // M session block 2, AD-07
+  { path: "/api/legal-entities", router: legalEntitiesRouter }, // M session block 2, AD-08
   { path: "/api/attendance", router: attendanceRouter },
   { path: "/api/biometric", router: biometricRouter },
   // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin

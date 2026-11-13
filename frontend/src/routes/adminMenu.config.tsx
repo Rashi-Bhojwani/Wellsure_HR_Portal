@@ -72,6 +72,7 @@ const PayrollAuditPage = lazyPage(() => import("../pages/admin/auditLog/AuditLog
 const SystemSettingsPage = lazyPage(() => import("../pages/admin/settings/SystemSettingsPage"), "SystemSettingsPage");
 const DefaultBehavioursPage = lazyPage(() => import("../pages/admin/settings/DefaultBehavioursPage"), "DefaultBehavioursPage"); // D-37
 const PolicySettingsPage = lazyPage(() => import("../pages/admin/settings/PolicySettingsPage"), "PolicySettingsPage"); // M session block 2
+const CompaniesPage = lazyPage(() => import("../pages/admin/settings/CompaniesPage"), "CompaniesPage"); // M block 2, AD-08
 const DataRetentionPage = lazyPage(() => import("../pages/admin/settings/DataRetentionPage"), "DataRetentionPage"); // M block 2, AD-07
 const CustomFieldsPage = lazyPage(() => import("../pages/admin/settings/CustomFieldsPage"), "CustomFieldsPage"); // M session block 2, ER-28
 const CompanyDocumentsPage = lazyPage(() => import("../pages/admin/documents/CompanyDocumentsPage"), "CompanyDocumentsPage");
@@ -473,6 +474,7 @@ export const adminApps: AdminApp[] = [
           { key: "system-settings", label: "System Settings", path: "admin-tools/settings", icon: SettingOutlined, element: SystemSettingsPage, needs: { any: ["settings.manage"] } },
           { key: "default-behaviours", label: "Default behaviours", path: "settings/behaviours", icon: SettingOutlined, element: DefaultBehavioursPage, needs: { director: true } }, // D-37
           { key: "policy-settings", label: "Policy settings", path: "settings/policies", icon: SettingOutlined, element: PolicySettingsPage, needs: { director: true } }, // M session block 2
+          { key: "companies", label: "Companies", path: "settings/companies", icon: SettingOutlined, element: CompaniesPage, needs: { director: true } }, // M block 2, AD-08
           { key: "data-retention", label: "Data retention", path: "settings/data-retention", icon: SettingOutlined, element: DataRetentionPage, needs: { director: true } }, // M block 2, AD-07
           { key: "custom-fields", label: "Custom fields", path: "settings/custom-fields", icon: SettingOutlined, element: CustomFieldsPage, needs: { director: true } }, // M block 2, ER-28
         ],

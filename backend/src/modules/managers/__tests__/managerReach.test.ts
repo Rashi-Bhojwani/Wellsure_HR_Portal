@@ -656,6 +656,21 @@ describe("manager reach — TEAM scope at every endpoint a manager can call (E2)
     });
   });
 
+  // M session block 2, AD-08: a manager with employee.view sees company names and a team member's company, never an outsider's.
+  describe("companies (AD-08): the team member's company only", () => {
+    it("GET /api/legal-entities — names and head counts, no person", async () => {
+      const res = await m().get("/api/legal-entities");
+      expect(res.status).toBe(200);
+      expect(JSON.stringify(res.body)).not.toContain(p.member.employeeCode);
+      cover("GET /api/legal-entities");
+    });
+    it("GET /api/legal-entities/employees/:employeeId — the member's, never the outsider's", async () => {
+      expect((await m().get(`/api/legal-entities/employees/${p.member.employeeId}`)).body).toEqual({ main: true, code: null, name: null });
+      expect((await m().get(`/api/legal-entities/employees/${p.outsider.employeeId}`)).status).toBe(404);
+      cover("GET /api/legal-entities/employees/:employeeId");
+    });
+  });
+
   it("every manager-reachable scoped route has a case above", () => {
     expect(MANAGER_REACHABLE_SCOPED.filter((r) => !covered.has(r))).toEqual([]);
   });

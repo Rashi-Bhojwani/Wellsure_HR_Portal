@@ -103,6 +103,7 @@ export const OPTIONAL_FK_POLICY: Record<string, Policy> = {
 // plain deleteMany on their natural key.
 export const FIXTURE_ROOT_MODELS = ["Employee", "User"] as const;
 export const STANDALONE_ROOT_MODELS: Record<string, string> = {
+  LegalEntity: "M block 2 (AD-08): tests remove their own with deleteWithDependents(\"LegalEntity\", ids), which also removes assignments",
   UpdateImportBatch: "M block 2 (IE-07/08): an upload's checked rows (no FK); updateImport.test.ts removes its own with deleteWithDependents(\"UpdateImportBatch\", ids)",
   CustomFieldDefinition: "M block 2 (ER-28): tests remove their own with deleteWithDependents(\"CustomFieldDefinition\", ids), which also removes the values",
   Division: "M block 2 (ER-27): divisions.test.ts creates its own and removes them with deleteWithDependents(\"Division\", ...)",
