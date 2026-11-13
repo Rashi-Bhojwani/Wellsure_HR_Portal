@@ -10,6 +10,7 @@ import { app, authHeader, cleanupFullTestEmployee, createFullTestEmployee, login
 import { byBank, bankSummaryHtml } from "../run/bankSummary";
 import { addMonthsClamped, serviceLength } from "../settlements/guide";
 import { form16Html } from "../tax/form16Html";
+import { ratesInForce } from "../minimumWages/service";
 import { REAL_RULES, approve, closeWorld, closingWorld, confirmAllPins, driveToFinal, requestStep, staffWith, type Closing } from "./closeTestHelpers";
 import { CYCLE, calculateRun, setRules } from "./runTestHelpers";
 import { makeComponent } from "./salaryTestHelpers";
@@ -71,6 +72,24 @@ describe("PY-37 and ST-24 — the pure parts", () => {
     expect(draft).toContain("&lt;b&gt;Test&lt;/b&gt;");
     expect(draft).toContain("ending 1234");
     expect(form16Html({ ...base, watermark: null })).not.toContain('class="wm"');
+  });
+});
+
+describe("ST-29 — which minimum wage is in force", () => {
+  it("the latest effective-from on or before the day wins; a later entry wins a tie; future rates are ignored", () => {
+    fc.assert(
+      fc.property(fc.array(fc.record({ state: fc.constantFrom("S1", "S2"), category: fc.constantFrom("C1", "C2"), monthlyAmount: fc.constantFrom("100.00", "200.50", "300.00"), effectiveFrom: fc.constantFrom("2026-01-01", "2026-06-01", "2026-09-01"), createdAt: fc.constantFrom("2026-01-01T00:00:00Z", "2026-02-01T00:00:00Z", "2026-03-01T00:00:00Z") }), { maxLength: 20 }), fc.constantFrom("2026-05-31", "2026-06-01", "2026-12-31"), (rows, day) => {
+        const got = ratesInForce(rows, day);
+        for (const st of ["S1", "S2"]) for (const cat of ["C1", "C2"]) {
+          const live = rows.filter((r) => r.state === st && r.category === cat && r.effectiveFrom <= day).sort((x, y) => (x.effectiveFrom === y.effectiveFrom ? x.createdAt.localeCompare(y.createdAt) : x.effectiveFrom.localeCompare(y.effectiveFrom)));
+          const want = live.length ? live[live.length - 1]!.monthlyAmount : undefined;
+          // a tie on both dates may pick either equal-keyed row; only check when the winner is unambiguous
+          const top = live.filter((r) => want !== undefined && r.effectiveFrom === live[live.length - 1]!.effectiveFrom && r.createdAt === live[live.length - 1]!.createdAt);
+          if (new Set(top.map((t) => t.monthlyAmount)).size <= 1) expect(got.get(`${st}|${cat}`)).toBe(want);
+        }
+      }),
+      { numRuns: 400 },
+    );
   });
 });
 
@@ -276,6 +295,39 @@ describe("Session A parity rows over a finalised run", () => {
     expect(paise(aug.workedOut)).toBe(lines.reduce((s, l) => s + paise(Number(l.amount.toString()).toFixed(2)), 0n));
     expect(paise(aug.deposited)).toBe(0n); // not confirmed yet
     expect((await call(tok.hr!, "get", `/api/tax/statutory-challans?fy=${FY}&kind=LWF`)).status).toBe(403);
+  });
+
+  it("ST-29: the minimum wages check says what is Not set, lists who is below the minimum in force for their state and category, and changes no pay", async () => {
+    const mw = (m: "get" | "post", path: string, body?: object, t = world.tokens.maker) => call(t, m, `/api/payroll-minimum-wages${path}`, body);
+    for (const t of [tok.hr!, tok.mgr!, tok.a!, tok.dev!]) expect((await mw("get", `/check?runId=${runId}`, undefined, t)).status).toBe(403);
+    const first = await mw("get", `/check?runId=${runId}`);
+    if (!(await prisma.minimumWageBasis.count())) expect(first.body.notSet).toEqual(["The pay heads compared with the minimum wage are Not set."]);
+    const itemsBefore = await prisma.payrollRunLine.findMany({ where: { runId }, select: { id: true, amount: true } });
+    const placement = await prisma.employeeJobHistory.findFirstOrThrow({ where: { employeeId: who("a") }, orderBy: { effectiveFrom: "desc" }, include: { location: { select: { state: true } } } });
+    const state = placement.location.state;
+    const basicLine = await prisma.payrollRunLine.findFirstOrThrow({ where: { runId, employeeId: who("a"), code: world.basic } });
+    const basic = Number(basicLine.amount.toString()).toFixed(2);
+    const minimum = (Number(basic) + 1234.5).toFixed(2);
+    const made: Record<string, string[]> = { MinimumWageRate: [], MinimumWageCategory: [], MinimumWageBasis: [] };
+    made.MinimumWageBasis!.push((await mw("post", "/basis", { headCodes: [world.basic], source: "test fixture" })).body.id);
+    made.MinimumWageRate!.push((await mw("post", "/rates", { state, category: "ZZ-CAT1", monthlyAmount: minimum, effectiveFrom: "2026-01-01", source: "test fixture" })).body.id);
+    made.MinimumWageRate!.push((await mw("post", "/rates", { state, category: "ZZ-CAT1", monthlyAmount: "1.00", effectiveFrom: "2026-12-01", source: "a future rate is not in force" })).body.id);
+    made.MinimumWageCategory!.push((await mw("post", "/categories", { employeeId: who("a"), category: "ZZ-CAT1" })).body.id);
+    made.MinimumWageCategory!.push((await mw("post", "/categories", { employeeId: who("b"), category: "ZZ-NORATE" })).body.id);
+    expect((await mw("post", "/rates", { state, category: "X", monthlyAmount: "-5", effectiveFrom: "2026-01-01", source: "bad" })).status).toBe(400);
+    try {
+      const r = await mw("get", `/check?runId=${runId}`);
+      expect(r.status, JSON.stringify(r.body)).toBe(200);
+      const a = r.body.below.find((x: { employeeCode: string }) => x.employeeCode === world.named.a!.employeeCode);
+      expect(a).toMatchObject({ category: "ZZ-CAT1", compared: basic, minimum });
+      expect(paise(a.shortfall)).toBe(paise(minimum) - paise(basic));
+      expect(r.body.notSet.join(" ")).toContain("ZZ-NORATE");
+      expect(r.body.notSet.join(" ")).toContain(world.named.c!.employeeCode); // no category
+      await expect(prisma.minimumWageRate.update({ where: { id: made.MinimumWageRate![0]! }, data: { source: "x" } })).rejects.toThrow(/MINIMUM_WAGE_APPEND_ONLY/);
+      expect(await prisma.payrollRunLine.findMany({ where: { runId }, select: { id: true, amount: true } })).toEqual(itemsBefore); // pay unchanged
+    } finally {
+      for (const [model, ids] of Object.entries(made)) await deleteWithDependents(model, ids.filter(Boolean));
+    }
   });
 
   it("PY-37: the bank summary is a PDF for directors, audited; its page has the file's rows and total by bank code and no account number, name or person's pay", async () => {

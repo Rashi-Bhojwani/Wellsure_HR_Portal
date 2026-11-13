@@ -130,6 +130,7 @@ const QuarterlyTdsPage = lazyPage(() => import("../pages/admin/payroll/Quarterly
 const PayrollReportsPage = lazyPage(() => import("../pages/admin/payroll/PayrollReportsPage"), "PayrollReportsPage"); // Stage 6
 const StatutoryChallansPage = lazyPage(() => import("../pages/admin/payroll/StatutoryChallansPage"), "StatutoryChallansPage"); // ST-03 / ST-06
 const CompliancePage = lazyPage(() => import("../pages/admin/payroll/CompliancePage"), "CompliancePage"); // ST-30
+const MinimumWagesPage = lazyPage(() => import("../pages/admin/payroll/MinimumWagesPage"), "MinimumWagesPage"); // ST-29
 const ReimbursementsAdminPage = lazyPage(() => import("../pages/admin/payroll/ReimbursementsAdminPage"), "ReimbursementsAdminPage"); // P7-5
 const LoansAdminPage = lazyPage(() => import("../pages/admin/payroll/LoansAdminPage"), "LoansAdminPage"); // P7-4
 const OpeningFiguresPage = lazyPage(() => import("../pages/admin/payroll/OpeningFiguresPage"), "OpeningFiguresPage"); // A-3
@@ -415,6 +416,7 @@ export const adminApps: AdminApp[] = [
           { key: "payroll-tds-form16", label: "TDS and Form 16", path: "payroll/tds-form16", icon: FileProtectOutlined, element: TdsForm16Page, needs: { director: true } }, // P7-7
           { key: "payroll-statutory-challans", label: "Statutory challans", path: "payroll/statutory-challans", icon: FileProtectOutlined, element: StatutoryChallansPage, needs: { director: true } }, // ST-03 / ST-06
           { key: "payroll-compliance", label: "Compliance calendar", path: "payroll/compliance", icon: FileProtectOutlined, element: CompliancePage, needs: { director: true } }, // ST-30
+          { key: "payroll-minimum-wages", label: "Minimum wages", path: "payroll/minimum-wages", icon: FileProtectOutlined, element: MinimumWagesPage, needs: { director: true } }, // ST-29
           { key: "payroll-reports", label: "Payroll reports", path: "payroll/reports", icon: FileProtectOutlined, element: PayrollReportsPage, needs: { director: true } }, // Stage 6
           { key: "payroll-tax-declarations", label: "Tax Declarations", path: "payroll/tax-declarations", icon: FormOutlined, element: TaxDeclarationsPage, needs: PAYROLL_NEEDS },
           { key: "payroll-holds", label: "Held Salaries", path: "payroll/holds", icon: PauseCircleOutlined, element: HeldSalariesPage, needs: PAYROLL_NEEDS },

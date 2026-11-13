@@ -4437,6 +4437,43 @@ model ComplianceDueMark {
   @@unique([dueDateId, month, kind])
   @@map("compliance_due_marks")
 }
+/// ST-29: a minimum wage a director entered (state as written on the branches, category, monthly amount, from, source). None preset; append-only.
+model MinimumWageRate {
+  id              String   @id @default(cuid())
+  state           String
+  category        String
+  monthlyAmount   Decimal  @map("monthly_amount") @db.Decimal(14, 2)
+  effectiveFrom   DateTime @map("effective_from") @db.Date
+  source          String
+  createdByUserId String   @map("created_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([state, category, effectiveFrom])
+  @@map("minimum_wage_rates")
+}
+
+/// ST-29: a person's minimum wage category, chosen by a director (Not set until then). Append-only; the newest is in force.
+model MinimumWageCategory {
+  id          String   @id @default(cuid())
+  employeeId  String   @map("employee_id")
+  category    String
+  setByUserId String   @map("set_by_user_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([employeeId, createdAt])
+  @@map("minimum_wage_categories")
+}
+
+/// ST-29: the pay heads whose total is compared with the minimum, chosen by a director (Not set until then). Append-only; the newest is in force.
+model MinimumWageBasis {
+  id          String   @id @default(cuid())
+  headCodes   String[] @map("head_codes")
+  source      String
+  setByUserId String   @map("set_by_user_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("minimum_wage_bases")
+}
 // A-END
 // M-BEGIN (second session block 2, ER-27): divisions, an optional grouping of departments (an employee's division is their department's).
 model Division {

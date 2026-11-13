@@ -392,6 +392,11 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/payroll/runs/:id/bank-batch": admin,
   "GET /api/payroll/bank-batches/:id": admin,
   "GET /api/payroll/bank-batches/:id/file": admin,
+  "GET /api/payroll-minimum-wages": adminInService("payroll.salary.view and a director check (minimumWages.setup)"), // ST-29
+  "POST /api/payroll-minimum-wages/rates": adminInService("director check (addRate)"),
+  "POST /api/payroll-minimum-wages/categories": adminInService("director check (setCategory)"),
+  "POST /api/payroll-minimum-wages/basis": adminInService("director check (setBasis)"),
+  "GET /api/payroll-minimum-wages/check": adminInService("director check (check)"),
   "GET /api/payroll-compliance": adminInService("payroll.salary.view and a director check (compliance.list)"), // ST-30
   "POST /api/payroll-compliance": adminInService("director check (compliance.add)"),
   "POST /api/payroll-compliance/:id/retire": adminInService("director check (compliance.retire)"),
