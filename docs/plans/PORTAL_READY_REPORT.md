@@ -114,7 +114,7 @@ dialog by a shared trap; the scale budgets are the project's recorded 500-person
    the adjustment), settlements (`settlements/service.ts` automatic lines), YTD on payslips (`run/ytd.ts`, `run/payslip.ts`).
 2. Tax gates: the opening-figures gate in `tax/gather.ts`, `tax/openings.ts` hash binding, `tax/form16.ts` DRAFT rules.
 3. Access: every new route refuses HR, managers (except their own/team where stated), employees on others' data and the Developer role; the
-   Developer still reaches Employee Swipes (pre-existing; no selection now) — confirm that is intended.
+   Developer does not reach Employee Swipes unless a director turns the switch on (D-37 default 3, `9ec926e`) — confirm the switch is read on every request.
 4. Append-only and immutability triggers in the new migrations (`2026110*`), and the test-only purge exception.
 5. Sealed challan numbers registered in `lib/fieldKeyRotation.ts`.
 6. The attendance engine changes: rejected swipes, location-limited holidays and weekend overrides in `attendance/compute.ts`.
