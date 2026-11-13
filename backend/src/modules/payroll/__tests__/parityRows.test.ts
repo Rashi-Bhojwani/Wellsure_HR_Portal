@@ -11,6 +11,8 @@ import { byBank, bankSummaryHtml } from "../run/bankSummary";
 import { addMonthsClamped, serviceLength } from "../settlements/guide";
 import { form16Html } from "../tax/form16Html";
 import { ratesInForce } from "../minimumWages/service";
+import { journalOf } from "../journal/service";
+import { dec } from "../money";
 import { REAL_RULES, approve, closeWorld, closingWorld, confirmAllPins, driveToFinal, requestStep, staffWith, type Closing } from "./closeTestHelpers";
 import { CYCLE, calculateRun, setRules } from "./runTestHelpers";
 import { makeComponent } from "./salaryTestHelpers";
@@ -87,6 +89,23 @@ describe("ST-29 — which minimum wage is in force", () => {
           const top = live.filter((r) => want !== undefined && r.effectiveFrom === live[live.length - 1]!.effectiveFrom && r.createdAt === live[live.length - 1]!.createdAt);
           if (new Set(top.map((t) => t.monthlyAmount)).size <= 1) expect(got.get(`${st}|${cat}`)).toBe(want);
         }
+      }),
+      { numRuns: 400 },
+    );
+  });
+});
+
+describe("PY-41 — the journal balances", () => {
+  it("debits equal credits exactly whenever net pay is earnings less deductions plus rounding; each key carries exactly its lines", () => {
+    fc.assert(
+      fc.property(fc.array(fc.record({ code: fc.constantFrom("BASIC", "HRA", "PF", "PT", "ROUND"), kind: fc.constantFrom("EARNING", "DEDUCTION", "EMPLOYER_CONTRIBUTION", "ROUNDING"), p: fc.bigInt({ min: -100n, max: 10_000_000n }) }), { maxLength: 30 }), (raw) => {
+        const lines = raw.map((r) => ({ ...r, p: r.kind === "ROUNDING" ? r.p : r.p < 0n ? -r.p : r.p }));
+        const txt = (p: bigint) => `${p < 0n ? "-" : ""}${(p < 0n ? -p : p) / 100n}.${String((p < 0n ? -p : p) % 100n).padStart(2, "0")}`;
+        const net = lines.reduce((s, l) => s + (l.kind === "EARNING" || l.kind === "ROUNDING" ? l.p : l.kind === "DEDUCTION" ? -l.p : 0n), 0n);
+        const entries = journalOf(lines.map((l) => ({ code: l.code, kind: l.kind, amount: dec(txt(l.p)) })), dec(txt(net)));
+        const P = (d: { toFixed: (n: number) => string }) => paise(d.toFixed(2));
+        expect(entries.reduce((s, e) => s + P(e.debit), 0n)).toBe(entries.reduce((s, e) => s + P(e.credit), 0n));
+        for (const e of entries.filter((x) => x.key.startsWith("EARNING:"))) expect(P(e.debit)).toBe(lines.filter((l) => l.kind === "EARNING" && `EARNING:${l.code}` === e.key).reduce((s, l) => s + l.p, 0n));
       }),
       { numRuns: 400 },
     );
@@ -327,6 +346,38 @@ describe("Session A parity rows over a finalised run", () => {
       expect(await prisma.payrollRunLine.findMany({ where: { runId }, select: { id: true, amount: true } })).toEqual(itemsBefore); // pay unchanged
     } finally {
       for (const [model, ids] of Object.entries(made)) await deleteWithDependents(model, ids.filter(Boolean));
+    }
+  });
+
+  it("PY-41: the journal lists what is Not set until every key is mapped, then balances exactly by account and exports, audited; others are refused", async () => {
+    const jr = (m: "get" | "put", path: string, body?: object, t = world.tokens.maker) => call(t, m, `/api/payroll-journal${path}`, body);
+    for (const t of [tok.hr!, tok.mgr!, tok.a!, tok.dev!]) expect((await jr("get", `/runs/${runId}`, undefined, t)).status).toBe(403);
+    const first = await jr("get", `/runs/${runId}`);
+    expect(first.status, JSON.stringify(first.body)).toBe(200);
+    expect((await jr("get", `/runs/${runId}/export?format=csv`)).status).toBe(first.body.notSet.length ? 409 : 200);
+    const account = (key: string) => (key.startsWith("EARNING:") ? "ZZ Salaries" : key.startsWith("DEDUCTION:") ? "ZZ Deductions payable" : key.endsWith(":EXPENSE") ? "ZZ Employer cost" : key.endsWith(":LIABILITY") ? "ZZ Statutory payable" : key.startsWith("ROUNDING:") ? "ZZ Rounding" : "ZZ Net pay payable");
+    const keys: string[] = first.body.keys.map((k: { key: string }) => k.key);
+    expect((await jr("put", "/mappings", { mappings: [{ key: "NOT A KEY", account: "x" }], reason: "test" })).status).toBe(400);
+    expect((await jr("put", "/mappings", { mappings: keys.map((key) => ({ key, account: account(key) })), reason: "test fixture" })).status).toBe(200);
+    try {
+      const j = await jr("get", `/runs/${runId}`);
+      expect(j.body.notSet).toEqual([]);
+      expect(dec(j.body.totalDebit).equals(dec(j.body.totalCredit))).toBe(true);
+      // Independent: the run's earning lines and net pay, exact.
+      const items = await prisma.payrollRunItem.findMany({ where: { runId, status: { in: ["PAYABLE", "HELD"] } }, include: { lines: true } });
+      const exact = (xs: Array<{ toString(): string }>) => xs.reduce((s, x) => s.plus(dec(x.toString())), dec("0"));
+      const salaries = j.body.accounts.find((a: { account: string }) => a.account === "ZZ Salaries");
+      expect(dec(salaries.debit).equals(exact(items.flatMap((i) => i.lines.filter((l) => l.kind === "EARNING").map((l) => l.amount))))).toBe(true);
+      const net = j.body.accounts.find((a: { account: string }) => a.account === "ZZ Net pay payable");
+      expect(dec(net.credit).equals(exact(items.map((i) => i.netPay)))).toBe(true);
+      const csv = await jr("get", `/runs/${runId}/export?format=csv`);
+      expect(csv.status).toBe(200);
+      expect(csv.text).toContain("ZZ Salaries");
+      const audit = await prisma.auditLog.findFirstOrThrow({ where: { action: "payroll.journal.exported", entityId: runId } });
+      expect(JSON.stringify(audit.after)).not.toMatch(/\d+\.\d{2}/);
+      await expect(prisma.ledgerAccountMapping.updateMany({ where: { setByUserId: world.maker.userId }, data: { account: "x" } })).rejects.toThrow(/LEDGER_MAPPING_APPEND_ONLY/);
+    } finally {
+      await deleteWithDependents("LedgerAccountMapping", (await prisma.ledgerAccountMapping.findMany({ where: { setByUserId: world.maker.userId }, select: { id: true } })).map((x) => x.id));
     }
   });
 

@@ -4488,6 +4488,18 @@ model Form16PartAFile {
   @@index([financialYear, employeeId, createdAt], map: "form16_part_a_files_year_employee_idx")
   @@map("form16_part_a_files")
 }
+/// PY-41: the ledger account a journal key posts to, set by a director (none preset). Append-only; the newest per key wins.
+model LedgerAccountMapping {
+  id          String   @id @default(cuid())
+  key         String
+  account     String
+  reason      String
+  setByUserId String   @map("set_by_user_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([key, createdAt])
+  @@map("ledger_account_mappings")
+}
 // A-END
 // M-BEGIN (second session block 2, ER-27): divisions, an optional grouping of departments (an employee's division is their department's).
 model Division {
