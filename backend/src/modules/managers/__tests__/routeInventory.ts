@@ -876,6 +876,10 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/update-import/:id": scoped("employee.edit; the uploader's own batch, or a director"),
   "POST /api/update-import/:id/apply": scoped("employee.edit; the uploader or a director; rows checked at preview; job rows by a director when the setting says so"),
   // LT-09: anyone holding a letter checks it is genuine; rate-limited; the answer has no personal data
+  // AD-07 data retention: directors only
+  "GET /api/retention/due": adminInService("router gate settings.manage (never HR), Developer refused, and a director check in the service"),
+  "POST /api/retention/erasures": adminInService("router gate settings.manage, Developer refused, a director check in the service"),
+  "POST /api/retention/erasures/:id/confirm": adminInService("router gate settings.manage, Developer refused; a different director confirms (service and database)"),
   "POST /api/public/letter-check": machine("no sign-in by design (banks, landlords); rate-limited per address; answers genuine or not with the reference, date and signature count, no personal data"),
   // P7-3: the person's own
   "GET /api/tax/me/ytd": self,

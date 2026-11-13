@@ -181,12 +181,11 @@ export const POLICY_SETTINGS: readonly PolicySettingDef[] = [
     area: "Data",
     row: "AD-07",
     title: "Data retention for former employees",
-    what: "How long after the leaving date each kind of record is kept. Not set means kept. Payroll and tax records are not erased here (their periods follow the law and are the directors' with payroll).",
+    what: "How long after the leaving date each kind of record is kept. Not set means kept. Payroll and tax records, and pay or statutory documents, are not erased here (their periods follow the law and are the directors' with payroll). Erasing needs one director to propose it and another to confirm.",
     kind: "notSet",
     fields: [
       { name: "contactMonths", label: "Contact and personal details", type: "int", min: 1, max: 240, unit: "months after leaving", optional: true },
       { name: "documentsMonths", label: "Documents shared with the person", type: "int", min: 1, max: 240, unit: "months after leaving", optional: true },
-      { name: "helpdeskMonths", label: "Helpdesk tickets", type: "int", min: 1, max: 240, unit: "months after leaving", optional: true },
     ],
     defaultValue: null,
     why: "Retention periods are the owners' (DPDP and labour law); nothing is erased until they choose.",
