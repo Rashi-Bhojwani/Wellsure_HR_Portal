@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Form, Input } from "antd";
 import { financialYearOf } from "@shared/utils/financialYear";
@@ -8,7 +8,7 @@ import { Caption } from "../../../components/payroll/payrollUi";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatDate } from "../../../lib/dates";
 import { space } from "../../../theme/tokens";
-import { ApprovalBanner, DataTable, PageHeader, Panel, SideDrawer, SkeletonCard, Stack, StatusChip, toast } from "../../../ui";
+import { ApprovalBanner, DataTable, EmptyState, isForbidden, PageHeader, Panel, SideDrawer, SkeletonCard, Stack, StatusChip, toast } from "../../../ui";
 
 // Payroll > Tax years. Directors only. A tax year is every value income tax is worked out from (the slabs, the standard deduction, the rebate, surcharge, cess, the rounding, the default regime,
 // the sections people can declare under): none is shipped. Each is entered by a director with the note saying where it came from and the date it applies from, and a DIFFERENT director confirms the
@@ -50,20 +50,26 @@ export function TaxYearsPage() {
   const queryClient = useQueryClient();
   const [year, setYear] = useState(financialYearOf(new Date().toISOString().slice(0, 10)).label);
   const [editing, setEditing] = useState(false);
+  // The drawers unmount on close, so focus is handed back to the button that opened them.
+  const editButton = useRef<HTMLButtonElement>(null);
+  const confirmButton = useRef<HTMLButtonElement>(null);
+  const back = (b: React.RefObject<HTMLButtonElement | null>) => requestAnimationFrame(() => b.current?.focus());
   const [confirming, setConfirming] = useState(false);
   const q = useQuery({ queryKey: ["tax", "year", year], queryFn: () => taxApi.taxYear(year), retry: false });
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["tax", "year", year] });
   const y = q.data?.year;
   const tone = y?.status === "CONFIRMED" ? "success" : y?.status === "PLACEHOLDER" ? "warning" : "neutral";
+  // A refusal (only directors hold payroll.rules.manage) is a forbidden page, not a bad year.
+  if (isForbidden(q.error)) return <><PageHeader title="Tax years" /><EmptyState kind="forbidden" /></>;
   return (
     <>
-      <PageHeader title="Tax years" subtitle="The values income tax is worked out from. None is built in: you enter them, and a different director confirms them." actions={<Button type="primary" onClick={() => setEditing(true)} disabled={!y}>Enter or change the values</Button>} />
+      <PageHeader title="Tax years" subtitle="The values income tax is worked out from. None is built in: you enter them, and a different director confirms them." actions={<Button ref={editButton} type="primary" onClick={() => setEditing(true)} disabled={!y}>Enter or change the values</Button>} />
       <Stack>
         <ApprovalBanner tone="info" title="Nothing here is a tax rule from the system" description="Every figure needs the note saying where it came from and the date it applies from. Form 16 and any tax statement stay DRAFT until the year is confirmed." />
         <Panel title="Financial year" extra={y && <StatusChip tone={tone}>{y.status === "CONFIRMED" ? "Confirmed" : y.status === "PLACEHOLDER" ? "Entered, not confirmed" : "Not set"}</StatusChip>}>
           <Form layout="inline" component="div" style={{ gap: space[3], flexWrap: "wrap" }}>
             <Form.Item label="Year" htmlFor="tax-year-label"><Input id="tax-year-label" value={year} maxLength={7} onChange={(e) => setYear(e.target.value)} style={{ width: 120 }} placeholder="2026-27" /></Form.Item>
-            {y?.status === "PLACEHOLDER" && <Button onClick={() => setConfirming(true)}>Confirm this version</Button>}
+            {y?.status === "PLACEHOLDER" && <Button ref={confirmButton} onClick={() => setConfirming(true)}>Confirm this version</Button>}
           </Form>
           {q.isLoading && <SkeletonCard lines={3} />}
           {q.error && <ApprovalBanner tone="warning" title="That is not a financial year" description={apiErrorMessage(q.error, "Write it like 2026-27.")} />}
@@ -88,8 +94,8 @@ export function TaxYearsPage() {
           </Panel>
         )}
       </Stack>
-      {editing && y && <EditDrawer year={y} onClose={() => setEditing(false)} onDone={refresh} />}
-      {confirming && y && <ConfirmDrawer year={y} onClose={() => setConfirming(false)} onDone={refresh} />}
+      {editing && y && <EditDrawer year={y} onClose={() => { setEditing(false); back(editButton); }} onDone={refresh} />}
+      {confirming && y && <ConfirmDrawer year={y} onClose={() => { setConfirming(false); back(confirmButton); }} onDone={refresh} />}
     </>
   );
 }
