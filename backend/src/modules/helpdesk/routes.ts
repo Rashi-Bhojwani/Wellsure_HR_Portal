@@ -1,5 +1,6 @@
 // PEEPS-BEGIN helpdesk-visibility
 import * as categoryVisibility from "./categoryVisibility";
+import { refuseDeveloper } from "../../middleware/refuseDeveloper";
 import { attachmentContentDisposition } from "../../integrations/storage/StorageService";
 // PEEPS-END helpdesk-visibility
 
@@ -68,7 +69,8 @@ helpdeskRouter.post("/attachments/:id/content", validate({ params: idParamsSchem
 // PEEPS-END helpdesk-visibility
 
 // PEEPS-BEGIN helpdesk-moves
-helpdeskRouter.post("/tickets/:id/move", manage, validate({ params: idParamsSchema, body: categoryVisibility.moveSchema }), async (req, res) => {
+// Stage 4 (permission matrix): the Developer role is refused before validation, as the service already refuses it.
+helpdeskRouter.post("/tickets/:id/move", manage, refuseDeveloper, validate({ params: idParamsSchema, body: categoryVisibility.moveSchema }), async (req, res) => {
   res.json(await categoryVisibility.moveTicket(req.params.id as string, req.body, req.user!, { actorUserId: req.user!.userId, ipAddress: req.ip, userAgent: req.headers["user-agent"] }));
 });
 // PEEPS-END helpdesk-moves
