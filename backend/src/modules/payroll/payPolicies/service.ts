@@ -5,10 +5,11 @@ import { requireDirector } from "../../../lib/directorAuthority";
 import { namesOn, salariesOn } from "../../../lib/effectiveDating";
 import { prisma } from "../../../lib/prisma";
 import { HttpError } from "../../../middleware/errorHandler";
-import { behaviourValue } from "../../behaviours/service";
+import { behaviourOn, behaviourValue } from "../../behaviours/service";
 import { policyInForce } from "../../policySettings/service";
 import { fixed } from "../money";
-import { encashmentAmount, overtimeAmount } from "./arith";
+import { basisOf, encashmentAmount, gratuityAmount, gratuityYears, noticeRecoveryAmount, noticeShortfall, overtimeAmount } from "./arith";
+import { serviceLength } from "../settlements/guide";
 
 // Part 3 A2/A3 (docs/plans/A_PART3.md; owner decisions 2026-11-13): paying approved overtime and in-year leave encashment. Each needs its behaviour setting confirmed by
 // two directors (Not set by default) AND the other session's own switch on; until then nothing is paid and no run changes. Paying creates ordinary pending pay adjustments
@@ -136,4 +137,32 @@ export async function exitEncashment(employeeId: string, leaveTypeCode: string, 
   if (!salary) return null;
   const dim = new Date(Date.UTC(lastWorkingDate.getUTCFullYear(), lastWorkingDate.getUTCMonth() + 1, 0)).getUTCDate();
   return { amount: fixed(encashmentAmount(days, linesOf(salary), setting.basisHeads, setting.divisor, dim, setting.rounding), 2), source: "leave encashment setting (Default behaviours)" };
+}
+
+/** Part 4: gratuity at exit, or null while the setting is Not set (or not in force on the day) or the person does not qualify. */
+export async function exitGratuity(employeeId: string, lastWorkingDate: Date): Promise<{ amount: string; source: string; years: number } | null> {
+  const setting = await behaviourOn("payroll.gratuity", iso(lastWorkingDate));
+  if (!setting) return null;
+  const emp = await prisma.employee.findUnique({ where: { id: employeeId }, select: { dateOfJoining: true } });
+  const salary = (await salariesOn([employeeId], lastWorkingDate)).get(employeeId);
+  if (!emp || !salary) return null;
+  const svc = serviceLength(emp.dateOfJoining, lastWorkingDate);
+  const completed = svc.years + svc.months / 12; // allow-number: months in a year, for the eligibility comparison only
+  if (completed < Number(setting.minYears)) return null; // allow-number: the setting's own least years
+  const years = gratuityYears(svc.years, svc.months, setting.partYear);
+  const amount = gratuityAmount(years, basisOf(linesOf(salary), setting.wageHeads), setting.daysPerYear, setting.divisor, setting.ceiling, setting.rounding);
+  return { amount: fixed(amount, 2), source: `gratuity setting (Default behaviours), ${years} year(s) counted`, years };
+}
+
+/** Part 4: notice recovery at exit, or null while the setting is Not set, recovery is off, or the notice was served in full. */
+export async function exitNoticeRecovery(employeeId: string, noticeGiven: Date, lastWorkingDate: Date): Promise<{ amount: string; shortfall: number; source: string } | null> {
+  const setting = await behaviourOn("payroll.noticeRecovery", iso(lastWorkingDate));
+  if (!setting || !setting.recoverShortfall) return null;
+  const given = new Date(`${iso(noticeGiven)}T00:00:00Z`);
+  const { shortfall } = noticeShortfall(given, lastWorkingDate, setting.noticeDays);
+  if (shortfall === 0) return null;
+  const salary = (await salariesOn([employeeId], lastWorkingDate)).get(employeeId);
+  if (!salary) return null;
+  const amount = noticeRecoveryAmount(shortfall, basisOf(linesOf(salary), setting.basisHeads), setting.divisor, setting.rounding);
+  return { amount: fixed(amount, 2), shortfall, source: `notice setting (Default behaviours): ${setting.noticeDays} days, given ${iso(given)}` };
 }

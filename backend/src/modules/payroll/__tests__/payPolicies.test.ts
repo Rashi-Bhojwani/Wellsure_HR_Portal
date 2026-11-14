@@ -5,7 +5,8 @@ import { DEVELOPER_ROLE_CODE } from "@shared/constants/sensitiveData";
 import { deleteWithDependents } from "../../../lib/__tests__/cleanup";
 import { prisma } from "../../../lib/prisma";
 import { app, authHeader, cleanupFullTestEmployee, createFullTestEmployee, loginAs } from "../../employee/__tests__/employeeTestHelpers";
-import { encashmentAmount, overtimeAmount } from "../payPolicies/arith";
+import { encashmentAmount, gratuityAmount, gratuityYears, noticeRecoveryAmount, noticeShortfall, overtimeAmount } from "../payPolicies/arith";
+import { dec } from "../money";
 import { automaticLines } from "../settlements/service";
 import { REAL_RULES, closeWorld, closingWorld, confirmAllPins, driveToFinal, staffWith, type Closing } from "./closeTestHelpers";
 import { goldenFixture, goldenSnapshot } from "./goldenHelpers";
@@ -53,6 +54,35 @@ describe("A2/A3 — the arithmetic against exact fractions (TEST values)", () =>
         expect(paise(encashmentAmount(days, lines, ["TEST_BASIC"], { kind: "CALENDAR_DAYS" }, dim, r).toFixed(2))).toBe(halfUpPaise(new Frac(d.n * basic, d.d * 100n * BigInt(dim))));
       }),
       { numRuns: 300 },
+    );
+  });
+});
+
+describe("Part 4 — gratuity and notice recovery against exact fractions (TEST values)", () => {
+  it("gratuity: wage × days ÷ divisor × counted years, capped; a part year counts from six months only when the setting says so", () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 0, max: 40 }), fc.integer({ min: 0, max: 11 }), fc.bigInt({ min: 0n, max: 50_000_000n }), fc.constantFrom("15", "30"), fc.constantFrom("26", "30"), fc.constantFrom("NONE", "2000000"), fc.boolean(), (years, months, wage, days, divisor, ceiling, sixMonths) => {
+        const counted = gratuityYears(years, months, sixMonths ? "SIX_MONTHS_OR_MORE_COUNTS_AS_A_YEAR" : "COMPLETED_YEARS_ONLY");
+        expect(counted).toBe(sixMonths && months >= 6 ? years + 1 : years);
+        const exact = new Frac(wage * BigInt(days) * BigInt(counted), 100n * BigInt(divisor)); // rupees
+        const capped = ceiling !== "NONE" && exact.n > BigInt(ceiling) * exact.d ? new Frac(BigInt(ceiling), 1n) : exact;
+        const got = gratuityAmount(counted, dec(txt(wage)), days, divisor, ceiling, { mode: "HALF_UP", scale: 2 });
+        expect(paise(got.toFixed(2))).toBe(halfUpPaise(capped));
+      }),
+      { numRuns: 400 },
+    );
+  });
+  it("notice: days served count both ends; the shortfall is recovered at basis ÷ divisor a day", () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 0, max: 200 }), fc.integer({ min: 0, max: 120 }), fc.bigInt({ min: 0n, max: 50_000_000n }), fc.constantFrom("26", "30"), (gap, noticeDays, basis, divisor) => {
+        const given = new Date("2026-06-01T00:00:00Z");
+        const lwd = new Date(given.getTime() + gap * 86_400_000);
+        const { served, shortfall } = noticeShortfall(given, lwd, noticeDays);
+        expect(served).toBe(gap + 1);
+        expect(shortfall).toBe(Math.max(0, noticeDays - (gap + 1)));
+        expect(paise(noticeRecoveryAmount(shortfall, dec(txt(basis)), divisor, { mode: "HALF_UP", scale: 2 }).toFixed(2))).toBe(halfUpPaise(new Frac(BigInt(shortfall) * basis, 100n * BigInt(divisor))));
+      }),
+      { numRuns: 400 },
     );
   });
 });
@@ -126,6 +156,8 @@ describe("A2/A3 — over a real run", () => {
     expect((await call(world.tokens.maker, "post", "/api/payroll-pay-policies/encashment/pay", { requestId: encReqId })).body.error.code).toBe("NOT_SET");
     const leave = (await automaticLines(who("c"), new Date("2026-09-30T00:00:00Z"))).find((l) => l.kind === "LEAVE_BALANCE")!;
     expect(leave).toMatchObject({ amount: null, label: "Leave balance (PL), days only" });
+    const exitNotSet = await automaticLines(who("c"), new Date("2026-09-30T00:00:00Z"), new Date("2026-09-20T00:00:00Z"));
+    expect(exitNotSet.some((l) => l.kind === "GRATUITY" || l.kind === "NOTICE_RECOVERY")).toBe(false); // Not set: no line at all
   });
 
   it("with TEST values confirmed by two directors and the switches on: overtime and encashment are paid once each, exactly; the ledger records the days; the settlement gets its amount", async () => {
@@ -162,6 +194,25 @@ describe("A2/A3 — over a real run", () => {
     // A type not named for exit stays in days only.
     const other = exitLines.find((l) => l.label.includes(`(${otherCode})`))!;
     expect(other).toMatchObject({ amount: null, label: `Leave balance (${otherCode}), days only` });
+    // Part 4: gratuity and notice recovery with TEST values. A setting dated after the last working day is not in force.
+    await setBehaviour("payroll.gratuity", { effectiveFrom: "2027-01-01", minYears: "1", partYear: "SIX_MONTHS_OR_MORE_COUNTS_AS_A_YEAR", wageHeads: [world.basic], daysPerYear: "15", divisor: "26", ceiling: "NONE", rounding: { mode: "HALF_UP", scale: 2 }, sourceNote: "TEST value, dated later" }, "/api/behaviours");
+    expect((await automaticLines(who("c"), new Date("2026-09-30T00:00:00Z"))).some((l) => l.kind === "GRATUITY")).toBe(false);
+    await setBehaviour("payroll.gratuity", { effectiveFrom: "2026-01-01", minYears: "1", partYear: "SIX_MONTHS_OR_MORE_COUNTS_AS_A_YEAR", wageHeads: [world.basic], daysPerYear: "15", divisor: "26", ceiling: "NONE", rounding: { mode: "HALF_UP", scale: 2 }, sourceNote: "TEST value, not a real rule" }, "/api/behaviours");
+    await setBehaviour("payroll.noticeRecovery", { effectiveFrom: "2026-01-01", noticeDays: 30, recoverShortfall: true, basisHeads: [world.basic], divisor: "30", rounding: { mode: "HALF_UP", scale: 2 }, sourceNote: "TEST value, not a real period" }, "/api/behaviours");
+    const lwd = new Date("2026-09-30T00:00:00Z");
+    const exit = await automaticLines(who("c"), lwd, new Date("2026-09-21T00:00:00Z"));
+    const empC = await prisma.employee.findUniqueOrThrow({ where: { id: who("c") } });
+    const { serviceLength } = await import("../settlements/guide");
+    const svc = serviceLength(empC.dateOfJoining, lwd);
+    const counted = svc.months >= 6 ? svc.years + 1 : svc.years;
+    const basicC = (await prisma.employeeSalary.findFirstOrThrow({ where: { employeeId: who("c") }, include: { lines: true } })).lines.find((l) => l.componentCode === world.basic)!.amount.toString();
+    const [wc, fc2 = ""] = basicC.split(".");
+    const basicCPaise = BigInt(wc!) * 100n + BigInt((fc2 + "00").slice(0, 2));
+    const grat = exit.find((l) => l.kind === "GRATUITY")!;
+    expect(paise(grat.amount!)).toBe(halfUpPaise(new Frac(basicCPaise * 15n * BigInt(counted), 100n * 26n)));
+    const notice = exit.find((l) => l.kind === "NOTICE_RECOVERY")!; // 21 to 30 September served: 10 days of 30, 20 short
+    expect(notice.label).toBe("Notice not served (20 days)");
+    expect(paise(notice.amount!)).toBe(-halfUpPaise(new Frac(20n * basicCPaise, 100n * 30n)));
     // The finalised August run is untouched by all of this.
     expect(await goldenSnapshot(world, runId)).toEqual(goldenFixture());
   });

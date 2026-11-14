@@ -119,6 +119,45 @@ export const BEHAVIOURS = {
     d37: false,
     defaultText: "Not set: encashment requests are not paid; a settlement shows leave in days only",
   },
+  // Part 4 (docs/plans/A_PART4.md): settlement mechanisms, every figure the directors'; each value carries the day it takes effect (effectiveFrom).
+  "payroll.gratuity": {
+    title: "Gratuity at exit",
+    what: "Who qualifies (least completed years of service), how a part year counts, the wage it uses (chosen heads of the salary in force on the last working day), days of wage per year of service and the divisor, the ceiling (or none), the rounding, and from when. Until confirmed, a settlement shows no gratuity line.",
+    schema: z
+      .object({
+        effectiveFrom: z.iso.date(),
+        minYears: z.string().regex(/^\d{1,2}(\.\d{1,2})?$/),
+        partYear: z.enum(["COMPLETED_YEARS_ONLY", "SIX_MONTHS_OR_MORE_COUNTS_AS_A_YEAR"]),
+        wageHeads: z.array(z.string().regex(/^[A-Z][A-Z0-9_]{1,31}$/)).min(1).max(20), // allow-number: field lengths
+        daysPerYear: z.string().regex(/^\d{1,2}(\.\d{1,2})?$/),
+        divisor: z.string().regex(/^\d{1,2}(\.\d{1,2})?$/),
+        ceiling: z.union([z.string().regex(/^\d{1,9}(\.\d{1,2})?$/), z.literal("NONE")]),
+        rounding: z.object({ mode: z.enum(["HALF_UP", "UP", "DOWN"]), scale: z.number().int().min(0).max(2) }).strict(), // allow-number: decimals of a rupee
+        sourceNote: z.string().trim().min(3).max(300),
+      })
+      .strict(),
+    defaultValue: null as null | { effectiveFrom: string; minYears: string; partYear: "COMPLETED_YEARS_ONLY" | "SIX_MONTHS_OR_MORE_COUNTS_AS_A_YEAR"; wageHeads: string[]; daysPerYear: string; divisor: string; ceiling: string; rounding: { mode: "HALF_UP" | "UP" | "DOWN"; scale: number }; sourceNote: string },
+    d37: false,
+    defaultText: "Not set: a settlement shows no gratuity line",
+  },
+  "payroll.noticeRecovery": {
+    title: "Notice period and its recovery at exit",
+    what: "The notice period in days, whether a shortfall is recovered, the per-day basis (chosen heads of the salary in force on the last working day divided by a number of days), the rounding, and from when. Notice runs from the day the separation was recorded to the last working day, both counted.",
+    schema: z
+      .object({
+        effectiveFrom: z.iso.date(),
+        noticeDays: z.number().int().min(0).max(365), // allow-number: days in a year
+        recoverShortfall: z.boolean(),
+        basisHeads: z.array(z.string().regex(/^[A-Z][A-Z0-9_]{1,31}$/)).min(1).max(20), // allow-number: field lengths
+        divisor: z.string().regex(/^\d{1,2}(\.\d{1,2})?$/),
+        rounding: z.object({ mode: z.enum(["HALF_UP", "UP", "DOWN"]), scale: z.number().int().min(0).max(2) }).strict(), // allow-number: decimals of a rupee
+        sourceNote: z.string().trim().min(3).max(300),
+      })
+      .strict(),
+    defaultValue: null as null | { effectiveFrom: string; noticeDays: number; recoverShortfall: boolean; basisHeads: string[]; divisor: string; rounding: { mode: "HALF_UP" | "UP" | "DOWN"; scale: number }; sourceNote: string },
+    d37: false,
+    defaultText: "Not set: no notice recovery is worked out",
+  },
 } as const;
 export type BehaviourKey = keyof typeof BEHAVIOURS;
 export const BEHAVIOUR_KEYS = Object.keys(BEHAVIOURS) as BehaviourKey[];
@@ -131,6 +170,18 @@ export interface Actor {
 
 async function confirmedLatest(key: BehaviourKey) {
   return prisma.behaviourProposal.findFirst({ where: { key, confirmation: { isNot: null } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], include: { confirmation: true } });
+}
+
+/** Part 4: for a setting whose value carries `effectiveFrom`, the confirmed value in force on `day` (the latest effective-from on or before it; a later confirmation
+ *  wins a tie), or null. */
+export async function behaviourOn<K extends BehaviourKey>(key: K, day: string): Promise<z.infer<(typeof BEHAVIOURS)[K]["schema"]> | null> {
+  const rows = await prisma.behaviourProposal.findMany({ where: { key, confirmation: { isNot: null } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { value: true } });
+  let best: { effectiveFrom: string } | null = null;
+  for (const r of rows) {
+    const v = r.value as { effectiveFrom?: string } | null;
+    if (v?.effectiveFrom && v.effectiveFrom <= day && (!best || v.effectiveFrom >= best.effectiveFrom)) best = v as { effectiveFrom: string };
+  }
+  return best as z.infer<(typeof BEHAVIOURS)[K]["schema"]> | null;
 }
 
 /** The value in force: the latest confirmed proposal, or the key's default. */

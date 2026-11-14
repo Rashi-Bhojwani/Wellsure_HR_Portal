@@ -10,7 +10,7 @@ import { decide, liveApproval, registerSubject, submit } from "../approvals";
 import { payrollHash } from "../hash";
 import { unpaidHeldItems } from "../offcycle/held";
 import { outstandingLoans } from "../loans/service";
-import { exitEncashment } from "../payPolicies/service";
+import { exitEncashment, exitGratuity, exitNoticeRecovery } from "../payPolicies/service";
 import { canonicalDecimal, dec, fixed, sum, ZERO, type Money } from "../money";
 
 // P7-6 (docs/plans/P7_6_SETTLEMENTS.md): full and final settlement, prepared and confirmed. Paying it needs an off-cycle run (P7-6b, not built): nothing here moves money.
@@ -23,7 +23,7 @@ const iso = (d: Date) => d.toISOString().slice(0, 10);
 const MONEY = /^-?\d+(\.\d{1,2})?$/;
 
 export interface SettlementLine {
-  kind: "HELD_PAY" | "PENDING_ADJUSTMENT" | "LOAN_OWED" | "LEAVE_BALANCE" | "DIRECTOR";
+  kind: "HELD_PAY" | "PENDING_ADJUSTMENT" | "LOAN_OWED" | "LEAVE_BALANCE" | "GRATUITY" | "NOTICE_RECOVERY" | "DIRECTOR"; // GRATUITY, NOTICE_RECOVERY: part 4
   label: string;
   /** Signed: a positive amount is paid to the person, a negative one recovered. Null for the leave balance's days (no amount without the owners' formula). */
   amount: string | null;
@@ -32,7 +32,7 @@ export interface SettlementLine {
 }
 
 /** The automatic lines, read from their sources. Exported so the tests can check each against its source. */
-export async function automaticLines(employeeId: string, lastWorkingDate: Date): Promise<SettlementLine[]> {
+export async function automaticLines(employeeId: string, lastWorkingDate: Date, noticeGiven?: Date): Promise<SettlementLine[]> {
   const lines: SettlementLine[] = [];
   // Pay held in a final run and not yet paid (by a director's release or an off-cycle run): one reader shared with the off-cycle run (P7-6b).
   for (const h of await unpaidHeldItems({ employeeId })) lines.push({ kind: "HELD_PAY", label: `Pay held in ${h.run.cycleLabel}`, amount: fixed(dec(h.netPay.toString()), 2), source: `run item ${h.id}` });
@@ -57,6 +57,13 @@ export async function automaticLines(employeeId: string, lastWorkingDate: Date):
     const code = types.get(l.leaveTypeId) ?? "leave";
     const enc = days.gt(ZERO) ? await exitEncashment(employeeId, code, canonicalDecimal(days), lastWorkingDate) : null;
     lines.push(enc ? { kind: "LEAVE_BALANCE", label: `Leave encashment (${code})`, amount: enc.amount, days: canonicalDecimal(days), source: `leave ledger; ${enc.source}` } : { kind: "LEAVE_BALANCE", label: `Leave balance (${code}), days only`, amount: null, days: canonicalDecimal(days), source: "leave ledger" });
+  }
+  // Part 4: gratuity and notice recovery, each only once its setting is confirmed and in force on the last working day; until then no line, exactly as before.
+  const gratuity = await exitGratuity(employeeId, lastWorkingDate);
+  if (gratuity) lines.push({ kind: "GRATUITY", label: "Gratuity", amount: gratuity.amount, source: gratuity.source });
+  if (noticeGiven) {
+    const notice = await exitNoticeRecovery(employeeId, noticeGiven, lastWorkingDate);
+    if (notice) lines.push({ kind: "NOTICE_RECOVERY", label: `Notice not served (${notice.shortfall} days)`, amount: fixed(dec(notice.amount).negated(), 2), source: notice.source });
   }
   return lines;
 }
@@ -85,7 +92,7 @@ export async function prepare(raw: unknown, actor: Actor) {
   if (pendingApproval?.status === "PENDING") throw new HttpError(409, "A settlement for this person is waiting for the other director. Ask them to decide it first.", "WAITING_FOR_DECISION");
   const latestId = (await latestFor(sep.id))?.id;
   if (latestId && (await prisma.offCycleFinalisation.findUnique({ where: { kind_sourceRef: { kind: "SETTLEMENT", sourceRef: latestId } } }))) throw new HttpError(409, "This person's settlement has been paid. Anything more goes through an adjustment.", "ALREADY_PAID");
-  const lines: SettlementLine[] = [...(await automaticLines(sep.employeeId, sep.lastWorkingDate)), ...parsed.data.directorLines.map((l) => ({ kind: "DIRECTOR" as const, label: l.label, amount: fixed(dec(l.amount), 2), source: l.source }))];
+  const lines: SettlementLine[] = [...(await automaticLines(sep.employeeId, sep.lastWorkingDate, sep.initiatedAt)), ...parsed.data.directorLines.map((l) => ({ kind: "DIRECTOR" as const, label: l.label, amount: fixed(dec(l.amount), 2), source: l.source }))];
   const { total } = settlementTotals(lines);
   const row = await prisma.fnfSettlement.create({ data: { separationId: sep.id, employeeId: sep.employeeId, lines: lines as unknown as object, total: total.toFixed(2), createdByUserId: actor.userId } });
   await writeAuditLog({ actorUserId: actor.userId, ipAddress: actor.ip ?? null, action: "payroll.settlement.prepared", entityType: "FnfSettlement", entityId: row.id, after: { separationId: sep.id, lines: lines.length } });
