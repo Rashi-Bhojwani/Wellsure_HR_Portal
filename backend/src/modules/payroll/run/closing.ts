@@ -246,7 +246,7 @@ async function envelope(slug: Slug, run: PayrollRun, actor: Actor, blockers: Blo
 async function choiceBlockers(action: string): Promise<Blocker[]> {
   const unset = await unsetRequiredSteps();
   if (unset.length === 0) return [];
-  return [{ code: "DIRECTOR_CHOICE_NOT_SET", title: "Who decides each step is not set", message: `The two directors have not both chosen, and confirmed, who decides: ${unset.map((u) => u.label).join("; ")}. One sets it, the other confirms it (Admin Tools, Director authority). Until then the run cannot be ${action}.` }];
+  return [{ code: "DIRECTOR_CHOICE_NOT_SET", title: "Who decides each step is not set", message: `The two directors have not both chosen, and confirmed, who decides: ${unset.map((u) => u.label).join("; ")}. One sets it, the other confirms it (System Settings, the Director authority tab). Until then the run cannot be ${action}.` }];
 }
 
 async function realBlocker(run: PayrollRun, action: string): Promise<Blocker[]> {

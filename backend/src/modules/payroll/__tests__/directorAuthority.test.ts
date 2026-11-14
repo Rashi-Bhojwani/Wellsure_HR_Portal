@@ -101,6 +101,8 @@ describe("director authority", () => {
       for (const step of ["BANK_FILE", "RUN_APPROVAL", "SALARY_REVISION", "RULE_CONFIRM", "SETUP_SIGNOFF", "PERIOD_UNLOCK", "PERIOD_FINALISE", "PAYSLIP_PUBLISH"] as const) {
         await expect(authorityFor(step), step).rejects.toMatchObject({ status: 409, code: "DIRECTOR_CHOICE_NOT_SET" });
       }
+      // Cleanup C2: the message points to where the choice is made (System Settings, the Director authority tab), not "Admin Tools, Director authority".
+      await expect(authorityFor("BANK_FILE")).rejects.toMatchObject({ message: expect.stringContaining("(System Settings, the Director authority tab)") });
       expect(await authorityFor("SETTINGS")).toBe("DIRECTOR_AUTHORITY");
       expect(await authorityFor("IDENTITY_DIRECTOR_ENTRY")).toBe("DIRECTOR_AUTHORITY");
       const id = newId();
