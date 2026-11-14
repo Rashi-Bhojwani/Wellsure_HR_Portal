@@ -148,6 +148,11 @@ describe("A2/A3 — over a real run", () => {
       expect((await call(t, "post", "/api/payroll-pay-policies/overtime/post", { month: "2026-08" })).status).toBe(403);
       expect((await call(t, "get", "/api/payroll-pay-policies/encashment")).status).toBe(403);
       expect((await call(t, "post", "/api/payroll-pay-policies/encashment/pay", { requestId: encReqId })).status).toBe(403);
+      // Part 4: the gratuity and notice settings are the directors' alone — no read, no proposal.
+      expect((await call(t, "get", "/api/behaviours")).status).toBe(403);
+      for (const key of ["payroll.gratuity", "payroll.noticeRecovery"]) {
+        expect((await call(t, "post", `/api/behaviours/${key}/proposals`, { value: null, reason: "test" })).status).toBe(403);
+      }
     }
     const pre = await call(world.tokens.maker, "get", "/api/payroll-pay-policies/overtime?month=2026-08");
     expect(pre.body.notSet.length).toBe(2);
