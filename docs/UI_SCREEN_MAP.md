@@ -142,19 +142,21 @@ Sensitive values (salary, bank, PAN, Aadhaar, UAN, ESI) appear only to the roles
 
 ### Reports
 
+Every report is closed to the Developer (owners, 2026-11-14): the role holds no report key, the Reports overview says "You can't open reports", each report page shows the forbidden page and the server refuses every report route with 403.
+
 | URL | Screen | Menu path | Who can open it | Status | Board frame |
 |---|---|---|---|---|---|
-| `/admin/reports/headcount` | Headcount | Reports → People → Headcount | SA HA HE DEV MGR* · `reports.view` | built | `reports-02`..`10` |
-| `/admin/reports/joiners` | Joiners | Reports → People → Joiners | SA HA HE DEV MGR* · `reports.view` | built | — |
-| `/admin/reports/leavers` | Leavers & attrition | Reports → People → Leavers & attrition | SA HA HE DEV MGR* · `reports.view` | built | — |
-| `/admin/reports/celebrations` | Birthdays & anniversaries | Reports → People → Birthdays & anniversaries | SA HA HE DEV MGR* · `reports.view` | built | — |
-| `/admin/reports/leave-balance` | Leave balance | Reports → Leave → Leave balance | SA HA HE DEV MGR* · `reports.leave.view` | built | — |
-| `/admin/reports/leave-liability` | Leave liability | Reports → Leave → Leave liability | SA · `reports.liability.view` | built | `reports-06` |
-| `/admin/reports/lop` | Loss of pay (LOP) | Reports → Leave → Loss of pay (LOP) | SA HA HE DEV MGR* · `reports.leave.view` | built | — |
-| `/admin/reports/attendance-muster` | Attendance summary | Reports → Attendance → Attendance summary | SA HA HE DEV MGR* · `reports.attendance.view` | built | — |
-| `/admin/reports/late-coming` | Late coming | Reports → Attendance → Late coming | SA HA HE DEV MGR* · `reports.attendance.view` | built | — |
-| `/admin/reports/excess-hours` | Excess hours | Reports → Attendance → Excess hours | SA HA HE DEV MGR* · `reports.attendance.view` | built | — |
-| `/admin/reports/exception-summary` | Attendance exceptions | Reports → Attendance → Attendance exceptions | SA HA HE DEV MGR* · `reports.attendance.view` | built | — |
+| `/admin/reports/headcount` | Headcount | Reports → People → Headcount | SA HA HE MGR* · `reports.view` · never the Developer | built | `reports-02`..`10` |
+| `/admin/reports/joiners` | Joiners | Reports → People → Joiners | SA HA HE MGR* · `reports.view` · never the Developer | built | — |
+| `/admin/reports/leavers` | Leavers & attrition | Reports → People → Leavers & attrition | SA HA HE MGR* · `reports.view` · never the Developer | built | — |
+| `/admin/reports/celebrations` | Birthdays & anniversaries | Reports → People → Birthdays & anniversaries | SA HA HE MGR* · `reports.view` · never the Developer | built | — |
+| `/admin/reports/leave-balance` | Leave balance | Reports → Leave → Leave balance | SA HA HE MGR* · `reports.leave.view` · never the Developer | built | — |
+| `/admin/reports/leave-liability` | Leave liability | Reports → Leave → Leave liability | SA · `reports.liability.view` · never the Developer | built | `reports-06` |
+| `/admin/reports/lop` | Loss of pay (LOP) | Reports → Leave → Loss of pay (LOP) | SA HA HE MGR* · `reports.leave.view` · never the Developer | built | — |
+| `/admin/reports/attendance-muster` | Attendance summary | Reports → Attendance → Attendance summary | SA HA HE MGR* · `reports.attendance.view` · never the Developer | built | — |
+| `/admin/reports/late-coming` | Late coming | Reports → Attendance → Late coming | SA HA HE MGR* · `reports.attendance.view` · never the Developer | built | — |
+| `/admin/reports/excess-hours` | Excess hours | Reports → Attendance → Excess hours | SA HA HE MGR* · `reports.attendance.view` · never the Developer | built | — |
+| `/admin/reports/exception-summary` | Attendance exceptions | Reports → Attendance → Attendance exceptions | SA HA HE MGR* · `reports.attendance.view` · never the Developer | built | — |
 
 ### Engage
 

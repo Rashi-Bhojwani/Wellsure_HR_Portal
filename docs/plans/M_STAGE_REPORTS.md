@@ -484,3 +484,31 @@ the setup checklist. The screens no longer show them, but a direct API call woul
 Leavers & attrition, Birthdays & anniversaries, Leave balance, Loss of pay (LOP), Attendance summary, Late coming, Excess hours, Attendance
 exceptions) with names and rows. No pay figure is in them (Leave liability and Payroll reports are closed to the Developer), but Loss of pay shows
 LOP days per person. Should the Developer lose `reports.view`, or at least the LOP report?
+
+---
+
+# Owners' decisions on the Developer (2026-11-14)
+
+1. **Every report is closed to the Developer.** The Developer role's default permissions (`shared/constants/sensitiveData.ts`
+   `DEVELOPER_ROLE_PERMISSIONS`) no longer hold any report key: `reports.view` and also `reports.attendance.view` and `reports.leave.view`, because
+   those two alone open the Leave balance, Loss of pay and four attendance report pages in the menu. Existing databases lose the three grants in the
+   forward-only migration `20261114090000_m_developer_no_reports` (the removal is recorded first in `role_permission_removals`, as the HR hard lock
+   records its removals). No route or screen code changed: the report routes already require `reports.view`, the report pages already show the
+   forbidden page without their key, and the Reports overview already says "You can't open reports".
+   - New tests: `backend/src/modules/reports/__tests__/developerNoReports.test.ts` (5: the role holds no report key in the defaults and in the
+     database; every report and payroll-report route in the route inventory, with every report key, refuses the Developer with 403 and no file,
+     and no schedule is created; a director still opens reports; the migration, replayed on a database with the old grants, removes them and
+     records the removal) and `frontend/src/routes/__tests__/reportsDeveloper.test.tsx` (17: all 11 report pages refused by the menu rule and
+     rendered as the forbidden page; the sidebar offers no report; the overview says "You can't open reports" and calls no API; a director opens
+     every page). Mutants caught 4 of 4: `reports.view` back on the role; `reports.leave.view` back alone; the gate removed from
+     `GET /api/reports/:key`; the migration's delete made a no-op.
+   - Changed tests: none needed. The existing tests that touch the Developer and reports already expected a refusal
+     (`subscriptions.test.ts`: the Developer cannot schedule the leave liability report) or use `reports.view` only as an ordinary key for a
+     per-person grant (`developerCeiling.test.ts`: a director may still grant an ordinary key to one person; unchanged, see the note below).
+   - Note: the decision is about the role's default. A director can still give one Developer `reports.view` as a personal grant (an audited
+     override, as for any non-sensitive key); the Developer ceiling refuses only sensitive keys. If the owners want that closed too, `reports.*`
+     would join `DEVELOPER_FORBIDDEN_KEYS` (the access resolver applies it; not changed here).
+   - `docs/UI_SCREEN_MAP.md` regenerated: the report rows no longer list DEV and say "never the Developer", with a note under Reports.
+2. **Setup Checklist and Ready for First Run stay closed to the Developer** (as built in "Developer and payroll screens" above; the question there
+   is answered).
+3. **Request 13 (payroll APIs answering the Developer's `payroll.rules.view` reads) is Session A's**; not done here.

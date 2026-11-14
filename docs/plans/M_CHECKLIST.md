@@ -128,3 +128,9 @@ migration applied to a fresh database; no existing test weakened; a golden test 
 
 # Developer and payroll screens (2026-11-14)
 - [x] Every payroll page (34 menu items, the run and its step) shows the Developer the forbidden page; test walks the payroll menu as the Developer (6 of 6 mutants caught); browser re-walk 36 of 36
+
+# Owners' decisions on the Developer (2026-11-14)
+- [x] Every report closed to the Developer: no report key on the role (defaults + migration `m_developer_no_reports`); backend route walk (403 on every report route) and frontend Reports-menu walk; 4 of 4 mutants caught; no existing test needed changing
+- [x] Setup Checklist and Ready for First Run stay closed to the Developer (no change)
+- [-] Request 13: Session A's
+- [x] docs/UI_SCREEN_MAP.md report rows: "never the Developer"

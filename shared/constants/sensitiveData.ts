@@ -217,9 +217,7 @@ export const DEVELOPER_ROLE_PERMISSIONS: readonly PermissionKey[] = [
   "attendance.roster.manage",
   "leave.view",
   "leave.policy.manage",
-  "reports.view",
-  "reports.attendance.view",
-  "reports.leave.view",
+  // No report key (owners, 2026-11-14): every report is closed to the Developer (reports.view, reports.attendance.view, reports.leave.view removed).
   "helpdesk.manage",
   "payroll.rules.view",
 ];
