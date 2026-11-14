@@ -116,3 +116,6 @@ migration applied to a fresh database; no existing test weakened; a golden test 
 - [x] Golden "off" regressions for AT-22, LV-19, LV-20, AT-19, AT-36, LV-23: present since block 2 (no change needed)
 - [x] Browser walk of both blocks' screens (AD-08 Companies skipped by the owner): fix `24e3af31`
 - [x] Check script, full backend suite alone (2,205 of 2,205), CI run 368 read per job
+
+# Operations documents (2026-11-14, docs only)
+- [x] docs/ops/FIRST_SETUP.md, DAILY_AND_MONTHLY_GUIDE.md, ACCEPTANCE_CHECKLIST.md, MOVE_FROM_GREYTHR.md, README.md (screen names checked against the menu configs and pages)

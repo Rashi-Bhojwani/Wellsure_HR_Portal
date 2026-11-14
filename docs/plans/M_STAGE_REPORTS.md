@@ -382,3 +382,37 @@ All are in `shared/constants/policySettings.ts` with the reason beside each, and
 * AD-07 helpdesk erasure replaces the subject and every message of the tickets the person raised and removes their attachment files; the
   ticket rows and numbers stay (counts and history keep adding up).
 * The AD-08 golden follows Session A's payroll per company (see changed tests) rather than pinning a moved person in the main run.
+
+---
+
+# Operations documents (2026-11-14): docs only
+
+Written in `docs/ops/`: FIRST_SETUP.md, DAILY_AND_MONTHLY_GUIDE.md, ACCEPTANCE_CHECKLIST.md, MOVE_FROM_GREYTHR.md and a README. Every screen name and menu
+path was read from `frontend/src/routes/adminMenu.config.tsx` / `employeeMenu.config.tsx` and the pages; quoted messages from the backend services
+(`lib/directorAuthority.ts`, `payroll/rules/context.ts`, `payroll/run`, regularization, leave). Demo examples only (DEMO accounts, DEMO branch names).
+
+**Could not confirm from the code (worded generally in the documents):** what an employee sees if they open an `/admin` address (the employee
+checklist row says only that no admin screen opens with their data); the exact menu path to View My Info (given as `/app/profile`); that the demo
+company has a finished financial year for the Form 16 row (the row says to skip if not); live behaviour of a branch device punch (needs a machine).
+
+**Mismatches between the code and existing docs (listed, not fixed):**
+1. `docs/FIRST_REAL_PAYROLL_RUN.md` §0 gives the payroll work to "Payroll Admin" and "Payroll Approver" roles held by different people; the owners'
+   decision and the seed make the two directors the payroll team (the roles still exist in `systemRoles.ts` with permissions).
+2. `docs/FIRST_REAL_PAYROLL_RUN.md` §1.2 and §5 speak of "your CA"; the owners' decision is no CA (owners enter statutory values with source notes).
+3. `docs/FIRST_REAL_PAYROLL_RUN.md` §1.6 says "There is no spreadsheet import for salaries"; Payroll → Salary Revisions has **Import from a file**
+   (the portal's own template; each revision still approved by another director).
+4. `docs/FIRST_REAL_PAYROLL_RUN.md` §4 says "There are no off-cycle runs yet"; Payroll → Off-cycle runs and Settlements exist.
+5. `docs/FIRST_REAL_PAYROLL_RUN.md` closing section names the place as "Admin Tools, System Settings, Director authority"; it is a System Settings tab
+   shown to directors only (correct), but `lib/directorAuthority.ts`'s message says "(Admin Tools, Director authority)" without "System Settings".
+6. `docs/UI_SCREEN_MAP.md` is behind the menu: My Worklife → Feedback is listed as a Phase 8 placeholder (built); the Salary sub-pages
+   (YTD Reports, IT Statement, IT Declaration, Loans and Advances, Reimbursement, Proof Of Investment, Salary Revision) are listed as Phase 7
+   placeholders (built); Payroll → Loans as a placeholder (built); the roles column still names PA / PP; and these screens are missing:
+   Employee → Filters & Segments, Bulk Upload, Letters, Update From File, Onboarding, Probation, Employee Feedback; Workforce → Work From Home,
+   Overtime, Encashment Requests; Payroll → Monthly Inputs is present but Opening Figures, Reimbursements, Settlements, Off-cycle runs, Loan and claim
+   types, Quarterly TDS data, TDS and Form 16, Statutory challans, Compliance calendar, Minimum wages, Accounting journal, Overtime and encashment pay,
+   Company settings, Payroll reports, Held Salaries entries are missing; Engage → Mass Email; Admin Tools → What HR Can Do, Workforce Settings,
+   Attendance Locks, Leave Reviewers, Calendar Adjustments, Device Sync Requests, Leavers, Workflow, Letter Settings, Default behaviours, Policy
+   settings, Companies, Data retention, Custom fields; employee Leave → Encashment, Attendance → Work From Home and Overtime, To do → Onboarding,
+   Salary → Form 16; the public `/check-letter` page. (Not updated: no screen *name* in it was wrong, only missing or stale status.)
+7. The task asked for branches "as Divisions": in the portal branches are **Organisation Setup → Branches**; Divisions are an optional grouping of
+   departments. FIRST_SETUP.md follows the code.
