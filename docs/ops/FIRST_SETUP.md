@@ -49,7 +49,7 @@ The **other** director then confirms the choice. There is no default.
 1. **Cities**: add your city.
 2. **Branches**: add your three branches (for example DEMO North, DEMO Central, DEMO South). Say whether each has a biometric machine.
 3. **Departments**, **Designations**, **Grades**, **Cost Centres**.
-4. **Divisions** are optional: a way to group departments. With one company in one city you can leave them empty.
+4. **Divisions** are an optional way to group departments. They are **not** where branches go, and you do not need them: leave them empty.
 
 **Companies** (Admin Tools → Companies) is for a second legal company. You have one company and one payroll, so leave it as it is.
 

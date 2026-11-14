@@ -416,3 +416,33 @@ company has a finished financial year for the Form 16 row (the row says to skip 
    Salary → Form 16; the public `/check-letter` page. (Not updated: no screen *name* in it was wrong, only missing or stale status.)
 7. The task asked for branches "as Divisions": in the portal branches are **Organisation Setup → Branches**; Divisions are an optional grouping of
    departments. FIRST_SETUP.md follows the code.
+
+---
+
+# Docs cleanup (2026-11-14): docs only
+
+**Changed:** `docs/FIRST_REAL_PAYROLL_RUN.md` (rewritten to the owner decisions and the current portal; points to `docs/ops/FIRST_SETUP.md` for
+setup), `docs/UI_SCREEN_MAP.md` (regenerated), `docs/ops/FIRST_SETUP.md` (Divisions wording).
+
+**How the screen map was made.** The two menu configs were loaded through the frontend's own Vite setup and dumped (every app, group and item, its
+path, its `needs`, whether it has a page or a `phase` mark). The default role permissions were read from `systemRoles.ts`, minus
+`HR_FORBIDDEN_KEYS` for both HR roles and `DEVELOPER_FORBIDDEN_KEYS` for the Developer; manager-grantable keys from `MANAGER_GRANTABLE_KEYS`.
+The routes outside the menus were read from `router.tsx` and `PortalRoutes.tsx`. Board frames were carried over from the old map for every URL it
+already had (99 of 166). The four ops guides were re-checked against it: every screen and menu path they name is in the map.
+
+**Could not confirm from the code:**
+* "Who can open it" shows defaults: the directors can narrow HR at run time (What HR Can Do), and a manager's grants are per person.
+* For a menu item with no `needs`, the map says the page's own API decides; the exact rule for each such page was not re-read.
+* The payroll menu items list DEV because the Developer holds `payroll.rules.view` (to see the Setup Checklist's status); the payroll APIs refuse
+  the Developer every figure (tested in earlier blocks), but whether each payroll list page shows the Developer an empty state or a forbidden state
+  was not re-checked.
+* The run pages (`/admin/payroll/run/:id`, `/step/:slug`) are recorded as directors only from the services' director checks, not from a menu `needs`.
+
+## Requests to Session A (docs cleanup)
+
+10. **The in-product message about Director authority.** `lib/directorAuthority.ts` says "(Admin Tools, Director authority)". It should say System
+    Settings, the Director authority tab (Admin Tools → System Settings → Director authority).
+11. **Payroll Admin and Payroll Approver roles.** They still exist in `systemRoles.ts` with payroll permissions, although the two directors are the
+    payroll team and the roles are given to nobody. Should they be hidden from role assignment (Roles & Permissions, Manager Management), or removed?
+12. **Payroll reports by branch.** Add a branch filter and a grouping by branch (Organisation Setup → Branches) to Payroll → Payroll reports.
+    Payroll results must stay byte-for-byte identical: this is a view over finished runs only.

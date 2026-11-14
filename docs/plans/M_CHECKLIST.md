@@ -119,3 +119,9 @@ migration applied to a fresh database; no existing test weakened; a golden test 
 
 # Operations documents (2026-11-14, docs only)
 - [x] docs/ops/FIRST_SETUP.md, DAILY_AND_MONTHLY_GUIDE.md, ACCEPTANCE_CHECKLIST.md, MOVE_FROM_GREYTHR.md, README.md (screen names checked against the menu configs and pages)
+
+# Docs cleanup (2026-11-14, docs only)
+- [x] docs/FIRST_REAL_PAYROLL_RUN.md updated (no CA; directors are the payroll team; Import from a file; off-cycle runs and Settlements; Director authority tab)
+- [x] docs/UI_SCREEN_MAP.md regenerated from the menu configs, routes and default roles (166 screens; only placeholder left: Assets Management)
+- [x] docs/ops/FIRST_SETUP.md: branches under Organisation Setup → Branches; Divisions not needed
+- [x] Requests 10 to 12 to Session A recorded in M_STAGE_REPORTS.md
