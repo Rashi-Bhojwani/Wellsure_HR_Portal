@@ -495,3 +495,35 @@ screens (the buttons could not be reached on a phone), and Company settings' but
 closed by Escape, focus returned.
 **Not built (next steps for payroll per company):** each company's own bank file and statutory files (refused for now), a period lock per company (finalising one company's
 run locks the month's attendance for all, as before).
+
+## Session A part 4, 2026-11-14 — remaining statutory mechanisms (one state), realtime fix
+
+Plan and row audit `A_PART4.md`. Commits: realtime `ac741bc`, PY-27/PY-28 `d3b440a`, ST-15/ST-18 `4522912`, plan `fa383fd`, owner sheet `f982ec5`, guards `0d9022f`,
+access test `108d91e`, walk fix `3237127`. Scope: one company, one state; payroll per company left as it is (switched off beyond one company, not extended).
+
+**Rows re-opened.** Already complete and verified, nothing added: PF and ESI rules; ST-07 PT and ST-09 LWF (one state's table, branches mapped to it); income tax with both
+regimes; LV-14/PY-29 encashment at exit (part 3); ST-02/ST-05 file layouts and PY-23 payslip layout (formats are the owners'). **Built:** PY-27 gratuity and PY-28 notice
+recovery (effective-dated behaviour settings, every figure Not set, a different director confirms, a settlement line only when in force); ST-15 HRA exemption (old regime)
+and ST-18 marginal relief on the rebate, both optional owner-entered parts of the tax year: absent means Not set and no effect. **Deferred:** PY-43 (risk found: a structure
+EMPLOYER_CONTRIBUTION line is paid on top of the statutory employer lines, so "inside CTC" today would count employer PF twice — owner row 102); PY-30 (annual, not monthly);
+LC-16, LC-15, LC-13 (not needed for monthly payroll); ST-16, ST-17 (deferred by the owners); ST-19, ST-22 (not needed for payroll, the Form 16 draft or challans); surcharge
+marginal relief (above the surcharge threshold).
+**Realtime.** HR received one more event after a switch went off: the cluster-wide leave is applied only when the request comes back from Redis. Now the sockets on this
+server leave the lost permission rooms synchronously before the notice goes out; the cluster-wide leave still follows for other servers (they still lag one Redis round trip,
+documented). New emit-level race test; with the local leave removed, the race test fails (mutant caught). No existing test changed.
+**Tests.** Exact-fraction property tests against `Frac` for gratuity, notice, the HRA least-of and rebate relief, with TEST values only; a TEST setting dated after the exit is
+not used; golden run identical with every setting Not set (`goldenRun`, plus a check that the tax result keys are unchanged). **Mutation checks:** HRA least-of, old-regime
+only, rent section excluded, relief bound, part-year rule, gratuity ceiling, notice day count, effective date — 8 of 8 caught.
+**Item 3 per row:** no new route, table or migration (settings live in the existing behaviour and tax-year stores, so the access scan, cleanup and encryption registries are
+unchanged; no new personal field). Director-only routes: HR, a manager, an employee and the Developer get 403 on the behaviours list and on proposing either new key
+(`payPolicies.test.ts`); every change is audited by the existing stores; fresh-database drift check clean.
+**Phase check** (script, stops at the first failure): typecheck, lint, tokens, drift, changed tests — found two guard literals (allowlisted, reason recorded). Frontend:
+75/75 tests, build, bundle within budgets.
+**Full backend suite alone** (after the last pull, no pull while it ran): **255 files, 2,213 tests, all passed**.
+**CI:** run 373 (`108d91e`, all part-4 backend code): green. Run 372 (`0d9022f`) was cancelled by the next push. Final code commit `3237127`: CI_RESULT_PENDING.
+**Browser walk** (scratch copy of the demo company): Default behaviours, Tax years and Settlements, plus the payslips page, as director, HR, manager, employee and Developer at
+1280 light and 390 dark (40 visits, then 16 more after the fix): no crash, no server error, no secret text, no horizontal scroll; the directors' screens refused to the other
+four. The gratuity and notice forms opened and read correctly at both views. **Found and fixed (`3237127`):** the Developer opening Tax years saw a warning titled "That is
+not a financial year" (the API refused; no value shown), now the forbidden page; focus did not return to "Enter or change the values" after its drawer closed, now it does.
+Keyboard: 4 of 4 primary actions reached with focus visible, opened, trapped, closed by Escape, focus returned.
+**Not verified:** the realtime lag across several api servers (one server here); real statutory figures (none exist; TEST values only).

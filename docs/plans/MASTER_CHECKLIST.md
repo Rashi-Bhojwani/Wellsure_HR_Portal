@@ -121,6 +121,10 @@ pause only at CHECKPOINT 1 (after Stage 2), CHECKPOINT 2 (after P7-3) and stop c
   ST-25 Form 16 Part A pairing `debd4ae` · PY-41 accounting journal `f6ea21c`, `cdcba37` · group checks `9c49d57` (8 mutants caught; one found a real gap: negative net pay)
 - [x] Part 3 (2026-11-13, plan `A_PART3.md`): golden baseline; A1 dated statutory IDs `edaf4f6` · A2/A3 overtime and encashment pay (Not set) `b2f0b32` · B1 company filter
   `7f885c0` · B2 payroll per company, first steps `6ebb4db` · B3 registers `0d6eb71` · fixes `163bdfc`, `ff5bd98`, `19ea770`, `bf9429b`
+- [x] Part 4 (2026-11-14, plan `A_PART4.md`), one company, one state: realtime fix `ac741bc` · PY-27 gratuity and PY-28 notice recovery (effective-dated, Not set) `d3b440a` ·
+  ST-15 HRA exemption and ST-18 marginal relief on the rebate (owner-entered parts of the tax year) `4522912` · guards `0d9022f` · access test `108d91e` · walk fix `3237127`.
+  Verified complete, nothing added: PF, ESI, ST-07 PT and ST-09 LWF (one state), income tax both regimes, LV-14/PY-29 encashment at exit, ST-02/ST-05 file layouts, PY-23 payslip layout.
+- [ ] Deferred with reasons (`A_PART4.md`): PY-43 (risk: would count employer PF twice; owner row 102), PY-30, LC-16, LC-15, LC-13, ST-16, ST-17, ST-19, ST-22, surcharge marginal relief
 - [ ] Payroll per company, next: each company's bank and statutory files; a period lock per company (owner question row 98)
 
 ## Stage 7 — Phase 7 P7-2..P7-7
