@@ -1,3 +1,4 @@
+import { headsPaidSoFar } from "./hra";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { z } from "zod";
@@ -216,7 +217,18 @@ export async function compareRegimes(employeeId: string, fy: string): Promise<Re
   const ytd = await yearToDate(employeeId, fy, `${today.slice(0, 7)}-01`, head); // the first day of this month: finalised months before it
   const taxablePay = projectTaxablePay({ paidSoFar: ytd.taxable, recurring: split.recurring, oneOff: ZERO, monthsLeft: monthsLeftInYear(today) });
   const results: Partial<Record<Regime, EngineResult>> = {};
-  for (const regime of ["NEW", "OLD"] as const) results[regime] = computeAnnualTax({ year: value, regime, taxablePay: canonicalDecimal(taxablePay), deductions: counted.deductions });
+  // Part 4 (ST-15): the year's HRA received and basis, projected the same way as taxable pay.
+  const hraDef = value.hraExemption?.value;
+  let hra: { received: string; basis: string } | undefined;
+  if (hraDef) {
+    const fyStart = financialYearOf(today).start;
+    const before = `${today.slice(0, 7)}-01`;
+    const [rSoFar, bSoFar] = await Promise.all([headsPaidSoFar([employeeId], fyStart, before, hraDef.hraHeads), headsPaidSoFar([employeeId], fyStart, before, hraDef.basisHeads)]);
+    const monthly = (heads: readonly string[]) => sum((salary?.lines ?? []).filter((l) => heads.includes(l.componentCode)).map((l) => dec(l.amount.toString())));
+    const left = dec(String(monthsLeftInYear(today)));
+    hra = { received: canonicalDecimal(rSoFar.get(employeeId)!.plus(monthly(hraDef.hraHeads).times(left))), basis: canonicalDecimal(bSoFar.get(employeeId)!.plus(monthly(hraDef.basisHeads).times(left))) };
+  }
+  for (const regime of ["NEW", "OLD"] as const) results[regime] = computeAnnualTax({ year: value, regime, taxablePay: canonicalDecimal(taxablePay), deductions: counted.deductions, ...(hra ? { hra } : {}) });
   return { ...base, available: true, draft: !year!.confirmed, basis: counted.basis, taxablePay: canonicalDecimal(taxablePay), results, chosen: counted.regime };
 }
 

@@ -257,7 +257,11 @@ export function calculatePerson(input: PersonInput, ctx: CalcContext): ItemOut {
       inputsOut.tds = { state: "NOT_SET", lacking };
     } else {
       const projected = projectTaxablePay({ paidSoFar: t.taxableSoFar, recurring: split.recurring, oneOff: split.oneOff, monthsLeft: t.monthsLeft });
-      const annual = computeAnnualTax({ year: t.values!, regime: t.regime!, taxablePay: c(projected), deductions: t.deductions });
+      // Part 4 (ST-15): the year's HRA received and basis, projected like taxable pay (paid so far, plus this month's lines for each month left).
+      const hraDef = t.values!.hraExemption?.value;
+      const headsNow = (heads: readonly string[]) => sum(earningLines.filter((l) => heads.includes(l.code)).map((l) => l.amount));
+      const hra = hraDef && t.hraSoFar ? { received: c(t.hraSoFar.received.plus(headsNow(hraDef.hraHeads).times(dec(String(t.monthsLeft))))), basis: c(t.hraSoFar.basis.plus(headsNow(hraDef.basisHeads).times(dec(String(t.monthsLeft))))) } : undefined;
+      const annual = computeAnnualTax({ year: t.values!, regime: t.regime!, taxablePay: c(projected), deductions: t.deductions, ...(hra ? { hra } : {}) });
       const month = monthlyTds({ year: t.values!, annualTax: annual.annualTax, deductedSoFar: c(t.tdsSoFar), monthsLeft: t.monthsLeft });
       const tdsBasis = { kind: "TDS", year: t.year, regime: t.regime, regimeSource: t.regimeSource, declarationVersion: t.declarationVersion, deductionBasis: t.deductionBasis, taxablePaidSoFar: c(t.taxableSoFar), recurringThisMonth: c(split.recurring), oneOffThisMonth: c(split.oneOff), monthsLeft: t.monthsLeft, projectedTaxablePay: c(projected), annual, tdsSoFar: c(t.tdsSoFar), remaining: month.remaining, share: month.share, minimum: month.minimum };
       inputsOut.tds = { state: "WORKED_OUT", regime: t.regime, annualTax: annual.annualTax, thisMonth: month.tds };

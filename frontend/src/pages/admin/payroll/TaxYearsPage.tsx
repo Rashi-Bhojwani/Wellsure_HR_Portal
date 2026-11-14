@@ -27,6 +27,9 @@ const LEAVES: Array<{ key: string; label: string; path: string[] }> = [
   { key: "min", label: "Minimum monthly TDS", path: ["minimumMonthlyTds"] },
   { key: "oneoffs", label: "How one-off pay is taxed", path: ["oneOffs"] },
   { key: "sections", label: "Sections people can declare under", path: ["sections"] },
+  // Part 4: optional; absent = Not set (no HRA exemption, no marginal relief on the rebate). Entered in the same JSON, with a source note and a date.
+  { key: "hra", label: "HRA exemption (old regime): rent section, heads, percentages, metro", path: ["hraExemption"] },
+  { key: "relief", label: "Marginal relief on the rebate", path: ["marginalReliefOnRebate"] },
 ];
 const leafOf = (value: Record<string, unknown> | null, path: string[]) => path.reduce<unknown>((o, k) => (o && typeof o === "object" ? (o as Record<string, unknown>)[k] : undefined), value) as { value: unknown; sourceNote: string; effectiveFrom: string } | undefined;
 
