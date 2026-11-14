@@ -17,6 +17,9 @@ export interface RoomEmitter {
   // Both the real server and the Redis emitter can move a user's sockets
   // between rooms across every api instance.
   in?(room: string | string[]): { socketsJoin(rooms: string | string[]): unknown; socketsLeave(rooms: string | string[]): unknown };
+  // The real server only: the same operations on this instance's own sockets, applied at once (the Redis adapter otherwise applies them when the request
+  // comes back from Redis, one round trip later).
+  local?: { in(room: string | string[]): { socketsLeave(rooms: string | string[]): unknown } };
 }
 let io: RoomEmitter | null = null;
 
@@ -198,7 +201,11 @@ export function emitPermissionsChanged(employeeId: string, effectivePermissions:
   const keep = new Set(effectivePermissions);
   if (io.in) {
     const userRoom = `user:${employeeId}`;
-    io.in(userRoom).socketsLeave(allKeys.filter((k) => !keep.has(k)).map(permissionRoom));
+    const lost = allKeys.filter((k) => !keep.has(k)).map(permissionRoom);
+    // A lost permission takes effect on this instance's sockets now, before anything else is emitted (an event sent straight after a switch goes off must
+    // not reach them while the cluster-wide leave below is still on its way through Redis).
+    io.local?.in(userRoom).socketsLeave(lost);
+    io.in(userRoom).socketsLeave(lost);
     io.in(userRoom).socketsJoin([...keep].map(permissionRoom));
   }
   io.to(`user:${employeeId}`).emit("permissions.changed", {});
