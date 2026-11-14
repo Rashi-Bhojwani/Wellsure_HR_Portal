@@ -30,6 +30,7 @@
     "history:repair": "tsx scripts/history-repair.ts",
     "test:replay": "vitest run --config vitest.replay.config.ts",
     "test:demo": "vitest run --config vitest.demo.config.ts",
+    "test:peeps-demo": "vitest run --config vitest.peeps-demo.config.ts",
     "test:clock": "bash scripts/test-clock.sh"
   },
   "prisma": {
