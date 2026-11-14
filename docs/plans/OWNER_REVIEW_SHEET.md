@@ -221,3 +221,13 @@ director confirms it; until then whatever depends on it refuses to work it out (
 | 102 | **Employer PF/ESI inside CTC is not built.** Do not add an employer PF line to a salary structure meanwhile: the run would pay it as well as the PF it works out. | How CTC is built (employer share inside or outside). | Decide before the first salaries are entered. |
 | 103 | Deferred: statutory bonus (annual), flexible benefit plan, travel advance, manager step on claims, LTA, perquisites, Form 12BB, the official quarterly return file, surcharge marginal relief. | — | Ask when one is needed. |
 | 104 | The realtime fix applies on the server that makes the change at once; another server applies it one Redis round trip later (signal-only events, never pay figures). | — | Keep. |
+
+## Cleanup block (2026-11-14)
+
+No new value to enter.
+
+| # | Decided in the cleanup block | What you give | Recommendation |
+|---|---|---|---|
+| 105 | Payroll reports can be filtered and grouped by branch (Organisation Setup, Branches; Divisions are not used). People with no branch show under "No branch"; in a finalised run that cannot happen (a run refuses anyone without a placement), so it appears only where a report reads today's job history (the overtime register). | — | Keep. |
+| 106 | Payroll Admin and Payroll Approver are given to nobody, a director included; the screens no longer offer them and the server refuses them. Nobody holds them today; any existing row was left as it was. | — | Keep; remove the two roles later if you never want them. |
+

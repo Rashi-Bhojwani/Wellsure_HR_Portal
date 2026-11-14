@@ -125,6 +125,8 @@ pause only at CHECKPOINT 1 (after Stage 2), CHECKPOINT 2 (after P7-3) and stop c
   ST-15 HRA exemption and ST-18 marginal relief on the rebate (owner-entered parts of the tax year) `4522912` · guards `0d9022f` · access test `108d91e` · walk fix `3237127`.
   Verified complete, nothing added: PF, ESI, ST-07 PT and ST-09 LWF (one state), income tax both regimes, LV-14/PY-29 encashment at exit, ST-02/ST-05 file layouts, PY-23 payslip layout.
 - [ ] Deferred with reasons (`A_PART4.md`): PY-43 (risk: would count employer PF twice; owner row 102), PY-30, LC-16, LC-15, LC-13, ST-16, ST-17, ST-19, ST-22, surcharge marginal relief
+- [x] Cleanup block (2026-11-14): C1 payroll reports filtered and grouped by branch (Organisation Setup, Branches), golden captured first `8dbe7af`, `c7749e5`, `df34dcf`, `c2e961f` ·
+  C2 Director authority message points to System Settings `0824015` · C3 Payroll Admin / Payroll Approver assignable to nobody `7e815bf` · C4 agent-windows UDP EACCES `a31f3be`
 - [ ] Payroll per company, next: each company's bank and statutory files; a period lock per company (owner question row 98)
 
 ## Stage 7 — Phase 7 P7-2..P7-7

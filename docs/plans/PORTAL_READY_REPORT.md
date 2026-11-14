@@ -33,6 +33,7 @@ owner's instruction (`PARITY_COVERAGE.md` was brought onto this branch by the pa
 | Part 2: ST-08, ST-30, ST-29, ST-25, PY-41 (mechanisms, every value Not set) | DONE | `bd192ee`…`cdcba37` |
 | Part 3: dated statutory IDs, overtime and encashment pay (Not set), company filter, payroll per company (first steps), registers | DONE; golden run unchanged; suite 2,196/2,196; CI 359 green | `edaf4f6`…`bf9429b` |
 | Part 4: realtime fix; gratuity and notice recovery at exit; HRA exemption and marginal relief on the rebate (all Not set until two directors confirm); PF/ESI/PT/LWF/income tax verified for one state | DONE; golden run unchanged; suite 2,213/2,213; CI 377 green | `ac741bc`, `d3b440a`, `4522912`, `0d9022f`, `108d91e`, `3237127` |
+| Cleanup: payroll reports by branch (filter and group, golden unchanged); Director authority message; Payroll Admin/Approver not assignable; agent-windows port fix | DONE; suite 2,219/2,219; CI 383 green (agent-windows included) | `8dbe7af`, `c7749e5`, `0824015`, `7e815bf`, `a31f3be`, `df34dcf`, `c2e961f` |
 | Stage 9 Tier 1 parity (payroll rows) | DONE where no owner value is needed (above); owner-value rows listed as skipped | — |
 
 Plans written before code: `GREYTHR_PARITY_WORKFORCE.md`, `A3_OPENING_FIGURES.md`, `P7_4_LOANS.md`, `P7_5_REIMBURSEMENTS.md`, `P7_6_SETTLEMENTS.md` (with the

@@ -527,3 +527,36 @@ four. The gratuity and notice forms opened and read correctly at both views. **F
 not a financial year" (the API refused; no value shown), now the forbidden page; focus did not return to "Enter or change the values" after its drawer closed, now it does.
 Keyboard: 4 of 4 primary actions reached with focus visible, opened, trapped, closed by Escape, focus returned.
 **Not verified:** the realtime lag across several api servers (one server here); real statutory figures (none exist; TEST values only).
+
+## Session A cleanup block, 2026-11-14 — payroll reports by branch, message fix, payroll roles, Windows agent ports
+
+Commits: C1 golden `8dbe7af` (fixture written once from the code before the change), C1 `c7749e5`, test fixes `df34dcf`, `c2e961f`; C2 `0824015`; C3 `7e815bf`; C4 `a31f3be`.
+
+**C1 branch filter.** Branches are Organisation Setup, Branches (the Location table), not Divisions. Payroll summary and statutory summary now take the branch
+filter; payroll summary, department cost, head-wise, variance, statutory summary and the wage, deduction and overtime registers take "Group by branch". Each branch's
+totals are the same report built again for that branch, so they cannot hold a figure the report does not, and they add up to the report's total; people with no
+placement, or a branch no longer on record, are under "No branch". A finalised run refuses anyone without a placement (NO_PLACEMENT), so "No branch" appears only where a
+report reads today's job history (the overtime register). Exports carry the branch totals (CSV rows after the total; a "By branch" sheet). One behaviour added only under
+a branch filter: payroll summary leaves out a month in which the branch had nobody. **Golden:** the run's figures and payslips and all eight reports, unfiltered, are
+byte-for-byte the fixture captured before the change (test's own random codes normalised; the people are put in letter order — the full suite showed the database
+returning them in another order, which CI run 381 also caught; fixed in `c2e961f`). Tests: grouped rows and totals equal the ungrouped ones; every money and count
+total adds up across branches to the paisa; filter = group; NONE keeps only people with no branch; a filter a report does not take is refused.
+**C2.** "(Admin Tools, Director authority)" now reads "(System Settings, the Director authority tab)" in both places; no test pinned the old text, two now pin the new.
+**C3.** Payroll Admin and Payroll Approver are assignable to nobody, a director included: the API refuses (`PAYROLL_ROLE_NOT_ASSIGNABLE`), the Access tab never offers
+them, Roles & Permissions marks them "Not assignable". Existing assignment rows, the database rule and every payroll permission check are unchanged. Mutation checks:
+the old directors-only rule and a removed check both fail the new backend test; removing the UI filter fails its test.
+**C4.** CI run 368 (agent-windows) failed four tests with bind EACCES on 609xx: Windows refuses UDP binds inside its reserved ranges and hands out TCP ports in sequence,
+so twenty retries fell in one block. The fake device now binds UDP to port 0 and puts TCP on the same number, retrying a fresh pair on a taken or refused port (up to
+200); explicit ports are never swapped. No assertion weakened; three tests added. Mutation checks: a cap of 20 and a fixed UDP number are both caught. **Proof:**
+agent-windows green in run 381 and run 383 ("Unit tests on Windows" passed).
+**Phase check** (one script, stops at the first failure): typecheck found the workbook buffer type in the new test (fixed); then typecheck, lint, tokens, drift,
+changed backend tests (6 files, 75 tests), frontend tests (117), build and bundle budgets all passed; agent tests 171/171.
+**Full backend suite alone:** first run 2,218/2,219 (the golden ordering above); after the fix **256 files, 2,219 tests, all passed**.
+**CI:** run 380 (the owner's sample-files commit) cancelled by the next push; run 381 (`df34dcf`) failed only on the golden ordering (backend shard 2, and so
+`backend-tests-complete`), agent-windows green; run 383 (`c2e961f`, the final code commit): all 12 jobs green, read to the end.
+**Browser walk** (scratch copy of the demo company): Payroll reports, Roles & Permissions and an employee's Access tab as director, HR, manager, employee and Developer at
+1280 light and 390 dark (30 visits): no crash, no server error, no secret text, no horizontal scroll. Payroll reports refused to the other four. The director's grouped
+report shows the "By branch" table (at 390 through the Filter drawer); its branches add up to the total (80 paid, 3 held). The Access tab's role picker offers no payroll
+role; Roles & Permissions shows "Not assignable" on both. The Developer can read Roles & Permissions and the Access tab (no picker, no pay figure), as before.
+Keyboard: "Group by branch" reached by Tab with a visible focus ring, Space turns it on, the branch table appears, at both views.
+**Not verified:** a Windows machine other than the CI runner; "No branch" inside a finalised run (it cannot occur; covered by the pure test and the overtime register).
