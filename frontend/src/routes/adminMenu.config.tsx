@@ -1,3 +1,4 @@
+import { DEVELOPER_ROLE_CODE } from "@shared/constants/sensitiveData";
 import type { ComponentType } from "react";
 import {
   AuditOutlined,
@@ -163,7 +164,9 @@ const LeaveReviewersPage = lazyPage(() => import("../pages/admin/workforce/parit
 // A-10 — end
 const SetupChecklistPage = lazyPage(() => import("../pages/admin/payroll/SetupChecklistPage"), "SetupChecklistPage");
 // Anyone holding any payroll key sees the Payroll group; HR holds none (the hard lock), so HR never sees it. The server still decides every request.
-const PAYROLL_NEEDS = { any: ["payroll.rules.view", "payroll.salary.view", "payroll.run", "payroll.approve"] };
+// noDeveloper: the Developer holds payroll.rules.view (the API lets it read the Setup Checklist's status), but every payroll screen shows it the
+// forbidden page instead of any table or figure.
+export const PAYROLL_NEEDS: AdminNeeds = { any: ["payroll.rules.view", "payroll.salary.view", "payroll.run", "payroll.approve"], noDeveloper: true };
 const ReadyPage = lazyPage(() => import("../pages/admin/payroll/ReadyPage"), "ReadyPage");
 const CompareRegistersPage = lazyPage(() => import("../pages/admin/payroll/CompareRegistersPage"), "CompareRegistersPage");
 const AttendanceSettingsPage = lazyPage(() => import("../pages/admin/attendance/AttendanceSettingsPage"), "AttendanceSettingsPage");
@@ -183,6 +186,13 @@ const WeekOffPatternsPage = lazyPage(() => import("../pages/admin/attendance/Att
 export interface AdminNeeds {
   any?: readonly string[];
   director?: boolean;
+  /** The Developer role (not also a director) is shown the forbidden page, whatever keys it holds: every payroll page (it never sees a payroll figure or table). */
+  noDeveloper?: boolean;
+}
+
+/** The Developer / operator role, not also a director (a director who also holds it is a director). */
+export function isDeveloperOnly(roleCodes: readonly string[] | undefined): boolean {
+  return !!roleCodes && roleCodes.includes(DEVELOPER_ROLE_CODE) && !roleCodes.includes("SUPER_ADMIN");
 }
 
 export interface AdminMenuLeaf {
@@ -195,9 +205,10 @@ export interface AdminMenuLeaf {
   needs?: AdminNeeds;
 }
 
-export function adminNeedsMet(needs: AdminNeeds | undefined, hasPermission: (key: string) => boolean, isDirector: boolean): boolean {
+export function adminNeedsMet(needs: AdminNeeds | undefined, hasPermission: (key: string) => boolean, isDirector: boolean, isDeveloper = false): boolean {
   if (!needs) return true;
   if (isDirector) return true;
+  if (needs.noDeveloper && isDeveloper) return false;
   if (needs.director) return false;
   return !needs.any || needs.any.some(hasPermission);
 }
@@ -407,25 +418,25 @@ export const adminApps: AdminApp[] = [
           { key: "employee-salaries", label: "Employee Salaries", path: "payroll/salaries", icon: WalletOutlined, element: EmployeeSalariesPage, needs: PAYROLL_NEEDS },
           { key: "salary-revisions", label: "Salary Revisions", path: "payroll/revisions", icon: AuditOutlined, element: SalaryRevisionsPage, needs: PAYROLL_NEEDS },
           { key: "payroll-adjustments", label: "Adjustments", path: "payroll/adjustments", icon: DiffOutlined, element: AdjustmentsPage, needs: PAYROLL_NEEDS },
-          { key: "payroll-monthly-inputs", label: "Monthly Inputs", path: "payroll/monthly-inputs", icon: TableOutlined, element: MonthlyInputsPage, needs: { any: ["payroll.salary.edit"] } },
+          { key: "payroll-monthly-inputs", label: "Monthly Inputs", path: "payroll/monthly-inputs", icon: TableOutlined, element: MonthlyInputsPage, needs: { any: ["payroll.salary.edit"], noDeveloper: true } },
           { key: "payroll-payslip-links", label: "Payslip Links", path: "payroll/payslip-links", icon: LinkOutlined, element: PayslipLinksPage, needs: PAYROLL_NEEDS },
           { key: "payroll-not-on-payroll", label: "Not on Payroll", path: "payroll/not-on-payroll", icon: UserDeleteOutlined, element: NotOnPayrollPage, needs: PAYROLL_NEEDS },
           { key: "payroll-tax-years", label: "Tax Years", path: "payroll/tax-years", icon: FileProtectOutlined, element: TaxYearsPage, needs: PAYROLL_NEEDS },
-          { key: "payroll-opening-figures", label: "Opening Figures", path: "payroll/opening-figures", icon: FileProtectOutlined, element: OpeningFiguresPage, needs: { director: true } }, // A-3
-          { key: "payroll-loans", label: "Loans", path: "payroll/loans", icon: FileProtectOutlined, element: LoansAdminPage, needs: { director: true } }, // P7-4
-          { key: "payroll-reimbursements", label: "Reimbursements", path: "payroll/reimbursements", icon: FileProtectOutlined, element: ReimbursementsAdminPage, needs: { director: true } }, // P7-5
-          { key: "payroll-settlements", label: "Settlements", path: "payroll/settlements", icon: FileProtectOutlined, element: SettlementsPage, needs: { director: true } }, // P7-6
-          { key: "payroll-offcycle", label: "Off-cycle runs", path: "payroll/off-cycle", icon: FileProtectOutlined, element: OffCyclePage, needs: { director: true } }, // P7-6b
-          { key: "payroll-pay-types", label: "Loan and claim types", path: "payroll/pay-types", icon: FileProtectOutlined, element: PayTypesPage, needs: { director: true } }, // item 3
-          { key: "payroll-quarterly-tds", label: "Quarterly TDS data", path: "payroll/quarterly-tds", icon: FileProtectOutlined, element: QuarterlyTdsPage, needs: { director: true } }, // item 3
-          { key: "payroll-tds-form16", label: "TDS and Form 16", path: "payroll/tds-form16", icon: FileProtectOutlined, element: TdsForm16Page, needs: { director: true } }, // P7-7
-          { key: "payroll-statutory-challans", label: "Statutory challans", path: "payroll/statutory-challans", icon: FileProtectOutlined, element: StatutoryChallansPage, needs: { director: true } }, // ST-03 / ST-06
-          { key: "payroll-compliance", label: "Compliance calendar", path: "payroll/compliance", icon: FileProtectOutlined, element: CompliancePage, needs: { director: true } }, // ST-30
-          { key: "payroll-minimum-wages", label: "Minimum wages", path: "payroll/minimum-wages", icon: FileProtectOutlined, element: MinimumWagesPage, needs: { director: true } }, // ST-29
-          { key: "payroll-journal", label: "Accounting journal", path: "payroll/journal", icon: FileProtectOutlined, element: JournalPage, needs: { director: true } }, // PY-41
-          { key: "payroll-overtime-encashment", label: "Overtime and encashment pay", path: "payroll/overtime-encashment", icon: FileProtectOutlined, element: OvertimeEncashmentPage, needs: { director: true } }, // part 3 A2/A3
-          { key: "payroll-company-settings", label: "Company settings", path: "payroll/company-settings", icon: FileProtectOutlined, element: CompanySettingsPage, needs: { director: true } }, // part 3 B2a
-          { key: "payroll-reports", label: "Payroll reports", path: "payroll/reports", icon: FileProtectOutlined, element: PayrollReportsPage, needs: { director: true } }, // Stage 6
+          { key: "payroll-opening-figures", label: "Opening Figures", path: "payroll/opening-figures", icon: FileProtectOutlined, element: OpeningFiguresPage, needs: { director: true, noDeveloper: true } }, // A-3
+          { key: "payroll-loans", label: "Loans", path: "payroll/loans", icon: FileProtectOutlined, element: LoansAdminPage, needs: { director: true, noDeveloper: true } }, // P7-4
+          { key: "payroll-reimbursements", label: "Reimbursements", path: "payroll/reimbursements", icon: FileProtectOutlined, element: ReimbursementsAdminPage, needs: { director: true, noDeveloper: true } }, // P7-5
+          { key: "payroll-settlements", label: "Settlements", path: "payroll/settlements", icon: FileProtectOutlined, element: SettlementsPage, needs: { director: true, noDeveloper: true } }, // P7-6
+          { key: "payroll-offcycle", label: "Off-cycle runs", path: "payroll/off-cycle", icon: FileProtectOutlined, element: OffCyclePage, needs: { director: true, noDeveloper: true } }, // P7-6b
+          { key: "payroll-pay-types", label: "Loan and claim types", path: "payroll/pay-types", icon: FileProtectOutlined, element: PayTypesPage, needs: { director: true, noDeveloper: true } }, // item 3
+          { key: "payroll-quarterly-tds", label: "Quarterly TDS data", path: "payroll/quarterly-tds", icon: FileProtectOutlined, element: QuarterlyTdsPage, needs: { director: true, noDeveloper: true } }, // item 3
+          { key: "payroll-tds-form16", label: "TDS and Form 16", path: "payroll/tds-form16", icon: FileProtectOutlined, element: TdsForm16Page, needs: { director: true, noDeveloper: true } }, // P7-7
+          { key: "payroll-statutory-challans", label: "Statutory challans", path: "payroll/statutory-challans", icon: FileProtectOutlined, element: StatutoryChallansPage, needs: { director: true, noDeveloper: true } }, // ST-03 / ST-06
+          { key: "payroll-compliance", label: "Compliance calendar", path: "payroll/compliance", icon: FileProtectOutlined, element: CompliancePage, needs: { director: true, noDeveloper: true } }, // ST-30
+          { key: "payroll-minimum-wages", label: "Minimum wages", path: "payroll/minimum-wages", icon: FileProtectOutlined, element: MinimumWagesPage, needs: { director: true, noDeveloper: true } }, // ST-29
+          { key: "payroll-journal", label: "Accounting journal", path: "payroll/journal", icon: FileProtectOutlined, element: JournalPage, needs: { director: true, noDeveloper: true } }, // PY-41
+          { key: "payroll-overtime-encashment", label: "Overtime and encashment pay", path: "payroll/overtime-encashment", icon: FileProtectOutlined, element: OvertimeEncashmentPage, needs: { director: true, noDeveloper: true } }, // part 3 A2/A3
+          { key: "payroll-company-settings", label: "Company settings", path: "payroll/company-settings", icon: FileProtectOutlined, element: CompanySettingsPage, needs: { director: true, noDeveloper: true } }, // part 3 B2a
+          { key: "payroll-reports", label: "Payroll reports", path: "payroll/reports", icon: FileProtectOutlined, element: PayrollReportsPage, needs: { director: true, noDeveloper: true } }, // Stage 6
           { key: "payroll-tax-declarations", label: "Tax Declarations", path: "payroll/tax-declarations", icon: FormOutlined, element: TaxDeclarationsPage, needs: PAYROLL_NEEDS },
           { key: "payroll-holds", label: "Held Salaries", path: "payroll/holds", icon: PauseCircleOutlined, element: HeldSalariesPage, needs: PAYROLL_NEEDS },
           { key: "payroll-run", label: "Payroll Run", path: "payroll/run", icon: FundOutlined, element: PayrollRunsPage, needs: PAYROLL_NEEDS },

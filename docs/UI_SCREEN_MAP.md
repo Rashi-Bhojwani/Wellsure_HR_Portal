@@ -170,42 +170,42 @@ Sensitive values (salary, bank, PAN, Aadhaar, UAN, ESI) appear only to the roles
 
 | URL | Screen | Menu path | Who can open it | Status | Board frame |
 |---|---|---|---|---|---|
-| `/admin/payroll/setup` | Setup Checklist | Payroll → Setup Checklist | SA DEV · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` | built | `checklist-03` |
-| `/admin/payroll/ready` | Ready for First Run | Payroll → Ready for First Run | SA DEV · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` | built | `checklist-09` |
-| `/admin/payroll/rules` | Rules and Setup | Payroll → Rules and Setup | SA DEV · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` | built | `payroll-04`/`05` |
-| `/admin/payroll/overrides` | Rule Overrides | Payroll → Rule Overrides | SA DEV · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` | built | none |
-| `/admin/payroll/components` | Salary Components | Payroll → Salary Components | SA DEV · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` | built | `settings-05` |
-| `/admin/payroll/structures` | Salary Structures | Payroll → Salary Structures | SA DEV · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` | built | `payroll-04` |
-| `/admin/payroll/salaries` | Employee Salaries | Payroll → Employee Salaries | SA DEV · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` | built | `payroll-01` |
-| `/admin/payroll/revisions` | Salary Revisions | Payroll → Salary Revisions | SA DEV · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` | built | `payroll-01` |
-| `/admin/payroll/adjustments` | Adjustments | Payroll → Adjustments | SA DEV · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` | built | `payroll-01` |
-| `/admin/payroll/monthly-inputs` | Monthly Inputs | Payroll → Monthly Inputs | SA · `payroll.salary.edit` | built | none |
-| `/admin/payroll/payslip-links` | Payslip Links | Payroll → Payslip Links | SA DEV · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` | built | none |
-| `/admin/payroll/not-on-payroll` | Not on Payroll | Payroll → Not on Payroll | SA DEV · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` | built | none |
-| `/admin/payroll/tax-years` | Tax Years | Payroll → Tax Years | SA DEV · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` | built | none |
-| `/admin/payroll/opening-figures` | Opening Figures | Payroll → Opening Figures | SA (directors only) | built | — |
-| `/admin/payroll/loans` | Loans | Payroll → Loans | SA (directors only) | built | — |
-| `/admin/payroll/reimbursements` | Reimbursements | Payroll → Reimbursements | SA (directors only) | built | — |
-| `/admin/payroll/settlements` | Settlements | Payroll → Settlements | SA (directors only) | built | — |
-| `/admin/payroll/off-cycle` | Off-cycle runs | Payroll → Off-cycle runs | SA (directors only) | built | — |
-| `/admin/payroll/pay-types` | Loan and claim types | Payroll → Loan and claim types | SA (directors only) | built | — |
-| `/admin/payroll/quarterly-tds` | Quarterly TDS data | Payroll → Quarterly TDS data | SA (directors only) | built | — |
-| `/admin/payroll/tds-form16` | TDS and Form 16 | Payroll → TDS and Form 16 | SA (directors only) | built | — |
-| `/admin/payroll/statutory-challans` | Statutory challans | Payroll → Statutory challans | SA (directors only) | built | — |
-| `/admin/payroll/compliance` | Compliance calendar | Payroll → Compliance calendar | SA (directors only) | built | — |
-| `/admin/payroll/minimum-wages` | Minimum wages | Payroll → Minimum wages | SA (directors only) | built | — |
-| `/admin/payroll/journal` | Accounting journal | Payroll → Accounting journal | SA (directors only) | built | — |
-| `/admin/payroll/overtime-encashment` | Overtime and encashment pay | Payroll → Overtime and encashment pay | SA (directors only) | built | — |
-| `/admin/payroll/company-settings` | Company settings | Payroll → Company settings | SA (directors only) | built | — |
-| `/admin/payroll/reports` | Payroll reports | Payroll → Payroll reports | SA (directors only) | built | — |
-| `/admin/payroll/tax-declarations` | Tax Declarations | Payroll → Tax Declarations | SA DEV · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` | built | none |
-| `/admin/payroll/holds` | Held Salaries | Payroll → Held Salaries | SA DEV · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` | built | none |
-| `/admin/payroll/run` | Payroll Run | Payroll → Payroll Run | SA DEV · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` | built | `payroll-01` |
-| `/admin/payroll/compare` | Compare Registers | Payroll → Compare Registers | SA DEV · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` | built | `reports-04` |
-| `/admin/payroll/audit` | Payroll Audit Trail | Payroll → Payroll Audit Trail | SA DEV · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` | built | `recruitment-08` (timeline) |
-| `/admin/payroll/layouts` | Bank and Statutory Layouts | Payroll → Bank and Statutory Layouts | SA DEV · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` | built | `recruitment-18`/`19` |
-| `/admin/payroll/run/:id` | Payroll run (steps, preview, approval) | from Payroll Run | SA (directors only) | built | stepper `recruitment-09` + `payroll-02` |
-| `/admin/payroll/run/:id/step/:slug` | Run step (submit, close the period, publish payslips, bank file) | from a payroll run | SA (directors only) | built | `payroll-02`/`03`, `documents-03` |
+| `/admin/payroll/setup` | Setup Checklist | Payroll → Setup Checklist | SA · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` · never the Developer | built | `checklist-03` |
+| `/admin/payroll/ready` | Ready for First Run | Payroll → Ready for First Run | SA · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` · never the Developer | built | `checklist-09` |
+| `/admin/payroll/rules` | Rules and Setup | Payroll → Rules and Setup | SA · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` · never the Developer | built | `payroll-04`/`05` |
+| `/admin/payroll/overrides` | Rule Overrides | Payroll → Rule Overrides | SA · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` · never the Developer | built | none |
+| `/admin/payroll/components` | Salary Components | Payroll → Salary Components | SA · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` · never the Developer | built | `settings-05` |
+| `/admin/payroll/structures` | Salary Structures | Payroll → Salary Structures | SA · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` · never the Developer | built | `payroll-04` |
+| `/admin/payroll/salaries` | Employee Salaries | Payroll → Employee Salaries | SA · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` · never the Developer | built | `payroll-01` |
+| `/admin/payroll/revisions` | Salary Revisions | Payroll → Salary Revisions | SA · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` · never the Developer | built | `payroll-01` |
+| `/admin/payroll/adjustments` | Adjustments | Payroll → Adjustments | SA · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` · never the Developer | built | `payroll-01` |
+| `/admin/payroll/monthly-inputs` | Monthly Inputs | Payroll → Monthly Inputs | SA · `payroll.salary.edit` · never the Developer | built | none |
+| `/admin/payroll/payslip-links` | Payslip Links | Payroll → Payslip Links | SA · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` · never the Developer | built | none |
+| `/admin/payroll/not-on-payroll` | Not on Payroll | Payroll → Not on Payroll | SA · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` · never the Developer | built | none |
+| `/admin/payroll/tax-years` | Tax Years | Payroll → Tax Years | SA · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` · never the Developer | built | none |
+| `/admin/payroll/opening-figures` | Opening Figures | Payroll → Opening Figures | SA (directors only) · never the Developer | built | — |
+| `/admin/payroll/loans` | Loans | Payroll → Loans | SA (directors only) · never the Developer | built | — |
+| `/admin/payroll/reimbursements` | Reimbursements | Payroll → Reimbursements | SA (directors only) · never the Developer | built | — |
+| `/admin/payroll/settlements` | Settlements | Payroll → Settlements | SA (directors only) · never the Developer | built | — |
+| `/admin/payroll/off-cycle` | Off-cycle runs | Payroll → Off-cycle runs | SA (directors only) · never the Developer | built | — |
+| `/admin/payroll/pay-types` | Loan and claim types | Payroll → Loan and claim types | SA (directors only) · never the Developer | built | — |
+| `/admin/payroll/quarterly-tds` | Quarterly TDS data | Payroll → Quarterly TDS data | SA (directors only) · never the Developer | built | — |
+| `/admin/payroll/tds-form16` | TDS and Form 16 | Payroll → TDS and Form 16 | SA (directors only) · never the Developer | built | — |
+| `/admin/payroll/statutory-challans` | Statutory challans | Payroll → Statutory challans | SA (directors only) · never the Developer | built | — |
+| `/admin/payroll/compliance` | Compliance calendar | Payroll → Compliance calendar | SA (directors only) · never the Developer | built | — |
+| `/admin/payroll/minimum-wages` | Minimum wages | Payroll → Minimum wages | SA (directors only) · never the Developer | built | — |
+| `/admin/payroll/journal` | Accounting journal | Payroll → Accounting journal | SA (directors only) · never the Developer | built | — |
+| `/admin/payroll/overtime-encashment` | Overtime and encashment pay | Payroll → Overtime and encashment pay | SA (directors only) · never the Developer | built | — |
+| `/admin/payroll/company-settings` | Company settings | Payroll → Company settings | SA (directors only) · never the Developer | built | — |
+| `/admin/payroll/reports` | Payroll reports | Payroll → Payroll reports | SA (directors only) · never the Developer | built | — |
+| `/admin/payroll/tax-declarations` | Tax Declarations | Payroll → Tax Declarations | SA · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` · never the Developer | built | none |
+| `/admin/payroll/holds` | Held Salaries | Payroll → Held Salaries | SA · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` · never the Developer | built | none |
+| `/admin/payroll/run` | Payroll Run | Payroll → Payroll Run | SA · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` · never the Developer | built | `payroll-01` |
+| `/admin/payroll/compare` | Compare Registers | Payroll → Compare Registers | SA · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` · never the Developer | built | `reports-04` |
+| `/admin/payroll/audit` | Payroll Audit Trail | Payroll → Payroll Audit Trail | SA · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` · never the Developer | built | `recruitment-08` (timeline) |
+| `/admin/payroll/layouts` | Bank and Statutory Layouts | Payroll → Bank and Statutory Layouts | SA · `payroll.rules.view`, `payroll.salary.view`, `payroll.run`, `payroll.approve` · never the Developer | built | `recruitment-18`/`19` |
+| `/admin/payroll/run/:id` | Payroll run (steps, preview, approval) | from Payroll Run | SA (directors only) · never the Developer | built | stepper `recruitment-09` + `payroll-02` |
+| `/admin/payroll/run/:id/step/:slug` | Run step (submit, close the period, publish payslips, bank file) | from a payroll run | SA (directors only) · never the Developer | built | `payroll-02`/`03`, `documents-03` |
 
 ### Admin Tools
 

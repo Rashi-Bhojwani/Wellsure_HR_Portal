@@ -446,3 +446,41 @@ already had (99 of 166). The four ops guides were re-checked against it: every s
     payroll team and the roles are given to nobody. Should they be hidden from role assignment (Roles & Permissions, Manager Management), or removed?
 12. **Payroll reports by branch.** Add a branch filter and a grouping by branch (Organisation Setup → Branches) to Payroll → Payroll reports.
     Payroll results must stay byte-for-byte identical: this is a view over finished runs only.
+
+---
+
+# Developer and payroll screens (2026-11-14)
+
+**Found (browser walk as `DEMO005`, dev stack, demo company), before the fix:** of the 34 payroll menu pages, 29 already refused the Developer
+(the shared forbidden page, or the page's own "You don't have access"); five opened and showed content: **Setup Checklist** (status lines),
+**Ready for First Run** (status), **Rules and Setup** (62 rows, **with rupee figures**: the statutory and company rule values), **Bank and statutory
+layouts** (6 layout rows) and **Compare Registers** (its upload form). Rule overrides showed one row. The run and its step pages had no gate of
+their own (the API refused the data). Cause: the menu rule `PAYROLL_NEEDS` includes `payroll.rules.view`, which the Developer holds so that the
+API can tell it the Setup Checklist's status.
+
+**Fixed (frontend shared access layer only, no payroll page edited):** `AdminNeeds.noDeveloper` in `routes/adminMenu.config.tsx`, set on every
+payroll menu item (`PAYROLL_NEEDS`, Monthly Inputs and the director-only ones); `adminNeedsMet` refuses it to the Developer (`isDeveloperOnly`: the
+Developer role and not also a director), applied in `RequireAccess` (the forbidden page "This is not switched on for you"), the sidebar
+(`layouts/shell/nav.ts`, `AdminLayout.tsx`) and the home favourites; the run and run-step routes in `PortalRoutes.tsx` are wrapped in the same gate.
+`docs/UI_SCREEN_MAP.md` regenerated: every payroll row now says "never the Developer".
+
+**Verified:** `frontend/src/routes/__tests__/payrollDeveloper.test.tsx` (41 cases: the whole payroll menu and both run pages refused by the rule and
+rendered as the forbidden page, never the page; the Developer's sidebar has no payroll entry; the run routes are wrapped; a director opens every
+page). Mutants caught 6 of 6 (rule removed; flag off `PAYROLL_NEEDS`; flag off Monthly Inputs; gate ignores the Developer; run page unwrapped;
+sidebar ignores the Developer). Browser re-walk as `DEMO005`: 36 of 36 payroll pages show the forbidden page, no table row, no rupee figure. Check
+script (lint, typecheck, migrate and drift, 116 frontend tests), build and bundle budgets (login 232.3 KB, shell + employee home 347.7 KB, shell +
+admin home 367.4 KB): all pass. The backend was not changed (the demo test's Developer reads of `payroll/setup` and the restricted layout stay valid).
+
+**Decision made here:** the Setup Checklist and Ready for First Run are now forbidden pages for the Developer too (the owner asked for every payroll
+page); the API still answers the Developer's status read, so this can be reverted for those two screens alone if the owners want the Developer to
+see where setup stands.
+
+**Request 13 to Session A (protected payroll folder):** the payroll **APIs** still answer the Developer for `payroll.rules.view` reads: the rules
+list with its values (statutory and company figures, sealed identifiers already hidden), the layouts list (sealed values already restricted) and
+the setup checklist. The screens no longer show them, but a direct API call would. Consider refusing the Developer on the rules and layouts reads
+(keeping the setup status read if the owners want it). These are company settings, not any person's pay.
+
+**Question for the owners (not changed):** the Developer holds `reports.view`, so it opens the ten people and attendance reports (Headcount, Joiners,
+Leavers & attrition, Birthdays & anniversaries, Leave balance, Loss of pay (LOP), Attendance summary, Late coming, Excess hours, Attendance
+exceptions) with names and rows. No pay figure is in them (Leave liability and Payroll reports are closed to the Developer), but Loss of pay shows
+LOP days per person. Should the Developer lose `reports.view`, or at least the LOP report?

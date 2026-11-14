@@ -9,6 +9,7 @@ import { useIsPhone } from "../ui/hooks";
 import { AppShell } from "./shell/AppShell";
 import { AdminPhoneTabBar } from "./shell/AdminPhoneTabBar";
 import { adminNav } from "./shell/nav";
+import { isDeveloperOnly } from "../routes/adminMenu.config";
 
 const EXTRA_TITLES: [RegExp, string][] = [
   [/^\/admin\/security$/, "Account & security"],
@@ -50,8 +51,9 @@ function AdminLayoutInner() {
   const { user, hasPermission } = useAuth();
   const isDirector = Boolean(user?.roleCodes.includes("SUPER_ADMIN"));
   // Follows the person's permissions: when a director switches a duty off for them, /me is refetched (permissions.changed) and the item leaves the menu, the search and the phone menu.
+  const isDeveloper = isDeveloperOnly(user?.roleCodes);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const nav = useMemo(() => adminNav(hasPermission, isDirector), [user?.permissions, isDirector]);
+  const nav = useMemo(() => adminNav(hasPermission, isDirector, isDeveloper), [user?.permissions, isDirector, isDeveloper]);
   return (
     <AppShell
       nav={nav}

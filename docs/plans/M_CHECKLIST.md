@@ -125,3 +125,6 @@ migration applied to a fresh database; no existing test weakened; a golden test 
 - [x] docs/UI_SCREEN_MAP.md regenerated from the menu configs, routes and default roles (166 screens; only placeholder left: Assets Management)
 - [x] docs/ops/FIRST_SETUP.md: branches under Organisation Setup → Branches; Divisions not needed
 - [x] Requests 10 to 12 to Session A recorded in M_STAGE_REPORTS.md
+
+# Developer and payroll screens (2026-11-14)
+- [x] Every payroll page (34 menu items, the run and its step) shows the Developer the forbidden page; test walks the payroll menu as the Developer (6 of 6 mutants caught); browser re-walk 36 of 36

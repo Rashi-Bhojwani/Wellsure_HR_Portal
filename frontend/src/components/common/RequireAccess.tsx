@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { adminNeedsMet, type AdminNeeds } from "../../routes/adminMenu.config";
+import { adminNeedsMet, isDeveloperOnly, type AdminNeeds } from "../../routes/adminMenu.config";
 import { useAuth } from "../../hooks/useAuth";
 import { EmptyState } from "../../ui/EmptyState";
 
@@ -8,7 +8,7 @@ import { EmptyState } from "../../ui/EmptyState";
 export function RequireAccess({ needs, children }: { needs: AdminNeeds; children: ReactNode }) {
   const { user, hasPermission } = useAuth();
   const isDirector = Boolean(user?.roleCodes.includes("SUPER_ADMIN"));
-  if (!adminNeedsMet(needs, hasPermission, isDirector)) {
+  if (!adminNeedsMet(needs, hasPermission, isDirector, isDeveloperOnly(user?.roleCodes))) {
     return <EmptyState title="This is not switched on for you" description="What you can open here is set by the directors. If you need it, ask one of them." />;
   }
   return <>{children}</>;
