@@ -82,7 +82,8 @@ describe("every report is closed to the Developer", () => {
     expect(perms).toHaveLength(3);
     // An existing database, as it was before the decision.
     await prisma.rolePermission.createMany({ data: perms.map((p) => ({ roleId: role.id, permissionId: p.id })) });
-    expect((await request(app).get("/api/reports").set(...authHeader(await loginAs(dev.employeeCode)))).status).toBe(200);
+    // Session A, Stage 8 block (owners): every report key is now a Developer ceiling, so even these old rows are not resolved (was 200 before the migration ran).
+    expect((await request(app).get("/api/reports").set(...authHeader(await loginAs(dev.employeeCode)))).status).toBe(403);
     for (const stmt of readFileSync(MIGRATION, "utf8").replace(/^--.*$/gm, "").split(";").map((s) => s.trim()).filter(Boolean)) await prisma.$executeRawUnsafe(stmt);
     expect(await prisma.rolePermission.count({ where: { roleId: role.id, permissionId: { in: perms.map((p) => p.id) } } })).toBe(0);
     const recorded = await prisma.rolePermissionRemoval.findMany({ where: { roleCode: DEVELOPER_ROLE_CODE, reason: { contains: "every report is closed to the Developer" } } });

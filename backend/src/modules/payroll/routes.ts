@@ -34,14 +34,15 @@ export const payrollRouter = Router();
 payrollRouter.use(authenticate);
 
 // Rules and setup (P6-1)
-payrollRouter.get("/rules", requirePermission("payroll.rules.view"), controller.rules);
-payrollRouter.get("/rule-overrides", requirePermission("payroll.rules.view"), controller.overrides);
+// Request 13 (Stage 8 block): the rule values and the bank and statutory layouts are refused to the Developer role on the backend too, even called directly.
+payrollRouter.get("/rules", refuseDeveloper, requirePermission("payroll.rules.view"), controller.rules);
+payrollRouter.get("/rule-overrides", refuseDeveloper, requirePermission("payroll.rules.view"), controller.overrides);
 payrollRouter.post("/rule-overrides/preview", requirePermission("payroll.rules.manage"), validate({ body: overridePreviewSchema }), controller.overridePreview);
 payrollRouter.put("/rule-overrides", requirePermission("payroll.rules.manage"), validate({ body: overrideSaveSchema }), controller.overrideSave);
-payrollRouter.get("/rule-overrides/:key/history", requirePermission("payroll.rules.view"), validate({ params: overrideKeyParamsSchema }), controller.overrideHistory);
+payrollRouter.get("/rule-overrides/:key/history", refuseDeveloper, requirePermission("payroll.rules.view"), validate({ params: overrideKeyParamsSchema }), controller.overrideHistory);
 payrollRouter.post("/rule-overrides/:key/confirm-preview", requirePermission("payroll.rules.confirm"), validate({ params: overrideKeyParamsSchema }), controller.overrideConfirmPreview);
 payrollRouter.post("/rule-overrides/:key/confirm", requirePermission("payroll.rules.confirm"), validate({ params: overrideKeyParamsSchema, body: ruleConfirmSchema }), controller.overrideConfirm);
-payrollRouter.get("/rules/:key", requirePermission("payroll.rules.view"), validate({ params: ruleKeyParamsSchema }), controller.rule);
+payrollRouter.get("/rules/:key", refuseDeveloper, requirePermission("payroll.rules.view"), validate({ params: ruleKeyParamsSchema }), controller.rule);
 payrollRouter.post("/rules/:key/edit-preview", ruleGate("manage"), validate({ params: ruleKeyParamsSchema, body: ruleEditPreviewSchema }), controller.editPreview);
 payrollRouter.put("/rules/:key", ruleGate("manage"), validate({ params: ruleKeyParamsSchema, body: ruleEditSchema }), controller.edit);
 payrollRouter.post("/rules/:key/confirm-preview", ruleGate("confirm"), validate({ params: ruleKeyParamsSchema }), controller.confirmPreview);
@@ -187,8 +188,8 @@ payrollRouter.get("/runs/:id/outputs", reportView, validate({ params: rv.runIdPa
 payrollRouter.post("/runs/:id/outputs", make, validate({ params: rv.runIdParamsSchema, body: rv.outputGenerateSchema }), rel.outputGenerate);
 payrollRouter.get("/outputs/:id/file", reportView, validate({ params: rv.slipIdParamsSchema }), rel.outputDownload);
 // Layouts: saved by payroll.rules.manage, confirmed by a different person with payroll.rules.confirm, read by payroll.rules.view.
-payrollRouter.get("/layouts", requirePermission("payroll.rules.view"), rel.layouts);
-payrollRouter.get("/layouts/:key", requirePermission("payroll.rules.view"), validate({ params: rv.layoutKeyParamsSchema }), rel.layout);
+payrollRouter.get("/layouts", refuseDeveloper, requirePermission("payroll.rules.view"), rel.layouts);
+payrollRouter.get("/layouts/:key", refuseDeveloper, requirePermission("payroll.rules.view"), validate({ params: rv.layoutKeyParamsSchema }), rel.layout);
 payrollRouter.post("/layouts/:key/save-preview", layoutGate("manage"), validate({ params: rv.layoutKeyParamsSchema, body: rv.layoutSavePreviewSchema }), rel.layoutSavePreview);
 payrollRouter.put("/layouts/:key", layoutGate("manage"), validate({ params: rv.layoutKeyParamsSchema, body: rv.layoutSaveSchema }), rel.layoutSave);
 payrollRouter.post("/layouts/:key/confirm-preview", layoutGate("confirm"), validate({ params: rv.layoutKeyParamsSchema }), rel.layoutConfirmPreview);
