@@ -352,4 +352,40 @@ describe("DEMO C-4B offers, pay, joining links, conversion and referrals", () =>
     expect(Object.keys(after.body.items[0]).sort()).toEqual(["createdAt", "id", "jobTitle", "status"]);
     await f.setting("referrals", { enabled: false });
   });
+
+  it("Stage 4 concurrency: two simultaneous issues record one ISSUED event; two links at once leave one live; one link cannot take the same document twice, even at once", async () => {
+    // Offer issue: both calls carry the same version; one issues, the other is the retried request and changes nothing.
+    const { candidateId, applicationId } = await candidate("DEMO race offer");
+    const o = await f.call("office", "post", "/offers", terms(applicationId));
+    expect((await f.call("director", "put", `/offers/${o.body.id}/compensation`, { amount: PAY, period: "ANNUAL", version: 0 })).status).toBe(200);
+    expect((await move("office", o.body.id, "PROPOSED", 1)).status).toBe(200);
+    const issue = { letterSentThroughLetters: true, letterReference: "DEMO-LTR-RACE" };
+    const issued = await Promise.all([move("director", o.body.id, "ISSUED", 2, issue), move("second" as Who, o.body.id, "ISSUED", 2, issue)]);
+    expect(issued.map((r) => r.status).sort()).toEqual([200, 200]);
+    expect(await prisma.recruitmentOfferEvent.count({ where: { offerId: o.body.id, toState: "ISSUED" } })).toBe(1);
+    expect((await prisma.recruitmentOffer.findUniqueOrThrow({ where: { id: o.body.id } })).version).toBe(3);
+    expect((await move("office", o.body.id, "ACCEPTED", 3)).status).toBe(200);
+
+    await f.setting("joinerLinkLifetime", { hours: 48 });
+    await f.setting("joinerDocumentTypes", [{ code: "DEMO_ID", label: "DEMO identity proof", kind: "IDENTITY", allowedMimeTypes: ["application/pdf"], maxMb: 1 }, { code: "DEMO_BANK", label: "DEMO bank proof", kind: "BANK", allowedMimeTypes: ["application/pdf"], maxMb: 1 }]);
+    // Two links created at once: only one is live afterwards.
+    const links = await Promise.all([f.call("hr", "post", `/candidates/${candidateId}/joiner-links`, {}), f.call("hr", "post", `/candidates/${candidateId}/joiner-links`, {})]);
+    expect(links.map((r) => r.status)).toEqual([201, 201]);
+    expect(await prisma.recruitmentJoinerLink.count({ where: { candidateId, revokedAt: null } })).toBe(1);
+    const liveId = (await prisma.recruitmentJoinerLink.findFirstOrThrow({ where: { candidateId, revokedAt: null } })).id;
+    const token = links.find((r) => r.body.id === liveId)!.body.token as string;
+    const stale = links.find((r) => r.body.id !== liveId)!.body.token as string;
+    expect((await pub(stale)).status).toBe(410);
+    // The same document type sent twice at once: one is stored, the other refused.
+    const same = await Promise.all([upload(token, "DEMO_ID", PDF, "id.pdf", "application/pdf"), upload(token, "DEMO_ID", PDF, "id.pdf", "application/pdf")]);
+    expect(same.map((r) => r.status).sort()).toEqual([201, 409]);
+    expect(await prisma.recruitmentJoinerDocument.count({ where: { linkId: liveId, typeCode: "DEMO_ID" } })).toBe(1);
+    // The last document twice at once: one completes the link, which is then spent for everyone.
+    const last = await Promise.all([upload(token, "DEMO_BANK", PDF, "bank.pdf", "application/pdf"), upload(token, "DEMO_BANK", PDF, "bank.pdf", "application/pdf")]);
+    expect(last.map((r) => r.status).sort()[0]).toBe(201);
+    expect(last.filter((r) => r.status === 201)).toHaveLength(1);
+    expect(await prisma.recruitmentJoinerDocument.count({ where: { linkId: liveId } })).toBe(2);
+    expect((await pub(token)).status).toBe(410);
+    expect((await upload(token, "DEMO_ID", PDF, "id.pdf", "application/pdf")).status).toBe(410);
+  });
 });
