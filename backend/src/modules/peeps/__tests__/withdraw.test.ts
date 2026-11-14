@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { purgeAppendOnly } from "../../../lib/__tests__/cleanup";
 import { prisma } from "../../../lib/prisma";
 import { app, authHeader, cleanupEmployeeTestOrgMasters, cleanupFullTestEmployee, createEmployeeTestOrgMasters, createFullTestEmployee, loginAs, type TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
+import { confirmSetting } from "../settings";
 import { appoint, clearPeepsSettings } from "./peepsTestKit";
 
 // Peeps Stage 3: a pending proposal (a Peeps setting version, or a Wellsure Office membership change) is withdrawn by its author or a director, with
@@ -64,6 +65,28 @@ describe("withdrawing a pending proposal", () => {
     expect((await post("director", "/api/peeps/settings/unmute.sessionMinutes/withdraw", { version: third, reason: "too late" })).body.error.code).toBe("ALREADY_DECIDED");
     const row = await prisma.peepsSettingVersion.findFirstOrThrow({ where: { key: "unmute.sessionMinutes", version: third } });
     await expect(prisma.peepsSettingWithdrawal.create({ data: { versionId: row.id, withdrawnByUserId: p.director.userId, reason: "database check" } })).rejects.toThrow(/PEEPS_ALREADY_DECIDED/);
+  });
+
+  it("confirming a setting: only a director who did not enter it; the author cannot, nor can anyone else (service 403, and the database refuses too)", async () => {
+    // Found by the Stage 4 mutation check: with either service refusal removed, no test failed (the database trigger still refused, as a 500).
+    const byDirector = (await post("director", "/api/peeps/settings/unmute.sessionMinutes", { value: 35 })).body.pending.version as number;
+    const own = await post("director", "/api/peeps/settings/unmute.sessionMinutes/confirm", { version: byDirector });
+    expect([own.status, own.body.error.code]).toEqual([403, "SAME_PERSON"]);
+    for (const who of ["preparer", "member", "hr", "manager", "emp"] as const) {
+      const r = await post(who, "/api/peeps/settings/unmute.sessionMinutes/confirm", { version: byDirector });
+      expect([r.status, r.body.error?.code], who).toEqual([403, "FORBIDDEN"]); // the route's director guard
+    }
+    const byPreparer = (await post("preparer", "/api/peeps/settings/unmute.sessionMinutes", { value: 40 })).body.pending.version as number;
+    // Behind the route guard, the service refuses a non-director on its own too.
+    const preparerActor = { userId: p.preparer.userId, employeeId: p.preparer.employeeId, isDirector: false, isMember: true, capabilities: ["PREPARE_SETTINGS"], roleCodes: [] } as never;
+    await expect(confirmSetting("unmute.sessionMinutes", { version: byPreparer }, preparerActor, { actorUserId: p.preparer.userId, ipAddress: null, userAgent: null })).rejects.toMatchObject({ status: 403, code: "DIRECTORS_ONLY" });
+    const row = await prisma.peepsSettingVersion.findFirstOrThrow({ where: { key: "unmute.sessionMinutes", version: byPreparer } });
+    await expect(prisma.peepsSettingConfirmation.create({ data: { versionId: row.id, confirmedByUserId: p.preparer.userId } })).rejects.toThrow(/PEEPS_SETTING_SAME_PERSON/);
+    await expect(prisma.peepsSettingConfirmation.create({ data: { versionId: row.id, confirmedByUserId: p.member.userId } })).rejects.toThrow(/PEEPS_SETTING_DIRECTORS_ONLY/);
+    expect(await prisma.peepsSettingConfirmation.count({ where: { versionId: row.id } })).toBe(0);
+    const ok = await post("director2", "/api/peeps/settings/unmute.sessionMinutes/confirm", { version: byPreparer });
+    expect(ok.status).toBe(200);
+    expect(ok.body.inForce.value).toBe(40);
   });
 
   it("a membership change: a director withdraws it before it is confirmed; not after; a withdrawn change cannot be confirmed", async () => {

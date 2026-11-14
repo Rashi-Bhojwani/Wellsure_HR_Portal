@@ -1923,3 +1923,35 @@ public giver and reason shown, nudge tags (8), off-limits words (35). Nudge life
 - The scans (`check:sensitive-ui`, `check:popovers`) ran in CI only (green in run 364); a local popover run is not comparable
   (the local demo database has more notifications).
 - E-mail delivery: Peeps Stage 3 events send no e-mail.
+
+## Stage 4 of 4 (2026-11-14): testing program — phase 6 mutation table
+
+Each mutation breaks one guard by an exact text replacement, runs the named test file, records the result and restores the file
+byte for byte (`git diff --quiet` checked after each). Run in this stage: 16 rules that had never been mutation-checked.
+
+| # | Rule | First run | Caught by |
+|---|---|---|---|
+| N1 | Nudge tag: only a director gives/removes | caught | "a director removes any nudge…", "the receiver asks for a review…" |
+| N2 | Nudge tag: off-limits words refused | caught | "off-limits words block tag names…" |
+| N3 | Nudge tag: shows for 7 days | caught | "…a week each", "disappears after a week (fake clock)" |
+| N4 | Nudge review: only the recipient asks | caught | "the receiver asks for a review…; nobody else may ask" |
+| S1 | Setting: the person who entered it cannot confirm it | **survived** → test added → caught | "confirming a setting: only a director who did not enter it…" (withdraw.test.ts) |
+| S2 | Setting: only its author or a director withdraws | caught | "a setting version: its author or a director withdraws it…" |
+| S3 | Setting: only a director confirms (service layer; the route guard and the database also refuse) | **survived** → test added → caught | same new test (calls the service directly behind the route guard) |
+| AR1 | Asset request: your own is decided by someone else | caught | "states: approve then fulfil, or decline…; never your own" |
+| AR2 | Asset request: a decider's own request is never their task | **survived** → test added → caught | "a decider's own request is never a task for them…" (assetRequests.test.ts) |
+| AR3 | Asset request: deciding needs the register's managers | caught | "permission matrix: the list and decisions are for the register's managers only" |
+| B1 | Badge: a reason of 3+ characters is required | caught | "a reason is required" |
+| B2 | Badge: a retired badge cannot be given | caught | "directors change the catalogue…" |
+| B3 | Badge: weekly/monthly end at the India-time period end | caught | "weekly and monthly items expire when their period ends in India time" |
+| J1 | Joining exception: only the director-chosen approver grants | caught | "exceptions need the director-chosen approver…" |
+| RF1 | Referral: the referrer sees a basic status only | caught | "referrals: off by default, then the referrer sees basic status only" |
+| H1 | Helpdesk move: the Developer refused (Stage 4 fix) | caught | permission matrix "every route answers each actor exactly as reviewed" |
+
+**16/16 caught** after the three missing tests were added (the three survivors were untested refusals that a second layer — the
+route guard or a database trigger — still enforced). Rules mutation-checked in earlier stages, with their tables above: assets M1–M11;
+Office/Unmute U1–U2, M1–M7; badges/nudges R1–R5, Q1–Q2; avatars A1–A2; leave types L1–L5, G1, D1–D2; badge line R1–R3, L1, N1, A1;
+C-1 races and attendance labels (11); ticket desk (4); exits (5); recruitment (5); C-4B offers (3); Insights (2); autofill (3);
+Stage 3 reporting line, pair limit, receiver sees giver (3). Property tests kept: Insights small-group (5,000 populations),
+badge reporting line (random charts). Nothing is left un-mutation-checked among the access, confidentiality and limit rules listed
+in PEEPS_PLAN; display-only rules (labels, sort orders) were not mutated.

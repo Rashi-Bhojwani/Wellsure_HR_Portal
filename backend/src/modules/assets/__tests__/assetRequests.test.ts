@@ -153,4 +153,14 @@ describe("asset requests", () => {
     expect(lines.join("\n")).not.toContain(NOTE);
     expect(JSON.stringify(await prisma.auditLog.findMany({ where: { entityId: id } }))).not.toContain(NOTE);
   });
+
+  it("a decider's own request is never a task for them; another decider gets it", async () => {
+    // Found by the Stage 4 mutation check: with the task feed's "not your own" filter removed, no test failed.
+    const own = (await ask("hr")).body.id as string;
+    const taskIds = async (who: Who) => ((await get(who, "/api/tasks/mine")).body as Array<{ type: string; id: string }>).filter((t) => t.type === "ASSET_REQUEST").map((t) => t.id);
+    expect(await taskIds("hr")).not.toContain(own);
+    expect(await taskIds("hrExec")).toContain(own);
+    expect(await taskIds("director")).toContain(own);
+    expect((await post("director", `/api/assets/requests/${own}/decide`, { outcome: "DECLINED", note: "DEMO not needed" })).status).toBe(200);
+  });
 });
