@@ -171,3 +171,53 @@ Report layouts are the D-37 kind of default ("Default, change in settings"); not
 | 97 | **Payroll per company, first steps**: a run is for one company (no company = the main one); one live run per month per company. Each company's registrations and bank account: Not set, two directors. Bank and statutory files for a run of another company are refused until they are built. | Each company's registrations and account; whether a period lock should be per company. | Enter them before using a second company. |
 | 98 | Finalising any company's run locks that month's attendance for everyone (the lock is per month, as before). | Whether it should be per company. | Keep until you run a second company. |
 | 99 | **Registers** (wages with a column per pay head, deductions, overtime) from finalised runs, in our own layouts marked "Default, change in settings". No official form is claimed. | The official formats, if a state requires them. | — |
+
+## Part 4 (2026-11-14): every value the directors must enter, and where
+
+Nothing below has a value in the system. Each is entered by one director with a source note and a date it applies from, and takes effect only when a different
+director confirms it; until then whatever depends on it refuses to work it out (or has no effect) and says what is missing.
+
+**Payroll → Rules and Setup**
+- Enter the PF employee rate, the employer pension (EPS) rate, the employer provident fund rate, the EDLI rate and the administration charge rate.
+- Enter the PF monthly wage ceiling and the ceiling mode (whether PF is worked out on the full wage or up to the ceiling).
+- Enter the ESI employee rate, the ESI employer rate, the ESI monthly wage ceiling and the ESI coverage period rule.
+- Choose which employment types PF covers and which ESI covers.
+- Enter your one state's PT slab table, map the state written on your three branches to that state, and say which placement decides it.
+- Enter your one state's LWF amounts and when they are deducted.
+- Choose how income tax is deducted (none, or worked out from the tax year).
+- Choose the pay-days basis, the fixed days (if used), the loss-of-pay divisor, the payment date, leavers' last-month timing and what happens to a negative net pay.
+- Choose the rounding of salary lines, PF, ESI and net pay.
+- Enter the leave encashment rules for the year end, the arrears rules and the loss-of-pay reversal limits.
+- Enter the company's PF establishment code, ESI employer code, PT registration, LWF registration, company PAN and TAN.
+
+**Payroll → Tax Years** (one financial year at a time)
+- Enter both regimes' slabs, standard deduction and rebate, the surcharge table, the cess percentage, the default regime, the rounding of tax, the minimum monthly TDS
+  and how one-off pay is taxed.
+- Enter the sections people can declare under (code, label, which regime, caps).
+- If HRA exemption applies: enter the section in which rent is declared, the HRA heads, the basis heads (basic and DA), the three percentages and whether your city is metro.
+- If marginal relief on the rebate applies: switch it on.
+
+**System Settings → Default behaviours**
+- Overtime pay: the pay head, a flat rate per hour or a multiplier with its basis heads and hours a month, and the rounding.
+- Leave encashment: the pay head, the per-day basis heads, the divisor, the rounding and the leave types encashed at exit.
+- Gratuity: the least years, how a part year counts, the wage heads, days per year, the divisor, the ceiling (or none), the rounding and the date it applies from.
+- Notice period: the days, whether a shortfall is recovered, the basis heads, the divisor, the rounding and the date it applies from.
+- The most a month's deductions may take (percentage of gross), and the rounding of a pro-rata leave figure.
+
+**System Settings → Policy settings**
+- Turn overtime on (and its minimum and step) and turn encashment requests during the year on, if you want either.
+
+**Payroll → Bank and Statutory Layouts**
+- Enter the bank file layout with the debit account, and the PF ECR, ESI, PT and LWF file layouts.
+
+**Payroll → Opening Figures, Compliance calendar, Minimum wages, Accounting journal, Loan and claim types**
+- Enter the year's opening figures (or confirm there are none); each compliance due date; the minimum wage rates, each person's category and the compared heads; the
+  ledger account of each journal key; and each loan and claim type.
+
+| # | Decided or deferred in part 4 | What you give | Recommendation |
+|---|---|---|---|
+| 100 | HRA exemption and marginal relief on the rebate are parts of the tax year; absent means none is applied (as before). | The figures above. | Enter them with the year's values. |
+| 101 | Gratuity and notice recovery are effective-dated settings applied in the settlement; notice runs from the day the separation was recorded. | The figures above; whether pay in lieu of notice is ever paid (it stays a typed line). | Decide before the first leaver. |
+| 102 | **Employer PF/ESI inside CTC is not built.** Do not add an employer PF line to a salary structure meanwhile: the run would pay it as well as the PF it works out. | How CTC is built (employer share inside or outside). | Decide before the first salaries are entered. |
+| 103 | Deferred: statutory bonus (annual), flexible benefit plan, travel advance, manager step on claims, LTA, perquisites, Form 12BB, the official quarterly return file, surcharge marginal relief. | — | Ask when one is needed. |
+| 104 | The realtime fix applies on the server that makes the change at once; another server applies it one Redis round trip later (signal-only events, never pay figures). | — | Keep. |
