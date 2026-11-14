@@ -1319,6 +1319,8 @@ export interface ImportView {
   fingerprint: string;
   canApply: boolean;
   canApplySkippingInvalid: boolean;
+  /** Stage 8: who uploaded it (their employee record); a different director applies it. */
+  uploadedByEmployeeId: string | null;
 }
 export interface ImportListRow {
   id: string;

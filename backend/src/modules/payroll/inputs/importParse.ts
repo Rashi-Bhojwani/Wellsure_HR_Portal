@@ -59,6 +59,27 @@ export function parseCsv(input: string): string[][] {
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 
 /** A date written year-month-day or day-Mon-year (the sample's 01-Apr-2008). Anything else is refused, not guessed (01/04/2008 could be either). */
+/**
+ * Stage 8: greytHR's own Bulk Salary Overrides file writes dates day first with slashes ("31/01/2026"). A slash date is read only where it cannot be misread: both
+ * readings give the same day (01/01/2026), its first part is above 12 (31/01/2026), or the file has already proved it writes day first (`dayFirstProven`).
+ * Otherwise (01/08/2026 in a file that proves nothing) it stays refused, as before.
+ */
+export function parseDateTextDayFirst(raw: string, dayFirstProven: boolean): string | null {
+  const plain = parseDateText(raw);
+  if (plain) return plain;
+  const hit = /^(\d{1,2})[/.](\d{1,2})[/.](\d{4})$/.exec(raw.trim());
+  if (!hit) return null;
+  const [d, m] = [Number(hit[1]), Number(hit[2])]; // allow-number: day and month of a date, never money
+  if (!(d === m || d > 12 || dayFirstProven)) return null;
+  return parseDateText(`${hit[3]}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+}
+
+/** Stage 8: true when some slash date in the file can only be day first (its first part is above 12). */
+export const provesDayFirst = (texts: readonly string[]): boolean => texts.some((t) => {
+  const hit = /^(\d{1,2})[/.](\d{1,2})[/.](\d{4})$/.exec(t.trim());
+  return !!hit && Number(hit[1]) > 12 && Number(hit[2]) <= 12; // allow-number: date parts
+});
+
 export function parseDateText(raw: string): string | null {
   const t = raw.trim();
   let iso: string;

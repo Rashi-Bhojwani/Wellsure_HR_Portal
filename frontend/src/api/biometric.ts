@@ -193,6 +193,12 @@ export interface ImportPreview extends ImportCounts {
   device: { id: string; name: string };
   fileName: string;
   sample: Array<{ lineNumber: number; deviceUserId: string; localTime: string; outcome: string }>;
+  /** Stage 8: the device's own text export, or greytHR's Attendance Swipes spreadsheet. */
+  source?: "ATTLOG" | "SWIPES";
+  /** Device user IDs nobody is mapped to (they wait in the unmapped queue). */
+  unknownIds?: string[];
+  /** Swipes: employee numbers no employee has (rejected, never guessed). */
+  unknownNumbers?: string[];
 }
 
 const base = "/api/biometric";

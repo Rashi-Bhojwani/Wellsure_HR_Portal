@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import ExcelJS from "exceljs";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -24,7 +26,8 @@ describe("monthly inputs import", () => {
   const get = (path: string, token = maker()) => request(app).get(`/api/payroll/monthly-inputs${path}`).set(...authHeader(token));
   const post = (path: string, body: object, token = maker()) => request(app).post(`/api/payroll/monthly-inputs${path}`).set(...authHeader(token)).send(body);
   const upload = (content: string | Buffer, name = "overrides.csv", token = maker()) => request(app).post("/api/payroll/monthly-inputs/import").set(...authHeader(token)).attach("file", Buffer.isBuffer(content) ? content : Buffer.from(content), name);
-  const apply = (batchId: string, fingerprint: string, over: Record<string, unknown> = {}) => post(`/import/${batchId}/apply`, { fingerprint, skipInvalid: false, reason: "Loaded in the test", ...over });
+  // Stage 8: a different director from the uploader applies a file (checkerA; the uploads are the maker's).
+  const apply = (batchId: string, fingerprint: string, over: Record<string, unknown> = {}) => post(`/import/${batchId}/apply`, { fingerprint, skipInvalid: false, reason: "Loaded in the test", ...over }, w.tokens.checkerA);
   const ledger = (employee: string, head?: string, month?: string) => prisma.payrollMonthlyInput.findMany({ where: { employeeId: id(employee), ...(head ? { componentCode: head } : {}), ...(month ? { cycleStart: new Date(`${month}T00:00:00Z`) } : {}) }, orderBy: { createdAt: "asc" } });
   let tag = 0;
   const header = () => `Employee Number,Overide From,Overide Till,Principal Part,Interest Part,Remarks,${nameInc},${nameAdv},Slab Salary Bonus,Training Exp`;
@@ -99,7 +102,7 @@ describe("monthly inputs import", () => {
     expect((await ledger("a", incentive, "2026-08-01")).map((x) => x.amount?.toString())).toEqual(["700"]);
     expect((await ledger("a", incentive))[0]!.batchId).toBe(r.body.id);
     const batch = await prisma.payrollInputBatch.findUniqueOrThrow({ where: { id: r.body.id } });
-    expect([batch.status, batch.appliedByUserId]).toEqual(["APPLIED", w.maker.userId]);
+    expect([batch.status, batch.appliedByUserId]).toEqual(["APPLIED", w.checkerA.userId]); // Stage 8: applied by a different director from the uploader
     const audit = await prisma.auditLog.findFirstOrThrow({ where: { action: "payroll.monthly_inputs.import_applied", entityId: r.body.id } });
     expect(JSON.stringify(audit.after)).not.toContain("700"); // the audit row has counts, never a figure
     expect(JSON.stringify(audit.after)).toContain("redacted");
@@ -149,7 +152,7 @@ describe("monthly inputs import", () => {
   it("a director may choose to skip the invalid rows: only the valid rows are saved, and the choice is recorded", async () => {
     const file = [header(), row("b", "2026-08-01", "2026-08-31", "10.25", "", "good line"), `NO_SUCH_EMP,2026-08-01,2026-08-31,,,bad person,5,,,`].join("\n");
     const r = await upload(file);
-    const noReason = await post(`/import/${r.body.id}/apply`, { fingerprint: r.body.fingerprint, skipInvalid: true, reason: "r" });
+    const noReason = await post(`/import/${r.body.id}/apply`, { fingerprint: r.body.fingerprint, skipInvalid: true, reason: "r" }, w.tokens.checkerA);
     expect(noReason.status).toBe(400); // a reason is needed
     const done = await apply(r.body.id, r.body.fingerprint, { skipInvalid: true });
     expect(done.status, JSON.stringify(done.body)).toBe(200);
@@ -196,5 +199,31 @@ describe("monthly inputs import", () => {
     expect((await get("/import/does-not-exist")).status).toBe(404);
     const list = await get("/import");
     expect(list.body.batches.length).toBeGreaterThan(0);
+  });
+
+  it("Stage 8: the director who uploaded a file cannot apply it; a different director does, and only then is anything saved", async () => {
+    const r = await upload(`${header()}\n${row("b", "01/08/2026", "31/08/2026", "777")}`, "second-director.csv");
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    expect(r.body.uploadedByEmployeeId).toBe(w.maker.employeeId);
+    expect(r.body.analysis.invalid, JSON.stringify(r.body.analysis.rows.map((x: { problems: string[] }) => x.problems))).toBe(0);
+    const own = await post(`/import/${r.body.id}/apply`, { fingerprint: r.body.fingerprint, skipInvalid: false, reason: "Loaded in the test" });
+    expect([own.status, own.body.error?.code]).toEqual([403, "SAME_DIRECTOR"]);
+    expect((await ledger("b", incentive, "2026-08-01")).filter((x) => x.amount?.toString() === "777")).toHaveLength(0);
+    const applied = await apply(r.body.id, r.body.fingerprint);
+    expect(applied.status, JSON.stringify(applied.body)).toBe(200);
+    expect((await ledger("b", incentive, "2026-08-01")).filter((x) => x.amount?.toString() === "777")).toHaveLength(1);
+  });
+
+  it("Stage 8: greytHR's synthetic Bulk Salary Overrides file is read as its layout: the fixed columns, the footer note ignored, its pay heads named as unknown here", async () => {
+    const file = readFileSync(path.join(__dirname, "..", "..", "..", "..", "..", "docs", "samples", "Bulk_Salary_Overrides_template.xlsx"));
+    const r = await upload(file, "Bulk_Salary_Overrides_template.xlsx");
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    const kinds = Object.fromEntries(r.body.analysis.columns.map((c: { header: string; kind: string }) => [c.header, c.kind]));
+    expect([kinds["Employee Number"], kinds["Overide From"], kinds["Overide Till"], kinds["Principal Part"], kinds["Interest Part"], kinds.Remarks]).toEqual(["FIXED", "FIXED", "FIXED", "FIXED", "FIXED", "FIXED"]);
+    expect(kinds.INCENTIVE).toBe("UNKNOWN"); // this test company has no head named INCENTIVE: nothing is guessed from a name
+    expect(r.body.canApply).toBe(false);
+    expect(r.body.analysis.rows.map((x: { employeeNumber: string }) => x.employeeNumber)).not.toContain("Columns in red are mandatory");
+    expect([r.body.analysis.rows[0].from, r.body.analysis.rows[0].till]).toEqual(["2026-01-01", "2026-01-31"]); // 31/01/2026 proves the file writes day first
+    expect((await post(`/import/${r.body.id}/discard`, {})).status).toBe(200);
   });
 });

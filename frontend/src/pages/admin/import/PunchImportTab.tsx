@@ -70,15 +70,15 @@ export function PunchImportTab() {
       </div>
 
       <div>
-        <div style={{ fontWeight: fw.medium, color: v.textPrimary, marginBottom: space[2] }}>2. Upload the ATTLOG file</div>
+        <div style={{ fontWeight: fw.medium, color: v.textPrimary, marginBottom: space[2] }}>2. Upload the ATTLOG file or the Attendance Swipes file</div>
         <Dropzone
           compact
-          accept=".txt,.dat,.log,text/plain"
+          accept=".txt,.dat,.log,text/plain,.xlsx,.xls"
           disabled={!deviceId}
           loading={upload.isPending}
           onFile={(file) => upload.mutate(file)}
-          title={deviceId ? "Drop the ATTLOG file here" : "Pick the device first"}
-          hint="A .txt, .dat or .log export, exactly as it came off the machine. Nothing is stored until you commit."
+          title={deviceId ? "Drop the ATTLOG file or greytHR's Attendance Swipes file here" : "Pick the device first"}
+          hint="The device's .txt, .dat or .log export exactly as it came off the machine, or greytHR's Attendance Swipes spreadsheet (.xlsx or .xls; each employee number becomes that person's device user ID). Nothing is stored until you commit."
           buttonLabel="Upload ATTLOG file"
         />
       </div>
@@ -98,6 +98,12 @@ export function PunchImportTab() {
             </CardGrid>
           </div>
 
+          {(preview.unknownIds?.length ?? 0) > 0 && (
+            <ApprovalBanner tone="warning" title={`Device user IDs nobody is mapped to (${preview.unknownIds!.length})`} description={`${preview.unknownIds!.slice(0, 40).join(", ")}${preview.unknownIds!.length > 40 ? " …" : ""}. Their punches wait in Attendance, Devices, Unmapped until someone maps them. Nothing is guessed.`} />
+          )}
+          {(preview.unknownNumbers?.length ?? 0) > 0 && (
+            <ApprovalBanner tone="warning" title={`Employee numbers no employee has (${preview.unknownNumbers!.length})`} description={`${preview.unknownNumbers!.slice(0, 40).join(", ")}${preview.unknownNumbers!.length > 40 ? " …" : ""}. Their rows are rejected below. Nothing is guessed.`} />
+          )}
           {preview.rejected.length > 0 && (
             <div>
               <FormGroupTitle>Rejected lines (kept verbatim; they won't be stored)</FormGroupTitle>

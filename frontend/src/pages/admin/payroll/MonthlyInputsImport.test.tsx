@@ -7,6 +7,9 @@ import * as payrollApi from "../../../api/payroll";
 import type { ImportView } from "../../../api/payroll";
 import { MonthlyInputsImport } from "./MonthlyInputsImport";
 
+// Stage 8: the screen asks who is signed in (the uploader never applies their own file); here a director who did not upload it.
+vi.mock("../../../hooks/useAuth", () => ({ useAuth: () => ({ user: { employeeId: "a-different-director" } }) }));
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -21,6 +24,7 @@ const preview: ImportView = {
   fingerprint: "fp",
   canApply: false,
   canApplySkippingInvalid: true,
+  uploadedByEmployeeId: null,
   analysis: {
     columns: [{ header: "Employee Number", kind: "FIXED" }, { header: "Incentive", kind: "HEAD", head: "INC" }],
     fileProblems: [],
