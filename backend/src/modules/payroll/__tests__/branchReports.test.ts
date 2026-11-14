@@ -83,7 +83,10 @@ describe("C1 — payroll reports by branch", () => {
   }, 300_000);
 
   it("golden: with no branch filter the run's figures, its payslips and the eight reports are byte-for-byte as before the branch work", async () => {
-    const snap = { run: await goldenSnapshot(world, runId), reports: await reportsSnapshot() };
+    // The run's items and payslips are keyed by person letter; the database returns them in no fixed order, so the letters are put in order (values untouched).
+    const byLetter = <T,>(m: Record<string, T>) => Object.fromEntries(Object.keys(m).sort().map((k) => [k, m[k]!]));
+    const run = await goldenSnapshot(world, runId);
+    const snap = { run: { items: byLetter(run.items), payslips: byLetter(run.payslips) }, reports: await reportsSnapshot() };
     if (process.env.GOLDEN_WRITE === "1") {
       if (!existsSync(path.dirname(FIXTURE))) mkdirSync(path.dirname(FIXTURE), { recursive: true });
       writeFileSync(FIXTURE, `${JSON.stringify(snap, null, 2)}\n`);
