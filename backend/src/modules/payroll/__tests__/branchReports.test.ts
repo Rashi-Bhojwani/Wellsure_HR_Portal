@@ -153,7 +153,7 @@ describe("C1 — payroll reports by branch", () => {
     expect(plainCsv.text).not.toContain("Branch: ");
     const xlsx = await get(`register-wages/export?format=xlsx&month=${month}&groupBy=branch`).buffer(true).parse((res, cb) => { const chunks: Buffer[] = []; res.on("data", (c: Buffer) => chunks.push(c)); res.on("end", () => cb(null, Buffer.concat(chunks))); });
     const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(xlsx.body as Buffer);
+    await wb.xlsx.load(xlsx.body as unknown as ArrayBuffer);
     expect(wb.worksheets).toHaveLength(2);
     const sheet = wb.worksheets[1]!;
     expect(sheet.name).toBe("By branch");
