@@ -520,7 +520,7 @@ unchanged; no new personal field). Director-only routes: HR, a manager, an emplo
 **Phase check** (script, stops at the first failure): typecheck, lint, tokens, drift, changed tests — found two guard literals (allowlisted, reason recorded). Frontend:
 75/75 tests, build, bundle within budgets.
 **Full backend suite alone** (after the last pull, no pull while it ran): **255 files, 2,213 tests, all passed**.
-**CI:** run 373 (`108d91e`, all part-4 backend code): green. Run 372 (`0d9022f`) was cancelled by the next push. Final code commit `3237127`: CI_RESULT_PENDING.
+**CI:** run 373 (`108d91e`, all part-4 backend code): green. Run 372 (`0d9022f`) was cancelled by the next push. Final code commit `3237127`: run 377, all 12 jobs green to the end (lint, typecheck, tokens and bundles, migrations match the schema, four backend shards and `backend-tests-complete`, both sensitive-ui scans, latency, attendance replay, docker build, Windows agent).
 **Browser walk** (scratch copy of the demo company): Default behaviours, Tax years and Settlements, plus the payslips page, as director, HR, manager, employee and Developer at
 1280 light and 390 dark (40 visits, then 16 more after the fix): no crash, no server error, no secret text, no horizontal scroll; the directors' screens refused to the other
 four. The gratuity and notice forms opened and read correctly at both views. **Found and fixed (`3237127`):** the Developer opening Tax years saw a warning titled "That is
