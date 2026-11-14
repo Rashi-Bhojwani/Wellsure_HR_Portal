@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import type { PayrollReportDef, PayrollReportKey, PayrollReportResult } from "@shared/constants/payrollReports";
+import type { PayrollReportDef, PayrollReportFilter, PayrollReportKey, PayrollReportResult } from "@shared/constants/payrollReports";
 
 // Stage 6 (docs/plans/STAGE_6_PAYROLL_REPORTS.md): payroll reports, directors only. Figures are exact decimal strings from the API; the screen never re-adds them.
 const base = "/api/payroll-reports";
@@ -11,7 +11,7 @@ export interface ReportLayout {
   savedAt: string | null;
   reason: string | null;
 }
-export type ReportFilters = Partial<Record<"month" | "compareMonth" | "fromMonth" | "toMonth" | "fromDate" | "toDate" | "asOf" | "department" | "location" | "company", string>>;
+export type ReportFilters = Partial<Record<PayrollReportFilter, string>>; // C1: groupBy=branch too
 export type CatalogEntry = PayrollReportDef & { layout: ReportLayout };
 export type ReportResult = PayrollReportResult & { layout: ReportLayout };
 

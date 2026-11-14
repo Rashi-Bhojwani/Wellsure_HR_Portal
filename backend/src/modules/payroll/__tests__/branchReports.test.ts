@@ -5,6 +5,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { deleteWithDependents } from "../../../lib/__tests__/cleanup";
 import { prisma } from "../../../lib/prisma";
 import { app, authHeader } from "../../employee/__tests__/employeeTestHelpers";
+import ExcelJS from "exceljs";
+import { NO_BRANCH, branchOf } from "../reports/definitions";
 import { goldenSnapshot } from "./goldenHelpers";
 import { REAL_RULES, closeWorld, closingWorld, confirmAllPins, driveToFinal, staffWith, type Closing } from "./closeTestHelpers";
 import { CYCLE, calculateRun, setRules } from "./runTestHelpers";
@@ -87,5 +89,74 @@ describe("C1 — payroll reports by branch", () => {
       writeFileSync(FIXTURE, `${JSON.stringify(snap, null, 2)}\n`);
     }
     expect(JSON.stringify(snap, null, 2)).toBe(JSON.stringify(JSON.parse(readFileSync(FIXTURE, "utf8")), null, 2));
+  });
+
+  const paise = (v: string | number) => {
+    const t = String(v);
+    const neg = t.startsWith("-");
+    const [w, f = ""] = (neg ? t.slice(1) : t).split(".");
+    const p = BigInt(w!) * 100n + BigInt((f + "00").slice(0, 2));
+    return neg ? -p : p;
+  };
+  type Group = { key: string; branch: string; rows: number; totals: Record<string, string | number> };
+
+  it("grouped by branch: the rows and totals are the ungrouped ones; each branch's totals add up exactly to the report's total; no branch is 'No branch'", async () => {
+    for (const [key, q] of BRANCH_REPORTS) {
+      const plain = (await get(`${key}?${q}`)).body;
+      const res = await get(`${key}?${q}&groupBy=branch`);
+      expect(res.status, `${key} ${JSON.stringify(res.body)}`).toBe(200);
+      expect([res.body.rows, res.body.totals, res.body.columns], key).toEqual([plain.rows, plain.totals, plain.columns]);
+      expect(res.body.filtersApplied.at(-1)).toMatch(/^Grouped by branch/);
+      const groups = res.body.groups as Group[];
+      // Per-person reports: each row is in exactly one branch. Aggregate reports (a row per month, department, head or line) have rows in several branches.
+      if (["variance", "register-wages", "register-deductions", "register-overtime"].includes(key)) expect(groups.reduce((n, g) => n + g.rows, 0), key).toBe(plain.rows.length);
+      for (const [col, total] of Object.entries(plain.totals as Record<string, string | number>)) {
+        if (typeof total === "number") expect(groups.reduce((n, g) => n + Number(g.totals[col] ?? 0), 0), `${key} ${col}`).toBe(total);
+        else expect(groups.reduce((n, g) => n + paise(g.totals[col] ?? "0"), 0n), `${key} ${col}`).toBe(paise(total));
+      }
+      const labels = groups.map((g) => g.branch.split(world.prefix).join("P").replace(/^Test Location .*/, "Branch A"));
+      if (key === "register-overtime") expect(labels.sort(), key).toEqual(["Branch A", "No branch"]); // c has no job history now
+      else expect(labels.sort(), key).toEqual(["Branch A", "Second branch P"]); // the run placed everyone; b at the second branch
+    }
+  });
+
+  it("the branch filter: payroll summary and statutory summary now take it; each branch alone equals its group; 'NONE' keeps only people with no branch", async () => {
+    for (const key of ["payroll-summary", "statutory-summary", "department-cost", "head-wise", "variance", "register-wages", "register-deductions"]) {
+      const q = BRANCH_REPORTS.find(([k]) => k === key)![1];
+      const groups = (await get(`${key}?${q}&groupBy=branch`)).body.groups as Group[];
+      const second = groups.find((g) => g.key === otherBranch)!;
+      const only = (await get(`${key}?${q}&location=${otherBranch}`)).body;
+      expect(only.totals, key).toEqual(second.totals);
+      expect(only.filtersApplied, key).toContain(`Branch: Second branch ${world.prefix}`);
+    }
+    const summaryB = (await get(`payroll-summary?fromMonth=${month}&toMonth=${month}&location=${otherBranch}`)).body;
+    const itemB = await prisma.payrollRunItem.findFirstOrThrow({ where: { runId, employeeId: world.named.b!.employeeId } });
+    expect([summaryB.rows[0].paid, summaryB.rows[0].held, paise(summaryB.rows[0].gross)]).toEqual([1, 0, paise(itemB.gross.toFixed(2))]);
+    const none = (await get(`register-overtime?month=${month}&location=${NO_BRANCH}`)).body;
+    expect(none.rows.map((r: { employeeCode: string }) => r.employeeCode)).toEqual([world.named.c!.employeeCode]);
+    expect(none.filtersApplied).toContain("Branch: No branch");
+    expect((await get(`bank-transfer?groupBy=branch`)).status).toBe(400); // a report this block does not cover refuses it
+    expect((await get(`head-wise?month=${month}&groupBy=division`)).status).toBe(400);
+  });
+
+  it("a placement counts under its branch only while the branch is on record; otherwise under 'No branch'", () => {
+    const known = new Set(["L1"]);
+    expect([branchOf({ locationId: "L1" }, known), branchOf({}, known), branchOf({ locationId: "gone" }, known)]).toEqual(["L1", NO_BRANCH, NO_BRANCH]);
+  });
+
+  it("exports carry each branch's totals: CSV rows after the total, a 'By branch' sheet in the workbook", async () => {
+    const csv = await get(`head-wise/export?format=csv&month=${month}&groupBy=branch`);
+    expect(csv.status).toBe(200);
+    expect(csv.text).toContain("Grouped by branch");
+    expect(csv.text).toContain(`Branch: Second branch ${world.prefix}`);
+    const plainCsv = await get(`head-wise/export?format=csv&month=${month}`);
+    expect(plainCsv.text).not.toContain("Branch: ");
+    const xlsx = await get(`register-wages/export?format=xlsx&month=${month}&groupBy=branch`).buffer(true).parse((res, cb) => { const chunks: Buffer[] = []; res.on("data", (c: Buffer) => chunks.push(c)); res.on("end", () => cb(null, Buffer.concat(chunks))); });
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(xlsx.body as Buffer);
+    expect(wb.worksheets).toHaveLength(2);
+    const sheet = wb.worksheets[1]!;
+    expect(sheet.name).toBe("By branch");
+    expect(sheet.getColumn(1).values.filter(Boolean).map(String)).toEqual(expect.arrayContaining(["Branch", `Second branch ${world.prefix}`, "Total"]));
   });
 });

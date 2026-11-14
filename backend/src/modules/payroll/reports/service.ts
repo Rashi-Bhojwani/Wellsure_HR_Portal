@@ -5,7 +5,8 @@ import { requireDirector } from "../../../lib/directorAuthority";
 import { buildXlsx } from "../../../lib/xlsx";
 import { prisma } from "../../../lib/prisma";
 import { HttpError } from "../../../middleware/errorHandler";
-import { build, totalsOf, type Built, type Filters } from "./definitions";
+import { NO_BRANCH, NO_BRANCH_LABEL, build, orgNames, totalsOf, type Built, type Filters } from "./definitions";
+import type { PayrollReportBranchGroup } from "@shared/constants/payrollReports";
 
 // Stage 6 (docs/plans/STAGE_6_PAYROLL_REPORTS.md): the payroll reports. Directors only (the router gate plus requireDirector here). Column layouts start from the
 // conventional set ("Default, change in settings"); a director may save the company's layout for a report (append-only, audited). Every export is audited.
@@ -19,7 +20,7 @@ export interface Actor {
 const month = z.string().regex(/^\d{4}-\d{2}(-01)?$/, "A month, YYYY-MM");
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "A date, YYYY-MM-DD");
 export const filtersSchema = z
-  .object({ month: month.optional(), compareMonth: month.optional(), fromMonth: month.optional(), toMonth: month.optional(), fromDate: date.optional(), toDate: date.optional(), asOf: date.optional(), department: z.string().min(1).max(64).optional(), location: z.string().min(1).max(64).optional(), company: z.string().min(1).max(64).optional() })
+  .object({ month: month.optional(), compareMonth: month.optional(), fromMonth: month.optional(), toMonth: month.optional(), fromDate: date.optional(), toDate: date.optional(), asOf: date.optional(), department: z.string().min(1).max(64).optional(), location: z.string().min(1).max(64).optional(), company: z.string().min(1).max(64).optional(), groupBy: z.enum(["branch"]).optional() })
   .strict();
 
 function keyOf(raw: string): PayrollReportKey {
@@ -55,12 +56,30 @@ export async function catalog(actor: Actor) {
   return { reports: await Promise.all(PAYROLL_REPORT_KEYS.map(async (k) => ({ ...PAYROLL_REPORTS[k], layout: await layoutOf(k) }))) };
 }
 
+/**
+ * Cleanup C1: the totals of each branch (Organisation Setup -> Branches, not Divisions), and "No branch" for people without one. Each group is the same report
+ * built again with that branch as its filter, so a group can never hold a figure the report does not; the branches are disjoint, so they add up to the total.
+ * Branches with nothing in them are left out. With a branch filter set, only that branch.
+ */
+async function branchGroups(key: PayrollReportKey, f: Filters, actor: Actor): Promise<PayrollReportBranchGroup[]> {
+  const names = await orgNames();
+  const keys = f.location ? [f.location] : [...[...names.loc.entries()].sort((a, b) => a[1].localeCompare(b[1])).map(([id]) => id), NO_BRANCH];
+  const out: PayrollReportBranchGroup[] = [];
+  for (const k of keys) {
+    const one = await build(key, { ...f, groupBy: undefined, location: k }, actor);
+    if (!one.rows.length) continue;
+    out.push({ key: k, branch: k === NO_BRANCH ? NO_BRANCH_LABEL : (names.loc.get(k) ?? "unknown"), rows: one.rows.length, totals: totalsOf(key, one.rows, one.extraColumns?.columns ?? []) });
+  }
+  return out;
+}
+const GROUPED_NOTE = "Grouped by branch (Organisation Setup, Branches); people with no branch are under \"No branch\".";
+
 export async function run(rawKey: string, rawFilters: unknown, actor: Actor): Promise<PayrollReportResult & { layout: Awaited<ReturnType<typeof layoutOf>> }> {
   await requireDirector(actor.userId, "see a payroll report");
   const key = keyOf(rawKey);
   const f = parseFilters(key, rawFilters);
   const built = await build(key, f, actor);
-  return { key, title: PAYROLL_REPORTS[key].title, generatedAt: new Date().toISOString() /* allow-clock: when the report was made */, filtersApplied: built.filtersApplied, columns: merged(PAYROLL_REPORTS[key].columns, built), rows: built.rows, totals: totalsOf(key, built.rows, built.extraColumns?.columns ?? []), notes: built.notes, layout: await layoutOf(key) };
+  return { key, title: PAYROLL_REPORTS[key].title, generatedAt: new Date().toISOString() /* allow-clock: when the report was made */, filtersApplied: built.filtersApplied, columns: merged(PAYROLL_REPORTS[key].columns, built), rows: built.rows, totals: totalsOf(key, built.rows, built.extraColumns?.columns ?? []), notes: built.notes, layout: await layoutOf(key), ...(f.groupBy === "branch" ? { groups: await branchGroups(key, f, actor), filtersApplied: [...built.filtersApplied, GROUPED_NOTE] } : {}) };
 }
 
 export const layoutSchema = z.object({ columns: z.array(z.string().min(1).max(40)).min(1).max(40), reason: z.string().trim().min(3).max(300) }).strict();
@@ -111,12 +130,15 @@ export async function exportReport(rawKey: string, rawQuery: Record<string, unkn
   const totals = totalsOf(key, built.rows, built.extraColumns?.columns ?? []);
   const stamp = new Date().toISOString().slice(0, 10); // allow-clock: the file's date
   const fileName = `${key}-${stamp}.${format}`;
-  const preamble = [def.title, ...built.filtersApplied];
+  const groups = f.groupBy === "branch" ? await branchGroups(key, f, actor) : null;
+  const preamble = [def.title, ...built.filtersApplied, ...(groups ? [GROUPED_NOTE] : [])];
+  // C1: each branch's totals follow the report's own total, one row per branch, first column naming it.
+  const groupRows = (groups ?? []).map((g) => Object.fromEntries(columns.map((c, i) => [c.key, i === 0 && g.totals[c.key] === undefined ? `Branch: ${g.branch}` : (g.totals[c.key] ?? "")])));
   const rows = built.rows.map((r) => Object.fromEntries(columns.map((c) => [c.key, r[c.key] ?? null])));
   const buffer =
     format === "csv"
-      ? Buffer.from(csvOf(columns, [...rows, ...(Object.keys(totals).length ? [Object.fromEntries(columns.map((c, i) => [c.key, i === 0 && totals[c.key] === undefined ? "Total" : (totals[c.key] ?? "")]))] : [])], preamble), "utf8")
-      : await buildXlsx([{ name: def.title, columns: columns.map((c) => ({ key: c.key, header: c.header, type: c.type })), rows, totals: Object.fromEntries(columns.map((c) => [c.key, totals[c.key] ?? null])), footer: [...built.filtersApplied, ...built.notes] }]);
+      ? Buffer.from(csvOf(columns, [...rows, ...(Object.keys(totals).length ? [Object.fromEntries(columns.map((c, i) => [c.key, i === 0 && totals[c.key] === undefined ? "Total" : (totals[c.key] ?? "")]))] : []), ...groupRows], preamble), "utf8")
+      : await buildXlsx([{ name: def.title, columns: columns.map((c) => ({ key: c.key, header: c.header, type: c.type })), rows, totals: Object.fromEntries(columns.map((c) => [c.key, totals[c.key] ?? null])), footer: [...built.filtersApplied, ...built.notes] }, ...(groups ? [{ name: "By branch", columns: [{ key: "__branch", header: "Branch", type: "text" as const }, ...columns.filter((c) => totals[c.key] !== undefined).map((c) => ({ key: c.key, header: c.header, type: c.type }))], rows: groups.map((g) => ({ __branch: g.branch, ...g.totals })), totals: { __branch: "Total", ...totals }, footer: [GROUPED_NOTE] }] : [])]);
   await writeAuditLog({ actorUserId: actor.userId, ipAddress: actor.ip ?? null, action: "payroll.report.exported", entityType: "PayrollReport", entityId: key, after: { format, filters: f, columns: columns.map((c) => c.key), rows: rows.length } }); // never a figure
   return { buffer, fileName, contentType: format === "csv" ? "text/csv; charset=utf-8" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
 }

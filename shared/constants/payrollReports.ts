@@ -1,7 +1,7 @@
 // Stage 6 payroll reports (docs/plans/STAGE_6_PAYROLL_REPORTS.md): the catalog shared by the backend (modules/payroll/reports) and the Payroll Reports screen.
 // Directors only. Each report declares its filters and its columns; `on: true` marks the conventional starting layout ("Default, change in settings").
 
-export type PayrollReportFilter = "month" | "compareMonth" | "fromMonth" | "toMonth" | "fromDate" | "toDate" | "asOf" | "department" | "location" | "company";
+export type PayrollReportFilter = "month" | "compareMonth" | "fromMonth" | "toMonth" | "fromDate" | "toDate" | "asOf" | "department" | "location" | "company" | "groupBy";
 export type PayrollReportColumnType = "text" | "number" | "money" | "percent" | "date";
 
 export interface PayrollReportColumnDef {
@@ -32,21 +32,21 @@ export const PAYROLL_REPORTS: Record<PayrollReportKey, PayrollReportDef> = {
     key: "payroll-summary",
     title: "Payroll summary",
     description: "Each finalised run: people paid and held, gross, deductions, employer contributions, net and cost to company.",
-    filters: ["fromMonth", "toMonth"],
+    filters: ["fromMonth", "toMonth", "location", "groupBy"],
     columns: [c("cycle", "Month", "text"), c("paid", "People paid", "number"), c("held", "People held", "number"), c("gross", "Gross", "money"), c("deductions", "Deductions", "money"), c("employer", "Employer contributions", "money"), c("netPaid", "Net paid", "money"), c("netHeld", "Net held", "money", false), c("cost", "Cost to company", "money")],
   },
   "department-cost": {
     key: "department-cost",
     title: "Department-wise cost",
     description: "For one finalised month, per department: people, gross, employer contributions, cost to company and net.",
-    filters: ["month", ...ORG],
+    filters: ["month", ...ORG, "groupBy"],
     columns: [c("department", "Department", "text"), c("people", "People", "number"), c("gross", "Gross", "money"), c("employer", "Employer contributions", "money"), c("cost", "Cost to company", "money"), c("deductions", "Deductions", "money", false), c("net", "Net", "money")],
   },
   "head-wise": {
     key: "head-wise",
     title: "Head-wise summary",
     description: "For one finalised month, each pay head: how many people it touched and the total.",
-    filters: ["month", ...ORG],
+    filters: ["month", ...ORG, "groupBy"],
     columns: [c("code", "Head", "text"), c("label", "Shown as", "text"), c("kind", "Kind", "text"), c("people", "People", "number"), c("total", "Total", "money")],
   },
   "bank-transfer": {
@@ -74,7 +74,7 @@ export const PAYROLL_REPORTS: Record<PayrollReportKey, PayrollReportDef> = {
     key: "statutory-summary",
     title: "Statutory summary",
     description: "For one finalised month, each statutory line the run worked out (PF, ESI, PT, LWF, TDS): people, employee share and employer share.",
-    filters: ["month"],
+    filters: ["month", "location", "groupBy"],
     columns: [c("statute", "Statute", "text"), c("line", "Line", "text"), c("people", "People", "number"), c("employee", "Employee share", "money"), c("employer", "Employer share", "money")],
   },
   "statutory-by-person": {
@@ -88,7 +88,7 @@ export const PAYROLL_REPORTS: Record<PayrollReportKey, PayrollReportDef> = {
     key: "variance",
     title: "Variance between months",
     description: "Each person's gross and net in one finalised month against another, with the change.",
-    filters: ["month", "compareMonth", ...ORG],
+    filters: ["month", "compareMonth", ...ORG, "groupBy"],
     columns: [...PERSON, c("grossBefore", "Gross (compared month)", "money", false), c("grossNow", "Gross (month)", "money", false), c("netBefore", "Net (compared month)", "money"), c("netNow", "Net (month)", "money"), c("change", "Change in net", "money"), c("changePercent", "Change %", "percent")],
   },
   ctc: {
@@ -103,24 +103,32 @@ export const PAYROLL_REPORTS: Record<PayrollReportKey, PayrollReportDef> = {
     key: "register-wages",
     title: "Register of wages",
     description: "For one finalised month, each person paid or held: days, every earning and deduction head the run worked out (one column each), gross, deductions and net.",
-    filters: ["month", ...ORG],
+    filters: ["month", ...ORG, "groupBy"],
     columns: [...PERSON, c("paidDays", "Days paid", "number"), c("lopDays", "Loss of pay days", "number"), c("gross", "Gross", "money"), c("deductions", "Deductions", "money"), c("net", "Net", "money")],
   },
   "register-deductions": {
     key: "register-deductions",
     title: "Register of deductions",
     description: "For one finalised month, every deduction the run made from each person, one row per deduction.",
-    filters: ["month", ...ORG],
+    filters: ["month", ...ORG, "groupBy"],
     columns: [...PERSON, c("head", "Deduction", "text"), c("headCode", "Head code", "text", false), c("source", "Worked out by", "text", false), c("amount", "Amount", "money")],
   },
   "register-overtime": {
     key: "register-overtime",
     title: "Register of overtime",
     description: "Approved overtime in a month, one row per day: minutes claimed and approved, who decided, and what payroll has been asked to pay for the month.",
-    filters: ["month", ...ORG],
+    filters: ["month", ...ORG, "groupBy"],
     columns: [...PERSON, c("date", "Day", "date"), c("minutes", "Minutes claimed", "number"), c("approvedMinutes", "Minutes approved", "number"), c("decidedOn", "Decided on", "date", false), c("paidForMonth", "Paid for the month", "money")],
   },
 };
+
+/** Cleanup C1: with groupBy=branch, the totals of each branch (Organisation Setup -> Branches); people with no branch under "No branch". Adds up to `totals`. */
+export interface PayrollReportBranchGroup {
+  key: string; // a branch (location) id, or "NONE"
+  branch: string;
+  rows: number;
+  totals: Record<string, string | number>;
+}
 
 export interface PayrollReportResult {
   key: PayrollReportKey;
@@ -132,4 +140,6 @@ export interface PayrollReportResult {
   /** Totals of the money and number columns, worked out exactly. */
   totals: Record<string, string | number>;
   notes: string[];
+  /** Present only when grouped by branch. */
+  groups?: PayrollReportBranchGroup[];
 }

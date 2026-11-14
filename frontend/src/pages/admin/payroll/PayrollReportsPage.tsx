@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Checkbox, DatePicker, Input, Select, Table, Typography } from "antd";
 import { DownloadOutlined, SettingOutlined } from "@ant-design/icons";
 import dayjs, { type Dayjs } from "dayjs";
-import { PAYROLL_REPORT_KEYS, PAYROLL_REPORTS, type PayrollReportColumnDef, type PayrollReportFilter, type PayrollReportKey } from "@shared/constants/payrollReports";
+import { PAYROLL_REPORT_KEYS, PAYROLL_REPORTS, type PayrollReportBranchGroup, type PayrollReportColumnDef, type PayrollReportFilter, type PayrollReportKey } from "@shared/constants/payrollReports";
 import * as reportsApi from "../../../api/payrollReports";
 import type { ReportFilters } from "../../../api/payrollReports";
 import { departments, listLocations } from "../../../api/org";
@@ -105,13 +105,23 @@ export function PayrollReportsPage() {
       return (
         <Select key={f} aria-label="Company" placeholder="All companies" allowClear value={filters.company} onChange={(val?: string) => setFilter(f, val)} loading={companies.isLoading} style={{ minWidth: 170 }} options={[{ value: "MAIN", label: companies.data?.main.name ? `${companies.data.main.name} (main)` : "Main company" }, ...(companies.data?.entities ?? []).map((e) => ({ value: e.id, label: e.name }))]} />
       );
+    // Cleanup C1: group by branch (Organisation Setup, Branches); the report's rows and totals stay as they are, each branch's totals are added below.
+    if (f === "groupBy")
+      return (
+        <Checkbox key={f} checked={filters.groupBy === "branch"} onChange={(e) => setFilter(f, e.target.checked ? "branch" : undefined)} style={{ alignSelf: "center", minHeight: 44, display: "inline-flex", alignItems: "center" }}>
+          Group by branch
+        </Checkbox>
+      );
     const isDep = f === "department";
-    const items = isDep ? (deps.data ?? []).map((d) => ({ value: d.id, label: d.name })) : (locs.data ?? []).map((l) => ({ value: l.id, label: l.name }));
+    const items = isDep ? (deps.data ?? []).map((d) => ({ value: d.id, label: d.name })) : [...(locs.data ?? []).map((l) => ({ value: l.id, label: l.name })), { value: "NONE", label: "No branch" }];
     return (
       <Select key={f} aria-label={isDep ? "Department" : "Branch"} placeholder={isDep ? "All departments" : "All branches"} allowClear showSearch optionFilterProp="label" value={filters[f]} onChange={(val?: string) => setFilter(f, val)} options={items} loading={isDep ? deps.isLoading : locs.isLoading} style={{ minWidth: 170 }} />
     );
   });
-  const activeOrg = (def.filters.includes("department") && filters.department ? 1 : 0) + (def.filters.includes("location") && filters.location ? 1 : 0) + (def.filters.includes("company") && filters.company ? 1 : 0);
+  const activeOrg = (def.filters.includes("department") && filters.department ? 1 : 0) + (def.filters.includes("location") && filters.location ? 1 : 0) + (def.filters.includes("company") && filters.company ? 1 : 0) + (def.filters.includes("groupBy") && filters.groupBy ? 1 : 0);
+  // C1: the columns that have a total, for the branch table.
+  const groups = report.data?.key === key ? report.data.groups : undefined;
+  const groupColumns = columns.filter((c) => totals[c.key] !== undefined);
 
   return (
     <>
@@ -134,7 +144,7 @@ export function PayrollReportsPage() {
         <FilterBar
           filters={<>{filterControls}</>}
           activeCount={activeOrg}
-          onClear={activeOrg ? () => setFilters((s) => ({ ...s, department: undefined, location: undefined, company: undefined })) : undefined}
+          onClear={activeOrg ? () => setFilters((s) => ({ ...s, department: undefined, location: undefined, company: undefined, groupBy: undefined })) : undefined}
           actions={
             <div style={{ display: "flex", gap: space[2], flexWrap: "wrap" }}>
               <Button icon={<SettingOutlined />} onClick={() => { setDraft(chosen); setDrawer(true); }}>Columns</Button>
@@ -174,6 +184,32 @@ export function PayrollReportsPage() {
           }
         />
       </Panel>
+      {groups && (
+        <Panel title="By branch" subtitle="Each branch's totals, from Organisation Setup, Branches. They add up to the report's total; people with no branch are under No branch." style={{ marginBottom: space[4] }}>
+          <DataTable<PayrollReportBranchGroup>
+            rowKey="key"
+            dataSource={groups}
+            empty="No branch has anything for these filters."
+            pagination={false}
+            scroll={{ x: "max-content" }}
+            mobile={{ title: (g) => g.branch, fields: groupColumns.map((c) => ({ label: c.header, render: (g: PayrollReportBranchGroup) => show(g.totals[c.key], c.type) })) }}
+            columns={[
+              { title: "Branch", key: "branch", render: (_: unknown, g: PayrollReportBranchGroup) => g.branch },
+              ...groupColumns.map((c) => ({ title: c.header, key: c.key, align: "right" as const, render: (_: unknown, g: PayrollReportBranchGroup) => show(g.totals[c.key], c.type) })),
+            ]}
+            summary={() =>
+              groups.length > 0 ? (
+                <Table.Summary.Row>
+                  <Table.Summary.Cell index={0}><strong>Total</strong></Table.Summary.Cell>
+                  {groupColumns.map((c, i) => (
+                    <Table.Summary.Cell key={c.key} index={i + 1} align="right"><strong>{show(totals[c.key], c.type)}</strong></Table.Summary.Cell>
+                  ))}
+                </Table.Summary.Row>
+              ) : null
+            }
+          />
+        </Panel>
+      )}
 
       <SideDrawer
         open={drawer}
