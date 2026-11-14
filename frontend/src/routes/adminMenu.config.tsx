@@ -131,6 +131,7 @@ const OffCyclePage = lazyPage(() => import("../pages/admin/payroll/OffCyclePage"
 const PayTypesPage = lazyPage(() => import("../pages/admin/payroll/PayTypesPage"), "PayTypesPage"); // item 3
 const QuarterlyTdsPage = lazyPage(() => import("../pages/admin/payroll/QuarterlyTdsPage"), "QuarterlyTdsPage"); // item 3
 const PayrollReportsPage = lazyPage(() => import("../pages/admin/payroll/PayrollReportsPage"), "PayrollReportsPage"); // Stage 6
+const ParallelRunPage = lazyPage(() => import("../pages/admin/payroll/ParallelRunPage"), "ParallelRunPage"); // Stage 8
 const StatutoryChallansPage = lazyPage(() => import("../pages/admin/payroll/StatutoryChallansPage"), "StatutoryChallansPage"); // ST-03 / ST-06
 const CompliancePage = lazyPage(() => import("../pages/admin/payroll/CompliancePage"), "CompliancePage"); // ST-30
 const MinimumWagesPage = lazyPage(() => import("../pages/admin/payroll/MinimumWagesPage"), "MinimumWagesPage"); // ST-29
@@ -437,6 +438,7 @@ export const adminApps: AdminApp[] = [
           { key: "payroll-overtime-encashment", label: "Overtime and encashment pay", path: "payroll/overtime-encashment", icon: FileProtectOutlined, element: OvertimeEncashmentPage, needs: { director: true, noDeveloper: true } }, // part 3 A2/A3
           { key: "payroll-company-settings", label: "Company settings", path: "payroll/company-settings", icon: FileProtectOutlined, element: CompanySettingsPage, needs: { director: true, noDeveloper: true } }, // part 3 B2a
           { key: "payroll-reports", label: "Payroll reports", path: "payroll/reports", icon: FileProtectOutlined, element: PayrollReportsPage, needs: { director: true, noDeveloper: true } }, // Stage 6
+          { key: "payroll-parallel-run", label: "Parallel run", path: "payroll/parallel-run", icon: DiffOutlined, element: ParallelRunPage, needs: { director: true, noDeveloper: true } }, // Stage 8: greytHR statement against a run
           { key: "payroll-tax-declarations", label: "Tax Declarations", path: "payroll/tax-declarations", icon: FormOutlined, element: TaxDeclarationsPage, needs: PAYROLL_NEEDS },
           { key: "payroll-holds", label: "Held Salaries", path: "payroll/holds", icon: PauseCircleOutlined, element: HeldSalariesPage, needs: PAYROLL_NEEDS },
           { key: "payroll-run", label: "Payroll Run", path: "payroll/run", icon: FundOutlined, element: PayrollRunsPage, needs: PAYROLL_NEEDS },

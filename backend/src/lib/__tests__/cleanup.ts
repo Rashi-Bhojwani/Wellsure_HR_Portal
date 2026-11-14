@@ -109,6 +109,7 @@ export const STANDALONE_ROOT_MODELS: Record<string, string> = {
   Division: "M block 2 (ER-27): divisions.test.ts creates its own and removes them with deleteWithDependents(\"Division\", ...)",
   Role: "shared role catalog; cleanupTestRole",
   PayrollReportLayout: "Stage 6: a saved payroll report layout (no FK; append-only); deleteWithDependents(\"PayrollReportLayout\", ids)",
+  PayrollParallelComparison: "Stage 8: a saved parallel-run comparison (no FK; a director may delete it); deleteWithDependents(\"PayrollParallelComparison\", ids)",
   BehaviourProposal: "D-37: a behaviour setting proposal (no FK; append-only); deleteWithDependents(\"BehaviourProposal\", ids) also removes its confirmation",
   TdsChallan: "P7-7: a company deposit record (no FK; immutable); deleteWithDependents(\"TdsChallan\", ids)",
   MinimumWageRate: "ST-29: a director-entered rate (no FK; append-only); deleteWithDependents(\"MinimumWageRate\", ids)",

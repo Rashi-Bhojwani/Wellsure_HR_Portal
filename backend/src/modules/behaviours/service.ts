@@ -158,6 +158,23 @@ export const BEHAVIOURS = {
     d37: false,
     defaultText: "Not set: no notice recovery is worked out",
   },
+  // Stage 8 (docs/plans/STAGE_8_PLAN.md): the parallel-run kit. The tolerance is a policy choice with a conventional default (exact match); the retention has none.
+  "payroll.parallelTolerance": {
+    title: "Parallel run: what counts as a match",
+    what: "How far apart greytHR's figure and the portal's may be and still count as matching, per head and per person (a rounding allowance in rupees). Days and LOP always compare exactly.",
+    schema: z.object({ allowance: z.string().regex(/^\d{1,4}(\.\d{1,2})?$/, "Rupees, up to two decimals, at most 9999.99") }).strict(),
+    defaultValue: { allowance: "0" } as { allowance: string },
+    d37: true,
+    defaultText: "Exact match: a difference of 0 (no rounding allowance)",
+  },
+  "payroll.parallelRetentionDays": {
+    title: "Parallel run: how long a saved comparison is kept",
+    what: "Days a saved comparison (it holds pay figures) is kept before it is deleted. Uploaded files are never kept: each is read in memory and dropped.",
+    schema: z.number().int().min(1).max(3650), // allow-number: days, up to ten years
+    defaultValue: null as number | null,
+    d37: false,
+    defaultText: "Not set: a comparison is kept until a director deletes it",
+  },
 } as const;
 export type BehaviourKey = keyof typeof BEHAVIOURS;
 export const BEHAVIOUR_KEYS = Object.keys(BEHAVIOURS) as BehaviourKey[];

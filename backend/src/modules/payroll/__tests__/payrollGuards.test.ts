@@ -91,6 +91,10 @@ const EXTRA_ALLOWED: Record<string, number[]> = {
   "minimumWages/service.ts": [60, 300, 20],
   "tax/form16PartA.ts": [1024, 120],
   "payPolicies/arith.ts": [60, 86400000], // minutes in an hour (part 3 A2); milliseconds in a day (part 4 notice days)
+  // Stage 8 (greytHR readers and parallel-run kit): file-size limits (MB = 1024 × 1024), row and text caps, a list size, one day in ms (retention age), an HTTP status. No pay figure.
+  "greythr/bankCheck.ts": [1024],
+  "greythr/parallel.ts": [20000, 120, 60, 86400000],
+  "greythr/statement.ts": [1024, 20000, 413],
   "companies/service.ts": [20, 300], // form limits: an account of up to 20 digits, a reason of 300 characters (part 3 B2a)
   // A-3 opening figures: the largest import file (rows), form field lengths (a figure's text, a note, a reason), the length of a sha256 fingerprint and the
   // short batch id cut from it. None is a payroll figure.

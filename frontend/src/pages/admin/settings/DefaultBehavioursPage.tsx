@@ -44,6 +44,12 @@ function describe(b: Pick<Behaviour, "key" | "value">): string {
     const n = v as { effectiveFrom: string; noticeDays: number; recoverShortfall: boolean; basisHeads: string[]; divisor: string };
     return `From ${n.effectiveFrom}: ${n.noticeDays} days' notice; ${n.recoverShortfall ? `a shortfall is recovered at (${n.basisHeads.join(" + ")}) ÷ ${n.divisor} a day` : "a shortfall is not recovered"}`;
   }
+  // Stage 8: the parallel-run kit.
+  if (b.key === "payroll.parallelTolerance") {
+    const t = (v ?? { allowance: "0" }) as { allowance: string };
+    return Number(t.allowance) === 0 ? "Exact match: a difference of 0 (no rounding allowance)" : `A difference of up to ₹${t.allowance} counts as a match (days always compare exactly)`; // allow-number: display only
+  }
+  if (b.key === "payroll.parallelRetentionDays") return typeof v === "number" ? `A saved comparison is deleted after ${v} days` : "Not set: a comparison is kept until a director deletes it";
   if (b.key === "leave.leavingMonthAccrual") {
     const m = v as { mode: string; minDays?: number };
     return m.mode === "FULL_IF_MIN_DAYS" ? `A full month only if at least ${m.minDays} days were worked` : MODE_LABEL[m.mode] ?? m.mode;
@@ -55,7 +61,7 @@ function describe(b: Pick<Behaviour, "key" | "value">): string {
 
 const ROUND_LABEL: Record<string, string> = { HALF_UP: "Half up", HALF_EVEN: "Half even", UP: "Up", DOWN: "Down", CEIL: "Ceiling", FLOOR: "Floor" };
 
-type FormValues = { reason: string; effectiveFrom?: string; minYears?: string; partYear?: string; daysPerYear?: string; divisor?: string; ceiling?: string; noticeDays?: number; recoverShortfall?: string; payHead?: string; rateMode?: string; perHour?: string; multiplier?: string; basisHeads?: string[]; hoursPerMonth?: string; exitLeaveTypes?: string[]; divisorKind?: string; divisorDays?: string; codes?: string[]; roundMode?: string; scale?: number; on?: string; mode?: string; minDays?: number; percent?: string; sourceNote?: string; rules?: Array<{ typeKey: string; rule: string }> };
+type FormValues = { reason: string; allowance?: string; retentionDays?: number; effectiveFrom?: string; minYears?: string; partYear?: string; daysPerYear?: string; divisor?: string; ceiling?: string; noticeDays?: number; recoverShortfall?: string; payHead?: string; rateMode?: string; perHour?: string; multiplier?: string; basisHeads?: string[]; hoursPerMonth?: string; exitLeaveTypes?: string[]; divisorKind?: string; divisorDays?: string; codes?: string[]; roundMode?: string; scale?: number; on?: string; mode?: string; minDays?: number; percent?: string; sourceNote?: string; rules?: Array<{ typeKey: string; rule: string }> };
 
 export function DefaultBehavioursPage() {
   const queryClient = useQueryClient();
@@ -78,6 +84,8 @@ export function DefaultBehavioursPage() {
         : key === "loan.maxTotalDeductionPercent" ? { percent: v.percent, sourceNote: v.sourceNote }
         : key === "leave.proRataRounding" ? { mode: v.roundMode, scale: v.scale }
         : key === "payroll.overtimePay" ? { payHead: v.payHead, rate: v.rateMode === "FLAT_PER_HOUR" ? { mode: "FLAT_PER_HOUR", perHour: v.perHour } : { mode: "MULTIPLIER", multiplier: v.multiplier, basisHeads: v.basisHeads ?? [], hoursPerMonth: v.hoursPerMonth }, rounding: { mode: v.roundMode, scale: v.scale }, sourceNote: v.sourceNote }
+        : key === "payroll.parallelTolerance" ? { allowance: v.allowance }
+        : key === "payroll.parallelRetentionDays" ? v.retentionDays
         : key === "payroll.gratuity" ? { effectiveFrom: v.effectiveFrom, minYears: v.minYears, partYear: v.partYear, wageHeads: v.basisHeads ?? [], daysPerYear: v.daysPerYear, divisor: v.divisor, ceiling: v.ceiling?.trim() ? v.ceiling.trim() : "NONE", rounding: { mode: v.roundMode, scale: v.scale }, sourceNote: v.sourceNote }
         : key === "payroll.noticeRecovery" ? { effectiveFrom: v.effectiveFrom, noticeDays: v.noticeDays, recoverShortfall: v.recoverShortfall === "yes", basisHeads: v.basisHeads ?? [], divisor: v.divisor, rounding: { mode: v.roundMode, scale: v.scale }, sourceNote: v.sourceNote }
         : key === "payroll.leaveEncashment" ? { payHead: v.payHead, exitLeaveTypes: v.exitLeaveTypes ?? [], basisHeads: v.basisHeads ?? [], divisor: v.divisorKind === "CALENDAR_DAYS" ? { kind: "CALENDAR_DAYS" } : { kind: "FIXED_DAYS", days: v.divisorDays }, rounding: { mode: v.roundMode, scale: v.scale }, sourceNote: v.sourceNote }
@@ -93,6 +101,7 @@ export function DefaultBehavioursPage() {
     form.resetFields();
     const v = b.value as Record<string, unknown> | boolean | null;
     if (b.key === "access.developerSeesSwipes" || b.key === "identity.directorConfirmsHrChanges") form.setFieldsValue({ on: v === true ? "on" : "off" });
+    if (b.key === "payroll.parallelTolerance") form.setFieldsValue({ allowance: (v as { allowance?: string } | null)?.allowance ?? "0" });
     if (b.key === "letters.employeeMayAsk") form.setFieldsValue({ codes: Array.isArray(v) ? (v as string[]) : [] });
     if (b.key === "leave.leavingMonthAccrual") form.setFieldsValue({ mode: (v as { mode: string }).mode, minDays: (v as { minDays?: number }).minDays });
     if (b.key === "loan.shortfall") form.setFieldsValue({ rules: Object.entries((v ?? {}) as Record<string, string>).map(([typeKey, rule]) => ({ typeKey, rule })) });
@@ -169,6 +178,12 @@ export function DefaultBehavioursPage() {
                 <Input />
               </Form.Item>
             </>
+          )}
+          {editing?.key === "payroll.parallelTolerance" && (
+            <Form.Item name="allowance" label="Rounding allowance in rupees (0 = exact match)" rules={[{ required: true, pattern: /^\d{1,4}(\.\d{1,2})?$/, message: "Rupees, up to two decimals" }]}><Input inputMode="decimal" placeholder="0" /></Form.Item>
+          )}
+          {editing?.key === "payroll.parallelRetentionDays" && (
+            <Form.Item name="retentionDays" label="Keep a saved comparison for (days)" rules={[{ required: true }]}><InputNumber min={1} max={3650} style={{ width: "100%" }} /></Form.Item>
           )}
           {(editing?.key === "payroll.gratuity" || editing?.key === "payroll.noticeRecovery") && (
             <>

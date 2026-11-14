@@ -2,7 +2,7 @@ import { apiClient } from "./client";
 
 // D-37 (docs/plans/D37_DEFAULTS.md): behaviour settings, directors only. A change is proposed by one director and confirmed by a different one.
 const base = "/api/behaviours";
-export type BehaviourKey = "loan.shortfall" | "leave.leavingMonthAccrual" | "leave.proRataRounding" | "access.developerSeesSwipes" | "identity.directorConfirmsHrChanges" | "letters.employeeMayAsk" | "loan.maxTotalDeductionPercent" | "payroll.overtimePay" | "payroll.leaveEncashment" | "payroll.gratuity" | "payroll.noticeRecovery";
+export type BehaviourKey = "loan.shortfall" | "leave.leavingMonthAccrual" | "leave.proRataRounding" | "access.developerSeesSwipes" | "identity.directorConfirmsHrChanges" | "letters.employeeMayAsk" | "loan.maxTotalDeductionPercent" | "payroll.overtimePay" | "payroll.leaveEncashment" | "payroll.gratuity" | "payroll.noticeRecovery" | "payroll.parallelTolerance" | "payroll.parallelRetentionDays";
 export interface Behaviour {
   key: BehaviourKey;
   title: string;

@@ -4553,6 +4553,22 @@ model PayrollCompanySettingConfirmation {
 
   @@map("payroll_company_setting_confirmations")
 }
+// Stage 8 (docs/plans/STAGE_8_PLAN.md): a saved parallel-run comparison (greytHR's salary statement against a portal run). The whole result, which holds pay
+// figures, is encrypted; `counts` holds only how many people and differences, never a figure. Kept until a director deletes it (retention Not set), or for
+// the days a director set. Standalone: the run is named by id so a comparison never blocks anything else.
+model PayrollParallelComparison {
+  id              String   @id @default(cuid())
+  cycleStart      DateTime @map("cycle_start") @db.Date
+  runId           String   @map("run_id")
+  fileName        String   @map("file_name")
+  resultEncrypted Bytes    @map("result_encrypted")
+  counts          Json
+  createdByUserId String   @map("created_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([cycleStart, createdAt])
+  @@map("payroll_parallel_comparisons")
+}
 // A-END
 // M-BEGIN (second session block 2, ER-27): divisions, an optional grouping of departments (an employee's division is their department's).
 model Division {

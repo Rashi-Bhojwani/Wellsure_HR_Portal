@@ -2,6 +2,9 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MusterUploadTab } from "../attendance/muster/MusterUploadPanel";
 import { PunchImportTab } from "./PunchImportTab";
+import { MonthlyInputsImport } from "../payroll/MonthlyInputsImport";
+import { ParallelRunPanel } from "../../../components/payroll/greythr/ParallelRunPanel";
+import { BankFileCheck } from "../../../components/payroll/greythr/BankFileCheck";
 import { InvitationsTab } from "./InvitationsTab";
 import { Dropzone } from "./Dropzone";
 import { Button, Input, Tabs } from "antd";
@@ -301,7 +304,9 @@ function ReconciliationTab() {
 }
 
 export function ImportCenterPage() {
-  const { hasPermission } = useAuth();
+  const { hasPermission, hasRole } = useAuth();
+  // Stage 8: greytHR's pay files are the directors' alone (the server refuses everyone else too).
+  const isDirector = hasRole("SUPER_ADMIN");
   const canImportAll = hasPermission("import.manage");
   const canImportDetails = canImportAll || hasPermission("import.details.manage");
   return (
@@ -318,7 +323,10 @@ export function ImportCenterPage() {
             ...(hasPermission("invitations.send") ? [{ key: "invitations", label: "Invitations", children: <InvitationsTab /> }] : []),
             { key: "reconciliation", label: "Reconciliation Report", children: <ReconciliationTab /> },
             // Phase 2 P2-B: the emergency punch upload (attendance.devices.manage).
-            ...(hasPermission("attendance.devices.manage") ? [{ key: "punches", label: "Punches (ATTLOG)", children: <PunchImportTab /> }] : []),
+            ...(hasPermission("attendance.devices.manage") ? [{ key: "punches", label: "Punches (ATTLOG or greytHR swipes)", children: <PunchImportTab /> }] : []),
+            ...(isDirector ? [{ key: "greythr-overrides", label: "greytHR salary overrides", children: <MonthlyInputsImport canEdit onApplied={() => undefined} /> }] : []),
+            ...(isDirector ? [{ key: "greythr-statement", label: "greytHR salary statement", children: <ParallelRunPanel /> }] : []),
+            ...(isDirector ? [{ key: "greythr-bank", label: "greytHR bank file", children: <BankFileCheck /> }] : []),
             // Phase 2 P2-D: the manual-capture branches' muster (attendance.manual.enter, branch-limited).
             ...(hasPermission("attendance.manual.enter") ? [{ key: "manual-muster", label: "Manual attendance muster", children: <MusterUploadTab /> }] : []),
           ]}

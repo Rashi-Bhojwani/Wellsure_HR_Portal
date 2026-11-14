@@ -47,6 +47,7 @@ import { settlementsRouter } from "./modules/payroll/settlements/routes"; // P7-
 import { offCycleRouter } from "./modules/payroll/offcycle/routes"; // P7-6b
 import { behavioursRouter } from "./modules/behaviours/routes"; // D-37
 import { payrollReportsRouter } from "./modules/payroll/reports/routes"; // Stage 6
+import { payrollGreythrRouter } from "./modules/payroll/greythr/routes"; // Stage 8
 import { complianceRouter } from "./modules/payroll/compliance/routes"; // ST-30
 import { minimumWagesRouter } from "./modules/payroll/minimumWages/routes"; // ST-29
 import { journalRouter } from "./modules/payroll/journal/routes"; // PY-41
@@ -126,6 +127,7 @@ const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   { path: "/api/offcycle", router: offCycleRouter }, // P7-6b
   { path: "/api/behaviours", router: behavioursRouter }, // D-37
   { path: "/api/payroll-reports", router: payrollReportsRouter }, // Stage 6
+  { path: "/api/payroll-greythr", router: payrollGreythrRouter }, // Stage 8
   { path: "/api/payroll-compliance", router: complianceRouter }, // ST-30
   { path: "/api/payroll-minimum-wages", router: minimumWagesRouter }, // ST-29
   { path: "/api/payroll-journal", router: journalRouter }, // PY-41
