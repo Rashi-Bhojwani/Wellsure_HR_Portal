@@ -536,13 +536,31 @@ describe("director authority", () => {
     });
 
     it("the service says why, in words, and the same for a per-user grant of a payroll key", async () => {
-      await expect(assignRole(p.hr.employeeId, "PAYROLL_APPROVER", await actorOf(p.b), meta(p.b))).rejects.toMatchObject({ code: "PAYROLL_ROLE_DIRECTORS_ONLY" });
+      // Cleanup C3: the payroll roles are assigned to nobody (was PAYROLL_ROLE_DIRECTORS_ONLY for a non-director; a director could be given one).
+      await expect(assignRole(p.hr.employeeId, "PAYROLL_APPROVER", await actorOf(p.b), meta(p.b))).rejects.toMatchObject({ code: "PAYROLL_ROLE_NOT_ASSIGNABLE" });
       // Stage 1: for someone who holds an HR role the HR hard lock speaks first (it says the same thing about pay data); for anyone else it is this rule.
       await expect(setOverride(p.hr.employeeId, "payroll.run", { effect: "GRANT", reason: "test" }, await actorOf(p.b), meta(p.b))).rejects.toMatchObject({ code: "HR_CEILING" });
       await expect(setOverride(p.emp.employeeId, "payroll.run", { effect: "GRANT", reason: "test" }, await actorOf(p.b), meta(p.b))).rejects.toMatchObject({ code: "PAYROLL_GRANT_DIRECTORS_ONLY" });
       const permission = await prisma.permission.findUniqueOrThrow({ where: { key: "payroll.run" } });
       await expect(prisma.userPermissionOverride.create({ data: { userId: p.emp.userId, permissionId: permission.id, effect: "GRANT", reason: "raw", createdByUserId: p.b.userId } })).rejects.toThrow(/PAYROLL_GRANT_DIRECTORS_ONLY/);
       await expect(prisma.userPermissionOverride.create({ data: { userId: p.hr.userId, permissionId: permission.id, effect: "GRANT", reason: "raw", createdByUserId: p.b.userId } })).rejects.toThrow(/HR_HARD_LOCK/);
+    });
+
+    it("cleanup C3: nobody is given a payroll role, a director included, by the service or the route; an assignment that already exists is left as it was", async () => {
+      const heldBefore = (await resolveAccess(p.a.userId)).roleCodes; // p.a holds PAYROLL_ADMIN from the database test above
+      for (const code of ["PAYROLL_ADMIN", "PAYROLL_APPROVER"]) {
+        await expect(assignRole(p.b.employeeId, code, await actorOf(p.a), meta(p.a)), code).rejects.toMatchObject({ status: 403, code: "PAYROLL_ROLE_NOT_ASSIGNABLE" });
+        await expect(assignRole(p.emp.employeeId, code, await actorOf(p.a), meta(p.a)), code).rejects.toMatchObject({ code: "PAYROLL_ROLE_NOT_ASSIGNABLE" });
+      }
+      const res = await request(app).post(`/api/access/employees/${p.b.employeeId}/roles`).set(...authHeader(await loginAs(p.a.employeeCode))).send({ code: "PAYROLL_APPROVER" });
+      expect([res.status, res.body.error?.code]).toEqual([403, "PAYROLL_ROLE_NOT_ASSIGNABLE"]);
+      expect((await resolveAccess(p.b.userId)).roleCodes).not.toContain("PAYROLL_APPROVER");
+      expect((await resolveAccess(p.a.userId)).roleCodes).toEqual(heldBefore);
+      expect(heldBefore).toContain("PAYROLL_ADMIN");
+      expect(await prisma.auditLog.count({ where: { action: "access.role.assigned", entityId: p.b.userId, createdAt: { gte: new Date(Date.now() - 60_000) } } })).toBe(0);
+      // Other roles are still assignable: the refusal is for the payroll roles only.
+      await expect(assignRole(p.emp.employeeId, "HR_EXECUTIVE", await actorOf(p.a), meta(p.a))).resolves.toBeTruthy();
+      await removeRole(p.emp.employeeId, "HR_EXECUTIVE", await actorOf(p.a), meta(p.a));
     });
 
     it("a payroll role held without Super Admin (a row that got past everything) grants nothing and is not seen as held", async () => {

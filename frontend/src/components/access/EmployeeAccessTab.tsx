@@ -4,6 +4,7 @@ import { Button, Collapse, Form, Input, Select, Tooltip } from "antd";
 import { CheckOutlined, CloseOutlined, KeyOutlined, LockOutlined, MailOutlined, SafetyOutlined, StopOutlined, UnlockOutlined } from "@ant-design/icons";
 import * as parityApi from "../../api/parity"; // A-9
 import { PERMISSION_CATALOG, PERMISSION_GROUPS, type PermissionKey } from "@shared/constants/permissions";
+import { assignableRoles } from "./assignableRoles";
 import * as accessApi from "../../api/access";
 import type { EmployeeAccess, EmployeePermission } from "../../api/access";
 import { apiErrorMessage } from "../../lib/apiError";
@@ -83,7 +84,7 @@ export function EmployeeAccessTab({ employeeId }: { employeeId: string }) {
 
   const can = access.can;
   const byKey = new Map(access.permissions.map((p) => [p.key, p]));
-  const assignable = roles.filter((r) => !access.roles.some((h) => h.code === r.code));
+  const assignable = assignableRoles(roles, access.roles); // cleanup C3: never the payroll roles
 
   const overridePrompt = (p: EmployeePermission, effect: "GRANT" | "REVOKE" | "CLEAR") => {
     const label = PERMISSION_CATALOG[p.key as PermissionKey]?.label ?? p.key;
