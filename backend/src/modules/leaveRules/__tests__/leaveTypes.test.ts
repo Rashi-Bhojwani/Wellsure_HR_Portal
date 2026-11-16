@@ -282,6 +282,21 @@ describe("new leave types", () => {
       expect(audits.map((a) => a.actorUserId).sort()).toEqual([p.director.userId, p.hrExec.userId, p.report.userId].sort());
     });
 
+    it("one HR person never lists or opens another HR person's documents; the directors and the person themselves do (Stage 4 review finding 4)", async () => {
+      const applied = await apply("hrExec", "MEDICAL", workday(70), workday(70));
+      expect(applied.status, JSON.stringify(applied.body)).toBe(201);
+      expect((await attach("hrExec", applied.body.id)).status).toBe(201);
+      const own = await get("hrExec", `/api/leave-documents/requests/${applied.body.id}`);
+      expect(own.body.documents).toHaveLength(1);
+      const docId = own.body.documents[0].id as string;
+      expect((await get("hrAdmin", `/api/leave-documents/requests/${applied.body.id}`)).status).toBe(404);
+      expect((await get("hrAdmin", `/api/leave-documents/${docId}`)).status).toBe(404);
+      expect((await get("director", `/api/leave-documents/requests/${applied.body.id}`)).body.documents).toHaveLength(1);
+      expect((await get("director", `/api/leave-documents/${docId}`)).status).toBe(200);
+      expect((await get("hrExec", `/api/leave-documents/${docId}`)).status).toBe(200);
+      expect(await prisma.auditLog.count({ where: { action: "leave.document.opened", entityId: docId, actorUserId: p.hrAdmin.userId } })).toBe(0);
+    });
+
     it("the manager sees only \"Leave\" and the dates for a medical leave (setting Not set), never the reason or the document, in lists, notifications and task previews", async () => {
       const pending = await apply("report", "MEDICAL", addCalendarDays(friday, 49), addCalendarDays(friday, 49)); // a pending one, for the tasks inbox
       expect(pending.status, JSON.stringify(pending.body)).toBe(201);

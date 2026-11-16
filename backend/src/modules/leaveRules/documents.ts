@@ -1,9 +1,11 @@
 import { randomBytes } from "node:crypto";
 import { isPeepsLeaveTypeCode } from "@shared/constants/peepsLeave";
+import { HR_ROLE_CODES } from "@shared/constants/sensitiveData";
 import { DOCUMENT_MIME_TYPES, type DocumentMimeType } from "@shared/constants/peopleDocuments";
 import { storageService } from "../../integrations/storage";
 import { writeAuditLog } from "../../lib/audit";
 import { getPeopleDocumentsSettings } from "../../lib/peopleDocumentsSettings";
+import { resolveAccess } from "../../lib/permissions";
 import { prisma } from "../../lib/prisma";
 import { prepareDocumentUpload } from "../../lib/uploads";
 import { HttpError } from "../../middleware/errorHandler";
@@ -18,6 +20,21 @@ export interface DocViewer {
   userId: string;
   employeeId: string;
   canOpen: boolean; // leave.documents.view (HR) or a director
+  isDirector?: boolean;
+}
+
+/**
+ * Who may list and open the documents of a person's request: the person, the directors, and HR (leave.documents.view) — except that one HR
+ * person never opens another HR person's documents (owners: HR do not see each other's private data; independent review finding 4). Those
+ * are the directors' only. Anyone else: not found.
+ */
+async function mayOpenFor(viewer: DocViewer, employeeId: string): Promise<boolean> {
+  if (employeeId === viewer.employeeId || viewer.isDirector) return true;
+  if (!viewer.canOpen) return false;
+  const user = await prisma.user.findFirst({ where: { employeeId }, select: { id: true } });
+  if (!user) return true;
+  const { roleCodes } = await resolveAccess(user.id);
+  return !roleCodes.some((c) => (HR_ROLE_CODES as readonly string[]).includes(c));
 }
 
 const NOT_FOUND = () => new HttpError(404, "Leave request not found.", "NOT_FOUND");
@@ -45,14 +62,14 @@ export async function attachDocument(requestId: string, file: Express.Multer.Fil
 export async function listDocuments(requestId: string, viewer: DocViewer) {
   const r = await newTypeRequest(requestId);
   const docs = await prisma.leaveRequestDocument.findMany({ where: { leaveRequestId: requestId }, orderBy: { uploadedAt: "asc" } });
-  if (viewer.canOpen || r.employeeId === viewer.employeeId) return { attached: docs.length, documents: docs.map((d, i) => ({ id: d.id, label: `Document ${i + 1}`, contentType: d.contentType, sizeBytes: d.sizeBytes, uploadedAt: d.uploadedAt.toISOString() })) };
+  if (await mayOpenFor(viewer, r.employeeId)) return { attached: docs.length, documents: docs.map((d, i) => ({ id: d.id, label: `Document ${i + 1}`, contentType: d.contentType, sizeBytes: d.sizeBytes, uploadedAt: d.uploadedAt.toISOString() })) };
   throw NOT_FOUND();
 }
 
 /** HR, the directors or the employee whose request it is opens a document; every open is written to the audit log (who, which document, when). */
 export async function openDocument(documentId: string, viewer: DocViewer, meta: ActorMeta): Promise<{ body: Buffer; contentType: DocumentMimeType; fileName: string }> {
   const doc = await prisma.leaveRequestDocument.findUnique({ where: { id: documentId }, include: { leaveRequest: { select: { employeeId: true } } } });
-  if (!doc || (!viewer.canOpen && doc.leaveRequest.employeeId !== viewer.employeeId)) throw new HttpError(404, "Document not found.", "NOT_FOUND");
+  if (!doc || !(await mayOpenFor(viewer, doc.leaveRequest.employeeId))) throw new HttpError(404, "Document not found.", "NOT_FOUND");
   const object = await storageService.getObject(doc.storageKey);
   await writeAuditLog({ ...meta, action: "leave.document.opened", entityType: "LeaveRequestDocument", entityId: doc.id, after: { leaveRequestId: doc.leaveRequestId } });
   const contentType = doc.contentType as DocumentMimeType;
