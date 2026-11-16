@@ -644,8 +644,8 @@ sheet (one cell at column 255 of every row, under 1 MB) grew to about 16.7 milli
 | Calculation job (`measure:payroll`) / full calculation in memory | 3.5 s / 0.49 s | recorded 6.5 s / 1.6 s |
 | Approval re-check / payslip content for all | 0.37 s / 0.40 s | 1.4 s / 1.0 s |
 | Payslip PDFs (15, Chromium) | 0.13–0.15 s each (500 in about 1.1 minutes) | 0.5 s each |
-| **Publish payslips (the route)** | **1.88 s before the fix**, PUBLISH_AFTER after | 1.6 s (no recorded figure) |
-| Each of the 13 payroll reports / grouped by branch / head-wise .xlsx grouped | at most 0.31 s / 0.33 s / 0.29 s | 1.6 s / 1.6 s / 2.2 s |
+| **Publish payslips (the route)** | **1.88 s before the fix, 1.38 s after** | 1.6 s (no recorded figure) |
+| Each of the 13 payroll reports / grouped by branch / head-wise .xlsx grouped | at most 0.38 s / 0.34 s / 0.29 s | 1.6 s / 1.6 s / 2.2 s |
 | Parallel-run comparison of a 498-row statement: upload and match / open / export | 0.29 / 0.05 / 0.05 s | 1.6 / 1.6 / 2.2 s |
 
 **Over budget and fixed:** publishing payslips. Every release (publish, bank file) first ran a full calculation of the run and threw the result away

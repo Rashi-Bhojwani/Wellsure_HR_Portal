@@ -246,3 +246,13 @@ Values the directors may enter (none is preset):
 | 110 | greytHR's payroll repository (pay items) file is not read: no synthetic sample exists, so its layout is not guessed. | A synthetic copy of its layout (made-up values) if you want it read. | Not needed for the parallel run (heads come from the statement). |
 | 111 | Every report key is now refused to the Developer role, even as a personal grant; the payroll rule values and the layouts are refused to it on the server. | — | Keep. |
 
+
+| # | Decided or asked in Stage 9 (2026-11-16) | What you give | Recommendation |
+|---|---|---|---|
+| 112 | No Tier 1 row could be built: the four still open each need your answer — employer PF/ESI inside or outside CTC (PY-43), the PF ECR and ESI upload formats (ST-02, ST-05), a made-up copy of greytHR's pay items file (IE-12). | The answers or files. | Answer PY-43 before the first real run; the formats before the first challan upload. |
+| 113 | The full-month rehearsal runs on made-up test people, not on the demo company (the demo company already has finished months and its own check). | — | Keep. |
+| 114 | A month's punches uploaded more than the allowed age later are flagged, and the month cannot be finalised until a person accepts them with a reason (as before; the rehearsal shows it). | — | Keep: a late file is exactly when a person should look. |
+| 115 | A spreadsheet that would need more than a million cells in memory (counting the empty ones between cells) is refused as too large. Real greytHR files are far smaller (a 500-person statement is about 16,500 cells). | — | Keep. |
+| 116 | Publishing payslips and making the bank file no longer recalculate the finalised run first (it never changes; the approval check is what protects it). Publishing 500 payslips: 1.88 s → 1.38 s. | — | Keep. |
+| 117 | Steps with no recorded 500-person time (publishing payslips, the parallel-run comparison) are held to a screen read's budget, 1.6 s. | A different budget, if you have one. | Keep. |
+| 118 | The go-live gap list is in `PORTAL_READY_REPORT.md` section 7: values you enter, real files to try, items deferred by your decision. | Work through group A, then B. | — |
