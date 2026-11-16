@@ -173,6 +173,7 @@ function policyItems(p: LeavePolicy) {
 
 function TypePanel({ t, canManage, onEditType, onEditPolicy }: { t: LeaveTypeAdminRow; canManage: boolean; onEditType: () => void; onEditPolicy: () => void }) {
   // PEEPS-BEGIN leave-types
+  const peepsActionSize = useIsPhone() ? "middle" : "small"; // 44 px touch target on phones (Stage 4 browser walk); runs on every render
   // A new leave type's policy, paid flag and switch come from its approved rules ("New leave types" below), so its card only points there.
   if (isPeepsLeaveTypeCode(t.code))
     return (
@@ -186,7 +187,7 @@ function TypePanel({ t, canManage, onEditType, onEditPolicy }: { t: LeaveTypeAdm
         extra={<StatusChip status={t.isActive ? "ACTIVE" : "INACTIVE"}>{t.isActive ? "Active" : "Inactive"}</StatusChip>}
         style={{ height: "100%" }}
       >
-        <ApprovalBanner tone="info" title="Set by its approved rules" description="Prepare and approve this type's rules under New leave types, below. Only its name is edited here." actions={canManage ? <Button size="small" onClick={onEditType}>Edit name</Button> : undefined} />
+        <ApprovalBanner tone="info" title="Set by its approved rules" description="Prepare and approve this type's rules under New leave types, below. Only its name is edited here." actions={canManage ? <Button size={peepsActionSize} onClick={onEditType}>Edit name</Button> : undefined} />
       </Panel>
     );
   // PEEPS-END

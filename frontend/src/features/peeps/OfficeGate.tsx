@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { OfficeCapabilityId } from "@shared/constants/peeps";
-import { EmptyState, PageHeader, PageSkeleton, Panel } from "../../ui";
+import { EmptyState, PageHeader, PageSkeleton, Panel, isForbidden } from "../../ui";
 import { usePeepsMe } from "./usePeepsMe";
 
 /**
@@ -8,8 +8,19 @@ import { usePeepsMe } from "./usePeepsMe";
  * anyone else who opens the address gets "no access" and nothing else. The API refuses them regardless; this keeps the page from showing its frame.
  */
 export function OfficeGate({ title, need, children }: { title: string; need: "director" | "member" | OfficeCapabilityId; children: ReactNode }) {
-  const { data, isLoading } = usePeepsMe();
+  const { data, isLoading, error, refetch } = usePeepsMe();
   if (isLoading) return <PageSkeleton />;
+  // A failed check is not a refusal: say it could not load (with Try again) instead of "no access" (found by the Stage 4 browser walk).
+  if (error && !isForbidden(error)) {
+    return (
+      <>
+        <PageHeader title={title} />
+        <Panel>
+          <EmptyState kind="error" onRetry={() => void refetch()} />
+        </Panel>
+      </>
+    );
+  }
   const allowed = Boolean(data?.isDirector || (need !== "director" && data?.isMember && (need === "member" || data.capabilities.includes(need))));
   if (allowed) return <>{children}</>;
   return (

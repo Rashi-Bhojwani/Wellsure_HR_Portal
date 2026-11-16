@@ -5,7 +5,7 @@ import { OfficeGate } from "../../peeps/OfficeGate";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatDate, formatDateTime } from "../../../lib/dates";
 import { space, v } from "../../../theme/tokens";
-import { ApprovalBanner, ConfirmModal, DataTable, EmptyState, PageHeader, Panel, Stack, StatusChip, toast } from "../../../ui";
+import { ApprovalBanner, ConfirmModal, DataTable, EmptyState, PageHeader, Panel, Stack, StatusChip, toast, useIsPhone } from "../../../ui";
 import * as api from "../api";
 import type { Badge, Note, NudgeTag } from "../api";
 
@@ -25,6 +25,7 @@ export function RecognitionAdminPage() {
 }
 
 function RecognitionAdminPageInner() {
+  const actionSize = useIsPhone() ? "middle" : "small"; // 44 px touch targets on phones (the global rule leaves size="small" alone)
   const queryClient = useQueryClient();
   const badges = useQuery({ queryKey: ["recognition", "admin", "badges"], queryFn: api.allBadges });
   const tags = useQuery({ queryKey: ["recognition", "admin", "nudges"], queryFn: api.allNudges });
@@ -53,17 +54,17 @@ function RecognitionAdminPageInner() {
     onError: (err) => toast.error(apiErrorMessage(err, "Couldn't decide the review.")),
   });
   const badgeState = (b: Badge) => (b.revoked ? <StatusChip tone="neutral">Revoked</StatusChip> : b.active ? <StatusChip tone="success">Active</StatusChip> : <StatusChip tone="neutral">Expired</StatusChip>);
-  const badgeActions = (b: Badge) => (b.active && !b.revoked ? <Button size="small" danger onClick={() => setPending({ kind: "revoke", badge: b })}>Revoke</Button> : null);
+  const badgeActions = (b: Badge) => (b.active && !b.revoked ? <Button size={actionSize} danger onClick={() => setPending({ kind: "revoke", badge: b })}>Revoke</Button> : null);
   const openReview = (t: NudgeTag) => Boolean(t.review && !t.review.outcome && !t.removed);
   const tagState = (t: NudgeTag) => (t.removed ? <StatusChip tone="neutral">Removed</StatusChip> : openReview(t) ? <StatusChip tone="warning">Review asked</StatusChip> : t.active ? <StatusChip tone="purple">This week</StatusChip> : <StatusChip tone="neutral">Ended</StatusChip>);
   const tagActions = (t: NudgeTag) =>
     openReview(t) ? (
       <span style={{ display: "inline-flex", gap: space[2], flexWrap: "wrap" }}>
-        <Button size="small" loading={keep.isPending} onClick={() => keep.mutate(t)}>Keep</Button>
-        <Button size="small" danger onClick={() => setPending({ kind: "decide-remove", tag: t })}>Remove</Button>
+        <Button size={actionSize} loading={keep.isPending} onClick={() => keep.mutate(t)}>Keep</Button>
+        <Button size={actionSize} danger onClick={() => setPending({ kind: "decide-remove", tag: t })}>Remove</Button>
       </span>
     ) : t.active && !t.removed ? (
-      <Button size="small" danger onClick={() => setPending({ kind: "remove", tag: t })}>Remove</Button>
+      <Button size={actionSize} danger onClick={() => setPending({ kind: "remove", tag: t })}>Remove</Button>
     ) : null;
   const reviews = (tags.data ?? []).filter(openReview);
   const title = pending?.kind === "revoke" ? "Revoke this badge?" : "Remove this nudge?";

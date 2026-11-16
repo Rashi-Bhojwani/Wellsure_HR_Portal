@@ -5,7 +5,7 @@ import { SmileOutlined, TrophyOutlined } from "@ant-design/icons";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatDate, formatDateTime } from "../../../lib/dates";
 import { fs, fw, space, v } from "../../../theme/tokens";
-import { ConfirmModal, DataTable, EmptyState, PageHeader, Panel, SideDrawer, Stack, StatusChip, toast } from "../../../ui";
+import { ConfirmModal, DataTable, EmptyState, PageHeader, Panel, SideDrawer, Stack, StatusChip, toast, useIsPhone } from "../../../ui";
 import * as api from "../api";
 import type { Badge, Note, NudgeTag } from "../api";
 import { RecipientSelect } from "../RecipientSelect";
@@ -18,6 +18,7 @@ const NUDGE_FORM = "give-nudge-form";
 // is required); the nudge tags I received this week and before, with who gave each, and asking the directors to review one; and the old private notes
 // about me, read-only. A director also gives nudge tags here.
 export function RecognitionPage() {
+  const actionSize = useIsPhone() ? "middle" : "small"; // 44 px touch targets on phones (the global rule leaves size="small" alone)
   const queryClient = useQueryClient();
   const bStatus = useQuery({ queryKey: ["recognition", "badge-status"], queryFn: api.badgeStatus });
   const nStatus = useQuery({ queryKey: ["recognition", "nudge-status"], queryFn: api.nudgeStatus });
@@ -63,7 +64,7 @@ export function RecognitionPage() {
   const badgeState = (b: Badge) => (b.revoked ? <StatusChip tone="neutral">Revoked</StatusChip> : !b.active ? <StatusChip tone="neutral">Expired</StatusChip> : <StatusChip tone="success">Active</StatusChip>);
   const tagState = (t: NudgeTag) =>
     t.removed ? <StatusChip tone="neutral">Removed</StatusChip> : !t.active ? <StatusChip tone="neutral">Ended</StatusChip> : t.review && !t.review.outcome ? <StatusChip tone="warning">Review asked</StatusChip> : t.review?.outcome === "KEPT" ? <StatusChip tone="info">Reviewed: kept</StatusChip> : <StatusChip tone="purple">This week</StatusChip>;
-  const tagAction = (t: NudgeTag) => (t.active && !t.review ? <Button size="small" onClick={() => setReviewing(t)}>Ask for a review</Button> : null);
+  const tagAction = (t: NudgeTag) => (t.active && !t.review ? <Button size={actionSize} onClick={() => setReviewing(t)}>Ask for a review</Button> : null);
   const noteList = notes.data?.notes ?? [];
 
   return (

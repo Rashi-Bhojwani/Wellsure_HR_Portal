@@ -5,7 +5,7 @@ import { OfficeGate } from "../../peeps/OfficeGate";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatDate } from "../../../lib/dates";
 import { space, v } from "../../../theme/tokens";
-import { ConfirmModal, DataTable, EmptyState, PageHeader, Panel, StatusChip, toast } from "../../../ui";
+import { ConfirmModal, DataTable, EmptyState, PageHeader, Panel, StatusChip, toast, useIsPhone } from "../../../ui";
 import * as req from "../requestsApi";
 import type { AssetRequestStatus, AssetRequestView } from "../requestsApi";
 
@@ -15,6 +15,7 @@ const OUTCOME_LABEL: Record<Outcome, string> = { APPROVED: "Approve", DECLINED: 
 // Assets → Requests (Peeps Stage 3): every employee's asset requests, for the people who run the register (HR and the directors, and Wellsure Office
 // members while the directors' asset audience allows). Approve or decline a waiting request, and mark an approved one fulfilled; the employee is told.
 export function AssetRequestsPage() {
+  const actionSize = useIsPhone() ? "middle" : "small"; // 44 px touch targets on phones (the global rule leaves size="small" alone)
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<AssetRequestStatus | undefined>("SUBMITTED");
   const list = useQuery({ queryKey: ["assets", "requests", "all", status], queryFn: () => req.all(status) });
@@ -31,7 +32,7 @@ export function AssetRequestsPage() {
     if (!can.length) return null;
     return (
       <Space wrap size={space[2]}>
-        {can.map((o) => <Button key={o} size="small" danger={o === "DECLINED"} type={o === "APPROVED" ? "primary" : "default"} onClick={() => setDeciding({ r, outcome: o })}>{OUTCOME_LABEL[o]}</Button>)}
+        {can.map((o) => <Button key={o} size={actionSize} danger={o === "DECLINED"} type={o === "APPROVED" ? "primary" : "default"} onClick={() => setDeciding({ r, outcome: o })}>{OUTCOME_LABEL[o]}</Button>)}
       </Space>
     );
   };

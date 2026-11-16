@@ -1955,3 +1955,30 @@ C-1 races and attendance labels (11); ticket desk (4); exits (5); recruitment (5
 Stage 3 reporting line, pair limit, receiver sees giver (3). Property tests kept: Insights small-group (5,000 populations),
 badge reporting line (random charts). Nothing is left un-mutation-checked among the access, confidentiality and limit rules listed
 in PEEPS_PLAN; display-only rules (labels, sort orders) were not mutated.
+
+## Stage 4 phase 7: browser walkthrough
+
+Local stack on the scratch demo database (`wellsure_s3walk`), scripted with Playwright (script kept outside the repo; no screenshots
+committed). Roles: director DEMO001, HR Admin DEMO004, manager DEMO009, employee DEMO006, Wellsure Office member DEMO008. Screens: every
+Peeps menu entry and detail page (21 employee-portal and 14 admin-portal addresses, plus Leave Types & Policies), each at 1280 and 390 in
+light and dark, and 768 on the ten main screens. Per visit: horizontal overflow, console errors, crash screen, page title, phone touch
+targets; on light at 1280 and 390, keyboard only: Tab to the primary action (focus visible), Enter, then Esc closes what opened. Loading
+(API slowed: skeleton shown, no full-page spinner) and error (API answering 500: the error state with Try again, not a crash) for every
+screen and role. First pass 700 records; after fixes, a 390 + states pass for all five roles (266 records) and a targeted pass (32).
+
+| Finding | Fix |
+|---|---|
+| My profile: 9–12 px sideways scroll at 390 (long values did not wrap), every role | value column `minmax(0, 1fr)`, values wrap |
+| Phone touch targets under 44 px: asset-request Approve/Decline/Mark fulfilled, Revoke/Keep/Remove (recognition admin), Ask for a review, Cancel (my asset requests), Edit name (new leave types) | normal size on phones (the global 44 px rule covers it) |
+| A hidden or missing record (API 404) showed "Something went wrong… Try again" on exit case, exit interview, recruitment job and interview, autofill review | `RecordState`: "Not found — this record does not exist, or it is not open to you" (never says which) |
+| Wellsure Office screens: when the Office check failed (server error), even a director saw "You don't have access" | `OfficeGate` shows the error state with Try again; a refusal still shows no access (component test added) |
+| "Mark interview complete" (final, audited) and "Mark clearance ready" acted on one press | `ConfirmModal` first; stays open until the server answers; Enter opens, Esc closes |
+
+Checked and correct as they are: HR on Exits, Recruitment and Insights sees the HR switch framework's "not switched on" screen (the
+directors switch HR on); "Confirm choice" / "Confirm pipeline version" / "Submit feedback" are forms whose Enter submits and stops at the
+required reason; Ant tabs are 44 px on phones (the first pass measured the inner label). Not mine and left alone: the base `HelpStrip`
+"Hide help" link is under 44 px on phones. Side effect, scratch database only: the first walk's Enter on "Mark interview complete"
+completed the demo exit interview (that is how the missing confirmation was found).
+
+After the fixes: no failure, crash, console error, overflow, small target, untitled page or wrong error state; every primary action reached
+and operated by keyboard with focus visible; skeletons while loading on every screen. Phase-end check passed.

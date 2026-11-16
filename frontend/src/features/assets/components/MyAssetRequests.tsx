@@ -4,7 +4,7 @@ import { Button, Form, Input, Select } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatDate } from "../../../lib/dates";
-import { DataTable, EmptyState, Panel, SideDrawer, StatusChip, toast } from "../../../ui";
+import { DataTable, EmptyState, Panel, SideDrawer, StatusChip, toast, useIsPhone } from "../../../ui";
 import { space } from "../../../theme/tokens";
 import * as req from "../requestsApi";
 import type { AssetRequestView } from "../requestsApi";
@@ -14,6 +14,7 @@ const FORM = "asset-request-form";
 // My Assets → Requests (Peeps Stage 3): ask for an asset type; see your own requests and their status; cancel one that is still waiting. Nobody
 // else's requests ever reach this panel.
 export function MyAssetRequests() {
+  const actionSize = useIsPhone() ? "middle" : "small"; // 44 px touch targets on phones (the global rule leaves size="small" alone)
   const queryClient = useQueryClient();
   const opts = useQuery({ queryKey: ["assets", "request-options"], queryFn: req.options });
   const list = useQuery({ queryKey: ["assets", "requests", "mine"], queryFn: req.mine });
@@ -31,7 +32,7 @@ export function MyAssetRequests() {
     onError: (err) => toast.error(apiErrorMessage(err, "Couldn't cancel the request.")),
   });
   const state = (r: AssetRequestView) => <StatusChip tone={req.STATUS_TONE[r.status]}>{req.STATUS_LABEL[r.status]}</StatusChip>;
-  const action = (r: AssetRequestView) => (r.status === "SUBMITTED" ? <Button size="small" loading={cancel.isPending && cancel.variables === r.id} onClick={() => cancel.mutate(r.id)}>Cancel</Button> : null);
+  const action = (r: AssetRequestView) => (r.status === "SUBMITTED" ? <Button size={actionSize} loading={cancel.isPending && cancel.variables === r.id} onClick={() => cancel.mutate(r.id)}>Cancel</Button> : null);
   const ready = opts.data?.ready ?? false;
   return (
     <>

@@ -3,7 +3,8 @@ import { Link, useParams } from "react-router-dom";
 import { Alert, Button, Input, Space } from "antd";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiErrorMessage } from "../../lib/apiError";
-import { CardGrid, ConfirmModal, DataTable, EmptyState, KeyValueGrid, PageHeader, Panel, QueryState, Skel, Stack, StatusChip, toast } from "../../ui";
+import { CardGrid, ConfirmModal, DataTable, EmptyState, KeyValueGrid, PageHeader, Panel, Skel, Stack, StatusChip, toast } from "../../ui";
+import { RecordState } from "../peeps/RecordState";
 import * as api from "./api";
 
 // Review a document's suggestions beside the source document. Each field shows its suggestion, confidence, missing values and
@@ -60,7 +61,7 @@ export function AutofillReviewPage() {
   return (
     <>
       <PageHeader title="Review document" back="/admin/autofill" actions={<Link to="/admin/autofill">All documents</Link>} />
-      <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
+      <RecordState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
         {d && (
           <Stack>
             <Alert type="info" showIcon message={d.notice} />
@@ -85,7 +86,7 @@ export function AutofillReviewPage() {
             <ConfirmModal open={confirm} title="Save the reviewed values?" description="Only confirmed or corrected fields are used. Bank and identity changes wait for a director while that setting is on." confirmLabel="Save" loading={apply.isPending} onCancel={() => setConfirm(false)} onConfirm={() => apply.mutate()} />
           </Stack>
         )}
-      </QueryState>
+      </RecordState>
     </>
   );
 }

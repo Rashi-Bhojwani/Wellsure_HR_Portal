@@ -15,11 +15,11 @@ import { ChangeAvatarDialog } from "./ChangeAvatarDialog";
 
 function Rows({ items }: { items: Array<[string, string | null | undefined]> }) {
   return (
-    <dl style={{ margin: 0, display: "grid", gridTemplateColumns: "minmax(110px, auto) 1fr", gap: `${space[2]}px ${space[4]}px` }}>
+    <dl style={{ margin: 0, display: "grid", gridTemplateColumns: "minmax(110px, auto) minmax(0, 1fr)", gap: `${space[2]}px ${space[4]}px` }}>
       {items.map(([label, value]) => (
         <div key={label} style={{ display: "contents" }}>
           <dt style={{ color: v.textSecondary, fontSize: fs.sm }}>{label}</dt>
-          <dd style={{ margin: 0, color: v.textPrimary }}>{value || "—"}</dd>
+          <dd style={{ margin: 0, minWidth: 0, overflowWrap: "anywhere", color: v.textPrimary }}>{value || "—"}</dd>
         </div>
       ))}
     </dl>
