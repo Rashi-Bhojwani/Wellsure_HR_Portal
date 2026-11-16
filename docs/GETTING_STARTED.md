@@ -149,6 +149,7 @@ except the two marked **required**.
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_USER` / `SMTP_PASSWORD` / `MAIL_FROM` | Your SMTP account, used only when `MAIL_DRIVER=smtp`. Keep the real values in `backend/.env` (gitignored), never in a committed file | Conditional | port `587`, `SMTP_SECURE=false` |
 | `SMTP_REQUIRE_TLS` | Leave `true` for any real provider. `false` only for a local catcher such as Mailpit, which has no TLS | No | `true` |
 | `SES_FROM` | Required only when `MAIL_DRIVER=ses` | Conditional | — |
+| `MAIL_ALLOWED_DOMAINS` | Outside production, the only domains `smtp`/`ses` may send to (comma-separated). Reserved test domains and demo employees are refused in every mode. See "Sending real email in development" | No | empty (sends nowhere) |
 | `SECURITY_ALERT_EMAIL` | An inbox **outside** this system (e.g. the owners' shared mailbox). It also receives every break-glass alert (§12). Set it in staging and production | No | unset |
 | `AGENT_API_KEYS` | Unused. Sync agent keys are created on Admin Tools → Devices → Sync agents (shown once, stored hashed) since Phase 2 P2-B | No | placeholder |
 | `AWS_REGION` | Used by the S3, SES, KMS and CloudWatch clients when those drivers are active | No | `ap-south-1` |
@@ -411,11 +412,23 @@ limits free accounts to a few hundred emails a day, plenty for development.
 `SMTP_HOST=localhost`, `SMTP_PORT=1025`, `SMTP_REQUIRE_TLS=false`; the
 emails show up in its web page (<http://localhost:8025>) and go nowhere else.
 
-**Careful with the demo data.** The seeded accounts that are still `INVITED`
-have made-up Gmail addresses that may belong to real strangers. With
-`MAIL_DRIVER=smtp` do not use "Select everyone not yet sent" in
-**Import Center → Invitations** on a seeded database: tick only the people
-you created yourself with an address you own.
+**The mail guard (outside production, only listed domains).** Every driver that
+really sends (`smtp`, `ses`) goes through a guard
+(`backend/src/integrations/mail/guard.ts`). Outside production (development and
+staging) it sends only to domains listed in `MAIL_ALLOWED_DOMAINS`
+(comma-separated, e.g. `MAIL_ALLOWED_DOMAINS=gmail.com`); the default is empty,
+so nothing leaves until you list the domain of the inbox you are testing with.
+In every mode, production included, it refuses reserved test domains
+(`*.invalid`, `*.test`, `example.com` …) and, while the demo company exists,
+any address of a demo employee. A refused email shows as "could not be sent"
+with the reason. A staging stack must list the domains its testers use, or it
+sends no mail at all.
+
+**The seeded and demo addresses are fake on purpose.** The dev seed gives its
+people `…@wellsure.example.invalid` (work) and `…@personal.example.invalid`
+(personal) addresses and the demo company uses `…@demo.example.invalid`:
+reserved domains that cannot belong to anyone, and that the guard refuses.
+To try the invitation email, create someone yourself with an address you own.
 
 **Imported employees are never emailed automatically.** After an Excel import
 A director (the Import Center is hard-locked to directors since Checkpoint 1) opens **Import Center → Invitations**, chooses who to invite (up to 100 at

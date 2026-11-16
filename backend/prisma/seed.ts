@@ -539,7 +539,7 @@ async function main() {
     const employee = await prisma.employee.create({
       data: {
         employeeCode: spec.employeeCode,
-        officialEmail: `${spec.fullName.toLowerCase().replace(/\s+/g, ".")}@wellsure.com`,
+        officialEmail: `${spec.fullName.toLowerCase().replace(/\s+/g, ".")}@wellsure.example.invalid`,
         dateOfJoining: new Date(spec.doj),
         lastWorkingDate: spec.lastWorkingDate ? new Date(spec.lastWorkingDate) : null,
         employmentType: spec.employmentType,
@@ -598,7 +598,7 @@ async function main() {
         employeeId: employee.id,
         dateOfBirth: new Date(spec.dob),
         gender: spec.gender,
-        personalEmail: `${spec.fullName.toLowerCase().replace(/\s+/g, ".")}${n}@gmail.com`,
+        personalEmail: `${spec.fullName.toLowerCase().replace(/\s+/g, ".")}${n}@personal.example.invalid`,
         mobile: `9${String(800000000 + n * 97).slice(0, 9)}`,
         currentAddress: `${spec.fullName.split(" ")[0]}'s current address, ${loc[spec.locationCode]!.city}`,
         permanentAddress: `${spec.fullName.split(" ")[0]}'s permanent address, ${loc[spec.locationCode]!.city}`,

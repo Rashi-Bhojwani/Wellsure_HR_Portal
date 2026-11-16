@@ -100,6 +100,10 @@ export const envSchema = z.object({
   SMTP_PASSWORD: z.string().optional(),
   // The From address and name on development mail ("Wellsure HR <you@gmail.com>"); defaults to SMTP_USER. Most providers refuse a From that is not the account's own.
   MAIL_FROM: z.string().optional(),
+  // PEEPS-BEGIN mail-guard: outside production, mail goes only to these domains (comma-separated; empty = nowhere). Reserved test domains and
+  // demo company employees are refused in every mode (integrations/mail/guard.ts).
+  MAIL_ALLOWED_DOMAINS: z.string().default(""),
+  // PEEPS-END mail-guard
   // Optional (E1.1): an inbox OUTSIDE this system (e.g. the owners' shared
   // mailbox) that also receives every break-glass alert — the one copy a
   // compromised Super Admin account can't make disappear.
