@@ -226,9 +226,6 @@ export async function pinStatuses(pins: readonly RulePin[]): Promise<PinStatus[]
  */
 export async function assertRunIsReal(pins: readonly RulePin[], action: string): Promise<void> {
   const statuses = await pinStatuses(pins);
-  // Standard statutory values: in force, but a run that used them is made real only after both directors have acknowledged them once (the demo company is exempt).
-  const { assertPackAcknowledged } = await import("../statutoryPack/service");
-  await assertPackAcknowledged(pins);
   const placeholders = statuses.filter((s) => s.status === "PLACEHOLDER");
   if (placeholders.length > 0) {
     throw new HttpError(
@@ -242,6 +239,9 @@ export async function assertRunIsReal(pins: readonly RulePin[], action: string):
   if (stale.length > 0) {
     throw new HttpError(409, `A rule this used has been changed since it was calculated: ${stale.map((s) => s.label).join(", ")}. Calculate it again first.`, "RULES_CHANGED", { rules: stale.map((s) => ({ key: s.pin.key, label: s.label })) });
   }
+  // Standard statutory values: in force, but a run that used them is made real only after both directors have acknowledged them once (the demo company is exempt).
+  const { assertPackAcknowledged } = await import("../statutoryPack/service");
+  await assertPackAcknowledged(pins);
 }
 
 // ── The watermark ──

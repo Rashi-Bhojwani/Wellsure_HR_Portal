@@ -161,9 +161,12 @@ describe("A2/A3 — over a real run", () => {
     expect((await call(world.tokens.maker, "post", "/api/payroll-pay-policies/overtime/post", { month: "2026-08" })).body.error.code).toBe("NOT_SET");
     expect((await call(world.tokens.maker, "post", "/api/payroll-pay-policies/encashment/pay", { requestId: encReqId })).body.error.code).toBe("NOT_SET");
     const leave = (await automaticLines(who("c"), new Date("2026-09-30T00:00:00Z"))).find((l) => l.kind === "LEAVE_BALANCE" && l.label.includes("(PL)"))!; // by its label, not its position
-    expect(leave).toMatchObject({ amount: null, label: "Leave balance (PL), days only" });
-    const exitNotSet = await automaticLines(who("c"), new Date("2026-09-30T00:00:00Z"), new Date("2026-09-20T00:00:00Z"));
-    expect(exitNotSet.some((l) => l.kind === "GRATUITY" || l.kind === "NOTICE_RECOVERY")).toBe(false); // Not set: no line at all
+    // Changed 2026-11-16 (standard defaults pack, CHANGED_TESTS.md): leave encashment, gratuity and notice recovery now have standard defaults. Encashment uses the
+    // default head BASIC, which this test company does not have (its heads are prefixed), so the line is there with 0.00: exactly why the head codes are "review needed".
+    expect(leave).toMatchObject({ amount: "0.00", label: "Leave encashment (PL)" });
+    const exitStd = await automaticLines(who("c"), new Date("2026-09-30T00:00:00Z"), new Date("2026-09-20T00:00:00Z"));
+    expect(exitStd.some((l) => l.kind === "GRATUITY")).toBe(false); // the standard gratuity needs five years' service; this person has less
+    expect(exitStd.find((l) => l.kind === "NOTICE_RECOVERY")).toMatchObject({ amount: "0.00" }); // 30 days' notice by default, 11 served; the BASIC head again absent
   });
 
   it("with TEST values confirmed by two directors and the switches on: overtime and encashment are paid once each, exactly; the ledger records the days; the settlement gets its amount", async () => {
