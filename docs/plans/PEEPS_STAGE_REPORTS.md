@@ -2061,3 +2061,6 @@ workforce dashboard breaks leave down by type for scoped viewers.
 Phase-end check after the fixes (`scripts/peeps-check.sh --since 1f6f5a2`): lint, typecheck, 5 changed backend files / 53 tests passed; the
 affected suites (Peeps, recruitment, exits, Insights, autofill, assets: 28 files / 188 tests; leave and leave rules: 20 files / 162 tests;
 recognition 43; audit log 12) passed.
+
+CI run 406 on `5978b26` (the final code commit), read to the end of each job: 10 jobs green; `backend-tests (3)` red on exactly one test,
+`payPolicies.test.ts` (592 passed), and `backend-tests-complete` red only because of that shard. Stage 4 ends here (STOP).

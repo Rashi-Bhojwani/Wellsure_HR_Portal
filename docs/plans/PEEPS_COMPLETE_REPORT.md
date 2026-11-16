@@ -163,4 +163,13 @@ refused across the Peeps modules; Insights suppressed and Not set; no preset whe
 
 ## 8. Final checks
 
-TO FILL (CI on the final code commit).
+- **Local, on `1f6f5a2`** (before the review fixes): lint and typecheck (all four projects); frontend 29 files / 165 tests; build and bundle
+  budgets (login 232.3 KB, employee home 353.7 KB, admin home 372.6 KB); `check:popovers` and `check:sensitive-ui` (906 pages, no secret) on
+  fresh databases with the new seed; full backend suite alone 2,576 / 2,584 — the 8 failures are Session A's `payPolicies.test.ts` (1) and
+  the 7 caused by `fullMonthRehearsal.test.ts` running first (§4 hand-offs).
+- **After the review fixes**: phase check (lint, typecheck, 5 changed test files / 53 tests) and every affected suite green (§5).
+- **CI run 406 on `5978b26`, the final code commit, read to the end of every job**: 10 green — install-lint-typecheck-test (lint,
+  typecheck, design tokens and bundle budgets, migrate, schema matches migrations, seed, frontend and agent tests, demo company tests),
+  backend shards 1, 2 and 4, both sensitive-ui halves, latency (with `check:popovers`), attendance-replay, agent-windows, docker-build.
+  **Red:** `backend-tests (3)` — exactly one test, `payPolicies.test.ts` "…a settlement shows leave in days only" (592 passed), the accepted
+  Session A hand-off; and `backend-tests-complete`, which only checks that every shard succeeded. Nothing else is red.
