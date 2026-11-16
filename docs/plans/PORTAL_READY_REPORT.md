@@ -181,7 +181,8 @@ phone push, a manager step on claims) are listed in `PARITY_COVERAGE.md` (e).
 
 ## 8. Standard statutory defaults (written 2026-11-16)
 
-Verified: full backend suite alone 263 files / 2,291 tests passed; CI run 416 green on all 12 jobs; browser walk of the changed screens (5 roles x 1280 light / 390
+Verified: full backend suite alone 263 files / 2,291 tests passed; CI run 418 on the final commit `451b178` green on all 12 jobs (run 417 failed once on a
+pre-existing flaky test, fixed); browser walk of the changed screens (5 roles x 1280 light / 390
 dark, 50 visits, keyboard acknowledgement) clean after one fix (390 sideways scroll from long source URLs).
 
 By the owners' decision statutory and tax values ship in force with their sources (`docs/STATUTORY_DEFAULTS.md`); payroll runs without the directors entering
