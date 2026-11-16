@@ -1982,3 +1982,52 @@ completed the demo exit interview (that is how the missing confirmation was foun
 
 After the fixes: no failure, crash, console error, overflow, small target, untitled page or wrong error state; every primary action reached
 and operated by keyboard with focus visible; skeletons while loading on every screen. Phase-end check passed.
+
+## Stage 4 phase 8: full run, merge, and the owner's wrap-up steps (2026-11-16)
+
+### Merge of `feat/hr-payroll-separation` (`b0b853e`, 73 commits) — `c9866f8`
+Conflicts, both sides kept: `schema.prisma` (Session A's compliance, minimum wage, Form 16, ledger, statutory, legal entity, data erasure models;
+the Peeps Stage 3 models), `app.ts` (public letter check; public joiner link), `fieldKeyRotation.ts` (parallel comparisons; private nudge text),
+`router.tsx` (letter check; joiner upload), `PortalRoutes.tsx` (Session A's `RequireAccess` on the payroll run routes, then the Peeps detail
+routes), `UI_SCREEN_MAP.md` (Session A's new closing sentence, then the Peeps blocks). `immediacy.test.ts` taken from Session A (hands-off rule);
+`customFields` and `profileAndReveal` tests identical to Session A's. Kept: the earlier `runAuthority` catalogue edit and the C-1
+`monthlyInputsImport` fix. Migrations: 141 apply on a fresh database and on one that already held every Peeps migration plus the demo company
+(Session A's 12 new ones arrive after the `peeps_` ones there); no drift on either.
+
+### Step 1: the leaking test (bisected)
+The post-merge batch failed my core regression test with "1201 employee-days differ: the engine stored no record". Not reproducible by plain
+re-runs (vitest orders files from its cache; the database is recreated per run), so a temporary order-forcing vitest config (deleted afterwards)
+ran files in a fixed order. **Culprit: Session A's `payroll/__tests__/fullMonthRehearsal.test.ts`.** It finalises August 2026 attendance and its
+cleanup leaves the append-only event behind: `attendance_period_locks` = FINALISE, 2026-08-01..2026-08-31, `locked_days` 62, no UNLOCK after it.
+For the rest of that run every August 2026 recompute stores nothing. Proven: that file then my test fails; my test alone passes. Not edited
+(Session A's); hand-off in PEEPS_COMPLETE_REPORT §4. My test now resets its own precondition: if it finds August finalised it records an UNLOCK and
+puts the FINALISE back in `afterAll` (`3580124`); in the failing order both files pass (17/17) and the lock history ends as it was found.
+The same leftover also fails Session A's own `golden.test.ts` (4), `manual.test.ts` (1), `regularization.test.ts` (1) and
+`regularizationLimits.test.ts` (1) in the full local run: all 40 pass without it, the same 7 fail with fullMonthRehearsal forced first.
+
+### Step 2: seed safety — `1f6f5a2`
+- Seed: `prisma/seed.ts` now gives `…@wellsure.example.invalid` (work) and `…@personal.example.invalid` (personal) instead of
+  `@wellsure.com` / generated `@gmail.com`. The demo company already used `@demo.example.invalid`. Fresh database: 46 of 46 personal addresses
+  on reserved domains, none on Gmail. No test pinned a seeded address (searched); none changed for it.
+- Mail guard (`integrations/mail/guard.ts`, wired in `index.ts` inside a PEEPS block; `MAIL_ALLOWED_DOMAINS` in `env.ts`): in front of SMTP
+  and SES (the console driver writes a local file and is not wrapped). Every mode: reserved test domains refused; while `demo.company` is set,
+  any address of a `DEMO…` employee (official or personal) refused. Outside production: only domains in `MAIL_ALLOWED_DOMAINS` (empty by
+  default). A refusal throws `MAIL_REFUSED` (the interface's "throws if not handed over"). Documented in GETTING_STARTED and `.env.example`.
+- Tests: new `integrations/mail/__tests__/guard.test.ts` (4 cases). **Changed tests: none** (`smtp.test.ts` uses the SMTP driver directly and
+  passes unchanged; API-level tests keep random `@gmail.com` because the base `gmailSchema` requires Gmail for personal addresses; the guard
+  blocks them outside production).
+- Mutation check (each broken, the guard test file re-run, restored): MG1 reserved-domain refusal removed → caught; MG2 demo-employee refusal
+  removed → caught; MG3 allowlist bypassed → caught; MG4 SMTP not wrapped → caught. **4/4.**
+
+### Step 3: full run on `1f6f5a2`
+- Lint (ESLint + design tokens) and typecheck (backend, frontend, agent, infra): pass.
+- Frontend: 29 files / 165 tests pass; build; budgets login 232.3 KB, shell + employee home 353.7 KB, shell + admin home 372.6 KB (all within).
+- Full backend suite, alone: 299 files / 2,584 tests: 2,576 passed, 8 failed — `payPolicies.test.ts` (1, the accepted hand-off) and the 7
+  August-lock failures above (all Session A's tests, all caused by fullMonthRehearsal's leftover; none Peeps).
+- CI run 397 on `1f6f5a2`, read to the end of each job: 10 green (agent-windows, latency incl. popovers, attendance-replay, backend shards 1, 2
+  and 4, both sensitive-ui halves, install-lint-typecheck-test incl. demo company tests, docker-build). **Red: `backend-tests (3)`** — exactly one
+  test, `payPolicies.test.ts` "…a settlement shows leave in days only" (596 passed); and `backend-tests-complete`, which only checks that every
+  shard succeeded. The August-lock failures do not appear in CI (sharding keeps fullMonthRehearsal away from those files) but remain
+  order-dependent.
+- Browser checks on `1f6f5a2`, each on a freshly migrated database seeded with the new seed: `check:popovers` (base seed only, as CI) —
+  every popover passes; `check:sensitive-ui` (with the demo company) — no secret on any of 906 pages, the DEMO banner on every one.
