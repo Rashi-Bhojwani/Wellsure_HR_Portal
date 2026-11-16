@@ -1,6 +1,7 @@
 # Portal readiness report
 
-Branch `feat/hr-payroll-separation`, written 2026-11-10, updated 2026-11-11 and 2026-11-16 (Stage 9, with the go-live gap list in section 7) by the session continuing Session A. Public repository: no real data, no real
+Branch `feat/hr-payroll-separation`, written 2026-11-10, updated 2026-11-11 and 2026-11-16 (Stage 9, with the go-live gap list in section 7; then the standard
+statutory defaults pack, section 8) by the session continuing Session A. Public repository: no real data, no real
 person's name. **Every buildable item is now built**, including P7-6b off-cycle runs and the three D-37 defaults. Still open: eight A-items undefined in every plan
 file; Stage 8 blocked until the owner replaces the files on `origin/main` (they look like real exports; not brought here); Stages 6 and 9 not started on the
 owner's instruction (`PARITY_COVERAGE.md` was brought onto this branch by the parallel M session on 2026-11-11).
@@ -140,16 +141,18 @@ two directors enter and confirm it.
 
 **A. Owner values to enter (in the portal; the other director confirms each)**
 1. Director authority per payroll step (System Settings → Director authority).
-2. The tax year 2026-27: slabs, standard deduction, rebate, surcharge, cess, regime default, rounding, minimum monthly TDS, one-off taxation, section catalogue,
-   HRA exemption and marginal relief values; then `TDS_MODE` PROJECTED when ready.
-3. Statutory rules for the one state: PF, ESI, PT, LWF rates, ceilings and slabs; gratuity and notice-recovery values; overtime and encashment pay (spec §14).
-4. **How CTC is built: employer PF and ESI inside or outside CTC** (parity PY-43, the only open Tier 1 pay rule).
+2. **Now standard (section 8):** the tax year 2026-27 values ship in force; review the items marked "review needed", enter the HRA exemption heads, then
+   `TDS_MODE` PROJECTED when ready.
+3. **Now standard (section 8):** PF, ESI, PT and LWF for Rajasthan (not levied), gratuity, notice and encashment defaults; review the items marked "review
+   needed" and set the gratuity / notice / encashment head codes; overtime pay stays the directors' (spec §14).
+4. How CTC is built: employer PF and ESI are **inside CTC by default** now (PY-43, a director setting); change it only if offer letters say otherwise.
 5. Every earning head's taxability; Monthly Inputs heads' direction and negatives (D-31).
 6. Opening figures for the year (or confirm there are none) — income tax in a run does nothing until then.
 7. Company and branch registrations (PF, ESI, PT, TAN) and the company bank details.
 8. Bank layout from the bank's own specification (debit account, payment mode, remark), the payment date rule, the payslip link lifetime, the
    password-protected PDF approval.
-9. **The PF portal's current ECR format and the ESI portal's upload format** as layouts (parity ST-02, ST-05: the mechanism is built, the layout is typed by a director).
+9. The PF file now uses EPFO's published ECR 2.0 layout ("check against the portal before uploading"); **the ESI portal's upload format** is still a layout
+   for a director to type (not published).
 10. Loan and claim types (limits, rate, pay heads; "Principal Part" and "Interest Part" deduction heads).
 11. Admin Tools → Default behaviours: the three D-37 defaults to review; max total deduction %, pro-rata leave rounding, parallel-run tolerance and comparison
     retention to set.
@@ -175,3 +178,19 @@ DRAFT in our own layout (no official format). Buildable non-payroll rows (assets
 phone push, a manager step on claims) are listed in `PARITY_COVERAGE.md` (e).
 
 **Deployment** (outside this work): AWS, KMS keys, SES, the static IP for the biometric agent, staging timings with a pooled, loaded database.
+
+## 8. Standard statutory defaults (written 2026-11-16)
+
+By the owners' decision statutory and tax values ship in force with their sources (`docs/STATUTORY_DEFAULTS.md`); payroll runs without the directors entering
+figures. Before the first real run: **both directors click "I have reviewed the standard values"** (Ready for First Run; a run that used them is refused until
+then), after reading the values marked review needed:
+
+- Rajasthan professional tax "not levied" and LWF "not levied" (not confirmed from a gazette); Rajasthan minimum wages (secondary sources).
+- PF and ESI rounding; September 2026 PF (whole month on Rs 25,000).
+- Tax 2026-27: the standard deduction under the 2025 Act, one surcharge table (old regime's 37% and surcharge marginal relief not modelled), TDS policy
+  defaults, a short section catalogue.
+- Gratuity, notice and encashment head codes (default BASIC; with other head names the amounts are 0) and the notice period (30 days, a policy default).
+
+Not modelled (named): ESI Rs 176/day exemption and Rs 25,000 for persons with disability; PF Rs 500 minimum admin charge; fixed-term gratuity after one year.
+To try on the real portals: the PF ECR file (EPFO) and the ESI upload (format not published). Reminders come every 6 months (a setting) or when a value's date
+passes.

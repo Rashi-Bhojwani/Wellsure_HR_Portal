@@ -669,3 +669,45 @@ its end)", "… (unknown sector size)"); HR, manager, employee and Developer are
 at both views: the run chosen with arrows and Enter, the drop areas reached by Tab with focus visible, Enter opens the file chooser, and a damaged file chosen
 that way is refused the same way. (At 390 the file chooser opened in over 3 s on this machine; the walk's first 3 s wait was too short, re-checked with 6 s.)
 **Not verified:** real greytHR exports, real PF/ESI portal files, the bank's acceptance of .xlsx or .csv, staging timings with a pooled, loaded database.
+
+## Session A: Standard statutory defaults pack (written 2026-11-16)
+
+Owner decision 2026-11-16: statutory and tax rules ship with standard, sourced values in force (replaces the Stage 3.2 "nothing statutory is shipped" rule).
+Plan `STATUTORY_DEFAULTS_PLAN.md`; every value, source, check date and verification in `docs/STATUTORY_DEFAULTS.md` (generated from
+`shared/constants/statutoryDefaults.ts`; a test fails if the document is out of date). State: Rajasthan.
+
+**Research.** Direct fetches of the government sites were refused (HTTP 403/503) from the build machine; official documents were read through the search index
+of the official domains (epfindia.gov.in, labour.gov.in, pib.gov.in, esic.gov.in, incometax.gov.in, incometaxindia.gov.in, indiabudget.gov.in, indiacode.nic.in,
+rajasthan.gov.in). **Official:** PF 12% / 8.33% EPS / 3.67% / EDLI 0.5% / admin 0.5% (EPFO); PF ceiling Rs 15,000, then **Rs 25,000 from 17 Sep 2026 (S.O.
+5109(E), Gazette, superseding S.O. 2702(E))**, applied with effective dating; ESI 0.75% / 3.25%, ceiling Rs 21,000 (ESIC); income tax 2026-27: new-regime slabs
+(nil to 4 lakh ... 30% above 24 lakh), rebate Rs 60,000 up to Rs 12 lakh with marginal relief, cess 4%, surcharge (Finance Bill 2026 memorandum: no change in
+rates; Income Tax Department pages); old-regime slabs and Rs 12,500 rebate; gratuity (Code on Social Security s.53: 15/26 per year, more than six months a year,
+five years, ceiling Rs 20 lakh per the Ministry's FAQ); the ECR 2.0 file layout (EPFO). **UNVERIFIED (still used, flagged "review needed"):** Rajasthan PT not
+levied (only a Government of Rajasthan training note), Rajasthan LWF not levied (no LWF Act on the Labour Department's list), Rajasthan minimum wages (secondary
+sites; a reported April 2026 revision unconfirmed), PF/ESI rounding, the 2026-27 standard deduction under the 2025 Act, the policy defaults (TDS rounding, minimum
+monthly TDS, notice 30 days, encashment BASIC/30). **ESI upload format:** not publicly documented; nothing built (an item for the owners on the ESIC portal).
+
+**Built.** Standard values fill only rules, tax years and settings nobody has entered (a director's value, confirmed or not, always wins; never overwritten);
+dated (the entry in force on the month's last day decides the month); pinned as kind PACK, counted in force, never a Placeholder, so they never make a run a test.
+PT/LWF follow one state setting (default Rajasthan: "Not levied in Rajasthan (source, date)", nothing computed); any other state refused ("Values for this state
+have not been loaded"). Tax year 2026-27 standard year; gratuity, notice and encashment defaults; minimum wages standard rates (the check never changes pay); the PF
+file in EPFO's published ECR 2.0 layout when none is confirmed. **Acknowledgement:** a_ migration `statutory_pack_reviews` (append-only; one acknowledgement per
+director); a run that used standard values is refused at submit and every later step until two directors clicked "I have reviewed the standard values" (demo
+exempt); Ready for First Run shows the non-blocking "Using standard statutory values, last reviewed on" row, the review-needed list and the acknowledgement row;
+the Standard statutory values panel lists every value with its source. **Reminder:** when the last review is older than `statutory.reviewIntervalMonths` (default
+6) or a value's effective date has passed since it (rides the hourly director sweep). **PY-43:** `payroll.ctcIncludesEmployerStatutory` default on; a component may
+stand for the statutory employer PF/ESI and is never paid or costed by a run (no double count); with the setting off such a line cannot count toward CTC.
+Screens: Ready for First Run (panel), Rules (standard value and source per rule), Tax Years (the standard year), Minimum wages (standard rates), Default
+behaviours (the new settings labelled "Standard default, change in settings").
+
+**Found and fixed while writing the independent reference:** the rebate's marginal relief was applied in the old regime too (it is the new regime's only);
+surcharge bands began AT 50 lakh / 1 crore / 2 crore (the law says "exceeds").
+
+**Tests.** `statutoryDefaults.test.ts` (22): golden per group against an independent integer reference written in the test from the sourced rules: PF below / at /
+above both ceilings and across 17 Sep 2026 (EPS maximum 1,250 then 2,083); ESI coverage at 20,999 / 21,000 / 21,001 and contributions; PT/LWF not levied in
+Rajasthan and refused for another state; tax 2026-27 at every slab edge, the rebate limit, marginal relief, the surcharge thresholds, both regimes (12,75,000
+salary pays nil, 12,75,001 pays 1); gratuity years and the ceiling; notice and encashment; the ECR line; the reminder; the generated document. Database: dating,
+never overwriting (a director's unconfirmed 18,000 wins and the standard run goes stale), routes (HR, manager, employee, Developer 403; director 200),
+acknowledgement (refused, one ack refused, demo exempt, both acks pass, once per director, audited), Ready for First Run. **Mutation checks: 4 of 4 caught**
+(effective dating, no-overwrite, acknowledgement refusal, double-pay guard). Existing tests changed only because a standard value is now in force or for the relief
+fix: 7 files, each recorded in `CHANGED_TESTS.md`; the payroll golden run unchanged (its world enters every rule).
