@@ -3,6 +3,7 @@ import { recruitmentAuditWhere } from "../recruitment/audience";
 // PEEPS-END recruitment
 // PEEPS-BEGIN exits
 import { exitAuditAudienceWhere } from "../exits/audience";
+import { peepsPrivateAuditWhere } from "../peeps/auditAudience"; // PEEPS: private Peeps rows for the directors only
 // PEEPS-END exits
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
@@ -65,7 +66,7 @@ export interface AuditViewer {
 export async function listAuditLogs(query: ListAuditLogQuery, viewer: AuditViewer = { canSeePayroll: false }) {
   // PEEPS-BEGIN exits
   // PEEPS-BEGIN recruitment
-  const where: Prisma.AuditLogWhereInput = { AND: [await exitAuditAudienceWhere(viewer.userId), await recruitmentAuditWhere(viewer.userId)] };
+  const where: Prisma.AuditLogWhereInput = { AND: [await exitAuditAudienceWhere(viewer.userId), await recruitmentAuditWhere(viewer.userId), await peepsPrivateAuditWhere(viewer.userId)] };
   // PEEPS-END recruitment
   // PEEPS-END exits
   const payrollRows = { OR: [{ action: { startsWith: PAYROLL_AUDIT_ACTION_PREFIX } }, { entityType: { startsWith: PAYROLL_AUDIT_ENTITY_PREFIX } }] };
