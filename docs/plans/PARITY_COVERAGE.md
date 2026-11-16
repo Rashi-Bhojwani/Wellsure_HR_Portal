@@ -1,6 +1,7 @@
 # Parity coverage: what a greytHR-style HR and payroll system does, against this portal
 
 Read-only audit, written 2026-11-11 on branch `docs/parity-audit`, cut from `feat/hr-payroll-separation` at `64d3246`. No code was changed.
+**Re-checked 2026-11-16 (Session A, Stage 9)** against the code at `04275be`: every Built row's evidence files and tests exist; rows built since are marked Built only where a route or screen and a test were found ("Re-check" in Evidence). The summary counts in (a) and the work list in (d) are the 2026-11-11 audit's; the current state is in section (e) below.
 Public repository: no real data and no real person's name appear here. `docs/samples/` was not opened (it is not on this branch).
 
 This is the file that `MASTER_CHECKLIST.md` names for Stage 6 and Stage 9 ("Tier 1 MISSING items of `PARITY_COVERAGE.md`"). It lists **functions**,
@@ -80,14 +81,14 @@ Tier 1 rows that are Missing or Partial: 19 (Missing 7, Partial 12).
 | ER-08 | Name change history (past documents keep the old name) | Built | 2 | `PATCH /api/employees/:id/name`, `/:id/history/name`; test employee/effectiveDatedUpdates | — |
 | ER-09 | Bank account: encrypted, masked, effective-dated, audited reveal | Built | 1 | `PATCH /api/employees/:id/bank`, `/:id/bank/reveal`, `/:id/history/bank`; tests lib/fieldEncryption, employee/profileAndReveal | — |
 | ER-10 | Statutory IDs (PAN, Aadhaar, UAN, ESI): encrypted, masked, audited reveal | Built | 1 | `PATCH /api/employees/:id/statutory`, `/:id/statutory/reveal`; test employee/profileAndReveal | Stored as one row per person with no history (see next row). |
-| ER-11 | Statutory ID history (effective-dated, like bank) | **Missing** | 2 | `EmployeeStatutory` in backend/prisma/schema.prisma:609 is one mutable row; no history route in be/employee/routes.ts | Payroll reads the current row; a past month cannot show the ID in force then. |
-| ER-12 | HR's bank and statutory changes wait for a director's confirmation (decision b) | **Missing** | 1 | be/employee/service.ts:677 `updateBank` writes at once; `EmployeeBankAccount` (schema.prisma:636) has no pending state; STAGE_REPORTS.md:43 says not built | See Mismatch M1. The payroll setup sign-off (`payroll/setup/signoffs.ts`, area BANK_ACCOUNTS) checks the whole set before a run, which limits the risk. |
+| ER-11 | Statutory ID history (effective-dated, like bank) | Built | 2 | `EmployeeStatutory` in backend/prisma/schema.prisma:609 is one mutable row; no history route in be/employee/routes.ts · **Re-check 2026-11-16:** test employee/statutoryHistory; dated statutory IDs (part 3 A1) | Payroll reads the current row; a past month cannot show the ID in force then. |
+| ER-12 | HR's bank and statutory changes wait for a director's confirmation (decision b) | Built | 1 | be/employee/service.ts:677 `updateBank` writes at once; `EmployeeBankAccount` (schema.prisma:636) has no pending state; STAGE_REPORTS.md:43 says not built · **Re-check 2026-11-16:** tests employee/identityChanges, changeRequestsAndSeparations; setting identity.directorConfirmsHrChanges | See Mismatch M1. The payroll setup sign-off (`payroll/setup/signoffs.ts`, area BANK_ACCOUNTS) checks the whole set before a run, which limits the risk. |
 | ER-13 | Contact numbers masked with audited reveal | Built | 2 | be/parity/contact.ts `/api/employee-extras/:id/contact`; test parity/segments | — |
 | ER-14 | Photo upload, single and in bulk (file name = employee code) | Built | 3 | `PUT /api/employees/:id/photo` (be/people/photos.ts); be/parity/bulk.ts `/api/employee-extras/bulk/photos`; Employee → Bulk Upload; tests people/photos, parity/bulk | — |
 | ER-15 | Employee documents: categories, sensitivity, archive, audited download | Built | 1 | be/documents/routes.ts `/employees/:employeeId`, `/employee-documents/:id/*`; tests documents/employeeDocuments, sensitivity, permissions | — |
 | ER-16 | Bulk document upload | Built | 2 | be/parity/bulk.ts `/bulk/documents`; Employee → Bulk Upload; test parity/bulk | — |
 | ER-17 | Company documents and policies (publish, archive, download log) | Built | 2 | be/documents/routes.ts `/company*`; Employee → Company Documents; test documents/companyDocuments | — |
-| ER-18 | Policy acknowledgement by employees | **Missing** | 3 | no acknowledge route in be/documents/routes.ts; listed "NOT SHOWN YET" in GREYTHR_PARITY_EMPLOYEE_ADMIN.md §I | Not shown to the owners yet. |
+| ER-18 | Policy acknowledgement by employees | Built | 3 | no acknowledge route in be/documents/routes.ts; listed "NOT SHOWN YET" in GREYTHR_PARITY_EMPLOYEE_ADMIN.md §I · **Re-check 2026-11-16:** test documents/acknowledgements; Company Documents | Not shown to the owners yet. |
 | ER-19 | Profile change requests (employee asks, HR approves) | Built | 1 | `POST/GET /api/employees/change-requests`, be/employee/changeRequests.ts; test employee/changeRequestsAndSeparations | — |
 | ER-20 | Future-dated (scheduled) changes | Built | 2 | be/employee/scheduledChanges.ts; test employee/scheduledChanges | — |
 | ER-21 | Directory (People) and org chart | Built | 2 | be/people/routes.ts `/api/people`, `/org-chart`; fe/employee/people (PeoplePage, OrgChart); tests people/directory, fieldPolicy | — |
@@ -95,9 +96,9 @@ Tier 1 rows that are Missing or Partial: 19 (Missing 7, Partial 12).
 | ER-23 | Emergency contact and addresses | Built | 2 | captured on create and import (be/employee/validators.ts, be/import/rowValidators.ts); tests employee/create, parity/segments | No update importer (see Imports). |
 | ER-24 | Employee code and device user ID mapping | Built | 1 | be/employee/deviceCode.ts `GET /api/employees/device-code-check`; test lib/deviceMappingWriter | Default pre-fill rule is open (spec §14). |
 | ER-25 | Disable / enable portal access | Built | 2 | `POST /api/access/employees/:id/portal-access`; test parity/accountAndSeparation | — |
-| ER-26 | Probation tracking and confirmation due list | **Partial** | 2 | employment type only (be/employee/grid.ts); confirmation letter starter `STARTER_CONFIRMATION` (shared/constants/letterStarters.ts); no due list, reminder or confirm action | Probation length per company is an owner value. |
-| ER-27 | Divisions | **Missing** | 3 | no division master (GREYTHR_PARITY_EMPLOYEE_ADMIN.md open question; be/parity/position.ts has none) | Open question to owners: does the company use divisions? |
-| ER-28 | Custom fields on the employee record | **Missing** | 3 | no custom-field model or route (searched schema.prisma, be/employee, be/parity) | — |
+| ER-26 | Probation tracking and confirmation due list | Built | 2 | employment type only (be/employee/grid.ts); confirmation letter starter `STARTER_CONFIRMATION` (shared/constants/letterStarters.ts); no due list, reminder or confirm action · **Re-check 2026-11-16:** be/probation/routes.ts; Employee → Probation; test probation (period length is the owners') | Probation length per company is an owner value. |
+| ER-27 | Divisions | Built | 3 | no division master (GREYTHR_PARITY_EMPLOYEE_ADMIN.md open question; be/parity/position.ts has none) · **Re-check 2026-11-16:** be/divisions/routes.ts; Organisation Setup; test divisions | Open question to owners: does the company use divisions? |
+| ER-28 | Custom fields on the employee record | Built | 3 | no custom-field model or route (searched schema.prisma, be/employee, be/parity) · **Re-check 2026-11-16:** be/customFields/routes.ts; Custom Fields; test customFields | — |
 | ER-29 | Assets issued to employees | **Missing** | 3 | admin menu `assets` has no element (PlaceholderPage, Phase 8) in frontend/src/routes/adminMenu.config.tsx | Planned on peeps/foundation (GREYTHR_PARITY_WORKFORCE.md); not on this branch. |
 
 ### Attendance
@@ -122,10 +123,10 @@ Tier 1 rows that are Missing or Partial: 19 (Missing 7, Partial 12).
 | AT-16 | Rules engine in spec order; night shift belongs to its start date | Built | 1 | be/attendance/compute.ts, engine/engine.ts; tests attendance/compute, engine, golden, month500.replay | — |
 | AT-17 | Late in, early out, shortfall, excess per day | Built | 1 | be/attendance/engine/engine.ts `computeFigures`; test attendance/engine | — |
 | AT-18 | Late-mark penalty rules (for example N late marks = half-day loss of pay) | **Missing** | 2 | engine computes lateness only (engine.ts:58); no penalty rule in schema or settings | Policy is the owners'. |
-| AT-19 | Overtime: rules, approval and paid overtime | **Missing** | 2 | only the Excess hours report; shared/constants/reports.ts:40 says "overtime is not defined yet" | Needs the owners' overtime policy, then a pay head link. |
+| AT-19 | Overtime: rules, approval and paid overtime | Built | 2 | only the Excess hours report; shared/constants/reports.ts:40 says "overtime is not defined yet" · **Re-check 2026-11-16:** be/overtime/routes.ts; Overtime pages; test overtime (pay: part 3 A2, values Not set) | Needs the owners' overtime policy, then a pay head link. |
 | AT-20 | Regularization: employee request, manager decision | Built | 1 | `/api/attendance/me/regularizations`, `/regularizations/:id/approve`; test attendance/regularization | — |
 | AT-21 | Regularization in bulk | Built | 2 | `/api/attendance/regularizations/bulk`; test attendance/regularizationBulk | — |
-| AT-22 | Regularization rules module (A-5) | **Missing** | 2 | MASTER_CHECKLIST.md: A-5 "UNDEFINED in detail" | Owners to define A-5. |
+| AT-22 | Regularization rules module (A-5) | **Partial** | 2 | MASTER_CHECKLIST.md: A-5 "UNDEFINED in detail" · **Re-check 2026-11-16:** correction limits (off by default); test attendance/regularizationLimits; A-5 itself undefined | Owners to define A-5. |
 | AT-23 | Correction window setting | Built | 2 | be/settings `/api/settings/regularization`; test settings/settings | — |
 | AT-24 | Manual override with reason and allowed statuses | Built | 1 | `/api/attendance/overrides*`; Manual Override; tests attendance/manualOverride, workforce/musterAndSettings | — |
 | AT-25 | Status catalogue with director-set labels | Built | 2 | be/workforce `/statuses`, `/settings/:key`; test workforce/musterAndSettings | — |
@@ -139,7 +140,7 @@ Tier 1 rows that are Missing or Partial: 19 (Missing 7, Partial 12).
 | AT-33 | Exceptions list and bulk resolve | Built | 1 | `/api/attendance/exceptions*`; Attendance Exception; test attendance/exceptions | — |
 | AT-34 | Swipes viewer: filters, export, shift column, reject and reinstate | Built | 1 | `/api/attendance/swipes*`, be/workforce `/swipes/decide`; tests attendance/swipes, workforce/swipesSync | — |
 | AT-35 | Remote check-in/out with director decisions, and its report | Built | 1 | `/api/attendance/me/remote/*`, `/remote/*`, `/remote/report`; Mark Attendance, Remote Attendance; tests attendance/remoteAttendance, remoteRules | Reminder threshold Not set (D-18). |
-| AT-36 | Work-from-home eligibility and approval policy | **Partial** | 2 | leave policy has `wfhMonthlyLimit`, `wfhYearlyLimit` (schema.prisma LeavePolicy); remote marks by directors (`/remote/marks`) | MASTER_CHECKLIST "WAITING ON": WFH eligibility and approval. |
+| AT-36 | Work-from-home eligibility and approval policy | Built | 2 | leave policy has `wfhMonthlyLimit`, `wfhYearlyLimit` (schema.prisma LeavePolicy); remote marks by directors (`/remote/marks`) · **Re-check 2026-11-16:** be/wfhRequests/routes.ts; Work From Home pages; test wfhRequests | MASTER_CHECKLIST "WAITING ON": WFH eligibility and approval. |
 | AT-37 | Holiday calendar and restricted holidays | Built | 1 | be/leave `/holidays`, `/restricted-holidays`; Admin Tools → Holiday Calendars; test leave/adminCatalog | — |
 | AT-38 | Holidays limited to some locations | Built | 2 | be/workforce `/holidays/:id/locations`; test workforce/calendar | D-52. |
 | AT-39 | Weekend overrides for chosen people | Built | 2 | be/workforce `/weekend-overrides`; Calendar Adjustments; test workforce/calendar | D-53: leave counting not affected. |
@@ -166,16 +167,16 @@ Tier 1 rows that are Missing or Partial: 19 (Missing 7, Partial 12).
 | LV-11 | Restricted holiday quota | Built | 2 | LeavePolicy `rhYearlyQuota`, `/api/leave/restricted-holidays`; tests leave/adminCatalog, dashboard | — |
 | LV-12 | Manual leave grants | Built | 1 | `POST /api/leave/grants`; Leave Granter; test leave/adminGrants | — |
 | LV-13 | Year-end: carry forward, encashment, reset | Built | 1 | `/api/leave/year-end*`; Year End Process; tests leave/yearEnd, yearEndMoney | Directors only (`leave.yearend.manage` HR-locked). |
-| LV-14 | Encashment formula (per-day rate) | **Partial** | 1 | be/leave/encashmentRate.ts flat setting; be/payroll/run/providers.ts:53 `SalaryBasedEncashmentRateProvider` | Formula and tax treatment open (spec §14). |
+| LV-14 | Encashment formula (per-day rate) | Built | 1 | be/leave/encashmentRate.ts flat setting; be/payroll/run/providers.ts:53 `SalaryBasedEncashmentRateProvider` · **Re-check 2026-11-16:** part 3 A3 setting payroll.leaveEncashment (values Not set); test payroll/payPolicies | Formula and tax treatment open (spec §14). |
 | LV-15 | Leave recalculator | Built | 2 | `/api/leave/recalculate/*`; test leave/recalculator | — |
 | LV-16 | Leavers: leave recalculated to the leaving date; leaving-month rule | Built | 1 | be/workforce `/leavers`; be/leave/leavingMonth.ts; tests workforce/leavers, leave/leavingMonth | D-37 default 2 (pro-rata); rounding Not set (D-73). |
 | LV-17 | Team leave calendar and leave overview dashboard | Built | 2 | `GET /api/leave/calendar`, `GET /api/leave/dashboard`; Leave Calendar; tests workforce/calendar, managers/managerReach, leave/dashboard | — |
 | LV-18 | Supporting document on a leave request | **Partial** | 2 | `LeaveRequest.attachmentStorageKey` (schema.prisma:1019), be/leave/validators.ts; no "required after N days" rule | Leave extension planned on peeps/foundation. |
-| LV-19 | Policy limits: maximum consecutive days, minimum notice, document after N days | **Missing** | 2 | LeavePolicy fields (schema.prisma) have none of these | — |
-| LV-20 | Sandwich rule (week-offs between leave days counted) | **Missing** | 2 | no code (only an unrelated poll test matches) | Policy is the owners'. |
+| LV-19 | Policy limits: maximum consecutive days, minimum notice, document after N days | Built | 2 | LeavePolicy fields (schema.prisma) have none of these · **Re-check 2026-11-16:** test leave/policyLimits (limits are the owners') | — |
+| LV-20 | Sandwich rule (week-offs between leave days counted) | Built | 2 | no code (only an unrelated poll test matches) · **Re-check 2026-11-16:** test leave/policyLimits (sandwich rule off until the owners switch it on) | Policy is the owners'. |
 | LV-21 | Privacy rule for sensitive leave types | **Partial** | 2 | shared/leave/display.ts `displayLeaveForViewer` hook (D-59), nothing hidden | Planned on peeps/foundation. |
 | LV-22 | Leave counting follows each person's own week-offs | Not needed | — | — | D-53: weekend overrides change attendance only; stands until the owners overrule. |
-| LV-23 | Employee-requested encashment during the year | **Missing** | 3 | no route in be/leave/routes.ts | — |
+| LV-23 | Employee-requested encashment during the year | Built | 3 | no route in be/leave/routes.ts · **Re-check 2026-11-16:** be/encashmentRequests/routes.ts; Encashment pages; test encashmentRequests | — |
 
 ### Payroll
 
@@ -204,25 +205,25 @@ Tier 1 rows that are Missing or Partial: 19 (Missing 7, Partial 12).
 | PY-21 | Year to date on the payslip | Built | 2 | be/payroll/run/ytd.ts; tests payroll/releases, taxOpenings | D-62. |
 | PY-22 | Raise a query on a payslip | Built | 2 | `POST /api/payslips/mine/:id/query`; test payroll/payslipQuery | D-29. |
 | PY-23 | Payslip layout set by the company | **Missing** | 2 | Stage 8.2 unticked in MASTER_CHECKLIST.md | Needs the owners' payslip sample. |
-| PY-24 | Reimbursement payslip / statement per run | **Missing** | 3 | P7-5 "not built: per-run statement layout" (MASTER_CHECKLIST.md) | — |
+| PY-24 | Reimbursement payslip / statement per run | Built | 3 | P7-5 "not built: per-run statement layout" (MASTER_CHECKLIST.md) · **Re-check 2026-11-16:** be/payroll/reimbursements/routes.ts; test payroll/parityRows | — |
 | PY-25 | Off-cycle runs (settlements, held pay) | Built | 1 | be/payroll/offcycle/routes.ts; Off-cycle runs; test payroll/offCycle | — |
 | PY-26 | Full and final settlement | Built | 1 | be/payroll/settlements/routes.ts; Settlements; test payroll/settlements | Automatic lines: held pay, adjustments, loan owed, leave days. |
-| PY-27 | Gratuity calculation | **Missing** | 1 | typed as a manual settlement line (fe/admin/payroll/SettlementsPage.tsx:76); no calculation in be/payroll | Needs the owners' rule and source. |
-| PY-28 | Notice pay or notice recovery | **Partial** | 1 | manual settlement line only (SettlementsPage.tsx:76) | No notice-period data exists (see Exit). |
-| PY-29 | Leave encashment in the settlement | **Partial** | 1 | days only (be/payroll/settlements/service.ts:49) | Amount waits for the encashment formula (spec §14). |
+| PY-27 | Gratuity calculation | Built | 1 | typed as a manual settlement line (fe/admin/payroll/SettlementsPage.tsx:76); no calculation in be/payroll · **Re-check 2026-11-16:** part 4: setting payroll.gratuity (Not set), settlement line; test payroll/payPolicies, parityRows | Needs the owners' rule and source. |
+| PY-28 | Notice pay or notice recovery | Built | 1 | manual settlement line only (SettlementsPage.tsx:76) · **Re-check 2026-11-16:** part 4: setting payroll.noticeRecovery (Not set); test payroll/payPolicies | No notice-period data exists (see Exit). |
+| PY-29 | Leave encashment in the settlement | Built | 1 | days only (be/payroll/settlements/service.ts:49) · **Re-check 2026-11-16:** part 3 A3: amount from the encashment setting (Not set); test payroll/payPolicies | Amount waits for the encashment formula (spec §14). |
 | PY-30 | Statutory bonus calculation | **Missing** | 2 | no calculation; a director can only create a bonus pay head | — |
 | PY-31 | Compare our register with greytHR's (parallel run) | Built | 1 | `POST /api/payroll/compare`; Compare Registers; test payroll/compare | — |
-| PY-32 | Parallel-run kit and statement reader (Stage 8.1, 8.4) | **Partial** | 1 | compare tool only; Stage 8 blocked: docs/samples not on this branch (MASTER_CHECKLIST.md) | Needs the samples on this branch. |
+| PY-32 | Parallel-run kit and statement reader (Stage 8.1, 8.4) | Built | 1 | compare tool only; Stage 8 blocked: docs/samples not on this branch (MASTER_CHECKLIST.md) · **Re-check 2026-11-16:** Stage 8: Payroll → Parallel run; be/payroll/greythr; test payroll/greythrKit | Needs the samples on this branch. |
 | PY-33 | Bank transfer file from the owners' layout | Built | 1 | `POST /api/payroll/runs/:id/bank-file/generate`, `/layouts*`; Bank and Statutory Layouts; tests payroll/layout, layoutAuthorConfirm, releases | .xls question open. |
 | PY-34 | Bank file "sent" note, manual rejections, repayment file | Built | 1 | `/api/payroll/bank-batches/:id/sent`, `/rejections`, `/repayment-plans*`; test payroll/bankRepayment | D-26, D-32. |
 | PY-35 | Bank response file import | Not needed | — | layout keys in be/payroll/run/validators.ts:30 have no return template | D-33, D-34: bank payments are manual. |
 | PY-36 | Masked TEST bank file from a test run | Not needed | — | — | D-23. |
-| PY-37 | Bank summary PDF (spec §7.5) | **Missing** | 2 | no generator in be/payroll/run/bank.ts, bankBatches.ts | — |
+| PY-37 | Bank summary PDF (spec §7.5) | Built | 2 | no generator in be/payroll/run/bank.ts, bankBatches.ts · **Re-check 2026-11-16:** `GET /api/payroll/bank-batches/:id/summary.pdf`; test payroll/parityRows | — |
 | PY-38 | Payment modes (NEFT, RTGS, cheque, cash) as a list | Not needed | — | — | D-24: a constant column typed in the bank layout until the bank's codes are known. |
 | PY-39 | Payroll audit trail | Built | 1 | `GET /api/payroll/audit`; Payroll Audit Trail; tests payroll/access, access/developerCeiling | — |
 | PY-40 | Demo company rehearsal | Built | 1 | test payroll/demoCompany.demo | D-36. |
-| PY-41 | Accounting journal export | **Missing** | 2 | no code (searched journal, ledger export, accounting) | Needs the owners' chart of accounts. |
-| PY-42 | Payroll cost by cost centre or department | **Missing** | 2 | cost centre is a label only (GREYTHR_PARITY_EMPLOYEE_ADMIN.md §C) | Part of Stage 6 reports. |
+| PY-41 | Accounting journal export | Built | 2 | no code (searched journal, ledger export, accounting) · **Re-check 2026-11-16:** be/payroll/journal/routes.ts; Accounting journal; test payroll/parityRows (ledger accounts are the owners') | Needs the owners' chart of accounts. |
+| PY-42 | Payroll cost by cost centre or department | Built | 2 | cost centre is a label only (GREYTHR_PARITY_EMPLOYEE_ADMIN.md §C) · **Re-check 2026-11-16:** Stage 6 report department-cost; tests payroll/payrollReports, branchReports | Part of Stage 6 reports. |
 | PY-43 | Employer PF and ESI contributions inside CTC | **Partial** | 1 | statutory rules exist (be/payroll/run/statutory.ts); treatment listed "WAITING ON" in MASTER_CHECKLIST.md | — |
 | PY-44 | Maximum share of gross that deductions may take | Built | 2 | behaviour store, Not set (D-72); test payroll/loanShortfall | — |
 
@@ -232,34 +233,34 @@ Tier 1 rows that are Missing or Partial: 19 (Missing 7, Partial 12).
 |---|---|---|---|---|---|
 | ST-01 | PF calculation from owner-entered rates | Built | 1 | be/payroll/run/statutory.ts; tests payroll/ruleHierarchy, runCalculation | Rates Not set until entered. |
 | ST-02 | PF ECR file | **Partial** | 1 | output `PF_ECR` (be/payroll/run/outputs.ts:23) from an owner-typed layout; test payroll/layout | Official format not verified ("WAITING ON"). |
-| ST-03 | PF challan record | **Missing** | 2 | only TDS challans exist (be/payroll/tax/routes.ts `/challans`) | — |
+| ST-03 | PF challan record | Built | 2 | only TDS challans exist (be/payroll/tax/routes.ts `/challans`) · **Re-check 2026-11-16:** Statutory challans; test payroll/parityRows | — |
 | ST-04 | ESI calculation with contribution period rule | Built | 1 | rules `ESI`, `ESI_PERIOD_RULE`, `ESI_ROUNDING`; test payroll/runCalculation | — |
 | ST-05 | ESI upload file | **Partial** | 1 | output `ESI` (outputs.ts:61); test payroll/layout | Official format not verified. |
-| ST-06 | ESI challan record | **Missing** | 2 | none (as PF challan) | — |
-| ST-07 | Professional tax by state slabs | **Partial** | 1 | rule `PT`, output `PT` (outputs.ts:70) | Applicability per state open (spec §14). |
-| ST-08 | PT returns and challans | **Missing** | 2 | none | — |
-| ST-09 | Labour welfare fund | **Partial** | 2 | rule and output `LWF` (outputs.ts:23) | Applicability open (spec §14). |
+| ST-06 | ESI challan record | Built | 2 | none (as PF challan) · **Re-check 2026-11-16:** Statutory challans; test payroll/parityRows | — |
+| ST-07 | Professional tax by state slabs | Built | 1 | rule `PT`, output `PT` (outputs.ts:70) · **Re-check 2026-11-16:** rules PT_SLABS for one state (Not set until two directors confirm); tests payroll statutory; part 4 audit | Applicability per state open (spec §14). |
+| ST-08 | PT returns and challans | Built | 2 | none · **Re-check 2026-11-16:** Statutory challans (PT, LWF); test payroll/parityRows | — |
+| ST-09 | Labour welfare fund | Built | 2 | rule and output `LWF` (outputs.ts:23) · **Re-check 2026-11-16:** rule LWF_TABLE for one state (Not set); part 4 audit | Applicability open (spec §14). |
 | ST-10 | Tax year (slabs, rebate, cess, sections) entered by directors | Built | 1 | `/api/payroll/tax/years*`; Tax Years; test payroll/taxEngine | D-38, D-46. |
 | ST-11 | TDS projection, both regimes side by side | Built | 1 | be/payroll/tax/engine.ts, projection.ts; tests payroll/taxEngine; RegimeCompare.test.tsx | D-41, D-44. |
 | ST-12 | IT declaration windows and declarations | Built | 1 | `/api/payroll/tax/windows`, `/me/declaration`; Tax Declarations, IT Declaration; test payroll/taxDeclarations | — |
 | ST-13 | Proof of investment with director verification | Built | 1 | `/api/payroll/tax/me/proofs`, `/proofs/:id/decision`; test payroll/taxDeclarations | D-42, D-43. |
 | ST-14 | Opening figures (pay and tax before this system) | Built | 1 | `/api/payroll/tax/openings*`; Opening Figures; test payroll/taxOpenings | D-60, D-61. |
-| ST-15 | HRA exemption | **Missing** | 1 | "HRA, LTA and perquisites" not built (DECISIONS_FOR_OWNERS.md, Stage 7 note) | — |
+| ST-15 | HRA exemption | Built | 1 | "HRA, LTA and perquisites" not built (DECISIONS_FOR_OWNERS.md, Stage 7 note) · **Re-check 2026-11-16:** part 4: tax year hraExemption (owner-entered); test payroll/taxHraRelief | — |
 | ST-16 | LTA exemption | **Missing** | 2 | as above | — |
 | ST-17 | Perquisites, including cheap loans | **Missing** | 2 | as above; D-67 | — |
-| ST-18 | Marginal relief | **Missing** | 2 | D-45: not worked out | — |
+| ST-18 | Marginal relief | Built | 2 | D-45: not worked out · **Re-check 2026-11-16:** part 4: marginal relief on the rebate (owner switch); test payroll/taxHraRelief; surcharge relief deferred | — |
 | ST-19 | Form 12BB output | **Missing** | 3 | no generator (searched 12BB) | — |
 | ST-20 | TDS challans and reconciliation | Built | 1 | `/api/payroll/tax/challans*`; TDS and Form 16; test payroll/form16 | — |
-| ST-21 | Quarterly TDS return data | **Partial** | 1 | `GET /api/payroll/tax/quarterly`; Quarterly TDS data; test payroll/form16 | Not in the official return format (P7-7). |
+| ST-21 | Quarterly TDS return data | Built | 1 | `GET /api/payroll/tax/quarterly`; Quarterly TDS data; test payroll/form16 · **Re-check 2026-11-16:** Quarterly TDS screen; test payroll/parityRows (official file: ST-22) | Not in the official return format (P7-7). |
 | ST-22 | Quarterly return file in the official format | **Missing** | 2 | not built (MASTER_CHECKLIST.md P7-7) | Needs the official format. |
-| ST-23 | Form 16 Part B data (draft until confirmed) | **Partial** | 1 | be/payroll/tax/form16.ts, `/form16*`; test payroll/form16 | DRAFT only. |
-| ST-24 | Form 16 PDF for employees | **Missing** | 1 | not built (MASTER_CHECKLIST.md P7-7) | — |
-| ST-25 | Form 16 Part A pairing | **Missing** | 2 | not built (MASTER_CHECKLIST.md P7-7) | — |
+| ST-23 | Form 16 Part B data (draft until confirmed) | Built | 1 | be/payroll/tax/form16.ts, `/form16*`; test payroll/form16 · **Re-check 2026-11-16:** Form 16 Part B data, DRAFT while the year is unconfirmed (by design); tests payroll/form16, parityRows | DRAFT only. |
+| ST-24 | Form 16 PDF for employees | Built | 1 | not built (MASTER_CHECKLIST.md P7-7) · **Re-check 2026-11-16:** Form 16 PDF (DRAFT); TDS / Form 16 pages; test payroll/parityRows | — |
+| ST-25 | Form 16 Part A pairing | Built | 2 | not built (MASTER_CHECKLIST.md P7-7) · **Re-check 2026-11-16:** Form 16 Part A pairing; test payroll/form16 | — |
 | ST-26 | Refund of over-deducted TDS in a run | Not needed | — | — | D-44. |
 | ST-27 | One-off pay spread over the months left | Not needed | — | — | D-40: taxed in the month paid; stands until the owners overrule. |
-| ST-28 | Statutory registers (wages, deductions, fines) | **Missing** | 2 | none (searched register names) | Which registers apply is the owners'. |
-| ST-29 | Minimum wages check | **Missing** | 3 | none | — |
-| ST-30 | Compliance due-date reminders | **Missing** | 3 | none | — |
+| ST-28 | Statutory registers (wages, deductions, fines) | Built | 2 | none (searched register names) · **Re-check 2026-11-16:** part 3 B3 registers (wage, deduction, overtime) in Payroll reports; tests payroll/payrollReports, branchReports | Which registers apply is the owners'. |
+| ST-29 | Minimum wages check | Built | 3 | none · **Re-check 2026-11-16:** be/payroll/minimumWages/routes.ts; Minimum wages; test payroll/parityRows (rates are the owners') | — |
+| ST-30 | Compliance due-date reminders | Built | 3 | none · **Re-check 2026-11-16:** be/payroll/compliance/routes.ts; Compliance calendar; test payroll/complianceDueDates | — |
 | ST-31 | Employer registration numbers (PF, ESI, TAN) sealed | Built | 1 | be/payroll/sealed.ts; test payroll/sealedIdentifiers | — |
 
 ### Loans and claims
@@ -272,14 +273,14 @@ Tier 1 rows that are Missing or Partial: 19 (Missing 7, Partial 12).
 | LC-04 | Instalment schedule (reducing balance) | Built | 1 | be/payroll/loans/schedule.ts; test payroll/loans | D-65. |
 | LC-05 | Pay out and recover through payroll runs | Built | 1 | be/payroll/run/gather.ts; tests payroll/loans, runIntegrations | — |
 | LC-06 | Shortfall rule per loan type | Built | 1 | be/payroll/run/loanShortfall.ts; test payroll/loanShortfall | D-37 default 1. |
-| LC-07 | Loan changes (stop remaining instalments, reschedule) on a screen | **Partial** | 2 | `POST /api/loans/:id/changes` and decision exist; no screen (MASTER_CHECKLIST.md P7-4) | — |
+| LC-07 | Loan changes (stop remaining instalments, reschedule) on a screen | Built | 2 | `POST /api/loans/:id/changes` and decision exist; no screen (MASTER_CHECKLIST.md P7-4) · **Re-check 2026-11-16:** Loans admin page; test payroll/offCycleLoanE2E | — |
 | LC-08 | Loan statement for the employee | Built | 2 | `/api/loans/mine/:id`; Loans and Advances; test payroll/loans | — |
-| LC-09 | Loan recovery in full and final | **Partial** | 1 | code path in be/payroll/settlements/service.ts (`LOAN_OWED`); not exercised by a test (PORTAL_READY_REPORT §3) | — |
+| LC-09 | Loan recovery in full and final | Built | 1 | code path in be/payroll/settlements/service.ts (`LOAN_OWED`); not exercised by a test (PORTAL_READY_REPORT §3) · **Re-check 2026-11-16:** settlement recovers the loan through an off-cycle run; test payroll/offCycleLoanE2E | — |
 | LC-10 | Claim types (who may claim, bills, caps) | Built | 1 | `/api/reimbursements/types`; Loan and claim types; test payroll/reimbursements | — |
 | LC-11 | Employee claims with bills | Built | 1 | `/api/reimbursements/mine`; Reimbursement; test payroll/reimbursements | — |
 | LC-12 | Director decision on claims, paid through payroll | Built | 1 | `/api/reimbursements/:id/decision`; test payroll/reimbursements | — |
 | LC-13 | Manager step before the director on a claim | **Missing** | 2 | P7-5 "not built: manager step" (MASTER_CHECKLIST.md) | — |
-| LC-14 | Claims in the Tasks inbox | **Missing** | 2 | P7-5 "not built: Tasks inbox source" | — |
+| LC-14 | Claims in the Tasks inbox | Built | 2 | P7-5 "not built: Tasks inbox source" · **Re-check 2026-11-16:** Tasks inbox lists claims; test tasks/directorSources | — |
 | LC-15 | Travel advance and expense settlement | **Missing** | 3 | none | — |
 | LC-16 | Flexible benefit plan | **Missing** | 3 | none | — |
 
@@ -294,8 +295,8 @@ Tier 1 rows that are Missing or Partial: 19 (Missing 7, Partial 12).
 | LT-05 | HR can issue only letters proven free of pay figures | Built | 1 | be/letters/template.ts pay-free proof; test letters/payFreeProof | — |
 | LT-06 | Offer and revision letters with salary figures | Built | 2 | letter figure fields from the salary (A-3); test letters/letterPayFigures | D-63. |
 | LT-07 | Issued letter filed in the employee's documents | Built | 2 | be/letters/service.ts → documents; test documents/employeeDocuments | — |
-| LT-08 | Employee asks for a letter (for example address proof) | **Missing** | 3 | letters routes only for issuers (be/letters/routes.ts:79-80) | — |
-| LT-09 | Electronic signature | **Missing** | 3 | none | — |
+| LT-08 | Employee asks for a letter (for example address proof) | Built | 3 | letters routes only for issuers (be/letters/routes.ts:79-80) · **Re-check 2026-11-16:** be/letters/routes.ts; test letters/letterAsks | — |
+| LT-09 | Electronic signature | Built | 3 | none · **Re-check 2026-11-16:** be/letterCheck/routes.ts; letter check page; test letterCheck | — |
 
 ### Onboarding and exit
 
@@ -304,12 +305,12 @@ Tier 1 rows that are Missing or Partial: 19 (Missing 7, Partial 12).
 | OE-01 | Invitation, first sign-in, privacy notice | Built | 1 | be/auth `/invitations/:token`, `/privacy-notice/accept`; tests auth/invitation, totpAndPrivacy, employee/e2eOnboarding | — |
 | OE-02 | Joining post on the feed | Built | 3 | be/engage/autoPosts.ts; test engage/joiningEvent | — |
 | OE-03 | Candidate pre-joining portal and offer acceptance | **Missing** | 3 | none on this branch | Recruitment planned on peeps/foundation. |
-| OE-04 | Onboarding checklist and tasks | **Missing** | 2 | none (searched onboarding) | — |
+| OE-04 | Onboarding checklist and tasks | Built | 2 | none (searched onboarding) · **Re-check 2026-11-16:** be/onboarding/routes.ts; Onboarding pages; test onboarding | — |
 | OE-05 | Separation with mode and last working day | Built | 1 | be/employee/separations.ts, be/parity/separationModes.ts; Separations; tests employee/changeRequestsAndSeparations, parity/accountAndSeparation | Modes Not set. |
 | OE-06 | Access ends after the last working day | Built | 1 | `processScheduledSeparations` (be/employee/separations.ts:101); test employee/changeRequestsAndSeparations | — |
 | OE-07 | Employee submits a resignation | **Missing** | 2 | separations are started by HR only (`employee.separate`) | Exits planned on peeps/foundation. |
 | OE-08 | Exit clearance checklist (spec §7.2) | **Missing** | 2 | no checklist in be/employee/separations.ts | Exits planned on peeps/foundation. |
-| OE-09 | Notice period tracking | **Missing** | 2 | none (searched notice period) | Needed for notice pay in settlements. |
+| OE-09 | Notice period tracking | **Partial** | 2 | none (searched notice period) · **Re-check 2026-11-16:** company notice period in setting payroll.noticeRecovery (Not set); no per-person notice tracking | Needed for notice pay in settlements. |
 | OE-10 | Exit interview | **Missing** | 3 | none | — |
 | OE-11 | Relieving and experience letters | Built | 2 | starters `STARTER_RELIEVING`, `STARTER_EXPERIENCE`; test letters/letters | — |
 
@@ -324,12 +325,12 @@ Tier 1 rows that are Missing or Partial: 19 (Missing 7, Partial 12).
 | RP-05 | Attendance summary, late coming, excess hours, exceptions | Built | 1 | `/api/reports/attendance-muster`, `/late-coming`, `/excess-hours`, `/exception-summary`; Reports → Attendance; test reports/attendanceReports | Excess hours is not overtime (AT row on overtime). |
 | RP-06 | Report export to Excel, audited | Built | 1 | `/api/reports/:key/export`; test reports/reportsPermissions | — |
 | RP-07 | Salary register | Built | 1 | output `SALARY_REGISTER` (be/payroll/run/outputs.ts:93); test payroll/releases | A run file, not a report in the gallery. |
-| RP-08 | PF, ESI and PT reports in the report gallery | **Partial** | 2 | files only (outputs.ts); no report keys in shared/constants/reports.ts | Stage 6. |
-| RP-09 | Payroll summary and department cost (Stage 6) | **Missing** | 1 | Stage 6 unticked; REPORT_KEYS (shared/constants/reports.ts:18) has no payroll report | Layouts need the owners or the samples. |
-| RP-10 | CTC report | **Missing** | 2 | none in REPORT_KEYS | — |
+| RP-08 | PF, ESI and PT reports in the report gallery | Built | 2 | files only (outputs.ts); no report keys in shared/constants/reports.ts · **Re-check 2026-11-16:** Stage 6 statutory summary and statutory by person; test payroll/payrollReports | Stage 6. |
+| RP-09 | Payroll summary and department cost (Stage 6) | Built | 1 | Stage 6 unticked; REPORT_KEYS (shared/constants/reports.ts:18) has no payroll report · **Re-check 2026-11-16:** Stage 6 payroll summary and department cost; tests payroll/payrollReports, branchReports | Layouts need the owners or the samples. |
+| RP-10 | CTC report | Built | 2 | none in REPORT_KEYS · **Re-check 2026-11-16:** Stage 6 CTC report; test payroll/payrollReports | — |
 | RP-11 | Exit report (spec §7.6) | **Missing** | 3 | none in REPORT_KEYS | — |
 | RP-12 | Custom report / query builder for directors | **Missing** | 2 | spec §7.6 Phase 8; Stage 6 in MASTER_CHECKLIST.md | — |
-| RP-13 | Scheduled reports by email | **Missing** | 3 | none | — |
+| RP-13 | Scheduled reports by email | Built | 3 | none · **Re-check 2026-11-16:** report subscriptions; test reports/subscriptions | — |
 | RP-14 | Admin dashboard widgets | Built | 2 | `GET /api/admin/dashboard`; Homepage dashboard tab; test admin/dashboard | — |
 | RP-15 | YTD reports for the employee | Built | 2 | `GET /api/payroll/tax/me/ytd`; YTD Reports; test payroll/taxOpenings | — |
 
@@ -362,10 +363,10 @@ Tier 1 rows that are Missing or Partial: 19 (Missing 7, Partial 12).
 | NT-05 | Device health alerts | Built | 1 | be/biometric/health/notify.ts; test biometric/health | — |
 | NT-06 | Mass email | Built | 3 | be/parity/massEmail.ts `/api/mass-email`; Mass Email; test parity/massEmail | — |
 | NT-07 | Announcements | Built | 2 | be/announcements; Engage → Announcements; test announcements/announcements | — |
-| NT-08 | Editable email templates | **Missing** | 3 | the "Email & Letter Templates" page edits letters only; sign-in emails are fixed text in be/auth/emails.ts | — |
-| NT-09 | Per-person notification preferences | **Missing** | 3 | none (searched preference) | — |
+| NT-08 | Editable email templates | Built | 3 | the "Email & Letter Templates" page edits letters only; sign-in emails are fixed text in be/auth/emails.ts · **Re-check 2026-11-16:** email templates in settings; test settings/emailTemplates | — |
+| NT-09 | Per-person notification preferences | Built | 3 | none (searched preference) · **Re-check 2026-11-16:** notification preferences; test notifications/preferences | — |
 | NT-10 | Phone push notifications | **Missing** | 3 | frontend/public/sw.js caches the shell only; no push | — |
-| NT-11 | SMS or WhatsApp | **Missing** | 3 | none | — |
+| NT-11 | SMS or WhatsApp | Built | 3 | none · **Re-check 2026-11-16:** text messages (provider Not set); test textMessages | — |
 
 ### Audit
 
@@ -374,7 +375,7 @@ Tier 1 rows that are Missing or Partial: 19 (Missing 7, Partial 12).
 | AU-01 | Append-only audit log enforced by the database | Built | 1 | be/auditLog; tests auditLog/auditLog, lib/dbRoles | — |
 | AU-02 | Redaction of identifiers before write | Built | 1 | backend/src/lib/redact.ts; test lib/redact | — |
 | AU-03 | Audit log viewer with filters | Built | 1 | `GET /api/audit-log`; Audit Log; test auditLog/auditLog | — |
-| AU-04 | Audit log export | **Missing** | 3 | only `GET /` in be/auditLog/routes.ts | — |
+| AU-04 | Audit log export | Built | 3 | only `GET /` in be/auditLog/routes.ts · **Re-check 2026-11-16:** audit export; test auditLog/auditExport | — |
 | AU-05 | Every reveal of an identifier audited | Built | 1 | `/:id/bank/reveal`, `/:id/statutory/reveal`; test employee/profileAndReveal | — |
 | AU-06 | Security events and acknowledgement | Built | 1 | `/api/access/security-events*`; test access/access | — |
 | AU-07 | Break-glass tools (bootstrap, recover) | Built | 1 | be/access/bootstrap.ts, recovery.ts; test access/access | — |
@@ -399,12 +400,12 @@ Tier 1 rows that are Missing or Partial: 19 (Missing 7, Partial 12).
 | IE-04 | Bank and statutory import | Built | 1 | datasets `bank`, `statutory`; test import/import | Directors only. |
 | IE-05 | Opening leave balances and grants import | Built | 1 | dataset `leave-grants`; test import/leaveGrants | — |
 | IE-06 | Reconciliation report against greytHR | Built | 1 | `GET /api/import/reconciliation`; test import/import | — |
-| IE-07 | Update importer for existing employees | **Missing** | 2 | datasets are new rows only (GREYTHR_PARITY_EMPLOYEE_ADMIN.md item 14) | Part of A-2 (undefined). |
-| IE-08 | HR's import rules (A-2) | **Missing** | 2 | MASTER_CHECKLIST.md: A-2 "UNDEFINED in detail" | — |
-| IE-09 | Salary structure and salary assignment import (spec §10 item 7) | **Missing** | 1 | no salary dataset in be/import/validators.ts:4 | Needs a layout from the owners or the samples. |
+| IE-07 | Update importer for existing employees | Built | 2 | datasets are new rows only (GREYTHR_PARITY_EMPLOYEE_ADMIN.md item 14) · **Re-check 2026-11-16:** Update From File; test updateImport | Part of A-2 (undefined). |
+| IE-08 | HR's import rules (A-2) | Built | 2 | MASTER_CHECKLIST.md: A-2 "UNDEFINED in detail" · **Re-check 2026-11-16:** Update From File rules; test updateImport | — |
+| IE-09 | Salary structure and salary assignment import (spec §10 item 7) | Built | 1 | no salary dataset in be/import/validators.ts:4 · **Re-check 2026-11-16:** Salary Revisions → Import from a file; test payroll/salaryAssignmentImport | Needs a layout from the owners or the samples. |
 | IE-10 | Opening tax figures import | Built | 1 | `/api/payroll/tax/openings/import/*`; test payroll/taxOpenings | — |
 | IE-11 | Monthly inputs import | Built | 1 | `/api/payroll/monthly-inputs/import*`; test payroll/monthlyInputsImport | D-12: 1,000 rows. |
-| IE-12 | greytHR attendance and salary file readers (Stage 8) | **Missing** | 1 | Stage 8 blocked: docs/samples not on this branch | — |
+| IE-12 | greytHR attendance and salary file readers (Stage 8) | **Partial** | 1 | Stage 8 blocked: docs/samples not on this branch · **Re-check 2026-11-16:** Stage 8: device log, swipes, overrides, salary statement, bank file read (tests biometric/greythrPunches, payroll/greythrKit, monthlyInputsImport); the pay items file is not read (no sample) | — |
 | IE-13 | Invitations sent in batches by HR | Built | 1 | `POST /api/employees/invitations/send`; test employee/invitations | — |
 
 ### Self-service
@@ -415,7 +416,7 @@ Tier 1 rows that are Missing or Partial: 19 (Missing 7, Partial 12).
 | SS-02 | View my profile and ask for changes | Built | 1 | `GET/PATCH /api/employees/me`, `/change-requests`; test employee/changeRequestsAndSeparations | — |
 | SS-03 | Payslips list and PDF | Built | 1 | `/api/payslips/mine*`; Payslips; test payroll/releases | — |
 | SS-04 | IT statement | Built | 1 | `GET /api/payroll/tax/me/statement`; IT Statement; test payroll/taxDeclarations | D-48. |
-| SS-05 | Form 16 download | **Partial** | 1 | `GET /api/payroll/tax/me/form16`; Form 16; test payroll/form16 | Data only, no PDF. |
+| SS-05 | Form 16 download | Built | 1 | `GET /api/payroll/tax/me/form16`; Form 16; test payroll/form16 · **Re-check 2026-11-16:** Form 16 page with DRAFT PDF; test payroll/parityRows | Data only, no PDF. |
 | SS-06 | Salary revision history | Built | 2 | `GET /api/payroll/tax/me/salary-revisions`; Salary Revision; test payroll/taxOpenings | — |
 | SS-07 | Leave balances, apply, calendar, holiday calendar | Built | 1 | be/leave routes; Leave menu; tests leave/* | — |
 | SS-08 | Attendance info, regularize, remote check-in | Built | 1 | be/attendance `/me/*`; Attendance menu; tests attendance/attendanceInfo, regularization | — |
@@ -423,9 +424,9 @@ Tier 1 rows that are Missing or Partial: 19 (Missing 7, Partial 12).
 | SS-10 | Helpdesk tickets with replies and attachments | Built | 2 | be/helpdesk `/tickets*`; Helpdesk; tests helpdesk/helpdesk, attachments, autoClose | Payroll category directors only (decision f). |
 | SS-11 | My workflow delegates | Built | 2 | `/api/delegations/mine`; Workflow Delegates; test delegations/delegations | — |
 | SS-12 | Engage feed: posts, kudos (given and received), polls, reactions, comments, groups | Built | 3 | be/engage; Engage, My Worklife → Kudos; tests engage/posts, kudos, polls, reactions, comments, groups | — |
-| SS-13 | Feedback | **Missing** | 3 | employee menu `my-worklife/feedback` has no element (PlaceholderPage, Phase 8) | — |
+| SS-13 | Feedback | Built | 3 | employee menu `my-worklife/feedback` has no element (PlaceholderPage, Phase 8) · **Re-check 2026-11-16:** be/feedback/routes.ts; Feedback pages; test feedback | — |
 | SS-14 | Two-step sign-in and backup codes | Built | 1 | be/auth `/2fa/*`; tests auth/totpAndPrivacy, totpTolerance | Go-live condition for directors. |
-| SS-15 | Download my own data (DPDP) | **Missing** | 2 | no route (searched data export, DPDP); spec §9 | — |
+| SS-15 | Download my own data (DPDP) | Built | 2 | no route (searched data export, DPDP); spec §9 · **Re-check 2026-11-16:** download my data; test employee/selfExport | — |
 
 ### Admin tools
 
@@ -437,8 +438,8 @@ Tier 1 rows that are Missing or Partial: 19 (Missing 7, Partial 12).
 | AD-04 | System settings (security, leave, helpdesk, devices, regularization, excess hours) | Built | 1 | be/settings routes; System Settings; tests settings/settings, settingsNotice | — |
 | AD-05 | Homepage favourites and dashboard layout | Built | 2 | be/admin `/favourites*`, `/dashboard-layout`; tests admin/favourites, layout | — |
 | AD-06 | Punch simulator for development | Built | 2 | be/dev, be/attendance/__tests__/simulator; tests golden, month500.replay | — |
-| AD-07 | Data retention for former employees (DPDP) | **Missing** | 2 | no retention setting in be/settings/routes.ts; spec §9 | Retention period is the owners'. |
-| AD-08 | More than one company (legal entity) | **Missing** | 3 | one company plus the demo company only | Whether a second entity exists is the owners'. |
+| AD-07 | Data retention for former employees (DPDP) | Built | 2 | no retention setting in be/settings/routes.ts; spec §9 · **Re-check 2026-11-16:** Data retention (period Not set); test retention | Retention period is the owners'. |
+| AD-08 | More than one company (legal entity) | Built | 3 | one company plus the demo company only · **Re-check 2026-11-16:** Companies (payroll per company switched off beyond one company by owner decision); test legalEntities | Whether a second entity exists is the owners'. |
 | AD-09 | Undefined items A-1, A-4, A-6, A-7, A-8 | **Missing** | — | MASTER_CHECKLIST.md: "UNDEFINED in every plan file" | Cannot be audited until the owners define them. |
 | AD-10 | Vendor news feed and vendor help links | Not needed | — | — | Owner answer in GREYTHR_PARITY_EMPLOYEE_ADMIN.md §A: NOT WANTED. |
 | AD-11 | Tax and payroll sign-off by an outside accountant | Not needed | — | — | STAGE_7_PLAN.md: no CA; the owners enter and verify every tax value. |
@@ -730,6 +731,51 @@ value is never guessed and starts as Not set.
 |---|---|---|---|---|---|
 | MP-04 | Native store app | Missing | 3 | large | yes |
 | AD-09 | Undefined items A-1, A-4, A-6, A-7, A-8 | Missing | — | — | yes |
+
+
+## (e) Current state after the 2026-11-16 re-check
+
+297 rows: **255 Built**, 8 Partial, 20 Missing, 14 Not needed. Tier 1 rows still Partial or Missing: 4 (PY-43, ST-02, ST-05, IE-12), none buildable now: each waits for an owner value or sample.
+
+### Remaining (every row still Missing or Partial)
+
+| ID | Feature | Status | Tier | Why it is open |
+|---|---|---|---|---|
+| ER-29 | Assets issued to employees | Missing | 3 | **buildable now**: Tier 3; not payroll (assets, planned with the other session's work) |
+| AT-18 | Late-mark penalty rules (for example N late marks = half-day loss of pay) | Missing | 2 | **needs an owner value**: the late-mark penalty policy |
+| AT-22 | Regularization rules module (A-5) | Partial | 2 | **needs an owner value**: A-5 (the regularization rules module) is undefined; the correction limit is built |
+| LV-18 | Supporting document on a leave request | Partial | 2 | **buildable now**: Tier 2; not payroll (leave documents, planned with the other session's work) |
+| LV-21 | Privacy rule for sensitive leave types | Partial | 2 | **buildable now**: Tier 2; not payroll (sensitive leave privacy, the other session's work) |
+| PY-23 | Payslip layout set by the company | Missing | 2 | **needs an owner value**: the owners' payslip sample |
+| PY-30 | Statutory bonus calculation | Missing | 2 | **deferred by owner decision**: statutory bonus |
+| PY-43 | Employer PF and ESI contributions inside CTC | Partial | 1 | **needs an owner value**: how CTC is built (employer PF/ESI inside or outside); see the risk in A_PART4.md |
+| ST-02 | PF ECR file | Partial | 1 | **needs an owner value**: the PF portal's current ECR format (the layout is owner-typed; mechanism built) |
+| ST-05 | ESI upload file | Partial | 1 | **needs an owner value**: the ESI portal's current upload format (owner-typed layout; mechanism built) |
+| ST-16 | LTA exemption | Missing | 2 | **deferred by owner decision**: LTA |
+| ST-17 | Perquisites, including cheap loans | Missing | 2 | **deferred by owner decision**: perquisites |
+| ST-19 | Form 12BB output | Missing | 3 | **deferred by owner decision**: Form 12BB |
+| ST-22 | Quarterly return file in the official format | Missing | 2 | **deferred by owner decision**: the quarterly return file in the official format |
+| LC-13 | Manager step before the director on a claim | Missing | 2 | **buildable now**: Tier 2; a manager step on claims is a workflow choice, not needed for payroll correctness |
+| LC-15 | Travel advance and expense settlement | Missing | 3 | **deferred by owner decision**: travel advance |
+| LC-16 | Flexible benefit plan | Missing | 3 | **deferred by owner decision**: flexible benefits |
+| OE-03 | Candidate pre-joining portal and offer acceptance | Missing | 3 | **buildable now**: Tier 3; not payroll (recruitment, the other session's work) |
+| OE-07 | Employee submits a resignation | Missing | 2 | **buildable now**: Tier 2; not payroll (resignations, the other session's work) |
+| OE-08 | Exit clearance checklist (spec §7.2) | Missing | 2 | **buildable now**: Tier 2; not payroll (exit clearance, the other session's work) |
+| OE-09 | Notice period tracking | Partial | 2 | **buildable now**: Tier 2; per-person notice tracking (the company notice period is a setting) |
+| OE-10 | Exit interview | Missing | 3 | **buildable now**: Tier 3; not payroll |
+| RP-11 | Exit report (spec §7.6) | Missing | 3 | **buildable now**: Tier 3; exit report |
+| RP-12 | Custom report / query builder for directors | Missing | 2 | **buildable now**: Tier 2; a query builder for directors |
+| NT-10 | Phone push notifications | Missing | 3 | **buildable now**: Tier 3; phone push |
+| MP-04 | Native store app | Missing | 3 | **deferred by owner decision**: the PWA covers phones |
+| IE-12 | greytHR attendance and salary file readers (Stage 8) | Partial | 1 | **needs an owner value**: a synthetic sample of greytHR's pay items (payroll repository) file; real greytHR files untried |
+| AD-09 | Undefined items A-1, A-4, A-6, A-7, A-8 | Missing | — | **needs an owner value**: A-1, A-4, A-6, A-7, A-8 are undefined |
+
+## (f) Mismatches between documents and code (listed, not fixed silently)
+
+1. **Default behaviours is under Admin Tools, not System Settings.** `OWNER_REVIEW_SHEET.md` (lines with "System Settings → Default behaviours"), `D37_DEFAULTS.md`, `PORTAL_READY_REPORT.md` item 10a and row RA-11 here name it "System Settings → Default behaviours"; the menu (`frontend/src/routes/adminMenu.config.tsx`) puts **Default behaviours** directly under **Admin Tools**, beside **System Settings**.
+2. `MASTER_CHECKLIST.md`'s line "Skipped (owner decision or real value)" (Session A parity block, 2026-11-12) still lists rows built since (LV-14, ST-30, ST-07, ST-15, ST-18, ST-08, ST-25, ST-29, PY-41 and the amounts of PY-27/28/29); the part 3, part 4 and Stage 8 lines below it record what was built.
+3. The 2026-11-11 summary in (a) and the work list in (d) predate the re-check; they are kept as the audit wrote them. Section (e) is current.
+4. `payroll/inputs/importService.ts` said "a director confirms" a Monthly Inputs file until Stage 8; the owners' Stage 8 instruction made it a different director from the uploader (code and `MOVE_FROM_GREYTHR.md` agree now; `STAGE_4_PLAN.md` still says one director).
 
 ## Suggested order
 
