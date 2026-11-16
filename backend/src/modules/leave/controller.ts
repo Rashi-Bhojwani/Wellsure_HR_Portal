@@ -12,7 +12,7 @@ import * as requestsService from "./requests";
 import type { ActorMeta, LeaveViewer } from "./types";
 import * as yearEndService from "./yearEnd";
 // PEEPS-BEGIN leave-types
-import { redactLeaveRows } from "../leaveRules/hooks";
+import { redactBalanceOrLedger, redactLeaveRows } from "../leaveRules/hooks";
 // PEEPS-END
 
 function actorMeta(req: Request): ActorMeta {
@@ -78,12 +78,16 @@ export async function cancelLeaveRequest(req: Request, res: Response): Promise<v
 export async function getLeaveBalances(req: Request, res: Response): Promise<void> {
   const { employeeId, asOfDate } = req.query as { employeeId?: string; asOfDate?: string };
   const balances = await balancesService.getLeaveBalancesForDisplay(employeeId, viewer(req), asOfDate ? new Date(asOfDate) : businessToday());
-  res.status(200).json({ balances });
+  // PEEPS-BEGIN leave-types: menstrual and medical read "Leave" to managers and delegates (setting Not set)
+  res.status(200).json({ balances: await redactBalanceOrLedger(balances, viewer(req), employeeId) });
+  // PEEPS-END leave-types
 }
 
 export async function getLeaveLedger(req: Request, res: Response): Promise<void> {
   const { employeeId, leaveTypeId } = req.query as { employeeId?: string; leaveTypeId?: string };
-  res.status(200).json({ entries: await ledgerView.getLeaveLedger(employeeId, viewer(req), { leaveTypeId }) });
+  // PEEPS-BEGIN leave-types: menstrual and medical read "Leave" to managers and delegates (setting Not set)
+  res.status(200).json({ entries: await redactBalanceOrLedger(await ledgerView.getLeaveLedger(employeeId, viewer(req), { leaveTypeId }), viewer(req), employeeId) });
+  // PEEPS-END leave-types
 }
 
 // ── Calendar ─────────────────────────────────────────────────────────────

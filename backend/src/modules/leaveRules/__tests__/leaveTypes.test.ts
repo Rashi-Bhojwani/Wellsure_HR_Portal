@@ -297,6 +297,18 @@ describe("new leave types", () => {
       expect(await prisma.auditLog.count({ where: { action: "leave.document.opened", entityId: docId, actorUserId: p.hrAdmin.userId } })).toBe(0);
     });
 
+    it("leave balances and the ledger say \"Leave\" for menstrual and medical to a manager; the employee and HR see the type (Stage 4 review finding 5)", async () => {
+      const codesIn = (body: unknown) => JSON.stringify(body).match(/"(?:code|leaveTypeCode)":"[A-Z_]+"/g) ?? [];
+      const asManager = [...codesIn((await get("manager", `/api/leave/balances?employeeId=${p.report.employeeId}`)).body), ...codesIn((await get("manager", `/api/leave/ledger?employeeId=${p.report.employeeId}`)).body)];
+      expect(asManager.length).toBeGreaterThan(0); // the manager really reads the balances
+      expect(asManager.join(" ")).not.toMatch(/MEDICAL|MENSTRUAL/);
+      expect(asManager.join(" ")).toMatch(/"code":"LEAVE"/);
+      for (const who of ["report", "hrAdmin"] as const) {
+        const url = who === "report" ? "/api/leave/balances" : `/api/leave/balances?employeeId=${p.report.employeeId}`;
+        expect(codesIn((await get(who, url)).body).join(" "), who).toMatch(/MEDICAL/);
+      }
+    });
+
     it("the manager sees only \"Leave\" and the dates for a medical leave (setting Not set), never the reason or the document, in lists, notifications and task previews", async () => {
       const pending = await apply("report", "MEDICAL", addCalendarDays(friday, 49), addCalendarDays(friday, 49)); // a pending one, for the tasks inbox
       expect(pending.status, JSON.stringify(pending.body)).toBe(201);

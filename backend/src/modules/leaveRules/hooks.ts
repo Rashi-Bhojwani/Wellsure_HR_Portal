@@ -163,3 +163,17 @@ export async function redactLeaveRows<T>(body: T, viewer: ViewerLike): Promise<T
   }
   return body;
 }
+
+/**
+ * Leave balances and ledger rows read by someone other than the employee, HR or a director (a manager, an approval delegate): menstrual and
+ * medical leave read "Leave" until the directors' setting names them, as they already do on calendars, tasks and request rows (independent
+ * review finding 5). A row keeps its days; only the type's code, name and id are generalised.
+ */
+export async function redactBalanceOrLedger<T extends { code?: string; name?: string; leaveTypeId?: string; leaveTypeCode?: string }>(rows: T[], viewer: ViewerLike, targetEmployeeId: string | undefined): Promise<T[]> {
+  if (!targetEmployeeId || targetEmployeeId === viewer.employeeId || isHrOrDirector(viewer) || (await sensitiveTypesShown())) return rows;
+  return rows.map((r) => {
+    const code = r.code ?? r.leaveTypeCode;
+    if (!code || !isSensitiveLeaveTypeCode(code)) return r;
+    return { ...r, ...(r.code !== undefined ? { code: "LEAVE" } : {}), ...(r.name !== undefined ? { name: "Leave" } : {}), ...(r.leaveTypeId !== undefined ? { leaveTypeId: "" } : {}), ...(r.leaveTypeCode !== undefined ? { leaveTypeCode: "LEAVE" } : {}) };
+  });
+}
