@@ -17,6 +17,11 @@ import type { AdjustmentIn, CalcContext, ExceptionOut, ItemOut, LineOut, PersonI
 
 const c = canonicalDecimal;
 
+/** ESI covers a month whose ESI wages are more than nil and within the ceiling (at the ceiling is covered). Exported for the standard-defaults golden test. */
+export function inEsiCover(entitlement: Money, ceiling: Money): boolean {
+  return entitlement.greaterThan(ZERO) && entitlement.lessThanOrEqualTo(ceiling);
+}
+
 interface Acc {
   code: string;
   type: ComponentValue["type"];
@@ -209,7 +214,7 @@ export function calculatePerson(input: PersonInput, ctx: CalcContext): ItemOut {
       entitlement = last ? sum(last.lines.filter((l) => l.type === "EARNING" && ctx.components.byVersion.get(`${l.component}@${l.version}`)?.esiApplicable).map((l) => l.amount)) : ZERO;
     }
   }
-  const esiInCover = esiCovered && entitlement !== null && entitlement.greaterThan(ZERO) && entitlement.lessThanOrEqualTo(rules.esi.ceiling);
+  const esiInCover = esiCovered && entitlement !== null && inEsiCover(entitlement, rules.esi.ceiling);
   if (!esiCovered) notices.push(`ESI does not apply to ${input.employmentType.toLowerCase()} staff under the rule "ESI: employment types covered".`);
   else if (!esiInCover) notices.push(`ESI does not apply: their ESI wages for the month (${entitlement ? c(entitlement) : "none"}) are ${entitlement && entitlement.greaterThan(rules.esi.ceiling) ? "above" : "not within"} the ESI ceiling of ${c(rules.esi.ceiling)}.`);
   const esi = esiInCover ? computeEsi(esiWages, rules) : null;

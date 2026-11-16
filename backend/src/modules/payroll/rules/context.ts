@@ -124,9 +124,15 @@ export class RuleContext {
   }
 
   /** Test helper: a context over given values, so a calculation can be exercised without the database. Every value is version 1. */
-  static fromValuesForTests(values: Record<string, unknown>): RuleContext {
+  static fromValuesForTests(values: Record<string, unknown>, opts: { packOn?: string } = {}): RuleContext {
     if (!process.env.VITEST) throw new Error("for tests only");
-    return new RuleContext(new Map(Object.entries(values).map(([k, v]) => [k, { version: 1, valueHash: `test:${k}`, value: v }])));
+    const map = new Map<string, Current>(Object.entries(values).map(([k, v]) => [k, { version: 1, valueHash: `test:${k}`, value: v }]));
+    // `packOn`: also fill every rule not given from the standard defaults pack, as load() does for that day.
+    if (opts.packOn) for (const [key, series] of Object.entries(PACK_RULES)) {
+      const entry = map.has(key) ? null : entryOn(series, opts.packOn);
+      if (entry) map.set(key, { version: PACK_VERSION, valueHash: packPinHash(key, entry), value: entry.value, packFrom: entry.from });
+    }
+    return new RuleContext(map);
   }
 
   /** Read a rule's value (its canonical stored form). Pins it. Throws RuleNotSetError if nobody has entered a value. */

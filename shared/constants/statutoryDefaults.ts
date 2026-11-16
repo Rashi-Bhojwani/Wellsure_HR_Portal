@@ -161,11 +161,12 @@ export const PACK_TAX_YEARS: Readonly<Record<string, { value: unknown; verificat
         standardDeduction: e("50000", IT_SD),
         rebate: e({ thresholdIncome: "500000", maximum: "12500" }, IT_SALARIED_AY2627),
       },
+      // Surcharge applies when income EXCEEDS 50 lakh, 1 crore, 2 crore: a band starts one paisa above each threshold (the engine reads from <= income < to).
       surcharge: e([
-        { from: "0", to: "5000000", ratePercent: "0" },
-        { from: "5000000", to: "10000000", ratePercent: "10" },
-        { from: "10000000", to: "20000000", ratePercent: "15" },
-        { from: "20000000", to: null, ratePercent: "25" },
+        { from: "0", to: "5000000.01", ratePercent: "0" },
+        { from: "5000000.01", to: "10000000.01", ratePercent: "10" },
+        { from: "10000000.01", to: "20000000.01", ratePercent: "15" },
+        { from: "20000000.01", to: null, ratePercent: "25" },
       ], IT_SURCHARGE),
       cessPercent: e("4", IT_SURCHARGE),
       defaultRegime: e("NEW", IT_SALARIED_AY2627),
