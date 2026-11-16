@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import request from "supertest";
 import pino from "pino";
+import { decryptField } from "../../../lib/encryption";
 import { logger } from "../../../lib/logger";
 import { redis } from "../../../lib/redis";
 import { deleteWithDependents } from "../../../lib/__tests__/cleanup";
@@ -94,7 +95,11 @@ describe("DEMO document autofill: settings, authority, never auto-save, idempote
     const r = await up("hr", { ...emp(), docKind: "BANK" }, await S.bankPdf(), "bank.pdf", "application/pdf");
     const doc = (await call("hr", "get", `/documents/${r.body.id}`)).body;
     expect(doc.extraction.status).toBe("DONE");
-    expect(Object.fromEntries(doc.fields.map((x: { field: string; suggestion: { value: string } }) => [x.field, x.suggestion.value]))).toEqual(S.BANK);
+    // HR sees the account number masked to its last four (project rule for bank and identity values); a director sees it whole.
+    const values = (d: { fields: Array<{ field: string; suggestion: { value: string } }> }) => Object.fromEntries(d.fields.map((x) => [x.field, x.suggestion.value]));
+    expect(values(doc)).toEqual({ ...S.BANK, accountNumber: `••••${S.BANK.accountNumber.slice(-4)}` });
+    expect(JSON.stringify(doc)).not.toContain(S.BANK.accountNumber);
+    expect(values((await call("director", "get", `/documents/${r.body.id}`)).body)).toEqual(S.BANK);
     expect(doc.notice).toContain("not a verified");
     expect(doc.provenance).toMatchObject({ provider: "LOCAL", runs: 1 });
     // Never auto-saved.
@@ -126,6 +131,19 @@ describe("DEMO document autofill: settings, authority, never auto-save, idempote
     expect((await call("hr", "post", `/documents/${r.body.id}/apply`, {})).body.error.code).toBe("NOTHING_TO_SAVE"); // the name is never saved
     expect(await prisma.autofillFieldReview.count({ where: { documentId: r.body.id, field: { in: ["pan", "aadhaar"] } } })).toBe(0);
     await prisma.userPermissionOverride.deleteMany({ where: { userId: f.people.hr.userId, permissionId: key.id } });
+    // Stage 4 review: with the statutory key back, HR sees PAN and Aadhaar masked to the last four, never whole, yet accepting stores the real
+    // reading (the server's, not the screen's); the director sees them whole.
+    const again = (await call("hr", "get", `/documents/${r.body.id}`)).body;
+    expect(again.fields.find((x: { field: string }) => x.field === "pan")).toMatchObject({ authorized: true, masked: true, suggestion: { value: `••••${S.IDENTITY.pan.slice(-4)}` } });
+    expect(again.fields.find((x: { field: string }) => x.field === "aadhaar")).toMatchObject({ authorized: true, masked: true, suggestion: { value: `••••${S.IDENTITY.aadhaar.slice(-4)}` } });
+    for (const whole of [S.IDENTITY.pan, S.IDENTITY.aadhaar]) expect(JSON.stringify(again)).not.toContain(whole);
+    expect((await call("hr", "post", `/documents/${r.body.id}/fields/pan/review`, { decision: "ACCEPTED" })).status).toBe(200);
+    const stored = await prisma.autofillFieldReview.findUniqueOrThrow({ where: { documentId_field: { documentId: r.body.id, field: "pan" } } });
+    expect(decryptField(stored.valueEncrypted!)).toBe(S.IDENTITY.pan);
+    const afterAccept = (await call("hr", "get", `/documents/${r.body.id}`)).body;
+    expect(afterAccept.fields.find((x: { field: string }) => x.field === "pan").review.value).toBe(`••••${S.IDENTITY.pan.slice(-4)}`);
+    const asDirector = (await call("director", "get", `/documents/${r.body.id}`)).body;
+    expect(asDirector.fields.find((x: { field: string }) => x.field === "pan")).toMatchObject({ masked: false, suggestion: { value: S.IDENTITY.pan }, review: { value: S.IDENTITY.pan } });
   });
 
   it("re-running extraction never overwrites an accepted correction, and two simultaneous extractions create one result", async () => {

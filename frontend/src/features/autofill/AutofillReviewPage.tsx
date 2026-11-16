@@ -26,7 +26,8 @@ function Source({ id, mimeType }: { id: string; mimeType: string }) {
 
 function FieldRow({ docId, f, locked }: { docId: string; f: api.Field; locked: boolean }) {
   const client = useQueryClient();
-  const [value, setValue] = useState(f.review?.value ?? f.suggestion?.value ?? "");
+  // A masked value (••••1234) is never put in the box: correcting means typing the whole value again.
+  const [value, setValue] = useState(f.masked ? "" : (f.review?.value ?? f.suggestion?.value ?? ""));
   const work = useMutation({ mutationFn: (d: { decision: "ACCEPTED" | "CORRECTED" | "REJECTED"; value?: string }) => api.review(docId, f.field, d.decision, d.value), onSuccess: (doc) => { client.setQueryData(["autofill", "doc", docId], doc); toast.success("Field reviewed."); }, onError: (e) => toast.error(apiErrorMessage(e, "Could not review this field.")) });
   if (!f.authorized) return <Panel title={f.label} extra={<StatusChip>Not yours to review</StatusChip>}><p>Another reviewer with this field's permission confirms it.</p></Panel>;
   const s = f.suggestion;

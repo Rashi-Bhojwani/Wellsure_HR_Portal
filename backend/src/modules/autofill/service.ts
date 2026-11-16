@@ -65,6 +65,13 @@ async function viewerOf(actor: AuthenticatedUser) {
   return { ...actor, access, isDirector: access.isSuperAdmin, can };
 }
 type Viewer = Awaited<ReturnType<typeof viewerOf>>;
+/** Identifiers shown to a non-director only as their last four characters (project rule: HR sees bank and identity values masked). */
+const MASKED_FIELDS = new Set(["pan", "aadhaar", "accountNumber"]);
+function maskLast4(value: string | null): string | null {
+  if (value == null) return value;
+  const compact = value.replace(/\s/g, "");
+  return compact.length <= 4 ? "••••" : `••••${compact.slice(-4)}`;
+}
 const notFound = () => new HttpError(404, "Document not found.", "NOT_FOUND");
 async function assertSubject(v: Viewer, subjectKind: "CANDIDATE" | "EMPLOYEE", subjectId: string, kind: DocKind) {
   if (SUBJECT_OF[kind] !== subjectKind) throw new HttpError(400, `${kind} documents belong to a ${SUBJECT_OF[kind].toLowerCase()}.`, "VALIDATION_ERROR");
@@ -199,8 +206,12 @@ export async function getDocument(id: string, actor: AuthenticatedUser) {
       const authorized = v.can[def.authority];
       const review = doc.reviews.find((r) => r.field === def.field);
       const s = suggestions[def.field];
+      // Stage 4 review: an extracted PAN, Aadhaar or account number is masked to its last four for anyone but a director, as typed values
+      // are; accepting uses the stored suggestion (never the screen's), and opening the source document is the audited reveal.
+      const mask = MASKED_FIELDS.has(def.field) && !v.isDirector ? maskLast4 : (x: string | null) => x;
+      const shown = s ? { ...s, value: s.value == null ? s.value : mask(s.value) } : null;
       return authorized
-        ? { field: def.field, label: def.label, authorized, suggestion: s ?? null, review: review ? { decision: review.decision, value: open(review.valueEncrypted), at: review.createdAt.toISOString() } : null }
+        ? { field: def.field, label: def.label, authorized, masked: MASKED_FIELDS.has(def.field) && !v.isDirector, suggestion: shown, review: review ? { decision: review.decision, value: mask(open(review.valueEncrypted)), at: review.createdAt.toISOString() } : null }
         : { field: def.field, label: def.label, authorized, suggestion: null, review: review ? { decision: review.decision, value: null, at: review.createdAt.toISOString() } : null };
     }),
   };
