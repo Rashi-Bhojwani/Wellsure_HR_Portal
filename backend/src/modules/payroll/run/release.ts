@@ -20,7 +20,6 @@ import { requireHolds } from "./closing";
 import { formatDate, renderLayout, type LayoutRow } from "./layout";
 import { currentLayout, debitAccountOf } from "./layouts";
 import { buildPayslips } from "./payslip";
-import { computeRun } from "./engine";
 
 // The acts that release a final run's results, and the only code allowed to write payslips, bank batches and release rows (docs/plans/PHASE_6.md §14H; a source scan in
 // payrollGuards.test.ts keeps it to this file). Like finalising, each is carried out by somebody other than the person who decided, re-checks everything from scratch, and
@@ -41,8 +40,8 @@ async function finalRun(runId: string): Promise<PayrollRun> {
   const run = await prisma.payrollRun.findUnique({ where: { id: runId } });
   if (!run) throw new HttpError(404, "No such payroll run.", "NOT_FOUND");
   if (run.status !== "FINALISED") throw new HttpError(409, "This run is not final, so nothing can be released from it.", "RUN_STATE");
-  const computed = await computeRun({ start: run.cycleStart, end: run.cycleEnd, label: run.cycleLabel, runId: run.id });
-  void computed; // a final run never changes; the approval's own hash (below) is what is checked
+  // A final run never changes, so it is not calculated again here: the approval's own hash (decidedBy, then consume inside the write) is what is checked. A full
+  // calculation used to run here and its result was thrown away; at 500 people it cost about half a second of every publish and bank file (Stage 9 re-measure).
   await assertRunIsReal(((run.pins as unknown as Parameters<typeof assertRunIsReal>[0]) ?? []), "released");
   return run;
 }

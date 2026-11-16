@@ -602,3 +602,52 @@ the director screens and do not see the greytHR tabs. Found and fixed: the Devel
 at both views: run chosen with arrows and Enter; the statement and bank drop areas reached by Tab with focus visible and Enter opens the file chooser; the
 tolerance setting's drawer opens and Escape closes it.
 **Not verified:** real greytHR exports; the bank's acceptance of an .xlsx or .csv file; a Windows machine other than CI.
+
+## Session A Stage 9: audit re-check, remaining Tier 1 gaps, full-month rehearsal, hardening (written 2026-11-16)
+
+**1. Audit re-check** (`71898df`). `PARITY_COVERAGE.md` re-checked against the code at `04275be`: a row is Built only with a real route or screen and a test.
+59 rows updated with their evidence; 297 rows: 255 Built, 8 Partial, 20 Missing, 14 Not needed. New section (e) "Remaining" classifies every open row (needs an
+owner value / deferred by owner decision / buildable now); section (f) lists four document/code mismatches, not fixed silently (Default behaviours is under Admin
+Tools, not System Settings, in four documents; MASTER_CHECKLIST's "Skipped" line; sections (a) and (d) predate the re-check; STAGE_4_PLAN says one director applies
+Monthly Inputs imports).
+
+**2. Remaining Tier 1 gaps.** None buildable now. The four open Tier 1 rows each wait for the owners: PY-43 (employer PF/ESI inside or outside CTC), ST-02 (the
+PF portal's current ECR format; the mechanism is built), ST-05 (the ESI portal's upload format; mechanism built), IE-12 (a synthetic sample of greytHR's pay items
+file; real greytHR files untried). The deferred rows (LTA, perquisites, statutory bonus, flexible benefits, travel advance, Form 12BB, quarterly return file) were
+skipped as instructed. The rows still "buildable now" are all Tier 2/3 and not payroll. **Nothing was built under item 2.**
+
+**3. Full-month rehearsal** (`c61e307`, `payroll/__tests__/fullMonthRehearsal.test.ts`, 12 ordered steps, about 16 s). On made-up people with TEST rule values,
+through the API (the attendance and calculation workers' functions are called directly): the device log for one person and a greytHR swipes file for the other,
+previewed and committed; the late file's TOO_OLD flags block finalising until a person accepts them (bulk accept with a reason); leave refused without a balance,
+granted, applied, approved; attendance processed and finalised (a second finalise refused); a loan sanctioned only by the other director; the run calculated (before
+the month was finalised everyone was EXCLUDED with ATTENDANCE_NOT_FINAL), the leave days paid, the loan paid out and recovered; the bank file refused before
+finalise, the preparer's self-approval refused, approved, finalised; the bank file refused without a confirmed layout, then without its own approval, made, marked
+sent only after download (409 NOT_DOWNLOADED before); payslips unseen, publish refused until approved, then the employee sees their own; PF, ESI and PT challans
+confirmed only by a different director; the Form 16 draft refused before the year closes and a DRAFT PDF after; a wrong file refused by the parallel-run kit and a
+statement generated from the run matched with zero differences. Decision: it runs on the test world (`closingWorld`), not on the seeded demo company, because the
+demo company already has finalised months and its own CI step.
+
+**4a. Hostile spreadsheets** (`f421c7e`, `lib/__tests__/xlsHardening.test.ts`). 820 files through the product's upload reader (`readGrid`): broken, truncated (four
+files at 39 cut points), encrypted (FILEPASS and an EncryptionInfo stream), oversized, huge rows, 25 structural lies (sector size, chain and list loops, pointers past
+the end, string tables that claim more than they hold, short labels, missing sheets, nested sheets), and 600 seeded random mutations of valid files. Each is read in a
+worker thread with a 256 MB heap cap and killed after 5 s; every file must end in a clean read or a 4xx refusal, inside 2 s. **Found and fixed:** a label whose
+rich-text or extended count was cut off threw a raw RangeError (a 500): bounds-checked, and any stray RangeError in the reader now becomes a clean refusal; a sparse
+sheet (one cell at column 255 of every row, under 1 MB) grew to about 16.7 million grid slots (221 MB of the 256 MB cap): padded slots now count toward the
+1,000,000-cell limit. After the fix: slowest file 43 ms, worker heap peak 60 MB. Both defects were seen failing before the fix.
+
+**4b. 500 people, re-measured** (`npm run measure:stage9`, new; on fresh scratch databases prepared with the existing scripts: seed, demo company, `measure:payroll --
+500`, `measure:new-readers`). Budgets: the recorded 500-person figures doubled (PHASE_6_REVIEW §6; 1.6 s per screen read); figures with no recorded value are held to
+1.6 s and say so.
+
+| Measured (development machine, 498–500 people, 7 branches) | Time | Budget |
+|---|---|---|
+| Calculation job (`measure:payroll`) / full calculation in memory | 3.5 s / 0.49 s | recorded 6.5 s / 1.6 s |
+| Approval re-check / payslip content for all | 0.37 s / 0.40 s | 1.4 s / 1.0 s |
+| Payslip PDFs (15, Chromium) | 0.13–0.15 s each (500 in about 1.1 minutes) | 0.5 s each |
+| **Publish payslips (the route)** | **1.88 s before the fix**, PUBLISH_AFTER after | 1.6 s (no recorded figure) |
+| Each of the 13 payroll reports / grouped by branch / head-wise .xlsx grouped | at most 0.31 s / 0.33 s / 0.29 s | 1.6 s / 1.6 s / 2.2 s |
+| Parallel-run comparison of a 498-row statement: upload and match / open / export | 0.29 / 0.05 / 0.05 s | 1.6 / 1.6 / 2.2 s |
+
+**Over budget and fixed:** publishing payslips. Every release (publish, bank file) first ran a full calculation of the run and threw the result away
+(`void computed` in `run/release.ts`, there since the file was written); a final run never changes and the approval's hash is what is checked (before preparing and
+again inside the write). Removed. The payslip PDF step that hung in an earlier container completed here.
