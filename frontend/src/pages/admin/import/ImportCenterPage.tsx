@@ -307,6 +307,8 @@ export function ImportCenterPage() {
   const { hasPermission, hasRole } = useAuth();
   // Stage 8: greytHR's pay files are the directors' alone (the server refuses everyone else too).
   const isDirector = hasRole("SUPER_ADMIN");
+  // The Developer role keeps the device's own log; greytHR's swipes file is refused to it by the server, so it is not offered here either.
+  const punchesLabel = hasRole("DEVELOPER") ? "Punches (ATTLOG)" : "Punches (ATTLOG or greytHR swipes)";
   const canImportAll = hasPermission("import.manage");
   const canImportDetails = canImportAll || hasPermission("import.details.manage");
   return (
@@ -323,7 +325,7 @@ export function ImportCenterPage() {
             ...(hasPermission("invitations.send") ? [{ key: "invitations", label: "Invitations", children: <InvitationsTab /> }] : []),
             { key: "reconciliation", label: "Reconciliation Report", children: <ReconciliationTab /> },
             // Phase 2 P2-B: the emergency punch upload (attendance.devices.manage).
-            ...(hasPermission("attendance.devices.manage") ? [{ key: "punches", label: "Punches (ATTLOG or greytHR swipes)", children: <PunchImportTab /> }] : []),
+            ...(hasPermission("attendance.devices.manage") ? [{ key: "punches", label: punchesLabel, children: <PunchImportTab /> }] : []),
             ...(isDirector ? [{ key: "greythr-overrides", label: "greytHR salary overrides", children: <MonthlyInputsImport canEdit onApplied={() => undefined} /> }] : []),
             ...(isDirector ? [{ key: "greythr-statement", label: "greytHR salary statement", children: <ParallelRunPanel /> }] : []),
             ...(isDirector ? [{ key: "greythr-bank", label: "greytHR bank file", children: <BankFileCheck /> }] : []),
