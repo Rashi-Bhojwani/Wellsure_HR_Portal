@@ -41,7 +41,8 @@ const refuseNonDirector = (actor: PeepsActor, what: string) => {
   if (!actor.isDirector || isDeveloper(actor)) throw new HttpError(403, `Only a director ${what}.`, 'FORBIDDEN');
 };
 
-async function present(rows: Row[]) {
+/** A tag as a viewer sees it; whether a review was asked for (and its outcome) only for the person tagged and the directors (Stage 4 review). */
+async function present(rows: Row[], viewer: PeepsActor) {
   const cat = await catalogue();
   const label = await giverLabels(rows.map((r) => ({ giverUserId: r.giverUserId, giverKind: 'DIRECTOR' as const })), { realNames: true });
   const at = now();
@@ -56,7 +57,7 @@ async function present(rows: Row[]) {
       removed: Boolean(r.removal),
       active: !r.removal && r.expiresAt > at,
       from: label({ giverUserId: r.giverUserId, giverKind: 'DIRECTOR' }),
-      review: review ? { requestedAt: review.at.toISOString(), outcome: review.decision?.outcome ?? null } : null,
+      review: review && (viewer.isDirector || r.recipientEmployeeId === viewer.employeeId) ? { requestedAt: review.at.toISOString(), outcome: review.decision?.outcome ?? null } : null,
     };
   });
 }
@@ -78,7 +79,7 @@ export async function give(actor: PeepsActor, input: { recipientEmployeeId: stri
   await giverKindFor(actor, input.recipientEmployeeId, 'nudges'); // directors only; not yourself; an active employee
   const key = { giverUserId_idempotencyKey: { giverUserId: actor.userId, idempotencyKey: input.idempotencyKey } };
   const existing = await prisma.nudgeTagAward.findUnique({ where: key, include });
-  if (existing) return { ...(await present([existing]))[0]!, repeated: true };
+  if (existing) return { ...(await present([existing], actor))[0]!, repeated: true };
   const tag = (await catalogue()).find((t) => t.code === input.tagCode);
   if (!tag) throw new HttpError(400, 'That tag is not in the catalogue.', 'VALIDATION_ERROR');
   if (tag.retired) throw new HttpError(409, 'That tag has been retired.', 'RETIRED');
@@ -105,21 +106,21 @@ export async function give(actor: PeepsActor, input: { recipientEmployeeId: stri
       throw err;
     });
   if (!repeated) await peepsNotify(input.recipientEmployeeId, { type: 'nudges.received', title: 'You received a nudge', body: 'Open Recognition to see it.', link: '/app/recognition', payload: { nudgeId: row.id } }, { dedupeKey: `nudge:${row.id}` });
-  return { ...(await present([row]))[0]!, repeated };
+  return { ...(await present([row], actor))[0]!, repeated };
 }
 
 /** The receiver's own tags, recent first, with who gave each and any review. */
 export async function mine(actor: PeepsActor) {
   refuseDeveloper(actor);
   const rows = await prisma.nudgeTagAward.findMany({ where: { recipientEmployeeId: actor.employeeId }, orderBy: { givenAt: 'desc' }, take: 100, include });
-  return present(rows);
+  return present(rows, actor);
 }
 
 /** A person's active tags, as everyone signed in sees them. */
 export async function forPerson(actor: PeepsActor, employeeId: string) {
   if (employeeId !== actor.employeeId) refuseDeveloper(actor);
   const rows = await prisma.nudgeTagAward.findMany({ where: { recipientEmployeeId: employeeId, ...activeWhere(now()) }, orderBy: { givenAt: 'desc' }, include });
-  return { tags: await present(rows) };
+  return { tags: await present(rows, actor) };
 }
 
 /** Everyone's active tag count (only people who have one), for the directory. */
@@ -133,7 +134,7 @@ export async function counts(actor: PeepsActor) {
 export async function recent(actor: PeepsActor) {
   refuseDeveloper(actor);
   const rows = await prisma.nudgeTagAward.findMany({ where: activeWhere(now()), orderBy: { givenAt: 'desc' }, take: 20, include });
-  const out = await present(rows);
+  const out = await present(rows, actor);
   return Promise.all(out.map(async (t, i) => ({ ...t, recipient: await employeeRef(rows[i]!.recipientEmployeeId) })));
 }
 
@@ -204,7 +205,7 @@ export async function decideReview(actor: PeepsActor, id: string, input: { outco
 export async function adminAll(actor: PeepsActor) {
   refuseNonDirector(actor, 'sees every nudge');
   const rows = await prisma.nudgeTagAward.findMany({ orderBy: { givenAt: 'desc' }, take: 500, include });
-  const out = await present(rows);
+  const out = await present(rows, actor);
   return Promise.all(out.map(async (t, i) => ({ ...t, recipient: await employeeRef(rows[i]!.recipientEmployeeId) })));
 }
 

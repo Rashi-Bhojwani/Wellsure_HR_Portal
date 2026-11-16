@@ -272,4 +272,19 @@ describe("nudge tags and read-only corrective notes", () => {
       expect(JSON.stringify((await get("other", `/api/people?search=${NOTE_MARKER}`)).body)).not.toContain(noteId);
     });
   });
+
+  it("whether a review was asked for, and its outcome, shows only to the person tagged and the directors (Stage 4 review finding 3)", async () => {
+    const given = await tag("director", "other");
+    expect(given.status).toBe(201);
+    expect((await post("other", `/api/nudges/${given.body.id}/review`)).status).toBe(200);
+    const reviewOf = (list: Array<{ id: string; review: unknown }>) => list.find((t) => t.id === given.body.id)?.review;
+    expect(reviewOf((await get("other", "/api/nudges/mine")).body)).toMatchObject({ outcome: null });
+    expect(reviewOf((await get("director", `/api/nudges/people/${p.other.employeeId}`)).body.tags)).toMatchObject({ outcome: null });
+    for (const who of ["emp", "manager", "hr", "member"] as const) {
+      const person = (await get(who, `/api/nudges/people/${p.other.employeeId}`)).body.tags as Array<{ id: string; review: unknown }>;
+      expect(person.some((t) => t.id === given.body.id), who).toBe(true); // the tag itself is public
+      expect(reviewOf(person), who).toBeNull();
+      expect(reviewOf((await get(who, "/api/nudges/recent")).body), who).toBeNull();
+    }
+  });
 });
