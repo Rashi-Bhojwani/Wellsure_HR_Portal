@@ -594,7 +594,7 @@ reader bug (a string continued across records lost its flag byte) and a real imp
 four tests asserting the old Developer access (changed to the new rule), one frontend test needing the signed-in director: all fixed.
 **Full backend suite alone:** first run 4 failures (the history-table guard: the swipes reader now uses a reader in `lib/effectiveDating`; sealedIdentifiers
 expected the Developer to read rules; two compare tests edited while the suite ran); after the fixes **260 files, 2,249 tests, all passed**.
-**CI:** CI_STAGE8_PENDING.
+**CI:** runs 386 and 387 failed: 386 on the old Developer assertions fixed in `c4b9485`; 387 only in the demo-company step (`demoCompany.demo.test.ts`, run only in CI, expected the old restricted layout view), fixed in `d51d80b` (`npm run test:demo` 7/7 locally). Run 388 (`8c7e7d5`) cancelled by the next push. **Run 389** (`a381e9e`, containing the final code commit `d51d80b`): **all 12 jobs green**, read to the end (lint, typecheck, tokens and bundles, migrations match, seed, frontend and agent tests, demo company tests, four backend shards and `backend-tests-complete`, both sensitive-ui scans, latency, attendance replay, docker build, agent-windows).
 **Browser walk** (scratch copy of the demo company, synthetic files): Parallel run, Import Center (greytHR tabs, bank check), Default behaviours, as director,
 HR, manager, employee and Developer at 1280 light and 390 dark (30 visits): no crash, no server error, no secret text (the sample's account number and IFSC
 never shown), no horizontal scroll. The director compared the sample statement against a demo run and checked the sample bank file; the others are refused
