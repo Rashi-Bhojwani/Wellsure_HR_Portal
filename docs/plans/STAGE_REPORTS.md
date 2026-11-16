@@ -711,3 +711,13 @@ never overwriting (a director's unconfirmed 18,000 wins and the standard run goe
 acknowledgement (refused, one ack refused, demo exempt, both acks pass, once per director, audited), Ready for First Run. **Mutation checks: 4 of 4 caught**
 (effective dating, no-overwrite, acknowledgement refusal, double-pay guard). Existing tests changed only because a standard value is now in force or for the relief
 fix: 7 files, each recorded in `CHANGED_TESTS.md`; the payroll golden run unchanged (its world enters every rule).
+**Verification.** Check script (lint, typecheck, tokens, migrations on a fresh database, 13 backend files / 150 tests, frontend 135): all passed. **Full backend
+suite alone on `089ff9a`: 263 files, 2,291 tests, all passed** (26 minutes). **CI:** run 413 (`aa646c1`) failed only in the backend shards, on the existing tests
+not yet updated at that commit (fixed in `3687481`); runs 409–412, 414 and 415 cancelled by later pushes; **run 416 on `089ff9a`: all 12 jobs green**. The overflow
+fix below is screen-only; CI on its commit is read below. **Browser walk** (scratch demo company, migrated): Ready for First Run, Rules, Tax Years, Minimum wages and
+Default behaviours as director, HR, manager, employee and Developer at 1280 light and 390 dark (50 visits): no crash, no server error, no secret text; the director
+sees the standard values, "not levied in Rajasthan" with its source, the standard tax year, the standard Rajasthan rates and the new settings; the other four are
+refused every one. **Found and fixed:** at 390 the Ready page and Minimum wages scrolled sideways (long source URLs in the review notes): those blocks now wrap
+anywhere. Keyboard at both views: "I have reviewed the standard values" reached by Tab with focus visible, Enter opens the dialog, Escape closes it and focus
+returns, Tab to the dialog's confirm and Enter records it ("Recorded: you have reviewed the standard values.").
+**Not verified:** the Rajasthan values against a gazette; the ECR file on the EPFO portal; the ESI upload (format not published); a real month in the parallel run.

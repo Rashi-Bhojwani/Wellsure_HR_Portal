@@ -147,7 +147,7 @@ export function StandardValuesPanel() {
             </StatusChip>
           }
         >
-          <Stack>
+          <div style={{ overflowWrap: "anywhere" }}><Stack>
             {!p.state.loaded && (
               <ApprovalBanner
                 tone="danger"
@@ -282,7 +282,7 @@ export function StandardValuesPanel() {
               onCancel={() => setConfirming(null)}
               onConfirm={() => (confirming === "ACK" ? ack.mutate() : review.mutate())}
             />
-          </Stack>
+          </Stack></div>
         </Panel>
       );
 }

@@ -72,7 +72,7 @@ export function MinimumWagesPage() {
         </Panel>
         {(setup.data?.standardRates ?? []).length > 0 && (
           <Panel title={`Standard rates: ${setup.data!.standardRates![0]!.state}`} subtitle={`${setup.data!.standardRates![0]!.label}. Used for a category no director has entered a rate for.`}>
-            <Stack>
+            <Stack style={{ overflowWrap: "anywhere" }}>
               {setup.data!.standardRates![0]!.reviewNeeded && <ApprovalBanner tone="warning" title="Review needed" description={setup.data!.standardRates![0]!.note} />}
               <DataTable<NonNullable<MinimumWageSetup["standardRates"]>[number]>
                 rowKey="category"
