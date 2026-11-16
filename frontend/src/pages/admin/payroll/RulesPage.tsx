@@ -81,7 +81,7 @@ export function RulesPage() {
       key: "value",
       width: "20%",
       // A long table value (PT slabs, state names) is cut to the column with the whole of it on hover, so it never pushes the actions off screen.
-      render: (_, r) => (r.current ? <Text code ellipsis={{ tooltip: formatRuleValue(r.shape, r.current.value) }} style={{ maxWidth: "100%" }}>{formatRuleValue(r.shape, r.current.value)}</Text> : <Text type="secondary">Not set</Text>),
+      render: (_, r) => (r.current ? <Text code ellipsis={{ tooltip: formatRuleValue(r.shape, r.current.value) }} style={{ maxWidth: "100%" }}>{formatRuleValue(r.shape, r.current.value)}</Text> : r.standard ? <Text code>{formatRuleValue(r.shape, r.standard.value)}</Text> : r.byState ? <Text type="secondary">By the company&apos;s state</Text> : <Text type="secondary">Not set</Text>),
     },
     { title: "Status", key: "status", width: "22%", render: (_, r) => <RuleStatusCell r={r} /> },
     { title: "Who confirms", dataIndex: "whoConfirms", width: "12%" },
@@ -123,7 +123,8 @@ export function RulesPage() {
           description={
             <>
               A rule is <StatusChip tone="neutral">Not set</StatusChip> until somebody enters it, a <StatusChip tone="warning">Placeholder</StatusChip> until a director confirms it, and <StatusChip tone="success">Confirmed</StatusChip> after. A payroll run that used any Placeholder is a <Text strong>test</Text>: it can be calculated and looked at, with a TEST mark on screen, in files and on payslip previews, but it cannot be approved, finalised, published or turned into a bank file.
-              Editing a Confirmed rule makes the new value a Placeholder again; the last Confirmed value stays on record.
+              Editing a Confirmed rule makes the new value a Placeholder again; the last Confirmed value stays on record. Statutory rates and ceilings carry a{" "}
+              <StatusChip tone="info">Standard default, change in settings</StatusChip> with its source: it is in force until a director&apos;s own value is confirmed, and a director&apos;s edit waiting for confirmation does not replace it.
             </>
           }
         />
@@ -167,9 +168,9 @@ export function RulesPage() {
                 mobile={{
                   title: (r) => r.label,
                   subtitle: (r) => r.key,
-                  status: (r) => <StatusChip tone={STATUS_TAG[r.status].tone}>{STATUS_TAG[r.status].label}</StatusChip>,
+                  status: (r) => (r.standard && r.status === "NOT_SET" ? <StatusChip tone="info">{r.standard.label}</StatusChip> : <StatusChip tone={STATUS_TAG[r.status].tone}>{STATUS_TAG[r.status].label}</StatusChip>),
                   fields: [
-                    { label: "Value", render: (r) => (r.current ? <Text code>{formatRuleValue(r.shape, r.current.value)}</Text> : "Not set") },
+                    { label: "Value", render: (r) => (r.current ? <Text code>{formatRuleValue(r.shape, r.current.value)}</Text> : r.standard ? <Text code>{formatRuleValue(r.shape, r.standard.value)}</Text> : r.byState ? "By the company's state" : "Not set") },
                     { label: "Who confirms", render: (r) => r.whoConfirms },
                     { label: "About", render: (r) => <RuleStatusCell r={r} hideChip /> },
                   ],
@@ -191,7 +192,7 @@ export function RulesPage() {
 function RuleStatusCell({ r, hideChip }: { r: RuleView; hideChip?: boolean }) {
   return (
     <Space orientation="vertical" size={4}>
-      {!hideChip && <StatusChip tone={STATUS_TAG[r.status].tone}>{STATUS_TAG[r.status].label}</StatusChip>}
+      {!hideChip && !(r.standard && r.status === "NOT_SET") && <StatusChip tone={STATUS_TAG[r.status].tone}>{STATUS_TAG[r.status].label}</StatusChip>}
       {r.openQuestion && (
         <Tooltip title={r.openQuestion.question}>
           <span tabIndex={0} aria-label={`Open question: ${r.openQuestion.question}`}>
@@ -199,10 +200,23 @@ function RuleStatusCell({ r, hideChip }: { r: RuleView; hideChip?: boolean }) {
           </span>
         </Tooltip>
       )}
+      {r.standard && (
+        <>
+          <StatusChip tone="info">{r.standard.label}</StatusChip>
+          <Caption>
+            In use: {formatRuleValue(r.shape, r.standard.value)}
+            {r.standard.from ? ` from ${formatDate(r.standard.from)}` : ""}. Source:{" "}
+            {r.standard.source.url ? <a href={r.standard.source.url} target="_blank" rel="noreferrer">{r.standard.source.name}</a> : r.standard.source.name} (checked {formatDate(r.standard.checkedOn)}).
+          </Caption>
+          {r.standard.reviewNeeded && <StatusChip tone="warning">Review needed</StatusChip>}
+          {r.standard.pending && <Caption tone="warning">A director&apos;s new value is waiting for the other director&apos;s confirmation; the standard value is used until then.</Caption>}
+        </>
+      )}
+      {r.byState && !r.current && <Caption>Follows the company&apos;s state: see Standard statutory values on Ready for First Run.</Caption>}
       {r.sourceLabel && <Caption tone={r.status === "PLACEHOLDER" ? "warning" : undefined}>{r.sourceLabel}</Caption>}
       {r.current?.sourceNote && <Caption>Source: {r.current.sourceNote}{r.current.effectiveFrom ? ` (applies from ${formatDate(r.current.effectiveFrom)})` : ""}</Caption>}
       {r.lastConfirmed && <Caption>Last confirmed value: {formatRuleValue(r.shape, r.lastConfirmed.value)}</Caption>}
-      {hideChip && !r.openQuestion && !r.sourceLabel && !r.lastConfirmed && "—"}
+      {hideChip && !r.openQuestion && !r.sourceLabel && !r.lastConfirmed && !r.standard && "—"}
     </Space>
   );
 }

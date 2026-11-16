@@ -24,6 +24,8 @@ export interface TaxYearView {
   lastConfirmed: VersionView | null;
   /** What the year still lacks before a TDS can be worked out under both regimes, in words. */
   missing: string[];
+  /** Standard defaults pack: the standard year, and whether payroll uses it (no director version is confirmed). */
+  standard: { inUse: boolean; value: TaxYearValue; verification: string; unverifiedParts: string[] } | null;
 }
 
 const label = (raw: string): string => {
@@ -47,13 +49,16 @@ function toView(year: string, data: Awaited<ReturnType<typeof loadItems>>): TaxY
   const fy = parseFinancialYearLabel(year);
   const s = summarise(data, year);
   const value = (s.current?.value as TaxYearValue | undefined) ?? null;
-  return { year, start: fy.start, end: fy.end, value, status: s.status, sourceLabel: s.sourceLabel, current: s.current, lastConfirmed: s.lastConfirmed, missing: missingForTds(value) };
+  const std = packTaxYear(year);
+  const inUse = Boolean(std) && s.status !== "CONFIRMED" && !s.lastConfirmed;
+  return { year, start: fy.start, end: fy.end, value, status: s.status, sourceLabel: s.sourceLabel, current: s.current, lastConfirmed: s.lastConfirmed, missing: inUse ? [] : missingForTds(value), standard: std ? { inUse, ...std } : null };
 }
 
 export async function listTaxYears(actor: Actor): Promise<TaxYearView[]> {
   await requireDirector(actor.userId, "see the tax years");
   const data = await loadItems(KIND);
-  return keysIn(data).map((k) => toView(k, data));
+  // Standard defaults pack: a standard year nobody has entered is listed too (it is the one payroll uses).
+  return [...new Set([...keysIn(data), ...Object.keys(PACK_TAX_YEARS)])].sort().map((k) => toView(k, data));
 }
 
 export async function getTaxYear(yearRaw: string, actor: Actor): Promise<{ year: TaxYearView; history: VersionView[] }> {

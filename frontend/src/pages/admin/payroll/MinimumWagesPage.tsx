@@ -42,9 +42,9 @@ export function MinimumWagesPage() {
   const categories = [...new Set((setup.data?.rates ?? []).map((r) => r.category))];
   return (
     <>
-      <PageHeader title="Minimum wages" subtitle="Rates, categories and the compared pay heads are yours to enter; the check never changes pay." actions={<Button type="primary" icon={<PlusOutlined />} onClick={() => setAdding(true)}>Enter a rate</Button>} />
+      <PageHeader title="Minimum wages" subtitle="Standard rates for the company's state, or yours; categories and compared pay heads are yours to enter. The check never changes pay." actions={<Button type="primary" icon={<PlusOutlined />} onClick={() => setAdding(true)}>Enter a rate</Button>} />
       <Stack>
-        <ApprovalBanner tone="info" title="Nothing is preset" description={setup.data?.note ?? "Every value here is entered by a director with its source."} />
+        <ApprovalBanner tone="info" title="Standard rates for the company's state, and your entries" description={setup.data?.note ?? "Every value here is entered by a director with its source."} />
         <Panel title="Pay heads compared with the minimum" subtitle={basis ? `In force since ${dayjs(basis.setAt).format("D MMM YYYY")}: ${basis.source}` : "Not set"}>
           <div style={{ display: "flex", gap: space[2], flexWrap: "wrap", alignItems: "center" }}>
             <Select mode="multiple" aria-label="Pay heads" placeholder="Choose the pay heads" style={{ minWidth: 280, flex: 1 }} value={chosenHeads} onChange={setHeads} loading={comps.isLoading} options={(comps.data ?? []).filter((c) => c.value?.type === "EARNING").map((c) => ({ value: c.code, label: c.value?.payslipLabel ? `${c.value.payslipLabel} (${c.code})` : c.code }))} />
@@ -70,6 +70,26 @@ export function MinimumWagesPage() {
             ]}
           />
         </Panel>
+        {(setup.data?.standardRates ?? []).length > 0 && (
+          <Panel title={`Standard rates: ${setup.data!.standardRates![0]!.state}`} subtitle={`${setup.data!.standardRates![0]!.label}. Used for a category no director has entered a rate for.`}>
+            <Stack>
+              {setup.data!.standardRates![0]!.reviewNeeded && <ApprovalBanner tone="warning" title="Review needed" description={setup.data!.standardRates![0]!.note} />}
+              <DataTable<NonNullable<MinimumWageSetup["standardRates"]>[number]>
+                rowKey="category"
+                density="compact"
+                pagination={false}
+                dataSource={setup.data!.standardRates!}
+                mobile={{ title: (r) => r.category, subtitle: (r) => `Rs ${r.monthlyAmount} a month`, fields: [{ label: "From", render: (r) => dayjs(r.effectiveFrom).format("D MMM YYYY") }, { label: "Source", render: (r) => r.source }] }}
+                columns={[
+                  { title: "Category", dataIndex: "category" },
+                  { title: "Monthly", dataIndex: "monthlyAmount" },
+                  { title: "From", dataIndex: "effectiveFrom", render: (v: string) => dayjs(v).format("D MMM YYYY") },
+                  { title: "Source", key: "s", render: (_: unknown, r: NonNullable<MinimumWageSetup["standardRates"]>[number]) => <a href={r.url} target="_blank" rel="noreferrer">{r.source}</a> },
+                ]}
+              />
+            </Stack>
+          </Panel>
+        )}
         <Panel title="A person's category" subtitle="Not set for anyone until you choose it.">
           <div style={{ display: "flex", gap: space[2], flexWrap: "wrap" }}>
             <AutoComplete aria-label="Employee" placeholder="Search by name or number" style={{ minWidth: 260, flex: 1 }} value={person ? person.label : personQ} onChange={(v) => { setPerson(null); setPersonQ(v); }} onSelect={(v: string, o: { label?: string }) => setPerson({ id: v, label: String(o.label ?? v) })} options={(people.data ?? []).map((p) => ({ value: p.employeeId, label: `${p.name} (${p.employeeCode})` }))} />

@@ -6,6 +6,17 @@ import { namesOn, payrollPlacementsOn } from "../../../lib/effectiveDating";
 import { prisma } from "../../../lib/prisma";
 import { HttpError } from "../../../middleware/errorHandler";
 import { dec, fixed, sum, type Money } from "../money";
+import { PACK_STATE_LABEL, PACK_STATE_RULES, STANDARD_DEFAULT_LABEL } from "@shared/constants/statutoryDefaults";
+import { behaviourValue } from "../../behaviours/service";
+
+/** Standard defaults pack: the company state's standard minimum wage rows, in the shape of a director's rate (they never win over a director's rate for the same day). */
+async function standardRates(): Promise<Array<{ state: string; category: string; monthlyAmount: string; effectiveFrom: string; createdAt: string; source: string; url: string; checkedOn: string; reviewNeeded: boolean; note: string }>> {
+  const state = (await behaviourValue("statutory.state")).value as string;
+  const pack = (PACK_STATE_RULES as Record<string, (typeof PACK_STATE_RULES)["RAJASTHAN"] | undefined>)[state];
+  if (!pack) return [];
+  const e = pack.minimumWages;
+  return e.value.map((r) => ({ state: PACK_STATE_LABEL[state] ?? state, category: r.category, monthlyAmount: r.monthlyAmount, effectiveFrom: e.from, createdAt: "0000-01-01T00:00:00.000Z", source: e.source.name, url: e.source.url, checkedOn: e.checkedOn, reviewNeeded: e.verification === "UNVERIFIED", note: e.note }));
+}
 
 // ST-29 (docs/plans/A_PARITY_ROWS.md part 2): the minimum wages check. Directors enter every value — each rate (state as written on the branches, category, monthly
 // amount, from, source), each person's category, and which pay heads are compared — none is preset. A run's check lists each payable person whose compared amount is
@@ -43,7 +54,9 @@ export async function setup(actor: Actor) {
     rates: rates.map((r) => ({ id: r.id, state: r.state, category: r.category, monthlyAmount: fixed(dec(r.monthlyAmount.toString()), 2), effectiveFrom: iso(r.effectiveFrom), source: r.source })),
     basis: basis ? { headCodes: basis.headCodes, source: basis.source, setAt: basis.createdAt.toISOString() } : null,
     branchStates: states.map((s) => s.state).filter(Boolean),
-    note: "No rate, category or compared heads are preset: each is entered by a director with its source.",
+    // Standard defaults pack: the state's standard rates, used where no director rate is in force; categories and compared heads stay the directors'.
+    standardRates: (await standardRates()).map((r) => ({ state: r.state, category: r.category, monthlyAmount: fixed(dec(r.monthlyAmount), 2), effectiveFrom: r.effectiveFrom, source: r.source, url: r.url, checkedOn: r.checkedOn, reviewNeeded: r.reviewNeeded, note: r.note, label: STANDARD_DEFAULT_LABEL })),
+    note: "Each person's category and the compared pay heads are entered by a director. Standard rates for the company's state are used where no director rate is in force.",
   };
 }
 
@@ -99,7 +112,9 @@ export async function check(raw: unknown, actor: Actor) {
   ]);
   const categoryOf = new Map<string, string>();
   for (const c of categories) categoryOf.set(c.employeeId, c.category); // ascending: the newest wins
-  const rates = ratesInForce(rateRows.map((r) => ({ state: r.state, category: r.category, monthlyAmount: r.monthlyAmount.toString(), effectiveFrom: iso(r.effectiveFrom), createdAt: r.createdAt.toISOString() })), end);
+  // A standard rate is used only for a state and category no director has entered any rate for (the pack never overrides a director's figure).
+  const entered = new Set(rateRows.map((r) => `${r.state}|${r.category}`));
+  const rates = ratesInForce([...(await standardRates()).filter((r) => !entered.has(`${r.state}|${r.category}`)), ...rateRows.map((r) => ({ state: r.state, category: r.category, monthlyAmount: r.monthlyAmount.toString(), effectiveFrom: iso(r.effectiveFrom), createdAt: r.createdAt.toISOString() }))], end);
   const code = new Map(emps.map((e) => [e.id, e.employeeCode]));
   const noCategory: string[] = [];
   const noRate = new Set<string>();

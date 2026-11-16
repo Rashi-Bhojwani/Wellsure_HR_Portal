@@ -6,6 +6,8 @@ export interface MinimumWageSetup {
   rates: Array<{ id: string; state: string; category: string; monthlyAmount: string; effectiveFrom: string; source: string }>;
   basis: { headCodes: string[]; source: string; setAt: string } | null;
   branchStates: string[];
+  /** Standard defaults pack: the company state's standard rates, used where no director rate is in force. */
+  standardRates?: Array<{ state: string; category: string; monthlyAmount: string; effectiveFrom: string; source: string; url: string; checkedOn: string; reviewNeeded: boolean; note: string; label: string }>;
   note: string;
 }
 export interface MinimumWageCheck { run: string; basis?: string[]; notSet: string[]; checked: number; below: Array<{ employeeCode: string; name: string; state: string; category: string; compared: string; minimum: string; shortfall: string }>; note?: string }
