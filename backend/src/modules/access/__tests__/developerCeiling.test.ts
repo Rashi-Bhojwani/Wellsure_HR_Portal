@@ -120,7 +120,7 @@ describe("the developer ceiling", () => {
       expect([...a.permissions].filter((k) => (SENSITIVE_PERMISSION_KEYS as readonly string[]).includes(k))).toEqual([]);
       const token = await loginAs(both.employeeCode);
       expect((await request(app).get("/api/payroll/salary/employees").set(...authHeader(token))).status).toBe(403);
-      expect((await request(app).get("/api/payroll/rules").set(...authHeader(token))).status).toBe(200); // statuses only: payroll.rules.view
+      expect((await request(app).get("/api/payroll/rules").set(...authHeader(token))).status).toBe(403); // request 13 (Stage 8 block): the rule values are refused to the Developer role on the backend
     } finally {
       await prisma.userRole.deleteMany({ where: { userId: both.userId, roleId: sup.id } });
       await prisma.$executeRawUnsafe('ALTER TABLE "user_roles" ENABLE TRIGGER "user_roles_developer_not_super_admin"');
@@ -133,9 +133,11 @@ describe("the developer ceiling", () => {
     await expect(assignRole(dev.employeeId, "HR_ADMIN", await actorOf(), meta())).rejects.toMatchObject({ code: "DEVELOPER_CEILING" });
     await expect(assignRole(dev.employeeId, "PAYROLL_ADMIN", await actorOf(), meta())).rejects.toMatchObject({ code: "DEVELOPER_CEILING" });
     await expect(updateRole(DEVELOPER_ROLE_CODE, { permissions: [...DEVELOPER_ROLE_PERMISSIONS, "employee.bank.view"] }, await actorOf(), meta())).rejects.toMatchObject({ code: "DEVELOPER_CEILING" });
-    // An ordinary grant is fine: the ceiling is only about the registry.
+    // Owners, Stage 8 block: every report key is a Developer ceiling too, so a personal grant of one is refused (was: an ordinary grant).
+    await expect(setOverride(dev.employeeId, "reports.view", { effect: "GRANT", reason: "needed" }, await actorOf(), meta())).rejects.toMatchObject({ code: "DEVELOPER_CEILING" });
+    // An ordinary grant is fine: the ceiling is only about the registry and the reports.
     await grantPermissions("EMPLOYEE", []);
-    await expect(setOverride(dev.employeeId, "reports.view", { effect: "GRANT", reason: "needed" }, await actorOf(), meta())).resolves.toBeDefined();
+    await expect(setOverride(dev.employeeId, "announcements.manage", { effect: "GRANT", reason: "needed" }, await actorOf(), meta())).resolves.toBeDefined();
     await prisma.userPermissionOverride.deleteMany({ where: { userId: dev.userId } });
   });
 
@@ -150,10 +152,9 @@ describe("the developer ceiling", () => {
     ] as const) {
       expect([403, 404], `${m} ${p}`).toContain((await call(m, p)).status);
     }
-    // The bank layout: the developer is told it exists and in what state, and sees nothing of it.
+    // The bank layout: request 13 (Stage 8 block) refuses the layouts to the Developer role outright (was: told it exists, seeing nothing of it).
     const layout = await call("get", "/api/payroll/layouts/BANK_TEMPLATE");
-    expect(layout.status).toBe(200);
-    expect(layout.body.layout.current === null || layout.body.layout.current.value?.restricted === true).toBe(true);
+    expect(layout.status).toBe(403);
     expect(JSON.stringify(layout.body)).not.toMatch(/columns|debitAccount/);
     expect((await call("post", "/api/payroll/rules/PF_ESTABLISHMENT_CODE/reveal")).status).toBe(403);
     expect((await call("put", "/api/payroll/layouts/BANK_TEMPLATE", { value: {}, fingerprint: "x".repeat(12) })).status).toBe(403);

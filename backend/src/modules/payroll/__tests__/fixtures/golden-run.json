@@ -1,0 +1,112 @@
+{
+  "items": {
+    "a": {
+      "status": "PAYABLE",
+      "gross": "50000",
+      "deductions": "1800",
+      "employerContributions": "1951",
+      "netBeforeRounding": "48200",
+      "roundingAdjustment": "0",
+      "netPay": "48200",
+      "lines": [
+        "0|P_BASIC|EARNING|COMPONENT|20000",
+        "1|P_HRA|EARNING|COMPONENT|10000",
+        "2|P_CONV|EARNING|COMPONENT|1600",
+        "3|P_SPECIAL|EARNING|COMPONENT|18400",
+        "4|PF_EMPLOYEE|DEDUCTION|PF|1800",
+        "5|PF_EPS|EMPLOYER_CONTRIBUTION|PF|1250",
+        "6|PF_EPF_ER|EMPLOYER_CONTRIBUTION|PF|551",
+        "7|PF_EDLI|EMPLOYER_CONTRIBUTION|PF|75",
+        "8|PF_ADMIN|EMPLOYER_CONTRIBUTION|PF|75"
+      ]
+    },
+    "b": {
+      "status": "PAYABLE",
+      "gross": "50000",
+      "deductions": "1800",
+      "employerContributions": "1951",
+      "netBeforeRounding": "48200",
+      "roundingAdjustment": "0",
+      "netPay": "48200",
+      "lines": [
+        "0|P_BASIC|EARNING|COMPONENT|20000",
+        "1|P_HRA|EARNING|COMPONENT|10000",
+        "2|P_CONV|EARNING|COMPONENT|1600",
+        "3|P_SPECIAL|EARNING|COMPONENT|18400",
+        "4|PF_EMPLOYEE|DEDUCTION|PF|1800",
+        "5|PF_EPS|EMPLOYER_CONTRIBUTION|PF|1250",
+        "6|PF_EPF_ER|EMPLOYER_CONTRIBUTION|PF|551",
+        "7|PF_EDLI|EMPLOYER_CONTRIBUTION|PF|75",
+        "8|PF_ADMIN|EMPLOYER_CONTRIBUTION|PF|75"
+      ]
+    },
+    "c": {
+      "status": "HELD",
+      "gross": "50000",
+      "deductions": "1800",
+      "employerContributions": "1951",
+      "netBeforeRounding": "48200",
+      "roundingAdjustment": "0",
+      "netPay": "48200",
+      "lines": [
+        "0|P_BASIC|EARNING|COMPONENT|20000",
+        "1|P_HRA|EARNING|COMPONENT|10000",
+        "2|P_CONV|EARNING|COMPONENT|1600",
+        "3|P_SPECIAL|EARNING|COMPONENT|18400",
+        "4|PF_EMPLOYEE|DEDUCTION|PF|1800",
+        "5|PF_EPS|EMPLOYER_CONTRIBUTION|PF|1250",
+        "6|PF_EPF_ER|EMPLOYER_CONTRIBUTION|PF|551",
+        "7|PF_EDLI|EMPLOYER_CONTRIBUTION|PF|75",
+        "8|PF_ADMIN|EMPLOYER_CONTRIBUTION|PF|75"
+      ]
+    }
+  },
+  "payslips": {
+    "a": {
+      "totals": {
+        "gross": "50000.00",
+        "deductions": "1800.00",
+        "net": "48200.00",
+        "employerContributions": "1951.00"
+      },
+      "days": {
+        "paid": "31",
+        "lop": "0",
+        "basis": "31"
+      },
+      "earnings": [
+        "P_BASIC|20000.00",
+        "P_HRA|10000.00",
+        "P_CONV|1600.00",
+        "P_SPECIAL|18400.00"
+      ],
+      "deductions": [
+        "PF_EMPLOYEE|1800.00"
+      ],
+      "employer": []
+    },
+    "b": {
+      "totals": {
+        "gross": "50000.00",
+        "deductions": "1800.00",
+        "net": "48200.00",
+        "employerContributions": "1951.00"
+      },
+      "days": {
+        "paid": "31",
+        "lop": "0",
+        "basis": "31"
+      },
+      "earnings": [
+        "P_BASIC|20000.00",
+        "P_HRA|10000.00",
+        "P_CONV|1600.00",
+        "P_SPECIAL|18400.00"
+      ],
+      "deductions": [
+        "PF_EMPLOYEE|1800.00"
+      ],
+      "employer": []
+    }
+  }
+}

@@ -149,3 +149,110 @@ Report layouts are the D-37 kind of default ("Default, change in settings"); not
 | 85 | PF and ESI challans: "worked out" is the statute's own lines in finalised runs (employee and employer); administration charges are not added. A different director confirms each challan by retyping it. | Add the charges as their own line once you give the rule. | Keep. |
 | 86 | Salary import uses **our own template** (employee number, structure, version, annual CTC, effective from). One revision per structure, CTC and date; each waits for the other director; one bad row or blocked group stops the whole file. greytHR's file is not read. | — | Keep. |
 | 87 | The reimbursement statement lists claims paid by monthly runs; a claim paid by an off-cycle run shows on that run, not in the statement. Loan "reschedule" is not built (prepaid, waived and stop-the-instalments are). | Ask for either. | Keep for now. |
+
+## Part 2: mechanisms with every value Not set (2026-11-13)
+
+| # | What was built | What you give | Recommendation |
+|---|---|---|---|
+| 88 | PT and LWF deposits go in the same challan register as PF and ESI (Payroll → Statutory challans). The state PT return is not built. | The return format, if you want it. | Use it from the first month. |
+| 89 | Compliance calendar: you enter each due date (statute, what, day of month, days before to remind, source). None is preset. The directors are reminded once a month inside the window; a date is marked done per month. | Every due date. | Enter them before go-live. |
+| 90 | Minimum wages check: you enter each rate (state as written on your branches, category, monthly amount, from, source), each person's category and which pay heads are compared. Until then the check says Not set. It never changes pay. | Rates, categories, the compared heads. | Ask your accountant which heads count. |
+| 91 | Form 16 Part A: you upload each person's Part A as the tax portal issued it; they download it beside Part B. Nothing is read from the file. | The files, each year. | — |
+| 92 | Accounting journal: you map each journal key (a head's earning, deduction, rounding, employer expense and liability, and net pay) to a ledger account; none is preset. A negative net pay posts as a debit. No accounting package's format is built. | The chart of accounts. | Ask your accountant for the account names. |
+
+## Part 3: dated statutory IDs, overtime and encashment pay, payroll per company, registers (2026-11-13)
+
+| # | What was built or chosen | What you give | Recommendation |
+|---|---|---|---|
+| 93 | **Statutory IDs are effective-dated** (your decision): payslips, the PF/ESI files and Form 16 use the PAN, UAN and ESI number in force on their own date; older months keep the ones they had. An ID missing on a date is taken from the first value later known (an ID entered late counts for older months). | — | Keep. |
+| 94 | A change is detected by the PAN's keyed hash or by a change in a last four; a new UAN or ESI number with the same last four as the old one is not recorded as a change (they have no keyed hash). | Whether to store a keyed hash for UAN and ESI. | Add one later if it matters. |
+| 95 | **Overtime pay**: Not set. You choose the pay head and a flat rate per hour, or a multiplier of an hourly rate (chosen salary heads ÷ hours a month), and the rounding; a second director confirms. Nothing is paid unless overtime is also turned on. A director pays a month's approved overtime as one adjustment per person for the next run. | The rate rule. | Ask your accountant (the Factories Act basis, if it applies). |
+| 96 | **Leave encashment** (in the year and at exit): Not set. You choose the pay head, the salary heads for the per-day basis, the divisor (fixed days or the month's calendar days), the rounding and which leave types are encashed at exit; a second director confirms. In-year requests are paid with the leave-ledger entry, once; at exit the settlement's leave line gets its amount. | The formula (spec §14). | Decide before the first leaver. |
+| 97 | **Payroll per company, first steps**: a run is for one company (no company = the main one); one live run per month per company. Each company's registrations and bank account: Not set, two directors. Bank and statutory files for a run of another company are refused until they are built. | Each company's registrations and account; whether a period lock should be per company. | Enter them before using a second company. |
+| 98 | Finalising any company's run locks that month's attendance for everyone (the lock is per month, as before). | Whether it should be per company. | Keep until you run a second company. |
+| 99 | **Registers** (wages with a column per pay head, deductions, overtime) from finalised runs, in our own layouts marked "Default, change in settings". No official form is claimed. | The official formats, if a state requires them. | — |
+
+## Part 4 (2026-11-14): every value the directors must enter, and where
+
+Nothing below has a value in the system. Each is entered by one director with a source note and a date it applies from, and takes effect only when a different
+director confirms it; until then whatever depends on it refuses to work it out (or has no effect) and says what is missing.
+
+**Payroll → Rules and Setup**
+- Enter the PF employee rate, the employer pension (EPS) rate, the employer provident fund rate, the EDLI rate and the administration charge rate.
+- Enter the PF monthly wage ceiling and the ceiling mode (whether PF is worked out on the full wage or up to the ceiling).
+- Enter the ESI employee rate, the ESI employer rate, the ESI monthly wage ceiling and the ESI coverage period rule.
+- Choose which employment types PF covers and which ESI covers.
+- Enter your one state's PT slab table, map the state written on your three branches to that state, and say which placement decides it.
+- Enter your one state's LWF amounts and when they are deducted.
+- Choose how income tax is deducted (none, or worked out from the tax year).
+- Choose the pay-days basis, the fixed days (if used), the loss-of-pay divisor, the payment date, leavers' last-month timing and what happens to a negative net pay.
+- Choose the rounding of salary lines, PF, ESI and net pay.
+- Enter the leave encashment rules for the year end, the arrears rules and the loss-of-pay reversal limits.
+- Enter the company's PF establishment code, ESI employer code, PT registration, LWF registration, company PAN and TAN.
+
+**Payroll → Tax Years** (one financial year at a time)
+- Enter both regimes' slabs, standard deduction and rebate, the surcharge table, the cess percentage, the default regime, the rounding of tax, the minimum monthly TDS
+  and how one-off pay is taxed.
+- Enter the sections people can declare under (code, label, which regime, caps).
+- If HRA exemption applies: enter the section in which rent is declared, the HRA heads, the basis heads (basic and DA), the three percentages and whether your city is metro.
+- If marginal relief on the rebate applies: switch it on.
+
+**System Settings → Default behaviours**
+- Overtime pay: the pay head, a flat rate per hour or a multiplier with its basis heads and hours a month, and the rounding.
+- Leave encashment: the pay head, the per-day basis heads, the divisor, the rounding and the leave types encashed at exit.
+- Gratuity: the least years, how a part year counts, the wage heads, days per year, the divisor, the ceiling (or none), the rounding and the date it applies from.
+- Notice period: the days, whether a shortfall is recovered, the basis heads, the divisor, the rounding and the date it applies from.
+- The most a month's deductions may take (percentage of gross), and the rounding of a pro-rata leave figure.
+
+**System Settings → Policy settings**
+- Turn overtime on (and its minimum and step) and turn encashment requests during the year on, if you want either.
+
+**Payroll → Bank and Statutory Layouts**
+- Enter the bank file layout with the debit account, and the PF ECR, ESI, PT and LWF file layouts.
+
+**Payroll → Opening Figures, Compliance calendar, Minimum wages, Accounting journal, Loan and claim types**
+- Enter the year's opening figures (or confirm there are none); each compliance due date; the minimum wage rates, each person's category and the compared heads; the
+  ledger account of each journal key; and each loan and claim type.
+
+| # | Decided or deferred in part 4 | What you give | Recommendation |
+|---|---|---|---|
+| 100 | HRA exemption and marginal relief on the rebate are parts of the tax year; absent means none is applied (as before). | The figures above. | Enter them with the year's values. |
+| 101 | Gratuity and notice recovery are effective-dated settings applied in the settlement; notice runs from the day the separation was recorded. | The figures above; whether pay in lieu of notice is ever paid (it stays a typed line). | Decide before the first leaver. |
+| 102 | **Employer PF/ESI inside CTC is not built.** Do not add an employer PF line to a salary structure meanwhile: the run would pay it as well as the PF it works out. | How CTC is built (employer share inside or outside). | Decide before the first salaries are entered. |
+| 103 | Deferred: statutory bonus (annual), flexible benefit plan, travel advance, manager step on claims, LTA, perquisites, Form 12BB, the official quarterly return file, surcharge marginal relief. | — | Ask when one is needed. |
+| 104 | The realtime fix applies on the server that makes the change at once; another server applies it one Redis round trip later (signal-only events, never pay figures). | — | Keep. |
+
+## Cleanup block (2026-11-14)
+
+No new value to enter.
+
+| # | Decided in the cleanup block | What you give | Recommendation |
+|---|---|---|---|
+| 105 | Payroll reports can be filtered and grouped by branch (Organisation Setup, Branches; Divisions are not used). People with no branch show under "No branch"; in a finalised run that cannot happen (a run refuses anyone without a placement), so it appears only where a report reads today's job history (the overtime register). | — | Keep. |
+| 106 | Payroll Admin and Payroll Approver are given to nobody, a director included; the screens no longer offer them and the server refuses them. Nobody holds them today; any existing row was left as it was. | — | Keep; remove the two roles later if you never want them. |
+
+## Stage 8 (2026-11-16): greytHR readers and the parallel-run kit
+
+Values the directors may enter (none is preset):
+- Admin Tools → Default behaviours → **Parallel run: what counts as a match**: a rounding allowance in rupees, if one rupee or more of rounding should count as a match (default exact match, shown "Default, change in settings").
+- Admin Tools → Default behaviours → **Parallel run: how long a saved comparison is kept**: the number of days a comparison (it holds pay figures) is kept (Not set: until a director deletes it).
+- Payroll → Bank and Statutory Layouts → **Bank file**: if you start a draft from greytHR's bank file (Admin Tools → Data Import/Export → greytHR bank file), enter the debit account, the payment mode code and the remark text, then the other director confirms it.
+
+| # | Decided or asked in Stage 8 | What you give | Recommendation |
+|---|---|---|---|
+| 107 | Only the synthetic sample files have been tried. Real greytHR exports may differ (extra columns, other date styles). | One real month's statement, swipes and overrides files, tried in the portal (never committed). | Try one real month before relying on the kit. |
+| 108 | A file of pay figures (greytHR's Bulk Salary Overrides) is applied only by the director who did not upload it. | — | Keep. |
+| 109 | Your bank takes a legacy .xls; the portal writes .xlsx or .csv, not .xls. | Ask the bank whether it accepts .xlsx or .csv. | Ask before the first real bank file. |
+| 110 | greytHR's payroll repository (pay items) file is not read: no synthetic sample exists, so its layout is not guessed. | A synthetic copy of its layout (made-up values) if you want it read. | Not needed for the parallel run (heads come from the statement). |
+| 111 | Every report key is now refused to the Developer role, even as a personal grant; the payroll rule values and the layouts are refused to it on the server. | — | Keep. |
+
+
+| # | Decided or asked in Stage 9 (2026-11-16) | What you give | Recommendation |
+|---|---|---|---|
+| 112 | No Tier 1 row could be built: the four still open each need your answer — employer PF/ESI inside or outside CTC (PY-43), the PF ECR and ESI upload formats (ST-02, ST-05), a made-up copy of greytHR's pay items file (IE-12). | The answers or files. | Answer PY-43 before the first real run; the formats before the first challan upload. |
+| 113 | The full-month rehearsal runs on made-up test people, not on the demo company (the demo company already has finished months and its own check). | — | Keep. |
+| 114 | A month's punches uploaded more than the allowed age later are flagged, and the month cannot be finalised until a person accepts them with a reason (as before; the rehearsal shows it). | — | Keep: a late file is exactly when a person should look. |
+| 115 | A spreadsheet that would need more than a million cells in memory (counting the empty ones between cells) is refused as too large. Real greytHR files are far smaller (a 500-person statement is about 16,500 cells). | — | Keep. |
+| 116 | Publishing payslips and making the bank file no longer recalculate the finalised run first (it never changes; the approval check is what protects it). Publishing 500 payslips: 1.88 s → 1.38 s. | — | Keep. |
+| 117 | Steps with no recorded 500-person time (publishing payslips, the parallel-run comparison) are held to a screen read's budget, 1.6 s. | A different budget, if you have one. | Keep. |
+| 118 | The go-live gap list is in `PORTAL_READY_REPORT.md` section 7: values you enter, real files to try, items deferred by your decision. | Work through group A, then B. | — |

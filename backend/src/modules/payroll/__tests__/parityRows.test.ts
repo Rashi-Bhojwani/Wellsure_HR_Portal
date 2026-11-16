@@ -8,8 +8,12 @@ import { setBusinessTodayForTests } from "../../../lib/businessDate";
 import { prisma } from "../../../lib/prisma";
 import { app, authHeader, cleanupFullTestEmployee, createFullTestEmployee, loginAs } from "../../employee/__tests__/employeeTestHelpers";
 import { byBank, bankSummaryHtml } from "../run/bankSummary";
+import { buildPayslips } from "../run/payslip";
 import { addMonthsClamped, serviceLength } from "../settlements/guide";
 import { form16Html } from "../tax/form16Html";
+import { ratesInForce } from "../minimumWages/service";
+import { journalOf } from "../journal/service";
+import { dec } from "../money";
 import { REAL_RULES, approve, closeWorld, closingWorld, confirmAllPins, driveToFinal, requestStep, staffWith, type Closing } from "./closeTestHelpers";
 import { CYCLE, calculateRun, setRules } from "./runTestHelpers";
 import { makeComponent } from "./salaryTestHelpers";
@@ -71,6 +75,42 @@ describe("PY-37 and ST-24 — the pure parts", () => {
     expect(draft).toContain("&lt;b&gt;Test&lt;/b&gt;");
     expect(draft).toContain("ending 1234");
     expect(form16Html({ ...base, watermark: null })).not.toContain('class="wm"');
+  });
+});
+
+describe("ST-29 — which minimum wage is in force", () => {
+  it("the latest effective-from on or before the day wins; a later entry wins a tie; future rates are ignored", () => {
+    fc.assert(
+      fc.property(fc.array(fc.record({ state: fc.constantFrom("S1", "S2"), category: fc.constantFrom("C1", "C2"), monthlyAmount: fc.constantFrom("100.00", "200.50", "300.00"), effectiveFrom: fc.constantFrom("2026-01-01", "2026-06-01", "2026-09-01"), createdAt: fc.constantFrom("2026-01-01T00:00:00Z", "2026-02-01T00:00:00Z", "2026-03-01T00:00:00Z") }), { maxLength: 20 }), fc.constantFrom("2026-05-31", "2026-06-01", "2026-12-31"), (rows, day) => {
+        const got = ratesInForce(rows, day);
+        for (const st of ["S1", "S2"]) for (const cat of ["C1", "C2"]) {
+          const live = rows.filter((r) => r.state === st && r.category === cat && r.effectiveFrom <= day).sort((x, y) => (x.effectiveFrom === y.effectiveFrom ? x.createdAt.localeCompare(y.createdAt) : x.effectiveFrom.localeCompare(y.effectiveFrom)));
+          const want = live.length ? live[live.length - 1]!.monthlyAmount : undefined;
+          // a tie on both dates may pick either equal-keyed row; only check when the winner is unambiguous
+          const top = live.filter((r) => want !== undefined && r.effectiveFrom === live[live.length - 1]!.effectiveFrom && r.createdAt === live[live.length - 1]!.createdAt);
+          if (new Set(top.map((t) => t.monthlyAmount)).size <= 1) expect(got.get(`${st}|${cat}`)).toBe(want);
+        }
+      }),
+      { numRuns: 400 },
+    );
+  });
+});
+
+describe("PY-41 — the journal balances", () => {
+  it("debits equal credits exactly whenever net pay is earnings less deductions plus rounding; each key carries exactly its lines", () => {
+    fc.assert(
+      fc.property(fc.array(fc.record({ code: fc.constantFrom("BASIC", "HRA", "PF", "PT", "ROUND"), kind: fc.constantFrom("EARNING", "DEDUCTION", "EMPLOYER_CONTRIBUTION", "ROUNDING"), p: fc.bigInt({ min: -100n, max: 10_000_000n }) }), { maxLength: 30 }), (raw) => {
+        const lines = raw.map((r) => ({ ...r, p: r.kind === "ROUNDING" ? r.p : r.p < 0n ? -r.p : r.p }));
+        const txt = (p: bigint) => `${p < 0n ? "-" : ""}${(p < 0n ? -p : p) / 100n}.${String((p < 0n ? -p : p) % 100n).padStart(2, "0")}`;
+        const net = lines.reduce((s, l) => s + (l.kind === "EARNING" || l.kind === "ROUNDING" ? l.p : l.kind === "DEDUCTION" ? -l.p : 0n), 0n);
+        const entries = journalOf(lines.map((l) => ({ code: l.code, kind: l.kind, amount: dec(txt(l.p)) })), dec(txt(net)));
+        const P = (d: { toFixed: (n: number) => string }) => paise(d.toFixed(2));
+        expect(entries.reduce((s, e) => s + P(e.debit), 0n)).toBe(entries.reduce((s, e) => s + P(e.credit), 0n));
+        for (const e of entries) expect(P(e.debit) >= 0n && P(e.credit) >= 0n, e.key).toBe(true); // a negative rounding is a credit, never a negative debit
+        for (const e of entries.filter((x) => x.key.startsWith("EARNING:"))) expect(P(e.debit)).toBe(lines.filter((l) => l.kind === "EARNING" && `EARNING:${l.code}` === e.key).reduce((s, l) => s + l.p, 0n));
+      }),
+      { numRuns: 400 },
+    );
   });
 });
 
@@ -263,6 +303,102 @@ describe("Session A parity rows over a finalised run", () => {
     const audits = await prisma.auditLog.findMany({ where: { action: { startsWith: "payroll.statutory_challan." }, entityId: { in: challanIds } } });
     expect(audits.map((x) => x.action).sort()).toEqual(["payroll.statutory_challan.confirmed", "payroll.statutory_challan.entered", "payroll.statutory_challan.entered"]);
     expect(JSON.stringify(audits.map((x) => x.after))).not.toMatch(/12345678|100\.5/);
+  });
+
+  it("ST-08: a PT challan is recorded the same way; its month compares the run's own PT lines; an unknown kind is refused", async () => {
+    const c = await call(world.tokens.maker, "post", "/api/tax/statutory-challans", { kind: "PT", month: "2026-08", depositedOn: "2026-09-15", amount: "400", reference: "ZZPT0000001" });
+    expect(c.status, JSON.stringify(c.body)).toBe(201);
+    challanIds.push(c.body.id);
+    expect((await call(world.tokens.maker, "post", "/api/tax/statutory-challans", { kind: "TDS", month: "2026-08", depositedOn: "2026-09-15", amount: "1", reference: "ZZPT0000002" })).status).toBe(400);
+    const reg = await call(world.tokens.maker, "get", `/api/tax/statutory-challans?fy=${FY}&kind=PT`);
+    const aug = reg.body.months.find((m: { month: string }) => m.month === "2026-08");
+    const lines = await prisma.payrollRunLine.findMany({ where: { source: "PT", runItem: { status: { in: ["PAYABLE", "HELD"] } }, run: { status: "FINALISED", cycleEnd: { gte: utc("2026-08-01"), lte: utc("2026-08-31") } } } });
+    expect(paise(aug.workedOut)).toBe(lines.reduce((s, l) => s + paise(Number(l.amount.toString()).toFixed(2)), 0n));
+    expect(paise(aug.deposited)).toBe(0n); // not confirmed yet
+    expect((await call(tok.hr!, "get", `/api/tax/statutory-challans?fy=${FY}&kind=LWF`)).status).toBe(403);
+  });
+
+  it("ST-29: the minimum wages check says what is Not set, lists who is below the minimum in force for their state and category, and changes no pay", async () => {
+    const mw = (m: "get" | "post", path: string, body?: object, t = world.tokens.maker) => call(t, m, `/api/payroll-minimum-wages${path}`, body);
+    for (const t of [tok.hr!, tok.mgr!, tok.a!, tok.dev!]) expect((await mw("get", `/check?runId=${runId}`, undefined, t)).status).toBe(403);
+    const first = await mw("get", `/check?runId=${runId}`);
+    if (!(await prisma.minimumWageBasis.count())) expect(first.body.notSet).toEqual(["The pay heads compared with the minimum wage are Not set."]);
+    const itemsBefore = await prisma.payrollRunLine.findMany({ where: { runId }, select: { id: true, amount: true } });
+    const placement = await prisma.employeeJobHistory.findFirstOrThrow({ where: { employeeId: who("a") }, orderBy: { effectiveFrom: "desc" }, include: { location: { select: { state: true } } } });
+    const state = placement.location.state;
+    const basicLine = await prisma.payrollRunLine.findFirstOrThrow({ where: { runId, employeeId: who("a"), code: world.basic } });
+    const basic = Number(basicLine.amount.toString()).toFixed(2);
+    const minimum = (Number(basic) + 1234.5).toFixed(2);
+    const made: Record<string, string[]> = { MinimumWageRate: [], MinimumWageCategory: [], MinimumWageBasis: [] };
+    made.MinimumWageBasis!.push((await mw("post", "/basis", { headCodes: [world.basic], source: "test fixture" })).body.id);
+    made.MinimumWageRate!.push((await mw("post", "/rates", { state, category: "ZZ-CAT1", monthlyAmount: minimum, effectiveFrom: "2026-01-01", source: "test fixture" })).body.id);
+    made.MinimumWageRate!.push((await mw("post", "/rates", { state, category: "ZZ-CAT1", monthlyAmount: "1.00", effectiveFrom: "2026-12-01", source: "a future rate is not in force" })).body.id);
+    made.MinimumWageCategory!.push((await mw("post", "/categories", { employeeId: who("a"), category: "ZZ-CAT1" })).body.id);
+    made.MinimumWageCategory!.push((await mw("post", "/categories", { employeeId: who("b"), category: "ZZ-NORATE" })).body.id);
+    expect((await mw("post", "/rates", { state, category: "X", monthlyAmount: "-5", effectiveFrom: "2026-01-01", source: "bad" })).status).toBe(400);
+    try {
+      const r = await mw("get", `/check?runId=${runId}`);
+      expect(r.status, JSON.stringify(r.body)).toBe(200);
+      const a = r.body.below.find((x: { employeeCode: string }) => x.employeeCode === world.named.a!.employeeCode);
+      expect(a).toMatchObject({ category: "ZZ-CAT1", compared: basic, minimum });
+      expect(paise(a.shortfall)).toBe(paise(minimum) - paise(basic));
+      expect(r.body.notSet.join(" ")).toContain("ZZ-NORATE");
+      expect(r.body.notSet.join(" ")).toContain(world.named.c!.employeeCode); // no category
+      await expect(prisma.minimumWageRate.update({ where: { id: made.MinimumWageRate![0]! }, data: { source: "x" } })).rejects.toThrow(/MINIMUM_WAGE_APPEND_ONLY/);
+      expect(await prisma.payrollRunLine.findMany({ where: { runId }, select: { id: true, amount: true } })).toEqual(itemsBefore); // pay unchanged
+    } finally {
+      for (const [model, ids] of Object.entries(made)) await deleteWithDependents(model, ids.filter(Boolean));
+    }
+  });
+
+  it("PY-41: the journal lists what is Not set until every key is mapped, then balances exactly by account and exports, audited; others are refused", async () => {
+    const jr = (m: "get" | "put", path: string, body?: object, t = world.tokens.maker) => call(t, m, `/api/payroll-journal${path}`, body);
+    for (const t of [tok.hr!, tok.mgr!, tok.a!, tok.dev!]) expect((await jr("get", `/runs/${runId}`, undefined, t)).status).toBe(403);
+    const first = await jr("get", `/runs/${runId}`);
+    expect(first.status, JSON.stringify(first.body)).toBe(200);
+    expect((await jr("get", `/runs/${runId}/export?format=csv`)).status).toBe(first.body.notSet.length ? 409 : 200);
+    const account = (key: string) => (key.startsWith("EARNING:") ? "ZZ Salaries" : key.startsWith("DEDUCTION:") ? "ZZ Deductions payable" : key.endsWith(":EXPENSE") ? "ZZ Employer cost" : key.endsWith(":LIABILITY") ? "ZZ Statutory payable" : key.startsWith("ROUNDING:") ? "ZZ Rounding" : "ZZ Net pay payable");
+    const keys: string[] = first.body.keys.map((k: { key: string }) => k.key);
+    expect((await jr("put", "/mappings", { mappings: [{ key: "NOT A KEY", account: "x" }], reason: "test" })).status).toBe(400);
+    expect((await jr("put", "/mappings", { mappings: keys.map((key) => ({ key, account: account(key) })), reason: "test fixture" })).status).toBe(200);
+    try {
+      const j = await jr("get", `/runs/${runId}`);
+      expect(j.body.notSet).toEqual([]);
+      expect(dec(j.body.totalDebit).equals(dec(j.body.totalCredit))).toBe(true);
+      // Independent: the run's earning lines and net pay, exact.
+      const items = await prisma.payrollRunItem.findMany({ where: { runId, status: { in: ["PAYABLE", "HELD"] } }, include: { lines: true } });
+      const exact = (xs: Array<{ toString(): string }>) => xs.map((x) => dec(x.toString())).reduce((s, x) => s.plus(x), dec("0"));
+      const salaries = j.body.accounts.find((a: { account: string }) => a.account === "ZZ Salaries");
+      expect(dec(salaries.debit).equals(exact(items.flatMap((i) => i.lines.filter((l) => l.kind === "EARNING").map((l) => l.amount))))).toBe(true);
+      const net = j.body.accounts.find((a: { account: string }) => a.account === "ZZ Net pay payable");
+      expect(dec(net.credit).equals(exact(items.map((i) => i.netPay)))).toBe(true);
+      const csv = await jr("get", `/runs/${runId}/export?format=csv`);
+      expect(csv.status).toBe(200);
+      expect(csv.text).toContain("ZZ Salaries");
+      const audit = await prisma.auditLog.findFirstOrThrow({ where: { action: "payroll.journal.exported", entityId: runId } });
+      expect(JSON.stringify(audit.after)).not.toMatch(/\d+\.\d{2}/);
+      await expect(prisma.ledgerAccountMapping.updateMany({ where: { setByUserId: world.maker.userId }, data: { account: "x" } })).rejects.toThrow(/LEDGER_MAPPING_APPEND_ONLY/);
+    } finally {
+      await deleteWithDependents("LedgerAccountMapping", (await prisma.ledgerAccountMapping.findMany({ where: { setByUserId: world.maker.userId }, select: { id: true } })).map((x) => x.id));
+    }
+  });
+
+  it("A1: a payslip shows the identifiers in force at the end of its own month; a later change shows from its own date; a missing one is filled by the first later value", async () => {
+    const st = await prisma.employeeStatutory.findUniqueOrThrow({ where: { employeeId: who("a") } });
+    expect(st.panLast4).not.toBeNull();
+    // A realistic history: the PAN held since January (and no UAN), then on 1 September a corrected PAN and a UAN entered for the first time.
+    const first = await prisma.employeeStatutoryDated.create({ data: { id: `esd_first_${who("a")}`, employeeId: who("a"), effectiveFrom: utc("2026-01-01"), panLast4: st.panLast4, uanLast4: null, esiLast4: null } });
+    const later = await prisma.employeeStatutoryDated.create({ data: { id: `esd_later_${who("a")}`, employeeId: who("a"), effectiveFrom: utc("2026-09-01"), panLast4: "9393", uanLast4: "4242", esiLast4: null } });
+    try {
+      const run = await prisma.payrollRun.findUniqueOrThrow({ where: { id: runId } });
+      const s = (await buildPayslips(run)).get(who("a"))!.content as unknown as { statutory: { panLast4: string | null; uanLast4: string | null } };
+      expect(s.statutory.panLast4).toBe(st.panLast4); // August keeps the PAN it had
+      expect(s.statutory.uanLast4).toBe("4242"); // August had no UAN on record: the first UAN known applies backwards
+      const { statutoryOn } = await import("../statutoryOn");
+      expect((await statutoryOn([who("a")], utc("2026-09-30"))).get(who("a"))!.panLast4).toBe("9393");
+    } finally {
+      await deleteWithDependents("EmployeeStatutoryDated", [first.id, later.id]);
+    }
   });
 
   it("PY-37: the bank summary is a PDF for directors, audited; its page has the file's rows and total by bank code and no account number, name or person's pay", async () => {

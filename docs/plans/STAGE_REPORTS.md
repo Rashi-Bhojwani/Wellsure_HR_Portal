@@ -456,3 +456,198 @@ this block's code, the `247096d` fix and the other session's `yearEndMoney` fix)
 add up to the suite, each test once), install-lint-typecheck-test, docker-build, latency, attendance-replay, agent-windows and sensitive-ui (employee) green;
 sensitive-ui (admin) was cancelled by the next push at 15 minutes — it was green on run 326 (`c62a451`, every new screen; the one later code change, `247096d`, is a
 backend read). Run 326 itself failed only on the two tests named above (one mine, fixed; one the other session's, fixed by them in `c536707`).
+
+## Session A part 2, 2026-11-13 — mechanisms with every value Not set (ST-08, ST-30, ST-29, ST-25, PY-41)
+
+Built under the new speed rule (commit as I go; checks once per group). Plan: `A_PARITY_ROWS.md` part 2. Commits `bd192ee`, `af76eb0`, `26d2f88`, `debd4ae`, `f6ea21c`,
+group fixes `9c49d57`, `cdcba37`.
+
+**Group check** (one script, stops at the first failed step): backend and frontend typecheck, lint and design tokens, migrations on a fresh database matching the
+schema, the changed backend tests (9 files, 121 tests) and the frontend tests — all passed after fixing what the first pass found (guard allowlist entries for form
+limits, the Part A file key in the cleanup storage list, three index names, one test's types). Frontend build within budget.
+**Mutation checks:** day clamp, reminder window, reminder once a month, future rate ignored, below-minimum comparison, employer liability, Part A PDF check — caught;
+the rounding sign survived at first and exposed a real gap: a negative net pay posted as a negative credit. Fixed (`cdcba37`: it posts as a debit) and the property
+test now requires every side to be non-negative.
+**Full backend suite alone** (once, end of stage): 246 files, 2,178 tests, 3 failed — all because I pulled the other session's AD-07/AD-08 commits (new migrations)
+while the suite ran; the two files re-run on the current code: 66 of 66 passed.
+**CI** (run 349, `2b084c6`, all of part 2's code): every job green except backend shard 3, which failed on the other session's `customFields.test.ts` ("mgr: expected
+404 to be 403"), order-dependent (passes alone; also failed on its own commit's run 320); `backend-tests-complete` fails because of that shard.
+**Requests from the other session:** 3 done (`PORTAL_READY_REPORT.md` §6); 4 (payslips showing the ID in force on their date), 5 (overtime pay), 6 (encashment during
+the year) need owner values (rates, the formula, whether to store dated ciphertext); 7 (payroll per company) and 8 (statutory registers in official formats) are not
+started.
+
+## Session A part 3, 2026-11-13 — dated statutory IDs, overtime and encashment pay, payroll per company, statutory registers
+
+Plan `A_PART3.md`. Commits: golden baseline (goldenRun.test.ts), A1 `edaf4f6`, A2/A3 `b2f0b32`, fixes `163bdfc`, `ff5bd98`; B1 `7f885c0`, B2 `6ebb4db`, B3 `0d6eb71`, `19ea770`;
+walk fixes `bf9429b`.
+
+**Golden regression.** A finalised run's figures and payslips were captured from the code before part 3 (`fixtures/golden-run.json`) and compared after every phase:
+identical with the settings Not set, with approved overtime and an approved encashment request present, and with one company.
+**Phase checks** (one script each, stopping at the first failure). Phase A found: an identifier missing on a date must be taken from the first later value (otherwise a
+UAN entered late stops an older month's PF file — `releases.test.ts` caught it; no test changed); an exact-fraction test found overtime cut a recurring fraction before
+rounding (now one division, last). Phase B found two guard allowlist entries (form limits). **Mutation checks:** dated copy choice, flat rate, divisor, exit leave types
+(survived first: a test added), overtime switch, main-company filter, report company filter, register head prefix — all caught in the end.
+**Full backend suite alone** (once, after the last pull, no pull while it ran): **251 files, 2,196 tests, all passed** (the other session's `customFields` fix included).
+**CI** run 359 (`19ea770`, all part-3 backend code): all 12 jobs green, including `backend-tests-complete`. The walk fixes (`bf9429b`, frontend only) are read below.
+**Browser walk** (scratch copy of the demo company): ten changed admin screens and Form 16 as director, HR, manager, employee and Developer at 1280 light and 390 dark —
+110 visits, no crash, no server error, no secret text, every directors' screen refused to the other four. Found and fixed: phone cards did not carry their row actions on six
+screens (the buttons could not be reached on a phone), and Company settings' buttons sat past the edge at 1280. Keyboard: 10 of 10 primary actions reached, opened, trapped,
+closed by Escape, focus returned.
+**Not built (next steps for payroll per company):** each company's own bank file and statutory files (refused for now), a period lock per company (finalising one company's
+run locks the month's attendance for all, as before).
+
+## Session A part 4, 2026-11-14 — remaining statutory mechanisms (one state), realtime fix
+
+Plan and row audit `A_PART4.md`. Commits: realtime `ac741bc`, PY-27/PY-28 `d3b440a`, ST-15/ST-18 `4522912`, plan `fa383fd`, owner sheet `f982ec5`, guards `0d9022f`,
+access test `108d91e`, walk fix `3237127`. Scope: one company, one state; payroll per company left as it is (switched off beyond one company, not extended).
+
+**Rows re-opened.** Already complete and verified, nothing added: PF and ESI rules; ST-07 PT and ST-09 LWF (one state's table, branches mapped to it); income tax with both
+regimes; LV-14/PY-29 encashment at exit (part 3); ST-02/ST-05 file layouts and PY-23 payslip layout (formats are the owners'). **Built:** PY-27 gratuity and PY-28 notice
+recovery (effective-dated behaviour settings, every figure Not set, a different director confirms, a settlement line only when in force); ST-15 HRA exemption (old regime)
+and ST-18 marginal relief on the rebate, both optional owner-entered parts of the tax year: absent means Not set and no effect. **Deferred:** PY-43 (risk found: a structure
+EMPLOYER_CONTRIBUTION line is paid on top of the statutory employer lines, so "inside CTC" today would count employer PF twice — owner row 102); PY-30 (annual, not monthly);
+LC-16, LC-15, LC-13 (not needed for monthly payroll); ST-16, ST-17 (deferred by the owners); ST-19, ST-22 (not needed for payroll, the Form 16 draft or challans); surcharge
+marginal relief (above the surcharge threshold).
+**Realtime.** HR received one more event after a switch went off: the cluster-wide leave is applied only when the request comes back from Redis. Now the sockets on this
+server leave the lost permission rooms synchronously before the notice goes out; the cluster-wide leave still follows for other servers (they still lag one Redis round trip,
+documented). New emit-level race test; with the local leave removed, the race test fails (mutant caught). No existing test changed.
+**Tests.** Exact-fraction property tests against `Frac` for gratuity, notice, the HRA least-of and rebate relief, with TEST values only; a TEST setting dated after the exit is
+not used; golden run identical with every setting Not set (`goldenRun`, plus a check that the tax result keys are unchanged). **Mutation checks:** HRA least-of, old-regime
+only, rent section excluded, relief bound, part-year rule, gratuity ceiling, notice day count, effective date — 8 of 8 caught.
+**Item 3 per row:** no new route, table or migration (settings live in the existing behaviour and tax-year stores, so the access scan, cleanup and encryption registries are
+unchanged; no new personal field). Director-only routes: HR, a manager, an employee and the Developer get 403 on the behaviours list and on proposing either new key
+(`payPolicies.test.ts`); every change is audited by the existing stores; fresh-database drift check clean.
+**Phase check** (script, stops at the first failure): typecheck, lint, tokens, drift, changed tests — found two guard literals (allowlisted, reason recorded). Frontend:
+75/75 tests, build, bundle within budgets.
+**Full backend suite alone** (after the last pull, no pull while it ran): **255 files, 2,213 tests, all passed**.
+**CI:** run 373 (`108d91e`, all part-4 backend code): green. Run 372 (`0d9022f`) was cancelled by the next push. Final code commit `3237127`: run 377, all 12 jobs green to the end (lint, typecheck, tokens and bundles, migrations match the schema, four backend shards and `backend-tests-complete`, both sensitive-ui scans, latency, attendance replay, docker build, Windows agent).
+**Browser walk** (scratch copy of the demo company): Default behaviours, Tax years and Settlements, plus the payslips page, as director, HR, manager, employee and Developer at
+1280 light and 390 dark (40 visits, then 16 more after the fix): no crash, no server error, no secret text, no horizontal scroll; the directors' screens refused to the other
+four. The gratuity and notice forms opened and read correctly at both views. **Found and fixed (`3237127`):** the Developer opening Tax years saw a warning titled "That is
+not a financial year" (the API refused; no value shown), now the forbidden page; focus did not return to "Enter or change the values" after its drawer closed, now it does.
+Keyboard: 4 of 4 primary actions reached with focus visible, opened, trapped, closed by Escape, focus returned.
+**Not verified:** the realtime lag across several api servers (one server here); real statutory figures (none exist; TEST values only).
+
+## Session A cleanup block, 2026-11-14 — payroll reports by branch, message fix, payroll roles, Windows agent ports
+
+Commits: C1 golden `8dbe7af` (fixture written once from the code before the change), C1 `c7749e5`, test fixes `df34dcf`, `c2e961f`; C2 `0824015`; C3 `7e815bf`; C4 `a31f3be`.
+
+**C1 branch filter.** Branches are Organisation Setup, Branches (the Location table), not Divisions. Payroll summary and statutory summary now take the branch
+filter; payroll summary, department cost, head-wise, variance, statutory summary and the wage, deduction and overtime registers take "Group by branch". Each branch's
+totals are the same report built again for that branch, so they cannot hold a figure the report does not, and they add up to the report's total; people with no
+placement, or a branch no longer on record, are under "No branch". A finalised run refuses anyone without a placement (NO_PLACEMENT), so "No branch" appears only where a
+report reads today's job history (the overtime register). Exports carry the branch totals (CSV rows after the total; a "By branch" sheet). One behaviour added only under
+a branch filter: payroll summary leaves out a month in which the branch had nobody. **Golden:** the run's figures and payslips and all eight reports, unfiltered, are
+byte-for-byte the fixture captured before the change (test's own random codes normalised; the people are put in letter order — the full suite showed the database
+returning them in another order, which CI run 381 also caught; fixed in `c2e961f`). Tests: grouped rows and totals equal the ungrouped ones; every money and count
+total adds up across branches to the paisa; filter = group; NONE keeps only people with no branch; a filter a report does not take is refused.
+**C2.** "(Admin Tools, Director authority)" now reads "(System Settings, the Director authority tab)" in both places; no test pinned the old text, two now pin the new.
+**C3.** Payroll Admin and Payroll Approver are assignable to nobody, a director included: the API refuses (`PAYROLL_ROLE_NOT_ASSIGNABLE`), the Access tab never offers
+them, Roles & Permissions marks them "Not assignable". Existing assignment rows, the database rule and every payroll permission check are unchanged. Mutation checks:
+the old directors-only rule and a removed check both fail the new backend test; removing the UI filter fails its test.
+**C4.** CI run 368 (agent-windows) failed four tests with bind EACCES on 609xx: Windows refuses UDP binds inside its reserved ranges and hands out TCP ports in sequence,
+so twenty retries fell in one block. The fake device now binds UDP to port 0 and puts TCP on the same number, retrying a fresh pair on a taken or refused port (up to
+200); explicit ports are never swapped. No assertion weakened; three tests added. Mutation checks: a cap of 20 and a fixed UDP number are both caught. **Proof:**
+agent-windows green in run 381 and run 383 ("Unit tests on Windows" passed).
+**Phase check** (one script, stops at the first failure): typecheck found the workbook buffer type in the new test (fixed); then typecheck, lint, tokens, drift,
+changed backend tests (6 files, 75 tests), frontend tests (117), build and bundle budgets all passed; agent tests 171/171.
+**Full backend suite alone:** first run 2,218/2,219 (the golden ordering above); after the fix **256 files, 2,219 tests, all passed**.
+**CI:** run 380 (the owner's sample-files commit) cancelled by the next push; run 381 (`df34dcf`) failed only on the golden ordering (backend shard 2, and so
+`backend-tests-complete`), agent-windows green; run 383 (`c2e961f`, the final code commit): all 12 jobs green, read to the end.
+**Browser walk** (scratch copy of the demo company): Payroll reports, Roles & Permissions and an employee's Access tab as director, HR, manager, employee and Developer at
+1280 light and 390 dark (30 visits): no crash, no server error, no secret text, no horizontal scroll. Payroll reports refused to the other four. The director's grouped
+report shows the "By branch" table (at 390 through the Filter drawer); its branches add up to the total (80 paid, 3 held). The Access tab's role picker offers no payroll
+role; Roles & Permissions shows "Not assignable" on both. The Developer can read Roles & Permissions and the Access tab (no picker, no pay figure), as before.
+Keyboard: "Group by branch" reached by Tab with a visible focus ring, Space turns it on, the branch table appears, at both views.
+**Not verified:** a Windows machine other than the CI runner; "No branch" inside a finalised run (it cannot occur; covered by the pure test and the overtime register).
+
+## Session A Stage 8, 2026-11-14 to 16 — greytHR file readers and the parallel-run kit
+
+Plan `STAGE_8_PLAN.md` (what existed for each sample before building). Commits: readers `05e80c1`, kit and bank check `d0e5a20`, request 13 and the report ceiling
+`6174928`, fixes and the move guide `c4b9485`, walk fix `8c7e7d5`. **Fixtures: only the synthetic files in `docs/samples/` and generated files in their layout.
+Real greytHR exports have not been tried and could differ from the synthetic layout.**
+
+**What existed.** The device log (.dat) already had an Import Center importer (preview, duplicates skipped, unmapped IDs queued, punches immutable, audited):
+kept, and its preview now lists the unknown device user IDs. greytHR's Bulk Salary Overrides layout was already read by Monthly Inputs → Import a file.
+**Built.** `lib/xls.ts`: a read-only legacy Excel reader (cell values; a formula's cached result only; no macro read; encrypted and Excel 5 files refused;
+loops bounded), checked against an independent reader on the samples and on generated files; the `xlsx` npm package was not used (open advisories for
+untrusted files). Swipes (.xlsx/.xls) become ATTLOG lines through the same ingestion (employee number → device user ID that day; unknown numbers and unmapped
+people rejected with reasons; the Developer role may not load it). Overrides: **the uploader cannot apply the file; a different director does**; the template's
+footer note is skipped (it made greytHR's own file invalid); slash dates are read day first only where they cannot be misread (31/01/2026 proves it).
+Salary statement reader and the **parallel-run kit** (Payroll → Parallel run, and Import Center tabs for directors): match by employee number; every head,
+the totals, days and LOP; differences with which side is higher; people and heads on one side only; totals and the net difference; a likely cause only
+where certain (a head on one side, LOP days differing, a person on one side). Tolerance a director setting (default exact match); retention Not set.
+Comparisons saved encrypted (a_ migration, field-key registry); exports audited without figures; the kit writes no payroll data (tested: run items, lines,
+adjustments, monthly inputs and the golden snapshot unchanged). **Bank file check**: headers against the bank layout, notes (.xls vs .xlsx/.csv, the
+capitalised month, trailing spaces), a draft layout offered with only certain fields, saved through the existing layout save and confirmed by the other
+director. The writer was not changed. **Deferred:** the payroll repository (pay items) reader: no synthetic sample, layout not guessed. Compare Registers'
+greytHR option now points to the Parallel run.
+**Request 13 and the report ceiling.** The rule values (`/rules`, `/rules/:key`, `/rule-overrides` and history) and the layouts (`/layouts`, `/layouts/:key`)
+refuse the Developer role on the server. Every `reports.*` key is in `DEVELOPER_FORBIDDEN_KEYS`: a personal grant is refused (DEVELOPER_CEILING) and an
+old row is never resolved.
+**Tests.** Good, wrong, empty, oversize, damaged, duplicate, unknown-code and wrong-column files for each reader; generated statement pairs (exact, one
+rupee, missing person, extra head, different LOP); a property test of the comparison against an independent reference (300 runs); the payroll golden run
+and the attendance golden replay unchanged. **Mutation checks: 9 of 9 caught** (match by employee number, the tolerance, days always exact, all-or-nothing
+apply, the second-director rule, request 13 on rules and on layouts, the report ceiling, the swipes unknown-number rejection). The phase check found a real
+reader bug (a string continued across records lost its flag byte) and a real importer bug (greytHR's footer note); both fixed with tests.
+**Phase check** (one script, stops at the first failure): lint (two control-character regexes), guard literals (structural, allowlisted with reasons),
+four tests asserting the old Developer access (changed to the new rule), one frontend test needing the signed-in director: all fixed.
+**Full backend suite alone:** first run 4 failures (the history-table guard: the swipes reader now uses a reader in `lib/effectiveDating`; sealedIdentifiers
+expected the Developer to read rules; two compare tests edited while the suite ran); after the fixes **260 files, 2,249 tests, all passed**.
+**CI:** runs 386 and 387 failed: 386 on the old Developer assertions fixed in `c4b9485`; 387 only in the demo-company step (`demoCompany.demo.test.ts`, run only in CI, expected the old restricted layout view), fixed in `d51d80b` (`npm run test:demo` 7/7 locally). Run 388 (`8c7e7d5`) cancelled by the next push. **Run 389** (`a381e9e`, containing the final code commit `d51d80b`): **all 12 jobs green**, read to the end (lint, typecheck, tokens and bundles, migrations match, seed, frontend and agent tests, demo company tests, four backend shards and `backend-tests-complete`, both sensitive-ui scans, latency, attendance replay, docker build, agent-windows).
+**Browser walk** (scratch copy of the demo company, synthetic files): Parallel run, Import Center (greytHR tabs, bank check), Default behaviours, as director,
+HR, manager, employee and Developer at 1280 light and 390 dark (30 visits): no crash, no server error, no secret text (the sample's account number and IFSC
+never shown), no horizontal scroll. The director compared the sample statement against a demo run and checked the sample bank file; the others are refused
+the director screens and do not see the greytHR tabs. Found and fixed: the Developer's punches tab offered greytHR swipes (refused by the server). Keyboard
+at both views: run chosen with arrows and Enter; the statement and bank drop areas reached by Tab with focus visible and Enter opens the file chooser; the
+tolerance setting's drawer opens and Escape closes it.
+**Not verified:** real greytHR exports; the bank's acceptance of an .xlsx or .csv file; a Windows machine other than CI.
+
+## Session A Stage 9: audit re-check, remaining Tier 1 gaps, full-month rehearsal, hardening (written 2026-11-16)
+
+**1. Audit re-check** (`71898df`). `PARITY_COVERAGE.md` re-checked against the code at `04275be`: a row is Built only with a real route or screen and a test.
+59 rows updated with their evidence; 297 rows: 255 Built, 8 Partial, 20 Missing, 14 Not needed. New section (e) "Remaining" classifies every open row (needs an
+owner value / deferred by owner decision / buildable now); section (f) lists four document/code mismatches, not fixed silently (Default behaviours is under Admin
+Tools, not System Settings, in four documents; MASTER_CHECKLIST's "Skipped" line; sections (a) and (d) predate the re-check; STAGE_4_PLAN says one director applies
+Monthly Inputs imports).
+
+**2. Remaining Tier 1 gaps.** None buildable now. The four open Tier 1 rows each wait for the owners: PY-43 (employer PF/ESI inside or outside CTC), ST-02 (the
+PF portal's current ECR format; the mechanism is built), ST-05 (the ESI portal's upload format; mechanism built), IE-12 (a synthetic sample of greytHR's pay items
+file; real greytHR files untried). The deferred rows (LTA, perquisites, statutory bonus, flexible benefits, travel advance, Form 12BB, quarterly return file) were
+skipped as instructed. The rows still "buildable now" are all Tier 2/3 and not payroll. **Nothing was built under item 2.**
+
+**3. Full-month rehearsal** (`c61e307`, `payroll/__tests__/fullMonthRehearsal.test.ts`, 12 ordered steps, about 16 s). On made-up people with TEST rule values,
+through the API (the attendance and calculation workers' functions are called directly): the device log for one person and a greytHR swipes file for the other,
+previewed and committed; the late file's TOO_OLD flags block finalising until a person accepts them (bulk accept with a reason); leave refused without a balance,
+granted, applied, approved; attendance processed and finalised (a second finalise refused); a loan sanctioned only by the other director; the run calculated (before
+the month was finalised everyone was EXCLUDED with ATTENDANCE_NOT_FINAL), the leave days paid, the loan paid out and recovered; the bank file refused before
+finalise, the preparer's self-approval refused, approved, finalised; the bank file refused without a confirmed layout, then without its own approval, made, marked
+sent only after download (409 NOT_DOWNLOADED before); payslips unseen, publish refused until approved, then the employee sees their own; PF, ESI and PT challans
+confirmed only by a different director; the Form 16 draft refused before the year closes and a DRAFT PDF after; a wrong file refused by the parallel-run kit and a
+statement generated from the run matched with zero differences. Decision: it runs on the test world (`closingWorld`), not on the seeded demo company, because the
+demo company already has finalised months and its own CI step.
+
+**4a. Hostile spreadsheets** (`f421c7e`, `lib/__tests__/xlsHardening.test.ts`). 820 files through the product's upload reader (`readGrid`): broken, truncated (four
+files at 39 cut points), encrypted (FILEPASS and an EncryptionInfo stream), oversized, huge rows, 25 structural lies (sector size, chain and list loops, pointers past
+the end, string tables that claim more than they hold, short labels, missing sheets, nested sheets), and 600 seeded random mutations of valid files. Each is read in a
+worker thread with a 256 MB heap cap and killed after 5 s; every file must end in a clean read or a 4xx refusal, inside 2 s. **Found and fixed:** a label whose
+rich-text or extended count was cut off threw a raw RangeError (a 500): bounds-checked, and any stray RangeError in the reader now becomes a clean refusal; a sparse
+sheet (one cell at column 255 of every row, under 1 MB) grew to about 16.7 million grid slots (221 MB of the 256 MB cap): padded slots now count toward the
+1,000,000-cell limit. After the fix: slowest file 43 ms, worker heap peak 60 MB. Both defects were seen failing before the fix.
+
+**4b. 500 people, re-measured** (`npm run measure:stage9`, new; on fresh scratch databases prepared with the existing scripts: seed, demo company, `measure:payroll --
+500`, `measure:new-readers`). Budgets: the recorded 500-person figures doubled (PHASE_6_REVIEW §6; 1.6 s per screen read); figures with no recorded value are held to
+1.6 s and say so.
+
+| Measured (development machine, 498–500 people, 7 branches) | Time | Budget |
+|---|---|---|
+| Calculation job (`measure:payroll`) / full calculation in memory | 3.5 s / 0.49 s | recorded 6.5 s / 1.6 s |
+| Approval re-check / payslip content for all | 0.37 s / 0.40 s | 1.4 s / 1.0 s |
+| Payslip PDFs (15, Chromium) | 0.13–0.15 s each (500 in about 1.1 minutes) | 0.5 s each |
+| **Publish payslips (the route)** | **1.88 s before the fix, 1.38 s after** | 1.6 s (no recorded figure) |
+| Each of the 13 payroll reports / grouped by branch / head-wise .xlsx grouped | at most 0.38 s / 0.34 s / 0.29 s | 1.6 s / 1.6 s / 2.2 s |
+| Parallel-run comparison of a 498-row statement: upload and match / open / export | 0.29 / 0.05 / 0.05 s | 1.6 / 1.6 / 2.2 s |
+
+**Over budget and fixed:** publishing payslips. Every release (publish, bank file) first ran a full calculation of the run and threw the result away
+(`void computed` in `run/release.ts`, there since the file was written); a final run never changes and the approval's hash is what is checked (before preparing and
+again inside the write). Removed. The payslip PDF step that hung in an earlier container completed here.

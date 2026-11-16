@@ -84,6 +84,18 @@ const EXTRA_ALLOWED: Record<string, number[]> = {
   "tax/statutoryChallans.ts": [30],
   // IE-09: form limits (the note a director types, the file name kept on a revision); 500 (rows in one file) carries its own allow-number comment.
   "salary/assignmentImport.ts": [300, 80],
+  // Part 2 rows, none a payroll figure: calendar (milliseconds in a day, days 31 and 30 of a month) and form-field limits (texts of 60, 80, 120, 300 characters;
+  // 20 names listed in a message); a 5 MB upload limit (1024 × 1024).
+  "compliance/service.ts": [86400000, 31, 30, 300],
+  "journal/service.ts": [80, 120, 300],
+  "minimumWages/service.ts": [60, 300, 20],
+  "tax/form16PartA.ts": [1024, 120],
+  "payPolicies/arith.ts": [60, 86400000], // minutes in an hour (part 3 A2); milliseconds in a day (part 4 notice days)
+  // Stage 8 (greytHR readers and parallel-run kit): file-size limits (MB = 1024 × 1024), row and text caps, a list size, one day in ms (retention age), an HTTP status. No pay figure.
+  "greythr/bankCheck.ts": [1024],
+  "greythr/parallel.ts": [20000, 120, 60, 86400000],
+  "greythr/statement.ts": [1024, 20000, 413],
+  "companies/service.ts": [20, 300], // form limits: an account of up to 20 digits, a reason of 300 characters (part 3 B2a)
   // A-3 opening figures: the largest import file (rows), form field lengths (a figure's text, a note, a reason), the length of a sha256 fingerprint and the
   // short batch id cut from it. None is a payroll figure.
   "tax/openings.ts": [2000, 20, 300, 64, 24],
@@ -112,7 +124,7 @@ const EXTRA_ALLOWED: Record<string, number[]> = {
   // Tax: lengths of labels, notes, codes and a year label (2026-27 is 7 characters), a link's lifetime in seconds, and how many sections a year lists. None is a tax figure: every tax value is entered by the owners.
   "tax/declarations.ts": [20, 60, 120, 300],
   "tax/routes.ts": [20, 64], // 64: a fingerprint's length (P7-7)
-  "tax/schema.ts": [19, 20, 60, 80, 300],
+  "tax/schema.ts": [19, 20, 60, 80, 300, 31],
   "salary/validators.ts": [20, 25, 60, 300],
   "salary/adjustments.ts": [300],
   "salary/employees.ts": [20, 25, 60],

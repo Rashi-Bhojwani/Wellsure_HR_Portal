@@ -13,6 +13,8 @@ const AutofillReviewPage = lazyPage(() => import("../features/autofill/AutofillR
 const ExitCasePage = lazyPage(() => import("../features/exits/ExitCasePage"), "ExitCasePage");
 const ExitInterviewPage = lazyPage(() => import("../features/exits/ExitInterviewPage"), "ExitInterviewPage");
 // PEEPS-END exits
+import { RequireAccess } from "../components/common/RequireAccess";
+import { PAYROLL_NEEDS } from "./adminMenu.config";
 
 // The signed-in half of the router (router.tsx mounts it, lazily, at /app/* and /admin/*). Kept out of the entry chunk so the login screen never downloads the
 // shells, the menu configs or their icons (bundle budget, DESIGN_SYSTEM.md §7). Paths below are relative to /app or /admin.
@@ -93,8 +95,9 @@ export function PortalRoutes() {
             <Route path="employee/profile/:id" element={<EmployeeProfilePage />} />
             <Route path="employee/helpdesk/:id" element={<AdminHelpdeskTicketPage />} />
             <Route path="admin-tools/templates/:id" element={<LetterTemplateEditorPage />} />
-            <Route path="payroll/run/:id" element={<PayrollRunPage />} />
-            <Route path="payroll/run/:id/step/:slug" element={<RunStepPage />} />
+            {/* The run and its steps: the same gate as the payroll menu (the Developer gets the forbidden page, never a figure). */}
+            <Route path="payroll/run/:id" element={<RequireAccess needs={PAYROLL_NEEDS}><PayrollRunPage /></RequireAccess>} />
+            <Route path="payroll/run/:id/step/:slug" element={<RequireAccess needs={PAYROLL_NEEDS}><RunStepPage /></RequireAccess>} />
             {/* PEEPS-BEGIN recruitment */}
             <Route path="recruitment/jobs/:id" element={<RecruitmentJobPage />} />
             <Route path="recruitment/interviews/:id" element={<RecruitmentInterviewPage />} />

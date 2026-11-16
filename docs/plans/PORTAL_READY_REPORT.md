@@ -1,6 +1,6 @@
 # Portal readiness report
 
-Branch `feat/hr-payroll-separation`, written 2026-11-10 and updated 2026-11-11 by the session continuing Session A. Public repository: no real data, no real
+Branch `feat/hr-payroll-separation`, written 2026-11-10, updated 2026-11-11 and 2026-11-16 (Stage 9, with the go-live gap list in section 7) by the session continuing Session A. Public repository: no real data, no real
 person's name. **Every buildable item is now built**, including P7-6b off-cycle runs and the three D-37 defaults. Still open: eight A-items undefined in every plan
 file; Stage 8 blocked until the owner replaces the files on `origin/main` (they look like real exports; not brought here); Stages 6 and 9 not started on the
 owner's instruction (`PARITY_COVERAGE.md` was brought onto this branch by the parallel M session on 2026-11-11).
@@ -30,7 +30,12 @@ owner's instruction (`PARITY_COVERAGE.md` was brought onto this branch by the pa
 | CI backend shards with a count check | DONE (longest shard 6.5 min vs 17 min before; limit unchanged) | `f915ba3` |
 | Payroll rows of the parity audit (ST-24/SS-05, PY-27/28/29 guide, ST-21, ST-03/06, LC-07, PY-37, PY-24, IE-09) | DONE; LC-09 and ST-23 were already covered; the rest skipped (owner values) — see `A_PARITY_ROWS.md` | `9bbcc05`, `c62a451` |
 | Stage 8 file readers and parallel-run kit | **BLOCKED in part**: `docs/samples/` exists only on `peeps/foundation` (not touched); the Phase 6 compare tool exists | — |
-| Stage 9 Tier 1 parity (payroll rows) | DONE where no owner value is needed (above); owner-value rows listed as skipped | — |
+| Part 2: ST-08, ST-30, ST-29, ST-25, PY-41 (mechanisms, every value Not set) | DONE | `bd192ee`…`cdcba37` |
+| Part 3: dated statutory IDs, overtime and encashment pay (Not set), company filter, payroll per company (first steps), registers | DONE; golden run unchanged; suite 2,196/2,196; CI 359 green | `edaf4f6`…`bf9429b` |
+| Part 4: realtime fix; gratuity and notice recovery at exit; HRA exemption and marginal relief on the rebate (all Not set until two directors confirm); PF/ESI/PT/LWF/income tax verified for one state | DONE; golden run unchanged; suite 2,213/2,213; CI 377 green | `ac741bc`, `d3b440a`, `4522912`, `0d9022f`, `108d91e`, `3237127` |
+| Cleanup: payroll reports by branch (filter and group, golden unchanged); Director authority message; Payroll Admin/Approver not assignable; agent-windows port fix | DONE; suite 2,219/2,219; CI 383 green (agent-windows included) | `8dbe7af`, `c7749e5`, `0824015`, `7e815bf`, `a31f3be`, `df34dcf`, `c2e961f` |
+| Stage 8: greytHR file readers (device log, swipes, overrides with a second director, salary statement, bank file check) and the parallel-run kit; request 13; every report key a Developer ceiling | DONE with synthetic samples (real greytHR files not tried); suite 2,249/2,249; CI 389 green | `05e80c1`, `d0e5a20`, `6174928`, `c4b9485`, `8c7e7d5`, `d51d80b` |
+| Stage 9: audit re-check of `PARITY_COVERAGE.md`; remaining Tier 1 gaps (none buildable: all four need an owner value); full-month rehearsal; hostile-file hardening; 500-person re-measure | DONE; 2 reader bugs and 1 over-budget step fixed; see section 7 for go-live | `71898df`, `c61e307`, `f421c7e`, `965034d`, `9d8ebb9` |
 
 Plans written before code: `GREYTHR_PARITY_WORKFORCE.md`, `A3_OPENING_FIGURES.md`, `P7_4_LOANS.md`, `P7_5_REIMBURSEMENTS.md`, `P7_6_SETTLEMENTS.md` (with the
 P7-6b section), `P7_7_FORM16.md`, `D37_DEFAULTS.md`.
@@ -78,11 +83,11 @@ and off-cycle step is inside its budget (largest: 0.58 s against 1.6 s).
 - Test gates: final full suite alone 221 files, 2,061 tests, all passed; CI run 307 on the branch head green on all seven jobs. Risk: the CI Test step now takes
   about 17 of its 18 allowed minutes (run 288 timed out with no failing test).
 - Real screen readers (only keyboard paths and focus were checked); colour contrast was not measured; a real phone and a real tablet (emulated widths only).
-- Payslip PDF timing at 500 in this container (the existing measure's PDF step hung here; earlier figure 0.25 s each stands unverified today).
+- (Verified 2026-11-16: payslip PDFs at 500 take 0.13–0.17 s each in this container, about 1.1–1.4 minutes for everyone.)
 - A loaded database, RDS Proxy and two people on different machines at once (the double-click checks are from one browser and one test process).
 - The loan "pause" the owners may want: there is no such feature (row 75).
 - A TEAM-scope viewer of the roster grid; the five non-leave attendance-lock writers over their routes (wired; only leave apply exercised).
-- Stage 8 readers (no synthetic samples on this branch yet).
+- Stage 8 readers against real greytHR exports (only the synthetic samples and generated files were tried).
 
 **Verified on 2026-11-12 (Session A block):** see STAGE_REPORTS.md "Session A block". Full suite alone 239 files / 2,139 tests with 3 failures: one mine (fixed in
 `247096d`), two in the other session's files (`customFields` passes alone; `yearEndMoney` audit-viewer test broken since `ad5b3ca`). Not verified: the Form 16 PDF and
@@ -113,7 +118,7 @@ dialog by a shared trap; the scale budgets are the project's recorded 500-person
    the adjustment), settlements (`settlements/service.ts` automatic lines), YTD on payslips (`run/ytd.ts`, `run/payslip.ts`).
 2. Tax gates: the opening-figures gate in `tax/gather.ts`, `tax/openings.ts` hash binding, `tax/form16.ts` DRAFT rules.
 3. Access: every new route refuses HR, managers (except their own/team where stated), employees on others' data and the Developer role; the
-   Developer still reaches Employee Swipes (pre-existing; no selection now) — confirm that is intended.
+   Developer does not reach Employee Swipes unless a director turns the switch on (D-37 default 3, `9ec926e`) — confirm the switch is read on every request.
 4. Append-only and immutability triggers in the new migrations (`2026110*`), and the test-only purge exception.
 5. Sealed challan numbers registered in `lib/fieldKeyRotation.ts`.
 6. The attendance engine changes: rejected swipes, location-limited holidays and weekend overrides in `attendance/compute.ts`.
@@ -121,3 +126,47 @@ dialog by a shared trap; the scale budgets are the project's recorded 500-person
    unlock refusals. The D-37 store (`behaviours/service.ts`, migration `20261111120000`), the loan shortfall in `run/person.ts` and `run/finaliser.ts`, the leaving
    month in `leave/recalculator.ts`, the Developer switch in `lib/permissions.ts`.
 8. The A-items' definitions.
+
+## 7. Go-live gap list (written 2026-11-16, after Stage 9)
+
+What stands between this branch and the first real month, in three groups. greytHR keeps running in parallel throughout; nothing here assumes it is switched off.
+The full-month rehearsal (`fullMonthRehearsal.test.ts`) shows the whole road works with TEST values; every value below is Not set in the real company until the
+two directors enter and confirm it.
+
+**A. Owner values to enter (in the portal; the other director confirms each)**
+1. Director authority per payroll step (System Settings → Director authority).
+2. The tax year 2026-27: slabs, standard deduction, rebate, surcharge, cess, regime default, rounding, minimum monthly TDS, one-off taxation, section catalogue,
+   HRA exemption and marginal relief values; then `TDS_MODE` PROJECTED when ready.
+3. Statutory rules for the one state: PF, ESI, PT, LWF rates, ceilings and slabs; gratuity and notice-recovery values; overtime and encashment pay (spec §14).
+4. **How CTC is built: employer PF and ESI inside or outside CTC** (parity PY-43, the only open Tier 1 pay rule).
+5. Every earning head's taxability; Monthly Inputs heads' direction and negatives (D-31).
+6. Opening figures for the year (or confirm there are none) — income tax in a run does nothing until then.
+7. Company and branch registrations (PF, ESI, PT, TAN) and the company bank details.
+8. Bank layout from the bank's own specification (debit account, payment mode, remark), the payment date rule, the payslip link lifetime, the
+   password-protected PDF approval.
+9. **The PF portal's current ECR format and the ESI portal's upload format** as layouts (parity ST-02, ST-05: the mechanism is built, the layout is typed by a director).
+10. Loan and claim types (limits, rate, pay heads; "Principal Part" and "Interest Part" deduction heads).
+11. Admin Tools → Default behaviours: the three D-37 defaults to review; max total deduction %, pro-rata leave rounding, parallel-run tolerance and comparison
+    retention to set.
+12. Attendance and leave: PL eligibility boundary, encashment formula, late-mark penalty policy (AT-18), status labels, holidays per location, leave reviewers.
+13. The open questions of spec §14 not covered above: device model, headcount, domain, static IP, AWS account structure; the payslip layout sample (PY-23).
+14. Two-step sign-in for both directors.
+15. The undefined A-items (A-1, A-4, A-6, A-7, A-8; A-2 and A-5 in detail): define them or drop them.
+
+**B. Needs real greytHR (or bank/portal) files, tried in the portal and never committed**
+1. One real month of greytHR's Salary Statement (.xls) through the parallel-run kit against the same month's portal run — the readers have only seen the synthetic
+   samples (IE-12).
+2. greytHR's Attendance Swipes file and the device log (.dat) for the same month, imported and compared with greytHR's attendance.
+3. greytHR's Bulk Salary Overrides file, uploaded by one director and applied by the other.
+4. greytHR's bank transfer file through the bank file check; and the bank's answer on whether it accepts .xlsx or .csv (the portal does not write .xls).
+5. A synthetic copy (made-up values) of greytHR's payroll repository (pay items) layout, if that reader is wanted.
+6. A sample PF ECR and ESI upload accepted by the portals (to confirm the typed layouts in A9).
+7. Two to three months of parallel run with greytHR before cutover (spec: payroll runs in parallel).
+
+**C. Deferred by owner decision (not built; nothing waits on them for monthly payroll)**
+LTA exemption (ST-16), perquisites including cheap loans (ST-17), statutory bonus (PY-30), flexible benefit plan (LC-16), travel advance and expense settlement
+(LC-15), Form 12BB output (ST-19), the quarterly return file in the official format (ST-22), a native store app (MP-04; the PWA covers phones). Form 16 stays a
+DRAFT in our own layout (no official format). Buildable non-payroll rows (assets, leave documents, resignations, exit clearance and interview, custom reports,
+phone push, a manager step on claims) are listed in `PARITY_COVERAGE.md` (e).
+
+**Deployment** (outside this work): AWS, KMS keys, SES, the static IP for the biometric agent, staging timings with a pooled, loaded database.

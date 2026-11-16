@@ -4,6 +4,7 @@ import { Button, Form, Input, InputNumber, Select } from "antd";
 import * as api from "../../../api/behaviours";
 import * as loansApi from "../../../api/loans";
 import * as lettersApi from "../../../api/letters";
+import * as payrollApi from "../../../api/payroll";
 import type { Behaviour, BehaviourKey } from "../../../api/behaviours";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { PageHeader, Panel, QueryState, SideDrawer, StatusChip, toast } from "../../../ui";
@@ -21,6 +22,34 @@ function describe(b: Pick<Behaviour, "key" | "value">): string {
   if (b.key === "identity.directorConfirmsHrChanges") return v === true ? "On: a director confirms HR's bank and statutory changes before they take effect" : "Off: HR's bank and statutory changes take effect at once";
   if (b.key === "loan.maxTotalDeductionPercent") return v && typeof v === "object" ? `${String(v.percent)}% of gross (source: ${String(v.sourceNote)})` : "Not set: no percentage limit";
   if (b.key === "leave.proRataRounding") return v && typeof v === "object" ? `${ROUND_LABEL[String(v.mode)] ?? String(v.mode)} to ${String(v.scale)} decimal place(s)` : "Not set: a pro-rata result that needs rounding waits for this";
+  // Part 3: pay mechanisms, Not set until two directors confirm them.
+  if (b.key === "payroll.overtimePay") {
+    if (!v || typeof v !== "object") return "Not set: approved overtime is not paid";
+    const o = v as { payHead: string; rate: { mode: string; perHour?: string; multiplier?: string; basisHeads?: string[]; hoursPerMonth?: string }; rounding: { mode: string; scale: number } };
+    return `${o.rate.mode === "FLAT_PER_HOUR" ? `₹${o.rate.perHour} an hour` : `${o.rate.multiplier} × (${(o.rate.basisHeads ?? []).join(" + ")}) ÷ ${o.rate.hoursPerMonth} hours`}, paid as ${o.payHead}; ${ROUND_LABEL[o.rounding.mode] ?? o.rounding.mode} to ${o.rounding.scale} place(s)`;
+  }
+  if (b.key === "payroll.leaveEncashment") {
+    if (!v || typeof v !== "object") return "Not set: encashment requests are not paid; a settlement shows leave in days only";
+    const e = v as { payHead: string; exitLeaveTypes: string[]; basisHeads: string[]; divisor: { kind: string; days?: string }; rounding: { mode: string; scale: number } };
+    return `Days × (${e.basisHeads.join(" + ")}) ÷ ${e.divisor.kind === "FIXED_DAYS" ? e.divisor.days : "the month's calendar days"}, paid as ${e.payHead}; at exit: ${e.exitLeaveTypes.join(", ") || "no type"}; ${ROUND_LABEL[e.rounding.mode] ?? e.rounding.mode} to ${e.rounding.scale} place(s)`;
+  }
+  // Part 4: settlement mechanisms (effective-dated), Not set until two directors confirm them.
+  if (b.key === "payroll.gratuity") {
+    if (!v || typeof v !== "object") return "Not set: a settlement shows no gratuity line";
+    const g = v as { effectiveFrom: string; minYears: string; partYear: string; wageHeads: string[]; daysPerYear: string; divisor: string; ceiling: string };
+    return `From ${g.effectiveFrom}: after ${g.minYears} year(s), (${g.wageHeads.join(" + ")}) × ${g.daysPerYear} ÷ ${g.divisor} a year${g.partYear === "SIX_MONTHS_OR_MORE_COUNTS_AS_A_YEAR" ? " (six months or more counts as a year)" : ""}; ceiling ${g.ceiling === "NONE" ? "none" : `₹${g.ceiling}`}`;
+  }
+  if (b.key === "payroll.noticeRecovery") {
+    if (!v || typeof v !== "object") return "Not set: no notice recovery is worked out";
+    const n = v as { effectiveFrom: string; noticeDays: number; recoverShortfall: boolean; basisHeads: string[]; divisor: string };
+    return `From ${n.effectiveFrom}: ${n.noticeDays} days' notice; ${n.recoverShortfall ? `a shortfall is recovered at (${n.basisHeads.join(" + ")}) ÷ ${n.divisor} a day` : "a shortfall is not recovered"}`;
+  }
+  // Stage 8: the parallel-run kit.
+  if (b.key === "payroll.parallelTolerance") {
+    const t = (v ?? { allowance: "0" }) as { allowance: string };
+    return Number(t.allowance) === 0 ? "Exact match: a difference of 0 (no rounding allowance)" : `A difference of up to ₹${t.allowance} counts as a match (days always compare exactly)`; // allow-number: display only
+  }
+  if (b.key === "payroll.parallelRetentionDays") return typeof v === "number" ? `A saved comparison is deleted after ${v} days` : "Not set: a comparison is kept until a director deletes it";
   if (b.key === "leave.leavingMonthAccrual") {
     const m = v as { mode: string; minDays?: number };
     return m.mode === "FULL_IF_MIN_DAYS" ? `A full month only if at least ${m.minDays} days were worked` : MODE_LABEL[m.mode] ?? m.mode;
@@ -32,7 +61,7 @@ function describe(b: Pick<Behaviour, "key" | "value">): string {
 
 const ROUND_LABEL: Record<string, string> = { HALF_UP: "Half up", HALF_EVEN: "Half even", UP: "Up", DOWN: "Down", CEIL: "Ceiling", FLOOR: "Floor" };
 
-type FormValues = { reason: string; codes?: string[]; roundMode?: string; scale?: number; on?: string; mode?: string; minDays?: number; percent?: string; sourceNote?: string; rules?: Array<{ typeKey: string; rule: string }> };
+type FormValues = { reason: string; allowance?: string; retentionDays?: number; effectiveFrom?: string; minYears?: string; partYear?: string; daysPerYear?: string; divisor?: string; ceiling?: string; noticeDays?: number; recoverShortfall?: string; payHead?: string; rateMode?: string; perHour?: string; multiplier?: string; basisHeads?: string[]; hoursPerMonth?: string; exitLeaveTypes?: string[]; divisorKind?: string; divisorDays?: string; codes?: string[]; roundMode?: string; scale?: number; on?: string; mode?: string; minDays?: number; percent?: string; sourceNote?: string; rules?: Array<{ typeKey: string; rule: string }> };
 
 export function DefaultBehavioursPage() {
   const queryClient = useQueryClient();
@@ -41,6 +70,9 @@ export function DefaultBehavioursPage() {
   const q = useQuery({ queryKey: ["behaviours"], queryFn: api.listBehaviours });
   const types = useQuery({ queryKey: ["loans", "types"], queryFn: loansApi.loanTypes });
   const letterTemplates = useQuery({ queryKey: ["letters", "templates"], queryFn: lettersApi.listTemplates });
+  const comps = useQuery({ queryKey: ["payroll", "components"], queryFn: payrollApi.listComponents });
+  const earningHeads = (comps.data ?? []).filter((c) => c.value?.type === "EARNING").map((c) => ({ value: c.code, label: c.value?.payslipLabel ? `${c.value.payslipLabel} (${c.code})` : c.code }));
+  const PAY_ROUND = [{ value: "HALF_UP", label: "Half up" }, { value: "UP", label: "Up" }, { value: "DOWN", label: "Down" }];
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["behaviours"] });
   const propose = useMutation({
     mutationFn: (v: FormValues) => {
@@ -51,6 +83,12 @@ export function DefaultBehavioursPage() {
         : key === "leave.leavingMonthAccrual" ? (v.mode === "FULL_IF_MIN_DAYS" ? { mode: v.mode, minDays: v.minDays } : { mode: v.mode })
         : key === "loan.maxTotalDeductionPercent" ? { percent: v.percent, sourceNote: v.sourceNote }
         : key === "leave.proRataRounding" ? { mode: v.roundMode, scale: v.scale }
+        : key === "payroll.overtimePay" ? { payHead: v.payHead, rate: v.rateMode === "FLAT_PER_HOUR" ? { mode: "FLAT_PER_HOUR", perHour: v.perHour } : { mode: "MULTIPLIER", multiplier: v.multiplier, basisHeads: v.basisHeads ?? [], hoursPerMonth: v.hoursPerMonth }, rounding: { mode: v.roundMode, scale: v.scale }, sourceNote: v.sourceNote }
+        : key === "payroll.parallelTolerance" ? { allowance: v.allowance }
+        : key === "payroll.parallelRetentionDays" ? v.retentionDays
+        : key === "payroll.gratuity" ? { effectiveFrom: v.effectiveFrom, minYears: v.minYears, partYear: v.partYear, wageHeads: v.basisHeads ?? [], daysPerYear: v.daysPerYear, divisor: v.divisor, ceiling: v.ceiling?.trim() ? v.ceiling.trim() : "NONE", rounding: { mode: v.roundMode, scale: v.scale }, sourceNote: v.sourceNote }
+        : key === "payroll.noticeRecovery" ? { effectiveFrom: v.effectiveFrom, noticeDays: v.noticeDays, recoverShortfall: v.recoverShortfall === "yes", basisHeads: v.basisHeads ?? [], divisor: v.divisor, rounding: { mode: v.roundMode, scale: v.scale }, sourceNote: v.sourceNote }
+        : key === "payroll.leaveEncashment" ? { payHead: v.payHead, exitLeaveTypes: v.exitLeaveTypes ?? [], basisHeads: v.basisHeads ?? [], divisor: v.divisorKind === "CALENDAR_DAYS" ? { kind: "CALENDAR_DAYS" } : { kind: "FIXED_DAYS", days: v.divisorDays }, rounding: { mode: v.roundMode, scale: v.scale }, sourceNote: v.sourceNote }
         : Object.fromEntries((v.rules ?? []).filter((r) => r?.typeKey && r?.rule).map((r) => [r.typeKey, r.rule]));
       return api.proposeBehaviour(key, value, v.reason);
     },
@@ -63,6 +101,7 @@ export function DefaultBehavioursPage() {
     form.resetFields();
     const v = b.value as Record<string, unknown> | boolean | null;
     if (b.key === "access.developerSeesSwipes" || b.key === "identity.directorConfirmsHrChanges") form.setFieldsValue({ on: v === true ? "on" : "off" });
+    if (b.key === "payroll.parallelTolerance") form.setFieldsValue({ allowance: (v as { allowance?: string } | null)?.allowance ?? "0" });
     if (b.key === "letters.employeeMayAsk") form.setFieldsValue({ codes: Array.isArray(v) ? (v as string[]) : [] });
     if (b.key === "leave.leavingMonthAccrual") form.setFieldsValue({ mode: (v as { mode: string }).mode, minDays: (v as { minDays?: number }).minDays });
     if (b.key === "loan.shortfall") form.setFieldsValue({ rules: Object.entries((v ?? {}) as Record<string, string>).map(([typeKey, rule]) => ({ typeKey, rule })) });
@@ -138,6 +177,73 @@ export function DefaultBehavioursPage() {
               <Form.Item name="sourceNote" label="Source note (where the figure comes from)" rules={[{ required: true, min: 3 }]}>
                 <Input />
               </Form.Item>
+            </>
+          )}
+          {editing?.key === "payroll.parallelTolerance" && (
+            <Form.Item name="allowance" label="Rounding allowance in rupees (0 = exact match)" rules={[{ required: true, pattern: /^\d{1,4}(\.\d{1,2})?$/, message: "Rupees, up to two decimals" }]}><Input inputMode="decimal" placeholder="0" /></Form.Item>
+          )}
+          {editing?.key === "payroll.parallelRetentionDays" && (
+            <Form.Item name="retentionDays" label="Keep a saved comparison for (days)" rules={[{ required: true }]}><InputNumber min={1} max={3650} style={{ width: "100%" }} /></Form.Item>
+          )}
+          {(editing?.key === "payroll.gratuity" || editing?.key === "payroll.noticeRecovery") && (
+            <>
+              <Form.Item name="effectiveFrom" label="In force from (YYYY-MM-DD)" rules={[{ required: true, pattern: /^\d{4}-\d{2}-\d{2}$/, message: "A date, YYYY-MM-DD" }]}><Input placeholder="2027-04-01" /></Form.Item>
+              {editing.key === "payroll.gratuity" ? (
+                <>
+                  <Form.Item name="minYears" label="Least completed years of service" rules={[{ required: true, pattern: /^\d{1,2}(\.\d{1,2})?$/, message: "Years" }]}><Input inputMode="decimal" /></Form.Item>
+                  <Form.Item name="partYear" label="A part year" rules={[{ required: true }]}><Select options={[{ value: "COMPLETED_YEARS_ONLY", label: "Only completed years count" }, { value: "SIX_MONTHS_OR_MORE_COUNTS_AS_A_YEAR", label: "Six months or more counts as a year" }]} /></Form.Item>
+                  <Form.Item name="basisHeads" label="Wage from these heads of the salary" rules={[{ required: true, message: "Choose the heads" }]}><Select mode="multiple" options={earningHeads} /></Form.Item>
+                  <Form.Item name="daysPerYear" label="Days of wage per year of service" rules={[{ required: true, pattern: /^\d{1,2}(\.\d{1,2})?$/, message: "Days" }]}><Input inputMode="decimal" /></Form.Item>
+                  <Form.Item name="divisor" label="Divided by (days)" rules={[{ required: true, pattern: /^\d{1,2}(\.\d{1,2})?$/, message: "Days" }]}><Input inputMode="decimal" /></Form.Item>
+                  <Form.Item name="ceiling" label="Ceiling in rupees (leave blank for none)" rules={[{ pattern: /^\d{1,9}(\.\d{1,2})?$/, message: "Rupees" }]}><Input inputMode="decimal" /></Form.Item>
+                </>
+              ) : (
+                <>
+                  <Form.Item name="noticeDays" label="Notice period (days)" rules={[{ required: true }]}><InputNumber min={0} max={365} style={{ width: "100%" }} /></Form.Item>
+                  <Form.Item name="recoverShortfall" label="Recover a shortfall" rules={[{ required: true }]}><Select options={[{ value: "yes", label: "Yes" }, { value: "no", label: "No" }]} /></Form.Item>
+                  <Form.Item name="basisHeads" label="Per-day basis from these heads of the salary" rules={[{ required: true, message: "Choose the heads" }]}><Select mode="multiple" options={earningHeads} /></Form.Item>
+                  <Form.Item name="divisor" label="Divided by (days)" rules={[{ required: true, pattern: /^\d{1,2}(\.\d{1,2})?$/, message: "Days" }]}><Input inputMode="decimal" /></Form.Item>
+                </>
+              )}
+              <Form.Item name="roundMode" label="Rounding" rules={[{ required: true }]}><Select options={PAY_ROUND} /></Form.Item>
+              <Form.Item name="scale" label="Decimal places (0 to 2)" rules={[{ required: true }]}><InputNumber min={0} max={2} style={{ width: "100%" }} /></Form.Item>
+              <Form.Item name="sourceNote" label="Source note (where the rule comes from)" rules={[{ required: true, min: 3 }]}><Input /></Form.Item>
+            </>
+          )}
+          {(editing?.key === "payroll.overtimePay" || editing?.key === "payroll.leaveEncashment") && (
+            <>
+              <Form.Item name="payHead" label="Paid as (pay head)" rules={[{ required: true, message: "Choose the pay head" }]}><Select options={earningHeads} /></Form.Item>
+              {editing.key === "payroll.overtimePay" && (
+                <>
+                  <Form.Item name="rateMode" label="Rate" rules={[{ required: true }]}><Select options={[{ value: "FLAT_PER_HOUR", label: "A flat rate per hour" }, { value: "MULTIPLIER", label: "A multiplier of an hourly rate" }]} /></Form.Item>
+                  <Form.Item noStyle shouldUpdate={(a, b) => a.rateMode !== b.rateMode}>
+                    {({ getFieldValue }) =>
+                      getFieldValue("rateMode") === "FLAT_PER_HOUR" ? (
+                        <Form.Item name="perHour" label="Rupees per hour" rules={[{ required: true, pattern: /^\d{1,9}(\.\d{1,2})?$/, message: "Rupees, up to two decimals" }]}><Input inputMode="decimal" /></Form.Item>
+                      ) : getFieldValue("rateMode") === "MULTIPLIER" ? (
+                        <>
+                          <Form.Item name="multiplier" label="Multiplier" rules={[{ required: true, pattern: /^\d{1,2}(\.\d{1,4})?$/, message: "For example 2" }]}><Input inputMode="decimal" /></Form.Item>
+                          <Form.Item name="basisHeads" label="Hourly rate from these heads of the salary" rules={[{ required: true, message: "Choose the heads" }]}><Select mode="multiple" options={earningHeads} /></Form.Item>
+                          <Form.Item name="hoursPerMonth" label="Divided by hours a month" rules={[{ required: true, pattern: /^\d{1,3}(\.\d{1,2})?$/, message: "Hours" }]}><Input inputMode="decimal" /></Form.Item>
+                        </>
+                      ) : null
+                    }
+                  </Form.Item>
+                </>
+              )}
+              {editing.key === "payroll.leaveEncashment" && (
+                <>
+                  <Form.Item name="basisHeads" label="Per-day basis from these heads of the salary" rules={[{ required: true, message: "Choose the heads" }]}><Select mode="multiple" options={earningHeads} /></Form.Item>
+                  <Form.Item name="divisorKind" label="Divided by" rules={[{ required: true }]}><Select options={[{ value: "FIXED_DAYS", label: "A fixed number of days" }, { value: "CALENDAR_DAYS", label: "The month's calendar days" }]} /></Form.Item>
+                  <Form.Item noStyle shouldUpdate={(a, b) => a.divisorKind !== b.divisorKind}>
+                    {({ getFieldValue }) => getFieldValue("divisorKind") === "FIXED_DAYS" ? <Form.Item name="divisorDays" label="Days" rules={[{ required: true, pattern: /^\d{1,2}(\.\d{1,2})?$/, message: "Days" }]}><Input inputMode="decimal" /></Form.Item> : null}
+                  </Form.Item>
+                  <Form.Item name="exitLeaveTypes" label="Leave types encashed at exit (codes)"><Select mode="tags" tokenSeparators={[","]} /></Form.Item>
+                </>
+              )}
+              <Form.Item name="roundMode" label="Rounding" rules={[{ required: true }]}><Select options={PAY_ROUND} /></Form.Item>
+              <Form.Item name="scale" label="Decimal places (0 to 2)" rules={[{ required: true }]}><InputNumber min={0} max={2} style={{ width: "100%" }} /></Form.Item>
+              <Form.Item name="sourceNote" label="Source note (where the rule comes from)" rules={[{ required: true, min: 3 }]}><Input /></Form.Item>
             </>
           )}
           {editing?.key === "loan.shortfall" && (

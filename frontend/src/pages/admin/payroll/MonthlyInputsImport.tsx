@@ -9,6 +9,7 @@ import { formatDateTime } from "../../../lib/dates";
 import { ApprovalBanner, DataTable, EmptyState, Panel, Stack, StatusChip, toast } from "../../../ui";
 import { Caption, Num, PersonCell } from "../../../components/payroll/payrollUi";
 import { space } from "../../../theme/tokens";
+import { useAuth } from "../../../hooks/useAuth";
 
 // Monthly Inputs → Import a file. Upload an Excel or CSV in the layout of the Bulk Salary Overrides sample, look at the preview (every row, line numbers, what is wrong in
 // words), and only then confirm. Nothing is saved before the confirm. One invalid row refuses the whole file unless the director chooses to skip the invalid rows.
@@ -18,6 +19,7 @@ export function MonthlyInputsImport({ canEdit, onApplied }: { canEdit: boolean; 
   const input = useRef<HTMLInputElement>(null);
   const [view, setView] = useState<ImportView | null>(null);
   const [skip, setSkip] = useState(false);
+  const { user } = useAuth();
   const [reason, setReason] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
   const past = useQuery({ queryKey: ["payroll", "inputs", "imports"], queryFn: payrollApi.listImports });
@@ -52,7 +54,9 @@ export function MonthlyInputsImport({ canEdit, onApplied }: { canEdit: boolean; 
   });
   const headName = (code: string) => view?.analysis.columns.find((c) => c.head === code)?.header ?? code;
   const a = view?.analysis;
-  const canSave = !!view && view.status === "PREVIEW" && !view.alreadyApplied && reason.trim().length >= 3 && (skip ? view.canApplySkippingInvalid : view.canApply);
+  // Stage 8: the director who uploaded the file never applies it; a different director does.
+  const uploadedByMe = !!view && !!user && view.uploadedByEmployeeId === user.employeeId;
+  const canSave = !!view && view.status === "PREVIEW" && !view.alreadyApplied && !uploadedByMe && reason.trim().length >= 3 && (skip ? view.canApplySkippingInvalid : view.canApply);
 
   return (
     <Stack>
@@ -72,6 +76,7 @@ export function MonthlyInputsImport({ canEdit, onApplied }: { canEdit: boolean; 
           <Stack>
             {view.alreadyApplied && <ApprovalBanner tone="info" title="This exact file was already applied" description={`It was saved on ${formatDateTime(view.alreadyApplied.at)}. A file is never applied twice.`} />}
             {view.status === "APPLIED" && !view.alreadyApplied && <ApprovalBanner tone="info" title="This file has been applied" />}
+            {view.status === "PREVIEW" && uploadedByMe && <ApprovalBanner tone="info" title="A different director applies this file" description="You uploaded it, so the other director checks this preview and saves the figures. Nothing is saved until then." />}
             {a.fileProblems.map((p) => <ApprovalBanner key={p} tone="danger" title={p} />)}
             {a.notices.map((n) => <ApprovalBanner key={n} tone="warning" title={n} />)}
             <div>

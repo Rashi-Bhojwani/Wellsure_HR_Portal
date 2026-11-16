@@ -235,7 +235,9 @@ export const REVIEWED_NOT_SENSITIVE: readonly PermissionKey[] = [
 
 /** The keys nobody can hold together with the DEVELOPER role. */
 export const DEVELOPER_ROLE_CODE = "DEVELOPER";
-export const DEVELOPER_FORBIDDEN_KEYS: readonly PermissionKey[] = SENSITIVE_PERMISSION_KEYS;
+// Owners, 2026-11-14 (Session A, Stage 8 block): every report key too (reports.*, including one added later), so even a personal, audited grant of a report
+// permission to someone holding the Developer role is refused and never resolved.
+export const DEVELOPER_FORBIDDEN_KEYS: readonly PermissionKey[] = [...new Set<PermissionKey>([...SENSITIVE_PERMISSION_KEYS, ...PERMISSION_KEYS.filter((k) => k.startsWith("reports."))])];
 
 /**
  * The HR hard lock (docs/plans/HR_CAPABILITIES.md §1A): pay data is never HR's. lib/permissions.ts removes these from anyone who holds an HR role without also being a Super Admin,
@@ -290,9 +292,7 @@ export const DEVELOPER_ROLE_PERMISSIONS: readonly PermissionKey[] = [
   "attendance.roster.manage",
   "leave.view",
   "leave.policy.manage",
-  "reports.view",
-  "reports.attendance.view",
-  "reports.leave.view",
+  // No report key (owners, 2026-11-14): every report is closed to the Developer (reports.view, reports.attendance.view, reports.leave.view removed).
   "helpdesk.manage",
   "payroll.rules.view",
 ];

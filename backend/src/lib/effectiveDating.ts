@@ -405,6 +405,12 @@ export async function payrollPlacementsOn(employeeIds: string[], day: Date): Pro
 }
 
 /** Whose punch is this: the employee a device user ID belonged to on `day`. */
+/** Stage 8: the device user ID an employee has on a day (the reverse of employeeForDeviceUserOn), or null; greytHR's swipes file names people by employee number. */
+export async function deviceUserIdForEmployeeOn(employeeId: string, day: Date): Promise<string | null> {
+  const m = await prisma.deviceUserMapping.findFirst({ where: { employeeId, ...mappingInForceOn(day) }, select: { deviceUserId: true } });
+  return m?.deviceUserId ?? null;
+}
+
 export async function employeeForDeviceUserOn(deviceUserId: string, day: Date): Promise<string | null> {
   const m = await prisma.deviceUserMapping.findFirst({ where: { deviceUserId, ...mappingInForceOn(day) }, select: { employeeId: true } });
   return m?.employeeId ?? null;

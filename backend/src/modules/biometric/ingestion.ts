@@ -178,7 +178,7 @@ export function punchedAtRange(times: Date[]): { first: Date; last: Date } {
  * What committing an uploaded file would do, counted against what's stored
  * now (docs/plans/PHASE_2.md §3 "File upload": upload → preview → commit).
  */
-export async function previewCounts(device: Device, text: string, now: Date = new Date()): Promise<IngestCounts & { rejected: AttlogRejected[]; sample: Array<{ lineNumber: number; deviceUserId: string; localTime: string; outcome: string }> }> {
+export async function previewCounts(device: Device, text: string, now: Date = new Date()): Promise<IngestCounts & { unknownIds: string[]; rejected: AttlogRejected[]; sample: Array<{ lineNumber: number; deviceUserId: string; localTime: string; outcome: string }> }> {
   const { planned, rejected } = await analyse(device, text, now);
   const range = punchedAtRange(planned.map((p) => p.punchedAt));
   const existing = planned.length
@@ -198,6 +198,8 @@ export async function previewCounts(device: Device, text: string, now: Date = ne
     unmappedCount: fresh.filter((p) => !p.employeeId).length,
     rejectedCount: rejected.length,
     flaggedCount: fresh.filter((p) => p.flag).length,
+    // Stage 8: which device user IDs nobody is mapped to (they wait in the unmapped queue; nothing is guessed).
+    unknownIds: [...new Set(fresh.filter((p) => !p.employeeId).map((p) => p.deviceUserId))].sort(),
     rejected,
     sample: planned.slice(0, 200).map((p) => ({ lineNumber: p.lineNumber, deviceUserId: p.deviceUserId, localTime: p.localTime, outcome: outcome(p) })),
   };

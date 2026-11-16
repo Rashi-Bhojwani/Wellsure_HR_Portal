@@ -228,3 +228,287 @@ session's final message. Every migration was applied to a fresh test database by
 **Pay-data check.** No path found for HR, a manager or the Developer to see pay data. New routes that could carry a figure keep it out: the claims inbox
 item has no amount; scheduled report emails carry no rows (leave liability stays directors-only through `reports.liability.view`); the audit export
 keeps payroll rows and money fields from anyone without the salary key and refuses the Developer; the data export lists payslips by month only.
+
+---
+
+# Block 2 (2026-11-12 to 13): Developer audit view, the decision rows
+
+## Rows and commits
+
+| Row | Now | Commit | Default or state |
+|---|---|---|---|
+| B1 Developer audit view | Built | `ad5b3ca`, test `c536707` | — |
+| Policy settings (shared two-director store, System Settings → Policy settings) | Built | `de0cfed` | — |
+| ER-27 Divisions | Built | `de0cfed` | none defined (optional grouping of departments) |
+| ER-18 Policy acknowledgement | Built | `9741815`, `fbf26e8` | off for every document unless asked |
+| ER-26 Probation | Built | `371fd55` | 3 months; reminder 15 days before (Default, change in settings) |
+| OE-04 Onboarding checklist | Built | `f9b1842` | six conventional steps (Default) |
+| ER-28 Custom fields | Built | `c4f4b7b` | none defined |
+| SS-13 Feedback | Built | `3bea7cb` | anonymous allowed (Default) |
+| AT-22 Correction limits | Built, off | `cbaee81` | off; suggested 3 a month |
+| LV-19 Leave request limits | Built, off (not "document after N days": Peeps LV-18) | `cbaee81` | off; suggested PL 15 days, 7 days' notice |
+| LV-20 Sandwich rule | Built, off | `cbaee81` | off; no type listed |
+| AT-19 Overtime | Built, off (paying it: Session A) | `f503dd7` | off; suggested 60 min minimum, 30 min steps, manager-with-key or director |
+| AT-36 Work from home | Built, off | `fc14ed4` | off; suggested all departments, 5 days a request, a director approves |
+| LV-23 Encashment requests | Built, off (paying it: Session A) | `c87fb08` | off; suggested PL, keep 15, at most 10 a year |
+| IE-07 / IE-08 Update import and HR's import rules | Built | `1aedbb0` | HR updates contact/personal; job changes need a director; 500 rows (Default) |
+| LT-09 Electronic signature | Built (check a letter; signing existed) | `96c908d` | — |
+| AD-07 Data retention | Built, every period Not set | `048aed2` | Not set (nothing is ever due) |
+| NT-11 SMS / WhatsApp | Built, provider Not set | `b9ec63c` | Not set (nothing is sent) |
+| AD-08 More than one company | Built (payroll per company: Session A) | `c7f01a2` | one company |
+
+Skipped: AT-18 late-mark penalty (Peeps owns the lateness rule); ST-28 statutory registers (built from payroll results: Session A);
+NT-10 phone push (deferred to deployment by the owner).
+
+## Defaults chosen, and why (for the owners' review)
+
+All are in `shared/constants/policySettings.ts` with the reason beside each, and are changed by one director and confirmed by another.
+* Probation 3 months, reminder 15 days before: the most common probation in Indian offer letters at this size; time for the manager's review.
+* Onboarding: six first-month steps (offer letter and documents; invitation and first sign-in; team introduction; My Info complete; policies
+  acknowledged; first-month check-in). No asset or payroll step (assets are Peeps'; payroll set-up is the directors').
+* Feedback without a name allowed: a suggestion box is normally anonymous.
+* Update import: HR may update contact and personal details; job changes need a director (they change who approves what); 500 rows.
+* Suggested values offered on the form for the settings that change pay or leave (never in force until turned on): corrections 3 a month;
+  overtime from 60 minutes in 30-minute steps; WFH up to 5 days a request for every department; PL at most 15 days a request with 7 days'
+  notice; encashment of PL keeping 15 and at most 10 a year. Sandwich rule: no type suggested (many companies have none).
+* Not set (owners' values): retention periods; the SMS/WhatsApp provider and its notices.
+
+## Decisions made here (owners may overrule)
+
+* Developer audit view: the record id, IP address and browser are withheld too, not only the old and new values; the names of the fields
+  that changed are shown (a key that looks like a code or an id is left out).
+* Settings that change pay or leave are proposed "on" by one director and confirmed by another; off again the same way.
+* Sandwich rule counts only days between two leave days of the same request (not across two requests); it changes the balance taken,
+  not attendance (the engine still shows a week-off).
+* Leave notice applies to one's own request; HR applying on someone's behalf is not held to it.
+* Overtime is read from the engine's excess minutes on a non-provisional day and re-read at approval (never more than claimed).
+* WFH approval writes remote marks through the existing director path; the leave policy's WFH monthly/yearly limits are not applied here.
+* Encashment requests reserve days (asked or approved count against the minimum) but write nothing to the ledger; payroll does.
+* Feedback without a name writes no audit row (it would carry the sender's account and address).
+* Custom field values: the audit records which fields changed, never the values; only a director reveals a sensitive one.
+* Retention erasure: contact details are replaced by a marker and the photo removed; only GENERAL documents' files are removed; helpdesk
+  tickets are not covered yet.
+* SMS/WhatsApp texts carry the notice's title only, never its body.
+* More than one company: kept in new tables beside the main company, so nothing payroll reads changes.
+
+## Requests to Session A (block 2)
+
+5. **Overtime pay.** Approved minutes per person per month: `overtime_claims` (status APPROVED, `approved_minutes`), or
+   `GET /api/overtime/totals?month=` (directors). A pay head and rate are needed (owners' values).
+6. **Encashment during the year.** `leave_encashment_requests` with status APPROVED wait for payroll to pay them and write the leave
+   ledger entry (the rate is spec §14's open question).
+7. **Payroll per company.** `legal_entities` and `employee_legal_entities` (no row = the main company): registrations, statutory files
+   and the bank file per entity.
+8. **Statutory registers (ST-28)**: built from payroll results; not started here.
+9. Session A's `payroll/reports/definitions.ts` read history tables directly (current-row guard); already fixed by Session A in `247096d`.
+
+## Changed tests (block 2)
+
+| Test | Before | After | Why |
+|---|---|---|---|
+| `leave/__tests__/yearEndMoney.test.ts` audit viewer case | The Developer sees the year-end row without the total, the rest intact | The Developer sees no value at all; the money rule for a non-salary viewer is kept by calling the audit service directly (mutation still caught) | Owner rule: the Developer never sees a value |
+| `frontend/src/routes/__tests__/mobile.test.tsx` coming-soon case | Feedback was the example of a page still to come | Feedback is real; the rule is checked on a temporary phase-marked entry | SS-13 built the last placeholder |
+| `managers/__tests__/managerReach.test.ts` | — | cases added for custom fields, overtime and companies (manager-grantable keys) | new routes |
+
+## Verification
+
+* Per row (until the owner asked to skip tests): the row's own test file, route inventory, cleanup engine; mutation checks on each new rule
+  (all caught; two first survived and were closed by new cases: an approver deciding their own overtime claim, and a team-scoped importer).
+  Rows built after that request (LT-09 check page only partly, AD-07, NT-11, AD-08) have **no test of their own run** beyond lint and
+  typecheck: LT-09's test file was written and passed; AD-07, NT-11 and AD-08 have no test file.
+* Full backend suite alone once (after SS-13): 2,135 tests, 2 failures: Session A's reports reading history tables (fixed by them) and the
+  year-end audit test changed above. Not run again at the end.
+* Every migration applied to the local database with no schema drift; each test run rebuilt the test database from migrations.
+* Lint, design tokens and typecheck (both projects) pass on the final tree. The backend typecheck needs about 2.5 GB of Node heap
+  (default here is 2 GB; CI passes as is).
+* **Not done:** keyboard-only, tablet (768), desktop light and 390 dark walks of block 2's screens; a browser walk of any block 2 screen.
+
+---
+
+# Verification block (2026-11-13): no new features
+
+## Commits
+`20ce0125` (cherry-pick of `74ee229`), `1b51172a`, `03462da8`, `24e3af31`, `8c8522dc`, and this report.
+
+## What was verified
+* **Flaky tests (cherry-picked, not redone):** `profileAndReveal` + `customFields` in one run, both orders (seeds showing each order): 21 of 21
+  each time; `immediacy.test.ts` 8 of 8.
+* **Order failures of my own, found by the full suite and fixed:** `wfhRequests.test.ts` left remote-work marks (no foreign key), which broke
+  `remoteAttendance.test.ts`'s "nobody is remote by default" (both orders now pass, 25 of 25); `resetPolicy` left a confirmed "cleared"
+  row, so a Not set setting read as confirmed in a later file (it now removes the test's proposals). 13 related files pass under three
+  shuffle seeds (96 of 96 each).
+* **AD-07 data retention** (helpdesk tickets added; migration `m_data_erasures_helpdesk`): every period Not set and nothing can be proposed;
+  signed out 401; HR, manager, employee, Developer 403 on every route; not past the period refused; one director proposes, a different one
+  confirms (service and database); a proposal alone erases nothing; contact replaced, general documents erased, pay documents kept, helpdesk
+  subject and messages replaced; audited (6 rows); records fixed. Mutants caught: 4 of 4.
+* **NT-11 SMS/WhatsApp:** Not set sends nothing (the in-app notice is still stored); only directors choose, an unknown notice refused; the
+  text read from the file driver is the title only, never the body (a confidential reason and figure asserted absent); other notices and
+  provider NONE send nothing. Mutants caught: 3 of 3.
+* **AD-08 more than one company:** signed out 401; HR, manager, employee, Developer cannot change it; employee and Developer cannot read
+  it; a manager reads the team member's company, never an outsider's (manager-reach). GOLDEN: the main company's payroll run is byte-for-byte
+  the same with one company and with extra companies defined. Mutants caught: 2 of 2.
+* **Golden "off" regressions** for AT-22, LV-19, LV-20, AT-19, AT-36, LV-23: present since block 2 (each passes in the full suite).
+* **Migrations on a fresh database:** every backend test run drops, recreates and migrates the test database; no schema drift locally or in CI.
+* **Browser walk** (dev stack, seed data; AD-08 Companies skipped by the owner): 387 page visits, 5 roles (director, HR Admin, manager,
+  employee, Developer) × desktop 1280 light, tablet 768 light, phone 390 dark, every screen of both blocks: no horizontal scroll, no console
+  error, no crash. Error state (every data call failing, 29 screens): none crashed; 27 show "Try again"; **Update From File's directors' panel
+  hid itself (fixed `24e3af31`)**; Account & security reads only sign-in and notification calls, which the check leaves working. Keyboard
+  (desktop, 5 roles, 129 page visits): focus visible on all 1,548 tab stops; 21 dialogs opened by Enter, focus stayed inside all 21, Escape
+  closed all 21.
+* **Check script** (stops at the first failed step; 4 GB heap; Prisma client regenerated): lint, typecheck, migrate and drift, frontend lint
+  + tokens + typecheck + 75 tests: all pass.
+* **Full backend suite alone:** 254 files, 2,205 tests, all passed.
+* **CI run 368 on `8c8522dc`, read to the end of every job:** 11 of 12 green (install-lint-typecheck-test with every step; backend-tests
+  shards 1 to 4; backend-tests-complete; sensitive-ui admin and employee portals; latency; attendance-replay; docker-build). **agent-windows
+  failed** at "Unit tests on Windows": 4 biometric-agent tests could not bind local UDP ports (`bind EACCES 127.0.0.1:609xx`, a refusal by
+  the Windows runner). Neither M block touched `biometric-agent/`, and the same job was green on `cbaee81` (run 333). Not changed here (not
+  this session's area); re-running that job, or making the agent tests pick ports outside Windows' reserved ranges, is for the agent's owner.
+
+## Changed tests (verification block)
+| Test | Before | After | Why |
+|---|---|---|---|
+| `employee/__tests__/profileAndReveal.test.ts` (cherry-pick `74ee229`) | left a grant on the shared Manager role | restores the shared roles at the end; every assertion kept | `customFields.test.ts` got 404 instead of 403 when it ran after it |
+| `hrCapabilities/__tests__/immediacy.test.ts` (cherry-pick `74ee229`) | waited a fixed delay for the live update | waits for the room change itself; same checks | failed once in CI on timing |
+| `wfhRequests/__tests__/wfhRequests.test.ts` | left remote-work marks | removes them | broke `remoteAttendance.test.ts` |
+| `policySettings/__tests__/policyTestHelpers.ts` `resetPolicy` (+ overtime and manager-reach resets) | wrote a "cleared" confirmed proposal | removes the test's proposals (fresh state) | a Not set setting read as confirmed in a later file |
+| `legalEntities/__tests__/legalEntities.test.ts` golden | "with extra companies and a person moved" | "with extra companies defined"; the move is checked in the access case | Session A's payroll per company (`6ebb4db6`) now pays a moved person in that company's run, by design |
+
+## Still not verified
+* agent-windows on the final commit (runner refused UDP ports; see above).
+* AD-08 Companies screens in the browser (owner: skipped; the feature stays off).
+* Payroll per company itself is Session A's (their tests).
+
+## Decisions made here
+* AD-07 helpdesk erasure replaces the subject and every message of the tickets the person raised and removes their attachment files; the
+  ticket rows and numbers stay (counts and history keep adding up).
+* The AD-08 golden follows Session A's payroll per company (see changed tests) rather than pinning a moved person in the main run.
+
+---
+
+# Operations documents (2026-11-14): docs only
+
+Written in `docs/ops/`: FIRST_SETUP.md, DAILY_AND_MONTHLY_GUIDE.md, ACCEPTANCE_CHECKLIST.md, MOVE_FROM_GREYTHR.md and a README. Every screen name and menu
+path was read from `frontend/src/routes/adminMenu.config.tsx` / `employeeMenu.config.tsx` and the pages; quoted messages from the backend services
+(`lib/directorAuthority.ts`, `payroll/rules/context.ts`, `payroll/run`, regularization, leave). Demo examples only (DEMO accounts, DEMO branch names).
+
+**Could not confirm from the code (worded generally in the documents):** what an employee sees if they open an `/admin` address (the employee
+checklist row says only that no admin screen opens with their data); the exact menu path to View My Info (given as `/app/profile`); that the demo
+company has a finished financial year for the Form 16 row (the row says to skip if not); live behaviour of a branch device punch (needs a machine).
+
+**Mismatches between the code and existing docs (listed, not fixed):**
+1. `docs/FIRST_REAL_PAYROLL_RUN.md` §0 gives the payroll work to "Payroll Admin" and "Payroll Approver" roles held by different people; the owners'
+   decision and the seed make the two directors the payroll team (the roles still exist in `systemRoles.ts` with permissions).
+2. `docs/FIRST_REAL_PAYROLL_RUN.md` §1.2 and §5 speak of "your CA"; the owners' decision is no CA (owners enter statutory values with source notes).
+3. `docs/FIRST_REAL_PAYROLL_RUN.md` §1.6 says "There is no spreadsheet import for salaries"; Payroll → Salary Revisions has **Import from a file**
+   (the portal's own template; each revision still approved by another director).
+4. `docs/FIRST_REAL_PAYROLL_RUN.md` §4 says "There are no off-cycle runs yet"; Payroll → Off-cycle runs and Settlements exist.
+5. `docs/FIRST_REAL_PAYROLL_RUN.md` closing section names the place as "Admin Tools, System Settings, Director authority"; it is a System Settings tab
+   shown to directors only (correct), but `lib/directorAuthority.ts`'s message says "(Admin Tools, Director authority)" without "System Settings".
+6. `docs/UI_SCREEN_MAP.md` is behind the menu: My Worklife → Feedback is listed as a Phase 8 placeholder (built); the Salary sub-pages
+   (YTD Reports, IT Statement, IT Declaration, Loans and Advances, Reimbursement, Proof Of Investment, Salary Revision) are listed as Phase 7
+   placeholders (built); Payroll → Loans as a placeholder (built); the roles column still names PA / PP; and these screens are missing:
+   Employee → Filters & Segments, Bulk Upload, Letters, Update From File, Onboarding, Probation, Employee Feedback; Workforce → Work From Home,
+   Overtime, Encashment Requests; Payroll → Monthly Inputs is present but Opening Figures, Reimbursements, Settlements, Off-cycle runs, Loan and claim
+   types, Quarterly TDS data, TDS and Form 16, Statutory challans, Compliance calendar, Minimum wages, Accounting journal, Overtime and encashment pay,
+   Company settings, Payroll reports, Held Salaries entries are missing; Engage → Mass Email; Admin Tools → What HR Can Do, Workforce Settings,
+   Attendance Locks, Leave Reviewers, Calendar Adjustments, Device Sync Requests, Leavers, Workflow, Letter Settings, Default behaviours, Policy
+   settings, Companies, Data retention, Custom fields; employee Leave → Encashment, Attendance → Work From Home and Overtime, To do → Onboarding,
+   Salary → Form 16; the public `/check-letter` page. (Not updated: no screen *name* in it was wrong, only missing or stale status.)
+7. The task asked for branches "as Divisions": in the portal branches are **Organisation Setup → Branches**; Divisions are an optional grouping of
+   departments. FIRST_SETUP.md follows the code.
+
+---
+
+# Docs cleanup (2026-11-14): docs only
+
+**Changed:** `docs/FIRST_REAL_PAYROLL_RUN.md` (rewritten to the owner decisions and the current portal; points to `docs/ops/FIRST_SETUP.md` for
+setup), `docs/UI_SCREEN_MAP.md` (regenerated), `docs/ops/FIRST_SETUP.md` (Divisions wording).
+
+**How the screen map was made.** The two menu configs were loaded through the frontend's own Vite setup and dumped (every app, group and item, its
+path, its `needs`, whether it has a page or a `phase` mark). The default role permissions were read from `systemRoles.ts`, minus
+`HR_FORBIDDEN_KEYS` for both HR roles and `DEVELOPER_FORBIDDEN_KEYS` for the Developer; manager-grantable keys from `MANAGER_GRANTABLE_KEYS`.
+The routes outside the menus were read from `router.tsx` and `PortalRoutes.tsx`. Board frames were carried over from the old map for every URL it
+already had (99 of 166). The four ops guides were re-checked against it: every screen and menu path they name is in the map.
+
+**Could not confirm from the code:**
+* "Who can open it" shows defaults: the directors can narrow HR at run time (What HR Can Do), and a manager's grants are per person.
+* For a menu item with no `needs`, the map says the page's own API decides; the exact rule for each such page was not re-read.
+* The payroll menu items list DEV because the Developer holds `payroll.rules.view` (to see the Setup Checklist's status); the payroll APIs refuse
+  the Developer every figure (tested in earlier blocks), but whether each payroll list page shows the Developer an empty state or a forbidden state
+  was not re-checked.
+* The run pages (`/admin/payroll/run/:id`, `/step/:slug`) are recorded as directors only from the services' director checks, not from a menu `needs`.
+
+## Requests to Session A (docs cleanup)
+
+10. **The in-product message about Director authority.** `lib/directorAuthority.ts` says "(Admin Tools, Director authority)". It should say System
+    Settings, the Director authority tab (Admin Tools → System Settings → Director authority).
+11. **Payroll Admin and Payroll Approver roles.** They still exist in `systemRoles.ts` with payroll permissions, although the two directors are the
+    payroll team and the roles are given to nobody. Should they be hidden from role assignment (Roles & Permissions, Manager Management), or removed?
+12. **Payroll reports by branch.** Add a branch filter and a grouping by branch (Organisation Setup → Branches) to Payroll → Payroll reports.
+    Payroll results must stay byte-for-byte identical: this is a view over finished runs only.
+
+---
+
+# Developer and payroll screens (2026-11-14)
+
+**Found (browser walk as `DEMO005`, dev stack, demo company), before the fix:** of the 34 payroll menu pages, 29 already refused the Developer
+(the shared forbidden page, or the page's own "You don't have access"); five opened and showed content: **Setup Checklist** (status lines),
+**Ready for First Run** (status), **Rules and Setup** (62 rows, **with rupee figures**: the statutory and company rule values), **Bank and statutory
+layouts** (6 layout rows) and **Compare Registers** (its upload form). Rule overrides showed one row. The run and its step pages had no gate of
+their own (the API refused the data). Cause: the menu rule `PAYROLL_NEEDS` includes `payroll.rules.view`, which the Developer holds so that the
+API can tell it the Setup Checklist's status.
+
+**Fixed (frontend shared access layer only, no payroll page edited):** `AdminNeeds.noDeveloper` in `routes/adminMenu.config.tsx`, set on every
+payroll menu item (`PAYROLL_NEEDS`, Monthly Inputs and the director-only ones); `adminNeedsMet` refuses it to the Developer (`isDeveloperOnly`: the
+Developer role and not also a director), applied in `RequireAccess` (the forbidden page "This is not switched on for you"), the sidebar
+(`layouts/shell/nav.ts`, `AdminLayout.tsx`) and the home favourites; the run and run-step routes in `PortalRoutes.tsx` are wrapped in the same gate.
+`docs/UI_SCREEN_MAP.md` regenerated: every payroll row now says "never the Developer".
+
+**Verified:** `frontend/src/routes/__tests__/payrollDeveloper.test.tsx` (41 cases: the whole payroll menu and both run pages refused by the rule and
+rendered as the forbidden page, never the page; the Developer's sidebar has no payroll entry; the run routes are wrapped; a director opens every
+page). Mutants caught 6 of 6 (rule removed; flag off `PAYROLL_NEEDS`; flag off Monthly Inputs; gate ignores the Developer; run page unwrapped;
+sidebar ignores the Developer). Browser re-walk as `DEMO005`: 36 of 36 payroll pages show the forbidden page, no table row, no rupee figure. Check
+script (lint, typecheck, migrate and drift, 116 frontend tests), build and bundle budgets (login 232.3 KB, shell + employee home 347.7 KB, shell +
+admin home 367.4 KB): all pass. The backend was not changed (the demo test's Developer reads of `payroll/setup` and the restricted layout stay valid).
+
+**Decision made here:** the Setup Checklist and Ready for First Run are now forbidden pages for the Developer too (the owner asked for every payroll
+page); the API still answers the Developer's status read, so this can be reverted for those two screens alone if the owners want the Developer to
+see where setup stands.
+
+**Request 13 to Session A (protected payroll folder):** the payroll **APIs** still answer the Developer for `payroll.rules.view` reads: the rules
+list with its values (statutory and company figures, sealed identifiers already hidden), the layouts list (sealed values already restricted) and
+the setup checklist. The screens no longer show them, but a direct API call would. Consider refusing the Developer on the rules and layouts reads
+(keeping the setup status read if the owners want it). These are company settings, not any person's pay.
+
+**Question for the owners (not changed):** the Developer holds `reports.view`, so it opens the ten people and attendance reports (Headcount, Joiners,
+Leavers & attrition, Birthdays & anniversaries, Leave balance, Loss of pay (LOP), Attendance summary, Late coming, Excess hours, Attendance
+exceptions) with names and rows. No pay figure is in them (Leave liability and Payroll reports are closed to the Developer), but Loss of pay shows
+LOP days per person. Should the Developer lose `reports.view`, or at least the LOP report?
+
+---
+
+# Owners' decisions on the Developer (2026-11-14)
+
+1. **Every report is closed to the Developer.** The Developer role's default permissions (`shared/constants/sensitiveData.ts`
+   `DEVELOPER_ROLE_PERMISSIONS`) no longer hold any report key: `reports.view` and also `reports.attendance.view` and `reports.leave.view`, because
+   those two alone open the Leave balance, Loss of pay and four attendance report pages in the menu. Existing databases lose the three grants in the
+   forward-only migration `20261114090000_m_developer_no_reports` (the removal is recorded first in `role_permission_removals`, as the HR hard lock
+   records its removals). No route or screen code changed: the report routes already require `reports.view`, the report pages already show the
+   forbidden page without their key, and the Reports overview already says "You can't open reports".
+   - New tests: `backend/src/modules/reports/__tests__/developerNoReports.test.ts` (5: the role holds no report key in the defaults and in the
+     database; every report and payroll-report route in the route inventory, with every report key, refuses the Developer with 403 and no file,
+     and no schedule is created; a director still opens reports; the migration, replayed on a database with the old grants, removes them and
+     records the removal) and `frontend/src/routes/__tests__/reportsDeveloper.test.tsx` (17: all 11 report pages refused by the menu rule and
+     rendered as the forbidden page; the sidebar offers no report; the overview says "You can't open reports" and calls no API; a director opens
+     every page). Mutants caught 4 of 4: `reports.view` back on the role; `reports.leave.view` back alone; the gate removed from
+     `GET /api/reports/:key`; the migration's delete made a no-op.
+   - Changed tests: none needed. The existing tests that touch the Developer and reports already expected a refusal
+     (`subscriptions.test.ts`: the Developer cannot schedule the leave liability report) or use `reports.view` only as an ordinary key for a
+     per-person grant (`developerCeiling.test.ts`: a director may still grant an ordinary key to one person; unchanged, see the note below).
+   - Note: the decision is about the role's default. A director can still give one Developer `reports.view` as a personal grant (an audited
+     override, as for any non-sensitive key); the Developer ceiling refuses only sensitive keys. If the owners want that closed too, `reports.*`
+     would join `DEVELOPER_FORBIDDEN_KEYS` (the access resolver applies it; not changed here).
+   - `docs/UI_SCREEN_MAP.md` regenerated: the report rows no longer list DEV and say "never the Developer", with a note under Reports.
+2. **Setup Checklist and Ready for First Run stay closed to the Developer** (as built in "Developer and payroll screens" above; the question there
+   is answered).
+3. **Request 13 (payroll APIs answering the Developer's `payroll.rules.view` reads) is Session A's**; not done here.

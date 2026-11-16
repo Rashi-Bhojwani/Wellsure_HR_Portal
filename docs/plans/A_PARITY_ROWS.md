@@ -52,3 +52,20 @@ the field-encryption registry; an audit row on every state change and every down
 LV-14, PY-30, LC-16, ST-30, LC-13, LC-15, ST-07, ST-09, PY-43, ST-02, ST-05, PY-23, PY-41, ST-29, PY-27/28/29 amounts, ST-15, ST-08, ST-16, ST-17, ST-18,
 ST-22, ST-25, ST-19; IE-12 and PY-32 by instruction. Where a mechanism with the value Not set already exists (PT, LWF, PF ECR and ESI layouts, the encashment
 rate setting) nothing new is built.
+
+## Part 2 (2026-11-13): owner-decision rows given a mechanism with every value Not set
+
+Speed rule from 2026-11-13: commit as I go with each feature's tests; changed tests, lint and typecheck once at the end of the group; the full backend suite alone
+once at the end of the stage; CI once on the final code commit.
+
+1. **ST-08: PT and LWF challans.** The PF/ESI register takes PT and LWF too (same sealing, retyping, immutability); the month compares the run's own PT or LWF lines.
+   PT returns (the state form) are not built: the format is the owners'.
+2. **ST-30: compliance due dates.** Directors enter each due date themselves (statute, what is due, the day it is due, how many days before to remind). None is
+   preset: the dates are statutory facts the owners give. A daily job reminds the directors in the window; each date can be marked done for a month (audited).
+3. **ST-29: minimum wages check.** A director enters each minimum wage (state, category, monthly amount, from, source); none is preset. A run's check lists each
+   payable person whose gross is below the minimum for their placement's state and category, once a category is chosen for them; until rates exist the check
+   says Not set. It never changes pay.
+4. **ST-25: Form 16 Part A pairing.** A director uploads each person's Part A (the PDF from the tax portal) for a closed year; the person downloads it beside
+   Part B. Nothing is read from the file; who uploaded and every download are audited.
+5. **PY-41: accounting journal export.** A director maps each pay head to a ledger account name (none preset; a head without one is listed as Not set). Once every
+   head in a finalised run is mapped, the run's journal (debits and credits by account, balanced exactly) exports as .csv/.xlsx, audited. No accounting format.

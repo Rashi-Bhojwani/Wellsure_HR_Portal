@@ -40,8 +40,10 @@ Read first. Status: DONE / OPEN / PARTIAL / **UNDEFINED** (no plan file on any b
 | E2E | a settlement recovers a loan through an off-cycle run; double clicks; regular run identical | DONE `c6af1ce` (2 bugs fixed, 3 mutants caught) | — |
 | Scale | new readers and the off-cycle road at 500 people | DONE `6b1ba3d` (all within budget) | — |
 | Stage 6 | internal payroll reports (directors only) | **DONE 2026-11-12** (`e90c471`, `247096d`); the query builder RP-12 is the other session's row | — |
-| Stage 8 | attendance and salary file readers from `docs/samples`, layout setup, parallel-run kit | **BLOCKED: the files on `origin/main` look like real exports; the owner will replace them with synthetic files and say when (2026-11-11). Not brought here.** Earlier note: **BLOCKED in part: `docs/samples/` is not on this branch** (only on `peeps/foundation`, which this work may not touch) | samples on this branch |
-| Stage 9 parity | Tier 1 MISSING items of `PARITY_COVERAGE.md` | not started (the file was brought onto this branch by the M session on 2026-11-11, `9f5dd5f`; not started on the owner's instruction) | as Stage 6 |
+| Stage 8 | attendance and salary file readers from `docs/samples`, layout setup, parallel-run kit | **DONE with the synthetic samples** (`05e80c1`, `d0e5a20`, `6174928`, `c4b9485`, `8c7e7d5`); the pay items reader waits for a sample; real greytHR exports not tried |
+| Stage 9 parity | Tier 1 MISSING items of `PARITY_COVERAGE.md` | **Re-checked 2026-11-16** (`71898df`): 255 Built / 8 Partial / 20 Missing / 14 Not needed; the four open Tier 1 rows (PY-43, ST-02, ST-05, IE-12) each need an owner value or sample, so nothing was built; the deferred rows skipped as instructed | — |
+| Stage 9 rehearsal | one scripted month end to end, each step refused before its predecessor | DONE `c61e307` (`fullMonthRehearsal.test.ts`, 12 steps, ~16 s) | — |
+| Stage 9 hardening | hostile .xls/.xlsx files with time and memory limits; 500-person re-measure | DONE `f421c7e` (2 reader bugs fixed), `965034d` (measure), `9d8ebb9` (publish 1.88 s → 1.38 s; everything else within budget) | — |
 | Close-out | `PORTAL_READY_REPORT.md`, `GETTING_STARTED.md`, `FIRST_REAL_PAYROLL_RUN.md` | PORTAL_READY_REPORT and OWNER_REVIEW_SHEET updated 2026-11-11; open items are the undefined A-items and the blocked stages | everything above |
 
 **Note on the undefined items.** The owner's message says "A-4, then A-7, then A-2, then A-3 …, then A-1, A-5, A-6 and A-8, each exactly as your plan
@@ -117,12 +119,26 @@ pause only at CHECKPOINT 1 (after Stage 2), CHECKPOINT 2 (after P7-3) and stop c
   PY-37 bank summary PDF · PY-24 reimbursement statement — `9bbcc05` (9 mutants caught) · IE-09 salary assignment import (our template, ordinary revisions) — `c62a451` (3 caught, 1 equivalent)
 - [ ] Skipped (owner decision or real value): LV-14, PY-30, LC-16, ST-30, LC-13, LC-15, ST-07, ST-09, PY-43, ST-02, ST-05, PY-23, PY-41, ST-29, ST-15, ST-08, ST-16, ST-17,
   ST-18, ST-22, ST-25, ST-19, and the amounts of PY-27/28/29; IE-12 and PY-32 by instruction
+- [x] Part 2 (2026-11-13), mechanisms with every value Not set: ST-08 PT/LWF challans `bd192ee` · ST-30 compliance calendar `af76eb0` · ST-29 minimum wages check `26d2f88` ·
+  ST-25 Form 16 Part A pairing `debd4ae` · PY-41 accounting journal `f6ea21c`, `cdcba37` · group checks `9c49d57` (8 mutants caught; one found a real gap: negative net pay)
+- [x] Part 3 (2026-11-13, plan `A_PART3.md`): golden baseline; A1 dated statutory IDs `edaf4f6` · A2/A3 overtime and encashment pay (Not set) `b2f0b32` · B1 company filter
+  `7f885c0` · B2 payroll per company, first steps `6ebb4db` · B3 registers `0d6eb71` · fixes `163bdfc`, `ff5bd98`, `19ea770`, `bf9429b`
+- [x] Part 4 (2026-11-14, plan `A_PART4.md`), one company, one state: realtime fix `ac741bc` · PY-27 gratuity and PY-28 notice recovery (effective-dated, Not set) `d3b440a` ·
+  ST-15 HRA exemption and ST-18 marginal relief on the rebate (owner-entered parts of the tax year) `4522912` · guards `0d9022f` · access test `108d91e` · walk fix `3237127`.
+  Verified complete, nothing added: PF, ESI, ST-07 PT and ST-09 LWF (one state), income tax both regimes, LV-14/PY-29 encashment at exit, ST-02/ST-05 file layouts, PY-23 payslip layout.
+- [ ] Deferred with reasons (`A_PART4.md`): PY-43 (risk: would count employer PF twice; owner row 102), PY-30, LC-16, LC-15, LC-13, ST-16, ST-17, ST-19, ST-22, surcharge marginal relief
+- [x] Cleanup block (2026-11-14): C1 payroll reports filtered and grouped by branch (Organisation Setup, Branches), golden captured first `8dbe7af`, `c7749e5`, `df34dcf`, `c2e961f` ·
+  C2 Director authority message points to System Settings `0824015` · C3 Payroll Admin / Payroll Approver assignable to nobody `7e815bf` · C4 agent-windows UDP EACCES `a31f3be`
+- [ ] Payroll per company, next: each company's bank and statutory files; a period lock per company (owner question row 98)
 
 ## Stage 7 — Phase 7 P7-2..P7-7
 - [x] P7-2 (windows, declarations, proofs, directors' verification, regime comparison, screens) · [x] P7-3 as far as TDS in the run and the IT Statement (the TDS line, its explanation, pins, stale on a changed declaration); **not built from P7-3's list:** YTD Reports, payslip YTD column, Salary Revision page, revision letters, offer-letter figures → **STOPPED AT THE TDS CHECKPOINT (CHECKPOINT 2)** · [ ] P7-4 · [ ] P7-5 · [ ] P7-6 · [ ] P7-7
 
 ## Stage 8 — parity tools
-- [ ] 8.1 statement parser/compare · [ ] 8.2 payslip layout · [ ] 8.3 statutory layout editor · [ ] 8.4 parallel-run kit
+- [x] 8.1 statement reader (greytHR Salary Statement .xls through `lib/xls.ts`) · [ ] 8.2 payslip layout (needs the owners' payslip sample) · [ ] 8.3 statutory layout editor · [x] 8.4 parallel-run kit
+- [x] Stage 8 (2026-11-14 to 16, plan `STAGE_8_PLAN.md`): readers `05e80c1` · kit and bank check `d0e5a20` · request 13 and every report key a Developer ceiling `6174928` ·
+  fixes and the move guide `c4b9485` · walk fix `8c7e7d5`. Built and tested with the synthetic samples only; real greytHR exports not tried.
+- [ ] Deferred: greytHR's payroll repository (pay items) reader: no synthetic sample on the branch, so its layout is not guessed (the kit maps heads from the statement's own columns)
 
 ## Close-out
 - [ ] `PHASE_7_REVIEW.md`, `PROGRESS.md`, `FIRST_REAL_PAYROLL_RUN.md`, then STOP

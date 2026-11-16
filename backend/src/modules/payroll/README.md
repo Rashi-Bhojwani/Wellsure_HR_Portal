@@ -97,7 +97,8 @@ Three more rules: **a layout is data from a specification, never guessed**; **no
 | `setup/status.ts` | `buildSetupReport`: the one function behind the Setup Checklist and Ready screens (Not set / Placeholder / Confirmed, who, when, where to enter it). Computed from the data each time; there is no stored "ready" flag. |
 | `setup/signoffs.ts` | Sign-offs of people's data (salaries, bank accounts, UAN), bound to a keyed hash of the exact set; the signer cannot be the requester or an author of a covered row. `payroll_setup_signoffs` is append-only. |
 | `setup/access.ts` | "Who can see and change this": the named people who hold each registry permission right now, resolved from live access. |
-| `compare/` | Register comparison: `parse.ts` (our workbook, a generic table, the greytHR stub that answers `PARSER_WAITING_FOR_SAMPLE`), `diff.ts` (exact decimals, tolerance, aliases), `service.ts`. Uploads stay in memory. |
+| `compare/` | Register comparison: `parse.ts` (our workbook, a generic table; greytHR's statement answers `USE_PARALLEL_RUN`), `diff.ts` (exact decimals, tolerance, aliases), `service.ts`. Uploads stay in memory. |
+| `greythr/` | Stage 8 (docs/plans/STAGE_8_PLAN.md): `statement.ts` reads greytHR's Salary Statement (.xls through `lib/xls.ts`), `compare.ts` the pure comparison, `parallel.ts` the parallel-run kit (saved encrypted, directors only, reads only), `bankCheck.ts` the bank file's headers against the bank layout, `routes.ts` at `/api/payroll-greythr`. |
 
 The sensitive-data rules (`shared/constants/sensitiveData.ts`, `docs/SENSITIVE_DATA.md`): a permission that opens a secret is in the registry or in `REVIEWED_NOT_SENSITIVE`
 (a test fails otherwise); the Developer / operator role holds none of them, enforced in `lib/permissions.ts`; **no log line, error, audit row, export or event carries a secret**

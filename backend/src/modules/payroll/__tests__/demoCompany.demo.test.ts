@@ -82,7 +82,9 @@ describe("the demo company", () => {
     expect([...access.permissions].filter((k) => (SENSITIVE_PERMISSION_KEYS as readonly string[]).includes(k))).toEqual([]);
     expect((await call("DEMO005", "get", "payroll/setup")).status).toBe(200);
     expect((await call("DEMO005", "get", "payroll/salary/employees")).status).toBe(403);
-    expect((await call("DEMO005", "get", "payroll/layouts/BANK_TEMPLATE")).body.layout.current.value).toEqual({ restricted: true });
+    // Request 13 (Session A, Stage 8): the layouts are refused to the Developer role outright (was: shown as restricted).
+    const layout = await call("DEMO005", "get", "payroll/layouts/BANK_TEMPLATE");
+    expect([layout.status, layout.body.layout]).toEqual([403, undefined]);
     const accounts = (await prisma.employeeBankAccount.findMany()).map((b) => decryptField(b.accountNumberEncrypted));
     const secrets = [DEMO_DEBIT_ACCOUNT, ...Object.values(DEMO_IDENTIFIERS), DEMO_BANK_LAYOUT.header[0]![0]!.value, ...accounts.slice(0, 20)];
     const crawled = await crawlGets(app, token.DEMO005!, { id: ["x"], employeeId: [(await prisma.employee.findFirstOrThrow({ where: { employeeCode: "DEMO006" } })).id], key: ["PF_ESTABLISHMENT_CODE", "BANK_TEMPLATE"] });

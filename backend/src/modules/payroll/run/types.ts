@@ -85,6 +85,8 @@ export interface PersonInput {
 
 export interface TaxIn {
   year: string;
+  /** Part 4 (ST-15): what finalised runs of the year paid on the HRA and basis heads before this cycle (only when the tax year has an HRA exemption). */
+  hraSoFar?: { received: Money; basis: Money };
   /** What the tax year lacks before tax can be worked out, in words; empty when it has everything. */
   missing: string[];
   /** The year's values (a Placeholder one makes the run a test through its pin). Null when nobody entered the year. */

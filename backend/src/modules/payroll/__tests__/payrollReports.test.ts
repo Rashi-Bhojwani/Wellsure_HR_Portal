@@ -148,6 +148,55 @@ describe("Stage 6 — payroll reports over a finalised run", () => {
     }
   });
 
+  it("B1: the company filter splits people by company (no row = the main company); with no filter the report is exactly as before", async () => {
+    const all = await r(world.tokens.maker, "get", `/statutory-by-person?month=${month}`);
+    const entity = await prisma.legalEntity.create({ data: { code: `ZZ${world.prefix}`, name: "ZZ Test Company Two", createdByUserId: world.maker.userId } });
+    await prisma.employeeLegalEntity.create({ data: { employeeId: world.named.b!.employeeId, legalEntityId: entity.id, setByUserId: world.maker.userId } });
+    try {
+      const codes = (res: { body: { rows: Array<{ employeeCode: string }> } }) => res.body.rows.map((x) => x.employeeCode).sort();
+      const main = await r(world.tokens.maker, "get", `/statutory-by-person?month=${month}&company=MAIN`);
+      const two = await r(world.tokens.maker, "get", `/statutory-by-person?month=${month}&company=${entity.id}`);
+      expect(codes(two)).toEqual([world.named.b!.employeeCode]);
+      expect(codes(main)).not.toContain(world.named.b!.employeeCode);
+      expect([...codes(main), ...codes(two)].sort()).toEqual(codes(all));
+      expect(two.body.filtersApplied).toContain("Company: ZZ Test Company Two");
+      const again = await r(world.tokens.maker, "get", `/statutory-by-person?month=${month}`);
+      expect(again.body.rows).toEqual(all.body.rows);
+      expect(again.body.totals).toEqual(all.body.totals);
+    } finally {
+      await deleteWithDependents("LegalEntity", [entity.id]);
+    }
+  });
+
+  it("B3: the registers — each person's head columns add up exactly to the run's gross and deductions; the deductions register sums to the run's deductions; approved overtime is listed", async () => {
+    const reg = await r(world.tokens.maker, "get", `/register-wages?month=${month}`);
+    expect(reg.status, JSON.stringify(reg.body)).toBe(200);
+    const heads = (reg.body.columns as Array<{ key: string }>).map((c) => c.key);
+    expect(heads).toContain(`E:${world.basic}`);
+    expect(heads.indexOf(`E:${world.basic}`)).toBeGreaterThan(heads.indexOf("lopDays"));
+    const items = await prisma.payrollRunItem.findMany({ where: { runId, status: { in: ["PAYABLE", "HELD"] } } });
+    for (const row of reg.body.rows as Array<Record<string, string>>) {
+      const item = items.find((i) => i.employeeId === Object.entries(world.named).find(([, v]) => v.employeeCode === row.employeeCode)?.[1].employeeId);
+      if (!item) continue;
+      const E = sumP(heads.filter((h) => h.startsWith("E:")).map((h) => row[h] ?? "0"));
+      const D = sumP(heads.filter((h) => h.startsWith("D:")).map((h) => row[h] ?? "0"));
+      expect(E).toBe(paise(Number(item.gross.toString()).toFixed(2)));
+      expect(D).toBe(paise(Number(item.deductions.toString()).toFixed(2)));
+      expect(paise(row.net!)).toBe(paise(Number(item.netPay.toString()).toFixed(2)));
+    }
+    expect(paise(reg.body.totals[`E:${world.basic}`])).toBe(sumP((reg.body.rows as Array<Record<string, string>>).map((x) => x[`E:${world.basic}`] ?? "0")));
+    const csv = await r(world.tokens.maker, "get", `/register-wages/export?month=${month}&format=csv`);
+    expect(csv.status).toBe(200);
+    expect(csv.text.split("\n").find((l) => l.startsWith("Employee code"))).toContain("(deduction)");
+    const ded = await r(world.tokens.maker, "get", `/register-deductions?month=${month}`);
+    expect(sumP((ded.body.rows as Array<{ amount: string }>).map((x) => x.amount))).toBe(sumP(items.filter((i) => Object.values(world.named).some((v) => v.employeeId === i.employeeId)).map((i) => Number(i.deductions.toString()).toFixed(2))) + sumP((ded.body.rows as Array<{ amount: string; employeeCode: string }>).filter((x) => !Object.values(world.named).some((v) => v.employeeCode === x.employeeCode)).map((x) => x.amount)));
+    const claim = await prisma.overtimeClaim.create({ data: { employeeId: world.named.a!.employeeId, date: new Date("2026-08-12T00:00:00Z"), minutes: 90, approvedMinutes: 60, status: "APPROVED", decidedByUserId: world.maker.userId, decidedAt: new Date() } });
+    const ot = await r(world.tokens.maker, "get", `/register-overtime?month=${month}`);
+    expect(ot.body.rows.find((x: { employeeCode: string; date: string }) => x.employeeCode === world.named.a!.employeeCode && x.date === "2026-08-12")).toMatchObject({ minutes: 90, approvedMinutes: 60, paidForMonth: null });
+    expect(claim.id).toBeTruthy();
+    for (const t of [tok.hr!, tok.mgr!, tok.emp!, tok.dev!]) expect((await r(t, "get", `/register-wages?month=${month}`)).status).toBe(403);
+  });
+
   it("exports carry only the chosen columns, as .csv and .xlsx, and every export is audited (never a figure in the audit row)", async () => {
     const csv = await r(world.tokens.maker, "get", `/department-cost/export?format=csv&month=${month}&columns=department,cost`);
     expect(csv.status).toBe(200);

@@ -697,7 +697,7 @@ export interface VarianceView {
 
 export const listRuns = (page: number, pageSize: number) => get<{ total: number; items: RunSummary[] }>("/runs", { page, pageSize });
 export const getRunReadiness = (cycleStart: string) => get<RunReadiness>("/runs/readiness", { cycleStart });
-export const createRun = (cycleStart: string) => post<{ id: string }>("/runs", { cycleStart });
+export const createRun = (cycleStart: string, legalEntityId?: string) => post<{ id: string }>("/runs", { cycleStart, ...(legalEntityId ? { legalEntityId } : {}) }); // legalEntityId: part 3 B2 (omitted = the main company)
 export const getRun = (id: string) => get<RunDetail>(`/runs/${id}`);
 export const listRunItems = (id: string, params: { status?: string; search?: string; exceptionsOnly?: boolean; page: number; pageSize: number }) =>
   get<{ total: number; items: RunItemRow[] }>(`/runs/${id}/items`, { ...params, exceptionsOnly: params.exceptionsOnly ? "true" : undefined });
@@ -1319,6 +1319,8 @@ export interface ImportView {
   fingerprint: string;
   canApply: boolean;
   canApplySkippingInvalid: boolean;
+  /** Stage 8: who uploaded it (their employee record); a different director applies it. */
+  uploadedByEmployeeId: string | null;
 }
 export interface ImportListRow {
   id: string;

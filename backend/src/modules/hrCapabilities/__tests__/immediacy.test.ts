@@ -7,7 +7,9 @@ import { closeHrCapabilityQueue } from "../../../jobs/hrCapabilityQueue";
 import { purgeAppendOnly } from "../../../lib/__tests__/cleanup";
 import { signAccessToken } from "../../../lib/jwt";
 import { prisma } from "../../../lib/prisma";
-import { emitPunchesReceived, emitRegularizationSubmitted, getSocketServer, permissionRoom, setSocketServer } from "../../../realtime/emit";
+import { emitPermissionsChanged, emitPunchesReceived, emitRegularizationSubmitted, getSocketServer, permissionRoom, setSocketServer } from "../../../realtime/emit";
+import { resolveAccess } from "../../../lib/permissions";
+import { PERMISSION_KEYS } from "@shared/constants/permissions";
 import { createSocketServer } from "../../../realtime/socket";
 import { app, authHeader, cleanupEmployeeTestOrgMasters, cleanupFullTestEmployee, createEmployeeTestOrgMasters, createFullTestEmployee, grantPermissions, loginAs, revokePermissions, type TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
 import { getRegularizationRequestSink, setRegularizationRequestSink } from "../../admin/regularizationIntegration";
@@ -236,6 +238,32 @@ describe("a switch is felt everywhere at once", () => {
       const back = next("punch.received.batch");
       punch();
       await back;
+    });
+
+    it("an event sent immediately after the switch goes off does not reach HR (no waiting for the room to settle)", async () => {
+      const heard = next("punch.received.batch");
+      punch();
+      await heard; // on: it reaches them
+      const quiet = silence("punch.received.batch");
+      await roleSwitch("VIEW_ATTENDANCE", "HR_ADMIN", "OFF");
+      punch(); // at once, before any Redis round trip could have moved the socket
+      expect(await quiet).toBe(true);
+      const again = next("permissions.changed");
+      await roleSwitch("VIEW_ATTENDANCE", "HR_ADMIN", "DEFAULT");
+      await again;
+      await roomSettled("attendance.view", true);
+    });
+
+    it("the race itself: a permission change and an event sent back to back on this server — the event does not reach the socket that lost the room", async () => {
+      await roomSettled("attendance.view", true);
+      const access = await resolveAccess(p.hrAdmin.userId);
+      const without = [...access.permissions].filter((k) => k !== "attendance.view");
+      const quiet = silence("punch.received.batch");
+      emitPermissionsChanged(p.hrAdmin.employeeId, without, PERMISSION_KEYS);
+      punch(); // the same tick: the cluster-wide leave is still on its way through Redis
+      expect(await quiet).toBe(true);
+      emitPermissionsChanged(p.hrAdmin.employeeId, access.permissions, PERMISSION_KEYS); // put the room back for the next test
+      await roomSettled("attendance.view", true);
     });
 
     it("the same for regularizations on their own room", async () => {

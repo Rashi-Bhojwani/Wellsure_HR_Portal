@@ -13,7 +13,7 @@ export const runs = async (req: Request, res: Response): Promise<void> => {
   res.status(200).json(await listRuns(q.page, q.pageSize));
 };
 export const runReadiness = async (req: Request, res: Response): Promise<void> => void res.status(200).json(await readiness((req.query as { cycleStart: string }).cycleStart));
-export const runCreate = async (req: Request, res: Response): Promise<void> => void res.status(201).json(await createRun((req.body as { cycleStart: string }).cycleStart, actor(req)));
+export const runCreate = async (req: Request, res: Response): Promise<void> => void res.status(201).json(await createRun((req.body as { cycleStart: string }).cycleStart, actor(req), (req.body as { legalEntityId?: string }).legalEntityId));
 export const run = async (req: Request, res: Response): Promise<void> => void res.status(200).json(await getRun(id(req)));
 export const runItems = async (req: Request, res: Response): Promise<void> => void res.status(200).json(await listItems(id(req), itemListSchema.parse(req.query), req.user!.userId));
 export const runItem = async (req: Request, res: Response): Promise<void> => void res.status(200).json(await getItem(id(req), req.params.employeeId as string, req.user!.userId));

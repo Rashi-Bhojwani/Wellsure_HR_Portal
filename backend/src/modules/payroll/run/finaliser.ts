@@ -37,7 +37,7 @@ export async function finaliseRun(runId: string, actor: Actor) {
   // On director authority the director who decided is the one who carries it out: that is the point. Otherwise the person who decides is never the person who does.
   if (approvals.some((a) => a.authority !== "DIRECTOR_AUTHORITY" && a.checkerUserId === actor.userId)) throw new HttpError(403, "You approved this, so somebody else carries out the finalising. The person who decides is never the person who does.", "CHECKER_IS_EXECUTOR");
 
-  const computed = await computeRun({ start: run.cycleStart, end: run.cycleEnd, label: run.cycleLabel });
+  const computed = await computeRun({ start: run.cycleStart, end: run.cycleEnd, label: run.cycleLabel, runId: run.id });
   if (computed.runHash !== run.runHash) {
     await reverifyRun(runId, "the figures no longer match what was approved", null);
     throw new HttpError(409, "The figures changed after they were approved, so the approval is void. They need to be submitted and approved again.", "APPROVAL_VOIDED");

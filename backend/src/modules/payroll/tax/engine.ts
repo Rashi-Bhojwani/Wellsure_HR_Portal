@@ -1,5 +1,6 @@
 import { HUNDRED, ZERO, canonicalDecimal, dec, max, min, roundTo, sum, type Money, type RoundingMode } from "../money";
 import type { SectionDef, TaxYearValue } from "./schema";
+import { hraExemptionOf } from "./hra";
 
 // The tax engine: pure, exact, no I/O (docs/plans/STAGE_7_PLAN.md). It works out one regime's annual tax from the figures it is given and the tax year the owners entered, and a
 // month's TDS from that. It knows no rate, slab or limit of its own: whatever is not entered stops it, naming the value. Every step is returned, so a payslip can explain it.
@@ -20,6 +21,8 @@ export interface EngineInput {
   taxablePay: string;
   /** What the person declared (or what was verified, after the proof cut-off), by section code. */
   deductions: ReadonlyArray<{ section: string; amount: string }>;
+  /** Part 4 (ST-15): the year's HRA received and basis (projected like taxable pay), when the tax year has an HRA exemption. */
+  hra?: { received: string; basis: string };
 }
 
 export interface SectionWorking {
@@ -46,6 +49,9 @@ export interface EngineResult {
   beforeRounding: string;
   annualTax: string;
   notModelled: string[];
+  hraExemption?: string;
+  rentDeclared?: string;
+  marginalRelief?: string;
 }
 
 const need = <T>(value: T | undefined, what: string): T => {
@@ -97,8 +103,13 @@ export function computeAnnualTax(input: EngineInput): EngineResult {
   const rounding = need(input.year.rounding, "the rounding of tax").value;
   const catalogue = need(input.year.sections, "the section catalogue").value;
 
-  const pay = max(ZERO, dec(input.taxablePay));
-  const sections = countDeductions(catalogue, input.regime, input.deductions);
+  // Part 4 (ST-15): the HRA exemption, old regime only, once the tax year has it; the rent is the amount in its section, which is then not a deduction itself.
+  const hraDef = input.year.hraExemption?.value;
+  const hraApplies = input.regime === "OLD" && !!hraDef && !!input.hra;
+  const rent = hraDef ? sum(input.deductions.filter((d) => d.section === hraDef.rentSection).map((d) => dec(d.amount))) : ZERO;
+  const hraExemption = hraApplies ? hraExemptionOf(hraDef!, { received: dec(input.hra!.received), basis: dec(input.hra!.basis), rent }) : null;
+  const pay = max(ZERO, dec(input.taxablePay).minus(hraExemption ?? ZERO));
+  const sections = countDeductions(catalogue, input.regime, hraDef ? input.deductions.filter((d) => d.section !== hraDef.rentSection) : input.deductions);
   const sectionsTotal = sum(sections.map((s) => dec(s.counted)));
   const income = max(ZERO, pay.minus(standard).minus(sectionsTotal));
 
@@ -109,7 +120,10 @@ export function computeAnnualTax(input: EngineInput): EngineResult {
     if (inSlab.greaterThan(ZERO)) slabTax = slabTax.plus(inSlab.times(dec(s.ratePercent)).dividedBy(HUNDRED));
   }
   const rebate = income.lessThanOrEqualTo(dec(rebateDef.thresholdIncome)) ? min(slabTax, dec(rebateDef.maximum)) : ZERO;
-  const afterRebate = slabTax.minus(rebate);
+  // Part 4 (ST-18): marginal relief on the rebate, once the tax year says so: just above the threshold, tax after the rebate is never more than the income above it.
+  const reliefOn = input.year.marginalReliefOnRebate?.value === true && income.greaterThan(dec(rebateDef.thresholdIncome));
+  const relieved = reliefOn ? min(slabTax.minus(rebate), income.minus(dec(rebateDef.thresholdIncome))) : null;
+  const afterRebate = relieved ?? slabTax.minus(rebate);
   const band = surchargeTable.find((s) => income.greaterThanOrEqualTo(dec(s.from)) && (s.to === null || income.lessThan(dec(s.to))));
   const surchargeRate = band ? dec(band.ratePercent) : ZERO;
   const surcharge = afterRebate.times(surchargeRate).dividedBy(HUNDRED);
@@ -131,7 +145,10 @@ export function computeAnnualTax(input: EngineInput): EngineResult {
     cess: canonicalDecimal(cess),
     beforeRounding: canonicalDecimal(beforeRounding),
     annualTax: canonicalDecimal(annualTax),
-    notModelled: ["marginal relief on the rebate", "marginal relief on the surcharge"],
+    notModelled: input.year.marginalReliefOnRebate?.value === true ? ["marginal relief on the surcharge"] : ["marginal relief on the rebate", "marginal relief on the surcharge"],
+    // Part 4: present only when they apply, so a year without them gives exactly the result it gave before.
+    ...(hraExemption !== null ? { hraExemption: canonicalDecimal(hraExemption), rentDeclared: canonicalDecimal(rent) } : {}),
+    ...(relieved !== null ? { marginalRelief: canonicalDecimal(slabTax.minus(rebate).minus(relieved)) } : {}),
   };
 }
 

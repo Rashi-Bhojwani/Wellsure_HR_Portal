@@ -3,7 +3,7 @@ import { apiClient } from "./client";
 // P7-6 (docs/plans/P7_6_SETTLEMENTS.md): full and final settlements, directors only.
 const base = "/api/settlements";
 export interface SettlementLine {
-  kind: "HELD_PAY" | "PENDING_ADJUSTMENT" | "LOAN_OWED" | "LEAVE_BALANCE" | "DIRECTOR";
+  kind: "HELD_PAY" | "PENDING_ADJUSTMENT" | "LOAN_OWED" | "LEAVE_BALANCE" | "GRATUITY" | "NOTICE_RECOVERY" | "DIRECTOR";
   label: string;
   amount: string | null;
   days?: string;

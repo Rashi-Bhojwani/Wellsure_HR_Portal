@@ -14,11 +14,11 @@ import { payrollHash } from "../hash";
 import { addCalendarDays, businessToday } from "../../../lib/businessDate";
 import { iso } from "../run/days";
 import { assertNotOwnPay } from "../salary/guards";
-import { FIXED_COLUMNS, fixedColumnOf, normaliseHeader, parseDateText, readTable, type RawTable } from "./importParse";
+import { FIXED_COLUMNS, fixedColumnOf, normaliseHeader, parseDateTextDayFirst, provesDayFirst, readTable, type RawTable } from "./importParse";
 import { parseAmountText, type MonthState } from "./rules";
 import { headReady, inputHeads, monthView, peopleInMonth, type Actor, type Head } from "./service";
 
-// Importing Monthly Inputs from a file (docs/plans/STAGE_4_PLAN.md): upload → preview → a director confirms. Nothing is a figure of any month until the confirm; the
+// Importing Monthly Inputs from a file (docs/plans/STAGE_4_PLAN.md): upload → preview → a DIFFERENT director confirms (Stage 8). Nothing is a figure of any month until the confirm; the
 // same file (by hash) is applied once; one invalid row refuses the whole file unless the director chooses to skip the invalid rows, and that choice is recorded.
 //
 // UNCONFIRMED BY THE OWNERS: "Override From" and "Override Till" are read as an inclusive range of payroll months (the months that contain those two dates), and the
@@ -150,15 +150,20 @@ export async function analyse(raw: RawTable): Promise<Analysis> {
 
   const rows: PreviewRow[] = [];
   const claimed = new Map<string, number>(); // employee|month|head → first line
-  for (const r of raw.rows) {
+  // Stage 8: greytHR's template ends with a note ("Columns in red are mandatory") in the first column; it is not a row.
+  const isFooter = (r: (typeof raw.rows)[number]) => r.cells.filter((x) => (x ?? "").trim() !== "").length === 1 && /columns in red are mandatory/i.test(r.cells.join(" "));
+  const dataRows = raw.rows.filter((r) => !isFooter(r));
+  const dayFirst = provesDayFirst(dataRows.flatMap((r) => [cFrom >= 0 ? (r.cells[cFrom] ?? "") : "", cTill >= 0 ? (r.cells[cTill] ?? "") : ""]));
+  if (dataRows.some((r) => [cFrom, cTill].some((i) => i >= 0 && /^\d{1,2}\/\d{1,2}\/\d{4}$/.test((r.cells[i] ?? "").trim())))) notices.push("Dates written with slashes are read day first (31/01/2026 is 31 January), as greytHR writes them; a slash date that could be read either way is refused unless the file shows it writes day first.");
+  for (const r of dataRows) {
     const problems: string[] = [];
     const get = (i: number) => (i >= 0 ? (r.cells[i] ?? "").trim() : "");
     const employeeNumber = get(cNo);
     const emp = employeeNumber ? empByCode.get(employeeNumber.toLowerCase()) : undefined;
     if (employeeNumber === "") problems.push("Employee Number is blank.");
     else if (!emp) problems.push(`No employee has the number ${employeeNumber}.`);
-    const from = parseDateText(get(cFrom));
-    const till = parseDateText(get(cTill));
+    const from = parseDateTextDayFirst(get(cFrom), dayFirst);
+    const till = parseDateTextDayFirst(get(cTill), dayFirst);
     if (cFrom >= 0 && from === null) problems.push(`Override From "${get(cFrom)}" is not a date. Write it as 2026-04-01 or 01-Apr-2026.`);
     if (cTill >= 0 && till === null) problems.push(`Override Till "${get(cTill)}" is not a date. Write it as 2026-04-30 or 30-Apr-2026.`);
     let months: string[] = [];
@@ -234,9 +239,11 @@ export interface BatchView {
   fingerprint: string;
   canApply: boolean;
   canApplySkippingInvalid: boolean;
+  /** Stage 8: the employee record of the director who uploaded the file; a different director applies it. */
+  uploadedByEmployeeId: string | null;
 }
 
-async function viewOf(batch: { id: string; fileName: string; fileHash: string; status: "PREVIEW" | "APPLIED" | "DISCARDED"; parsed: unknown }): Promise<BatchView> {
+async function viewOf(batch: { id: string; fileName: string; fileHash: string; status: "PREVIEW" | "APPLIED" | "DISCARDED"; parsed: unknown; uploadedByUserId: string }): Promise<BatchView> {
   const analysis = await analyse(batch.parsed as RawTable);
   const applied = batch.status === "APPLIED" ? null : await prisma.payrollInputBatch.findFirst({ where: { fileHash: batch.fileHash, status: "APPLIED" }, select: { id: true, appliedAt: true } });
   const blocked = analysis.fileProblems.length > 0 || applied !== null || batch.status !== "PREVIEW";
@@ -250,6 +257,7 @@ async function viewOf(batch: { id: string; fileName: string; fileHash: string; s
     fingerprint: fingerprintOf(batch.fileHash, analysis),
     canApply: !blocked && analysis.invalid === 0 && analysis.valid > 0,
     canApplySkippingInvalid: !blocked && analysis.invalid > 0 && analysis.valid > 0,
+    uploadedByEmployeeId: (await prisma.user.findUnique({ where: { id: batch.uploadedByUserId }, select: { employeeId: true } }))?.employeeId ?? null,
   };
 }
 
@@ -295,6 +303,8 @@ export async function apply(id: string, raw: unknown, actor: Actor): Promise<{ w
   const batch = await prisma.payrollInputBatch.findUnique({ where: { id } });
   if (!batch) throw new HttpError(404, "That import was not found.", "NOT_FOUND");
   if (batch.status !== "PREVIEW") throw new HttpError(409, `That import is already ${batch.status.toLowerCase()}.`, "CONFLICT");
+  // Stage 8 (owner instruction): a file of pay figures is never applied by the director who uploaded it; a different director confirms it.
+  if (batch.uploadedByUserId === actor.userId) throw new HttpError(403, "You uploaded this file, so a different director checks the preview and applies it.", "SAME_DIRECTOR");
   const twin = await prisma.payrollInputBatch.findFirst({ where: { fileHash: batch.fileHash, status: "APPLIED" }, select: { id: true } });
   if (twin) throw new HttpError(409, "This exact file was already applied. A file is never applied twice.", "FILE_ALREADY_APPLIED");
   const view = await viewOf(batch);

@@ -70,6 +70,22 @@ export const taxYearSchema = z
     minimumMonthlyTds: entered(decimalText).optional(),
     /** How one-off pay (arrears, encashment, a bonus) is taxed. Only the month it is paid is built. */
     oneOffs: entered(z.enum(["MONTH_PAID"])).optional(),
+    /** Part 4 (ST-15): the HRA exemption in the old regime, every figure the owners'. Absent = Not set: no exemption is worked out (as before). */
+    hraExemption: entered(
+      z
+        .object({
+          rentSection: z.string().regex(SECTION_CODE),
+          hraHeads: z.array(z.string().regex(/^[A-Z][A-Z0-9_]{1,31}$/)).min(1).max(10),
+          basisHeads: z.array(z.string().regex(/^[A-Z][A-Z0-9_]{1,31}$/)).min(1).max(10),
+          rentExcessPercent: percent,
+          metroPercent: percent,
+          nonMetroPercent: percent,
+          metro: z.boolean(),
+        })
+        .strict(),
+    ).optional(),
+    /** Part 4 (ST-18): marginal relief on the rebate (tax after the rebate never more than the income above the rebate threshold). Absent = not applied. */
+    marginalReliefOnRebate: entered(z.boolean()).optional(),
     sections: entered(z.array(sectionSchema).max(60).superRefine((list, ctx) => {
       const seen = new Set<string>();
       for (const s of list) {

@@ -1,4 +1,5 @@
 import { financialYearOf, monthsLeftInYear } from "@shared/utils/financialYear";
+import { headsPaidSoFar } from "./hra";
 import { canonicalDecimal } from "../money";
 import type { RuleContext } from "../rules/context";
 import type { TaxIn } from "../run/types";
@@ -27,6 +28,10 @@ export async function gatherTax(ctx: RuleContext, cycle: { start: Date; end: Dat
   // A-3: real income tax waits until the year's opening figures are confirmed by a different director (an empty year is confirmed too, on purpose).
   if (!(await openingsConfirmed(fy))) missing.push("confirmed opening figures (Payroll → Opening Figures: enter them, or confirm there are none, and a different director confirms)");
   const sections = values?.sections?.value ?? [];
+  // Part 4 (ST-15): with an HRA exemption in the tax year, what finalised runs of the year paid on its heads before this cycle.
+  const hraDef = values?.hraExemption?.value;
+  const fyStart = financialYearOf(iso(cycle.end)).start;
+  const hraSoFar = hraDef ? { received: await headsPaidSoFar(employeeIds, fyStart, iso(cycle.start), hraDef.hraHeads), basis: await headsPaidSoFar(employeeIds, fyStart, iso(cycle.start), hraDef.basisHeads) } : null;
   const out = new Map<string, TaxIn>();
   for (const id of employeeIds) {
     const counted = await countedDeductions(id, fy, sections, iso(cycle.end));
@@ -42,6 +47,7 @@ export async function gatherTax(ctx: RuleContext, cycle: { start: Date; end: Dat
       deductionBasis: counted.basis,
       declarationVersion: counted.declarationVersion,
       taxableSoFar: ytd.taxable,
+      ...(hraSoFar ? { hraSoFar: { received: hraSoFar.received.get(id)!, basis: hraSoFar.basis.get(id)! } } : {}),
       tdsSoFar: ytd.tds,
       monthsLeft: monthsLeftInYear(iso(cycle.end)),
     });
@@ -50,4 +56,4 @@ export async function gatherTax(ctx: RuleContext, cycle: { start: Date; end: Dat
 }
 
 /** What goes into the run's fingerprint for a person's tax: change a declaration, a regime or what was paid and the world has moved. */
-export const taxFingerprint = (t: TaxIn | undefined): unknown => (t ? [t.year, t.regime, t.deductionBasis, t.declarationVersion, t.deductions.map((d) => [d.section, d.amount]), canonicalDecimal(t.taxableSoFar), canonicalDecimal(t.tdsSoFar), t.monthsLeft, t.missing.length] : null);
+export const taxFingerprint = (t: TaxIn | undefined): unknown => (t ? [t.year, t.regime, t.deductionBasis, t.declarationVersion, t.deductions.map((d) => [d.section, d.amount]), canonicalDecimal(t.taxableSoFar), canonicalDecimal(t.tdsSoFar), t.monthsLeft, t.missing.length, ...(t.hraSoFar ? [canonicalDecimal(t.hraSoFar.received), canonicalDecimal(t.hraSoFar.basis)] : [])] : null);

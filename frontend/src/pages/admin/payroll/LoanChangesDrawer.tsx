@@ -48,7 +48,7 @@ export function LoanChangesDrawer({ loan, onClose }: { loan: LoanView | null; on
         dataSource={loan?.changes ?? []}
         empty="No changes to this loan."
         pagination={false}
-        mobile={{ title: (c) => KIND[c.kind as LoanChangeKind] ?? c.kind, subtitle: (c) => `${c.reference} · ${dayjs(c.createdAt).format("D MMM YYYY")}`, fields: [{ label: "State", render: (c: Change) => STATE[c.state ?? "NOT_ASKED"]?.text ?? c.state }] }}
+        mobile={{ title: (c) => KIND[c.kind as LoanChangeKind] ?? c.kind, subtitle: (c) => `${c.reference} · ${dayjs(c.createdAt).format("D MMM YYYY")}`, fields: [{ label: "State", render: (c: Change) => STATE[c.state ?? "NOT_ASKED"]?.text ?? c.state }], actions: (c) => (c.state === "PENDING" && !c.preparedByMe ? <><Button type="primary" loading={busy === c.id} onClick={() => decide.mutate({ c, d: "APPROVE" })}>Approve</Button><Button danger loading={busy === c.id} onClick={() => decide.mutate({ c, d: "REJECT" })}>Reject</Button></> : null) }}
         columns={[
           { title: "Change", key: "k", render: (_, c) => KIND[c.kind as LoanChangeKind] ?? c.kind },
           { title: "Amount", dataIndex: "amount", align: "right", render: (x: string | null) => (x ? formatRupees(x, 2) : "—") },

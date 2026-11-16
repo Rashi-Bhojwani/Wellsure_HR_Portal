@@ -7,7 +7,7 @@ import type { Register, RegisterPerson, RegisterSource } from "./types";
 //
 //   OWN       the register this system produces (the "Register" sheet of a run's workbook, or the salary register output).
 //   GENERIC   any plain table: a header row with a column that holds the employee code, and numeric columns that are the amounts.
-//   GREYTHR   greytHR's own register layout. NOT BUILT: it needs real sample files, and it will not be guessed. It says so.
+//   GREYTHR   greytHR's own Salary Statement: read by Payroll → Parallel run (Stage 8, modules/payroll/greythr), which this answer points to.
 
 const MAX_ROWS = 20_000;
 const SCAN_ROWS = 40;
@@ -123,11 +123,8 @@ function readTable(sheet: ExcelJS.Worksheet, label: string, source: RegisterSour
 
 export async function parseRegister(source: RegisterSource, buffer: Buffer, label: string): Promise<Register> {
   if (source === "GREYTHR") {
-    throw new HttpError(
-      501,
-      "greytHR's own register layout is not built yet: it needs a real sample file from your greytHR (one month's register as it exports it), and it will not be guessed. Until then, if your greytHR export is a plain table with an employee-code column, choose “A plain table” for it.",
-      "PARSER_WAITING_FOR_SAMPLE",
-    );
+    // Stage 8: greytHR's Salary Statement is read by the parallel-run kit, against a run of the same month; this tool stays for plain tables and the portal's own register.
+    throw new HttpError(400, "greytHR's Salary Statement is compared in Payroll, Parallel run, which reads greytHR's own layout against the portal's run for the month. This screen compares the portal's register with a plain table.", "USE_PARALLEL_RUN");
   }
   const wb = await load(buffer, label);
   if (source === "OWN") {

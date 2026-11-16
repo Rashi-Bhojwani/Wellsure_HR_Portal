@@ -636,8 +636,8 @@ describe("manager reach — TEAM scope at every endpoint a manager can call (E2)
       }
     });
     afterAll(async () => {
-      const { overtimePolicy } = await import("../../overtime/__tests__/overtimeTestHelpers");
-      await overtimePolicy({ active: false, minimumMinutes: 60, roundToMinutes: 30, approver: "MANAGER_OR_DIRECTOR" }, p.director.userId, p.hrAdmin.userId);
+      const { resetPolicy } = await import("../../policySettings/__tests__/policyTestHelpers");
+      await resetPolicy("policy.overtime");
     });
 
     it("GET /api/overtime — the member's claim, never the outsider's", async () => {
@@ -653,6 +653,21 @@ describe("manager reach — TEAM scope at every endpoint a manager can call (E2)
       expect((await m().post(`/api/overtime/${claim.member}/approve`)).status).toBe(200);
       cover("POST /api/overtime/:id/approve");
       cover("POST /api/overtime/:id/reject");
+    });
+  });
+
+  // M session block 2, AD-08: a manager with employee.view sees company names and a team member's company, never an outsider's.
+  describe("companies (AD-08): the team member's company only", () => {
+    it("GET /api/legal-entities — names and head counts, no person", async () => {
+      const res = await m().get("/api/legal-entities");
+      expect(res.status).toBe(200);
+      expect(JSON.stringify(res.body)).not.toContain(p.member.employeeCode);
+      cover("GET /api/legal-entities");
+    });
+    it("GET /api/legal-entities/employees/:employeeId — the member's, never the outsider's", async () => {
+      expect((await m().get(`/api/legal-entities/employees/${p.member.employeeId}`)).body).toEqual({ main: true, code: null, name: null });
+      expect((await m().get(`/api/legal-entities/employees/${p.outsider.employeeId}`)).status).toBe(404);
+      cover("GET /api/legal-entities/employees/:employeeId");
     });
   });
 

@@ -109,7 +109,7 @@ export async function authorityFor(step: DirectorStep, db: Db = prisma): Promise
   const mode = await choiceMode(step, db);
   if (mode) return mode;
   if (isChoiceRequired(step)) {
-    throw new HttpError(409, `The two directors have not both chosen how “${DIRECTOR_STEP_INFO[step].label}” is decided (a different director, or the acting director alone). Payroll will not run this until one director has set it and the other has confirmed it (Admin Tools, Director authority).`, "DIRECTOR_CHOICE_NOT_SET");
+    throw new HttpError(409, `The two directors have not both chosen how “${DIRECTOR_STEP_INFO[step].label}” is decided (a different director, or the acting director alone). Payroll will not run this until one director has set it and the other has confirmed it (System Settings, the Director authority tab).`, "DIRECTOR_CHOICE_NOT_SET");
   }
   return "DIRECTOR_AUTHORITY";
 }

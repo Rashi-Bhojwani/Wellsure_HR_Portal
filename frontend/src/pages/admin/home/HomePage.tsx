@@ -12,7 +12,7 @@ import {
   SoundOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../../../hooks/useAuth';
-import { adminNeedsForPath, adminNeedsMet } from '../../../routes/adminMenu.config';
+import { adminNeedsForPath, adminNeedsMet, isDeveloperOnly } from '../../../routes/adminMenu.config';
 import * as managersApi from '../../../api/managers';
 import * as adminHomeApi from '../../../api/adminHome';
 import * as announcementsApi from '../../../api/announcements';
@@ -76,7 +76,7 @@ function FavouriteTiles() {
     queryFn: adminHomeApi.listFavourites,
   });
   // A shortcut to a page the person's permissions no longer cover (a duty a director switched off) is not shown; it comes back by itself when the duty does.
-  const favourites = allFavourites.filter((f) => adminNeedsMet(adminNeedsForPath(f.path), hasPermission, isDirector));
+  const favourites = allFavourites.filter((f) => adminNeedsMet(adminNeedsForPath(f.path), hasPermission, isDirector, isDeveloperOnly(user?.roleCodes)));
   const deleteFavourite = useMutation({
     mutationFn: adminHomeApi.deleteFavourite,
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['admin', 'favourites'] }),

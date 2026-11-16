@@ -93,16 +93,23 @@ export async function readiness(cycleStart: string) {
 
 // ── Making and discarding ──
 
-export async function createRun(cycleStart: string, actor: { userId: string; ip?: string | null }) {
+export async function createRun(cycleStart: string, actor: { userId: string; ip?: string | null }, legalEntityId?: string) {
   const cycle = await cycleOf(cycleStart);
   if (cycle.end >= businessToday()) throw new HttpError(409, `The cycle ${cycle.label} runs to ${iso(cycle.end)}. Payroll is run after the cycle has ended and its attendance is finalised.`, "CYCLE_NOT_OVER");
+  // Part 3 B2: a run for another company is tagged with it (omitted = the main company); one live run per cycle per company (checked by the database at commit).
+  if (legalEntityId && !(await prisma.legalEntity.findUnique({ where: { id: legalEntityId }, select: { id: true } }))) throw new HttpError(404, "No such company.", "NOT_FOUND");
   try {
-    const run = await prisma.payrollRun.create({ data: { cycleStart: cycle.start, cycleEnd: cycle.end, cycleLabel: cycle.label, createdByUserId: actor.userId } });
-    await recordEvent({ subjectType: "PAYROLL_RUN", subjectId: run.id, type: "CREATED", actorUserId: actor.userId, payload: { cycle: cycle.label } });
-    await writeAuditLog({ actorUserId: actor.userId, action: "payroll.run.created", entityType: "PayrollRun", entityId: run.id, after: { cycle: cycle.label }, ipAddress: actor.ip ?? null });
+    const run = await prisma.$transaction(async (tx) => {
+      const created = await tx.payrollRun.create({ data: { cycleStart: cycle.start, cycleEnd: cycle.end, cycleLabel: cycle.label, createdByUserId: actor.userId } });
+      if (legalEntityId) await tx.payrollRunCompany.create({ data: { runId: created.id, legalEntityId } });
+      return created;
+    });
+    await recordEvent({ subjectType: "PAYROLL_RUN", subjectId: run.id, type: "CREATED", actorUserId: actor.userId, payload: { cycle: cycle.label, ...(legalEntityId ? { legalEntityId } : {}) } });
+    await writeAuditLog({ actorUserId: actor.userId, action: "payroll.run.created", entityType: "PayrollRun", entityId: run.id, after: { cycle: cycle.label, ...(legalEntityId ? { legalEntityId } : {}) }, ipAddress: actor.ip ?? null });
     return { id: run.id };
   } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") throw new HttpError(409, `There is already a payroll run for ${cycle.label}. Open it, or discard it first.`, "RUN_EXISTS");
+    const exists = (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") || String((err as Error)?.message ?? "").includes("PAYROLL_RUN_EXISTS");
+    if (exists) throw new HttpError(409, `There is already a payroll run for ${cycle.label}${legalEntityId ? " for this company" : ""}. Open it, or discard it first.`, "RUN_EXISTS");
     throw err;
   }
 }
@@ -146,7 +153,7 @@ function refuseIfNotCalculable(status: string): void {
 export async function previewCalculation(runId: string) {
   const run = await loadRun(runId);
   refuseIfNotCalculable(run.status);
-  const computed = await computeRun({ start: run.cycleStart, end: run.cycleEnd, label: run.cycleLabel });
+  const computed = await computeRun({ start: run.cycleStart, end: run.cycleEnd, label: run.cycleLabel, runId: run.id });
   const before = new Map((await prisma.payrollRunItem.findMany({ where: { runId } })).map((i) => [i.employeeId, i]));
   const names = await namesOn(computed.items.map((i) => i.employeeId), run.cycleEnd);
   const changes: Array<{ employeeId: string; name: string; change: "NEW" | "CHANGED"; netBefore: string | null; netAfter: string; netChange: string | null }> = [];
@@ -194,7 +201,7 @@ export async function requestCalculation(runId: string, fingerprint: string, act
     await enqueueCalculation(runId);
     return { id: runId, resumed: true };
   }
-  const computed = await computeRun({ start: run.cycleStart, end: run.cycleEnd, label: run.cycleLabel });
+  const computed = await computeRun({ start: run.cycleStart, end: run.cycleEnd, label: run.cycleLabel, runId: run.id });
   if (computed.runHash !== fingerprint) throw new HttpError(409, "Something changed since you looked (an attendance day, a salary, an adjustment or a rule). Look at the preview again.", "PREVIEW_STALE");
   const { count } = await prisma.payrollRun.updateMany({
     where: { id: runId, status: { in: ["NEW", "CALCULATED", "FAILED"] } },

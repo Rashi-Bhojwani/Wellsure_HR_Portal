@@ -83,6 +83,98 @@ export const BEHAVIOURS = {
     d37: false,
     defaultText: "Not set: no percentage limit (net pay still never goes below zero because of a loan)",
   },
+  // Part 3 (docs/plans/A_PART3.md), owner decisions 2026-11-13: pay mechanisms with every value Not set until two directors confirm them.
+  "payroll.overtimePay": {
+    title: "Overtime pay",
+    what: "How approved overtime is paid: the pay head, and a flat rate per hour or a multiplier of an hourly rate (chosen heads of the salary in force divided by hours a month), with the rounding. Nothing is paid until this is confirmed AND overtime is turned on.",
+    schema: z
+      .object({
+        payHead: z.string().regex(/^[A-Z][A-Z0-9_]{1,31}$/),
+        rate: z.discriminatedUnion("mode", [
+          z.object({ mode: z.literal("FLAT_PER_HOUR"), perHour: z.string().regex(/^\d{1,9}(\.\d{1,2})?$/) }).strict(),
+          z.object({ mode: z.literal("MULTIPLIER"), multiplier: z.string().regex(/^\d{1,2}(\.\d{1,4})?$/), basisHeads: z.array(z.string().regex(/^[A-Z][A-Z0-9_]{1,31}$/)).min(1).max(20), hoursPerMonth: z.string().regex(/^\d{1,3}(\.\d{1,2})?$/) }).strict(), // allow-number: field lengths
+        ]),
+        rounding: z.object({ mode: z.enum(["HALF_UP", "UP", "DOWN"]), scale: z.number().int().min(0).max(2) }).strict(), // allow-number: decimals of a rupee
+        sourceNote: z.string().trim().min(3).max(300),
+      })
+      .strict(),
+    defaultValue: null as null | { payHead: string; rate: { mode: "FLAT_PER_HOUR"; perHour: string } | { mode: "MULTIPLIER"; multiplier: string; basisHeads: string[]; hoursPerMonth: string }; rounding: { mode: "HALF_UP" | "UP" | "DOWN"; scale: number }; sourceNote: string },
+    d37: false,
+    defaultText: "Not set: approved overtime is not paid",
+  },
+  "payroll.leaveEncashment": {
+    title: "Leave encashment amount (in the year and at exit)",
+    what: "The pay head, the leave types encashed at exit, the heads of the salary in force that make the per-day basis, the divisor (a fixed number of days or the month's calendar days) and the rounding. Until confirmed, encashment requests are not paid and a settlement shows leave in days only.",
+    schema: z
+      .object({
+        payHead: z.string().regex(/^[A-Z][A-Z0-9_]{1,31}$/),
+        exitLeaveTypes: z.array(z.string().regex(/^[A-Z0-9_]{1,20}$/)).max(20), // allow-number: field lengths
+        basisHeads: z.array(z.string().regex(/^[A-Z][A-Z0-9_]{1,31}$/)).min(1).max(20), // allow-number: field lengths
+        divisor: z.discriminatedUnion("kind", [z.object({ kind: z.literal("FIXED_DAYS"), days: z.string().regex(/^\d{1,2}(\.\d{1,2})?$/) }).strict(), z.object({ kind: z.literal("CALENDAR_DAYS") }).strict()]),
+        rounding: z.object({ mode: z.enum(["HALF_UP", "UP", "DOWN"]), scale: z.number().int().min(0).max(2) }).strict(), // allow-number: decimals of a rupee
+        sourceNote: z.string().trim().min(3).max(300),
+      })
+      .strict(),
+    defaultValue: null as null | { payHead: string; exitLeaveTypes: string[]; basisHeads: string[]; divisor: { kind: "FIXED_DAYS"; days: string } | { kind: "CALENDAR_DAYS" }; rounding: { mode: "HALF_UP" | "UP" | "DOWN"; scale: number }; sourceNote: string },
+    d37: false,
+    defaultText: "Not set: encashment requests are not paid; a settlement shows leave in days only",
+  },
+  // Part 4 (docs/plans/A_PART4.md): settlement mechanisms, every figure the directors'; each value carries the day it takes effect (effectiveFrom).
+  "payroll.gratuity": {
+    title: "Gratuity at exit",
+    what: "Who qualifies (least completed years of service), how a part year counts, the wage it uses (chosen heads of the salary in force on the last working day), days of wage per year of service and the divisor, the ceiling (or none), the rounding, and from when. Until confirmed, a settlement shows no gratuity line.",
+    schema: z
+      .object({
+        effectiveFrom: z.iso.date(),
+        minYears: z.string().regex(/^\d{1,2}(\.\d{1,2})?$/),
+        partYear: z.enum(["COMPLETED_YEARS_ONLY", "SIX_MONTHS_OR_MORE_COUNTS_AS_A_YEAR"]),
+        wageHeads: z.array(z.string().regex(/^[A-Z][A-Z0-9_]{1,31}$/)).min(1).max(20), // allow-number: field lengths
+        daysPerYear: z.string().regex(/^\d{1,2}(\.\d{1,2})?$/),
+        divisor: z.string().regex(/^\d{1,2}(\.\d{1,2})?$/),
+        ceiling: z.union([z.string().regex(/^\d{1,9}(\.\d{1,2})?$/), z.literal("NONE")]),
+        rounding: z.object({ mode: z.enum(["HALF_UP", "UP", "DOWN"]), scale: z.number().int().min(0).max(2) }).strict(), // allow-number: decimals of a rupee
+        sourceNote: z.string().trim().min(3).max(300),
+      })
+      .strict(),
+    defaultValue: null as null | { effectiveFrom: string; minYears: string; partYear: "COMPLETED_YEARS_ONLY" | "SIX_MONTHS_OR_MORE_COUNTS_AS_A_YEAR"; wageHeads: string[]; daysPerYear: string; divisor: string; ceiling: string; rounding: { mode: "HALF_UP" | "UP" | "DOWN"; scale: number }; sourceNote: string },
+    d37: false,
+    defaultText: "Not set: a settlement shows no gratuity line",
+  },
+  "payroll.noticeRecovery": {
+    title: "Notice period and its recovery at exit",
+    what: "The notice period in days, whether a shortfall is recovered, the per-day basis (chosen heads of the salary in force on the last working day divided by a number of days), the rounding, and from when. Notice runs from the day the separation was recorded to the last working day, both counted.",
+    schema: z
+      .object({
+        effectiveFrom: z.iso.date(),
+        noticeDays: z.number().int().min(0).max(365), // allow-number: days in a year
+        recoverShortfall: z.boolean(),
+        basisHeads: z.array(z.string().regex(/^[A-Z][A-Z0-9_]{1,31}$/)).min(1).max(20), // allow-number: field lengths
+        divisor: z.string().regex(/^\d{1,2}(\.\d{1,2})?$/),
+        rounding: z.object({ mode: z.enum(["HALF_UP", "UP", "DOWN"]), scale: z.number().int().min(0).max(2) }).strict(), // allow-number: decimals of a rupee
+        sourceNote: z.string().trim().min(3).max(300),
+      })
+      .strict(),
+    defaultValue: null as null | { effectiveFrom: string; noticeDays: number; recoverShortfall: boolean; basisHeads: string[]; divisor: string; rounding: { mode: "HALF_UP" | "UP" | "DOWN"; scale: number }; sourceNote: string },
+    d37: false,
+    defaultText: "Not set: no notice recovery is worked out",
+  },
+  // Stage 8 (docs/plans/STAGE_8_PLAN.md): the parallel-run kit. The tolerance is a policy choice with a conventional default (exact match); the retention has none.
+  "payroll.parallelTolerance": {
+    title: "Parallel run: what counts as a match",
+    what: "How far apart greytHR's figure and the portal's may be and still count as matching, per head and per person (a rounding allowance in rupees). Days and LOP always compare exactly.",
+    schema: z.object({ allowance: z.string().regex(/^\d{1,4}(\.\d{1,2})?$/, "Rupees, up to two decimals, at most 9999.99") }).strict(),
+    defaultValue: { allowance: "0" } as { allowance: string },
+    d37: true,
+    defaultText: "Exact match: a difference of 0 (no rounding allowance)",
+  },
+  "payroll.parallelRetentionDays": {
+    title: "Parallel run: how long a saved comparison is kept",
+    what: "Days a saved comparison (it holds pay figures) is kept before it is deleted. Uploaded files are never kept: each is read in memory and dropped.",
+    schema: z.number().int().min(1).max(3650), // allow-number: days, up to ten years
+    defaultValue: null as number | null,
+    d37: false,
+    defaultText: "Not set: a comparison is kept until a director deletes it",
+  },
 } as const;
 export type BehaviourKey = keyof typeof BEHAVIOURS;
 export const BEHAVIOUR_KEYS = Object.keys(BEHAVIOURS) as BehaviourKey[];
@@ -95,6 +187,18 @@ export interface Actor {
 
 async function confirmedLatest(key: BehaviourKey) {
   return prisma.behaviourProposal.findFirst({ where: { key, confirmation: { isNot: null } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], include: { confirmation: true } });
+}
+
+/** Part 4: for a setting whose value carries `effectiveFrom`, the confirmed value in force on `day` (the latest effective-from on or before it; a later confirmation
+ *  wins a tie), or null. */
+export async function behaviourOn<K extends BehaviourKey>(key: K, day: string): Promise<z.infer<(typeof BEHAVIOURS)[K]["schema"]> | null> {
+  const rows = await prisma.behaviourProposal.findMany({ where: { key, confirmation: { isNot: null } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { value: true } });
+  let best: { effectiveFrom: string } | null = null;
+  for (const r of rows) {
+    const v = r.value as { effectiveFrom?: string } | null;
+    if (v?.effectiveFrom && v.effectiveFrom <= day && (!best || v.effectiveFrom >= best.effectiveFrom)) best = v as { effectiveFrom: string };
+  }
+  return best as z.infer<(typeof BEHAVIOURS)[K]["schema"]> | null;
 }
 
 /** The value in force: the latest confirmed proposal, or the key's default. */

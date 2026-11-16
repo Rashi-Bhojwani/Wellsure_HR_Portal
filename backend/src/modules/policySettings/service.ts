@@ -1,5 +1,5 @@
 import { z, type ZodTypeAny } from "zod";
-import { DEFAULT_LABEL, INACTIVE_LABEL, NOT_SET_LABEL, POLICY_SETTINGS, policyDef, type PolicyField, type PolicySettingDef } from "@shared/constants/policySettings";
+import { DEFAULT_LABEL, INACTIVE_LABEL, NOT_SET_LABEL, POLICY_SETTINGS, TEXT_MESSAGE_CATEGORIES, policyDef, type PolicyField, type PolicySettingDef } from "@shared/constants/policySettings";
 import { writeAuditLog } from "../../lib/audit";
 import { activeDirectors, requireDirector } from "../../lib/directorAuthority";
 import { prisma } from "../../lib/prisma";
@@ -139,6 +139,10 @@ async function validateExtra(key: string, value: Record<string, unknown>): Promi
   if (key === "policy.sandwich" || key === "policy.encashmentRequests") {
     const missing = await missingLeaveTypes(value.leaveTypes as string[]);
     if (missing.length) return `No leave type with code ${missing.join(", ")}`;
+  }
+  if (key === "policy.textMessages") {
+    const bad = (value.categories as string[]).filter((c) => !TEXT_MESSAGE_CATEGORIES.some((x) => x.code === c));
+    if (bad.length) return `Unknown notice ${bad.join(", ")} (use ${TEXT_MESSAGE_CATEGORIES.map((x) => x.code).join(", ")})`;
   }
   if (key === "policy.wfh") {
     const codes = value.departments as string[];

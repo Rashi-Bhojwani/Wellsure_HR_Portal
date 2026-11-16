@@ -1,8 +1,8 @@
 import { useState } from "react";
 import dayjs, { type Dayjs } from "dayjs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, DatePicker, Form, Input, Select } from "antd";
-import { DownloadOutlined, PlusOutlined } from "@ant-design/icons";
+import { Button, DatePicker, Form, Input, Select, Upload } from "antd";
+import { DownloadOutlined, PlusOutlined, UploadOutlined } from "@ant-design/icons";
 import { saveBlob } from "../../../api/muster";
 import { financialYearOf } from "@shared/utils/financialYear";
 import * as taxApi from "../../../api/tax";
@@ -34,6 +34,18 @@ export function TdsForm16Page() {
       saveBlob(await taxApi.form16PdfFor(fy, employeeId), `form16-part-b-${fy}-${code}.pdf`);
     } catch (err) {
       toast.error(apiErrorMessage(err, "Could not make the PDF."));
+    }
+  };
+  // ST-25: Part A uploads (the PDF the tax portal issued; nothing is read from it).
+  const partA = useQuery({ queryKey: ["form16", "part-a", fy], queryFn: () => taxApi.form16PartAList(fy), retry: false, enabled: !!f16.data });
+  const hasPartA = new Set((partA.data?.files ?? []).map((x) => x.employeeId));
+  const uploadPartA = async (employeeId: string, file: File) => {
+    try {
+      await taxApi.uploadForm16PartA(fy, employeeId, file);
+      toast.success("Part A uploaded.");
+      void queryClient.invalidateQueries({ queryKey: ["form16", "part-a", fy] });
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Could not upload Part A."));
     }
   };
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["challans"] }).then(() => queryClient.invalidateQueries({ queryKey: ["form16"] }));
@@ -113,6 +125,23 @@ export function TdsForm16Page() {
                   { title: "Taxable pay", dataIndex: "taxablePay", align: "right", render: (x: string) => formatRupees(x, 2) },
                   { title: "Tax for the year", key: "t", align: "right", render: (_, r) => (r.computation?.annualTax ? formatRupees(r.computation.annualTax, 2) : "—") },
                   { title: "TDS deducted", dataIndex: "tdsDeducted", align: "right", render: (x: string) => formatRupees(x, 2) },
+                  {
+                    title: "Part A",
+                    key: "partA",
+                    render: (_, r) =>
+                      r.employeeId ? (
+                        <div style={{ display: "flex", gap: space[2], flexWrap: "wrap" }}>
+                          {hasPartA.has(r.employeeId) && (
+                            <Button size="small" icon={<DownloadOutlined />} aria-label={`Part A for ${r.name ?? r.employeeCode}`} onClick={() => void taxApi.form16PartAFor(fy, r.employeeId!).then((b) => saveBlob(b, `form16-part-a-${fy}-${r.employeeCode}.pdf`), (e) => toast.error(apiErrorMessage(e, "Could not download.")))}>
+                              Part A
+                            </Button>
+                          )}
+                          <Upload accept="application/pdf,.pdf" showUploadList={false} beforeUpload={(file) => { void uploadPartA(r.employeeId!, file); return false; }}>
+                            <Button size="small" icon={<UploadOutlined />} aria-label={`Upload Part A for ${r.name ?? r.employeeCode}`}>{hasPartA.has(r.employeeId) ? "Replace" : "Upload"}</Button>
+                          </Upload>
+                        </div>
+                      ) : null,
+                  },
                   {
                     title: "PDF",
                     key: "pdf",

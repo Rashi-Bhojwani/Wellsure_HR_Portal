@@ -4,6 +4,7 @@ import { Alert, Button, List, Select, Space, Typography } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import { Link, useNavigate } from "react-router-dom";
 import * as payrollApi from "../../../api/payroll";
+import { listEntities } from "../../../api/legalEntities";
 import * as attendanceApi from "../../../api/attendance";
 import type { PersonProblem, RunReadiness, RunSummary } from "../../../api/payroll";
 import { useAuth } from "../../../hooks/useAuth";
@@ -123,10 +124,12 @@ function StartRunDrawer({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [cycleStart, setCycleStart] = useState<string>();
+  const [company, setCompany] = useState<string>(); // part 3 B2: omitted = the main company
   const cycles = useQuery({ queryKey: ["attendance", "cycle"], queryFn: attendanceApi.getCycle });
+  const companies = useQuery({ queryKey: ["legal-entities"], queryFn: listEntities });
   const readiness = useQuery({ queryKey: ["payroll", "readiness", cycleStart], enabled: !!cycleStart, queryFn: () => payrollApi.getRunReadiness(cycleStart!), retry: false });
   const create = useMutation({
-    mutationFn: () => payrollApi.createRun(cycleStart!),
+    mutationFn: () => payrollApi.createRun(cycleStart!, company),
     onSuccess: ({ id }) => {
       void queryClient.invalidateQueries({ queryKey: ["payroll", "runs"] });
       navigate(`/admin/payroll/run/${id}`);
@@ -158,6 +161,13 @@ function StartRunDrawer({ onClose }: { onClose: () => void }) {
             options={(cycles.data?.recent ?? []).map((c) => ({ value: c.start, label: `${c.label} (${formatDate(c.start)} to ${formatDate(c.end)})` }))}
           />
         </div>
+        {(companies.data?.entities.length ?? 0) > 0 && (
+          <div>
+            <label htmlFor="run-company" style={{ display: "block", marginBottom: 6 }}>Which company</label>
+            <Select id="run-company" style={{ width: "100%" }} value={company ?? "MAIN"} onChange={(v: string) => setCompany(v === "MAIN" ? undefined : v)} options={[{ value: "MAIN", label: `${companies.data!.main.name} (main)` }, ...companies.data!.entities.map((e) => ({ value: e.id, label: e.name }))]} />
+            <Text type="secondary">A run pays one company's people. Another company's bank and statutory files are not made yet.</Text>
+          </div>
+        )}
         {readiness.isLoading && <SkeletonCard lines={5} />}
         {readiness.error && <Alert type="error" showIcon title={apiErrorMessage(readiness.error, "Could not check this cycle.")} />}
         {r && (

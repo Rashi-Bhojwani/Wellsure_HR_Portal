@@ -332,9 +332,10 @@ export async function assignRole(employeeId: string, roleCode: string, actor: Ac
     const carried = await prisma.rolePermission.findMany({ where: { role: { code: { in: nowHolding } }, permission: { key: { in: [...DEVELOPER_FORBIDDEN_KEYS] } } }, include: { permission: true, role: true } });
     if (carried.length) assertDeveloperCeiling([...new Set(carried.map((c) => c.permission.key))]);
   }
-  // D1: the payroll roles are for directors. (The database refuses it too; this says why, in words.)
-  if ((DIRECTOR_ONLY_ROLE_CODES as readonly string[]).includes(role.code) && !before.includes(SUPER_ADMIN_ROLE_CODE)) {
-    throw forbid("The payroll roles are held by directors only. Make this person a Super Admin first, or leave payroll to the directors.", "PAYROLL_ROLE_DIRECTORS_ONLY");
+  // Cleanup C3 (owner decision: the two directors are the whole payroll team): the payroll roles are assigned to nobody, a director included. Existing
+  // assignments and every payroll permission check are unchanged (lib/permissions.ts still ignores these markers for anyone who is not a director).
+  if ((DIRECTOR_ONLY_ROLE_CODES as readonly string[]).includes(role.code)) {
+    throw forbid("The payroll roles are given to nobody: the two directors are the payroll team, and a Super Admin already holds every payroll permission.", "PAYROLL_ROLE_NOT_ASSIGNABLE");
   }
   await prisma.$transaction(async (tx) => {
     await tx.userRole.create({ data: { userId: user.id, roleId: role.id, assignedByUserId: actor.userId } });

@@ -81,6 +81,8 @@ interface Session {
 
 /** Bind failures that mean "that port number will not do here, take another", not "something is broken". */
 export const RETRYABLE_BIND_ERRORS: ReadonlySet<string> = new Set(["EADDRINUSE", "EACCES"]);
+/** How many port pairs the fake tries before giving up (each failed try costs a millisecond or so). */
+export const MAX_PAIR_ATTEMPTS = 200;
 
 export class FakeZkDevice {
   records: FakeRecord[];
@@ -252,36 +254,69 @@ export class FakeZkDevice {
 
   async start(listen: { host?: string; tcpPort?: number; udpPort?: number | null } = {}): Promise<{ tcpPort: number; udpPort: number | null }> {
     const host = listen.host ?? "127.0.0.1";
-    // TCP and UDP port numbers are separate spaces, and a real device answers both on 4370. When the TCP port is
-    // chosen by the OS, the UDP socket wants the same number; if something else already holds that UDP number
-    // (another test file's fake, on a busy machine) take a fresh TCP port and try again, instead of hanging. Windows also refuses UDP binds inside its reserved
-    // port ranges with EACCES (not EADDRINUSE), and a TCP port the OS picked can fall in one, so that is retried the same way.
-    const explicit = listen.tcpPort !== undefined;
-    for (let attempt = 1; ; attempt++) {
-      this.tcp = net.createServer((socket) => this.serveTcp(socket));
+    // TCP and UDP port numbers are separate spaces, and a real device answers both on 4370, so the fake answers both on one number. When no port is asked
+    // for, the OS chooses the UDP port (port 0) and TCP takes the same number. That order matters on Windows: it refuses UDP binds inside its reserved port
+    // ranges with EACCES, and the TCP ports it hands out run in sequence, so a whole run of them can fall in one reserved block (CI saw 60919..61000 all
+    // refused). A UDP port the OS chose itself is never refused. If the TCP number is taken or refused, both are let go and the pair is tried again.
+    if (listen.tcpPort === undefined && listen.udpPort === undefined) return this.startPaired(host);
+    this.tcp = net.createServer((socket) => this.serveTcp(socket));
+    await new Promise<void>((resolve, reject) => {
+      this.tcp!.once("error", reject);
+      this.tcp!.listen(listen.tcpPort ?? 0, host, () => resolve());
+    });
+    const tcpPort = (this.tcp.address() as net.AddressInfo).port;
+    if (listen.udpPort === null) return { tcpPort, udpPort: null };
+    const udp = dgram.createSocket("udp4");
+    udp.on("message", (msg, rinfo) => this.serveUdp(msg, rinfo));
+    try {
       await new Promise<void>((resolve, reject) => {
-        this.tcp!.once("error", reject);
-        this.tcp!.listen(listen.tcpPort ?? 0, host, () => resolve());
+        udp.once("error", reject);
+        udp.bind(listen.udpPort ?? tcpPort, host, () => resolve());
       });
-      const tcpPort = (this.tcp.address() as net.AddressInfo).port;
-      if (listen.udpPort === null) return { tcpPort, udpPort: null };
+    } catch (err) {
+      udp.close();
+      await new Promise<void>((resolve) => this.tcp!.close(() => resolve()));
+      this.tcp = null;
+      throw err; // an explicit port is never swapped for another
+    }
+    udp.removeAllListeners("error");
+    this.udp = udp;
+    return { tcpPort, udpPort: udp.address().port };
+  }
+
+  /** One number for both: UDP first, chosen by the OS; TCP on the same number. Retried while the failure is a taken or refused port. */
+  private async startPaired(host: string): Promise<{ tcpPort: number; udpPort: number }> {
+    for (let attempt = 1; ; attempt++) {
       const udp = dgram.createSocket("udp4");
       udp.on("message", (msg, rinfo) => this.serveUdp(msg, rinfo));
+      const retryable = (err: unknown) => RETRYABLE_BIND_ERRORS.has((err as NodeJS.ErrnoException).code ?? "") && attempt < MAX_PAIR_ATTEMPTS;
       try {
         await new Promise<void>((resolve, reject) => {
           udp.once("error", reject);
-          udp.bind(listen.udpPort ?? tcpPort, host, () => resolve());
+          udp.bind(0, host, () => resolve());
         });
       } catch (err) {
         udp.close();
-        await new Promise<void>((resolve) => this.tcp!.close(() => resolve()));
-        this.tcp = null;
-        if (RETRYABLE_BIND_ERRORS.has((err as NodeJS.ErrnoException).code ?? "") && !explicit && listen.udpPort === undefined && attempt < 20) continue;
+        if (retryable(err)) continue;
         throw err;
       }
       udp.removeAllListeners("error");
+      const port = udp.address().port;
+      const tcp = net.createServer((socket) => this.serveTcp(socket));
+      try {
+        await new Promise<void>((resolve, reject) => {
+          tcp.once("error", reject);
+          tcp.listen(port, host, () => resolve());
+        });
+      } catch (err) {
+        udp.close();
+        if (retryable(err)) continue;
+        throw err;
+      }
+      tcp.removeAllListeners("error");
       this.udp = udp;
-      return { tcpPort, udpPort: udp.address().port };
+      this.tcp = tcp;
+      return { tcpPort: port, udpPort: port };
     }
   }
 

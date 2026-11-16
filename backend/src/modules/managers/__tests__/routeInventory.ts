@@ -513,6 +513,25 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/payroll/runs/:id/bank-batch": admin,
   "GET /api/payroll/bank-batches/:id": admin,
   "GET /api/payroll/bank-batches/:id/file": admin,
+  "GET /api/payroll-company-settings": adminInService("payroll.salary.view and a director check (companies.list)"), // part 3 B2a
+  "POST /api/payroll-company-settings": adminInService("director check (companies.enter)"),
+  "POST /api/payroll-company-settings/:id/confirm": adminInService("a different director (companies.confirm; the database refuses the same person too)"),
+  "GET /api/payroll-pay-policies/overtime": adminInService("payroll.salary.view and a director check (overtimePreview)"), // part 3 A2
+  "POST /api/payroll-pay-policies/overtime/post": adminInService("director check (overtimePost)"),
+  "GET /api/payroll-pay-policies/encashment": adminInService("director check (encashmentList)"), // part 3 A3
+  "POST /api/payroll-pay-policies/encashment/pay": adminInService("director check (encashmentPay)"),
+  "PUT /api/payroll-journal/mappings": adminInService("payroll.salary.view and a director check (setMappings)"), // PY-41
+  "GET /api/payroll-journal/runs/:runId": adminInService("director check (journal)"),
+  "GET /api/payroll-journal/runs/:runId/export": adminInService("director check (exportJournal calls journal)"),
+  "GET /api/payroll-minimum-wages": adminInService("payroll.salary.view and a director check (minimumWages.setup)"), // ST-29
+  "POST /api/payroll-minimum-wages/rates": adminInService("director check (addRate)"),
+  "POST /api/payroll-minimum-wages/categories": adminInService("director check (setCategory)"),
+  "POST /api/payroll-minimum-wages/basis": adminInService("director check (setBasis)"),
+  "GET /api/payroll-minimum-wages/check": adminInService("director check (check)"),
+  "GET /api/payroll-compliance": adminInService("payroll.salary.view and a director check (compliance.list)"), // ST-30
+  "POST /api/payroll-compliance": adminInService("director check (compliance.add)"),
+  "POST /api/payroll-compliance/:id/retire": adminInService("director check (compliance.retire)"),
+  "POST /api/payroll-compliance/:id/done": adminInService("director check (compliance.markDone)"),
   "GET /api/payroll/salary/import/template": adminInService("payroll.salary.edit (directors only)"), // IE-09
   "POST /api/payroll/salary/import/preview": adminInService("payroll.salary.edit and a director check in previewAssignments"),
   "POST /api/payroll/salary/import/commit": adminInService("payroll.salary.edit and a director check in commitAssignments; each revision waits for a different director"),
@@ -985,6 +1004,10 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   // P7-7 (docs/plans/P7_7_FORM16.md)
   "GET /api/tax/me/form16": self,
   "GET /api/tax/me/form16/pdf": self, // ST-24 / SS-05
+  "GET /api/tax/me/form16/part-a": self, // ST-25
+  "GET /api/tax/form16/:fy/part-a": adminInService("director only (form16PartA.listYear)"),
+  "POST /api/tax/form16/:fy/people/:employeeId/part-a": adminInService("director only (form16PartA.upload)"),
+  "GET /api/tax/form16/:fy/people/:employeeId/part-a": adminInService("director only (form16PartA.directorPartA)"),
   "GET /api/tax/challans": adminInService("director only (register)"),
   "POST /api/tax/challans": adminInService("director only (enterChallan), audited"),
   "POST /api/tax/challans/:id/confirm": adminInService("a different director, by retyping (confirmChallan)"),
@@ -1021,6 +1044,14 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/payroll-reports/:key": adminInService("router gate payroll.salary.view (never HR) and a director check in the service (Stage 6 payroll reports)"),
   "PUT /api/payroll-reports/:key/layout": adminInService("router gate payroll.salary.view (never HR) and a director check in the service (Stage 6 payroll reports)"),
   "GET /api/payroll-reports/:key/export": adminInService("router gate payroll.salary.view (never HR) and a director check in the service (Stage 6 payroll reports)"),
+  "POST /api/payroll-greythr/bank-check": adminInService("router gate payroll.salary.view (never HR) and a director check in the service; the Developer refused (Stage 8 greytHR readers and parallel-run kit)"),
+  "GET /api/payroll-greythr/parallel/runs": adminInService("router gate payroll.salary.view (never HR) and a director check in the service; the Developer refused (Stage 8 greytHR readers and parallel-run kit)"),
+  "GET /api/payroll-greythr/parallel": adminInService("router gate payroll.salary.view (never HR) and a director check in the service; the Developer refused (Stage 8 greytHR readers and parallel-run kit)"),
+  "POST /api/payroll-greythr/parallel": adminInService("router gate payroll.salary.view (never HR) and a director check in the service; the Developer refused (Stage 8 greytHR readers and parallel-run kit)"),
+  "GET /api/payroll-greythr/parallel/:id": adminInService("router gate payroll.salary.view (never HR) and a director check in the service; the Developer refused (Stage 8 greytHR readers and parallel-run kit)"),
+  "POST /api/payroll-greythr/parallel/:id/recompare": adminInService("router gate payroll.salary.view (never HR) and a director check in the service; the Developer refused (Stage 8 greytHR readers and parallel-run kit)"),
+  "DELETE /api/payroll-greythr/parallel/:id": adminInService("router gate payroll.salary.view (never HR) and a director check in the service; the Developer refused (Stage 8 greytHR readers and parallel-run kit)"),
+  "GET /api/payroll-greythr/parallel/:id/export": adminInService("router gate payroll.salary.view (never HR) and a director check in the service; the Developer refused (Stage 8 greytHR readers and parallel-run kit)"),
   // M session block 2: policy settings (the decision rows), the same two-director store
   "GET /api/policy-settings": adminInService("router gate settings.manage (never HR), Developer refused, and a director check in the service"),
   "POST /api/policy-settings/:key/proposals": adminInService("router gate settings.manage (never HR), Developer refused, and a director check in the service"),
@@ -1091,6 +1122,18 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/update-import/waiting": adminInService("employee.edit at the gate, directors only in the service"),
   "GET /api/update-import/:id": scoped("employee.edit; the uploader's own batch, or a director"),
   "POST /api/update-import/:id/apply": scoped("employee.edit; the uploader or a director; rows checked at preview; job rows by a director when the setting says so"),
+  // LT-09: anyone holding a letter checks it is genuine; rate-limited; the answer has no personal data
+  // AD-07 data retention: directors only
+  "GET /api/retention/due": adminInService("router gate settings.manage (never HR), Developer refused, and a director check in the service"),
+  "POST /api/retention/erasures": adminInService("router gate settings.manage, Developer refused, a director check in the service"),
+  "POST /api/retention/erasures/:id/confirm": adminInService("router gate settings.manage, Developer refused; a different director confirms (service and database)"),
+  // AD-08 more than one company
+  "GET /api/legal-entities": scoped("employee.view; company names and head counts only, no person; Developer refused"),
+  "GET /api/legal-entities/employees/:employeeId": scoped("employee.view + findScopedEmployee; Developer refused"),
+  "POST /api/legal-entities": adminInService("settings.manage (never HR) and a director check in the service"),
+  "PATCH /api/legal-entities/:id": adminInService("settings.manage and a director check in the service"),
+  "PUT /api/legal-entities/assignments": adminInService("settings.manage and a director check in the service"),
+  "POST /api/public/letter-check": machine("no sign-in by design (banks, landlords); rate-limited per address; answers genuine or not with the reference, date and signature count, no personal data"),
   // P7-3: the person's own
   "GET /api/tax/me/ytd": self,
   "GET /api/tax/me/salary-revisions": self,
@@ -1107,6 +1150,8 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
 // Scoped routes a manager can reach with a manager-grantable key — each has
 // an IDOR case in managerReach.test.ts. The test fails if one is missing.
 export const MANAGER_REACHABLE_SCOPED = [
+  "GET /api/legal-entities", // M block 2, AD-08
+  "GET /api/legal-entities/employees/:employeeId", // M block 2, AD-08
   "GET /api/overtime", // M block 2, AT-19
   "POST /api/overtime/:id/approve", // M block 2, AT-19
   "POST /api/overtime/:id/reject", // M block 2, AT-19

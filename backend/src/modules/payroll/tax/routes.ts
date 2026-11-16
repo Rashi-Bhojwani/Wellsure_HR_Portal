@@ -13,6 +13,7 @@ import * as years from "./years";
 import * as openings from "./openings"; // A-3
 import * as form16 from "./form16"; // P7-7
 import * as statChallans from "./statutoryChallans"; // ST-03 / ST-06
+import * as partA from "./form16PartA"; // ST-25
 import { myYtdReport } from "../run/ytd";
 import { mySalaryRevisions } from "../salary/mine";
 import { refuseDeveloper } from "../../../middleware/refuseDeveloper";
@@ -94,6 +95,10 @@ const pdfOut = (res: Response, out: { pdf: Buffer; fileName: string }) => {
   res.status(200).send(out.pdf);
 };
 const personYearParams = z.object({ fy: z.string().min(7).max(7), employeeId: z.string().min(1).max(64) }).strict();
+taxRouter.get("/me/form16/part-a", refuseDeveloper, validate({ query: requiredYearQuery }), async (req, res) => pdfOut(res, await partA.myPartA(req.user!.employeeId, (req.query as { fy: string }).fy, actor(req)))); // ST-25
+taxRouter.get("/form16/:fy/part-a", refuseDeveloper, directors, validate({ params: yearParams }), async (req, res) => send(res, 200, await partA.listYear((req.params as { fy: string }).fy, actor(req))));
+taxRouter.post("/form16/:fy/people/:employeeId/part-a", refuseDeveloper, directors, memoryUpload(6), validate({ params: personYearParams }), async (req, res) => send(res, 201, await partA.upload((req.params as { fy: string }).fy, (req.params as { employeeId: string }).employeeId, req.file, actor(req))));
+taxRouter.get("/form16/:fy/people/:employeeId/part-a", refuseDeveloper, directors, validate({ params: personYearParams }), async (req, res) => pdfOut(res, await partA.directorPartA((req.params as { fy: string }).fy, (req.params as { employeeId: string }).employeeId, actor(req))));
 taxRouter.get("/me/form16/pdf", refuseDeveloper, validate({ query: requiredYearQuery }), async (req, res) => pdfOut(res, await form16.myForm16Pdf(req.user!.employeeId, (req.query as { fy: string }).fy, actor(req)))); // ST-24 / SS-05
 taxRouter.get("/form16/:fy/people/:employeeId/pdf", refuseDeveloper, directors, validate({ params: personYearParams }), async (req, res) => pdfOut(res, await form16.directorForm16Pdf((req.params as { fy: string }).fy, (req.params as { employeeId: string }).employeeId, actor(req)))); // ST-24
 taxRouter.get("/statutory-challans", refuseDeveloper, directors, validate({ query: statChallans.registerQuery }), async (req, res) => send(res, 200, await statChallans.register(req.query, actor(req)))); // ST-03 / ST-06

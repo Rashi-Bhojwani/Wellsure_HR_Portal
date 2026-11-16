@@ -27,6 +27,7 @@ describe("P7-7 — over the routes", () => {
   const p: Record<string, Person> = {};
   const tok: Record<string, string> = {};
   const challanIds: string[] = [];
+  const partAIds: string[] = [];
   const t = (who: string, method: "get" | "post", path: string, body?: object) => request(app)[method](`/api/tax${path}`).set(...authHeader(tok[who]!)).send(body);
 
   beforeAll(async () => {
@@ -41,6 +42,7 @@ describe("P7-7 — over the routes", () => {
 
   afterAll(async () => {
     await deleteWithDependents("TdsChallan", challanIds);
+    await deleteWithDependents("Form16PartAFile", partAIds);
     await deleteWithDependents("PayrollApproval", (await prisma.payrollApproval.findMany({ where: { subject: "FORM16_CONFIRM", makerUserId: { in: [p.d1!.userId, p.d2!.userId] } }, select: { id: true } })).map((a) => a.id));
     for (const x of Object.values(p)) await cleanupFullTestEmployee(x.employeeId);
     await cleanupEmployeeTestOrgMasters(org);
@@ -90,6 +92,28 @@ describe("P7-7 — over the routes", () => {
     expect((await t("d1", "get", `/form16?fy=${CLOSED}`)).body.state).toBe("CONFIRMED");
     // The tax year itself is not confirmed in this test: the person's Form 16 stays a draft.
     expect((await t("emp", "get", `/me/form16?fy=${CLOSED}`)).body.draft).toBe(true);
+  });
+
+  it("ST-25: a director uploads a person's Part A (a PDF, nothing read from it); only that person and directors download it; every step is audited", async () => {
+    const pdf = Buffer.from("%PDF-1.4\n% made-up test file\n%%EOF\n");
+    const up = (who: string, file: Buffer, name = "part-a.pdf") => request(app).post(`/api/tax/form16/${CLOSED}/people/${p.emp!.employeeId}/part-a`).set(...authHeader(tok[who]!)).attach("file", file, name);
+    for (const who of ["hr", "dev", "emp"]) expect((await up(who, pdf)).status, who).toBe(403);
+    expect((await up("d1", Buffer.from("not a pdf"), "x.pdf")).status).toBe(400);
+    expect((await t("emp", "get", `/me/form16/part-a?fy=${CLOSED}`)).status).toBe(404); // nothing uploaded yet
+    const ok = await up("d1", pdf);
+    expect(ok.status, JSON.stringify(ok.body)).toBe(201);
+    partAIds.push(ok.body.id);
+    const mine = await request(app).get(`/api/tax/me/form16/part-a?fy=${CLOSED}`).set(...authHeader(tok.emp!)).buffer(true).parse((res, cb) => { const c: Buffer[] = []; res.on("data", (x: Buffer) => c.push(x)); res.on("end", () => cb(null, Buffer.concat(c))); });
+    expect(mine.status).toBe(200);
+    expect((mine.body as Buffer).equals(pdf)).toBe(true);
+    // Another person has none of their own and cannot reach this one: there is no person id on the own route, and the directors' route refuses them.
+    expect((await t("hr", "get", `/me/form16/part-a?fy=${CLOSED}`)).status).toBe(404);
+    expect((await t("hr", "get", `/form16/${CLOSED}/people/${p.emp!.employeeId}/part-a`)).status).toBe(403);
+    expect((await t("dev", "get", `/me/form16/part-a?fy=${CLOSED}`)).status).toBe(403);
+    expect((await t("d2", "get", `/form16/${CLOSED}/part-a`)).body.files.map((f: { employeeId: string }) => f.employeeId)).toContain(p.emp!.employeeId);
+    await expect(prisma.form16PartAFile.update({ where: { id: ok.body.id }, data: { fileName: "x" } })).rejects.toThrow(/FORM16_PART_A_APPEND_ONLY/);
+    const audits = await prisma.auditLog.findMany({ where: { entityId: p.emp!.employeeId, action: { startsWith: "payroll.form16.part_a" } } });
+    expect(audits.map((x) => x.action).sort()).toEqual(["payroll.form16.part_a_downloaded", "payroll.form16.part_a_uploaded"]);
   });
 
   it("quarterly data is in our own layout and says the official format is not built", async () => {

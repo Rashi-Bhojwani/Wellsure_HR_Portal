@@ -12,6 +12,12 @@ import { newAgentKey } from "./agentAuth";
 import { deviceHealth, warningsFor } from "./deviceHealth";
 import { flaggedWhere, type FlaggedFilter } from "./flaggedBulk";
 import { ingest, previewCounts } from "./ingestion";
+import { swipesToAttlog } from "./swipesImport";
+import { resolveAccess } from "../../lib/permissions";
+import { DEVELOPER_ROLE_CODE } from "@shared/constants/sensitiveData";
+import { looksLikeXls } from "../../lib/xls";
+
+const isSpreadsheet = (b: Buffer) => looksLikeXls(b) || (b.length >= 4 && b[0] === 0x50 && b[1] === 0x4b && b[2] === 0x03 && b[3] === 0x04);
 import { openIncidentKindsBySubject, statusOf } from "./health/queries";
 
 // Admin side of biometric ingestion (P2-B): devices, sync agents (keys shown
@@ -325,8 +331,16 @@ async function activeDevice(id: string) {
 /** Parse and count the file against what's stored; nothing is written to raw_punches until commit. */
 export async function previewImport(deviceId: string, file: { buffer: Buffer; originalname: string }, meta: Meta) {
   const device = await activeDevice(deviceId);
-  const text = file.buffer.toString("utf8");
-  const counts = await previewCounts(device, text);
+  // Stage 8: greytHR's Attendance Swipes spreadsheet (.xlsx or .xls) becomes ATTLOG lines for this device; the device's own text export is read as it is.
+  const spreadsheet = isSpreadsheet(file.buffer);
+  if (!spreadsheet && file.buffer.includes(0)) throw new HttpError(400, "This file is neither a device ATTLOG export (text) nor greytHR's Attendance Swipes spreadsheet.", "WRONG_FILE_TYPE");
+  // greytHR's swipes file is people's attendance from greytHR: HR's work, never the Developer role's (who by default does not see Employee Swipes either).
+  if (spreadsheet && (await resolveAccess(meta.actorUserId)).roleCodes.includes(DEVELOPER_ROLE_CODE)) throw new HttpError(403, "The Developer role does not load greytHR's swipes file; HR does.", "DEVELOPER_CEILING");
+  const swipes = spreadsheet ? await swipesToAttlog(file.buffer, file.originalname) : null;
+  const text = swipes ? swipes.text : file.buffer.toString("utf8");
+  if (!text.trim() && !swipes?.rejected.length) throw new HttpError(400, "The file is empty: there is not one punch in it.", "EMPTY_FILE");
+  const parsedCounts = await previewCounts(device, text);
+  const counts = swipes ? { ...parsedCounts, totalLines: parsedCounts.totalLines + swipes.rejected.length, rejectedCount: parsedCounts.rejectedCount + swipes.rejected.length, rejected: [...swipes.rejected, ...parsedCounts.rejected] } : parsedCounts;
   const batch = await prisma.ingestionBatch.create({
     data: {
       route: "IMPORT",
@@ -344,7 +358,7 @@ export async function previewImport(deviceId: string, file: { buffer: Buffer; or
       rejectedLines: counts.rejected.slice(0, 1000) as never,
     },
   });
-  return { batchId: batch.id, device: { id: device.id, name: device.name }, fileName: file.originalname, ...counts };
+  return { batchId: batch.id, device: { id: device.id, name: device.name }, fileName: file.originalname, source: swipes ? ("SWIPES" as const) : ("ATTLOG" as const), unknownNumbers: swipes?.unknownNumbers ?? [], ...counts };
 }
 
 export async function commitImport(batchId: string, input: { reason: string }, meta: Meta) {

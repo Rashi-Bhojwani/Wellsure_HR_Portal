@@ -54,6 +54,7 @@ describe("the choice for each payroll step: Not set, then either way", () => {
     const { preview, request } = await ask();
     expect(preview.status).toBe(200);
     expect(preview.body.blockers.map((b: { code: string }) => b.code)).toContain("DIRECTOR_CHOICE_NOT_SET");
+    expect(preview.body.blockers.find((b: { code: string }) => b.code === "DIRECTOR_CHOICE_NOT_SET").message).toContain("(System Settings, the Director authority tab)"); // cleanup C2
     expect([request.status, request.body.error?.code]).toEqual([409, "DIRECTOR_CHOICE_NOT_SET"]);
     expect((await runRow(runId)).status).toBe("CALCULATED");
     expect(await prisma.payrollApproval.count({ where: { subjectId: runId } })).toBe(0);

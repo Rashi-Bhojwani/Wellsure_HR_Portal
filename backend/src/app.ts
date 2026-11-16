@@ -62,6 +62,12 @@ import { settlementsRouter } from "./modules/payroll/settlements/routes"; // P7-
 import { offCycleRouter } from "./modules/payroll/offcycle/routes"; // P7-6b
 import { behavioursRouter } from "./modules/behaviours/routes"; // D-37
 import { payrollReportsRouter } from "./modules/payroll/reports/routes"; // Stage 6
+import { payrollGreythrRouter } from "./modules/payroll/greythr/routes"; // Stage 8
+import { complianceRouter } from "./modules/payroll/compliance/routes"; // ST-30
+import { minimumWagesRouter } from "./modules/payroll/minimumWages/routes"; // ST-29
+import { journalRouter } from "./modules/payroll/journal/routes"; // PY-41
+import { payPoliciesRouter } from "./modules/payroll/payPolicies/routes"; // part 3 A2/A3
+import { companySettingsRouter } from "./modules/payroll/companies/routes"; // part 3 B2a
 import { policySettingsRouter } from "./modules/policySettings/routes"; // M session block 2
 import { divisionsRouter } from "./modules/divisions/routes"; // M session block 2, ER-27
 import { documentAcksRouter } from "./modules/documents/ackRoutes"; // M session block 2, ER-18
@@ -73,6 +79,9 @@ import { overtimeRouter } from "./modules/overtime/routes"; // M session block 2
 import { wfhRequestsRouter } from "./modules/wfhRequests/routes"; // M session block 2, AT-36
 import { encashmentRequestsRouter } from "./modules/encashmentRequests/routes"; // M session block 2, LV-23
 import { updateImportRouter } from "./modules/updateImport/routes"; // M session block 2, IE-07/08
+import { letterCheckRouter } from "./modules/letterCheck/routes"; // M session block 2, LT-09
+import { retentionRouter } from "./modules/retention/routes"; // M session block 2, AD-07
+import { legalEntitiesRouter } from "./modules/legalEntities/routes"; // M session block 2, AD-08
 import { payslipRouter } from "./modules/payroll/payslipRoutes";
 // PEEPS-BEGIN assets
 import { assetsRouter } from "./modules/assets/routes";
@@ -119,6 +128,8 @@ const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   // Public joiner link (token only, rate-limited, no sign-in) — before the bare /api router's `authenticate`.
   { path: "/api/joining", router: joiningPublicRouter },
   // PEEPS-END recruitment-offers
+  // M session block 2, LT-09: no sign-in by design; before the bare /api router, whose `authenticate` would otherwise run first.
+  { path: "/api/public/letter-check", router: letterCheckRouter },
   { path: "/api/org", router: orgRouter },
   { path: "/api/employees", router: employeeRouter },
   { path: "/api/import", router: importRouter },
@@ -151,6 +162,12 @@ const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   { path: "/api/offcycle", router: offCycleRouter }, // P7-6b
   { path: "/api/behaviours", router: behavioursRouter }, // D-37
   { path: "/api/payroll-reports", router: payrollReportsRouter }, // Stage 6
+  { path: "/api/payroll-greythr", router: payrollGreythrRouter }, // Stage 8
+  { path: "/api/payroll-compliance", router: complianceRouter }, // ST-30
+  { path: "/api/payroll-minimum-wages", router: minimumWagesRouter }, // ST-29
+  { path: "/api/payroll-journal", router: journalRouter }, // PY-41
+  { path: "/api/payroll-pay-policies", router: payPoliciesRouter }, // part 3 A2/A3
+  { path: "/api/payroll-company-settings", router: companySettingsRouter }, // part 3 B2a
   { path: "/api/policy-settings", router: policySettingsRouter }, // M session block 2
   { path: "/api/divisions", router: divisionsRouter }, // M session block 2, ER-27
   { path: "/api/document-acks", router: documentAcksRouter }, // M session block 2, ER-18
@@ -162,6 +179,8 @@ const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   { path: "/api/wfh-requests", router: wfhRequestsRouter }, // M session block 2, AT-36
   { path: "/api/encashment-requests", router: encashmentRequestsRouter }, // M session block 2, LV-23
   { path: "/api/update-import", router: updateImportRouter }, // M session block 2, IE-07/08
+  { path: "/api/retention", router: retentionRouter }, // M session block 2, AD-07
+  { path: "/api/legal-entities", router: legalEntitiesRouter }, // M session block 2, AD-08
   { path: "/api/attendance", router: attendanceRouter },
   { path: "/api/biometric", router: biometricRouter },
   // PEEPS-BEGIN recruitment

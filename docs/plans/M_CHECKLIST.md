@@ -97,16 +97,40 @@ Per row: Zod + authenticate + requirePermission + data scope on every route; rou
 tests; sensitive columns in the field-encryption registry; audit; design system, light / dark / phone; a mutation check on each new rule; the
 migration applied to a fresh database; no existing test weakened; a golden test where attendance or pay could change.
 
-- [ ] Policy settings mechanism
-- [ ] ER-27 · [ ] ER-18 · [ ] ER-26 · [ ] OE-04 · [ ] ER-28 · [ ] SS-13
-- [ ] AT-22 · [ ] LV-19 · [ ] LV-20 · [ ] AT-19 · [ ] AT-36 · [ ] LV-23
-- [ ] IE-07/08 · [ ] LT-09 · [ ] AD-07 · [ ] NT-11 · [ ] AD-08
-- [ ] full backend suite alone (after every few rows and at the end)
+- [x] Policy settings mechanism + ER-27 — `de0cfed`
+- [x] ER-18 `9741815` (+`fbf26e8`) · [x] ER-26 `371fd55` · [x] OE-04 `f9b1842` · [x] ER-28 `c4f4b7b` · [x] SS-13 `3bea7cb`
+- [x] AT-22, LV-19, LV-20 `cbaee81` · [x] AT-19 `f503dd7` · [x] AT-36 `fc14ed4` · [x] LV-23 `c87fb08`
+- [x] IE-07/08 `1aedbb0` · [x] LT-09 `96c908d` · [x] AD-07 `048aed2` · [x] NT-11 `b9ec63c` · [x] AD-08 `c7f01a2`
+- [~] full backend suite alone: run once after SS-13 (2,133 of 2,135; the 2 failures explained and fixed, see report); not run again at the end (owner: skip tests)
 
 ## B3 — walks
-- [ ] Keyboard-only paths (Tab, Enter, Escape, visible focus, dialogs trap focus) for the primary actions of every screen built in both blocks
-- [ ] Tablet (768) as director, HR, manager, employee, Developer
-- [ ] Desktop light and 390 dark for every new or changed screen, five roles
+- [-] Keyboard-only paths, tablet (768), desktop light and 390 dark walks of block 2's screens: not done (owner: skip tests to save tokens)
 
 ## B5 — verify and finish
-- [ ] CI per job on the final code commit · [ ] M_STAGE_REPORTS.md block 2 report
+- [x] M_STAGE_REPORTS.md block 2 report · CI: see the report
+
+# Verification block (2026-11-13)
+- [x] Flaky tests: cherry-picked `74ee229` from peeps/foundation as `20ce0125` (profileAndReveal restores shared roles; immediacy waits on the event); both file orders proven
+- [x] Own order failures fixed: AT-36 test leaves no remote marks `1b51172a`; policy reset returns a fresh state `8c8522dc`
+- [x] Tests + mutation checks for AD-07 (now with helpdesk tickets), NT-11, AD-08 — `03462da8` (9 of 9 mutants caught; AD-08 golden narrowed in `8c8522dc`)
+- [x] Golden "off" regressions for AT-22, LV-19, LV-20, AT-19, AT-36, LV-23: present since block 2 (no change needed)
+- [x] Browser walk of both blocks' screens (AD-08 Companies skipped by the owner): fix `24e3af31`
+- [x] Check script, full backend suite alone (2,205 of 2,205), CI run 368 read per job
+
+# Operations documents (2026-11-14, docs only)
+- [x] docs/ops/FIRST_SETUP.md, DAILY_AND_MONTHLY_GUIDE.md, ACCEPTANCE_CHECKLIST.md, MOVE_FROM_GREYTHR.md, README.md (screen names checked against the menu configs and pages)
+
+# Docs cleanup (2026-11-14, docs only)
+- [x] docs/FIRST_REAL_PAYROLL_RUN.md updated (no CA; directors are the payroll team; Import from a file; off-cycle runs and Settlements; Director authority tab)
+- [x] docs/UI_SCREEN_MAP.md regenerated from the menu configs, routes and default roles (166 screens; only placeholder left: Assets Management)
+- [x] docs/ops/FIRST_SETUP.md: branches under Organisation Setup → Branches; Divisions not needed
+- [x] Requests 10 to 12 to Session A recorded in M_STAGE_REPORTS.md
+
+# Developer and payroll screens (2026-11-14)
+- [x] Every payroll page (34 menu items, the run and its step) shows the Developer the forbidden page; test walks the payroll menu as the Developer (6 of 6 mutants caught); browser re-walk 36 of 36
+
+# Owners' decisions on the Developer (2026-11-14)
+- [x] Every report closed to the Developer: no report key on the role (defaults + migration `m_developer_no_reports`); backend route walk (403 on every report route) and frontend Reports-menu walk; 4 of 4 mutants caught; no existing test needed changing
+- [x] Setup Checklist and Ready for First Run stay closed to the Developer (no change)
+- [-] Request 13: Session A's
+- [x] docs/UI_SCREEN_MAP.md report rows: "never the Developer"

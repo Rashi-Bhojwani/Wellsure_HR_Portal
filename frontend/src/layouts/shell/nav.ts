@@ -52,7 +52,7 @@ export function employeeNav(hasPermission: (key: string) => boolean): NavEntry[]
  * HR / Admin portal: each app is a group (Homepage and Tasks are single items); an app's own overview page comes first, then its menus as sections. An item the person's permissions
  * (as switched on or off for them) do not cover is left out, and a section or app left with nothing goes with it.
  */
-export function adminNav(hasPermission: (key: string) => boolean = () => true, isDirector = true): NavEntry[] {
+export function adminNav(hasPermission: (key: string) => boolean = () => true, isDirector = true, isDeveloper = false): NavEntry[] {
   return adminApps
     .map((app): NavEntry | null => {
       const path = app.path === "" ? "/admin" : `/admin/${app.path}`;
@@ -64,7 +64,7 @@ export function adminNav(hasPermission: (key: string) => boolean = () => true, i
       const multi = app.menus.length > 1 || app.element;
       for (const group of app.menus) {
         const leaves: NavLeaf[] = group.items
-          .filter((item) => adminNeedsMet(item.needs, hasPermission, isDirector))
+          .filter((item) => adminNeedsMet(item.needs, hasPermission, isDirector, isDeveloper))
           .map((item) => ({ kind: "leaf" as const, key: item.key, label: item.label, path: `/admin/${item.path}`, icon: item.icon, soon: item.phase, element: item.element }));
         if (leaves.length === 0) continue;
         if (multi) children.push({ kind: "section", key: `${app.key}-${group.key}`, label: group.label });

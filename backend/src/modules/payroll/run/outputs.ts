@@ -4,6 +4,8 @@ import { writeAuditLog, writeAuditLogs } from "../../../lib/audit";
 import { namesOn } from "../../../lib/effectiveDating";
 import { decryptField } from "../../../lib/encryption";
 import { prisma } from "../../../lib/prisma";
+import { statutoryOn } from "../statutoryOn";
+import { refuseFilesForOtherCompany } from "./company";
 import { HttpError } from "../../../middleware/errorHandler";
 import { storageService } from "../../../integrations/storage";
 import { recordEvent } from "../events";
@@ -25,7 +27,14 @@ const LAYOUT_OF: Record<Exclude<PayrollOutputKind, "SALARY_REGISTER">, LayoutKin
 
 type Item = Awaited<ReturnType<typeof loadItems>>[number];
 async function loadItems(runId: string) {
-  return prisma.payrollRunItem.findMany({ where: { runId, status: { in: ["PAYABLE", "HELD"] } }, include: { lines: true, employee: { select: { employeeCode: true, statutory: { select: { uanEncrypted: true, esiEncrypted: true } } } } }, orderBy: { employee: { employeeCode: "asc" } } });
+  const items = await prisma.payrollRunItem.findMany({ where: { runId, status: { in: ["PAYABLE", "HELD"] } }, include: { lines: true, employee: { select: { employeeCode: true } } }, orderBy: { employee: { employeeCode: "asc" } } });
+  // A1: the UAN and ESI number in force at the end of the run's period (a later change does not rewrite an older month's file).
+  const { cycleEnd } = await prisma.payrollRun.findUniqueOrThrow({ where: { id: runId }, select: { cycleEnd: true } });
+  const st = await statutoryOn(items.map((i) => i.employeeId), cycleEnd);
+  return items.map((i) => {
+    const s = st.get(i.employeeId);
+    return { ...i, employee: { ...i.employee, statutory: s ? { uanEncrypted: s.uanEncrypted, esiEncrypted: s.esiEncrypted } : null } };
+  });
 }
 
 const amountOf = (item: Item, code: string): string => canonicalDecimal(item.lines.filter((l) => l.code === code).reduce((a, l) => a.plus(dec(l.amount.toString())), ZERO));
@@ -80,6 +89,7 @@ function build(kind: Exclude<PayrollOutputKind, "SALARY_REGISTER">, items: Item[
 }
 
 export async function generateOutput(runId: string, kind: PayrollOutputKind, actor: Actor) {
+  await refuseFilesForOtherCompany(runId, "statutory file"); // part 3 B2
   const run: PayrollRun | null = await prisma.payrollRun.findUnique({ where: { id: runId } });
   if (!run) throw new HttpError(404, "No such payroll run.", "NOT_FOUND");
   if (run.status !== "FINALISED") throw new HttpError(409, "Statutory files and the register come only from a final run.", "RUN_STATE");
