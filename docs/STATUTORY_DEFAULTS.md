@@ -75,5 +75,5 @@ Review needed:
 
 - ESI: the daily-wage exemption (Rs 176) and the Rs 25,000 ceiling for persons with disability.
 - PF: the Rs 500 monthly minimum administrative charge (per establishment); September 2026 uses the ceiling in force on its last day (Rs 25,000).
-- Gratuity: one year for fixed-term employees (pro rata).
+- Gratuity: one year for fixed-term employees (pro rata); a part year of exactly six months (no days over) counts as a year here, while the Code says "in excess of six months".
 - Income tax: the old regime's 37% surcharge above Rs 5 crore and marginal relief at surcharge thresholds.
