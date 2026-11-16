@@ -231,3 +231,18 @@ No new value to enter.
 | 105 | Payroll reports can be filtered and grouped by branch (Organisation Setup, Branches; Divisions are not used). People with no branch show under "No branch"; in a finalised run that cannot happen (a run refuses anyone without a placement), so it appears only where a report reads today's job history (the overtime register). | — | Keep. |
 | 106 | Payroll Admin and Payroll Approver are given to nobody, a director included; the screens no longer offer them and the server refuses them. Nobody holds them today; any existing row was left as it was. | — | Keep; remove the two roles later if you never want them. |
 
+## Stage 8 (2026-11-16): greytHR readers and the parallel-run kit
+
+Values the directors may enter (none is preset):
+- Admin Tools → Default behaviours → **Parallel run: what counts as a match**: a rounding allowance in rupees, if one rupee or more of rounding should count as a match (default exact match, shown "Default, change in settings").
+- Admin Tools → Default behaviours → **Parallel run: how long a saved comparison is kept**: the number of days a comparison (it holds pay figures) is kept (Not set: until a director deletes it).
+- Payroll → Bank and Statutory Layouts → **Bank file**: if you start a draft from greytHR's bank file (Admin Tools → Data Import/Export → greytHR bank file), enter the debit account, the payment mode code and the remark text, then the other director confirms it.
+
+| # | Decided or asked in Stage 8 | What you give | Recommendation |
+|---|---|---|---|
+| 107 | Only the synthetic sample files have been tried. Real greytHR exports may differ (extra columns, other date styles). | One real month's statement, swipes and overrides files, tried in the portal (never committed). | Try one real month before relying on the kit. |
+| 108 | A file of pay figures (greytHR's Bulk Salary Overrides) is applied only by the director who did not upload it. | — | Keep. |
+| 109 | Your bank takes a legacy .xls; the portal writes .xlsx or .csv, not .xls. | Ask the bank whether it accepts .xlsx or .csv. | Ask before the first real bank file. |
+| 110 | greytHR's payroll repository (pay items) file is not read: no synthetic sample exists, so its layout is not guessed. | A synthetic copy of its layout (made-up values) if you want it read. | Not needed for the parallel run (heads come from the statement). |
+| 111 | Every report key is now refused to the Developer role, even as a personal grant; the payroll rule values and the layouts are refused to it on the server. | — | Keep. |
+

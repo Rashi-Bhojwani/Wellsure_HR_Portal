@@ -40,7 +40,7 @@ Read first. Status: DONE / OPEN / PARTIAL / **UNDEFINED** (no plan file on any b
 | E2E | a settlement recovers a loan through an off-cycle run; double clicks; regular run identical | DONE `c6af1ce` (2 bugs fixed, 3 mutants caught) | — |
 | Scale | new readers and the off-cycle road at 500 people | DONE `6b1ba3d` (all within budget) | — |
 | Stage 6 | internal payroll reports (directors only) | **DONE 2026-11-12** (`e90c471`, `247096d`); the query builder RP-12 is the other session's row | — |
-| Stage 8 | attendance and salary file readers from `docs/samples`, layout setup, parallel-run kit | **BLOCKED: the files on `origin/main` look like real exports; the owner will replace them with synthetic files and say when (2026-11-11). Not brought here.** Earlier note: **BLOCKED in part: `docs/samples/` is not on this branch** (only on `peeps/foundation`, which this work may not touch) | samples on this branch |
+| Stage 8 | attendance and salary file readers from `docs/samples`, layout setup, parallel-run kit | **DONE with the synthetic samples** (`05e80c1`, `d0e5a20`, `6174928`, `c4b9485`, `8c7e7d5`); the pay items reader waits for a sample; real greytHR exports not tried |
 | Stage 9 parity | Tier 1 MISSING items of `PARITY_COVERAGE.md` | not started (the file was brought onto this branch by the M session on 2026-11-11, `9f5dd5f`; not started on the owner's instruction) | as Stage 6 |
 | Close-out | `PORTAL_READY_REPORT.md`, `GETTING_STARTED.md`, `FIRST_REAL_PAYROLL_RUN.md` | PORTAL_READY_REPORT and OWNER_REVIEW_SHEET updated 2026-11-11; open items are the undefined A-items and the blocked stages | everything above |
 
@@ -133,7 +133,10 @@ pause only at CHECKPOINT 1 (after Stage 2), CHECKPOINT 2 (after P7-3) and stop c
 - [x] P7-2 (windows, declarations, proofs, directors' verification, regime comparison, screens) · [x] P7-3 as far as TDS in the run and the IT Statement (the TDS line, its explanation, pins, stale on a changed declaration); **not built from P7-3's list:** YTD Reports, payslip YTD column, Salary Revision page, revision letters, offer-letter figures → **STOPPED AT THE TDS CHECKPOINT (CHECKPOINT 2)** · [ ] P7-4 · [ ] P7-5 · [ ] P7-6 · [ ] P7-7
 
 ## Stage 8 — parity tools
-- [ ] 8.1 statement parser/compare · [ ] 8.2 payslip layout · [ ] 8.3 statutory layout editor · [ ] 8.4 parallel-run kit
+- [x] 8.1 statement reader (greytHR Salary Statement .xls through `lib/xls.ts`) · [ ] 8.2 payslip layout (needs the owners' payslip sample) · [ ] 8.3 statutory layout editor · [x] 8.4 parallel-run kit
+- [x] Stage 8 (2026-11-14 to 16, plan `STAGE_8_PLAN.md`): readers `05e80c1` · kit and bank check `d0e5a20` · request 13 and every report key a Developer ceiling `6174928` ·
+  fixes and the move guide `c4b9485` · walk fix `8c7e7d5`. Built and tested with the synthetic samples only; real greytHR exports not tried.
+- [ ] Deferred: greytHR's payroll repository (pay items) reader: no synthetic sample on the branch, so its layout is not guessed (the kit maps heads from the statement's own columns)
 
 ## Close-out
 - [ ] `PHASE_7_REVIEW.md`, `PROGRESS.md`, `FIRST_REAL_PAYROLL_RUN.md`, then STOP

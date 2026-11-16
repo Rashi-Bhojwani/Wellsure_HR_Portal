@@ -560,3 +560,45 @@ report shows the "By branch" table (at 390 through the Filter drawer); its branc
 role; Roles & Permissions shows "Not assignable" on both. The Developer can read Roles & Permissions and the Access tab (no picker, no pay figure), as before.
 Keyboard: "Group by branch" reached by Tab with a visible focus ring, Space turns it on, the branch table appears, at both views.
 **Not verified:** a Windows machine other than the CI runner; "No branch" inside a finalised run (it cannot occur; covered by the pure test and the overtime register).
+
+## Session A Stage 8, 2026-11-14 to 16 — greytHR file readers and the parallel-run kit
+
+Plan `STAGE_8_PLAN.md` (what existed for each sample before building). Commits: readers `05e80c1`, kit and bank check `d0e5a20`, request 13 and the report ceiling
+`6174928`, fixes and the move guide `c4b9485`, walk fix `8c7e7d5`. **Fixtures: only the synthetic files in `docs/samples/` and generated files in their layout.
+Real greytHR exports have not been tried and could differ from the synthetic layout.**
+
+**What existed.** The device log (.dat) already had an Import Center importer (preview, duplicates skipped, unmapped IDs queued, punches immutable, audited):
+kept, and its preview now lists the unknown device user IDs. greytHR's Bulk Salary Overrides layout was already read by Monthly Inputs → Import a file.
+**Built.** `lib/xls.ts`: a read-only legacy Excel reader (cell values; a formula's cached result only; no macro read; encrypted and Excel 5 files refused;
+loops bounded), checked against an independent reader on the samples and on generated files; the `xlsx` npm package was not used (open advisories for
+untrusted files). Swipes (.xlsx/.xls) become ATTLOG lines through the same ingestion (employee number → device user ID that day; unknown numbers and unmapped
+people rejected with reasons; the Developer role may not load it). Overrides: **the uploader cannot apply the file; a different director does**; the template's
+footer note is skipped (it made greytHR's own file invalid); slash dates are read day first only where they cannot be misread (31/01/2026 proves it).
+Salary statement reader and the **parallel-run kit** (Payroll → Parallel run, and Import Center tabs for directors): match by employee number; every head,
+the totals, days and LOP; differences with which side is higher; people and heads on one side only; totals and the net difference; a likely cause only
+where certain (a head on one side, LOP days differing, a person on one side). Tolerance a director setting (default exact match); retention Not set.
+Comparisons saved encrypted (a_ migration, field-key registry); exports audited without figures; the kit writes no payroll data (tested: run items, lines,
+adjustments, monthly inputs and the golden snapshot unchanged). **Bank file check**: headers against the bank layout, notes (.xls vs .xlsx/.csv, the
+capitalised month, trailing spaces), a draft layout offered with only certain fields, saved through the existing layout save and confirmed by the other
+director. The writer was not changed. **Deferred:** the payroll repository (pay items) reader: no synthetic sample, layout not guessed. Compare Registers'
+greytHR option now points to the Parallel run.
+**Request 13 and the report ceiling.** The rule values (`/rules`, `/rules/:key`, `/rule-overrides` and history) and the layouts (`/layouts`, `/layouts/:key`)
+refuse the Developer role on the server. Every `reports.*` key is in `DEVELOPER_FORBIDDEN_KEYS`: a personal grant is refused (DEVELOPER_CEILING) and an
+old row is never resolved.
+**Tests.** Good, wrong, empty, oversize, damaged, duplicate, unknown-code and wrong-column files for each reader; generated statement pairs (exact, one
+rupee, missing person, extra head, different LOP); a property test of the comparison against an independent reference (300 runs); the payroll golden run
+and the attendance golden replay unchanged. **Mutation checks: 9 of 9 caught** (match by employee number, the tolerance, days always exact, all-or-nothing
+apply, the second-director rule, request 13 on rules and on layouts, the report ceiling, the swipes unknown-number rejection). The phase check found a real
+reader bug (a string continued across records lost its flag byte) and a real importer bug (greytHR's footer note); both fixed with tests.
+**Phase check** (one script, stops at the first failure): lint (two control-character regexes), guard literals (structural, allowlisted with reasons),
+four tests asserting the old Developer access (changed to the new rule), one frontend test needing the signed-in director: all fixed.
+**Full backend suite alone:** first run 4 failures (the history-table guard: the swipes reader now uses a reader in `lib/effectiveDating`; sealedIdentifiers
+expected the Developer to read rules; two compare tests edited while the suite ran); after the fixes **260 files, 2,249 tests, all passed**.
+**CI:** CI_STAGE8_PENDING.
+**Browser walk** (scratch copy of the demo company, synthetic files): Parallel run, Import Center (greytHR tabs, bank check), Default behaviours, as director,
+HR, manager, employee and Developer at 1280 light and 390 dark (30 visits): no crash, no server error, no secret text (the sample's account number and IFSC
+never shown), no horizontal scroll. The director compared the sample statement against a demo run and checked the sample bank file; the others are refused
+the director screens and do not see the greytHR tabs. Found and fixed: the Developer's punches tab offered greytHR swipes (refused by the server). Keyboard
+at both views: run chosen with arrows and Enter; the statement and bank drop areas reached by Tab with focus visible and Enter opens the file chooser; the
+tolerance setting's drawer opens and Escape closes it.
+**Not verified:** real greytHR exports; the bank's acceptance of an .xlsx or .csv file; a Windows machine other than CI.
