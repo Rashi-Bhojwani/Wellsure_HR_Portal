@@ -22,6 +22,7 @@
     "seed:demo-company": "tsx scripts/seed-demo-company.ts",
     "measure:payroll": "tsx scripts/measure-payroll.ts",
     "measure:new-readers": "tsx scripts/measure-new-readers.ts",
+    "measure:stage9": "tsx scripts/measure-stage9.ts",
     "docs:sensitive": "tsx scripts/sensitive-docs.ts",
     "admin:bootstrap": "tsx scripts/admin-bootstrap.ts",
     "admin:recover": "tsx scripts/admin-recover.ts",
