@@ -35,6 +35,7 @@ describe("new leave types", () => {
   const typeId = {} as Record<string, string>;
   const requestIds: string[] = [];
   let friday: Date;
+  let workday: (offset: number) => Date = () => new Date(NaN);
   const get = (who: Who, path: string) => request(app).get(path).set(...authHeader(tok[who]));
   const post = (who: Who, path: string, body: object = {}) => request(app).post(path).set(...authHeader(tok[who])).send(body);
   const prepare = (who: Who, code: string, rules: object, note = "DEMO") => post(who, `/api/leave-rules/${code}/versions`, { rules, note });
@@ -66,9 +67,19 @@ describe("new leave types", () => {
     }
     for (const k of Object.keys(p) as Who[]) tok[k] = await loginAs(p[k].employeeCode);
     for (const t of await prisma.leaveType.findMany({ where: { code: { in: ["MENSTRUAL", "MEDICAL", "WEDDING", "BEREAVEMENT", "PL"] } } })) typeId[t.code] = t.id;
+    // Dates are counted from today, so they must never land on a holiday or a weekend (a one-day request on one is 0 working days and is
+    // refused: on 2026-11-16 "friday + 21" was 25 December). friday is a Friday whose Monday and Tuesday, and the next Friday and Monday, are
+    // working days; workday() moves forward to the next working day.
+    const holidays = new Set((await prisma.holiday.findMany({ select: { date: true } })).map((h) => iso(h.date)));
+    const free = (x: Date) => x.getUTCDay() !== 0 && x.getUTCDay() !== 6 && !holidays.has(iso(x));
     let d = addCalendarDays(businessToday(), 14);
-    while (d.getUTCDay() !== 5) d = addCalendarDays(d, 1);
+    while (d.getUTCDay() !== 5 || ![0, 3, 4, 7, 10].every((o) => free(addCalendarDays(d, o)))) d = addCalendarDays(d, 1);
     friday = d;
+    workday = (offset: number) => {
+      let x = addCalendarDays(friday, offset);
+      while (!free(x)) x = addCalendarDays(x, 1);
+      return x;
+    };
   });
 
   afterAll(async () => {
@@ -172,7 +183,7 @@ describe("new leave types", () => {
     });
 
     it("a manager decides a type whose route allows it, for their own report", async () => {
-      const r = await apply("report", "BEREAVEMENT", addCalendarDays(friday, 21), addCalendarDays(friday, 21));
+      const r = await apply("report", "BEREAVEMENT", workday(21), workday(21));
       expect(r.status).toBe(201);
       expect((await post("manager", `/api/leave/requests/${r.body.id}/approve`)).status).toBe(200);
     });
@@ -183,7 +194,7 @@ describe("new leave types", () => {
       const early = await apply("employee", "WEDDING", friday, friday);
       expect(early.status).toBe(409);
       expect(JSON.stringify(early.body)).toContain("LEAVE_RULES_NOT_SET");
-      const later = await apply("employee", "WEDDING", addCalendarDays(friday, 31), addCalendarDays(friday, 31));
+      const later = await apply("employee", "WEDDING", workday(31), workday(31));
       expect(later.status).not.toBe(201); // a granted balance: nothing granted yet, so the engine's balance check refuses
     });
 
@@ -207,23 +218,23 @@ describe("new leave types", () => {
       expect((await approve("director", "MENSTRUAL", 1)).status).toBe(200);
       await prisma.employeePersonal.update({ where: { employeeId: p.colleague.employeeId }, data: { gender: "MALE" } });
       await prisma.employeePersonal.update({ where: { employeeId: p.employee.employeeId }, data: { gender: "FEMALE" } });
-      const refused = await apply("colleague", "MENSTRUAL", addCalendarDays(friday, 56), addCalendarDays(friday, 56));
+      const refused = await apply("colleague", "MENSTRUAL", workday(56), workday(56));
       expect(refused.status).toBe(409);
       expect(refused.body.error.code).toBe("NOT_ELIGIBLE");
       expect(refused.body.error.message).toBe("This employee is not eligible for this leave type under its rules.");
       expect(JSON.stringify(refused.body)).not.toMatch(/gender|female|male|women/i);
-      const accepted = await apply("employee", "MENSTRUAL", addCalendarDays(friday, 56), addCalendarDays(friday, 56));
+      const accepted = await apply("employee", "MENSTRUAL", workday(56), workday(56));
       expect(accepted.status, JSON.stringify(accepted.body)).toBe(201);
       await prisma.employeePersonal.delete({ where: { employeeId: p.contractor.employeeId } }); // no record at all
       await prisma.employee.update({ where: { id: p.contractor.employeeId }, data: { employmentType: "PERMANENT" } });
-      const none = await apply("contractor", "MENSTRUAL", addCalendarDays(friday, 56), addCalendarDays(friday, 56));
+      const none = await apply("contractor", "MENSTRUAL", workday(56), workday(56));
       expect(none.status).toBe(409);
       expect(none.body.error.code).toBe("NOT_ELIGIBLE");
     });
 
     it("the criterion never shows anyone's gender: not to the manager, the calendar, notifications or the audit of the request", async () => {
       const r = await prisma.leaveRequest.findFirstOrThrow({ where: { employeeId: p.employee.employeeId, leaveTypeId: typeId.MENSTRUAL } });
-      for (const [who, path] of [["colleague", `/api/leave/calendar?fromDate=${iso(addCalendarDays(friday, 56))}&toDate=${iso(addCalendarDays(friday, 56))}`], ["colleague", "/api/people?pageSize=100"], ["manager", "/api/tasks/mine"], ["manager", "/api/notifications"]] as const) {
+      for (const [who, path] of [["colleague", `/api/leave/calendar?fromDate=${iso(workday(56))}&toDate=${iso(workday(56))}`], ["colleague", "/api/people?pageSize=100"], ["manager", "/api/tasks/mine"], ["manager", "/api/notifications"]] as const) {
         expect(JSON.stringify((await get(who, path)).body), `${who} ${path}`).not.toMatch(/"gender"|FEMALE|MENSTRUAL|Menstrual/);
       }
       const audits = await prisma.auditLog.findMany({ where: { entityId: r.id } });
