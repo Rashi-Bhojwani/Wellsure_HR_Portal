@@ -2031,3 +2031,33 @@ The same leftover also fails Session A's own `golden.test.ts` (4), `manual.test.
   order-dependent.
 - Browser checks on `1f6f5a2`, each on a freshly migrated database seeded with the new seed: `check:popovers` (base seed only, as CI) —
   every popover passes; `check:sensitive-ui` (with the demo company) — no secret on any of 906 pages, the DEMO banner on every one.
+
+## Stage 4 phase 9: independent review (2026-11-16)
+
+A fresh subagent that had not seen the Stage 4 work was given `PEEPS_PLAN.md`, the owner decisions and `PEEPS_SETUP_GUIDE.md` and asked to
+break the confidentiality and permission rules, find unfinished or unreachable screens, and find presets that should be Not set. It worked
+read-only (it stopped once on a usage limit and was resumed). Seven findings; each was checked against the code, all seven were real, and each
+was fixed with a test and a mutation check (the fix broken, the new test seen failing, the file restored).
+
+| # | Severity | Finding (as verified) | Fix | Commit |
+|---|---|---|---|---|
+| 1 | High | Autofill showed HR (holders of the bank/statutory keys) extracted PAN, Aadhaar and account numbers whole; typed values are masked to the last four for HR | Masked to the last four for non-directors (suggestion and saved value); accept still stores the server's reading; opening the source document is the audited reveal; the screen never pre-fills a masked value. Changed test: `autofill.test.ts` (expects masked for HR, whole for the director) | `f5c0b3b` |
+| 2 | High | The audit log showed HR and the Developer who booked Unmute, who asked for a nudge review, who attached/opened a leave document, which private item a director opened | Those rows for directors only (`peeps/auditAudience.ts`, one filter beside exits/recruitment) | `fddefe2` |
+| 3 | Medium | Public tag views (person page, home list) showed whether a review was asked for and its outcome | Review state only to the person tagged and the directors | `cd32065` |
+| 4 | Medium | Any HR could list/open any employee's leave documents, another HR person's medical certificate included (owners: HR do not see each other's private data) | Another HR person's documents: directors only (and the person's own) | `d9eb0b4` |
+| 5 | Medium | Leave balances and the ledger named menstrual/medical to managers and delegates (calendars, tasks and request rows already said "Leave") | Same rule applied to balances and ledger (PEEPS block in the leave controller) | `cbca2a5` |
+| 6 | Low | The setup guide said every setting needs a second director; recruitment, joining, exits, Insights and autofill settings take effect on one director's save | Guide corrected; adding a second-director step there is left to the owners (decision, not built) | `5978b26` |
+| 7 | Low | Office members held recruitment/exits keys while those Office audiences were closed (menus showed screens that then refused them; no data leaked) | Keys follow the audience, as asset keys did; changing either audience re-syncs grants | `8101835` |
+
+Checked and found correct by the reviewer: offer pay and expected pay directors only (service and trigger, audited); interview feedback panel
+and directors only; exit interview answers employee, interviewer of record and directors only; Unmute participants only, director opens
+audited; nudges only from directors; the Developer refused across recruitment, exits, Insights, autofill and leave rules; Insights aggregate
+with complementary suppression and every definition Not set; Peeps settings and Office membership need a different director; shipped defaults
+match setup guide §3; link lifetime, joiner documents, exception approver, every retention, exits, assets, Unmute, Insights and the four leave
+types Not set; demo data only from the DEMO seed; every Peeps page reachable, no placeholder screens. Not determined by the reviewer (recorded as
+not verified): whether helpdesk notification bodies (ticket subject) reach anyone outside a restricted category's audience; whether the
+workforce dashboard breaks leave down by type for scoped viewers.
+
+Phase-end check after the fixes (`scripts/peeps-check.sh --since 1f6f5a2`): lint, typecheck, 5 changed backend files / 53 tests passed; the
+affected suites (Peeps, recruitment, exits, Insights, autofill, assets: 28 files / 188 tests; leave and leave rules: 20 files / 162 tests;
+recognition 43; audit log 12) passed.

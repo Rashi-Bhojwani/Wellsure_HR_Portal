@@ -39,7 +39,7 @@ attendance engine (with the owners' confirmed cutoffs); Peeps would then only ad
 
 Stage 4 (testing programme): permission matrix `a959db5`; confidentiality scan `154855a`; concurrency `3ddafa4`; core regression `cba74f3`,
 `3580124`; mutation table `965ba1b`; browser-walk fixes `d40ba2a`; leave-types test dates `21a310b`; merge of Session A `c9866f8`; seed and
-mail safety: TO FILL; review fixes: TO FILL.
+mail safety `1f6f5a2`; independent review fixes `f5c0b3b`, `fddefe2`, `cd32065`, `d9eb0b4`, `cbca2a5`, `8101835`, guide `5978b26`.
 
 ## 2. Owner setup checklist — every setting left Not set
 
@@ -107,15 +107,60 @@ week/month end; a nudge shows for 7 days; only a director gives or removes a nud
 
 ## 5. Not verified
 
-TO FILL after the final full run, CI read and review.
-
-- `npm run test:peeps-demo` (the confidentiality scan) runs locally only; CI does not run it (CI files are not mine to change).
+- **The full backend suite alone after the independent-review fixes.** The last full local run was on `1f6f5a2` (before them); after them I
+  ran the phase check (lint, typecheck, changed tests) and every affected suite (Peeps, recruitment, exits, Insights, autofill, assets, leave,
+  leave rules, recognition, audit log), all green. The whole suite after them ran only in CI (§8).
+- `npm run test:peeps-demo` (the confidentiality scan on the demo company) runs locally only; CI does not run it (CI files are not mine).
+  It was green on Stage 4 phase 2 and was not re-run after the later fixes.
+- The independent reviewer could not determine: whether helpdesk notification bodies (they carry the ticket subject) reach anyone outside a
+  restricted category's audience; whether the workforce leave dashboard breaks leave down by type for scoped viewers. I did not trace them.
+- Staging: nothing was run against staging or production. The mail guard means a staging stack sends mail only to domains listed in
+  `MAIL_ALLOWED_DOMAINS`; I did not change the infrastructure code to set it.
 - The base `HelpStrip` "Hide help" link is under 44 px on phones (not Peeps code; left alone).
+- Session A's `fullMonthRehearsal.test.ts` leftover (August 2026 finalised for the rest of a run) also fails Session A's own golden replay,
+  manual-entry, regularization and correction-limit tests when it runs first in the same batch; CI's sharding hides it today.
 
 ## 6. Decided by me
 
-TO FILL (see also each stage's "Decided by me" list in PEEPS_STAGE_REPORTS).
+Earlier stages' decisions are listed in each stage's report. Stage 4:
+
+- **Masking in autofill.** HR sees extracted PAN, Aadhaar and account numbers as their last four; directors see them whole; there is no
+  separate "reveal" button in autofill: opening the source document (already audited) is the reveal.
+- **Another HR person's leave documents are the directors' only.** HR still handle everyone else's (the owners' "HR-only documents").
+- **Private Peeps rows in the audit log are the directors' only**: Unmute bookings, nudge review requests, leave-document attach/open,
+  and director opens of private items. The audit export, which has no user context, leaves them (and the exit and recruitment rows) out
+  for everyone, directors included.
+- **Office grants follow the audiences.** A member's recruitment and exits keys exist only while the directors open that module to the
+  Office, as the asset keys already did.
+- **Settings confirmation.** I did not add a second-director step to the recruitment, joining, exits, Insights and autofill settings
+  (they take effect on one director's save, with a reason, audited); I corrected the setup guide instead. Adding it is your call.
+- **Mail guard defaults.** Outside production the allowlist is empty (nothing is sent until domains are listed); reserved test domains
+  and demo employees are refused in every mode; the console driver (a local file) is not guarded. A refusal is reported as a failed send.
+- **Seed addresses.** `…@wellsure.example.invalid` and `…@personal.example.invalid`. API-level tests keep random Gmail addresses because
+  the base rule requires Gmail for personal addresses; the guard keeps mail away from them outside production.
+- **Core regression test precondition.** If it finds August 2026 finalised by another file, it records an UNLOCK for its run and puts the
+  FINALISE back afterwards (append-only events, nothing deleted).
+- **Payroll test files.** Kept the earlier `runAuthority.test.ts` catalogue edit and the C-1 `monthlyInputsImport.test.ts` fix through the
+  merge; did not edit `payPolicies.test.ts` or `fullMonthRehearsal.test.ts` (hand-offs in §4).
 
 ## 7. Independent review findings
 
-TO FILL.
+A fresh reviewer that had not seen the Stage 4 work, given PEEPS_PLAN, the owner decisions and the setup guide, read the code. Seven findings,
+all real, all fixed with a test and a mutation check (details in PEEPS_STAGE_REPORTS, Stage 4 phase 9):
+
+1. High — autofill showed HR whole PAN, Aadhaar and account numbers → masked to the last four (`f5c0b3b`).
+2. High — the audit log told HR and the Developer who booked Unmute, asked for a nudge review, attached/opened a leave document → those rows
+   for directors only (`fddefe2`).
+3. Medium — public tag views showed whether a review was asked for → only the person and the directors (`cd32065`).
+4. Medium — any HR could open another HR person's medical documents → directors only (`d9eb0b4`).
+5. Medium — balances and the ledger named menstrual/medical leave to managers and delegates → "Leave" (`cbca2a5`).
+6. Low — the setup guide overstated two-director confirmation → corrected; the owners decide whether to add it (`5978b26`).
+7. Low — Office members held recruitment/exits keys while those audiences were closed → keys follow the audience (`8101835`).
+
+The reviewer found the core confidentiality rules holding: offer pay and expected pay directors only; interview feedback panel and directors
+only; exit interview answers employee, interviewer and directors only; Unmute participants only; nudges from directors only; the Developer
+refused across the Peeps modules; Insights suppressed and Not set; no preset where the guide requires Not set; every screen reachable.
+
+## 8. Final checks
+
+TO FILL (CI on the final code commit).

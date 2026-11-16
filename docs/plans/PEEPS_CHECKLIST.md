@@ -187,7 +187,9 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 - [x] Phase 8 full run, merge of `feat/hr-payroll-separation` `b0b853e` — `c9866f8`; leave-types date fix `21a310b`; leak bisected (Session A's fullMonthRehearsal leaves August finalised; hand-off) — `3580124`
 - [x] Seed safety: reserved-domain seed emails, mail guard (reserved domains, demo employees, allowlist outside production), 4/4 mutations — `1f6f5a2`
 - [x] Full run on `1f6f5a2`: lint, typecheck, frontend 165, budgets, popovers, sensitive-ui 906 pages; backend 2,576/2,584 (8 = Session A hand-offs); CI run 397: only `payPolicies.test.ts` red
-- [ ] Phase 9 independent review: findings fixed and recorded (see PEEPS_STAGE_REPORTS and PEEPS_COMPLETE_REPORT §7)
+- [x] Phase 9 independent review: 7 findings, all real, all fixed with tests and mutation checks — `f5c0b3b`, `fddefe2`, `cd32065`, `d9eb0b4`, `cbca2a5`, `8101835`, `5978b26`
 - [ ] Hand-offs to Session A: `payPolicies.test.ts` leave-balance order; `fullMonthRehearsal.test.ts` August FINALISE leftover
 - [ ] Owner: the setup checklist in PEEPS_COMPLETE_REPORT §2; `MAIL_ALLOWED_DOMAINS` for any staging stack that must send mail
 - [ ] Lateness rule: NOT built (Session A's attendance engine; owner values Not set)
+- [x] Final report: `docs/plans/PEEPS_COMPLETE_REPORT.md`
+- [ ] **STOP: Peeps Stage 4 complete; wait for the owner**
