@@ -104,7 +104,11 @@ describe("monthly inputs import", () => {
     const batch = await prisma.payrollInputBatch.findUniqueOrThrow({ where: { id: r.body.id } });
     expect([batch.status, batch.appliedByUserId]).toEqual(["APPLIED", w.checkerA.userId]); // Stage 8: applied by a different director from the uploader
     const audit = await prisma.auditLog.findFirstOrThrow({ where: { action: "payroll.monthly_inputs.import_applied", entityId: r.body.id } });
-    expect(JSON.stringify(audit.after)).not.toContain("700"); // the audit row has counts, never a figure
+    // The audit row has counts, never a figure. Changed 2026-11-16 (CHANGED_TESTS.md): the file's SHA-256 is left out of this search, because a random hash can
+    // contain "700" by chance (CI run 417 failed on "...c0700cbd..."); the hash is a hex digest, never a pay figure, and every other field is still searched.
+    const { fileHash, ...rest } = audit.after as Record<string, unknown>;
+    expect(fileHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(JSON.stringify(rest)).not.toContain("700");
     expect(JSON.stringify(audit.after)).toContain("redacted");
     // Again: the same bytes. It is recognised, and cannot be applied.
     const again = await upload(file);
