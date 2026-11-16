@@ -47,6 +47,7 @@ describe("attendance, leave and payroll are unchanged with Peeps unset, on and o
   let runId = "";
   const results = {} as Record<State, { attendance: string; leave: string; payroll: string }>;
   let monday: Date;
+  let augustWasFinalised: { periodStart: Date; periodEnd: Date; lockedDays: number; actorUserId: string } | null = null;
 
   const post = (who: string, path: string, body: object = {}) => request(app).post(path).set(...authHeader(tok[who]!)).send(body);
   const get = (who: string, path: string) => request(app).get(path).set(...authHeader(tok[who]!));
@@ -137,6 +138,14 @@ describe("attendance, leave and payroll are unchanged with Peeps unset, on and o
     while (d.getUTCDay() !== 1) d = addCalendarDays(d, 1);
     monday = d;
 
+    // Precondition: August 2026 must not be a finalised attendance cycle, or the engine stores nothing for it. Another test file in the same run
+    // (Session A's fullMonthRehearsal) finalises August and leaves the append-only FINALISE event behind; if it is there, an UNLOCK event is
+    // recorded for the duration of this file and the FINALISE is put back in afterAll, so the run continues exactly as it was found.
+    const latestAugust = await prisma.attendancePeriodLock.findFirst({ where: { periodStart: new Date("2026-08-01T00:00:00Z"), periodEnd: new Date("2026-08-31T00:00:00Z") }, orderBy: { seq: "desc" } });
+    if (latestAugust?.action === "FINALISE") {
+      augustWasFinalised = latestAugust;
+      await prisma.attendancePeriodLock.create({ data: { periodStart: latestAugust.periodStart, periodEnd: latestAugust.periodEnd, action: "UNLOCK", reason: "Peeps core regression test: precondition (restored afterwards)", lockedDays: 0, actorUserId: director.userId } });
+    }
     const roster = buildRoster({ seed: 20260801, month: "2026-08", employees: 40, existingHolidays: await existingHolidays("2026-08") });
     plan = planMonth(roster);
     world = await createWorld(roster, `pr${Date.now().toString(36).slice(-4)}`, manualEntriesOf(plan));
@@ -152,6 +161,7 @@ describe("attendance, leave and payroll are unchanged with Peeps unset, on and o
   }, 600_000);
 
   afterAll(async () => {
+    if (augustWasFinalised) await prisma.attendancePeriodLock.create({ data: { periodStart: augustWasFinalised.periodStart, periodEnd: augustWasFinalised.periodEnd, action: "FINALISE", reason: "Peeps core regression test: restoring the state it found", lockedDays: augustWasFinalised.lockedDays, actorUserId: augustWasFinalised.actorUserId } });
     await clearPeepsSettings();
     if (Object.keys(typeId).length) await resetNewTypes();
     if (pay) await teardownRunWorld(pay);
