@@ -173,5 +173,21 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 - [x] Phase-end check passed; browser walk 84 visits + states, no problems
 - [x] Full backend suite alone: 279 files / 2,468 tests passed; CI run 364 on `df88a79`: all 12 jobs green to the end
 - [ ] Owner: review the Stage 3 "Decided by me" list and the defaults in PEEPS_SETUP_GUIDE
-- [ ] **STOP: wait for the owner (stage 4 not started)**
+- [x] STOP passed (Stage 4 received)
 
+
+## Stage 4 of 4 (2026-11-14 to 2026-11-16): testing programme and merge check
+- [x] Phase 1 permission matrix: every Peeps route x 10 actors, reviewed expected statuses; fix: helpdesk move refuses the Developer — `a959db5`
+- [x] Phase 2 confidentiality scan on the demo company (`npm run test:peeps-demo`, local only): 13 classes, every GET route, search, logs, notifications, mail, sockets — `154855a`
+- [x] Phase 3 concurrency: offer issue, joiner links, same-document uploads (others already covered) — `3ddafa4`
+- [x] Phase 4 core regression: attendance (golden replay), leave and payroll identical with Peeps unset/on/off — `cba74f3`; precondition guard `3580124`
+- [x] Phase 5 migrations: fresh and demo-data databases, no drift, no applied migration edited (checksums 129/129, then 141 after the merge)
+- [x] Phase 6 mutation table: 16 never-checked rules, 3 survivors got tests, 16/16 caught — `965ba1b`
+- [x] Phase 7 browser walk (5 roles, 1280/390 light/dark, 768, keyboard, loading/error): 5 findings fixed — `d40ba2a`
+- [x] Phase 8 full run, merge of `feat/hr-payroll-separation` `b0b853e` — `c9866f8`; leave-types date fix `21a310b`; leak bisected (Session A's fullMonthRehearsal leaves August finalised; hand-off) — `3580124`
+- [x] Seed safety: reserved-domain seed emails, mail guard (reserved domains, demo employees, allowlist outside production), 4/4 mutations — `1f6f5a2`
+- [x] Full run on `1f6f5a2`: lint, typecheck, frontend 165, budgets, popovers, sensitive-ui 906 pages; backend 2,576/2,584 (8 = Session A hand-offs); CI run 397: only `payPolicies.test.ts` red
+- [ ] Phase 9 independent review: findings fixed and recorded (see PEEPS_STAGE_REPORTS and PEEPS_COMPLETE_REPORT §7)
+- [ ] Hand-offs to Session A: `payPolicies.test.ts` leave-balance order; `fullMonthRehearsal.test.ts` August FINALISE leftover
+- [ ] Owner: the setup checklist in PEEPS_COMPLETE_REPORT §2; `MAIL_ALLOWED_DOMAINS` for any staging stack that must send mail
+- [ ] Lateness rule: NOT built (Session A's attendance engine; owner values Not set)
