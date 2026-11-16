@@ -54,7 +54,7 @@ const RULES_PATH = { label: "Payroll, Rules and Setup", path: "/admin/payroll/ru
 
 /** Standard defaults pack: what a covered rule with no confirmed director value stands on (in force, so CONFIRMED), or null to show it as before. */
 function standardFor(def: RuleDef, s: ItemSummary, state: string, today: string): Pick<SetupItem, "status" | "enteredBy" | "confirmedBy" | "detail"> | "STATE_NOT_LOADED" | null {
-  if (!isPackCovered(def.key) || s.status === "CONFIRMED" || s.lastConfirmed) return null;
+  if (!isPackCovered(def.key) || s.current) return null;
   const by = (detail: string) => ({ status: "CONFIRMED" as const, enteredBy: null, confirmedBy: null, detail });
   const series = PACK_RULES[def.key];
   if (series) {
@@ -71,7 +71,7 @@ function standardFor(def: RuleDef, s: ItemSummary, state: string, today: string)
 function ruleItems(rules: ItemSummary[], plain: Map<string, unknown>, state = "RAJASTHAN", today = PACK_CHECKED_ON): SetupItem[] {
   const ptLwfNotLevied = (["PT_SLABS", "LWF_TABLE"] as const).every((k) => {
     const i = RULE_CATALOG.findIndex((d) => d.key === k);
-    return !(rules[i]?.status === "CONFIRMED" || rules[i]?.lastConfirmed) && Boolean((PACK_STATE_RULES as Record<string, unknown>)[state]);
+    return !rules[i]?.current && Boolean((PACK_STATE_RULES as Record<string, unknown>)[state]);
   });
   return RULE_CATALOG.map((def: RuleDef, i) => {
     const s = rules[i]!;

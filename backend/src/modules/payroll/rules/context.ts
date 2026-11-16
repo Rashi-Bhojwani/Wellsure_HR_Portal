@@ -1,5 +1,5 @@
 import { RULE_BY_KEY, TEST_WATERMARK_TEXT } from "@shared/constants/payrollRules";
-import { PACK_COVERED_RULE_KEYS, PACK_RULES, PACK_VERSION, entryOn, isPackCovered } from "@shared/constants/statutoryDefaults";
+import { PACK_RULES, PACK_VERSION, entryOn } from "@shared/constants/statutoryDefaults";
 import { businessToday } from "../../../lib/businessDate";
 import { prisma } from "../../../lib/prisma";
 import { HttpError } from "../../../middleware/errorHandler";
@@ -35,9 +35,9 @@ export interface RulePin {
 
 export const UNSET_VALUE_HASH = "not-set";
 
-// The Standard statutory defaults pack (docs/plans/STATUTORY_DEFAULTS_PLAN.md). A rule the pack covers reads the latest version a different director CONFIRMED; with
-// none, the pack's entry in force on the context's day. A pack value is pinned as kind PACK (key, pack version, the entry's hash) and counts as in force, never as a
-// Placeholder. A director's edit that is not yet confirmed is not used for a covered rule, so it cannot turn a run into a test; once confirmed it is used.
+// The Standard statutory defaults pack (docs/plans/STATUTORY_DEFAULTS_PLAN.md). A rule nobody has entered reads the pack's entry in force on the context's day; a
+// director's value (confirmed or not) is always used instead, exactly as before. A pack value is pinned as kind PACK (key, pack version, the entry's hash) and counts as
+// in force, never as a Placeholder, so standard values never make a run a test; a director's own unconfirmed value still does.
 export const packPinHash = (key: string, entry: { from: string; value: unknown }): string => `pack:${PACK_VERSION}:${key}:${entry.from}:${JSON.stringify(entry.value)}`;
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -62,21 +62,17 @@ export class RuleContext {
 
   /** `asOf`: the day whose pack values apply (a run passes its cycle's last day; anything else, today). */
   static async load(opts: { asOf?: Date } = {}): Promise<RuleContext> {
-    const [rows, confirmations] = await Promise.all([
-      prisma.payrollItemVersion.findMany({ where: { kind: "RULE" }, orderBy: [{ key: "asc" }, { version: "asc" }] }),
-      prisma.payrollItemConfirmation.findMany({ where: { kind: "RULE", key: { in: [...PACK_COVERED_RULE_KEYS] } }, select: { key: true, version: true, valueHash: true } }),
-    ]);
-    const confirmed = new Set(confirmations.map((c) => `${c.key}@${c.version}@${c.valueHash}`));
+    const rows = await prisma.payrollItemVersion.findMany({ where: { kind: "RULE" }, orderBy: [{ key: "asc" }, { version: "asc" }] });
     const latest = new Map<string, Current>();
     // A version authored by nobody is a figure an older build shipped "from memory". It is never used: that rule is Not set until a director enters it.
     for (const r of rows) {
       if (r.authorUserId === null) continue;
-      if (isPackCovered(r.key) && !confirmed.has(`${r.key}@${r.version}@${r.valueHash}`)) continue; // covered: only a confirmed director value replaces the pack
       latest.set(r.key, { version: r.version, valueHash: r.valueHash, value: r.value });
     }
+    // Standard defaults pack: only where no director has entered anything (never over a director's value, confirmed or not), the entry in force on the context's day.
     const day = isoDay(opts.asOf ?? businessToday());
     for (const [key, series] of Object.entries(PACK_RULES)) {
-      if (latest.has(key)) continue; // never overwrite a director's value
+      if (latest.has(key)) continue;
       const entry = entryOn(series, day);
       if (entry) latest.set(key, { version: PACK_VERSION, valueHash: packPinHash(key, entry), value: entry.value, packFrom: entry.from });
     }
@@ -187,32 +183,26 @@ export async function pinStatuses(pins: readonly RulePin[]): Promise<PinStatus[]
   if (pins.length === 0) return [];
   const kinds = [...new Set(pins.map(pinKind).filter((k) => k !== "PACK"))];
   const keys = [...new Set(pins.map((p) => p.key))];
-  // A pack pin is replaced by a confirmed director value: a rule (its own key) or a tax year ("TAX_YEAR:<year>").
+  // A pack pin is replaced (goes stale) once a director enters a value: a rule (its own key) or a tax year ("TAX_YEAR:<year>").
   const packRuleKeys = pins.filter((p) => pinKind(p) === "PACK" && !p.key.startsWith("TAX_YEAR:")).map((p) => p.key);
   const packYears = pins.filter((p) => pinKind(p) === "PACK" && p.key.startsWith("TAX_YEAR:")).map((p) => p.key.slice("TAX_YEAR:".length));
-  const [versions, confirmations, packConfirmations] = await Promise.all([
+  const [versions, confirmations, entered] = await Promise.all([
     prisma.payrollItemVersion.groupBy({ by: ["kind", "key"], where: { kind: { in: kinds as never }, key: { in: keys } }, _max: { version: true } }),
     prisma.payrollItemConfirmation.findMany({ where: { kind: { in: kinds as never }, key: { in: keys } }, select: { kind: true, key: true, version: true, valueHash: true } }),
     packRuleKeys.length || packYears.length
-      ? prisma.payrollItemConfirmation.findMany({ where: { OR: [{ kind: "RULE", key: { in: [...packRuleKeys, ...keys.filter(isPackCovered)] } }, { kind: "TAX_YEAR", key: { in: packYears } }] }, select: { kind: true, key: true, version: true } })
-      : prisma.payrollItemConfirmation.findMany({ where: { kind: "RULE", key: { in: keys.filter(isPackCovered) } }, select: { kind: true, key: true, version: true } }),
+      ? prisma.payrollItemVersion.groupBy({ by: ["kind", "key"], where: { authorUserId: { not: null }, OR: [{ kind: "RULE", key: { in: packRuleKeys } }, { kind: "TAX_YEAR", key: { in: packYears } }] }, _max: { version: true } })
+      : Promise.resolve([] as Array<{ kind: string; key: string; _max: { version: number | null } }>),
   ]);
   const latest = new Map(versions.map((v) => [`${v.kind}|${v.key}`, v._max.version ?? 0]));
   const confirmed = new Set(confirmations.map((c) => `${c.kind}|${c.key}@${c.version}@${c.valueHash}`));
-  // For a rule the pack covers, what matters is the newest CONFIRMED director version: an unconfirmed edit is not used, so it makes nothing stale.
-  const newestConfirmed = new Map<string, number>();
-  for (const c of packConfirmations) {
-    const k = c.kind === "TAX_YEAR" ? `TAX_YEAR:${c.key}` : c.key;
-    newestConfirmed.set(k, Math.max(newestConfirmed.get(k) ?? 0, c.version));
-  }
+  const directorEntered = new Set(entered.map((e) => (e.kind === "TAX_YEAR" ? `TAX_YEAR:${e.key}` : e.key)));
   return pins.map((pin) => {
     const kind = pinKind(pin);
     if (kind === "PACK") {
-      // In force by the owners' decision. Stale once a director's value is confirmed for it, or the pack itself was updated since the run was calculated.
-      const directorConfirmed = newestConfirmed.get(pin.key) ?? 0;
-      return { pin, label: pinLabel(pin), status: "CONFIRMED", stale: pin.version !== PACK_VERSION || directorConfirmed > 0, currentVersion: directorConfirmed || pin.version };
+      // In force by the owners' decision. Stale once a director enters a value for it, or the pack itself was updated since the run was calculated.
+      return { pin, label: pinLabel(pin), status: "CONFIRMED", stale: pin.version !== PACK_VERSION || directorEntered.has(pin.key), currentVersion: pin.version };
     }
-    const newest = kind === "RULE" && isPackCovered(pin.key) ? (newestConfirmed.get(pin.key) ?? 0) : (latest.get(`${kind}|${pin.key}`) ?? 0);
+    const newest = latest.get(`${kind}|${pin.key}`) ?? 0;
     return {
       pin,
       label: pinLabel(pin),

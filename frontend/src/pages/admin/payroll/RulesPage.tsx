@@ -124,7 +124,7 @@ export function RulesPage() {
             <>
               A rule is <StatusChip tone="neutral">Not set</StatusChip> until somebody enters it, a <StatusChip tone="warning">Placeholder</StatusChip> until a director confirms it, and <StatusChip tone="success">Confirmed</StatusChip> after. A payroll run that used any Placeholder is a <Text strong>test</Text>: it can be calculated and looked at, with a TEST mark on screen, in files and on payslip previews, but it cannot be approved, finalised, published or turned into a bank file.
               Editing a Confirmed rule makes the new value a Placeholder again; the last Confirmed value stays on record. Statutory rates and ceilings carry a{" "}
-              <StatusChip tone="info">Standard default, change in settings</StatusChip> with its source: it is in force until a director&apos;s own value is confirmed, and a director&apos;s edit waiting for confirmation does not replace it.
+              <StatusChip tone="info">Standard default, change in settings</StatusChip> with its source: it is in force (never a Placeholder) until a director enters a value of their own, which then counts as usual.
             </>
           }
         />
@@ -209,7 +209,6 @@ function RuleStatusCell({ r, hideChip }: { r: RuleView; hideChip?: boolean }) {
             {r.standard.source.url ? <a href={r.standard.source.url} target="_blank" rel="noreferrer">{r.standard.source.name}</a> : r.standard.source.name} (checked {formatDate(r.standard.checkedOn)}).
           </Caption>
           {r.standard.reviewNeeded && <StatusChip tone="warning">Review needed</StatusChip>}
-          {r.standard.pending && <Caption tone="warning">A director&apos;s new value is waiting for the other director&apos;s confirmation; the standard value is used until then.</Caption>}
         </>
       )}
       {r.byState && !r.current && <Caption>Follows the company&apos;s state: see Standard statutory values on Ready for First Run.</Caption>}

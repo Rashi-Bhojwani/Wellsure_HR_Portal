@@ -91,10 +91,10 @@ function viewOf(def: RuleDef, data: Awaited<ReturnType<typeof loadItems>>): Rule
 }
 
 function standardOf(key: string, s: ReturnType<typeof summarise>): RuleView["standard"] {
-  if (!isPackCovered(key) || s.status === "CONFIRMED" || s.lastConfirmed) return null;
+  if (!isPackCovered(key) || s.current) return null;
   const e = entryOn(PACK_RULES[key], businessToday().toISOString().slice(0, 10));
   if (!e) return null;
-  return { label: STANDARD_DEFAULT_LABEL, value: e.value, from: e.from === CONTINUING ? null : e.from, source: e.source, checkedOn: e.checkedOn, reviewNeeded: e.verification === "UNVERIFIED", note: e.note, pending: s.current !== null };
+  return { label: STANDARD_DEFAULT_LABEL, value: e.value, from: e.from === CONTINUING ? null : e.from, source: e.source, checkedOn: e.checkedOn, reviewNeeded: e.verification === "UNVERIFIED", note: e.note, pending: false };
 }
 
 export async function listRules(): Promise<RuleView[]> {

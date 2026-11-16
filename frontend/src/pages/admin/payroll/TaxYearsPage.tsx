@@ -68,7 +68,7 @@ export function TaxYearsPage() {
     <>
       <PageHeader title="Tax years" subtitle="The values income tax is worked out from: the standard values for the year, or yours once a different director confirms them." actions={<Button ref={editButton} type="primary" onClick={() => setEditing(true)} disabled={!y}>Enter or change the values</Button>} />
       <Stack>
-        <ApprovalBanner tone="info" title="Standard values, or yours" description="A year with standard values (Standard default, change in settings) is used until a director enters the year and a different director confirms it. Every figure needs the note saying where it came from and the date it applies from. Form 16 and any tax statement stay DRAFT until the year is confirmed." />
+        <ApprovalBanner tone="info" title="Standard values, or yours" description="A year with standard values (Standard default, change in settings) is used until a director enters the year (then, as before, a different director confirms it). Every figure needs the note saying where it came from and the date it applies from. Form 16 and any tax statement stay DRAFT until the year is confirmed." />
         <Panel title="Financial year" extra={y && <StatusChip tone={tone}>{y.status === "CONFIRMED" ? "Confirmed" : standardInUse ? "Standard default, change in settings" : y.status === "PLACEHOLDER" ? "Entered, not confirmed" : "Not set"}</StatusChip>}>
           <Form layout="inline" component="div" style={{ gap: space[3], flexWrap: "wrap" }}>
             <Form.Item label="Year" htmlFor="tax-year-label"><Input id="tax-year-label" value={year} maxLength={7} onChange={(e) => setYear(e.target.value)} style={{ width: 120 }} placeholder="2026-27" /></Form.Item>
@@ -77,7 +77,7 @@ export function TaxYearsPage() {
           {q.isLoading && <SkeletonCard lines={3} />}
           {q.error && <ApprovalBanner tone="warning" title="That is not a financial year" description={apiErrorMessage(q.error, "Write it like 2026-27.")} />}
           {y && y.missing.length > 0 && <ApprovalBanner tone="warning" title={`Still to be entered (${y.missing.length})`} description={y.missing.join("; ")} />}
-          {standardInUse && <ApprovalBanner tone="info" title="Payroll uses the standard values for this year" description={`Each value below shows its source. Review needed: ${y!.standard!.unverifiedParts.join(" ")}${y?.status === "PLACEHOLDER" ? " A director's entry is waiting for the other director's confirmation; until then the standard values are used." : ""}`} />}
+          {standardInUse && <ApprovalBanner tone="info" title="Payroll uses the standard values for this year" description={`Each value below shows its source. Review needed: ${y!.standard!.unverifiedParts.join(" ")}`} />}
           {y?.current && <Caption>Version {y.current.version} entered by {y.current.authorName}, {formatDate(y.current.createdAt)}.{y.current.confirmation ? ` Confirmed by ${y.current.confirmation.confirmedByName}, ${formatDate(y.current.confirmation.confirmedAt)}.` : " Not confirmed yet."}</Caption>}
         </Panel>
         {y && (

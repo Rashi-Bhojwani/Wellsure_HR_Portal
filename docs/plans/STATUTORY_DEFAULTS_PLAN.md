@@ -21,13 +21,14 @@ State: **Rajasthan** (one company, one city, one state). The values, their sourc
 
 ## 2. Rules for using a pack value
 
-1. **Never overwrite.** A rule covered by the pack uses the latest director version that a different director **confirmed**; with none, the pack's entry in force on
-   the month's last day. A director's edit awaiting confirmation is shown but not used (so it cannot turn a run into a test); once confirmed it is used from the
-   next calculation (runs on the pack value become stale and are recalculated).
+1. **Never overwrite.** A rule, tax year or setting a director has entered uses the director's value exactly as before (a Placeholder until a different director
+   confirms it). Only where nobody has entered anything is the pack's entry used, the one in force on the month's last day. Once a director enters a value, runs
+   calculated on the pack value become stale and are recalculated. (Decided 2026-11-16 while building: an earlier draft ignored a director's unconfirmed edit for a
+   covered rule; that replaced an entered value with the standard one, which the owners' "never overwrite a value a director has entered" rules out.)
 2. **Effective dating.** The pack entry in force on the cycle's last day applies to the whole month (the existing payroll rule). PF ceiling: 15,000 for months
    ending before 17 Sep 2026, 25,000 from the month that contains it. A run is calculated with the cycle's dates; other readers use today.
-3. **In force, not a Placeholder.** A pack value is pinned as kind `PACK` (key, pack version, entry date, value hash) and counts as confirmed. The TEST
-   watermark/refusal stays for company-specific rules with no default.
+3. **In force, not a Placeholder.** A pack value is pinned as kind `PACK` (key, pack version, entry date, value hash) and counts as confirmed, so standard values never
+   make a run a TEST run. The TEST watermark/refusal stays for company-specific rules with no default, and for a director's own value until it is confirmed.
 4. **Review needed.** UNVERIFIED values are still used; each is flagged on the Rules screen and listed on Ready for First Run.
 5. **Changing a value** is the existing edit + second-director confirmation, audited.
 

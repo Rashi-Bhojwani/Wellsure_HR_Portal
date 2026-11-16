@@ -50,7 +50,7 @@ function toView(year: string, data: Awaited<ReturnType<typeof loadItems>>): TaxY
   const s = summarise(data, year);
   const value = (s.current?.value as TaxYearValue | undefined) ?? null;
   const std = packTaxYear(year);
-  const inUse = Boolean(std) && s.status !== "CONFIRMED" && !s.lastConfirmed;
+  const inUse = Boolean(std) && !s.current;
   return { year, start: fy.start, end: fy.end, value, status: s.status, sourceLabel: s.sourceLabel, current: s.current, lastConfirmed: s.lastConfirmed, missing: inUse ? [] : missingForTds(value), standard: std ? { inUse, ...std } : null };
 }
 
@@ -119,20 +119,18 @@ export async function confirmTaxYear(yearRaw: string, input: { version: number; 
 }
 
 /**
- * The year as the engine reads it. Standard defaults pack (docs/plans/STATUTORY_DEFAULTS_PLAN.md): the latest version a different director CONFIRMED; with none, the
- * pack's standard year if it has one (`pack: true`, in force); otherwise the director's unconfirmed entry (a Placeholder), or null when nobody entered it.
+ * The year as the engine reads it: the current version (confirmed, or a Placeholder) as before. Standard defaults pack (docs/plans/STATUTORY_DEFAULTS_PLAN.md): a year
+ * nobody has entered uses the pack's standard year if it has one (`pack: true`, in force); otherwise null.
  */
 export async function taxYearForEngine(year: string): Promise<{ value: TaxYearValue; version: number; valueHash: string; confirmed: boolean; pack?: true } | null> {
   const s = summarise(await loadItems(KIND, [year]), year);
-  if (s.status === "CONFIRMED" && s.current) return { value: s.current.value as TaxYearValue, version: s.current.version, valueHash: s.current.valueHash, confirmed: true };
-  if (s.lastConfirmed) return { value: s.lastConfirmed.value as TaxYearValue, version: s.lastConfirmed.version, valueHash: s.lastConfirmed.valueHash, confirmed: true };
+  if (s.current) return { value: s.current.value as TaxYearValue, version: s.current.version, valueHash: s.current.valueHash, confirmed: s.status === "CONFIRMED" };
   const packYear = PACK_TAX_YEARS[year];
   if (packYear) {
     const value = parseTaxYearValue(packYear.value);
     return { value, version: PACK_VERSION, valueHash: `pack:${PACK_VERSION}:TAX_YEAR:${year}:${payrollHash(value)}`, confirmed: true, pack: true };
   }
-  if (!s.current) return null;
-  return { value: s.current.value as TaxYearValue, version: s.current.version, valueHash: s.current.valueHash, confirmed: false };
+  return null;
 }
 
 /** The standard tax year a director has not replaced, for the screens (null when the pack has no year of that name). */

@@ -85,7 +85,7 @@ export async function packStatus(actor: Actor) {
     ctcIncludesEmployerStatutory: ctcSetting.value as boolean,
     rules: Object.entries(PACK_RULES).map(([key, series]) => {
       const s = summarise(ruleData, key);
-      const inUse = s.status === "CONFIRMED" ? "DIRECTOR" : s.lastConfirmed ? "DIRECTOR" : "STANDARD";
+      const inUse = s.current ? "DIRECTOR" : "STANDARD";
       return { key, label: RULE_BY_KEY[key]?.label ?? key, inUse, today: entryView(entryOn(series, today) ?? series[0]!), series: series.map(entryView) };
     }),
     state: {
@@ -97,7 +97,7 @@ export async function packStatus(actor: Actor) {
       minimumWages: statePack ? entryView(statePack.minimumWages) : null,
       notLoadedText: statePack ? null : "Values for this state have not been loaded.",
     },
-    taxYears: Object.entries(PACK_TAX_YEARS).map(([year, t]) => ({ year, inUse: summarise(taxData, year).lastConfirmed ? "DIRECTOR" : "STANDARD", verification: t.verification, unverifiedParts: t.unverifiedParts })),
+    taxYears: Object.entries(PACK_TAX_YEARS).map(([year, t]) => ({ year, inUse: summarise(taxData, year).current ? "DIRECTOR" : "STANDARD", verification: t.verification, unverifiedParts: t.unverifiedParts })),
   };
 }
 
