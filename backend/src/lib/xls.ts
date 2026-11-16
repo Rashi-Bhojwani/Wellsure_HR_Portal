@@ -185,6 +185,7 @@ function unicodeString(data: Buffer, off: number, lenBytes: 1 | 2): { text: stri
   const cch = lenBytes === 1 ? data.readUInt8(off) : data.readUInt16LE(off);
   const flags = data.readUInt8(off + lenBytes);
   let p = off + lenBytes + 1;
+  if (p + (flags & 0x08 ? 2 : 0) + (flags & 0x04 ? 4 : 0) > data.length) throw new XlsError("The file is damaged (a short string).");
   const rich = flags & 0x08 ? data.readUInt16LE(p) : 0;
   if (flags & 0x08) p += 2;
   const ext = flags & 0x04 ? data.readUInt32LE(p) : 0;
@@ -209,6 +210,16 @@ function rkValue(rk: number): number {
 
 /** Reads every worksheet's cell values. Throws XlsError with a plain message for a file that is not a readable .xls. */
 export function readXls(buf: Buffer): XlsWorkbook {
+  try {
+    return readWorkbook(buf);
+  } catch (err) {
+    // Stage 9 hardening: a read past the end of a damaged record that a bounds check above did not foresee is still a damaged file, never a server error.
+    if (err instanceof RangeError) throw new XlsError("The file is damaged (a record is shorter than it says).");
+    throw err;
+  }
+}
+
+function readWorkbook(buf: Buffer): XlsWorkbook {
   const { data } = cfbStream(buf, ["Workbook"]);
   const recs = records(data);
   const first = recs[0];
@@ -253,7 +264,11 @@ export function readXls(buf: Buffer): XlsWorkbook {
     const grid: XlsCell[][] = [];
     const put = (row: number, col: number, v: XlsCell) => {
       if (row >= MAX_ROWS || col >= MAX_COLS) throw new XlsError("The sheet is larger than an .xls file can be.");
-      if (++cells > MAX_CELLS) throw new XlsError("The file has too many cells to be read.");
+      // Every slot the grid grows by counts, the empty ones before a cell included: a sparse sheet (one cell at the far right of every row) is under 1 MB on
+      // disk but would otherwise grow to 16.7 million slots in memory (Stage 9 hardening).
+      const line0 = grid[row];
+      cells += Math.max(0, row + 1 - grid.length) + Math.max(0, col + 1 - (line0?.length ?? 0));
+      if (cells > MAX_CELLS) throw new XlsError("The file has too many cells to be read.");
       while (grid.length <= row) grid.push([]);
       const line = grid[row]!;
       while (line.length <= col) line.push(null);
