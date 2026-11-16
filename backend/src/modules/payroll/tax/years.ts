@@ -3,6 +3,7 @@ import { requireDirector } from "../../../lib/directorAuthority";
 import { HttpError } from "../../../middleware/errorHandler";
 import { payrollHash } from "../hash";
 import { appendVersion, confirmVersion, editFingerprint, keysIn, loadItems, previewConfirmation, summarise, type ItemStatus, type VersionView } from "../items";
+import { PACK_TAX_YEARS, PACK_VERSION } from "@shared/constants/statutoryDefaults";
 import { InvalidTaxValueError, missingForTds, parseTaxYearValue, type TaxYearValue } from "./schema";
 
 // A tax year as a governed item (docs/plans/STAGE_7_PLAN.md). Directors only: HR, managers, employees and the Developer role never see it. An entry is a Placeholder until a different
@@ -112,9 +113,25 @@ export async function confirmTaxYear(yearRaw: string, input: { version: number; 
   return (await getTaxYear(year, actor)).year;
 }
 
-/** The year as the engine reads it: the current version if it is confirmed, with its version and hash for pinning. Null when nobody entered it, or when the current version is only a Placeholder. */
-export async function taxYearForEngine(year: string): Promise<{ value: TaxYearValue; version: number; valueHash: string; confirmed: boolean } | null> {
+/**
+ * The year as the engine reads it. Standard defaults pack (docs/plans/STATUTORY_DEFAULTS_PLAN.md): the latest version a different director CONFIRMED; with none, the
+ * pack's standard year if it has one (`pack: true`, in force); otherwise the director's unconfirmed entry (a Placeholder), or null when nobody entered it.
+ */
+export async function taxYearForEngine(year: string): Promise<{ value: TaxYearValue; version: number; valueHash: string; confirmed: boolean; pack?: true } | null> {
   const s = summarise(await loadItems(KIND, [year]), year);
+  if (s.status === "CONFIRMED" && s.current) return { value: s.current.value as TaxYearValue, version: s.current.version, valueHash: s.current.valueHash, confirmed: true };
+  if (s.lastConfirmed) return { value: s.lastConfirmed.value as TaxYearValue, version: s.lastConfirmed.version, valueHash: s.lastConfirmed.valueHash, confirmed: true };
+  const packYear = PACK_TAX_YEARS[year];
+  if (packYear) {
+    const value = parseTaxYearValue(packYear.value);
+    return { value, version: PACK_VERSION, valueHash: `pack:${PACK_VERSION}:TAX_YEAR:${year}:${payrollHash(value)}`, confirmed: true, pack: true };
+  }
   if (!s.current) return null;
-  return { value: s.current.value as TaxYearValue, version: s.current.version, valueHash: s.current.valueHash, confirmed: s.status === "CONFIRMED" };
+  return { value: s.current.value as TaxYearValue, version: s.current.version, valueHash: s.current.valueHash, confirmed: false };
+}
+
+/** The standard tax year a director has not replaced, for the screens (null when the pack has no year of that name). */
+export function packTaxYear(year: string): { value: TaxYearValue; verification: string; unverifiedParts: string[] } | null {
+  const p = PACK_TAX_YEARS[year];
+  return p ? { value: parseTaxYearValue(p.value), verification: p.verification, unverifiedParts: p.unverifiedParts } : null;
 }

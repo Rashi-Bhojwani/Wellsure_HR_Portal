@@ -1,4 +1,6 @@
 import { RULE_BY_KEY, TEST_WATERMARK_TEXT } from "@shared/constants/payrollRules";
+import { PACK_COVERED_RULE_KEYS, PACK_RULES, PACK_VERSION, entryOn, isPackCovered } from "@shared/constants/statutoryDefaults";
+import { businessToday } from "../../../lib/businessDate";
 import { prisma } from "../../../lib/prisma";
 import { HttpError } from "../../../middleware/errorHandler";
 import { dec, type Money } from "../money";
@@ -14,7 +16,7 @@ import { dec, type Money } from "../money";
 //   - Confirmed or Placeholder is whether a confirmation exists for that exact version and value;
 //   - stale is whether a newer version has since been written (the run must be recalculated before it can go any further).
 
-export type PinKind = "RULE" | "RULE_OVERRIDE" | "COMPONENT" | "STRUCTURE" | "TAX_YEAR";
+export type PinKind = "RULE" | "RULE_OVERRIDE" | "COMPONENT" | "STRUCTURE" | "TAX_YEAR" | "PACK";
 
 // What a run read, and the exact version it read. Absent `kind` means a rule and absent `live` means true, so a pin written before these existed hashes the same.
 //   live: false   a figure that was FROZEN earlier and is not re-read: the structure, components and rounding a salary row was built under. A newer
@@ -33,6 +35,12 @@ export interface RulePin {
 
 export const UNSET_VALUE_HASH = "not-set";
 
+// The Standard statutory defaults pack (docs/plans/STATUTORY_DEFAULTS_PLAN.md). A rule the pack covers reads the latest version a different director CONFIRMED; with
+// none, the pack's entry in force on the context's day. A pack value is pinned as kind PACK (key, pack version, the entry's hash) and counts as in force, never as a
+// Placeholder. A director's edit that is not yet confirmed is not used for a covered rule, so it cannot turn a run into a test; once confirmed it is used.
+export const packPinHash = (key: string, entry: { from: string; value: unknown }): string => `pack:${PACK_VERSION}:${key}:${entry.from}:${JSON.stringify(entry.value)}`;
+const isoDay = (d: Date) => d.toISOString().slice(0, 10);
+
 export class RuleNotSetError extends HttpError {
   constructor(public readonly key: string) {
     super(409, `The rule "${RULE_BY_KEY[key]?.label ?? key}" has no value yet. An administrator needs to enter one (Payroll, Rules and setup) before this can be calculated.`, "RULE_NOT_SET", { key });
@@ -44,21 +52,40 @@ interface Current {
   version: number;
   valueHash: string;
   value: unknown;
+  /** Set when the value is the pack's (no confirmed director value): the entry's first day. */
+  packFrom?: string;
 }
 
 export class RuleContext {
   private readonly pinned = new Map<string, RulePin>();
   private constructor(private readonly current: ReadonlyMap<string, Current>) {}
 
-  static async load(): Promise<RuleContext> {
-    const rows = await prisma.payrollItemVersion.findMany({ where: { kind: "RULE" }, orderBy: [{ key: "asc" }, { version: "asc" }] });
+  /** `asOf`: the day whose pack values apply (a run passes its cycle's last day; anything else, today). */
+  static async load(opts: { asOf?: Date } = {}): Promise<RuleContext> {
+    const [rows, confirmations] = await Promise.all([
+      prisma.payrollItemVersion.findMany({ where: { kind: "RULE" }, orderBy: [{ key: "asc" }, { version: "asc" }] }),
+      prisma.payrollItemConfirmation.findMany({ where: { kind: "RULE", key: { in: [...PACK_COVERED_RULE_KEYS] } }, select: { key: true, version: true, valueHash: true } }),
+    ]);
+    const confirmed = new Set(confirmations.map((c) => `${c.key}@${c.version}@${c.valueHash}`));
     const latest = new Map<string, Current>();
     // A version authored by nobody is a figure an older build shipped "from memory". It is never used: that rule is Not set until a director enters it.
     for (const r of rows) {
       if (r.authorUserId === null) continue;
+      if (isPackCovered(r.key) && !confirmed.has(`${r.key}@${r.version}@${r.valueHash}`)) continue; // covered: only a confirmed director value replaces the pack
       latest.set(r.key, { version: r.version, valueHash: r.valueHash, value: r.value });
     }
+    const day = isoDay(opts.asOf ?? businessToday());
+    for (const [key, series] of Object.entries(PACK_RULES)) {
+      if (latest.has(key)) continue; // never overwrite a director's value
+      const entry = entryOn(series, day);
+      if (entry) latest.set(key, { version: PACK_VERSION, valueHash: packPinHash(key, entry), value: entry.value, packFrom: entry.from });
+    }
     return new RuleContext(latest);
+  }
+
+  /** The pack entry a covered rule is using (null when a director's confirmed value is in force, or the rule is not covered). */
+  packFrom(key: string): string | null {
+    return this.current.get(key)?.packFrom ?? null;
   }
 
   /**
@@ -85,6 +112,11 @@ export class RuleContext {
     this.pinned.set(`${pin.kind}|${pin.key}|${pin.version}`, { ...pin, live: false });
   }
 
+  /** Records a pack value read outside the rule catalog (the tax year, a state's no-levy answer), so the run shows it and goes stale if it changes. */
+  addPackPin(key: string, valueHash: string): void {
+    this.pinned.set(`PACK|${key}`, { key, version: PACK_VERSION, valueHash, kind: "PACK" });
+  }
+
   /** Records a salary component read live (an adjustment's flags). */
   addLivePin(pin: Required<Pick<RulePin, "kind" | "key" | "version" | "valueHash">>): void {
     this.pinned.set(`${pin.kind}|${pin.key}|${pin.version}|live`, { ...pin, live: true });
@@ -106,7 +138,7 @@ export class RuleContext {
     if (!RULE_BY_KEY[key]) throw new Error(`There is no payroll rule called ${key}`);
     const c = this.current.get(key);
     if (!c) throw new RuleNotSetError(key);
-    this.pinned.set(key, { key, version: c.version, valueHash: c.valueHash });
+    this.pinned.set(key, c.packFrom !== undefined ? { key, version: c.version, valueHash: c.valueHash, kind: "PACK" } : { key, version: c.version, valueHash: c.valueHash });
     return c.value as T;
   }
 
@@ -146,24 +178,41 @@ const pinKind = (p: RulePin): PinKind => p.kind ?? "RULE";
 
 function pinLabel(p: RulePin): string {
   const kind = pinKind(p);
-  const base = kind === "RULE" ? (RULE_BY_KEY[p.key]?.label ?? p.key) : kind === "RULE_OVERRIDE" ? `Rule override ${p.key.split("~").slice(0, 3).join(" / ")} (version ${p.version})` : kind === "COMPONENT" ? `Salary component ${p.key} (version ${p.version})` : `Salary structure ${p.key} (version ${p.version})`;
+  const base = kind === "PACK" ? `${RULE_BY_KEY[p.key]?.label ?? p.key} (standard default)` : kind === "RULE" ? (RULE_BY_KEY[p.key]?.label ?? p.key) : kind === "RULE_OVERRIDE" ? `Rule override ${p.key.split("~").slice(0, 3).join(" / ")} (version ${p.version})` : kind === "COMPONENT" ? `Salary component ${p.key} (version ${p.version})` : `Salary structure ${p.key} (version ${p.version})`;
   return p.unset ? `${base} (not set)` : base;
 }
 
 /** The live state of each pin: is the exact pinned version confirmed, and (for a pin that is read live) is it still the current one. */
 export async function pinStatuses(pins: readonly RulePin[]): Promise<PinStatus[]> {
   if (pins.length === 0) return [];
-  const kinds = [...new Set(pins.map(pinKind))];
+  const kinds = [...new Set(pins.map(pinKind).filter((k) => k !== "PACK"))];
   const keys = [...new Set(pins.map((p) => p.key))];
-  const [versions, confirmations] = await Promise.all([
-    prisma.payrollItemVersion.groupBy({ by: ["kind", "key"], where: { kind: { in: kinds }, key: { in: keys } }, _max: { version: true } }),
-    prisma.payrollItemConfirmation.findMany({ where: { kind: { in: kinds }, key: { in: keys } }, select: { kind: true, key: true, version: true, valueHash: true } }),
+  // A pack pin is replaced by a confirmed director value: a rule (its own key) or a tax year ("TAX_YEAR:<year>").
+  const packRuleKeys = pins.filter((p) => pinKind(p) === "PACK" && !p.key.startsWith("TAX_YEAR:")).map((p) => p.key);
+  const packYears = pins.filter((p) => pinKind(p) === "PACK" && p.key.startsWith("TAX_YEAR:")).map((p) => p.key.slice("TAX_YEAR:".length));
+  const [versions, confirmations, packConfirmations] = await Promise.all([
+    prisma.payrollItemVersion.groupBy({ by: ["kind", "key"], where: { kind: { in: kinds as never }, key: { in: keys } }, _max: { version: true } }),
+    prisma.payrollItemConfirmation.findMany({ where: { kind: { in: kinds as never }, key: { in: keys } }, select: { kind: true, key: true, version: true, valueHash: true } }),
+    packRuleKeys.length || packYears.length
+      ? prisma.payrollItemConfirmation.findMany({ where: { OR: [{ kind: "RULE", key: { in: [...packRuleKeys, ...keys.filter(isPackCovered)] } }, { kind: "TAX_YEAR", key: { in: packYears } }] }, select: { kind: true, key: true, version: true } })
+      : prisma.payrollItemConfirmation.findMany({ where: { kind: "RULE", key: { in: keys.filter(isPackCovered) } }, select: { kind: true, key: true, version: true } }),
   ]);
   const latest = new Map(versions.map((v) => [`${v.kind}|${v.key}`, v._max.version ?? 0]));
   const confirmed = new Set(confirmations.map((c) => `${c.kind}|${c.key}@${c.version}@${c.valueHash}`));
+  // For a rule the pack covers, what matters is the newest CONFIRMED director version: an unconfirmed edit is not used, so it makes nothing stale.
+  const newestConfirmed = new Map<string, number>();
+  for (const c of packConfirmations) {
+    const k = c.kind === "TAX_YEAR" ? `TAX_YEAR:${c.key}` : c.key;
+    newestConfirmed.set(k, Math.max(newestConfirmed.get(k) ?? 0, c.version));
+  }
   return pins.map((pin) => {
     const kind = pinKind(pin);
-    const newest = latest.get(`${kind}|${pin.key}`) ?? 0;
+    if (kind === "PACK") {
+      // In force by the owners' decision. Stale once a director's value is confirmed for it, or the pack itself was updated since the run was calculated.
+      const directorConfirmed = newestConfirmed.get(pin.key) ?? 0;
+      return { pin, label: pinLabel(pin), status: "CONFIRMED", stale: pin.version !== PACK_VERSION || directorConfirmed > 0, currentVersion: directorConfirmed || pin.version };
+    }
+    const newest = kind === "RULE" && isPackCovered(pin.key) ? (newestConfirmed.get(pin.key) ?? 0) : (latest.get(`${kind}|${pin.key}`) ?? 0);
     return {
       pin,
       label: pinLabel(pin),

@@ -4,6 +4,7 @@ import { requireDirector } from "../../lib/directorAuthority";
 import { namesOfUsers } from "../payroll/names";
 import { prisma } from "../../lib/prisma";
 import { HttpError } from "../../middleware/errorHandler";
+import { DEFAULT_REVIEW_INTERVAL_MONTHS, DEFAULT_STATE, PACK_ENCASHMENT, PACK_GRATUITY, PACK_NOTICE, STANDARD_DEFAULT_LABEL } from "@shared/constants/statutoryDefaults";
 
 // D-37 (docs/plans/D37_DEFAULTS.md). Behaviour settings: each key's value in force is the latest proposal a DIFFERENT director confirmed; with none, it is the key's
 // default. Exactly three keys have a common default (the owners' D-37 exception, labelled "Default, change in settings"); the max-deduction percentage has none (Not set).
@@ -115,9 +116,11 @@ export const BEHAVIOURS = {
         sourceNote: z.string().trim().min(3).max(300),
       })
       .strict(),
-    defaultValue: null as null | { payHead: string; exitLeaveTypes: string[]; basisHeads: string[]; divisor: { kind: "FIXED_DAYS"; days: string } | { kind: "CALENDAR_DAYS" }; rounding: { mode: "HALF_UP" | "UP" | "DOWN"; scale: number }; sourceNote: string },
+    // Standard defaults pack (docs/plans/STATUTORY_DEFAULTS_PLAN.md): the conventional formula, a policy default (not a statute), review needed.
+    defaultValue: { ...PACK_ENCASHMENT.value, sourceNote: `Standard default (policy, not statute): ${PACK_ENCASHMENT.source.name}` } as null | { payHead: string; exitLeaveTypes: string[]; basisHeads: string[]; divisor: { kind: "FIXED_DAYS"; days: string } | { kind: "CALENDAR_DAYS" }; rounding: { mode: "HALF_UP" | "UP" | "DOWN"; scale: number }; sourceNote: string },
     d37: false,
-    defaultText: "Not set: encashment requests are not paid; a settlement shows leave in days only",
+    standard: true,
+    defaultText: "Standard default (policy, not statute): BASIC / 30 a day, PL at exit, on the head LEAVE_ENCASHMENT. Review the head codes",
   },
   // Part 4 (docs/plans/A_PART4.md): settlement mechanisms, every figure the directors'; each value carries the day it takes effect (effectiveFrom).
   "payroll.gratuity": {
@@ -136,9 +139,10 @@ export const BEHAVIOURS = {
         sourceNote: z.string().trim().min(3).max(300),
       })
       .strict(),
-    defaultValue: null as null | { effectiveFrom: string; minYears: string; partYear: "COMPLETED_YEARS_ONLY" | "SIX_MONTHS_OR_MORE_COUNTS_AS_A_YEAR"; wageHeads: string[]; daysPerYear: string; divisor: string; ceiling: string; rounding: { mode: "HALF_UP" | "UP" | "DOWN"; scale: number }; sourceNote: string },
+    defaultValue: { effectiveFrom: PACK_GRATUITY.from, ...PACK_GRATUITY.value, sourceNote: `Standard default: ${PACK_GRATUITY.source.name} (checked ${PACK_GRATUITY.checkedOn})`.slice(0, 300) } as null | { effectiveFrom: string; minYears: string; partYear: "COMPLETED_YEARS_ONLY" | "SIX_MONTHS_OR_MORE_COUNTS_AS_A_YEAR"; wageHeads: string[]; daysPerYear: string; divisor: string; ceiling: string; rounding: { mode: "HALF_UP" | "UP" | "DOWN"; scale: number }; sourceNote: string },
     d37: false,
-    defaultText: "Not set: a settlement shows no gratuity line",
+    standard: true,
+    defaultText: "Standard default (Code on Social Security, 2020, s.53): 15/26 of the monthly wage per completed year, more than six months counts, at least five years, ceiling Rs 20 lakh. Review the wage heads (default BASIC)",
   },
   "payroll.noticeRecovery": {
     title: "Notice period and its recovery at exit",
@@ -154,9 +158,10 @@ export const BEHAVIOURS = {
         sourceNote: z.string().trim().min(3).max(300),
       })
       .strict(),
-    defaultValue: null as null | { effectiveFrom: string; noticeDays: number; recoverShortfall: boolean; basisHeads: string[]; divisor: string; rounding: { mode: "HALF_UP" | "UP" | "DOWN"; scale: number }; sourceNote: string },
+    defaultValue: { effectiveFrom: PACK_NOTICE.from, ...PACK_NOTICE.value, sourceNote: `Standard default (policy, not statute): ${PACK_NOTICE.source.name}`.slice(0, 300) } as null | { effectiveFrom: string; noticeDays: number; recoverShortfall: boolean; basisHeads: string[]; divisor: string; rounding: { mode: "HALF_UP" | "UP" | "DOWN"; scale: number }; sourceNote: string },
     d37: false,
-    defaultText: "Not set: no notice recovery is worked out",
+    standard: true,
+    defaultText: "Standard default (policy, not statute): 30 days' notice, a shortfall recovered at BASIC / 30 a day. Review the period and the heads",
   },
   // Stage 8 (docs/plans/STAGE_8_PLAN.md): the parallel-run kit. The tolerance is a policy choice with a conventional default (exact match); the retention has none.
   "payroll.parallelTolerance": {
@@ -174,6 +179,34 @@ export const BEHAVIOURS = {
     defaultValue: null as number | null,
     d37: false,
     defaultText: "Not set: a comparison is kept until a director deletes it",
+  },
+  // Standard defaults pack (docs/plans/STATUTORY_DEFAULTS_PLAN.md).
+  "statutory.state": {
+    title: "State for professional tax, LWF and minimum wages",
+    what: "The one state the company's statutory state rules follow. Values are loaded for Rajasthan only: for any other state, professional tax and LWF are refused (\"Values for this state have not been loaded\") until a director enters that state's tables.",
+    schema: z.string().regex(/^[A-Z][A-Z_]{1,39}$/, "A state key in capitals, for example RAJASTHAN"),
+    defaultValue: DEFAULT_STATE as string,
+    d37: false,
+    standard: true,
+    defaultText: "Rajasthan",
+  },
+  "statutory.reviewIntervalMonths": {
+    title: "Standard statutory values: how often they are reviewed",
+    what: "After this many months since the last review (or when a value's effective date has passed since then), the directors are reminded to review the standard values.",
+    schema: z.number().int().min(1).max(24), // allow-number: months
+    defaultValue: DEFAULT_REVIEW_INTERVAL_MONTHS as number,
+    d37: false,
+    standard: true,
+    defaultText: "Every 6 months",
+  },
+  "payroll.ctcIncludesEmployerStatutory": {
+    title: "CTC includes the employer's PF and ESI (PY-43)",
+    what: "On: CTC = gross pay + employer PF + employer ESI, and a salary structure may count a line that stands for them toward CTC (the run pays the exact statutory figure, never the line as well). Off: CTC is gross pay only and such a line may not count toward CTC.",
+    schema: z.boolean(),
+    defaultValue: true as boolean,
+    d37: false,
+    standard: true,
+    defaultText: "On: CTC = gross + employer PF + employer ESI",
   },
 } as const;
 export type BehaviourKey = keyof typeof BEHAVIOURS;
@@ -198,7 +231,11 @@ export async function behaviourOn<K extends BehaviourKey>(key: K, day: string): 
     const v = r.value as { effectiveFrom?: string } | null;
     if (v?.effectiveFrom && v.effectiveFrom <= day && (!best || v.effectiveFrom >= best.effectiveFrom)) best = v as { effectiveFrom: string };
   }
-  return best as z.infer<(typeof BEHAVIOURS)[K]["schema"]> | null;
+  if (best) return best as z.infer<(typeof BEHAVIOURS)[K]["schema"]>;
+  // Standard defaults pack: with no confirmed value in force, a dated standard default applies from its own effective date.
+  const def = BEHAVIOURS[key].defaultValue as { effectiveFrom?: string } | null;
+  if ("standard" in BEHAVIOURS[key] && def?.effectiveFrom && def.effectiveFrom <= day) return def as z.infer<(typeof BEHAVIOURS)[K]["schema"]>;
+  return null;
 }
 
 /** The value in force: the latest confirmed proposal, or the key's default. */
@@ -223,9 +260,10 @@ export async function list(actor: Actor) {
       title: def.title,
       what: def.what,
       d37: def.d37,
+      standard: "standard" in def,
       value: current ? current.value : def.defaultValue,
-      state: current ? "CONFIRMED" : def.d37 ? "DEFAULT" : "NOT_SET",
-      label: current ? null : def.d37 ? DEFAULT_LABEL : "Not set",
+      state: current ? "CONFIRMED" : def.d37 || "standard" in def ? "DEFAULT" : "NOT_SET",
+      label: current ? null : "standard" in def ? STANDARD_DEFAULT_LABEL : def.d37 ? DEFAULT_LABEL : "Not set",
       defaultText: def.defaultText,
       confirmed: current ? { reason: current.reason, proposedBy: names.get(current.proposedByUserId) ?? "A director", confirmedBy: names.get(current.confirmation!.confirmedByUserId) ?? "A director", at: current.confirmation!.createdAt.toISOString() } : null,
       pending: pending.map((p) => ({ id: p.id, value: p.value, reason: p.reason, proposedBy: names.get(p.proposedByUserId) ?? "A director", mine: p.proposedByUserId === actor.userId, at: p.createdAt.toISOString() })),
