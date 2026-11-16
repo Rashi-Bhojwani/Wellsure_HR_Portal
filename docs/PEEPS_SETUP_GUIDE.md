@@ -4,9 +4,17 @@ What has to be chosen before each Peeps module works for the real company, who c
 and every default that ships, so you can review it. Written at the end of Peeps Stage 3 (2026-11-13). The demo company carries
 made-up values labelled DEMO for all of these; nothing below is preset for the real company unless it says **Default**.
 
-How a setting changes: a director (or, for some working values, a Wellsure Office member you allowed to prepare settings)
-enters a value; a **different** director confirms it; only then is it used. A value waiting for confirmation can be withdrawn
-by the person who entered it or by a director. Every entry, confirmation and withdrawal is in the audit log.
+How a setting changes depends on where it lives (corrected in Stage 4 after the independent review):
+
+- **Peeps settings** (workspace, Unmute, badges, nudges, directory, leave naming, audiences), **Wellsure Office membership** and
+  the **asset lists**: a director (or, for some working values, a Wellsure Office member you allowed to prepare settings) enters a
+  value; a **different** director confirms it; only then is it used. A value waiting for confirmation can be withdrawn by the
+  person who entered it or by a director.
+- **The four new leave types**: HR (or a director) prepares the rules; a **different** director approves them.
+- **Recruitment, joining, exits, Insights and autofill settings**: a director's save takes effect at once (one director, with a
+  reason). A second-director confirmation is not built for these; tell us if you want it.
+
+Every entry, confirmation, approval and withdrawal is in the audit log.
 
 - **Not set**: nothing is used; the module (or just that step) refuses and names what is missing.
 - **Default, change in settings**: a conventional starting value is in use until a director confirms another.
