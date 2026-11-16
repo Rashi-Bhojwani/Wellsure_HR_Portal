@@ -56,6 +56,7 @@ export async function setExitSetting(key: ExitSettingKey, input: z.infer<typeof 
     const row = await tx.exitSettingVersion.create({ data: { key, version: input.version + 1, value: value === null ? Prisma.JsonNull : value, reason: input.reason, changedByUserId: meta.actorUserId } });
     await writeAuditLogs([{ ...meta, action: "exits.setting.confirmed", entityType: "ExitSettingVersion", entityId: row.id, after: { key, version: row.version, reason: input.reason } }], tx);
   });
+  if (key === "officeAudience") await (await import("../peeps/office")).resyncOfficeGrants(meta.actorUserId); // members' exits grants follow the audience (Stage 4 review)
   const affected=await activeUsersHoldingPermission("exits.view");
   if(affected.length)getSocketServer()?.to(affected.map(u=>`user:${u.employeeId}`)).emit("exits.access.changed",{});
   return settingsView(meta.actorUserId);

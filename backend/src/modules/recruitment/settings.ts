@@ -49,6 +49,7 @@ export async function set(key:SettingKey,input:z.infer<typeof settingInput>,meta
  const row=await tx.recruitmentSettingVersion.create({data:{key,version:input.version+1,value:value===null?Prisma.JsonNull:value,reason:input.reason,changedByUserId:meta.actorUserId}});
  await writeAuditLogs([{...meta,action:"recruitment.setting.confirmed",entityType:"RecruitmentSettingVersion",entityId:row.id,after:{key,version:row.version}}],tx);
  });
+ if(key==="officeAudience")await (await import("../peeps/office")).resyncOfficeGrants(meta.actorUserId); // members' recruitment grants follow the audience (Stage 4 review)
  const affected=await activeUsersHoldingPermission("recruitment.view");if(affected.length)getSocketServer()?.to(affected.map(u=>`user:${u.employeeId}`)).emit("recruitment.access.changed",{});
  return view(meta.actorUserId);
 }

@@ -71,10 +71,25 @@ export const ASSET_KEYS: ReadonlySet<string> = new Set(OFFICE_CAPABILITIES.find(
 export async function assetsOpenToOffice(client: Prisma.TransactionClient | typeof prisma = prisma): Promise<boolean> {
   return (await getSetting<{ officeManages: boolean }>("audience.assets", client))?.officeManages === true;
 }
-/** The keys a member's labelled grants should hold: their capabilities' keys, less the asset keys while the register is not open to the Wellsure Office. */
-export function grantKeysFor(capabilities: readonly string[], assetsOpen: boolean): Set<string> {
+/** Stage 4 review finding 7: recruitment and exits keys follow their own Office audience settings the same way (Not set = not open). */
+export const RECRUITMENT_KEYS: ReadonlySet<string> = new Set(OFFICE_CAPABILITIES.find((c) => c.id === "MANAGE_RECRUITMENT")?.keys ?? []);
+export const EXIT_KEYS: ReadonlySet<string> = new Set(OFFICE_CAPABILITIES.find((c) => c.id === "MANAGE_EXITS")?.keys ?? []);
+export type OfficeAudiences = { assets: boolean; recruitment: boolean; exits: boolean };
+export async function officeAudiencesOpen(client: Prisma.TransactionClient | typeof prisma = prisma): Promise<OfficeAudiences> {
+  const [{ getSetting: recruitmentSetting }, { getExitSetting }] = await Promise.all([import("../recruitment/settings"), import("../exits/settings")]);
+  return {
+    assets: await assetsOpenToOffice(client),
+    recruitment: (await recruitmentSetting("officeAudience"))?.officeManages === true,
+    exits: (await getExitSetting("officeAudience"))?.officeManages === true,
+  };
+}
+/** The keys a member's labelled grants should hold: their capabilities' keys, less the keys of each module (assets, recruitment, exits) whose
+ *  audience setting does not open it to the Wellsure Office — so the menus show a member only what they can open. */
+export function grantKeysFor(capabilities: readonly string[], open: OfficeAudiences): Set<string> {
   const keys = keysFor(capabilities);
-  if (!assetsOpen) for (const k of ASSET_KEYS) keys.delete(k);
+  if (!open.assets) for (const k of ASSET_KEYS) keys.delete(k);
+  if (!open.recruitment) for (const k of RECRUITMENT_KEYS) keys.delete(k);
+  if (!open.exits) for (const k of EXIT_KEYS) keys.delete(k);
   return keys;
 }
 
@@ -85,7 +100,7 @@ async function syncGrants(tx: Prisma.TransactionClient, employeeIds: string[], b
   const allKeys = [...keysFor(OFFICE_CAPABILITY_IDS)];
   const perms = await tx.permission.findMany({ where: { key: { in: allKeys } }, select: { id: true, key: true } });
   const permId = new Map(perms.map((p) => [p.key, p.id]));
-  const assetsOpen = await assetsOpenToOffice(tx);
+  const assetsOpen = await officeAudiencesOpen(tx);
   let added = 0;
   let removed = 0;
   for (const u of users) {
@@ -289,7 +304,7 @@ export async function officeGrantDrift(): Promise<GrantDrift[]> {
   const members = await currentMembers();
   const allKeys = [...keysFor(OFFICE_CAPABILITY_IDS)];
   const rows = await prisma.userPermissionOverride.findMany({ where: { permission: { key: { in: allKeys } } }, include: { permission: true, user: { select: { employeeId: true } } } });
-  const assetsOpen = await assetsOpenToOffice();
+  const assetsOpen = await officeAudiencesOpen();
   const drift: GrantDrift[] = [];
   for (const r of rows) {
     const m = members.get(r.user.employeeId);
