@@ -89,6 +89,11 @@ and off-cycle step is inside its budget (largest: 0.58 s against 1.6 s).
 - A TEAM-scope viewer of the roster grid; the five non-leave attendance-lock writers over their routes (wired; only leave apply exercised).
 - Stage 8 readers against real greytHR exports (only the synthetic samples and generated files were tried).
 
+**Verified on 2026-11-16 (Stage 9):** full backend suite alone on `aa1de7e`, 262 files / 2,268 tests, all passed (after fixing the rehearsal's cleanup, which
+had failed 9 later tests); CI run 396 on `aa1de7e` green on all 12 jobs; check script passed; browser walk of the changed upload and payroll screens, 5 roles ×
+1280 light / 390 dark (30 visits) and keyboard: damaged files refused in plain words, no crash, no server error, no secret text. The full-month rehearsal passes
+(12 steps). At 500 people everything is within budget after one fix (publishing payslips 1.88 s → 1.38 s against 1.6 s).
+
 **Verified on 2026-11-12 (Session A block):** see STAGE_REPORTS.md "Session A block". Full suite alone 239 files / 2,139 tests with 3 failures: one mine (fixed in
 `247096d`), two in the other session's files (`customFields` passes alone; `yearEndMoney` audit-viewer test broken since `ad5b3ca`). Not verified: the Form 16 PDF and
 the bank summary against any official or bank format (both are our own layouts); a real upload of the salary import by a director and its decision by the other

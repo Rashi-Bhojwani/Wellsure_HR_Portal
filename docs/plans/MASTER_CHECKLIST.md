@@ -43,7 +43,7 @@ Read first. Status: DONE / OPEN / PARTIAL / **UNDEFINED** (no plan file on any b
 | Stage 8 | attendance and salary file readers from `docs/samples`, layout setup, parallel-run kit | **DONE with the synthetic samples** (`05e80c1`, `d0e5a20`, `6174928`, `c4b9485`, `8c7e7d5`); the pay items reader waits for a sample; real greytHR exports not tried |
 | Stage 9 parity | Tier 1 MISSING items of `PARITY_COVERAGE.md` | **Re-checked 2026-11-16** (`71898df`): 255 Built / 8 Partial / 20 Missing / 14 Not needed; the four open Tier 1 rows (PY-43, ST-02, ST-05, IE-12) each need an owner value or sample, so nothing was built; the deferred rows skipped as instructed | — |
 | Stage 9 rehearsal | one scripted month end to end, each step refused before its predecessor | DONE `c61e307` (`fullMonthRehearsal.test.ts`, 12 steps, ~16 s) | — |
-| Stage 9 hardening | hostile .xls/.xlsx files with time and memory limits; 500-person re-measure | DONE `f421c7e` (2 reader bugs fixed), `965034d` (measure), `9d8ebb9` (publish 1.88 s → 1.38 s; everything else within budget) | — |
+| Stage 9 hardening | hostile .xls/.xlsx files with time and memory limits; 500-person re-measure | DONE `f421c7e` (2 reader bugs fixed), `965034d` (measure), `9d8ebb9` (publish 1.88 s → 1.38 s; everything else within budget); verified: suite 2,268/2,268 and CI 396 green on `aa1de7e`, walk 30 visits | — |
 | Close-out | `PORTAL_READY_REPORT.md`, `GETTING_STARTED.md`, `FIRST_REAL_PAYROLL_RUN.md` | PORTAL_READY_REPORT and OWNER_REVIEW_SHEET updated 2026-11-11; open items are the undefined A-items and the blocked stages | everything above |
 
 **Note on the undefined items.** The owner's message says "A-4, then A-7, then A-2, then A-3 …, then A-1, A-5, A-6 and A-8, each exactly as your plan

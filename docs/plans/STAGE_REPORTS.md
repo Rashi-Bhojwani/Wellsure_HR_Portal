@@ -651,3 +651,21 @@ sheet (one cell at column 255 of every row, under 1 MB) grew to about 16.7 milli
 **Over budget and fixed:** publishing payslips. Every release (publish, bank file) first ran a full calculation of the run and threw the result away
 (`void computed` in `run/release.ts`, there since the file was written); a final run never changes and the approval's hash is what is checked (before preparing and
 again inside the write). Removed. The payslip PDF step that hung in an earlier container completed here.
+
+**Verification (Stage 9).** Check script (lint, typecheck, tokens, fresh-database migration check, the new and changed tests, frontend tests): all passed.
+**Full backend suite alone:** first run on `b0b853e` 9 failures in 5 files — all caused by the new rehearsal, which left its company-wide August finalisation lock
+and its challans behind (muster, regularization, regularization limits, two parity-row challan tests, the attendance golden replay); fixed in `aa1de7e` (the lock,
+its audit row and the challans removed in `afterAll`, and checked gone). In the same commit, on the owner's request, `payPolicies.test.ts` picks leave types by code
+and the PL line by its label (recorded in CHANGED_TESTS). A later attempt did not start (Postgres and Redis had stopped after a container restart). **Final run on
+`aa1de7e`: 262 files, 2,268 tests, all passed** (24 minutes).
+**CI:** runs 392 and 393 cancelled by later pushes; run 394 (`b0b853e`, docs) green; **run 396 on `aa1de7e`: all 12 jobs green** — install-lint-typecheck-test
+(with the demo company tests), backend shards 1–4 and the shard count check, docker-build, sensitive-ui admin and employee, latency, attendance-replay,
+agent-windows.
+**Browser walk** (scratch demo company; damaged copies of the synthetic samples only): no screen was added or changed in Stage 9, so the walk covered the screens
+whose behaviour changed — the parallel run and the greytHR bank file check (the upload reader) and the payroll runs screen (publishing is faster; the screen is
+unchanged) — as director, HR, manager, employee and Developer at 1280 light and 390 dark: 30 visits, no crash, no server error, no secret text, no sideways scroll.
+The director's truncated statement, truncated bank file and garbage .xls were each refused in plain words on screen ("The file is damaged (a sector points past
+its end)", "… (unknown sector size)"); HR, manager, employee and Developer are refused the parallel run and the runs screen, and see no greytHR bank tab. Keyboard
+at both views: the run chosen with arrows and Enter, the drop areas reached by Tab with focus visible, Enter opens the file chooser, and a damaged file chosen
+that way is refused the same way. (At 390 the file chooser opened in over 3 s on this machine; the walk's first 3 s wait was too short, re-checked with 6 s.)
+**Not verified:** real greytHR exports, real PF/ESI portal files, the bank's acceptance of .xlsx or .csv, staging timings with a pooled, loaded database.
