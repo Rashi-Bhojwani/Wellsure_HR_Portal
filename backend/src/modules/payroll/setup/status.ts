@@ -1,5 +1,6 @@
 import { BEHAVIOURS, BEHAVIOUR_KEYS, DEFAULT_LABEL, behaviourValue } from "../../behaviours/service";
 import { RULE_CATALOG, type RuleDef } from "@shared/constants/payrollRules";
+import { CONTINUING, PACK_CHECKED_ON, PACK_RULES, PACK_STATE_LABEL, PACK_STATE_RULES, STANDARD_DEFAULT_LABEL, entryOn, isPackCovered, packReviewNeeded } from "@shared/constants/statutoryDefaults";
 import { DEVELOPER_ROLE_CODE, SENSITIVE_PERMISSION_KEYS } from "@shared/constants/sensitiveData";
 import { env } from "../../../config/env";
 import { businessToday } from "../../../lib/businessDate";
@@ -51,12 +52,34 @@ function governed(summary: ItemSummary): Pick<SetupItem, "status" | "enteredBy" 
 
 const RULES_PATH = { label: "Payroll, Rules and Setup", path: "/admin/payroll/rules" };
 
-function ruleItems(rules: ItemSummary[], plain: Map<string, unknown>): SetupItem[] {
+/** Standard defaults pack: what a covered rule with no confirmed director value stands on (in force, so CONFIRMED), or null to show it as before. */
+function standardFor(def: RuleDef, s: ItemSummary, state: string, today: string): Pick<SetupItem, "status" | "enteredBy" | "confirmedBy" | "detail"> | "STATE_NOT_LOADED" | null {
+  if (!isPackCovered(def.key) || s.status === "CONFIRMED" || s.lastConfirmed) return null;
+  const by = (detail: string) => ({ status: "CONFIRMED" as const, enteredBy: null, confirmedBy: null, detail });
+  const series = PACK_RULES[def.key];
+  if (series) {
+    const e = entryOn(series, today);
+    if (!e) return null;
+    return by(`${STANDARD_DEFAULT_LABEL}: ${typeof e.value === "string" ? e.value : JSON.stringify(e.value)}${e.from === CONTINUING ? "" : ` from ${e.from}`} (${e.source.name}, checked ${e.checkedOn})${e.verification === "UNVERIFIED" ? ". Review needed" : ""}.`);
+  }
+  const pack = (PACK_STATE_RULES as Record<string, (typeof PACK_STATE_RULES)["RAJASTHAN"] | undefined>)[state];
+  if (!pack) return "STATE_NOT_LOADED";
+  const e = def.key === "PT_SLABS" ? pack.professionalTax : pack.labourWelfareFund;
+  return by(`${STANDARD_DEFAULT_LABEL}: not levied in ${PACK_STATE_LABEL[state] ?? state} (${e.source.name}, checked ${e.checkedOn})${e.verification === "UNVERIFIED" ? ". Review needed" : ""}. Nothing is computed for it.`);
+}
+
+function ruleItems(rules: ItemSummary[], plain: Map<string, unknown>, state = "RAJASTHAN", today = PACK_CHECKED_ON): SetupItem[] {
+  const ptLwfNotLevied = (["PT_SLABS", "LWF_TABLE"] as const).every((k) => {
+    const i = RULE_CATALOG.findIndex((d) => d.key === k);
+    return !(rules[i]?.status === "CONFIRMED" || rules[i]?.lastConfirmed) && Boolean((PACK_STATE_RULES as Record<string, unknown>)[state]);
+  });
   return RULE_CATALOG.map((def: RuleDef, i) => {
     const s = rules[i]!;
     const section: SectionId = def.sensitiveClass ? "identifiers" : def.origin === "STATUTORY" ? "law" : "company";
-    const base = governed(s);
+    const standard = standardFor(def, s, state, today);
+    const base = standard && standard !== "STATE_NOT_LOADED" ? standard : standard === "STATE_NOT_LOADED" ? { ...governed(s), detail: `Values for this state (${state}) have not been loaded. Enter this state's table, or set the state to one the standard values cover.` } : governed(s);
     let notRequired = def.notRequiredForFirstRun;
+    if ((def.key === "STATE_NAME_MAP" || def.key === "PT_STATE_OF_PLACEMENT") && ptLwfNotLevied) notRequired = `Not needed: professional tax and labour welfare fund are not levied in ${PACK_STATE_LABEL[state] ?? state}.`;
     if (def.key === "FIXED_DAYS_VALUE" && plain.get("PAY_DAYS_BASIS") !== "FIXED_DAYS" && plain.get("LOP_DIVISOR") !== "FIXED_DAYS") notRequired = "Only used if days are counted as a fixed number, which they are not.";
     const question = def.openQuestion && (def.openQuestion.whenValue === undefined || plain.get(def.key) === def.openQuestion.whenValue) ? def.openQuestion.question : undefined;
     return {
@@ -260,12 +283,58 @@ async function behaviourItems(): Promise<SetupItem[]> {
   return out;
 }
 
+/** Standard defaults pack: the non-blocking "Using standard statutory values" row (with what needs review and whether a review is due), and the acknowledgement. */
+async function packItems(demo: boolean): Promise<SetupItem[]> {
+  const where = { label: "Payroll, Ready for First Run", path: "/admin/payroll/ready" };
+  const today = businessToday().toISOString().slice(0, 10);
+  const directorIds = new Set((await activeDirectors()).map((d) => d.userId));
+  const reviews = await prisma.statutoryPackReview.findMany({ orderBy: { createdAt: "asc" } });
+  const acks = reviews.filter((r) => r.kind === "ACKNOWLEDGED" && directorIds.has(r.userId));
+  const lastAt = reviews.at(-1)?.createdAt.toISOString().slice(0, 10);
+  const last = lastAt && lastAt > PACK_CHECKED_ON ? lastAt : PACK_CHECKED_ON;
+  const { reviewDueReasons } = await import("../statutoryPack/service");
+  const due = reviewDueReasons({ today, lastReviewed: last, intervalMonths: (await behaviourValue("statutory.reviewIntervalMonths")).value as number });
+  const review = packReviewNeeded();
+  const names = await namesOfUsers(acks.map((a) => a.userId));
+  return [
+    {
+      id: "pack:status",
+      section: "law",
+      category: "Standard statutory values",
+      title: `Using standard statutory values, last reviewed on ${last}`,
+      why: "PF, ESI, professional tax and LWF for the company's state, income tax and gratuity use standard, sourced values until a director enters and a different director confirms their own.",
+      required: false,
+      status: "CONFIRMED",
+      enteredBy: null,
+      confirmedBy: null,
+      detail: `${review.length} value${review.length === 1 ? "" : "s"} need${review.length === 1 ? "s" : ""} review.`,
+      where,
+      warning: [`Using standard statutory values, last reviewed on ${last}. Review needed: ${review.map((r) => r.label).join("; ")}.`, ...due].join(" "),
+    },
+    {
+      id: "pack:acknowledgement",
+      section: "law",
+      category: "Standard statutory values",
+      title: "Both directors have reviewed the standard values",
+      why: "Before the first real payroll run, each of the two directors clicks \"I have reviewed the standard values\". Nothing is entered; the click is recorded and audited.",
+      required: !demo,
+      ...(demo ? { notRequiredReason: "The demo company is exempt." } : {}),
+      status: acks.length >= 2 ? "CONFIRMED" : "PLACEHOLDER",
+      enteredBy: null,
+      confirmedBy: null,
+      detail: acks.length ? `Acknowledged by ${acks.map((a) => `${names.get(a.userId) ?? "a director"} on ${a.createdAt.toISOString().slice(0, 10)}`).join(" and ")}${acks.length < 2 ? "; the other director has not yet." : "."}` : "Neither director has acknowledged them yet.",
+      where,
+    },
+  ];
+}
+
 export async function buildSetupReport(): Promise<SetupReport> {
   const demo = await isDemoCompany();
   const ruleData = await loadItems("RULE");
   const summaries = RULE_CATALOG.map((d) => summarise(ruleData, d.key));
   const plain = new Map<string, unknown>(RULE_CATALOG.map((d, i) => [d.key, d.sensitiveClass ? undefined : summaries[i]!.current?.value]));
-  const items: SetupItem[] = [...ruleItems(summaries, plain), ...(await salaryItems()), ...(await layoutItems()), ...(await peopleItems()), ...(await safetyItems(demo)), ...(await behaviourItems())];
+  const state = (await behaviourValue("statutory.state")).value as string;
+  const items: SetupItem[] = [...ruleItems(summaries, plain, state, businessToday().toISOString().slice(0, 10)), ...(await packItems(demo)), ...(await salaryItems()), ...(await layoutItems()), ...(await peopleItems()), ...(await safetyItems(demo)), ...(await behaviourItems())];
   const sections: SetupSection[] = SECTION_ORDER.map((id) => ({ id, ...SECTION_TEXT[id], items: items.filter((i) => i.section === id) }));
   return { generatedAt: new Date().toISOString() /* allow-clock: the instant the report was made */, environment: env.APP_ENV, demo, sections };
 }

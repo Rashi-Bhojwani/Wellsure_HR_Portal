@@ -12,6 +12,7 @@ import { processLetterJob } from "../modules/letters/service";
 import { LETTERS_QUEUE_NAME } from "./lettersQueue";
 import { SECURITY_ALERT_QUEUE_NAME } from "./securityAlertQueue";
 import { DIRECTOR_NOTICE_QUEUE } from "./directorNoticeQueue";
+import { remindStatutoryPackReview } from "../modules/payroll/statutoryPack/service";
 import { remindDueDates } from "../modules/payroll/compliance/service"; // ST-30
 import { REMOTE_REMINDER_QUEUE } from "./remoteQueue";
 import { sendDueReminders } from "../modules/attendance/remote/service";
@@ -228,6 +229,7 @@ export function startWorkers(): Worker[] {
     async (job) => {
       if (job.name === "sweep") {
         await remindDueDates().catch((err) => logger.error({ event: "payroll.compliance.remind_failed", err }, "compliance reminder failed")); // ST-30, rides the hourly sweep
+        await remindStatutoryPackReview().catch((err) => logger.error({ event: "payroll.statutory_pack.remind_failed", err }, "standard values review reminder failed")); // rides the hourly sweep
         return sweepDirectorNotices();
       }
       return deliverDirectorNotice((job.data as { noticeId: string }).noticeId);

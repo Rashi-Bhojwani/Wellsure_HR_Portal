@@ -195,6 +195,33 @@ export const PACK_GRATUITY: PackEntry<{ minYears: string; partYear: "SIX_MONTHS_
 export const PACK_NOTICE = unverified(CONTINUING, { noticeDays: 30, recoverShortfall: true, basisHeads: ["BASIC"], divisor: "30", rounding: { mode: "HALF_UP" as const, scale: 0 } }, { name: "Policy default (no statute sets a notice period for this company's staff; it is in each appointment letter)", url: "" }, "A policy default, not a statute: 30 days' notice, a shortfall recovered at the BASIC head / 30 per day. Review needed: the notice period and the heads are the company's.");
 export const PACK_ENCASHMENT = unverified(CONTINUING, { payHead: "LEAVE_ENCASHMENT", exitLeaveTypes: ["PL"], basisHeads: ["BASIC"], divisor: { kind: "FIXED_DAYS" as const, days: "30" }, rounding: { mode: "HALF_UP" as const, scale: 0 } }, { name: "Policy default (the specification's conventional formula, BASIC / 30; spec §5.2)", url: "" }, "A policy default, not a statute: one day of leave valued at BASIC / 30, PL encashed at exit, paid on the head LEAVE_ENCASHMENT. Review needed: the encashment formula is an open question in the specification (§14) and the head codes are the company's.");
 
+// ── Returns ──
+
+/**
+ * EPFO's ECR 2.0 upload file, as EPFO publishes it: a text file, one line per member, fields separated by #~#, no header row, whole rupees, in this order: UAN, member
+ * name, gross wages, EPF wages, EPS wages, EDLI wages, EE share remitted, EPS contribution remitted, ER share (EPF-EPS difference) remitted, NCP days, refund of advances.
+ * Used for the PF file when no director-confirmed layout exists, labelled "check against the portal before uploading". The ESI monthly contribution upload is not publicly
+ * documented (only the portal's own template), so nothing is built for it.
+ */
+export const PACK_ECR_LAYOUT = {
+  source: { name: "EPFO, Introduction to Electronic Challan cum Return Version II (ECR 2.0): fields and #~# separator", url: "https://www.epfindia.gov.in/site_docs/PDFs/EPFOUnifiedPortal/Introduction_ECR2.0.pdf" },
+  checkedOn: PACK_CHECKED_ON,
+  verification: "OFFICIAL" as Verification,
+  note: "Check against the portal before uploading: EPFO's own help file on the employer portal is the final word on the current layout.",
+  value: {
+    format: "DELIMITED",
+    delimiter: "#~#",
+    quote: false,
+    lineEnding: "LF",
+    extension: "txt",
+    amountDecimals: 0,
+    columnHeaders: false,
+    header: [],
+    trailer: [],
+    columns: ["UAN", "NAME", "GROSS_WAGES", "EPF_WAGES", "EPS_WAGES", "EDLI_WAGES", "EPF_CONTRIBUTION", "EPS_CONTRIBUTION", "EPF_EPS_DIFF", "NCP_DAYS", "REFUND"].map((f) => ({ source: "FIELD", value: f })),
+  },
+};
+
 // ── Review ──
 
 export const DEFAULT_REVIEW_INTERVAL_MONTHS = 6;

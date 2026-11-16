@@ -25,6 +25,8 @@ interface Acc {
   prorates: boolean;
   pf: boolean;
   esi: boolean;
+  /** PY-43: the line stands for the statutory employer PF or ESI (a CTC reserve, never paid or costed by the run). */
+  standsFor?: "PF_EMPLOYER" | "ESI_EMPLOYER";
   /** Sum of amount x segment numerator: divided once, by the person's common denominator, at the end. */
   numerator: Money;
   fixedAmount: Money | null;
@@ -110,6 +112,7 @@ export function calculatePerson(input: PersonInput, ctx: CalcContext): ItemOut {
       a.prorates = flags.prorates;
       a.pf = flags.pfApplicable;
       a.esi = flags.esiApplicable;
+      a.standsFor = flags.type === "EMPLOYER_CONTRIBUTION" ? flags.standsFor : undefined;
       if (flags.prorates) a.numerator = a.numerator.plus(line.amount.times(sf.num));
       else if (applyShare(line.amount, false, { paid: sf.num, basis: sf.den }).greaterThan(ZERO)) a.fixedAmount = line.amount; // pays in full, from the last segment that was paid at all
       a.parts.push({ from: iso(seg.from), to: iso(seg.to), monthly: c(line.amount), factor: c(sf.factor), version: line.version });
@@ -141,7 +144,10 @@ export function calculatePerson(input: PersonInput, ctx: CalcContext): ItemOut {
       if (a.pf) pfWages = pfWages.plus(amount);
       if (a.esi) esiWages = esiWages.plus(amount);
     } else if (a.type === "DEDUCTION") deductionLines.push(line);
-    else employerLines.push(line);
+    else if (a.standsFor) {
+      // PY-43: never counted twice. The structure's line only reserved room in CTC; the statutory engine below computes the exact employer PF / ESI, which is the one used.
+      notices.push(`${a.label} stands for the statutory employer ${a.standsFor === "PF_EMPLOYER" ? "PF" : "ESI"}: the run uses the exact statutory figure instead of this line.`);
+    } else employerLines.push(line);
   }
 
   // ── Adjustments, arrears and year-end encashment: each a line of its own, carrying where it came from ──

@@ -4569,6 +4569,22 @@ model PayrollParallelComparison {
   @@index([cycleStart, createdAt])
   @@map("payroll_parallel_comparisons")
 }
+// Standard statutory defaults pack (docs/plans/STATUTORY_DEFAULTS_PLAN.md): each director's one-time acknowledgement and each later review. Append-only.
+enum StatutoryPackReviewKind {
+  ACKNOWLEDGED
+  REVIEWED
+}
+
+model StatutoryPackReview {
+  id          String                  @id @default(cuid())
+  kind        StatutoryPackReviewKind
+  packVersion Int                     @map("pack_version")
+  userId      String                  @map("user_id")
+  createdAt   DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([kind, createdAt])
+  @@map("statutory_pack_reviews")
+}
 // A-END
 // M-BEGIN (second session block 2, ER-27): divisions, an optional grouping of departments (an employee's division is their department's).
 model Division {
