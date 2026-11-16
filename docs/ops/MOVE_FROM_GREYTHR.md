@@ -2,11 +2,9 @@
 
 **For:** the two directors and HR. greytHR keeps running alongside this portal until the results agree. Nothing here switches greytHR off for you.
 
-Steps marked **waiting for build** depend on something not built yet:
-- the **greytHR file readers**: reading greytHR's own export and register layouts directly;
-- the **parallel-run kit**.
-
-Until those are built, do those steps the manual way described here.
+The greytHR file readers and the parallel-run kit are built (Session A, Stage 8). They were built and tested with **synthetic** files that copy greytHR's
+column layout with made-up values; real greytHR exports have not been tried yet and could differ. Try one real month before relying on them, and keep the
+manual way described below as the fallback.
 
 ---
 
@@ -41,7 +39,18 @@ The portal reads **its own templates**, not greytHR's layouts. You copy the colu
 | Year-to-date pay and tax | Payroll → Opening Figures | One by one, or the template's file. The other director confirms. |
 | Attendance before go-live | Not needed | The portal computes attendance from its own start date. |
 
-**Waiting for build:** loading greytHR's export files directly, without copying columns into the templates.
+**greytHR's own files, read directly** (Admin Tools → Data Import/Export, or Employee → Bulk Import):
+
+| greytHR file | Tab | What happens |
+|---|---|---|
+| Device attendance log (`.dat`) | **Punches (ATTLOG or greytHR swipes)** | Choose the device, upload, look at the preview (new, already on record, unmapped device user IDs listed, rejected lines with reasons), then commit with a reason. Punches already on record are never stored twice. |
+| Attendance Swipes export (`.xlsx` or `.xls`) | The same tab | Each employee number becomes that person's device user ID on the day; an unknown number, or a person with no device user ID, is listed and rejected, never guessed. Dates are read day first (05/01/2026 = 5 January). The Developer role cannot load this file. |
+| Bulk Salary Overrides (`.xlsx`) | **greytHR salary overrides** (directors; the same screen as Payroll → Monthly Inputs → Import a file) | Preview first. Its pay-head columns must match pay heads that take their value from Monthly Inputs; one invalid row refuses the whole file unless a director chooses to skip invalid rows. **The director who uploaded the file cannot apply it: the other director checks the preview and applies it.** |
+| Salary Statement (`.xls`) | **greytHR salary statement** (directors; the same as Payroll → Parallel run) | See section 4. |
+| Bank transfer file (`.xls`) | **greytHR bank file** (directors) | The bank file's columns are compared with the portal's bank layout (only the header row is read). If they differ, a director can start a draft bank layout from them; everything uncertain (the debit account, the payment mode code, the remark) stays Not set, and the other director confirms the layout in Payroll → Bank and Statutory Layouts. |
+
+Not built: greytHR's payroll repository (pay items) file. No synthetic sample of it exists, so its layout is not guessed; the kit maps pay heads from the
+salary statement's own columns instead.
 
 Check the counts after loading: Admin Tools → Data Import/Export → **Reconciliation Report** shows active headcount by branch and by department. Compare it with greytHR.
 
@@ -51,11 +60,18 @@ Check the counts after loading: Admin Tools → Data Import/Export → **Reconci
 2. In the portal, run the same month to the end: Payroll Run → Calculate → Submit for approval → Approval → Close the period. Do **not** upload its bank file to the bank.
 3. Download the portal's salary register from the run.
 
-**Waiting for build:** the parallel-run kit, which would do steps 2 to 4 of this section for you.
+4. **Payroll → Parallel run** (directors): choose the portal's run for the month (a finalised run, or a run calculated on TEST rules), upload greytHR's
+   Salary Statement for the same month, and look at the result: who matched exactly, the differences (amount and which side is higher), people in only
+   one of the two, heads in only one, and the totals per head. A likely cause is shown only where the data proves it (a head on one side only, LOP days
+   differing, a person on one side only). Where a greytHR column was not matched to a portal head by name, choose it in the mapping table and press
+   **Compare again**. Download the differences as .xlsx or .csv. The kit changes nothing in payroll.
+5. What counts as a match is a setting: Admin Tools → Default behaviours → **Parallel run: what counts as a match** (default exact match; a rupee of
+   rounding can be allowed). How long saved comparisons are kept: **Parallel run: how long a saved comparison is kept** (Not set: until a director
+   deletes one). One director proposes a change and the other confirms it.
 
-## 5. Compare line by line
+## 5. Compare line by line (any other register)
 
-**Payroll → Compare Registers**:
+**Payroll → Compare Registers**, for a register that is not greytHR's Salary Statement:
 
 1. First register: the portal's (Wellsure register).
 2. Second register: greytHR's. Choose **"A plain table (a header row, an Employee code column, amounts)"** and save greytHR's register in that shape:
@@ -63,7 +79,7 @@ Check the counts after loading: Admin Tools → Data Import/Export → **Reconci
    - one column for the employee code;
    - every other column an amount.
    
-   The option "greytHR's own register layout" is **waiting for build**: it needs a real sample first.
+   For greytHR's Salary Statement itself, use Payroll → Parallel run (section 4) instead: it reads greytHR's layout directly.
 3. Set the tolerance, for example 1 rupee.
 4. Use the column-name box to match names that differ (for example "Basic Salary" = "BASIC").
 

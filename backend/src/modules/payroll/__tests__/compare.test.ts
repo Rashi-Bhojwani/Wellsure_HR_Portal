@@ -165,8 +165,8 @@ describe("reading a register from a spreadsheet", () => {
     await expect(parseRegister("GENERIC", Buffer.from(await dup.xlsx.writeBuffer()), "B")).rejects.toMatchObject({ code: "DUPLICATE_CODES" });
   });
 
-  it("greytHR's own layout is waiting for a real sample, and says so rather than guessing", async () => {
-    await expect(parseRegister("GREYTHR", Buffer.from("x"), "greytHR")).rejects.toMatchObject({ status: 501, code: "PARSER_WAITING_FOR_SAMPLE" });
+  it("greytHR's own layout points to the parallel-run kit (Stage 8), which reads it, rather than guessing here", async () => {
+    await expect(parseRegister("GREYTHR", Buffer.from("x"), "greytHR")).rejects.toMatchObject({ status: 400, code: "USE_PARALLEL_RUN" });
   });
 });
 
@@ -239,7 +239,7 @@ describe("the comparison through the API", () => {
     const a = await book([["Z1", "Asha", 1, 1]]);
     expect((await send(employeeToken, a, a)).status).toBe(403);
     const grey = await send(makerToken, a, a, { sourceB: "GREYTHR" });
-    expect([grey.status, grey.body.error.code]).toEqual([501, "PARSER_WAITING_FOR_SAMPLE"]);
+    expect([grey.status, grey.body.error.code]).toEqual([400, "USE_PARALLEL_RUN"]); // Stage 8: was 501 waiting for a sample
     expect((await send(makerToken, a, Buffer.from("nope"))).body.error.code).toBe("INVALID_FILE");
     expect((await request(app).post("/api/payroll/compare").set(...authHeader(makerToken)).attach("a", a, "a.xlsx")).body.error.code).toBe("INVALID_UPLOAD");
     expect((await send(makerToken, a, a, { toleranceAmount: "lots" })).status).toBe(400);

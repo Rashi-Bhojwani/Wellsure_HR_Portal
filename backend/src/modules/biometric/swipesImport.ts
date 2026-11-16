@@ -1,6 +1,6 @@
 import type { AttlogRejected } from "@shared/attendance/attlog";
 import { formatAttlogLine } from "@shared/attendance/attlog";
-import { mappingInForceOn } from "../../lib/effectiveDating";
+import { deviceUserIdForEmployeeOn } from "../../lib/effectiveDating";
 import { prisma } from "../../lib/prisma";
 import { cellText, headerKey, readGrid, type GridCell } from "../../lib/spreadsheet";
 import { HttpError } from "../../middleware/errorHandler";
@@ -87,8 +87,7 @@ export async function swipesToAttlog(buffer: Buffer, fileName: string): Promise<
     const day = p.time.slice(0, 10);
     const key = `${employeeId}|${day}`;
     if (!mappingCache.has(key)) {
-      const m = await prisma.deviceUserMapping.findFirst({ where: { employeeId, ...mappingInForceOn(new Date(`${day}T00:00:00Z`)) }, select: { deviceUserId: true } });
-      mappingCache.set(key, m?.deviceUserId ?? null);
+      mappingCache.set(key, await deviceUserIdForEmployeeOn(employeeId, new Date(`${day}T00:00:00Z`)));
     }
     const deviceUserId = mappingCache.get(key);
     if (!deviceUserId) {

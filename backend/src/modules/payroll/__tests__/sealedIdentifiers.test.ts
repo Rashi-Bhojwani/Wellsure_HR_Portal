@@ -81,11 +81,16 @@ describe("sealed company identifiers", () => {
   });
 
   it("nobody sees it in a list, a detail, a history or the audit viewer; even the person who entered it must Reveal it, and that is recorded without the value", async () => {
-    for (const t of [tokens.maker, tokens.checker, tokens.dev, tokens.rulesOnly]) {
+    for (const t of [tokens.maker, tokens.checker, tokens.rulesOnly]) {
       const list = await api(t).get("/rules");
       const one = await api(t).get(`/rules/${KEY}`);
       expect(JSON.stringify([list.body, one.body]), "a response").not.toContain(SECRET);
       expect(one.body.rule.sealed).toBe(true);
+    }
+    // Request 13 (Stage 8 block): the Developer role is refused the rule values outright (it was shown the sealed rule without its value).
+    for (const p of ["/rules", `/rules/${KEY}`]) {
+      const r = await api(tokens.dev).get(p);
+      expect([r.status, JSON.stringify(r.body).includes(SECRET)]).toEqual([403, false]);
     }
     const reveal = await api(tokens.maker).post(`/rules/${KEY}/reveal`);
     expect(reveal.status).toBe(200);

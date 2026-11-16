@@ -16,7 +16,7 @@ import { space } from "../../../theme/tokens";
 const SOURCE_OPTIONS: Array<{ value: RegisterSource; label: string }> = [
   { value: "OWN", label: "Wellsure register (the workbook this system makes)" },
   { value: "GENERIC", label: "A plain table (a header row, an Employee code column, amounts)" },
-  { value: "GREYTHR", label: "greytHR's own register layout (waiting for a real sample)" },
+  { value: "GREYTHR", label: "greytHR's Salary Statement (use Payroll, Parallel run)" },
 ];
 
 type FormValues = { labelA: string; labelB: string; sourceA: RegisterSource; sourceB: RegisterSource; toleranceAmount: string; tolerancePercent: string; aliases?: Array<{ from: string; to: string }> };
