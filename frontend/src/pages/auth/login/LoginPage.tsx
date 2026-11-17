@@ -59,7 +59,7 @@ export function LoginPage() {
           extra="The same number as on the attendance machine."
           rules={[{ required: true, whitespace: true, message: "Enter your employee number" }]}
         >
-          <Input placeholder="e.g. 486" size="large" autoFocus autoComplete="username" autoCapitalize="none" spellCheck={false} />
+          <Input placeholder="e.g. 1042" size="large" autoFocus autoComplete="username" autoCapitalize="none" spellCheck={false} />
         </Form.Item>
         <Form.Item name="password" label="Password" rules={[{ required: true, message: "Enter your password" }]} style={{ marginBottom: space[3] }}>
           <Input.Password placeholder="Password" size="large" autoComplete="current-password" />

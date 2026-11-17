@@ -2,7 +2,7 @@
 import "../../../ui/__tests__/setup";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { FORGOT_PASSWORD_REPLY } from "@shared/constants/login";
 import { AppThemeProvider } from "../../../theme/ThemeProvider";
 
@@ -21,6 +21,9 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
+// Ant Design's form feedback schedules short delayed state updates (rc-component useDelayState). Let them run while the jsdom window still exists,
+// or they fire after teardown as "window is not defined" and fail the run (found by CI run 422).
+afterAll(() => new Promise((resolve) => setTimeout(resolve, 1500)));
 
 const renderAt = (ui: React.ReactNode) =>
   render(

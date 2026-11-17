@@ -66,7 +66,7 @@ export function ForgotPasswordPage() {
           extra="The same number as on the attendance machine. The link goes to the email HR has on record for you."
           rules={[{ required: true, whitespace: true, message: "Enter your employee number" }]}
         >
-          <Input placeholder="e.g. 486" size="large" autoFocus autoComplete="username" autoCapitalize="none" spellCheck={false} />
+          <Input placeholder="e.g. 1042" size="large" autoFocus autoComplete="username" autoCapitalize="none" spellCheck={false} />
         </Form.Item>
         <Form.Item style={{ marginBottom: space[4] }}>
           <Button type="primary" htmlType="submit" block size="large" loading={submitting}>
