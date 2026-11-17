@@ -70,26 +70,6 @@ export function MinimumWagesPage() {
             ]}
           />
         </Panel>
-        {(setup.data?.standardRates ?? []).length > 0 && (
-          <Panel title={`Standard rates: ${setup.data!.standardRates![0]!.state}`} subtitle={`${setup.data!.standardRates![0]!.label}. Used for a category no director has entered a rate for.`}>
-            <Stack style={{ overflowWrap: "anywhere" }}>
-              {setup.data!.standardRates![0]!.reviewNeeded && <ApprovalBanner tone="warning" title="Review needed" description={setup.data!.standardRates![0]!.note} />}
-              <DataTable<NonNullable<MinimumWageSetup["standardRates"]>[number]>
-                rowKey="category"
-                density="compact"
-                pagination={false}
-                dataSource={setup.data!.standardRates!}
-                mobile={{ title: (r) => r.category, subtitle: (r) => `Rs ${r.monthlyAmount} a month`, fields: [{ label: "From", render: (r) => dayjs(r.effectiveFrom).format("D MMM YYYY") }, { label: "Source", render: (r) => r.source }] }}
-                columns={[
-                  { title: "Category", dataIndex: "category" },
-                  { title: "Monthly", dataIndex: "monthlyAmount" },
-                  { title: "From", dataIndex: "effectiveFrom", render: (v: string) => dayjs(v).format("D MMM YYYY") },
-                  { title: "Source", key: "s", render: (_: unknown, r: NonNullable<MinimumWageSetup["standardRates"]>[number]) => <a href={r.url} target="_blank" rel="noreferrer">{r.source}</a> },
-                ]}
-              />
-            </Stack>
-          </Panel>
-        )}
         <Panel title="A person's category" subtitle="Not set for anyone until you choose it.">
           <div style={{ display: "flex", gap: space[2], flexWrap: "wrap" }}>
             <AutoComplete aria-label="Employee" placeholder="Search by name or number" style={{ minWidth: 260, flex: 1 }} value={person ? person.label : personQ} onChange={(v) => { setPerson(null); setPersonQ(v); }} onSelect={(v: string, o: { label?: string }) => setPerson({ id: v, label: String(o.label ?? v) })} options={(people.data ?? []).map((p) => ({ value: p.employeeId, label: `${p.name} (${p.employeeCode})` }))} />

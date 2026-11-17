@@ -1,5 +1,4 @@
 import { RULE_BY_KEY } from "@shared/constants/payrollRules";
-import { PACK_STATE_LABEL, PACK_STATE_RULES, type PackEntry, type PackState } from "@shared/constants/statutoryDefaults";
 import { HttpError } from "../../../middleware/errorHandler";
 import type { Money } from "../money";
 import { dec } from "../money";
@@ -49,24 +48,14 @@ export interface RunRules {
   lopReversal: { lookbackMonths: number; overrideAllowed: boolean } | null;
   /** Heads rounded differently from the general rule; absent heads use `lineRounding`. */
   headRounding: Record<string, RoundingRule>;
-  /** Standard defaults pack: PT / LWF not levied in the company's state (nothing computed). */
-  notLevied?: NotLeviedNote[];
+  /** Owner decision 2026-11-17: PT / LWF with no director table (nothing computed; shown as "not set", never "not levied"). */
+  notSet?: Array<"PT" | "LWF">;
 }
 
-/** A state rule the standard defaults pack answers "not levied": nothing is computed and the run says so, with the source and the date it was checked. */
-export interface NotLeviedNote {
-  rule: "PT" | "LWF";
-  state: string;
-  stateLabel: string;
-  source: string;
-  url: string;
-  checkedOn: string;
-  reviewNeeded: boolean;
-}
+/** Professional tax / LWF a stored run left Not set: an owner-decision NOT_SET pin, or (runs before 2026-11-17) an unset rule pin. */
+export const notSetFromPins = (pins: ReadonlyArray<{ key: string; kind?: string; unset?: boolean }>, key: "PT_SLABS" | "LWF_TABLE"): boolean => pins.some((p) => p.key === key && (p.kind === "NOT_SET" || p.unset === true));
 
 export interface RuleNeeds {
-  /** The company's state for PT, LWF and minimum wages (setting statutory.state; default RAJASTHAN). */
-  state?: string;
   /** The run pays loss of pay back (Stage 3.3b). */
   reversals?: boolean;
   arrears: boolean;
@@ -115,22 +104,17 @@ export function loadRunRules(ctx: RuleContext, needs: RuleNeeds): RunRules {
   const payDaysBasis = take<PayDaysBasis>("PAY_DAYS_BASIS");
   const lopDivisor = take<LopDivisor>("LOP_DIVISOR");
   const fixedDays = payDaysBasis === "FIXED_DAYS" || lopDivisor === "FIXED_DAYS" ? take<number>("FIXED_DAYS_VALUE") : null;
-  // PT and LWF: a director's confirmed table wins; with none, the standard defaults pack answers for the company's state, and a state it has no values for is refused.
-  const state = needs.state ?? "RAJASTHAN";
-  const statePack = (PACK_STATE_RULES as Record<string, (typeof PACK_STATE_RULES)[PackState] | undefined>)[state];
-  const notLevied: NotLeviedNote[] = [];
-  const stateTable = <T>(key: "PT_SLABS" | "LWF_TABLE", rule: "PT" | "LWF", entry: PackEntry<{ levied: false }> | undefined): T | null => {
+  // PT and LWF (owner decision 2026-11-17): a director's table is used (a Placeholder until confirmed, as for any rule). With none, nothing is deducted and the run
+  // records a NOT_SET pin, so the run, the payslip and Ready say "not set" (never "not levied"); a monthly run is not blocked or made a test by it.
+  const notSet: Array<"PT" | "LWF"> = [];
+  const stateTable = <T>(key: "PT_SLABS" | "LWF_TABLE", rule: "PT" | "LWF"): T | null => {
     if (ctx.isSet(key)) return ctx.optional<T>(key);
-    if (!entry) {
-      missing.push({ key, label: `${labelOf(key)}: values for this state (${state}) have not been loaded. Enter this state's table, or set the state to one the standard values cover` });
-      return null;
-    }
-    ctx.addPackPin(key, `pack-state:${state}:${rule}:${entry.from}:${JSON.stringify(entry.value)}`);
-    notLevied.push({ rule, state, stateLabel: PACK_STATE_LABEL[state] ?? state, source: entry.source.name, url: entry.source.url, checkedOn: entry.checkedOn, reviewNeeded: entry.verification === "UNVERIFIED" });
+    ctx.addNotSetPin(key);
+    notSet.push(rule);
     return null;
   };
-  const ptSlabs = stateTable<PtTable>("PT_SLABS", "PT", statePack?.professionalTax);
-  const lwfTable = stateTable<LwfTable>("LWF_TABLE", "LWF", statePack?.labourWelfareFund);
+  const ptSlabs = stateTable<PtTable>("PT_SLABS", "PT");
+  const lwfTable = stateTable<LwfTable>("LWF_TABLE", "LWF");
   const needsState = ptSlabs !== null || lwfTable !== null;
   const rules: RunRules = {
     payDaysBasis: payDaysBasis ?? "CALENDAR_DAYS",
@@ -170,7 +154,7 @@ export function loadRunRules(ctx: RuleContext, needs: RuleNeeds): RunRules {
     arrearOnArrear: needs.arrears ? take<boolean>("ARREAR_ON_ARREAR") : null,
     lopReversal: needs.reversals ? { lookbackMonths: take<number>("LOP_REVERSAL_LOOKBACK_MONTHS") ?? 0, overrideAllowed: take<boolean>("LOP_REVERSAL_OVERRIDE_ALLOWED") ?? false } : null,
     headRounding: ctx.ifSet<Record<string, RoundingRule>>("HEAD_ROUNDING") ?? {},
-    notLevied,
+    notSet,
   };
   if (missing.length) throw new RulesMissingError(missing);
   return rules;

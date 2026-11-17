@@ -3,8 +3,8 @@ import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { DEVELOPER_ROLE_CODE } from "@shared/constants/sensitiveData";
 import { deleteWithDependents } from "../../../lib/__tests__/cleanup";
+import { setBehaviourByRoute, testEncashment, testGratuity, testNotice } from "./settlementRulesTestHelpers";
 import { prisma } from "../../../lib/prisma";
-import { behaviourOn } from "../../behaviours/service";
 import { app, authHeader, cleanupFullTestEmployee, createFullTestEmployee, loginAs } from "../../employee/__tests__/employeeTestHelpers";
 import { netOf } from "../offcycle/service";
 import { settlementTotals } from "../settlements/service";
@@ -249,14 +249,10 @@ describe("P7-6b — off-cycle runs over the routes", () => {
 
   it("a settlement: paid once, its pending adjustment marked paid by the off-cycle run (so no regular run pays it), and the demo company's file is DEMO only from a DEMO layout", async () => {
     const c = who("c");
-    // Changed 2026-11-17 (no silent zero, CHANGED_TESTS.md): the standard notice recovery uses the head BASIC, which this test company lacks, so preparing the
-    // settlement is now refused instead of adding a 0.00 line. The directors switch the automatic recovery off here (one enters, the other confirms); this test
-    // enters its own notice recovery line, so the amounts below are unchanged.
-    const std = (await behaviourOn("payroll.noticeRecovery", CYCLE.end))!;
-    const np = await request(app).post("/api/behaviours/payroll.noticeRecovery/proposals").set(...authHeader(world.tokens.maker)).send({ value: { ...std, effectiveFrom: "2026-01-01", recoverShortfall: false, basisHeads: [world.basic] }, reason: "TEST: the notice line is entered by hand" });
-    expect(np.status, JSON.stringify(np.body)).toBe(201);
-    proposalIds.push(np.body.id);
-    expect((await request(app).post(`/api/behaviours/proposals/${np.body.id}/confirm`).set(...authHeader(world.tokens.checkerA))).status).toBe(200);
+    // Changed 2026-11-17 (CHANGED_TESTS.md; owner decision: the settlement settings ship Not set and a settlement is refused until all three are set). The directors
+    // set them (one enters, the other confirms) so that no automatic line is added: notice recovery off, a gratuity nobody here qualifies for, no leave type encashed
+    // at exit. This test enters its own notice line, so every amount below is unchanged.
+    for (const [key, value] of [["payroll.noticeRecovery", testNotice(world.basic, { recoverShortfall: false })], ["payroll.gratuity", testGratuity(world.basic, { minYears: "40" })], ["payroll.leaveEncashment", testEncashment(world.basic, { exitLeaveTypes: [] })]] as const) proposalIds.push(await setBehaviourByRoute(world.tokens.maker, world.tokens.checkerA, key, value));
     const sep = await prisma.separation.create({ data: { employeeId: c, lastWorkingDate: day(CYCLE.end), reason: "test", initiatedByUserId: hr.userId } });
     const adj = await prisma.payrollAdjustment.create({ data: { employeeId: c, componentCode: "TEST_ANY", direction: "EARNING", amount: "1234.56", reason: "made-up arrears", source: "MANUAL", sourceRef: `offcycle-test-${c}`, createdByUserId: world.maker.userId } });
     const s = await request(app).post("/api/settlements").set(...authHeader(world.tokens.maker)).send({ separationId: sep.id, directorLines: [{ label: "Notice recovery", amount: "-200.10", source: "made-up: the notice shortfall" }] });

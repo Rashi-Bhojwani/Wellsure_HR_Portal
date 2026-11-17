@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DEVELOPER_ROLE_CODE } from "@shared/constants/sensitiveData";
 import { deleteWithDependents } from "../../../lib/__tests__/cleanup";
 import { prisma } from "../../../lib/prisma";
+import { setSettlementRulesDirect } from "./settlementRulesTestHelpers";
 import { app, authHeader, cleanupEmployeeTestOrgMasters, cleanupFullTestEmployee, createEmployeeTestOrgMasters, createFullTestEmployee, loginAs, type TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
 
 // P7-6 (docs/plans/P7_6_SETTLEMENTS.md): a full and final settlement, prepared and confirmed; nothing is paid. Made-up figures only.
@@ -21,6 +22,7 @@ describe("P7-6 — settlements", () => {
   const tok: Record<string, string> = {};
   let separationId = "";
   let ownSeparationId = "";
+  let ruleIds: string[] = [];
   const call = (who: string, method: "get" | "post", path: string, body?: object) => request(app)[method](`/api/settlements${path}`).set(...authHeader(tok[who]!)).send(body);
 
   beforeAll(async () => {
@@ -35,6 +37,10 @@ describe("P7-6 — settlements", () => {
     ownSeparationId = (await prisma.separation.create({ data: { employeeId: p.d1.employeeId, lastWorkingDate: d("2031-05-31"), reason: "test", initiatedByUserId: p.hr.userId } })).id;
     await prisma.payrollAdjustment.create({ data: { employeeId: p.leaver.employeeId, componentCode: "TEST_ANY", direction: "EARNING", amount: "1234.56", reason: "made-up arrears", source: "MANUAL", sourceRef: `fnf-test-${p.leaver.employeeId}`, createdByUserId: p.d1.userId } });
     await prisma.payrollAdjustment.create({ data: { employeeId: p.leaver.employeeId, componentCode: "TEST_ANY_DED", direction: "DEDUCTION", amount: "34.56", reason: "made-up recovery", source: "MANUAL", sourceRef: `fnf-test-ded-${p.leaver.employeeId}`, createdByUserId: p.d1.userId } });
+    // Changed 2026-11-17 (owner decision, CHANGED_TESTS.md): a settlement is refused until gratuity, notice pay and leave encashment are set. They are set here with
+    // TEST values that leave this test's lines as before: no type encashed at exit (leave stays in days only); this person has no salary (no gratuity line); the
+    // notice was served in full (no recovery line).
+    ruleIds = await setSettlementRulesDirect(p.d1.userId, p.d2.userId, "TEST_PAY", { encashment: { exitLeaveTypes: [] } });
     const pl = await prisma.leaveType.findUniqueOrThrow({ where: { code: "PL" } });
     for (const [date, days] of [["2031-01-01", "1"], ["2031-02-01", "1"], ["2031-06-01", "1"]] as const) {
       await prisma.leaveLedger.create({ data: { employeeId: p.leaver.employeeId, leaveTypeId: pl.id, leaveYear: 2031, entryDate: d(date), accrualMonth: d(date), entryType: "ACCRUAL", days, referenceType: "ACCRUAL_JOB" } });
@@ -42,6 +48,7 @@ describe("P7-6 — settlements", () => {
   }, 180_000);
 
   afterAll(async () => {
+    await deleteWithDependents("BehaviourProposal", ruleIds);
     await deleteWithDependents("PayrollApproval", (await prisma.payrollApproval.findMany({ where: { subject: "FNF_SETTLEMENT", makerUserId: { in: [p.d1!.userId, p.d2!.userId] } }, select: { id: true } })).map((a) => a.id));
     for (const x of Object.values(p)) await cleanupFullTestEmployee(x.employeeId);
     await cleanupEmployeeTestOrgMasters(org);

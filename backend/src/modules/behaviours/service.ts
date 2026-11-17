@@ -4,7 +4,7 @@ import { requireDirector } from "../../lib/directorAuthority";
 import { namesOfUsers } from "../payroll/names";
 import { prisma } from "../../lib/prisma";
 import { HttpError } from "../../middleware/errorHandler";
-import { DEFAULT_REVIEW_INTERVAL_MONTHS, DEFAULT_STATE, PACK_ENCASHMENT, PACK_GRATUITY, PACK_NOTICE, STANDARD_DEFAULT_LABEL } from "@shared/constants/statutoryDefaults";
+import { COMPANY_STATES, DEFAULT_REVIEW_INTERVAL_MONTHS, STANDARD_DEFAULT_LABEL } from "@shared/constants/statutoryDefaults";
 
 // D-37 (docs/plans/D37_DEFAULTS.md). Behaviour settings: each key's value in force is the latest proposal a DIFFERENT director confirmed; with none, it is the key's
 // default. Exactly three keys have a common default (the owners' D-37 exception, labelled "Default, change in settings"); the max-deduction percentage has none (Not set).
@@ -105,7 +105,7 @@ export const BEHAVIOURS = {
   },
   "payroll.leaveEncashment": {
     title: "Leave encashment amount (in the year and at exit)",
-    what: "The pay head, the leave types encashed at exit, the heads of the salary in force that make the per-day basis, the divisor (a fixed number of days or the month's calendar days) and the rounding. Until confirmed, encashment requests are not paid and a settlement shows leave in days only.",
+    what: "The pay head, the leave types encashed at exit, the heads of the salary in force that make the per-day basis, the divisor (a fixed number of days or the month's calendar days) and the rounding. Until confirmed, encashment requests are not paid and a final settlement is refused.",
     schema: z
       .object({
         payHead: z.string().regex(/^[A-Z][A-Z0-9_]{1,31}$/),
@@ -116,16 +116,15 @@ export const BEHAVIOURS = {
         sourceNote: z.string().trim().min(3).max(300),
       })
       .strict(),
-    // Standard defaults pack (docs/plans/STATUTORY_DEFAULTS_PLAN.md): the conventional formula, a policy default (not a statute), review needed.
-    defaultValue: { ...PACK_ENCASHMENT.value, sourceNote: `Standard default (policy, not statute): ${PACK_ENCASHMENT.source.name}` } as null | { payHead: string; exitLeaveTypes: string[]; basisHeads: string[]; divisor: { kind: "FIXED_DAYS"; days: string } | { kind: "CALENDAR_DAYS" }; rounding: { mode: "HALF_UP" | "UP" | "DOWN"; scale: number }; sourceNote: string },
+    // Owner decision 2026-11-17 (docs/plans/OWNER_EMPTY_SETTINGS.md): Not set until the directors choose it; a final settlement is refused until then.
+    defaultValue: null as null | { payHead: string; exitLeaveTypes: string[]; basisHeads: string[]; divisor: { kind: "FIXED_DAYS"; days: string } | { kind: "CALENDAR_DAYS" }; rounding: { mode: "HALF_UP" | "UP" | "DOWN"; scale: number }; sourceNote: string },
     d37: false,
-    standard: true,
-    defaultText: "Standard default (policy, not statute): BASIC / 30 a day, PL at exit, on the head LEAVE_ENCASHMENT. Review the head codes",
+    defaultText: "Not set: encashment requests are not paid and a final settlement is refused until this is set",
   },
   // Part 4 (docs/plans/A_PART4.md): settlement mechanisms, every figure the directors'; each value carries the day it takes effect (effectiveFrom).
   "payroll.gratuity": {
     title: "Gratuity at exit",
-    what: "Who qualifies (least completed years of service), how a part year counts, the wage it uses (chosen heads of the salary in force on the last working day), days of wage per year of service and the divisor, the ceiling (or none), the rounding, and from when. Until confirmed, a settlement shows no gratuity line.",
+    what: "Who qualifies (least completed years of service), how a part year counts, the wage it uses (chosen heads of the salary in force on the last working day), days of wage per year of service and the divisor, the ceiling (or none), the rounding, and from when. Until confirmed (and in force on the last working day), a final settlement is refused.",
     schema: z
       .object({
         effectiveFrom: z.iso.date(),
@@ -139,14 +138,13 @@ export const BEHAVIOURS = {
         sourceNote: z.string().trim().min(3).max(300),
       })
       .strict(),
-    defaultValue: { effectiveFrom: PACK_GRATUITY.from, ...PACK_GRATUITY.value, sourceNote: `Standard default: ${PACK_GRATUITY.source.name} (checked ${PACK_GRATUITY.checkedOn})`.slice(0, 300) } as null | { effectiveFrom: string; minYears: string; partYear: "COMPLETED_YEARS_ONLY" | "SIX_MONTHS_OR_MORE_COUNTS_AS_A_YEAR"; wageHeads: string[]; daysPerYear: string; divisor: string; ceiling: string; rounding: { mode: "HALF_UP" | "UP" | "DOWN"; scale: number }; sourceNote: string },
+    defaultValue: null as null | { effectiveFrom: string; minYears: string; partYear: "COMPLETED_YEARS_ONLY" | "SIX_MONTHS_OR_MORE_COUNTS_AS_A_YEAR"; wageHeads: string[]; daysPerYear: string; divisor: string; ceiling: string; rounding: { mode: "HALF_UP" | "UP" | "DOWN"; scale: number }; sourceNote: string },
     d37: false,
-    standard: true,
-    defaultText: "Standard default (Code on Social Security, 2020, s.53): 15/26 of the monthly wage per completed year, more than six months counts, at least five years, ceiling Rs 20 lakh. Review the wage heads (default BASIC)",
+    defaultText: "Not set: a final settlement is refused until this is set",
   },
   "payroll.noticeRecovery": {
     title: "Notice period and its recovery at exit",
-    what: "The notice period in days, whether a shortfall is recovered, the per-day basis (chosen heads of the salary in force on the last working day divided by a number of days), the rounding, and from when. Notice runs from the day the separation was recorded to the last working day, both counted.",
+    what: "The notice period in days, whether a shortfall is recovered, the per-day basis (chosen heads of the salary in force on the last working day divided by a number of days), the rounding, and from when. Notice runs from the day the separation was recorded to the last working day, both counted. Until confirmed (and in force on the last working day), a final settlement is refused.",
     schema: z
       .object({
         effectiveFrom: z.iso.date(),
@@ -158,10 +156,9 @@ export const BEHAVIOURS = {
         sourceNote: z.string().trim().min(3).max(300),
       })
       .strict(),
-    defaultValue: { effectiveFrom: PACK_NOTICE.from, ...PACK_NOTICE.value, sourceNote: `Standard default (policy, not statute): ${PACK_NOTICE.source.name}`.slice(0, 300) } as null | { effectiveFrom: string; noticeDays: number; recoverShortfall: boolean; basisHeads: string[]; divisor: string; rounding: { mode: "HALF_UP" | "UP" | "DOWN"; scale: number }; sourceNote: string },
+    defaultValue: null as null | { effectiveFrom: string; noticeDays: number; recoverShortfall: boolean; basisHeads: string[]; divisor: string; rounding: { mode: "HALF_UP" | "UP" | "DOWN"; scale: number }; sourceNote: string },
     d37: false,
-    standard: true,
-    defaultText: "Standard default (policy, not statute): 30 days' notice, a shortfall recovered at BASIC / 30 a day. Review the period and the heads",
+    defaultText: "Not set: a final settlement is refused until this is set",
   },
   // Stage 8 (docs/plans/STAGE_8_PLAN.md): the parallel-run kit. The tolerance is a policy choice with a conventional default (exact match); the retention has none.
   "payroll.parallelTolerance": {
@@ -180,15 +177,14 @@ export const BEHAVIOURS = {
     d37: false,
     defaultText: "Not set: a comparison is kept until a director deletes it",
   },
-  // Standard defaults pack (docs/plans/STATUTORY_DEFAULTS_PLAN.md).
+  // Owner decision 2026-11-17: the company's state is Not set until a director chooses it; no state's PT, LWF or minimum wages are loaded.
   "statutory.state": {
     title: "State for professional tax, LWF and minimum wages",
-    what: "The one state the company's statutory state rules follow. Values are loaded for Rajasthan only: for any other state, professional tax and LWF are refused (\"Values for this state have not been loaded\") until a director enters that state's tables.",
-    schema: z.string().regex(/^[A-Z][A-Z_]{1,39}$/, "A state key in capitals, for example RAJASTHAN"),
-    defaultValue: DEFAULT_STATE as string,
+    what: "The state the company's professional tax, labour welfare fund and minimum wages follow. No state's values are loaded: after choosing it, a director enters its PT and LWF tables (Rules and setup) and its minimum wages (Payroll, Minimum Wages). Until the tables are entered no PT or LWF is deducted, and the run, the payslip and Ready for First Run say \"not set\" (never \"not levied\").",
+    schema: z.enum(Object.keys(COMPANY_STATES) as [string, ...string[]]),
+    defaultValue: null as string | null,
     d37: false,
-    standard: true,
-    defaultText: "Rajasthan",
+    defaultText: "Not set: no professional tax or LWF is deducted, shown as \"not set\"",
   },
   "statutory.reviewIntervalMonths": {
     title: "Standard statutory values: how often they are reviewed",

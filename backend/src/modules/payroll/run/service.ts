@@ -15,8 +15,7 @@ import { employeeIdOfUser } from "../salary/guards";
 import { reverifyRun } from "./closing";
 import { computeRun, enqueueCalculation } from "./engine";
 import { gatherRunInputs } from "./gather";
-import { PACK_STATE_LABEL, PACK_STATE_RULES } from "@shared/constants/statutoryDefaults";
-import { RulesMissingError, loadRunRules, type MissingRule, type NotLeviedNote } from "./rules";
+import { RulesMissingError, loadRunRules, notSetFromPins, type MissingRule } from "./rules";
 import { iso } from "./days";
 import { checkForRun } from "../inputs/service";
 import { skippedForCycle } from "../exclusions/service";
@@ -181,31 +180,16 @@ export async function previewCalculation(runId: string) {
     totals: { gross: canonicalDecimal(t.gross), deductions: canonicalDecimal(t.deductions), net: canonicalDecimal(t.net), payable: t.payable, held: t.held, excluded: t.excluded, exceptions: t.exceptions },
     before: run.runHash ? { gross: m(run.totalGross), deductions: m(run.totalDeductions), net: m(run.totalNet) } : null,
     watermark,
-    runNotices: runNotices(computed.rules.ptSlabs === null && !(computed.rules.notLevied ?? []).some((n) => n.rule === "PT"), computed.rules.lwfTable === null && !(computed.rules.notLevied ?? []).some((n) => n.rule === "LWF"), computed.rules.notLevied ?? []),
+    runNotices: runNotices((computed.rules.notSet ?? []).includes("PT"), (computed.rules.notSet ?? []).includes("LWF")),
     willVoidApproval: false,
   };
 }
 
-export function runNotices(ptNotSet: boolean, lwfNotSet: boolean, notLevied: readonly NotLeviedNote[] = []): string[] {
+export function runNotices(ptNotSet: boolean, lwfNotSet: boolean): string[] {
   const out = ["Income tax (TDS), loan recoveries and reimbursements are not calculated until Phase 7. Their lines are absent, not zero."];
-  if (ptNotSet) out.push("Professional tax tables are not set up, so none is charged. Until they are set and confirmed this run is a test.");
-  if (lwfNotSet) out.push("Labour welfare fund tables are not set up, so none is charged. Until they are set and confirmed this run is a test.");
-  // Standard defaults pack: a levy the company's state does not have is stated plainly, with where that answer came from.
-  for (const n of notLevied) out.push(`${n.rule === "PT" ? "Professional tax" : "Labour welfare fund"}: not levied in ${n.stateLabel} (${n.source}, checked ${n.checkedOn}${n.reviewNeeded ? "; review needed" : ""}). Nothing is computed for it.`);
-  return out;
-}
-
-/** The "not levied" answers a stored run used, read back from its pack pins. */
-export function notLeviedFromPins(pins: ReadonlyArray<{ key: string; kind?: string; valueHash: string }>): NotLeviedNote[] {
-  const out: NotLeviedNote[] = [];
-  for (const p of pins) {
-    if (p.kind !== "PACK" || (p.key !== "PT_SLABS" && p.key !== "LWF_TABLE")) continue;
-    const m = /^pack-state:([A-Z_]+):(PT|LWF):/.exec(p.valueHash);
-    if (!m) continue;
-    const pack = (PACK_STATE_RULES as Record<string, (typeof PACK_STATE_RULES)["RAJASTHAN"] | undefined>)[m[1]!];
-    const entry = m[2] === "PT" ? pack?.professionalTax : pack?.labourWelfareFund;
-    if (entry) out.push({ rule: m[2] as "PT" | "LWF", state: m[1]!, stateLabel: PACK_STATE_LABEL[m[1]!] ?? m[1]!, source: entry.source.name, url: entry.source.url, checkedOn: entry.checkedOn, reviewNeeded: entry.verification === "UNVERIFIED" });
-  }
+  // Owner decision 2026-11-17: "not set" is said plainly so nobody reads it as "not levied". It does not block the month.
+  if (ptNotSet) out.push("Professional Tax: not set. No professional tax is deducted until a director chooses the state (Default behaviours) and enters its table (Rules and setup). This is not the same as \"not levied\".");
+  if (lwfNotSet) out.push("Labour Welfare Fund: not set. No LWF is deducted until a director chooses the state (Default behaviours) and enters its table (Rules and setup). This is not the same as \"not levied\".");
   return out;
 }
 
@@ -270,7 +254,7 @@ export async function getRun(runId: string) {
     watermark,
     rules: statuses.map((s) => ({ key: s.pin.key, kind: s.pin.kind ?? "RULE", version: s.pin.version, label: s.label, status: s.status, stale: s.stale, notSet: s.pin.unset === true, frozen: s.pin.live === false })),
     stale: statuses.some((s) => s.stale),
-    notices: runNotices(statuses.some((s) => s.pin.key === "PT_SLABS" && s.pin.unset), statuses.some((s) => s.pin.key === "LWF_TABLE" && s.pin.unset), notLeviedFromPins(statuses.map((s) => s.pin))),
+    notices: runNotices(notSetFromPins(statuses.map((s) => s.pin), "PT_SLABS"), notSetFromPins(statuses.map((s) => s.pin), "LWF_TABLE")),
     skipped: await skippedForCycle(run.cycleStart, run.cycleEnd),
     events: events.map((e) => ({ type: e.type, at: e.createdAt.toISOString() })),
   };

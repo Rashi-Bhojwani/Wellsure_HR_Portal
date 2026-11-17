@@ -297,7 +297,7 @@ export async function gatherRunInputs(cycle: CycleSpan & { company?: string }, c
   // Income tax (TDS_MODE PROJECTED): each person's year so far, declarations and the tax year, gathered once for the whole run.
   const taxByPerson = await gatherTax(ctx, cycle, ids, (code) => components.current.get(code)?.value);
   if (taxByPerson) for (const p of people) p.tax = taxByPerson.get(p.employeeId);
-  return { cycle, payrollMonth, payrollYear, paymentDate, skipped, people, components, needs: { arrears, encashment, reversals, state: (await behaviourValue("statutory.state")).value as string }, componentHashes, encashmentsNotThisCycle };
+  return { cycle, payrollMonth, payrollYear, paymentDate, skipped, people, components, needs: { arrears, encashment, reversals }, componentHashes, encashmentsNotThisCycle };
 }
 
 /** A fingerprint of everything gathered, so a resumed or repeated calculation can tell whether the world moved, and a confirm can tell that what was previewed is still true. */

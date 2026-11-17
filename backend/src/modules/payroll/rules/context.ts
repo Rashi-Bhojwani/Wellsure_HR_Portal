@@ -16,12 +16,14 @@ import { dec, type Money } from "../money";
 //   - Confirmed or Placeholder is whether a confirmation exists for that exact version and value;
 //   - stale is whether a newer version has since been written (the run must be recalculated before it can go any further).
 
-export type PinKind = "RULE" | "RULE_OVERRIDE" | "COMPONENT" | "STRUCTURE" | "TAX_YEAR" | "PACK";
+export type PinKind = "RULE" | "RULE_OVERRIDE" | "COMPONENT" | "STRUCTURE" | "TAX_YEAR" | "PACK" | "NOT_SET";
 
 // What a run read, and the exact version it read. Absent `kind` means a rule and absent `live` means true, so a pin written before these existed hashes the same.
 //   live: false   a figure that was FROZEN earlier and is not re-read: the structure, components and rounding a salary row was built under. A newer
 //                 version of those does not make a run stale (people are deliberately left on the old one until a revision moves them), but if the
 //                 version the row was frozen under is a Placeholder, the run is still a test.
+//   kind NOT_SET  (owner decision 2026-11-17) professional tax or LWF with no director table: nothing is deducted and the run, payslip and Ready say "not set". It
+//                 does not make a monthly run a test (owners decide these themselves; they do not block a month) and is stale once a director enters the table.
 //   unset: true   a rule that has no value at all, and was allowed to count as nothing (PT slabs, LWF table): version 0. It counts as a Placeholder, so
 //                 "zero because nobody set it" can never be mistaken for a confirmed figure.
 export interface RulePin {
@@ -113,6 +115,11 @@ export class RuleContext {
     this.pinned.set(`PACK|${key}`, { key, version: PACK_VERSION, valueHash, kind: "PACK" });
   }
 
+  /** Owner decision 2026-11-17: professional tax or LWF that no director has set. Nothing is computed for it; the pin says so on the run and payslip. */
+  addNotSetPin(key: "PT_SLABS" | "LWF_TABLE"): void {
+    this.pinned.set(`NOT_SET|${key}`, { key, version: 0, valueHash: UNSET_VALUE_HASH, kind: "NOT_SET" });
+  }
+
   /** Records a salary component read live (an adjustment's flags). */
   addLivePin(pin: Required<Pick<RulePin, "kind" | "key" | "version" | "valueHash">>): void {
     this.pinned.set(`${pin.kind}|${pin.key}|${pin.version}|live`, { ...pin, live: true });
@@ -180,6 +187,7 @@ const pinKind = (p: RulePin): PinKind => p.kind ?? "RULE";
 
 function pinLabel(p: RulePin): string {
   const kind = pinKind(p);
+  if (kind === "NOT_SET") return `${p.key === "PT_SLABS" ? "Professional Tax" : "Labour Welfare Fund"}: not set`;
   const base = kind === "PACK" ? `${RULE_BY_KEY[p.key]?.label ?? p.key} (standard default)` : kind === "RULE" ? (RULE_BY_KEY[p.key]?.label ?? p.key) : kind === "RULE_OVERRIDE" ? `Rule override ${p.key.split("~").slice(0, 3).join(" / ")} (version ${p.version})` : kind === "COMPONENT" ? `Salary component ${p.key} (version ${p.version})` : `Salary structure ${p.key} (version ${p.version})`;
   return p.unset ? `${base} (not set)` : base;
 }
@@ -187,10 +195,10 @@ function pinLabel(p: RulePin): string {
 /** The live state of each pin: is the exact pinned version confirmed, and (for a pin that is read live) is it still the current one. */
 export async function pinStatuses(pins: readonly RulePin[]): Promise<PinStatus[]> {
   if (pins.length === 0) return [];
-  const kinds = [...new Set(pins.map(pinKind).filter((k) => k !== "PACK"))];
+  const kinds = [...new Set(pins.map(pinKind).filter((k) => k !== "PACK" && k !== "NOT_SET"))];
   const keys = [...new Set(pins.map((p) => p.key))];
   // A pack pin is replaced (goes stale) once a director enters a value: a rule (its own key) or a tax year ("TAX_YEAR:<year>").
-  const packRuleKeys = pins.filter((p) => pinKind(p) === "PACK" && !p.key.startsWith("TAX_YEAR:")).map((p) => p.key);
+  const packRuleKeys = pins.filter((p) => (pinKind(p) === "PACK" || pinKind(p) === "NOT_SET") && !p.key.startsWith("TAX_YEAR:")).map((p) => p.key);
   const packYears = pins.filter((p) => pinKind(p) === "PACK" && p.key.startsWith("TAX_YEAR:")).map((p) => p.key.slice("TAX_YEAR:".length));
   const [versions, confirmations, entered] = await Promise.all([
     prisma.payrollItemVersion.groupBy({ by: ["kind", "key"], where: { kind: { in: kinds as never }, key: { in: keys } }, _max: { version: true } }),
@@ -204,6 +212,10 @@ export async function pinStatuses(pins: readonly RulePin[]): Promise<PinStatus[]
   const directorEntered = new Set(entered.map((e) => (e.kind === "TAX_YEAR" ? `TAX_YEAR:${e.key}` : e.key)));
   return pins.map((pin) => {
     const kind = pinKind(pin);
+    if (kind === "NOT_SET") {
+      // Not set by the owners' decision: not a Placeholder (a month is not blocked by it). Stale once a director enters the table.
+      return { pin, label: pinLabel(pin), status: "CONFIRMED", stale: directorEntered.has(pin.key), currentVersion: 0 };
+    }
     if (kind === "PACK") {
       // In force by the owners' decision. Stale once a director enters a value for it, or the pack itself was updated since the run was calculated.
       return { pin, label: pinLabel(pin), status: "CONFIRMED", stale: pin.version !== PACK_VERSION || directorEntered.has(pin.key), currentVersion: pin.version };

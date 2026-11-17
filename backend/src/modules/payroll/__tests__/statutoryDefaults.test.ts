@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { PACK_ECR_LAYOUT, PACK_ENCASHMENT, PACK_GRATUITY, PACK_NOTICE, PACK_RULES, PACK_TAX_YEARS, PACK_VERSION, entryOn } from "@shared/constants/statutoryDefaults";
+import { PACK_ECR_LAYOUT, PACK_RULES, PACK_TAX_YEARS, PACK_VERSION, entryOn } from "@shared/constants/statutoryDefaults";
+import { BEHAVIOURS } from "../../behaviours/service";
 import { DEVELOPER_ROLE_CODE } from "@shared/constants/sensitiveData";
 import { deleteWithDependents, purgeAppendOnly } from "../../../lib/__tests__/cleanup";
 import { prisma } from "../../../lib/prisma";
@@ -13,12 +14,13 @@ import { encashmentAmount, gratuityAmount, gratuityYears, noticeRecoveryAmount }
 import { RuleContext, pinStatuses, type RulePin } from "../rules/context";
 import { editRule, previewEdit } from "../rules/governed";
 import { calculatePerson, inEsiCover } from "../run/person";
-import { RulesMissingError, loadRunRules, type RunRules } from "../run/rules";
+import { loadRunRules, type RunRules } from "../run/rules";
+import { runNotices } from "../run/service";
 import { parseLayout, renderLayout } from "../run/layout";
 import { computeEsi, computePf } from "../run/statutory";
 import type { CalcContext, PersonInput } from "../run/types";
 import type { ComponentValue } from "../salary/schemas";
-import { buildSetupReport } from "../setup/status";
+import { buildSetupReport, readinessOf } from "../setup/status";
 import { assertPackAcknowledged, reviewDueReasons } from "../statutoryPack/service";
 import { computeAnnualTax } from "../tax/engine";
 import { parseTaxYearValue } from "../tax/schema";
@@ -54,9 +56,9 @@ const COMPANY: Record<string, unknown> = {
   LEAVER_PAYMENT_TIMING: "PAY_WITH_RUN",
   PAYMENT_DATE_RULE: { monthOffset: 0, day: "LAST" },
 };
-const rulesOn = (day: string, state = "RAJASTHAN"): { rules: RunRules; ctx: RuleContext } => {
-  const ctx = RuleContext.fromValuesForTests(COMPANY, { packOn: day });
-  return { rules: loadRunRules(ctx, { arrears: false, encashment: false, state }), ctx };
+const rulesOn = (day: string, extra: Record<string, unknown> = {}): { rules: RunRules; ctx: RuleContext } => {
+  const ctx = RuleContext.fromValuesForTests({ ...COMPANY, ...extra }, { packOn: day });
+  return { rules: loadRunRules(ctx, { arrears: false, encashment: false }), ctx };
 };
 
 describe("Standard defaults — golden against an independent reference", () => {
@@ -101,20 +103,27 @@ describe("Standard defaults — golden against an independent reference", () => 
     });
   });
 
-  describe("Professional tax and LWF: not levied in Rajasthan; any other state is refused", () => {
-    it("Rajasthan: nothing is computed, the run states it with the source, and it is pinned as a standard value", () => {
-      const { rules, ctx } = rulesOn("2026-10-31", "RAJASTHAN");
-      expect([rules.ptSlabs, rules.lwfTable]).toEqual([null, null]);
-      expect(rules.notLevied?.map((n) => [n.rule, n.state, n.reviewNeeded])).toEqual([["PT", "RAJASTHAN", true], ["LWF", "RAJASTHAN", true]]);
-      expect(ctx.pins().filter((p) => p.kind === "PACK" && (p.key === "PT_SLABS" || p.key === "LWF_TABLE")).length).toBe(2);
+  // Changed 2026-11-17 (owner decision, CHANGED_TESTS.md): no state's PT or LWF is loaded. Not set means nothing is deducted and the run says "not set" (never "not
+  // levied"), without making the month a test; a director's own table is used as before.
+  describe("Professional tax and LWF: Not set by default (owner decision); a director's table is used", () => {
+    it("with no director table: nothing is computed, the run records NOT_SET (in force, not a Placeholder) and says \"not set\", never \"not levied\"", async () => {
+      const { rules, ctx } = rulesOn("2026-10-31");
+      expect([rules.ptSlabs, rules.lwfTable, rules.notSet]).toEqual([null, null, ["PT", "LWF"]]);
+      const pins = ctx.pins().filter((p) => p.key === "PT_SLABS" || p.key === "LWF_TABLE");
+      expect(pins.map((p) => [p.key, p.kind])).toEqual([["LWF_TABLE", "NOT_SET"], ["PT_SLABS", "NOT_SET"]]);
+      const statuses = await pinStatuses(pins);
+      expect(statuses.map((st) => [st.label, st.status])).toEqual([["Labour Welfare Fund: not set", "CONFIRMED"], ["Professional Tax: not set", "CONFIRMED"]]);
+      const notices = runNotices(true, true).join(" ");
+      expect(notices).toContain("Professional Tax: not set.");
+      expect(notices).toContain("Labour Welfare Fund: not set.");
+      expect(notices).not.toMatch(/not levied in/);
     });
-    it("a state with no values loaded refuses the calculation, naming it", () => {
-      expect(() => rulesOn("2026-10-31", "GUJARAT")).toThrow(RulesMissingError);
-      try {
-        rulesOn("2026-10-31", "GUJARAT");
-      } catch (err) {
-        expect((err as RulesMissingError).missing.map((m) => m.label).join(" ")).toMatch(/values for this state \(GUJARAT\) have not been loaded/);
-      }
+    it("a director's table is used (and pinned as a rule, not NOT_SET)", () => {
+      const pt = { states: { TEST_STATE: { slabs: [{ fromGross: "0", toGross: null, monthlyAmount: "200" }] } } };
+      const { rules, ctx } = rulesOn("2026-10-31", { PT_SLABS: pt, PT_STATE_OF_PLACEMENT: "LAST_DAY_OF_PERIOD", STATE_NAME_MAP: { "Test State": "TEST_STATE" } });
+      expect(rules.ptSlabs).toEqual(pt);
+      expect(rules.notSet).toEqual(["LWF"]);
+      expect(ctx.pins().find((p) => p.key === "PT_SLABS")?.kind).toBeUndefined();
     });
   });
 
@@ -165,10 +174,17 @@ describe("Standard defaults — golden against an independent reference", () => 
     });
   });
 
-  describe("Gratuity (Code on Social Security, 2020, s.53) and the policy defaults for notice and encashment", () => {
-    const g = PACK_GRATUITY.value;
-    it("15 days' wages for each counted year, a part year counted from six months, capped at Rs 20 lakh", () => {
-      expect([g.minYears, g.daysPerYear, g.divisor, g.ceiling]).toEqual(["5", "15", "26", "2000000"]);
+  // Changed 2026-11-17 (owner decision, CHANGED_TESTS.md): gratuity, notice and encashment are no longer loaded. The arithmetic is still checked against the reference,
+  // with the reference figures (docs/STATUTORY_DEFAULTS.md, "Reference values, not loaded") typed here as TEST values; the settings themselves ship Not set.
+  describe("Gratuity, notice and encashment: Not set by default; the arithmetic against the reference with TEST values", () => {
+    it("the three settings and the state ship Not set (no hidden default)", () => {
+      for (const k of ["payroll.gratuity", "payroll.noticeRecovery", "payroll.leaveEncashment", "statutory.state"] as const) {
+        expect(BEHAVIOURS[k].defaultValue, k).toBeNull();
+        expect("standard" in BEHAVIOURS[k], k).toBe(false);
+      }
+    });
+    const g = { minYears: "5", partYear: "SIX_MONTHS_OR_MORE_COUNTS_AS_A_YEAR" as const, daysPerYear: "15", divisor: "26", ceiling: "2000000", rounding: { mode: "HALF_UP" as const, scale: 0 } };
+    it("TEST values: 15 days' wages for each counted year, a part year counted from six months, capped at Rs 20 lakh", () => {
       const ref = (years: number, wage: bigint) => {
         const exact = (wage * 15n * BigInt(years) * 2n + 26n) / (26n * 2n); // half up, whole rupees
         return (exact > 2000000n ? 2000000n : exact).toString();
@@ -178,13 +194,12 @@ describe("Standard defaults — golden against an independent reference", () => 
         for (const wage of [26000n, 33333n, 200000n]) expect(gratuityAmount(counted, intDec(Number(wage)), g.daysPerYear, g.divisor, g.ceiling, g.rounding).toString(), `${counted} years, wage ${wage}`).toBe(ref(counted, wage));
       }
     });
-    it("notice: shortfall days x BASIC / 30; encashment: days x BASIC / 30 (policy defaults, half up)", () => {
-      const n = PACK_NOTICE.value;
-      const e = PACK_ENCASHMENT.value;
+    it("TEST values: notice shortfall days x head / 30; encashment days x head / 30 (half up)", () => {
+      const r = { mode: "HALF_UP" as const, scale: 0 };
       for (const [days, basic] of [[1, 20000], [7, 23456], [30, 31000]] as const) {
         const ref = halfUp(BigInt(days) * BigInt(basic), 30n).toString();
-        expect(noticeRecoveryAmount(days, intDec(basic), n.divisor, n.rounding).toString()).toBe(ref);
-        expect(encashmentAmount(String(days), [{ componentCode: "BASIC", amount: String(basic) }], e.basisHeads, e.divisor, 31, e.rounding).toString()).toBe(ref);
+        expect(noticeRecoveryAmount(days, intDec(basic), "30", r).toString()).toBe(ref);
+        expect(encashmentAmount(String(days), [{ componentCode: "TEST_PAY", amount: String(basic) }], ["TEST_PAY"], { kind: "FIXED_DAYS", days: "30" }, 31, r).toString()).toBe(ref);
       }
     });
   });
@@ -306,7 +321,7 @@ describe("Standard defaults in the database", () => {
     }
     const res = await api(tok.d1!).get("/");
     expect(res.status).toBe(200);
-    expect(res.body.state).toMatchObject({ key: "RAJASTHAN", loaded: true });
+    expect(res.body.state).toMatchObject({ key: null, label: "Not set", loaded: false, professionalTax: null }); // changed 2026-11-17: the state ships Not set
     expect(res.body.rules.find((r: { key: string }) => r.key === "ESI_WAGE_CEILING").today).toMatchObject({ value: "21000", verification: "OFFICIAL" });
   });
 
@@ -332,8 +347,12 @@ describe("Standard defaults in the database", () => {
     const status = items.find((i) => i.id === "pack:status")!;
     expect([status.required, status.warning?.startsWith("Using standard statutory values, last reviewed on")]).toEqual([false, true]);
     expect(items.find((i) => i.id === "pack:acknowledgement")!.required).toBe(true);
+    // Changed 2026-11-17: PT and LWF are the owners' tables, never required for the first run, and a non-blocking row says they are not set.
     const pt = items.find((i) => i.id === "rule:PT_SLABS")!;
-    expect([pt.status, pt.detail]).toEqual(["CONFIRMED", expect.stringMatching(/not levied in Rajasthan/)]);
+    expect([pt.required, pt.notRequiredReason]).toEqual([false, expect.stringMatching(/set by the owners/)]);
+    const row = readinessOf(report).behaviours.find((b) => b.itemId === "statutory:ptlwf")!;
+    expect([row.title, row.state]).toEqual(["Professional Tax and LWF: not set", "NOT_SET"]);
+    expect(readinessOf(report).blockers.some((b) => b.itemId === "statutory:ptlwf" || b.itemId === "rule:PT_SLABS" || b.itemId === "rule:LWF_TABLE")).toBe(false);
     expect(items.find((i) => i.id === "rule:ESI_EMPLOYEE_RATE")!.detail).toMatch(/Standard default, change in settings: 0\.75/);
   });
 });

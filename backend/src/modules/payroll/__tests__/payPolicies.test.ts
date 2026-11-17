@@ -161,14 +161,14 @@ describe("A2/A3 — over a real run", () => {
     expect(pre.body.people.find((p: { employeeId: string }) => p.employeeId === who("a"))).toMatchObject({ minutes: 150, amount: null });
     expect((await call(world.tokens.maker, "post", "/api/payroll-pay-policies/overtime/post", { month: "2026-08" })).body.error.code).toBe("NOT_SET");
     expect((await call(world.tokens.maker, "post", "/api/payroll-pay-policies/encashment/pay", { requestId: encReqId })).body.error.code).toBe("NOT_SET");
-    // Changed 2026-11-17 (no silent zero, CHANGED_TESTS.md): leave encashment, gratuity and notice recovery use the standard default head BASIC, which this test company
-    // does not have (its heads are prefixed). Before, the lines were there with 0.00; now the calculation is refused with a plain message and never returns 0.
-    const refusal = { status: 409, code: "SALARY_HEAD_NOT_FOUND", message: "Salary head 'BASIC' not found for this employee. Choose the right head in settings." };
-    await expect(automaticLines(who("c"), new Date("2026-09-30T00:00:00Z"))).rejects.toMatchObject(refusal);
-    await expect(exitEncashment(who("c"), "PL", "1", new Date("2026-09-30T00:00:00Z"))).rejects.toMatchObject({ ...refusal, details: { use: "ENCASHMENT", heads: ["BASIC"] } });
-    // 30 days' notice by default, 11 served; the BASIC head again absent
-    await expect(exitNoticeRecovery(who("c"), new Date("2026-09-20T00:00:00Z"), new Date("2026-09-30T00:00:00Z"))).rejects.toMatchObject({ ...refusal, details: { use: "NOTICE", heads: ["BASIC"] } });
-    expect(await exitGratuity(who("c"), new Date("2026-09-30T00:00:00Z"))).toBeNull(); // the standard gratuity needs five years' service; this person has less, so no line and no refusal
+    // Changed 2026-11-17 (owner decision, CHANGED_TESTS.md): leave encashment, gratuity and notice recovery ship Not set. Earlier the same day a missing BASIC head was
+    // refused; now there is no head at all until the directors choose one, so each calculation is refused naming its setting, and never returns 0.
+    const lwd = new Date("2026-09-30T00:00:00Z");
+    const all = "Gratuity salary head is not set. Choose it in settings. Notice pay salary head is not set. Choose it in settings. Leave encashment salary head is not set. Choose it in settings.";
+    await expect(automaticLines(who("c"), lwd)).rejects.toMatchObject({ status: 409, code: "SETTING_NOT_SET", message: all, details: { settings: ["payroll.gratuity", "payroll.noticeRecovery", "payroll.leaveEncashment"] } });
+    await expect(exitEncashment(who("c"), "PL", "1", lwd)).rejects.toMatchObject({ code: "SETTING_NOT_SET", message: "Leave encashment salary head is not set. Choose it in settings." });
+    await expect(exitNoticeRecovery(who("c"), new Date("2026-09-20T00:00:00Z"), lwd)).rejects.toMatchObject({ code: "SETTING_NOT_SET", message: "Notice pay salary head is not set. Choose it in settings." });
+    await expect(exitGratuity(who("c"), lwd)).rejects.toMatchObject({ code: "SETTING_NOT_SET", message: "Gratuity salary head is not set. Choose it in settings." });
   });
 
   it("with TEST values confirmed by two directors and the switches on: overtime and encashment are paid once each, exactly; the ledger records the days; the settlement gets its amount", async () => {
@@ -198,6 +198,10 @@ describe("A2/A3 — over a real run", () => {
     expect((await call(world.tokens.checkerA, "post", "/api/payroll-pay-policies/encashment/pay", { requestId: encReqId })).body.error.code).toBe("ALREADY_PAID");
     const ledger = await prisma.leaveLedger.findMany({ where: { referenceType: "ENCASHMENT_REQUEST", referenceId: encReqId } });
     expect(ledger.map((l) => [l.entryType, l.days.toString()])).toEqual([["ENCASHMENT", "-2.5"]]);
+    // Changed 2026-11-17 (owner decision, CHANGED_TESTS.md): a settlement needs all three settings. Notice (served in full here: no date given) and a gratuity nobody here
+    // qualifies for (40 years) are set first, so this part still checks encashment alone; the gratuity and notice amounts are checked below as before.
+    await setBehaviour("payroll.noticeRecovery", { effectiveFrom: "2026-01-01", noticeDays: 30, recoverShortfall: false, basisHeads: [world.basic], divisor: "30", rounding: { mode: "HALF_UP", scale: 2 }, sourceNote: "TEST value, recovery off" }, "/api/behaviours");
+    await setBehaviour("payroll.gratuity", { effectiveFrom: "2026-01-01", minYears: "40", partYear: "COMPLETED_YEARS_ONLY", wageHeads: [world.basic], daysPerYear: "15", divisor: "26", ceiling: "NONE", rounding: { mode: "HALF_UP", scale: 2 }, sourceNote: "TEST value, nobody qualifies" }, "/api/behaviours");
     const exitLines = (await automaticLines(who("c"), new Date("2026-09-30T00:00:00Z"))).filter((l) => l.kind === "LEAVE_BALANCE");
     const leave = exitLines.find((l) => l.label.includes("(PL)"))!;
     expect(leave.amount).not.toBeNull();

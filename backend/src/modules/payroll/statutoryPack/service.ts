@@ -3,11 +3,10 @@ import {
   CONTINUING,
   PACK_CHECKED_ON,
   PACK_RULES,
-  PACK_STATE_LABEL,
-  PACK_STATE_RULES,
   PACK_TAX_YEARS,
   PACK_VERSION,
   STANDARD_DEFAULT_LABEL,
+  stateLabel,
   entryOn,
   packChangeDates,
   packReviewNeeded,
@@ -70,8 +69,7 @@ export async function packStatus(actor: Actor) {
     loadItems("TAX_YEAR", Object.keys(PACK_TAX_YEARS)),
   ]);
   const names = await namesOfUsers(acks.map((a) => a.userId));
-  const stateKey = state.value as string;
-  const statePack = (PACK_STATE_RULES as Record<string, (typeof PACK_STATE_RULES)["RAJASTHAN"] | undefined>)[stateKey];
+  const stateKey = (state.value as string | null) ?? null;
   return {
     version: PACK_VERSION,
     checkedOn: PACK_CHECKED_ON,
@@ -88,14 +86,15 @@ export async function packStatus(actor: Actor) {
       const inUse = s.current ? "DIRECTOR" : "STANDARD";
       return { key, label: RULE_BY_KEY[key]?.label ?? key, inUse, today: entryView(entryOn(series, today) ?? series[0]!), series: series.map(entryView) };
     }),
+    // Owner decision 2026-11-17: the state and its PT, LWF and minimum wages are not part of the standard values; the directors set them.
     state: {
       key: stateKey,
-      label: PACK_STATE_LABEL[stateKey] ?? stateKey,
-      loaded: Boolean(statePack),
-      professionalTax: statePack ? entryView(statePack.professionalTax) : null,
-      labourWelfareFund: statePack ? entryView(statePack.labourWelfareFund) : null,
-      minimumWages: statePack ? entryView(statePack.minimumWages) : null,
-      notLoadedText: statePack ? null : "Values for this state have not been loaded.",
+      label: stateLabel(stateKey),
+      loaded: false,
+      professionalTax: null,
+      labourWelfareFund: null,
+      minimumWages: null,
+      notLoadedText: "Professional tax, labour welfare fund and minimum wages are not part of the standard values: the directors set the state and its tables. Until then no PT or LWF is deducted and the run says \"not set\".",
     },
     taxYears: Object.entries(PACK_TAX_YEARS).map(([year, t]) => ({ year, inUse: summarise(taxData, year).current ? "DIRECTOR" : "STANDARD", verification: t.verification, unverifiedParts: t.unverifiedParts })),
   };

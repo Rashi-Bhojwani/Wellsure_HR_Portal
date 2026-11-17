@@ -890,6 +890,8 @@ export interface PayslipContent {
   runHash: string;
   /** P7-3: year to date per line ("EARNING|CODE"), on payslips published from P7-3 on; absent on older ones (a published payslip never changes). */
   ytd?: { financialYear: string; byLine: Record<string, string>; gross: string; deductions: string };
+  /** What the run left Not set ("Professional Tax: not set"), so a missing line is never read as "not levied"; absent when nothing was. */
+  notices?: string[];
 }
 export interface PayslipSummary {
   id: string;

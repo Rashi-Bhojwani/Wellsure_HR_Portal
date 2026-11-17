@@ -93,36 +93,6 @@ export function StandardValuesPanel() {
           reviewNeeded: r.today.reviewNeeded,
           inUse: r.inUse,
         })),
-        ...(p.state.professionalTax
-          ? [
-              {
-                key: "PT",
-                label: `Professional tax, ${p.state.label}`,
-                value: `Not levied in ${p.state.label}`,
-                when: fromText(p.state.professionalTax),
-                source: p.state.professionalTax.source.name,
-                url: p.state.professionalTax.source.url,
-                checkedOn: p.state.professionalTax.checkedOn,
-                reviewNeeded: p.state.professionalTax.reviewNeeded,
-                inUse: "STANDARD",
-              },
-            ]
-          : []),
-        ...(p.state.labourWelfareFund
-          ? [
-              {
-                key: "LWF",
-                label: `Labour welfare fund, ${p.state.label}`,
-                value: `Not levied in ${p.state.label}`,
-                when: fromText(p.state.labourWelfareFund),
-                source: p.state.labourWelfareFund.source.name,
-                url: p.state.labourWelfareFund.source.url,
-                checkedOn: p.state.labourWelfareFund.checkedOn,
-                reviewNeeded: p.state.labourWelfareFund.reviewNeeded,
-                inUse: "STANDARD",
-              },
-            ]
-          : []),
         ...p.taxYears.map((t) => ({
           key: `TAX_${t.year}`,
           label: `Income tax ${t.year}`,
@@ -148,13 +118,11 @@ export function StandardValuesPanel() {
           }
         >
           <div style={{ overflowWrap: "anywhere" }}><Stack>
-            {!p.state.loaded && (
-              <ApprovalBanner
-                tone="danger"
-                title={`${p.state.label}: ${p.state.notLoadedText}`}
-                description="Professional tax and labour welfare fund are refused for this state until a director enters its tables."
-              />
-            )}
+            <ApprovalBanner
+              tone="info"
+              title="Professional tax, LWF, minimum wages and the final settlement rules are not standard values"
+              description={`The owners set them (state: ${p.state.label}). Until they are set, no PT or LWF is deducted and the run says "not set", and a final settlement is refused. See Default behaviours.`}
+            />
             {p.reviewDue.length > 0 && (
               <ApprovalBanner
                 tone="warning"

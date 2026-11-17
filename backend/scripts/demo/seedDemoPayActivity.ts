@@ -3,7 +3,6 @@ import { createApp } from "../../src/app";
 import { addCalendarDays, businessToday } from "../../src/lib/businessDate";
 import { signAccessToken } from "../../src/lib/jwt";
 import { prisma } from "../../src/lib/prisma";
-import { behaviourOn, behaviourValue } from "../../src/modules/behaviours/service";
 import { confirmComponent, previewComponentConfirm, previewComponentSave, saveComponent } from "../../src/modules/payroll/salary/components";
 import { loanSchedule } from "../../src/modules/payroll/loans/schedule";
 import { scheduleJson } from "../../src/modules/payroll/loans/service";
@@ -147,13 +146,13 @@ export async function seedDemoPayActivity(): Promise<DemoActivityResult> {
   // This claim is approved after both runs, so it waits, approved, for the next run.
   await call(OWNER, "post", `reimbursements/${claims.approved}/decision`, { decision: "APPROVE" });
 
-  // ── The salary head gratuity, notice pay and leave encashment use (no silent zero, 2026-11-17): the standard default is BASIC, which the demo company calls DEMO_BASIC.
-  // Without this choice a settlement is refused. One director enters it, the other confirms, as on Default behaviours. Encashment is paid on DEMO_SPECIAL (a DEMO choice).
-  const today = iso(businessToday());
+  // ── Final settlement rules (owner decision 2026-11-17: they ship Not set and a settlement is refused until they exist). The demo's directors set DEMO values on its
+  // own head DEMO_BASIC: one enters, the other confirms, as on Default behaviours. Made-up figures for the demo only, never a statement of the law or of any policy.
+  const demoRounding = { mode: "HALF_UP", scale: 0 };
   const chosen: Array<[string, unknown]> = [
-    ["payroll.gratuity", { ...(await behaviourOn("payroll.gratuity", today)), wageHeads: ["DEMO_BASIC"] }],
-    ["payroll.noticeRecovery", { ...(await behaviourOn("payroll.noticeRecovery", today)), basisHeads: ["DEMO_BASIC"] }],
-    ["payroll.leaveEncashment", { ...((await behaviourValue("payroll.leaveEncashment")).value as object), basisHeads: ["DEMO_BASIC"], payHead: "DEMO_SPECIAL" }],
+    ["payroll.gratuity", { effectiveFrom: "2020-01-01", minYears: "5", partYear: "SIX_MONTHS_OR_MORE_COUNTS_AS_A_YEAR", wageHeads: ["DEMO_BASIC"], daysPerYear: "15", divisor: "26", ceiling: "2000000", rounding: demoRounding, sourceNote: "DEMO COMPANY: made-up values" }],
+    ["payroll.noticeRecovery", { effectiveFrom: "2020-01-01", noticeDays: 30, recoverShortfall: true, basisHeads: ["DEMO_BASIC"], divisor: "30", rounding: demoRounding, sourceNote: "DEMO COMPANY: made-up values" }],
+    ["payroll.leaveEncashment", { payHead: "DEMO_SPECIAL", exitLeaveTypes: ["PL"], basisHeads: ["DEMO_BASIC"], divisor: { kind: "FIXED_DAYS", days: "30" }, rounding: demoRounding, sourceNote: "DEMO COMPANY: made-up values" }],
   ];
   for (const [key, value] of chosen) {
     const p = await call(OWNER, "post", `behaviours/${key}/proposals`, { value, reason: "DEMO COMPANY: the demo's basic head" });

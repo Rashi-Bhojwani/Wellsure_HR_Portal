@@ -8,6 +8,7 @@ import { payrollHash } from "../hash";
 import { canonicalDecimal, dec, fixed, sum, ZERO } from "../money";
 import { paymentDateOf } from "./bank";
 import { ytdLines, type YtdLine } from "./ytd";
+import { notSetFromPins } from "./rules";
 import { financialYearOf } from "@shared/utils/financialYear";
 
 // What a payslip says (docs/plans/PHASE_6.md §9 and §14H). The content is built once, from a FINAL run's stored items and lines, at the moment payslips are published,
@@ -41,6 +42,11 @@ export interface PayslipContent {
    * before it was added: a published payslip never changes.
    */
   ytd?: { financialYear: string; byLine: Record<string, string>; gross: string; deductions: string };
+  /**
+   * Owner decision 2026-11-17: what the run left Not set, in words ("Professional Tax: not set", "Labour Welfare Fund: not set"), so a missing line is never read as
+   * "not levied". Absent when nothing was left Not set (and on payslips published before it was added).
+   */
+  notices?: string[];
 }
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -67,6 +73,8 @@ export async function buildPayslips(run: PayrollRun): Promise<Map<string, { runI
   const banks = await bankAccountsOn(ids, paidOn);
   const ytd = await ytdLines(ids, run.cycleEnd, run.id);
 
+  const pins = (run.pins as unknown as Array<{ key: string; kind?: string; unset?: boolean }> | null) ?? [];
+  const notices = [...(notSetFromPins(pins, "PT_SLABS") ? ["Professional Tax: not set"] : []), ...(notSetFromPins(pins, "LWF_TABLE") ? ["Labour Welfare Fund: not set"] : [])];
   const out = new Map<string, { runItemId: string; content: PayslipContent; contentHash: string }>();
   for (const item of items) {
     const line = (kind: string) => item.lines.filter((l) => l.kind === kind).map((l) => ({ code: l.code, label: l.label, amount: money(l.amount) }));
@@ -99,6 +107,7 @@ export async function buildPayslips(run: PayrollRun): Promise<Map<string, { runI
       statutory: { panLast4: stat?.panLast4 ?? null, uanLast4: stat?.uanLast4 ?? null, esiLast4: stat?.esiLast4 ?? null },
       runHash: run.runHash ?? "",
       ytd: ytdOf(ytd.get(item.employeeId), run.cycleEnd),
+      ...(notices.length ? { notices } : {}),
     };
     out.set(item.employeeId, { runItemId: item.id, content, contentHash: payslipHash(content) });
   }
