@@ -721,3 +721,31 @@ refused every one. **Found and fixed:** at 390 the Ready page and Minimum wages 
 anywhere. Keyboard at both views: "I have reviewed the standard values" reached by Tab with focus visible, Enter opens the dialog, Escape closes it and focus
 returns, Tab to the dialog's confirm and Enter records it ("Recorded: you have reviewed the standard values.").
 **Not verified:** the Rajasthan values against a gazette; the ECR file on the EPFO portal; the ESI upload (format not published); a real month in the parallel run.
+
+## Session A: owner-decided settings ship empty, no silent zero (written 2026-11-17)
+
+Plan: `docs/plans/OWNER_EMPTY_SETTINGS.md`. Commits `14ff0ad` (missing head refused), `062aa85`, `54ff2f6` and this report.
+
+- **Empty by default.** Gratuity, notice pay and leave encashment (heads, notice period, encashment divisor, gratuity figures), the company's state, and
+  Rajasthan PT, LWF and minimum wages are no longer loaded. Their researched values and sources are in `docs/STATUTORY_DEFAULTS.md`, "Reference values, not
+  loaded" (generated, nothing in the app imports them). Pack version 1 → 2. PF, ESI, income tax, PF ceiling dating, PY-43, ECR and the acknowledgement unchanged.
+- **Configurable.** Default behaviours has a "Final settlement rules" section (anchors per setting; head choices list only existing salary heads, the server refuses
+  any other) and a state select that starts blank; changes follow the existing second-director confirmation and audit. Existing director values untouched.
+- **No silent zero.** A final settlement, its guide and each of gratuity / notice / encashment are refused naming the missing setting (`SETTING_NOT_SET`); a
+  configured head missing from a salary is refused by name. PT/LWF with no table: no deduction, a `NOT_SET` pin in force (not a Placeholder, so a month is not
+  blocked), and the run, payslip (screen and PDF) and Ready say "Professional Tax: not set" / "Labour Welfare Fund: not set".
+- **Ready for First Run** (never blocking): "Final settlement rules: not set" → once set, "salary head matches your structures" with the count; "Professional
+  Tax and LWF: not set"; "Minimum wages: not set"; each links to its screen. Also fixed: the review interval and PY-43 rows showed "Not set" although a standard
+  default is in force; the settlement guide hard-coded "Not set" for every rule.
+
+Verification:
+- Check script once (lint, typecheck, tokens, fresh-database migration diff, 17 changed backend files / 204 tests, frontend 18 files / 135 tests): passed.
+- Full backend suite alone: 265 files / 2,302 tests passed. Demo company tests: 7 / 7.
+- Mutation checks, 4 of 4 caught: refusal replaced by a zero amount; a hidden gratuity default; a hidden PT table instead of "not set"; the payslip not saying it.
+- Golden PF / ESI / tax tests unchanged and passing. Developer-403 and permission tests on the behaviours routes (propose, confirm, list, the state).
+- Browser walk (director, HR, manager, employee, Developer; 1280 light and 390 dark; Ready, Default behaviours, Minimum wages, Settlements): 40 visits, the
+  director sees the new rows and sections, every other role is refused, no sideways scroll, no error, no leak, no "not levied". Keyboard: Ready's settlement row
+  link → Default behaviours `#payroll.gratuity` with focus on the card (now 64 px clear of the header, one fix); "Set it" opens the drawer (reference text only),
+  Esc closes, focus returns; the state select opens by keyboard; setting buttons 44 px on the phone. The local dev database was one migration behind
+  (`statutory_pack_reviews`) and was brought up to date with the guarded script.
+- Changed tests: `CHANGED_TESTS.md`, "Owner-decided settings empty (2026-11-17)".
