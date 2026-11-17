@@ -4,7 +4,7 @@ import { prisma } from "../../lib/prisma";
 import { writeAuditLog } from "../../lib/audit";
 import { resolveAttendanceDefaults } from "../../lib/attendanceSettings";
 import { businessToday } from "../../lib/businessDate";
-import { deviceCapturedOn, firstHistoryDay, inForceOn, rowStatus, writeBankChange, writeJobChange, writeNameChange } from "../../lib/effectiveDating";
+import { deviceCapturedOn, firstHistoryDay, inForceOn, mappingInForceOn, rowStatus, writeBankChange, writeJobChange, writeNameChange } from "../../lib/effectiveDating";
 import { logger } from "../../lib/logger";
 import { HttpError } from "../../middleware/errorHandler";
 import { reResolveUnmapped } from "../biometric/adminService";
@@ -468,7 +468,6 @@ async function loadProfileCore(employeeId: string) {
       nameHistory: { where: inForceOn() },
       user: { select: { id: true, status: true, totpEnabled: true, lastLoginAt: true } },
       loginEmailMissingNotice: { select: { lastRequestedAt: true, requestCount: true } },
-      deviceMappings: { where: { validTo: null }, orderBy: { validFrom: "desc" }, take: 1, select: { deviceUserId: true } },
       jobHistory: {
         where: inForceOn(),
         include: { department: true, designation: true, location: true, grade: true, costCentre: true, reportingManager: { include: { nameHistory: { where: inForceOn() } } } },
@@ -483,6 +482,8 @@ async function loadProfileCore(employeeId: string) {
   const today = businessToday();
   const captureDay = employee.dateOfJoining > today ? employee.dateOfJoining : employee.lastWorkingDate && employee.lastWorkingDate < today ? employee.lastWorkingDate : today;
   const attendanceCapture = (await deviceCapturedOn([employee.id], captureDay)).has(employee.id) ? "DEVICE" : "MANUAL";
+  // The machine ID in force on the same day (employee-number login: shown beside the login ID, a difference warned about).
+  const machine = await prisma.deviceUserMapping.findFirst({ where: { employeeId: employee.id, ...mappingInForceOn(captureDay) }, select: { deviceUserId: true } });
   return {
     id: employee.id,
     employeeCode: employee.employeeCode,
@@ -495,8 +496,8 @@ async function loadProfileCore(employeeId: string) {
     attendanceCapture,
     // Employee-number login (docs/plans/LOGIN_CHECKLIST.md): the number is the login ID and should be the attendance machine ID too. Shown, and a
     // difference warned about; never forced (the machine ID is a separate dated mapping the attendance engine reads).
-    deviceUserId: employee.deviceMappings[0]?.deviceUserId ?? null,
-    loginIdMatchesMachine: employee.deviceMappings[0] ? employee.deviceMappings[0].deviceUserId.trim().toLowerCase() === employee.employeeCode.trim().toLowerCase() : null,
+    deviceUserId: machine?.deviceUserId ?? null,
+    loginIdMatchesMachine: machine ? machine.deviceUserId.trim().toLowerCase() === employee.employeeCode.trim().toLowerCase() : null,
     // No email on record: no password link can reach them. The notice says when someone last asked for one.
     noEmailOnRecord: !emailOnRecord(employee.personal),
     emailMissingRequestedAt: employee.loginEmailMissingNotice?.lastRequestedAt.toISOString() ?? null,

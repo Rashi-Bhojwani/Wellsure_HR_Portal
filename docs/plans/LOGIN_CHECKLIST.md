@@ -76,6 +76,6 @@ sign in. HR then fills in the rest. The number must be the same in the machine a
 - [x] Phase check script green (lint, typecheck, auth/employee tests, frontend tests, build + bundle)
 - [x] Migrations on a fresh database
 - [x] Browser walk: HR, director, employee, Developer; desktop light + 390 dark; keyboard only
-- [ ] Full backend suite once
+- [x] Full backend suite once (2 failures, both mine, fixed; see LOGIN_REPORT.md)
 - [x] FIRST_SETUP.md "Login IDs" section; LOGIN_REPORT.md
 - [ ] Push to `feat/employee-number-login`; CI read once on the final code commit
