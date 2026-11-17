@@ -78,4 +78,4 @@ sign in. HR then fills in the rest. The number must be the same in the machine a
 - [x] Browser walk: HR, director, employee, Developer; desktop light + 390 dark; keyboard only
 - [x] Full backend suite once (2 failures, both mine, fixed; see LOGIN_REPORT.md)
 - [x] FIRST_SETUP.md "Login IDs" section; LOGIN_REPORT.md
-- [ ] Push to `feat/employee-number-login`; CI read once on the final code commit
+- [x] Push to `feat/employee-number-login`; CI green on the final code commit (run 424, `e810b729`; runs 422 and 423 red for explained reasons, see LOGIN_REPORT.md)

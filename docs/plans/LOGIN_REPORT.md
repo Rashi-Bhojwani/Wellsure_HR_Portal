@@ -20,7 +20,11 @@ Session A. Plan and checklist: `docs/plans/LOGIN_CHECKLIST.md`.
 | `4029557c` | docs: plan and checklist |
 | `9aab194b` | backend: matching, migration `login_employee_number`, Forgot password changes, setup link 7 days, director-only number change, profile fields, settings, tests |
 | `f71b2f5d` | frontend: login and Forgot password screens, employee screen (login and machine ID, warnings, director change), setup-link wording, settings, tests |
-| (this commit) | docs: FIRST_SETUP "Login IDs", this report, checklist ticked |
+| `96c913b6` | docs: FIRST_SETUP "Login IDs", this report, checklist |
+| `3e1a6156` | fix: machine ID read through `mappingInForceOn`; new route classified in the manager route inventory (both found by the full backend suite) |
+| `d99fe878` | fix: "e.g. 1042" placeholder kept for the browser checks; login-screen tests wait for antd timers (CI run 422) |
+| `e810b729` | fix: latency simulator accepts the "Employee number" label (CI run 423) |
+| (this commit) | docs: CI run 424 green recorded |
 
 ## What it does now
 
@@ -62,7 +66,7 @@ the admin "send reset link" uses the same TTL setting.
 | Phase check (one script, stops at first failure) | green: backend + frontend lint (incl. check:tokens), both typechecks, **fresh database: migrate + `db:drift` "No difference detected" + seed**, backend auth/employee/settings/access/cleanup 213/213, frontend 140/140, build + bundle (login 232.4 KB / 250; employee home 347.8 / 400; admin home 367.5 / 400) |
 | Browser walk (Playwright, local dev DB, made-up fixtures) | **54/54**: desktop 1440 light and 390 dark; login, Forgot password, set password, new person end to end (Forgot password → link → password → sign in → same link refused), HR (labels, mismatch, no-email banner, Send setup link message, Invited, no hash/token in the page), director (change drawer, Esc closes, change to match the machine, second change), employee (another person's record not shown), Developer (no change button; API 403). Keyboard only: focus lands on the number field, Tab order number → password → Forgot password? → Sign in, Enter submits, Enter opens the drawer, Esc closes it. No sideways scroll at 390; no console errors |
 | Full backend suite, once | 2313/2315 on the first run. The 2 failures were mine and are fixed in the follow-up commit: `currentRowGuard.test.ts` (the profile read the machine mapping with `validTo: null`; it now uses `mappingInForceOn`, on the same day the attendance-capture line uses) and `routeInventory.test.ts` (the new `POST /api/employees/:id/employee-code` is now classified `admin`). After the fix, those two files plus the employee module and the new login tests: 100/100. The full suite was not re-run (the speed rule allows one run); CI runs it on the final commit |
-| CI on the final code commit | CI_RESULT |
+| CI on the final code commit | **Run 424 on `e810b729`: green**, every job (lint, typecheck, tokens and bundle, migrate, schema drift, seed, frontend and agent tests, demo company tests, all 4 backend shards plus the shard check, both sensitive-UI crawls, popovers, punch-to-screen latency, attendance replay, Docker build, Windows agent). Before it: run 422 (`3e1a6156`) was red in 4 jobs: the new login-screen tests left Ant Design delayed state updates running past jsdom teardown (2 unhandled errors, 140/140 tests passing), and the popovers and both sensitive-UI crawls find the login field by its placeholder "e.g. 1042", which had changed to "e.g. 486". Fixed in `d99fe878` (placeholder restored; the test waits for the timers). Run 423 was then red only in the latency simulator (`biometric-agent/src/simulator/latency/run.ts`), which signed in with the label "Employee Code"; fixed in `e810b729` (accepts "Employee number" or "Employee Code"). All three causes came from this branch's wording change and are explained. A repo-wide search found no other consumer of the old login wording |
 
 ### Changed existing test
 
