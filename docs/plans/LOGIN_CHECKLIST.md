@@ -65,17 +65,17 @@ sign in. HR then fills in the rest. The number must be the same in the machine a
 
 ## Checklist
 
-- [ ] Plan written (this file)
-- [ ] L1 matching + migration + golden login test
-- [ ] L2 forgot password (INVITED, TTL setting, no-email notice, per-number limit, timing)
-- [ ] L3 setup link TTL 7 days, director-only code change + audit
-- [ ] L4 profile machine ID + mismatch; unmapped-queue test
-- [ ] L5 permission matrix (Developer 403, employee cannot read others, HR sees no token/password)
-- [ ] Mutation checks (differing reply, reusable token, expired token, plaintext token)
-- [ ] Frontend: labels, forgot-password reply, profile banners, director change modal, tests
-- [ ] Phase check script green (lint, typecheck, auth/employee tests, frontend tests, build + bundle)
-- [ ] Migrations on a fresh database
-- [ ] Browser walk: HR, director, employee, Developer; desktop light + 390 dark; keyboard only
+- [x] Plan written (this file)
+- [x] L1 matching + migration + golden login test
+- [x] L2 forgot password (INVITED, TTL setting, no-email notice, per-number limit, timing)
+- [x] L3 setup link TTL 7 days, director-only code change + audit
+- [x] L4 profile machine ID + mismatch; unmapped-queue test
+- [x] L5 permission matrix (Developer 403, employee cannot read others, HR sees no token/password)
+- [x] Mutation checks (differing reply, reusable token, expired token, plaintext token)
+- [x] Frontend: labels, forgot-password reply, profile banners, director change modal, tests
+- [x] Phase check script green (lint, typecheck, auth/employee tests, frontend tests, build + bundle)
+- [x] Migrations on a fresh database
+- [x] Browser walk: HR, director, employee, Developer; desktop light + 390 dark; keyboard only
 - [ ] Full backend suite once
-- [ ] FIRST_SETUP.md "Login IDs" section; LOGIN_REPORT.md
+- [x] FIRST_SETUP.md "Login IDs" section; LOGIN_REPORT.md
 - [ ] Push to `feat/employee-number-login`; CI read once on the final code commit
