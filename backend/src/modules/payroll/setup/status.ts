@@ -271,8 +271,9 @@ async function behaviourItems(): Promise<SetupItem[]> {
   for (const key of BEHAVIOUR_KEYS) {
     const def = BEHAVIOURS[key];
     const v = await behaviourValue(key);
-    const state = !v.isDefault ? "CONFIRMED" : def.d37 ? "DEFAULT" : "NOT_SET";
-    const label = state === "CONFIRMED" ? null : state === "DEFAULT" ? DEFAULT_LABEL : "Not set";
+    // A setting with a standard default in force (the review interval, PY-43) is shown as a default, not as Not set.
+    const state = !v.isDefault ? "CONFIRMED" : def.d37 || "standard" in def ? "DEFAULT" : "NOT_SET";
+    const label = state === "CONFIRMED" ? null : state === "DEFAULT" ? ("standard" in def ? STANDARD_DEFAULT_LABEL : DEFAULT_LABEL) : "Not set";
     out.push({ id: `behaviour:${key}`, section: "company", category: "Default behaviours", title: def.title, why: def.what, required: false, notRequiredReason: label ?? "Changed by the directors and confirmed by a different director.", status: state === "CONFIRMED" ? "CONFIRMED" : state === "DEFAULT" ? "PLACEHOLDER" : "NOT_SET", enteredBy: null, confirmedBy: null, detail: state === "CONFIRMED" ? "Changed by the directors, confirmed by a different director." : def.defaultText, where: { ...where, path: `${where.path}#${key}` }, behaviour: { state, label } });
   }
   return out;

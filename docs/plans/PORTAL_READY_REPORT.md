@@ -189,12 +189,28 @@ By the owners' decision statutory and tax values ship in force with their source
 figures. Before the first real run: **both directors click "I have reviewed the standard values"** (Ready for First Run; a run that used them is refused until
 then), after reading the values marked review needed:
 
-- Rajasthan professional tax "not levied" and LWF "not levied" (not confirmed from a gazette); Rajasthan minimum wages (secondary sources).
+- ~~Rajasthan professional tax, LWF and minimum wages~~: no longer loaded (section 9).
 - PF and ESI rounding; September 2026 PF (whole month on Rs 25,000).
 - Tax 2026-27: the standard deduction under the 2025 Act, one surcharge table (old regime's 37% and surcharge marginal relief not modelled), TDS policy
   defaults, a short section catalogue.
-- Gratuity, notice and encashment head codes (default BASIC; with other head names the amounts are 0) and the notice period (30 days, a policy default).
+- ~~Gratuity, notice and encashment~~: no longer loaded (section 9).
 
 Not modelled (named): ESI Rs 176/day exemption and Rs 25,000 for persons with disability; PF Rs 500 minimum admin charge; fixed-term gratuity after one year.
 To try on the real portals: the PF ECR file (EPFO) and the ESI upload (format not published). Reminders come every 6 months (a setting) or when a value's date
 passes.
+
+## 9. Owner-decided settings ship empty (written 2026-11-17)
+
+Your decision: gratuity, notice pay and leave encashment (heads, notice period, encashment divisor, gratuity figures), the company's state, and that state's
+professional tax, LWF and minimum wages ship **Not set**; you set them. PF, ESI and income tax standard values, the PF ceiling dating, PY-43, the PF ECR file and
+the acknowledgement are unchanged. The researched values are kept, unused, in `docs/STATUTORY_DEFAULTS.md`, "Reference values, not loaded".
+
+| Owner to set | Until then | Where |
+|---|---|---|
+| Final settlement rules (gratuity, notice pay, leave encashment) | A final settlement and its guide are refused, naming each missing setting ("Gratuity salary head is not set. Choose it in settings."); a configured head missing from someone's salary is refused by name. Never a zero. | System Settings, Default behaviours, "Final settlement rules" |
+| The state, its PT and LWF tables | No PT or LWF deducted; the run, every payslip and Ready say "Professional Tax: not set" / "Labour Welfare Fund: not set" (never "not levied"). A monthly run is not blocked. | Default behaviours (state); Rules and setup (tables) |
+| Minimum wages | The check says Not set; it never changes pay. | Payroll, Minimum Wages |
+
+Ready for First Run shows each as an information row (never blocking) with a link to its screen. Verification: see `STAGE_REPORTS.md`, "Owner-decided settings
+ship empty".
+

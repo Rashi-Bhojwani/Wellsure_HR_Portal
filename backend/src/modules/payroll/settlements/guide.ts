@@ -1,5 +1,6 @@
 import { requireDirector } from "../../../lib/directorAuthority";
 import { prisma } from "../../../lib/prisma";
+import { behaviourOn, behaviourValue } from "../../behaviours/service";
 import { HttpError } from "../../../middleware/errorHandler";
 import { dec, fixed } from "../money";
 import { automaticLines, type Actor } from "./service";
@@ -33,11 +34,12 @@ export function serviceLength(doj: Date, lastWorkingDay: Date): { years: number;
   return { years: Math.floor(m / 12), months: m % 12, days, totalDays: Math.round((end.getTime() - doj.getTime()) / DAY_MS) }; // allow-number: months in a year
 }
 
-const NOT_SET = "Not set";
+// Owner decision 2026-11-17: the three rules ship Not set and the guide (like preparing a settlement) is refused until all three are in force on the last working day
+// (automaticLines below refuses, naming each missing one). Once they are, the guide shows the rule in force for each; it still proposes no amount of its own.
 export const GUIDE_RULES = [
-  { key: "gratuity", label: "Gratuity rule", why: "Who qualifies, the formula and the wage it uses are the owners' to set (spec §14). Type the amount and its source if one is due." },
-  { key: "noticePeriod", label: "Notice period", why: "No notice period is recorded for anyone yet; notice pay or recovery is typed with its source." },
-  { key: "encashmentRate", label: "Leave encashment per-day rate", why: "The encashment formula and its tax treatment are the owners' to set (spec §14). The leave balance below is in days only." },
+  { key: "gratuity", label: "Gratuity rule", why: "Who qualifies, the formula and the wage heads, as the directors set them (Default behaviours, Final settlement rules)." },
+  { key: "noticePeriod", label: "Notice period", why: "The notice period and how a shortfall is recovered, as the directors set them (Default behaviours, Final settlement rules)." },
+  { key: "encashmentRate", label: "Leave encashment per-day rate", why: "The per-day basis and the leave types encashed at exit, as the directors set them (Default behaviours, Final settlement rules)." },
 ] as const;
 
 export async function guide(separationId: string, actor: Actor) {
@@ -58,7 +60,19 @@ export async function guide(separationId: string, actor: Actor) {
     service: serviceLength(sep.employee.dateOfJoining, sep.lastWorkingDate),
     lastDrawn: last ? { cycle: last.run.cycleLabel, gross: fixed(dec(last.gross.toString()), 2), earnings: last.lines.map((l) => ({ code: l.code, label: l.label, amount: fixed(dec(l.amount.toString()), 2) })) } : null,
     leave,
-    rules: GUIDE_RULES.map((r) => ({ ...r, value: null, state: NOT_SET })),
+    rules: await rulesInForce(sep.lastWorkingDate),
     note: "Facts only. No amount is proposed: each line is typed by a director with its source.",
   };
+}
+
+/** The three rules in force on the last working day, in words (automaticLines has already refused if any is Not set). */
+async function rulesInForce(lwd: Date) {
+  const day = iso(lwd);
+  const [g, n, e] = await Promise.all([behaviourOn("payroll.gratuity", day), behaviourOn("payroll.noticeRecovery", day), behaviourValue("payroll.leaveEncashment")]);
+  const text = {
+    gratuity: g ? `From ${g.effectiveFrom}: after ${g.minYears} year(s), (${g.wageHeads.join(" + ")}) x ${g.daysPerYear} / ${g.divisor} per counted year; ceiling ${g.ceiling === "NONE" ? "none" : g.ceiling}` : null,
+    noticePeriod: n ? `From ${n.effectiveFrom}: ${n.noticeDays} days; ${n.recoverShortfall ? `a shortfall recovered at (${n.basisHeads.join(" + ")}) / ${n.divisor} a day` : "a shortfall is not recovered"}` : null,
+    encashmentRate: e.value ? `(${e.value.basisHeads.join(" + ")}) / ${e.value.divisor.kind === "FIXED_DAYS" ? e.value.divisor.days : "the month's calendar days"} a day; at exit: ${e.value.exitLeaveTypes.join(", ") || "no type"}` : null,
+  };
+  return GUIDE_RULES.map((r) => ({ ...r, value: text[r.key], state: text[r.key] ? "Set" : "Not set" }));
 }

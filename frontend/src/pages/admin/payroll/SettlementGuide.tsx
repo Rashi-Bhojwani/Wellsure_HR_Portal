@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Typography } from "antd";
 import * as api from "../../../api/settlements";
@@ -13,6 +14,10 @@ const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
 export function SettlementGuide({ separationId }: { separationId: string }) {
   const q = useQuery({ queryKey: ["settlements", "guide", separationId], queryFn: () => api.settlementGuide(separationId) });
   if (q.isLoading) return <SkeletonCard lines={5} style={{ marginBottom: space[4] }} />;
+  // Owner decision 2026-11-17: refused (409) until gratuity, notice pay and leave encashment are set, or while a chosen head is missing from the person's salary.
+  const code = (q.error as { response?: { data?: { error?: { code?: string } } } } | null)?.response?.data?.error?.code;
+  if (code === "SETTING_NOT_SET" || code === "SALARY_HEAD_NOT_FOUND")
+    return <ApprovalBanner tone="warning" title={code === "SETTING_NOT_SET" ? "Final settlement rules are not set" : "A chosen salary head is missing"} description={<>{apiErrorMessage(q.error, "")} <Link to="/admin/settings/behaviours#final-settlement">Final settlement rules</Link></>} style={{ marginBottom: space[4] }} />;
   if (q.error || !q.data) return <ApprovalBanner tone="warning" title="The guide could not be loaded" description={apiErrorMessage(q.error, "Try again.")} style={{ marginBottom: space[4] }} />;
   const g = q.data;
   const muted = { color: v.textSecondary, fontSize: fs.sm };
@@ -42,7 +47,8 @@ export function SettlementGuide({ separationId }: { separationId: string }) {
       {g.rules.map((r) => (
         <div key={r.key} style={{ display: "flex", gap: space[2], alignItems: "baseline", flexWrap: "wrap", marginBottom: space[2] }}>
           <strong>{r.label}</strong>
-          <StatusChip tone="warning">{r.state}</StatusChip>
+          <StatusChip tone={r.value ? "success" : "warning"}>{r.state}</StatusChip>
+          {r.value && <span>{r.value}</span>}
           <span style={muted}>{r.why}</span>
         </div>
       ))}

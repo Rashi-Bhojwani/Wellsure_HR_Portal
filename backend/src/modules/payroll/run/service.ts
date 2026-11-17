@@ -252,7 +252,7 @@ export async function getRun(runId: string) {
     createdBy: makers.get(run.createdByUserId) ?? "Someone",
     calculatedBy: run.calculatedByUserId ? (makers.get(run.calculatedByUserId) ?? "Someone") : null,
     watermark,
-    rules: statuses.map((s) => ({ key: s.pin.key, kind: s.pin.kind ?? "RULE", version: s.pin.version, label: s.label, status: s.status, stale: s.stale, notSet: s.pin.unset === true, frozen: s.pin.live === false })),
+    rules: statuses.map((s) => ({ key: s.pin.key, kind: s.pin.kind ?? "RULE", version: s.pin.version, label: s.label, status: s.status, stale: s.stale, notSet: s.pin.unset === true || s.pin.kind === "NOT_SET", frozen: s.pin.live === false })),
     stale: statuses.some((s) => s.stale),
     notices: runNotices(notSetFromPins(statuses.map((s) => s.pin), "PT_SLABS"), notSetFromPins(statuses.map((s) => s.pin), "LWF_TABLE")),
     skipped: await skippedForCycle(run.cycleStart, run.cycleEnd),

@@ -134,7 +134,7 @@ export function DefaultBehavioursPage() {
     if (el) { el.scrollIntoView({ block: "start" }); el.focus({ preventScroll: true }); }
   }, [q.data, location.hash]);
   const card = (b: Behaviour) => (
-    <div key={b.key} id={b.key} tabIndex={-1}>
+    <div key={b.key} id={b.key} tabIndex={-1} style={{ scrollMarginTop: space[16] }}>
       <Panel title={b.title} subtitle={b.what} extra={<StatusChip tone={b.state === "CONFIRMED" ? "success" : b.state === "DEFAULT" ? "info" : "warning"}>{b.label ?? "Changed and confirmed"}</StatusChip>}>
         <p style={{ marginTop: 0 }}>In effect: {describe(b)}</p>
         {b.confirmed && <p>Proposed by {b.confirmed.proposedBy}, confirmed by {b.confirmed.confirmedBy}. Reason: {b.confirmed.reason}</p>}
@@ -156,7 +156,7 @@ export function DefaultBehavioursPage() {
         {(
           <div style={{ display: "flex", flexDirection: "column", gap: space[4] }}>
             {GROUPS.map((g) => (
-              <section key={g.id} id={g.id} aria-labelledby={`${g.id}-title`} style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
+              <section key={g.id} id={g.id} tabIndex={-1} aria-labelledby={`${g.id}-title`} style={{ display: "flex", flexDirection: "column", gap: space[3], scrollMarginTop: space[16] }}>
                 <div>
                   <Typography.Title level={4} id={`${g.id}-title`} style={{ margin: 0 }}>{g.title}</Typography.Title>
                   <Typography.Text type="secondary">{g.intro}</Typography.Text>

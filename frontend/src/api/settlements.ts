@@ -43,7 +43,7 @@ export interface SettlementGuide {
   service: { years: number; months: number; days: number; totalDays: number };
   lastDrawn: { cycle: string; gross: string; earnings: Array<{ code: string; label: string; amount: string }> } | null;
   leave: Array<{ label: string; days: string }>;
-  rules: Array<{ key: string; label: string; why: string; value: null; state: string }>;
+  rules: Array<{ key: string; label: string; why: string; value: string | null; state: string }>;
   note: string;
 }
 export const settlementGuide = async (separationId: string) => (await apiClient.get<SettlementGuide>(`${base}/guide`, { params: { separationId } })).data;
