@@ -12,6 +12,8 @@ export interface SecuritySettings {
   lockoutMinutes: number;
   passwordMinLength: number;
   invitationTtlHours: number;
+  /** How long a "Forgot password" link stays valid. */
+  passwordResetTtlMinutes: number;
   require2faRoles: string[];
   /** Optional by default: only a director can change it. */
   requireDirectorTwoFactor: boolean;
@@ -20,6 +22,7 @@ export interface SecuritySettings {
     totpVerify: RateLimitSetting;
     inviteAccept: RateLimitSetting;
     forgotPassword: RateLimitSetting;
+    forgotPasswordPerLogin: RateLimitSetting;
     resetPassword: RateLimitSetting;
   };
 }

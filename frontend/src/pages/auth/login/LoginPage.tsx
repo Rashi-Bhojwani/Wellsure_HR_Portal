@@ -48,13 +48,18 @@ export function LoginPage() {
   };
 
   return (
-    <AuthShell layout="split" title="Sign in to your account" subtitle="Use your Employee Code and password.">
+    <AuthShell layout="split" title="Sign in to your account" subtitle="Use your employee number and password.">
       {passwordReset && !error && <Alert type="success" showIcon title="Password updated. Sign in with your new password." style={{ marginBottom: space[5] }} />}
       <AuthError message={error} />
 
       <Form<LoginForm> layout="vertical" onFinish={onFinish} requiredMark={requiredMark}>
-        <Form.Item name="employeeCode" label="Employee Code" rules={[{ required: true, message: "Enter your Employee Code" }]}>
-          <Input placeholder="e.g. 1042" size="large" autoFocus autoComplete="username" />
+        <Form.Item
+          name="employeeCode"
+          label="Employee number"
+          extra="The same number as on the attendance machine."
+          rules={[{ required: true, whitespace: true, message: "Enter your employee number" }]}
+        >
+          <Input placeholder="e.g. 486" size="large" autoFocus autoComplete="username" autoCapitalize="none" spellCheck={false} />
         </Form.Item>
         <Form.Item name="password" label="Password" rules={[{ required: true, message: "Enter your password" }]} style={{ marginBottom: space[3] }}>
           <Input.Password placeholder="Password" size="large" autoComplete="current-password" />

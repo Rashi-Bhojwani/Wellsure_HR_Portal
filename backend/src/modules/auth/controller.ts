@@ -4,6 +4,7 @@ import { verifyTotpChallengeToken } from "../../lib/jwt";
 import { HttpError } from "../../middleware/errorHandler";
 import * as authService from "./service";
 import type { LoginResult, RequestMetaInput } from "./types";
+import { FORGOT_PASSWORD_REPLY } from "@shared/constants/login";
 
 const REFRESH_COOKIE = "refreshToken";
 
@@ -101,9 +102,6 @@ export async function forgotPassword(req: Request, res: Response): Promise<void>
   // Identical response regardless of whether the employee number exists, has an email, is invited or active (owner's wording, 2026-11-17).
   res.status(200).json({ message: FORGOT_PASSWORD_REPLY });
 }
-
-/** The one reply every "Forgot password" request gets. */
-export const FORGOT_PASSWORD_REPLY = "If that account exists, a link has been sent to the email on record.";
 
 export async function resetPassword(req: Request, res: Response): Promise<void> {
   const { password } = req.body as { password: string };

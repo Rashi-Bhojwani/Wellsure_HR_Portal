@@ -19,7 +19,7 @@ import {
   type TestOrgMasters,
 } from "../../employee/__tests__/employeeTestHelpers";
 import { FORGOT_PASSWORD_MIN_DURATION_MS } from "../service";
-import { FORGOT_PASSWORD_REPLY } from "../controller";
+import { FORGOT_PASSWORD_REPLY } from "@shared/constants/login";
 import { findEmployeeIdByLoginId } from "../loginId";
 
 // Employee-number login (docs/plans/LOGIN_CHECKLIST.md, owner decision 2026-11-17): the employee number is the login ID and the machine ID; a new
