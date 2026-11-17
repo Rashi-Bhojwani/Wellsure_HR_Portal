@@ -1,4 +1,4 @@
-import { BEHAVIOURS, BEHAVIOUR_KEYS, DEFAULT_LABEL, behaviourValue } from "../../behaviours/service";
+import { BEHAVIOURS, BEHAVIOUR_KEYS, DEFAULT_LABEL, behaviourOn, behaviourValue } from "../../behaviours/service";
 import { RULE_CATALOG, type RuleDef } from "@shared/constants/payrollRules";
 import { CONTINUING, PACK_CHECKED_ON, PACK_RULES, PACK_STATE_LABEL, PACK_STATE_RULES, STANDARD_DEFAULT_LABEL, entryOn, isPackCovered, packReviewNeeded } from "@shared/constants/statutoryDefaults";
 import { DEVELOPER_ROLE_CODE, SENSITIVE_PERMISSION_KEYS } from "@shared/constants/sensitiveData";
@@ -328,13 +328,56 @@ async function packItems(demo: boolean): Promise<SetupItem[]> {
   ];
 }
 
+/** For each active person (their salary lines, or undefined with no salary): how many lack a head chosen for gratuity, notice or encashment, and which heads. Pure. */
+export function headCoverage(uses: ReadonlyArray<readonly [string, readonly string[]]>, people: ReadonlyArray<{ lines: ReadonlyArray<{ componentCode: string }> } | undefined>) {
+  const lacking = new Map<string, number>();
+  let without = 0;
+  let noSalary = 0;
+  for (const sal of people) {
+    if (!sal) { noSalary += 1; continue; }
+    const have = new Set(sal.lines.map((l) => l.componentCode));
+    const missing = new Set(uses.flatMap(([, heads]) => heads.filter((h) => !have.has(h))));
+    for (const h of missing) lacking.set(h, (lacking.get(h) ?? 0) + 1);
+    if (missing.size) without += 1;
+  }
+  return { without, noSalary, lacking };
+}
+
+/** No silent zero (2026-11-17): a non-blocking row saying whether every active employee's salary has the heads gratuity, notice pay and leave encashment use. */
+async function settlementHeadItem(): Promise<SetupItem> {
+  const day = businessToday();
+  const dayIso = day.toISOString().slice(0, 10);
+  const [g, n, e] = await Promise.all([behaviourOn("payroll.gratuity", dayIso), behaviourOn("payroll.noticeRecovery", dayIso), behaviourValue("payroll.leaveEncashment")]);
+  const uses: Array<[string, string[]]> = [["gratuity", g?.wageHeads ?? []], ["notice pay", n?.basisHeads ?? []], ["leave encashment", e.value?.basisHeads ?? []]];
+  const active = await prisma.employee.findMany({ where: { status: "ACTIVE" }, select: { id: true } });
+  const salaries = await salariesOn(active.map((a) => a.id), day);
+  const { without, noSalary, lacking } = headCoverage(uses, active.map((a) => salaries.get(a.id)));
+  const chosen = uses.map(([use, heads]) => `${use}: ${heads.join(" + ") || "none chosen"}`).join("; ");
+  const ok = without === 0;
+  return {
+    id: "settlement:heads",
+    section: "company",
+    category: "Default behaviours",
+    title: "Gratuity, notice and encashment salary head matches your structures",
+    why: "Gratuity, notice pay and leave encashment are worked out from the salary heads chosen in Default behaviours. A person whose salary lacks a chosen head is refused, never paid nothing.",
+    required: false,
+    status: "CONFIRMED",
+    enteredBy: null,
+    confirmedBy: null,
+    detail: ok ? `Every active employee with a salary has the chosen heads (${chosen}).${noSalary ? ` ${noSalary} active ${noSalary === 1 ? "person has" : "people have"} no salary yet.` : ""}` : `${without} active ${without === 1 ? "employee's salary does" : "employees' salaries do"} not have a chosen head (${[...lacking].map(([h, c]) => `'${h}' missing for ${c}`).join(", ")}). Chosen: ${chosen}.`,
+    where: { label: "System Settings, Default behaviours", path: "/admin/settings/behaviours" },
+    // Shown on Ready for first real run with the other information rows (never blocking): green when it matches, otherwise how many do not.
+    behaviour: { state: ok ? "CONFIRMED" : "NOT_SET", label: ok ? "Matches every structure" : `${without} employee${without === 1 ? "" : "s"} without the chosen head` },
+  };
+}
+
 export async function buildSetupReport(): Promise<SetupReport> {
   const demo = await isDemoCompany();
   const ruleData = await loadItems("RULE");
   const summaries = RULE_CATALOG.map((d) => summarise(ruleData, d.key));
   const plain = new Map<string, unknown>(RULE_CATALOG.map((d, i) => [d.key, d.sensitiveClass ? undefined : summaries[i]!.current?.value]));
   const state = (await behaviourValue("statutory.state")).value as string;
-  const items: SetupItem[] = [...ruleItems(summaries, plain, state, businessToday().toISOString().slice(0, 10)), ...(await packItems(demo)), ...(await salaryItems()), ...(await layoutItems()), ...(await peopleItems()), ...(await safetyItems(demo)), ...(await behaviourItems())];
+  const items: SetupItem[] = [...ruleItems(summaries, plain, state, businessToday().toISOString().slice(0, 10)), ...(await packItems(demo)), await settlementHeadItem(), ...(await salaryItems()), ...(await layoutItems()), ...(await peopleItems()), ...(await safetyItems(demo)), ...(await behaviourItems())];
   const sections: SetupSection[] = SECTION_ORDER.map((id) => ({ id, ...SECTION_TEXT[id], items: items.filter((i) => i.section === id) }));
   return { generatedAt: new Date().toISOString() /* allow-clock: the instant the report was made */, environment: env.APP_ENV, demo, sections };
 }

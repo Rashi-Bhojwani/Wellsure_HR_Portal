@@ -7,6 +7,7 @@ import { prisma } from "../../../lib/prisma";
 import { app, authHeader, cleanupFullTestEmployee, createFullTestEmployee, loginAs } from "../../employee/__tests__/employeeTestHelpers";
 import { encashmentAmount, gratuityAmount, gratuityYears, noticeRecoveryAmount, noticeShortfall, overtimeAmount } from "../payPolicies/arith";
 import { dec } from "../money";
+import { exitEncashment, exitGratuity, exitNoticeRecovery } from "../payPolicies/service";
 import { automaticLines } from "../settlements/service";
 import { REAL_RULES, closeWorld, closingWorld, confirmAllPins, driveToFinal, staffWith, type Closing } from "./closeTestHelpers";
 import { goldenFixture, goldenSnapshot } from "./goldenHelpers";
@@ -160,13 +161,14 @@ describe("A2/A3 — over a real run", () => {
     expect(pre.body.people.find((p: { employeeId: string }) => p.employeeId === who("a"))).toMatchObject({ minutes: 150, amount: null });
     expect((await call(world.tokens.maker, "post", "/api/payroll-pay-policies/overtime/post", { month: "2026-08" })).body.error.code).toBe("NOT_SET");
     expect((await call(world.tokens.maker, "post", "/api/payroll-pay-policies/encashment/pay", { requestId: encReqId })).body.error.code).toBe("NOT_SET");
-    const leave = (await automaticLines(who("c"), new Date("2026-09-30T00:00:00Z"))).find((l) => l.kind === "LEAVE_BALANCE" && l.label.includes("(PL)"))!; // by its label, not its position
-    // Changed 2026-11-16 (standard defaults pack, CHANGED_TESTS.md): leave encashment, gratuity and notice recovery now have standard defaults. Encashment uses the
-    // default head BASIC, which this test company does not have (its heads are prefixed), so the line is there with 0.00: exactly why the head codes are "review needed".
-    expect(leave).toMatchObject({ amount: "0.00", label: "Leave encashment (PL)" });
-    const exitStd = await automaticLines(who("c"), new Date("2026-09-30T00:00:00Z"), new Date("2026-09-20T00:00:00Z"));
-    expect(exitStd.some((l) => l.kind === "GRATUITY")).toBe(false); // the standard gratuity needs five years' service; this person has less
-    expect(exitStd.find((l) => l.kind === "NOTICE_RECOVERY")).toMatchObject({ amount: "0.00" }); // 30 days' notice by default, 11 served; the BASIC head again absent
+    // Changed 2026-11-17 (no silent zero, CHANGED_TESTS.md): leave encashment, gratuity and notice recovery use the standard default head BASIC, which this test company
+    // does not have (its heads are prefixed). Before, the lines were there with 0.00; now the calculation is refused with a plain message and never returns 0.
+    const refusal = { status: 409, code: "SALARY_HEAD_NOT_FOUND", message: "Salary head 'BASIC' not found for this employee. Choose the right head in settings." };
+    await expect(automaticLines(who("c"), new Date("2026-09-30T00:00:00Z"))).rejects.toMatchObject(refusal);
+    await expect(exitEncashment(who("c"), "PL", "1", new Date("2026-09-30T00:00:00Z"))).rejects.toMatchObject({ ...refusal, details: { use: "ENCASHMENT", heads: ["BASIC"] } });
+    // 30 days' notice by default, 11 served; the BASIC head again absent
+    await expect(exitNoticeRecovery(who("c"), new Date("2026-09-20T00:00:00Z"), new Date("2026-09-30T00:00:00Z"))).rejects.toMatchObject({ ...refusal, details: { use: "NOTICE", heads: ["BASIC"] } });
+    expect(await exitGratuity(who("c"), new Date("2026-09-30T00:00:00Z"))).toBeNull(); // the standard gratuity needs five years' service; this person has less, so no line and no refusal
   });
 
   it("with TEST values confirmed by two directors and the switches on: overtime and encashment are paid once each, exactly; the ledger records the days; the settlement gets its amount", async () => {

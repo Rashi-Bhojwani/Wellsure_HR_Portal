@@ -1,7 +1,9 @@
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { setBusinessTodayForTests } from "../../../lib/businessDate";
+import { deleteWithDependents } from "../../../lib/__tests__/cleanup";
 import { prisma } from "../../../lib/prisma";
+import { behaviourOn } from "../../behaviours/service";
 import { app, authHeader } from "../../employee/__tests__/employeeTestHelpers";
 import { REAL_RULES, closeWorld, closingWorld, confirmAllPins, driveToFinal, resetSeams, staffWith, type Closing } from "./closeTestHelpers";
 import { calculateAgain, calculateRun, lockCycle, setRules } from "./runTestHelpers";
@@ -39,6 +41,7 @@ describe("end to end: a settlement recovers a loan through an off-cycle run", ()
   let septRun = "";
   let snapshotB: unknown = null;
   let offId = "";
+  const proposalIds: string[] = [];
   const who = (n: string) => world.named[n]!.employeeId;
   const api = (token: string, method: "get" | "post" | "put", path: string, body?: object) => request(app)[method](`/api${path}`).set(...authHeader(token)).send(body);
   const maker = () => world.tokens.maker;
@@ -91,6 +94,7 @@ describe("end to end: a settlement recovers a loan through an off-cycle run", ()
     seam.ready = false;
     setBusinessTodayForTests(null);
     resetSeams();
+    await deleteWithDependents("BehaviourProposal", proposalIds);
     await prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe("SELECT set_config('app.audit_purge', 'test', true)");
       await tx.loanTypeVersion.deleteMany({ where: { typeKey } });
@@ -101,6 +105,13 @@ describe("end to end: a settlement recovers a loan through an off-cycle run", ()
   it("the settlement shows what is still owed on the loan, from its source", async () => {
     const before = await api(maker(), "get", `/loans/${loanId}`);
     expect(before.body).toMatchObject({ balance: "20000.00", recovery: "STOPPED" });
+    // Changed 2026-11-17 (no silent zero, CHANGED_TESTS.md): the standard notice recovery uses the head BASIC, which this test company lacks, so preparing is now
+    // refused instead of adding a 0.00 line. The directors switch the automatic recovery off (one enters, the other confirms); the test enters its own notice line.
+    const std = (await behaviourOn("payroll.noticeRecovery", "2026-09-30"))!;
+    const np = await api(maker(), "post", "/behaviours/payroll.noticeRecovery/proposals", { value: { ...std, effectiveFrom: "2026-01-01", recoverShortfall: false, basisHeads: [world.basic] }, reason: "TEST: the notice line is entered by hand" });
+    expect(np.status, JSON.stringify(np.body)).toBe(201);
+    proposalIds.push(np.body.id);
+    expect((await api(world.tokens.checkerA, "post", `/behaviours/proposals/${np.body.id}/confirm`)).status).toBe(200);
     const sep = await prisma.separation.create({ data: { employeeId: who("a"), lastWorkingDate: new Date("2026-09-30T00:00:00Z"), reason: "test", initiatedByUserId: world.maker.userId } });
     const s = await api(maker(), "post", "/settlements", { separationId: sep.id, directorLines: [{ label: "Notice pay", amount: "30000", source: "made-up figure" }] });
     expect(s.status, JSON.stringify(s.body)).toBe(201);

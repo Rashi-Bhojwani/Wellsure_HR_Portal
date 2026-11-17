@@ -66,12 +66,12 @@ export function OvertimeEncashmentPage() {
             dataSource={enc.data?.requests ?? []}
             empty="No approved encashment requests."
             pagination={{ pageSize: 25 }}
-            mobile={{ title: (r) => `${r.name} · ${r.leaveType}`, subtitle: (r) => `${r.days} days · ${r.amount ? formatRupees(r.amount, 2) : "Not set"}`, actions: (r) => (r.paid ? null : <Button disabled={(enc.data?.notSet.length ?? 1) > 0 || !r.amount} loading={pay.isPending && pay.variables === r.id} onClick={() => pay.mutate(r.id)}>Pay</Button>) }}
+            mobile={{ title: (r) => `${r.name} · ${r.leaveType}`, subtitle: (r) => `${r.days} days · ${r.headProblem ?? (r.amount ? formatRupees(r.amount, 2) : "Not set")}`, actions: (r) => (r.paid ? null : <Button disabled={(enc.data?.notSet.length ?? 1) > 0 || !r.amount} loading={pay.isPending && pay.variables === r.id} onClick={() => pay.mutate(r.id)}>Pay</Button>) }}
             columns={[
               { title: "Employee", key: "e", render: (_, r) => `${r.name} (${r.employeeCode})` },
               { title: "Leave", key: "l", render: (_, r) => `${r.leaveType} ${r.leaveYear}` },
               { title: "Days", dataIndex: "days", align: "right" },
-              { title: "Amount", dataIndex: "amount", align: "right", render: (x: string | null, r) => (r.noSalary ? "No salary" : x ? formatRupees(x, 2) : "Not set") },
+              { title: "Amount", dataIndex: "amount", align: "right", render: (x: string | null, r) => (r.noSalary ? "No salary" : r.headProblem ? r.headProblem : x ? formatRupees(x, 2) : "Not set") },
               { title: "", key: "a", render: (_, r) => (r.paid ? <StatusChip tone="success">Added for the next run</StatusChip> : <Button disabled={(enc.data?.notSet.length ?? 1) > 0 || !r.amount} loading={pay.isPending && pay.variables === r.id} onClick={() => pay.mutate(r.id)}>Pay</Button>) },
             ]}
           />

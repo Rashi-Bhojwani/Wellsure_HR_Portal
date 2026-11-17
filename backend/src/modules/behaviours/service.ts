@@ -272,6 +272,22 @@ export async function list(actor: Actor) {
   return { behaviours: out };
 }
 
+/** No silent zero (2026-11-17): the salary heads gratuity, notice pay and leave encashment use must be heads that exist in the company (salary components). */
+const HEAD_FIELDS: Partial<Record<BehaviourKey, (v: Record<string, unknown>) => string[]>> = {
+  "payroll.gratuity": (v) => (v.wageHeads as string[]) ?? [],
+  "payroll.noticeRecovery": (v) => (v.basisHeads as string[]) ?? [],
+  "payroll.leaveEncashment": (v) => [...((v.basisHeads as string[]) ?? []), ...(v.payHead ? [v.payHead as string] : [])],
+};
+async function refuseUnknownHeads(key: BehaviourKey, value: unknown): Promise<void> {
+  const pick = HEAD_FIELDS[key];
+  if (!pick || !value || typeof value !== "object") return;
+  const heads = [...new Set(pick(value as Record<string, unknown>))];
+  if (heads.length === 0) return;
+  const known = new Set((await prisma.payrollItemVersion.findMany({ where: { kind: "COMPONENT", key: { in: heads }, authorUserId: { not: null } }, distinct: ["key"], select: { key: true } })).map((r) => r.key));
+  const unknown = heads.filter((h) => !known.has(h));
+  if (unknown.length) throw new HttpError(400, `${unknown.map((h) => `'${h}'`).join(", ")} ${unknown.length === 1 ? "is not a salary head" : "are not salary heads"} in this company. Choose from the heads that exist (Payroll, Salary Components).`, "UNKNOWN_SALARY_HEAD", { heads: unknown });
+}
+
 export const proposeSchema = z.object({ value: z.unknown(), reason: z.string().trim().min(3).max(300) }).strict();
 
 export async function propose(key: string, raw: unknown, actor: Actor) {
@@ -282,6 +298,7 @@ export async function propose(key: string, raw: unknown, actor: Actor) {
   if (!body.success) throw new HttpError(400, body.error.issues.map((i) => i.message).join("; "), "VALIDATION_ERROR");
   const value = BEHAVIOURS[k].schema.safeParse(body.data.value);
   if (!value.success) throw new HttpError(400, value.error.issues.map((i) => i.message).join("; "), "VALIDATION_ERROR");
+  await refuseUnknownHeads(k, value.data);
   const row = await prisma.behaviourProposal.create({ data: { key: k, value: value.data as object, reason: body.data.reason, proposedByUserId: actor.userId } });
   await writeAuditLog({ actorUserId: actor.userId, ipAddress: actor.ip ?? null, action: "settings.behaviour.proposed", entityType: "BehaviourProposal", entityId: row.id, after: { key: k, value: value.data, reason: body.data.reason } });
   return { id: row.id };

@@ -3,6 +3,7 @@ import { createApp } from "../../src/app";
 import { addCalendarDays, businessToday } from "../../src/lib/businessDate";
 import { signAccessToken } from "../../src/lib/jwt";
 import { prisma } from "../../src/lib/prisma";
+import { behaviourOn, behaviourValue } from "../../src/modules/behaviours/service";
 import { confirmComponent, previewComponentConfirm, previewComponentSave, saveComponent } from "../../src/modules/payroll/salary/components";
 import { loanSchedule } from "../../src/modules/payroll/loans/schedule";
 import { scheduleJson } from "../../src/modules/payroll/loans/service";
@@ -145,6 +146,19 @@ export async function seedDemoPayActivity(): Promise<DemoActivityResult> {
   const runs = [await finishRun(m3.start), await finishRun(m2.start)];
   // This claim is approved after both runs, so it waits, approved, for the next run.
   await call(OWNER, "post", `reimbursements/${claims.approved}/decision`, { decision: "APPROVE" });
+
+  // ── The salary head gratuity, notice pay and leave encashment use (no silent zero, 2026-11-17): the standard default is BASIC, which the demo company calls DEMO_BASIC.
+  // Without this choice a settlement is refused. One director enters it, the other confirms, as on Default behaviours. Encashment is paid on DEMO_SPECIAL (a DEMO choice).
+  const today = iso(businessToday());
+  const chosen: Array<[string, unknown]> = [
+    ["payroll.gratuity", { ...(await behaviourOn("payroll.gratuity", today)), wageHeads: ["DEMO_BASIC"] }],
+    ["payroll.noticeRecovery", { ...(await behaviourOn("payroll.noticeRecovery", today)), basisHeads: ["DEMO_BASIC"] }],
+    ["payroll.leaveEncashment", { ...((await behaviourValue("payroll.leaveEncashment")).value as object), basisHeads: ["DEMO_BASIC"], payHead: "DEMO_SPECIAL" }],
+  ];
+  for (const [key, value] of chosen) {
+    const p = await call(OWNER, "post", `behaviours/${key}/proposals`, { value, reason: "DEMO COMPANY: the demo's basic head" });
+    await call(SECOND, "post", `behaviours/proposals/${p.id}/confirm`);
+  }
 
   // ── Two leavers (last working day at the end of this month) and their settlements ──
   const lwd = iso(monthEnd(0));
