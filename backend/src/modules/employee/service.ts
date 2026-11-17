@@ -11,7 +11,9 @@ import { reResolveUnmapped } from "../biometric/adminService";
 import { encryptField, decryptField } from "../../lib/encryption";
 import { blindIndex, last4, normalizeAadhaar, normalizeAccountNumber, normalizePan } from "../../lib/fieldHash";
 import { buildEmployeeScopeWhere, type DataScope } from "../../lib/dataScope";
-import { createInvitation, latestInvitationDelivery, resendInvitation as resendInvitationEmail, type InvitationDelivery } from "../auth/service";
+import { createInvitation, emailOnRecord, latestInvitationDelivery, recordNoEmailOnRecord, resendInvitation as resendInvitationEmail, type InvitationDelivery } from "../auth/service";
+import { loginIdTaken } from "../auth/loginId";
+import { requireDirector, requireDirectorTwoFactor } from "../../lib/directorAuthority";
 import { assertReportingLine, assertReportingLineFor } from "../managers/hierarchy";
 import { emitPlacementRooms, emitTeamChanged } from "../../realtime/emit";
 import { notifyScheduledMove } from "./scheduledChanges";
@@ -57,10 +59,12 @@ async function runConflictSafe<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-async function assertEmployeeCodeAvailable(employeeCode: string): Promise<void> {
-  const existing = await prisma.employee.findUnique({ where: { employeeCode } });
+// The employee number is the login ID, so it is unique ignoring case and surrounding spaces (auth/loginId.ts; the database index agrees).
+async function assertEmployeeCodeAvailable(employeeCode: string, exceptEmployeeId?: string): Promise<void> {
+  const existing = await loginIdTaken(employeeCode, exceptEmployeeId);
   if (existing) {
-    throw new HttpError(409, `Employee Code "${employeeCode}" is already in use.`, "EMPLOYEE_CODE_TAKEN");
+    const sameText = existing.employeeCode === employeeCode.trim();
+    throw new HttpError(409, sameText ? `Employee Code "${employeeCode}" is already in use.` : `Employee Code "${employeeCode}" is already in use (as "${existing.employeeCode}": login IDs ignore upper and lower case).`, "EMPLOYEE_CODE_TAKEN");
   }
 }
 
@@ -319,8 +323,14 @@ export async function resendInvite(employeeId: string, meta: RequestMetaInput): 
   if (employee.user.status !== "INVITED") {
     throw new HttpError(400, "This employee has already activated their account.", "ALREADY_ACTIVE");
   }
+  const email = emailOnRecord(employee.personal);
+  if (!email) {
+    // Nothing is sent; HR is told by number, here and on the employee screen (docs/plans/LOGIN_CHECKLIST.md).
+    await recordNoEmailOnRecord(employee, meta.actorUserId, meta);
+    throw new HttpError(409, `No email on record for employee ${employee.employeeCode}. Add their email, then send the setup link.`, "NO_EMAIL_ON_RECORD");
+  }
   const fullName = employee.nameHistory[0]?.fullName ?? employee.employeeCode;
-  const { delivery } = await resendInvitationEmail(employee.user.id, employee.personal!.personalEmail, fullName, employee.employeeCode, meta.actorUserId);
+  const { delivery } = await resendInvitationEmail(employee.user.id, email, fullName, employee.employeeCode, meta.actorUserId);
   await writeAuditLog({ ...meta, action: "employee.invite_resent", entityType: "Employee", entityId: employeeId, after: { to: delivery.to, outcome: delivery.status, ...(delivery.error ? { error: delivery.error } : {}) } });
   return delivery;
 }
@@ -331,6 +341,8 @@ export interface PendingInvitation {
   fullName: string;
   email: string;
   delivery: InvitationDelivery;
+  /** No email on record: no link can be sent until HR adds one. */
+  noEmailOnRecord: boolean;
 }
 
 const BATCH_LIMIT = 100;
@@ -344,8 +356,8 @@ export async function listPendingInvitations(page: number, pageSize: number): Pr
   ]);
   const items: PendingInvitation[] = [];
   for (const e of rows) {
-    const email = e.personal?.personalEmail ?? "";
-    items.push({ employeeId: e.id, employeeCode: e.employeeCode, fullName: e.nameHistory[0]?.fullName ?? e.employeeCode, email, delivery: await latestInvitationDelivery(e.user!.id, email) });
+    const email = emailOnRecord(e.personal) ?? "";
+    items.push({ employeeId: e.id, employeeCode: e.employeeCode, fullName: e.nameHistory[0]?.fullName ?? e.employeeCode, email, noEmailOnRecord: !email, delivery: await latestInvitationDelivery(e.user!.id, email) });
   }
   return { total, items };
 }
@@ -372,18 +384,19 @@ export async function sendInvitations(employeeIds: string[], meta: RequestMetaIn
   for (const id of ids) {
     const e = byId.get(id);
     if (!e?.user) {
-      results.push({ employeeId: id, employeeCode: "", fullName: "", email: "", delivery: { status: "NOT_SENT", to: "" }, skipped: "That person was not found." });
+      results.push({ employeeId: id, employeeCode: "", fullName: "", email: "", noEmailOnRecord: false, delivery: { status: "NOT_SENT", to: "" }, skipped: "That person was not found." });
       continue;
     }
     const fullName = e.nameHistory[0]?.fullName ?? e.employeeCode;
-    const email = e.personal?.personalEmail ?? "";
-    const base = { employeeId: e.id, employeeCode: e.employeeCode, fullName, email };
+    const email = emailOnRecord(e.personal) ?? "";
+    const base = { employeeId: e.id, employeeCode: e.employeeCode, fullName, email, noEmailOnRecord: !email };
     if (e.user.status !== "INVITED" || e.status === "SEPARATED") {
       results.push({ ...base, delivery: { status: "NOT_SENT", to: email }, skipped: "Already activated, or no longer employed, so there is nothing to send." });
       continue;
     }
     if (!email) {
-      results.push({ ...base, delivery: { status: "NOT_SENT", to: "" }, skipped: "No personal email on file." });
+      await recordNoEmailOnRecord(e, meta.actorUserId, meta);
+      results.push({ ...base, delivery: { status: "NOT_SENT", to: "" }, skipped: `No email on record for employee ${e.employeeCode}.` });
       continue;
     }
     const { delivery } = await resendInvitationEmail(e.user.id, email, fullName, e.employeeCode, meta.actorUserId);
@@ -392,6 +405,39 @@ export async function sendInvitations(employeeIds: string[], meta: RequestMetaIn
   }
   const count = (status: InvitationDelivery["status"]) => results.filter((r) => !r.skipped && r.delivery.status === status).length;
   return { requested: ids.length, sent: count("SENT"), fileOnly: count("FILE_ONLY"), failed: count("FAILED"), results };
+}
+
+// ── Employee number change (directors only) ─────────────────────────────
+
+export const EMPLOYEE_CODE_CHANGE_WARNING = "The employee number is also the login ID and must match the attendance machine. Change the ID on the machine (and the Device User ID here) to the new number too, or their punches will not reach them.";
+
+/**
+ * Changes a person's employee number, which is their login ID (docs/plans/LOGIN_CHECKLIST.md, owner decision 2026-11-17). Directors only, with a
+ * reason, audited old → new. The new number must be free (ignoring case and spaces). Their password, sessions and machine mapping are left as they
+ * are; the reply carries the warning that the machine must be changed to match.
+ */
+export async function changeEmployeeCode(employeeId: string, newCodeRaw: string, reason: string, meta: RequestMetaInput): Promise<{ employeeCode: string; previousEmployeeCode: string; warning: string }> {
+  const actor = meta.actorUserId;
+  if (!actor) throw new HttpError(403, "Only a director (a Super Admin) can change an employee number.", "DIRECTOR_ONLY");
+  await requireDirector(actor, "change an employee number");
+  await requireDirectorTwoFactor(actor);
+  const employee = await prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true, employeeCode: true } });
+  if (!employee) throw new HttpError(404, "Employee not found.", "NOT_FOUND");
+  const newCode = newCodeRaw.trim();
+  if (newCode === employee.employeeCode) throw new HttpError(400, "That is already their employee number.", "VALIDATION_ERROR");
+  await assertEmployeeCodeAvailable(newCode, employee.id);
+  await runConflictSafe(() => prisma.employee.update({ where: { id: employee.id }, data: { employeeCode: newCode } }));
+  await writeAuditLog({
+    actorUserId: actor,
+    action: "employee.code_changed",
+    entityType: "Employee",
+    entityId: employee.id,
+    before: { employeeCode: employee.employeeCode },
+    after: { employeeCode: newCode, reason },
+    ipAddress: meta.ipAddress,
+    userAgent: meta.userAgent,
+  });
+  return { employeeCode: newCode, previousEmployeeCode: employee.employeeCode, warning: EMPLOYEE_CODE_CHANGE_WARNING };
 }
 
 // ── Scope helpers ────────────────────────────────────────────────────────
@@ -421,6 +467,8 @@ async function loadProfileCore(employeeId: string) {
       personal: true,
       nameHistory: { where: inForceOn() },
       user: { select: { id: true, status: true, totpEnabled: true, lastLoginAt: true } },
+      loginEmailMissingNotice: { select: { lastRequestedAt: true, requestCount: true } },
+      deviceMappings: { where: { validTo: null }, orderBy: { validFrom: "desc" }, take: 1, select: { deviceUserId: true } },
       jobHistory: {
         where: inForceOn(),
         include: { department: true, designation: true, location: true, grade: true, costCentre: true, reportingManager: { include: { nameHistory: { where: inForceOn() } } } },
@@ -445,6 +493,13 @@ async function loadProfileCore(employeeId: string) {
     employmentType: employee.employmentType,
     status: employee.status,
     attendanceCapture,
+    // Employee-number login (docs/plans/LOGIN_CHECKLIST.md): the number is the login ID and should be the attendance machine ID too. Shown, and a
+    // difference warned about; never forced (the machine ID is a separate dated mapping the attendance engine reads).
+    deviceUserId: employee.deviceMappings[0]?.deviceUserId ?? null,
+    loginIdMatchesMachine: employee.deviceMappings[0] ? employee.deviceMappings[0].deviceUserId.trim().toLowerCase() === employee.employeeCode.trim().toLowerCase() : null,
+    // No email on record: no password link can reach them. The notice says when someone last asked for one.
+    noEmailOnRecord: !emailOnRecord(employee.personal),
+    emailMissingRequestedAt: employee.loginEmailMissingNotice?.lastRequestedAt.toISOString() ?? null,
     accountStatus: employee.user?.status ?? null,
     // What happened to the latest invitation email, for an account still waiting for its owner (null once they have activated).
     invitation: employee.user?.status === "INVITED" ? await latestInvitationDelivery(employee.user.id, employee.personal?.personalEmail ?? "") : null,

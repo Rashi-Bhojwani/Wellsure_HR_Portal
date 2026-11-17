@@ -9,7 +9,7 @@ export interface RateLimitSetting {
   windowSeconds: number;
 }
 
-export const RATE_LIMIT_KEYS = ["login", "totpVerify", "inviteAccept", "forgotPassword", "resetPassword"] as const;
+export const RATE_LIMIT_KEYS = ["login", "totpVerify", "inviteAccept", "forgotPassword", "forgotPasswordPerLogin", "resetPassword"] as const;
 export type RateLimitKey = (typeof RATE_LIMIT_KEYS)[number];
 
 export const RATE_LIMIT_DEFAULTS: Record<RateLimitKey, RateLimitSetting> = {
@@ -17,6 +17,8 @@ export const RATE_LIMIT_DEFAULTS: Record<RateLimitKey, RateLimitSetting> = {
   totpVerify: { maxAttempts: 10, windowSeconds: 900 },
   inviteAccept: { maxAttempts: 10, windowSeconds: 900 },
   forgotPassword: { maxAttempts: 5, windowSeconds: 3600 },
+  // Per employee number, on top of the per-IP limit above (employee-number login, docs/plans/LOGIN_CHECKLIST.md).
+  forgotPasswordPerLogin: { maxAttempts: 3, windowSeconds: 3600 },
   resetPassword: { maxAttempts: 10, windowSeconds: 900 },
 };
 
@@ -25,6 +27,8 @@ export interface SecuritySettings {
   lockoutMinutes: number;
   passwordMinLength: number;
   invitationTtlHours: number;
+  /** How long a "Forgot password" link stays valid. */
+  passwordResetTtlMinutes: number;
   require2faRoles: string[];
   /** Whether two-step sign-in is required of directors (off by default: it is optional, strongly recommended). */
   requireDirectorTwoFactor: boolean;

@@ -558,6 +558,9 @@ model Employee {
   encashmentRequests         LeaveEncashmentRequest[] // block 2, LV-23
   dataErasures               DataErasure[] // block 2, AD-07
   legalEntity                EmployeeLegalEntity? // block 2, AD-08
+  // LOGIN-BEGIN (employee-number login, docs/plans/LOGIN_CHECKLIST.md)
+  loginEmailMissingNotice    LoginEmailMissingNotice?
+  // LOGIN-END
   // M-END
 
   @@index([status])
@@ -4863,3 +4866,18 @@ model EmployeeLegalEntity {
   @@map("employee_legal_entities")
 }
 // M-END
+
+// LOGIN-BEGIN (employee-number login, docs/plans/LOGIN_CHECKLIST.md): a person asked for a password link (or HR tried to send a setup link) but has
+// no email on record, so nothing was sent. One row per employee; HR sees it on the employee screen and the pending-invitations list until an email
+// is added. Holds no token and no personal data beyond who it is about.
+model LoginEmailMissingNotice {
+  id              String   @id @default(cuid())
+  employeeId      String   @unique @map("employee_id")
+  employee        Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  requestCount    Int      @default(1) @map("request_count")
+  firstSeenAt     DateTime @default(now()) @map("first_seen_at") @db.Timestamptz(3)
+  lastRequestedAt DateTime @default(now()) @map("last_requested_at") @db.Timestamptz(3)
+
+  @@map("login_email_missing_notices")
+}
+// LOGIN-END

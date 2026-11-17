@@ -55,6 +55,11 @@ export async function resendInvite(req: Request, res: Response): Promise<void> {
   res.status(200).json(await employeeService.resendInvite(req.params.id as string, actorMeta(req)));
 }
 
+export async function changeEmployeeCode(req: Request, res: Response): Promise<void> {
+  const { employeeCode, reason } = req.body as { employeeCode: string; reason: string };
+  res.status(200).json(await employeeService.changeEmployeeCode(req.params.id as string, employeeCode, reason, actorMeta(req)));
+}
+
 export async function listPendingInvitations(req: Request, res: Response): Promise<void> {
   const q = req.query as unknown as { page: number; pageSize: number };
   res.status(200).json(await employeeService.listPendingInvitations(q.page, q.pageSize));

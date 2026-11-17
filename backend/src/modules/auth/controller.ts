@@ -98,9 +98,12 @@ export async function acceptInvitation(req: Request, res: Response): Promise<voi
 export async function forgotPassword(req: Request, res: Response): Promise<void> {
   const { employeeCode } = req.body as { employeeCode: string };
   await authService.forgotPassword(employeeCode, requestMeta(req));
-  // Identical response regardless of whether employeeCode exists.
-  res.status(200).json({ message: "If that Employee Code exists, a reset link has been sent to the email on file." });
+  // Identical response regardless of whether the employee number exists, has an email, is invited or active (owner's wording, 2026-11-17).
+  res.status(200).json({ message: FORGOT_PASSWORD_REPLY });
 }
+
+/** The one reply every "Forgot password" request gets. */
+export const FORGOT_PASSWORD_REPLY = "If that account exists, a link has been sent to the email on record.";
 
 export async function resetPassword(req: Request, res: Response): Promise<void> {
   const { password } = req.body as { password: string };
