@@ -112,7 +112,7 @@ same status and timing. The first-time hint moves to the login screen as static 
 - **Phase check (run once):** green: both lints, both typechecks, fresh database migrate + drift ("No difference detected") + seed, backend
   auth/employee/settings/access/cleanup 214/214, frontend 141/141, build + bundle (login 232.5 KB / 250; employee home 347.8 / 400; admin home
   367.5 / 400).
-- **CI on the final code commit:** FOLLOWUP_CI
+- **CI on the final code commit:** **run 429 on `8b4c5fb6`: green**, every job (read once).
 
 ## Not verified / for the owners
 
