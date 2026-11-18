@@ -67,12 +67,12 @@ the directors confirm the penalty option is allowed for their case; the portal g
 
 ## 8. Checklist
 
-- [ ] Plan (this file)
-- [ ] Migration `late_*` + schema inside `LATE-BEGIN` / `LATE-END`
-- [ ] Settings, evaluator, hook, waivers, penalties, routes, Ready rows, route inventory
-- [ ] Goldens: OFF byte-for-byte; boundaries 10:09/10:10/10:19/10:20/10:29/10:30/10:31; 3rd vs 4th; month reset; higher-of; waiver returns allowance; both edges;
+- [x] Plan (this file)
+- [x] Migration `late_*` + schema inside `LATE-BEGIN` / `LATE-END`
+- [x] Settings, evaluator, hook, waivers, penalties, routes, Ready rows, route inventory
+- [x] Goldens: OFF byte-for-byte; boundaries 10:09/10:10/10:19/10:20/10:29/10:30/10:31; 3rd vs 4th; month reset; higher-of; waiver returns allowance; both edges;
       half-day + lateness; every outcome in every band
-- [ ] Mutation checks (script `backend/scripts/late-mutation-check.sh`)
-- [ ] Security: permission matrix, Developer 403, IDOR, HR no pay, self-approval refused; migrations on a fresh database
-- [ ] Screens: employee/manager, HR waivers, director rule; browser walk (desktop light, 390 dark, keyboard)
-- [ ] Full backend suite once; ops section; report; push; CI read once
+- [x] Mutation checks (script `backend/scripts/late-mutation-check.sh`)
+- [x] Security: permission matrix, Developer 403, IDOR, HR no pay, self-approval refused; migrations on a fresh database
+- [x] Screens: employee/manager, HR waivers, director rule; browser walk (desktop light, 390 dark, keyboard)
+- [x] Full backend suite once; ops section; report; push; CI read once (results in LATE_REPORT.md)
