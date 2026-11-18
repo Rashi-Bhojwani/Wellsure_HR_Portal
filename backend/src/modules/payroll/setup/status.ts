@@ -426,6 +426,7 @@ export async function buildSetupReport(): Promise<SetupReport> {
   const summaries = RULE_CATALOG.map((d) => summarise(ruleData, d.key));
   const plain = new Map<string, unknown>(RULE_CATALOG.map((d, i) => [d.key, d.sensitiveClass ? undefined : summaries[i]!.current?.value]));
   const items: SetupItem[] = [...ruleItems(summaries, plain, businessToday().toISOString().slice(0, 10)), ...(await packItems(demo)), await settlementHeadItem(), await ptLwfItem(summaries), await minimumWagesItem(), ...(await salaryItems()), ...(await layoutItems()), ...(await peopleItems()), ...(await safetyItems(demo)), ...(await behaviourItems())];
+  items.push(...(await (await import("../../lateness/setupRows")).latenessSetupItems())); // LATE: lateness rows, never blocking (docs/plans/LATE_CHECKLIST.md §7)
   const sections: SetupSection[] = SECTION_ORDER.map((id) => ({ id, ...SECTION_TEXT[id], items: items.filter((i) => i.section === id) }));
   return { generatedAt: new Date().toISOString() /* allow-clock: the instant the report was made */, environment: env.APP_ENV, demo, sections };
 }

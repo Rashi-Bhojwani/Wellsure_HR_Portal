@@ -63,6 +63,8 @@ const ChangeRequestsPage = lazyPage(() => import("../pages/admin/employee/Change
 const ProbationPage = lazyPage(() => import("../pages/admin/employee/m/ProbationPage"), "ProbationPage"); // M session block 2, ER-26
 const EncashmentRequestsPage = lazyPage(() => import("../pages/admin/leave/EncashmentRequestsPage"), "EncashmentRequestsPage"); // M block 2, LV-23
 const WfhRequestsPage = lazyPage(() => import("../pages/admin/workforce/WfhRequestsPage"), "WfhRequestsPage"); // M block 2, AT-36
+const LatenessWaiversPage = lazyPage(() => import("../pages/admin/workforce/LatenessWaiversPage"), "LatenessWaiversPage"); // LATE
+const LatenessRulePage = lazyPage(() => import("../pages/admin/workforce/LatenessRulePage"), "LatenessRulePage"); // LATE
 const OvertimeClaimsPage = lazyPage(() => import("../pages/admin/workforce/OvertimeClaimsPage"), "OvertimeClaimsPage"); // M block 2, AT-19
 const FeedbackInboxPage = lazyPage(() => import("../pages/admin/employee/m/FeedbackInboxPage"), "FeedbackInboxPage"); // M block 2, SS-13
 const UpdateImportPage = lazyPage(() => import("../pages/admin/employee/m/UpdateImportPage"), "UpdateImportPage"); // M block 2, IE-07/08
@@ -314,6 +316,8 @@ export const adminApps: AdminApp[] = [
           { key: "attendance-muster", label: "Attendance Muster", path: "workforce/attendance/muster", icon: FileTextOutlined, element: MusterPage, needs: { any: ["attendance.view", "attendance.manual.enter"] } },
           { key: "attendance-info", label: "Attendance Info", path: "workforce/attendance/info", icon: CalendarOutlined, element: AttendanceInfoAdminPage, needs: { any: ["attendance.view"] } },
           { key: "wfh-requests", label: "Work From Home", path: "workforce/attendance/wfh-requests", icon: AuditOutlined, element: WfhRequestsPage, needs: { director: true } }, // M block 2, AT-36
+          { key: "lateness-waivers", label: "Lateness Waivers", path: "workforce/attendance/lateness-waivers", icon: AuditOutlined, element: LatenessWaiversPage, needs: { any: ["attendance.override.manage"] } }, // LATE
+          { key: "lateness-rule", label: "Lateness Rule", path: "workforce/attendance/lateness-rule", icon: SettingOutlined, element: LatenessRulePage, needs: { director: true } }, // LATE
           { key: "overtime", label: "Overtime", path: "workforce/attendance/overtime", icon: AuditOutlined, element: OvertimeClaimsPage, needs: { any: ["attendance.regularization.approve"] } }, // M block 2, AT-19
           { key: "regularizations", label: "Regularizations", path: "workforce/attendance/regularizations", icon: AuditOutlined, element: RegularizationsPage, needs: { any: ["attendance.regularization.view", "attendance.regularization.approve"] } },
           { key: "process-attendance", label: "Process Attendance", path: "workforce/attendance/process", icon: ToolOutlined, element: ProcessAttendancePage, needs: { any: ["attendance.process"] } },
