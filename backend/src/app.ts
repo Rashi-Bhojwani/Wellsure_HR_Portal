@@ -69,6 +69,7 @@ import { letterCheckRouter } from "./modules/letterCheck/routes"; // M session b
 import { retentionRouter } from "./modules/retention/routes"; // M session block 2, AD-07
 import { legalEntitiesRouter } from "./modules/legalEntities/routes"; // M session block 2, AD-08
 import { payslipRouter } from "./modules/payroll/payslipRoutes";
+import { latenessRouter } from "./modules/lateness/routes"; // LATE: lateness rule (docs/plans/LATE_CHECKLIST.md)
 // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
 import { employeeExtrasRouter, massEmailRouter, segmentsRouter, separationModesRouter } from "./modules/parity/routes";
 // A-10 (docs/plans/GREYTHR_PARITY_WORKFORCE.md) — begin
@@ -148,6 +149,7 @@ const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   { path: "/api/update-import", router: updateImportRouter }, // M session block 2, IE-07/08
   { path: "/api/retention", router: retentionRouter }, // M session block 2, AD-07
   { path: "/api/legal-entities", router: legalEntitiesRouter }, // M session block 2, AD-08
+  { path: "/api/lateness", router: latenessRouter }, // LATE: lateness rule
   { path: "/api/attendance", router: attendanceRouter },
   { path: "/api/biometric", router: biometricRouter },
   // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin

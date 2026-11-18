@@ -559,6 +559,9 @@ model Employee {
   dataErasures               DataErasure[] // block 2, AD-07
   legalEntity                EmployeeLegalEntity? // block 2, AD-08
   // M-END
+  // LATE-BEGIN (lateness rule, docs/plans/LATE_CHECKLIST.md)
+  lateWaivers                LateWaiver[]
+  // LATE-END
 
   @@index([status])
   @@index([dateOfJoining])
@@ -4863,3 +4866,24 @@ model EmployeeLegalEntity {
   @@map("employee_legal_entities")
 }
 // M-END
+
+// LATE-BEGIN (lateness rule, docs/plans/LATE_CHECKLIST.md §5): a manager asks HR to waive one late arrival; HR approves or rejects (never the requester,
+// never the employee). An approved waiver removes that arrival's consequence and returns its allowance. Decided rows never change (a trigger refuses).
+model LateWaiver {
+  id                String    @id @default(cuid())
+  employeeId        String    @map("employee_id")
+  employee          Employee  @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  date              DateTime  @db.Date
+  reason            String
+  status            String    @default("PENDING")
+  requestedByUserId String    @map("requested_by_user_id")
+  decidedByUserId   String?   @map("decided_by_user_id")
+  decidedAt         DateTime? @map("decided_at") @db.Timestamptz(3)
+  decisionNote      String?   @map("decision_note")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([employeeId, date])
+  @@index([status])
+  @@map("late_waivers")
+}
+// LATE-END

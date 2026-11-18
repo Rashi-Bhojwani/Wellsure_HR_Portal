@@ -16,6 +16,7 @@ import { loadOverrides } from "./overrides";
 import { loadReleasedLeave } from "./leaveReleases";
 import { loadShiftOverrides, shiftDefOf, type LoadedShiftOverride, type ShiftWithSessions } from "./shiftOverrides";
 import { finalisedPeriodsOverlapping, inAnyPeriod } from "./lockedPeriods";
+import { loadAttendanceDayHook } from "../lateness/dayHook"; // LATE: the one additive hook point (docs/plans/LATE_REPORT.md)
 
 // The engine's loader and writer (docs/plans/PHASE_2.md §4.1). The loader
 // gathers each employee-day's inputs — through the effective-dating readers
@@ -197,6 +198,7 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
   const calendar = await loadCalendar(employees.map((e) => e.id), from, last);
   const existingBy = new Map(existing.map((e) => [`${e.employeeId}|${iso(e.date)}`, e]));
   const changedByEmployee = new Map<string, string[]>();
+  const dayHook = await loadAttendanceDayHook(employees.map((e) => e.id), from, last, { dryRun: !!opts.dryRun }); // LATE: null unless a lateness/missing-punch/half-day setting is in force
 
   for (const emp of employees) {
     const rows = assignments.filter((a) => a.employeeId === emp.id);
@@ -284,7 +286,7 @@ export async function computeAttendance(employeeIds: string[], from: string, to:
         policy: a ? { id: a.policy.id, fullDayMinMinutes: a.policy.fullDayMinMinutes, halfDayMinMinutes: a.policy.halfDayMinMinutes, halfDayMinNotMetLopDays: Number(a.policy.halfDayMinNotMetLopDays), nearDuplicateSeconds: a.policy.nearDuplicateSeconds, inferBreakPairing: a.policy.inferBreakPairing } : null,
         now,
       };
-      const r = evaluateDay(input);
+      const r = dayHook ? dayHook(emp.id, input, evaluateDay) : evaluateDay(input); // LATE
       if (opts.collect) (result.evaluated ??= []).push({ employeeId: emp.id, date, before: before?.status ?? null, after: r?.status ?? null, locked: false });
       const note = (after: string | null) => {
         result.changed += 1;
