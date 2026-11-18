@@ -50,7 +50,7 @@ The loader returns `null` unless a month in the range has the rule switched on, 
 
 ### Full suite
 
-Pending: the full backend suite is running; its result is added in the next commit.
+Run once, alone, at the end (local, Node 22, PostgreSQL 16, Redis 7): **268 files, 2,356 tests: 2,355 passed, 1 failed** (1,150 s). The one failure is `src/lib/__tests__/dbRoles.test.ts` ("a new password takes effect while the old one stops working"). It happened because my scratch PostgreSQL was created with `trust` authentication, which accepts any password. After switching localhost to `scram-sha-256`, that file passed 10/10. It has nothing to do with this branch, and CI (password authentication) passes it. Every existing golden (engine, attendance replay, payroll golden run, full-month rehearsal) passed with the module present and off.
 
 ### Browser walk (local dev servers, seeded demo data, Playwright Chromium)
 
@@ -62,7 +62,7 @@ Personas: employee 1006, manager 1002, HR Admin 1001, director 1000, and Develop
 
 ## CI
 
-Pending: read once on the final code commit; added in the next commit.
+CI run 430 (https://github.com/Rashi-Bhojwani/Wellsure_HR_Portal/actions/runs/44247778409) on `ece5dbb`, which contains every code commit (code identical to `2e6ae80`; only docs followed). I read it once, to the end of each job: **all 12 jobs succeeded**. They are install-lint-typecheck-test (lint, typecheck, design tokens and bundle budgets, migrate, schema matches migrations, seed, frontend and agent tests, demo company tests), backend-tests shards 1–4, backend-tests-complete (each test exactly once), attendance-replay, latency, docker-build, sensitive-ui (employee portal), sensitive-ui (admin portal) and agent-windows.
 
 ## Not verified
 
