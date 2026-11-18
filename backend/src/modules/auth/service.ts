@@ -153,40 +153,60 @@ async function recordFailedLogin(userId: string, meta: RequestMetaInput): Promis
   });
 }
 
-// spec §3: login = Employee Code + password. Every failure path (unknown
-// code, wrong password) returns the same generic message — only lockout
-// and not-yet-activated get a distinct message, since neither reveals
-// anything an attacker couldn't already infer from Employee Codes being
-// openly known internal identifiers, not secrets.
+// The one reply every failed sign-in gets (owner decision 2026-11-18, docs/plans/LOGIN_REPORT.md): an unknown number, a wrong password and an
+// invited account with no password yet (and a suspended or deactivated one) are indistinguishable — same status, same words, same timing. The
+// first-time hint lives on the login screen as static text instead. Only the existing lockout keeps its own reply (unchanged rule).
+export const LOGIN_FAILED_MESSAGE = "The employee number or password is not correct.";
+
+// Every failed sign-in takes at least this long. Each failure path also does the same expensive step (one argon2 verify, against the real hash or
+// a dummy one), so the floor only has to absorb the small database writes a wrong password adds.
+export const LOGIN_FAILURE_MIN_DURATION_MS = 400;
+
+let dummyPasswordHash: Promise<string> | null = null;
+function dummyHash(): Promise<string> {
+  dummyPasswordHash ??= argon2.hash(randomBytes(16).toString("hex"));
+  return dummyPasswordHash;
+}
+
+// spec §3: login = employee number + password.
 export async function login(employeeCode: string, password: string, meta: RequestMetaInput): Promise<LoginResult> {
-  const genericError = () => new HttpError(401, "Invalid Employee Code or password.", "INVALID_CREDENTIALS");
+  const started = Date.now();
+  const fail = async (): Promise<never> => {
+    const elapsed = Date.now() - started;
+    if (elapsed < LOGIN_FAILURE_MIN_DURATION_MS) await new Promise((resolve) => setTimeout(resolve, LOGIN_FAILURE_MIN_DURATION_MS - elapsed));
+    throw new HttpError(401, LOGIN_FAILED_MESSAGE, "INVALID_CREDENTIALS");
+  };
+  // The same work as checking a real password, for a person who has none to check.
+  const burnVerify = async (): Promise<void> => {
+    await argon2.verify(await dummyHash(), password).catch(() => false);
+  };
 
   // The employee number, matched exactly after trimming spaces and ignoring case (loginId.ts).
   const employeeId = await findEmployeeIdByLoginId(employeeCode);
   const employee = employeeId ? await prisma.employee.findUnique({ where: { id: employeeId }, include: { user: true } }) : null;
   if (!employee?.user) {
-    await argon2.hash(password).catch(() => undefined); // keep timing roughly consistent with the real-user path
-    throw genericError();
+    await burnVerify();
+    return fail();
   }
   const user = employee.user;
 
-  if (user.status === "INVITED") {
-    throw new HttpError(
-      403,
-      "Your account hasn't been activated yet. Check your email for the set-password link.",
-      "NOT_ACTIVATED",
-    );
-  }
+  // Invited (no password yet), suspended or deactivated: exactly the reply an unknown number gets.
   if (user.status !== "ACTIVE") {
-    throw genericError();
+    await burnVerify();
+    return fail();
   }
   if (user.lockedUntil && user.lockedUntil > new Date()) {
     const minutes = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60_000);
     throw new HttpError(423, `Account is locked. Try again in ${minutes} minute(s).`, "LOCKED");
   }
-  if (!user.passwordHash || !(await argon2.verify(user.passwordHash, password))) {
+  if (!user.passwordHash) {
+    await burnVerify();
     await recordFailedLogin(user.id, meta);
-    throw genericError();
+    return fail();
+  }
+  if (!(await argon2.verify(user.passwordHash, password))) {
+    await recordFailedLogin(user.id, meta);
+    return fail();
   }
 
   await prisma.user.update({ where: { id: user.id }, data: { failedLoginAttempts: 0, lockedUntil: null } });

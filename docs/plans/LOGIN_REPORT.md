@@ -73,17 +73,46 @@ the admin "send reset link" uses the same TTL setting.
 - `backend/src/modules/auth/__tests__/passwordFlow.test.ts`: "does not create a reset token for an INVITED account" became "creates a reset token
   for an INVITED account …, none for a suspended one". **Reason:** the owner decision. A new person sets their first password through Forgot password,
   so Invited accounts must now get a link. The timing test's comment now names the constant instead of "200 ms".
+- (2026-11-18) `backend/src/modules/auth/__tests__/login.test.ts`: "gives a distinct message for an INVITED account" (403 `NOT_ACTIVATED`) became
+  "gives an INVITED account the SAME generic reply as an unknown code" (401, identical body). **Reason:** owner decision of 2026-11-18.
+- (2026-11-18) `employeeNumberLogin.test.ts` golden test: the failure wording is now "The employee number or password is not correct." and the
+  invited case is expected to equal the unknown case. **Reason:** the same decision.
+- (2026-11-18) `frontend/src/pages/auth/__tests__/loginScreens.test.tsx`: the mocked failure message uses the new wording.
 
 ## Decisions taken in this session (owner answers marked)
 
 - **Owner:** number only, no email login. **Owner:** machine ID defaults to the number and is warned about, never forced.
 - The email on record is the **personal email** (as today; the official email is not used for links).
 - Timing floor raised from 200 ms to 400 ms to leave room for the extra work on known numbers. Mail is sent in the background.
-- The Invited-account login message ("Your account hasn't been activated yet …", 403) is unchanged (golden). It does say that a number belongs to an
-  invited account. It predates this work and was left as it was; the owners may want it reworded to point at Forgot password.
+- ~~The Invited-account login message is unchanged.~~ Superseded by the 2026-11-18 follow-up below: an invited account now gets the one failure reply.
 - `prisma format` was not run (it reformatted 400 unrelated lines); the schema edits are only the lines inside `LOGIN-BEGIN` / `LOGIN-END`.
 - The seed reset (`npm run db:seed` = `prisma migrate reset --force`) was **not** run, under the no-destructive-commands rule. Fresh databases were
   seeded with `prisma db seed` after migrating, and the test harness rebuilt its own isolated test database as usual.
+
+## Follow-up 2026-11-18: one reply for every failed sign-in
+
+**Owner decision:** an unknown number, a wrong password and an invited account with no password yet must all show the same plain message, with the
+same status and timing. The first-time hint moves to the login screen as static text.
+
+- **Server** (`backend/src/modules/auth/service.ts`, `login`): every failure is `401 INVALID_CREDENTIALS` "The employee number or password is not
+  correct." (`LOGIN_FAILED_MESSAGE`). Invited, suspended and deactivated accounts take the same path as an unknown number. Each failure path does one
+  argon2 verify (the real hash, or a dummy hash made once per process for a person with none) and is padded to at least 400 ms
+  (`LOGIN_FAILURE_MIN_DURATION_MS`), so the small database writes a wrong password adds (the failed-attempt counter) do not show. A successful
+  sign-in is not padded. The existing lockout (`423 LOCKED` after 5 wrong passwords) keeps its own reply: it was outside this request and is
+  unchanged; it does say that a number exists once someone has failed five times on it, which the owners may want to revisit.
+- **Screen** (`frontend/src/pages/auth/login/LoginPage.tsx`): always-visible text under "Forgot password?": "First time, or forgot your password? Use
+  Forgot password with your employee number." (design tokens only).
+- **Tests:** `employeeNumberLogin.test.ts` "an unknown number, a wrong password and an invited account are indistinguishable": same status (401),
+  identical body, every sample at or above the 400 ms floor, and the averages of the three cases within 100 ms of each other (the tolerance already
+  used for Forgot password), over 4 samples each. Frontend: the hint is shown before any attempt and still shown after a failed one.
+- **Mutation checks** (each applied alone, then reverted; file compared byte for byte): *invited case answered differently* (the old 403
+  `NOT_ACTIVATED`): 3 tests fail. *Invited case with the same words but answered at once* (no verify, no padding): the indistinguishability test fails.
+- **Results:** auth module 60/60, login screens 6/6, phase check and CI: see below.
+
+- **Phase check (run once):** green: both lints, both typechecks, fresh database migrate + drift ("No difference detected") + seed, backend
+  auth/employee/settings/access/cleanup 214/214, frontend 141/141, build + bundle (login 232.5 KB / 250; employee home 347.8 / 400; admin home
+  367.5 / 400).
+- **CI on the final code commit:** FOLLOWUP_CI
 
 ## Not verified / for the owners
 

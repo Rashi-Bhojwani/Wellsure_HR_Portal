@@ -18,7 +18,7 @@ import {
   TEST_PASSWORD,
   type TestOrgMasters,
 } from "../../employee/__tests__/employeeTestHelpers";
-import { FORGOT_PASSWORD_MIN_DURATION_MS } from "../service";
+import { FORGOT_PASSWORD_MIN_DURATION_MS, LOGIN_FAILED_MESSAGE, LOGIN_FAILURE_MIN_DURATION_MS } from "../service";
 import { FORGOT_PASSWORD_REPLY } from "@shared/constants/login";
 import { findEmployeeIdByLoginId } from "../loginId";
 
@@ -85,7 +85,8 @@ describe("employee-number login", () => {
   // ── 1. Login by number ────────────────────────────────────────────────
 
   describe("login by employee number", () => {
-    it("golden: today's number login is unchanged (success shape, the generic failure, invited, lockout)", async () => {
+    // Changed 2026-11-18: the failure wording is now the owners' sentence and the invited case shares it (it used to be a distinct 403).
+    it("golden: number login (success shape, the one failure reply for unknown / wrong / invited, lockout)", async () => {
       const code = `G${uniq()}`;
       const p = await person(code);
       const ok = await login(code);
@@ -98,12 +99,12 @@ describe("employee-number login", () => {
       const wrong = await login(code, "wrong-password");
       expect([unknown.status, wrong.status]).toEqual([401, 401]);
       expect(unknown.body).toEqual(wrong.body);
-      expect(wrong.body.error).toMatchObject({ code: "INVALID_CREDENTIALS", message: "Invalid Employee Code or password." });
+      expect(wrong.body.error).toMatchObject({ code: "INVALID_CREDENTIALS", message: "The employee number or password is not correct." });
 
       const inv = await person(`GI${uniq()}`, { status: "INVITED" });
       const invited = await login(inv.employeeCode);
-      expect(invited.status).toBe(403);
-      expect(invited.body.error.code).toBe("NOT_ACTIVATED");
+      expect(invited.status).toBe(401);
+      expect(invited.body).toEqual(unknown.body);
 
       // The existing lockout rule (auth.lockout: 5 tries, 15 minutes) is reused as it is.
       for (let i = 0; i < 5; i++) {
@@ -115,6 +116,42 @@ describe("employee-number login", () => {
       expect(locked.status).toBe(423);
       expect(locked.body.error.code).toBe("LOCKED");
       await prisma.user.update({ where: { id: p.userId }, data: { failedLoginAttempts: 0, lockedUntil: null } });
+    });
+
+    it("an unknown number, a wrong password and an invited account are indistinguishable: body, status and timing", async () => {
+      const active = await person(`IA${uniq()}`);
+      const invited = await person(`II${uniq()}`, { status: "INVITED" });
+      const cases = {
+        unknown: () => login(`NOBODY-${uniq()}`, "Whatever123"),
+        wrongPassword: () => login(active.employeeCode, "Wrong-Pass-1"),
+        invited: () => login(invited.employeeCode, "Whatever123"),
+      };
+      const bodies: Record<string, unknown> = {};
+      const statuses: Record<string, number> = {};
+      const times: Record<string, number[]> = { unknown: [], wrongPassword: [], invited: [] };
+      const SAMPLES = 4;
+      for (let i = 0; i < SAMPLES; i++) {
+        for (const [name, run] of Object.entries(cases)) {
+          await clearRateLimits();
+          const t0 = process.hrtime.bigint();
+          const res = await run();
+          times[name]!.push(Number(process.hrtime.bigint() - t0) / 1e6);
+          bodies[name] = res.body;
+          statuses[name] = res.status;
+        }
+        // Keep the wrong-password account below the lockout threshold so every sample takes the same path.
+        await prisma.user.update({ where: { id: active.userId }, data: { failedLoginAttempts: 0, lockedUntil: null } });
+      }
+      expect(statuses).toEqual({ unknown: 401, wrongPassword: 401, invited: 401 });
+      expect(bodies.wrongPassword).toEqual(bodies.unknown);
+      expect(bodies.invited).toEqual(bodies.unknown);
+      expect(bodies.unknown).toEqual({ error: { code: "INVALID_CREDENTIALS", message: LOGIN_FAILED_MESSAGE } });
+      expect(LOGIN_FAILED_MESSAGE).toBe("The employee number or password is not correct.");
+      const avg = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
+      for (const x of Object.values(times).flat()) expect(x).toBeGreaterThanOrEqual(LOGIN_FAILURE_MIN_DURATION_MS - 5);
+      // The same tolerance as the Forgot password timing test: no consistent gap of 100 ms or more between any two cases.
+      const avgs = Object.values(times).map(avg);
+      expect(Math.max(...avgs) - Math.min(...avgs)).toBeLessThan(100);
     });
 
     it("matches exactly after trimming spaces and ignoring case; leading zeros and letters are kept", async () => {

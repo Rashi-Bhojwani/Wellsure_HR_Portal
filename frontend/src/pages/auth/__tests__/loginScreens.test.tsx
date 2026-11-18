@@ -47,7 +47,7 @@ describe("login screen", () => {
   });
 
   it("shows the server's message for a wrong password, and refuses an all-spaces number before sending", async () => {
-    auth.login.mockRejectedValue({ isAxiosError: true, response: { status: 401, data: { error: { code: "INVALID_CREDENTIALS", message: "Invalid Employee Code or password." } } } });
+    auth.login.mockRejectedValue({ isAxiosError: true, response: { status: 401, data: { error: { code: "INVALID_CREDENTIALS", message: "The employee number or password is not correct." } } } });
     renderAt(<LoginPage />);
     fireEvent.change(screen.getByLabelText(/Employee number/), { target: { value: "   " } });
     fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: "x" } });
@@ -56,7 +56,19 @@ describe("login screen", () => {
     expect(auth.login).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText(/Employee number/), { target: { value: "486" } });
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
-    expect(await screen.findByText("Invalid Employee Code or password.")).toBeTruthy();
+    expect(await screen.findByText("The employee number or password is not correct.")).toBeTruthy();
+  });
+
+  it("always shows the first-time hint, before any attempt and after a failed one", async () => {
+    auth.login.mockRejectedValue({ response: { status: 401, data: { error: { code: "INVALID_CREDENTIALS", message: "The employee number or password is not correct." } } } });
+    renderAt(<LoginPage />);
+    const hint = "First time, or forgot your password? Use Forgot password with your employee number.";
+    expect(screen.getByText(hint)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/Employee number/), { target: { value: "486" } });
+    fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: "x" } });
+    fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    expect(await screen.findByText("The employee number or password is not correct.")).toBeTruthy();
+    expect(screen.getByText(hint)).toBeTruthy();
   });
 
   it("links to Forgot password", () => {

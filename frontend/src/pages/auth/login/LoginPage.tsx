@@ -5,7 +5,7 @@ import { apiErrorMessage } from "../../../lib/apiError";
 import { AuthShell } from "../AuthShell";
 import { AuthError } from "../authParts";
 import { requiredMark } from "../authStyles";
-import { space } from "../../../theme/tokens";
+import { fs, space, v } from "../../../theme/tokens";
 import { useAuth } from "../../../hooks/useAuth";
 import { isLoginChallenge } from "../../../api/auth";
 
@@ -64,9 +64,13 @@ export function LoginPage() {
         <Form.Item name="password" label="Password" rules={[{ required: true, message: "Enter your password" }]} style={{ marginBottom: space[3] }}>
           <Input.Password placeholder="Password" size="large" autoComplete="current-password" />
         </Form.Item>
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: space[6] }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: space[3] }}>
           <Link to="/forgot-password">Forgot password?</Link>
         </div>
+        {/* Always shown: the sign-in reply is the same for every failure (it never says an account is waiting to be set up), so the first-time route lives here. */}
+        <p style={{ margin: 0, marginBottom: space[6], color: v.textSecondary, fontSize: fs.md }} data-testid="login-first-time-hint">
+          First time, or forgot your password? Use Forgot password with your employee number.
+        </p>
         <Form.Item style={{ marginBottom: 0 }}>
           <Button type="primary" htmlType="submit" block size="large" loading={submitting}>
             Sign in
