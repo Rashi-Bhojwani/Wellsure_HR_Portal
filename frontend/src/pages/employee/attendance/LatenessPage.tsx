@@ -128,7 +128,7 @@ export function LatenessPage() {
       <SideDrawer open={!!asking} title="Ask HR to waive this arrival" subtitle={asking ? `${asking.person.name}, ${formatDate(asking.arrival.date)} at ${asking.arrival.time} (${asking.arrival.bandLabel}). If HR agrees, the arrival has no consequence and any allowance it used comes back.` : undefined} onClose={() => setAsking(null)} formId="late-waiver-form" primaryLabel="Ask" primaryLoading={ask.isPending}>
         <Form id="late-waiver-form" form={form} layout="vertical" requiredMark={false} onFinish={(vals) => ask.mutate(vals.reason)}>
           <Form.Item name="reason" label="Reason" rules={[{ required: true, min: 3, message: "A few words" }]}>
-            <Input.TextArea rows={3} maxLength={300} />
+            <Input.TextArea rows={3} maxLength={300} autoFocus />
           </Form.Item>
         </Form>
       </SideDrawer>
