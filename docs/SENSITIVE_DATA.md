@@ -23,23 +23,24 @@ data (the demo company), and so that a real company starts from an empty system 
 | Employees' PAN, Aadhaar, UAN and ESI numbers | The government identifiers of each person. | View statutory details | Edit statutory details | nobody by permission |
 | The company's PF, ESI, PT, LWF, PAN and TAN identifiers | The company's own registration numbers, printed on statutory files. | Company identifiers: enter and reveal | Company identifiers: enter and reveal | Company identifiers: confirm |
 | The bank file layout and the company's debit account | How the bank wants its transfer file laid out, and the company account the salaries are paid from. | Bank file layout and debit account: enter; Bank file layout and debit account: confirm | Bank file layout and debit account: enter | Bank file layout and debit account: confirm |
+| Employees' personal email, phone and home address | How to reach each person at home: personal email, mobile number, current and permanent address, and their emergency contact. | See personal contact details | nobody by permission | nobody by permission |
 | Employees' HR-held documents | ID proofs, certificates and letters kept on file for each person. | View employee documents | Manage employee documents | nobody by permission |
 | Sensitive helpdesk tickets | Tickets in categories such as Payroll and Salary or Grievance, where people write private things. | Sensitive tickets | nobody by permission | nobody by permission |
 | Power over other people's access | Security policy, other people's sign-in and 2FA, individual permission exceptions, and unlocking attendance. Whoever holds these can weaken the protection of everything above. | nobody by permission | Manage others' sign-in security; System settings; Manager permission exceptions; Unlock attendance periods; Unlock payroll periods | nobody by permission |
 
 #### What each default role can do with each kind (S = see, C = change, K = confirm; a role's permissions are the Super Admins' to edit, so this is the starting point)
 
-| Role | Salaries and payroll figures | Payroll rules, components and structures | Employees' bank accounts | Employees' PAN, Aadhaar, UAN and ESI numbers | The company's PF, ESI, PT, LWF, PAN and TAN identifiers | The bank file layout and the company's debit account | Employees' HR-held documents | Sensitive helpdesk tickets | Power over other people's access |
-|---|---|---|---|---|---|---|---|---|---|
-| Super Admin | SCK | CK | SC | SC | SCK | SCK | SC | S | C |
-| HR Admin | — | — | SC | SC | — | — | SC | S | C |
-| HR Executive | — | — | SC | SC | — | — | SC | — | — |
-| Payroll Admin | SC | C | S | S | SC | SC | — | — | — |
-| Payroll Approver | SK | K | — | — | K | SK | — | — | — |
-| Developer / operator | — | — | — | — | — | — | — | — | — |
-| Manager | — | — | — | — | — | — | — | — | — |
-| Approver | — | — | — | — | — | — | — | — | — |
-| Employee | — | — | — | — | — | — | — | — | — |
+| Role | Salaries and payroll figures | Payroll rules, components and structures | Employees' bank accounts | Employees' PAN, Aadhaar, UAN and ESI numbers | The company's PF, ESI, PT, LWF, PAN and TAN identifiers | The bank file layout and the company's debit account | Employees' personal email, phone and home address | Employees' HR-held documents | Sensitive helpdesk tickets | Power over other people's access |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Super Admin | SCK | CK | SC | SC | SCK | SCK | S | SC | S | C |
+| HR Admin | — | — | SC | SC | — | — | S | SC | S | C |
+| HR Executive | — | — | SC | SC | — | — | S | SC | — | — |
+| Payroll Admin | SC | C | S | S | SC | SC | S | — | — | — |
+| Payroll Approver | SK | K | — | — | K | SK | — | — | — | — |
+| Developer / operator | — | — | — | — | — | — | — | — | — | — |
+| Manager | — | — | — | — | — | — | — | — | — | — |
+| Approver | — | — | — | — | — | — | — | — | — | — |
+| Employee | — | — | — | — | — | — | — | — | — | — |
 
 <!-- END GENERATED -->
 
