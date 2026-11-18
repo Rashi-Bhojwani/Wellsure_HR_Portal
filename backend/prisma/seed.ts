@@ -727,12 +727,14 @@ async function main() {
   const SETTINGS: Array<[string, unknown]> = [
     ["auth.lockout", { maxAttempts: 5, lockoutMinutes: 15 }],
     ["auth.passwordMinLength", 8],
-    ["auth.invitationTtlHours", 48],
+    ["auth.invitationTtlHours", 168], // the setup link: 7 days (employee-number login, docs/plans/LOGIN_CHECKLIST.md)
+    ["auth.passwordResetTtlMinutes", 60], // a "Forgot password" link
     ["auth.require2faRoles", []], // temporarily disabled fleet-wide — see chore commit 7f99cfd
     ["auth.rateLimit.login", { maxAttempts: 10, windowSeconds: 900 }],
     ["auth.rateLimit.totpVerify", { maxAttempts: 10, windowSeconds: 900 }],
     ["auth.rateLimit.inviteAccept", { maxAttempts: 10, windowSeconds: 900 }],
     ["auth.rateLimit.forgotPassword", { maxAttempts: 5, windowSeconds: 3600 }],
+    ["auth.rateLimit.forgotPasswordPerLogin", { maxAttempts: 3, windowSeconds: 3600 }],
     ["auth.rateLimit.resetPassword", { maxAttempts: 10, windowSeconds: 900 }],
     // Phase 5 commit C — People & Documents
     ["people.directory.visibleFields", DEFAULT_DIRECTORY_VISIBLE_FIELDS],

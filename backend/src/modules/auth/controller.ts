@@ -4,6 +4,7 @@ import { verifyTotpChallengeToken } from "../../lib/jwt";
 import { HttpError } from "../../middleware/errorHandler";
 import * as authService from "./service";
 import type { LoginResult, RequestMetaInput } from "./types";
+import { FORGOT_PASSWORD_REPLY } from "@shared/constants/login";
 
 const REFRESH_COOKIE = "refreshToken";
 
@@ -98,8 +99,8 @@ export async function acceptInvitation(req: Request, res: Response): Promise<voi
 export async function forgotPassword(req: Request, res: Response): Promise<void> {
   const { employeeCode } = req.body as { employeeCode: string };
   await authService.forgotPassword(employeeCode, requestMeta(req));
-  // Identical response regardless of whether employeeCode exists.
-  res.status(200).json({ message: "If that Employee Code exists, a reset link has been sent to the email on file." });
+  // Identical response regardless of whether the employee number exists, has an email, is invited or active (owner's wording, 2026-11-17).
+  res.status(200).json({ message: FORGOT_PASSWORD_REPLY });
 }
 
 export async function resetPassword(req: Request, res: Response): Promise<void> {

@@ -113,6 +113,13 @@ employeeRouter.post("/invitations/send", canInvite, validate({ body: sendInvitat
 
 employeeRouter.get("/:id", canView, validate({ params: idParamsSchema }), controller.getProfile);
 employeeRouter.post("/:id/resend-invite", canInvite, validate({ params: idParamsSchema }), controller.resendInvite);
+// Employee-number login (docs/plans/LOGIN_CHECKLIST.md): the number is the login ID; only a director may change it (checked in the service), with a reason.
+employeeRouter.post(
+  "/:id/employee-code",
+  canEdit,
+  validate({ params: idParamsSchema, body: z.object({ employeeCode: z.string().trim().min(1).max(30), reason: z.string().trim().min(3).max(300) }).strict() }),
+  controller.changeEmployeeCode,
+);
 
 employeeRouter.get("/:id/statutory/reveal", canViewStatutory, validate({ params: idParamsSchema, query: revealQuerySchema }), controller.revealStatutory);
 employeeRouter.get("/:id/bank/reveal", canViewBank, validate({ params: idParamsSchema, query: revealQuerySchema }), controller.revealBank);
