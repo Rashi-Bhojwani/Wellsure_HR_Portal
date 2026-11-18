@@ -92,7 +92,7 @@ function PersonalTab({ profile }: { profile: employeeApi.EmployeeProfile }) {
   const contact = useContactReveal(profile.id);
   if (!profile.personal) return <EmptyState compact title="No personal details on file." description={null} />;
   const personal = contact.revealed ? { ...profile.personal, mobile: contact.revealed.mobile, emergencyContactPhone: contact.revealed.emergencyContactPhone } : profile.personal;
-  const s = personalSections(personal);
+  const s = personalSections(personal, profile.personalHidden === true);
   return (
     <SectionStack>
       <ProfileSection title="Personal info" extra={profile.contactMasked && !contact.revealed && hasPermission("employee.contact.reveal") ? contact.button : undefined}>

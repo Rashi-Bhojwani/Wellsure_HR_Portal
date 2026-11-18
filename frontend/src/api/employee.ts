@@ -179,8 +179,8 @@ export interface EmployeeProfile {
   invitation: InvitationDelivery | null;
   totpEnabled: boolean;
   personal: {
-    dateOfBirth: string;
-    gender: string;
+    dateOfBirth: string | null;
+    gender: string | null;
     // null when withheld (audit fix 2026-11-18: no employee.personal.view)
     personalEmail: string | null;
     mobile: string | null;

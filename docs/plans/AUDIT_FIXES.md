@@ -39,6 +39,17 @@ same value.
 
 ## 7. The Developer sees no personal data
 
-Personal email, phone and home address join the fields the Developer never sees, through the same access resolver and `DEVELOPER_FORBIDDEN_KEYS` mechanism as
+Personal email, phone, home addresses and the emergency contact (and date of birth, gender and blood group, which support needs no more than the rest) join the fields the Developer never sees, through the same access resolver and `DEVELOPER_FORBIDDEN_KEYS` mechanism as
 pay, bank and identity, and are masked on the profile and in every list, search and export that returned them. The Developer keeps employee number, name, role and
 status.
+
+### What the Developer still sees on an employee profile (2026-11-18)
+
+Employee number, name, official email, status, employment type, date of joining and last working day, attendance capture (device or manual), account status and
+whether two-factor sign-in is on, the invitation's delivery status (not the address), photo version, and the job (department, designation, location, grade, cost
+centre, reporting manager, effective date). Withheld: personal email, mobile, current and permanent address, emergency contact (name, phone, relation), date of
+birth, gender, blood group, the invitation address; bank and statutory sections are omitted (as before); pay is behind its own route (as before).
+
+When `feat/employee-number-login` merges, its four new profile fields need a decision each. Recommendation: `deviceUserId` (the machine ID, needed to diagnose
+punches), `loginIdMatchesMachine` (true/false), `noEmailOnRecord` (true/false) and `emailMissingRequestedAt` (a time) carry no personal contact data, so the
+Developer keeps all four; none goes in `PERSONAL_CONTACT_FIELDS`.

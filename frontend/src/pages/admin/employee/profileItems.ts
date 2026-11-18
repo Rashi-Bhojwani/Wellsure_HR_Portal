@@ -19,14 +19,14 @@ export function statutoryItems(
 // Audit fix 2026-11-18: a field the server withholds (the viewer has no employee.personal.view) arrives as null and is shown as "Hidden".
 const shown = (v: string | null | undefined) => (v === null || v === undefined ? "Hidden" : v);
 
-export function personalSections(p: NonNullable<employeeApi.EmployeeProfile["personal"]>) {
+export function personalSections(p: NonNullable<employeeApi.EmployeeProfile["personal"]>, hidden = false) {
   return {
     info: [
-      { label: "Date of Birth", value: p.dateOfBirth },
-      { label: "Gender", value: p.gender },
+      { label: "Date of Birth", value: shown(p.dateOfBirth) },
+      { label: "Gender", value: shown(p.gender) },
       { label: "Personal Email", value: shown(p.personalEmail) },
       { label: "Mobile", value: shown(p.mobile) },
-      { label: "Blood Group", value: p.bloodGroup ?? "—" },
+      { label: "Blood Group", value: hidden ? "Hidden" : (p.bloodGroup ?? "—") },
     ] as KeyValueItem[],
     address: [
       { label: "Current Address", value: shown(p.currentAddress), wide: true },

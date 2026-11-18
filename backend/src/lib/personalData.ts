@@ -4,7 +4,8 @@ import { DEVELOPER_ROLE_CODE } from "@shared/constants/sensitiveData";
 // EMPLOYEE_PERSONAL_CONTACT; the ceiling in lib/permissions.ts). Everyone always sees their own. The Developer keeps what support needs: employee number, name,
 // role and status.
 export const PERSONAL_VIEW_KEY = "employee.personal.view";
-export const PERSONAL_CONTACT_FIELDS = ["personalEmail", "mobile", "currentAddress", "permanentAddress", "emergencyContactName", "emergencyContactPhone", "emergencyContactRelation"] as const;
+export const PERSONAL_CONTACT_FIELDS = ["personalEmail", "mobile", "currentAddress", "permanentAddress", "emergencyContactName", "emergencyContactPhone", "emergencyContactRelation", "dateOfBirth", "gender", "bloodGroup"] as const;
+// dateOfBirth, gender and bloodGroup (health data) are personal too: support needs none of them, so they are withheld the same way.
 
 export function canSeePersonal(viewer: { permissions: Set<string>; employeeId?: string | null }, subjectEmployeeId?: string | null): boolean {
   return viewer.permissions.has(PERSONAL_VIEW_KEY) || (!!subjectEmployeeId && !!viewer.employeeId && subjectEmployeeId === viewer.employeeId);

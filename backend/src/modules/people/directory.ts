@@ -84,7 +84,7 @@ function toEntry(row: DirectoryRow, visible: Set<DirectoryToggleableField>, pers
     // Audit fix 2026-11-18: personal contact only to a viewer holding employee.personal.view (never the Developer), even with the directory toggle on.
     if (personalVisible && allowed("EmployeePersonal.mobile", visible)) entry.mobile = row.personal.mobile;
     if (personalVisible && allowed("EmployeePersonal.personalEmail", visible)) entry.personalEmail = row.personal.personalEmail;
-    if (allowed("EmployeePersonal.dateOfBirth", visible)) entry.birthday = row.personal.dateOfBirth.toISOString().slice(5, 10);
+    if (personalVisible && allowed("EmployeePersonal.dateOfBirth", visible)) entry.birthday = row.personal.dateOfBirth.toISOString().slice(5, 10);
   }
   if (visible.has("reportingManager")) {
     const m = job.reportingManager;

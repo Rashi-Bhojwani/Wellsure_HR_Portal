@@ -50,11 +50,13 @@ describe("the Developer sees no personal contact details", () => {
     for (const f of PERSONAL_CONTACT_FIELDS) expect(dev.body.personal[f], f).toBeNull();
     expect(dev.body).toMatchObject({ employeeCode: p.target!.employeeCode, status: "ACTIVE" });
     expect(dev.body.fullName).toBeTruthy();
+    expect([dev.body.personal.dateOfBirth, dev.body.personal.gender, dev.body.personal.bloodGroup]).toEqual([null, null, null]); // personal too: support needs none of them
     expect(JSON.stringify(dev.body)).not.toContain(target.personalEmail);
     expect(JSON.stringify(dev.body)).not.toContain(target.currentAddress);
     const hr = await get("hr", `/api/employees/${p.target!.employeeId}`);
     expect(hr.body.personal).toMatchObject({ personalEmail: target.personalEmail, currentAddress: target.currentAddress });
     expect(hr.body.personalHidden).toBe(false);
+    expect(hr.body.personal.dateOfBirth).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
   it("the grid: the Developer gets no personal email or mobile, and cannot find anybody by them; HR can", async () => {
@@ -79,6 +81,7 @@ describe("the Developer sees no personal contact details", () => {
     expect(dev.status).toBe(200);
     expect(dev.body.personalEmail).toBeUndefined();
     expect(dev.body.mobile).toBeUndefined();
+    expect(dev.body.birthday).toBeUndefined();
     const devList = await get("dev", "/api/people?search=" + encodeURIComponent(p.target!.employeeCode));
     const entry = (devList.body.entries ?? devList.body.items ?? devList.body).find?.((x: { id: string }) => x.id === p.target!.employeeId);
     expect(entry?.personalEmail).toBeUndefined();
