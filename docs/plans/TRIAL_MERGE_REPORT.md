@@ -99,7 +99,20 @@ outline on the cream page. That is low contrast as decoration only; focus is sti
 
 ## 6. CI
 
-CI result on the final `integration/trial` commit: filled in below after the push.
+CI run 434 (`44296828286`) on `46121fb`, read once with every job to the end:
+
+| Job | Result |
+|---|---|
+| install-lint-typecheck-test (lint, typecheck, tokens + bundle, migrate, drift, seed, frontend + agent tests, demo company) | ✅ |
+| backend-tests (2), (4) | ✅ |
+| backend-tests (1) | ❌ 1 file: `src/lib/__tests__/sensitiveDocs.test.ts` (67 of 68 files pass) |
+| backend-tests (3) | ❌ 1 file: `src/modules/hrCapabilities/__tests__/hrCapabilities.test.ts` (67 of 68 files pass) |
+| backend-tests-complete | ❌ only because shards 1 and 3 failed; the shard-coverage check was skipped |
+| docker-build, agent-windows, latency (popovers + punch latency), attendance-replay, sensitive-ui (admin portal), sensitive-ui (employee portal) | ✅ |
+
+CI fails on exactly the two tests from Session A's `090fbbb` that failed locally (§4). `testDatabaseIsolation` passes in CI, which confirms
+the local failure came from my test setup. **No CI failure comes from the merge.** This report update is a docs-only commit after run 434;
+its CI run was not read.
 
 ## 7. Where Session A's unmerged work is likely to conflict
 
