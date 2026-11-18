@@ -68,6 +68,7 @@ export const SPLIT_KEYS: ReadonlyArray<{ child: PermissionKey; parent: Permissio
   { child: "reports.attendance.view", parent: "reports.view" },
   { child: "reports.leave.view", parent: "reports.view" },
   { child: "invitations.send", parent: "employee.create" },
+  { child: "employee.personal.view", parent: "employee.view" }, // audit fix 2026-11-18: the Developer's ceiling removes it (a sensitive class)
 ];
 
 export function withSplitKeys(keys: readonly string[]): string[] {

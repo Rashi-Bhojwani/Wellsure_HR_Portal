@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { prisma } from "../../../lib/prisma";
-import { EncashmentRateNotConfiguredError, SettingsBasedEncashmentRateProvider, setEncashmentRateProvider, type EncashmentRateProvider } from "../encashmentRate";
+import { EncashmentRateNotConfiguredError, NotConfiguredEncashmentRateProvider, setEncashmentRateProvider, type EncashmentRateProvider } from "../encashmentRate";
 import { writeLedgerEntry } from "../ledger";
 import * as yearEndService from "../yearEnd";
 import {
@@ -54,7 +54,7 @@ describe("Year End Process", () => {
   });
 
   afterAll(async () => {
-    setEncashmentRateProvider(new SettingsBasedEncashmentRateProvider()); // don't leak the fake into later test files — fileParallelism:false shares this process
+    setEncashmentRateProvider(new NotConfiguredEncashmentRateProvider()); // don't leak the fake into later test files — fileParallelism:false shares this process
     await cleanupLoginableTestEmployee(actorEmployeeId);
     await cleanupEmployeeTestOrgMasters(actorOrg);
   });

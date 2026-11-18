@@ -4,6 +4,7 @@ import { addCalendarDays, businessToday } from "../../lib/businessDate";
 import { HttpError } from "../../middleware/errorHandler";
 import { withEmployeeLeaveLock } from "./concurrency";
 import { writeLedgerEntry, InsufficientLeaveBalanceError } from "./ledger";
+import { requireLeaveTypeFor } from "./leaveTypeRoles";
 
 // Extends HttpError, same reasoning as InsufficientLeaveBalanceError
 // (ledger.ts) — a 400 the global error handler maps automatically.
@@ -31,7 +32,7 @@ interface CreditCompOffInput {
 // punch (spec §4.4) — reusing this eligibility check, expiry computation
 // and ledger GRANT entry rather than reimplementing any of it.
 export async function creditCompOff(input: CreditCompOffInput): Promise<CompOffCredit> {
-  const cofType = await prisma.leaveType.findUniqueOrThrow({ where: { code: "COF" }, include: { policy: true } });
+  const cofType = await requireLeaveTypeFor("COMP_OFF"); // audit fix: the comp-off type is a director setting, not the code "COF"
   const minHours = cofType.policy?.compOffMinHoursWorked ? Number(cofType.policy.compOffMinHoursWorked) : 4;
   if (input.hoursWorked < minHours) {
     throw new InsufficientHoursForCompOffError(input.hoursWorked, minHours);
@@ -85,7 +86,7 @@ export async function consumeCompOffFifo(
   leaveYear: number,
   entryDate: Date,
 ): Promise<void> {
-  const cofType = await tx.leaveType.findUniqueOrThrow({ where: { code: "COF" } });
+  const cofType = await requireLeaveTypeFor("COMP_OFF", tx);
   let need = new Prisma.Decimal(totalDays);
 
   const credits = await tx.compOffCredit.findMany({
@@ -132,7 +133,7 @@ export async function consumeCompOffFifo(
 export async function reverseCompOffConsumption(tx: Prisma.TransactionClient, leaveRequestId: string, leaveYear: number, entryDate: Date): Promise<void> {
   // Per lot: what the approval consumed, less what HR already gave back by releasing single days (Phase 3), so a
   // cancellation after a release never returns the same days twice.
-  const cofType = await tx.leaveType.findUniqueOrThrow({ where: { code: "COF" } });
+  const cofType = await requireLeaveTypeFor("COMP_OFF", tx);
   for (const [creditId, net] of await consumedPerLot(tx, leaveRequestId)) {
     if (!net.greaterThan(0)) continue;
     const credit = await tx.compOffCredit.findUniqueOrThrow({ where: { id: creditId } });
@@ -181,7 +182,7 @@ export async function restoreCompOffDays(
   tx: Prisma.TransactionClient,
   p: { leaveRequestId: string; releaseId: string; employeeId: string; amount: Prisma.Decimal; leaveYear: number; entryDate: Date; remarks: string; actorUserId: string },
 ): Promise<void> {
-  const cofType = await tx.leaveType.findUniqueOrThrow({ where: { code: "COF" } });
+  const cofType = await requireLeaveTypeFor("COMP_OFF", tx);
   const perLot = await consumedPerLot(tx, p.leaveRequestId);
   const credits = await tx.compOffCredit.findMany({ where: { id: { in: [...perLot.keys()] } }, orderBy: { earnedDate: "desc" } });
   let left = p.amount;
@@ -216,7 +217,7 @@ export async function restoreCompOffDays(
 // unlike accrual): once a credit's status flips to EXPIRED, the
 // `status: "AVAILABLE"` filter excludes it from every future run.
 export async function expireCompOffCredits(asOfDate: Date = businessToday()): Promise<{ expired: number }> {
-  const cofType = await prisma.leaveType.findUniqueOrThrow({ where: { code: "COF" } });
+  const cofType = await requireLeaveTypeFor("COMP_OFF");
   const candidates = await prisma.compOffCredit.findMany({
     where: { status: "AVAILABLE", expiresOn: { lt: asOfDate } },
   });

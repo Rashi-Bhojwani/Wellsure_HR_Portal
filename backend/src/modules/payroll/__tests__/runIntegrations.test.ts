@@ -1,11 +1,11 @@
 import { randomBytes } from "node:crypto";
+import { Prisma } from "@prisma/client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { deleteWithDependents } from "../../../lib/__tests__/cleanup";
 import { setPayrollLockCheck } from "../../../lib/effectiveDating";
 import { prisma } from "../../../lib/prisma";
 import { getSetting, setSetting } from "../../../lib/settings";
-import { SettingsBasedEncashmentRateProvider, setEncashmentRateProvider } from "../../leave/encashmentRate";
-import { confirmRule, previewConfirm } from "../rules/governed";
+import { NotConfiguredEncashmentRateProvider, setEncashmentRateProvider } from "../../leave/encashmentRate";
 import { finalisedRunArrearsProvider, registerPayroll, SalaryBasedEncashmentRateProvider } from "../run/providers";
 import { setArrearsBasisProvider } from "../salary/arrears";
 import { Frac } from "./rational";
@@ -25,6 +25,7 @@ describe("runs, finalised runs, arrears, encashment and variance", () => {
   const who = (n: (typeof NAMES)[number]) => world.named[n]!.employeeId;
   const finalise = (id: string) => handFinalise(id, world.maker.userId, world.checkerA.userId);
   const yearEndRunIds: string[] = [];
+  const encashmentProposalIds: string[] = [];
   let flatRateBefore: number | null;
 
   beforeAll(async () => {
@@ -43,9 +44,10 @@ describe("runs, finalised runs, arrears, encashment and variance", () => {
   afterAll(async () => {
     setPayrollLockCheck(null);
     setArrearsBasisProvider(null);
-    setEncashmentRateProvider(new SettingsBasedEncashmentRateProvider());
+    setEncashmentRateProvider(new NotConfiguredEncashmentRateProvider());
     await setSetting("leave.encashment.defaultDailyRate", flatRateBefore, null);
     await deleteWithDependents("YearEndRun", yearEndRunIds);
+    await deleteWithDependents("BehaviourProposal", encashmentProposalIds);
     await teardownRunWorld(world);
   });
 
@@ -220,17 +222,18 @@ describe("runs, finalised runs, arrears, encashment and variance", () => {
       expect(readiness.adjustments.encashmentsPaidLater).toBe(1);
     });
 
-    it("the daily rate comes from the salary by the rule's formula, is final only when that rule is Confirmed, and defers to the flat rate until the rule is set", async () => {
+    // Changed 2026-11-18 (audit fix item 4, CHANGED_TESTS.md): one leave-day value for year-end, mid-year and exit: Default behaviours, Leave encashment amount.
+    // Before: the rule ENCASH_DAILY_RATE_FORMULA, deferring to a flat rupee rate while the rule had no value. The flat rate and the formula rule are no longer read.
+    it("the value of a leave day comes from the one setting (the salary's chosen heads / the divisor); Not set is refused, and the old flat rate is never used", async () => {
       const provider = new SalaryBasedEncashmentRateProvider();
-      await setSetting("leave.encashment.defaultDailyRate", 777, world.maker.userId);
-      const flat = await provider.getDailyRate(who("full"), day("2026-12-31"));
-      expect([flat.amount.toString(), flat.source, flat.isFinal]).toEqual(["777", "MANUAL_SETTING", false]);
-      await setRules(world.maker.userId, { ENCASH_DAILY_RATE_FORMULA: `${world.basic} / 30` });
+      await setSetting("leave.encashment.defaultDailyRate", 777, world.maker.userId); // the removed flat rate: present, and ignored
+      await expect(provider.getDailyRate(who("full"), day("2026-12-31"))).rejects.toMatchObject({ status: 409, code: "SETTING_NOT_SET", message: expect.stringContaining("Leave encashment amount is not set") });
+      const p = await prisma.behaviourProposal.create({ data: { key: "payroll.leaveEncashment", value: { payHead: world.special, exitLeaveTypes: ["PL"], basisHeads: [world.basic], divisor: { kind: "FIXED_DAYS", days: "30" }, rounding: { mode: "HALF_UP", scale: 2 }, sourceNote: "TEST value" }, reason: "TEST", proposedByUserId: world.maker.userId } });
+      await prisma.behaviourConfirmation.create({ data: { proposalId: p.id, confirmedByUserId: world.checkerA.userId } });
+      encashmentProposalIds.push(p.id);
       const rate = await provider.getDailyRate(who("full"), day("2026-12-31"));
-      expect([rate.amount.toString(), rate.source, rate.isFinal]).toEqual(["800", "SALARY_STRUCTURE", false]); // 24,000 / 30 on the 720,000 salary
-      const pre = await previewConfirm("ENCASH_DAILY_RATE_FORMULA", world.checkerA.userId);
-      await confirmRule("ENCASH_DAILY_RATE_FORMULA", { version: pre.version, note: "checked against the notification", fingerprint: pre.fingerprint }, { userId: world.checkerA.userId });
-      expect((await provider.getDailyRate(who("full"), day("2026-12-31"))).isFinal).toBe(true);
+      expect([rate.amount.toString(), rate.source, rate.isFinal]).toEqual(["800", "SALARY_STRUCTURE", true]); // 24,000 / 30 on the 720,000 salary
+      expect((await provider.amountFor(who("full"), day("2026-12-31"), new Prisma.Decimal("2.5"))).amount.toString()).toBe("2000"); // 2.5 x 24,000 / 30, rounded once
       await expect(provider.getDailyRate(who("other"), day("2026-07-01"))).resolves.toMatchObject({ source: "SALARY_STRUCTURE" }); // 20,000 / 30 on a 600,000 salary
       await expect(provider.getDailyRate(world.checkerA.employeeId, day("2026-12-31"))).rejects.toMatchObject({ code: "ENCASHMENT_NO_SALARY" }); // somebody with no salary: named, never guessed
     });

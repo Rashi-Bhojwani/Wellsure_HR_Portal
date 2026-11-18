@@ -172,14 +172,15 @@ describe("Core reports (F)", () => {
 
   it("LOP: only the days inside the range, holidays and week-offs out, half-days as half", async () => {
     const august = await run("lop", "&from=2025-08-01&to=2025-08-31");
-    expect(august.rows).toEqual([expect.objectContaining({ employeeCode: p.b.employeeCode, lopDays: 1.5, requests: 1 })]); // Fri 1 + Mon 4 (first half)
+    // Changed 2026-11-18 (audit fix, CHANGED_TESTS.md): week-offs come from the person's own pattern (Sunday only for test employees), so Saturday 2 counts.
+    expect(august.rows).toEqual([expect.objectContaining({ employeeCode: p.b.employeeCode, lopDays: 2.5, requests: 1 })]); // Fri 1 + Sat 2 + Mon 4 (first half)
     const july = await run("lop", "&from=2025-07-01&to=2025-07-31");
     expect(july.rows[0]).toMatchObject({ lopDays: 2 }); // Wed 30, Thu 31
     expect(august.notes.join(" ")).toMatch(/Phase 3/);
     const existing = await prisma.holiday.findUnique({ where: { date: D("2025-08-01") } });
     const holiday = existing ?? (await prisma.holiday.create({ data: { date: D("2025-08-01"), name: "Test holiday" } }));
     try {
-      expect((await run("lop", "&from=2025-08-01&to=2025-08-31")).rows[0]).toMatchObject({ lopDays: 0.5 });
+      expect((await run("lop", "&from=2025-08-01&to=2025-08-31")).rows[0]).toMatchObject({ lopDays: 1.5 }); // changed 2026-11-18: Sat 2 + Mon 4 first half
     } finally {
       if (!existing) await prisma.holiday.delete({ where: { id: holiday.id } });
     }

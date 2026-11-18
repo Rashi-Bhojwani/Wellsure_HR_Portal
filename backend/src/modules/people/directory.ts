@@ -67,7 +67,7 @@ function allowed(column: string, visible: Set<DirectoryToggleableField>): boolea
   return false;
 }
 
-function toEntry(row: DirectoryRow, visible: Set<DirectoryToggleableField>): DirectoryEntry {
+function toEntry(row: DirectoryRow, visible: Set<DirectoryToggleableField>, personalVisible: boolean): DirectoryEntry {
   const job = row.jobHistory[0]!;
   const entry: DirectoryEntry = {
     id: row.id,
@@ -81,8 +81,9 @@ function toEntry(row: DirectoryRow, visible: Set<DirectoryToggleableField>): Dir
   if (allowed("Employee.officialEmail", visible)) entry.officialEmail = row.officialEmail;
   if (allowed("Employee.dateOfJoining", visible)) entry.dateOfJoining = row.dateOfJoining.toISOString().slice(0, 10);
   if (row.personal) {
-    if (allowed("EmployeePersonal.mobile", visible)) entry.mobile = row.personal.mobile;
-    if (allowed("EmployeePersonal.personalEmail", visible)) entry.personalEmail = row.personal.personalEmail;
+    // Audit fix 2026-11-18: personal contact only to a viewer holding employee.personal.view (never the Developer), even with the directory toggle on.
+    if (personalVisible && allowed("EmployeePersonal.mobile", visible)) entry.mobile = row.personal.mobile;
+    if (personalVisible && allowed("EmployeePersonal.personalEmail", visible)) entry.personalEmail = row.personal.personalEmail;
     if (allowed("EmployeePersonal.dateOfBirth", visible)) entry.birthday = row.personal.dateOfBirth.toISOString().slice(5, 10);
   }
   if (visible.has("reportingManager")) {
@@ -104,7 +105,7 @@ export interface ListDirectoryQuery {
   pageSize: number;
 }
 
-export async function listDirectory(query: ListDirectoryQuery) {
+export async function listDirectory(query: ListDirectoryQuery, personalVisible = false) {
   const search = query.search?.trim();
   const where = {
     ...(search && {
@@ -127,7 +128,7 @@ export async function listDirectory(query: ListDirectoryQuery) {
   // Sorted by name in memory — name lives in effective-dated history, which
   // Prisma can't order by; fine at this headcount (same approach as the
   // All Employees grid, employee/grid.ts).
-  const entries = rows.map((r) => toEntry(r, visible)).sort((a, b) => a.name.localeCompare(b.name));
+  const entries = rows.map((r) => toEntry(r, visible, personalVisible)).sort((a, b) => a.name.localeCompare(b.name));
   const start = (query.page - 1) * query.pageSize;
   return {
     items: entries.slice(start, start + query.pageSize),
@@ -138,11 +139,11 @@ export async function listDirectory(query: ListDirectoryQuery) {
   };
 }
 
-export async function getDirectoryEntry(employeeId: string): Promise<DirectoryEntry> {
+export async function getDirectoryEntry(employeeId: string, personalVisible = false): Promise<DirectoryEntry> {
   const [rows, visible] = await Promise.all([loadDirectoryRows({ id: employeeId }), visibleFields()]);
   // Not ACTIVE, or no current job row → indistinguishable from "doesn't exist".
   if (rows.length === 0) throw new HttpError(404, "Employee not found.", "NOT_FOUND");
-  return toEntry(rows[0]!, visible);
+  return toEntry(rows[0]!, visible, personalVisible);
 }
 
 // ── Org chart ─────────────────────────────────────────────────────────

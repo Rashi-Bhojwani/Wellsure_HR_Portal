@@ -1,13 +1,14 @@
+import { developerViewer } from "../../lib/personalData";
 import type { Request, Response } from "express";
 import * as directory from "./directory";
 import * as photos from "./photos";
 
 export async function listDirectory(req: Request, res: Response): Promise<void> {
-  res.status(200).json(await directory.listDirectory(req.query as never as directory.ListDirectoryQuery));
+  res.status(200).json(await directory.listDirectory(req.query as never as directory.ListDirectoryQuery, !developerViewer(req.user!)));
 }
 
 export async function getDirectoryEntry(req: Request, res: Response): Promise<void> {
-  res.status(200).json(await directory.getDirectoryEntry(req.params.id as string));
+  res.status(200).json(await directory.getDirectoryEntry(req.params.id as string, !developerViewer(req.user!) || req.user!.employeeId === req.params.id));
 }
 
 export async function getOrgChart(_req: Request, res: Response): Promise<void> {

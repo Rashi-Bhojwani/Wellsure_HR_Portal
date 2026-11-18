@@ -6,6 +6,7 @@ import { resolveAttendanceDefaults } from "../../lib/attendanceSettings";
 import { businessToday } from "../../lib/businessDate";
 import { deviceCapturedOn, firstHistoryDay, inForceOn, rowStatus, writeBankChange, writeJobChange, writeNameChange } from "../../lib/effectiveDating";
 import { logger } from "../../lib/logger";
+import { canSeePersonal, withoutPersonalContact } from "../../lib/personalData";
 import { HttpError } from "../../middleware/errorHandler";
 import { reResolveUnmapped } from "../biometric/adminService";
 import { encryptField, decryptField } from "../../lib/encryption";
@@ -521,9 +522,13 @@ export async function getEmployeeProfile(
   await findScopedEmployee(employeeId, viewer.employeeId, scope);
   const loaded = await loadProfileCore(employeeId);
   // A-9: another person's contact numbers are masked to the last 4; the full number is behind the audited reveal (modules/parity/contact.ts).
-  const core = loaded.personal && employeeId !== viewer.employeeId
-    ? { ...loaded, personal: { ...loaded.personal, mobile: maskMobile(loaded.personal.mobile), emergencyContactPhone: maskMobile(loaded.personal.emergencyContactPhone) }, contactMasked: true }
-    : { ...loaded, contactMasked: false };
+  // Audit fix 2026-11-18: without employee.personal.view (the Developer), personal email, phone, addresses and the emergency contact are not sent at all.
+  const personalHidden = !canSeePersonal(viewer, employeeId);
+  const core = personalHidden
+    ? { ...loaded, personal: loaded.personal ? withoutPersonalContact(loaded.personal) : null, invitation: loaded.invitation ? { ...loaded.invitation, to: null } : null, contactMasked: true, personalHidden: true }
+    : loaded.personal && employeeId !== viewer.employeeId
+      ? { ...loaded, personal: { ...loaded.personal, mobile: maskMobile(loaded.personal.mobile), emergencyContactPhone: maskMobile(loaded.personal.emergencyContactPhone) }, contactMasked: true, personalHidden: false }
+      : { ...loaded, contactMasked: false, personalHidden: false };
   return {
     ...core,
     statutory: viewer.permissions.has("employee.statutory.view") ? await loadMaskedStatutory(employeeId) : undefined,

@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../../lib/prisma";
 import { app, authHeader, cleanupEmployeeTestOrgMasters, cleanupFullTestEmployee, cleanupTestRole, createEmployeeTestOrgMasters, createFullTestEmployee, grantPermissions, loginAs, type TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
-import { SettingsBasedEncashmentRateProvider, setEncashmentRateProvider } from "../encashmentRate";
+import { NotConfiguredEncashmentRateProvider, setEncashmentRateProvider } from "../encashmentRate";
 
 // Stage 1.5: encashment is money, so whoever runs the year-end process without pay access works on days alone. A director sees the rupees; that person ("hr" below, a custom role holding the
 // year-end key and no salary key) gets nulls in the screens, no money columns in the download, and none in the audit viewer. (Since the HR hard lock grew, the HR roles themselves cannot reach
@@ -39,7 +39,7 @@ describe("year-end encashment amounts are not HR's", () => {
     expect(created.status).toBe(201);
   });
   afterAll(async () => {
-    setEncashmentRateProvider(new SettingsBasedEncashmentRateProvider());
+    setEncashmentRateProvider(new NotConfiguredEncashmentRateProvider());
     for (const id of runIds) await prisma.yearEndRun.deleteMany({ where: { id } });
     await prisma.leaveLedger.deleteMany({ where: { employeeId: p.hr.employeeId } });
     for (const k of Object.keys(p) as Array<keyof typeof p>) await cleanupFullTestEmployee(p[k].employeeId);

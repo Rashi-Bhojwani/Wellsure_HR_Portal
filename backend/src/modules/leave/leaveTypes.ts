@@ -44,6 +44,7 @@ function policyToJson(p: LeavePolicy) {
     eligibilityMode: p.eligibilityMode,
     eligibilityValue: p.eligibilityValue,
     carryForwardCapDays: p.carryForwardCapDays?.toNumber() ?? null,
+    carryForwardRule: p.carryForwardRule as "CAPPED" | "UNLIMITED" | null,
     negativeBalanceAllowed: p.negativeBalanceAllowed,
     skipBalanceCheck: p.skipBalanceCheck,
     yearEndEncashment: p.yearEndEncashment,
@@ -109,9 +110,10 @@ interface UpsertPolicyInput {
   eligibilityMode?: LeaveEligibilityMode | null;
   eligibilityValue?: number | null;
   carryForwardCapDays?: number | null;
+  carryForwardRule?: "CAPPED" | "UNLIMITED" | null;
   negativeBalanceAllowed?: boolean;
   skipBalanceCheck?: boolean;
-  yearEndEncashment?: boolean;
+  yearEndEncashment?: boolean | null;
   compOffMinHoursWorked?: number | null;
   compOffExpiryDays?: number | null;
   wfhMonthlyLimit?: number | null;
@@ -124,6 +126,10 @@ export async function upsertLeavePolicy(leaveTypeId: string, input: UpsertPolicy
   if (!leaveType) throw new HttpError(404, "Leave type not found.", "NOT_FOUND");
 
   const before = leaveType.policy;
+  // Audit fix 2026-11-18: "a number of days" needs the number.
+  const rule = input.carryForwardRule !== undefined ? input.carryForwardRule : (before?.carryForwardRule ?? null);
+  const cap = input.carryForwardCapDays !== undefined ? input.carryForwardCapDays : (before?.carryForwardCapDays?.toNumber() ?? null);
+  if (rule === "CAPPED" && cap === null) throw new HttpError(400, "Enter the carry-forward cap in days, or choose no limit.", "VALIDATION_ERROR");
   const after = await prisma.leavePolicy.upsert({
     where: { leaveTypeId },
     create: { leaveTypeId, ...input },

@@ -177,6 +177,23 @@ export const BEHAVIOURS = {
     d37: false,
     defaultText: "Not set: a comparison is kept until a director deletes it",
   },
+  // Audit fix 2026-11-18 (docs/plans/AUDIT_FIXES.md item 2): which leave type plays each role, chosen by the directors (no type name is assumed).
+  "leave.earnedLeaveType": {
+    title: "Earned / paid leave type",
+    what: "The leave type that is credited every month (monthly accrual) and settled at year end (carry-forward and encashment). Any active leave type; its name and code are free.",
+    schema: z.string().min(1).max(64),
+    defaultValue: null as string | null,
+    d37: false,
+    defaultText: "Not set: the monthly accrual and the year-end run are refused until it is chosen",
+  },
+  "leave.compOffType": {
+    title: "Comp-off leave type",
+    what: "The leave type that holds comp-off: credited by a comp-off grant (with its expiry) and used first-in first-out. Any active leave type other than the earned leave type.",
+    schema: z.string().min(1).max(64),
+    defaultValue: null as string | null,
+    d37: false,
+    defaultText: "Not set: comp-off cannot be granted until it is chosen",
+  },
   // Owner decision 2026-11-17: the company's state is Not set until a director chooses it; no state's PT, LWF or minimum wages are loaded.
   "statutory.state": {
     title: "State for professional tax, LWF and minimum wages",
@@ -284,6 +301,15 @@ async function refuseUnknownHeads(key: BehaviourKey, value: unknown): Promise<vo
   if (unknown.length) throw new HttpError(400, `${unknown.map((h) => `'${h}'`).join(", ")} ${unknown.length === 1 ? "is not a salary head" : "are not salary heads"} in this company. Choose from the heads that exist (Payroll, Salary Components).`, "UNKNOWN_SALARY_HEAD", { heads: unknown });
 }
 
+/** Audit fix 2026-11-18: a leave type role must name an active leave type, and the two roles must be different types. */
+async function refuseBadLeaveTypeRole(key: BehaviourKey, value: unknown): Promise<void> {
+  if (key !== "leave.earnedLeaveType" && key !== "leave.compOffType") return;
+  const type = await prisma.leaveType.findUnique({ where: { id: String(value) }, select: { isActive: true, name: true } });
+  if (!type?.isActive) throw new HttpError(400, "Choose an active leave type (Admin Tools, Leave Types and Policies).", "UNKNOWN_LEAVE_TYPE");
+  const other = (await behaviourValue(key === "leave.earnedLeaveType" ? "leave.compOffType" : "leave.earnedLeaveType")).value;
+  if (other === value) throw new HttpError(400, `${type.name} already holds the other role. The earned leave type and the comp-off type must be different types.`, "SAME_LEAVE_TYPE_ROLE");
+}
+
 export const proposeSchema = z.object({ value: z.unknown(), reason: z.string().trim().min(3).max(300) }).strict();
 
 export async function propose(key: string, raw: unknown, actor: Actor) {
@@ -295,6 +321,7 @@ export async function propose(key: string, raw: unknown, actor: Actor) {
   const value = BEHAVIOURS[k].schema.safeParse(body.data.value);
   if (!value.success) throw new HttpError(400, value.error.issues.map((i) => i.message).join("; "), "VALIDATION_ERROR");
   await refuseUnknownHeads(k, value.data);
+  await refuseBadLeaveTypeRole(k, value.data);
   const row = await prisma.behaviourProposal.create({ data: { key: k, value: value.data as object, reason: body.data.reason, proposedByUserId: actor.userId } });
   await writeAuditLog({ actorUserId: actor.userId, ipAddress: actor.ip ?? null, action: "settings.behaviour.proposed", entityType: "BehaviourProposal", entityId: row.id, after: { key: k, value: value.data, reason: body.data.reason } });
   return { id: row.id };

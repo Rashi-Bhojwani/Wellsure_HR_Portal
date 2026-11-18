@@ -161,7 +161,10 @@ export async function cleanupTestRole(roleCode: string): Promise<void> {
 export async function grantPermissions(roleCode: string, permissionKeys: string[]): Promise<void> {
   let role = await prisma.role.findUnique({ where: { code: roleCode } });
   role ??= await prisma.role.create({ data: { code: roleCode, name: roleCode } });
-  for (const key of permissionKeys) {
+  // Audit fix 2026-11-18: employee.personal.view was split out of employee.view, and the migration gave it to every role holding employee.view (except the
+  // Developer). A test role built here gets it the same way, so a test role is like a real one; the Developer's ceiling still removes it.
+  const keys = permissionKeys.includes("employee.view") && roleCode !== "DEVELOPER" ? [...new Set([...permissionKeys, "employee.personal.view"])] : permissionKeys;
+  for (const key of keys) {
     let permission = await prisma.permission.findUnique({ where: { key } });
     permission ??= await prisma.permission.create({ data: { key, description: key } });
     await prisma.rolePermission.upsert({

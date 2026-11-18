@@ -7,6 +7,7 @@ import * as api from "../../../api/behaviours";
 import * as loansApi from "../../../api/loans";
 import * as lettersApi from "../../../api/letters";
 import * as payrollApi from "../../../api/payroll";
+import * as leaveApi from "../../../api/leave";
 import type { Behaviour, BehaviourKey } from "../../../api/behaviours";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { PageHeader, Panel, QueryState, SideDrawer, StatusChip, toast } from "../../../ui";
@@ -17,10 +18,12 @@ import { space } from "../../../theme/tokens";
 const RULE_LABEL: Record<string, string> = { STOP_RUN: "Stop the run", SKIP_AND_CARRY: "Skip the instalment and carry it forward", PARTIAL_AND_CARRY: "Recover what is possible, carry the rest" };
 const MODE_LABEL: Record<string, string> = { NONE: "None", FULL_MONTH: "A full month", PRO_RATA_DAYS_WORKED: "Pro-rata by days worked", FULL_IF_MIN_DAYS: "A full month only if at least N days were worked" };
 
-function describe(b: Pick<Behaviour, "key" | "value">): string {
+function describe(b: Pick<Behaviour, "key" | "value">, leaveTypeNames: ReadonlyMap<string, string> = new Map()): string {
+  const leaveTypeName = (id: string) => leaveTypeNames.get(id) ?? "A leave type";
   const v = b.value as Record<string, unknown> | boolean | null;
   // Owner decision 2026-11-17 (docs/plans/OWNER_EMPTY_SETTINGS.md): the state ships Not set; no state's PT, LWF or minimum wages are loaded.
   if (b.key === "statutory.state") return typeof b.value === "string" ? `${stateLabel(b.value)}. Its PT and LWF tables are entered under Rules and setup, its minimum wages on Minimum Wages.` : "Not set: no professional tax or LWF is deducted, and the run and payslip say \"not set\" (not \"not levied\")";
+  if (b.key === "leave.earnedLeaveType" || b.key === "leave.compOffType") return typeof b.value === "string" ? `${leaveTypeName(b.value)}` : b.key === "leave.earnedLeaveType" ? "Not set: the monthly accrual and the year-end run are refused until it is chosen" : "Not set: comp-off cannot be granted until it is chosen";
   if (b.key === "statutory.reviewIntervalMonths") return `Every ${String(b.value)} month(s)`;
   if (b.key === "payroll.ctcIncludesEmployerStatutory") return v === true ? "On: CTC = gross + employer PF + employer ESI" : "Off: CTC is gross pay only";
   if (b.key === "access.developerSeesSwipes") return v === true ? "On: the Developer role sees Employee Swipes" : "Off: the Developer role does not see Employee Swipes";
@@ -68,6 +71,7 @@ function describe(b: Pick<Behaviour, "key" | "value">): string {
 // Owner decision 2026-11-17: the settings the owners decide themselves are grouped first, each with an anchor (#key) Ready for First Run links to.
 const GROUPS: Array<{ id: string; title: string; intro: string; keys: string[] }> = [
   { id: "final-settlement", title: "Final settlement rules", intro: "Gratuity, notice pay and leave encashment. Not set until you choose them; a final settlement is refused until all three are set. Head choices list only the salary heads that exist in your company.", keys: ["payroll.gratuity", "payroll.noticeRecovery", "payroll.leaveEncashment"] },
+  { id: "leave-roles", title: "Leave type roles", intro: "Which leave type is the earned / paid leave (monthly accrual and year end) and which is comp-off. Leave type names and codes are free; until a role is chosen, the run that needs it is refused.", keys: ["leave.earnedLeaveType", "leave.compOffType"] },
   { id: "state", title: "Professional tax, LWF and minimum wages", intro: "Not set until you choose the state. No state's values are loaded: after choosing it, enter its PT and LWF tables (Rules and setup) and its minimum wages (Payroll, Minimum Wages).", keys: ["statutory.state"] },
 ];
 const GROUPED = new Set(GROUPS.flatMap((g) => g.keys));
@@ -75,7 +79,7 @@ const STATE_OPTIONS = Object.entries(COMPANY_STATES).map(([value, label]) => ({ 
 
 const ROUND_LABEL: Record<string, string> = { HALF_UP: "Half up", HALF_EVEN: "Half even", UP: "Up", DOWN: "Down", CEIL: "Ceiling", FLOOR: "Floor" };
 
-type FormValues = { reason: string; stateKey?: string; months?: number; allowance?: string; retentionDays?: number; effectiveFrom?: string; minYears?: string; partYear?: string; daysPerYear?: string; divisor?: string; ceiling?: string; noticeDays?: number; recoverShortfall?: string; payHead?: string; rateMode?: string; perHour?: string; multiplier?: string; basisHeads?: string[]; hoursPerMonth?: string; exitLeaveTypes?: string[]; divisorKind?: string; divisorDays?: string; codes?: string[]; roundMode?: string; scale?: number; on?: string; mode?: string; minDays?: number; percent?: string; sourceNote?: string; rules?: Array<{ typeKey: string; rule: string }> };
+type FormValues = { reason: string; stateKey?: string; leaveTypeId?: string; months?: number; allowance?: string; retentionDays?: number; effectiveFrom?: string; minYears?: string; partYear?: string; daysPerYear?: string; divisor?: string; ceiling?: string; noticeDays?: number; recoverShortfall?: string; payHead?: string; rateMode?: string; perHour?: string; multiplier?: string; basisHeads?: string[]; hoursPerMonth?: string; exitLeaveTypes?: string[]; divisorKind?: string; divisorDays?: string; codes?: string[]; roundMode?: string; scale?: number; on?: string; mode?: string; minDays?: number; percent?: string; sourceNote?: string; rules?: Array<{ typeKey: string; rule: string }> };
 
 export function DefaultBehavioursPage() {
   const queryClient = useQueryClient();
@@ -85,6 +89,8 @@ export function DefaultBehavioursPage() {
   const types = useQuery({ queryKey: ["loans", "types"], queryFn: loansApi.loanTypes });
   const letterTemplates = useQuery({ queryKey: ["letters", "templates"], queryFn: lettersApi.listTemplates });
   const comps = useQuery({ queryKey: ["payroll", "components"], queryFn: payrollApi.listComponents });
+  const leaveTypes = useQuery({ queryKey: ["leave", "types", "all"], queryFn: leaveApi.listAllLeaveTypes });
+  const typeNames = new Map((leaveTypes.data ?? []).map((t) => [t.id, `${t.name} (${t.code})`]));
   const earningHeads = (comps.data ?? []).filter((c) => c.value?.type === "EARNING").map((c) => ({ value: c.code, label: c.value?.payslipLabel ? `${c.value.payslipLabel} (${c.code})` : c.code }));
   const PAY_ROUND = [{ value: "HALF_UP", label: "Half up" }, { value: "UP", label: "Up" }, { value: "DOWN", label: "Down" }];
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["behaviours"] });
@@ -103,6 +109,7 @@ export function DefaultBehavioursPage() {
         : key === "payroll.gratuity" ? { effectiveFrom: v.effectiveFrom, minYears: v.minYears, partYear: v.partYear, wageHeads: v.basisHeads ?? [], daysPerYear: v.daysPerYear, divisor: v.divisor, ceiling: v.ceiling?.trim() ? v.ceiling.trim() : "NONE", rounding: { mode: v.roundMode, scale: v.scale }, sourceNote: v.sourceNote }
         : key === "payroll.noticeRecovery" ? { effectiveFrom: v.effectiveFrom, noticeDays: v.noticeDays, recoverShortfall: v.recoverShortfall === "yes", basisHeads: v.basisHeads ?? [], divisor: v.divisor, rounding: { mode: v.roundMode, scale: v.scale }, sourceNote: v.sourceNote }
         : key === "statutory.state" ? v.stateKey
+        : key === "leave.earnedLeaveType" || key === "leave.compOffType" ? v.leaveTypeId
         : key === "statutory.reviewIntervalMonths" ? v.months
         : key === "payroll.ctcIncludesEmployerStatutory" ? v.on === "on"
         : key === "payroll.leaveEncashment" ? { payHead: v.payHead, exitLeaveTypes: v.exitLeaveTypes ?? [], basisHeads: v.basisHeads ?? [], divisor: v.divisorKind === "CALENDAR_DAYS" ? { kind: "CALENDAR_DAYS" } : { kind: "FIXED_DAYS", days: v.divisorDays }, rounding: { mode: v.roundMode, scale: v.scale }, sourceNote: v.sourceNote }
@@ -119,6 +126,7 @@ export function DefaultBehavioursPage() {
     const v = b.value as Record<string, unknown> | boolean | null;
     if (b.key === "access.developerSeesSwipes" || b.key === "identity.directorConfirmsHrChanges" || b.key === "payroll.ctcIncludesEmployerStatutory") form.setFieldsValue({ on: v === true ? "on" : "off" });
     if (b.key === "statutory.state" && typeof b.value === "string") form.setFieldsValue({ stateKey: b.value });
+    if ((b.key === "leave.earnedLeaveType" || b.key === "leave.compOffType") && typeof b.value === "string") form.setFieldsValue({ leaveTypeId: b.value });
     if (b.key === "statutory.reviewIntervalMonths" && typeof b.value === "number") form.setFieldsValue({ months: b.value });
     if (b.key === "payroll.parallelTolerance") form.setFieldsValue({ allowance: (v as { allowance?: string } | null)?.allowance ?? "0" });
     if (b.key === "letters.employeeMayAsk") form.setFieldsValue({ codes: Array.isArray(v) ? (v as string[]) : [] });
@@ -136,12 +144,12 @@ export function DefaultBehavioursPage() {
   const card = (b: Behaviour) => (
     <div key={b.key} id={b.key} tabIndex={-1} style={{ scrollMarginTop: space[16] }}>
       <Panel title={b.title} subtitle={b.what} extra={<StatusChip tone={b.state === "CONFIRMED" ? "success" : b.state === "DEFAULT" ? "info" : "warning"}>{b.label ?? "Changed and confirmed"}</StatusChip>}>
-        <p style={{ marginTop: 0 }}>In effect: {describe(b)}</p>
+        <p style={{ marginTop: 0 }}>In effect: {describe(b, typeNames)}</p>
         {b.confirmed && <p>Proposed by {b.confirmed.proposedBy}, confirmed by {b.confirmed.confirmedBy}. Reason: {b.confirmed.reason}</p>}
         {b.pending.slice(0, 1).map((p) => (
           <div key={p.id} style={{ display: "flex", gap: space[2], flexWrap: "wrap", alignItems: "center", marginBottom: space[2] }}>
             <StatusChip tone="warning">Waiting for a different director</StatusChip>
-            <span>{describe({ key: b.key, value: p.value })} — proposed by {p.proposedBy}: {p.reason}</span>
+            <span>{describe({ key: b.key, value: p.value }, typeNames)} — proposed by {p.proposedBy}: {p.reason}</span>
             {!p.mine && <Button type="primary" loading={confirm.isPending} onClick={() => confirm.mutate(p.id)}>Confirm</Button>}
           </div>
         ))}
@@ -191,6 +199,11 @@ export function DefaultBehavioursPage() {
           {editing?.key === "statutory.state" && (
             <Form.Item name="stateKey" label="State" rules={[{ required: true, message: "Choose the state" }]}>
               <Select showSearch optionFilterProp="label" placeholder="Choose a state" options={STATE_OPTIONS} />
+            </Form.Item>
+          )}
+          {(editing?.key === "leave.earnedLeaveType" || editing?.key === "leave.compOffType") && (
+            <Form.Item name="leaveTypeId" label="Leave type" rules={[{ required: true, message: "Choose the leave type" }]}>
+              <Select showSearch optionFilterProp="label" placeholder="Choose a leave type" options={(leaveTypes.data ?? []).filter((t) => t.isActive).map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))} />
             </Form.Item>
           )}
           {editing?.key === "statutory.reviewIntervalMonths" && (

@@ -15,6 +15,8 @@ import { consumeCompOffFifo, reverseCompOffConsumption } from "./compOff";
 import { withEmployeeLeaveLock } from "./concurrency";
 import { assertLeaveLimits, leaveDaysFor } from "./policyLimits";
 import { resolveDayCountContext } from "./dayCountContext";
+import { isLeaveTypeFor } from "./leaveTypeRoles";
+import { assertTypeLimits } from "./typeLimits";
 import { assertSufficientBalance, writeLedgerEntry } from "./ledger";
 import { releasedDaysOf } from "./releases";
 import { approvalEmployeeIdFilter, isEmployeeInScope, reachFor, resolveApprovalReach, type ApprovalReach } from "./scope";
@@ -106,9 +108,9 @@ export async function applyForLeave(input: ApplyLeaveInput, viewer: LeaveViewer,
 
   await assertNoLockedPeriod(targetEmployeeId, fromDate, toDate);
 
-  const { holidayDates, weekOffDays } = await resolveDayCountContext(targetEmployeeId, fromDate, toDate);
+  const { excludedDates } = await resolveDayCountContext(targetEmployeeId, fromDate, toDate);
   // LV-20 (M session block 2): the sandwich rule, off until two directors turn it on; off, this is exactly computeTotalLeaveDays.
-  const totalDays = await leaveDaysFor(leaveType.code, fromDate, toDate, input.fromDayPart, input.toDayPart, holidayDates, weekOffDays);
+  const totalDays = await leaveDaysFor(leaveType.code, fromDate, toDate, input.fromDayPart, input.toDayPart, excludedDates, []); // week-offs are dates now (the person's own pattern), so no weekday list
   if (totalDays.lessThanOrEqualTo(0)) {
     throw new HttpError(400, "The selected range contains no working days to apply leave for.", "NO_WORKING_DAYS");
   }
@@ -121,6 +123,8 @@ export async function applyForLeave(input: ApplyLeaveInput, viewer: LeaveViewer,
     if (overlap) {
       throw new HttpError(409, "An existing request already covers part of this date range.", "OVERLAPPING_REQUEST");
     }
+
+    await assertTypeLimits(tx, targetEmployeeId, leaveType, { fromDate, toDate, fromDayPart: input.fromDayPart, toDayPart: input.toDayPart }); // audit fix 2026-11-18: WFH and RH limits
 
     if (!leaveType.policy?.skipBalanceCheck) {
       await assertSufficientBalance(tx, targetEmployeeId, leaveType.id, leaveType.policy ?? { skipBalanceCheck: false, negativeBalanceAllowed: false }, totalDays);
@@ -475,7 +479,7 @@ export async function approveLeaveRequest(requestId: string, viewer: LeaveViewer
     }
     const leaveYear = fresh.fromDate.getUTCFullYear();
 
-    if (existing.leaveType.code === "COF") {
+    if (await isLeaveTypeFor("COMP_OFF", existing.leaveTypeId)) {
       await consumeCompOffFifo(tx, existing.employeeId, requestId, fresh.totalDays, leaveYear, fresh.fromDate);
     } else {
       const policy = existing.leaveType.policy;
@@ -620,7 +624,7 @@ export async function cancelLeaveRequest(requestId: string, viewer: LeaveViewer,
 
     if (fresh.status === "APPROVED") {
       const leaveYear = cancelDate.getUTCFullYear();
-      if (existing.leaveType.code === "COF") {
+      if (await isLeaveTypeFor("COMP_OFF", existing.leaveTypeId)) {
         await reverseCompOffConsumption(tx, requestId, leaveYear, cancelDate);
       } else {
         // Days HR already returned by releasing single days the person worked (Phase 3) are not returned twice.

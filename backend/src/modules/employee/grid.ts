@@ -2,6 +2,7 @@ import { buildXlsx } from "../../lib/xlsx";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { writeAuditLog } from "../../lib/audit";
+import { PERSONAL_VIEW_KEY } from "../../lib/personalData";
 import { HttpError } from "../../middleware/errorHandler";
 import { buildEmployeeScopeWhere, type DataScope } from "../../lib/dataScope";
 import type { RequestMetaInput } from "./types";
@@ -49,7 +50,7 @@ export function maskMobile(mobile: string | null | undefined): string {
   return `••••${digits.slice(-4)}`;
 }
 
-export async function buildWhere(query: EmployeeListQuery, viewerEmployeeId: string, scope: DataScope): Promise<Prisma.EmployeeWhereInput> {
+export async function buildWhere(query: EmployeeListQuery, viewerEmployeeId: string, scope: DataScope, personalVisible = true): Promise<Prisma.EmployeeWhereInput> {
   const scopeWhere = await buildEmployeeScopeWhere(viewerEmployeeId, scope);
   const filters: Prisma.EmployeeWhereInput[] = [scopeWhere];
 
@@ -58,9 +59,9 @@ export async function buildWhere(query: EmployeeListQuery, viewerEmployeeId: str
       OR: [
         { employeeCode: { contains: query.search, mode: "insensitive" } },
         { nameHistory: { some: { ...inForceOn(), fullName: { contains: query.search, mode: "insensitive" } } } },
-        { personal: { personalEmail: { contains: query.search, mode: "insensitive" } } },
+        // Audit fix 2026-11-18: searching by personal email or mobile only for someone who may see them (else the search itself would reveal them).
+        ...(personalVisible ? [{ personal: { personalEmail: { contains: query.search, mode: "insensitive" as const } } }, { personal: { mobile: { contains: query.search } } }] : []),
         { officialEmail: { contains: query.search, mode: "insensitive" } }, // A-9
-        { personal: { mobile: { contains: query.search } } },
       ],
     });
   }
@@ -85,7 +86,7 @@ export async function buildWhere(query: EmployeeListQuery, viewerEmployeeId: str
   return { AND: filters };
 }
 
-async function loadRows(where: Prisma.EmployeeWhereInput, includeSensitive: { bank: boolean; statutory: boolean }): Promise<GridRow[]> {
+async function loadRows(where: Prisma.EmployeeWhereInput, includeSensitive: { bank: boolean; statutory: boolean }, personalVisible = true): Promise<GridRow[]> {
   const employees = await prisma.employee.findMany({
     where,
     include: {
@@ -117,9 +118,9 @@ async function loadRows(where: Prisma.EmployeeWhereInput, includeSensitive: { ba
       dateOfJoining: employee.dateOfJoining.toISOString().slice(0, 10),
       status: employee.status,
       employmentType: employee.employmentType,
-      mobile: maskMobile(employee.personal?.mobile), // A-9: masked; full number only through the audited reveal
+      mobile: personalVisible ? maskMobile(employee.personal?.mobile) : "", // A-9: masked; full number only through the audited reveal. Audit fix 2026-11-18: none without employee.personal.view
       officialEmail: employee.officialEmail,
-      personalEmail: employee.personal?.personalEmail ?? "",
+      personalEmail: personalVisible ? (employee.personal?.personalEmail ?? "") : "",
       ...(includeSensitive.bank ? { bankLast4: bank?.accountNumberLast4 ?? null } : {}),
       ...(includeSensitive.statutory ? { panLast4: statutory?.panLast4 ?? null, aadhaarLast4: statutory?.aadhaarLast4 ?? null } : {}),
     };
@@ -140,9 +141,10 @@ export async function listEmployeesGrid(
   viewer: { employeeId: string; permissions: Set<string> },
   scope: DataScope,
 ) {
-  const where = await buildWhere(query, viewer.employeeId, scope);
+  const personalVisible = viewer.permissions.has(PERSONAL_VIEW_KEY);
+  const where = await buildWhere(query, viewer.employeeId, scope, personalVisible);
   const includeSensitive = { bank: viewer.permissions.has("employee.bank.view"), statutory: viewer.permissions.has("employee.statutory.view") };
-  const rows = sortRows(await loadRows(where, includeSensitive), query.sortBy, query.sortDir);
+  const rows = sortRows(await loadRows(where, includeSensitive, personalVisible), query.sortBy, query.sortDir);
   const start = (query.page - 1) * query.pageSize;
   return { rows: rows.slice(start, start + query.pageSize), total: rows.length, page: query.page, pageSize: query.pageSize };
 }
@@ -188,9 +190,11 @@ export async function exportEmployeesExcel(
     statutory: includeSensitive && viewer.permissions.has("employee.statutory.view"),
   };
 
-  const where = await buildWhere(query, viewer.employeeId, scope);
-  const rows = sortRows(await loadRows(where, sensitiveFlags), query.sortBy, query.sortDir);
-  const columns = EXPORT_COLUMNS.filter((col) => !col.sensitive || sensitiveFlags.bank || sensitiveFlags.statutory);
+  const personalVisible = viewer.permissions.has(PERSONAL_VIEW_KEY);
+  const where = await buildWhere(query, viewer.employeeId, scope, personalVisible);
+  const rows = sortRows(await loadRows(where, sensitiveFlags, personalVisible), query.sortBy, query.sortDir);
+  // Audit fix 2026-11-18: without employee.personal.view the personal columns are left out of the file altogether.
+  const columns = EXPORT_COLUMNS.filter((col) => (!col.sensitive || sensitiveFlags.bank || sensitiveFlags.statutory) && (personalVisible || (col.key !== "mobile" && col.key !== "personalEmail")));
 
   const buffer = await buildXlsx([{ name: "All Employees", columns: columns.map((col) => ({ key: col.key, header: col.header, width: 20 })), rows: rows as unknown as Array<Record<string, unknown>> }]);
 

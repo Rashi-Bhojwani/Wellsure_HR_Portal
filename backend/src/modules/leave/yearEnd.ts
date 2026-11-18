@@ -4,7 +4,8 @@ import { prisma } from "../../lib/prisma";
 import { writeAuditLog } from "../../lib/audit";
 import { HttpError } from "../../middleware/errorHandler";
 import { withEmployeeLeaveLock } from "./concurrency";
-import { getEncashmentRateProvider } from "./encashmentRate";
+import { encashedAmountFor, getEncashmentRateProvider } from "./encashmentRate";
+import { requireLeaveTypeFor } from "./leaveTypeRoles";
 import { writeLedgerEntry } from "./ledger";
 import type { ActorMeta } from "./types";
 import { inForceOn } from "../../lib/effectiveDating";
@@ -38,6 +39,8 @@ function itemJson(item: {
   rateSource: string;
   encashedAmount: Prisma.Decimal;
   ledgerEncashmentEntryId: string | null;
+  carriedForwardDays?: Prisma.Decimal;
+  lapsedDays?: Prisma.Decimal;
 }) {
   return {
     id: item.id,
@@ -48,7 +51,34 @@ function itemJson(item: {
     rateSource: item.rateSource,
     encashedAmount: item.encashedAmount.toNumber(),
     ledgerEncashmentEntryId: item.ledgerEncashmentEntryId,
+    carriedForwardDays: item.carriedForwardDays?.toNumber() ?? 0,
+    lapsedDays: item.lapsedDays?.toNumber() ?? 0,
   };
+}
+
+/**
+ * Audit fix 2026-11-18 (docs/plans/AUDIT_FIXES.md item 3): what year end does with a closing balance, from the earned leave type's policy. At most the
+ * carry-forward cap is carried into the new year ("no limit" carries everything); the rest is encashed when year-end encashment is on, or lapses when it is off.
+ * Both must be chosen: while either is Not set the run is refused, naming it, and nothing is cashed out. Pure.
+ */
+export function yearEndSplit(balance: Prisma.Decimal, policy: { carryForwardRule: string | null; carryForwardCapDays: Prisma.Decimal | null; yearEndEncashment: boolean | null }): { carried: Prisma.Decimal; encashed: Prisma.Decimal; lapsed: Prisma.Decimal } {
+  const zero = new Prisma.Decimal(0);
+  if (balance.lessThanOrEqualTo(0)) return { carried: zero, encashed: zero, lapsed: zero };
+  const carried = policy.carryForwardRule === "UNLIMITED" ? balance : Prisma.Decimal.min(balance, policy.carryForwardCapDays ?? zero);
+  const rest = balance.minus(carried);
+  return policy.yearEndEncashment ? { carried, encashed: rest, lapsed: zero } : { carried, encashed: zero, lapsed: rest };
+}
+
+/** The year-end settings of the earned leave type, refusing (naming each) while any is Not set. */
+async function yearEndPolicy() {
+  const type = await requireLeaveTypeFor("EARNED");
+  const p = type.policy;
+  const missing = [
+    ...(!p || (p.carryForwardRule !== "UNLIMITED" && p.carryForwardRule !== "CAPPED") || (p.carryForwardRule === "CAPPED" && p.carryForwardCapDays === null) ? [`${type.name}: carry-forward cap is not set (a number of days, or no limit)`] : []),
+    ...(!p || p.yearEndEncashment === null ? [`${type.name}: year-end encashment is not set (on or off)`] : []),
+  ];
+  if (missing.length) throw new HttpError(409, `${missing.join(". ")}. Choose ${missing.length === 1 ? "it" : "them"} in Admin Tools, Leave Types and Policies. Nothing is encashed until then.`, "SETTING_NOT_SET", { settings: missing });
+  return { type, policy: p! };
 }
 
 function runJson(run: {
@@ -119,19 +149,21 @@ export async function getYearEndRun(runId: string) {
 // amounts.
 export async function previewYearEnd(leaveYear: number, meta: ActorMeta) {
   const cutoff = cutoffDate(leaveYear);
-  const plType = await prisma.leaveType.findUniqueOrThrow({ where: { code: "PL" } });
+  const { type: plType, policy } = await yearEndPolicy();
   const employees = await prisma.employee.findMany({ where: { status: "ACTIVE" }, select: { id: true } });
   const rateProvider = getEncashmentRateProvider();
 
-  const computed: { employeeId: string; closingPlBalance: Prisma.Decimal; dailyRate: Prisma.Decimal; rateSource: string; encashedAmount: Prisma.Decimal }[] = [];
+  const computed: { employeeId: string; closingPlBalance: Prisma.Decimal; encashedDays: Prisma.Decimal; carriedForwardDays: Prisma.Decimal; lapsedDays: Prisma.Decimal; dailyRate: Prisma.Decimal; rateSource: string; encashedAmount: Prisma.Decimal }[] = [];
   for (const employee of employees) {
     const balance = await closingPlBalance(employee.id, plType.id, cutoff);
     if (balance.lessThanOrEqualTo(0)) continue;
-    const rate = await rateProvider.getDailyRate(employee.id, cutoff); // throws EncashmentRateNotConfiguredError if unset — aborts before any row is written
-    computed.push({ employeeId: employee.id, closingPlBalance: balance, dailyRate: rate.amount, rateSource: rate.source, encashedAmount: balance.times(rate.amount) });
+    const split = yearEndSplit(balance, policy);
+    // The one leave-day value (Default behaviours, Leave encashment amount); refuses if Not set, before any row is written.
+    const value = split.encashed.greaterThan(0) ? await encashedAmountFor(rateProvider, employee.id, cutoff, split.encashed) : { amount: new Prisma.Decimal(0), dailyRate: new Prisma.Decimal(0), source: "NOT_ENCASHED" };
+    computed.push({ employeeId: employee.id, closingPlBalance: balance, encashedDays: split.encashed, carriedForwardDays: split.carried, lapsedDays: split.lapsed, dailyRate: value.dailyRate, rateSource: value.source, encashedAmount: value.amount });
   }
 
-  const totalEncashedDays = computed.reduce((sum, c) => sum.plus(c.closingPlBalance), new Prisma.Decimal(0));
+  const totalEncashedDays = computed.reduce((sum, c) => sum.plus(c.encashedDays), new Prisma.Decimal(0));
   const totalEncashedAmount = computed.reduce((sum, c) => sum.plus(c.encashedAmount), new Prisma.Decimal(0));
 
   const run = await prisma.$transaction(async (tx) => {
@@ -148,7 +180,9 @@ export async function previewYearEnd(leaveYear: number, meta: ActorMeta) {
           create: computed.map((c) => ({
             employeeId: c.employeeId,
             closingPlBalance: c.closingPlBalance,
-            encashedDays: c.closingPlBalance,
+            encashedDays: c.encashedDays,
+            carriedForwardDays: c.carriedForwardDays,
+            lapsedDays: c.lapsedDays,
             dailyRate: c.dailyRate,
             rateSource: c.rateSource,
             encashedAmount: c.encashedAmount,
@@ -191,7 +225,7 @@ export async function commitYearEndRun(runId: string, meta: ActorMeta, options: 
   }
 
   const cutoff = cutoffDate(run.leaveYear);
-  const plType = await prisma.leaveType.findUniqueOrThrow({ where: { code: "PL" } });
+  const plType = await requireLeaveTypeFor("EARNED");
 
   for (const item of run.items) {
     const fresh = await closingPlBalance(item.employeeId, plType.id, cutoff);
@@ -202,23 +236,39 @@ export async function commitYearEndRun(runId: string, meta: ActorMeta, options: 
 
   for (const item of run.items) {
     await withEmployeeLeaveLock(item.employeeId, async (tx) => {
-      const entry = await writeLedgerEntry(tx, {
-        employeeId: item.employeeId,
-        leaveTypeId: plType.id,
-        leaveYear: run.leaveYear,
-        entryDate: cutoff,
-        entryType: "ENCASHMENT",
-        days: item.closingPlBalance.negated(),
-        referenceType: "YEAR_END_RUN",
-        referenceId: run.id,
-        createdByUserId: meta.actorUserId,
-        // Days only, never the rate: the ledger is readable by anyone with
-        // leave.view in scope (managers included), and the daily rate is
-        // salary-derived. The rate and amount live on the YearEndRunItem,
-        // behind leave.yearend.manage (2026-10-03).
-        remarks: `Year-end ${run.leaveYear} encashment: ${item.encashedDays.toFixed(2)} day(s)`,
-      });
-      await tx.yearEndRunItem.update({ where: { id: item.id }, data: { ledgerEncashmentEntryId: entry.id } });
+      // What is carried stays in the balance (it is the sum of entries); the rest leaves it as an ENCASHMENT or a LAPSE entry.
+      if (item.encashedDays.greaterThan(0)) {
+        const entry = await writeLedgerEntry(tx, {
+          employeeId: item.employeeId,
+          leaveTypeId: plType.id,
+          leaveYear: run.leaveYear,
+          entryDate: cutoff,
+          entryType: "ENCASHMENT",
+          days: item.encashedDays.negated(),
+          referenceType: "YEAR_END_RUN",
+          referenceId: run.id,
+          createdByUserId: meta.actorUserId,
+          // Days only, never the rate: the ledger is readable by anyone with leave.view in scope (managers included), and the daily rate is salary-derived.
+          // The rate and amount live on the YearEndRunItem, behind leave.yearend.manage (2026-10-03).
+          remarks: `Year-end ${run.leaveYear} encashment: ${item.encashedDays.toFixed(2)} day(s)`,
+        });
+        await tx.yearEndRunItem.update({ where: { id: item.id }, data: { ledgerEncashmentEntryId: entry.id } });
+      }
+      if (item.lapsedDays.greaterThan(0)) {
+        const entry = await writeLedgerEntry(tx, {
+          employeeId: item.employeeId,
+          leaveTypeId: plType.id,
+          leaveYear: run.leaveYear,
+          entryDate: cutoff,
+          entryType: "LAPSE",
+          days: item.lapsedDays.negated(),
+          referenceType: "YEAR_END_RUN",
+          referenceId: run.id,
+          createdByUserId: meta.actorUserId,
+          remarks: `Year-end ${run.leaveYear}: ${item.lapsedDays.toFixed(2)} day(s) above the carry-forward cap lapsed (year-end encashment is off)`,
+        });
+        await tx.yearEndRunItem.update({ where: { id: item.id }, data: { ledgerLapseEntryId: entry.id } });
+      }
     });
   }
 
@@ -244,6 +294,8 @@ export async function buildYearEndReport(runId: string, withMoney: boolean): Pro
         { header: "Employee Name", key: "name", width: 28 },
         { header: "Closing PL Balance", key: "balance", type: "number", width: 18 },
         { header: "Encashed Days", key: "days", type: "number", width: 16 },
+        { header: "Carried Forward Days", key: "carried", type: "number", width: 20 },
+        { header: "Lapsed Days", key: "lapsed", type: "number", width: 14 },
         ...(withMoney
           ? ([
               { header: "Daily Rate", key: "rate", type: "money", width: 14 },
@@ -257,6 +309,8 @@ export async function buildYearEndReport(runId: string, withMoney: boolean): Pro
         name: item.employee.nameHistory[0]?.fullName ?? item.employee.employeeCode,
         balance: item.closingPlBalance.toNumber(),
         days: item.encashedDays.toNumber(),
+        carried: item.carriedForwardDays.toNumber(),
+        lapsed: item.lapsedDays.toNumber(),
         ...(withMoney ? { rate: item.dailyRate.toNumber(), rateSource: item.rateSource, amount: item.encashedAmount.toNumber() } : {}),
       })),
       totals: { name: "Total", days: run.totalEncashedDays.toNumber(), ...(withMoney ? { amount: run.totalEncashedAmount.toNumber() } : {}) },

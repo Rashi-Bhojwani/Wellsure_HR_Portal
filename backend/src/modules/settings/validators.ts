@@ -30,9 +30,6 @@ export const updateSettingsSchema = z.object({
     .optional(),
 });
 
-export const updateLeaveSettingsSchema = z.object({
-  encashmentDefaultDailyRate: z.number().positive().nullable().optional(),
-});
 
 export const updatePeopleDocumentsSettingsSchema = z.object({
   directoryVisibleFields: z.array(z.enum(DIRECTORY_TOGGLEABLE_FIELDS)).optional(),

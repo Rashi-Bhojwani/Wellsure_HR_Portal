@@ -1,4 +1,5 @@
 import { prisma } from "../../lib/prisma";
+import { leaveTypeIdFor } from "../leave/leaveTypeRoles";
 import { addCalendarDays } from "../../lib/businessDate";
 import { encryptBankFields, encryptStatutoryFields } from "../employee/service";
 import { packBytes } from "../../lib/bytesJson";
@@ -61,7 +62,7 @@ export async function loadReferenceData(): Promise<ReferenceData> {
       prisma.deviceUserMapping.findMany({ select: { deviceUserId: true, validFrom: true, validTo: true, employee: { select: { employeeCode: true } } } }),
       prisma.employeeStatutory.findMany({ select: { panHash: true, aadhaarHash: true } }),
       prisma.employeeBankAccount.findMany({ where: inForceOn(), select: { accountNumberHash: true } }),
-      prisma.leaveType.findMany({ where: { isActive: true, code: { not: "COF" } }, select: { id: true, code: true } }),
+      leaveTypeIdFor("COMP_OFF").then((cof) => prisma.leaveType.findMany({ where: { isActive: true, ...(cof ? { id: { not: cof } } : {}) }, select: { id: true, code: true } })), // the comp-off type (a director setting) is granted with hours, not imported
     ]);
 
   return {
@@ -460,10 +461,9 @@ export function validateLeaveGrantRow(row: ParsedRow, refs: ReferenceData, _trac
 
   if (!v.leaveTypeCode) {
     errors.push("leaveTypeCode is required.");
-  } else if (leaveTypeCode === "COF") {
-    errors.push("COF is not supported here — use Leave Granter's Comp-Off Grant action (it needs hours worked, not just a day count).");
   } else if (!refs.activeLeaveTypeCodeToId.has(leaveTypeCode.toLowerCase())) {
-    errors.push(`Unknown or inactive leave type code "${leaveTypeCode}".`);
+    // The comp-off type (Default behaviours) is left out of the importable types: it is granted with hours worked, not a day count.
+    errors.push(`Unknown or inactive leave type code "${leaveTypeCode}" (the comp-off type is not imported: use Leave Granter's Comp-Off Grant action).`);
   }
 
   if (!v.days) {

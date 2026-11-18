@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Col, Form, Input, InputNumber, Row, Select, Switch } from "antd";
 import {
@@ -25,7 +25,7 @@ import {
 } from "@shared/constants/peopleDocuments";
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as settingsApi from "../../../api/settings";
-import type { DeviceAlertSettings, DeviceHealthThresholds, HelpdeskSettings, LeaveSettings, PeopleDocumentsSettings, RegularizationSettings, SecuritySettings } from "../../../api/settings";
+import type { DeviceAlertSettings, DeviceHealthThresholds, HelpdeskSettings, PeopleDocumentsSettings, RegularizationSettings, SecuritySettings } from "../../../api/settings";
 import { LettersSettingsCard } from "../../../components/letters/LettersSettingsCard";
 import { EmailTemplatesCard } from "./EmailTemplatesCard";
 import { DirectorAuthorityCard } from "../../../components/payroll/DirectorAuthorityCard";
@@ -85,44 +85,14 @@ function SettingsSection({ title, isLoading, error, onRetry, fields, children }:
   );
 }
 
-// Separate card + independent save, matching the two separate backend
-// endpoints (GET/PUT /api/settings/security vs /leave) rather than one
-// combined form — the Leave section is deliberately small: a closed
-// catalog of typed settings (see settings/service.ts's comment), not a
-// generic key-value editor, so this is exactly as small as it should be.
+// Audit fix 2026-11-18 (docs/plans/AUDIT_FIXES.md item 4): there is no flat rupee rate any more. The value of a leave day, for year-end, mid-year and exit
+// encashment alike, is the one director setting in Default behaviours ("Leave encashment amount"); this card says where it is.
 function LeaveSettingsCard() {
-  const queryClient = useQueryClient();
-  const { data, isLoading, error, refetch } = useQuery({ queryKey: ["settings", "leave"], queryFn: settingsApi.getLeaveSettings });
-  const [form] = Form.useForm<LeaveSettings>();
-
-  useEffect(() => {
-    if (data) form.setFieldsValue(data);
-  }, [data, form]);
-
-  const saveMutation = useMutation({
-    mutationFn: (values: LeaveSettings) => settingsApi.updateLeaveSettings(values),
-    onSuccess: (updated) => {
-      queryClient.setQueryData(["settings", "leave"], updated);
-      toast.success("Leave settings saved.");
-    },
-    onError: (err) => toast.error(errorMessage(err, "Could not save settings.")),
-  });
-
   return (
-    <SettingsSection title="Year-end PL encashment" isLoading={isLoading || (!data && !error)} error={error} onRetry={() => void refetch()} fields={1}>
-      {data && (
-        <Form form={form} layout="vertical" initialValues={data} onFinish={(values) => saveMutation.mutate(values)} requiredMark={false}>
-          <SectionIntro>One flat rupee amount per encashed leave day, used by Year End Process — pending the owners' confirmation of both the rate and its tax treatment (spec §5.2).</SectionIntro>
-          <Row gutter={[24, 0]}>
-            <Col {...half}>
-              <Form.Item name="encashmentDefaultDailyRate" label="Default daily rate (₹)">
-                <InputNumber min={0} step={1} style={{ width: "100%" }} placeholder="Not configured" />
-              </Form.Item>
-            </Col>
-          </Row>
-          <SaveButton loading={saveMutation.isPending} />
-        </Form>
-      )}
+    <SettingsSection title="Leave encashment" isLoading={false} error={null} onRetry={() => undefined} fields={1}>
+      <SectionIntro>
+        The value of an encashed leave day (year end, during the year and at exit) is one setting: <Link to="/admin/settings/behaviours#payroll.leaveEncashment">Default behaviours, Leave encashment amount</Link>, set by one director and confirmed by the other. Until it is set, encashment is refused; nothing is paid at a flat rate. What year end carries forward or encashes is on <Link to="/admin/admin-tools/leave-policies">Leave Types and Policies</Link>.
+      </SectionIntro>
     </SettingsSection>
   );
 }

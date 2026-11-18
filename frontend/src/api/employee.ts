@@ -162,6 +162,8 @@ export async function deleteSavedView(id: string): Promise<void> {
 export interface EmployeeProfile {
   /** A-9: another person's contact numbers arrive masked (last 4); the full numbers are behind the audited reveal. */
   contactMasked?: boolean;
+  /** Audit fix 2026-11-18: personal email, phone, addresses and emergency contact withheld (no employee.personal.view); they arrive as null. */
+  personalHidden?: boolean;
   id: string;
   employeeCode: string;
   fullName: string;
@@ -179,13 +181,14 @@ export interface EmployeeProfile {
   personal: {
     dateOfBirth: string;
     gender: string;
-    personalEmail: string;
-    mobile: string;
-    currentAddress: string;
-    permanentAddress: string;
-    emergencyContactName: string;
-    emergencyContactPhone: string;
-    emergencyContactRelation: string;
+    // null when withheld (audit fix 2026-11-18: no employee.personal.view)
+    personalEmail: string | null;
+    mobile: string | null;
+    currentAddress: string | null;
+    permanentAddress: string | null;
+    emergencyContactName: string | null;
+    emergencyContactPhone: string | null;
+    emergencyContactRelation: string | null;
     bloodGroup: string | null;
     photoVersion: string | null;
   } | null;

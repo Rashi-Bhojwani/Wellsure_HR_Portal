@@ -14,6 +14,7 @@ export type SensitiveClassId =
   | "EMPLOYEE_STATUTORY"
   | "COMPANY_IDENTIFIERS"
   | "BANK_LAYOUT_AND_DEBIT_ACCOUNT"
+  | "EMPLOYEE_PERSONAL_CONTACT"
   | "PERSONAL_DOCUMENTS"
   | "SENSITIVE_TICKETS"
   | "ACCESS_CONTROL";
@@ -79,6 +80,15 @@ export const SENSITIVE_CLASSES: readonly SensitiveClass[] = [
     view: ["payroll.banklayout.manage", "payroll.banklayout.confirm"],
     edit: ["payroll.banklayout.manage"],
     confirm: ["payroll.banklayout.confirm"],
+  },
+  {
+    // Audit fix 2026-11-18 (docs/plans/AUDIT_FIXES.md item 7): personal contact details, kept from the Developer like pay, bank and identity.
+    id: "EMPLOYEE_PERSONAL_CONTACT",
+    label: "Employees' personal email, phone and home address",
+    what: "How to reach each person at home: personal email, mobile number, current and permanent address, and their emergency contact.",
+    view: ["employee.personal.view"],
+    edit: [],
+    confirm: [],
   },
   {
     id: "PERSONAL_DOCUMENTS",

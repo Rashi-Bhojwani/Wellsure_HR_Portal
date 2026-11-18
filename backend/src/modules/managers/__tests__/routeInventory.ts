@@ -151,8 +151,6 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "GET /api/audit-logs/export": admin, // AU-04: audit.view (non-grantable), Developer refused
   "GET /api/settings/security": admin,
   "PUT /api/settings/security": admin,
-  "GET /api/settings/leave": admin,
-  "PUT /api/settings/leave": admin,
   "GET /api/settings/people-documents": admin,
   "PUT /api/settings/people-documents": admin,
   "GET /api/settings/helpdesk": admin,

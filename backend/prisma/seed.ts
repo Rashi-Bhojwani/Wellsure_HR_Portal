@@ -269,7 +269,10 @@ async function main() {
       accrualDaysPerMonth: 1.0,
       eligibilityMode: "DAYS", // HR-confirmed
       eligibilityValue: 90, // HR-confirmed: 90-day waiting period from DOJ
-      carryForwardCapDays: null, // HR-confirmed: no cap
+      // Spec §5.2 (development data): unused PL rolls over month to month without a cap; at 31 December the remaining balance is encashed and the balance resets.
+      // Audit fix 2026-11-18: that is "carry 0 days into the new year, encash the rest". A real company chooses both on Leave Types and Policies.
+      carryForwardRule: "CAPPED",
+      carryForwardCapDays: 0,
       negativeBalanceAllowed: false, // HR-confirmed
       yearEndEncashment: true, // HR-confirmed
     },
@@ -984,6 +987,17 @@ async function main() {
   );
   if (violations.length > 0) {
     throw new Error(`Seed reporting lines break the three-level rule:\n  - ${violations.join("\n  - ")}`);
+  }
+
+  // Audit fix 2026-11-18 (docs/plans/AUDIT_FIXES.md item 2): the earned leave and comp-off roles are director settings. A real company starts Not set (the runs
+  // refuse until chosen); the development data has them chosen the way the screens would: proposed by director 1000, confirmed by director 1031.
+  {
+    const d1 = await prisma.user.findFirstOrThrow({ where: { employee: { employeeCode: "1000" } }, select: { id: true } });
+    const d2 = await prisma.user.findFirstOrThrow({ where: { employee: { employeeCode: "1031" } }, select: { id: true } });
+    for (const [key, typeId] of [["leave.earnedLeaveType", plType.id], ["leave.compOffType", cofType.id]] as const) {
+      const p = await prisma.behaviourProposal.create({ data: { key, value: typeId, reason: "Development data: the seeded leave types", proposedByUserId: d1.id } });
+      await prisma.behaviourConfirmation.create({ data: { proposalId: p.id, confirmedByUserId: d2.id } });
+    }
   }
 
   console.log(`Seeded ${n} employees across ${locations.length} branches in 2 cities.`);

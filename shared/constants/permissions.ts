@@ -100,6 +100,7 @@ export const PERMISSION_KEYS = [
   "payroll.banklayout.confirm", // check a bank layout against the bank's specification and confirm it (a different person)
   // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
   "employee.segments.manage", // save employee filters and segments (resolved inside the viewer's own scope; never widens it)
+  "employee.personal.view", // audit fix 2026-11-18: another person's personal email, mobile, home addresses and emergency contact (the Developer never holds it)
   "employee.contact.reveal", // reveal a person's full contact number (masked to the last 4 everywhere else); audited with a reason
   "communication.mass.send", // compose and send an email to many employees at once (never pay or identity data); the directors', until an owner grants it
   // A-9 — end
@@ -248,6 +249,7 @@ export const PERMISSION_CATALOG: Record<PermissionKey, PermissionInfo> = {
   // A-9 — begin
   "employee.segments.manage": { group: "Employees", label: "Saved filters and segments", description: "Save a filter of employees or a named group of people, optionally shared with other admins. It always resolves inside each viewer's own data scope." },
   "communication.mass.send": { group: "Home & Engage", label: "Mass email", description: "Write an email to everyone, a saved segment or chosen people, and send it. The text may not carry pay figures or identity numbers. Every send is recorded." },
+  "employee.personal.view": { group: "Employees", label: "See personal contact details", description: "See another person's personal email, mobile number (last 4 digits), home addresses and emergency contact. Everyone who could see employees keeps it; the Developer role never has it.", managerGrantable: true },
   "employee.contact.reveal": { group: "Employees", label: "Reveal contact numbers", description: "See a person's full mobile number (shown as the last 4 digits elsewhere). Each reveal is audited with a reason." },
   // A-9 — end
   "helpdesk.sensitive.view": { group: "Helpdesk", label: "Sensitive tickets", description: "See tickets in categories marked sensitive (e.g. Payroll & Salary, Grievance)." },

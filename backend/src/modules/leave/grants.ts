@@ -6,6 +6,7 @@ import { creditCompOff } from "./compOff";
 import { withEmployeeLeaveLock } from "./concurrency";
 import { assertSufficientBalance, writeLedgerEntry } from "./ledger";
 import { isEmployeeInScope } from "./scope";
+import { isLeaveTypeFor } from "./leaveTypeRoles";
 import type { ActorMeta, LeaveViewer } from "./types";
 
 // Leave Granter's manual single-entry path (spec §5's Leave Granter
@@ -32,8 +33,8 @@ export async function manualGrantOrDebit(input: ManualGrantInput, meta: ActorMet
   if (!leaveType || !leaveType.isActive) {
     throw new HttpError(400, "Invalid leave type.", "INVALID_LEAVE_TYPE");
   }
-  if (leaveType.code === "COF") {
-    throw new HttpError(400, "Use the Comp-Off Grant action for COF credits — it needs hours worked to compute expiry.", "USE_COMP_OFF_GRANT");
+  if (await isLeaveTypeFor("COMP_OFF", leaveType.id)) {
+    throw new HttpError(400, "Use the Comp-Off Grant action for comp-off credits — it needs hours worked to compute expiry.", "USE_COMP_OFF_GRANT");
   }
 
   const days = new Prisma.Decimal(input.days);

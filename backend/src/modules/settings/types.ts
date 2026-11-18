@@ -38,6 +38,4 @@ export interface SecuritySettings {
 // needs (see modules/leave/encashmentRate.ts) — the flat per-day
 // encashment rate standing in for spec §5.2's real salary-based formula
 // until Phase 6.
-export interface LeaveSettings {
-  encashmentDefaultDailyRate: number | null;
-}
+

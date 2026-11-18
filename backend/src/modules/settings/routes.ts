@@ -4,7 +4,7 @@ import { requirePermission } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
 import * as controller from "./controller";
 import * as emailTemplates from "../auth/emailTemplates";
-import { updateRegularizationSettingsSchema, updateExcessHoursSettingsSchema, updateDeviceAlertSettingsSchema, updateDeviceHealthSettingsSchema, updateHelpdeskSettingsSchema, updateLeaveSettingsSchema, updatePeopleDocumentsSettingsSchema, updateSettingsSchema } from "./validators";
+import { updateRegularizationSettingsSchema, updateExcessHoursSettingsSchema, updateDeviceAlertSettingsSchema, updateDeviceHealthSettingsSchema, updateHelpdeskSettingsSchema, updatePeopleDocumentsSettingsSchema, updateSettingsSchema } from "./validators";
 
 // System Settings (spec §7.8) — security policy (Phase 1: lockout,
 // password rules, invitation TTL, 2FA-required roles, auth rate limits)
@@ -24,8 +24,6 @@ settingsRouter.put("/email-templates", manage, validate({ body: emailTemplates.u
 settingsRouter.get("/security", manage, controller.getSettings);
 settingsRouter.put("/security", manage, validate({ body: updateSettingsSchema }), controller.updateSettings);
 
-settingsRouter.get("/leave", manage, controller.getLeaveSettings);
-settingsRouter.put("/leave", manage, validate({ body: updateLeaveSettingsSchema }), controller.updateLeaveSettings);
 
 settingsRouter.get("/people-documents", manage, controller.getPeopleDocumentsSettings);
 settingsRouter.put(

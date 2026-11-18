@@ -107,10 +107,26 @@ function PolicyDrawer({ open, leaveType, onClose }: { open: boolean; leaveType: 
           </Form.Item>
         </div>
 
-        <FormGroupTitle>Carry over</FormGroupTitle>
-        <Form.Item name="carryForwardCapDays" label="Carry-forward cap (days) — leave blank for uncapped">
-          <InputNumber style={{ width: "100%" }} min={0} />
-        </Form.Item>
+        {/* Audit fix 2026-11-18 (docs/plans/AUDIT_FIXES.md item 3): year end reads exactly these. Both start Not set; while either is, the year-end run refuses. */}
+        <FormGroupTitle>Year end (31 December)</FormGroupTitle>
+        <p style={{ marginTop: 0 }}>At year end at most the carry-forward cap is carried into the new year; the rest is encashed if year-end encashment is on, or lapses if it is off. These apply to the leave type chosen as the earned leave type (Default behaviours).</p>
+        <div style={twoCol}>
+          <Form.Item name="carryForwardRule" label="Carried into the new year">
+            <Select allowClear placeholder="Not set" options={[{ value: "CAPPED", label: "At most a number of days" }, { value: "UNLIMITED", label: "No limit (everything is carried)" }]} />
+          </Form.Item>
+          <Form.Item noStyle shouldUpdate={(a, b) => a.carryForwardRule !== b.carryForwardRule}>
+            {({ getFieldValue }) =>
+              getFieldValue("carryForwardRule") === "CAPPED" ? (
+                <Form.Item name="carryForwardCapDays" label="Carry-forward cap (days; 0 carries nothing)" rules={[{ required: true, message: "Enter the cap in days" }]}>
+                  <InputNumber style={{ width: "100%" }} min={0} />
+                </Form.Item>
+              ) : null
+            }
+          </Form.Item>
+          <Form.Item name="yearEndEncashment" label="Year-end encashment">
+            <Select allowClear placeholder="Not set" options={[{ value: true, label: "On: encash what is not carried" }, { value: false, label: "Off: what is not carried lapses" }]} />
+          </Form.Item>
+        </div>
 
         <FormGroupTitle>Balance rules</FormGroupTitle>
         <div style={twoCol}>
@@ -120,12 +136,9 @@ function PolicyDrawer({ open, leaveType, onClose }: { open: boolean; leaveType: 
           <Form.Item name="skipBalanceCheck" label="Skip balance check entirely" valuePropName="checked">
             <Switch />
           </Form.Item>
-          <Form.Item name="yearEndEncashment" label="Year-end encashment" valuePropName="checked">
-            <Switch />
-          </Form.Item>
         </div>
 
-        <FormGroupTitle>Comp-off (COF only)</FormGroupTitle>
+        <FormGroupTitle>Comp-off (the comp-off leave type)</FormGroupTitle>
         <div style={twoCol}>
           <Form.Item name="compOffMinHoursWorked" label="Min hours worked to earn a credit">
             <InputNumber style={{ width: "100%" }} min={0} max={24} step={0.5} />
@@ -135,18 +148,18 @@ function PolicyDrawer({ open, leaveType, onClose }: { open: boolean; leaveType: 
           </Form.Item>
         </div>
 
-        <FormGroupTitle>WFH (WFH only)</FormGroupTitle>
+        <FormGroupTitle>Work from home limits (enforced when someone applies)</FormGroupTitle>
         <div style={twoCol}>
-          <Form.Item name="wfhMonthlyLimit" label="Monthly limit — blank for unlimited">
+          <Form.Item name="wfhMonthlyLimit" label="Monthly limit (days) — blank for no limit">
             <InputNumber style={{ width: "100%" }} min={0} />
           </Form.Item>
-          <Form.Item name="wfhYearlyLimit" label="Yearly limit — blank for unlimited">
+          <Form.Item name="wfhYearlyLimit" label="Yearly limit (days) — blank for no limit">
             <InputNumber style={{ width: "100%" }} min={0} />
           </Form.Item>
         </div>
 
-        <FormGroupTitle>Restricted Holiday (RH only)</FormGroupTitle>
-        <Form.Item name="rhYearlyQuota" label="Yearly quota — blank for unlimited">
+        <FormGroupTitle>Restricted holiday quota (enforced when someone applies)</FormGroupTitle>
+        <Form.Item name="rhYearlyQuota" label="Yearly quota (days) — blank for no limit">
           <InputNumber style={{ width: "100%" }} min={0} />
         </Form.Item>
       </Form>
@@ -161,8 +174,10 @@ function policyItems(p: LeavePolicy) {
   return [
     { key: "accrual", label: "Accrual", value: p.accrualEnabled ? `${p.accrualDaysPerMonth ?? 0} day(s) / month` : "Off" },
     { key: "elig", label: "Eligibility", value: p.eligibilityMode ? `${p.eligibilityValue ?? 0} ${p.eligibilityMode === "DAYS" ? "days" : "months"} from DOJ` : "Not set" },
-    { key: "cf", label: "Carry-forward cap", value: blankAs(p.carryForwardCapDays, "days", "Uncapped") },
-    { key: "enc", label: "Year-end encashment", value: yesNo(p.yearEndEncashment) },
+    { key: "cf", label: "Carried into the new year", value: p.carryForwardRule === "UNLIMITED" ? "No limit" : p.carryForwardRule === "CAPPED" ? `At most ${p.carryForwardCapDays ?? 0} day(s)` : "Not set" },
+    { key: "enc", label: "Year-end encashment", value: p.yearEndEncashment === null ? "Not set" : p.yearEndEncashment ? "On" : "Off (lapses)" },
+    ...(p.wfhMonthlyLimit !== null || p.wfhYearlyLimit !== null ? [{ key: "wfh", label: "Work from home limit", value: `${blankAs(p.wfhMonthlyLimit, "a month", "No monthly limit")}; ${blankAs(p.wfhYearlyLimit, "a year", "no yearly limit")}` }] : []),
+    ...(p.rhYearlyQuota !== null ? [{ key: "rh", label: "Restricted holiday quota", value: `${p.rhYearlyQuota} a year` }] : []),
     { key: "neg", label: "Negative balance", value: p.skipBalanceCheck ? "No balance check" : yesNo(p.negativeBalanceAllowed) },
   ];
 }

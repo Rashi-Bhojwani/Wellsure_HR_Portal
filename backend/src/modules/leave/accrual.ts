@@ -1,4 +1,5 @@
 import { Prisma, type LeaveLedger, type LeavePolicy } from "@prisma/client";
+import { requireLeaveTypeFor } from "./leaveTypeRoles";
 import { prisma } from "../../lib/prisma";
 import { addCalendarDays, addCalendarMonths, startOfMonthUTC } from "../../lib/businessDate";
 import { withEmployeeLeaveLock } from "./concurrency";
@@ -91,11 +92,9 @@ export async function creditMonthlyAccrualForEmployee(
 // month, safe to re-run (a retry after a partial failure just no-ops on
 // whoever was already credited).
 export async function runMonthlyPlAccrual(accrualMonth: Date): Promise<{ credited: number; skipped: number }> {
-  const plType = await prisma.leaveType.findUnique({
-    where: { code: "PL" },
-    include: { policy: true },
-  });
-  if (!plType?.policy?.accrualEnabled) {
+  // Audit fix 2026-11-18: the earned leave type is a director setting; Not set refuses naming it (never a silent skip).
+  const plType = await requireLeaveTypeFor("EARNED");
+  if (!plType.policy?.accrualEnabled) {
     return { credited: 0, skipped: 0 };
   }
   const policy = plType.policy;

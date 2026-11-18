@@ -925,12 +925,15 @@ model LeavePolicy {
   accrualDaysPerMonth    Decimal?              @map("accrual_days_per_month") @db.Decimal(5, 2) // 1.00
   eligibilityMode        LeaveEligibilityMode? @map("eligibility_mode") // DAYS
   eligibilityValue       Int?                  @map("eligibility_value") // 90
-  carryForwardCapDays    Decimal?              @map("carry_forward_cap_days") @db.Decimal(5, 2) // null = uncapped
+  carryForwardCapDays    Decimal?              @map("carry_forward_cap_days") @db.Decimal(5, 2) // the cap when carryForwardRule is CAPPED
+  // A (audit fix 2026-11-18, docs/plans/AUDIT_FIXES.md item 3): what year end carries into the new year. CAPPED (at most carryForwardCapDays) or UNLIMITED;
+  // null = Not set, and the year-end run refuses. Nothing is assumed.
+  carryForwardRule       String?               @map("carry_forward_rule")
   negativeBalanceAllowed Boolean               @default(false) @map("negative_balance_allowed")
   skipBalanceCheck       Boolean               @default(false) @map("skip_balance_check") // true for LOP only —
   // LOP has no balance concept at all rather than an "unlimited" number; apply/approve never call the
   // balance-check function for a type with this set
-  yearEndEncashment      Boolean               @default(false) @map("year_end_encashment") // true for PL only
+  yearEndEncashment      Boolean?              @map("year_end_encashment") // A (audit fix 2026-11-18): null = Not set (the year-end run refuses); true encashes what year end does not carry, false lets it lapse
 
   // Comp-off (COF only) — hours/expiry pending HR confirmation, see docs/PROGRESS.md open questions
   compOffMinHoursWorked Decimal? @map("comp_off_min_hours_worked") @db.Decimal(4, 2) // default 4.00
@@ -1189,12 +1192,16 @@ model YearEndRunItem {
   employeeId              String     @map("employee_id")
   employee                Employee   @relation(fields: [employeeId], references: [id])
   closingPlBalance        Decimal    @map("closing_pl_balance") @db.Decimal(5, 2)
-  encashedDays            Decimal    @map("encashed_days") @db.Decimal(5, 2) // == closingPlBalance (no cap today)
+  encashedDays            Decimal    @map("encashed_days") @db.Decimal(5, 2) // closing balance minus what is carried, when encashment is on
   dailyRate               Decimal    @map("daily_rate") @db.Decimal(10, 2) // resolved via EncashmentRateProvider
   // at preview time
   rateSource              String     @map("rate_source") // "MANUAL_SETTING" today; "SALARY_STRUCTURE" once
   // Phase 6 supplies a real provider — snapshot so switching providers never retroactively changes history
   encashedAmount          Decimal    @map("encashed_amount") @db.Decimal(12, 2)
+  // A (audit fix 2026-11-18): what year end carried into the new year (up to the policy's cap) and what lapsed (encashment off).
+  carriedForwardDays      Decimal    @default(0) @map("carried_forward_days") @db.Decimal(5, 2)
+  lapsedDays              Decimal    @default(0) @map("lapsed_days") @db.Decimal(5, 2)
+  ledgerLapseEntryId      String?    @unique @map("ledger_lapse_entry_id")
   ledgerEncashmentEntryId String?    @unique @map("ledger_encashment_entry_id") // set only once committed;
   // null on a mere preview — one ENCASHMENT ledger entry per employee, debiting the full balance to 0, IS
   // the "reset for the new year" — no separate reset entry needed
