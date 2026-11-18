@@ -1,4 +1,5 @@
 import { RULE_BY_KEY } from "@shared/constants/payrollRules";
+import { financialYearOf } from "@shared/utils/financialYear";
 import {
   CONTINUING,
   PACK_CHECKED_ON,
@@ -157,3 +158,30 @@ export async function remindStatutoryPackReview(): Promise<{ reminded: number }>
   return { reminded };
 }
 
+
+/**
+ * Audit A-16 (2026-11-18): the tax year is not guessed. From 1 February, if nobody has entered next financial year's tax year and the standard values do not hold
+ * it, every director is told once (a month's run in April is refused, TAX_NOT_SET, until it is entered). Rides the hourly director-notice sweep. Pure check below.
+ */
+export function nextTaxYearDue(today: string, entered: ReadonlySet<string>): string | null {
+  const month = Number(today.slice(5, 7));
+  if (month < 2 || month > 3) return null; // February and March only
+  const next = financialYearOf(today).startYear + 1;
+  const label = `${next}-${String((next + 1) % 100).padStart(2, "0")}`;
+  return entered.has(label) || label in PACK_TAX_YEARS ? null : label;
+}
+
+export async function remindNextTaxYear(): Promise<{ reminded: number }> {
+  const today = iso(businessToday());
+  const entered = new Set((await prisma.payrollItemVersion.findMany({ where: { kind: "TAX_YEAR", authorUserId: { not: null } }, distinct: ["key"], select: { key: true } })).map((r) => r.key));
+  const label = nextTaxYearDue(today, entered);
+  if (!label) return { reminded: 0 };
+  const body = `The tax year ${label} has not been entered. Enter it (Payroll, Tax Years) and have the other director confirm it before April's payroll, or April's run is refused.`;
+  let reminded = 0;
+  for (const d of await activeDirectors()) {
+    if (await prisma.notification.findFirst({ where: { userId: d.userId, type: "payroll.tax_year.missing", body }, select: { id: true } })) continue;
+    await notifyEmployee(d.employeeId, { type: "payroll.tax_year.missing", title: `Enter the tax year ${label}`, body, link: "/admin/payroll/tax-years" });
+    reminded += 1;
+  }
+  return { reminded };
+}

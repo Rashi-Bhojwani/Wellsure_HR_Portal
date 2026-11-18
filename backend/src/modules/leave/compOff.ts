@@ -33,11 +33,14 @@ interface CreditCompOffInput {
 // and ledger GRANT entry rather than reimplementing any of it.
 export async function creditCompOff(input: CreditCompOffInput): Promise<CompOffCredit> {
   const cofType = await requireLeaveTypeFor("COMP_OFF"); // audit fix: the comp-off type is a director setting, not the code "COF"
-  const minHours = cofType.policy?.compOffMinHoursWorked ? Number(cofType.policy.compOffMinHoursWorked) : 4;
+  // Audit fix 2026-11-18 (audit #7): the minimum hours and the expiry are the comp-off type's own policy; blank is refused, never 4 hours / 60 days.
+  const blank = [...(cofType.policy?.compOffMinHoursWorked == null ? ["the minimum hours worked to earn it"] : []), ...(cofType.policy?.compOffExpiryDays == null ? ["the expiry in days"] : [])];
+  if (blank.length) throw new HttpError(409, `${cofType.name}: ${blank.join(" and ")} ${blank.length === 1 ? "is" : "are"} not set. Set ${blank.length === 1 ? "it" : "them"} in Admin Tools, Leave Types and Policies. Nothing is credited until then.`, "SETTING_NOT_SET", { settings: blank });
+  const minHours = Number(cofType.policy!.compOffMinHoursWorked);
   if (input.hoursWorked < minHours) {
     throw new InsufficientHoursForCompOffError(input.hoursWorked, minHours);
   }
-  const expiryDays = cofType.policy?.compOffExpiryDays ?? 60;
+  const expiryDays = cofType.policy!.compOffExpiryDays!;
   const expiresOn = addCalendarDays(input.earnedDate, expiryDays);
   const earnedDays = new Prisma.Decimal(1); // Phase 4 always grants a full day — partial-day comp-off
   // (e.g. 0.5 for a short shift worked) is a future refinement, not asked for here

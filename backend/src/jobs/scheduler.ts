@@ -1,11 +1,10 @@
 import { logger } from "../lib/logger";
 import { getDailyRunHour } from "../modules/engage/autoPostSettings";
-import { getSetting } from "../lib/settings";
-import { MANUAL_REMINDER_HOUR_KEY } from "../modules/attendance/manual/reminder";
+import { scheduleTimedJob } from "../modules/settings/schedulesLimits";
 import { directorNoticeQueue } from "./directorNoticeQueue";
 import { remoteReminderQueue } from "./remoteQueue";
-import { attendanceDeviceHealthQueue, attendanceManualReminderQueue, attendanceNightlyQueue } from "./attendanceQueues";
-import { compOffExpiryQueue, employeeSeparationsQueue, historyRolloverQueue, engageAutoPostsQueue, helpdeskAutoCloseQueue, leavePlAccrualQueue, reportSubscriptionsQueue, peopleDailyQueue } from "./queues";
+import { attendanceDeviceHealthQueue } from "./attendanceQueues";
+import { compOffExpiryQueue, employeeSeparationsQueue, historyRolloverQueue, engageAutoPostsQueue, helpdeskAutoCloseQueue, leavePlAccrualQueue } from "./queues";
 
 // Registers BullMQ repeatable jobs. Idempotent registration matters here —
 // see docs/PROJECT_SPEC.md §15.2.3 (the scheduler service always runs
@@ -14,17 +13,9 @@ import { compOffExpiryQueue, employeeSeparationsQueue, historyRolloverQueue, eng
 // The nightly attendance cron and daily Engage auto-posts are registered
 // here starting Phase 2/5.
 export async function registerScheduledJobs(): Promise<void> {
-  // Attendance nightly (Phase 2 P2-C): finalises yesterday (and catches up any
-  // missed nights) once every GEN shift window has closed (01:00).
-  await attendanceNightlyQueue().upsertJobScheduler("attendance-nightly", { pattern: "0 2 * * *", tz: "Asia/Kolkata" }, { name: "attendance-nightly" });
-  logger.info("Registered repeatable job: attendance-nightly (02:00 IST daily)");
-  // "Still not marked" to whoever marks a manual branch (P2-D). The hour is
-  // the System Setting attendance.manualReminderHour (default 18), read at
-  // registration like the Engage hour below: a change applies on restart.
-  const stored = Number(await getSetting<number | string>(MANUAL_REMINDER_HOUR_KEY, 18));
-  const reminderHour = Number.isInteger(stored) && stored >= 0 && stored <= 23 ? stored : 18;
-  await attendanceManualReminderQueue().upsertJobScheduler("attendance-manual-reminder", { pattern: `0 ${reminderHour} * * *`, tz: "Asia/Kolkata" }, { name: "attendance-manual-reminder" });
-  logger.info(`Registered repeatable job: attendance-manual-reminder (${String(reminderHour).padStart(2, "0")}:00 IST daily)`);
+  // Attendance nightly (Phase 2 P2-C) and the "still not marked" reminder (P2-D): their hours are System Settings, Schedules and limits (audit fix 2026-11-18,
+  // #14 and A-17; defaults 02:00 and 18:00). Registered from the setting here; a director's change reschedules the job at once (modules/settings/schedulesLimits.ts).
+  for (const key of ["attendance.nightlyHour", "attendance.manualReminderHour"]) logger.info(`Registered repeatable job for ${key}: ${await scheduleTimedJob(key)} (IST)`);
 
   // Device and agent health (P2-H): cheap queries on timestamps, every minute. The thresholds are read each run, so a change in System Settings applies at once.
   await attendanceDeviceHealthQueue().upsertJobScheduler("attendance-device-health", { pattern: "* * * * *", tz: "Asia/Kolkata" }, { name: "attendance-device-health" });
@@ -65,11 +56,9 @@ export async function registerScheduledJobs(): Promise<void> {
   );
   logger.info("Registered repeatable job: helpdesk-auto-close (hourly at :05)");
 
-  // RP-13 (M session): scheduled reports, 07:41 IST daily (WEEKLY ones go on Mondays, MONTHLY on the 1st).
-  await reportSubscriptionsQueue.upsertJobScheduler("report-subscriptions-daily", { pattern: "41 7 * * *", tz: "Asia/Kolkata" }, { name: "send-due-reports" });
-  logger.info("Registered repeatable job: report-subscriptions (07:41 IST daily)");
-  await peopleDailyQueue.upsertJobScheduler("m-people-daily", { pattern: "13 8 * * *", tz: "Asia/Kolkata" }, { name: "people-daily" });
-  logger.info("Registered repeatable job: m-people-daily (08:13 IST daily)");
+  // RP-13 (M session): scheduled reports (WEEKLY ones go on Mondays, MONTHLY on the 1st), and the daily people job. Their times are settings (audit A-21;
+  // defaults 07:41 and 08:13), rescheduled at once when changed.
+  for (const key of ["reports.subscriptionsTime", "people.dailyJobTime"]) logger.info(`Registered repeatable job for ${key}: ${await scheduleTimedJob(key)} (IST)`);
 
   // Remote attendance reminders: hourly; a no-op while the threshold is Not set.
   await remoteReminderQueue().upsertJobScheduler("remote-attendance-reminder-hourly", { pattern: "40 * * * *", tz: "Asia/Kolkata" }, { name: "remind" });

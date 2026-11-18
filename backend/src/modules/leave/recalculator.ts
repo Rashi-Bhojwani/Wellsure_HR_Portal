@@ -3,7 +3,7 @@ import { prisma } from "../../lib/prisma";
 import { writeAuditLog } from "../../lib/audit";
 import { startOfMonthUTC, addCalendarMonths, businessToday } from "../../lib/businessDate";
 import { HttpError } from "../../middleware/errorHandler";
-import { isEligibleForAccrualMonth } from "./accrual";
+import { isEligibleForAccrualMonth, assertAccrualPolicy } from "./accrual";
 import { withEmployeeLeaveLock } from "./concurrency";
 import { writeLedgerEntry } from "./ledger";
 import type { ActorMeta } from "./types";
@@ -45,7 +45,9 @@ interface RecalcEmployeeResult {
 }
 
 async function accrualEnabledTypes() {
-  return prisma.leaveType.findMany({ where: { isActive: true, policy: { accrualEnabled: true } }, include: { policy: true } });
+  const types = await prisma.leaveType.findMany({ where: { isActive: true, policy: { accrualEnabled: true } }, include: { policy: true } });
+  for (const t of types) assertAccrualPolicy(t.name, t.policy); // audit fix 2026-11-18: a blank days-per-month or eligibility period is refused, never made up
+  return types;
 }
 
 async function diffForEmployee(
@@ -88,7 +90,7 @@ async function diffForEmployee(
       const existing = existingByMonth.get(monthKey);
 
       if (leavingMonth && leavingRule && shouldBeCredited && month.getTime() === leavingMonth.monthStart.getTime()) {
-        const full = type.policy.accrualDaysPerMonth ?? new Prisma.Decimal(1);
+        const full = type.policy.accrualDaysPerMonth!; // checked below (assertAccrualPolicy): never a made-up 1.0
         const target = leavingMonthTarget({ rule: leavingRule.value, full, daysWorked: leavingMonth.daysWorked, daysInMonth: leavingMonth.daysInMonth, rounding: rounding?.value ?? null });
         if (target.days === null) {
           actions.push({ type: "WAITING", accrualMonth: monthKey, leaveTypeId: type.id, leaveTypeCode: type.code, days: 0, note: target.waiting });
@@ -104,7 +106,7 @@ async function diffForEmployee(
       }
 
       if (shouldBeCredited && !existing) {
-        actions.push({ type: "CREDIT", accrualMonth: monthKey, leaveTypeId: type.id, leaveTypeCode: type.code, days: (type.policy.accrualDaysPerMonth ?? new Prisma.Decimal(1)).toNumber() });
+        actions.push({ type: "CREDIT", accrualMonth: monthKey, leaveTypeId: type.id, leaveTypeCode: type.code, days: type.policy.accrualDaysPerMonth!.toNumber() });
       } else if (!shouldBeCredited && existing && !alreadyReversedIds.has(existing.id)) {
         actions.push({ type: "REVERSE", accrualMonth: monthKey, leaveTypeId: type.id, leaveTypeCode: type.code, days: existing.days.toNumber(), existingLedgerId: existing.id });
       }

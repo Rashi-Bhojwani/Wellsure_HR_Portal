@@ -142,3 +142,25 @@ export interface EmailTemplate {
 export const listEmailTemplates = async () => (await apiClient.get<{ templates: EmailTemplate[] }>("/api/settings/email-templates")).data.templates;
 export const updateEmailTemplate = async (key: EmailTemplateKey, text: EmailText | null) =>
   (await apiClient.put<{ templates: EmailTemplate[] }>("/api/settings/email-templates", { key, text })).data.templates;
+
+// Audit fix 2026-11-18 (docs/plans/AUDIT_FIXES.md items 5 and 6): times and limits that had no screen; which settings are still on their built-in default.
+export interface ScheduleLimitSetting {
+  key: string;
+  label: string;
+  help: string;
+  kind: "hour" | "time" | "int";
+  min: number | null;
+  max: number | null;
+  value: number | string;
+  defaultValue: number | string;
+  defaultInUse: boolean;
+}
+export async function getSchedulesLimits(): Promise<ScheduleLimitSetting[]> {
+  return (await apiClient.get<{ settings: ScheduleLimitSetting[] }>("/api/settings/schedules-limits")).data.settings;
+}
+export async function setScheduleLimit(key: string, value: number | string): Promise<ScheduleLimitSetting[]> {
+  return (await apiClient.put<{ settings: ScheduleLimitSetting[] }>(`/api/settings/schedules-limits/${encodeURIComponent(key)}`, { value })).data.settings;
+}
+export async function getDefaultsInUse(): Promise<string[]> {
+  return (await apiClient.get<{ keys: string[] }>("/api/settings/defaults-in-use")).data.keys;
+}

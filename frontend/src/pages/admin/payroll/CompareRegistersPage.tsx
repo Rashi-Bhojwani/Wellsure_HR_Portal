@@ -77,15 +77,15 @@ export function CompareRegistersPage() {
           description="Put two payroll registers side by side, ours and greytHR’s. People are matched by employee code. Every figure that differs is shown by person and by component, and what is beyond your tolerance is flagged."
         />
         <Panel title="The two registers">
-          <Form form={form} layout="vertical" onFinish={submit} initialValues={{ labelA: "Wellsure", labelB: "greytHR", sourceA: "OWN", sourceB: "GENERIC", toleranceAmount: "1", tolerancePercent: "0", aliases: [] }}>
+          <Form form={form} layout="vertical" onFinish={submit} initialValues={{ labelA: "Wellsure", labelB: "greytHR", sourceA: "OWN", sourceB: "GENERIC", toleranceAmount: "", tolerancePercent: "0", aliases: [] }}>
             <div style={{ display: "flex", gap: space[6], flexWrap: "wrap" }}>
               {side("a")}
               {side("b")}
             </div>
             <FormGroupTitle>Tolerance</FormGroupTitle>
             <div style={{ display: "flex", gap: space[4], flexWrap: "wrap" }}>
-              <Form.Item name="toleranceAmount" label="Ignore a difference of up to (rupees)" extra="Differences up to this many rupees are not flagged." style={{ flex: "1 1 240px" }}>
-                <Input inputMode="decimal" prefix="₹" style={{ maxWidth: 180 }} />
+              <Form.Item name="toleranceAmount" label="Ignore a difference of up to (rupees)" extra="Differences up to this many rupees are not flagged. Blank: the parallel run's own setting (Default behaviours, what counts as a match; default ₹0)." style={{ flex: "1 1 240px" }}>
+                <Input inputMode="decimal" prefix="₹" placeholder="Setting" style={{ maxWidth: 180 }} />
               </Form.Item>
               <Form.Item name="tolerancePercent" label="or up to (percent of the first register's figure)" extra="A difference within either is not flagged." style={{ flex: "1 1 240px" }}>
                 <Input inputMode="decimal" suffix="%" style={{ maxWidth: 180 }} />

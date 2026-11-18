@@ -1,21 +1,38 @@
-import { Prisma, type LeaveLedger, type LeavePolicy } from "@prisma/client";
+import type { LeaveLedger, LeavePolicy } from "@prisma/client";
 import { requireLeaveTypeFor } from "./leaveTypeRoles";
 import { prisma } from "../../lib/prisma";
 import { addCalendarDays, addCalendarMonths, startOfMonthUTC } from "../../lib/businessDate";
 import { withEmployeeLeaveLock } from "./concurrency";
 import { writeLedgerEntry } from "./ledger";
+import { HttpError } from "../../middleware/errorHandler";
 
 // HR's confirmed PL rule (docs/PROJECT_SPEC.md §5.2, confirmed 2026-09-28):
 // waiting period 90 days from DOJ, no pro-rating, always a full 1.0 day
 // once eligible. eligibilityMode/eligibilityValue are configurable on
 // leave_policies (DAYS default 90, or CALENDAR_MONTHS) — this function
 // never hardcodes 90, it reads the policy.
+/**
+ * Audit fix 2026-11-18 (audit §3: a blank "days per month" credited 1.0, a blank eligibility period meant "eligible from joining"): an accruing leave type
+ * needs both entered; a blank one is refused, naming it, and nothing is credited. 0 is a valid entry (eligible from joining).
+ */
+export function accrualPolicyMissing(name: string, policy: Pick<LeavePolicy, "eligibilityMode" | "eligibilityValue" | "accrualDaysPerMonth"> | null): string[] {
+  return [
+    ...(policy?.accrualDaysPerMonth === null || policy?.accrualDaysPerMonth === undefined ? [`${name}: days earned per month is not set`] : []),
+    ...(!policy?.eligibilityMode || policy.eligibilityValue === null || policy.eligibilityValue === undefined ? [`${name}: the eligibility period is not set (enter 0 for eligible from joining)`] : []),
+  ];
+}
+export function assertAccrualPolicy(name: string, policy: Pick<LeavePolicy, "eligibilityMode" | "eligibilityValue" | "accrualDaysPerMonth"> | null): void {
+  const missing = accrualPolicyMissing(name, policy);
+  if (missing.length) throw new HttpError(409, `${missing.join(". ")}. Set ${missing.length === 1 ? "it" : "them"} in Admin Tools, Leave Types and Policies. Nothing is credited until then.`, "SETTING_NOT_SET", { settings: missing });
+}
+
 export function computeEligibilityDate(dateOfJoining: Date, policy: Pick<LeavePolicy, "eligibilityMode" | "eligibilityValue">): Date {
-  const value = policy.eligibilityValue ?? 0;
+  if (!policy.eligibilityMode || policy.eligibilityValue === null || policy.eligibilityValue === undefined) throw new HttpError(409, "The eligibility period is not set for this leave type (enter 0 for eligible from joining). Set it in Admin Tools, Leave Types and Policies.", "SETTING_NOT_SET");
+  const value = policy.eligibilityValue;
   if (policy.eligibilityMode === "CALENDAR_MONTHS") {
     return addCalendarMonths(dateOfJoining, value);
   }
-  return addCalendarDays(dateOfJoining, value); // DAYS mode, and the default when unset
+  return addCalendarDays(dateOfJoining, value); // DAYS mode
 }
 
 // The smallest first-of-month M such that `date <= M` — round a date UP
@@ -63,6 +80,7 @@ export async function creditMonthlyAccrualForEmployee(
   policy: Pick<LeavePolicy, "eligibilityMode" | "eligibilityValue" | "accrualDaysPerMonth">,
   accrualMonth: Date,
 ): Promise<LeaveLedger | null> {
+  assertAccrualPolicy("This leave type", policy);
   if (!isEligibleForAccrualMonth(dateOfJoining, policy, accrualMonth)) return null;
 
   return withEmployeeLeaveLock(employeeId, async (tx) => {
@@ -79,7 +97,7 @@ export async function creditMonthlyAccrualForEmployee(
       entryDate: accrualMonth,
       accrualMonth,
       entryType: "ACCRUAL",
-      days: policy.accrualDaysPerMonth ?? new Prisma.Decimal(1),
+      days: policy.accrualDaysPerMonth!, // checked by assertAccrualPolicy / isEligibleForAccrualMonth's caller: never a made-up 1.0
       referenceType: "ACCRUAL_JOB",
       remarks: `Monthly PL accrual for ${accrualMonth.toISOString().slice(0, 7)}`,
     });
@@ -94,6 +112,7 @@ export async function creditMonthlyAccrualForEmployee(
 export async function runMonthlyPlAccrual(accrualMonth: Date): Promise<{ credited: number; skipped: number }> {
   // Audit fix 2026-11-18: the earned leave type is a director setting; Not set refuses naming it (never a silent skip).
   const plType = await requireLeaveTypeFor("EARNED");
+  if (plType.policy?.accrualEnabled) assertAccrualPolicy(plType.name, plType.policy);
   if (!plType.policy?.accrualEnabled) {
     return { credited: 0, skipped: 0 };
   }

@@ -30,7 +30,8 @@ import { LettersSettingsCard } from "../../../components/letters/LettersSettings
 import { EmailTemplatesCard } from "./EmailTemplatesCard";
 import { DirectorAuthorityCard } from "../../../components/payroll/DirectorAuthorityCard";
 import { useAuth } from "../../../hooks/useAuth";
-import { FormGroupTitle, PageHeader, Panel, QueryState, Skel, toast } from "../../../ui";
+import { FormGroupTitle, PageHeader, Panel, QueryState, Skel, StatusChip, toast } from "../../../ui";
+import { SchedulesLimitsCard } from "./SchedulesLimitsCard";
 import { fs, fw, radius, space, v } from "../../../theme/tokens";
 import { SectionIntro, SectionNav, SettingsLayout, SwitchList, ToggleRow, type SectionNavItem } from "./SettingsNav";
 
@@ -77,10 +78,26 @@ function SaveButton({ loading, label = "Save changes" }: { loading: boolean; lab
 }
 
 /** Loading / error / content for one settings section, in the board's right-hand panel. */
+// Audit fix 2026-11-18 (item 5): which stored settings each card shows; while nobody has saved them the card says the values below are the defaults in use.
+const DEFAULT_KEYS_BY_TITLE: Record<string, string[]> = {
+  Security: ["auth.lockout", "auth.passwordMinLength", "auth.invitationTtlHours", "auth.rateLimit.login", "auth.rateLimit.totpVerify", "auth.rateLimit.inviteAccept", "auth.rateLimit.forgotPassword", "auth.rateLimit.resetPassword"],
+  "Device alerts": ["attendance.deviceAlerts"],
+  "Device health": ["attendance.deviceHealth"],
+  Regularization: ["attendance.regularization"],
+  "Excess hours": ["attendance.excessHours"],
+  Helpdesk: ["helpdesk.autoCloseDays", "helpdesk.reopenWindowDays"],
+  "People directory": ["people.directory.visibleFields", "people.photo.maxUploadMb", "documents.maxUploadMb", "documents.allowedMimeTypes"],
+};
+
 function SettingsSection({ title, isLoading, error, onRetry, fields, children }: { title: string; isLoading: boolean; error: unknown; onRetry: () => void; fields?: number; children: ReactNode }) {
+  const defaults = useQuery({ queryKey: ["settings", "defaults-in-use"], queryFn: settingsApi.getDefaultsInUse, enabled: !!DEFAULT_KEYS_BY_TITLE[title] });
+  const onDefault = (DEFAULT_KEYS_BY_TITLE[title] ?? []).filter((k) => defaults.data?.includes(k));
   return (
     <QueryState isLoading={isLoading} error={error} onRetry={onRetry} skeleton={<SettingsSkeleton fields={fields} />}>
-      <Panel title={title}>{children}</Panel>
+      <Panel title={title} extra={onDefault.length ? <StatusChip tone="info">Default in use</StatusChip> : undefined}>
+        {onDefault.length > 0 && <SectionIntro>Default in use: nobody has saved {onDefault.length === (DEFAULT_KEYS_BY_TITLE[title] ?? []).length ? "these settings" : "some of these settings"} yet, so the values shown below are the built-in defaults.</SectionIntro>}
+        {children}
+      </Panel>
     </QueryState>
   );
 }
@@ -546,6 +563,7 @@ export function SystemSettingsPage() {
   const sections: (SectionNavItem & { render: () => ReactNode })[] = [
     { key: "security", label: "Security", icon: <LockOutlined />, group: "General", render: () => <SecuritySettingsCard /> },
     ...(isDirector ? [{ key: "director", label: "Director authority", icon: <SafetyCertificateOutlined />, group: "General", render: () => <DirectorAuthorityCard /> }] : []),
+    ...(isDirector ? [{ key: "schedules", label: "Schedules and limits", icon: <ClockCircleOutlined />, group: "General", render: () => <SchedulesLimitsCard /> }] : []),
     { key: "leave", label: "Leave encashment", icon: <CalendarOutlined />, group: "Leave & people", render: () => <LeaveSettingsCard /> },
     { key: "people", label: "People & documents", icon: <TeamOutlined />, group: "Leave & people", render: () => <PeopleDocumentsSettingsCard /> },
     { key: "helpdesk", label: "Helpdesk", icon: <CustomerServiceOutlined />, group: "Leave & people", render: () => <HelpdeskSettingsCard /> },

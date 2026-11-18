@@ -8,6 +8,7 @@ import { recordDirectorNotice, scheduleDelivery } from "../../../lib/directorNot
 import { namesOn, notifyPayrollInputsChanged } from "../../../lib/effectiveDating";
 import { prisma } from "../../../lib/prisma";
 import { HttpError } from "../../../middleware/errorHandler";
+import { scheduleLimitValue } from "../../../lib/schedulesAndLimits";
 import { noteFiguresChanged } from "../approvals";
 import { recordEvent } from "../events";
 import { payrollHash } from "../hash";
@@ -264,6 +265,8 @@ async function viewOf(batch: { id: string; fileName: string; fileHash: string; s
 export async function upload(file: { buffer: Buffer; originalname: string }, actor: Actor): Promise<BatchView> {
   await requireDirector(actor.userId, "import Monthly Inputs");
   const raw = await readTable(file.buffer, file.originalname);
+  const maxRows = await scheduleLimitValue<number>("payroll.monthlyInputsImportMaxRows"); // audit A-19: a setting, default 1000
+  if (raw.rows.length > maxRows) throw new HttpError(400, `The file has more than ${maxRows} rows. Split it (System Settings, Schedules and limits).`, "INVALID_FILE");
   const fileHash = createHash("sha256").update(file.buffer).digest("hex");
   const existing = await prisma.payrollInputBatch.findFirst({ where: { fileHash, status: { in: ["PREVIEW", "APPLIED"] } }, orderBy: { createdAt: "desc" } });
   if (existing) return viewOf(existing);

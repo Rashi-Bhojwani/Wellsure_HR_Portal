@@ -149,6 +149,9 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "POST /api/reports/subscriptions/mine": everyone("RP-13: the caller's own report schedules, no one else's record; each report is run within the caller's own data scope when it is sent (a manager: their team)"),
   "DELETE /api/reports/subscriptions/mine/:id": everyone("RP-13: the caller's own report schedules, no one else's record"),
   "GET /api/audit-logs/export": admin, // AU-04: audit.view (non-grantable), Developer refused
+  "GET /api/settings/schedules-limits": admin,
+  "PUT /api/settings/schedules-limits/:key": admin,
+  "GET /api/settings/defaults-in-use": admin,
   "GET /api/settings/security": admin,
   "PUT /api/settings/security": admin,
   "GET /api/settings/people-documents": admin,
@@ -269,6 +272,7 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "POST /api/documents/employee-documents/:id/download": scoped("employee.documents.view + scope"),
 
   "GET /api/helpdesk/categories": everyone("ticket categories (raise form)"),
+  "GET /api/helpdesk/limits": everyone("how many files a helpdesk message may carry (raise and reply forms)"),
   "GET /api/helpdesk/categories/all": admin,
   "POST /api/helpdesk/categories": admin,
   "PATCH /api/helpdesk/categories/:id": admin,

@@ -90,20 +90,21 @@ function PolicyDrawer({ open, leaveType, onClose }: { open: boolean; leaveType: 
           <Form.Item name="accrualEnabled" label="Accrual enabled" valuePropName="checked">
             <Switch />
           </Form.Item>
-          <Form.Item name="accrualDaysPerMonth" label="Days per month">
-            <InputNumber style={{ width: "100%" }} min={0} max={31} step={0.5} />
+          <Form.Item name="accrualDaysPerMonth" label="Days per month (blank: Not set, the monthly accrual refuses)">
+            <InputNumber style={{ width: "100%" }} min={0} max={31} step={0.5} placeholder="Not set" />
           </Form.Item>
-          <Form.Item name="eligibilityMode" label="Eligibility mode">
+          <Form.Item name="eligibilityMode" label="Eligibility mode (blank: Not set, the monthly accrual refuses)">
             <Select
               allowClear
+              placeholder="Not set"
               options={[
                 { value: "DAYS", label: "Calendar days from DOJ" },
                 { value: "CALENDAR_MONTHS", label: "Calendar months from DOJ" },
               ]}
             />
           </Form.Item>
-          <Form.Item name="eligibilityValue" label="Eligibility value">
-            <InputNumber style={{ width: "100%" }} min={0} />
+          <Form.Item name="eligibilityValue" label="Eligibility value (0 = from joining; blank: Not set)">
+            <InputNumber style={{ width: "100%" }} min={0} placeholder="Not set" />
           </Form.Item>
         </div>
 
@@ -140,11 +141,11 @@ function PolicyDrawer({ open, leaveType, onClose }: { open: boolean; leaveType: 
 
         <FormGroupTitle>Comp-off (the comp-off leave type)</FormGroupTitle>
         <div style={twoCol}>
-          <Form.Item name="compOffMinHoursWorked" label="Min hours worked to earn a credit">
-            <InputNumber style={{ width: "100%" }} min={0} max={24} step={0.5} />
+          <Form.Item name="compOffMinHoursWorked" label="Min hours worked to earn a credit (blank: Not set, comp-off grants refuse)">
+            <InputNumber style={{ width: "100%" }} min={0} max={24} step={0.5} placeholder="Not set" />
           </Form.Item>
-          <Form.Item name="compOffExpiryDays" label="Expiry (days from earning)">
-            <InputNumber style={{ width: "100%" }} min={0} />
+          <Form.Item name="compOffExpiryDays" label="Expiry (days from earning; blank: Not set, comp-off grants refuse)">
+            <InputNumber style={{ width: "100%" }} min={0} placeholder="Not set" />
           </Form.Item>
         </div>
 
@@ -172,8 +173,9 @@ const yesNo = (b: boolean) => (b ? "Yes" : "No");
 
 function policyItems(p: LeavePolicy) {
   return [
-    { key: "accrual", label: "Accrual", value: p.accrualEnabled ? `${p.accrualDaysPerMonth ?? 0} day(s) / month` : "Off" },
-    { key: "elig", label: "Eligibility", value: p.eligibilityMode ? `${p.eligibilityValue ?? 0} ${p.eligibilityMode === "DAYS" ? "days" : "months"} from DOJ` : "Not set" },
+    { key: "accrual", label: "Accrual", value: p.accrualEnabled ? (p.accrualDaysPerMonth === null ? "On, days per month Not set (refused)" : `${p.accrualDaysPerMonth} day(s) / month`) : "Off" },
+    { key: "elig", label: "Eligibility", value: p.eligibilityMode && p.eligibilityValue !== null ? `${p.eligibilityValue} ${p.eligibilityMode === "DAYS" ? "days" : "months"} from DOJ` : "Not set" },
+    ...(p.compOffMinHoursWorked !== null || p.compOffExpiryDays !== null ? [{ key: "cof", label: "Comp-off", value: `${p.compOffMinHoursWorked === null ? "minimum hours Not set" : `${p.compOffMinHoursWorked} h minimum`}; ${p.compOffExpiryDays === null ? "expiry Not set" : `expires after ${p.compOffExpiryDays} days`}` }] : []),
     { key: "cf", label: "Carried into the new year", value: p.carryForwardRule === "UNLIMITED" ? "No limit" : p.carryForwardRule === "CAPPED" ? `At most ${p.carryForwardCapDays ?? 0} day(s)` : "Not set" },
     { key: "enc", label: "Year-end encashment", value: p.yearEndEncashment === null ? "Not set" : p.yearEndEncashment ? "On" : "Off (lapses)" },
     ...(p.wfhMonthlyLimit !== null || p.wfhYearlyLimit !== null ? [{ key: "wfh", label: "Work from home limit", value: `${blankAs(p.wfhMonthlyLimit, "a month", "No monthly limit")}; ${blankAs(p.wfhYearlyLimit, "a year", "no yearly limit")}` }] : []),

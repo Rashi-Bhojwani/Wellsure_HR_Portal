@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Button, Checkbox, Input, Tooltip, Upload } from "antd";
 import type { UploadFile } from "antd";
@@ -12,7 +13,7 @@ import { toFiles } from "./helpdeskUtils";
 import { fs, fw, layout, radius, space, v } from "../../theme/tokens";
 import { ApprovalBanner, InitialsAvatar, Panel, Skel, Stack, StatusChip, toast, useIsPhone, usePrefersReducedMotion, type ChipTone } from "../../ui";
 
-// The same 3-file cap the server enforces (modules/helpdesk/service.ts).
+// The fallback until the server's limit has loaded; the limit itself is a director setting (audit A-18; GET /api/helpdesk/limits), which the server enforces.
 export const MAX_ATTACHMENTS = 3;
 export const ATTACHMENT_ACCEPT = ".pdf,.png,.jpg,.jpeg,.docx,.xlsx";
 
@@ -193,19 +194,21 @@ export function Thread({ messages, viewer }: { messages: HelpdeskMessage[]; view
 // Files are held in the browser and sent with the message (multipart) —
 // beforeUpload returning false stops AntD uploading them itself.
 export function AttachmentPicker({ files, onChange, compact = false }: { files: UploadFile[]; onChange: (files: UploadFile[]) => void; compact?: boolean }) {
-  const full = files.length >= MAX_ATTACHMENTS;
-  const label = `Attach files (up to ${MAX_ATTACHMENTS})`;
+  const limits = useQuery({ queryKey: ["helpdesk", "limits"], queryFn: helpdeskApi.getHelpdeskLimits, staleTime: 300_000 });
+  const MAX = limits.data?.maxAttachmentsPerMessage ?? MAX_ATTACHMENTS;
+  const full = files.length >= MAX;
+  const label = `Attach files (up to ${MAX})`;
   return (
     <Upload
       multiple
       accept={ATTACHMENT_ACCEPT}
       fileList={files}
-      maxCount={MAX_ATTACHMENTS}
+      maxCount={MAX}
       beforeUpload={() => false}
-      onChange={({ fileList }) => onChange(fileList.slice(0, MAX_ATTACHMENTS))}
+      onChange={({ fileList }) => onChange(fileList.slice(0, MAX))}
     >
       {compact ? (
-        <Tooltip title={full ? `Up to ${MAX_ATTACHMENTS} files` : label}>
+        <Tooltip title={full ? `Up to ${MAX} files` : label}>
           <Button type="text" icon={<PaperClipOutlined />} aria-label={label} disabled={full} />
         </Tooltip>
       ) : (

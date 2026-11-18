@@ -1,7 +1,7 @@
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DEVELOPER_FORBIDDEN_KEYS, DEVELOPER_ROLE_CODE } from "@shared/constants/sensitiveData";
-import { PERSONAL_CONTACT_FIELDS } from "../../../lib/personalData";
+import { DEVELOPER_KEEPS_PROFILE_FIELDS, PERSONAL_CONTACT_FIELDS } from "../../../lib/personalData";
 import { resolveAccess } from "../../../lib/permissions";
 import { prisma } from "../../../lib/prisma";
 import { getSetting, setSetting } from "../../../lib/settings";
@@ -35,6 +35,11 @@ describe("the Developer sees no personal contact details", () => {
     for (const x of Object.values(p)) await cleanupFullTestEmployee(x.employeeId);
     await cleanupEmployeeTestOrgMasters(org);
   }, 120_000);
+
+  it("owner decision: the four profile fields of feat/employee-number-login stay visible to the Developer (never in the withheld list)", () => {
+    expect(DEVELOPER_KEEPS_PROFILE_FIELDS).toEqual(["deviceUserId", "loginIdMatchesMachine", "noEmailOnRecord", "emailMissingRequestedAt"]);
+    expect(DEVELOPER_KEEPS_PROFILE_FIELDS.filter((f) => (PERSONAL_CONTACT_FIELDS as readonly string[]).includes(f))).toEqual([]);
+  });
 
   it("the key is a sensitive class, so the Developer's ceiling removes it; every other role that sees employees keeps it", async () => {
     expect(DEVELOPER_FORBIDDEN_KEYS).toContain("employee.personal.view");

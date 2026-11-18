@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { writeAuditLog } from "../../../lib/audit";
+import { behaviourValue } from "../../behaviours/service";
 import { buildPayrollXlsx } from "../exports";
 import { compareRegisters, parseOptions } from "./diff";
 import { parseRegister } from "./parse";
@@ -18,7 +19,7 @@ export interface CompareInput {
  * never a figure or a name.
  */
 export async function compare(input: CompareInput, actor: { userId: string; ip?: string | null; userAgent?: string | null }): Promise<CompareResult> {
-  const options = parseOptions({ toleranceAmount: input.toleranceAmount, tolerancePercent: input.tolerancePercent, aliases: input.aliases });
+  const options = parseOptions({ toleranceAmount: input.toleranceAmount, tolerancePercent: input.tolerancePercent, aliases: input.aliases }, (await behaviourValue("payroll.parallelTolerance")).value.allowance); // audit A-20: one tolerance
   const [ra, rb] = [await parseRegister(input.a.source, input.a.buffer, input.a.label), await parseRegister(input.b.source, input.b.buffer, input.b.label)];
   const result = compareRegisters(ra, rb, options);
   await writeAuditLog({

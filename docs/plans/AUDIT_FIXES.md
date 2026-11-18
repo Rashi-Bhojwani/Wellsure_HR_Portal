@@ -53,3 +53,33 @@ birth, gender, blood group, the invitation address; bank and statutory sections 
 When `feat/employee-number-login` merges, its four new profile fields need a decision each. Recommendation: `deviceUserId` (the machine ID, needed to diagnose
 punches), `loginIdMatchesMachine` (true/false), `noEmailOnRecord` (true/false) and `emailMissingRequestedAt` (a time) carry no personal contact data, so the
 Developer keeps all four; none goes in `PERSONAL_CONTACT_FIELDS`.
+
+## 5 and 6. Hidden defaults and the small class A items (from the audit's own lists, 2026-11-18)
+
+Skipped by the owner (other chats own them): #8 and #9 (missing punch, late arrival: `feat/lateness-rule`); #13 and the password-reset and session lifetimes (auth
+files changed by `feat/employee-number-login`); C-6 (the ignored `TZ_BUSINESS`: reported only).
+
+| Audit item | Done |
+|---|---|
+| §3 `leave.defaultWeekOffDays` (Sat+Sun, no screen) | Removed (item 1): the person's own week-off pattern. |
+| §3 / #6 accrual "days per month" blank → 1.0 | Not set, refused naming it (`SETTING_NOT_SET`): monthly accrual, recalculator, per-employee credit. |
+| §3 eligibility period blank → eligible from joining | Not set, refused naming it; 0 is a real entry. |
+| §3 / #7 comp-off minimum hours / expiry blank → 4 h / 60 days | Not set, refused naming them. |
+| §3 the 3 blank boxes using a figure (the three rows above) | Leave Types and Policies shows "Not set" and what is refused. |
+| §3 no screen: `attendance.manualReminderHour` (#14), `payroll.directorNoticeEscalationDays`, `history.maxScheduleAheadDays` (#15) | System Settings, Schedules and limits (directors): "Default in use: value" until saved; a saved hour reschedules the job at once. |
+| §3 "values shown; not marked as defaults" (security, device alerts, device health, regularization, excess hours, helpdesk, people) | Each card says "Default in use" while nobody has saved its keys (`GET /api/settings/defaults-in-use`). |
+| §3 device retention prefill (3 days / 20,000) | The form says it is the default in use for a new device until the model (spec §14) is known. |
+| §3 `leave.encashment.defaultDailyRate` | Removed (item 4). |
+| #2 dashboard counts the code "RH" | Restricted-holiday counts are the approved leave of any type on those dates. |
+| A-16 only tax year 2026-27 shipped | Directors are told in February and March if next year's tax year is not entered (hourly sweep). |
+| A-17 nightly attendance 02:00 | Setting (Schedules and limits). |
+| A-18 3 helpdesk files per message | Setting (ceiling 10); the forms read it (`GET /api/helpdesk/limits`). |
+| A-19 import row caps 500 / 1,000 | Settings; the shared file reader keeps a technical ceiling of 10,000. |
+| A-20 compare tolerance ₹1 when blank | A blank tolerance is the parallel run's own setting (default ₹0). |
+| A-21 report subscriptions 07:41, daily people job 08:13 | Settings. |
+| #11, #12 notice / gratuity / encashment heads | Done in the earlier blocks (Not set; head refused by name). |
+
+Not built (medium or large; effort estimates): #7 half-day comp-off (medium, 1 to 2 days: a partial credit, its FIFO use and expiry); #10 statutory edge cases:
+ESI ₹176/day exemption, ₹25,000 ceiling for persons with disability, old-regime 37% surcharge, surcharge marginal relief (medium, 2 to 3 days with their
+reference tests); C-5 April-to-March leave year if ever wanted (large); live re-scheduling of the Engage auto-post hour (small, but that screen belongs to Engage and
+already says it applies on restart). §3 rows already shown plainly were left as they are.

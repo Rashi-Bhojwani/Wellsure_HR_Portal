@@ -21,3 +21,9 @@ export function withoutPersonalContact<T extends Record<string, unknown>>(person
 /** The colleague directory is governed by its own company toggle (People & Documents); there only the Developer role is kept from personal contact (as the audit log
  *  hides values from it), so an ordinary colleague's view is unchanged. */
 export const developerViewer = (user: { roleCodes: string[] }): boolean => user.roleCodes.includes(DEVELOPER_ROLE_CODE) && !user.roleCodes.includes("SUPER_ADMIN");
+
+/**
+ * Decided 2026-11-18 (owner): the four profile fields feat/employee-number-login adds stay visible to the Developer. None carries personal contact data, and
+ * support needs the machine ID to diagnose punches. When that branch merges, they must NOT be added to PERSONAL_CONTACT_FIELDS.
+ */
+export const DEVELOPER_KEEPS_PROFILE_FIELDS = ["deviceUserId", "loginIdMatchesMachine", "noEmailOnRecord", "emailMissingRequestedAt"] as const;

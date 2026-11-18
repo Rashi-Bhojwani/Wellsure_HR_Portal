@@ -214,3 +214,11 @@ the acknowledgement are unchanged. The researched values are kept, unused, in `d
 Ready for First Run shows each as an information row (never blocking) with a link to its screen. Verification: see `STAGE_REPORTS.md`, "Owner-decided settings
 ship empty".
 
+## 10. Audit fixes (written 2026-11-18)
+
+From the read-only audit of hard-coded values (commit `14ff0adf`). Owner to set before go-live, each refused until set (never a made-up figure): the leave type
+roles (earned / comp-off); the earned type's year-end carry-forward and encashment; an accruing type's days per month and eligibility; the comp-off minimum hours
+and expiry; the leave encashment amount (one value for year end, mid-year and exit). Leave days now follow each person's week-off pattern. The Developer sees no
+personal data. Times and limits that had no screen are on System Settings, Schedules and limits. Rows 141 to 151 of `OWNER_REVIEW_SHEET.md`; plan and the list of
+what was not built in `docs/plans/AUDIT_FIXES.md`. Verification: `STAGE_REPORTS.md`, "Audit fixes".
+

@@ -70,7 +70,7 @@ describe("leave type roles, year end and leave type limits over the database", (
       typeIds.push(lt.id);
       return lt.id;
     };
-    earnId = await type("EARN", "Annual leave", { accrualEnabled: true, accrualDaysPerMonth: 1 });
+    earnId = await type("EARN", "Annual leave", { accrualEnabled: true, accrualDaysPerMonth: 1, eligibilityMode: "DAYS", eligibilityValue: 0 });
     compId = await type("TOIL", "Time off in lieu", { compOffMinHoursWorked: 4, compOffExpiryDays: 30 });
     wfhId = await type("HOME", "Remote day", { wfhMonthlyLimit: 2, wfhYearlyLimit: 3, skipBalanceCheck: true });
     rhId = await type("OPTH", "Optional holiday", { rhYearlyQuota: 1, skipBalanceCheck: true });
@@ -118,6 +118,14 @@ describe("leave type roles, year end and leave type limits over the database", (
     expect((await prisma.leaveLedger.aggregate({ _sum: { days: true }, where: { employeeId: e.emp!, leaveTypeId: earnId } }))._sum.days?.toString()).toBe("1");
     await creditCompOff({ employeeId: e.emp!, earnedDate: d("2026-11-15"), hoursWorked: 8, source: "MANUAL_GRANT" });
     expect(await prisma.leaveLedger.count({ where: { employeeId: e.emp!, leaveTypeId: compId, entryType: "GRANT" } })).toBe(1);
+    // Audit #7: a blank minimum hours or expiry is refused, naming it (never 4 hours / 60 days).
+    await prisma.leavePolicy.update({ where: { leaveTypeId: compId }, data: { compOffMinHoursWorked: null, compOffExpiryDays: null } });
+    await expect(creditCompOff({ employeeId: e.emp!, earnedDate: d("2026-11-16"), hoursWorked: 8, source: "MANUAL_GRANT" })).rejects.toMatchObject({ code: "SETTING_NOT_SET", message: expect.stringContaining("the minimum hours worked to earn it and the expiry in days are not set") });
+    await prisma.leavePolicy.update({ where: { leaveTypeId: compId }, data: { compOffMinHoursWorked: 4, compOffExpiryDays: 30 } });
+    // Audit #6: a blank days-per-month on the earned type is refused (never 1.0).
+    await prisma.leavePolicy.update({ where: { leaveTypeId: earnId }, data: { accrualDaysPerMonth: null } });
+    await expect(runMonthlyPlAccrual(d("2026-11-01"))).rejects.toMatchObject({ code: "SETTING_NOT_SET", message: expect.stringContaining("days earned per month is not set") });
+    await prisma.leavePolicy.update({ where: { leaveTypeId: earnId }, data: { accrualDaysPerMonth: 1 } });
   });
 
   it("year end refuses while the earned type's carry-forward cap or year-end encashment is Not set, and never cashes out everything", async () => {

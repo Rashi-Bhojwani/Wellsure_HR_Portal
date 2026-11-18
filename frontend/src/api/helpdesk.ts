@@ -132,3 +132,8 @@ export async function downloadAttachment(id: string): Promise<SignedDownload> {
   const { data } = await apiClient.post<SignedDownload>(`/api/helpdesk/attachments/${id}/download`);
   return data;
 }
+
+/** Audit A-18 (2026-11-18): how many files one message may carry (a director setting; default 3). */
+export async function getHelpdeskLimits(): Promise<{ maxAttachmentsPerMessage: number }> {
+  return (await apiClient.get<{ maxAttachmentsPerMessage: number }>("/api/helpdesk/limits")).data;
+}

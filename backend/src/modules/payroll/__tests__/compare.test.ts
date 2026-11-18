@@ -18,7 +18,9 @@ const reg = (label: string, columns: string[], people: Array<[string, string, Re
   ignoredColumns: [],
   people: new Map(people.map(([code, name, amounts]) => [code, { code, name, amounts: new Map(Object.entries(amounts)) }])),
 });
-const opts = (over: Parameters<typeof parseOptions>[0] = {}) => parseOptions(over);
+// Changed 2026-11-18 (audit A-20, CHANGED_TESTS.md): a blank tolerance is no longer a hidden ₹1 but the parallel run's own setting, passed in. These tests keep
+// their ₹1 tolerance by passing it, so every assertion below is unchanged.
+const opts = (over: Parameters<typeof parseOptions>[0] = {}) => parseOptions({ toleranceAmount: "1", ...over });
 
 describe("the comparison", () => {
   const a = () =>
