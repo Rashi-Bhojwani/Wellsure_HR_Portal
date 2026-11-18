@@ -6,16 +6,14 @@
     <!-- PWA (Phase 5 commit G): installable, with our own icons. -->
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#FFFFFF" />
-    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" href="/logo.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Wellsure" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>Wellsure HR Portal</title>
-    <link
-      rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23121828'/%3E%3Ctext x='16' y='22.5' font-size='17' font-family='sans-serif' font-weight='800' fill='%2328A174' text-anchor='middle'%3EW%3C/text%3E%3C/svg%3E"
-    />
+    <!-- The Wellsure logo and favicon are supplied by the repo owner at public/logo.png and public/favicon.png (never drawn here). -->
+    <link rel="icon" type="image/png" href="/favicon.png" />
     <!-- Before the first paint: the saved theme (or the device's), so a dark-mode user never sees a white flash. The colours are tokens.ts bgPage/textBody
          (src/theme/__tests__/theme.test.ts keeps them equal). -->
     <script>
@@ -28,8 +26,8 @@
         var root = document.documentElement;
         root.setAttribute("data-theme", dark ? "dark" : "light");
         root.style.colorScheme = dark ? "dark" : "light";
-        root.style.background = dark ? "#121828" : "#FAFAFA";
-        root.style.color = dark ? "#E1E8F0" : "#2C2B31";
+        root.style.background = dark ? "#0E0E0C" : "#FFFDF0";
+        root.style.color = dark ? "#E6E4D4" : "#1C1C18";
       })();
     </script>
 
