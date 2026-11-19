@@ -19,7 +19,8 @@ const isDirector = (req: Request) => req.user!.roleCodes.includes(SUPER_ADMIN_RO
 const rulesActor = (req: Request) => ({ userId: req.user!.userId, isDirector: isDirector(req), canPrepare: isDirector(req) || req.user!.permissions.has("leave.policy.manage") });
 const docViewer = (req: Request) => ({ userId: req.user!.userId, employeeId: req.user!.employeeId, isDirector: isDirector(req), canOpen: isDirector(req) || req.user!.permissions.has("leave.documents.view") });
 
-// The rules are the owners' decision: the Developer (who holds leave.policy.manage to run the system) does not prepare or read them.
+// The rules are the owners' decision: the Developer never prepares or reads them (since the final merge the Developer no longer holds
+// leave.policy.manage at all: Session A removed it from the role and the access resolver forbids it; this guard stays as a second layer).
 const notDeveloper = (req: Request, _res: Response, next: NextFunction) => (req.user!.roleCodes.includes(DEVELOPER_ROLE_CODE) ? next(new HttpError(403, "The Developer role does not prepare or read leave rules.", "FORBIDDEN")) : next());
 
 export const leaveRulesRouter = Router();
