@@ -181,7 +181,7 @@ identical reply; no distinct 423, and no per-number or per-IP wording on the sig
     these tests are about is what they actually exercise. All 4 tests in the file pass.
   - **Full backend suite, run alone once before pushing:** 265 files, 2319 tests, all passed. No other test encoded the old rate-limit behaviour,
     so nothing else was changed.
-  - **CI on the final commit:** FOLLOWUP2B_CI
+  - **CI on the final commit:** **run 442 on `44b7894c`: green**, every job (read once). This closes the run 440 failure.
 
 ## Not verified / for the owners
 
