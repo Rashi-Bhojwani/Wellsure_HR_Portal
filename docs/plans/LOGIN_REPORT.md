@@ -157,7 +157,18 @@ identical reply; no distinct 423, and no per-number or per-IP wording on the sig
 - **Phase check (run once):** green: both lints, both typechecks, fresh database migrate + drift + seed, backend
   auth/employee/settings/access/cleanup 217/217, frontend 141/141, build + bundle (login 232.5 KB / 250; employee home 347.8 / 400; admin home
   367.5 / 400).
-- **CI on the final code commit:** FOLLOWUP2_CI
+- **CI on the final code commit:** **run 440 on `2b47c1e1`: red** (read once; not fixed, per the instruction).
+  - Two jobs are red, with one cause. `backend-tests (3)` failed; `backend-tests-complete` only reports that a shard failed. Every other job is
+    green.
+  - The 3 failing tests are all in `backend/src/middleware/__tests__/trustProxy.test.ts`, which is outside the phase-check script's test set, so
+    the local check did not run it. Reproduced locally with `vitest run --shard=3/4` (3 failed, 473 passed).
+  - *"keys the limit on the address the ALB appended…"* and *"with no proxy trusted, the header is ignored…"* look for the old route-level key
+    `ratelimit:auth.rateLimit.login:<ip>`. The per-IP sign-in counter is now `ratelimit:auth.loginFail.ip:<ip>` (counted in the service), so they
+    find no key.
+  - *"one person failing does not lock out a different person behind the same ALB"* sends both people's attempts with the same made-up number
+    "NOPE". That number now has its own counter, shared across addresses by design, so it reaches 5 and the second person gets 429. The per-IP
+    separation the test is about still holds.
+  - **Fix needed (not applied):** point the test at the new key and give the two people different numbers. No product code change is needed.
 
 ## Not verified / for the owners
 
