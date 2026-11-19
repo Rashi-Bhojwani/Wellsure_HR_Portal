@@ -259,7 +259,7 @@ export function LeaveMonthCalendar({ entries, monthStart, onMonthChange, loading
                       fontSize: fs.table,
                       fontWeight: isToday ? fw.bold : fw.medium,
                       background: isToday ? v.accent : "transparent",
-                      color: isToday ? v.navActiveText : inMonth ? v.textBody : v.textPlaceholder,
+                      color: isToday ? v.accentOn : inMonth ? v.textBody : v.textPlaceholder,
                       opacity: inMonth ? 1 : 0.7,
                     }}
                   >

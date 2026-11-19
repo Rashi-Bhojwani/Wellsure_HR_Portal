@@ -1,7 +1,7 @@
 // Read through Vite's ?raw import (typed by vite/client), so this test needs no Node typings in the app tsconfig.
 import indexHtml from "../../../index.html?raw";
 import { describe, expect, it } from "vitest";
-import { AA_TEXT_PAIRS, chart, cssVarsFor, dark, light, palettes, v, type Palette } from "../tokens";
+import { AA_TEXT_PAIRS, AA_UI_PAIRS, chart, cssVarsFor, dark, light, palettes, v, type Palette } from "../tokens";
 import { antdThemeFor } from "../antdTheme";
 
 function luminance(hex: string): number {
@@ -36,9 +36,53 @@ describe("design tokens (docs/DESIGN_SYSTEM.md)", () => {
     }
   });
 
-  it("the accent fill keeps 3:1 against the surface (non-text UI)", () => {
-    expect(contrast(light.accent, light.bgSurface)).toBeGreaterThanOrEqual(3);
-    expect(contrast(dark.accent, dark.bgSurface)).toBeGreaterThanOrEqual(3);
+  it("non-text UI pairs meet WCAG AA (3:1) in both themes: control outlines, checked fills, focus ring, marker edge, row-action icons", () => {
+    for (const mode of ["light", "dark"] as const) {
+      const p: Palette = palettes[mode];
+      for (const [fg, bg] of AA_UI_PAIRS) {
+        expect(contrast(p[fg], p[bg]), `${mode}: ${fg} on ${bg}`).toBeGreaterThanOrEqual(3);
+      }
+    }
+  });
+
+  it("the Wellsure brand: yellow #FFF605 primary with ink text in both themes, never yellow as text on a light surface", () => {
+    for (const p of [light, dark]) {
+      expect(p.primary).toBe("#FFF605");
+      expect(p.primaryText).toBe("#0B0B0B");
+    }
+    expect(light.primaryHover).toBe("#F2E900");
+    expect(light.primaryActive).toBe("#DBD000");
+    // Brand yellow as text on a light background would be 1.1:1: no such pair may exist (yellow on ink is fine).
+    for (const mode of ["light", "dark"] as const) {
+      const p: Palette = palettes[mode];
+      for (const [fg, bg] of AA_TEXT_PAIRS) if (p[fg] === "#FFF605") expect(luminance(p[bg]), `${mode}: ${fg} on ${bg}`).toBeLessThan(0.2);
+    }
+    expect(light.accentText).toBe("#8A6D00");
+    expect(dark.accentText).toBe("#FFF35C");
+  });
+
+  it("the Ant Design theme's own text colours meet 4.5:1 on its backgrounds in both themes", () => {
+    for (const mode of ["light", "dark"] as const) {
+      const t = antdThemeFor(mode).token!;
+      for (const fg of ["colorText", "colorTextHeading", "colorTextSecondary", "colorTextPlaceholder", "colorLink", "colorError"] as const) {
+        for (const bg of ["colorBgContainer", "colorBgLayout"] as const) {
+          expect(contrast(t[fg] as string, t[bg] as string), `${mode}: ${fg} on ${bg}`).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+      const b = antdThemeFor(mode).components!.Button!;
+      expect(contrast(b.primaryColor as string, b.colorPrimary as string), `${mode}: primary button label`).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(b.primaryColor as string, b.colorPrimaryHover as string), `${mode}: primary button label, hover`).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(b.primaryColor as string, b.colorPrimaryActive as string), `${mode}: primary button label, pressed`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("chart marks keep 3:1 on the card, and chart text 4.5:1, in both themes", () => {
+    for (const mode of ["light", "dark"] as const) {
+      const surface = palettes[mode].bgSurface;
+      for (const c of [...chart[mode].categorical, chart[mode].positive, chart[mode].negative]) expect(contrast(c, surface), `${mode}: chart ${c}`).toBeGreaterThanOrEqual(3);
+      expect(contrast(chart[mode].ink, surface)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(chart[mode].muted, surface)).toBeGreaterThanOrEqual(4.5);
+    }
   });
 
   it("CSS variables exist for every key, and v.* points at them", () => {
