@@ -2064,3 +2064,10 @@ recognition 43; audit log 12) passed.
 
 CI run 406 on `5978b26` (the final code commit), read to the end of each job: 10 jobs green; `backend-tests (3)` red on exactly one test,
 `payPolicies.test.ts` (592 passed), and `backend-tests-complete` red only because of that shard. Stage 4 ends here (STOP).
+
+## Final merge with the main branch (2026-11-19)
+
+Merge `7830167` of `feat/hr-payroll-separation` `a3849bf`. Conflicts, meeting-point checks (a–f), theme walk, flow walk, fixes and checks are
+recorded in full in `PEEPS_COMPLETE_REPORT.md` §9. Commits: `7830167` (merge), `d917a5c` (a: conversion account path and setup link),
+`c471331` (b: Developer personal data), `204f042` (c: lateness), `03eb47d` (d: weekly-off counting), `916f518` (e: sign-in lifetimes),
+`7410807` (Convert drawer crash), `01480b5` (colleague-directory rule, changed test). Full backend suite alone: 317 files / 2,747 tests passed.

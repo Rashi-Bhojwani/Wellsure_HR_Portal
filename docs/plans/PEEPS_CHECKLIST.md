@@ -192,4 +192,20 @@ first unticked item. No real data in this file. Commit numbers are the rows of `
 - [ ] Owner: the setup checklist in PEEPS_COMPLETE_REPORT §2; `MAIL_ALLOWED_DOMAINS` for any staging stack that must send mail
 - [ ] Lateness rule: NOT built (Session A's attendance engine; owner values Not set)
 - [x] Final report: `docs/plans/PEEPS_COMPLETE_REPORT.md`
-- [ ] **STOP: Peeps Stage 4 complete; wait for the owner**
+- [x] STOP passed (final merge received)
+
+## Final merge with the main branch (2026-11-19)
+- [x] Merged `feat/hr-payroll-separation` `a3849bf` (52 commits) — `7830167`; 7 conflicts resolved keeping both sides; 147 migrations, no drift (fresh and demo databases)
+- [x] (a) conversion: Invited account, employee number login, setup link through the mail guard, idempotent; screen message — `d917a5c`
+- [x] (b) Developer personal data: every GET route crawled as the Developer, nothing personal; no `leave.policy.manage` — `c471331`
+- [x] (c) lateness stays out of Peeps (source scan, catalogues) — `204f042`
+- [x] (d) new leave types count on the person's weekly-off pattern; no hard-coded weekend — `03eb47d`
+- [x] (e) sign-in lifetimes in the setup guide — `916f518`
+- [x] (f) mail guard, demo emails, audit audiences, Office rules: 43 files / 328 tests green
+- [x] Theme walk (6 roles, 1280 light + 390 dark, axe): 0 violations, no styling fix needed
+- [x] Fixed: Convert to employee drawer crash (pre-existing) — `7410807`; colleague-directory personal email test aligned with the owners' Peeps rule — `01480b5`
+- [x] Joiner link and conversion flow walked by keyboard end to end
+- [x] popovers, sensitive-UI (921 pages), peeps-demo scan (5/5), frontend 176, budgets
+- [x] Full backend suite alone: 317 files / 2,747 tests passed; CI on the final commit — see PEEPS_COMPLETE_REPORT §9
+- [ ] Owner: confirm the colleague-directory personal-email rule (Peeps: never; base toggle: allowed)
+- [ ] **STOP: wait for the owner's independent audit of `peeps/foundation`**

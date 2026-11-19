@@ -173,3 +173,88 @@ refused across the Peeps modules; Insights suppressed and Not set; no preset whe
   backend shards 1, 2 and 4, both sensitive-ui halves, latency (with `check:popovers`), attendance-replay, agent-windows, docker-build.
   **Red:** `backend-tests (3)` — exactly one test, `payPolicies.test.ts` "…a settlement shows leave in days only" (592 passed), the accepted
   Session A hand-off; and `backend-tests-complete`, which only checks that every shard succeeded. Nothing else is red.
+
+---
+
+## 9. Merged with the main branch (2026-11-19)
+
+`feat/hr-payroll-separation` at `a3849bf` (52 commits: employee-number login with Invited accounts and setup links, the lateness rule, the
+yellow-and-black theme, sign-in lifetimes as director settings, Developer personal-data masking, leave days on each person's weekly-off pattern,
+the statutory defaults pack) merged into `peeps/foundation` as a normal merge commit: **`7830167`**. `peeps/foundation` now holds the whole
+portal and is the release candidate.
+
+### Conflicts and resolutions (both sides' intent kept)
+
+| File | Peeps side | Main side | Resolution |
+|---|---|---|---|
+| `backend/prisma/schema.prisma` (end of file) | a blank line | the statutory defaults pack models | both (the pack models as they are) |
+| `backend/src/app.ts` | Peeps router imports | the lateness router import | both |
+| `frontend/src/api/helpdesk.ts` | category visibility and move calls | the per-message attachment limit call | both |
+| `backend/src/modules/leave/requests.ts` | `peepsApplyDays` around the day count (new types' rules and counting) | the day count on the person's own week-off dates (`excludedDates`) | the main side's count is now the working-day input of `peepsApplyDays`; the original types are untouched, the new types apply their rules |
+| `frontend/src/pages/admin/employee/EmployeeProfilePage.tsx` | the `ProfilePhoto` import | the login-ID panel, `PhotoUploader`, `peopleApi` imports | `ProfilePhoto` and the login-ID panel (the body uses those; the other two are unused there since Peeps replaced the uploader) |
+| `backend/src/modules/payroll/__tests__/monthlyInputsImport.test.ts` | my earlier C-1 fix of the hash flake | Session A's own later fix of the same flake | Session A's file (their test, their fix) |
+| `docs/SENSITIVE_DATA.md` | Peeps rows | main-side rows | regenerated from the merged registry (`sensitiveDocs` test passes) |
+
+Also: my `leaveTypes.test.ts` restored a provider the main side removed (`SettingsBasedEncashmentRateProvider` → `NotConfiguredEncashmentRateProvider`,
+the new default). The `customFields`, `profileAndReveal` and `immediacy` tests are identical to the main branch's; the earlier `runAuthority`
+catalogue edit is kept. No conflict touched the access resolver, the HR switch framework, payroll rule files or CI files.
+**Migrations:** all 147 kept; applied in order on a fresh database and on the Peeps demo database (the 6 new ones after the `peeps_` ones there),
+no drift on either; the merged seed and the demo seed both run.
+
+### Where the two sides meet (each checked, each with a test)
+
+| # | Check | Result | Commit |
+|---|---|---|---|
+| a | Converting an accepted joiner uses the new account path | It already created the account through `createEmployeeInTx` (Invited, employee number as login, no password) but never sent the setup link Add Employee sends. It now sends it through the same `createInvitation` (single-use, stored hashed, through the mail service and so the mail guard), only from the request that created the employee; the racing request and retries report the state and send nothing. The conversion screen says "Account invited: they sign in with <number>" and what happened to the link. Tests: account state, one hashed token, idempotency, a guard refusal reported (FAILED) and never delivered, the screen message | `d917a5c` |
+| b | Developer personal-data masking across Peeps | Every GET route called as the Developer with the ids of an employee carrying fictional personal values who appears in Peeps data (badge, nudge tag, colleague directory with phone and birthday switched on): nothing comes back; HR's crawl finds them. The Developer holds no `leave.policy.manage` and the leave-rules routes refuse them; no Peeps migration or seed grants it. No code change needed (a stale comment updated) | `c471331` |
+| c | Lateness stays out of Peeps | No Peeps module imports the lateness module or reads waivers, cut-offs or late-in minutes; the nudge tags, badges and Insights metrics name nothing about attendance, lateness or performance | `204f042` |
+| d | Day counting follows the weekly-off pattern | A Monday-to-Saturday worker's Friday-to-Monday bereavement leave counts 3 days (not 2). Exits compute no day counts of their own (last working day from the base separation, settlement days from the base ledger); no Peeps screen or service hard-codes Saturday and Sunday | `03eb47d` |
+| e | Sign-in lifetimes | No Peeps doc or env example mentioned `JWT_REFRESH_TTL`; the setup guide now says the reset link and Stay signed in are two-director Default behaviours (60 minutes, 30 days); Peeps' one-director settings unchanged | `916f518` |
+| f | Mail guard, demo emails, HR audit audiences, Office rules | 43 files / 328 tests green on the merged code (mail guard, audit audience, Office grants, permission matrix, withdraw, assets, recognition, autofill, leave rules, recruitment, exits, Insights, Unmute, avatars); the merged seed gives 33 of 33 people `.invalid` addresses | — |
+
+### Theme (yellow and black)
+
+Every Peeps screen walked as director, HR, manager, employee, interviewer and Developer at 1280 light and 390 dark (342 page visits plus loading
+and error states), with axe's colour-contrast, button-name, label and link-name rules on every page: **0 violations**. Focus visible on every
+primary action reached by keyboard; no overflow, crash or console error. Design tokens (lint) and `check:popovers` pass. **No styling fix was
+needed** (the Peeps screens use only tokens and Ant Design, so the theme reached them unchanged). Insights uses tables, not charts.
+
+### Found by the walk and fixed
+
+- **The Convert to employee drawer crashed on open** ("designations.data?.map is not a function"): it read the designations endpoint as an array,
+  but the endpoint answers `{ items }`. Not caused by the merge (the drawer had never been opened in a browser: it needs every joining document);
+  fixed in `7410807`. The full joiner flow then walked by keyboard: HR creates the link (shown once), the joiner signed out at 390 dark uploads both
+  documents ("All documents received"), HR converts; the account is Invited with one hashed setup token, and the screen says so.
+
+### Checks
+
+- **Check script once** (`scripts/peeps-check.sh --since 6f050a2 --full`): lint and design tokens, typecheck of all four projects, the 42 backend
+  test files changed by the merge and the fixes (442 tests), the 4 changed frontend files (27 tests), then the **full backend suite alone:
+  317 files / 2,747 tests, all passed** (`payPolicies.test.ts` included: the main branch fixed it, and nothing trips over the August lock any more).
+  The first run of the script stopped at one failure, fixed below; the second is the one recorded.
+- Frontend: 31 files / 176 tests; build; budgets login 233.0 KB, shell + employee home 354.6 KB, shell + admin home 373.6 KB (all within).
+- `check:popovers` (base seed, as CI) passes; `check:sensitive-ui`: no secret on any of **921 pages**, the DEMO banner on each.
+- Peeps demo-company confidentiality scan (`npm run test:peeps-demo`, which ran only locally before): **5 / 5** on the merged code.
+- Browser walk: §9 Theme, plus the joiner-link and conversion flow by keyboard.
+- CI on the final commit: §9 CI (below).
+
+Fixes for failures caused by the merge or by my fixes:
+1. `leaveTypes.test.ts` used a provider the main side removed → the new default (`7830167`).
+2. The check script's first run: Session A's `developerPersonalData.test.ts` expected a colleague to see a personal email with the company
+   toggle on; the merged code keeps the owners' Peeps rule ("personal email never shows"). The colleague assertion was changed, recorded in
+   `CHANGED_TESTS.md` (`01480b5`). **Owners: please confirm which rule you want** (Peeps: never; the base toggle: allowed).
+3. Not caused by the merge, found by the walk: the Convert drawer crash (`7410807`).
+
+### Not verified
+
+- Staging and production: nothing was run there. A staging stack sends mail only to domains in `MAIL_ALLOWED_DOMAINS`.
+- The setup email's real delivery: only the console driver (a file) and the guard's refusal were exercised; no SMTP or SES.
+- The Developer crawl uses one employee's values; it calls every GET route with that employee's id, not every possible id of every kind.
+- The theme check is automated (axe) plus a visual look at a sample of screenshots, not a manual review of every screen in both themes.
+
+### Decided by me
+
+- Converted joiners get their setup link at conversion, as Add Employee does by default (rather than waiting for HR to press "Send setup link");
+  a failed or refused send is shown, never thrown, and can be resent from the profile as for any employee.
+- The racing conversion request reports the link state it reads, which can be "not sent yet" for a moment while the winner sends it.
+- `monthlyInputsImport.test.ts`: Session A's version over my older fix of the same flake.
