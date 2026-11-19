@@ -84,6 +84,8 @@ const EXTRA_ALLOWED: Record<string, number[]> = {
   "tax/statutoryChallans.ts": [30],
   // IE-09: form limits (the note a director types, the file name kept on a revision); 500 (rows in one file) carries its own allow-number comment.
   "salary/assignmentImport.ts": [300, 80],
+  // Audit fixes 2026-11-18 (A-19): the shared import reader's technical ceiling on rows in one file; the per-import caps are settings. Not money.
+  "inputs/importParse.ts": [10000],
   // Part 2 rows, none a payroll figure: calendar (milliseconds in a day, days 31 and 30 of a month) and form-field limits (texts of 60, 80, 120, 300 characters;
   // 20 names listed in a message); a 5 MB upload limit (1024 × 1024).
   "compliance/service.ts": [86400000, 31, 30, 300],

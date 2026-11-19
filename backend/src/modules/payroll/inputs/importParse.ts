@@ -5,7 +5,7 @@ import { HttpError } from "../../../middleware/errorHandler";
 // column. The layout mirrors the Bulk Salary Overrides sample: a header row, then one row per person.
 
 /** A technical ceiling for any file read here; the per-import limits are settings (System Settings, Schedules and limits; audit A-19). */
-export const MAX_IMPORT_ROWS = 10000;
+export const MAX_IMPORT_ROWS = 10000; // a technical row ceiling for one file (allowlisted in payrollGuards.test.ts), not money
 const MAX_COLUMNS = 200;
 
 export interface RawTable {

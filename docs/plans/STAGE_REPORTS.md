@@ -749,3 +749,35 @@ Verification:
   Esc closes, focus returns; the state select opens by keyboard; setting buttons 44 px on the phone. The local dev database was one migration behind
   (`statutory_pack_reviews`) and was brought up to date with the guarded script.
 - Changed tests: `CHANGED_TESTS.md`, "Owner-decided settings empty (2026-11-17)".
+
+## Session A: audit fixes — leave, hidden defaults, Developer personal data (written 2026-11-18)
+
+Plan: `docs/plans/AUDIT_FIXES.md`. Commits `090fbbb`, `08392ef`, `80eb2bc`, `09c068f` and the guard fix with this report.
+
+- **Leave days** follow the person's own attendance week-off pattern (alternate Saturdays included), a branch override, and their location's holidays; the
+  company default pattern when no assignment; missing → refused. The Saturday-and-Sunday stub is gone. Attendance shows every leave date as leave.
+- **Leave type roles:** Default behaviours "Earned / paid leave type" and "Comp-off leave type" (two directors, audited) replace the "PL" / "COF" code checks;
+  Not set → accrual, year end and comp-off refuse (`SETTING_NOT_SET`).
+- **Honoured:** carry-forward cap (CAPPED n / UNLIMITED) and year-end encashment (rest encashed, or lapsed); both Not set → year end refuses. WFH monthly /
+  yearly limits and the RH quota enforced on apply; empty = "No limit".
+- **One leave-day value** (`payroll.leaveEncashment`) for year end, mid-year and exit; the flat-rupee rate and its routes removed; Not set refuses.
+- **Hidden defaults (audit items 5, 6):** accrual days / eligibility / comp-off hours and expiry Not set and refused (no 1.0 day, 4 h, 60 days); the four
+  settings with no screen and the timed jobs on a director "Schedules and limits" card (a saved time reschedules at once); every defaulted card says "Default in
+  use"; A-16 tax-year reminder, A-18 helpdesk files, A-19 import caps, A-20 compare tolerance, dashboard RH count. Table in the plan.
+- **Developer:** new sensitive class `employee.personal.view` (in `DEVELOPER_FORBIDDEN_KEYS`); personal email, mobile, addresses, emergency contact, DOB,
+  gender and blood group withheld on the profile, grid, search, directory and exports. The four `feat/employee-number-login` fields stay visible (pinned by test).
+
+Skipped (other chats): #8, #9 (lateness branch), #13 and reset/session lifetimes (login branch), C-6 `TZ_BUSINESS` ignored (reported only). Not built, with
+estimates: #7 half-day comp-off (medium, 1–2 days); #10 statutory edge cases (medium, 2–3 days); C-5 April–March leave year (large); live Engage hour (small).
+
+Verification:
+- Phase check script: passed (91 files / 730 tests; frontend 18 / 135; lint, typecheck, tokens, fresh-database migrations).
+- Full backend suite alone: first run 2 `payrollGuards` findings (a 10,000-row ceiling and a calendar month written as numbers), both fixed (allowlist with
+  reason; `allow-number` note); re-run: 269 files / 2,331 tests passed.
+- Mutation checks, 11 of 11 caught: Saturday still skipped, name-only "PL", silent full cash-out, cap ignored, flat-rate fallback, WFH limit ignored, Developer
+  sees personal email, comp-off defaults, schedule not moved, compare ₹1, login-branch field withheld.
+- Goldens unchanged and passing. Developer-403 and permission tests on every new or changed route.
+- Browser walk (director, HR, manager, employee, Developer; 1280 light, 390 dark): behaviours and leave policies for the right roles only; Developer profile
+  "Hidden" for every personal field, HR sees values; Schedules card "Default in use" / "Set". Keyboard: drawer opens with Enter, Esc closes, save works, 44 px on
+  the phone, no sideways scroll.
+- Changed tests: `CHANGED_TESTS.md`, "Audit fixes (2026-11-18)".

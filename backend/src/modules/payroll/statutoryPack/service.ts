@@ -164,7 +164,7 @@ export async function remindStatutoryPackReview(): Promise<{ reminded: number }>
  * it, every director is told once (a month's run in April is refused, TAX_NOT_SET, until it is entered). Rides the hourly director-notice sweep. Pure check below.
  */
 export function nextTaxYearDue(today: string, entered: ReadonlySet<string>): string | null {
-  const month = Number(today.slice(5, 7));
+  const month = Number(today.slice(5, 7)); // allow-number: a calendar month, not money
   if (month < 2 || month > 3) return null; // February and March only
   const next = financialYearOf(today).startYear + 1;
   const label = `${next}-${String((next + 1) % 100).padStart(2, "0")}`;
