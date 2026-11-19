@@ -51,15 +51,21 @@ describe("POST /api/auth/login", () => {
     expect(res.body.error.code).toBe("INVALID_CREDENTIALS");
   });
 
-  it("gives a distinct message for an INVITED (not yet activated) account", async () => {
+  // Changed 2026-11-18 (docs/plans/LOGIN_REPORT.md): the owners decided an invited account gets exactly the reply an unknown number gets, so the
+  // sign-in reply cannot tell anyone which numbers exist. It used to be a distinct 403 NOT_ACTIVATED.
+  it("gives an INVITED (not yet activated) account the SAME generic reply as an unknown code", async () => {
     const user = await createTestUser(org, { status: "INVITED" });
     employeeIds.push(user.employeeId);
 
     const res = await request(app).post("/api/auth/login").send({ employeeCode: user.employeeCode, password: TEST_PASSWORD });
-    expect(res.status).toBe(403);
-    expect(res.body.error.code).toBe("NOT_ACTIVATED");
+    const unknown = await request(app).post("/api/auth/login").send({ employeeCode: "NO-SUCH-CODE", password: TEST_PASSWORD });
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual(unknown.body);
+    expect(res.body.error.code).toBe("INVALID_CREDENTIALS");
   });
 
+  // Changed 2026-11-19 (docs/plans/LOGIN_REPORT.md, follow-up 2): the locked reply is the one over-limit reply (429 TOO_MANY_ATTEMPTS), the same as
+  // for a number nobody holds; it used to be a distinct 423 LOCKED. The account is still recorded as locked for HR's and directors' screens.
   it("locks the account after 5 failed attempts, and rejects even the correct password while locked", async () => {
     const user = await createTestUser(org);
     employeeIds.push(user.employeeId);
@@ -69,8 +75,8 @@ describe("POST /api/auth/login", () => {
     }
 
     const lockedRes = await request(app).post("/api/auth/login").send({ employeeCode: user.employeeCode, password: TEST_PASSWORD });
-    expect(lockedRes.status).toBe(423);
-    expect(lockedRes.body.error.code).toBe("LOCKED");
+    expect(lockedRes.status).toBe(429);
+    expect(lockedRes.body.error.code).toBe("TOO_MANY_ATTEMPTS");
 
     const dbUser = await prisma.user.findUnique({ where: { id: user.userId } });
     expect(dbUser?.lockedUntil).not.toBeNull();

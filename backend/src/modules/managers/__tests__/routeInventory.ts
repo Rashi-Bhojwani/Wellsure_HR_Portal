@@ -105,6 +105,7 @@ export const ROUTE_CLASSIFICATION: Record<string, RouteClass> = {
   "POST /api/employees/separations/:id/cancel": admin,
   "GET /api/employees/:id": scoped("profile: findScopedEmployee"),
   "POST /api/employees/:id/resend-invite": admin,
+  "POST /api/employees/:id/employee-code": admin, // employee-number login: directors only (checked in the service)
   "GET /api/employees/invitations": admin,
   "POST /api/employees/invitations/send": admin,
   "GET /api/employees/:id/statutory/reveal": admin,

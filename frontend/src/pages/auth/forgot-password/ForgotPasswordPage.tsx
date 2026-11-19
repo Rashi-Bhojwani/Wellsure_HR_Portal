@@ -8,6 +8,7 @@ import { requiredMark } from "../authStyles";
 import * as authApi from "../../../api/auth";
 import { Illustration } from "../../../ui";
 import { fs, space, v } from "../../../theme/tokens";
+import { FORGOT_PASSWORD_REPLY } from "@shared/constants/login";
 
 interface ForgotPasswordForm {
   employeeCode: string;
@@ -42,8 +43,8 @@ export function ForgotPasswordPage() {
         hero={<Illustration name="inbox" size={140} />}
         subtitle={
           <>
-            <span style={{ display: "block", color: v.textPrimary }}>If that Employee Code exists, a reset link has been sent</span>
-            Check the personal email on file. The link is valid for 1 hour.
+            <span style={{ display: "block", color: v.textPrimary }}>{FORGOT_PASSWORD_REPLY}</span>
+            The link works once and expires after a short time. No email? Ask HR to check the email they have for you.
           </>
         }
       >
@@ -55,16 +56,21 @@ export function ForgotPasswordPage() {
   }
 
   return (
-    <AuthShell title="Forgot password" subtitle="Enter your Employee Code and we'll email you a reset link">
+    <AuthShell title="Forgot password" subtitle="Enter your employee number. New here? This is also how you set your first password.">
       <AuthError message={error} />
 
       <Form<ForgotPasswordForm> layout="vertical" onFinish={onFinish} requiredMark={requiredMark}>
-        <Form.Item name="employeeCode" label="Employee Code" rules={[{ required: true, message: "Enter your Employee Code" }]}>
-          <Input placeholder="e.g. 1042" size="large" autoFocus autoComplete="username" />
+        <Form.Item
+          name="employeeCode"
+          label="Employee number"
+          extra="The same number as on the attendance machine. The link goes to the email HR has on record for you."
+          rules={[{ required: true, whitespace: true, message: "Enter your employee number" }]}
+        >
+          <Input placeholder="e.g. 1042" size="large" autoFocus autoComplete="username" autoCapitalize="none" spellCheck={false} />
         </Form.Item>
         <Form.Item style={{ marginBottom: space[4] }}>
           <Button type="primary" htmlType="submit" block size="large" loading={submitting}>
-            Send reset link
+            Send link
           </Button>
         </Form.Item>
       </Form>

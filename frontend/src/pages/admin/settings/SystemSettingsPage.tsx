@@ -38,10 +38,11 @@ import { SectionIntro, SectionNav, SettingsLayout, SwitchList, ToggleRow, type S
 const ROLE_OPTIONS = ["SUPER_ADMIN", "HR_ADMIN", "HR_EXECUTIVE", "PAYROLL_ADMIN", "MANAGER", "APPROVER", "EMPLOYEE"].map((r) => ({ value: r, label: r }));
 
 const RATE_LIMIT_LABELS: Record<keyof SecuritySettings["rateLimits"], string> = {
-  login: "Login",
+  login: "Sign-in (failed attempts per address)",
   totpVerify: "2FA verify",
   inviteAccept: "Accept invitation",
-  forgotPassword: "Forgot password",
+  forgotPassword: "Forgot password (per address)",
+  forgotPasswordPerLogin: "Forgot password (per employee number)",
   resetPassword: "Reset password",
 };
 
@@ -502,8 +503,13 @@ function SecuritySettingsCard() {
               </Form.Item>
             </Col>
             <Col {...half}>
-              <Form.Item name="invitationTtlHours" label="Invitation link validity (hours)" rules={[{ required: true }]}>
+              <Form.Item name="invitationTtlHours" label="Setup link validity (hours)" extra="The link HR sends a new person. 168 hours = 7 days." rules={[{ required: true }]}>
                 <InputNumber min={1} max={336} style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+            <Col {...half}>
+              <Form.Item name="passwordResetTtlMinutes" label="Forgot-password link validity (minutes)" extra="The link a person asks for themselves." rules={[{ required: true }]}>
+                <InputNumber min={5} max={1440} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
           </Row>

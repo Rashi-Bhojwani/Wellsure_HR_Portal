@@ -85,7 +85,8 @@ async function signIn(browser: Browser, web: string, code: string, password: str
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, timezoneId: "Asia/Kolkata" });
   const page = await ctx.newPage();
   await page.goto(`${web}/login`);
-  await page.getByLabel("Employee Code").fill(code);
+  // The field is labelled "Employee number" since the employee-number login work (docs/plans/LOGIN_CHECKLIST.md); either label is accepted.
+  await page.getByLabel(/Employee (number|Code)/).fill(code);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: /sign in|log in/i }).click();
   await page.waitForURL(/\/(app|admin)/, { timeout: 15_000 });

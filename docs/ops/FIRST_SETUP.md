@@ -70,6 +70,12 @@ The **other** director then confirms the choice. There is no default.
 5. Opening leave balances: **Workforce Management → Leave → Leave Granter**, or the Leave Grants import tab.
 6. Invitations: each new account gets a link to set a password. You can resend it from the person's profile.
 
+### Login IDs
+
+- **The attendance machine number is the login ID.** First create the person's ID on the attendance machine (for example 486). Then add them in the portal with that same number as the employee number and the Device User ID. The employee screen shows it as "Login ID and attendance machine ID" and warns in yellow if the two ever differ. Numbers are text: leading zeros and letters are kept, and upper and lower case count as the same number.
+- **How HR invites.** Adding the employee creates their account as **Invited**, with no password. A setup link (valid 7 days, a setting under System Settings) goes to the personal email on record. **Send setup link** on their profile sends a fresh one. HR never sees or sets a password. If the screen says "No email on record for employee 486", add their personal email first; nothing can be sent until then. Only a director can change an employee number later, with a reason; change the machine to match.
+- **What the employee does.** On the sign-in page, choose **Forgot password**, type the employee number, and open the link sent to the email HR has on record. Set a password, then sign in with the number and that password. The status becomes **Active**. The reply is always the same sentence, so it never reveals whether a number exists.
+
 ## Step 6. Director settings (one director proposes, the other confirms)
 
 1. **Admin Tools → Default behaviours**. Four settings already have a value, marked "Default, change in settings":
